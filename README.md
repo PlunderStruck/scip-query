@@ -1060,9 +1060,122 @@ scip-query convergence bottlenecks hotspots
 
 ---
 
+### Source & Analysis
+
+#### `code <symbol>`
+
+Read the source code for a symbol, bounded to its definition range.
+
+```bash
+scip-query code shortenSymbol
+scip-query code shortenSymbol -C 5    # 5 extra lines of context
+```
+
+**Options:**
+- `-C, --context <n>` — Extra lines above/below the definition (default: 0)
+
+**Value:** Read source without leaving the terminal. Language-agnostic — just reads the file at the line range from the index.
+
+---
+
+#### `complexity <symbol>`
+
+Per-symbol complexity analysis: source-level branch counting + index-level metrics.
+
+```bash
+scip-query complexity login
+#   LOC:                  41
+#   Branches:             8
+#   Cyclomatic estimate:  9
+#   Callees:              5
+#   Fan-in:               12
+#   Fan-out:              3
+```
+
+**Value:** Combines source-level analysis (branch counting via language-aware regex) with graph-level metrics (fan-in, fan-out, callee count) for a complete complexity picture.
+
+---
+
+#### `dataflow <symbol>`
+
+Reference-level dataflow: where data around a symbol comes from and where it goes.
+
+```bash
+scip-query dataflow login
+#   ═══ DEFINED AT ═══
+#     src/auth.service.ts:5
+#   ═══ USED AT ═══
+#     src/auth.controller.ts:15  in handleAuth
+#   ═══ PRODUCERS (feeds into this) ═══
+#     validateInput, formatName
+#   ═══ CONSUMERS (this feeds into) ═══
+#     sendEmail, logAudit
+```
+
+**Value:** Shows the data flow context: what other symbols are referenced alongside this one, what feeds in, what consumes it.
+
+---
+
+#### `slice <symbol>`
+
+Reference-level program slicing: what affects a symbol (backward) or what it affects (forward).
+
+```bash
+scip-query slice login               # backward: what feeds in
+scip-query slice login --forward     # forward: what this feeds into
+```
+
+**Options:**
+- `--forward` — Forward slice instead of backward (default: backward)
+
+**Value:** Backward slice shows inputs/dependencies. Forward slice shows outputs/effects. Useful for tracing data flow through error handling and concurrency paths.
+
+---
+
+### Additional Cleanup
+
+#### `redundant-reexports`
+
+Find barrel file re-exports that nobody imports through.
+
+```bash
+scip-query redundant-reexports
+#   src/index.ts
+#     resolveCacheDir()  (from src/config.ts)
+#       barrel: 0 consumer(s) | direct: 0 consumer(s)
+```
+
+**Options:**
+- `-s, --scope <path>` — Limit to files matching path
+- `-n, --limit <n>` — Number of results (default: 30)
+
+**Value:** Finds dead entries in barrel files. Note: TypeScript namespace imports (`import * as`) resolve through barrels transparently, so the command is most effective on codebases using named imports.
+
+---
+
+#### `similar-signatures`
+
+Find functions with near-identical type signatures (same parameter types and return type).
+
+```bash
+scip-query similar-signatures --min-loc 5
+#   Signature: (email: string): Promise<Token>  (2 functions)
+#     src/auth.ts:5-20   login   (15 LOC)
+#     src/auth.ts:22-37  signup  (15 LOC)
+```
+
+**Options:**
+- `-s, --scope <path>` — Limit to files matching path
+- `--min-loc <n>` — Minimum LOC per function (default: 3)
+- `-n, --limit <n>` — Number of groups (default: 20)
+
+**Value:** Different signal from callee similarity — catches "same interface, different implementation" even when the internal logic differs completely.
+
+---
+
 ## Programmatic API
 
-All 44 commands are available as TypeScript functions:
+All 50 commands are available as TypeScript functions:
 
 ```typescript
 import {
