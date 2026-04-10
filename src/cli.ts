@@ -1310,6 +1310,57 @@ program
     }
   });
 
+// redundant-reexports
+program
+  .command('redundant-reexports')
+  .description('Find barrel re-exports that nobody imports through')
+  .option('-s, --scope <path>', 'Limit to files matching path')
+  .option('-n, --limit <n>', 'Number of results', parseIntSafe, 30)
+  .action((opts) => {
+    const db = openDb();
+    const results = queries.redundantReexports(db, { scope: opts.scope, limit: opts.limit });
+    if (results.length === 0) {
+      console.log('No redundant re-exports found.');
+    } else {
+      let prevBarrel = '';
+      for (const r of results) {
+        if (r.barrelFile !== prevBarrel) {
+          if (prevBarrel) console.log('');
+          console.log(r.barrelFile);
+          prevBarrel = r.barrelFile;
+        }
+        console.log(`  ${r.shortName}  (from ${r.originalFile})`);
+        console.log(`    barrel: ${r.barrelConsumers} consumer(s) | direct: ${r.directConsumers} consumer(s)`);
+      }
+      console.log(`\n${results.length} redundant re-export(s).`);
+    }
+    db.close();
+  });
+
+// similar-signatures
+program
+  .command('similar-signatures')
+  .description('Find functions with near-identical type signatures (same shape)')
+  .option('-s, --scope <path>', 'Limit to files matching path')
+  .option('--min-loc <n>', 'Minimum LOC per function', parseIntSafe, 3)
+  .option('-n, --limit <n>', 'Number of groups', parseIntSafe, 20)
+  .action((opts) => {
+    const db = openDb();
+    const groups = queries.similarSignatures(db, { scope: opts.scope, minLoc: opts.minLoc, limit: opts.limit });
+    if (groups.length === 0) {
+      console.log('No same-shape function groups found.');
+    } else {
+      for (const g of groups) {
+        console.log(`\nSignature: ${g.signature}  (${g.functions.length} functions)`);
+        for (const f of g.functions) {
+          console.log(`  ${f.file}:${f.startLine}-${f.endLine}  ${f.shortName}  (${f.loc} LOC)`);
+        }
+      }
+      console.log(`\n${groups.length} group(s) found.`);
+    }
+    db.close();
+  });
+
 // init
 program
   .command('init')

@@ -41,3 +41,5 @@ export { code } from './code.js';
 export { complexity } from './complexity.js';
 export { dataflow } from './dataflow.js';
 export { slice } from './slice.js';
+export { redundantReexports } from './redundant-reexports.js';
+export { similarSignatures } from './similar-signatures.js';

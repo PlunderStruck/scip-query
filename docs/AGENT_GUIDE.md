@@ -197,6 +197,18 @@ For command syntax and options reference, see [README.md](../README.md).
    ```bash
    scip-query drift
    ```
+
+10. **Remove redundant re-exports**
+    ```bash
+    scip-query redundant-reexports
+    ```
+    Barrel file entries that nobody imports through. Clean up the barrel.
+
+11. **Find same-shape functions**
+    ```bash
+    scip-query similar-signatures --min-loc 5
+    ```
+    Functions with identical parameter/return types. Different signal from callee similarity — catches "same interface, different implementation."
    Files that deviate from their directory's typical dependency pattern. Bring them into line with their neighbors.
 
 ### Priority order
@@ -321,7 +333,9 @@ For command syntax and options reference, see [README.md](../README.md).
 | See impact of my git changes | `diff-impact` |
 | Find dead code to delete | `dead --min-loc 10 --skip-barrels` |
 | Find duplicate functions | `similar --min-similarity 0.5` |
+| Find same-shape functions | `similar-signatures --min-loc 5` |
 | Get a refactoring prescription | `convergence <sym1> <sym2>` |
+| Find redundant barrel re-exports | `redundant-reexports` |
 | Find extraction opportunities | `extract-candidates --min-loc 20` |
 | Find unnecessary wrappers | `wrapper-candidates` |
 | Find single-implementation types | `stale-abstractions` |

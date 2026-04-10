@@ -194,6 +194,7 @@ Every file path, line number, and behavioral claim includes the scip-query comma
 | Circular dependencies | `scip-query cycles` |
 | Dependency depth | `scip-query deep-chains` |
 | Similar functions | `scip-query similar <symbol>` |
+| Same-shape functions | `scip-query similar-signatures` |
 | Test coverage | `scip-query test-coverage <symbol>` |
 
 Full documentation: Run `scip-query --help` or read the README at the scip-query repo.

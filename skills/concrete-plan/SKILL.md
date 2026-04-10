@@ -55,7 +55,9 @@ This skill deliberately excludes `Grep` and `Read` from its allowed tools. This 
 | **Backward slice (what affects this)** | `scip-query slice <symbol>` |
 | **Forward slice (what this affects)** | `scip-query slice <symbol> --forward` |
 | Find similar functions | `scip-query similar <symbol>` |
+| Find same-shape functions | `scip-query similar-signatures` |
 | Refactoring prescription | `scip-query convergence <a> <b>` |
+| Find redundant re-exports | `scip-query redundant-reexports` |
 | Find dead code | `scip-query dead --min-loc 10 --skip-barrels` |
 | Codebase health report | `scip-query health` |
 | Coupling pressure points | `scip-query bottlenecks` |

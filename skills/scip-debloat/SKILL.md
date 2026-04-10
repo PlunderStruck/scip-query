@@ -187,9 +187,38 @@ Files that deviate from their directory's typical dependency pattern. If 8 of 10
 
 **Action:** Bring drifted files into line with their neighbors, or document why the deviation is intentional.
 
+### Angle 11: Redundant Re-exports (dead barrel entries)
+
+```bash
+scip-query redundant-reexports
+```
+
+Barrel files (index.ts) that re-export symbols nobody actually imports through the barrel. If every consumer imports directly from the source file, the re-export is dead weight.
+
+**What to look for:**
+- Symbols with 0 barrel consumers = completely redundant re-export
+- Symbols where barrel consumers < direct consumers = barrel mostly bypassed
+
+**Action:** Remove unused re-exports from barrel files to reduce indirection.
+
+### Angle 12: Similar Signatures (same-shape functions)
+
+```bash
+scip-query similar-signatures --min-loc 5
+```
+
+Functions with the same parameter types and return type but different names. "Same shape" is a different signal from "same callees" — catches cases where two functions accept and return the same things even if they do different work internally.
+
+**What to look for:**
+- Groups of 3+ functions with identical signatures = strong consolidation signal
+- Groups of 2 with identical signatures + similar callees = very strong signal
+- Cross-reference with `scip-query convergence` for the consolidation prescription
+
+**Action:** Investigate whether same-shape functions can share an implementation or a common interface.
+
 ---
 
-## Structural Assessment (run alongside the 10 angles)
+## Structural Assessment (run alongside the 12 angles)
 
 These provide context for the cleanup, not direct actions:
 
@@ -342,6 +371,8 @@ Do NOT use grep, rg, or Read. Use only scip-query commands.
 | Most-referenced | `scip-query hotspots -n 10` |
 | Test coverage | `scip-query test-coverage` |
 | Doc coverage | `scip-query doc-coverage` |
+| Redundant re-exports | `scip-query redundant-reexports` |
+| Similar signatures | `scip-query similar-signatures --min-loc 5` |
 | Read source | `scip-query code <symbol>` |
 | Verify references | `scip-query refs <symbol>` |
 | Check blast radius | `scip-query affected <symbol>` |
