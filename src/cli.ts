@@ -671,6 +671,160 @@ program
     db.close();
   });
 
+// similar
+program
+  .command('similar [symbol]')
+  .description('Find functions with similar callee fingerprints (consolidation candidates)')
+  .option('--min-similarity <n>', 'Minimum Jaccard similarity (0-1)', parseFloat, 0.4)
+  .option('-n, --limit <n>', 'Number of results', parseIntSafe, 20)
+  .option('-s, --scope <path>', 'Limit to files matching path')
+  .option('--min-callees <n>', 'Minimum callees to consider', parseIntSafe, 4)
+  .action((symbol, opts) => {
+    const db = openDb();
+    if (symbol) {
+      const results = queries.similar(db, symbol, {
+        minSimilarity: opts.minSimilarity,
+        limit: opts.limit,
+      });
+      if (results.length === 0) {
+        console.log('No similar symbols found.');
+      } else {
+        for (const r of results) {
+          console.log(`\n${Math.round(r.similarity * 100)}% similar:`);
+          console.log(`  A: ${r.shortNameA}  (${r.fileA})`);
+          console.log(`  B: ${r.shortNameB}  (${r.fileB})`);
+          console.log(`  Shared callees: ${r.sharedCallees.join(', ')}`);
+          if (r.uniqueToA.length) console.log(`  Only in A: ${r.uniqueToA.join(', ')}`);
+          if (r.uniqueToB.length) console.log(`  Only in B: ${r.uniqueToB.join(', ')}`);
+        }
+      }
+    } else {
+      const results = queries.similarAll(db, {
+        minSimilarity: opts.minSimilarity,
+        limit: opts.limit,
+        scope: opts.scope,
+        minCallees: opts.minCallees,
+      });
+      if (results.length === 0) {
+        console.log('No similar symbol pairs found.');
+      } else {
+        for (const r of results) {
+          console.log(`\n${Math.round(r.similarity * 100)}% similar:`);
+          console.log(`  A: ${r.shortNameA}  (${r.fileA})`);
+          console.log(`  B: ${r.shortNameB}  (${r.fileB})`);
+          console.log(`  Shared: ${r.sharedCallees.join(', ')}`);
+        }
+        console.log(`\n${results.length} similar pair(s) found.`);
+      }
+    }
+    db.close();
+  });
+
+// similar-files
+program
+  .command('similar-files [file]')
+  .description('Find files with similar dependency profiles')
+  .option('--min-similarity <n>', 'Minimum Jaccard similarity (0-1)', parseFloat, 0.5)
+  .option('-n, --limit <n>', 'Number of results', parseIntSafe, 20)
+  .option('-s, --scope <path>', 'Limit to files matching path')
+  .option('--min-deps <n>', 'Minimum dependencies to consider', parseIntSafe, 3)
+  .action((file, opts) => {
+    const db = openDb();
+    const results = queries.similarFiles(db, {
+      minSimilarity: opts.minSimilarity,
+      limit: opts.limit,
+      scope: opts.scope,
+      minDeps: opts.minDeps,
+      filePattern: file,
+    });
+    if (results.length === 0) {
+      console.log('No similar file pairs found.');
+    } else {
+      for (const r of results) {
+        console.log(`\n${Math.round(r.similarity * 100)}% similar:`);
+        console.log(`  ${r.fileA}`);
+        console.log(`  ${r.fileB}`);
+        console.log(`  Shared deps (${r.sharedDeps.length}): ${r.sharedDeps.join(', ')}`);
+        if (r.uniqueToA.length) console.log(`  Only in first:  ${r.uniqueToA.join(', ')}`);
+        if (r.uniqueToB.length) console.log(`  Only in second: ${r.uniqueToB.join(', ')}`);
+      }
+      console.log(`\n${results.length} similar pair(s) found.`);
+    }
+    db.close();
+  });
+
+// similar-chains
+program
+  .command('similar-chains')
+  .description('Find end-to-end dependency flows that diverge at few points')
+  .option('--min-similarity <n>', 'Minimum chain similarity (0-1)', parseFloat, 0.5)
+  .option('-n, --limit <n>', 'Number of results', parseIntSafe, 15)
+  .option('-s, --scope <path>', 'Limit to files matching path')
+  .option('--min-length <n>', 'Minimum chain length', parseIntSafe, 3)
+  .option('--max-length <n>', 'Maximum chain length', parseIntSafe, 8)
+  .action((opts) => {
+    const db = openDb();
+    const results = queries.similarChains(db, {
+      minSimilarity: opts.minSimilarity,
+      limit: opts.limit,
+      scope: opts.scope,
+      minChainLength: opts.minLength,
+      maxChainLength: opts.maxLength,
+    });
+    if (results.length === 0) {
+      console.log('No similar chains found.');
+    } else {
+      for (let i = 0; i < results.length; i++) {
+        const r = results[i]!;
+        console.log(`\n── Chain pair ${i + 1} (${Math.round(r.similarity * 100)}% similar, ${r.divergencePoints.length} divergence point(s)) ──`);
+        console.log(`  Chain A: ${r.chainA.join(' → ')}`);
+        console.log(`  Chain B: ${r.chainB.join(' → ')}`);
+        if (r.commonPrefix.length) console.log(`  Common prefix: ${r.commonPrefix.join(' → ')}`);
+        if (r.commonSuffix.length) console.log(`  Common suffix: ${r.commonSuffix.join(' → ')}`);
+        console.log('  Divergence points (consolidation targets):');
+        for (const d of r.divergencePoints) {
+          console.log(`    [${d.index}] ${d.nodeA}  ↔  ${d.nodeB}`);
+        }
+      }
+      console.log(`\n${results.length} similar chain pair(s) found.`);
+    }
+    db.close();
+  });
+
+// extract-candidates
+program
+  .command('extract-candidates')
+  .description('Find functions with natural extraction seams (isolated callee clusters)')
+  .option('-s, --scope <path>', 'Limit to files matching path')
+  .option('--min-loc <n>', 'Minimum function LOC', parseIntSafe, 10)
+  .option('--min-callees <n>', 'Minimum callees to analyze', parseIntSafe, 6)
+  .option('-n, --limit <n>', 'Number of results', parseIntSafe, 20)
+  .action((opts) => {
+    const db = openDb();
+    const results = queries.extractCandidates(db, {
+      scope: opts.scope,
+      minLoc: opts.minLoc,
+      minCallees: opts.minCallees,
+      limit: opts.limit,
+    });
+    if (results.length === 0) {
+      console.log('No extraction candidates found.');
+    } else {
+      for (const r of results) {
+        console.log(`\n${r.relativePath}:${r.startLine}-${r.endLine}  ${r.shortName}  (${r.loc} LOC, ${r.totalCallees} callees)`);
+        for (let i = 0; i < r.clusters.length; i++) {
+          const c = r.clusters[i]!;
+          console.log(`  Cluster ${i + 1} (${Math.round(c.isolation * 100)}% isolated, ${c.callees.length} callees):`);
+          for (const callee of c.callees) {
+            console.log(`    ${callee}`);
+          }
+        }
+      }
+      console.log(`\n${results.length} extraction candidate(s) found.`);
+    }
+    db.close();
+  });
+
 // init
 program
   .command('init')

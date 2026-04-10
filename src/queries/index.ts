@@ -23,3 +23,7 @@ export { docCoverage } from './doc-coverage.js';
 export { deepChains } from './deep-chains.js';
 export { hierarchy } from './hierarchy.js';
 export { callGraph } from './call-graph.js';
+export { similar, similarAll } from './similar.js';
+export { similarFiles } from './similar-files.js';
+export { similarChains } from './similar-chains.js';
+export { extractCandidates } from './extract-candidates.js';

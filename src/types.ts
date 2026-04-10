@@ -245,6 +245,71 @@ export interface CallGraphResult {
   callees: Array<{ symbol: string; shortName: string; file: string }>;
 }
 
+// ── Similarity / Extraction Types ──────────────────────────
+
+export interface SimilarSymbolResult {
+  symbolA: string;
+  shortNameA: string;
+  fileA: string;
+  symbolB: string;
+  shortNameB: string;
+  fileB: string;
+  /** Jaccard similarity of callee sets (0-1) */
+  similarity: number;
+  /** Callees shared by both symbols */
+  sharedCallees: string[];
+  /** Callees unique to A */
+  uniqueToA: string[];
+  /** Callees unique to B */
+  uniqueToB: string[];
+}
+
+export interface SimilarFileResult {
+  fileA: string;
+  fileB: string;
+  /** Jaccard similarity of dependency sets (0-1) */
+  similarity: number;
+  sharedDeps: string[];
+  uniqueToA: string[];
+  uniqueToB: string[];
+}
+
+export interface SimilarChainResult {
+  chainA: string[];
+  chainB: string[];
+  /** Fraction of nodes shared (0-1) */
+  similarity: number;
+  /** Edit distance between the two chains */
+  editDistance: number;
+  /** Indices where the chains diverge — the consolidation targets */
+  divergencePoints: Array<{
+    index: number;
+    nodeA: string;
+    nodeB: string;
+  }>;
+  /** Shared prefix */
+  commonPrefix: string[];
+  /** Shared suffix */
+  commonSuffix: string[];
+}
+
+export interface ExtractCandidate {
+  symbol: string;
+  shortName: string;
+  relativePath: string;
+  startLine: number;
+  endLine: number;
+  loc: number;
+  /** Total callees */
+  totalCallees: number;
+  /** Distinct clusters of callees (natural extraction seams) */
+  clusters: Array<{
+    callees: string[];
+    /** How isolated this cluster is from the rest (0-1, higher = more extractable) */
+    isolation: number;
+  }>;
+}
+
 // ── Dead Code Query Options ────────────────────────────────
 
 export interface DeadOptions {
