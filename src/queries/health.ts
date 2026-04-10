@@ -82,34 +82,11 @@ export function health(
   // The drift command already filters structural roles internally.
   const trueDriftCount = driftResult.results.length;
 
-  // Similar pairs: only count pairs where similarity is driven by
-  // actual logic overlap, not just shared imports. Pairs where the
-  // shared callees are ALL infrastructure (db, types, shortenSymbol)
-  // are boilerplate overlap, not real duplication.
-  const infraSymbols = new Set<string>();
-  // Build the set of "universal" callees (referenced by many modules)
-  for (const pair of similarResult) {
-    for (const callee of pair.sharedCallees) {
-      infraSymbols.add(callee);
-    }
-  }
-  // Count shared callees that appear in >70% of similar pairs = infrastructure
-  const calleeFreq = new Map<string, number>();
-  for (const pair of similarResult) {
-    for (const callee of pair.sharedCallees) {
-      calleeFreq.set(callee, (calleeFreq.get(callee) ?? 0) + 1);
-    }
-  }
-  const universalCallees = new Set<string>();
-  const pairCount = similarResult.length || 1;
-  for (const [callee, freq] of calleeFreq) {
-    if (freq / pairCount > 0.7) universalCallees.add(callee);
-  }
-  // A pair has "real" similarity only if it shares callees beyond universal ones
-  const trueSimilarCount = similarResult.filter((pair) => {
-    const nonUniversal = pair.sharedCallees.filter((c) => !universalCallees.has(c));
-    return nonUniversal.length >= 2; // at least 2 non-infrastructure shared callees
-  }).length;
+  // Similar pairs: the similar command now uses TF-IDF weighted cosine
+  // similarity which automatically discounts infrastructure callees.
+  // The sharedCallees list only contains significant (above-median IDF) callees.
+  // We can trust the count directly.
+  const trueSimilarCount = similarResult.length;
 
   // ── Build prioritized action list ────────────────────────
 
