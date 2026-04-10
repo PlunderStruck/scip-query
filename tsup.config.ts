@@ -23,12 +23,18 @@ export default defineConfig([
     target: 'node18',
   },
   {
-    entry: { cli: 'src/cli.ts', 'reindex-worker': 'src/reindex-worker.ts' },
+    entry: { cli: 'src/cli.ts' },
     format: ['esm'],
     sourcemap: true,
     target: 'node18',
     banner: {
       js: '#!/usr/bin/env node',
     },
+  },
+  {
+    entry: { 'reindex-worker': 'src/reindex-worker.ts', postinstall: 'src/postinstall.ts' },
+    format: ['esm'],
+    sourcemap: true,
+    target: 'node18',
   },
 ]);

@@ -113,8 +113,9 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
 }
 
 function ensureBinary(name: string, installHint: string): void {
+  const cmd = process.platform === 'win32' ? 'where' : 'which';
   try {
-    execFileSync('which', [name], { stdio: 'pipe' });
+    execFileSync(cmd, [name], { stdio: 'pipe' });
   } catch {
     throw new Error(`"${name}" not found on PATH. ${installHint}`);
   }

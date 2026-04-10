@@ -1,8 +1,6 @@
 import { program } from 'commander';
-import { existsSync, mkdirSync, symlinkSync, readlinkSync, unlinkSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { homedir } from 'node:os';
-import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { ScipDatabase } from './db.js';
 import { createGitignoreFilter } from './gitignore-filter.js';
 import { loadProjectConfig, resolveIndexPaths, initProjectConfig } from './config.js';
@@ -10,6 +8,7 @@ import { reindex, detectLanguages } from './reindex/index.js';
 import { Watcher } from './watch.js';
 import * as queries from './queries/index.js';
 import type { ScipQueryConfig, DeadOptions, WatcherStatus } from './types.js';
+import { installSkills, isScipInstalled, printScipInstallInstructions } from './setup.js';
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -1281,42 +1280,26 @@ program
 // install-skills
 program
   .command('install-skills')
-  .description('Install scip-query Claude Code skills (concrete-plan, scip-explore, scip-debloat)')
+  .description('Install skills into Claude Code (~/.claude/skills/) and Codex (~/.codex/skills/)')
   .action(() => {
-    const thisFile = fileURLToPath(import.meta.url);
-    const skillsSource = join(dirname(thisFile), '..', 'skills');
-    const skillsTarget = join(homedir(), '.claude', 'skills');
-
-    mkdirSync(skillsTarget, { recursive: true });
-
-    const skills = ['concrete-plan', 'scip-explore', 'scip-debloat'];
-    for (const skill of skills) {
-      const source = join(skillsSource, skill);
-      const target = join(skillsTarget, skill);
-
-      if (!existsSync(source)) {
-        console.log(`  skip: ${skill} (source not found at ${source})`);
-        continue;
-      }
-
-      if (existsSync(target)) {
-        try {
-          const existing = readlinkSync(target);
-          if (existing === source) {
-            console.log(`  ok:   ${skill} (already linked)`);
-            continue;
-          }
-        } catch {
-          console.log(`  skip: ${skill} (${target} exists and is not a symlink)`);
-          continue;
-        }
-        unlinkSync(target);
-      }
-
-      symlinkSync(source, target, 'dir');
-      console.log(`  done: ${skill} → ${target}`);
+    const result = installSkills();
+    const total = result.installed.length + result.alreadyLinked.length;
+    console.log(`\n${result.installed.length} installed, ${result.alreadyLinked.length} already linked, ${result.skipped.length} skipped.`);
+    if (total > 0) {
+      console.log('Skills will be available in your next Claude Code / Codex session.');
     }
-    console.log('\nSkills installed. They will be available in your next Claude Code session.');
+  });
+
+// check-deps
+program
+  .command('check-deps')
+  .description('Check if required dependencies (scip CLI) are installed')
+  .action(() => {
+    if (isScipInstalled()) {
+      console.log('scip CLI: installed');
+    } else {
+      printScipInstallInstructions();
+    }
   });
 
 // init
