@@ -18,6 +18,10 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       return { binary: 'npx', args };
     },
     markerFiles: ['tsconfig.json'],
+    installMethods: [
+      { label: 'npm', prerequisite: 'npm', binary: 'npm', args: ['install', '-g', '@sourcegraph/scip-typescript'] },
+    ],
+    installUrl: 'https://github.com/sourcegraph/scip-typescript',
   },
 
   javascript: {
@@ -29,6 +33,10 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       args: ['scip-typescript', 'index', '--infer-tsconfig', '--output', outputPath, '--no-progress-bar'],
     }),
     markerFiles: ['package.json'],
+    installMethods: [
+      { label: 'npm', prerequisite: 'npm', binary: 'npm', args: ['install', '-g', '@sourcegraph/scip-typescript'] },
+    ],
+    installUrl: 'https://github.com/sourcegraph/scip-typescript',
   },
 
   java: {
@@ -40,6 +48,10 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       args: ['index', '--output', outputPath],
     }),
     markerFiles: ['pom.xml', 'build.gradle'],
+    installMethods: [
+      { label: 'coursier', prerequisite: 'cs', binary: 'cs', args: ['install', 'scip-java'] },
+    ],
+    installUrl: 'https://github.com/sourcegraph/scip-java/releases',
   },
 
   scala: {
@@ -51,6 +63,10 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       args: ['index', '--output', outputPath],
     }),
     markerFiles: ['build.sbt'],
+    installMethods: [
+      { label: 'coursier', prerequisite: 'cs', binary: 'cs', args: ['install', 'scip-java'] },
+    ],
+    installUrl: 'https://github.com/sourcegraph/scip-java/releases',
   },
 
   kotlin: {
@@ -62,6 +78,10 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       args: ['index', '--output', outputPath],
     }),
     markerFiles: ['build.gradle.kts'],
+    installMethods: [
+      { label: 'coursier', prerequisite: 'cs', binary: 'cs', args: ['install', 'scip-java'] },
+    ],
+    installUrl: 'https://github.com/sourcegraph/scip-java/releases',
   },
 
   rust: {
@@ -73,6 +93,10 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       args: ['scip', '.', '--output', outputPath],
     }),
     markerFiles: ['Cargo.toml'],
+    installMethods: [
+      { label: 'rustup', prerequisite: 'rustup', binary: 'rustup', args: ['component', 'add', 'rust-analyzer'] },
+    ],
+    installUrl: 'https://github.com/rust-lang/rust-analyzer',
   },
 
   python: {
@@ -84,6 +108,10 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       args: ['index', '--output', outputPath, '--project-name', 'project'],
     }),
     markerFiles: ['pyproject.toml', 'setup.py'],
+    installMethods: [
+      { label: 'npm', prerequisite: 'npm', binary: 'npm', args: ['install', '-g', 'scip-python-plus'] },
+    ],
+    installUrl: 'https://github.com/PlunderStruck/scip-python',
   },
 
   ruby: {
@@ -95,6 +123,8 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       args: ['--output', outputPath],
     }),
     markerFiles: ['Gemfile'],
+    installMethods: [],
+    installUrl: 'https://github.com/sourcegraph/scip-ruby/releases',
   },
 
   go: {
@@ -106,6 +136,10 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       args: ['--output', outputPath],
     }),
     markerFiles: ['go.mod'],
+    installMethods: [
+      { label: 'go install', prerequisite: 'go', binary: 'go', args: ['install', 'github.com/sourcegraph/scip-go@latest'] },
+    ],
+    installUrl: 'https://github.com/sourcegraph/scip-go',
   },
 
   cpp: {
@@ -117,6 +151,8 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       args: ['--output', outputPath],
     }),
     markerFiles: ['CMakeLists.txt', 'Makefile'],
+    installMethods: [],
+    installUrl: 'https://github.com/sourcegraph/scip-clang/releases',
   },
 
   c: {
@@ -128,6 +164,8 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       args: ['--output', outputPath],
     }),
     markerFiles: ['CMakeLists.txt', 'Makefile'],
+    installMethods: [],
+    installUrl: 'https://github.com/sourcegraph/scip-clang/releases',
   },
 
   csharp: {
@@ -139,6 +177,10 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       args: ['index', '--output', outputPath],
     }),
     markerFiles: [],
+    installMethods: [
+      { label: 'dotnet', prerequisite: 'dotnet', binary: 'dotnet', args: ['tool', 'install', '--global', 'scip-dotnet'] },
+    ],
+    installUrl: 'https://github.com/sourcegraph/scip-dotnet/releases',
   },
 
   dart: {
@@ -150,6 +192,10 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       args: ['index', '--output', outputPath],
     }),
     markerFiles: ['pubspec.yaml'],
+    installMethods: [
+      { label: 'dart pub', prerequisite: 'dart', binary: 'dart', args: ['pub', 'global', 'activate', 'scip_dart'] },
+    ],
+    installUrl: 'https://github.com/Workiva/scip-dart/releases',
   },
 
   php: {
@@ -161,6 +207,10 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       args: ['index', '--output', outputPath],
     }),
     markerFiles: ['composer.json'],
+    installMethods: [
+      { label: 'composer', prerequisite: 'composer', binary: 'composer', args: ['global', 'require', 'davidrjenni/scip-php'] },
+    ],
+    installUrl: 'https://github.com/davidrjenni/scip-php/releases',
   },
 };
 

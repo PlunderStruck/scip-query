@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { SupportedLanguage } from '../types.js';
 import { detectLanguages } from './detect.js';
 import { getIndexerConfig } from './indexers.js';
+import { isBinaryAvailable, isIndexerInstalled, tryInstallIndexer, tryInstallScipCli } from './install.js';
 
 export interface ReindexOptions {
   projectRoot: string;
@@ -19,6 +20,8 @@ export interface ReindexOptions {
   onStatus?: (message: string) => void;
   /** Extra flags for pnpm-workspace-aware TS indexing */
   pnpmWorkspaces?: boolean;
+  /** Skip auto-install prompts */
+  skipAutoInstall?: boolean;
 }
 
 export interface ReindexResult {
@@ -37,6 +40,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
     projectRoot,
     maxHeapMb = 8192,
     onStatus = console.log,
+    skipAutoInstall = false,
   } = opts;
 
   const outputScip = opts.outputScip ?? join(projectRoot, 'index.scip');
@@ -54,8 +58,22 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
 
   onStatus(`Detected languages: ${languages.join(', ')}`);
 
-  // Check that the scip CLI is available
-  ensureBinary('scip', 'The scip CLI is required. Install from: https://github.com/sourcegraph/scip/releases');
+  // Check that the scip CLI is available, auto-install if needed
+  if (!isBinaryAvailable('scip')) {
+    if (skipAutoInstall) {
+      throw new Error(
+        'The scip CLI is required but not found on PATH.\n' +
+        'Install from: https://github.com/sourcegraph/scip/releases',
+      );
+    }
+    onStatus('scip CLI not found on PATH. Attempting auto-install...');
+    if (!tryInstallScipCli(onStatus)) {
+      throw new Error(
+        'The scip CLI is required but could not be installed.\n' +
+        'Install manually from: https://github.com/sourcegraph/scip/releases',
+      );
+    }
+  }
 
   const env = {
     ...process.env,
@@ -65,6 +83,24 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
   // Index each language
   for (const lang of languages) {
     const config = getIndexerConfig(lang);
+
+    // Check if indexer is installed, auto-install if needed
+    if (!isIndexerInstalled(config)) {
+      if (skipAutoInstall) {
+        throw new Error(
+          `${config.indexerBinary} is required to index ${lang} but not found on PATH.\n` +
+          (config.installUrl ? `Install from: ${config.installUrl}` : `Make sure ${config.indexerBinary} is installed and available on PATH.`),
+        );
+      }
+      onStatus(`${config.indexerBinary} not found. Attempting auto-install...`);
+      if (!tryInstallIndexer(config, onStatus)) {
+        throw new Error(
+          `${config.indexerBinary} is required to index ${lang} but could not be installed.\n` +
+          (config.installUrl ? `Install manually from: ${config.installUrl}` : `Make sure ${config.indexerBinary} is installed and available on PATH.`),
+        );
+      }
+    }
+
     onStatus(`Indexing ${lang} with ${config.indexerBinary}...`);
 
     const { binary, args } = config.indexArgs({
@@ -112,14 +148,6 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
   return { languages, indexPath: outputScip, dbPath: outputDb, durationMs };
 }
 
-function ensureBinary(name: string, installHint: string): void {
-  const cmd = process.platform === 'win32' ? 'where' : 'which';
-  try {
-    execFileSync(cmd, [name], { stdio: 'pipe' });
-  } catch {
-    throw new Error(`"${name}" not found on PATH. ${installHint}`);
-  }
-}
-
 export { detectLanguages } from './detect.js';
 export { getIndexerConfig, INDEXER_CONFIGS } from './indexers.js';
+export { isBinaryAvailable, isIndexerInstalled, tryInstallIndexer, tryInstallScipCli } from './install.js';

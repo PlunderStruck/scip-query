@@ -45,7 +45,7 @@ scip-query diff-impact                   # what did my changes affect?
 | TypeScript / JavaScript | scip-typescript | `npm install -g @sourcegraph/scip-typescript` |
 | Java / Scala / Kotlin | scip-java | [releases](https://github.com/sourcegraph/scip-java/releases) |
 | Rust | rust-analyzer | Ships with rust-analyzer (`rust-analyzer scip`) |
-| Python | scip-python | `pip install scip-python` |
+| Python | scip-python-plus | `npm install -g scip-python-plus` |
 | Go | scip-go | `go install github.com/sourcegraph/scip-go@latest` |
 | Ruby | scip-ruby | [releases](https://github.com/sourcegraph/scip-ruby/releases) |
 | C / C++ | scip-clang | [releases](https://github.com/sourcegraph/scip-clang/releases) |

@@ -7,6 +7,7 @@ import { homedir, platform, arch } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { get as httpsGet } from 'node:https';
+import { tryInstallScipCli } from './reindex/install.js';
 
 const IS_WINDOWS = platform() === 'win32';
 const SKILLS = ['concrete-plan', 'scip-explore', 'scip-debloat', 'scip-verify'];
@@ -185,9 +186,13 @@ export function postinstall(): void {
     console.log(`\n${result.installed.length} skill(s) installed, ${result.alreadyLinked.length} already linked.`);
   }
 
-  // Check for scip binary (advisory, don't fail install)
+  // Check for scip binary — auto-install if missing
   if (!isScipInstalled()) {
-    printScipInstallInstructions();
+    console.log('\nscip CLI not found on PATH. Attempting auto-install...');
+    const installed = tryInstallScipCli(console.log);
+    if (!installed) {
+      printScipInstallInstructions();
+    }
   } else {
     const version = getScipVersion();
     console.log(`\nscip CLI: ${version ?? 'installed'}`);

@@ -523,6 +523,19 @@ export interface DeadOptions {
   includeMembers?: boolean;
 }
 
+// ── Auto-Install Types ────────────────────────────────────
+
+export interface InstallMethod {
+  /** Human-readable label (e.g., "npm", "pip", "go install") */
+  label: string;
+  /** Binary that must exist for this install method to work (e.g., "npm", "pip3", "go") */
+  prerequisite: string;
+  /** Command to execute */
+  binary: string;
+  /** Arguments for the command */
+  args: string[];
+}
+
 // ── Reindex Types ──────────────────────────────────────────
 
 export type SupportedLanguage =
@@ -555,6 +568,10 @@ export interface IndexerConfig {
   }) => { binary: string; args: string[] };
   /** Marker files that indicate this language is present */
   markerFiles: string[];
+  /** Installation methods to try in order of preference */
+  installMethods?: InstallMethod[];
+  /** URL for manual installation if auto-install fails */
+  installUrl?: string;
 }
 
 // ── Database Config ────────────────────────────────────────
