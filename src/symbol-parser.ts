@@ -102,22 +102,52 @@ export function parseSymbol(raw: string): ScipSymbol | ScipLocalSymbol {
 /**
  * Parse the descriptor chain from a SCIP symbol.
  *
- * Descriptors are a sequence of <name><suffix> pairs.
+ * SCIP descriptor grammar:
+ *   namespace:   name/
+ *   type:        name#
+ *   term:        name.
+ *   method:      name(disambiguator).
+ *   type-param:  [name]          (bracket-wrapped, prefix syntax)
+ *   parameter:   (name)          (paren-wrapped, prefix syntax)
+ *   meta:        name:
+ *   macro:       name!
+ *
  * Names can be backtick-escaped: `some/name.with.dots`
- * Method suffix is special: ().  (two chars that look like one)
  */
 function parseDescriptors(input: string): ScipDescriptor[] {
   const descriptors: ScipDescriptor[] = [];
   let i = 0;
 
   while (i < input.length) {
+    // Type parameter: [name]
+    if (input[i] === '[') {
+      const closeBracket = input.indexOf(']', i + 1);
+      if (closeBracket === -1) {
+        descriptors.push({ name: input.slice(i + 1), suffix: 'type-param' });
+        break;
+      }
+      descriptors.push({ name: input.slice(i + 1, closeBracket), suffix: 'type-param' });
+      i = closeBracket + 1;
+      continue;
+    }
+
+    // Parameter: (name) — only when ( appears at descriptor start with no preceding name
+    if (input[i] === '(' && (descriptors.length === 0 || i === 0 || isSuffixChar(input[i - 1]!))) {
+      const closeParen = input.indexOf(')', i + 1);
+      if (closeParen !== -1 && input[closeParen + 1] !== '.') {
+        // This is a parameter (name), not a method disambiguator
+        descriptors.push({ name: input.slice(i + 1, closeParen), suffix: 'parameter' });
+        i = closeParen + 1;
+        continue;
+      }
+    }
+
     let name: string;
 
-    // Parse name (possibly backtick-escaped)
+    // Backtick-escaped name
     if (input[i] === '`') {
       const closingTick = input.indexOf('`', i + 1);
       if (closingTick === -1) {
-        // Malformed — take the rest
         name = input.slice(i + 1);
         i = input.length;
         descriptors.push({ name, suffix: 'term' });
@@ -126,7 +156,7 @@ function parseDescriptors(input: string): ScipDescriptor[] {
       name = input.slice(i + 1, closingTick);
       i = closingTick + 1;
     } else {
-      // Read until we hit a suffix character
+      // Read name until we hit a suffix character
       const start = i;
       while (i < input.length && !isSuffixChar(input[i]!)) {
         i++;
@@ -134,7 +164,7 @@ function parseDescriptors(input: string): ScipDescriptor[] {
       name = input.slice(start, i);
     }
 
-    // Parse suffix
+    // Parse suffix after name
     if (i >= input.length) {
       if (name) descriptors.push({ name, suffix: 'term' });
       break;
@@ -142,16 +172,19 @@ function parseDescriptors(input: string): ScipDescriptor[] {
 
     const char = input[i]!;
 
-    // Check for method suffix: ().
-    if (char === '(' && i + 2 <= input.length && input[i + 1] === ')') {
-      if (input[i + 2] === '.') {
-        // Method: ().
+    // Method: name(disambiguator).
+    if (char === '(') {
+      const closeParen = input.indexOf(')', i + 1);
+      if (closeParen !== -1 && input[closeParen + 1] === '.') {
         descriptors.push({ name, suffix: 'method' });
-        i += 3;
+        i = closeParen + 2; // skip past ).
+      } else if (closeParen !== -1) {
+        // Bare (disambiguator) without . — treat as method anyway (common in practice)
+        descriptors.push({ name, suffix: 'method' });
+        i = closeParen + 1;
       } else {
-        // Parameter: ()
-        descriptors.push({ name, suffix: 'parameter' });
-        i += 2;
+        descriptors.push({ name, suffix: 'term' });
+        i++;
       }
     } else {
       const suffix = SUFFIX_MAP[char];
@@ -159,8 +192,7 @@ function parseDescriptors(input: string): ScipDescriptor[] {
         descriptors.push({ name, suffix });
         i += 1;
       } else {
-        // Unknown suffix — skip
-        i += 1;
+        i += 1; // Unknown suffix — skip
       }
     }
   }

@@ -26,7 +26,6 @@ export class ScipDatabase {
     this.config = config;
     this.pathFilter = pathFilter ?? null;
     this.db = new Database(config.dbPath, { readonly: true });
-    this.db.pragma('journal_mode = WAL');
     this.db.pragma('busy_timeout = 5000');
   }
 
