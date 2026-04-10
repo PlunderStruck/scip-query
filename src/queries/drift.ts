@@ -50,8 +50,12 @@ export function drift(
       if (count > threshold) expectedDeps.add(dep);
     }
 
-    // 4. For each file, compute deviation
+    // 4. For each file, compute deviation (skip structural roles)
     for (const file of files) {
+      // Barrel files, entry points, and orchestrators naturally deviate
+      const basename = path.basename(file);
+      if (isStructuralRole(basename)) continue;
+
       const actualDeps = depGraph.get(file) ?? new Set<string>();
 
       const missing = [...expectedDeps].filter((d) => !actualDeps.has(d));
@@ -78,4 +82,20 @@ export function drift(
   results.sort((a, b) => b.deviationPercent - a.deviationPercent);
 
   return results;
+}
+
+/**
+ * Files that naturally deviate from sibling patterns due to their structural
+ * role (barrel re-exports, entry points, orchestrators, thin wrappers).
+ * These should not be flagged as drift.
+ */
+function isStructuralRole(basename: string): boolean {
+  // Barrel re-exports
+  if (basename === 'index.ts' || basename === 'index.js') return true;
+  // Entry points
+  if (basename === 'cli.ts' || basename === 'main.ts' || basename === 'main.rs') return true;
+  if (basename.includes('worker.') || basename.includes('postinstall.')) return true;
+  // Orchestrators that compose many siblings
+  if (basename === 'health.ts' || basename === 'health.js') return true;
+  return false;
 }
