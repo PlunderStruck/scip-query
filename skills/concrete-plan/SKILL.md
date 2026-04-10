@@ -23,6 +23,41 @@ You are writing a production implementation plan as a markdown checklist. Every 
 
 ---
 
+## Symbol Lookup Tips
+
+scip-query accepts partial symbol names — you don't need the full SCIP symbol path. These all work:
+
+```bash
+scip-query code processVegaMention              # just the function name
+scip-query call-graph ChatService               # just the class name
+scip-query trace getActiveInferenceConfig       # any unique substring
+```
+
+**Avoid parentheses** — `()` causes shell parse errors in zsh/bash:
+```bash
+# BAD — shell tries to execute a subshell
+scip-query code processVegaMention()
+
+# GOOD — no parens needed, scip-query strips them internally
+scip-query code processVegaMention
+
+# ALSO GOOD — single quotes protect special characters
+scip-query code 'processVegaMention'
+```
+
+**Read source by file + line range** when the symbol name is ambiguous:
+```bash
+scip-query code 'src/modules/chat/chat.service.ts:100-200'
+```
+
+**If "Symbol not found":**
+1. Try a shorter/simpler name — `login` instead of `AuthService:login`
+2. Try `scip-query symbols <file>` to see what symbols exist in the file
+3. Try `scip-query trace <name>` which uses a different lookup path
+4. Use the `file:line-line` syntax for `code` if you know the location
+
+---
+
 ## Forbidden Tools and Patterns
 
 This skill deliberately excludes `Grep` and `Read` from its allowed tools. This is intentional.
