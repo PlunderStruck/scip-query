@@ -119,7 +119,7 @@ export function getScipVersion(): string | null {
 /**
  * Resolve the download URL for the scip CLI binary for this platform.
  */
-export function getScipDownloadUrl(): { url: string; filename: string } | null {
+function getScipDownloadUrl(): { url: string; filename: string } | null {
   const os = platform();
   const cpu = arch();
 

@@ -86,15 +86,18 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
   }>(sql, ...params);
 
   let deadCodeCount = 0;
-  let deadExportCount = 0;
+  let fileInternalCount = 0;
   let totalLoc = 0;
 
   const symbols: DeadSymbolResult[] = rows
     .filter((r) => !db.isIgnored(r.relative_path))
     .map((r) => {
-      const kind = r.same_file_refs === 0 ? 'dead-code' : 'dead-export';
+      // dead-code: zero references anywhere (not even in same file) — safe to delete
+      // file-internal: referenced within same file but never cross-file —
+      //   may be a private helper (fine) or a forgotten export (needs review)
+      const kind = r.same_file_refs === 0 ? 'dead-code' : 'file-internal';
       if (kind === 'dead-code') deadCodeCount++;
-      else deadExportCount++;
+      else fileInternalCount++;
       totalLoc += r.loc;
 
       return {
@@ -113,7 +116,7 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     symbols,
     totalCount: symbols.length,
     deadCodeCount,
-    deadExportCount,
+    fileInternalCount,
     totalLoc,
   };
 }

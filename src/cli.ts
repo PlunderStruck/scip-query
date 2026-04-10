@@ -262,7 +262,7 @@ program
 // dead
 program
   .command('dead [scope]')
-  .description('Find dead exports (no cross-file consumers)')
+  .description('Find dead code and file-internal symbols (no cross-file consumers)')
   .option('--min-loc <n>', 'Only show symbols >= N lines', parseIntSafe, 1)
   .option('--include-tests', 'Include test files')
   .option('--skip-barrels', 'Ignore refs from barrel re-export files')
@@ -280,7 +280,7 @@ program
       const result = queries.dead(db, deadOpts);
 
       if (result.symbols.length === 0) {
-        console.log('No dead exports found.');
+        console.log('No dead code found.');
         return;
       }
 
@@ -291,14 +291,14 @@ program
           console.log(s.relativePath);
           prevFile = s.relativePath;
         }
-        const tag = s.kind === 'dead-code' ? '[dead code]' : '[dead export]';
+        const tag = s.kind === 'dead-code' ? '[dead code]' : '[file-internal only]';
         console.log(`  ${s.startLine}-${s.endLine}  (${s.loc} LOC)  ${s.shortName}  ${tag}`);
       }
 
       console.log('\n───────────────────────────');
       console.log(
         `Total: ${result.totalCount} symbols (${result.deadCodeCount} dead code, ` +
-        `${result.deadExportCount} dead exports), ${result.totalLoc} LOC`,
+        `${result.fileInternalCount} file-internal), ${result.totalLoc} LOC`,
       );
     });
   });
@@ -1110,6 +1110,7 @@ program
       if (f.staleTypes > 0) console.log(`    Stale abstractions:   ${f.staleTypes}`);
       if (f.driftedFiles > 0) console.log(`    Pattern drift:        ${f.driftedFiles} files`);
       if (f.complexityHotspotCount > 0) console.log(`    Complexity hotspots:  ${f.complexityHotspotCount}`);
+      console.log(`    Test coverage:        ${f.testCoveragePercent}%`);
 
       if (report.actions.length > 0) {
         console.log('\n  Prioritized Actions (highest impact + lowest effort first):');

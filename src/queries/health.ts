@@ -9,6 +9,7 @@ import { passthroughCandidates } from './passthrough-candidates.js';
 import { staleAbstractions } from './stale-abstractions.js';
 import { drift } from './drift.js';
 import { complexityHotspots } from './complexity-hotspots.js';
+import { testCoverageSummary } from './test-coverage.js';
 import { stats } from './stats.js';
 
 export interface HealthAction {
@@ -41,6 +42,7 @@ export interface HealthReport {
     staleTypes: number;
     driftedFiles: number;
     complexityHotspotCount: number;
+    testCoveragePercent: number;
   };
   actions: HealthAction[];
   topComplexity: Array<{ symbol: string; score: number }>;
@@ -74,6 +76,7 @@ export function health(
   const staleResult = staleAbstractions(db, { scope, minLoc: 3, limit: 50 });
   const driftResult = drift(db, { scope, minDeviation: 30 });
   const complexResult = complexityHotspots(db, { scope, minLoc: 10, limit: 10 });
+  const testResult = testCoverageSummary(db, { scope, minLoc: 3 });
 
   const isolatedLoc = isolatedResult.reduce((sum, r) => sum + r.loc, 0);
 
@@ -84,13 +87,16 @@ export function health(
   const entryPointPatterns = ['/index.ts', '/index.js', 'cli.ts', 'worker.ts', 'postinstall.ts', '/mod.rs', '__init__.py', 'main.ts', 'main.rs', 'main.go', 'main.py'];
   const isEntryPoint = (path: string) => entryPointPatterns.some((p) => path.endsWith(p));
 
-  // Dead code: separate true dead from entry-point false positives
-  const trueDeadCount = deadResult.symbols.filter(
-    (s) => !isEntryPoint(s.relativePath),
+  // Dead code: only count truly dead symbols (zero refs anywhere),
+  // excluding entry points AND file-internal helpers (which are fine).
+  const trueDeadSymbols = deadResult.symbols.filter(
+    (s) => !isEntryPoint(s.relativePath) && s.kind === 'dead-code',
+  );
+  const trueDeadCount = trueDeadSymbols.length;
+  const trueDeadLoc = trueDeadSymbols.reduce((sum, s) => sum + s.loc, 0);
+  const fileInternalCount = deadResult.symbols.filter(
+    (s) => !isEntryPoint(s.relativePath) && s.kind === 'file-internal',
   ).length;
-  const trueDeadLoc = deadResult.symbols
-    .filter((s) => !isEntryPoint(s.relativePath))
-    .reduce((sum, s) => sum + s.loc, 0);
 
   // Isolated: same entry-point filtering
   const trueIsolatedCount = isolatedResult.filter(
@@ -149,20 +155,24 @@ export function health(
   const actions: HealthAction[] = [];
 
   if (trueDeadCount > 0) {
-    const deadExports = deadResult.symbols.filter(
-      (s) => !isEntryPoint(s.relativePath) && s.kind === 'dead-export',
-    ).length;
-    const deadCode = trueDeadCount - deadExports;
-    const parts: string[] = [];
-    if (deadCode > 0) parts.push(`${deadCode} with zero references anywhere`);
-    if (deadExports > 0) parts.push(`${deadExports} dead exports (used locally, never imported)`);
     actions.push({
       category: 'Dead code',
-      description: `${parts.join(', ')} — safe to delete or make private`,
+      description: `${trueDeadCount} symbols with zero references anywhere — safe to delete`,
       effort: 'low',
       impact: 'high',
       count: trueDeadCount,
       locRecoverable: trueDeadLoc,
+    });
+  }
+
+  if (testResult.percent < 50) {
+    actions.push({
+      category: 'Test coverage',
+      description: `${testResult.percent}% of symbols referenced by tests (${testResult.uncovered} uncovered)`,
+      effort: 'high',
+      impact: 'high',
+      count: testResult.uncovered,
+      locRecoverable: 0,
     });
   }
 
@@ -317,6 +327,11 @@ export function health(
   const extremeComplexity = complexResult.filter((r) => r.score > 50).length;
   score -= Math.min(5, extremeComplexity * 2);
 
+  // Test coverage: significant penalty for low coverage
+  // 0% = -15, 25% = -11, 50% = -7, 75% = -4, 100% = 0
+  const coverageDeduction = Math.round(15 * (1 - testResult.percent / 100));
+  score -= coverageDeduction;
+
   score = Math.max(0, Math.min(100, score));
 
   return {
@@ -341,6 +356,7 @@ export function health(
       staleTypes: trueStaleCount,
       driftedFiles: trueDriftCount,
       complexityHotspotCount: complexResult.length,
+      testCoveragePercent: testResult.percent,
     },
     actions,
     topComplexity: complexResult.slice(0, 5).map((r) => ({

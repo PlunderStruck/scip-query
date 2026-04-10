@@ -107,14 +107,17 @@ export interface DeadSymbolResult {
   symbol: string;
   shortName: string;
   sameFileRefs: number;
-  kind: 'dead-code' | 'dead-export';
+  kind: 'dead-code' | 'file-internal';
 }
 
 export interface DeadSummary {
   symbols: DeadSymbolResult[];
   totalCount: number;
+  /** Symbols with zero references anywhere — safe to delete */
   deadCodeCount: number;
-  deadExportCount: number;
+  /** Symbols referenced only within their own file — no cross-file consumers.
+   *  May be private helpers (fine) or forgotten exports (needs review). */
+  fileInternalCount: number;
   totalLoc: number;
 }
 

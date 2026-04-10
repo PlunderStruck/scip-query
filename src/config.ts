@@ -87,20 +87,6 @@ export function resolveIndexPaths(projectRoot: string, config?: ProjectConfig): 
   };
 }
 
-/** Write a meta.json that maps this cache dir back to its project */
-export function writeMetaFile(
-  metaPath: string,
-  projectRoot: string,
-  languages: string[],
-): void {
-  const meta = {
-    projectRoot: resolve(projectRoot),
-    languages,
-    lastIndexed: new Date().toISOString(),
-  };
-  writeFileSync(metaPath, JSON.stringify(meta, null, 2));
-}
-
 /**
  * Scaffold a default .scipquery.json in the project root.
  * Does not overwrite an existing config.
