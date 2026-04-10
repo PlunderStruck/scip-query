@@ -87,37 +87,82 @@ export function findFirstSymbolMatch(
   db: ScipDatabase,
   symbolPattern: string,
 ): SymbolMatch | null {
-  const row = db.get<{
-    id: number;
-    symbol: string;
-    document_id: number;
-    start_line: number;
-    end_line: number;
-    relative_path: string;
-  }>(
-    `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path
-    FROM global_symbols gs
-    JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-    JOIN documents d ON der.document_id = d.id
-    WHERE gs.symbol LIKE ?
-      ${db.pathExclusionsFor('d')}
-      ${db.symbolNoiseFor('gs')}
-    LIMIT 1`,
-    `%${symbolPattern}%`,
-  );
-
-  if (!row || db.isIgnored(row.relative_path)) {
-    return null;
+  // Handle file:line-line syntax (e.g., "src/foo.ts:10-50")
+  const fileLineMatch = symbolPattern.match(/^(.+):(\d+)-(\d+)$/);
+  if (fileLineMatch) {
+    const [, filePath, startStr, endStr] = fileLineMatch;
+    const row = db.get<{
+      id: number;
+      symbol: string;
+      document_id: number;
+      start_line: number;
+      end_line: number;
+      relative_path: string;
+    }>(
+      `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path
+      FROM global_symbols gs
+      JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
+      JOIN documents d ON der.document_id = d.id
+      WHERE d.relative_path LIKE ?
+        AND der.start_line <= ? AND der.end_line >= ?
+        ${db.pathExclusionsFor('d')}
+      ORDER BY (der.end_line - der.start_line) ASC
+      LIMIT 1`,
+      `%${filePath}%`, parseInt(startStr!, 10), parseInt(endStr!, 10),
+    );
+    if (row && !db.isIgnored(row.relative_path)) {
+      return {
+        symbolId: row.id,
+        symbol: row.symbol,
+        documentId: row.document_id,
+        startLine: row.start_line,
+        endLine: row.end_line,
+        relativePath: row.relative_path,
+      };
+    }
   }
 
-  return {
-    symbolId: row.id,
-    symbol: row.symbol,
-    documentId: row.document_id,
-    startLine: row.start_line,
-    endLine: row.end_line,
-    relativePath: row.relative_path,
-  };
+  // Strip parentheses from the pattern to avoid shell escaping issues.
+  // Agents often pass "functionName()" — strip the () for matching.
+  const cleaned = symbolPattern.replace(/\(\)$/, '').replace(/\(.*$/, '');
+
+  // Try exact-ish match first (with noise filter), then fallback without noise filter.
+  // The noise filter excludes %().(%  which can incorrectly match some symbols.
+  for (const useNoiseFilter of [true, false]) {
+    const noiseClause = useNoiseFilter ? db.symbolNoiseFor('gs') : '';
+    const row = db.get<{
+      id: number;
+      symbol: string;
+      document_id: number;
+      start_line: number;
+      end_line: number;
+      relative_path: string;
+    }>(
+      `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path
+      FROM global_symbols gs
+      JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
+      JOIN documents d ON der.document_id = d.id
+      WHERE gs.symbol LIKE ?
+        ${db.pathExclusionsFor('d')}
+        ${noiseClause}
+      ORDER BY (der.end_line - der.start_line) DESC
+      LIMIT 1`,
+      `%${cleaned}%`,
+    );
+
+    if (row && !db.isIgnored(row.relative_path)) {
+      return {
+        symbolId: row.id,
+        symbol: row.symbol,
+        documentId: row.document_id,
+        startLine: row.start_line,
+        endLine: row.end_line,
+        relativePath: row.relative_path,
+      };
+    }
+  }
+
+  return null;
 }
 
 export function getCalleeRowsForSymbol(
