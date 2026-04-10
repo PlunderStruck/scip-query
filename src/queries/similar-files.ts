@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../db.js';
+import { buildFileDepGraph } from '../query-support.js';
 import type { SimilarFileResult } from '../types.js';
 
 /**
@@ -62,43 +63,44 @@ function buildFileProfiles(
   opts: { scope?: string; minDeps: number },
 ): FileProfile[] {
   const { scope, minDeps } = opts;
-  const scopeFilter = scope ? `AND d1.relative_path LIKE '%${scope}%'` : '';
-
-  // Get all file dependency edges
-  const edges = db.all<{ from_file: string; to_file: string }>(
-    `SELECT DISTINCT
-      d1.relative_path AS from_file,
-      d2.relative_path AS to_file
-    FROM mentions m
-    JOIN chunks c ON m.chunk_id = c.id
-    JOIN documents d1 ON c.document_id = d1.id
-    JOIN global_symbols gs ON m.symbol_id = gs.id
-    JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-    JOIN documents d2 ON der.document_id = d2.id
-    WHERE d1.id != d2.id
-      AND m.role = 0
-      AND d1.relative_path NOT LIKE 'node_modules/%'
-      AND d2.relative_path NOT LIKE 'node_modules/%'
-      ${scopeFilter}`,
-  );
-
-  // Group by source file
-  const depMap = new Map<string, Set<string>>();
-  for (const e of edges) {
-    if (db.isIgnored(e.from_file) || db.isIgnored(e.to_file)) continue;
-    if (!depMap.has(e.from_file)) depMap.set(e.from_file, new Set());
-    depMap.get(e.from_file)!.add(e.to_file);
-  }
+  const depMap = buildFileDepGraph(db, scope);
+  const universalDeps = findUniversalDependencies(depMap);
 
   // Filter to files with enough deps
   const profiles: FileProfile[] = [];
   for (const [file, deps] of depMap) {
     if (deps.size >= minDeps) {
-      profiles.push({ file, deps });
+      profiles.push({
+        file,
+        deps: new Set([...deps].filter((dep) => !universalDeps.has(dep))),
+      });
     }
   }
 
   return profiles;
+}
+
+function findUniversalDependencies(
+  depMap: Map<string, Set<string>>,
+): Set<string> {
+  const universalDeps = new Set<string>();
+  const fileCount = depMap.size;
+  if (fileCount === 0) return universalDeps;
+
+  const depCounts = new Map<string, number>();
+  for (const deps of depMap.values()) {
+    for (const dep of deps) {
+      depCounts.set(dep, (depCounts.get(dep) ?? 0) + 1);
+    }
+  }
+
+  for (const [dep, count] of depCounts) {
+    if (count / fileCount > 0.5) {
+      universalDeps.add(dep);
+    }
+  }
+
+  return universalDeps;
 }
 
 function compareProfiles(

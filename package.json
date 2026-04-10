@@ -8,10 +8,19 @@
   "bin": {
     "scip-query": "dist/cli.js"
   },
+  "sideEffects": false,
   "exports": {
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./queries": {
+      "import": "./dist/queries/index.js",
+      "types": "./dist/queries/index.d.ts"
+    },
+    "./queries/*": {
+      "import": "./dist/queries/*.js",
+      "types": "./dist/queries/*.d.ts"
     }
   },
   "scripts": {

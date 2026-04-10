@@ -81,8 +81,7 @@ export function topCoupling(
     JOIN documents def_d ON der.document_id = def_d.id
     WHERE m.role = 0
       AND def_d.id != ref_d.id
-      AND def_d.relative_path NOT LIKE 'node_modules/%'
-      AND ref_d.relative_path NOT LIKE 'node_modules/%'
+      ${db.pathExclusionsFor('def_d', 'ref_d')}
       ${scopeFilter}
     GROUP BY def_d.id, ref_d.id
     ORDER BY shared DESC

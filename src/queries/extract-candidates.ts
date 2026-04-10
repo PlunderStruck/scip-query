@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../db.js';
+import { getCalleeRowsForSymbol } from '../query-support.js';
 import type { ExtractCandidate } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 
@@ -36,10 +37,9 @@ export function extractCandidates(
     FROM global_symbols gs
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents d ON der.document_id = d.id
-    WHERE d.relative_path NOT LIKE 'node_modules/%'
-      AND d.relative_path NOT LIKE '.git/%'
-      AND gs.symbol NOT LIKE '%typeLiteral%'
-      AND gs.symbol NOT LIKE '%().(%'
+    WHERE 1 = 1
+      ${db.pathExclusionsFor('d')}
+      ${db.symbolNoiseFor('gs')}
       AND (der.end_line - der.start_line + 1) >= ?
       ${scopeFilter}
     ORDER BY (der.end_line - der.start_line + 1) DESC`,
@@ -52,27 +52,15 @@ export function extractCandidates(
     if (db.isIgnored(sym.relative_path)) continue;
 
     // Get callees with their chunk locations (to build co-occurrence)
-    const calleeChunks = db.all<{
-      callee_symbol: string;
-      chunk_id: number;
-    }>(
-      `SELECT DISTINCT callee_gs.symbol AS callee_symbol, c.id AS chunk_id
-      FROM mentions m
-      JOIN chunks c ON m.chunk_id = c.id
-      JOIN global_symbols callee_gs ON m.symbol_id = callee_gs.id
-      JOIN defn_enclosing_ranges callee_der ON callee_gs.id = callee_der.symbol_id
-      JOIN documents callee_d ON callee_der.document_id = callee_d.id
-      WHERE c.document_id = ?
-        AND c.start_line >= ? AND c.end_line <= ?
-        AND m.role = 0
-        AND callee_gs.id != ?
-        AND callee_gs.symbol NOT LIKE '%typeLiteral%'
-        AND callee_d.relative_path NOT LIKE 'node_modules/%'`,
-      sym.document_id, sym.start_line, sym.end_line, sym.id,
-    );
+    const calleeChunks = getCalleeRowsForSymbol(db, {
+      documentId: sym.document_id,
+      startLine: sym.start_line,
+      endLine: sym.end_line,
+      symbolId: sym.id,
+    });
 
     // Collect unique callees
-    const calleeSet = new Set(calleeChunks.map((c) => c.callee_symbol));
+    const calleeSet = new Set(calleeChunks.map((c) => c.symbol));
     if (calleeSet.size < minCallees) continue;
 
     // Build co-occurrence graph: two callees are connected if they
@@ -85,8 +73,8 @@ export function extractCandidates(
     // Group by chunk
     const chunkToCallees = new Map<number, Set<string>>();
     for (const cc of calleeChunks) {
-      if (!chunkToCallees.has(cc.chunk_id)) chunkToCallees.set(cc.chunk_id, new Set());
-      chunkToCallees.get(cc.chunk_id)!.add(cc.callee_symbol);
+      if (!chunkToCallees.has(cc.chunkId)) chunkToCallees.set(cc.chunkId, new Set());
+      chunkToCallees.get(cc.chunkId)!.add(cc.symbol);
     }
 
     // Callees in the same chunk are co-occurring

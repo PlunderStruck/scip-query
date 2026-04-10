@@ -153,8 +153,7 @@ export function byKind(
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents d ON der.document_id = d.id
     WHERE gs.kind = ?
-      AND d.relative_path NOT LIKE 'node_modules/%'
-      AND d.relative_path NOT LIKE '.git/%'
+      ${db.pathExclusionsFor('d')}
       ${scopeFilter}
     ORDER BY d.relative_path, der.start_line
     LIMIT ?`,
@@ -188,8 +187,8 @@ export function kindCounts(
     FROM global_symbols gs
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents d ON der.document_id = d.id
-    WHERE d.relative_path NOT LIKE 'node_modules/%'
-      AND d.relative_path NOT LIKE '.git/%'
+    WHERE 1 = 1
+      ${db.pathExclusionsFor('d')}
       AND gs.kind IS NOT NULL
       AND gs.kind != 0
       ${scopeFilter}

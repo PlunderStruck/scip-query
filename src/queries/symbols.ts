@@ -9,25 +9,26 @@ export function symbols(db: ScipDatabase, filePattern: string): SymbolResult[] {
     end_line: number;
     sig: string | null;
     symbol: string;
+    relative_path: string;
   }>(
     `SELECT
       der.start_line,
       der.end_line,
       REPLACE(SUBSTR(gs.documentation, INSTR(gs.documentation, '|') + 1), char(10), ' ') AS sig,
-      gs.symbol
+      gs.symbol,
+      d.relative_path
     FROM defn_enclosing_ranges der
     JOIN global_symbols gs ON der.symbol_id = gs.id
     JOIN documents d ON der.document_id = d.id
     WHERE d.relative_path LIKE ?
       AND ${db.localSymbolPredicate}
-      AND gs.symbol NOT LIKE '%().(%'
-      AND gs.symbol NOT LIKE '%typeLiteral%'
+      ${db.symbolNoise}
     ORDER BY der.start_line`,
     `%${filePattern}%`,
   );
 
   return rows
-    .filter((r) => !db.isIgnored(r.symbol))
+    .filter((r) => !db.isIgnored(r.relative_path))
     .map((r) => ({
       startLine: r.start_line,
       endLine: r.end_line,
@@ -36,4 +37,3 @@ export function symbols(db: ScipDatabase, filePattern: string): SymbolResult[] {
       signature: cleanSignature(r.sig),
     }));
 }
-

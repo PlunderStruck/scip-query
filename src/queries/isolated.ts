@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../db.js';
+import { testFileExclusionSql } from '../query-support.js';
 import type { IsolatedResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 
@@ -30,13 +31,10 @@ export function isolated(
     FROM global_symbols gs
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents d ON der.document_id = d.id
-    WHERE d.relative_path NOT LIKE 'node_modules/%'
-      AND d.relative_path NOT LIKE '.git/%'
-      AND d.relative_path NOT LIKE '%/__tests__/%'
-      AND d.relative_path NOT LIKE '%.test.%'
-      AND d.relative_path NOT LIKE '%.spec.%'
-      AND gs.symbol NOT LIKE '%typeLiteral%'
-      AND gs.symbol NOT LIKE '%().(%'
+    WHERE 1 = 1
+      ${db.pathExclusionsFor('d')}
+      AND ${testFileExclusionSql('d')}
+      ${db.symbolNoiseFor('gs')}
       AND gs.symbol NOT LIKE '%#%'
       AND (der.end_line - der.start_line + 1) >= ?
       ${scopeFilter}

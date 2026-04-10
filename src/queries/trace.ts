@@ -17,8 +17,7 @@ export function trace(db: ScipDatabase, symbolPattern: string): TraceResult {
     JOIN documents d ON der.document_id = d.id
     WHERE gs.symbol LIKE ?
       AND ${db.localSymbolPredicate}
-      AND gs.symbol NOT LIKE '%().(%'
-      AND gs.symbol NOT LIKE '%typeLiteral%'
+      ${db.symbolNoise}
     ORDER BY d.relative_path, der.start_line
     LIMIT 10`,
     `%${symbolPattern}%`,
@@ -42,8 +41,7 @@ export function trace(db: ScipDatabase, symbolPattern: string): TraceResult {
     JOIN global_symbols gs ON m.symbol_id = gs.id
     WHERE gs.symbol LIKE ?
       AND ${db.localSymbolPredicate}
-      AND gs.symbol NOT LIKE '%().(%'
-      AND gs.symbol NOT LIKE '%typeLiteral%'
+      ${db.symbolNoise}
       AND m.role = 0
     ORDER BY d.relative_path`,
     `%${symbolPattern}%`,
@@ -55,4 +53,3 @@ export function trace(db: ScipDatabase, symbolPattern: string): TraceResult {
 
   return { definitions, referencedBy };
 }
-

@@ -89,8 +89,8 @@ export function topFanIn(
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents def_d ON der.document_id = def_d.id
     WHERE m.role = 0
-      AND def_d.relative_path NOT LIKE 'node_modules/%'
-      AND gs.symbol NOT LIKE '%typeLiteral%'
+      ${db.pathExclusionsFor('def_d')}
+      ${db.symbolNoiseFor('gs')}
       ${scopeFilter}
     GROUP BY gs.id
     HAVING file_count > 1
@@ -130,7 +130,8 @@ export function topFanOut(
     JOIN documents def_d ON der.document_id = def_d.id
     WHERE m.role = 0
       AND def_d.id != d.id
-      AND d.relative_path NOT LIKE 'node_modules/%'
+      ${db.pathExclusionsFor('d')}
+      ${db.symbolNoiseFor('gs')}
       ${scopeFilter}
     GROUP BY d.id
     ORDER BY symbol_count DESC

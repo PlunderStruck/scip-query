@@ -14,8 +14,7 @@ export function methods(db: ScipDatabase, className: string): MethodResult[] {
     WHERE gs.symbol LIKE ?
       AND ${db.localSymbolPredicate}
       AND gs.symbol LIKE '%().%'
-      AND gs.symbol NOT LIKE '%().(%'
-      AND gs.symbol NOT LIKE '%typeLiteral%'
+      ${db.symbolNoise}
     ORDER BY der.start_line`,
     `%${className}#%`,
   );

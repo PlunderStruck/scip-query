@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../db.js';
+import { buildFileDepGraph } from '../query-support.js';
 import type { CycleResult } from '../types.js';
 
 /**
@@ -13,33 +14,7 @@ export function cycles(
   opts: { scope?: string; maxDepth?: number } = {},
 ): CycleResult[] {
   const { scope, maxDepth = 10 } = opts;
-  const scopeFilter = scope ? `AND d1.relative_path LIKE '%${scope}%'` : '';
-
-  // Build the file dependency graph
-  const edges = db.all<{ from_file: string; to_file: string }>(
-    `SELECT DISTINCT
-      d1.relative_path AS from_file,
-      d2.relative_path AS to_file
-    FROM mentions m
-    JOIN chunks c ON m.chunk_id = c.id
-    JOIN documents d1 ON c.document_id = d1.id
-    JOIN global_symbols gs ON m.symbol_id = gs.id
-    JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-    JOIN documents d2 ON der.document_id = d2.id
-    WHERE d1.id != d2.id
-      AND m.role = 0
-      AND d1.relative_path NOT LIKE 'node_modules/%'
-      AND d2.relative_path NOT LIKE 'node_modules/%'
-      ${scopeFilter}`,
-  );
-
-  // Build adjacency list
-  const graph = new Map<string, Set<string>>();
-  for (const edge of edges) {
-    if (db.isIgnored(edge.from_file) || db.isIgnored(edge.to_file)) continue;
-    if (!graph.has(edge.from_file)) graph.set(edge.from_file, new Set());
-    graph.get(edge.from_file)!.add(edge.to_file);
-  }
+  const graph = buildFileDepGraph(db, scope);
 
   // DFS cycle detection
   const allCycles: CycleResult[] = [];

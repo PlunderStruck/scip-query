@@ -19,10 +19,9 @@ export function docCoverage(
     FROM global_symbols gs
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents d ON der.document_id = d.id
-    WHERE d.relative_path NOT LIKE 'node_modules/%'
-      AND d.relative_path NOT LIKE '.git/%'
-      AND gs.symbol NOT LIKE '%typeLiteral%'
-      AND gs.symbol NOT LIKE '%().(%'
+    WHERE 1 = 1
+      ${db.pathExclusionsFor('d')}
+      ${db.symbolNoiseFor('gs')}
       AND gs.symbol NOT LIKE '%#%'
       AND (der.end_line - der.start_line + 1) >= ?
       ${scopeFilter}`,
@@ -34,10 +33,9 @@ export function docCoverage(
     FROM global_symbols gs
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents d ON der.document_id = d.id
-    WHERE d.relative_path NOT LIKE 'node_modules/%'
-      AND d.relative_path NOT LIKE '.git/%'
-      AND gs.symbol NOT LIKE '%typeLiteral%'
-      AND gs.symbol NOT LIKE '%().(%'
+    WHERE 1 = 1
+      ${db.pathExclusionsFor('d')}
+      ${db.symbolNoiseFor('gs')}
       AND gs.symbol NOT LIKE '%#%'
       AND (der.end_line - der.start_line + 1) >= ?
       AND gs.documentation IS NOT NULL
@@ -59,10 +57,9 @@ export function docCoverage(
     FROM global_symbols gs
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents d ON der.document_id = d.id
-    WHERE d.relative_path NOT LIKE 'node_modules/%'
-      AND d.relative_path NOT LIKE '.git/%'
-      AND gs.symbol NOT LIKE '%typeLiteral%'
-      AND gs.symbol NOT LIKE '%().(%'
+    WHERE 1 = 1
+      ${db.pathExclusionsFor('d')}
+      ${db.symbolNoiseFor('gs')}
       AND gs.symbol NOT LIKE '%#%'
       AND (der.end_line - der.start_line + 1) >= ?
       AND (gs.documentation IS NULL OR gs.documentation = '')

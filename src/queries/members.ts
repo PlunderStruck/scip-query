@@ -29,7 +29,7 @@ export function members(db: ScipDatabase, symbolPattern: string): MemberResult[]
     FROM global_symbols gs
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     WHERE gs.enclosing_symbol IN (${placeholders})
-      AND gs.symbol NOT LIKE '%typeLiteral%'
+      ${db.symbolNoise}
     ORDER BY der.start_line`,
     ...parentSymbols,
   );

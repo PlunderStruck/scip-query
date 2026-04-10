@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../db.js';
+import { buildFileDepGraph } from '../query-support.js';
 import type { SimilarChainResult } from '../types.js';
 
 /**
@@ -35,10 +36,10 @@ export function similarChains(
   } = opts;
 
   // Build file dependency graph
-  const graph = buildGraph(db, scope);
+  const graph = buildFileDepGraph(db, scope);
 
   // Generate chains via DFS (bounded length)
-  const chains = generateChains(graph, minChainLength, maxChainLength, db);
+  const chains = generateChains(graph, minChainLength, maxChainLength);
 
   // Pairwise chain comparison using edit distance
   const results: SimilarChainResult[] = [];
@@ -116,47 +117,12 @@ export function similarChains(
   return deduped;
 }
 
-// ── Graph building ─────────────────────────────────────────
-
-function buildGraph(
-  db: ScipDatabase,
-  scope?: string,
-): Map<string, Set<string>> {
-  const scopeFilter = scope ? `AND d1.relative_path LIKE '%${scope}%'` : '';
-
-  const edges = db.all<{ from_file: string; to_file: string }>(
-    `SELECT DISTINCT
-      d1.relative_path AS from_file,
-      d2.relative_path AS to_file
-    FROM mentions m
-    JOIN chunks c ON m.chunk_id = c.id
-    JOIN documents d1 ON c.document_id = d1.id
-    JOIN global_symbols gs ON m.symbol_id = gs.id
-    JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-    JOIN documents d2 ON der.document_id = d2.id
-    WHERE d1.id != d2.id
-      AND m.role = 0
-      AND d1.relative_path NOT LIKE 'node_modules/%'
-      AND d2.relative_path NOT LIKE 'node_modules/%'
-      ${scopeFilter}`,
-  );
-
-  const graph = new Map<string, Set<string>>();
-  for (const e of edges) {
-    if (db.isIgnored(e.from_file) || db.isIgnored(e.to_file)) continue;
-    if (!graph.has(e.from_file)) graph.set(e.from_file, new Set());
-    graph.get(e.from_file)!.add(e.to_file);
-  }
-  return graph;
-}
-
 // ── Chain generation ───────────────────────────────────────
 
 function generateChains(
   graph: Map<string, Set<string>>,
   minLen: number,
   maxLen: number,
-  db: ScipDatabase,
 ): string[][] {
   const chains: string[][] = [];
   const maxChains = 500; // cap to avoid combinatorial explosion

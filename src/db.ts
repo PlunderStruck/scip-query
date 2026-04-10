@@ -61,8 +61,7 @@ export class ScipDatabase {
       FROM defn_enclosing_ranges local_der
       JOIN documents local_d ON local_der.document_id = local_d.id
       WHERE local_der.symbol_id = gs.id
-        AND local_d.relative_path NOT LIKE 'node_modules/%'
-        AND local_d.relative_path NOT LIKE '.git/%'
+        ${this.pathExclusionsFor('local_d').trimStart()}
     )`;
   }
 
@@ -71,15 +70,27 @@ export class ScipDatabase {
    * Complements the JS-level gitignore filtering for performance.
    */
   get pathExclusions(): string {
-    return `
-      AND d.relative_path NOT LIKE 'node_modules/%'
-      AND d.relative_path NOT LIKE '.git/%'
-    `;
+    return this.pathExclusionsFor('d');
   }
 
   /** Reusable SQL fragment: filter out synthetic/internal symbol noise */
   get symbolNoise(): string {
-    return `AND gs.symbol NOT LIKE '%().(%' AND gs.symbol NOT LIKE '%typeLiteral%'`;
+    return this.symbolNoiseFor('gs');
+  }
+
+  /** Build SQL path exclusions for one or more document table aliases */
+  pathExclusionsFor(...aliases: string[]): string {
+    return aliases
+      .flatMap((alias) => [
+        `AND ${alias}.relative_path NOT LIKE 'node_modules/%'`,
+        `AND ${alias}.relative_path NOT LIKE '.git/%'`,
+      ])
+      .join('\n      ');
+  }
+
+  /** Build SQL symbol exclusions for the given global_symbols alias */
+  symbolNoiseFor(alias: string): string {
+    return `AND ${alias}.symbol NOT LIKE '%().(%' AND ${alias}.symbol NOT LIKE '%typeLiteral%'`;
   }
 
   /** Run a raw SQL query and return all rows */

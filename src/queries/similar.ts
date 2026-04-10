@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../db.js';
+import { findFirstSymbolMatch, getCalleeRowsForSymbol } from '../query-support.js';
 import type { SimilarSymbolResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 
@@ -127,46 +128,15 @@ function findCallees(
   db: ScipDatabase,
   symbolPattern: string,
 ): SymbolFingerprint | null {
-  const target = db.get<{
-    id: number;
-    symbol: string;
-    document_id: number;
-    start_line: number;
-    end_line: number;
-    relative_path: string;
-  }>(
-    `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path
-    FROM global_symbols gs
-    JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-    JOIN documents d ON der.document_id = d.id
-    WHERE gs.symbol LIKE ?
-      AND d.relative_path NOT LIKE 'node_modules/%'
-      AND gs.symbol NOT LIKE '%typeLiteral%'
-    LIMIT 1`,
-    `%${symbolPattern}%`,
-  );
+  const target = findFirstSymbolMatch(db, symbolPattern);
 
   if (!target) return null;
 
-  const calleeRows = db.all<{ symbol: string }>(
-    `SELECT DISTINCT callee_gs.symbol
-    FROM mentions m
-    JOIN chunks c ON m.chunk_id = c.id
-    JOIN global_symbols callee_gs ON m.symbol_id = callee_gs.id
-    JOIN defn_enclosing_ranges callee_der ON callee_gs.id = callee_der.symbol_id
-    JOIN documents callee_d ON callee_der.document_id = callee_d.id
-    WHERE c.document_id = ?
-      AND c.start_line >= ? AND c.end_line <= ?
-      AND m.role = 0
-      AND callee_gs.id != ?
-      AND callee_gs.symbol NOT LIKE '%typeLiteral%'
-      AND callee_d.relative_path NOT LIKE 'node_modules/%'`,
-    target.document_id, target.start_line, target.end_line, target.id,
-  );
+  const calleeRows = getCalleeRowsForSymbol(db, target);
 
   return {
     symbol: target.symbol,
-    file: target.relative_path,
+    file: target.relativePath,
     callees: new Set(calleeRows.map((r) => r.symbol)),
   };
 }
@@ -192,10 +162,9 @@ function getAllCalleeFingerprints(
     FROM global_symbols gs
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents d ON der.document_id = d.id
-    WHERE d.relative_path NOT LIKE 'node_modules/%'
-      AND d.relative_path NOT LIKE '.git/%'
-      AND gs.symbol NOT LIKE '%typeLiteral%'
-      AND gs.symbol NOT LIKE '%().(%'
+    WHERE 1 = 1
+      ${db.pathExclusionsFor('d')}
+      ${db.symbolNoiseFor('gs')}
       AND (der.end_line - der.start_line + 1) >= 5
       ${scopeFilter}
       ${excludeFilter}
@@ -207,21 +176,12 @@ function getAllCalleeFingerprints(
   for (const sym of symbols) {
     if (db.isIgnored(sym.relative_path)) continue;
 
-    const calleeRows = db.all<{ symbol: string }>(
-      `SELECT DISTINCT callee_gs.symbol
-      FROM mentions m
-      JOIN chunks c ON m.chunk_id = c.id
-      JOIN global_symbols callee_gs ON m.symbol_id = callee_gs.id
-      JOIN defn_enclosing_ranges callee_der ON callee_gs.id = callee_der.symbol_id
-      JOIN documents callee_d ON callee_der.document_id = callee_d.id
-      WHERE c.document_id = ?
-        AND c.start_line >= ? AND c.end_line <= ?
-        AND m.role = 0
-        AND callee_gs.id != ?
-        AND callee_gs.symbol NOT LIKE '%typeLiteral%'
-        AND callee_d.relative_path NOT LIKE 'node_modules/%'`,
-      sym.document_id, sym.start_line, sym.end_line, sym.id,
-    );
+    const calleeRows = getCalleeRowsForSymbol(db, {
+      documentId: sym.document_id,
+      startLine: sym.start_line,
+      endLine: sym.end_line,
+      symbolId: sym.id,
+    });
 
     const callees = new Set(calleeRows.map((r) => r.symbol));
     if (callees.size >= minCallees) {

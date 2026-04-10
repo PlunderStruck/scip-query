@@ -18,7 +18,7 @@ export function outline(db: ScipDatabase, filePattern: string): OutlineNode[] {
     JOIN global_symbols gs ON der.symbol_id = gs.id
     JOIN documents d ON der.document_id = d.id
     WHERE d.relative_path LIKE ?
-      AND gs.symbol NOT LIKE '%typeLiteral%'
+      ${db.symbolNoise}
     ORDER BY der.start_line`,
     `%${filePattern}%`,
   );

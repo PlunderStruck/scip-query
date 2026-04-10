@@ -1,8 +1,21 @@
+import { readdirSync } from 'node:fs';
 import { defineConfig } from 'tsup';
+
+const queryEntries = Object.fromEntries(
+  readdirSync('src/queries', { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.ts'))
+    .map((entry) => [
+      `queries/${entry.name.replace(/\.ts$/, '')}`,
+      `src/queries/${entry.name}`,
+    ]),
+);
 
 export default defineConfig([
   {
-    entry: { index: 'src/index.ts' },
+    entry: {
+      index: 'src/index.ts',
+      ...queryEntries,
+    },
     format: ['esm'],
     dts: true,
     sourcemap: true,

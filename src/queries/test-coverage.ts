@@ -1,19 +1,7 @@
 import type { ScipDatabase } from '../db.js';
+import { TEST_FILE_PATTERNS, testFileExclusionSql, testFileMatchSql } from '../query-support.js';
 import type { TestCoverageResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
-
-/** Common test file path patterns across languages */
-const TEST_PATTERNS = [
-  '%/__tests__/%',
-  '%.test.%',
-  '%.spec.%',
-  '%/test/%',
-  '%/tests/%',
-  '%_test.%',
-  '%_spec.%',
-  '%/test_%.%',
-  '%/spec_%.%',
-];
 
 /**
  * Check if a symbol is referenced by any test file.
@@ -34,14 +22,13 @@ export function testCoverage(
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents d ON der.document_id = d.id
     WHERE gs.symbol LIKE ?
-      AND d.relative_path NOT LIKE 'node_modules/%'
-      AND gs.symbol NOT LIKE '%typeLiteral%'
-      AND gs.symbol NOT LIKE '%().(%'
+      ${db.pathExclusionsFor('d')}
+      ${db.symbolNoiseFor('gs')}
     ORDER BY d.relative_path`,
     `%${symbolPattern}%`,
   );
 
-  const testPatternSql = TEST_PATTERNS.map((p) => `ref_d.relative_path LIKE '${p}'`).join(' OR ');
+  const testPatternSql = testFileMatchSql('ref_d', TEST_FILE_PATTERNS);
 
   return syms
     .filter((s) => !db.isIgnored(s.relative_path))
@@ -78,24 +65,24 @@ export function testCoverageSummary(
 ): { total: number; covered: number; uncovered: number; percent: number } {
   const { scope, minLoc = 3 } = opts;
   const scopeFilter = scope ? `AND d.relative_path LIKE '%${scope}%'` : '';
-  const testPatternSql = TEST_PATTERNS.map((p) => `d.relative_path NOT LIKE '${p}'`).join(' AND ');
+  const testPatternSql = testFileExclusionSql('d');
 
   const symbols = db.all<{ id: number }>(
     `SELECT gs.id
     FROM global_symbols gs
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents d ON der.document_id = d.id
-    WHERE d.relative_path NOT LIKE 'node_modules/%'
+    WHERE 1 = 1
+      ${db.pathExclusionsFor('d')}
       AND ${testPatternSql}
-      AND gs.symbol NOT LIKE '%typeLiteral%'
-      AND gs.symbol NOT LIKE '%().(%'
+      ${db.symbolNoiseFor('gs')}
       AND gs.symbol NOT LIKE '%#%'
       AND (der.end_line - der.start_line + 1) >= ?
       ${scopeFilter}`,
     minLoc,
   );
 
-  const testRefSql = TEST_PATTERNS.map((p) => `ref_d.relative_path LIKE '${p}'`).join(' OR ');
+  const testRefSql = testFileMatchSql('ref_d', TEST_FILE_PATTERNS);
 
   let covered = 0;
   for (const s of symbols) {

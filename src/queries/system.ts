@@ -30,8 +30,7 @@ export function system(db: ScipDatabase, modulePattern: string): SystemResult {
     JOIN documents d ON der.document_id = d.id
     WHERE d.relative_path LIKE ?
       AND ${db.localSymbolPredicate}
-      AND gs.symbol NOT LIKE '%().(%'
-      AND gs.symbol NOT LIKE '%typeLiteral%'
+      ${db.symbolNoise}
       AND gs.documentation IS NOT NULL
     ORDER BY d.relative_path, der.start_line`,
     `%${modulePattern}%`,
@@ -85,4 +84,3 @@ export function system(db: ScipDatabase, modulePattern: string): SystemResult {
 
   return { files, symbols, dependsOn, dependedOnBy };
 }
-

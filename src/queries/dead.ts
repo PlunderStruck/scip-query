@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../db.js';
+import { TEST_SUPPORT_PATH_PATTERNS, testFileExclusionSql } from '../query-support.js';
 import type { DeadOptions, DeadSymbolResult, DeadSummary } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 
@@ -15,35 +16,22 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     includeMembers = false,
   } = opts;
 
-  // Build dynamic WHERE clauses
-  const conditions: string[] = [
-    `d.relative_path NOT LIKE 'node_modules/%'`,
-    `d.relative_path NOT LIKE '.git/%'`,
-    `gs.symbol NOT LIKE '%().(%'`,
-    `gs.symbol NOT LIKE '%typeLiteral%'`,
-    `(der.end_line - der.start_line + 1) >= ?`,
-  ];
   const params: unknown[] = [minLoc];
+  let testFileExclusions = '';
+  let memberExclusion = '';
 
   if (scope) {
-    conditions.push(`d.relative_path LIKE ?`);
     params.push(`%${scope}%`);
   }
 
   if (!includeTests) {
-    conditions.push(`d.relative_path NOT LIKE '%/__tests__/%'`);
-    conditions.push(`d.relative_path NOT LIKE '%.test.%'`);
-    conditions.push(`d.relative_path NOT LIKE '%.spec.%'`);
-    conditions.push(`d.relative_path NOT LIKE '%/test-utils/%'`);
-    // Python test conventions
-    conditions.push(`d.relative_path NOT LIKE '%/tests/%'`);
-    // Rust test conventions
-    conditions.push(`d.relative_path NOT LIKE '%/test/%'`);
+    testFileExclusions = `
+      AND ${testFileExclusionSql('d', TEST_SUPPORT_PATH_PATTERNS)}
+    `;
   }
 
   if (!includeMembers) {
-    // # is the SCIP type-member delimiter (works across all languages)
-    conditions.push(`gs.symbol NOT LIKE '%#%'`);
+    memberExclusion = `AND gs.symbol NOT LIKE '%#%'`;
   }
 
   // Barrel file exclusion for the NOT EXISTS subquery
@@ -68,7 +56,13 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     FROM global_symbols gs
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents d ON der.document_id = d.id
-    WHERE ${conditions.join('\n      AND ')}
+    WHERE 1 = 1
+      ${db.pathExclusionsFor('d')}
+      ${db.symbolNoiseFor('gs')}
+      AND (der.end_line - der.start_line + 1) >= ?
+      ${scope ? 'AND d.relative_path LIKE ?' : ''}
+      ${testFileExclusions}
+      ${memberExclusion}
       AND NOT EXISTS (
         SELECT 1
         FROM mentions ref_m

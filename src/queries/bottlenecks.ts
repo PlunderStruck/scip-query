@@ -44,10 +44,9 @@ export function bottlenecks(
       FROM global_symbols gs
       JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
       JOIN documents def_d ON der.document_id = def_d.id
-      WHERE def_d.relative_path NOT LIKE 'node_modules/%'
-        AND def_d.relative_path NOT LIKE '.git/%'
-        AND gs.symbol NOT LIKE '%typeLiteral%'
-        AND gs.symbol NOT LIKE '%().(%'
+      WHERE 1 = 1
+        ${db.pathExclusionsFor('def_d')}
+        ${db.symbolNoiseFor('gs')}
         ${scopeFilter}
     ) WHERE fan_in >= ? AND fan_out >= ?
     ORDER BY (fan_in * fan_out) DESC
