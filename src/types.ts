@@ -252,10 +252,19 @@ export interface CallGraphResult {
 
 export interface DriftResult {
   file: string;
-  directory: string;
-  deviationPercent: number;
-  missingExpectedDeps: string[];
-  unexpectedDeps: string[];
+  kind: 'unused-import' | 'layer-violation' | 'pattern-deviation';
+  description: string;
+  /** The dependency involved */
+  dep: string;
+  /** For layer violations: the expected layer boundary */
+  detail?: string;
+}
+
+export interface DriftSummary {
+  results: DriftResult[];
+  unusedImports: number;
+  layerViolations: number;
+  patternDeviations: number;
 }
 
 export interface WrapperCandidate {

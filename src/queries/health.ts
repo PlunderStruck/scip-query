@@ -39,7 +39,7 @@ export function health(
   const wrapperResult = wrapperCandidates(db, { scope, maxLoc: 15, limit: 50 });
   const passthroughResult = passthroughCandidates(db, { scope, maxLoc: 15, limit: 50 });
   const staleResult = staleAbstractions(db, { scope, minLoc: 3, limit: 50 });
-  const driftResult = drift(db, { scope, minDeviation: 30 });
+  const driftResult = drift(db, { scope });
   const complexResult = complexityHotspots(db, { scope, minLoc: 10, limit: 10 });
   const testResult = testCoverageSummary(db, { scope, minLoc: 3 });
 
@@ -78,13 +78,9 @@ export function health(
     return !isTypesFile;
   }).length;
 
-  // Drift: barrels, entry points, and orchestrators naturally deviate.
-  const trueDriftCount = driftResult.filter((d) => {
-    const basename = d.file.split('/').pop() ?? '';
-    return !isEntryPoint(d.file)
-      && !basename.startsWith('index.')
-      && !d.file.includes('health.');
-  }).length;
+  // Drift: now uses usage-based detection (unused imports, layer violations, pattern deviations)
+  // The drift command already filters structural roles internally.
+  const trueDriftCount = driftResult.results.length;
 
   // Similar pairs: only count pairs where similarity is driven by
   // actual logic overlap, not just shared imports. Pairs where the
@@ -228,11 +224,15 @@ export function health(
   }
 
   if (trueDriftCount > 0) {
+    const parts: string[] = [];
+    if (driftResult.unusedImports > 0) parts.push(`${driftResult.unusedImports} unused imports`);
+    if (driftResult.layerViolations > 0) parts.push(`${driftResult.layerViolations} layer violations`);
+    if (driftResult.patternDeviations > 0) parts.push(`${driftResult.patternDeviations} unique deps`);
     actions.push({
-      category: 'Pattern drift',
-      description: `${trueDriftCount} files deviate from their directory's typical dependency pattern (excluding barrels/entry points)`,
-      effort: 'medium',
-      impact: 'low',
+      category: 'Structural drift',
+      description: parts.join(', '),
+      effort: driftResult.layerViolations > 0 ? 'medium' : 'low',
+      impact: driftResult.layerViolations > 0 ? 'medium' : 'low',
       count: trueDriftCount,
       locRecoverable: 0,
     });

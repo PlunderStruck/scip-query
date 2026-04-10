@@ -977,20 +977,27 @@ program
 // drift
 program
   .command('drift [module]')
-  .description('Detect files that deviate from their directory\'s typical dependency pattern')
-  .option('--min-deviation <n>', 'Minimum deviation % to report', parseIntSafe, 30)
-  .action((module, opts) => {
+  .description('Detect unused imports, layer violations, and pattern deviations')
+  .action((module) => {
     const db = openDb();
-    const results = queries.drift(db, { scope: module, minDeviation: opts.minDeviation });
-    if (results.length === 0) {
-      console.log('No pattern drift detected.');
+    const summary = queries.drift(db, { scope: module });
+    if (summary.results.length === 0) {
+      console.log('No drift detected.');
     } else {
-      for (const r of results) {
-        console.log(`\n${r.file}  (${r.deviationPercent}% deviation from ${r.directory})`);
-        if (r.missingExpectedDeps.length) console.log(`  Missing expected: ${r.missingExpectedDeps.join(', ')}`);
-        if (r.unexpectedDeps.length) console.log(`  Unexpected:       ${r.unexpectedDeps.join(', ')}`);
+      const grouped = new Map<string, typeof summary.results>();
+      for (const r of summary.results) {
+        if (!grouped.has(r.file)) grouped.set(r.file, []);
+        grouped.get(r.file)!.push(r);
       }
-      console.log(`\n${results.length} drifted file(s) found.`);
+      for (const [file, items] of grouped) {
+        console.log(`\n${file}`);
+        for (const r of items) {
+          const tag = r.kind === 'unused-import' ? 'UNUSED' : r.kind === 'layer-violation' ? 'LAYER' : 'UNIQUE';
+          console.log(`  [${tag}] ${r.description}`);
+          if (r.detail) console.log(`         ${r.detail}`);
+        }
+      }
+      console.log(`\n${summary.unusedImports} unused import(s), ${summary.layerViolations} layer violation(s), ${summary.patternDeviations} pattern deviation(s)`);
     }
     db.close();
   });
