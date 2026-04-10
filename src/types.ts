@@ -245,6 +245,63 @@ export interface CallGraphResult {
   callees: Array<{ symbol: string; shortName: string; file: string }>;
 }
 
+// ── Drift / Wrapper / Passthrough / Stale / Complexity Types
+
+export interface DriftResult {
+  file: string;
+  directory: string;
+  deviationPercent: number;
+  missingExpectedDeps: string[];
+  unexpectedDeps: string[];
+}
+
+export interface WrapperCandidate {
+  symbol: string;
+  shortName: string;
+  file: string;
+  startLine: number;
+  endLine: number;
+  loc: number;
+  singleCaller: string;
+  singleCallerShort: string;
+  callerFanIn: number;
+}
+
+export interface PassthroughCandidate {
+  symbol: string;
+  shortName: string;
+  file: string;
+  startLine: number;
+  endLine: number;
+  loc: number;
+  forwardsTo: string;
+  forwardsToShort: string;
+  forwardsToFile: string;
+}
+
+export interface StaleAbstraction {
+  symbol: string;
+  shortName: string;
+  file: string;
+  startLine: number;
+  endLine: number;
+  loc: number;
+  consumers: number;
+}
+
+export interface ComplexityHotspot {
+  symbol: string;
+  shortName: string;
+  file: string;
+  startLine: number;
+  endLine: number;
+  loc: number;
+  fanIn: number;
+  fanOut: number;
+  calleeCount: number;
+  score: number;
+}
+
 // ── Similarity / Extraction Types ──────────────────────────
 
 export interface SimilarSymbolResult {
@@ -308,6 +365,87 @@ export interface ExtractCandidate {
     /** How isolated this cluster is from the rest (0-1, higher = more extractable) */
     isolation: number;
   }>;
+}
+
+// ── Health / Convergence Types ──────────────────────────────
+
+export interface HealthAction {
+  category: string;
+  description: string;
+  effort: 'low' | 'medium' | 'high';
+  impact: 'low' | 'medium' | 'high';
+  count: number;
+  locRecoverable: number;
+}
+
+export interface HealthReport {
+  score: number;
+  overview: { documents: number; symbols: number; indexSizeBytes: number };
+  findings: {
+    deadSymbols: number;
+    deadLoc: number;
+    isolatedSymbols: number;
+    isolatedLoc: number;
+    cycles: number;
+    similarPairs: number;
+    extractionCandidates: number;
+    wrappers: number;
+    passthroughs: number;
+    staleTypes: number;
+    driftedFiles: number;
+    complexityHotspotCount: number;
+  };
+  actions: HealthAction[];
+  topComplexity: Array<{ symbol: string; score: number }>;
+}
+
+export interface ConvergenceResult {
+  symbolA: { symbol: string; shortName: string; file: string; loc: number };
+  symbolB: { symbol: string; shortName: string; file: string; loc: number };
+  similarity: number;
+  sharedCallees: string[];
+  uniqueToA: string[];
+  uniqueToB: string[];
+  consolidationStrategy: string;
+}
+
+// ── Affected / Change Surface / Diff Impact Types ────────
+
+export interface AffectedResult {
+  symbol: string;
+  shortName: string;
+  file: string;
+  depth: number;
+}
+
+export interface ChangeSurfaceEntry {
+  symbol: string;
+  shortName: string;
+  startLine: number;
+  endLine: number;
+  externalConsumers: number;
+  testFiles: string[];
+  riskLevel: 'low' | 'medium' | 'high';
+}
+
+export interface ChangeSurfaceResult {
+  file: string;
+  symbols: ChangeSurfaceEntry[];
+  totalExternalConsumers: number;
+  testCoveragePercent: number;
+}
+
+export interface DiffImpactResult {
+  changedFiles: string[];
+  changedSymbols: Array<{ symbol: string; shortName: string; file: string; fanIn: number }>;
+  affectedConsumers: Array<{ file: string; consumedSymbols: number }>;
+  uncoveredSymbols: Array<{ symbol: string; shortName: string; file: string }>;
+  summary: {
+    totalChangedFiles: number;
+    totalChangedSymbols: number;
+    totalAffectedFiles: number;
+    testCoveragePercent: number;
+  };
 }
 
 // ── Dead Code Query Options ────────────────────────────────

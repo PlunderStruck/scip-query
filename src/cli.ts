@@ -893,6 +893,275 @@ program
     );
   });
 
+// affected
+program
+  .command('affected <symbol>')
+  .description('Transitive closure of symbols that could break if this symbol changes')
+  .option('--max-depth <n>', 'Maximum traversal depth', parseIntSafe, 5)
+  .option('-s, --scope <path>', 'Limit to files matching path')
+  .action((symbol, opts) => {
+    const db = openDb();
+    const results = queries.affected(db, symbol, { maxDepth: opts.maxDepth, scope: opts.scope });
+    if (results.length === 0) {
+      console.log('No affected symbols found.');
+    } else {
+      let prevDepth = -1;
+      for (const r of results) {
+        if (r.depth !== prevDepth) {
+          console.log(`\n  ── Depth ${r.depth} ──`);
+          prevDepth = r.depth;
+        }
+        console.log(`  ${r.file}  ${r.shortName}`);
+      }
+      console.log(`\n${results.length} affected symbol(s) across ${new Set(results.map((r) => r.file)).size} files.`);
+    }
+    db.close();
+  });
+
+// change-surface
+program
+  .command('change-surface <file>')
+  .description('Pre-change briefing: exports, consumers, test coverage, risk')
+  .action((file) => {
+    const db = openDb();
+    const result = queries.changeSurface(db, file);
+    if (!result) {
+      console.log('File not found in index.');
+      db.close();
+      return;
+    }
+    console.log(`File: ${result.file}`);
+    console.log(`Test coverage: ${result.testCoveragePercent}% | External consumers: ${result.totalExternalConsumers}\n`);
+    for (const s of result.symbols) {
+      const risk = s.riskLevel === 'high' ? ' *** HIGH RISK ***' : s.riskLevel === 'medium' ? ' * medium risk *' : '';
+      const tests = s.testFiles.length > 0 ? ` (${s.testFiles.length} test file(s))` : ' (no tests)';
+      console.log(`  ${s.startLine}-${s.endLine}  ${s.shortName}  [${s.externalConsumers} consumers]${tests}${risk}`);
+    }
+    db.close();
+  });
+
+// diff-impact
+program
+  .command('diff-impact')
+  .description('Compute affected symbols from current git diff')
+  .option('--base <ref>', 'Git ref to diff against (default: HEAD)')
+  .action((opts) => {
+    const db = openDb();
+    const result = queries.diffImpact(db, { base: opts.base });
+    console.log(`Changed files: ${result.summary.totalChangedFiles}`);
+    console.log(`Changed symbols: ${result.summary.totalChangedSymbols}`);
+    console.log(`Affected consumer files: ${result.summary.totalAffectedFiles}`);
+    console.log(`Test coverage: ${result.summary.testCoveragePercent}%\n`);
+    if (result.changedSymbols.length > 0) {
+      console.log('Changed symbols:');
+      for (const s of result.changedSymbols) {
+        console.log(`  ${s.file}  ${s.shortName}  (fan-in: ${s.fanIn})`);
+      }
+    }
+    if (result.uncoveredSymbols.length > 0) {
+      console.log('\nUncovered (no test references):');
+      for (const s of result.uncoveredSymbols) {
+        console.log(`  ${s.file}  ${s.shortName}`);
+      }
+    }
+    if (result.affectedConsumers.length > 0) {
+      console.log('\nAffected consumer files:');
+      for (const c of result.affectedConsumers) {
+        console.log(`  ${c.file}  (${c.consumedSymbols} symbol(s))`);
+      }
+    }
+    db.close();
+  });
+
+// drift
+program
+  .command('drift [module]')
+  .description('Detect files that deviate from their directory\'s typical dependency pattern')
+  .option('--min-deviation <n>', 'Minimum deviation % to report', parseIntSafe, 30)
+  .action((module, opts) => {
+    const db = openDb();
+    const results = queries.drift(db, { scope: module, minDeviation: opts.minDeviation });
+    if (results.length === 0) {
+      console.log('No pattern drift detected.');
+    } else {
+      for (const r of results) {
+        console.log(`\n${r.file}  (${r.deviationPercent}% deviation from ${r.directory})`);
+        if (r.missingExpectedDeps.length) console.log(`  Missing expected: ${r.missingExpectedDeps.join(', ')}`);
+        if (r.unexpectedDeps.length) console.log(`  Unexpected:       ${r.unexpectedDeps.join(', ')}`);
+      }
+      console.log(`\n${results.length} drifted file(s) found.`);
+    }
+    db.close();
+  });
+
+// wrapper-candidates
+program
+  .command('wrapper-candidates')
+  .description('Find symbols only called by one consumer (premature abstractions)')
+  .option('-s, --scope <path>', 'Limit to files matching path')
+  .option('--max-loc <n>', 'Maximum LOC for candidates', parseIntSafe, 15)
+  .option('-n, --limit <n>', 'Number of results', parseIntSafe, 30)
+  .action((opts) => {
+    const db = openDb();
+    const results = queries.wrapperCandidates(db, { scope: opts.scope, maxLoc: opts.maxLoc, limit: opts.limit });
+    if (results.length === 0) {
+      console.log('No wrapper candidates found.');
+    } else {
+      for (const r of results) {
+        console.log(`  ${r.file}:${r.startLine}-${r.endLine}  ${r.shortName}  (${r.loc} LOC)`);
+        console.log(`    Only called by: ${r.singleCallerShort}  (fan-in: ${r.callerFanIn})`);
+      }
+      console.log(`\n${results.length} wrapper candidate(s).`);
+    }
+    db.close();
+  });
+
+// passthrough-candidates
+program
+  .command('passthrough-candidates')
+  .description('Find functions that just forward to one other function')
+  .option('-s, --scope <path>', 'Limit to files matching path')
+  .option('--max-loc <n>', 'Maximum LOC for candidates', parseIntSafe, 15)
+  .option('-n, --limit <n>', 'Number of results', parseIntSafe, 30)
+  .action((opts) => {
+    const db = openDb();
+    const results = queries.passthroughCandidates(db, { scope: opts.scope, maxLoc: opts.maxLoc, limit: opts.limit });
+    if (results.length === 0) {
+      console.log('No passthrough candidates found.');
+    } else {
+      for (const r of results) {
+        console.log(`  ${r.file}:${r.startLine}-${r.endLine}  ${r.shortName}  (${r.loc} LOC)`);
+        console.log(`    Forwards to: ${r.forwardsToShort}  (${r.forwardsToFile})`);
+      }
+      console.log(`\n${results.length} passthrough candidate(s).`);
+    }
+    db.close();
+  });
+
+// stale-abstractions
+program
+  .command('stale-abstractions')
+  .description('Find types/interfaces with 0-1 consumers (premature abstractions)')
+  .option('-s, --scope <path>', 'Limit to files matching path')
+  .option('--min-loc <n>', 'Minimum LOC', parseIntSafe, 3)
+  .option('-n, --limit <n>', 'Number of results', parseIntSafe, 30)
+  .action((opts) => {
+    const db = openDb();
+    const results = queries.staleAbstractions(db, { scope: opts.scope, minLoc: opts.minLoc, limit: opts.limit });
+    if (results.length === 0) {
+      console.log('No stale abstractions found.');
+    } else {
+      for (const r of results) {
+        const label = r.consumers === 0 ? 'unused' : '1 consumer';
+        console.log(`  ${r.file}:${r.startLine}-${r.endLine}  ${r.shortName}  (${r.loc} LOC, ${label})`);
+      }
+      console.log(`\n${results.length} stale abstraction(s).`);
+    }
+    db.close();
+  });
+
+// complexity-hotspots
+program
+  .command('complexity-hotspots')
+  .description('Composite complexity score: LOC x fan-in x fan-out')
+  .option('-s, --scope <path>', 'Limit to files matching path')
+  .option('--min-loc <n>', 'Minimum LOC', parseIntSafe, 10)
+  .option('-n, --limit <n>', 'Number of results', parseIntSafe, 20)
+  .action((opts) => {
+    const db = openDb();
+    const results = queries.complexityHotspots(db, { scope: opts.scope, minLoc: opts.minLoc, limit: opts.limit });
+    if (results.length === 0) {
+      console.log('No complexity hotspots found.');
+    } else {
+      console.log('  score   LOC  fan-in  fan-out  callees  symbol');
+      console.log('  ─────  ────  ──────  ───────  ───────  ──────');
+      for (const r of results) {
+        console.log(`  ${r.score.toFixed(1).padStart(5)}  ${String(r.loc).padStart(4)}  ${String(r.fanIn).padStart(6)}  ${String(r.fanOut).padStart(7)}  ${String(r.calleeCount).padStart(7)}  ${r.shortName}`);
+      }
+    }
+    db.close();
+  });
+
+// health
+program
+  .command('health')
+  .description('Composite codebase health report with prioritized action list')
+  .option('-s, --scope <path>', 'Limit to files matching path')
+  .option('--json', 'Output as JSON for programmatic consumption')
+  .action((opts) => {
+    const db = openDb();
+    const report = queries.health(db, { scope: opts.scope });
+    if (opts.json) {
+      console.log(JSON.stringify(report, null, 2));
+    } else {
+      console.log(`\n  Codebase Health Score: ${report.score}/100\n`);
+      console.log(`  ${report.overview.documents} files | ${report.overview.symbols} symbols | ${formatBytes(report.overview.indexSizeBytes)}\n`);
+
+      console.log('  Findings:');
+      const f = report.findings;
+      if (f.deadSymbols > 0) console.log(`    Dead code:            ${f.deadSymbols} symbols (${f.deadLoc} LOC)`);
+      if (f.isolatedSymbols > 0) console.log(`    Isolated symbols:     ${f.isolatedSymbols} (${f.isolatedLoc} LOC)`);
+      if (f.cycles > 0) console.log(`    Circular deps:        ${f.cycles}`);
+      if (f.similarPairs > 0) console.log(`    Similar pairs:        ${f.similarPairs}`);
+      if (f.extractionCandidates > 0) console.log(`    Extract candidates:   ${f.extractionCandidates}`);
+      if (f.wrappers > 0) console.log(`    Wrapper functions:    ${f.wrappers}`);
+      if (f.passthroughs > 0) console.log(`    Passthroughs:         ${f.passthroughs}`);
+      if (f.staleTypes > 0) console.log(`    Stale abstractions:   ${f.staleTypes}`);
+      if (f.driftedFiles > 0) console.log(`    Pattern drift:        ${f.driftedFiles} files`);
+      if (f.complexityHotspotCount > 0) console.log(`    Complexity hotspots:  ${f.complexityHotspotCount}`);
+
+      if (report.actions.length > 0) {
+        console.log('\n  Prioritized Actions (highest impact + lowest effort first):');
+        for (let i = 0; i < report.actions.length; i++) {
+          const a = report.actions[i]!;
+          const loc = a.locRecoverable > 0 ? ` (~${a.locRecoverable} LOC recoverable)` : '';
+          console.log(`    ${i + 1}. [${a.effort} effort / ${a.impact} impact] ${a.description}${loc}`);
+        }
+      }
+
+      if (report.topComplexity.length > 0) {
+        console.log('\n  Top Complexity Hotspots:');
+        for (const c of report.topComplexity) {
+          console.log(`    ${c.score.toFixed(1).padStart(6)}  ${c.symbol}`);
+        }
+      }
+
+      if (report.actions.length === 0) {
+        console.log('\n  No issues found. Codebase is clean.');
+      }
+    }
+    db.close();
+  });
+
+// convergence
+program
+  .command('convergence <symbol1> <symbol2>')
+  .description('Show what a consolidated version of two similar functions would look like')
+  .action((symbol1, symbol2) => {
+    const db = openDb();
+    const result = queries.convergence(db, symbol1, symbol2);
+    if (!result) {
+      console.log('One or both symbols not found.');
+      db.close();
+      return;
+    }
+    console.log(`\n${Math.round(result.similarity * 100)}% callee overlap\n`);
+    console.log(`  A: ${result.symbolA.shortName}  (${result.symbolA.file}, ${result.symbolA.loc} LOC)`);
+    console.log(`  B: ${result.symbolB.shortName}  (${result.symbolB.file}, ${result.symbolB.loc} LOC)\n`);
+    console.log(`  Shared callees (${result.sharedCallees.length}):`);
+    for (const c of result.sharedCallees) console.log(`    ${c}`);
+    if (result.uniqueToA.length > 0) {
+      console.log(`\n  Unique to A (${result.uniqueToA.length}):`);
+      for (const c of result.uniqueToA) console.log(`    ${c}`);
+    }
+    if (result.uniqueToB.length > 0) {
+      console.log(`\n  Unique to B (${result.uniqueToB.length}):`);
+      for (const c of result.uniqueToB) console.log(`    ${c}`);
+    }
+    console.log(`\n  Strategy: ${result.consolidationStrategy}`);
+    db.close();
+  });
+
 // init
 program
   .command('init')
