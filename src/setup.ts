@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { get as httpsGet } from 'node:https';
 
 const IS_WINDOWS = platform() === 'win32';
-const SKILLS = ['concrete-plan', 'scip-explore', 'scip-debloat'];
+const SKILLS = ['concrete-plan', 'scip-explore', 'scip-debloat', 'scip-verify'];
 const SCIP_VERSION = 'v0.7.0';
 
 // ── Skills Installation ────────────────────────────────────

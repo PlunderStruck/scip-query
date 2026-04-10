@@ -1288,7 +1288,7 @@ program
 // install-skills
 program
   .command('install-skills')
-  .description('Install skills into Claude Code (~/.claude/skills/) and Codex (~/.codex/skills/)')
+  .description('Install skills (concrete-plan, scip-explore, scip-debloat, scip-verify) into Claude Code and Codex')
   .action(() => {
     const result = installSkills();
     const total = result.installed.length + result.alreadyLinked.length;
