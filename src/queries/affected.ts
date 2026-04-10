@@ -53,7 +53,7 @@ export function affected(
       JOIN global_symbols enc_gs ON enc_der.symbol_id = enc_gs.id
       JOIN documents enc_d ON enc_der.document_id = enc_d.id
       WHERE m.symbol_id IN (${placeholders})
-        AND m.role = 0
+        AND m.role != 1
         AND enc_gs.id NOT IN (${placeholders})
         ${db.symbolNoiseFor('enc_gs')}
         ${db.pathExclusionsFor('enc_d')}

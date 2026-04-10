@@ -48,7 +48,7 @@ export function complexity(
     `SELECT COUNT(DISTINCT c.document_id) AS c
     FROM mentions m
     JOIN chunks c ON m.chunk_id = c.id
-    WHERE m.symbol_id = ? AND m.role = 0`,
+    WHERE m.symbol_id = ? AND m.role != 1`,
     match.symbolId,
   );
 

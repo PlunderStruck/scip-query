@@ -51,7 +51,7 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
       gs.symbol,
       (SELECT COUNT(*) FROM mentions m2
        JOIN chunks c2 ON m2.chunk_id = c2.id
-       WHERE m2.symbol_id = gs.id AND m2.role = 0 AND c2.document_id = d.id
+       WHERE m2.symbol_id = gs.id AND m2.role != 1 AND c2.document_id = d.id
       ) AS same_file_refs
     FROM global_symbols gs
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
@@ -69,7 +69,7 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
         JOIN chunks ref_c ON ref_m.chunk_id = ref_c.id
         JOIN documents ref_d ON ref_c.document_id = ref_d.id
         WHERE ref_m.symbol_id = gs.id
-          AND ref_m.role = 0
+          AND ref_m.role != 1
           AND ref_d.id != d.id
           ${barrelExclusions}
       )

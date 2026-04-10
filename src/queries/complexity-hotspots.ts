@@ -39,7 +39,7 @@ export function complexityHotspots(
       (SELECT COUNT(DISTINCT ref_c.document_id)
        FROM mentions ref_m
        JOIN chunks ref_c ON ref_m.chunk_id = ref_c.id
-       WHERE ref_m.symbol_id = gs.id AND ref_m.role = 0
+       WHERE ref_m.symbol_id = gs.id AND ref_m.role != 1
       ) AS fan_in,
       -- fanOut: distinct symbols referenced within this definition range
       -- that are defined in different files
@@ -51,7 +51,7 @@ export function complexityHotspots(
        WHERE out_c.document_id = der.document_id
          AND out_c.start_line >= der.start_line
          AND out_c.end_line <= der.end_line
-         AND out_m.role = 0
+         AND out_m.role != 1
          AND out_gs.id != gs.id
          AND out_der.document_id != der.document_id
       ) AS fan_out,
@@ -63,7 +63,7 @@ export function complexityHotspots(
        WHERE callee_c.document_id = der.document_id
          AND callee_c.start_line >= der.start_line
          AND callee_c.end_line <= der.end_line
-         AND callee_m.role = 0
+         AND callee_m.role != 1
          AND callee_gs.id != gs.id
       ) AS callee_count
     FROM global_symbols gs
@@ -80,7 +80,7 @@ export function complexityHotspots(
       * CAST((SELECT COUNT(DISTINCT ref_c2.document_id)
               FROM mentions ref_m2
               JOIN chunks ref_c2 ON ref_m2.chunk_id = ref_c2.id
-              WHERE ref_m2.symbol_id = gs.id AND ref_m2.role = 0
+              WHERE ref_m2.symbol_id = gs.id AND ref_m2.role != 1
              ) AS REAL) / 5.0
       * MAX(CAST((SELECT COUNT(DISTINCT out_gs2.id)
                   FROM mentions out_m2
@@ -90,7 +90,7 @@ export function complexityHotspots(
                   WHERE out_c2.document_id = der.document_id
                     AND out_c2.start_line >= der.start_line
                     AND out_c2.end_line <= der.end_line
-                    AND out_m2.role = 0
+                    AND out_m2.role != 1
                     AND out_gs2.id != gs.id
                     AND out_der2.document_id != der.document_id
                  ) AS REAL) / 5.0, 1.0)

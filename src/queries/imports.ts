@@ -80,7 +80,7 @@ export function unusedImports(db: ScipDatabase, filePattern: string): UnusedImpo
         FROM mentions ref_m
         JOIN chunks ref_c ON ref_m.chunk_id = ref_c.id
         WHERE ref_m.symbol_id = gs.id
-          AND ref_m.role = 0
+          AND ref_m.role != 1
           AND ref_c.document_id = d.id
       )
     ORDER BY d.relative_path, gs.symbol`,

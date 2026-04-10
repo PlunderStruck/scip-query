@@ -48,7 +48,7 @@ export function redundantReexports(
     JOIN global_symbols gs ON m.symbol_id = gs.id
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents orig_d ON der.document_id = orig_d.id
-    WHERE m.role = 0
+    WHERE m.role != 1
       AND (barrel_d.relative_path LIKE '%/index.ts'
         OR barrel_d.relative_path LIKE '%/index.js'
         OR barrel_d.relative_path = 'index.ts'
@@ -109,20 +109,20 @@ export function redundantReexports(
             FROM mentions barrel_m
             JOIN chunks barrel_c ON barrel_m.chunk_id = barrel_c.id
             WHERE barrel_c.document_id = consumer_d.id
-              AND barrel_m.role = 0
+              AND barrel_m.role != 1
               AND barrel_m.symbol_id IN (
                 SELECT m2.symbol_id
                 FROM mentions m2
                 JOIN chunks c2 ON m2.chunk_id = c2.id
                 WHERE c2.document_id = ?
-                  AND m2.role = 0
+                  AND m2.role != 1
               )
           ) THEN 1 ELSE 0 END) AS uses_barrel
         FROM mentions ref_m
         JOIN chunks ref_c ON ref_m.chunk_id = ref_c.id
         JOIN documents consumer_d ON ref_c.document_id = consumer_d.id
         WHERE ref_m.symbol_id = ?
-          AND ref_m.role = 0
+          AND ref_m.role != 1
           AND consumer_d.id != ?
           AND consumer_d.id != ?
           ${db.pathExclusionsFor('consumer_d')}

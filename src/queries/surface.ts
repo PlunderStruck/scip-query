@@ -18,7 +18,7 @@ export function surface(db: ScipDatabase, modulePattern: string): SurfaceResult[
     WHERE d2.relative_path LIKE ?
       AND d1.relative_path NOT LIKE ?
       AND ${db.localSymbolPredicate}
-      AND m.role = 0
+      AND m.role != 1
     ORDER BY d1.relative_path`,
     `%${modulePattern}%`,
     `%${modulePattern}%`,

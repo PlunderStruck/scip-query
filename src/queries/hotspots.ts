@@ -31,7 +31,7 @@ export function hotspots(
     JOIN global_symbols gs ON m.symbol_id = gs.id
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents def_d ON der.document_id = def_d.id
-    WHERE m.role = 0
+    WHERE m.role != 1
       ${db.pathExclusionsFor('def_d')}
       ${db.symbolNoiseFor('gs')}
       ${scopeFilter}

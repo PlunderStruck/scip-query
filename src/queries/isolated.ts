@@ -42,13 +42,13 @@ export function isolated(
       AND NOT EXISTS (
         SELECT 1 FROM mentions m
         JOIN chunks c ON m.chunk_id = c.id
-        WHERE m.symbol_id = gs.id AND m.role = 0 AND c.document_id != d.id
+        WHERE m.symbol_id = gs.id AND m.role != 1 AND c.document_id != d.id
       )
       -- No same-file references either
       AND NOT EXISTS (
         SELECT 1 FROM mentions m
         JOIN chunks c ON m.chunk_id = c.id
-        WHERE m.symbol_id = gs.id AND m.role = 0 AND c.document_id = d.id
+        WHERE m.symbol_id = gs.id AND m.role != 1 AND c.document_id = d.id
       )
     ORDER BY loc DESC, d.relative_path`,
     minLoc,

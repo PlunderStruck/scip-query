@@ -34,7 +34,7 @@ export function callGraph(db: ScipDatabase, symbolPattern: string): CallGraphRes
     JOIN global_symbols caller_gs ON caller_der.symbol_id = caller_gs.id
     JOIN documents caller_d ON caller_der.document_id = caller_d.id
     WHERE m.symbol_id = ?
-      AND m.role = 0
+      AND m.role != 1
       AND caller_gs.id != ?
       ${db.symbolNoiseFor('caller_gs')}
       ${db.pathExclusionsFor('caller_d')}

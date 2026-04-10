@@ -457,7 +457,7 @@ export interface DataflowResult {
   relativePath: string;
   /** Where the symbol is defined (role=1) */
   definitionSites: Array<{ file: string; line: number }>;
-  /** Where the symbol is referenced (role=0) */
+  /** Where the symbol is referenced (role!=1) */
   usageSites: Array<{ file: string; line: number; enclosingSymbol: string; enclosingShort: string }>;
   /** Symbols that appear in the same function that defines this symbol (producers/inputs) */
   producers: Array<{ symbol: string; shortName: string; file: string }>;

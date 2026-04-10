@@ -46,7 +46,7 @@ export function wrapperCandidates(
            AND ref_c.end_line <= caller_der.end_line
          JOIN global_symbols caller_gs ON caller_der.symbol_id = caller_gs.id
          WHERE ref_m.symbol_id = gs.id
-           AND ref_m.role = 0
+           AND ref_m.role != 1
            AND ref_c.document_id != der.document_id
          LIMIT 1
         ) AS caller_symbol,
@@ -63,11 +63,11 @@ export function wrapperCandidates(
              AND ref_c2.start_line >= caller_der2.start_line
              AND ref_c2.end_line <= caller_der2.end_line
            WHERE ref_m2.symbol_id = gs.id
-             AND ref_m2.role = 0
+             AND ref_m2.role != 1
              AND ref_c2.document_id != der.document_id
            LIMIT 1
          )
-         AND caller_ref_m.role = 0
+         AND caller_ref_m.role != 1
         ) AS caller_fan_in
       FROM global_symbols gs
       JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
@@ -87,7 +87,7 @@ export function wrapperCandidates(
           FROM mentions ref_m
           JOIN chunks ref_c ON ref_m.chunk_id = ref_c.id
           WHERE ref_m.symbol_id = gs.id
-            AND ref_m.role = 0
+            AND ref_m.role != 1
             AND ref_c.document_id != der.document_id
         ) = 1
     ) WHERE caller_symbol IS NOT NULL AND caller_fan_in > 3

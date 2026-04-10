@@ -13,7 +13,7 @@ export function refs(db: ScipDatabase, symbolPattern: string): RefResult[] {
     JOIN global_symbols gs ON m.symbol_id = gs.id
     WHERE gs.symbol LIKE ?
       AND ${db.localSymbolPredicate}
-      AND m.role = 0
+      AND m.role != 1
     ORDER BY d.relative_path, c.start_line`,
     `%${symbolPattern}%`,
   );

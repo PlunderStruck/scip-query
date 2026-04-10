@@ -53,7 +53,7 @@ export function dataflow(
     FROM mentions m
     JOIN chunks c ON m.chunk_id = c.id
     JOIN documents d ON c.document_id = d.id
-    WHERE m.symbol_id = ? AND m.role = 0
+    WHERE m.symbol_id = ? AND m.role != 1
       ${db.pathExclusionsFor('d')}
     ORDER BY d.relative_path, c.start_line`,
     match.symbolId,
@@ -69,7 +69,7 @@ export function dataflow(
     JOIN documents other_d ON other_der.document_id = other_d.id
     WHERE other_c.document_id = ?
       AND other_c.start_line >= ? AND other_c.end_line <= ?
-      AND other_m.role = 0
+      AND other_m.role != 1
       AND other_gs.id != ?
       ${db.symbolNoiseFor('other_gs')}
       ${db.pathExclusionsFor('other_d')}
@@ -92,11 +92,11 @@ export function dataflow(
       AND enc_der.end_line >= ref_c.end_line
     JOIN global_symbols enc_gs ON enc_der.symbol_id = enc_gs.id
     -- Find other symbols defined by that enclosing function's file
-    JOIN mentions consumer_m ON consumer_m.symbol_id = enc_gs.id AND consumer_m.role = 0
+    JOIN mentions consumer_m ON consumer_m.symbol_id = enc_gs.id AND consumer_m.role != 1
     JOIN chunks consumer_c ON consumer_m.chunk_id = consumer_c.id
     JOIN documents consumer_d ON consumer_c.document_id = consumer_d.id
     JOIN global_symbols consumer_gs ON consumer_m.symbol_id = consumer_gs.id
-    WHERE ref_m.symbol_id = ? AND ref_m.role = 0
+    WHERE ref_m.symbol_id = ? AND ref_m.role != 1
       AND consumer_d.id != ref_d.id
       ${db.symbolNoiseFor('consumer_gs')}
       ${db.pathExclusionsFor('consumer_d')}

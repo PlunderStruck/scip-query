@@ -30,7 +30,7 @@ export function bottlenecks(
         (SELECT COUNT(DISTINCT ref_c.document_id)
          FROM mentions ref_m
          JOIN chunks ref_c ON ref_m.chunk_id = ref_c.id
-         WHERE ref_m.symbol_id = gs.id AND ref_m.role = 0
+         WHERE ref_m.symbol_id = gs.id AND ref_m.role != 1
         ) AS fan_in,
         (SELECT COUNT(DISTINCT ref_gs.id)
          FROM mentions ref_m
@@ -38,7 +38,7 @@ export function bottlenecks(
          JOIN global_symbols ref_gs ON ref_m.symbol_id = ref_gs.id
          JOIN defn_enclosing_ranges ref_der ON ref_gs.id = ref_der.symbol_id
          WHERE ref_c.document_id = def_d.id
-           AND ref_m.role = 0
+           AND ref_m.role != 1
            AND ref_der.document_id != def_d.id
         ) AS fan_out
       FROM global_symbols gs

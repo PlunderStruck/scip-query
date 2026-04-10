@@ -37,7 +37,7 @@ export function staleAbstractions(
          FROM mentions ref_m
          JOIN chunks ref_c ON ref_m.chunk_id = ref_c.id
          WHERE ref_m.symbol_id = gs.id
-           AND ref_m.role = 0
+           AND ref_m.role != 1
            AND ref_c.document_id != der.document_id
         ) AS consumers
       FROM global_symbols gs

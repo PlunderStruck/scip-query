@@ -19,7 +19,7 @@ export function fanIn(
     JOIN chunks c ON m.chunk_id = c.id
     JOIN global_symbols gs ON m.symbol_id = gs.id
     WHERE gs.symbol LIKE ?
-      AND m.role = 0
+      AND m.role != 1
     GROUP BY gs.id
     ORDER BY file_count DESC`,
     `%${symbolPattern}%`,
@@ -51,7 +51,7 @@ export function fanOut(
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents def_d ON der.document_id = def_d.id
     WHERE d.relative_path LIKE ?
-      AND m.role = 0
+      AND m.role != 1
       AND def_d.id != d.id
     GROUP BY d.id
     ORDER BY symbol_count DESC`,
@@ -88,7 +88,7 @@ export function topFanIn(
     JOIN global_symbols gs ON m.symbol_id = gs.id
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents def_d ON der.document_id = def_d.id
-    WHERE m.role = 0
+    WHERE m.role != 1
       ${db.pathExclusionsFor('def_d')}
       ${db.symbolNoiseFor('gs')}
       ${scopeFilter}
@@ -128,7 +128,7 @@ export function topFanOut(
     JOIN global_symbols gs ON m.symbol_id = gs.id
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents def_d ON der.document_id = def_d.id
-    WHERE m.role = 0
+    WHERE m.role != 1
       AND def_d.id != d.id
       ${db.pathExclusionsFor('d')}
       ${db.symbolNoiseFor('gs')}

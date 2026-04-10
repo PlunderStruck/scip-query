@@ -24,7 +24,7 @@ export function coupling(
         SELECT 1 FROM mentions m
         JOIN chunks c ON m.chunk_id = c.id
         JOIN documents d ON c.document_id = d.id
-        WHERE m.symbol_id = gs.id AND m.role = 0 AND d.relative_path LIKE ?
+        WHERE m.symbol_id = gs.id AND m.role != 1 AND d.relative_path LIKE ?
       )
     ) OR (
       -- Defined in file2, referenced in file1
@@ -37,7 +37,7 @@ export function coupling(
         SELECT 1 FROM mentions m
         JOIN chunks c ON m.chunk_id = c.id
         JOIN documents d ON c.document_id = d.id
-        WHERE m.symbol_id = gs.id AND m.role = 0 AND d.relative_path LIKE ?
+        WHERE m.symbol_id = gs.id AND m.role != 1 AND d.relative_path LIKE ?
       )
     )`,
     `%${file1}%`, `%${file2}%`,
@@ -79,7 +79,7 @@ export function topCoupling(
     JOIN global_symbols gs ON m.symbol_id = gs.id
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents def_d ON der.document_id = def_d.id
-    WHERE m.role = 0
+    WHERE m.role != 1
       AND def_d.id != ref_d.id
       ${db.pathExclusionsFor('def_d', 'ref_d')}
       ${scopeFilter}

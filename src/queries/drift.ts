@@ -158,7 +158,7 @@ function buildSymbolRefGraph(
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents d2 ON der.document_id = d2.id
     WHERE d1.id != d2.id
-      AND m.role = 0
+      AND m.role != 1
       ${db.pathExclusionsFor('d1', 'd2')}
       ${scopeFilter}`,
   );

@@ -42,7 +42,7 @@ export function trace(db: ScipDatabase, symbolPattern: string): TraceResult {
     WHERE gs.symbol LIKE ?
       AND ${db.localSymbolPredicate}
       ${db.symbolNoise}
-      AND m.role = 0
+      AND m.role != 1
     ORDER BY d.relative_path`,
     `%${symbolPattern}%`,
   );

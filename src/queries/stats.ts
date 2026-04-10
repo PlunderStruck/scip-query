@@ -8,7 +8,7 @@ export function stats(db: ScipDatabase): StatsResult {
     'SELECT COUNT(*) as c FROM mentions WHERE role = 1',
   )!.c;
   const references = db.get<{ c: number }>(
-    'SELECT COUNT(*) as c FROM mentions WHERE role = 0',
+    'SELECT COUNT(*) as c FROM mentions WHERE role != 1',
   )!.c;
 
   return {

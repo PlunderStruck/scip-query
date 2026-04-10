@@ -121,7 +121,7 @@ export function diffImpact(
       FROM mentions m
       JOIN chunks c ON m.chunk_id = c.id
       WHERE m.symbol_id = ?
-        AND m.role = 0`,
+        AND m.role != 1`,
       sym.symbol_id,
     );
 
@@ -142,7 +142,7 @@ export function diffImpact(
       JOIN chunks c ON m.chunk_id = c.id
       JOIN documents ref_d ON c.document_id = ref_d.id
       WHERE m.symbol_id = ?
-        AND m.role = 0
+        AND m.role != 1
         AND ref_d.relative_path NOT IN (${changedFiles.map(() => '?').join(',')})
         ${db.pathExclusionsFor('ref_d')}`,
       sym.symbol_id,
@@ -164,7 +164,7 @@ export function diffImpact(
       JOIN chunks c ON m.chunk_id = c.id
       JOIN documents ref_d ON c.document_id = ref_d.id
       WHERE m.symbol_id = ?
-        AND m.role = 0
+        AND m.role != 1
         AND (${testPatternSql})`,
       sym.symbol_id,
     );

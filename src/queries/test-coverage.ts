@@ -40,7 +40,7 @@ export function testCoverage(
         JOIN chunks c ON m.chunk_id = c.id
         JOIN documents ref_d ON c.document_id = ref_d.id
         WHERE m.symbol_id = ?
-          AND m.role = 0
+          AND m.role != 1
           AND (${testPatternSql})
         ORDER BY ref_d.relative_path`,
         s.id,
@@ -90,7 +90,7 @@ export function testCoverageSummary(
       `SELECT COUNT(*) AS c FROM mentions m
        JOIN chunks c ON m.chunk_id = c.id
        JOIN documents ref_d ON c.document_id = ref_d.id
-       WHERE m.symbol_id = ? AND m.role = 0 AND (${testRefSql})`,
+       WHERE m.symbol_id = ? AND m.role != 1 AND (${testRefSql})`,
       s.id,
     );
     if (hasTest && hasTest.c > 0) covered++;

@@ -113,7 +113,7 @@ function forwardSlice(db: ScipDatabase, match: SymbolMatch): SliceResult {
     JOIN global_symbols enc_gs ON enc_der.symbol_id = enc_gs.id
     JOIN documents enc_d ON enc_der.document_id = enc_d.id
     -- Find other symbols referenced within that enclosing function
-    JOIN mentions out_m ON out_m.role = 0
+    JOIN mentions out_m ON out_m.role != 1
     JOIN chunks out_c ON out_m.chunk_id = out_c.id
       AND out_c.document_id = enc_der.document_id
       AND out_c.start_line >= enc_der.start_line
@@ -121,7 +121,7 @@ function forwardSlice(db: ScipDatabase, match: SymbolMatch): SliceResult {
     JOIN global_symbols out_gs ON out_m.symbol_id = out_gs.id
     JOIN defn_enclosing_ranges out_der ON out_gs.id = out_der.symbol_id
     JOIN documents out_d ON out_der.document_id = out_d.id
-    WHERE ref_m.symbol_id = ? AND ref_m.role = 0
+    WHERE ref_m.symbol_id = ? AND ref_m.role != 1
       AND out_gs.id != ? AND out_gs.id != enc_gs.id
       AND out_d.id != ref_d.id
       ${db.symbolNoiseFor('out_gs')}
