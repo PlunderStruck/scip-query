@@ -76,6 +76,8 @@ export function wrapperCandidates(
         ${db.pathExclusionsFor('d')}
         AND ${testFileExclusionSql('d')}
         ${db.symbolNoiseFor('gs')}
+        -- Only functions/terms, not type definitions (types with # are not wrappers)
+        AND gs.symbol NOT LIKE '%#'
         AND (der.end_line - der.start_line + 1) <= ?
         AND (der.end_line - der.start_line + 1) >= 2
         ${scopeFilter}

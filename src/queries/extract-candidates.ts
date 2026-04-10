@@ -51,6 +51,12 @@ export function extractCandidates(
   for (const sym of symbols) {
     if (db.isIgnored(sym.relative_path)) continue;
 
+    // Skip pure type files — "callees" in a type file are just type references,
+    // not function calls. Splitting type files is a cosmetic choice, not an
+    // extraction opportunity.
+    const basename = sym.relative_path.split('/').pop() ?? '';
+    if (basename.includes('types')) continue;
+
     // Get callees with their chunk locations (to build co-occurrence)
     const calleeChunks = getCalleeRowsForSymbol(db, {
       documentId: sym.document_id,

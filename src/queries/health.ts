@@ -68,14 +68,24 @@ export function health(
     (s) => !isEntryPoint(s.relativePath),
   ).length;
 
-  // Stale abstractions: types defined in a dedicated types file with exactly
-  // 1 consumer are normal API types, not premature abstractions.
-  // Only count as stale if: 0 consumers, OR 1 consumer but NOT in a types file.
+  // Stale abstractions: the command filters out types.ts single-consumer types.
+  // Also filter out 0-consumer types in files that export functions — these are
+  // likely parameter/return types consumed through function signatures, which
+  // the SCIP index can't track as direct mentions.
+  const filesWithFunctions = new Set(
+    db.all<{ relative_path: string }>(
+      `SELECT DISTINCT d.relative_path
+       FROM global_symbols gs
+       JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
+       JOIN documents d ON der.document_id = d.id
+       WHERE gs.symbol LIKE '%().'
+         ${db.pathExclusionsFor('d')}`,
+    ).map((r) => r.relative_path),
+  );
   const trueStaleCount = staleResult.filter((s) => {
-    if (s.consumers === 0) return true; // truly unused — always stale
-    // 1-consumer types in a dedicated types file are normal API types
-    const isTypesFile = s.file.includes('types.ts') || s.file.includes('types/');
-    return !isTypesFile;
+    // 0-consumer types in files with functions are likely param/return types
+    if (s.consumers === 0 && filesWithFunctions.has(s.file)) return false;
+    return true;
   }).length;
 
   // Drift: now uses usage-based detection (unused imports, layer violations, pattern deviations)
@@ -183,7 +193,12 @@ export function health(
   }
 
   if (trueStaleCount > 0) {
-    const unused = staleResult.filter((s) => s.consumers === 0).length;
+    // Count from the filtered set, not the raw result
+    const trueStaleSymbols = staleResult.filter((s) => {
+      if (s.consumers === 0 && filesWithFunctions.has(s.file)) return false;
+      return true;
+    });
+    const unused = trueStaleSymbols.filter((s) => s.consumers === 0).length;
     const singleUse = trueStaleCount - unused;
     const parts: string[] = [];
     if (unused > 0) parts.push(`${unused} unused`);

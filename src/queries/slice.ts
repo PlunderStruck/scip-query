@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch, getCalleeRowsForSymbol } from '../query-support.js';
+import { findFirstSymbolMatch, getCalleeRowsForSymbol, type SymbolMatch } from '../query-support.js';
 import type { SliceResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 
@@ -33,14 +33,6 @@ export function slice(
   }
 }
 
-interface SymbolMatch {
-  symbolId: number;
-  symbol: string;
-  documentId: number;
-  startLine: number;
-  endLine: number;
-  relativePath: string;
-}
 
 function backwardSlice(db: ScipDatabase, match: SymbolMatch): SliceResult {
   // Find all symbols referenced within the definition range of the target.

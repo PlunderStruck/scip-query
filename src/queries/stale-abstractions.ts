@@ -60,6 +60,16 @@ export function staleAbstractions(
 
   return rows
     .filter((r) => !db.isIgnored(r.file))
+    // Exclude types defined in dedicated type files (types.ts, types/, etc.)
+    // These are intentional public API types, not premature abstractions.
+    .filter((r) => {
+      const basename = r.file.split('/').pop() ?? '';
+      const isTypeFile = basename.includes('types') || r.file.includes('/types/');
+      // Types in type files with 1 consumer are normal API types — skip them.
+      // Types in type files with 0 consumers are genuinely unused — keep them.
+      if (isTypeFile && r.consumers > 0) return false;
+      return true;
+    })
     .map((r) => ({
       symbol: r.symbol,
       shortName: shortenSymbol(r.symbol),
