@@ -397,6 +397,7 @@ export interface HealthReport {
     staleTypes: number;
     driftedFiles: number;
     complexityHotspotCount: number;
+    testCoveragePercent: number;
   };
   actions: HealthAction[];
   topComplexity: Array<{ symbol: string; score: number }>;

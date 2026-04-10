@@ -11,42 +11,7 @@ import { drift } from './drift.js';
 import { complexityHotspots } from './complexity-hotspots.js';
 import { testCoverageSummary } from './test-coverage.js';
 import { stats } from './stats.js';
-
-export interface HealthAction {
-  category: string;
-  description: string;
-  effort: 'low' | 'medium' | 'high';
-  impact: 'low' | 'medium' | 'high';
-  count: number;
-  locRecoverable: number;
-}
-
-export interface HealthReport {
-  /** 0-100, higher is healthier */
-  score: number;
-  overview: {
-    documents: number;
-    symbols: number;
-    indexSizeBytes: number;
-  };
-  findings: {
-    deadSymbols: number;
-    deadLoc: number;
-    isolatedSymbols: number;
-    isolatedLoc: number;
-    cycles: number;
-    similarPairs: number;
-    extractionCandidates: number;
-    wrappers: number;
-    passthroughs: number;
-    staleTypes: number;
-    driftedFiles: number;
-    complexityHotspotCount: number;
-    testCoveragePercent: number;
-  };
-  actions: HealthAction[];
-  topComplexity: Array<{ symbol: string; score: number }>;
-}
+import type { HealthAction, HealthReport } from '../types.js';
 
 /**
  * Single composite health report that runs all de-bloat analyses
@@ -66,7 +31,7 @@ export function health(
 
   // Run all analyses
   const s = stats(db);
-  const deadResult = dead(db, { scope, minLoc: 3, skipBarrels: true });
+  const deadResult = dead(db, { scope, minLoc: 3, skipBarrels: false });
   const isolatedResult = isolated(db, { scope, minLoc: 3 });
   const cycleResult = cycles(db, { scope });
   const similarResult = similarAll(db, { scope, minSimilarity: 0.6, limit: 50, minCallees: 4 });

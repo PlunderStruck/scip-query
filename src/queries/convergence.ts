@@ -1,16 +1,7 @@
 import type { ScipDatabase } from '../db.js';
 import { findFirstSymbolMatch, getCalleeRowsForSymbol } from '../query-support.js';
+import type { ConvergenceResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
-
-export interface ConvergenceResult {
-  symbolA: { symbol: string; shortName: string; file: string; loc: number };
-  symbolB: { symbol: string; shortName: string; file: string; loc: number };
-  similarity: number;
-  sharedCallees: string[];
-  uniqueToA: string[];
-  uniqueToB: string[];
-  consolidationStrategy: string;
-}
 
 /**
  * Given two similar symbols, show what a consolidated version would look like.
