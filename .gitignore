@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.scip
+*.db
+.DS_Store
+coverage/
+.env
