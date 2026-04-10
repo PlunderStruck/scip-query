@@ -4,6 +4,16 @@ Language-agnostic code intelligence CLI powered by [SCIP](https://github.com/sou
 
 Works with every language that has a SCIP indexer: TypeScript, JavaScript, Java, Scala, Kotlin, Rust, Python, Ruby, Go, C/C++, C#, Dart, PHP.
 
+## Workflows
+
+For goal-oriented usage guides (not just command reference), see **[Agent Guide](docs/AGENT_GUIDE.md)**:
+
+- **[Understand a system](docs/AGENT_GUIDE.md#workflow-1-understand-a-system-before-making-changes)** — map a module, trace symbols, check blast radius
+- **[Write an implementation plan](docs/AGENT_GUIDE.md#workflow-2-write-a-concrete-implementation-plan)** — identify contracts, map dependencies, find reusable code
+- **[De-bloat a codebase](docs/AGENT_GUIDE.md#workflow-3-clean-up-and-de-bloat-a-codebase)** — prioritized cleanup from dead code to pattern drift
+- **[Assess code quality](docs/AGENT_GUIDE.md#workflow-4-assess-code-quality-and-risk)** — health score, complexity hotspots, coupling risks
+- **[Verify change impact](docs/AGENT_GUIDE.md#workflow-5-understand-impact-after-making-changes)** — diff impact, transitive blast radius, test gaps
+
 ## Quick Start
 
 ```bash
@@ -15,11 +25,13 @@ scip-query reindex
 
 # Start querying
 scip-query stats
+scip-query health                        # full codebase health report
 scip-query symbols src/auth.service.ts
 scip-query refs login
+scip-query affected login                # transitive blast radius
 scip-query dead --min-loc 10
-scip-query hotspots
 scip-query similar --min-similarity 0.5
+scip-query diff-impact                   # what did my changes affect?
 ```
 
 ## Prerequisites
@@ -833,12 +845,231 @@ scip-query extract-candidates --min-loc 20 --min-callees 6
 
 ---
 
+### Impact & Planning
+
+#### `affected <symbol>`
+
+Full transitive closure of symbols that could break if this symbol changes. BFS through the mention graph at configurable depth.
+
+```bash
+scip-query affected login --max-depth 3
+#   ── Depth 1 ──
+#   src/controllers/auth.controller.ts  handleLogin
+#   src/__tests__/auth.test.ts  authTests
+#
+#   ── Depth 2 ──
+#   src/routes/index.ts  routes
+```
+
+**Options:**
+- `--max-depth <n>` — Maximum traversal depth (default: 5)
+- `-s, --scope <path>` — Limit to files matching path
+
+**Value:** "If I change this, what's the full blast wave?" Goes beyond direct `rdeps` to show consumers-of-consumers.
+
+---
+
+#### `change-surface <file>`
+
+Pre-change briefing for a file: every exported symbol, consumer count, test coverage, and risk level.
+
+```bash
+scip-query change-surface auth.service.ts
+# File: src/services/auth.service.ts
+# Test coverage: 60% | External consumers: 45
+#
+#   1-50   AuthService  [12 consumers] (2 test files) * medium risk *
+#   5-20   login()      [8 consumers]  (1 test file)
+#   22-35  logout()     [3 consumers]  (no tests) *** HIGH RISK ***
+```
+
+**Value:** One command before modifying any file. Shows what's exported, who uses it, what's tested, and what's dangerous.
+
+---
+
+#### `diff-impact`
+
+Compute affected symbols from the current git diff.
+
+```bash
+scip-query diff-impact
+scip-query diff-impact --base main
+# Changed files: 3
+# Changed symbols: 12
+# Affected consumer files: 28
+# Test coverage: 67%
+```
+
+**Options:**
+- `--base <ref>` — Git ref to diff against (default: HEAD)
+
+**Value:** Run before committing. Shows everything your changes affect, which consumer files are impacted, and where test gaps exist.
+
+---
+
+### De-bloating
+
+#### `drift [module]`
+
+Detect files that deviate from their directory's typical dependency pattern.
+
+```bash
+scip-query drift --min-deviation 30
+# src/services/legacy-auth.ts  (65% deviation from src/services)
+#   Missing expected: validator.ts, logger.ts
+#   Unexpected:       raw-sql.ts, deprecated-crypto.ts
+```
+
+**Options:**
+- `--min-deviation <n>` — Minimum deviation % to report (default: 30)
+
+**Value:** Finds files that don't follow their neighbors' conventions. The outliers are either legacy code needing migration or intentional exceptions needing documentation.
+
+---
+
+#### `wrapper-candidates`
+
+Find symbols only called by one consumer — potential premature abstractions.
+
+```bash
+scip-query wrapper-candidates --max-loc 15
+#   src/utils/format.ts:10-18  formatCurrency  (8 LOC)
+#     Only called by: formatInvoice  (fan-in: 12)
+```
+
+**Options:**
+- `-s, --scope <path>` — Limit to files matching path
+- `--max-loc <n>` — Maximum LOC (default: 15)
+- `-n, --limit <n>` — Number of results (default: 30)
+
+**Value:** If a function is only called by one other function, it might be inlineable. The smaller it is, the stronger the signal.
+
+---
+
+#### `passthrough-candidates`
+
+Find functions that forward to exactly one callee — pure indirection.
+
+```bash
+scip-query passthrough-candidates
+#   src/services/user.ts:5-10  getUser  (5 LOC)
+#     Forwards to: userRepo.findById  (src/repos/user.repo.ts)
+```
+
+**Options:**
+- `-s, --scope <path>` — Limit to files matching path
+- `--max-loc <n>` — Maximum LOC (default: 15)
+- `-n, --limit <n>` — Number of results (default: 30)
+
+**Value:** Functions that just call one other function without adding logic. Either inline them or verify they serve a purpose (testing boundary, dependency inversion).
+
+---
+
+#### `stale-abstractions`
+
+Find types, interfaces, and classes with 0-1 cross-file consumers.
+
+```bash
+scip-query stale-abstractions --min-loc 5
+#   src/types/deprecated.ts:1-25  OldUserType  (25 LOC, unused)
+#   src/interfaces/single.ts:1-15  ISingleUse  (15 LOC, 1 consumer)
+```
+
+**Options:**
+- `-s, --scope <path>` — Limit to files matching path
+- `--min-loc <n>` — Minimum LOC (default: 3)
+- `-n, --limit <n>` — Number of results (default: 30)
+
+**Value:** An interface with one implementation isn't an abstraction — it's indirection. Finds over-engineering.
+
+---
+
+#### `complexity-hotspots`
+
+Composite complexity score per symbol: LOC x fan-in x fan-out.
+
+```bash
+scip-query complexity-hotspots -n 10
+#   score   LOC  fan-in  fan-out  callees  symbol
+#   ─────  ────  ──────  ───────  ───────  ──────
+#   101.7   541      47        0       16  types
+#    31.3   279      28        5       33  symbol-parser
+```
+
+**Options:**
+- `-s, --scope <path>` — Limit to files matching path
+- `--min-loc <n>` — Minimum LOC (default: 10)
+- `-n, --limit <n>` — Number of results (default: 20)
+
+**Value:** The symbols most likely to contain bugs and be hardest to modify. High score = high LOC + many consumers + many dependencies.
+
+---
+
+### Composite Reports
+
+#### `health`
+
+Single command that runs all analyses and produces a prioritized action list with a health score.
+
+```bash
+scip-query health
+# Codebase Health Score: 72/100
+# 54 files | 1501 symbols | 900 KB
+#
+# Findings:
+#   Dead code:          12 symbols (340 LOC)
+#   Similar pairs:      8
+#   Stale abstractions: 5
+#
+# Prioritized Actions:
+#   1. [low effort / high impact] 12 symbols with zero references — safe to delete (~340 LOC)
+#   2. [low effort / medium impact] 5 types with 0-1 consumers — premature abstraction
+#   3. [medium effort / medium impact] 8 pairs with >60% callee overlap — consolidation candidates
+
+scip-query health --json    # JSON output for programmatic use
+```
+
+**Options:**
+- `-s, --scope <path>` — Limit to files matching path
+- `--json` — Output as JSON
+
+**Value:** The one command to rule them all. Runs every cleanup analysis, scores the codebase, and tells you exactly what to fix and in what order.
+
+---
+
+#### `convergence <symbol1> <symbol2>`
+
+Given two similar functions (from `similar`), show what a consolidated version would look like.
+
+```bash
+scip-query convergence bottlenecks hotspots
+# 82% callee overlap
+#
+#   A: bottlenecks  (src/queries/bottlenecks.ts, 68 LOC)
+#   B: hotspots     (src/queries/hotspots.ts, 54 LOC)
+#
+#   Shared callees (9): ScipDatabase, db.all(), db.isIgnored(), ...
+#   Unique to A (1): BottleneckResult
+#   Unique to B (1): HotspotResult
+#
+#   Strategy: Create a shared function with the 9 common callees.
+#   Pass the 2 divergent callees as parameters or strategy callbacks.
+```
+
+**Value:** Turns "these two functions are similar" into a concrete refactoring prescription.
+
+---
+
 ## Programmatic API
 
-All commands are also available as TypeScript functions:
+All 44 commands are available as TypeScript functions:
 
 ```typescript
-import { ScipDatabase, createGitignoreFilter, hotspots, similar, dead } from 'scip-query';
+import {
+  ScipDatabase, createGitignoreFilter,
+  health, affected, changeSurface, diffImpact,
+  hotspots, similar, dead, convergence,
+} from 'scip-query';
 
 const filter = createGitignoreFilter('/path/to/project');
 const db = new ScipDatabase({
@@ -847,9 +1078,19 @@ const db = new ScipDatabase({
   projectRoot: '/path/to/project',
 }, filter);
 
-const top = hotspots(db, { limit: 10 });
+// Full health report
+const report = health(db);
+console.log(`Score: ${report.score}/100`);
+console.log(`Actions: ${report.actions.length}`);
+
+// Impact analysis
+const blast = affected(db, 'login', { maxDepth: 3 });
+const brief = changeSurface(db, 'auth.service.ts');
+const impact = diffImpact(db, { base: 'main' });
+
+// Consolidation
 const pairs = similar(db, 'myFunction', { minSimilarity: 0.5 });
-const deadCode = dead(db, { minLoc: 10, skipBarrels: true });
+const recipe = convergence(db, 'funcA', 'funcB');
 
 db.close();
 ```
