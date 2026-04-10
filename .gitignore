@@ -2,6 +2,10 @@ node_modules/
 dist/
 *.scip
 *.db
+*.db-shm
+*.db-wal
+*.db-journal
 .DS_Store
 coverage/
 .env
+.scipquery.json
