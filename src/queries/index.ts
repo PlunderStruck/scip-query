@@ -37,3 +37,7 @@ export { staleAbstractions } from './stale-abstractions.js';
 export { complexityHotspots } from './complexity-hotspots.js';
 export { health } from './health.js';
 export { convergence } from './convergence.js';
+export { code } from './code.js';
+export { complexity } from './complexity.js';
+export { dataflow } from './dataflow.js';
+export { slice } from './slice.js';

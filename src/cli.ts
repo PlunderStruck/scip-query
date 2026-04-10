@@ -1162,6 +1162,120 @@ program
     db.close();
   });
 
+// code
+program
+  .command('code <symbol>')
+  .description('Read the source code for a symbol (bounded to its definition range)')
+  .option('-C, --context <n>', 'Extra lines of context above/below', parseIntSafe, 0)
+  .action((symbol, opts) => {
+    const db = openDb();
+    const result = queries.code(db, symbol, { context: opts.context });
+    if (!result) {
+      console.log('Symbol not found or file unreadable.');
+      db.close();
+      return;
+    }
+    console.log(`${result.relativePath}:${result.startLine}-${result.endLine}  ${result.shortName}  [${result.language ?? 'unknown'}]\n`);
+    const lines = result.source.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      console.log(`  ${String(result.startLine + i).padStart(4)}  ${lines[i]}`);
+    }
+    db.close();
+  });
+
+// complexity
+program
+  .command('complexity <symbol>')
+  .description('Per-symbol complexity: branches, cyclomatic estimate, fan-in/out, callees')
+  .action((symbol) => {
+    const db = openDb();
+    const result = queries.complexity(db, symbol);
+    if (!result) {
+      console.log('Symbol not found.');
+      db.close();
+      return;
+    }
+    console.log(`${result.relativePath}:${result.startLine}-${result.endLine}  ${result.shortName}\n`);
+    console.log(`  LOC:                  ${result.loc}`);
+    console.log(`  Branches:             ${result.branches}`);
+    console.log(`  Cyclomatic estimate:  ${result.cyclomaticEstimate}`);
+    console.log(`  Callees:              ${result.calleeCount}`);
+    console.log(`  Fan-in:               ${result.fanIn}`);
+    console.log(`  Fan-out:              ${result.fanOut}`);
+    db.close();
+  });
+
+// dataflow
+program
+  .command('dataflow <symbol>')
+  .description('Reference-level dataflow: definition sites, usage sites, producers, consumers')
+  .action((symbol) => {
+    const db = openDb();
+    const result = queries.dataflow(db, symbol);
+    if (!result) {
+      console.log('Symbol not found.');
+      db.close();
+      return;
+    }
+    console.log(`${result.shortName}  (${result.relativePath})\n`);
+
+    if (result.definitionSites.length > 0) {
+      console.log('  ═══ DEFINED AT ═══');
+      for (const s of result.definitionSites) {
+        console.log(`    ${s.file}:${s.line}`);
+      }
+    }
+
+    if (result.usageSites.length > 0) {
+      console.log('\n  ═══ USED AT ═══');
+      for (const s of result.usageSites) {
+        console.log(`    ${s.file}:${s.line}  in ${s.enclosingShort}`);
+      }
+    }
+
+    if (result.producers.length > 0) {
+      console.log('\n  ═══ PRODUCERS (feeds into this) ═══');
+      for (const p of result.producers) {
+        console.log(`    ${p.file}  ${p.shortName}`);
+      }
+    }
+
+    if (result.consumers.length > 0) {
+      console.log('\n  ═══ CONSUMERS (this feeds into) ═══');
+      for (const c of result.consumers) {
+        console.log(`    ${c.file}  ${c.shortName}`);
+      }
+    }
+    db.close();
+  });
+
+// slice
+program
+  .command('slice <symbol>')
+  .description('Reference-level program slice: what affects this (backward) or what this affects (forward)')
+  .option('--forward', 'Forward slice (what does this affect). Default is backward.')
+  .action((symbol, opts) => {
+    const db = openDb();
+    const direction = opts.forward ? 'forward' : 'backward';
+    const result = queries.slice(db, symbol, { direction });
+    if (!result) {
+      console.log('Symbol not found.');
+      db.close();
+      return;
+    }
+    console.log(`${result.direction} slice of ${result.shortName}\n`);
+    if (result.connectedSymbols.length === 0) {
+      console.log('  No connected symbols found.');
+    } else {
+      for (const s of result.connectedSymbols) {
+        console.log(`  ${s.file}  ${s.shortName}`);
+        console.log(`    ${s.relationship}`);
+      }
+      console.log(`\n${result.connectedSymbols.length} connected symbol(s).`);
+    }
+    db.close();
+  });
+
 // init
 program
   .command('init')

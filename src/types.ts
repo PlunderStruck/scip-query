@@ -409,6 +409,58 @@ export interface ConvergenceResult {
   consolidationStrategy: string;
 }
 
+// ── Code / Complexity / Dataflow / Slice Types ─────────────
+
+export interface CodeResult {
+  symbol: string;
+  shortName: string;
+  relativePath: string;
+  startLine: number;
+  endLine: number;
+  language: string | null;
+  source: string;
+}
+
+export interface ComplexityResult {
+  symbol: string;
+  shortName: string;
+  relativePath: string;
+  startLine: number;
+  endLine: number;
+  loc: number;
+  /** Branch count from source-level regex (if, else, for, while, switch, catch, ternary, &&, ||) */
+  branches: number;
+  /** Cyclomatic complexity estimate: branches + 1 */
+  cyclomaticEstimate: number;
+  /** Number of distinct callees within the definition */
+  calleeCount: number;
+  fanIn: number;
+  fanOut: number;
+}
+
+export interface DataflowResult {
+  symbol: string;
+  shortName: string;
+  relativePath: string;
+  /** Where the symbol is defined (role=1) */
+  definitionSites: Array<{ file: string; line: number }>;
+  /** Where the symbol is referenced (role=0) */
+  usageSites: Array<{ file: string; line: number; enclosingSymbol: string; enclosingShort: string }>;
+  /** Symbols that appear in the same function that defines this symbol (producers/inputs) */
+  producers: Array<{ symbol: string; shortName: string; file: string }>;
+  /** Symbols defined by functions that reference this symbol (consumers/outputs) */
+  consumers: Array<{ symbol: string; shortName: string; file: string }>;
+}
+
+export interface SliceResult {
+  symbol: string;
+  shortName: string;
+  direction: 'backward' | 'forward';
+  /** Backward: symbols referenced in the same function as the target's definition (inputs) */
+  /** Forward: symbols defined by functions that reference the target (outputs) */
+  connectedSymbols: Array<{ symbol: string; shortName: string; file: string; relationship: string }>;
+}
+
 // ── Affected / Change Surface / Diff Impact Types ────────
 
 export interface AffectedResult {
