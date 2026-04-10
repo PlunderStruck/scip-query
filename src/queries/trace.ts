@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../db.js';
 import type { TraceResult } from '../types.js';
+import { cleanSignature } from './clean-signature.js';
 
 export function trace(db: ScipDatabase, symbolPattern: string): TraceResult {
   // Definitions
@@ -29,7 +30,7 @@ export function trace(db: ScipDatabase, symbolPattern: string): TraceResult {
       relativePath: r.relative_path,
       startLine: r.start_line,
       endLine: r.end_line,
-      signature: cleanSig(r.sig),
+      signature: cleanSignature(r.sig),
     }));
 
   // References
@@ -55,12 +56,3 @@ export function trace(db: ScipDatabase, symbolPattern: string): TraceResult {
   return { definitions, referencedBy };
 }
 
-function cleanSig(sig: string | null): string | null {
-  if (!sig || !sig.trim()) return null;
-  return sig
-    .replace(/^```\w*\s*/, '')
-    .replace(/\s*```$/, '')
-    .replace(/^\(method\)\s*/, '')
-    .replace(/^\(function\)\s*/, '')
-    .trim() || null;
-}

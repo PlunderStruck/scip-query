@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../db.js';
 import type { SystemResult, SymbolResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
+import { cleanSignature } from './clean-signature.js';
 
 /** Full system map for a module path: files, symbols, deps in/out */
 export function system(db: ScipDatabase, modulePattern: string): SystemResult {
@@ -40,7 +41,7 @@ export function system(db: ScipDatabase, modulePattern: string): SystemResult {
     endLine: r.end_line,
     symbol: r.symbol,
     shortName: shortenSymbol(r.symbol),
-    signature: cleanSig(r.sig),
+    signature: cleanSignature(r.sig),
   }));
 
   // Internal dependencies (what this module depends on)
@@ -85,13 +86,3 @@ export function system(db: ScipDatabase, modulePattern: string): SystemResult {
   return { files, symbols, dependsOn, dependedOnBy };
 }
 
-function cleanSig(sig: string | null): string | null {
-  if (!sig || !sig.trim()) return null;
-  return sig
-    .replace(/^```\w*\s*/, '')
-    .replace(/\s*```$/, '')
-    .replace(/^\(method\)\s*/, '')
-    .replace(/^\(property\)\s*/, '')
-    .replace(/^\(function\)\s*/, '')
-    .trim() || null;
-}

@@ -77,6 +77,11 @@ export class ScipDatabase {
     `;
   }
 
+  /** Reusable SQL fragment: filter out synthetic/internal symbol noise */
+  get symbolNoise(): string {
+    return `AND gs.symbol NOT LIKE '%().(%' AND gs.symbol NOT LIKE '%typeLiteral%'`;
+  }
+
   /** Run a raw SQL query and return all rows */
   all<T = Record<string, unknown>>(sql: string, ...params: unknown[]): T[] {
     return this.db.prepare(sql).all(...params) as T[];

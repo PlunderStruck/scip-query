@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../db.js';
 import type { SymbolResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
+import { cleanSignature } from './clean-signature.js';
 
 export function symbols(db: ScipDatabase, filePattern: string): SymbolResult[] {
   const rows = db.all<{
@@ -36,16 +37,3 @@ export function symbols(db: ScipDatabase, filePattern: string): SymbolResult[] {
     }));
 }
 
-/** Clean up the raw doc/signature string from the SCIP index */
-function cleanSignature(sig: string | null): string | null {
-  if (!sig || !sig.trim()) return null;
-  return sig
-    .replace(/^```\w*\s*/, '')
-    .replace(/\s*```$/, '')
-    .replace(/^\(method\)\s*/, '')
-    .replace(/^\(property\)\s*/, '')
-    .replace(/^\(function\)\s*/, '')
-    .replace(/^\(class\)\s*/, '')
-    .replace(/^\(interface\)\s*/, '')
-    .trim() || null;
-}
