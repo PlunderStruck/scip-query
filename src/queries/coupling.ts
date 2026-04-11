@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../db.js';
+import { resolveIndexedFile } from '../query-support.js';
 import type { CouplingResult } from '../types.js';
 
 /**
@@ -10,6 +11,9 @@ export function coupling(
   file1: string,
   file2: string,
 ): CouplingResult {
+  const resolvedFile1 = resolveIndexedFile(db, file1) ?? file1;
+  const resolvedFile2 = resolveIndexedFile(db, file2) ?? file2;
+
   const row = db.get<{ shared: number }>(
     `SELECT COUNT(DISTINCT gs.id) AS shared
     FROM global_symbols gs
@@ -18,35 +22,35 @@ export function coupling(
       EXISTS (
         SELECT 1 FROM defn_enclosing_ranges der
         JOIN documents d ON der.document_id = d.id
-        WHERE der.symbol_id = gs.id AND d.relative_path LIKE ?
+        WHERE der.symbol_id = gs.id AND d.relative_path = ?
       )
       AND EXISTS (
         SELECT 1 FROM mentions m
         JOIN chunks c ON m.chunk_id = c.id
         JOIN documents d ON c.document_id = d.id
-        WHERE m.symbol_id = gs.id AND m.role != 1 AND d.relative_path LIKE ?
+        WHERE m.symbol_id = gs.id AND m.role != 1 AND d.relative_path = ?
       )
     ) OR (
       -- Defined in file2, referenced in file1
       EXISTS (
         SELECT 1 FROM defn_enclosing_ranges der
         JOIN documents d ON der.document_id = d.id
-        WHERE der.symbol_id = gs.id AND d.relative_path LIKE ?
+        WHERE der.symbol_id = gs.id AND d.relative_path = ?
       )
       AND EXISTS (
         SELECT 1 FROM mentions m
         JOIN chunks c ON m.chunk_id = c.id
         JOIN documents d ON c.document_id = d.id
-        WHERE m.symbol_id = gs.id AND m.role != 1 AND d.relative_path LIKE ?
+        WHERE m.symbol_id = gs.id AND m.role != 1 AND d.relative_path = ?
       )
     )`,
-    `%${file1}%`, `%${file2}%`,
-    `%${file2}%`, `%${file1}%`,
+    resolvedFile1, resolvedFile2,
+    resolvedFile2, resolvedFile1,
   );
 
   return {
-    file1,
-    file2,
+    file1: resolvedFile1,
+    file2: resolvedFile2,
     sharedSymbols: row?.shared ?? 0,
   };
 }

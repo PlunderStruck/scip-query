@@ -102,9 +102,10 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
   python: {
     language: 'python',
     indexerBinary: 'scip-python',
+    binaryAliases: ['scip-python-plus'],
     checkCommand: 'scip-python --version',
-    indexArgs: ({ outputPath }) => ({
-      binary: 'scip-python',
+    indexArgs: ({ outputPath, indexerBinary }) => ({
+      binary: indexerBinary,
       args: ['index', '--output', outputPath, '--project-name', 'project'],
     }),
     markerFiles: ['pyproject.toml', 'setup.py'],

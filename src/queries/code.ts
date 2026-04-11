@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch } from '../query-support.js';
+import { findFirstSymbolMatch, resolveIndexedFile } from '../query-support.js';
 import type { CodeResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 
@@ -70,9 +70,12 @@ function readFileRange(
   context: number,
 ): CodeResult | null {
   // Find the file in the index
+  const resolvedPath = resolveIndexedFile(db, filePath);
+  if (!resolvedPath) return null;
+
   const doc = db.get<{ relative_path: string; language: string | null }>(
-    `SELECT relative_path, language FROM documents WHERE relative_path LIKE ?`,
-    `%${filePath}%`,
+    `SELECT relative_path, language FROM documents WHERE relative_path = ?`,
+    resolvedPath,
   );
   if (!doc) return null;
 

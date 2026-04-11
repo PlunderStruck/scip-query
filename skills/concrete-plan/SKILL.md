@@ -241,7 +241,7 @@ After stress-testing is complete:
 2. **Verify references**: Spawn parallel subagents (one per phase) using the **Subagent Briefing Template**. Each agent confirms that every file path exists, every line number is within +-5 lines, and every described behavior matches reality. Reject output that doesn't cite scip-query commands.
 3. **Fix drift**: Update any stale references.
 4. **Check execution order**: No phase depends on a later phase. No step within a phase depends on a later step.
-5. **Check test coverage**: Every behavior-changing step should have a corresponding test step. Flag gaps.
+5. **Check validation coverage**: Every behavior-changing step should have a corresponding validation step. Flag gaps in tests, manual checks, or runtime verification.
 6. **Run diff-impact**: `scip-query diff-impact` to verify the blast radius matches what the plan predicted.
 
 ---

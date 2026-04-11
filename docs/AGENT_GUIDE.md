@@ -46,7 +46,7 @@ For command syntax and options reference, see [README.md](../README.md).
    ```bash
    scip-query change-surface <file>
    ```
-   Returns: every symbol in the file, how many external consumers each has, which are test-covered, and a risk level (high/medium/low). Run this before modifying any file.
+   Returns: every symbol in the file, how many external consumers each has, and a risk level (high/medium/low). Run this before modifying any file.
 
 ### What you should know after this workflow
 
@@ -54,7 +54,7 @@ For command syntax and options reference, see [README.md](../README.md).
 - The true public API (what consumers actually use)
 - The full dependency graph (what the module depends on and what depends on it)
 - The blast radius of any specific symbol change
-- Which symbols are high-risk (many consumers, no tests)
+- Which symbols are high-risk (many consumers, wide blast radius)
 
 ---
 
@@ -85,12 +85,12 @@ For command syntax and options reference, see [README.md](../README.md).
    ```
    For each symbol you'll modify: know exactly who consumes it and how many layers deep the impact goes.
 
-4. **Check test coverage gaps**
+4. **Check blast radius before editing**
    ```bash
-   scip-query test-coverage <symbol>
    scip-query change-surface <file>
+   scip-query diff-impact
    ```
-   Identify which symbols in your change set lack test coverage. These are the risk points that need new tests.
+   Identify which symbols in your change set have many external consumers and which downstream files will be affected.
 
 5. **Find reusable code**
    ```bash
@@ -102,8 +102,9 @@ For command syntax and options reference, see [README.md](../README.md).
 6. **After making changes, verify impact**
    ```bash
    scip-query diff-impact
+   scip-query drift
    ```
-   Shows every symbol affected by your git diff, every consumer file impacted, and test coverage gaps.
+   Shows every symbol affected by your git diff, every consumer file impacted, and whether the change introduced new structural drift.
 
 ### Plan template
 
@@ -113,7 +114,7 @@ For command syntax and options reference, see [README.md](../README.md).
 ### Files to modify
 - `path/to/file.ts` — [what changes, which symbols]
   - `symbolName` (lines X-Y) — [change description]
-  - Fan-in: N, Test coverage: yes/no
+  - Fan-in: N, External consumers: N, Risk: low/medium/high
 
 ### Files to create
 - `path/to/new-file.ts` — [purpose]
@@ -127,9 +128,9 @@ For command syntax and options reference, see [README.md](../README.md).
 - `affected` shows N symbols across M files at depth 1-2
 - [List high-risk symbols]
 
-### Test plan
-- `change-surface` shows N symbols without test coverage
-- [Tests to add]
+### Impact checks
+- `change-surface` shows N externally consumed symbols
+- `diff-impact` shows N downstream consumer files
 ```
 
 ---
@@ -150,7 +151,7 @@ For command syntax and options reference, see [README.md](../README.md).
    ```bash
    scip-query dead --min-loc 10 --skip-barrels
    ```
-   These symbols have zero cross-file references. They can be safely deleted. `--skip-barrels` ignores re-exports through index.ts files which can create false negatives.
+   These symbols have zero cross-file references. They can be safely deleted. `--skip-barrels` ignores references from inactive barrel files, which helps surface exports kept alive only by unused re-export layers without hiding live package entry surfaces.
 
 3. **Delete isolated symbols**
    ```bash
@@ -256,16 +257,11 @@ For command syntax and options reference, see [README.md](../README.md).
    ```
    Long transitive dependency chains. If chains are deeper than 6-7, the architecture may need flattening.
 
-5. **Test coverage**
+5. **Structural drift**
    ```bash
-   scip-query test-coverage
+   scip-query drift
    ```
-   Percentage of symbols referenced by test files. Not execution coverage, but structural coverage.
-
-6. **Documentation coverage**
-   ```bash
-   scip-query doc-coverage --min-loc 5
-   ```
+   Files with unused imports, layer violations, or dependency profiles that deviate from their neighbors.
 
 ### Quality report template
 
@@ -282,9 +278,8 @@ For command syntax and options reference, see [README.md](../README.md).
 - Deepest dependency chain: N layers
 - Circular dependencies: N
 
-### Coverage
-- Test coverage: N% of symbols referenced by tests
-- Documentation coverage: N%
+### Structural quality
+- Pattern drift: N files
 
 ### Cleanup Opportunities
 - Dead code: N symbols (N LOC recoverable)
@@ -304,7 +299,7 @@ For command syntax and options reference, see [README.md](../README.md).
    ```bash
    scip-query diff-impact
    ```
-   Shows: changed files, changed symbols with fan-in counts, affected consumer files, symbols without test coverage.
+   Shows: changed files, changed symbols with fan-in counts, and affected consumer files.
 
 2. **Check transitive impact for critical symbols**
    ```bash
@@ -312,11 +307,12 @@ For command syntax and options reference, see [README.md](../README.md).
    ```
    For any high fan-in symbol that changed, check the full transitive blast wave.
 
-3. **Verify test coverage**
+3. **Re-check structural drift around the changed area**
    ```bash
-   scip-query test-coverage <changed-symbol>
+   scip-query drift
+   scip-query change-surface <changed-file>
    ```
-   For each affected symbol, verify tests exist.
+   Verify the change did not introduce new dependency-pattern outliers and understand the remaining blast radius.
 
 ---
 
@@ -344,8 +340,6 @@ For command syntax and options reference, see [README.md](../README.md).
 | Find riskiest symbols | `complexity-hotspots` |
 | Find coupling pressure points | `bottlenecks` |
 | Find circular dependencies | `cycles` |
-| Check test coverage | `test-coverage` |
-
 ---
 
 ## Tips for AI Agents
@@ -353,7 +347,7 @@ For command syntax and options reference, see [README.md](../README.md).
 - **Always reindex before analysis** if the codebase has changed significantly: `scip-query reindex`
 - **Use `--json` on `health`** for programmatic consumption — parse the JSON to make decisions
 - **Run `change-surface` before every file modification** — it takes <1 second and prevents surprises
-- **Run `diff-impact` before committing** — catches test coverage gaps and unexpected blast radius
+- **Run `diff-impact` before committing** — catches unexpected blast radius across downstream consumers
 - **Use `convergence` after `similar`** — `similar` finds the problem, `convergence` gives the solution
 - **Start cleanup with `health`** — it prioritizes for you so you don't have to decide what to fix first
 - **Scope commands with `-s`** — most commands accept `--scope <path>` to limit analysis to a specific module. Use this on large codebases to keep results focused.

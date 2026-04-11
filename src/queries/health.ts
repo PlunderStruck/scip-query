@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../db.js';
+import { isEntrySurface } from '../entry-surfaces.js';
 import { dead } from './dead.js';
 import { isolated } from './isolated.js';
 import { cycles } from './cycles.js';
@@ -9,7 +10,6 @@ import { passthroughCandidates } from './passthrough-candidates.js';
 import { staleAbstractions } from './stale-abstractions.js';
 import { drift } from './drift.js';
 import { complexityHotspots } from './complexity-hotspots.js';
-import { testCoverageSummary } from './test-coverage.js';
 import { stats } from './stats.js';
 import type { HealthAction, HealthReport } from '../types.js';
 
@@ -31,7 +31,7 @@ export function health(
 
   // Run all analyses
   const s = stats(db);
-  const deadResult = dead(db, { scope, minLoc: 3, skipBarrels: false });
+    const deadResult = dead(db, { scope, minLoc: 3, skipBarrels: true });
   const isolatedResult = isolated(db, { scope, minLoc: 3 });
   const cycleResult = cycles(db, { scope });
   const similarResult = similarAll(db, { scope, minSimilarity: 0.6, limit: 50, minCallees: 4 });
@@ -41,52 +41,23 @@ export function health(
   const staleResult = staleAbstractions(db, { scope, minLoc: 3, limit: 50 });
   const driftResult = drift(db, { scope });
   const complexResult = complexityHotspots(db, { scope, minLoc: 10, limit: 10 });
-  const testResult = testCoverageSummary(db, { scope, minLoc: 3 });
-
-  const isolatedLoc = isolatedResult.reduce((sum, r) => sum + r.loc, 0);
 
   // ── False-positive filtering ─────────────────────────────
-
-  // Entry points and barrels appear as dead/isolated because nothing imports them.
-  // Filter them out of the scoring (but still report them with a note).
-  const entryPointPatterns = ['/index.ts', '/index.js', 'cli.ts', 'worker.ts', 'postinstall.ts', '/mod.rs', '__init__.py', 'main.ts', 'main.rs', 'main.go', 'main.py'];
-  const isEntryPoint = (path: string) => entryPointPatterns.some((p) => path.endsWith(p));
 
   // Dead code: only count truly dead symbols (zero refs anywhere),
   // excluding entry points AND file-internal helpers (which are fine).
   const trueDeadSymbols = deadResult.symbols.filter(
-    (s) => !isEntryPoint(s.relativePath) && s.kind === 'dead-code',
+    (s) => !isEntrySurface(db, s.relativePath) && s.kind === 'dead-code',
   );
   const trueDeadCount = trueDeadSymbols.length;
   const trueDeadLoc = trueDeadSymbols.reduce((sum, s) => sum + s.loc, 0);
-  const fileInternalCount = deadResult.symbols.filter(
-    (s) => !isEntryPoint(s.relativePath) && s.kind === 'file-internal',
-  ).length;
 
   // Isolated: same entry-point filtering
   const trueIsolatedCount = isolatedResult.filter(
-    (s) => !isEntryPoint(s.relativePath),
+    (s) => !isEntrySurface(db, s.relativePath),
   ).length;
 
-  // Stale abstractions: the command filters out types.ts single-consumer types.
-  // Also filter out 0-consumer types in files that export functions — these are
-  // likely parameter/return types consumed through function signatures, which
-  // the SCIP index can't track as direct mentions.
-  const filesWithFunctions = new Set(
-    db.all<{ relative_path: string }>(
-      `SELECT DISTINCT d.relative_path
-       FROM global_symbols gs
-       JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-       JOIN documents d ON der.document_id = d.id
-       WHERE gs.symbol LIKE '%().'
-         ${db.pathExclusionsFor('d')}`,
-    ).map((r) => r.relative_path),
-  );
-  const trueStaleCount = staleResult.filter((s) => {
-    // 0-consumer types in files with functions are likely param/return types
-    if (s.consumers === 0 && filesWithFunctions.has(s.file)) return false;
-    return true;
-  }).length;
+  const trueStaleCount = staleResult.length;
 
   // Drift: now uses usage-based detection (unused imports, layer violations, pattern deviations)
   // The drift command already filters structural roles internally.
@@ -113,27 +84,16 @@ export function health(
     });
   }
 
-  if (testResult.percent < 50) {
-    actions.push({
-      category: 'Test coverage',
-      description: `${testResult.percent}% of symbols referenced by tests (${testResult.uncovered} uncovered)`,
-      effort: 'high',
-      impact: 'high',
-      count: testResult.uncovered,
-      locRecoverable: 0,
-    });
-  }
-
   if (trueIsolatedCount > 0) {
     actions.push({
       category: 'Isolated symbols',
       description: `${trueIsolatedCount} symbols completely disconnected from the codebase graph`,
       effort: 'low',
       impact: 'medium',
-      count: trueIsolatedCount,
-      locRecoverable: isolatedResult
-        .filter((s) => !isEntryPoint(s.relativePath))
-        .reduce((sum, s) => sum + s.loc, 0),
+        count: trueIsolatedCount,
+        locRecoverable: isolatedResult
+          .filter((s) => !isEntrySurface(db, s.relativePath))
+          .reduce((sum, s) => sum + s.loc, 0),
     });
   }
 
@@ -193,12 +153,7 @@ export function health(
   }
 
   if (trueStaleCount > 0) {
-    // Count from the filtered set, not the raw result
-    const trueStaleSymbols = staleResult.filter((s) => {
-      if (s.consumers === 0 && filesWithFunctions.has(s.file)) return false;
-      return true;
-    });
-    const unused = trueStaleSymbols.filter((s) => s.consumers === 0).length;
+    const unused = staleResult.filter((s) => s.consumers === 0).length;
     const singleUse = trueStaleCount - unused;
     const parts: string[] = [];
     if (unused > 0) parts.push(`${unused} unused`);
@@ -209,9 +164,7 @@ export function health(
       effort: 'low',
       impact: 'medium',
       count: trueStaleCount,
-      locRecoverable: staleResult
-        .filter((s) => s.consumers === 0 || !s.file.includes('types'))
-        .reduce((sum, r) => sum + r.loc, 0),
+      locRecoverable: staleResult.reduce((sum, r) => sum + r.loc, 0),
     });
   }
 
@@ -284,11 +237,6 @@ export function health(
   const extremeComplexity = complexResult.filter((r) => r.score > 50).length;
   score -= Math.min(5, extremeComplexity * 2);
 
-  // Test coverage: significant penalty for low coverage
-  // 0% = -15, 25% = -11, 50% = -7, 75% = -4, 100% = 0
-  const coverageDeduction = Math.round(15 * (1 - testResult.percent / 100));
-  score -= coverageDeduction;
-
   score = Math.max(0, Math.min(100, score));
 
   return {
@@ -302,9 +250,9 @@ export function health(
       deadSymbols: trueDeadCount,
       deadLoc: trueDeadLoc,
       isolatedSymbols: trueIsolatedCount,
-      isolatedLoc: isolatedResult
-        .filter((s) => !isEntryPoint(s.relativePath))
-        .reduce((sum, s) => sum + s.loc, 0),
+        isolatedLoc: isolatedResult
+          .filter((s) => !isEntrySurface(db, s.relativePath))
+          .reduce((sum, s) => sum + s.loc, 0),
       cycles: cycleResult.length,
       similarPairs: trueSimilarCount,
       extractionCandidates: extractResult.length,
@@ -313,7 +261,6 @@ export function health(
       staleTypes: trueStaleCount,
       driftedFiles: trueDriftCount,
       complexityHotspotCount: complexResult.length,
-      testCoveragePercent: testResult.percent,
     },
     actions,
     topComplexity: complexResult.slice(0, 5).map((r) => ({

@@ -17,11 +17,35 @@ export function isBinaryAvailable(name: string): boolean {
   }
 }
 
+function getBinaryCandidates(config: IndexerConfig): string[] {
+  return [config.indexerBinary, ...(config.binaryAliases ?? [])];
+}
+
+/**
+ * Describe the accepted executable names for an indexer.
+ */
+export function describeIndexerBinary(config: IndexerConfig): string {
+  const candidates = getBinaryCandidates(config);
+  return candidates.length === 1 ? candidates[0]! : candidates.join(' or ');
+}
+
+/**
+ * Resolve the first available executable name for an indexer.
+ */
+export function resolveIndexerBinary(config: IndexerConfig): string | null {
+  for (const candidate of getBinaryCandidates(config)) {
+    if (isBinaryAvailable(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 /**
  * Check if an indexer's binary is available on PATH.
  */
 export function isIndexerInstalled(config: IndexerConfig): boolean {
-  return isBinaryAvailable(config.indexerBinary);
+  return resolveIndexerBinary(config) !== null;
 }
 
 /**
@@ -34,8 +58,9 @@ export function tryInstallIndexer(
   onStatus: (msg: string) => void,
 ): boolean {
   const methods = config.installMethods;
+  const binaryLabel = describeIndexerBinary(config);
   if (!methods?.length) {
-    onStatus(`No auto-install method available for ${config.indexerBinary}.`);
+    onStatus(`No auto-install method available for ${binaryLabel}.`);
     if (config.installUrl) {
       onStatus(`Install manually from: ${config.installUrl}`);
     }
@@ -47,7 +72,7 @@ export function tryInstallIndexer(
       continue;
     }
 
-    onStatus(`Installing ${config.indexerBinary} via ${method.label}...`);
+    onStatus(`Installing ${binaryLabel} via ${method.label}...`);
     try {
       execFileSync(method.binary, method.args, {
         stdio: 'inherit',
@@ -55,71 +80,24 @@ export function tryInstallIndexer(
         env: process.env,
       });
 
-      if (isIndexerInstalled(config)) {
-        onStatus(`Successfully installed ${config.indexerBinary} via ${method.label}`);
+      const resolvedBinary = resolveIndexerBinary(config);
+      if (resolvedBinary) {
+        const resolutionNote = resolvedBinary === config.indexerBinary
+          ? ''
+          : ` (using ${resolvedBinary})`;
+        onStatus(`Successfully installed ${binaryLabel} via ${method.label}${resolutionNote}`);
         return true;
       }
-      onStatus(`${method.label} command completed but ${config.indexerBinary} not found on PATH`);
+      onStatus(`${method.label} command completed but ${binaryLabel} was not found on PATH`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       onStatus(`${method.label} install failed: ${msg}`);
     }
   }
 
-  onStatus(`Could not auto-install ${config.indexerBinary}.`);
+  onStatus(`Could not auto-install ${binaryLabel}.`);
   if (config.installUrl) {
     onStatus(`Install manually from: ${config.installUrl}`);
   }
-  return false;
-}
-
-/**
- * Attempt to auto-install the `scip` CLI binary.
- * Tries brew (macOS), then go install, then prints manual instructions.
- * Returns true if installation succeeded.
- */
-export function tryInstallScipCli(
-  onStatus: (msg: string) => void,
-): boolean {
-  // macOS: try Homebrew first
-  if (platform() === 'darwin' && isBinaryAvailable('brew')) {
-    onStatus('Installing scip CLI via Homebrew...');
-    try {
-      execFileSync('brew', ['install', 'sourcegraph/scip/scip'], {
-        stdio: 'inherit',
-        timeout: 300_000,
-        env: process.env,
-      });
-      if (isBinaryAvailable('scip')) {
-        onStatus('Successfully installed scip CLI via Homebrew');
-        return true;
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      onStatus(`Homebrew install failed: ${msg}`);
-    }
-  }
-
-  // Any platform: try go install
-  if (isBinaryAvailable('go')) {
-    onStatus('Installing scip CLI via go install...');
-    try {
-      execFileSync('go', ['install', 'github.com/sourcegraph/scip/cmd/scip@latest'], {
-        stdio: 'inherit',
-        timeout: 300_000,
-        env: process.env,
-      });
-      if (isBinaryAvailable('scip')) {
-        onStatus('Successfully installed scip CLI via go install');
-        return true;
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      onStatus(`go install failed: ${msg}`);
-    }
-  }
-
-  onStatus('Could not auto-install scip CLI.');
-  onStatus('Install manually from: https://github.com/sourcegraph/scip/releases');
   return false;
 }

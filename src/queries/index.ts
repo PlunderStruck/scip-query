@@ -18,8 +18,6 @@ export { cycles } from './cycles.js';
 export { bottlenecks } from './bottlenecks.js';
 export { isolated } from './isolated.js';
 export { byKind, kindCounts } from './by-kind.js';
-export { testCoverage, testCoverageSummary } from './test-coverage.js';
-export { docCoverage } from './doc-coverage.js';
 export { deepChains } from './deep-chains.js';
 export { hierarchy } from './hierarchy.js';
 export { callGraph } from './call-graph.js';

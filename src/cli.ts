@@ -1,14 +1,61 @@
 import { program } from 'commander';
-import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { existsSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { ScipDatabase } from './db.js';
 import { createGitignoreFilter } from './gitignore-filter.js';
 import { loadProjectConfig, resolveIndexPaths, initProjectConfig } from './config.js';
 import { reindex, detectLanguages } from './reindex/index.js';
 import { Watcher } from './watch.js';
-import * as queries from './queries/index.js';
+import { stats } from './queries/stats.js';
+import { files } from './queries/files.js';
+import { symbols } from './queries/symbols.js';
+import { methods } from './queries/methods.js';
+import { refs } from './queries/refs.js';
+import { trace } from './queries/trace.js';
+import { deps, rdeps } from './queries/deps.js';
+import { system } from './queries/system.js';
+import { surface } from './queries/surface.js';
+import { dead } from './queries/dead.js';
+import { hotspots } from './queries/hotspots.js';
+import { imports, importedBy, unusedImports } from './queries/imports.js';
+import { outline } from './queries/outline.js';
+import { members } from './queries/members.js';
+import { fanIn, fanOut, topFanIn, topFanOut } from './queries/fan.js';
+import { coupling, topCoupling } from './queries/coupling.js';
+import { cycles } from './queries/cycles.js';
+import { bottlenecks } from './queries/bottlenecks.js';
+import { isolated } from './queries/isolated.js';
+import { byKind, kindCounts } from './queries/by-kind.js';
+import { deepChains } from './queries/deep-chains.js';
+import { hierarchy } from './queries/hierarchy.js';
+import { callGraph } from './queries/call-graph.js';
+import { similar, similarAll } from './queries/similar.js';
+import { similarFiles } from './queries/similar-files.js';
+import { similarChains } from './queries/similar-chains.js';
+import { extractCandidates } from './queries/extract-candidates.js';
+import { affected } from './queries/affected.js';
+import { changeSurface } from './queries/change-surface.js';
+import { diffImpact } from './queries/diff-impact.js';
+import { drift } from './queries/drift.js';
+import { wrapperCandidates } from './queries/wrapper-candidates.js';
+import { passthroughCandidates } from './queries/passthrough-candidates.js';
+import { staleAbstractions } from './queries/stale-abstractions.js';
+import { complexityHotspots } from './queries/complexity-hotspots.js';
+import { health } from './queries/health.js';
+import { convergence } from './queries/convergence.js';
+import { code } from './queries/code.js';
+import { complexity } from './queries/complexity.js';
+import { dataflow } from './queries/dataflow.js';
+import { slice } from './queries/slice.js';
+import { redundantReexports } from './queries/redundant-reexports.js';
+import { similarSignatures } from './queries/similar-signatures.js';
 import type { ScipQueryConfig, DeadOptions, WatcherStatus } from './types.js';
 import { installSkills, isScipInstalled, printScipInstallInstructions } from './setup.js';
+
+const require = createRequire(import.meta.url);
+const { version: cliVersion } = require('../package.json') as { version: string };
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -16,14 +63,19 @@ function resolveProjectRoot(): string {
   return process.env['SCIP_QUERY_PROJECT_ROOT'] ?? process.cwd();
 }
 
+function resolveActiveDbPath(projectRoot: string): string {
+  const config = loadProjectConfig(projectRoot);
+  const paths = resolveIndexPaths(projectRoot, config);
+  return process.env['SCIP_QUERY_INDEX_DB']
+    ?? (existsSync(paths.dbPath) ? paths.dbPath : join(projectRoot, 'index.db'));
+}
+
 function openDb(): ScipDatabase {
   const projectRoot = resolveProjectRoot();
   const config = loadProjectConfig(projectRoot);
   const paths = resolveIndexPaths(projectRoot, config);
 
-  // Also check legacy location (project root) for backwards compat
-  const dbPath = process.env['SCIP_QUERY_INDEX_DB']
-    ?? (existsSync(paths.dbPath) ? paths.dbPath : join(projectRoot, 'index.db'));
+  const dbPath = resolveActiveDbPath(projectRoot);
 
   if (!existsSync(dbPath)) {
     console.error(`error: No index.db found. Run: scip-query reindex`);
@@ -58,12 +110,79 @@ function runQuery<T>(
   });
 }
 
+function displayLine(line: number): number {
+  return line + 1;
+}
+
+function displayRange(startLine: number, endLine: number): string {
+  return `${displayLine(startLine)}-${displayLine(endLine)}`;
+}
+
+function displayPathRange(relativePath: string, startLine: number, endLine: number): string {
+  return `${relativePath}:${displayRange(startLine, endLine)}`;
+}
+
+const queries = {
+  stats,
+  files,
+  symbols,
+  methods,
+  refs,
+  trace,
+  deps,
+  rdeps,
+  system,
+  surface,
+  dead,
+  hotspots,
+  imports,
+  importedBy,
+  unusedImports,
+  outline,
+  members,
+  fanIn,
+  fanOut,
+  topFanIn,
+  topFanOut,
+  coupling,
+  topCoupling,
+  cycles,
+  bottlenecks,
+  isolated,
+  byKind,
+  kindCounts,
+  deepChains,
+  hierarchy,
+  callGraph,
+  similar,
+  similarAll,
+  similarFiles,
+  similarChains,
+  extractCandidates,
+  affected,
+  changeSurface,
+  diffImpact,
+  drift,
+  wrapperCandidates,
+  passthroughCandidates,
+  staleAbstractions,
+  complexityHotspots,
+  health,
+  convergence,
+  code,
+  complexity,
+  dataflow,
+  slice,
+  redundantReexports,
+  similarSignatures,
+} as const;
+
 // ── CLI Definition ─────────────────────────────────────────
 
 program
   .name('scip-query')
   .description('Language-agnostic code intelligence CLI powered by SCIP indexes')
-  .version('0.1.0');
+  .version(cliVersion);
 
 // reindex
 program
@@ -129,7 +248,7 @@ program
       (results) => {
         for (const r of results) {
           const sig = r.signature ? `  — ${r.signature}` : '';
-          console.log(`  ${r.startLine}-${r.endLine}  ${r.shortName}${sig}`);
+          console.log(`  ${displayRange(r.startLine, r.endLine)}  ${r.shortName}${sig}`);
         }
       },
     );
@@ -144,7 +263,7 @@ program
       (db) => queries.methods(db, className),
       (results) => {
         for (const r of results) {
-          console.log(`  ${r.startLine}-${r.endLine}  ${r.name}`);
+          console.log(`  ${displayRange(r.startLine, r.endLine)}  ${r.name}`);
         }
       },
     );
@@ -165,7 +284,7 @@ program
             console.log(r.relativePath);
             prevFile = r.relativePath;
           }
-          console.log(`  line ${r.line}`);
+          console.log(`  line ${displayLine(r.line)}`);
         }
       },
     );
@@ -182,12 +301,18 @@ program
         console.log('═══ DEFINITION ═══');
         for (const d of result.definitions) {
           const sig = d.signature ? `  — ${d.signature}` : '';
-          console.log(`  ${d.relativePath}:${d.startLine}-${d.endLine}${sig}`);
+          console.log(`  ${displayPathRange(d.relativePath, d.startLine, d.endLine)}${sig}`);
         }
 
         console.log('\n═══ REFERENCED BY ═══');
+        let prevFile = '';
         for (const ref of result.referencedBy) {
-          console.log(`  ${ref}`);
+          if (ref.relativePath !== prevFile) {
+            if (prevFile) console.log('');
+            console.log(`  ${ref.relativePath}`);
+            prevFile = ref.relativePath;
+          }
+          console.log(`    line ${displayLine(ref.line)}  in ${ref.enclosingShort}`);
         }
       },
     );
@@ -232,7 +357,7 @@ program
 
         console.log('\n═══ EXPORTED SYMBOLS ═══');
         for (const s of result.symbols) {
-          console.log(`  ${s.startLine}-${s.endLine}  ${s.shortName}`);
+          console.log(`  ${displayRange(s.startLine, s.endLine)}  ${s.shortName}`);
         }
 
         console.log('\n═══ DEPENDS ON (internal) ═══');
@@ -292,7 +417,7 @@ program
           prevFile = s.relativePath;
         }
         const tag = s.kind === 'dead-code' ? '[dead code]' : '[file-internal only]';
-        console.log(`  ${s.startLine}-${s.endLine}  (${s.loc} LOC)  ${s.shortName}  ${tag}`);
+        console.log(`  ${displayRange(s.startLine, s.endLine)}  (${s.loc} LOC)  ${s.shortName}  ${tag}`);
       }
 
       console.log('\n───────────────────────────');
@@ -386,7 +511,7 @@ program
         function printTree(nodes: typeof roots, indent: number): void {
           for (const n of nodes) {
             const prefix = '  '.repeat(indent);
-            console.log(`${prefix}${n.startLine}-${n.endLine}  ${n.shortName}`);
+            console.log(`${prefix}${displayRange(n.startLine, n.endLine)}  ${n.shortName}`);
             printTree(n.children, indent + 1);
           }
         }
@@ -404,7 +529,7 @@ program
       (db) => queries.members(db, symbol),
       (results) => {
         for (const r of results) {
-          console.log(`  ${r.startLine}-${r.endLine}  [${r.kind}]  ${r.shortName}`);
+          console.log(`  ${displayRange(r.startLine, r.endLine)}  [${r.kind}]  ${r.shortName}`);
         }
       },
     );
@@ -556,7 +681,7 @@ program
               console.log(r.relativePath);
               prevFile = r.relativePath;
             }
-            console.log(`  ${r.startLine}-${r.endLine}  (${r.loc} LOC)  ${r.shortName}`);
+            console.log(`  ${displayRange(r.startLine, r.endLine)}  (${r.loc} LOC)  ${r.shortName}`);
           }
           console.log(`\n${results.length} isolated symbol(s)`);
         }
@@ -578,7 +703,7 @@ program
           console.log(`No symbols found for kind "${kind}". Use "kind-counts" to see available kinds.`);
         } else {
           for (const r of results) {
-            console.log(`  ${r.relativePath}:${r.startLine}-${r.endLine}  [${r.kindName}]  ${r.shortName}`);
+            console.log(`  ${displayPathRange(r.relativePath, r.startLine, r.endLine)}  [${r.kindName}]  ${r.shortName}`);
           }
           console.log(`\n${results.length} symbol(s)`);
         }
@@ -599,62 +724,6 @@ program
         console.log('  ─────  ────');
         for (const r of results) {
           console.log(`  ${String(r.count).padStart(5)}  ${r.kindName} (${r.kind})`);
-        }
-      },
-    );
-  });
-
-// test-coverage
-program
-  .command('test-coverage [symbol]')
-  .description('Check if symbols are referenced by test files')
-  .option('-s, --scope <path>', 'Limit to files matching path')
-  .option('--min-loc <n>', 'Minimum LOC for summary mode', parseIntSafe, 3)
-  .action((symbol, opts) => {
-    withDb((db) => {
-      if (symbol) {
-        const results = queries.testCoverage(db, symbol);
-        for (const r of results) {
-          const status = r.covered ? 'covered' : 'NOT COVERED';
-          console.log(`  [${status}]  ${r.shortName}  (${r.definedIn})`);
-          for (const tf of r.testFiles) {
-            console.log(`    ← ${tf}`);
-          }
-        }
-      } else {
-        const summary = queries.testCoverageSummary(db, { scope: opts.scope, minLoc: opts.minLoc });
-        console.log(`Test coverage: ${summary.percent}%`);
-        console.log(`  Total symbols:  ${summary.total}`);
-        console.log(`  Covered:        ${summary.covered}`);
-        console.log(`  Not covered:    ${summary.uncovered}`);
-      }
-    });
-  });
-
-// doc-coverage
-program
-  .command('doc-coverage')
-  .description('Check documentation coverage across symbols')
-  .option('-s, --scope <path>', 'Limit to files matching path')
-  .option('--min-loc <n>', 'Minimum LOC to consider', parseIntSafe, 3)
-  .option('-n, --limit <n>', 'Max undocumented symbols to show', parseIntSafe, 50)
-  .action((opts) => {
-    runQuery(
-      (db) => queries.docCoverage(db, {
-        scope: opts.scope,
-        minLoc: opts.minLoc,
-        limit: opts.limit,
-      }),
-      (result) => {
-        console.log(`Documentation coverage: ${result.coveragePercent}%`);
-        console.log(`  Total symbols:   ${result.totalSymbols}`);
-        console.log(`  Documented:      ${result.documented}`);
-        console.log(`  Undocumented:    ${result.undocumented}`);
-        if (result.undocumentedSymbols.length > 0) {
-          console.log('\nUndocumented:');
-          for (const s of result.undocumentedSymbols) {
-            console.log(`  ${s.relativePath}:${s.startLine}  ${s.shortName}`);
-          }
         }
       },
     );
@@ -879,7 +948,7 @@ program
           console.log('No extraction candidates found.');
         } else {
           for (const r of results) {
-            console.log(`\n${r.relativePath}:${r.startLine}-${r.endLine}  ${r.shortName}  (${r.loc} LOC, ${r.totalCallees} callees)`);
+            console.log(`\n${displayPathRange(r.relativePath, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC, ${r.totalCallees} callees)`);
             for (let i = 0; i < r.clusters.length; i++) {
               const c = r.clusters[i]!;
               console.log(`  Cluster ${i + 1} (${Math.round(c.isolation * 100)}% isolated, ${c.callees.length} callees):`);
@@ -922,7 +991,7 @@ program
 // change-surface
 program
   .command('change-surface <file>')
-  .description('Pre-change briefing: exports, consumers, test coverage, risk')
+  .description('Pre-change briefing: exports, consumers, and blast-radius risk')
   .action((file) => {
     const db = openDb();
     const result = queries.changeSurface(db, file);
@@ -932,11 +1001,10 @@ program
       return;
     }
     console.log(`File: ${result.file}`);
-    console.log(`Test coverage: ${result.testCoveragePercent}% | External consumers: ${result.totalExternalConsumers}\n`);
+    console.log(`External consumers: ${result.totalExternalConsumers}\n`);
     for (const s of result.symbols) {
       const risk = s.riskLevel === 'high' ? ' *** HIGH RISK ***' : s.riskLevel === 'medium' ? ' * medium risk *' : '';
-      const tests = s.testFiles.length > 0 ? ` (${s.testFiles.length} test file(s))` : ' (no tests)';
-      console.log(`  ${s.startLine}-${s.endLine}  ${s.shortName}  [${s.externalConsumers} consumers]${tests}${risk}`);
+      console.log(`  ${displayRange(s.startLine, s.endLine)}  ${s.shortName}  [${s.externalConsumers} consumers]${risk}`);
     }
     db.close();
   });
@@ -944,7 +1012,7 @@ program
 // diff-impact
 program
   .command('diff-impact')
-  .description('Compute affected symbols from current git diff')
+  .description('Compute changed symbols and downstream consumers from current git diff')
   .option('--base <ref>', 'Git ref to diff against (default: HEAD)')
   .action((opts) => {
     const db = openDb();
@@ -952,17 +1020,14 @@ program
     console.log(`Changed files: ${result.summary.totalChangedFiles}`);
     console.log(`Changed symbols: ${result.summary.totalChangedSymbols}`);
     console.log(`Affected consumer files: ${result.summary.totalAffectedFiles}`);
-    console.log(`Test coverage: ${result.summary.testCoveragePercent}%\n`);
+    if (result.summary.note) {
+      console.log(`Note: ${result.summary.note}`);
+    }
+    console.log('');
     if (result.changedSymbols.length > 0) {
       console.log('Changed symbols:');
       for (const s of result.changedSymbols) {
         console.log(`  ${s.file}  ${s.shortName}  (fan-in: ${s.fanIn})`);
-      }
-    }
-    if (result.uncoveredSymbols.length > 0) {
-      console.log('\nUncovered (no test references):');
-      for (const s of result.uncoveredSymbols) {
-        console.log(`  ${s.file}  ${s.shortName}`);
       }
     }
     if (result.affectedConsumers.length > 0) {
@@ -1016,7 +1081,7 @@ program
       console.log('No wrapper candidates found.');
     } else {
       for (const r of results) {
-        console.log(`  ${r.file}:${r.startLine}-${r.endLine}  ${r.shortName}  (${r.loc} LOC)`);
+        console.log(`  ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC)`);
         console.log(`    Only called by: ${r.singleCallerShort}  (fan-in: ${r.callerFanIn})`);
       }
       console.log(`\n${results.length} wrapper candidate(s).`);
@@ -1038,7 +1103,7 @@ program
       console.log('No passthrough candidates found.');
     } else {
       for (const r of results) {
-        console.log(`  ${r.file}:${r.startLine}-${r.endLine}  ${r.shortName}  (${r.loc} LOC)`);
+        console.log(`  ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC)`);
         console.log(`    Forwards to: ${r.forwardsToShort}  (${r.forwardsToFile})`);
       }
       console.log(`\n${results.length} passthrough candidate(s).`);
@@ -1061,7 +1126,7 @@ program
     } else {
       for (const r of results) {
         const label = r.consumers === 0 ? 'unused' : '1 consumer';
-        console.log(`  ${r.file}:${r.startLine}-${r.endLine}  ${r.shortName}  (${r.loc} LOC, ${label})`);
+        console.log(`  ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC, ${label})`);
       }
       console.log(`\n${results.length} stale abstraction(s).`);
     }
@@ -1117,7 +1182,6 @@ program
       if (f.staleTypes > 0) console.log(`    Stale abstractions:   ${f.staleTypes}`);
       if (f.driftedFiles > 0) console.log(`    Pattern drift:        ${f.driftedFiles} files`);
       if (f.complexityHotspotCount > 0) console.log(`    Complexity hotspots:  ${f.complexityHotspotCount}`);
-      console.log(`    Test coverage:        ${f.testCoveragePercent}%`);
 
       if (report.actions.length > 0) {
         console.log('\n  Prioritized Actions (highest impact + lowest effort first):');
@@ -1184,10 +1248,10 @@ program
       db.close();
       return;
     }
-    console.log(`${result.relativePath}:${result.startLine}-${result.endLine}  ${result.shortName}  [${result.language ?? 'unknown'}]\n`);
+    console.log(`${displayPathRange(result.relativePath, result.startLine, result.endLine)}  ${result.shortName}  [${result.language ?? 'unknown'}]\n`);
     const lines = result.source.split('\n');
     for (let i = 0; i < lines.length; i++) {
-      console.log(`  ${String(result.startLine + i).padStart(4)}  ${lines[i]}`);
+      console.log(`  ${String(displayLine(result.startLine + i)).padStart(4)}  ${lines[i]}`);
     }
     db.close();
   });
@@ -1204,7 +1268,7 @@ program
       db.close();
       return;
     }
-    console.log(`${result.relativePath}:${result.startLine}-${result.endLine}  ${result.shortName}\n`);
+    console.log(`${displayPathRange(result.relativePath, result.startLine, result.endLine)}  ${result.shortName}\n`);
     console.log(`  LOC:                  ${result.loc}`);
     console.log(`  Branches:             ${result.branches}`);
     console.log(`  Cyclomatic estimate:  ${result.cyclomaticEstimate}`);
@@ -1231,14 +1295,14 @@ program
     if (result.definitionSites.length > 0) {
       console.log('  ═══ DEFINED AT ═══');
       for (const s of result.definitionSites) {
-        console.log(`    ${s.file}:${s.line}`);
+        console.log(`    ${s.file}:${displayLine(s.line)}`);
       }
     }
 
     if (result.usageSites.length > 0) {
       console.log('\n  ═══ USED AT ═══');
       for (const s of result.usageSites) {
-        console.log(`    ${s.file}:${s.line}  in ${s.enclosingShort}`);
+        console.log(`    ${s.file}:${displayLine(s.line)}  in ${s.enclosingShort}`);
       }
     }
 
@@ -1353,7 +1417,7 @@ program
       for (const g of groups) {
         console.log(`\nSignature: ${g.signature}  (${g.functions.length} functions)`);
         for (const f of g.functions) {
-          console.log(`  ${f.file}:${f.startLine}-${f.endLine}  ${f.shortName}  (${f.loc} LOC)`);
+          console.log(`  ${displayPathRange(f.file, f.startLine, f.endLine)}  ${f.shortName}  (${f.loc} LOC)`);
         }
       }
       console.log(`\n${groups.length} group(s) found.`);
@@ -1421,12 +1485,16 @@ program
     const projectRoot = resolveProjectRoot();
     const config = loadProjectConfig(projectRoot);
     const paths = resolveIndexPaths(projectRoot, config);
+    const dbPath = resolveActiveDbPath(projectRoot);
 
     console.log(`Project:  ${projectRoot}`);
-    console.log(`DB path:  ${paths.dbPath}`);
-    console.log(`Exists:   ${existsSync(paths.dbPath) ? 'yes' : 'no'}`);
+    console.log(`DB path:  ${dbPath}`);
+    if (dbPath !== paths.dbPath) {
+      console.log(`Config:   ${paths.dbPath} (fallback to project root index.db)`);
+    }
+    console.log(`Exists:   ${existsSync(dbPath) ? 'yes' : 'no'}`);
 
-    if (existsSync(paths.dbPath)) {
+    if (existsSync(dbPath)) {
       withDb((db) => {
         const s = queries.stats(db);
         console.log(`Symbols:  ${s.symbols}`);
@@ -1442,7 +1510,24 @@ program
 
 // ── Parse & Run ────────────────────────────────────────────
 
-program.parse();
+export { program };
+
+if (isCliEntrypoint()) {
+  program.parse();
+}
+
+function isCliEntrypoint(): boolean {
+  if (!process.argv[1]) {
+    return false;
+  }
+
+  const thisFile = fileURLToPath(import.meta.url);
+  try {
+    return realpathSync(thisFile) === realpathSync(process.argv[1]);
+  } catch {
+    return thisFile === process.argv[1];
+  }
+}
 
 // ── Utility ────────────────────────────────────────────────
 

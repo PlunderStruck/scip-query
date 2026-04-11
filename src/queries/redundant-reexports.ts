@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../db.js';
+import { isLiveBarrel } from '../entry-surfaces.js';
 import type { RedundantReexport } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 
@@ -64,10 +65,11 @@ export function redundantReexports(
 
   const results: RedundantReexport[] = [];
 
-  for (const row of reexportRows) {
-    if (db.isIgnored(row.barrel_path) || db.isIgnored(row.original_path)) continue;
+    for (const row of reexportRows) {
+      if (db.isIgnored(row.barrel_path) || db.isIgnored(row.original_path)) continue;
+      if (isLiveBarrel(db, row.barrel_path)) continue;
 
-    // Step 3: Count consumers that reference this symbol through the barrel
+      // Step 3: Count consumers that reference this symbol through the barrel
     // A "barrel consumer" is a file (other than the barrel itself and the original file)
     // that mentions this symbol AND also mentions something from the barrel document.
     // More precisely: count distinct files that reference this symbol AND whose
@@ -144,10 +146,10 @@ export function redundantReexports(
     // We can only confidently report symbols with 0 consumers EVERYWHERE
     // (both barrel and direct). These are truly dead re-exports.
     //
-    // Symbols with directConsumers > 0 but barrelConsumers === 0 might be
-    // consumed through a namespace import — we can't tell, so we skip them.
-    if (barrelConsumers === 0 && directConsumers === 0) {
-      results.push({
+      // Symbols with directConsumers > 0 but barrelConsumers === 0 might still be
+      // consumed through a namespace import — we can't tell, so we skip them.
+      if (barrelConsumers === 0 && directConsumers === 0) {
+        results.push({
         barrelFile: row.barrel_path,
         symbol: row.symbol,
         shortName: shortenSymbol(row.symbol),

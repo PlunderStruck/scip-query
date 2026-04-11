@@ -6,6 +6,7 @@ export { parseSymbol, shortenSymbol, leafName } from './symbol-parser.js';
 export { reindex, detectLanguages, getIndexerConfig, INDEXER_CONFIGS, isBinaryAvailable, isIndexerInstalled, tryInstallIndexer, tryInstallScipCli } from './reindex/index.js';
 export { loadProjectConfig, resolveIndexPaths, resolveCacheDir, initProjectConfig } from './config.js';
 export { Watcher } from './watch.js';
-export { installSkills, isScipInstalled, getScipVersion, printScipInstallInstructions } from './setup.js';
+export { installSkills } from './setup.js';
+export { isScipInstalled, getScipVersion, printScipInstallInstructions } from './scip-cli.js';
 export * from './queries/index.js';
 export type * from './types.js';

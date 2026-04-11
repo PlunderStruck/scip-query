@@ -45,12 +45,16 @@ export function convergence(
 
   // Generate a consolidation strategy description
   let strategy: string;
-  if (uniqueA.length === 0 && uniqueB.length === 0) {
-    strategy = 'These functions have identical callee sets. One can replace the other directly.';
+  if (union.size === 0) {
+    strategy = 'Neither function calls other tracked symbols. There is no callee-pattern evidence for consolidation; inspect the source bodies directly.';
+  } else if (shared.length === 0) {
+    strategy = 'These functions do not share any callees. They are not a callee-based consolidation candidate.';
+  } else if (uniqueA.length === 0 && uniqueB.length === 0) {
+    strategy = 'These functions have identical tracked callee sets. They are a strong structural match, but identical callees do not prove interchangeable semantics; inspect signatures, control flow, and return values before consolidating.';
   } else if (uniqueA.length === 0) {
-    strategy = `A is a subset of B. A can be replaced by calling B (B does everything A does plus more).`;
+    strategy = `A's tracked callees are a subset of B's. B may subsume part of A's structure, but verify signatures, guards, and non-call logic before replacing A with B.`;
   } else if (uniqueB.length === 0) {
-    strategy = `B is a subset of A. B can be replaced by calling A (A does everything B does plus more).`;
+    strategy = `B's tracked callees are a subset of A's. A may subsume part of B's structure, but verify signatures, guards, and non-call logic before replacing B with A.`;
   } else if (uniqueA.length <= 2 && uniqueB.length <= 2) {
     strategy = `Create a shared function with the ${shared.length} common callees. Pass the ${uniqueA.length + uniqueB.length} divergent callees as parameters or strategy callbacks.`;
   } else {

@@ -1,13 +1,12 @@
 import { execFileSync } from 'node:child_process';
 import type { ScipDatabase } from '../db.js';
-import { TEST_FILE_PATTERNS, testFileMatchSql } from '../query-support.js';
 import type { DiffImpactResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 
 /**
  * Given a git diff, compute the affected symbol set.
  * Finds all symbols defined in changed files, their fan-in,
- * the files that consume them, and test coverage gaps.
+ * and the files that consume them downstream.
  */
 export function diffImpact(
   db: ScipDatabase,
@@ -18,27 +17,18 @@ export function diffImpact(
   // Get changed files from git
   let changedFileLines: string[];
   try {
-    const stdout = execFileSync('git', ['diff', '--name-only', base], {
-      encoding: 'utf-8',
-      cwd: db.config.projectRoot,
-      timeout: 10_000,
-    });
-    changedFileLines = stdout
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0);
+    changedFileLines = getChangedFiles(db.config.projectRoot, base);
   } catch {
     // Not in a git repo or git not available — return empty result
     return {
       changedFiles: [],
       changedSymbols: [],
       affectedConsumers: [],
-      uncoveredSymbols: [],
       summary: {
         totalChangedFiles: 0,
         totalChangedSymbols: 0,
         totalAffectedFiles: 0,
-        testCoveragePercent: 0,
+        note: 'Unable to compute git diff.',
       },
     };
   }
@@ -48,12 +38,11 @@ export function diffImpact(
       changedFiles: [],
       changedSymbols: [],
       affectedConsumers: [],
-      uncoveredSymbols: [],
       summary: {
         totalChangedFiles: 0,
         totalChangedSymbols: 0,
         totalAffectedFiles: 0,
-        testCoveragePercent: 0,
+        note: 'No changed files found.',
       },
     };
   }
@@ -80,12 +69,11 @@ export function diffImpact(
       changedFiles: changedFileLines,
       changedSymbols: [],
       affectedConsumers: [],
-      uncoveredSymbols: [],
       summary: {
         totalChangedFiles: changedFileLines.length,
         totalChangedSymbols: 0,
         totalAffectedFiles: 0,
-        testCoveragePercent: 0,
+        note: 'Changed files are not present in the current SCIP index.',
       },
     };
   }
@@ -108,11 +96,8 @@ export function diffImpact(
   );
 
   // For each symbol, compute fan-in (distinct referencing documents)
-  const testPatternSql = testFileMatchSql('ref_d', TEST_FILE_PATTERNS);
   const changedSymbols: DiffImpactResult['changedSymbols'] = [];
   const consumerMap = new Map<string, Set<string>>(); // file -> set of consumed symbol shortNames
-  const uncoveredSymbols: DiffImpactResult['uncoveredSymbols'] = [];
-  let coveredCount = 0;
 
   for (const sym of syms) {
     // Fan-in: distinct files that reference this symbol
@@ -156,28 +141,6 @@ export function diffImpact(
       }
       consumerMap.get(consumer.relative_path)!.add(shortName);
     }
-
-    // Check test coverage
-    const hasTest = db.get<{ c: number }>(
-      `SELECT COUNT(*) AS c
-      FROM mentions m
-      JOIN chunks c ON m.chunk_id = c.id
-      JOIN documents ref_d ON c.document_id = ref_d.id
-      WHERE m.symbol_id = ?
-        AND m.role != 1
-        AND (${testPatternSql})`,
-      sym.symbol_id,
-    );
-
-    if (hasTest && hasTest.c > 0) {
-      coveredCount++;
-    } else {
-      uncoveredSymbols.push({
-        symbol: sym.symbol,
-        shortName,
-        file: sym.relative_path,
-      });
-    }
   }
 
   // Build affected consumers list
@@ -185,20 +148,39 @@ export function diffImpact(
     .map(([file, symbols]) => ({ file, consumedSymbols: symbols.size }))
     .sort((a, b) => b.consumedSymbols - a.consumedSymbols);
 
-  const totalSymbols = changedSymbols.length;
-  const testCoveragePercent =
-    totalSymbols > 0 ? Math.round((coveredCount / totalSymbols) * 100) : 0;
-
   return {
     changedFiles,
     changedSymbols,
     affectedConsumers,
-    uncoveredSymbols,
     summary: {
       totalChangedFiles: changedFiles.length,
-      totalChangedSymbols: totalSymbols,
+      totalChangedSymbols: changedSymbols.length,
       totalAffectedFiles: affectedConsumers.length,
-      testCoveragePercent,
     },
   };
+}
+
+function getChangedFiles(projectRoot: string, base: string): string[] {
+  const diff = execFileSync('git', ['diff', '--name-only', base], {
+    encoding: 'utf-8',
+    cwd: projectRoot,
+    timeout: 10_000,
+  });
+  const staged = execFileSync('git', ['diff', '--name-only', '--cached', base], {
+    encoding: 'utf-8',
+    cwd: projectRoot,
+    timeout: 10_000,
+  });
+  const untracked = execFileSync('git', ['ls-files', '--others', '--exclude-standard'], {
+    encoding: 'utf-8',
+    cwd: projectRoot,
+    timeout: 10_000,
+  });
+
+  return [...new Set(
+    [diff, staged, untracked]
+      .flatMap((chunk) => chunk.split('\n'))
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0),
+  )];
 }

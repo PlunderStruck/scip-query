@@ -83,7 +83,12 @@ export interface TraceResult {
     endLine: number;
     signature: string | null;
   }>;
-  referencedBy: string[];
+  referencedBy: Array<{
+    relativePath: string;
+    line: number;
+    enclosingSymbol: string | null;
+    enclosingShort: string;
+  }>;
 }
 
 export interface SystemResult {
@@ -175,7 +180,7 @@ export interface CycleResult {
   path: string[];
 }
 
-// ── Bottleneck / Isolated / Coverage / Chain Types ─────────
+// ── Bottleneck / Isolated / Chain Types ───────────────────
 
 export interface BottleneckResult {
   symbol: string;
@@ -204,27 +209,6 @@ export interface ByKindResult {
   relativePath: string;
   startLine: number;
   endLine: number;
-}
-
-export interface TestCoverageResult {
-  symbol: string;
-  shortName: string;
-  definedIn: string;
-  testFiles: string[];
-  covered: boolean;
-}
-
-export interface DocCoverageResult {
-  totalSymbols: number;
-  documented: number;
-  undocumented: number;
-  coveragePercent: number;
-  undocumentedSymbols: Array<{
-    symbol: string;
-    shortName: string;
-    relativePath: string;
-    startLine: number;
-  }>;
 }
 
 export interface DeepChainResult {
@@ -406,7 +390,6 @@ export interface HealthReport {
     staleTypes: number;
     driftedFiles: number;
     complexityHotspotCount: number;
-    testCoveragePercent: number;
   };
   actions: HealthAction[];
   topComplexity: Array<{ symbol: string; score: number }>;
@@ -489,7 +472,6 @@ export interface ChangeSurfaceEntry {
   startLine: number;
   endLine: number;
   externalConsumers: number;
-  testFiles: string[];
   riskLevel: 'low' | 'medium' | 'high';
 }
 
@@ -497,19 +479,17 @@ export interface ChangeSurfaceResult {
   file: string;
   symbols: ChangeSurfaceEntry[];
   totalExternalConsumers: number;
-  testCoveragePercent: number;
 }
 
 export interface DiffImpactResult {
   changedFiles: string[];
   changedSymbols: Array<{ symbol: string; shortName: string; file: string; fanIn: number }>;
   affectedConsumers: Array<{ file: string; consumedSymbols: number }>;
-  uncoveredSymbols: Array<{ symbol: string; shortName: string; file: string }>;
   summary: {
     totalChangedFiles: number;
     totalChangedSymbols: number;
     totalAffectedFiles: number;
-    testCoveragePercent: number;
+    note?: string;
   };
 }
 
@@ -556,8 +536,10 @@ export type SupportedLanguage =
 
 export interface IndexerConfig {
   language: SupportedLanguage;
-  /** The npm/cargo/pip package or binary that produces the SCIP index */
+  /** Preferred executable name for the indexer */
   indexerBinary: string;
+  /** Additional executable names accepted on PATH for the same indexer */
+  binaryAliases?: string[];
   /** Command to check if the indexer is installed */
   checkCommand: string;
   /** Returns the binary + args array for execFileSync (no shell injection) */
@@ -565,6 +547,7 @@ export interface IndexerConfig {
     projectRoot: string;
     outputPath: string;
     pnpmWorkspaces?: boolean;
+    indexerBinary: string;
   }) => { binary: string; args: string[] };
   /** Marker files that indicate this language is present */
   markerFiles: string[];

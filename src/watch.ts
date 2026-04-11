@@ -225,7 +225,7 @@ export class Watcher {
     return new Promise((resolve, reject) => {
       const start = Date.now();
       const tmpDb = this.indexPaths.dbPath + '.tmp';
-      const tmpScip = this.indexPaths.indexPath + '.tmp';
+      const tmpScip = tempScipPath(this.indexPaths.indexPath);
 
       // Fork a child that runs the reindex
       const child = fork(
@@ -271,4 +271,10 @@ export class Watcher {
     this.status = status;
     this.onStatus(status);
   }
+}
+
+export function tempScipPath(indexPath: string): string {
+  return indexPath.endsWith('.scip')
+    ? indexPath.slice(0, -'.scip'.length) + '.tmp.scip'
+    : indexPath + '.tmp.scip';
 }

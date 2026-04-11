@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../db.js';
 import { findFirstSymbolMatch, getCalleeRowsForSymbol } from '../query-support.js';
 import type { SimilarSymbolResult } from '../types.js';
-import { shortenSymbol } from '../symbol-parser.js';
+import { isFunctionLikeSymbol, shortenSymbol } from '../symbol-parser.js';
 
 /**
  * Find functions with similar callee fingerprints using TF-IDF weighted
@@ -27,6 +27,7 @@ export function similar(
 
   const target = findCallees(db, symbolPattern);
   if (!target || target.callees.size === 0) return [];
+  if (!isFunctionLikeSymbol(target.symbol)) return [];
 
   const candidates = getAllCalleeFingerprints(db, {
     minCallees: 3,
@@ -271,6 +272,7 @@ function getAllCalleeFingerprints(
 
   for (const sym of symbols) {
     if (db.isIgnored(sym.relative_path)) continue;
+    if (!isFunctionLikeSymbol(sym.symbol)) continue;
 
     const calleeRows = getCalleeRowsForSymbol(db, {
       documentId: sym.document_id,

@@ -1,10 +1,11 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { tryInstallScipCli } from '../scip-cli.js';
 import type { SupportedLanguage } from '../types.js';
 import { detectLanguages } from './detect.js';
 import { getIndexerConfig } from './indexers.js';
-import { isBinaryAvailable, isIndexerInstalled, tryInstallIndexer, tryInstallScipCli } from './install.js';
+import { describeIndexerBinary, isBinaryAvailable, isIndexerInstalled, resolveIndexerBinary, tryInstallIndexer } from './install.js';
 
 export interface ReindexOptions {
   projectRoot: string;
@@ -83,30 +84,40 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
   // Index each language
   for (const lang of languages) {
     const config = getIndexerConfig(lang);
+    const binaryLabel = describeIndexerBinary(config);
 
     // Check if indexer is installed, auto-install if needed
     if (!isIndexerInstalled(config)) {
       if (skipAutoInstall) {
         throw new Error(
-          `${config.indexerBinary} is required to index ${lang} but not found on PATH.\n` +
-          (config.installUrl ? `Install from: ${config.installUrl}` : `Make sure ${config.indexerBinary} is installed and available on PATH.`),
+          `${binaryLabel} is required to index ${lang} but not found on PATH.\n` +
+          (config.installUrl ? `Install from: ${config.installUrl}` : `Make sure ${binaryLabel} is installed and available on PATH.`),
         );
       }
-      onStatus(`${config.indexerBinary} not found. Attempting auto-install...`);
+      onStatus(`${binaryLabel} not found. Attempting auto-install...`);
       if (!tryInstallIndexer(config, onStatus)) {
         throw new Error(
-          `${config.indexerBinary} is required to index ${lang} but could not be installed.\n` +
-          (config.installUrl ? `Install manually from: ${config.installUrl}` : `Make sure ${config.indexerBinary} is installed and available on PATH.`),
+          `${binaryLabel} is required to index ${lang} but could not be installed.\n` +
+          (config.installUrl ? `Install manually from: ${config.installUrl}` : `Make sure ${binaryLabel} is installed and available on PATH.`),
         );
       }
     }
 
-    onStatus(`Indexing ${lang} with ${config.indexerBinary}...`);
+    const resolvedBinary = resolveIndexerBinary(config);
+    if (!resolvedBinary) {
+      throw new Error(
+        `${binaryLabel} is required to index ${lang} but was not found on PATH after installation checks.\n` +
+        (config.installUrl ? `Install manually from: ${config.installUrl}` : `Make sure ${binaryLabel} is installed and available on PATH.`),
+      );
+    }
+
+    onStatus(`Indexing ${lang} with ${resolvedBinary}...`);
 
     const { binary, args } = config.indexArgs({
       projectRoot,
       outputPath: outputScip,
       pnpmWorkspaces: opts.pnpmWorkspaces,
+      indexerBinary: resolvedBinary,
     });
 
     try {
@@ -119,8 +130,8 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new Error(
-        `Failed to index ${lang} with ${config.indexerBinary}: ${msg}\n` +
-        `Make sure ${config.indexerBinary} is installed and available on PATH.`,
+        `Failed to index ${lang} with ${resolvedBinary}: ${msg}\n` +
+        `Make sure ${binaryLabel} is installed and available on PATH.`,
       );
     }
   }
@@ -150,4 +161,5 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
 
 export { detectLanguages } from './detect.js';
 export { getIndexerConfig, INDEXER_CONFIGS } from './indexers.js';
-export { isBinaryAvailable, isIndexerInstalled, tryInstallIndexer, tryInstallScipCli } from './install.js';
+export { describeIndexerBinary, isBinaryAvailable, isIndexerInstalled, resolveIndexerBinary, tryInstallIndexer } from './install.js';
+export { tryInstallScipCli } from '../scip-cli.js';

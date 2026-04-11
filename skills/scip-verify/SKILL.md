@@ -1,13 +1,13 @@
 ---
 name: scip-verify
-description: Post-implementation verification using scip-query. Confirms changes are wired correctly — no broken references, no new cycles, no orphaned code, no test gaps, no health regressions. Run after making changes and before committing.
+description: Post-implementation verification using scip-query. Confirms changes are wired correctly — no broken references, no new cycles, no orphaned code, no structural regressions, no health regressions. Run after making changes and before committing.
 allowed-tools: [Bash, Write, Edit, Glob, Agent, TaskCreate, TaskUpdate, TaskGet, TaskList]
-keywords: [verify, check, validate, wire, confirm, post-implementation, review, regression, health, test]
+keywords: [verify, check, validate, wire, confirm, post-implementation, review, regression, health]
 ---
 
 # Post-Implementation Verification with scip-query
 
-You are verifying that a code change was implemented correctly. Every check must use `scip-query` to confirm the change didn't break references, introduce cycles, orphan code, or miss test coverage. This is the "measure twice" step — run it after making changes, before committing.
+You are verifying that a code change was implemented correctly. Every check must use `scip-query` to confirm the change didn't break references, introduce cycles, orphan code, or widen structural risk unexpectedly. This is the "measure twice" step — run it after making changes, before committing.
 
 ---
 
@@ -27,7 +27,7 @@ You are verifying that a code change was implemented correctly. Every check must
 
 1. **Reindex first.** Always run `scip-query reindex` before verification. You're checking the current code, not the old index.
 
-2. **Every check must produce evidence.** Don't say "looks good." Say "scip-query cycles returned 0 cycles, scip-query diff-impact shows 3 changed symbols affecting 12 files, all 3 have test coverage."
+2. **Every check must produce evidence.** Don't say "looks good." Say "scip-query cycles returned 0 cycles, scip-query diff-impact shows 3 changed symbols affecting 12 files, and change-surface shows the blast radius stayed within expectations."
 
 3. **Fail loudly.** If any check fails, stop and report the exact failure with the scip-query command output. Do not proceed to "looks mostly fine."
 
@@ -70,7 +70,7 @@ scip-query code 'src/modules/chat/chat.service.ts:100-200'
 
 ---
 
-## The 8 Verification Checks
+## The 7 Verification Checks
 
 Run every one of these. Each catches a different class of implementation error.
 
@@ -81,12 +81,11 @@ scip-query reindex
 scip-query diff-impact
 ```
 
-**What you're checking:** Which symbols changed, how many consumer files are affected, and whether test coverage exists for changed symbols.
+**What you're checking:** Which symbols changed and how many downstream consumers are affected.
 
 **Pass criteria:**
 - Every changed symbol is intentional (no accidental modifications)
 - The number of affected consumer files matches expectations
-- Changed symbols have test references (or test gaps are acknowledged)
 
 **Fail if:** Unexpected symbols appear in the diff, or the affected file count is much larger than expected (blast radius exceeded plan).
 
@@ -141,19 +140,7 @@ scip-query fan-in <changed-symbol>
 
 **Fail if:** A changed symbol's fan-in dropped — a consumer was disconnected.
 
-### Check 6: Test Coverage for Changes
-
-```bash
-scip-query test-coverage <changed-symbol>
-```
-
-For each changed symbol, verify test files reference it.
-
-**Pass criteria:** Every changed symbol is referenced by at least one test file.
-
-**Fail if:** Changed symbols with zero test references. Report which ones need tests.
-
-### Check 7: Change Surface Risk Check
+### Check 6: Change Surface Risk Check
 
 For each modified file:
 
@@ -161,13 +148,13 @@ For each modified file:
 scip-query change-surface <modified-file>
 ```
 
-**What you're checking:** High-risk symbols in modified files (high consumer count + no tests).
+**What you're checking:** High-risk symbols in modified files based on consumer count, blast radius, and structural exposure.
 
-**Pass criteria:** No HIGH RISK symbols, or all high-risk symbols were intentionally modified.
+**Pass criteria:** No unexpectedly high-risk surfaces, or all high-risk symbols were intentionally modified with the blast radius understood.
 
-**Fail if:** A HIGH RISK symbol was modified without test coverage.
+**Fail if:** A HIGH RISK symbol was modified without acknowledging the blast radius or downstream consumers.
 
-### Check 8: Health Score
+### Check 7: Health Score
 
 ```bash
 scip-query health
@@ -190,7 +177,7 @@ scip-query reindex
 scip-query diff-impact
 ```
 
-Record: changed files, changed symbols, affected consumers, test coverage %.
+Record: changed files, changed symbols, affected consumers, and any unexpectedly large blast-radius surfaces.
 
 ### Phase 2: Structural Checks (parallel)
 
@@ -209,7 +196,6 @@ For each changed symbol from diff-impact:
 ```bash
 scip-query refs <symbol>
 scip-query fan-in <symbol>
-scip-query test-coverage <symbol>
 ```
 
 ### Phase 4: Per-File Checks
@@ -246,7 +232,7 @@ The verification report is structured as:
 - Changed files: N
 - Changed symbols: N
 - Affected consumer files: N
-- Test coverage: N%
+- High-risk symbols touched: N
 
 ## Check Results
 
@@ -257,9 +243,8 @@ The verification report is structured as:
 | 3 | No new dead code | PASS/FAIL | [count] |
 | 4 | No new isolated | PASS/FAIL | [count] |
 | 5 | References intact | PASS/FAIL | [fan-in changes] |
-| 6 | Test coverage | PASS/FAIL | [uncovered symbols] |
-| 7 | Risk assessment | PASS/FAIL | [high-risk symbols] |
-| 8 | Health score | PASS/FAIL | [score delta] |
+| 6 | Risk assessment | PASS/FAIL | [high-risk symbols] |
+| 7 | Health score | PASS/FAIL | [score delta] |
 
 ## Failures
 [Detailed explanation of any failures with scip-query output]
@@ -316,7 +301,6 @@ Do NOT use grep, rg, or Read. Use only scip-query commands.
 | Isolated | `scip-query isolated --min-loc 3` |
 | References | `scip-query refs <symbol>` |
 | Fan-in | `scip-query fan-in <symbol>` |
-| Test coverage | `scip-query test-coverage <symbol>` |
 | Change surface | `scip-query change-surface <file>` |
 | Health | `scip-query health` |
 | Full blast radius | `scip-query affected <symbol>` |

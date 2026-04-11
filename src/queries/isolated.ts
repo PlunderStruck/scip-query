@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../db.js';
+import { isEntrySurface } from '../entry-surfaces.js';
 import { testFileExclusionSql } from '../query-support.js';
 import type { IsolatedResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
@@ -56,6 +57,7 @@ export function isolated(
 
   return rows
     .filter((r) => !db.isIgnored(r.relative_path))
+    .filter((r) => !isEntrySurface(db, r.relative_path))
     .map((r) => ({
       symbol: r.symbol,
       shortName: shortenSymbol(r.symbol),

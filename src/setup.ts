@@ -1,18 +1,14 @@
 import {
   existsSync, mkdirSync, symlinkSync, readlinkSync,
-  unlinkSync, chmodSync, createWriteStream,
+  unlinkSync,
 } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
-import { homedir, platform, arch } from 'node:os';
-import { execFileSync } from 'node:child_process';
+import { homedir, platform } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { get as httpsGet } from 'node:https';
-import { tryInstallScipCli } from './reindex/install.js';
+import { getScipVersion, isScipInstalled, printScipInstallInstructions, tryInstallScipCli } from './scip-cli.js';
 
 const IS_WINDOWS = platform() === 'win32';
 const SKILLS = ['concrete-plan', 'scip-explore', 'scip-debloat', 'scip-verify'];
-const SCIP_VERSION = 'v0.7.0';
-
 // ── Skills Installation ────────────────────────────────────
 
 export interface InstallSkillsResult {
@@ -90,87 +86,6 @@ export function installSkills(
   return result;
 }
 
-// ── SCIP CLI Binary Detection & Installation ───────────────
-
-/**
- * Check if the `scip` CLI binary is available on PATH.
- */
-export function isScipInstalled(): boolean {
-  try {
-    const cmd = IS_WINDOWS ? 'where' : 'which';
-    execFileSync(cmd, ['scip'], { stdio: 'pipe' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Get the scip CLI version if installed.
- */
-export function getScipVersion(): string | null {
-  try {
-    const output = execFileSync('scip', ['--version'], { stdio: 'pipe' }).toString().trim();
-    return output;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Resolve the download URL for the scip CLI binary for this platform.
- */
-function getScipDownloadUrl(): { url: string; filename: string } | null {
-  const os = platform();
-  const cpu = arch();
-
-  let osName: string;
-  let archName: string;
-  let ext: string;
-
-  switch (os) {
-    case 'darwin': osName = 'darwin'; ext = 'tar.gz'; break;
-    case 'linux': osName = 'linux'; ext = 'tar.gz'; break;
-    case 'win32': osName = 'windows'; ext = 'zip'; break;
-    default: return null;
-  }
-
-  switch (cpu) {
-    case 'arm64': archName = 'arm64'; break;
-    case 'x64': archName = 'amd64'; break;
-    default: return null;
-  }
-
-  const filename = `scip-${osName}-${archName}.${ext}`;
-  const url = `https://github.com/sourcegraph/scip/releases/download/${SCIP_VERSION}/${filename}`;
-  return { url, filename };
-}
-
-/**
- * Print instructions for installing the scip CLI binary.
- */
-export function printScipInstallInstructions(): void {
-  const download = getScipDownloadUrl();
-
-  console.log('\nThe `scip` CLI is required but not found on PATH.\n');
-
-  if (platform() === 'darwin') {
-    console.log('Install via Homebrew:');
-    console.log('  brew install sourcegraph/scip/scip\n');
-    console.log('Or download manually:');
-  } else {
-    console.log('Download from:');
-  }
-
-  if (download) {
-    console.log(`  ${download.url}\n`);
-  } else {
-    console.log(`  https://github.com/sourcegraph/scip/releases/tag/${SCIP_VERSION}\n`);
-  }
-
-  console.log('After installing, ensure `scip` is on your PATH and run `scip-query reindex`.');
-}
-
 // ── First-Run Setup ────────────────────────────────────────
 
 /**
@@ -200,3 +115,5 @@ export function postinstall(): void {
 
   console.log('');
 }
+
+export { isScipInstalled, getScipVersion, printScipInstallInstructions } from './scip-cli.js';

@@ -1,9 +1,16 @@
 import type { ScipDatabase } from '../db.js';
+import { resolveIndexedPaths } from '../query-support.js';
 import type { SurfaceResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 
 /** Public API surface: what symbols do external consumers actually use from this module? */
 export function surface(db: ScipDatabase, modulePattern: string): SurfaceResult[] {
+  const matchedPaths = resolveIndexedPaths(db, modulePattern);
+  if (matchedPaths.length === 0) {
+    return [];
+  }
+
+  const placeholders = matchedPaths.map(() => '?').join(', ');
   const rows = db.all<{
     relative_path: string;
     symbol: string;
@@ -15,13 +22,13 @@ export function surface(db: ScipDatabase, modulePattern: string): SurfaceResult[
     JOIN global_symbols gs ON m.symbol_id = gs.id
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents d2 ON der.document_id = d2.id
-    WHERE d2.relative_path LIKE ?
-      AND d1.relative_path NOT LIKE ?
+    WHERE d2.relative_path IN (${placeholders})
+      AND d1.relative_path NOT IN (${placeholders})
       AND ${db.localSymbolPredicate}
       AND m.role != 1
     ORDER BY d1.relative_path`,
-    `%${modulePattern}%`,
-    `%${modulePattern}%`,
+    ...matchedPaths,
+    ...matchedPaths,
   );
 
   return rows

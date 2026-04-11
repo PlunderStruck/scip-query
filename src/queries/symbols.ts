@@ -1,9 +1,16 @@
 import type { ScipDatabase } from '../db.js';
 import type { SymbolResult } from '../types.js';
+import { resolveIndexedPaths } from '../query-support.js';
 import { shortenSymbol } from '../symbol-parser.js';
 import { cleanSignature } from './clean-signature.js';
 
 export function symbols(db: ScipDatabase, filePattern: string): SymbolResult[] {
+  const resolvedPaths = resolveIndexedPaths(db, filePattern);
+  if (resolvedPaths.length === 0) {
+    return [];
+  }
+
+  const placeholders = resolvedPaths.map(() => '?').join(', ');
   const rows = db.all<{
     start_line: number;
     end_line: number;
@@ -20,11 +27,11 @@ export function symbols(db: ScipDatabase, filePattern: string): SymbolResult[] {
     FROM defn_enclosing_ranges der
     JOIN global_symbols gs ON der.symbol_id = gs.id
     JOIN documents d ON der.document_id = d.id
-    WHERE d.relative_path LIKE ?
+    WHERE d.relative_path IN (${placeholders})
       AND ${db.localSymbolPredicate}
       ${db.symbolNoise}
-    ORDER BY der.start_line`,
-    `%${filePattern}%`,
+    ORDER BY d.relative_path, der.start_line`,
+    ...resolvedPaths,
   );
 
   return rows

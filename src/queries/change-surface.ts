@@ -1,23 +1,26 @@
 import type { ScipDatabase } from '../db.js';
-import { TEST_FILE_PATTERNS, testFileMatchSql } from '../query-support.js';
+import { resolveIndexedFile } from '../query-support.js';
 import type { ChangeSurfaceEntry, ChangeSurfaceResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 
 /**
  * Pre-change briefing for a file. For each symbol defined in the file,
- * reports external consumer count, test coverage, and risk level.
+ * reports external consumer count and blast-radius risk.
  */
 export function changeSurface(
   db: ScipDatabase,
   filePattern: string,
 ): ChangeSurfaceResult | null {
+  const resolvedFile = resolveIndexedFile(db, filePattern);
+  if (!resolvedFile) return null;
+
   // Find the file
   const doc = db.get<{ id: number; relative_path: string }>(
     `SELECT id, relative_path FROM documents
-     WHERE relative_path LIKE ?
+     WHERE relative_path = ?
        ${db.pathExclusionsFor('documents')}
      LIMIT 1`,
-    `%${filePattern}%`,
+    resolvedFile,
   );
 
   if (!doc || db.isIgnored(doc.relative_path)) return null;
@@ -38,11 +41,8 @@ export function changeSurface(
     doc.id,
   );
 
-  const testPatternSql = testFileMatchSql('ref_d', TEST_FILE_PATTERNS);
-
   const symbols: ChangeSurfaceEntry[] = [];
   let totalExternalConsumers = 0;
-  let coveredCount = 0;
 
   for (const sym of syms) {
     // Count external consumers: mentions with role=0 from different documents
@@ -59,27 +59,11 @@ export function changeSurface(
 
     const externalConsumers = consumerRow?.consumer_count ?? 0;
 
-    // Find test files that reference this symbol
-    const testFiles = db.all<{ relative_path: string }>(
-      `SELECT DISTINCT ref_d.relative_path
-      FROM mentions m
-      JOIN chunks c ON m.chunk_id = c.id
-      JOIN documents ref_d ON c.document_id = ref_d.id
-      WHERE m.symbol_id = ?
-        AND m.role != 1
-        AND (${testPatternSql})
-      ORDER BY ref_d.relative_path`,
-      sym.symbol_id,
-    ).map((r) => r.relative_path);
-
-    const hasTests = testFiles.length > 0;
-    if (hasTests) coveredCount++;
-
-    // Risk level determination
+    // Risk level is based on blast radius: how many external files depend on this symbol.
     let riskLevel: 'low' | 'medium' | 'high';
-    if (externalConsumers > 10 && !hasTests) {
+    if (externalConsumers > 10) {
       riskLevel = 'high';
-    } else if (externalConsumers > 5 || !hasTests) {
+    } else if (externalConsumers > 0) {
       riskLevel = 'medium';
     } else {
       riskLevel = 'low';
@@ -93,18 +77,13 @@ export function changeSurface(
       startLine: sym.start_line,
       endLine: sym.end_line,
       externalConsumers,
-      testFiles,
       riskLevel,
     });
   }
-
-  const testCoveragePercent =
-    symbols.length > 0 ? Math.round((coveredCount / symbols.length) * 100) : 0;
 
   return {
     file: doc.relative_path,
     symbols,
     totalExternalConsumers,
-    testCoveragePercent,
   };
 }

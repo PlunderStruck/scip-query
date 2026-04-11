@@ -38,11 +38,13 @@ export function drift(
   // File depends on module B (via dep graph) but never references
   // any symbol defined in B (via symbol ref graph).
   for (const [file, deps] of depGraph) {
-    if (isStructuralRole(path.basename(file))) continue;
+    if (shouldSkipDriftFile(file)) continue;
 
     const referencedFiles = symbolRefs.get(file) ?? new Set<string>();
 
     for (const dep of deps) {
+      if (shouldSkipDriftFile(dep)) continue;
+
       if (!referencedFiles.has(dep)) {
         // This file "depends on" dep but never references its symbols.
         // This can happen when the dep is imported for types only
@@ -67,11 +69,13 @@ export function drift(
   const layerRules = inferLayerRules(depGraph);
 
   for (const [file, deps] of depGraph) {
-    if (isStructuralRole(path.basename(file))) continue;
+    if (shouldSkipDriftFile(file)) continue;
 
-    const fileLayer = getTopDir(file);
+    const fileLayer = getArchitecturalLayer(file);
     for (const dep of deps) {
-      const depLayer = getTopDir(dep);
+      if (shouldSkipDriftFile(dep)) continue;
+
+      const depLayer = getArchitecturalLayer(dep);
       if (fileLayer === depLayer) continue; // same layer, fine
 
       const violation = layerRules.get(`${fileLayer}->${depLayer}`);
@@ -103,15 +107,17 @@ export function drift(
     // Count dep frequency across siblings
     const depFreq = new Map<string, number>();
     for (const file of files) {
-      if (isStructuralRole(path.basename(file))) continue;
+      if (shouldSkipDriftFile(file)) continue;
       for (const dep of depGraph.get(file) ?? []) {
+        if (shouldSkipDriftFile(dep)) continue;
         depFreq.set(dep, (depFreq.get(dep) ?? 0) + 1);
       }
     }
 
     for (const file of files) {
-      if (isStructuralRole(path.basename(file))) continue;
+      if (shouldSkipDriftFile(file)) continue;
       for (const dep of depGraph.get(file) ?? []) {
+        if (shouldSkipDriftFile(dep)) continue;
         if ((depFreq.get(dep) ?? 0) === 1) {
           // This file is the only one in its dir that depends on this module
           // Skip if dep is in the same directory (sibling imports are normal)
@@ -184,10 +190,14 @@ function inferLayerRules(
   const layerSet = new Set<string>();
 
   for (const [file, deps] of depGraph) {
-    const fromLayer = getTopDir(file);
+    if (shouldSkipDriftFile(file)) continue;
+
+    const fromLayer = getArchitecturalLayer(file);
     layerSet.add(fromLayer);
     for (const dep of deps) {
-      const toLayer = getTopDir(dep);
+      if (shouldSkipDriftFile(dep)) continue;
+
+      const toLayer = getArchitecturalLayer(dep);
       if (fromLayer === toLayer) continue;
       layerSet.add(toLayer);
       const key = `${fromLayer}->${toLayer}`;
@@ -206,13 +216,27 @@ function inferLayerRules(
   return rules;
 }
 
-function getTopDir(filePath: string): string {
-  const parts = filePath.split('/');
-  return parts[0] ?? filePath;
+function getArchitecturalLayer(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/');
+  const parts = normalized.split('/').filter(Boolean);
+
+  if (parts.length <= 1) {
+    return '(root)';
+  }
+
+  if (parts.length >= 3 && ['src', 'lib', 'app', 'server', 'client'].includes(parts[0]!)) {
+    return `${parts[0]!}/${parts[1]!}`;
+  }
+
+  return parts[0]!;
 }
 
 function isLikelyTypeOnlyDep(dep: string): boolean {
   return dep.includes('types') || dep.endsWith('.d.ts');
+}
+
+function shouldSkipDriftFile(filePath: string): boolean {
+  return isStructuralRole(path.basename(filePath)) || isTestLikePath(filePath);
 }
 
 function isStructuralRole(basename: string): boolean {
@@ -221,4 +245,16 @@ function isStructuralRole(basename: string): boolean {
   if (basename.includes('worker.') || basename.includes('postinstall.')) return true;
   if (basename === 'health.ts' || basename === 'health.js') return true;
   return false;
+}
+
+function isTestLikePath(filePath: string): boolean {
+  const normalized = filePath.replace(/\\/g, '/');
+  const basename = path.basename(normalized);
+  return normalized.includes('/__tests__/')
+    || normalized.includes('/tests/')
+    || normalized.includes('/test/')
+    || /\.(test|spec)\.[A-Za-z0-9]+$/.test(basename)
+    || /_(test|spec)\.[A-Za-z0-9]+$/.test(basename)
+    || /^test[_-]/.test(basename)
+    || /^test\./.test(basename);
 }

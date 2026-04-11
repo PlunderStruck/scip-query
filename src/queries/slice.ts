@@ -8,7 +8,7 @@ import { shortenSymbol } from '../symbol-parser.js';
  * or what a symbol affects (forward).
  *
  * Backward slice: "What feeds into this?" — symbols referenced in the same
- * function that defines the target. These are the inputs/dependencies.
+ * function that defines the target. These are the direct tracked inputs.
  *
  * Forward slice: "What does this feed into?" — at each site where the target
  * is referenced, find the enclosing function, then find what that function
@@ -39,22 +39,6 @@ function backwardSlice(db: ScipDatabase, match: SymbolMatch): SliceResult {
   // These are what "feeds into" the target — the inputs.
   const callees = getCalleeRowsForSymbol(db, match);
 
-  // Also find symbols whose definitions are in the same file and whose
-  // ranges overlap or precede the target — local variables, parameters, etc.
-  const localPredecessors = db.all<{ symbol: string; file: string }>(
-    `SELECT DISTINCT gs.symbol, d.relative_path AS file
-    FROM defn_enclosing_ranges der
-    JOIN global_symbols gs ON der.symbol_id = gs.id
-    JOIN documents d ON der.document_id = d.id
-    WHERE der.document_id = ?
-      AND der.end_line < ?
-      AND gs.id != ?
-      ${db.symbolNoiseFor('gs')}
-    ORDER BY der.start_line DESC
-    LIMIT 15`,
-    match.documentId, match.startLine, match.symbolId,
-  );
-
   const seen = new Set<string>();
   const connected: SliceResult['connectedSymbols'] = [];
 
@@ -66,17 +50,6 @@ function backwardSlice(db: ScipDatabase, match: SymbolMatch): SliceResult {
       shortName: shortenSymbol(c.symbol),
       file: c.file,
       relationship: 'referenced within definition (callee)',
-    });
-  }
-
-  for (const p of localPredecessors) {
-    if (seen.has(p.symbol) || db.isIgnored(p.file)) continue;
-    seen.add(p.symbol);
-    connected.push({
-      symbol: p.symbol,
-      shortName: shortenSymbol(p.symbol),
-      file: p.file,
-      relationship: 'defined before target in same file (local predecessor)',
     });
   }
 

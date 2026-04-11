@@ -124,7 +124,7 @@ Identify the riskiest parts of the system:
 scip-query complexity <symbol>        # Per-symbol: branches, cyclomatic, fan-in/out
 scip-query complexity-hotspots        # Top N most complex symbols
 scip-query bottlenecks                # Coupling pressure points
-scip-query change-surface <file>      # Per-file risk: consumers, test coverage
+scip-query change-surface <file>      # Per-file risk: external consumers, blast radius
 ```
 
 ### Step 6: Check structural health
@@ -161,9 +161,8 @@ scip-query complexity X               # How complex is it
 ### "Is it safe to change X?"
 
 ```bash
-scip-query change-surface <file>      # Risk per symbol: consumers, tests
+scip-query change-surface <file>      # Risk per symbol: consumers, blast radius
 scip-query affected X --max-depth 3   # Full transitive blast radius
-scip-query test-coverage X            # Do tests reference this?
 scip-query similar X                  # Is there duplicated logic to consolidate?
 ```
 
@@ -197,7 +196,7 @@ When reporting exploration results, structure them as:
 4. **Data flow** — What data enters, how it transforms, where it ends up
 5. **Dependencies** — What the system depends on (with `deps` citations)
 6. **Consumers** — What depends on this system (with `rdeps`/`surface` citations)
-7. **Risk areas** — Complex symbols, high fan-in, missing tests (with `complexity`/`change-surface` citations)
+7. **Risk areas** — Complex symbols, high fan-in, high-consumer surfaces, or broad blast radius (with `complexity`/`change-surface` citations)
 
 Every file path, line number, and behavioral claim includes the scip-query command that verified it.
 
@@ -230,6 +229,5 @@ Every file path, line number, and behavioral claim includes the scip-query comma
 | Dependency depth | `scip-query deep-chains` |
 | Similar functions | `scip-query similar <symbol>` |
 | Same-shape functions | `scip-query similar-signatures` |
-| Test coverage | `scip-query test-coverage <symbol>` |
 
 Full documentation: Run `scip-query --help` or read the README at the scip-query repo.

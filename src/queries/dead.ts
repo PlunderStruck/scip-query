@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../db.js';
+import { getInactiveBarrelPaths, isEntrySurface } from '../entry-surfaces.js';
 import { TEST_SUPPORT_PATH_PATTERNS, testFileExclusionSql } from '../query-support.js';
 import type { DeadOptions, DeadSymbolResult, DeadSummary } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
@@ -19,6 +20,7 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
   const params: unknown[] = [minLoc];
   let testFileExclusions = '';
   let memberExclusion = '';
+  let barrelExclusions = '';
 
   if (scope) {
     params.push(`%${scope}%`);
@@ -34,13 +36,13 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     memberExclusion = `AND gs.symbol NOT LIKE '%#%'`;
   }
 
-  // Barrel file exclusion for the NOT EXISTS subquery
-  const barrelExclusions = skipBarrels
-    ? `AND ref_d.relative_path NOT LIKE '%/index.ts'
-       AND ref_d.relative_path NOT LIKE '%/index.js'
-       AND ref_d.relative_path NOT LIKE '%/mod.rs'
-       AND ref_d.relative_path NOT LIKE '%/__init__.py'`
-    : '';
+  if (skipBarrels) {
+    const inactiveBarrelPaths = getInactiveBarrelPaths(db);
+    if (inactiveBarrelPaths.length > 0) {
+      barrelExclusions = `AND ref_d.relative_path NOT IN (${inactiveBarrelPaths.map(() => '?').join(', ')})`;
+      params.push(...inactiveBarrelPaths);
+    }
+  }
 
   const sql = `
     SELECT
@@ -91,6 +93,7 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
 
   const symbols: DeadSymbolResult[] = rows
     .filter((r) => !db.isIgnored(r.relative_path))
+    .filter((r) => !isEntrySurface(db, r.relative_path))
     .map((r) => {
       // dead-code: zero references anywhere (not even in same file) — safe to delete
       // file-internal: referenced within same file but never cross-file —

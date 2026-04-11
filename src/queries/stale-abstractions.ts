@@ -53,23 +53,15 @@ export function staleAbstractions(
         AND (der.end_line - der.start_line + 1) >= ?
         ${scopeFilter}
     ) WHERE consumers <= 1
-    ORDER BY loc DESC
-    LIMIT ?`,
-    minLoc, limit,
+    ORDER BY loc DESC, file ASC, start_line ASC`,
+    minLoc,
   );
+
+  const filesWithFunctions = getFilesWithFunctions(db, scope);
 
   return rows
     .filter((r) => !db.isIgnored(r.file))
-    // Exclude types defined in dedicated type files (types.ts, types/, etc.)
-    // These are intentional public API types, not premature abstractions.
-    .filter((r) => {
-      const basename = r.file.split('/').pop() ?? '';
-      const isTypeFile = basename.includes('types') || r.file.includes('/types/');
-      // Types in type files with 1 consumer are normal API types — skip them.
-      // Types in type files with 0 consumers are genuinely unused — keep them.
-      if (isTypeFile && r.consumers > 0) return false;
-      return true;
-    })
+    .filter((r) => isTrueStaleAbstraction(r, filesWithFunctions))
     .map((r) => ({
       symbol: r.symbol,
       shortName: shortenSymbol(r.symbol),
@@ -78,5 +70,46 @@ export function staleAbstractions(
       endLine: r.end_line,
       loc: r.loc,
       consumers: r.consumers,
-    }));
+    }))
+    .slice(0, limit);
+}
+
+function getFilesWithFunctions(
+  db: ScipDatabase,
+  scope?: string,
+): Set<string> {
+  const scopeFilter = scope ? `AND d.relative_path LIKE '%${scope}%'` : '';
+
+  return new Set(
+    db.all<{ relative_path: string }>(
+      `SELECT DISTINCT d.relative_path
+       FROM global_symbols gs
+       JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
+       JOIN documents d ON der.document_id = d.id
+       WHERE gs.symbol LIKE '%().'
+         ${db.pathExclusionsFor('d')}
+         ${scopeFilter}`,
+    )
+      .map((row) => row.relative_path)
+      .filter((path) => !db.isIgnored(path)),
+  );
+}
+
+function isTrueStaleAbstraction(
+  row: { file: string; consumers: number },
+  filesWithFunctions: ReadonlySet<string>,
+): boolean {
+  const basename = row.file.split('/').pop() ?? '';
+  const isTypeFile = basename.includes('types') || row.file.includes('/types/');
+  if (isTypeFile && row.consumers > 0) {
+    return false;
+  }
+
+  // 0-consumer types in files that also export functions are often parameter/
+  // return-only shapes that the SCIP graph does not model as direct mentions.
+  if (row.consumers === 0 && filesWithFunctions.has(row.file)) {
+    return false;
+  }
+
+  return true;
 }

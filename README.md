@@ -12,7 +12,7 @@ For goal-oriented usage guides (not just command reference), see **[Agent Guide]
 - **[Write an implementation plan](docs/AGENT_GUIDE.md#workflow-2-write-a-concrete-implementation-plan)** — identify contracts, map dependencies, find reusable code
 - **[De-bloat a codebase](docs/AGENT_GUIDE.md#workflow-3-clean-up-and-de-bloat-a-codebase)** — prioritized cleanup from dead code to pattern drift
 - **[Assess code quality](docs/AGENT_GUIDE.md#workflow-4-assess-code-quality-and-risk)** — health score, complexity hotspots, coupling risks
-- **[Verify change impact](docs/AGENT_GUIDE.md#workflow-5-understand-impact-after-making-changes)** — diff impact, transitive blast radius, test gaps
+- **[Verify change impact](docs/AGENT_GUIDE.md#workflow-5-understand-impact-after-making-changes)** — diff impact, transitive blast radius, consumer blast radius
 
 ## Quick Start
 
@@ -52,6 +52,8 @@ scip-query diff-impact                   # what did my changes affect?
 | C# / VB | scip-dotnet | [releases](https://github.com/sourcegraph/scip-dotnet/releases) |
 | Dart | scip-dart | [releases](https://github.com/nicovince/scip-dart/releases) |
 | PHP | scip-php | [releases](https://github.com/nicovince/scip-php/releases) |
+
+For Python, the npm package is `scip-python-plus`. Depending on which version you installed, the executable on your `PATH` may be `scip-python`, `scip-python-plus`, or both. `scip-query` now accepts either name.
 
 ## How It Works
 
@@ -461,10 +463,10 @@ scip-query dead src/utils --skip-barrels --include-members
 **Options:**
 - `--min-loc <n>` — Only show symbols >= N lines (default: 1)
 - `--include-tests` — Include test files in results (excluded by default)
-- `--skip-barrels` — Ignore references from barrel re-export files (index.ts)
+- `--skip-barrels` — Ignore references from inactive barrel re-export files
 - `--include-members` — Include class members (module-level only by default)
 
-**Value:** Find code you can delete. The `--skip-barrels` flag is key — without it, symbols re-exported through index.ts appear "referenced" even if no real consumer uses them.
+**Value:** Find code you can delete. The `--skip-barrels` flag is key when a codebase has unused barrels, but it now keeps live entry-surface barrels counted so active exports do not look dead.
 
 ---
 
@@ -482,56 +484,6 @@ scip-query isolated --scope src/utils
 - `--min-loc <n>` — Minimum lines of code (default: 3)
 
 **Value:** Stricter than `dead` — these symbols serve no purpose at all. Safe deletion candidates.
-
----
-
-#### `doc-coverage`
-
-Check what percentage of symbols have documentation strings. Lists undocumented symbols.
-
-```bash
-scip-query doc-coverage --min-loc 5
-# Documentation coverage: 78%
-#   Total symbols:   122
-#   Documented:      95
-#   Undocumented:    27
-#
-# Undocumented:
-#   src/utils/format.ts:15  formatCurrency
-#   src/utils/format.ts:28  formatDate
-```
-
-**Options:**
-- `-s, --scope <path>` — Limit to files matching path
-- `--min-loc <n>` — Minimum LOC to consider (default: 3)
-- `-n, --limit <n>` — Max undocumented symbols to show (default: 50)
-
-**Value:** Documentation health check. Focus efforts on the undocumented list.
-
----
-
-#### `test-coverage [symbol]`
-
-Check if symbols are referenced by test files. Without a symbol argument, shows a summary percentage. With a symbol, shows which specific test files cover it.
-
-```bash
-scip-query test-coverage
-# Test coverage: 45%
-#   Total symbols:  95
-#   Covered:        43
-#   Not covered:    52
-
-scip-query test-coverage AuthService
-#   [covered]      AuthService  (src/services/auth.service.ts)
-#     ← src/__tests__/auth.test.ts
-#   [NOT COVERED]  AuthService:logout()  (src/services/auth.service.ts)
-```
-
-**Options:**
-- `-s, --scope <path>` — Limit to files matching path
-- `--min-loc <n>` — Minimum LOC for summary mode (default: 3)
-
-**Value:** Reference-based test coverage — which symbols does your test suite actually exercise? Not execution coverage, but structural coverage: "do tests at least reference this code?"
 
 ---
 
@@ -556,7 +508,7 @@ scip-query hotspots -n 15
 - `-n, --limit <n>` — Number of results (default: 30)
 - `-s, --scope <path>` — Limit to files matching path
 
-**Value:** Identify the symbols where a bug or breaking change would affect the most consumers. Hotspots deserve the most careful review, the best test coverage, and the most stable interfaces.
+**Value:** Identify the symbols where a bug or breaking change would affect the most consumers. Hotspots deserve the most careful review and the most stable interfaces.
 
 ---
 
@@ -581,7 +533,7 @@ scip-query fan-in -n 10
 - `-n, --limit <n>` — Number of results for top mode (default: 30)
 - `-s, --scope <path>` — Limit to files matching path
 
-**Value:** High fan-in = widely depended upon. Changes to high fan-in symbols have large blast radius. These symbols should have stable interfaces and thorough tests.
+**Value:** High fan-in = widely depended upon. Changes to high fan-in symbols have large blast radius. These symbols should have stable interfaces and careful review.
 
 ---
 
@@ -871,19 +823,19 @@ scip-query affected login --max-depth 3
 
 #### `change-surface <file>`
 
-Pre-change briefing for a file: every exported symbol, consumer count, test coverage, and risk level.
+Pre-change briefing for a file: every exported symbol, consumer count, and blast-radius risk.
 
 ```bash
 scip-query change-surface auth.service.ts
 # File: src/services/auth.service.ts
-# Test coverage: 60% | External consumers: 45
+# External consumers: 45
 #
-#   1-50   AuthService  [12 consumers] (2 test files) * medium risk *
-#   5-20   login()      [8 consumers]  (1 test file)
-#   22-35  logout()     [3 consumers]  (no tests) *** HIGH RISK ***
+#   1-50   AuthService  [12 consumers] *** HIGH RISK ***
+#   5-20   login()      [8 consumers]  * medium risk *
+#   22-35  logout()     [0 consumers]
 ```
 
-**Value:** One command before modifying any file. Shows what's exported, who uses it, what's tested, and what's dangerous.
+**Value:** One command before modifying any file. Shows what's exported, who uses it, and which symbols carry the largest downstream blast radius.
 
 ---
 
@@ -897,13 +849,12 @@ scip-query diff-impact --base main
 # Changed files: 3
 # Changed symbols: 12
 # Affected consumer files: 28
-# Test coverage: 67%
 ```
 
 **Options:**
 - `--base <ref>` — Git ref to diff against (default: HEAD)
 
-**Value:** Run before committing. Shows everything your changes affect, which consumer files are impacted, and where test gaps exist.
+**Value:** Run before committing. Shows everything your changes affect and which consumer files sit downstream of the changed symbols.
 
 ---
 
@@ -914,14 +865,11 @@ scip-query diff-impact --base main
 Detect files that deviate from their directory's typical dependency pattern.
 
 ```bash
-scip-query drift --min-deviation 30
+scip-query drift
 # src/services/legacy-auth.ts  (65% deviation from src/services)
 #   Missing expected: validator.ts, logger.ts
 #   Unexpected:       raw-sql.ts, deprecated-crypto.ts
 ```
-
-**Options:**
-- `--min-deviation <n>` — Minimum deviation % to report (default: 30)
 
 **Value:** Finds files that don't follow their neighbors' conventions. The outliers are either legacy code needing migration or intentional exceptions needing documentation.
 
@@ -1149,7 +1097,7 @@ scip-query redundant-reexports
 - `-s, --scope <path>` — Limit to files matching path
 - `-n, --limit <n>` — Number of results (default: 30)
 
-**Value:** Finds dead entries in barrel files. Note: TypeScript namespace imports (`import * as`) resolve through barrels transparently, so the command is most effective on codebases using named imports.
+**Value:** Finds dead entries in inactive barrel files. Live barrels are skipped so shared entry surfaces like package roots and CLI registries do not show up as false positives.
 
 ---
 
@@ -1175,7 +1123,7 @@ scip-query similar-signatures --min-loc 5
 
 ## Programmatic API
 
-All 50 commands are available as TypeScript functions:
+All 49 commands are available as TypeScript functions:
 
 ```typescript
 import {

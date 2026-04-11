@@ -276,3 +276,59 @@ export function leafName(raw: string): string {
   const last = sym.descriptors[sym.descriptors.length - 1]!;
   return last.name;
 }
+
+/** Return the suffix of the last descriptor, if the symbol parsed cleanly. */
+export function leafSuffix(raw: string): DescriptorSuffix | null {
+  const parsed = parseSymbol(raw);
+  if ('kind' in parsed && parsed.kind === 'local') {
+    return null;
+  }
+
+  const sym = parsed as ScipSymbol;
+  const last = sym.descriptors[sym.descriptors.length - 1];
+  return last?.suffix ?? null;
+}
+
+/** True when the symbol represents a callable/function-like definition. */
+export function isFunctionLikeSymbol(raw: string): boolean {
+  const suffix = leafSuffix(raw);
+  return suffix === 'method' || suffix === 'term';
+}
+
+/** True when the symbol is a namespace/module/file surface rather than a callable or type. */
+export function isModuleLikeSymbol(raw: string): boolean {
+  return leafSuffix(raw) === 'namespace';
+}
+
+/**
+ * Determine whether `candidateRaw` is a direct child of `parentRaw`
+ * in the SCIP descriptor chain.
+ */
+export function isDirectChildSymbol(parentRaw: string, candidateRaw: string): boolean {
+  const parent = parseSymbol(parentRaw);
+  const candidate = parseSymbol(candidateRaw);
+
+  if ('kind' in parent || 'kind' in candidate) {
+    return false;
+  }
+
+  const parentDescriptors = (parent as ScipSymbol).descriptors;
+  const candidateDescriptors = (candidate as ScipSymbol).descriptors;
+
+  if (candidateDescriptors.length !== parentDescriptors.length + 1) {
+    return false;
+  }
+
+  for (let i = 0; i < parentDescriptors.length; i++) {
+    const parentDesc = parentDescriptors[i]!;
+    const candidateDesc = candidateDescriptors[i]!;
+    if (
+      parentDesc.name !== candidateDesc.name
+      || parentDesc.suffix !== candidateDesc.suffix
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}

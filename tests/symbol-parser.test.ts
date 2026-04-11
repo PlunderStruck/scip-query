@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { parseSymbol, shortenSymbol, leafName } from '../src/symbol-parser.js';
+import {
+  parseSymbol,
+  shortenSymbol,
+  leafName,
+  isFunctionLikeSymbol,
+  isModuleLikeSymbol,
+  isDirectChildSymbol,
+} from '../src/symbol-parser.js';
 
 describe('parseSymbol', () => {
   it('parses a TypeScript class method symbol', () => {
@@ -153,5 +160,26 @@ describe('leafName', () => {
 
   it('handles local symbols', () => {
     expect(leafName('local 42')).toBe('42');
+  });
+});
+
+describe('symbol helpers', () => {
+  it('recognizes function-like vs module-like symbols', () => {
+    const fn = 'scip-typescript npm pkg 1.0.0 src/reindex/`index.ts`/reindex().';
+    const mod = 'scip-typescript npm pkg 1.0.0 src/reindex/`index.ts`/';
+
+    expect(isFunctionLikeSymbol(fn)).toBe(true);
+    expect(isModuleLikeSymbol(fn)).toBe(false);
+    expect(isModuleLikeSymbol(mod)).toBe(true);
+    expect(isFunctionLikeSymbol(mod)).toBe(false);
+  });
+
+  it('detects direct child relationships in descriptor chains', () => {
+    const parent = 'scip-typescript npm pkg 1.0.0 src/`watch.ts`/Watcher#';
+    const child = 'scip-typescript npm pkg 1.0.0 src/`watch.ts`/Watcher#start().';
+    const grandchild = 'scip-typescript npm pkg 1.0.0 src/`watch.ts`/Watcher#start().(opts)';
+
+    expect(isDirectChildSymbol(parent, child)).toBe(true);
+    expect(isDirectChildSymbol(parent, grandchild)).toBe(false);
   });
 });

@@ -210,7 +210,7 @@ Types, interfaces, and classes with 0-1 cross-file consumers. An interface with 
 ### Angle 10: Pattern Drift (convention violations)
 
 ```bash
-scip-query drift --min-deviation 30
+scip-query drift
 ```
 
 Files that deviate from their directory's typical dependency pattern. If 8 of 10 services import a validator and 2 don't, those 2 are flagged.
@@ -263,7 +263,6 @@ scip-query deep-chains --min-depth 5       # Excessively deep dependency chains
 scip-query bottlenecks -n 10               # Coupling pressure points
 scip-query complexity-hotspots -n 10       # Riskiest symbols
 scip-query hotspots -n 10                  # Most-referenced symbols
-scip-query test-coverage                   # Test coverage percentage
 scip-query doc-coverage --min-loc 5        # Documentation coverage
 ```
 
@@ -350,7 +349,6 @@ The report is a markdown file with:
 - Max dependency chain depth: N
 - Coupling bottlenecks: [top 5]
 - Complexity hotspots: [top 5]
-- Test coverage: N%
 - Doc coverage: N%
 ```
 
@@ -398,13 +396,12 @@ Do NOT use grep, rg, or Read. Use only scip-query commands.
 | Wrappers | `scip-query wrapper-candidates --max-loc 15` |
 | Passthroughs | `scip-query passthrough-candidates` |
 | Stale abstractions | `scip-query stale-abstractions --min-loc 3` |
-| Pattern drift | `scip-query drift --min-deviation 30` |
+| Pattern drift | `scip-query drift` |
 | Circular dependencies | `scip-query cycles` |
 | Dependency depth | `scip-query deep-chains --min-depth 5` |
 | Coupling pressure | `scip-query bottlenecks -n 10` |
 | Complexity hotspots | `scip-query complexity-hotspots -n 10` |
 | Most-referenced | `scip-query hotspots -n 10` |
-| Test coverage | `scip-query test-coverage` |
 | Doc coverage | `scip-query doc-coverage` |
 | Redundant re-exports | `scip-query redundant-reexports` |
 | Similar signatures | `scip-query similar-signatures --min-loc 5` |

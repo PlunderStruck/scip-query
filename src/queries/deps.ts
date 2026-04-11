@@ -1,8 +1,14 @@
 import type { ScipDatabase } from '../db.js';
 import type { DepResult } from '../types.js';
+import { resolveIndexedFile } from '../query-support.js';
 
 /** What internal files does this file depend on? (forward dependencies) */
 export function deps(db: ScipDatabase, filePattern: string): DepResult[] {
+  const resolvedFile = resolveIndexedFile(db, filePattern);
+  if (!resolvedFile) {
+    return [];
+  }
+
   const rows = db.all<{ relative_path: string }>(
     `SELECT DISTINCT d2.relative_path
     FROM mentions m
@@ -11,11 +17,11 @@ export function deps(db: ScipDatabase, filePattern: string): DepResult[] {
     JOIN global_symbols gs ON m.symbol_id = gs.id
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents d2 ON der.document_id = d2.id
-    WHERE d1.relative_path LIKE ?
+    WHERE d1.relative_path = ?
       AND d2.relative_path <> d1.relative_path
       AND ${db.localSymbolPredicate}
     ORDER BY d2.relative_path`,
-    `%${filePattern}%`,
+    resolvedFile,
   );
 
   return rows
@@ -25,6 +31,11 @@ export function deps(db: ScipDatabase, filePattern: string): DepResult[] {
 
 /** What files depend on this file/module? (reverse dependencies) */
 export function rdeps(db: ScipDatabase, filePattern: string): DepResult[] {
+  const resolvedFile = resolveIndexedFile(db, filePattern);
+  if (!resolvedFile) {
+    return [];
+  }
+
   const rows = db.all<{ relative_path: string }>(
     `SELECT DISTINCT d1.relative_path
     FROM mentions m
@@ -33,11 +44,11 @@ export function rdeps(db: ScipDatabase, filePattern: string): DepResult[] {
     JOIN global_symbols gs ON m.symbol_id = gs.id
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents d2 ON der.document_id = d2.id
-    WHERE d2.relative_path LIKE ?
-      AND d1.relative_path NOT LIKE ?
+    WHERE d2.relative_path = ?
+      AND d1.relative_path != ?
     ORDER BY d1.relative_path`,
-    `%${filePattern}%`,
-    `%${filePattern}%`,
+    resolvedFile,
+    resolvedFile,
   );
 
   return rows

@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../db.js';
 import type { ByKindResult } from '../types.js';
-import { shortenSymbol } from '../symbol-parser.js';
+import { leafSuffix, parseSymbol, shortenSymbol } from '../symbol-parser.js';
 
 /**
  * SCIP SymbolInformation.Kind enum values.
@@ -131,46 +131,23 @@ export function byKind(
     return [];
   }
 
-  const scopeFilter = scope ? `AND d.relative_path LIKE '%${scope}%'` : '';
+  const rows = loadKindRows(db, scope)
+    .map((row) => ({
+      row,
+      resolvedKind: resolveKindNumber(row),
+    }))
+    .filter((entry) => entry.resolvedKind === kindNum)
+    .slice(0, limit);
 
-  // Check if the index actually has kind data populated
-  const hasKinds = db.get<{ c: number }>(
-    `SELECT COUNT(*) AS c FROM global_symbols WHERE kind IS NOT NULL`,
-  );
-  if (!hasKinds || hasKinds.c === 0) {
-    return []; // Indexer doesn't populate kind field
-  }
-
-  const rows = db.all<{
-    symbol: string;
-    kind: number;
-    relative_path: string;
-    start_line: number;
-    end_line: number;
-  }>(
-    `SELECT gs.symbol, gs.kind, d.relative_path, der.start_line, der.end_line
-    FROM global_symbols gs
-    JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-    JOIN documents d ON der.document_id = d.id
-    WHERE gs.kind = ?
-      ${db.pathExclusionsFor('d')}
-      ${scopeFilter}
-    ORDER BY d.relative_path, der.start_line
-    LIMIT ?`,
-    kindNum, limit,
-  );
-
-  return rows
-    .filter((r) => !db.isIgnored(r.relative_path))
-    .map((r) => ({
-      symbol: r.symbol,
-      shortName: shortenSymbol(r.symbol),
-      kind: r.kind,
-      kindName: KIND_NAMES[r.kind] ?? 'Unknown',
-      relativePath: r.relative_path,
-      startLine: r.start_line,
-      endLine: r.end_line,
-    }));
+  return rows.map(({ row, resolvedKind }) => ({
+    symbol: row.symbol,
+    shortName: shortenSymbol(row.symbol),
+    kind: resolvedKind!,
+    kindName: KIND_NAMES[resolvedKind!] ?? 'Unknown',
+    relativePath: row.relative_path,
+    startLine: row.start_line,
+    endLine: row.end_line,
+  }));
 }
 
 /** List all symbol kinds present in the index with counts */
@@ -178,27 +155,121 @@ export function kindCounts(
   db: ScipDatabase,
   opts: { scope?: string } = {},
 ): Array<{ kind: number; kindName: string; count: number }> {
-  const scopeFilter = opts.scope
-    ? `AND d.relative_path LIKE '%${opts.scope}%'`
-    : '';
+  const counts = new Map<number, number>();
 
-  const rows = db.all<{ kind: number; cnt: number }>(
-    `SELECT gs.kind, COUNT(*) AS cnt
+  for (const row of loadKindRows(db, opts.scope)) {
+    const kind = resolveKindNumber(row);
+    if (kind === null || kind === 0) continue;
+    counts.set(kind, (counts.get(kind) ?? 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0] - b[0])
+    .map(([kind, count]) => ({
+      kind,
+      kindName: KIND_NAMES[kind] ?? 'Unknown',
+      count,
+    }));
+}
+
+interface KindRow {
+  symbol: string;
+  kind: number | null;
+  documentation: string | null;
+  enclosing_symbol: string | null;
+  relative_path: string;
+  start_line: number;
+  end_line: number;
+}
+
+function loadKindRows(
+  db: ScipDatabase,
+  scope?: string,
+): KindRow[] {
+  const scopeFilter = scope ? `AND d.relative_path LIKE '%${scope}%'` : '';
+
+  return db.all<KindRow>(
+    `SELECT
+      gs.symbol,
+      gs.kind,
+      gs.documentation,
+      gs.enclosing_symbol,
+      d.relative_path,
+      der.start_line,
+      der.end_line
     FROM global_symbols gs
     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
     JOIN documents d ON der.document_id = d.id
     WHERE 1 = 1
       ${db.pathExclusionsFor('d')}
-      AND gs.kind IS NOT NULL
-      AND gs.kind != 0
       ${scopeFilter}
-    GROUP BY gs.kind
-    ORDER BY cnt DESC`,
-  );
+    ORDER BY d.relative_path, der.start_line`,
+  )
+    .filter((row) => !db.isIgnored(row.relative_path));
+}
 
-  return rows.map((r) => ({
-    kind: r.kind,
-    kindName: KIND_NAMES[r.kind] ?? 'Unknown',
-    count: r.cnt,
-  }));
+function resolveKindNumber(row: Pick<KindRow, 'symbol' | 'kind' | 'documentation' | 'enclosing_symbol'>): number | null {
+  if (row.kind !== null && row.kind !== 0) {
+    return normalizeIndexedKind(row.kind, row.symbol, row.documentation);
+  }
+  return inferKindNumber(row.symbol, row.documentation, row.enclosing_symbol);
+}
+
+function normalizeIndexedKind(
+  kind: number,
+  symbol: string,
+  documentation: string | null,
+): number {
+  const signature = (documentation ?? '').toLowerCase();
+  const suffix = leafSuffix(symbol);
+
+  if (suffix === 'type') {
+    if (signature.includes('type ')) return 76;
+    if (signature.includes('interface ')) return 27;
+    if (signature.includes('struct ')) return 68;
+    if (signature.includes('trait ')) return 73;
+    if (signature.includes('class ')) return 9;
+  }
+
+  return kind;
+}
+
+function inferKindNumber(
+  symbol: string,
+  documentation: string | null,
+  enclosingSymbol: string | null,
+): number | null {
+  const parsed = parseSymbol(symbol);
+  if ('kind' in parsed) {
+    return null;
+  }
+
+  const descriptors = parsed.descriptors;
+  const parent = descriptors[descriptors.length - 2] ?? null;
+  const suffix = leafSuffix(symbol);
+  const signature = (documentation ?? '').toLowerCase();
+  if (suffix === 'type') {
+    if (signature.includes('type ')) return 76;
+    if (signature.includes('interface ')) return 27;
+    if (signature.includes('struct ')) return 68;
+    if (signature.includes('trait ')) return 73;
+    if (signature.includes('class ')) return 9;
+    return 9; // Class fallback when the index does not expose richer type metadata
+  }
+  if (suffix === 'method') {
+    return parent?.suffix === 'type' ? 33 : 23;
+  }
+  if (suffix === 'namespace') return 39; // Module
+  if (suffix !== 'term') return null;
+
+  if (signature.includes('async def ') || signature.includes('def ')) {
+    return 23; // Function
+  }
+
+  const enclosingSuffix = enclosingSymbol ? leafSuffix(enclosingSymbol) : (parent?.suffix ?? null);
+  if (enclosingSuffix === 'type') {
+    return 21; // Field
+  }
+
+  return 83; // Variable / term fallback
 }
