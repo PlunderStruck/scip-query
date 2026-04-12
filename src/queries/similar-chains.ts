@@ -64,8 +64,8 @@ export function similarChains(
   }
 
   // Infrastructure: nodes in >40% of chains OR tail nodes in >30% of chains
-  const infraThreshold = rawChains.length * 0.4;
-  const tailThreshold = rawChains.length * 0.3;
+  const infraThreshold = rawChains.length * 0.9;
+  const tailThreshold = rawChains.length * 0.8;
   const infraNodes = new Set<string>();
   for (const [node, freq] of nodeFreq) {
     if (freq > infraThreshold) infraNodes.add(node);
@@ -89,7 +89,7 @@ export function similarChains(
     // Only keep chains that have at least 3 non-infrastructure nodes.
     // Chains with 1-2 unique nodes are just "query → infra" which is
     // the expected pattern, not a consolidation opportunity.
-    if (filtered.length >= 3) {
+    if (filtered.length >= 2) {
       filteredChains.push({ original: chain, filtered });
     }
   }

@@ -3,6 +3,7 @@ import {
   readFileSync,
 } from 'node:fs';
 import {
+  basename,
   dirname,
   extname,
   join,
@@ -20,6 +21,11 @@ export interface ParsedSourceImport {
   usedMembers: string[];
 }
 
+export interface ParsedSourceExport {
+  sourcePath: string | null;
+  specifier: string;
+}
+
 export interface ParsedSourceCall {
   calleeName: string;
   receiverName: string | null;
@@ -32,6 +38,7 @@ export interface ParsedSourceBinding {
 }
 
 const SOURCE_IMPORT_CACHE = new WeakMap<ScipDatabase, Map<string, ParsedSourceImport[]>>();
+const SOURCE_EXPORT_CACHE = new WeakMap<ScipDatabase, Map<string, ParsedSourceExport[]>>();
 const SOURCE_TEXT_CACHE = new WeakMap<ScipDatabase, Map<string, string>>();
 const SOURCE_CALL_CACHE = new WeakMap<ScipDatabase, Map<string, ParsedSourceCall[]>>();
 const SOURCE_BINDING_CACHE = new WeakMap<ScipDatabase, Map<string, ParsedSourceBinding[]>>();
@@ -39,6 +46,13 @@ const INDEXED_PATH_CACHE = new WeakMap<ScipDatabase, Set<string>>();
 
 const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'] as const;
 const PYTHON_SOURCE_EXTENSIONS = ['.py', '.pyi'] as const;
+const JVM_SOURCE_EXTENSIONS = ['.java', '.scala', '.kt', '.kts'] as const;
+const RUST_SOURCE_EXTENSIONS = ['.rs'] as const;
+const RUBY_SOURCE_EXTENSIONS = ['.rb'] as const;
+const C_LIKE_SOURCE_EXTENSIONS = ['.c', '.h', '.cc', '.cpp', '.cxx', '.hpp', '.hh', '.hxx'] as const;
+const DOTNET_SOURCE_EXTENSIONS = ['.cs', '.vb'] as const;
+const DART_SOURCE_EXTENSIONS = ['.dart'] as const;
+const PHP_SOURCE_EXTENSIONS = ['.php'] as const;
 
 export function getSourceImports(
   db: ScipDatabase,
@@ -60,7 +74,51 @@ export function getSourceImports(
   const source = readFileSync(fullPath, 'utf-8');
   const parsed = isPythonSourcePath(normalized)
     ? parsePythonImports(db, normalized, source)
-    : parseJavaScriptImports(db, normalized, source);
+    : isJavaScriptSourcePath(normalized)
+      ? parseJavaScriptImports(db, normalized, source)
+      : isJvmSourcePath(normalized)
+        ? parseJvmImports(db, normalized, source)
+        : isRustSourcePath(normalized)
+          ? parseRustImports(db, normalized, source)
+          : isRubySourcePath(normalized)
+            ? parseRubyImports(db, normalized, source)
+            : isCLikeSourcePath(normalized)
+              ? parseCLikeImports(db, normalized, source)
+              : isDotNetSourcePath(normalized)
+                ? parseDotNetImports(db, normalized, source)
+                : isDartSourcePath(normalized)
+                  ? parseDartImports(db, normalized, source)
+                  : isPhpSourcePath(normalized)
+                    ? parsePhpImports(db, normalized, source)
+                    : [];
+
+  cache.set(normalized, parsed);
+  return parsed;
+}
+
+export function getSourceExports(
+  db: ScipDatabase,
+  relativePath: string,
+): ParsedSourceExport[] {
+  const cache = getCachedMap(SOURCE_EXPORT_CACHE, db);
+  const normalized = normalizePath(relativePath);
+  const cached = cache.get(normalized);
+  if (cached) {
+    return cached;
+  }
+
+  const fullPath = join(db.config.projectRoot, normalized);
+  if (!existsSync(fullPath)) {
+    cache.set(normalized, []);
+    return [];
+  }
+
+  const source = readFileSync(fullPath, 'utf-8');
+  const parsed = isDartSourcePath(normalized)
+    ? parseDartExports(db, normalized, source)
+    : isRustSourcePath(normalized)
+      ? parseRustExports(db, normalized, source)
+    : [];
 
   cache.set(normalized, parsed);
   return parsed;
@@ -281,6 +339,372 @@ function parseJavaScriptImportStatement(
       usedMembers: [],
     };
   });
+}
+
+function parseJvmImports(
+  db: ScipDatabase,
+  importerPath: string,
+  source: string,
+): ParsedSourceImport[] {
+  const statements: ParsedSourceImport[] = [];
+  for (const match of source.matchAll(/^[ \t]*import\s+(?:static\s+)?(.+?)\s*;?$/gm)) {
+    const clause = match[1]?.trim();
+    const full = match[0];
+    if (!clause || !full || typeof match.index !== 'number') continue;
+    const body = buildUsageBody(source, match.index, match.index + full.length);
+    statements.push(...parseJvmImportClause(db, importerPath, clause, body));
+  }
+  return statements;
+}
+
+function parseJvmImportClause(
+  db: ScipDatabase,
+  importerPath: string,
+  clause: string,
+  body: string,
+): ParsedSourceImport[] {
+  if (clause.includes('{') && clause.includes('}')) {
+    const prefix = clause.slice(0, clause.indexOf('{')).replace(/\.$/, '').trim();
+    const inner = clause.slice(clause.indexOf('{') + 1, clause.lastIndexOf('}')).trim();
+    return splitTopLevel(inner).flatMap((entry) => {
+      const cleaned = entry.trim();
+      if (!cleaned) return [];
+      const [importedPart, aliasPart] = cleaned.includes('=>')
+        ? cleaned.split(/\s*=>\s*/)
+        : cleaned.split(/\s+as\s+/);
+      const importedName = importedPart?.trim();
+      if (!importedName || importedName === '_') return [];
+      const localName = (aliasPart ?? importedName.split('.').pop() ?? importedName).trim();
+      const qualified = importedName === '_'
+        ? prefix
+        : `${prefix}.${importedName}`.replace(/\.\./g, '.');
+      return [buildSimpleImport(db, importerPath, body, qualified, importedName, localName)];
+    });
+  }
+
+  return [buildSimpleImport(
+    db,
+    importerPath,
+    body,
+    clause,
+    clause.split('.').pop() ?? clause,
+    clause.split('.').pop() ?? clause,
+  )];
+}
+
+function parseRustImports(
+  db: ScipDatabase,
+  importerPath: string,
+  source: string,
+): ParsedSourceImport[] {
+  const statements: ParsedSourceImport[] = [];
+  for (const match of source.matchAll(/^[ \t]*use\s+(.+?)\s*;$/gm)) {
+    const clause = match[1]?.trim();
+    const full = match[0];
+    if (!clause || !full || typeof match.index !== 'number') continue;
+    const body = buildUsageBody(source, match.index, match.index + full.length);
+    statements.push(...parseRustUseClause(db, importerPath, clause, body));
+  }
+  return statements;
+}
+
+function parseRustUseClause(
+  db: ScipDatabase,
+  importerPath: string,
+  clause: string,
+  body: string,
+): ParsedSourceImport[] {
+  const trimmed = clause.trim();
+  if (trimmed.includes('{') && trimmed.includes('}')) {
+    const prefix = trimmed.slice(0, trimmed.indexOf('{')).replace(/::$/, '').trim();
+    const inner = trimmed.slice(trimmed.indexOf('{') + 1, trimmed.lastIndexOf('}')).trim();
+    return splitTopLevel(inner).flatMap((entry) => {
+      const cleaned = entry.trim();
+      if (!cleaned || cleaned === 'self') return [];
+      const [importedPart, aliasPart] = cleaned.split(/\s+as\s+/);
+      const importedName = importedPart?.trim();
+      if (!importedName) return [];
+      const localName = (aliasPart ?? importedName.split('::').pop() ?? importedName).trim();
+      const moduleSpecifier = `${prefix}::${importedName}`.replace(/::::/g, '::');
+      return [buildSimpleImport(
+        db,
+        importerPath,
+        body,
+        moduleSpecifier,
+        importedName.split('::').pop() ?? importedName,
+        localName,
+        resolveRustImportPath(db, importerPath, prefix),
+      )];
+    });
+  }
+
+  const [importedPart, aliasPart] = trimmed.split(/\s+as\s+/);
+  const importedName = importedPart?.trim() ?? trimmed;
+  const localName = (aliasPart ?? importedName.split('::').pop() ?? importedName).trim();
+  const resolved = resolveRustImportPath(db, importerPath, importedName)
+    ?? resolveRustImportPath(db, importerPath, importedName.split('::').slice(0, -1).join('::'));
+  return [buildSimpleImport(
+    db,
+    importerPath,
+    body,
+    importedName,
+    importedName.split('::').pop() ?? importedName,
+    localName,
+    resolved,
+  )];
+}
+
+function parseRustExports(
+  db: ScipDatabase,
+  importerPath: string,
+  source: string,
+): ParsedSourceExport[] {
+  const statements: ParsedSourceExport[] = [];
+  for (const match of source.matchAll(/^[ \t]*pub\s+use\s+(.+?)\s*;$/gm)) {
+    const clause = match[1]?.trim();
+    if (!clause) continue;
+    statements.push(...parseRustExportClause(db, importerPath, clause));
+  }
+  return statements;
+}
+
+function parseRustExportClause(
+  db: ScipDatabase,
+  importerPath: string,
+  clause: string,
+): ParsedSourceExport[] {
+  const trimmed = clause.trim();
+  if (trimmed.includes('{') && trimmed.includes('}')) {
+    const prefix = trimmed.slice(0, trimmed.indexOf('{')).replace(/::$/, '').trim();
+    const inner = trimmed.slice(trimmed.indexOf('{') + 1, trimmed.lastIndexOf('}')).trim();
+    return splitTopLevel(inner).flatMap((entry) => {
+      const cleaned = entry.trim();
+      if (!cleaned || cleaned === 'self') return [];
+      const [qualifiedPart] = cleaned.split(/\s+as\s+/);
+      const qualified = `${prefix}::${qualifiedPart?.trim() ?? cleaned}`.replace(/::::/g, '::');
+      return [buildRustExport(db, importerPath, qualified)];
+    });
+  }
+
+  return [buildRustExport(db, importerPath, trimmed)];
+}
+
+function buildRustExport(
+  db: ScipDatabase,
+  importerPath: string,
+  specifier: string,
+): ParsedSourceExport {
+  return {
+    specifier,
+    sourcePath: resolveRustImportPath(db, importerPath, specifier)
+      ?? resolveRustImportPath(db, importerPath, specifier.split('::').slice(0, -1).join('::')),
+  };
+}
+
+function parseRubyImports(
+  db: ScipDatabase,
+  importerPath: string,
+  source: string,
+): ParsedSourceImport[] {
+  const statements: ParsedSourceImport[] = [];
+  for (const match of source.matchAll(/^[ \t]*(require_relative|require)\s+["']([^"']+)["']\s*$/gm)) {
+    const kind = match[1];
+    const specifier = match[2];
+    const full = match[0];
+    if (!kind || !specifier || !full || typeof match.index !== 'number') continue;
+    const body = buildUsageBody(source, match.index, match.index + full.length);
+    const sourcePath = kind === 'require_relative'
+      ? resolveRubyImportPath(db, importerPath, specifier)
+      : null;
+
+    if (sourcePath) {
+      const localName = rubyConstantName(specifier);
+      statements.push({
+        importedName: localName,
+        localName,
+        sourcePath,
+        kind: 'named',
+        used: hasIdentifierUsage(body, localName),
+        usedMembers: [],
+      });
+      continue;
+    }
+
+    statements.push({
+      importedName: specifier,
+      localName: null,
+      sourcePath,
+      kind: 'side-effect',
+      used: true,
+      usedMembers: [],
+    });
+  }
+  return statements;
+}
+
+function rubyConstantName(specifier: string): string {
+  return basename(specifier)
+    .replace(/\.[^.]+$/, '')
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join('');
+}
+
+function parseCLikeImports(
+  db: ScipDatabase,
+  importerPath: string,
+  source: string,
+): ParsedSourceImport[] {
+  const statements: ParsedSourceImport[] = [];
+  for (const match of source.matchAll(/^[ \t]*#include\s+[<"]([^">]+)[">]\s*$/gm)) {
+    const specifier = match[1]?.trim();
+    const full = match[0];
+    if (!specifier || !full || typeof match.index !== 'number') continue;
+    const body = buildUsageBody(source, match.index, match.index + full.length);
+    const localName = basename(specifier).replace(/\.[^.]+$/, '');
+    statements.push({
+      importedName: specifier,
+      localName,
+      sourcePath: resolveCLikeImportPath(db, importerPath, specifier),
+      kind: 'named',
+      used: hasIdentifierUsage(body, localName),
+      usedMembers: [],
+    });
+  }
+  return statements;
+}
+
+function parseDotNetImports(
+  db: ScipDatabase,
+  importerPath: string,
+  source: string,
+): ParsedSourceImport[] {
+  const statements: ParsedSourceImport[] = [];
+  const lineRegex = isVisualBasicSourcePath(importerPath)
+    ? /^[ \t]*Imports\s+(.+?)\s*$/gm
+    : /^[ \t]*using\s+(.+?)\s*;$/gm;
+
+  for (const match of source.matchAll(lineRegex)) {
+    const clause = match[1]?.trim();
+    const full = match[0];
+    if (!clause || !full || typeof match.index !== 'number') continue;
+    const body = buildUsageBody(source, match.index, match.index + full.length);
+
+    const [aliasPart, targetPart] = isVisualBasicSourcePath(importerPath)
+      ? clause.split(/\s*=\s*/)
+      : clause.split(/\s*=\s*/);
+    const hasAlias = Boolean(targetPart);
+    const qualified = (hasAlias ? targetPart : aliasPart)?.trim() ?? clause;
+    const importedName = qualified.split('.').pop() ?? qualified;
+    const localName = hasAlias
+      ? aliasPart?.trim() ?? importedName
+      : importedName;
+
+    statements.push(buildSimpleImport(
+      db,
+      importerPath,
+      body,
+      qualified,
+      importedName,
+      localName,
+      resolveQualifiedImportPath(db, qualified, DOTNET_SOURCE_EXTENSIONS),
+    ));
+  }
+
+  return statements;
+}
+
+function parseDartImports(
+  db: ScipDatabase,
+  importerPath: string,
+  source: string,
+): ParsedSourceImport[] {
+  const statements: ParsedSourceImport[] = [];
+  for (const match of source.matchAll(/^[ \t]*import\s+['"]([^'"]+)['"](?:\s+as\s+([A-Za-z_]\w*))?[\s\S]*?;$/gm)) {
+    const specifier = match[1]?.trim();
+    const alias = match[2]?.trim() ?? null;
+    const full = match[0];
+    if (!specifier || !full || typeof match.index !== 'number') continue;
+    const body = buildUsageBody(source, match.index, match.index + full.length);
+    statements.push({
+      importedName: specifier,
+      localName: alias,
+      sourcePath: resolveDartImportPath(db, importerPath, specifier),
+      kind: alias ? 'namespace' : 'side-effect',
+      used: alias ? hasIdentifierUsage(body, alias) : true,
+      usedMembers: alias ? collectNamespaceMembers(body, alias) : [],
+    });
+  }
+  return statements;
+}
+
+function parseDartExports(
+  db: ScipDatabase,
+  importerPath: string,
+  source: string,
+): ParsedSourceExport[] {
+  const statements: ParsedSourceExport[] = [];
+  for (const match of source.matchAll(/^[ \t]*export\s+['"]([^'"]+)['"][\s\S]*?;$/gm)) {
+    const specifier = match[1]?.trim();
+    if (!specifier) continue;
+    statements.push({
+      specifier,
+      sourcePath: resolveDartImportPath(db, importerPath, specifier),
+    });
+  }
+  return statements;
+}
+
+function parsePhpImports(
+  db: ScipDatabase,
+  importerPath: string,
+  source: string,
+): ParsedSourceImport[] {
+  const statements: ParsedSourceImport[] = [];
+  for (const match of source.matchAll(/^[ \t]*use\s+(.+?)\s*;$/gm)) {
+    const clause = match[1]?.trim();
+    const full = match[0];
+    if (!clause || !full || typeof match.index !== 'number') continue;
+    const body = buildUsageBody(source, match.index, match.index + full.length);
+    for (const entry of splitTopLevel(clause)) {
+      const cleaned = entry.trim();
+      if (!cleaned) continue;
+      const [qualifiedPart, aliasPart] = cleaned.split(/\s+as\s+/i);
+      const qualified = qualifiedPart?.trim() ?? cleaned;
+      const importedName = qualified.split('\\').pop() ?? qualified;
+      const localName = (aliasPart ?? importedName).trim();
+      statements.push(buildSimpleImport(
+        db,
+        importerPath,
+        body,
+        qualified,
+        importedName,
+        localName,
+        resolveQualifiedImportPath(db, qualified.replace(/\\/g, '.'), PHP_SOURCE_EXTENSIONS),
+      ));
+    }
+  }
+  return statements;
+}
+
+function buildSimpleImport(
+  db: ScipDatabase,
+  importerPath: string,
+  body: string,
+  qualifiedName: string,
+  importedName: string,
+  localName: string,
+  sourcePath?: string | null,
+): ParsedSourceImport {
+  return {
+    importedName,
+    localName,
+    sourcePath: sourcePath ?? resolveQualifiedImportPath(db, qualifiedName, extensionFamilyFor(importerPath)),
+    kind: 'named',
+    used: hasIdentifierUsage(body, localName),
+    usedMembers: [],
+  };
 }
 
 function parsePythonCalls(lines: string[], baseLine: number): ParsedSourceCall[] {
@@ -762,6 +1186,26 @@ function resolveImportPath(
     return resolvePythonImportPath(db, importerPath, specifier);
   }
 
+  if (isRustSourcePath(importerPath)) {
+    return resolveRustImportPath(db, importerPath, specifier);
+  }
+
+  if (isRubySourcePath(importerPath)) {
+    return resolveRubyImportPath(db, importerPath, specifier);
+  }
+
+  if (isCLikeSourcePath(importerPath)) {
+    return resolveCLikeImportPath(db, importerPath, specifier);
+  }
+
+  if (isJvmSourcePath(importerPath) || isDotNetSourcePath(importerPath) || isPhpSourcePath(importerPath)) {
+    return resolveQualifiedImportPath(db, specifier.replace(/\\/g, '.'), extensionFamilyFor(importerPath));
+  }
+
+  if (isDartSourcePath(importerPath)) {
+    return resolveDartImportPath(db, importerPath, specifier);
+  }
+
   return resolveJavaScriptImportPath(db, importerPath, specifier);
 }
 
@@ -825,6 +1269,141 @@ function resolvePythonImportPath(
   return null;
 }
 
+function resolveRustImportPath(
+  db: ScipDatabase,
+  importerPath: string,
+  specifier: string,
+): string | null {
+  if (!specifier) return null;
+  const normalizedSpecifier = specifier.replace(/\s+as\s+.+$/, '').trim();
+  if (!normalizedSpecifier.startsWith('crate::') && !normalizedSpecifier.startsWith('self::') && !normalizedSpecifier.startsWith('super::')) {
+    return null;
+  }
+
+  const importerDir = dirname(join(db.config.projectRoot, importerPath));
+  let basePath: string;
+  if (normalizedSpecifier.startsWith('crate::')) {
+    basePath = resolve(db.config.projectRoot, 'src', normalizedSpecifier.slice('crate::'.length).replace(/::/g, '/'));
+  } else if (normalizedSpecifier.startsWith('self::')) {
+    basePath = resolve(importerDir, normalizedSpecifier.slice('self::'.length).replace(/::/g, '/'));
+  } else {
+    basePath = resolve(dirname(importerDir), normalizedSpecifier.slice('super::'.length).replace(/::/g, '/'));
+  }
+
+  for (const candidate of rustCandidateImportPaths(basePath)) {
+    const relativeCandidate = normalizePath(relative(db.config.projectRoot, candidate));
+    if (getIndexedPaths(db).has(relativeCandidate) || existsSync(candidate)) {
+      return relativeCandidate;
+    }
+  }
+
+  return null;
+}
+
+function resolveRubyImportPath(
+  db: ScipDatabase,
+  importerPath: string,
+  specifier: string,
+): string | null {
+  const importerDir = dirname(join(db.config.projectRoot, importerPath));
+  const absolute = resolve(importerDir, specifier);
+  for (const candidate of rubyCandidateImportPaths(absolute)) {
+    const relativeCandidate = normalizePath(relative(db.config.projectRoot, candidate));
+    if (getIndexedPaths(db).has(relativeCandidate) || existsSync(candidate)) {
+      return relativeCandidate;
+    }
+  }
+  return null;
+}
+
+function resolveCLikeImportPath(
+  db: ScipDatabase,
+  importerPath: string,
+  specifier: string,
+): string | null {
+  const indexedPaths = getIndexedPaths(db);
+  const importerDir = dirname(join(db.config.projectRoot, importerPath));
+  const candidates = [
+    resolve(importerDir, specifier),
+    resolve(db.config.projectRoot, specifier),
+    resolve(db.config.projectRoot, 'include', specifier),
+    resolve(db.config.projectRoot, 'src', specifier),
+  ];
+
+  for (const candidate of candidates) {
+    const relativeCandidate = normalizePath(relative(db.config.projectRoot, candidate));
+    if (indexedPaths.has(relativeCandidate) || existsSync(candidate)) {
+      return relativeCandidate;
+    }
+  }
+
+  return null;
+}
+
+function resolveQualifiedImportPath(
+  db: ScipDatabase,
+  specifier: string,
+  extensions: readonly string[],
+): string | null {
+  const indexedPaths = getIndexedPaths(db);
+  const normalized = specifier.replace(/\\/g, '.').replace(/::/g, '.').replace(/^global::/, '');
+  const pathified = normalized.replace(/\./g, '/');
+  const basenameOnly = normalized.split('.').pop() ?? normalized;
+
+  for (const ext of extensions) {
+    const exactSuffix = `${pathified}${ext}`;
+    const exact = [...indexedPaths].find((relativePath) => relativePath.endsWith(exactSuffix));
+    if (exact) return exact;
+  }
+
+  for (const ext of extensions) {
+    const basenameMatch = [...indexedPaths].find((relativePath) => basename(relativePath) === `${basenameOnly}${ext}`);
+    if (basenameMatch) return basenameMatch;
+  }
+
+  const folderMatches = [...indexedPaths]
+    .filter((relativePath) => extensions.includes(extname(relativePath).toLowerCase()))
+    .filter((relativePath) => (
+      relativePath.includes(`/${pathified}/`)
+      || relativePath.includes(`/${basenameOnly}/`)
+    ))
+    .sort((left, right) => left.localeCompare(right));
+  if (folderMatches.length === 1) {
+    return folderMatches[0]!;
+  }
+
+  return null;
+}
+
+function resolveDartImportPath(
+  db: ScipDatabase,
+  importerPath: string,
+  specifier: string,
+): string | null {
+  const indexedPaths = getIndexedPaths(db);
+  if (specifier.startsWith('package:')) {
+    const withoutScheme = specifier.slice('package:'.length);
+    const slashIndex = withoutScheme.indexOf('/');
+    if (slashIndex < 0) return null;
+    const packageRelative = withoutScheme.slice(slashIndex + 1);
+    const candidate = normalizePath(packageRelative.startsWith('lib/')
+      ? packageRelative
+      : `lib/${packageRelative}`);
+    if (indexedPaths.has(candidate)) return candidate;
+    return null;
+  }
+
+  const importerDir = dirname(join(db.config.projectRoot, importerPath));
+  const absolute = resolve(importerDir, specifier);
+  for (const candidate of dartCandidateImportPaths(absolute)) {
+    const relativeCandidate = normalizePath(relative(db.config.projectRoot, candidate));
+    if (indexedPaths.has(relativeCandidate) || existsSync(candidate)) {
+      return relativeCandidate;
+    }
+  }
+  return null;
+}
+
 function pythonCandidateImportPaths(basePath: string): string[] {
   const ext = extname(basePath);
   if (PYTHON_SOURCE_EXTENSIONS.includes(ext as typeof PYTHON_SOURCE_EXTENSIONS[number])) {
@@ -837,6 +1416,39 @@ function pythonCandidateImportPaths(basePath: string): string[] {
     join(basePath, '__init__.py'),
     join(basePath, '__init__.pyi'),
   ];
+}
+
+function rustCandidateImportPaths(basePath: string): string[] {
+  const ext = extname(basePath);
+  if (RUST_SOURCE_EXTENSIONS.includes(ext as typeof RUST_SOURCE_EXTENSIONS[number])) {
+    return [basePath];
+  }
+
+  return [
+    `${basePath}.rs`,
+    join(basePath, 'mod.rs'),
+  ];
+}
+
+function rubyCandidateImportPaths(basePath: string): string[] {
+  const ext = extname(basePath);
+  if (RUBY_SOURCE_EXTENSIONS.includes(ext as typeof RUBY_SOURCE_EXTENSIONS[number])) {
+    return [basePath];
+  }
+
+  return [
+    `${basePath}.rb`,
+    join(basePath, 'index.rb'),
+  ];
+}
+
+function dartCandidateImportPaths(basePath: string): string[] {
+  const ext = extname(basePath);
+  if (DART_SOURCE_EXTENSIONS.includes(ext as typeof DART_SOURCE_EXTENSIONS[number])) {
+    return [basePath];
+  }
+
+  return [`${basePath}.dart`, basePath];
 }
 
 function candidateImportPaths(absolute: string): string[] {
@@ -901,6 +1513,49 @@ function isJavaScriptSourcePath(relativePath: string): boolean {
 
 function isPythonSourcePath(relativePath: string): boolean {
   return PYTHON_SOURCE_EXTENSIONS.includes(extname(relativePath).toLowerCase() as typeof PYTHON_SOURCE_EXTENSIONS[number]);
+}
+
+function isJvmSourcePath(relativePath: string): boolean {
+  return JVM_SOURCE_EXTENSIONS.includes(extname(relativePath).toLowerCase() as typeof JVM_SOURCE_EXTENSIONS[number]);
+}
+
+function isRustSourcePath(relativePath: string): boolean {
+  return RUST_SOURCE_EXTENSIONS.includes(extname(relativePath).toLowerCase() as typeof RUST_SOURCE_EXTENSIONS[number]);
+}
+
+function isRubySourcePath(relativePath: string): boolean {
+  return RUBY_SOURCE_EXTENSIONS.includes(extname(relativePath).toLowerCase() as typeof RUBY_SOURCE_EXTENSIONS[number]);
+}
+
+function isCLikeSourcePath(relativePath: string): boolean {
+  return C_LIKE_SOURCE_EXTENSIONS.includes(extname(relativePath).toLowerCase() as typeof C_LIKE_SOURCE_EXTENSIONS[number]);
+}
+
+function isDotNetSourcePath(relativePath: string): boolean {
+  return DOTNET_SOURCE_EXTENSIONS.includes(extname(relativePath).toLowerCase() as typeof DOTNET_SOURCE_EXTENSIONS[number]);
+}
+
+function isVisualBasicSourcePath(relativePath: string): boolean {
+  return extname(relativePath).toLowerCase() === '.vb';
+}
+
+function isDartSourcePath(relativePath: string): boolean {
+  return DART_SOURCE_EXTENSIONS.includes(extname(relativePath).toLowerCase() as typeof DART_SOURCE_EXTENSIONS[number]);
+}
+
+function isPhpSourcePath(relativePath: string): boolean {
+  return PHP_SOURCE_EXTENSIONS.includes(extname(relativePath).toLowerCase() as typeof PHP_SOURCE_EXTENSIONS[number]);
+}
+
+function extensionFamilyFor(relativePath: string): readonly string[] {
+  if (isJvmSourcePath(relativePath)) return JVM_SOURCE_EXTENSIONS;
+  if (isDotNetSourcePath(relativePath)) return DOTNET_SOURCE_EXTENSIONS;
+  if (isPhpSourcePath(relativePath)) return PHP_SOURCE_EXTENSIONS;
+  if (isDartSourcePath(relativePath)) return DART_SOURCE_EXTENSIONS;
+  if (isCLikeSourcePath(relativePath)) return C_LIKE_SOURCE_EXTENSIONS;
+  if (isRustSourcePath(relativePath)) return RUST_SOURCE_EXTENSIONS;
+  if (isRubySourcePath(relativePath)) return RUBY_SOURCE_EXTENSIONS;
+  return SOURCE_EXTENSIONS;
 }
 
 export function getSourceText(

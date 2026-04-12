@@ -1,8 +1,8 @@
 import type { ScipDatabase } from '../db.js';
 import { getInactiveBarrelPaths, isEntrySurface } from '../entry-surfaces.js';
-import { TEST_SUPPORT_PATH_PATTERNS, testFileExclusionSql } from '../query-support.js';
+import { getAllDefinitions, TEST_FILE_PATTERNS, TEST_SUPPORT_PATH_PATTERNS } from '../query-support.js';
 import type { DeadOptions, DeadSymbolResult, DeadSummary } from '../types.js';
-import { shortenSymbol } from '../symbol-parser.js';
+import { isFunctionLikeSymbol, isModuleLikeSymbol, shortenSymbol } from '../symbol-parser.js';
 
 /**
  * Find dead exports: symbols defined locally with no cross-file references.
@@ -17,75 +17,72 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     includeMembers = false,
   } = opts;
 
-  const params: unknown[] = [minLoc];
-  let testFileExclusions = '';
-  let memberExclusion = '';
-  let barrelExclusions = '';
-
-  if (scope) {
-    params.push(`%${scope}%`);
-  }
-
-  if (!includeTests) {
-    testFileExclusions = `
-      AND ${testFileExclusionSql('d', TEST_SUPPORT_PATH_PATTERNS)}
-    `;
-  }
-
-  if (!includeMembers) {
-    memberExclusion = `AND gs.symbol NOT LIKE '%#%'`;
-  }
-
-  if (skipBarrels) {
-    const inactiveBarrelPaths = getInactiveBarrelPaths(db);
-    if (inactiveBarrelPaths.length > 0) {
-      barrelExclusions = `AND ref_d.relative_path NOT IN (${inactiveBarrelPaths.map(() => '?').join(', ')})`;
-      params.push(...inactiveBarrelPaths);
-    }
-  }
-
-  const sql = `
-    SELECT
-      d.relative_path,
-      der.start_line,
-      der.end_line,
-      (der.end_line - der.start_line + 1) AS loc,
-      gs.symbol,
-      (SELECT COUNT(*) FROM mentions m2
-       JOIN chunks c2 ON m2.chunk_id = c2.id
-       WHERE m2.symbol_id = gs.id AND m2.role != 1 AND c2.document_id = d.id
-      ) AS same_file_refs
-    FROM global_symbols gs
-    JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-    JOIN documents d ON der.document_id = d.id
-    WHERE 1 = 1
-      ${db.pathExclusionsFor('d')}
-      ${db.symbolNoiseFor('gs')}
-      AND (der.end_line - der.start_line + 1) >= ?
-      ${scope ? 'AND d.relative_path LIKE ?' : ''}
-      ${testFileExclusions}
-      ${memberExclusion}
-      AND NOT EXISTS (
-        SELECT 1
-        FROM mentions ref_m
-        JOIN chunks ref_c ON ref_m.chunk_id = ref_c.id
-        JOIN documents ref_d ON ref_c.document_id = ref_d.id
-        WHERE ref_m.symbol_id = gs.id
-          AND ref_m.role != 1
-          AND ref_d.id != d.id
-          ${barrelExclusions}
-      )
-    ORDER BY (der.end_line - der.start_line + 1) DESC, d.relative_path, der.start_line
-  `;
-
-  const rows = db.all<{
+  const inactiveBarrelPaths = skipBarrels ? new Set(getInactiveBarrelPaths(db)) : new Set<string>();
+  const referenceRows = db.all<{
+    symbol_id: number;
     relative_path: string;
-    start_line: number;
-    end_line: number;
-    loc: number;
-    symbol: string;
-    same_file_refs: number;
-  }>(sql, ...params);
+    ref_count: number;
+  }>(
+    `SELECT
+      m.symbol_id,
+      d.relative_path,
+      COUNT(*) AS ref_count
+     FROM mentions m
+     JOIN chunks c ON m.chunk_id = c.id
+     JOIN documents d ON c.document_id = d.id
+     WHERE m.role != 1
+       ${db.pathExclusionsFor('d')}
+     GROUP BY m.symbol_id, d.relative_path`,
+  );
+
+  const referencesBySymbol = new Map<number, Map<string, number>>();
+  for (const row of referenceRows) {
+    if (db.isIgnored(row.relative_path)) continue;
+    if (inactiveBarrelPaths.has(row.relative_path)) continue;
+
+    let refsForSymbol = referencesBySymbol.get(row.symbol_id);
+    if (!refsForSymbol) {
+      refsForSymbol = new Map<string, number>();
+      referencesBySymbol.set(row.symbol_id, refsForSymbol);
+    }
+    refsForSymbol.set(row.relative_path, row.ref_count);
+  }
+
+  const definitions = getAllDefinitions(db, { scope })
+    .filter((definition) => !db.isIgnored(definition.relativePath))
+    .filter((definition) => !isModuleLikeSymbol(definition.symbol))
+    .filter((definition) => looksValueLikeDefinition(definition.symbol))
+    .filter((definition) => (
+      definition.isFunctionLike
+      || !definition.enclosingSymbol
+      || !looksValueLikeDefinition(definition.enclosingSymbol)
+    ))
+    .filter((definition) => includeTests || passesTestFileFilter(definition.relativePath))
+    .filter((definition) => includeMembers || looksValueLikeDefinition(definition.symbol))
+    .filter((definition) => (definition.endLine - definition.startLine + 1) >= minLoc);
+
+  const rows = definitions
+    .map((definition) => {
+      const refMap = referencesBySymbol.get(definition.symbolId) ?? new Map<string, number>();
+      const sameFileRefs = refMap.get(definition.relativePath) ?? 0;
+      let crossFileRefs = 0;
+      for (const [relativePath, count] of refMap) {
+        if (relativePath === definition.relativePath) continue;
+        crossFileRefs += count;
+      }
+
+      return {
+        relative_path: definition.relativePath,
+        start_line: definition.startLine,
+        end_line: definition.endLine,
+        loc: definition.endLine - definition.startLine + 1,
+        symbol: definition.symbol,
+        same_file_refs: sameFileRefs,
+        cross_file_refs: crossFileRefs,
+      };
+    })
+    .filter((row) => row.cross_file_refs === 0)
+    .sort((a, b) => b.loc - a.loc || a.relative_path.localeCompare(b.relative_path) || a.start_line - b.start_line);
 
   let deadCodeCount = 0;
   let fileInternalCount = 0;
@@ -122,4 +119,21 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     fileInternalCount,
     totalLoc,
   };
+}
+
+function passesTestFileFilter(relativePath: string): boolean {
+  const patterns = [...new Set([...TEST_FILE_PATTERNS, ...TEST_SUPPORT_PATH_PATTERNS])];
+  return patterns.every((pattern) => !likeMatches(relativePath, pattern));
+}
+
+function likeMatches(value: string, pattern: string): boolean {
+  const regex = new RegExp(`^${pattern
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/%/g, '.*')
+    .replace(/_/g, '.')}$`);
+  return regex.test(value);
+}
+
+function looksValueLikeDefinition(rawSymbol: string): boolean {
+  return isFunctionLikeSymbol(rawSymbol) || rawSymbol.endsWith('().') || rawSymbol.endsWith('.');
 }

@@ -1,27 +1,43 @@
+import { basename } from 'node:path';
 import type { ScipDatabase } from '../db.js';
+import { findFirstSymbolMatch, getDefinitionsForFile } from '../query-support.js';
 import type { MethodResult } from '../types.js';
-import { leafName } from '../symbol-parser.js';
+import { leafName, leafSuffix } from '../symbol-parser.js';
 
 export function methods(db: ScipDatabase, className: string): MethodResult[] {
-  const rows = db.all<{
-    start_line: number;
-    end_line: number;
-    symbol: string;
-  }>(
-    `SELECT der.start_line, der.end_line, gs.symbol
-    FROM global_symbols gs
-    JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-    WHERE gs.symbol LIKE ?
-      AND ${db.localSymbolPredicate}
-      AND gs.symbol LIKE '%().%'
-      ${db.symbolNoise}
-    ORDER BY der.start_line`,
-    `%${className}#%`,
-  );
+  const classMatch = findFirstSymbolMatch(db, className);
+  if (!classMatch) {
+    return [];
+  }
 
-  return rows.map((r) => ({
-    startLine: r.start_line,
-    endLine: r.end_line,
-    name: leafName(r.symbol),
+  const ownerName = leafName(classMatch.symbol);
+  const definitions = getDefinitionsForFile(db, classMatch.relativePath)
+    .filter((definition) => isCallableSymbol(definition.symbol));
+
+  const directMethods = definitions.filter((definition) => (
+      definition.parentTypeName === ownerName
+      || definition.symbol.includes(ownerName)
+    ));
+
+  const fileScopedMethods = directMethods.length > 0
+    ? directMethods
+    : (
+      stripExtension(basename(classMatch.relativePath)) === ownerName
+        ? definitions.filter((definition) => definition.symbol.includes('<invalid-global-code>'))
+        : []
+    );
+
+  return fileScopedMethods.map((definition) => ({
+    startLine: definition.startLine,
+    endLine: definition.endLine,
+    name: leafName(definition.symbol),
   }));
+}
+
+function isCallableSymbol(rawSymbol: string): boolean {
+  return rawSymbol.endsWith('().') || leafSuffix(rawSymbol) === 'method';
+}
+
+function stripExtension(relativePath: string): string {
+  return relativePath.replace(/\.[^.]+$/, '');
 }

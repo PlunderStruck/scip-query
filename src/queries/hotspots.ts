@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../db.js';
+import { getAllDefinitions, getCallerRowsForSymbol } from '../query-support.js';
 import type { HotspotResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 
@@ -41,7 +42,7 @@ export function hotspots(
     limit,
   );
 
-  return rows
+  const indexedResults = rows
     .filter((r) => !db.isIgnored(r.defined_in))
     .map((r) => ({
       symbol: r.symbol,
@@ -50,4 +51,24 @@ export function hotspots(
       fileCount: r.file_count,
       definedIn: r.defined_in,
     }));
+
+  if (indexedResults.length > 0) {
+    return indexedResults;
+  }
+
+  return getAllDefinitions(db, { scope })
+    .filter((definition) => !db.isIgnored(definition.relativePath))
+    .map((definition) => {
+      const callerRows = getCallerRowsForSymbol(db, definition, { limit: 500 });
+      return {
+        symbol: definition.symbol,
+        shortName: shortenSymbol(definition.symbol),
+        refCount: callerRows.length,
+        fileCount: new Set(callerRows.map((row) => row.file)).size,
+        definedIn: definition.relativePath,
+      };
+    })
+    .filter((row) => row.refCount > 0)
+    .sort((left, right) => right.refCount - left.refCount || right.fileCount - left.fileCount)
+    .slice(0, limit);
 }

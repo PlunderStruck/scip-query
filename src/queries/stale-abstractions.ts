@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../db.js';
-import { testFileExclusionSql } from '../query-support.js';
+import { getDefinitionsForFile } from '../query-support.js';
 import type { StaleAbstraction } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 
@@ -16,46 +16,18 @@ export function staleAbstractions(
   opts?: { scope?: string; minLoc?: number; limit?: number },
 ): StaleAbstraction[] {
   const { scope, minLoc = 3, limit = 30 } = opts ?? {};
-  const scopeFilter = scope ? `AND d.relative_path LIKE '%${scope}%'` : '';
-
-  const rows = db.all<{
-    symbol: string;
-    file: string;
-    start_line: number;
-    end_line: number;
-    loc: number;
-    consumers: number;
-  }>(
-    `SELECT * FROM (
-      SELECT
-        gs.symbol,
-        d.relative_path AS file,
-        der.start_line,
-        der.end_line,
-        (der.end_line - der.start_line + 1) AS loc,
-        (SELECT COUNT(DISTINCT ref_c.document_id)
-         FROM mentions ref_m
-         JOIN chunks ref_c ON ref_m.chunk_id = ref_c.id
-         WHERE ref_m.symbol_id = gs.id
-           AND ref_m.role != 1
-           AND ref_c.document_id != der.document_id
-        ) AS consumers
-      FROM global_symbols gs
-      JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-      JOIN documents d ON der.document_id = d.id
-      WHERE 1 = 1
-        ${db.pathExclusionsFor('d')}
-        AND ${testFileExclusionSql('d')}
-        ${db.symbolNoiseFor('gs')}
-        -- Top-level type symbols: ends with # but does not contain nested #
-        AND gs.symbol LIKE '%#'
-        AND gs.symbol NOT LIKE '%#%#%'
-        AND (der.end_line - der.start_line + 1) >= ?
-        ${scopeFilter}
-    ) WHERE consumers <= 1
-    ORDER BY loc DESC, file ASC, start_line ASC`,
-    minLoc,
-  );
+  const rows = getScopedDefinitions(db, scope)
+    .filter((definition) => definition.isTypeLike && definitionLoc(definition) >= minLoc)
+    .map((definition) => ({
+      symbol: definition.symbol,
+      file: definition.relativePath,
+      start_line: definition.startLine,
+      end_line: definition.endLine,
+      loc: definitionLoc(definition),
+      consumers: countCrossFileConsumers(db, definition),
+    }))
+    .filter((row) => row.consumers <= 1)
+    .sort((left, right) => right.loc - left.loc || left.file.localeCompare(right.file) || left.start_line - right.start_line);
 
   const filesWithFunctions = getFilesWithFunctions(db, scope);
 
@@ -78,21 +50,9 @@ function getFilesWithFunctions(
   db: ScipDatabase,
   scope?: string,
 ): Set<string> {
-  const scopeFilter = scope ? `AND d.relative_path LIKE '%${scope}%'` : '';
-
-  return new Set(
-    db.all<{ relative_path: string }>(
-      `SELECT DISTINCT d.relative_path
-       FROM global_symbols gs
-       JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-       JOIN documents d ON der.document_id = d.id
-       WHERE gs.symbol LIKE '%().'
-         ${db.pathExclusionsFor('d')}
-         ${scopeFilter}`,
-    )
-      .map((row) => row.relative_path)
-      .filter((path) => !db.isIgnored(path)),
-  );
+  return new Set(getScopedDefinitions(db, scope)
+    .filter((definition) => definition.isFunctionLike)
+    .map((definition) => definition.relativePath));
 }
 
 function isTrueStaleAbstraction(
@@ -112,4 +72,48 @@ function isTrueStaleAbstraction(
   }
 
   return true;
+}
+
+function getScopedDefinitions(
+  db: ScipDatabase,
+  scope?: string,
+): ReturnType<typeof getDefinitionsForFile>[number][] {
+  const scopeFilter = scope ? `AND relative_path LIKE '%${scope}%'` : '';
+
+  return db.all<{ relative_path: string }>(
+    `SELECT relative_path
+     FROM documents
+     WHERE 1 = 1
+       ${db.pathExclusionsFor('documents')}
+       ${scopeFilter}
+     ORDER BY relative_path`,
+  )
+    .flatMap((row) => getDefinitionsForFile(db, row.relative_path))
+    .filter((row) => !db.isIgnored(row.relativePath));
+}
+
+function countCrossFileConsumers(
+  db: ScipDatabase,
+  definition: ReturnType<typeof getDefinitionsForFile>[number],
+): number {
+  const callers = db.all<{ relative_path: string }>(
+    `SELECT DISTINCT d.relative_path
+     FROM mentions m
+     JOIN chunks c ON m.chunk_id = c.id
+     JOIN documents d ON c.document_id = d.id
+     WHERE m.symbol_id = ?
+       AND m.role != 1
+       ${db.pathExclusionsFor('d')}`,
+    definition.symbolId,
+  )
+    .map((row) => row.relative_path)
+    .filter((relativePath) => relativePath !== definition.relativePath && !db.isIgnored(relativePath));
+
+  return new Set(callers).size;
+}
+
+function definitionLoc(
+  definition: ReturnType<typeof getDefinitionsForFile>[number],
+): number {
+  return definition.endLine - definition.startLine + 1;
 }

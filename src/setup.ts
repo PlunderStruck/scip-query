@@ -8,7 +8,13 @@ import { fileURLToPath } from 'node:url';
 import { getScipVersion, isScipInstalled, printScipInstallInstructions, tryInstallScipCli } from './scip-cli.js';
 
 const IS_WINDOWS = platform() === 'win32';
-const SKILLS = ['concrete-plan', 'scip-explore', 'scip-debloat', 'scip-verify'];
+export const BUILTIN_SKILLS = [
+  'concrete-plan',
+  'scip-explore',
+  'scip-debloat',
+  'scip-verify',
+  'scip-language-playbook',
+] as const;
 // ── Skills Installation ────────────────────────────────────
 
 export interface InstallSkillsResult {
@@ -50,7 +56,7 @@ export function installSkills(
     mkdirSync(targetDir, { recursive: true });
     const toolName = targetDir.includes('.codex') ? 'Codex' : 'Claude';
 
-    for (const skill of SKILLS) {
+    for (const skill of BUILTIN_SKILLS) {
       const source = join(skillsSource, skill);
       const target = join(targetDir, skill);
 

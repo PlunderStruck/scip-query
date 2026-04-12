@@ -1,5 +1,9 @@
 import type { ScipDatabase } from '../db.js';
-import { findExactSymbolMatch, findFirstSymbolMatch, getSourceReferenceSites } from '../query-support.js';
+import {
+  findExactSymbolMatch,
+  findFirstSymbolMatch,
+  getCallerRowsForSymbol,
+} from '../query-support.js';
 import type { SymbolMatch } from '../query-support.js';
 import type { AffectedResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
@@ -72,92 +76,50 @@ function getDirectAffectedRows(
   file: string;
   symbolMatch: SymbolMatch | null;
 }> {
-  const sourceSites = getSourceReferenceSites(db, target)
-    .filter((site) => !db.isIgnored(site.file))
-    .filter((site) => !scope || site.file.includes(scope));
+  const callerRows = getCallerRowsForSymbol(db, target, { limit: 500 })
+    .filter((row) => !db.isIgnored(row.file))
+    .filter((row) => !scope || row.file.includes(scope));
 
-  if (sourceSites.length > 0) {
-    const rows: Array<{
-      symbolId: number | null;
-      symbol: string;
-      shortName: string;
-      file: string;
-      symbolMatch: SymbolMatch | null;
-    }> = [];
-    const seen = new Set<string>();
+  const results: Array<{
+    symbolId: number | null;
+    symbol: string;
+    shortName: string;
+    file: string;
+    symbolMatch: SymbolMatch | null;
+  }> = [];
+  const seen = new Set<string>();
 
-    for (const site of sourceSites) {
-      if (!site.enclosingSymbol || site.enclosingSymbol === target.symbol) {
-        const key = `${site.file}|(top-level)`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        rows.push({
-          symbolId: null,
-          symbol: site.file,
-          shortName: '(top-level)',
-          file: site.file,
-          symbolMatch: null,
-        });
-        continue;
-      }
-
-      const enclosing = findExactSymbolMatch(db, site.enclosingSymbol);
-      if (!enclosing || enclosing.symbolId === target.symbolId || db.isIgnored(enclosing.relativePath)) {
-        continue;
-      }
-
-      const key = `${enclosing.symbolId}|${enclosing.relativePath}`;
+  for (const row of callerRows) {
+    const match = findExactSymbolMatch(db, row.symbol);
+    if (!match) {
+      const key = `${row.file}|${row.symbol}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      rows.push({
-        symbolId: enclosing.symbolId,
-        symbol: enclosing.symbol,
-        shortName: shortenSymbol(enclosing.symbol),
-        file: enclosing.relativePath,
-        symbolMatch: enclosing,
+      results.push({
+        symbolId: null,
+        symbol: row.symbol,
+        shortName: shortenSymbol(row.symbol),
+        file: row.file,
+        symbolMatch: null,
       });
+      continue;
     }
 
-    return rows;
+    if (match.symbolId === target.symbolId || db.isIgnored(match.relativePath)) {
+      continue;
+    }
+
+    const key = `${match.symbolId}|${match.relativePath}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    results.push({
+      symbolId: match.symbolId,
+      symbol: match.symbol,
+      shortName: shortenSymbol(match.symbol),
+      file: match.relativePath,
+      symbolMatch: match,
+    });
   }
 
-  const rows = db.all<{
-    symbol_id: number;
-    symbol: string;
-    relative_path: string;
-  }>(
-    `SELECT DISTINCT
-      enc_gs.id AS symbol_id,
-      enc_gs.symbol AS symbol,
-      enc_d.relative_path AS relative_path
-    FROM mentions m
-    JOIN chunks c ON m.chunk_id = c.id
-    JOIN documents ref_d ON c.document_id = ref_d.id
-    JOIN defn_enclosing_ranges enc_der
-      ON enc_der.document_id = ref_d.id
-      AND c.start_line >= enc_der.start_line
-      AND c.end_line <= enc_der.end_line
-    JOIN global_symbols enc_gs ON enc_der.symbol_id = enc_gs.id
-    JOIN documents enc_d ON enc_der.document_id = enc_d.id
-    WHERE m.symbol_id = ?
-      AND m.role != 1
-      AND enc_gs.id != ?
-      ${db.symbolNoiseFor('enc_gs')}
-      ${db.pathExclusionsFor('enc_d')}
-      ${scope ? `AND enc_d.relative_path LIKE '%${scope}%'` : ''}
-    ORDER BY enc_d.relative_path
-    LIMIT 1`,
-    target.symbolId,
-    target.symbolId,
-  );
-
-  return rows
-    .filter((row) => !db.isIgnored(row.relative_path))
-    .map((row) => ({
-      symbolId: row.symbol_id,
-      symbol: row.symbol,
-      shortName: shortenSymbol(row.symbol),
-      file: row.relative_path,
-      symbolMatch: findExactSymbolMatch(db, row.symbol),
-    }));
+  return results;
 }

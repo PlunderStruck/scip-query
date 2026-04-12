@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../db.js';
 import { findFirstSymbolMatch, getSourceReferenceSites } from '../query-support.js';
+import { getSourceText } from '../source-analysis.js';
 import type { TraceResult } from '../types.js';
 import { cleanSignature } from './clean-signature.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../symbol-parser.js';
@@ -10,34 +11,28 @@ export function trace(db: ScipDatabase, symbolPattern: string): TraceResult {
     return { definitions: [], referencedBy: [] };
   }
 
-  // Definitions
-  const defRows = db.all<{
-    relative_path: string;
-    start_line: number;
-    end_line: number;
+  const definitionMeta = db.get<{
     sig: string | null;
     display_name: string | null;
   }>(
-    `SELECT d.relative_path, der.start_line, der.end_line,
+    `SELECT
       gs.display_name,
       REPLACE(SUBSTR(gs.documentation, INSTR(gs.documentation, '|') + 1), char(10), ' ') AS sig
     FROM global_symbols gs
-    JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-    JOIN documents d ON der.document_id = d.id
     WHERE gs.id = ?
-    ORDER BY d.relative_path, der.start_line
     LIMIT 10`,
     match.symbolId,
   );
 
-  const definitions = defRows
-    .filter((r) => !db.isIgnored(r.relative_path))
-    .map((r) => ({
-      relativePath: r.relative_path,
-      startLine: r.start_line,
-      endLine: r.end_line,
-      signature: buildTraceSignature(r.sig, r.display_name, match.symbol),
-    }));
+  const definitions = db.isIgnored(match.relativePath)
+    ? []
+    : [{
+      relativePath: match.relativePath,
+      startLine: match.startLine,
+      endLine: match.endLine,
+      signature: buildTraceSignature(definitionMeta?.sig ?? null, definitionMeta?.display_name ?? null, match.symbol),
+      source: definitionSource(db, match.relativePath, match.startLine, match.endLine),
+    }];
 
   // References
   const sourceSites = getSourceReferenceSites(db, match);
@@ -82,6 +77,22 @@ export function trace(db: ScipDatabase, symbolPattern: string): TraceResult {
       }));
 
   return { definitions, referencedBy };
+}
+
+function definitionSource(
+  db: ScipDatabase,
+  relativePath: string,
+  startLine: number,
+  endLine: number,
+): string | null {
+  const source = getSourceText(db, relativePath);
+  if (!source) {
+    return null;
+  }
+
+  const lines = source.split('\n');
+  const slice = lines.slice(startLine, endLine + 1).join('\n').trimEnd();
+  return slice.length > 0 ? slice : null;
 }
 
 function buildTraceSignature(

@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../db.js';
-import { getCalleeRowsForSymbol } from '../query-support.js';
+import { getCalleeRowsForSymbol, getDefinitionsForFile } from '../query-support.js';
 import type { ExtractCandidate } from '../types.js';
-import { shortenSymbol } from '../symbol-parser.js';
+import { isFunctionLikeSymbol, shortenSymbol } from '../symbol-parser.js';
 
 /**
  * Find functions with natural extraction seams.
@@ -22,48 +22,23 @@ export function extractCandidates(
   opts: { scope?: string; minLoc?: number; minCallees?: number; limit?: number } = {},
 ): ExtractCandidate[] {
   const { scope, minLoc = 10, minCallees = 6, limit = 20 } = opts;
-  const scopeFilter = scope ? `AND d.relative_path LIKE '%${scope}%'` : '';
-
-  // Find functions large enough to consider
-  const symbols = db.all<{
-    id: number;
-    symbol: string;
-    document_id: number;
-    start_line: number;
-    end_line: number;
-    relative_path: string;
-  }>(
-    `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path
-    FROM global_symbols gs
-    JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-    JOIN documents d ON der.document_id = d.id
-    WHERE 1 = 1
-      ${db.pathExclusionsFor('d')}
-      ${db.symbolNoiseFor('gs')}
-      AND (der.end_line - der.start_line + 1) >= ?
-      ${scopeFilter}
-    ORDER BY (der.end_line - der.start_line + 1) DESC`,
-    minLoc,
-  );
+  const symbols = getScopedDefinitions(db, scope)
+    .filter((definition) => definitionLoc(definition) >= minLoc && isFunctionLikeSymbol(definition.symbol))
+    .sort((left, right) => definitionLoc(right) - definitionLoc(left));
 
   const results: ExtractCandidate[] = [];
 
   for (const sym of symbols) {
-    if (db.isIgnored(sym.relative_path)) continue;
+    if (db.isIgnored(sym.relativePath)) continue;
 
     // Skip pure type files — "callees" in a type file are just type references,
     // not function calls. Splitting type files is a cosmetic choice, not an
     // extraction opportunity.
-    const basename = sym.relative_path.split('/').pop() ?? '';
+    const basename = sym.relativePath.split('/').pop() ?? '';
     if (basename.includes('types')) continue;
 
     // Get callees with their chunk locations (to build co-occurrence)
-    const calleeChunks = getCalleeRowsForSymbol(db, {
-      documentId: sym.document_id,
-      startLine: sym.start_line,
-      endLine: sym.end_line,
-      symbolId: sym.id,
-    });
+    const calleeChunks = getCalleeRowsForSymbol(db, sym);
 
     // Collect unique callees
     const calleeSet = new Set(calleeChunks.map((c) => c.symbol));
@@ -152,10 +127,10 @@ export function extractCandidates(
       results.push({
         symbol: sym.symbol,
         shortName: shortenSymbol(sym.symbol),
-        relativePath: sym.relative_path,
-        startLine: sym.start_line,
-        endLine: sym.end_line,
-        loc: sym.end_line - sym.start_line + 1,
+        relativePath: sym.relativePath,
+        startLine: sym.startLine,
+        endLine: sym.endLine,
+        loc: definitionLoc(sym),
         totalCallees: calleeSet.size,
         clusters: scoredClusters,
       });
@@ -164,4 +139,28 @@ export function extractCandidates(
 
   results.sort((a, b) => b.clusters.length - a.clusters.length || b.loc - a.loc);
   return results.slice(0, limit);
+}
+
+function getScopedDefinitions(
+  db: ScipDatabase,
+  scope?: string,
+): ReturnType<typeof getDefinitionsForFile>[number][] {
+  const scopeFilter = scope ? `AND relative_path LIKE '%${scope}%'` : '';
+
+  return db.all<{ relative_path: string }>(
+    `SELECT relative_path
+     FROM documents
+     WHERE 1 = 1
+       ${db.pathExclusionsFor('documents')}
+       ${scopeFilter}
+     ORDER BY relative_path`,
+  )
+    .flatMap((row) => getDefinitionsForFile(db, row.relative_path))
+    .filter((row) => !db.isIgnored(row.relativePath));
+}
+
+function definitionLoc(
+  definition: ReturnType<typeof getDefinitionsForFile>[number],
+): number {
+  return definition.endLine - definition.startLine + 1;
 }

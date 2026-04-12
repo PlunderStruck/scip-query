@@ -19,6 +19,7 @@ For goal-oriented usage guides (not just command reference), see **[Agent Guide]
 ```bash
 # Install
 npm install -g scip-query
+scip-query install-skills            # installs built-in Codex/Claude skills, including scip-language-playbook
 
 # Index your project (auto-detects language)
 scip-query reindex

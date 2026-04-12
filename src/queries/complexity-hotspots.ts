@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../db.js';
+import { getAllDefinitions, getCalleeRowsForSymbol, getCallerRowsForSymbol } from '../query-support.js';
 import { testFileExclusionSql } from '../query-support.js';
 import type { ComplexityHotspot } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
@@ -99,7 +100,7 @@ export function complexityHotspots(
     minLoc, limit,
   );
 
-  return rows
+  const indexedResults = rows
     .filter((r) => !db.isIgnored(r.file))
     .map((r) => ({
       symbol: r.symbol,
@@ -116,4 +117,38 @@ export function complexityHotspots(
           (r.loc / 50) * (r.fan_in / 5) * Math.max(r.fan_out / 5, 1) * 100,
         ) / 100,
     }));
+
+  if (indexedResults.length > 0) {
+    return indexedResults;
+  }
+
+  return getAllDefinitions(db, { scope })
+    .filter((definition) => !db.isIgnored(definition.relativePath))
+    .map((definition) => {
+      const loc = definition.endLine - definition.startLine + 1;
+      const callerRows = getCallerRowsForSymbol(db, definition, { limit: 500 });
+      const calleeRows = getCalleeRowsForSymbol(db, definition, { limit: 500 });
+      const fanIn = new Set(callerRows.map((row) => row.file)).size;
+      const fanOut = new Set(
+        calleeRows
+          .filter((row) => row.file !== definition.relativePath)
+          .map((row) => `${row.symbol}|${row.file}`),
+      ).size;
+      const calleeCount = new Set(calleeRows.map((row) => `${row.symbol}|${row.file}`)).size;
+      return {
+        symbol: definition.symbol,
+        shortName: shortenSymbol(definition.symbol),
+        file: definition.relativePath,
+        startLine: definition.startLine,
+        endLine: definition.endLine,
+        loc,
+        fanIn,
+        fanOut,
+        calleeCount,
+        score: Math.round((loc / 50) * (fanIn / 5) * Math.max(fanOut / 5, 1) * 100) / 100,
+      };
+    })
+    .filter((row) => row.loc >= minLoc)
+    .sort((left, right) => right.score - left.score || right.loc - left.loc)
+    .slice(0, limit);
 }

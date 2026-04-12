@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../db.js';
-import { getCalleeRowsForSymbol, testFileExclusionSql } from '../query-support.js';
+import { getCalleeRowsForSymbol, getDefinitionsForFile } from '../query-support.js';
 import type { PassthroughCandidate } from '../types.js';
-import { shortenSymbol } from '../symbol-parser.js';
+import { isFunctionLikeSymbol, shortenSymbol } from '../symbol-parser.js';
 
 /**
  * Find passthrough candidates: functions that just forward to one
@@ -16,52 +16,19 @@ export function passthroughCandidates(
   opts?: { scope?: string; maxLoc?: number; limit?: number },
 ): PassthroughCandidate[] {
   const { scope, maxLoc = 15, limit = 30 } = opts ?? {};
-  const scopeFilter = scope ? `AND d.relative_path LIKE '%${scope}%'` : '';
-
-  // 1. Find all non-trivial symbols with definition ranges (>= 3 LOC)
-  const symbols = db.all<{
-    id: number;
-    symbol: string;
-    document_id: number;
-    start_line: number;
-    end_line: number;
-    loc: number;
-    relative_path: string;
-  }>(
-    `SELECT
-      gs.id,
-      gs.symbol,
-      der.document_id,
-      der.start_line,
-      der.end_line,
-      (der.end_line - der.start_line + 1) AS loc,
-      d.relative_path
-    FROM global_symbols gs
-    JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-    JOIN documents d ON der.document_id = d.id
-    WHERE 1 = 1
-      ${db.pathExclusionsFor('d')}
-      AND ${testFileExclusionSql('d')}
-      ${db.symbolNoiseFor('gs')}
-      AND (der.end_line - der.start_line + 1) >= 3
-      AND (der.end_line - der.start_line + 1) <= ?
-      ${scopeFilter}
-    ORDER BY d.relative_path`,
-    maxLoc,
-  );
+  const symbols = getScopedDefinitions(db, scope)
+    .filter((definition) => definitionLoc(definition) >= 3 && definitionLoc(definition) <= maxLoc);
 
   const results: PassthroughCandidate[] = [];
 
   for (const sym of symbols) {
-    if (db.isIgnored(sym.relative_path)) continue;
+    if (db.isIgnored(sym.relativePath) || !isFunctionLikeSymbol(sym.symbol)) continue;
 
     // 2. Count callees for this symbol
-    const callees = getCalleeRowsForSymbol(db, {
-      documentId: sym.document_id,
-      startLine: sym.start_line,
-      endLine: sym.end_line,
-      symbolId: sym.id,
-    });
+    const rawCallees = getCalleeRowsForSymbol(db, sym);
+    const callees = rawCallees.some((callee) => isFunctionLikeSymbol(callee.symbol))
+      ? rawCallees.filter((callee) => isFunctionLikeSymbol(callee.symbol))
+      : rawCallees;
 
     // Deduplicate by symbol (same callee may appear in multiple chunks)
     const uniqueCallees = new Map<string, { symbol: string; file: string }>();
@@ -79,10 +46,10 @@ export function passthroughCandidates(
     results.push({
       symbol: sym.symbol,
       shortName: shortenSymbol(sym.symbol),
-      file: sym.relative_path,
-      startLine: sym.start_line,
-      endLine: sym.end_line,
-      loc: sym.loc,
+      file: sym.relativePath,
+      startLine: sym.startLine,
+      endLine: sym.endLine,
+      loc: definitionLoc(sym),
       forwardsTo: callee.symbol,
       forwardsToShort: shortenSymbol(callee.symbol),
       forwardsToFile: callee.file,
@@ -91,4 +58,28 @@ export function passthroughCandidates(
 
   results.sort((a, b) => a.loc - b.loc || a.file.localeCompare(b.file));
   return results.slice(0, limit);
+}
+
+function getScopedDefinitions(
+  db: ScipDatabase,
+  scope?: string,
+): ReturnType<typeof getDefinitionsForFile>[number][] {
+  const scopeFilter = scope ? `AND relative_path LIKE '%${scope}%'` : '';
+
+  return db.all<{ relative_path: string }>(
+    `SELECT relative_path
+     FROM documents
+     WHERE 1 = 1
+       ${db.pathExclusionsFor('documents')}
+       ${scopeFilter}
+     ORDER BY relative_path`,
+  )
+    .flatMap((row) => getDefinitionsForFile(db, row.relative_path))
+    .filter((row) => !db.isIgnored(row.relativePath));
+}
+
+function definitionLoc(
+  definition: ReturnType<typeof getDefinitionsForFile>[number],
+): number {
+  return definition.endLine - definition.startLine + 1;
 }

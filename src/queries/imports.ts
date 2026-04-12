@@ -105,6 +105,16 @@ export function importedBy(db: ScipDatabase, symbolPattern: string): ImportResul
         continue;
       }
 
+      if (entry.kind === 'side-effect') {
+        importers.add(row.relative_path);
+        continue;
+      }
+
+      if (targetFile && isCLikeImporter(row.relative_path)) {
+        importers.add(row.relative_path);
+        continue;
+      }
+
       if (targetIsModule) {
         importers.add(row.relative_path);
         continue;
@@ -207,4 +217,8 @@ function renderImportSymbol(
 
 function normalizePath(path: string): string {
   return path.replace(/\\/g, '/');
+}
+
+function isCLikeImporter(relativePath: string): boolean {
+  return /\.(?:c|h|cc|cpp|cxx|hpp|hh|hxx)$/i.test(relativePath);
 }

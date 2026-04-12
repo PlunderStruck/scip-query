@@ -82,6 +82,7 @@ export interface TraceResult {
     startLine: number;
     endLine: number;
     signature: string | null;
+    source: string | null;
   }>;
   referencedBy: Array<{
     relativePath: string;
@@ -540,6 +541,8 @@ export interface IndexerConfig {
   indexerBinary: string;
   /** Additional executable names accepted on PATH for the same indexer */
   binaryAliases?: string[];
+  /** Project-local executable paths to prefer when they exist */
+  projectLocalBinaries?: string[];
   /** Command to check if the indexer is installed */
   checkCommand: string;
   /** Returns the binary + args array for execFileSync (no shell injection) */

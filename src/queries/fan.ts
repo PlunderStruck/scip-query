@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch, resolveIndexedFile } from '../query-support.js';
+import { buildFileDepGraph, findFirstSymbolMatch, resolveIndexedFile } from '../query-support.js';
 import type { FanResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 
@@ -63,12 +63,27 @@ export function fanOut(
     resolvedFile,
   );
 
-  return rows
+  const indexedResults = rows
     .filter((r) => !db.isIgnored(r.relative_path))
     .map((r) => ({
       name: r.relative_path,
       count: r.symbol_count,
     }));
+
+  if (indexedResults.length > 0) {
+    return indexedResults;
+  }
+
+  const graph = buildFileDepGraph(db);
+  const deps = graph.get(resolvedFile);
+  if (!deps || deps.size === 0) {
+    return [];
+  }
+
+  return [{
+    name: resolvedFile,
+    count: deps.size,
+  }];
 }
 
 /**

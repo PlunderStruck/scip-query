@@ -1,8 +1,8 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { tryInstallScipCli } from '../scip-cli.js';
-import type { SupportedLanguage } from '../types.js';
+import type { SupportedLanguage, IndexerConfig } from '../types.js';
 import { detectLanguages } from './detect.js';
 import { getIndexerConfig } from './indexers.js';
 import { describeIndexerBinary, isBinaryAvailable, isIndexerInstalled, resolveIndexerBinary, tryInstallIndexer } from './install.js';
@@ -85,9 +85,10 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
   for (const lang of languages) {
     const config = getIndexerConfig(lang);
     const binaryLabel = describeIndexerBinary(config);
+    const projectLocalBinary = resolveProjectLocalIndexerBinary(config, projectRoot);
 
     // Check if indexer is installed, auto-install if needed
-    if (!isIndexerInstalled(config)) {
+    if (!projectLocalBinary && !isIndexerInstalled(config)) {
       if (skipAutoInstall) {
         throw new Error(
           `${binaryLabel} is required to index ${lang} but not found on PATH.\n` +
@@ -103,7 +104,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
       }
     }
 
-    const resolvedBinary = resolveIndexerBinary(config);
+    const resolvedBinary = projectLocalBinary ?? resolveIndexerBinary(config);
     if (!resolvedBinary) {
       throw new Error(
         `${binaryLabel} is required to index ${lang} but was not found on PATH after installation checks.\n` +
@@ -134,6 +135,13 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
         `Make sure ${binaryLabel} is installed and available on PATH.`,
       );
     }
+
+    if (lang === 'php') {
+      const defaultPhpOutput = join(projectRoot, 'index.scip');
+      if (outputScip !== defaultPhpOutput && existsSync(defaultPhpOutput)) {
+        renameSync(defaultPhpOutput, outputScip);
+      }
+    }
   }
 
   // Convert SCIP protobuf to SQLite
@@ -163,3 +171,17 @@ export { detectLanguages } from './detect.js';
 export { getIndexerConfig, INDEXER_CONFIGS } from './indexers.js';
 export { describeIndexerBinary, isBinaryAvailable, isIndexerInstalled, resolveIndexerBinary, tryInstallIndexer } from './install.js';
 export { tryInstallScipCli } from '../scip-cli.js';
+
+function resolveProjectLocalIndexerBinary(
+  config: IndexerConfig,
+  projectRoot: string,
+): string | null {
+  for (const relativePath of config.projectLocalBinaries ?? []) {
+    const candidate = join(projectRoot, relativePath);
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}

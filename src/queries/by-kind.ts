@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../db.js';
 import type { ByKindResult } from '../types.js';
+import { getAllDefinitions, type IndexedDefinition } from '../query-support.js';
 import { leafSuffix, parseSymbol, shortenSymbol } from '../symbol-parser.js';
 
 /**
@@ -186,26 +187,19 @@ function loadKindRows(
   db: ScipDatabase,
   scope?: string,
 ): KindRow[] {
-  const scopeFilter = scope ? `AND d.relative_path LIKE '%${scope}%'` : '';
+  return getAllDefinitions(db, { scope }).map(mapDefinitionToKindRow);
+}
 
-  return db.all<KindRow>(
-    `SELECT
-      gs.symbol,
-      gs.kind,
-      gs.documentation,
-      gs.enclosing_symbol,
-      d.relative_path,
-      der.start_line,
-      der.end_line
-    FROM global_symbols gs
-    JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-    JOIN documents d ON der.document_id = d.id
-    WHERE 1 = 1
-      ${db.pathExclusionsFor('d')}
-      ${scopeFilter}
-    ORDER BY d.relative_path, der.start_line`,
-  )
-    .filter((row) => !db.isIgnored(row.relative_path));
+function mapDefinitionToKindRow(definition: IndexedDefinition): KindRow {
+  return {
+    symbol: definition.symbol,
+    kind: definition.kind,
+    documentation: definition.documentation,
+    enclosing_symbol: definition.enclosingSymbol,
+    relative_path: definition.relativePath,
+    start_line: definition.startLine,
+    end_line: definition.endLine,
+  };
 }
 
 function resolveKindNumber(row: Pick<KindRow, 'symbol' | 'kind' | 'documentation' | 'enclosing_symbol'>): number | null {

@@ -1,7 +1,8 @@
 import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch, getCalleeRowsForSymbol } from '../query-support.js';
+import { findFirstSymbolMatch, getAllDefinitions, getCalleeRowsForSymbol } from '../query-support.js';
+import { getSourceText } from '../source-analysis.js';
 import type { SimilarSymbolResult } from '../types.js';
-import { isFunctionLikeSymbol, shortenSymbol } from '../symbol-parser.js';
+import { isFunctionLikeSymbol, leafName, shortenSymbol } from '../symbol-parser.js';
 
 /**
  * Find functions with similar callee fingerprints using TF-IDF weighted
@@ -26,7 +27,7 @@ export function similar(
   const { minSimilarity = 0.4, limit = 20 } = opts;
 
   const target = findCallees(db, symbolPattern);
-  if (!target || target.callees.size === 0) return [];
+  if (!target) return [];
   if (!isFunctionLikeSymbol(target.symbol)) return [];
 
   const candidates = getAllCalleeFingerprints(db, {
@@ -65,7 +66,11 @@ export function similar(
   }
 
   results.sort((a, b) => b.similarity - a.similarity);
-  return results.slice(0, limit);
+  if (results.length > 0) {
+    return results.slice(0, limit);
+  }
+
+  return similarBySourceShape(db, symbolPattern, { minSimilarity, limit });
 }
 
 /**
@@ -222,6 +227,12 @@ interface SymbolFingerprint {
   callees: Set<string>;
 }
 
+interface SourceFingerprint {
+  symbol: string;
+  file: string;
+  tokens: Set<string>;
+}
+
 function findCallees(
   db: ScipDatabase,
   symbolPattern: string,
@@ -304,4 +315,174 @@ function difference<T>(a: Set<T>, b: Set<T>): Set<T> {
     if (!b.has(item)) result.add(item);
   }
   return result;
+}
+
+function similarBySourceShape(
+  db: ScipDatabase,
+  symbolPattern: string,
+  opts: { minSimilarity: number; limit: number },
+): SimilarSymbolResult[] {
+  const target = findSourceFingerprint(db, symbolPattern);
+  if (!target || target.tokens.size < 3) {
+    return [];
+  }
+
+  const minSimilarity = opts.minSimilarity >= 0.5 ? opts.minSimilarity : 0.3;
+  const results: SimilarSymbolResult[] = [];
+
+  for (const candidate of getAllSourceFingerprints(db)) {
+    if (candidate.symbol === target.symbol || candidate.tokens.size < 3) continue;
+
+    const shared = intersection(target.tokens, candidate.tokens);
+    if (shared.size < 2) continue;
+
+    const union = new Set([...target.tokens, ...candidate.tokens]);
+    const similarity = union.size > 0 ? shared.size / union.size : 0;
+    if (similarity < minSimilarity) continue;
+
+    results.push({
+      symbolA: target.symbol,
+      shortNameA: shortenSymbol(target.symbol),
+      fileA: target.file,
+      symbolB: candidate.symbol,
+      shortNameB: shortenSymbol(candidate.symbol),
+      fileB: candidate.file,
+      similarity,
+      sharedCallees: [...shared].sort(),
+      uniqueToA: [...difference(target.tokens, candidate.tokens)].sort(),
+      uniqueToB: [...difference(candidate.tokens, target.tokens)].sort(),
+    });
+  }
+
+  results.sort((a, b) => b.similarity - a.similarity || a.shortNameB.localeCompare(b.shortNameB));
+  return results.slice(0, opts.limit);
+}
+
+function findSourceFingerprint(
+  db: ScipDatabase,
+  symbolPattern: string,
+): SourceFingerprint | null {
+  const match = findFirstSymbolMatch(db, symbolPattern);
+  if (!match || !isFunctionLikeSymbol(match.symbol)) {
+    return null;
+  }
+
+  const snippet = definitionSnippet(db, match.relativePath, match.startLine, match.endLine, leafName(match.symbol));
+  const tokens = sourceTokens(snippet, leafName(match.symbol));
+  if (tokens.size === 0) {
+    return null;
+  }
+
+  return {
+    symbol: match.symbol,
+    file: match.relativePath,
+    tokens,
+  };
+}
+
+function getAllSourceFingerprints(db: ScipDatabase): SourceFingerprint[] {
+  return getAllDefinitions(db)
+    .filter((definition) => definition.isFunctionLike)
+    .map((definition) => ({
+      symbol: definition.symbol,
+      file: definition.relativePath,
+      tokens: sourceTokens(
+        definitionSnippet(db, definition.relativePath, definition.startLine, definition.endLine, definition.leaf),
+        definition.leaf,
+      ),
+    }))
+    .filter((fingerprint) => fingerprint.tokens.size > 0);
+}
+
+function definitionSnippet(
+  db: ScipDatabase,
+  relativePath: string,
+  startLine: number,
+  endLine: number,
+  leaf: string,
+): string {
+  const source = getSourceText(db, relativePath);
+  if (!source) {
+    return '';
+  }
+
+  const lines = source.split('\n');
+  if (endLine >= startLine && (endLine - startLine) <= 12) {
+    return lines.slice(startLine, endLine + 1).join('\n');
+  }
+
+  const markerPatterns = [
+    new RegExp(`\\bdef\\s+${escapeRegex(leaf)}\\b`),
+    new RegExp(`\\bfun\\s+${escapeRegex(leaf)}\\b`),
+    new RegExp(`\\bfn\\s+${escapeRegex(leaf)}\\b`),
+    new RegExp(`\\bfunction\\s+${escapeRegex(leaf)}\\b`),
+    new RegExp(`\\b${escapeRegex(leaf)}\\s*\\(`),
+  ];
+  const definitionStart = lines.findIndex((line) => markerPatterns.some((pattern) => pattern.test(line)));
+  if (definitionStart >= 0) {
+    let definitionEnd = definitionStart;
+    for (let index = definitionStart + 1; index < lines.length && index <= definitionStart + 8; index++) {
+      const line = lines[index] ?? '';
+      if (index > definitionStart && looksLikeDefinitionBoundary(line)) {
+        break;
+      }
+      definitionEnd = index;
+      if (line.trim() === '' && index > definitionStart + 1) {
+        break;
+      }
+    }
+    return lines.slice(definitionStart, definitionEnd + 1).join('\n');
+  }
+
+  return lines.slice(startLine, Math.min(lines.length, startLine + 8)).join('\n');
+}
+
+function sourceTokens(
+  snippet: string,
+  leaf: string,
+): Set<string> {
+  if (!snippet) {
+    return new Set();
+  }
+
+  const stopWords = new Set([
+    'public', 'private', 'protected', 'final', 'static', 'class', 'def', 'fun', 'fn', 'function',
+    'return', 'string', 'bool', 'boolean', 'void', 'unit', 'self', 'this', 'new', 'const', 'let', 'var',
+    'end', 'pub',
+  ]);
+  const normalizedLeafParts = splitIdentifier(leaf);
+  const normalized = snippet
+    .replace(/["'`]/g, ' ')
+    .replace(/\b\d+\b/g, ' NUM ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[^A-Za-z0-9_]+/g, ' ')
+    .replace(/_/g, ' ')
+    .toLowerCase();
+
+  const tokens = normalized
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 1)
+    .filter((token) => !stopWords.has(token))
+    .filter((token) => !normalizedLeafParts.has(token));
+
+  return new Set(tokens);
+}
+
+function splitIdentifier(value: string): Set<string> {
+  return new Set(
+    value
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .split(/[^A-Za-z0-9_]+|_/)
+      .map((part) => part.toLowerCase())
+      .filter((part) => part.length > 1),
+  );
+}
+
+function looksLikeDefinitionBoundary(line: string): boolean {
+  return /^\s*(?:def|fun|fn|function|class|trait|module|object|enum|interface|public|private|protected)\b/.test(line);
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

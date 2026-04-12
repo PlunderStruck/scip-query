@@ -1,7 +1,9 @@
 import type { ScipDatabase } from '../db.js';
 import { isLiveBarrel } from '../entry-surfaces.js';
+import { getDefinitionsForFile } from '../query-support.js';
+import { getSourceExports, getSourceImports } from '../source-analysis.js';
 import type { RedundantReexport } from '../types.js';
-import { shortenSymbol } from '../symbol-parser.js';
+import { leafSuffix, shortenSymbol } from '../symbol-parser.js';
 
 /**
  * Find barrel re-exports that no consumer actually imports through.
@@ -168,5 +170,112 @@ export function redundantReexports(
     || a.shortName.localeCompare(b.shortName),
   );
 
-  return limit ? results.slice(0, limit) : results;
+  const withDartFallback = dedupeReexports([
+    ...results,
+    ...findSourceRedundantReexports(db, scope),
+  ]);
+  withDartFallback.sort((a, b) =>
+    b.directConsumers - a.directConsumers
+    || a.barrelFile.localeCompare(b.barrelFile)
+    || a.shortName.localeCompare(b.shortName),
+  );
+
+  return limit ? withDartFallback.slice(0, limit) : withDartFallback;
+}
+
+function findSourceRedundantReexports(
+  db: ScipDatabase,
+  scope?: string,
+): RedundantReexport[] {
+  const files = db.all<{ relative_path: string }>(
+    `SELECT relative_path
+     FROM documents
+     WHERE 1 = 1
+       ${scope ? 'AND relative_path LIKE ?' : ''}
+       ${db.pathExclusionsFor('documents')}
+     ORDER BY relative_path`,
+    ...(scope ? [`%${scope}%`] : []),
+  );
+
+  const candidates = files
+    .map((row) => row.relative_path)
+    .filter((relativePath) => !db.isIgnored(relativePath))
+    .filter((relativePath) => getSourceExports(db, relativePath).length > 0);
+
+  const results: RedundantReexport[] = [];
+
+  for (const barrelPath of candidates) {
+    const exports = getSourceExports(db, barrelPath).filter((entry) => entry.sourcePath && !db.isIgnored(entry.sourcePath));
+    if (exports.length === 0) continue;
+
+    const barrelConsumers = countDirectImporters(db, barrelPath, barrelPath);
+    if (barrelConsumers > 0) continue;
+
+    for (const exported of exports) {
+      const sourcePath = exported.sourcePath!;
+      const representative = representativeExportSymbol(db, sourcePath);
+      if (!representative) continue;
+
+      results.push({
+        barrelFile: barrelPath,
+        symbol: representative.symbol,
+        shortName: shortenSymbol(representative.symbol),
+        originalFile: sourcePath,
+        barrelConsumers: 0,
+        directConsumers: countDirectImporters(db, sourcePath, barrelPath),
+      });
+    }
+  }
+
+  return results;
+}
+
+function countDirectImporters(
+  db: ScipDatabase,
+  targetPath: string,
+  excludedPath: string,
+): number {
+  const files = db.all<{ relative_path: string }>(
+    `SELECT relative_path
+     FROM documents
+     WHERE 1 = 1
+       ${db.pathExclusionsFor('documents')}
+     ORDER BY relative_path`,
+  );
+
+  const importers = new Set<string>();
+  for (const row of files) {
+    if (db.isIgnored(row.relative_path) || row.relative_path === excludedPath) continue;
+    for (const imported of getSourceImports(db, row.relative_path)) {
+      if (imported.sourcePath === targetPath) {
+        importers.add(row.relative_path);
+      }
+    }
+  }
+
+  return importers.size;
+}
+
+function representativeExportSymbol(
+  db: ScipDatabase,
+  sourcePath: string,
+): ReturnType<typeof getDefinitionsForFile>[number] | null {
+  const definitions = getDefinitionsForFile(db, sourcePath);
+  return definitions.find((definition) => leafSuffix(definition.symbol) === 'method')
+    ?? definitions[0]
+    ?? null;
+}
+
+function dedupeReexports(
+  rows: RedundantReexport[],
+): RedundantReexport[] {
+  const seen = new Set<string>();
+  const unique: RedundantReexport[] = [];
+  for (const row of rows) {
+    const key = `${row.barrelFile}|${row.symbol}|${row.originalFile}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(row);
+  }
+  return unique;
 }

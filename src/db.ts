@@ -56,12 +56,23 @@ export class ScipDatabase {
   get localSymbolPredicate(): string {
     // Basic SQL-level exclusions for the most common cases.
     // JS-level gitignore filtering handles the rest post-query.
-    return `EXISTS (
-      SELECT 1
-      FROM defn_enclosing_ranges local_der
-      JOIN documents local_d ON local_der.document_id = local_d.id
-      WHERE local_der.symbol_id = gs.id
-        ${this.pathExclusionsFor('local_d').trimStart()}
+    return `(
+      EXISTS (
+        SELECT 1
+        FROM defn_enclosing_ranges local_der
+        JOIN documents local_d ON local_der.document_id = local_d.id
+        WHERE local_der.symbol_id = gs.id
+          ${this.pathExclusionsFor('local_d').trimStart()}
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM mentions local_m
+        JOIN chunks local_c ON local_m.chunk_id = local_c.id
+        JOIN documents local_d ON local_c.document_id = local_d.id
+        WHERE local_m.symbol_id = gs.id
+          AND local_m.role = 1
+          ${this.pathExclusionsFor('local_d').trimStart()}
+      )
     )`;
   }
 

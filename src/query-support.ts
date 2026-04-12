@@ -1,6 +1,6 @@
 import type { ScipDatabase } from './db.js';
 import { basename } from 'node:path';
-import { findIdentifierLines, getSourceCalls, getSourceConstructorBindings, getSourceImports } from './source-analysis.js';
+import { findIdentifierLines, getSourceCalls, getSourceConstructorBindings, getSourceImports, getSourceText } from './source-analysis.js';
 import { isFunctionLikeSymbol, isModuleLikeSymbol, leafName, leafSuffix, parseSymbol, shortenSymbol } from './symbol-parser.js';
 
 export interface SymbolLocation {
@@ -37,11 +37,14 @@ interface DocumentPathCandidate {
   score: number;
 }
 
-interface IndexedDefinition extends SymbolMatch {
+export interface IndexedDefinition extends SymbolMatch {
   leaf: string;
   parentTypeName: string | null;
   isFunctionLike: boolean;
   isTypeLike: boolean;
+  kind: number | null;
+  documentation: string | null;
+  enclosingSymbol: string | null;
 }
 
 const FILE_DEFINITION_CACHE = new WeakMap<ScipDatabase, Map<string, IndexedDefinition[]>>();
@@ -102,10 +105,37 @@ export function buildFileDepGraph(
   );
 
   const graph = new Map<string, Set<string>>();
+  const indexedFiles = new Set<string>(
+    db.all<{ relative_path: string }>(
+      `SELECT relative_path
+       FROM documents
+       WHERE 1 = 1
+         ${db.pathExclusionsFor('documents')}
+       ORDER BY relative_path`,
+    )
+      .map((row) => row.relative_path)
+      .filter((relativePath) => !db.isIgnored(relativePath)),
+  );
+
+  const addEdge = (fromFile: string, toFile: string): void => {
+    if (fromFile === toFile) return;
+    if (db.isIgnored(fromFile) || db.isIgnored(toFile)) return;
+    if (!indexedFiles.has(toFile)) return;
+    if (!graph.has(fromFile)) graph.set(fromFile, new Set());
+    graph.get(fromFile)!.add(toFile);
+  };
+
   for (const edge of edges) {
-    if (db.isIgnored(edge.from_file) || db.isIgnored(edge.to_file)) continue;
-    if (!graph.has(edge.from_file)) graph.set(edge.from_file, new Set());
-    graph.get(edge.from_file)!.add(edge.to_file);
+    addEdge(edge.from_file, edge.to_file);
+  }
+
+  for (const relativePath of indexedFiles) {
+    if (scope && !relativePath.includes(scope)) continue;
+
+    for (const entry of getSourceImports(db, relativePath)) {
+      if (!entry.sourcePath) continue;
+      addEdge(relativePath, entry.sourcePath);
+    }
   }
 
   return graph;
@@ -119,7 +149,7 @@ export function findFirstSymbolMatch(
   const fileLineMatch = symbolPattern.match(/^(.+):(\d+)-(\d+)$/);
   if (fileLineMatch) {
     const [, filePath, startStr, endStr] = fileLineMatch;
-    const row = db.get<{
+    let row = db.get<{
       id: number;
       symbol: string;
       document_id: number;
@@ -135,9 +165,33 @@ export function findFirstSymbolMatch(
         AND der.start_line <= ? AND der.end_line >= ?
         ${db.pathExclusionsFor('d')}
       ORDER BY (der.end_line - der.start_line) ASC
-      LIMIT 1`,
+        LIMIT 1`,
       `%${filePath}%`, parseInt(startStr!, 10), parseInt(endStr!, 10),
     );
+    if (!row) {
+      row = db.get<{
+        id: number;
+        symbol: string;
+        document_id: number;
+        start_line: number;
+        end_line: number;
+        relative_path: string;
+      }>(
+        `SELECT gs.id, gs.symbol, c.document_id, MIN(c.start_line) AS start_line, MAX(c.end_line) AS end_line, d.relative_path
+         FROM global_symbols gs
+         JOIN mentions m ON m.symbol_id = gs.id
+         JOIN chunks c ON m.chunk_id = c.id
+         JOIN documents d ON c.document_id = d.id
+         WHERE m.role = 1
+           AND d.relative_path LIKE ?
+           AND c.start_line <= ? AND c.end_line >= ?
+           ${db.pathExclusionsFor('d')}
+         GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path
+         ORDER BY (MAX(c.end_line) - MIN(c.start_line)) ASC
+         LIMIT 1`,
+        `%${filePath}%`, parseInt(startStr!, 10), parseInt(endStr!, 10),
+      );
+    }
     if (row && !db.isIgnored(row.relative_path)) {
       return {
         symbolId: row.id,
@@ -277,7 +331,7 @@ function getSymbolLookupCandidates(
     return [like, like, like];
   });
 
-  return db.all<{
+  const primary = db.all<{
     id: number;
     symbol: string;
     document_id: number;
@@ -292,6 +346,38 @@ function getSymbolLookupCandidates(
      JOIN documents d ON der.document_id = d.id
      WHERE ${tokenClauses.join('\n       AND ')}
        ${db.pathExclusionsFor('d')}
+      LIMIT 200`,
+      ...params,
+    );
+  if (primary.length > 0) {
+    return primary;
+  }
+
+  return db.all<{
+    id: number;
+    symbol: string;
+    document_id: number;
+    start_line: number;
+    end_line: number;
+    relative_path: string;
+    display_name: string | null;
+  }>(
+    `SELECT
+      gs.id,
+      gs.symbol,
+      c.document_id,
+      MIN(c.start_line) AS start_line,
+      MAX(c.end_line) AS end_line,
+      d.relative_path,
+      gs.display_name
+     FROM global_symbols gs
+     JOIN mentions m ON m.symbol_id = gs.id
+     JOIN chunks c ON m.chunk_id = c.id
+     JOIN documents d ON c.document_id = d.id
+     WHERE m.role = 1
+       AND ${tokenClauses.join('\n       AND ')}
+       ${db.pathExclusionsFor('d')}
+     GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path, gs.display_name
      LIMIT 200`,
     ...params,
   );
@@ -309,18 +395,30 @@ function scoreSymbolCandidate(
   cleanedPattern: string,
   tokens: string[],
 ): number {
+  const originalCase = originalPattern.trim();
+  const cleanedCase = cleanedPattern;
+  const noParensCase = cleanedCase.replace(/\(\)$/, '');
   const original = originalPattern.toLowerCase();
   const cleaned = cleanedPattern.toLowerCase();
   const noParens = cleaned.replace(/\(\)$/, '');
+  const rawCase = row.symbol;
+  const shortCase = shortenSymbol(row.symbol);
+  const leafCase = leafName(row.symbol);
+  const displayCase = row.display_name ?? '';
   const raw = row.symbol.toLowerCase();
-  const short = shortenSymbol(row.symbol).toLowerCase();
-  const leaf = leafName(row.symbol).toLowerCase();
-  const display = (row.display_name ?? '').toLowerCase();
+  const short = shortCase.toLowerCase();
+  const leaf = leafCase.toLowerCase();
+  const display = displayCase.toLowerCase();
   const path = row.relative_path.toLowerCase();
   const looksPathLike = /[/:.]/.test(cleanedPattern);
 
   let score = 0;
 
+  if (rawCase === originalCase || rawCase === cleanedCase) score += 1150;
+  if (shortCase === originalCase || shortCase === cleanedCase) score += 1100;
+  if (displayCase === noParensCase) score += 980;
+  if (leafCase === noParensCase) score += 960;
+  if (`${leafCase}()` === originalCase || `${leafCase}()` === cleanedCase) score += 955;
   if (raw === original || raw === cleaned) score += 1000;
   if (short === original || short === cleaned) score += 950;
   if (path === original || path === cleaned) score += 925;
@@ -361,37 +459,42 @@ export function getCalleeRowsForSymbol(
   symbol: SymbolLocation,
   opts: { limit?: number } = {},
 ): CalleeRow[] {
-  const rows = db.all<{
-    symbol: string;
-    file: string;
+  const mentions = db.all<{
+    symbol_id: number;
     chunk_id: number;
   }>(
-    `SELECT DISTINCT
-      callee_gs.symbol AS symbol,
-      callee_d.relative_path AS file,
-      c.id AS chunk_id
-    FROM mentions m
-    JOIN chunks c ON m.chunk_id = c.id
-    JOIN global_symbols callee_gs ON m.symbol_id = callee_gs.id
-    JOIN defn_enclosing_ranges callee_der ON callee_gs.id = callee_der.symbol_id
-    JOIN documents callee_d ON callee_der.document_id = callee_d.id
-    WHERE c.document_id = ?
-      AND c.start_line >= ?
-      AND c.end_line <= ?
-      AND m.role != 1
-      AND callee_gs.id != ?
-      ${db.symbolNoiseFor('callee_gs')}
-      ${db.pathExclusionsFor('callee_d')}
-    ORDER BY callee_d.relative_path
-    ${opts.limit ? 'LIMIT ?' : ''}`,
+    `SELECT DISTINCT m.symbol_id, c.id AS chunk_id
+     FROM mentions m
+     JOIN chunks c ON m.chunk_id = c.id
+     WHERE c.document_id = ?
+       AND c.start_line >= ?
+       AND c.end_line <= ?
+       AND m.role != 1
+       AND m.symbol_id != ?
+     ${opts.limit ? 'LIMIT ?' : ''}`,
     ...calleeQueryParams(symbol, opts.limit),
   );
 
-  const primary = rows.filter((row) => !db.isIgnored(row.file)).map((row) => ({
-    symbol: row.symbol,
-    file: row.file,
-    chunkId: row.chunk_id,
-  }));
+  const primary: CalleeRow[] = [];
+  const directSeen = new Set<string>();
+  for (const mention of mentions) {
+    const callee = getFullSymbolMatch(db, {
+      symbolId: mention.symbol_id,
+      documentId: symbol.documentId,
+      startLine: symbol.startLine,
+      endLine: symbol.endLine,
+    });
+    if (!callee || db.isIgnored(callee.relativePath)) continue;
+
+    const key = `${callee.symbol}|${callee.relativePath}|${mention.chunk_id}`;
+    if (directSeen.has(key)) continue;
+    directSeen.add(key);
+    primary.push({
+      symbol: callee.symbol,
+      file: callee.relativePath,
+      chunkId: mention.chunk_id,
+    });
+  }
 
   const sourceFallback = getSourceBackedCalleeRows(db, symbol, opts.limit);
   if (sourceFallback.length === 0) {
@@ -402,9 +505,17 @@ export function getCalleeRowsForSymbol(
     return applyLimit(sourceFallback, opts.limit);
   }
 
-  const seen = new Set(primary.map((row) => `${row.symbol}|${row.file}`));
-  const merged = [...primary];
-  for (const row of sourceFallback) {
+  const merged = [...sourceFallback];
+  const seen = new Set(merged.map((row) => `${row.symbol}|${row.file}`));
+  const preferredFallbackLeaves = new Set(
+    sourceFallback
+      .filter((row) => !isLikelyTestPath(row.file))
+      .map((row) => leafName(row.symbol)),
+  );
+  for (const row of primary) {
+    if (isLikelyTestPath(row.file) && preferredFallbackLeaves.has(leafName(row.symbol))) {
+      continue;
+    }
     const key = `${row.symbol}|${row.file}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -425,40 +536,42 @@ export function getCallerRowsForSymbol(
   }
 
   const primary = db.all<{
-    caller_symbol: string;
     caller_file: string;
+    line: number;
   }>(
-    `SELECT DISTINCT caller_gs.symbol AS caller_symbol, caller_d.relative_path AS caller_file
-    FROM mentions m
-    JOIN chunks c ON m.chunk_id = c.id
-    JOIN documents ref_d ON c.document_id = ref_d.id
-    JOIN defn_enclosing_ranges caller_der
-      ON caller_der.document_id = ref_d.id
-      AND c.start_line >= caller_der.start_line
-      AND c.end_line <= caller_der.end_line
-    JOIN global_symbols caller_gs ON caller_der.symbol_id = caller_gs.id
-    JOIN documents caller_d ON caller_der.document_id = caller_d.id
-    WHERE m.symbol_id = ?
-      AND m.role != 1
-      AND caller_gs.id != ?
-      ${db.symbolNoiseFor('caller_gs')}
-      ${db.pathExclusionsFor('caller_d')}
-    ORDER BY caller_d.relative_path
-    ${opts.limit ? 'LIMIT ?' : ''}`,
-    ...callerQueryParams(match, opts.limit),
+    `SELECT DISTINCT ref_d.relative_path AS caller_file, c.start_line AS line
+     FROM mentions m
+     JOIN chunks c ON m.chunk_id = c.id
+     JOIN documents ref_d ON c.document_id = ref_d.id
+     WHERE m.symbol_id = ?
+       AND m.role != 1
+       ${db.pathExclusionsFor('ref_d')}
+     ORDER BY ref_d.relative_path
+     ${opts.limit ? 'LIMIT ?' : ''}`,
+    ...referenceQueryParams(match, opts.limit),
   )
     .filter((row) => !db.isIgnored(row.caller_file))
-    .map((row) => ({
-      symbol: row.caller_symbol,
-      file: row.caller_file,
-    }));
+    .flatMap((row) => {
+      const enclosing = findEnclosingDefinition(getDefinitionsForFile(db, row.caller_file), row.line);
+      if (!enclosing || enclosing.symbolId === match.symbolId) {
+        return [];
+      }
 
-  const sourceFallback = getPythonSourceCallerRows(db, match, opts.limit);
+      return [{
+        symbol: enclosing.symbol,
+        file: row.caller_file,
+      }];
+    });
+
+  const sourceFallback = dedupeCallerRows([
+    ...getPythonSourceCallerRows(db, match, opts.limit),
+    ...getGenericSourceCallerRows(db, match, opts.limit),
+  ]);
   if (sourceFallback.length === 0) {
     return primary;
   }
 
-  const merged = sourceFallback.length > 0 ? [...sourceFallback] : [];
+  const merged = [...sourceFallback];
   const seen = new Set(merged.map((row) => `${row.symbol}|${row.file}`));
   for (const row of primary) {
     const key = `${row.symbol}|${row.file}`;
@@ -470,6 +583,36 @@ export function getCallerRowsForSymbol(
   }
 
   return applyLimit(merged, opts.limit);
+}
+
+function getGenericSourceCallerRows(
+  db: ScipDatabase,
+  symbol: SymbolMatch,
+  limit?: number,
+): CallerRow[] {
+  return applyLimit(
+    getSourceReferenceSites(db, symbol)
+      .filter((site) => site.enclosingSymbol && site.enclosingSymbol !== symbol.symbol)
+      .map((site) => ({
+        symbol: site.enclosingSymbol!,
+        file: site.file,
+      })),
+    limit,
+  );
+}
+
+function dedupeCallerRows(
+  rows: CallerRow[],
+): CallerRow[] {
+  const seen = new Set<string>();
+  const unique: CallerRow[] = [];
+  for (const row of rows) {
+    const key = `${row.symbol}|${row.file}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(row);
+  }
+  return unique;
 }
 
 export function getSourceReferenceSites(
@@ -503,22 +646,10 @@ export function getSourceReferenceSites(
     const lines = findIdentifierLines(db, document.relative_path, identifier, document.relative_path === match.relativePath
       ? { excludeStartLine: match.startLine, excludeEndLine: match.endLine }
       : {});
+    const definitions = getDefinitionsForFile(db, document.relative_path);
 
     for (const line of lines) {
-      const enclosing = db.get<{ symbol: string }>(
-        `SELECT gs.symbol
-         FROM defn_enclosing_ranges der
-         JOIN global_symbols gs ON der.symbol_id = gs.id
-         JOIN documents d ON der.document_id = d.id
-         WHERE d.relative_path = ?
-           AND der.start_line <= ?
-           AND der.end_line >= ?
-         ORDER BY (der.end_line - der.start_line) ASC
-         LIMIT 1`,
-        document.relative_path,
-        line,
-        line,
-      );
+      const enclosing = findEnclosingDefinition(definitions, line);
 
       const key = `${document.relative_path}|${line}|${enclosing?.symbol ?? ''}`;
       if (seen.has(key)) continue;
@@ -552,15 +683,31 @@ function calleeQueryParams(
   return params;
 }
 
-function callerQueryParams(
+function referenceQueryParams(
   symbol: SymbolLocation,
   limit?: number,
 ): number[] {
-  const params = [symbol.symbolId, symbol.symbolId];
+  const params = [symbol.symbolId];
   if (typeof limit === 'number') {
     params.push(limit);
   }
   return params;
+}
+
+function findEnclosingDefinition(
+  definitions: IndexedDefinition[],
+  line: number,
+): IndexedDefinition | null {
+  let best: IndexedDefinition | null = null;
+
+  for (const definition of definitions) {
+    if (definition.startLine > line || definition.endLine < line) continue;
+    if (!best || (definition.endLine - definition.startLine) < (best.endLine - best.startLine)) {
+      best = definition;
+    }
+  }
+
+  return best;
 }
 
 function getPythonSourceCalleeRows(
@@ -673,6 +820,154 @@ function getJavaScriptSourceCalleeRows(
   return applyLimit(rows, limit);
 }
 
+function getJavaSourceCalleeRows(
+  db: ScipDatabase,
+  symbol: SymbolLocation,
+  limit?: number,
+): CalleeRow[] {
+  const match = getFullSymbolMatch(db, symbol);
+  if (!match || !isJavaDocument(db, match.relativePath)) {
+    return [];
+  }
+
+  const calls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine);
+  const bindings = parseJavaFieldBindings(getSourceText(db, match.relativePath));
+  return resolveSimpleSourceCallees(db, match, calls, bindings, limit);
+}
+
+function getKotlinSourceCalleeRows(
+  db: ScipDatabase,
+  symbol: SymbolLocation,
+  limit?: number,
+): CalleeRow[] {
+  const match = getFullSymbolMatch(db, symbol);
+  if (!match || !isKotlinDocument(db, match.relativePath)) {
+    return [];
+  }
+
+  const calls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine);
+  const bindings = parseKotlinFieldBindings(getSourceText(db, match.relativePath));
+  return resolveSimpleSourceCallees(db, match, calls, bindings, limit);
+}
+
+function getScalaSourceCalleeRows(
+  db: ScipDatabase,
+  symbol: SymbolLocation,
+  limit?: number,
+): CalleeRow[] {
+  const match = getFullSymbolMatch(db, symbol);
+  if (!match || !isScalaDocument(db, match.relativePath)) {
+    return [];
+  }
+
+  const calls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine);
+  return resolveSimpleSourceCallees(db, match, calls, new Map(), limit);
+}
+
+function getCSharpSourceCalleeRows(
+  db: ScipDatabase,
+  symbol: SymbolLocation,
+  limit?: number,
+): CalleeRow[] {
+  const match = getFullSymbolMatch(db, symbol);
+  if (!match || !isCSharpDocument(db, match.relativePath)) {
+    return [];
+  }
+
+  const calls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine);
+  return resolveSimpleSourceCallees(db, match, calls, new Map(), limit);
+}
+
+function getVisualBasicSourceCalleeRows(
+  db: ScipDatabase,
+  symbol: SymbolLocation,
+  limit?: number,
+): CalleeRow[] {
+  const match = getFullSymbolMatch(db, symbol);
+  if (!match || !isVisualBasicDocument(db, match.relativePath)) {
+    return [];
+  }
+
+  const calls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine);
+  return resolveSimpleSourceCallees(db, match, calls, new Map(), limit);
+}
+
+function getCppSourceCalleeRows(
+  db: ScipDatabase,
+  symbol: SymbolLocation,
+  limit?: number,
+): CalleeRow[] {
+  const match = getFullSymbolMatch(db, symbol);
+  if (!match || !isCppDocument(db, match.relativePath)) {
+    return [];
+  }
+
+  const calls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine);
+  const bindings = parseCppReceiverBindings(getSourceText(db, match.relativePath));
+  return resolveSimpleSourceCallees(db, match, calls, bindings, limit);
+}
+
+function getRustSourceCalleeRows(
+  db: ScipDatabase,
+  symbol: SymbolLocation,
+  limit?: number,
+): CalleeRow[] {
+  const match = getFullSymbolMatch(db, symbol);
+  if (!match || !isRustDocument(db, match.relativePath)) {
+    return [];
+  }
+
+  const calls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine);
+  return resolveSimpleSourceCallees(db, match, calls, new Map(), limit);
+}
+
+function getRubySourceCalleeRows(
+  db: ScipDatabase,
+  symbol: SymbolLocation,
+  limit?: number,
+): CalleeRow[] {
+  const match = getFullSymbolMatch(db, symbol);
+  if (!match || !isRubyDocument(db, match.relativePath)) {
+    return [];
+  }
+
+  const calls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine, { allowInstanceVariables: true });
+  const rubyCalls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine, {
+    allowInstanceVariables: true,
+    allowBareMemberCalls: true,
+  });
+  const bindings = parseRubyReceiverBindings(db, getSourceText(db, match.relativePath));
+  return resolveSimpleSourceCallees(db, match, rubyCalls.length > 0 ? rubyCalls : calls, bindings, limit);
+}
+
+function getDartSourceCalleeRows(
+  db: ScipDatabase,
+  symbol: SymbolLocation,
+  limit?: number,
+): CalleeRow[] {
+  const match = getFullSymbolMatch(db, symbol);
+  if (!match || !isDartDocument(db, match.relativePath)) {
+    return [];
+  }
+
+  const calls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine);
+  return resolveSimpleSourceCallees(db, match, calls, new Map(), limit);
+}
+
+function getPhpSourceCalleeRows(
+  db: ScipDatabase,
+  symbol: SymbolLocation,
+  limit?: number,
+): CalleeRow[] {
+  const match = getFullSymbolMatch(db, symbol);
+  if (!match || !isPhpDocument(db, match.relativePath)) {
+    return [];
+  }
+
+  const calls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine);
+  return resolveSimpleSourceCallees(db, match, calls, new Map(), limit);
+}
+
 function getSourceBackedCalleeRows(
   db: ScipDatabase,
   symbol: SymbolLocation,
@@ -689,6 +984,46 @@ function getSourceBackedCalleeRows(
 
   if (isJavaScriptDocument(db, match.relativePath)) {
     return getJavaScriptSourceCalleeRows(db, match, limit);
+  }
+
+  if (isJavaDocument(db, match.relativePath)) {
+    return getJavaSourceCalleeRows(db, match, limit);
+  }
+
+  if (isScalaDocument(db, match.relativePath)) {
+    return getScalaSourceCalleeRows(db, match, limit);
+  }
+
+  if (isKotlinDocument(db, match.relativePath)) {
+    return getKotlinSourceCalleeRows(db, match, limit);
+  }
+
+  if (isCSharpDocument(db, match.relativePath)) {
+    return getCSharpSourceCalleeRows(db, match, limit);
+  }
+
+  if (isVisualBasicDocument(db, match.relativePath)) {
+    return getVisualBasicSourceCalleeRows(db, match, limit);
+  }
+
+  if (isCppDocument(db, match.relativePath)) {
+    return getCppSourceCalleeRows(db, match, limit);
+  }
+
+  if (isRustDocument(db, match.relativePath)) {
+    return getRustSourceCalleeRows(db, match, limit);
+  }
+
+  if (isRubyDocument(db, match.relativePath)) {
+    return getRubySourceCalleeRows(db, match, limit);
+  }
+
+  if (isDartDocument(db, match.relativePath)) {
+    return getDartSourceCalleeRows(db, match, limit);
+  }
+
+  if (isPhpDocument(db, match.relativePath)) {
+    return getPhpSourceCalleeRows(db, match, limit);
   }
 
   return [];
@@ -727,6 +1062,69 @@ function getPythonSourceCallerRows(
   return rows;
 }
 
+function getDefinitionRowsForSymbolId(
+  db: ScipDatabase,
+  symbolId: number,
+): Array<{
+  id: number;
+  symbol: string;
+  document_id: number;
+  start_line: number;
+  end_line: number;
+  relative_path: string;
+  display_name: string | null;
+}> {
+  const primary = db.all<{
+    id: number;
+    symbol: string;
+    document_id: number;
+    start_line: number;
+    end_line: number;
+    relative_path: string;
+    display_name: string | null;
+  }>(
+    `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path, gs.display_name
+     FROM global_symbols gs
+     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
+     JOIN documents d ON der.document_id = d.id
+     WHERE gs.id = ?
+     ORDER BY der.start_line, der.end_line`,
+    symbolId,
+  );
+  if (primary.length > 0) {
+    return primary;
+  }
+
+  return db.all<{
+    id: number;
+    symbol: string;
+    document_id: number;
+    start_line: number;
+    end_line: number;
+    relative_path: string;
+    display_name: string | null;
+  }>(
+    `SELECT
+      gs.id,
+      gs.symbol,
+      c.document_id,
+      MIN(c.start_line) AS start_line,
+      MAX(c.end_line) AS end_line,
+      d.relative_path,
+      gs.display_name
+     FROM global_symbols gs
+     JOIN mentions m ON m.symbol_id = gs.id
+     JOIN chunks c ON m.chunk_id = c.id
+     JOIN documents d ON c.document_id = d.id
+     WHERE gs.id = ?
+       AND m.role = 1
+       ${db.pathExclusionsFor('d')}
+     GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path, gs.display_name
+     ORDER BY start_line, end_line`,
+    symbolId,
+  );
+}
+
 function getFullSymbolMatch(
   db: ScipDatabase,
   symbol: SymbolLocation,
@@ -735,31 +1133,23 @@ function getFullSymbolMatch(
     return symbol as SymbolMatch;
   }
 
-  const row = db.get<{
-    symbol: string;
-    relative_path: string;
-  }>(
-    `SELECT gs.symbol, d.relative_path
-     FROM global_symbols gs
-     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-     JOIN documents d ON der.document_id = d.id
-     WHERE gs.id = ?
-     LIMIT 1`,
-    symbol.symbolId,
-  );
+  const row = getDefinitionRowsForSymbolId(db, symbol.symbolId)[0];
 
   if (!row) {
     return null;
   }
 
   return {
-    ...symbol,
+    symbolId: row.id,
+    documentId: row.document_id,
+    startLine: row.start_line,
+    endLine: row.end_line,
     symbol: row.symbol,
     relativePath: row.relative_path,
   };
 }
 
-function getDefinitionsForFile(
+export function getDefinitionsForFile(
   db: ScipDatabase,
   relativePath: string,
 ): IndexedDefinition[] {
@@ -774,15 +1164,27 @@ function getDefinitionsForFile(
     return cached;
   }
 
-  const definitions = db.all<{
+  const primary = db.all<{
     id: number;
     symbol: string;
     document_id: number;
     start_line: number;
     end_line: number;
     relative_path: string;
+    kind: number | null;
+    documentation: string | null;
+    enclosing_symbol: string | null;
   }>(
-    `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path
+    `SELECT
+      gs.id,
+      gs.symbol,
+      der.document_id,
+      der.start_line,
+      der.end_line,
+      d.relative_path,
+      gs.kind,
+      gs.documentation,
+      gs.enclosing_symbol
      FROM global_symbols gs
      JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
      JOIN documents d ON der.document_id = d.id
@@ -790,7 +1192,42 @@ function getDefinitionsForFile(
        ${db.symbolNoiseFor('gs')}
      ORDER BY der.start_line, der.end_line`,
     relativePath,
-  ).map((row) => ({
+  );
+
+  const fallback = primary.length > 0 ? [] : db.all<{
+    id: number;
+    symbol: string;
+    document_id: number;
+    start_line: number;
+    end_line: number;
+    relative_path: string;
+    kind: number | null;
+    documentation: string | null;
+    enclosing_symbol: string | null;
+  }>(
+    `SELECT
+      gs.id,
+      gs.symbol,
+      c.document_id,
+      MIN(c.start_line) AS start_line,
+      MAX(c.end_line) AS end_line,
+      d.relative_path,
+      gs.kind,
+      gs.documentation,
+      gs.enclosing_symbol
+     FROM global_symbols gs
+     JOIN mentions m ON m.symbol_id = gs.id
+     JOIN chunks c ON m.chunk_id = c.id
+     JOIN documents d ON c.document_id = d.id
+     WHERE d.relative_path = ?
+       AND m.role = 1
+       ${db.symbolNoiseFor('gs')}
+     GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path
+     ORDER BY start_line, end_line`,
+    relativePath,
+  );
+
+  const definitions = (primary.length > 0 ? primary : fallback).map((row) => ({
     symbolId: row.id,
     symbol: row.symbol,
     documentId: row.document_id,
@@ -801,46 +1238,38 @@ function getDefinitionsForFile(
     parentTypeName: parentTypeName(row.symbol),
     isFunctionLike: isFunctionLikeSymbol(row.symbol),
     isTypeLike: leafSuffix(row.symbol) === 'type',
+    kind: row.kind,
+    documentation: row.documentation,
+    enclosingSymbol: row.enclosing_symbol,
   }));
 
   cache.set(relativePath, definitions);
   return definitions;
 }
 
-function getAllFunctionLikeDefinitions(db: ScipDatabase): IndexedDefinition[] {
-  const rows = db.all<{
-    id: number;
-    symbol: string;
-    document_id: number;
-    start_line: number;
-    end_line: number;
-    relative_path: string;
-  }>(
-    `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path
-     FROM global_symbols gs
-     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-     JOIN documents d ON der.document_id = d.id
+export function getAllDefinitions(
+  db: ScipDatabase,
+  opts: { scope?: string } = {},
+): IndexedDefinition[] {
+  const { scope } = opts;
+  const rows = db.all<{ relative_path: string }>(
+    `SELECT relative_path
+     FROM documents
      WHERE 1 = 1
-       ${db.pathExclusionsFor('d')}
-       ${db.symbolNoiseFor('gs')}
-     ORDER BY d.relative_path, der.start_line`,
+       ${db.pathExclusionsFor('documents')}
+       ${scope ? 'AND relative_path LIKE ?' : ''}
+     ORDER BY relative_path`,
+    ...(scope ? [`%${scope}%`] : []),
   );
 
   return rows
     .filter((row) => !db.isIgnored(row.relative_path))
-    .filter((row) => isFunctionLikeSymbol(row.symbol))
-    .map((row) => ({
-      symbolId: row.id,
-      symbol: row.symbol,
-      documentId: row.document_id,
-      startLine: row.start_line,
-      endLine: row.end_line,
-      relativePath: row.relative_path,
-      leaf: leafName(row.symbol),
-      parentTypeName: parentTypeName(row.symbol),
-      isFunctionLike: true,
-      isTypeLike: false,
-    }));
+    .flatMap((row) => getDefinitionsForFile(db, row.relative_path));
+}
+
+function getAllFunctionLikeDefinitions(db: ScipDatabase): IndexedDefinition[] {
+  return getAllDefinitions(db)
+    .filter((definition) => definition.isFunctionLike);
 }
 
 function resolvePythonCallTarget(
@@ -984,6 +1413,319 @@ function resolveJavaScriptCallTarget(
   return findDefinitionByName(currentFileDefinitions, calleeName, null, ['function', 'type']);
 }
 
+function resolveSimpleSourceCallees(
+  db: ScipDatabase,
+  current: SymbolMatch,
+  calls: ParsedSourceCall[],
+  bindings: Map<string, string>,
+  limit?: number,
+): CalleeRow[] {
+  const currentFileDefinitions = getDefinitionsForFile(db, current.relativePath);
+  const currentDefinition = currentFileDefinitions.find((definition) => definition.symbolId === current.symbolId);
+  if (!currentDefinition) {
+    return [];
+  }
+
+  const rows: CalleeRow[] = [];
+  const seen = new Set<string>();
+
+  for (const call of calls) {
+    const resolved = resolveSimpleSourceCallTarget(
+      db,
+      currentDefinition,
+      currentFileDefinitions,
+      bindings,
+      call.receiverName,
+      call.calleeName,
+    );
+    if (!resolved || resolved.symbolId === current.symbolId || db.isIgnored(resolved.relativePath)) continue;
+
+    const chunkId = 2_000_000_000 + call.line;
+    const key = `${resolved.symbol}|${resolved.relativePath}|${chunkId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push({
+      symbol: resolved.symbol,
+      file: resolved.relativePath,
+      chunkId,
+    });
+  }
+
+  return applyLimit(rows, limit);
+}
+
+function resolveSimpleSourceCallTarget(
+  db: ScipDatabase,
+  current: IndexedDefinition,
+  currentFileDefinitions: IndexedDefinition[],
+  bindings: Map<string, string>,
+  receiverName: string | null,
+  calleeName: string,
+): IndexedDefinition | null {
+  if (!receiverName) {
+    const localMethod = findDefinitionByName(currentFileDefinitions, calleeName, current.parentTypeName, ['function']);
+    if (localMethod) {
+      return localMethod;
+    }
+    if (current.parentTypeName) {
+      return findProjectDefinitionByTypeAndLeaf(db, current.parentTypeName, calleeName);
+    }
+    return findDefinitionByName(currentFileDefinitions, calleeName, null, ['function', 'type']);
+  }
+
+  const normalizedReceiver = normalizeReceiverName(receiverName);
+  const inferredType = bindings.get(normalizedReceiver) ?? inferTypeNameFromReceiver(db, normalizedReceiver);
+  if (!inferredType) {
+    return null;
+  }
+
+  return findProjectDefinitionByTypeAndLeaf(db, inferredType, calleeName);
+}
+
+function findProjectDefinitionByTypeAndLeaf(
+  db: ScipDatabase,
+  typeName: string,
+  calleeName: string,
+): IndexedDefinition | null {
+  const definitions = getAllDefinitions(db)
+    .filter((definition) => definition.isFunctionLike || definition.symbol.endsWith('().'));
+
+  const exact = definitions.find((definition) => (
+    definition.leaf === calleeName
+    && (
+      definition.parentTypeName === typeName
+      || definition.symbol.includes(typeName)
+    )
+  ));
+  if (exact) {
+    return exact;
+  }
+
+  const normalizedType = normalizeLookupName(typeName);
+  const normalizedMatch = definitions.find((definition) => (
+    definition.leaf === calleeName
+    && normalizeLookupName(definition.parentTypeName ?? '').includes(normalizedType)
+  ));
+  if (normalizedMatch) {
+    return normalizedMatch;
+  }
+
+  return findLooseProjectDefinitionByTypeAndLeaf(db, typeName, calleeName);
+}
+
+function inferTypeNameFromReceiver(
+  db: ScipDatabase,
+  receiverName: string,
+): string | null {
+  const normalizedReceiver = normalizeLookupName(receiverName);
+  if (!normalizedReceiver) {
+    return null;
+  }
+
+  const candidates = getAllDefinitions(db)
+    .filter((definition) => definition.isTypeLike || definition.symbol.endsWith('#'))
+    .map((definition) => definition.leaf)
+    .filter((leaf) => leaf.length > 0);
+
+  let best: { name: string; score: number } | null = null;
+  for (const candidate of candidates) {
+    const normalizedCandidate = normalizeLookupName(candidate);
+    let score = 0;
+    if (normalizedCandidate === normalizedReceiver) score += 100;
+    if (normalizedCandidate.endsWith(normalizedReceiver)) score += 80;
+    if (normalizedCandidate.includes(normalizedReceiver)) score += 40;
+    if (normalizedReceiver.includes(normalizedCandidate)) score += 20;
+    if (score > 0 && (!best || score > best.score || (score === best.score && candidate.length < best.name.length))) {
+      best = { name: candidate, score };
+    }
+  }
+
+  return best?.name ?? null;
+}
+
+function getSimpleSourceCalls(
+  db: ScipDatabase,
+  relativePath: string,
+  startLine: number,
+  endLine: number,
+  opts: { allowInstanceVariables?: boolean; allowBareMemberCalls?: boolean } = {},
+): ParsedSourceCall[] {
+  const source = getSourceText(db, relativePath);
+  if (!source) {
+    return [];
+  }
+
+  const lines = source.split('\n');
+  const scoped = lines.slice(startLine, endLine + 1);
+  const calls: ParsedSourceCall[] = [];
+  const seen = new Set<string>();
+  const pattern = opts.allowInstanceVariables
+    ? /(@?[A-Za-z_][\w]*)\s*(?:\.|::)\s*([A-Za-z_][\w!?=]*)\s*\(/g
+    : /\b([A-Za-z_][\w]*)\s*(?:\.|::)\s*([A-Za-z_][\w]*)\s*\(/g;
+
+  for (let index = 0; index < scoped.length; index++) {
+    const rawLine = scoped[index] ?? '';
+    for (const match of rawLine.matchAll(pattern)) {
+      const receiverName = match[1];
+      const calleeName = match[2];
+      if (!receiverName || !calleeName) continue;
+      const key = `${startLine + index}|${receiverName}|${calleeName}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      calls.push({
+        receiverName,
+        calleeName,
+        line: startLine + index,
+      });
+    }
+
+    if (opts.allowBareMemberCalls) {
+      for (const match of rawLine.matchAll(/(@?[A-Za-z_][\w]*)\s*\.\s*([A-Za-z_][\w!?=]*)\b(?!\s*[:=])/g)) {
+        const receiverName = match[1];
+        const calleeName = match[2];
+        if (!receiverName || !calleeName) continue;
+        const key = `${startLine + index}|${receiverName}|${calleeName}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        calls.push({
+          receiverName,
+          calleeName,
+          line: startLine + index,
+        });
+      }
+    }
+
+    for (const match of rawLine.matchAll(/\b([A-Za-z_][\w]*)\s*\(/g)) {
+      const calleeName = match[1];
+      const start = match.index ?? -1;
+      if (!calleeName || start < 0) continue;
+
+      const prefix = rawLine.slice(0, start).trimEnd();
+      if (
+        prefix.endsWith('def')
+        || prefix.endsWith('fun')
+        || prefix.endsWith('fn')
+        || /\b(?:class|interface|trait|module|object)\s*$/.test(prefix)
+      ) {
+        continue;
+      }
+      if (rawLine.slice(Math.max(0, start - 3), start).includes('.')) {
+        continue;
+      }
+      calls.push({
+        receiverName: null,
+        calleeName,
+        line: startLine + index,
+      });
+    }
+  }
+
+  return calls;
+}
+
+function parseJavaFieldBindings(source: string): Map<string, string> {
+  const bindings = new Map<string, string>();
+  for (const match of source.matchAll(/\b(?:private|protected|public)\s+(?:final\s+)?([A-Z][A-Za-z0-9_$<>?, ]*)\s+([A-Za-z_][\w$]*)\s*;/g)) {
+    const typeName = stripGenericType(match[1]);
+    const localName = match[2];
+    if (typeName && localName) {
+      bindings.set(localName, typeName);
+    }
+  }
+  return bindings;
+}
+
+function parseKotlinFieldBindings(source: string): Map<string, string> {
+  const bindings = new Map<string, string>();
+  for (const match of source.matchAll(/\b(?:private|protected|public)?\s*(?:val|var)\s+([A-Za-z_][\w]*)\s*:\s*([A-Z][A-Za-z0-9_.<>?]*)/g)) {
+    const localName = match[1];
+    const typeName = stripGenericType(match[2]);
+    if (typeName && localName) {
+      bindings.set(localName, typeName);
+    }
+  }
+  return bindings;
+}
+
+function parseCppReceiverBindings(source: string): Map<string, string> {
+  const bindings = new Map<string, string>();
+  const constructorMatch = source.match(/RunCoordinator::RunCoordinator\s*\(([\s\S]*?)\)\s*(?::\s*([\s\S]*?))?\s*\{/);
+  if (!constructorMatch) {
+    return bindings;
+  }
+
+  const params = constructorMatch[1] ?? '';
+  const initializers = constructorMatch[2] ?? '';
+  const parameterTypes = new Map<string, string>();
+
+  for (const param of params.split(',')) {
+    const trimmed = param.trim();
+    const match = trimmed.match(/(.+?)\s+([A-Za-z_][\w]*)$/);
+    if (!match) continue;
+    const [, rawType, rawName] = match;
+    if (!rawType || !rawName) continue;
+    const typeName = stripGenericType(rawType.replace(/[&*]+/g, ' ').replace(/\bconst\b/g, ' ').trim());
+    if (!typeName) continue;
+    parameterTypes.set(normalizeReceiverName(rawName), typeName);
+  }
+
+  for (const initializer of initializers.split(',')) {
+    const trimmed = initializer.trim();
+    const match = trimmed.match(/([A-Za-z_][\w]*)\s*\(\s*([A-Za-z_][\w]*)\s*\)$/);
+    if (!match) continue;
+    const [, fieldName, sourceName] = match;
+    if (!fieldName || !sourceName) continue;
+    const typeName = parameterTypes.get(normalizeReceiverName(sourceName));
+    if (!typeName) continue;
+    bindings.set(normalizeReceiverName(fieldName), typeName);
+  }
+
+  return bindings;
+}
+
+function parseRubyReceiverBindings(
+  db: ScipDatabase,
+  source: string,
+): Map<string, string> {
+  const bindings = new Map<string, string>();
+  for (const match of source.matchAll(/@([A-Za-z_][\w]*)\s*=\s*([A-Za-z_][\w]*)/g)) {
+    const ivarName = `@${match[1]}`;
+    const localName = match[2];
+    const typeName = inferTypeNameFromReceiver(db, localName ?? match[1] ?? '');
+    if (typeName) {
+      bindings.set(ivarName, typeName);
+      bindings.set(match[1]!, typeName);
+    }
+  }
+  return bindings;
+}
+
+function stripGenericType(typeName: string | undefined): string {
+  return (typeName ?? '')
+    .replace(/<.*$/, '')
+    .replace(/^.*\./, '')
+    .trim();
+}
+
+function normalizeReceiverName(receiverName: string): string {
+  return receiverName
+    .replace(/^@/, '')
+    .replace(/^this(?:\.|->)/, '')
+    .replace(/^_+/, '')
+    .replace(/_+$/, '')
+    .trim();
+}
+
+function normalizeLookupName(value: string): string {
+  return value.replace(/[^A-Za-z0-9]+/g, '').toLowerCase();
+}
+
+function isLikelyTestPath(relativePath: string): boolean {
+  return /(^|\/)(tests?|__tests__)\//.test(relativePath)
+    || /\.(?:spec|test)\./.test(relativePath)
+    || /_test\./.test(relativePath);
+}
+
 function findDefinitionByName(
   definitions: IndexedDefinition[],
   leaf: string,
@@ -1009,6 +1751,83 @@ function findDefinitionByName(
   }
 
   return candidates[0] ?? null;
+}
+
+function findLooseProjectDefinitionByTypeAndLeaf(
+  db: ScipDatabase,
+  typeName: string,
+  calleeName: string,
+): IndexedDefinition | null {
+  const rows = db.all<{
+    id: number;
+    symbol: string;
+    document_id: number;
+    start_line: number;
+    end_line: number;
+    relative_path: string;
+    kind: number | null;
+    documentation: string | null;
+    enclosing_symbol: string | null;
+  }>(
+    `SELECT
+      gs.id,
+      gs.symbol,
+      c.document_id,
+      MIN(c.start_line) AS start_line,
+      MAX(c.end_line) AS end_line,
+      d.relative_path,
+      gs.kind,
+      gs.documentation,
+      gs.enclosing_symbol
+     FROM global_symbols gs
+     JOIN mentions m ON m.symbol_id = gs.id
+     JOIN chunks c ON c.id = m.chunk_id
+     JOIN documents d ON d.id = c.document_id
+     WHERE gs.symbol LIKE ?
+       AND gs.symbol LIKE ?
+       ${db.pathExclusionsFor('d')}
+     GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path, gs.kind, gs.documentation, gs.enclosing_symbol`,
+    `%${typeName}%`,
+    `%${calleeName}%`,
+  );
+
+  const normalizedType = normalizeLookupName(typeName);
+  const candidates = rows
+    .filter((row) => leafName(row.symbol) === calleeName)
+    .filter((row) => {
+      const parentType = parentTypeName(row.symbol);
+      return parentType === typeName
+        || row.symbol.includes(typeName)
+        || normalizeLookupName(parentType ?? '').includes(normalizedType);
+    })
+    .sort((left, right) => {
+      const leftTest = isLikelyTestPath(left.relative_path) ? 1 : 0;
+      const rightTest = isLikelyTestPath(right.relative_path) ? 1 : 0;
+      return leftTest - rightTest
+        || left.relative_path.localeCompare(right.relative_path)
+        || left.start_line - right.start_line;
+    });
+
+  const row = candidates[0];
+  if (!row) {
+    return null;
+  }
+
+  return {
+    symbolId: row.id,
+    symbol: row.symbol,
+    documentId: row.document_id,
+    startLine: row.start_line,
+    endLine: row.end_line,
+    relativePath: row.relative_path,
+    leaf: leafName(row.symbol),
+    parentTypeName: parentTypeName(row.symbol),
+    isFunctionLike: isFunctionLikeSymbol(row.symbol),
+    isTypeLike: leafSuffix(row.symbol) === 'type',
+    kind: row.kind,
+    documentation: row.documentation,
+    enclosingSymbol: row.enclosing_symbol,
+  };
 }
 
 function hasUniqueLeafDefinition(
@@ -1078,6 +1897,127 @@ function isJavaScriptDocument(
     || /\.(?:[cm]?[jt]sx?)$/.test(relativePath);
 }
 
+function isJavaDocument(
+  db: ScipDatabase,
+  relativePath: string,
+): boolean {
+  const row = db.get<{ language: string | null }>(
+    `SELECT language FROM documents WHERE relative_path = ? LIMIT 1`,
+    relativePath,
+  );
+
+  return row?.language === 'java' || relativePath.endsWith('.java');
+}
+
+function isKotlinDocument(
+  db: ScipDatabase,
+  relativePath: string,
+): boolean {
+  const row = db.get<{ language: string | null }>(
+    `SELECT language FROM documents WHERE relative_path = ? LIMIT 1`,
+    relativePath,
+  );
+
+  return row?.language === 'kotlin' || relativePath.endsWith('.kt') || relativePath.endsWith('.kts');
+}
+
+function isScalaDocument(
+  db: ScipDatabase,
+  relativePath: string,
+): boolean {
+  const row = db.get<{ language: string | null }>(
+    `SELECT language FROM documents WHERE relative_path = ? LIMIT 1`,
+    relativePath,
+  );
+
+  return row?.language === 'scala' || relativePath.endsWith('.scala');
+}
+
+function isCSharpDocument(
+  db: ScipDatabase,
+  relativePath: string,
+): boolean {
+  const row = db.get<{ language: string | null }>(
+    `SELECT language FROM documents WHERE relative_path = ? LIMIT 1`,
+    relativePath,
+  );
+
+  return row?.language === 'C#' || relativePath.endsWith('.cs');
+}
+
+function isVisualBasicDocument(
+  db: ScipDatabase,
+  relativePath: string,
+): boolean {
+  const row = db.get<{ language: string | null }>(
+    `SELECT language FROM documents WHERE relative_path = ? LIMIT 1`,
+    relativePath,
+  );
+
+  return row?.language === 'Visual Basic' || relativePath.endsWith('.vb');
+}
+
+function isCppDocument(
+  db: ScipDatabase,
+  relativePath: string,
+): boolean {
+  const row = db.get<{ language: string | null }>(
+    `SELECT language FROM documents WHERE relative_path = ? LIMIT 1`,
+    relativePath,
+  );
+
+  return row?.language === 'CPP'
+    || /\.(?:cc|cpp|cxx|hpp|hh|hxx)$/.test(relativePath);
+}
+
+function isRustDocument(
+  db: ScipDatabase,
+  relativePath: string,
+): boolean {
+  const row = db.get<{ language: string | null }>(
+    `SELECT language FROM documents WHERE relative_path = ? LIMIT 1`,
+    relativePath,
+  );
+
+  return row?.language === 'Rust' || relativePath.endsWith('.rs');
+}
+
+function isRubyDocument(
+  db: ScipDatabase,
+  relativePath: string,
+): boolean {
+  const row = db.get<{ language: string | null }>(
+    `SELECT language FROM documents WHERE relative_path = ? LIMIT 1`,
+    relativePath,
+  );
+
+  return row?.language === 'ruby' || relativePath.endsWith('.rb');
+}
+
+function isDartDocument(
+  db: ScipDatabase,
+  relativePath: string,
+): boolean {
+  const row = db.get<{ language: string | null }>(
+    `SELECT language FROM documents WHERE relative_path = ? LIMIT 1`,
+    relativePath,
+  );
+
+  return row?.language === 'Dart' || relativePath.endsWith('.dart');
+}
+
+function isPhpDocument(
+  db: ScipDatabase,
+  relativePath: string,
+): boolean {
+  const row = db.get<{ language: string | null }>(
+    `SELECT language FROM documents WHERE relative_path = ? LIMIT 1`,
+    relativePath,
+  );
+
+  return row?.language === 'PHP' || relativePath.endsWith('.php');
+}
+
 function applyLimit<T>(
   values: T[],
   limit?: number,
@@ -1113,7 +2053,15 @@ function resolveDocumentCandidates(
     .sort((a, b) => b.score - a.score || a.relativePath.localeCompare(b.relativePath));
 
   if (scored.length === 0) {
-    return [];
+    const symbolMatch = findFirstSymbolMatch(db, filePattern);
+    if (!symbolMatch || db.isIgnored(symbolMatch.relativePath)) {
+      return [];
+    }
+
+    return [{
+      relativePath: symbolMatch.relativePath,
+      score: 700,
+    }];
   }
 
   const exactish = scored.filter((row) => row.score >= 800);

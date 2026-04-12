@@ -52,7 +52,7 @@ import { slice } from './queries/slice.js';
 import { redundantReexports } from './queries/redundant-reexports.js';
 import { similarSignatures } from './queries/similar-signatures.js';
 import type { ScipQueryConfig, DeadOptions, WatcherStatus } from './types.js';
-import { installSkills, isScipInstalled, printScipInstallInstructions } from './setup.js';
+import { BUILTIN_SKILLS, installSkills, isScipInstalled, printScipInstallInstructions } from './setup.js';
 
 const require = createRequire(import.meta.url);
 const { version: cliVersion } = require('../package.json') as { version: string };
@@ -302,6 +302,13 @@ program
         for (const d of result.definitions) {
           const sig = d.signature ? `  — ${d.signature}` : '';
           console.log(`  ${displayPathRange(d.relativePath, d.startLine, d.endLine)}${sig}`);
+          if (d.source) {
+            const numbered = d.source
+              .split('\n')
+              .map((line, index) => `    ${displayLine(d.startLine + index)}  ${line}`)
+              .join('\n');
+            console.log(numbered);
+          }
         }
 
         console.log('\n═══ REFERENCED BY ═══');
@@ -859,7 +866,7 @@ program
   .option('--min-similarity <n>', 'Minimum Jaccard similarity (0-1)', parseFloat, 0.5)
   .option('-n, --limit <n>', 'Number of results', parseIntSafe, 20)
   .option('-s, --scope <path>', 'Limit to files matching path')
-  .option('--min-deps <n>', 'Minimum dependencies to consider', parseIntSafe, 3)
+  .option('--min-deps <n>', 'Minimum dependencies to consider', parseIntSafe)
   .action((file, opts) => {
     runQuery(
       (db) => queries.similarFiles(db, {
@@ -1352,7 +1359,7 @@ program
 // install-skills
 program
   .command('install-skills')
-  .description('Install skills (concrete-plan, scip-explore, scip-debloat, scip-verify) into Claude Code and Codex')
+  .description(`Install skills (${BUILTIN_SKILLS.join(', ')}) into Claude Code and Codex`)
   .action(() => {
     const result = installSkills();
     const total = result.installed.length + result.alreadyLinked.length;

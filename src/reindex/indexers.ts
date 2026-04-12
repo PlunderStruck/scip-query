@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import type { SupportedLanguage, IndexerConfig } from '../types.js';
 
 /**
@@ -202,11 +204,20 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
   php: {
     language: 'php',
     indexerBinary: 'scip-php',
+    projectLocalBinaries: ['vendor/bin/scip-php'],
     checkCommand: 'scip-php --version',
-    indexArgs: ({ outputPath }) => ({
-      binary: 'scip-php',
-      args: ['index', '--output', outputPath],
-    }),
+    indexArgs: ({ projectRoot, indexerBinary }) => {
+      const localBinary = join(projectRoot, 'vendor', 'bin', 'scip-php');
+      const targetBinary = existsSync(localBinary) ? localBinary : indexerBinary;
+      return {
+        binary: 'php',
+        args: [
+          '-d',
+          'error_reporting=E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED',
+          targetBinary,
+        ],
+      };
+    },
     markerFiles: ['composer.json'],
     installMethods: [
       { label: 'composer', prerequisite: 'composer', binary: 'composer', args: ['global', 'require', 'davidrjenni/scip-php'] },

@@ -19,7 +19,8 @@ export function similarFiles(
     filePattern?: string;
   } = {},
 ): SimilarFileResult[] {
-  const { minSimilarity = 0.5, limit = 20, scope, minDeps = 3, filePattern } = opts;
+  const { minSimilarity = 0.5, limit = 20, scope, filePattern } = opts;
+  const minDeps = opts.minDeps ?? (filePattern ? 1 : 3);
 
   // Build dependency profile for each file
   const profiles = buildFileProfiles(db, { scope, minDeps });
@@ -95,7 +96,7 @@ function findUniversalDependencies(
   }
 
   for (const [dep, count] of depCounts) {
-    if (count / fileCount > 0.5) {
+    if (count >= 6 && count / fileCount > 0.8) {
       universalDeps.add(dep);
     }
   }

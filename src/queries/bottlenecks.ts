@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../db.js';
+import { getAllDefinitions, getCalleeRowsForSymbol, getCallerRowsForSymbol } from '../query-support.js';
 import type { BottleneckResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 
@@ -54,7 +55,7 @@ export function bottlenecks(
     minFanIn, minFanOut, limit,
   );
 
-  return rows
+  const indexedResults = rows
     .filter((r) => !db.isIgnored(r.defined_in))
     .map((r) => ({
       symbol: r.symbol,
@@ -64,4 +65,32 @@ export function bottlenecks(
       score: r.fan_in * r.fan_out,
       definedIn: r.defined_in,
     }));
+
+  if (indexedResults.length > 0) {
+    return indexedResults;
+  }
+
+  return getAllDefinitions(db, { scope })
+    .filter((definition) => !db.isIgnored(definition.relativePath))
+    .map((definition) => {
+      const fanIn = new Set(
+        getCallerRowsForSymbol(db, definition, { limit: 500 }).map((row) => row.file),
+      ).size;
+      const fanOut = new Set(
+        getCalleeRowsForSymbol(db, definition, { limit: 500 })
+          .filter((row) => row.file !== definition.relativePath)
+          .map((row) => `${row.symbol}|${row.file}`),
+      ).size;
+      return {
+        symbol: definition.symbol,
+        shortName: shortenSymbol(definition.symbol),
+        fanIn,
+        fanOut,
+        score: fanIn * fanOut,
+        definedIn: definition.relativePath,
+      };
+    })
+    .filter((row) => row.fanIn >= minFanIn && row.fanOut >= minFanOut)
+    .sort((left, right) => right.score - left.score || right.fanIn - left.fanIn)
+    .slice(0, limit);
 }
