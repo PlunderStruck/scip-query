@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { SupportedLanguage, IndexerConfig } from '../types.js';
 
@@ -50,9 +50,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       args: ['index', '--output', outputPath],
     }),
     markerFiles: ['pom.xml', 'build.gradle'],
-    installMethods: [
-      { label: 'coursier', prerequisite: 'cs', binary: 'cs', args: ['install', 'scip-java'] },
-    ],
+    installMethods: [],
     installUrl: 'https://github.com/sourcegraph/scip-java/releases',
   },
 
@@ -65,9 +63,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       args: ['index', '--output', outputPath],
     }),
     markerFiles: ['build.sbt'],
-    installMethods: [
-      { label: 'coursier', prerequisite: 'cs', binary: 'cs', args: ['install', 'scip-java'] },
-    ],
+    installMethods: [],
     installUrl: 'https://github.com/sourcegraph/scip-java/releases',
   },
 
@@ -80,9 +76,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       args: ['index', '--output', outputPath],
     }),
     markerFiles: ['build.gradle.kts'],
-    installMethods: [
-      { label: 'coursier', prerequisite: 'cs', binary: 'cs', args: ['install', 'scip-java'] },
-    ],
+    installMethods: [],
     installUrl: 'https://github.com/sourcegraph/scip-java/releases',
   },
 
@@ -121,10 +115,11 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     language: 'ruby',
     indexerBinary: 'scip-ruby',
     checkCommand: 'scip-ruby --version',
-    indexArgs: ({ outputPath }) => ({
-      binary: 'scip-ruby',
-      args: ['--output', outputPath],
+    indexArgs: ({ indexerBinary }) => ({
+      binary: indexerBinary,
+      args: ['--dir', '.'],
     }),
+    defaultOutputPath: 'index.scip',
     markerFiles: ['Gemfile'],
     installMethods: [],
     installUrl: 'https://github.com/sourcegraph/scip-ruby/releases',
@@ -151,7 +146,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     checkCommand: 'scip-clang --version',
     indexArgs: ({ outputPath }) => ({
       binary: 'scip-clang',
-      args: ['--output', outputPath],
+      args: ['--compdb-path', 'compile_commands.json', '--index-output-path', outputPath],
     }),
     markerFiles: ['CMakeLists.txt', 'Makefile'],
     installMethods: [],
@@ -164,7 +159,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     checkCommand: 'scip-clang --version',
     indexArgs: ({ outputPath }) => ({
       binary: 'scip-clang',
-      args: ['--output', outputPath],
+      args: ['--compdb-path', 'compile_commands.json', '--index-output-path', outputPath],
     }),
     markerFiles: ['CMakeLists.txt', 'Makefile'],
     installMethods: [],
@@ -175,11 +170,26 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     language: 'csharp',
     indexerBinary: 'scip-dotnet',
     checkCommand: 'scip-dotnet --version',
-    indexArgs: ({ outputPath }) => ({
+    indexArgs: ({ projectRoot, outputPath }) => ({
       binary: 'scip-dotnet',
-      args: ['index', '--output', outputPath],
+      args: ['index', resolveDotnetProject(projectRoot, ['.sln', '.csproj']) ?? projectRoot, '--output', outputPath, '--working-directory', projectRoot],
     }),
-    markerFiles: [],
+    markerFiles: ['*.csproj', '*.sln'],
+    installMethods: [
+      { label: 'dotnet', prerequisite: 'dotnet', binary: 'dotnet', args: ['tool', 'install', '--global', 'scip-dotnet'] },
+    ],
+    installUrl: 'https://github.com/sourcegraph/scip-dotnet/releases',
+  },
+
+  vb: {
+    language: 'vb',
+    indexerBinary: 'scip-dotnet',
+    checkCommand: 'scip-dotnet --version',
+    indexArgs: ({ projectRoot, outputPath }) => ({
+      binary: 'scip-dotnet',
+      args: ['index', resolveDotnetProject(projectRoot, ['.sln', '.vbproj']) ?? projectRoot, '--output', outputPath, '--working-directory', projectRoot],
+    }),
+    markerFiles: ['*.vbproj', '*.sln'],
     installMethods: [
       { label: 'dotnet', prerequisite: 'dotnet', binary: 'dotnet', args: ['tool', 'install', '--global', 'scip-dotnet'] },
     ],
@@ -190,9 +200,9 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     language: 'dart',
     indexerBinary: 'scip-dart',
     checkCommand: 'scip-dart --version',
-    indexArgs: ({ outputPath }) => ({
-      binary: 'scip-dart',
-      args: ['index', '--output', outputPath],
+    indexArgs: ({ indexerBinary, outputPath }) => ({
+      binary: indexerBinary,
+      args: ['--output', outputPath],
     }),
     markerFiles: ['pubspec.yaml'],
     installMethods: [
@@ -204,11 +214,16 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
   php: {
     language: 'php',
     indexerBinary: 'scip-php',
-    projectLocalBinaries: ['vendor/bin/scip-php'],
+    projectLocalBinaries: ['vendor/davidrjenni/scip-php/bin/scip-php', 'vendor/bin/scip-php'],
     checkCommand: 'scip-php --version',
     indexArgs: ({ projectRoot, indexerBinary }) => {
       const localBinary = join(projectRoot, 'vendor', 'bin', 'scip-php');
-      const targetBinary = existsSync(localBinary) ? localBinary : indexerBinary;
+      const nestedLocalBinary = join(projectRoot, 'vendor', 'davidrjenni', 'scip-php', 'bin', 'scip-php');
+      const targetBinary = existsSync(nestedLocalBinary)
+        ? nestedLocalBinary
+        : existsSync(localBinary)
+          ? localBinary
+          : indexerBinary;
       return {
         binary: 'php',
         args: [
@@ -218,10 +233,9 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
         ],
       };
     },
+    defaultOutputPath: 'index.scip',
     markerFiles: ['composer.json'],
-    installMethods: [
-      { label: 'composer', prerequisite: 'composer', binary: 'composer', args: ['global', 'require', 'davidrjenni/scip-php'] },
-    ],
+    installMethods: [],
     installUrl: 'https://github.com/davidrjenni/scip-php/releases',
   },
 };
@@ -229,4 +243,24 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
 /** Get the indexer config for a language */
 export function getIndexerConfig(language: SupportedLanguage): IndexerConfig {
   return INDEXER_CONFIGS[language];
+}
+
+function resolveDotnetProject(
+  projectRoot: string,
+  suffixes: readonly string[],
+): string | null {
+  let entries: string[];
+  try {
+    entries = readdirSync(projectRoot);
+  } catch {
+    return null;
+  }
+
+  for (const entry of entries) {
+    if (suffixes.some((suffix) => entry.endsWith(suffix))) {
+      return join(projectRoot, entry);
+    }
+  }
+
+  return null;
 }

@@ -1,8 +1,20 @@
 import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { platform } from 'node:os';
+import { join } from 'node:path';
 import type { IndexerConfig } from '../types.js';
 
 const IS_WINDOWS = platform() === 'win32';
+
+export interface IndexerDependencyStatus {
+  language: IndexerConfig['language'];
+  binaryLabel: string;
+  installed: boolean;
+  runnable: boolean;
+  resolvedBinary: string | null;
+  installUrl?: string;
+  note?: string;
+}
 
 /**
  * Check if a binary is available on PATH.
@@ -46,6 +58,107 @@ export function resolveIndexerBinary(config: IndexerConfig): string | null {
  */
 export function isIndexerInstalled(config: IndexerConfig): boolean {
   return resolveIndexerBinary(config) !== null;
+}
+
+/**
+ * Resolve a project-local indexer binary when the project vendors its own executable.
+ */
+export function resolveProjectLocalIndexerBinary(
+  config: IndexerConfig,
+  projectRoot: string,
+): string | null {
+  for (const relativePath of config.projectLocalBinaries ?? []) {
+    const candidate = join(projectRoot, relativePath);
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Resolve an indexer binary, preferring a project-local executable when present.
+ */
+export function resolveIndexerBinaryForProject(
+  config: IndexerConfig,
+  projectRoot: string,
+): string | null {
+  return resolveProjectLocalIndexerBinary(config, projectRoot) ?? resolveIndexerBinary(config);
+}
+
+/**
+ * Build the environment needed to execute a language indexer.
+ * Currently only .NET indexers need special handling because `scip-dotnet`
+ * still targets the .NET 9 runtime.
+ */
+export function getIndexerExecutionEnv(
+  config: IndexerConfig,
+  baseEnv: NodeJS.ProcessEnv = process.env,
+  binary = config.indexerBinary,
+): NodeJS.ProcessEnv {
+  if (config.indexerBinary !== 'scip-dotnet') {
+    return baseEnv;
+  }
+
+  if (canRunDotnetIndexer(binary, baseEnv)) {
+    return baseEnv;
+  }
+
+  const dotnetRoot = resolveWorkingDotnetRoot(binary, baseEnv);
+  if (!dotnetRoot) {
+    return baseEnv;
+  }
+
+  return {
+    ...baseEnv,
+    DOTNET_ROOT: dotnetRoot,
+  };
+}
+
+/**
+ * Check whether an indexer is installed and runnable in the current environment.
+ */
+export function getIndexerDependencyStatus(
+  config: IndexerConfig,
+  projectRoot?: string,
+): IndexerDependencyStatus {
+  const binaryLabel = describeIndexerBinary(config);
+  const resolvedBinary = projectRoot
+    ? resolveIndexerBinaryForProject(config, projectRoot)
+    : resolveIndexerBinary(config);
+
+  if (!resolvedBinary) {
+    return {
+      language: config.language,
+      binaryLabel,
+      installed: false,
+      runnable: false,
+      resolvedBinary: null,
+      installUrl: config.installUrl,
+    };
+  }
+
+  if (config.indexerBinary !== 'scip-dotnet') {
+    return {
+      language: config.language,
+      binaryLabel,
+      installed: true,
+      runnable: true,
+      resolvedBinary,
+    };
+  }
+
+  const runtimeProbe = probeDotnetRuntime(resolvedBinary);
+  return {
+    language: config.language,
+    binaryLabel,
+    installed: true,
+    runnable: runtimeProbe.runnable,
+    resolvedBinary,
+    installUrl: config.installUrl,
+    note: runtimeProbe.note,
+  };
 }
 
 /**
@@ -100,4 +213,82 @@ export function tryInstallIndexer(
     onStatus(`Install manually from: ${config.installUrl}`);
   }
   return false;
+}
+
+function probeDotnetRuntime(binary: string): { runnable: boolean; note?: string } {
+  if (canRunDotnetIndexer(binary, process.env)) {
+    return { runnable: true };
+  }
+
+  const dotnetRoot = resolveWorkingDotnetRoot(binary, process.env);
+  if (dotnetRoot) {
+    return {
+      runnable: true,
+      note: `using .NET 9 runtime from ${dotnetRoot}`,
+    };
+  }
+
+  const attemptedRoots = getDotnetRootCandidates(process.env);
+  const attemptedNote = attemptedRoots.length > 0
+    ? `.NET 9 runtime still unavailable after checking ${attemptedRoots.join(', ')}`
+    : 'binary is present, but scip-dotnet still needs a .NET 9 runtime';
+  return {
+    runnable: false,
+    note: attemptedNote,
+  };
+}
+
+function resolveWorkingDotnetRoot(
+  binary: string,
+  env: NodeJS.ProcessEnv,
+): string | null {
+  for (const dotnetRoot of getDotnetRootCandidates(env)) {
+    if (canRunDotnetIndexer(binary, { ...env, DOTNET_ROOT: dotnetRoot })) {
+      return dotnetRoot;
+    }
+  }
+
+  return null;
+}
+
+function getDotnetRootCandidates(
+  env: NodeJS.ProcessEnv,
+): string[] {
+  const candidates: string[] = [];
+  const configured = env['DOTNET_ROOT'];
+  if (configured && existsSync(configured)) {
+    candidates.push(configured);
+  }
+
+  if (platform() === 'darwin' && isBinaryAvailable('brew')) {
+    try {
+      const prefix = execFileSync('brew', ['--prefix', 'dotnet@9'], {
+        stdio: 'pipe',
+        env,
+      }).toString().trim();
+      const candidate = join(prefix, 'libexec');
+      if (existsSync(candidate) && !candidates.includes(candidate)) {
+        candidates.push(candidate);
+      }
+    } catch {
+      // Fall through to any other candidates we already found.
+    }
+  }
+
+  return candidates;
+}
+
+function canRunDotnetIndexer(
+  binary: string,
+  env: NodeJS.ProcessEnv,
+): boolean {
+  try {
+    execFileSync(binary, ['--version'], {
+      stdio: 'pipe',
+      env,
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }

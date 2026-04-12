@@ -532,6 +532,7 @@ export type SupportedLanguage =
   | 'cpp'
   | 'c'
   | 'csharp'
+  | 'vb'
   | 'dart'
   | 'php';
 
@@ -552,6 +553,8 @@ export interface IndexerConfig {
     pnpmWorkspaces?: boolean;
     indexerBinary: string;
   }) => { binary: string; args: string[] };
+  /** Relative output path written by the indexer when it ignores outputPath */
+  defaultOutputPath?: string;
   /** Marker files that indicate this language is present */
   markerFiles: string[];
   /** Installation methods to try in order of preference */

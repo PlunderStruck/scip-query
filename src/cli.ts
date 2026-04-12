@@ -7,6 +7,8 @@ import { ScipDatabase } from './db.js';
 import { createGitignoreFilter } from './gitignore-filter.js';
 import { loadProjectConfig, resolveIndexPaths, initProjectConfig } from './config.js';
 import { reindex, detectLanguages } from './reindex/index.js';
+import { getIndexerConfig } from './reindex/indexers.js';
+import { getIndexerDependencyStatus } from './reindex/install.js';
 import { Watcher } from './watch.js';
 import { stats } from './queries/stats.js';
 import { files } from './queries/files.js';
@@ -1372,13 +1374,47 @@ program
 // check-deps
 program
   .command('check-deps')
-  .description('Check if required dependencies (scip CLI) are installed')
+  .description('Check whether scip-query and the detected language indexers are actually runnable')
   .action(() => {
+    let hasProblems = false;
     if (isScipInstalled()) {
       console.log('scip CLI: installed');
     } else {
       printScipInstallInstructions();
+      hasProblems = true;
     }
+
+    const projectRoot = resolveProjectRoot();
+    const config = loadProjectConfig(projectRoot);
+    const languages = config.languages ?? detectLanguages(projectRoot);
+
+    if (languages.length === 0) {
+      console.log('\nNo supported project languages detected in the current directory.');
+      process.exitCode = hasProblems ? 1 : 0;
+      return;
+    }
+
+    console.log(`\nDetected languages: ${languages.join(', ')}`);
+    console.log('\nIndexer readiness:');
+
+    for (const language of languages) {
+      const status = getIndexerDependencyStatus(getIndexerConfig(language), projectRoot);
+      const prefix = status.runnable ? '  OK' : status.installed ? '  WARN' : '  MISSING';
+      const resolved = status.resolvedBinary ? ` (${status.resolvedBinary})` : '';
+
+      console.log(`${prefix} ${language}: ${status.binaryLabel}${resolved}`);
+      if (status.note) {
+        console.log(`    ${status.note}`);
+      }
+      if (!status.installed && status.installUrl) {
+        console.log(`    install: ${status.installUrl}`);
+      }
+      if (!status.runnable) {
+        hasProblems = true;
+      }
+    }
+
+    process.exitCode = hasProblems ? 1 : 0;
   });
 
 // redundant-reexports

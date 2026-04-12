@@ -1,6 +1,7 @@
 import type { ScipDatabase } from './db.js';
 import { basename } from 'node:path';
 import { findIdentifierLines, getSourceCalls, getSourceConstructorBindings, getSourceImports, getSourceText } from './source-analysis.js';
+import type { ParsedSourceCall } from './source-analysis.js';
 import { isFunctionLikeSymbol, isModuleLikeSymbol, leafName, leafSuffix, parseSymbol, shortenSymbol } from './symbol-parser.js';
 
 export interface SymbolLocation {

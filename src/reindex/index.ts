@@ -5,7 +5,15 @@ import { tryInstallScipCli } from '../scip-cli.js';
 import type { SupportedLanguage, IndexerConfig } from '../types.js';
 import { detectLanguages } from './detect.js';
 import { getIndexerConfig } from './indexers.js';
-import { describeIndexerBinary, isBinaryAvailable, isIndexerInstalled, resolveIndexerBinary, tryInstallIndexer } from './install.js';
+import {
+  describeIndexerBinary,
+  getIndexerExecutionEnv,
+  isBinaryAvailable,
+  isIndexerInstalled,
+  resolveIndexerBinary,
+  resolveProjectLocalIndexerBinary,
+  tryInstallIndexer,
+} from './install.js';
 
 export interface ReindexOptions {
   projectRoot: string;
@@ -114,6 +122,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
 
     onStatus(`Indexing ${lang} with ${resolvedBinary}...`);
 
+    const indexerEnv = getIndexerExecutionEnv(config, env, resolvedBinary);
     const { binary, args } = config.indexArgs({
       projectRoot,
       outputPath: outputScip,
@@ -124,7 +133,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
     try {
       execFileSync(binary, args, {
         cwd: projectRoot,
-        env,
+        env: indexerEnv,
         stdio: 'pipe',
         maxBuffer: 50 * 1024 * 1024,
       });
@@ -136,12 +145,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
       );
     }
 
-    if (lang === 'php') {
-      const defaultPhpOutput = join(projectRoot, 'index.scip');
-      if (outputScip !== defaultPhpOutput && existsSync(defaultPhpOutput)) {
-        renameSync(defaultPhpOutput, outputScip);
-      }
-    }
+    moveDefaultOutputIfNeeded(config, projectRoot, outputScip);
   }
 
   // Convert SCIP protobuf to SQLite
@@ -169,19 +173,28 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
 
 export { detectLanguages } from './detect.js';
 export { getIndexerConfig, INDEXER_CONFIGS } from './indexers.js';
-export { describeIndexerBinary, isBinaryAvailable, isIndexerInstalled, resolveIndexerBinary, tryInstallIndexer } from './install.js';
+export {
+  describeIndexerBinary,
+  getIndexerExecutionEnv,
+  isBinaryAvailable,
+  isIndexerInstalled,
+  resolveIndexerBinary,
+  resolveProjectLocalIndexerBinary,
+  tryInstallIndexer,
+} from './install.js';
 export { tryInstallScipCli } from '../scip-cli.js';
 
-function resolveProjectLocalIndexerBinary(
+function moveDefaultOutputIfNeeded(
   config: IndexerConfig,
   projectRoot: string,
-): string | null {
-  for (const relativePath of config.projectLocalBinaries ?? []) {
-    const candidate = join(projectRoot, relativePath);
-    if (existsSync(candidate)) {
-      return candidate;
-    }
+  outputScip: string,
+): void {
+  if (!config.defaultOutputPath) {
+    return;
   }
 
-  return null;
+  const defaultOutputPath = join(projectRoot, config.defaultOutputPath);
+  if (outputScip !== defaultOutputPath && existsSync(defaultOutputPath)) {
+    renameSync(defaultOutputPath, outputScip);
+  }
 }
