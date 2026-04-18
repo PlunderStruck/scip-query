@@ -2,7 +2,7 @@ import type { ScipDatabase } from '../db.js';
 import type { SymbolResult } from '../types.js';
 import { getDefinitionsForFile, resolveIndexedPaths } from '../query-support.js';
 import { shortenSymbol } from '../symbol-parser.js';
-import { cleanSignature } from './clean-signature.js';
+import { cleanSignature, extractSignature } from './clean-signature.js';
 
 export function symbols(db: ScipDatabase, filePattern: string): SymbolResult[] {
   const resolvedPaths = resolveIndexedPaths(db, filePattern);
@@ -14,10 +14,8 @@ export function symbols(db: ScipDatabase, filePattern: string): SymbolResult[] {
     .flatMap((relativePath) => getDefinitionsForFile(db, relativePath))
     .filter((row) => !db.isIgnored(row.relativePath))
     .map((row) => {
-      const docRow = db.get<{ sig: string | null }>(
-        `SELECT REPLACE(SUBSTR(documentation, INSTR(documentation, '|') + 1), char(10), ' ') AS sig
-         FROM global_symbols
-         WHERE id = ?`,
+      const docRow = db.get<{ documentation: string | null }>(
+        'SELECT documentation FROM global_symbols WHERE id = ?',
         row.symbolId,
       );
 
@@ -26,7 +24,7 @@ export function symbols(db: ScipDatabase, filePattern: string): SymbolResult[] {
         endLine: row.endLine,
         symbol: row.symbol,
         shortName: shortenSymbol(row.symbol),
-        signature: cleanSignature(docRow?.sig ?? null),
+        signature: cleanSignature(extractSignature(docRow?.documentation ?? null)),
       };
     });
 }

@@ -1,10 +1,11 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, renameSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, renameSync, rmSync } from 'node:fs';
+import { basename, dirname, extname, join } from 'node:path';
 import { tryInstallScipCli } from '../scip-cli.js';
 import type { SupportedLanguage, IndexerConfig } from '../types.js';
 import { detectLanguages } from './detect.js';
 import { getIndexerConfig } from './indexers.js';
+import { mergeScipFiles } from './merge.js';
 import {
   describeIndexerBinary,
   getIndexerExecutionEnv,
@@ -89,8 +90,15 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
     NODE_OPTIONS: `--max-old-space-size=${maxHeapMb}`,
   };
 
+  const languageOutputs = languages.map((language, index) => ({
+    language,
+    scipPath: languages.length > 1
+      ? tempScipPath(outputScip, language, index)
+      : outputScip,
+  }));
+
   // Index each language
-  for (const lang of languages) {
+  for (const { language: lang, scipPath } of languageOutputs) {
     const config = getIndexerConfig(lang);
     const binaryLabel = describeIndexerBinary(config);
     const projectLocalBinary = resolveProjectLocalIndexerBinary(config, projectRoot);
@@ -125,7 +133,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
     const indexerEnv = getIndexerExecutionEnv(config, env, resolvedBinary);
     const { binary, args } = config.indexArgs({
       projectRoot,
-      outputPath: outputScip,
+      outputPath: scipPath,
       pnpmWorkspaces: opts.pnpmWorkspaces,
       indexerBinary: resolvedBinary,
     });
@@ -142,10 +150,16 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
       throw new Error(
         `Failed to index ${lang} with ${resolvedBinary}: ${msg}\n` +
         `Make sure ${binaryLabel} is installed and available on PATH.`,
+        { cause: err },
       );
     }
 
-    moveDefaultOutputIfNeeded(config, projectRoot, outputScip);
+    moveDefaultOutputIfNeeded(config, projectRoot, scipPath);
+  }
+
+  if (languageOutputs.length > 1) {
+    onStatus(`Merging ${languageOutputs.length} language indexes...`);
+    mergeScipFiles(languageOutputs.map((entry) => entry.scipPath), outputScip);
   }
 
   // Convert SCIP protobuf to SQLite
@@ -162,7 +176,13 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(`Failed to convert SCIP index to SQLite: ${msg}`);
+    throw new Error(`Failed to convert SCIP index to SQLite: ${msg}`, { cause: err });
+  } finally {
+    for (const { scipPath } of languageOutputs) {
+      if (scipPath !== outputScip) {
+        rmSync(scipPath, { force: true });
+      }
+    }
   }
 
   const durationMs = Date.now() - start;
@@ -173,6 +193,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
 
 export { detectLanguages } from './detect.js';
 export { getIndexerConfig, INDEXER_CONFIGS } from './indexers.js';
+export { mergeScipFiles, mergeScipIndexes } from './merge.js';
 export {
   describeIndexerBinary,
   getIndexerExecutionEnv,
@@ -197,4 +218,10 @@ function moveDefaultOutputIfNeeded(
   if (outputScip !== defaultOutputPath && existsSync(defaultOutputPath)) {
     renameSync(defaultOutputPath, outputScip);
   }
+}
+
+function tempScipPath(outputScip: string, language: SupportedLanguage, index: number): string {
+  const extension = extname(outputScip) || '.scip';
+  const stem = basename(outputScip, extension);
+  return join(dirname(outputScip), `${stem}.${index + 1}.${language}${extension}`);
 }

@@ -1,39 +1,28 @@
 import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch } from '../query-support.js';
+import { findFirstSymbolMatch, getDefinitionsForFile } from '../query-support.js';
 import type { MemberResult } from '../types.js';
 import { isDirectChildSymbol, leafSuffix, shortenSymbol } from '../symbol-parser.js';
 
 /**
  * Find all direct children of a symbol (methods, fields, nested types).
  * Uses descriptor-chain fallback when enclosing_symbol is not populated.
+ *
+ * Ranges come from getDefinitionsForFile so they are source-corrected
+ * and match `scip symbols` output.
  */
 export function members(db: ScipDatabase, symbolPattern: string): MemberResult[] {
   const parent = findFirstSymbolMatch(db, symbolPattern);
   if (!parent) return [];
 
-  const rows = db.all<{
-    symbol: string;
-    start_line: number;
-    end_line: number;
-  }>(
-    `SELECT gs.symbol, der.start_line, der.end_line
-     FROM global_symbols gs
-     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-     WHERE der.document_id = ?
-       AND gs.symbol != ?
-       ${db.symbolNoiseFor('gs')}
-     ORDER BY der.start_line`,
-    parent.documentId,
-    parent.symbol,
-  );
-
-  return rows
-    .filter((row) => isDirectChildSymbol(parent.symbol, row.symbol))
-    .map((row) => ({
-      symbol: row.symbol,
-      shortName: shortenSymbol(row.symbol),
-      startLine: row.start_line,
-      endLine: row.end_line,
-      kind: leafSuffix(row.symbol) ?? 'unknown',
+  return getDefinitionsForFile(db, parent.relativePath)
+    .filter((definition) => definition.symbol !== parent.symbol)
+    .filter((definition) => isDirectChildSymbol(parent.symbol, definition.symbol))
+    .sort((a, b) => a.startLine - b.startLine || a.endLine - b.endLine)
+    .map((definition) => ({
+      symbol: definition.symbol,
+      shortName: shortenSymbol(definition.symbol),
+      startLine: definition.startLine,
+      endLine: definition.endLine,
+      kind: leafSuffix(definition.symbol) ?? 'unknown',
     }));
 }

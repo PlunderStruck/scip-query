@@ -62,7 +62,7 @@ For Python, the npm package is `scip-python-plus`. Depending on which version yo
 2. The `scip` CLI converts the protobuf to a SQLite database (`index.db`).
 3. `scip-query` runs SQL queries against that database to answer questions about your codebase.
 
-Because the index comes from the real compiler, results are precise — not grep-based approximations. A reference to `login()` in file A is provably the same `login()` defined in file B, not just a string match.
+Because the index comes from the real compiler, direct symbol, definition, and reference queries are precise — not grep-based approximations. When a language index is missing enough call-site detail for higher-level analyses, `scip-query` can fall back to source parsing and identifier recovery so those commands stay useful, but they should be treated as source-backed heuristics rather than compiler-proof facts.
 
 ## Configuration
 

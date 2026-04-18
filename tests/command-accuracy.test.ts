@@ -26,9 +26,12 @@ import { fanIn } from '../src/queries/fan.js';
 import { health } from '../src/queries/health.js';
 import { importedBy, imports, unusedImports } from '../src/queries/imports.js';
 import { members } from '../src/queries/members.js';
+import { outline } from '../src/queries/outline.js';
 import { refs } from '../src/queries/refs.js';
 import { similarAll } from '../src/queries/similar.js';
 import { staleAbstractions } from '../src/queries/stale-abstractions.js';
+import { symbols } from '../src/queries/symbols.js';
+import { system } from '../src/queries/system.js';
 import type { ScipQueryConfig } from '../src/types.js';
 
 function createFixtureProject(projectRoot: string): void {
@@ -483,7 +486,7 @@ describe('command accuracy fixes', () => {
 
     expect(match).not.toBeNull();
     expect(match!.relativePath).toBe('src/reindex/index.ts');
-    expect(match!.startLine).toBe(1);
+    expect(match!.startLine).toBe(0);
   });
 
   it('accepts short-name lookups and returns direct members without enclosing_symbol metadata', () => {
@@ -565,6 +568,219 @@ describe('command accuracy fixes', () => {
     );
   });
 
+  it('isolates callee fingerprints between adjacent functions so ranges do not cross-pollute', () => {
+    // Regression guard for src/queries/similar.ts getAllCalleeFingerprints.
+    //
+    // Prior to the canonical-range refactor the helper selected raw
+    // defn_enclosing_ranges.start_line/end_line and fed those directly
+    // into getCalleeRowsForSymbol. When an indexer emitted a range that
+    // was slightly too wide, chunks belonging to the neighbouring
+    // definition leaked into the callee set — so a function that only
+    // calls sharedOne() would show sharedTwo() in its fingerprint (and
+    // therefore the "unique" sets returned by similarAll would lie).
+    //
+    // We build a self-contained fixture with two multi-line functions
+    // whose callees are disjoint and assert that the similarAll output
+    // for the (alphaIso, betaIso) pair reflects what each function
+    // actually calls.
+    const isoTempDir = mkdtempSync(join(tmpdir(), 'scip-query-similar-iso-'));
+    try {
+      mkdirSync(join(isoTempDir, 'src'), { recursive: true });
+      writeFileSync(
+        join(isoTempDir, 'src', 'iso.ts'),
+        [
+          'export function sharedOne() { return 1; }',
+          'export function sharedTwo() { return 2; }',
+          'export function sharedThree() { return 3; }',
+          'export function sharedFour() { return 4; }',
+          'export function decoyOne() { return 5; }',
+          'export function decoyTwo() { return 6; }',
+          'export function alphaIso() {',
+          '  sharedOne();',
+          '  sharedThree();',
+          '  sharedFour();',
+          '  return 0;',
+          '}',
+          'export function betaIso() {',
+          '  sharedTwo();',
+          '  sharedThree();',
+          '  sharedFour();',
+          '  return 0;',
+          '}',
+          'export function decoyAlpha() {',
+          '  decoyOne();',
+          '  decoyTwo();',
+          '  return 0;',
+          '}',
+          'export function decoyBeta() {',
+          '  decoyOne();',
+          '  decoyTwo();',
+          '  return 0;',
+          '}',
+          '',
+        ].join('\n'),
+      );
+
+      const isoDbPath = join(isoTempDir, 'index.db');
+      const sqliteDb = new Database(isoDbPath);
+      sqliteDb.exec(`
+        CREATE TABLE documents (
+          id INTEGER PRIMARY KEY,
+          language TEXT,
+          relative_path TEXT NOT NULL UNIQUE,
+          position_encoding TEXT,
+          text TEXT
+        );
+        CREATE TABLE global_symbols (
+          id INTEGER PRIMARY KEY,
+          symbol TEXT NOT NULL UNIQUE,
+          display_name TEXT,
+          kind INTEGER,
+          documentation TEXT,
+          signature BLOB,
+          enclosing_symbol TEXT,
+          relationships BLOB
+        );
+        CREATE TABLE defn_enclosing_ranges (
+          id INTEGER PRIMARY KEY,
+          document_id INTEGER NOT NULL,
+          symbol_id INTEGER NOT NULL,
+          start_line INTEGER NOT NULL,
+          start_char INTEGER NOT NULL,
+          end_line INTEGER NOT NULL,
+          end_char INTEGER NOT NULL
+        );
+        CREATE TABLE mentions (
+          chunk_id INTEGER NOT NULL,
+          symbol_id INTEGER NOT NULL,
+          role INTEGER NOT NULL,
+          PRIMARY KEY (chunk_id, symbol_id, role)
+        );
+        CREATE TABLE chunks (
+          id INTEGER PRIMARY KEY,
+          document_id INTEGER NOT NULL,
+          chunk_index INTEGER NOT NULL,
+          start_line INTEGER NOT NULL,
+          end_line INTEGER NOT NULL,
+          occurrences BLOB NOT NULL
+        );
+        CREATE INDEX idx_mentions_symbol_id_role ON mentions(symbol_id, role);
+        CREATE INDEX idx_defn_enclosing_ranges_symbol_id ON defn_enclosing_ranges(symbol_id);
+        CREATE INDEX idx_defn_enclosing_ranges_document ON defn_enclosing_ranges(document_id, start_line, end_line);
+        CREATE INDEX idx_chunks_doc_id ON chunks(document_id);
+        CREATE INDEX idx_global_symbols_symbol ON global_symbols(symbol);
+      `);
+
+      sqliteDb.exec("INSERT INTO documents (id, language, relative_path) VALUES (1, 'typescript', 'src/iso.ts');");
+
+      const insertSymbol = sqliteDb.prepare(
+        `INSERT INTO global_symbols (id, symbol, display_name, kind, documentation)
+         VALUES (?, ?, ?, ?, ?)`,
+      );
+      insertSymbol.run(1, 'scip-typescript npm pkg 1.0.0 src/`iso.ts`/sharedOne().', 'sharedOne', 3, 'function');
+      insertSymbol.run(2, 'scip-typescript npm pkg 1.0.0 src/`iso.ts`/sharedTwo().', 'sharedTwo', 3, 'function');
+      insertSymbol.run(3, 'scip-typescript npm pkg 1.0.0 src/`iso.ts`/sharedThree().', 'sharedThree', 3, 'function');
+      insertSymbol.run(4, 'scip-typescript npm pkg 1.0.0 src/`iso.ts`/sharedFour().', 'sharedFour', 3, 'function');
+      insertSymbol.run(5, 'scip-typescript npm pkg 1.0.0 src/`iso.ts`/decoyOne().', 'decoyOne', 3, 'function');
+      insertSymbol.run(6, 'scip-typescript npm pkg 1.0.0 src/`iso.ts`/decoyTwo().', 'decoyTwo', 3, 'function');
+      insertSymbol.run(7, 'scip-typescript npm pkg 1.0.0 src/`iso.ts`/alphaIso().', 'alphaIso', 3, 'function');
+      insertSymbol.run(8, 'scip-typescript npm pkg 1.0.0 src/`iso.ts`/betaIso().', 'betaIso', 3, 'function');
+      insertSymbol.run(9, 'scip-typescript npm pkg 1.0.0 src/`iso.ts`/decoyAlpha().', 'decoyAlpha', 3, 'function');
+      insertSymbol.run(10, 'scip-typescript npm pkg 1.0.0 src/`iso.ts`/decoyBeta().', 'decoyBeta', 3, 'function');
+
+      sqliteDb.exec(`
+        INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+          (1, 1, 1, 0, 0, 0, 0),
+          (2, 1, 2, 1, 0, 1, 0),
+          (3, 1, 3, 2, 0, 2, 0),
+          (4, 1, 4, 3, 0, 3, 0),
+          (5, 1, 5, 4, 0, 4, 0),
+          (6, 1, 6, 5, 0, 5, 0),
+          (7, 1, 7, 6, 0, 11, 0),
+          (8, 1, 8, 12, 0, 17, 0),
+          (9, 1, 9, 18, 0, 22, 0),
+          (10, 1, 10, 23, 0, 27, 0);
+      `);
+
+      // One chunk per callsite so bounds vs chunk attribution is clean.
+      sqliteDb.exec(`
+        INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+          (1, 1, 0, 7, 7, X'00'),
+          (2, 1, 1, 8, 8, X'00'),
+          (3, 1, 2, 9, 9, X'00'),
+          (4, 1, 3, 13, 13, X'00'),
+          (5, 1, 4, 14, 14, X'00'),
+          (6, 1, 5, 15, 15, X'00'),
+          (7, 1, 6, 19, 19, X'00'),
+          (8, 1, 7, 20, 20, X'00'),
+          (9, 1, 8, 24, 24, X'00'),
+          (10, 1, 9, 25, 25, X'00');
+      `);
+
+      sqliteDb.exec(`
+        INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+          (1, 1, 0),
+          (2, 3, 0),
+          (3, 4, 0),
+          (4, 2, 0),
+          (5, 3, 0),
+          (6, 4, 0),
+          (7, 5, 0),
+          (8, 6, 0),
+          (9, 5, 0),
+          (10, 6, 0);
+      `);
+
+      sqliteDb.close();
+
+      const isoDb = new ScipDatabase({
+        dbPath: isoDbPath,
+        indexPath: join(isoTempDir, 'index.scip'),
+        projectRoot: isoTempDir,
+      });
+      try {
+        const results = similarAll(isoDb, {
+          minSimilarity: 0.3,
+          minCallees: 2,
+          limit: 10,
+        });
+
+        const pair = results.find((result) => {
+          const names = new Set([result.shortNameA, result.shortNameB]);
+          return names.has('src:iso:alphaIso()') && names.has('src:iso:betaIso()');
+        });
+
+        expect(pair).toBeDefined();
+
+        // Normalise so "A" is always alphaIso.
+        const alphaIsA = pair!.shortNameA === 'src:iso:alphaIso()';
+        const alphaUnique = alphaIsA ? pair!.uniqueToA : pair!.uniqueToB;
+        const betaUnique = alphaIsA ? pair!.uniqueToB : pair!.uniqueToA;
+        const shared = pair!.sharedCallees;
+
+        // Invariant: every callee listed for alphaIso reflects what the
+        // source actually calls. sharedTwo MUST NOT appear in alphaIso's
+        // fingerprint (that would be cross-pollution from betaIso's
+        // range); sharedOne MUST NOT appear in betaIso's.
+        expect(alphaUnique).toContain('src:iso:sharedOne()');
+        expect(alphaUnique).not.toContain('src:iso:sharedTwo()');
+        expect(betaUnique).toContain('src:iso:sharedTwo()');
+        expect(betaUnique).not.toContain('src:iso:sharedOne()');
+
+        // Shared callees must be exactly sharedThree + sharedFour — the
+        // two helpers both functions actually call.
+        expect(new Set(shared)).toEqual(new Set([
+          'src:iso:sharedThree()',
+          'src:iso:sharedFour()',
+        ]));
+      } finally {
+        isoDb.close();
+      }
+    } finally {
+      rmSync(isoTempDir, { recursive: true, force: true });
+    }
+  });
+
   it('does not overstate consolidation when both symbols have no tracked callees', () => {
     const convergenceResult = convergence(db, 'reindex', 'getIndexerConfig');
 
@@ -597,6 +813,66 @@ describe('command accuracy fixes', () => {
     expect(report.findings.staleTypes).toBe(stale.length);
     expect(staleAction?.count).toBe(stale.length);
     expect(staleAction?.description).toContain('1 unused, 1 single-consumer');
+  });
+
+  it('reports consistent symbol ranges across outline/members/change-surface/system/symbols', () => {
+    // The invariant: a given symbol's (startLine, endLine) must not depend
+    // on which query you asked. Prior to the line-accuracy pass, outline
+    // and members read raw der.* while symbols ran through the source-
+    // correcting path, so they could disagree by a few lines.
+    const utilSymbols = symbols(db, 'utils.ts');
+    const outlineNodes = outline(db, 'utils.ts');
+    const systemResult = system(db, 'utils.ts');
+    const changeSurfaceResult = changeSurface(db, 'utils.ts');
+
+    const rangeBySymbol = new Map<string, { startLine: number; endLine: number }>();
+    for (const s of utilSymbols) {
+      rangeBySymbol.set(s.symbol, { startLine: s.startLine, endLine: s.endLine });
+    }
+    expect(rangeBySymbol.size).toBeGreaterThan(0);
+
+    for (const node of outlineNodes) {
+      const expected = rangeBySymbol.get(node.symbol);
+      if (!expected) continue;
+      expect({ startLine: node.startLine, endLine: node.endLine }).toEqual(expected);
+    }
+    for (const sym of systemResult.symbols) {
+      const expected = rangeBySymbol.get(sym.symbol);
+      if (!expected) continue;
+      expect({ startLine: sym.startLine, endLine: sym.endLine }).toEqual(expected);
+    }
+    for (const entry of changeSurfaceResult!.symbols) {
+      const expected = rangeBySymbol.get(entry.symbol);
+      if (!expected) continue;
+      expect({ startLine: entry.startLine, endLine: entry.endLine }).toEqual(expected);
+    }
+
+    const watcherMembers = members(db, 'Watcher');
+    const watcherSymbols = symbols(db, 'watch.ts');
+    const watcherRanges = new Map(watcherSymbols.map((s) => [s.symbol, { startLine: s.startLine, endLine: s.endLine }]));
+    for (const m of watcherMembers) {
+      const expected = watcherRanges.get(m.symbol);
+      if (!expected) continue;
+      expect({ startLine: m.startLine, endLine: m.endLine }).toEqual(expected);
+    }
+  });
+
+  it('accepts 1-indexed editor line numbers in file:line-line symbol lookup', () => {
+    // src/predicates.ts has three non-overlapping single-line function
+    // definitions at editor lines 1, 2, 3 (DB lines 0, 1, 2). Users type
+    // editor-1-indexed lines; the helper must subtract 1 before comparing
+    // against the 0-indexed DB columns.
+    const firstMatch = findFirstSymbolMatch(db, 'src/predicates.ts:1-1');
+    expect(firstMatch).not.toBeNull();
+    expect(firstMatch!.symbol).toContain('normalizePath');
+
+    const secondMatch = findFirstSymbolMatch(db, 'src/predicates.ts:2-2');
+    expect(secondMatch).not.toBeNull();
+    expect(secondMatch!.symbol).toContain('isWorkerEntrySurface');
+
+    const thirdMatch = findFirstSymbolMatch(db, 'src/predicates.ts:3-3');
+    expect(thirdMatch).not.toBeNull();
+    expect(thirdMatch!.symbol).toContain('isBarrelFile');
   });
 
   it('recovers TypeScript method calls and exact reference lines from source fallbacks', () => {

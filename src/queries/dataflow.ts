@@ -1,5 +1,10 @@
 import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch, getCalleeRowsForSymbol, getSourceReferenceSites } from '../query-support.js';
+import {
+  findFirstSymbolMatch,
+  getCalleeRowsForSymbol,
+  getResolvedReferenceSites,
+  getSourceReferenceSites,
+} from '../query-support.js';
 import type { DataflowResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 
@@ -28,44 +33,20 @@ export function dataflow(
     line: match.startLine,
   }];
 
+  // Primary: cross-file identifier scan. Fallback: mention-resolved sites
+  // with in-chunk line refinement so usage lines are precise, not chunk-start.
   const sourceUsageSites = getSourceReferenceSites(db, match);
-  const usageSites = sourceUsageSites.length > 0
-    ? sourceUsageSites.map((site) => ({
-      file: site.file,
-      line: site.line,
-      enclosing_symbol: site.enclosingSymbol,
-    }))
-    : db.all<{
-      file: string;
-      line: number;
-      enclosing_symbol: string | null;
-    }>(
-      `SELECT d.relative_path AS file, c.start_line AS line,
-        (SELECT enc_gs.symbol
-         FROM defn_enclosing_ranges enc_der
-         JOIN global_symbols enc_gs ON enc_der.symbol_id = enc_gs.id
-         WHERE enc_der.document_id = d.id
-           AND enc_der.start_line <= c.start_line
-           AND enc_der.end_line >= c.end_line
-         ORDER BY (enc_der.end_line - enc_der.start_line) ASC
-         LIMIT 1
-        ) AS enclosing_symbol
-      FROM mentions m
-      JOIN chunks c ON m.chunk_id = c.id
-      JOIN documents d ON c.document_id = d.id
-      WHERE m.symbol_id = ? AND m.role != 1
-        ${db.pathExclusionsFor('d')}
-      ORDER BY d.relative_path, c.start_line`,
-      match.symbolId,
-    );
+  const resolvedSites = sourceUsageSites.length > 0
+    ? sourceUsageSites
+    : getResolvedReferenceSites(db, match);
 
-  const normalizedUsageSites = usageSites
+  const normalizedUsageSites = resolvedSites
     .filter((site) => !db.isIgnored(site.file))
     .map((site) => ({
       file: site.file,
       line: site.line,
-      enclosingSymbol: site.enclosing_symbol ?? '(top-level)',
-      enclosingShort: site.enclosing_symbol ? shortenSymbol(site.enclosing_symbol) : '(top-level)',
+      enclosingSymbol: site.enclosingSymbol ?? '(top-level)',
+      enclosingShort: site.enclosingSymbol ? shortenSymbol(site.enclosingSymbol) : '(top-level)',
     }));
 
   // Producers: other symbols referenced within the same function that defines our target

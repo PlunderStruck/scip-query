@@ -1507,54 +1507,40 @@ function normalizePath(path: string): string {
   return path.replace(/\\/g, '/');
 }
 
-function isJavaScriptSourcePath(relativePath: string): boolean {
-  return SOURCE_EXTENSIONS.includes(extname(relativePath).toLowerCase() as typeof SOURCE_EXTENSIONS[number]);
+// ── Language extension lookup ──────────────────────────────
+
+const LANGUAGE_EXTENSION_FAMILIES: ReadonlyArray<readonly string[]> = [
+  SOURCE_EXTENSIONS,
+  PYTHON_SOURCE_EXTENSIONS,
+  JVM_SOURCE_EXTENSIONS,
+  RUST_SOURCE_EXTENSIONS,
+  RUBY_SOURCE_EXTENSIONS,
+  C_LIKE_SOURCE_EXTENSIONS,
+  DOTNET_SOURCE_EXTENSIONS,
+  DART_SOURCE_EXTENSIONS,
+  PHP_SOURCE_EXTENSIONS,
+];
+
+function hasExtensionIn(relativePath: string, extensions: readonly string[]): boolean {
+  return (extensions as readonly string[]).includes(extname(relativePath).toLowerCase());
 }
 
-function isPythonSourcePath(relativePath: string): boolean {
-  return PYTHON_SOURCE_EXTENSIONS.includes(extname(relativePath).toLowerCase() as typeof PYTHON_SOURCE_EXTENSIONS[number]);
-}
-
-function isJvmSourcePath(relativePath: string): boolean {
-  return JVM_SOURCE_EXTENSIONS.includes(extname(relativePath).toLowerCase() as typeof JVM_SOURCE_EXTENSIONS[number]);
-}
-
-function isRustSourcePath(relativePath: string): boolean {
-  return RUST_SOURCE_EXTENSIONS.includes(extname(relativePath).toLowerCase() as typeof RUST_SOURCE_EXTENSIONS[number]);
-}
-
-function isRubySourcePath(relativePath: string): boolean {
-  return RUBY_SOURCE_EXTENSIONS.includes(extname(relativePath).toLowerCase() as typeof RUBY_SOURCE_EXTENSIONS[number]);
-}
-
-function isCLikeSourcePath(relativePath: string): boolean {
-  return C_LIKE_SOURCE_EXTENSIONS.includes(extname(relativePath).toLowerCase() as typeof C_LIKE_SOURCE_EXTENSIONS[number]);
-}
-
-function isDotNetSourcePath(relativePath: string): boolean {
-  return DOTNET_SOURCE_EXTENSIONS.includes(extname(relativePath).toLowerCase() as typeof DOTNET_SOURCE_EXTENSIONS[number]);
-}
-
-function isVisualBasicSourcePath(relativePath: string): boolean {
-  return extname(relativePath).toLowerCase() === '.vb';
-}
-
-function isDartSourcePath(relativePath: string): boolean {
-  return DART_SOURCE_EXTENSIONS.includes(extname(relativePath).toLowerCase() as typeof DART_SOURCE_EXTENSIONS[number]);
-}
-
-function isPhpSourcePath(relativePath: string): boolean {
-  return PHP_SOURCE_EXTENSIONS.includes(extname(relativePath).toLowerCase() as typeof PHP_SOURCE_EXTENSIONS[number]);
-}
+function isJavaScriptSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, SOURCE_EXTENSIONS); }
+function isPythonSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, PYTHON_SOURCE_EXTENSIONS); }
+function isJvmSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, JVM_SOURCE_EXTENSIONS); }
+function isRustSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, RUST_SOURCE_EXTENSIONS); }
+function isRubySourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, RUBY_SOURCE_EXTENSIONS); }
+function isCLikeSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, C_LIKE_SOURCE_EXTENSIONS); }
+function isDotNetSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, DOTNET_SOURCE_EXTENSIONS); }
+function isVisualBasicSourcePath(relativePath: string): boolean { return extname(relativePath).toLowerCase() === '.vb'; }
+function isDartSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, DART_SOURCE_EXTENSIONS); }
+function isPhpSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, PHP_SOURCE_EXTENSIONS); }
 
 function extensionFamilyFor(relativePath: string): readonly string[] {
-  if (isJvmSourcePath(relativePath)) return JVM_SOURCE_EXTENSIONS;
-  if (isDotNetSourcePath(relativePath)) return DOTNET_SOURCE_EXTENSIONS;
-  if (isPhpSourcePath(relativePath)) return PHP_SOURCE_EXTENSIONS;
-  if (isDartSourcePath(relativePath)) return DART_SOURCE_EXTENSIONS;
-  if (isCLikeSourcePath(relativePath)) return C_LIKE_SOURCE_EXTENSIONS;
-  if (isRustSourcePath(relativePath)) return RUST_SOURCE_EXTENSIONS;
-  if (isRubySourcePath(relativePath)) return RUBY_SOURCE_EXTENSIONS;
+  const ext = extname(relativePath).toLowerCase();
+  for (const family of LANGUAGE_EXTENSION_FAMILIES) {
+    if ((family as readonly string[]).includes(ext)) return family;
+  }
   return SOURCE_EXTENSIONS;
 }
 

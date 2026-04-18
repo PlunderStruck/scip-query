@@ -149,7 +149,6 @@ function parseDescriptors(input: string): ScipDescriptor[] {
       const closingTick = input.indexOf('`', i + 1);
       if (closingTick === -1) {
         name = input.slice(i + 1);
-        i = input.length;
         descriptors.push({ name, suffix: 'term' });
         break;
       }
@@ -287,6 +286,11 @@ export function leafSuffix(raw: string): DescriptorSuffix | null {
   const sym = parsed as ScipSymbol;
   const last = sym.descriptors[sym.descriptors.length - 1];
   return last?.suffix ?? null;
+}
+
+/** True when the symbol looks callable — ends with `().` or has method suffix. */
+export function isCallableSymbol(raw: string): boolean {
+  return raw.endsWith('().') || leafSuffix(raw) === 'method';
 }
 
 /** True when the symbol represents a callable/function-like definition. */

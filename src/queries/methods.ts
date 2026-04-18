@@ -2,7 +2,7 @@ import { basename } from 'node:path';
 import type { ScipDatabase } from '../db.js';
 import { findFirstSymbolMatch, getDefinitionsForFile } from '../query-support.js';
 import type { MethodResult } from '../types.js';
-import { leafName, leafSuffix } from '../symbol-parser.js';
+import { isCallableSymbol, leafName } from '../symbol-parser.js';
 
 export function methods(db: ScipDatabase, className: string): MethodResult[] {
   const classMatch = findFirstSymbolMatch(db, className);
@@ -32,10 +32,6 @@ export function methods(db: ScipDatabase, className: string): MethodResult[] {
     endLine: definition.endLine,
     name: leafName(definition.symbol),
   }));
-}
-
-function isCallableSymbol(rawSymbol: string): boolean {
-  return rawSymbol.endsWith('().') || leafSuffix(rawSymbol) === 'method';
 }
 
 function stripExtension(relativePath: string): string {

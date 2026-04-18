@@ -45,4 +45,15 @@ describe('createGitignoreFilter', () => {
 
     expect(filtered).toEqual(['src/app.ts', 'lib/utils.ts']);
   });
+
+  it('does not throw when a query path resolves outside the project root', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'scip-query-test-'));
+    mkdirSync(join(dir, 'apps', 'web'), { recursive: true });
+    writeFileSync(join(dir, '.gitignore'), 'node_modules/\n');
+
+    const filter = createGitignoreFilter(join(dir, 'apps', 'web'));
+
+    expect(() => filter.isIgnored('../../packages/shared/src/constants.ts')).not.toThrow();
+    expect(filter.isIgnored('../../packages/shared/src/constants.ts')).toBe(false);
+  });
 });

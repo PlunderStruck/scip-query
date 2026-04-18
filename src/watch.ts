@@ -1,5 +1,5 @@
 import { watch } from 'node:fs';
-import { readFileSync, existsSync, renameSync } from 'node:fs';
+import { existsSync, renameSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fork } from 'node:child_process';
 import ignore from 'ignore';
@@ -105,11 +105,6 @@ export class Watcher {
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     if (this.cooldownTimer) clearTimeout(this.cooldownTimer);
     this.setStatus({ state: 'idle' });
-  }
-
-  /** Get current watcher status */
-  getStatus(): WatcherStatus {
-    return this.status;
   }
 
   // ── Internal ─────────────────────────────────────────────

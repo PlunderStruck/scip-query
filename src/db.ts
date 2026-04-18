@@ -29,19 +29,9 @@ export class ScipDatabase {
     this.db.pragma('busy_timeout = 5000');
   }
 
-  /** Attach a gitignore-based path filter for query results */
-  setPathFilter(filter: PathFilter): void {
-    this.pathFilter = filter;
-  }
-
   /** Check if a path should be excluded based on .gitignore rules */
   isIgnored(relativePath: string): boolean {
     return this.pathFilter?.isIgnored(relativePath) ?? false;
-  }
-
-  /** Filter an array of paths using the gitignore filter */
-  filterPaths(paths: string[]): string[] {
-    return this.pathFilter?.filter(paths) ?? paths;
   }
 
   /**

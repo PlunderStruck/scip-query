@@ -411,7 +411,12 @@ describe('python repo accuracy regressions', () => {
       'simulation:helper()',
     ]));
 
-    const outlineNames = outline(db, 'simulation.py').map((node) => node.shortName);
+    // outline returns a tree — root is the module, children are nested under it
+    const roots = outline(db, 'simulation.py');
+    function collectNames(nodes: typeof roots): string[] {
+      return nodes.flatMap((n) => [n.shortName, ...collectNames(n.children)]);
+    }
+    const outlineNames = collectNames(roots);
     expect(outlineNames).toHaveLength(3);
     expect(outlineNames).toEqual(expect.arrayContaining([
       'simulation',

@@ -1,10 +1,14 @@
 import type { ScipDatabase } from '../db.js';
 import type { SystemResult, SymbolResult } from '../types.js';
-import { resolveIndexedPaths } from '../query-support.js';
+import { getDefinitionsForFile, resolveIndexedPaths } from '../query-support.js';
 import { shortenSymbol } from '../symbol-parser.js';
-import { cleanSignature } from './clean-signature.js';
+import { cleanSignature, extractSignature } from './clean-signature.js';
 
-/** Full system map for a module path: files, symbols, deps in/out */
+/** Full system map for a module path: files, symbols, deps in/out.
+ *
+ * Exported-symbol ranges come from getDefinitionsForFile so they are
+ * source-corrected and match `scip symbols` output.
+ */
 export function system(db: ScipDatabase, modulePattern: string): SystemResult {
   const matchedPaths = resolveIndexedPaths(db, modulePattern);
   if (matchedPaths.length === 0) {
@@ -12,7 +16,6 @@ export function system(db: ScipDatabase, modulePattern: string): SystemResult {
   }
 
   const placeholders = matchedPaths.map(() => '?').join(', ');
-  // Files in this module
   const fileRows = db.all<{ relative_path: string }>(
     `SELECT relative_path FROM documents
      WHERE relative_path IN (${placeholders})
@@ -23,34 +26,26 @@ export function system(db: ScipDatabase, modulePattern: string): SystemResult {
     .map((r) => r.relative_path)
     .filter((p) => !db.isIgnored(p));
 
-  // Exported symbols
-  const symbolRows = db.all<{
-    start_line: number;
-    end_line: number;
-    symbol: string;
-    sig: string | null;
-  }>(
-    `SELECT der.start_line, der.end_line, gs.symbol,
-      REPLACE(SUBSTR(gs.documentation, INSTR(gs.documentation, '|') + 1), char(10), ' ') AS sig
-    FROM defn_enclosing_ranges der
-    JOIN global_symbols gs ON der.symbol_id = gs.id
-    JOIN documents d ON der.document_id = d.id
-    WHERE d.relative_path IN (${placeholders})
-      AND ${db.localSymbolPredicate}
-      ${db.symbolNoise}
-      AND gs.documentation IS NOT NULL
-    ORDER BY d.relative_path, der.start_line`,
-    ...matchedPaths,
-  );
-  const symbols: SymbolResult[] = symbolRows.map((r) => ({
-    startLine: r.start_line,
-    endLine: r.end_line,
-    symbol: r.symbol,
-    shortName: shortenSymbol(r.symbol),
-    signature: cleanSignature(r.sig),
-  }));
+  // Exported symbols: corrected ranges + documentation filter.
+  const symbols: SymbolResult[] = files
+    .flatMap((relativePath) => getDefinitionsForFile(db, relativePath))
+    .filter((d) => d.documentation !== null && d.documentation !== '')
+    .sort((a, b) =>
+      a.relativePath.localeCompare(b.relativePath)
+      || a.startLine - b.startLine
+      || a.endLine - b.endLine,
+    )
+    .map((d) => {
+      const sig = extractSignature(d.documentation);
+      return {
+        startLine: d.startLine,
+        endLine: d.endLine,
+        symbol: d.symbol,
+        shortName: shortenSymbol(d.symbol),
+        signature: cleanSignature(sig),
+      };
+    });
 
-  // Internal dependencies (what this module depends on)
   const depRows = db.all<{ relative_path: string }>(
     `SELECT DISTINCT d2.relative_path
     FROM mentions m
@@ -70,7 +65,6 @@ export function system(db: ScipDatabase, modulePattern: string): SystemResult {
     .map((r) => r.relative_path)
     .filter((p) => !db.isIgnored(p));
 
-  // Reverse dependencies (who depends on this module)
   const rdepRows = db.all<{ relative_path: string }>(
     `SELECT DISTINCT d1.relative_path
     FROM mentions m

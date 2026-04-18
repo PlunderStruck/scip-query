@@ -1,6 +1,6 @@
-import ignore, { type Ignore } from 'ignore';
+import ignore from 'ignore';
 import { readFileSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 /**
  * Builds a gitignore-based path filter from .gitignore files found
@@ -34,8 +34,8 @@ export function createGitignoreFilter(projectRoot: string): PathFilter {
   }
 
   return {
-    isIgnored: (relativePath: string) => ig.ignores(relativePath),
-    filter: (paths: string[]) => paths.filter((p) => !ig.ignores(p)),
+    isIgnored: (relativePath: string) => safeIgnores(ig, projectRoot, relativePath),
+    filter: (paths: string[]) => paths.filter((p) => !safeIgnores(ig, projectRoot, p)),
   };
 }
 
@@ -141,3 +141,37 @@ Thumbs.db
 # Type definitions (often noise in queries)
 *.d.ts
 `;
+
+function safeIgnores(ig: ReturnType<typeof ignore>, projectRoot: string, inputPath: string): boolean {
+  const relativePath = normalizeForIgnore(projectRoot, inputPath);
+  if (!relativePath) {
+    return false;
+  }
+
+  try {
+    return ig.ignores(relativePath);
+  } catch {
+    return false;
+  }
+}
+
+function normalizeForIgnore(projectRoot: string, inputPath: string): string | null {
+  if (!inputPath || inputPath === '.') {
+    return null;
+  }
+
+  if (!isAbsolute(inputPath) && !inputPath.startsWith('..')) {
+    return inputPath.replaceAll('\\', '/');
+  }
+
+  const absolutePath = isAbsolute(inputPath)
+    ? inputPath
+    : resolve(projectRoot, inputPath);
+  const relativePath = relative(projectRoot, absolutePath).replaceAll('\\', '/');
+
+  if (!relativePath || relativePath === '.' || relativePath.startsWith('..')) {
+    return null;
+  }
+
+  return relativePath;
+}

@@ -194,11 +194,15 @@ program
   .option('--pnpm-workspaces', 'Enable pnpm workspace support (TypeScript)')
   .action(async (opts) => {
     const projectRoot = resolveProjectRoot();
+    const config = loadProjectConfig(projectRoot);
+    const paths = resolveIndexPaths(projectRoot, config);
     try {
       const result = await reindex({
         projectRoot,
-        languages: opts.language.length > 0 ? opts.language : undefined,
-        pnpmWorkspaces: opts.pnpmWorkspaces,
+        languages: opts.language.length > 0 ? opts.language : config.languages,
+        outputScip: paths.indexPath,
+        outputDb: paths.dbPath,
+        pnpmWorkspaces: opts.pnpmWorkspaces || config.indexer?.typescript?.pnpmWorkspaces,
       });
       console.log(`Indexed ${result.languages.join(', ')} in ${(result.durationMs / 1000).toFixed(1)}s`);
     } catch (err) {
@@ -820,6 +824,7 @@ program
   .option('-n, --limit <n>', 'Number of results', parseIntSafe, 20)
   .option('-s, --scope <path>', 'Limit to files matching path')
   .option('--min-callees <n>', 'Minimum callees to consider', parseIntSafe, 4)
+  .option('--cross-file-only', 'Only show cross-file pairs (skip same-file matches)')
   .action((symbol, opts) => {
     withDb((db) => {
       if (symbol) {
@@ -845,6 +850,7 @@ program
           limit: opts.limit,
           scope: opts.scope,
           minCallees: opts.minCallees,
+          crossFileOnly: opts.crossFileOnly,
         });
         if (results.length === 0) {
           console.log('No similar symbol pairs found.');
@@ -1336,10 +1342,11 @@ program
   .command('slice <symbol>')
   .description('Reference-level program slice: what affects this (backward) or what this affects (forward)')
   .option('--forward', 'Forward slice (what does this affect). Default is backward.')
+  .option('--depth <n>', 'Max transitive depth for backward slice', parseIntSafe, 3)
   .action((symbol, opts) => {
     const db = openDb();
     const direction = opts.forward ? 'forward' : 'backward';
-    const result = queries.slice(db, symbol, { direction });
+    const result = queries.slice(db, symbol, { direction, maxDepth: opts.depth });
     if (!result) {
       console.log('Symbol not found.');
       db.close();
@@ -1497,6 +1504,7 @@ program
     const watcher = new Watcher({
       projectRoot,
       config,
+      languages: config.languages,
       onStatus: (status) => {
         process.stdout.write(`\r\x1b[K${formatStatus(status)}`);
       },

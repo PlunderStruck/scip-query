@@ -1,6 +1,6 @@
 {
   "name": "scip-query",
-  "version": "0.4.0",
+  "version": "0.4.3",
   "description": "Language-agnostic code intelligence CLI powered by SCIP indexes",
   "type": "module",
   "main": "dist/index.js",
@@ -60,16 +60,22 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
+    "@bufbuild/protobuf": "^2.11.0",
+    "@c4312/scip": "^0.1.0",
     "better-sqlite3": "^11.7.0",
     "commander": "^13.1.0",
     "ignore": "^7.0.3"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@sourcegraph/scip-typescript": "^0.4.0",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.0",
+    "eslint": "^10.2.0",
+    "globals": "^17.5.0",
     "tsup": "^8.3.0",
     "typescript": "^5.7.0",
+    "typescript-eslint": "^8.58.1",
     "vitest": "^3.0.0"
   }
 }

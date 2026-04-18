@@ -196,7 +196,7 @@ function normalizeSourceSignature(
 ): string | null {
   if (!raw || !raw.trim()) return null;
 
-  let declaration = raw.replace(/\s+/g, ' ').trim();
+  const declaration = raw.replace(/\s+/g, ' ').trim();
   const parenIdx = declaration.indexOf('(');
   if (parenIdx === -1) return null;
 
@@ -212,7 +212,7 @@ function normalizeSourceSignature(
     .replace(/\s+/g, ' ')
     .trim();
 
-  let suffix = declaration.slice(parenIdx)
+  const suffix = declaration.slice(parenIdx)
     .replace(/\s*\{[\s\S]*$/, '')
     .replace(/\s*=>[\s\S]*$/, '')
     .replace(/\)\s*=\s*[\s\S]*$/, ')')

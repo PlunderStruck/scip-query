@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../db.js';
-import { getDefinitionsForFile } from '../query-support.js';
+import { getDefinitionsForFile, getScopedDefinitions } from '../query-support.js';
 import type { StaleAbstraction } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 
@@ -72,24 +72,6 @@ function isTrueStaleAbstraction(
   }
 
   return true;
-}
-
-function getScopedDefinitions(
-  db: ScipDatabase,
-  scope?: string,
-): ReturnType<typeof getDefinitionsForFile>[number][] {
-  const scopeFilter = scope ? `AND relative_path LIKE '%${scope}%'` : '';
-
-  return db.all<{ relative_path: string }>(
-    `SELECT relative_path
-     FROM documents
-     WHERE 1 = 1
-       ${db.pathExclusionsFor('documents')}
-       ${scopeFilter}
-     ORDER BY relative_path`,
-  )
-    .flatMap((row) => getDefinitionsForFile(db, row.relative_path))
-    .filter((row) => !db.isIgnored(row.relativePath));
 }
 
 function countCrossFileConsumers(

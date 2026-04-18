@@ -1,6 +1,6 @@
 import { basename, extname } from 'node:path';
 import type { ScipDatabase } from '../db.js';
-import { buildFileDepGraph, getCallerRowsForSymbol, getDefinitionsForFile } from '../query-support.js';
+import { buildFileDepGraph, getCallerRowsForSymbol, getDefinitionsForFile, getScopedDefinitions } from '../query-support.js';
 import type { WrapperCandidate } from '../types.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../symbol-parser.js';
 
@@ -70,24 +70,6 @@ function definitionLoc(
   definition: ReturnType<typeof getDefinitionsForFile>[number],
 ): number {
   return definition.endLine - definition.startLine + 1;
-}
-
-function getScopedDefinitions(
-  db: ScipDatabase,
-  scope?: string,
-): ReturnType<typeof getDefinitionsForFile>[number][] {
-  const scopeFilter = scope ? `AND relative_path LIKE '%${scope}%'` : '';
-
-  return db.all<{ relative_path: string }>(
-    `SELECT relative_path
-     FROM documents
-     WHERE 1 = 1
-       ${db.pathExclusionsFor('documents')}
-       ${scopeFilter}
-     ORDER BY relative_path`,
-  )
-    .flatMap((row) => getDefinitionsForFile(db, row.relative_path))
-    .filter((row) => !db.isIgnored(row.relativePath));
 }
 
 function dedupeRows<T extends { symbol: string; file: string }>(rows: T[]): T[] {

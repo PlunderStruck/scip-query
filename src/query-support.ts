@@ -1,3 +1,36 @@
+/**
+ * query-support — shared helpers for command queries.
+ *
+ * Where to get what:
+ *
+ *   Symbol ranges (for output OR as bounds):
+ *     - Per file:   getDefinitionsForFile(db, relativePath)
+ *     - Project:    getAllDefinitions(db, { scope? })
+ *     - User input: findFirstSymbolMatch(db, pattern)
+ *   All three return source-corrected ranges. Do NOT read
+ *   defn_enclosing_ranges.start_line/end_line directly if the result
+ *   will be shown to a user or used to bound a mention lookup.
+ *
+ *   Reference lines (where is this used?):
+ *     - Primary:    getSourceReferenceSites — cross-file identifier
+ *                   scan; returns [] when the leaf name is ambiguous.
+ *     - Fallback:   getResolvedReferenceSites — mention-resolved
+ *                   chunks with in-chunk line refinement. Always
+ *                   returns a result when the symbol has mentions.
+ *   Do NOT read chunks.start_line as the "line of a reference";
+ *   a chunk spans many source lines.
+ *
+ *   Enclosing symbol at a line:
+ *     - Use findEnclosingDefinition(definitions, line) with a
+ *       getDefinitionsForFile result. This matches what
+ *       getSourceReferenceSites and getResolvedReferenceSites use
+ *       internally, so attribution stays consistent across commands.
+ *
+ *   Counts and existence checks only:
+ *     - Direct SQL on mentions/chunks is fine here — e.g., "how many
+ *       files reference this symbol" in fan.ts. Never use chunk
+ *       start_line as a line number in output.
+ */
 import type { ScipDatabase } from './db.js';
 import { basename } from 'node:path';
 import { findIdentifierLines, getSourceCalls, getSourceConstructorBindings, getSourceImports, getSourceText } from './source-analysis.js';
@@ -48,6 +81,19 @@ export interface IndexedDefinition extends SymbolMatch {
   enclosingSymbol: string | null;
 }
 
+interface SymbolQueryRow {
+  id: number;
+  symbol: string;
+  document_id: number;
+  start_line: number;
+  end_line: number;
+  relative_path: string;
+  display_name?: string | null;
+  kind?: number | null;
+  documentation?: string | null;
+  enclosing_symbol?: string | null;
+}
+
 const FILE_DEFINITION_CACHE = new WeakMap<ScipDatabase, Map<string, IndexedDefinition[]>>();
 
 export const TEST_FILE_PATTERNS = [
@@ -65,13 +111,6 @@ export const TEST_FILE_PATTERNS = [
 export const TEST_SUPPORT_PATH_PATTERNS = [
   '%/test-utils/%',
 ] as const;
-
-export function testFileMatchSql(
-  alias: string,
-  patterns: readonly string[] = TEST_FILE_PATTERNS,
-): string {
-  return `(${patterns.map((pattern) => `${alias}.relative_path LIKE '${pattern}'`).join(' OR ')})`;
-}
 
 export function testFileExclusionSql(
   alias: string,
@@ -146,18 +185,19 @@ export function findFirstSymbolMatch(
   db: ScipDatabase,
   symbolPattern: string,
 ): SymbolMatch | null {
-  // Handle file:line-line syntax (e.g., "src/foo.ts:10-50")
+  const exact = findExactSymbolMatch(db, symbolPattern.trim());
+  if (exact) {
+    return exact;
+  }
+
+  // Handle file:line-line syntax (e.g., "src/foo.ts:10-50").
+  // User-supplied lines are editor-1-indexed; DB is 0-indexed.
   const fileLineMatch = symbolPattern.match(/^(.+):(\d+)-(\d+)$/);
   if (fileLineMatch) {
     const [, filePath, startStr, endStr] = fileLineMatch;
-    let row = db.get<{
-      id: number;
-      symbol: string;
-      document_id: number;
-      start_line: number;
-      end_line: number;
-      relative_path: string;
-    }>(
+    const userStart0 = Math.max(0, parseInt(startStr!, 10) - 1);
+    const userEnd0 = Math.max(userStart0, parseInt(endStr!, 10) - 1);
+    let row = db.get<SymbolQueryRow>(
       `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path
       FROM global_symbols gs
       JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
@@ -167,17 +207,10 @@ export function findFirstSymbolMatch(
         ${db.pathExclusionsFor('d')}
       ORDER BY (der.end_line - der.start_line) ASC
         LIMIT 1`,
-      `%${filePath}%`, parseInt(startStr!, 10), parseInt(endStr!, 10),
+      `%${filePath}%`, userStart0, userEnd0,
     );
     if (!row) {
-      row = db.get<{
-        id: number;
-        symbol: string;
-        document_id: number;
-        start_line: number;
-        end_line: number;
-        relative_path: string;
-      }>(
+      row = db.get<SymbolQueryRow>(
         `SELECT gs.id, gs.symbol, c.document_id, MIN(c.start_line) AS start_line, MAX(c.end_line) AS end_line, d.relative_path
          FROM global_symbols gs
          JOIN mentions m ON m.symbol_id = gs.id
@@ -190,35 +223,24 @@ export function findFirstSymbolMatch(
          GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path
          ORDER BY (MAX(c.end_line) - MIN(c.start_line)) ASC
          LIMIT 1`,
-        `%${filePath}%`, parseInt(startStr!, 10), parseInt(endStr!, 10),
+        `%${filePath}%`, userStart0, userEnd0,
       );
     }
     if (row && !db.isIgnored(row.relative_path)) {
-      return {
-        symbolId: row.id,
-        symbol: row.symbol,
-        documentId: row.document_id,
-        startLine: row.start_line,
-        endLine: row.end_line,
-        relativePath: row.relative_path,
-      };
+      return hydrateSymbolMatch(db, row);
     }
   }
 
   const cleaned = normalizeLookupPattern(symbolPattern);
   const tokens = lookupTokens(symbolPattern);
   const candidates = getSymbolLookupCandidates(db, tokens);
+  const direct = findDirectSymbolCandidate(candidates, symbolPattern, cleaned);
+  if (direct && !db.isIgnored(direct.relative_path)) {
+    return hydrateSymbolMatch(db, direct);
+  }
 
   let best: {
-    row: {
-      id: number;
-      symbol: string;
-      document_id: number;
-      start_line: number;
-      end_line: number;
-      relative_path: string;
-      display_name: string | null;
-    };
+    row: SymbolQueryRow;
     score: number;
   } | null = null;
 
@@ -234,14 +256,7 @@ export function findFirstSymbolMatch(
   }
 
   if (best) {
-    return {
-      symbolId: best.row.id,
-      symbol: best.row.symbol,
-      documentId: best.row.document_id,
-      startLine: best.row.start_line,
-      endLine: best.row.end_line,
-      relativePath: best.row.relative_path,
-    };
+    return hydrateSymbolMatch(db, best.row);
   }
 
   return null;
@@ -251,14 +266,7 @@ export function findExactSymbolMatch(
   db: ScipDatabase,
   symbol: string,
 ): SymbolMatch | null {
-  const row = db.get<{
-    id: number;
-    symbol: string;
-    document_id: number;
-    start_line: number;
-    end_line: number;
-    relative_path: string;
-  }>(
+  const row = db.get<SymbolQueryRow>(
     `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path
      FROM global_symbols gs
      JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
@@ -274,14 +282,7 @@ export function findExactSymbolMatch(
     return null;
   }
 
-  return {
-    symbolId: row.id,
-    symbol: row.symbol,
-    documentId: row.document_id,
-    startLine: row.start_line,
-    endLine: row.end_line,
-    relativePath: row.relative_path,
-  };
+  return hydrateSymbolMatch(db, row);
 }
 
 export function resolveIndexedFile(
@@ -315,15 +316,7 @@ function lookupTokens(symbolPattern: string): string[] {
 function getSymbolLookupCandidates(
   db: ScipDatabase,
   tokens: string[],
-): Array<{
-  id: number;
-  symbol: string;
-  document_id: number;
-  start_line: number;
-  end_line: number;
-  relative_path: string;
-  display_name: string | null;
-}> {
+): SymbolQueryRow[] {
   const tokenClauses = tokens.map(
     () => `(gs.symbol LIKE ? OR d.relative_path LIKE ? OR COALESCE(gs.display_name, '') LIKE ?)`,
   );
@@ -332,15 +325,7 @@ function getSymbolLookupCandidates(
     return [like, like, like];
   });
 
-  const primary = db.all<{
-    id: number;
-    symbol: string;
-    document_id: number;
-    start_line: number;
-    end_line: number;
-    relative_path: string;
-    display_name: string | null;
-  }>(
+  const primary = db.all<SymbolQueryRow>(
     `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path, gs.display_name
      FROM global_symbols gs
      JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
@@ -354,15 +339,7 @@ function getSymbolLookupCandidates(
     return primary;
   }
 
-  return db.all<{
-    id: number;
-    symbol: string;
-    document_id: number;
-    start_line: number;
-    end_line: number;
-    relative_path: string;
-    display_name: string | null;
-  }>(
+  return db.all<SymbolQueryRow>(
     `SELECT
       gs.id,
       gs.symbol,
@@ -385,13 +362,7 @@ function getSymbolLookupCandidates(
 }
 
 function scoreSymbolCandidate(
-  row: {
-    symbol: string;
-    relative_path: string;
-    start_line: number;
-    end_line: number;
-    display_name: string | null;
-  },
+  row: SymbolQueryRow,
   originalPattern: string,
   cleanedPattern: string,
   tokens: string[],
@@ -498,32 +469,10 @@ export function getCalleeRowsForSymbol(
   }
 
   const sourceFallback = getSourceBackedCalleeRows(db, symbol, opts.limit);
-  if (sourceFallback.length === 0) {
-    return primary;
-  }
-
-  if (primary.length === 0) {
+  if (sourceFallback.length > 0) {
     return applyLimit(sourceFallback, opts.limit);
   }
-
-  const merged = [...sourceFallback];
-  const seen = new Set(merged.map((row) => `${row.symbol}|${row.file}`));
-  const preferredFallbackLeaves = new Set(
-    sourceFallback
-      .filter((row) => !isLikelyTestPath(row.file))
-      .map((row) => leafName(row.symbol)),
-  );
-  for (const row of primary) {
-    if (isLikelyTestPath(row.file) && preferredFallbackLeaves.has(leafName(row.symbol))) {
-      continue;
-    }
-    const key = `${row.symbol}|${row.file}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push(row);
-  }
-
-  return applyLimit(merged, opts.limit);
+  return primary;
 }
 
 export function getCallerRowsForSymbol(
@@ -569,12 +518,14 @@ export function getCallerRowsForSymbol(
     ...getGenericSourceCallerRows(db, match, opts.limit),
   ]);
   if (sourceFallback.length === 0) {
-    return primary;
+    return dedupeCallerRows(primary);
   }
 
   const merged = [...sourceFallback];
+  const fallbackFiles = new Set(sourceFallback.map((row) => row.file));
   const seen = new Set(merged.map((row) => `${row.symbol}|${row.file}`));
   for (const row of primary) {
+    if (fallbackFiles.has(row.file)) continue;
     const key = `${row.symbol}|${row.file}`;
     if (seen.has(key)) continue;
     if (isFunctionLikeSymbol(row.symbol) || merged.length === 0) {
@@ -666,6 +617,91 @@ export function getSourceReferenceSites(
   return sites;
 }
 
+/**
+ * Precision-upgraded fallback for callers/references when
+ * `getSourceReferenceSites` bails out (leaf name is shared across symbols,
+ * or the unique-leaf check doesn't apply). Starts from SCIP's authoritative
+ * mention table (role != 1) so resolution is correct, then refines each
+ * chunk's coarse `start_line` by source-scanning for the symbol's leaf
+ * name within the chunk range. Falls back to chunk start when the leaf
+ * name is unavailable or the scan finds nothing.
+ *
+ * Use this instead of raw `c.start_line` for any query that reports where
+ * references occur.
+ */
+export function getResolvedReferenceSites(
+  db: ScipDatabase,
+  symbol: SymbolLocation,
+): ReferenceSite[] {
+  const match = getFullSymbolMatch(db, symbol);
+  if (!match) {
+    return [];
+  }
+
+  const rows = db.all<{
+    relative_path: string;
+    start_line: number;
+    end_line: number;
+  }>(
+    `SELECT DISTINCT d.relative_path, c.start_line, c.end_line
+     FROM mentions m
+     JOIN chunks c ON m.chunk_id = c.id
+     JOIN documents d ON c.document_id = d.id
+     WHERE m.symbol_id = ?
+       AND m.role != 1
+       ${db.pathExclusionsFor('d')}
+     ORDER BY d.relative_path, c.start_line`,
+    match.symbolId,
+  );
+
+  const chunksByFile = new Map<string, Array<{ start_line: number; end_line: number }>>();
+  for (const row of rows) {
+    if (db.isIgnored(row.relative_path)) continue;
+    let bucket = chunksByFile.get(row.relative_path);
+    if (!bucket) {
+      bucket = [];
+      chunksByFile.set(row.relative_path, bucket);
+    }
+    bucket.push({ start_line: row.start_line, end_line: row.end_line });
+  }
+
+  const identifier = leafName(match.symbol);
+  const sites: ReferenceSite[] = [];
+  const seen = new Set<string>();
+
+  for (const [file, chunks] of chunksByFile) {
+    const definitions = getDefinitionsForFile(db, file);
+    const excludeOpts = file === match.relativePath
+      ? { excludeStartLine: match.startLine, excludeEndLine: match.endLine }
+      : {};
+
+    const allHits = identifier
+      ? findIdentifierLines(db, file, identifier, excludeOpts)
+      : [];
+
+    for (const chunk of chunks) {
+      const hitsInChunk = allHits.filter(
+        (line) => line >= chunk.start_line && line <= chunk.end_line,
+      );
+      const lines = hitsInChunk.length > 0 ? hitsInChunk : [chunk.start_line];
+
+      for (const line of lines) {
+        const enclosing = findEnclosingDefinition(definitions, line);
+        const key = `${file}|${line}|${enclosing?.symbol ?? ''}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        sites.push({
+          file,
+          line,
+          enclosingSymbol: enclosing?.symbol ?? null,
+        });
+      }
+    }
+  }
+
+  return sites;
+}
+
 function calleeQueryParams(
   symbol: SymbolLocation,
   limit?: number,
@@ -695,7 +731,7 @@ function referenceQueryParams(
   return params;
 }
 
-function findEnclosingDefinition(
+export function findEnclosingDefinition(
   definitions: IndexedDefinition[],
   line: number,
 ): IndexedDefinition | null {
@@ -711,16 +747,78 @@ function findEnclosingDefinition(
   return best;
 }
 
-function getPythonSourceCalleeRows(
+// ── Language callee config dispatch ──────────────────────────
+
+type ComplexCallResolver = (
   db: ScipDatabase,
-  symbol: SymbolLocation,
+  current: IndexedDefinition,
+  currentFileDefinitions: IndexedDefinition[],
+  imports: ReturnType<typeof getSourceImports>,
+  constructorBindings: Map<string, string>,
+  receiverName: string | null,
+  calleeName: string,
+) => IndexedDefinition | null;
+
+interface ComplexCalleeConfig {
+  readonly kind: 'complex';
+  readonly languageIndex: number;
+  readonly resolver: ComplexCallResolver;
+}
+
+interface SimpleCalleeConfig {
+  readonly kind: 'simple';
+  readonly languageIndex: number;
+  readonly parseBindings: ((db: ScipDatabase, source: string) => Map<string, string>) | null;
+  readonly sourceCallOpts?: { allowInstanceVariables?: boolean; allowBareMemberCalls?: boolean };
+  readonly dualAttempt?: {
+    readonly baseOpts: { allowInstanceVariables?: boolean };
+    readonly extendedOpts: { allowInstanceVariables?: boolean; allowBareMemberCalls?: boolean };
+  };
+}
+
+type LanguageCalleeConfig = ComplexCalleeConfig | SimpleCalleeConfig;
+
+const LANGUAGE_CALLEE_CONFIGS: readonly LanguageCalleeConfig[] = [
+  // Python (index 0) — complex resolver
+  { kind: 'complex', languageIndex: 0, resolver: resolvePythonCallTarget },
+  // JavaScript/TypeScript (index 1) — complex resolver
+  { kind: 'complex', languageIndex: 1, resolver: resolveJavaScriptCallTarget },
+  // Java (index 2) — simple with field bindings
+  { kind: 'simple', languageIndex: 2, parseBindings: (_db, source) => parseJavaFieldBindings(source) },
+  // Kotlin (index 3) — simple with field bindings
+  { kind: 'simple', languageIndex: 3, parseBindings: (_db, source) => parseKotlinFieldBindings(source) },
+  // Scala (index 4) — simple, no bindings
+  { kind: 'simple', languageIndex: 4, parseBindings: null },
+  // C# (index 5) — simple, no bindings
+  { kind: 'simple', languageIndex: 5, parseBindings: null },
+  // Visual Basic (index 6) — simple, no bindings
+  { kind: 'simple', languageIndex: 6, parseBindings: null },
+  // C++ (index 7) — simple with receiver bindings
+  { kind: 'simple', languageIndex: 7, parseBindings: (_db, source) => parseCppReceiverBindings(source) },
+  // Rust (index 8) — simple, no bindings
+  { kind: 'simple', languageIndex: 8, parseBindings: null },
+  // Ruby (index 9) — simple with dual-attempt logic
+  {
+    kind: 'simple',
+    languageIndex: 9,
+    parseBindings: (db, source) => parseRubyReceiverBindings(db, source),
+    dualAttempt: {
+      baseOpts: { allowInstanceVariables: true },
+      extendedOpts: { allowInstanceVariables: true, allowBareMemberCalls: true },
+    },
+  },
+  // Dart (index 10) — simple, no bindings
+  { kind: 'simple', languageIndex: 10, parseBindings: null },
+  // PHP (index 11) — simple, no bindings
+  { kind: 'simple', languageIndex: 11, parseBindings: null },
+];
+
+function getComplexSourceCalleeRows(
+  db: ScipDatabase,
+  match: SymbolMatch,
+  config: ComplexCalleeConfig,
   limit?: number,
 ): CalleeRow[] {
-  const match = getFullSymbolMatch(db, symbol);
-  if (!match || !isPythonDocument(db, match.relativePath)) {
-    return [];
-  }
-
   const definitions = getDefinitionsForFile(db, match.relativePath);
   const current = definitions.find((definition) => definition.symbolId === match.symbolId);
   if (!current) {
@@ -741,7 +839,7 @@ function getPythonSourceCalleeRows(
     startLine: match.startLine,
     endLine: match.endLine,
   })) {
-    const resolved = resolvePythonCallTarget(
+    const resolved = config.resolver(
       db,
       current,
       definitions,
@@ -766,207 +864,26 @@ function getPythonSourceCalleeRows(
   return applyLimit(rows, limit);
 }
 
-function getJavaScriptSourceCalleeRows(
+function getSimpleLanguageCalleeRows(
   db: ScipDatabase,
-  symbol: SymbolLocation,
+  match: SymbolMatch,
+  config: SimpleCalleeConfig,
   limit?: number,
 ): CalleeRow[] {
-  const match = getFullSymbolMatch(db, symbol);
-  if (!match || !isJavaScriptDocument(db, match.relativePath)) {
-    return [];
+  let calls: ParsedSourceCall[];
+  if (config.dualAttempt) {
+    const baseCalls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine, config.dualAttempt.baseOpts);
+    const extendedCalls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine, config.dualAttempt.extendedOpts);
+    calls = extendedCalls.length > 0 ? extendedCalls : baseCalls;
+  } else {
+    calls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine, config.sourceCallOpts);
   }
 
-  const definitions = getDefinitionsForFile(db, match.relativePath);
-  const current = definitions.find((definition) => definition.symbolId === match.symbolId);
-  if (!current) {
-    return [];
-  }
+  const bindings = config.parseBindings
+    ? config.parseBindings(db, getSourceText(db, match.relativePath))
+    : new Map<string, string>();
 
-  const imports = getSourceImports(db, match.relativePath);
-  const bindings = new Map(
-    getSourceConstructorBindings(db, match.relativePath, {
-      startLine: match.startLine,
-      endLine: match.endLine,
-    }).map((binding) => [binding.localName, binding.typeName]),
-  );
-  const rows: CalleeRow[] = [];
-  const seen = new Set<string>();
-
-  for (const call of getSourceCalls(db, match.relativePath, {
-    startLine: match.startLine,
-    endLine: match.endLine,
-  })) {
-    const resolved = resolveJavaScriptCallTarget(
-      db,
-      current,
-      definitions,
-      imports,
-      bindings,
-      call.receiverName,
-      call.calleeName,
-    );
-    if (!resolved || resolved.symbolId === match.symbolId || db.isIgnored(resolved.relativePath)) continue;
-
-    const chunkId = 1_000_000_000 + call.line;
-    const key = `${resolved.symbol}|${resolved.relativePath}|${chunkId}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    rows.push({
-      symbol: resolved.symbol,
-      file: resolved.relativePath,
-      chunkId,
-    });
-  }
-
-  return applyLimit(rows, limit);
-}
-
-function getJavaSourceCalleeRows(
-  db: ScipDatabase,
-  symbol: SymbolLocation,
-  limit?: number,
-): CalleeRow[] {
-  const match = getFullSymbolMatch(db, symbol);
-  if (!match || !isJavaDocument(db, match.relativePath)) {
-    return [];
-  }
-
-  const calls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine);
-  const bindings = parseJavaFieldBindings(getSourceText(db, match.relativePath));
   return resolveSimpleSourceCallees(db, match, calls, bindings, limit);
-}
-
-function getKotlinSourceCalleeRows(
-  db: ScipDatabase,
-  symbol: SymbolLocation,
-  limit?: number,
-): CalleeRow[] {
-  const match = getFullSymbolMatch(db, symbol);
-  if (!match || !isKotlinDocument(db, match.relativePath)) {
-    return [];
-  }
-
-  const calls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine);
-  const bindings = parseKotlinFieldBindings(getSourceText(db, match.relativePath));
-  return resolveSimpleSourceCallees(db, match, calls, bindings, limit);
-}
-
-function getScalaSourceCalleeRows(
-  db: ScipDatabase,
-  symbol: SymbolLocation,
-  limit?: number,
-): CalleeRow[] {
-  const match = getFullSymbolMatch(db, symbol);
-  if (!match || !isScalaDocument(db, match.relativePath)) {
-    return [];
-  }
-
-  const calls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine);
-  return resolveSimpleSourceCallees(db, match, calls, new Map(), limit);
-}
-
-function getCSharpSourceCalleeRows(
-  db: ScipDatabase,
-  symbol: SymbolLocation,
-  limit?: number,
-): CalleeRow[] {
-  const match = getFullSymbolMatch(db, symbol);
-  if (!match || !isCSharpDocument(db, match.relativePath)) {
-    return [];
-  }
-
-  const calls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine);
-  return resolveSimpleSourceCallees(db, match, calls, new Map(), limit);
-}
-
-function getVisualBasicSourceCalleeRows(
-  db: ScipDatabase,
-  symbol: SymbolLocation,
-  limit?: number,
-): CalleeRow[] {
-  const match = getFullSymbolMatch(db, symbol);
-  if (!match || !isVisualBasicDocument(db, match.relativePath)) {
-    return [];
-  }
-
-  const calls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine);
-  return resolveSimpleSourceCallees(db, match, calls, new Map(), limit);
-}
-
-function getCppSourceCalleeRows(
-  db: ScipDatabase,
-  symbol: SymbolLocation,
-  limit?: number,
-): CalleeRow[] {
-  const match = getFullSymbolMatch(db, symbol);
-  if (!match || !isCppDocument(db, match.relativePath)) {
-    return [];
-  }
-
-  const calls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine);
-  const bindings = parseCppReceiverBindings(getSourceText(db, match.relativePath));
-  return resolveSimpleSourceCallees(db, match, calls, bindings, limit);
-}
-
-function getRustSourceCalleeRows(
-  db: ScipDatabase,
-  symbol: SymbolLocation,
-  limit?: number,
-): CalleeRow[] {
-  const match = getFullSymbolMatch(db, symbol);
-  if (!match || !isRustDocument(db, match.relativePath)) {
-    return [];
-  }
-
-  const calls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine);
-  return resolveSimpleSourceCallees(db, match, calls, new Map(), limit);
-}
-
-function getRubySourceCalleeRows(
-  db: ScipDatabase,
-  symbol: SymbolLocation,
-  limit?: number,
-): CalleeRow[] {
-  const match = getFullSymbolMatch(db, symbol);
-  if (!match || !isRubyDocument(db, match.relativePath)) {
-    return [];
-  }
-
-  const calls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine, { allowInstanceVariables: true });
-  const rubyCalls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine, {
-    allowInstanceVariables: true,
-    allowBareMemberCalls: true,
-  });
-  const bindings = parseRubyReceiverBindings(db, getSourceText(db, match.relativePath));
-  return resolveSimpleSourceCallees(db, match, rubyCalls.length > 0 ? rubyCalls : calls, bindings, limit);
-}
-
-function getDartSourceCalleeRows(
-  db: ScipDatabase,
-  symbol: SymbolLocation,
-  limit?: number,
-): CalleeRow[] {
-  const match = getFullSymbolMatch(db, symbol);
-  if (!match || !isDartDocument(db, match.relativePath)) {
-    return [];
-  }
-
-  const calls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine);
-  return resolveSimpleSourceCallees(db, match, calls, new Map(), limit);
-}
-
-function getPhpSourceCalleeRows(
-  db: ScipDatabase,
-  symbol: SymbolLocation,
-  limit?: number,
-): CalleeRow[] {
-  const match = getFullSymbolMatch(db, symbol);
-  if (!match || !isPhpDocument(db, match.relativePath)) {
-    return [];
-  }
-
-  const calls = getSimpleSourceCalls(db, match.relativePath, match.startLine, match.endLine);
-  return resolveSimpleSourceCallees(db, match, calls, new Map(), limit);
 }
 
 function getSourceBackedCalleeRows(
@@ -979,52 +896,16 @@ function getSourceBackedCalleeRows(
     return [];
   }
 
-  if (isPythonDocument(db, match.relativePath)) {
-    return getPythonSourceCalleeRows(db, match, limit);
-  }
+  for (const config of LANGUAGE_CALLEE_CONFIGS) {
+    if (!isDocumentLanguage(db, match.relativePath, DOCUMENT_LANGUAGE_TABLE[config.languageIndex]!)) {
+      continue;
+    }
 
-  if (isJavaScriptDocument(db, match.relativePath)) {
-    return getJavaScriptSourceCalleeRows(db, match, limit);
-  }
+    if (config.kind === 'complex') {
+      return getComplexSourceCalleeRows(db, match, config, limit);
+    }
 
-  if (isJavaDocument(db, match.relativePath)) {
-    return getJavaSourceCalleeRows(db, match, limit);
-  }
-
-  if (isScalaDocument(db, match.relativePath)) {
-    return getScalaSourceCalleeRows(db, match, limit);
-  }
-
-  if (isKotlinDocument(db, match.relativePath)) {
-    return getKotlinSourceCalleeRows(db, match, limit);
-  }
-
-  if (isCSharpDocument(db, match.relativePath)) {
-    return getCSharpSourceCalleeRows(db, match, limit);
-  }
-
-  if (isVisualBasicDocument(db, match.relativePath)) {
-    return getVisualBasicSourceCalleeRows(db, match, limit);
-  }
-
-  if (isCppDocument(db, match.relativePath)) {
-    return getCppSourceCalleeRows(db, match, limit);
-  }
-
-  if (isRustDocument(db, match.relativePath)) {
-    return getRustSourceCalleeRows(db, match, limit);
-  }
-
-  if (isRubyDocument(db, match.relativePath)) {
-    return getRubySourceCalleeRows(db, match, limit);
-  }
-
-  if (isDartDocument(db, match.relativePath)) {
-    return getDartSourceCalleeRows(db, match, limit);
-  }
-
-  if (isPhpDocument(db, match.relativePath)) {
-    return getPhpSourceCalleeRows(db, match, limit);
+    return getSimpleLanguageCalleeRows(db, match, config, limit);
   }
 
   return [];
@@ -1042,9 +923,11 @@ function getPythonSourceCallerRows(
   const rows: CallerRow[] = [];
   const seen = new Set<string>();
 
+  const pythonConfig = LANGUAGE_CALLEE_CONFIGS[0] as ComplexCalleeConfig;
   for (const candidate of getAllFunctionLikeDefinitions(db)) {
     if (candidate.symbolId === target.symbolId) continue;
-    const callees = getPythonSourceCalleeRows(db, candidate);
+    if (!isDocumentLanguage(db, candidate.relativePath, DOCUMENT_LANGUAGE_TABLE[pythonConfig.languageIndex]!)) continue;
+    const callees = getComplexSourceCalleeRows(db, candidate, pythonConfig);
     if (!callees.some((callee) => callee.symbol === target.symbol)) continue;
 
     const key = `${candidate.symbol}|${candidate.relativePath}`;
@@ -1066,24 +949,8 @@ function getPythonSourceCallerRows(
 function getDefinitionRowsForSymbolId(
   db: ScipDatabase,
   symbolId: number,
-): Array<{
-  id: number;
-  symbol: string;
-  document_id: number;
-  start_line: number;
-  end_line: number;
-  relative_path: string;
-  display_name: string | null;
-}> {
-  const primary = db.all<{
-    id: number;
-    symbol: string;
-    document_id: number;
-    start_line: number;
-    end_line: number;
-    relative_path: string;
-    display_name: string | null;
-  }>(
+): SymbolQueryRow[] {
+  const primary = db.all<SymbolQueryRow>(
     `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path, gs.display_name
      FROM global_symbols gs
      JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
@@ -1096,15 +963,7 @@ function getDefinitionRowsForSymbolId(
     return primary;
   }
 
-  return db.all<{
-    id: number;
-    symbol: string;
-    document_id: number;
-    start_line: number;
-    end_line: number;
-    relative_path: string;
-    display_name: string | null;
-  }>(
+  return db.all<SymbolQueryRow>(
     `SELECT
       gs.id,
       gs.symbol,
@@ -1140,14 +999,7 @@ function getFullSymbolMatch(
     return null;
   }
 
-  return {
-    symbolId: row.id,
-    documentId: row.document_id,
-    startLine: row.start_line,
-    endLine: row.end_line,
-    symbol: row.symbol,
-    relativePath: row.relative_path,
-  };
+  return hydrateSymbolMatch(db, row);
 }
 
 export function getDefinitionsForFile(
@@ -1165,17 +1017,7 @@ export function getDefinitionsForFile(
     return cached;
   }
 
-  const primary = db.all<{
-    id: number;
-    symbol: string;
-    document_id: number;
-    start_line: number;
-    end_line: number;
-    relative_path: string;
-    kind: number | null;
-    documentation: string | null;
-    enclosing_symbol: string | null;
-  }>(
+  const primary = db.all<SymbolQueryRow>(
     `SELECT
       gs.id,
       gs.symbol,
@@ -1183,6 +1025,7 @@ export function getDefinitionsForFile(
       der.start_line,
       der.end_line,
       d.relative_path,
+      gs.display_name,
       gs.kind,
       gs.documentation,
       gs.enclosing_symbol
@@ -1195,17 +1038,7 @@ export function getDefinitionsForFile(
     relativePath,
   );
 
-  const fallback = primary.length > 0 ? [] : db.all<{
-    id: number;
-    symbol: string;
-    document_id: number;
-    start_line: number;
-    end_line: number;
-    relative_path: string;
-    kind: number | null;
-    documentation: string | null;
-    enclosing_symbol: string | null;
-  }>(
+  const fallback = primary.length > 0 ? [] : db.all<SymbolQueryRow>(
     `SELECT
       gs.id,
       gs.symbol,
@@ -1213,6 +1046,7 @@ export function getDefinitionsForFile(
       MIN(c.start_line) AS start_line,
       MAX(c.end_line) AS end_line,
       d.relative_path,
+      gs.display_name,
       gs.kind,
       gs.documentation,
       gs.enclosing_symbol
@@ -1228,24 +1062,319 @@ export function getDefinitionsForFile(
     relativePath,
   );
 
-  const definitions = (primary.length > 0 ? primary : fallback).map((row) => ({
+  const definitions = correctDefinitionRangesFromSource(
+    db,
+    relativePath,
+    (primary.length > 0 ? primary : fallback).map((row) => ({
+      symbolId: row.id,
+      symbol: row.symbol,
+      documentId: row.document_id,
+      startLine: row.start_line,
+      endLine: row.end_line,
+      relativePath: row.relative_path,
+      leaf: leafName(row.symbol),
+      parentTypeName: parentTypeName(row.symbol),
+      isFunctionLike: isFunctionLikeSymbol(row.symbol),
+      isTypeLike: leafSuffix(row.symbol) === 'type',
+      kind: row.kind ?? null,
+      documentation: row.documentation ?? null,
+      enclosingSymbol: row.enclosing_symbol ?? null,
+    })),
+  );
+
+  cache.set(relativePath, definitions);
+  return definitions;
+}
+
+function hydrateSymbolMatch(
+  db: ScipDatabase,
+  row: SymbolQueryRow,
+): SymbolMatch {
+  const corrected = getDefinitionsForFile(db, row.relative_path)
+    .find((definition) => definition.symbolId === row.id);
+
+  if (corrected) {
+    return {
+      symbolId: corrected.symbolId,
+      symbol: corrected.symbol,
+      documentId: corrected.documentId,
+      startLine: corrected.startLine,
+      endLine: corrected.endLine,
+      relativePath: corrected.relativePath,
+    };
+  }
+
+  return {
     symbolId: row.id,
     symbol: row.symbol,
     documentId: row.document_id,
     startLine: row.start_line,
     endLine: row.end_line,
     relativePath: row.relative_path,
-    leaf: leafName(row.symbol),
-    parentTypeName: parentTypeName(row.symbol),
-    isFunctionLike: isFunctionLikeSymbol(row.symbol),
-    isTypeLike: leafSuffix(row.symbol) === 'type',
-    kind: row.kind,
-    documentation: row.documentation,
-    enclosingSymbol: row.enclosing_symbol,
-  }));
+  };
+}
 
-  cache.set(relativePath, definitions);
-  return definitions;
+function findDirectSymbolCandidate(
+  candidates: SymbolQueryRow[],
+  symbolPattern: string,
+  cleanedPattern: string,
+): SymbolQueryRow | null {
+  const trimmed = symbolPattern.trim();
+  const directMatches = candidates.filter((row) => {
+    const short = shortenSymbol(row.symbol);
+    const display = (row.display_name ?? '').trim();
+    return row.symbol === trimmed
+      || short === trimmed
+      || short === cleanedPattern
+      || display === trimmed
+      || display === cleanedPattern
+      || `${display}()` === trimmed
+      || row.relative_path === trimmed;
+  });
+
+  if (directMatches.length === 0) {
+    return null;
+  }
+
+  directMatches.sort((left, right) =>
+    (left.end_line - left.start_line) - (right.end_line - right.start_line)
+    || left.relative_path.localeCompare(right.relative_path)
+    || left.symbol.localeCompare(right.symbol),
+  );
+  return directMatches[0] ?? null;
+}
+
+function correctDefinitionRangesFromSource(
+  db: ScipDatabase,
+  relativePath: string,
+  definitions: IndexedDefinition[],
+): IndexedDefinition[] {
+  const source = getSourceText(db, relativePath);
+  if (!source) {
+    return definitions;
+  }
+
+  const lines = source.split(/\r?\n/);
+  const correctedStarts = new Map<number, number>();
+  for (const definition of definitions) {
+    correctedStarts.set(
+      definition.symbolId,
+      resolveCallableDefinitionStartLine(lines, definition),
+    );
+  }
+
+  const correctedRanges = new Map<number, { startLine: number; endLine: number }>();
+  const callableDefinitions = definitions
+    .filter((definition) => isCallableDefinition(definition.symbol))
+    .map((definition) => ({
+      definition,
+      startLine: correctedStarts.get(definition.symbolId) ?? definition.startLine,
+    }))
+    .sort((left, right) =>
+      left.startLine - right.startLine
+      || left.definition.startLine - right.definition.startLine
+      || left.definition.symbol.localeCompare(right.definition.symbol),
+    );
+
+  for (let index = 0; index < callableDefinitions.length; index += 1) {
+    const current = callableDefinitions[index]!;
+    const next = callableDefinitions[index + 1];
+    const maxEndLine = next
+      ? Math.max(current.startLine, next.startLine - 1)
+      : lines.length - 1;
+
+    correctedRanges.set(current.definition.symbolId, {
+      startLine: current.startLine,
+      endLine: resolveCallableDefinitionEndLine(
+        lines,
+        current.definition,
+        current.startLine,
+        maxEndLine,
+      ),
+    });
+  }
+
+  return definitions.map((definition) => {
+    const corrected = correctedRanges.get(definition.symbolId);
+    if (!corrected) {
+      return definition;
+    }
+
+    return {
+      ...definition,
+      startLine: corrected.startLine,
+      endLine: corrected.endLine,
+    };
+  });
+}
+
+function resolveCallableDefinitionStartLine(
+  lines: string[],
+  definition: IndexedDefinition,
+): number {
+  if (!isCallableDefinition(definition.symbol)) {
+    return definition.startLine;
+  }
+
+  const escapedLeaf = escapeRegex(definition.leaf);
+  const strongPatterns = [
+    new RegExp(`\\b(?:function|def|fn)\\s+${escapedLeaf}\\b`),
+    new RegExp(`\\b${escapedLeaf}\\b\\s*[:=]\\s*(?:async\\s*)?(?:function\\b|\\()`),
+    // Method/function declaration with optional TypeScript generic
+    // parameters: matches `foo(`, `foo<T>(`, `foo<T = Record<string, unknown>>(`.
+    // `[^(]*` with greedy backtracking handles nested generics as long as
+    // the generic block itself doesn't contain a `(`. Anchored to start of
+    // line content (optional leading whitespace + optional access modifiers)
+    // so it prefers the declaration line over call sites.
+    new RegExp(
+      `^\\s*(?:export\\s+|public\\s+|private\\s+|protected\\s+|static\\s+|readonly\\s+|async\\s+|abstract\\s+|get\\s+|set\\s+)*${escapedLeaf}\\s*(?:<[^(]*>)?\\s*\\(`,
+    ),
+  ];
+  const fallbackPatterns = [
+    new RegExp(`\\b${escapedLeaf}\\b\\s*\\(`),
+  ];
+
+  return findNearestMatchingLine(
+    lines,
+    [...strongPatterns, ...fallbackPatterns],
+    definition.startLine,
+    definition.endLine,
+  );
+}
+
+function findNearestMatchingLine(
+  lines: string[],
+  patterns: RegExp[],
+  preferredStartLine: number,
+  preferredEndLine: number,
+): number {
+  const windowStart = Math.max(0, preferredStartLine - 40);
+  const windowEnd = Math.min(lines.length - 1, Math.max(preferredEndLine + 40, preferredStartLine + 5));
+
+  const windowMatch = matchNearestLine(lines, patterns, preferredStartLine, windowStart, windowEnd);
+  if (windowMatch !== null) {
+    return windowMatch;
+  }
+
+  const fullMatch = matchNearestLine(lines, patterns, preferredStartLine, 0, lines.length - 1);
+  return fullMatch ?? Math.max(0, Math.min(preferredStartLine, lines.length - 1));
+}
+
+function matchNearestLine(
+  lines: string[],
+  patterns: RegExp[],
+  preferredLine: number,
+  startLine: number,
+  endLine: number,
+): number | null {
+  let best: { line: number; distance: number } | null = null;
+
+  for (let lineIndex = startLine; lineIndex <= endLine; lineIndex += 1) {
+    const line = lines[lineIndex] ?? '';
+    if (!patterns.some((pattern) => pattern.test(line))) continue;
+
+    const distance = Math.abs(lineIndex - preferredLine);
+    if (!best || distance < best.distance) {
+      best = { line: lineIndex, distance };
+    }
+  }
+
+  return best?.line ?? null;
+}
+
+function resolveCallableDefinitionEndLine(
+  lines: string[],
+  definition: IndexedDefinition,
+  startLine: number,
+  maxEndLine: number,
+): number {
+  const boundedEndLine = Math.max(startLine, Math.min(lines.length - 1, maxEndLine));
+  const fallbackEndLine = Math.max(startLine, Math.min(boundedEndLine, definition.endLine));
+
+  let braceDepth = 0;
+  let parenDepth = 0;
+  let sawOpeningBrace = false;
+
+  for (let lineIndex = startLine; lineIndex <= boundedEndLine; lineIndex += 1) {
+    const masked = maskStructuralLine(lines[lineIndex] ?? '');
+    for (const char of masked) {
+      if (char === '{') {
+        braceDepth += 1;
+        sawOpeningBrace = true;
+      } else if (char === '}') {
+        braceDepth = Math.max(0, braceDepth - 1);
+      } else if (char === '(') {
+        parenDepth += 1;
+      } else if (char === ')') {
+        parenDepth = Math.max(0, parenDepth - 1);
+      }
+    }
+
+    if (sawOpeningBrace && braceDepth === 0) {
+      return lineIndex;
+    }
+
+    if (!sawOpeningBrace && parenDepth === 0 && lineIndex >= fallbackEndLine) {
+      return lineIndex;
+    }
+  }
+
+  return fallbackEndLine;
+}
+
+function maskStructuralLine(line: string): string {
+  let masked = '';
+  let quote: '"' | '\'' | '`' | null = null;
+  let escaping = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index]!;
+    const next = line[index + 1];
+
+    if (!quote && char === '/' && next === '/') {
+      masked += ' '.repeat(line.length - index);
+      break;
+    }
+
+    if (quote) {
+      if (escaping) {
+        escaping = false;
+        masked += ' ';
+        continue;
+      }
+
+      if (char === '\\') {
+        escaping = true;
+        masked += ' ';
+        continue;
+      }
+
+      if (char === quote) {
+        quote = null;
+      }
+
+      masked += ' ';
+      continue;
+    }
+
+    if (char === '"' || char === '\'' || char === '`') {
+      quote = char;
+      masked += ' ';
+      continue;
+    }
+
+    masked += char;
+  }
+
+  return masked;
+}
+
+function isCallableDefinition(symbol: string): boolean {
+  return symbol.includes('().');
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export function getAllDefinitions(
@@ -1266,6 +1395,24 @@ export function getAllDefinitions(
   return rows
     .filter((row) => !db.isIgnored(row.relative_path))
     .flatMap((row) => getDefinitionsForFile(db, row.relative_path));
+}
+
+export function getScopedDefinitions(
+  db: ScipDatabase,
+  scope?: string,
+): IndexedDefinition[] {
+  const scopeFilter = scope ? `AND relative_path LIKE '%${scope}%'` : '';
+
+  return db.all<{ relative_path: string }>(
+    `SELECT relative_path
+     FROM documents
+     WHERE 1 = 1
+       ${db.pathExclusionsFor('documents')}
+       ${scopeFilter}
+     ORDER BY relative_path`,
+  )
+    .flatMap((row) => getDefinitionsForFile(db, row.relative_path))
+    .filter((row) => !db.isIgnored(row.relativePath));
 }
 
 function getAllFunctionLikeDefinitions(db: ScipDatabase): IndexedDefinition[] {
@@ -1872,152 +2019,48 @@ function parentTypeName(rawSymbol: string): string | null {
   return null;
 }
 
-function isPythonDocument(
-  db: ScipDatabase,
-  relativePath: string,
-): boolean {
+// ── Document language lookup ──────────────────────────────
+
+interface DocumentLanguageEntry {
+  readonly languages: readonly string[];
+  readonly extensionPattern: RegExp;
+}
+
+const DOCUMENT_LANGUAGE_TABLE: readonly DocumentLanguageEntry[] = [
+  { languages: ['python'], extensionPattern: /\.(?:py|pyi)$/ },
+  { languages: ['typescript', 'javascript'], extensionPattern: /\.(?:[cm]?[jt]sx?)$/ },
+  { languages: ['java'], extensionPattern: /\.java$/ },
+  { languages: ['kotlin'], extensionPattern: /\.(?:kt|kts)$/ },
+  { languages: ['scala'], extensionPattern: /\.scala$/ },
+  { languages: ['C#'], extensionPattern: /\.cs$/ },
+  { languages: ['Visual Basic'], extensionPattern: /\.vb$/ },
+  { languages: ['CPP'], extensionPattern: /\.(?:cc|cpp|cxx|hpp|hh|hxx)$/ },
+  { languages: ['Rust'], extensionPattern: /\.rs$/ },
+  { languages: ['ruby'], extensionPattern: /\.rb$/ },
+  { languages: ['Dart'], extensionPattern: /\.dart$/ },
+  { languages: ['PHP'], extensionPattern: /\.php$/ },
+];
+
+function isDocumentLanguage(db: ScipDatabase, relativePath: string, entry: DocumentLanguageEntry): boolean {
   const row = db.get<{ language: string | null }>(
     `SELECT language FROM documents WHERE relative_path = ? LIMIT 1`,
     relativePath,
   );
-
-  return row?.language === 'python' || relativePath.endsWith('.py') || relativePath.endsWith('.pyi');
+  return entry.languages.includes(row?.language ?? '') || entry.extensionPattern.test(relativePath);
 }
 
-function isJavaScriptDocument(
-  db: ScipDatabase,
-  relativePath: string,
-): boolean {
-  const row = db.get<{ language: string | null }>(
-    `SELECT language FROM documents WHERE relative_path = ? LIMIT 1`,
-    relativePath,
-  );
-
-  return row?.language === 'typescript'
-    || row?.language === 'javascript'
-    || /\.(?:[cm]?[jt]sx?)$/.test(relativePath);
-}
-
-function isJavaDocument(
-  db: ScipDatabase,
-  relativePath: string,
-): boolean {
-  const row = db.get<{ language: string | null }>(
-    `SELECT language FROM documents WHERE relative_path = ? LIMIT 1`,
-    relativePath,
-  );
-
-  return row?.language === 'java' || relativePath.endsWith('.java');
-}
-
-function isKotlinDocument(
-  db: ScipDatabase,
-  relativePath: string,
-): boolean {
-  const row = db.get<{ language: string | null }>(
-    `SELECT language FROM documents WHERE relative_path = ? LIMIT 1`,
-    relativePath,
-  );
-
-  return row?.language === 'kotlin' || relativePath.endsWith('.kt') || relativePath.endsWith('.kts');
-}
-
-function isScalaDocument(
-  db: ScipDatabase,
-  relativePath: string,
-): boolean {
-  const row = db.get<{ language: string | null }>(
-    `SELECT language FROM documents WHERE relative_path = ? LIMIT 1`,
-    relativePath,
-  );
-
-  return row?.language === 'scala' || relativePath.endsWith('.scala');
-}
-
-function isCSharpDocument(
-  db: ScipDatabase,
-  relativePath: string,
-): boolean {
-  const row = db.get<{ language: string | null }>(
-    `SELECT language FROM documents WHERE relative_path = ? LIMIT 1`,
-    relativePath,
-  );
-
-  return row?.language === 'C#' || relativePath.endsWith('.cs');
-}
-
-function isVisualBasicDocument(
-  db: ScipDatabase,
-  relativePath: string,
-): boolean {
-  const row = db.get<{ language: string | null }>(
-    `SELECT language FROM documents WHERE relative_path = ? LIMIT 1`,
-    relativePath,
-  );
-
-  return row?.language === 'Visual Basic' || relativePath.endsWith('.vb');
-}
-
-function isCppDocument(
-  db: ScipDatabase,
-  relativePath: string,
-): boolean {
-  const row = db.get<{ language: string | null }>(
-    `SELECT language FROM documents WHERE relative_path = ? LIMIT 1`,
-    relativePath,
-  );
-
-  return row?.language === 'CPP'
-    || /\.(?:cc|cpp|cxx|hpp|hh|hxx)$/.test(relativePath);
-}
-
-function isRustDocument(
-  db: ScipDatabase,
-  relativePath: string,
-): boolean {
-  const row = db.get<{ language: string | null }>(
-    `SELECT language FROM documents WHERE relative_path = ? LIMIT 1`,
-    relativePath,
-  );
-
-  return row?.language === 'Rust' || relativePath.endsWith('.rs');
-}
-
-function isRubyDocument(
-  db: ScipDatabase,
-  relativePath: string,
-): boolean {
-  const row = db.get<{ language: string | null }>(
-    `SELECT language FROM documents WHERE relative_path = ? LIMIT 1`,
-    relativePath,
-  );
-
-  return row?.language === 'ruby' || relativePath.endsWith('.rb');
-}
-
-function isDartDocument(
-  db: ScipDatabase,
-  relativePath: string,
-): boolean {
-  const row = db.get<{ language: string | null }>(
-    `SELECT language FROM documents WHERE relative_path = ? LIMIT 1`,
-    relativePath,
-  );
-
-  return row?.language === 'Dart' || relativePath.endsWith('.dart');
-}
-
-function isPhpDocument(
-  db: ScipDatabase,
-  relativePath: string,
-): boolean {
-  const row = db.get<{ language: string | null }>(
-    `SELECT language FROM documents WHERE relative_path = ? LIMIT 1`,
-    relativePath,
-  );
-
-  return row?.language === 'PHP' || relativePath.endsWith('.php');
-}
+function isPythonDocument(db: ScipDatabase, relativePath: string): boolean { return isDocumentLanguage(db, relativePath, DOCUMENT_LANGUAGE_TABLE[0]!); }
+function isJavaScriptDocument(db: ScipDatabase, relativePath: string): boolean { return isDocumentLanguage(db, relativePath, DOCUMENT_LANGUAGE_TABLE[1]!); }
+function isJavaDocument(db: ScipDatabase, relativePath: string): boolean { return isDocumentLanguage(db, relativePath, DOCUMENT_LANGUAGE_TABLE[2]!); }
+function isKotlinDocument(db: ScipDatabase, relativePath: string): boolean { return isDocumentLanguage(db, relativePath, DOCUMENT_LANGUAGE_TABLE[3]!); }
+function isScalaDocument(db: ScipDatabase, relativePath: string): boolean { return isDocumentLanguage(db, relativePath, DOCUMENT_LANGUAGE_TABLE[4]!); }
+function isCSharpDocument(db: ScipDatabase, relativePath: string): boolean { return isDocumentLanguage(db, relativePath, DOCUMENT_LANGUAGE_TABLE[5]!); }
+function isVisualBasicDocument(db: ScipDatabase, relativePath: string): boolean { return isDocumentLanguage(db, relativePath, DOCUMENT_LANGUAGE_TABLE[6]!); }
+function isCppDocument(db: ScipDatabase, relativePath: string): boolean { return isDocumentLanguage(db, relativePath, DOCUMENT_LANGUAGE_TABLE[7]!); }
+function isRustDocument(db: ScipDatabase, relativePath: string): boolean { return isDocumentLanguage(db, relativePath, DOCUMENT_LANGUAGE_TABLE[8]!); }
+function isRubyDocument(db: ScipDatabase, relativePath: string): boolean { return isDocumentLanguage(db, relativePath, DOCUMENT_LANGUAGE_TABLE[9]!); }
+function isDartDocument(db: ScipDatabase, relativePath: string): boolean { return isDocumentLanguage(db, relativePath, DOCUMENT_LANGUAGE_TABLE[10]!); }
+function isPhpDocument(db: ScipDatabase, relativePath: string): boolean { return isDocumentLanguage(db, relativePath, DOCUMENT_LANGUAGE_TABLE[11]!); }
 
 function applyLimit<T>(
   values: T[],

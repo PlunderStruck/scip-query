@@ -1,81 +1,36 @@
 import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch, getSourceReferenceSites } from '../query-support.js';
+import { findFirstSymbolMatch, getResolvedReferenceSites, getSourceReferenceSites } from '../query-support.js';
 import { getSourceText } from '../source-analysis.js';
 import { isFunctionLikeSymbol } from '../symbol-parser.js';
 import type { RefResult } from '../types.js';
 
 export function refs(db: ScipDatabase, symbolPattern: string): RefResult[] {
   const match = findFirstSymbolMatch(db, symbolPattern);
-  if (match) {
-    const includeDefinitionSite = !isFunctionLikeSymbol(match.symbol);
-    const definitionRows = includeDefinitionSite
-      ? [{
-        relativePath: match.relativePath,
-        line: match.startLine,
-      }]
-      : [];
-    const sourceSites = getSourceReferenceSites(db, match)
-      .filter((site) => !db.isIgnored(site.file))
-      .map((site) => ({
-        relativePath: site.file,
-        line: site.line,
-      }));
+  if (!match) return [];
 
-    if (sourceSites.length > 0) {
-      const seen = new Set<string>();
-      const rows = [...definitionRows, ...sourceSites, ...getRubySemanticRefs(db, match)].filter((site) => {
-        const key = `${site.relativePath}:${site.line}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-      return rows;
-    }
-  }
+  const includeDefinitionSite = !isFunctionLikeSymbol(match.symbol);
+  const definitionRows: RefResult[] = includeDefinitionSite && !db.isIgnored(match.relativePath)
+    ? [{ relativePath: match.relativePath, line: match.startLine }]
+    : [];
 
-  const rows = db.all<{
-    relative_path: string;
-    start_line: number;
-  }>(
-    `SELECT DISTINCT d.relative_path, c.start_line
-    FROM mentions m
-    JOIN chunks c ON m.chunk_id = c.id
-    JOIN documents d ON c.document_id = d.id
-    JOIN global_symbols gs ON m.symbol_id = gs.id
-    WHERE m.symbol_id = ?
-      AND ${db.localSymbolPredicate}
-      AND m.role != 1
-    ORDER BY d.relative_path, c.start_line`,
-    match?.symbolId ?? -1,
-  );
+  // Primary: cross-file identifier scan when the leaf name is unique.
+  // Fallback: mention-resolved sites with in-chunk line refinement.
+  const sourceSites = getSourceReferenceSites(db, match);
+  const referenceSites = (sourceSites.length > 0 ? sourceSites : getResolvedReferenceSites(db, match))
+    .filter((site) => !db.isIgnored(site.file))
+    .map((site) => ({ relativePath: site.file, line: site.line }));
 
-  const referenceRows = rows
-    .filter((r) => !db.isIgnored(r.relative_path))
-    .map((r) => ({
-      relativePath: r.relative_path,
-      line: r.start_line,
-    }));
+  const rubySites = getRubySemanticRefs(db, match);
 
-  if (!match || db.isIgnored(match.relativePath) || isFunctionLikeSymbol(match.symbol)) {
-    return referenceRows;
-  }
-
-  const seen = new Set(referenceRows.map((row) => `${row.relativePath}:${row.line}`));
-  if (!seen.has(`${match.relativePath}:${match.startLine}`)) {
-    referenceRows.unshift({
-      relativePath: match.relativePath,
-      line: match.startLine,
-    });
-  }
-
-  for (const row of getRubySemanticRefs(db, match)) {
+  const seen = new Set<string>();
+  const out: RefResult[] = [];
+  for (const row of [...definitionRows, ...referenceSites, ...rubySites]) {
     const key = `${row.relativePath}:${row.line}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    referenceRows.push(row);
+    out.push(row);
   }
-
-  return referenceRows;
+  return out;
 }
 
 function getRubySemanticRefs(

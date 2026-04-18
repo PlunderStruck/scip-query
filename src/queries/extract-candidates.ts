@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../db.js';
-import { getCalleeRowsForSymbol, getDefinitionsForFile } from '../query-support.js';
+import { getCalleeRowsForSymbol, getDefinitionsForFile, getScopedDefinitions } from '../query-support.js';
 import type { ExtractCandidate } from '../types.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../symbol-parser.js';
 
@@ -139,24 +139,6 @@ export function extractCandidates(
 
   results.sort((a, b) => b.clusters.length - a.clusters.length || b.loc - a.loc);
   return results.slice(0, limit);
-}
-
-function getScopedDefinitions(
-  db: ScipDatabase,
-  scope?: string,
-): ReturnType<typeof getDefinitionsForFile>[number][] {
-  const scopeFilter = scope ? `AND relative_path LIKE '%${scope}%'` : '';
-
-  return db.all<{ relative_path: string }>(
-    `SELECT relative_path
-     FROM documents
-     WHERE 1 = 1
-       ${db.pathExclusionsFor('documents')}
-       ${scopeFilter}
-     ORDER BY relative_path`,
-  )
-    .flatMap((row) => getDefinitionsForFile(db, row.relative_path))
-    .filter((row) => !db.isIgnored(row.relativePath));
 }
 
 function definitionLoc(

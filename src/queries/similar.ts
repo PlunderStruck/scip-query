@@ -44,7 +44,7 @@ export function similar(
   for (const candidate of candidates) {
     if (candidate.callees.size < 3) continue;
 
-    const { similarity, significantShared, trivialShared } = weightedSimilarity(
+    const { similarity, significantShared } = weightedSimilarity(
       target.callees, candidate.callees, idfWeights,
     );
 
@@ -79,9 +79,9 @@ export function similar(
  */
 export function similarAll(
   db: ScipDatabase,
-  opts: { minSimilarity?: number; limit?: number; scope?: string; minCallees?: number } = {},
+  opts: { minSimilarity?: number; limit?: number; scope?: string; minCallees?: number; crossFileOnly?: boolean } = {},
 ): SimilarSymbolResult[] {
-  const { minSimilarity = 0.5, limit = 20, scope, minCallees = 4 } = opts;
+  const { minSimilarity = 0.5, limit = 20, scope, minCallees = 4, crossFileOnly = false } = opts;
 
   const all = getAllCalleeFingerprints(db, { minCallees, scope });
   const idfWeights = computeIdf(all);
@@ -93,14 +93,24 @@ export function similarAll(
       const a = all[i]!;
       const b = all[j]!;
 
-      if (a.file === b.file) continue;
+      if (crossFileOnly && a.file === b.file) continue;
 
       const { similarity, significantShared } = weightedSimilarity(
         a.callees, b.callees, idfWeights,
       );
 
       if (similarity < minSimilarity) continue;
-      if (significantShared.length < 2) continue;
+
+      // Require at least some meaningful overlap. If TF-IDF classifies all
+      // shared callees as trivial but raw overlap is substantial (>= 4 shared),
+      // still include the pair — many shared "common" callees is itself a signal.
+      const sharedCount = intersection(a.callees, b.callees).size;
+      if (significantShared.length < 2 && sharedCount < 4) continue;
+
+      // Use significant callees if available, otherwise fall back to all shared
+      const displayShared = significantShared.length > 0
+        ? significantShared
+        : [...intersection(a.callees, b.callees)];
 
       results.push({
         symbolA: a.symbol,
@@ -110,7 +120,7 @@ export function similarAll(
         shortNameB: shortenSymbol(b.symbol),
         fileB: b.file,
         similarity,
-        sharedCallees: significantShared.map(shortenSymbol),
+        sharedCallees: displayShared.map(shortenSymbol),
         uniqueToA: [...difference(a.callees, b.callees)].map(shortenSymbol),
         uniqueToB: [...difference(b.callees, a.callees)].map(shortenSymbol),
       });
@@ -255,47 +265,27 @@ function getAllCalleeFingerprints(
   opts: { minCallees: number; scope?: string; excludeSymbol?: string },
 ): SymbolFingerprint[] {
   const { minCallees, scope, excludeSymbol } = opts;
-  const scopeFilter = scope ? `AND d.relative_path LIKE '%${scope}%'` : '';
-  const excludeFilter = excludeSymbol ? `AND gs.symbol != '${excludeSymbol.replace(/'/g, "''")}'` : '';
-
-  const symbols = db.all<{
-    id: number;
-    symbol: string;
-    document_id: number;
-    start_line: number;
-    end_line: number;
-    relative_path: string;
-  }>(
-    `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path
-    FROM global_symbols gs
-    JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-    JOIN documents d ON der.document_id = d.id
-    WHERE 1 = 1
-      ${db.pathExclusionsFor('d')}
-      ${db.symbolNoiseFor('gs')}
-      AND (der.end_line - der.start_line + 1) >= 5
-      ${scopeFilter}
-      ${excludeFilter}
-    ORDER BY d.relative_path`,
-  );
-
   const fingerprints: SymbolFingerprint[] = [];
 
-  for (const sym of symbols) {
-    if (db.isIgnored(sym.relative_path)) continue;
-    if (!isFunctionLikeSymbol(sym.symbol)) continue;
+  for (const definition of getAllDefinitions(db, { scope })) {
+    if (db.isIgnored(definition.relativePath)) continue;
+    if (!definition.isFunctionLike) continue;
+    if (excludeSymbol && definition.symbol === excludeSymbol) continue;
+    // Minimum LOC guard matches the previous SQL filter. Keeps small helpers
+    // out of the fingerprint set — their callee sets are too thin for TF-IDF
+    // similarity to be meaningful.
+    if ((definition.endLine - definition.startLine + 1) < 5) continue;
 
-    const calleeRows = getCalleeRowsForSymbol(db, {
-      documentId: sym.document_id,
-      startLine: sym.start_line,
-      endLine: sym.end_line,
-      symbolId: sym.id,
+    const callees = new Set(
+      getCalleeRowsForSymbol(db, definition).map((row) => row.symbol),
+    );
+    if (callees.size < minCallees) continue;
+
+    fingerprints.push({
+      symbol: definition.symbol,
+      file: definition.relativePath,
+      callees,
     });
-
-    const callees = new Set(calleeRows.map((r) => r.symbol));
-    if (callees.size >= minCallees) {
-      fingerprints.push({ symbol: sym.symbol, file: sym.relative_path, callees });
-    }
   }
 
   return fingerprints;

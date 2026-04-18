@@ -1,5 +1,14 @@
 import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch, getCalleeRowsForSymbol, type SymbolMatch } from '../query-support.js';
+import {
+  findEnclosingDefinition,
+  findExactSymbolMatch,
+  findFirstSymbolMatch,
+  getCalleeRowsForSymbol,
+  getDefinitionsForFile,
+  getResolvedReferenceSites,
+  getSourceReferenceSites,
+  type SymbolMatch,
+} from '../query-support.js';
 import type { SliceResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 
@@ -7,8 +16,8 @@ import { shortenSymbol } from '../symbol-parser.js';
  * Reference-level program slicing: track what affects a symbol (backward)
  * or what a symbol affects (forward).
  *
- * Backward slice: "What feeds into this?" — symbols referenced in the same
- * function that defines the target. These are the direct tracked inputs.
+ * Backward slice: "What feeds into this?" — transitive closure of callees.
+ * Depth 1 = direct callees, depth 2 = their callees, etc.
  *
  * Forward slice: "What does this feed into?" — at each site where the target
  * is referenced, find the enclosing function, then find what that function
@@ -19,38 +28,56 @@ import { shortenSymbol } from '../symbol-parser.js';
 export function slice(
   db: ScipDatabase,
   symbolPattern: string,
-  opts: { direction?: 'backward' | 'forward' } = {},
+  opts: { direction?: 'backward' | 'forward'; maxDepth?: number } = {},
 ): SliceResult | null {
-  const { direction = 'backward' } = opts;
+  const { direction = 'backward', maxDepth = 3 } = opts;
 
   const match = findFirstSymbolMatch(db, symbolPattern);
   if (!match) return null;
 
   if (direction === 'backward') {
-    return backwardSlice(db, match);
+    return backwardSlice(db, match, maxDepth);
   } else {
     return forwardSlice(db, match);
   }
 }
 
 
-function backwardSlice(db: ScipDatabase, match: SymbolMatch): SliceResult {
-  // Find all symbols referenced within the definition range of the target.
-  // These are what "feeds into" the target — the inputs.
-  const callees = getCalleeRowsForSymbol(db, match);
-
-  const seen = new Set<string>();
+function backwardSlice(db: ScipDatabase, match: SymbolMatch, maxDepth: number): SliceResult {
+  // Transitive BFS through callees: depth 1 = direct callees of the target,
+  // depth 2 = callees of those callees, etc.
   const connected: SliceResult['connectedSymbols'] = [];
+  const visited = new Set<string>([match.symbol]);
+  let frontier: SymbolMatch[] = [match];
 
-  for (const c of callees) {
-    if (seen.has(c.symbol)) continue;
-    seen.add(c.symbol);
-    connected.push({
-      symbol: c.symbol,
-      shortName: shortenSymbol(c.symbol),
-      file: c.file,
-      relationship: 'referenced within definition (callee)',
-    });
+  for (let depth = 1; depth <= maxDepth; depth++) {
+    if (frontier.length === 0) break;
+
+    const nextFrontier: SymbolMatch[] = [];
+
+    for (const current of frontier) {
+      const callees = getCalleeRowsForSymbol(db, current);
+
+      for (const c of callees) {
+        if (visited.has(c.symbol)) continue;
+        visited.add(c.symbol);
+
+        connected.push({
+          symbol: c.symbol,
+          shortName: shortenSymbol(c.symbol),
+          file: c.file,
+          relationship: depth === 1 ? 'referenced within definition (callee)' : `depth ${depth} callee`,
+        });
+
+        // Resolve the callee as a SymbolMatch for the next frontier
+        const calleeMatch = findExactSymbolMatch(db, c.symbol);
+        if (calleeMatch && !db.isIgnored(calleeMatch.relativePath)) {
+          nextFrontier.push(calleeMatch);
+        }
+      }
+    }
+
+    frontier = nextFrontier;
   }
 
   return {
@@ -63,60 +90,52 @@ function backwardSlice(db: ScipDatabase, match: SymbolMatch): SliceResult {
 
 function forwardSlice(db: ScipDatabase, match: SymbolMatch): SliceResult {
   // Find where the target is referenced, then at each reference site,
-  // find what else the enclosing function defines/exports.
-  const rows = db.all<{
-    enclosing_symbol: string;
-    enclosing_file: string;
-    output_symbol: string;
-    output_file: string;
-  }>(
-    `SELECT DISTINCT
-      enc_gs.symbol AS enclosing_symbol,
-      enc_d.relative_path AS enclosing_file,
-      out_gs.symbol AS output_symbol,
-      out_d.relative_path AS output_file
-    FROM mentions ref_m
-    JOIN chunks ref_c ON ref_m.chunk_id = ref_c.id
-    JOIN documents ref_d ON ref_c.document_id = ref_d.id
-    -- Find enclosing function at each reference site
-    JOIN defn_enclosing_ranges enc_der
-      ON enc_der.document_id = ref_d.id
-      AND enc_der.start_line <= ref_c.start_line
-      AND enc_der.end_line >= ref_c.end_line
-    JOIN global_symbols enc_gs ON enc_der.symbol_id = enc_gs.id
-    JOIN documents enc_d ON enc_der.document_id = enc_d.id
-    -- Find other symbols referenced within that enclosing function
-    JOIN mentions out_m ON out_m.role != 1
-    JOIN chunks out_c ON out_m.chunk_id = out_c.id
-      AND out_c.document_id = enc_der.document_id
-      AND out_c.start_line >= enc_der.start_line
-      AND out_c.end_line <= enc_der.end_line
-    JOIN global_symbols out_gs ON out_m.symbol_id = out_gs.id
-    JOIN defn_enclosing_ranges out_der ON out_gs.id = out_der.symbol_id
-    JOIN documents out_d ON out_der.document_id = out_d.id
-    WHERE ref_m.symbol_id = ? AND ref_m.role != 1
-      AND out_gs.id != ? AND out_gs.id != enc_gs.id
-      AND out_d.id != ref_d.id
-      ${db.symbolNoiseFor('out_gs')}
-      ${db.pathExclusionsFor('out_d')}
-    ORDER BY out_d.relative_path
-    LIMIT 30`,
-    match.symbolId, match.symbolId,
-  );
+  // find what else the enclosing function defines/exports. Goes through the
+  // canonical reference-site + enclosing-definition helpers so that bounds
+  // are source-corrected and attribution matches every other query that
+  // does the same lookup.
+  const sourceRefs = getSourceReferenceSites(db, match);
+  const refs = sourceRefs.length > 0 ? sourceRefs : getResolvedReferenceSites(db, match);
 
-  const seen = new Set<string>();
+  const seenOutputs = new Set<string>();
   const connected: SliceResult['connectedSymbols'] = [];
 
-  for (const r of rows) {
-    if (seen.has(r.output_symbol) || db.isIgnored(r.output_file)) continue;
-    seen.add(r.output_symbol);
-    connected.push({
-      symbol: r.output_symbol,
-      shortName: shortenSymbol(r.output_symbol),
-      file: r.output_file,
-      relationship: `used alongside target in ${shortenSymbol(r.enclosing_symbol)}`,
-    });
+  for (const ref of refs) {
+    if (connected.length >= 30) break;
+    if (db.isIgnored(ref.file)) continue;
+
+    // Enclosing symbol via corrected ranges — use the JS helper so we agree
+    // with getSourceReferenceSites/getResolvedReferenceSites, which already
+    // compute enclosing the same way.
+    const enclosingSymbol =
+      ref.enclosingSymbol ?? findEnclosingDefinition(
+        getDefinitionsForFile(db, ref.file),
+        ref.line,
+      )?.symbol ?? null;
+    if (!enclosingSymbol || enclosingSymbol === match.symbol) continue;
+
+    const enclosingMatch = findExactSymbolMatch(db, enclosingSymbol);
+    if (!enclosingMatch) continue;
+
+    for (const callee of getCalleeRowsForSymbol(db, enclosingMatch)) {
+      if (callee.symbol === match.symbol) continue;
+      if (callee.symbol === enclosingSymbol) continue;
+      if (callee.file === ref.file) continue; // preserve `out_d.id != ref_d.id`
+      if (db.isIgnored(callee.file)) continue;
+      if (seenOutputs.has(callee.symbol)) continue;
+      seenOutputs.add(callee.symbol);
+
+      connected.push({
+        symbol: callee.symbol,
+        shortName: shortenSymbol(callee.symbol),
+        file: callee.file,
+        relationship: `used alongside target in ${shortenSymbol(enclosingSymbol)}`,
+      });
+      if (connected.length >= 30) break;
+    }
   }
+
+  connected.sort((a, b) => a.file.localeCompare(b.file)); // preserve SQL's ORDER BY out_d.relative_path
 
   return {
     symbol: match.symbol,

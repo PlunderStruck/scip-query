@@ -1,8 +1,8 @@
 import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch, getSourceReferenceSites } from '../query-support.js';
+import { findFirstSymbolMatch, getResolvedReferenceSites, getSourceReferenceSites } from '../query-support.js';
 import { getSourceText } from '../source-analysis.js';
 import type { TraceResult } from '../types.js';
-import { cleanSignature } from './clean-signature.js';
+import { cleanSignature, extractSignature } from './clean-signature.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../symbol-parser.js';
 
 export function trace(db: ScipDatabase, symbolPattern: string): TraceResult {
@@ -11,18 +11,11 @@ export function trace(db: ScipDatabase, symbolPattern: string): TraceResult {
     return { definitions: [], referencedBy: [] };
   }
 
-  const definitionMeta = db.get<{
-    sig: string | null;
-    display_name: string | null;
-  }>(
-    `SELECT
-      gs.display_name,
-      REPLACE(SUBSTR(gs.documentation, INSTR(gs.documentation, '|') + 1), char(10), ' ') AS sig
-    FROM global_symbols gs
-    WHERE gs.id = ?
-    LIMIT 10`,
+  const definitionMeta = db.get<{ display_name: string | null; documentation: string | null }>(
+    'SELECT display_name, documentation FROM global_symbols WHERE id = ?',
     match.symbolId,
   );
+  const sig = extractSignature(definitionMeta?.documentation ?? null);
 
   const definitions = db.isIgnored(match.relativePath)
     ? []
@@ -30,51 +23,22 @@ export function trace(db: ScipDatabase, symbolPattern: string): TraceResult {
       relativePath: match.relativePath,
       startLine: match.startLine,
       endLine: match.endLine,
-      signature: buildTraceSignature(definitionMeta?.sig ?? null, definitionMeta?.display_name ?? null, match.symbol),
+      signature: buildTraceSignature(sig, definitionMeta?.display_name ?? null, match.symbol),
       source: definitionSource(db, match.relativePath, match.startLine, match.endLine),
     }];
 
-  // References
+  // Primary: cross-file identifier scan. Fallback: mention-resolved sites
+  // with in-chunk line refinement (precise line, not chunk-start).
   const sourceSites = getSourceReferenceSites(db, match);
-  const referencedBy = sourceSites.length > 0
-    ? sourceSites
-      .filter((site) => !db.isIgnored(site.file))
-      .map((site) => ({
-        relativePath: site.file,
-        line: site.line,
-        enclosingSymbol: site.enclosingSymbol,
-        enclosingShort: site.enclosingSymbol ? shortenSymbol(site.enclosingSymbol) : '(top-level)',
-      }))
-    : db.all<{
-      relative_path: string;
-      line: number;
-      enclosing_symbol: string | null;
-    }>(
-      `SELECT DISTINCT d.relative_path, c.start_line AS line,
-        (SELECT enc_gs.symbol
-         FROM defn_enclosing_ranges enc_der
-         JOIN global_symbols enc_gs ON enc_der.symbol_id = enc_gs.id
-         WHERE enc_der.document_id = d.id
-           AND enc_der.start_line <= c.start_line
-           AND enc_der.end_line >= c.end_line
-         ORDER BY (enc_der.end_line - enc_der.start_line) ASC
-         LIMIT 1
-        ) AS enclosing_symbol
-      FROM mentions m
-      JOIN chunks c ON m.chunk_id = c.id
-      JOIN documents d ON c.document_id = d.id
-      WHERE m.symbol_id = ?
-        AND m.role != 1
-      ORDER BY d.relative_path, c.start_line`,
-      match.symbolId,
-    )
-      .filter((r) => !db.isIgnored(r.relative_path))
-      .map((r) => ({
-        relativePath: r.relative_path,
-        line: r.line,
-        enclosingSymbol: r.enclosing_symbol,
-        enclosingShort: r.enclosing_symbol ? shortenSymbol(r.enclosing_symbol) : '(top-level)',
-      }));
+  const resolvedSites = sourceSites.length > 0 ? sourceSites : getResolvedReferenceSites(db, match);
+  const referencedBy = resolvedSites
+    .filter((site) => !db.isIgnored(site.file))
+    .map((site) => ({
+      relativePath: site.file,
+      line: site.line,
+      enclosingSymbol: site.enclosingSymbol,
+      enclosingShort: site.enclosingSymbol ? shortenSymbol(site.enclosingSymbol) : '(top-level)',
+    }));
 
   return { definitions, referencedBy };
 }

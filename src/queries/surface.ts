@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../db.js';
 import { getDefinitionsForFile, resolveIndexedPaths } from '../query-support.js';
 import type { SurfaceResult } from '../types.js';
-import { leafSuffix, shortenSymbol } from '../symbol-parser.js';
+import { isCallableSymbol, shortenSymbol } from '../symbol-parser.js';
 
 /** Public API surface: what symbols do external consumers actually use from this module? */
 export function surface(db: ScipDatabase, modulePattern: string): SurfaceResult[] {
@@ -73,6 +73,3 @@ export function surface(db: ScipDatabase, modulePattern: string): SurfaceResult[
     }));
 }
 
-function isCallableSymbol(rawSymbol: string): boolean {
-  return rawSymbol.endsWith('().') || leafSuffix(rawSymbol) === 'method';
-}

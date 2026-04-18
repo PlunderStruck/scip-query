@@ -4,6 +4,14 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/db.js';
 import * as queries from '../src/queries/index.js';
+import {
+  findEnclosingDefinition,
+  findFirstSymbolMatch,
+  getDefinitionsForFile,
+  getResolvedReferenceSites,
+  getSourceReferenceSites,
+} from '../src/query-support.js';
+import { shortenSymbol } from '../src/symbol-parser.js';
 import type { ScipQueryConfig } from '../src/types.js';
 import { advancedFixture, createAdvancedFixtureDb } from './advanced-fixture.js';
 
@@ -180,5 +188,45 @@ describe('advanced queries', () => {
         advancedFixture.files.view,
       ]),
     );
+  });
+
+  it('forward slice enclosing attribution agrees with findEnclosingDefinition', () => {
+    // Regression: forwardSlice's `relationship` string must name an enclosing
+    // symbol that the canonical `findEnclosingDefinition` helper would assign
+    // for the reference site. This pins the invariant that the forward slice
+    // implementation routes enclosing attribution through the same helper
+    // every other query uses, so they never drift again.
+    const match = findFirstSymbolMatch(db, 'normalize');
+    expect(match).not.toBeNull();
+
+    const sourceRefs = getSourceReferenceSites(db, match!);
+    const refs = sourceRefs.length > 0 ? sourceRefs : getResolvedReferenceSites(db, match!);
+    expect(refs.length).toBeGreaterThan(0);
+
+    const enclosingShortNames = new Set<string>();
+    for (const ref of refs) {
+      const enclosingSymbol =
+        ref.enclosingSymbol ??
+        findEnclosingDefinition(getDefinitionsForFile(db, ref.file), ref.line)?.symbol ??
+        null;
+      if (!enclosingSymbol) continue;
+      if (enclosingSymbol === match!.symbol) continue;
+      enclosingShortNames.add(shortenSymbol(enclosingSymbol));
+    }
+    expect(enclosingShortNames.size).toBeGreaterThan(0);
+
+    const result = queries.slice(db, 'normalize', { direction: 'forward' });
+    expect(result).not.toBeNull();
+    expect(result!.connectedSymbols.length).toBeGreaterThan(0);
+
+    for (const connected of result!.connectedSymbols) {
+      const matchesSomeEnclosing = Array.from(enclosingShortNames).some((name) =>
+        connected.relationship.includes(name),
+      );
+      expect(
+        matchesSomeEnclosing,
+        `relationship "${connected.relationship}" should name one of the canonical enclosings: ${Array.from(enclosingShortNames).join(', ')}`,
+      ).toBe(true);
+    }
   });
 });

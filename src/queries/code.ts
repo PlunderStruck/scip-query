@@ -54,8 +54,11 @@ export function code(
     symbol: match.symbol,
     shortName: shortenSymbol(match.symbol),
     relativePath: match.relativePath,
-    startLine: startLine + 1, // 1-indexed for display
-    endLine: endLine + 1,
+    // 0-indexed, like every other query result. The CLI's displayLine()
+    // converts once at render time. Returning 1-indexed here caused a
+    // double-conversion in the CLI and printed labels off by +1.
+    startLine,
+    endLine,
     language: doc?.language ?? null,
     source,
   };
@@ -96,8 +99,8 @@ function readFileRange(
     symbol: `${doc.relative_path}:${startLine}-${endLine}`,
     shortName: `${doc.relative_path}:${startLine}-${endLine}`,
     relativePath: doc.relative_path,
-    startLine: start + 1,
-    endLine: end + 1,
+    startLine: start,
+    endLine: end,
     language: doc.language,
     source,
   };
