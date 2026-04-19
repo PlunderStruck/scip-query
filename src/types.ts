@@ -283,7 +283,31 @@ export interface StaleAbstraction {
   startLine: number;
   endLine: number;
   loc: number;
+  /**
+   * Cross-file consumers NOT counting files that only re-export the symbol
+   * through a barrel (`export { X } from '...'`). Barrel files expand the
+   * public surface; they aren't real consumers.
+   */
   consumers: number;
+  /** Number of files whose only reference is a passthrough re-export. */
+  barrelConsumers: number;
+  /** What the definition is syntactically — detected from source at the definition line. */
+  kind: 'class' | 'interface' | 'type' | 'enum' | 'other';
+  /**
+   * Does the defining file itself reference the type outside its own declaration?
+   * `false` is the strongest stale signal — the type lives in a file that never
+   * uses it (misplaced types file), while another file is its only consumer.
+   */
+  definerUsesType: boolean;
+  /**
+   * Ranked confidence in the "stale" verdict:
+   *   'high'   — consumers === 0, OR consumers === 1 && !definerUsesType && kind !== 'class'.
+   *   'medium' — consumers <= 1 with one of the signals pointing weakly stale.
+   *   'low'    — consumers === 1 but kind === 'class' (likely encapsulation, not over-abstraction).
+   */
+  confidence: 'high' | 'medium' | 'low';
+  /** Short human-readable explanation of why this was flagged. */
+  reason: string;
 }
 
 export interface ComplexityHotspot {

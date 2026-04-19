@@ -1,49 +1,89 @@
 import type { ScipDatabase } from '../db.js';
 import { getDefinitionsForFile, getScopedDefinitions } from '../query-support.js';
 import type { StaleAbstraction } from '../types.js';
-import { shortenSymbol } from '../symbol-parser.js';
+import { leafName, shortenSymbol } from '../symbol-parser.js';
+import { getReExports, getSourceText } from '../source-analysis.js';
 
 /**
  * Find stale abstractions: type-level symbols (classes, interfaces, type
- * aliases) that have 0 or 1 cross-file consumers.
+ * aliases) that have 0 or 1 *real* cross-file consumers.
  *
- * A type that only one file uses is over-abstracted — it was designed
- * for reuse that never materialized. Large single-consumer types are
- * the strongest signal of wasted abstraction.
+ * "Real" means: after excluding barrel files whose only reference is a
+ * passthrough re-export (`export { X } from '...'`). A type re-exported
+ * through the public API surface isn't stale — consumers just reach it
+ * through the barrel.
+ *
+ * Findings are ranked by confidence:
+ *   - high:   0 consumers (truly unused type), OR 1 consumer where the
+ *             defining file never uses the type itself (misplaced type).
+ *   - medium: 1 consumer, definer uses it, kind is interface/type/enum —
+ *             single-use abstraction worth questioning.
+ *   - low:    1 consumer but kind === 'class' — usually encapsulation
+ *             (big class owned by its single consumer), not over-abstraction.
  */
 export function staleAbstractions(
   db: ScipDatabase,
-  opts?: { scope?: string; minLoc?: number; limit?: number },
+  opts?: { scope?: string; minLoc?: number; limit?: number; includeLowConfidence?: boolean },
 ): StaleAbstraction[] {
-  const { scope, minLoc = 3, limit = 30 } = opts ?? {};
-  const rows = getScopedDefinitions(db, scope)
-    .filter((definition) => definition.isTypeLike && definitionLoc(definition) >= minLoc)
-    .map((definition) => ({
-      symbol: definition.symbol,
-      file: definition.relativePath,
-      start_line: definition.startLine,
-      end_line: definition.endLine,
-      loc: definitionLoc(definition),
-      consumers: countCrossFileConsumers(db, definition),
-    }))
-    .filter((row) => row.consumers <= 1)
-    .sort((left, right) => right.loc - left.loc || left.file.localeCompare(right.file) || left.start_line - right.start_line);
+  const { scope, minLoc = 3, limit = 30, includeLowConfidence = false } = opts ?? {};
 
   const filesWithFunctions = getFilesWithFunctions(db, scope);
 
-  return rows
-    .filter((r) => !db.isIgnored(r.file))
-    .filter((r) => isTrueStaleAbstraction(r, filesWithFunctions))
-    .map((r) => ({
-      symbol: r.symbol,
-      shortName: shortenSymbol(r.symbol),
-      file: r.file,
-      startLine: r.start_line,
-      endLine: r.end_line,
-      loc: r.loc,
-      consumers: r.consumers,
-    }))
-    .slice(0, limit);
+  const rows = getScopedDefinitions(db, scope)
+    .filter((definition) => definition.isTypeLike && definitionLoc(definition) >= minLoc)
+    .filter((definition) => !db.isIgnored(definition.relativePath))
+    .map((definition) => {
+      const consumerFiles = getCrossFileConsumerFiles(db, definition);
+      const { realConsumers, barrelConsumers } = partitionConsumers(
+        db,
+        definition.relativePath,
+        definition.symbol,
+        consumerFiles,
+      );
+      return {
+        definition,
+        realConsumers,
+        barrelConsumers,
+      };
+    })
+    .filter((row) => row.realConsumers.length <= 1)
+    // A type whose only observable use is a public-API re-export is not stale —
+    // it's part of the surface the library exposes to external consumers we
+    // can't see in the index. Skip those entirely.
+    .filter((row) => !(row.realConsumers.length === 0 && row.barrelConsumers > 0));
+
+  const scored = rows
+    .filter((row) => isTrueStaleAbstraction(row.definition, row.realConsumers.length, filesWithFunctions))
+    .map((row) => {
+      const kind = detectDefinitionKind(db, row.definition.relativePath, row.definition.startLine);
+      const definerUsesType = detectDefinerUsesType(db, row.definition);
+      const { confidence, reason } = scoreConfidence(row.realConsumers.length, kind, definerUsesType);
+
+      return {
+        symbol: row.definition.symbol,
+        shortName: shortenSymbol(row.definition.symbol),
+        file: row.definition.relativePath,
+        startLine: row.definition.startLine,
+        endLine: row.definition.endLine,
+        loc: definitionLoc(row.definition),
+        consumers: row.realConsumers.length,
+        barrelConsumers: row.barrelConsumers,
+        kind,
+        definerUsesType,
+        confidence,
+        reason,
+      } satisfies StaleAbstraction;
+    })
+    .filter((row) => includeLowConfidence || row.confidence !== 'low')
+    .sort((left, right) => {
+      const confOrder = { high: 0, medium: 1, low: 2 } as const;
+      return confOrder[left.confidence] - confOrder[right.confidence]
+        || right.loc - left.loc
+        || left.file.localeCompare(right.file)
+        || left.startLine - right.startLine;
+    });
+
+  return scored.slice(0, limit);
 }
 
 function getFilesWithFunctions(
@@ -56,28 +96,29 @@ function getFilesWithFunctions(
 }
 
 function isTrueStaleAbstraction(
-  row: { file: string; consumers: number },
+  definition: { relativePath: string },
+  consumers: number,
   filesWithFunctions: ReadonlySet<string>,
 ): boolean {
-  const basename = row.file.split('/').pop() ?? '';
-  const isTypeFile = basename.includes('types') || row.file.includes('/types/');
-  if (isTypeFile && row.consumers > 0) {
+  const basename = definition.relativePath.split('/').pop() ?? '';
+  const isTypeFile = basename.includes('types') || definition.relativePath.includes('/types/');
+  if (isTypeFile && consumers > 0) {
     return false;
   }
 
   // 0-consumer types in files that also export functions are often parameter/
   // return-only shapes that the SCIP graph does not model as direct mentions.
-  if (row.consumers === 0 && filesWithFunctions.has(row.file)) {
+  if (consumers === 0 && filesWithFunctions.has(definition.relativePath)) {
     return false;
   }
 
   return true;
 }
 
-function countCrossFileConsumers(
+function getCrossFileConsumerFiles(
   db: ScipDatabase,
-  definition: ReturnType<typeof getDefinitionsForFile>[number],
-): number {
+  definition: { symbolId: number; relativePath: string },
+): string[] {
   const callers = db.all<{ relative_path: string }>(
     `SELECT DISTINCT d.relative_path
      FROM mentions m
@@ -91,7 +132,165 @@ function countCrossFileConsumers(
     .map((row) => row.relative_path)
     .filter((relativePath) => relativePath !== definition.relativePath && !db.isIgnored(relativePath));
 
-  return new Set(callers).size;
+  return [...new Set(callers)];
+}
+
+/**
+ * Split consumers into "real" (actually use the type) vs "barrel" (their only
+ * reference to the type is a passthrough re-export like
+ * `export { X } from './defFile'` or `export * from './defFile'`).
+ */
+function partitionConsumers(
+  db: ScipDatabase,
+  definitionFile: string,
+  symbol: string,
+  consumerFiles: string[],
+): { realConsumers: string[]; barrelConsumers: number } {
+  const realConsumers: string[] = [];
+  let barrelConsumers = 0;
+  const leaf = leafName(symbol);
+
+  for (const consumer of consumerFiles) {
+    if (isReExportOnlyConsumer(db, consumer, definitionFile, leaf)) {
+      barrelConsumers++;
+    } else {
+      realConsumers.push(consumer);
+    }
+  }
+
+  return { realConsumers, barrelConsumers };
+}
+
+/**
+ * True when every mention of `leaf` in `consumerFile` sits inside a
+ * re-export statement (`export { X } from '...'` or `export * from '...'`).
+ * That makes the file a public-API passthrough, not a real consumer.
+ *
+ * We intentionally do NOT require the re-export's resolved path to equal
+ * `definitionFile`: re-exports sometimes point at the wrong file (e.g.
+ * pointing at a sibling module whose compiler-resolved types route back
+ * to the real definition). What matters is that the consumer file never
+ * *uses* the type — if every occurrence of the leaf is on a re-export
+ * line, the file is forwarding the type to downstream consumers.
+ */
+function isReExportOnlyConsumer(
+  db: ScipDatabase,
+  consumerFile: string,
+  _definitionFile: string,
+  leaf: string,
+): boolean {
+  if (!leaf) return false;
+  const source = getSourceText(db, consumerFile);
+  if (!source) return false;
+
+  const reExports = getReExports(db, consumerFile);
+  if (reExports.length === 0) return false;
+
+  const escaped = leaf.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const wordRegex = new RegExp(`\\b${escaped}\\b`);
+  const lines = source.split('\n');
+
+  let occurrenceCount = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (!wordRegex.test(lines[i] ?? '')) continue;
+    occurrenceCount++;
+    const coveredBy = reExports.find((r) => r.startLine <= i && i <= r.endLine);
+    if (!coveredBy) return false;
+  }
+
+  // If the leaf never appears in source but SCIP records a mention, there's
+  // nothing to attribute — treat as not a passthrough (defensive fallback).
+  return occurrenceCount > 0;
+}
+
+/**
+ * Detect whether the definition is a class, interface, type alias, or
+ * enum by inspecting the source line where the definition starts. If the
+ * source can't be read, return 'other' rather than guessing.
+ */
+function detectDefinitionKind(
+  db: ScipDatabase,
+  relativePath: string,
+  startLine: number,
+): 'class' | 'interface' | 'type' | 'enum' | 'other' {
+  const source = getSourceText(db, relativePath);
+  if (!source) return 'other';
+  const lines = source.split('\n');
+  // Scan a few lines around the start (handles decorators / comments).
+  const begin = Math.max(0, startLine - 2);
+  const end = Math.min(lines.length - 1, startLine + 2);
+  for (let i = begin; i <= end; i++) {
+    const line = lines[i] ?? '';
+    // Strip line-comment prefixes so `// class Foo` doesn't false-positive.
+    const stripped = line.replace(/^\s*\/\/.*$/g, '');
+    if (/\b(?:export\s+)?(?:abstract\s+)?class\s+\w/.test(stripped)) return 'class';
+    if (/\b(?:export\s+)?interface\s+\w/.test(stripped)) return 'interface';
+    if (/\b(?:export\s+)?type\s+\w/.test(stripped)) return 'type';
+    if (/\b(?:export\s+)?(?:const\s+)?enum\s+\w/.test(stripped)) return 'enum';
+  }
+  return 'other';
+}
+
+/**
+ * Does the defining file reference the type anywhere outside the declaration
+ * range itself? A `false` result means the file is effectively just a types
+ * module for one external consumer — the classic "defined in the wrong place"
+ * signal.
+ *
+ * We scan the source text instead of the mentions/chunks tables because
+ * chunk boundaries in SCIP are coarse (often a single chunk covers the
+ * whole file or a large block), which makes the "is this mention outside
+ * the declaration range" check unreliable at the chunk granularity.
+ */
+function detectDefinerUsesType(
+  db: ScipDatabase,
+  definition: { symbol: string; relativePath: string; startLine: number; endLine: number },
+): boolean {
+  const source = getSourceText(db, definition.relativePath);
+  if (!source) return false;
+  const leaf = leafName(definition.symbol);
+  if (!leaf) return false;
+
+  const escaped = leaf.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const wordRegex = new RegExp(`\\b${escaped}\\b`);
+  const lines = source.split('\n');
+
+  // IndexedDefinition ranges are 0-indexed, inclusive. Treat anything
+  // outside [startLine, endLine] with the leaf word as external usage.
+  for (let i = 0; i < lines.length; i++) {
+    if (i >= definition.startLine && i <= definition.endLine) continue;
+    if (wordRegex.test(lines[i] ?? '')) return true;
+  }
+  return false;
+}
+
+function scoreConfidence(
+  consumers: number,
+  kind: StaleAbstraction['kind'],
+  definerUsesType: boolean,
+): { confidence: StaleAbstraction['confidence']; reason: string } {
+  if (consumers === 0) {
+    return {
+      confidence: 'high',
+      reason: 'unused — no consumers and defining file has no real usage',
+    };
+  }
+  if (consumers === 1 && kind === 'class') {
+    return {
+      confidence: 'low',
+      reason: '1 consumer + class kind — likely 1:1 encapsulation, not over-abstraction',
+    };
+  }
+  if (consumers === 1 && !definerUsesType) {
+    return {
+      confidence: 'high',
+      reason: '1 consumer + defining file never uses it — type belongs with its consumer',
+    };
+  }
+  return {
+    confidence: 'medium',
+    reason: '1 consumer — single-use abstraction',
+  };
 }
 
 function definitionLoc(

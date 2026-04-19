@@ -26,6 +26,27 @@ export interface ParsedSourceExport {
   specifier: string;
 }
 
+/**
+ * A re-export statement in a JavaScript/TypeScript source file — one of:
+ *   export { X [as Y] } from './path'
+ *   export type { X } from './path'
+ *   export * from './path'
+ *   export * as Ns from './path'
+ *
+ * The `sourcePath` is the resolved, project-relative path to the re-exported
+ * module (same convention as ParsedSourceImport.sourcePath).
+ */
+export interface ParsedReExport {
+  kind: 'named' | 'star' | 'star-as';
+  sourcePath: string | null;
+  /** For 'named': the list of re-exported identifiers as they appear in THIS file. */
+  names: string[];
+  /** Start line in the source (0-indexed) — inclusive. */
+  startLine: number;
+  /** End line in the source (0-indexed) — inclusive. */
+  endLine: number;
+}
+
 export interface ParsedSourceCall {
   calleeName: string;
   receiverName: string | null;
@@ -229,6 +250,97 @@ export function findIdentifierLines(
   }
 
   return results;
+}
+
+/**
+ * Parse all re-export statements (`export ... from '...'`) in a JS/TS source.
+ * Returns each statement's kind, resolved source path, re-exported local
+ * names (for named re-exports), and line range.
+ *
+ * Returns an empty array for non-JS/TS source paths.
+ */
+export function getReExports(
+  db: ScipDatabase,
+  relativePath: string,
+): ParsedReExport[] {
+  const normalized = normalizePath(relativePath);
+  if (!isJavaScriptSourcePath(normalized)) return [];
+  const source = getSourceText(db, normalized);
+  if (!source) return [];
+
+  const results: ParsedReExport[] = [];
+
+  const namedRegex = /^[ \t]*export\s+(?:type\s+)?\{([\s\S]*?)\}\s+from\s+['"]([^'"]+)['"]\s*;?/gm;
+  for (const match of source.matchAll(namedRegex)) {
+    if (typeof match.index !== 'number') continue;
+    const inner = match[1] ?? '';
+    const specifier = match[2] ?? '';
+    const names = splitTopLevel(inner)
+      .map((binding) => parseReExportBinding(binding.trim()))
+      .filter((name): name is string => Boolean(name));
+    const start = lineOf(source, match.index);
+    const end = lineOf(source, match.index + match[0].length - 1);
+    results.push({
+      kind: 'named',
+      sourcePath: resolveImportPath(db, normalized, specifier),
+      names,
+      startLine: start,
+      endLine: end,
+    });
+  }
+
+  const starAsRegex = /^[ \t]*export\s+\*\s+as\s+(\w+)\s+from\s+['"]([^'"]+)['"]\s*;?/gm;
+  for (const match of source.matchAll(starAsRegex)) {
+    if (typeof match.index !== 'number') continue;
+    const specifier = match[2] ?? '';
+    const start = lineOf(source, match.index);
+    const end = lineOf(source, match.index + match[0].length - 1);
+    results.push({
+      kind: 'star-as',
+      sourcePath: resolveImportPath(db, normalized, specifier),
+      names: [],
+      startLine: start,
+      endLine: end,
+    });
+  }
+
+  const starRegex = /^[ \t]*export\s+\*\s+from\s+['"]([^'"]+)['"]\s*;?/gm;
+  for (const match of source.matchAll(starRegex)) {
+    if (typeof match.index !== 'number') continue;
+    const specifier = match[1] ?? '';
+    const start = lineOf(source, match.index);
+    const end = lineOf(source, match.index + match[0].length - 1);
+    results.push({
+      kind: 'star',
+      sourcePath: resolveImportPath(db, normalized, specifier),
+      names: [],
+      startLine: start,
+      endLine: end,
+    });
+  }
+
+  return results;
+}
+
+function parseReExportBinding(entry: string): string | null {
+  if (!entry) return null;
+  // Strip trailing comment fragments that survived splitTopLevel
+  const cleaned = entry.replace(/^type\s+/, '').trim();
+  if (!cleaned) return null;
+  // `X` or `X as Y` — we want the LOCAL (post-alias) name, since that's what
+  // external consumers see and what mentions in this file carry.
+  const asMatch = cleaned.match(/^(\w+)\s+as\s+(\w+)$/);
+  if (asMatch) return asMatch[2] ?? null;
+  const plainMatch = cleaned.match(/^(\w+)$/);
+  return plainMatch ? plainMatch[1] ?? null : null;
+}
+
+function lineOf(source: string, offset: number): number {
+  let line = 0;
+  for (let i = 0; i < offset && i < source.length; i++) {
+    if (source.charCodeAt(i) === 10) line++;
+  }
+  return line;
 }
 
 function parseJavaScriptImports(
@@ -1177,7 +1289,7 @@ function collectNamespaceMembers(body: string, namespaceName: string): string[] 
   return [...members];
 }
 
-function resolveImportPath(
+export function resolveImportPath(
   db: ScipDatabase,
   importerPath: string,
   specifier: string,

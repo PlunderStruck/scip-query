@@ -1133,15 +1133,25 @@ program
   .option('-s, --scope <path>', 'Limit to files matching path')
   .option('--min-loc <n>', 'Minimum LOC', parseIntSafe, 3)
   .option('-n, --limit <n>', 'Number of results', parseIntSafe, 30)
+  .option('--include-low-confidence', 'Include 1-consumer classes (usually encapsulation, not stale)', false)
   .action((opts) => {
     const db = openDb();
-    const results = queries.staleAbstractions(db, { scope: opts.scope, minLoc: opts.minLoc, limit: opts.limit });
+    const results = queries.staleAbstractions(db, {
+      scope: opts.scope,
+      minLoc: opts.minLoc,
+      limit: opts.limit,
+      includeLowConfidence: Boolean(opts.includeLowConfidence),
+    });
     if (results.length === 0) {
       console.log('No stale abstractions found.');
     } else {
       for (const r of results) {
-        const label = r.consumers === 0 ? 'unused' : '1 consumer';
-        console.log(`  ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC, ${label})`);
+        const consumerLabel = r.consumers === 0 ? 'unused' : `${r.consumers} consumer`;
+        const barrelLabel = r.barrelConsumers > 0 ? `, +${r.barrelConsumers} barrel` : '';
+        console.log(
+          `  [${r.confidence}] ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  (${r.kind}, ${r.loc} LOC, ${consumerLabel}${barrelLabel})`,
+        );
+        console.log(`           ${r.reason}`);
       }
       console.log(`\n${results.length} stale abstraction(s).`);
     }
