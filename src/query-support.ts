@@ -472,48 +472,14 @@ export function getCalleeRowsForSymbol(
   symbol: SymbolLocation,
   opts: { limit?: number } = {},
 ): CalleeRow[] {
-  const mentions = db.all<{
-    symbol_id: number;
-    chunk_id: number;
-  }>(
-    `SELECT DISTINCT m.symbol_id, c.id AS chunk_id
-     FROM mentions m
-     JOIN chunks c ON m.chunk_id = c.id
-     WHERE c.document_id = ?
-       AND c.start_line >= ?
-       AND c.end_line <= ?
-       AND m.role != 1
-       AND m.symbol_id != ?
-     ${opts.limit ? 'LIMIT ?' : ''}`,
-    ...calleeQueryParams(symbol, opts.limit),
-  );
-
-  const primary: CalleeRow[] = [];
-  const directSeen = new Set<string>();
-  for (const mention of mentions) {
-    const callee = getFullSymbolMatch(db, {
-      symbolId: mention.symbol_id,
-      documentId: symbol.documentId,
-      startLine: symbol.startLine,
-      endLine: symbol.endLine,
-    });
-    if (!callee || db.isIgnored(callee.relativePath)) continue;
-
-    const key = `${callee.symbol}|${callee.relativePath}|${mention.chunk_id}`;
-    if (directSeen.has(key)) continue;
-    directSeen.add(key);
-    primary.push({
-      symbol: callee.symbol,
-      file: callee.relativePath,
-      chunkId: mention.chunk_id,
-    });
-  }
-
-  const sourceFallback = getSourceBackedCalleeRows(db, symbol, opts.limit);
-  if (sourceFallback.length > 0) {
-    return applyLimit(sourceFallback, opts.limit);
-  }
-  return primary;
+  // Delegates to the shared bulk path so callers automatically benefit from
+  // tree-sitter call attribution, source-confirmation, and the merged AST +
+  // SCIP results. Avoids the older per-symbol mention-scan that under-
+  // attributed for AST-supported languages and missed call/callee shape
+  // refinements that the bulk helper already handles.
+  const map = buildCalleeMap(db, [symbol]);
+  const callees = map.get(symbol.symbolId) ?? [];
+  return applyLimit(callees, opts.limit);
 }
 
 export function getCallerRowsForSymbol(
@@ -521,61 +487,55 @@ export function getCallerRowsForSymbol(
   symbol: SymbolLocation,
   opts: { limit?: number } = {},
 ): CallerRow[] {
-  const match = getFullSymbolMatch(db, symbol);
-  if (!match) {
-    return [];
-  }
+  // Delegates to the cached inverse-callee map (built from buildCalleeMap of
+  // all definitions). One inversion per process gives every per-symbol
+  // caller query AST-quality attribution + SCIP fallback in O(1) lookup.
+  const inverse = buildCallerRowsMap(db);
+  const callers = inverse.get(symbol.symbolId) ?? [];
+  return applyLimit(callers, opts.limit);
+}
 
-  const primary = db.all<{
-    caller_file: string;
-    line: number;
-  }>(
-    `SELECT DISTINCT ref_d.relative_path AS caller_file, c.start_line AS line
-     FROM mentions m
-     JOIN chunks c ON m.chunk_id = c.id
-     JOIN documents ref_d ON c.document_id = ref_d.id
-     WHERE m.symbol_id = ?
-       AND m.role != 1
-       ${db.pathExclusionsFor('ref_d')}
-     ORDER BY ref_d.relative_path
-     ${opts.limit ? 'LIMIT ?' : ''}`,
-    ...referenceQueryParams(match, opts.limit),
-  )
-    .filter((row) => !db.isIgnored(row.caller_file))
-    .flatMap((row) => {
-      const enclosing = findEnclosingDefinition(getDefinitionsForFile(db, row.caller_file), row.line);
-      if (!enclosing || enclosing.symbolId === match.symbolId) {
-        return [];
+const CALLER_ROWS_CACHE = new WeakMap<ScipDatabase, Map<number, CallerRow[]>>();
+
+/**
+ * Inverse of buildCalleeMap: for every (caller, callee) edge, register the
+ * caller's symbol + file under the callee's symbolId. Cached so the entire
+ * inversion happens once per ScipDatabase instance.
+ */
+function buildCallerRowsMap(db: ScipDatabase): Map<number, CallerRow[]> {
+  const cached = CALLER_ROWS_CACHE.get(db);
+  if (cached) return cached;
+
+  const allDefs = getAllDefinitions(db);
+  const calleeMap = buildCalleeMap(db, allDefs);
+
+  const symbolToId = new Map<string, number>();
+  for (const def of allDefs) symbolToId.set(def.symbol, def.symbolId);
+
+  const result = new Map<number, CallerRow[]>();
+  const seen = new Map<number, Set<string>>();
+  for (const callerDef of allDefs) {
+    const callees = calleeMap.get(callerDef.symbolId);
+    if (!callees || callees.length === 0) continue;
+    for (const callee of callees) {
+      const calleeId = symbolToId.get(callee.symbol);
+      if (calleeId === undefined) continue;
+      if (calleeId === callerDef.symbolId) continue; // skip self-recursion
+      let bucket = result.get(calleeId);
+      if (!bucket) {
+        bucket = [];
+        result.set(calleeId, bucket);
+        seen.set(calleeId, new Set());
       }
-
-      return [{
-        symbol: enclosing.symbol,
-        file: row.caller_file,
-      }];
-    });
-
-  const sourceFallback = dedupeCallerRows([
-    ...getPythonSourceCallerRows(db, match, opts.limit),
-    ...getGenericSourceCallerRows(db, match, opts.limit),
-  ]);
-  if (sourceFallback.length === 0) {
-    return dedupeCallerRows(primary);
-  }
-
-  const merged = [...sourceFallback];
-  const fallbackFiles = new Set(sourceFallback.map((row) => row.file));
-  const seen = new Set(merged.map((row) => `${row.symbol}|${row.file}`));
-  for (const row of primary) {
-    if (fallbackFiles.has(row.file)) continue;
-    const key = `${row.symbol}|${row.file}`;
-    if (seen.has(key)) continue;
-    if (isFunctionLikeSymbol(row.symbol) || merged.length === 0) {
-      seen.add(key);
-      merged.push(row);
+      const dedupeKey = `${callerDef.symbol}|${callerDef.relativePath}`;
+      if (seen.get(calleeId)!.has(dedupeKey)) continue;
+      seen.get(calleeId)!.add(dedupeKey);
+      bucket.push({ symbol: callerDef.symbol, file: callerDef.relativePath });
     }
   }
 
-  return applyLimit(merged, opts.limit);
+  CALLER_ROWS_CACHE.set(db, result);
+  return result;
 }
 
 function getGenericSourceCallerRows(
@@ -1508,31 +1468,39 @@ export function getScopedDefinitions(
  *
  * For files with tree-sitter support (Rust, TS/JS, Python), we use AST
  * call_expression / new_expression nodes — every callsite is exact, every
- * attribution is to the precise enclosing function. No chunk-level mention
- * attribution, no "is this identifier in range" guessing.
+ * attribution is to the precise enclosing function.
  *
  * For files without AST support (Java, JVM, Ruby, .NET, Dart, PHP, C/C++),
- * we fall back to chunk-level SCIP mentions with the same source-confirm
- * heuristic as before — preserves correctness for those languages without
- * requiring a tree-sitter grammar for each one.
+ * we fall back to chunk-level SCIP mentions.
+ *
+ * `opts.additive`:
+ *   - false (default, "call-strict"): AST is the ground truth for AST files;
+ *     chunk attribution is NOT unioned in. Use for callee fingerprints,
+ *     extract/passthrough analysis, callGraph — anywhere you need exact
+ *     "what does this function call" without false positives from chunk
+ *     attribution placing a mention in the wrong enclosing function.
+ *   - true ("union with chunks"): merges both paths. Use for liveness
+ *     checks (isolated, "has any callee at all") where ambiguous-leaf
+ *     callees that AST resolution skips would otherwise produce false
+ *     positives.
  */
 export function buildCalleeMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<SymbolLocation>,
+  opts: { additive?: boolean } = {},
 ): Map<number, Array<{ symbol: string; file: string; chunkId: number }>> {
   if (definitions.length === 0) return new Map();
+  const additive = opts.additive ?? false;
 
-  // ADDITIVE: AST callees (precise call attribution for AST languages) PLUS
-  // SCIP chunk callees (catches ambiguous-leaf calls like Rust trait methods
-  // `new()`/`from()` that AST resolution skips, plus type references and
-  // macro-mediated calls). Same callee from both paths dedupes on
-  // (symbol|chunkId) inside each map merge step.
-  const astDefs = definitions.filter(
-    (def) => detectAstLanguage(def.relativePath) && getCallSites(db, def.relativePath) !== null,
-  );
-
-  const astResult = astDefs.length > 0 ? buildAstCalleeMap(db, astDefs) : new Map();
-  const chunkResult = buildChunkCalleeMap(db, definitions);
+  const astDefs: SymbolLocation[] = [];
+  const chunkOnlyDefs: SymbolLocation[] = [];
+  for (const def of definitions) {
+    if (detectAstLanguage(def.relativePath) && getCallSites(db, def.relativePath) !== null) {
+      astDefs.push(def);
+    } else {
+      chunkOnlyDefs.push(def);
+    }
+  }
 
   const merged = new Map<number, Array<{ symbol: string; file: string; chunkId: number }>>();
   const addAll = (
@@ -1550,8 +1518,11 @@ export function buildCalleeMap(
       }
     }
   };
-  addAll(chunkResult);
-  addAll(astResult);
+
+  if (astDefs.length > 0) addAll(buildAstCalleeMap(db, astDefs));
+  // Chunk path runs for non-AST defs always; for AST defs only when additive.
+  const chunkDefs = additive ? definitions : chunkOnlyDefs;
+  if (chunkDefs.length > 0) addAll(buildChunkCalleeMap(db, chunkDefs));
   return merged;
 }
 

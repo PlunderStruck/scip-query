@@ -8,6 +8,7 @@ import {
 import type { StaleAbstraction } from '../types.js';
 import { leafName, shortenSymbol } from '../symbol-parser.js';
 import { getReExports, getSourceText } from '../source-analysis.js';
+import { detectAstLanguage, getAst, type SyntaxNode } from '../ast.js';
 
 /**
  * Find stale abstractions: type-level symbols (classes, interfaces, type
@@ -152,12 +153,74 @@ function partitionConsumers(
   for (const consumer of consumerFiles) {
     if (isReExportOnlyConsumer(db, consumer, definitionFile, leaf)) {
       barrelConsumers++;
+    } else if (isImportOnlyConsumer(db, consumer, leaf)) {
+      // File imports the type but never references it outside the import.
+      // Counts as phantom consumer (the import itself is dead too).
+      barrelConsumers++;
     } else {
       realConsumers.push(consumer);
     }
   }
 
   return { realConsumers, barrelConsumers };
+}
+
+/**
+ * True when the only occurrences of `leaf` in `consumerFile` are inside
+ * import statements — i.e. the consumer imports the type but never uses it.
+ *
+ * Uses per-file caches: one walk per file produces (a) the set of leaves
+ * mentioned ONLY inside imports and (b) the set of leaves mentioned
+ * elsewhere. Repeat checks for different leaves on the same file then
+ * become O(1) Set lookups.
+ */
+const FILE_USAGE_CACHE = new WeakMap<ScipDatabase, Map<string, { importedLeaves: Set<string>; usedLeaves: Set<string> }>>();
+function isImportOnlyConsumer(
+  db: ScipDatabase,
+  consumerFile: string,
+  leaf: string,
+): boolean {
+  if (!leaf) return false;
+  const lang = detectAstLanguage(consumerFile);
+  if (!lang) return false;
+
+  let perDb = FILE_USAGE_CACHE.get(db);
+  if (!perDb) { perDb = new Map(); FILE_USAGE_CACHE.set(db, perDb); }
+  let cached = perDb.get(consumerFile);
+  if (!cached) {
+    cached = computeFileLeafUsage(db, consumerFile, lang);
+    perDb.set(consumerFile, cached);
+  }
+  return cached.importedLeaves.has(leaf) && !cached.usedLeaves.has(leaf);
+}
+
+function computeFileLeafUsage(
+  db: ScipDatabase,
+  file: string,
+  lang: string,
+): { importedLeaves: Set<string>; usedLeaves: Set<string> } {
+  const importedLeaves = new Set<string>();
+  const usedLeaves = new Set<string>();
+  const tree = getAst(db, file);
+  if (!tree) return { importedLeaves, usedLeaves };
+
+  const importTypes = lang === 'rust'
+    ? new Set(['use_declaration'])
+    : lang === 'python'
+      ? new Set(['import_statement', 'import_from_statement'])
+      : new Set(['import_statement']); // TS/JS — value exports are NOT included
+
+  const walk = (node: SyntaxNode, insideImport: boolean): void => {
+    const nowInside = insideImport || importTypes.has(node.type);
+    if (node.type === 'identifier' || node.type === 'type_identifier'
+        || node.type === 'property_identifier' || node.type === 'field_identifier') {
+      if (nowInside) importedLeaves.add(node.text);
+      else usedLeaves.add(node.text);
+    }
+    for (const child of node.children) walk(child, nowInside);
+  };
+  walk(tree.rootNode, false);
+  return { importedLeaves, usedLeaves };
 }
 
 /**

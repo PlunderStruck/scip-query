@@ -323,19 +323,186 @@ const EXCLUSION_CACHE = new WeakMap<Tree, ExclusionEntry[]>();
 
 /**
  * Find every definition the dead-code pass should skip because the symbol is
- * framework-invoked: `#[tauri::command]`, `#[test]`, `#[bench]`, anything
- * inside `#[cfg(test)] mod`, and the fields of `#[derive(Serialize)]` /
- * `#[derive(Deserialize)]` structs (touched by serde reflection).
- *
- * Currently Rust-only — TS decorator support and other languages can be
- * layered on top of this same shape.
+ * framework-invoked: Rust `#[tauri::command]`, `#[test]`, `#[bench]`, anything
+ * inside `#[cfg(test)] mod`, and `#[derive(Serialize/Deserialize)]` struct
+ * fields (touched by serde reflection); TS/JS test files (any file containing
+ * top-level `describe()`, `it()`, `test()`, `beforeEach()`, etc. calls).
  */
 export function getDefinitionExclusions(
   db: ScipDatabase,
   relativePath: string,
 ): ExclusionEntry[] {
   const lang = detectAstLanguage(relativePath);
-  if (lang !== 'rust') return [];
+  if (lang === 'rust') return getRustExclusions(db, relativePath);
+  if (lang === 'typescript' || lang === 'tsx' || lang === 'javascript') {
+    return getJsTestExclusions(db, relativePath);
+  }
+  return [];
+}
+
+const TEST_FRAMEWORK_NAMES = new Set([
+  'describe', 'it', 'test', 'fdescribe', 'fit', 'xdescribe', 'xit',
+  'beforeEach', 'afterEach', 'beforeAll', 'afterAll', 'before', 'after',
+  'suite', 'bench', 'benchmark',
+]);
+
+function getJsTestExclusions(
+  db: ScipDatabase,
+  relativePath: string,
+): ExclusionEntry[] {
+  const tree = getAst(db, relativePath);
+  if (!tree) return [];
+  const cached = EXCLUSION_CACHE.get(tree);
+  if (cached) return cached;
+
+  // Next.js / Remix file conventions: any top-level export in a page-like
+  // path is framework-invoked by the router.
+  const isNextRoute = /(^|\/)(pages|app)\/.+\.(tsx?|jsx?)$/.test(relativePath)
+    || /(^|\/)(layout|page|loading|error|not-found|head|template|default)\.(tsx?|jsx?)$/.test(relativePath);
+  // Vite/Vue route component conventions
+  const isViteRoute = /(^|\/)src\/(pages|views|routes)\/.+\.(tsx?|jsx?|vue)$/.test(relativePath);
+
+  // Scan top-level `expression_statement > call_expression > identifier`
+  // for test-framework names. Presence of any one classifies the whole
+  // file as a test file — its top-level helpers are then framework-owned.
+  let isTestFile = false;
+  const program = tree.rootNode;
+  for (const child of program.namedChildren) {
+    if (child.type !== 'expression_statement') continue;
+    const call = child.namedChild(0);
+    if (!call || call.type !== 'call_expression') continue;
+    const target = call.namedChild(0);
+    if (!target) continue;
+    const name = target.type === 'member_expression'
+      ? target.namedChild(target.namedChildCount - 1)?.text
+      : target.text;
+    if (name && TEST_FRAMEWORK_NAMES.has(name)) {
+      isTestFile = true;
+      break;
+    }
+  }
+
+  const out: ExclusionEntry[] = [];
+  if (isTestFile) {
+    out.push({
+      startLine: 0,
+      endLine: program.endPosition.row,
+      reason: 'TS/JS test file (describe/it/test at top level)',
+    });
+  }
+
+  if (isNextRoute || isViteRoute) {
+    // Framework-routed file: every exported function/component is invoked
+    // by the framework's router, not by static code.
+    out.push({
+      startLine: 0,
+      endLine: program.endPosition.row,
+      reason: isNextRoute ? 'Next.js / Remix route file' : 'Vite/Vue route component',
+    });
+  }
+
+  // Custom React hook detection: top-level function whose name starts with
+  // `use` followed by an uppercase letter is invoked by React's render loop
+  // when called from a component — same dispatch invisibility as Tauri
+  // commands and trait impls.
+  for (const child of program.namedChildren) {
+    let funcName: string | null = null;
+    let funcNode: SyntaxNode | null = null;
+    if (child.type === 'function_declaration') {
+      funcName = child.namedChild(0)?.text ?? null;
+      funcNode = child;
+    } else if (child.type === 'export_statement') {
+      const inner = child.namedChild(0);
+      if (inner?.type === 'function_declaration') {
+        funcName = inner.namedChild(0)?.text ?? null;
+        funcNode = inner;
+      }
+    } else if (child.type === 'lexical_declaration') {
+      const decl = child.namedChild(0);
+      if (decl?.type === 'variable_declarator') {
+        const name = decl.namedChild(0)?.text;
+        const value = decl.namedChild(1);
+        if (name && (value?.type === 'arrow_function' || value?.type === 'function_expression')) {
+          funcName = name;
+          funcNode = decl;
+        }
+      }
+    }
+    if (funcName && /^use[A-Z]/.test(funcName) && funcNode) {
+      out.push({
+        startLine: funcNode.startPosition.row,
+        endLine: funcNode.endPosition.row,
+        reason: 'React custom hook (use*)',
+      });
+    }
+  }
+
+  out.push(...collectSuppressionExclusions(
+    tree,
+    new Set(['function_declaration', 'method_definition', 'class_declaration', 'interface_declaration', 'type_alias_declaration', 'enum_declaration', 'variable_declarator', 'export_statement']),
+    new Set(['comment']),
+  ));
+  EXCLUSION_CACHE.set(tree, out);
+  return out;
+}
+
+/**
+ * Honor `// scip-query: ignore-dead` (or `// scip-query-ignore: dead-code`)
+ * comments immediately before a definition. Lets users suppress known
+ * false positives without modifying the detector's heuristics.
+ */
+const SUPPRESS_COMMENT_RE = /scip-query[\s:-]*ignore[\s:-]*(?:dead(?:-code)?|stale)?/i;
+function isSuppressionComment(text: string): boolean {
+  return SUPPRESS_COMMENT_RE.test(text);
+}
+
+function collectSuppressionExclusions(
+  tree: Tree,
+  matchableNodeTypes: ReadonlySet<string>,
+  commentTypes: ReadonlySet<string>,
+): ExclusionEntry[] {
+  const out: ExclusionEntry[] = [];
+  const walk = (node: SyntaxNode): void => {
+    if (matchableNodeTypes.has(node.type) && node.parent) {
+      const parent = node.parent;
+      const children = parent.children;
+      let idx = -1;
+      for (let i = 0; i < children.length; i += 1) {
+        if (children[i]!.startIndex === node.startIndex && children[i]!.type === node.type) {
+          idx = i;
+          break;
+        }
+      }
+      if (idx > 0) {
+        for (let i = idx - 1; i >= 0; i -= 1) {
+          const sib = children[i]!;
+          if (commentTypes.has(sib.type)) {
+            if (isSuppressionComment(sib.text)) {
+              out.push({
+                startLine: node.startPosition.row,
+                endLine: node.endPosition.row,
+                reason: 'scip-query suppression comment',
+              });
+              break;
+            }
+            continue;
+          }
+          // Skip attribute_items between comment and node — common in Rust.
+          if (sib.type === 'attribute_item' || sib.type === 'inner_attribute_item') continue;
+          break;
+        }
+      }
+    }
+    for (const child of node.namedChildren) walk(child);
+  };
+  walk(tree.rootNode);
+  return out;
+}
+
+function getRustExclusions(
+  db: ScipDatabase,
+  relativePath: string,
+): ExclusionEntry[] {
   const tree = getAst(db, relativePath);
   if (!tree) return [];
 
@@ -387,6 +554,7 @@ export function getDefinitionExclusions(
     if (/#\[\s*pymethod\b/.test(attrText)) return '#[pymethod]';
     if (/#\[\s*pyo3\b/.test(attrText)) return '#[pyo3]';
     if (/#\[\s*cfg\s*\(\s*test\s*\)/.test(attrText)) return '#[cfg(test)]';
+    if (/#\[\s*doc\s*\(\s*hidden\s*\)/.test(attrText)) return '#[doc(hidden)]';
     return null;
   };
 
@@ -451,6 +619,13 @@ export function getDefinitionExclusions(
   };
 
   visit(tree.rootNode, false, false);
+
+  // Suppression comments override the heuristic checks above.
+  out.push(...collectSuppressionExclusions(
+    tree,
+    new Set(['function_item', 'function_signature_item', 'struct_item', 'enum_item', 'union_item', 'impl_item', 'mod_item', 'static_item', 'const_item']),
+    new Set(['line_comment', 'block_comment']),
+  ));
 
   EXCLUSION_CACHE.set(tree, out);
   return out;

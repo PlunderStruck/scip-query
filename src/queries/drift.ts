@@ -1,6 +1,7 @@
 import path from 'node:path';
 import type { ScipDatabase } from '../db.js';
 import { buildFileDepGraph } from '../query-support.js';
+import { getSourceImports } from '../source-analysis.js';
 import type { DriftResult, DriftSummary } from '../types.js';
 
 /**
@@ -50,6 +51,9 @@ export function drift(
         // This can happen when the dep is imported for types only
         // (which don't appear in the mention graph). Skip type-heavy deps.
         if (isLikelyTypeOnlyDep(dep)) continue;
+        // Side-effect-only imports (`import 'polyfill'`) intentionally
+        // reference nothing — flagging them as "unused" would be wrong.
+        if (isSideEffectImport(db, file, dep)) continue;
 
         results.push({
           file,
@@ -239,6 +243,23 @@ function getArchitecturalLayer(filePath: string): string {
 
 function isLikelyTypeOnlyDep(dep: string): boolean {
   return dep.includes('types') || dep.endsWith('.d.ts');
+}
+
+/**
+ * True when `file` imports `dep` only via a side-effect import (`import 'x'`
+ * with no bindings) or a `* as ns` namespace import where the namespace is
+ * never accessed. Both legitimately reference no symbols from the dep, so
+ * the "unused-import" heuristic shouldn't flag them.
+ */
+function isSideEffectImport(db: ScipDatabase, file: string, dep: string): boolean {
+  const imports = getSourceImports(db, file).filter((entry) => entry.sourcePath === dep);
+  if (imports.length === 0) return false;
+  // If every import for this dep is a side-effect (no bindings), or an unused
+  // namespace import, treat it as intentional.
+  return imports.every((entry) =>
+    entry.kind === 'side-effect'
+    || (entry.kind === 'namespace' && entry.usedMembers.length === 0 && !entry.used),
+  );
 }
 
 function shouldSkipDriftFile(filePath: string): boolean {

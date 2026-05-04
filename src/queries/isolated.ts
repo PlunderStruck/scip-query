@@ -41,7 +41,11 @@ export function isolated(
 
   const symbolBySymbolId = new Map(candidates.map((d) => [d.symbolId, d.symbol]));
   const t5 = Date.now();
-  const calleeMap = buildCalleeMap(db, candidates);
+  // additive: chunk-based callee detection unioned with AST. For "does this
+  // function call anything at all?" we want max recall — Rust trait methods
+  // like `new()` and `from()` resolve via dynamic dispatch and AST attribution
+  // skips them as ambiguous leaves; the chunk path catches them.
+  const calleeMap = buildCalleeMap(db, candidates, { additive: true });
   tr(`F calleeMap=${calleeMap.size} +${Date.now()-t5}ms`);
   const symbolsWithCallees = new Set(
     [...calleeMap.entries()]
