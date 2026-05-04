@@ -1,11 +1,12 @@
 import type { ScipDatabase } from '../db.js';
 import { getInactiveBarrelPaths, isEntrySurface, TEST_FILE_PATTERNS, TEST_SUPPORT_PATH_PATTERNS } from '../file-classifier.js';
+import { attributeIdentifier } from '../identifier-attribution.js';
 import { getAllDefinitions } from '../query-support.js';
 import { detectAstLanguage, getCrossLanguageDispatchNames, getDefinitionExclusions, isVueSfcPath } from '../ast.js';
-import { getIdentifierLineMap, getSourceImports } from '../source-analysis.js';
+import { getIdentifierLineMap } from '../source-analysis.js';
 import { getSourceFiles } from '../source-fileset.js';
 import type { DeadOptions, DeadSymbolResult, DeadSummary } from '../types.js';
-import { isFunctionLikeSymbol, isModuleLikeSymbol, leafName, shortenSymbol } from '../symbol-parser.js';
+import { isFunctionLikeSymbol, isModuleLikeSymbol, shortenSymbol } from '../symbol-parser.js';
 
 /**
  * Find dead exports: symbols defined locally with no cross-file references.
@@ -65,116 +66,8 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
   // rather than "dead-code"); other-file matches register as cross-file refs
   // (eliminating the dead-code flag entirely).
   //
-  // Restricting to unique-leaf candidates avoids over-attribution: a method
-  // named `new` exists on dozens of types, so a textual match of `new` in
-  // some file shouldn't satisfy "is this specific type's `new` method used."
-  // Build a leaf index. For unique leaves we have a single global mapping.
-  // For ambiguous leaves (e.g. `SYSTEM_PROMPT` defined in two crates), we
-  // also keep a per-file index so a same-file reference can resolve to the
-  // right symbol — important when scip-rust drops in-file mentions.
-  const leafToSymbolGlobal = new Map<string, Array<{ symbolId: number; relativePath: string }>>();
-  for (const row of db.all<{ id: number; symbol: string; relative_path: string | null }>(
-    `SELECT gs.id, gs.symbol,
-            COALESCE(der_doc.relative_path, mention_doc.relative_path) AS relative_path
-     FROM global_symbols gs
-     LEFT JOIN defn_enclosing_ranges der ON der.symbol_id = gs.id
-     LEFT JOIN documents der_doc ON der_doc.id = der.document_id
-     LEFT JOIN (
-       SELECT m.symbol_id, MIN(d.relative_path) AS relative_path
-       FROM mentions m
-       JOIN chunks c ON m.chunk_id = c.id
-       JOIN documents d ON c.document_id = d.id
-       WHERE m.role = 1
-       GROUP BY m.symbol_id
-     ) mention_doc ON mention_doc.symbol_id = gs.id
-     WHERE 1 = 1 ${db.symbolNoiseFor('gs')}`,
-  )) {
-    if (!row.relative_path) continue;
-    const leaf = leafName(row.symbol);
-    if (!leaf) continue;
-    let bucket = leafToSymbolGlobal.get(leaf);
-    if (!bucket) { bucket = []; leafToSymbolGlobal.set(leaf, bucket); }
-    if (!bucket.some((e) => e.symbolId === row.id)) {
-      bucket.push({ symbolId: row.id, relativePath: row.relative_path });
-    }
-  }
-  // Ambiguous-leaf disambiguation via imports. When a leaf is defined by N
-  // symbols and a referencing file imports `name` from path P, attribute the
-  // textual hit to the symbol whose defining file is P. Cached per file so
-  // we don't reparse imports for every leaf encountered in the file.
-  const importsByFile = new Map<string, Map<string, Set<string>>>();
-  const importsForFile = (file: string): Map<string, Set<string>> => {
-    const cached = importsByFile.get(file);
-    if (cached) return cached;
-    const map = new Map<string, Set<string>>();
-    for (const entry of getSourceImports(db, file)) {
-      if (!entry.sourcePath) continue;
-      const localName = entry.localName ?? entry.importedName;
-      if (localName) {
-        let s = map.get(localName);
-        if (!s) { s = new Set(); map.set(localName, s); }
-        s.add(entry.sourcePath);
-      }
-      if (entry.kind === 'namespace') {
-        for (const member of entry.usedMembers) {
-          let s = map.get(member);
-          if (!s) { s = new Set(); map.set(member, s); }
-          s.add(entry.sourcePath);
-        }
-      }
-    }
-    importsByFile.set(file, map);
-    return map;
-  };
-  const pathsResolveSame = (a: string, b: string): boolean => {
-    const norm = (p: string): string => p.replace(/\\/g, '/').replace(/^\.\//, '');
-    return norm(a) === norm(b);
-  };
-
-  // Resolve to one OR many candidates. Multiple come back for interface-impl
-  // dispatch: when a file declares `interface PaymentProcessor { foo() }`
-  // alongside `class StripePaymentProcessor implements PaymentProcessor
-  // { foo() }`, a call `processor.foo()` statically resolves to the
-  // interface symbol but at runtime can land on any impl. So every
-  // same-file candidate should stay live, not just the interface.
-  const resolveLeaf = (leaf: string, refFile: string): Array<{ symbolId: number; relativePath: string }> => {
-    const bucket = leafToSymbolGlobal.get(leaf);
-    if (!bucket || bucket.length === 0) return [];
-    if (bucket.length === 1) return [bucket[0]!];
-
-    // 1. Same-reference-file resolution wins outright.
-    const sameFile = bucket.find((e) => e.relativePath === refFile);
-    if (sameFile) return [sameFile];
-
-    // 2. Direct import: refFile explicitly imports `leaf` from a path that
-    // matches a candidate's defining file. Credit all same-file candidates
-    // (interface dispatch could land on any impl at runtime).
-    const fileImports = importsForFile(refFile);
-    const directlyImportedFrom = fileImports.get(leaf);
-    if (directlyImportedFrom) {
-      for (const sourcePath of directlyImportedFrom) {
-        const matches = bucket.filter((e) => pathsResolveSame(sourcePath, e.relativePath));
-        if (matches.length > 0) return matches;
-      }
-    }
-
-    // 3. Indirect access (method-on-instance via a factory). The leaf isn't
-    // imported by name, but the consumer imports SOMETHING from a file
-    // where ALL the candidates live — and a textual hit on the leaf in
-    // this consumer is most likely a method call on an instance whose
-    // type comes from that file. Example: tests import `getPaymentProcessor`
-    // from `provider.ts`, then call `processor.createIntent(...)`. Credit
-    // all candidates in the imported file.
-    const importedSourcePaths = new Set<string>();
-    for (const set of fileImports.values()) for (const p of set) importedSourcePaths.add(p);
-    for (const sourcePath of importedSourcePaths) {
-      const matches = bucket.filter((e) => pathsResolveSame(sourcePath, e.relativePath));
-      if (matches.length > 0 && matches.length === bucket.length) {
-        return matches;
-      }
-    }
-    return [];
-  };
+  // attributeIdentifier owns the same-file > direct-import > interface-
+  // dispatch disambiguation that used to live inline here.
 
   const docRows = db.all<{ relative_path: string }>(
     `SELECT relative_path FROM documents
@@ -198,7 +91,7 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     if (inactiveBarrelPaths.has(doc.relative_path)) continue;
     const lineMap = getIdentifierLineMap(db, doc.relative_path);
     for (const [name, lines] of lineMap) {
-      const targets = resolveLeaf(name, doc.relative_path);
+      const targets = attributeIdentifier(db, doc.relative_path, name);
       if (targets.length === 0) continue;
       // Each line is one occurrence. The defining file's count includes the
       // declaration itself; subtract one occurrence on that file so we don't
@@ -219,7 +112,7 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
 
     const dispatchNames = getCrossLanguageDispatchNames(db, doc.relative_path);
     for (const cmdName of dispatchNames) {
-      const targets = resolveLeaf(cmdName, doc.relative_path);
+      const targets = attributeIdentifier(db, doc.relative_path, cmdName);
       for (const target of targets) {
         if (target.relativePath === doc.relative_path) continue;
 

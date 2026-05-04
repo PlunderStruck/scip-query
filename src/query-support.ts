@@ -553,107 +553,7 @@ function buildCallerRowsMap(db: ScipDatabase): Map<number, CallerRow[]> {
   });
 }
 
-export function getSourceReferenceSites(
-  db: ScipDatabase,
-  symbol: SymbolLocation,
-): ReferenceSite[] {
-  const prelude = resolveReferencePrelude(db, symbol);
-  if (!prelude) return [];
-  const { match, identifier } = prelude;
-  if (!identifier) return [];
-
-  // If the leaf identifier is uniquely defined in the index, ANY textual hit
-  // of it must refer to this symbol — fast path, scan every file.
-  if (hasUniqueLeafDefinition(db, identifier, match.symbolId)) {
-    return buildReferenceSites(db, sourceCandidateLines(db, match, identifier));
-  }
-
-  // Otherwise the leaf is shared by 2+ definitions (a frontend `listInventoryItems`
-  // and a backend twin, for instance). We can still find references precisely
-  // by following each candidate file's imports: a textual hit only counts if
-  // the file imports `identifier` from a path that resolves back to *this*
-  // symbol's defining file.
-  return buildReferenceSites(db, importAttributedCandidateLines(db, match, identifier));
-}
-
-function sourceCandidateLines(
-  db: ScipDatabase,
-  match: { relativePath: string; startLine: number; endLine: number },
-  identifier: string,
-): Map<string, number[]> {
-  const allFiles = getSourceFiles(db);
-
-  const fileLines = new Map<string, number[]>();
-  for (const file of allFiles) {
-    const lines = findIdentifierLines(
-      db,
-      file,
-      identifier,
-      file === match.relativePath
-        ? { excludeStartLine: match.startLine, excludeEndLine: match.endLine }
-        : {},
-    );
-    if (lines.length > 0) fileLines.set(file, lines);
-  }
-  return fileLines;
-}
-
-/**
- * When a leaf identifier has multiple global definitions, attribute textual
- * hits to the right one by following each candidate file's imports. A file
- * counts as a referrer of `match` only if it imports `identifier` from a path
- * that resolves to `match.relativePath` (or to a re-exporting barrel that
- * resolves there). This is what disambiguates a frontend `listInventoryItems`
- * from a backend twin: Vue files import the frontend version, never the
- * backend one.
- */
-function importAttributedCandidateLines(
-  db: ScipDatabase,
-  match: { relativePath: string; startLine: number; endLine: number },
-  identifier: string,
-): Map<string, number[]> {
-  const allFiles = getSourceFiles(db);
-  const targetFile = match.relativePath;
-
-  const fileLines = new Map<string, number[]>();
-  for (const file of allFiles) {
-    let isReferrer = file === targetFile;
-    if (!isReferrer) {
-      // Cheap source-text gate: if the identifier doesn't appear in the
-      // raw text, skip the import-list walk entirely.
-      const source = getSourceText(db, file);
-      if (!source || source.indexOf(identifier) === -1) continue;
-
-      for (const entry of getSourceImports(db, file)) {
-        const matchesName = entry.localName === identifier
-          || entry.importedName === identifier
-          || (entry.kind === 'namespace' && entry.usedMembers.includes(identifier));
-        if (!matchesName) continue;
-        if (entry.sourcePath && pathsResolveSame(entry.sourcePath, targetFile)) {
-          isReferrer = true;
-          break;
-        }
-      }
-    }
-    if (!isReferrer) continue;
-
-    const lines = findIdentifierLines(
-      db,
-      file,
-      identifier,
-      file === targetFile
-        ? { excludeStartLine: match.startLine, excludeEndLine: match.endLine }
-        : {},
-    );
-    if (lines.length > 0) fileLines.set(file, lines);
-  }
-  return fileLines;
-}
-
-function pathsResolveSame(a: string, b: string): boolean {
-  const norm = (p: string): string => p.replace(/\\/g, '/').replace(/^\.\//, '');
-  return norm(a) === norm(b);
-}
+export { findReferences as getSourceReferenceSites } from './identifier-attribution.js';
 
 
 /**
@@ -817,7 +717,7 @@ function getDefinitionRowsForSymbolId(
   );
 }
 
-function getFullSymbolMatch(
+export function getFullSymbolMatch(
   db: ScipDatabase,
   symbol: SymbolLocation,
 ): SymbolMatch | null {
@@ -1456,7 +1356,7 @@ function buildAstCalleeMap(
 }
 
 const GLOBAL_LEAF_INDEX_CACHE = createPerDbValue<Map<string, Array<{ symbol: string; symbolId: number; file: string }>>>('global-leaf-index');
-function getGlobalLeafIndex(
+export function getGlobalLeafIndex(
   db: ScipDatabase,
 ): Map<string, Array<{ symbol: string; symbolId: number; file: string }>> {
   return GLOBAL_LEAF_INDEX_CACHE.get(db, () => {
@@ -1716,142 +1616,7 @@ export function buildCrossFileCallerMap(
   return map;
 }
 
-/**
- * Bulk source-text caller fallback. Useful when the SCIP indexer
- * under-reports references — e.g., scip-python's known gaps, Rust macro
- * expansions, or any indexer that misses dynamic-dispatch call sites.
- *
- * For each candidate whose leaf identifier is *unique* across the codebase
- * (so a textual hit can be unambiguously attributed), this scans every
- * source file once, collecting files that mention the identifier outside
- * the candidate's own definition range and outside comments/strings.
- *
- * Returns symbolId → set of caller files. Merge into the SCIP-derived
- * `buildCrossFileCallerMap` to recover the accuracy that per-symbol
- * `getCallerRowsForSymbol` used to provide, without paying its
- * O(symbols × files) cost.
- */
-export function buildSourceFallbackCallerFiles(
-  db: ScipDatabase,
-  candidates: ReadonlyArray<IndexedDefinition>,
-): Map<number, Set<string>> {
-  const leafCounts = new Map<string, number>();
-  for (const def of candidates) {
-    if (!def.leaf) continue;
-    leafCounts.set(def.leaf, (leafCounts.get(def.leaf) ?? 0) + 1);
-  }
-  // Unique-leaf candidates can be attributed by leaf alone — fast path.
-  const leafToCandidate = new Map<string, IndexedDefinition>();
-  // Ambiguous-leaf candidates (e.g. a frontend `listInventoryItems` and a
-  // backend twin) get an extra index by their defining file; we then use
-  // the consumer's imports to pick the right one.
-  const leafToAmbiguous = new Map<string, IndexedDefinition[]>();
-  for (const def of candidates) {
-    if (!def.leaf) continue;
-    if ((leafCounts.get(def.leaf) ?? 0) === 1) {
-      leafToCandidate.set(def.leaf, def);
-    } else {
-      const bucket = leafToAmbiguous.get(def.leaf) ?? [];
-      bucket.push(def);
-      leafToAmbiguous.set(def.leaf, bucket);
-    }
-  }
-  if (leafToCandidate.size === 0 && leafToAmbiguous.size === 0) return new Map();
-
-  const allFiles = getSourceFiles(db);
-
-  const result = new Map<number, Set<string>>();
-  const credit = (target: IndexedDefinition, file: string): void => {
-    if (file === target.relativePath) return;
-    let bucket = result.get(target.symbolId);
-    if (!bucket) { bucket = new Set(); result.set(target.symbolId, bucket); }
-    bucket.add(file);
-  };
-
-  // Each file contributes a Set<identifierName>. We then intersect that with
-  // the candidate-leaf set rather than scanning every identifier on every line.
-  // Tree-sitter-backed identifier collection (when language is supported)
-  // automatically excludes comments/strings; the Set lookup makes per-file
-  // attribution O(unique identifiers in file) instead of O(all token matches).
-  for (const file of allFiles) {
-    const fileIdents = getFileIdentifiers(db, file);
-    if (fileIdents.size === 0) continue;
-
-    // For ambiguous leaves, build a per-file imports lookup once: name → set
-    // of source file paths that name resolves to. We only need this when the
-    // file even mentions one of the ambiguous names.
-    let importsByName: Map<string, Set<string>> | null = null;
-    const computeImports = (): Map<string, Set<string>> => {
-      if (importsByName) return importsByName;
-      importsByName = new Map();
-      for (const entry of getSourceImports(db, file)) {
-        if (!entry.sourcePath) continue;
-        const localName = entry.localName ?? entry.importedName;
-        if (localName) {
-          let s = importsByName.get(localName);
-          if (!s) { s = new Set(); importsByName.set(localName, s); }
-          s.add(entry.sourcePath);
-        }
-        if (entry.kind === 'namespace') {
-          for (const member of entry.usedMembers) {
-            let s = importsByName.get(member);
-            if (!s) { s = new Set(); importsByName.set(member, s); }
-            s.add(entry.sourcePath);
-          }
-        }
-      }
-      return importsByName;
-    };
-
-    for (const name of fileIdents) {
-      const candidate = leafToCandidate.get(name);
-      if (candidate) {
-        credit(candidate, file);
-        continue;
-      }
-      const ambiguous = leafToAmbiguous.get(name);
-      if (!ambiguous) continue;
-      const imports = computeImports();
-      const importedFrom = imports.get(name);
-      if (!importedFrom || importedFrom.size === 0) continue;
-      for (const def of ambiguous) {
-        for (const sourcePath of importedFrom) {
-          if (pathsResolveSame(sourcePath, def.relativePath)) {
-            credit(def, file);
-            break;
-          }
-        }
-      }
-    }
-  }
-
-  return result;
-}
-
-function hasUniqueLeafDefinition(
-  db: ScipDatabase,
-  leaf: string,
-  symbolId: number,
-): boolean {
-  const rows = db.all<{ id: number; symbol: string }>(
-    `SELECT id, symbol
-     FROM global_symbols
-     WHERE symbol LIKE ?
-     LIMIT 50`,
-    `%${leaf}%`,
-  );
-
-  let count = 0;
-  for (const row of rows) {
-    if (leafName(row.symbol) !== leaf) continue;
-    count++;
-    if (count > 1 && row.id !== symbolId) {
-      return false;
-    }
-  }
-
-  return count === 1;
-}
+export { findCallerFiles as buildSourceFallbackCallerFiles } from './identifier-attribution.js';
 
 function parentTypeName(rawSymbol: string): string | null {
   const parsed = parseSymbol(rawSymbol);
