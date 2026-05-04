@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../db.js';
 import { buildFileDepGraph } from '../query-support.js';
+import { jaccard } from '../similarity.js';
 import type { SimilarFileResult } from '../types.js';
 
 /**
@@ -126,8 +127,7 @@ function compareProfiles(
   if (shared.size < 3) return null;
   if (a.deps.size < 4 || b.deps.size < 4) return null;
 
-  const unionSize = new Set([...a.deps, ...b.deps]).size;
-  const similarity = shared.size / unionSize;
+  const similarity = jaccard(a.deps, b.deps);
 
   if (similarity < minSimilarity) return null;
 

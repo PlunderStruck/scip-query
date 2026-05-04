@@ -2,6 +2,7 @@ import type { ScipDatabase } from '../db.js';
 import { findFirstSymbolMatch, getAllDefinitions, getScopedDefinitions, getCalleeRowsForSymbol, buildCalleeMap } from '../query-support.js';
 import { getCallableSignature } from '../ast.js';
 import { getSourceText } from '../source-analysis.js';
+import { computeIdf, difference, intersection, weightedCosine } from '../similarity.js';
 import type { SimilarSymbolResult } from '../types.js';
 import { isFunctionLikeSymbol, leafName, shortenSymbol } from '../symbol-parser.js';
 
@@ -45,7 +46,7 @@ function compareAgainstFingerprints(
     minCallees: 3,
     excludeSymbol: target.symbol,
   });
-  const idfWeights = computeIdf([target, ...candidates]);
+  const idfWeights = computeIdf([target, ...candidates].map((fp) => fp.callees));
 
   const results: SimilarSymbolResult[] = [];
   for (const candidate of candidates) {
@@ -74,7 +75,7 @@ function comparePair(
   idfWeights: Map<string, number>,
   opts: ComparePairOptions,
 ): SimilarSymbolResult | null {
-  const { similarity, significantShared } = weightedSimilarity(a.callees, b.callees, idfWeights);
+  const { similarity, significantShared } = weightedCosine(a.callees, b.callees, idfWeights);
   if (similarity < opts.minSimilarity) return null;
   const sharedCount = intersection(a.callees, b.callees).size;
   if (significantShared.length < opts.requireSignificantShared && sharedCount < opts.requireSharedCount) {
@@ -110,7 +111,7 @@ export function similarAll(
   const { minSimilarity = 0.5, limit = 20, scope, minCallees = 4, crossFileOnly = false } = opts;
 
   const all = getAllCalleeFingerprints(db, { minCallees, scope });
-  const idfWeights = computeIdf(all);
+  const idfWeights = computeIdf(all.map((fp) => fp.callees));
 
   // Inverted index: callee → indexes of fingerprints that include it. Skipping
   // ubiquitous callees (df > sqrt(N)) keeps the candidate set tight — pairs
@@ -176,102 +177,6 @@ export function similarAll(
   return results.slice(0, limit);
 }
 
-// ── TF-IDF Engine ──────────────────────────────────────────
-
-/**
- * Compute inverse document frequency for each callee.
- * IDF(callee) = log(N / df(callee)) where N is total functions
- * and df is how many functions reference that callee.
- *
- * High IDF = rare callee = strong similarity signal.
- * Low IDF = ubiquitous callee = noise.
- */
-function computeIdf(fingerprints: SymbolFingerprint[]): Map<string, number> {
-  const n = fingerprints.length;
-  if (n === 0) return new Map();
-
-  // Count how many functions reference each callee
-  const docFreq = new Map<string, number>();
-  for (const fp of fingerprints) {
-    for (const callee of fp.callees) {
-      docFreq.set(callee, (docFreq.get(callee) ?? 0) + 1);
-    }
-  }
-
-  // Compute IDF
-  const idf = new Map<string, number>();
-  for (const [callee, df] of docFreq) {
-    idf.set(callee, Math.log(n / df));
-  }
-
-  return idf;
-}
-
-/**
- * Compute TF-IDF weighted cosine similarity between two callee sets.
- *
- * Each callee is a dimension. Its weight is its IDF score.
- * Cosine similarity of the weighted vectors gives a similarity
- * that ignores ubiquitous callees and emphasizes rare shared ones.
- *
- * Also returns which shared callees are "significant" (above-median IDF)
- * vs "trivial" (below-median IDF, i.e., infrastructure).
- */
-function weightedSimilarity(
-  a: Set<string>,
-  b: Set<string>,
-  idf: Map<string, number>,
-): { similarity: number; significantShared: string[]; trivialShared: string[] } {
-  const shared = intersection(a, b);
-  if (shared.size === 0) return { similarity: 0, significantShared: [], trivialShared: [] };
-
-  // Compute weighted dot product and magnitudes
-  let dotProduct = 0;
-  let magA = 0;
-  let magB = 0;
-
-  const allCallees = new Set([...a, ...b]);
-  for (const callee of allCallees) {
-    const weight = idf.get(callee) ?? 0;
-    const inA = a.has(callee) ? weight : 0;
-    const inB = b.has(callee) ? weight : 0;
-    dotProduct += inA * inB;
-    magA += inA * inA;
-    magB += inB * inB;
-  }
-
-  const magnitude = Math.sqrt(magA) * Math.sqrt(magB);
-  const similarity = magnitude > 0 ? dotProduct / magnitude : 0;
-
-  // Split shared callees into significant (high IDF) and trivial (low IDF)
-  const medianIdf = getMedianIdf(idf);
-  const significantShared: string[] = [];
-  const trivialShared: string[] = [];
-
-  for (const callee of shared) {
-    const weight = idf.get(callee) ?? 0;
-    if (weight >= medianIdf) {
-      significantShared.push(callee);
-    } else {
-      trivialShared.push(callee);
-    }
-  }
-
-  // Sort significant callees by IDF descending (most distinctive first)
-  significantShared.sort((x, y) => (idf.get(y) ?? 0) - (idf.get(x) ?? 0));
-
-  return { similarity, significantShared, trivialShared };
-}
-
-function getMedianIdf(idf: Map<string, number>): number {
-  const values = [...idf.values()].sort((a, b) => a - b);
-  if (values.length === 0) return 0;
-  const mid = Math.floor(values.length / 2);
-  return values.length % 2 === 0
-    ? (values[mid - 1]! + values[mid]!) / 2
-    : values[mid]!;
-}
-
 // ── Internal helpers ───────────────────────────────────────
 
 interface SymbolFingerprint {
@@ -327,22 +232,6 @@ function getAllCalleeFingerprints(
       paramCount: getCallableSignature(db, d.relativePath, d.startLine, d.endLine)?.paramCount ?? -1,
     }))
     .filter((fp) => fp.callees.size >= minCallees);
-}
-
-function intersection<T>(a: Set<T>, b: Set<T>): Set<T> {
-  const result = new Set<T>();
-  for (const item of a) {
-    if (b.has(item)) result.add(item);
-  }
-  return result;
-}
-
-function difference<T>(a: Set<T>, b: Set<T>): Set<T> {
-  const result = new Set<T>();
-  for (const item of a) {
-    if (!b.has(item)) result.add(item);
-  }
-  return result;
 }
 
 function similarBySourceShape(
