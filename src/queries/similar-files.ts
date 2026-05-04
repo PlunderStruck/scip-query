@@ -119,10 +119,12 @@ function compareProfiles(
     if (b.deps.has(dep)) shared.add(dep);
   }
 
-  // Require at least 2 substantive shared deps. A single shared dep gives
-  // a misleading 100% Jaccard when both files have only that one dep after
-  // universal-dep filtering — those aren't really structurally similar.
-  if (shared.size < 2) return null;
+  // Require at least 3 substantive shared deps and at least 4 deps on each
+  // side. Smaller dep sets give misleadingly high Jaccard scores — a file
+  // with 2 deps shared with another file with 2 deps reads as 100% similar
+  // even though neither file has enough structural surface to compare.
+  if (shared.size < 3) return null;
+  if (a.deps.size < 4 || b.deps.size < 4) return null;
 
   const unionSize = new Set([...a.deps, ...b.deps]).size;
   const similarity = shared.size / unionSize;
