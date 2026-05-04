@@ -405,6 +405,8 @@ program
   .option('--include-tests', 'Include test files')
   .option('--skip-barrels', 'Ignore refs from barrel re-export files')
   .option('--include-members', 'Include class members')
+  .option('--only-dead', 'Show only [dead code] symbols (skip [file-internal only])')
+  .option('--only-internal', 'Show only [file-internal only] symbols (skip [dead code])')
   .action((scope, opts) => {
     withDb((db) => {
       const deadOpts: DeadOptions = {
@@ -422,21 +424,75 @@ program
         return;
       }
 
-      let prevFile = '';
-      for (const s of result.symbols) {
-        if (s.relativePath !== prevFile) {
-          if (prevFile) console.log('');
-          console.log(s.relativePath);
-          prevFile = s.relativePath;
+      const deadCode = result.symbols.filter((s) => s.kind === 'dead-code');
+      const fileInternal = result.symbols.filter((s) => s.kind !== 'dead-code');
+      const showDead = !opts.onlyInternal;
+      const showInternal = !opts.onlyDead;
+
+      const renderGroup = (
+        rows: typeof result.symbols,
+        title: string,
+        explanation: string,
+        loc: number,
+      ): void => {
+        console.log(`═══ ${title} (${rows.length}, ${loc} LOC) ═══`);
+        console.log(explanation);
+        console.log('');
+        // Group by file, sort files by total LOC desc so the worst-offender
+        // files surface first. Within a file, keep symbols in source order.
+        const byFile = new Map<string, typeof rows>();
+        for (const s of rows) {
+          const bucket = byFile.get(s.relativePath) ?? [];
+          bucket.push(s);
+          byFile.set(s.relativePath, bucket);
         }
-        const tag = s.kind === 'dead-code' ? '[dead code]' : '[file-internal only]';
-        console.log(`  ${displayRange(s.startLine, s.endLine)}  (${s.loc} LOC)  ${s.shortName}  ${tag}`);
+        const fileOrder = [...byFile.entries()]
+          .map(([file, bucket]) => ({
+            file,
+            bucket,
+            totalLoc: bucket.reduce((sum, s) => sum + s.loc, 0),
+          }))
+          .sort((a, b) => b.totalLoc - a.totalLoc || a.file.localeCompare(b.file));
+
+        let first = true;
+        for (const { file, bucket } of fileOrder) {
+          if (!first) console.log('');
+          first = false;
+          console.log(`  ${file}`);
+          bucket.sort((a, b) => a.startLine - b.startLine);
+          for (const s of bucket) {
+            console.log(`    ${displayRange(s.startLine, s.endLine)}  (${s.loc} LOC)  ${s.shortName}`);
+          }
+        }
+      };
+
+      const deadLoc = deadCode.reduce((sum, s) => sum + s.loc, 0);
+      const fiLoc = fileInternal.reduce((sum, s) => sum + s.loc, 0);
+
+      if (showDead && deadCode.length > 0) {
+        renderGroup(
+          deadCode,
+          'DEAD CODE',
+          '  Zero references anywhere — no cross-file callers AND no same-file uses.\n  Safe to delete.',
+          deadLoc,
+        );
+      }
+
+      if (showInternal && fileInternal.length > 0) {
+        if (showDead && deadCode.length > 0) console.log('');
+        renderGroup(
+          fileInternal,
+          'FILE-INTERNAL ONLY',
+          '  Used only within the same file (no cross-file callers). Could be a\n  single-use helper, an abstraction-in-progress, or a callback registered\n  through a framework path that static analysis cannot trace (signal\n  handlers, event listeners, dependency injection). NOT necessarily dead —\n  review case by case.',
+          fiLoc,
+        );
       }
 
       console.log('\n───────────────────────────');
       console.log(
-        `Total: ${result.totalCount} symbols (${result.deadCodeCount} dead code, ` +
-        `${result.fileInternalCount} file-internal), ${result.totalLoc} LOC`,
+        `Total: ${result.totalCount} symbols — ` +
+        `${result.deadCodeCount} dead code (${deadLoc} LOC) + ` +
+        `${result.fileInternalCount} file-internal (${fiLoc} LOC)`,
       );
     });
   });

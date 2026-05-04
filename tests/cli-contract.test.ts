@@ -30,6 +30,8 @@ describe('CLI contract', () => {
       '--include-tests',
       '--skip-barrels',
       '--include-members',
+      '--only-dead',
+      '--only-internal',
     ]);
 
     expect(command('health').description()).toBe('Composite codebase health report with prioritized action list');
