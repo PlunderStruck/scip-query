@@ -97,13 +97,14 @@ export function health(
     });
   }
 
-  if (cycleResult.length > 0) {
+  const realCycles = cycleResult.filter((c) => c.kind === 'real');
+  if (realCycles.length > 0) {
     actions.push({
       category: 'Circular dependencies',
-      description: `${cycleResult.length} cycle(s) — break with dependency inversion or module restructuring`,
+      description: `${realCycles.length} cycle(s) — break with dependency inversion or module restructuring`,
       effort: 'medium',
       impact: 'high',
-      count: cycleResult.length,
+      count: realCycles.length,
       locRecoverable: 0,
     });
   }
