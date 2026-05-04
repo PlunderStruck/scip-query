@@ -133,22 +133,6 @@ interface SymbolQueryRow {
 
 const FILE_DEFINITION_CACHE = createPerDbCache<string, IndexedDefinition[]>('file-definitions');
 
-export const TEST_FILE_PATTERNS = [
-  '%/__tests__/%',
-  '%.test.%',
-  '%.spec.%',
-  '%/test/%',
-  '%/tests/%',
-  '%_test.%',
-  '%_spec.%',
-  '%/test_%.%',
-  '%/spec_%.%',
-] as const;
-
-export const TEST_SUPPORT_PATH_PATTERNS = [
-  '%/test-utils/%',
-] as const;
-
 const FILE_DEP_GRAPH_CACHE = createPerDbCache<string, Map<string, Set<string>>>('file-dep-graph');
 
 export function buildFileDepGraph(

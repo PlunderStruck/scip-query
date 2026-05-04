@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../db.js';
-import { isLiveBarrel } from '../entry-surfaces.js';
+import { isLiveBarrel } from '../file-classifier.js';
 import { getDefinitionsForFile } from '../query-support.js';
 import { getSourceExports, getSourceImports } from '../source-analysis.js';
 import type { RedundantReexport } from '../types.js';

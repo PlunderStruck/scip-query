@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../db.js';
-import { isEntrySurface } from '../entry-surfaces.js';
+import { isEntrySurface } from '../file-classifier.js';
 import { getScopedDefinitions, buildCalleeMap, buildCrossFileCallerMap, buildSourceFallbackCallerFiles } from '../query-support.js';
 import type { IsolatedResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';

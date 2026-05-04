@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../db.js';
-import { isEntrySurface } from '../entry-surfaces.js';
+import { isEntrySurface } from '../file-classifier.js';
 import { dead } from './dead.js';
 import { isolated } from './isolated.js';
 import { cycles } from './cycles.js';
