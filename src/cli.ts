@@ -55,6 +55,7 @@ import { redundantReexports } from './queries/redundant-reexports.js';
 import { similarSignatures } from './queries/similar-signatures.js';
 import type { ScipQueryConfig, DeadOptions, WatcherStatus } from './types.js';
 import { BUILTIN_SKILLS, installSkills, isScipInstalled, printScipInstallInstructions } from './setup.js';
+import { displayLine, displayPathRange, displayRange } from './render.js';
 
 const require = createRequire(import.meta.url);
 const { version: cliVersion } = require('../package.json') as { version: string };
@@ -112,17 +113,6 @@ function runQuery<T>(
   });
 }
 
-function displayLine(line: number): number {
-  return line + 1;
-}
-
-function displayRange(startLine: number, endLine: number): string {
-  return `${displayLine(startLine)}-${displayLine(endLine)}`;
-}
-
-function displayPathRange(relativePath: string, startLine: number, endLine: number): string {
-  return `${relativePath}:${displayRange(startLine, endLine)}`;
-}
 
 const queries = {
   stats,
