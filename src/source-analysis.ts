@@ -12,6 +12,7 @@ import {
 } from 'node:path';
 import type { ScipDatabase } from './db.js';
 import { detectAstLanguage, getAst, isVueSfcPath, type SyntaxNode, type Tree } from './ast.js';
+import { getParserForPath } from './language-parsers/registry.js';
 import { createPerDbCache, createPerDbSourceCache, createPerDbValue } from './per-db-cache.js';
 import { getSourceText } from './source-text.js';
 
@@ -70,28 +71,12 @@ export function getSourceImports(
 ): ParsedSourceImport[] {
   const normalized = normalizePath(relativePath);
   return SOURCE_IMPORT_CACHE.get(db, normalized, () => {
+    const parser = getParserForPath(normalized);
+    if (!parser) return [];
     const fullPath = join(db.config.projectRoot, normalized);
     if (!existsSync(fullPath)) return [];
     const source = readFileSync(fullPath, 'utf-8');
-    return isPythonSourcePath(normalized)
-      ? parsePythonImports(db, normalized, source)
-      : isJavaScriptSourcePath(normalized)
-        ? parseJavaScriptImports(db, normalized, source)
-        : isJvmSourcePath(normalized)
-          ? parseJvmImports(db, normalized, source)
-          : isRustSourcePath(normalized)
-            ? parseRustImports(db, normalized, source)
-            : isRubySourcePath(normalized)
-              ? parseRubyImports(db, normalized, source)
-              : isCLikeSourcePath(normalized)
-                ? parseCLikeImports(db, normalized, source)
-                : isDotNetSourcePath(normalized)
-                  ? parseDotNetImports(db, normalized, source)
-                  : isDartSourcePath(normalized)
-                    ? parseDartImports(db, normalized, source)
-                    : isPhpSourcePath(normalized)
-                      ? parsePhpImports(db, normalized, source)
-                      : [];
+    return parser.parseImports(db, normalized, source);
   });
 }
 
@@ -101,14 +86,12 @@ export function getSourceExports(
 ): ParsedSourceExport[] {
   const normalized = normalizePath(relativePath);
   return SOURCE_EXPORT_CACHE.get(db, normalized, () => {
+    const parser = getParserForPath(normalized);
+    if (!parser?.parseExports) return [];
     const fullPath = join(db.config.projectRoot, normalized);
     if (!existsSync(fullPath)) return [];
     const source = readFileSync(fullPath, 'utf-8');
-    return isDartSourcePath(normalized)
-      ? parseDartExports(db, normalized, source)
-      : isRustSourcePath(normalized)
-        ? parseRustExports(db, normalized, source)
-      : [];
+    return parser.parseExports(db, normalized, source);
   });
 }
 
@@ -333,7 +316,7 @@ function parseReExportClause(
   return { kind: 'star', sourcePath, names: [], startLine, endLine };
 }
 
-function parseJavaScriptImports(
+export function parseJavaScriptImports(
   db: ScipDatabase,
   importerPath: string,
   source: string,
@@ -584,7 +567,7 @@ function parseJavaScriptImportStatement(
   });
 }
 
-function parseJvmImports(
+export function parseJvmImports(
   db: ScipDatabase,
   importerPath: string,
   source: string,
@@ -808,7 +791,7 @@ function parseJvmImportClause(
   )];
 }
 
-function parseRustImports(
+export function parseRustImports(
   db: ScipDatabase,
   importerPath: string,
   source: string,
@@ -1132,7 +1115,7 @@ function parseRustUseClause(
   )];
 }
 
-function parseRustExports(
+export function parseRustExports(
   db: ScipDatabase,
   importerPath: string,
   source: string,
@@ -1217,7 +1200,7 @@ function buildRustExport(
   };
 }
 
-function parseRubyImports(
+export function parseRubyImports(
   db: ScipDatabase,
   importerPath: string,
   source: string,
@@ -1320,7 +1303,7 @@ function rubyConstantName(specifier: string): string {
     .join('');
 }
 
-function parseCLikeImports(
+export function parseCLikeImports(
   db: ScipDatabase,
   importerPath: string,
   source: string,
@@ -1387,7 +1370,7 @@ function parseCLikeImportsAst(
   return results;
 }
 
-function parseDotNetImports(
+export function parseDotNetImports(
   db: ScipDatabase,
   importerPath: string,
   source: string,
@@ -1511,7 +1494,7 @@ function parseCSharpImportsAst(
   return results;
 }
 
-function parseDartImports(
+export function parseDartImports(
   db: ScipDatabase,
   importerPath: string,
   source: string,
@@ -1535,7 +1518,7 @@ function parseDartImports(
   return statements;
 }
 
-function parseDartExports(
+export function parseDartExports(
   db: ScipDatabase,
   importerPath: string,
   source: string,
@@ -1552,7 +1535,7 @@ function parseDartExports(
   return statements;
 }
 
-function parsePhpImports(
+export function parsePhpImports(
   db: ScipDatabase,
   importerPath: string,
   source: string,
@@ -1672,7 +1655,7 @@ function buildSimpleImport(
 }
 
 
-function parsePythonImports(
+export function parsePythonImports(
   db: ScipDatabase,
   importerPath: string,
   source: string,
