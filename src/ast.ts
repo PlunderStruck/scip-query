@@ -558,9 +558,22 @@ function getRustExclusions(
     return null;
   };
 
-  const isSerdeDeriveAttr = (attrText: string): boolean => {
+  const isReflectiveDeriveAttr = (attrText: string): boolean => {
     if (!/#\[\s*derive\s*\(/.test(attrText)) return false;
-    return /\bSerialize\b/.test(attrText) || /\bDeserialize\b/.test(attrText);
+    // Any derive that touches fields via reflection / macro expansion. SCIP
+    // doesn't see these accesses; without the exclusion every field of these
+    // structs looks dead.
+    return /\bSerialize\b/.test(attrText)
+      || /\bDeserialize\b/.test(attrText)
+      || /\bFromRow\b/.test(attrText)        // sqlx
+      || /\bDeriveEntityModel\b/.test(attrText) // sea-orm
+      || /\bIntoSchema\b/.test(attrText)     // utoipa
+      || /\bToSchema\b/.test(attrText)       // utoipa
+      || /\bDeriveValueType\b/.test(attrText)
+      || /\bsqlx::FromRow\b/.test(attrText);
+  };
+  const isAllowDeadCodeAttr = (attrText: string): boolean => {
+    return /#\[\s*allow\s*\(\s*dead_code\s*\)/.test(attrText);
   };
 
   const visit = (node: SyntaxNode, inTestMod: boolean, inTraitImpl: boolean): void => {
@@ -584,19 +597,29 @@ function getRustExclusions(
       for (const attr of attrs) {
         const r = isFrameworkAttr(attr);
         if (r) { reason = r; break; }
+        if (isAllowDeadCodeAttr(attr)) { reason = '#[allow(dead_code)]'; break; }
       }
       if (reason) {
         out.push({ startLine: node.startPosition.row, endLine: node.endPosition.row, reason });
       }
     } else if (node.type === 'struct_item' || node.type === 'enum_item' || node.type === 'union_item') {
       const attrs = collectAttrTexts(node);
-      const isSerde = attrs.some(isSerdeDeriveAttr);
+      const isReflective = attrs.some(isReflectiveDeriveAttr);
+      const isAllowed = attrs.some(isAllowDeadCodeAttr);
       const typeName = node.namedChildren.find((c) => c.type === 'type_identifier')?.text;
-      if (isSerde) {
+      if (isReflective) {
         out.push({
           startLine: node.startPosition.row,
           endLine: node.endPosition.row,
-          reason: '#[derive(Serialize/Deserialize)]',
+          reason: '#[derive(<reflective>)] — fields accessed via macro/reflection',
+          containerName: typeName,
+        });
+      }
+      if (isAllowed) {
+        out.push({
+          startLine: node.startPosition.row,
+          endLine: node.endPosition.row,
+          reason: '#[allow(dead_code)]',
           containerName: typeName,
         });
       }

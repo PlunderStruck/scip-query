@@ -1,3 +1,5 @@
+import { readdirSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import type { ScipDatabase } from '../db.js';
 import { getInactiveBarrelPaths, isEntrySurface } from '../entry-surfaces.js';
 import { getAllDefinitions, TEST_FILE_PATTERNS, TEST_SUPPORT_PATH_PATTERNS } from '../query-support.js';
@@ -67,8 +69,11 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
   // Restricting to unique-leaf candidates avoids over-attribution: a method
   // named `new` exists on dozens of types, so a textual match of `new` in
   // some file shouldn't satisfy "is this specific type's `new` method used."
-  const leafCounts = new Map<string, number>();
-  const leafToSymbol = new Map<string, { symbolId: number; relativePath: string }>();
+  // Build a leaf index. For unique leaves we have a single global mapping.
+  // For ambiguous leaves (e.g. `SYSTEM_PROMPT` defined in two crates), we
+  // also keep a per-file index so a same-file reference can resolve to the
+  // right symbol — important when scip-rust drops in-file mentions.
+  const leafToSymbolGlobal = new Map<string, Array<{ symbolId: number; relativePath: string }>>();
   for (const row of db.all<{ id: number; symbol: string; relative_path: string | null }>(
     `SELECT gs.id, gs.symbol,
             COALESCE(der_doc.relative_path, mention_doc.relative_path) AS relative_path
@@ -88,24 +93,44 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     if (!row.relative_path) continue;
     const leaf = leafName(row.symbol);
     if (!leaf) continue;
-    leafCounts.set(leaf, (leafCounts.get(leaf) ?? 0) + 1);
-    if (!leafToSymbol.has(leaf)) {
-      leafToSymbol.set(leaf, { symbolId: row.id, relativePath: row.relative_path });
+    let bucket = leafToSymbolGlobal.get(leaf);
+    if (!bucket) { bucket = []; leafToSymbolGlobal.set(leaf, bucket); }
+    if (!bucket.some((e) => e.symbolId === row.id)) {
+      bucket.push({ symbolId: row.id, relativePath: row.relative_path });
     }
   }
+  const resolveLeaf = (leaf: string, refFile: string): { symbolId: number; relativePath: string } | null => {
+    const bucket = leafToSymbolGlobal.get(leaf);
+    if (!bucket || bucket.length === 0) return null;
+    if (bucket.length === 1) return bucket[0]!;
+    // Ambiguous — prefer a symbol whose defining file is the reference file
+    // (same-file resolution). Otherwise we can't safely attribute.
+    const sameFile = bucket.find((e) => e.relativePath === refFile);
+    return sameFile ?? null;
+  };
 
   const docRows = db.all<{ relative_path: string }>(
     `SELECT relative_path FROM documents
      WHERE 1 = 1 ${db.pathExclusionsFor('documents')}`,
   );
-  for (const doc of docRows) {
+  const indexedPaths = new Set(docRows.map((r) => r.relative_path));
+  // Indexers (especially rust-analyzer) don't always cover every source
+  // file — partial workspace indexing is common. We extend the AST scan to
+  // ANY source file under projectRoot, so a reference from an unindexed
+  // file still credits the symbol it reaches. Without this, a constant
+  // imported by one Tauri command file (often unindexed) but defined in
+  // an indexed crate looks dead.
+  const allSourcePaths = collectSourceFilesInProject(db.config.projectRoot);
+  const scanPaths = new Set<string>([...indexedPaths, ...allSourcePaths]);
+  for (const relativePath of scanPaths) {
+    const doc = { relative_path: relativePath };
     if (!detectAstLanguage(doc.relative_path)) continue;
     if (db.isIgnored(doc.relative_path)) continue;
     if (inactiveBarrelPaths.has(doc.relative_path)) continue;
     const lineMap = getIdentifierLineMap(db, doc.relative_path);
     for (const [name, lines] of lineMap) {
-      if ((leafCounts.get(name) ?? 0) !== 1) continue; // ambiguous leaf — skip
-      const target = leafToSymbol.get(name)!;
+      const target = resolveLeaf(name, doc.relative_path);
+      if (!target) continue;
       // Each line is one occurrence. The defining file's count includes the
       // declaration itself; subtract one occurrence on that file so we don't
       // count the def as a reference to itself.
@@ -121,17 +146,10 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
       refsForSymbol.set(doc.relative_path, (refsForSymbol.get(doc.relative_path) ?? 0) + occurrences);
     }
 
-    // Cross-language dispatch supplement: `invoke('cmd_name')` in TS/JS
-    // counts as a reference to the Rust (or other-language) function named
-    // `cmd_name`. Tauri commands not annotated `#[tauri::command]` and any
-    // hand-rolled IPC bridge are reachable only this way.
     const dispatchNames = getCrossLanguageDispatchNames(db, doc.relative_path);
     for (const cmdName of dispatchNames) {
-      if ((leafCounts.get(cmdName) ?? 0) !== 1) continue;
-      const target = leafToSymbol.get(cmdName)!;
-      // Skip same-language same-file (the JS file calling its own function
-      // — that's not "cross-language", and getIdentifierLineMap above
-      // already credited it).
+      const target = resolveLeaf(cmdName, doc.relative_path);
+      if (!target) continue;
       if (target.relativePath === doc.relative_path) continue;
 
       let refsForSymbol = referencesBySymbol.get(target.symbolId);
@@ -250,6 +268,47 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     fileInternalCount,
     totalLoc,
   };
+}
+
+/**
+ * Walk projectRoot and return every source file with an AST-supported
+ * extension as a relative path. Skips obvious directories that shouldn't
+ * contain user code (node_modules, target, .git, dist, build, .next, etc.).
+ *
+ * Used by the AST identifier supplement so unindexed source files
+ * (rust-analyzer often skips part of a workspace; tsc-batch indexers can
+ * miss files too) still contribute their references to the dead-code
+ * detector.
+ */
+const SOURCE_EXTENSIONS = new Set(['.rs', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.pyi']);
+const SKIP_DIRS = new Set([
+  'node_modules', 'target', '.git', 'dist', 'build', '.next', '.turbo',
+  '.cache', 'coverage', '.venv', 'venv', '__pycache__', '.idea', '.vscode',
+]);
+function collectSourceFilesInProject(projectRoot: string): Set<string> {
+  const out = new Set<string>();
+  const visit = (absDir: string): void => {
+    let entries: string[];
+    try { entries = readdirSync(absDir); } catch { return; }
+    for (const name of entries) {
+      if (name.startsWith('.') && SKIP_DIRS.has(name)) continue;
+      if (SKIP_DIRS.has(name)) continue;
+      const abs = join(absDir, name);
+      let st;
+      try { st = statSync(abs); } catch { continue; }
+      if (st.isDirectory()) {
+        visit(abs);
+      } else if (st.isFile()) {
+        const dot = name.lastIndexOf('.');
+        if (dot < 0) continue;
+        const ext = name.slice(dot).toLowerCase();
+        if (!SOURCE_EXTENSIONS.has(ext)) continue;
+        out.add(relative(projectRoot, abs).replace(/\\/g, '/'));
+      }
+    }
+  };
+  visit(projectRoot);
+  return out;
 }
 
 function passesTestFileFilter(relativePath: string): boolean {
