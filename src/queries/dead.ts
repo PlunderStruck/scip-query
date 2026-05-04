@@ -3,7 +3,7 @@ import { join, relative } from 'node:path';
 import type { ScipDatabase } from '../db.js';
 import { getInactiveBarrelPaths, isEntrySurface } from '../entry-surfaces.js';
 import { getAllDefinitions, TEST_FILE_PATTERNS, TEST_SUPPORT_PATH_PATTERNS } from '../query-support.js';
-import { detectAstLanguage, getCrossLanguageDispatchNames, getDefinitionExclusions } from '../ast.js';
+import { detectAstLanguage, getCrossLanguageDispatchNames, getDefinitionExclusions, isVueSfcPath } from '../ast.js';
 import { getIdentifierLineMap } from '../source-analysis.js';
 import type { DeadOptions, DeadSymbolResult, DeadSummary } from '../types.js';
 import { isFunctionLikeSymbol, isModuleLikeSymbol, leafName, shortenSymbol } from '../symbol-parser.js';
@@ -124,7 +124,10 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
   const scanPaths = new Set<string>([...indexedPaths, ...allSourcePaths]);
   for (const relativePath of scanPaths) {
     const doc = { relative_path: relativePath };
-    if (!detectAstLanguage(doc.relative_path)) continue;
+    // Skip files we can't parse at all. Vue SFCs go through `getAst`'s
+    // script-block extraction (returns a TS/JS tree), so they pass even
+    // though detectAstLanguage('.vue') returns null.
+    if (!detectAstLanguage(doc.relative_path) && !isVueSfcPath(doc.relative_path)) continue;
     if (db.isIgnored(doc.relative_path)) continue;
     if (inactiveBarrelPaths.has(doc.relative_path)) continue;
     const lineMap = getIdentifierLineMap(db, doc.relative_path);
@@ -280,7 +283,7 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
  * miss files too) still contribute their references to the dead-code
  * detector.
  */
-const SOURCE_EXTENSIONS = new Set(['.rs', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.pyi']);
+const SOURCE_EXTENSIONS = new Set(['.rs', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.pyi', '.vue']);
 const SKIP_DIRS = new Set([
   'node_modules', 'target', '.git', 'dist', 'build', '.next', '.turbo',
   '.cache', 'coverage', '.venv', 'venv', '__pycache__', '.idea', '.vscode',

@@ -32,7 +32,7 @@
  *       start_line as a line number in output.
  */
 import type { ScipDatabase } from './db.js';
-import { existsSync as existsSyncFs } from 'node:fs';
+import { existsSync as existsSyncFs, readdirSync as readdirAux } from 'node:fs';
 import { basename, isAbsolute as isAbsolutePath, join as pathJoin } from 'node:path';
 import { detectAstLanguage, getCallableSites, getCallSites, type CallableSite } from './ast.js';
 import { findIdentifierLines, getFileIdentifiers, getIdentifiersByLine, getSourceImports, getSourceText } from './source-analysis.js';
@@ -605,20 +605,74 @@ function sourceCandidateLines(
        ${db.pathExclusionsFor('documents')}
      ORDER BY relative_path`,
   );
+  // Some source file types are not understood by the SCIP indexers we shell
+  // out to (Vue SFCs, for instance — scip-typescript doesn't recognize the
+  // `.vue` extension). Those files exist on disk and are perfectly happy to
+  // be source-scanned for identifier mentions; they just aren't in the
+  // `documents` table. Walk the project once per DB to find them and union
+  // into the iteration set.
+  const indexedSet = new Set(documents.map((d) => d.relative_path));
+  const auxiliary = listAuxiliarySourceFiles(db).filter((p) => !indexedSet.has(p));
+  const allFiles = [...documents.map((d) => d.relative_path), ...auxiliary];
+
   const fileLines = new Map<string, number[]>();
-  for (const document of documents) {
-    if (db.isIgnored(document.relative_path)) continue;
+  for (const file of allFiles) {
+    if (db.isIgnored(file)) continue;
     const lines = findIdentifierLines(
       db,
-      document.relative_path,
+      file,
       identifier,
-      document.relative_path === match.relativePath
+      file === match.relativePath
         ? { excludeStartLine: match.startLine, excludeEndLine: match.endLine }
         : {},
     );
-    if (lines.length > 0) fileLines.set(document.relative_path, lines);
+    if (lines.length > 0) fileLines.set(file, lines);
   }
   return fileLines;
+}
+
+const AUX_SOURCE_FILES_CACHE = new WeakMap<ScipDatabase, string[]>();
+const AUX_EXTENSIONS = new Set(['.vue']);
+const AUX_SKIP_DIRS = new Set([
+  'node_modules', '.git', 'target', 'dist', 'build',
+  '.next', '.nuxt', '.cache', '.turbo', 'out', 'coverage',
+]);
+
+/**
+ * Walk the project root for source file types the SCIP indexers don't
+ * recognize but that scip-query's source-text path can still parse and
+ * scan (Vue SFCs today). Cached per DB.
+ */
+function listAuxiliarySourceFiles(db: ScipDatabase): string[] {
+  const cached = AUX_SOURCE_FILES_CACHE.get(db);
+  if (cached) return cached;
+  const out: string[] = [];
+  collectAuxFiles(db.config.projectRoot, '', out);
+  AUX_SOURCE_FILES_CACHE.set(db, out);
+  return out;
+}
+
+function collectAuxFiles(absRoot: string, relDir: string, out: string[]): void {
+  const absDir = relDir ? pathJoin(absRoot, relDir) : absRoot;
+  let entries: { name: string; isDirectory(): boolean }[] = [];
+  try {
+    entries = readdirAux(absDir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      if (AUX_SKIP_DIRS.has(entry.name)) continue;
+      const next = relDir ? `${relDir}/${entry.name}` : entry.name;
+      collectAuxFiles(absRoot, next, out);
+      continue;
+    }
+    const dot = entry.name.lastIndexOf('.');
+    if (dot < 0) continue;
+    const ext = entry.name.slice(dot).toLowerCase();
+    if (!AUX_EXTENSIONS.has(ext)) continue;
+    out.push(relDir ? `${relDir}/${entry.name}` : entry.name);
+  }
 }
 
 /**
@@ -1737,6 +1791,12 @@ export function buildSourceFallbackCallerFiles(
      WHERE 1 = 1
        ${db.pathExclusionsFor('documents')}`,
   );
+  const indexedSet = new Set(documents.map((d) => d.relative_path));
+  // Same union as sourceCandidateLines: include on-disk files the SCIP
+  // indexers ignore (Vue SFCs, etc.) so dead-code detection sees their
+  // identifier references too.
+  const auxiliary = listAuxiliarySourceFiles(db).filter((p) => !indexedSet.has(p));
+  const allFiles = [...documents.map((d) => d.relative_path), ...auxiliary];
 
   const result = new Map<number, Set<string>>();
 
@@ -1745,9 +1805,9 @@ export function buildSourceFallbackCallerFiles(
   // Tree-sitter-backed identifier collection (when language is supported)
   // automatically excludes comments/strings; the Set lookup makes per-file
   // attribution O(unique identifiers in file) instead of O(all token matches).
-  for (const doc of documents) {
-    if (db.isIgnored(doc.relative_path)) continue;
-    const fileIdents = getFileIdentifiers(db, doc.relative_path);
+  for (const file of allFiles) {
+    if (db.isIgnored(file)) continue;
+    const fileIdents = getFileIdentifiers(db, file);
     if (fileIdents.size === 0) continue;
 
     for (const name of fileIdents) {
@@ -1757,14 +1817,14 @@ export function buildSourceFallbackCallerFiles(
       // a self-reference, not a caller. Drop matches whose source file is the
       // candidate's own file. (We can't go finer than file granularity here
       // because the AST identifier set has no positions.)
-      if (doc.relative_path === candidate.relativePath) continue;
+      if (file === candidate.relativePath) continue;
 
       let bucket = result.get(candidate.symbolId);
       if (!bucket) {
         bucket = new Set();
         result.set(candidate.symbolId, bucket);
       }
-      bucket.add(doc.relative_path);
+      bucket.add(file);
     }
   }
 
