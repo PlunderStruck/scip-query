@@ -1,7 +1,8 @@
 import type { ScipDatabase } from './db.js';
 import { buildFileDepGraph } from './query-support.js';
+import { createPerDbValue } from './per-db-cache.js';
 
-const liveBarrelCache = new WeakMap<ScipDatabase, Set<string>>();
+const liveBarrelCache = createPerDbValue<Set<string>>('live-barrels');
 
 function normalizePath(path: string): string {
   return path.replace(/\\/g, '/');
@@ -72,38 +73,25 @@ function getIndexedPaths(db: ScipDatabase): string[] {
 }
 
 export function getLiveBarrelPaths(db: ScipDatabase): Set<string> {
-  const cached = liveBarrelCache.get(db);
-  if (cached) {
-    return cached;
-  }
+  return liveBarrelCache.get(db, () => {
+    const graph = buildFileDepGraph(db);
+    const queue = getIndexedPaths(db).filter((path) =>
+      isStructuralEntrySurface(path) || isWorkerEntrySurface(path),
+    );
+    const visited = new Set<string>();
+    const liveBarrels = new Set<string>();
 
-  const graph = buildFileDepGraph(db);
-  const queue = getIndexedPaths(db).filter((path) =>
-    isStructuralEntrySurface(path) || isWorkerEntrySurface(path),
-  );
-  const visited = new Set<string>();
-  const liveBarrels = new Set<string>();
-
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    if (visited.has(current)) {
-      continue;
-    }
-
-    visited.add(current);
-    if (isBarrelFile(current)) {
-      liveBarrels.add(current);
-    }
-
-    for (const dep of graph.get(current) ?? []) {
-      if (!visited.has(dep)) {
-        queue.push(dep);
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (visited.has(current)) continue;
+      visited.add(current);
+      if (isBarrelFile(current)) liveBarrels.add(current);
+      for (const dep of graph.get(current) ?? []) {
+        if (!visited.has(dep)) queue.push(dep);
       }
     }
-  }
-
-  liveBarrelCache.set(db, liveBarrels);
-  return liveBarrels;
+    return liveBarrels;
+  });
 }
 
 export function isLiveBarrel(db: ScipDatabase, path: string): boolean {

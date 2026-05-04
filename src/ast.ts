@@ -15,6 +15,7 @@ import { extname } from 'node:path';
 import { createRequire } from 'node:module';
 import type { ScipDatabase } from './db.js';
 import { getSourceText } from './source-text.js';
+import { createPerDbSourceCache } from './per-db-cache.js';
 
 const require = createRequire(import.meta.url);
 
@@ -184,7 +185,7 @@ export function isVueSfcPath(relativePath: string): boolean {
   return extname(relativePath).toLowerCase() === '.vue';
 }
 
-const TREE_CACHE = new WeakMap<ScipDatabase, Map<string, { source: string; tree: Tree }>>();
+const TREE_CACHE = createPerDbSourceCache<Tree | null>('ast-trees');
 
 /**
  * Parse a file with tree-sitter and cache the result. Returns null when the
@@ -203,23 +204,14 @@ export function getAst(db: ScipDatabase, relativePath: string): Tree | null {
   const lang = detectAstLanguage(relativePath);
   if (!lang) return null;
 
-  let perDb = TREE_CACHE.get(db);
-  if (!perDb) {
-    perDb = new Map();
-    TREE_CACHE.set(db, perDb);
-  }
-
   const source = getSourceText(db, relativePath);
   if (!source) return null;
 
-  const cached = perDb.get(relativePath);
-  if (cached && cached.source === source) return cached.tree;
-
-  const parser = getParser(lang);
-  if (!parser) return null;
-  const tree = parser.parse(source);
-  perDb.set(relativePath, { source, tree });
-  return tree;
+  return TREE_CACHE.get(db, relativePath, source, () => {
+    const parser = getParser(lang);
+    if (!parser) return null;
+    return parser.parse(source);
+  });
 }
 
 /**
@@ -235,26 +227,15 @@ function getVueScriptAst(db: ScipDatabase, relativePath: string): Tree | null {
   const source = getSourceText(db, relativePath);
   if (!source) return null;
 
-  const cached = TREE_CACHE.get(db)?.get(relativePath);
-  if (cached && cached.source === source) return cached.tree;
-
-  const block = extractVueScriptBlock(source);
-  if (!block) return null;
-
-  const parser = getParser(block.language);
-  if (!parser) return null;
-
-  // Pad with newlines so the script content sits on its original lines.
-  const padded = '\n'.repeat(block.startLine) + block.body;
-  const tree = parser.parse(padded);
-
-  let perDb = TREE_CACHE.get(db);
-  if (!perDb) {
-    perDb = new Map();
-    TREE_CACHE.set(db, perDb);
-  }
-  perDb.set(relativePath, { source, tree });
-  return tree;
+  return TREE_CACHE.get(db, relativePath, source, () => {
+    const block = extractVueScriptBlock(source);
+    if (!block) return null;
+    const parser = getParser(block.language);
+    if (!parser) return null;
+    // Pad with newlines so the script content sits on its original lines.
+    const padded = '\n'.repeat(block.startLine) + block.body;
+    return parser.parse(padded);
+  });
 }
 
 interface VueScriptBlock {

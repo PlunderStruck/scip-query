@@ -9,28 +9,18 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ScipDatabase } from './db.js';
+import { createPerDbCache } from './per-db-cache.js';
 
-const SOURCE_TEXT_CACHE = new WeakMap<ScipDatabase, Map<string, string>>();
+const SOURCE_TEXT_CACHE = createPerDbCache<string, string>('source-text');
 
 export function getSourceText(
   db: ScipDatabase,
   relativePath: string,
 ): string {
-  let cache = SOURCE_TEXT_CACHE.get(db);
-  if (!cache) {
-    cache = new Map();
-    SOURCE_TEXT_CACHE.set(db, cache);
-  }
   const normalized = relativePath.replace(/\\/g, '/');
-  const cached = cache.get(normalized);
-  if (typeof cached === 'string') return cached;
-
-  const fullPath = join(db.config.projectRoot, normalized);
-  if (!existsSync(fullPath)) {
-    cache.set(normalized, '');
-    return '';
-  }
-  const source = readFileSync(fullPath, 'utf-8');
-  cache.set(normalized, source);
-  return source;
+  return SOURCE_TEXT_CACHE.get(db, normalized, () => {
+    const fullPath = join(db.config.projectRoot, normalized);
+    if (!existsSync(fullPath)) return '';
+    return readFileSync(fullPath, 'utf-8');
+  });
 }

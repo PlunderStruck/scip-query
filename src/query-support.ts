@@ -35,6 +35,7 @@ import type { ScipDatabase } from './db.js';
 import { existsSync as existsSyncFs, readdirSync as readdirAux } from 'node:fs';
 import { basename, isAbsolute as isAbsolutePath, join as pathJoin } from 'node:path';
 import { detectAstLanguage, getCallableSites, getCallSites, type CallableSite } from './ast.js';
+import { createPerDbCache, createPerDbValue } from './per-db-cache.js';
 import { findIdentifierLines, getFileIdentifiers, getIdentifiersByLine, getSourceImports, getSourceText } from './source-analysis.js';
 import { isFunctionLikeSymbol, isModuleLikeSymbol, leafName, leafSuffix, parseSymbol, shortenSymbol } from './symbol-parser.js';
 /**
@@ -129,7 +130,7 @@ interface SymbolQueryRow {
   enclosing_symbol?: string | null;
 }
 
-const FILE_DEFINITION_CACHE = new WeakMap<ScipDatabase, Map<string, IndexedDefinition[]>>();
+const FILE_DEFINITION_CACHE = createPerDbCache<string, IndexedDefinition[]>('file-definitions');
 
 export const TEST_FILE_PATTERNS = [
   '%/__tests__/%',
@@ -147,82 +148,70 @@ export const TEST_SUPPORT_PATH_PATTERNS = [
   '%/test-utils/%',
 ] as const;
 
-const FILE_DEP_GRAPH_CACHE = new WeakMap<ScipDatabase, Map<string, Map<string, Set<string>>>>();
+const FILE_DEP_GRAPH_CACHE = createPerDbCache<string, Map<string, Set<string>>>('file-dep-graph');
 
 export function buildFileDepGraph(
   db: ScipDatabase,
   scope?: string,
 ): Map<string, Set<string>> {
-  const cacheKey = scope ?? '';
-  const cached = FILE_DEP_GRAPH_CACHE.get(db)?.get(cacheKey);
-  if (cached) return cached;
+  return FILE_DEP_GRAPH_CACHE.get(db, scope ?? '', () => {
+    const scopeFilter = scope ? `AND d1.relative_path LIKE '%${scope}%'` : '';
 
-  const scopeFilter = scope ? `AND d1.relative_path LIKE '%${scope}%'` : '';
+    const edges = db.all<{ from_file: string; to_file: string }>(
+      `SELECT DISTINCT
+        d1.relative_path AS from_file,
+        d2.relative_path AS to_file
+      FROM mentions m
+      JOIN chunks c ON m.chunk_id = c.id
+      JOIN documents d1 ON c.document_id = d1.id
+      JOIN global_symbols gs ON m.symbol_id = gs.id
+      JOIN (
+        SELECT m2.symbol_id, c2.document_id
+        FROM mentions m2
+        JOIN chunks c2 ON m2.chunk_id = c2.id
+        WHERE m2.role = 1
+        GROUP BY m2.symbol_id
+      ) sym_def ON sym_def.symbol_id = gs.id
+      JOIN documents d2 ON sym_def.document_id = d2.id
+      WHERE d1.id != d2.id
+        AND m.role != 1
+        ${db.pathExclusionsFor('d1', 'd2')}
+        ${scopeFilter}`,
+    );
 
-  const edges = db.all<{ from_file: string; to_file: string }>(
-    `SELECT DISTINCT
-      d1.relative_path AS from_file,
-      d2.relative_path AS to_file
-    FROM mentions m
-    JOIN chunks c ON m.chunk_id = c.id
-    JOIN documents d1 ON c.document_id = d1.id
-    JOIN global_symbols gs ON m.symbol_id = gs.id
-    JOIN (
-      SELECT m2.symbol_id, c2.document_id
-      FROM mentions m2
-      JOIN chunks c2 ON m2.chunk_id = c2.id
-      WHERE m2.role = 1
-      GROUP BY m2.symbol_id
-    ) sym_def ON sym_def.symbol_id = gs.id
-    JOIN documents d2 ON sym_def.document_id = d2.id
-    WHERE d1.id != d2.id
-      AND m.role != 1
-      ${db.pathExclusionsFor('d1', 'd2')}
-      ${scopeFilter}`,
-  );
+    const graph = new Map<string, Set<string>>();
+    const indexedFiles = new Set<string>(
+      db.all<{ relative_path: string }>(
+        `SELECT relative_path
+         FROM documents
+         WHERE 1 = 1
+           ${db.pathExclusionsFor('documents')}
+         ORDER BY relative_path`,
+      )
+        .map((row) => row.relative_path)
+        .filter((relativePath) => !db.isIgnored(relativePath)),
+    );
 
-  const graph = new Map<string, Set<string>>();
-  const indexedFiles = new Set<string>(
-    db.all<{ relative_path: string }>(
-      `SELECT relative_path
-       FROM documents
-       WHERE 1 = 1
-         ${db.pathExclusionsFor('documents')}
-       ORDER BY relative_path`,
-    )
-      .map((row) => row.relative_path)
-      .filter((relativePath) => !db.isIgnored(relativePath)),
-  );
+    const addEdge = (fromFile: string, toFile: string): void => {
+      if (fromFile === toFile) return;
+      if (db.isIgnored(fromFile) || db.isIgnored(toFile)) return;
+      if (!indexedFiles.has(toFile)) return;
+      if (!graph.has(fromFile)) graph.set(fromFile, new Set());
+      graph.get(fromFile)!.add(toFile);
+    };
 
-  const addEdge = (fromFile: string, toFile: string): void => {
-    if (fromFile === toFile) return;
-    if (db.isIgnored(fromFile) || db.isIgnored(toFile)) return;
-    if (!indexedFiles.has(toFile)) return;
-    if (!graph.has(fromFile)) graph.set(fromFile, new Set());
-    graph.get(fromFile)!.add(toFile);
-  };
+    for (const edge of edges) addEdge(edge.from_file, edge.to_file);
 
-  for (const edge of edges) {
-    addEdge(edge.from_file, edge.to_file);
-  }
-
-  for (const relativePath of indexedFiles) {
-    if (scope && !relativePath.includes(scope)) continue;
-
-    for (const entry of getSourceImports(db, relativePath)) {
-      if (!entry.sourcePath) continue;
-      addEdge(relativePath, entry.sourcePath);
+    for (const relativePath of indexedFiles) {
+      if (scope && !relativePath.includes(scope)) continue;
+      for (const entry of getSourceImports(db, relativePath)) {
+        if (!entry.sourcePath) continue;
+        addEdge(relativePath, entry.sourcePath);
+      }
     }
-  }
 
-  const dbCache = FILE_DEP_GRAPH_CACHE.get(db);
-  if (dbCache) {
-    dbCache.set(cacheKey, graph);
-  } else {
-    FILE_DEP_GRAPH_CACHE.set(db, new Map([[cacheKey, graph]]));
-  }
-
-  return graph;
+    return graph;
+  });
 }
 
 export function findFirstSymbolMatch(
@@ -538,7 +527,7 @@ export function getCallerRowsForSymbol(
   return applyLimit(callers, opts.limit);
 }
 
-const CALLER_ROWS_CACHE = new WeakMap<ScipDatabase, Map<number, CallerRow[]>>();
+const CALLER_ROWS_CACHE = createPerDbValue<Map<number, CallerRow[]>>('caller-rows');
 
 /**
  * Inverse of buildCalleeMap: for every (caller, callee) edge, register the
@@ -546,39 +535,37 @@ const CALLER_ROWS_CACHE = new WeakMap<ScipDatabase, Map<number, CallerRow[]>>();
  * inversion happens once per ScipDatabase instance.
  */
 function buildCallerRowsMap(db: ScipDatabase): Map<number, CallerRow[]> {
-  const cached = CALLER_ROWS_CACHE.get(db);
-  if (cached) return cached;
+  return CALLER_ROWS_CACHE.get(db, () => {
+    const allDefs = getAllDefinitions(db);
+    const calleeMap = buildCalleeMap(db, allDefs);
 
-  const allDefs = getAllDefinitions(db);
-  const calleeMap = buildCalleeMap(db, allDefs);
+    const symbolToId = new Map<string, number>();
+    for (const def of allDefs) symbolToId.set(def.symbol, def.symbolId);
 
-  const symbolToId = new Map<string, number>();
-  for (const def of allDefs) symbolToId.set(def.symbol, def.symbolId);
-
-  const result = new Map<number, CallerRow[]>();
-  const seen = new Map<number, Set<string>>();
-  for (const callerDef of allDefs) {
-    const callees = calleeMap.get(callerDef.symbolId);
-    if (!callees || callees.length === 0) continue;
-    for (const callee of callees) {
-      const calleeId = symbolToId.get(callee.symbol);
-      if (calleeId === undefined) continue;
-      if (calleeId === callerDef.symbolId) continue; // skip self-recursion
-      let bucket = result.get(calleeId);
-      if (!bucket) {
-        bucket = [];
-        result.set(calleeId, bucket);
-        seen.set(calleeId, new Set());
+    const result = new Map<number, CallerRow[]>();
+    const seen = new Map<number, Set<string>>();
+    for (const callerDef of allDefs) {
+      const callees = calleeMap.get(callerDef.symbolId);
+      if (!callees || callees.length === 0) continue;
+      for (const callee of callees) {
+        const calleeId = symbolToId.get(callee.symbol);
+        if (calleeId === undefined) continue;
+        if (calleeId === callerDef.symbolId) continue; // skip self-recursion
+        let bucket = result.get(calleeId);
+        if (!bucket) {
+          bucket = [];
+          result.set(calleeId, bucket);
+          seen.set(calleeId, new Set());
+        }
+        const dedupeKey = `${callerDef.symbol}|${callerDef.relativePath}`;
+        if (seen.get(calleeId)!.has(dedupeKey)) continue;
+        seen.get(calleeId)!.add(dedupeKey);
+        bucket.push({ symbol: callerDef.symbol, file: callerDef.relativePath });
       }
-      const dedupeKey = `${callerDef.symbol}|${callerDef.relativePath}`;
-      if (seen.get(calleeId)!.has(dedupeKey)) continue;
-      seen.get(calleeId)!.add(dedupeKey);
-      bucket.push({ symbol: callerDef.symbol, file: callerDef.relativePath });
     }
-  }
 
-  CALLER_ROWS_CACHE.set(db, result);
-  return result;
+    return result;
+  });
 }
 
 export function getSourceReferenceSites(
@@ -710,7 +697,7 @@ function pathsResolveSame(a: string, b: string): boolean {
   return norm(a) === norm(b);
 }
 
-const AUX_SOURCE_FILES_CACHE = new WeakMap<ScipDatabase, string[]>();
+const AUX_SOURCE_FILES_CACHE = createPerDbValue<string[]>('aux-source-files');
 const AUX_EXTENSIONS = new Set(['.vue']);
 const AUX_SKIP_DIRS = new Set([
   'node_modules', '.git', 'target', 'dist', 'build',
@@ -723,12 +710,11 @@ const AUX_SKIP_DIRS = new Set([
  * scan (Vue SFCs today). Cached per DB.
  */
 function listAuxiliarySourceFiles(db: ScipDatabase): string[] {
-  const cached = AUX_SOURCE_FILES_CACHE.get(db);
-  if (cached) return cached;
-  const out: string[] = [];
-  collectAuxFiles(db.config.projectRoot, '', out);
-  AUX_SOURCE_FILES_CACHE.set(db, out);
-  return out;
+  return AUX_SOURCE_FILES_CACHE.get(db, () => {
+    const out: string[] = [];
+    collectAuxFiles(db.config.projectRoot, '', out);
+    return out;
+  });
 }
 
 function collectAuxFiles(absRoot: string, relDir: string, out: string[]): void {
@@ -936,84 +922,72 @@ export function getDefinitionsForFile(
   db: ScipDatabase,
   relativePath: string,
 ): IndexedDefinition[] {
-  let cache = FILE_DEFINITION_CACHE.get(db);
-  if (!cache) {
-    cache = new Map<string, IndexedDefinition[]>();
-    FILE_DEFINITION_CACHE.set(db, cache);
-  }
+  return FILE_DEFINITION_CACHE.get(db, relativePath, () => {
+    const primary = db.all<SymbolQueryRow>(
+      `SELECT
+        gs.id,
+        gs.symbol,
+        der.document_id,
+        der.start_line,
+        der.end_line,
+        d.relative_path,
+        gs.display_name,
+        gs.kind,
+        gs.documentation,
+        gs.enclosing_symbol
+       FROM global_symbols gs
+       JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
+       JOIN documents d ON der.document_id = d.id
+       WHERE d.relative_path = ?
+         ${db.symbolNoiseFor('gs')}
+       ORDER BY der.start_line, der.end_line`,
+      relativePath,
+    );
 
-  const cached = cache.get(relativePath);
-  if (cached) {
-    return cached;
-  }
+    const fallback = primary.length > 0 ? [] : db.all<SymbolQueryRow>(
+      `SELECT
+        gs.id,
+        gs.symbol,
+        c.document_id,
+        MIN(c.start_line) AS start_line,
+        MAX(c.end_line) AS end_line,
+        d.relative_path,
+        gs.display_name,
+        gs.kind,
+        gs.documentation,
+        gs.enclosing_symbol
+       FROM global_symbols gs
+       JOIN mentions m ON m.symbol_id = gs.id
+       JOIN chunks c ON m.chunk_id = c.id
+       JOIN documents d ON c.document_id = d.id
+       WHERE d.relative_path = ?
+         AND m.role = 1
+         ${db.symbolNoiseFor('gs')}
+       GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path
+       ORDER BY start_line, end_line`,
+      relativePath,
+    );
 
-  const primary = db.all<SymbolQueryRow>(
-    `SELECT
-      gs.id,
-      gs.symbol,
-      der.document_id,
-      der.start_line,
-      der.end_line,
-      d.relative_path,
-      gs.display_name,
-      gs.kind,
-      gs.documentation,
-      gs.enclosing_symbol
-     FROM global_symbols gs
-     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-     JOIN documents d ON der.document_id = d.id
-     WHERE d.relative_path = ?
-       ${db.symbolNoiseFor('gs')}
-     ORDER BY der.start_line, der.end_line`,
-    relativePath,
-  );
-
-  const fallback = primary.length > 0 ? [] : db.all<SymbolQueryRow>(
-    `SELECT
-      gs.id,
-      gs.symbol,
-      c.document_id,
-      MIN(c.start_line) AS start_line,
-      MAX(c.end_line) AS end_line,
-      d.relative_path,
-      gs.display_name,
-      gs.kind,
-      gs.documentation,
-      gs.enclosing_symbol
-     FROM global_symbols gs
-     JOIN mentions m ON m.symbol_id = gs.id
-     JOIN chunks c ON m.chunk_id = c.id
-     JOIN documents d ON c.document_id = d.id
-     WHERE d.relative_path = ?
-       AND m.role = 1
-       ${db.symbolNoiseFor('gs')}
-     GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path
-     ORDER BY start_line, end_line`,
-    relativePath,
-  );
-
-  const definitions = correctDefinitionRangesFromSource(
-    db,
-    relativePath,
-    (primary.length > 0 ? primary : fallback).map((row) => ({
-      symbolId: row.id,
-      symbol: row.symbol,
-      documentId: row.document_id,
-      startLine: row.start_line,
-      endLine: row.end_line,
-      relativePath: row.relative_path,
-      leaf: leafName(row.symbol),
-      parentTypeName: parentTypeName(row.symbol),
-      isFunctionLike: isFunctionLikeSymbol(row.symbol),
-      isTypeLike: leafSuffix(row.symbol) === 'type',
-      kind: row.kind ?? null,
-      documentation: row.documentation ?? null,
-      enclosingSymbol: row.enclosing_symbol ?? null,
-    })),
-  );
-
-  cache.set(relativePath, definitions);
-  return definitions;
+    return correctDefinitionRangesFromSource(
+      db,
+      relativePath,
+      (primary.length > 0 ? primary : fallback).map((row) => ({
+        symbolId: row.id,
+        symbol: row.symbol,
+        documentId: row.document_id,
+        startLine: row.start_line,
+        endLine: row.end_line,
+        relativePath: row.relative_path,
+        leaf: leafName(row.symbol),
+        parentTypeName: parentTypeName(row.symbol),
+        isFunctionLike: isFunctionLikeSymbol(row.symbol),
+        isTypeLike: leafSuffix(row.symbol) === 'type',
+        kind: row.kind ?? null,
+        documentation: row.documentation ?? null,
+        enclosingSymbol: row.enclosing_symbol ?? null,
+      })),
+    );
+  });
 }
 
 function hydrateSymbolMatch(
@@ -1565,46 +1539,43 @@ function buildAstCalleeMap(
   return result;
 }
 
-const GLOBAL_LEAF_INDEX_CACHE = new WeakMap<ScipDatabase, Map<string, Array<{ symbol: string; symbolId: number; file: string }>>>();
+const GLOBAL_LEAF_INDEX_CACHE = createPerDbValue<Map<string, Array<{ symbol: string; symbolId: number; file: string }>>>('global-leaf-index');
 function getGlobalLeafIndex(
   db: ScipDatabase,
 ): Map<string, Array<{ symbol: string; symbolId: number; file: string }>> {
-  const cached = GLOBAL_LEAF_INDEX_CACHE.get(db);
-  if (cached) return cached;
+  return GLOBAL_LEAF_INDEX_CACHE.get(db, () => {
+    const rows = db.all<{ id: number; symbol: string; relative_path: string | null }>(
+      `SELECT gs.id, gs.symbol,
+              COALESCE(der_doc.relative_path, mention_doc.relative_path) AS relative_path
+       FROM global_symbols gs
+       LEFT JOIN defn_enclosing_ranges der ON der.symbol_id = gs.id
+       LEFT JOIN documents der_doc ON der_doc.id = der.document_id
+       LEFT JOIN (
+         SELECT m.symbol_id, MIN(d.relative_path) AS relative_path
+         FROM mentions m
+         JOIN chunks c ON m.chunk_id = c.id
+         JOIN documents d ON c.document_id = d.id
+         WHERE m.role = 1
+         GROUP BY m.symbol_id
+       ) mention_doc ON mention_doc.symbol_id = gs.id
+       WHERE 1 = 1
+         ${db.symbolNoiseFor('gs')}`,
+    );
 
-  const rows = db.all<{ id: number; symbol: string; relative_path: string | null }>(
-    `SELECT gs.id, gs.symbol,
-            COALESCE(der_doc.relative_path, mention_doc.relative_path) AS relative_path
-     FROM global_symbols gs
-     LEFT JOIN defn_enclosing_ranges der ON der.symbol_id = gs.id
-     LEFT JOIN documents der_doc ON der_doc.id = der.document_id
-     LEFT JOIN (
-       SELECT m.symbol_id, MIN(d.relative_path) AS relative_path
-       FROM mentions m
-       JOIN chunks c ON m.chunk_id = c.id
-       JOIN documents d ON c.document_id = d.id
-       WHERE m.role = 1
-       GROUP BY m.symbol_id
-     ) mention_doc ON mention_doc.symbol_id = gs.id
-     WHERE 1 = 1
-       ${db.symbolNoiseFor('gs')}`,
-  );
-
-  const index = new Map<string, Array<{ symbol: string; symbolId: number; file: string }>>();
-  for (const row of rows) {
-    if (!row.relative_path || db.isIgnored(row.relative_path)) continue;
-    const leaf = leafName(row.symbol);
-    if (!leaf) continue;
-    let bucket = index.get(leaf);
-    if (!bucket) { bucket = []; index.set(leaf, bucket); }
-    // Dedupe: same symbol can show up via both joins.
-    if (!bucket.some((e) => e.symbolId === row.id)) {
-      bucket.push({ symbol: row.symbol, symbolId: row.id, file: row.relative_path });
+    const index = new Map<string, Array<{ symbol: string; symbolId: number; file: string }>>();
+    for (const row of rows) {
+      if (!row.relative_path || db.isIgnored(row.relative_path)) continue;
+      const leaf = leafName(row.symbol);
+      if (!leaf) continue;
+      let bucket = index.get(leaf);
+      if (!bucket) { bucket = []; index.set(leaf, bucket); }
+      // Dedupe: same symbol can show up via both joins.
+      if (!bucket.some((e) => e.symbolId === row.id)) {
+        bucket.push({ symbol: row.symbol, symbolId: row.id, file: row.relative_path });
+      }
     }
-  }
-
-  GLOBAL_LEAF_INDEX_CACHE.set(db, index);
-  return index;
+    return index;
+  });
 }
 
 function buildChunkCalleeMap(

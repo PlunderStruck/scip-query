@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../db.js';
+import { createPerDbCache } from '../per-db-cache.js';
 import {
   buildCrossFileCallerMap,
   buildSourceFallbackCallerFiles,
@@ -237,7 +238,7 @@ function isTransitivelyConsumed(
  * elsewhere. Repeat checks for different leaves on the same file then
  * become O(1) Set lookups.
  */
-const FILE_USAGE_CACHE = new WeakMap<ScipDatabase, Map<string, { importedLeaves: Set<string>; usedLeaves: Set<string> }>>();
+const FILE_USAGE_CACHE = createPerDbCache<string, { importedLeaves: Set<string>; usedLeaves: Set<string> }>('stale-abs-file-usage');
 function isImportOnlyConsumer(
   db: ScipDatabase,
   consumerFile: string,
@@ -246,15 +247,10 @@ function isImportOnlyConsumer(
   if (!leaf) return false;
   const lang = detectAstLanguage(consumerFile);
   if (!lang) return false;
-
-  let perDb = FILE_USAGE_CACHE.get(db);
-  if (!perDb) { perDb = new Map(); FILE_USAGE_CACHE.set(db, perDb); }
-  let cached = perDb.get(consumerFile);
-  if (!cached) {
-    cached = computeFileLeafUsage(db, consumerFile, lang);
-    perDb.set(consumerFile, cached);
-  }
-  return cached.importedLeaves.has(leaf) && !cached.usedLeaves.has(leaf);
+  const usage = FILE_USAGE_CACHE.get(db, consumerFile, () =>
+    computeFileLeafUsage(db, consumerFile, lang),
+  );
+  return usage.importedLeaves.has(leaf) && !usage.usedLeaves.has(leaf);
 }
 
 function computeFileLeafUsage(

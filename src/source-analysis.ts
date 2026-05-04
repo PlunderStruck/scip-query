@@ -12,6 +12,7 @@ import {
 } from 'node:path';
 import type { ScipDatabase } from './db.js';
 import { detectAstLanguage, getAst, isVueSfcPath, type SyntaxNode, type Tree } from './ast.js';
+import { createPerDbCache, createPerDbSourceCache, createPerDbValue } from './per-db-cache.js';
 import { getSourceText } from './source-text.js';
 
 export interface ParsedSourceImport {
@@ -49,9 +50,9 @@ export interface ParsedReExport {
   endLine: number;
 }
 
-const SOURCE_IMPORT_CACHE = new WeakMap<ScipDatabase, Map<string, ParsedSourceImport[]>>();
-const SOURCE_EXPORT_CACHE = new WeakMap<ScipDatabase, Map<string, ParsedSourceExport[]>>();
-const INDEXED_PATH_CACHE = new WeakMap<ScipDatabase, Set<string>>();
+const SOURCE_IMPORT_CACHE = createPerDbCache<string, ParsedSourceImport[]>('source-imports');
+const SOURCE_EXPORT_CACHE = createPerDbCache<string, ParsedSourceExport[]>('source-exports');
+const INDEXED_PATH_CACHE = createPerDbValue<Set<string>>('indexed-paths');
 
 const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs', '.vue'] as const;
 const PYTHON_SOURCE_EXTENSIONS = ['.py', '.pyi'] as const;
@@ -67,70 +68,48 @@ export function getSourceImports(
   db: ScipDatabase,
   relativePath: string,
 ): ParsedSourceImport[] {
-  const cache = getCachedMap(SOURCE_IMPORT_CACHE, db);
   const normalized = normalizePath(relativePath);
-  const cached = cache.get(normalized);
-  if (cached) {
-    return cached;
-  }
-
-  const fullPath = join(db.config.projectRoot, normalized);
-  if (!existsSync(fullPath)) {
-    cache.set(normalized, []);
-    return [];
-  }
-
-  const source = readFileSync(fullPath, 'utf-8');
-  const parsed = isPythonSourcePath(normalized)
-    ? parsePythonImports(db, normalized, source)
-    : isJavaScriptSourcePath(normalized)
-      ? parseJavaScriptImports(db, normalized, source)
-      : isJvmSourcePath(normalized)
-        ? parseJvmImports(db, normalized, source)
-        : isRustSourcePath(normalized)
-          ? parseRustImports(db, normalized, source)
-          : isRubySourcePath(normalized)
-            ? parseRubyImports(db, normalized, source)
-            : isCLikeSourcePath(normalized)
-              ? parseCLikeImports(db, normalized, source)
-              : isDotNetSourcePath(normalized)
-                ? parseDotNetImports(db, normalized, source)
-                : isDartSourcePath(normalized)
-                  ? parseDartImports(db, normalized, source)
-                  : isPhpSourcePath(normalized)
-                    ? parsePhpImports(db, normalized, source)
-                    : [];
-
-  cache.set(normalized, parsed);
-  return parsed;
+  return SOURCE_IMPORT_CACHE.get(db, normalized, () => {
+    const fullPath = join(db.config.projectRoot, normalized);
+    if (!existsSync(fullPath)) return [];
+    const source = readFileSync(fullPath, 'utf-8');
+    return isPythonSourcePath(normalized)
+      ? parsePythonImports(db, normalized, source)
+      : isJavaScriptSourcePath(normalized)
+        ? parseJavaScriptImports(db, normalized, source)
+        : isJvmSourcePath(normalized)
+          ? parseJvmImports(db, normalized, source)
+          : isRustSourcePath(normalized)
+            ? parseRustImports(db, normalized, source)
+            : isRubySourcePath(normalized)
+              ? parseRubyImports(db, normalized, source)
+              : isCLikeSourcePath(normalized)
+                ? parseCLikeImports(db, normalized, source)
+                : isDotNetSourcePath(normalized)
+                  ? parseDotNetImports(db, normalized, source)
+                  : isDartSourcePath(normalized)
+                    ? parseDartImports(db, normalized, source)
+                    : isPhpSourcePath(normalized)
+                      ? parsePhpImports(db, normalized, source)
+                      : [];
+  });
 }
 
 export function getSourceExports(
   db: ScipDatabase,
   relativePath: string,
 ): ParsedSourceExport[] {
-  const cache = getCachedMap(SOURCE_EXPORT_CACHE, db);
   const normalized = normalizePath(relativePath);
-  const cached = cache.get(normalized);
-  if (cached) {
-    return cached;
-  }
-
-  const fullPath = join(db.config.projectRoot, normalized);
-  if (!existsSync(fullPath)) {
-    cache.set(normalized, []);
-    return [];
-  }
-
-  const source = readFileSync(fullPath, 'utf-8');
-  const parsed = isDartSourcePath(normalized)
-    ? parseDartExports(db, normalized, source)
-    : isRustSourcePath(normalized)
-      ? parseRustExports(db, normalized, source)
-    : [];
-
-  cache.set(normalized, parsed);
-  return parsed;
+  return SOURCE_EXPORT_CACHE.get(db, normalized, () => {
+    const fullPath = join(db.config.projectRoot, normalized);
+    if (!existsSync(fullPath)) return [];
+    const source = readFileSync(fullPath, 'utf-8');
+    return isDartSourcePath(normalized)
+      ? parseDartExports(db, normalized, source)
+      : isRustSourcePath(normalized)
+        ? parseRustExports(db, normalized, source)
+      : [];
+  });
 }
 
 export function findIdentifierLines(
@@ -193,19 +172,12 @@ function inExcludedRange(
     && line <= opts.excludeEndLine;
 }
 
-const STRIPPED_LINES_CACHE = new WeakMap<ScipDatabase, Map<string, { source: string; lines: string[] }>>();
+const STRIPPED_LINES_CACHE = createPerDbSourceCache<string[]>('stripped-lines');
 
 function getStrippedLines(db: ScipDatabase, relativePath: string, source: string): string[] {
-  let perDb = STRIPPED_LINES_CACHE.get(db);
-  if (!perDb) {
-    perDb = new Map();
-    STRIPPED_LINES_CACHE.set(db, perDb);
-  }
-  const cached = perDb.get(relativePath);
-  if (cached && cached.source === source) return cached.lines;
-  const lines = stripCommentsAndStrings(source).split('\n');
-  perDb.set(relativePath, { source, lines });
-  return lines;
+  return STRIPPED_LINES_CACHE.get(db, relativePath, source, () =>
+    stripCommentsAndStrings(source).split('\n'),
+  );
 }
 
 /**
@@ -1000,23 +972,15 @@ function collectIdentifiersOutside(tree: Tree, excludeTypes: ReadonlySet<string>
  * Cached per (db, file) so repeat queries — e.g. health's many subcommands —
  * pay the parse cost exactly once per file per process.
  */
-const FILE_IDENTIFIER_CACHE = new WeakMap<ScipDatabase, Map<string, Set<string>>>();
+const FILE_IDENTIFIER_CACHE = createPerDbCache<string, Set<string>>('file-identifiers');
 export function getFileIdentifiers(
   db: ScipDatabase,
   relativePath: string,
 ): Set<string> {
-  let cache = FILE_IDENTIFIER_CACHE.get(db);
-  if (!cache) {
-    cache = new Map();
-    FILE_IDENTIFIER_CACHE.set(db, cache);
-  }
-  const cached = cache.get(relativePath);
-  if (cached) return cached;
-
-  // Derive from the line-map walk so we don't pay the AST traversal twice.
-  const result = new Set(getIdentifierLineMap(db, relativePath).keys());
-  cache.set(relativePath, result);
-  return result;
+  return FILE_IDENTIFIER_CACHE.get(db, relativePath, () =>
+    // Derive from the line-map walk so we don't pay the AST traversal twice.
+    new Set(getIdentifierLineMap(db, relativePath).keys()),
+  );
 }
 
 /**
@@ -1024,22 +988,14 @@ export function getFileIdentifiers(
  * Powers source-text refinement of SCIP mentions when a chunk's start line
  * is too coarse to identify the precise enclosing function. Cached per file.
  */
-const FILE_IDENT_LINES_CACHE = new WeakMap<ScipDatabase, Map<string, Map<string, number[]>>>();
+const FILE_IDENT_LINES_CACHE = createPerDbCache<string, Map<string, number[]>>('file-ident-lines');
 export function getIdentifierLineMap(
   db: ScipDatabase,
   relativePath: string,
 ): Map<string, number[]> {
-  let cache = FILE_IDENT_LINES_CACHE.get(db);
-  if (!cache) {
-    cache = new Map();
-    FILE_IDENT_LINES_CACHE.set(db, cache);
-  }
-  const cached = cache.get(relativePath);
-  if (cached) return cached;
-
-  const result = computeIdentifierLineMap(db, relativePath);
-  cache.set(relativePath, result);
-  return result;
+  return FILE_IDENT_LINES_CACHE.get(db, relativePath, () =>
+    computeIdentifierLineMap(db, relativePath),
+  );
 }
 
 /**
@@ -1049,34 +1005,25 @@ export function getIdentifierLineMap(
  * — avoiding the O(file identifiers) scan that buildCalleeMap would otherwise
  * pay per definition.
  */
-const FILE_IDENTS_BY_LINE_CACHE = new WeakMap<ScipDatabase, Map<string, Array<Set<string>>>>();
+const FILE_IDENTS_BY_LINE_CACHE = createPerDbCache<string, Array<Set<string>>>('file-idents-by-line');
 export function getIdentifiersByLine(
   db: ScipDatabase,
   relativePath: string,
 ): Array<Set<string>> {
-  let cache = FILE_IDENTS_BY_LINE_CACHE.get(db);
-  if (!cache) {
-    cache = new Map();
-    FILE_IDENTS_BY_LINE_CACHE.set(db, cache);
-  }
-  const cached = cache.get(relativePath);
-  if (cached) return cached;
-
-  const lineMap = getIdentifierLineMap(db, relativePath);
-  let maxLine = 0;
-  for (const lines of lineMap.values()) {
-    const last = lines[lines.length - 1];
-    if (last !== undefined && last > maxLine) maxLine = last;
-  }
-  const out: Array<Set<string>> = new Array(maxLine + 1);
-  for (let i = 0; i <= maxLine; i += 1) out[i] = new Set();
-  for (const [name, lines] of lineMap) {
-    for (const line of lines) {
-      out[line]!.add(name);
+  return FILE_IDENTS_BY_LINE_CACHE.get(db, relativePath, () => {
+    const lineMap = getIdentifierLineMap(db, relativePath);
+    let maxLine = 0;
+    for (const lines of lineMap.values()) {
+      const last = lines[lines.length - 1];
+      if (last !== undefined && last > maxLine) maxLine = last;
     }
-  }
-  cache.set(relativePath, out);
-  return out;
+    const out: Array<Set<string>> = new Array(maxLine + 1);
+    for (let i = 0; i <= maxLine; i += 1) out[i] = new Set();
+    for (const [name, lines] of lineMap) {
+      for (const line of lines) out[line]!.add(name);
+    }
+    return out;
+  });
 }
 
 function computeIdentifierLineMap(
@@ -2444,37 +2391,20 @@ function candidateImportPaths(absolute: string): string[] {
 }
 
 function getIndexedPaths(db: ScipDatabase): Set<string> {
-  const cached = INDEXED_PATH_CACHE.get(db);
-  if (cached) {
-    return cached;
-  }
-
-  const paths = new Set(
-    db.all<{ relative_path: string }>(
-      `SELECT relative_path
-       FROM documents
-       WHERE 1 = 1
-         ${db.pathExclusionsFor('documents')}`,
-    )
-      .map((row) => normalizePath(row.relative_path))
-      .filter((relativePath) => !db.isIgnored(relativePath)),
+  return INDEXED_PATH_CACHE.get(db, () =>
+    new Set(
+      db.all<{ relative_path: string }>(
+        `SELECT relative_path
+         FROM documents
+         WHERE 1 = 1
+           ${db.pathExclusionsFor('documents')}`,
+      )
+        .map((row) => normalizePath(row.relative_path))
+        .filter((relativePath) => !db.isIgnored(relativePath)),
+    ),
   );
-
-  INDEXED_PATH_CACHE.set(db, paths);
-  return paths;
 }
 
-function getCachedMap<K, V>(
-  cache: WeakMap<ScipDatabase, Map<K, V>>,
-  db: ScipDatabase,
-): Map<K, V> {
-  let map = cache.get(db);
-  if (!map) {
-    map = new Map<K, V>();
-    cache.set(db, map);
-  }
-  return map;
-}
 
 function normalizePath(path: string): string {
   return path.replace(/\\/g, '/');
@@ -2534,7 +2464,7 @@ function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-const VUE_NON_SCRIPT_IDENTIFIERS_CACHE = new WeakMap<ScipDatabase, Map<string, Set<string>>>();
+const VUE_NON_SCRIPT_IDENTIFIERS_CACHE = createPerDbCache<string, Set<string>>('vue-non-script-identifiers');
 
 /**
  * Collect identifier-shaped tokens from the parts of a Vue SFC that aren't
@@ -2550,36 +2480,23 @@ function collectVueNonScriptIdentifiers(
   db: ScipDatabase,
   relativePath: string,
 ): Set<string> {
-  let perDb = VUE_NON_SCRIPT_IDENTIFIERS_CACHE.get(db);
-  if (!perDb) {
-    perDb = new Map();
-    VUE_NON_SCRIPT_IDENTIFIERS_CACHE.set(db, perDb);
-  }
-  const cached = perDb.get(relativePath);
-  if (cached) return cached;
-
-  const out = new Set<string>();
-  const source = getSourceText(db, relativePath);
-  if (!source) {
-    perDb.set(relativePath, out);
+  return VUE_NON_SCRIPT_IDENTIFIERS_CACHE.get(db, relativePath, () => {
+    const out = new Set<string>();
+    const source = getSourceText(db, relativePath);
+    if (!source) return out;
+    // Replace all <script>...</script> bodies with whitespace so we only scan
+    // template/style/etc. for identifiers. Comments inside template are
+    // unlikely to contain real identifiers, but we still strip HTML and JS
+    // comments to keep things clean.
+    const withoutScripts = source.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, (m) =>
+      m.replace(/[^\r\n]/g, ' '),
+    );
+    const stripped = withoutScripts
+      .replace(/<!--[\s\S]*?-->/g, (m) => m.replace(/[^\r\n]/g, ' '))
+      .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\r\n]/g, ' '));
+    for (const match of stripped.matchAll(/[A-Za-z_$][\w$]*/g)) {
+      out.add(match[0]);
+    }
     return out;
-  }
-
-  // Replace all <script>...</script> bodies with whitespace so we only scan
-  // template/style/etc. for identifiers. Comments inside template are
-  // unlikely to contain real identifiers, but we still strip HTML and JS
-  // comments to keep things clean.
-  const withoutScripts = source.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, (m) =>
-    m.replace(/[^\r\n]/g, ' '),
-  );
-  const stripped = withoutScripts
-    .replace(/<!--[\s\S]*?-->/g, (m) => m.replace(/[^\r\n]/g, ' '))
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\r\n]/g, ' '));
-
-  for (const match of stripped.matchAll(/[A-Za-z_$][\w$]*/g)) {
-    out.add(match[0]);
-  }
-
-  perDb.set(relativePath, out);
-  return out;
+  });
 }
