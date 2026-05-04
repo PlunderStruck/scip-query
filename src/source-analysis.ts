@@ -11,7 +11,7 @@ import {
   resolve,
 } from 'node:path';
 import type { ScipDatabase } from './db.js';
-import { detectAstLanguage, getAst, type SyntaxNode, type Tree } from './ast.js';
+import { detectAstLanguage, getAst, isVueSfcPath, type SyntaxNode, type Tree } from './ast.js';
 import { getSourceText } from './source-text.js';
 
 export interface ParsedSourceImport {
@@ -53,7 +53,7 @@ const SOURCE_IMPORT_CACHE = new WeakMap<ScipDatabase, Map<string, ParsedSourceIm
 const SOURCE_EXPORT_CACHE = new WeakMap<ScipDatabase, Map<string, ParsedSourceExport[]>>();
 const INDEXED_PATH_CACHE = new WeakMap<ScipDatabase, Set<string>>();
 
-const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'] as const;
+const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs', '.vue'] as const;
 const PYTHON_SOURCE_EXTENSIONS = ['.py', '.pyi'] as const;
 const JVM_SOURCE_EXTENSIONS = ['.java', '.scala', '.kt', '.kts'] as const;
 const RUST_SOURCE_EXTENSIONS = ['.rs'] as const;
@@ -396,6 +396,17 @@ function parseJavaScriptImportsAst(
     tree,
     new Set(['import_statement']),
   );
+
+  // Vue SFC: the script-block AST doesn't see <template> or <style> usages,
+  // so a component imported into <script setup> and only referenced as
+  // `<Header />` in the template would look unused. Augment usedNames with
+  // identifier-like tokens found in the SFC outside the script block.
+  if (isVueSfcPath(importerPath)) {
+    for (const name of collectVueNonScriptIdentifiers(db, importerPath)) {
+      usedNames.add(name);
+    }
+  }
+
   const results: ParsedSourceImport[] = [];
 
   for (const node of tree.rootNode.descendantsOfType('import_statement')) {
@@ -2521,4 +2532,54 @@ function pythonParenBalance(value: string): number {
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+const VUE_NON_SCRIPT_IDENTIFIERS_CACHE = new WeakMap<ScipDatabase, Map<string, Set<string>>>();
+
+/**
+ * Collect identifier-shaped tokens from the parts of a Vue SFC that aren't
+ * inside `<script>` blocks — i.e. `<template>` and `<style>`. Used to mark
+ * imports as "used" when they're only referenced from a template (e.g. a
+ * component imported into `<script setup>` and rendered as `<Header />`).
+ *
+ * This is a textual scan — it doesn't understand template directives in
+ * detail — but it's correct for the unused-imports decision: any identifier
+ * whose name appears anywhere in the template/style is treated as used.
+ */
+function collectVueNonScriptIdentifiers(
+  db: ScipDatabase,
+  relativePath: string,
+): Set<string> {
+  let perDb = VUE_NON_SCRIPT_IDENTIFIERS_CACHE.get(db);
+  if (!perDb) {
+    perDb = new Map();
+    VUE_NON_SCRIPT_IDENTIFIERS_CACHE.set(db, perDb);
+  }
+  const cached = perDb.get(relativePath);
+  if (cached) return cached;
+
+  const out = new Set<string>();
+  const source = getSourceText(db, relativePath);
+  if (!source) {
+    perDb.set(relativePath, out);
+    return out;
+  }
+
+  // Replace all <script>...</script> bodies with whitespace so we only scan
+  // template/style/etc. for identifiers. Comments inside template are
+  // unlikely to contain real identifiers, but we still strip HTML and JS
+  // comments to keep things clean.
+  const withoutScripts = source.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, (m) =>
+    m.replace(/[^\r\n]/g, ' '),
+  );
+  const stripped = withoutScripts
+    .replace(/<!--[\s\S]*?-->/g, (m) => m.replace(/[^\r\n]/g, ' '))
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\r\n]/g, ' '));
+
+  for (const match of stripped.matchAll(/[A-Za-z_$][\w$]*/g)) {
+    out.add(match[0]);
+  }
+
+  perDb.set(relativePath, out);
+  return out;
 }

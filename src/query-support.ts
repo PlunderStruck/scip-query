@@ -32,7 +32,8 @@
  *       start_line as a line number in output.
  */
 import type { ScipDatabase } from './db.js';
-import { basename } from 'node:path';
+import { existsSync as existsSyncFs } from 'node:fs';
+import { basename, isAbsolute as isAbsolutePath, join as pathJoin } from 'node:path';
 import { detectAstLanguage, getCallableSites, getCallSites, type CallableSite } from './ast.js';
 import { findIdentifierLines, getFileIdentifiers, getIdentifiersByLine, getSourceImports, getSourceText } from './source-analysis.js';
 import { isFunctionLikeSymbol, isModuleLikeSymbol, leafName, leafSuffix, parseSymbol, shortenSymbol } from './symbol-parser.js';
@@ -353,7 +354,26 @@ export function resolveIndexedFile(
   db: ScipDatabase,
   filePattern: string,
 ): string | null {
-  return resolveDocumentCandidates(db, filePattern, { allowMultiple: false })[0]?.relativePath ?? null;
+  const indexed = resolveDocumentCandidates(db, filePattern, { allowMultiple: false })[0]?.relativePath;
+  if (indexed) return indexed;
+
+  // Fallback for file types the SCIP indexers don't include (Vue SFCs in
+  // particular — scip-typescript doesn't recognize the `.vue` extension).
+  // Source-text-based queries like `imports` / `unused-imports` still work
+  // for these files because their parsers go through `getSourceImports`,
+  // which reads from disk; we just need to give them a real relative path.
+  return resolveOnDiskFile(db, filePattern);
+}
+
+function resolveOnDiskFile(db: ScipDatabase, filePattern: string): string | null {
+  if (!filePattern) return null;
+  const normalized = filePattern.replace(/\\/g, '/').replace(/^\.\//, '');
+  // Try exact-relative-to-project resolution first.
+  const rel = isAbsolutePath(normalized) && normalized.startsWith(db.config.projectRoot)
+    ? normalized.slice(db.config.projectRoot.length).replace(/^\/+/, '')
+    : normalized;
+  const abs = pathJoin(db.config.projectRoot, rel);
+  return existsSyncFs(abs) ? rel : null;
 }
 
 export function resolveIndexedPaths(

@@ -180,13 +180,26 @@ export function detectAstLanguage(relativePath: string): AstLanguage | null {
   return LANGUAGE_BY_EXT[extname(relativePath).toLowerCase()] ?? null;
 }
 
+export function isVueSfcPath(relativePath: string): boolean {
+  return extname(relativePath).toLowerCase() === '.vue';
+}
+
 const TREE_CACHE = new WeakMap<ScipDatabase, Map<string, { source: string; tree: Tree }>>();
 
 /**
  * Parse a file with tree-sitter and cache the result. Returns null when the
  * language has no AST parser configured (caller should fall back to regex).
+ *
+ * Vue SFCs are special-cased: there's no working tree-sitter-vue binding
+ * compatible with our tree-sitter runtime, so we extract the `<script>` (or
+ * `<script setup>`) block and parse it with TypeScript/JavaScript. The
+ * extracted script is left-padded with newlines so node line numbers match
+ * the original SFC file. Template and style blocks fall back to regex.
  */
 export function getAst(db: ScipDatabase, relativePath: string): Tree | null {
+  if (isVueSfcPath(relativePath)) {
+    return getVueScriptAst(db, relativePath);
+  }
   const lang = detectAstLanguage(relativePath);
   if (!lang) return null;
 
@@ -207,6 +220,92 @@ export function getAst(db: ScipDatabase, relativePath: string): Tree | null {
   const tree = parser.parse(source);
   perDb.set(relativePath, { source, tree });
   return tree;
+}
+
+/**
+ * Extract the `<script>` block from a Vue SFC and parse it with the AST
+ * grammar implied by `lang=`. The returned Tree's node positions are
+ * SFC-relative (achieved by padding the extracted script with newlines so
+ * the script content sits on its original line numbers).
+ *
+ * Returns null when there's no `<script>` block, the source is unreadable,
+ * or the inferred grammar isn't loadable.
+ */
+function getVueScriptAst(db: ScipDatabase, relativePath: string): Tree | null {
+  const source = getSourceText(db, relativePath);
+  if (!source) return null;
+
+  const cached = TREE_CACHE.get(db)?.get(relativePath);
+  if (cached && cached.source === source) return cached.tree;
+
+  const block = extractVueScriptBlock(source);
+  if (!block) return null;
+
+  const parser = getParser(block.language);
+  if (!parser) return null;
+
+  // Pad with newlines so the script content sits on its original lines.
+  const padded = '\n'.repeat(block.startLine) + block.body;
+  const tree = parser.parse(padded);
+
+  let perDb = TREE_CACHE.get(db);
+  if (!perDb) {
+    perDb = new Map();
+    TREE_CACHE.set(db, perDb);
+  }
+  perDb.set(relativePath, { source, tree });
+  return tree;
+}
+
+interface VueScriptBlock {
+  body: string;
+  startLine: number;
+  language: AstLanguage;
+}
+
+/**
+ * Find the first `<script>` (or `<script setup>`) block in a Vue SFC.
+ * Vue's grammar disallows nested `<script>` tags so a regex on the SFC
+ * is safe — we don't need a full HTML parser. Picks the language from
+ * the `lang=` attribute (`ts`/`tsx` → typescript/tsx, otherwise javascript).
+ */
+function extractVueScriptBlock(source: string): VueScriptBlock | null {
+  // Vue allows up to two script blocks: a regular `<script>` and a `<script setup>`.
+  // Tooling typically treats their imports as the same source-of-truth, so for
+  // our import-tracking purpose grabbing the setup block (when present)
+  // covers the modern path, and we fall back to the plain `<script>` otherwise.
+  const scripts: { tagOpen: string; body: string; openIdx: number }[] = [];
+  const re = /<script\b([^>]*)>([\s\S]*?)<\/script>/g;
+  for (const match of source.matchAll(re)) {
+    if (typeof match.index !== 'number') continue;
+    scripts.push({
+      tagOpen: match[1] ?? '',
+      body: match[2] ?? '',
+      openIdx: match.index + (match[0].length - (match[2]?.length ?? 0) - '</script>'.length),
+    });
+  }
+  if (scripts.length === 0) return null;
+
+  const preferred = scripts.find((s) => /\bsetup\b/.test(s.tagOpen)) ?? scripts[0]!;
+  const langMatch = preferred.tagOpen.match(/\blang\s*=\s*["']?([\w-]+)/);
+  const langAttr = langMatch?.[1]?.toLowerCase();
+  const language: AstLanguage = langAttr === 'ts' || langAttr === 'typescript'
+    ? 'typescript'
+    : langAttr === 'tsx'
+      ? 'tsx'
+      : 'javascript';
+
+  // The script body's start line is the count of newlines before openIdx.
+  const startLine = countNewlinesBefore(source, preferred.openIdx);
+  return { body: preferred.body, startLine, language };
+}
+
+function countNewlinesBefore(source: string, offset: number): number {
+  let count = 0;
+  for (let i = 0; i < offset && i < source.length; i++) {
+    if (source.charCodeAt(i) === 10) count++;
+  }
+  return count;
 }
 
 const QUERY_CACHE = new Map<string, QueryInstance | null>();
