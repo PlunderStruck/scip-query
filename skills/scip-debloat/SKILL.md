@@ -73,7 +73,7 @@ scip-query code 'src/modules/chat/chat.service.ts:100-200'
 
 ---
 
-## The 10 Angles of Bloat
+## The 12 Angles of Bloat
 
 Run every one of these. Each catches a different class of problem. Skip none.
 
@@ -108,7 +108,7 @@ Stricter than dead code — these symbols reference nothing AND are referenced b
 scip-query similar --min-similarity 0.5 --min-callees 3
 ```
 
-Functions that call the same set of symbols. High Jaccard similarity = doing the same work.
+Functions that call the same set of symbols. Uses TF-IDF weighted cosine similarity over the callee set, so rare shared callees score higher than ubiquitous infrastructure ones — a high score means the pair shares meaningful work, not just the same `db` and `logger`.
 
 For each high-similarity pair, get the consolidation prescription:
 
@@ -263,7 +263,6 @@ scip-query deep-chains --min-depth 5       # Excessively deep dependency chains
 scip-query bottlenecks -n 10               # Coupling pressure points
 scip-query complexity-hotspots -n 10       # Riskiest symbols
 scip-query hotspots -n 10                  # Most-referenced symbols
-scip-query doc-coverage --min-loc 5        # Documentation coverage
 ```
 
 ---
@@ -281,7 +280,7 @@ Read the health score, the findings breakdown, and the prioritized action list. 
 
 ### Phase 2: Deep Scan (10-15 minutes)
 
-Run all 10 angles plus the structural assessment. For each:
+Run all 12 angles plus the structural assessment. For each:
 1. Run the command
 2. Record the count and top findings
 3. For actionable findings, drill deeper (e.g., `convergence` for similar pairs)
@@ -349,7 +348,6 @@ The report is a markdown file with:
 - Max dependency chain depth: N
 - Coupling bottlenecks: [top 5]
 - Complexity hotspots: [top 5]
-- Doc coverage: N%
 ```
 
 Every finding includes the scip-query command that produced it.
@@ -402,7 +400,6 @@ Do NOT use grep, rg, or Read. Use only scip-query commands.
 | Coupling pressure | `scip-query bottlenecks -n 10` |
 | Complexity hotspots | `scip-query complexity-hotspots -n 10` |
 | Most-referenced | `scip-query hotspots -n 10` |
-| Doc coverage | `scip-query doc-coverage` |
 | Redundant re-exports | `scip-query redundant-reexports` |
 | Similar signatures | `scip-query similar-signatures --min-loc 5` |
 | Read source | `scip-query code <symbol>` |

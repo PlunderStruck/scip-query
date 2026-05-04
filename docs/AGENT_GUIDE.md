@@ -198,6 +198,7 @@ For command syntax and options reference, see [README.md](../README.md).
    ```bash
    scip-query drift
    ```
+   Files that deviate from their directory's typical dependency pattern. Bring them into line with their neighbors.
 
 10. **Remove redundant re-exports**
     ```bash
@@ -210,7 +211,6 @@ For command syntax and options reference, see [README.md](../README.md).
     scip-query similar-signatures --min-loc 5
     ```
     Functions with identical parameter/return types. Different signal from callee similarity — catches "same interface, different implementation."
-   Files that deviate from their directory's typical dependency pattern. Bring them into line with their neighbors.
 
 ### Priority order
 

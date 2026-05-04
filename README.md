@@ -2,7 +2,7 @@
 
 Language-agnostic code intelligence CLI powered by [SCIP](https://github.com/sourcegraph/scip) indexes. Index any codebase, then query it for references, dependencies, dead code, similarity, coupling, and more — without an IDE or language server running.
 
-Works with every language that has a SCIP indexer: TypeScript, JavaScript, Java, Scala, Kotlin, Rust, Python, Ruby, Go, C/C++, C#, Dart, PHP.
+Works with every language that has a SCIP indexer: TypeScript, JavaScript, Vue, Java, Scala, Kotlin, Rust, Python, Ruby, Go, C/C++, C#, Visual Basic, Dart, PHP.
 
 ## Workflows
 
@@ -43,7 +43,7 @@ scip-query diff-impact                   # what did my changes affect?
 
 | Language | Indexer | Install |
 |---|---|---|
-| TypeScript / JavaScript | scip-typescript | `npm install -g @sourcegraph/scip-typescript` |
+| TypeScript / JavaScript / Vue | scip-typescript | `npm install -g @sourcegraph/scip-typescript` |
 | Java / Scala / Kotlin | scip-java | [releases](https://github.com/sourcegraph/scip-java/releases) |
 | Rust | rust-analyzer | Ships with rust-analyzer (`rust-analyzer scip`) |
 | Python | scip-python-plus | `npm install -g scip-python-plus` |
@@ -54,7 +54,9 @@ scip-query diff-impact                   # what did my changes affect?
 | Dart | scip-dart | [releases](https://github.com/nicovince/scip-dart/releases) |
 | PHP | scip-php | [releases](https://github.com/nicovince/scip-php/releases) |
 
-For Python, the npm package is `scip-python-plus`. Depending on which version you installed, the executable on your `PATH` may be `scip-python`, `scip-python-plus`, or both. `scip-query` now accepts either name.
+For Python, the npm package is `scip-python-plus`. Depending on which version you installed, the executable on your `PATH` may be `scip-python`, `scip-python-plus`, or both. `scip-query` accepts either name.
+
+Vue single-file components (`.vue`) are handled by the JavaScript/TypeScript indexer. `scip-query` extracts the `<script>` block (or `<script setup>`, picking the language from the `lang=` attribute) and parses it as TS/JS so symbol, reference, and import queries cover Vue components alongside regular `.ts`/`.js` files.
 
 ## How It Works
 
@@ -466,6 +468,8 @@ scip-query dead src/utils --skip-barrels --include-members
 - `--include-tests` — Include test files in results (excluded by default)
 - `--skip-barrels` — Ignore references from inactive barrel re-export files
 - `--include-members` — Include class members (module-level only by default)
+- `--only-dead` — Show only `[dead code]` symbols (skip `[file-internal only]`)
+- `--only-internal` — Show only `[file-internal only]` symbols (skip `[dead code]`)
 
 **Value:** Find code you can delete. The `--skip-barrels` flag is key when a codebase has unused barrels, but it now keeps live entry-surface barrels counted so active exports do not look dead.
 
@@ -695,7 +699,7 @@ These commands find duplication, redundancy, and extraction opportunities — th
 
 #### `similar [symbol]`
 
-Find functions with similar callee fingerprints using Jaccard similarity. Two functions that call the same set of symbols are likely doing the same work and are candidates for consolidation.
+Find functions with similar callee fingerprints using TF-IDF weighted cosine similarity. Each callee is weighted by how rare it is across the codebase — two functions sharing a niche helper (`sendWelcomeEmail()`) score much higher than two functions sharing infrastructure callees (`db.all()`, `shortenSymbol()`). The "shared" list shown for each pair is the high-IDF (significant) intersection, not every shared callee.
 
 Without a symbol argument, finds the top N most similar pairs across the codebase. With a symbol, finds what's most similar to that specific function.
 
@@ -716,10 +720,11 @@ scip-query similar dead --min-similarity 0.3
 ```
 
 **Options:**
-- `--min-similarity <n>` — Minimum Jaccard similarity 0-1 (default: 0.4)
+- `--min-similarity <n>` — Minimum cosine similarity 0-1 (default: 0.4)
 - `-n, --limit <n>` — Number of results (default: 20)
 - `-s, --scope <path>` — Limit to files matching path
 - `--min-callees <n>` — Minimum callees to consider a symbol (default: 4)
+- `--cross-file-only` — Only show cross-file pairs (skip same-file matches)
 
 **Value:** Finds "these two functions do basically the same thing" at scale. The shared callee list shows exactly what's duplicated. The unique callees show where they diverge — that's the parameterization point for a consolidated version.
 
@@ -743,7 +748,7 @@ scip-query similar-files auth.controller.ts
 - `--min-similarity <n>` — Minimum Jaccard similarity 0-1 (default: 0.5)
 - `-n, --limit <n>` — Number of results (default: 20)
 - `-s, --scope <path>` — Limit to files matching path
-- `--min-deps <n>` — Minimum dependencies to consider (default: 3)
+- `--min-deps <n>` — Minimum dependencies on the smaller side (auto-tunes by default; pass to override)
 
 **Value:** Finds copy-paste file variants and structurally redundant modules. When two files have 90%+ dependency overlap, they're likely doing similar jobs and should share code or be merged.
 
@@ -928,6 +933,7 @@ scip-query stale-abstractions --min-loc 5
 - `-s, --scope <path>` — Limit to files matching path
 - `--min-loc <n>` — Minimum LOC (default: 3)
 - `-n, --limit <n>` — Number of results (default: 30)
+- `--include-low-confidence` — Include 1-consumer classes (usually encapsulation, not stale)
 
 **Value:** An interface with one implementation isn't an abstraction — it's indirection. Finds over-engineering.
 
@@ -1076,6 +1082,7 @@ scip-query slice login --forward     # forward: what this feeds into
 
 **Options:**
 - `--forward` — Forward slice instead of backward (default: backward)
+- `--depth <n>` — Max transitive depth for backward slice (default: 3)
 
 **Value:** Backward slice shows inputs/dependencies. Forward slice shows outputs/effects. Useful for tracing data flow through error handling and concurrency paths.
 
@@ -1124,7 +1131,7 @@ scip-query similar-signatures --min-loc 5
 
 ## Programmatic API
 
-All 49 commands are available as TypeScript functions:
+Every CLI command is also a TypeScript function. The `queries` namespace exports cover all of them — including the `top*` variants of `fan-in`, `fan-out`, and `coupling`, plus `similarAll` for the cross-codebase mode of `similar`:
 
 ```typescript
 import {

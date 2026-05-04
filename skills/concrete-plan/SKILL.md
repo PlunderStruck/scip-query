@@ -67,7 +67,7 @@ This skill deliberately excludes `Grep` and `Read` from its allowed tools. This 
 - Using `Read` via a subagent to browse files for discovery. Subagents must also use scip-query.
 - Spawning Explore agents that fall back to grep and file reads. If a subagent's output does not cite scip-query commands, reject its findings and re-run.
 
-**Instead, use scip-query (48 commands — full reference at `/Users/aydansalois/Documents/GitHub/scip-query/README.md`):**
+**Instead, use scip-query (full reference at `/Users/aydansalois/Documents/GitHub/scip-query/README.md`):**
 
 | You want to... | Use this |
 |---|---|
@@ -107,7 +107,7 @@ If none of these can answer your question, say so explicitly in the plan rather 
 
 ### Full Documentation
 
-- **All 48 commands with options and examples:** `/Users/aydansalois/Documents/GitHub/scip-query/README.md`
+- **Every command with options and examples:** `/Users/aydansalois/Documents/GitHub/scip-query/README.md`
 - **Goal-oriented agent workflows:** `/Users/aydansalois/Documents/GitHub/scip-query/docs/AGENT_GUIDE.md`
 
 ---
@@ -255,7 +255,7 @@ When spawning any subagent for this planning process, **include the following bl
 
 You have the `scip-query` CLI for compiler-resolved code intelligence. Use it for ALL code references — do not use grep, rg, Read, or cat.
 
-### scip-query commands (48 total)
+### scip-query commands
 
 Navigation:
 - `scip-query code <symbol>` — read source code (bounded to definition range)

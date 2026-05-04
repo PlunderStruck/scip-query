@@ -62,6 +62,8 @@ scip-query redundant-reexports
 
 Why this row is strong: TypeScript has the broadest verified command surface in the current suite, especially for imports, members, call flow, change risk, and DRY analysis.
 
+Vue note: `.vue` single-file components are handled by the same path. scip-query extracts the `<script>` (or `<script setup>`) block and parses it as TS/JS, so the TypeScript commands above also work on the Vue file's `<script>` symbols. Identifiers used only in `<template>`/`<style>` are tracked through a separate identifier scan so they don't show up as unused imports.
+
 ### Python
 
 Use first:
