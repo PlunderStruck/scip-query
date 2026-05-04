@@ -50,29 +50,7 @@ export function dataflow(
       enclosingShort: site.enclosingSymbol ? shortenSymbol(site.enclosingSymbol) : '(top-level)',
     }));
 
-  // Producers: AST-backed callees of the target (what flows IN). Now that
-  // getCalleeRowsForSymbol delegates to the bulk AST callee map, calls are
-  // attributed to the precise enclosing function — no chunk-overlap aliasing.
-  const producers = uniqueSymbolRows(getCalleeRowsForSymbol(db, match, { limit: 30 }).map((row) => ({
-    symbol: row.symbol,
-    file: row.file,
-  })));
-
-  // Consumers: AST-backed callers of the target (what flows OUT). Same
-  // upgrade — these come from the cached inverse-callee map which uses
-  // tree-sitter call_expression attribution for AST languages.
-  const astConsumers = uniqueSymbolRows(getCallerRowsForSymbol(db, match, { limit: 30 }));
-  // Fall back to source-scan derived consumers when SCIP+AST returned
-  // nothing (rare — happens when AST resolution is ambiguous AND SCIP has
-  // no role!=1 mention).
-  const consumers = astConsumers.length > 0
-    ? astConsumers
-    : uniqueSymbolRows(
-      normalizedUsageSites.map((site) => ({
-        symbol: site.enclosingSymbol === '(top-level)' ? site.file : site.enclosingSymbol,
-        file: site.file,
-      })),
-    );
+  const { producers, consumers } = collectFlowEndpoints(db, match, normalizedUsageSites);
 
   return {
     symbol: match.symbol,
@@ -91,6 +69,31 @@ export function dataflow(
         file: c.file,
       })),
   };
+}
+
+interface SymbolRow { symbol: string; file: string }
+
+function collectFlowEndpoints(
+  db: ScipDatabase,
+  match: Parameters<typeof getCalleeRowsForSymbol>[1],
+  normalizedUsageSites: { file: string; enclosingSymbol: string }[],
+): { producers: SymbolRow[]; consumers: SymbolRow[] } {
+  const producers = uniqueSymbolRows(
+    getCalleeRowsForSymbol(db, match, { limit: 30 }).map((row) => ({
+      symbol: row.symbol,
+      file: row.file,
+    })),
+  );
+  const astConsumers = uniqueSymbolRows(getCallerRowsForSymbol(db, match, { limit: 30 }));
+  const consumers = astConsumers.length > 0
+    ? astConsumers
+    : uniqueSymbolRows(
+      normalizedUsageSites.map((site) => ({
+        symbol: site.enclosingSymbol === '(top-level)' ? site.file : site.enclosingSymbol,
+        file: site.file,
+      })),
+    );
+  return { producers, consumers };
 }
 
 function uniqueSymbolRows<T extends { symbol: string; file: string }>(rows: T[]): T[] {

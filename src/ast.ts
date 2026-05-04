@@ -52,15 +52,27 @@ export interface QueryInstance {
   matches(node: SyntaxNode): Array<{ pattern: number; captures: Array<{ name: string; node: SyntaxNode }> }>;
 }
 
+// `tree-sitter` is an optionalDependency — its native binding can fail to
+// install on minimal environments (no Python / no C++ toolchain). When that
+// happens, `require('tree-sitter')` throws on first use; we cache the failure
+// so callers get a fast `null` and fall back to their regex paths.
 let _Parser: (ParserCtor & { Query: QueryConstructor }) | null = null;
-function getParserCtor(): ParserCtor & { Query: QueryConstructor } {
-  if (!_Parser) {
+let _ParserUnavailable = false;
+function getParserCtor(): (ParserCtor & { Query: QueryConstructor }) | null {
+  if (_ParserUnavailable) return null;
+  if (_Parser) return _Parser;
+  try {
     _Parser = require('tree-sitter') as ParserCtor & { Query: QueryConstructor };
+    return _Parser;
+  } catch {
+    _ParserUnavailable = true;
+    return null;
   }
-  return _Parser;
 }
 
-export type AstLanguage = 'rust' | 'typescript' | 'tsx' | 'javascript' | 'python';
+export type AstLanguage =
+  | 'rust' | 'typescript' | 'tsx' | 'javascript' | 'python'
+  | 'java' | 'kotlin' | 'scala' | 'ruby' | 'c' | 'cpp' | 'csharp' | 'php' | 'vb';
 
 const LANGUAGE_BY_EXT: Readonly<Record<string, AstLanguage>> = {
   '.rs': 'rust',
@@ -74,31 +86,92 @@ const LANGUAGE_BY_EXT: Readonly<Record<string, AstLanguage>> = {
   '.cjs': 'javascript',
   '.py': 'python',
   '.pyi': 'python',
+  '.java': 'java',
+  '.kt': 'kotlin',
+  '.kts': 'kotlin',
+  '.scala': 'scala',
+  '.sc': 'scala',
+  '.rb': 'ruby',
+  '.c': 'c',
+  '.h': 'c',
+  '.cc': 'cpp',
+  '.cpp': 'cpp',
+  '.cxx': 'cpp',
+  '.hpp': 'cpp',
+  '.hh': 'cpp',
+  '.hxx': 'cpp',
+  '.cs': 'csharp',
+  '.php': 'php',
+  '.vb': 'vb',
 };
 
 const grammarCache = new Map<AstLanguage, unknown>();
-function loadGrammar(lang: AstLanguage): unknown {
+const failedLanguages = new Set<AstLanguage>();
+function loadGrammar(lang: AstLanguage): unknown | null {
+  if (failedLanguages.has(lang)) return null;
   const cached = grammarCache.get(lang);
   if (cached) return cached;
   let g: unknown;
-  switch (lang) {
-    case 'rust':       g = require('tree-sitter-rust'); break;
-    case 'typescript': g = (require('tree-sitter-typescript') as { typescript: unknown }).typescript; break;
-    case 'tsx':        g = (require('tree-sitter-typescript') as { tsx: unknown }).tsx; break;
-    case 'javascript': g = require('tree-sitter-javascript'); break;
-    case 'python':     g = require('tree-sitter-python'); break;
+  try {
+    switch (lang) {
+      case 'rust':       g = require('tree-sitter-rust'); break;
+      case 'typescript': g = (require('tree-sitter-typescript') as { typescript: unknown }).typescript; break;
+      case 'tsx':        g = (require('tree-sitter-typescript') as { tsx: unknown }).tsx; break;
+      case 'javascript': g = require('tree-sitter-javascript'); break;
+      case 'python':     g = require('tree-sitter-python'); break;
+      case 'java':       g = require('tree-sitter-java'); break;
+      case 'kotlin':     g = require('tree-sitter-kotlin'); break;
+      case 'scala':      g = require('tree-sitter-scala'); break;
+      case 'ruby':       g = require('tree-sitter-ruby'); break;
+      case 'c':          g = require('tree-sitter-c'); break;
+      case 'cpp':        g = require('tree-sitter-cpp'); break;
+      case 'csharp':     g = require('tree-sitter-c-sharp'); break;
+      case 'php':        g = (require('tree-sitter-php') as { php: unknown }).php; break;
+      case 'vb': {
+        const m = require('tree-sitter-vb-dotnet') as { language?: unknown };
+        g = m.language ?? m;
+        break;
+      }
+    }
+  } catch {
+    // Native binding missing or incompatible. Mark as failed so callers fall
+    // back to regex; subsequent calls skip the require attempt.
+    failedLanguages.add(lang);
+    return null;
   }
   grammarCache.set(lang, g);
   return g;
 }
 
+/**
+ * Languages whose AST is rich enough to power the cross-file callable/call
+ * queries. The other AST languages have parsed trees (used for imports,
+ * identifier collection, structural scans) but don't have callable/call
+ * tree-sitter queries wired up.
+ */
+const QUERY_SUPPORTED: ReadonlySet<AstLanguage> = new Set([
+  'rust', 'typescript', 'tsx', 'javascript', 'python',
+]);
+
+export function isQuerySupportedLanguage(lang: AstLanguage): boolean {
+  return QUERY_SUPPORTED.has(lang);
+}
+
 const parserPool = new Map<AstLanguage, ParserInstance>();
-function getParser(lang: AstLanguage): ParserInstance {
+function getParser(lang: AstLanguage): ParserInstance | null {
   const cached = parserPool.get(lang);
   if (cached) return cached;
+  const grammar = loadGrammar(lang);
+  if (!grammar) return null;
   const Ctor = getParserCtor();
+  if (!Ctor) return null;
   const parser = new Ctor();
-  parser.setLanguage(loadGrammar(lang));
+  try {
+    parser.setLanguage(grammar);
+  } catch {
+    failedLanguages.add(lang);
+    return null;
+  }
   parserPool.set(lang, parser);
   return parser;
 }
@@ -129,19 +202,34 @@ export function getAst(db: ScipDatabase, relativePath: string): Tree | null {
   const cached = perDb.get(relativePath);
   if (cached && cached.source === source) return cached.tree;
 
-  const tree = getParser(lang).parse(source);
+  const parser = getParser(lang);
+  if (!parser) return null;
+  const tree = parser.parse(source);
   perDb.set(relativePath, { source, tree });
   return tree;
 }
 
-const QUERY_CACHE = new Map<string, QueryInstance>();
+const QUERY_CACHE = new Map<string, QueryInstance | null>();
 /** Compile (and cache) a tree-sitter query for the given language + query text. */
-export function compileQuery(lang: AstLanguage, queryString: string): QueryInstance {
+export function compileQuery(lang: AstLanguage, queryString: string): QueryInstance | null {
   const key = `${lang}::${queryString}`;
-  const cached = QUERY_CACHE.get(key);
-  if (cached) return cached;
-  const Q = getParserCtor().Query;
-  const compiled = new Q(loadGrammar(lang), queryString);
+  if (QUERY_CACHE.has(key)) return QUERY_CACHE.get(key) ?? null;
+  const grammar = loadGrammar(lang);
+  if (!grammar) {
+    QUERY_CACHE.set(key, null);
+    return null;
+  }
+  const Ctor = getParserCtor();
+  if (!Ctor) {
+    QUERY_CACHE.set(key, null);
+    return null;
+  }
+  let compiled: QueryInstance | null = null;
+  try {
+    compiled = new Ctor.Query(grammar, queryString);
+  } catch {
+    compiled = null;
+  }
   QUERY_CACHE.set(key, compiled);
   return compiled;
 }
@@ -152,7 +240,7 @@ export interface CallableSite {
   endLine: number;
 }
 
-const CALLABLE_QUERY_BY_LANG: Readonly<Record<AstLanguage, string>> = {
+const CALLABLE_QUERY_BY_LANG: Readonly<Partial<Record<AstLanguage, string>>> = {
   // Rust: free fns + methods. impl-block methods are still `function_item`.
   rust: `
     (function_item name: (identifier) @name) @def
@@ -201,13 +289,16 @@ const CALLABLE_CACHE = new WeakMap<Tree, CallableSite[]>();
 export function getCallableSites(db: ScipDatabase, relativePath: string): CallableSite[] | null {
   const lang = detectAstLanguage(relativePath);
   if (!lang) return null;
+  const queryString = CALLABLE_QUERY_BY_LANG[lang];
+  if (!queryString) return null;
   const tree = getAst(db, relativePath);
   if (!tree) return null;
 
   const cached = CALLABLE_CACHE.get(tree);
   if (cached) return cached;
 
-  const query = compileQuery(lang, CALLABLE_QUERY_BY_LANG[lang]);
+  const query = compileQuery(lang, queryString);
+  if (!query) return null;
   const matches = query.matches(tree.rootNode);
   const sites: CallableSite[] = [];
   for (const match of matches) {
@@ -232,7 +323,7 @@ export interface CallSite {
   line: number;
 }
 
-const CALL_QUERY_BY_LANG: Readonly<Record<AstLanguage, string>> = {
+const CALL_QUERY_BY_LANG: Readonly<Partial<Record<AstLanguage, string>>> = {
   rust: `
     (call_expression function: (_) @target) @call
     (macro_invocation macro: (_) @target) @call
@@ -273,13 +364,16 @@ const CALLSITE_CACHE = new WeakMap<Tree, CallSite[]>();
 export function getCallSites(db: ScipDatabase, relativePath: string): CallSite[] | null {
   const lang = detectAstLanguage(relativePath);
   if (!lang) return null;
+  const queryString = CALL_QUERY_BY_LANG[lang];
+  if (!queryString) return null;
   const tree = getAst(db, relativePath);
   if (!tree) return null;
 
   const cached = CALLSITE_CACHE.get(tree);
   if (cached) return cached;
 
-  const query = compileQuery(lang, CALL_QUERY_BY_LANG[lang]);
+  const query = compileQuery(lang, queryString);
+  if (!query) return null;
   const sites: CallSite[] = [];
   for (const match of query.matches(tree.rootNode)) {
     let target: SyntaxNode | null = null;
@@ -781,73 +875,82 @@ export function getTypeContainerMap(
   db: ScipDatabase,
   relativePath: string,
 ): Map<string, Set<string>> {
-  const lang = detectAstLanguage(relativePath);
-  if (!lang) return new Map();
-  const tree = getAst(db, relativePath);
-  if (!tree) return new Map();
-
-  const cached = TYPE_CONTAINER_CACHE.get(tree);
-  if (cached) return cached;
-
-  const result = new Map<string, Set<string>>();
-  const link = (child: string, container: string): void => {
-    if (child === container) return;
-    let bucket = result.get(child);
-    if (!bucket) { bucket = new Set(); result.set(child, bucket); }
-    bucket.add(container);
-  };
-
-  // Different languages name type references with different node types.
-  const refTypes = lang === 'python'
-    ? new Set(['identifier'])
-    : new Set(['type_identifier']);
-  const collectChildren = (root: SyntaxNode, container: string): void => {
-    const walk = (node: SyntaxNode): void => {
-      if (refTypes.has(node.type) && node.text !== container) {
-        link(node.text, container);
-      }
-      for (const child of node.children) walk(child);
+  return runCachedAstWalk(db, relativePath, TYPE_CONTAINER_CACHE, () => new Map<string, Set<string>>(), (tree, lang, result) => {
+    const link = (child: string, container: string): void => {
+      if (child === container) return;
+      let bucket = result.get(child);
+      if (!bucket) { bucket = new Set(); result.set(child, bucket); }
+      bucket.add(container);
     };
-    for (const child of root.children) walk(child);
-  };
 
-  if (lang === 'rust') {
-    for (const s of tree.rootNode.descendantsOfType(['struct_item', 'enum_item', 'union_item', 'type_item'])) {
-      const name = s.namedChildren.find((c) => c.type === 'type_identifier')?.text;
-      if (!name) continue;
-      const body = s.namedChildren.find((c) => c.type === 'field_declaration_list'
-        || c.type === 'enum_variant_list'
-        || c.type === 'ordered_field_declaration_list');
-      if (body) collectChildren(body, name);
-      if (s.type === 'type_item') collectChildren(s, name);
-    }
-  } else if (lang === 'python') {
-    // Python class fields are annotated assignments inside the class body.
-    // Walk only the `type` annotation nodes (not the assignment values) so
-    // we only pick up types, not arbitrary identifiers used as defaults.
-    for (const cls of tree.rootNode.descendantsOfType('class_definition')) {
-      const name = cls.namedChildren.find((c) => c.type === 'identifier')?.text;
-      if (!name) continue;
-      const body = cls.namedChildren.find((c) => c.type === 'block');
-      if (!body) continue;
-      for (const typeNode of body.descendantsOfType('type')) {
-        // Inside `type` node, every identifier is a referenced type name.
-        for (const id of typeNode.descendantsOfType('identifier')) {
-          if (id.text !== name) link(id.text, name);
+    // Different languages name type references with different node types.
+    const refTypes = lang === 'python'
+      ? new Set(['identifier'])
+      : new Set(['type_identifier']);
+    const collectChildren = (root: SyntaxNode, container: string): void => {
+      const walk = (node: SyntaxNode): void => {
+        if (refTypes.has(node.type) && node.text !== container) {
+          link(node.text, container);
+        }
+        for (const child of node.children) walk(child);
+      };
+      for (const child of root.children) walk(child);
+    };
+
+    if (lang === 'rust') {
+      for (const s of tree.rootNode.descendantsOfType(['struct_item', 'enum_item', 'union_item', 'type_item'])) {
+        const name = s.namedChildren.find((c) => c.type === 'type_identifier')?.text;
+        if (!name) continue;
+        const body = s.namedChildren.find((c) => c.type === 'field_declaration_list'
+          || c.type === 'enum_variant_list'
+          || c.type === 'ordered_field_declaration_list');
+        if (body) collectChildren(body, name);
+        if (s.type === 'type_item') collectChildren(s, name);
+      }
+    } else if (lang === 'python') {
+      // Python class fields are annotated assignments inside the class body.
+      // Walk only the `type` annotation nodes (not the assignment values) so
+      // we only pick up types, not arbitrary identifiers used as defaults.
+      for (const cls of tree.rootNode.descendantsOfType('class_definition')) {
+        const name = cls.namedChildren.find((c) => c.type === 'identifier')?.text;
+        if (!name) continue;
+        const body = cls.namedChildren.find((c) => c.type === 'block');
+        if (!body) continue;
+        for (const typeNode of body.descendantsOfType('type')) {
+          // Inside `type` node, every identifier is a referenced type name.
+          for (const id of typeNode.descendantsOfType('identifier')) {
+            if (id.text !== name) link(id.text, name);
+          }
         }
       }
+    } else {
+      // TS/JS interfaces, type aliases, classes (field types).
+      for (const s of tree.rootNode.descendantsOfType(['interface_declaration', 'type_alias_declaration', 'class_declaration'])) {
+        const name = s.namedChildren.find((c) => c.type === 'type_identifier')?.text;
+        if (!name) continue;
+        collectChildren(s, name);
+      }
     }
-  } else {
-    // TS/JS interfaces, type aliases, classes (field types).
-    for (const s of tree.rootNode.descendantsOfType(['interface_declaration', 'type_alias_declaration', 'class_declaration'])) {
-      const name = s.namedChildren.find((c) => c.type === 'type_identifier')?.text;
-      if (!name) continue;
-      collectChildren(s, name);
-    }
-  }
+  }) ?? new Map();
+}
 
-  TYPE_CONTAINER_CACHE.set(tree, result);
-  return result;
+function runCachedAstWalk<T>(
+  db: ScipDatabase,
+  relativePath: string,
+  cache: WeakMap<Tree, T>,
+  init: () => T,
+  walk: (tree: Tree, lang: AstLanguage, acc: T) => void,
+): T | null {
+  const lang = detectAstLanguage(relativePath);
+  if (!lang) return null;
+  const tree = getAst(db, relativePath);
+  if (!tree) return null;
+  const cached = cache.get(tree);
+  if (cached) return cached;
+  const acc = init();
+  walk(tree, lang, acc);
+  cache.set(tree, acc);
+  return acc;
 }
 
 const TYPE_CONTAINER_CACHE = new WeakMap<Tree, Map<string, Set<string>>>();
@@ -883,37 +986,26 @@ export function getCrossLanguageDispatchNames(
   db: ScipDatabase,
   relativePath: string,
 ): Set<string> {
-  const lang = detectAstLanguage(relativePath);
-  if (lang !== 'typescript' && lang !== 'tsx' && lang !== 'javascript') {
-    return new Set();
-  }
-  const tree = getAst(db, relativePath);
-  if (!tree) return new Set();
+  return runCachedAstWalk(db, relativePath, DISPATCH_NAMES_CACHE, () => new Set<string>(), (tree, lang, out) => {
+    if (lang !== 'typescript' && lang !== 'tsx' && lang !== 'javascript') return;
 
-  const cached = DISPATCH_NAMES_CACHE.get(tree);
-  if (cached) return cached;
+    for (const call of tree.rootNode.descendantsOfType('call_expression')) {
+      const target = call.namedChild(0);
+      if (!target) continue;
+      // Resolve the call target's leaf — handles `invoke(...)`,
+      // `tauri.invoke(...)`, `window.__TAURI__.invoke(...)`.
+      const leaf = extractCallLeaf(target);
+      if (!leaf || !CROSS_LANG_DISPATCH_NAMES.has(leaf)) continue;
 
-  const out = new Set<string>();
-  const calls = tree.rootNode.descendantsOfType('call_expression');
-  for (const call of calls) {
-    const target = call.namedChild(0);
-    if (!target) continue;
-    // Resolve the call target's leaf — handles `invoke(...)`,
-    // `tauri.invoke(...)`, `window.__TAURI__.invoke(...)`.
-    const leaf = extractCallLeaf(target);
-    if (!leaf || !CROSS_LANG_DISPATCH_NAMES.has(leaf)) continue;
-
-    const args = call.namedChildren.find((c) => c.type === 'arguments');
-    if (!args) continue;
-    const firstArg = args.namedChild(0);
-    if (!firstArg) continue;
-    if (firstArg.type !== 'string') continue;
-    const frag = firstArg.namedChildren.find((c) => c.type === 'string_fragment');
-    if (frag) out.add(frag.text);
-  }
-
-  DISPATCH_NAMES_CACHE.set(tree, out);
-  return out;
+      const args = call.namedChildren.find((c) => c.type === 'arguments');
+      if (!args) continue;
+      const firstArg = args.namedChild(0);
+      if (!firstArg) continue;
+      if (firstArg.type !== 'string') continue;
+      const frag = firstArg.namedChildren.find((c) => c.type === 'string_fragment');
+      if (frag) out.add(frag.text);
+    }
+  }) ?? new Set();
 }
 
 const DISPATCH_NAMES_CACHE = new WeakMap<Tree, Set<string>>();
@@ -980,152 +1072,6 @@ function buildSignatureIndex(tree: Tree, lang: AstLanguage): Map<string, Callabl
   return index;
 }
 
-export interface DetailedCallSite {
-  /** Function/method name being invoked. */
-  calleeName: string;
-  /** Receiver expression's leftmost name, or null for free functions. */
-  receiverName: string | null;
-  line: number;
-}
-
-const DETAILED_CALL_CACHE = new WeakMap<Tree, DetailedCallSite[]>();
-
-/**
- * Like getCallSites but also extracts the receiver name. For `obj.method()`
- * the receiver is "obj"; for `this.method()` the receiver is "this"; for a
- * free call like `foo()` the receiver is null. Used by getSourceCalls to
- * preserve the existing regex parser's contract.
- */
-export function getDetailedCallSites(
-  db: ScipDatabase,
-  relativePath: string,
-): DetailedCallSite[] | null {
-  const lang = detectAstLanguage(relativePath);
-  if (!lang) return null;
-  const tree = getAst(db, relativePath);
-  if (!tree) return null;
-
-  const cached = DETAILED_CALL_CACHE.get(tree);
-  if (cached) return cached;
-
-  const query = compileQuery(lang, CALL_QUERY_BY_LANG[lang]);
-  const sites: DetailedCallSite[] = [];
-  for (const match of query.matches(tree.rootNode)) {
-    let target: SyntaxNode | null = null;
-    let call: SyntaxNode | null = null;
-    for (const cap of match.captures) {
-      if (cap.name === 'target') target = cap.node;
-      else if (cap.name === 'call') call = cap.node;
-    }
-    if (!target || !call) continue;
-    const calleeName = extractCallLeaf(target);
-    if (!calleeName) continue;
-    sites.push({
-      calleeName,
-      receiverName: extractCallReceiver(target),
-      line: call.startPosition.row,
-    });
-  }
-
-  DETAILED_CALL_CACHE.set(tree, sites);
-  return sites;
-}
-
-/**
- * Receiver = the part to the left of the dot/`::`. For `obj.method()` returns
- * "obj"; for `pkg::Type::method()` returns "Type"; for plain `foo()` returns
- * null. Used to disambiguate methods from free calls in getSourceCalls.
- */
-function extractCallReceiver(node: SyntaxNode): string | null {
-  switch (node.type) {
-    case 'field_expression':
-    case 'member_expression':
-    case 'attribute': {
-      const obj = node.namedChild(0);
-      if (!obj) return null;
-      if (obj.type === 'this' || obj.type === 'self' || obj.type === 'super') return obj.type;
-      // Use rightmost identifier of the receiver expression for nested paths.
-      return extractCallLeaf(obj);
-    }
-    case 'scoped_identifier': {
-      // For `Type::method`, receiver is the next-to-last segment.
-      const namedChildren = node.namedChildren;
-      if (namedChildren.length < 2) return null;
-      return extractCallLeaf(namedChildren[namedChildren.length - 2]!);
-    }
-    default:
-      return null;
-  }
-}
-
-export interface ConstructorBindingSite {
-  localName: string;
-  typeName: string;
-}
-
-const BINDING_CACHE = new WeakMap<Tree, ConstructorBindingSite[]>();
-
-const BINDING_QUERY_BY_LANG: Readonly<Record<AstLanguage, string>> = {
-  // TS captures three binding patterns the regex parser used:
-  //   1. const x = new Foo()
-  //   2. const x: Foo = ... — explicit type annotation on a variable
-  //   3. function f(x: Foo) — parameter with type annotation
-  // (2) and (3) are essential for resolving `x.method()` against a type the
-  // parameter type names. The regex parser handled both via the same
-  // `name: Type` pattern.
-  typescript: `
-    (variable_declarator name: (identifier) @name value: (new_expression constructor: (_) @ctor))
-    (variable_declarator name: (identifier) @name type: (type_annotation (type_identifier) @ctor))
-    (required_parameter pattern: (identifier) @name type: (type_annotation (type_identifier) @ctor))
-    (optional_parameter pattern: (identifier) @name type: (type_annotation (type_identifier) @ctor))
-    (public_field_definition name: (property_identifier) @name type: (type_annotation (type_identifier) @ctor))
-  `,
-  tsx: `
-    (variable_declarator name: (identifier) @name value: (new_expression constructor: (_) @ctor))
-    (variable_declarator name: (identifier) @name type: (type_annotation (type_identifier) @ctor))
-    (required_parameter pattern: (identifier) @name type: (type_annotation (type_identifier) @ctor))
-    (optional_parameter pattern: (identifier) @name type: (type_annotation (type_identifier) @ctor))
-    (public_field_definition name: (property_identifier) @name type: (type_annotation (type_identifier) @ctor))
-  `,
-  javascript: `(variable_declarator name: (identifier) @name value: (new_expression constructor: (_) @ctor))`,
-  python: `(assignment left: (identifier) @name right: (call function: (_) @ctor))`,
-  rust: `(let_declaration pattern: (identifier) @name value: (call_expression function: (_) @ctor))`,
-};
-
-/**
- * Bindings of the form `const x = new Foo()` (TS/JS) or `let x = Foo::new()`
- * (Rust) so downstream queries can resolve `x.method()` to `Foo::method`.
- */
-export function getConstructorBindings(
-  db: ScipDatabase,
-  relativePath: string,
-): ConstructorBindingSite[] | null {
-  const lang = detectAstLanguage(relativePath);
-  if (!lang) return null;
-  const tree = getAst(db, relativePath);
-  if (!tree) return null;
-
-  const cached = BINDING_CACHE.get(tree);
-  if (cached) return cached;
-
-  const query = compileQuery(lang, BINDING_QUERY_BY_LANG[lang]);
-  const sites: ConstructorBindingSite[] = [];
-  for (const match of query.matches(tree.rootNode)) {
-    let nameNode: SyntaxNode | null = null;
-    let ctorNode: SyntaxNode | null = null;
-    for (const cap of match.captures) {
-      if (cap.name === 'name') nameNode = cap.node;
-      else if (cap.name === 'ctor') ctorNode = cap.node;
-    }
-    if (!nameNode || !ctorNode) continue;
-    const typeName = extractCallLeaf(ctorNode);
-    if (!typeName) continue;
-    sites.push({ localName: nameNode.text, typeName });
-  }
-
-  BINDING_CACHE.set(tree, sites);
-  return sites;
-}
 
 /**
  * Pull the rightmost name out of a call target node. Handles plain

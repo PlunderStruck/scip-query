@@ -1,8 +1,11 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { platform } from 'node:os';
 import { join } from 'node:path';
 import type { IndexerConfig } from '../types.js';
+
+const requireFromHere = createRequire(import.meta.url);
 
 const IS_WINDOWS = platform() === 'win32';
 
@@ -43,12 +46,19 @@ export function describeIndexerBinary(config: IndexerConfig): string {
 
 /**
  * Resolve the first available executable name for an indexer.
+ *
+ * Falls back to the indexer's preferred binary name when the indexer's
+ * `bundledNpmPackage` is installed locally — `npx <binary>` will pick it up
+ * even when it isn't on PATH.
  */
 export function resolveIndexerBinary(config: IndexerConfig): string | null {
   for (const candidate of getBinaryCandidates(config)) {
     if (isBinaryAvailable(candidate)) {
       return candidate;
     }
+  }
+  if (isBundledNpmPackageInstalled(config)) {
+    return config.indexerBinary;
   }
   return null;
 }
@@ -57,7 +67,23 @@ export function resolveIndexerBinary(config: IndexerConfig): string | null {
  * Check if an indexer's binary is available on PATH.
  */
 export function isIndexerInstalled(config: IndexerConfig): boolean {
-  return resolveIndexerBinary(config) !== null;
+  return resolveIndexerBinary(config) !== null || isBundledNpmPackageInstalled(config);
+}
+
+/**
+ * Check whether the indexer's bundled npm package (an optionalDependency of
+ * scip-query) was successfully installed alongside scip-query. When it was,
+ * `npx <binary>` from indexArgs will resolve to the local install — no need
+ * to fall through to global install or PATH lookup.
+ */
+function isBundledNpmPackageInstalled(config: IndexerConfig): boolean {
+  if (!config.bundledNpmPackage) return false;
+  try {
+    requireFromHere.resolve(`${config.bundledNpmPackage}/package.json`);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

@@ -24,6 +24,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       { label: 'npm', prerequisite: 'npm', binary: 'npm', args: ['install', '-g', '@sourcegraph/scip-typescript'] },
     ],
     installUrl: 'https://github.com/sourcegraph/scip-typescript',
+    bundledNpmPackage: '@sourcegraph/scip-typescript',
   },
 
   javascript: {
@@ -39,6 +40,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       { label: 'npm', prerequisite: 'npm', binary: 'npm', args: ['install', '-g', '@sourcegraph/scip-typescript'] },
     ],
     installUrl: 'https://github.com/sourcegraph/scip-typescript',
+    bundledNpmPackage: '@sourcegraph/scip-typescript',
   },
 
   java: {
@@ -99,16 +101,19 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     language: 'python',
     indexerBinary: 'scip-python',
     binaryAliases: ['scip-python-plus'],
-    checkCommand: 'scip-python --version',
-    indexArgs: ({ outputPath, indexerBinary }) => ({
-      binary: indexerBinary,
-      args: ['index', '--output', outputPath, '--project-name', 'project'],
+    // npx resolves to the locally-installed scip-python-plus first (it's an
+    // optionalDependency of scip-query), then falls back to a global install.
+    checkCommand: 'npx scip-python --version',
+    indexArgs: ({ outputPath }) => ({
+      binary: 'npx',
+      args: ['scip-python', 'index', '--output', outputPath, '--project-name', 'project'],
     }),
     markerFiles: ['pyproject.toml', 'setup.py'],
     installMethods: [
       { label: 'npm', prerequisite: 'npm', binary: 'npm', args: ['install', '-g', 'scip-python-plus'] },
     ],
     installUrl: 'https://github.com/PlunderStruck/scip-python',
+    bundledNpmPackage: 'scip-python-plus',
   },
 
   ruby: {

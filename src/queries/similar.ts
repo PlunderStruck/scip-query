@@ -31,47 +31,72 @@ export function similar(
   if (!target) return [];
   if (!isFunctionLikeSymbol(target.symbol)) return [];
 
+  const results = compareAgainstFingerprints(db, target, minSimilarity);
+  if (results.length > 0) return results.slice(0, limit);
+  return similarBySourceShape(db, symbolPattern, { minSimilarity, limit });
+}
+
+function compareAgainstFingerprints(
+  db: ScipDatabase,
+  target: SymbolFingerprint,
+  minSimilarity: number,
+): SimilarSymbolResult[] {
   const candidates = getAllCalleeFingerprints(db, {
     minCallees: 3,
     excludeSymbol: target.symbol,
   });
-
-  // Compute IDF weights across all fingerprints + target
-  const allFingerprints = [target, ...candidates];
-  const idfWeights = computeIdf(allFingerprints);
+  const idfWeights = computeIdf([target, ...candidates]);
 
   const results: SimilarSymbolResult[] = [];
-
   for (const candidate of candidates) {
     if (candidate.callees.size < 3) continue;
-
-    const { similarity, significantShared } = weightedSimilarity(
-      target.callees, candidate.callees, idfWeights,
-    );
-
-    if (similarity < minSimilarity) continue;
-    if (significantShared.length < 1) continue; // no real overlap
-
-    results.push({
-      symbolA: target.symbol,
-      shortNameA: shortenSymbol(target.symbol),
-      fileA: target.file,
-      symbolB: candidate.symbol,
-      shortNameB: shortenSymbol(candidate.symbol),
-      fileB: candidate.file,
-      similarity,
-      sharedCallees: significantShared.map(shortenSymbol),
-      uniqueToA: [...difference(target.callees, candidate.callees)].map(shortenSymbol),
-      uniqueToB: [...difference(candidate.callees, target.callees)].map(shortenSymbol),
+    const result = comparePair(target, candidate, idfWeights, {
+      minSimilarity,
+      requireSignificantShared: 1,
+      requireSharedCount: 0,
     });
+    if (result) results.push(result);
   }
-
   results.sort((a, b) => b.similarity - a.similarity);
-  if (results.length > 0) {
-    return results.slice(0, limit);
+  return results;
+}
+
+interface ComparePairOptions {
+  minSimilarity: number;
+  /** Pair is dropped when significantShared.length < this AND sharedCount < requireSharedCount. */
+  requireSignificantShared: number;
+  requireSharedCount: number;
+}
+
+function comparePair(
+  a: SymbolFingerprint,
+  b: SymbolFingerprint,
+  idfWeights: Map<string, number>,
+  opts: ComparePairOptions,
+): SimilarSymbolResult | null {
+  const { similarity, significantShared } = weightedSimilarity(a.callees, b.callees, idfWeights);
+  if (similarity < opts.minSimilarity) return null;
+  const sharedCount = intersection(a.callees, b.callees).size;
+  if (significantShared.length < opts.requireSignificantShared && sharedCount < opts.requireSharedCount) {
+    return null;
   }
 
-  return similarBySourceShape(db, symbolPattern, { minSimilarity, limit });
+  const displayShared = significantShared.length > 0
+    ? significantShared
+    : [...intersection(a.callees, b.callees)];
+
+  return {
+    symbolA: a.symbol,
+    shortNameA: shortenSymbol(a.symbol),
+    fileA: a.file,
+    symbolB: b.symbol,
+    shortNameB: shortenSymbol(b.symbol),
+    fileB: b.file,
+    similarity,
+    sharedCallees: displayShared.map(shortenSymbol),
+    uniqueToA: [...difference(a.callees, b.callees)].map(shortenSymbol),
+    uniqueToB: [...difference(b.callees, a.callees)].map(shortenSymbol),
+  };
 }
 
 /**
@@ -135,31 +160,13 @@ export function similarAll(
         if (diff > maxAllowed) continue;
       }
 
-      const { similarity, significantShared } = weightedSimilarity(
-        a.callees, b.callees, idfWeights,
-      );
-
-      if (similarity < minSimilarity) continue;
-
-      const sharedCount = intersection(a.callees, b.callees).size;
-      if (significantShared.length < 2 && sharedCount < 4) continue;
-
-      const displayShared = significantShared.length > 0
-        ? significantShared
-        : [...intersection(a.callees, b.callees)];
-
-      results.push({
-        symbolA: a.symbol,
-        shortNameA: shortenSymbol(a.symbol),
-        fileA: a.file,
-        symbolB: b.symbol,
-        shortNameB: shortenSymbol(b.symbol),
-        fileB: b.file,
-        similarity,
-        sharedCallees: displayShared.map(shortenSymbol),
-        uniqueToA: [...difference(a.callees, b.callees)].map(shortenSymbol),
-        uniqueToB: [...difference(b.callees, a.callees)].map(shortenSymbol),
+      const result = comparePair(a, b, idfWeights, {
+        minSimilarity,
+        requireSignificantShared: 2,
+        requireSharedCount: 4,
       });
+      if (!result) continue;
+      results.push(result);
 
       if (results.length > limit * 5) break outer;
     }
@@ -387,18 +394,19 @@ function findSourceFingerprint(
   if (!match || !isFunctionLikeSymbol(match.symbol)) {
     return null;
   }
+  const tokens = buildSourceFingerprintTokens(db, match);
+  if (!tokens) return null;
+  return { symbol: match.symbol, file: match.relativePath, tokens };
+}
 
-  const snippet = definitionSnippet(db, match.relativePath, match.startLine, match.endLine, leafName(match.symbol));
-  const tokens = sourceTokens(snippet, leafName(match.symbol));
-  if (tokens.size === 0) {
-    return null;
-  }
-
-  return {
-    symbol: match.symbol,
-    file: match.relativePath,
-    tokens,
-  };
+function buildSourceFingerprintTokens(
+  db: ScipDatabase,
+  match: { symbol: string; relativePath: string; startLine: number; endLine: number },
+): Set<string> | null {
+  const leaf = leafName(match.symbol);
+  const snippet = definitionSnippet(db, match.relativePath, match.startLine, match.endLine, leaf);
+  const tokens = sourceTokens(snippet, leaf);
+  return tokens.size > 0 ? tokens : null;
 }
 
 function getAllSourceFingerprints(db: ScipDatabase): SourceFingerprint[] {

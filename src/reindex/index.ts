@@ -35,10 +35,16 @@ export interface ReindexOptions {
 }
 
 export interface ReindexResult {
+  /** Languages that were successfully indexed. */
   languages: SupportedLanguage[];
   indexPath: string;
   dbPath: string;
   durationMs: number;
+  /**
+   * Languages detected in the project but skipped because their indexer
+   * could not be located, installed, or run. Each entry includes the reason.
+   */
+  skipped: { language: SupportedLanguage; reason: string }[];
 }
 
 /**
@@ -97,7 +103,13 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
       : outputScip,
   }));
 
-  // Index each language
+  // Track which languages actually produced an index so we only merge those.
+  const indexedOutputs: { language: SupportedLanguage; scipPath: string }[] = [];
+  const skippedLanguages: { language: SupportedLanguage; reason: string }[] = [];
+
+  // Index each language. Failures for one language don't stop the rest:
+  // we want users on minimal environments to still get partial coverage
+  // (e.g. TS+Python work even when rust-analyzer isn't installed).
   for (const { language: lang, scipPath } of languageOutputs) {
     const config = getIndexerConfig(lang);
     const binaryLabel = describeIndexerBinary(config);
@@ -106,26 +118,26 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
     // Check if indexer is installed, auto-install if needed
     if (!projectLocalBinary && !isIndexerInstalled(config)) {
       if (skipAutoInstall) {
-        throw new Error(
-          `${binaryLabel} is required to index ${lang} but not found on PATH.\n` +
-          (config.installUrl ? `Install from: ${config.installUrl}` : `Make sure ${binaryLabel} is installed and available on PATH.`),
-        );
+        const reason = `${binaryLabel} not found on PATH (auto-install disabled). ${config.installUrl ?? ''}`.trim();
+        onStatus(`Skipping ${lang}: ${reason}`);
+        skippedLanguages.push({ language: lang, reason });
+        continue;
       }
       onStatus(`${binaryLabel} not found. Attempting auto-install...`);
       if (!tryInstallIndexer(config, onStatus)) {
-        throw new Error(
-          `${binaryLabel} is required to index ${lang} but could not be installed.\n` +
-          (config.installUrl ? `Install manually from: ${config.installUrl}` : `Make sure ${binaryLabel} is installed and available on PATH.`),
-        );
+        const reason = `${binaryLabel} could not be auto-installed. ${config.installUrl ? `Install manually from ${config.installUrl}` : `Install ${binaryLabel} and put it on PATH.`}`;
+        onStatus(`Skipping ${lang}: ${reason}`);
+        skippedLanguages.push({ language: lang, reason });
+        continue;
       }
     }
 
     const resolvedBinary = projectLocalBinary ?? resolveIndexerBinary(config);
     if (!resolvedBinary) {
-      throw new Error(
-        `${binaryLabel} is required to index ${lang} but was not found on PATH after installation checks.\n` +
-        (config.installUrl ? `Install manually from: ${config.installUrl}` : `Make sure ${binaryLabel} is installed and available on PATH.`),
-      );
+      const reason = `${binaryLabel} was not found after installation checks.`;
+      onStatus(`Skipping ${lang}: ${reason}`);
+      skippedLanguages.push({ language: lang, reason });
+      continue;
     }
 
     onStatus(`Indexing ${lang} with ${resolvedBinary}...`);
@@ -147,19 +159,41 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      throw new Error(
-        `Failed to index ${lang} with ${resolvedBinary}: ${msg}\n` +
-        `Make sure ${binaryLabel} is installed and available on PATH.`,
-        { cause: err },
-      );
+      const reason = `${resolvedBinary} indexer failed: ${msg.split('\n')[0]}`;
+      onStatus(`Skipping ${lang}: ${reason}`);
+      skippedLanguages.push({ language: lang, reason });
+      continue;
     }
 
     moveDefaultOutputIfNeeded(config, projectRoot, scipPath);
+    indexedOutputs.push({ language: lang, scipPath });
   }
 
-  if (languageOutputs.length > 1) {
-    onStatus(`Merging ${languageOutputs.length} language indexes...`);
-    mergeScipFiles(languageOutputs.map((entry) => entry.scipPath), outputScip);
+  if (indexedOutputs.length === 0) {
+    const detail = skippedLanguages.map((s) => `  - ${s.language}: ${s.reason}`).join('\n');
+    throw new Error(
+      'No language indexers ran successfully. Install at least one indexer for the languages in this project.\n' +
+      detail,
+    );
+  }
+
+  if (skippedLanguages.length > 0) {
+    onStatus(`Indexed ${indexedOutputs.length} of ${languages.length} languages; skipped ${skippedLanguages.map((s) => s.language).join(', ')}.`);
+  }
+
+  // Multi-language project where multiple indexers ran: merge per-language
+  // SCIP files into one. Single-language path already wrote directly to
+  // outputScip. If only one of N expected indexers actually ran, treat its
+  // output as the single SCIP and rename if necessary.
+  if (languages.length > 1) {
+    if (indexedOutputs.length > 1) {
+      onStatus(`Merging ${indexedOutputs.length} language indexes...`);
+      mergeScipFiles(indexedOutputs.map((entry) => entry.scipPath), outputScip);
+    } else if (indexedOutputs[0]!.scipPath !== outputScip) {
+      // Exactly one language indexed in a multi-lang project — promote its
+      // temp file to outputScip so the convert step finds it.
+      renameSync(indexedOutputs[0]!.scipPath, outputScip);
+    }
   }
 
   // Convert SCIP protobuf to SQLite
@@ -188,7 +222,13 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
   const durationMs = Date.now() - start;
   onStatus(`Done in ${(durationMs / 1000).toFixed(1)}s`);
 
-  return { languages, indexPath: outputScip, dbPath: outputDb, durationMs };
+  return {
+    languages: indexedOutputs.map((o) => o.language),
+    indexPath: outputScip,
+    dbPath: outputDb,
+    durationMs,
+    skipped: skippedLanguages,
+  };
 }
 
 export { detectLanguages } from './detect.js';

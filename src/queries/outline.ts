@@ -1,7 +1,6 @@
 import type { ScipDatabase } from '../db.js';
 import type { OutlineNode } from '../types.js';
-import { getDefinitionsForFile, resolveIndexedPaths, type IndexedDefinition } from '../query-support.js';
-import { shortenSymbol } from '../symbol-parser.js';
+import { loadFileSymbols } from '../query-support.js';
 
 /**
  * Build a tree-structured outline of symbols in a file,
@@ -11,23 +10,12 @@ import { shortenSymbol } from '../symbol-parser.js';
  * numbers match `scip symbols` output exactly.
  */
 export function outline(db: ScipDatabase, filePattern: string): OutlineNode[] {
-  const resolvedPaths = resolveIndexedPaths(db, filePattern);
-  if (resolvedPaths.length === 0) {
-    return [];
-  }
-
-  const definitions: IndexedDefinition[] = resolvedPaths
-    .flatMap((relativePath) => getDefinitionsForFile(db, relativePath))
-    .filter((d) => !db.isIgnored(d.relativePath))
-    .sort((a, b) =>
-      a.relativePath.localeCompare(b.relativePath)
-      || a.startLine - b.startLine
-      || a.endLine - b.endLine,
-    );
+  const definitions = loadFileSymbols(db, filePattern, { sort: true });
+  if (definitions.length === 0) return [];
 
   const nodes: OutlineNode[] = definitions.map((d) => ({
     symbol: d.symbol,
-    shortName: shortenSymbol(d.symbol),
+    shortName: d.shortName,
     startLine: d.startLine,
     endLine: d.endLine,
     children: [],

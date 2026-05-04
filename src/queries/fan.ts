@@ -99,15 +99,22 @@ export function topFanIn(
   db: ScipDatabase,
   opts: { limit?: number; scope?: string } = {},
 ): FanResult[] {
+  return fetchTopFanInRows(db, opts).map((r) => ({
+    name: shortenSymbol(r.symbol),
+    count: r.file_count,
+  }));
+}
+
+function fetchTopFanInRows(
+  db: ScipDatabase,
+  opts: { limit?: number; scope?: string },
+): Array<{ symbol: string; file_count: number }> {
   const { limit = 30, scope } = opts;
   const scopeFilter = scope
     ? `AND def_d.relative_path LIKE '%${scope}%'`
     : '';
 
-  const rows = db.all<{
-    symbol: string;
-    file_count: number;
-  }>(
+  return db.all<{ symbol: string; file_count: number }>(
     `SELECT gs.symbol, COUNT(DISTINCT c.document_id) AS file_count
     FROM mentions m
     JOIN chunks c ON m.chunk_id = c.id
@@ -130,11 +137,6 @@ export function topFanIn(
     LIMIT ?`,
     limit,
   );
-
-  return rows.map((r) => ({
-    name: shortenSymbol(r.symbol),
-    count: r.file_count,
-  }));
 }
 
 /**

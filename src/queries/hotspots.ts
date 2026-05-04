@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../db.js';
 import { getAllDefinitions, getCallerRowsForSymbol } from '../query-support.js';
+import type { IndexedDefinition } from '../query-support.js';
 import type { HotspotResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 
@@ -62,19 +63,32 @@ export function hotspots(
     return indexedResults;
   }
 
+  return hotspotsByDefinitionFallback(db, scope, limit);
+}
+
+function hotspotsByDefinitionFallback(
+  db: ScipDatabase,
+  scope: string | undefined,
+  limit: number,
+): HotspotResult[] {
   return getAllDefinitions(db, { scope })
     .filter((definition) => !db.isIgnored(definition.relativePath))
-    .map((definition) => {
-      const callerRows = getCallerRowsForSymbol(db, definition, { limit: 500 });
-      return {
-        symbol: definition.symbol,
-        shortName: shortenSymbol(definition.symbol),
-        refCount: callerRows.length,
-        fileCount: new Set(callerRows.map((row) => row.file)).size,
-        definedIn: definition.relativePath,
-      };
-    })
+    .map((definition) => hotspotRowFor(db, definition))
     .filter((row) => row.refCount > 0)
     .sort((left, right) => right.refCount - left.refCount || right.fileCount - left.fileCount)
     .slice(0, limit);
+}
+
+function hotspotRowFor(
+  db: ScipDatabase,
+  definition: IndexedDefinition,
+): HotspotResult {
+  const callerRows = getCallerRowsForSymbol(db, definition, { limit: 500 });
+  return {
+    symbol: definition.symbol,
+    shortName: shortenSymbol(definition.symbol),
+    refCount: callerRows.length,
+    fileCount: new Set(callerRows.map((row) => row.file)).size,
+    definedIn: definition.relativePath,
+  };
 }

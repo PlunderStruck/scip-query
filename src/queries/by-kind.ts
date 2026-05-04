@@ -103,6 +103,20 @@ for (const [k, v] of Object.entries(KIND_NAMES)) {
 /**
  * Find symbols by SCIP kind (class, interface, enum, function, etc.)
  */
+function resolveKindQuery(kindQuery: string): number | null {
+  const asNum = parseInt(kindQuery, 10);
+  if (!isNaN(asNum)) return asNum;
+
+  const lower = kindQuery.toLowerCase();
+  const exact = KIND_BY_NAME.get(lower);
+  if (exact !== undefined) return exact;
+
+  for (const [name, num] of KIND_BY_NAME) {
+    if (name.includes(lower)) return num;
+  }
+  return null;
+}
+
 export function byKind(
   db: ScipDatabase,
   kindQuery: string,
@@ -110,24 +124,7 @@ export function byKind(
 ): ByKindResult[] {
   const { scope, limit = 100 } = opts;
 
-  // Resolve kind: accept number or name
-  let kindNum: number | null = null;
-  const asNum = parseInt(kindQuery, 10);
-  if (!isNaN(asNum)) {
-    kindNum = asNum;
-  } else {
-    kindNum = KIND_BY_NAME.get(kindQuery.toLowerCase()) ?? null;
-    // Fuzzy match: try partial name
-    if (kindNum === null) {
-      for (const [name, num] of KIND_BY_NAME) {
-        if (name.includes(kindQuery.toLowerCase())) {
-          kindNum = num;
-          break;
-        }
-      }
-    }
-  }
-
+  const kindNum = resolveKindQuery(kindQuery);
   if (kindNum === null) {
     return [];
   }

@@ -19,10 +19,7 @@ export function wrapperCandidates(
 ): WrapperCandidate[] {
   const { scope, maxLoc = 15, limit = 30 } = opts ?? {};
   const reverseFanIn = buildReverseFileFanIn(buildFileDepGraph(db, scope));
-  const symbols = getScopedDefinitions(db, scope)
-    .filter((definition) => !db.isIgnored(definition.relativePath))
-    .filter((definition) => isFunctionLikeSymbol(definition.symbol))
-    .filter((definition) => definitionLoc(definition) <= maxLoc && definitionLoc(definition) >= 2);
+  const symbols = getWrapperCandidateSymbols(db, scope, maxLoc);
 
   // Bulk pre-filter: only process symbols with exactly 1 distinct external
   // caller file. Source-text fallback adds back references the indexer may
@@ -107,6 +104,17 @@ function definitionLoc(
   definition: ReturnType<typeof getDefinitionsForFile>[number],
 ): number {
   return definition.endLine - definition.startLine + 1;
+}
+
+function getWrapperCandidateSymbols(
+  db: ScipDatabase,
+  scope: string | undefined,
+  maxLoc: number,
+): ReturnType<typeof getScopedDefinitions> {
+  return getScopedDefinitions(db, scope)
+    .filter((definition) => !db.isIgnored(definition.relativePath))
+    .filter((definition) => isFunctionLikeSymbol(definition.symbol))
+    .filter((definition) => definitionLoc(definition) <= maxLoc && definitionLoc(definition) >= 2);
 }
 
 /**

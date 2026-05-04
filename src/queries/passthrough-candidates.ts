@@ -17,11 +17,7 @@ export function passthroughCandidates(
   opts?: { scope?: string; maxLoc?: number; limit?: number },
 ): PassthroughCandidate[] {
   const { scope, maxLoc = 15, limit = 30 } = opts ?? {};
-  const symbols = getScopedDefinitions(db, scope)
-    .filter((d) => !db.isIgnored(d.relativePath))
-    .filter((d) => isFunctionLikeSymbol(d.symbol))
-    .filter((d) => definitionLoc(d) >= 3 && definitionLoc(d) <= maxLoc);
-
+  const symbols = getPassthroughCandidateSymbols(db, scope, maxLoc);
   const calleeMap = buildCalleeMap(db, symbols);
 
   const results: PassthroughCandidate[] = [];
@@ -61,6 +57,17 @@ export function passthroughCandidates(
 
   results.sort((a, b) => a.loc - b.loc || a.file.localeCompare(b.file));
   return results.slice(0, limit);
+}
+
+function getPassthroughCandidateSymbols(
+  db: ScipDatabase,
+  scope: string | undefined,
+  maxLoc: number,
+): ReturnType<typeof getDefinitionsForFile> {
+  return getScopedDefinitions(db, scope)
+    .filter((d) => !db.isIgnored(d.relativePath))
+    .filter((d) => isFunctionLikeSymbol(d.symbol))
+    .filter((d) => definitionLoc(d) >= 3 && definitionLoc(d) <= maxLoc);
 }
 
 function definitionLoc(

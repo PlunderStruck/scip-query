@@ -11,7 +11,7 @@ import {
   resolve,
 } from 'node:path';
 import type { ScipDatabase } from './db.js';
-import { detectAstLanguage, getAst, getConstructorBindings, getDetailedCallSites, type SyntaxNode, type Tree } from './ast.js';
+import { detectAstLanguage, getAst, type SyntaxNode, type Tree } from './ast.js';
 import { getSourceText } from './source-text.js';
 
 export interface ParsedSourceImport {
@@ -49,21 +49,8 @@ export interface ParsedReExport {
   endLine: number;
 }
 
-export interface ParsedSourceCall {
-  calleeName: string;
-  receiverName: string | null;
-  line: number;
-}
-
-export interface ParsedSourceBinding {
-  localName: string;
-  typeName: string;
-}
-
 const SOURCE_IMPORT_CACHE = new WeakMap<ScipDatabase, Map<string, ParsedSourceImport[]>>();
 const SOURCE_EXPORT_CACHE = new WeakMap<ScipDatabase, Map<string, ParsedSourceExport[]>>();
-const SOURCE_CALL_CACHE = new WeakMap<ScipDatabase, Map<string, ParsedSourceCall[]>>();
-const SOURCE_BINDING_CACHE = new WeakMap<ScipDatabase, Map<string, ParsedSourceBinding[]>>();
 const INDEXED_PATH_CACHE = new WeakMap<ScipDatabase, Set<string>>();
 
 const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'] as const;
@@ -146,103 +133,6 @@ export function getSourceExports(
   return parsed;
 }
 
-export function getSourceCalls(
-  db: ScipDatabase,
-  relativePath: string,
-  opts: { startLine?: number; endLine?: number } = {},
-): ParsedSourceCall[] {
-  const normalized = normalizePath(relativePath);
-  if (!isPythonSourcePath(normalized) && !isJavaScriptSourcePath(normalized)) {
-    return [];
-  }
-
-  const cache = getCachedMap(SOURCE_CALL_CACHE, db);
-  const key = `${normalized}:${opts.startLine ?? 0}:${opts.endLine ?? Number.MAX_SAFE_INTEGER}`;
-  const cached = cache.get(key);
-  if (cached) {
-    return cached;
-  }
-
-  // AST path: tree-sitter call_expression / new_expression nodes give exact
-  // call attribution with receiver info. No regex tokenization, no false
-  // positives from comment/string content, no missed cases from edge syntax.
-  const detailed = getDetailedCallSites(db, normalized);
-  if (detailed) {
-    const startLine = opts.startLine ?? 0;
-    const endLine = opts.endLine ?? Number.MAX_SAFE_INTEGER;
-    const calls: ParsedSourceCall[] = detailed
-      .filter((c) => c.line >= startLine && c.line <= endLine)
-      .map((c) => ({ calleeName: c.calleeName, receiverName: c.receiverName, line: c.line }));
-    cache.set(key, calls);
-    return calls;
-  }
-
-  const source = getSourceText(db, normalized);
-  if (!source) {
-    cache.set(key, []);
-    return [];
-  }
-
-  const lines = source.split('\n');
-  const startLine = Math.max(0, opts.startLine ?? 0);
-  const endLine = Math.min(lines.length - 1, opts.endLine ?? lines.length - 1);
-  const scopedLines = lines.slice(startLine, endLine + 1);
-  const calls = isPythonSourcePath(normalized)
-    ? parsePythonCalls(scopedLines, startLine)
-    : parseJavaScriptCalls(scopedLines, startLine);
-
-  cache.set(key, calls);
-  return calls;
-}
-
-export function getSourceConstructorBindings(
-  db: ScipDatabase,
-  relativePath: string,
-  opts: { startLine?: number; endLine?: number } = {},
-): ParsedSourceBinding[] {
-  const normalized = normalizePath(relativePath);
-  if (!isPythonSourcePath(normalized) && !isJavaScriptSourcePath(normalized)) {
-    return [];
-  }
-
-  const cache = getCachedMap(SOURCE_BINDING_CACHE, db);
-  const key = `${normalized}:${opts.startLine ?? 0}:${opts.endLine ?? Number.MAX_SAFE_INTEGER}`;
-  const cached = cache.get(key);
-  if (cached) {
-    return cached;
-  }
-
-  // AST path: variable_declarator with new_expression / call_expression value
-  // is the canonical "x is bound to type Foo" pattern. The regex parser had to
-  // hand-write this for each language; AST queries express it once.
-  const astBindings = getConstructorBindings(db, normalized);
-  if (astBindings) {
-    const result: ParsedSourceBinding[] = astBindings.map((b) => ({
-      localName: b.localName,
-      typeName: b.typeName,
-    }));
-    cache.set(key, result);
-    return result;
-  }
-
-  const source = getSourceText(db, normalized);
-  if (!source) {
-    cache.set(key, []);
-    return [];
-  }
-
-  const lines = source.split('\n');
-  const startLine = Math.max(0, opts.startLine ?? 0);
-  const endLine = Math.min(lines.length - 1, opts.endLine ?? lines.length - 1);
-  const scopedLines = lines.slice(startLine, endLine + 1);
-  const bindings = isPythonSourcePath(normalized)
-    ? parsePythonConstructorBindings(scopedLines)
-    : parseJavaScriptConstructorBindings(scopedLines);
-
-  cache.set(key, bindings);
-  return bindings;
-}
-
 export function findIdentifierLines(
   db: ScipDatabase,
   relativePath: string,
@@ -253,31 +143,69 @@ export function findIdentifierLines(
     return [];
   }
 
-  const source = getSourceText(db, normalizePath(relativePath));
+  const normalized = normalizePath(relativePath);
+  const source = getSourceText(db, normalized);
   if (!source) {
     return [];
   }
 
-  const lines = stripCommentsAndStrings(source).split('\n');
+  // Cheap early-exit: if the raw source doesn't even contain the identifier
+  // substring, neither the stripped source nor the AST can either. Saves
+  // both the 8-pass regex strip and the AST walk on every file that doesn't
+  // reference this symbol — the common case for cross-file `refs`.
+  if (source.indexOf(identifier) === -1) {
+    return [];
+  }
+
+  // AST path: getIdentifierLineMap already walks the tree once per file
+  // and caches the result. For the AST-supported languages this is more
+  // accurate than regex (correctly handles raw strings, JSX text, format
+  // string interpolation, nested template literals) AND faster on the
+  // second-and-later identifier lookup in the same file.
+  if (detectAstLanguage(normalized)) {
+    const lineMap = getIdentifierLineMap(db, normalized);
+    const lines = lineMap.get(identifier) ?? [];
+    return lines.filter((line) => !inExcludedRange(line, opts));
+  }
+
+  // Regex fallback for languages without an AST parser.
+  const lines = getStrippedLines(db, normalized, source);
   const regex = new RegExp(`\\b${escapeRegex(identifier)}\\b`);
   const results: number[] = [];
 
   for (let line = 0; line < lines.length; line++) {
-    if (
-      typeof opts.excludeStartLine === 'number'
-      && typeof opts.excludeEndLine === 'number'
-      && line >= opts.excludeStartLine
-      && line <= opts.excludeEndLine
-    ) {
-      continue;
-    }
-
+    if (inExcludedRange(line, opts)) continue;
     if (regex.test(lines[line] ?? '')) {
       results.push(line);
     }
   }
 
   return results;
+}
+
+function inExcludedRange(
+  line: number,
+  opts: { excludeStartLine?: number; excludeEndLine?: number },
+): boolean {
+  return typeof opts.excludeStartLine === 'number'
+    && typeof opts.excludeEndLine === 'number'
+    && line >= opts.excludeStartLine
+    && line <= opts.excludeEndLine;
+}
+
+const STRIPPED_LINES_CACHE = new WeakMap<ScipDatabase, Map<string, { source: string; lines: string[] }>>();
+
+function getStrippedLines(db: ScipDatabase, relativePath: string, source: string): string[] {
+  let perDb = STRIPPED_LINES_CACHE.get(db);
+  if (!perDb) {
+    perDb = new Map();
+    STRIPPED_LINES_CACHE.set(db, perDb);
+  }
+  const cached = perDb.get(relativePath);
+  if (cached && cached.source === source) return cached.lines;
+  const lines = stripCommentsAndStrings(source).split('\n');
+  perDb.set(relativePath, { source, lines });
+  return lines;
 }
 
 /**
@@ -382,44 +310,55 @@ function getReExportsAst(
   const results: ParsedReExport[] = [];
 
   for (const node of tree.rootNode.descendantsOfType('export_statement')) {
-    const str = firstChildOfType(node, 'string');
-    if (!str) continue; // Not a re-export — it's `export const x = ...` etc.
-    const frag = firstChildOfType(str, 'string_fragment');
-    if (!frag) continue;
-    const specifier = frag.text;
-    const sourcePath = resolveImportPath(db, importerPath, specifier);
+    const sourcePath = resolveExportSpecifierSource(db, importerPath, node);
+    if (sourcePath === undefined) continue; // Not a re-export
 
     const startLine = node.startPosition.row;
     const endLine = node.endPosition.row;
-
-    const exportClause = firstChildOfType(node, 'export_clause');
-    if (exportClause) {
-      // `export { a, b as c } from 'x'`
-      const names: string[] = [];
-      for (const spec of exportClause.namedChildren) {
-        if (spec.type !== 'export_specifier') continue;
-        const importedNode = spec.namedChild(0);
-        const aliasNode = spec.namedChild(1);
-        if (!importedNode) continue;
-        // Re-exports surface the LOCAL (post-alias) name to downstream consumers.
-        names.push((aliasNode ?? importedNode).text);
-      }
-      results.push({ kind: 'named', sourcePath, names, startLine, endLine });
-      continue;
-    }
-
-    const namespaceExport = firstChildOfType(node, 'namespace_export');
-    if (namespaceExport) {
-      // `export * as ns from 'x'`
-      results.push({ kind: 'star-as', sourcePath, names: [], startLine, endLine });
-      continue;
-    }
-
-    // `export * from 'x'`
-    results.push({ kind: 'star', sourcePath, names: [], startLine, endLine });
+    const result = parseReExportClause(node, sourcePath, startLine, endLine);
+    results.push(result);
   }
 
   return results;
+}
+
+function resolveExportSpecifierSource(
+  db: ScipDatabase,
+  importerPath: string,
+  node: SyntaxNode,
+): string | null | undefined {
+  const str = firstChildOfType(node, 'string');
+  if (!str) return undefined;
+  const frag = firstChildOfType(str, 'string_fragment');
+  if (!frag) return undefined;
+  return resolveImportPath(db, importerPath, frag.text);
+}
+
+function parseReExportClause(
+  node: SyntaxNode,
+  sourcePath: string | null,
+  startLine: number,
+  endLine: number,
+): ParsedReExport {
+  const exportClause = firstChildOfType(node, 'export_clause');
+  if (exportClause) {
+    const names: string[] = [];
+    for (const spec of exportClause.namedChildren) {
+      if (spec.type !== 'export_specifier') continue;
+      const importedNode = spec.namedChild(0);
+      const aliasNode = spec.namedChild(1);
+      if (!importedNode) continue;
+      names.push((aliasNode ?? importedNode).text);
+    }
+    return { kind: 'named', sourcePath, names, startLine, endLine };
+  }
+
+  const namespaceExport = firstChildOfType(node, 'namespace_export');
+  if (namespaceExport) {
+    return { kind: 'star-as', sourcePath, names: [], startLine, endLine };
+  }
+
+  return { kind: 'star', sourcePath, names: [], startLine, endLine };
 }
 
 function parseJavaScriptImports(
@@ -667,6 +606,13 @@ function parseJvmImports(
   importerPath: string,
   source: string,
 ): ParsedSourceImport[] {
+  const tree = getAst(db, importerPath);
+  const lang = detectAstLanguage(importerPath);
+  if (tree && lang === 'java') return parseJavaImportsAst(db, importerPath, tree);
+  if (tree && lang === 'kotlin') return parseKotlinImportsAst(db, importerPath, tree);
+  if (tree && lang === 'scala') return parseScalaImportsAst(db, importerPath, tree);
+
+  // Regex fallback (used only when tree-sitter parse fails on the source).
   const statements: ParsedSourceImport[] = [];
   for (const match of source.matchAll(/^[ \t]*import\s+(?:static\s+)?(.+?)\s*;?$/gm)) {
     const clause = match[1]?.trim();
@@ -676,6 +622,172 @@ function parseJvmImports(
     statements.push(...parseJvmImportClause(db, importerPath, clause, body));
   }
   return statements;
+}
+
+function parseJavaImportsAst(
+  db: ScipDatabase,
+  importerPath: string,
+  tree: Tree,
+): ParsedSourceImport[] {
+  const usedNames = collectIdentifiersOutside(tree, new Set(['import_declaration']));
+  const results: ParsedSourceImport[] = [];
+
+  for (const decl of tree.rootNode.descendantsOfType('import_declaration')) {
+    const isWildcard = decl.children.some((c) => c.type === 'asterisk');
+    const scoped = decl.namedChildren.find((c) => c.type === 'scoped_identifier');
+    const target = scoped ?? decl.namedChildren.find((c) => c.type === 'identifier');
+    if (!target) continue;
+    const qualified = target.text;
+
+    if (isWildcard) {
+      // `import foo.bar.*;` — namespace import, no specific imported name to track.
+      results.push({
+        importedName: '*',
+        localName: null,
+        sourcePath: resolveQualifiedImportPath(db, qualified, JVM_SOURCE_EXTENSIONS),
+        kind: 'namespace',
+        used: true,
+        usedMembers: [],
+      });
+      continue;
+    }
+
+    const importedName = qualified.split('.').pop() ?? qualified;
+    results.push({
+      importedName,
+      localName: importedName,
+      sourcePath: resolveQualifiedImportPath(db, qualified, JVM_SOURCE_EXTENSIONS),
+      kind: 'named',
+      used: usedNames.has(importedName),
+      usedMembers: [],
+    });
+  }
+  return results;
+}
+
+function parseKotlinImportsAst(
+  db: ScipDatabase,
+  importerPath: string,
+  tree: Tree,
+): ParsedSourceImport[] {
+  const usedNames = collectIdentifiersOutside(tree, new Set(['import_header', 'import_list']));
+  const results: ParsedSourceImport[] = [];
+
+  for (const header of tree.rootNode.descendantsOfType('import_header')) {
+    const ident = header.namedChildren.find((c) => c.type === 'identifier');
+    if (!ident) continue;
+    const wildcard = header.namedChildren.some((c) => c.type === 'wildcard_import');
+    const aliasNode = header.namedChildren.find((c) => c.type === 'import_alias');
+
+    if (wildcard) {
+      results.push({
+        importedName: '*',
+        localName: null,
+        sourcePath: resolveQualifiedImportPath(db, ident.text, JVM_SOURCE_EXTENSIONS),
+        kind: 'namespace',
+        used: true,
+        usedMembers: [],
+      });
+      continue;
+    }
+
+    const qualified = ident.text;
+    const importedName = qualified.split('.').pop() ?? qualified;
+    const aliasName = aliasNode?.namedChild(0)?.text;
+    const localName = aliasName ?? importedName;
+
+    results.push({
+      importedName,
+      localName,
+      sourcePath: resolveQualifiedImportPath(db, qualified, JVM_SOURCE_EXTENSIONS),
+      kind: 'named',
+      used: usedNames.has(localName),
+      usedMembers: [],
+    });
+  }
+  return results;
+}
+
+function parseScalaImportsAst(
+  db: ScipDatabase,
+  importerPath: string,
+  tree: Tree,
+): ParsedSourceImport[] {
+  const usedNames = collectIdentifiersOutside(tree, new Set(['import_declaration']));
+  const results: ParsedSourceImport[] = [];
+
+  for (const decl of tree.rootNode.descendantsOfType('import_declaration')) {
+    // import_declaration has named children for the path segments (identifiers)
+    // plus an optional namespace_selectors / namespace_wildcard at the tail.
+    const tailSelector = decl.namedChildren.find(
+      (c) => c.type === 'namespace_selectors' || c.type === 'namespace_wildcard',
+    );
+    const pathSegments = decl.namedChildren.filter(
+      (c) => c !== tailSelector && (c.type === 'identifier' || c.type === 'stable_identifier'),
+    );
+    const prefix = pathSegments.map((s) => s.text).join('.');
+    if (!prefix) continue;
+
+    if (tailSelector?.type === 'namespace_wildcard') {
+      results.push({
+        importedName: '*',
+        localName: null,
+        sourcePath: resolveQualifiedImportPath(db, prefix, JVM_SOURCE_EXTENSIONS),
+        kind: 'namespace',
+        used: true,
+        usedMembers: [],
+      });
+      continue;
+    }
+
+    if (tailSelector?.type === 'namespace_selectors') {
+      for (const sel of tailSelector.namedChildren) {
+        if (sel.type === 'arrow_renamed_identifier') {
+          const [orig, alias] = sel.namedChildren;
+          if (!orig) continue;
+          const importedName = orig.text;
+          const localName = alias?.text ?? importedName;
+          if (importedName === '_') continue;
+          results.push({
+            importedName,
+            localName,
+            sourcePath: resolveQualifiedImportPath(db, `${prefix}.${importedName}`, JVM_SOURCE_EXTENSIONS),
+            kind: 'named',
+            used: usedNames.has(localName),
+            usedMembers: [],
+          });
+        } else if (sel.type === 'identifier') {
+          const importedName = sel.text;
+          results.push({
+            importedName,
+            localName: importedName,
+            sourcePath: resolveQualifiedImportPath(db, `${prefix}.${importedName}`, JVM_SOURCE_EXTENSIONS),
+            kind: 'named',
+            used: usedNames.has(importedName),
+            usedMembers: [],
+          });
+        }
+      }
+      continue;
+    }
+
+    // Bare `import x.Y` — last segment is the imported name.
+    const importedName = pathSegments[pathSegments.length - 1]?.text ?? prefix;
+    const qualifiedPrefix = pathSegments.slice(0, -1).map((s) => s.text).join('.') || prefix;
+    results.push({
+      importedName,
+      localName: importedName,
+      sourcePath: resolveQualifiedImportPath(
+        db,
+        qualifiedPrefix && pathSegments.length > 1 ? `${qualifiedPrefix}.${importedName}` : prefix,
+        JVM_SOURCE_EXTENSIONS,
+      ),
+      kind: 'named',
+      used: usedNames.has(importedName),
+      usedMembers: [],
+    });
+  }
+  return results;
 }
 
 function parseJvmImportClause(
@@ -890,7 +1002,8 @@ export function getFileIdentifiers(
   const cached = cache.get(relativePath);
   if (cached) return cached;
 
-  const result = computeFileIdentifiers(db, relativePath);
+  // Derive from the line-map walk so we don't pay the AST traversal twice.
+  const result = new Set(getIdentifierLineMap(db, relativePath).keys());
   cache.set(relativePath, result);
   return result;
 }
@@ -1015,44 +1128,6 @@ function computeIdentifierLineMap(
   return out;
 }
 
-function computeFileIdentifiers(
-  db: ScipDatabase,
-  relativePath: string,
-): Set<string> {
-  if (detectAstLanguage(relativePath)) {
-    const tree = getAst(db, relativePath);
-    if (tree) {
-      const lang = detectAstLanguage(relativePath);
-      // Rust: also harvest type identifiers and field identifiers as references.
-      // TS/JS: same — references include `property_identifier`, `type_identifier`.
-      // Python: just `identifier`.
-      const identifierTypes = lang === 'rust'
-        ? new Set(['identifier', 'type_identifier', 'field_identifier'])
-        : lang === 'python'
-          ? new Set(['identifier'])
-          : new Set(['identifier', 'property_identifier', 'type_identifier']);
-      const out = new Set<string>();
-      const walk = (node: SyntaxNode): void => {
-        if (identifierTypes.has(node.type)) out.add(node.text);
-        for (const child of node.children) walk(child);
-      };
-      walk(tree.rootNode);
-      return out;
-    }
-  }
-
-  // Fallback: regex tokenize with comments/strings stripped.
-  const source = getSourceText(db, relativePath);
-  if (!source) return new Set();
-  const stripped = stripCommentsAndStrings(source);
-  const out = new Set<string>();
-  const re = /\b([A-Za-z_$][\w$]*)\b/g;
-  for (const match of stripped.matchAll(re)) {
-    if (match[1]) out.add(match[1]);
-  }
-  return out;
-}
-
 function parseRustUseClause(
   db: ScipDatabase,
   importerPath: string,
@@ -1104,6 +1179,11 @@ function parseRustExports(
   importerPath: string,
   source: string,
 ): ParsedSourceExport[] {
+  const tree = getAst(db, importerPath);
+  if (tree) {
+    return parseRustExportsAst(db, importerPath, tree);
+  }
+  // Regex fallback for files where tree-sitter can't parse the source.
   const statements: ParsedSourceExport[] = [];
   for (const match of source.matchAll(/^[ \t]*pub\s+use\s+(.+?)\s*;$/gm)) {
     const clause = match[1]?.trim();
@@ -1111,6 +1191,39 @@ function parseRustExports(
     statements.push(...parseRustExportClause(db, importerPath, clause));
   }
   return statements;
+}
+
+function parseRustExportsAst(
+  db: ScipDatabase,
+  importerPath: string,
+  tree: Tree,
+): ParsedSourceExport[] {
+  const results: ParsedSourceExport[] = [];
+
+  for (const useDecl of tree.rootNode.descendantsOfType('use_declaration')) {
+    // Only `pub use ...` re-exports, not plain `use`.
+    if (!hasPubVisibility(useDecl)) continue;
+
+    // The use-tree root is the first named child after any `pub`/visibility
+    // modifier. flattenRustUseTree handles braced lists, aliases, globs,
+    // nested paths.
+    const root = useDecl.namedChildren.find((c) => c.type !== 'visibility_modifier');
+    if (!root) continue;
+
+    for (const leaf of flattenRustUseTree(root, '')) {
+      if (!leaf.importedName) continue;
+      results.push(buildRustExport(db, importerPath, leaf.qualifiedName));
+    }
+  }
+
+  return results;
+}
+
+function hasPubVisibility(node: SyntaxNode): boolean {
+  for (const child of node.children) {
+    if (child.type === 'visibility_modifier' && child.text.startsWith('pub')) return true;
+  }
+  return false;
 }
 
 function parseRustExportClause(
@@ -1151,6 +1264,10 @@ function parseRubyImports(
   importerPath: string,
   source: string,
 ): ParsedSourceImport[] {
+  const tree = getAst(db, importerPath);
+  if (tree) return parseRubyImportsAst(db, importerPath, tree);
+
+  // Regex fallback (only when tree-sitter parse fails on the source).
   const statements: ParsedSourceImport[] = [];
   for (const match of source.matchAll(/^[ \t]*(require_relative|require)\s+["']([^"']+)["']\s*$/gm)) {
     const kind = match[1];
@@ -1187,6 +1304,55 @@ function parseRubyImports(
   return statements;
 }
 
+function parseRubyImportsAst(
+  db: ScipDatabase,
+  importerPath: string,
+  tree: Tree,
+): ParsedSourceImport[] {
+  const usedNames = collectIdentifiersOutside(tree, new Set([]));
+  const results: ParsedSourceImport[] = [];
+  const REQUIRE_KINDS = new Set(['require', 'require_relative', 'load']);
+
+  for (const call of tree.rootNode.descendantsOfType('call')) {
+    const method = call.namedChild(0);
+    if (!method || method.type !== 'identifier') continue;
+    if (!REQUIRE_KINDS.has(method.text)) continue;
+
+    const args = call.namedChildren.find((c) => c.type === 'argument_list');
+    const firstArg = args?.namedChild(0);
+    if (!firstArg || firstArg.type !== 'string') continue;
+    const fragment = firstArg.namedChildren.find((c) => c.type === 'string_content');
+    const specifier = fragment?.text;
+    if (!specifier) continue;
+
+    const sourcePath = method.text === 'require_relative'
+      ? resolveRubyImportPath(db, importerPath, specifier)
+      : null;
+
+    if (sourcePath) {
+      const localName = rubyConstantName(specifier);
+      results.push({
+        importedName: localName,
+        localName,
+        sourcePath,
+        kind: 'named',
+        used: usedNames.has(localName),
+        usedMembers: [],
+      });
+    } else {
+      results.push({
+        importedName: specifier,
+        localName: null,
+        sourcePath,
+        kind: 'side-effect',
+        used: true,
+        usedMembers: [],
+      });
+    }
+  }
+  return results;
+}
+
 function rubyConstantName(specifier: string): string {
   return basename(specifier)
     .replace(/\.[^.]+$/, '')
@@ -1201,6 +1367,10 @@ function parseCLikeImports(
   importerPath: string,
   source: string,
 ): ParsedSourceImport[] {
+  const tree = getAst(db, importerPath);
+  if (tree) return parseCLikeImportsAst(db, importerPath, tree);
+
+  // Regex fallback (only when tree-sitter parse fails on the source).
   const statements: ParsedSourceImport[] = [];
   for (const match of source.matchAll(/^[ \t]*#include\s+[<"]([^">]+)[">]\s*$/gm)) {
     const specifier = match[1]?.trim();
@@ -1220,11 +1390,55 @@ function parseCLikeImports(
   return statements;
 }
 
+function parseCLikeImportsAst(
+  db: ScipDatabase,
+  importerPath: string,
+  tree: Tree,
+): ParsedSourceImport[] {
+  const usedNames = collectIdentifiersOutside(tree, new Set(['preproc_include']));
+  const results: ParsedSourceImport[] = [];
+
+  for (const inc of tree.rootNode.descendantsOfType('preproc_include')) {
+    // System headers: `#include <stdio.h>` → `system_lib_string` child whose
+    // text includes the angle brackets. Local headers: `#include "foo.h"` →
+    // `string_literal` with a `string_content` child holding the filename.
+    let specifier: string | null = null;
+    for (const child of inc.namedChildren) {
+      if (child.type === 'system_lib_string') {
+        specifier = child.text.replace(/^<|>$/g, '');
+        break;
+      }
+      if (child.type === 'string_literal') {
+        const frag = child.namedChildren.find((c) => c.type === 'string_content');
+        specifier = frag?.text ?? child.text.replace(/^"|"$/g, '');
+        break;
+      }
+    }
+    if (!specifier) continue;
+
+    const localName = basename(specifier).replace(/\.[^.]+$/, '');
+    results.push({
+      importedName: specifier,
+      localName,
+      sourcePath: resolveCLikeImportPath(db, importerPath, specifier),
+      kind: 'named',
+      used: usedNames.has(localName),
+      usedMembers: [],
+    });
+  }
+  return results;
+}
+
 function parseDotNetImports(
   db: ScipDatabase,
   importerPath: string,
   source: string,
 ): ParsedSourceImport[] {
+  const tree = getAst(db, importerPath);
+  const lang = detectAstLanguage(importerPath);
+  if (tree && lang === 'csharp') return parseCSharpImportsAst(db, importerPath, tree);
+  if (tree && lang === 'vb') return parseVbImportsAst(db, importerPath, tree);
+
   const statements: ParsedSourceImport[] = [];
   const lineRegex = isVisualBasicSourcePath(importerPath)
     ? /^[ \t]*Imports\s+(.+?)\s*$/gm
@@ -1258,6 +1472,85 @@ function parseDotNetImports(
   }
 
   return statements;
+}
+
+function parseVbImportsAst(
+  db: ScipDatabase,
+  importerPath: string,
+  tree: Tree,
+): ParsedSourceImport[] {
+  const usedNames = collectIdentifiersOutside(tree, new Set(['imports_statement']));
+  const results: ParsedSourceImport[] = [];
+
+  for (const stmt of tree.rootNode.descendantsOfType('imports_statement')) {
+    // `Imports System` and `Imports System.IO`:
+    //   imports_statement → namespace_name (target)
+    // `Imports vb = System.Linq` (alias) parses as:
+    //   imports_statement → ERROR("vb =") namespace_name(vb) namespace_name(System.Linq)
+    // We pick the LAST namespace_name as the target (after the alias if any).
+    const namespaceNodes = stmt.namedChildren.filter((c) => c.type === 'namespace_name');
+    if (namespaceNodes.length === 0) continue;
+    const target = namespaceNodes[namespaceNodes.length - 1]!;
+    const aliasNode = namespaceNodes.length > 1 ? namespaceNodes[0]! : null;
+
+    const qualified = target.text;
+    const importedName = qualified.split('.').pop() ?? qualified;
+    const localName = aliasNode?.text ?? importedName;
+
+    results.push({
+      importedName,
+      localName,
+      sourcePath: resolveQualifiedImportPath(db, qualified, DOTNET_SOURCE_EXTENSIONS),
+      kind: aliasNode ? 'namespace' : 'named',
+      used: usedNames.has(localName),
+      usedMembers: [],
+    });
+  }
+  return results;
+}
+
+function parseCSharpImportsAst(
+  db: ScipDatabase,
+  importerPath: string,
+  tree: Tree,
+): ParsedSourceImport[] {
+  const usedNames = collectIdentifiersOutside(tree, new Set(['using_directive']));
+  const results: ParsedSourceImport[] = [];
+
+  for (const directive of tree.rootNode.descendantsOfType('using_directive')) {
+    // Three shapes:
+    //   using System;                  → identifier OR qualified_name
+    //   using static System.Math;      → same, with `static` keyword child
+    //   using Alias = System.Linq;     → `identifier` (alias) + `qualified_name` target
+    const namedChildren = directive.namedChildren;
+    if (namedChildren.length === 0) continue;
+
+    let aliasNode: SyntaxNode | null = null;
+    let targetNode: SyntaxNode | null = null;
+
+    if (namedChildren.length >= 2 && namedChildren[0]!.type === 'identifier'
+        && (namedChildren[1]!.type === 'qualified_name' || namedChildren[1]!.type === 'identifier')) {
+      aliasNode = namedChildren[0]!;
+      targetNode = namedChildren[1]!;
+    } else {
+      targetNode = namedChildren[namedChildren.length - 1]!;
+    }
+    if (!targetNode) continue;
+
+    const qualified = targetNode.text;
+    const importedName = qualified.split('.').pop() ?? qualified;
+    const localName = aliasNode?.text ?? importedName;
+
+    results.push({
+      importedName,
+      localName,
+      sourcePath: resolveQualifiedImportPath(db, qualified, DOTNET_SOURCE_EXTENSIONS),
+      kind: aliasNode ? 'namespace' : 'named',
+      used: usedNames.has(localName),
+      usedMembers: [],
+    });
+  }
+  return results;
 }
 
 function parseDartImports(
@@ -1306,6 +1599,10 @@ function parsePhpImports(
   importerPath: string,
   source: string,
 ): ParsedSourceImport[] {
+  const tree = getAst(db, importerPath);
+  if (tree) return parsePhpImportsAst(db, importerPath, tree);
+
+  // Regex fallback (only when tree-sitter parse fails).
   const statements: ParsedSourceImport[] = [];
   for (const match of source.matchAll(/^[ \t]*use\s+(.+?)\s*;$/gm)) {
     const clause = match[1]?.trim();
@@ -1333,6 +1630,70 @@ function parsePhpImports(
   return statements;
 }
 
+function parsePhpImportsAst(
+  db: ScipDatabase,
+  importerPath: string,
+  tree: Tree,
+): ParsedSourceImport[] {
+  const usedNames = collectIdentifiersOutside(tree, new Set(['namespace_use_declaration']));
+  const results: ParsedSourceImport[] = [];
+
+  const emit = (qualified: string, importedName: string, localName: string): void => {
+    results.push({
+      importedName,
+      localName,
+      sourcePath: resolveQualifiedImportPath(db, qualified.replace(/\\/g, '.'), PHP_SOURCE_EXTENSIONS),
+      kind: 'named',
+      used: usedNames.has(localName),
+      usedMembers: [],
+    });
+  };
+
+  for (const decl of tree.rootNode.descendantsOfType('namespace_use_declaration')) {
+    const group = decl.namedChildren.find((c) => c.type === 'namespace_use_group');
+    if (group) {
+      // `use Ns\{Foo, Bar as Baz};` — group import with shared prefix.
+      const prefix = decl.namedChildren.find((c) => c.type === 'namespace_name')?.text ?? '';
+      for (const clause of group.namedChildren) {
+        if (clause.type !== 'namespace_use_clause') continue;
+        const { importedName, localName, qualified } = phpUseClauseTarget(clause, prefix);
+        if (!importedName) continue;
+        emit(qualified, importedName, localName);
+      }
+      continue;
+    }
+
+    // `use App\Foo;` or `use App\Foo as Bar;` — single clause(s) at the top level.
+    for (const clause of decl.namedChildren) {
+      if (clause.type !== 'namespace_use_clause') continue;
+      const { importedName, localName, qualified } = phpUseClauseTarget(clause, '');
+      if (!importedName) continue;
+      emit(qualified, importedName, localName);
+    }
+  }
+  return results;
+}
+
+function phpUseClauseTarget(
+  clause: SyntaxNode,
+  prefix: string,
+): { importedName: string; localName: string; qualified: string } {
+  const qualifiedNode = clause.namedChildren.find((c) => c.type === 'qualified_name');
+  const nameNodes = clause.namedChildren.filter((c) => c.type === 'name');
+
+  let basePath = '';
+  if (qualifiedNode) {
+    basePath = qualifiedNode.text;
+  } else if (nameNodes.length >= 1) {
+    basePath = nameNodes[0]!.text;
+  }
+  const aliasNode = qualifiedNode && nameNodes.length > 0 ? nameNodes[nameNodes.length - 1] : null;
+  const importedName = basePath.split('\\').pop() ?? basePath;
+  const localName = aliasNode?.text ?? importedName;
+  const qualified = prefix ? `${prefix}\\${basePath}` : basePath;
+  return { importedName, localName, qualified };
+}
+
 function buildSimpleImport(
   db: ScipDatabase,
   importerPath: string,
@@ -1352,171 +1713,6 @@ function buildSimpleImport(
   };
 }
 
-function parsePythonCalls(lines: string[], baseLine: number): ParsedSourceCall[] {
-  const calls: ParsedSourceCall[] = [];
-  const controlKeywords = new Set([
-    'if',
-    'for',
-    'while',
-    'with',
-    'except',
-    'elif',
-    'return',
-    'yield',
-    'assert',
-    'raise',
-    'lambda',
-    'class',
-    'def',
-  ]);
-
-  for (let index = 0; index < lines.length; index++) {
-    const rawLine = lines[index] ?? '';
-    const stripped = stripCommentsAndStrings(rawLine);
-    if (!stripped.trim()) continue;
-
-    const attributeMatches = [...stripped.matchAll(/\b([A-Za-z_][\w]*)\s*\.\s*([A-Za-z_][\w]*)\s*\(/g)];
-    const attributeRanges = attributeMatches.map((match) => ({
-      start: match.index ?? -1,
-      end: (match.index ?? -1) + match[0].length,
-    }));
-
-    for (const match of attributeMatches) {
-      const receiverName = match[1];
-      const calleeName = match[2];
-      if (!receiverName || !calleeName) continue;
-      calls.push({
-        receiverName,
-        calleeName,
-        line: baseLine + index,
-      });
-    }
-
-    for (const match of stripped.matchAll(/\b([A-Za-z_][\w]*)\s*\(/g)) {
-      const calleeName = match[1];
-      const start = match.index ?? -1;
-      if (!calleeName || start < 0) continue;
-      if (controlKeywords.has(calleeName)) continue;
-      if (attributeRanges.some((range) => start >= range.start && start < range.end)) continue;
-
-      const prefix = stripped.slice(0, start).trimEnd();
-      if (prefix.endsWith('def') || prefix.endsWith('class') || prefix.endsWith('async def')) {
-        continue;
-      }
-
-      calls.push({
-        receiverName: null,
-        calleeName,
-        line: baseLine + index,
-      });
-    }
-  }
-
-  return calls;
-}
-
-function parseJavaScriptCalls(lines: string[], baseLine: number): ParsedSourceCall[] {
-  const calls: ParsedSourceCall[] = [];
-  const controlKeywords = new Set([
-    'if',
-    'for',
-    'while',
-    'switch',
-    'catch',
-    'function',
-    'class',
-    'return',
-    'typeof',
-    'import',
-  ]);
-
-  for (let index = 0; index < lines.length; index++) {
-    const stripped = stripCommentsAndStrings(lines[index] ?? '');
-    if (!stripped.trim()) continue;
-
-    const attributeMatches = [
-      ...stripped.matchAll(/\b([A-Za-z_$][\w$]*)\s*(?:\?\.|\.)\s*([A-Za-z_$][\w$]*)\s*\(/g),
-      ...stripped.matchAll(/\bthis\s*(?:\?\.|\.)\s*([A-Za-z_$][\w$]*)\s*\(/g),
-    ];
-    const attributeRanges = attributeMatches.map((match) => ({
-      start: match.index ?? -1,
-      end: (match.index ?? -1) + match[0].length,
-    }));
-
-    for (const match of attributeMatches) {
-      const receiverName = match[2] ? match[1] : 'this';
-      const calleeName = match[2] ?? match[1];
-      if (!receiverName || !calleeName) continue;
-      calls.push({
-        receiverName,
-        calleeName,
-        line: baseLine + index,
-      });
-    }
-
-    for (const match of stripped.matchAll(/\b([A-Za-z_$][\w$]*)\s*\(/g)) {
-      const calleeName = match[1];
-      const start = match.index ?? -1;
-      if (!calleeName || start < 0) continue;
-      if (controlKeywords.has(calleeName)) continue;
-      if (attributeRanges.some((range) => start >= range.start && start < range.end)) continue;
-
-      const prefix = stripped.slice(0, start).trimEnd();
-      if (
-        prefix.endsWith('function')
-        || prefix.endsWith('class')
-        || prefix.endsWith('new')
-      ) {
-        continue;
-      }
-
-      calls.push({
-        receiverName: null,
-        calleeName,
-        line: baseLine + index,
-      });
-    }
-  }
-
-  return calls;
-}
-
-function parsePythonConstructorBindings(lines: string[]): ParsedSourceBinding[] {
-  const bindings = new Map<string, string>();
-
-  for (const rawLine of lines) {
-    const stripped = stripCommentsAndStrings(rawLine);
-    const constructorMatch = stripped.match(/\b([A-Za-z_][\w]*)\s*=\s*([A-Z][\w]*)\s*\(/);
-    if (constructorMatch?.[1] && constructorMatch[2]) {
-      bindings.set(constructorMatch[1], constructorMatch[2]);
-    }
-  }
-
-  return [...bindings.entries()].map(([localName, typeName]) => ({ localName, typeName }));
-}
-
-function parseJavaScriptConstructorBindings(lines: string[]): ParsedSourceBinding[] {
-  const bindings = new Map<string, string>();
-
-  for (const rawLine of lines) {
-    const stripped = stripCommentsAndStrings(rawLine);
-
-    for (const match of stripped.matchAll(/\b([A-Za-z_$][\w$]*)\s*:\s*([A-Z][A-Za-z0-9_$]*)\b/g)) {
-      const localName = match[1];
-      const typeName = match[2];
-      if (localName && typeName) {
-        bindings.set(localName, typeName);
-      }
-    }
-
-    const constructorMatch = stripped.match(/\b(?:const|let|var)?\s*([A-Za-z_$][\w$]*)\s*(?::\s*[A-Z][A-Za-z0-9_$<> ,]*)?\s*=\s*new\s+([A-Z][A-Za-z0-9_$]*)\s*\(/);
-    if (constructorMatch?.[1] && constructorMatch[2]) {
-      bindings.set(constructorMatch[1], constructorMatch[2]);
-    }
-  }
-
-  return [...bindings.entries()].map(([localName, typeName]) => ({ localName, typeName }));
-}
 
 function parsePythonImports(
   db: ScipDatabase,
@@ -1939,6 +2135,10 @@ function collectNamespaceMembers(body: string, namespaceName: string): string[] 
   return [...members];
 }
 
+function isQualifiedDotImportPath(path: string): boolean {
+  return isJvmSourcePath(path) || isDotNetSourcePath(path) || isPhpSourcePath(path);
+}
+
 export function resolveImportPath(
   db: ScipDatabase,
   importerPath: string,
@@ -1960,7 +2160,7 @@ export function resolveImportPath(
     return resolveCLikeImportPath(db, importerPath, specifier);
   }
 
-  if (isJvmSourcePath(importerPath) || isDotNetSourcePath(importerPath) || isPhpSourcePath(importerPath)) {
+  if (isQualifiedDotImportPath(importerPath)) {
     return resolveQualifiedImportPath(db, specifier.replace(/\\/g, '.'), extensionFamilyFor(importerPath));
   }
 

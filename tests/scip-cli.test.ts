@@ -8,8 +8,23 @@ async function loadScipCli(opts: {
   isBinaryAvailable?: (name: string) => boolean;
   execFileSync?: (...args: any[]) => any;
 }) {
-  const execFileSync = opts.execFileSync ?? vi.fn(() => Buffer.from(''));
-  const isBinaryAvailable = vi.fn(opts.isBinaryAvailable ?? (() => false));
+  const userIsBinary = opts.isBinaryAvailable;
+  const userExec = opts.execFileSync;
+  const isBinaryAvailable = vi.fn(userIsBinary ?? (() => false));
+  // scip-cli.ts inlines an `isBinaryAvailable` helper that calls
+  // `execFileSync('which'|'where', [name])`. When a test customizes
+  // isBinaryAvailable, route which/where probes through the mock so the
+  // helper's return value is driven by the test. Otherwise defer to the
+  // test's execFileSync (or the no-op default) so unrelated tests keep
+  // their existing behavior.
+  const execFileSync = vi.fn((cmd: string, args: readonly string[], ...rest: any[]) => {
+    if (userIsBinary && (cmd === 'which' || cmd === 'where') && Array.isArray(args)) {
+      if (isBinaryAvailable(args[0]!)) return Buffer.from('');
+      throw new Error(`${args[0]} not found`);
+    }
+    if (userExec) return userExec(cmd, args, ...rest);
+    return Buffer.from('');
+  });
 
   vi.resetModules();
   vi.doMock('node:os', () => ({
@@ -18,9 +33,6 @@ async function loadScipCli(opts: {
   }));
   vi.doMock('node:child_process', () => ({
     execFileSync,
-  }));
-  vi.doMock('../src/reindex/install.js', () => ({
-    isBinaryAvailable,
   }));
 
   const mod = (await import('../src/scip-cli.js')) as ScipCliModule;

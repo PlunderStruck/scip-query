@@ -1,30 +1,7 @@
 import type { ScipDatabase } from '../db.js';
 import type { SymbolResult } from '../types.js';
-import { getDefinitionsForFile, resolveIndexedPaths } from '../query-support.js';
-import { shortenSymbol } from '../symbol-parser.js';
-import { cleanSignature, extractSignature } from './clean-signature.js';
+import { loadFileSymbols } from '../query-support.js';
 
 export function symbols(db: ScipDatabase, filePattern: string): SymbolResult[] {
-  const resolvedPaths = resolveIndexedPaths(db, filePattern);
-  if (resolvedPaths.length === 0) {
-    return [];
-  }
-
-  return resolvedPaths
-    .flatMap((relativePath) => getDefinitionsForFile(db, relativePath))
-    .filter((row) => !db.isIgnored(row.relativePath))
-    .map((row) => {
-      const docRow = db.get<{ documentation: string | null }>(
-        'SELECT documentation FROM global_symbols WHERE id = ?',
-        row.symbolId,
-      );
-
-      return {
-        startLine: row.startLine,
-        endLine: row.endLine,
-        symbol: row.symbol,
-        shortName: shortenSymbol(row.symbol),
-        signature: cleanSignature(extractSignature(docRow?.documentation ?? null)),
-      };
-    });
+  return loadFileSymbols(db, filePattern).map(({ relativePath: _r, ...rest }) => rest);
 }

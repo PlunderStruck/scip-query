@@ -91,7 +91,7 @@ export function extractCandidates(
     // Score each cluster by isolation:
     // isolation = 1 - (edges to other clusters / total possible edges to other clusters)
     const scoredClusters = clusters
-      .filter((c) => c.size >= 2) // single-callee clusters aren't interesting
+      .filter((c) => c.size >= 3) // 1- or 2-callee clusters aren't worth extracting
       .map((cluster) => {
         const otherCallees = new Set<string>();
         for (const c of clusters) {

@@ -217,11 +217,14 @@ export function health(
   const realCycleCount = cycleResult.filter((c) => c.kind === 'real').length;
   score -= Math.min(15, realCycleCount * 5);
 
-  // Similar pairs: only count true logic overlap, not boilerplate
-  score -= Math.min(10, trueSimilarCount * 2);
+  // Similar pairs: scale with codebase size so a small project with 5 pairs
+  // isn't graded the same as a 5000-symbol project with 5 pairs.
+  const similarPerMille = trueSimilarCount / symbolCount * 1000;
+  score -= Math.min(10, Math.round(similarPerMille));
 
-  // Extract candidates: mild penalty
-  score -= Math.min(5, extractResult.length * 2);
+  // Extract candidates: percentage-based for the same reason.
+  const extractPerMille = extractResult.length / symbolCount * 1000;
+  score -= Math.min(5, Math.round(extractPerMille / 2));
 
   // Wrappers: mild
   score -= Math.min(3, wrapperResult.length);

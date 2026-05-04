@@ -9,51 +9,11 @@ import { isModuleLikeSymbol, leafName, shortenSymbol } from '../symbol-parser.js
  * Uses role=2 (import) from the SCIP mentions table.
  */
 export function imports(db: ScipDatabase, filePattern: string): ImportResult[] {
-  const importer = resolveIndexedFile(db, filePattern);
-  if (!importer) return [];
-
-  const rows = db.all<{
-    symbol: string;
-    from_file: string;
-    importer: string;
-  }>(
-    `SELECT DISTINCT gs.symbol, def_d.relative_path AS from_file, imp_d.relative_path AS importer
-    FROM mentions m
-    JOIN chunks c ON m.chunk_id = c.id
-    JOIN documents imp_d ON c.document_id = imp_d.id
-    JOIN global_symbols gs ON m.symbol_id = gs.id
-    LEFT JOIN (
-      SELECT m2.symbol_id, c2.document_id
-      FROM mentions m2
-      JOIN chunks c2 ON m2.chunk_id = c2.id
-      WHERE m2.role = 1
-      GROUP BY m2.symbol_id
-    ) sym_def ON sym_def.symbol_id = gs.id
-    LEFT JOIN documents def_d ON sym_def.document_id = def_d.id
-    WHERE imp_d.relative_path = ?
-      AND m.role = 2
-    ORDER BY def_d.relative_path, gs.symbol`,
-    importer,
-  );
-
-  const indexedResults = rows
-    .filter((row) => !db.isIgnored(row.importer))
-    .map((r) => ({
-      symbol: r.symbol,
-      shortName: shortenSymbol(r.symbol),
-      fromFile: r.from_file ?? '(external)',
-    }));
-
-  if (indexedResults.length > 0) {
-    return indexedResults;
-  }
-
-  return getSourceImports(db, importer)
-    .map((entry) => ({
-      symbol: renderImportSymbol(entry.importedName, entry.localName, entry.kind),
-      shortName: renderImportSymbol(entry.importedName, entry.localName, entry.kind),
-      fromFile: entry.sourcePath ?? '(external)',
-    }));
+  return loadFileImportEntries(db, filePattern)?.map((entry) => ({
+    symbol: entry.symbol,
+    shortName: entry.shortName,
+    fromFile: entry.fromFile,
+  })) ?? [];
 }
 
 /**
@@ -149,52 +109,88 @@ export function importedBy(db: ScipDatabase, symbolPattern: string): ImportResul
  * These are likely unused imports.
  */
 export function unusedImports(db: ScipDatabase, filePattern: string): UnusedImportResult[] {
+  return loadFileImportEntries(db, filePattern)
+    ?.filter((entry) => !entry.used)
+    .map((entry) => ({
+      symbol: entry.symbol,
+      shortName: entry.shortName,
+      importedIn: entry.importer,
+    })) ?? [];
+}
+
+interface ImportEntry {
+  symbol: string;
+  shortName: string;
+  fromFile: string;
+  importer: string;
+  used: boolean;
+}
+
+function loadFileImportEntries(db: ScipDatabase, filePattern: string): ImportEntry[] | null {
   const importer = resolveIndexedFile(db, filePattern);
-  if (!importer) return [];
+  if (!importer) return null;
 
   const rows = db.all<{
     symbol: string;
-    imported_in: string;
+    from_file: string | null;
     importer: string;
+    used: number;
   }>(
-    `SELECT gs.symbol, d.relative_path AS imported_in, d.relative_path AS importer
+    `SELECT DISTINCT
+       gs.symbol,
+       def_d.relative_path AS from_file,
+       imp_d.relative_path AS importer,
+       EXISTS (
+         SELECT 1
+         FROM mentions ref_m
+         JOIN chunks ref_c ON ref_m.chunk_id = ref_c.id
+         WHERE ref_m.symbol_id = gs.id
+           AND ref_m.role != 1
+           AND ref_c.document_id = imp_d.id
+       ) AS used
     FROM mentions m
     JOIN chunks c ON m.chunk_id = c.id
-    JOIN documents d ON c.document_id = d.id
+    JOIN documents imp_d ON c.document_id = imp_d.id
     JOIN global_symbols gs ON m.symbol_id = gs.id
-    WHERE d.relative_path = ?
+    LEFT JOIN (
+      SELECT m2.symbol_id, c2.document_id
+      FROM mentions m2
+      JOIN chunks c2 ON m2.chunk_id = c2.id
+      WHERE m2.role = 1
+      GROUP BY m2.symbol_id
+    ) sym_def ON sym_def.symbol_id = gs.id
+    LEFT JOIN documents def_d ON sym_def.document_id = def_d.id
+    WHERE imp_d.relative_path = ?
       AND m.role = 2
-      AND NOT EXISTS (
-        SELECT 1
-        FROM mentions ref_m
-        JOIN chunks ref_c ON ref_m.chunk_id = ref_c.id
-        WHERE ref_m.symbol_id = gs.id
-          AND ref_m.role != 1
-          AND ref_c.document_id = d.id
-      )
-    ORDER BY d.relative_path, gs.symbol`,
+    ORDER BY def_d.relative_path, gs.symbol`,
     importer,
   );
 
-  const indexedResults = rows
-    .filter((row) => !db.isIgnored(row.importer))
-    .map((r) => ({
+  const indexed = rows.filter((row) => !db.isIgnored(row.importer));
+  if (indexed.length > 0) {
+    return indexed.map((r) => ({
       symbol: r.symbol,
       shortName: shortenSymbol(r.symbol),
-      importedIn: r.imported_in,
+      fromFile: r.from_file ?? '(external)',
+      importer: r.importer,
+      used: r.used !== 0,
     }));
-
-  if (indexedResults.length > 0) {
-    return indexedResults;
   }
 
-  return getSourceImports(db, importer)
-    .filter((entry) => entry.kind !== 'side-effect' && !entry.used)
-    .map((entry) => ({
-      symbol: renderImportSymbol(entry.importedName, entry.localName, entry.kind),
-      shortName: renderImportSymbol(entry.importedName, entry.localName, entry.kind),
-      importedIn: importer,
-    }));
+  return getSourceImports(db, importer).map((entry) => {
+    const rendered = renderImportSymbol(entry.importedName, entry.localName, entry.kind);
+    // Side-effect imports never reference a named symbol, so they're never
+    // "unused" in the sense unused-imports flags. Mark them used to preserve
+    // the original `kind !== 'side-effect' && !entry.used` filter behavior.
+    const used = entry.kind === 'side-effect' ? true : entry.used;
+    return {
+      symbol: rendered,
+      shortName: rendered,
+      fromFile: entry.sourcePath ?? '(external)',
+      importer,
+      used,
+    };
+  });
 }
 
 function renderImportSymbol(

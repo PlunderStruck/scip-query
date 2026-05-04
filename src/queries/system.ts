@@ -1,8 +1,6 @@
 import type { ScipDatabase } from '../db.js';
 import type { SystemResult, SymbolResult } from '../types.js';
-import { getDefinitionsForFile, resolveIndexedPaths } from '../query-support.js';
-import { shortenSymbol } from '../symbol-parser.js';
-import { cleanSignature, extractSignature } from './clean-signature.js';
+import { loadFileSymbols, resolveIndexedPaths } from '../query-support.js';
 
 /** Full system map for a module path: files, symbols, deps in/out.
  *
@@ -27,24 +25,8 @@ export function system(db: ScipDatabase, modulePattern: string): SystemResult {
     .filter((p) => !db.isIgnored(p));
 
   // Exported symbols: corrected ranges + documentation filter.
-  const symbols: SymbolResult[] = files
-    .flatMap((relativePath) => getDefinitionsForFile(db, relativePath))
-    .filter((d) => d.documentation !== null && d.documentation !== '')
-    .sort((a, b) =>
-      a.relativePath.localeCompare(b.relativePath)
-      || a.startLine - b.startLine
-      || a.endLine - b.endLine,
-    )
-    .map((d) => {
-      const sig = extractSignature(d.documentation);
-      return {
-        startLine: d.startLine,
-        endLine: d.endLine,
-        symbol: d.symbol,
-        shortName: shortenSymbol(d.symbol),
-        signature: cleanSignature(sig),
-      };
-    });
+  const symbols: SymbolResult[] = loadFileSymbols(db, files, { onlyDocumented: true, sort: true })
+    .map(({ relativePath: _r, ...rest }) => rest);
 
   const depRows = db.all<{ relative_path: string }>(
     `SELECT DISTINCT d2.relative_path

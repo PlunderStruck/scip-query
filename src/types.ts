@@ -594,6 +594,13 @@ export interface IndexerConfig {
   installMethods?: InstallMethod[];
   /** URL for manual installation if auto-install fails */
   installUrl?: string;
+  /**
+   * npm package bundled with scip-query as an optionalDependency. When this
+   * package resolves locally (i.e. it installed successfully), the indexer is
+   * considered available even if its binary isn't on PATH — `npx <binary>`
+   * will pick up the local install.
+   */
+  bundledNpmPackage?: string;
 }
 
 // ── Database Config ────────────────────────────────────────

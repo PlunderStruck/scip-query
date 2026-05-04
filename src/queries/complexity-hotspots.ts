@@ -20,11 +20,7 @@ export function complexityHotspots(
 ): ComplexityHotspot[] {
   const { scope, minLoc = 10, limit = 30 } = opts ?? {};
 
-  const definitions = getScopedDefinitions(db, scope)
-    .filter((definition) => !db.isIgnored(definition.relativePath));
-
-  const callerMap = buildCrossFileCallerMap(db, definitions);
-  const calleeMap = buildCalleeMap(db, definitions);
+  const { definitions, callerMap, calleeMap } = loadComplexityCandidates(db, scope);
 
   return definitions
     .map((definition) => {
@@ -50,4 +46,25 @@ export function complexityHotspots(
     .filter((row) => row.loc >= minLoc)
     .sort((left, right) => right.score - left.score || right.loc - left.loc)
     .slice(0, limit);
+}
+
+function loadComplexityCandidates(
+  db: ScipDatabase,
+  scope: string | undefined,
+): {
+  definitions: ReturnType<typeof getScopedDefinitions>;
+  callerMap: ReturnType<typeof buildCrossFileCallerMap>;
+  calleeMap: ReturnType<typeof buildCalleeMap>;
+} {
+  // Only function-like definitions are real complexity hotspots. SCIP records
+  // file/module symbols as definitions spanning the whole file, which would
+  // otherwise dominate the score with their synthetic LOC.
+  const definitions = getScopedDefinitions(db, scope)
+    .filter((definition) => definition.isFunctionLike && !db.isIgnored(definition.relativePath));
+
+  return {
+    definitions,
+    callerMap: buildCrossFileCallerMap(db, definitions),
+    calleeMap: buildCalleeMap(db, definitions),
+  };
 }
