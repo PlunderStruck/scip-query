@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../db.js';
-import { buildFileDepGraph } from '../query-support.js';
+import { buildFileDepGraph } from '../reference-graph.js';
 import type { DeepChainResult } from '../types.js';
 
 /**

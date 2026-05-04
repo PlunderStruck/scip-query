@@ -3,9 +3,8 @@ import { createPerDbCache } from '../per-db-cache.js';
 import {
   buildCrossFileCallerMap,
   buildSourceFallbackCallerFiles,
-  getDefinitionsForFile,
-  getScopedDefinitions,
-} from '../query-support.js';
+} from '../reference-graph.js';
+import { getDefinitionsForFile, getScopedDefinitions } from '../definition-catalog.js';
 import type { StaleAbstraction } from '../types.js';
 import { leafName, shortenSymbol } from '../symbol-parser.js';
 import { getReExports, getSourceText } from '../source-analysis.js';

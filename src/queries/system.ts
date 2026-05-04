@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../db.js';
 import type { SystemResult, SymbolResult } from '../types.js';
-import { loadFileSymbols, resolveIndexedPaths } from '../query-support.js';
+import { loadFileSymbols } from '../definition-catalog.js';
+import { resolveIndexedPaths } from '../path-resolver.js';
 
 /** Full system map for a module path: files, symbols, deps in/out.
  *

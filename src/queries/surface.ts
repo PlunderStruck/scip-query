@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../db.js';
-import { getDefinitionsForFile, resolveIndexedPaths } from '../query-support.js';
+import { getDefinitionsForFile } from '../definition-catalog.js';
+import { resolveIndexedPaths } from '../path-resolver.js';
 import type { SurfaceResult } from '../types.js';
 import { isCallableSymbol, shortenSymbol } from '../symbol-parser.js';
 

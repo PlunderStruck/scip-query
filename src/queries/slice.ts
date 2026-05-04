@@ -1,14 +1,8 @@
 import type { ScipDatabase } from '../db.js';
-import {
-  findEnclosingDefinition,
-  findExactSymbolMatch,
-  findFirstSymbolMatch,
-  getCalleeRowsForSymbol,
-  getDefinitionsForFile,
-  getResolvedReferenceSites,
-  getSourceReferenceSites,
-  type SymbolMatch,
-} from '../query-support.js';
+import { findExactSymbolMatch, findFirstSymbolMatch } from '../symbol-lookup.js';
+import { findEnclosingDefinition, getDefinitionsForFile } from '../definition-catalog.js';
+import { getCalleeRowsForSymbol, getResolvedReferenceSites, getSourceReferenceSites } from '../reference-graph.js';
+import type { SymbolMatch } from '../types.js';
 import type { SliceResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 

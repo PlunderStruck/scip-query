@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../db.js';
 import { isEntrySurface } from '../file-classifier.js';
-import { getScopedDefinitions, buildCalleeMap, buildCrossFileCallerMap, buildSourceFallbackCallerFiles } from '../query-support.js';
+import { getScopedDefinitions } from '../definition-catalog.js';
+import { buildCalleeMap, buildCrossFileCallerMap, buildSourceFallbackCallerFiles } from '../reference-graph.js';
 import type { IsolatedResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 import { appendFileSync } from 'node:fs';

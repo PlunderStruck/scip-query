@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch, getDefinitionsForFile } from '../query-support.js';
+import { findFirstSymbolMatch } from '../symbol-lookup.js';
+import { getDefinitionsForFile } from '../definition-catalog.js';
 import type { MemberResult } from '../types.js';
 import { isDirectChildSymbol, leafSuffix, shortenSymbol } from '../symbol-parser.js';
 

@@ -1,13 +1,8 @@
 import type { ScipDatabase } from '../db.js';
-import {
-  buildCrossFileCallerMap,
-  findExactSymbolMatch,
-  findFirstSymbolMatch,
-  getCallerRowsForSymbol,
-  getDefinitionsForFile,
-  findEnclosingDefinition,
-} from '../query-support.js';
-import type { SymbolMatch } from '../query-support.js';
+import { findExactSymbolMatch, findFirstSymbolMatch } from '../symbol-lookup.js';
+import { findEnclosingDefinition, getDefinitionsForFile } from '../definition-catalog.js';
+import { buildCrossFileCallerMap, getCallerRowsForSymbol } from '../reference-graph.js';
+import type { SymbolMatch } from '../types.js';
 import type { AffectedResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 

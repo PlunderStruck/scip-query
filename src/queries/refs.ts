@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch, getResolvedReferenceSites, getSourceReferenceSites } from '../query-support.js';
+import { findFirstSymbolMatch } from '../symbol-lookup.js';
+import { getResolvedReferenceSites, getSourceReferenceSites } from '../reference-graph.js';
 import { getSourceText } from '../source-analysis.js';
 import { isFunctionLikeSymbol } from '../symbol-parser.js';
 import type { RefResult } from '../types.js';

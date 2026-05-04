@@ -1,3 +1,68 @@
+// ── Indexed-symbol Types (shared by path-resolver / symbol-lookup /
+//    definition-catalog / reference-graph) ────────────────────────────
+
+/**
+ * A symbol's location in the SCIP index. The minimum data needed to
+ * identify a definition: which document it lives in, which lines it
+ * spans, and the global symbol id. Used as a lightweight handle when
+ * the caller doesn't need the symbol's textual name or path.
+ */
+export interface SymbolLocation {
+  documentId: number;
+  startLine: number;
+  endLine: number;
+  symbolId: number;
+}
+
+/**
+ * A SymbolLocation plus the human-readable bits: the SCIP symbol string
+ * and the document's relative path. Returned by lookup helpers like
+ * `findFirstSymbolMatch` so callers don't have to round-trip through the
+ * documents table to get a path or symbol name.
+ */
+export interface SymbolMatch extends SymbolLocation {
+  symbol: string;
+  relativePath: string;
+}
+
+/**
+ * Reference-site of a symbol — where (file + line) the symbol is used,
+ * and the smallest enclosing definition at that line (for credit
+ * attribution in reverse-index views).
+ */
+export interface ReferenceSite {
+  file: string;
+  line: number;
+  enclosingSymbol: string | null;
+}
+
+/**
+ * A full definition record: SymbolMatch plus per-symbol metadata
+ * (leaf name, parent type, kind, documentation, enclosing symbol).
+ * Used by the catalog APIs (`getDefinitionsForFile`, `getAllDefinitions`,
+ * `getScopedDefinitions`) so consumers don't have to re-derive any of
+ * these per-record.
+ */
+export interface IndexedDefinition extends SymbolMatch {
+  leaf: string;
+  parentTypeName: string | null;
+  isFunctionLike: boolean;
+  isTypeLike: boolean;
+  kind: number | null;
+  documentation: string | null;
+  enclosingSymbol: string | null;
+}
+
+/**
+ * Internal scoring shape used by `path-resolver` to rank document path
+ * candidates against a user-supplied file pattern. Not part of any
+ * public CLI interface.
+ */
+export interface DocumentPathCandidate {
+  relativePath: string;
+  score: number;
+}
+
 // ── SCIP Symbol Grammar Types ──────────────────────────────
 
 /** Parsed components of a SCIP symbol string */

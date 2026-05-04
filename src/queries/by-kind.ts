@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../db.js';
 import type { ByKindResult } from '../types.js';
-import { getAllDefinitions, type IndexedDefinition } from '../query-support.js';
+import { getAllDefinitions } from '../definition-catalog.js';
+import type { IndexedDefinition } from '../types.js';
 import { leafSuffix, parseSymbol, shortenSymbol } from '../symbol-parser.js';
 
 /**

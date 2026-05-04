@@ -12,7 +12,7 @@
  * handle it.
  */
 import type { ScipDatabase } from './db.js';
-import { buildFileDepGraph } from './query-support.js';
+import { buildFileDepGraph } from './reference-graph.js';
 import { createPerDbValue } from './per-db-cache.js';
 import { getSourceFiles } from './source-fileset.js';
 

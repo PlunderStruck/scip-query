@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../db.js';
-import { buildCalleeMap, getDefinitionsForFile, getScopedDefinitions } from '../query-support.js';
+import { getDefinitionsForFile, getScopedDefinitions } from '../definition-catalog.js';
+import { buildCalleeMap } from '../reference-graph.js';
 import { isLiteralPassthrough } from '../passthrough-detect.js';
 import type { PassthroughCandidate } from '../types.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../symbol-parser.js';

@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../db.js';
-import { resolveIndexedFile } from '../query-support.js';
+import { resolveIndexedFile } from '../path-resolver.js';
 import type { CouplingResult } from '../types.js';
 
 /**

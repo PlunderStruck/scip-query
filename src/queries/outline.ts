@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../db.js';
 import type { OutlineNode } from '../types.js';
-import { loadFileSymbols } from '../query-support.js';
+import { loadFileSymbols } from '../definition-catalog.js';
 
 /**
  * Build a tree-structured outline of symbols in a file,

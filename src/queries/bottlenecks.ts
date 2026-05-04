@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../db.js';
-import { getAllDefinitions, getCalleeRowsForSymbol, getCallerRowsForSymbol } from '../query-support.js';
-import type { IndexedDefinition } from '../query-support.js';
+import { getAllDefinitions } from '../definition-catalog.js';
+import { getCalleeRowsForSymbol, getCallerRowsForSymbol } from '../reference-graph.js';
+import type { IndexedDefinition } from '../types.js';
 import type { BottleneckResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 

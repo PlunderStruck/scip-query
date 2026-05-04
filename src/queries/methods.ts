@@ -1,6 +1,7 @@
 import { basename } from 'node:path';
 import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch, getDefinitionsForFile } from '../query-support.js';
+import { findFirstSymbolMatch } from '../symbol-lookup.js';
+import { getDefinitionsForFile } from '../definition-catalog.js';
 import type { MethodResult } from '../types.js';
 import { isCallableSymbol, leafName } from '../symbol-parser.js';
 

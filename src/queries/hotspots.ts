@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../db.js';
-import { getAllDefinitions, getCallerRowsForSymbol } from '../query-support.js';
-import type { IndexedDefinition } from '../query-support.js';
+import { getAllDefinitions } from '../definition-catalog.js';
+import { getCallerRowsForSymbol } from '../reference-graph.js';
+import type { IndexedDefinition } from '../types.js';
 import type { HotspotResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 

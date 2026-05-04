@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../db.js';
 import { getInactiveBarrelPaths, isEntrySurface, TEST_FILE_PATTERNS, TEST_SUPPORT_PATH_PATTERNS } from '../file-classifier.js';
 import { attributeIdentifier } from '../identifier-attribution.js';
-import { getAllDefinitions } from '../query-support.js';
+import { getAllDefinitions } from '../definition-catalog.js';
 import { detectAstLanguage, isVueSfcPath } from '../ast.js';
 import { getCrossLanguageDispatchNames, getDefinitionExclusions } from '../framework-patterns.js';
 import { getIdentifierLineMap } from '../source-analysis.js';

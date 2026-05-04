@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch } from '../query-support.js';
+import { findFirstSymbolMatch } from '../symbol-lookup.js';
 import { parseSymbol, shortenSymbol } from '../symbol-parser.js';
 import type { HierarchyNode } from '../types.js';
 

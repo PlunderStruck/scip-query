@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch, getCalleeRowsForSymbol } from '../query-support.js';
+import { findFirstSymbolMatch } from '../symbol-lookup.js';
+import { getCalleeRowsForSymbol } from '../reference-graph.js';
 import type { ConvergenceResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 

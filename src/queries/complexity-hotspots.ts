@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../db.js';
-import { buildCalleeMap, buildCrossFileCallerMap, getScopedDefinitions } from '../query-support.js';
+import { getScopedDefinitions } from '../definition-catalog.js';
+import { buildCalleeMap, buildCrossFileCallerMap } from '../reference-graph.js';
 import type { ComplexityHotspot } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 

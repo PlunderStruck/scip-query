@@ -15,7 +15,7 @@ import {
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/db.js';
-import { findFirstSymbolMatch } from '../src/query-support.js';
+import { findFirstSymbolMatch } from '../src/symbol-lookup.js';
 import { refs } from '../src/queries/refs.js';
 import type { ScipQueryConfig } from '../src/types.js';
 

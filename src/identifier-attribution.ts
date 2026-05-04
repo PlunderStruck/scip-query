@@ -16,15 +16,10 @@
  * receive the answer, not raw candidates.
  */
 import type { ScipDatabase } from './db.js';
-import {
-  findEnclosingDefinition,
-  getDefinitionsForFile,
-  getFullSymbolMatch,
-  getGlobalLeafIndex,
-  type IndexedDefinition,
-  type ReferenceSite,
-  type SymbolLocation,
-} from './query-support.js';
+import { findEnclosingDefinition, getDefinitionsForFile } from './definition-catalog.js';
+import { getFullSymbolMatch } from './symbol-lookup.js';
+import { getGlobalLeafIndex } from './reference-graph.js';
+import type { IndexedDefinition, ReferenceSite, SymbolLocation } from './types.js';
 import {
   findIdentifierLines,
   getFileIdentifiers,

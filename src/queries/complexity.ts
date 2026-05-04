@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ScipDatabase } from '../db.js';
-import { buildCalleeMap, findFirstSymbolMatch } from '../query-support.js';
+import { findFirstSymbolMatch } from '../symbol-lookup.js';
+import { buildCalleeMap } from '../reference-graph.js';
 import type { ComplexityResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 

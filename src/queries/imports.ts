@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch, resolveIndexedFile } from '../query-support.js';
+import { findFirstSymbolMatch } from '../symbol-lookup.js';
+import { resolveIndexedFile } from '../path-resolver.js';
 import { getSourceImports } from '../source-analysis.js';
 import type { ImportResult, UnusedImportResult } from '../types.js';
 import { isModuleLikeSymbol, leafName, shortenSymbol } from '../symbol-parser.js';

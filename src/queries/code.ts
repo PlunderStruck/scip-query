@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch, resolveIndexedFile } from '../query-support.js';
+import { findFirstSymbolMatch } from '../symbol-lookup.js';
+import { resolveIndexedFile } from '../path-resolver.js';
 import type { CodeResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 

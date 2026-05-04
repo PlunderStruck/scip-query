@@ -4,13 +4,9 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/db.js';
 import * as queries from '../src/queries/index.js';
-import {
-  findEnclosingDefinition,
-  findFirstSymbolMatch,
-  getDefinitionsForFile,
-  getResolvedReferenceSites,
-  getSourceReferenceSites,
-} from '../src/query-support.js';
+import { findFirstSymbolMatch } from '../src/symbol-lookup.js';
+import { findEnclosingDefinition, getDefinitionsForFile } from '../src/definition-catalog.js';
+import { getResolvedReferenceSites, getSourceReferenceSites } from '../src/reference-graph.js';
 import { shortenSymbol } from '../src/symbol-parser.js';
 import type { ScipQueryConfig } from '../src/types.js';
 import { advancedFixture, createAdvancedFixtureDb } from './advanced-fixture.js';

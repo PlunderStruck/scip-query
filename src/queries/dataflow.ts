@@ -1,11 +1,11 @@
 import type { ScipDatabase } from '../db.js';
+import { findFirstSymbolMatch } from '../symbol-lookup.js';
 import {
-  findFirstSymbolMatch,
   getCalleeRowsForSymbol,
   getCallerRowsForSymbol,
   getResolvedReferenceSites,
   getSourceReferenceSites,
-} from '../query-support.js';
+} from '../reference-graph.js';
 import type { DataflowResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 
