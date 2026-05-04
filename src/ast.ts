@@ -631,6 +631,332 @@ function getRustExclusions(
   return out;
 }
 
+/**
+ * True when a function's body is a *direct* forward to one other call —
+ * `return inner(a, b)` (or void `inner(a, b)`) where the call's args are
+ * exactly the function's parameters in order. Passthrough-candidates uses
+ * this to filter out type guards, defaulted wrappers, and partial
+ * applications that happen to call exactly one function.
+ *
+ * Returns false when the body has any extra logic — additional statements,
+ * literal args, computed args, default-value substitution, control flow.
+ *
+ * Per-file cache (we re-use the AST parse).
+ */
+export function isLiteralPassthrough(
+  db: ScipDatabase,
+  relativePath: string,
+  startLine: number,
+  endLine: number,
+): boolean {
+  const lang = detectAstLanguage(relativePath);
+  if (!lang) return true; // No AST — fall back to LOC heuristic (current behavior).
+  const tree = getAst(db, relativePath);
+  if (!tree) return true;
+
+  let cache = PASSTHROUGH_CACHE.get(tree);
+  if (!cache) {
+    cache = buildPassthroughIndex(tree, lang);
+    PASSTHROUGH_CACHE.set(tree, cache);
+  }
+  const result = cache.get(`${startLine}:${endLine}`);
+  return result ?? true;
+}
+
+const PASSTHROUGH_CACHE = new WeakMap<Tree, Map<string, boolean>>();
+
+function buildPassthroughIndex(tree: Tree, lang: AstLanguage): Map<string, boolean> {
+  const callableNodeTypes = lang === 'rust'
+    ? new Set(['function_item', 'function_signature_item'])
+    : lang === 'python'
+      ? new Set(['function_definition'])
+      : new Set(['function_declaration', 'method_definition', 'arrow_function', 'function_expression']);
+  const index = new Map<string, boolean>();
+  const walk = (node: SyntaxNode): void => {
+    if (callableNodeTypes.has(node.type)) {
+      index.set(`${node.startPosition.row}:${node.endPosition.row}`, isPassthroughBody(node, lang));
+    }
+    for (const child of node.children) walk(child);
+  };
+  walk(tree.rootNode);
+  return index;
+}
+
+function isPassthroughBody(fnNode: SyntaxNode, lang: AstLanguage): boolean {
+  // Find the body block.
+  const body = fnNode.namedChildren.find((c) =>
+    c.type === 'block' || c.type === 'statement_block',
+  );
+  if (!body) return false;
+
+  // Body must contain exactly one statement (or for Rust an expression).
+  const statements = body.namedChildren.filter((c) =>
+    c.type !== 'comment' && c.type !== 'line_comment' && c.type !== 'block_comment',
+  );
+  if (statements.length !== 1) return false;
+  const only = statements[0]!;
+
+  // Unwrap return statements / expression statements to find the call.
+  let callNode: SyntaxNode | null = null;
+  if (only.type === 'return_statement') {
+    callNode = only.namedChild(0) ?? null;
+  } else if (only.type === 'expression_statement') {
+    callNode = only.namedChild(0) ?? null;
+  } else if (lang === 'rust' && (only.type === 'call_expression' || only.type === 'macro_invocation')) {
+    // Rust expression-as-block tail
+    callNode = only;
+  }
+  if (!callNode) return false;
+  const callType = lang === 'python' ? 'call' : 'call_expression';
+  if (callNode.type !== callType) return false;
+
+  // Get the call's arguments and the function's parameters.
+  const argsNode = callNode.namedChildren.find((c) =>
+    c.type === 'arguments' || c.type === 'argument_list',
+  );
+  if (!argsNode) return false;
+  const callArgs = argsNode.namedChildren.filter((c) => c.type !== 'comment');
+
+  const paramsNode = fnNode.namedChildren.find((c) =>
+    c.type === 'parameters' || c.type === 'formal_parameters',
+  );
+  if (!paramsNode) return false;
+  const paramNames: string[] = [];
+  for (const p of paramsNode.namedChildren) {
+    // TS: required_parameter > identifier
+    // Rust: parameter > identifier (also self_parameter for methods)
+    // Python: identifier directly, or default_parameter > identifier
+    if (p.type === 'identifier') paramNames.push(p.text);
+    else {
+      const id = p.namedChildren.find((c) => c.type === 'identifier');
+      if (id) paramNames.push(id.text);
+    }
+  }
+
+  // Args must equal params in order, by name.
+  if (callArgs.length !== paramNames.length) return false;
+  for (let i = 0; i < paramNames.length; i += 1) {
+    const arg = callArgs[i]!;
+    if (arg.type !== 'identifier') return false;
+    if (arg.text !== paramNames[i]) return false;
+  }
+  return true;
+}
+
+/**
+ * Per-file map: child type name → set of container type names that reference
+ * it inside their field/variant type annotations. Powers transitive type
+ * usage detection in stale-abstractions: if `Foo` is referenced only by
+ * fields of `Bar` and `Bar` has cross-file consumers, `Foo` isn't really
+ * stale — it's reachable through `Bar`.
+ *
+ * Walks structs/enums/interfaces/type aliases. For each, collects every
+ * type_identifier inside its body (including those nested in generic_type,
+ * array_type, union_type, tuple, etc.) and records "child → container".
+ */
+export function getTypeContainerMap(
+  db: ScipDatabase,
+  relativePath: string,
+): Map<string, Set<string>> {
+  const lang = detectAstLanguage(relativePath);
+  if (!lang) return new Map();
+  const tree = getAst(db, relativePath);
+  if (!tree) return new Map();
+
+  const cached = TYPE_CONTAINER_CACHE.get(tree);
+  if (cached) return cached;
+
+  const result = new Map<string, Set<string>>();
+  const link = (child: string, container: string): void => {
+    if (child === container) return;
+    let bucket = result.get(child);
+    if (!bucket) { bucket = new Set(); result.set(child, bucket); }
+    bucket.add(container);
+  };
+
+  // Different languages name type references with different node types.
+  const refTypes = lang === 'python'
+    ? new Set(['identifier'])
+    : new Set(['type_identifier']);
+  const collectChildren = (root: SyntaxNode, container: string): void => {
+    const walk = (node: SyntaxNode): void => {
+      if (refTypes.has(node.type) && node.text !== container) {
+        link(node.text, container);
+      }
+      for (const child of node.children) walk(child);
+    };
+    for (const child of root.children) walk(child);
+  };
+
+  if (lang === 'rust') {
+    for (const s of tree.rootNode.descendantsOfType(['struct_item', 'enum_item', 'union_item', 'type_item'])) {
+      const name = s.namedChildren.find((c) => c.type === 'type_identifier')?.text;
+      if (!name) continue;
+      const body = s.namedChildren.find((c) => c.type === 'field_declaration_list'
+        || c.type === 'enum_variant_list'
+        || c.type === 'ordered_field_declaration_list');
+      if (body) collectChildren(body, name);
+      if (s.type === 'type_item') collectChildren(s, name);
+    }
+  } else if (lang === 'python') {
+    // Python class fields are annotated assignments inside the class body.
+    // Walk only the `type` annotation nodes (not the assignment values) so
+    // we only pick up types, not arbitrary identifiers used as defaults.
+    for (const cls of tree.rootNode.descendantsOfType('class_definition')) {
+      const name = cls.namedChildren.find((c) => c.type === 'identifier')?.text;
+      if (!name) continue;
+      const body = cls.namedChildren.find((c) => c.type === 'block');
+      if (!body) continue;
+      for (const typeNode of body.descendantsOfType('type')) {
+        // Inside `type` node, every identifier is a referenced type name.
+        for (const id of typeNode.descendantsOfType('identifier')) {
+          if (id.text !== name) link(id.text, name);
+        }
+      }
+    }
+  } else {
+    // TS/JS interfaces, type aliases, classes (field types).
+    for (const s of tree.rootNode.descendantsOfType(['interface_declaration', 'type_alias_declaration', 'class_declaration'])) {
+      const name = s.namedChildren.find((c) => c.type === 'type_identifier')?.text;
+      if (!name) continue;
+      collectChildren(s, name);
+    }
+  }
+
+  TYPE_CONTAINER_CACHE.set(tree, result);
+  return result;
+}
+
+const TYPE_CONTAINER_CACHE = new WeakMap<Tree, Map<string, Set<string>>>();
+
+/**
+ * Names known to take a command-string argument that dispatches to a
+ * cross-language handler. Hits in source code like `invoke('start_job', ...)`
+ * are treated as references to a function named `start_job` defined in
+ * another language (typically Rust via Tauri's IPC bridge).
+ */
+const CROSS_LANG_DISPATCH_NAMES = new Set([
+  'invoke',           // Tauri JS API
+  'invokeTauriCommand',
+  'listen',           // Tauri event listener
+  'once',             // Tauri one-shot listener
+  'emit',             // Tauri event emit
+  'subscribe',
+  'dispatch',
+  'sendCommand',
+  'callRust',
+]);
+
+/**
+ * Walk TS/JS callsites looking for string-arg dispatches like
+ * `invoke('cmd_name')`. Returns the set of dispatched command names.
+ *
+ * Used by the dead-code detector: a Rust function whose leaf name appears
+ * here was reached from JS even though no static call exists in the SCIP
+ * graph. Without this, every Tauri command not annotated `#[tauri::command]`
+ * (the framework allows lower-level registrations too) looks dead.
+ */
+export function getCrossLanguageDispatchNames(
+  db: ScipDatabase,
+  relativePath: string,
+): Set<string> {
+  const lang = detectAstLanguage(relativePath);
+  if (lang !== 'typescript' && lang !== 'tsx' && lang !== 'javascript') {
+    return new Set();
+  }
+  const tree = getAst(db, relativePath);
+  if (!tree) return new Set();
+
+  const cached = DISPATCH_NAMES_CACHE.get(tree);
+  if (cached) return cached;
+
+  const out = new Set<string>();
+  const calls = tree.rootNode.descendantsOfType('call_expression');
+  for (const call of calls) {
+    const target = call.namedChild(0);
+    if (!target) continue;
+    // Resolve the call target's leaf — handles `invoke(...)`,
+    // `tauri.invoke(...)`, `window.__TAURI__.invoke(...)`.
+    const leaf = extractCallLeaf(target);
+    if (!leaf || !CROSS_LANG_DISPATCH_NAMES.has(leaf)) continue;
+
+    const args = call.namedChildren.find((c) => c.type === 'arguments');
+    if (!args) continue;
+    const firstArg = args.namedChild(0);
+    if (!firstArg) continue;
+    if (firstArg.type !== 'string') continue;
+    const frag = firstArg.namedChildren.find((c) => c.type === 'string_fragment');
+    if (frag) out.add(frag.text);
+  }
+
+  DISPATCH_NAMES_CACHE.set(tree, out);
+  return out;
+}
+
+const DISPATCH_NAMES_CACHE = new WeakMap<Tree, Set<string>>();
+
+export interface CallableSignature {
+  paramCount: number;
+}
+
+const SIGNATURE_CACHE = new WeakMap<Tree, Map<string, CallableSignature>>();
+
+/**
+ * Pull a function's parameter count from the AST. Used by similar-pair
+ * filtering to avoid declaring a 1-arg helper similar to a 7-arg orchestrator
+ * just because they happen to share infrastructure callees.
+ *
+ * On first call per file, walks the entire AST once and indexes every
+ * callable's signature by (startLine, endLine). Subsequent calls are O(1)
+ * Map lookups — critical when called for thousands of candidates.
+ */
+export function getCallableSignature(
+  db: ScipDatabase,
+  relativePath: string,
+  startLine: number,
+  endLine: number,
+): CallableSignature | null {
+  const lang = detectAstLanguage(relativePath);
+  if (!lang) return null;
+  const tree = getAst(db, relativePath);
+  if (!tree) return null;
+
+  let cache = SIGNATURE_CACHE.get(tree);
+  if (!cache) {
+    cache = buildSignatureIndex(tree, lang);
+    SIGNATURE_CACHE.set(tree, cache);
+  }
+  return cache.get(`${startLine}:${endLine}`) ?? null;
+}
+
+function buildSignatureIndex(tree: Tree, lang: AstLanguage): Map<string, CallableSignature> {
+  const callableNodeTypes = lang === 'rust'
+    ? new Set(['function_item', 'function_signature_item'])
+    : lang === 'python'
+      ? new Set(['function_definition'])
+      : new Set(['function_declaration', 'method_definition', 'arrow_function', 'function_expression']);
+
+  const index = new Map<string, CallableSignature>();
+  const walk = (node: SyntaxNode): void => {
+    if (callableNodeTypes.has(node.type)) {
+      const paramsNode = node.namedChildren.find((c) =>
+        c.type === 'parameters' || c.type === 'formal_parameters',
+      );
+      let paramCount = 0;
+      if (paramsNode) {
+        for (const p of paramsNode.namedChildren) {
+          if (p.type === 'comment' || p.type === 'line_comment' || p.type === 'block_comment') continue;
+          paramCount += 1;
+        }
+      }
+      index.set(`${node.startPosition.row}:${node.endPosition.row}`, { paramCount });
+    }
+    for (const child of node.children) walk(child);
+  };
+  walk(tree.rootNode);
+  return index;
+}
+
 export interface DetailedCallSite {
   /** Function/method name being invoked. */
   calleeName: string;

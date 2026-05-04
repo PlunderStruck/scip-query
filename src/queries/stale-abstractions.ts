@@ -8,7 +8,7 @@ import {
 import type { StaleAbstraction } from '../types.js';
 import { leafName, shortenSymbol } from '../symbol-parser.js';
 import { getReExports, getSourceText } from '../source-analysis.js';
-import { detectAstLanguage, getAst, type SyntaxNode } from '../ast.js';
+import { detectAstLanguage, getAst, getTypeContainerMap, type SyntaxNode } from '../ast.js';
 
 /**
  * Find stale abstractions: type-level symbols (classes, interfaces, type
@@ -47,6 +47,16 @@ export function staleAbstractions(
   const sourceConsumers = buildSourceFallbackCallerFiles(db, typeCandidates);
   const consumerFileMap = mergeConsumerMaps(scipConsumers, sourceConsumers);
 
+  // Pre-index type candidates by (file, leaf) so the transitive-reachability
+  // check is O(1) per container instead of O(typeCandidates) linear scan.
+  const candidateIndex = new Map<string, Map<string, typeof typeCandidates[number]>>();
+  for (const c of typeCandidates) {
+    let perFile = candidateIndex.get(c.relativePath);
+    if (!perFile) { perFile = new Map(); candidateIndex.set(c.relativePath, perFile); }
+    const leaf = leafName(c.symbol);
+    if (leaf) perFile.set(leaf, c);
+  }
+
   const rows = typeCandidates
     .map((definition) => {
       const allFiles = consumerFileMap.get(definition.symbolId) ?? new Set<string>();
@@ -59,12 +69,26 @@ export function staleAbstractions(
         definition.symbol,
         consumerFiles,
       );
+
+      // Transitive: if this type is referenced by a container type in the
+      // SAME file (e.g. `interface Outer { field: This }`) and that container
+      // has cross-file consumers, this type is reachable through the
+      // container's public API — not stale, even with 0 direct consumers.
+      const transitivelyReachable = isTransitivelyConsumed(
+        db,
+        definition,
+        consumerFileMap,
+        candidateIndex,
+      );
+
       return {
         definition,
         realConsumers,
         barrelConsumers,
+        transitivelyReachable,
       };
     })
+    .filter((row) => !row.transitivelyReachable)
     .filter((row) => row.realConsumers.length <= 1)
     // A type whose only observable use is a public-API re-export is not stale —
     // it's part of the surface the library exposes to external consumers we
@@ -163,6 +187,45 @@ function partitionConsumers(
   }
 
   return { realConsumers, barrelConsumers };
+}
+
+/**
+ * True when this type isn't referenced cross-file directly, but a container
+ * type in the same file references it AND the container HAS cross-file
+ * consumers. The container's public API transitively exposes this type, so
+ * it's not really stale.
+ *
+ * Example (TS):
+ *   interface Inner { ... }                       // 0 direct cross-file refs
+ *   interface Outer { items: Inner[]; }           // referenced cross-file
+ * Without transitive tracking, `Inner` shows as "unused" even though every
+ * consumer of `Outer` is a consumer of `Inner` too.
+ */
+function isTransitivelyConsumed(
+  db: ScipDatabase,
+  definition: { relativePath: string; symbol: string; symbolId: number },
+  consumerFileMap: Map<number, Set<string>>,
+  candidateIndex: Map<string, Map<string, { symbolId: number }>>,
+): boolean {
+  const containerMap = getTypeContainerMap(db, definition.relativePath);
+  const myLeaf = leafName(definition.symbol);
+  if (!myLeaf) return false;
+  const containers = containerMap.get(myLeaf);
+  if (!containers || containers.size === 0) return false;
+
+  const perFile = candidateIndex.get(definition.relativePath);
+  if (!perFile) return false;
+
+  for (const containerName of containers) {
+    const container = perFile.get(containerName);
+    if (!container) continue;
+    const containerConsumers = consumerFileMap.get(container.symbolId);
+    if (!containerConsumers) continue;
+    for (const f of containerConsumers) {
+      if (f !== definition.relativePath && !db.isIgnored(f)) return true;
+    }
+  }
+  return false;
 }
 
 /**

@@ -2,6 +2,7 @@ import type { ScipDatabase } from '../db.js';
 import {
   findFirstSymbolMatch,
   getCalleeRowsForSymbol,
+  getCallerRowsForSymbol,
   getResolvedReferenceSites,
   getSourceReferenceSites,
 } from '../query-support.js';
@@ -49,19 +50,29 @@ export function dataflow(
       enclosingShort: site.enclosingSymbol ? shortenSymbol(site.enclosingSymbol) : '(top-level)',
     }));
 
-  // Producers: other symbols referenced within the same function that defines our target
+  // Producers: AST-backed callees of the target (what flows IN). Now that
+  // getCalleeRowsForSymbol delegates to the bulk AST callee map, calls are
+  // attributed to the precise enclosing function — no chunk-overlap aliasing.
   const producers = uniqueSymbolRows(getCalleeRowsForSymbol(db, match, { limit: 30 }).map((row) => ({
     symbol: row.symbol,
     file: row.file,
   })));
 
-  // Consumers: the enclosing scopes that reference this symbol.
-  const consumers = uniqueSymbolRows(
-    normalizedUsageSites.map((site) => ({
-      symbol: site.enclosingSymbol === '(top-level)' ? site.file : site.enclosingSymbol,
-      file: site.file,
-    })),
-  );
+  // Consumers: AST-backed callers of the target (what flows OUT). Same
+  // upgrade — these come from the cached inverse-callee map which uses
+  // tree-sitter call_expression attribution for AST languages.
+  const astConsumers = uniqueSymbolRows(getCallerRowsForSymbol(db, match, { limit: 30 }));
+  // Fall back to source-scan derived consumers when SCIP+AST returned
+  // nothing (rare — happens when AST resolution is ambiguous AND SCIP has
+  // no role!=1 mention).
+  const consumers = astConsumers.length > 0
+    ? astConsumers
+    : uniqueSymbolRows(
+      normalizedUsageSites.map((site) => ({
+        symbol: site.enclosingSymbol === '(top-level)' ? site.file : site.enclosingSymbol,
+        file: site.file,
+      })),
+    );
 
   return {
     symbol: match.symbol,

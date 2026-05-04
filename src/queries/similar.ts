@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../db.js';
 import { findFirstSymbolMatch, getAllDefinitions, getScopedDefinitions, getCalleeRowsForSymbol, buildCalleeMap } from '../query-support.js';
+import { getCallableSignature } from '../ast.js';
 import { getSourceText } from '../source-analysis.js';
 import type { SimilarSymbolResult } from '../types.js';
 import { isFunctionLikeSymbol, leafName, shortenSymbol } from '../symbol-parser.js';
@@ -122,6 +123,17 @@ export function similarAll(
       const b = all[j]!;
 
       if (crossFileOnly && a.file === b.file) continue;
+
+      // Signature filter: a 1-arg helper and a 7-arg orchestrator that share
+      // infrastructure callees aren't really "similar." If both sides have
+      // a known param count, skip pairs that differ by more than 2 OR by
+      // more than 50% (whichever is larger). Pairs without sig info pass
+      // through (non-AST languages, indirect AST resolution failure).
+      if (a.paramCount >= 0 && b.paramCount >= 0) {
+        const diff = Math.abs(a.paramCount - b.paramCount);
+        const maxAllowed = Math.max(2, Math.ceil(Math.max(a.paramCount, b.paramCount) * 0.5));
+        if (diff > maxAllowed) continue;
+      }
 
       const { similarity, significantShared } = weightedSimilarity(
         a.callees, b.callees, idfWeights,
@@ -259,6 +271,7 @@ interface SymbolFingerprint {
   symbol: string;
   file: string;
   callees: Set<string>;
+  paramCount: number;
 }
 
 interface SourceFingerprint {
@@ -281,6 +294,7 @@ function findCallees(
     symbol: target.symbol,
     file: target.relativePath,
     callees: new Set(calleeRows.map((r) => r.symbol)),
+    paramCount: getCallableSignature(db, target.relativePath, target.startLine, target.endLine)?.paramCount ?? -1,
   };
 }
 
@@ -303,6 +317,7 @@ function getAllCalleeFingerprints(
       symbol: d.symbol,
       file: d.relativePath,
       callees: new Set((calleeMap.get(d.symbolId) ?? []).map((c) => c.symbol)),
+      paramCount: getCallableSignature(db, d.relativePath, d.startLine, d.endLine)?.paramCount ?? -1,
     }))
     .filter((fp) => fp.callees.size >= minCallees);
 }

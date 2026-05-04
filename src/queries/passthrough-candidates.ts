@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../db.js';
 import { buildCalleeMap, getDefinitionsForFile, getScopedDefinitions } from '../query-support.js';
+import { isLiteralPassthrough } from '../ast.js';
 import type { PassthroughCandidate } from '../types.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../symbol-parser.js';
 
@@ -38,6 +39,11 @@ export function passthroughCandidates(
     }
 
     if (uniqueCallees.size !== 1) continue;
+
+    // Body-shape gate: must be `return inner(args)` where args === params,
+    // not a type guard / partial application / defaulted wrapper that
+    // happens to call exactly one function.
+    if (!isLiteralPassthrough(db, sym.relativePath, sym.startLine, sym.endLine)) continue;
 
     const [, callee] = [...uniqueCallees.entries()][0]!;
     results.push({

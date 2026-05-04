@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../db.js';
 import { getInactiveBarrelPaths, isEntrySurface } from '../entry-surfaces.js';
 import { getAllDefinitions, TEST_FILE_PATTERNS, TEST_SUPPORT_PATH_PATTERNS } from '../query-support.js';
-import { detectAstLanguage, getDefinitionExclusions } from '../ast.js';
+import { detectAstLanguage, getCrossLanguageDispatchNames, getDefinitionExclusions } from '../ast.js';
 import { getIdentifierLineMap } from '../source-analysis.js';
 import type { DeadOptions, DeadSymbolResult, DeadSummary } from '../types.js';
 import { isFunctionLikeSymbol, isModuleLikeSymbol, leafName, shortenSymbol } from '../symbol-parser.js';
@@ -119,6 +119,27 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
         referencesBySymbol.set(target.symbolId, refsForSymbol);
       }
       refsForSymbol.set(doc.relative_path, (refsForSymbol.get(doc.relative_path) ?? 0) + occurrences);
+    }
+
+    // Cross-language dispatch supplement: `invoke('cmd_name')` in TS/JS
+    // counts as a reference to the Rust (or other-language) function named
+    // `cmd_name`. Tauri commands not annotated `#[tauri::command]` and any
+    // hand-rolled IPC bridge are reachable only this way.
+    const dispatchNames = getCrossLanguageDispatchNames(db, doc.relative_path);
+    for (const cmdName of dispatchNames) {
+      if ((leafCounts.get(cmdName) ?? 0) !== 1) continue;
+      const target = leafToSymbol.get(cmdName)!;
+      // Skip same-language same-file (the JS file calling its own function
+      // — that's not "cross-language", and getIdentifierLineMap above
+      // already credited it).
+      if (target.relativePath === doc.relative_path) continue;
+
+      let refsForSymbol = referencesBySymbol.get(target.symbolId);
+      if (!refsForSymbol) {
+        refsForSymbol = new Map<string, number>();
+        referencesBySymbol.set(target.symbolId, refsForSymbol);
+      }
+      refsForSymbol.set(doc.relative_path, (refsForSymbol.get(doc.relative_path) ?? 0) + 1);
     }
   }
 
