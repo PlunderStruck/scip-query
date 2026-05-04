@@ -38,6 +38,9 @@ export function slice(
 }
 
 
+// scip-query: ignore-similar — shares callee-row helpers with forwardSlice but
+// implements transitive BFS; forwardSlice does single-hop reference attribution.
+// Different algorithms, intentionally split.
 function backwardSlice(db: ScipDatabase, match: SymbolMatch, maxDepth: number): SliceResult {
   // Transitive BFS through callees: depth 1 = direct callees of the target,
   // depth 2 = callees of those callees, etc.
@@ -83,6 +86,9 @@ function backwardSlice(db: ScipDatabase, match: SymbolMatch, maxDepth: number): 
   };
 }
 
+// scip-query: ignore-similar — single-hop reference + enclosing-definition
+// walk; different algorithm from backwardSlice's transitive BFS even though
+// they share the same callee-row + symbol-lookup primitives.
 function forwardSlice(db: ScipDatabase, match: SymbolMatch): SliceResult {
   // Find where the target is referenced, then at each reference site,
   // find what else the enclosing function defines/exports. Goes through the

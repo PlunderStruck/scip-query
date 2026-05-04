@@ -53,114 +53,9 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     refsForSymbol.set(row.relative_path, row.ref_count);
   }
 
-  // ── AST-based reference supplement ──────────────────────────
-  //
-  // scip-rust (and most SCIP indexers) doesn't record every identifier
-  // reference. The biggest gap on Rust codebases: `self.field` and `Self::X`
-  // accesses inside an impl block are not emitted as cross-symbol mentions,
-  // so a struct field that's used heavily within its own impl appears dead.
-  //
-  // We compensate by walking each AST-supported file's identifier set
-  // (already cached from earlier queries) and for any identifier whose name
-  // matches a unique-leaf candidate symbol, attribute it as a reference.
-  // Same-file matches register as same-file refs (becoming "file-internal"
-  // rather than "dead-code"); other-file matches register as cross-file refs
-  // (eliminating the dead-code flag entirely).
-  //
-  // attributeIdentifier owns the same-file > direct-import > interface-
-  // dispatch disambiguation that used to live inline here.
+  supplementReferencesFromAst(db, referencesBySymbol, inactiveBarrelPaths);
 
-  const docRows = db.all<{ relative_path: string }>(
-    `SELECT relative_path FROM documents
-     WHERE 1 = 1 ${db.pathExclusionsFor('documents')}`,
-  );
-  const indexedPaths = new Set(docRows.map((r) => r.relative_path));
-  // Indexers (especially rust-analyzer) don't always cover every source
-  // file — partial workspace indexing is common. We extend the AST scan to
-  // every source file the project owns (indexed + auxiliary types like
-  // Vue SFCs), so a reference from an unindexed file still credits the
-  // symbol it reaches.
-  const scanPaths = new Set<string>(getSourceFiles(db));
-  for (const p of indexedPaths) scanPaths.add(p);
-  for (const relativePath of scanPaths) {
-    const doc = { relative_path: relativePath };
-    // Skip files we can't parse at all. Vue SFCs go through `getAst`'s
-    // script-block extraction (returns a TS/JS tree), so they pass even
-    // though detectAstLanguage('.vue') returns null.
-    if (!detectAstLanguage(doc.relative_path) && !isVueSfcPath(doc.relative_path)) continue;
-    if (db.isIgnored(doc.relative_path)) continue;
-    if (inactiveBarrelPaths.has(doc.relative_path)) continue;
-    const lineMap = getIdentifierLineMap(db, doc.relative_path);
-    for (const [name, lines] of lineMap) {
-      const targets = attributeIdentifier(db, doc.relative_path, name);
-      if (targets.length === 0) continue;
-      // Each line is one occurrence. The defining file's count includes the
-      // declaration itself; subtract one occurrence on that file so we don't
-      // count the def as a reference to itself.
-      for (const target of targets) {
-        let occurrences = lines.length;
-        if (target.relativePath === doc.relative_path) occurrences = Math.max(0, occurrences - 1);
-        if (occurrences === 0) continue;
-
-        let refsForSymbol = referencesBySymbol.get(target.symbolId);
-        if (!refsForSymbol) {
-          refsForSymbol = new Map<string, number>();
-          referencesBySymbol.set(target.symbolId, refsForSymbol);
-        }
-        refsForSymbol.set(doc.relative_path, (refsForSymbol.get(doc.relative_path) ?? 0) + occurrences);
-      }
-    }
-
-    const dispatchNames = getCrossLanguageDispatchNames(db, doc.relative_path);
-    for (const cmdName of dispatchNames) {
-      const targets = attributeIdentifier(db, doc.relative_path, cmdName);
-      for (const target of targets) {
-        if (target.relativePath === doc.relative_path) continue;
-
-        let refsForSymbol = referencesBySymbol.get(target.symbolId);
-        if (!refsForSymbol) {
-          refsForSymbol = new Map<string, number>();
-          referencesBySymbol.set(target.symbolId, refsForSymbol);
-        }
-        refsForSymbol.set(doc.relative_path, (refsForSymbol.get(doc.relative_path) ?? 0) + 1);
-      }
-    }
-  }
-
-  // Per-file framework-owned exclusion ranges (Tauri command handlers, test
-  // functions, serde-derived struct/enum fields, anything inside
-  // #[cfg(test)] mod). These items are invoked by the framework, not by code
-  // in the SCIP graph, so they look "dead" without this filter and dominate
-  // the report. Range-based matching because SCIP fields' start_line often
-  // points at the struct's opening line.
-  interface FileExclusions {
-    ranges: Array<{ startLine: number; endLine: number }>;
-    containers: Set<string>;
-  }
-  const exclusionsByFile = new Map<string, FileExclusions>();
-  const ensureFileExclusions = (relativePath: string): FileExclusions => {
-    let cached = exclusionsByFile.get(relativePath);
-    if (cached) return cached;
-    const entries = getDefinitionExclusions(db, relativePath);
-    cached = {
-      ranges: entries.map((e) => ({ startLine: e.startLine, endLine: e.endLine })),
-      containers: new Set(entries.map((e) => e.containerName).filter((n): n is string => Boolean(n))),
-    };
-    exclusionsByFile.set(relativePath, cached);
-    return cached;
-  };
-  const isExcluded = (
-    relativePath: string,
-    startLine: number,
-    parentTypeName: string | null,
-  ): boolean => {
-    const ex = ensureFileExclusions(relativePath);
-    for (const r of ex.ranges) {
-      if (startLine >= r.startLine && startLine <= r.endLine) return true;
-    }
-    if (parentTypeName && ex.containers.has(parentTypeName)) return true;
-    return false;
-  };
+  const isExcluded = buildFileExclusionPredicate(db);
 
   const definitions = getAllDefinitions(db, { scope })
     .filter((definition) => !db.isIgnored(definition.relativePath))
@@ -246,6 +141,121 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
  * miss files too) still contribute their references to the dead-code
  * detector.
  */
+
+/**
+ * Augment `referencesBySymbol` with AST-based identifier hits.
+ *
+ * scip-rust (and most SCIP indexers) doesn't record every identifier
+ * reference. The biggest gap on Rust codebases: `self.field` and `Self::X`
+ * accesses inside an impl block are not emitted as cross-symbol mentions,
+ * so a struct field that's used heavily within its own impl appears dead.
+ *
+ * We compensate by walking each AST-supported file's identifier set
+ * (already cached from earlier queries) and for any identifier whose name
+ * matches a unique-leaf candidate symbol, attribute it as a reference.
+ * Same-file matches register as same-file refs (becoming "file-internal"
+ * rather than "dead-code"); other-file matches register as cross-file refs
+ * (eliminating the dead-code flag entirely).
+ *
+ * attributeIdentifier owns the same-file > direct-import > interface-
+ * dispatch disambiguation that used to live inline here.
+ */
+function supplementReferencesFromAst(
+  db: ScipDatabase,
+  referencesBySymbol: Map<number, Map<string, number>>,
+  inactiveBarrelPaths: ReadonlySet<string>,
+): void {
+  const docRows = db.all<{ relative_path: string }>(
+    `SELECT relative_path FROM documents
+     WHERE 1 = 1 ${db.pathExclusionsFor('documents')}`,
+  );
+  const indexedPaths = new Set(docRows.map((r) => r.relative_path));
+  // Indexers (especially rust-analyzer) don't always cover every source
+  // file — partial workspace indexing is common. We extend the AST scan to
+  // every source file the project owns (indexed + auxiliary types like
+  // Vue SFCs), so a reference from an unindexed file still credits the
+  // symbol it reaches.
+  const scanPaths = new Set<string>(getSourceFiles(db));
+  for (const p of indexedPaths) scanPaths.add(p);
+
+  const recordRef = (symbolId: number, file: string, occurrences: number): void => {
+    if (occurrences <= 0) return;
+    let refsForSymbol = referencesBySymbol.get(symbolId);
+    if (!refsForSymbol) {
+      refsForSymbol = new Map<string, number>();
+      referencesBySymbol.set(symbolId, refsForSymbol);
+    }
+    refsForSymbol.set(file, (refsForSymbol.get(file) ?? 0) + occurrences);
+  };
+
+  for (const relativePath of scanPaths) {
+    // Skip files we can't parse at all. Vue SFCs go through `getAst`'s
+    // script-block extraction (returns a TS/JS tree), so they pass even
+    // though detectAstLanguage('.vue') returns null.
+    if (!detectAstLanguage(relativePath) && !isVueSfcPath(relativePath)) continue;
+    if (db.isIgnored(relativePath)) continue;
+    if (inactiveBarrelPaths.has(relativePath)) continue;
+    const lineMap = getIdentifierLineMap(db, relativePath);
+    for (const [name, lines] of lineMap) {
+      const targets = attributeIdentifier(db, relativePath, name);
+      if (targets.length === 0) continue;
+      // Each line is one occurrence. The defining file's count includes the
+      // declaration itself; subtract one occurrence on that file so we don't
+      // count the def as a reference to itself.
+      for (const target of targets) {
+        const occurrences = target.relativePath === relativePath
+          ? Math.max(0, lines.length - 1)
+          : lines.length;
+        recordRef(target.symbolId, relativePath, occurrences);
+      }
+    }
+
+    const dispatchNames = getCrossLanguageDispatchNames(db, relativePath);
+    for (const cmdName of dispatchNames) {
+      const targets = attributeIdentifier(db, relativePath, cmdName);
+      for (const target of targets) {
+        if (target.relativePath === relativePath) continue;
+        recordRef(target.symbolId, relativePath, 1);
+      }
+    }
+  }
+}
+
+/**
+ * Build a per-file exclusion predicate: returns true when (file, startLine)
+ * sits inside a framework-owned definition range (Tauri command handlers,
+ * `#[cfg(test)] mod`, serde-derived fields, etc.) that the SCIP graph can't
+ * see callers for. Range-based matching because SCIP fields' start_line
+ * often points at the struct's opening line.
+ */
+function buildFileExclusionPredicate(
+  db: ScipDatabase,
+): (relativePath: string, startLine: number, parentTypeName: string | null) => boolean {
+  interface FileExclusions {
+    ranges: Array<{ startLine: number; endLine: number }>;
+    containers: Set<string>;
+  }
+  const exclusionsByFile = new Map<string, FileExclusions>();
+  const ensure = (relativePath: string): FileExclusions => {
+    let cached = exclusionsByFile.get(relativePath);
+    if (cached) return cached;
+    const entries = getDefinitionExclusions(db, relativePath);
+    cached = {
+      ranges: entries.map((e) => ({ startLine: e.startLine, endLine: e.endLine })),
+      containers: new Set(entries.map((e) => e.containerName).filter((n): n is string => Boolean(n))),
+    };
+    exclusionsByFile.set(relativePath, cached);
+    return cached;
+  };
+  return (relativePath, startLine, parentTypeName) => {
+    const ex = ensure(relativePath);
+    for (const r of ex.ranges) {
+      if (startLine >= r.startLine && startLine <= r.endLine) return true;
+    }
+    if (parentTypeName && ex.containers.has(parentTypeName)) return true;
+    return false;
+  };
+}
 
 function passesTestFileFilter(relativePath: string): boolean {
   const patterns = [...new Set([...TEST_FILE_PATTERNS, ...TEST_SUPPORT_PATH_PATTERNS])];

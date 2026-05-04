@@ -39,6 +39,9 @@ export function createGitignoreFilter(projectRoot: string): PathFilter {
   };
 }
 
+// scip-query: ignore-stale — public return type of createGitignoreFilter and
+// passed across many call sites as the ScipDatabase.gitignore field; the
+// 1-consumer count is the type's own file (it's the canonical PathFilter shape).
 export interface PathFilter {
   /** Returns true if this path should be excluded from results */
   isIgnored: (relativePath: string) => boolean;

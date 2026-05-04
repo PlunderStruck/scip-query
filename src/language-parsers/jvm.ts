@@ -34,6 +34,8 @@ export function parseJvmImports(
   return statements;
 }
 
+// scip-query: ignore-similar — Java-specific: scoped_identifier nodes, no
+// aliases, asterisk wildcards. Per-language AST shapes intentionally split.
 function parseJavaImportsAst(
   db: ScipDatabase,
   importerPath: string,
@@ -75,6 +77,8 @@ function parseJavaImportsAst(
   return results;
 }
 
+// scip-query: ignore-similar — Kotlin-specific: import_header + import_alias +
+// wildcard_import nodes. Per-language AST shapes intentionally split.
 function parseKotlinImportsAst(
   db: ScipDatabase,
   importerPath: string,
@@ -118,6 +122,9 @@ function parseKotlinImportsAst(
   return results;
 }
 
+// scip-query: ignore-similar — Scala-specific: namespace_selectors with
+// arrow_renamed_identifier (`{X => Y}`) syntax, three import-shape branches.
+// Per-language AST shapes intentionally split.
 function parseScalaImportsAst(
   db: ScipDatabase,
   importerPath: string,

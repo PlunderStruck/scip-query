@@ -79,6 +79,9 @@ const REGISTRY: ReadonlyArray<LanguageParser> = [
   javascript, python, jvm, rust, ruby, cLike, dotnet, dart, php,
 ];
 
+// scip-query: ignore-wrapper — public face of the registry; hides REGISTRY +
+// the selectParser function from index.ts so the barrel only knows the
+// "given a path, get a parser" abstraction.
 export function getParserForPath(relativePath: string): LanguageParser | null {
   return selectParser(REGISTRY, relativePath);
 }

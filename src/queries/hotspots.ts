@@ -9,6 +9,8 @@ import { shortenSymbol } from '../symbol-parser.js';
  * Find the most-referenced symbols in the codebase — the choke points
  * where changes have the widest blast radius.
  */
+// scip-query: ignore-similar — shares SCIP-DB join shape with bottlenecks /
+// topFanOut; counts cross-file references per definition. Different question.
 export function hotspots(
   db: ScipDatabase,
   opts: { limit?: number; scope?: string } = {},

@@ -22,7 +22,7 @@
 import { readdirSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import type { ScipDatabase } from './db.js';
-import { createPerDbCache, createPerDbValue } from './per-db-cache.js';
+import { createPerDbCache } from './per-db-cache.js';
 
 /**
  * The complete set of source-file extensions scip-query knows how to
@@ -121,22 +121,6 @@ export function getSourceFiles(
 }
 
 const SOURCE_FILES_CACHE = createPerDbCache<string, string[]>('source-files');
-
-/**
- * Just the auxiliary set — files on disk that match an auxiliary extension
- * (.vue today). Cheaper than getSourceFiles when a caller only needs
- * "what's the unindexed-but-source set?" Cached per DB.
- */
-export function getAuxiliarySourceFiles(db: ScipDatabase): string[] {
-  return AUX_SOURCE_FILES_CACHE.get(db, () => {
-    const ext = new Set(AUXILIARY_EXTENSIONS.map((e) => e.toLowerCase()));
-    return [...listOnDiskSources(db.config.projectRoot, ext)]
-      .filter((file) => !db.isIgnored(file))
-      .sort();
-  });
-}
-
-const AUX_SOURCE_FILES_CACHE = createPerDbValue<string[]>('aux-source-files');
 
 function listOnDiskSources(absRoot: string, extensions: ReadonlySet<string>): Set<string> {
   const out = new Set<string>();

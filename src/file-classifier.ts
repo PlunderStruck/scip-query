@@ -38,11 +38,7 @@ export function classifyFile(file: string): FileKind {
 
 // ── Convenience predicates ───────────────────────────────────────
 
-export function isEntry(file: string): boolean { return classifyFile(file) === 'entry'; }
 export function isBarrel(file: string): boolean { return classifyFile(file) === 'barrel'; }
-export function isWorker(file: string): boolean { return classifyFile(file) === 'worker'; }
-export function isTest(file: string): boolean { return classifyFile(file) === 'test'; }
-export function isSource(file: string): boolean { return classifyFile(file) === 'source'; }
 
 // ── Live-barrel transitive closure (DB-dependent) ────────────────
 

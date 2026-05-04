@@ -144,6 +144,9 @@ function fetchTopFanInRows(
 /**
  * Top fan-out across the whole codebase — files that depend on the most external symbols.
  */
+// scip-query: ignore-similar — shares SCIP-DB join shape with bottlenecks +
+// hotspots; measures per-file external-symbol count. Each query asks a
+// different question of the same SCIP graph.
 export function topFanOut(
   db: ScipDatabase,
   opts: { limit?: number; scope?: string } = {},

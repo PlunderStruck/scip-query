@@ -5,6 +5,7 @@ import { buildCalleeMap, getCalleeRowsForSymbol } from '../reference-graph.js';
 import { getCallableSignature } from '../ast.js';
 import { getSourceText } from '../source-text.js';
 import { computeIdf, difference, intersection, weightedCosine } from '../similarity.js';
+import { hasSuppressionComment } from '../source-text.js';
 import type { SimilarSymbolResult } from '../types.js';
 import { isFunctionLikeSymbol, leafName, shortenSymbol } from '../symbol-parser.js';
 
@@ -222,7 +223,8 @@ function getAllCalleeFingerprints(
     .filter((d) => !db.isIgnored(d.relativePath))
     .filter((d) => d.isFunctionLike)
     .filter((d) => excludeSymbol === undefined || d.symbol !== excludeSymbol)
-    .filter((d) => (d.endLine - d.startLine + 1) >= 5);
+    .filter((d) => (d.endLine - d.startLine + 1) >= 5)
+    .filter((d) => !hasSuppressionComment(db, d.relativePath, d.startLine));
 
   const calleeMap = buildCalleeMap(db, candidates);
 

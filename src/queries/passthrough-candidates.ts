@@ -2,6 +2,7 @@ import type { ScipDatabase } from '../db.js';
 import { getDefinitionsForFile, getScopedDefinitions } from '../definition-catalog.js';
 import { buildCalleeMap } from '../reference-graph.js';
 import { isLiteralPassthrough } from '../passthrough-detect.js';
+import { hasSuppressionComment } from '../source-text.js';
 import type { PassthroughCandidate } from '../types.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../symbol-parser.js';
 
@@ -24,6 +25,7 @@ export function passthroughCandidates(
   const results: PassthroughCandidate[] = [];
 
   for (const sym of symbols) {
+    if (hasSuppressionComment(db, sym.relativePath, sym.startLine)) continue;
     const rawCallees = calleeMap.get(sym.symbolId) ?? [];
     const callees = rawCallees.some((c) => isFunctionLikeSymbol(c.symbol))
       ? rawCallees.filter((c) => isFunctionLikeSymbol(c.symbol))

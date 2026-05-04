@@ -96,6 +96,8 @@ function inExcludedRange(
  * pay the parse cost exactly once per file per process.
  */
 const FILE_IDENTIFIER_CACHE = createPerDbCache<string, Set<string>>('file-identifiers');
+// scip-query: ignore-wrapper — public read-side of FILE_IDENTIFIER_CACHE, expresses
+// "set of identifiers in this file" as a distinct interface from the line-map cache.
 export function getFileIdentifiers(
   db: ScipDatabase,
   relativePath: string,

@@ -5,8 +5,8 @@ import { buildSourceFallbackCallerFiles } from '../identifier-attribution.js';
 import { getDefinitionsForFile, getScopedDefinitions } from '../definition-catalog.js';
 import type { StaleAbstraction } from '../types.js';
 import { leafName, shortenSymbol } from '../symbol-parser.js';
-import { getReExports } from '../language-parsers/javascript.js';
-import { getSourceText } from '../source-text.js';
+import { getReExports } from '../language-parsers/index.js';
+import { getSourceText, hasSuppressionComment } from '../source-text.js';
 import { detectAstLanguage, getAst, getTypeContainerMap, type SyntaxNode } from '../ast.js';
 
 /**
@@ -36,7 +36,8 @@ export function staleAbstractions(
 
   const typeCandidates = getScopedDefinitions(db, scope)
     .filter((definition) => definition.isTypeLike && definitionLoc(definition) >= minLoc)
-    .filter((definition) => !db.isIgnored(definition.relativePath));
+    .filter((definition) => !db.isIgnored(definition.relativePath))
+    .filter((definition) => !hasSuppressionComment(db, definition.relativePath, definition.startLine));
 
   // Consumer map = SCIP mentions (with self-references filtered) ∪ source-text
   // fallback for unique-named types. Without the fallback, a type used only in

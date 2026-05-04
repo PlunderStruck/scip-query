@@ -536,9 +536,3 @@ export function parentTypeName(rawSymbol: string): string | null {
   return null;
 }
 
-export function applyLimit<T>(
-  values: T[],
-  limit?: number,
-): T[] {
-  return typeof limit === 'number' ? values.slice(0, limit) : values;
-}

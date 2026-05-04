@@ -63,6 +63,9 @@ export function affected(
   return results;
 }
 
+// scip-query: ignore-similar — shares enclosing-definition + symbol-lookup
+// helpers with forwardSlice; computes BFS-affected rows for impact propagation,
+// not slice connectivity. Different intent.
 function getDirectAffectedRows(
   db: ScipDatabase,
   target: SymbolMatch,

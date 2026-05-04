@@ -17,6 +17,8 @@ import { createPerDbSourceCache } from './per-db-cache.js';
  * Python strings, line-prefixed (`#`, `//`), block comments (`/* … *‍/`),
  * backtick template strings, single-quoted, and double-quoted.
  */
+// scip-query: ignore-wrapper — public primitive of source-stripper; the heuristic
+// only sees one external caller today but this is the module's defining function.
 export function stripCommentsAndStrings(source: string): string {
   return source
     .replace(/'''[\s\S]*?'''/g, maskPreservingLines)
@@ -41,6 +43,8 @@ const STRIPPED_LINES_CACHE = createPerDbSourceCache<string[]>('stripped-lines');
  * identifier-index.ts) so repeat lookups in the same file pay the strip cost
  * exactly once.
  */
+// scip-query: ignore-wrapper — owns STRIPPED_LINES_CACHE; the cached read is the
+// abstraction, not the lambda inside.
 export function getStrippedLines(db: ScipDatabase, relativePath: string, source: string): string[] {
   return STRIPPED_LINES_CACHE.get(db, relativePath, source, () =>
     stripCommentsAndStrings(source).split('\n'),
@@ -99,6 +103,8 @@ export function collectNamespaceMembers(body: string, namespaceName: string): st
 }
 
 /** Escape regex meta-characters so a user-supplied identifier matches literally. */
+// scip-query: ignore-wrapper — used internally (hasIdentifierUsage, collectNamespaceMembers)
+// AND exported for identifier-index.ts; the external-caller count of 1 understates real fan-in.
 export function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

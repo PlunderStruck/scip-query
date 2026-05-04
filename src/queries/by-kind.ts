@@ -118,6 +118,9 @@ function resolveKindQuery(kindQuery: string): number | null {
   return null;
 }
 
+// scip-query: ignore-extract — the cluster the extract heuristic finds
+// (Array.slice + loadKindRows + PathFilter.filter) is just the trailing
+// fluent chain of the filter pipeline, not an extractable unit.
 export function byKind(
   db: ScipDatabase,
   kindQuery: string,

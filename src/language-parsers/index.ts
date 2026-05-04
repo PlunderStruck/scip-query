@@ -14,8 +14,24 @@ import { join } from 'node:path';
 import type { ScipDatabase } from '../db.js';
 import { normalizePath } from '../import-path-resolver.js';
 import { createPerDbCache } from '../per-db-cache.js';
-import type { ParsedSourceExport, ParsedSourceImport } from '../types.js';
+import type { ParsedReExport, ParsedSourceExport, ParsedSourceImport } from '../types.js';
+import { parseReExports } from './javascript.js';
 import { getParserForPath } from './registry.js';
+
+/**
+ * Parse `export … from '…'` statements in a JS/TS source and resolve the
+ * target paths. Public entry point of the language-parsers barrel so callers
+ * don't reach into the JS-specific implementation file.
+ */
+// scip-query: ignore-wrapper — barrel-layer entry point that hides the
+// per-language adapter. Inlining would reintroduce a queries → JS-impl
+// layer dependency that drift correctly flags.
+export function getReExports(
+  db: ScipDatabase,
+  relativePath: string,
+): ParsedReExport[] {
+  return parseReExports(db, relativePath);
+}
 
 const SOURCE_IMPORT_CACHE = createPerDbCache<string, ParsedSourceImport[]>('source-imports');
 const SOURCE_EXPORT_CACHE = createPerDbCache<string, ParsedSourceExport[]>('source-exports');

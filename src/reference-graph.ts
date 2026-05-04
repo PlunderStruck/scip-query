@@ -39,7 +39,7 @@ import { createPerDbCache, createPerDbValue } from './per-db-cache.js';
 import { findIdentifierLines, getIdentifiersByLine } from './identifier-index.js';
 import { getSourceImports } from './language-parsers/index.js';
 import { leafName } from './symbol-parser.js';
-import { applyLimit, findEnclosingDefinition, getAllDefinitions, getDefinitionsForFile } from './definition-catalog.js';
+import { findEnclosingDefinition, getAllDefinitions, getDefinitionsForFile } from './definition-catalog.js';
 import { getFullSymbolMatch } from './symbol-lookup.js';
 import type { ReferenceSite, SymbolLocation } from './types.js';
 
@@ -136,7 +136,7 @@ export function getCalleeRowsForSymbol(
   // refinements that the bulk helper already handles.
   const map = buildCalleeMap(db, [symbol]);
   const callees = map.get(symbol.symbolId) ?? [];
-  return applyLimit(callees, opts.limit);
+  return typeof opts.limit === 'number' ? callees.slice(0, opts.limit) : callees;
 }
 
 export function getCallerRowsForSymbol(
@@ -149,7 +149,7 @@ export function getCallerRowsForSymbol(
   // caller query AST-quality attribution + SCIP fallback in O(1) lookup.
   const inverse = buildCallerRowsMap(db);
   const callers = inverse.get(symbol.symbolId) ?? [];
-  return applyLimit(callers, opts.limit);
+  return typeof opts.limit === 'number' ? callers.slice(0, opts.limit) : callers;
 }
 
 const CALLER_ROWS_CACHE = createPerDbValue<Map<number, CallerRow[]>>('caller-rows');

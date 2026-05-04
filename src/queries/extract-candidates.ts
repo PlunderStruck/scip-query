@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../db.js';
 import { getDefinitionsForFile, getScopedDefinitions } from '../definition-catalog.js';
 import { buildCalleeMap } from '../reference-graph.js';
+import { hasSuppressionComment } from '../source-text.js';
 import type { ExtractCandidate } from '../types.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../symbol-parser.js';
 
@@ -27,6 +28,7 @@ export function extractCandidates(
     .filter((definition) => !db.isIgnored(definition.relativePath))
     .filter((definition) => definitionLoc(definition) >= minLoc && isFunctionLikeSymbol(definition.symbol))
     .filter((definition) => !(definition.relativePath.split('/').pop() ?? '').includes('types'))
+    .filter((definition) => !hasSuppressionComment(db, definition.relativePath, definition.startLine))
     .sort((left, right) => definitionLoc(right) - definitionLoc(left));
 
   const calleeMap = buildCalleeMap(db, symbols);

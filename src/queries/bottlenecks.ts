@@ -12,6 +12,9 @@ import { shortenSymbol } from '../symbol-parser.js';
  * These are the most dangerous symbols to change — they sit at the
  * intersection of many dependency paths. Score = fanIn * fanOut.
  */
+// scip-query: ignore-similar — shares the SCIP-DB join shape with topFanOut /
+// hotspots, but measures fan-in × fan-out coupling, not fan-out alone.
+// Different intent, intentionally separate query.
 export function bottlenecks(
   db: ScipDatabase,
   opts: { limit?: number; scope?: string; minFanIn?: number; minFanOut?: number } = {},

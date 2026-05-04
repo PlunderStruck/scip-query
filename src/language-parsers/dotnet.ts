@@ -57,6 +57,10 @@ export function parseDotNetImports(
   return statements;
 }
 
+// scip-query: ignore-similar — per-language AST walker; each language has a
+// distinct AST node shape (imports_statement / using_directive / import_declaration)
+// and distinct alias/wildcard semantics. Convergence would require a Strategy
+// abstraction that's harder to read than the per-language version.
 function parseVbImportsAst(
   db: ScipDatabase,
   importerPath: string,
@@ -92,6 +96,8 @@ function parseVbImportsAst(
   return results;
 }
 
+// scip-query: ignore-similar — handles C#-specific `using static`, alias
+// (`using A = B`), and 3-shape AST patterns; not interchangeable with VB / JVM.
 function parseCSharpImportsAst(
   db: ScipDatabase,
   importerPath: string,

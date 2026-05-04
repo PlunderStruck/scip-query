@@ -45,6 +45,8 @@ export function parsePhpImports(
   return statements;
 }
 
+// scip-query: ignore-similar — PHP-specific: `use Foo\Bar;`, `use function`,
+// `use const`, group `use Foo\{A, B}`. Per-language AST shapes intentionally split.
 function parsePhpImportsAst(
   db: ScipDatabase,
   importerPath: string,

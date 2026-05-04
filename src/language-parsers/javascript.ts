@@ -347,8 +347,11 @@ function splitImportClause(clause: string): [string, string | null] {
  * Parse all re-export statements (`export ... from '...'`) in a JS/TS source.
  * Returns each statement's kind, resolved source path, re-exported local
  * names (for named re-exports), and line range.
+ *
+ * The public entry point lives in `./index.ts` (`getReExports`) so callers
+ * import via the language-parsers barrel like every other parser surface.
  */
-export function getReExports(
+export function parseReExports(
   db: ScipDatabase,
   relativePath: string,
 ): ParsedReExport[] {

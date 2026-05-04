@@ -49,7 +49,6 @@ function hasExtensionIn(relativePath: string, extensions: readonly string[]): bo
   return (extensions as readonly string[]).includes(extname(relativePath).toLowerCase());
 }
 
-export function isJavaScriptSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, JS_EXTENSIONS); }
 export function isPythonSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, PYTHON_EXTENSIONS); }
 export function isJvmSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, JVM_EXTENSIONS); }
 export function isRustSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, RUST_EXTENSIONS); }
@@ -60,6 +59,8 @@ export function isVisualBasicSourcePath(relativePath: string): boolean { return 
 export function isDartSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, DART_EXTENSIONS); }
 export function isPhpSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, PHP_EXTENSIONS); }
 
+// scip-query: ignore-wrapper — public predicate naming the family-for-extension
+// concept; called from utils.ts which uses it across many call sites.
 export function extensionFamilyFor(relativePath: string): readonly string[] {
   const ext = extname(relativePath).toLowerCase();
   for (const family of LANGUAGE_EXTENSION_FAMILIES) {
@@ -385,6 +386,9 @@ function getIndexedPaths(db: ScipDatabase): Set<string> {
   );
 }
 
+// scip-query: ignore-wrapper — single line but expresses the project-wide
+// "always forward-slash paths" contract; replacing call sites would scatter
+// the convention.
 export function normalizePath(path: string): string {
   return path.replace(/\\/g, '/');
 }

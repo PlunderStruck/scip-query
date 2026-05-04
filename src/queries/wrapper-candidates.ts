@@ -5,6 +5,7 @@ import { buildSourceFallbackCallerFiles } from '../identifier-attribution.js';
 import { findEnclosingDefinition, getDefinitionsForFile, getScopedDefinitions } from '../definition-catalog.js';
 import { getIdentifierLineMap } from '../identifier-index.js';
 import { leafName } from '../symbol-parser.js';
+import { hasSuppressionComment } from '../source-text.js';
 import type { WrapperCandidate } from '../types.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../symbol-parser.js';
 
@@ -35,6 +36,7 @@ export function wrapperCandidates(
   const results: WrapperCandidate[] = [];
 
   for (const symbol of symbols) {
+    if (hasSuppressionComment(db, symbol.relativePath, symbol.startLine)) continue;
     const symbolStem = basename(symbol.relativePath, extname(symbol.relativePath));
 
     // Cheap bulk check first: skip if not exactly 1 external caller file (excluding same stem)

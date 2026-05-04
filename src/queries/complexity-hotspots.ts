@@ -49,6 +49,9 @@ export function complexityHotspots(
     .slice(0, limit);
 }
 
+// scip-query: ignore-similar — shape overlap with isolated() is just the
+// shared "load definitions, build callee+caller maps" pattern; the analyses
+// are unrelated (complexity scoring vs disconnected-leaf detection).
 function loadComplexityCandidates(
   db: ScipDatabase,
   scope: string | undefined,

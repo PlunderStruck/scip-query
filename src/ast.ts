@@ -71,6 +71,9 @@ function getParserCtor(): (ParserCtor & { Query: QueryConstructor }) | null {
   }
 }
 
+// scip-query: ignore-stale — foundational discriminator used by every AST helper
+// in this file plus framework-patterns; the heuristic counts cross-file consumers
+// only and misses the dozens of internal uses.
 export type AstLanguage =
   | 'rust' | 'typescript' | 'tsx' | 'javascript' | 'python'
   | 'java' | 'kotlin' | 'scala' | 'ruby' | 'c' | 'cpp' | 'csharp' | 'php' | 'vb';
@@ -142,20 +145,6 @@ function loadGrammar(lang: AstLanguage): unknown | null {
   }
   grammarCache.set(lang, g);
   return g;
-}
-
-/**
- * Languages whose AST is rich enough to power the cross-file callable/call
- * queries. The other AST languages have parsed trees (used for imports,
- * identifier collection, structural scans) but don't have callable/call
- * tree-sitter queries wired up.
- */
-const QUERY_SUPPORTED: ReadonlySet<AstLanguage> = new Set([
-  'rust', 'typescript', 'tsx', 'javascript', 'python',
-]);
-
-export function isQuerySupportedLanguage(lang: AstLanguage): boolean {
-  return QUERY_SUPPORTED.has(lang);
 }
 
 const parserPool = new Map<AstLanguage, ParserInstance>();
@@ -314,6 +303,9 @@ export function compileQuery(lang: AstLanguage, queryString: string): QueryInsta
   return compiled;
 }
 
+// scip-query: ignore-stale — public return type of getCallableSites; the
+// single-consumer count just reflects that the function exposing it is itself
+// only called from one place today.
 export interface CallableSite {
   name: string;
   startLine: number;
@@ -367,34 +359,21 @@ const CALLABLE_CACHE = new WeakMap<Tree, CallableSite[]>();
  * the tree-sitter path is unavailable and callers fall back to regex.
  */
 export function getCallableSites(db: ScipDatabase, relativePath: string): CallableSite[] | null {
-  const lang = detectAstLanguage(relativePath);
-  if (!lang) return null;
-  const queryString = CALLABLE_QUERY_BY_LANG[lang];
-  if (!queryString) return null;
-  const tree = getAst(db, relativePath);
-  if (!tree) return null;
-
-  const cached = CALLABLE_CACHE.get(tree);
-  if (cached) return cached;
-
-  const query = compileQuery(lang, queryString);
-  if (!query) return null;
-  const matches = query.matches(tree.rootNode);
-  const sites: CallableSite[] = [];
-  for (const match of matches) {
-    let name: string | null = null;
-    let def: { startLine: number; endLine: number } | null = null;
-    for (const cap of match.captures) {
-      if (cap.name === 'name') name = cap.node.text;
-      else if (cap.name === 'def') {
-        def = { startLine: cap.node.startPosition.row, endLine: cap.node.endPosition.row };
+  return runCachedAstQuery(db, relativePath, CALLABLE_CACHE, CALLABLE_QUERY_BY_LANG, (matches) => {
+    const sites: CallableSite[] = [];
+    for (const match of matches) {
+      let name: string | null = null;
+      let def: { startLine: number; endLine: number } | null = null;
+      for (const cap of match.captures) {
+        if (cap.name === 'name') name = cap.node.text;
+        else if (cap.name === 'def') {
+          def = { startLine: cap.node.startPosition.row, endLine: cap.node.endPosition.row };
+        }
       }
+      if (name && def) sites.push({ name, startLine: def.startLine, endLine: def.endLine });
     }
-    if (name && def) sites.push({ name, startLine: def.startLine, endLine: def.endLine });
-  }
-
-  CALLABLE_CACHE.set(tree, sites);
-  return sites;
+    return sites;
+  });
 }
 
 export interface CallSite {
@@ -442,34 +421,22 @@ const CALLSITE_CACHE = new WeakMap<Tree, CallSite[]>();
  * Cached per parsed Tree.
  */
 export function getCallSites(db: ScipDatabase, relativePath: string): CallSite[] | null {
-  const lang = detectAstLanguage(relativePath);
-  if (!lang) return null;
-  const queryString = CALL_QUERY_BY_LANG[lang];
-  if (!queryString) return null;
-  const tree = getAst(db, relativePath);
-  if (!tree) return null;
-
-  const cached = CALLSITE_CACHE.get(tree);
-  if (cached) return cached;
-
-  const query = compileQuery(lang, queryString);
-  if (!query) return null;
-  const sites: CallSite[] = [];
-  for (const match of query.matches(tree.rootNode)) {
-    let target: SyntaxNode | null = null;
-    let call: SyntaxNode | null = null;
-    for (const cap of match.captures) {
-      if (cap.name === 'target') target = cap.node;
-      else if (cap.name === 'call') call = cap.node;
+  return runCachedAstQuery(db, relativePath, CALLSITE_CACHE, CALL_QUERY_BY_LANG, (matches) => {
+    const sites: CallSite[] = [];
+    for (const match of matches) {
+      let target: SyntaxNode | null = null;
+      let call: SyntaxNode | null = null;
+      for (const cap of match.captures) {
+        if (cap.name === 'target') target = cap.node;
+        else if (cap.name === 'call') call = cap.node;
+      }
+      if (!target || !call) continue;
+      const leaf = extractCallLeaf(target);
+      if (!leaf) continue;
+      sites.push({ calleeLeaf: leaf, line: call.startPosition.row });
     }
-    if (!target || !call) continue;
-    const leaf = extractCallLeaf(target);
-    if (!leaf) continue;
-    sites.push({ calleeLeaf: leaf, line: call.startPosition.row });
-  }
-
-  CALLSITE_CACHE.set(tree, sites);
-  return sites;
+    return sites;
+  });
 }
 
 
@@ -564,6 +531,37 @@ export function runCachedAstWalk<T>(
   walk(tree, lang, acc);
   cache.set(tree, acc);
   return acc;
+}
+
+/**
+ * Run a per-language tree-sitter query against `relativePath`, build a result
+ * via `build`, and cache it per-Tree. Returns `null` when the language has no
+ * query string registered, the source is unparseable, or the query fails to
+ * compile. Used by getCallableSites / getCallSites which share this exact
+ * shape.
+ */
+export function runCachedAstQuery<T>(
+  db: ScipDatabase,
+  relativePath: string,
+  cache: WeakMap<Tree, T>,
+  queryByLang: Readonly<Partial<Record<AstLanguage, string>>>,
+  build: (matches: ReturnType<QueryInstance['matches']>) => T,
+): T | null {
+  const lang = detectAstLanguage(relativePath);
+  if (!lang) return null;
+  const queryString = queryByLang[lang];
+  if (!queryString) return null;
+  const tree = getAst(db, relativePath);
+  if (!tree) return null;
+
+  const cached = cache.get(tree);
+  if (cached) return cached;
+
+  const query = compileQuery(lang, queryString);
+  if (!query) return null;
+  const result = build(query.matches(tree.rootNode));
+  cache.set(tree, result);
+  return result;
 }
 
 const TYPE_CONTAINER_CACHE = new WeakMap<Tree, Map<string, Set<string>>>();
