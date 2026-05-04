@@ -132,10 +132,6 @@ function loadGrammar(lang: AstLanguage): unknown | null {
       case 'csharp':     g = require('tree-sitter-c-sharp'); break;
       case 'php':        g = (require('tree-sitter-php') as { php: unknown }).php; break;
       case 'vb': {
-        // tree-sitter-vb-dotnet only ships versions that peer-require
-        // tree-sitter@^0.22, conflicting with tree-sitter-kotlin's hard
-        // ^0.21 peer. Dropped from optionalDependencies; VB falls back
-        // to regex parsing. require() throws -> caught below.
         const m = require('tree-sitter-vb-dotnet') as { language?: unknown };
         g = m.language ?? m;
         break;
