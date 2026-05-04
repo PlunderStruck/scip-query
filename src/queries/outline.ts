@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../db.js';
 import type { OutlineNode } from '../types.js';
 import { loadFileSymbols } from '../definition-catalog.js';
+import { resolveIndexedPaths } from '../path-resolver.js';
 
 /**
  * Build a tree-structured outline of symbols in a file,
@@ -10,7 +11,8 @@ import { loadFileSymbols } from '../definition-catalog.js';
  * numbers match `scip symbols` output exactly.
  */
 export function outline(db: ScipDatabase, filePattern: string): OutlineNode[] {
-  const definitions = loadFileSymbols(db, filePattern, { sort: true });
+  const paths = resolveIndexedPaths(db, filePattern);
+  const definitions = loadFileSymbols(db, paths, { sort: true });
   if (definitions.length === 0) return [];
 
   const nodes: OutlineNode[] = definitions.map((d) => ({

@@ -15,9 +15,9 @@
  *    don't silently disappear.
  *
  * Pre-this-module the two sets were managed in three places (query-support,
- * dead.ts, source-analysis) with three different extension lists and three
- * different skip-dir lists. Vue support touched all three; the next file
- * type would too.
+ * dead.ts, the import-resolver) with three different extension lists and
+ * three different skip-dir lists. Vue support touched all three; the next
+ * file type would too.
  */
 import { readdirSync } from 'node:fs';
 import { extname, join } from 'node:path';

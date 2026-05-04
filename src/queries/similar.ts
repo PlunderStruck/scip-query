@@ -3,7 +3,7 @@ import { findFirstSymbolMatch } from '../symbol-lookup.js';
 import { getAllDefinitions, getScopedDefinitions } from '../definition-catalog.js';
 import { buildCalleeMap, getCalleeRowsForSymbol } from '../reference-graph.js';
 import { getCallableSignature } from '../ast.js';
-import { getSourceText } from '../source-analysis.js';
+import { getSourceText } from '../source-text.js';
 import { computeIdf, difference, intersection, weightedCosine } from '../similarity.js';
 import type { SimilarSymbolResult } from '../types.js';
 import { isFunctionLikeSymbol, leafName, shortenSymbol } from '../symbol-parser.js';

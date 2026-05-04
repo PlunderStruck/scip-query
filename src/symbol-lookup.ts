@@ -21,56 +21,15 @@
  */
 import type { ScipDatabase } from './db.js';
 import { isFunctionLikeSymbol, isModuleLikeSymbol, leafName, shortenSymbol } from './symbol-parser.js';
-import { getDefinitionsForFile } from './definition-catalog.js';
+import { hydrateSymbolMatch } from './definition-catalog.js';
+import { type SymbolQueryRow } from './scip-rows.js';
 import type { SymbolLocation, SymbolMatch } from './types.js';
 
-/**
- * Clean up the raw doc/signature string from the SCIP index. Strips fenced
- * code-block markers and the parenthesized kind prefixes (`(method)`,
- * `(property)`, etc.) that some SCIP indexers prepend.
- */
-export function cleanSignature(sig: string | null): string | null {
-  if (!sig || !sig.trim()) return null;
-  return sig
-    .replace(/^```\w*\s*/, '')
-    .replace(/\s*```$/, '')
-    .replace(/^\(method\)\s*/, '')
-    .replace(/^\(property\)\s*/, '')
-    .replace(/^\(function\)\s*/, '')
-    .replace(/^\(class\)\s*/, '')
-    .replace(/^\(interface\)\s*/, '')
-    .replace(/^\(enum\)\s*/, '')
-    .replace(/^\(type alias\)\s*/, '')
-    .replace(/^\(const\)\s*/, '')
-    .replace(/^\(var\)\s*/, '')
-    .trim() || null;
-}
-
-/**
- * SCIP indexers store `documentation` as "docstring|signature" (pipe-delimited).
- * `extractSignature` pulls the signature half; newlines are flattened to spaces
- * so downstream one-liner rendering works. If the pipe is absent the whole
- * `documentation` string is treated as signature.
- */
-export function extractSignature(doc: string | null): string | null {
-  if (!doc) return null;
-  const pipeIdx = doc.indexOf('|');
-  if (pipeIdx === -1) return doc.replace(/\n/g, ' ');
-  return doc.slice(pipeIdx + 1).replace(/\n/g, ' ');
-}
-
-export interface SymbolQueryRow {
-  id: number;
-  symbol: string;
-  document_id: number;
-  start_line: number;
-  end_line: number;
-  relative_path: string;
-  display_name?: string | null;
-  kind?: number | null;
-  documentation?: string | null;
-  enclosing_symbol?: string | null;
-}
+// `cleanSignature`, `extractSignature`, and `SymbolQueryRow` live in
+// `scip-rows.ts` so both this module and `definition-catalog.ts` can use
+// them without forming a cycle. Re-exported here for callers that already
+// import them from this module.
+export { cleanSignature, extractSignature, type SymbolQueryRow } from './scip-rows.js';
 
 export function findFirstSymbolMatch(
   db: ScipDatabase,
@@ -410,37 +369,7 @@ export function findDirectSymbolCandidate(
   return directMatches[0] ?? null;
 }
 
-/**
- * Project a SymbolQueryRow into a SymbolMatch, replacing the raw chunk-
- * level range with the AST-corrected per-file range from the definition
- * catalog when one is available. Callers that show ranges to a user (or
- * use them as bounds) get accurate line numbers; raw rows are only ever
- * used for tie-breaks before correction.
- */
-export function hydrateSymbolMatch(
-  db: ScipDatabase,
-  row: SymbolQueryRow,
-): SymbolMatch {
-  const corrected = getDefinitionsForFile(db, row.relative_path)
-    .find((definition) => definition.symbolId === row.id);
-
-  if (corrected) {
-    return {
-      symbolId: corrected.symbolId,
-      symbol: corrected.symbol,
-      documentId: corrected.documentId,
-      startLine: corrected.startLine,
-      endLine: corrected.endLine,
-      relativePath: corrected.relativePath,
-    };
-  }
-
-  return {
-    symbolId: row.id,
-    symbol: row.symbol,
-    documentId: row.document_id,
-    startLine: row.start_line,
-    endLine: row.end_line,
-    relativePath: row.relative_path,
-  };
-}
+// `hydrateSymbolMatch` lives in definition-catalog.ts (it's catalog work
+// — projecting raw rows through the AST-corrected per-file range table).
+// Re-exported above via the scip-rows barrel, but the function itself is
+// imported directly from definition-catalog.

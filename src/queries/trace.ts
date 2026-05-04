@@ -1,7 +1,8 @@
 import type { ScipDatabase } from '../db.js';
 import { cleanSignature, extractSignature, findFirstSymbolMatch } from '../symbol-lookup.js';
-import { getResolvedReferenceSites, getSourceReferenceSites } from '../reference-graph.js';
-import { getSourceText } from '../source-analysis.js';
+import { getResolvedReferenceSites } from '../reference-graph.js';
+import { getSourceReferenceSites } from '../identifier-attribution.js';
+import { getSourceText } from '../source-text.js';
 import type { TraceResult } from '../types.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../symbol-parser.js';
 

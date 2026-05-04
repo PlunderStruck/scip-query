@@ -13,7 +13,7 @@
  * exactly once per file regardless of how many adapters might match.
  */
 import type { ScipDatabase } from '../db.js';
-import type { ParsedSourceExport, ParsedSourceImport } from '../source-analysis.js';
+import type { ParsedSourceExport, ParsedSourceImport } from '../types.js';
 
 export interface LanguageParser {
   /** Human-readable language name — only used in diagnostics. */

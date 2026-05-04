@@ -1,9 +1,9 @@
 /**
  * Tree-sitter AST cache for fast, accurate source parsing.
  *
- * Replaces the regex-based parsers in source-analysis.ts for the four
- * languages we care about most (Rust, TypeScript/TSX, JavaScript, Python).
- * Other languages keep their existing regex parsers.
+ * Each per-language parser in `src/language-parsers/*.ts` calls `getAst`
+ * to walk a source file's syntax tree; the regex-fallback paths in those
+ * adapters only run when the AST is unavailable.
  *
  * Caching strategy:
  *   - Parser instances are created once per language at first use.

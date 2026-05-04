@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../db.js';
 import { getAllDefinitions } from '../definition-catalog.js';
-import { getSourceText } from '../source-analysis.js';
+import { getSourceText } from '../source-text.js';
 import type { SimilarSignatureGroup } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 

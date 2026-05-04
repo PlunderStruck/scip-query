@@ -2,24 +2,20 @@
  * Language-parser registry — wires each per-language adapter to its
  * extensions and exposes a single dispatcher.
  *
- * For now most adapters thunk into the parser functions still living in
- * source-analysis.ts; the indirection is the seam. Per-language files
- * (`./rust.ts`, `./python.ts`, etc.) can move parser code out one
- * language at a time without editing this file's clients.
+ * Each per-language file (`./javascript.ts`, `./python.ts`, …) owns its
+ * AST + regex fallback. Adding a language = one new file + one entry in
+ * the REGISTRY array; the registry has no knowledge of any language's
+ * internals.
  */
-import {
-  parseCLikeImports,
-  parseDartExports,
-  parseDartImports,
-  parseDotNetImports,
-  parseJavaScriptImports,
-  parseJvmImports,
-  parsePhpImports,
-  parsePythonImports,
-  parseRubyImports,
-  parseRustExports,
-  parseRustImports,
-} from '../source-analysis.js';
+import { parseCLikeImports } from './c-like.js';
+import { parseDartExports, parseDartImports } from './dart.js';
+import { parseDotNetImports } from './dotnet.js';
+import { parseJavaScriptImports } from './javascript.js';
+import { parseJvmImports } from './jvm.js';
+import { parsePhpImports } from './php.js';
+import { parsePythonImports } from './python.js';
+import { parseRubyImports } from './ruby.js';
+import { parseRustExports, parseRustImports } from './rust.js';
 import type { LanguageParser } from './types.js';
 import { selectParser } from './types.js';
 

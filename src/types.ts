@@ -63,6 +63,62 @@ export interface DocumentPathCandidate {
   score: number;
 }
 
+// ── Source-import / source-export records ─────────────────────────
+// Owned here (not in language-parsers/) so any module — query, parser,
+// resolver — can reference them without going back through the parser
+// registry and re-introducing a cycle.
+
+/**
+ * A single import binding parsed out of a source file. Captures both the
+ * lexical shape (kind, names, source path) and a usage flag computed from
+ * the source's body — `used` is `true` when the imported binding's local
+ * name appears anywhere in the file outside the import statement itself.
+ *
+ * Producers: each per-language parser in `src/language-parsers/*.ts`.
+ * Consumers: import-graph queries (`imports`, `drift`, `redundant-reexports`),
+ * unused-imports queries, and the import-attribution path inside
+ * `identifier-attribution.ts`.
+ */
+export interface ParsedSourceImport {
+  importedName: string;
+  localName: string | null;
+  sourcePath: string | null;
+  kind: 'named' | 'default' | 'namespace' | 'side-effect';
+  used: boolean;
+  usedMembers: string[];
+}
+
+/**
+ * A single export-from binding parsed out of a source file. Used by the
+ * languages that have an explicit re-export construct (Rust `pub use`,
+ * Dart `export`) to surface what a barrel module re-shapes.
+ */
+export interface ParsedSourceExport {
+  sourcePath: string | null;
+  specifier: string;
+}
+
+/**
+ * A re-export statement in a JavaScript/TypeScript source file — one of:
+ *   export { X [as Y] } from './path'
+ *   export type { X } from './path'
+ *   export * from './path'
+ *   export * as Ns from './path'
+ *
+ * The `sourcePath` is the resolved, project-relative path to the re-exported
+ * module (same convention as ParsedSourceImport.sourcePath).
+ */
+export interface ParsedReExport {
+  kind: 'named' | 'star' | 'star-as';
+  sourcePath: string | null;
+  /** For 'named': the list of re-exported identifiers as they appear in THIS file. */
+  names: string[];
+  /** Start line in the source (0-indexed) — inclusive. */
+  startLine: number;
+  /** End line in the source (0-indexed) — inclusive. */
+  endLine: number;
+}
+
 // ── SCIP Symbol Grammar Types ──────────────────────────────
 
 /** Parsed components of a SCIP symbol string */

@@ -1,8 +1,9 @@
 import { basename, extname } from 'node:path';
 import type { ScipDatabase } from '../db.js';
-import { buildCrossFileCallerMap, buildFileDepGraph, buildSourceFallbackCallerFiles } from '../reference-graph.js';
+import { buildCrossFileCallerMap, buildFileDepGraph } from '../reference-graph.js';
+import { buildSourceFallbackCallerFiles } from '../identifier-attribution.js';
 import { findEnclosingDefinition, getDefinitionsForFile, getScopedDefinitions } from '../definition-catalog.js';
-import { getIdentifierLineMap } from '../source-analysis.js';
+import { getIdentifierLineMap } from '../identifier-index.js';
 import { leafName } from '../symbol-parser.js';
 import type { WrapperCandidate } from '../types.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../symbol-parser.js';

@@ -4,7 +4,7 @@ import { attributeIdentifier } from '../identifier-attribution.js';
 import { getAllDefinitions } from '../definition-catalog.js';
 import { detectAstLanguage, isVueSfcPath } from '../ast.js';
 import { getCrossLanguageDispatchNames, getDefinitionExclusions } from '../framework-patterns.js';
-import { getIdentifierLineMap } from '../source-analysis.js';
+import { getIdentifierLineMap } from '../identifier-index.js';
 import { getSourceFiles } from '../source-fileset.js';
 import type { DeadOptions, DeadSymbolResult, DeadSummary } from '../types.js';
 import { isFunctionLikeSymbol, isModuleLikeSymbol, shortenSymbol } from '../symbol-parser.js';

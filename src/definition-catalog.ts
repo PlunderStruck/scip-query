@@ -23,12 +23,11 @@
  */
 import type { ScipDatabase } from './db.js';
 import { getCallableSites, type CallableSite } from './ast.js';
-import { getSourceText } from './source-analysis.js';
+import { getSourceText } from './source-text.js';
 import { isFunctionLikeSymbol, leafName, leafSuffix, parseSymbol, shortenSymbol } from './symbol-parser.js';
 import { createPerDbCache } from './per-db-cache.js';
-import { resolveIndexedPaths } from './path-resolver.js';
-import { cleanSignature, extractSignature, type SymbolQueryRow } from './symbol-lookup.js';
-import type { IndexedDefinition } from './types.js';
+import { cleanSignature, extractSignature, type SymbolQueryRow } from './scip-rows.js';
+import type { IndexedDefinition, SymbolMatch } from './types.js';
 
 export const FILE_DEFINITION_CACHE = createPerDbCache<string, IndexedDefinition[]>('file-definitions');
 
@@ -140,20 +139,23 @@ export function getScopedDefinitions(
 }
 
 /**
- * Project a set of file paths (or a file pattern) into the symbol-list shape
- * shared by `symbols`, `system`, and `outline`. Encapsulates the read →
- * filter ignored → optionally drop undocumented → optionally sort →
- * project pipeline that those three queries used to inline (which made
- * them register as similar-callee pairs).
+ * Project a set of file paths into the symbol-list shape shared by
+ * `symbols`, `system`, and `outline`. Encapsulates the read → filter
+ * ignored → optionally drop undocumented → optionally sort → project
+ * pipeline that those three queries used to inline (which made them
+ * register as similar-callee pairs).
+ *
+ * Callers that have a user-supplied path pattern instead of a list of
+ * paths should run it through `resolveIndexedPaths` first; we don't
+ * re-resolve here so the catalog has no dependency on path-resolver
+ * (which would re-introduce the path-resolver ↔ symbol-lookup ↔ catalog
+ * cycle).
  */
 export function loadFileSymbols(
   db: ScipDatabase,
-  filePatternOrPaths: string | string[],
+  paths: string[],
   opts: { onlyDocumented?: boolean; sort?: boolean } = {},
 ): FileSymbolResult[] {
-  const paths = typeof filePatternOrPaths === 'string'
-    ? resolveIndexedPaths(db, filePatternOrPaths)
-    : filePatternOrPaths;
   if (paths.length === 0) return [];
 
   let definitions = paths
@@ -196,6 +198,45 @@ export function findEnclosingDefinition(
   }
 
   return best;
+}
+
+/**
+ * Project a SymbolQueryRow into a SymbolMatch, replacing the raw chunk-
+ * level range with the AST-corrected per-file range from the definition
+ * catalog when one is available. Callers that show ranges to a user (or
+ * use them as bounds) get accurate line numbers; raw rows are only ever
+ * used for tie-breaks before correction.
+ *
+ * Lives here (not in symbol-lookup.ts) because the correction comes from
+ * the per-file catalog — putting hydrate next to its data source breaks
+ * what would otherwise be a symbol-lookup ↔ definition-catalog cycle.
+ */
+export function hydrateSymbolMatch(
+  db: ScipDatabase,
+  row: SymbolQueryRow,
+): SymbolMatch {
+  const corrected = getDefinitionsForFile(db, row.relative_path)
+    .find((definition) => definition.symbolId === row.id);
+
+  if (corrected) {
+    return {
+      symbolId: corrected.symbolId,
+      symbol: corrected.symbol,
+      documentId: corrected.documentId,
+      startLine: corrected.startLine,
+      endLine: corrected.endLine,
+      relativePath: corrected.relativePath,
+    };
+  }
+
+  return {
+    symbolId: row.id,
+    symbol: row.symbol,
+    documentId: row.document_id,
+    startLine: row.start_line,
+    endLine: row.end_line,
+    relativePath: row.relative_path,
+  };
 }
 
 // ── AST / regex range correction ─────────────────────────────────

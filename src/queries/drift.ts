@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { ScipDatabase } from '../db.js';
 import { buildFileDepGraph } from '../reference-graph.js';
-import { getSourceImports } from '../source-analysis.js';
+import { getSourceImports } from '../language-parsers/index.js';
 import type { DriftResult, DriftSummary } from '../types.js';
 
 /**

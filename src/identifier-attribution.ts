@@ -20,12 +20,9 @@ import { findEnclosingDefinition, getDefinitionsForFile } from './definition-cat
 import { getFullSymbolMatch } from './symbol-lookup.js';
 import { getGlobalLeafIndex } from './reference-graph.js';
 import type { IndexedDefinition, ReferenceSite, SymbolLocation } from './types.js';
-import {
-  findIdentifierLines,
-  getFileIdentifiers,
-  getSourceImports,
-  getSourceText,
-} from './source-analysis.js';
+import { findIdentifierLines, getFileIdentifiers } from './identifier-index.js';
+import { getSourceImports } from './language-parsers/index.js';
+import { getSourceText } from './source-text.js';
 import { getSourceFiles } from './source-fileset.js';
 import { leafName } from './symbol-parser.js';
 
@@ -240,3 +237,10 @@ function materializeReferenceSites(
   }
   return sites;
 }
+
+// ── Backwards-compatible aliases ─────────────────────────────────
+// Old query-support names. Kept so callers can keep importing the
+// names they're used to without going through reference-graph (which
+// used to re-export them, creating a cycle).
+export { findReferences as getSourceReferenceSites };
+export { findCallerFiles as buildSourceFallbackCallerFiles };

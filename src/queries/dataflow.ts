@@ -4,8 +4,8 @@ import {
   getCalleeRowsForSymbol,
   getCallerRowsForSymbol,
   getResolvedReferenceSites,
-  getSourceReferenceSites,
 } from '../reference-graph.js';
+import { getSourceReferenceSites } from '../identifier-attribution.js';
 import type { DataflowResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 

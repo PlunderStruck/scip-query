@@ -1,13 +1,12 @@
 import type { ScipDatabase } from '../db.js';
 import { createPerDbCache } from '../per-db-cache.js';
-import {
-  buildCrossFileCallerMap,
-  buildSourceFallbackCallerFiles,
-} from '../reference-graph.js';
+import { buildCrossFileCallerMap } from '../reference-graph.js';
+import { buildSourceFallbackCallerFiles } from '../identifier-attribution.js';
 import { getDefinitionsForFile, getScopedDefinitions } from '../definition-catalog.js';
 import type { StaleAbstraction } from '../types.js';
 import { leafName, shortenSymbol } from '../symbol-parser.js';
-import { getReExports, getSourceText } from '../source-analysis.js';
+import { getReExports } from '../language-parsers/javascript.js';
+import { getSourceText } from '../source-text.js';
 import { detectAstLanguage, getAst, getTypeContainerMap, type SyntaxNode } from '../ast.js';
 
 /**

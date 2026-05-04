@@ -1,0 +1,80 @@
+/**
+ * C/C++ parser. Owns `.c`, `.h`, `.cc`, `.cpp`, `.cxx`, `.hpp`, `.hh`,
+ * `.hxx`. Recognizes `#include` directives. AST path uses tree-sitter-c
+ * (the dispatcher in `ast.ts` picks the grammar). Regex fallback covers
+ * source files where tree-sitter fails.
+ */
+import { basename } from 'node:path';
+import { getAst, type Tree } from '../ast.js';
+import type { ScipDatabase } from '../db.js';
+import { resolveCLikeImportPath } from '../import-path-resolver.js';
+import { buildUsageBody, hasIdentifierUsage } from '../source-stripper.js';
+import type { ParsedSourceImport } from '../types.js';
+import { collectIdentifiersOutside } from './utils.js';
+
+export function parseCLikeImports(
+  db: ScipDatabase,
+  importerPath: string,
+  source: string,
+): ParsedSourceImport[] {
+  const tree = getAst(db, importerPath);
+  if (tree) return parseCLikeImportsAst(db, importerPath, tree);
+
+  // Regex fallback (only when tree-sitter parse fails on the source).
+  const statements: ParsedSourceImport[] = [];
+  for (const match of source.matchAll(/^[ \t]*#include\s+[<"]([^">]+)[">]\s*$/gm)) {
+    const specifier = match[1]?.trim();
+    const full = match[0];
+    if (!specifier || !full || typeof match.index !== 'number') continue;
+    const body = buildUsageBody(source, match.index, match.index + full.length);
+    const localName = basename(specifier).replace(/\.[^.]+$/, '');
+    statements.push({
+      importedName: specifier,
+      localName,
+      sourcePath: resolveCLikeImportPath(db, importerPath, specifier),
+      kind: 'named',
+      used: hasIdentifierUsage(body, localName),
+      usedMembers: [],
+    });
+  }
+  return statements;
+}
+
+function parseCLikeImportsAst(
+  db: ScipDatabase,
+  importerPath: string,
+  tree: Tree,
+): ParsedSourceImport[] {
+  const usedNames = collectIdentifiersOutside(tree, new Set(['preproc_include']));
+  const results: ParsedSourceImport[] = [];
+
+  for (const inc of tree.rootNode.descendantsOfType('preproc_include')) {
+    // System headers: `#include <stdio.h>` → `system_lib_string` child whose
+    // text includes the angle brackets. Local headers: `#include "foo.h"` →
+    // `string_literal` with a `string_content` child holding the filename.
+    let specifier: string | null = null;
+    for (const child of inc.namedChildren) {
+      if (child.type === 'system_lib_string') {
+        specifier = child.text.replace(/^<|>$/g, '');
+        break;
+      }
+      if (child.type === 'string_literal') {
+        const frag = child.namedChildren.find((c) => c.type === 'string_content');
+        specifier = frag?.text ?? child.text.replace(/^"|"$/g, '');
+        break;
+      }
+    }
+    if (!specifier) continue;
+
+    const localName = basename(specifier).replace(/\.[^.]+$/, '');
+    results.push({
+      importedName: specifier,
+      localName,
+      sourcePath: resolveCLikeImportPath(db, importerPath, specifier),
+      kind: 'named',
+      used: usedNames.has(localName),
+      usedMembers: [],
+    });
+  }
+  return results;
+}

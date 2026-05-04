@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../db.js';
 import { isLiveBarrel } from '../file-classifier.js';
 import { getDefinitionsForFile } from '../definition-catalog.js';
-import { getSourceExports, getSourceImports } from '../source-analysis.js';
+import { getSourceExports, getSourceImports } from '../language-parsers/index.js';
 import type { RedundantReexport } from '../types.js';
 import { leafSuffix, shortenSymbol } from '../symbol-parser.js';
 

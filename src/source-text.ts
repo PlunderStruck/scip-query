@@ -1,10 +1,8 @@
 /**
- * Source-file reader with a per-database cache.
- *
- * Lives in its own module (not in source-analysis.ts) so ast.ts can read
- * source files for tree-sitter parsing without pulling in all of
- * source-analysis — that import would create a cycle since source-analysis
- * needs ast.ts to dispatch parsing for AST languages.
+ * Source-file reader with a per-database cache. Tiny module, but the cache
+ * itself is hot — every per-language parser, every source-text-driven
+ * query (refs/dataflow/trace), and the AST runtime all read source
+ * through here so we pay the disk cost once per file per process.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';

@@ -36,7 +36,8 @@
 import type { ScipDatabase } from './db.js';
 import { detectAstLanguage, getCallSites } from './ast.js';
 import { createPerDbCache, createPerDbValue } from './per-db-cache.js';
-import { findIdentifierLines, getIdentifiersByLine, getSourceImports } from './source-analysis.js';
+import { findIdentifierLines, getIdentifiersByLine } from './identifier-index.js';
+import { getSourceImports } from './language-parsers/index.js';
 import { leafName } from './symbol-parser.js';
 import { applyLimit, findEnclosingDefinition, getAllDefinitions, getDefinitionsForFile } from './definition-catalog.js';
 import { getFullSymbolMatch } from './symbol-lookup.js';
@@ -194,18 +195,14 @@ export function buildCallerRowsMap(db: ScipDatabase): Map<number, CallerRow[]> {
 
 // ── Reference-site resolution ──────────────────────────────────
 
-/**
- * Re-export the source-text-based reference scan from
- * identifier-attribution under its query-support-era name. Same call,
- * one less module-name to learn.
- */
-export { findReferences as getSourceReferenceSites } from './identifier-attribution.js';
-
-/**
- * Re-export the bulk source-fallback caller-file builder under its
- * query-support-era name.
- */
-export { findCallerFiles as buildSourceFallbackCallerFiles } from './identifier-attribution.js';
+// `findReferences` (source-text-based reference scan) and
+// `findCallerFiles` (bulk source-fallback caller-file builder) live in
+// `identifier-attribution.ts`. They used to be re-exported here under
+// their query-support-era names (`getSourceReferenceSites` and
+// `buildSourceFallbackCallerFiles`) but the back-edge created a
+// reference-graph ↔ identifier-attribution cycle that the cycles
+// detector flagged. Callers now import them directly from
+// identifier-attribution.
 
 /**
  * Precision-upgraded fallback for callers/references when
