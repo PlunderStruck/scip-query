@@ -336,3 +336,36 @@ export function isDirectChildSymbol(parentRaw: string, candidateRaw: string): bo
 
   return true;
 }
+
+/**
+ * Determine whether `ancestorRaw` is a strict ancestor of `descendantRaw`
+ * in the SCIP descriptor chain (any depth, but not equal).
+ */
+export function isAncestorSymbol(ancestorRaw: string, descendantRaw: string): boolean {
+  const ancestor = parseSymbol(ancestorRaw);
+  const descendant = parseSymbol(descendantRaw);
+
+  if ('kind' in ancestor || 'kind' in descendant) {
+    return false;
+  }
+
+  const ancestorDescriptors = (ancestor as ScipSymbol).descriptors;
+  const descendantDescriptors = (descendant as ScipSymbol).descriptors;
+
+  if (descendantDescriptors.length <= ancestorDescriptors.length) {
+    return false;
+  }
+
+  for (let i = 0; i < ancestorDescriptors.length; i++) {
+    const ancestorDesc = ancestorDescriptors[i]!;
+    const descendantDesc = descendantDescriptors[i]!;
+    if (
+      ancestorDesc.name !== descendantDesc.name
+      || ancestorDesc.suffix !== descendantDesc.suffix
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}

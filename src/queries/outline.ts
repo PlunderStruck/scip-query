@@ -2,6 +2,7 @@ import type { ScipDatabase } from '../db.js';
 import type { OutlineNode } from '../types.js';
 import { loadFileSymbols } from '../definition-catalog.js';
 import { resolveIndexedPaths } from '../path-resolver.js';
+import { isAncestorSymbol } from '../symbol-parser.js';
 
 /**
  * Build a tree-structured outline of symbols in a file,
@@ -37,12 +38,19 @@ export function outline(db: ScipDatabase, filePattern: string): OutlineNode[] {
       continue;
     }
 
+    // Geometric containment fallback for indexers that don't populate
+    // enclosing_symbol (e.g. rust-analyzer, where every same-module
+    // symbol shares the same range). When ranges are equal we'd otherwise
+    // pick an arbitrary same-range sibling as parent and form a cycle —
+    // disambiguate by requiring a SCIP descriptor-chain ancestor.
     let bestParent: OutlineNode | null = null;
     let bestSize = Infinity;
 
     for (const candidate of nodes) {
       if (candidate === node) continue;
       if (candidate.startLine <= node.startLine && candidate.endLine >= node.endLine) {
+        const sameRange = candidate.startLine === node.startLine && candidate.endLine === node.endLine;
+        if (sameRange && !isAncestorSymbol(candidate.symbol, node.symbol)) continue;
         const size = candidate.endLine - candidate.startLine;
         if (size < bestSize) {
           bestSize = size;
