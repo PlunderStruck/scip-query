@@ -505,10 +505,9 @@ program
   .option('-s, --scope <path>', 'Limit to files matching path')
   .action((symbol, opts) => withDb((db) => {
     if (symbol) {
-      render.list(
-        queries.fanIn(db, symbol),
-        (r) => `  ${String(r.count).padStart(4)} files  ${r.name}`,
-      );
+      const results = queries.fanIn(db, symbol);
+      if (results.length === 0) return render.empty(`No fan-in for ${symbol}.`);
+      render.list(results, (r) => `  ${String(r.count).padStart(4)} files  ${r.name}`);
     } else {
       render.table(
         ['files', 'symbol'],
@@ -527,10 +526,9 @@ program
   .option('-s, --scope <path>', 'Limit to files matching path')
   .action((file, opts) => withDb((db) => {
     if (file) {
-      render.list(
-        queries.fanOut(db, file),
-        (r) => `  ${String(r.count).padStart(4)} symbols  ${r.name}`,
-      );
+      const results = queries.fanOut(db, file);
+      if (results.length === 0) return render.empty(`No fan-out for ${file}.`);
+      render.list(results, (r) => `  ${String(r.count).padStart(4)} symbols  ${r.name}`);
     } else {
       render.table(
         ['symbols', 'file'],
