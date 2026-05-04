@@ -10,6 +10,8 @@ const queryEntries = Object.fromEntries(
     ]),
 );
 
+// Minify JS to keep the published tarball compact. Sourcemaps are generated
+// for local debugging but excluded from the tarball via package.json `files`.
 export default defineConfig([
   {
     entry: {
@@ -20,12 +22,14 @@ export default defineConfig([
     dts: true,
     sourcemap: true,
     clean: true,
+    minify: true,
     target: 'node18',
   },
   {
     entry: { cli: 'src/cli.ts' },
     format: ['esm'],
     sourcemap: true,
+    minify: true,
     target: 'node18',
     banner: {
       js: '#!/usr/bin/env node',
@@ -35,6 +39,7 @@ export default defineConfig([
     entry: { 'reindex-worker': 'src/reindex-worker.ts', postinstall: 'src/postinstall.ts' },
     format: ['esm'],
     sourcemap: true,
+    minify: true,
     target: 'node18',
   },
 ]);
