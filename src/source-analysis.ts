@@ -12,6 +12,7 @@ import {
 } from 'node:path';
 import type { ScipDatabase } from './db.js';
 import { detectAstLanguage, getAst, getConstructorBindings, getDetailedCallSites, type SyntaxNode, type Tree } from './ast.js';
+import { getSourceText } from './source-text.js';
 
 export interface ParsedSourceImport {
   importedName: string;
@@ -61,7 +62,6 @@ export interface ParsedSourceBinding {
 
 const SOURCE_IMPORT_CACHE = new WeakMap<ScipDatabase, Map<string, ParsedSourceImport[]>>();
 const SOURCE_EXPORT_CACHE = new WeakMap<ScipDatabase, Map<string, ParsedSourceExport[]>>();
-const SOURCE_TEXT_CACHE = new WeakMap<ScipDatabase, Map<string, string>>();
 const SOURCE_CALL_CACHE = new WeakMap<ScipDatabase, Map<string, ParsedSourceCall[]>>();
 const SOURCE_BINDING_CACHE = new WeakMap<ScipDatabase, Map<string, ParsedSourceBinding[]>>();
 const INDEXED_PATH_CACHE = new WeakMap<ScipDatabase, Set<string>>();
@@ -2306,27 +2306,9 @@ function extensionFamilyFor(relativePath: string): readonly string[] {
   return SOURCE_EXTENSIONS;
 }
 
-export function getSourceText(
-  db: ScipDatabase,
-  relativePath: string,
-): string {
-  const cache = getCachedMap(SOURCE_TEXT_CACHE, db);
-  const normalized = normalizePath(relativePath);
-  const cached = cache.get(normalized);
-  if (typeof cached === 'string') {
-    return cached;
-  }
-
-  const fullPath = join(db.config.projectRoot, normalized);
-  if (!existsSync(fullPath)) {
-    cache.set(normalized, '');
-    return '';
-  }
-
-  const source = readFileSync(fullPath, 'utf-8');
-  cache.set(normalized, source);
-  return source;
-}
+// Re-export for the public API so existing consumers (`getSourceText` was
+// long part of source-analysis's surface) keep working unchanged.
+export { getSourceText };
 
 function pythonParenBalance(value: string): number {
   let balance = 0;

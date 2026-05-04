@@ -14,7 +14,7 @@
 import { extname } from 'node:path';
 import { createRequire } from 'node:module';
 import type { ScipDatabase } from './db.js';
-import { getSourceText } from './source-analysis.js';
+import { getSourceText } from './source-text.js';
 
 const require = createRequire(import.meta.url);
 
