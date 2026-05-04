@@ -132,24 +132,49 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     return norm(a) === norm(b);
   };
 
-  const resolveLeaf = (leaf: string, refFile: string): { symbolId: number; relativePath: string } | null => {
+  // Resolve to one OR many candidates. Multiple come back for interface-impl
+  // dispatch: when a file declares `interface PaymentProcessor { foo() }`
+  // alongside `class StripePaymentProcessor implements PaymentProcessor
+  // { foo() }`, a call `processor.foo()` statically resolves to the
+  // interface symbol but at runtime can land on any impl. So every
+  // same-file candidate should stay live, not just the interface.
+  const resolveLeaf = (leaf: string, refFile: string): Array<{ symbolId: number; relativePath: string }> => {
     const bucket = leafToSymbolGlobal.get(leaf);
-    if (!bucket || bucket.length === 0) return null;
-    if (bucket.length === 1) return bucket[0]!;
-    // Ambiguous — prefer a symbol whose defining file is the reference file.
+    if (!bucket || bucket.length === 0) return [];
+    if (bucket.length === 1) return [bucket[0]!];
+
+    // 1. Same-reference-file resolution wins outright.
     const sameFile = bucket.find((e) => e.relativePath === refFile);
-    if (sameFile) return sameFile;
-    // Otherwise, look at refFile's imports: if it imports `leaf` from a
-    // path that resolves to one of the candidates' defining files, that's
-    // the right attribution.
-    const importedFrom = importsForFile(refFile).get(leaf);
-    if (importedFrom) {
-      for (const sourcePath of importedFrom) {
-        const matched = bucket.find((e) => pathsResolveSame(sourcePath, e.relativePath));
-        if (matched) return matched;
+    if (sameFile) return [sameFile];
+
+    // 2. Direct import: refFile explicitly imports `leaf` from a path that
+    // matches a candidate's defining file. Credit all same-file candidates
+    // (interface dispatch could land on any impl at runtime).
+    const fileImports = importsForFile(refFile);
+    const directlyImportedFrom = fileImports.get(leaf);
+    if (directlyImportedFrom) {
+      for (const sourcePath of directlyImportedFrom) {
+        const matches = bucket.filter((e) => pathsResolveSame(sourcePath, e.relativePath));
+        if (matches.length > 0) return matches;
       }
     }
-    return null;
+
+    // 3. Indirect access (method-on-instance via a factory). The leaf isn't
+    // imported by name, but the consumer imports SOMETHING from a file
+    // where ALL the candidates live — and a textual hit on the leaf in
+    // this consumer is most likely a method call on an instance whose
+    // type comes from that file. Example: tests import `getPaymentProcessor`
+    // from `provider.ts`, then call `processor.createIntent(...)`. Credit
+    // all candidates in the imported file.
+    const importedSourcePaths = new Set<string>();
+    for (const set of fileImports.values()) for (const p of set) importedSourcePaths.add(p);
+    for (const sourcePath of importedSourcePaths) {
+      const matches = bucket.filter((e) => pathsResolveSame(sourcePath, e.relativePath));
+      if (matches.length > 0 && matches.length === bucket.length) {
+        return matches;
+      }
+    }
+    return [];
   };
 
   const docRows = db.all<{ relative_path: string }>(
@@ -175,35 +200,38 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     if (inactiveBarrelPaths.has(doc.relative_path)) continue;
     const lineMap = getIdentifierLineMap(db, doc.relative_path);
     for (const [name, lines] of lineMap) {
-      const target = resolveLeaf(name, doc.relative_path);
-      if (!target) continue;
+      const targets = resolveLeaf(name, doc.relative_path);
+      if (targets.length === 0) continue;
       // Each line is one occurrence. The defining file's count includes the
       // declaration itself; subtract one occurrence on that file so we don't
       // count the def as a reference to itself.
-      let occurrences = lines.length;
-      if (target.relativePath === doc.relative_path) occurrences = Math.max(0, occurrences - 1);
-      if (occurrences === 0) continue;
+      for (const target of targets) {
+        let occurrences = lines.length;
+        if (target.relativePath === doc.relative_path) occurrences = Math.max(0, occurrences - 1);
+        if (occurrences === 0) continue;
 
-      let refsForSymbol = referencesBySymbol.get(target.symbolId);
-      if (!refsForSymbol) {
-        refsForSymbol = new Map<string, number>();
-        referencesBySymbol.set(target.symbolId, refsForSymbol);
+        let refsForSymbol = referencesBySymbol.get(target.symbolId);
+        if (!refsForSymbol) {
+          refsForSymbol = new Map<string, number>();
+          referencesBySymbol.set(target.symbolId, refsForSymbol);
+        }
+        refsForSymbol.set(doc.relative_path, (refsForSymbol.get(doc.relative_path) ?? 0) + occurrences);
       }
-      refsForSymbol.set(doc.relative_path, (refsForSymbol.get(doc.relative_path) ?? 0) + occurrences);
     }
 
     const dispatchNames = getCrossLanguageDispatchNames(db, doc.relative_path);
     for (const cmdName of dispatchNames) {
-      const target = resolveLeaf(cmdName, doc.relative_path);
-      if (!target) continue;
-      if (target.relativePath === doc.relative_path) continue;
+      const targets = resolveLeaf(cmdName, doc.relative_path);
+      for (const target of targets) {
+        if (target.relativePath === doc.relative_path) continue;
 
-      let refsForSymbol = referencesBySymbol.get(target.symbolId);
-      if (!refsForSymbol) {
-        refsForSymbol = new Map<string, number>();
-        referencesBySymbol.set(target.symbolId, refsForSymbol);
+        let refsForSymbol = referencesBySymbol.get(target.symbolId);
+        if (!refsForSymbol) {
+          refsForSymbol = new Map<string, number>();
+          referencesBySymbol.set(target.symbolId, refsForSymbol);
+        }
+        refsForSymbol.set(doc.relative_path, (refsForSymbol.get(doc.relative_path) ?? 0) + 1);
       }
-      refsForSymbol.set(doc.relative_path, (refsForSymbol.get(doc.relative_path) ?? 0) + 1);
     }
   }
 
