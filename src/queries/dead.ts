@@ -4,7 +4,7 @@ import type { ScipDatabase } from '../db.js';
 import { getInactiveBarrelPaths, isEntrySurface } from '../entry-surfaces.js';
 import { getAllDefinitions, TEST_FILE_PATTERNS, TEST_SUPPORT_PATH_PATTERNS } from '../query-support.js';
 import { detectAstLanguage, getCrossLanguageDispatchNames, getDefinitionExclusions, isVueSfcPath } from '../ast.js';
-import { getIdentifierLineMap } from '../source-analysis.js';
+import { getIdentifierLineMap, getSourceImports } from '../source-analysis.js';
 import type { DeadOptions, DeadSymbolResult, DeadSummary } from '../types.js';
 import { isFunctionLikeSymbol, isModuleLikeSymbol, leafName, shortenSymbol } from '../symbol-parser.js';
 
@@ -99,14 +99,57 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
       bucket.push({ symbolId: row.id, relativePath: row.relative_path });
     }
   }
+  // Ambiguous-leaf disambiguation via imports. When a leaf is defined by N
+  // symbols and a referencing file imports `name` from path P, attribute the
+  // textual hit to the symbol whose defining file is P. Cached per file so
+  // we don't reparse imports for every leaf encountered in the file.
+  const importsByFile = new Map<string, Map<string, Set<string>>>();
+  const importsForFile = (file: string): Map<string, Set<string>> => {
+    const cached = importsByFile.get(file);
+    if (cached) return cached;
+    const map = new Map<string, Set<string>>();
+    for (const entry of getSourceImports(db, file)) {
+      if (!entry.sourcePath) continue;
+      const localName = entry.localName ?? entry.importedName;
+      if (localName) {
+        let s = map.get(localName);
+        if (!s) { s = new Set(); map.set(localName, s); }
+        s.add(entry.sourcePath);
+      }
+      if (entry.kind === 'namespace') {
+        for (const member of entry.usedMembers) {
+          let s = map.get(member);
+          if (!s) { s = new Set(); map.set(member, s); }
+          s.add(entry.sourcePath);
+        }
+      }
+    }
+    importsByFile.set(file, map);
+    return map;
+  };
+  const pathsResolveSame = (a: string, b: string): boolean => {
+    const norm = (p: string): string => p.replace(/\\/g, '/').replace(/^\.\//, '');
+    return norm(a) === norm(b);
+  };
+
   const resolveLeaf = (leaf: string, refFile: string): { symbolId: number; relativePath: string } | null => {
     const bucket = leafToSymbolGlobal.get(leaf);
     if (!bucket || bucket.length === 0) return null;
     if (bucket.length === 1) return bucket[0]!;
-    // Ambiguous — prefer a symbol whose defining file is the reference file
-    // (same-file resolution). Otherwise we can't safely attribute.
+    // Ambiguous — prefer a symbol whose defining file is the reference file.
     const sameFile = bucket.find((e) => e.relativePath === refFile);
-    return sameFile ?? null;
+    if (sameFile) return sameFile;
+    // Otherwise, look at refFile's imports: if it imports `leaf` from a
+    // path that resolves to one of the candidates' defining files, that's
+    // the right attribution.
+    const importedFrom = importsForFile(refFile).get(leaf);
+    if (importedFrom) {
+      for (const sourcePath of importedFrom) {
+        const matched = bucket.find((e) => pathsResolveSame(sourcePath, e.relativePath));
+        if (matched) return matched;
+      }
+    }
+    return null;
   };
 
   const docRows = db.all<{ relative_path: string }>(

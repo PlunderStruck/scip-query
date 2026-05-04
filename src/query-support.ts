@@ -588,9 +588,20 @@ export function getSourceReferenceSites(
   const prelude = resolveReferencePrelude(db, symbol);
   if (!prelude) return [];
   const { match, identifier } = prelude;
-  if (!identifier || !hasUniqueLeafDefinition(db, identifier, match.symbolId)) return [];
+  if (!identifier) return [];
 
-  return buildReferenceSites(db, sourceCandidateLines(db, match, identifier));
+  // If the leaf identifier is uniquely defined in the index, ANY textual hit
+  // of it must refer to this symbol — fast path, scan every file.
+  if (hasUniqueLeafDefinition(db, identifier, match.symbolId)) {
+    return buildReferenceSites(db, sourceCandidateLines(db, match, identifier));
+  }
+
+  // Otherwise the leaf is shared by 2+ definitions (a frontend `listInventoryItems`
+  // and a backend twin, for instance). We can still find references precisely
+  // by following each candidate file's imports: a textual hit only counts if
+  // the file imports `identifier` from a path that resolves back to *this*
+  // symbol's defining file.
+  return buildReferenceSites(db, importAttributedCandidateLines(db, match, identifier));
 }
 
 function sourceCandidateLines(
@@ -629,6 +640,74 @@ function sourceCandidateLines(
     if (lines.length > 0) fileLines.set(file, lines);
   }
   return fileLines;
+}
+
+/**
+ * When a leaf identifier has multiple global definitions, attribute textual
+ * hits to the right one by following each candidate file's imports. A file
+ * counts as a referrer of `match` only if it imports `identifier` from a path
+ * that resolves to `match.relativePath` (or to a re-exporting barrel that
+ * resolves there). This is what disambiguates a frontend `listInventoryItems`
+ * from a backend twin: Vue files import the frontend version, never the
+ * backend one.
+ */
+function importAttributedCandidateLines(
+  db: ScipDatabase,
+  match: { relativePath: string; startLine: number; endLine: number },
+  identifier: string,
+): Map<string, number[]> {
+  const documents = db.all<{ relative_path: string }>(
+    `SELECT relative_path
+     FROM documents
+     WHERE 1 = 1
+       ${db.pathExclusionsFor('documents')}
+     ORDER BY relative_path`,
+  );
+  const indexedSet = new Set(documents.map((d) => d.relative_path));
+  const auxiliary = listAuxiliarySourceFiles(db).filter((p) => !indexedSet.has(p));
+  const allFiles = [...documents.map((d) => d.relative_path), ...auxiliary];
+  const targetFile = match.relativePath;
+
+  const fileLines = new Map<string, number[]>();
+  for (const file of allFiles) {
+    if (db.isIgnored(file)) continue;
+
+    let isReferrer = file === targetFile;
+    if (!isReferrer) {
+      // Cheap source-text gate: if the identifier doesn't appear in the
+      // raw text, skip the import-list walk entirely.
+      const source = getSourceText(db, file);
+      if (!source || source.indexOf(identifier) === -1) continue;
+
+      for (const entry of getSourceImports(db, file)) {
+        const matchesName = entry.localName === identifier
+          || entry.importedName === identifier
+          || (entry.kind === 'namespace' && entry.usedMembers.includes(identifier));
+        if (!matchesName) continue;
+        if (entry.sourcePath && pathsResolveSame(entry.sourcePath, targetFile)) {
+          isReferrer = true;
+          break;
+        }
+      }
+    }
+    if (!isReferrer) continue;
+
+    const lines = findIdentifierLines(
+      db,
+      file,
+      identifier,
+      file === targetFile
+        ? { excludeStartLine: match.startLine, excludeEndLine: match.endLine }
+        : {},
+    );
+    if (lines.length > 0) fileLines.set(file, lines);
+  }
+  return fileLines;
+}
+
+function pathsResolveSame(a: string, b: string): boolean {
+  const norm = (p: string): string => p.replace(/\\/g, '/').replace(/^\.\//, '');
+  return norm(a) === norm(b);
 }
 
 const AUX_SOURCE_FILES_CACHE = new WeakMap<ScipDatabase, string[]>();
@@ -1774,16 +1853,23 @@ export function buildSourceFallbackCallerFiles(
     if (!def.leaf) continue;
     leafCounts.set(def.leaf, (leafCounts.get(def.leaf) ?? 0) + 1);
   }
-  // Only unique-leaf candidates can be attributed without ambiguity. Mirrors
-  // the `hasUniqueLeafDefinition` gate that the per-symbol fallback used.
+  // Unique-leaf candidates can be attributed by leaf alone — fast path.
   const leafToCandidate = new Map<string, IndexedDefinition>();
+  // Ambiguous-leaf candidates (e.g. a frontend `listInventoryItems` and a
+  // backend twin) get an extra index by their defining file; we then use
+  // the consumer's imports to pick the right one.
+  const leafToAmbiguous = new Map<string, IndexedDefinition[]>();
   for (const def of candidates) {
     if (!def.leaf) continue;
     if ((leafCounts.get(def.leaf) ?? 0) === 1) {
       leafToCandidate.set(def.leaf, def);
+    } else {
+      const bucket = leafToAmbiguous.get(def.leaf) ?? [];
+      bucket.push(def);
+      leafToAmbiguous.set(def.leaf, bucket);
     }
   }
-  if (leafToCandidate.size === 0) return new Map();
+  if (leafToCandidate.size === 0 && leafToAmbiguous.size === 0) return new Map();
 
   const documents = db.all<{ relative_path: string }>(
     `SELECT relative_path
@@ -1799,6 +1885,12 @@ export function buildSourceFallbackCallerFiles(
   const allFiles = [...documents.map((d) => d.relative_path), ...auxiliary];
 
   const result = new Map<number, Set<string>>();
+  const credit = (target: IndexedDefinition, file: string): void => {
+    if (file === target.relativePath) return;
+    let bucket = result.get(target.symbolId);
+    if (!bucket) { bucket = new Set(); result.set(target.symbolId, bucket); }
+    bucket.add(file);
+  };
 
   // Each file contributes a Set<identifierName>. We then intersect that with
   // the candidate-leaf set rather than scanning every identifier on every line.
@@ -1810,21 +1902,51 @@ export function buildSourceFallbackCallerFiles(
     const fileIdents = getFileIdentifiers(db, file);
     if (fileIdents.size === 0) continue;
 
+    // For ambiguous leaves, build a per-file imports lookup once: name → set
+    // of source file paths that name resolves to. We only need this when the
+    // file even mentions one of the ambiguous names.
+    let importsByName: Map<string, Set<string>> | null = null;
+    const computeImports = (): Map<string, Set<string>> => {
+      if (importsByName) return importsByName;
+      importsByName = new Map();
+      for (const entry of getSourceImports(db, file)) {
+        if (!entry.sourcePath) continue;
+        const localName = entry.localName ?? entry.importedName;
+        if (localName) {
+          let s = importsByName.get(localName);
+          if (!s) { s = new Set(); importsByName.set(localName, s); }
+          s.add(entry.sourcePath);
+        }
+        if (entry.kind === 'namespace') {
+          for (const member of entry.usedMembers) {
+            let s = importsByName.get(member);
+            if (!s) { s = new Set(); importsByName.set(member, s); }
+            s.add(entry.sourcePath);
+          }
+        }
+      }
+      return importsByName;
+    };
+
     for (const name of fileIdents) {
       const candidate = leafToCandidate.get(name);
-      if (!candidate) continue;
-      // The defining file always contains its own definition's leaf — that's
-      // a self-reference, not a caller. Drop matches whose source file is the
-      // candidate's own file. (We can't go finer than file granularity here
-      // because the AST identifier set has no positions.)
-      if (file === candidate.relativePath) continue;
-
-      let bucket = result.get(candidate.symbolId);
-      if (!bucket) {
-        bucket = new Set();
-        result.set(candidate.symbolId, bucket);
+      if (candidate) {
+        credit(candidate, file);
+        continue;
       }
-      bucket.add(file);
+      const ambiguous = leafToAmbiguous.get(name);
+      if (!ambiguous) continue;
+      const imports = computeImports();
+      const importedFrom = imports.get(name);
+      if (!importedFrom || importedFrom.size === 0) continue;
+      for (const def of ambiguous) {
+        for (const sourcePath of importedFrom) {
+          if (pathsResolveSame(sourcePath, def.relativePath)) {
+            credit(def, file);
+            break;
+          }
+        }
+      }
     }
   }
 
