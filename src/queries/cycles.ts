@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../db.js';
 import { buildFileDepGraph } from '../query-support.js';
+import { isBarrelFile } from '../entry-surfaces.js';
 import type { CycleResult } from '../types.js';
 
 /**
@@ -42,7 +43,7 @@ export function cycles(
         const key = normalized.join(' -> ');
         if (!seenCycles.has(key)) {
           seenCycles.add(key);
-          allCycles.push({ path: normalized });
+          allCycles.push({ path: normalized, kind: classifyCycle(normalized) });
         }
       }
       return;
@@ -71,8 +72,31 @@ export function cycles(
     }
   }
 
-  // Sort by cycle length (shorter cycles are more actionable)
-  allCycles.sort((a, b) => a.path.length - b.path.length);
+  // Sort: real cycles first (more actionable), then by length.
+  allCycles.sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind === 'real' ? -1 : 1;
+    return a.path.length - b.path.length;
+  });
 
   return allCycles;
+}
+
+/**
+ * A cycle is "module-hierarchy" — and therefore not a real architectural
+ * cycle worth fixing — when it's a 2-file loop where one file is a barrel
+ * (mod.rs / index.ts / __init__.py). The barrel declares its child module
+ * (Rust `pub mod x;` or TS re-export); the child accesses something the
+ * barrel re-exports. That creates a graph edge each direction even though
+ * there's no real cyclic coupling — it's how module hierarchies work.
+ *
+ * Longer cycles (3+ files) are kept as 'real' even when a barrel is
+ * involved — those are usually genuine tangles.
+ */
+function classifyCycle(path: string[]): 'real' | 'module-hierarchy' {
+  // path includes the closing repeat (a → b → a), so 2 distinct files = path of length 3.
+  if (path.length !== 3) return 'real';
+  const [a, b] = path;
+  if (!a || !b) return 'real';
+  if (isBarrelFile(a) || isBarrelFile(b)) return 'module-hierarchy';
+  return 'real';
 }

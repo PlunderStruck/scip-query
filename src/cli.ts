@@ -630,15 +630,21 @@ program
       (results) => {
         if (results.length === 0) {
           console.log('No circular dependencies found.');
-        } else {
-          for (let i = 0; i < results.length; i++) {
-            console.log(`\nCycle ${i + 1} (${results[i]!.path.length - 1} files):`);
-            for (let j = 0; j < results[i]!.path.length; j++) {
-              const arrow = j < results[i]!.path.length - 1 ? ' →' : ' (cycle)';
-              console.log(`  ${results[i]!.path[j]}${arrow}`);
-            }
+          return;
+        }
+        const real = results.filter((r) => r.kind === 'real');
+        const moduleHierarchy = results.filter((r) => r.kind === 'module-hierarchy');
+        for (let i = 0; i < real.length; i++) {
+          console.log(`\nCycle ${i + 1} (${real[i]!.path.length - 1} files):`);
+          for (let j = 0; j < real[i]!.path.length; j++) {
+            const arrow = j < real[i]!.path.length - 1 ? ' →' : ' (cycle)';
+            console.log(`  ${real[i]!.path[j]}${arrow}`);
           }
-          console.log(`\n${results.length} cycle(s) found.`);
+        }
+        if (real.length === 0) console.log('No real circular dependencies found.');
+        else console.log(`\n${real.length} real cycle(s) found.`);
+        if (moduleHierarchy.length > 0) {
+          console.log(`(${moduleHierarchy.length} module-hierarchy cycle(s) hidden — barrel files participating in normal parent/child re-export patterns. Pass --include-module-hierarchy to see them.)`);
         }
       },
     );

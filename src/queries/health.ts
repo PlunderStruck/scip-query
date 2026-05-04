@@ -210,8 +210,11 @@ export function health(
   const isolatedPercent = trueIsolatedCount / symbolCount;
   score -= Math.min(10, Math.round(isolatedPercent * 200));
 
-  // Cycles: these are always bad, flat penalty
-  score -= Math.min(15, cycleResult.length * 5);
+  // Cycles: real architectural ones are always bad — module-hierarchy
+  // patterns (barrel mod.rs / index.ts re-exporting children) aren't
+  // actionable so they don't count toward the score.
+  const realCycleCount = cycleResult.filter((c) => c.kind === 'real').length;
+  score -= Math.min(15, realCycleCount * 5);
 
   // Similar pairs: only count true logic overlap, not boilerplate
   score -= Math.min(10, trueSimilarCount * 2);
@@ -253,7 +256,7 @@ export function health(
         isolatedLoc: isolatedResult
           .filter((s) => !isEntrySurface(db, s.relativePath))
           .reduce((sum, s) => sum + s.loc, 0),
-      cycles: cycleResult.length,
+      cycles: realCycleCount,
       similarPairs: trueSimilarCount,
       extractionCandidates: extractResult.length,
       wrappers: wrapperResult.length,

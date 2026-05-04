@@ -179,6 +179,15 @@ export interface CouplingResult {
 export interface CycleResult {
   /** Files forming a cycle, in order */
   path: string[];
+  /**
+   * Classification of the cycle:
+   *   - 'real':            architectural cycle worth fixing
+   *   - 'module-hierarchy': barrel-file pattern (mod.rs / index.ts /
+   *                        __init__.py declaring children that re-import
+   *                        parent re-exports). Standard module structure,
+   *                        not actionable.
+   */
+  kind: 'real' | 'module-hierarchy';
 }
 
 // ── Bottleneck / Isolated / Chain Types ───────────────────
