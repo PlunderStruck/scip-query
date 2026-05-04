@@ -20,9 +20,11 @@ export function coupling(
     WHERE (
       -- Defined in file1, referenced in file2
       EXISTS (
-        SELECT 1 FROM defn_enclosing_ranges der
-        JOIN documents d ON der.document_id = d.id
-        WHERE der.symbol_id = gs.id AND d.relative_path = ?
+        SELECT 1
+        FROM mentions def_m
+        JOIN chunks def_c ON def_m.chunk_id = def_c.id
+        JOIN documents d ON def_c.document_id = d.id
+        WHERE def_m.symbol_id = gs.id AND def_m.role = 1 AND d.relative_path = ?
       )
       AND EXISTS (
         SELECT 1 FROM mentions m
@@ -33,9 +35,11 @@ export function coupling(
     ) OR (
       -- Defined in file2, referenced in file1
       EXISTS (
-        SELECT 1 FROM defn_enclosing_ranges der
-        JOIN documents d ON der.document_id = d.id
-        WHERE der.symbol_id = gs.id AND d.relative_path = ?
+        SELECT 1
+        FROM mentions def_m
+        JOIN chunks def_c ON def_m.chunk_id = def_c.id
+        JOIN documents d ON def_c.document_id = d.id
+        WHERE def_m.symbol_id = gs.id AND def_m.role = 1 AND d.relative_path = ?
       )
       AND EXISTS (
         SELECT 1 FROM mentions m
@@ -81,8 +85,14 @@ export function topCoupling(
     JOIN chunks c ON m.chunk_id = c.id
     JOIN documents ref_d ON c.document_id = ref_d.id
     JOIN global_symbols gs ON m.symbol_id = gs.id
-    JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-    JOIN documents def_d ON der.document_id = def_d.id
+    JOIN (
+      SELECT m2.symbol_id, c2.document_id
+      FROM mentions m2
+      JOIN chunks c2 ON m2.chunk_id = c2.id
+      WHERE m2.role = 1
+      GROUP BY m2.symbol_id
+    ) sym_def ON sym_def.symbol_id = gs.id
+    JOIN documents def_d ON sym_def.document_id = def_d.id
     WHERE m.role != 1
       AND def_d.id != ref_d.id
       ${db.pathExclusionsFor('def_d', 'ref_d')}

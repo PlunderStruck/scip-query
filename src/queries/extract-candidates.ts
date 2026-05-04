@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../db.js';
-import { getCalleeRowsForSymbol, getDefinitionsForFile, getScopedDefinitions } from '../query-support.js';
+import { buildCalleeMap, getDefinitionsForFile, getScopedDefinitions } from '../query-support.js';
 import type { ExtractCandidate } from '../types.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../symbol-parser.js';
 
@@ -23,22 +23,18 @@ export function extractCandidates(
 ): ExtractCandidate[] {
   const { scope, minLoc = 10, minCallees = 6, limit = 20 } = opts;
   const symbols = getScopedDefinitions(db, scope)
+    .filter((definition) => !db.isIgnored(definition.relativePath))
     .filter((definition) => definitionLoc(definition) >= minLoc && isFunctionLikeSymbol(definition.symbol))
+    .filter((definition) => !(definition.relativePath.split('/').pop() ?? '').includes('types'))
     .sort((left, right) => definitionLoc(right) - definitionLoc(left));
+
+  const calleeMap = buildCalleeMap(db, symbols);
 
   const results: ExtractCandidate[] = [];
 
   for (const sym of symbols) {
-    if (db.isIgnored(sym.relativePath)) continue;
-
-    // Skip pure type files — "callees" in a type file are just type references,
-    // not function calls. Splitting type files is a cosmetic choice, not an
-    // extraction opportunity.
-    const basename = sym.relativePath.split('/').pop() ?? '';
-    if (basename.includes('types')) continue;
-
     // Get callees with their chunk locations (to build co-occurrence)
-    const calleeChunks = getCalleeRowsForSymbol(db, sym);
+    const calleeChunks = calleeMap.get(sym.symbolId) ?? [];
 
     // Collect unique callees
     const calleeSet = new Set(calleeChunks.map((c) => c.symbol));

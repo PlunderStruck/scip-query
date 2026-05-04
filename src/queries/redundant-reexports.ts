@@ -49,8 +49,14 @@ export function redundantReexports(
     JOIN chunks c ON m.chunk_id = c.id
     JOIN documents barrel_d ON c.document_id = barrel_d.id
     JOIN global_symbols gs ON m.symbol_id = gs.id
-    JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-    JOIN documents orig_d ON der.document_id = orig_d.id
+    JOIN (
+      SELECT m2.symbol_id, c2.document_id
+      FROM mentions m2
+      JOIN chunks c2 ON m2.chunk_id = c2.id
+      WHERE m2.role = 1
+      GROUP BY m2.symbol_id
+    ) sym_def ON sym_def.symbol_id = gs.id
+    JOIN documents orig_d ON sym_def.document_id = orig_d.id
     WHERE m.role != 1
       AND (barrel_d.relative_path LIKE '%/index.ts'
         OR barrel_d.relative_path LIKE '%/index.js'

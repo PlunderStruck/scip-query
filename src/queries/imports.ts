@@ -22,8 +22,14 @@ export function imports(db: ScipDatabase, filePattern: string): ImportResult[] {
     JOIN chunks c ON m.chunk_id = c.id
     JOIN documents imp_d ON c.document_id = imp_d.id
     JOIN global_symbols gs ON m.symbol_id = gs.id
-    LEFT JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-    LEFT JOIN documents def_d ON der.document_id = def_d.id
+    LEFT JOIN (
+      SELECT m2.symbol_id, c2.document_id
+      FROM mentions m2
+      JOIN chunks c2 ON m2.chunk_id = c2.id
+      WHERE m2.role = 1
+      GROUP BY m2.symbol_id
+    ) sym_def ON sym_def.symbol_id = gs.id
+    LEFT JOIN documents def_d ON sym_def.document_id = def_d.id
     WHERE imp_d.relative_path = ?
       AND m.role = 2
     ORDER BY def_d.relative_path, gs.symbol`,

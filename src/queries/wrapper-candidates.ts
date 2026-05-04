@@ -1,6 +1,8 @@
 import { basename, extname } from 'node:path';
 import type { ScipDatabase } from '../db.js';
-import { buildFileDepGraph, getCallerRowsForSymbol, getDefinitionsForFile, getScopedDefinitions } from '../query-support.js';
+import { buildFileDepGraph, buildCrossFileCallerMap, buildSourceFallbackCallerFiles, findEnclosingDefinition, getDefinitionsForFile, getScopedDefinitions } from '../query-support.js';
+import { getIdentifierLineMap } from '../source-analysis.js';
+import { leafName } from '../symbol-parser.js';
 import type { WrapperCandidate } from '../types.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../symbol-parser.js';
 
@@ -18,35 +20,70 @@ export function wrapperCandidates(
   const { scope, maxLoc = 15, limit = 30 } = opts ?? {};
   const reverseFanIn = buildReverseFileFanIn(buildFileDepGraph(db, scope));
   const symbols = getScopedDefinitions(db, scope)
+    .filter((definition) => !db.isIgnored(definition.relativePath))
+    .filter((definition) => isFunctionLikeSymbol(definition.symbol))
     .filter((definition) => definitionLoc(definition) <= maxLoc && definitionLoc(definition) >= 2);
+
+  // Bulk pre-filter: only process symbols with exactly 1 distinct external
+  // caller file. Source-text fallback adds back references the indexer may
+  // miss (macros, dynamic dispatch); without it, a function called via a
+  // missed path would falsely look like a wrapper.
+  const callerFileMap = mergeCallerMaps(
+    buildCrossFileCallerMap(db, symbols),
+    buildSourceFallbackCallerFiles(db, symbols),
+  );
 
   const results: WrapperCandidate[] = [];
 
   for (const symbol of symbols) {
-    if (db.isIgnored(symbol.relativePath) || !isFunctionLikeSymbol(symbol.symbol)) continue;
     const symbolStem = basename(symbol.relativePath, extname(symbol.relativePath));
 
-    const callerRows = dedupeRows(
-      getCallerRowsForSymbol(db, symbol, { limit: 200 })
-        .filter((row) => row.file !== symbol.relativePath),
-    ).filter((row) => basename(row.file, extname(row.file)) !== symbolStem);
+    // Cheap bulk check first: skip if not exactly 1 external caller file (excluding same stem)
+    const externalFiles = [...(callerFileMap.get(symbol.symbolId) ?? [])]
+      .filter((f) => f !== symbol.relativePath)
+      .filter((f) => basename(f, extname(f)) !== symbolStem);
+    if (externalFiles.length !== 1) continue;
 
-    if (callerRows.length !== 1) continue;
+    const callerFile = externalFiles[0]!;
 
-    const caller = callerRows[0]!;
-    const callerDefinition = getDefinitionsForFile(db, caller.file)
-      .find((definition) => definition.symbol === caller.symbol);
-    const useDefinitionFanIn = callerDefinition?.isFunctionLike ?? false;
+    // SCIP gives us the chunk that contains the reference, but chunks can be
+    // file-wide. Refine via source-text scan: find a line within the chunk's
+    // range where the symbol's leaf identifier actually appears, then look up
+    // the enclosing definition from that precise line. Falls back to the
+    // chunk's start line when source isn't readable / leaf isn't unique.
+    const refRow = db.get<{ start_line: number; end_line: number }>(
+      `SELECT c.start_line, c.end_line
+       FROM mentions m
+       JOIN chunks c ON m.chunk_id = c.id
+       JOIN documents d ON c.document_id = d.id
+       WHERE m.symbol_id = ? AND m.role != 1 AND d.relative_path = ?
+       LIMIT 1`,
+      symbol.symbolId,
+      callerFile,
+    );
+    if (!refRow) continue;
+
+    const callerDefs = getDefinitionsForFile(db, callerFile);
+    const refinedLine = refineCallSiteLine(db, callerFile, symbol.symbol, refRow.start_line, refRow.end_line);
+    const enclosing = findEnclosingDefinition(callerDefs, refinedLine);
+
+    // Fan-in: function-level from bulk map, or file-level as fallback
     let callerFanIn: number;
-    if (useDefinitionFanIn && callerDefinition) {
-      callerFanIn = new Set(
-        getCallerRowsForSymbol(db, callerDefinition, { limit: 500 })
-          .filter((row) => row.file !== callerDefinition.relativePath)
-          .map((row) => row.file),
-      ).size;
+    const callerSymbol = enclosing?.symbol ?? '';
+    const callerShort = enclosing?.isFunctionLike
+      ? shortenSymbol(enclosing.symbol)
+      : basename(callerFile);
+
+    if (enclosing?.isFunctionLike && enclosing.symbolId !== symbol.symbolId) {
+      const extCallers = [...(callerFileMap.get(enclosing.symbolId) ?? [])]
+        .filter((f) => f !== enclosing.relativePath);
+      callerFanIn = extCallers.length > 0
+        ? extCallers.length
+        : fallbackCallerFanIn(reverseFanIn, callerFile);
     } else {
-      callerFanIn = fallbackCallerFanIn(db, reverseFanIn, caller.file);
+      callerFanIn = fallbackCallerFanIn(reverseFanIn, callerFile);
     }
+
     if (callerFanIn <= 3) continue;
 
     results.push({
@@ -56,8 +93,8 @@ export function wrapperCandidates(
       startLine: symbol.startLine,
       endLine: symbol.endLine,
       loc: definitionLoc(symbol),
-      singleCaller: caller.symbol,
-      singleCallerShort: useDefinitionFanIn ? shortenSymbol(caller.symbol) : basename(caller.file),
+      singleCaller: callerSymbol,
+      singleCallerShort: callerShort,
       callerFanIn,
     });
   }
@@ -72,16 +109,44 @@ function definitionLoc(
   return definition.endLine - definition.startLine + 1;
 }
 
-function dedupeRows<T extends { symbol: string; file: string }>(rows: T[]): T[] {
-  const seen = new Set<string>();
-  const unique: T[] = [];
-  for (const row of rows) {
-    const key = `${row.symbol}|${row.file}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(row);
+/**
+ * Refine a SCIP chunk's start line to the actual line where the symbol's
+ * leaf identifier appears, scanning the chunk's range only. Uses the cached
+ * AST/regex identifier-line map. Falls back to the chunk start when the leaf
+ * isn't present (defensive — shouldn't happen if the SCIP mention is real).
+ */
+function refineCallSiteLine(
+  db: ScipDatabase,
+  file: string,
+  symbol: string,
+  chunkStart: number,
+  chunkEnd: number,
+): number {
+  const leaf = leafName(symbol);
+  if (!leaf) return chunkStart;
+  const lines = getIdentifierLineMap(db, file).get(leaf);
+  if (!lines || lines.length === 0) return chunkStart;
+  for (const line of lines) {
+    if (line >= chunkStart && line <= chunkEnd) return line;
   }
-  return unique;
+  return chunkStart;
+}
+
+function mergeCallerMaps(
+  ...maps: Array<Map<number, Set<string>>>
+): Map<number, Set<string>> {
+  const merged = new Map<number, Set<string>>();
+  for (const m of maps) {
+    for (const [k, v] of m) {
+      let bucket = merged.get(k);
+      if (!bucket) {
+        bucket = new Set();
+        merged.set(k, bucket);
+      }
+      for (const f of v) bucket.add(f);
+    }
+  }
+  return merged;
 }
 
 function buildReverseFileFanIn(
@@ -100,22 +165,9 @@ function buildReverseFileFanIn(
 }
 
 function fallbackCallerFanIn(
-  db: ScipDatabase,
   reverseFanIn: Map<string, number>,
   callerFile: string,
 ): number {
-  const functionLikeFanIn = getDefinitionsForFile(db, callerFile)
-    .filter((definition) => definition.isFunctionLike)
-    .map((definition) => new Set(
-      getCallerRowsForSymbol(db, definition, { limit: 500 })
-        .filter((row) => row.file !== definition.relativePath)
-        .map((row) => row.file),
-    ).size)
-    .sort((left, right) => right - left)[0] ?? 0;
-  if (functionLikeFanIn > 0) {
-    return functionLikeFanIn;
-  }
-
   const direct = reverseFanIn.get(callerFile) ?? 0;
   if (direct > 0) {
     return direct;

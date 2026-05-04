@@ -33,7 +33,8 @@
  */
 import type { ScipDatabase } from './db.js';
 import { basename } from 'node:path';
-import { findIdentifierLines, getSourceCalls, getSourceConstructorBindings, getSourceImports, getSourceText } from './source-analysis.js';
+import { detectAstLanguage, getCallableSites, getCallSites, type CallableSite } from './ast.js';
+import { findIdentifierLines, getFileIdentifiers, getIdentifierLineMap, getIdentifiersByLine, getSourceCalls, getSourceConstructorBindings, getSourceImports, getSourceText, stripCommentsAndStrings } from './source-analysis.js';
 import type { ParsedSourceCall } from './source-analysis.js';
 import { isFunctionLikeSymbol, isModuleLikeSymbol, leafName, leafSuffix, parseSymbol, shortenSymbol } from './symbol-parser.js';
 
@@ -122,10 +123,16 @@ export function testFileExclusionSql(
     .join('\n      AND ');
 }
 
+const FILE_DEP_GRAPH_CACHE = new WeakMap<ScipDatabase, Map<string, Map<string, Set<string>>>>();
+
 export function buildFileDepGraph(
   db: ScipDatabase,
   scope?: string,
 ): Map<string, Set<string>> {
+  const cacheKey = scope ?? '';
+  const cached = FILE_DEP_GRAPH_CACHE.get(db)?.get(cacheKey);
+  if (cached) return cached;
+
   const scopeFilter = scope ? `AND d1.relative_path LIKE '%${scope}%'` : '';
 
   const edges = db.all<{ from_file: string; to_file: string }>(
@@ -136,8 +143,14 @@ export function buildFileDepGraph(
     JOIN chunks c ON m.chunk_id = c.id
     JOIN documents d1 ON c.document_id = d1.id
     JOIN global_symbols gs ON m.symbol_id = gs.id
-    JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-    JOIN documents d2 ON der.document_id = d2.id
+    JOIN (
+      SELECT m2.symbol_id, c2.document_id
+      FROM mentions m2
+      JOIN chunks c2 ON m2.chunk_id = c2.id
+      WHERE m2.role = 1
+      GROUP BY m2.symbol_id
+    ) sym_def ON sym_def.symbol_id = gs.id
+    JOIN documents d2 ON sym_def.document_id = d2.id
     WHERE d1.id != d2.id
       AND m.role != 1
       ${db.pathExclusionsFor('d1', 'd2')}
@@ -176,6 +189,13 @@ export function buildFileDepGraph(
       if (!entry.sourcePath) continue;
       addEdge(relativePath, entry.sourcePath);
     }
+  }
+
+  const dbCache = FILE_DEP_GRAPH_CACHE.get(db);
+  if (dbCache) {
+    dbCache.set(cacheKey, graph);
+  } else {
+    FILE_DEP_GRAPH_CACHE.set(db, new Map([[cacheKey, graph]]));
   }
 
   return graph;
@@ -266,7 +286,7 @@ export function findExactSymbolMatch(
   db: ScipDatabase,
   symbol: string,
 ): SymbolMatch | null {
-  const row = db.get<SymbolQueryRow>(
+  const primary = db.get<SymbolQueryRow>(
     `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path
      FROM global_symbols gs
      JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
@@ -274,6 +294,27 @@ export function findExactSymbolMatch(
      WHERE gs.symbol = ?
        ${db.pathExclusionsFor('d')}
      ORDER BY d.relative_path, der.start_line
+     LIMIT 1`,
+    symbol,
+  );
+
+  const row = primary ?? db.get<SymbolQueryRow>(
+    `SELECT
+      gs.id,
+      gs.symbol,
+      c.document_id,
+      MIN(c.start_line) AS start_line,
+      MAX(c.end_line) AS end_line,
+      d.relative_path
+     FROM global_symbols gs
+     JOIN mentions m ON m.symbol_id = gs.id
+     JOIN chunks c ON m.chunk_id = c.id
+     JOIN documents d ON c.document_id = d.id
+     WHERE gs.symbol = ?
+       AND m.role = 1
+       ${db.pathExclusionsFor('d')}
+     GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path
+     ORDER BY d.relative_path, start_line
      LIMIT 1`,
     symbol,
   );
@@ -1149,17 +1190,31 @@ function correctDefinitionRangesFromSource(
   relativePath: string,
   definitions: IndexedDefinition[],
 ): IndexedDefinition[] {
+  // Tree-sitter path: gives both startLine and endLine in one shot from the
+  // parsed AST, so no brace-counting or regex sweeps are needed. This is the
+  // primary path for Rust / TS / JS / Python.
+  const callables = getCallableSites(db, relativePath);
+  if (callables) {
+    return correctDefinitionRangesFromAst(definitions, callables);
+  }
+
+  // Regex fallback for languages without tree-sitter support.
   const source = getSourceText(db, relativePath);
   if (!source) {
     return definitions;
   }
 
   const lines = source.split(/\r?\n/);
+
+  const declarationLines = definitions.some((d) => isCallableDefinition(d.symbol))
+    ? buildDeclarationCandidatesMap(lines)
+    : null;
+
   const correctedStarts = new Map<number, number>();
   for (const definition of definitions) {
     correctedStarts.set(
       definition.symbolId,
-      resolveCallableDefinitionStartLine(lines, definition),
+      resolveCallableDefinitionStartLine(lines, declarationLines, definition),
     );
   }
 
@@ -1208,78 +1263,114 @@ function correctDefinitionRangesFromSource(
   });
 }
 
+/**
+ * Match each callable definition against tree-sitter callable sites by leaf
+ * name; pick the AST site whose startLine is nearest to the SCIP-reported
+ * startLine. Non-callable definitions (types, constants) pass through with
+ * their original chunk-level ranges since the AST query targets functions.
+ */
+function correctDefinitionRangesFromAst(
+  definitions: IndexedDefinition[],
+  callables: ReadonlyArray<CallableSite>,
+): IndexedDefinition[] {
+  const sitesByName = new Map<string, CallableSite[]>();
+  for (const site of callables) {
+    const arr = sitesByName.get(site.name);
+    if (arr) arr.push(site);
+    else sitesByName.set(site.name, [site]);
+  }
+
+  return definitions.map((def) => {
+    if (!isCallableDefinition(def.symbol) || !def.leaf) return def;
+    const sites = sitesByName.get(def.leaf);
+    if (!sites || sites.length === 0) return def;
+
+    let best = sites[0]!;
+    let bestDistance = Math.abs(best.startLine - def.startLine);
+    for (let i = 1; i < sites.length; i += 1) {
+      const site = sites[i]!;
+      const distance = Math.abs(site.startLine - def.startLine);
+      if (distance < bestDistance) {
+        best = site;
+        bestDistance = distance;
+      }
+    }
+
+    return { ...def, startLine: best.startLine, endLine: best.endLine };
+  });
+}
+
 function resolveCallableDefinitionStartLine(
   lines: string[],
+  declarationLines: DeclarationCandidatesMap | null,
   definition: IndexedDefinition,
 ): number {
   if (!isCallableDefinition(definition.symbol)) {
     return definition.startLine;
   }
+  const fallback = Math.max(0, Math.min(definition.startLine, lines.length - 1));
+  if (!declarationLines) return fallback;
 
-  const escapedLeaf = escapeRegex(definition.leaf);
-  const strongPatterns = [
-    new RegExp(`\\b(?:function|def|fn)\\s+${escapedLeaf}\\b`),
-    new RegExp(`\\b${escapedLeaf}\\b\\s*[:=]\\s*(?:async\\s*)?(?:function\\b|\\()`),
-    // Method/function declaration with optional TypeScript generic
-    // parameters: matches `foo(`, `foo<T>(`, `foo<T = Record<string, unknown>>(`.
-    // `[^(]*` with greedy backtracking handles nested generics as long as
-    // the generic block itself doesn't contain a `(`. Anchored to start of
-    // line content (optional leading whitespace + optional access modifiers)
-    // so it prefers the declaration line over call sites.
-    new RegExp(
-      `^\\s*(?:export\\s+|public\\s+|private\\s+|protected\\s+|static\\s+|readonly\\s+|async\\s+|abstract\\s+|get\\s+|set\\s+)*${escapedLeaf}\\s*(?:<[^(]*>)?\\s*\\(`,
-    ),
-  ];
-  const fallbackPatterns = [
-    new RegExp(`\\b${escapedLeaf}\\b\\s*\\(`),
-  ];
+  const candidates = declarationLines.get(definition.leaf);
+  if (!candidates || candidates.length === 0) return fallback;
 
-  return findNearestMatchingLine(
-    lines,
-    [...strongPatterns, ...fallbackPatterns],
-    definition.startLine,
-    definition.endLine,
-  );
-}
-
-function findNearestMatchingLine(
-  lines: string[],
-  patterns: RegExp[],
-  preferredStartLine: number,
-  preferredEndLine: number,
-): number {
-  const windowStart = Math.max(0, preferredStartLine - 40);
-  const windowEnd = Math.min(lines.length - 1, Math.max(preferredEndLine + 40, preferredStartLine + 5));
-
-  const windowMatch = matchNearestLine(lines, patterns, preferredStartLine, windowStart, windowEnd);
-  if (windowMatch !== null) {
-    return windowMatch;
-  }
-
-  const fullMatch = matchNearestLine(lines, patterns, preferredStartLine, 0, lines.length - 1);
-  return fullMatch ?? Math.max(0, Math.min(preferredStartLine, lines.length - 1));
-}
-
-function matchNearestLine(
-  lines: string[],
-  patterns: RegExp[],
-  preferredLine: number,
-  startLine: number,
-  endLine: number,
-): number | null {
+  // Original semantics: prefer the declaration line nearest the chunk-reported
+  // startLine. Strong and fallback patterns shared the same nearest-wins pick,
+  // so we merge them into one candidate list per name.
   let best: { line: number; distance: number } | null = null;
-
-  for (let lineIndex = startLine; lineIndex <= endLine; lineIndex += 1) {
-    const line = lines[lineIndex] ?? '';
-    if (!patterns.some((pattern) => pattern.test(line))) continue;
-
-    const distance = Math.abs(lineIndex - preferredLine);
+  for (const line of candidates) {
+    const distance = Math.abs(line - definition.startLine);
     if (!best || distance < best.distance) {
-      best = { line: lineIndex, distance };
+      best = { line, distance };
+    }
+  }
+  return best?.line ?? fallback;
+}
+
+type DeclarationCandidatesMap = Map<string, number[]>;
+
+/**
+ * Single pass through the file's lines: for each line, run name-CAPTURING
+ * variants of the same declaration patterns the per-definition resolver
+ * used. Build `name → sorted candidate line numbers`.
+ *
+ * Patterns are kept identical in shape to the original strong + fallback
+ * patterns — only the literal `\b{name}\b` is swapped for `\b(\w+)\b` so
+ * we can capture instead of testing.
+ */
+function buildDeclarationCandidatesMap(lines: string[]): DeclarationCandidatesMap {
+  const namedFunction = /\b(?:function|def|fn)\s+([A-Za-z_$][\w$]*)/g;
+  const assignedFunction = /\b([A-Za-z_$][\w$]*)\s*[:=]\s*(?:async\s*)?(?:function\b|\()/g;
+  const methodDeclaration = /^\s*(?:(?:export|public|private|protected|static|readonly|async|abstract|get|set)\s+)*([A-Za-z_$][\w$]*)\s*(?:<[^(]*>)?\s*\(/;
+  const callShape = /\b([A-Za-z_$][\w$]*)\s*\(/g;
+
+  const map: DeclarationCandidatesMap = new Map();
+  const record = (name: string, line: number): void => {
+    const arr = map.get(name);
+    if (!arr) {
+      map.set(name, [line]);
+      return;
+    }
+    if (arr[arr.length - 1] !== line) arr.push(line);
+  };
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i] ?? '';
+
+    for (const match of line.matchAll(namedFunction)) {
+      if (match[1]) record(match[1], i);
+    }
+    for (const match of line.matchAll(assignedFunction)) {
+      if (match[1]) record(match[1], i);
+    }
+    const methodMatch = line.match(methodDeclaration);
+    if (methodMatch?.[1]) record(methodMatch[1], i);
+    for (const match of line.matchAll(callShape)) {
+      if (match[1]) record(match[1], i);
     }
   }
 
-  return best?.line ?? null;
+  return map;
 }
 
 function resolveCallableDefinitionEndLine(
@@ -1373,10 +1464,6 @@ function isCallableDefinition(symbol: string): boolean {
   return symbol.includes('().');
 }
 
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 export function getAllDefinitions(
   db: ScipDatabase,
   opts: { scope?: string } = {},
@@ -1413,6 +1500,468 @@ export function getScopedDefinitions(
   )
     .flatMap((row) => getDefinitionsForFile(db, row.relative_path))
     .filter((row) => !db.isIgnored(row.relativePath));
+}
+
+/**
+ * Bulk callee map: for each definition in the list, find every symbol it
+ * actually calls.
+ *
+ * For files with tree-sitter support (Rust, TS/JS, Python), we use AST
+ * call_expression / new_expression nodes — every callsite is exact, every
+ * attribution is to the precise enclosing function. No chunk-level mention
+ * attribution, no "is this identifier in range" guessing.
+ *
+ * For files without AST support (Java, JVM, Ruby, .NET, Dart, PHP, C/C++),
+ * we fall back to chunk-level SCIP mentions with the same source-confirm
+ * heuristic as before — preserves correctness for those languages without
+ * requiring a tree-sitter grammar for each one.
+ */
+export function buildCalleeMap(
+  db: ScipDatabase,
+  definitions: ReadonlyArray<SymbolLocation>,
+): Map<number, Array<{ symbol: string; file: string; chunkId: number }>> {
+  if (definitions.length === 0) return new Map();
+
+  // ADDITIVE: AST callees (precise call attribution for AST languages) PLUS
+  // SCIP chunk callees (catches ambiguous-leaf calls like Rust trait methods
+  // `new()`/`from()` that AST resolution skips, plus type references and
+  // macro-mediated calls). Same callee from both paths dedupes on
+  // (symbol|chunkId) inside each map merge step.
+  const astDefs = definitions.filter(
+    (def) => detectAstLanguage(def.relativePath) && getCallSites(db, def.relativePath) !== null,
+  );
+
+  const astResult = astDefs.length > 0 ? buildAstCalleeMap(db, astDefs) : new Map();
+  const chunkResult = buildChunkCalleeMap(db, definitions);
+
+  const merged = new Map<number, Array<{ symbol: string; file: string; chunkId: number }>>();
+  const addAll = (
+    src: Map<number, Array<{ symbol: string; file: string; chunkId: number }>>,
+  ): void => {
+    for (const [id, list] of src) {
+      let bucket = merged.get(id);
+      if (!bucket) { bucket = []; merged.set(id, bucket); }
+      const seen = new Set(bucket.map((c) => `${c.symbol}|${c.chunkId}`));
+      for (const c of list) {
+        const key = `${c.symbol}|${c.chunkId}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        bucket.push(c);
+      }
+    }
+  };
+  addAll(chunkResult);
+  addAll(astResult);
+  return merged;
+}
+
+/**
+ * AST-based callee detection. For each definition's file:
+ *   1. Walk callsites (cached AST query).
+ *   2. Match each callsite to its enclosing definition by line containment
+ *      against the file's known definitions sorted by start line.
+ *   3. Resolve the callee leaf to a SCIP symbol via the global leaf index.
+ */
+function buildAstCalleeMap(
+  db: ScipDatabase,
+  definitions: ReadonlyArray<SymbolLocation>,
+): Map<number, Array<{ symbol: string; file: string; chunkId: number }>> {
+  const result = new Map<number, Array<{ symbol: string; file: string; chunkId: number }>>();
+
+  // Index defs by file so we can attribute callsites to the smallest
+  // containing definition without walking the full set per callsite.
+  const byFile = new Map<string, SymbolLocation[]>();
+  for (const def of definitions) {
+    const arr = byFile.get(def.relativePath);
+    if (arr) arr.push(def);
+    else byFile.set(def.relativePath, [def]);
+    result.set(def.symbolId, []);
+  }
+
+  const leafIndex = getGlobalLeafIndex(db);
+
+  for (const [file, fileDefs] of byFile) {
+    const callsites = getCallSites(db, file);
+    if (!callsites) continue; // Source unreadable — defs return empty callee arrays.
+
+    // Sort defs by smallest range first so the innermost containing def wins
+    // (handles nested closures / inner fns correctly).
+    const sortedDefs = [...fileDefs].sort((a, b) => {
+      const aSize = a.endLine - a.startLine;
+      const bSize = b.endLine - b.startLine;
+      return aSize - bSize;
+    });
+
+    for (const site of callsites) {
+      // Innermost containing definition.
+      let owner: SymbolLocation | null = null;
+      for (const def of sortedDefs) {
+        if (site.line >= def.startLine && site.line <= def.endLine) {
+          owner = def;
+          break;
+        }
+      }
+      if (!owner) continue;
+
+      // Resolve callee leaf to one or more SCIP symbols.
+      const candidates = leafIndex.get(site.calleeLeaf);
+      if (!candidates || candidates.length === 0) continue;
+
+      // Prefer same-file resolution (covers free-functions and methods on
+      // types defined in the same file). Otherwise accept a unique global
+      // match. Skip ambiguous names — without scope analysis we'd be guessing.
+      let pick: { symbol: string; file: string } | null = null;
+      const sameFile = candidates.find((c) => c.file === file);
+      if (sameFile) pick = sameFile;
+      else if (candidates.length === 1) pick = candidates[0]!;
+      if (!pick) continue;
+      if (pick.symbol === owner.symbol) continue; // skip self-recursion
+
+      const list = result.get(owner.symbolId)!;
+      list.push({ symbol: pick.symbol, file: pick.file, chunkId: site.line });
+    }
+  }
+
+  return result;
+}
+
+const GLOBAL_LEAF_INDEX_CACHE = new WeakMap<ScipDatabase, Map<string, Array<{ symbol: string; symbolId: number; file: string }>>>();
+function getGlobalLeafIndex(
+  db: ScipDatabase,
+): Map<string, Array<{ symbol: string; symbolId: number; file: string }>> {
+  const cached = GLOBAL_LEAF_INDEX_CACHE.get(db);
+  if (cached) return cached;
+
+  const rows = db.all<{ id: number; symbol: string; relative_path: string | null }>(
+    `SELECT gs.id, gs.symbol,
+            COALESCE(der_doc.relative_path, mention_doc.relative_path) AS relative_path
+     FROM global_symbols gs
+     LEFT JOIN defn_enclosing_ranges der ON der.symbol_id = gs.id
+     LEFT JOIN documents der_doc ON der_doc.id = der.document_id
+     LEFT JOIN (
+       SELECT m.symbol_id, MIN(d.relative_path) AS relative_path
+       FROM mentions m
+       JOIN chunks c ON m.chunk_id = c.id
+       JOIN documents d ON c.document_id = d.id
+       WHERE m.role = 1
+       GROUP BY m.symbol_id
+     ) mention_doc ON mention_doc.symbol_id = gs.id
+     WHERE 1 = 1
+       ${db.symbolNoiseFor('gs')}`,
+  );
+
+  const index = new Map<string, Array<{ symbol: string; symbolId: number; file: string }>>();
+  for (const row of rows) {
+    if (!row.relative_path || db.isIgnored(row.relative_path)) continue;
+    const leaf = leafName(row.symbol);
+    if (!leaf) continue;
+    let bucket = index.get(leaf);
+    if (!bucket) { bucket = []; index.set(leaf, bucket); }
+    // Dedupe: same symbol can show up via both joins.
+    if (!bucket.some((e) => e.symbolId === row.id)) {
+      bucket.push({ symbol: row.symbol, symbolId: row.id, file: row.relative_path });
+    }
+  }
+
+  GLOBAL_LEAF_INDEX_CACHE.set(db, index);
+  return index;
+}
+
+function buildChunkCalleeMap(
+  db: ScipDatabase,
+  definitions: ReadonlyArray<SymbolLocation>,
+): Map<number, Array<{ symbol: string; file: string; chunkId: number }>> {
+  if (definitions.length === 0) return new Map();
+
+  // All non-definition mentions with their chunk doc/line range
+  const refRows = db.all<{
+    document_id: number;
+    chunk_id: number;
+    start_line: number;
+    end_line: number;
+    symbol_id: number;
+  }>(
+    `SELECT c.document_id, c.id AS chunk_id, c.start_line, c.end_line, m.symbol_id
+     FROM mentions m
+     JOIN chunks c ON m.chunk_id = c.id
+     WHERE m.role != 1`,
+  );
+
+  // Group by document
+  const byDoc = new Map<number, Array<typeof refRows[number]>>();
+  for (const row of refRows) {
+    if (!byDoc.has(row.document_id)) byDoc.set(row.document_id, []);
+    byDoc.get(row.document_id)!.push(row);
+  }
+
+  // Callee symbol info: symbolId → {symbol string, defining file}.
+  //
+  // Defining file is resolved by preferring `defn_enclosing_ranges` (the
+  // canonical source when populated, e.g. scip-python) and falling back to
+  // any chunk that holds a role=1 mention (every other indexer). global_symbols
+  // is the authoritative symbol table — joining off mentions only would drop
+  // symbols that have no role=1 mention recorded (test fixtures, indexers
+  // that emit definitions only via enclosing ranges).
+  const docPaths = new Map<number, string>(
+    db.all<{ id: number; relative_path: string }>(
+      `SELECT id, relative_path FROM documents`,
+    ).map((r) => [r.id, r.relative_path]),
+  );
+  const calleeInfo = new Map<number, { symbol: string; file: string }>();
+  const calleeRows = db.all<{ symbol_id: number; symbol: string; document_id: number | null }>(
+    `SELECT gs.id AS symbol_id, gs.symbol,
+            COALESCE(der.document_id, def_chunk.document_id) AS document_id
+     FROM global_symbols gs
+     LEFT JOIN defn_enclosing_ranges der ON der.symbol_id = gs.id
+     LEFT JOIN (
+       SELECT m.symbol_id, MIN(c.document_id) AS document_id
+       FROM mentions m
+       JOIN chunks c ON m.chunk_id = c.id
+       WHERE m.role = 1
+       GROUP BY m.symbol_id
+     ) def_chunk ON def_chunk.symbol_id = gs.id`,
+  );
+  for (const r of calleeRows) {
+    if (calleeInfo.has(r.symbol_id)) continue;
+    calleeInfo.set(r.symbol_id, {
+      symbol: r.symbol,
+      file: r.document_id !== null ? (docPaths.get(r.document_id) ?? '') : '',
+    });
+  }
+
+  // Match each definition against mentions in its document/range. Two passes:
+  //   1. SCIP-only: chunk is fully inside the def's range — count.
+  //   2. Source-text confirm: chunk *overlaps* the def's range (but isn't
+  //      contained) — confirm by source-scanning the def's range for the
+  //      callee's leaf identifier. This recovers calls that an indexer
+  //      records via a wide chunk that straddles the function boundary, and
+  //      handles fixtures / hand-built indexes whose chunks are file-wide.
+  //
+  // The per-def `identsInRange` set materialises every leaf appearing inside
+  // the def's range once — turning per-mention source confirmation from an
+  // O(lines) linear scan into an O(1) Set.has lookup. Critical for languages
+  // (e.g. Rust without defn_enclosing_ranges) where chunks are file-wide and
+  // every mention triggers the source-confirm path.
+  const result = new Map<number, Array<{ symbol: string; file: string; chunkId: number }>>();
+  const filePathById = docPaths;
+  for (const def of definitions) {
+    const docMentions = byDoc.get(def.documentId) ?? [];
+    const seenKey = new Set<string>();
+    const callees: Array<{ symbol: string; file: string; chunkId: number }> = [];
+    let identsInRange: Set<string> | null = null;
+    const computeIdentsInRange = (): Set<string> => {
+      if (identsInRange) return identsInRange;
+      const filePath = filePathById.get(def.documentId) ?? '';
+      const out = new Set<string>();
+      if (filePath) {
+        const byLine = getIdentifiersByLine(db, filePath);
+        const start = Math.max(0, def.startLine);
+        const end = Math.min(byLine.length - 1, def.endLine);
+        for (let i = start; i <= end; i += 1) {
+          for (const name of byLine[i]!) out.add(name);
+        }
+      }
+      identsInRange = out;
+      return out;
+    };
+
+    for (const m of docMentions) {
+      if (m.symbol_id === def.symbolId) continue;
+      const info = calleeInfo.get(m.symbol_id);
+      if (!info) continue;
+
+      const containedInRange = m.start_line >= def.startLine && m.end_line <= def.endLine;
+      if (!containedInRange) {
+        const overlapsRange = m.start_line <= def.endLine && m.end_line >= def.startLine;
+        if (!overlapsRange) continue;
+        const leaf = leafName(info.symbol);
+        if (!leaf) continue;
+        if (!computeIdentsInRange().has(leaf)) continue;
+      }
+
+      const key = `${info.symbol}|${m.chunk_id}`;
+      if (seenKey.has(key)) continue;
+      seenKey.add(key);
+      callees.push({ ...info, chunkId: m.chunk_id });
+    }
+    result.set(def.symbolId, callees);
+  }
+
+  return result;
+}
+
+/**
+ * Bulk caller map: symbolId → set of distinct files that reference the
+ * symbol.
+ *
+ * For files with tree-sitter support, callers come from AST call_expression
+ * nodes — each callsite resolves to a real symbol via the global leaf index
+ * with same-file preference. For non-AST files, callers come from SCIP's
+ * mentions table (chunk-level) with self-reference filtering.
+ *
+ * If `definitions` is supplied, references that fall inside the symbol's own
+ * defining file are treated as potential self-references and only counted
+ * when they originate from a different document.
+ */
+export function buildCrossFileCallerMap(
+  db: ScipDatabase,
+  definitions?: ReadonlyArray<SymbolLocation>,
+): Map<number, Set<string>> {
+  const map = new Map<number, Set<string>>();
+
+  // ── AST path: for every supported file with readable source, walk
+  // callsites and attribute each call to the symbol whose leaf it names.
+  // This is ADDITIVE to the chunk path below — call_expression nodes catch
+  // functions, but types are referenced in non-call positions (annotations,
+  // extends clauses, field types). The chunk-based SCIP path catches those
+  // type references; AST refines callable attribution. Both paths feed the
+  // same map (Set semantics dedupe duplicates).
+  const docs = db.all<{ relative_path: string }>(
+    `SELECT relative_path FROM documents
+     WHERE 1 = 1 ${db.pathExclusionsFor('documents')}`,
+  );
+  const leafIndex = getGlobalLeafIndex(db);
+  for (const doc of docs) {
+    if (!detectAstLanguage(doc.relative_path)) continue;
+    if (db.isIgnored(doc.relative_path)) continue;
+    const callsites = getCallSites(db, doc.relative_path);
+    if (!callsites) continue;
+    for (const site of callsites) {
+      const candidates = leafIndex.get(site.calleeLeaf);
+      if (!candidates || candidates.length === 0) continue;
+      // Same-file preference (consistent with buildAstCalleeMap).
+      const sameFile = candidates.find((c) => c.file === doc.relative_path);
+      const pick = sameFile ?? (candidates.length === 1 ? candidates[0]! : null);
+      if (!pick) continue;
+      // Cross-file caller only — self-references skipped.
+      if (pick.file === doc.relative_path) continue;
+      let bucket = map.get(pick.symbolId);
+      if (!bucket) { bucket = new Set(); map.set(pick.symbolId, bucket); }
+      bucket.add(doc.relative_path);
+    }
+  }
+
+  // ── Chunk path: SCIP mentions catch references AST callsite queries miss
+  // (type annotations, extends clauses, macro-mediated refs). Self-reference
+  // filter via the optional `definitions` arg.
+  const rows = db.all<{
+    symbol_id: number;
+    relative_path: string;
+    document_id: number;
+    chunk_start: number;
+    chunk_end: number;
+  }>(
+    `SELECT DISTINCT m.symbol_id, d.relative_path, c.document_id,
+            c.start_line AS chunk_start, c.end_line AS chunk_end
+     FROM mentions m
+     JOIN chunks c ON m.chunk_id = c.id
+     JOIN documents d ON c.document_id = d.id
+     WHERE m.role != 1
+       ${db.pathExclusionsFor('d')}`,
+  );
+
+  const selfRanges = new Map<number, { docId: number; startLine: number; endLine: number }>();
+  if (definitions) {
+    for (const def of definitions) {
+      selfRanges.set(def.symbolId, {
+        docId: def.documentId,
+        startLine: def.startLine,
+        endLine: def.endLine,
+      });
+    }
+  }
+
+  for (const row of rows) {
+    if (db.isIgnored(row.relative_path)) continue;
+
+    const range = selfRanges.get(row.symbol_id);
+    if (range
+      && range.docId === row.document_id
+      && row.chunk_start >= range.startLine
+      && row.chunk_end <= range.endLine) {
+      continue;
+    }
+
+    let bucket = map.get(row.symbol_id);
+    if (!bucket) { bucket = new Set(); map.set(row.symbol_id, bucket); }
+    bucket.add(row.relative_path);
+  }
+  return map;
+}
+
+/**
+ * Bulk source-text caller fallback. Useful when the SCIP indexer
+ * under-reports references — e.g., scip-python's known gaps, Rust macro
+ * expansions, or any indexer that misses dynamic-dispatch call sites.
+ *
+ * For each candidate whose leaf identifier is *unique* across the codebase
+ * (so a textual hit can be unambiguously attributed), this scans every
+ * source file once, collecting files that mention the identifier outside
+ * the candidate's own definition range and outside comments/strings.
+ *
+ * Returns symbolId → set of caller files. Merge into the SCIP-derived
+ * `buildCrossFileCallerMap` to recover the accuracy that per-symbol
+ * `getCallerRowsForSymbol` used to provide, without paying its
+ * O(symbols × files) cost.
+ */
+export function buildSourceFallbackCallerFiles(
+  db: ScipDatabase,
+  candidates: ReadonlyArray<IndexedDefinition>,
+): Map<number, Set<string>> {
+  const leafCounts = new Map<string, number>();
+  for (const def of candidates) {
+    if (!def.leaf) continue;
+    leafCounts.set(def.leaf, (leafCounts.get(def.leaf) ?? 0) + 1);
+  }
+  // Only unique-leaf candidates can be attributed without ambiguity. Mirrors
+  // the `hasUniqueLeafDefinition` gate that the per-symbol fallback used.
+  const leafToCandidate = new Map<string, IndexedDefinition>();
+  for (const def of candidates) {
+    if (!def.leaf) continue;
+    if ((leafCounts.get(def.leaf) ?? 0) === 1) {
+      leafToCandidate.set(def.leaf, def);
+    }
+  }
+  if (leafToCandidate.size === 0) return new Map();
+
+  const documents = db.all<{ relative_path: string }>(
+    `SELECT relative_path
+     FROM documents
+     WHERE 1 = 1
+       ${db.pathExclusionsFor('documents')}`,
+  );
+
+  const result = new Map<number, Set<string>>();
+
+  // Each file contributes a Set<identifierName>. We then intersect that with
+  // the candidate-leaf set rather than scanning every identifier on every line.
+  // Tree-sitter-backed identifier collection (when language is supported)
+  // automatically excludes comments/strings; the Set lookup makes per-file
+  // attribution O(unique identifiers in file) instead of O(all token matches).
+  for (const doc of documents) {
+    if (db.isIgnored(doc.relative_path)) continue;
+    const fileIdents = getFileIdentifiers(db, doc.relative_path);
+    if (fileIdents.size === 0) continue;
+
+    for (const name of fileIdents) {
+      const candidate = leafToCandidate.get(name);
+      if (!candidate) continue;
+      // The defining file always contains its own definition's leaf — that's
+      // a self-reference, not a caller. Drop matches whose source file is the
+      // candidate's own file. (We can't go finer than file granularity here
+      // because the AST identifier set has no positions.)
+      if (doc.relative_path === candidate.relativePath) continue;
+
+      let bucket = result.get(candidate.symbolId);
+      if (!bucket) {
+        bucket = new Set();
+        result.set(candidate.symbolId, bucket);
+      }
+      bucket.add(doc.relative_path);
+    }
+  }
+
+  return result;
 }
 
 function getAllFunctionLikeDefinitions(db: ScipDatabase): IndexedDefinition[] {

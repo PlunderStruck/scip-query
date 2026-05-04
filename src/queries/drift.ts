@@ -161,8 +161,14 @@ function buildSymbolRefGraph(
     JOIN chunks c ON m.chunk_id = c.id
     JOIN documents d1 ON c.document_id = d1.id
     JOIN global_symbols gs ON m.symbol_id = gs.id
-    JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-    JOIN documents d2 ON der.document_id = d2.id
+    JOIN (
+      SELECT m2.symbol_id, c2.document_id
+      FROM mentions m2
+      JOIN chunks c2 ON m2.chunk_id = c2.id
+      WHERE m2.role = 1
+      GROUP BY m2.symbol_id
+    ) sym_def ON sym_def.symbol_id = gs.id
+    JOIN documents d2 ON sym_def.document_id = d2.id
     WHERE d1.id != d2.id
       AND m.role != 1
       ${db.pathExclusionsFor('d1', 'd2')}

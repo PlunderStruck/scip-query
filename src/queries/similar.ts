@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch, getAllDefinitions, getCalleeRowsForSymbol } from '../query-support.js';
+import { findFirstSymbolMatch, getAllDefinitions, getScopedDefinitions, getCalleeRowsForSymbol, buildCalleeMap } from '../query-support.js';
 import { getSourceText } from '../source-analysis.js';
 import type { SimilarSymbolResult } from '../types.js';
 import { isFunctionLikeSymbol, leafName, shortenSymbol } from '../symbol-parser.js';
@@ -86,11 +86,39 @@ export function similarAll(
   const all = getAllCalleeFingerprints(db, { minCallees, scope });
   const idfWeights = computeIdf(all);
 
-  const results: SimilarSymbolResult[] = [];
+  // Inverted index: callee → indexes of fingerprints that include it. Skipping
+  // ubiquitous callees (df > sqrt(N)) keeps the candidate set tight — pairs
+  // joined only by an everywhere-used callee aren't meaningful similarities.
+  // Without this index we'd compare every pair (N²); with it we only compare
+  // pairs that share at least one moderately-rare callee.
+  const docFreq = new Map<string, number>();
+  for (const fp of all) for (const c of fp.callees) docFreq.set(c, (docFreq.get(c) ?? 0) + 1);
+  const ubiquityThreshold = Math.max(8, Math.ceil(Math.sqrt(all.length)));
+  const calleeIndex = new Map<string, number[]>();
+  for (let i = 0; i < all.length; i += 1) {
+    for (const callee of all[i]!.callees) {
+      if ((docFreq.get(callee) ?? 0) > ubiquityThreshold) continue;
+      let bucket = calleeIndex.get(callee);
+      if (!bucket) { bucket = []; calleeIndex.set(callee, bucket); }
+      bucket.push(i);
+    }
+  }
 
-  for (let i = 0; i < all.length; i++) {
-    for (let j = i + 1; j < all.length; j++) {
-      const a = all[i]!;
+  const results: SimilarSymbolResult[] = [];
+  const seenPair = new Set<string>();
+
+  outer: for (let i = 0; i < all.length; i += 1) {
+    const a = all[i]!;
+    const candidates = new Set<number>();
+    for (const callee of a.callees) {
+      const bucket = calleeIndex.get(callee);
+      if (!bucket) continue;
+      for (const j of bucket) if (j > i) candidates.add(j);
+    }
+    for (const j of candidates) {
+      const pairKey = `${i}|${j}`;
+      if (seenPair.has(pairKey)) continue;
+      seenPair.add(pairKey);
       const b = all[j]!;
 
       if (crossFileOnly && a.file === b.file) continue;
@@ -101,13 +129,9 @@ export function similarAll(
 
       if (similarity < minSimilarity) continue;
 
-      // Require at least some meaningful overlap. If TF-IDF classifies all
-      // shared callees as trivial but raw overlap is substantial (>= 4 shared),
-      // still include the pair — many shared "common" callees is itself a signal.
       const sharedCount = intersection(a.callees, b.callees).size;
       if (significantShared.length < 2 && sharedCount < 4) continue;
 
-      // Use significant callees if available, otherwise fall back to all shared
       const displayShared = significantShared.length > 0
         ? significantShared
         : [...intersection(a.callees, b.callees)];
@@ -124,9 +148,9 @@ export function similarAll(
         uniqueToA: [...difference(a.callees, b.callees)].map(shortenSymbol),
         uniqueToB: [...difference(b.callees, a.callees)].map(shortenSymbol),
       });
-    }
 
-    if (results.length > limit * 5) break;
+      if (results.length > limit * 5) break outer;
+    }
   }
 
   results.sort((a, b) => b.similarity - a.similarity);
@@ -265,30 +289,22 @@ function getAllCalleeFingerprints(
   opts: { minCallees: number; scope?: string; excludeSymbol?: string },
 ): SymbolFingerprint[] {
   const { minCallees, scope, excludeSymbol } = opts;
-  const fingerprints: SymbolFingerprint[] = [];
 
-  for (const definition of getAllDefinitions(db, { scope })) {
-    if (db.isIgnored(definition.relativePath)) continue;
-    if (!definition.isFunctionLike) continue;
-    if (excludeSymbol && definition.symbol === excludeSymbol) continue;
-    // Minimum LOC guard matches the previous SQL filter. Keeps small helpers
-    // out of the fingerprint set — their callee sets are too thin for TF-IDF
-    // similarity to be meaningful.
-    if ((definition.endLine - definition.startLine + 1) < 5) continue;
+  const candidates = getScopedDefinitions(db, scope)
+    .filter((d) => !db.isIgnored(d.relativePath))
+    .filter((d) => d.isFunctionLike)
+    .filter((d) => excludeSymbol === undefined || d.symbol !== excludeSymbol)
+    .filter((d) => (d.endLine - d.startLine + 1) >= 5);
 
-    const callees = new Set(
-      getCalleeRowsForSymbol(db, definition).map((row) => row.symbol),
-    );
-    if (callees.size < minCallees) continue;
+  const calleeMap = buildCalleeMap(db, candidates);
 
-    fingerprints.push({
-      symbol: definition.symbol,
-      file: definition.relativePath,
-      callees,
-    });
-  }
-
-  return fingerprints;
+  return candidates
+    .map((d) => ({
+      symbol: d.symbol,
+      file: d.relativePath,
+      callees: new Set((calleeMap.get(d.symbolId) ?? []).map((c) => c.symbol)),
+    }))
+    .filter((fp) => fp.callees.size >= minCallees);
 }
 
 function intersection<T>(a: Set<T>, b: Set<T>): Set<T> {

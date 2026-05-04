@@ -37,14 +37,26 @@ export function bottlenecks(
          FROM mentions ref_m
          JOIN chunks ref_c ON ref_m.chunk_id = ref_c.id
          JOIN global_symbols ref_gs ON ref_m.symbol_id = ref_gs.id
-         JOIN defn_enclosing_ranges ref_der ON ref_gs.id = ref_der.symbol_id
+         JOIN (
+           SELECT m3.symbol_id, c3.document_id
+           FROM mentions m3
+           JOIN chunks c3 ON m3.chunk_id = c3.id
+           WHERE m3.role = 1
+           GROUP BY m3.symbol_id
+         ) ref_sym_def ON ref_sym_def.symbol_id = ref_gs.id
          WHERE ref_c.document_id = def_d.id
            AND ref_m.role != 1
-           AND ref_der.document_id != def_d.id
+           AND ref_sym_def.document_id != def_d.id
         ) AS fan_out
       FROM global_symbols gs
-      JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-      JOIN documents def_d ON der.document_id = def_d.id
+      JOIN (
+        SELECT m2.symbol_id, c2.document_id
+        FROM mentions m2
+        JOIN chunks c2 ON m2.chunk_id = c2.id
+        WHERE m2.role = 1
+        GROUP BY m2.symbol_id
+      ) sym_def ON sym_def.symbol_id = gs.id
+      JOIN documents def_d ON sym_def.document_id = def_d.id
       WHERE 1 = 1
         ${db.pathExclusionsFor('def_d')}
         ${db.symbolNoiseFor('gs')}

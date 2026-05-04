@@ -37,9 +37,18 @@ export function isStructuralEntrySurface(path: string): boolean {
     || basename === 'main.rs'
     || basename === 'main.go'
     || basename === 'main.py'
+    || basename === 'build.rs'
+    || basename === 'lib.rs'
   ) {
     return true;
   }
+
+  // Cargo binary targets: every .rs in src/bin/ or examples/ is an entry
+  // point with its own main(). Same for tests/ and benches/.
+  if (/\bsrc\/bin\/[^/]+\.rs$/.test(normalized)) return true;
+  if (/(^|\/)examples\/[^/]+\.rs$/.test(normalized)) return true;
+  if (/(^|\/)tests\/[^/]+\.rs$/.test(normalized)) return true;
+  if (/(^|\/)benches\/[^/]+\.rs$/.test(normalized)) return true;
 
   if (basename === 'index.ts' || basename === 'index.js') {
     // Treat only top-level index files as structural entry surfaces.

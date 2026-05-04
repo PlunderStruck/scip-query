@@ -1,5 +1,10 @@
 import type { ScipDatabase } from '../db.js';
-import { getDefinitionsForFile, getScopedDefinitions } from '../query-support.js';
+import {
+  buildCrossFileCallerMap,
+  buildSourceFallbackCallerFiles,
+  getDefinitionsForFile,
+  getScopedDefinitions,
+} from '../query-support.js';
 import type { StaleAbstraction } from '../types.js';
 import { leafName, shortenSymbol } from '../symbol-parser.js';
 import { getReExports, getSourceText } from '../source-analysis.js';
@@ -29,11 +34,24 @@ export function staleAbstractions(
 
   const filesWithFunctions = getFilesWithFunctions(db, scope);
 
-  const rows = getScopedDefinitions(db, scope)
+  const typeCandidates = getScopedDefinitions(db, scope)
     .filter((definition) => definition.isTypeLike && definitionLoc(definition) >= minLoc)
-    .filter((definition) => !db.isIgnored(definition.relativePath))
+    .filter((definition) => !db.isIgnored(definition.relativePath));
+
+  // Consumer map = SCIP mentions (with self-references filtered) ∪ source-text
+  // fallback for unique-named types. Without the fallback, a type used only in
+  // string-templated contexts or via paths the indexer missed would falsely
+  // appear unconsumed.
+  const scipConsumers = buildCrossFileCallerMap(db, typeCandidates);
+  const sourceConsumers = buildSourceFallbackCallerFiles(db, typeCandidates);
+  const consumerFileMap = mergeConsumerMaps(scipConsumers, sourceConsumers);
+
+  const rows = typeCandidates
     .map((definition) => {
-      const consumerFiles = getCrossFileConsumerFiles(db, definition);
+      const allFiles = consumerFileMap.get(definition.symbolId) ?? new Set<string>();
+      const consumerFiles = [...allFiles].filter(
+        (f) => f !== definition.relativePath && !db.isIgnored(f),
+      );
       const { realConsumers, barrelConsumers } = partitionConsumers(
         db,
         definition.relativePath,
@@ -115,25 +133,6 @@ function isTrueStaleAbstraction(
   return true;
 }
 
-function getCrossFileConsumerFiles(
-  db: ScipDatabase,
-  definition: { symbolId: number; relativePath: string },
-): string[] {
-  const callers = db.all<{ relative_path: string }>(
-    `SELECT DISTINCT d.relative_path
-     FROM mentions m
-     JOIN chunks c ON m.chunk_id = c.id
-     JOIN documents d ON c.document_id = d.id
-     WHERE m.symbol_id = ?
-       AND m.role != 1
-       ${db.pathExclusionsFor('d')}`,
-    definition.symbolId,
-  )
-    .map((row) => row.relative_path)
-    .filter((relativePath) => relativePath !== definition.relativePath && !db.isIgnored(relativePath));
-
-  return [...new Set(callers)];
-}
 
 /**
  * Split consumers into "real" (actually use the type) vs "barrel" (their only
@@ -297,4 +296,21 @@ function definitionLoc(
   definition: ReturnType<typeof getDefinitionsForFile>[number],
 ): number {
   return definition.endLine - definition.startLine + 1;
+}
+
+function mergeConsumerMaps(
+  ...maps: Array<Map<number, Set<string>>>
+): Map<number, Set<string>> {
+  const merged = new Map<number, Set<string>>();
+  for (const m of maps) {
+    for (const [k, v] of m) {
+      let bucket = merged.get(k);
+      if (!bucket) {
+        bucket = new Set();
+        merged.set(k, bucket);
+      }
+      for (const f of v) bucket.add(f);
+    }
+  }
+  return merged;
 }

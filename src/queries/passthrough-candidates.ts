@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../db.js';
-import { getCalleeRowsForSymbol, getDefinitionsForFile, getScopedDefinitions } from '../query-support.js';
+import { buildCalleeMap, getDefinitionsForFile, getScopedDefinitions } from '../query-support.js';
 import type { PassthroughCandidate } from '../types.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../symbol-parser.js';
 
@@ -17,32 +17,29 @@ export function passthroughCandidates(
 ): PassthroughCandidate[] {
   const { scope, maxLoc = 15, limit = 30 } = opts ?? {};
   const symbols = getScopedDefinitions(db, scope)
-    .filter((definition) => definitionLoc(definition) >= 3 && definitionLoc(definition) <= maxLoc);
+    .filter((d) => !db.isIgnored(d.relativePath))
+    .filter((d) => isFunctionLikeSymbol(d.symbol))
+    .filter((d) => definitionLoc(d) >= 3 && definitionLoc(d) <= maxLoc);
+
+  const calleeMap = buildCalleeMap(db, symbols);
 
   const results: PassthroughCandidate[] = [];
 
   for (const sym of symbols) {
-    if (db.isIgnored(sym.relativePath) || !isFunctionLikeSymbol(sym.symbol)) continue;
-
-    // 2. Count callees for this symbol
-    const rawCallees = getCalleeRowsForSymbol(db, sym);
-    const callees = rawCallees.some((callee) => isFunctionLikeSymbol(callee.symbol))
-      ? rawCallees.filter((callee) => isFunctionLikeSymbol(callee.symbol))
+    const rawCallees = calleeMap.get(sym.symbolId) ?? [];
+    const callees = rawCallees.some((c) => isFunctionLikeSymbol(c.symbol))
+      ? rawCallees.filter((c) => isFunctionLikeSymbol(c.symbol))
       : rawCallees;
 
-    // Deduplicate by symbol (same callee may appear in multiple chunks)
+    // Deduplicate by symbol
     const uniqueCallees = new Map<string, { symbol: string; file: string }>();
     for (const c of callees) {
-      if (!uniqueCallees.has(c.symbol)) {
-        uniqueCallees.set(c.symbol, { symbol: c.symbol, file: c.file });
-      }
+      if (!uniqueCallees.has(c.symbol)) uniqueCallees.set(c.symbol, c);
     }
 
-    // 3. Passthrough = exactly 1 unique callee
     if (uniqueCallees.size !== 1) continue;
 
     const [, callee] = [...uniqueCallees.entries()][0]!;
-
     results.push({
       symbol: sym.symbol,
       shortName: shortenSymbol(sym.symbol),

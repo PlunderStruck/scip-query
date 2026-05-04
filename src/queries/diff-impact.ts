@@ -86,10 +86,12 @@ export function diffImpact(
     relative_path: string;
   }>(
     `SELECT DISTINCT gs.id AS symbol_id, gs.symbol, d.relative_path
-    FROM defn_enclosing_ranges der
-    JOIN global_symbols gs ON der.symbol_id = gs.id
-    JOIN documents d ON der.document_id = d.id
-    WHERE der.document_id IN (${docPlaceholders})
+    FROM mentions m
+    JOIN chunks c ON m.chunk_id = c.id
+    JOIN global_symbols gs ON m.symbol_id = gs.id
+    JOIN documents d ON c.document_id = d.id
+    WHERE m.role = 1
+      AND c.document_id IN (${docPlaceholders})
       ${db.symbolNoiseFor('gs')}
     ORDER BY d.relative_path`,
     ...changedDocIds,

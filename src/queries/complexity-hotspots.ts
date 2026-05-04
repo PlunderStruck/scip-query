@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../db.js';
-import { getAllDefinitions, getCalleeRowsForSymbol, getCallerRowsForSymbol } from '../query-support.js';
+import { buildCalleeMap, buildCrossFileCallerMap, getScopedDefinitions } from '../query-support.js';
 import type { ComplexityHotspot } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 
@@ -9,15 +9,10 @@ import { shortenSymbol } from '../symbol-parser.js';
  *
  * Score = (loc / 50) * (fanIn / 5) * max(fanOut / 5, 1)
  *
- * High scores indicate symbols that are large, widely depended upon,
- * AND reach out to many other modules — the riskiest code to change.
- *
- * Uses source-corrected definition ranges via getAllDefinitions so the
- * LOC/callee bounds match `scip symbols` output. Computing fan-in/out
- * through getCallerRowsForSymbol / getCalleeRowsForSymbol keeps the
- * bounds consistent with the corrected ranges instead of whatever raw
- * range the SCIP indexer emitted (which is sometimes too wide and
- * attributes mentions from an adjacent function).
+ * Bulk fan-in/out via buildCrossFileCallerMap + buildCalleeMap so we pay
+ * one SQL pass per kind regardless of how many definitions we score —
+ * replaces the previous per-symbol getCaller/CalleeRowsForSymbol calls
+ * that were O(symbols × files) on large indexes.
  */
 export function complexityHotspots(
   db: ScipDatabase,
@@ -25,19 +20,20 @@ export function complexityHotspots(
 ): ComplexityHotspot[] {
   const { scope, minLoc = 10, limit = 30 } = opts ?? {};
 
-  return getAllDefinitions(db, { scope })
-    .filter((definition) => !db.isIgnored(definition.relativePath))
+  const definitions = getScopedDefinitions(db, scope)
+    .filter((definition) => !db.isIgnored(definition.relativePath));
+
+  const callerMap = buildCrossFileCallerMap(db, definitions);
+  const calleeMap = buildCalleeMap(db, definitions);
+
+  return definitions
     .map((definition) => {
       const loc = definition.endLine - definition.startLine + 1;
-      const callerRows = getCallerRowsForSymbol(db, definition, { limit: 500 });
-      const calleeRows = getCalleeRowsForSymbol(db, definition, { limit: 500 });
-      const fanIn = new Set(callerRows.map((row) => row.file)).size;
-      const fanOut = new Set(
-        calleeRows
-          .filter((row) => row.file !== definition.relativePath)
-          .map((row) => `${row.symbol}|${row.file}`),
-      ).size;
-      const calleeCount = new Set(calleeRows.map((row) => `${row.symbol}|${row.file}`)).size;
+      const fanIn = callerMap.get(definition.symbolId)?.size ?? 0;
+      const callees = calleeMap.get(definition.symbolId) ?? [];
+      const externalCallees = callees.filter((c) => c.file !== definition.relativePath);
+      const fanOut = new Set(externalCallees.map((c) => `${c.symbol}|${c.file}`)).size;
+      const calleeCount = new Set(callees.map((c) => `${c.symbol}|${c.file}`)).size;
       return {
         symbol: definition.symbol,
         shortName: shortenSymbol(definition.symbol),
