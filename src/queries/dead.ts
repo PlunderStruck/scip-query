@@ -1,10 +1,9 @@
-import { readdirSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
 import type { ScipDatabase } from '../db.js';
 import { getInactiveBarrelPaths, isEntrySurface } from '../entry-surfaces.js';
 import { getAllDefinitions, TEST_FILE_PATTERNS, TEST_SUPPORT_PATH_PATTERNS } from '../query-support.js';
 import { detectAstLanguage, getCrossLanguageDispatchNames, getDefinitionExclusions, isVueSfcPath } from '../ast.js';
 import { getIdentifierLineMap, getSourceImports } from '../source-analysis.js';
+import { getSourceFiles } from '../source-fileset.js';
 import type { DeadOptions, DeadSymbolResult, DeadSummary } from '../types.js';
 import { isFunctionLikeSymbol, isModuleLikeSymbol, leafName, shortenSymbol } from '../symbol-parser.js';
 
@@ -184,12 +183,11 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
   const indexedPaths = new Set(docRows.map((r) => r.relative_path));
   // Indexers (especially rust-analyzer) don't always cover every source
   // file — partial workspace indexing is common. We extend the AST scan to
-  // ANY source file under projectRoot, so a reference from an unindexed
-  // file still credits the symbol it reaches. Without this, a constant
-  // imported by one Tauri command file (often unindexed) but defined in
-  // an indexed crate looks dead.
-  const allSourcePaths = collectSourceFilesInProject(db.config.projectRoot);
-  const scanPaths = new Set<string>([...indexedPaths, ...allSourcePaths]);
+  // every source file the project owns (indexed + auxiliary types like
+  // Vue SFCs), so a reference from an unindexed file still credits the
+  // symbol it reaches.
+  const scanPaths = new Set<string>(getSourceFiles(db));
+  for (const p of indexedPaths) scanPaths.add(p);
   for (const relativePath of scanPaths) {
     const doc = { relative_path: relativePath };
     // Skip files we can't parse at all. Vue SFCs go through `getAst`'s
@@ -354,36 +352,6 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
  * miss files too) still contribute their references to the dead-code
  * detector.
  */
-const SOURCE_EXTENSIONS = new Set(['.rs', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.pyi', '.vue']);
-const SKIP_DIRS = new Set([
-  'node_modules', 'target', '.git', 'dist', 'build', '.next', '.turbo',
-  '.cache', 'coverage', '.venv', 'venv', '__pycache__', '.idea', '.vscode',
-]);
-function collectSourceFilesInProject(projectRoot: string): Set<string> {
-  const out = new Set<string>();
-  const visit = (absDir: string): void => {
-    let entries: string[];
-    try { entries = readdirSync(absDir); } catch { return; }
-    for (const name of entries) {
-      if (name.startsWith('.') && SKIP_DIRS.has(name)) continue;
-      if (SKIP_DIRS.has(name)) continue;
-      const abs = join(absDir, name);
-      let st;
-      try { st = statSync(abs); } catch { continue; }
-      if (st.isDirectory()) {
-        visit(abs);
-      } else if (st.isFile()) {
-        const dot = name.lastIndexOf('.');
-        if (dot < 0) continue;
-        const ext = name.slice(dot).toLowerCase();
-        if (!SOURCE_EXTENSIONS.has(ext)) continue;
-        out.add(relative(projectRoot, abs).replace(/\\/g, '/'));
-      }
-    }
-  };
-  visit(projectRoot);
-  return out;
-}
 
 function passesTestFileFilter(relativePath: string): boolean {
   const patterns = [...new Set([...TEST_FILE_PATTERNS, ...TEST_SUPPORT_PATH_PATTERNS])];
