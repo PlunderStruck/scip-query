@@ -1,8 +1,11 @@
 import type { ScipDatabase } from '../db.js';
 import {
+  buildCrossFileCallerMap,
   findExactSymbolMatch,
   findFirstSymbolMatch,
   getCallerRowsForSymbol,
+  getDefinitionsForFile,
+  findEnclosingDefinition,
 } from '../query-support.js';
 import type { SymbolMatch } from '../query-support.js';
 import type { AffectedResult } from '../types.js';
@@ -76,9 +79,33 @@ function getDirectAffectedRows(
   file: string;
   symbolMatch: SymbolMatch | null;
 }> {
+  // Two sources unioned: AST-backed callers (precise enclosing function for
+  // call expressions) PLUS file-level references from the broader caller map
+  // (catches type-annotation users — `function f(x: Target)` doesn't appear
+  // as a call but the file IS affected if Target's API changes).
   const callerRows = getCallerRowsForSymbol(db, target, { limit: 500 })
     .filter((row) => !db.isIgnored(row.file))
     .filter((row) => !scope || row.file.includes(scope));
+
+  const callerSeenFiles = new Set(callerRows.map((r) => r.file));
+  const broaderFiles = buildCrossFileCallerMap(db).get(target.symbolId) ?? new Set<string>();
+  const typeReferenceRows: Array<{ symbol: string; file: string }> = [];
+  for (const file of broaderFiles) {
+    if (callerSeenFiles.has(file)) continue;
+    if (db.isIgnored(file)) continue;
+    if (scope && !file.includes(scope)) continue;
+    // For type-only consumers, attribute to the file's first definition that
+    // mentions the target's leaf in source — the closest "owner" we can name
+    // without per-line precision. If no enclosing def is found, attribute to
+    // the file as a whole (symbolId: null).
+    const fileDefs = getDefinitionsForFile(db, file);
+    const enclosing = fileDefs.length > 0 ? findEnclosingDefinition(fileDefs, fileDefs[0]!.startLine) : null;
+    typeReferenceRows.push({
+      symbol: enclosing?.symbol ?? file,
+      file,
+    });
+  }
+  const allCallerRows = [...callerRows, ...typeReferenceRows];
 
   const results: Array<{
     symbolId: number | null;
@@ -89,7 +116,7 @@ function getDirectAffectedRows(
   }> = [];
   const seen = new Set<string>();
 
-  for (const row of callerRows) {
+  for (const row of allCallerRows) {
     const match = findExactSymbolMatch(db, row.symbol);
     if (!match) {
       const key = `${row.file}|${row.symbol}`;

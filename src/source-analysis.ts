@@ -449,11 +449,13 @@ function parseJavaScriptImportsAst(
   importerPath: string,
   tree: Tree,
 ): ParsedSourceImport[] {
-  // Identifier set excluding everything inside import/export statements,
-  // so "used" reflects whether the symbol is referenced in the body.
+  // Only IMPORT contexts are exclusions — value exports like
+  // `export function f()` are also `export_statement` nodes, so excluding
+  // them here would make every identifier used inside an exported function
+  // body look "unused", and unused-imports would flag every import.
   const usedNames = collectIdentifiersOutside(
     tree,
-    new Set(['import_statement', 'export_statement']),
+    new Set(['import_statement']),
   );
   const results: ParsedSourceImport[] = [];
 
@@ -843,9 +845,21 @@ function joinRustPath(prefix: string, suffix: string): string {
  */
 function collectIdentifiersOutside(tree: Tree, excludeTypes: ReadonlySet<string>): Set<string> {
   const out = new Set<string>();
+  // Track every kind of identifier reference: plain identifiers, type
+  // positions (TS interfaces/types), member-access right-hand sides
+  // (`obj.prop`), and Rust struct/enum/field references. Without this an
+  // `import type { Foo }` used only in `function f(x: Foo)` would look
+  // unused because Foo is a type_identifier, not an identifier.
+  const refTypes = new Set([
+    'identifier',
+    'type_identifier',
+    'property_identifier',
+    'shorthand_property_identifier',
+    'field_identifier',
+  ]);
   const walk = (node: SyntaxNode, inside: boolean): void => {
     const skip = inside || excludeTypes.has(node.type);
-    if (!skip && node.type === 'identifier') {
+    if (!skip && refTypes.has(node.type)) {
       out.add(node.text);
     }
     for (const child of node.children) walk(child, skip);

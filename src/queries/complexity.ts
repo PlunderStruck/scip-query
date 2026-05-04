@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch, getCalleeRowsForSymbol } from '../query-support.js';
+import { buildCalleeMap, findFirstSymbolMatch } from '../query-support.js';
 import type { ComplexityResult } from '../types.js';
 import { shortenSymbol } from '../symbol-parser.js';
 
@@ -39,8 +39,12 @@ export function complexity(
   const branches = countBranches(source, language);
   const loc = match.endLine - match.startLine + 1;
 
-  // Callee count
-  const callees = getCalleeRowsForSymbol(db, match);
+  // Callee count: use additive mode so common-named callees (Map.set,
+  // arr.push, etc.) that AST resolution skips as ambiguous still count
+  // toward complexity. A complexity metric should reflect total work, not
+  // just the calls we can statically attribute to a unique target.
+  const calleeMap = buildCalleeMap(db, [match], { additive: true });
+  const callees = calleeMap.get(match.symbolId) ?? [];
   const uniqueCallees = new Set(callees.map((c) => c.symbol));
 
   // Fan-in

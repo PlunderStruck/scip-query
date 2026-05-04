@@ -96,7 +96,12 @@ function findUniversalDependencies(
   }
 
   for (const [dep, count] of depCounts) {
-    if (count >= 6 && count / fileCount > 0.8) {
+    // Treat any dep imported by more than 30% of files as "infrastructure"
+    // and exclude from similarity scoring. The previous 80% threshold was
+    // too high — query-support, db, and symbol-parser are imported by
+    // ~70% of scip-query's files but they're shared because everything
+    // needs them, not because the importers are similar to each other.
+    if (count >= 5 && count / fileCount > 0.3) {
       universalDeps.add(dep);
     }
   }
@@ -114,7 +119,10 @@ function compareProfiles(
     if (b.deps.has(dep)) shared.add(dep);
   }
 
-  if (shared.size === 0) return null;
+  // Require at least 2 substantive shared deps. A single shared dep gives
+  // a misleading 100% Jaccard when both files have only that one dep after
+  // universal-dep filtering — those aren't really structurally similar.
+  if (shared.size < 2) return null;
 
   const unionSize = new Set([...a.deps, ...b.deps]).size;
   const similarity = shared.size / unionSize;
