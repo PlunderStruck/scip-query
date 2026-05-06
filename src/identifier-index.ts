@@ -179,16 +179,21 @@ function computeIdentifierLineMap(
       // Python). tree-sitter doesn't break those into identifier nodes —
       // the whole quoted text is one string_content node. Without
       // extracting the names, they look unreferenced and the dead-code
-      // detector flags `IDENT` as dead. We pull them out via a brace-scan
-      // of every string_content node.
+      // detector flags `IDENT` as dead. We pull every `{...}` block and
+      // extract every identifier in it: covers `{name}`, `{:<NAME$}`
+      // (width-from-variable), `{name:<.PREC$}`, `{name:?}`, etc.
       const interpolationLangs = new Set(['rust', 'python']);
-      const interpolationRegex = /\{(?:\?\s*)?([A-Za-z_][\w]*)/g;
+      const braceBlockRegex = /\{([^{}]*)\}/g;
+      const identInBlockRegex = /\b([A-Za-z_][\w]*)\b/g;
       const walk = (node: SyntaxNode): void => {
         if (identifierTypes.has(node.type)) record(node.text, node.startPosition.row);
         if (lang && interpolationLangs.has(lang) && node.type === 'string_content') {
           const baseLine = node.startPosition.row;
-          for (const match of node.text.matchAll(interpolationRegex)) {
-            if (match[1]) record(match[1], baseLine);
+          for (const block of node.text.matchAll(braceBlockRegex)) {
+            const inner = block[1] ?? '';
+            for (const ident of inner.matchAll(identInBlockRegex)) {
+              if (ident[1]) record(ident[1], baseLine);
+            }
           }
         }
         for (const child of node.children) walk(child);

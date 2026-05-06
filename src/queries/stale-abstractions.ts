@@ -4,7 +4,7 @@ import { buildCrossFileCallerMap } from '../reference-graph.js';
 import { buildSourceFallbackCallerFiles } from '../identifier-attribution.js';
 import { getDefinitionsForFile, getScopedDefinitions } from '../definition-catalog.js';
 import type { StaleAbstraction } from '../types.js';
-import { leafName, shortenSymbol } from '../symbol-parser.js';
+import { leafName, parseSymbol, shortenSymbol } from '../symbol-parser.js';
 import { getReExports } from '../language-parsers/index.js';
 import { getSourceText, hasSuppressionComment } from '../source-text.js';
 import { detectAstLanguage, getAst, getTypeContainerMap, type SyntaxNode } from '../ast.js';
@@ -28,15 +28,27 @@ import { detectAstLanguage, getAst, getTypeContainerMap, type SyntaxNode } from 
  */
 export function staleAbstractions(
   db: ScipDatabase,
-  opts?: { scope?: string; minLoc?: number; limit?: number; includeLowConfidence?: boolean },
+  opts?: { scope?: string; minLoc?: number; maxLoc?: number; limit?: number; includeLowConfidence?: boolean },
 ): StaleAbstraction[] {
-  const { scope, minLoc = 3, limit = 30, includeLowConfidence = false } = opts ?? {};
+  const { scope, minLoc = 3, maxLoc = 80, limit = 30, includeLowConfidence = false } = opts ?? {};
 
   const filesWithFunctions = getFilesWithFunctions(db, scope);
 
   const typeCandidates = getScopedDefinitions(db, scope)
     .filter((definition) => definition.isTypeLike && definitionLoc(definition) >= minLoc)
+    // Cap candidate LOC. Types over ~80 lines are substantive abstractions
+    // (engine state, request envelopes, etc.) — even if cross-file consumers
+    // are sparse, calling them "stale" is wrong. The cap also protects
+    // against rust-analyzer's chunk-fallback ranges (whole-file ranges that
+    // appear when a real `defn_enclosing_range` isn't emitted), which would
+    // otherwise dominate the report.
+    .filter((definition) => definitionLoc(definition) <= maxLoc)
     .filter((definition) => !db.isIgnored(definition.relativePath))
+    // Enum variants encode as `Type#Variant#` (parent descriptor also `type`).
+    // The variant isn't an "abstraction" on its own — the enum is. Without
+    // this filter every enum variant gets a separate stale-abstraction
+    // entry, which is noise.
+    .filter((definition) => !isNestedTypeMember(definition.symbol))
     .filter((definition) => !hasSuppressionComment(db, definition.relativePath, definition.startLine));
 
   // Consumer map = SCIP mentions (with self-references filtered) ∪ source-text
@@ -99,7 +111,14 @@ export function staleAbstractions(
     .filter((row) => isTrueStaleAbstraction(row.definition, row.realConsumers.length, filesWithFunctions))
     .map((row) => {
       const kind = detectDefinitionKind(db, row.definition.relativePath, row.definition.startLine);
-      const definerUsesType = detectDefinerUsesType(db, row.definition);
+      // For type-only files the definer is *expected* not to use what it
+      // defines (their job is exporting types for downstream consumption),
+      // so pretend the definer uses it — that avoids the "1 consumer +
+      // defining file never uses it = high confidence" branch firing on
+      // every type in a `protocol/common.rs`-style module.
+      const definerUsesType = isTypeOnlyFile(row.definition.relativePath)
+        ? true
+        : detectDefinerUsesType(db, row.definition);
       const { confidence, reason } = scoreConfidence(row.realConsumers.length, kind, definerUsesType);
 
       return {
@@ -138,14 +157,44 @@ function getFilesWithFunctions(
     .map((definition) => definition.relativePath));
 }
 
+// True when a `type`-suffix symbol's parent descriptor is also a type — i.e.
+// the symbol is a member nested inside another type (enum variant or inner
+// class). For stale-abstraction purposes only the outer type matters.
+function isNestedTypeMember(symbol: string): boolean {
+  const parsed = parseSymbol(symbol);
+  if ('kind' in parsed) return false;
+  const descriptors = parsed.descriptors;
+  if (descriptors.length < 2) return false;
+  const leaf = descriptors[descriptors.length - 1];
+  const parent = descriptors[descriptors.length - 2];
+  return leaf?.suffix === 'type' && parent?.suffix === 'type';
+}
+
+// File-name heuristic for "this file is meant to define types for other
+// modules to consume" — `types.rs`, `models/...`, `protocol/common.rs`,
+// `dto.ts`, `schema.rs`, etc. The "1 consumer + definer never uses it"
+// signal is meaningless for these: by design they don't use what they
+// define, and most exports legitimately have a single (or few) downstream
+// consumers without that being a code-smell.
+function isTypeOnlyFile(relativePath: string): boolean {
+  const basename = relativePath.split('/').pop() ?? '';
+  const stem = basename.replace(/\.[^.]+$/, '');
+  if (stem === 'types' || stem === 'models' || stem === 'schema'
+      || stem === 'common' || stem === 'protocol' || stem === 'proto'
+      || stem === 'dto' || stem === 'mod') return true;
+  if (/(^|\/)types(\/|\.)/.test(relativePath)) return true;
+  if (/(^|\/)models?(\/|\.)/.test(relativePath)) return true;
+  if (/(^|\/)proto(?:col)?(\/|\.)/.test(relativePath)) return true;
+  if (/(^|\/)schema(\/|\.)/.test(relativePath)) return true;
+  return false;
+}
+
 function isTrueStaleAbstraction(
   definition: { relativePath: string },
   consumers: number,
   filesWithFunctions: ReadonlySet<string>,
 ): boolean {
-  const basename = definition.relativePath.split('/').pop() ?? '';
-  const isTypeFile = basename.includes('types') || definition.relativePath.includes('/types/');
-  if (isTypeFile && consumers > 0) {
+  if (isTypeOnlyFile(definition.relativePath) && consumers > 0) {
     return false;
   }
 

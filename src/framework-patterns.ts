@@ -225,6 +225,21 @@ function getRustExclusions(
 
   const out: ExclusionEntry[] = [];
 
+  // Generated-file shortcut. tonic-build, prost-build, openapi-generator-rust,
+  // and bindgen all stamp an `@generated` marker into the first few lines.
+  // Every definition inside is reflection/macro/network-driven and the SCIP
+  // graph never connects callers to it. Bail out wholesale instead of
+  // case-handling each indirection.
+  if (isGeneratedFileHeader(tree.rootNode)) {
+    const entry: ExclusionEntry = {
+      startLine: 0,
+      endLine: tree.rootNode.endPosition.row,
+      reason: 'generated file (@generated header)',
+    };
+    EXCLUSION_CACHE.set(tree, [entry]);
+    return [entry];
+  }
+
   const collectAttrTexts = (item: SyntaxNode): string[] => {
     const parent = item.parent;
     if (!parent) return [];
@@ -284,23 +299,54 @@ function getRustExclusions(
       || /\bIntoSchema\b/.test(attrText)     // utoipa
       || /\bToSchema\b/.test(attrText)       // utoipa
       || /\bDeriveValueType\b/.test(attrText)
-      || /\bsqlx::FromRow\b/.test(attrText);
+      || /\bsqlx::FromRow\b/.test(attrText)
+      // thiserror — `#[error("... {field}")]` interpolates field names via the
+      // generated Display impl, which SCIP can't see. Without this every
+      // variant field of every error enum looks dead.
+      || /\bError\b/.test(attrText)
+      || /\bthiserror::Error\b/.test(attrText);
   };
   const isAllowDeadCodeAttr = (attrText: string): boolean => {
     return /#\[\s*allow\s*\(\s*dead_code\s*\)/.test(attrText);
   };
 
-  const visit = (node: SyntaxNode, inTestMod: boolean, inTraitImpl: boolean): void => {
+  const visit = (node: SyntaxNode, inTestMod: boolean, inTraitImpl: boolean, inTraitDecl: boolean): void => {
     let childInTestMod = inTestMod;
     let childInTraitImpl = inTraitImpl;
+    let childInTraitDecl = inTraitDecl;
+
+    if (node.type === 'trait_item') {
+      // Methods/consts declared inside `pub trait T { ... }` are reached
+      // through whichever concrete impl callers go through. The dispatch
+      // crosses the impl boundary that SCIP doesn't always trace, so the
+      // declaration looks dead even when there are real impls + callers.
+      childInTraitDecl = true;
+      out.push({
+        startLine: node.startPosition.row,
+        endLine: node.endPosition.row,
+        reason: 'trait declaration body (dynamic dispatch)',
+      });
+    }
 
     if (node.type === 'impl_item') {
-      // `impl Trait for Type` has TWO type_identifier children;
-      // `impl Type` has one. Trait impl methods are invoked through the trait
-      // (dynamic dispatch or generic bounds) — SCIP can't see those calls so
-      // they look "dead" without this filter.
-      const typeIds = node.namedChildren.filter((c) => c.type === 'type_identifier');
-      if (typeIds.length >= 2) childInTraitImpl = true;
+      // tree-sitter-rust marks the trait side of `impl Trait for Type` with the
+      // `trait` field; absence of that field means inherent impl. Counting bare
+      // `type_identifier` children misses any trait or self type that's a
+      // `generic_type` (e.g. `Approvable<T>`, `Foo<'_>`), so generic/lifetime
+      // trait impls were leaking through as "dead".
+      if (node.childForFieldName('trait')) {
+        childInTraitImpl = true;
+        // Some indexers (rust-analyzer in particular) report associated
+        // const/type symbols with `start_line` at the *impl block opening*,
+        // not the inner item — so range-matching against the inner node
+        // misses them. Pushing one exclusion that spans the full impl block
+        // covers methods, consts, and types in one shot.
+        out.push({
+          startLine: node.startPosition.row,
+          endLine: node.endPosition.row,
+          reason: 'trait impl block (dynamic dispatch)',
+        });
+      }
     }
 
     if (node.type === 'function_item' || node.type === 'function_signature_item') {
@@ -316,6 +362,20 @@ function getRustExclusions(
       if (reason) {
         out.push({ startLine: node.startPosition.row, endLine: node.endPosition.row, reason });
       }
+    } else if (
+      inTraitImpl
+      && (node.type === 'const_item' || node.type === 'type_item' || node.type === 'static_item' || node.type === 'associated_type')
+    ) {
+      // Associated consts/types inside `impl Trait for T` are reached through
+      // the trait — same generic-dispatch invisibility as trait methods. The
+      // SCIP graph never connects `<X as Trait>::CONST` callsites back to the
+      // concrete impl, so without this filter every associated const looks
+      // dead.
+      out.push({
+        startLine: node.startPosition.row,
+        endLine: node.endPosition.row,
+        reason: 'trait impl associated item (dynamic dispatch)',
+      });
     } else if (node.type === 'struct_item' || node.type === 'enum_item' || node.type === 'union_item') {
       const attrs = collectAttrTexts(node);
       const isReflective = attrs.some(isReflectiveDeriveAttr);
@@ -352,10 +412,10 @@ function getRustExclusions(
       }
     }
 
-    for (const child of node.namedChildren) visit(child, childInTestMod, childInTraitImpl);
+    for (const child of node.namedChildren) visit(child, childInTestMod, childInTraitImpl, childInTraitDecl);
   };
 
-  visit(tree.rootNode, false, false);
+  visit(tree.rootNode, false, false, false);
 
   // Suppression comments override the heuristic checks above.
   out.push(...collectSuppressionExclusions(
@@ -364,7 +424,140 @@ function getRustExclusions(
     new Set(['line_comment', 'block_comment']),
   ));
 
+  // Serde `with = "module"` attrs reference items by name. Anything inside
+  // the matching `mod module {}` block in the same file is reflection-driven
+  // (serde calls `module::serialize` / `::deserialize`), so the whole mod
+  // body is excluded.
+  const serdeWithModNames = collectSerdeWithModNames(tree.rootNode);
+  if (serdeWithModNames.size > 0) {
+    for (const mod of tree.rootNode.descendantsOfType('mod_item')) {
+      const name = mod.childForFieldName('name')?.text;
+      if (name && serdeWithModNames.has(name)) {
+        out.push({
+          startLine: mod.startPosition.row,
+          endLine: mod.endPosition.row,
+          reason: 'serde `with = "..."` module — body invoked via reflection',
+          containerName: name,
+        });
+      }
+    }
+  }
+
   EXCLUSION_CACHE.set(tree, out);
+  return out;
+}
+
+/**
+ * Detect tonic-build / prost-build / openapi-generator / bindgen style
+ * `@generated` markers in the first few comments of a file.
+ */
+function isGeneratedFileHeader(root: SyntaxNode): boolean {
+  // Scan top-level leading comments only — `@generated` further down is
+  // commentary about a single item, not the whole file.
+  for (let i = 0; i < Math.min(root.namedChildCount, 12); i += 1) {
+    const child = root.namedChild(i);
+    if (!child) break;
+    if (child.type !== 'line_comment' && child.type !== 'block_comment') break;
+    if (/@generated\b/.test(child.text)) return true;
+    if (/This file is .*generated\b/i.test(child.text)) return true;
+    if (/Code generated by/i.test(child.text)) return true;
+    // openapi-generator's banner is multi-line and uses "Generated by:".
+    if (/Generated by:\s*https?:\/\/openapi-generator/i.test(child.text)) return true;
+    if (/openapi-generator/i.test(child.text) && /Generated by/i.test(child.text)) return true;
+  }
+  return false;
+}
+
+// Pre-compiled attribute scanners. Source attrs are tiny strings, so a few
+// alternation regexes are cheaper than parsing the macro-token-tree by hand.
+const ATTR_HELPER_RES: ReadonlyArray<{ key: string; re: RegExp }> = [
+  { key: 'default',              re: /\bdefault\s*=\s*"([^"]+)"/g },
+  { key: 'with',                 re: /\bwith\s*=\s*"([^"]+)"/g },
+  { key: 'serialize_with',       re: /\bserialize_with\s*=\s*"([^"]+)"/g },
+  { key: 'deserialize_with',     re: /\bdeserialize_with\s*=\s*"([^"]+)"/g },
+  { key: 'skip_serializing_if',  re: /\bskip_serializing_if\s*=\s*"([^"]+)"/g },
+  { key: 'getter',               re: /\bgetter\s*=\s*"([^"]+)"/g },
+  { key: 'rename_all_with',      re: /\brename_all_with\s*=\s*"([^"]+)"/g },
+  { key: 'schema_with',          re: /\bschema_with\s*=\s*"([^"]+)"/g },
+];
+const SERDE_ATTR_HEAD = /^#!?\[\s*serde\s*\(/;
+const SCHEMARS_ATTR_HEAD = /^#!?\[\s*schemars\s*\(/;
+const VALIDATE_ATTR_HEAD = /^#!?\[\s*validate\s*\(/;
+const SERDE_WITH_RE = /\bwith\s*=\s*"([^"]+)"/g;
+
+/**
+ * Walk the file's `attribute_item`s looking for string-keyed serde / schemars
+ * helpers — `default = "fn"`, `with = "mod"`, `serialize_with = "fn"`,
+ * `deserialize_with = "fn"`, `skip_serializing_if = "fn"`, `schemars(default
+ * = "fn")`, `schemars(schema_with = "fn")`. The keys live inside an opaque
+ * `token_tree`, so we regex-scan the attribute text rather than re-parsing.
+ *
+ * Each name is registered as if the *file* called it: dead.ts attributes the
+ * call to whatever definition the leaf resolves to. This compensates for
+ * SCIP graphs that don't link string-literal attribute args to the function
+ * they name.
+ */
+export function getRustAttrReferencedNames(
+  db: ScipDatabase,
+  relativePath: string,
+): Set<string> {
+  return runCachedAstWalk(db, relativePath, ATTR_REF_CACHE, () => new Set<string>(), (tree, lang, out) => {
+    if (lang !== 'rust') return;
+    for (const attr of tree.rootNode.descendantsOfType('attribute_item')) {
+      collectAttrHelperNames(attr.text, out);
+    }
+    for (const attr of tree.rootNode.descendantsOfType('inner_attribute_item')) {
+      collectAttrHelperNames(attr.text, out);
+    }
+  }) ?? new Set();
+}
+
+const ATTR_REF_CACHE = new WeakMap<Tree, Set<string>>();
+
+function collectAttrHelperNames(attrText: string, out: Set<string>): void {
+  // Restrict to attrs we know carry helper-name strings. Without this guard,
+  // a `cfg(feature = "x")` would leak feature names into the dead-code
+  // reference set.
+  const isSerde = SERDE_ATTR_HEAD.test(attrText);
+  const isSchemars = SCHEMARS_ATTR_HEAD.test(attrText);
+  const isValidate = VALIDATE_ATTR_HEAD.test(attrText);
+  if (!isSerde && !isSchemars && !isValidate) return;
+
+  for (const { re } of ATTR_HELPER_RES) {
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(attrText)) !== null) {
+      const value = m[1]!;
+      // Path-style values resolve by leaf: `crate::helpers::fn` → `fn`. The
+      // dead-code attribution layer disambiguates by file scope.
+      const leaf = value.split('::').pop() ?? value;
+      // Stdlib helpers like `Option::is_none` and `String::is_empty` aren't
+      // user definitions; skip them so we don't mask a legitimately dead
+      // local helper that happens to share the name.
+      if (leaf === 'is_none' && /\bOption\b/.test(value)) continue;
+      if (leaf === 'is_empty' && /\b(String|Vec|HashMap|BTreeMap|HashSet|BTreeSet)\b/.test(value)) continue;
+      if (leaf) out.add(leaf);
+    }
+  }
+}
+
+/**
+ * Subset of attribute scanning aimed at `serde(with = "module_name")` —
+ * returns the bare module names referenced. `getRustExclusions` uses this to
+ * blanket-exclude the named `mod` block.
+ */
+function collectSerdeWithModNames(root: SyntaxNode): Set<string> {
+  const out = new Set<string>();
+  for (const attr of root.descendantsOfType('attribute_item')) {
+    if (!SERDE_ATTR_HEAD.test(attr.text)) continue;
+    SERDE_WITH_RE.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = SERDE_WITH_RE.exec(attr.text)) !== null) {
+      const value = m[1]!;
+      const leaf = value.split('::').pop() ?? value;
+      if (leaf) out.add(leaf);
+    }
+  }
   return out;
 }
 

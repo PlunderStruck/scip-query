@@ -536,3 +536,21 @@ export function parentTypeName(rawSymbol: string): string | null {
   return null;
 }
 
+/**
+ * Walk every enclosing type segment in the symbol path. For an enum-variant
+ * field like `Module:Enum:Variant:field`, `parentTypeName` only returns
+ * `Variant` (the closest type ancestor); a containerName-keyed exclusion
+ * registered against the enum (`Enum`) would miss it. Tools matching against
+ * a container set should check this set instead.
+ */
+export function enclosingTypeNames(rawSymbol: string): string[] {
+  const parsed = parseSymbol(rawSymbol);
+  if ('kind' in parsed) return [];
+  const out: string[] = [];
+  for (let i = parsed.descriptors.length - 2; i >= 0; i -= 1) {
+    const d = parsed.descriptors[i];
+    if (d?.suffix === 'type' && d.name) out.push(d.name);
+  }
+  return out;
+}
+

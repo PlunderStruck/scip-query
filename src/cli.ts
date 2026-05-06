@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { ScipDatabase } from './db.js';
 import { createGitignoreFilter } from './gitignore-filter.js';
 import { loadProjectConfig, resolveIndexPaths, initProjectConfig } from './config.js';
-import { reindex, detectLanguages } from './reindex/index.js';
+import { reindex, detectLanguages, augmentAuxiliaryDocuments, augmentVueResolvedReferences } from './reindex/index.js';
 import { getIndexerConfig } from './reindex/indexers.js';
 import { getIndexerDependencyStatus } from './reindex/install.js';
 import { Watcher } from './watch.js';
@@ -89,6 +89,7 @@ function openDb(): ScipDatabase {
     dbPath,
     indexPath: process.env['SCIP_QUERY_INDEX_SCIP'] ?? paths.indexPath,
     projectRoot,
+    entryRoots: config.entryRoots,
   };
 
   const filter = createGitignoreFilter(projectRoot);
@@ -185,6 +186,48 @@ program
         pnpmWorkspaces: opts.pnpmWorkspaces || config.indexer?.typescript?.pnpmWorkspaces,
       });
       console.log(`Indexed ${result.languages.join(', ')} in ${(result.durationMs / 1000).toFixed(1)}s`);
+    } catch (err) {
+      console.error(`error: ${err instanceof Error ? err.message : err}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('augment-sources')
+  .description('Add source files skipped by upstream SCIP indexers to the SQLite documents table')
+  .action(() => {
+    const projectRoot = resolveProjectRoot();
+    const dbPath = resolveActiveDbPath(projectRoot);
+    try {
+      const result = augmentAuxiliaryDocuments({
+        projectRoot,
+        dbPath,
+        onStatus: (message) => console.log(message),
+      });
+      console.log(`Scanned ${result.scanned} auxiliary source files; inserted ${result.inserted}.`);
+    } catch (err) {
+      console.error(`error: ${err instanceof Error ? err.message : err}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('augment-vue')
+  .description('Add compiler-resolved Vue SFC references to the SQLite index using Volar')
+  .option('--project <tsconfig>', 'Vue tsconfig path', 'frontend/tsconfig.scip.json')
+  .action((opts) => {
+    const projectRoot = resolveProjectRoot();
+    const dbPath = resolveActiveDbPath(projectRoot);
+    try {
+      const result = augmentVueResolvedReferences({
+        projectRoot,
+        dbPath,
+        tsconfig: opts.project,
+        onStatus: (message) => console.log(message),
+      });
+      console.log(
+        `Vue files: ${result.vueFiles}; resolved references: ${result.resolvedReferences}; inserted mentions: ${result.insertedMentions}.`,
+      );
     } catch (err) {
       console.error(`error: ${err instanceof Error ? err.message : err}`);
       process.exit(1);

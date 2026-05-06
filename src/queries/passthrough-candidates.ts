@@ -4,7 +4,7 @@ import { buildCalleeMap } from '../reference-graph.js';
 import { isLiteralPassthrough } from '../passthrough-detect.js';
 import { hasSuppressionComment } from '../source-text.js';
 import type { PassthroughCandidate } from '../types.js';
-import { isFunctionLikeSymbol, shortenSymbol } from '../symbol-parser.js';
+import { isFunctionLikeSymbol, isInRustTestModule, isRustTraitImplMember, shortenSymbol } from '../symbol-parser.js';
 
 /**
  * Find passthrough candidates: functions that just forward to one
@@ -70,6 +70,13 @@ function getPassthroughCandidateSymbols(
   return getScopedDefinitions(db, scope)
     .filter((d) => !db.isIgnored(d.relativePath))
     .filter((d) => isFunctionLikeSymbol(d.symbol))
+    // Trait-impl methods like `Default::default()`, `From::from()`,
+    // `FromStr::from_str()` legitimately delegate to a single inherent
+    // method or constructor — that's the trait-protocol idiom, not
+    // unnecessary indirection. Filtering these prevents the metric from
+    // flooding with idiomatic forwards.
+    .filter((d) => !isRustTraitImplMember(d.symbol))
+    .filter((d) => !isInRustTestModule(d.symbol))
     .filter((d) => definitionLoc(d) >= 3 && definitionLoc(d) <= maxLoc);
 }
 

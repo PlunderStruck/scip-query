@@ -98,6 +98,23 @@ export function isEntrySurface(db: ScipDatabase, file: string): boolean {
   return kind === 'entry' || kind === 'worker' || isLiveBarrel(db, file);
 }
 
+export function isRootedSymbol(db: ScipDatabase, symbol: string, file: string): boolean {
+  const roots = db.config.entryRoots;
+  if (!roots) return false;
+  const normalized = normalizePath(file);
+  if (roots.files?.some((candidate) => normalizePath(candidate) === normalized)) return true;
+  if (roots.pathPrefixes?.some((prefix) => normalized.startsWith(normalizePath(prefix)))) return true;
+  if (roots.qualifiedVars?.some((qualified) => symbolMatchesQualifiedVar(symbol, qualified))) return true;
+  if (roots.symbolPatterns?.some((pattern) => {
+    try {
+      return new RegExp(pattern).test(symbol);
+    } catch {
+      return false;
+    }
+  })) return true;
+  return false;
+}
+
 // ── Pattern internals ────────────────────────────────────────────
 
 /**
@@ -130,6 +147,8 @@ function matchesTestPattern(normalized: string): boolean {
   if (/(?:^|\/)(?:_)?test_[^/]+$/i.test(normalized)) return true;
   if (/(?:^|\/)spec_[^/]+$/i.test(normalized)) return true;
   if (/(?:^|\/)[^/]+_test\.[a-z0-9]+$/i.test(normalized)) return true;
+  if (/(?:^|\/)[^/]+_tests\.rs$/i.test(normalized)) return true; // Rust convention for inline-tests modules
+  if (/(?:^|\/)tests\.rs$/i.test(normalized)) return true;       // Rust `mod tests;` body file
   if (/(?:^|\/)[^/]+_spec\.[a-z0-9]+$/i.test(normalized)) return true;
   // Test directories (only when path actually traverses them; not bare basenames)
   if (/(?:^|\/)__tests__\//i.test(normalized)) return true;
@@ -194,4 +213,19 @@ function isBarrelPath(normalized: string): boolean {
 
 function normalizePath(path: string): string {
   return path.replace(/\\/g, '/');
+}
+
+function symbolMatchesQualifiedVar(symbol: string, qualified: string): boolean {
+  const slash = qualified.lastIndexOf('/');
+  if (slash < 0) return false;
+  const ns = qualified.slice(0, slash);
+  const name = qualified.slice(slash + 1);
+  return symbol.includes(formatScipName(ns) + '/')
+    && symbol.includes(formatScipName(name) + '.');
+}
+
+function formatScipName(value: string): string {
+  return /^[A-Za-z0-9_$+-]+$/.test(value)
+    ? value
+    : '`' + value.replace(/`/g, '``') + '`';
 }

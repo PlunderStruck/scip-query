@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../db.js';
 import { buildFileDepGraph } from '../reference-graph.js';
-import { isBarrel as isBarrelFile } from '../file-classifier.js';
+import { classifyFile, isBarrel as isBarrelFile } from '../file-classifier.js';
 import type { CycleResult } from '../types.js';
 
 /**
@@ -93,10 +93,69 @@ export function cycles(
  * involved — those are usually genuine tangles.
  */
 function classifyCycle(path: string[]): 'real' | 'module-hierarchy' {
+  // Any cycle that passes through a test file, barrel, or entry isn't an
+  // architectural one. Tests are leaves with implicit cross-traffic from
+  // `mod tests;`. Barrels exist to re-export — every cycle they're in is
+  // bookkeeping. Entries do bootstrap imports the rest of the crate then
+  // mirrors. Apply to cycles of any length.
+  for (const file of path) {
+    const kind = classifyFile(file);
+    if (kind === 'test' || kind === 'barrel' || kind === 'entry') return 'module-hierarchy';
+  }
   // path includes the closing repeat (a → b → a), so 2 distinct files = path of length 3.
   if (path.length !== 3) return 'real';
   const [a, b] = path;
   if (!a || !b) return 'real';
   if (isBarrelFile(a) || isBarrelFile(b)) return 'module-hierarchy';
+  // Rust submodule pattern: `foo.rs` declares `mod bar;` whose body lives in
+  // `foo/bar.rs`. Parent and child reference each other's items — this is
+  // how Rust hierarchical modules work, not an architectural cycle.
+  // `_tests`-suffixed siblings and integration tests in `tests/<name>.rs`
+  // alongside `src/<name>.rs` follow the same pattern.
+  if (isRustSubmodulePair(a, b) || isRustSubmodulePair(b, a)) return 'module-hierarchy';
+  if (isRustTestSibling(a, b) || isRustTestSibling(b, a)) return 'module-hierarchy';
+  // Entry-file 2-cycles (`main.rs` ↔ a sibling): the entry file is the
+  // bootstrap, the sibling is implementation; the cycle exists because the
+  // entry imports the impl while the impl imports something the entry
+  // re-exports. Same kind of artifact as a barrel cycle.
+  if (classifyFile(a) === 'entry' || classifyFile(b) === 'entry') return 'module-hierarchy';
   return 'real';
+}
+
+// True when `child` is the body file of a submodule declared by `parent`.
+// In Rust, `parent.rs` (or `parent/mod.rs`) can declare `mod child;` whose
+// body is at `parent/child.rs`. The two files are guaranteed to reference
+// each other — child uses items from parent's scope, parent re-exports
+// items from child — and that bidirectional traffic isn't a true cycle.
+function isRustSubmodulePair(child: string, parent: string): boolean {
+  if (!/\.rs$/.test(child) || !/\.rs$/.test(parent)) return false;
+  const parentDir = parent.replace(/\.rs$/, '/');
+  // child must live directly under the parent's stem-named directory:
+  // parent.rs ↔ parent/child.rs.
+  if (!child.startsWith(parentDir)) return false;
+  const remainder = child.slice(parentDir.length);
+  // direct child only (no nested subdirs); rejects deeper hierarchy whose
+  // cycles would represent genuine cross-layer traffic.
+  return !remainder.includes('/');
+}
+
+// True when `tests` looks like the inline-test sibling of `parent`. Covers
+// the two common Rust idioms: `foo_tests.rs` next to `foo.rs`, and
+// `tests/foo.rs` integration test for `src/foo.rs`.
+function isRustTestSibling(tests: string, parent: string): boolean {
+  if (!/\.rs$/.test(tests) || !/\.rs$/.test(parent)) return false;
+  const testBase = tests.replace(/\.rs$/, '');
+  const parentBase = parent.replace(/\.rs$/, '');
+  if (testBase === parentBase + '_tests') return true;
+  if (testBase === parentBase + '/tests') return true;
+  // Integration test pattern: `<crate>/tests/<name>.rs` ↔ `<crate>/src/<name>.rs`.
+  // Both files share a basename and the test path passes through `/tests/`.
+  const testParts = tests.split('/');
+  const parentParts = parent.split('/');
+  if (testParts.length === parentParts.length && testParts.includes('tests') && parentParts.includes('src')) {
+    const testBaseName = testParts[testParts.length - 1];
+    const parentBaseName = parentParts[parentParts.length - 1];
+    if (testBaseName && testBaseName === parentBaseName) return true;
+  }
+  return false;
 }

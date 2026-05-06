@@ -304,6 +304,37 @@ export function isModuleLikeSymbol(raw: string): boolean {
   return leafSuffix(raw) === 'namespace';
 }
 
+// rust-analyzer encodes inherent impl members as `impl#[Type]Member.` and
+// trait impl members as `impl#[Type][Trait]Member.`. Two adjacent bracketed
+// groups means the member belongs to a `impl Trait for Type` block — i.e.
+// it's reached via dispatch and the SCIP graph rarely traces those calls.
+// Many heuristics (dead, isolated, wrapper, passthrough, …) need to skip
+// these symbols to avoid false positives, so the regex lives here once.
+// Match `impl#[Type][Trait]…` whether the impl block sits at the crate root
+// (`<version> impl#…`) or nested in a module (`<version> path/to/mod/impl#…`).
+const RUST_TRAIT_IMPL_RE = /^rust-analyzer\b.*[\s/]impl#\[[^\]]+\]\[[^\]]+\]/;
+export function isRustTraitImplMember(symbol: string): boolean {
+  return RUST_TRAIT_IMPL_RE.test(symbol);
+}
+
+// True when any namespace segment in the SCIP path is named `tests`,
+// `test`, or `_tests` — i.e. the symbol lives inside a `#[cfg(test)] mod
+// tests { ... }` block. file-classifier alone misses these because the
+// containing file is a regular source file; only the inner module is test-
+// scoped. Lots of heuristics (similar-pairs, wrapper-candidates, …) want
+// to skip them to avoid flooding the report with test-helper noise.
+const TEST_MOD_NAMES = new Set(['test', 'tests', '_tests']);
+export function isInRustTestModule(symbol: string): boolean {
+  const parsed = parseSymbol(symbol);
+  if ('kind' in parsed) return false;
+  // Skip the leaf — only enclosing namespaces count.
+  for (let i = 0; i < parsed.descriptors.length - 1; i += 1) {
+    const d = parsed.descriptors[i];
+    if (d?.suffix === 'namespace' && d.name && TEST_MOD_NAMES.has(d.name)) return true;
+  }
+  return false;
+}
+
 /**
  * Determine whether `candidateRaw` is a direct child of `parentRaw`
  * in the SCIP descriptor chain.

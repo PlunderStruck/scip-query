@@ -1,6 +1,11 @@
 import path from 'node:path';
 import type { ScipDatabase } from '../db.js';
 import { buildFileDepGraph } from '../reference-graph.js';
+import { attributeIdentifierPermissive } from '../identifier-attribution.js';
+import { classifyFile } from '../file-classifier.js';
+import { getIdentifierLineMap } from '../identifier-index.js';
+import { getRustAttrReferencedNames } from '../framework-patterns.js';
+import { detectAstLanguage } from '../ast.js';
 import { getSourceImports } from '../language-parsers/index.js';
 import type { DriftResult, DriftSummary } from '../types.js';
 
@@ -106,34 +111,38 @@ export function drift(
   }
 
   for (const [dir, files] of dirToFiles) {
-    if (files.length < 3) continue;
+    // Need a meaningful sample of siblings before "only one file does X" is
+    // a signal — 3 siblings was too low (any small-fanout helper dir lit up).
+    // Filter to "non-skipped siblings" so a 4-file dir with 3 tests doesn't
+    // hit the threshold via the test counts.
+    const realSiblings = files.filter((f) => !shouldSkipDriftFile(f));
+    if (realSiblings.length < 5) continue;
 
     // Count dep frequency across siblings
     const depFreq = new Map<string, number>();
-    for (const file of files) {
-      if (shouldSkipDriftFile(file)) continue;
+    for (const file of realSiblings) {
       for (const dep of depGraph.get(file) ?? []) {
         if (shouldSkipDriftFile(dep)) continue;
         depFreq.set(dep, (depFreq.get(dep) ?? 0) + 1);
       }
     }
 
-    for (const file of files) {
-      if (shouldSkipDriftFile(file)) continue;
+    for (const file of realSiblings) {
       for (const dep of depGraph.get(file) ?? []) {
         if (shouldSkipDriftFile(dep)) continue;
-        if ((depFreq.get(dep) ?? 0) === 1) {
-          // This file is the only one in its dir that depends on this module
-          // Skip if dep is in the same directory (sibling imports are normal)
-          if (path.dirname(dep) === dir) continue;
-
-          results.push({
-            file,
-            kind: 'pattern-deviation',
-            description: `Only file in ${dir}/ that depends on ${dep}`,
-            dep,
-          });
-        }
+        if ((depFreq.get(dep) ?? 0) !== 1) continue;
+        // Skip same-directory deps (sibling imports are normal).
+        if (path.dirname(dep) === dir) continue;
+        // Skip deps that share the file's own *parent* directory — pulling
+        // from a sibling subdir is the common Rust submodule pattern, not
+        // drift.
+        if (path.dirname(dep) === path.dirname(dir)) continue;
+        results.push({
+          file,
+          kind: 'pattern-deviation',
+          description: `Only file in ${dir}/ that depends on ${dep}`,
+          dep,
+        });
       }
     }
   }
@@ -185,6 +194,48 @@ function buildSymbolRefGraph(
     if (!graph.has(r.from_file)) graph.set(r.from_file, new Set());
     graph.get(r.from_file)!.add(r.to_file);
   }
+
+  // SCIP mentions miss many cross-file references (rust-analyzer skips a lot
+  // of inherent-method calls; tsc-batch can drop method receivers). Without
+  // augmentation, the drift "unused import" check fires whenever a real
+  // dependency goes through one of those gaps. Walk every source file's
+  // identifier list, attribute each to a SCIP symbol via the permissive
+  // resolver, and credit the target's defining file as a referenced file.
+  const docs = db.all<{ relative_path: string }>(
+    `SELECT relative_path FROM documents
+     WHERE 1 = 1 ${db.pathExclusionsFor('documents')}`,
+  );
+  for (const doc of docs) {
+    if (db.isIgnored(doc.relative_path)) continue;
+    if (!detectAstLanguage(doc.relative_path)) continue;
+    const lineMap = getIdentifierLineMap(db, doc.relative_path);
+    let bucket = graph.get(doc.relative_path);
+    for (const name of lineMap.keys()) {
+      const targets = attributeIdentifierPermissive(db, doc.relative_path, name);
+      for (const t of targets) {
+        if (t.relativePath === doc.relative_path) continue;
+        if (db.isIgnored(t.relativePath)) continue;
+        if (!bucket) { bucket = new Set(); graph.set(doc.relative_path, bucket); }
+        bucket.add(t.relativePath);
+      }
+    }
+    // Same string-attr augmentation we apply to the caller map: serde/
+    // schemars/thiserror string args reference functions in OTHER files
+    // (e.g. `#[serde(default = "crate::common::default_x")]`).
+    if (detectAstLanguage(doc.relative_path) === 'rust') {
+      const attrRefs = getRustAttrReferencedNames(db, doc.relative_path);
+      for (const name of attrRefs) {
+        const targets = attributeIdentifierPermissive(db, doc.relative_path, name);
+        for (const t of targets) {
+          if (t.relativePath === doc.relative_path) continue;
+          if (db.isIgnored(t.relativePath)) continue;
+          if (!bucket) { bucket = new Set(); graph.set(doc.relative_path, bucket); }
+          bucket.add(t.relativePath);
+        }
+      }
+    }
+  }
+
   return graph;
 }
 
@@ -263,7 +314,16 @@ function isSideEffectImport(db: ScipDatabase, file: string, dep: string): boolea
 }
 
 function shouldSkipDriftFile(filePath: string): boolean {
-  return isStructuralRole(path.basename(filePath)) || isTestLikePath(filePath);
+  // Defer to the shared file classifier — it knows about Rust `lib.rs` /
+  // `mod.rs`, `*_tests.rs`, integration `tests/<name>.rs`, workers,
+  // entry points, etc. Drift heuristics are noisy on those by nature
+  // (entries / barrels / tests legitimately reach across the codebase),
+  // so any of those classifications should suppress drift reports.
+  const kind = classifyFile(filePath);
+  if (kind === 'entry' || kind === 'barrel' || kind === 'test' || kind === 'worker') return true;
+  // Health.ts is its own meta-roll-up of everything; drift on it is noise.
+  if (isStructuralRole(path.basename(filePath))) return true;
+  return false;
 }
 
 function isStructuralRole(basename: string): boolean {

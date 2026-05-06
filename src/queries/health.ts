@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../db.js';
-import { isEntrySurface } from '../file-classifier.js';
+import { isEntrySurface, isRootedSymbol } from '../file-classifier.js';
 import { dead } from './dead.js';
 import { isolated } from './isolated.js';
 import { cycles } from './cycles.js';
@@ -47,21 +47,24 @@ export function health(
   // Dead code: only count truly dead symbols (zero refs anywhere),
   // excluding entry points AND file-internal helpers (which are fine).
   const trueDeadSymbols = deadResult.symbols.filter(
-    (s) => !isEntrySurface(db, s.relativePath) && s.kind === 'dead-code',
+    (s) => !isEntrySurface(db, s.relativePath) && !isRootedSymbol(db, s.symbol, s.relativePath) && s.kind === 'dead-code',
   );
   const trueDeadCount = trueDeadSymbols.length;
   const trueDeadLoc = trueDeadSymbols.reduce((sum, s) => sum + s.loc, 0);
 
   // Isolated: same entry-point filtering
   const trueIsolatedCount = isolatedResult.filter(
-    (s) => !isEntrySurface(db, s.relativePath),
+    (s) => !isEntrySurface(db, s.relativePath) && !isRootedSymbol(db, s.symbol, s.relativePath),
   ).length;
 
   const trueStaleCount = staleResult.length;
 
-  // Drift: now uses usage-based detection (unused imports, layer violations, pattern deviations)
-  // The drift command already filters structural roles internally.
-  const trueDriftCount = driftResult.results.length;
+  // Drift: only the actionable kinds count toward the score and headline.
+  // Unique-dep "pattern deviations" are informational — a feature-distributed
+  // file legitimately has unique deps every sibling lacks, and including
+  // them dominates the count without indicating a real problem. Unused
+  // imports and layer violations are what actually need a code change.
+  const trueDriftCount = driftResult.unusedImports + driftResult.layerViolations;
 
   // Similar pairs: the similar command now uses TF-IDF weighted cosine
   // similarity which automatically discounts infrastructure callees.
@@ -92,7 +95,7 @@ export function health(
       impact: 'medium',
         count: trueIsolatedCount,
         locRecoverable: isolatedResult
-          .filter((s) => !isEntrySurface(db, s.relativePath))
+          .filter((s) => !isEntrySurface(db, s.relativePath) && !isRootedSymbol(db, s.symbol, s.relativePath))
           .reduce((sum, s) => sum + s.loc, 0),
     });
   }
@@ -169,10 +172,12 @@ export function health(
     });
   }
 
-  if (trueDriftCount > 0) {
+  if (trueDriftCount > 0 || driftResult.patternDeviations > 0) {
     const parts: string[] = [];
     if (driftResult.unusedImports > 0) parts.push(`${driftResult.unusedImports} unused imports`);
     if (driftResult.layerViolations > 0) parts.push(`${driftResult.layerViolations} layer violations`);
+    // Unique-dep noise is included for discoverability but doesn't drive
+    // effort/impact — every modular codebase has plenty.
     if (driftResult.patternDeviations > 0) parts.push(`${driftResult.patternDeviations} unique deps`);
     actions.push({
       category: 'Structural drift',

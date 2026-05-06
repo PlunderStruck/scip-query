@@ -35,13 +35,14 @@
  */
 import type { ScipDatabase } from './db.js';
 import { detectAstLanguage, getCallSites } from './ast.js';
+import { getRustAttrReferencedNames } from './framework-patterns.js';
 import { createPerDbCache, createPerDbValue } from './per-db-cache.js';
 import { findIdentifierLines, getIdentifiersByLine } from './identifier-index.js';
 import { getSourceImports } from './language-parsers/index.js';
 import { leafName } from './symbol-parser.js';
 import { findEnclosingDefinition, getAllDefinitions, getDefinitionsForFile } from './definition-catalog.js';
 import { getFullSymbolMatch } from './symbol-lookup.js';
-import type { ReferenceSite, SymbolLocation } from './types.js';
+import type { ReferenceSite, SymbolLocation, SymbolMatch } from './types.js';
 
 export interface CalleeRow {
   symbol: string;
@@ -126,7 +127,7 @@ export function buildFileDepGraph(
 
 export function getCalleeRowsForSymbol(
   db: ScipDatabase,
-  symbol: SymbolLocation,
+  symbol: SymbolMatch,
   opts: { limit?: number } = {},
 ): CalleeRow[] {
   // Delegates to the shared bulk path so callers automatically benefit from
@@ -141,7 +142,7 @@ export function getCalleeRowsForSymbol(
 
 export function getCallerRowsForSymbol(
   db: ScipDatabase,
-  symbol: SymbolLocation,
+  symbol: SymbolMatch,
   opts: { limit?: number } = {},
 ): CallerRow[] {
   // Delegates to the cached inverse-callee map (built from buildCalleeMap of
@@ -336,14 +337,14 @@ export function buildReferenceSites(
  */
 export function buildCalleeMap(
   db: ScipDatabase,
-  definitions: ReadonlyArray<SymbolLocation>,
+  definitions: ReadonlyArray<SymbolMatch>,
   opts: { additive?: boolean } = {},
 ): Map<number, Array<{ symbol: string; file: string; chunkId: number }>> {
   if (definitions.length === 0) return new Map();
   const additive = opts.additive ?? false;
 
-  const astDefs: SymbolLocation[] = [];
-  const chunkOnlyDefs: SymbolLocation[] = [];
+  const astDefs: SymbolMatch[] = [];
+  const chunkOnlyDefs: SymbolMatch[] = [];
   for (const def of definitions) {
     if (detectAstLanguage(def.relativePath) && getCallSites(db, def.relativePath) !== null) {
       astDefs.push(def);
@@ -385,13 +386,13 @@ export function buildCalleeMap(
  */
 export function buildAstCalleeMap(
   db: ScipDatabase,
-  definitions: ReadonlyArray<SymbolLocation>,
+  definitions: ReadonlyArray<SymbolMatch>,
 ): Map<number, Array<{ symbol: string; file: string; chunkId: number }>> {
   const result = new Map<number, Array<{ symbol: string; file: string; chunkId: number }>>();
 
   // Index defs by file so we can attribute callsites to the smallest
   // containing definition without walking the full set per callsite.
-  const byFile = new Map<string, SymbolLocation[]>();
+  const byFile = new Map<string, SymbolMatch[]>();
   for (const def of definitions) {
     const arr = byFile.get(def.relativePath);
     if (arr) arr.push(def);
@@ -415,7 +416,7 @@ export function buildAstCalleeMap(
 
     for (const site of callsites) {
       // Innermost containing definition.
-      let owner: SymbolLocation | null = null;
+      let owner: SymbolMatch | null = null;
       for (const def of sortedDefs) {
         if (site.line >= def.startLine && site.line <= def.endLine) {
           owner = def;
@@ -704,6 +705,28 @@ export function buildCrossFileCallerMap(
     if (!bucket) { bucket = new Set(); map.set(row.symbol_id, bucket); }
     bucket.add(row.relative_path);
   }
+
+  // ── String-attr path: serde / schemars / thiserror string-attr helpers
+  // (`#[serde(default = "fn")]`, `#[serde(with = "mod")]`, etc.) name a
+  // function the framework dispatches to via reflection. SCIP doesn't
+  // connect the literal arg back to the function, so the helper appears
+  // caller-less. Credit the file containing the attr as a caller.
+  for (const doc of docs) {
+    if (db.isIgnored(doc.relative_path)) continue;
+    if (detectAstLanguage(doc.relative_path) !== 'rust') continue;
+    const attrRefs = getRustAttrReferencedNames(db, doc.relative_path);
+    if (attrRefs.size === 0) continue;
+    for (const name of attrRefs) {
+      const candidates = leafIndex.get(name);
+      if (!candidates) continue;
+      for (const c of candidates) {
+        if (c.file === doc.relative_path) continue; // self-ref, not a caller
+        let bucket = map.get(c.symbolId);
+        if (!bucket) { bucket = new Set(); map.set(c.symbolId, bucket); }
+        bucket.add(doc.relative_path);
+      }
+    }
+  }
+
   return map;
 }
-

@@ -2,7 +2,8 @@ import type { ScipDatabase } from '../db.js';
 import { getScopedDefinitions } from '../definition-catalog.js';
 import { buildCalleeMap, buildCrossFileCallerMap } from '../reference-graph.js';
 import type { ComplexityHotspot } from '../types.js';
-import { shortenSymbol } from '../symbol-parser.js';
+import { isCallableSymbol, isInRustTestModule, shortenSymbol } from '../symbol-parser.js';
+import { classifyFile } from '../file-classifier.js';
 
 /**
  * Find complexity hotspots: symbols with a composite score based on
@@ -60,11 +61,18 @@ function loadComplexityCandidates(
   callerMap: ReturnType<typeof buildCrossFileCallerMap>;
   calleeMap: ReturnType<typeof buildCalleeMap>;
 } {
-  // Only function-like definitions are real complexity hotspots. SCIP records
-  // file/module symbols as definitions spanning the whole file, which would
-  // otherwise dominate the score with their synthetic LOC.
+  // Only callables (methods + free functions) are real complexity hotspots.
+  // `isFunctionLike` accepts every `term` suffix, which includes Rust struct
+  // fields like `Config:features.` — those have huge synthetic chunk-fallback
+  // LOC and high fan-in (every reader of the field), so they otherwise
+  // dominate the score even though they're plain data and have no logic.
   const definitions = getScopedDefinitions(db, scope)
-    .filter((definition) => definition.isFunctionLike && !db.isIgnored(definition.relativePath));
+    .filter((definition) => isCallableSymbol(definition.symbol) && !db.isIgnored(definition.relativePath))
+    // Tests aren't production complexity. A 200-LOC `make_session_and_context()`
+    // setup helper isn't a hotspot to refactor — it's the price of testing
+    // a complex system. Filter both file-level tests and inline `mod tests`.
+    .filter((definition) => classifyFile(definition.relativePath) !== 'test')
+    .filter((definition) => !isInRustTestModule(definition.symbol));
 
   return {
     definitions,

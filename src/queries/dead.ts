@@ -1,13 +1,13 @@
 import type { ScipDatabase } from '../db.js';
-import { getInactiveBarrelPaths, isEntrySurface, TEST_FILE_PATTERNS, TEST_SUPPORT_PATH_PATTERNS } from '../file-classifier.js';
-import { attributeIdentifier } from '../identifier-attribution.js';
-import { getAllDefinitions } from '../definition-catalog.js';
+import { getInactiveBarrelPaths, isEntrySurface, isRootedSymbol, TEST_FILE_PATTERNS, TEST_SUPPORT_PATH_PATTERNS } from '../file-classifier.js';
+import { attributeIdentifier, attributeIdentifierPermissive } from '../identifier-attribution.js';
+import { enclosingTypeNames, getAllDefinitions } from '../definition-catalog.js';
 import { detectAstLanguage, isVueSfcPath } from '../ast.js';
-import { getCrossLanguageDispatchNames, getDefinitionExclusions } from '../framework-patterns.js';
+import { getCrossLanguageDispatchNames, getDefinitionExclusions, getRustAttrReferencedNames } from '../framework-patterns.js';
 import { getIdentifierLineMap } from '../identifier-index.js';
 import { getSourceFiles } from '../source-fileset.js';
 import type { DeadOptions, DeadSymbolResult, DeadSummary } from '../types.js';
-import { isFunctionLikeSymbol, isModuleLikeSymbol, shortenSymbol } from '../symbol-parser.js';
+import { isFunctionLikeSymbol, isInRustTestModule, isModuleLikeSymbol, isRustTraitImplMember, shortenSymbol } from '../symbol-parser.js';
 
 /**
  * Find dead exports: symbols defined locally with no cross-file references.
@@ -67,7 +67,21 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
       || !looksValueLikeDefinition(definition.enclosingSymbol)
     ))
     .filter((definition) => includeTests || passesTestFileFilter(definition.relativePath))
-    .filter((definition) => includeTests || !isExcluded(definition.relativePath, definition.startLine, definition.parentTypeName))
+    .filter((definition) => includeTests || !isExcluded(definition.relativePath, definition.startLine, definition.symbol, definition.parentTypeName))
+    // rust-analyzer encodes trait impls as `impl#[Type][Trait]Member.` and
+    // inherent impls as `impl#[Type]Member.`. Trait-impl members (methods,
+    // associated consts, associated types) are reached through the trait —
+    // SCIP can't see those calls, and the AST line-range exclusion only
+    // catches them when the symbol's reported range actually sits inside
+    // the impl block. For associated consts, rust-analyzer often emits no
+    // `defn_enclosing_range` row, so the fallback chunk range pushes them
+    // outside any AST exclusion. Filtering by symbol structure side-steps
+    // that whole issue.
+    .filter((definition) => !isRustTraitImplMember(definition.symbol))
+    // Inline test mods (`#[cfg(test)] mod tests`) live in regular source
+    // files but the items inside them aren't shippable code — treating
+    // them as "potentially dead" floods the report with helper fns.
+    .filter((definition) => !isInRustTestModule(definition.symbol))
     .filter((definition) => includeMembers || looksValueLikeDefinition(definition.symbol))
     .filter((definition) => (definition.endLine - definition.startLine + 1) >= minLoc);
 
@@ -101,6 +115,7 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
   const symbols: DeadSymbolResult[] = rows
     .filter((r) => !db.isIgnored(r.relative_path))
     .filter((r) => !isEntrySurface(db, r.relative_path))
+    .filter((r) => !isRootedSymbol(db, r.symbol, r.relative_path))
     .map((r) => {
       // dead-code: zero references anywhere (not even in same file) — safe to delete
       // file-internal: referenced within same file but never cross-file —
@@ -197,7 +212,12 @@ function supplementReferencesFromAst(
     if (inactiveBarrelPaths.has(relativePath)) continue;
     const lineMap = getIdentifierLineMap(db, relativePath);
     for (const [name, lines] of lineMap) {
-      const targets = attributeIdentifier(db, relativePath, name);
+      // Use the permissive resolver: when an identifier could resolve to
+      // several candidates (typical for method leaves like
+      // `set_windows_sandbox_mode` defined on multiple types), credit all
+      // of them so a real textual hit doesn't leave every candidate
+      // looking dead. Strict resolution would return [] here.
+      const targets = attributeIdentifierPermissive(db, relativePath, name);
       if (targets.length === 0) continue;
       // Each line is one occurrence. The defining file's count includes the
       // declaration itself; subtract one occurrence on that file so we don't
@@ -218,6 +238,20 @@ function supplementReferencesFromAst(
         recordRef(target.symbolId, relativePath, 1);
       }
     }
+
+    // Rust string-attr helpers: `#[serde(default = "fn_name")]`,
+    // `#[serde(with = "module")]`, schemars equivalents, etc. The SCIP graph
+    // does not connect the literal arg to the function it names, so without
+    // this every serde helper looks dead. Same-file targets get a same-file
+    // ref (becoming "file-internal"); cross-file targets get a cross-file
+    // ref so they drop out of the dead-code list entirely.
+    const attrRefs = getRustAttrReferencedNames(db, relativePath);
+    for (const name of attrRefs) {
+      const targets = attributeIdentifier(db, relativePath, name);
+      for (const target of targets) {
+        recordRef(target.symbolId, relativePath, 1);
+      }
+    }
   }
 }
 
@@ -230,7 +264,7 @@ function supplementReferencesFromAst(
  */
 function buildFileExclusionPredicate(
   db: ScipDatabase,
-): (relativePath: string, startLine: number, parentTypeName: string | null) => boolean {
+): (relativePath: string, startLine: number, symbol: string, parentTypeName: string | null) => boolean {
   interface FileExclusions {
     ranges: Array<{ startLine: number; endLine: number }>;
     containers: Set<string>;
@@ -247,12 +281,20 @@ function buildFileExclusionPredicate(
     exclusionsByFile.set(relativePath, cached);
     return cached;
   };
-  return (relativePath, startLine, parentTypeName) => {
+  return (relativePath, startLine, symbol, parentTypeName) => {
     const ex = ensure(relativePath);
     for (const r of ex.ranges) {
       if (startLine >= r.startLine && startLine <= r.endLine) return true;
     }
     if (parentTypeName && ex.containers.has(parentTypeName)) return true;
+    // Walk the full enclosing-type chain: enum-variant fields' immediate
+    // parent type is the variant, but we want the exclusion registered
+    // against the enum to apply (thiserror error fields, sea-orm value
+    // structs, anything where the framework-touched type is the outermost
+    // wrapper rather than the closest parent).
+    for (const name of enclosingTypeNames(symbol)) {
+      if (ex.containers.has(name)) return true;
+    }
     return false;
   };
 }

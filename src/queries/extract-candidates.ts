@@ -3,7 +3,8 @@ import { getDefinitionsForFile, getScopedDefinitions } from '../definition-catal
 import { buildCalleeMap } from '../reference-graph.js';
 import { hasSuppressionComment } from '../source-text.js';
 import type { ExtractCandidate } from '../types.js';
-import { isFunctionLikeSymbol, shortenSymbol } from '../symbol-parser.js';
+import { isFunctionLikeSymbol, isInRustTestModule, shortenSymbol } from '../symbol-parser.js';
+import { classifyFile } from '../file-classifier.js';
 
 /**
  * Find functions with natural extraction seams.
@@ -28,6 +29,12 @@ export function extractCandidates(
     .filter((definition) => !db.isIgnored(definition.relativePath))
     .filter((definition) => definitionLoc(definition) >= minLoc && isFunctionLikeSymbol(definition.symbol))
     .filter((definition) => !(definition.relativePath.split('/').pop() ?? '').includes('types'))
+    // Tests legitimately have natural extraction seams (arrange/act/assert
+    // calls each cluster of helpers) that don't represent over-large
+    // production functions. Excluding them keeps the action-oriented list
+    // focused on real refactor candidates.
+    .filter((definition) => classifyFile(definition.relativePath) !== 'test')
+    .filter((definition) => !isInRustTestModule(definition.symbol))
     .filter((definition) => !hasSuppressionComment(db, definition.relativePath, definition.startLine))
     .sort((left, right) => definitionLoc(right) - definitionLoc(left));
 

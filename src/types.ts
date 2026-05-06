@@ -733,6 +733,8 @@ export interface ScipQueryConfig {
   indexPath: string;
   /** Project root directory */
   projectRoot: string;
+  /** Project-specific externally-live roots for dead-code filtering */
+  entryRoots?: EntryRootsConfig;
   /** Paths to .gitignore files to load for filtering */
   gitignorePaths?: string[];
 }
@@ -748,6 +750,19 @@ export interface ProjectConfig {
   indexer?: Partial<Record<SupportedLanguage, IndexerOverrides>>;
   /** Override the database storage path (default: ~/.cache/scip-query/<hash>/) */
   dbPath?: string;
+  /** Project-specific externally-live roots for dead-code filtering */
+  entryRoots?: EntryRootsConfig;
+}
+
+export interface EntryRootsConfig {
+  /** Any symbol defined in these path prefixes is externally live */
+  pathPrefixes?: string[];
+  /** Any symbol defined in these exact files is externally live */
+  files?: string[];
+  /** Symbols matching these regular expressions are externally live */
+  symbolPatterns?: string[];
+  /** Qualified var names like my.ns/my-fn that are externally live */
+  qualifiedVars?: string[];
 }
 
 export interface WatchConfig {

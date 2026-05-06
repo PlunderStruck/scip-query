@@ -3,8 +3,10 @@ import { isEntrySurface } from '../file-classifier.js';
 import { getScopedDefinitions } from '../definition-catalog.js';
 import { buildCalleeMap, buildCrossFileCallerMap } from '../reference-graph.js';
 import { buildSourceFallbackCallerFiles } from '../identifier-attribution.js';
+import { getRustAttrReferencedNames } from '../framework-patterns.js';
+import { detectAstLanguage } from '../ast.js';
 import type { IsolatedResult } from '../types.js';
-import { shortenSymbol } from '../symbol-parser.js';
+import { isInRustTestModule, isRustTraitImplMember, leafName, shortenSymbol } from '../symbol-parser.js';
 
 /**
  * Find isolated callables: defined locally, referenced by nothing,
@@ -24,6 +26,8 @@ export function isolated(
     .filter((definition) => !db.isIgnored(definition.relativePath))
     .filter((definition) => !isEntrySurface(db, definition.relativePath))
     .filter((definition) => definition.isFunctionLike)
+    .filter((definition) => !isRustTraitImplMember(definition.symbol))
+    .filter((definition) => !isInRustTestModule(definition.symbol))
     .filter((definition) => (definition.endLine - definition.startLine + 1) >= minLoc);
 
   const scipCallerMap = buildCrossFileCallerMap(db, candidates);
@@ -32,6 +36,33 @@ export function isolated(
     ...scipCallerMap.keys(),
     ...fallbackCallerMap.keys(),
   ]);
+
+  // Same-file string-attr references count as a usage. `buildCrossFileCallerMap`
+  // skips same-file callers (correct for cross-file isolation) but a function
+  // referenced by `#[serde(default = "fn")]` in its own file is not isolated
+  // — it's used; just not from another file. Walk every Rust source once and
+  // mark candidates whose leaf appears in the file's serde/schemars attrs.
+  const candidatesByLeaf = new Map<string, number[]>();
+  for (const c of candidates) {
+    const leaf = leafName(c.symbol);
+    if (!leaf) continue;
+    const bucket = candidatesByLeaf.get(leaf) ?? [];
+    bucket.push(c.symbolId);
+    candidatesByLeaf.set(leaf, bucket);
+  }
+  const docs = db.all<{ relative_path: string }>(
+    `SELECT relative_path FROM documents WHERE 1 = 1 ${db.pathExclusionsFor('documents')}`,
+  );
+  for (const doc of docs) {
+    if (db.isIgnored(doc.relative_path)) continue;
+    if (detectAstLanguage(doc.relative_path) !== 'rust') continue;
+    const refs = getRustAttrReferencedNames(db, doc.relative_path);
+    for (const name of refs) {
+      const ids = candidatesByLeaf.get(name);
+      if (!ids) continue;
+      for (const id of ids) symbolsWithCallers.add(id);
+    }
+  }
 
   const symbolBySymbolId = new Map(candidates.map((d) => [d.symbolId, d.symbol]));
   // additive: chunk-based callee detection unioned with AST. For "does this

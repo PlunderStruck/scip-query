@@ -3,6 +3,8 @@ import { existsSync, renameSync, rmSync } from 'node:fs';
 import { basename, dirname, extname, join } from 'node:path';
 import { tryInstallScipCli } from '../scip-cli.js';
 import type { SupportedLanguage, IndexerConfig } from '../types.js';
+import { augmentAuxiliaryDocuments } from './augment.js';
+import { augmentVueResolvedReferences } from './augment-vue.js';
 import { detectLanguages } from './detect.js';
 import { getIndexerConfig } from './indexers.js';
 import { mergeScipFiles } from './merge.js';
@@ -219,6 +221,12 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
     }
   }
 
+  augmentAuxiliaryDocuments({
+    projectRoot,
+    dbPath: outputDb,
+    onStatus,
+  });
+
   const durationMs = Date.now() - start;
   onStatus(`Done in ${(durationMs / 1000).toFixed(1)}s`);
 
@@ -232,6 +240,8 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
 }
 
 export { detectLanguages } from './detect.js';
+export { augmentAuxiliaryDocuments } from './augment.js';
+export { augmentVueResolvedReferences } from './augment-vue.js';
 export { getIndexerConfig, INDEXER_CONFIGS } from './indexers.js';
 export { mergeScipFiles, mergeScipIndexes } from './merge.js';
 export {

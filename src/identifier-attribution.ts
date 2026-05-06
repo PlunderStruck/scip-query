@@ -56,9 +56,13 @@ export function attributeIdentifier(
 
   if (bucket.length === 1) return [toSymbolRef(bucket[0]!)];
 
-  // 1. Same-file resolution wins outright.
-  const sameFile = bucket.find((e) => e.file === file);
-  if (sameFile) return [toSymbolRef(sameFile)];
+  // 1. Same-file resolution wins outright. Credit every same-file
+  // candidate — a Rust struct's field and a method on that struct can
+  // share a name (e.g. `pub line_ending: T` + `fn line_ending(self, ...)`)
+  // and a textual hit could resolve to either at runtime, so both must
+  // count for dead-code purposes. `find` previously dropped one of them.
+  const sameFile = bucket.filter((e) => e.file === file);
+  if (sameFile.length > 0) return sameFile.map(toSymbolRef);
 
   // 2. Direct import: refFile imports `identifier` by name from a path
   // that matches a candidate's defining file. Credit ALL candidates in
@@ -89,6 +93,36 @@ export function attributeIdentifier(
   }
 
   return [];
+}
+
+/**
+ * Permissive variant of `attributeIdentifier` for dead-code analysis.
+ *
+ * The strict version returns `[]` when an identifier could resolve to
+ * multiple candidates and no scope signal disambiguates. That's the right
+ * call for refs/dataflow (precision), but the wrong call for dead-code:
+ * a textual hit on a method leaf almost always lands on *one* of the
+ * candidates at runtime — we just can't tell which. Returning `[]`
+ * wrongly leaves every candidate without a reference and they all look
+ * dead.
+ *
+ * Bias: prefer false negatives (live code stays live) over false
+ * positives (deleting referenced code).
+ */
+export function attributeIdentifierPermissive(
+  db: ScipDatabase,
+  file: string,
+  identifier: string,
+): SymbolRef[] {
+  const strict = attributeIdentifier(db, file, identifier);
+  if (strict.length > 0) return strict;
+  // Strict returned empty → ambiguous textual hit. Credit every candidate:
+  // each one *could* be the runtime target. The dead-code pass then sees
+  // "at least one cross-file reference" for whichever candidates a textual
+  // hit appears against, which is the safer bias for deletion decisions.
+  const bucket = getGlobalLeafIndex(db).get(identifier);
+  if (!bucket || bucket.length === 0) return [];
+  return bucket.map(toSymbolRef);
 }
 
 // ── Inverse: per-symbol reference list ───────────────────────────

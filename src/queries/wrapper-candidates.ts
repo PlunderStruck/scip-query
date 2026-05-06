@@ -4,10 +4,11 @@ import { buildCrossFileCallerMap, buildFileDepGraph } from '../reference-graph.j
 import { buildSourceFallbackCallerFiles } from '../identifier-attribution.js';
 import { findEnclosingDefinition, getDefinitionsForFile, getScopedDefinitions } from '../definition-catalog.js';
 import { getIdentifierLineMap } from '../identifier-index.js';
+import { classifyFile } from '../file-classifier.js';
 import { leafName } from '../symbol-parser.js';
 import { hasSuppressionComment } from '../source-text.js';
 import type { WrapperCandidate } from '../types.js';
-import { isFunctionLikeSymbol, shortenSymbol } from '../symbol-parser.js';
+import { isFunctionLikeSymbol, isInRustTestModule, shortenSymbol } from '../symbol-parser.js';
 
 /**
  * Find wrapper candidates: symbols called by only one other symbol.
@@ -39,10 +40,20 @@ export function wrapperCandidates(
     if (hasSuppressionComment(db, symbol.relativePath, symbol.startLine)) continue;
     const symbolStem = basename(symbol.relativePath, extname(symbol.relativePath));
 
-    // Cheap bulk check first: skip if not exactly 1 external caller file (excluding same stem)
+    // Cheap bulk check first: skip if not exactly 1 external caller file
+    // (excluding same stem). Also exclude entry/barrel/test files —
+    // entries and barrels are re-export / bootstrap surfaces, not real
+    // wrapping callers. Test files indicate the function is exercised
+    // from tests; the wrapper signal is supposed to flag production
+    // indirection, not "only used in tests" (which is a different
+    // signal — likely dead production code, surfaced by `dead`).
     const externalFiles = [...(callerFileMap.get(symbol.symbolId) ?? [])]
       .filter((f) => f !== symbol.relativePath)
-      .filter((f) => basename(f, extname(f)) !== symbolStem);
+      .filter((f) => basename(f, extname(f)) !== symbolStem)
+      .filter((f) => {
+        const kind = classifyFile(f);
+        return kind !== 'barrel' && kind !== 'entry' && kind !== 'test';
+      });
     if (externalFiles.length !== 1) continue;
 
     const callerFile = externalFiles[0]!;
@@ -67,6 +78,12 @@ export function wrapperCandidates(
     const callerDefs = getDefinitionsForFile(db, callerFile);
     const refinedLine = refineCallSiteLine(db, callerFile, symbol.symbol, refRow.start_line, refRow.end_line);
     const enclosing = findEnclosingDefinition(callerDefs, refinedLine);
+
+    // If the only caller is a function inside a `#[cfg(test)] mod tests`
+    // block (regardless of whether the file itself is classified as a test
+    // file), the wrapper metric isn't useful — that's a "used only in
+    // tests" signal, distinct from production over-abstraction.
+    if (enclosing && isInRustTestModule(enclosing.symbol)) continue;
 
     // Fan-in: function-level from bulk map, or file-level as fallback
     let callerFanIn: number;
@@ -118,6 +135,7 @@ function getWrapperCandidateSymbols(
   return getScopedDefinitions(db, scope)
     .filter((definition) => !db.isIgnored(definition.relativePath))
     .filter((definition) => isFunctionLikeSymbol(definition.symbol))
+    .filter((definition) => !isInRustTestModule(definition.symbol))
     .filter((definition) => definitionLoc(definition) <= maxLoc && definitionLoc(definition) >= 2);
 }
 
