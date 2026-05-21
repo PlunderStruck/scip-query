@@ -199,7 +199,11 @@ export function getAst(db: ScipDatabase, relativePath: string): Tree | null {
   return TREE_CACHE.get(db, relativePath, source, () => {
     const parser = getParser(lang);
     if (!parser) return null;
-    return parser.parse(source);
+    try {
+      return parser.parse(source);
+    } catch {
+      return null;
+    }
   });
 }
 
@@ -223,7 +227,11 @@ function getVueScriptAst(db: ScipDatabase, relativePath: string): Tree | null {
     if (!parser) return null;
     // Pad with newlines so the script content sits on its original lines.
     const padded = '\n'.repeat(block.startLine) + block.body;
-    return parser.parse(padded);
+    try {
+      return parser.parse(padded);
+    } catch {
+      return null;
+    }
   });
 }
 
