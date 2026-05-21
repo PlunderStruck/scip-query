@@ -6,14 +6,15 @@ import { getAst } from '../src/ast.js';
 import type { ScipDatabase } from '../src/db.js';
 
 describe('AST parser fallback', () => {
-  it('falls back instead of crashing when tree-sitter rejects a source file', () => {
+  it('parses a TypeScript source file that tree-sitter rejects as one large string', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-ast-fallback-'));
     try {
       const source = readFileSync(join(process.cwd(), 'src', 'cli.ts'), 'utf-8');
       writeFileSync(join(tempDir, 'cli.ts'), source);
       const db = { config: { projectRoot: tempDir } } as ScipDatabase;
 
-      expect(() => getAst(db, 'cli.ts')).not.toThrow();
+      const tree = getAst(db, 'cli.ts');
+      expect(tree?.rootNode.type).toBe('program');
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }

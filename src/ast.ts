@@ -23,7 +23,7 @@ const require = createRequire(import.meta.url);
 type ParserCtor = new () => ParserInstance;
 interface ParserInstance {
   setLanguage(lang: unknown): void;
-  parse(source: string): Tree;
+  parse(source: string | ((index: number, position: { row: number; column: number }) => string | null)): Tree;
 }
 export interface Tree {
   rootNode: SyntaxNode;
@@ -200,7 +200,7 @@ export function getAst(db: ScipDatabase, relativePath: string): Tree | null {
     const parser = getParser(lang);
     if (!parser) return null;
     try {
-      return parser.parse(source);
+      return parseSource(parser, source);
     } catch {
       return null;
     }
@@ -228,11 +228,18 @@ function getVueScriptAst(db: ScipDatabase, relativePath: string): Tree | null {
     // Pad with newlines so the script content sits on its original lines.
     const padded = '\n'.repeat(block.startLine) + block.body;
     try {
-      return parser.parse(padded);
+      return parseSource(parser, padded);
     } catch {
       return null;
     }
   });
+}
+
+function parseSource(parser: ParserInstance, source: string): Tree {
+  const chunkSize = 16 * 1024;
+  return parser.parse((index) => (
+    index >= source.length ? null : source.slice(index, Math.min(source.length, index + chunkSize))
+  ));
 }
 
 interface VueScriptBlock {
