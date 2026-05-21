@@ -184,34 +184,58 @@ What does the user experience during and after this change? Features that disapp
 
 **Key question**: If a real user walked through this flow, would anything surprise, confuse, or frustrate them?
 
-### 11. Match the existing system
+### 11. Reuse over re-implement; match what already exists
 
-Before designing any new code path, find 2-3 existing examples of the same problem class in the codebase. How does it already handle errors in this layer? What utilities does it already use? What's the naming convention? What abstraction level do similar modules operate at? Your implementation should be indistinguishable from the surrounding code — same patterns, same utilities, same conventions, same libraries. If you need to diverge, justify why in the plan. Two patterns for the same thing is worse than either pattern alone.
+Two implementations of the same logic is worse than either alone — they drift, diverge, and slowly contradict each other until nobody knows which is canonical. Before designing any new code path, find the existing implementations of the same problem class and reuse them. The codebase already has utilities, error-handling patterns, naming conventions, and abstractions for this — use them. If you genuinely need a new pattern, justify why in the plan with a citation to what existed and why it didn't fit. Your implementation should be indistinguishable from the surrounding code — same patterns, same utilities, same conventions, same libraries.
 
-**Key question**: Does every new code path in the plan follow the conventions already established by the codebase, and can you point to the existing examples it's matching?
-**Tools**: `scip-query similar <symbol>` to find functions with overlapping callee sets. `scip-query surface` to see what utilities a module already uses. `scip-query deps` to see what libraries are already adopted. `scip-query code` to read the canonical implementation.
+This principle backstops the Gate C **Reuse Audit** — by stress-test time, every new symbol in the plan should already be tied to a reuse target or a written justification. Use this lens to catch ones that slipped through.
+
+**Key question**: For every new function, type, or module in the plan, does an existing one already do this — or 80% of this? If you'd be writing logic that's *similar-but-not-identical* to existing code, you are creating future drift.
+**Tools**: `scip-query similar-chains` (parallel end-to-end flows). `scip-query similar-files` (structurally similar modules). `scip-query similar <symbol>` (overlapping callee sets). `scip-query similar-signatures` (same-shape functions). `scip-query convergence <a> <b>` (merge prescription for near-duplicates). `scip-query surface <module>` (what's already exposed). `scip-query deps <file>` (what libraries are already adopted). `scip-query code <symbol>` (read the canonical example).
 
 ---
 
 ## Workflow
 
-### 1. Discover
+### 1. Discover — three gates before you design
 
-Start from the user's request. Use scip-query to map the system around the change:
+You may not write a single design step until you have produced written answers to all three gates below. Each gate becomes a section in the final plan. A plan that skips any gate is rejected — it means you don't understand the problem, the system, or what already exists.
 
-- `scip-query system <module>` for the full module map.
-- `scip-query call-graph <symbol>` for callers and callees.
-- `scip-query rdeps` and `scip-query surface` to find all consumers.
-- `scip-query affected <symbol>` for the full transitive blast radius.
-- `scip-query change-surface <file>` for a pre-change risk briefing on each file you'll modify.
+#### Gate A — Restate the goal
 
-Then find the existing conventions before designing anything new:
+What is the user actually trying to accomplish? Not the literal request — the underlying job. State it in your own words, then state what "done" looks like for the user (not for the code). If the goal is ambiguous, stop and ask the user before designing. A correct plan for the wrong goal is worse than no plan.
 
-- `scip-query similar <symbol>` to find functions with overlapping patterns you can reuse.
-- `scip-query deps` to see what libraries and utilities the surrounding code already uses.
-- `scip-query code <symbol>` to read the canonical examples.
+#### Gate B — Explain the current end-to-end flow
 
-Write a clear problem statement: what needs to change, why, and what the target state looks like. Include a **Conventions** section listing the existing patterns the implementation must follow, with source citations.
+Walk the affected slice of the system from entry point to side effect, citing scip-query at every hop. Use:
+
+- `scip-query system <module>` — full module map of the area
+- `scip-query call-graph <symbol>` — callers and callees of every entry point you'll touch
+- `scip-query trace <symbol>` — definition + signature + every reference
+- `scip-query dataflow <symbol>` — what feeds in, where it ends up
+- `scip-query change-surface <file>` — pre-change risk briefing on each file you'll modify
+- `scip-query affected <symbol>` — full transitive blast radius
+
+If you can't explain how the code works today, you have not earned the right to change it. Surface the non-obvious invariants — what does this code handle that you'd never guess from its shape? What production failures shaped it? What edge cases does the current implementation already cover?
+
+#### Gate C — Reuse audit (search before you write)
+
+For every new function, type, helper, or module you are about to propose, verify the logic doesn't already exist somewhere in the codebase. **Reuse > extend > write-new.** Two implementations of the same logic is worse than either alone — they drift, diverge, and slowly contradict each other.
+
+Run, in roughly broad-to-narrow order:
+
+- `scip-query similar-chains` — does an equivalent end-to-end flow already exist? (the most powerful reuse-finder — catches architectural duplication that function-level checks miss)
+- `scip-query similar-files <closest-existing-file>` — does a structurally similar module already exist?
+- `scip-query similar <closest-existing-symbol>` — does a function already do most of this? (TF-IDF weighted cosine on callee fingerprints)
+- `scip-query similar-signatures` — does a function with this parameter+return shape already exist?
+- `scip-query surface <module>` — what utilities does the area you're touching already expose?
+
+Once a candidate surfaces, confirm fit with:
+
+- `scip-query code <candidate>` — read it
+- `scip-query convergence <yours> <candidate>` — merge prescription if it's a near-duplicate
+
+The plan must include a **Reuse Audit** subsection. For every new symbol you're proposing, list either (a) the existing function/utility you'll reuse or extend (with scip-query citation), or (b) the specific reason existing code doesn't fit and a new symbol is justified. "I didn't find anything" is not an acceptable answer — name the queries you ran.
 
 ### 2. Design
 
@@ -310,9 +334,11 @@ Agent workflows guide: /Users/aydansalois/Documents/GitHub/scip-query/docs/AGENT
 The plan is a single markdown file with:
 
 1. Title and date
-2. Problem statement (what, why, target state)
-3. Design phases (numbered checklists with Source fields)
-4. Stress-test findings (inline with the relevant phase or as addenda)
-5. Execution order (dependency graph between phases)
-6. Ship order (recommended deployment sequence, one-way doors flagged)
-7. Summary (files modified/created/deleted, net code delta)
+2. **Goal** (Gate A — what the user is actually trying to accomplish, what "done" looks like for them)
+3. **Current state** (Gate B — end-to-end flow today with scip-query citations, plus the non-obvious invariants the current code already handles)
+4. **Reuse audit** (Gate C — for each new symbol proposed, the reuse target or the justification for writing new, with the queries that were run)
+5. Design phases (numbered checklists with Source fields)
+6. Stress-test findings (inline with the relevant phase or as addenda)
+7. Execution order (dependency graph between phases)
+8. Ship order (recommended deployment sequence, one-way doors flagged)
+9. Summary (files modified/created/deleted, net code delta)

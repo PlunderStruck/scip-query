@@ -233,7 +233,7 @@ function createVueLanguageContext(projectRoot: string, configPath: string): VueL
     createParsedCommandLine(ts: TsModule, host: unknown, configFileName: string): {
       vueOptions: Record<string, unknown>;
     };
-    createGlobalTypesWriter(options: unknown, writeFile: (path: string, data: string) => void): unknown;
+    createGlobalTypesWriter?(options: unknown, writeFile: (path: string, data: string) => void): unknown;
     getAllExtensions(options: Record<string, unknown>): string[];
     createVueLanguagePlugin(
       ts: TsModule,
@@ -266,7 +266,9 @@ function createVueLanguageContext(projectRoot: string, configPath: string): VueL
 
   const vueParsed = vueCore.createParsedCommandLine(ts, ts.sys, configPath);
   const vueOptions = vueParsed.vueOptions;
-  vueOptions['globalTypesPath'] = vueCore.createGlobalTypesWriter(vueOptions, ts.sys.writeFile);
+  if (typeof vueCore.createGlobalTypesWriter === 'function') {
+    vueOptions['globalTypesPath'] = vueCore.createGlobalTypesWriter(vueOptions, ts.sys.writeFile);
+  }
   const extraFileExtensions = vueCore.getAllExtensions(vueOptions).map((extension) => ({
     extension: extension.slice(1),
     isMixedContent: true,
