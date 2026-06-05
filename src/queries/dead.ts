@@ -3,7 +3,7 @@ import { getInactiveBarrelPaths, isEntrySurface, isRootedSymbol, TEST_FILE_PATTE
 import { enclosingTypeNames, getAllDefinitions } from '../symbols/definition-catalog.js';
 import { getDefinitionExclusions } from '../analysis/framework-patterns.js';
 import type { DeadOptions, DeadSymbolResult, DeadSummary } from '../domain/types.js';
-import { isFunctionLikeSymbol, isInRustTestModule, isModuleLikeSymbol, isRustTraitImplMember, shortenSymbol } from '../symbols/symbol-parser.js';
+import { isCallableSymbol, isFunctionLikeSymbol, isInRustTestModule, isModuleLikeSymbol, isRustTraitImplMember, shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
 
 /**
@@ -79,7 +79,7 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     // files but the items inside them aren't shippable code — treating
     // them as "potentially dead" floods the report with helper fns.
     .filter((definition) => !isInRustTestModule(definition.symbol))
-    .filter((definition) => includeMembers || looksValueLikeDefinition(definition.symbol))
+    .filter((definition) => includeMembers || isTopLevelOrCallable(definition))
     .filter((definition) => (definition.endLine - definition.startLine + 1) >= minLoc);
 
   const rows = definitions
@@ -276,4 +276,8 @@ function likeMatches(value: string, pattern: string): boolean {
 
 function looksValueLikeDefinition(rawSymbol: string): boolean {
   return isFunctionLikeSymbol(rawSymbol) || rawSymbol.endsWith('().') || rawSymbol.endsWith('.');
+}
+
+function isTopLevelOrCallable(definition: { isFunctionLike: boolean; parentTypeName: string | null; symbol: string }): boolean {
+  return isCallableSymbol(definition.symbol) || enclosingTypeNames(definition.symbol).length === 0;
 }

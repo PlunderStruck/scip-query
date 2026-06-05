@@ -22,6 +22,7 @@ import { changeSurface } from '../src/queries/change-surface.js';
 import { convergence } from '../src/queries/convergence.js';
 import { complexity } from '../src/queries/complexity.js';
 import { dataflow } from '../src/queries/dataflow.js';
+import { dead } from '../src/queries/dead.js';
 import { fanIn } from '../src/queries/fan.js';
 import { health } from '../src/queries/health.js';
 import { importedBy, imports, unusedImports } from '../src/queries/imports.js';
@@ -121,6 +122,15 @@ function createFixtureProject(projectRoot: string): void {
     ].join('\n'),
   );
   writeFileSync(
+    join(projectRoot, 'src', 'config.ts'),
+    [
+      'export class Settings {',
+      '  unusedField = 1;',
+      '}',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(
     join(projectRoot, 'tests', 'utils.test.ts'),
     [
       "import { tryInstallScipCli } from '../src/utils.js';",
@@ -196,7 +206,8 @@ function createFixtureDb(dbPath: string): void {
       (7, 'typescript', 'src/contracts.ts'),
       (8, 'typescript', 'src/predicates.ts'),
       (9, 'typescript', 'src/types.ts'),
-      (10, 'typescript', 'tests/utils.test.ts');
+      (10, 'typescript', 'tests/utils.test.ts'),
+      (11, 'typescript', 'src/config.ts');
   `);
 
   const insertSymbol = sqliteDb.prepare(
@@ -228,6 +239,8 @@ function createFixtureDb(dbPath: string): void {
   insertSymbol.run(22, 'scip-typescript npm pkg 1.0.0 src/`types.ts`/InstallMethod#', 'InstallMethod', null, 'interface InstallMethod');
   insertSymbol.run(23, 'scip-typescript npm pkg 1.0.0 src/`predicates.ts`/TempOptions#', 'TempOptions', null, 'interface TempOptions');
   insertSymbol.run(24, 'scip-typescript npm pkg 1.0.0 src/`predicates.ts`/WorkerStatus#', 'WorkerStatus', null, 'type WorkerStatus');
+  insertSymbol.run(25, 'scip-typescript npm pkg 1.0.0 src/`config.ts`/Settings#', 'Settings', 5, 'class Settings');
+  insertSymbol.run(26, 'scip-typescript npm pkg 1.0.0 src/`config.ts`/Settings#unusedField.', 'unusedField', 8, 'field unusedField');
 
   run(`
     INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
@@ -254,7 +267,9 @@ function createFixtureDb(dbPath: string): void {
       (21, 8, 21, 2, 0, 2, 0),
       (22, 9, 22, 0, 0, 2, 0),
       (23, 8, 23, 3, 0, 4, 0),
-      (24, 8, 24, 6, 0, 6, 0);
+      (24, 8, 24, 6, 0, 6, 0),
+      (25, 11, 25, 0, 0, 2, 0),
+      (26, 11, 26, 1, 2, 1, 18);
   `);
 
   run(`
@@ -280,7 +295,8 @@ function createFixtureDb(dbPath: string): void {
       (19, 9, 0, 0, 2, X'00'),
       (20, 8, 3, 3, 4, X'00'),
       (21, 10, 0, 0, 4, X'00'),
-      (22, 8, 4, 6, 6, X'00');
+      (22, 8, 4, 6, 6, X'00'),
+      (23, 11, 0, 0, 2, X'00');
   `);
 
   run(`
@@ -320,6 +336,8 @@ function createFixtureDb(dbPath: string): void {
       (19, 22, 1),
       (20, 23, 1),
       (22, 24, 1),
+      (23, 25, 1),
+      (23, 26, 1),
       (21, 8, 0),
       (21, 2, 0);
   `);
@@ -813,6 +831,14 @@ describe('command accuracy fixes', () => {
     expect(report.findings.staleTypes).toBe(stale.length);
     expect(staleAction?.count).toBe(stale.length);
     expect(staleAction?.description).toContain('1 unused, 1 single-consumer');
+  });
+
+  it('does not call data members dead code unless member analysis is explicitly requested', () => {
+    const defaultResults = dead(db, { minLoc: 1 });
+    const memberResults = dead(db, { minLoc: 1, includeMembers: true });
+
+    expect(defaultResults.symbols.map((result) => result.shortName)).not.toContain('src:config:Settings:unusedField');
+    expect(memberResults.symbols.map((result) => result.shortName)).toContain('src:config:Settings:unusedField');
   });
 
   it('reports consistent symbol ranges across outline/members/change-surface/system/symbols', () => {

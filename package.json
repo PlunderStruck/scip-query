@@ -35,6 +35,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
+    "calibrate": "node scripts/accuracy-calibration.mjs",
     "prepublishOnly": "npm run build",
     "postinstall": "node dist/postinstall.js || true"
   },
