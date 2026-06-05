@@ -1,3 +1,4 @@
+import { statSync } from 'node:fs';
 import type { ScipDatabase } from '../storage/db.js';
 import type { StatsResult } from '../domain/types.js';
 
@@ -16,7 +17,15 @@ export function stats(db: ScipDatabase): StatsResult {
     symbols,
     definitions,
     references,
-    indexSizeBytes: db.sizeBytes(),
-    lastBuilt: db.lastModified(),
+    ...readDbFileStats(db.config.dbPath),
   };
+}
+
+function readDbFileStats(dbPath: string): Pick<StatsResult, 'indexSizeBytes' | 'lastBuilt'> {
+  try {
+    const stat = statSync(dbPath);
+    return { indexSizeBytes: stat.size, lastBuilt: stat.mtime };
+  } catch {
+    return { indexSizeBytes: 0, lastBuilt: null };
+  }
 }

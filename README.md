@@ -1100,9 +1100,7 @@ Find barrel file re-exports that nobody imports through.
 
 ```bash
 scip-query redundant-reexports
-#   src/index.ts
-#     resolveCacheDir()  (from src/runtime/config.ts)
-#       barrel: 0 consumer(s) | direct: 0 consumer(s)
+# No redundant re-exports found.
 ```
 
 **Options:**

@@ -5,9 +5,8 @@
 import { getAst, type SyntaxNode, type Tree } from '../source/ast.js';
 import type { ScipDatabase } from '../storage/db.js';
 import { PHP_EXTENSIONS, resolveQualifiedImportPath } from '../resolution/import-path-resolver.js';
-import { buildUsageBody } from '../source/source-stripper.js';
 import type { ParsedSourceImport } from '../domain/types.js';
-import { buildSimpleImport, collectIdentifiersOutside, splitTopLevel } from './utils.js';
+import { buildSimpleImport, collectIdentifiersOutside, parseImportLineMatches, splitTopLevel } from './utils.js';
 
 export function parsePhpImports(
   db: ScipDatabase,
@@ -18,20 +17,17 @@ export function parsePhpImports(
   if (tree) return parsePhpImportsAst(db, importerPath, tree);
 
   // Regex fallback (only when tree-sitter parse fails).
-  const statements: ParsedSourceImport[] = [];
-  for (const match of source.matchAll(/^[ \t]*use\s+(.+?)\s*;$/gm)) {
+  return parseImportLineMatches(source, /^[ \t]*use\s+(.+?)\s*;$/gm, (match, body) => {
     const clause = match[1]?.trim();
-    const full = match[0];
-    if (!clause || !full || typeof match.index !== 'number') continue;
-    const body = buildUsageBody(source, match.index, match.index + full.length);
-    for (const entry of splitTopLevel(clause)) {
+    if (!clause) return [];
+    return splitTopLevel(clause).flatMap((entry) => {
       const cleaned = entry.trim();
-      if (!cleaned) continue;
+      if (!cleaned) return [];
       const [qualifiedPart, aliasPart] = cleaned.split(/\s+as\s+/i);
       const qualified = qualifiedPart?.trim() ?? cleaned;
       const importedName = qualified.split('\\').pop() ?? qualified;
       const localName = (aliasPart ?? importedName).trim();
-      statements.push(buildSimpleImport(
+      return [buildSimpleImport(
         db,
         importerPath,
         body,
@@ -39,10 +35,9 @@ export function parsePhpImports(
         importedName,
         localName,
         resolveQualifiedImportPath(db, qualified.replace(/\\/g, '.'), PHP_EXTENSIONS),
-      ));
-    }
-  }
-  return statements;
+      )];
+    });
+  });
 }
 
 // scip-query: ignore-similar — PHP-specific: `use Foo\Bar;`, `use function`,

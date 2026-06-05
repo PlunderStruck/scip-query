@@ -14,7 +14,7 @@
  */
 import type { ScipDatabase } from '../storage/db.js';
 import { extensionFamilyFor, resolveQualifiedImportPath } from '../resolution/import-path-resolver.js';
-import { hasIdentifierUsage } from '../source/source-stripper.js';
+import { buildUsageBody, hasIdentifierUsage } from '../source/source-stripper.js';
 import type { SyntaxNode, Tree } from '../source/ast.js';
 import type { ParsedSourceImport } from '../domain/types.js';
 
@@ -103,4 +103,19 @@ export function buildSimpleImport(
     used: hasIdentifierUsage(body, localName),
     usedMembers: [],
   };
+}
+
+export function parseImportLineMatches<T>(
+  source: string,
+  pattern: RegExp,
+  parse: (match: RegExpMatchArray, body: string) => T[],
+): T[] {
+  const results: T[] = [];
+  for (const match of source.matchAll(pattern)) {
+    const full = match[0];
+    if (!full || typeof match.index !== 'number') continue;
+    const body = buildUsageBody(source, match.index, match.index + full.length);
+    results.push(...parse(match, body));
+  }
+  return results;
 }

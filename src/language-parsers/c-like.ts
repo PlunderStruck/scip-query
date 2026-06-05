@@ -8,9 +8,9 @@ import { basename } from 'node:path';
 import { getAst, type Tree } from '../source/ast.js';
 import type { ScipDatabase } from '../storage/db.js';
 import { resolveCLikeImportPath } from '../resolution/import-path-resolver.js';
-import { buildUsageBody, hasIdentifierUsage } from '../source/source-stripper.js';
+import { hasIdentifierUsage } from '../source/source-stripper.js';
 import type { ParsedSourceImport } from '../domain/types.js';
-import { collectIdentifiersOutside } from './utils.js';
+import { collectIdentifiersOutside, parseImportLineMatches } from './utils.js';
 
 export function parseCLikeImports(
   db: ScipDatabase,
@@ -21,23 +21,23 @@ export function parseCLikeImports(
   if (tree) return parseCLikeImportsAst(db, importerPath, tree);
 
   // Regex fallback (only when tree-sitter parse fails on the source).
-  const statements: ParsedSourceImport[] = [];
-  for (const match of source.matchAll(/^[ \t]*#include\s+[<"]([^">]+)[">]\s*$/gm)) {
-    const specifier = match[1]?.trim();
-    const full = match[0];
-    if (!specifier || !full || typeof match.index !== 'number') continue;
-    const body = buildUsageBody(source, match.index, match.index + full.length);
-    const localName = basename(specifier).replace(/\.[^.]+$/, '');
-    statements.push({
-      importedName: specifier,
-      localName,
-      sourcePath: resolveCLikeImportPath(db, importerPath, specifier),
-      kind: 'named',
-      used: hasIdentifierUsage(body, localName),
-      usedMembers: [],
-    });
-  }
-  return statements;
+  return parseImportLineMatches(
+    source,
+    /^[ \t]*#include\s+[<"]([^">]+)[">]\s*$/gm,
+    (match, body) => {
+      const specifier = match[1]?.trim();
+      if (!specifier) return [];
+      const localName = basename(specifier).replace(/\.[^.]+$/, '');
+      return [{
+        importedName: specifier,
+        localName,
+        sourcePath: resolveCLikeImportPath(db, importerPath, specifier),
+        kind: 'named',
+        used: hasIdentifierUsage(body, localName),
+        usedMembers: [],
+      }];
+    },
+  );
 }
 
 function parseCLikeImportsAst(

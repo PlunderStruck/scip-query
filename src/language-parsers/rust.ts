@@ -10,9 +10,8 @@
 import { getAst, type SyntaxNode, type Tree } from '../source/ast.js';
 import type { ScipDatabase } from '../storage/db.js';
 import { resolveRustImportPath } from '../resolution/import-path-resolver.js';
-import { buildUsageBody } from '../source/source-stripper.js';
 import type { ParsedSourceExport, ParsedSourceImport } from '../domain/types.js';
-import { buildSimpleImport, collectIdentifiersOutside, splitTopLevel } from './utils.js';
+import { buildSimpleImport, collectIdentifiersOutside, parseImportLineMatches, splitTopLevel } from './utils.js';
 
 interface RustImportLeaf {
   qualifiedName: string;
@@ -30,15 +29,11 @@ export function parseRustImports(
     return parseRustImportsAst(db, importerPath, tree);
   }
   // Fallback: regex parser when AST is unavailable (e.g. unreadable source).
-  const statements: ParsedSourceImport[] = [];
-  for (const match of source.matchAll(/^[ \t]*use\s+(.+?)\s*;$/gm)) {
+  return parseImportLineMatches(source, /^[ \t]*use\s+(.+?)\s*;$/gm, (match, body) => {
     const clause = match[1]?.trim();
-    const full = match[0];
-    if (!clause || !full || typeof match.index !== 'number') continue;
-    const body = buildUsageBody(source, match.index, match.index + full.length);
-    statements.push(...parseRustUseClause(db, importerPath, clause, body));
-  }
-  return statements;
+    if (!clause) return [];
+    return parseRustUseClause(db, importerPath, clause, body);
+  });
 }
 
 function parseRustImportsAst(

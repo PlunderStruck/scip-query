@@ -93,6 +93,8 @@ export class ProjectIndex {
     return classifyFile(relativePath);
   }
 
+  // scip-query: ignore-wrapper — query modules stay on ProjectIndex instead of
+  // reaching into source-text caches directly.
   hasSuppressionComment(definition: Pick<IndexedDefinition, 'relativePath' | 'startLine'>): boolean {
     return hasSuppressionComment(this.db, definition.relativePath, definition.startLine);
   }

@@ -1,61 +1,26 @@
 import { program } from 'commander';
 import { createRequire } from 'node:module';
 import { existsSync, realpathSync } from 'node:fs';
-import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ScipDatabase } from '../storage/db.js';
-import { createGitignoreFilter } from '../source/gitignore-filter.js';
 import { loadProjectConfig, resolveIndexPaths, initProjectConfig } from './config.js';
 import { reindex, detectLanguages, augmentAuxiliaryDocuments, augmentVueResolvedReferences } from '../reindex/index.js';
 import { getIndexerConfig } from '../reindex/indexers.js';
 import { getIndexerDependencyStatus } from '../reindex/install.js';
 import { Watcher } from './watch.js';
-import { stats } from '../queries/stats.js';
-import { files } from '../queries/files.js';
-import { symbols } from '../queries/symbols.js';
-import { methods } from '../queries/methods.js';
-import { refs } from '../queries/refs.js';
-import { trace } from '../queries/trace.js';
-import { deps, rdeps } from '../queries/deps.js';
-import { system } from '../queries/system.js';
-import { surface } from '../queries/surface.js';
-import { dead } from '../queries/dead.js';
-import { hotspots } from '../queries/hotspots.js';
-import { imports, importedBy, unusedImports } from '../queries/imports.js';
-import { outline } from '../queries/outline.js';
-import { members } from '../queries/members.js';
-import { fanIn, fanOut, topFanIn, topFanOut } from '../queries/fan.js';
-import { coupling, topCoupling } from '../queries/coupling.js';
-import { cycles } from '../queries/cycles.js';
-import { bottlenecks } from '../queries/bottlenecks.js';
-import { isolated } from '../queries/isolated.js';
-import { byKind, kindCounts } from '../queries/by-kind.js';
-import { deepChains } from '../queries/deep-chains.js';
-import { hierarchy } from '../queries/hierarchy.js';
-import { callGraph } from '../queries/call-graph.js';
-import { similar, similarAll } from '../queries/similar.js';
-import { similarFiles } from '../queries/similar-files.js';
-import { similarChains } from '../queries/similar-chains.js';
-import { extractCandidates } from '../queries/extract-candidates.js';
-import { affected } from '../queries/affected.js';
-import { changeSurface } from '../queries/change-surface.js';
-import { diffImpact } from '../queries/diff-impact.js';
-import { drift } from '../queries/drift.js';
-import { wrapperCandidates } from '../queries/wrapper-candidates.js';
-import { passthroughCandidates } from '../queries/passthrough-candidates.js';
-import { staleAbstractions } from '../queries/stale-abstractions.js';
-import { complexityHotspots } from '../queries/complexity-hotspots.js';
-import { health } from '../queries/health.js';
-import { convergence } from '../queries/convergence.js';
-import { code } from '../queries/code.js';
-import { complexity } from '../queries/complexity.js';
-import { dataflow } from '../queries/dataflow.js';
-import { slice } from '../queries/slice.js';
-import { redundantReexports } from '../queries/redundant-reexports.js';
-import { similarSignatures } from '../queries/similar-signatures.js';
-import type { ScipQueryConfig, DeadOptions, WatcherStatus } from '../domain/types.js';
+import type { DeadOptions } from '../domain/types.js';
 import { BUILTIN_SKILLS, installSkills, isScipInstalled, printScipInstallInstructions } from './setup.js';
 import { displayLine, displayPathRange, displayRange, render } from './render.js';
+import {
+  collect,
+  formatBytes,
+  formatStatus,
+  parseIntSafe,
+  parsePositiveInt,
+  queries,
+  resolveActiveDbPath,
+  resolveProjectRoot,
+  withDb,
+} from './cli-context.js';
 
 const require = createRequire(import.meta.url);
 const { version: cliVersion } = loadCliPackageInfo();
@@ -70,106 +35,6 @@ function loadCliPackageInfo(): { version: string } {
   }
   return { version: '0.0.0' };
 }
-
-// ── Helpers ────────────────────────────────────────────────
-
-function resolveProjectRoot(): string {
-  return process.env['SCIP_QUERY_PROJECT_ROOT'] ?? process.cwd();
-}
-
-function resolveActiveDbPath(projectRoot: string): string {
-  const config = loadProjectConfig(projectRoot);
-  const paths = resolveIndexPaths(projectRoot, config);
-  return process.env['SCIP_QUERY_INDEX_DB']
-    ?? (existsSync(paths.dbPath) ? paths.dbPath : join(projectRoot, 'index.db'));
-}
-
-function openDb(): ScipDatabase {
-  const projectRoot = resolveProjectRoot();
-  const config = loadProjectConfig(projectRoot);
-  const paths = resolveIndexPaths(projectRoot, config);
-
-  const dbPath = resolveActiveDbPath(projectRoot);
-
-  if (!existsSync(dbPath)) {
-    console.error(`error: No index.db found. Run: scip-query reindex`);
-    process.exit(1);
-  }
-
-  const dbConfig: ScipQueryConfig = {
-    dbPath,
-    indexPath: process.env['SCIP_QUERY_INDEX_SCIP'] ?? paths.indexPath,
-    projectRoot,
-    entryRoots: config.entryRoots,
-  };
-
-  const filter = createGitignoreFilter(projectRoot);
-  return new ScipDatabase(dbConfig, filter);
-}
-
-function withDb(run: (db: ScipDatabase) => void): void {
-  const db = openDb();
-  try {
-    run(db);
-  } finally {
-    db.close();
-  }
-}
-
-const queries = {
-  stats,
-  files,
-  symbols,
-  methods,
-  refs,
-  trace,
-  deps,
-  rdeps,
-  system,
-  surface,
-  dead,
-  hotspots,
-  imports,
-  importedBy,
-  unusedImports,
-  outline,
-  members,
-  fanIn,
-  fanOut,
-  topFanIn,
-  topFanOut,
-  coupling,
-  topCoupling,
-  cycles,
-  bottlenecks,
-  isolated,
-  byKind,
-  kindCounts,
-  deepChains,
-  hierarchy,
-  callGraph,
-  similar,
-  similarAll,
-  similarFiles,
-  similarChains,
-  extractCandidates,
-  affected,
-  changeSurface,
-  diffImpact,
-  drift,
-  wrapperCandidates,
-  passthroughCandidates,
-  staleAbstractions,
-  complexityHotspots,
-  health,
-  convergence,
-  code,
-  complexity,
-  dataflow,
-  slice,
-  redundantReexports,
-  similarSignatures,
-} as const;
 
 // ── CLI Definition ─────────────────────────────────────────
 
@@ -1451,48 +1316,5 @@ function isCliEntrypoint(): boolean {
     return realpathSync(thisFile) === realpathSync(process.argv[1]);
   } catch {
     return thisFile === process.argv[1];
-  }
-}
-
-// ── Utility ────────────────────────────────────────────────
-
-function collect(value: string, prev: string[]): string[] {
-  return prev.concat([value]);
-}
-
-/** parseInt wrapper safe for commander (which passes default as 2nd arg = radix) */
-function parseIntSafe(value: string): number {
-  return parseInt(value, 10);
-}
-
-function parsePositiveInt(value: string): number {
-  const parsed = parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed < 1) {
-    throw new Error(`Expected a positive integer, got ${value}`);
-  }
-  return parsed;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-}
-
-function formatStatus(status: WatcherStatus): string {
-  switch (status.state) {
-    case 'idle':
-      return 'Watching (idle)';
-    case 'waiting': {
-      const secs = Math.round((status.reindexAt - Date.now()) / 1000);
-      return `${status.changedFiles} file(s) changed, reindexing in ${secs}s...`;
-    }
-    case 'indexing':
-      return `Reindexing... (${Math.round((Date.now() - status.startedAt) / 1000)}s)`;
-    case 'cooldown': {
-      const secs = Math.round((status.until - Date.now()) / 1000);
-      return `Cooldown (${secs}s)${status.dirty ? ' — changes pending' : ''}`;
-    }
   }
 }

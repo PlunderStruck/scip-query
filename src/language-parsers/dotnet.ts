@@ -10,9 +10,8 @@ import {
   isVisualBasicSourcePath,
   resolveQualifiedImportPath,
 } from '../resolution/import-path-resolver.js';
-import { buildUsageBody } from '../source/source-stripper.js';
 import type { ParsedSourceImport } from '../domain/types.js';
-import { buildSimpleImport, collectIdentifiersOutside } from './utils.js';
+import { buildSimpleImport, collectIdentifiersOutside, parseImportLineMatches } from './utils.js';
 
 export function parseDotNetImports(
   db: ScipDatabase,
@@ -24,16 +23,13 @@ export function parseDotNetImports(
   if (tree && lang === 'csharp') return parseCSharpImportsAst(db, importerPath, tree);
   if (tree && lang === 'vb') return parseVbImportsAst(db, importerPath, tree);
 
-  const statements: ParsedSourceImport[] = [];
   const lineRegex = isVisualBasicSourcePath(importerPath)
     ? /^[ \t]*Imports\s+(.+?)\s*$/gm
     : /^[ \t]*using\s+(.+?)\s*;$/gm;
 
-  for (const match of source.matchAll(lineRegex)) {
+  return parseImportLineMatches(source, lineRegex, (match, body) => {
     const clause = match[1]?.trim();
-    const full = match[0];
-    if (!clause || !full || typeof match.index !== 'number') continue;
-    const body = buildUsageBody(source, match.index, match.index + full.length);
+    if (!clause) return [];
 
     const [aliasPart, targetPart] = clause.split(/\s*=\s*/);
     const hasAlias = Boolean(targetPart);
@@ -43,7 +39,7 @@ export function parseDotNetImports(
       ? aliasPart?.trim() ?? importedName
       : importedName;
 
-    statements.push(buildSimpleImport(
+    return [buildSimpleImport(
       db,
       importerPath,
       body,
@@ -51,10 +47,8 @@ export function parseDotNetImports(
       importedName,
       localName,
       resolveQualifiedImportPath(db, qualified, DOTNET_EXTENSIONS),
-    ));
-  }
-
-  return statements;
+    )];
+  });
 }
 
 // scip-query: ignore-similar — per-language AST walker; each language has a

@@ -8,9 +8,9 @@ import { basename } from 'node:path';
 import { getAst, type Tree } from '../source/ast.js';
 import type { ScipDatabase } from '../storage/db.js';
 import { resolveRubyImportPath } from '../resolution/import-path-resolver.js';
-import { buildUsageBody, hasIdentifierUsage } from '../source/source-stripper.js';
+import { hasIdentifierUsage } from '../source/source-stripper.js';
 import type { ParsedSourceImport } from '../domain/types.js';
-import { collectIdentifiersOutside } from './utils.js';
+import { collectIdentifiersOutside, parseImportLineMatches } from './utils.js';
 
 export function parseRubyImports(
   db: ScipDatabase,
@@ -21,40 +21,39 @@ export function parseRubyImports(
   if (tree) return parseRubyImportsAst(db, importerPath, tree);
 
   // Regex fallback (only when tree-sitter parse fails on the source).
-  const statements: ParsedSourceImport[] = [];
-  for (const match of source.matchAll(/^[ \t]*(require_relative|require)\s+["']([^"']+)["']\s*$/gm)) {
-    const kind = match[1];
-    const specifier = match[2];
-    const full = match[0];
-    if (!kind || !specifier || !full || typeof match.index !== 'number') continue;
-    const body = buildUsageBody(source, match.index, match.index + full.length);
-    const sourcePath = kind === 'require_relative'
-      ? resolveRubyImportPath(db, importerPath, specifier)
-      : null;
+  return parseImportLineMatches<ParsedSourceImport>(
+    source,
+    /^[ \t]*(require_relative|require)\s+["']([^"']+)["']\s*$/gm,
+    (match, body) => {
+      const kind = match[1];
+      const specifier = match[2];
+      if (!kind || !specifier) return [];
+      const sourcePath = kind === 'require_relative'
+        ? resolveRubyImportPath(db, importerPath, specifier)
+        : null;
 
-    if (sourcePath) {
-      const localName = rubyConstantName(specifier);
-      statements.push({
-        importedName: localName,
-        localName,
+      if (sourcePath) {
+        const localName = rubyConstantName(specifier);
+        return [{
+          importedName: localName,
+          localName,
+          sourcePath,
+          kind: 'named',
+          used: hasIdentifierUsage(body, localName),
+          usedMembers: [],
+        }];
+      }
+
+      return [{
+        importedName: specifier,
+        localName: null,
         sourcePath,
-        kind: 'named',
-        used: hasIdentifierUsage(body, localName),
+        kind: 'side-effect',
+        used: true,
         usedMembers: [],
-      });
-      continue;
-    }
-
-    statements.push({
-      importedName: specifier,
-      localName: null,
-      sourcePath,
-      kind: 'side-effect',
-      used: true,
-      usedMembers: [],
-    });
-  }
-  return statements;
+      }];
+    },
+  );
 }
 
 function parseRubyImportsAst(

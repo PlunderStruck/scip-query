@@ -1,5 +1,4 @@
 import Database from 'better-sqlite3';
-import { statSync } from 'node:fs';
 import type { PathFilter } from '../source/gitignore-filter.js';
 import type { ScipQueryConfig } from '../domain/types.js';
 
@@ -102,24 +101,6 @@ export class ScipDatabase {
   /** Run a raw SQL query and return the first row */
   get<T = Record<string, unknown>>(sql: string, ...params: unknown[]): T | undefined {
     return this.db.prepare(sql).get(...params) as T | undefined;
-  }
-
-  /** Get the database file size in bytes */
-  sizeBytes(): number {
-    try {
-      return statSync(this.config.dbPath).size;
-    } catch {
-      return 0;
-    }
-  }
-
-  /** Get the last modification time of the database file */
-  lastModified(): Date | null {
-    try {
-      return statSync(this.config.dbPath).mtime;
-    } catch {
-      return null;
-    }
   }
 
   close(): void {

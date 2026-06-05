@@ -7,9 +7,8 @@
 import { detectAstLanguage, getAst, type Tree } from '../source/ast.js';
 import type { ScipDatabase } from '../storage/db.js';
 import { JVM_EXTENSIONS, resolveQualifiedImportPath } from '../resolution/import-path-resolver.js';
-import { buildUsageBody } from '../source/source-stripper.js';
 import type { ParsedSourceImport } from '../domain/types.js';
-import { buildSimpleImport, collectIdentifiersOutside, splitTopLevel } from './utils.js';
+import { buildSimpleImport, collectIdentifiersOutside, parseImportLineMatches, splitTopLevel } from './utils.js';
 
 export function parseJvmImports(
   db: ScipDatabase,
@@ -23,15 +22,11 @@ export function parseJvmImports(
   if (tree && lang === 'scala') return parseScalaImportsAst(db, importerPath, tree);
 
   // Regex fallback (used only when tree-sitter parse fails on the source).
-  const statements: ParsedSourceImport[] = [];
-  for (const match of source.matchAll(/^[ \t]*import\s+(?:static\s+)?(.+?)\s*;?$/gm)) {
+  return parseImportLineMatches(source, /^[ \t]*import\s+(?:static\s+)?(.+?)\s*;?$/gm, (match, body) => {
     const clause = match[1]?.trim();
-    const full = match[0];
-    if (!clause || !full || typeof match.index !== 'number') continue;
-    const body = buildUsageBody(source, match.index, match.index + full.length);
-    statements.push(...parseJvmImportClause(db, importerPath, clause, body));
-  }
-  return statements;
+    if (!clause) return [];
+    return parseJvmImportClause(db, importerPath, clause, body);
+  });
 }
 
 // scip-query: ignore-similar — Java-specific: scoped_identifier nodes, no

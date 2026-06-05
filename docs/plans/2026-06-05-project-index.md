@@ -115,3 +115,25 @@ The user wants the flat query architecture to become easier to maintain without 
   - Current behavior: README examples still referenced flat paths like `src/cli.ts`, `src/db.ts`, and `src/symbol-parser.ts`.
   - Target behavior: public examples reference layered paths like `src/runtime/cli.ts`, `src/storage/db.ts`, and `src/symbols/symbol-parser.ts`, and document `drift --min-deviation`.
   - Verification: README scan found no stale flat-path examples.
+
+## Additional Debloat Increment
+
+- [x] Trim the root package API.
+  - Current behavior: `src/index.ts` re-exported `resolveCacheDir()` even though nobody consumed it through the package root.
+  - Target behavior: keep `resolveCacheDir()` as an internal config helper and remove it from the root public surface.
+  - Verification: `node dist/cli.js redundant-reexports` reports `No redundant re-exports found.`
+
+- [x] Extract CLI runtime context out of the command entrypoint.
+  - Current behavior: `src/runtime/cli.ts` owned command registration, database opening, active-index resolution, query registry wiring, parse helpers, and formatting helpers.
+  - Target behavior: `src/runtime/cli-context.ts` owns runtime context and imports the existing query barrel as the registry; `cli.ts` remains focused on command definitions.
+  - Verification: `src/runtime/cli.ts` dropped from 1498 LOC to 1320 LOC while CLI contract tests still pass.
+
+- [x] Consolidate parser regex fallback mechanics.
+  - Current behavior: several language parsers repeated the same regex-match loop and import-body masking before applying language-specific clause logic.
+  - Target behavior: `parseImportLineMatches()` owns the shared line-match/body-mask workflow; Ruby, C/C++, .NET, JVM, PHP, and Rust keep only their language-specific parsing.
+  - Verification: full tests pass and self-index health remains `100/100`.
+
+- [x] Remove single-consumer database metadata wrappers.
+  - Current behavior: `ScipDatabase.sizeBytes()` and `ScipDatabase.lastModified()` were only used by `stats()`.
+  - Target behavior: `stats()` reads database file metadata directly, shrinking the storage module interface.
+  - Verification: `node dist/cli.js wrapper-candidates --max-loc 15` reports no wrapper candidates.
