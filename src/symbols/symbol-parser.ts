@@ -228,35 +228,33 @@ export function shortenSymbol(raw: string): string {
 
   const parts: string[] = [];
   for (const desc of sym.descriptors) {
-    // Strip file extensions from namespace descriptors (the file path parts)
-    let name = desc.name;
-    if (desc.suffix === 'namespace') {
-      // Remove common file extensions
-      name = name
-        .replace(/\.(ts|tsx|js|jsx|mjs|cjs)$/, '')
-        .replace(/\.(py|pyi)$/, '')
-        .replace(/\.(rs)$/, '')
-        .replace(/\.(java|scala|kt|kts)$/, '')
-        .replace(/\.(rb)$/, '')
-        .replace(/\.(go)$/, '')
-        .replace(/\.(cs|vb)$/, '')
-        .replace(/\.(dart)$/, '')
-        .replace(/\.(php)$/, '')
-        .replace(/\.(c|cc|cpp|cxx|h|hpp)$/, '');
-    }
-
-    // Skip empty names (can happen with trailing suffixes)
-    if (!name) continue;
-
-    // For methods, append () for clarity
-    if (desc.suffix === 'method') {
-      parts.push(`${name}()`);
-    } else {
-      parts.push(name);
-    }
+    const name = shortDescriptorName(desc);
+    if (name) parts.push(name);
   }
 
   return parts.join(':');
+}
+
+function shortDescriptorName(desc: ScipDescriptor): string {
+  const name = desc.suffix === 'namespace'
+    ? stripSourceExtension(desc.name)
+    : desc.name;
+  if (!name) return '';
+  return desc.suffix === 'method' ? `${name}()` : name;
+}
+
+function stripSourceExtension(name: string): string {
+  return name
+    .replace(/\.(ts|tsx|js|jsx|mjs|cjs)$/, '')
+    .replace(/\.(py|pyi)$/, '')
+    .replace(/\.(rs)$/, '')
+    .replace(/\.(java|scala|kt|kts)$/, '')
+    .replace(/\.(rb)$/, '')
+    .replace(/\.(go)$/, '')
+    .replace(/\.(cs|vb)$/, '')
+    .replace(/\.(dart)$/, '')
+    .replace(/\.(php)$/, '')
+    .replace(/\.(c|cc|cpp|cxx|h|hpp)$/, '');
 }
 
 /**

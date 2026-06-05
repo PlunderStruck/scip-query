@@ -253,11 +253,11 @@ Show a symbol's definition (with signature) and every file that references it. L
 ```bash
 scip-query trace parseSymbol
 # ═══ DEFINITION ═══
-#   src/symbol-parser.ts:35-99  — parseSymbol(raw: string): ScipSymbol | ScipLocalSymbol
+#   src/symbols/symbol-parser.ts:35-99  — parseSymbol(raw: string): ScipSymbol | ScipLocalSymbol
 #
 # ═══ REFERENCED BY ═══
 #   src/index.ts
-#   src/symbol-parser.ts
+#   src/symbols/symbol-parser.ts
 ```
 
 **Value:** End-to-end symbol investigation. Answers "where is this defined, what's its signature, and who uses it?" in one command.
@@ -339,8 +339,8 @@ List all internal files that this file depends on (forward dependencies).
 
 ```bash
 scip-query deps cli.ts
-# src/config.ts
-# src/db.ts
+# src/runtime/config.ts
+# src/storage/db.ts
 # src/queries/index.ts
 # src/reindex/index.ts
 ```
@@ -382,11 +382,11 @@ scip-query system queries
 # ...
 #
 # ═══ DEPENDS ON (internal) ═══
-#   src/db.ts
-#   src/symbol-parser.ts
+#   src/storage/db.ts
+#   src/symbols/symbol-parser.ts
 #
 # ═══ DEPENDED ON BY ═══
-#   src/cli.ts
+#   src/runtime/cli.ts
 #   src/index.ts
 ```
 
@@ -399,9 +399,9 @@ scip-query system queries
 What symbols do external consumers actually use from this module? The true public API — not what's exported, but what's actually imported and referenced by other modules.
 
 ```bash
-scip-query surface db.ts
-#   src/cli.ts → ScipDatabase
-#   src/cli.ts → ScipDatabase:close()
+scip-query surface storage/db.ts
+#   src/runtime/cli.ts → ScipDatabase
+#   src/runtime/cli.ts → ScipDatabase:close()
 #   src/queries/dead.ts → ScipDatabase:all()
 #   src/queries/dead.ts → ScipDatabase:isIgnored()
 ```
@@ -547,14 +547,14 @@ scip-query fan-in -n 10
 How many external symbols a file references. Without an argument, shows the top N files by fan-out. High fan-out files are fragile — they depend on many things, so upstream changes are more likely to break them.
 
 ```bash
-scip-query fan-out cli.ts
-#    23 symbols  src/cli.ts
+scip-query fan-out runtime/cli.ts
+#    23 symbols  src/runtime/cli.ts
 
 scip-query fan-out -n 10
 #   symbols  file
 #   ───────  ────
 #       68  src/queries/index.ts
-#       23  src/cli.ts
+#       23  src/runtime/cli.ts
 ```
 
 **Options:**
@@ -574,7 +574,7 @@ scip-query bottlenecks -n 10
 #   score  fan-in  fan-out  symbol
 #   ─────  ──────  ───────  ──────
 #     136       2       68  src:queries:index
-#     124      31        4  src:db:ScipDatabase
+#     124      31        4  src:storage:db:ScipDatabase
 ```
 
 **Options:**
@@ -592,13 +592,13 @@ scip-query bottlenecks -n 10
 Measure coupling between two specific files (how many symbols they share), or find the most coupled file pairs across the codebase.
 
 ```bash
-scip-query coupling db.ts cli.ts
-# db.ts ↔ cli.ts: 4 shared symbols
+scip-query coupling storage/db.ts runtime/cli.ts
+# storage/db.ts ↔ runtime/cli.ts: 4 shared symbols
 
 scip-query coupling -n 10
 #   shared  file1 → file2
 #   ──────  ─────────────
-#        5  src/db.ts → src/queries/stats.ts
+#        5  src/storage/db.ts → src/queries/stats.ts
 ```
 
 **Options:**
@@ -639,11 +639,11 @@ Find the longest transitive dependency chains in the codebase. A chain A → B �
 ```bash
 scip-query deep-chains -n 5 --min-depth 4
 # Chain 1 (depth 5):
-#   → src/cli.ts
+#   → src/runtime/cli.ts
 #   → src/queries/index.ts
 #   → src/queries/surface.ts
-#   → src/db.ts
-#   → src/types.ts
+#   → src/storage/db.ts
+#   → src/domain/types.ts
 ```
 
 **Options:**
@@ -868,16 +868,20 @@ scip-query diff-impact --base main
 
 #### `drift [module]`
 
-Detect files that deviate from their directory's typical dependency pattern.
+Detect unused imports, layer violations, and dependency-pattern deviations.
 
 ```bash
-scip-query drift
-# src/services/legacy-auth.ts  (65% deviation from src/services)
-#   Missing expected: validator.ts, logger.ts
-#   Unexpected:       raw-sql.ts, deprecated-crypto.ts
+scip-query drift --min-deviation 6
+#
+# src/services/legacy-auth.ts
+#   [LAYER] Imports from infra/ (infra/raw-sql.ts) — may cross architectural boundary
+#          app/ should not depend on infra/
 ```
 
-**Value:** Finds files that don't follow their neighbors' conventions. The outliers are either legacy code needing migration or intentional exceptions needing documentation.
+**Options:**
+- `--min-deviation <n>` — Minimum sibling files before reporting unique dependency deviations (default: 5)
+
+**Value:** Finds unused imports, layer-policy violations, and files that don't follow their neighbors' dependency conventions. The outliers are either legacy code needing migration or intentional exceptions needing documentation.
 
 ---
 
@@ -1097,7 +1101,7 @@ Find barrel file re-exports that nobody imports through.
 ```bash
 scip-query redundant-reexports
 #   src/index.ts
-#     resolveCacheDir()  (from src/config.ts)
+#     resolveCacheDir()  (from src/runtime/config.ts)
 #       barrel: 0 consumer(s) | direct: 0 consumer(s)
 ```
 

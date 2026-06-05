@@ -979,8 +979,9 @@ program
 program
   .command('drift [module]')
   .description('Detect unused imports, layer violations, and pattern deviations')
-  .action((module) => withDb((db) => {
-    const summary = queries.drift(db, { scope: module });
+  .option('--min-deviation <n>', 'Minimum sibling files before reporting unique dependency deviations', parsePositiveInt, 5)
+  .action((module, opts) => withDb((db) => {
+    const summary = queries.drift(db, { scope: module, minDeviation: opts.minDeviation });
     if (summary.results.length === 0) return render.empty('No drift detected.');
     // Original printed a leading `\n${file}` for every group — replicate by
     // emitting a leading blank line before the first group as well.

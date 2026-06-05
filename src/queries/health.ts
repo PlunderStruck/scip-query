@@ -13,6 +13,31 @@ import { complexityHotspots } from './complexity-hotspots.js';
 import { stats } from './stats.js';
 import type { HealthAction, HealthReport } from '../domain/types.js';
 
+interface HealthAnalyses {
+  statsResult: ReturnType<typeof stats>;
+  deadResult: ReturnType<typeof dead>;
+  isolatedResult: ReturnType<typeof isolated>;
+  cycleResult: ReturnType<typeof cycles>;
+  similarResult: ReturnType<typeof similarAll>;
+  extractResult: ReturnType<typeof extractCandidates>;
+  wrapperResult: ReturnType<typeof wrapperCandidates>;
+  passthroughResult: ReturnType<typeof passthroughCandidates>;
+  staleResult: ReturnType<typeof staleAbstractions>;
+  driftResult: ReturnType<typeof drift>;
+  complexResult: ReturnType<typeof complexityHotspots>;
+}
+
+interface HealthSignals {
+  trueDeadCount: number;
+  trueDeadLoc: number;
+  trueIsolatedCount: number;
+  trueIsolatedLoc: number;
+  trueStaleCount: number;
+  trueDriftCount: number;
+  trueSimilarCount: number;
+  realCycleCount: number;
+}
+
 /**
  * Single composite health report that runs all de-bloat analyses
  * and produces a prioritized action list.
@@ -27,138 +52,162 @@ export function health(
   db: ScipDatabase,
   opts: { scope?: string } = {},
 ): HealthReport {
-  const { scope } = opts;
+  const analyses = runHealthAnalyses(db, opts.scope);
+  const signals = filterHealthSignals(db, analyses);
+  const actions = buildHealthActions(analyses, signals);
+  const score = computeHealthScore(analyses, signals);
 
-  // Run all analyses
-  const s = stats(db);
-    const deadResult = dead(db, { scope, minLoc: 3, skipBarrels: true });
-  const isolatedResult = isolated(db, { scope, minLoc: 3 });
-  const cycleResult = cycles(db, { scope });
-  const similarResult = similarAll(db, { scope, minSimilarity: 0.6, limit: 50, minCallees: 4 });
-  const extractResult = extractCandidates(db, { scope, minLoc: 15, minCallees: 5, limit: 50 });
-  const wrapperResult = wrapperCandidates(db, { scope, maxLoc: 15, limit: 50 });
-  const passthroughResult = passthroughCandidates(db, { scope, maxLoc: 15, limit: 50 });
-  const staleResult = staleAbstractions(db, { scope, minLoc: 3, limit: 50 });
-  const driftResult = drift(db, { scope });
-  const complexResult = complexityHotspots(db, { scope, minLoc: 10, limit: 10 });
+  return {
+    score,
+    overview: {
+      documents: analyses.statsResult.documents,
+      symbols: analyses.statsResult.symbols,
+      indexSizeBytes: analyses.statsResult.indexSizeBytes,
+    },
+    findings: {
+      deadSymbols: signals.trueDeadCount,
+      deadLoc: signals.trueDeadLoc,
+      isolatedSymbols: signals.trueIsolatedCount,
+      isolatedLoc: signals.trueIsolatedLoc,
+      cycles: signals.realCycleCount,
+      similarPairs: signals.trueSimilarCount,
+      extractionCandidates: analyses.extractResult.length,
+      wrappers: analyses.wrapperResult.length,
+      passthroughs: analyses.passthroughResult.length,
+      staleTypes: signals.trueStaleCount,
+      driftedFiles: signals.trueDriftCount,
+      complexityHotspotCount: analyses.complexResult.length,
+    },
+    actions,
+    topComplexity: analyses.complexResult.slice(0, 5).map((r) => ({
+      symbol: r.shortName,
+      score: r.score,
+    })),
+  };
+}
 
-  // ── False-positive filtering ─────────────────────────────
+function runHealthAnalyses(db: ScipDatabase, scope: string | undefined): HealthAnalyses {
+  return {
+    statsResult: stats(db),
+    deadResult: dead(db, { scope, minLoc: 3, skipBarrels: true }),
+    isolatedResult: isolated(db, { scope, minLoc: 3 }),
+    cycleResult: cycles(db, { scope }),
+    similarResult: similarAll(db, { scope, minSimilarity: 0.6, limit: 50, minCallees: 4 }),
+    extractResult: extractCandidates(db, { scope, minLoc: 15, minCallees: 5, limit: 50 }),
+    wrapperResult: wrapperCandidates(db, { scope, maxLoc: 15, limit: 50 }),
+    passthroughResult: passthroughCandidates(db, { scope, maxLoc: 15, limit: 50 }),
+    staleResult: staleAbstractions(db, { scope, minLoc: 3, limit: 50 }),
+    driftResult: drift(db, { scope }),
+    complexResult: complexityHotspots(db, { scope, minLoc: 10, limit: 10 }),
+  };
+}
 
-  // Dead code: only count truly dead symbols (zero refs anywhere),
-  // excluding entry points AND file-internal helpers (which are fine).
-  const trueDeadSymbols = deadResult.symbols.filter(
-    (s) => !isEntrySurface(db, s.relativePath) && !isRootedSymbol(db, s.symbol, s.relativePath) && s.kind === 'dead-code',
+function filterHealthSignals(db: ScipDatabase, analyses: HealthAnalyses): HealthSignals {
+  const trueDeadSymbols = analyses.deadResult.symbols.filter(
+    (symbol) => !isEntrySurface(db, symbol.relativePath)
+      && !isRootedSymbol(db, symbol.symbol, symbol.relativePath)
+      && symbol.kind === 'dead-code',
   );
-  const trueDeadCount = trueDeadSymbols.length;
-  const trueDeadLoc = trueDeadSymbols.reduce((sum, s) => sum + s.loc, 0);
+  const trueIsolatedSymbols = analyses.isolatedResult.filter(
+    (symbol) => !isEntrySurface(db, symbol.relativePath)
+      && !isRootedSymbol(db, symbol.symbol, symbol.relativePath),
+  );
 
-  // Isolated: same entry-point filtering
-  const trueIsolatedCount = isolatedResult.filter(
-    (s) => !isEntrySurface(db, s.relativePath) && !isRootedSymbol(db, s.symbol, s.relativePath),
-  ).length;
+  return {
+    trueDeadCount: trueDeadSymbols.length,
+    trueDeadLoc: trueDeadSymbols.reduce((sum, symbol) => sum + symbol.loc, 0),
+    trueIsolatedCount: trueIsolatedSymbols.length,
+    trueIsolatedLoc: trueIsolatedSymbols.reduce((sum, symbol) => sum + symbol.loc, 0),
+    trueStaleCount: analyses.staleResult.length,
+    trueDriftCount: analyses.driftResult.unusedImports + analyses.driftResult.layerViolations,
+    trueSimilarCount: analyses.similarResult.length,
+    realCycleCount: analyses.cycleResult.filter((cycle) => cycle.kind === 'real').length,
+  };
+}
 
-  const trueStaleCount = staleResult.length;
-
-  // Drift: only the actionable kinds count toward the score and headline.
-  // Unique-dep "pattern deviations" are informational — a feature-distributed
-  // file legitimately has unique deps every sibling lacks, and including
-  // them dominates the count without indicating a real problem. Unused
-  // imports and layer violations are what actually need a code change.
-  const trueDriftCount = driftResult.unusedImports + driftResult.layerViolations;
-
-  // Similar pairs: the similar command now uses TF-IDF weighted cosine
-  // similarity which automatically discounts infrastructure callees.
-  // The sharedCallees list only contains significant (above-median IDF) callees.
-  // We can trust the count directly.
-  const trueSimilarCount = similarResult.length;
-
-  // ── Build prioritized action list ────────────────────────
-
+function buildHealthActions(analyses: HealthAnalyses, signals: HealthSignals): HealthAction[] {
   const actions: HealthAction[] = [];
 
-  if (trueDeadCount > 0) {
+  if (signals.trueDeadCount > 0) {
     actions.push({
       category: 'Dead code',
-      description: `${trueDeadCount} symbols with zero references anywhere — safe to delete`,
+      description: `${signals.trueDeadCount} symbols with zero references anywhere — safe to delete`,
       effort: 'low',
       impact: 'high',
-      count: trueDeadCount,
-      locRecoverable: trueDeadLoc,
+      count: signals.trueDeadCount,
+      locRecoverable: signals.trueDeadLoc,
     });
   }
 
-  if (trueIsolatedCount > 0) {
+  if (signals.trueIsolatedCount > 0) {
     actions.push({
       category: 'Isolated symbols',
-      description: `${trueIsolatedCount} symbols completely disconnected from the codebase graph`,
+      description: `${signals.trueIsolatedCount} symbols completely disconnected from the codebase graph`,
       effort: 'low',
       impact: 'medium',
-        count: trueIsolatedCount,
-        locRecoverable: isolatedResult
-          .filter((s) => !isEntrySurface(db, s.relativePath) && !isRootedSymbol(db, s.symbol, s.relativePath))
-          .reduce((sum, s) => sum + s.loc, 0),
+      count: signals.trueIsolatedCount,
+      locRecoverable: signals.trueIsolatedLoc,
     });
   }
 
-  const realCycles = cycleResult.filter((c) => c.kind === 'real');
-  if (realCycles.length > 0) {
+  if (signals.realCycleCount > 0) {
     actions.push({
       category: 'Circular dependencies',
-      description: `${realCycles.length} cycle(s) — break with dependency inversion or module restructuring`,
+      description: `${signals.realCycleCount} cycle(s) — break with dependency inversion or module restructuring`,
       effort: 'medium',
       impact: 'high',
-      count: realCycles.length,
+      count: signals.realCycleCount,
       locRecoverable: 0,
     });
   }
 
-  if (trueSimilarCount > 0) {
+  if (signals.trueSimilarCount > 0) {
     actions.push({
       category: 'Similar functions',
-      description: `${trueSimilarCount} pairs with real logic overlap (beyond shared imports) — consolidation candidates`,
+      description: `${signals.trueSimilarCount} pairs with real logic overlap (beyond shared imports) — consolidation candidates`,
       effort: 'medium',
       impact: 'medium',
-      count: trueSimilarCount,
+      count: signals.trueSimilarCount,
       locRecoverable: 0,
     });
   }
 
-  if (extractResult.length > 0) {
+  if (analyses.extractResult.length > 0) {
     actions.push({
       category: 'Extraction candidates',
-      description: `${extractResult.length} large functions with isolated callee clusters — extract method opportunities`,
+      description: `${analyses.extractResult.length} large functions with isolated callee clusters — extract method opportunities`,
       effort: 'medium',
       impact: 'medium',
-      count: extractResult.length,
+      count: analyses.extractResult.length,
       locRecoverable: 0,
     });
   }
 
-  if (wrapperResult.length > 0) {
+  if (analyses.wrapperResult.length > 0) {
     actions.push({
       category: 'Wrapper functions',
-      description: `${wrapperResult.length} single-consumer symbols that could be inlined`,
+      description: `${analyses.wrapperResult.length} single-consumer symbols that could be inlined`,
       effort: 'low',
       impact: 'low',
-      count: wrapperResult.length,
-      locRecoverable: wrapperResult.reduce((sum, r) => sum + r.loc, 0),
+      count: analyses.wrapperResult.length,
+      locRecoverable: analyses.wrapperResult.reduce((sum, r) => sum + r.loc, 0),
     });
   }
 
-  if (passthroughResult.length > 0) {
+  if (analyses.passthroughResult.length > 0) {
     actions.push({
       category: 'Passthrough functions',
-      description: `${passthroughResult.length} functions that just forward to one callee — unnecessary indirection`,
+      description: `${analyses.passthroughResult.length} functions that just forward to one callee — unnecessary indirection`,
       effort: 'low',
       impact: 'low',
-      count: passthroughResult.length,
-      locRecoverable: passthroughResult.reduce((sum, r) => sum + r.loc, 0),
+      count: analyses.passthroughResult.length,
+      locRecoverable: analyses.passthroughResult.reduce((sum, r) => sum + r.loc, 0),
     });
   }
 
-  if (trueStaleCount > 0) {
-    const unused = staleResult.filter((s) => s.consumers === 0).length;
-    const singleUse = trueStaleCount - unused;
+  if (signals.trueStaleCount > 0) {
+    const unused = analyses.staleResult.filter((s) => s.consumers === 0).length;
+    const singleUse = signals.trueStaleCount - unused;
     const parts: string[] = [];
     if (unused > 0) parts.push(`${unused} unused`);
     if (singleUse > 0) parts.push(`${singleUse} single-consumer (not in types file)`);
@@ -167,21 +216,21 @@ export function health(
       description: `${parts.join(', ')} — premature abstraction`,
       effort: 'low',
       impact: 'medium',
-      count: trueStaleCount,
-      locRecoverable: staleResult.reduce((sum, r) => sum + r.loc, 0),
+      count: signals.trueStaleCount,
+      locRecoverable: analyses.staleResult.reduce((sum, r) => sum + r.loc, 0),
     });
   }
 
-  if (trueDriftCount > 0) {
+  if (signals.trueDriftCount > 0) {
     const parts: string[] = [];
-    if (driftResult.unusedImports > 0) parts.push(`${driftResult.unusedImports} unused imports`);
-    if (driftResult.layerViolations > 0) parts.push(`${driftResult.layerViolations} layer violations`);
+    if (analyses.driftResult.unusedImports > 0) parts.push(`${analyses.driftResult.unusedImports} unused imports`);
+    if (analyses.driftResult.layerViolations > 0) parts.push(`${analyses.driftResult.layerViolations} layer violations`);
     actions.push({
       category: 'Structural drift',
       description: parts.join(', '),
-      effort: driftResult.layerViolations > 0 ? 'medium' : 'low',
-      impact: driftResult.layerViolations > 0 ? 'medium' : 'low',
-      count: trueDriftCount,
+      effort: analyses.driftResult.layerViolations > 0 ? 'medium' : 'low',
+      impact: analyses.driftResult.layerViolations > 0 ? 'medium' : 'low',
+      count: signals.trueDriftCount,
       locRecoverable: 0,
     });
   }
@@ -194,87 +243,39 @@ export function health(
     const scoreB = impactWeight[b.impact] * effortWeight[b.effort];
     return scoreB - scoreA;
   });
+  return actions;
+}
 
-  // ── Compute health score (0-100) ─────────────────────────
-  //
-  // Uses filtered counts (false positives removed).
-  // Deductions scale with codebase size so a 10-file project
-  // and a 1000-file project aren't penalized the same way.
-  const fileCount = Math.max(s.documents, 1);
-  const symbolCount = Math.max(s.symbols, 1);
-
+function computeHealthScore(analyses: HealthAnalyses, signals: HealthSignals): number {
+  const fileCount = Math.max(analyses.statsResult.documents, 1);
+  const symbolCount = Math.max(analyses.statsResult.symbols, 1);
   let score = 100;
 
-  // Dead code: deduct based on % of symbols that are dead, not raw count
-  const deadPercent = trueDeadCount / symbolCount;
+  const deadPercent = signals.trueDeadCount / symbolCount;
   score -= Math.min(20, Math.round(deadPercent * 200));
 
-  // Isolated: same percentage-based
-  const isolatedPercent = trueIsolatedCount / symbolCount;
+  const isolatedPercent = signals.trueIsolatedCount / symbolCount;
   score -= Math.min(10, Math.round(isolatedPercent * 200));
 
-  // Cycles: real architectural ones are always bad — module-hierarchy
-  // patterns (barrel mod.rs / index.ts re-exporting children) aren't
-  // actionable so they don't count toward the score.
-  const realCycleCount = cycleResult.filter((c) => c.kind === 'real').length;
-  score -= Math.min(15, realCycleCount * 5);
+  score -= Math.min(15, signals.realCycleCount * 5);
 
-  // Similar pairs: scale with codebase size so a small project with 5 pairs
-  // isn't graded the same as a 5000-symbol project with 5 pairs.
-  const similarPerMille = trueSimilarCount / symbolCount * 1000;
+  const similarPerMille = signals.trueSimilarCount / symbolCount * 1000;
   score -= Math.min(10, Math.round(similarPerMille));
 
-  // Extract candidates: percentage-based for the same reason.
-  const extractPerMille = extractResult.length / symbolCount * 1000;
+  const extractPerMille = analyses.extractResult.length / symbolCount * 1000;
   score -= Math.min(5, Math.round(extractPerMille / 2));
 
-  // Wrappers: mild
-  score -= Math.min(3, wrapperResult.length);
+  score -= Math.min(3, analyses.wrapperResult.length);
+  score -= Math.min(3, analyses.passthroughResult.length);
 
-  // Passthroughs: mild
-  score -= Math.min(3, passthroughResult.length);
-
-  // Stale abstractions: percentage-based with filtered count
-  const stalePercent = trueStaleCount / Math.max(symbolCount * 0.1, 1);
+  const stalePercent = signals.trueStaleCount / Math.max(symbolCount * 0.1, 1);
   score -= Math.min(8, Math.round(stalePercent * 10));
 
-  // Drift: percentage of files that deviate
-  const driftPercent = trueDriftCount / fileCount;
+  const driftPercent = signals.trueDriftCount / fileCount;
   score -= Math.min(5, Math.round(driftPercent * 50));
 
-  // Complexity: only penalize extreme outliers
-  const extremeComplexity = complexResult.filter((r) => r.score > 50).length;
+  const extremeComplexity = analyses.complexResult.filter((r) => r.score > 50).length;
   score -= Math.min(5, extremeComplexity * 2);
 
-  score = Math.max(0, Math.min(100, score));
-
-  return {
-    score,
-    overview: {
-      documents: s.documents,
-      symbols: s.symbols,
-      indexSizeBytes: s.indexSizeBytes,
-    },
-    findings: {
-      deadSymbols: trueDeadCount,
-      deadLoc: trueDeadLoc,
-      isolatedSymbols: trueIsolatedCount,
-        isolatedLoc: isolatedResult
-          .filter((s) => !isEntrySurface(db, s.relativePath))
-          .reduce((sum, s) => sum + s.loc, 0),
-      cycles: realCycleCount,
-      similarPairs: trueSimilarCount,
-      extractionCandidates: extractResult.length,
-      wrappers: wrapperResult.length,
-      passthroughs: passthroughResult.length,
-      staleTypes: trueStaleCount,
-      driftedFiles: trueDriftCount,
-      complexityHotspotCount: complexResult.length,
-    },
-    actions,
-    topComplexity: complexResult.slice(0, 5).map((r) => ({
-      symbol: r.shortName,
-      score: r.score,
-    })),
-  };
+  return Math.max(0, Math.min(100, score));
 }

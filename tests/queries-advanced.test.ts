@@ -76,6 +76,13 @@ describe('advanced queries', () => {
     ).toBe(true);
   });
 
+  it('honors the minimum sibling threshold for pattern deviations', () => {
+    const summary = queries.drift(db, { minDeviation: 6 });
+
+    expect(summary.patternDeviations).toBe(0);
+    expect(summary.layerViolations).toBeGreaterThan(0);
+  });
+
   it('reports dataflow through definition, usage, producer, and consumer sites', () => {
     const result = queries.dataflow(db, 'process');
 

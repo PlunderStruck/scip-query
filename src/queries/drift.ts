@@ -4,6 +4,7 @@ import { classifyFile } from '../analysis/file-classifier.js';
 import { getSourceImports } from '../language-parsers/index.js';
 import type { DriftResult, DriftSummary } from '../domain/types.js';
 import { ProjectIndex } from '../core/project-index.js';
+import { getArchitecturalLayer, isKnownProjectLayerDependency, layerPolicyForEdge } from './drift-policy.js';
 
 /**
  * Detect structural drift using the reference graph, not just import patterns.
@@ -25,7 +26,7 @@ export function drift(
   db: ScipDatabase,
   opts?: { scope?: string; minDeviation?: number },
 ): DriftSummary {
-  const { scope } = opts ?? {};
+  const { scope, minDeviation = 5 } = opts ?? {};
   const index = new ProjectIndex(db);
 
   // Build file dep graph (which files depend on which)
@@ -113,7 +114,7 @@ export function drift(
     // Filter to "non-skipped siblings" so a 4-file dir with 3 tests doesn't
     // hit the threshold via the test counts.
     const realSiblings = files.filter((f) => !shouldSkipDriftFile(f));
-    if (realSiblings.length < 5) continue;
+    if (realSiblings.length < minDeviation) continue;
 
     // Count dep frequency across siblings
     const depFreq = new Map<string, number>();
@@ -134,6 +135,9 @@ export function drift(
         // from a sibling subdir is the common Rust submodule pattern, not
         // drift.
         if (path.dirname(dep) === path.dirname(dir)) continue;
+        // For projects with an explicit layer policy, an allowed edge is not
+        // drift just because only one sibling currently needs that adapter.
+        if (isKnownProjectLayerDependency(file, dep)) continue;
         results.push({
           file,
           kind: 'pattern-deviation',
@@ -253,77 +257,6 @@ function inferLayerRules(
   }
 
   return rules;
-}
-
-function layerPolicyForEdge(fromLayer: string, toLayer: string): 'ok' | 'violation' | null {
-  if (fromLayer === toLayer) return 'ok';
-
-  const fromSrc = srcLayerName(fromLayer);
-  const toSrc = srcLayerName(toLayer);
-  if (fromSrc && toSrc) {
-    return isAllowedSrcLayerDependency(fromSrc, toSrc) ? 'ok' : 'violation';
-  }
-
-  const generic = genericLayerPolicy(fromLayer, toLayer);
-  if (generic) return generic;
-
-  return null;
-}
-
-function srcLayerName(layer: string): string | null {
-  const match = /^src\/([^/]+)$/.exec(layer);
-  return match?.[1] ?? null;
-}
-
-function isAllowedSrcLayerDependency(from: string, to: string): boolean {
-  if (to === 'domain') return true;
-  if (from === 'domain') return false;
-
-  const allowed: Record<string, ReadonlySet<string>> = {
-    analysis: new Set(['domain', 'source', 'storage', 'symbols']),
-    core: new Set(['analysis', 'domain', 'resolution', 'source', 'storage', 'symbols']),
-    'language-parsers': new Set(['domain', 'resolution', 'source', 'storage']),
-    queries: new Set(['analysis', 'core', 'domain', 'language-parsers', 'resolution', 'source', 'storage', 'symbols']),
-    reindex: new Set(['domain', 'language-parsers', 'resolution', 'runtime', 'source', 'storage', 'symbols']),
-    resolution: new Set(['domain', 'source', 'storage', 'symbols']),
-    runtime: new Set(['domain', 'queries', 'reindex', 'resolution', 'source', 'storage', 'symbols']),
-    source: new Set(['domain', 'storage']),
-    storage: new Set(['domain', 'source']),
-    symbols: new Set(['analysis', 'domain', 'language-parsers', 'resolution', 'source', 'storage']),
-  };
-
-  return allowed[from]?.has(to) ?? false;
-}
-
-function genericLayerPolicy(fromLayer: string, toLayer: string): 'ok' | 'violation' | null {
-  if (toLayer === 'shared') return 'ok';
-
-  const allowed: Record<string, ReadonlySet<string>> = {
-    app: new Set(['core', 'shared', 'ui']),
-    core: new Set(['shared']),
-    infra: new Set(['core', 'shared']),
-    ui: new Set(['core', 'shared']),
-  };
-
-  if (allowed[fromLayer]) {
-    return allowed[fromLayer].has(toLayer) ? 'ok' : 'violation';
-  }
-  return null;
-}
-
-function getArchitecturalLayer(filePath: string): string {
-  const normalized = filePath.replace(/\\/g, '/');
-  const parts = normalized.split('/').filter(Boolean);
-
-  if (parts.length <= 1) {
-    return '(root)';
-  }
-
-  if (parts.length >= 3 && ['src', 'lib', 'app', 'server', 'client'].includes(parts[0]!)) {
-    return `${parts[0]!}/${parts[1]!}`;
-  }
-
-  return parts[0]!;
 }
 
 function isLikelyTypeOnlyDep(dep: string): boolean {

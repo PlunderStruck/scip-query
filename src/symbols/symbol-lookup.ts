@@ -40,47 +40,15 @@ export function findFirstSymbolMatch(
     return exact;
   }
 
-  // Handle file:line-line syntax (e.g., "src/foo.ts:10-50").
-  // User-supplied lines are editor-1-indexed; DB is 0-indexed.
-  const fileLineMatch = symbolPattern.match(/^(.+):(\d+)-(\d+)$/);
-  if (fileLineMatch) {
-    const [, filePath, startStr, endStr] = fileLineMatch;
-    const userStart0 = Math.max(0, parseInt(startStr!, 10) - 1);
-    const userEnd0 = Math.max(userStart0, parseInt(endStr!, 10) - 1);
-    let row = db.get<SymbolQueryRow>(
-      `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path
-      FROM global_symbols gs
-      JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-      JOIN documents d ON der.document_id = d.id
-      WHERE d.relative_path LIKE ?
-        AND der.start_line <= ? AND der.end_line >= ?
-        ${db.pathExclusionsFor('d')}
-      ORDER BY (der.end_line - der.start_line) ASC
-        LIMIT 1`,
-      `%${filePath}%`, userStart0, userEnd0,
-    );
-    if (!row) {
-      row = db.get<SymbolQueryRow>(
-        `SELECT gs.id, gs.symbol, c.document_id, MIN(c.start_line) AS start_line, MAX(c.end_line) AS end_line, d.relative_path
-         FROM global_symbols gs
-         JOIN mentions m ON m.symbol_id = gs.id
-         JOIN chunks c ON m.chunk_id = c.id
-         JOIN documents d ON c.document_id = d.id
-         WHERE m.role = 1
-           AND d.relative_path LIKE ?
-           AND c.start_line <= ? AND c.end_line >= ?
-           ${db.pathExclusionsFor('d')}
-         GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path
-         ORDER BY (MAX(c.end_line) - MIN(c.start_line)) ASC
-         LIMIT 1`,
-        `%${filePath}%`, userStart0, userEnd0,
-      );
-    }
-    if (row && !db.isIgnored(row.relative_path)) {
-      return hydrateSymbolMatch(db, row);
-    }
+  const fileLine = findFileLineSymbolMatch(db, symbolPattern);
+  if (fileLine) {
+    return fileLine;
   }
 
+  return findBestFuzzySymbolMatch(db, symbolPattern);
+}
+
+function findBestFuzzySymbolMatch(db: ScipDatabase, symbolPattern: string): SymbolMatch | null {
   const cleaned = normalizeLookupPattern(symbolPattern);
   const tokens = lookupTokens(symbolPattern);
   const candidates = getSymbolLookupCandidates(db, tokens);
@@ -110,6 +78,63 @@ export function findFirstSymbolMatch(
   }
 
   return null;
+}
+
+function findFileLineSymbolMatch(db: ScipDatabase, symbolPattern: string): SymbolMatch | null {
+  const fileLineMatch = symbolPattern.match(/^(.+):(\d+)-(\d+)$/);
+  if (!fileLineMatch) {
+    return null;
+  }
+
+  const [, filePath, startStr, endStr] = fileLineMatch;
+  const userStart0 = Math.max(0, parseInt(startStr!, 10) - 1);
+  const userEnd0 = Math.max(userStart0, parseInt(endStr!, 10) - 1);
+  const row = findDefinitionRangeRow(db, filePath!, userStart0, userEnd0)
+    ?? findDefinitionChunkRow(db, filePath!, userStart0, userEnd0);
+  return row && !db.isIgnored(row.relative_path) ? hydrateSymbolMatch(db, row) : null;
+}
+
+function findDefinitionRangeRow(
+  db: ScipDatabase,
+  filePath: string,
+  startLine: number,
+  endLine: number,
+): SymbolQueryRow | undefined {
+  return db.get<SymbolQueryRow>(
+    `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path
+    FROM global_symbols gs
+    JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
+    JOIN documents d ON der.document_id = d.id
+    WHERE d.relative_path LIKE ?
+      AND der.start_line <= ? AND der.end_line >= ?
+      ${db.pathExclusionsFor('d')}
+    ORDER BY (der.end_line - der.start_line) ASC
+      LIMIT 1`,
+    `%${filePath}%`, startLine, endLine,
+  );
+}
+
+function findDefinitionChunkRow(
+  db: ScipDatabase,
+  filePath: string,
+  startLine: number,
+  endLine: number,
+): SymbolQueryRow | undefined {
+  return db.get<SymbolQueryRow>(
+    `SELECT gs.id, gs.symbol, c.document_id, MIN(c.start_line) AS start_line, MAX(c.end_line) AS end_line, d.relative_path
+     FROM global_symbols gs
+     JOIN mentions m ON m.symbol_id = gs.id
+     JOIN chunks c ON m.chunk_id = c.id
+     JOIN documents d ON c.document_id = d.id
+     WHERE m.role = 1
+       AND d.relative_path LIKE ?
+       AND c.start_line <= ? AND c.end_line >= ?
+       ${db.pathExclusionsFor('d')}
+     GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path
+     ORDER BY (MAX(c.end_line) - MIN(c.start_line)) ASC
+     LIMIT 1`,
+    `%${filePath}%`, startLine, endLine,
+  );
 }
 
 export function findExactSymbolMatch(

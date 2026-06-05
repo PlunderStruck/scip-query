@@ -88,3 +88,30 @@ The user wants the flat query architecture to become easier to maintain without 
   - Current behavior: `health` could show `100/100` and still list unique deps as a prioritized action.
   - Target behavior: `health` only creates a Structural drift action for unused imports or layer violations; `drift` remains the detailed command for unique dependency inspection.
   - Verification: `node dist/cli.js health` now reports `100/100` with no prioritized actions.
+
+## Follow-up Cleanup Increment
+
+- [x] Reduce the largest complexity hotspots without changing query semantics.
+  - Current behavior: `reindex()`, `health()`, `findFirstSymbolMatch()`, and `shortenSymbol()` were among the highest complexity hotspots.
+  - Target behavior: `reindex()` delegates indexer preparation, outcome validation, SCIP materialization, and conversion to private helpers; `health()` delegates analysis execution, signal filtering, action creation, and scoring; symbol lookup/parsing helpers own their narrower substeps.
+  - Verification: the old top four hotspots dropped out of the top of `node dist/cli.js complexity-hotspots --limit 10`.
+
+- [x] Resolve informational unique-dep drift for known project layers.
+  - Current behavior: `drift` still reported unique dependency deviations for allowed `src/*` layer edges.
+  - Target behavior: `src/queries/drift-policy.ts` owns explicit layer policy; `drift` does not report unique deps when the project layer policy already says the dependency is normal.
+  - Verification: `node dist/cli.js drift` reports `No drift detected.`
+
+- [x] Wire and document `drift --min-deviation`.
+  - Current behavior: `drift()` accepted `minDeviation`, but the option did not affect behavior and the CLI did not expose it.
+  - Target behavior: `minDeviation` controls the sibling threshold for unique dependency deviations; CLI exposes `--min-deviation <n>`.
+  - Verification: `tests/queries-advanced.test.ts` covers the threshold.
+
+- [x] Deepen reindex reliability tests.
+  - Current behavior: tests covered fail-closed partial indexing and conversion failure preservation.
+  - Target behavior: tests also cover explicit `allowPartial` metadata and serial retry after parallel indexer failure.
+  - Verification: `tests/reindex-reliability.test.ts` now has four reliability cases.
+
+- [x] Refresh public README examples after the folder restructure.
+  - Current behavior: README examples still referenced flat paths like `src/cli.ts`, `src/db.ts`, and `src/symbol-parser.ts`.
+  - Target behavior: public examples reference layered paths like `src/runtime/cli.ts`, `src/storage/db.ts`, and `src/symbols/symbol-parser.ts`, and document `drift --min-deviation`.
+  - Verification: README scan found no stale flat-path examples.

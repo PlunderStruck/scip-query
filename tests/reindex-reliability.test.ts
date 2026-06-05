@@ -76,14 +76,77 @@ describe('reindex reliability', () => {
     expect(readFileSync(outputScip, 'utf-8')).toBe('old-scip');
     expect(readFileSync(outputDb, 'utf-8')).toBe('old-db');
   });
+
+  it('writes partial metadata only when partial indexing is explicitly allowed', async () => {
+    const projectRoot = createProject('scip-query-reindex-allow-partial-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+    const metaPath = join(cacheDir, 'meta.json');
+
+    const { reindex } = await loadReindexFixture({
+      languages: ['typescript', 'python'],
+      failIndexers: new Set(['python']),
+    });
+
+    const result = await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      allowPartial: true,
+      onStatus: () => undefined,
+      indexerConcurrency: 1,
+    });
+
+    expect(result.languages).toEqual(['typescript']);
+    expect(result.skipped).toEqual([
+      expect.objectContaining({ language: 'python' }),
+    ]);
+    expect(readFileSync(outputDb, 'utf-8')).toBe('new-db');
+    expect(JSON.parse(readFileSync(metaPath, 'utf-8'))).toEqual(
+      expect.objectContaining({
+        status: 'partial',
+        requestedLanguages: ['typescript', 'python'],
+        indexedLanguages: ['typescript'],
+        skipped: [expect.objectContaining({ language: 'python' })],
+      }),
+    );
+  });
+
+  it('retries parallel indexer failures serially before skipping a language', async () => {
+    const projectRoot = createProject('scip-query-reindex-retry-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    const statuses: string[] = [];
+
+    const { reindex } = await loadReindexFixture({
+      languages: ['typescript', 'python'],
+      failFirstIndexers: new Set(['python']),
+    });
+
+    const result = await reindex({
+      projectRoot,
+      outputScip: join(cacheDir, 'index.scip'),
+      outputDb: join(cacheDir, 'index.db'),
+      onStatus: (message) => statuses.push(message),
+      indexerConcurrency: 2,
+    });
+
+    expect(result.languages).toEqual(['typescript', 'python']);
+    expect(result.skipped).toEqual([]);
+    expect(statuses.join('\n')).toContain('Retrying python indexer serially after parallel failure');
+  });
 });
 
 async function loadReindexFixture(opts: {
   languages: SupportedLanguage[];
   failIndexers?: ReadonlySet<SupportedLanguage>;
+  failFirstIndexers?: ReadonlySet<SupportedLanguage>;
   failConvert?: boolean;
 }) {
   vi.resetModules();
+  const attempts = new Map<SupportedLanguage, number>();
 
   vi.doMock('node:child_process', async () => {
     const fs = await import('node:fs');
@@ -94,8 +157,15 @@ async function loadReindexFixture(opts: {
       callback: (error: Error | null) => void,
     ) => {
       const language = binaryToLanguage(binary);
+      if (language) {
+        attempts.set(language, (attempts.get(language) ?? 0) + 1);
+      }
       if (language && opts.failIndexers?.has(language)) {
         callback(new Error(`${language} failed`));
+        return;
+      }
+      if (language && opts.failFirstIndexers?.has(language) && attempts.get(language) === 1) {
+        callback(new Error(`${language} failed once`));
         return;
       }
       const outputPath = outputArg(args);
@@ -147,6 +217,15 @@ async function loadReindexFixture(opts: {
   vi.doMock('../src/reindex/augment.js', () => ({
     augmentAuxiliaryDocuments: () => ({ scanned: 0, inserted: 0, existing: 0 }),
   }));
+  vi.doMock('../src/reindex/merge.js', async () => {
+    const fs = await import('node:fs');
+    return {
+      mergeScipFiles: (_inputPaths: readonly string[], outputPath: string) => {
+        fs.writeFileSync(outputPath, 'merged-scip');
+        return { documentCount: 0, externalSymbolCount: 0, inputCount: _inputPaths.length };
+      },
+    };
+  });
 
   return await import('../src/reindex/index.js');
 }

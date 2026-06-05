@@ -84,6 +84,11 @@ interface IndexerRunResult {
   skipped?: { language: SupportedLanguage; reason: string };
 }
 
+interface PreparedIndexerPlan {
+  preparedRuns: PreparedIndexerRun[];
+  skippedLanguages: { language: SupportedLanguage; reason: string }[];
+}
+
 interface DefaultOutputBackup {
   defaultOutputPath: string;
   backupPath: string | null;
@@ -159,22 +164,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
       };
     }
 
-    // Check that the scip CLI is available, auto-install if needed
-    if (!isBinaryAvailable('scip')) {
-      if (skipAutoInstall) {
-        throw new Error(
-          'The scip CLI is required but not found on PATH.\n' +
-          'Install from: https://github.com/sourcegraph/scip/releases',
-        );
-      }
-      onStatus('scip CLI not found on PATH. Attempting auto-install...');
-      if (!tryInstallScipCli(onStatus)) {
-        throw new Error(
-          'The scip CLI is required but could not be installed.\n' +
-          'Install manually from: https://github.com/sourcegraph/scip/releases',
-        );
-      }
-    }
+    ensureScipCliAvailable(skipAutoInstall, onStatus);
 
     runDir = mkdtempSync(join(dirname(outputDb), 'reindex-'));
     const tempOutputScip = join(runDir, basename(outputScip));
@@ -186,64 +176,15 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
       NODE_OPTIONS: `--max-old-space-size=${maxHeapMb}`,
     };
 
-    const languageOutputs = languages.map((language, index) => ({
-      language,
-      scipPath: languages.length > 1
-        ? tempScipPath(tempOutputScip, language, index)
-        : tempOutputScip,
-    }));
-
-    const indexedOutputs: { language: SupportedLanguage; scipPath: string }[] = [];
-    const skippedLanguages: { language: SupportedLanguage; reason: string }[] = [];
-    const preparedRuns: PreparedIndexerRun[] = [];
-
-    for (const { language: lang, scipPath } of languageOutputs) {
-      const config = getIndexerConfig(lang);
-      const binaryLabel = describeIndexerBinary(config);
-      const projectLocalBinary = resolveProjectLocalIndexerBinary(config, projectRoot);
-
-      if (!projectLocalBinary && !isIndexerInstalled(config)) {
-        if (skipAutoInstall) {
-          const reason = `${binaryLabel} not found on PATH (auto-install disabled). ${config.installUrl ?? ''}`.trim();
-          onStatus(`Skipping ${lang}: ${reason}`);
-          skippedLanguages.push({ language: lang, reason });
-          continue;
-        }
-        onStatus(`${binaryLabel} not found. Attempting auto-install...`);
-        if (!tryInstallIndexer(config, onStatus)) {
-          const reason = `${binaryLabel} could not be auto-installed. ${config.installUrl ? `Install manually from ${config.installUrl}` : `Install ${binaryLabel} and put it on PATH.`}`;
-          onStatus(`Skipping ${lang}: ${reason}`);
-          skippedLanguages.push({ language: lang, reason });
-          continue;
-        }
-      }
-
-      const resolvedBinary = projectLocalBinary ?? resolveIndexerBinary(config);
-      if (!resolvedBinary) {
-        const reason = `${binaryLabel} was not found after installation checks.`;
-        onStatus(`Skipping ${lang}: ${reason}`);
-        skippedLanguages.push({ language: lang, reason });
-        continue;
-      }
-
-      const indexerEnv = getIndexerExecutionEnv(config, env, resolvedBinary);
-      const { binary, args } = config.indexArgs({
-        projectRoot,
-        outputPath: scipPath,
-        pnpmWorkspaces: opts.pnpmWorkspaces,
-        indexerBinary: resolvedBinary,
-      });
-
-      preparedRuns.push({
-        language: lang,
-        scipPath,
-        config,
-        resolvedBinary,
-        binary,
-        args,
-        env: indexerEnv,
-      });
-    }
+    const { preparedRuns, skippedLanguages } = prepareIndexerRuns({
+      languages,
+      tempOutputScip,
+      projectRoot,
+      env,
+      skipAutoInstall,
+      pnpmWorkspaces: opts.pnpmWorkspaces,
+      onStatus,
+    });
 
     const runResults = await runPreparedIndexers(
       preparedRuns,
@@ -251,55 +192,10 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
       onStatus,
       opts.indexerConcurrency,
     );
-    for (const result of runResults) {
-      if (result.skipped) {
-        skippedLanguages.push(result.skipped);
-      } else {
-        indexedOutputs.push({ language: result.language, scipPath: result.scipPath });
-      }
-    }
-
-    if (indexedOutputs.length === 0) {
-      const detail = skippedLanguages.map((s) => `  - ${s.language}: ${s.reason}`).join('\n');
-      throw new Error(
-        'No language indexers ran successfully. Install at least one indexer for the languages in this project.\n' +
-        detail,
-      );
-    }
-
-    if (skippedLanguages.length > 0) {
-      onStatus(`Indexed ${indexedOutputs.length} of ${languages.length} languages; skipped ${skippedLanguages.map((s) => s.language).join(', ')}.`);
-      if (!opts.allowPartial) {
-        throw new Error(
-          'Failed to index all required languages; preserving the previous index. ' +
-          'Pass --allow-partial to intentionally write an incomplete index.\n' +
-          skippedLanguages.map((s) => `  - ${s.language}: ${s.reason}`).join('\n'),
-        );
-      }
-    }
-
-    if (indexedOutputs.length > 1) {
-      onStatus(`Merging ${indexedOutputs.length} language indexes...`);
-      mergeScipFiles(indexedOutputs.map((entry) => entry.scipPath), tempOutputScip);
-    } else if (indexedOutputs[0]!.scipPath !== tempOutputScip) {
-      renameSync(indexedOutputs[0]!.scipPath, tempOutputScip);
-    }
-
-    onStatus('Converting to SQLite...');
-    if (!existsSync(tempOutputScip)) {
-      throw new Error(`SCIP index not found at ${tempOutputScip} after indexing`);
-    }
-
-    try {
-      execFileSync('scip', ['expt-convert', '--output', tempOutputDb, tempOutputScip], {
-        env,
-        stdio: 'pipe',
-        maxBuffer: 50 * 1024 * 1024,
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      throw new Error(`Failed to convert SCIP index to SQLite: ${msg}`, { cause: err });
-    }
+    const { indexedOutputs } = collectIndexerOutputs(runResults, skippedLanguages);
+    validateIndexingOutcome(indexedOutputs, skippedLanguages, languages, opts.allowPartial, onStatus);
+    materializeScipOutput(indexedOutputs, tempOutputScip, onStatus);
+    convertScipToSqlite(tempOutputScip, tempOutputDb, env, onStatus);
 
     augmentAuxiliaryDocuments({
       projectRoot,
@@ -359,6 +255,191 @@ export {
   tryInstallIndexer,
 } from './install.js';
 export { tryInstallScipCli } from '../runtime/scip-cli.js';
+
+function ensureScipCliAvailable(skipAutoInstall: boolean, onStatus: (message: string) => void): void {
+  if (isBinaryAvailable('scip')) {
+    return;
+  }
+
+  if (skipAutoInstall) {
+    throw new Error(
+      'The scip CLI is required but not found on PATH.\n' +
+      'Install from: https://github.com/sourcegraph/scip/releases',
+    );
+  }
+
+  onStatus('scip CLI not found on PATH. Attempting auto-install...');
+  if (!tryInstallScipCli(onStatus)) {
+    throw new Error(
+      'The scip CLI is required but could not be installed.\n' +
+      'Install manually from: https://github.com/sourcegraph/scip/releases',
+    );
+  }
+}
+
+function prepareIndexerRuns(opts: {
+  languages: readonly SupportedLanguage[];
+  tempOutputScip: string;
+  projectRoot: string;
+  env: NodeJS.ProcessEnv;
+  skipAutoInstall: boolean;
+  pnpmWorkspaces?: boolean;
+  onStatus: (message: string) => void;
+}): PreparedIndexerPlan {
+  const preparedRuns: PreparedIndexerRun[] = [];
+  const skippedLanguages: { language: SupportedLanguage; reason: string }[] = [];
+  const languageOutputs = opts.languages.map((language, index) => ({
+    language,
+    scipPath: opts.languages.length > 1
+      ? tempScipPath(opts.tempOutputScip, language, index)
+      : opts.tempOutputScip,
+  }));
+
+  for (const { language, scipPath } of languageOutputs) {
+    const run = prepareIndexerRun({ ...opts, language, scipPath });
+    if ('skipped' in run) {
+      skippedLanguages.push(run.skipped);
+    } else {
+      preparedRuns.push(run.prepared);
+    }
+  }
+
+  return { preparedRuns, skippedLanguages };
+}
+
+function prepareIndexerRun(opts: {
+  language: SupportedLanguage;
+  scipPath: string;
+  projectRoot: string;
+  env: NodeJS.ProcessEnv;
+  skipAutoInstall: boolean;
+  pnpmWorkspaces?: boolean;
+  onStatus: (message: string) => void;
+}): { prepared: PreparedIndexerRun } | { skipped: { language: SupportedLanguage; reason: string } } {
+  const config = getIndexerConfig(opts.language);
+  const binaryLabel = describeIndexerBinary(config);
+  const projectLocalBinary = resolveProjectLocalIndexerBinary(config, opts.projectRoot);
+
+  if (!projectLocalBinary && !isIndexerInstalled(config)) {
+    if (opts.skipAutoInstall) {
+      const reason = `${binaryLabel} not found on PATH (auto-install disabled). ${config.installUrl ?? ''}`.trim();
+      opts.onStatus(`Skipping ${opts.language}: ${reason}`);
+      return { skipped: { language: opts.language, reason } };
+    }
+    opts.onStatus(`${binaryLabel} not found. Attempting auto-install...`);
+    if (!tryInstallIndexer(config, opts.onStatus)) {
+      const reason = `${binaryLabel} could not be auto-installed. ${config.installUrl ? `Install manually from ${config.installUrl}` : `Install ${binaryLabel} and put it on PATH.`}`;
+      opts.onStatus(`Skipping ${opts.language}: ${reason}`);
+      return { skipped: { language: opts.language, reason } };
+    }
+  }
+
+  const resolvedBinary = projectLocalBinary ?? resolveIndexerBinary(config);
+  if (!resolvedBinary) {
+    const reason = `${binaryLabel} was not found after installation checks.`;
+    opts.onStatus(`Skipping ${opts.language}: ${reason}`);
+    return { skipped: { language: opts.language, reason } };
+  }
+
+  const { binary, args } = config.indexArgs({
+    projectRoot: opts.projectRoot,
+    outputPath: opts.scipPath,
+    pnpmWorkspaces: opts.pnpmWorkspaces,
+    indexerBinary: resolvedBinary,
+  });
+
+  return {
+    prepared: {
+      language: opts.language,
+      scipPath: opts.scipPath,
+      config,
+      resolvedBinary,
+      binary,
+      args,
+      env: getIndexerExecutionEnv(config, opts.env, resolvedBinary),
+    },
+  };
+}
+
+function collectIndexerOutputs(
+  runResults: readonly IndexerRunResult[],
+  skippedLanguages: { language: SupportedLanguage; reason: string }[],
+): { indexedOutputs: { language: SupportedLanguage; scipPath: string }[] } {
+  const indexedOutputs: { language: SupportedLanguage; scipPath: string }[] = [];
+  for (const result of runResults) {
+    if (result.skipped) {
+      skippedLanguages.push(result.skipped);
+    } else {
+      indexedOutputs.push({ language: result.language, scipPath: result.scipPath });
+    }
+  }
+  return { indexedOutputs };
+}
+
+function validateIndexingOutcome(
+  indexedOutputs: readonly { language: SupportedLanguage; scipPath: string }[],
+  skippedLanguages: readonly { language: SupportedLanguage; reason: string }[],
+  requestedLanguages: readonly SupportedLanguage[],
+  allowPartial: boolean | undefined,
+  onStatus: (message: string) => void,
+): void {
+  if (indexedOutputs.length === 0) {
+    const detail = skippedLanguages.map((s) => `  - ${s.language}: ${s.reason}`).join('\n');
+    throw new Error(
+      'No language indexers ran successfully. Install at least one indexer for the languages in this project.\n' +
+      detail,
+    );
+  }
+
+  if (skippedLanguages.length === 0) {
+    return;
+  }
+
+  onStatus(`Indexed ${indexedOutputs.length} of ${requestedLanguages.length} languages; skipped ${skippedLanguages.map((s) => s.language).join(', ')}.`);
+  if (!allowPartial) {
+    throw new Error(
+      'Failed to index all required languages; preserving the previous index. ' +
+      'Pass --allow-partial to intentionally write an incomplete index.\n' +
+      skippedLanguages.map((s) => `  - ${s.language}: ${s.reason}`).join('\n'),
+    );
+  }
+}
+
+function materializeScipOutput(
+  indexedOutputs: readonly { language: SupportedLanguage; scipPath: string }[],
+  tempOutputScip: string,
+  onStatus: (message: string) => void,
+): void {
+  if (indexedOutputs.length > 1) {
+    onStatus(`Merging ${indexedOutputs.length} language indexes...`);
+    mergeScipFiles(indexedOutputs.map((entry) => entry.scipPath), tempOutputScip);
+  } else if (indexedOutputs[0]!.scipPath !== tempOutputScip) {
+    renameSync(indexedOutputs[0]!.scipPath, tempOutputScip);
+  }
+}
+
+function convertScipToSqlite(
+  tempOutputScip: string,
+  tempOutputDb: string,
+  env: NodeJS.ProcessEnv,
+  onStatus: (message: string) => void,
+): void {
+  onStatus('Converting to SQLite...');
+  if (!existsSync(tempOutputScip)) {
+    throw new Error(`SCIP index not found at ${tempOutputScip} after indexing`);
+  }
+
+  try {
+    execFileSync('scip', ['expt-convert', '--output', tempOutputDb, tempOutputScip], {
+      env,
+      stdio: 'pipe',
+      maxBuffer: 50 * 1024 * 1024,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to convert SCIP index to SQLite: ${msg}`, { cause: err });
+  }
+}
 
 function moveDefaultOutputIfNeeded(
   config: IndexerConfig,
