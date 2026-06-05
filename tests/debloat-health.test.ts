@@ -3,13 +3,13 @@ import Database from 'better-sqlite3';
 import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ScipDatabase } from '../src/db.js';
-import { getLiveBarrelPaths, isEntrySurface } from '../src/file-classifier.js';
+import { ScipDatabase } from '../src/storage/db.js';
+import { getLiveBarrelPaths, isEntrySurface } from '../src/analysis/file-classifier.js';
 import { dead } from '../src/queries/dead.js';
 import { health } from '../src/queries/health.js';
 import { isolated } from '../src/queries/isolated.js';
 import { redundantReexports } from '../src/queries/redundant-reexports.js';
-import type { ScipQueryConfig } from '../src/types.js';
+import type { ScipQueryConfig } from '../src/domain/types.js';
 
 function createDebloatFixtureDb(dbPath: string): void {
   const sqliteDb = new Database(dbPath);

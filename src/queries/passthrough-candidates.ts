@@ -1,10 +1,8 @@
-import type { ScipDatabase } from '../db.js';
-import { getDefinitionsForFile, getScopedDefinitions } from '../definition-catalog.js';
-import { buildCalleeMap } from '../reference-graph.js';
-import { isLiteralPassthrough } from '../passthrough-detect.js';
-import { hasSuppressionComment } from '../source-text.js';
-import type { PassthroughCandidate } from '../types.js';
-import { isFunctionLikeSymbol, isInRustTestModule, isRustTraitImplMember, shortenSymbol } from '../symbol-parser.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { isLiteralPassthrough } from '../analysis/passthrough-detect.js';
+import type { IndexedDefinition, PassthroughCandidate } from '../domain/types.js';
+import { isFunctionLikeSymbol, shortenSymbol } from '../symbols/symbol-parser.js';
+import { ProjectIndex } from '../core/project-index.js';
 
 /**
  * Find passthrough candidates: functions that just forward to one
@@ -19,13 +17,13 @@ export function passthroughCandidates(
   opts?: { scope?: string; maxLoc?: number; limit?: number },
 ): PassthroughCandidate[] {
   const { scope, maxLoc = 15, limit = 30 } = opts ?? {};
-  const symbols = getPassthroughCandidateSymbols(db, scope, maxLoc);
-  const calleeMap = buildCalleeMap(db, symbols);
+  const index = new ProjectIndex(db);
+  const symbols = getPassthroughCandidateSymbols(index, scope, maxLoc);
+  const calleeMap = index.calleeMap(symbols);
 
   const results: PassthroughCandidate[] = [];
 
   for (const sym of symbols) {
-    if (hasSuppressionComment(db, sym.relativePath, sym.startLine)) continue;
     const rawCallees = calleeMap.get(sym.symbolId) ?? [];
     const callees = rawCallees.some((c) => isFunctionLikeSymbol(c.symbol))
       ? rawCallees.filter((c) => isFunctionLikeSymbol(c.symbol))
@@ -63,25 +61,21 @@ export function passthroughCandidates(
 }
 
 function getPassthroughCandidateSymbols(
-  db: ScipDatabase,
+  index: ProjectIndex,
   scope: string | undefined,
   maxLoc: number,
-): ReturnType<typeof getDefinitionsForFile> {
-  return getScopedDefinitions(db, scope)
-    .filter((d) => !db.isIgnored(d.relativePath))
-    .filter((d) => isFunctionLikeSymbol(d.symbol))
-    // Trait-impl methods like `Default::default()`, `From::from()`,
-    // `FromStr::from_str()` legitimately delegate to a single inherent
-    // method or constructor — that's the trait-protocol idiom, not
-    // unnecessary indirection. Filtering these prevents the metric from
-    // flooding with idiomatic forwards.
-    .filter((d) => !isRustTraitImplMember(d.symbol))
-    .filter((d) => !isInRustTestModule(d.symbol))
-    .filter((d) => definitionLoc(d) >= 3 && definitionLoc(d) <= maxLoc);
+): IndexedDefinition[] {
+  return index.productionCallableDefinitions({
+    scope,
+    minLoc: 3,
+    maxLoc,
+    requireFunctionLikeSymbol: true,
+    excludeRustTraitImplMembers: true,
+  });
 }
 
 function definitionLoc(
-  definition: ReturnType<typeof getDefinitionsForFile>[number],
+  definition: IndexedDefinition,
 ): number {
   return definition.endLine - definition.startLine + 1;
 }

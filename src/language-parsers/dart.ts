@@ -3,14 +3,14 @@
  * tree-sitter-dart isn't bundled. Handles `import 'pkg' as ns;` and
  * `export 'pkg';` shapes.
  */
-import type { ScipDatabase } from '../db.js';
-import { resolveDartImportPath } from '../import-path-resolver.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { resolveDartImportPath } from '../resolution/import-path-resolver.js';
 import {
   buildUsageBody,
   collectNamespaceMembers,
   hasIdentifierUsage,
-} from '../source-stripper.js';
-import type { ParsedSourceExport, ParsedSourceImport } from '../types.js';
+} from '../source/source-stripper.js';
+import type { ParsedSourceExport, ParsedSourceImport } from '../domain/types.js';
 
 export function parseDartImports(
   db: ScipDatabase,

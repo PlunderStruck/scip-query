@@ -27,9 +27,9 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ScipDatabase } from '../src/db.js';
-import { attributeIdentifier } from '../src/identifier-attribution.js';
-import type { ScipQueryConfig } from '../src/types.js';
+import { ScipDatabase } from '../src/storage/db.js';
+import { attributeIdentifier } from '../src/symbols/identifier-attribution.js';
+import type { ScipQueryConfig } from '../src/domain/types.js';
 
 function createSchema(sqliteDb: Database.Database): void {
   sqliteDb.exec(`

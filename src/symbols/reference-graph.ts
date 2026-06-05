@@ -33,16 +33,16 @@
  * `buildSourceFallbackCallerFiles` so callers don't have to learn a
  * second module name).
  */
-import type { ScipDatabase } from './db.js';
-import { detectAstLanguage, getCallSites } from './ast.js';
-import { getRustAttrReferencedNames } from './framework-patterns.js';
-import { createPerDbCache, createPerDbValue } from './per-db-cache.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { detectAstLanguage, getCallSites } from '../source/ast.js';
+import { getRustAttrReferencedNames } from '../analysis/framework-patterns.js';
+import { createPerDbCache, createPerDbValue } from '../storage/per-db-cache.js';
 import { findIdentifierLines, getIdentifiersByLine } from './identifier-index.js';
-import { getSourceImports } from './language-parsers/index.js';
+import { getSourceImports } from '../language-parsers/index.js';
 import { leafName } from './symbol-parser.js';
 import { findEnclosingDefinition, getAllDefinitions, getDefinitionsForFile } from './definition-catalog.js';
 import { getFullSymbolMatch } from './symbol-lookup.js';
-import type { ReferenceSite, SymbolLocation, SymbolMatch } from './types.js';
+import type { ReferenceSite, SymbolLocation, SymbolMatch } from '../domain/types.js';
 
 export interface CalleeRow {
   symbol: string;
@@ -57,7 +57,7 @@ export interface CallerRow {
 
 // Re-export type for backwards-compatibility with callers that imported
 // ReferenceSite from query-support.ts.
-export type { ReferenceSite } from './types.js';
+export type { ReferenceSite } from '../domain/types.js';
 
 const FILE_DEP_GRAPH_CACHE = createPerDbCache<string, Map<string, Set<string>>>('file-dep-graph');
 

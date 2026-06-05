@@ -14,8 +14,8 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ScipDatabase } from '../src/db.js';
-import { findFirstSymbolMatch } from '../src/symbol-lookup.js';
+import { ScipDatabase } from '../src/storage/db.js';
+import { findFirstSymbolMatch } from '../src/symbols/symbol-lookup.js';
 import { byKind } from '../src/queries/by-kind.js';
 import { callGraph } from '../src/queries/call-graph.js';
 import { changeSurface } from '../src/queries/change-surface.js';
@@ -32,7 +32,7 @@ import { similarAll } from '../src/queries/similar.js';
 import { staleAbstractions } from '../src/queries/stale-abstractions.js';
 import { symbols } from '../src/queries/symbols.js';
 import { system } from '../src/queries/system.js';
-import type { ScipQueryConfig } from '../src/types.js';
+import type { ScipQueryConfig } from '../src/domain/types.js';
 
 function createFixtureProject(projectRoot: string): void {
   mkdirSync(join(projectRoot, 'src', 'reindex'), { recursive: true });

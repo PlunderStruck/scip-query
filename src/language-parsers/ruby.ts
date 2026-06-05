@@ -5,11 +5,11 @@
  * resolve.
  */
 import { basename } from 'node:path';
-import { getAst, type Tree } from '../ast.js';
-import type { ScipDatabase } from '../db.js';
-import { resolveRubyImportPath } from '../import-path-resolver.js';
-import { buildUsageBody, hasIdentifierUsage } from '../source-stripper.js';
-import type { ParsedSourceImport } from '../types.js';
+import { getAst, type Tree } from '../source/ast.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { resolveRubyImportPath } from '../resolution/import-path-resolver.js';
+import { buildUsageBody, hasIdentifierUsage } from '../source/source-stripper.js';
+import type { ParsedSourceImport } from '../domain/types.js';
 import { collectIdentifiersOutside } from './utils.js';
 
 export function parseRubyImports(

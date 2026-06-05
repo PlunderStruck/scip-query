@@ -1,4 +1,4 @@
-import type { ScipSymbol, ScipDescriptor, ScipLocalSymbol, DescriptorSuffix } from './types.js';
+import type { ScipSymbol, ScipDescriptor, ScipLocalSymbol, DescriptorSuffix } from '../domain/types.js';
 
 /**
  * SCIP Symbol Grammar (from the SCIP spec):

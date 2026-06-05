@@ -6,7 +6,7 @@ import {
   isFunctionLikeSymbol,
   isModuleLikeSymbol,
   isDirectChildSymbol,
-} from '../src/symbol-parser.js';
+} from '../src/symbols/symbol-parser.js';
 
 describe('parseSymbol', () => {
   it('parses a TypeScript class method symbol', () => {

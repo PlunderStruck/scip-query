@@ -14,10 +14,10 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ScipDatabase } from '../src/db.js';
+import { ScipDatabase } from '../src/storage/db.js';
 import { callGraph } from '../src/queries/call-graph.js';
 import { wrapperCandidates } from '../src/queries/wrapper-candidates.js';
-import type { ScipQueryConfig } from '../src/types.js';
+import type { ScipQueryConfig } from '../src/domain/types.js';
 
 function createSchema(sqliteDb: Database.Database): void {
   sqliteDb.exec(`

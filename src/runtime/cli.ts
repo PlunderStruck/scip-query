@@ -3,62 +3,73 @@ import { createRequire } from 'node:module';
 import { existsSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ScipDatabase } from './db.js';
-import { createGitignoreFilter } from './gitignore-filter.js';
+import { ScipDatabase } from '../storage/db.js';
+import { createGitignoreFilter } from '../source/gitignore-filter.js';
 import { loadProjectConfig, resolveIndexPaths, initProjectConfig } from './config.js';
-import { reindex, detectLanguages, augmentAuxiliaryDocuments, augmentVueResolvedReferences } from './reindex/index.js';
-import { getIndexerConfig } from './reindex/indexers.js';
-import { getIndexerDependencyStatus } from './reindex/install.js';
+import { reindex, detectLanguages, augmentAuxiliaryDocuments, augmentVueResolvedReferences } from '../reindex/index.js';
+import { getIndexerConfig } from '../reindex/indexers.js';
+import { getIndexerDependencyStatus } from '../reindex/install.js';
 import { Watcher } from './watch.js';
-import { stats } from './queries/stats.js';
-import { files } from './queries/files.js';
-import { symbols } from './queries/symbols.js';
-import { methods } from './queries/methods.js';
-import { refs } from './queries/refs.js';
-import { trace } from './queries/trace.js';
-import { deps, rdeps } from './queries/deps.js';
-import { system } from './queries/system.js';
-import { surface } from './queries/surface.js';
-import { dead } from './queries/dead.js';
-import { hotspots } from './queries/hotspots.js';
-import { imports, importedBy, unusedImports } from './queries/imports.js';
-import { outline } from './queries/outline.js';
-import { members } from './queries/members.js';
-import { fanIn, fanOut, topFanIn, topFanOut } from './queries/fan.js';
-import { coupling, topCoupling } from './queries/coupling.js';
-import { cycles } from './queries/cycles.js';
-import { bottlenecks } from './queries/bottlenecks.js';
-import { isolated } from './queries/isolated.js';
-import { byKind, kindCounts } from './queries/by-kind.js';
-import { deepChains } from './queries/deep-chains.js';
-import { hierarchy } from './queries/hierarchy.js';
-import { callGraph } from './queries/call-graph.js';
-import { similar, similarAll } from './queries/similar.js';
-import { similarFiles } from './queries/similar-files.js';
-import { similarChains } from './queries/similar-chains.js';
-import { extractCandidates } from './queries/extract-candidates.js';
-import { affected } from './queries/affected.js';
-import { changeSurface } from './queries/change-surface.js';
-import { diffImpact } from './queries/diff-impact.js';
-import { drift } from './queries/drift.js';
-import { wrapperCandidates } from './queries/wrapper-candidates.js';
-import { passthroughCandidates } from './queries/passthrough-candidates.js';
-import { staleAbstractions } from './queries/stale-abstractions.js';
-import { complexityHotspots } from './queries/complexity-hotspots.js';
-import { health } from './queries/health.js';
-import { convergence } from './queries/convergence.js';
-import { code } from './queries/code.js';
-import { complexity } from './queries/complexity.js';
-import { dataflow } from './queries/dataflow.js';
-import { slice } from './queries/slice.js';
-import { redundantReexports } from './queries/redundant-reexports.js';
-import { similarSignatures } from './queries/similar-signatures.js';
-import type { ScipQueryConfig, DeadOptions, WatcherStatus } from './types.js';
+import { stats } from '../queries/stats.js';
+import { files } from '../queries/files.js';
+import { symbols } from '../queries/symbols.js';
+import { methods } from '../queries/methods.js';
+import { refs } from '../queries/refs.js';
+import { trace } from '../queries/trace.js';
+import { deps, rdeps } from '../queries/deps.js';
+import { system } from '../queries/system.js';
+import { surface } from '../queries/surface.js';
+import { dead } from '../queries/dead.js';
+import { hotspots } from '../queries/hotspots.js';
+import { imports, importedBy, unusedImports } from '../queries/imports.js';
+import { outline } from '../queries/outline.js';
+import { members } from '../queries/members.js';
+import { fanIn, fanOut, topFanIn, topFanOut } from '../queries/fan.js';
+import { coupling, topCoupling } from '../queries/coupling.js';
+import { cycles } from '../queries/cycles.js';
+import { bottlenecks } from '../queries/bottlenecks.js';
+import { isolated } from '../queries/isolated.js';
+import { byKind, kindCounts } from '../queries/by-kind.js';
+import { deepChains } from '../queries/deep-chains.js';
+import { hierarchy } from '../queries/hierarchy.js';
+import { callGraph } from '../queries/call-graph.js';
+import { similar, similarAll } from '../queries/similar.js';
+import { similarFiles } from '../queries/similar-files.js';
+import { similarChains } from '../queries/similar-chains.js';
+import { extractCandidates } from '../queries/extract-candidates.js';
+import { affected } from '../queries/affected.js';
+import { changeSurface } from '../queries/change-surface.js';
+import { diffImpact } from '../queries/diff-impact.js';
+import { drift } from '../queries/drift.js';
+import { wrapperCandidates } from '../queries/wrapper-candidates.js';
+import { passthroughCandidates } from '../queries/passthrough-candidates.js';
+import { staleAbstractions } from '../queries/stale-abstractions.js';
+import { complexityHotspots } from '../queries/complexity-hotspots.js';
+import { health } from '../queries/health.js';
+import { convergence } from '../queries/convergence.js';
+import { code } from '../queries/code.js';
+import { complexity } from '../queries/complexity.js';
+import { dataflow } from '../queries/dataflow.js';
+import { slice } from '../queries/slice.js';
+import { redundantReexports } from '../queries/redundant-reexports.js';
+import { similarSignatures } from '../queries/similar-signatures.js';
+import type { ScipQueryConfig, DeadOptions, WatcherStatus } from '../domain/types.js';
 import { BUILTIN_SKILLS, installSkills, isScipInstalled, printScipInstallInstructions } from './setup.js';
 import { displayLine, displayPathRange, displayRange, render } from './render.js';
 
 const require = createRequire(import.meta.url);
-const { version: cliVersion } = require('../package.json') as { version: string };
+const { version: cliVersion } = loadCliPackageInfo();
+
+function loadCliPackageInfo(): { version: string } {
+  for (const path of ['../package.json', '../../package.json']) {
+    try {
+      return require(path) as { version: string };
+    } catch {
+      // Source runs from src/runtime; bundled CLI runs from dist.
+    }
+  }
+  return { version: '0.0.0' };
+}
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -173,6 +184,9 @@ program
   .description('Index the codebase and convert to SQLite')
   .option('-l, --language <lang>', 'Index only this language (can be repeated)', collect, [])
   .option('--pnpm-workspaces', 'Enable pnpm workspace support (TypeScript)')
+  .option('--force', 'Rebuild even if source inputs are unchanged')
+  .option('--allow-partial', 'Write an incomplete index when one or more detected languages fail')
+  .option('--indexer-concurrency <n>', 'Number of language indexers to run at once', parsePositiveInt)
   .action(async (opts) => {
     const projectRoot = resolveProjectRoot();
     const config = loadProjectConfig(projectRoot);
@@ -184,8 +198,11 @@ program
         outputScip: paths.indexPath,
         outputDb: paths.dbPath,
         pnpmWorkspaces: opts.pnpmWorkspaces || config.indexer?.typescript?.pnpmWorkspaces,
+        skipIfUnchanged: !opts.force,
+        allowPartial: opts.allowPartial,
+        indexerConcurrency: opts.indexerConcurrency,
       });
-      console.log(`Indexed ${result.languages.join(', ')} in ${(result.durationMs / 1000).toFixed(1)}s`);
+      console.log(`${result.reused ? 'Reused' : 'Indexed'} ${result.languages.join(', ')} in ${(result.durationMs / 1000).toFixed(1)}s`);
     } catch (err) {
       console.error(`error: ${err instanceof Error ? err.message : err}`);
       process.exit(1);
@@ -391,12 +408,16 @@ program
 
     const result = queries.dead(db, deadOpts);
 
-    if (result.symbols.length === 0) return render.empty('No dead code found.');
-
     const deadCode = result.symbols.filter((s) => s.kind === 'dead-code');
     const fileInternal = result.symbols.filter((s) => s.kind !== 'dead-code');
     const showDead = !opts.onlyInternal;
     const showInternal = !opts.onlyDead;
+    const shownDeadCode = showDead ? deadCode : [];
+    const shownFileInternal = showInternal ? fileInternal : [];
+
+    if (shownDeadCode.length === 0 && shownFileInternal.length === 0) {
+      return render.empty('No matching dead-code symbols found.');
+    }
 
     const renderGroup = (
       rows: typeof result.symbols,
@@ -435,33 +456,35 @@ program
       }
     };
 
-    const deadLoc = deadCode.reduce((sum, s) => sum + s.loc, 0);
-    const fiLoc = fileInternal.reduce((sum, s) => sum + s.loc, 0);
+    const deadLoc = shownDeadCode.reduce((sum, s) => sum + s.loc, 0);
+    const fiLoc = shownFileInternal.reduce((sum, s) => sum + s.loc, 0);
 
-    if (showDead && deadCode.length > 0) {
+    if (shownDeadCode.length > 0) {
       renderGroup(
-        deadCode,
+        shownDeadCode,
         'DEAD CODE',
         '  Zero references anywhere — no cross-file callers AND no same-file uses.\n  Safe to delete.',
         deadLoc,
       );
     }
 
-    if (showInternal && fileInternal.length > 0) {
-      if (showDead && deadCode.length > 0) console.log('');
+    if (shownFileInternal.length > 0) {
+      if (shownDeadCode.length > 0) console.log('');
       renderGroup(
-        fileInternal,
+        shownFileInternal,
         'FILE-INTERNAL ONLY',
         '  Used only within the same file (no cross-file callers). Could be a\n  single-use helper, an abstraction-in-progress, or a callback registered\n  through a framework path that static analysis cannot trace (signal\n  handlers, event listeners, dependency injection). NOT necessarily dead —\n  review case by case.',
         fiLoc,
       );
     }
 
+    const totalParts: string[] = [];
+    if (showDead) totalParts.push(`${shownDeadCode.length} dead code (${deadLoc} LOC)`);
+    if (showInternal) totalParts.push(`${shownFileInternal.length} file-internal (${fiLoc} LOC)`);
+
     console.log('\n───────────────────────────');
     console.log(
-      `Total: ${result.totalCount} symbols — ` +
-      `${result.deadCodeCount} dead code (${deadLoc} LOC) + ` +
-      `${result.fileInternalCount} file-internal (${fiLoc} LOC)`,
+      `Total: ${shownDeadCode.length + shownFileInternal.length} symbols — ${totalParts.join(' + ')}`,
     );
   }));
 
@@ -1439,6 +1462,14 @@ function collect(value: string, prev: string[]): string[] {
 /** parseInt wrapper safe for commander (which passes default as 2nd arg = radix) */
 function parseIntSafe(value: string): number {
   return parseInt(value, 10);
+}
+
+function parsePositiveInt(value: string): number {
+  const parsed = parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    throw new Error(`Expected a positive integer, got ${value}`);
+  }
+  return parsed;
 }
 
 function formatBytes(bytes: number): string {

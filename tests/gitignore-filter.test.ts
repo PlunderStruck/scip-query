@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createGitignoreFilter } from '../src/gitignore-filter.js';
+import { createGitignoreFilter } from '../src/source/gitignore-filter.js';
 import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';

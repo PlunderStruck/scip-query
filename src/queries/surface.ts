@@ -1,8 +1,8 @@
-import type { ScipDatabase } from '../db.js';
-import { getDefinitionsForFile } from '../definition-catalog.js';
-import { resolveIndexedPaths } from '../path-resolver.js';
-import type { SurfaceResult } from '../types.js';
-import { isCallableSymbol, shortenSymbol } from '../symbol-parser.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { ProjectIndex } from '../core/project-index.js';
+import { resolveIndexedPaths } from '../resolution/path-resolver.js';
+import type { SurfaceResult } from '../domain/types.js';
+import { isCallableSymbol, shortenSymbol } from '../symbols/symbol-parser.js';
 
 /** Public API surface: what symbols do external consumers actually use from this module? */
 export function surface(db: ScipDatabase, modulePattern: string): SurfaceResult[] {
@@ -10,6 +10,7 @@ export function surface(db: ScipDatabase, modulePattern: string): SurfaceResult[
   if (matchedPaths.length === 0) {
     return [];
   }
+  const index = new ProjectIndex(db);
 
   const placeholders = matchedPaths.map(() => '?').join(', ');
   const rows = db.all<{
@@ -50,7 +51,7 @@ export function surface(db: ScipDatabase, modulePattern: string): SurfaceResult[
   );
 
   const exposedDefinitions = matchedPaths.flatMap((relativePath) =>
-    getDefinitionsForFile(db, relativePath)
+    index.definitionsForFile(relativePath)
       .filter((definition) => isCallableSymbol(definition.symbol))
       .map((definition) => ({
         relative_path: relativePath,
@@ -73,4 +74,3 @@ export function surface(db: ScipDatabase, modulePattern: string): SurfaceResult[
       shortName: shortenSymbol(r.symbol),
     }));
 }
-

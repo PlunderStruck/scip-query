@@ -4,11 +4,11 @@
  * dispatcher branches on `detectAstLanguage` to pick a per-language AST
  * walker. Regex fallback covers all three with a single shape (`import …;`).
  */
-import { detectAstLanguage, getAst, type Tree } from '../ast.js';
-import type { ScipDatabase } from '../db.js';
-import { JVM_EXTENSIONS, resolveQualifiedImportPath } from '../import-path-resolver.js';
-import { buildUsageBody } from '../source-stripper.js';
-import type { ParsedSourceImport } from '../types.js';
+import { detectAstLanguage, getAst, type Tree } from '../source/ast.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { JVM_EXTENSIONS, resolveQualifiedImportPath } from '../resolution/import-path-resolver.js';
+import { buildUsageBody } from '../source/source-stripper.js';
+import type { ParsedSourceImport } from '../domain/types.js';
 import { buildSimpleImport, collectIdentifiersOutside, splitTopLevel } from './utils.js';
 
 export function parseJvmImports(

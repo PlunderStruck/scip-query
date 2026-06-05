@@ -1,13 +1,13 @@
-import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch } from '../symbol-lookup.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
 import {
   getCalleeRowsForSymbol,
   getCallerRowsForSymbol,
   getResolvedReferenceSites,
-} from '../reference-graph.js';
-import { getSourceReferenceSites } from '../identifier-attribution.js';
-import type { DataflowResult } from '../types.js';
-import { shortenSymbol } from '../symbol-parser.js';
+} from '../symbols/reference-graph.js';
+import { getSourceReferenceSites } from '../symbols/identifier-attribution.js';
+import type { DataflowResult } from '../domain/types.js';
+import { shortenSymbol } from '../symbols/symbol-parser.js';
 
 /**
  * Reference-level dataflow analysis: where does data around this symbol

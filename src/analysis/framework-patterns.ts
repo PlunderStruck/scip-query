@@ -15,16 +15,15 @@
  *    string-arg dispatches that cross language boundaries.
  *  - Generic suppression-comment honoring (`// scip-query: ignore-dead`).
  */
-import type { ScipDatabase } from './db.js';
+import type { ScipDatabase } from '../storage/db.js';
 import {
-  type AstLanguage,
   detectAstLanguage,
   extractCallLeaf,
   getAst,
   runCachedAstWalk,
   type SyntaxNode,
   type Tree,
-} from './ast.js';
+} from '../source/ast.js';
 
 export interface ExclusionEntry {
   startLine: number;

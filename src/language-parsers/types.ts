@@ -12,8 +12,8 @@
  * already-loaded source string so the dispatcher pays for the disk read
  * exactly once per file regardless of how many adapters might match.
  */
-import type { ScipDatabase } from '../db.js';
-import type { ParsedSourceExport, ParsedSourceImport } from '../types.js';
+import type { ScipDatabase } from '../storage/db.js';
+import type { ParsedSourceExport, ParsedSourceImport } from '../domain/types.js';
 
 export interface LanguageParser {
   /** Human-readable language name — only used in diagnostics. */

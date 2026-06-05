@@ -1,8 +1,8 @@
-import type { ScipDatabase } from '../db.js';
-import type { ByKindResult } from '../types.js';
-import { getAllDefinitions } from '../definition-catalog.js';
-import type { IndexedDefinition } from '../types.js';
-import { leafSuffix, parseSymbol, shortenSymbol } from '../symbol-parser.js';
+import type { ScipDatabase } from '../storage/db.js';
+import type { ByKindResult } from '../domain/types.js';
+import { getAllDefinitions } from '../symbols/definition-catalog.js';
+import type { IndexedDefinition } from '../domain/types.js';
+import { leafSuffix, parseSymbol, shortenSymbol } from '../symbols/symbol-parser.js';
 
 /**
  * SCIP SymbolInformation.Kind enum values.

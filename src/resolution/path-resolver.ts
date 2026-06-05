@@ -19,11 +19,11 @@
  * symbol-lookup (one-way: path-resolver → symbol-lookup, for the
  * symbol-pattern fallback).
  */
-import type { ScipDatabase } from './db.js';
+import type { ScipDatabase } from '../storage/db.js';
 import { existsSync as existsSyncFs } from 'node:fs';
 import { basename, isAbsolute as isAbsolutePath, join as pathJoin } from 'node:path';
-import { findFirstSymbolMatch } from './symbol-lookup.js';
-import type { DocumentPathCandidate } from './types.js';
+import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
+import type { DocumentPathCandidate } from '../domain/types.js';
 
 export function resolveIndexedFile(
   db: ScipDatabase,

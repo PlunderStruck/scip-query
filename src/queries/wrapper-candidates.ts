@@ -1,14 +1,11 @@
 import { basename, extname } from 'node:path';
-import type { ScipDatabase } from '../db.js';
-import { buildCrossFileCallerMap, buildFileDepGraph } from '../reference-graph.js';
-import { buildSourceFallbackCallerFiles } from '../identifier-attribution.js';
-import { findEnclosingDefinition, getDefinitionsForFile, getScopedDefinitions } from '../definition-catalog.js';
-import { getIdentifierLineMap } from '../identifier-index.js';
-import { classifyFile } from '../file-classifier.js';
-import { leafName } from '../symbol-parser.js';
-import { hasSuppressionComment } from '../source-text.js';
-import type { WrapperCandidate } from '../types.js';
-import { isFunctionLikeSymbol, isInRustTestModule, shortenSymbol } from '../symbol-parser.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { findEnclosingDefinition } from '../symbols/definition-catalog.js';
+import { getIdentifierLineMap } from '../symbols/identifier-index.js';
+import { leafName } from '../symbols/symbol-parser.js';
+import type { IndexedDefinition, WrapperCandidate } from '../domain/types.js';
+import { isInRustTestModule, shortenSymbol } from '../symbols/symbol-parser.js';
+import { ProjectIndex } from '../core/project-index.js';
 
 /**
  * Find wrapper candidates: symbols called by only one other symbol.
@@ -22,22 +19,22 @@ export function wrapperCandidates(
   opts?: { scope?: string; maxLoc?: number; limit?: number },
 ): WrapperCandidate[] {
   const { scope, maxLoc = 15, limit = 30 } = opts ?? {};
-  const reverseFanIn = buildReverseFileFanIn(buildFileDepGraph(db, scope));
-  const symbols = getWrapperCandidateSymbols(db, scope, maxLoc);
+  const index = new ProjectIndex(db);
+  const reverseFanIn = buildReverseFileFanIn(index.fileDependencyGraph(scope));
+  const symbols = getWrapperCandidateSymbols(index, scope, maxLoc);
 
   // Bulk pre-filter: only process symbols with exactly 1 distinct external
   // caller file. Source-text fallback adds back references the indexer may
   // miss (macros, dynamic dispatch); without it, a function called via a
   // missed path would falsely look like a wrapper.
   const callerFileMap = mergeCallerMaps(
-    buildCrossFileCallerMap(db, symbols),
-    buildSourceFallbackCallerFiles(db, symbols),
+    index.crossFileCallerMap(symbols),
+    index.sourceFallbackCallerFiles(symbols),
   );
 
   const results: WrapperCandidate[] = [];
 
   for (const symbol of symbols) {
-    if (hasSuppressionComment(db, symbol.relativePath, symbol.startLine)) continue;
     const symbolStem = basename(symbol.relativePath, extname(symbol.relativePath));
 
     // Cheap bulk check first: skip if not exactly 1 external caller file
@@ -51,7 +48,7 @@ export function wrapperCandidates(
       .filter((f) => f !== symbol.relativePath)
       .filter((f) => basename(f, extname(f)) !== symbolStem)
       .filter((f) => {
-        const kind = classifyFile(f);
+        const kind = index.fileKind(f);
         return kind !== 'barrel' && kind !== 'entry' && kind !== 'test';
       });
     if (externalFiles.length !== 1) continue;
@@ -75,7 +72,7 @@ export function wrapperCandidates(
     );
     if (!refRow) continue;
 
-    const callerDefs = getDefinitionsForFile(db, callerFile);
+    const callerDefs = index.definitionsForFile(callerFile);
     const refinedLine = refineCallSiteLine(db, callerFile, symbol.symbol, refRow.start_line, refRow.end_line);
     const enclosing = findEnclosingDefinition(callerDefs, refinedLine);
 
@@ -122,21 +119,22 @@ export function wrapperCandidates(
 }
 
 function definitionLoc(
-  definition: ReturnType<typeof getDefinitionsForFile>[number],
+  definition: IndexedDefinition,
 ): number {
   return definition.endLine - definition.startLine + 1;
 }
 
 function getWrapperCandidateSymbols(
-  db: ScipDatabase,
+  index: ProjectIndex,
   scope: string | undefined,
   maxLoc: number,
-): ReturnType<typeof getScopedDefinitions> {
-  return getScopedDefinitions(db, scope)
-    .filter((definition) => !db.isIgnored(definition.relativePath))
-    .filter((definition) => isFunctionLikeSymbol(definition.symbol))
-    .filter((definition) => !isInRustTestModule(definition.symbol))
-    .filter((definition) => definitionLoc(definition) <= maxLoc && definitionLoc(definition) >= 2);
+): IndexedDefinition[] {
+  return index.productionCallableDefinitions({
+    scope,
+    minLoc: 2,
+    maxLoc,
+    requireFunctionLikeSymbol: true,
+  });
 }
 
 /**

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-type ScipCliModule = typeof import('../src/scip-cli.js');
+type ScipCliModule = typeof import('../src/runtime/scip-cli.js');
 
 async function loadScipCli(opts: {
   platform: NodeJS.Platform;
@@ -35,7 +35,7 @@ async function loadScipCli(opts: {
     execFileSync,
   }));
 
-  const mod = (await import('../src/scip-cli.js')) as ScipCliModule;
+  const mod = (await import('../src/runtime/scip-cli.js')) as ScipCliModule;
   return { ...mod, execFileSync, isBinaryAvailable };
 }
 
@@ -86,7 +86,7 @@ describe('scip CLI helpers', () => {
       arch: 'arm64',
     });
 
-    const { printScipInstallInstructions } = await import('../src/scip-cli.js');
+    const { printScipInstallInstructions } = await import('../src/runtime/scip-cli.js');
     printScipInstallInstructions();
 
     expect(log.mock.calls.flat().join('\n')).toContain('brew install sourcegraph/scip/scip');
@@ -162,10 +162,11 @@ describe('scip CLI helpers', () => {
     vi.doMock('node:os', () => ({
       homedir: () => '/tmp/scip-query-test-home',
       platform: () => 'linux',
+      arch: () => 'x64',
     }));
-    vi.doMock('../src/scip-cli.js', () => scipHelpers);
+    vi.doMock('../src/runtime/scip-cli.js', () => scipHelpers);
 
-    const { postinstall } = await import('../src/setup.js');
+    const { postinstall } = await import('../src/runtime/setup.js');
     postinstall();
 
     expect(scipHelpers.isScipInstalled).toHaveBeenCalled();

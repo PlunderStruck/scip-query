@@ -11,10 +11,10 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ScipDatabase } from '../db.js';
-import { normalizePath } from '../import-path-resolver.js';
-import { createPerDbCache } from '../per-db-cache.js';
-import type { ParsedReExport, ParsedSourceExport, ParsedSourceImport } from '../types.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { normalizePath } from '../resolution/import-path-resolver.js';
+import { createPerDbCache } from '../storage/per-db-cache.js';
+import type { ParsedReExport, ParsedSourceExport, ParsedSourceImport } from '../domain/types.js';
 import { parseReExports } from './javascript.js';
 import { getParserForPath } from './registry.js';
 

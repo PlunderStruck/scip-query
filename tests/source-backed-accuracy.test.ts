@@ -8,12 +8,12 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ScipDatabase } from '../src/db.js';
+import { ScipDatabase } from '../src/storage/db.js';
 import { callGraph } from '../src/queries/call-graph.js';
 import { code } from '../src/queries/code.js';
 import { symbols } from '../src/queries/symbols.js';
 import { trace } from '../src/queries/trace.js';
-import type { ScipQueryConfig } from '../src/types.js';
+import type { ScipQueryConfig } from '../src/domain/types.js';
 
 function createSchema(sqliteDb: Database.Database): void {
   sqliteDb.exec(`

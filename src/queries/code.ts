@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch } from '../symbol-lookup.js';
-import { resolveIndexedFile } from '../path-resolver.js';
-import type { CodeResult } from '../types.js';
-import { shortenSymbol } from '../symbol-parser.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
+import { resolveIndexedFile } from '../resolution/path-resolver.js';
+import type { CodeResult } from '../domain/types.js';
+import { shortenSymbol } from '../symbols/symbol-parser.js';
 
 /**
  * Read the source code for a symbol, bounded to its definition range.

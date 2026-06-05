@@ -1,6 +1,7 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
 import { extname, join } from 'node:path';
-import type { SupportedLanguage } from '../types.js';
+import type { SupportedLanguage } from '../domain/types.js';
 
 interface LanguageMarker {
   language: SupportedLanguage;
@@ -126,6 +127,11 @@ function matchesSimpleGlob(entry: string, pattern: string): boolean {
 }
 
 function collectExtensions(projectRoot: string): Set<string> {
+  const gitExtensions = collectGitTrackedExtensions(projectRoot);
+  if (gitExtensions) {
+    return gitExtensions;
+  }
+
   const found = new Set<string>();
   const stack = [projectRoot];
 
@@ -165,6 +171,31 @@ function collectExtensions(projectRoot: string): Set<string> {
   }
 
   return found;
+}
+
+function collectGitTrackedExtensions(projectRoot: string): Set<string> | null {
+  try {
+    const stdout = execFileSync(
+      'git',
+      ['-C', projectRoot, 'ls-files', '-co', '--exclude-standard', '--', '.'],
+      {
+        encoding: 'utf-8',
+        maxBuffer: 25 * 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      },
+    );
+    const found = new Set<string>();
+    for (const line of stdout.split('\n')) {
+      if (!line) continue;
+      const extension = extname(line).toLowerCase();
+      if (extension) {
+        found.add(extension);
+      }
+    }
+    return found;
+  } catch {
+    return null;
+  }
 }
 
 function hasExtension(extensionSet: Set<string>, extensions: readonly string[] | undefined): boolean {

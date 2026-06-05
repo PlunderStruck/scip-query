@@ -2,14 +2,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ScipDatabase } from '../src/db.js';
+import { ScipDatabase } from '../src/storage/db.js';
 import * as queries from '../src/queries/index.js';
-import { findFirstSymbolMatch } from '../src/symbol-lookup.js';
-import { findEnclosingDefinition, getDefinitionsForFile } from '../src/definition-catalog.js';
-import { getResolvedReferenceSites } from '../src/reference-graph.js';
-import { getSourceReferenceSites } from '../src/identifier-attribution.js';
-import { shortenSymbol } from '../src/symbol-parser.js';
-import type { ScipQueryConfig } from '../src/types.js';
+import { findFirstSymbolMatch } from '../src/symbols/symbol-lookup.js';
+import { findEnclosingDefinition, getDefinitionsForFile } from '../src/symbols/definition-catalog.js';
+import { getResolvedReferenceSites } from '../src/symbols/reference-graph.js';
+import { getSourceReferenceSites } from '../src/symbols/identifier-attribution.js';
+import { shortenSymbol } from '../src/symbols/symbol-parser.js';
+import type { ScipQueryConfig } from '../src/domain/types.js';
 import { advancedFixture, createAdvancedFixtureDb } from './advanced-fixture.js';
 
 function shortNames(items: readonly { shortName: string }[]): string[] {

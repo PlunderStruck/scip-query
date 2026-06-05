@@ -1,11 +1,12 @@
-import type { ScipDatabase } from '../db.js';
-import { findExactSymbolMatch, findFirstSymbolMatch } from '../symbol-lookup.js';
-import { findEnclosingDefinition, getDefinitionsForFile } from '../definition-catalog.js';
-import { getCalleeRowsForSymbol, getResolvedReferenceSites } from '../reference-graph.js';
-import { getSourceReferenceSites } from '../identifier-attribution.js';
-import type { SymbolMatch } from '../types.js';
-import type { SliceResult } from '../types.js';
-import { shortenSymbol } from '../symbol-parser.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { ProjectIndex } from '../core/project-index.js';
+import { findExactSymbolMatch, findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
+import { findEnclosingDefinition } from '../symbols/definition-catalog.js';
+import { getCalleeRowsForSymbol, getResolvedReferenceSites } from '../symbols/reference-graph.js';
+import { getSourceReferenceSites } from '../symbols/identifier-attribution.js';
+import type { SymbolMatch } from '../domain/types.js';
+import type { SliceResult } from '../domain/types.js';
+import { shortenSymbol } from '../symbols/symbol-parser.js';
 
 /**
  * Reference-level program slicing: track what affects a symbol (backward)
@@ -100,6 +101,7 @@ function forwardSlice(db: ScipDatabase, match: SymbolMatch): SliceResult {
 
   const seenOutputs = new Set<string>();
   const connected: SliceResult['connectedSymbols'] = [];
+  const index = new ProjectIndex(db);
 
   for (const ref of refs) {
     if (connected.length >= 30) break;
@@ -110,7 +112,7 @@ function forwardSlice(db: ScipDatabase, match: SymbolMatch): SliceResult {
     // compute enclosing the same way.
     const enclosingSymbol =
       ref.enclosingSymbol ?? findEnclosingDefinition(
-        getDefinitionsForFile(db, ref.file),
+        index.definitionsForFile(ref.file),
         ref.line,
       )?.symbol ?? null;
     if (!enclosingSymbol || enclosingSymbol === match.symbol) continue;

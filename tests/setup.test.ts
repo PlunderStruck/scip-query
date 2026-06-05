@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-type SetupModule = typeof import('../src/setup.js');
+type SetupModule = typeof import('../src/runtime/setup.js');
 
 async function loadSetup(): Promise<{
   module: SetupModule;
@@ -48,7 +48,7 @@ async function loadSetup(): Promise<{
     fileURLToPath: () => '/pkg/dist/setup.js',
   }));
 
-  const module = await import('../src/setup.js');
+  const module = await import('../src/runtime/setup.js');
   return { module, symlinkSync };
 }
 

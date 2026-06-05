@@ -1,9 +1,9 @@
 import { basename } from 'node:path';
-import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch } from '../symbol-lookup.js';
-import { getDefinitionsForFile } from '../definition-catalog.js';
-import type { MethodResult } from '../types.js';
-import { isCallableSymbol, leafName } from '../symbol-parser.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { ProjectIndex } from '../core/project-index.js';
+import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
+import type { MethodResult } from '../domain/types.js';
+import { isCallableSymbol, leafName } from '../symbols/symbol-parser.js';
 
 export function methods(db: ScipDatabase, className: string): MethodResult[] {
   const classMatch = findFirstSymbolMatch(db, className);
@@ -12,7 +12,8 @@ export function methods(db: ScipDatabase, className: string): MethodResult[] {
   }
 
   const ownerName = leafName(classMatch.symbol);
-  const definitions = getDefinitionsForFile(db, classMatch.relativePath)
+  const index = new ProjectIndex(db);
+  const definitions = index.definitionsForFile(classMatch.relativePath)
     .filter((definition) => isCallableSymbol(definition.symbol));
 
   const directMethods = definitions.filter((definition) => (

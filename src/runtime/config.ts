@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
-import type { ProjectConfig, WatchConfig } from './types.js';
+import type { ProjectConfig, WatchConfig } from '../domain/types.js';
 
 const CONFIG_FILENAME = '.scipquery.json';
 

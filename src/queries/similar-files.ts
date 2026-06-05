@@ -1,7 +1,7 @@
-import type { ScipDatabase } from '../db.js';
-import { buildFileDepGraph } from '../reference-graph.js';
-import { jaccard } from '../similarity.js';
-import type { SimilarFileResult } from '../types.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { buildFileDepGraph } from '../symbols/reference-graph.js';
+import { jaccard } from '../analysis/similarity.js';
+import type { SimilarFileResult } from '../domain/types.js';
 
 /**
  * Find files with similar dependency profiles.

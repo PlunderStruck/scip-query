@@ -1,9 +1,9 @@
-import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch } from '../symbol-lookup.js';
-import { resolveIndexedFile } from '../path-resolver.js';
-import { buildFileDepGraph } from '../reference-graph.js';
-import type { FanResult } from '../types.js';
-import { shortenSymbol } from '../symbol-parser.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
+import { resolveIndexedFile } from '../resolution/path-resolver.js';
+import { buildFileDepGraph } from '../symbols/reference-graph.js';
+import type { FanResult } from '../domain/types.js';
+import { shortenSymbol } from '../symbols/symbol-parser.js';
 
 /**
  * Fan-in: how many distinct files reference this symbol.

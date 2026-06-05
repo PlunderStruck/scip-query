@@ -1,9 +1,9 @@
-import type { ScipDatabase } from '../db.js';
-import { getAllDefinitions } from '../definition-catalog.js';
-import { getCalleeRowsForSymbol, getCallerRowsForSymbol } from '../reference-graph.js';
-import type { IndexedDefinition } from '../types.js';
-import type { BottleneckResult } from '../types.js';
-import { shortenSymbol } from '../symbol-parser.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { getAllDefinitions } from '../symbols/definition-catalog.js';
+import { getCalleeRowsForSymbol, getCallerRowsForSymbol } from '../symbols/reference-graph.js';
+import type { IndexedDefinition } from '../domain/types.js';
+import type { BottleneckResult } from '../domain/types.js';
+import { shortenSymbol } from '../symbols/symbol-parser.js';
 
 /**
  * Find coupling hubs: symbols with both high fan-in (many consumers)

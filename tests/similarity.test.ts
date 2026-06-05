@@ -6,7 +6,7 @@ import {
   intersection,
   jaccard,
   weightedCosine,
-} from '../src/similarity.js';
+} from '../src/analysis/similarity.js';
 
 describe('similarity kernel', () => {
   describe('intersection / difference', () => {

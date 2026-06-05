@@ -1,8 +1,8 @@
-import type { ScipDatabase } from '../db.js';
-import type { OutlineNode } from '../types.js';
-import { loadFileSymbols } from '../definition-catalog.js';
-import { resolveIndexedPaths } from '../path-resolver.js';
-import { isAncestorSymbol } from '../symbol-parser.js';
+import type { ScipDatabase } from '../storage/db.js';
+import type { OutlineNode } from '../domain/types.js';
+import { loadFileSymbols } from '../symbols/definition-catalog.js';
+import { resolveIndexedPaths } from '../resolution/path-resolver.js';
+import { isAncestorSymbol } from '../symbols/symbol-parser.js';
 
 /**
  * Build a tree-structured outline of symbols in a file,

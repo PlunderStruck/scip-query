@@ -1,8 +1,8 @@
-import type { ScipDatabase } from '../db.js';
-import { getDefinitionsForFile } from '../definition-catalog.js';
-import { resolveIndexedFile } from '../path-resolver.js';
-import type { ChangeSurfaceEntry, ChangeSurfaceResult } from '../types.js';
-import { shortenSymbol } from '../symbol-parser.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { ProjectIndex } from '../core/project-index.js';
+import { resolveIndexedFile } from '../resolution/path-resolver.js';
+import type { ChangeSurfaceEntry, ChangeSurfaceResult } from '../domain/types.js';
+import { shortenSymbol } from '../symbols/symbol-parser.js';
 
 /**
  * Pre-change briefing for a file. For each symbol defined in the file,
@@ -28,7 +28,8 @@ export function changeSurface(
 
   if (!doc || db.isIgnored(doc.relative_path)) return null;
 
-  const definitions = getDefinitionsForFile(db, doc.relative_path)
+  const index = new ProjectIndex(db);
+  const definitions = index.definitionsForFile(doc.relative_path)
     .sort((a, b) => a.startLine - b.startLine || a.endLine - b.endLine);
 
   const symbols: ChangeSurfaceEntry[] = [];

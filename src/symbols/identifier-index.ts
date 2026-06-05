@@ -16,11 +16,11 @@
  * AST path uses tree-sitter; regex fallback uses the source-stripper to
  * tokenize comment- and string-free source into identifier tokens.
  */
-import { detectAstLanguage, getAst, type SyntaxNode } from './ast.js';
-import type { ScipDatabase } from './db.js';
-import { createPerDbCache } from './per-db-cache.js';
-import { escapeRegex, getStrippedLines, stripCommentsAndStrings } from './source-stripper.js';
-import { getSourceText } from './source-text.js';
+import { detectAstLanguage, getAst, type SyntaxNode } from '../source/ast.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { createPerDbCache } from '../storage/per-db-cache.js';
+import { escapeRegex, getStrippedLines, stripCommentsAndStrings } from '../source/source-stripper.js';
+import { getSourceText } from '../source/source-text.js';
 
 /**
  * Lines in `relativePath` where `identifier` appears (0-indexed). Excludes

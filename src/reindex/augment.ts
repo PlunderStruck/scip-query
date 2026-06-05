@@ -1,8 +1,9 @@
 import Database from 'better-sqlite3';
+import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
-import { createGitignoreFilter } from '../gitignore-filter.js';
-import { AUXILIARY_EXTENSIONS, SKIP_DIRS } from '../source-fileset.js';
+import { createGitignoreFilter } from '../source/gitignore-filter.js';
+import { AUXILIARY_EXTENSIONS, SKIP_DIRS } from '../source/source-fileset.js';
 
 export interface AugmentAuxiliaryDocumentsOptions {
   projectRoot: string;
@@ -42,12 +43,7 @@ export function augmentAuxiliaryDocuments(
 
   const db = new Database(opts.dbPath);
   try {
-    const existing = files.length === 0
-      ? new Set<string>()
-      : new Set((db.prepare(
-        `SELECT relative_path FROM documents WHERE relative_path IN (${files.map(() => '?').join(',')})`,
-      ).all(...files) as { relative_path: string }[])
-        .map((row) => row.relative_path));
+    const existing = selectExistingDocuments(db, files);
 
     const insert = db.prepare(
       `INSERT OR IGNORE INTO documents (language, relative_path, position_encoding, text)
@@ -80,10 +76,15 @@ export function augmentAuxiliaryDocuments(
 }
 
 function listAuxiliaryFiles(absRoot: string, extensions: ReadonlySet<string>): string[] {
+  const gitFiles = listGitTrackedFiles(absRoot, extensions);
+  if (gitFiles) {
+    return gitFiles;
+  }
+
   const out: string[] = [];
   const visit = (relDir: string): void => {
     const absDir = relDir ? join(absRoot, relDir) : absRoot;
-    let entries: { name: string; isDirectory(): boolean }[] = [];
+    let entries: { name: string; isDirectory(): boolean }[];
     try {
       entries = readdirSync(absDir, { withFileTypes: true });
     } catch {
@@ -105,6 +106,41 @@ function listAuxiliaryFiles(absRoot: string, extensions: ReadonlySet<string>): s
 
   visit('');
   return out.sort();
+}
+
+function listGitTrackedFiles(absRoot: string, extensions: ReadonlySet<string>): string[] | null {
+  try {
+    const stdout = execFileSync(
+      'git',
+      ['-C', absRoot, 'ls-files', '-co', '--exclude-standard', '--', '.'],
+      {
+        encoding: 'utf-8',
+        maxBuffer: 25 * 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      },
+    );
+    return stdout
+      .split('\n')
+      .filter((file) => file && extensions.has(extname(file).toLowerCase()))
+      .sort();
+  } catch {
+    return null;
+  }
+}
+
+function selectExistingDocuments(db: Database.Database, files: readonly string[]): Set<string> {
+  const existing = new Set<string>();
+  const chunkSize = 500;
+  for (let start = 0; start < files.length; start += chunkSize) {
+    const chunk = files.slice(start, start + chunkSize);
+    const rows = db.prepare(
+      `SELECT relative_path FROM documents WHERE relative_path IN (${chunk.map(() => '?').join(',')})`,
+    ).all(...chunk) as { relative_path: string }[];
+    for (const row of rows) {
+      existing.add(row.relative_path);
+    }
+  }
+  return existing;
 }
 
 function languageForPath(relativePath: string): string {

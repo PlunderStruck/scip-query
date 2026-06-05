@@ -21,13 +21,13 @@
  * Layer position: built on path-resolver and symbol-lookup. Used by
  * reference-graph and many query commands.
  */
-import type { ScipDatabase } from './db.js';
-import { getCallableSites, type CallableSite } from './ast.js';
-import { getSourceText } from './source-text.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { getCallableSites, type CallableSite } from '../source/ast.js';
+import { getSourceText } from '../source/source-text.js';
 import { isFunctionLikeSymbol, leafName, leafSuffix, parseSymbol, shortenSymbol } from './symbol-parser.js';
-import { createPerDbCache } from './per-db-cache.js';
-import { cleanSignature, extractSignature, type SymbolQueryRow } from './scip-rows.js';
-import type { IndexedDefinition, SymbolMatch } from './types.js';
+import { createPerDbCache } from '../storage/per-db-cache.js';
+import { cleanSignature, extractSignature, type SymbolQueryRow } from '../storage/scip-rows.js';
+import type { IndexedDefinition, SymbolMatch } from '../domain/types.js';
 
 export const FILE_DEFINITION_CACHE = createPerDbCache<string, IndexedDefinition[]>('file-definitions');
 

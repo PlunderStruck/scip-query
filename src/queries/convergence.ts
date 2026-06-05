@@ -1,8 +1,8 @@
-import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch } from '../symbol-lookup.js';
-import { getCalleeRowsForSymbol } from '../reference-graph.js';
-import type { ConvergenceResult } from '../types.js';
-import { shortenSymbol } from '../symbol-parser.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
+import { getCalleeRowsForSymbol } from '../symbols/reference-graph.js';
+import type { ConvergenceResult } from '../domain/types.js';
+import { shortenSymbol } from '../symbols/symbol-parser.js';
 
 /**
  * Given two similar symbols, show what a consolidated version would look like.

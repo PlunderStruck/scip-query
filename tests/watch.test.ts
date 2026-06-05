@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { tempScipPath } from '../src/watch.js';
+import { tempScipPath } from '../src/runtime/watch.js';
 
 describe('tempScipPath', () => {
   it('preserves the .scip suffix for temporary files', () => {

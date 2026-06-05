@@ -1,8 +1,8 @@
-import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch } from '../symbol-lookup.js';
-import { getDefinitionsForFile } from '../definition-catalog.js';
-import type { MemberResult } from '../types.js';
-import { isDirectChildSymbol, leafSuffix, shortenSymbol } from '../symbol-parser.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { ProjectIndex } from '../core/project-index.js';
+import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
+import type { MemberResult } from '../domain/types.js';
+import { isDirectChildSymbol, leafSuffix, shortenSymbol } from '../symbols/symbol-parser.js';
 
 /**
  * Find all direct children of a symbol (methods, fields, nested types).
@@ -15,7 +15,8 @@ export function members(db: ScipDatabase, symbolPattern: string): MemberResult[]
   const parent = findFirstSymbolMatch(db, symbolPattern);
   if (!parent) return [];
 
-  return getDefinitionsForFile(db, parent.relativePath)
+  const index = new ProjectIndex(db);
+  return index.definitionsForFile(parent.relativePath)
     .filter((definition) => definition.symbol !== parent.symbol)
     .filter((definition) => isDirectChildSymbol(parent.symbol, definition.symbol))
     .sort((a, b) => a.startLine - b.startLine || a.endLine - b.endLine)

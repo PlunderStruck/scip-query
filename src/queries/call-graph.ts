@@ -1,8 +1,8 @@
-import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch } from '../symbol-lookup.js';
-import { getCalleeRowsForSymbol, getCallerRowsForSymbol } from '../reference-graph.js';
-import type { CallGraphResult } from '../types.js';
-import { shortenSymbol } from '../symbol-parser.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
+import { getCalleeRowsForSymbol, getCallerRowsForSymbol } from '../symbols/reference-graph.js';
+import type { CallGraphResult } from '../domain/types.js';
+import { shortenSymbol } from '../symbols/symbol-parser.js';
 
 /**
  * Build a call graph for a symbol: who calls it (incoming) and

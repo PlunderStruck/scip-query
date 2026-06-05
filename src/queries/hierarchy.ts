@@ -1,7 +1,7 @@
-import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch } from '../symbol-lookup.js';
-import { parseSymbol, shortenSymbol } from '../symbol-parser.js';
-import type { HierarchyNode } from '../types.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
+import { parseSymbol, shortenSymbol } from '../symbols/symbol-parser.js';
+import type { HierarchyNode } from '../domain/types.js';
 
 /**
  * Walk the enclosing_symbol chain upward to show a symbol's ancestry.

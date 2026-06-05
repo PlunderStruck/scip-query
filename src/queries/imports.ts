@@ -1,9 +1,9 @@
-import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch } from '../symbol-lookup.js';
-import { resolveIndexedFile } from '../path-resolver.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
+import { resolveIndexedFile } from '../resolution/path-resolver.js';
 import { getSourceImports } from '../language-parsers/index.js';
-import type { ImportResult, UnusedImportResult } from '../types.js';
-import { isModuleLikeSymbol, leafName, shortenSymbol } from '../symbol-parser.js';
+import type { ImportResult, UnusedImportResult } from '../domain/types.js';
+import { isModuleLikeSymbol, leafName, shortenSymbol } from '../symbols/symbol-parser.js';
 
 /**
  * What symbols does this file import?

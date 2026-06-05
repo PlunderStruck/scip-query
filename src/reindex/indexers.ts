@@ -1,6 +1,6 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import type { SupportedLanguage, IndexerConfig } from '../types.js';
+import type { SupportedLanguage, IndexerConfig } from '../domain/types.js';
 
 /**
  * Indexer configurations for each supported language.

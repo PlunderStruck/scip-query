@@ -1,14 +1,11 @@
-import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch } from '../symbol-lookup.js';
-import { getAllDefinitions, getScopedDefinitions } from '../definition-catalog.js';
-import { buildCalleeMap, getCalleeRowsForSymbol } from '../reference-graph.js';
-import { getCallableSignature } from '../ast.js';
-import { getSourceText } from '../source-text.js';
-import { computeIdf, difference, intersection, weightedCosine } from '../similarity.js';
-import { hasSuppressionComment } from '../source-text.js';
-import { classifyFile } from '../file-classifier.js';
-import type { SimilarSymbolResult } from '../types.js';
-import { isFunctionLikeSymbol, isInRustTestModule, leafName, shortenSymbol } from '../symbol-parser.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
+import { getCalleeRowsForSymbol } from '../symbols/reference-graph.js';
+import { getSourceText } from '../source/source-text.js';
+import { computeIdf, difference, intersection, weightedCosine } from '../analysis/similarity.js';
+import type { SimilarSymbolResult } from '../domain/types.js';
+import { isFunctionLikeSymbol, isInRustTestModule, leafName, shortenSymbol } from '../symbols/symbol-parser.js';
+import { ProjectIndex } from '../core/project-index.js';
 
 /**
  * Find functions with similar callee fingerprints using TF-IDF weighted
@@ -201,6 +198,7 @@ function findCallees(
   symbolPattern: string,
 ): SymbolFingerprint | null {
   const target = findFirstSymbolMatch(db, symbolPattern);
+  const index = new ProjectIndex(db);
 
   if (!target) return null;
 
@@ -210,7 +208,7 @@ function findCallees(
     symbol: target.symbol,
     file: target.relativePath,
     callees: new Set(calleeRows.map((r) => r.symbol)),
-    paramCount: getCallableSignature(db, target.relativePath, target.startLine, target.endLine)?.paramCount ?? -1,
+    paramCount: index.callableSignature(target)?.paramCount ?? -1,
   };
 }
 
@@ -219,31 +217,17 @@ function getAllCalleeFingerprints(
   opts: { minCallees: number; scope?: string; excludeSymbol?: string },
 ): SymbolFingerprint[] {
   const { minCallees, scope, excludeSymbol } = opts;
+  const index = new ProjectIndex(db);
 
-  const candidates = getScopedDefinitions(db, scope)
-    .filter((d) => !db.isIgnored(d.relativePath))
-    .filter((d) => d.isFunctionLike)
-    .filter((d) => excludeSymbol === undefined || d.symbol !== excludeSymbol)
-    .filter((d) => (d.endLine - d.startLine + 1) >= 5)
-    // Tests aren't consolidation candidates. Two tests sharing the same
-    // setup helpers (`create_minimal_config`, `init_mcp`, …) trivially
-    // hit 100% callee-set similarity but their assertion logic differs —
-    // that's the point of having multiple tests. Including them here
-    // floods the report with non-actionable pairs.
-    .filter((d) => classifyFile(d.relativePath) !== 'test')
-    // Same reason as the test-file skip, applied to inline test modules
-    // (`#[cfg(test)] mod tests { ... }` inside a regular source file).
-    .filter((d) => !isInRustTestModule(d.symbol))
-    .filter((d) => !hasSuppressionComment(db, d.relativePath, d.startLine));
-
-  const calleeMap = buildCalleeMap(db, candidates);
+  const candidates = index.productionCallableDefinitions({ scope, minLoc: 5, excludeSymbol });
+  const calleeMap = index.calleeMap(candidates);
 
   return candidates
     .map((d) => ({
       symbol: d.symbol,
       file: d.relativePath,
       callees: new Set((calleeMap.get(d.symbolId) ?? []).map((c) => c.symbol)),
-      paramCount: getCallableSignature(db, d.relativePath, d.startLine, d.endLine)?.paramCount ?? -1,
+      paramCount: index.callableSignature(d)?.paramCount ?? -1,
     }))
     .filter((fp) => fp.callees.size >= minCallees);
 }
@@ -313,9 +297,10 @@ function buildSourceFingerprintTokens(
 }
 
 function getAllSourceFingerprints(db: ScipDatabase): SourceFingerprint[] {
-  return getAllDefinitions(db)
+  const index = new ProjectIndex(db);
+  return index.scopedDefinitions()
     .filter((definition) => definition.isFunctionLike)
-    .filter((definition) => classifyFile(definition.relativePath) !== 'test')
+    .filter((definition) => index.fileKind(definition.relativePath) !== 'test')
     .filter((definition) => !isInRustTestModule(definition.symbol))
     .map((definition) => ({
       symbol: definition.symbol,

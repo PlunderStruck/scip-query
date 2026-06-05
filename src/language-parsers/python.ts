@@ -4,11 +4,11 @@
  * cases where the AST is unavailable or where multi-line `from … import (…)`
  * statements need backstop coverage.
  */
-import { getAst, type SyntaxNode, type Tree } from '../ast.js';
-import type { ScipDatabase } from '../db.js';
-import { resolvePythonImportPath } from '../import-path-resolver.js';
-import { buildUsageBody, collectNamespaceMembers, hasIdentifierUsage } from '../source-stripper.js';
-import type { ParsedSourceImport } from '../types.js';
+import { getAst, type SyntaxNode, type Tree } from '../source/ast.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { resolvePythonImportPath } from '../resolution/import-path-resolver.js';
+import { buildUsageBody, collectNamespaceMembers, hasIdentifierUsage } from '../source/source-stripper.js';
+import type { ParsedSourceImport } from '../domain/types.js';
 import { collectIdentifiersOutside, firstChildOfType, splitTopLevel } from './utils.js';
 
 export function parsePythonImports(

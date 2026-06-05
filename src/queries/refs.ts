@@ -1,10 +1,10 @@
-import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch } from '../symbol-lookup.js';
-import { getResolvedReferenceSites } from '../reference-graph.js';
-import { getSourceReferenceSites } from '../identifier-attribution.js';
-import { getSourceText } from '../source-text.js';
-import { isFunctionLikeSymbol } from '../symbol-parser.js';
-import type { RefResult } from '../types.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
+import { getResolvedReferenceSites } from '../symbols/reference-graph.js';
+import { getSourceReferenceSites } from '../symbols/identifier-attribution.js';
+import { getSourceText } from '../source/source-text.js';
+import { isFunctionLikeSymbol } from '../symbols/symbol-parser.js';
+import type { RefResult } from '../domain/types.js';
 
 export function refs(db: ScipDatabase, symbolPattern: string): RefResult[] {
   const match = findFirstSymbolMatch(db, symbolPattern);

@@ -11,10 +11,10 @@
  * edit the type, and the compiler forces every consumer's switch to
  * handle it.
  */
-import type { ScipDatabase } from './db.js';
-import { buildFileDepGraph } from './reference-graph.js';
-import { createPerDbValue } from './per-db-cache.js';
-import { getSourceFiles } from './source-fileset.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { buildFileDepGraph } from '../symbols/reference-graph.js';
+import { createPerDbValue } from '../storage/per-db-cache.js';
+import { getSourceFiles } from '../source/source-fileset.js';
 
 export type FileKind =
   | 'entry'   // CLI/server bootstraps, main.rs, top-level index.ts, src/bin/*, scripts

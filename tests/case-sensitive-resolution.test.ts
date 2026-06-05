@@ -14,10 +14,10 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ScipDatabase } from '../src/db.js';
-import { findFirstSymbolMatch } from '../src/symbol-lookup.js';
+import { ScipDatabase } from '../src/storage/db.js';
+import { findFirstSymbolMatch } from '../src/symbols/symbol-lookup.js';
 import { refs } from '../src/queries/refs.js';
-import type { ScipQueryConfig } from '../src/types.js';
+import type { ScipQueryConfig } from '../src/domain/types.js';
 
 function createCaseFixtureProject(projectRoot: string): void {
   mkdirSync(join(projectRoot, 'lib', 'src'), { recursive: true });

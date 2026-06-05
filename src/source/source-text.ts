@@ -6,8 +6,8 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ScipDatabase } from './db.js';
-import { createPerDbCache } from './per-db-cache.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { createPerDbCache } from '../storage/per-db-cache.js';
 
 const SOURCE_TEXT_CACHE = createPerDbCache<string, string>('source-text');
 

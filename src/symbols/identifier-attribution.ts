@@ -15,20 +15,20 @@
  * (all candidates in same imported file) > empty — is owned here. Callers
  * receive the answer, not raw candidates.
  */
-import type { ScipDatabase } from './db.js';
+import type { ScipDatabase } from '../storage/db.js';
 import { findEnclosingDefinition, getDefinitionsForFile } from './definition-catalog.js';
 import { getFullSymbolMatch } from './symbol-lookup.js';
 import { getGlobalLeafIndex } from './reference-graph.js';
-import type { IndexedDefinition, ReferenceSite, SymbolLocation } from './types.js';
+import type { IndexedDefinition, ReferenceSite, SymbolLocation } from '../domain/types.js';
 import { findIdentifierLines, getFileIdentifiers } from './identifier-index.js';
-import { getSourceImports } from './language-parsers/index.js';
-import { getSourceText } from './source-text.js';
-import { getSourceFiles } from './source-fileset.js';
+import { getSourceImports } from '../language-parsers/index.js';
+import { getSourceText } from '../source/source-text.js';
+import { getSourceFiles } from '../source/source-fileset.js';
 import { leafName } from './symbol-parser.js';
 
 // ── Public types ─────────────────────────────────────────────────
 
-export interface SymbolRef {
+interface SymbolRef {
   symbolId: number;
   symbol: string;
   /** Defining file of the symbol. */

@@ -1,8 +1,8 @@
-import type { ScipDatabase } from '../db.js';
-import { getAllDefinitions } from '../definition-catalog.js';
-import { getSourceText } from '../source-text.js';
-import type { SimilarSignatureGroup } from '../types.js';
-import { shortenSymbol } from '../symbol-parser.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { getAllDefinitions } from '../symbols/definition-catalog.js';
+import { getSourceText } from '../source/source-text.js';
+import type { SimilarSignatureGroup } from '../domain/types.js';
+import { shortenSymbol } from '../symbols/symbol-parser.js';
 
 /**
  * Find functions with near-identical type signatures (same parameter types

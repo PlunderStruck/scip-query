@@ -1,7 +1,7 @@
-import type { ScipDatabase } from '../db.js';
-import { buildFileDepGraph } from '../reference-graph.js';
-import { classifyFile, isBarrel as isBarrelFile } from '../file-classifier.js';
-import type { CycleResult } from '../types.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { buildFileDepGraph } from '../symbols/reference-graph.js';
+import { classifyFile, isBarrel as isBarrelFile } from '../analysis/file-classifier.js';
+import type { CycleResult } from '../domain/types.js';
 
 /**
  * Detect circular dependency chains between files.

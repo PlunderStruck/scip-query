@@ -1,6 +1,6 @@
-import type { ScipDatabase } from '../db.js';
-import { buildFileDepGraph } from '../reference-graph.js';
-import type { SimilarChainResult } from '../types.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { buildFileDepGraph } from '../symbols/reference-graph.js';
+import type { SimilarChainResult } from '../domain/types.js';
 
 /**
  * Find end-to-end dependency flows that are structurally similar

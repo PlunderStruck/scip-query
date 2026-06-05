@@ -1,6 +1,6 @@
-import type { ScipDatabase } from '../db.js';
-import type { DepResult } from '../types.js';
-import { resolveIndexedFile } from '../path-resolver.js';
+import type { ScipDatabase } from '../storage/db.js';
+import type { DepResult } from '../domain/types.js';
+import { resolveIndexedFile } from '../resolution/path-resolver.js';
 
 /** What internal files does this file depend on? (forward dependencies) */
 export function deps(db: ScipDatabase, filePattern: string): DepResult[] {

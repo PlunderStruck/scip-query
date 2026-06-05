@@ -2,11 +2,11 @@
  * PHP parser. Owns `.php`. Recognizes `use` statements (including grouped
  * `use Ns\{Foo, Bar};` and `use Ns\Foo as Alias;`).
  */
-import { getAst, type SyntaxNode, type Tree } from '../ast.js';
-import type { ScipDatabase } from '../db.js';
-import { PHP_EXTENSIONS, resolveQualifiedImportPath } from '../import-path-resolver.js';
-import { buildUsageBody } from '../source-stripper.js';
-import type { ParsedSourceImport } from '../types.js';
+import { getAst, type SyntaxNode, type Tree } from '../source/ast.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { PHP_EXTENSIONS, resolveQualifiedImportPath } from '../resolution/import-path-resolver.js';
+import { buildUsageBody } from '../source/source-stripper.js';
+import type { ParsedSourceImport } from '../domain/types.js';
 import { buildSimpleImport, collectIdentifiersOutside, splitTopLevel } from './utils.js';
 
 export function parsePhpImports(

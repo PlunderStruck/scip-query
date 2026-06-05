@@ -7,11 +7,11 @@
  * pub-use is the export construct other languages handle via their
  * AST `export` nodes.
  */
-import { getAst, type SyntaxNode, type Tree } from '../ast.js';
-import type { ScipDatabase } from '../db.js';
-import { resolveRustImportPath } from '../import-path-resolver.js';
-import { buildUsageBody } from '../source-stripper.js';
-import type { ParsedSourceExport, ParsedSourceImport } from '../types.js';
+import { getAst, type SyntaxNode, type Tree } from '../source/ast.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { resolveRustImportPath } from '../resolution/import-path-resolver.js';
+import { buildUsageBody } from '../source/source-stripper.js';
+import type { ParsedSourceExport, ParsedSourceImport } from '../domain/types.js';
 import { buildSimpleImport, collectIdentifiersOutside, splitTopLevel } from './utils.js';
 
 interface RustImportLeaf {

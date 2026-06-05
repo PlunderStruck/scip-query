@@ -21,8 +21,8 @@
  */
 import { readdirSync } from 'node:fs';
 import { extname, join } from 'node:path';
-import type { ScipDatabase } from './db.js';
-import { createPerDbCache } from './per-db-cache.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { createPerDbCache } from '../storage/per-db-cache.js';
 
 /**
  * The complete set of source-file extensions scip-query knows how to
@@ -126,7 +126,7 @@ function listOnDiskSources(absRoot: string, extensions: ReadonlySet<string>): Se
   const out = new Set<string>();
   const visit = (relDir: string): void => {
     const absDir = relDir ? join(absRoot, relDir) : absRoot;
-    let entries: { name: string; isDirectory(): boolean }[] = [];
+    let entries: { name: string; isDirectory(): boolean }[];
     try {
       entries = readdirSync(absDir, { withFileTypes: true });
     } catch {

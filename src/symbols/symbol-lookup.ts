@@ -19,17 +19,17 @@
  * Layer position: foundational, paired with path-resolver. Definition
  * catalog and reference graph build on top.
  */
-import type { ScipDatabase } from './db.js';
+import type { ScipDatabase } from '../storage/db.js';
 import { isFunctionLikeSymbol, isModuleLikeSymbol, leafName, shortenSymbol } from './symbol-parser.js';
 import { hydrateSymbolMatch } from './definition-catalog.js';
-import { type SymbolQueryRow } from './scip-rows.js';
-import type { SymbolLocation, SymbolMatch } from './types.js';
+import { type SymbolQueryRow } from '../storage/scip-rows.js';
+import type { SymbolLocation, SymbolMatch } from '../domain/types.js';
 
 // `cleanSignature`, `extractSignature`, and `SymbolQueryRow` live in
 // `scip-rows.ts` so both this module and `definition-catalog.ts` can use
 // them without forming a cycle. Re-exported here for callers that already
 // import them from this module.
-export { cleanSignature, extractSignature, type SymbolQueryRow } from './scip-rows.js';
+export { cleanSignature, extractSignature, type SymbolQueryRow } from '../storage/scip-rows.js';
 
 export function findFirstSymbolMatch(
   db: ScipDatabase,

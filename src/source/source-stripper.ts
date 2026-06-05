@@ -8,8 +8,8 @@
  * spaces so byte offsets and line numbers stay aligned with the original
  * source.
  */
-import type { ScipDatabase } from './db.js';
-import { createPerDbSourceCache } from './per-db-cache.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { createPerDbSourceCache } from '../storage/per-db-cache.js';
 
 /**
  * Replace every comment and string literal with spaces (preserving newlines)

@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { statSync } from 'node:fs';
-import type { PathFilter } from './gitignore-filter.js';
-import type { ScipQueryConfig } from './types.js';
+import type { PathFilter } from '../source/gitignore-filter.js';
+import type { ScipQueryConfig } from '../domain/types.js';
 
 /**
  * Thin wrapper around better-sqlite3 with a pre-configured connection

@@ -1,13 +1,11 @@
-import type { ScipDatabase } from '../db.js';
-import { createPerDbCache } from '../per-db-cache.js';
-import { buildCrossFileCallerMap } from '../reference-graph.js';
-import { buildSourceFallbackCallerFiles } from '../identifier-attribution.js';
-import { getDefinitionsForFile, getScopedDefinitions } from '../definition-catalog.js';
-import type { StaleAbstraction } from '../types.js';
-import { leafName, parseSymbol, shortenSymbol } from '../symbol-parser.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { createPerDbCache } from '../storage/per-db-cache.js';
+import type { IndexedDefinition, StaleAbstraction } from '../domain/types.js';
+import { leafName, parseSymbol, shortenSymbol } from '../symbols/symbol-parser.js';
 import { getReExports } from '../language-parsers/index.js';
-import { getSourceText, hasSuppressionComment } from '../source-text.js';
-import { detectAstLanguage, getAst, getTypeContainerMap, type SyntaxNode } from '../ast.js';
+import { getSourceText } from '../source/source-text.js';
+import { detectAstLanguage, getAst, getTypeContainerMap, type SyntaxNode } from '../source/ast.js';
+import { ProjectIndex } from '../core/project-index.js';
 
 /**
  * Find stale abstractions: type-level symbols (classes, interfaces, type
@@ -31,10 +29,11 @@ export function staleAbstractions(
   opts?: { scope?: string; minLoc?: number; maxLoc?: number; limit?: number; includeLowConfidence?: boolean },
 ): StaleAbstraction[] {
   const { scope, minLoc = 3, maxLoc = 80, limit = 30, includeLowConfidence = false } = opts ?? {};
+  const index = new ProjectIndex(db);
 
-  const filesWithFunctions = getFilesWithFunctions(db, scope);
+  const filesWithFunctions = getFilesWithFunctions(index, scope);
 
-  const typeCandidates = getScopedDefinitions(db, scope)
+  const typeCandidates = index.scopedDefinitions(scope)
     .filter((definition) => definition.isTypeLike && definitionLoc(definition) >= minLoc)
     // Cap candidate LOC. Types over ~80 lines are substantive abstractions
     // (engine state, request envelopes, etc.) — even if cross-file consumers
@@ -49,14 +48,14 @@ export function staleAbstractions(
     // this filter every enum variant gets a separate stale-abstraction
     // entry, which is noise.
     .filter((definition) => !isNestedTypeMember(definition.symbol))
-    .filter((definition) => !hasSuppressionComment(db, definition.relativePath, definition.startLine));
+    .filter((definition) => !index.hasSuppressionComment(definition));
 
   // Consumer map = SCIP mentions (with self-references filtered) ∪ source-text
   // fallback for unique-named types. Without the fallback, a type used only in
   // string-templated contexts or via paths the indexer missed would falsely
   // appear unconsumed.
-  const scipConsumers = buildCrossFileCallerMap(db, typeCandidates);
-  const sourceConsumers = buildSourceFallbackCallerFiles(db, typeCandidates);
+  const scipConsumers = index.crossFileCallerMap(typeCandidates);
+  const sourceConsumers = index.sourceFallbackCallerFiles(typeCandidates);
   const consumerFileMap = mergeConsumerMaps(scipConsumers, sourceConsumers);
 
   // Pre-index type candidates by (file, leaf) so the transitive-reachability
@@ -149,10 +148,10 @@ export function staleAbstractions(
 }
 
 function getFilesWithFunctions(
-  db: ScipDatabase,
+  index: ProjectIndex,
   scope?: string,
 ): Set<string> {
-  return new Set(getScopedDefinitions(db, scope)
+  return new Set(index.scopedDefinitions(scope)
     .filter((definition) => definition.isFunctionLike)
     .map((definition) => definition.relativePath));
 }
@@ -463,7 +462,7 @@ function scoreConfidence(
 }
 
 function definitionLoc(
-  definition: ReturnType<typeof getDefinitionsForFile>[number],
+  definition: IndexedDefinition,
 ): number {
   return definition.endLine - definition.startLine + 1;
 }

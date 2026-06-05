@@ -1,5 +1,5 @@
-import type { ScipDatabase } from '../db.js';
-import type { StatsResult } from '../types.js';
+import type { ScipDatabase } from '../storage/db.js';
+import type { StatsResult } from '../domain/types.js';
 
 export function stats(db: ScipDatabase): StatsResult {
   const documents = db.get<{ c: number }>('SELECT COUNT(*) as c FROM documents')!.c;

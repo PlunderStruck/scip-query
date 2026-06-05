@@ -3,7 +3,7 @@ import Database from 'better-sqlite3';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ScipDatabase } from '../src/db.js';
+import { ScipDatabase } from '../src/storage/db.js';
 import { augmentAuxiliaryDocuments } from '../src/reindex/augment.js';
 import * as queries from '../src/queries/index.js';
 
@@ -74,5 +74,22 @@ describe('auxiliary source augmentation', () => {
     } finally {
       db.close();
     }
+  });
+
+  it('handles large auxiliary file sets without building an oversized SQLite query', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-augment-many-'));
+    const dbPath = join(projectRoot, 'index.db');
+    mkdirSync(join(projectRoot, 'src/components'), { recursive: true });
+    writeFileSync(join(projectRoot, 'src/main.ts'), 'export const main = 1;\n');
+    for (let index = 0; index < 1_100; index++) {
+      writeFileSync(
+        join(projectRoot, 'src/components', `Component${index}.vue`),
+        `<template>{{ value${index} }}</template>\n`,
+      );
+    }
+    createDocumentsOnlyDb(dbPath);
+
+    const result = augmentAuxiliaryDocuments({ projectRoot, dbPath });
+    expect(result).toEqual({ scanned: 1_100, inserted: 1_100, existing: 0 });
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { program } from '../src/cli.js';
+import { program } from '../src/runtime/cli.js';
 
 function command(name: string) {
   const cmd = program.commands.find((entry) => entry.name() === name);

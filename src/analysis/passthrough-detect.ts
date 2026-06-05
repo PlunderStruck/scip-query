@@ -4,8 +4,8 @@
  * Pulled out of ast.ts because it's a single-query consumer with body-shape
  * pattern matching that's distinct from the AST runtime everyone shares.
  */
-import type { ScipDatabase } from './db.js';
-import { type AstLanguage, detectAstLanguage, getAst, type SyntaxNode, type Tree } from './ast.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { type AstLanguage, detectAstLanguage, getAst, type SyntaxNode, type Tree } from '../source/ast.js';
 
 /**
  * True when a function's body is a *direct* forward to one other call —

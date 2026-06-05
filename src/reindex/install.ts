@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { platform } from 'node:os';
 import { join } from 'node:path';
-import type { IndexerConfig } from '../types.js';
+import type { IndexerConfig } from '../domain/types.js';
 
 const requireFromHere = createRequire(import.meta.url);
 

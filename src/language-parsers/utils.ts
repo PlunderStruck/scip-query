@@ -12,11 +12,11 @@
  *   "is this imported binding referenced elsewhere in the file?" check
  *   that every per-language parser performs.
  */
-import type { ScipDatabase } from '../db.js';
-import { extensionFamilyFor, resolveQualifiedImportPath } from '../import-path-resolver.js';
-import { hasIdentifierUsage } from '../source-stripper.js';
-import type { SyntaxNode, Tree } from '../ast.js';
-import type { ParsedSourceImport } from '../types.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { extensionFamilyFor, resolveQualifiedImportPath } from '../resolution/import-path-resolver.js';
+import { hasIdentifierUsage } from '../source/source-stripper.js';
+import type { SyntaxNode, Tree } from '../source/ast.js';
+import type { ParsedSourceImport } from '../domain/types.js';
 
 /**
  * Comma-split that respects bracket depth — `splitTopLevel('a, {b, c}, d')`

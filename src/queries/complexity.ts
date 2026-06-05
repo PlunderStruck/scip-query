@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ScipDatabase } from '../db.js';
-import { findFirstSymbolMatch } from '../symbol-lookup.js';
-import { buildCalleeMap } from '../reference-graph.js';
-import type { ComplexityResult } from '../types.js';
-import { shortenSymbol } from '../symbol-parser.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
+import type { ComplexityResult } from '../domain/types.js';
+import { shortenSymbol } from '../symbols/symbol-parser.js';
+import { ProjectIndex } from '../core/project-index.js';
 
 /**
  * Per-symbol complexity analysis combining source-level branch counting
@@ -19,6 +19,7 @@ export function complexity(
 ): ComplexityResult | null {
   const match = findFirstSymbolMatch(db, symbolPattern);
   if (!match) return null;
+  const index = new ProjectIndex(db);
 
   // Get language
   const doc = db.get<{ language: string | null }>(
@@ -44,7 +45,7 @@ export function complexity(
   // arr.push, etc.) that AST resolution skips as ambiguous still count
   // toward complexity. A complexity metric should reflect total work, not
   // just the calls we can statically attribute to a unique target.
-  const calleeMap = buildCalleeMap(db, [match], { additive: true });
+  const calleeMap = index.calleeMap([match], { additive: true });
   const callees = calleeMap.get(match.symbolId) ?? [];
   const uniqueCallees = new Set(callees.map((c) => c.symbol));
 

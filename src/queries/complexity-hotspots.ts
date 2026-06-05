@@ -1,9 +1,7 @@
-import type { ScipDatabase } from '../db.js';
-import { getScopedDefinitions } from '../definition-catalog.js';
-import { buildCalleeMap, buildCrossFileCallerMap } from '../reference-graph.js';
-import type { ComplexityHotspot } from '../types.js';
-import { isCallableSymbol, isInRustTestModule, shortenSymbol } from '../symbol-parser.js';
-import { classifyFile } from '../file-classifier.js';
+import type { ScipDatabase } from '../storage/db.js';
+import type { ComplexityHotspot, IndexedDefinition } from '../domain/types.js';
+import { shortenSymbol } from '../symbols/symbol-parser.js';
+import { ProjectIndex } from '../core/project-index.js';
 
 /**
  * Find complexity hotspots: symbols with a composite score based on
@@ -57,26 +55,20 @@ function loadComplexityCandidates(
   db: ScipDatabase,
   scope: string | undefined,
 ): {
-  definitions: ReturnType<typeof getScopedDefinitions>;
-  callerMap: ReturnType<typeof buildCrossFileCallerMap>;
-  calleeMap: ReturnType<typeof buildCalleeMap>;
+  definitions: IndexedDefinition[];
+  callerMap: ReturnType<ProjectIndex['crossFileCallerMap']>;
+  calleeMap: ReturnType<ProjectIndex['calleeMap']>;
 } {
-  // Only callables (methods + free functions) are real complexity hotspots.
-  // `isFunctionLike` accepts every `term` suffix, which includes Rust struct
-  // fields like `Config:features.` — those have huge synthetic chunk-fallback
-  // LOC and high fan-in (every reader of the field), so they otherwise
-  // dominate the score even though they're plain data and have no logic.
-  const definitions = getScopedDefinitions(db, scope)
-    .filter((definition) => isCallableSymbol(definition.symbol) && !db.isIgnored(definition.relativePath))
-    // Tests aren't production complexity. A 200-LOC `make_session_and_context()`
-    // setup helper isn't a hotspot to refactor — it's the price of testing
-    // a complex system. Filter both file-level tests and inline `mod tests`.
-    .filter((definition) => classifyFile(definition.relativePath) !== 'test')
-    .filter((definition) => !isInRustTestModule(definition.symbol));
+  const index = new ProjectIndex(db);
+  const definitions = index.productionCallableDefinitions({
+    scope,
+    requireCallableSymbol: true,
+    includeSuppressed: true,
+  });
 
   return {
     definitions,
-    callerMap: buildCrossFileCallerMap(db, definitions),
-    calleeMap: buildCalleeMap(db, definitions),
+    callerMap: index.crossFileCallerMap(definitions),
+    calleeMap: index.calleeMap(definitions),
   };
 }

@@ -3,9 +3,9 @@ import Database from 'better-sqlite3';
 import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ScipDatabase } from '../src/db.js';
+import { ScipDatabase } from '../src/storage/db.js';
 import * as queries from '../src/queries/index.js';
-import type { ScipQueryConfig } from '../src/types.js';
+import type { ScipQueryConfig } from '../src/domain/types.js';
 
 /**
  * Creates a minimal SCIP SQLite database with fixture data

@@ -1,10 +1,7 @@
-import type { ScipDatabase } from '../db.js';
-import { getDefinitionsForFile, getScopedDefinitions } from '../definition-catalog.js';
-import { buildCalleeMap } from '../reference-graph.js';
-import { hasSuppressionComment } from '../source-text.js';
-import type { ExtractCandidate } from '../types.js';
-import { isFunctionLikeSymbol, isInRustTestModule, shortenSymbol } from '../symbol-parser.js';
-import { classifyFile } from '../file-classifier.js';
+import type { ScipDatabase } from '../storage/db.js';
+import type { ExtractCandidate, IndexedDefinition } from '../domain/types.js';
+import { shortenSymbol } from '../symbols/symbol-parser.js';
+import { ProjectIndex } from '../core/project-index.js';
 
 /**
  * Find functions with natural extraction seams.
@@ -25,20 +22,16 @@ export function extractCandidates(
   opts: { scope?: string; minLoc?: number; minCallees?: number; limit?: number } = {},
 ): ExtractCandidate[] {
   const { scope, minLoc = 10, minCallees = 6, limit = 20 } = opts;
-  const symbols = getScopedDefinitions(db, scope)
-    .filter((definition) => !db.isIgnored(definition.relativePath))
-    .filter((definition) => definitionLoc(definition) >= minLoc && isFunctionLikeSymbol(definition.symbol))
-    .filter((definition) => !(definition.relativePath.split('/').pop() ?? '').includes('types'))
-    // Tests legitimately have natural extraction seams (arrange/act/assert
-    // calls each cluster of helpers) that don't represent over-large
-    // production functions. Excluding them keeps the action-oriented list
-    // focused on real refactor candidates.
-    .filter((definition) => classifyFile(definition.relativePath) !== 'test')
-    .filter((definition) => !isInRustTestModule(definition.symbol))
-    .filter((definition) => !hasSuppressionComment(db, definition.relativePath, definition.startLine))
-    .sort((left, right) => definitionLoc(right) - definitionLoc(left));
+  const index = new ProjectIndex(db);
+  const symbols = index.productionCallableDefinitions({
+    scope,
+    minLoc,
+    excludeTypesFiles: true,
+    requireFunctionLikeSymbol: true,
+    sortByLocDesc: true,
+  });
 
-  const calleeMap = buildCalleeMap(db, symbols);
+  const calleeMap = index.calleeMap(symbols);
 
   const results: ExtractCandidate[] = [];
 
@@ -148,7 +141,7 @@ export function extractCandidates(
 }
 
 function definitionLoc(
-  definition: ReturnType<typeof getDefinitionsForFile>[number],
+  definition: IndexedDefinition,
 ): number {
   return definition.endLine - definition.startLine + 1;
 }

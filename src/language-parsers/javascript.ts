@@ -6,18 +6,18 @@
  * shared dispatcher in `ast.ts`). Regex fallback handles cases where
  * tree-sitter can't parse the source.
  */
-import { getAst, isVueSfcPath, type SyntaxNode, type Tree } from '../ast.js';
-import type { ScipDatabase } from '../db.js';
-import { resolveImportPath } from '../import-path-resolver.js';
-import { getSourceText } from '../source-text.js';
+import { getAst, isVueSfcPath, type SyntaxNode, type Tree } from '../source/ast.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { resolveImportPath } from '../resolution/import-path-resolver.js';
+import { getSourceText } from '../source/source-text.js';
 import {
   buildUsageBody,
   collectNamespaceMembers,
   hasIdentifierUsage,
-} from '../source-stripper.js';
-import type { ParsedReExport, ParsedSourceImport } from '../types.js';
+} from '../source/source-stripper.js';
+import type { ParsedReExport, ParsedSourceImport } from '../domain/types.js';
 import { collectIdentifiersOutside, firstChildOfType, splitTopLevel } from './utils.js';
-import { createPerDbCache } from '../per-db-cache.js';
+import { createPerDbCache } from '../storage/per-db-cache.js';
 
 export function parseJavaScriptImports(
   db: ScipDatabase,

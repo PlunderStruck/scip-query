@@ -1,7 +1,7 @@
-import type { ScipDatabase } from '../db.js';
-import type { SymbolResult } from '../types.js';
-import { loadFileSymbols } from '../definition-catalog.js';
-import { resolveIndexedPaths } from '../path-resolver.js';
+import type { ScipDatabase } from '../storage/db.js';
+import type { SymbolResult } from '../domain/types.js';
+import { loadFileSymbols } from '../symbols/definition-catalog.js';
+import { resolveIndexedPaths } from '../resolution/path-resolver.js';
 
 export function symbols(db: ScipDatabase, filePattern: string): SymbolResult[] {
   const paths = resolveIndexedPaths(db, filePattern);

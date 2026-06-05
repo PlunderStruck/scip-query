@@ -14,8 +14,8 @@
  */
 import { existsSync } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
-import type { ScipDatabase } from './db.js';
-import { createPerDbValue } from './per-db-cache.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { createPerDbValue } from '../storage/per-db-cache.js';
 
 const INDEXED_PATH_CACHE = createPerDbValue<Set<string>>('indexed-paths');
 

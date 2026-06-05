@@ -1,5 +1,5 @@
-import type { ScipDatabase } from '../db.js';
-import { isEntrySurface, isRootedSymbol } from '../file-classifier.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { isEntrySurface, isRootedSymbol } from '../analysis/file-classifier.js';
 import { dead } from './dead.js';
 import { isolated } from './isolated.js';
 import { cycles } from './cycles.js';
@@ -11,7 +11,7 @@ import { staleAbstractions } from './stale-abstractions.js';
 import { drift } from './drift.js';
 import { complexityHotspots } from './complexity-hotspots.js';
 import { stats } from './stats.js';
-import type { HealthAction, HealthReport } from '../types.js';
+import type { HealthAction, HealthReport } from '../domain/types.js';
 
 /**
  * Single composite health report that runs all de-bloat analyses
@@ -172,13 +172,10 @@ export function health(
     });
   }
 
-  if (trueDriftCount > 0 || driftResult.patternDeviations > 0) {
+  if (trueDriftCount > 0) {
     const parts: string[] = [];
     if (driftResult.unusedImports > 0) parts.push(`${driftResult.unusedImports} unused imports`);
     if (driftResult.layerViolations > 0) parts.push(`${driftResult.layerViolations} layer violations`);
-    // Unique-dep noise is included for discoverability but doesn't drive
-    // effort/impact — every modular codebase has plenty.
-    if (driftResult.patternDeviations > 0) parts.push(`${driftResult.patternDeviations} unique deps`);
     actions.push({
       category: 'Structural drift',
       description: parts.join(', '),

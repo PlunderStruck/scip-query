@@ -14,7 +14,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ScipDatabase } from '../src/db.js';
+import { ScipDatabase } from '../src/storage/db.js';
 import { byKind, kindCounts } from '../src/queries/by-kind.js';
 import { callGraph } from '../src/queries/call-graph.js';
 import { complexity } from '../src/queries/complexity.js';
@@ -24,7 +24,7 @@ import { importedBy, imports, unusedImports } from '../src/queries/imports.js';
 import { outline } from '../src/queries/outline.js';
 import { symbols } from '../src/queries/symbols.js';
 import { system } from '../src/queries/system.js';
-import type { ScipQueryConfig } from '../src/types.js';
+import type { ScipQueryConfig } from '../src/domain/types.js';
 
 function createPythonFixtureProject(projectRoot: string): void {
   mkdirSync(join(projectRoot, 'tests'), { recursive: true });

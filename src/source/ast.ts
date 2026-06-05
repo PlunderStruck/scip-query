@@ -13,9 +13,9 @@
  */
 import { extname } from 'node:path';
 import { createRequire } from 'node:module';
-import type { ScipDatabase } from './db.js';
+import type { ScipDatabase } from '../storage/db.js';
 import { getSourceText } from './source-text.js';
-import { createPerDbSourceCache } from './per-db-cache.js';
+import { createPerDbSourceCache } from '../storage/per-db-cache.js';
 
 const require = createRequire(import.meta.url);
 
@@ -308,14 +308,14 @@ export function compileQuery(lang: AstLanguage, queryString: string): QueryInsta
     QUERY_CACHE.set(key, null);
     return null;
   }
-  let compiled: QueryInstance | null = null;
   try {
-    compiled = new Ctor.Query(grammar, queryString);
+    const compiled = new Ctor.Query(grammar, queryString);
+    QUERY_CACHE.set(key, compiled);
+    return compiled;
   } catch {
-    compiled = null;
+    QUERY_CACHE.set(key, null);
+    return null;
   }
-  QUERY_CACHE.set(key, compiled);
-  return compiled;
 }
 
 // scip-query: ignore-stale — public return type of getCallableSites; the

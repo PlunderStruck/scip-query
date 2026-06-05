@@ -1,13 +1,10 @@
-import type { ScipDatabase } from '../db.js';
-import { getInactiveBarrelPaths, isEntrySurface, isRootedSymbol, TEST_FILE_PATTERNS, TEST_SUPPORT_PATH_PATTERNS } from '../file-classifier.js';
-import { attributeIdentifier, attributeIdentifierPermissive } from '../identifier-attribution.js';
-import { enclosingTypeNames, getAllDefinitions } from '../definition-catalog.js';
-import { detectAstLanguage, isVueSfcPath } from '../ast.js';
-import { getCrossLanguageDispatchNames, getDefinitionExclusions, getRustAttrReferencedNames } from '../framework-patterns.js';
-import { getIdentifierLineMap } from '../identifier-index.js';
-import { getSourceFiles } from '../source-fileset.js';
-import type { DeadOptions, DeadSymbolResult, DeadSummary } from '../types.js';
-import { isFunctionLikeSymbol, isInRustTestModule, isModuleLikeSymbol, isRustTraitImplMember, shortenSymbol } from '../symbol-parser.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { getInactiveBarrelPaths, isEntrySurface, isRootedSymbol, TEST_FILE_PATTERNS, TEST_SUPPORT_PATH_PATTERNS } from '../analysis/file-classifier.js';
+import { enclosingTypeNames, getAllDefinitions } from '../symbols/definition-catalog.js';
+import { getDefinitionExclusions } from '../analysis/framework-patterns.js';
+import type { DeadOptions, DeadSymbolResult, DeadSummary } from '../domain/types.js';
+import { isFunctionLikeSymbol, isInRustTestModule, isModuleLikeSymbol, isRustTraitImplMember, shortenSymbol } from '../symbols/symbol-parser.js';
+import { ProjectIndex } from '../core/project-index.js';
 
 /**
  * Find dead exports: symbols defined locally with no cross-file references.
@@ -180,6 +177,7 @@ function supplementReferencesFromAst(
   referencesBySymbol: Map<number, Map<string, number>>,
   inactiveBarrelPaths: ReadonlySet<string>,
 ): void {
+  const index = new ProjectIndex(db);
   const docRows = db.all<{ relative_path: string }>(
     `SELECT relative_path FROM documents
      WHERE 1 = 1 ${db.pathExclusionsFor('documents')}`,
@@ -190,7 +188,7 @@ function supplementReferencesFromAst(
   // every source file the project owns (indexed + auxiliary types like
   // Vue SFCs), so a reference from an unindexed file still credits the
   // symbol it reaches.
-  const scanPaths = new Set<string>(getSourceFiles(db));
+  const scanPaths = new Set<string>(index.sourceFiles());
   for (const p of indexedPaths) scanPaths.add(p);
 
   const recordRef = (symbolId: number, file: string, occurrences: number): void => {
@@ -203,56 +201,20 @@ function supplementReferencesFromAst(
     refsForSymbol.set(file, (refsForSymbol.get(file) ?? 0) + occurrences);
   };
 
-  for (const relativePath of scanPaths) {
-    // Skip files we can't parse at all. Vue SFCs go through `getAst`'s
-    // script-block extraction (returns a TS/JS tree), so they pass even
-    // though detectAstLanguage('.vue') returns null.
-    if (!detectAstLanguage(relativePath) && !isVueSfcPath(relativePath)) continue;
-    if (db.isIgnored(relativePath)) continue;
-    if (inactiveBarrelPaths.has(relativePath)) continue;
-    const lineMap = getIdentifierLineMap(db, relativePath);
-    for (const [name, lines] of lineMap) {
-      // Use the permissive resolver: when an identifier could resolve to
-      // several candidates (typical for method leaves like
-      // `set_windows_sandbox_mode` defined on multiple types), credit all
-      // of them so a real textual hit doesn't leave every candidate
-      // looking dead. Strict resolution would return [] here.
-      const targets = attributeIdentifierPermissive(db, relativePath, name);
-      if (targets.length === 0) continue;
-      // Each line is one occurrence. The defining file's count includes the
-      // declaration itself; subtract one occurrence on that file so we don't
-      // count the def as a reference to itself.
-      for (const target of targets) {
-        const occurrences = target.relativePath === relativePath
-          ? Math.max(0, lines.length - 1)
-          : lines.length;
-        recordRef(target.symbolId, relativePath, occurrences);
-      }
-    }
-
-    const dispatchNames = getCrossLanguageDispatchNames(db, relativePath);
-    for (const cmdName of dispatchNames) {
-      const targets = attributeIdentifier(db, relativePath, cmdName);
-      for (const target of targets) {
-        if (target.relativePath === relativePath) continue;
-        recordRef(target.symbolId, relativePath, 1);
-      }
-    }
-
-    // Rust string-attr helpers: `#[serde(default = "fn_name")]`,
-    // `#[serde(with = "module")]`, schemars equivalents, etc. The SCIP graph
-    // does not connect the literal arg to the function it names, so without
-    // this every serde helper looks dead. Same-file targets get a same-file
-    // ref (becoming "file-internal"); cross-file targets get a cross-file
-    // ref so they drop out of the dead-code list entirely.
-    const attrRefs = getRustAttrReferencedNames(db, relativePath);
-    for (const name of attrRefs) {
-      const targets = attributeIdentifier(db, relativePath, name);
-      for (const target of targets) {
-        recordRef(target.symbolId, relativePath, 1);
-      }
-    }
-  }
+  index.scanSourceReferences({
+    paths: scanPaths,
+    includeVueSfc: true,
+    includeCrossLanguageDispatchNames: true,
+    includeRustAttributeNames: true,
+    identifierResolution: 'permissive',
+    skipPath: (relativePath) => inactiveBarrelPaths.has(relativePath),
+  }, (hit) => {
+    if (hit.kind === 'cross-language-dispatch' && hit.target.relativePath === hit.sourceFile) return;
+    const occurrences = hit.kind === 'identifier' && hit.target.relativePath === hit.sourceFile
+      ? Math.max(0, hit.occurrences - 1)
+      : hit.occurrences;
+    recordRef(hit.target.symbolId, hit.sourceFile, occurrences);
+  });
 }
 
 /**

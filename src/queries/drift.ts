@@ -1,13 +1,9 @@
 import path from 'node:path';
-import type { ScipDatabase } from '../db.js';
-import { buildFileDepGraph } from '../reference-graph.js';
-import { attributeIdentifierPermissive } from '../identifier-attribution.js';
-import { classifyFile } from '../file-classifier.js';
-import { getIdentifierLineMap } from '../identifier-index.js';
-import { getRustAttrReferencedNames } from '../framework-patterns.js';
-import { detectAstLanguage } from '../ast.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { classifyFile } from '../analysis/file-classifier.js';
 import { getSourceImports } from '../language-parsers/index.js';
-import type { DriftResult, DriftSummary } from '../types.js';
+import type { DriftResult, DriftSummary } from '../domain/types.js';
+import { ProjectIndex } from '../core/project-index.js';
 
 /**
  * Detect structural drift using the reference graph, not just import patterns.
@@ -30,9 +26,10 @@ export function drift(
   opts?: { scope?: string; minDeviation?: number },
 ): DriftSummary {
   const { scope } = opts ?? {};
+  const index = new ProjectIndex(db);
 
   // Build file dep graph (which files depend on which)
-  const depGraph = buildFileDepGraph(db, scope);
+  const depGraph = index.fileDependencyGraph(scope);
 
   // Build symbol-level reference graph: for each file, which other files'
   // symbols does it actually reference?
@@ -72,9 +69,8 @@ export function drift(
 
   // ── Angle 2: Layer violations ────────────────────────────
   // Detect when a file imports from a directory that represents
-  // a different architectural layer. We infer layers from the
-  // directory structure: files in the same top-level dir are peers,
-  // files in different top-level dirs crossing inward is a violation.
+  // a different architectural layer. Prefer explicit policy for known
+  // layers; fall back to statistical inference for unknown projects.
   const layerRules = inferLayerRules(depGraph);
 
   for (const [file, deps] of depGraph) {
@@ -87,7 +83,8 @@ export function drift(
       const depLayer = getArchitecturalLayer(dep);
       if (fileLayer === depLayer) continue; // same layer, fine
 
-      const violation = layerRules.get(`${fileLayer}->${depLayer}`);
+      const violation = layerPolicyForEdge(fileLayer, depLayer)
+        ?? layerRules.get(`${fileLayer}->${depLayer}`);
       if (violation === 'violation') {
         results.push({
           file,
@@ -166,6 +163,7 @@ function buildSymbolRefGraph(
   db: ScipDatabase,
   scope?: string,
 ): Map<string, Set<string>> {
+  const index = new ProjectIndex(db);
   const scopeFilter = scope ? `AND d1.relative_path LIKE '%${scope}%'` : '';
 
   const rows = db.all<{ from_file: string; to_file: string }>(
@@ -195,46 +193,28 @@ function buildSymbolRefGraph(
     graph.get(r.from_file)!.add(r.to_file);
   }
 
-  // SCIP mentions miss many cross-file references (rust-analyzer skips a lot
-  // of inherent-method calls; tsc-batch can drop method receivers). Without
-  // augmentation, the drift "unused import" check fires whenever a real
-  // dependency goes through one of those gaps. Walk every source file's
-  // identifier list, attribute each to a SCIP symbol via the permissive
-  // resolver, and credit the target's defining file as a referenced file.
   const docs = db.all<{ relative_path: string }>(
     `SELECT relative_path FROM documents
      WHERE 1 = 1 ${db.pathExclusionsFor('documents')}`,
   );
-  for (const doc of docs) {
-    if (db.isIgnored(doc.relative_path)) continue;
-    if (!detectAstLanguage(doc.relative_path)) continue;
-    const lineMap = getIdentifierLineMap(db, doc.relative_path);
-    let bucket = graph.get(doc.relative_path);
-    for (const name of lineMap.keys()) {
-      const targets = attributeIdentifierPermissive(db, doc.relative_path, name);
-      for (const t of targets) {
-        if (t.relativePath === doc.relative_path) continue;
-        if (db.isIgnored(t.relativePath)) continue;
-        if (!bucket) { bucket = new Set(); graph.set(doc.relative_path, bucket); }
-        bucket.add(t.relativePath);
-      }
+  // SCIP mentions miss many cross-file references (rust-analyzer skips a lot
+  // of inherent-method calls; tsc-batch can drop method receivers). Without
+  // augmentation, the drift "unused import" check fires whenever a real
+  // dependency goes through one of those gaps.
+  index.scanSourceReferences({
+    paths: docs.map((doc) => doc.relative_path),
+    includeRustAttributeNames: true,
+    identifierResolution: 'permissive',
+  }, (hit) => {
+    if (hit.target.relativePath === hit.sourceFile) return;
+    if (db.isIgnored(hit.target.relativePath)) return;
+    let bucket = graph.get(hit.sourceFile);
+    if (!bucket) {
+      bucket = new Set();
+      graph.set(hit.sourceFile, bucket);
     }
-    // Same string-attr augmentation we apply to the caller map: serde/
-    // schemars/thiserror string args reference functions in OTHER files
-    // (e.g. `#[serde(default = "crate::common::default_x")]`).
-    if (detectAstLanguage(doc.relative_path) === 'rust') {
-      const attrRefs = getRustAttrReferencedNames(db, doc.relative_path);
-      for (const name of attrRefs) {
-        const targets = attributeIdentifierPermissive(db, doc.relative_path, name);
-        for (const t of targets) {
-          if (t.relativePath === doc.relative_path) continue;
-          if (db.isIgnored(t.relativePath)) continue;
-          if (!bucket) { bucket = new Set(); graph.set(doc.relative_path, bucket); }
-          bucket.add(t.relativePath);
-        }
-      }
-    }
-  }
+    bucket.add(hit.target.relativePath);
+  });
 
   return graph;
 }
@@ -248,19 +228,17 @@ function inferLayerRules(
   depGraph: Map<string, Set<string>>,
 ): Map<string, 'ok' | 'violation'> {
   const layerEdges = new Map<string, number>();
-  const layerSet = new Set<string>();
 
   for (const [file, deps] of depGraph) {
     if (shouldSkipDriftFile(file)) continue;
 
     const fromLayer = getArchitecturalLayer(file);
-    layerSet.add(fromLayer);
     for (const dep of deps) {
       if (shouldSkipDriftFile(dep)) continue;
 
       const toLayer = getArchitecturalLayer(dep);
       if (fromLayer === toLayer) continue;
-      layerSet.add(toLayer);
+      if (layerPolicyForEdge(fromLayer, toLayer)) continue;
       const key = `${fromLayer}->${toLayer}`;
       layerEdges.set(key, (layerEdges.get(key) ?? 0) + 1);
     }
@@ -275,6 +253,62 @@ function inferLayerRules(
   }
 
   return rules;
+}
+
+function layerPolicyForEdge(fromLayer: string, toLayer: string): 'ok' | 'violation' | null {
+  if (fromLayer === toLayer) return 'ok';
+
+  const fromSrc = srcLayerName(fromLayer);
+  const toSrc = srcLayerName(toLayer);
+  if (fromSrc && toSrc) {
+    return isAllowedSrcLayerDependency(fromSrc, toSrc) ? 'ok' : 'violation';
+  }
+
+  const generic = genericLayerPolicy(fromLayer, toLayer);
+  if (generic) return generic;
+
+  return null;
+}
+
+function srcLayerName(layer: string): string | null {
+  const match = /^src\/([^/]+)$/.exec(layer);
+  return match?.[1] ?? null;
+}
+
+function isAllowedSrcLayerDependency(from: string, to: string): boolean {
+  if (to === 'domain') return true;
+  if (from === 'domain') return false;
+
+  const allowed: Record<string, ReadonlySet<string>> = {
+    analysis: new Set(['domain', 'source', 'storage', 'symbols']),
+    core: new Set(['analysis', 'domain', 'resolution', 'source', 'storage', 'symbols']),
+    'language-parsers': new Set(['domain', 'resolution', 'source', 'storage']),
+    queries: new Set(['analysis', 'core', 'domain', 'language-parsers', 'resolution', 'source', 'storage', 'symbols']),
+    reindex: new Set(['domain', 'language-parsers', 'resolution', 'runtime', 'source', 'storage', 'symbols']),
+    resolution: new Set(['domain', 'source', 'storage', 'symbols']),
+    runtime: new Set(['domain', 'queries', 'reindex', 'resolution', 'source', 'storage', 'symbols']),
+    source: new Set(['domain', 'storage']),
+    storage: new Set(['domain', 'source']),
+    symbols: new Set(['analysis', 'domain', 'language-parsers', 'resolution', 'source', 'storage']),
+  };
+
+  return allowed[from]?.has(to) ?? false;
+}
+
+function genericLayerPolicy(fromLayer: string, toLayer: string): 'ok' | 'violation' | null {
+  if (toLayer === 'shared') return 'ok';
+
+  const allowed: Record<string, ReadonlySet<string>> = {
+    app: new Set(['core', 'shared', 'ui']),
+    core: new Set(['shared']),
+    infra: new Set(['core', 'shared']),
+    ui: new Set(['core', 'shared']),
+  };
+
+  if (allowed[fromLayer]) {
+    return allowed[fromLayer].has(toLayer) ? 'ok' : 'violation';
+  }
+  return null;
 }
 
 function getArchitecturalLayer(filePath: string): string {
@@ -332,16 +366,4 @@ function isStructuralRole(basename: string): boolean {
   if (basename.includes('worker.') || basename.includes('postinstall.')) return true;
   if (basename === 'health.ts' || basename === 'health.js') return true;
   return false;
-}
-
-function isTestLikePath(filePath: string): boolean {
-  const normalized = filePath.replace(/\\/g, '/');
-  const basename = path.basename(normalized);
-  return normalized.includes('/__tests__/')
-    || normalized.includes('/tests/')
-    || normalized.includes('/test/')
-    || /\.(test|spec)\.[A-Za-z0-9]+$/.test(basename)
-    || /_(test|spec)\.[A-Za-z0-9]+$/.test(basename)
-    || /^test[_-]/.test(basename)
-    || /^test\./.test(basename);
 }

@@ -2,8 +2,8 @@
  * Child process worker for background reindexing.
  * Invoked by the watcher via fork(). Reads config from env vars.
  */
-import { reindex } from './reindex/index.js';
-import type { SupportedLanguage } from './types.js';
+import { reindex } from './index.js';
+import type { SupportedLanguage } from '../domain/types.js';
 
 const projectRoot = process.env['SCIP_REINDEX_PROJECT_ROOT'];
 const outputScip = process.env['SCIP_REINDEX_OUTPUT_SCIP'];

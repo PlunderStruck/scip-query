@@ -26,7 +26,7 @@ export default defineConfig([
     target: 'node18',
   },
   {
-    entry: { cli: 'src/cli.ts' },
+    entry: { cli: 'src/runtime/cli.ts' },
     format: ['esm'],
     sourcemap: true,
     minify: true,
@@ -36,7 +36,11 @@ export default defineConfig([
     },
   },
   {
-    entry: { 'reindex-worker': 'src/reindex-worker.ts', postinstall: 'src/postinstall.ts' },
+    entry: {
+      'reindex-worker': 'src/reindex/worker.ts',
+      'augment-vue-worker': 'src/reindex/augment-vue-worker.ts',
+      postinstall: 'src/runtime/postinstall.ts',
+    },
     format: ['esm'],
     sourcemap: true,
     minify: true,

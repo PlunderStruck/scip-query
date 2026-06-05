@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import type { ScipDatabase } from '../db.js';
-import type { DiffImpactResult } from '../types.js';
-import { shortenSymbol } from '../symbol-parser.js';
+import type { ScipDatabase } from '../storage/db.js';
+import type { DiffImpactResult } from '../domain/types.js';
+import { shortenSymbol } from '../symbols/symbol-parser.js';
 
 /**
  * Given a git diff, compute the affected symbol set.

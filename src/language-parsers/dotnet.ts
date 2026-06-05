@@ -3,15 +3,15 @@
  * directives (C#) and `Imports` statements (VB), including `using Alias =
  * Target` aliasing.
  */
-import { detectAstLanguage, getAst, type SyntaxNode, type Tree } from '../ast.js';
-import type { ScipDatabase } from '../db.js';
+import { detectAstLanguage, getAst, type SyntaxNode, type Tree } from '../source/ast.js';
+import type { ScipDatabase } from '../storage/db.js';
 import {
   DOTNET_EXTENSIONS,
   isVisualBasicSourcePath,
   resolveQualifiedImportPath,
-} from '../import-path-resolver.js';
-import { buildUsageBody } from '../source-stripper.js';
-import type { ParsedSourceImport } from '../types.js';
+} from '../resolution/import-path-resolver.js';
+import { buildUsageBody } from '../source/source-stripper.js';
+import type { ParsedSourceImport } from '../domain/types.js';
 import { buildSimpleImport, collectIdentifiersOutside } from './utils.js';
 
 export function parseDotNetImports(
@@ -115,7 +115,7 @@ function parseCSharpImportsAst(
     if (namedChildren.length === 0) continue;
 
     let aliasNode: SyntaxNode | null = null;
-    let targetNode: SyntaxNode | null = null;
+    let targetNode: SyntaxNode;
 
     if (namedChildren.length >= 2 && namedChildren[0]!.type === 'identifier'
         && (namedChildren[1]!.type === 'qualified_name' || namedChildren[1]!.type === 'identifier')) {
@@ -124,7 +124,6 @@ function parseCSharpImportsAst(
     } else {
       targetNode = namedChildren[namedChildren.length - 1]!;
     }
-    if (!targetNode) continue;
 
     const qualified = targetNode.text;
     const importedName = qualified.split('.').pop() ?? qualified;

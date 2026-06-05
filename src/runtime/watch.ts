@@ -3,9 +3,9 @@ import { existsSync, renameSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fork } from 'node:child_process';
 import ignore from 'ignore';
-import type { WatcherStatus, ProjectConfig, SupportedLanguage } from './types.js';
+import type { WatcherStatus, ProjectConfig, SupportedLanguage } from '../domain/types.js';
 import { resolveWatchConfig, resolveIndexPaths } from './config.js';
-import { createGitignoreFilter } from './gitignore-filter.js';
+import { createGitignoreFilter } from '../source/gitignore-filter.js';
 
 export interface WatcherOptions {
   projectRoot: string;

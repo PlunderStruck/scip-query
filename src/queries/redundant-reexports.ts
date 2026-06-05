@@ -1,9 +1,9 @@
-import type { ScipDatabase } from '../db.js';
-import { isLiveBarrel } from '../file-classifier.js';
-import { getDefinitionsForFile } from '../definition-catalog.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { ProjectIndex } from '../core/project-index.js';
+import { isLiveBarrel } from '../analysis/file-classifier.js';
 import { getSourceExports, getSourceImports } from '../language-parsers/index.js';
-import type { RedundantReexport } from '../types.js';
-import { leafSuffix, shortenSymbol } from '../symbol-parser.js';
+import type { IndexedDefinition, RedundantReexport } from '../domain/types.js';
+import { leafSuffix, shortenSymbol } from '../symbols/symbol-parser.js';
 
 /**
  * Find barrel re-exports that no consumer actually imports through.
@@ -72,6 +72,7 @@ export function redundantReexports(
   );
 
   const results: RedundantReexport[] = [];
+  const index = new ProjectIndex(db);
 
     for (const row of reexportRows) {
       if (db.isIgnored(row.barrel_path) || db.isIgnored(row.original_path)) continue;
@@ -178,7 +179,7 @@ export function redundantReexports(
 
   const withDartFallback = dedupeReexports([
     ...results,
-    ...findSourceRedundantReexports(db, scope),
+    ...findSourceRedundantReexports(db, index, scope),
   ]);
   withDartFallback.sort((a, b) =>
     b.directConsumers - a.directConsumers
@@ -191,6 +192,7 @@ export function redundantReexports(
 
 function findSourceRedundantReexports(
   db: ScipDatabase,
+  index: ProjectIndex,
   scope?: string,
 ): RedundantReexport[] {
   const files = db.all<{ relative_path: string }>(
@@ -219,7 +221,7 @@ function findSourceRedundantReexports(
 
     for (const exported of exports) {
       const sourcePath = exported.sourcePath!;
-      const representative = representativeExportSymbol(db, sourcePath);
+      const representative = representativeExportSymbol(index, sourcePath);
       if (!representative) continue;
 
       results.push({
@@ -263,10 +265,10 @@ function countDirectImporters(
 }
 
 function representativeExportSymbol(
-  db: ScipDatabase,
+  index: ProjectIndex,
   sourcePath: string,
-): ReturnType<typeof getDefinitionsForFile>[number] | null {
-  const definitions = getDefinitionsForFile(db, sourcePath);
+): IndexedDefinition | null {
+  const definitions = index.definitionsForFile(sourcePath);
   return definitions.find((definition) => leafSuffix(definition.symbol) === 'method')
     ?? definitions[0]
     ?? null;

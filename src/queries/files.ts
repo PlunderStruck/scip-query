@@ -1,5 +1,5 @@
-import type { ScipDatabase } from '../db.js';
-import type { FileResult } from '../types.js';
+import type { ScipDatabase } from '../storage/db.js';
+import type { FileResult } from '../domain/types.js';
 
 /**
  * Convert a glob pattern to a SQL LIKE pattern.

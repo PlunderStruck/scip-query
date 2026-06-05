@@ -1,6 +1,6 @@
-import type { ScipDatabase } from '../db.js';
-import { resolveIndexedFile } from '../path-resolver.js';
-import type { CouplingResult } from '../types.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { resolveIndexedFile } from '../resolution/path-resolver.js';
+import type { CouplingResult } from '../domain/types.js';
 
 /**
  * Measure coupling between two files: how many symbols do they share
