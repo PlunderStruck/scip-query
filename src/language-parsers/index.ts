@@ -67,3 +67,9 @@ export function clearLanguageParserCaches(db: ScipDatabase): void {
   SOURCE_IMPORT_CACHE.invalidateAll(db);
   SOURCE_EXPORT_CACHE.invalidateAll(db);
 }
+
+export function clearLanguageParserCachesForFile(db: ScipDatabase, relativePath: string): void {
+  const normalized = normalizePath(relativePath);
+  SOURCE_IMPORT_CACHE.invalidate(db, normalized);
+  SOURCE_EXPORT_CACHE.invalidate(db, normalized);
+}

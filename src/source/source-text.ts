@@ -29,6 +29,10 @@ export function clearSourceTextCache(db: ScipDatabase): void {
   SOURCE_TEXT_CACHE.invalidateAll(db);
 }
 
+export function clearSourceTextCacheForFile(db: ScipDatabase, relativePath: string): void {
+  SOURCE_TEXT_CACHE.invalidate(db, relativePath.replace(/\\/g, '/'));
+}
+
 const SUPPRESS_COMMENT_RE = /scip-query[\s:-]*ignore[\s:-]*(?:dead(?:-code)?|stale|wrapper|passthrough|drift|extract)?/i;
 
 /**

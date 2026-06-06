@@ -32,7 +32,14 @@ interface ScoredCluster {
 // scoring, and aggregate summary are one command contract.
 export function extractCandidates(
   db: ScipDatabase,
-  opts: { scope?: string; minLoc?: number; minCallees?: number; limit?: number; scanLimit?: number } = {},
+  opts: {
+    scope?: string;
+    minLoc?: number;
+    minCallees?: number;
+    limit?: number;
+    scanLimit?: number;
+    semantic?: boolean;
+  } = {},
 ): ExtractCandidate[] {
   const { scope, minLoc = 10, minCallees = 6, limit = 20, scanLimit } = opts;
   const index = new ProjectIndex(db);
@@ -45,7 +52,7 @@ export function extractCandidates(
   });
   const scannedSymbols = applyScanLimit(symbols, scanLimit);
 
-  const calleeMap = index.calleeMap(scannedSymbols);
+  const calleeMap = index.calleeMap(scannedSymbols, { semantic: opts.semantic !== false });
 
   const results: ExtractCandidate[] = [];
 

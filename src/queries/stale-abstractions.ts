@@ -43,9 +43,18 @@ interface SingletonBackedClass {
 // singleton correction, and per-row scoring.
 export function staleAbstractions(
   db: ScipDatabase,
-  opts?: { scope?: string; minLoc?: number; maxLoc?: number; limit?: number; includeLowConfidence?: boolean; scanLimit?: number },
+  opts?: {
+    scope?: string;
+    minLoc?: number;
+    maxLoc?: number;
+    limit?: number;
+    includeLowConfidence?: boolean;
+    scanLimit?: number;
+    semantic?: boolean;
+  },
 ): StaleAbstraction[] {
   const { scope, minLoc = 3, maxLoc = 80, limit = 30, includeLowConfidence = false, scanLimit } = opts ?? {};
+  const includeSemantic = opts?.semantic !== false;
   const index = new ProjectIndex(db);
   const scopedDefinitions = index.scopedDefinitions(scope);
   const filesWithFunctions = getFilesWithFunctions(index, scope);
@@ -59,8 +68,10 @@ export function staleAbstractions(
   // fallback for unique-named types. Without the fallback, a type used only in
   // string-templated contexts or via paths the indexer missed would falsely
   // appear unconsumed.
-  const consumerFileMap = consumerMapForTypeCandidates(index, typeCandidates);
-  const singletonBackedClassIds = getSingletonBackedClassIds(db, index, scopedDefinitions, typeCandidates);
+  const consumerFileMap = consumerMapForTypeCandidates(index, typeCandidates, { semantic: includeSemantic });
+  const singletonBackedClassIds = getSingletonBackedClassIds(db, index, scopedDefinitions, typeCandidates, {
+    semantic: includeSemantic,
+  });
   const candidateIndex = buildTypeCandidateIndex(typeCandidates);
   const rows = staleCandidateRows(db, typeCandidates, consumerFileMap, candidateIndex)
     .filter((row) => !singletonBackedClassIds.has(row.definition.symbolId))
@@ -113,9 +124,10 @@ function staleTypeCandidates(
 function consumerMapForTypeCandidates(
   index: ProjectIndex,
   typeCandidates: readonly IndexedDefinition[],
+  opts: { semantic: boolean },
 ): Map<number, Set<string>> {
   return mergeConsumerMaps(
-    index.crossFileCallerMap(typeCandidates),
+    index.crossFileCallerMap(typeCandidates, { semantic: opts.semantic }),
     index.sourceFallbackCallerFiles(typeCandidates),
   );
 }
@@ -215,6 +227,7 @@ function getSingletonBackedClassIds(
   index: ProjectIndex,
   scopedDefinitions: readonly IndexedDefinition[],
   typeCandidates: readonly IndexedDefinition[],
+  opts: { semantic: boolean },
 ): Set<number> {
   const singletonBackedClasses = singletonBackedClassesForCandidates(
     db,
@@ -225,7 +238,7 @@ function getSingletonBackedClassIds(
   if (singletonBackedClasses.length === 0) return new Set();
 
   const singletonConsumers = mergeConsumerMaps(
-    index.crossFileCallerMap(singletonVars),
+    index.crossFileCallerMap(singletonVars, { semantic: opts.semantic }),
     index.sourceFallbackCallerFiles(singletonVars),
   );
   const liveClassIds = new Set<number>();

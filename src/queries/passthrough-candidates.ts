@@ -17,7 +17,7 @@ import { ProjectIndex } from '../core/project-index.js';
 // summary are one result contract.
 export function passthroughCandidates(
   db: ScipDatabase,
-  opts?: { scope?: string; maxLoc?: number; limit?: number; scanLimit?: number },
+  opts?: { scope?: string; maxLoc?: number; limit?: number; scanLimit?: number; semantic?: boolean },
 ): PassthroughCandidate[] {
   const { scope, maxLoc = 15, limit = 30, scanLimit } = opts ?? {};
   const index = new ProjectIndex(db);
@@ -26,7 +26,7 @@ export function passthroughCandidates(
       .sort((left, right) => definitionLoc(left) - definitionLoc(right) || left.relativePath.localeCompare(right.relativePath)),
     scanLimit,
   );
-  const calleeMap = index.calleeMap(symbols);
+  const calleeMap = index.calleeMap(symbols, { semantic: opts?.semantic !== false });
 
   const results: PassthroughCandidate[] = [];
 

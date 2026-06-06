@@ -14,10 +14,11 @@ import { ProjectIndex } from '../core/project-index.js';
 // are unrelated.
 export function isolated(
   db: ScipDatabase,
-  opts: { scope?: string; minLoc?: number } = {},
+  opts: { scope?: string; minLoc?: number; semantic?: boolean } = {},
 ): IsolatedResult[] {
   const { scope, minLoc = 3 } = opts;
   const index = new ProjectIndex(db);
+  const includeSemantic = opts.semantic !== false;
 
   const candidates = index.productionCallableDefinitions({
     scope,
@@ -27,7 +28,7 @@ export function isolated(
     includeSuppressed: true,
   });
 
-  const scipCallerMap = index.crossFileCallerMap(candidates);
+  const scipCallerMap = index.crossFileCallerMap(candidates, { semantic: includeSemantic });
   const symbolsWithCallers = new Set<number>(scipCallerMap.keys());
 
   // Same-file string-attr references count as a usage. `buildCrossFileCallerMap`
@@ -57,7 +58,7 @@ export function isolated(
     }
   }
 
-  const symbolsWithCallees = connectedCalleeIds(index, candidates, { additive: false });
+  const symbolsWithCallees = connectedCalleeIds(index, candidates, { additive: false, semantic: includeSemantic });
   const possiblyIsolated = candidates
     .filter((definition) => !symbolsWithCallers.has(definition.symbolId))
     .filter((definition) => !symbolsWithCallees.has(definition.symbolId));
@@ -69,7 +70,11 @@ export function isolated(
 
   const candidatesNeedingAdditiveCallees = possiblyIsolated
     .filter((definition) => !symbolsWithCallers.has(definition.symbolId));
-  const additiveCalleeIds = connectedCalleeIds(index, candidatesNeedingAdditiveCallees, { additive: true });
+  const additiveCalleeIds = connectedCalleeIds(
+    index,
+    candidatesNeedingAdditiveCallees,
+    { additive: true, semantic: includeSemantic },
+  );
   for (const symbolId of additiveCalleeIds) {
     symbolsWithCallees.add(symbolId);
   }
@@ -94,12 +99,12 @@ export function isolated(
 function connectedCalleeIds(
   index: ProjectIndex,
   candidates: readonly ReturnType<ProjectIndex['productionCallableDefinitions']>[number][],
-  opts: { additive: boolean },
+  opts: { additive: boolean; semantic: boolean },
 ): Set<number> {
   if (candidates.length === 0) return new Set();
 
   const symbolBySymbolId = new Map(candidates.map((d) => [d.symbolId, d.symbol]));
-  const calleeMap = index.calleeMap(candidates, { additive: opts.additive });
+  const calleeMap = index.calleeMap(candidates, { additive: opts.additive, semantic: opts.semantic });
   return new Set(
     [...calleeMap.entries()]
       .filter(([symbolId, callees]) => {

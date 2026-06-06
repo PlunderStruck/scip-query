@@ -16,11 +16,11 @@ import { ProjectIndex } from '../core/project-index.js';
  */
 export function complexityHotspots(
   db: ScipDatabase,
-  opts?: { scope?: string; minLoc?: number; limit?: number; scanLimit?: number },
+  opts?: { scope?: string; minLoc?: number; limit?: number; scanLimit?: number; semantic?: boolean },
 ): ComplexityHotspot[] {
   const { scope, minLoc = 10, limit = 30, scanLimit } = opts ?? {};
 
-  const { definitions, callerMap, calleeMap } = loadComplexityCandidates(db, scope, scanLimit);
+  const { definitions, callerMap, calleeMap } = loadComplexityCandidates(db, scope, scanLimit, opts?.semantic !== false);
 
   return definitions
     .map((definition) => {
@@ -55,6 +55,7 @@ function loadComplexityCandidates(
   db: ScipDatabase,
   scope: string | undefined,
   scanLimit: number | undefined,
+  semantic: boolean,
 ): {
   definitions: IndexedDefinition[];
   callerMap: ReturnType<ProjectIndex['crossFileCallerMap']>;
@@ -70,8 +71,8 @@ function loadComplexityCandidates(
 
   return {
     definitions,
-    callerMap: index.crossFileCallerMap(definitions),
-    calleeMap: index.calleeMap(definitions),
+    callerMap: index.crossFileCallerMap(definitions, { semantic }),
+    calleeMap: index.calleeMap(definitions, { semantic }),
   };
 }
 

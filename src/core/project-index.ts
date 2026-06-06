@@ -79,13 +79,16 @@ export class ProjectIndex {
 
   calleeMap(
     definitions: ReadonlyArray<SymbolMatch>,
-    opts: { additive?: boolean } = {},
+    opts: { additive?: boolean; semantic?: boolean } = {},
   ): ReturnType<typeof buildCalleeMap> {
     return buildCalleeMap(this.db, definitions, opts);
   }
 
-  crossFileCallerMap(definitions?: ReadonlyArray<SymbolMatch>): ReturnType<typeof buildCrossFileCallerMap> {
-    return buildCrossFileCallerMap(this.db, definitions);
+  crossFileCallerMap(
+    definitions?: ReadonlyArray<SymbolMatch>,
+    opts: { semantic?: boolean } = {},
+  ): ReturnType<typeof buildCrossFileCallerMap> {
+    return buildCrossFileCallerMap(this.db, definitions, opts);
   }
 
   sourceFallbackCallerFiles(definitions: ReadonlyArray<IndexedDefinition>): ReturnType<typeof buildSourceFallbackCallerFiles> {

@@ -181,6 +181,10 @@ export function clearAstCache(db: ScipDatabase): void {
   TREE_CACHE.invalidateAll(db);
 }
 
+export function clearAstCacheForFile(db: ScipDatabase, relativePath: string): void {
+  TREE_CACHE.invalidate(db, relativePath);
+}
+
 /**
  * Parse a file with tree-sitter and cache the result. Returns null when the
  * language has no AST parser configured (caller should fall back to regex).

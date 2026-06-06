@@ -21,6 +21,7 @@ interface ScanSourceReferencesOptions {
   includeCrossLanguageDispatchNames?: boolean;
   includeRustAttributeNames?: boolean;
   identifierResolution?: 'strict' | 'permissive';
+  candidateNames?: ReadonlySet<string>;
   skipPath?: (relativePath: string) => boolean;
 }
 
@@ -41,6 +42,7 @@ export function scanSourceReferences(
 
     const lineMap = getIdentifierLineMap(db, sourceFile);
     for (const [name, lines] of lineMap) {
+      if (opts.candidateNames && !opts.candidateNames.has(name)) continue;
       for (const target of resolveIdentifier(db, sourceFile, name)) {
         visit({
           sourceFile,
@@ -54,6 +56,7 @@ export function scanSourceReferences(
 
     if (opts.includeCrossLanguageDispatchNames) {
       for (const name of getCrossLanguageDispatchNames(db, sourceFile)) {
+        if (opts.candidateNames && !opts.candidateNames.has(name)) continue;
         for (const target of attributeIdentifier(db, sourceFile, name)) {
           visit({
             sourceFile,
@@ -68,6 +71,7 @@ export function scanSourceReferences(
 
     if (opts.includeRustAttributeNames && astLanguage === 'rust') {
       for (const name of getRustAttrReferencedNames(db, sourceFile)) {
+        if (opts.candidateNames && !opts.candidateNames.has(name)) continue;
         for (const target of resolveIdentifier(db, sourceFile, name)) {
           visit({
             sourceFile,

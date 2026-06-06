@@ -2,6 +2,24 @@ import Database from 'better-sqlite3';
 import type { PathFilter } from '../source/gitignore-filter.js';
 import type { ScipQueryConfig } from '../domain/types.js';
 
+const SQL_EXCLUDED_PATH_SEGMENTS = [
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  'out',
+  'coverage',
+  'target',
+  '.next',
+  '.nuxt',
+  '.cache',
+  '.turbo',
+  '.scipquery-cache',
+  '__pycache__',
+  '.venv',
+  'venv',
+] as const;
+
 /**
  * Thin wrapper around better-sqlite3 with a pre-configured connection
  * and helper methods for the SCIP SQLite schema.
@@ -81,10 +99,10 @@ export class ScipDatabase {
   /** Build SQL path exclusions for one or more document table aliases */
   pathExclusionsFor(...aliases: string[]): string {
     return aliases
-      .flatMap((alias) => [
-        `AND ${alias}.relative_path NOT LIKE 'node_modules/%'`,
-        `AND ${alias}.relative_path NOT LIKE '.git/%'`,
-      ])
+      .flatMap((alias) => SQL_EXCLUDED_PATH_SEGMENTS.flatMap((segment) => [
+        `AND ${alias}.relative_path NOT LIKE '${segment}/%'`,
+        `AND ${alias}.relative_path NOT LIKE '%/${segment}/%'`,
+      ]))
       .join('\n      ');
   }
 

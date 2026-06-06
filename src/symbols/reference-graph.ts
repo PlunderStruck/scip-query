@@ -196,10 +196,10 @@ export function getCalleeRowsForSymbol(
 export function getCallerRowsForSymbol(
   db: ScipDatabase,
   symbol: SymbolMatch,
-  opts: { limit?: number } = {},
+  opts: { limit?: number; semantic?: boolean } = {},
 ): CallerRow[] {
   const callers = shouldUseTargetedCallerRows(db)
-    ? targetedCallerRowsForSymbol(db, symbol)
+    ? targetedCallerRowsForSymbol(db, symbol, { semantic: opts.semantic !== false })
     : buildCallerRowsMap(db).get(symbol.symbolId) ?? [];
   return typeof opts.limit === 'number' ? callers.slice(0, opts.limit) : callers;
 }
@@ -254,7 +254,11 @@ export function buildCallerRowsMap(db: ScipDatabase): Map<number, CallerRow[]> {
 // scip-query: ignore-extract — this is the targeted single-symbol caller
 // fallback: resolved reference sites, indexed definition lookup, and file-edge
 // attribution intentionally form one query path.
-function targetedCallerRowsForSymbol(db: ScipDatabase, symbol: SymbolMatch): CallerRow[] {
+function targetedCallerRowsForSymbol(
+  db: ScipDatabase,
+  symbol: SymbolMatch,
+  opts: { semantic: boolean },
+): CallerRow[] {
   const rows: CallerRow[] = [];
   const seen = new Set<string>();
   const add = (row: CallerRow): void => {
@@ -273,7 +277,7 @@ function targetedCallerRowsForSymbol(db: ScipDatabase, symbol: SymbolMatch): Cal
     });
   }
 
-  const definition = indexedDefinitionForSymbol(db, symbol);
+  const definition = opts.semantic ? indexedDefinitionForSymbol(db, symbol) : null;
   if (definition) {
     for (const reference of semanticReferences(db, definition)) {
       if (reference.file === symbol.relativePath || db.isIgnored(reference.file)) continue;
@@ -467,7 +471,7 @@ export function buildReferenceSites(
 export function buildCalleeMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<SymbolMatch>,
-  opts: { additive?: boolean } = {},
+  opts: { additive?: boolean; semantic?: boolean } = {},
 ): Map<number, CalleeRow[]> {
   if (definitions.length === 0) return new Map();
   const additive = opts.additive ?? false;
@@ -505,7 +509,7 @@ export function buildCalleeMap(
   };
 
   if (astDefs.length > 0) addAll(buildAstCalleeMap(db, astDefs));
-  addAll(toCalleeRows(semanticCalleeMap(db, definitions)));
+  if (opts.semantic !== false) addAll(toCalleeRows(semanticCalleeMap(db, definitions)));
   // Chunk path runs for non-AST defs always; for AST defs only when additive.
   const chunkDefs = additive ? definitions : chunkOnlyDefs;
   if (chunkDefs.length > 0) addAll(buildChunkCalleeMap(db, chunkDefs));
@@ -820,6 +824,7 @@ export function buildChunkCalleeMap(
 export function buildCrossFileCallerMap(
   db: ScipDatabase,
   definitions?: ReadonlyArray<SymbolLocation>,
+  opts: { semantic?: boolean } = {},
 ): Map<number, Set<string>> {
   const map = new Map<number, Set<string>>();
   if (definitions && definitions.length === 0) {
@@ -836,7 +841,9 @@ export function buildCrossFileCallerMap(
   addAstCallsiteCallers(db, map, docs, leafIndex, targetSymbolIds);
   addChunkMentionCallers(db, map, effectiveDefinitions, targetSymbolIds);
   addRustAttrCallers(db, map, docs, leafIndex, targetSymbolIds);
-  mergeCallerSets(map, semanticCallerMap(db, indexedDefinitions(effectiveDefinitions)));
+  if (opts.semantic !== false) {
+    mergeCallerSets(map, semanticCallerMap(db, indexedDefinitions(effectiveDefinitions)));
+  }
 
   return map;
 }

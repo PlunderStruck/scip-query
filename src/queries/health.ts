@@ -336,7 +336,7 @@ function summarizeHealthDead(
   budget: HealthBudget,
 ): CountLocSummary {
   return runHealthPhase(db, budget, 'dead', () => {
-    const deadResult = dead(db, { scope, minLoc: 3, skipBarrels: true });
+    const deadResult = dead(db, { scope, minLoc: 3, skipBarrels: true, deadCodeOnly: true });
     return summarizeLoc(filterHealthDeadSymbols(db, deadResult.symbols));
   });
 }
@@ -347,7 +347,7 @@ function summarizeHealthIsolated(
   budget: HealthBudget,
 ): CountLocSummary {
   return runHealthPhase(db, budget, 'isolated', () => {
-    const isolatedResult = isolated(db, { scope, minLoc: 3 });
+    const isolatedResult = isolated(db, { scope, minLoc: 3, semantic: false });
     return summarizeLoc(filterHealthIsolatedSymbols(db, isolatedResult));
   });
 }
@@ -375,6 +375,7 @@ function countSimilarHealthCandidates(
       limit: 50,
       minCallees: 4,
       scanLimit: budget.candidateScanLimit,
+      semantic: false,
     }).length,
   );
 }
@@ -391,6 +392,7 @@ function countExtractionHealthCandidates(
       minCallees: 5,
       limit: 50,
       scanLimit: budget.candidateScanLimit,
+      semantic: false,
     }).length,
   );
 }
@@ -406,6 +408,7 @@ function summarizeHealthWrappers(
       maxLoc: 15,
       limit: 50,
       scanLimit: budget.candidateScanLimit,
+      semantic: false,
     })),
   );
 }
@@ -421,6 +424,7 @@ function summarizeHealthPassthroughs(
       maxLoc: 15,
       limit: 50,
       scanLimit: budget.candidateScanLimit,
+      semantic: false,
     })),
   );
 }
@@ -436,6 +440,7 @@ function summarizeHealthStaleAbstractions(
       minLoc: 3,
       limit: 50,
       scanLimit: budget.candidateScanLimit,
+      semantic: false,
     });
     const unused = staleResult.filter((s) => s.consumers === 0).length;
     return {
@@ -453,7 +458,7 @@ function summarizeHealthDrift(
   budget: HealthBudget,
 ): DriftSummary {
   return runHealthPhase(db, budget, 'drift', () => {
-    const driftResult = drift(db, { scope });
+    const driftResult = drift(db, { scope, semantic: false });
     return {
       count: driftResult.unusedImports + driftResult.layerViolations,
       unusedImports: driftResult.unusedImports,
@@ -473,6 +478,7 @@ function summarizeHealthComplexity(
       minLoc: 10,
       limit: 10,
       scanLimit: budget.candidateScanLimit,
+      semantic: false,
     });
     return {
       top: complexResult.slice(0, 5).map((r) => ({

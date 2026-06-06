@@ -24,7 +24,7 @@ interface MentionChunk {
 // file fan-in are the evidence model for this command.
 export function wrapperCandidates(
   db: ScipDatabase,
-  opts?: { scope?: string; maxLoc?: number; limit?: number; scanLimit?: number },
+  opts?: { scope?: string; maxLoc?: number; limit?: number; scanLimit?: number; semantic?: boolean },
 ): WrapperCandidate[] {
   const { scope, maxLoc = 15, limit = 30, scanLimit } = opts ?? {};
   const index = new ProjectIndex(db);
@@ -40,7 +40,7 @@ export function wrapperCandidates(
   // miss (macros, dynamic dispatch); without it, a function called via a
   // missed path would falsely look like a wrapper.
   const callerFileMap = mergeCallerMaps(
-    index.crossFileCallerMap(symbols),
+    index.crossFileCallerMap(symbols, { semantic: opts?.semantic !== false }),
     index.sourceFallbackCallerFiles(symbols),
   );
 

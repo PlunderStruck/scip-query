@@ -660,6 +660,7 @@ export interface DeadOptions {
   includeTests?: boolean;
   skipBarrels?: boolean;
   includeMembers?: boolean;
+  deadCodeOnly?: boolean;
 }
 
 // ── Auto-Install Types ────────────────────────────────────

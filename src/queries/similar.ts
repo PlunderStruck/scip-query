@@ -108,11 +108,19 @@ function comparePair(
  */
 export function similarAll(
   db: ScipDatabase,
-  opts: { minSimilarity?: number; limit?: number; scope?: string; minCallees?: number; crossFileOnly?: boolean; scanLimit?: number } = {},
+  opts: {
+    minSimilarity?: number;
+    limit?: number;
+    scope?: string;
+    minCallees?: number;
+    crossFileOnly?: boolean;
+    scanLimit?: number;
+    semantic?: boolean;
+  } = {},
 ): SimilarSymbolResult[] {
   const { minSimilarity = 0.5, limit = 20, scope, minCallees = 4, crossFileOnly = false, scanLimit } = opts;
 
-  const all = getAllCalleeFingerprints(db, { minCallees, scope, scanLimit });
+  const all = getAllCalleeFingerprints(db, { minCallees, scope, scanLimit, semantic: opts.semantic !== false });
   const idfWeights = computeIdf(all.map((fp) => fp.callees));
 
   // Inverted index: callee → indexes of fingerprints that include it. Skipping
@@ -237,7 +245,7 @@ function findCallees(
 // fingerprint shaping are one evidence pass.
 function getAllCalleeFingerprints(
   db: ScipDatabase,
-  opts: { minCallees: number; scope?: string; excludeSymbol?: string; scanLimit?: number },
+  opts: { minCallees: number; scope?: string; excludeSymbol?: string; scanLimit?: number; semantic?: boolean },
 ): SymbolFingerprint[] {
   const { minCallees, scope, excludeSymbol, scanLimit } = opts;
   const index = new ProjectIndex(db);
@@ -251,7 +259,7 @@ function getAllCalleeFingerprints(
     }),
     scanLimit,
   );
-  const calleeMap = index.calleeMap(candidates);
+  const calleeMap = index.calleeMap(candidates, { semantic: opts.semantic !== false });
 
   return candidates
     .map((d) => ({

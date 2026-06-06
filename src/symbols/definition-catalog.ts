@@ -31,6 +31,10 @@ import type { IndexedDefinition, SymbolMatch } from '../domain/types.js';
 
 export const FILE_DEFINITION_CACHE = createPerDbCache<string, IndexedDefinition[]>('file-definitions');
 
+export function clearDefinitionCacheForFile(db: ScipDatabase, relativePath: string): void {
+  FILE_DEFINITION_CACHE.invalidate(db, relativePath);
+}
+
 export interface FileSymbolResult {
   startLine: number;
   endLine: number;

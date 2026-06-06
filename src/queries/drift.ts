@@ -28,9 +28,10 @@ import { getArchitecturalLayer, isKnownProjectLayerDependency, layerPolicyForEdg
 // intentionally assembled in one place.
 export function drift(
   db: ScipDatabase,
-  opts?: { scope?: string; minDeviation?: number },
+  opts?: { scope?: string; minDeviation?: number; semantic?: boolean },
 ): DriftSummary {
   const { scope, minDeviation = 5 } = opts ?? {};
+  const includeSemantic = opts?.semantic !== false;
   const index = new ProjectIndex(db);
 
   // Build file dep graph (which files depend on which)
@@ -41,7 +42,7 @@ export function drift(
   const symbolRefs = buildSymbolRefGraph(db, scope);
 
   return summarizeDrift([
-    ...unusedImportDrift(db, depGraph, symbolRefs),
+    ...unusedImportDrift(db, depGraph, symbolRefs, { semantic: includeSemantic }),
     ...layerViolationDrift(depGraph),
     ...patternDeviationDrift(depGraph, minDeviation),
   ]);
@@ -56,6 +57,7 @@ function unusedImportDrift(
   db: ScipDatabase,
   depGraph: Map<string, Set<string>>,
   symbolRefs: Map<string, Set<string>>,
+  opts: { semantic: boolean },
 ): DriftResult[] {
   const results: DriftResult[] = [];
   for (const [file, deps] of depGraph) {
@@ -70,7 +72,7 @@ function unusedImportDrift(
         // This file "depends on" dep but never references its symbols.
         // This can happen when the dep is imported for types only
         // (which don't appear in the mention graph). Skip type-heavy deps.
-        if (hasSemanticImportUse(db, file, dep)) continue;
+        if (opts.semantic && hasSemanticImportUse(db, file, dep)) continue;
         if (hasUsedSourceImport(db, file, dep)) continue;
         if (isTypeOnlyImport(db, file, dep)) continue;
         if (isLikelyTypeOnlyDep(dep)) continue;
