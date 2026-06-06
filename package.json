@@ -1,6 +1,6 @@
 {
   "name": "scip-query",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "description": "Language-agnostic code intelligence CLI powered by SCIP indexes",
   "type": "module",
   "main": "dist/index.js",
