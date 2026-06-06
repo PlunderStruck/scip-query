@@ -14,10 +14,10 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     language: 'typescript',
     indexerBinary: 'scip-typescript',
     checkCommand: 'npx scip-typescript --version',
-    indexArgs: ({ outputPath, pnpmWorkspaces }) => {
-      const args = ['scip-typescript', 'index', '--infer-tsconfig', '--output', outputPath, '--no-progress-bar'];
-      if (pnpmWorkspaces) args.splice(2, 0, '--pnpm-workspaces');
-      return { binary: 'npx', args };
+    indexArgs: ({ outputPath, pnpmWorkspaces, indexerBinary }) => {
+      const args = ['index', '--infer-tsconfig', '--output', outputPath, '--no-progress-bar'];
+      if (pnpmWorkspaces) args.splice(1, 0, '--pnpm-workspaces');
+      return { binary: indexerBinary, args };
     },
     markerFiles: ['tsconfig.json'],
     installMethods: [
@@ -31,9 +31,9 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     language: 'javascript',
     indexerBinary: 'scip-typescript',
     checkCommand: 'npx scip-typescript --version',
-    indexArgs: ({ outputPath }) => ({
-      binary: 'npx',
-      args: ['scip-typescript', 'index', '--infer-tsconfig', '--output', outputPath, '--no-progress-bar'],
+    indexArgs: ({ outputPath, indexerBinary }) => ({
+      binary: indexerBinary,
+      args: ['index', '--infer-tsconfig', '--output', outputPath, '--no-progress-bar'],
     }),
     markerFiles: ['package.json'],
     installMethods: [

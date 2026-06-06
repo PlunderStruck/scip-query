@@ -19,6 +19,21 @@ afterEach(() => {
 });
 
 describe('indexer configs', () => {
+  it('uses the resolved TypeScript indexer binary directly instead of npx', () => {
+    const config = getIndexerConfig('typescript');
+    const command = config.indexArgs({
+      projectRoot: '/tmp/project',
+      outputPath: '/tmp/project/index.scip',
+      indexerBinary: '/tmp/scip-typescript',
+      pnpmWorkspaces: true,
+    });
+
+    expect(command).toEqual({
+      binary: '/tmp/scip-typescript',
+      args: ['index', '--pnpm-workspaces', '--infer-tsconfig', '--output', '/tmp/project/index.scip', '--no-progress-bar'],
+    });
+  });
+
   it('uses scip-python-plus directly instead of npx scip-python', () => {
     const config = getIndexerConfig('python');
     const command = config.indexArgs({

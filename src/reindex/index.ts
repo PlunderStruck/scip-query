@@ -19,6 +19,7 @@ import { detectLanguages } from './detect.js';
 import { getIndexerConfig } from './indexers.js';
 import { mergeScipFiles } from './merge.js';
 import { fingerprintProjectFiles } from './project-files.js';
+import { sanitizeScipFile } from './sanitize.js';
 import {
   describeIndexerBinary,
   getIndexerExecutionEnv,
@@ -430,6 +431,13 @@ function convertScipToSqlite(
   }
 
   try {
+    const sanitized = sanitizeScipFile(tempOutputScip);
+    if (sanitized.removedDefinitionOccurrences > 0) {
+      onStatus(
+        `Sanitized ${sanitized.removedDefinitionOccurrences} invalid definition occurrences ` +
+        `across ${sanitized.touchedDocuments} documents before SQLite conversion.`,
+      );
+    }
     execFileSync('scip', ['expt-convert', '--output', tempOutputDb, tempOutputScip], {
       env,
       stdio: 'pipe',
