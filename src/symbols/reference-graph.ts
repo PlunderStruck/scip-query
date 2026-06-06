@@ -555,10 +555,12 @@ function astLanguageFamily(relativePath: string): string | null {
   return language;
 }
 
-const GLOBAL_LEAF_INDEX_CACHE = createPerDbValue<Map<string, Array<{ symbol: string; symbolId: number; file: string }>>>('global-leaf-index');
+type GlobalLeafCandidate = { symbol: string; symbolId: number; file: string };
+
+const GLOBAL_LEAF_INDEX_CACHE = createPerDbValue<Map<string, GlobalLeafCandidate[]>>('global-leaf-index');
 export function getGlobalLeafIndex(
   db: ScipDatabase,
-): Map<string, Array<{ symbol: string; symbolId: number; file: string }>> {
+): Map<string, GlobalLeafCandidate[]> {
   return GLOBAL_LEAF_INDEX_CACHE.get(db, () => {
     const rows = db.all<{ id: number; symbol: string; relative_path: string | null }>(
       `SELECT gs.id, gs.symbol,
@@ -578,7 +580,7 @@ export function getGlobalLeafIndex(
          ${db.symbolNoiseFor('gs')}`,
     );
 
-    const index = new Map<string, Array<{ symbol: string; symbolId: number; file: string }>>();
+    const index = new Map<string, GlobalLeafCandidate[]>();
     for (const row of rows) {
       if (!row.relative_path || db.isIgnored(row.relative_path)) continue;
       const leaf = leafName(row.symbol);
@@ -735,19 +737,30 @@ export function buildCrossFileCallerMap(
   definitions?: ReadonlyArray<SymbolLocation>,
 ): Map<number, Set<string>> {
   const map = new Map<number, Set<string>>();
-
-  // ── AST path: for every supported file with readable source, walk
-  // callsites and attribute each call to the symbol whose leaf it names.
-  // This is ADDITIVE to the chunk path below — call_expression nodes catch
-  // functions, but types are referenced in non-call positions (annotations,
-  // extends clauses, field types). The chunk-based SCIP path catches those
-  // type references; AST refines callable attribution. Both paths feed the
-  // same map (Set semantics dedupe duplicates).
   const docs = db.all<{ relative_path: string }>(
     `SELECT relative_path FROM documents
      WHERE 1 = 1 ${db.pathExclusionsFor('documents')}`,
   );
   const leafIndex = getGlobalLeafIndex(db);
+  const effectiveDefinitions = definitions ?? getAllDefinitions(db);
+
+  addAstCallsiteCallers(db, map, docs, leafIndex);
+  addChunkMentionCallers(db, map, effectiveDefinitions);
+  addRustAttrCallers(db, map, docs, leafIndex);
+  mergeCallerSets(map, semanticCallerMap(db, indexedDefinitions(effectiveDefinitions)));
+
+  return map;
+}
+
+function addAstCallsiteCallers(
+  db: ScipDatabase,
+  map: Map<number, Set<string>>,
+  docs: ReadonlyArray<{ relative_path: string }>,
+  leafIndex: Map<string, GlobalLeafCandidate[]>,
+): void {
+  // For supported files, walk callsites and attribute each call to the symbol
+  // whose leaf it names. This is additive to the chunk path: call_expression
+  // nodes catch functions while SCIP mentions catch type-position references.
   for (const doc of docs) {
     if (!detectAstLanguage(doc.relative_path)) continue;
     if (db.isIgnored(doc.relative_path)) continue;
@@ -760,15 +773,16 @@ export function buildCrossFileCallerMap(
       if (!pick) continue;
       // Cross-file caller only — self-references skipped.
       if (pick.file === doc.relative_path) continue;
-      let bucket = map.get(pick.symbolId);
-      if (!bucket) { bucket = new Set(); map.set(pick.symbolId, bucket); }
-      bucket.add(doc.relative_path);
+      addCallerFile(map, pick.symbolId, doc.relative_path);
     }
   }
+}
 
-  // ── Chunk path: SCIP mentions catch references AST callsite queries miss
-  // (type annotations, extends clauses, macro-mediated refs). Self-reference
-  // filter via the optional `definitions` arg.
+function addChunkMentionCallers(
+  db: ScipDatabase,
+  map: Map<number, Set<string>>,
+  definitions: ReadonlyArray<SymbolLocation>,
+): void {
   const rows = db.all<{
     symbol_id: number;
     relative_path: string;
@@ -785,9 +799,8 @@ export function buildCrossFileCallerMap(
        ${db.pathExclusionsFor('d')}`,
   );
 
-  const effectiveDefinitions = definitions ?? getAllDefinitions(db);
   const selfRanges = new Map<number, { docId: number; startLine: number; endLine: number }>();
-  for (const def of effectiveDefinitions) {
+  for (const def of definitions) {
     selfRanges.set(def.symbolId, {
       docId: def.documentId,
       startLine: def.startLine,
@@ -806,16 +819,18 @@ export function buildCrossFileCallerMap(
       continue;
     }
 
-    let bucket = map.get(row.symbol_id);
-    if (!bucket) { bucket = new Set(); map.set(row.symbol_id, bucket); }
-    bucket.add(row.relative_path);
+    addCallerFile(map, row.symbol_id, row.relative_path);
   }
+}
 
-  // ── String-attr path: serde / schemars / thiserror string-attr helpers
-  // (`#[serde(default = "fn")]`, `#[serde(with = "mod")]`, etc.) name a
-  // function the framework dispatches to via reflection. SCIP doesn't
-  // connect the literal arg back to the function, so the helper appears
-  // caller-less. Credit the file containing the attr as a caller.
+function addRustAttrCallers(
+  db: ScipDatabase,
+  map: Map<number, Set<string>>,
+  docs: ReadonlyArray<{ relative_path: string }>,
+  leafIndex: Map<string, GlobalLeafCandidate[]>,
+): void {
+  // String-attr helpers (`#[serde(default = "fn")]`, etc.) are framework
+  // dispatches that SCIP does not connect back to the helper definition.
   for (const doc of docs) {
     if (db.isIgnored(doc.relative_path)) continue;
     if (detectAstLanguage(doc.relative_path) !== 'rust') continue;
@@ -826,16 +841,19 @@ export function buildCrossFileCallerMap(
       if (!candidates) continue;
       for (const c of candidates) {
         if (c.file === doc.relative_path) continue; // self-ref, not a caller
-        let bucket = map.get(c.symbolId);
-        if (!bucket) { bucket = new Set(); map.set(c.symbolId, bucket); }
-        bucket.add(doc.relative_path);
+        addCallerFile(map, c.symbolId, doc.relative_path);
       }
     }
   }
+}
 
-  mergeCallerSets(map, semanticCallerMap(db, indexedDefinitions(effectiveDefinitions)));
-
-  return map;
+function addCallerFile(map: Map<number, Set<string>>, symbolId: number, file: string): void {
+  let bucket = map.get(symbolId);
+  if (!bucket) {
+    bucket = new Set();
+    map.set(symbolId, bucket);
+  }
+  bucket.add(file);
 }
 
 function indexedDefinitions(definitions: ReadonlyArray<SymbolLocation>): IndexedDefinition[] {

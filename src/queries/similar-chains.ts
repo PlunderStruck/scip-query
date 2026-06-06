@@ -42,31 +42,42 @@ export function similarChains(
 
   if (rawChains.length === 0) return [];
 
-  // Compute node frequency to identify infrastructure.
-  // Count both general frequency (appears anywhere in chain) and
-  // tail frequency (appears as one of the last 2 nodes). Shared
-  // tails like "→ db.ts → types.ts" are infrastructure even if
-  // they don't appear in >50% of chains overall.
-  const nodeFreq = new Map<string, number>();
-  const tailFreq = new Map<string, number>();
+  const filteredChains = filterInfrastructureChains(rawChains);
+
+  if (filteredChains.length < 2) return [];
+
+  return dedupeChainResults(
+    findSimilarChainPairs(filteredChains, minSimilarity, limit),
+    limit,
+  );
+}
+
+interface FilteredChain {
+  original: string[];
+  filtered: string[];
+}
+
+function filterInfrastructureChains(rawChains: string[][]): FilteredChain[] {
+  const infraNodes = infrastructureNodes(rawChains);
+  const filteredChains: FilteredChain[] = [];
   for (const chain of rawChains) {
-    const seen = new Set<string>();
-    for (const node of chain) {
-      if (!seen.has(node)) {
-        nodeFreq.set(node, (nodeFreq.get(node) ?? 0) + 1);
-        seen.add(node);
-      }
-    }
-    // Track tail nodes (last 2)
-    for (let t = Math.max(0, chain.length - 2); t < chain.length; t++) {
-      tailFreq.set(chain[t]!, (tailFreq.get(chain[t]!) ?? 0) + 1);
+    const filtered = chain.filter((n) => !infraNodes.has(n));
+    // Chains with 1-2 unique nodes are often just "query → infra", but the
+    // historical threshold is two; keep it stable while making the phases
+    // explicit.
+    if (filtered.length >= 2) {
+      filteredChains.push({ original: chain, filtered });
     }
   }
+  return filteredChains;
+}
 
-  // Infrastructure: nodes in >40% of chains OR tail nodes in >30% of chains
+function infrastructureNodes(rawChains: string[][]): Set<string> {
+  const { nodeFreq, tailFreq } = chainFrequencyMaps(rawChains);
   const infraThreshold = rawChains.length * 0.9;
   const tailThreshold = rawChains.length * 0.8;
   const infraNodes = new Set<string>();
+
   for (const [node, freq] of nodeFreq) {
     if (freq > infraThreshold) infraNodes.add(node);
   }
@@ -82,87 +93,98 @@ export function similarChains(
     if (structuralNames.includes(basename)) infraNodes.add(node);
   }
 
-  // Filter chains: remove infrastructure nodes, keep the "unique pipeline"
-  const filteredChains: { original: string[]; filtered: string[] }[] = [];
+  return infraNodes;
+}
+
+function chainFrequencyMaps(rawChains: string[][]): {
+  nodeFreq: Map<string, number>;
+  tailFreq: Map<string, number>;
+} {
+  const nodeFreq = new Map<string, number>();
+  const tailFreq = new Map<string, number>();
+
   for (const chain of rawChains) {
-    const filtered = chain.filter((n) => !infraNodes.has(n));
-    // Only keep chains that have at least 3 non-infrastructure nodes.
-    // Chains with 1-2 unique nodes are just "query → infra" which is
-    // the expected pattern, not a consolidation opportunity.
-    if (filtered.length >= 2) {
-      filteredChains.push({ original: chain, filtered });
+    const seen = new Set<string>();
+    for (const node of chain) {
+      if (!seen.has(node)) {
+        nodeFreq.set(node, (nodeFreq.get(node) ?? 0) + 1);
+        seen.add(node);
+      }
+    }
+    for (let t = Math.max(0, chain.length - 2); t < chain.length; t++) {
+      tailFreq.set(chain[t]!, (tailFreq.get(chain[t]!) ?? 0) + 1);
     }
   }
 
-  if (filteredChains.length < 2) return [];
+  return { nodeFreq, tailFreq };
+}
 
-  // Pairwise comparison on filtered chains
+function findSimilarChainPairs(
+  filteredChains: FilteredChain[],
+  minSimilarity: number,
+  limit: number,
+): SimilarChainResult[] {
   const results: SimilarChainResult[] = [];
-
   for (let i = 0; i < filteredChains.length; i++) {
     for (let j = i + 1; j < filteredChains.length; j++) {
-      const a = filteredChains[i]!;
-      const b = filteredChains[j]!;
-
-      // Quick reject: filtered chains must share at least one non-infra node
-      const setA = new Set(a.filtered);
-      let hasShared = false;
-      for (const node of b.filtered) {
-        if (setA.has(node)) { hasShared = true; break; }
-      }
-      if (!hasShared) continue;
-
-      // Edit distance on the FILTERED chains (infrastructure stripped)
-      const { distance, ops } = editDistance(a.filtered, b.filtered);
-      const maxLen = Math.max(a.filtered.length, b.filtered.length);
-      if (maxLen === 0) continue;
-
-      const similarity = 1 - distance / maxLen;
-      if (similarity < minSimilarity) continue;
-      if (distance === 0) continue; // identical filtered chains = not interesting
-
-      // Divergence points from the filtered comparison
-      const divergencePoints = ops
-        .filter((op) => op.type === 'substitute')
-        .map((op) => ({
-          index: op.indexA,
-          nodeA: a.filtered[op.indexA]!,
-          nodeB: b.filtered[op.indexB]!,
-        }));
-
-      if (divergencePoints.length === 0) continue;
-
-      // Require at least 2 matching (non-divergent) filtered nodes.
-      // A chain pair with 1 match and 1 divergence is just "two things
-      // that share one dependency" — not a duplicated pipeline.
-      const matchCount = ops.filter((op) => op.type === 'match').length;
-      if (matchCount < 2) continue;
-
-      // Report using original chains for context, but similarity is from filtered
-      const commonPrefix = getCommonPrefix(a.original, b.original);
-      const commonSuffix = getCommonSuffix(a.original, b.original);
-
-      results.push({
-        chainA: a.original,
-        chainB: b.original,
-        similarity,
-        editDistance: distance,
-        divergencePoints,
-        commonPrefix,
-        commonSuffix,
-      });
+      const result = compareFilteredChains(filteredChains[i]!, filteredChains[j]!, minSimilarity);
+      if (result) results.push(result);
     }
 
     if (results.length > limit * 10) break;
   }
 
-  // Sort by similarity desc, then fewest divergence points
   results.sort((a, b) => {
     if (Math.abs(b.similarity - a.similarity) > 0.01) return b.similarity - a.similarity;
     return a.divergencePoints.length - b.divergencePoints.length;
   });
+  return results;
+}
 
-  // Deduplicate sub-chains
+function compareFilteredChains(
+  a: FilteredChain,
+  b: FilteredChain,
+  minSimilarity: number,
+): SimilarChainResult | null {
+  if (!sharesNode(a.filtered, b.filtered)) return null;
+
+  const { distance, ops } = editDistance(a.filtered, b.filtered);
+  const maxLen = Math.max(a.filtered.length, b.filtered.length);
+  if (maxLen === 0) return null;
+
+  const similarity = 1 - distance / maxLen;
+  if (similarity < minSimilarity) return null;
+  if (distance === 0) return null;
+
+  const divergencePoints = ops
+    .filter((op) => op.type === 'substitute')
+    .map((op) => ({
+      index: op.indexA,
+      nodeA: a.filtered[op.indexA]!,
+      nodeB: b.filtered[op.indexB]!,
+    }));
+  if (divergencePoints.length === 0) return null;
+
+  const matchCount = ops.filter((op) => op.type === 'match').length;
+  if (matchCount < 2) return null;
+
+  return {
+    chainA: a.original,
+    chainB: b.original,
+    similarity,
+    editDistance: distance,
+    divergencePoints,
+    commonPrefix: getCommonPrefix(a.original, b.original),
+    commonSuffix: getCommonSuffix(a.original, b.original),
+  };
+}
+
+function sharesNode(a: string[], b: string[]): boolean {
+  const setA = new Set(a);
+  return b.some((node) => setA.has(node));
+}
+
+function dedupeChainResults(results: SimilarChainResult[], limit: number): SimilarChainResult[] {
   const deduped: SimilarChainResult[] = [];
   for (const r of results) {
     const isDuplicate = deduped.some(

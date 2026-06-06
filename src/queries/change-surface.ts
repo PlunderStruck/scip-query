@@ -19,51 +19,14 @@ export function changeSurface(
   const resolvedFile = resolveIndexedFile(db, filePattern);
   if (!resolvedFile) return null;
 
-  const doc = db.get<{ id: number; relative_path: string }>(
-    `SELECT id, relative_path FROM documents
-     WHERE relative_path = ?
-       ${db.pathExclusionsFor('documents')}
-     LIMIT 1`,
-    resolvedFile,
-  );
-
+  const doc = loadChangeSurfaceDocument(db, resolvedFile);
   if (!doc || db.isIgnored(doc.relative_path)) return null;
-
-  const index = new ProjectIndex(db);
-  const definitions = index.definitionsForFile(doc.relative_path)
-    .sort((a, b) => a.startLine - b.startLine || a.endLine - b.endLine);
 
   const symbols: ChangeSurfaceEntry[] = [];
   let totalExternalConsumers = 0;
 
-  for (const def of definitions) {
-    const consumerRows = db.all<{ relative_path: string }>(
-      `SELECT DISTINCT consumer_d.relative_path
-      FROM mentions m
-      JOIN chunks c ON m.chunk_id = c.id
-      JOIN documents consumer_d ON consumer_d.id = c.document_id
-      WHERE m.symbol_id = ?
-        AND m.role != 1
-        AND c.document_id != ?`,
-      def.symbolId,
-      doc.id,
-    );
-
-    const semanticConsumers = semanticCallerMap(db, [def]).get(def.symbolId) ?? new Set<string>();
-    const externalConsumers = new Set([
-      ...consumerRows.map((row) => row.relative_path),
-      ...[...semanticConsumers].filter((file) => file !== doc.relative_path),
-    ]).size;
-
-    let riskLevel: 'low' | 'medium' | 'high';
-    if (externalConsumers > 10) {
-      riskLevel = 'high';
-    } else if (externalConsumers > 0) {
-      riskLevel = 'medium';
-    } else {
-      riskLevel = 'low';
-    }
-
+  for (const def of sortedChangeSurfaceDefinitions(db, doc.relative_path)) {
+    const externalConsumers = externalConsumerCount(db, doc, def);
     totalExternalConsumers += externalConsumers;
 
     symbols.push({
@@ -72,7 +35,7 @@ export function changeSurface(
       startLine: def.startLine,
       endLine: def.endLine,
       externalConsumers,
-      riskLevel,
+      riskLevel: riskLevelForConsumers(externalConsumers),
     });
   }
 
@@ -81,4 +44,52 @@ export function changeSurface(
     symbols,
     totalExternalConsumers,
   };
+}
+
+function loadChangeSurfaceDocument(
+  db: ScipDatabase,
+  relativePath: string,
+): { id: number; relative_path: string } | null {
+  return db.get<{ id: number; relative_path: string }>(
+    `SELECT id, relative_path FROM documents
+     WHERE relative_path = ?
+       ${db.pathExclusionsFor('documents')}
+     LIMIT 1`,
+    relativePath,
+  ) ?? null;
+}
+
+function sortedChangeSurfaceDefinitions(db: ScipDatabase, relativePath: string) {
+  return new ProjectIndex(db).definitionsForFile(relativePath)
+    .sort((a, b) => a.startLine - b.startLine || a.endLine - b.endLine);
+}
+
+function externalConsumerCount(
+  db: ScipDatabase,
+  doc: { id: number; relative_path: string },
+  def: ReturnType<ProjectIndex['definitionsForFile']>[number],
+): number {
+  const consumerRows = db.all<{ relative_path: string }>(
+    `SELECT DISTINCT consumer_d.relative_path
+    FROM mentions m
+    JOIN chunks c ON m.chunk_id = c.id
+    JOIN documents consumer_d ON consumer_d.id = c.document_id
+    WHERE m.symbol_id = ?
+      AND m.role != 1
+      AND c.document_id != ?`,
+    def.symbolId,
+    doc.id,
+  );
+
+  const semanticConsumers = semanticCallerMap(db, [def]).get(def.symbolId) ?? new Set<string>();
+  return new Set([
+    ...consumerRows.map((row) => row.relative_path),
+    ...[...semanticConsumers].filter((file) => file !== doc.relative_path),
+  ]).size;
+}
+
+function riskLevelForConsumers(externalConsumers: number): 'low' | 'medium' | 'high' {
+  if (externalConsumers > 10) return 'high';
+  if (externalConsumers > 0) return 'medium';
+  return 'low';
 }

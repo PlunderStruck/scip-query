@@ -21,47 +21,15 @@ export function complexity(
   if (!match) return null;
   const index = new ProjectIndex(db);
 
-  // Get language
-  const doc = db.get<{ language: string | null }>(
-    `SELECT language FROM documents WHERE relative_path = ?`,
-    match.relativePath,
+  const branches = countBranches(
+    readSymbolSource(db, match.relativePath, match.startLine, match.endLine),
+    languageForFile(db, match.relativePath),
   );
-  const language = doc?.language ?? 'unknown';
-
-  // Read source for branch counting
-  const filePath = join(db.config.projectRoot, match.relativePath);
-  let source = '';
-  try {
-    const lines = readFileSync(filePath, 'utf-8').split('\n');
-    source = lines.slice(match.startLine, match.endLine + 1).join('\n');
-  } catch {
-    // If we can't read the file, just skip branch counting
-  }
-
-  const branches = countBranches(source, language);
   const loc = match.endLine - match.startLine + 1;
 
-  // Callee count: use additive mode so common-named callees (Map.set,
-  // arr.push, etc.) that AST resolution skips as ambiguous still count
-  // toward complexity. A complexity metric should reflect total work, not
-  // just the calls we can statically attribute to a unique target.
   const calleeMap = index.calleeMap([match], { additive: true });
   const callees = calleeMap.get(match.symbolId) ?? [];
   const uniqueCallees = new Set(callees.map((c) => c.symbol));
-
-  // Fan-in
-  const fanInRow = db.get<{ c: number }>(
-    `SELECT COUNT(DISTINCT c.document_id) AS c
-    FROM mentions m
-    JOIN chunks c ON m.chunk_id = c.id
-    WHERE m.symbol_id = ? AND m.role != 1`,
-    match.symbolId,
-  );
-
-  // Fan-out (callees in other files)
-  const fanOut = new Set(
-    callees.filter((c) => c.file !== match.relativePath).map((c) => c.symbol),
-  ).size;
 
   return {
     symbol: match.symbol,
@@ -73,9 +41,50 @@ export function complexity(
     branches,
     cyclomaticEstimate: branches + 1,
     calleeCount: uniqueCallees.size,
-    fanIn: fanInRow?.c ?? 0,
-    fanOut,
+    fanIn: fanInForSymbol(db, match.symbolId),
+    fanOut: fanOutForCallees(callees, match.relativePath),
   };
+}
+
+function languageForFile(db: ScipDatabase, relativePath: string): string {
+  const doc = db.get<{ language: string | null }>(
+    `SELECT language FROM documents WHERE relative_path = ?`,
+    relativePath,
+  );
+  return doc?.language ?? 'unknown';
+}
+
+function readSymbolSource(
+  db: ScipDatabase,
+  relativePath: string,
+  startLine: number,
+  endLine: number,
+): string {
+  try {
+    const lines = readFileSync(join(db.config.projectRoot, relativePath), 'utf-8').split('\n');
+    return lines.slice(startLine, endLine + 1).join('\n');
+  } catch {
+    return '';
+  }
+}
+
+function fanInForSymbol(db: ScipDatabase, symbolId: number): number {
+  return db.get<{ c: number }>(
+    `SELECT COUNT(DISTINCT c.document_id) AS c
+    FROM mentions m
+    JOIN chunks c ON m.chunk_id = c.id
+    WHERE m.symbol_id = ? AND m.role != 1`,
+    symbolId,
+  )?.c ?? 0;
+}
+
+function fanOutForCallees(
+  callees: ReadonlyArray<{ symbol: string; file: string }>,
+  relativePath: string,
+): number {
+  return new Set(
+    callees.filter((callee) => callee.file !== relativePath).map((callee) => callee.symbol),
+  ).size;
 }
 
 /**

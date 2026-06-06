@@ -22,6 +22,35 @@ export function imports(db: ScipDatabase, filePattern: string): ImportResult[] {
  * Which files import this symbol?
  */
 export function importedBy(db: ScipDatabase, symbolPattern: string): ImportResult[] {
+  const indexedResults = indexedImporters(db, symbolPattern);
+  return indexedResults.length > 0
+    ? indexedResults
+    : sourceImportersForSymbol(db, symbolPattern);
+}
+
+/**
+ * Find imports in a file that are never referenced (role=0) in the same file.
+ * These are likely unused imports.
+ */
+export function unusedImports(db: ScipDatabase, filePattern: string): UnusedImportResult[] {
+  return loadFileImportEntries(db, filePattern)
+    ?.filter((entry) => !entry.used)
+    .map((entry) => ({
+      symbol: entry.symbol,
+      shortName: entry.shortName,
+      importedIn: entry.importer,
+    })) ?? [];
+}
+
+interface ImportEntry {
+  symbol: string;
+  shortName: string;
+  fromFile: string;
+  importer: string;
+  used: boolean;
+}
+
+function indexedImporters(db: ScipDatabase, symbolPattern: string): ImportResult[] {
   const rows = db.all<{
     symbol: string;
     importer: string;
@@ -37,18 +66,16 @@ export function importedBy(db: ScipDatabase, symbolPattern: string): ImportResul
     `%${symbolPattern}%`,
   );
 
-  const indexedResults = rows
+  return rows
     .filter((r) => !db.isIgnored(r.importer))
     .map((r) => ({
       symbol: r.symbol,
       shortName: shortenSymbol(r.symbol),
       fromFile: r.importer,
     }));
+}
 
-  if (indexedResults.length > 0) {
-    return indexedResults;
-  }
-
+function sourceImportersForSymbol(db: ScipDatabase, symbolPattern: string): ImportResult[] {
   const target = findFirstSymbolMatch(db, symbolPattern);
   const targetFile = target?.relativePath ?? null;
   const targetLeaf = target ? leafName(target.symbol) : symbolPattern.replace(/\(\)$/, '');
@@ -106,32 +133,16 @@ export function importedBy(db: ScipDatabase, symbolPattern: string): ImportResul
   }));
 }
 
-/**
- * Find imports in a file that are never referenced (role=0) in the same file.
- * These are likely unused imports.
- */
-export function unusedImports(db: ScipDatabase, filePattern: string): UnusedImportResult[] {
-  return loadFileImportEntries(db, filePattern)
-    ?.filter((entry) => !entry.used)
-    .map((entry) => ({
-      symbol: entry.symbol,
-      shortName: entry.shortName,
-      importedIn: entry.importer,
-    })) ?? [];
-}
-
-interface ImportEntry {
-  symbol: string;
-  shortName: string;
-  fromFile: string;
-  importer: string;
-  used: boolean;
-}
-
 function loadFileImportEntries(db: ScipDatabase, filePattern: string): ImportEntry[] | null {
   const importer = resolveIndexedFile(db, filePattern);
   if (!importer) return null;
 
+  return indexedFileImportEntries(db, importer)
+    ?? semanticFileImportEntries(db, importer)
+    ?? sourceFileImportEntries(db, importer);
+}
+
+function indexedFileImportEntries(db: ScipDatabase, importer: string): ImportEntry[] | null {
   const rows = db.all<{
     symbol: string;
     from_file: string | null;
@@ -178,10 +189,14 @@ function loadFileImportEntries(db: ScipDatabase, filePattern: string): ImportEnt
       importer: r.importer,
       used: r.used !== 0 || semantic.some((entry) =>
         entry.isUsed && entry.sourcePath === r.from_file,
-      ),
+        ),
     }));
   }
 
+  return null;
+}
+
+function semanticFileImportEntries(db: ScipDatabase, importer: string): ImportEntry[] | null {
   const semantic = semanticImportUsage(db, importer);
   if (semantic.length > 0) {
     return semantic.map((entry) => {
@@ -195,7 +210,10 @@ function loadFileImportEntries(db: ScipDatabase, filePattern: string): ImportEnt
       };
     });
   }
+  return null;
+}
 
+function sourceFileImportEntries(db: ScipDatabase, importer: string): ImportEntry[] {
   return getSourceImports(db, importer).map((entry) => {
     const rendered = renderImportSymbol(entry.importedName, entry.localName, entry.kind);
     // Side-effect imports never reference a named symbol, so they're never

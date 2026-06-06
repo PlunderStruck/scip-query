@@ -10,13 +10,23 @@ export function surface(db: ScipDatabase, modulePattern: string): SurfaceResult[
   if (matchedPaths.length === 0) {
     return [];
   }
-  const index = new ProjectIndex(db);
 
+  return dedupeSurfaceRows([
+    ...loadExternalSurfaceRows(db, matchedPaths),
+    ...loadExposedCallableDefinitions(db, matchedPaths),
+  ])
+    .filter((row) => !db.isIgnored(row.relative_path))
+    .map(surfaceResultFromRow);
+}
+
+interface SurfaceRow {
+  relative_path: string;
+  symbol: string;
+}
+
+function loadExternalSurfaceRows(db: ScipDatabase, matchedPaths: string[]): SurfaceRow[] {
   const placeholders = matchedPaths.map(() => '?').join(', ');
-  const rows = db.all<{
-    relative_path: string;
-    symbol: string;
-  }>(
+  return db.all<SurfaceRow>(
     `SELECT DISTINCT d1.relative_path, gs.symbol
     FROM mentions m
     JOIN chunks c ON m.chunk_id = c.id
@@ -49,8 +59,11 @@ export function surface(db: ScipDatabase, modulePattern: string): SurfaceResult[
     ...matchedPaths,
     ...matchedPaths,
   );
+}
 
-  const exposedDefinitions = matchedPaths.flatMap((relativePath) =>
+function loadExposedCallableDefinitions(db: ScipDatabase, matchedPaths: string[]): SurfaceRow[] {
+  const index = new ProjectIndex(db);
+  return matchedPaths.flatMap((relativePath) =>
     index.definitionsForFile(relativePath)
       .filter((definition) => isCallableSymbol(definition.symbol))
       .map((definition) => ({
@@ -58,19 +71,22 @@ export function surface(db: ScipDatabase, modulePattern: string): SurfaceResult[
         symbol: definition.symbol,
       })),
   );
+}
 
+function dedupeSurfaceRows(rows: SurfaceRow[]): SurfaceRow[] {
   const seen = new Set<string>();
-  return [...rows, ...exposedDefinitions]
-    .filter((r) => !db.isIgnored(r.relative_path))
-    .filter((r) => {
-      const key = `${r.relative_path}|${r.symbol}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .map((r) => ({
-      consumer: r.relative_path,
-      symbol: r.symbol,
-      shortName: shortenSymbol(r.symbol),
-    }));
+  return rows.filter((row) => {
+    const key = `${row.relative_path}|${row.symbol}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function surfaceResultFromRow(row: SurfaceRow): SurfaceResult {
+  return {
+    consumer: row.relative_path,
+    symbol: row.symbol,
+    shortName: shortenSymbol(row.symbol),
+  };
 }

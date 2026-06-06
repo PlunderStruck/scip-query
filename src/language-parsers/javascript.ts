@@ -46,106 +46,155 @@ function parseJavaScriptImportsAst(
   importerPath: string,
   tree: Tree,
 ): ParsedSourceImport[] {
+  const usedNames = astImportUsedNames(db, importerPath, tree);
+  const results: ParsedSourceImport[] = [];
+  for (const node of tree.rootNode.descendantsOfType('import_statement')) {
+    results.push(...parseAstImportNode(db, importerPath, tree, node, usedNames));
+  }
+  return results;
+}
+
+function astImportUsedNames(
+  db: ScipDatabase,
+  importerPath: string,
+  tree: Tree,
+): Set<string> {
   // Only IMPORT contexts are exclusions — value exports like
   // `export function f()` are also `export_statement` nodes, so excluding
   // them here would make every identifier used inside an exported function
   // body look "unused", and unused-imports would flag every import.
-  const usedNames = collectIdentifiersOutside(
-    tree,
-    new Set(['import_statement']),
-  );
-
+  const usedNames = collectIdentifiersOutside(tree, new Set(['import_statement']));
   // Vue SFC: the script-block AST doesn't see <template> or <style> usages,
   // so a component imported into <script setup> and only referenced as
-  // `<Header />` in the template would look unused. Augment usedNames with
-  // identifier-like tokens found in the SFC outside the script block.
+  // `<Header />` in the template would look unused.
   if (isVueSfcPath(importerPath)) {
     for (const name of collectVueNonScriptIdentifiers(db, importerPath)) {
       usedNames.add(name);
     }
   }
+  return usedNames;
+}
 
-  const results: ParsedSourceImport[] = [];
+function parseAstImportNode(
+  db: ScipDatabase,
+  importerPath: string,
+  tree: Tree,
+  node: SyntaxNode,
+  usedNames: ReadonlySet<string>,
+): ParsedSourceImport[] {
+  const specifier = jsImportSpecifier(node);
+  if (!specifier) return [];
 
-  for (const node of tree.rootNode.descendantsOfType('import_statement')) {
-    const specifier = jsImportSpecifier(node);
-    if (!specifier) continue;
-    const sourcePath = resolveImportPath(db, importerPath, specifier);
-    const clauseTypeOnly = isTypeOnlyImportStatement(node.text);
-
-    const importClause = firstChildOfType(node, 'import_clause');
-    if (!importClause) {
-      // Side-effect import: `import 'x';`
-      results.push({
-        importedName: '*',
-        localName: null,
-        sourcePath,
-        kind: 'side-effect',
-        used: true,
-        usedMembers: [],
-      });
-      continue;
-    }
-
-    for (const child of importClause.namedChildren) {
-      switch (child.type) {
-        case 'identifier': {
-          // Default import: `import Foo from 'x'`
-          const localName = child.text;
-          results.push({
-            importedName: 'default',
-            localName,
-            sourcePath,
-            kind: 'default',
-            used: usedNames.has(localName),
-            usedMembers: [],
-            isTypeOnly: clauseTypeOnly,
-          });
-          break;
-        }
-        case 'namespace_import': {
-          const idNode = firstChildOfType(child, 'identifier');
-          const localName = idNode?.text ?? '';
-          if (!localName) break;
-          // `import * as ns from 'x'` — surface members the file actually accesses
-          // via `ns.member` so downstream queries (drift, redundant-reexports)
-          // can tell which sub-symbols are live.
-          const usedMembers = collectMemberAccesses(tree, localName);
-          results.push({
-            importedName: '*',
-            localName,
-            sourcePath,
-            kind: 'namespace',
-            used: usedMembers.length > 0 || usedNames.has(localName),
-            usedMembers,
-            isTypeOnly: clauseTypeOnly,
-          });
-          break;
-        }
-        case 'named_imports': {
-          for (const spec of child.namedChildren) {
-            if (spec.type !== 'import_specifier') continue;
-            const importedNode = spec.namedChild(0);
-            const aliasNode = spec.namedChild(1);
-            if (!importedNode) continue;
-            const importedName = importedNode.text;
-            const localName = aliasNode?.text ?? importedName;
-            results.push({
-              importedName,
-              localName,
-              sourcePath,
-              kind: 'named',
-              used: usedNames.has(localName),
-              usedMembers: [],
-              isTypeOnly: clauseTypeOnly || isTypeOnlyImportSpecifier(spec.text),
-            });
-          }
-          break;
-        }
-      }
-    }
+  const sourcePath = resolveImportPath(db, importerPath, specifier);
+  const importClause = firstChildOfType(node, 'import_clause');
+  if (!importClause) {
+    return [sideEffectImport(sourcePath)];
   }
 
+  return parseAstImportClause(
+    tree,
+    importClause,
+    sourcePath,
+    usedNames,
+    isTypeOnlyImportStatement(node.text),
+  );
+}
+
+function parseAstImportClause(
+  tree: Tree,
+  importClause: SyntaxNode,
+  sourcePath: string | null,
+  usedNames: ReadonlySet<string>,
+  clauseTypeOnly: boolean,
+): ParsedSourceImport[] {
+  const results: ParsedSourceImport[] = [];
+  for (const child of importClause.namedChildren) {
+    if (child.type === 'identifier') {
+      results.push(defaultImport(child.text, sourcePath, usedNames, clauseTypeOnly));
+    } else if (child.type === 'namespace_import') {
+      const parsed = namespaceImport(tree, child, sourcePath, usedNames, clauseTypeOnly);
+      if (parsed) results.push(parsed);
+    } else if (child.type === 'named_imports') {
+      results.push(...namedImports(child, sourcePath, usedNames, clauseTypeOnly));
+    }
+  }
+  return results;
+}
+
+function sideEffectImport(sourcePath: string | null): ParsedSourceImport {
+  return {
+    importedName: '*',
+    localName: null,
+    sourcePath,
+    kind: 'side-effect',
+    used: true,
+    usedMembers: [],
+  };
+}
+
+function defaultImport(
+  localName: string,
+  sourcePath: string | null,
+  usedNames: ReadonlySet<string>,
+  isTypeOnly: boolean,
+): ParsedSourceImport {
+  return {
+    importedName: 'default',
+    localName,
+    sourcePath,
+    kind: 'default',
+    used: usedNames.has(localName),
+    usedMembers: [],
+    isTypeOnly,
+  };
+}
+
+function namespaceImport(
+  tree: Tree,
+  node: SyntaxNode,
+  sourcePath: string | null,
+  usedNames: ReadonlySet<string>,
+  isTypeOnly: boolean,
+): ParsedSourceImport | null {
+  const idNode = firstChildOfType(node, 'identifier');
+  const localName = idNode?.text ?? '';
+  if (!localName) return null;
+  const usedMembers = collectMemberAccesses(tree, localName);
+  return {
+    importedName: '*',
+    localName,
+    sourcePath,
+    kind: 'namespace',
+    used: usedMembers.length > 0 || usedNames.has(localName),
+    usedMembers,
+    isTypeOnly,
+  };
+}
+
+function namedImports(
+  node: SyntaxNode,
+  sourcePath: string | null,
+  usedNames: ReadonlySet<string>,
+  clauseTypeOnly: boolean,
+): ParsedSourceImport[] {
+  const results: ParsedSourceImport[] = [];
+  for (const spec of node.namedChildren) {
+    if (spec.type !== 'import_specifier') continue;
+    const importedNode = spec.namedChild(0);
+    const aliasNode = spec.namedChild(1);
+    if (!importedNode) continue;
+    const importedName = importedNode.text;
+    const localName = aliasNode?.text ?? importedName;
+    results.push({
+      importedName,
+      localName,
+      sourcePath,
+      kind: 'named',
+      used: usedNames.has(localName),
+      usedMembers: [],
+      isTypeOnly: clauseTypeOnly || isTypeOnlyImportSpecifier(spec.text),
+    });
+  }
   return results;
 }
 

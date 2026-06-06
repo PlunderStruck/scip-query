@@ -37,11 +37,21 @@ export function drift(
   // symbols does it actually reference?
   const symbolRefs = buildSymbolRefGraph(db, scope);
 
-  const results: DriftResult[] = [];
+  return summarizeDrift([
+    ...unusedImportDrift(db, depGraph, symbolRefs),
+    ...layerViolationDrift(depGraph),
+    ...patternDeviationDrift(depGraph, minDeviation),
+  ]);
+}
 
-  // ── Angle 1: Unused imports ──────────────────────────────
-  // File depends on module B (via dep graph) but never references
-  // any symbol defined in B (via symbol ref graph).
+// ── Helpers ────────────────────────────────────────────────
+
+function unusedImportDrift(
+  db: ScipDatabase,
+  depGraph: Map<string, Set<string>>,
+  symbolRefs: Map<string, Set<string>>,
+): DriftResult[] {
+  const results: DriftResult[] = [];
   for (const [file, deps] of depGraph) {
     if (shouldSkipDriftFile(file)) continue;
 
@@ -74,11 +84,11 @@ export function drift(
       }
     }
   }
+  return results;
+}
 
-  // ── Angle 2: Layer violations ────────────────────────────
-  // Detect when a file imports from a directory that represents
-  // a different architectural layer. Prefer explicit policy for known
-  // layers; fall back to statistical inference for unknown projects.
+function layerViolationDrift(depGraph: Map<string, Set<string>>): DriftResult[] {
+  const results: DriftResult[] = [];
   const layerRules = inferLayerRules(depGraph);
 
   for (const [file, deps] of depGraph) {
@@ -104,18 +114,15 @@ export function drift(
       }
     }
   }
+  return results;
+}
 
-  // ── Angle 3: Unique deps (pattern deviation) ─────────────
-  // If a file is the ONLY one in its directory that depends on a
-  // particular module, that dependency is unusual and worth flagging.
-  const dirToFiles = new Map<string, string[]>();
-  for (const file of depGraph.keys()) {
-    const dir = path.dirname(file);
-    if (!dirToFiles.has(dir)) dirToFiles.set(dir, []);
-    dirToFiles.get(dir)!.push(file);
-  }
-
-  for (const [dir, files] of dirToFiles) {
+function patternDeviationDrift(
+  depGraph: Map<string, Set<string>>,
+  minDeviation: number,
+): DriftResult[] {
+  const results: DriftResult[] = [];
+  for (const [dir, files] of filesByDirectory(depGraph)) {
     // Need a meaningful sample of siblings before "only one file does X" is
     // a signal — 3 siblings was too low (any small-fanout helper dir lit up).
     // Filter to "non-skipped siblings" so a 4-file dir with 3 tests doesn't
@@ -123,14 +130,7 @@ export function drift(
     const realSiblings = files.filter((f) => !shouldSkipDriftFile(f));
     if (realSiblings.length < minDeviation) continue;
 
-    // Count dep frequency across siblings
-    const depFreq = new Map<string, number>();
-    for (const file of realSiblings) {
-      for (const dep of depGraph.get(file) ?? []) {
-        if (shouldSkipDriftFile(dep)) continue;
-        depFreq.set(dep, (depFreq.get(dep) ?? 0) + 1);
-      }
-    }
+    const depFreq = dependencyFrequency(depGraph, realSiblings);
 
     for (const file of realSiblings) {
       for (const dep of depGraph.get(file) ?? []) {
@@ -154,7 +154,10 @@ export function drift(
       }
     }
   }
+  return results;
+}
 
+function summarizeDrift(results: DriftResult[]): DriftSummary {
   return {
     results,
     unusedImports: results.filter((r) => r.kind === 'unused-import').length,
@@ -163,7 +166,33 @@ export function drift(
   };
 }
 
-// ── Helpers ────────────────────────────────────────────────
+function filesByDirectory(depGraph: Map<string, Set<string>>): Map<string, string[]> {
+  const dirToFiles = new Map<string, string[]>();
+  for (const file of depGraph.keys()) {
+    const dir = path.dirname(file);
+    let files = dirToFiles.get(dir);
+    if (!files) {
+      files = [];
+      dirToFiles.set(dir, files);
+    }
+    files.push(file);
+  }
+  return dirToFiles;
+}
+
+function dependencyFrequency(
+  depGraph: Map<string, Set<string>>,
+  files: string[],
+): Map<string, number> {
+  const depFreq = new Map<string, number>();
+  for (const file of files) {
+    for (const dep of depGraph.get(file) ?? []) {
+      if (shouldSkipDriftFile(dep)) continue;
+      depFreq.set(dep, (depFreq.get(dep) ?? 0) + 1);
+    }
+  }
+  return depFreq;
+}
 
 /**
  * Build a map of file → set of files whose symbols it references.

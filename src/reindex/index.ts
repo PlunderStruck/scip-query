@@ -105,6 +105,26 @@ interface ReindexMetadata {
   skipped: { language: SupportedLanguage; reason: string }[];
 }
 
+interface ReindexOutputPaths {
+  outputScip: string;
+  outputDb: string;
+  metaPath: string;
+}
+
+interface TempReindexPaths {
+  runDir: string;
+  tempOutputScip: string;
+  tempOutputDb: string;
+  tempMetaPath: string;
+}
+
+type IndexedOutput = { language: SupportedLanguage; scipPath: string };
+
+interface FreshIndexRun {
+  indexedOutputs: IndexedOutput[];
+  skippedLanguages: { language: SupportedLanguage; reason: string }[];
+}
+
 /**
  * Reindex a project: detect languages, run the appropriate SCIP indexer(s),
  * and convert the output to SQLite.
@@ -117,12 +137,10 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
     skipAutoInstall = false,
   } = opts;
 
-  const outputScip = opts.outputScip ?? join(projectRoot, 'index.scip');
-  const outputDb = opts.outputDb ?? join(projectRoot, 'index.db');
-  const metaPath = join(dirname(outputDb), 'meta.json');
+  const paths = resolveReindexOutputPaths(opts);
   const start = Date.now();
-  mkdirSync(dirname(outputScip), { recursive: true });
-  mkdirSync(dirname(outputDb), { recursive: true });
+  mkdirSync(dirname(paths.outputScip), { recursive: true });
+  mkdirSync(dirname(paths.outputDb), { recursive: true });
 
   // Detect or use provided languages
   const languages = opts.languages ?? detectLanguages(projectRoot);
@@ -138,101 +156,36 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
   const fingerprint = computeReindexFingerprint(projectRoot, languages, {
     pnpmWorkspaces: opts.pnpmWorkspaces,
   });
-  const releaseLock = acquireReindexLock(join(dirname(outputDb), 'index.lock'));
+  const releaseLock = acquireReindexLock(join(dirname(paths.outputDb), 'index.lock'));
   let runDir: string | null = null;
 
   try {
-    if (
-      opts.skipIfUnchanged !== false
-      && existsSync(outputScip)
-      && existsSync(outputDb)
-      && isUnchangedReindex(metaPath, fingerprint)
-    ) {
-      augmentAuxiliaryDocuments({
-        projectRoot,
-        dbPath: outputDb,
-        onStatus,
-      });
-      const durationMs = Date.now() - start;
-      onStatus(`Index unchanged; reused existing SQLite index in ${(durationMs / 1000).toFixed(1)}s`);
-      return {
-        languages,
-        indexPath: outputScip,
-        dbPath: outputDb,
-        durationMs,
-        reused: true,
-        skipped: [],
-      };
-    }
+    const reused = reuseExistingIndexIfPossible({
+      opts,
+      paths,
+      languages,
+      fingerprint,
+      start,
+      onStatus,
+    });
+    if (reused) return reused;
 
     ensureScipCliAvailable(skipAutoInstall, onStatus);
 
-    runDir = mkdtempSync(join(dirname(outputDb), 'reindex-'));
-    const tempOutputScip = join(runDir, basename(outputScip));
-    const tempOutputDb = join(runDir, basename(outputDb));
-    const tempMetaPath = join(runDir, basename(metaPath));
-
-    const env = {
-      ...process.env,
-      NODE_OPTIONS: `--max-old-space-size=${maxHeapMb}`,
-    };
-
-    const { preparedRuns, skippedLanguages } = prepareIndexerRuns({
+    const tempPaths = createTempReindexPaths(paths);
+    runDir = tempPaths.runDir;
+    return await runFreshReindex({
+      opts,
       languages,
-      tempOutputScip,
       projectRoot,
-      env,
-      skipAutoInstall,
-      pnpmWorkspaces: opts.pnpmWorkspaces,
-      onStatus,
-    });
-
-    const runResults = await runPreparedIndexers(
-      preparedRuns,
-      projectRoot,
-      onStatus,
-      opts.indexerConcurrency,
-    );
-    const { indexedOutputs } = collectIndexerOutputs(runResults, skippedLanguages);
-    validateIndexingOutcome(indexedOutputs, skippedLanguages, languages, opts.allowPartial, onStatus);
-    materializeScipOutput(indexedOutputs, tempOutputScip, onStatus);
-    convertScipToSqlite(tempOutputScip, tempOutputDb, env, onStatus);
-
-    augmentAuxiliaryDocuments({
-      projectRoot,
-      dbPath: tempOutputDb,
-      onStatus,
-    });
-
-    writeReindexMeta(tempMetaPath, {
-      version: 2,
-      status: skippedLanguages.length === 0 ? 'complete' : 'partial',
-      updatedAt: new Date().toISOString(),
+      paths,
+      tempPaths,
       fingerprint,
-      requestedLanguages: languages,
-      indexedLanguages: indexedOutputs.map((o) => o.language),
-      skipped: skippedLanguages,
+      start,
+      maxHeapMb,
+      skipAutoInstall,
+      onStatus,
     });
-    promoteReindexArtifacts({
-      tempOutputScip,
-      tempOutputDb,
-      tempMetaPath,
-      outputScip,
-      outputDb,
-      metaPath,
-    });
-
-    const durationMs = Date.now() - start;
-    onStatus(`Done in ${(durationMs / 1000).toFixed(1)}s`);
-
-    return {
-      languages: indexedOutputs.map((o) => o.language),
-      indexPath: outputScip,
-      dbPath: outputDb,
-      durationMs,
-      reused: false,
-      skipped: skippedLanguages,
-    };
   } finally {
     if (runDir) {
       rmSync(runDir, { recursive: true, force: true });
@@ -256,6 +209,151 @@ export {
   tryInstallIndexer,
 } from './install.js';
 export { tryInstallScipCli } from '../runtime/scip-cli.js';
+
+function resolveReindexOutputPaths(opts: ReindexOptions): ReindexOutputPaths {
+  const outputScip = opts.outputScip ?? join(opts.projectRoot, 'index.scip');
+  const outputDb = opts.outputDb ?? join(opts.projectRoot, 'index.db');
+  return {
+    outputScip,
+    outputDb,
+    metaPath: join(dirname(outputDb), 'meta.json'),
+  };
+}
+
+function reuseExistingIndexIfPossible(opts: {
+  opts: ReindexOptions;
+  paths: ReindexOutputPaths;
+  languages: SupportedLanguage[];
+  fingerprint: ReindexFingerprint;
+  start: number;
+  onStatus: (message: string) => void;
+}): ReindexResult | null {
+  if (
+    opts.opts.skipIfUnchanged === false
+    || !existsSync(opts.paths.outputScip)
+    || !existsSync(opts.paths.outputDb)
+    || !isUnchangedReindex(opts.paths.metaPath, opts.fingerprint)
+  ) {
+    return null;
+  }
+
+  augmentAuxiliaryDocuments({
+    projectRoot: opts.opts.projectRoot,
+    dbPath: opts.paths.outputDb,
+    onStatus: opts.onStatus,
+  });
+  const durationMs = Date.now() - opts.start;
+  opts.onStatus(`Index unchanged; reused existing SQLite index in ${(durationMs / 1000).toFixed(1)}s`);
+  return {
+    languages: opts.languages,
+    indexPath: opts.paths.outputScip,
+    dbPath: opts.paths.outputDb,
+    durationMs,
+    reused: true,
+    skipped: [],
+  };
+}
+
+function createTempReindexPaths(paths: ReindexOutputPaths): TempReindexPaths {
+  const runDir = mkdtempSync(join(dirname(paths.outputDb), 'reindex-'));
+  return {
+    runDir,
+    tempOutputScip: join(runDir, basename(paths.outputScip)),
+    tempOutputDb: join(runDir, basename(paths.outputDb)),
+    tempMetaPath: join(runDir, basename(paths.metaPath)),
+  };
+}
+
+async function runFreshReindex(opts: {
+  opts: ReindexOptions;
+  languages: SupportedLanguage[];
+  projectRoot: string;
+  paths: ReindexOutputPaths;
+  tempPaths: TempReindexPaths;
+  fingerprint: ReindexFingerprint;
+  start: number;
+  maxHeapMb: number;
+  skipAutoInstall: boolean;
+  onStatus: (message: string) => void;
+}): Promise<ReindexResult> {
+  const env = {
+    ...process.env,
+    NODE_OPTIONS: `--max-old-space-size=${opts.maxHeapMb}`,
+  };
+
+  const { indexedOutputs, skippedLanguages } = await runLanguageIndexersForFreshReindex(opts, env);
+  publishFreshReindexArtifacts(opts, env, indexedOutputs, skippedLanguages);
+
+  const durationMs = Date.now() - opts.start;
+  opts.onStatus(`Done in ${(durationMs / 1000).toFixed(1)}s`);
+  return {
+    languages: indexedOutputs.map((o) => o.language),
+    indexPath: opts.paths.outputScip,
+    dbPath: opts.paths.outputDb,
+    durationMs,
+    reused: false,
+    skipped: skippedLanguages,
+  };
+}
+
+async function runLanguageIndexersForFreshReindex(
+  opts: Parameters<typeof runFreshReindex>[0],
+  env: NodeJS.ProcessEnv,
+): Promise<FreshIndexRun> {
+  const { preparedRuns, skippedLanguages } = prepareIndexerRuns({
+    languages: opts.languages,
+    tempOutputScip: opts.tempPaths.tempOutputScip,
+    projectRoot: opts.projectRoot,
+    env,
+    skipAutoInstall: opts.skipAutoInstall,
+    pnpmWorkspaces: opts.opts.pnpmWorkspaces,
+    onStatus: opts.onStatus,
+  });
+
+  const runResults = await runPreparedIndexers(
+    preparedRuns,
+    opts.projectRoot,
+    opts.onStatus,
+    opts.opts.indexerConcurrency,
+  );
+  const { indexedOutputs } = collectIndexerOutputs(runResults, skippedLanguages);
+  validateIndexingOutcome(indexedOutputs, skippedLanguages, opts.languages, opts.opts.allowPartial, opts.onStatus);
+  return { indexedOutputs, skippedLanguages };
+}
+
+function publishFreshReindexArtifacts(
+  opts: Parameters<typeof runFreshReindex>[0],
+  env: NodeJS.ProcessEnv,
+  indexedOutputs: readonly IndexedOutput[],
+  skippedLanguages: readonly { language: SupportedLanguage; reason: string }[],
+): void {
+  materializeScipOutput(indexedOutputs, opts.tempPaths.tempOutputScip, opts.onStatus);
+  convertScipToSqlite(opts.tempPaths.tempOutputScip, opts.tempPaths.tempOutputDb, env, opts.onStatus);
+
+  augmentAuxiliaryDocuments({
+    projectRoot: opts.projectRoot,
+    dbPath: opts.tempPaths.tempOutputDb,
+    onStatus: opts.onStatus,
+  });
+
+  writeReindexMeta(opts.tempPaths.tempMetaPath, {
+    version: 2,
+    status: skippedLanguages.length === 0 ? 'complete' : 'partial',
+    updatedAt: new Date().toISOString(),
+    fingerprint: opts.fingerprint,
+    requestedLanguages: opts.languages,
+    indexedLanguages: indexedOutputs.map((o) => o.language),
+    skipped: [...skippedLanguages],
+  });
+  promoteReindexArtifacts({
+    tempOutputScip: opts.tempPaths.tempOutputScip,
+    tempOutputDb: opts.tempPaths.tempOutputDb,
+    tempMetaPath: opts.tempPaths.tempMetaPath,
+    outputScip: opts.paths.outputScip,
+    outputDb: opts.paths.outputDb,
+    metaPath: opts.paths.metaPath,
+  });
+}
 
 function ensureScipCliAvailable(skipAutoInstall: boolean, onStatus: (message: string) => void): void {
   if (isBinaryAvailable('scip')) {

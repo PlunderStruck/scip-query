@@ -46,72 +46,83 @@ export function getDefinitionsForFile(
   relativePath: string,
 ): IndexedDefinition[] {
   return FILE_DEFINITION_CACHE.get(db, relativePath, () => {
-    const primary = db.all<SymbolQueryRow>(
-      `SELECT
-        gs.id,
-        gs.symbol,
-        der.document_id,
-        der.start_line,
-        der.end_line,
-        d.relative_path,
-        gs.display_name,
-        gs.kind,
-        gs.documentation,
-        gs.enclosing_symbol
-       FROM global_symbols gs
-       JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-       JOIN documents d ON der.document_id = d.id
-       WHERE d.relative_path = ?
-         ${db.symbolNoiseFor('gs')}
-       ORDER BY der.start_line, der.end_line`,
-      relativePath,
+    const rows = mergeDefinitionRows(
+      loadPrimaryDefinitionRows(db, relativePath),
+      loadFallbackDefinitionRows(db, relativePath),
     );
-
-    const fallback = db.all<SymbolQueryRow>(
-      `SELECT
-        gs.id,
-        gs.symbol,
-        c.document_id,
-        MIN(c.start_line) AS start_line,
-        MAX(c.end_line) AS end_line,
-        d.relative_path,
-        gs.display_name,
-        gs.kind,
-        gs.documentation,
-        gs.enclosing_symbol
-       FROM global_symbols gs
-       JOIN mentions m ON m.symbol_id = gs.id
-       JOIN chunks c ON m.chunk_id = c.id
-       JOIN documents d ON c.document_id = d.id
-       WHERE d.relative_path = ?
-         AND m.role = 1
-         ${db.symbolNoiseFor('gs')}
-       GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path
-       ORDER BY start_line, end_line`,
-      relativePath,
-    );
-
-    const rows = mergeDefinitionRows(primary, fallback);
     return correctDefinitionRangesFromSource(
       db,
       relativePath,
-      rows.map((row) => ({
-        symbolId: row.id,
-        symbol: row.symbol,
-        documentId: row.document_id,
-        startLine: row.start_line,
-        endLine: row.end_line,
-        relativePath: row.relative_path,
-        leaf: leafName(row.symbol),
-        parentTypeName: parentTypeName(row.symbol),
-        isFunctionLike: isFunctionLikeSymbol(row.symbol),
-        isTypeLike: leafSuffix(row.symbol) === 'type',
-        kind: row.kind ?? null,
-        documentation: row.documentation ?? null,
-        enclosingSymbol: row.enclosing_symbol ?? null,
-      })),
+      rows.map(indexedDefinitionFromRow),
     );
   });
+}
+
+function loadPrimaryDefinitionRows(db: ScipDatabase, relativePath: string): SymbolQueryRow[] {
+  return db.all<SymbolQueryRow>(
+    `SELECT
+      gs.id,
+      gs.symbol,
+      der.document_id,
+      der.start_line,
+      der.end_line,
+      d.relative_path,
+      gs.display_name,
+      gs.kind,
+      gs.documentation,
+      gs.enclosing_symbol
+     FROM global_symbols gs
+     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
+     JOIN documents d ON der.document_id = d.id
+     WHERE d.relative_path = ?
+       ${db.symbolNoiseFor('gs')}
+     ORDER BY der.start_line, der.end_line`,
+    relativePath,
+  );
+}
+
+function loadFallbackDefinitionRows(db: ScipDatabase, relativePath: string): SymbolQueryRow[] {
+  return db.all<SymbolQueryRow>(
+    `SELECT
+      gs.id,
+      gs.symbol,
+      c.document_id,
+      MIN(c.start_line) AS start_line,
+      MAX(c.end_line) AS end_line,
+      d.relative_path,
+      gs.display_name,
+      gs.kind,
+      gs.documentation,
+      gs.enclosing_symbol
+     FROM global_symbols gs
+     JOIN mentions m ON m.symbol_id = gs.id
+     JOIN chunks c ON m.chunk_id = c.id
+     JOIN documents d ON c.document_id = d.id
+     WHERE d.relative_path = ?
+       AND m.role = 1
+       ${db.symbolNoiseFor('gs')}
+     GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path
+     ORDER BY start_line, end_line`,
+    relativePath,
+  );
+}
+
+function indexedDefinitionFromRow(row: SymbolQueryRow): IndexedDefinition {
+  return {
+    symbolId: row.id,
+    symbol: row.symbol,
+    documentId: row.document_id,
+    startLine: row.start_line,
+    endLine: row.end_line,
+    relativePath: row.relative_path,
+    leaf: leafName(row.symbol),
+    parentTypeName: parentTypeName(row.symbol),
+    isFunctionLike: isFunctionLikeSymbol(row.symbol),
+    isTypeLike: leafSuffix(row.symbol) === 'type',
+    kind: row.kind ?? null,
+    documentation: row.documentation ?? null,
+    enclosingSymbol: row.enclosing_symbol ?? null,
+  };
 }
 
 function mergeDefinitionRows(
@@ -289,6 +300,13 @@ export function correctDefinitionRangesFromSource(
     return definitions;
   }
 
+  return correctDefinitionRangesWithRegexFallback(definitions, source);
+}
+
+function correctDefinitionRangesWithRegexFallback(
+  definitions: IndexedDefinition[],
+  source: string,
+): IndexedDefinition[] {
   const lines = source.split(/\r?\n/);
 
   const declarationLines = definitions.some((d) => isCallableDefinition(d.symbol))

@@ -87,6 +87,43 @@ interface TsLanguageService {
   getProgram(): { getSourceFile(fileName: string): unknown } | undefined;
 }
 
+interface VueCoreModule {
+  createParsedCommandLine(ts: TsModule, host: unknown, configFileName: string): {
+    vueOptions: Record<string, unknown>;
+  };
+  createGlobalTypesWriter?(options: unknown, writeFile: (path: string, data: string) => void): unknown;
+  getAllExtensions(options: Record<string, unknown>): string[];
+  createVueLanguagePlugin(
+    ts: TsModule,
+    compilerOptions: unknown,
+    vueOptions: unknown,
+    asFileName: (id: string) => string,
+  ): {
+    getLanguageId(id: string): string | undefined;
+  };
+  createLanguage(
+    plugins: unknown[],
+    scripts: Map<string, unknown>,
+    sync: (id: string) => void,
+  ): VolarLanguage;
+}
+
+interface VolarTsModule {
+  createLanguageServiceHost(
+    ts: TsModule,
+    sys: unknown,
+    language: VolarLanguage,
+    asScriptId: (id: string) => string,
+    projectHost: unknown,
+  ): { languageServiceHost: unknown };
+}
+
+interface VueLanguageDependencies {
+  vueCore: VueCoreModule;
+  ts: TsModule;
+  volarTs: VolarTsModule;
+}
+
 interface VolarLanguage {
   scripts: {
     get(id: string, includeFsFiles?: boolean, shouldRegister?: boolean): VolarSourceScript | undefined;
@@ -138,6 +175,16 @@ interface VueReferenceTask {
   startOffset: number;
   endOffset: number;
   countFileSkip: boolean;
+}
+
+interface VueReferenceComputationOptions {
+  projectRoot: string;
+  vueFiles: string[];
+  tasks?: VueReferenceTask[];
+  context: VueLanguageContext;
+  symbolLookup: (definition: DefinitionInfo) => number | null;
+  vueSymbolLookup: { get(fileName: string): number | null };
+  sourceCache: (fileName: string) => SourceTextInfo | null;
 }
 
 interface VueIdentifierToken {
@@ -195,65 +242,97 @@ export function augmentVueResolvedReferences(
     const vueFiles = listVueDocumentFiles(db, opts.projectRoot);
     const cachePath = join(dirname(opts.dbPath), 'augment-vue-meta.json');
     const cacheFingerprint = computeAugmentVueFingerprint(db, opts.projectRoot, opts.tsconfig);
-    const cachedResult = readAugmentVueCache(cachePath, cacheFingerprint);
-    if (cachedResult) {
-      opts.onStatus?.(
-        `Vue references unchanged; reused ${cachedResult.resolvedReferences} cached resolved references.`,
-      );
-      return cachedResult;
-    }
+    const cachedResult = reuseCachedVueAugmentation(cachePath, cacheFingerprint, opts.onStatus);
+    if (cachedResult) return cachedResult;
 
-    const sourceCache = createSourceTextCache();
-    const symbolLookup = createSymbolLookup(db, opts.projectRoot, sourceCache);
     const vueSymbolLookup = createVueSymbolLookup(db, opts.projectRoot, vueFiles);
-    const computation = shouldUseVueWorkers(vueFiles)
-      ? awaitVueReferenceWorkers({
-        projectRoot: opts.projectRoot,
-        dbPath: opts.dbPath,
-        tsconfig: opts.tsconfig,
-        vueFiles,
-      })
-      : (() => {
-        const context = createVueLanguageContext(opts.projectRoot, configPath);
-        const contextVueFiles = context.fileNames.filter((file) => file.endsWith('.vue'));
-        return computeVueResolvedReferencesForFiles({
-          projectRoot: opts.projectRoot,
-          vueFiles: contextVueFiles,
-          context,
-          symbolLookup,
-          vueSymbolLookup,
-          sourceCache,
-        });
-      })();
-
+    const computation = computeVueReferenceComputation(db, opts, configPath, vueFiles, vueSymbolLookup);
     const occurrences = dedupeOccurrences(computation.occurrences);
-    const insertedMentions = replaceVueDocumentChunks(
-      db,
-      opts.projectRoot,
-      vueFiles,
-      vueSymbolLookup,
-      occurrences,
-    );
+    const insertedMentions = writeVueResolvedOccurrences(db, opts, vueFiles, vueSymbolLookup, occurrences);
     opts.onStatus?.(
       `Resolved ${occurrences.length} Vue references with Volar; inserted ${insertedMentions} mentions.`,
     );
 
-    const result = {
-      vueFiles: vueFiles.length,
-      resolvedReferences: occurrences.length,
-      insertedMentions,
-      skippedReferences: computation.skippedReferences,
-      syntheticSymbols: vueSymbolLookup.syntheticSymbols,
-    };
-    writeAugmentVueCache(
-      cachePath,
-      computeAugmentVueFingerprint(db, opts.projectRoot, opts.tsconfig),
-      result,
-    );
+    const result = vueResolvedResult(vueFiles, occurrences, insertedMentions, computation, vueSymbolLookup);
+    writeAugmentVueCache(cachePath, computeAugmentVueFingerprint(db, opts.projectRoot, opts.tsconfig), result);
     return result;
   } finally {
     db.close();
   }
+}
+
+function reuseCachedVueAugmentation(
+  cachePath: string,
+  cacheFingerprint: AugmentVueFingerprint,
+  onStatus?: (message: string) => void,
+): AugmentVueResolvedResult | null {
+  const cachedResult = readAugmentVueCache(cachePath, cacheFingerprint);
+  if (cachedResult) {
+    onStatus?.(
+      `Vue references unchanged; reused ${cachedResult.resolvedReferences} cached resolved references.`,
+    );
+  }
+  return cachedResult;
+}
+
+function computeVueReferenceComputation(
+  db: Database.Database,
+  opts: AugmentVueResolvedOptions,
+  configPath: string,
+  vueFiles: string[],
+  vueSymbolLookup: ReturnType<typeof createVueSymbolLookup>,
+): VueReferenceComputationResult {
+  if (shouldUseVueWorkers(vueFiles)) {
+    return awaitVueReferenceWorkers({
+      projectRoot: opts.projectRoot,
+      dbPath: opts.dbPath,
+      tsconfig: opts.tsconfig,
+      vueFiles,
+    });
+  }
+
+  const sourceCache = createSourceTextCache();
+  const context = createVueLanguageContext(opts.projectRoot, configPath);
+  return computeVueResolvedReferencesForFiles({
+    projectRoot: opts.projectRoot,
+    vueFiles: context.fileNames.filter((file) => file.endsWith('.vue')),
+    context,
+    symbolLookup: createSymbolLookup(db, opts.projectRoot, sourceCache),
+    vueSymbolLookup,
+    sourceCache,
+  });
+}
+
+function writeVueResolvedOccurrences(
+  db: Database.Database,
+  opts: AugmentVueResolvedOptions,
+  vueFiles: string[],
+  vueSymbolLookup: ReturnType<typeof createVueSymbolLookup>,
+  occurrences: ResolvedOccurrence[],
+): number {
+  return replaceVueDocumentChunks(
+    db,
+    opts.projectRoot,
+    vueFiles,
+    vueSymbolLookup,
+    occurrences,
+  );
+}
+
+function vueResolvedResult(
+  vueFiles: string[],
+  occurrences: ResolvedOccurrence[],
+  insertedMentions: number,
+  computation: VueReferenceComputationResult,
+  vueSymbolLookup: ReturnType<typeof createVueSymbolLookup>,
+): AugmentVueResolvedResult {
+  return {
+    vueFiles: vueFiles.length,
+    resolvedReferences: occurrences.length,
+    insertedMentions,
+    skippedReferences: computation.skippedReferences,
+    syntheticSymbols: vueSymbolLookup.syntheticSymbols,
+  };
 }
 
 function readAugmentVueCache(
@@ -332,15 +411,9 @@ export function computeVueResolvedReferencesForWorker(opts: {
   }
 }
 
-function computeVueResolvedReferencesForFiles(opts: {
-  projectRoot: string;
-  vueFiles: string[];
-  tasks?: VueReferenceTask[];
-  context: VueLanguageContext;
-  symbolLookup: (definition: DefinitionInfo) => number | null;
-  vueSymbolLookup: { get(fileName: string): number | null };
-  sourceCache: (fileName: string) => SourceTextInfo | null;
-}): VueReferenceComputationResult {
+function computeVueResolvedReferencesForFiles(
+  opts: VueReferenceComputationOptions,
+): VueReferenceComputationResult {
   const occurrences: ResolvedOccurrence[] = [];
   let skippedReferences = 0;
   const tasks = opts.tasks ?? opts.vueFiles.map((fileName) => ({
@@ -351,76 +424,119 @@ function computeVueResolvedReferencesForFiles(opts: {
   }));
 
   for (const task of tasks) {
-    const fileName = task.fileName;
-    const sourceScript = opts.context.language.scripts.get(fileName);
-    const serviceScript = sourceScript?.generated?.languagePlugin.typescript
-      ?.getServiceScript(sourceScript.generated.root)?.code;
-    if (!sourceScript || !serviceScript) {
-      if (task.countFileSkip) skippedReferences++;
-      continue;
-    }
-
-    const map = opts.context.language.maps.get(serviceScript, sourceScript);
-    const sourceInfo = opts.sourceCache(fileName);
-    if (!sourceInfo) {
-      if (task.countFileSkip) skippedReferences++;
-      continue;
-    }
-    const sourceFile = toRelativePath(opts.projectRoot, fileName);
-    const fileTokens = [...identifierTokens(sourceInfo.text)];
-    const tokens = fileTokens
-      .filter((token) => token.start >= task.startOffset && token.start < task.endOffset);
-    const tokenByStart = new Map(fileTokens.map((token) => [token.start, token]));
-    const tokenTextCounts = countTokenTexts(fileTokens);
-    const processedStarts = new Set<number>();
-
-    for (const token of tokens) {
-      if (processedStarts.has(token.start)) continue;
-      const generated = firstGeneratedOffset(map, token.start);
-      if (generated === null) continue;
-
-      const definitions = opts.context.languageService.getDefinitionAtPosition(fileName, generated + 1) ?? [];
-      const definition = definitions.find((def) => !isExternalDefinition(opts.projectRoot, def.fileName));
-      if (!definition) {
-        skippedReferences++;
-        continue;
-      }
-
-      const symbolId = resolveDefinitionSymbolId(
-        definition,
-        opts.symbolLookup,
-        opts.vueSymbolLookup,
-        opts.context,
-        opts.projectRoot,
-      );
-      if (symbolId === null) {
-        skippedReferences++;
-        continue;
-      }
-
-      addVueOccurrence(occurrences, sourceInfo, sourceFile, token, symbolId);
-      processedStarts.add(token.start);
-
-      if ((tokenTextCounts.get(token.text) ?? 0) > 1) {
-        for (const highlightedStart of sameSymbolSourceStarts(
-          opts.context.languageService,
-          fileName,
-          generated + 1,
-          map,
-          token,
-          tokenByStart,
-        )) {
-          if (processedStarts.has(highlightedStart)) continue;
-          const highlightedToken = tokenByStart.get(highlightedStart);
-          if (!highlightedToken) continue;
-          addVueOccurrence(occurrences, sourceInfo, sourceFile, highlightedToken, symbolId);
-          processedStarts.add(highlightedStart);
-        }
-      }
-    }
+    const result = computeVueReferenceTask(opts, task);
+    occurrences.push(...result.occurrences);
+    skippedReferences += result.skippedReferences;
   }
 
   return { occurrences, skippedReferences };
+}
+
+function computeVueReferenceTask(
+  opts: VueReferenceComputationOptions,
+  task: VueReferenceTask,
+): VueReferenceComputationResult {
+  const sourceScript = opts.context.language.scripts.get(task.fileName);
+  const serviceScript = sourceScript?.generated?.languagePlugin.typescript
+    ?.getServiceScript(sourceScript.generated.root)?.code;
+  if (!sourceScript || !serviceScript) {
+    return { occurrences: [], skippedReferences: task.countFileSkip ? 1 : 0 };
+  }
+
+  const sourceInfo = opts.sourceCache(task.fileName);
+  if (!sourceInfo) {
+    return { occurrences: [], skippedReferences: task.countFileSkip ? 1 : 0 };
+  }
+
+  const map = opts.context.language.maps.get(serviceScript, sourceScript);
+  const sourceFile = toRelativePath(opts.projectRoot, task.fileName);
+  const fileTokens = [...identifierTokens(sourceInfo.text)];
+  const tokenContext = {
+    tokens: fileTokens.filter((token) => token.start >= task.startOffset && token.start < task.endOffset),
+    tokenByStart: new Map(fileTokens.map((token) => [token.start, token])),
+    tokenTextCounts: countTokenTexts(fileTokens),
+    processedStarts: new Set<number>(),
+  };
+
+  return resolveVueTokenReferences({
+    ...opts,
+    fileName: task.fileName,
+    sourceInfo,
+    sourceFile,
+    map,
+    tokenContext,
+  });
+}
+
+function resolveVueTokenReferences(opts: VueReferenceComputationOptions & {
+  fileName: string;
+  sourceInfo: SourceTextInfo;
+  sourceFile: string;
+  map: VolarMapper;
+  tokenContext: {
+    tokens: VueIdentifierToken[];
+    tokenByStart: Map<number, VueIdentifierToken>;
+    tokenTextCounts: Map<string, number>;
+    processedStarts: Set<number>;
+  };
+}): VueReferenceComputationResult {
+  const occurrences: ResolvedOccurrence[] = [];
+  let skippedReferences = 0;
+
+  for (const token of opts.tokenContext.tokens) {
+    if (opts.tokenContext.processedStarts.has(token.start)) continue;
+    const generated = firstGeneratedOffset(opts.map, token.start);
+    if (generated === null) continue;
+
+    const definitions = opts.context.languageService.getDefinitionAtPosition(opts.fileName, generated + 1) ?? [];
+    const definition = definitions.find((def) => !isExternalDefinition(opts.projectRoot, def.fileName));
+    if (!definition) {
+      skippedReferences++;
+      continue;
+    }
+
+    const symbolId = resolveDefinitionSymbolId(
+      definition,
+      opts.symbolLookup,
+      opts.vueSymbolLookup,
+      opts.context,
+      opts.projectRoot,
+    );
+    if (symbolId === null) {
+      skippedReferences++;
+      continue;
+    }
+
+    addVueOccurrence(occurrences, opts.sourceInfo, opts.sourceFile, token, symbolId);
+    opts.tokenContext.processedStarts.add(token.start);
+    addVueHighlightedOccurrences(occurrences, opts, token, generated, symbolId);
+  }
+
+  return { occurrences, skippedReferences };
+}
+
+function addVueHighlightedOccurrences(
+  occurrences: ResolvedOccurrence[],
+  opts: Parameters<typeof resolveVueTokenReferences>[0],
+  token: VueIdentifierToken,
+  generated: number,
+  symbolId: number,
+): void {
+  if ((opts.tokenContext.tokenTextCounts.get(token.text) ?? 0) <= 1) return;
+  for (const highlightedStart of sameSymbolSourceStarts(
+    opts.context.languageService,
+    opts.fileName,
+    generated + 1,
+    opts.map,
+    token,
+    opts.tokenContext.tokenByStart,
+  )) {
+    if (opts.tokenContext.processedStarts.has(highlightedStart)) continue;
+    const highlightedToken = opts.tokenContext.tokenByStart.get(highlightedStart);
+    if (!highlightedToken) continue;
+    addVueOccurrence(occurrences, opts.sourceInfo, opts.sourceFile, highlightedToken, symbolId);
+    opts.tokenContext.processedStarts.add(highlightedStart);
+  }
 }
 
 function addVueOccurrence(
@@ -654,85 +770,13 @@ function listVueDocumentFiles(db: Database.Database, projectRoot: string): strin
 }
 
 function createVueLanguageContext(projectRoot: string, configPath: string): VueLanguageContext {
-  const requireFromProject = createRequire(pathToFileURL(join(projectRoot, 'package.json')).href);
-  const vueCore = requireVueAugmentDependency(requireFromProject, '@vue/language-core', projectRoot) as {
-    createParsedCommandLine(ts: TsModule, host: unknown, configFileName: string): {
-      vueOptions: Record<string, unknown>;
-    };
-    createGlobalTypesWriter?(options: unknown, writeFile: (path: string, data: string) => void): unknown;
-    getAllExtensions(options: Record<string, unknown>): string[];
-    createVueLanguagePlugin(
-      ts: TsModule,
-      compilerOptions: unknown,
-      vueOptions: unknown,
-      asFileName: (id: string) => string,
-    ): {
-      getLanguageId(id: string): string | undefined;
-    };
-    createLanguage(
-      plugins: unknown[],
-      scripts: Map<string, unknown>,
-      sync: (id: string) => void,
-    ): VolarLanguage;
-  };
-  const ts = requireVueAugmentDependency(requireFromProject, 'typescript', projectRoot) as TsModule;
-  const volarTs = requireVueAugmentDependency(requireFromProject, '@volar/typescript', projectRoot) as {
-    createLanguageServiceHost(
-      ts: TsModule,
-      sys: unknown,
-      language: VolarLanguage,
-      asScriptId: (id: string) => string,
-      projectHost: unknown,
-    ): { languageServiceHost: unknown };
-  };
-
-  const config = ts.readConfigFile(configPath, ts.sys.readFile);
-  if (config.error || !config.config) {
-    throw new Error(`Failed to read ${configPath}`);
-  }
-
-  const vueParsed = vueCore.createParsedCommandLine(ts, ts.sys, configPath);
-  const vueOptions = vueParsed.vueOptions;
-  if (typeof vueCore.createGlobalTypesWriter === 'function') {
-    vueOptions['globalTypesPath'] = vueCore.createGlobalTypesWriter(vueOptions, ts.sys.writeFile);
-  }
-  const extraFileExtensions = vueCore.getAllExtensions(vueOptions).map((extension) => ({
-    extension: extension.slice(1),
-    isMixedContent: true,
-    scriptKind: ts.ScriptKind['Deferred'],
-  }));
+  const { vueCore, ts, volarTs } = loadVueLanguageDependencies(projectRoot);
+  const { parsed, vueOptions } = parseVueTsConfig(vueCore, ts, configPath);
 
   const configDir = dirname(configPath);
-  const parsed = ts.parseJsonConfigFileContent(
-    config.config,
-    ts.sys,
-    configDir,
-    undefined,
-    configPath,
-    undefined,
-    extraFileExtensions,
-  );
   const vuePlugin = vueCore.createVueLanguagePlugin(ts, parsed.options, vueOptions, (id) => id);
-
-  const languageRef: { current?: VolarLanguage } = {};
-  const language = vueCore.createLanguage([vuePlugin], new Map(), (id) => {
-    if (!existsSync(id)) return;
-    const text = readFileSync(id, 'utf-8');
-    languageRef.current?.scripts.set(
-      id,
-      ts.ScriptSnapshot.fromString(text),
-      vuePlugin.getLanguageId(id) ?? languageIdForPath(id),
-    );
-  });
-  languageRef.current = language;
-
-  const projectHost = {
-    getCurrentDirectory: () => configDir,
-    getCompilationSettings: () => parsed.options,
-    getScriptFileNames: () => parsed.fileNames,
-    getProjectReferences: () => parsed.projectReferences,
-    getProjectVersion: () => '0',
-  };
+  const language = createVolarLanguage(vueCore, ts, vuePlugin);
+  const projectHost = createVueProjectHost(configDir, parsed);
 
   const { languageServiceHost } = volarTs.createLanguageServiceHost(
     ts,
@@ -749,6 +793,92 @@ function createVueLanguageContext(projectRoot: string, configPath: string): VueL
     languageService,
     fileNames: parsed.fileNames,
     configDir,
+  };
+}
+
+function loadVueLanguageDependencies(projectRoot: string): VueLanguageDependencies {
+  const requireFromProject = createRequire(pathToFileURL(join(projectRoot, 'package.json')).href);
+  return {
+    vueCore: requireVueAugmentDependency(
+      requireFromProject,
+      '@vue/language-core',
+      projectRoot,
+    ) as VueCoreModule,
+    ts: requireVueAugmentDependency(requireFromProject, 'typescript', projectRoot) as TsModule,
+    volarTs: requireVueAugmentDependency(
+      requireFromProject,
+      '@volar/typescript',
+      projectRoot,
+    ) as VolarTsModule,
+  };
+}
+
+function parseVueTsConfig(
+  vueCore: VueCoreModule,
+  ts: TsModule,
+  configPath: string,
+): {
+  parsed: ReturnType<TsModule['parseJsonConfigFileContent']>;
+  vueOptions: Record<string, unknown>;
+} {
+  const config = ts.readConfigFile(configPath, ts.sys.readFile);
+  if (config.error || !config.config) {
+    throw new Error(`Failed to read ${configPath}`);
+  }
+
+  const vueParsed = vueCore.createParsedCommandLine(ts, ts.sys, configPath);
+  const vueOptions = vueParsed.vueOptions;
+  if (typeof vueCore.createGlobalTypesWriter === 'function') {
+    vueOptions['globalTypesPath'] = vueCore.createGlobalTypesWriter(vueOptions, ts.sys.writeFile);
+  }
+
+  return {
+    parsed: ts.parseJsonConfigFileContent(
+      config.config,
+      ts.sys,
+      dirname(configPath),
+      undefined,
+      configPath,
+      undefined,
+      vueCore.getAllExtensions(vueOptions).map((extension) => ({
+        extension: extension.slice(1),
+        isMixedContent: true,
+        scriptKind: ts.ScriptKind['Deferred'],
+      })),
+    ),
+    vueOptions,
+  };
+}
+
+function createVolarLanguage(
+  vueCore: VueCoreModule,
+  ts: TsModule,
+  vuePlugin: { getLanguageId(id: string): string | undefined },
+): VolarLanguage {
+  const languageRef: { current?: VolarLanguage } = {};
+  const language = vueCore.createLanguage([vuePlugin], new Map(), (id) => {
+    if (!existsSync(id)) return;
+    const text = readFileSync(id, 'utf-8');
+    languageRef.current?.scripts.set(
+      id,
+      ts.ScriptSnapshot.fromString(text),
+      vuePlugin.getLanguageId(id) ?? languageIdForPath(id),
+    );
+  });
+  languageRef.current = language;
+  return language;
+}
+
+function createVueProjectHost(
+  configDir: string,
+  parsed: ReturnType<TsModule['parseJsonConfigFileContent']>,
+): unknown {
+  return {
+    getCurrentDirectory: () => configDir,
+    getCompilationSettings: () => parsed.options,
+    getScriptFileNames: () => parsed.fileNames,
+    getProjectReferences: () => parsed.projectReferences,
+    getProjectVersion: () => '0',
   };
 }
 

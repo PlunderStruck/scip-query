@@ -224,197 +224,13 @@ function getRustExclusions(
 
   const out: ExclusionEntry[] = [];
 
-  // Generated-file shortcut. tonic-build, prost-build, openapi-generator-rust,
-  // and bindgen all stamp an `@generated` marker into the first few lines.
-  // Every definition inside is reflection/macro/network-driven and the SCIP
-  // graph never connects callers to it. Bail out wholesale instead of
-  // case-handling each indirection.
-  if (isGeneratedFileHeader(tree.rootNode)) {
-    const entry: ExclusionEntry = {
-      startLine: 0,
-      endLine: tree.rootNode.endPosition.row,
-      reason: 'generated file (@generated header)',
-    };
-    EXCLUSION_CACHE.set(tree, [entry]);
-    return [entry];
+  const generatedExclusion = generatedRustFileExclusion(tree);
+  if (generatedExclusion) {
+    EXCLUSION_CACHE.set(tree, generatedExclusion);
+    return generatedExclusion;
   }
 
-  const collectAttrTexts = (item: SyntaxNode): string[] => {
-    const parent = item.parent;
-    if (!parent) return [];
-    // Match by startIndex to avoid issues if `parent.children[i]` returns a
-    // fresh wrapper object that isn't reference-equal to `item`. Native
-    // tree-sitter bindings sometimes re-create wrapper objects per access.
-    const children = parent.children;
-    let idx = -1;
-    for (let i = 0; i < children.length; i += 1) {
-      if (children[i]!.startIndex === item.startIndex && children[i]!.type === item.type) {
-        idx = i;
-        break;
-      }
-    }
-    if (idx <= 0) return [];
-    const attrs: string[] = [];
-    for (let i = idx - 1; i >= 0; i -= 1) {
-      const sibling = children[i]!;
-      if (sibling.type === 'attribute_item' || sibling.type === 'inner_attribute_item') {
-        attrs.push(sibling.text);
-      } else if (sibling.type === 'line_comment' || sibling.type === 'block_comment') {
-        continue;
-      } else {
-        break;
-      }
-    }
-    return attrs;
-  };
-
-  const isFrameworkAttr = (attrText: string): string | null => {
-    if (/#\[\s*tauri::command\b/.test(attrText)) return '#[tauri::command]';
-    if (/#\[\s*command\b/.test(attrText)) return '#[command]'; // tauri shorthand
-    if (/#\[\s*test\b/.test(attrText)) return '#[test]';
-    if (/#\[\s*bench\b/.test(attrText)) return '#[bench]';
-    if (/#\[\s*tokio::test\b/.test(attrText)) return '#[tokio::test]';
-    if (/#\[\s*async_std::test\b/.test(attrText)) return '#[async_std::test]';
-    if (/#\[\s*wasm_bindgen\b/.test(attrText)) return '#[wasm_bindgen]';
-    if (/#\[\s*no_mangle\b/.test(attrText)) return '#[no_mangle]';
-    if (/#\[\s*napi\b/.test(attrText)) return '#[napi]';
-    if (/#\[\s*pyfunction\b/.test(attrText)) return '#[pyfunction]';
-    if (/#\[\s*pymethod\b/.test(attrText)) return '#[pymethod]';
-    if (/#\[\s*pyo3\b/.test(attrText)) return '#[pyo3]';
-    if (/#\[\s*cfg\s*\(\s*test\s*\)/.test(attrText)) return '#[cfg(test)]';
-    if (/#\[\s*doc\s*\(\s*hidden\s*\)/.test(attrText)) return '#[doc(hidden)]';
-    return null;
-  };
-
-  const isReflectiveDeriveAttr = (attrText: string): boolean => {
-    if (!/#\[\s*derive\s*\(/.test(attrText)) return false;
-    // Any derive that touches fields via reflection / macro expansion. SCIP
-    // doesn't see these accesses; without the exclusion every field of these
-    // structs looks dead.
-    return /\bSerialize\b/.test(attrText)
-      || /\bDeserialize\b/.test(attrText)
-      || /\bFromRow\b/.test(attrText)        // sqlx
-      || /\bDeriveEntityModel\b/.test(attrText) // sea-orm
-      || /\bIntoSchema\b/.test(attrText)     // utoipa
-      || /\bToSchema\b/.test(attrText)       // utoipa
-      || /\bDeriveValueType\b/.test(attrText)
-      || /\bsqlx::FromRow\b/.test(attrText)
-      // thiserror — `#[error("... {field}")]` interpolates field names via the
-      // generated Display impl, which SCIP can't see. Without this every
-      // variant field of every error enum looks dead.
-      || /\bError\b/.test(attrText)
-      || /\bthiserror::Error\b/.test(attrText);
-  };
-  const isAllowDeadCodeAttr = (attrText: string): boolean => {
-    return /#\[\s*allow\s*\(\s*dead_code\s*\)/.test(attrText);
-  };
-
-  const visit = (node: SyntaxNode, inTestMod: boolean, inTraitImpl: boolean, inTraitDecl: boolean): void => {
-    let childInTestMod = inTestMod;
-    let childInTraitImpl = inTraitImpl;
-    let childInTraitDecl = inTraitDecl;
-
-    if (node.type === 'trait_item') {
-      // Methods/consts declared inside `pub trait T { ... }` are reached
-      // through whichever concrete impl callers go through. The dispatch
-      // crosses the impl boundary that SCIP doesn't always trace, so the
-      // declaration looks dead even when there are real impls + callers.
-      childInTraitDecl = true;
-      out.push({
-        startLine: node.startPosition.row,
-        endLine: node.endPosition.row,
-        reason: 'trait declaration body (dynamic dispatch)',
-      });
-    }
-
-    if (node.type === 'impl_item') {
-      // tree-sitter-rust marks the trait side of `impl Trait for Type` with the
-      // `trait` field; absence of that field means inherent impl. Counting bare
-      // `type_identifier` children misses any trait or self type that's a
-      // `generic_type` (e.g. `Approvable<T>`, `Foo<'_>`), so generic/lifetime
-      // trait impls were leaking through as "dead".
-      if (node.childForFieldName('trait')) {
-        childInTraitImpl = true;
-        // Some indexers (rust-analyzer in particular) report associated
-        // const/type symbols with `start_line` at the *impl block opening*,
-        // not the inner item — so range-matching against the inner node
-        // misses them. Pushing one exclusion that spans the full impl block
-        // covers methods, consts, and types in one shot.
-        out.push({
-          startLine: node.startPosition.row,
-          endLine: node.endPosition.row,
-          reason: 'trait impl block (dynamic dispatch)',
-        });
-      }
-    }
-
-    if (node.type === 'function_item' || node.type === 'function_signature_item') {
-      const attrs = collectAttrTexts(node);
-      let reason: string | null = null;
-      if (inTraitImpl) reason = 'trait impl method (dynamic dispatch)';
-      else if (inTestMod) reason = 'inside #[cfg(test)] mod';
-      for (const attr of attrs) {
-        const r = isFrameworkAttr(attr);
-        if (r) { reason = r; break; }
-        if (isAllowDeadCodeAttr(attr)) { reason = '#[allow(dead_code)]'; break; }
-      }
-      if (reason) {
-        out.push({ startLine: node.startPosition.row, endLine: node.endPosition.row, reason });
-      }
-    } else if (
-      inTraitImpl
-      && (node.type === 'const_item' || node.type === 'type_item' || node.type === 'static_item' || node.type === 'associated_type')
-    ) {
-      // Associated consts/types inside `impl Trait for T` are reached through
-      // the trait — same generic-dispatch invisibility as trait methods. The
-      // SCIP graph never connects `<X as Trait>::CONST` callsites back to the
-      // concrete impl, so without this filter every associated const looks
-      // dead.
-      out.push({
-        startLine: node.startPosition.row,
-        endLine: node.endPosition.row,
-        reason: 'trait impl associated item (dynamic dispatch)',
-      });
-    } else if (node.type === 'struct_item' || node.type === 'enum_item' || node.type === 'union_item') {
-      const attrs = collectAttrTexts(node);
-      const isReflective = attrs.some(isReflectiveDeriveAttr);
-      const isAllowed = attrs.some(isAllowDeadCodeAttr);
-      const typeName = node.namedChildren.find((c) => c.type === 'type_identifier')?.text;
-      if (isReflective) {
-        out.push({
-          startLine: node.startPosition.row,
-          endLine: node.endPosition.row,
-          reason: '#[derive(<reflective>)] — fields accessed via macro/reflection',
-          containerName: typeName,
-        });
-      }
-      if (isAllowed) {
-        out.push({
-          startLine: node.startPosition.row,
-          endLine: node.endPosition.row,
-          reason: '#[allow(dead_code)]',
-          containerName: typeName,
-        });
-      }
-      if (inTestMod) {
-        out.push({
-          startLine: node.startPosition.row,
-          endLine: node.endPosition.row,
-          reason: 'inside #[cfg(test)] mod',
-          containerName: typeName,
-        });
-      }
-    } else if (node.type === 'mod_item') {
-      const attrs = collectAttrTexts(node);
-      if (attrs.some((a) => /#\[\s*cfg\s*\(\s*test\s*\)/.test(a))) {
-        childInTestMod = true;
-      }
-    }
-
-    for (const child of node.namedChildren) visit(child, childInTestMod, childInTraitImpl, childInTraitDecl);
-  };
-
-  visit(tree.rootNode, false, false, false);
+  collectRustAstExclusions(tree.rootNode, out, false, false);
 
   // Suppression comments override the heuristic checks above.
   out.push(...collectSuppressionExclusions(
@@ -423,26 +239,222 @@ function getRustExclusions(
     new Set(['line_comment', 'block_comment']),
   ));
 
-  // Serde `with = "module"` attrs reference items by name. Anything inside
-  // the matching `mod module {}` block in the same file is reflection-driven
-  // (serde calls `module::serialize` / `::deserialize`), so the whole mod
-  // body is excluded.
-  const serdeWithModNames = collectSerdeWithModNames(tree.rootNode);
-  if (serdeWithModNames.size > 0) {
-    for (const mod of tree.rootNode.descendantsOfType('mod_item')) {
-      const name = mod.childForFieldName('name')?.text;
-      if (name && serdeWithModNames.has(name)) {
-        out.push({
-          startLine: mod.startPosition.row,
-          endLine: mod.endPosition.row,
-          reason: 'serde `with = "..."` module — body invoked via reflection',
-          containerName: name,
-        });
-      }
+  out.push(...serdeWithModuleExclusions(tree.rootNode));
+
+  EXCLUSION_CACHE.set(tree, out);
+  return out;
+}
+
+function generatedRustFileExclusion(tree: Tree): ExclusionEntry[] | null {
+  // Generated-file shortcut. tonic-build, prost-build, openapi-generator-rust,
+  // and bindgen all stamp an `@generated` marker into the first few lines.
+  // Every definition inside is reflection/macro/network-driven and the SCIP
+  // graph never connects callers to it. Bail out wholesale instead of
+  // case-handling each indirection.
+  if (!isGeneratedFileHeader(tree.rootNode)) return null;
+  return [{
+    startLine: 0,
+    endLine: tree.rootNode.endPosition.row,
+    reason: 'generated file (@generated header)',
+  }];
+}
+
+function collectRustAstExclusions(
+  node: SyntaxNode,
+  out: ExclusionEntry[],
+  inTestMod: boolean,
+  inTraitImpl: boolean,
+): void {
+  let childInTestMod = inTestMod;
+  let childInTraitImpl = inTraitImpl;
+
+  if (node.type === 'trait_item') {
+    out.push({
+      startLine: node.startPosition.row,
+      endLine: node.endPosition.row,
+      reason: 'trait declaration body (dynamic dispatch)',
+    });
+  }
+
+  if (node.type === 'impl_item' && node.childForFieldName('trait')) {
+    childInTraitImpl = true;
+    out.push({
+      startLine: node.startPosition.row,
+      endLine: node.endPosition.row,
+      reason: 'trait impl block (dynamic dispatch)',
+    });
+  }
+
+  if (node.type === 'function_item' || node.type === 'function_signature_item') {
+    collectRustFunctionExclusion(node, out, inTestMod, inTraitImpl);
+  } else if (inTraitImpl && isRustAssociatedTraitItem(node)) {
+    out.push({
+      startLine: node.startPosition.row,
+      endLine: node.endPosition.row,
+      reason: 'trait impl associated item (dynamic dispatch)',
+    });
+  } else if (node.type === 'struct_item' || node.type === 'enum_item' || node.type === 'union_item') {
+    collectRustTypeExclusions(node, out, inTestMod);
+  } else if (node.type === 'mod_item') {
+    if (rustAttributeTexts(node).some((a) => /#\[\s*cfg\s*\(\s*test\s*\)/.test(a))) {
+      childInTestMod = true;
     }
   }
 
-  EXCLUSION_CACHE.set(tree, out);
+  for (const child of node.namedChildren) {
+    collectRustAstExclusions(child, out, childInTestMod, childInTraitImpl);
+  }
+}
+
+function collectRustFunctionExclusion(
+  node: SyntaxNode,
+  out: ExclusionEntry[],
+  inTestMod: boolean,
+  inTraitImpl: boolean,
+): void {
+  const attrs = rustAttributeTexts(node);
+  let reason: string | null = null;
+  if (inTraitImpl) reason = 'trait impl method (dynamic dispatch)';
+  else if (inTestMod) reason = 'inside #[cfg(test)] mod';
+  for (const attr of attrs) {
+    const frameworkReason = rustFrameworkAttrReason(attr);
+    if (frameworkReason) { reason = frameworkReason; break; }
+    if (isRustAllowDeadCodeAttr(attr)) { reason = '#[allow(dead_code)]'; break; }
+  }
+  if (reason) {
+    out.push({ startLine: node.startPosition.row, endLine: node.endPosition.row, reason });
+  }
+}
+
+function collectRustTypeExclusions(
+  node: SyntaxNode,
+  out: ExclusionEntry[],
+  inTestMod: boolean,
+): void {
+  const attrs = rustAttributeTexts(node);
+  const typeName = node.namedChildren.find((c) => c.type === 'type_identifier')?.text;
+
+  if (attrs.some(isRustReflectiveDeriveAttr)) {
+    out.push({
+      startLine: node.startPosition.row,
+      endLine: node.endPosition.row,
+      reason: '#[derive(<reflective>)] — fields accessed via macro/reflection',
+      containerName: typeName,
+    });
+  }
+  if (attrs.some(isRustAllowDeadCodeAttr)) {
+    out.push({
+      startLine: node.startPosition.row,
+      endLine: node.endPosition.row,
+      reason: '#[allow(dead_code)]',
+      containerName: typeName,
+    });
+  }
+  if (inTestMod) {
+    out.push({
+      startLine: node.startPosition.row,
+      endLine: node.endPosition.row,
+      reason: 'inside #[cfg(test)] mod',
+      containerName: typeName,
+    });
+  }
+}
+
+function rustAttributeTexts(item: SyntaxNode): string[] {
+  const parent = item.parent;
+  if (!parent) return [];
+  // Match by startIndex to avoid issues if `parent.children[i]` returns a
+  // fresh wrapper object that isn't reference-equal to `item`. Native
+  // tree-sitter bindings sometimes re-create wrapper objects per access.
+  const children = parent.children;
+  let idx = -1;
+  for (let i = 0; i < children.length; i += 1) {
+    if (children[i]!.startIndex === item.startIndex && children[i]!.type === item.type) {
+      idx = i;
+      break;
+    }
+  }
+  if (idx <= 0) return [];
+
+  const attrs: string[] = [];
+  for (let i = idx - 1; i >= 0; i -= 1) {
+    const sibling = children[i]!;
+    if (sibling.type === 'attribute_item' || sibling.type === 'inner_attribute_item') {
+      attrs.push(sibling.text);
+    } else if (sibling.type === 'line_comment' || sibling.type === 'block_comment') {
+      continue;
+    } else {
+      break;
+    }
+  }
+  return attrs;
+}
+
+function rustFrameworkAttrReason(attrText: string): string | null {
+  if (/#\[\s*tauri::command\b/.test(attrText)) return '#[tauri::command]';
+  if (/#\[\s*command\b/.test(attrText)) return '#[command]'; // tauri shorthand
+  if (/#\[\s*test\b/.test(attrText)) return '#[test]';
+  if (/#\[\s*bench\b/.test(attrText)) return '#[bench]';
+  if (/#\[\s*tokio::test\b/.test(attrText)) return '#[tokio::test]';
+  if (/#\[\s*async_std::test\b/.test(attrText)) return '#[async_std::test]';
+  if (/#\[\s*wasm_bindgen\b/.test(attrText)) return '#[wasm_bindgen]';
+  if (/#\[\s*no_mangle\b/.test(attrText)) return '#[no_mangle]';
+  if (/#\[\s*napi\b/.test(attrText)) return '#[napi]';
+  if (/#\[\s*pyfunction\b/.test(attrText)) return '#[pyfunction]';
+  if (/#\[\s*pymethod\b/.test(attrText)) return '#[pymethod]';
+  if (/#\[\s*pyo3\b/.test(attrText)) return '#[pyo3]';
+  if (/#\[\s*cfg\s*\(\s*test\s*\)/.test(attrText)) return '#[cfg(test)]';
+  if (/#\[\s*doc\s*\(\s*hidden\s*\)/.test(attrText)) return '#[doc(hidden)]';
+  return null;
+}
+
+function isRustReflectiveDeriveAttr(attrText: string): boolean {
+  if (!/#\[\s*derive\s*\(/.test(attrText)) return false;
+  // Any derive that touches fields via reflection / macro expansion. SCIP
+  // doesn't see these accesses; without the exclusion every field of these
+  // structs looks dead.
+  return /\bSerialize\b/.test(attrText)
+    || /\bDeserialize\b/.test(attrText)
+    || /\bFromRow\b/.test(attrText)        // sqlx
+    || /\bDeriveEntityModel\b/.test(attrText) // sea-orm
+    || /\bIntoSchema\b/.test(attrText)     // utoipa
+    || /\bToSchema\b/.test(attrText)       // utoipa
+    || /\bDeriveValueType\b/.test(attrText)
+    || /\bsqlx::FromRow\b/.test(attrText)
+    // thiserror — `#[error("... {field}")]` interpolates field names via the
+    // generated Display impl, which SCIP can't see. Without this every
+    // variant field of every error enum looks dead.
+    || /\bError\b/.test(attrText)
+    || /\bthiserror::Error\b/.test(attrText);
+}
+
+function isRustAllowDeadCodeAttr(attrText: string): boolean {
+  return /#\[\s*allow\s*\(\s*dead_code\s*\)/.test(attrText);
+}
+
+function isRustAssociatedTraitItem(node: SyntaxNode): boolean {
+  return node.type === 'const_item'
+    || node.type === 'type_item'
+    || node.type === 'static_item'
+    || node.type === 'associated_type';
+}
+
+function serdeWithModuleExclusions(root: SyntaxNode): ExclusionEntry[] {
+  const serdeWithModNames = collectSerdeWithModNames(root);
+  if (serdeWithModNames.size === 0) return [];
+
+  const out: ExclusionEntry[] = [];
+  for (const mod of root.descendantsOfType('mod_item')) {
+    const name = mod.childForFieldName('name')?.text;
+    if (name && serdeWithModNames.has(name)) {
+      out.push({
+        startLine: mod.startPosition.row,
+        endLine: mod.endPosition.row,
+        reason: 'serde `with = "..."` module — body invoked via reflection',
+        containerName: name,
+      });
+    }
+  }
   return out;
 }
 
