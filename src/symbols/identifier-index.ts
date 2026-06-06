@@ -22,6 +22,13 @@ import { createPerDbCache } from '../storage/per-db-cache.js';
 import { escapeRegex, getStrippedLines, stripCommentsAndStrings } from '../source/source-stripper.js';
 import { getSourceText } from '../source/source-text.js';
 
+const RUST_IDENTIFIER_TYPES = new Set(['identifier', 'type_identifier', 'field_identifier']);
+const PYTHON_IDENTIFIER_TYPES = new Set(['identifier']);
+const DEFAULT_IDENTIFIER_TYPES = new Set(['identifier', 'property_identifier', 'type_identifier']);
+const INTERPOLATION_LANGUAGES = new Set(['rust', 'python']);
+const BRACE_BLOCK_RE = /\{([^{}]*)\}/g;
+const IDENT_IN_BLOCK_RE = /\b([A-Za-z_][\w]*)\b/g;
+
 /**
  * Lines in `relativePath` where `identifier` appears (0-indexed). Excludes
  * any line in `[opts.excludeStartLine, opts.excludeEndLine]` if both are
@@ -170,10 +177,10 @@ function computeIdentifierLineMap(
     if (tree) {
       const lang = detectAstLanguage(relativePath);
       const identifierTypes = lang === 'rust'
-        ? new Set(['identifier', 'type_identifier', 'field_identifier'])
+        ? RUST_IDENTIFIER_TYPES
         : lang === 'python'
-          ? new Set(['identifier'])
-          : new Set(['identifier', 'property_identifier', 'type_identifier']);
+          ? PYTHON_IDENTIFIER_TYPES
+          : DEFAULT_IDENTIFIER_TYPES;
       // Rust + Python format strings interpolate identifiers inside the
       // string content (`format!("{IDENT}")` since Rust 1.58, f-strings in
       // Python). tree-sitter doesn't break those into identifier nodes —
@@ -182,16 +189,13 @@ function computeIdentifierLineMap(
       // detector flags `IDENT` as dead. We pull every `{...}` block and
       // extract every identifier in it: covers `{name}`, `{:<NAME$}`
       // (width-from-variable), `{name:<.PREC$}`, `{name:?}`, etc.
-      const interpolationLangs = new Set(['rust', 'python']);
-      const braceBlockRegex = /\{([^{}]*)\}/g;
-      const identInBlockRegex = /\b([A-Za-z_][\w]*)\b/g;
       const walk = (node: SyntaxNode): void => {
         if (identifierTypes.has(node.type)) record(node.text, node.startPosition.row);
-        if (lang && interpolationLangs.has(lang) && node.type === 'string_content') {
+        if (lang && INTERPOLATION_LANGUAGES.has(lang) && node.type === 'string_content') {
           const baseLine = node.startPosition.row;
-          for (const block of node.text.matchAll(braceBlockRegex)) {
+          for (const block of node.text.matchAll(BRACE_BLOCK_RE)) {
             const inner = block[1] ?? '';
-            for (const ident of inner.matchAll(identInBlockRegex)) {
+            for (const ident of inner.matchAll(IDENT_IN_BLOCK_RE)) {
               if (ident[1]) record(ident[1], baseLine);
             }
           }

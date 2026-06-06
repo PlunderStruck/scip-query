@@ -55,20 +55,25 @@ export class ProjectIndex {
       sortByLocDesc = false,
     } = opts;
 
-    const definitions = this.scopedDefinitions(scope)
-      .filter((definition) => !this.db.isIgnored(definition.relativePath))
-      .filter((definition) => !excludeEntrySurfaces || !isEntrySurface(this.db, definition.relativePath))
-      .filter((definition) => matchesCallableMode(definition, { requireFunctionLikeSymbol, requireCallableSymbol }))
-      .filter((definition) => excludeSymbol === undefined || definition.symbol !== excludeSymbol)
-      .filter((definition) => definitionLoc(definition) >= minLoc && definitionLoc(definition) <= maxLoc)
-      .filter((definition) => !excludeTypesFiles || !isTypesFile(definition.relativePath))
-      .filter((definition) => !excludeRustTraitImplMembers || !isRustTraitImplMember(definition.symbol))
-      .filter((definition) => classifyFile(definition.relativePath) !== 'test')
-      .filter((definition) => !isInRustTestModule(definition.symbol))
-      .filter((definition) => includeSuppressed || !hasSuppressionComment(this.db, definition.relativePath, definition.startLine));
+    const definitions: IndexedDefinition[] = [];
+    for (const definition of this.scopedDefinitions(scope)) {
+      const relativePath = definition.relativePath;
+      if (this.db.isIgnored(relativePath)) continue;
+      if (excludeEntrySurfaces && isEntrySurface(this.db, relativePath)) continue;
+      if (!matchesCallableMode(definition, { requireFunctionLikeSymbol, requireCallableSymbol })) continue;
+      if (excludeSymbol !== undefined && definition.symbol === excludeSymbol) continue;
+      const loc = definitionLoc(definition);
+      if (loc < minLoc || loc > maxLoc) continue;
+      if (excludeTypesFiles && isTypesFile(relativePath)) continue;
+      if (excludeRustTraitImplMembers && isRustTraitImplMember(definition.symbol)) continue;
+      if (classifyFile(relativePath) === 'test') continue;
+      if (isInRustTestModule(definition.symbol)) continue;
+      if (!includeSuppressed && hasSuppressionComment(this.db, relativePath, definition.startLine)) continue;
+      definitions.push(definition);
+    }
 
     return sortByLocDesc
-      ? [...definitions].sort((left, right) => definitionLoc(right) - definitionLoc(left))
+      ? definitions.sort((left, right) => definitionLoc(right) - definitionLoc(left))
       : definitions;
   }
 

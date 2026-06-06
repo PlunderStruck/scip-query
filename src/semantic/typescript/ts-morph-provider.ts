@@ -116,6 +116,8 @@ class TsMorphSemanticProvider implements SemanticProvider {
   private readonly fileCalleesCache = new Map<string, Map<number, SemanticCallee[]>>();
   private readonly signatureCache = new Map<number, string | null>();
   private readonly sourceFileCache = new Map<string, SourceFileMatch | null>();
+  private readonly definitionNodeCache = new Map<number, Node | null>();
+  private readonly fileDefinitionNodeCache = new Map<string, Map<number, Node>>();
   private readonly indexedDefinitionLeafCache = new Map<string, Map<string, IndexedDefinition>>();
   private packageImportReferenceIndex: Map<number, SemanticReference[]> | null = null;
   private packageExportIndex: PackageExportIndex | null = null;
@@ -143,7 +145,9 @@ class TsMorphSemanticProvider implements SemanticProvider {
       if (!sourceFile) return [];
       const results: SemanticImportUsage[] = [];
       for (const declaration of sourceFile.getImportDeclarations()) {
-        results.push(...this.importUsageForDeclaration(file, declaration));
+        for (const usage of this.importUsageForDeclaration(file, declaration)) {
+          results.push(usage);
+        }
       }
       return results;
     });
@@ -154,14 +158,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
       const node = this.nodeForDefinition(definition);
       const packageRefs = this.packageImportReferencesForDefinition(definition);
       if (!node) return packageRefs;
-      const refs = findReferencesForNode(node);
-      return dedupeLocations(
-        [
-          ...refs.flatMap((ref: ReferencedSymbol) => referenceLocations(ref, this.db.config.projectRoot))
-            .filter((location) => location.file !== definition.relativePath || location.line < definition.startLine || location.line > definition.endLine),
-          ...packageRefs,
-        ],
-      );
+      return semanticReferencesForNode(node, definition, packageRefs, this.db.config.projectRoot);
     });
   }
 
@@ -215,9 +212,12 @@ class TsMorphSemanticProvider implements SemanticProvider {
     entry: ImportIdentifierEntry,
   ): SemanticImportUsage {
     const refs = entry.identifier ? entry.identifier.findReferences() : [];
-    const referenceLocations = refs.flatMap((ref) =>
-      referenceLocationsWithoutDeclaration(ref, importer, entry.identifier, this.db.config.projectRoot),
-    );
+    const referenceLocations: Array<{ location: SemanticLocation; node: Node }> = [];
+    for (const ref of refs) {
+      for (const location of referenceLocationsWithoutDeclaration(ref, importer, entry.identifier, this.db.config.projectRoot)) {
+        referenceLocations.push(location);
+      }
+    }
     const valueUsed = referenceLocations.some((location) => !isTypeOnlyLocation(location.node));
     const typeUsed = referenceLocations.some((location) => isTypeOnlyLocation(location.node));
     const bindingTypeOnly = entry.isTypeOnly;
@@ -390,20 +390,47 @@ class TsMorphSemanticProvider implements SemanticProvider {
   // definition; source-file lookup, name matching, and line matching are one
   // semantic bridge.
   private nodeForDefinition(definition: IndexedDefinition): Node | null {
-    const sourceFile = this.sourceFile(definition.relativePath);
-    if (!sourceFile) return null;
-    const leaf = leafName(definition.symbol) ?? definition.leaf;
-    const candidates: Node[] = [];
-    sourceFile.forEachDescendant((node) => {
-      if (!nodeHasName(this.tsMorph, node, leaf)) return;
-      const line = lineOf(sourceFile, node);
-      if (line < definition.startLine - 1 || line > definition.endLine + 1) return;
-      candidates.push(node);
+    return cached(this.definitionNodeCache, definition.symbolId, () =>
+      this.definitionNodesForFile(definition.relativePath).get(definition.symbolId) ?? null,
+    );
+  }
+
+  private definitionNodesForFile(relativePath: string): Map<number, Node> {
+    return cached(this.fileDefinitionNodeCache, relativePath, () => {
+      const sourceFile = this.sourceFile(relativePath);
+      if (!sourceFile) return new Map();
+      const definitionsByLeaf = new Map<string, IndexedDefinition[]>();
+      for (const definition of getDefinitionsForFile(this.db, relativePath)) {
+        const leaf = leafName(definition.symbol) ?? definition.leaf;
+        if (!leaf) continue;
+        let bucket = definitionsByLeaf.get(leaf);
+        if (!bucket) {
+          bucket = [];
+          definitionsByLeaf.set(leaf, bucket);
+        }
+        bucket.push(definition);
+      }
+      if (definitionsByLeaf.size === 0) return new Map();
+
+      const nodes = new Map<number, Node>();
+      const distanceBySymbolId = new Map<number, number>();
+      sourceFile.forEachDescendant((node) => {
+        for (const name of nodeNames(this.tsMorph, node)) {
+          const definitions = definitionsByLeaf.get(name);
+          if (!definitions) continue;
+          const line = lineOf(sourceFile, node);
+          for (const definition of definitions) {
+            if (line < definition.startLine - 1 || line > definition.endLine + 1) continue;
+            const distance = Math.abs(line - definition.startLine);
+            const previous = distanceBySymbolId.get(definition.symbolId);
+            if (previous !== undefined && previous <= distance) continue;
+            distanceBySymbolId.set(definition.symbolId, distance);
+            nodes.set(definition.symbolId, node);
+          }
+        }
+      });
+      return nodes;
     });
-    return candidates.sort((left, right) =>
-      Math.abs(lineOf(sourceFile, left) - definition.startLine)
-      - Math.abs(lineOf(sourceFile, right) - definition.startLine),
-    )[0] ?? null;
   }
 
   private definitionFromSymbol(symbol: Symbol): { symbol: string; file: string; line: number } | null {
@@ -626,17 +653,40 @@ function findReferencesForNode(node: Node): ReferencedSymbol[] {
   return [];
 }
 
+function semanticReferencesForNode(
+  node: Node,
+  definition: IndexedDefinition,
+  packageRefs: readonly SemanticReference[],
+  projectRoot: string,
+): SemanticReference[] {
+  const locations: SemanticReference[] = [];
+  for (const ref of findReferencesForNode(node)) {
+    for (const location of referenceLocations(ref, projectRoot)) {
+      if (location.file === definition.relativePath && location.line >= definition.startLine && location.line <= definition.endLine) {
+        continue;
+      }
+      locations.push(location);
+    }
+  }
+  for (const location of packageRefs) locations.push(location);
+  return dedupeLocations(locations);
+}
+
 function referenceLocationsWithoutDeclaration(
   ref: ReferencedSymbol,
   importer: string,
   declarationIdentifier: Identifier | null,
   projectRoot: string,
 ): Array<{ location: SemanticLocation; node: Node }> {
-  return ref.getReferences()
-    .map((entry) => entry.getNode())
-    .filter((node) => toRelative(projectRoot, node.getSourceFile().getFilePath()) === importer)
-    .filter((node) => !declarationIdentifier || node.getStart() !== declarationIdentifier.getStart())
-    .map((node) => ({ location: toSemanticLocation(node, projectRoot), node }));
+  const out: Array<{ location: SemanticLocation; node: Node }> = [];
+  const declarationStart = declarationIdentifier?.getStart();
+  for (const entry of ref.getReferences()) {
+    const node = entry.getNode();
+    if (toRelative(projectRoot, node.getSourceFile().getFilePath()) !== importer) continue;
+    if (declarationStart !== undefined && node.getStart() === declarationStart) continue;
+    out.push({ location: toSemanticLocation(node, projectRoot), node });
+  }
+  return out;
 }
 
 function toSemanticLocation(node: Node, projectRoot: string): SemanticLocation {
@@ -689,16 +739,21 @@ function isTypeOnlyLocation(node: Node): boolean {
   return false;
 }
 
-function nodeHasName(tsMorph: TsMorphModule, node: Node, name: string): boolean {
+function nodeNames(tsMorph: TsMorphModule, node: Node): string[] {
+  const names: string[] = [];
+  const add = (name: string | undefined): void => {
+    if (name && !names.includes(name)) names.push(name);
+  };
   if ('getNameNode' in node && typeof node.getNameNode === 'function') {
     const nameNode = (node as { getNameNode(): Node | undefined }).getNameNode();
-    if (nameNode?.getText() === name) return true;
+    add(nameNode?.getText());
   }
   if ('getName' in node && typeof node.getName === 'function') {
     const got = (node as { getName(): string | undefined }).getName();
-    if (got === name) return true;
+    add(got);
   }
-  return tsMorph.Node.isIdentifier(node) && node.getText() === name;
+  if (tsMorph.Node.isIdentifier(node)) add(node.getText());
+  return names;
 }
 
 function findIndexedDefinitionNear(

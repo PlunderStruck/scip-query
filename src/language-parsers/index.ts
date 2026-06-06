@@ -9,12 +9,11 @@
  * caching, each call would re-read the file off disk and re-walk the
  * AST. The cache makes repeat queries on the same file effectively free.
  */
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
 import { normalizePath } from '../resolution/import-path-resolver.js';
 import { createPerDbCache } from '../storage/per-db-cache.js';
 import type { ParsedReExport, ParsedSourceExport, ParsedSourceImport } from '../domain/types.js';
+import { getSourceText } from '../source/source-text.js';
 import { parseReExports } from './javascript.js';
 import { getParserForPath } from './registry.js';
 
@@ -44,9 +43,8 @@ export function getSourceImports(
   return SOURCE_IMPORT_CACHE.get(db, normalized, () => {
     const parser = getParserForPath(normalized);
     if (!parser) return [];
-    const fullPath = join(db.config.projectRoot, normalized);
-    if (!existsSync(fullPath)) return [];
-    const source = readFileSync(fullPath, 'utf-8');
+    const source = getSourceText(db, normalized);
+    if (!source) return [];
     return parser.parseImports(db, normalized, source);
   });
 }
@@ -59,9 +57,8 @@ export function getSourceExports(
   return SOURCE_EXPORT_CACHE.get(db, normalized, () => {
     const parser = getParserForPath(normalized);
     if (!parser?.parseExports) return [];
-    const fullPath = join(db.config.projectRoot, normalized);
-    if (!existsSync(fullPath)) return [];
-    const source = readFileSync(fullPath, 'utf-8');
+    const source = getSourceText(db, normalized);
+    if (!source) return [];
     return parser.parseExports(db, normalized, source);
   });
 }

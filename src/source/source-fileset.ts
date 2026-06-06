@@ -53,6 +53,8 @@ export const ALL_SOURCE_EXTENSIONS: readonly string[] = [
  * include. Walking these from disk supplements the `documents` table.
  */
 export const AUXILIARY_EXTENSIONS: readonly string[] = ['.vue'];
+const DEFAULT_EXTENSION_SET: ReadonlySet<string> = new Set(ALL_SOURCE_EXTENSIONS.map((e) => e.toLowerCase()));
+const DEFAULT_EXTENSION_CACHE_KEY = [...DEFAULT_EXTENSION_SET].sort().join(',');
 
 /**
  * Directories that never contain project source. Skipped during disk
@@ -94,10 +96,10 @@ export function getSourceFiles(
 ): string[] {
   const includeIndexed = opts.includeIndexed ?? true;
   const includeAuxiliary = opts.includeAuxiliary ?? true;
-  const extensions = opts.extensions
-    ? new Set(opts.extensions.map((e) => e.toLowerCase()))
-    : new Set(ALL_SOURCE_EXTENSIONS.map((e) => e.toLowerCase()));
-  const cacheKey = `${includeIndexed ? '1' : '0'}|${includeAuxiliary ? '1' : '0'}|${[...extensions].sort().join(',')}`;
+  const customExtensions = opts.extensions?.map((e) => e.toLowerCase());
+  const extensions = customExtensions ? new Set(customExtensions) : DEFAULT_EXTENSION_SET;
+  const extensionKey = customExtensions ? [...extensions].sort().join(',') : DEFAULT_EXTENSION_CACHE_KEY;
+  const cacheKey = `${includeIndexed ? '1' : '0'}|${includeAuxiliary ? '1' : '0'}|${extensionKey}`;
   return SOURCE_FILES_CACHE.get(db, cacheKey, () => {
     const out = new Set<string>();
     if (includeIndexed) {

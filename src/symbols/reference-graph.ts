@@ -462,7 +462,7 @@ export function buildCalleeMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<SymbolMatch>,
   opts: { additive?: boolean } = {},
-): Map<number, Array<{ symbol: string; file: string; chunkId: number }>> {
+): Map<number, CalleeRow[]> {
   if (definitions.length === 0) return new Map();
   const additive = opts.additive ?? false;
 
@@ -476,14 +476,19 @@ export function buildCalleeMap(
     }
   }
 
-  const merged = new Map<number, Array<{ symbol: string; file: string; chunkId: number }>>();
+  const merged = new Map<number, CalleeRow[]>();
+  const seenBySymbolId = new Map<number, Set<string>>();
   const addAll = (
-    src: Map<number, Array<{ symbol: string; file: string; chunkId: number }>>,
+    src: Map<number, CalleeRow[]>,
   ): void => {
     for (const [id, list] of src) {
       let bucket = merged.get(id);
       if (!bucket) { bucket = []; merged.set(id, bucket); }
-      const seen = new Set(bucket.map((c) => `${c.symbol}|${c.chunkId}`));
+      let seen = seenBySymbolId.get(id);
+      if (!seen) {
+        seen = new Set();
+        seenBySymbolId.set(id, seen);
+      }
       for (const c of list) {
         const key = `${c.symbol}|${c.chunkId}`;
         if (seen.has(key)) continue;
@@ -598,9 +603,12 @@ function pickAstCallCandidate<T extends { symbol: string; file: string }>(
         .map((entry) => entry.sourcePath)
         .filter((path): path is string => Boolean(path)),
     );
-    return candidates.find((candidate) =>
-      [...importedSourcePaths].some((sourcePath) => pathsResolveSame(sourcePath, candidate.file)),
-    ) ?? null;
+    for (const candidate of candidates) {
+      for (const sourcePath of importedSourcePaths) {
+        if (pathsResolveSame(sourcePath, candidate.file)) return candidate;
+      }
+    }
+    return null;
   }
 
   return candidates.length === 1 ? candidates[0]! : null;
@@ -937,10 +945,14 @@ function indexedDefinitions(definitions: ReadonlyArray<SymbolLocation>): Indexed
 
 function toCalleeRows(
   semantic: Map<number, Array<{ symbol: string; file: string }>>,
-): Map<number, Array<{ symbol: string; file: string; chunkId: number }>> {
-  const out = new Map<number, Array<{ symbol: string; file: string; chunkId: number }>>();
+): Map<number, CalleeRow[]> {
+  const out = new Map<number, CalleeRow[]>();
   for (const [symbolId, callees] of semantic) {
-    out.set(symbolId, callees.map((callee) => ({ ...callee, chunkId: -1 })));
+    const rows: CalleeRow[] = [];
+    for (const callee of callees) {
+      rows.push({ symbol: callee.symbol, file: callee.file, chunkId: -1 });
+    }
+    out.set(symbolId, rows);
   }
   return out;
 }

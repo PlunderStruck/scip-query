@@ -18,6 +18,14 @@ import { buildUsageBody, hasIdentifierUsage } from '../source/source-stripper.js
 import type { SyntaxNode, Tree } from '../source/ast.js';
 import type { ParsedSourceImport } from '../domain/types.js';
 
+const REFERENCE_IDENTIFIER_TYPES = new Set([
+  'identifier',
+  'type_identifier',
+  'property_identifier',
+  'shorthand_property_identifier',
+  'field_identifier',
+]);
+
 /**
  * Comma-split that respects bracket depth — `splitTopLevel('a, {b, c}, d')`
  * returns `['a', ' {b, c}', ' d']`. Used by the regex-fallback parsers
@@ -62,16 +70,9 @@ export function firstChildOfType(node: SyntaxNode, type: string): SyntaxNode | n
  */
 export function collectIdentifiersOutside(tree: Tree, excludeTypes: ReadonlySet<string>): Set<string> {
   const out = new Set<string>();
-  const refTypes = new Set([
-    'identifier',
-    'type_identifier',
-    'property_identifier',
-    'shorthand_property_identifier',
-    'field_identifier',
-  ]);
   const walk = (node: SyntaxNode, inside: boolean): void => {
     const skip = inside || excludeTypes.has(node.type);
-    if (!skip && refTypes.has(node.type)) {
+    if (!skip && REFERENCE_IDENTIFIER_TYPES.has(node.type)) {
       out.add(node.text);
     }
     for (const child of node.children) walk(child, skip);
@@ -115,7 +116,9 @@ export function parseImportLineMatches<T>(
     const full = match[0];
     if (!full || typeof match.index !== 'number') continue;
     const body = buildUsageBody(source, match.index, match.index + full.length);
-    results.push(...parse(match, body));
+    for (const result of parse(match, body)) {
+      results.push(result);
+    }
   }
   return results;
 }
