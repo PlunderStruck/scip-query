@@ -36,7 +36,7 @@ function loadCliPackageInfo(): { version: string } {
   return { version: '0.0.0' };
 }
 
-function renderHeuristicNotice(label: string): void {
+export function renderHeuristicNotice(label: string): void {
   console.log(`Heuristic ${label}: review before acting; these are candidates, not exact compiler facts.\n`);
 }
 

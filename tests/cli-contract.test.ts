@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { program } from '../src/runtime/cli.js';
+import { describe, it, expect, vi } from 'vitest';
+import { program, renderHeuristicNotice } from '../src/runtime/cli.js';
 
 function command(name: string) {
   const cmd = program.commands.find((entry) => entry.name() === name);
@@ -66,5 +66,15 @@ describe('CLI contract', () => {
     ]) {
       expect(command(name).description().toLowerCase()).toContain('candidate');
     }
+  });
+
+  it('prints an explicit heuristic disclaimer for candidate output', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    renderHeuristicNotice('stale abstraction candidates');
+
+    expect(log).toHaveBeenCalledWith(
+      'Heuristic stale abstraction candidates: review before acting; these are candidates, not exact compiler facts.\n',
+    );
   });
 });

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -20,6 +20,9 @@ const defaultCases = [
     sourceIncludes: ['export async function confirmBooking', 'ConfirmBookingInput'],
     expectedRefs: ['src/domain/agent/tools/confirm-booking.ts'],
     expectedCallGraph: ['maybeSetConfirmedAtAndReturn', 'ensureBookingStatus', 'loadBookingRowOrThrow'],
+    expectedDataflow: ['═══ PRODUCERS', 'maybeSetConfirmedAtAndReturn', 'confirmBookingForCustomer'],
+    sliceArgs: ['--forward'],
+    expectedSlice: ['forward slice', 'confirmBookingForCustomer', 'confirmWebhookBooking'],
   },
   {
     projectRoot: '/Users/aydansalois/Documents/GitHub/qwen3-tts-apple-silicon',
@@ -29,6 +32,9 @@ const defaultCases = [
     sourceIncludes: ['def main_menu():', 'Voice Cloning'],
     expectedRefs: [],
     expectedCallGraph: ['run_clone_manager', 'run_custom_session'],
+    expectedDataflow: ['═══ PRODUCERS', 'run_clone_manager', 'run_custom_session'],
+    sliceArgs: [],
+    expectedSlice: ['backward slice', 'run_clone_manager', 'run_custom_session'],
   },
   {
     projectRoot: '/Users/aydansalois/Documents/GitHub/SynthRunnerRust',
@@ -38,6 +44,9 @@ const defaultCases = [
     sourceIncludes: ['fn main()', 'synth_runner_rust::run'],
     expectedRefs: [],
     expectedCallGraph: ['app:run()'],
+    expectedDataflow: ['═══ DEFINED AT ═══', 'src/main.rs'],
+    sliceArgs: [],
+    expectedSlice: ['backward slice of main()', 'No connected symbols found.'],
   },
 ];
 
@@ -101,6 +110,7 @@ function runCase(testCase, projectRoot, cacheDir) {
   const reindex = run(['reindex', '--force', '--language', testCase.language], projectRoot, env, 180_000);
   checks.push(checkExit('reindex', reindex));
   if (reindex.status !== 0) return checks;
+  checks.push(performanceMetadata(cacheDir, { reindex }));
 
   const source = readFileSync(join(projectRoot, testCase.file), 'utf8');
   checks.push(assertIncludes('source oracle', source, testCase.sourceIncludes));
@@ -129,10 +139,29 @@ function runCase(testCase, projectRoot, cacheDir) {
   checks.push(checkExit('complexity', complexity));
   checks.push(assertIncludes('complexity output', complexity.stdout, ['Cyclomatic', 'Fan-in', 'Fan-out']));
 
+  const dataflow = run(['dataflow', testCase.symbol], projectRoot, env, 60_000);
+  checks.push(checkExit('dataflow', dataflow));
+  checks.push(assertIncludes('dataflow output', dataflow.stdout, testCase.expectedDataflow));
+
+  const slice = run(['slice', testCase.symbol, ...(testCase.sliceArgs ?? [])], projectRoot, env, 60_000);
+  checks.push(checkExit('slice', slice));
+  checks.push(assertIncludes('slice output', slice.stdout, testCase.expectedSlice));
+  checks.push(commandDurations({
+    symbols,
+    code,
+    refs,
+    trace,
+    callGraph,
+    complexity,
+    dataflow,
+    slice,
+  }));
+
   return checks;
 }
 
 function run(args, cwd, env, timeout) {
+  const startMs = Date.now();
   const result = spawnSync(process.execPath, [cliPath, ...args], {
     cwd,
     env,
@@ -145,6 +174,7 @@ function run(args, cwd, env, timeout) {
     stdout: result.stdout ?? '',
     stderr: result.stderr ?? '',
     error: result.error?.message ?? '',
+    durationMs: Date.now() - startMs,
   };
 }
 
@@ -154,6 +184,38 @@ function checkExit(name, result) {
     pass: result.status === 0,
     evidence: result.status === 0 ? '' : `${result.stdout}${result.stderr}${result.error}`,
   };
+}
+
+function performanceMetadata(cacheDir, commands) {
+  return {
+    name: 'performance metadata',
+    pass: true,
+    evidence: [
+      `reindex duration: ${commands.reindex.durationMs}ms`,
+      `index.scip: ${formatBytes(fileSize(join(cacheDir, 'index.scip')))}`,
+      `index.db: ${formatBytes(fileSize(join(cacheDir, 'index.db')))}`,
+    ].join('\n'),
+  };
+}
+
+function commandDurations(commands) {
+  return {
+    name: 'command durations',
+    pass: true,
+    evidence: Object.entries(commands)
+      .map(([name, result]) => `${name}: ${result.durationMs}ms`)
+      .join('\n'),
+  };
+}
+
+function fileSize(path) {
+  return existsSync(path) ? statSync(path).size : 0;
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
 }
 
 function assertIncludes(name, text, expectedValues) {
