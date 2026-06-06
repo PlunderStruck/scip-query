@@ -613,6 +613,9 @@ export function isCallableDefinition(symbol: string): boolean {
   return symbol.includes('().');
 }
 
+// scip-query: ignore-wrapper — catalog primitive used inside definition
+// hydration and by symbol lookup; it names the nearest enclosing type concept
+// so callers do not duplicate SCIP descriptor traversal.
 export function parentTypeName(rawSymbol: string): string | null {
   const parsed = parseSymbol(rawSymbol);
   if ('kind' in parsed) {

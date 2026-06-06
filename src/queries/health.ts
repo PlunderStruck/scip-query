@@ -38,6 +38,8 @@ interface HealthSignals {
   realCycleCount: number;
 }
 
+const EXTREME_COMPLEXITY_SCORE = 50;
+
 /**
  * Single composite health report that runs all de-bloat analyses
  * and produces a prioritized action list.
@@ -76,7 +78,7 @@ export function health(
       passthroughs: analyses.passthroughResult.length,
       staleTypes: signals.trueStaleCount,
       driftedFiles: signals.trueDriftCount,
-      complexityHotspotCount: analyses.complexResult.length,
+      complexityHotspotCount: extremeComplexityCount(analyses),
     },
     actions,
     topComplexity: analyses.complexResult.slice(0, 5).map((r) => ({
@@ -274,8 +276,12 @@ function computeHealthScore(analyses: HealthAnalyses, signals: HealthSignals): n
   const driftPercent = signals.trueDriftCount / fileCount;
   score -= Math.min(5, Math.round(driftPercent * 50));
 
-  const extremeComplexity = analyses.complexResult.filter((r) => r.score > 50).length;
+  const extremeComplexity = extremeComplexityCount(analyses);
   score -= Math.min(5, extremeComplexity * 2);
 
   return Math.max(0, Math.min(100, score));
+}
+
+function extremeComplexityCount(analyses: HealthAnalyses): number {
+  return analyses.complexResult.filter((r) => r.score > EXTREME_COMPLEXITY_SCORE).length;
 }

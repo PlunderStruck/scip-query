@@ -4,6 +4,9 @@ import { createTsMorphProvider } from './typescript/ts-morph-provider.js';
 
 const PROVIDER_CACHE = new WeakMap<ScipDatabase, Map<string, SemanticProvider>>();
 
+// scip-query: ignore-wrapper — public provider cache boundary exported from
+// semantic/index.ts; keeping provider construction behind this function
+// prevents query modules from depending on concrete ts-morph providers.
 export function getSemanticProvider(db: ScipDatabase, relativePath?: string): SemanticProvider {
   const key = `${db.config.projectRoot}:typescript-workspace`;
   let perDb = PROVIDER_CACHE.get(db);

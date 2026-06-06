@@ -41,6 +41,9 @@ export function semanticCallerMap(
   return result;
 }
 
+// scip-query: ignore-wrapper — public semantic graph primitive; even when only
+// reference-graph consumes it internally, this is the query-facing boundary
+// documented by the TypeScript semantic provider plan.
 export function semanticCalleeMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<IndexedDefinition | SymbolMatch>,
