@@ -2,6 +2,7 @@ import type { ScipDatabase } from '../storage/db.js';
 import { ProjectIndex } from '../core/project-index.js';
 import { resolveIndexedFile } from '../resolution/path-resolver.js';
 import type { ChangeSurfaceEntry, ChangeSurfaceResult } from '../domain/types.js';
+import { semanticCallerMap } from '../semantic/shared-primitives.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
 
 /**
@@ -36,10 +37,11 @@ export function changeSurface(
   let totalExternalConsumers = 0;
 
   for (const def of definitions) {
-    const consumerRow = db.get<{ consumer_count: number }>(
-      `SELECT COUNT(DISTINCT c.document_id) AS consumer_count
+    const consumerRows = db.all<{ relative_path: string }>(
+      `SELECT DISTINCT consumer_d.relative_path
       FROM mentions m
       JOIN chunks c ON m.chunk_id = c.id
+      JOIN documents consumer_d ON consumer_d.id = c.document_id
       WHERE m.symbol_id = ?
         AND m.role != 1
         AND c.document_id != ?`,
@@ -47,7 +49,11 @@ export function changeSurface(
       doc.id,
     );
 
-    const externalConsumers = consumerRow?.consumer_count ?? 0;
+    const semanticConsumers = semanticCallerMap(db, [def]).get(def.symbolId) ?? new Set<string>();
+    const externalConsumers = new Set([
+      ...consumerRows.map((row) => row.relative_path),
+      ...[...semanticConsumers].filter((file) => file !== doc.relative_path),
+    ]).size;
 
     let riskLevel: 'low' | 'medium' | 'high';
     if (externalConsumers > 10) {

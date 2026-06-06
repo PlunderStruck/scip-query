@@ -6,6 +6,7 @@ import { loadProjectConfig, resolveIndexPaths, initProjectConfig } from './confi
 import { reindex, detectLanguages, augmentAuxiliaryDocuments, augmentVueResolvedReferences } from '../reindex/index.js';
 import { getIndexerConfig } from '../reindex/indexers.js';
 import { getIndexerDependencyStatus } from '../reindex/install.js';
+import { getTypeScriptSemanticStatus } from '../semantic/typescript/status.js';
 import { Watcher } from './watch.js';
 import type { DeadOptions } from '../domain/types.js';
 import { BUILTIN_SKILLS, installSkills, isScipInstalled, printScipInstallInstructions } from './setup.js';
@@ -1189,6 +1190,17 @@ program
       }
     }
 
+    if (languages.includes('typescript')) {
+      const status = getTypeScriptSemanticStatus(projectRoot);
+      const prefix = status.available ? '  OK' : status.dependencyAvailable ? '  WARN' : '  MISSING';
+      const configPath = status.tsconfigPath ? ` (${status.tsconfigPath})` : '';
+      console.log('\nSemantic provider readiness:');
+      console.log(`${prefix} typescript: ts-morph${configPath}`);
+      if (status.reason) {
+        console.log(`    ${status.reason}; semantic checks will fall back to SCIP/source evidence`);
+      }
+    }
+
     process.exitCode = hasProblems ? 1 : 0;
   });
 
@@ -1298,6 +1310,15 @@ program
     console.log(`DB path:  ${dbPath}`);
     if (dbPath !== paths.dbPath) {
       console.log(`Config:   ${paths.dbPath} (fallback to project root index.db)`);
+    }
+    if ((config.languages ?? detectLanguages(projectRoot)).includes('typescript')) {
+      const semanticStatus = getTypeScriptSemanticStatus(projectRoot);
+      const semanticState = semanticStatus.available ? 'available' : 'fallback';
+      const suffix = semanticStatus.tsconfigPath ? ` (${semanticStatus.tsconfigPath})` : '';
+      console.log(`TS sem:   ${semanticState}${suffix}`);
+      if (semanticStatus.reason) {
+        console.log(`TS note:  ${semanticStatus.reason}`);
+      }
     }
     console.log(`Exists:   ${existsSync(dbPath) ? 'yes' : 'no'}`);
 

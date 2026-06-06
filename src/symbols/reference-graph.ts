@@ -42,7 +42,8 @@ import { getSourceImports } from '../language-parsers/index.js';
 import { isCallableSymbol, leafName } from './symbol-parser.js';
 import { findEnclosingDefinition, getAllDefinitions, getDefinitionsForFile } from './definition-catalog.js';
 import { getFullSymbolMatch } from './symbol-lookup.js';
-import type { ReferenceSite, SymbolLocation, SymbolMatch } from '../domain/types.js';
+import type { IndexedDefinition, ReferenceSite, SymbolLocation, SymbolMatch } from '../domain/types.js';
+import { semanticCalleeMap, semanticCallerMap } from '../semantic/shared-primitives.js';
 
 export interface CalleeRow {
   symbol: string;
@@ -373,6 +374,7 @@ export function buildCalleeMap(
   };
 
   if (astDefs.length > 0) addAll(buildAstCalleeMap(db, astDefs));
+  addAll(toCalleeRows(semanticCalleeMap(db, definitions)));
   // Chunk path runs for non-AST defs always; for AST defs only when additive.
   const chunkDefs = additive ? definitions : chunkOnlyDefs;
   if (chunkDefs.length > 0) addAll(buildChunkCalleeMap(db, chunkDefs));
@@ -719,15 +721,14 @@ export function buildCrossFileCallerMap(
        ${db.pathExclusionsFor('d')}`,
   );
 
+  const effectiveDefinitions = definitions ?? getAllDefinitions(db);
   const selfRanges = new Map<number, { docId: number; startLine: number; endLine: number }>();
-  if (definitions) {
-    for (const def of definitions) {
-      selfRanges.set(def.symbolId, {
-        docId: def.documentId,
-        startLine: def.startLine,
-        endLine: def.endLine,
-      });
-    }
+  for (const def of effectiveDefinitions) {
+    selfRanges.set(def.symbolId, {
+      docId: def.documentId,
+      startLine: def.startLine,
+      endLine: def.endLine,
+    });
   }
 
   for (const row of rows) {
@@ -768,5 +769,34 @@ export function buildCrossFileCallerMap(
     }
   }
 
+  mergeCallerSets(map, semanticCallerMap(db, indexedDefinitions(effectiveDefinitions)));
+
   return map;
+}
+
+function indexedDefinitions(definitions: ReadonlyArray<SymbolLocation>): IndexedDefinition[] {
+  return definitions.filter((definition): definition is IndexedDefinition =>
+    'relativePath' in definition && 'symbol' in definition && 'leaf' in definition,
+  );
+}
+
+function toCalleeRows(
+  semantic: Map<number, Array<{ symbol: string; file: string }>>,
+): Map<number, Array<{ symbol: string; file: string; chunkId: number }>> {
+  const out = new Map<number, Array<{ symbol: string; file: string; chunkId: number }>>();
+  for (const [symbolId, callees] of semantic) {
+    out.set(symbolId, callees.map((callee) => ({ ...callee, chunkId: -1 })));
+  }
+  return out;
+}
+
+function mergeCallerSets(target: Map<number, Set<string>>, source: Map<number, Set<string>>): void {
+  for (const [symbolId, files] of source) {
+    let bucket = target.get(symbolId);
+    if (!bucket) {
+      bucket = new Set();
+      target.set(symbolId, bucket);
+    }
+    for (const file of files) bucket.add(file);
+  }
 }

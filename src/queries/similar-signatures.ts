@@ -2,6 +2,7 @@ import type { ScipDatabase } from '../storage/db.js';
 import { getAllDefinitions } from '../symbols/definition-catalog.js';
 import { getSourceText } from '../source/source-text.js';
 import type { SimilarSignatureGroup } from '../domain/types.js';
+import { semanticSignature } from '../semantic/shared-primitives.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
 import { cleanSignature, extractSignature } from '../storage/scip-rows.js';
 
@@ -86,6 +87,9 @@ function resolveNormalizedSignature(
   db: ScipDatabase,
   definition: ReturnType<typeof getAllDefinitions>[number],
 ): string | null {
+  const semantic = semanticSignature(db, definition);
+  if (semantic) return semantic;
+
   const documented = extractDocumentedSignature(definition.documentation);
   const normalizedDocumented = documented ? normalizeSignature(documented) : null;
   if (normalizedDocumented) {

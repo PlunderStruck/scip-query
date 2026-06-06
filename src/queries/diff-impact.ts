@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import type { ScipDatabase } from '../storage/db.js';
 import type { DiffImpactResult, IndexedDefinition } from '../domain/types.js';
 import { ProjectIndex } from '../core/project-index.js';
+import { semanticCallerMap } from '../semantic/shared-primitives.js';
 import { isCallableSymbol, isModuleLikeSymbol, shortenSymbol } from '../symbols/symbol-parser.js';
 
 /**
@@ -98,7 +99,8 @@ export function diffImpact(
       def.symbolId,
     );
 
-    const fanIn = fanInRow?.fan_in ?? 0;
+    const semanticConsumers = semanticCallerMap(db, [def]).get(def.symbolId) ?? new Set<string>();
+    const fanIn = Math.max(fanInRow?.fan_in ?? 0, semanticConsumers.size);
     if (!shouldReportChangedDefinition(def, fanIn)) continue;
 
     const shortName = shortenSymbol(def.symbol);
@@ -131,6 +133,14 @@ export function diffImpact(
         consumerMap.set(consumer.relative_path, new Set());
       }
       consumerMap.get(consumer.relative_path)!.add(shortName);
+    }
+    for (const file of semanticConsumers) {
+      if (db.isIgnored(file)) continue;
+      if (changedFileSet.has(file)) continue;
+      if (!consumerMap.has(file)) {
+        consumerMap.set(file, new Set());
+      }
+      consumerMap.get(file)!.add(shortName);
     }
   }
 

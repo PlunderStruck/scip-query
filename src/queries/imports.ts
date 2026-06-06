@@ -2,6 +2,7 @@ import type { ScipDatabase } from '../storage/db.js';
 import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
 import { resolveIndexedFile } from '../resolution/path-resolver.js';
 import { getSourceImports } from '../language-parsers/index.js';
+import { semanticImportUsage } from '../semantic/shared-primitives.js';
 import type { ImportResult, UnusedImportResult } from '../domain/types.js';
 import { isModuleLikeSymbol, leafName, shortenSymbol } from '../symbols/symbol-parser.js';
 
@@ -169,13 +170,30 @@ function loadFileImportEntries(db: ScipDatabase, filePattern: string): ImportEnt
 
   const indexed = rows.filter((row) => !db.isIgnored(row.importer));
   if (indexed.length > 0) {
+    const semantic = semanticImportUsage(db, importer);
     return indexed.map((r) => ({
       symbol: r.symbol,
       shortName: shortenSymbol(r.symbol),
       fromFile: r.from_file ?? '(external)',
       importer: r.importer,
-      used: r.used !== 0,
+      used: r.used !== 0 || semantic.some((entry) =>
+        entry.isUsed && entry.sourcePath === r.from_file,
+      ),
     }));
+  }
+
+  const semantic = semanticImportUsage(db, importer);
+  if (semantic.length > 0) {
+    return semantic.map((entry) => {
+      const rendered = renderImportSymbol(entry.importedName, entry.localName, entry.kind);
+      return {
+        symbol: rendered,
+        shortName: rendered,
+        fromFile: entry.sourcePath ?? '(external)',
+        importer,
+        used: entry.kind === 'side-effect' ? true : entry.isUsed,
+      };
+    });
   }
 
   return getSourceImports(db, importer).map((entry) => {

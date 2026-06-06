@@ -4,6 +4,7 @@ import { classifyFile } from '../analysis/file-classifier.js';
 import { getSourceImports } from '../language-parsers/index.js';
 import type { DriftResult, DriftSummary } from '../domain/types.js';
 import { ProjectIndex } from '../core/project-index.js';
+import { semanticImportUsage } from '../semantic/shared-primitives.js';
 import { getArchitecturalLayer, isKnownProjectLayerDependency, layerPolicyForEdge } from './drift-policy.js';
 
 /**
@@ -53,6 +54,7 @@ export function drift(
         // This file "depends on" dep but never references its symbols.
         // This can happen when the dep is imported for types only
         // (which don't appear in the mention graph). Skip type-heavy deps.
+        if (hasSemanticImportUse(db, file, dep)) continue;
         if (hasUsedSourceImport(db, file, dep)) continue;
         if (isTypeOnlyImport(db, file, dep)) continue;
         if (isLikelyTypeOnlyDep(dep)) continue;
@@ -266,6 +268,11 @@ function inferLayerRules(
 
 function isLikelyTypeOnlyDep(dep: string): boolean {
   return dep.includes('types') || dep.endsWith('.d.ts');
+}
+
+function hasSemanticImportUse(db: ScipDatabase, file: string, dep: string): boolean {
+  const imports = semanticImportUsage(db, file).filter((entry) => entry.sourcePath === dep);
+  return imports.length > 0 && imports.some((entry) => entry.isUsed);
 }
 
 function hasUsedSourceImport(db: ScipDatabase, file: string, dep: string): boolean {

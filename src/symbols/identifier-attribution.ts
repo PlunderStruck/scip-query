@@ -24,6 +24,7 @@ import { findIdentifierLines, getFileIdentifiers } from './identifier-index.js';
 import { getSourceImports } from '../language-parsers/index.js';
 import { getSourceText } from '../source/source-text.js';
 import { getSourceFiles } from '../source/source-fileset.js';
+import { semanticReferences } from '../semantic/shared-primitives.js';
 import { leafName } from './symbol-parser.js';
 
 // ── Public types ─────────────────────────────────────────────────
@@ -145,6 +146,26 @@ export function findReferences(
   if (!match) return [];
   const identifier = leafName(match.symbol);
   if (!identifier) return [];
+
+  const semanticSites = semanticReferences(db, {
+    ...match,
+    leaf: identifier,
+    parentTypeName: null,
+    isFunctionLike: false,
+    isTypeLike: false,
+    kind: null,
+    documentation: null,
+    enclosingSymbol: null,
+  });
+  if (semanticSites.length > 0) {
+    const semanticLines = new Map<string, number[]>();
+    for (const site of semanticSites) {
+      const bucket = semanticLines.get(site.file) ?? [];
+      bucket.push(site.line);
+      semanticLines.set(site.file, bucket);
+    }
+    return materializeReferenceSites(db, semanticLines);
+  }
 
   const fileLines = new Map<string, number[]>();
   for (const file of getSourceFiles(db)) {
