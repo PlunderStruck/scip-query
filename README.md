@@ -50,11 +50,30 @@ For goal-oriented usage guides (not just command reference), see **[Agent Guide]
 
 Historical implementation plans and completed cleanup notes live in [`docs/plans/`](docs/plans/).
 
+## Install From npm
+
+Install the published CLI globally from npm:
+
+```bash
+npm install -g scip-query@latest
+scip-query --version
+```
+
+You can also run it without a global install:
+
+```bash
+npx scip-query@latest --version
+npx scip-query@latest reindex
+```
+
+The npm package is published at [`scip-query`](https://www.npmjs.com/package/scip-query). `@latest` should resolve to the newest published version.
+
 ## Quick Start
 
 ```bash
 # Install
-npm install -g scip-query
+npm install -g scip-query@latest
+scip-query --version
 scip-query check-deps                # verify optional indexers and parser support
 scip-query install-skills            # install built-in Codex/Claude skills
 
