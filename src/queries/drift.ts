@@ -23,6 +23,9 @@ import { getArchitecturalLayer, isKnownProjectLayerDependency, layerPolicyForEdg
  *    suggesting it's reaching outside its expected scope. Only flagged
  *    when the file is the ONLY one in its directory with that dep.
  */
+// scip-query: ignore-extract — this is the user-facing drift report pipeline:
+// file dependencies, symbol references, and the three drift families are
+// intentionally assembled in one place.
 export function drift(
   db: ScipDatabase,
   opts?: { scope?: string; minDeviation?: number },
@@ -46,6 +49,9 @@ export function drift(
 
 // ── Helpers ────────────────────────────────────────────────
 
+// scip-query: ignore-extract — this function is the conservative unused-import
+// evidence gate; the ordered skips prevent false positives for semantic,
+// type-only, side-effect, and Vue-template imports.
 function unusedImportDrift(
   db: ScipDatabase,
   depGraph: Map<string, Set<string>>,
@@ -117,6 +123,8 @@ function layerViolationDrift(depGraph: Map<string, Set<string>>): DriftResult[] 
   return results;
 }
 
+// scip-query: ignore-extract — this is the sibling-pattern scoring pass; the
+// directory grouping, dependency frequency, and threshold are one decision.
 function patternDeviationDrift(
   depGraph: Map<string, Set<string>>,
   minDeviation: number,
@@ -203,36 +211,56 @@ function buildSymbolRefGraph(
   db: ScipDatabase,
   scope?: string,
 ): Map<string, Set<string>> {
-  const index = new ProjectIndex(db);
-  const scopeFilter = scope ? `AND d1.relative_path LIKE '%${scope}%'` : '';
-
-  const rows = db.all<{ from_file: string; to_file: string }>(
-    `SELECT DISTINCT d1.relative_path AS from_file, d2.relative_path AS to_file
-    FROM mentions m
-    JOIN chunks c ON m.chunk_id = c.id
-    JOIN documents d1 ON c.document_id = d1.id
-    JOIN global_symbols gs ON m.symbol_id = gs.id
-    JOIN (
-      SELECT m2.symbol_id, c2.document_id
-      FROM mentions m2
-      JOIN chunks c2 ON m2.chunk_id = c2.id
-      WHERE m2.role = 1
-      GROUP BY m2.symbol_id
-    ) sym_def ON sym_def.symbol_id = gs.id
-    JOIN documents d2 ON sym_def.document_id = d2.id
-    WHERE d1.id != d2.id
-      AND m.role != 1
-      ${db.pathExclusionsFor('d1', 'd2')}
-      ${scopeFilter}`,
-  );
-
   const graph = new Map<string, Set<string>>();
-  for (const r of rows) {
-    if (db.isIgnored(r.from_file) || db.isIgnored(r.to_file)) continue;
-    if (!graph.has(r.from_file)) graph.set(r.from_file, new Set());
-    graph.get(r.from_file)!.add(r.to_file);
-  }
+  addScipSymbolRefEdges(db, graph, scope);
+  addSourceScannedSymbolRefEdges(db, graph);
+  return graph;
+}
 
+function addScipSymbolRefEdges(
+  db: ScipDatabase,
+  graph: Map<string, Set<string>>,
+  scope?: string,
+): void {
+  for (const edge of scipSymbolRefEdges(db, scope)) {
+    addSymbolRefEdge(db, graph, edge.from_file, edge.to_file);
+  }
+}
+
+function scipSymbolRefEdges(
+  db: ScipDatabase,
+  scope?: string,
+): Array<{ from_file: string; to_file: string }> {
+  const scopeFilter = scope ? `AND d1.relative_path LIKE '%${scope}%'` : '';
+  return db.all<{ from_file: string; to_file: string }>(
+    `SELECT DISTINCT d1.relative_path AS from_file, d2.relative_path AS to_file
+     FROM mentions m
+     JOIN chunks c ON m.chunk_id = c.id
+     JOIN documents d1 ON c.document_id = d1.id
+     JOIN global_symbols gs ON m.symbol_id = gs.id
+     JOIN (
+       SELECT m2.symbol_id, c2.document_id
+       FROM mentions m2
+       JOIN chunks c2 ON m2.chunk_id = c2.id
+       WHERE m2.role = 1
+       GROUP BY m2.symbol_id
+     ) sym_def ON sym_def.symbol_id = gs.id
+     JOIN documents d2 ON sym_def.document_id = d2.id
+     WHERE d1.id != d2.id
+       AND m.role != 1
+       ${db.pathExclusionsFor('d1', 'd2')}
+       ${scopeFilter}`,
+  );
+}
+
+// scip-query: ignore-extract — this adds source-scanned symbol edges; document
+// loading, ignore filtering, source-reference scanning, and graph mutation are
+// one fallback evidence source.
+function addSourceScannedSymbolRefEdges(
+  db: ScipDatabase,
+  graph: Map<string, Set<string>>,
+): void {
+  const index = new ProjectIndex(db);
   const docs = db.all<{ relative_path: string }>(
     `SELECT relative_path FROM documents
      WHERE 1 = 1 ${db.pathExclusionsFor('documents')}`,
@@ -248,15 +276,23 @@ function buildSymbolRefGraph(
   }, (hit) => {
     if (hit.target.relativePath === hit.sourceFile) return;
     if (db.isIgnored(hit.target.relativePath)) return;
-    let bucket = graph.get(hit.sourceFile);
-    if (!bucket) {
-      bucket = new Set();
-      graph.set(hit.sourceFile, bucket);
-    }
-    bucket.add(hit.target.relativePath);
+    addSymbolRefEdge(db, graph, hit.sourceFile, hit.target.relativePath);
   });
+}
 
-  return graph;
+function addSymbolRefEdge(
+  db: ScipDatabase,
+  graph: Map<string, Set<string>>,
+  fromFile: string,
+  toFile: string,
+): void {
+  if (db.isIgnored(fromFile) || db.isIgnored(toFile)) return;
+  let bucket = graph.get(fromFile);
+  if (!bucket) {
+    bucket = new Set();
+    graph.set(fromFile, bucket);
+  }
+  bucket.add(toFile);
 }
 
 /**

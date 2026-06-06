@@ -6,6 +6,8 @@ import { getSourceText } from '../source/source-text.js';
 import type { TraceResult } from '../domain/types.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../symbols/symbol-parser.js';
 
+// scip-query: ignore-extract — trace is the user-facing evidence assembly:
+// definition metadata plus source-scan references with mention fallback.
 export function trace(db: ScipDatabase, symbolPattern: string): TraceResult {
   const match = findFirstSymbolMatch(db, symbolPattern);
   if (!match) {

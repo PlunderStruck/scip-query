@@ -58,6 +58,9 @@ export function resolveOnDiskFile(db: ScipDatabase, filePattern: string): string
   return existsSyncFs(abs) ? rel : null;
 }
 
+// scip-query: ignore-extract — this function is the ranked file-resolution
+// decision table: exact path, basename, fuzzy path, and symbol fallback need
+// to stay readable in priority order.
 export function resolveDocumentCandidates(
   db: ScipDatabase,
   filePattern: string,

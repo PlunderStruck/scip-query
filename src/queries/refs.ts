@@ -35,6 +35,9 @@ export function refs(db: ScipDatabase, symbolPattern: string): RefResult[] {
   return out;
 }
 
+// scip-query: ignore-extract — this Ruby fallback is a narrow semantic
+// evidence adapter; splitting its guard/query/filter/project sequence would
+// obscure why it only runs for Ruby symbols.
 function getRubySemanticRefs(
   db: ScipDatabase,
   match: NonNullable<ReturnType<typeof findFirstSymbolMatch>>,

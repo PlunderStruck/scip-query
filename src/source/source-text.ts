@@ -23,7 +23,7 @@ export function getSourceText(
   });
 }
 
-const SUPPRESS_COMMENT_RE = /scip-query[\s:-]*ignore[\s:-]*(?:dead(?:-code)?|stale|wrapper|passthrough|drift)?/i;
+const SUPPRESS_COMMENT_RE = /scip-query[\s:-]*ignore[\s:-]*(?:dead(?:-code)?|stale|wrapper|passthrough|drift|extract)?/i;
 
 /**
  * True when a `// scip-query: ignore-...` (or similar) comment appears on

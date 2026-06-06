@@ -19,6 +19,9 @@ interface MentionChunk {
  * providing reuse. A function with fan-in = 1 whose sole caller
  * is widely used is a strong signal of unnecessary wrapping.
  */
+// scip-query: ignore-extract — this is the wrapper-candidate scoring pipeline:
+// production symbols, indexed callers, source fallback callers, and reverse
+// file fan-in are the evidence model for this command.
 export function wrapperCandidates(
   db: ScipDatabase,
   opts?: { scope?: string; maxLoc?: number; limit?: number },
@@ -51,6 +54,9 @@ export function wrapperCandidates(
   return results.slice(0, limit);
 }
 
+// scip-query: ignore-extract — this is the single-symbol wrapper decision:
+// external caller count, enclosing caller, test-module guard, and fan-in
+// threshold must be read together to understand the finding.
 function wrapperCandidateForSymbol(
   db: ScipDatabase,
   index: ProjectIndex,

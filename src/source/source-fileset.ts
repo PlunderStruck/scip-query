@@ -85,6 +85,9 @@ export interface SourceFilesetOptions {
  * stringification of the options so repeated calls with the same
  * filter share the result.
  */
+// scip-query: ignore-extract — this is the canonical source-file set builder:
+// indexed documents, on-disk fallback files, ignore rules, and extension
+// filtering must agree for every source-scanning query.
 export function getSourceFiles(
   db: ScipDatabase,
   opts: SourceFilesetOptions = {},

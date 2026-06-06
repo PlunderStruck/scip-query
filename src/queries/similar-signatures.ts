@@ -83,6 +83,9 @@ export function similarSignatures(
   return limit ? results.slice(0, limit) : results;
 }
 
+// scip-query: ignore-extract — this resolves one normalized signature:
+// semantic signatures, documented signatures, declaration heads, and fallback
+// normalization are one priority order.
 function resolveNormalizedSignature(
   db: ScipDatabase,
   definition: ReturnType<typeof getAllDefinitions>[number],

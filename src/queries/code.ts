@@ -23,14 +23,33 @@ export function code(
   const { context = 0 } = opts;
 
   // Handle direct file:line-line syntax (bypass symbol lookup)
-  const fileLineMatch = symbolPattern.match(/^(.+\.\w+):(\d+)-(\d+)$/);
-  if (fileLineMatch) {
-    return readFileRange(db, fileLineMatch[1]!, parseInt(fileLineMatch[2]!, 10), parseInt(fileLineMatch[3]!, 10), context);
-  }
+  const directRange = parseFileLineRange(symbolPattern);
+  if (directRange) return readFileRange(db, directRange.filePath, directRange.startLine, directRange.endLine, context);
 
   const match = findFirstSymbolMatch(db, symbolPattern);
   if (!match) return null;
+  return readSymbolRange(db, match, context);
+}
 
+function parseFileLineRange(symbolPattern: string): {
+  filePath: string;
+  startLine: number;
+  endLine: number;
+} | null {
+  const fileLineMatch = symbolPattern.match(/^(.+\.\w+):(\d+)-(\d+)$/);
+  if (!fileLineMatch) return null;
+  return {
+    filePath: fileLineMatch[1]!,
+    startLine: parseInt(fileLineMatch[2]!, 10),
+    endLine: parseInt(fileLineMatch[3]!, 10),
+  };
+}
+
+function readSymbolRange(
+  db: ScipDatabase,
+  match: NonNullable<ReturnType<typeof findFirstSymbolMatch>>,
+  context: number,
+): CodeResult | null {
   // Get the language from the documents table
   const doc = db.get<{ language: string | null }>(
     `SELECT language FROM documents WHERE relative_path = ?`,

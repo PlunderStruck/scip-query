@@ -56,63 +56,47 @@ export interface CallerRow {
   file: string;
 }
 
+interface ReferenceChunk {
+  start_line: number;
+  end_line: number;
+}
+
+interface ChunkMentionCallerRow {
+  symbol_id: number;
+  relative_path: string;
+  document_id: number;
+  chunk_start: number;
+  chunk_end: number;
+}
+
+interface DefinitionSelfRange {
+  docId: number;
+  startLine: number;
+  endLine: number;
+}
+
 // Re-export type for backwards-compatibility with callers that imported
 // ReferenceSite from query-support.ts.
 export type { ReferenceSite } from '../domain/types.js';
 
 const FILE_DEP_GRAPH_CACHE = createPerDbCache<string, Map<string, Set<string>>>('file-dep-graph');
 
+// scip-query: ignore-extract — this builds the file dependency graph from
+// SCIP edges plus source-import fallback edges; the two sources intentionally
+// share one normalization path.
 export function buildFileDepGraph(
   db: ScipDatabase,
   scope?: string,
 ): Map<string, Set<string>> {
   return FILE_DEP_GRAPH_CACHE.get(db, scope ?? '', () => {
-    const scopeFilter = scope ? `AND d1.relative_path LIKE '%${scope}%'` : '';
-
-    const edges = db.all<{ from_file: string; to_file: string }>(
-      `SELECT DISTINCT
-        d1.relative_path AS from_file,
-        d2.relative_path AS to_file
-      FROM mentions m
-      JOIN chunks c ON m.chunk_id = c.id
-      JOIN documents d1 ON c.document_id = d1.id
-      JOIN global_symbols gs ON m.symbol_id = gs.id
-      JOIN (
-        SELECT m2.symbol_id, c2.document_id
-        FROM mentions m2
-        JOIN chunks c2 ON m2.chunk_id = c2.id
-        WHERE m2.role = 1
-        GROUP BY m2.symbol_id
-      ) sym_def ON sym_def.symbol_id = gs.id
-      JOIN documents d2 ON sym_def.document_id = d2.id
-      WHERE d1.id != d2.id
-        AND m.role != 1
-        ${db.pathExclusionsFor('d1', 'd2')}
-        ${scopeFilter}`,
-    );
-
     const graph = new Map<string, Set<string>>();
-    const indexedFiles = new Set<string>(
-      db.all<{ relative_path: string }>(
-        `SELECT relative_path
-         FROM documents
-         WHERE 1 = 1
-           ${db.pathExclusionsFor('documents')}
-         ORDER BY relative_path`,
-      )
-        .map((row) => row.relative_path)
-        .filter((relativePath) => !db.isIgnored(relativePath)),
-    );
+    const indexedFiles = indexedDocumentPaths(db);
+    const addEdge = (fromFile: string, toFile: string): void =>
+      addFileDepEdge(db, graph, indexedFiles, fromFile, toFile);
 
-    const addEdge = (fromFile: string, toFile: string): void => {
-      if (fromFile === toFile) return;
-      if (db.isIgnored(fromFile) || db.isIgnored(toFile)) return;
-      if (!indexedFiles.has(toFile)) return;
-      if (!graph.has(fromFile)) graph.set(fromFile, new Set());
-      graph.get(fromFile)!.add(toFile);
-    };
-
-    for (const edge of edges) addEdge(edge.from_file, edge.to_file);
+    for (const edge of scipFileDepEdges(db, scope)) {
+      addEdge(edge.from_file, edge.to_file);
+    }
 
     for (const relativePath of indexedFiles) {
       if (scope && !relativePath.includes(scope)) continue;
@@ -124,6 +108,66 @@ export function buildFileDepGraph(
 
     return graph;
   });
+}
+
+function scipFileDepEdges(
+  db: ScipDatabase,
+  scope?: string,
+): Array<{ from_file: string; to_file: string }> {
+  const scopeFilter = scope ? `AND d1.relative_path LIKE '%${scope}%'` : '';
+  return db.all<{ from_file: string; to_file: string }>(
+    `SELECT DISTINCT
+      d1.relative_path AS from_file,
+      d2.relative_path AS to_file
+    FROM mentions m
+    JOIN chunks c ON m.chunk_id = c.id
+    JOIN documents d1 ON c.document_id = d1.id
+    JOIN global_symbols gs ON m.symbol_id = gs.id
+    JOIN (
+      SELECT m2.symbol_id, c2.document_id
+      FROM mentions m2
+      JOIN chunks c2 ON m2.chunk_id = c2.id
+      WHERE m2.role = 1
+      GROUP BY m2.symbol_id
+    ) sym_def ON sym_def.symbol_id = gs.id
+    JOIN documents d2 ON sym_def.document_id = d2.id
+    WHERE d1.id != d2.id
+      AND m.role != 1
+      ${db.pathExclusionsFor('d1', 'd2')}
+      ${scopeFilter}`,
+  );
+}
+
+function indexedDocumentPaths(db: ScipDatabase): Set<string> {
+  return new Set(
+    db.all<{ relative_path: string }>(
+      `SELECT relative_path
+       FROM documents
+       WHERE 1 = 1
+         ${db.pathExclusionsFor('documents')}
+       ORDER BY relative_path`,
+    )
+      .map((row) => row.relative_path)
+      .filter((relativePath) => !db.isIgnored(relativePath)),
+  );
+}
+
+function addFileDepEdge(
+  db: ScipDatabase,
+  graph: Map<string, Set<string>>,
+  indexedFiles: ReadonlySet<string>,
+  fromFile: string,
+  toFile: string,
+): void {
+  if (fromFile === toFile) return;
+  if (db.isIgnored(fromFile) || db.isIgnored(toFile)) return;
+  if (!indexedFiles.has(toFile)) return;
+  let bucket = graph.get(fromFile);
+  if (!bucket) {
+    bucket = new Set();
+    graph.set(fromFile, bucket);
+  }
+  bucket.add(toFile);
 }
 
 export function getCalleeRowsForSymbol(
@@ -201,6 +245,9 @@ export function buildCallerRowsMap(db: ScipDatabase): Map<number, CallerRow[]> {
   });
 }
 
+// scip-query: ignore-extract — this is the targeted single-symbol caller
+// fallback: resolved reference sites, indexed definition lookup, and file-edge
+// attribution intentionally form one query path.
 function targetedCallerRowsForSymbol(db: ScipDatabase, symbol: SymbolMatch): CallerRow[] {
   const rows: CallerRow[] = [];
   const seen = new Set<string>();
@@ -298,11 +345,16 @@ export function resolvedCandidateLines(
   match: { symbolId: number; relativePath: string; startLine: number; endLine: number },
   identifier: string | null,
 ): Map<string, number[]> {
-  const rows = db.all<{
-    relative_path: string;
-    start_line: number;
-    end_line: number;
-  }>(
+  const fileLines = new Map<string, number[]>();
+  for (const [file, chunks] of referenceChunksByFile(db, match.symbolId)) {
+    fileLines.set(file, resolvedLinesForFile(db, file, chunks, match, identifier));
+  }
+  return fileLines;
+}
+
+function referenceChunksByFile(db: ScipDatabase, symbolId: number): Map<string, ReferenceChunk[]> {
+  const chunksByFile = new Map<string, ReferenceChunk[]>();
+  const rows = db.all<{ relative_path: string; start_line: number; end_line: number }>(
     `SELECT DISTINCT d.relative_path, c.start_line, c.end_line
      FROM mentions m
      JOIN chunks c ON m.chunk_id = c.id
@@ -311,10 +363,8 @@ export function resolvedCandidateLines(
        AND m.role != 1
        ${db.pathExclusionsFor('d')}
      ORDER BY d.relative_path, c.start_line`,
-    match.symbolId,
+    symbolId,
   );
-
-  const chunksByFile = new Map<string, Array<{ start_line: number; end_line: number }>>();
   for (const row of rows) {
     if (db.isIgnored(row.relative_path)) continue;
     let bucket = chunksByFile.get(row.relative_path);
@@ -324,25 +374,28 @@ export function resolvedCandidateLines(
     }
     bucket.push({ start_line: row.start_line, end_line: row.end_line });
   }
+  return chunksByFile;
+}
 
-  const fileLines = new Map<string, number[]>();
-  for (const [file, chunks] of chunksByFile) {
-    const excludeOpts = file === match.relativePath
-      ? { excludeStartLine: match.startLine, excludeEndLine: match.endLine }
-      : {};
-    const allHits = identifier
-      ? findIdentifierLines(db, file, identifier, excludeOpts)
-      : [];
+function resolvedLinesForFile(
+  db: ScipDatabase,
+  file: string,
+  chunks: readonly ReferenceChunk[],
+  match: { relativePath: string; startLine: number; endLine: number },
+  identifier: string | null,
+): number[] {
+  const excludeOpts = file === match.relativePath
+    ? { excludeStartLine: match.startLine, excludeEndLine: match.endLine }
+    : {};
+  const allHits = identifier
+    ? findIdentifierLines(db, file, identifier, excludeOpts)
+    : [];
+  return chunks.flatMap((chunk) => hitsOrChunkStart(allHits, chunk));
+}
 
-    const lines: number[] = [];
-    for (const chunk of chunks) {
-      const hitsInChunk = allHits.filter((line) => line >= chunk.start_line && line <= chunk.end_line);
-      const chosen = hitsInChunk.length > 0 ? hitsInChunk : [chunk.start_line];
-      for (const l of chosen) lines.push(l);
-    }
-    fileLines.set(file, lines);
-  }
-  return fileLines;
+function hitsOrChunkStart(allHits: readonly number[], chunk: ReferenceChunk): number[] {
+  const hitsInChunk = allHits.filter((line) => line >= chunk.start_line && line <= chunk.end_line);
+  return hitsInChunk.length > 0 ? hitsInChunk : [chunk.start_line];
 }
 
 interface ReferencePrelude {
@@ -402,6 +455,9 @@ export function buildReferenceSites(
  *     callees that AST resolution skips would otherwise produce false
  *     positives.
  */
+// scip-query: ignore-extract — this is the AST/semantic/chunk merge policy
+// for callee evidence; keeping the precedence visible prevents accuracy
+// regressions when one evidence source is noisy.
 export function buildCalleeMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<SymbolMatch>,
@@ -452,14 +508,40 @@ export function buildCalleeMap(
  *      against the file's known definitions sorted by start line.
  *   3. Resolve the callee leaf to a SCIP symbol via the global leaf index.
  */
+// scip-query: ignore-extract — this is the AST callee fallback builder:
+// per-file definitions, callsites, leaf index lookup, and innermost-caller
+// attribution are one source-scan pass.
 export function buildAstCalleeMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<SymbolMatch>,
 ): Map<number, Array<{ symbol: string; file: string; chunkId: number }>> {
   const result = new Map<number, Array<{ symbol: string; file: string; chunkId: number }>>();
+  const byFile = definitionsByFile(definitions, result);
+  const leafIndex = getGlobalLeafIndex(db);
 
-  // Index defs by file so we can attribute callsites to the smallest
-  // containing definition without walking the full set per callsite.
+  for (const [file, fileDefs] of byFile) {
+    const callsites = getCallSites(db, file);
+    if (!callsites) continue; // Source unreadable — defs return empty callee arrays.
+
+    for (const site of callsites) {
+      const owner = innermostDefinitionAtLine(fileDefs, site.line);
+      if (!owner) continue;
+
+      const pick = resolveAstCalleeCandidate(db, file, leafIndex, site.calleeLeaf, site.memberAccess);
+      if (!pick) continue;
+      if (pick.symbol === owner.symbol) continue; // skip self-recursion
+
+      result.get(owner.symbolId)!.push({ symbol: pick.symbol, file: pick.file, chunkId: site.line });
+    }
+  }
+
+  return result;
+}
+
+function definitionsByFile(
+  definitions: ReadonlyArray<SymbolMatch>,
+  result: Map<number, Array<{ symbol: string; file: string; chunkId: number }>>,
+): Map<string, SymbolMatch[]> {
   const byFile = new Map<string, SymbolMatch[]>();
   for (const def of definitions) {
     const arr = byFile.get(def.relativePath);
@@ -467,46 +549,29 @@ export function buildAstCalleeMap(
     else byFile.set(def.relativePath, [def]);
     result.set(def.symbolId, []);
   }
-
-  const leafIndex = getGlobalLeafIndex(db);
-
-  for (const [file, fileDefs] of byFile) {
-    const callsites = getCallSites(db, file);
-    if (!callsites) continue; // Source unreadable — defs return empty callee arrays.
-
-    // Sort defs by smallest range first so the innermost containing def wins
-    // (handles nested closures / inner fns correctly).
-    const sortedDefs = [...fileDefs].sort((a, b) => {
-      const aSize = a.endLine - a.startLine;
-      const bSize = b.endLine - b.startLine;
-      return aSize - bSize;
-    });
-
-    for (const site of callsites) {
-      // Innermost containing definition.
-      let owner: SymbolMatch | null = null;
-      for (const def of sortedDefs) {
-        if (site.line >= def.startLine && site.line <= def.endLine) {
-          owner = def;
-          break;
-        }
-      }
-      if (!owner) continue;
-
-      // Resolve callee leaf to one or more SCIP symbols.
-      const candidates = sameLanguageCandidates(file, leafIndex.get(site.calleeLeaf) ?? []);
-      if (!candidates || candidates.length === 0) continue;
-
-      const pick = pickAstCallCandidate(db, file, candidates, site.memberAccess);
-      if (!pick) continue;
-      if (pick.symbol === owner.symbol) continue; // skip self-recursion
-
-      const list = result.get(owner.symbolId)!;
-      list.push({ symbol: pick.symbol, file: pick.file, chunkId: site.line });
-    }
+  for (const defs of byFile.values()) {
+    defs.sort((a, b) => (a.endLine - a.startLine) - (b.endLine - b.startLine));
   }
+  return byFile;
+}
 
-  return result;
+function innermostDefinitionAtLine(
+  definitions: readonly SymbolMatch[],
+  line: number,
+): SymbolMatch | null {
+  return definitions.find((def) => line >= def.startLine && line <= def.endLine) ?? null;
+}
+
+function resolveAstCalleeCandidate(
+  db: ScipDatabase,
+  file: string,
+  leafIndex: Map<string, GlobalLeafCandidate[]>,
+  calleeLeaf: string,
+  memberAccess: boolean,
+): GlobalLeafCandidate | null {
+  const candidates = sameLanguageCandidates(file, leafIndex.get(calleeLeaf) ?? []);
+  if (candidates.length === 0) return null;
+  return pickAstCallCandidate(db, file, candidates, memberAccess);
 }
 
 function sameLanguageCandidates<T extends { file: string }>(
@@ -558,6 +623,9 @@ function astLanguageFamily(relativePath: string): string | null {
 type GlobalLeafCandidate = { symbol: string; symbolId: number; file: string };
 
 const GLOBAL_LEAF_INDEX_CACHE = createPerDbValue<Map<string, GlobalLeafCandidate[]>>('global-leaf-index');
+// scip-query: ignore-extract — this builds the global leaf-name candidate
+// index; SQL loading, ignore filtering, noise filtering, and language tagging
+// define one cache value.
 export function getGlobalLeafIndex(
   db: ScipDatabase,
 ): Map<string, GlobalLeafCandidate[]> {
@@ -732,6 +800,9 @@ export function buildChunkCalleeMap(
  * defining file are treated as potential self-references and only counted
  * when they originate from a different document.
  */
+// scip-query: ignore-extract — this is the bulk caller-map merge policy:
+// SCIP mentions, AST callsites, Rust attribute calls, and TypeScript semantics
+// intentionally contribute to one cross-file reference map.
 export function buildCrossFileCallerMap(
   db: ScipDatabase,
   definitions?: ReadonlyArray<SymbolLocation>,
@@ -752,6 +823,9 @@ export function buildCrossFileCallerMap(
   return map;
 }
 
+// scip-query: ignore-extract — this is the AST callsite caller pass:
+// language filtering, callsite extraction, candidate picking, and self-call
+// suppression are one fallback path.
 function addAstCallsiteCallers(
   db: ScipDatabase,
   map: Map<number, Set<string>>,
@@ -783,13 +857,16 @@ function addChunkMentionCallers(
   map: Map<number, Set<string>>,
   definitions: ReadonlyArray<SymbolLocation>,
 ): void {
-  const rows = db.all<{
-    symbol_id: number;
-    relative_path: string;
-    document_id: number;
-    chunk_start: number;
-    chunk_end: number;
-  }>(
+  const selfRanges = definitionSelfRanges(definitions);
+  for (const row of loadChunkMentionCallerRows(db)) {
+    if (db.isIgnored(row.relative_path)) continue;
+    if (isSelfChunkMention(row, selfRanges.get(row.symbol_id))) continue;
+    addCallerFile(map, row.symbol_id, row.relative_path);
+  }
+}
+
+function loadChunkMentionCallerRows(db: ScipDatabase): ChunkMentionCallerRow[] {
+  return db.all<ChunkMentionCallerRow>(
     `SELECT DISTINCT m.symbol_id, d.relative_path, c.document_id,
             c.start_line AS chunk_start, c.end_line AS chunk_end
      FROM mentions m
@@ -798,8 +875,10 @@ function addChunkMentionCallers(
      WHERE m.role != 1
        ${db.pathExclusionsFor('d')}`,
   );
+}
 
-  const selfRanges = new Map<number, { docId: number; startLine: number; endLine: number }>();
+function definitionSelfRanges(definitions: ReadonlyArray<SymbolLocation>): Map<number, DefinitionSelfRange> {
+  const selfRanges = new Map<number, DefinitionSelfRange>();
   for (const def of definitions) {
     selfRanges.set(def.symbolId, {
       docId: def.documentId,
@@ -807,20 +886,14 @@ function addChunkMentionCallers(
       endLine: def.endLine,
     });
   }
+  return selfRanges;
+}
 
-  for (const row of rows) {
-    if (db.isIgnored(row.relative_path)) continue;
-
-    const range = selfRanges.get(row.symbol_id);
-    if (range
-      && range.docId === row.document_id
-      && row.chunk_start >= range.startLine
-      && row.chunk_end <= range.endLine) {
-      continue;
-    }
-
-    addCallerFile(map, row.symbol_id, row.relative_path);
-  }
+function isSelfChunkMention(row: ChunkMentionCallerRow, range: DefinitionSelfRange | undefined): boolean {
+  return !!range
+    && range.docId === row.document_id
+    && row.chunk_start >= range.startLine
+    && row.chunk_end <= range.endLine;
 }
 
 function addRustAttrCallers(

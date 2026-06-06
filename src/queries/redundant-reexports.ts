@@ -47,6 +47,9 @@ export function redundantReexports(
   return limit ? withDartFallback.slice(0, limit) : withDartFallback;
 }
 
+// scip-query: ignore-extract — this is the SCIP-backed redundant re-export
+// decision: barrel/source rows, live-barrel guard, and conservative consumer
+// counts must be evaluated together.
 function findScipRedundantReexports(
   db: ScipDatabase,
   scope?: string,
@@ -178,6 +181,16 @@ function findSourceRedundantReexports(
   index: ProjectIndex,
   scope?: string,
 ): RedundantReexport[] {
+  const results: RedundantReexport[] = [];
+  for (const barrelPath of sourceBarrelCandidates(db, scope)) {
+    const barrelConsumers = countDirectImporters(db, barrelPath, barrelPath);
+    if (barrelConsumers > 0) continue;
+    results.push(...sourceRedundantReexportsForBarrel(db, index, barrelPath));
+  }
+  return results;
+}
+
+function sourceBarrelCandidates(db: ScipDatabase, scope?: string): string[] {
   const files = db.all<{ relative_path: string }>(
     `SELECT relative_path
      FROM documents
@@ -187,38 +200,38 @@ function findSourceRedundantReexports(
      ORDER BY relative_path`,
     ...(scope ? [`%${scope}%`] : []),
   );
-
-  const candidates = files
+  return files
     .map((row) => row.relative_path)
     .filter((relativePath) => !db.isIgnored(relativePath))
     .filter((relativePath) => getSourceExports(db, relativePath).length > 0);
+}
 
-  const results: RedundantReexport[] = [];
+function sourceRedundantReexportsForBarrel(
+  db: ScipDatabase,
+  index: ProjectIndex,
+  barrelPath: string,
+): RedundantReexport[] {
+  return getSourceExports(db, barrelPath)
+    .filter((entry) => entry.sourcePath && !db.isIgnored(entry.sourcePath))
+    .flatMap((entry) => sourceRedundantReexportForExport(db, index, barrelPath, entry.sourcePath!));
+}
 
-  for (const barrelPath of candidates) {
-    const exports = getSourceExports(db, barrelPath).filter((entry) => entry.sourcePath && !db.isIgnored(entry.sourcePath));
-    if (exports.length === 0) continue;
-
-    const barrelConsumers = countDirectImporters(db, barrelPath, barrelPath);
-    if (barrelConsumers > 0) continue;
-
-    for (const exported of exports) {
-      const sourcePath = exported.sourcePath!;
-      const representative = representativeExportSymbol(index, sourcePath);
-      if (!representative) continue;
-
-      results.push({
-        barrelFile: barrelPath,
-        symbol: representative.symbol,
-        shortName: shortenSymbol(representative.symbol),
-        originalFile: sourcePath,
-        barrelConsumers: 0,
-        directConsumers: countDirectImporters(db, sourcePath, barrelPath),
-      });
-    }
-  }
-
-  return results;
+function sourceRedundantReexportForExport(
+  db: ScipDatabase,
+  index: ProjectIndex,
+  barrelPath: string,
+  sourcePath: string,
+): RedundantReexport[] {
+  const representative = representativeExportSymbol(index, sourcePath);
+  if (!representative) return [];
+  return [{
+    barrelFile: barrelPath,
+    symbol: representative.symbol,
+    shortName: shortenSymbol(representative.symbol),
+    originalFile: sourcePath,
+    barrelConsumers: 0,
+    directConsumers: countDirectImporters(db, sourcePath, barrelPath),
+  }];
 }
 
 function countDirectImporters(

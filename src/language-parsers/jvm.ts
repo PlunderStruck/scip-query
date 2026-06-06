@@ -10,6 +10,9 @@ import { JVM_EXTENSIONS, resolveQualifiedImportPath } from '../resolution/import
 import type { ParsedSourceImport } from '../domain/types.js';
 import { buildSimpleImport, collectIdentifiersOutside, parseImportLineMatches, splitTopLevel } from './utils.js';
 
+// scip-query: ignore-extract — this is the JVM import parser dispatcher:
+// Java, Scala, Kotlin, and regex fallback import shapes share one public
+// parser boundary.
 export function parseJvmImports(
   db: ScipDatabase,
   importerPath: string,

@@ -47,6 +47,9 @@ interface SymbolRef {
  * Returns [] when the leaf is ambiguous and no disambiguation
  * signal applies.
  */
+// scip-query: ignore-extract — this is an ordered resolution strategy stack:
+// unique leaf, same-file, direct import, then indirect factory/method access.
+// Splitting the strategy order would make attribution rules harder to audit.
 export function attributeIdentifier(
   db: ScipDatabase,
   file: string,

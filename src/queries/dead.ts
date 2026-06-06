@@ -31,6 +31,9 @@ interface DeadRow {
  * Find dead exports: symbols defined locally with no cross-file references.
  * Language-agnostic — works with any SCIP index.
  */
+// scip-query: ignore-extract — this is the dead-code command pipeline:
+// mention counts, caller-map supplements, AST fallback supplements, candidate
+// loading, row projection, and summary all define one result.
 export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
   const {
     scope,
@@ -94,6 +97,9 @@ function loadMentionReferenceCounts(
   return referencesBySymbol;
 }
 
+// scip-query: ignore-extract — this is the shared dead-code candidate gate:
+// ignore rules, test-file policy, callable/top-level shape, and value-like
+// filtering define the command's candidate set.
 function deadCandidateDefinitions(
   db: ScipDatabase,
   opts: DeadCandidateOptions,
@@ -222,34 +228,22 @@ function deadSummary(
  * attributeIdentifier owns the same-file > direct-import > interface-
  * dispatch disambiguation that used to live inline here.
  */
+// scip-query: ignore-extract — this is the AST/source fallback reference pass:
+// scan scope, framework dispatch names, unused-import filtering, and same-file
+// occurrence adjustment are one accuracy guardrail.
 function supplementReferencesFromAst(
   db: ScipDatabase,
   referencesBySymbol: ReferenceCounts,
   inactiveBarrelPaths: ReadonlySet<string>,
 ): void {
   const index = new ProjectIndex(db);
-  const docRows = db.all<{ relative_path: string }>(
-    `SELECT relative_path FROM documents
-     WHERE 1 = 1 ${db.pathExclusionsFor('documents')}`,
-  );
-  const indexedPaths = new Set(docRows.map((r) => r.relative_path));
   // Indexers (especially rust-analyzer) don't always cover every source
   // file — partial workspace indexing is common. We extend the AST scan to
   // every source file the project owns (indexed + auxiliary types like
   // Vue SFCs), so a reference from an unindexed file still credits the
   // symbol it reaches.
   const scanPaths = new Set<string>(index.sourceFiles());
-  for (const p of indexedPaths) scanPaths.add(p);
-
-  const recordRef = (symbolId: number, file: string, occurrences: number): void => {
-    if (occurrences <= 0) return;
-    let refsForSymbol = referencesBySymbol.get(symbolId);
-    if (!refsForSymbol) {
-      refsForSymbol = new Map<string, number>();
-      referencesBySymbol.set(symbolId, refsForSymbol);
-    }
-    refsForSymbol.set(file, (refsForSymbol.get(file) ?? 0) + occurrences);
-  };
+  for (const path of indexedDocumentPaths(db)) scanPaths.add(path);
 
   index.scanSourceReferences({
     paths: scanPaths,
@@ -259,13 +253,62 @@ function supplementReferencesFromAst(
     identifierResolution: 'permissive',
     skipPath: (relativePath) => inactiveBarrelPaths.has(relativePath),
   }, (hit) => {
-    if (hit.kind === 'cross-language-dispatch' && hit.target.relativePath === hit.sourceFile) return;
-    if (hit.kind === 'identifier' && isUnusedImportOnlyHit(db, hit)) return;
-    const occurrences = hit.kind === 'identifier' && hit.target.relativePath === hit.sourceFile
-      ? Math.max(0, hit.occurrences - 1)
-      : hit.occurrences;
-    recordRef(hit.target.symbolId, hit.sourceFile, occurrences);
+    if (shouldSkipAstReferenceHit(db, hit)) return;
+    recordReference(
+      referencesBySymbol,
+      hit.target.symbolId,
+      hit.sourceFile,
+      astReferenceOccurrences(hit),
+    );
   });
+}
+
+function indexedDocumentPaths(db: ScipDatabase): Set<string> {
+  const rows = db.all<{ relative_path: string }>(
+    `SELECT relative_path FROM documents
+     WHERE 1 = 1 ${db.pathExclusionsFor('documents')}`,
+  );
+  return new Set(rows.map((row) => row.relative_path));
+}
+
+function shouldSkipAstReferenceHit(
+  db: ScipDatabase,
+  hit: {
+    kind: string;
+    sourceFile: string;
+    name: string;
+    target: { relativePath: string };
+    occurrences: number;
+  },
+): boolean {
+  if (hit.kind === 'cross-language-dispatch' && hit.target.relativePath === hit.sourceFile) return true;
+  return hit.kind === 'identifier' && isUnusedImportOnlyHit(db, hit);
+}
+
+function astReferenceOccurrences(hit: {
+  kind: string;
+  sourceFile: string;
+  target: { relativePath: string };
+  occurrences: number;
+}): number {
+  return hit.kind === 'identifier' && hit.target.relativePath === hit.sourceFile
+    ? Math.max(0, hit.occurrences - 1)
+    : hit.occurrences;
+}
+
+function recordReference(
+  referencesBySymbol: ReferenceCounts,
+  symbolId: number,
+  file: string,
+  occurrences: number,
+): void {
+  if (occurrences <= 0) return;
+  let refsForSymbol = referencesBySymbol.get(symbolId);
+  if (!refsForSymbol) {
+    refsForSymbol = new Map<string, number>();
+    referencesBySymbol.set(symbolId, refsForSymbol);
+  }
+  refsForSymbol.set(file, (refsForSymbol.get(file) ?? 0) + occurrences);
 }
 
 function isUnusedImportOnlyHit(

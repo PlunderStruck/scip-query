@@ -3,7 +3,7 @@ import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
 import { resolveIndexedFile } from '../resolution/path-resolver.js';
 import { getSourceImports } from '../language-parsers/index.js';
 import { semanticImportUsage } from '../semantic/shared-primitives.js';
-import type { ImportResult, UnusedImportResult } from '../domain/types.js';
+import type { ImportResult, ParsedSourceImport, UnusedImportResult } from '../domain/types.js';
 import { isModuleLikeSymbol, leafName, shortenSymbol } from '../symbols/symbol-parser.js';
 
 /**
@@ -75,6 +75,9 @@ function indexedImporters(db: ScipDatabase, symbolPattern: string): ImportResult
     }));
 }
 
+// scip-query: ignore-extract — this is the source-parser fallback importer
+// scan; document loading, ignore filtering, and import-target matching form one
+// conservative evidence path.
 function sourceImportersForSymbol(db: ScipDatabase, symbolPattern: string): ImportResult[] {
   const target = findFirstSymbolMatch(db, symbolPattern);
   const targetFile = target?.relativePath ?? null;
@@ -94,33 +97,11 @@ function sourceImportersForSymbol(db: ScipDatabase, symbolPattern: string): Impo
     if (db.isIgnored(row.relative_path)) continue;
 
     for (const entry of getSourceImports(db, row.relative_path)) {
-      if (!entry.sourcePath) continue;
-
-      if (targetFile && normalizePath(entry.sourcePath) !== normalizePath(targetFile)) {
-        continue;
-      }
-
-      if (entry.kind === 'side-effect') {
-        importers.add(row.relative_path);
-        continue;
-      }
-
-      if (targetFile && isCLikeImporter(row.relative_path)) {
-        importers.add(row.relative_path);
-        continue;
-      }
-
-      if (targetIsModule) {
-        importers.add(row.relative_path);
-        continue;
-      }
-
-      if (entry.kind === 'named' && entry.importedName === targetLeaf) {
-        importers.add(row.relative_path);
-        continue;
-      }
-
-      if (entry.kind === 'namespace' && entry.usedMembers.includes(targetLeaf)) {
+      if (sourceImportMatchesTarget(entry, row.relative_path, {
+        targetFile,
+        targetLeaf,
+        targetIsModule,
+      })) {
         importers.add(row.relative_path);
       }
     }
@@ -131,6 +112,22 @@ function sourceImportersForSymbol(db: ScipDatabase, symbolPattern: string): Impo
     shortName: target ? shortenSymbol(target.symbol) : targetLeaf,
     fromFile: importer,
   }));
+}
+
+function sourceImportMatchesTarget(
+  entry: ParsedSourceImport,
+  importerPath: string,
+  target: { targetFile: string | null; targetLeaf: string; targetIsModule: boolean },
+): boolean {
+  if (!entry.sourcePath) return false;
+  if (target.targetFile && normalizePath(entry.sourcePath) !== normalizePath(target.targetFile)) {
+    return false;
+  }
+  if (entry.kind === 'side-effect') return true;
+  if (target.targetFile && isCLikeImporter(importerPath)) return true;
+  if (target.targetIsModule) return true;
+  if (entry.kind === 'named' && entry.importedName === target.targetLeaf) return true;
+  return entry.kind === 'namespace' && entry.usedMembers.includes(target.targetLeaf);
 }
 
 function loadFileImportEntries(db: ScipDatabase, filePattern: string): ImportEntry[] | null {

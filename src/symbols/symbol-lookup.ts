@@ -60,7 +60,39 @@ function findPathQualifiedSymbolMatch(db: ScipDatabase, symbolPattern: string): 
 
   const pathLike = `%${pathLeaf.path}%`;
   const leaf = pathLeaf.leaf;
-  const primary = db.all<SymbolQueryRow>(
+  const candidates = pathQualifiedCandidates(db, pathLike, leaf, cleaned);
+  const best = candidates[0];
+  return best ? hydrateSymbolMatch(db, best) : null;
+}
+
+function pathQualifiedCandidates(
+  db: ScipDatabase,
+  pathLike: string,
+  leaf: string,
+  cleanedPattern: string,
+): SymbolQueryRow[] {
+  const candidates = mergeSymbolQueryRows([], [
+    ...pathQualifiedPrimaryRows(db, pathLike, leaf),
+    ...pathQualifiedFallbackRows(db, pathLike, leaf),
+  ])
+    .filter((row) => !db.isIgnored(row.relative_path))
+    .filter((row) => pathQualifiedDirectScore(row, cleanedPattern) > 1);
+
+  candidates.sort((left, right) =>
+    pathQualifiedDirectScore(right, cleanedPattern) - pathQualifiedDirectScore(left, cleanedPattern)
+    || (left.end_line - left.start_line) - (right.end_line - right.start_line)
+    || left.start_line - right.start_line
+    || left.symbol.localeCompare(right.symbol),
+  );
+  return candidates;
+}
+
+function pathQualifiedPrimaryRows(
+  db: ScipDatabase,
+  pathLike: string,
+  leaf: string,
+): SymbolQueryRow[] {
+  return db.all<SymbolQueryRow>(
     `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path, gs.display_name, gs.documentation
      FROM global_symbols gs
      JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
@@ -70,7 +102,14 @@ function findPathQualifiedSymbolMatch(db: ScipDatabase, symbolPattern: string): 
        ${db.pathExclusionsFor('d')}`,
     pathLike, leaf, `%/${leaf}.%`,
   );
-  const fallback = db.all<SymbolQueryRow>(
+}
+
+function pathQualifiedFallbackRows(
+  db: ScipDatabase,
+  pathLike: string,
+  leaf: string,
+): SymbolQueryRow[] {
+  return db.all<SymbolQueryRow>(
     `SELECT
       gs.id,
       gs.symbol,
@@ -91,22 +130,11 @@ function findPathQualifiedSymbolMatch(db: ScipDatabase, symbolPattern: string): 
      GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path, gs.display_name, gs.documentation`,
     pathLike, leaf, `%/${leaf}.%`,
   );
-
-  const candidates = mergeSymbolQueryRows([], [...primary, ...fallback])
-    .filter((row) => !db.isIgnored(row.relative_path))
-    .filter((row) => pathQualifiedDirectScore(row, cleaned) > 1);
-
-  candidates.sort((left, right) =>
-    pathQualifiedDirectScore(right, cleaned) - pathQualifiedDirectScore(left, cleaned)
-    || (left.end_line - left.start_line) - (right.end_line - right.start_line)
-    || left.start_line - right.start_line
-    || left.symbol.localeCompare(right.symbol),
-  );
-
-  const best = candidates[0];
-  return best ? hydrateSymbolMatch(db, best) : null;
 }
 
+// scip-query: ignore-extract — this is the fuzzy symbol lookup policy:
+// direct lookup, token scoring, ignore filtering, and deterministic tie-breaks
+// are one ranked search operation.
 function findBestFuzzySymbolMatch(db: ScipDatabase, symbolPattern: string): SymbolMatch | null {
   const cleaned = normalizeLookupPattern(symbolPattern);
   const tokens = lookupTokens(symbolPattern);

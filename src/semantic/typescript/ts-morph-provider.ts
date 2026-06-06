@@ -20,6 +20,8 @@ type TsMorphModule = typeof import('ts-morph');
 type Project = import('ts-morph').Project;
 type SourceFile = import('ts-morph').SourceFile;
 type Node = import('ts-morph').Node;
+type CallExpression = import('ts-morph').CallExpression;
+type NewExpression = import('ts-morph').NewExpression;
 type ImportDeclaration = import('ts-morph').ImportDeclaration;
 type Identifier = import('ts-morph').Identifier;
 type ReferencedSymbol = import('ts-morph').ReferencedSymbol;
@@ -43,9 +45,20 @@ interface WorkspacePackage {
 
 type PackageExportIndex = Map<string, Map<string, Set<number>>>;
 
+interface ImportIdentifierEntry {
+  identifier: Identifier | null;
+  importedName: string;
+  localName: string | null;
+  kind: SemanticImportUsage['kind'];
+  isTypeOnly: boolean;
+}
+
 const require = createRequire(import.meta.url);
 let tsMorphModule: TsMorphModule | null | undefined;
 
+// scip-query: ignore-extract — this is the provider bootstrap boundary:
+// optional dependency loading, tsconfig discovery, project construction, and
+// unavailable-provider fallbacks define whether TypeScript semantics are live.
 export function createTsMorphProvider(
   db: ScipDatabase,
   _relativePath?: string,
@@ -189,43 +202,37 @@ class TsMorphSemanticProvider implements SemanticProvider {
     declaration: ImportDeclaration,
   ): SemanticImportUsage[] {
     const sourcePath = resolveImportPath(this.db, importer, declaration.getModuleSpecifierValue());
+    const entries = importIdentifiers(declaration);
     if (declaration.getImportClause()?.isTypeOnly()) {
-      return importIdentifiers(declaration).map((entry) => ({
-        importer,
-        sourcePath,
-        importedName: entry.importedName,
-        localName: entry.localName,
-        kind: entry.kind,
-        isTypeOnly: true,
-        isUsed: true,
-        isTypeUsed: true,
-        isValueUsed: false,
-        references: [],
-      }));
+      return entries.map((entry) => typeOnlyImportUsage(importer, sourcePath, entry));
     }
+    return entries.map((entry) => this.valueImportUsageForEntry(importer, sourcePath, entry));
+  }
 
-    return importIdentifiers(declaration).map((entry) => {
-      const identifier = entry.identifier;
-      const refs = identifier ? identifier.findReferences() : [];
-      const referenceLocations = refs.flatMap((ref) =>
-        referenceLocationsWithoutDeclaration(ref, importer, identifier, this.db.config.projectRoot),
-      );
-      const valueUsed = referenceLocations.some((location) => !isTypeOnlyLocation(location.node));
-      const typeUsed = referenceLocations.some((location) => isTypeOnlyLocation(location.node));
-      const bindingTypeOnly = entry.isTypeOnly;
-      return {
-        importer,
-        sourcePath,
-        importedName: entry.importedName,
-        localName: entry.localName,
-        kind: entry.kind,
-        isTypeOnly: bindingTypeOnly,
-        isUsed: bindingTypeOnly || referenceLocations.length > 0,
-        isTypeUsed: bindingTypeOnly || typeUsed,
-        isValueUsed: valueUsed,
-        references: referenceLocations.map((location) => location.location),
-      };
-    });
+  private valueImportUsageForEntry(
+    importer: string,
+    sourcePath: string | null,
+    entry: ImportIdentifierEntry,
+  ): SemanticImportUsage {
+    const refs = entry.identifier ? entry.identifier.findReferences() : [];
+    const referenceLocations = refs.flatMap((ref) =>
+      referenceLocationsWithoutDeclaration(ref, importer, entry.identifier, this.db.config.projectRoot),
+    );
+    const valueUsed = referenceLocations.some((location) => !isTypeOnlyLocation(location.node));
+    const typeUsed = referenceLocations.some((location) => isTypeOnlyLocation(location.node));
+    const bindingTypeOnly = entry.isTypeOnly;
+    return {
+      importer,
+      sourcePath,
+      importedName: entry.importedName,
+      localName: entry.localName,
+      kind: entry.kind,
+      isTypeOnly: bindingTypeOnly,
+      isUsed: bindingTypeOnly || referenceLocations.length > 0,
+      isTypeUsed: bindingTypeOnly || typeUsed,
+      isValueUsed: valueUsed,
+      references: referenceLocations.map((location) => location.location),
+    };
   }
 
   private sourceFile(relativePath: string): SourceFile | null {
@@ -255,7 +262,19 @@ class TsMorphSemanticProvider implements SemanticProvider {
     if (this.packageImportReferenceIndex) return this.packageImportReferenceIndex;
     const index = new Map<number, SemanticReference[]>();
     const exportIndex = this.packageExports();
-    const documents = this.db.all<{ relative_path: string }>(
+    for (const relativePath of this.indexedTypeScriptLikeDocuments()) {
+      this.addPackageImportReferencesForDocument(index, exportIndex, relativePath);
+    }
+
+    for (const [key, references] of index) {
+      index.set(key, dedupeLocations(references));
+    }
+    this.packageImportReferenceIndex = index;
+    return index;
+  }
+
+  private indexedTypeScriptLikeDocuments(): string[] {
+    return this.db.all<{ relative_path: string }>(
       `SELECT relative_path
        FROM documents
        WHERE (
@@ -269,37 +288,42 @@ class TsMorphSemanticProvider implements SemanticProvider {
          OR relative_path LIKE '%.cjs'
        )
          ${this.db.pathExclusionsFor('documents')}`,
-    );
+    ).map((document) => document.relative_path);
+  }
 
-    for (const document of documents) {
-      if (this.db.isIgnored(document.relative_path)) continue;
-      const match = this.sourceFileMatch(document.relative_path);
-      if (!match) continue;
-      for (const declaration of match.sourceFile.getImportDeclarations()) {
-        const packageName = workspacePackageNameForSpecifier(this.workspacePackages, declaration.getModuleSpecifierValue());
-        if (!packageName) continue;
-        const exportedSymbols = exportIndex.get(packageName);
-        if (!exportedSymbols) continue;
-        for (const entry of importIdentifiers(declaration)) {
-          if (entry.kind !== 'named' || !entry.identifier) continue;
-          const symbolIds = exportedSymbols.get(entry.importedName);
-          if (!symbolIds || symbolIds.size === 0) continue;
-          const refs = textualIdentifierLocations(entry.identifier, document.relative_path, this.db.config.projectRoot);
-          if (refs.length === 0) continue;
-          for (const symbolId of symbolIds) {
-            const bucket = index.get(symbolId) ?? [];
-            bucket.push(...refs);
-            index.set(symbolId, bucket);
-          }
-        }
-      }
+  private addPackageImportReferencesForDocument(
+    index: Map<number, SemanticReference[]>,
+    exportIndex: PackageExportIndex,
+    relativePath: string,
+  ): void {
+    if (this.db.isIgnored(relativePath)) return;
+    const match = this.sourceFileMatch(relativePath);
+    if (!match) return;
+    for (const declaration of match.sourceFile.getImportDeclarations()) {
+      this.addPackageImportReferencesForDeclaration(index, exportIndex, relativePath, declaration);
     }
+  }
 
-    for (const [key, references] of index) {
-      index.set(key, dedupeLocations(references));
+  // scip-query: ignore-extract — this records package import references for
+  // one declaration; package matching, exported symbol lookup, identifier
+  // locations, and symbol buckets are one indexing rule.
+  private addPackageImportReferencesForDeclaration(
+    index: Map<number, SemanticReference[]>,
+    exportIndex: PackageExportIndex,
+    relativePath: string,
+    declaration: ImportDeclaration,
+  ): void {
+    const packageName = workspacePackageNameForSpecifier(this.workspacePackages, declaration.getModuleSpecifierValue());
+    if (!packageName) return;
+    const exportedSymbols = exportIndex.get(packageName);
+    if (!exportedSymbols) return;
+    for (const entry of importIdentifiers(declaration)) {
+      if (entry.kind !== 'named' || !entry.identifier) continue;
+      const symbolIds = exportedSymbols.get(entry.importedName);
+      if (!symbolIds || symbolIds.size === 0) continue;
+      const refs = textualIdentifierLocations(entry.identifier, relativePath, this.db.config.projectRoot);
+      if (refs.length > 0) addReferencesForSymbols(index, symbolIds, refs);
     }
-    this.packageImportReferenceIndex = index;
-    return index;
   }
 
   private packageExports(): PackageExportIndex {
@@ -316,6 +340,9 @@ class TsMorphSemanticProvider implements SemanticProvider {
     return index;
   }
 
+  // scip-query: ignore-extract — this is the recursive package export walker:
+  // named exports, star re-exports, workspace source-root filtering, and
+  // cycle protection are one traversal policy.
   private collectPackageExports(
     pkg: WorkspacePackage,
     entryFile: string,
@@ -359,6 +386,9 @@ class TsMorphSemanticProvider implements SemanticProvider {
     return byLeaf.get(leaf) ?? null;
   }
 
+  // scip-query: ignore-extract — this finds the ts-morph node for an indexed
+  // definition; source-file lookup, name matching, and line matching are one
+  // semantic bridge.
   private nodeForDefinition(definition: IndexedDefinition): Node | null {
     const sourceFile = this.sourceFile(definition.relativePath);
     if (!sourceFile) return null;
@@ -389,6 +419,9 @@ class TsMorphSemanticProvider implements SemanticProvider {
     return null;
   }
 
+  // scip-query: ignore-extract — this builds the TypeScript semantic callee
+  // map for one file; source-file lookup, indexed definitions, descendant
+  // traversal, and dedupe are one adapter pass.
   private calleeMapForFile(relativePath: string): Map<number, SemanticCallee[]> {
     const sourceFile = this.sourceFile(relativePath);
     if (!sourceFile) return new Map();
@@ -400,26 +433,8 @@ class TsMorphSemanticProvider implements SemanticProvider {
     const out = new Map<number, SemanticCallee[]>();
     sourceFile.forEachDescendant((node) => {
       if (!this.tsMorph.Node.isCallExpression(node) && !this.tsMorph.Node.isNewExpression(node)) return;
-      const startLine = lineOf(sourceFile, node);
-      const caller = findContainingDefinition(definitions, startLine);
-      if (!caller) return;
-
-      const expression = node.getExpression();
-      if (!expression) return;
-      const symbol = expression.getSymbol() ?? expression.getType().getSymbol();
-      const target = symbol ? this.definitionFromSymbol(symbol) : null;
-      if (!target) return;
-
-      let bucket = out.get(caller.symbolId);
-      if (!bucket) {
-        bucket = [];
-        out.set(caller.symbolId, bucket);
-      }
-      bucket.push({
-        symbol: target.symbol,
-        file: target.file,
-        line: target.line,
-      });
+      const callee = this.semanticCalleeForCallNode(sourceFile, definitions, node);
+      if (callee) addSemanticCallee(out, callee.callerId, callee.target);
     });
 
     for (const [symbolId, callees] of out) {
@@ -427,22 +442,25 @@ class TsMorphSemanticProvider implements SemanticProvider {
     }
     return out;
   }
+
+  private semanticCalleeForCallNode(
+    sourceFile: SourceFile,
+    definitions: ReadonlyArray<IndexedDefinition>,
+    node: CallExpression | NewExpression,
+  ): { callerId: number; target: SemanticCallee } | null {
+    const caller = findContainingDefinition(definitions, lineOf(sourceFile, node));
+    if (!caller) return null;
+    const expression = node.getExpression();
+    const symbol = expression.getSymbol() ?? expression.getType().getSymbol();
+    const target = symbol ? this.definitionFromSymbol(symbol) : null;
+    return target
+      ? { callerId: caller.symbolId, target: { symbol: target.symbol, file: target.file, line: target.line } }
+      : null;
+  }
 }
 
-function importIdentifiers(declaration: ImportDeclaration): Array<{
-  identifier: Identifier | null;
-  importedName: string;
-  localName: string | null;
-  kind: SemanticImportUsage['kind'];
-  isTypeOnly: boolean;
-}> {
-  const out: Array<{
-    identifier: Identifier | null;
-    importedName: string;
-    localName: string | null;
-    kind: SemanticImportUsage['kind'];
-    isTypeOnly: boolean;
-  }> = [];
+function importIdentifiers(declaration: ImportDeclaration): ImportIdentifierEntry[] {
+  const out: ImportIdentifierEntry[] = [];
   const defaultImport = declaration.getDefaultImport();
   if (defaultImport) {
     out.push({
@@ -485,6 +503,38 @@ function importIdentifiers(declaration: ImportDeclaration): Array<{
     });
   }
   return out;
+}
+
+function typeOnlyImportUsage(
+  importer: string,
+  sourcePath: string | null,
+  entry: ImportIdentifierEntry,
+): SemanticImportUsage {
+  return {
+    importer,
+    sourcePath,
+    importedName: entry.importedName,
+    localName: entry.localName,
+    kind: entry.kind,
+    isTypeOnly: true,
+    isUsed: true,
+    isTypeUsed: true,
+    isValueUsed: false,
+    references: [],
+  };
+}
+
+function addSemanticCallee(
+  out: Map<number, SemanticCallee[]>,
+  callerId: number,
+  target: SemanticCallee,
+): void {
+  let bucket = out.get(callerId);
+  if (!bucket) {
+    bucket = [];
+    out.set(callerId, bucket);
+  }
+  bucket.push(target);
 }
 
 function discoverWorkspacePackages(projectRoot: string): WorkspacePackage[] {
@@ -775,6 +825,18 @@ function dedupeLocations(locations: SemanticReference[]): SemanticReference[] {
     out.push(location);
   }
   return out;
+}
+
+function addReferencesForSymbols(
+  index: Map<number, SemanticReference[]>,
+  symbolIds: Iterable<number>,
+  references: readonly SemanticReference[],
+): void {
+  for (const symbolId of symbolIds) {
+    const bucket = index.get(symbolId) ?? [];
+    bucket.push(...references);
+    index.set(symbolId, bucket);
+  }
 }
 
 function dedupeCallees(callees: SemanticCallee[]): SemanticCallee[] {

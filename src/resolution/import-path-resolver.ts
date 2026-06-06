@@ -110,6 +110,9 @@ export function resolveImportPath(
   return resolveJavaScriptImportPath(db, importerPath, specifier);
 }
 
+// scip-query: ignore-extract — this is the JavaScript import-path decision
+// table: path aliases, package names, relative candidates, indexed paths, and
+// disk fallback are tried in priority order.
 export function resolveJavaScriptImportPath(
   db: ScipDatabase,
   importerPath: string,
@@ -133,6 +136,9 @@ export function resolveJavaScriptImportPath(
   return normalizePath(relative(db.config.projectRoot, absolute));
 }
 
+// scip-query: ignore-extract — this is the Python import-path decision table:
+// direct module candidates, package __init__ candidates, and indexed-path
+// fallback are ordered from most to least specific.
 export function resolvePythonImportPath(
   db: ScipDatabase,
   importerPath: string,
@@ -276,6 +282,9 @@ export function resolveQualifiedImportPath(
   return null;
 }
 
+// scip-query: ignore-extract — this is the Dart import-path decision table:
+// package, relative, and indexed-path candidates are intentionally tried in a
+// single priority order.
 export function resolveDartImportPath(
   db: ScipDatabase,
   importerPath: string,

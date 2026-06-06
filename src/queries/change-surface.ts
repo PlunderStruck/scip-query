@@ -12,6 +12,9 @@ import { shortenSymbol } from '../symbols/symbol-parser.js';
  * Symbol ranges come from getDefinitionsForFile so they are source-corrected
  * and match `scip symbols` output.
  */
+// scip-query: ignore-extract — this is the command-level risk projection:
+// definitions, external consumer counts, and risk labels are intentionally
+// assembled into the public result shape here.
 export function changeSurface(
   db: ScipDatabase,
   filePattern: string,

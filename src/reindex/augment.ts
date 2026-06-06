@@ -23,6 +23,9 @@ export interface AugmentAuxiliaryDocumentsResult {
  * documents table. Vue SFCs are the motivating case: scip-typescript can
  * resolve imports to generated TS, but it does not emit `.vue` documents.
  */
+// scip-query: ignore-extract — this is the auxiliary-document transaction
+// pipeline; the helper calls already own discovery/filtering/language
+// detection, and keeping the DB write sequence together is clearer.
 export function augmentAuxiliaryDocuments(
   opts: AugmentAuxiliaryDocumentsOptions,
 ): AugmentAuxiliaryDocumentsResult {

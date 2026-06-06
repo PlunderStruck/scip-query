@@ -213,6 +213,9 @@ function findCallees(
   };
 }
 
+// scip-query: ignore-extract — this builds callee-set fingerprints for
+// similarity; callable selection, signature lookup, callee filtering, and
+// fingerprint shaping are one evidence pass.
 function getAllCalleeFingerprints(
   db: ScipDatabase,
   opts: { minCallees: number; scope?: string; excludeSymbol?: string },
@@ -298,6 +301,9 @@ function buildSourceFingerprintTokens(
   return tokens.size > 0 ? tokens : null;
 }
 
+// scip-query: ignore-extract — this builds source-token fingerprints; scoped
+// definitions, file-kind filtering, snippets, and token extraction are one
+// text-similarity pass.
 function getAllSourceFingerprints(db: ScipDatabase): SourceFingerprint[] {
   const index = new ProjectIndex(db);
   return index.scopedDefinitions()

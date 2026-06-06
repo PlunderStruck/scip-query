@@ -27,6 +27,9 @@ interface ScoredCluster {
  * 3. Finding connected components — disconnected components = extraction seams
  * 4. Scoring each cluster by how isolated it is from the rest
  */
+// scip-query: ignore-extract — this is the public extraction-candidate
+// detector pipeline: callable selection, callee-map loading, per-symbol
+// scoring, and aggregate summary are one command contract.
 export function extractCandidates(
   db: ScipDatabase,
   opts: { scope?: string; minLoc?: number; minCallees?: number; limit?: number } = {},
@@ -54,6 +57,9 @@ export function extractCandidates(
   return results.slice(0, limit);
 }
 
+// scip-query: ignore-extract — this is the detector's own per-symbol scoring
+// unit; co-occurrence graph construction, connected clusters, and LOC scoring
+// are the definition of an extraction candidate.
 function extractionCandidateForSymbol(
   definition: IndexedDefinition,
   calleeChunks: readonly CalleeChunk[],

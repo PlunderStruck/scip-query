@@ -223,6 +223,9 @@ interface AugmentVueCache {
   result: AugmentVueResolvedResult;
 }
 
+// scip-query: ignore-extract — this is the Vue augmentation transaction
+// pipeline: cache check, compute, dedupe, write chunks, persist metadata.
+// The helper calls own the details and the top-level order is important.
 export function augmentVueResolvedReferences(
   opts: AugmentVueResolvedOptions,
 ): AugmentVueResolvedResult {
@@ -432,6 +435,9 @@ function computeVueResolvedReferencesForFiles(
   return { occurrences, skippedReferences };
 }
 
+// scip-query: ignore-extract — this prepares one bounded Vue reference task:
+// service script lookup, source cache lookup, token windows, and mapper context
+// are the setup contract for the resolver.
 function computeVueReferenceTask(
   opts: VueReferenceComputationOptions,
   task: VueReferenceTask,
@@ -468,6 +474,9 @@ function computeVueReferenceTask(
   });
 }
 
+// scip-query: ignore-extract — this is the per-token Volar resolution loop:
+// generated offsets, definitions, symbol IDs, primary occurrences, and
+// highlighted occurrences all advance the same processed-starts state.
 function resolveVueTokenReferences(opts: VueReferenceComputationOptions & {
   fileName: string;
   sourceInfo: SourceTextInfo;
@@ -769,6 +778,9 @@ function listVueDocumentFiles(db: Database.Database, projectRoot: string): strin
   return rows.map((row) => resolve(projectRoot, row.relativePath));
 }
 
+// scip-query: ignore-extract — this creates the Volar/TypeScript language
+// context; dependency loading, tsconfig parsing, project host construction, and
+// language creation are one initialization boundary.
 function createVueLanguageContext(projectRoot: string, configPath: string): VueLanguageContext {
   const { vueCore, ts, volarTs } = loadVueLanguageDependencies(projectRoot);
   const { parsed, vueOptions } = parseVueTsConfig(vueCore, ts, configPath);
@@ -904,6 +916,9 @@ function requireVueAugmentDependency(
   }
 }
 
+// scip-query: ignore-extract — this creates the Vue generated-source symbol
+// lookup; definition ranges, source-map position conversion, nearest-start
+// matching, and path normalization are one bridge.
 function createSymbolLookup(
   db: Database.Database,
   projectRoot: string,

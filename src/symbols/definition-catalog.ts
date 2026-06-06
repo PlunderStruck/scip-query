@@ -41,6 +41,9 @@ export interface FileSymbolResult {
   enclosingSymbol: string | null;
 }
 
+// scip-query: ignore-extract — this is the definition-catalog read path:
+// primary rows, fallback rows, merging, and source-corrected ranges define the
+// authoritative per-file definition set.
 export function getDefinitionsForFile(
   db: ScipDatabase,
   relativePath: string,
@@ -308,11 +311,19 @@ function correctDefinitionRangesWithRegexFallback(
   source: string,
 ): IndexedDefinition[] {
   const lines = source.split(/\r?\n/);
+  const correctedStarts = correctedCallableStartLines(definitions, lines);
+  const callableDefinitions = sortedCallableDefinitionsWithStarts(definitions, correctedStarts);
+  const correctedRanges = correctedCallableRanges(callableDefinitions, lines);
+  return applyCorrectedRanges(definitions, correctedRanges);
+}
 
+function correctedCallableStartLines(
+  definitions: IndexedDefinition[],
+  lines: string[],
+): Map<number, number> {
   const declarationLines = definitions.some((d) => isCallableDefinition(d.symbol))
     ? buildDeclarationCandidatesMap(lines)
     : null;
-
   const correctedStarts = new Map<number, number>();
   for (const definition of definitions) {
     correctedStarts.set(
@@ -320,9 +331,14 @@ function correctDefinitionRangesWithRegexFallback(
       resolveCallableDefinitionStartLine(lines, declarationLines, definition),
     );
   }
+  return correctedStarts;
+}
 
-  const correctedRanges = new Map<number, { startLine: number; endLine: number }>();
-  const callableDefinitions = definitions
+function sortedCallableDefinitionsWithStarts(
+  definitions: IndexedDefinition[],
+  correctedStarts: ReadonlyMap<number, number>,
+): Array<{ definition: IndexedDefinition; startLine: number }> {
+  return definitions
     .filter((definition) => isCallableDefinition(definition.symbol))
     .map((definition) => ({
       definition,
@@ -333,7 +349,13 @@ function correctDefinitionRangesWithRegexFallback(
       || left.definition.startLine - right.definition.startLine
       || left.definition.symbol.localeCompare(right.definition.symbol),
     );
+}
 
+function correctedCallableRanges(
+  callableDefinitions: ReadonlyArray<{ definition: IndexedDefinition; startLine: number }>,
+  lines: string[],
+): Map<number, { startLine: number; endLine: number }> {
+  const correctedRanges = new Map<number, { startLine: number; endLine: number }>();
   for (let index = 0; index < callableDefinitions.length; index += 1) {
     const current = callableDefinitions[index]!;
     const next = callableDefinitions[index + 1];
@@ -351,7 +373,13 @@ function correctDefinitionRangesWithRegexFallback(
       ),
     });
   }
+  return correctedRanges;
+}
 
+function applyCorrectedRanges(
+  definitions: IndexedDefinition[],
+  correctedRanges: ReadonlyMap<number, { startLine: number; endLine: number }>,
+): IndexedDefinition[] {
   return definitions.map((definition) => {
     const corrected = correctedRanges.get(definition.symbolId);
     if (!corrected) {

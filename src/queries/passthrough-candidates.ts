@@ -12,6 +12,9 @@ import { ProjectIndex } from '../core/project-index.js';
  * wrapper that adds no value — it just passes arguments through to
  * the real implementation.
  */
+// scip-query: ignore-extract — this is the passthrough-candidate command
+// pipeline: production symbols, callee map, per-symbol scoring, sorting, and
+// summary are one result contract.
 export function passthroughCandidates(
   db: ScipDatabase,
   opts?: { scope?: string; maxLoc?: number; limit?: number },
@@ -24,40 +27,51 @@ export function passthroughCandidates(
   const results: PassthroughCandidate[] = [];
 
   for (const sym of symbols) {
-    const rawCallees = calleeMap.get(sym.symbolId) ?? [];
-    const callees = rawCallees.some((c) => isFunctionLikeSymbol(c.symbol))
-      ? rawCallees.filter((c) => isFunctionLikeSymbol(c.symbol))
-      : rawCallees;
-
-    // Deduplicate by symbol
-    const uniqueCallees = new Map<string, { symbol: string; file: string }>();
-    for (const c of callees) {
-      if (!uniqueCallees.has(c.symbol)) uniqueCallees.set(c.symbol, c);
-    }
-
-    if (uniqueCallees.size !== 1) continue;
-
-    // Body-shape gate: must be `return inner(args)` where args === params,
-    // not a type guard / partial application / defaulted wrapper that
-    // happens to call exactly one function.
-    if (!isLiteralPassthrough(db, sym.relativePath, sym.startLine, sym.endLine)) continue;
-
-    const [, callee] = [...uniqueCallees.entries()][0]!;
-    results.push({
-      symbol: sym.symbol,
-      shortName: shortenSymbol(sym.symbol),
-      file: sym.relativePath,
-      startLine: sym.startLine,
-      endLine: sym.endLine,
-      loc: definitionLoc(sym),
-      forwardsTo: callee.symbol,
-      forwardsToShort: shortenSymbol(callee.symbol),
-      forwardsToFile: callee.file,
-    });
+    const candidate = passthroughCandidateForSymbol(db, sym, calleeMap.get(sym.symbolId) ?? []);
+    if (candidate) results.push(candidate);
   }
 
   results.sort((a, b) => a.loc - b.loc || a.file.localeCompare(b.file));
   return results.slice(0, limit);
+}
+
+function passthroughCandidateForSymbol(
+  db: ScipDatabase,
+  sym: IndexedDefinition,
+  rawCallees: readonly { symbol: string; file: string }[],
+): PassthroughCandidate | null {
+  const uniqueCallees = uniquePassthroughCallees(rawCallees);
+  if (uniqueCallees.size !== 1) return null;
+  // Body-shape gate: must be `return inner(args)` where args === params,
+  // not a type guard / partial application / defaulted wrapper that happens
+  // to call exactly one function.
+  if (!isLiteralPassthrough(db, sym.relativePath, sym.startLine, sym.endLine)) return null;
+
+  const [, callee] = [...uniqueCallees.entries()][0]!;
+  return {
+    symbol: sym.symbol,
+    shortName: shortenSymbol(sym.symbol),
+    file: sym.relativePath,
+    startLine: sym.startLine,
+    endLine: sym.endLine,
+    loc: definitionLoc(sym),
+    forwardsTo: callee.symbol,
+    forwardsToShort: shortenSymbol(callee.symbol),
+    forwardsToFile: callee.file,
+  };
+}
+
+function uniquePassthroughCallees(
+  rawCallees: readonly { symbol: string; file: string }[],
+): Map<string, { symbol: string; file: string }> {
+  const callees = rawCallees.some((c) => isFunctionLikeSymbol(c.symbol))
+    ? rawCallees.filter((c) => isFunctionLikeSymbol(c.symbol))
+    : rawCallees;
+  const uniqueCallees = new Map<string, { symbol: string; file: string }>();
+  for (const c of callees) {
+    if (!uniqueCallees.has(c.symbol)) uniqueCallees.set(c.symbol, c);
+  }
+  return uniqueCallees;
 }
 
 function getPassthroughCandidateSymbols(

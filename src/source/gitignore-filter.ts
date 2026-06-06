@@ -10,6 +10,9 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
  *
  * Falls back to sensible defaults if no .gitignore is found.
  */
+// scip-query: ignore-extract — this builds the project gitignore predicate:
+// root discovery, ignore-file parsing, safe fallback handling, and normalized
+// relative paths are one boundary policy.
 export function createGitignoreFilter(projectRoot: string): PathFilter {
   const ig = ignore();
   let loaded = false;

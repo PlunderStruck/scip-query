@@ -71,6 +71,9 @@ export class Watcher {
   }
 
   /** Start watching for file changes */
+  // scip-query: ignore-extract — this wires the watcher lifecycle: initial
+  // status, chokidar subscription, debounce handling, and close semantics are
+  // one runtime boundary.
   start(): void {
     this.stopped = false;
     this.setStatus({ state: 'idle' });
@@ -152,6 +155,9 @@ export class Watcher {
     }, this.watchConfig.debounceMs);
   }
 
+  // scip-query: ignore-extract — this method is the watcher's state machine:
+  // cooldown, in-flight state, retry scheduling, and error recovery must stay
+  // visible together.
   private triggerReindex(): void {
     if (this.reindexInFlight || this.stopped) return;
 

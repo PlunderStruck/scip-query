@@ -13,6 +13,9 @@ import { ProjectIndex } from '../core/project-index.js';
  * Branch counting uses language-aware regex. The language is read from
  * the SCIP documents table, so it works for any indexed language.
  */
+// scip-query: ignore-extract — this is the per-symbol complexity scoring pass:
+// branches, fan-out, fan-in, LOC, language, and preview source are the public
+// report contract.
 export function complexity(
   db: ScipDatabase,
   symbolPattern: string,

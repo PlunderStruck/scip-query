@@ -19,6 +19,9 @@ import type { SimilarChainResult } from '../domain/types.js';
  * Two chains that both pass through userValidation → userRepo → emailService
  * after filtering is a strong consolidation signal.
  */
+// scip-query: ignore-extract — this is the command pipeline for chain
+// similarity: generation, pair scoring, dedupe, infrastructure filtering, and
+// ranking must stay visible as the public result contract.
 export function similarChains(
   db: ScipDatabase,
   opts: {

@@ -16,6 +16,11 @@ interface StaleCandidateRow {
   transitivelyReachable: boolean;
 }
 
+interface SingletonBackedClass {
+  singleton: IndexedDefinition;
+  classId: number;
+}
+
 /**
  * Find stale abstractions: type-level symbols (classes, interfaces, type
  * aliases) that have 0 or 1 *real* cross-file consumers.
@@ -33,6 +38,9 @@ interface StaleCandidateRow {
  *   - low:    1 consumer but kind === 'class' — usually encapsulation
  *             (big class owned by its single consumer), not over-abstraction.
  */
+// scip-query: ignore-extract — this is the stale-abstraction scoring
+// pipeline; helper functions already own candidate loading, consumer maps,
+// singleton correction, and per-row scoring.
 export function staleAbstractions(
   db: ScipDatabase,
   opts?: { scope?: string; minLoc?: number; maxLoc?: number; limit?: number; includeLowConfidence?: boolean },
@@ -164,6 +172,9 @@ function staleCandidateRows(
   });
 }
 
+// scip-query: ignore-extract — this is the final stale-abstraction scoring
+// projection; definition kind, definer usage, confidence, and result shape are
+// one report decision.
 function scoreStaleCandidate(
   db: ScipDatabase,
   row: StaleCandidateRow,
@@ -201,49 +212,78 @@ function getSingletonBackedClassIds(
   scopedDefinitions: readonly IndexedDefinition[],
   typeCandidates: readonly IndexedDefinition[],
 ): Set<number> {
-  const byFileAndLeaf = new Map<string, IndexedDefinition>();
-  for (const definition of scopedDefinitions) {
-    const leaf = leafName(definition.symbol);
-    if (!leaf) continue;
-    byFileAndLeaf.set(`${definition.relativePath}\0${leaf}`, definition);
-  }
-
-  const singletonVars: IndexedDefinition[] = [];
-  const classBySingletonVarId = new Map<number, number>();
-  for (const definition of typeCandidates) {
-    if (detectDefinitionKind(db, definition.relativePath, definition.startLine) !== 'class') continue;
-    const classLeaf = leafName(definition.symbol);
-    if (!classLeaf) continue;
-    const varName = exportedSingletonVarName(db, definition.relativePath, classLeaf);
-    if (!varName) continue;
-    const singleton = byFileAndLeaf.get(`${definition.relativePath}\0${varName}`);
-    if (!singleton) continue;
-    singletonVars.push(singleton);
-    classBySingletonVarId.set(singleton.symbolId, definition.symbolId);
-  }
-
-  if (singletonVars.length === 0) return new Set();
+  const singletonBackedClasses = singletonBackedClassesForCandidates(
+    db,
+    scopedDefinitionsByFileAndLeaf(scopedDefinitions),
+    typeCandidates,
+  );
+  const singletonVars = singletonBackedClasses.map((entry) => entry.singleton);
+  if (singletonBackedClasses.length === 0) return new Set();
 
   const singletonConsumers = mergeConsumerMaps(
     index.crossFileCallerMap(singletonVars),
     index.sourceFallbackCallerFiles(singletonVars),
   );
   const liveClassIds = new Set<number>();
-  for (const singleton of singletonVars) {
-    const singletonLeaf = leafName(singleton.symbol);
-    if (!singletonLeaf) continue;
-    const consumers = singletonConsumers.get(singleton.symbolId);
-    if (!consumers) continue;
-    const hasRealConsumer = [...consumers].some((file) =>
-      file !== singleton.relativePath
-      && !db.isIgnored(file)
-      && !isImportOnlyConsumer(db, file, singletonLeaf),
-    );
-    if (!hasRealConsumer) continue;
-    const classId = classBySingletonVarId.get(singleton.symbolId);
-    if (classId !== undefined) liveClassIds.add(classId);
+  for (const { singleton, classId } of singletonBackedClasses) {
+    if (singletonHasRealConsumer(db, singleton, singletonConsumers)) {
+      liveClassIds.add(classId);
+    }
   }
   return liveClassIds;
+}
+
+function scopedDefinitionsByFileAndLeaf(scopedDefinitions: readonly IndexedDefinition[]): Map<string, IndexedDefinition> {
+  const byFileAndLeaf = new Map<string, IndexedDefinition>();
+  for (const definition of scopedDefinitions) {
+    const leaf = leafName(definition.symbol);
+    if (leaf) byFileAndLeaf.set(fileLeafKey(definition.relativePath, leaf), definition);
+  }
+  return byFileAndLeaf;
+}
+
+function singletonBackedClassesForCandidates(
+  db: ScipDatabase,
+  byFileAndLeaf: ReadonlyMap<string, IndexedDefinition>,
+  typeCandidates: readonly IndexedDefinition[],
+): SingletonBackedClass[] {
+  const classes: SingletonBackedClass[] = [];
+  for (const definition of typeCandidates) {
+    const singleton = singletonForClassDefinition(db, byFileAndLeaf, definition);
+    if (singleton) classes.push({ singleton, classId: definition.symbolId });
+  }
+  return classes;
+}
+
+function singletonForClassDefinition(
+  db: ScipDatabase,
+  byFileAndLeaf: ReadonlyMap<string, IndexedDefinition>,
+  definition: IndexedDefinition,
+): IndexedDefinition | null {
+  if (detectDefinitionKind(db, definition.relativePath, definition.startLine) !== 'class') return null;
+  const classLeaf = leafName(definition.symbol);
+  if (!classLeaf) return null;
+  const varName = exportedSingletonVarName(db, definition.relativePath, classLeaf);
+  return varName ? byFileAndLeaf.get(fileLeafKey(definition.relativePath, varName)) ?? null : null;
+}
+
+function singletonHasRealConsumer(
+  db: ScipDatabase,
+  singleton: IndexedDefinition,
+  singletonConsumers: ReadonlyMap<number, Set<string>>,
+): boolean {
+  const singletonLeaf = leafName(singleton.symbol);
+  const consumers = singletonConsumers.get(singleton.symbolId);
+  if (!singletonLeaf || !consumers) return false;
+  return [...consumers].some((file) =>
+    file !== singleton.relativePath
+    && !db.isIgnored(file)
+    && !isImportOnlyConsumer(db, file, singletonLeaf),
+  );
+}
+
+function fileLeafKey(relativePath: string, leaf: string): string {
+  return `${relativePath}\0${leaf}`;
 }
 
 function exportedSingletonVarName(

@@ -129,6 +129,9 @@ interface FreshIndexRun {
  * Reindex a project: detect languages, run the appropriate SCIP indexer(s),
  * and convert the output to SQLite.
  */
+// scip-query: ignore-extract — this is the lock/cleanup safety envelope for
+// reindex; hiding the ordered steps behind another helper would make failure
+// behavior harder to audit.
 export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
   const {
     projectRoot,
@@ -321,6 +324,9 @@ async function runLanguageIndexersForFreshReindex(
   return { indexedOutputs, skippedLanguages };
 }
 
+// scip-query: ignore-extract — this is the publish phase for a fresh index:
+// materialize SCIP, convert to SQLite, promote both artifacts, and write
+// metadata are one atomic handoff.
 function publishFreshReindexArtifacts(
   opts: Parameters<typeof runFreshReindex>[0],
   env: NodeJS.ProcessEnv,
@@ -699,6 +705,9 @@ async function runPreparedIndexers(
     - runs.findIndex((run) => run.language === b.language));
 }
 
+// scip-query: ignore-extract — this is the per-indexer backup/run/restore
+// safety sequence; the default-output recovery has to remain in one visible
+// try/finally block.
 async function runPreparedIndexer(
   run: PreparedIndexerRun,
   projectRoot: string,

@@ -212,6 +212,9 @@ function collectSuppressionExclusions(
   return out;
 }
 
+// scip-query: ignore-extract — this is the Rust exclusion policy aggregator:
+// generated-file shortcut, AST exclusions, suppression comments, and serde
+// module handling are one accuracy contract for dead-code filtering.
 function getRustExclusions(
   db: ScipDatabase,
   relativePath: string,
@@ -259,6 +262,9 @@ function generatedRustFileExclusion(tree: Tree): ExclusionEntry[] | null {
   }];
 }
 
+// scip-query: ignore-extract — this is the recursive Rust syntax visitor for
+// framework exclusions; inherited test-module and trait-impl state drive each
+// child visit, so splitting branches would hide the traversal state.
 function collectRustAstExclusions(
   node: SyntaxNode,
   out: ExclusionEntry[],

@@ -186,6 +186,8 @@ const TREE_CACHE = createPerDbSourceCache<Tree | null>('ast-trees');
  * extracted script is left-padded with newlines so node line numbers match
  * the original SFC file. Template and style blocks fall back to regex.
  */
+// scip-query: ignore-extract — this is the AST entrypoint: language detection,
+// Vue SFC handling, parser selection, and source parsing are one parse policy.
 export function getAst(db: ScipDatabase, relativePath: string): Tree | null {
   if (isVueSfcPath(relativePath)) {
     return getVueScriptAst(db, relativePath);
@@ -216,6 +218,8 @@ export function getAst(db: ScipDatabase, relativePath: string): Tree | null {
  * Returns null when there's no `<script>` block, the source is unreadable,
  * or the inferred grammar isn't loadable.
  */
+// scip-query: ignore-extract — this parses the script-bearing part of a Vue
+// SFC; block extraction, language selection, and parser dispatch are one rule.
 function getVueScriptAst(db: ScipDatabase, relativePath: string): Tree | null {
   const source = getSourceText(db, relativePath);
   if (!source) return null;
@@ -568,6 +572,9 @@ export function runCachedAstWalk<T>(
  * compile. Used by getCallableSites / getCallSites which share this exact
  * shape.
  */
+// scip-query: ignore-extract — this is the shared cached AST-query executor:
+// language detection, query compilation, AST loading, and projection are one
+// cache contract.
 export function runCachedAstQuery<T>(
   db: ScipDatabase,
   relativePath: string,

@@ -35,6 +35,9 @@ export class ProjectIndex {
     return getDefinitionsForFile(this.db, relativePath);
   }
 
+  // scip-query: ignore-extract — this is the shared production-callable gate:
+  // scope, suppression comments, tests, generated files, LOC, and callable
+  // mode form the contract used by several health commands.
   productionCallableDefinitions(
     opts: ProductionCallableDefinitionsOptions = {},
   ): IndexedDefinition[] {

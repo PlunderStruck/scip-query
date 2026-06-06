@@ -13,6 +13,9 @@ type ConsumerMap = Map<string, Set<string>>;
  * Finds all symbols defined in changed files, their fan-in,
  * and the files that consume them downstream.
  */
+// scip-query: ignore-extract — this is the report assembly pipeline; the
+// helper calls already own the real work and the remaining body preserves
+// the user-facing result order.
 export function diffImpact(
   db: ScipDatabase,
   opts: { base?: string } = {},
@@ -139,6 +142,9 @@ function changedDefinitions(
     .sort((a, b) => a.relativePath.localeCompare(b.relativePath) || a.startLine - b.startLine);
 }
 
+// scip-query: ignore-extract — this adds one changed-definition impact row:
+// reportability, SCIP fan-in, source consumers, and dedupe all feed the same
+// changed-file evidence set.
 function addChangedDefinitionImpact(
   db: ScipDatabase,
   definition: IndexedDefinition,

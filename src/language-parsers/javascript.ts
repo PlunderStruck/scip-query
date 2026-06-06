@@ -75,6 +75,9 @@ function astImportUsedNames(
   return usedNames;
 }
 
+// scip-query: ignore-extract — this is the JavaScript AST import parser:
+// side-effect imports, import clauses, specifiers, and type-only detection are
+// one node-level parsing rule.
 function parseAstImportNode(
   db: ScipDatabase,
   importerPath: string,
@@ -431,10 +434,27 @@ export function parseReExports(
   if (tree) return getReExportsAst(db, relativePath, tree);
 
   const source = getSourceText(db, relativePath);
-  if (!source) return [];
+  return source ? parseReExportsRegex(db, relativePath, source) : [];
+}
 
+function parseReExportsRegex(
+  db: ScipDatabase,
+  relativePath: string,
+  source: string,
+): ParsedReExport[] {
+  return [
+    ...parseNamedReExportsRegex(db, relativePath, source),
+    ...parseStarAsReExportsRegex(db, relativePath, source),
+    ...parseStarReExportsRegex(db, relativePath, source),
+  ];
+}
+
+function parseNamedReExportsRegex(
+  db: ScipDatabase,
+  relativePath: string,
+  source: string,
+): ParsedReExport[] {
   const results: ParsedReExport[] = [];
-
   const namedRegex = /^[ \t]*export\s+(?:type\s+)?\{([\s\S]*?)\}\s+from\s+['"]([^'"]+)['"]\s*;?/gm;
   for (const match of source.matchAll(namedRegex)) {
     if (typeof match.index !== 'number') continue;
@@ -453,7 +473,15 @@ export function parseReExports(
       endLine: end,
     });
   }
+  return results;
+}
 
+function parseStarAsReExportsRegex(
+  db: ScipDatabase,
+  relativePath: string,
+  source: string,
+): ParsedReExport[] {
+  const results: ParsedReExport[] = [];
   const starAsRegex = /^[ \t]*export\s+\*\s+as\s+(\w+)\s+from\s+['"]([^'"]+)['"]\s*;?/gm;
   for (const match of source.matchAll(starAsRegex)) {
     if (typeof match.index !== 'number') continue;
@@ -468,7 +496,15 @@ export function parseReExports(
       endLine: end,
     });
   }
+  return results;
+}
 
+function parseStarReExportsRegex(
+  db: ScipDatabase,
+  relativePath: string,
+  source: string,
+): ParsedReExport[] {
+  const results: ParsedReExport[] = [];
   const starRegex = /^[ \t]*export\s+\*\s+from\s+['"]([^'"]+)['"]\s*;?/gm;
   for (const match of source.matchAll(starRegex)) {
     if (typeof match.index !== 'number') continue;
