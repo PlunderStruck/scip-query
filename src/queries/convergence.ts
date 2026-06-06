@@ -13,6 +13,7 @@ export function convergence(
   db: ScipDatabase,
   symbolPatternA: string,
   symbolPatternB: string,
+  opts: { semantic?: boolean } = {},
 ): ConvergenceResult | null {
   const matchA = findFirstSymbolMatch(db, symbolPatternA);
   const matchB = findFirstSymbolMatch(db, symbolPatternB);
@@ -20,10 +21,10 @@ export function convergence(
   if (!matchA || !matchB) return null;
 
   const calleesA = new Set(
-    getCalleeRowsForSymbol(db, matchA).map((r) => r.symbol),
+    getCalleeRowsForSymbol(db, matchA, { semantic: opts.semantic }).map((r) => r.symbol),
   );
   const calleesB = new Set(
-    getCalleeRowsForSymbol(db, matchB).map((r) => r.symbol),
+    getCalleeRowsForSymbol(db, matchB, { semantic: opts.semantic }).map((r) => r.symbol),
   );
 
   const shared: string[] = [];

@@ -8,7 +8,11 @@ import { isFunctionLikeSymbol, shortenSymbol } from '../symbols/symbol-parser.js
 
 // scip-query: ignore-extract — trace is the user-facing evidence assembly:
 // definition metadata plus source-scan references with mention fallback.
-export function trace(db: ScipDatabase, symbolPattern: string): TraceResult {
+export function trace(
+  db: ScipDatabase,
+  symbolPattern: string,
+  opts: { semantic?: boolean } = {},
+): TraceResult {
   const match = findFirstSymbolMatch(db, symbolPattern);
   if (!match) {
     return { definitions: [], referencedBy: [] };
@@ -32,7 +36,7 @@ export function trace(db: ScipDatabase, symbolPattern: string): TraceResult {
 
   // Primary: cross-file identifier scan. Fallback: mention-resolved sites
   // with in-chunk line refinement (precise line, not chunk-start).
-  const sourceSites = getSourceReferenceSites(db, match);
+  const sourceSites = getSourceReferenceSites(db, match, { semantic: opts.semantic });
   const resolvedSites = sourceSites.length > 0 ? sourceSites : getResolvedReferenceSites(db, match);
   const referencedBy = resolvedSites
     .filter((site) => !db.isIgnored(site.file))

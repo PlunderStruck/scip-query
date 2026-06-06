@@ -25,15 +25,18 @@ import { ProjectIndex } from '../core/project-index.js';
 export function similar(
   db: ScipDatabase,
   symbolPattern: string,
-  opts: { minSimilarity?: number; limit?: number } = {},
+  opts: { minSimilarity?: number; limit?: number; scanLimit?: number; semantic?: boolean } = {},
 ): SimilarSymbolResult[] {
   const { minSimilarity = 0.4, limit = 20 } = opts;
 
-  const target = findCallees(db, symbolPattern);
+  const target = findCallees(db, symbolPattern, { semantic: opts.semantic !== false });
   if (!target) return [];
   if (!isFunctionLikeSymbol(target.symbol)) return [];
 
-  const results = compareAgainstFingerprints(db, target, minSimilarity);
+  const results = compareAgainstFingerprints(db, target, minSimilarity, {
+    scanLimit: opts.scanLimit,
+    semantic: opts.semantic !== false,
+  });
   if (results.length > 0) return results.slice(0, limit);
   return similarBySourceShape(db, symbolPattern, { minSimilarity, limit });
 }
@@ -42,10 +45,13 @@ function compareAgainstFingerprints(
   db: ScipDatabase,
   target: SymbolFingerprint,
   minSimilarity: number,
+  opts: { scanLimit?: number; semantic: boolean },
 ): SimilarSymbolResult[] {
   const candidates = getAllCalleeFingerprints(db, {
     minCallees: 3,
     excludeSymbol: target.symbol,
+    scanLimit: opts.scanLimit,
+    semantic: opts.semantic,
   });
   const idfWeights = computeIdf([target, ...candidates].map((fp) => fp.callees));
 
@@ -224,13 +230,14 @@ const INFRASTRUCTURE_CALLEE_FRAGMENTS = [
 function findCallees(
   db: ScipDatabase,
   symbolPattern: string,
+  opts: { semantic: boolean },
 ): SymbolFingerprint | null {
   const target = findFirstSymbolMatch(db, symbolPattern);
   const index = new ProjectIndex(db);
 
   if (!target) return null;
 
-  const calleeRows = getCalleeRowsForSymbol(db, target);
+  const calleeRows = getCalleeRowsForSymbol(db, target, { semantic: opts.semantic });
 
   return {
     symbol: target.symbol,

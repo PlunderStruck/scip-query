@@ -179,14 +179,14 @@ function addFileDepEdge(
 export function getCalleeRowsForSymbol(
   db: ScipDatabase,
   symbol: SymbolMatch,
-  opts: { limit?: number; additive?: boolean; callableOnly?: boolean } = {},
+  opts: { limit?: number; additive?: boolean; callableOnly?: boolean; semantic?: boolean } = {},
 ): CalleeRow[] {
   // Delegates to the shared bulk path so callers automatically benefit from
   // tree-sitter call attribution, source-confirmation, and the merged AST +
   // SCIP results. Avoids the older per-symbol mention-scan that under-
   // attributed for AST-supported languages and missed call/callee shape
   // refinements that the bulk helper already handles.
-  const map = buildCalleeMap(db, [symbol], { additive: opts.additive });
+  const map = buildCalleeMap(db, [symbol], { additive: opts.additive, semantic: opts.semantic });
   const callees = opts.callableOnly
     ? (map.get(symbol.symbolId) ?? []).filter((callee) => isCallableSymbol(callee.symbol))
     : map.get(symbol.symbolId) ?? [];

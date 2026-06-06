@@ -144,30 +144,33 @@ export function attributeIdentifierPermissive(
 export function findReferences(
   db: ScipDatabase,
   symbol: SymbolLocation,
+  opts: { semantic?: boolean } = {},
 ): ReferenceSite[] {
   const match = getFullSymbolMatch(db, symbol);
   if (!match) return [];
   const identifier = leafName(match.symbol);
   if (!identifier) return [];
 
-  const semanticSites = semanticReferences(db, {
-    ...match,
-    leaf: identifier,
-    parentTypeName: null,
-    isFunctionLike: false,
-    isTypeLike: false,
-    kind: null,
-    documentation: null,
-    enclosingSymbol: null,
-  });
-  if (semanticSites.length > 0) {
-    const semanticLines = new Map<string, number[]>();
-    for (const site of semanticSites) {
-      const bucket = semanticLines.get(site.file) ?? [];
-      bucket.push(site.line);
-      semanticLines.set(site.file, bucket);
+  if (opts.semantic !== false) {
+    const semanticSites = semanticReferences(db, {
+      ...match,
+      leaf: identifier,
+      parentTypeName: null,
+      isFunctionLike: false,
+      isTypeLike: false,
+      kind: null,
+      documentation: null,
+      enclosingSymbol: null,
+    });
+    if (semanticSites.length > 0) {
+      const semanticLines = new Map<string, number[]>();
+      for (const site of semanticSites) {
+        const bucket = semanticLines.get(site.file) ?? [];
+        bucket.push(site.line);
+        semanticLines.set(site.file, bucket);
+      }
+      return materializeReferenceSites(db, semanticLines);
     }
-    return materializeReferenceSites(db, semanticLines);
   }
 
   const fileLines = new Map<string, number[]>();

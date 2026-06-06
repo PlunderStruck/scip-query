@@ -10,8 +10,12 @@ import { isModuleLikeSymbol, leafName, shortenSymbol } from '../symbols/symbol-p
  * What symbols does this file import?
  * Uses role=2 (import) from the SCIP mentions table.
  */
-export function imports(db: ScipDatabase, filePattern: string): ImportResult[] {
-  return loadFileImportEntries(db, filePattern)?.map((entry) => ({
+export function imports(
+  db: ScipDatabase,
+  filePattern: string,
+  opts: { semantic?: boolean } = {},
+): ImportResult[] {
+  return loadFileImportEntries(db, filePattern, opts)?.map((entry) => ({
     symbol: entry.symbol,
     shortName: entry.shortName,
     fromFile: entry.fromFile,
@@ -32,8 +36,12 @@ export function importedBy(db: ScipDatabase, symbolPattern: string): ImportResul
  * Find imports in a file that are never referenced (role=0) in the same file.
  * These are likely unused imports.
  */
-export function unusedImports(db: ScipDatabase, filePattern: string): UnusedImportResult[] {
-  return loadFileImportEntries(db, filePattern)
+export function unusedImports(
+  db: ScipDatabase,
+  filePattern: string,
+  opts: { semantic?: boolean } = {},
+): UnusedImportResult[] {
+  return loadFileImportEntries(db, filePattern, opts)
     ?.filter((entry) => !entry.used)
     .map((entry) => ({
       symbol: entry.symbol,
@@ -130,16 +138,24 @@ function sourceImportMatchesTarget(
   return entry.kind === 'namespace' && entry.usedMembers.includes(target.targetLeaf);
 }
 
-function loadFileImportEntries(db: ScipDatabase, filePattern: string): ImportEntry[] | null {
+function loadFileImportEntries(
+  db: ScipDatabase,
+  filePattern: string,
+  opts: { semantic?: boolean } = {},
+): ImportEntry[] | null {
   const importer = resolveIndexedFile(db, filePattern);
   if (!importer) return null;
 
-  return indexedFileImportEntries(db, importer)
-    ?? semanticFileImportEntries(db, importer)
+  return indexedFileImportEntries(db, importer, opts)
+    ?? (opts.semantic === false ? null : semanticFileImportEntries(db, importer))
     ?? sourceFileImportEntries(db, importer);
 }
 
-function indexedFileImportEntries(db: ScipDatabase, importer: string): ImportEntry[] | null {
+function indexedFileImportEntries(
+  db: ScipDatabase,
+  importer: string,
+  opts: { semantic?: boolean },
+): ImportEntry[] | null {
   const rows = db.all<{
     symbol: string;
     from_file: string | null;
@@ -178,7 +194,7 @@ function indexedFileImportEntries(db: ScipDatabase, importer: string): ImportEnt
 
   const indexed = rows.filter((row) => !db.isIgnored(row.importer));
   if (indexed.length > 0) {
-    const semantic = semanticImportUsage(db, importer);
+    const semantic = opts.semantic === false ? [] : semanticImportUsage(db, importer);
     return indexed.map((r) => ({
       symbol: r.symbol,
       shortName: shortenSymbol(r.symbol),

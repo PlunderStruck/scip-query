@@ -336,7 +336,14 @@ function summarizeHealthDead(
   budget: HealthBudget,
 ): CountLocSummary {
   return runHealthPhase(db, budget, 'dead', () => {
-    const deadResult = dead(db, { scope, minLoc: 3, skipBarrels: true, deadCodeOnly: true });
+    const deadResult = dead(db, {
+      scope,
+      minLoc: 3,
+      skipBarrels: true,
+      deadCodeOnly: true,
+      scanLimit: budget.candidateScanLimit,
+      semantic: false,
+    });
     return summarizeLoc(filterHealthDeadSymbols(db, deadResult.symbols));
   });
 }
@@ -347,7 +354,12 @@ function summarizeHealthIsolated(
   budget: HealthBudget,
 ): CountLocSummary {
   return runHealthPhase(db, budget, 'isolated', () => {
-    const isolatedResult = isolated(db, { scope, minLoc: 3, semantic: false });
+    const isolatedResult = isolated(db, {
+      scope,
+      minLoc: 3,
+      scanLimit: budget.candidateScanLimit,
+      semantic: false,
+    });
     return summarizeLoc(filterHealthIsolatedSymbols(db, isolatedResult));
   });
 }

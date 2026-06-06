@@ -6,7 +6,11 @@ import { getSourceText } from '../source/source-text.js';
 import { isFunctionLikeSymbol } from '../symbols/symbol-parser.js';
 import type { RefResult } from '../domain/types.js';
 
-export function refs(db: ScipDatabase, symbolPattern: string): RefResult[] {
+export function refs(
+  db: ScipDatabase,
+  symbolPattern: string,
+  opts: { semantic?: boolean } = {},
+): RefResult[] {
   const match = findFirstSymbolMatch(db, symbolPattern);
   if (!match) return [];
 
@@ -17,7 +21,7 @@ export function refs(db: ScipDatabase, symbolPattern: string): RefResult[] {
 
   // Primary: cross-file identifier scan when the leaf name is unique.
   // Fallback: mention-resolved sites with in-chunk line refinement.
-  const sourceSites = getSourceReferenceSites(db, match);
+  const sourceSites = getSourceReferenceSites(db, match, { semantic: opts.semantic });
   const referenceSites = (sourceSites.length > 0 ? sourceSites : getResolvedReferenceSites(db, match))
     .filter((site) => !db.isIgnored(site.file))
     .map((site) => ({ relativePath: site.file, line: site.line }));

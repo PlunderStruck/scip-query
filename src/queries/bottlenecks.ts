@@ -17,16 +17,20 @@ import { ProjectIndex } from '../core/project-index.js';
 // Different intent, intentionally separate query.
 export function bottlenecks(
   db: ScipDatabase,
-  opts: { limit?: number; scope?: string; minFanIn?: number; minFanOut?: number } = {},
+  opts: { limit?: number; scope?: string; minFanIn?: number; minFanOut?: number; scanLimit?: number; semantic?: boolean } = {},
 ): BottleneckResult[] {
-  const { limit = 20, scope, minFanIn = 2, minFanOut = 2 } = opts;
+  const { limit = 20, scope, minFanIn = 2, minFanOut = 2, scanLimit } = opts;
   const index = new ProjectIndex(db);
-  const rows = index.productionCallableDefinitions({
-    scope,
-    requireCallableSymbol: true,
-    includeSuppressed: true,
-  })
-    .map((definition) => bottleneckRowFor(db, definition));
+  const definitions = applyScanLimit(
+    index.productionCallableDefinitions({
+      scope,
+      requireCallableSymbol: true,
+      includeSuppressed: true,
+      sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
+    }),
+    scanLimit,
+  );
+  const rows = definitions.map((definition) => bottleneckRowFor(db, definition, opts.semantic !== false));
 
   return rows
     .filter((row) => row.fanIn >= minFanIn && row.fanOut >= minFanOut)
@@ -37,12 +41,13 @@ export function bottlenecks(
 function bottleneckRowFor(
   db: ScipDatabase,
   definition: IndexedDefinition,
+  semantic: boolean,
 ): BottleneckResult {
   const fanIn = new Set(
-    getCallerRowsForSymbol(db, definition, { limit: 500 }).map((row) => row.file),
+    getCallerRowsForSymbol(db, definition, { limit: 500, semantic }).map((row) => row.file),
   ).size;
   const fanOut = new Set(
-    getCalleeRowsForSymbol(db, definition, { limit: 500 })
+    getCalleeRowsForSymbol(db, definition, { limit: 500, semantic })
       .filter((row) => row.file !== definition.relativePath)
       .map((row) => `${row.symbol}|${row.file}`),
   ).size;
@@ -54,4 +59,11 @@ function bottleneckRowFor(
     score: fanIn * fanOut,
     definedIn: definition.relativePath,
   };
+}
+
+function applyScanLimit<T>(items: T[], scanLimit: number | undefined): T[] {
+  if (typeof scanLimit !== 'number' || scanLimit <= 0 || items.length <= scanLimit) {
+    return items;
+  }
+  return items.slice(0, scanLimit);
 }

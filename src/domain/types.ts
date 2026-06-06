@@ -661,6 +661,8 @@ export interface DeadOptions {
   skipBarrels?: boolean;
   includeMembers?: boolean;
   deadCodeOnly?: boolean;
+  scanLimit?: number;
+  semantic?: boolean;
 }
 
 // ── Auto-Install Types ────────────────────────────────────

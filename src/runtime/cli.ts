@@ -10,6 +10,7 @@ import { getIndexerDependencyStatus } from '../reindex/install.js';
 import { getTypeScriptSemanticStatus } from '../semantic/typescript/status.js';
 import { Watcher } from './watch.js';
 import type { DeadOptions } from '../domain/types.js';
+import type { ScipDatabase } from '../storage/db.js';
 import { BUILTIN_SKILLS, installSkills, isScipInstalled, printScipInstallInstructions } from './setup.js';
 import { displayLine, displayPathRange, displayRange, render } from './render.js';
 import {
@@ -29,6 +30,9 @@ const { version: cliVersion } = loadCliPackageInfo();
 const HEALTH_PHASE_COMMAND = '__health-phase';
 const DIFF_IMPACT_BATCH_COMMAND = '__diff-impact-batch';
 const DIFF_IMPACT_BATCH_SIZE = 10;
+const LARGE_COMMAND_SYMBOL_THRESHOLD = 75_000;
+const LARGE_COMMAND_DOCUMENT_THRESHOLD = 5_000;
+const DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT = 2_500;
 
 function loadCliPackageInfo(): { version: string } {
   for (const path of ['../package.json', '../../package.json']) {
@@ -59,6 +63,34 @@ interface DiffImpactCliOptions {
 
 export function renderHeuristicNotice(label: string): void {
   console.log(`Heuristic ${label}: review before acting; these are candidates, not exact compiler facts.\n`);
+}
+
+interface CommandAnalysisBudget {
+  scanLimit?: number;
+  semantic: boolean;
+}
+
+function commandAnalysisBudget(
+  db: ScipDatabase,
+  commandName: string,
+  full: boolean | undefined,
+): CommandAnalysisBudget {
+  const statsResult = queries.stats(db);
+  const isLargeIndex = statsResult.symbols >= LARGE_COMMAND_SYMBOL_THRESHOLD
+    || statsResult.documents >= LARGE_COMMAND_DOCUMENT_THRESHOLD;
+
+  if (!isLargeIndex) return { semantic: true };
+
+  if (full) {
+    console.error(`Large index detected; ${commandName} is running the unbounded semantic pass because --full was supplied.`);
+    return { semantic: true };
+  }
+
+  console.error(
+    `Large index detected; ${commandName} will scan the highest-priority ${DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT} candidates with semantic enrichment disabled. ` +
+    `Run "scip-query ${commandName} --full" for the unbounded semantic pass.`,
+  );
+  return { scanLimit: DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT, semantic: false };
 }
 
 function runIsolatedHealthReport(opts: HealthCliOptions): HealthReport {
@@ -329,16 +361,20 @@ program
 program
   .command('refs <symbol>')
   .description('Find all files referencing a symbol')
-  .action((symbol) => withDb((db) => {
-    render.groupedByFile(queries.refs(db, symbol), (r) => `  line ${displayLine(r.line)}`);
+  .option('--full', 'Run unbounded semantic analysis on large indexes')
+  .action((symbol, opts) => withDb((db) => {
+    const budget = commandAnalysisBudget(db, 'refs', Boolean(opts.full));
+    render.groupedByFile(queries.refs(db, symbol, { semantic: budget.semantic }), (r) => `  line ${displayLine(r.line)}`);
   }));
 
 // trace
 program
   .command('trace <symbol>')
   .description('Trace a symbol: definition + all references')
-  .action((symbol) => withDb((db) => {
-    const result = queries.trace(db, symbol);
+  .option('--full', 'Run unbounded semantic analysis on large indexes')
+  .action((symbol, opts) => withDb((db) => {
+    const budget = commandAnalysisBudget(db, 'trace', Boolean(opts.full));
+    const result = queries.trace(db, symbol, { semantic: budget.semantic });
 
     const definitionRows: string[] = [];
     for (const d of result.definitions) {
@@ -422,16 +458,20 @@ program
   .option('--include-members', 'Include class members')
   .option('--only-dead', 'Show only [dead code] symbols (skip [file-internal only])')
   .option('--only-internal', 'Show only [file-internal only] symbols (skip [dead code])')
+  .option('--full', 'Run unbounded semantic analysis on large indexes')
   // dead — kept inline: section title carries derived counts (`(N, M LOC)`),
   // bodies sort files by per-file total LOC, and a hand-formatted footer
   // sums across both groups. None of those fit a registry shape cleanly.
   .action((scope, opts) => withDb((db) => {
+    const budget = commandAnalysisBudget(db, 'dead', Boolean(opts.full));
     const deadOpts: DeadOptions = {
       scope: scope || undefined,
       minLoc: opts.minLoc,
       includeTests: opts.includeTests,
       skipBarrels: opts.skipBarrels,
       includeMembers: opts.includeMembers,
+      scanLimit: budget.scanLimit,
+      semantic: budget.semantic,
     };
 
     const result = queries.dead(db, deadOpts);
@@ -536,8 +576,10 @@ program
 program
   .command('imports <file>')
   .description('What symbols does this file import?')
-  .action((file) => withDb((db) => {
-    const results = queries.imports(db, file);
+  .option('--full', 'Run unbounded semantic analysis on large indexes')
+  .action((file, opts) => withDb((db) => {
+    const budget = commandAnalysisBudget(db, 'imports', Boolean(opts.full));
+    const results = queries.imports(db, file, { semantic: budget.semantic });
     if (results.length === 0) {
       render.empty('No imports found (indexer may not emit role=2 for this language).');
       return;
@@ -557,8 +599,10 @@ program
 program
   .command('unused-imports <file>')
   .description('Find imports not referenced in the same file')
-  .action((file) => withDb((db) => {
-    const results = queries.unusedImports(db, file);
+  .option('--full', 'Run unbounded semantic analysis on large indexes')
+  .action((file, opts) => withDb((db) => {
+    const budget = commandAnalysisBudget(db, 'unused-imports', Boolean(opts.full));
+    const results = queries.unusedImports(db, file, { semantic: budget.semantic });
     if (results.length === 0) return render.empty('No unused imports found.');
     render.list(results, (r) => `  ${r.shortName}  in ${r.importedIn}`);
     console.log(`\n${results.length} unused import(s)`);
@@ -687,12 +731,16 @@ program
   .option('-s, --scope <path>', 'Limit to files matching path')
   .option('--min-fan-in <n>', 'Minimum fan-in', parseIntSafe, 2)
   .option('--min-fan-out <n>', 'Minimum fan-out', parseIntSafe, 2)
+  .option('--full', 'Run unbounded semantic analysis on large indexes')
   .action((opts) => withDb((db) => {
+    const budget = commandAnalysisBudget(db, 'bottlenecks', Boolean(opts.full));
     const results = queries.bottlenecks(db, {
       limit: opts.limit,
       scope: opts.scope,
       minFanIn: opts.minFanIn,
       minFanOut: opts.minFanOut,
+      scanLimit: budget.scanLimit,
+      semantic: budget.semantic,
     });
     if (results.length === 0) return render.empty('No bottlenecks found.');
     render.table(
@@ -709,8 +757,15 @@ program
   .description('Find completely orphaned symbols (no references at all)')
   .option('-s, --scope <path>', 'Limit to files matching path')
   .option('--min-loc <n>', 'Minimum lines of code', parseIntSafe, 3)
+  .option('--full', 'Run unbounded semantic analysis on large indexes')
   .action((opts) => withDb((db) => {
-    const results = queries.isolated(db, { scope: opts.scope, minLoc: opts.minLoc });
+    const budget = commandAnalysisBudget(db, 'isolated', Boolean(opts.full));
+    const results = queries.isolated(db, {
+      scope: opts.scope,
+      minLoc: opts.minLoc,
+      scanLimit: budget.scanLimit,
+      semantic: budget.semantic,
+    });
     if (results.length === 0) return render.empty('No isolated symbols found.');
     render.groupedByFile(
       results,
@@ -786,8 +841,10 @@ program
 program
   .command('call-graph <symbol>')
   .description('Show incoming callers and outgoing callees for a symbol')
-  .action((symbol) => withDb((db) => {
-    const result = queries.callGraph(db, symbol);
+  .option('--full', 'Run unbounded semantic analysis on large indexes')
+  .action((symbol, opts) => withDb((db) => {
+    const budget = commandAnalysisBudget(db, 'call-graph', Boolean(opts.full));
+    const result = queries.callGraph(db, symbol, { semantic: budget.semantic });
     if (!result) return render.empty('Symbol not found.');
     console.log(`Symbol: ${result.shortName}\n`);
     render.sectionedReport([
@@ -811,11 +868,15 @@ program
   .option('-s, --scope <path>', 'Limit to files matching path')
   .option('--min-callees <n>', 'Minimum callees to consider', parseIntSafe, 4)
   .option('--cross-file-only', 'Only show cross-file pairs (skip same-file matches)')
+  .option('--full', 'Run unbounded semantic analysis on large indexes')
   .action((symbol, opts) => withDb((db) => {
+    const budget = commandAnalysisBudget(db, 'similar', Boolean(opts.full));
     if (symbol) {
       const results = queries.similar(db, symbol, {
         minSimilarity: opts.minSimilarity,
         limit: opts.limit,
+        scanLimit: budget.scanLimit,
+        semantic: budget.semantic,
       });
       if (results.length === 0) return render.empty('No similar symbols found.');
       renderHeuristicNotice('similarity candidates');
@@ -840,6 +901,8 @@ program
         scope: opts.scope,
         minCallees: opts.minCallees,
         crossFileOnly: opts.crossFileOnly,
+        scanLimit: budget.scanLimit,
+        semantic: budget.semantic,
       });
       if (results.length === 0) return render.empty('No similar symbol pairs found.');
       renderHeuristicNotice('similarity candidates');
@@ -927,12 +990,16 @@ program
   .option('--min-loc <n>', 'Minimum function LOC', parseIntSafe, 10)
   .option('--min-callees <n>', 'Minimum callees to analyze', parseIntSafe, 6)
   .option('-n, --limit <n>', 'Number of results', parseIntSafe, 20)
+  .option('--full', 'Run unbounded semantic analysis on large indexes')
   .action((opts) => withDb((db) => {
+    const budget = commandAnalysisBudget(db, 'extract-candidates', Boolean(opts.full));
     const results = queries.extractCandidates(db, {
       scope: opts.scope,
       minLoc: opts.minLoc,
       minCallees: opts.minCallees,
       limit: opts.limit,
+      scanLimit: budget.scanLimit,
+      semantic: budget.semantic,
     });
     if (results.length === 0) return render.empty('No extraction candidates found.');
     renderHeuristicNotice('extraction candidates');
@@ -976,8 +1043,10 @@ program
 program
   .command('change-surface <file>')
   .description('Pre-change briefing: exports, consumers, and blast-radius risk')
-  .action((file) => withDb((db) => {
-    const result = queries.changeSurface(db, file);
+  .option('--full', 'Run unbounded semantic analysis on large indexes')
+  .action((file, opts) => withDb((db) => {
+    const budget = commandAnalysisBudget(db, 'change-surface', Boolean(opts.full));
+    const result = queries.changeSurface(db, file, { semantic: budget.semantic });
     if (!result) return render.empty('File not found in index.');
     console.log(`File: ${result.file}`);
     console.log(`External consumers: ${result.totalExternalConsumers}\n`);
@@ -1016,8 +1085,14 @@ program
   .command('drift [module]')
   .description('Detect heuristic drift candidates: unused imports, layer violations, and pattern deviations')
   .option('--min-deviation <n>', 'Minimum sibling files before reporting unique dependency deviations', parsePositiveInt, 5)
+  .option('--full', 'Run unbounded semantic analysis on large indexes')
   .action((module, opts) => withDb((db) => {
-    const summary = queries.drift(db, { scope: module, minDeviation: opts.minDeviation });
+    const budget = commandAnalysisBudget(db, 'drift', Boolean(opts.full));
+    const summary = queries.drift(db, {
+      scope: module,
+      minDeviation: opts.minDeviation,
+      semantic: budget.semantic,
+    });
     if (summary.results.length === 0) return render.empty('No drift detected.');
     renderHeuristicNotice('drift candidates');
     // Original printed a leading `\n${file}` for every group — replicate by
@@ -1042,8 +1117,16 @@ program
   .option('-s, --scope <path>', 'Limit to files matching path')
   .option('--max-loc <n>', 'Maximum LOC for candidates', parseIntSafe, 15)
   .option('-n, --limit <n>', 'Number of results', parseIntSafe, 30)
+  .option('--full', 'Run unbounded semantic analysis on large indexes')
   .action((opts) => withDb((db) => {
-    const results = queries.wrapperCandidates(db, { scope: opts.scope, maxLoc: opts.maxLoc, limit: opts.limit });
+    const budget = commandAnalysisBudget(db, 'wrapper-candidates', Boolean(opts.full));
+    const results = queries.wrapperCandidates(db, {
+      scope: opts.scope,
+      maxLoc: opts.maxLoc,
+      limit: opts.limit,
+      scanLimit: budget.scanLimit,
+      semantic: budget.semantic,
+    });
     if (results.length === 0) return render.empty('No wrapper candidates found.');
     renderHeuristicNotice('wrapper candidates');
     render.list(
@@ -1062,8 +1145,16 @@ program
   .option('-s, --scope <path>', 'Limit to files matching path')
   .option('--max-loc <n>', 'Maximum LOC for candidates', parseIntSafe, 15)
   .option('-n, --limit <n>', 'Number of results', parseIntSafe, 30)
+  .option('--full', 'Run unbounded semantic analysis on large indexes')
   .action((opts) => withDb((db) => {
-    const results = queries.passthroughCandidates(db, { scope: opts.scope, maxLoc: opts.maxLoc, limit: opts.limit });
+    const budget = commandAnalysisBudget(db, 'passthrough-candidates', Boolean(opts.full));
+    const results = queries.passthroughCandidates(db, {
+      scope: opts.scope,
+      maxLoc: opts.maxLoc,
+      limit: opts.limit,
+      scanLimit: budget.scanLimit,
+      semantic: budget.semantic,
+    });
     if (results.length === 0) return render.empty('No passthrough candidates found.');
     renderHeuristicNotice('passthrough candidates');
     render.list(
@@ -1083,12 +1174,16 @@ program
   .option('--min-loc <n>', 'Minimum LOC', parseIntSafe, 3)
   .option('-n, --limit <n>', 'Number of results', parseIntSafe, 30)
   .option('--include-low-confidence', 'Include 1-consumer classes (usually encapsulation, not stale)', false)
+  .option('--full', 'Run unbounded semantic analysis on large indexes')
   .action((opts) => withDb((db) => {
+    const budget = commandAnalysisBudget(db, 'stale-abstractions', Boolean(opts.full));
     const results = queries.staleAbstractions(db, {
       scope: opts.scope,
       minLoc: opts.minLoc,
       limit: opts.limit,
       includeLowConfidence: Boolean(opts.includeLowConfidence),
+      scanLimit: budget.scanLimit,
+      semantic: budget.semantic,
     });
     if (results.length === 0) return render.empty('No stale abstractions found.');
     renderHeuristicNotice('stale abstraction candidates');
@@ -1110,8 +1205,16 @@ program
   .option('-s, --scope <path>', 'Limit to files matching path')
   .option('--min-loc <n>', 'Minimum LOC', parseIntSafe, 10)
   .option('-n, --limit <n>', 'Number of results', parseIntSafe, 20)
+  .option('--full', 'Run unbounded semantic analysis on large indexes')
   .action((opts) => withDb((db) => {
-    const results = queries.complexityHotspots(db, { scope: opts.scope, minLoc: opts.minLoc, limit: opts.limit });
+    const budget = commandAnalysisBudget(db, 'complexity-hotspots', Boolean(opts.full));
+    const results = queries.complexityHotspots(db, {
+      scope: opts.scope,
+      minLoc: opts.minLoc,
+      limit: opts.limit,
+      scanLimit: budget.scanLimit,
+      semantic: budget.semantic,
+    });
     if (results.length === 0) return render.empty('No complexity hotspots found.');
     renderHeuristicNotice('complexity hotspot candidates');
     // Header `LOC` is 3 chars but the body column pads to 4, so override
@@ -1166,8 +1269,10 @@ program
 program
   .command('convergence <symbol1> <symbol2>')
   .description('Show what a consolidated version of two similar functions would look like')
-  .action((symbol1, symbol2) => withDb((db) => {
-    const result = queries.convergence(db, symbol1, symbol2);
+  .option('--full', 'Run unbounded semantic analysis on large indexes')
+  .action((symbol1, symbol2, opts) => withDb((db) => {
+    const budget = commandAnalysisBudget(db, 'convergence', Boolean(opts.full));
+    const result = queries.convergence(db, symbol1, symbol2, { semantic: budget.semantic });
     if (!result) return render.empty('One or both symbols not found.');
     console.log(`\n${Math.round(result.similarity * 100)}% callee overlap\n`);
     console.log(`  A: ${result.symbolA.shortName}  (${result.symbolA.file}, ${result.symbolA.loc} LOC)`);
@@ -1204,8 +1309,10 @@ program
 program
   .command('complexity <symbol>')
   .description('Per-symbol complexity: branches, cyclomatic estimate, fan-in/out, callees')
-  .action((symbol) => withDb((db) => {
-    const result = queries.complexity(db, symbol);
+  .option('--full', 'Run unbounded semantic analysis on large indexes')
+  .action((symbol, opts) => withDb((db) => {
+    const budget = commandAnalysisBudget(db, 'complexity', Boolean(opts.full));
+    const result = queries.complexity(db, symbol, { semantic: budget.semantic });
     if (!result) return render.empty('Symbol not found.');
     console.log(`${displayPathRange(result.relativePath, result.startLine, result.endLine)}  ${result.shortName}\n`);
     console.log(`  LOC:                  ${result.loc}`);
@@ -1222,8 +1329,10 @@ program
 program
   .command('dataflow <symbol>')
   .description('Reference-level dataflow: definition sites, usage sites, producers, consumers')
-  .action((symbol) => withDb((db) => {
-    const result = queries.dataflow(db, symbol);
+  .option('--full', 'Run unbounded semantic analysis on large indexes')
+  .action((symbol, opts) => withDb((db) => {
+    const budget = commandAnalysisBudget(db, 'dataflow', Boolean(opts.full));
+    const result = queries.dataflow(db, symbol, { semantic: budget.semantic });
     if (!result) return render.empty('Symbol not found.');
     console.log(`${result.shortName}  (${result.relativePath})\n`);
 
@@ -1262,9 +1371,11 @@ program
   .description('Reference-level program slice: what affects this (backward) or what this affects (forward)')
   .option('--forward', 'Forward slice (what does this affect). Default is backward.')
   .option('--depth <n>', 'Max transitive depth for backward slice', parseIntSafe, 3)
+  .option('--full', 'Run unbounded semantic analysis on large indexes')
   .action((symbol, opts) => withDb((db) => {
     const direction = opts.forward ? 'forward' : 'backward';
-    const result = queries.slice(db, symbol, { direction, maxDepth: opts.depth });
+    const budget = commandAnalysisBudget(db, 'slice', Boolean(opts.full));
+    const result = queries.slice(db, symbol, { direction, maxDepth: opts.depth, semantic: budget.semantic });
     if (!result) return render.empty('Symbol not found.');
     console.log(`${result.direction} slice of ${result.shortName}\n`);
     if (result.connectedSymbols.length === 0) {
@@ -1376,8 +1487,16 @@ program
   .option('-s, --scope <path>', 'Limit to files matching path')
   .option('--min-loc <n>', 'Minimum LOC per function', parseIntSafe, 3)
   .option('-n, --limit <n>', 'Number of groups', parseIntSafe, 20)
+  .option('--full', 'Run unbounded semantic analysis on large indexes')
   .action((opts) => withDb((db) => {
-    const groups = queries.similarSignatures(db, { scope: opts.scope, minLoc: opts.minLoc, limit: opts.limit });
+    const budget = commandAnalysisBudget(db, 'similar-signatures', Boolean(opts.full));
+    const groups = queries.similarSignatures(db, {
+      scope: opts.scope,
+      minLoc: opts.minLoc,
+      limit: opts.limit,
+      scanLimit: budget.scanLimit,
+      semantic: budget.semantic,
+    });
     if (groups.length === 0) return render.empty('No same-shape function groups found.');
     render.list(groups, (g) => {
       const head = `\nSignature: ${g.signature}  (${g.functions.length} functions)`;

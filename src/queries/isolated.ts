@@ -14,19 +14,23 @@ import { ProjectIndex } from '../core/project-index.js';
 // are unrelated.
 export function isolated(
   db: ScipDatabase,
-  opts: { scope?: string; minLoc?: number; semantic?: boolean } = {},
+  opts: { scope?: string; minLoc?: number; scanLimit?: number; semantic?: boolean } = {},
 ): IsolatedResult[] {
-  const { scope, minLoc = 3 } = opts;
+  const { scope, minLoc = 3, scanLimit } = opts;
   const index = new ProjectIndex(db);
   const includeSemantic = opts.semantic !== false;
 
-  const candidates = index.productionCallableDefinitions({
-    scope,
-    minLoc,
-    excludeEntrySurfaces: true,
-    excludeRustTraitImplMembers: true,
-    includeSuppressed: true,
-  });
+  const candidates = applyScanLimit(
+    index.productionCallableDefinitions({
+      scope,
+      minLoc,
+      excludeEntrySurfaces: true,
+      excludeRustTraitImplMembers: true,
+      includeSuppressed: true,
+      sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
+    }),
+    scanLimit,
+  );
 
   const scipCallerMap = index.crossFileCallerMap(candidates, { semantic: includeSemantic });
   const symbolsWithCallers = new Set<number>(scipCallerMap.keys());
@@ -113,4 +117,11 @@ function connectedCalleeIds(
       })
       .map(([id]) => id),
   );
+}
+
+function applyScanLimit<T>(items: T[], scanLimit: number | undefined): T[] {
+  if (typeof scanLimit !== 'number' || scanLimit <= 0 || items.length <= scanLimit) {
+    return items;
+  }
+  return items.slice(0, scanLimit);
 }

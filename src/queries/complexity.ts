@@ -19,6 +19,7 @@ import { ProjectIndex } from '../core/project-index.js';
 export function complexity(
   db: ScipDatabase,
   symbolPattern: string,
+  opts: { semantic?: boolean } = {},
 ): ComplexityResult | null {
   const match = findFirstSymbolMatch(db, symbolPattern);
   if (!match) return null;
@@ -30,7 +31,7 @@ export function complexity(
   );
   const loc = match.endLine - match.startLine + 1;
 
-  const calleeMap = index.calleeMap([match], { additive: true });
+  const calleeMap = index.calleeMap([match], { additive: true, semantic: opts.semantic });
   const callees = calleeMap.get(match.symbolId) ?? [];
   const uniqueCallees = new Set(callees.map((c) => c.symbol));
 

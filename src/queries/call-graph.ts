@@ -11,19 +11,25 @@ import { shortenSymbol } from '../symbols/symbol-parser.js';
  * Incoming: other symbols whose definition ranges contain a reference to this symbol.
  * Outgoing: symbols referenced within this symbol's definition range.
  */
-export function callGraph(db: ScipDatabase, symbolPattern: string): CallGraphResult | null {
+export function callGraph(
+  db: ScipDatabase,
+  symbolPattern: string,
+  opts: { semantic?: boolean } = {},
+): CallGraphResult | null {
   // Find the target symbol and its definition range
   const target = findFirstSymbolMatch(db, symbolPattern);
 
   if (!target) return null;
 
-  const callerRows = getCallerRowsForSymbol(db, target, { limit: 50 });
+  const includeSemantic = opts.semantic !== false;
+  const callerRows = getCallerRowsForSymbol(db, target, { limit: 50, semantic: includeSemantic });
 
   // CALLEES: symbols referenced within our target's definition range.
   const calleeRows = uniqueRows(getCalleeRowsForSymbol(db, target, {
     limit: 50,
     additive: true,
     callableOnly: true,
+    semantic: includeSemantic,
   }));
 
   return {

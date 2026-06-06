@@ -25,6 +25,7 @@ import { shortenSymbol } from '../symbols/symbol-parser.js';
 export function dataflow(
   db: ScipDatabase,
   symbolPattern: string,
+  opts: { semantic?: boolean } = {},
 ): DataflowResult | null {
   const match = findFirstSymbolMatch(db, symbolPattern);
   if (!match) return null;
@@ -36,7 +37,7 @@ export function dataflow(
 
   // Primary: cross-file identifier scan. Fallback: mention-resolved sites
   // with in-chunk line refinement so usage lines are precise, not chunk-start.
-  const sourceUsageSites = getSourceReferenceSites(db, match);
+  const sourceUsageSites = getSourceReferenceSites(db, match, { semantic: opts.semantic });
   const resolvedSites = sourceUsageSites.length > 0
     ? sourceUsageSites
     : getResolvedReferenceSites(db, match);
@@ -50,7 +51,9 @@ export function dataflow(
       enclosingShort: site.enclosingSymbol ? shortenSymbol(site.enclosingSymbol) : '(top-level)',
     }));
 
-  const { producers, consumers } = collectFlowEndpoints(db, match, normalizedUsageSites);
+  const { producers, consumers } = collectFlowEndpoints(db, match, normalizedUsageSites, {
+    semantic: opts.semantic !== false,
+  });
 
   return {
     symbol: match.symbol,
@@ -77,14 +80,15 @@ function collectFlowEndpoints(
   db: ScipDatabase,
   match: Parameters<typeof getCalleeRowsForSymbol>[1],
   normalizedUsageSites: { file: string; enclosingSymbol: string }[],
+  opts: { semantic: boolean },
 ): { producers: SymbolRow[]; consumers: SymbolRow[] } {
   const producers = uniqueSymbolRows(
-    getCalleeRowsForSymbol(db, match, { limit: 30 }).map((row) => ({
+    getCalleeRowsForSymbol(db, match, { limit: 30, semantic: opts.semantic }).map((row) => ({
       symbol: row.symbol,
       file: row.file,
     })),
   );
-  const astConsumers = uniqueSymbolRows(getCallerRowsForSymbol(db, match, { limit: 30 }));
+  const astConsumers = uniqueSymbolRows(getCallerRowsForSymbol(db, match, { limit: 30, semantic: opts.semantic }));
   const consumers = astConsumers.length > 0
     ? astConsumers
     : uniqueSymbolRows(

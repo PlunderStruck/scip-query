@@ -18,6 +18,7 @@ import { shortenSymbol } from '../symbols/symbol-parser.js';
 export function changeSurface(
   db: ScipDatabase,
   filePattern: string,
+  opts: { semantic?: boolean } = {},
 ): ChangeSurfaceResult | null {
   const resolvedFile = resolveIndexedFile(db, filePattern);
   if (!resolvedFile) return null;
@@ -28,7 +29,9 @@ export function changeSurface(
   const symbols: ChangeSurfaceEntry[] = [];
   let totalExternalConsumers = 0;
   const definitions = sortedChangeSurfaceDefinitions(db, doc.relative_path);
-  const semanticConsumers = semanticCallerMap(db, definitions);
+  const semanticConsumers = opts.semantic === false
+    ? new Map<number, Set<string>>()
+    : semanticCallerMap(db, definitions);
 
   for (const def of definitions) {
     const externalConsumers = externalConsumerCount(

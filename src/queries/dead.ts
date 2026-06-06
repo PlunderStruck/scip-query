@@ -48,19 +48,24 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     skipBarrels = false,
     includeMembers = false,
     deadCodeOnly = false,
+    scanLimit,
+    semantic = true,
   } = opts;
 
-  const definitions = deadCandidateDefinitions(db, {
-    scope,
-    minLoc,
-    includeTests,
-    includeMembers,
-  });
+  const definitions = applyScanLimit(
+    deadCandidateDefinitions(db, {
+      scope,
+      minLoc,
+      includeTests,
+      includeMembers,
+    }),
+    scanLimit,
+  );
 
   const inactiveBarrelPaths = skipBarrels ? new Set(getInactiveBarrelPaths(db)) : new Set<string>();
   const referencesBySymbol = deadCodeOnly
     ? new Map<number, Map<string, number>>()
-    : loadMentionReferenceCounts(db, inactiveBarrelPaths);
+    : loadMentionReferenceCounts(db, inactiveBarrelPaths, definitions.map((definition) => definition.symbolId));
   const scipReferencedIds = deadCodeOnly
     ? loadMentionReferencedSymbolIds(db, definitions.map((definition) => definition.symbolId), inactiveBarrelPaths)
     : new Set<number>();
@@ -80,7 +85,7 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
   supplementReferencesFromCallerMap(db, callerCandidates, referencesBySymbol, {
     includeTests,
     inactiveBarrelPaths,
-    includeSemantic: !deadCodeOnly,
+    includeSemantic: !deadCodeOnly && semantic,
   });
 
   const reportedDefinitions = deadCodeOnly
@@ -92,7 +97,11 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
 function loadMentionReferenceCounts(
   db: ScipDatabase,
   inactiveBarrelPaths: ReadonlySet<string>,
+  symbolIds?: readonly number[],
 ): ReferenceCounts {
+  if (symbolIds) {
+    return loadMentionReferenceCountsForSymbols(db, inactiveBarrelPaths, symbolIds);
+  }
   const referenceRows = db.all<{
     symbol_id: number;
     relative_path: string;
@@ -123,6 +132,49 @@ function loadMentionReferenceCounts(
     refsForSymbol.set(row.relative_path, row.ref_count);
   }
   return referencesBySymbol;
+}
+
+function loadMentionReferenceCountsForSymbols(
+  db: ScipDatabase,
+  inactiveBarrelPaths: ReadonlySet<string>,
+  symbolIds: readonly number[],
+): ReferenceCounts {
+  const referencesBySymbol: ReferenceCounts = new Map();
+  for (let offset = 0; offset < symbolIds.length; offset += SQLITE_PARAM_BATCH_SIZE) {
+    for (const row of loadMentionReferenceCountBatch(db, symbolIds.slice(offset, offset + SQLITE_PARAM_BATCH_SIZE))) {
+      if (db.isIgnored(row.relative_path)) continue;
+      if (inactiveBarrelPaths.has(row.relative_path)) continue;
+
+      let refsForSymbol = referencesBySymbol.get(row.symbol_id);
+      if (!refsForSymbol) {
+        refsForSymbol = new Map<string, number>();
+        referencesBySymbol.set(row.symbol_id, refsForSymbol);
+      }
+      refsForSymbol.set(row.relative_path, row.ref_count);
+    }
+  }
+  return referencesBySymbol;
+}
+
+function loadMentionReferenceCountBatch(
+  db: ScipDatabase,
+  symbolIds: readonly number[],
+): Array<{ symbol_id: number; relative_path: string; ref_count: number }> {
+  if (symbolIds.length === 0) return [];
+  return db.all<{ symbol_id: number; relative_path: string; ref_count: number }>(
+    `SELECT
+      m.symbol_id,
+      d.relative_path,
+      COUNT(*) AS ref_count
+     FROM mentions m
+     JOIN chunks c ON m.chunk_id = c.id
+     JOIN documents d ON c.document_id = d.id
+     WHERE m.role != 1
+       AND m.symbol_id IN (${symbolIds.map(() => '?').join(',')})
+       ${db.pathExclusionsFor('d')}
+     GROUP BY m.symbol_id, d.relative_path`,
+    ...symbolIds,
+  );
 }
 
 function loadMentionReferencedSymbolIds(
@@ -223,6 +275,13 @@ function deadCandidateDefinitionPaths(db: ScipDatabase, scope?: string): string[
      ORDER BY relative_path`,
     ...params,
   ).map((row) => row.relative_path);
+}
+
+function applyScanLimit<T>(items: T[], scanLimit: number | undefined): T[] {
+  if (typeof scanLimit !== 'number' || scanLimit <= 0 || items.length <= scanLimit) {
+    return items;
+  }
+  return items.slice(0, scanLimit);
 }
 
 function deadRows(

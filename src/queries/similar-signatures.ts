@@ -21,9 +21,10 @@ import { cleanSignature, extractSignature } from '../storage/scip-rows.js';
  */
 export function similarSignatures(
   db: ScipDatabase,
-  opts: { scope?: string; minLoc?: number; limit?: number } = {},
+  opts: { scope?: string; minLoc?: number; limit?: number; scanLimit?: number; semantic?: boolean } = {},
 ): SimilarSignatureGroup[] {
-  const { scope, minLoc = 1, limit } = opts;
+  const { scope, minLoc = 1, limit, scanLimit } = opts;
+  const includeSemantic = opts.semantic !== false;
 
   // Group by normalized signature
   const sigGroups = new Map<string, Array<{
@@ -35,13 +36,20 @@ export function similarSignatures(
     loc: number;
   }>>();
 
-  for (const definition of getAllDefinitions(db, { scope })) {
-    if (!definition.isFunctionLike || db.isIgnored(definition.relativePath)) continue;
+  const definitions = applyScanLimit(
+    getAllDefinitions(db, { scope })
+      .filter((definition) => definition.isFunctionLike && !db.isIgnored(definition.relativePath))
+      .filter((definition) => definition.endLine - definition.startLine + 1 >= minLoc)
+      .sort((left, right) => {
+        if (typeof scanLimit !== 'number' || scanLimit <= 0) return 0;
+        return definitionLoc(right) - definitionLoc(left) || left.relativePath.localeCompare(right.relativePath);
+      }),
+    scanLimit,
+  );
 
-    const loc = definition.endLine - definition.startLine + 1;
-    if (loc < minLoc) continue;
-
-    const normalized = resolveNormalizedSignature(db, definition);
+  for (const definition of definitions) {
+    const loc = definitionLoc(definition);
+    const normalized = resolveNormalizedSignature(db, definition, { semantic: includeSemantic });
     if (!normalized) continue;
 
     const entry = {
@@ -89,9 +97,12 @@ export function similarSignatures(
 function resolveNormalizedSignature(
   db: ScipDatabase,
   definition: ReturnType<typeof getAllDefinitions>[number],
+  opts: { semantic: boolean },
 ): string | null {
-  const semantic = semanticSignature(db, definition);
-  if (semantic) return semantic;
+  if (opts.semantic) {
+    const semantic = semanticSignature(db, definition);
+    if (semantic) return semantic;
+  }
 
   const documented = extractDocumentedSignature(definition.documentation);
   const normalizedDocumented = documented ? normalizeSignature(documented) : null;
@@ -103,6 +114,19 @@ function resolveNormalizedSignature(
     extractDeclarationHead(db, definition.relativePath, definition.startLine, definition.endLine, definition.leaf),
     definition.leaf,
   );
+}
+
+function definitionLoc(
+  definition: ReturnType<typeof getAllDefinitions>[number],
+): number {
+  return definition.endLine - definition.startLine + 1;
+}
+
+function applyScanLimit<T>(items: T[], scanLimit: number | undefined): T[] {
+  if (typeof scanLimit !== 'number' || scanLimit <= 0 || items.length <= scanLimit) {
+    return items;
+  }
+  return items.slice(0, scanLimit);
 }
 
 function extractDocumentedSignature(

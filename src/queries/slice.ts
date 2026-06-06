@@ -24,7 +24,7 @@ import { shortenSymbol } from '../symbols/symbol-parser.js';
 export function slice(
   db: ScipDatabase,
   symbolPattern: string,
-  opts: { direction?: 'backward' | 'forward'; maxDepth?: number } = {},
+  opts: { direction?: 'backward' | 'forward'; maxDepth?: number; semantic?: boolean } = {},
 ): SliceResult | null {
   const { direction = 'backward', maxDepth = 3 } = opts;
 
@@ -32,9 +32,9 @@ export function slice(
   if (!match) return null;
 
   if (direction === 'backward') {
-    return backwardSlice(db, match, maxDepth);
+    return backwardSlice(db, match, maxDepth, { semantic: opts.semantic !== false });
   } else {
-    return forwardSlice(db, match);
+    return forwardSlice(db, match, { semantic: opts.semantic !== false });
   }
 }
 
@@ -42,7 +42,12 @@ export function slice(
 // scip-query: ignore-similar — shares callee-row helpers with forwardSlice but
 // implements transitive BFS; forwardSlice does single-hop reference attribution.
 // Different algorithms, intentionally split.
-function backwardSlice(db: ScipDatabase, match: SymbolMatch, maxDepth: number): SliceResult {
+function backwardSlice(
+  db: ScipDatabase,
+  match: SymbolMatch,
+  maxDepth: number,
+  opts: { semantic: boolean },
+): SliceResult {
   // Transitive BFS through callees: depth 1 = direct callees of the target,
   // depth 2 = callees of those callees, etc.
   const connected: SliceResult['connectedSymbols'] = [];
@@ -55,7 +60,7 @@ function backwardSlice(db: ScipDatabase, match: SymbolMatch, maxDepth: number): 
     const nextFrontier: SymbolMatch[] = [];
 
     for (const current of frontier) {
-      const callees = getCalleeRowsForSymbol(db, current);
+      const callees = getCalleeRowsForSymbol(db, current, { semantic: opts.semantic });
 
       for (const c of callees) {
         if (visited.has(c.symbol)) continue;
@@ -90,11 +95,15 @@ function backwardSlice(db: ScipDatabase, match: SymbolMatch, maxDepth: number): 
 // scip-query: ignore-similar — single-hop reference + enclosing-definition
 // walk; different algorithm from backwardSlice's transitive BFS even though
 // they share the same callee-row + symbol-lookup primitives.
-function forwardSlice(db: ScipDatabase, match: SymbolMatch): SliceResult {
+function forwardSlice(
+  db: ScipDatabase,
+  match: SymbolMatch,
+  opts: { semantic: boolean },
+): SliceResult {
   // Find where the target is referenced, then at each reference site,
   // report the enclosing consumer. A forward slice is "what this symbol
   // feeds into", not "what else is used alongside it".
-  const sourceRefs = getSourceReferenceSites(db, match);
+  const sourceRefs = getSourceReferenceSites(db, match, { semantic: opts.semantic });
   const refs = sourceRefs.length > 0 ? sourceRefs : getResolvedReferenceSites(db, match);
 
   const seenConsumers = new Set<string>();
