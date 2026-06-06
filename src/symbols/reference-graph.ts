@@ -39,7 +39,7 @@ import { getRustAttrReferencedNames } from '../analysis/framework-patterns.js';
 import { createPerDbCache, createPerDbValue } from '../storage/per-db-cache.js';
 import { findIdentifierLines, getIdentifiersByLine } from './identifier-index.js';
 import { getSourceImports } from '../language-parsers/index.js';
-import { leafName } from './symbol-parser.js';
+import { isCallableSymbol, leafName } from './symbol-parser.js';
 import { findEnclosingDefinition, getAllDefinitions, getDefinitionsForFile } from './definition-catalog.js';
 import { getFullSymbolMatch } from './symbol-lookup.js';
 import type { ReferenceSite, SymbolLocation, SymbolMatch } from '../domain/types.js';
@@ -128,15 +128,17 @@ export function buildFileDepGraph(
 export function getCalleeRowsForSymbol(
   db: ScipDatabase,
   symbol: SymbolMatch,
-  opts: { limit?: number } = {},
+  opts: { limit?: number; additive?: boolean; callableOnly?: boolean } = {},
 ): CalleeRow[] {
   // Delegates to the shared bulk path so callers automatically benefit from
   // tree-sitter call attribution, source-confirmation, and the merged AST +
   // SCIP results. Avoids the older per-symbol mention-scan that under-
   // attributed for AST-supported languages and missed call/callee shape
   // refinements that the bulk helper already handles.
-  const map = buildCalleeMap(db, [symbol]);
-  const callees = map.get(symbol.symbolId) ?? [];
+  const map = buildCalleeMap(db, [symbol], { additive: opts.additive });
+  const callees = opts.callableOnly
+    ? (map.get(symbol.symbolId) ?? []).filter((callee) => isCallableSymbol(callee.symbol))
+    : map.get(symbol.symbolId) ?? [];
   return typeof opts.limit === 'number' ? callees.slice(0, opts.limit) : callees;
 }
 

@@ -20,7 +20,11 @@ export function callGraph(db: ScipDatabase, symbolPattern: string): CallGraphRes
   const callerRows = getCallerRowsForSymbol(db, target, { limit: 50 });
 
   // CALLEES: symbols referenced within our target's definition range.
-  const calleeRows = uniqueRows(getCalleeRowsForSymbol(db, target, { limit: 50 }));
+  const calleeRows = uniqueRows(getCalleeRowsForSymbol(db, target, {
+    limit: 50,
+    additive: true,
+    callableOnly: true,
+  }));
 
   return {
     symbol: target.symbol,

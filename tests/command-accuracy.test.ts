@@ -1005,4 +1005,109 @@ describe('command accuracy fixes', () => {
       rmSync(callTempDir, { recursive: true, force: true });
     }
   });
+
+  it('recovers Rust qualified path calls from SCIP mentions when AST attribution misses them', () => {
+    const rustTempDir = mkdtempSync(join(tmpdir(), 'scip-query-rust-calls-'));
+    try {
+      mkdirSync(join(rustTempDir, 'src'), { recursive: true });
+      writeFileSync(
+        join(rustTempDir, 'src', 'main.rs'),
+        [
+          '//! Native entry point.',
+          '',
+          'fn main() {',
+          '    synth_runner_rust::run();',
+          '}',
+          '',
+        ].join('\n'),
+      );
+      writeFileSync(
+        join(rustTempDir, 'src', 'app.rs'),
+        [
+          'pub fn run() {',
+          '    build_app().run();',
+          '}',
+          '',
+        ].join('\n'),
+      );
+
+      const dbPath = join(rustTempDir, 'index.db');
+      const sqliteDb = new Database(dbPath);
+      sqliteDb.exec(`
+        CREATE TABLE documents (
+          id INTEGER PRIMARY KEY,
+          language TEXT,
+          relative_path TEXT NOT NULL UNIQUE,
+          position_encoding TEXT,
+          text TEXT
+        );
+        CREATE TABLE global_symbols (
+          id INTEGER PRIMARY KEY,
+          symbol TEXT NOT NULL UNIQUE,
+          display_name TEXT,
+          kind INTEGER,
+          documentation TEXT,
+          signature BLOB,
+          enclosing_symbol TEXT,
+          relationships BLOB
+        );
+        CREATE TABLE defn_enclosing_ranges (
+          id INTEGER PRIMARY KEY,
+          document_id INTEGER NOT NULL,
+          symbol_id INTEGER NOT NULL,
+          start_line INTEGER NOT NULL,
+          start_char INTEGER NOT NULL,
+          end_line INTEGER NOT NULL,
+          end_char INTEGER NOT NULL
+        );
+        CREATE TABLE mentions (
+          chunk_id INTEGER NOT NULL,
+          symbol_id INTEGER NOT NULL,
+          role INTEGER NOT NULL,
+          PRIMARY KEY (chunk_id, symbol_id, role)
+        );
+        CREATE TABLE chunks (
+          id INTEGER PRIMARY KEY,
+          document_id INTEGER NOT NULL,
+          chunk_index INTEGER NOT NULL,
+          start_line INTEGER NOT NULL,
+          end_line INTEGER NOT NULL,
+          occurrences BLOB NOT NULL
+        );
+        INSERT INTO documents (id, language, relative_path) VALUES
+          (1, 'rust', 'src/main.rs'),
+          (2, 'rust', 'src/app.rs');
+        INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
+          (1, 'rust-analyzer cargo fixture 0.1.0 main().', 'main', 12, 'fn main()'),
+          (2, 'rust-analyzer cargo fixture 0.1.0 app/run().', 'run', 12, 'pub fn run()');
+        INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+          (1, 1, 1, 2, 0, 4, 1),
+          (2, 2, 2, 0, 0, 2, 1);
+        INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+          (1, 1, 0, 0, 4, X'00'),
+          (2, 2, 0, 0, 2, X'00');
+        INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+          (1, 1, 1),
+          (1, 2, 0),
+          (2, 2, 1);
+      `);
+      sqliteDb.close();
+
+      const rustDb = new ScipDatabase({
+        dbPath,
+        indexPath: join(rustTempDir, 'index.scip'),
+        projectRoot: rustTempDir,
+      });
+
+      try {
+        expect(callGraph(rustDb, 'main')?.callees.map((callee) => callee.shortName)).toEqual([
+          'app:run()',
+        ]);
+      } finally {
+        rustDb.close();
+      }
+    } finally {
+      rmSync(rustTempDir, { recursive: true, force: true });
+    }
+  });
 });
