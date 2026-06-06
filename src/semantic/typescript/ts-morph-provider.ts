@@ -284,7 +284,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
           if (entry.kind !== 'named' || !entry.identifier) continue;
           const symbolIds = exportedSymbols.get(entry.importedName);
           if (!symbolIds || symbolIds.size === 0) continue;
-          const refs = identifierReferenceLocations(entry.identifier, document.relative_path, this.db.config.projectRoot);
+          const refs = textualIdentifierLocations(entry.identifier, document.relative_path, this.db.config.projectRoot);
           if (refs.length === 0) continue;
           for (const symbolId of symbolIds) {
             const bucket = index.get(symbolId) ?? [];
@@ -485,14 +485,6 @@ function importIdentifiers(declaration: ImportDeclaration): Array<{
     });
   }
   return out;
-}
-
-function identifierReferenceLocations(
-  identifier: Identifier,
-  importer: string,
-  projectRoot: string,
-): SemanticReference[] {
-  return textualIdentifierLocations(identifier, importer, projectRoot);
 }
 
 function discoverWorkspacePackages(projectRoot: string): WorkspacePackage[] {

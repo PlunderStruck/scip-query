@@ -2,11 +2,30 @@ import type { ScipDatabase } from '../storage/db.js';
 import { getInactiveBarrelPaths, isEntrySurface, isRootedSymbol, TEST_FILE_PATTERNS, TEST_SUPPORT_PATH_PATTERNS } from '../analysis/file-classifier.js';
 import { enclosingTypeNames, getAllDefinitions } from '../symbols/definition-catalog.js';
 import { getDefinitionExclusions } from '../analysis/framework-patterns.js';
-import type { DeadOptions, DeadSymbolResult, DeadSummary } from '../domain/types.js';
+import type { DeadOptions, DeadSymbolResult, DeadSummary, IndexedDefinition } from '../domain/types.js';
 import { isCallableSymbol, isFunctionLikeSymbol, isInRustTestModule, isModuleLikeSymbol, isRustTraitImplMember, shortenSymbol } from '../symbols/symbol-parser.js';
 import { getCallerRowsForSymbol } from '../symbols/reference-graph.js';
 import { ProjectIndex } from '../core/project-index.js';
 import { getSourceImports } from '../language-parsers/index.js';
+
+type ReferenceCounts = Map<number, Map<string, number>>;
+
+interface DeadCandidateOptions {
+  scope?: string;
+  minLoc: number;
+  includeTests: boolean;
+  includeMembers: boolean;
+}
+
+interface DeadRow {
+  relative_path: string;
+  start_line: number;
+  end_line: number;
+  loc: number;
+  symbol: string;
+  same_file_refs: number;
+  cross_file_refs: number;
+}
 
 /**
  * Find dead exports: symbols defined locally with no cross-file references.
@@ -22,6 +41,27 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
   } = opts;
 
   const inactiveBarrelPaths = skipBarrels ? new Set(getInactiveBarrelPaths(db)) : new Set<string>();
+  const referencesBySymbol = loadMentionReferenceCounts(db, inactiveBarrelPaths);
+  supplementReferencesFromAst(db, referencesBySymbol, inactiveBarrelPaths);
+
+  const definitions = deadCandidateDefinitions(db, {
+    scope,
+    minLoc,
+    includeTests,
+    includeMembers,
+  });
+  supplementReferencesFromCallerMap(db, definitions, referencesBySymbol, {
+    includeTests,
+    inactiveBarrelPaths,
+  });
+
+  return deadSummary(db, deadRows(definitions, referencesBySymbol));
+}
+
+function loadMentionReferenceCounts(
+  db: ScipDatabase,
+  inactiveBarrelPaths: ReadonlySet<string>,
+): ReferenceCounts {
   const referenceRows = db.all<{
     symbol_id: number;
     relative_path: string;
@@ -39,7 +79,7 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
      GROUP BY m.symbol_id, d.relative_path`,
   );
 
-  const referencesBySymbol = new Map<number, Map<string, number>>();
+  const referencesBySymbol: ReferenceCounts = new Map();
   for (const row of referenceRows) {
     if (db.isIgnored(row.relative_path)) continue;
     if (inactiveBarrelPaths.has(row.relative_path)) continue;
@@ -51,12 +91,15 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     }
     refsForSymbol.set(row.relative_path, row.ref_count);
   }
+  return referencesBySymbol;
+}
 
-  supplementReferencesFromAst(db, referencesBySymbol, inactiveBarrelPaths);
-
+function deadCandidateDefinitions(
+  db: ScipDatabase,
+  opts: DeadCandidateOptions,
+): IndexedDefinition[] {
   const isExcluded = buildFileExclusionPredicate(db);
-
-  const definitions = getAllDefinitions(db, { scope })
+  return getAllDefinitions(db, { scope: opts.scope })
     .filter((definition) => !db.isIgnored(definition.relativePath))
     .filter((definition) => !isModuleLikeSymbol(definition.symbol))
     .filter((definition) => looksValueLikeDefinition(definition.symbol))
@@ -65,8 +108,8 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
       || !definition.enclosingSymbol
       || !looksValueLikeDefinition(definition.enclosingSymbol)
     ))
-    .filter((definition) => includeTests || passesTestFileFilter(definition.relativePath))
-    .filter((definition) => includeTests || !isExcluded(definition.relativePath, definition.startLine, definition.symbol, definition.parentTypeName))
+    .filter((definition) => opts.includeTests || passesTestFileFilter(definition.relativePath))
+    .filter((definition) => opts.includeTests || !isExcluded(definition.relativePath, definition.startLine, definition.symbol, definition.parentTypeName))
     // rust-analyzer encodes trait impls as `impl#[Type][Trait]Member.` and
     // inherent impls as `impl#[Type]Member.`. Trait-impl members (methods,
     // associated consts, associated types) are reached through the trait —
@@ -81,65 +124,76 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     // files but the items inside them aren't shippable code — treating
     // them as "potentially dead" floods the report with helper fns.
     .filter((definition) => !isInRustTestModule(definition.symbol))
-    .filter((definition) => includeMembers || isTopLevelOrCallable(definition))
-    .filter((definition) => (definition.endLine - definition.startLine + 1) >= minLoc);
+    .filter((definition) => opts.includeMembers || isTopLevelOrCallable(definition))
+    .filter((definition) => (definition.endLine - definition.startLine + 1) >= opts.minLoc);
+}
 
-  supplementReferencesFromCallerMap(db, definitions, referencesBySymbol, {
-    includeTests,
-    inactiveBarrelPaths,
-  });
-
-  const rows = definitions
-    .map((definition) => {
-      const refMap = referencesBySymbol.get(definition.symbolId) ?? new Map<string, number>();
-      const sameFileRefs = refMap.get(definition.relativePath) ?? 0;
-      let crossFileRefs = 0;
-      for (const [relativePath, count] of refMap) {
-        if (relativePath === definition.relativePath) continue;
-        crossFileRefs += count;
-      }
-
-      return {
-        relative_path: definition.relativePath,
-        start_line: definition.startLine,
-        end_line: definition.endLine,
-        loc: definition.endLine - definition.startLine + 1,
-        symbol: definition.symbol,
-        same_file_refs: sameFileRefs,
-        cross_file_refs: crossFileRefs,
-      };
-    })
+function deadRows(
+  definitions: readonly IndexedDefinition[],
+  referencesBySymbol: ReferenceCounts,
+): DeadRow[] {
+  return definitions
+    .map((definition) => deadRow(definition, referencesBySymbol))
     .filter((row) => row.cross_file_refs === 0)
     .sort((a, b) => b.loc - a.loc || a.relative_path.localeCompare(b.relative_path) || a.start_line - b.start_line);
+}
 
+function deadRow(
+  definition: IndexedDefinition,
+  referencesBySymbol: ReferenceCounts,
+): DeadRow {
+  const refMap = referencesBySymbol.get(definition.symbolId) ?? new Map<string, number>();
+  const sameFileRefs = refMap.get(definition.relativePath) ?? 0;
+  let crossFileRefs = 0;
+  for (const [relativePath, count] of refMap) {
+    if (relativePath === definition.relativePath) continue;
+    crossFileRefs += count;
+  }
+
+  return {
+    relative_path: definition.relativePath,
+    start_line: definition.startLine,
+    end_line: definition.endLine,
+    loc: definition.endLine - definition.startLine + 1,
+    symbol: definition.symbol,
+    same_file_refs: sameFileRefs,
+    cross_file_refs: crossFileRefs,
+  };
+}
+
+function deadSummary(
+  db: ScipDatabase,
+  rows: readonly DeadRow[],
+): DeadSummary {
+  const symbols: DeadSymbolResult[] = [];
   let deadCodeCount = 0;
   let fileInternalCount = 0;
   let totalLoc = 0;
 
-  const symbols: DeadSymbolResult[] = rows
-    .filter((r) => !db.isIgnored(r.relative_path))
-    .filter((r) => !isEntrySurface(db, r.relative_path))
-    .filter((r) => !isRootedSymbol(db, r.symbol, r.relative_path))
-    .map((r) => {
-      // dead-code: zero references anywhere (not even in same file) — safe to delete
-      // file-internal: referenced within same file but never cross-file —
-      //   may be a private helper (fine) or a forgotten export (needs review)
-      const kind = r.same_file_refs === 0 ? 'dead-code' : 'file-internal';
-      if (kind === 'dead-code') deadCodeCount++;
-      else fileInternalCount++;
-      totalLoc += r.loc;
+  for (const row of rows) {
+    if (db.isIgnored(row.relative_path)) continue;
+    if (isEntrySurface(db, row.relative_path)) continue;
+    if (isRootedSymbol(db, row.symbol, row.relative_path)) continue;
 
-      return {
-        relativePath: r.relative_path,
-        startLine: r.start_line,
-        endLine: r.end_line,
-        loc: r.loc,
-        symbol: r.symbol,
-        shortName: shortenSymbol(r.symbol),
-        sameFileRefs: r.same_file_refs,
-        kind,
-      };
+    // dead-code: zero references anywhere (not even in same file) — safe to delete
+    // file-internal: referenced within same file but never cross-file —
+    //   may be a private helper (fine) or a forgotten export (needs review)
+    const kind = row.same_file_refs === 0 ? 'dead-code' : 'file-internal';
+    if (kind === 'dead-code') deadCodeCount++;
+    else fileInternalCount++;
+    totalLoc += row.loc;
+
+    symbols.push({
+      relativePath: row.relative_path,
+      startLine: row.start_line,
+      endLine: row.end_line,
+      loc: row.loc,
+      symbol: row.symbol,
+      shortName: shortenSymbol(row.symbol),
+      sameFileRefs: row.same_file_refs,
+      kind,
     });
+  }
 
   return {
     symbols,
@@ -149,17 +203,6 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     totalLoc,
   };
 }
-
-/**
- * Walk projectRoot and return every source file with an AST-supported
- * extension as a relative path. Skips obvious directories that shouldn't
- * contain user code (node_modules, target, .git, dist, build, .next, etc.).
- *
- * Used by the AST identifier supplement so unindexed source files
- * (rust-analyzer often skips part of a workspace; tsc-batch indexers can
- * miss files too) still contribute their references to the dead-code
- * detector.
- */
 
 /**
  * Augment `referencesBySymbol` with AST-based identifier hits.
@@ -181,7 +224,7 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
  */
 function supplementReferencesFromAst(
   db: ScipDatabase,
-  referencesBySymbol: Map<number, Map<string, number>>,
+  referencesBySymbol: ReferenceCounts,
   inactiveBarrelPaths: ReadonlySet<string>,
 ): void {
   const index = new ProjectIndex(db);
@@ -251,7 +294,7 @@ function supplementReferencesFromCallerMap(
     startLine: number;
     endLine: number;
   }>,
-  referencesBySymbol: Map<number, Map<string, number>>,
+  referencesBySymbol: ReferenceCounts,
   opts: { includeTests: boolean; inactiveBarrelPaths: ReadonlySet<string> },
 ): void {
   for (const definition of definitions) {

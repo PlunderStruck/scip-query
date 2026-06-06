@@ -765,6 +765,7 @@ export interface SemanticConfig {
   typescript?: TypeScriptSemanticConfig;
 }
 
+// scip-query: ignore-stale — exported config surface even when only referenced structurally.
 export interface TypeScriptSemanticConfig {
   /** Explicit tsconfig paths, relative to project root unless absolute */
   tsconfigs?: string[];

@@ -7,6 +7,11 @@ import type { IndexedDefinition, WrapperCandidate } from '../domain/types.js';
 import { isInRustTestModule, shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
 
+interface MentionChunk {
+  start_line: number;
+  end_line: number;
+}
+
 /**
  * Find wrapper candidates: symbols called by only one other symbol.
  *
@@ -35,87 +40,56 @@ export function wrapperCandidates(
   const results: WrapperCandidate[] = [];
 
   for (const symbol of symbols) {
-    const symbolStem = basename(symbol.relativePath, extname(symbol.relativePath));
-
-    // Cheap bulk check first: skip if not exactly 1 external caller file
-    // (excluding same stem). Also exclude entry/barrel/test files —
-    // entries and barrels are re-export / bootstrap surfaces, not real
-    // wrapping callers. Test files indicate the function is exercised
-    // from tests; the wrapper signal is supposed to flag production
-    // indirection, not "only used in tests" (which is a different
-    // signal — likely dead production code, surfaced by `dead`).
-    const externalFiles = [...(callerFileMap.get(symbol.symbolId) ?? [])]
-      .filter((f) => f !== symbol.relativePath)
-      .filter((f) => basename(f, extname(f)) !== symbolStem)
-      .filter((f) => {
-        const kind = index.fileKind(f);
-        return kind !== 'barrel' && kind !== 'entry' && kind !== 'test';
-      });
-    if (externalFiles.length !== 1) continue;
-
-    const callerFile = externalFiles[0]!;
-
-    // SCIP gives us the chunk that contains the reference, but chunks can be
-    // file-wide. Refine via source-text scan: find a line within the chunk's
-    // range where the symbol's leaf identifier actually appears, then look up
-    // the enclosing definition from that precise line. Falls back to the
-    // chunk's start line when source isn't readable / leaf isn't unique.
-    const refRow = db.get<{ start_line: number; end_line: number }>(
-      `SELECT c.start_line, c.end_line
-       FROM mentions m
-       JOIN chunks c ON m.chunk_id = c.id
-       JOIN documents d ON c.document_id = d.id
-       WHERE m.symbol_id = ? AND m.role != 1 AND d.relative_path = ?
-       LIMIT 1`,
-      symbol.symbolId,
-      callerFile,
-    );
-    if (!refRow) continue;
-
-    const callerDefs = index.definitionsForFile(callerFile);
-    const refinedLine = refineCallSiteLine(db, callerFile, symbol.symbol, refRow.start_line, refRow.end_line);
-    const enclosing = findEnclosingDefinition(callerDefs, refinedLine);
-
-    // If the only caller is a function inside a `#[cfg(test)] mod tests`
-    // block (regardless of whether the file itself is classified as a test
-    // file), the wrapper metric isn't useful — that's a "used only in
-    // tests" signal, distinct from production over-abstraction.
-    if (enclosing && isInRustTestModule(enclosing.symbol)) continue;
-
-    // Fan-in: function-level from bulk map, or file-level as fallback
-    let callerFanIn: number;
-    const callerSymbol = enclosing?.symbol ?? '';
-    const callerShort = enclosing?.isFunctionLike
-      ? shortenSymbol(enclosing.symbol)
-      : basename(callerFile);
-
-    if (enclosing?.isFunctionLike && enclosing.symbolId !== symbol.symbolId) {
-      const extCallers = [...(callerFileMap.get(enclosing.symbolId) ?? [])]
-        .filter((f) => f !== enclosing.relativePath);
-      callerFanIn = extCallers.length > 0
-        ? extCallers.length
-        : fallbackCallerFanIn(reverseFanIn, callerFile);
-    } else {
-      callerFanIn = fallbackCallerFanIn(reverseFanIn, callerFile);
-    }
-
-    if (callerFanIn <= 3) continue;
-
-    results.push({
-      symbol: symbol.symbol,
-      shortName: shortenSymbol(symbol.symbol),
-      file: symbol.relativePath,
-      startLine: symbol.startLine,
-      endLine: symbol.endLine,
-      loc: definitionLoc(symbol),
-      singleCaller: callerSymbol,
-      singleCallerShort: callerShort,
-      callerFanIn,
+    const candidate = wrapperCandidateForSymbol(db, index, symbol, {
+      callerFileMap,
+      reverseFanIn,
     });
+    if (candidate) results.push(candidate);
   }
 
   results.sort((left, right) => right.callerFanIn - left.callerFanIn || right.loc - left.loc);
   return results.slice(0, limit);
+}
+
+function wrapperCandidateForSymbol(
+  db: ScipDatabase,
+  index: ProjectIndex,
+  symbol: IndexedDefinition,
+  maps: {
+    callerFileMap: Map<number, Set<string>>;
+    reverseFanIn: Map<string, number>;
+  },
+): WrapperCandidate | null {
+  const externalFiles = externalCallerFiles(index, symbol, maps.callerFileMap);
+  if (externalFiles.length !== 1) return null;
+
+  const callerFile = externalFiles[0]!;
+  const refRow = mentionChunkForCaller(db, symbol.symbolId, callerFile);
+  if (!refRow) return null;
+
+  const enclosing = enclosingCaller(index, db, callerFile, symbol.symbol, refRow);
+  // If the only caller is a function inside a `#[cfg(test)] mod tests`
+  // block (regardless of whether the file itself is classified as a test
+  // file), the wrapper metric isn't useful — that's a "used only in
+  // tests" signal, distinct from production over-abstraction.
+  if (enclosing && isInRustTestModule(enclosing.symbol)) return null;
+
+  const callerFanIn = wrapperCallerFanIn(maps.callerFileMap, maps.reverseFanIn, callerFile, enclosing);
+  if (callerFanIn <= 3) return null;
+
+  return {
+    symbol: symbol.symbol,
+    shortName: shortenSymbol(symbol.symbol),
+    file: symbol.relativePath,
+    startLine: symbol.startLine,
+    endLine: symbol.endLine,
+    loc: definitionLoc(symbol),
+    singleCaller: enclosing?.symbol ?? '',
+    singleCallerShort: enclosing?.isFunctionLike
+      ? shortenSymbol(enclosing.symbol)
+      : basename(callerFile),
+    callerFanIn,
+  };
 }
 
 function definitionLoc(
@@ -135,6 +109,77 @@ function getWrapperCandidateSymbols(
     maxLoc,
     requireFunctionLikeSymbol: true,
   });
+}
+
+function externalCallerFiles(
+  index: ProjectIndex,
+  symbol: IndexedDefinition,
+  callerFileMap: Map<number, Set<string>>,
+): string[] {
+  const symbolStem = basename(symbol.relativePath, extname(symbol.relativePath));
+  // Cheap bulk check first: skip if not exactly 1 external caller file
+  // (excluding same stem). Also exclude entry/barrel/test files —
+  // entries and barrels are re-export / bootstrap surfaces, not real
+  // wrapping callers. Test files indicate the function is exercised
+  // from tests; the wrapper signal is supposed to flag production
+  // indirection, not "only used in tests" (which is a different
+  // signal — likely dead production code, surfaced by `dead`).
+  return [...(callerFileMap.get(symbol.symbolId) ?? [])]
+    .filter((f) => f !== symbol.relativePath)
+    .filter((f) => basename(f, extname(f)) !== symbolStem)
+    .filter((f) => {
+      const kind = index.fileKind(f);
+      return kind !== 'barrel' && kind !== 'entry' && kind !== 'test';
+    });
+}
+
+function mentionChunkForCaller(
+  db: ScipDatabase,
+  symbolId: number,
+  callerFile: string,
+): MentionChunk | undefined {
+  return db.get<MentionChunk>(
+    `SELECT c.start_line, c.end_line
+     FROM mentions m
+     JOIN chunks c ON m.chunk_id = c.id
+     JOIN documents d ON c.document_id = d.id
+     WHERE m.symbol_id = ? AND m.role != 1 AND d.relative_path = ?
+     LIMIT 1`,
+    symbolId,
+    callerFile,
+  );
+}
+
+function enclosingCaller(
+  index: ProjectIndex,
+  db: ScipDatabase,
+  callerFile: string,
+  symbol: string,
+  refRow: MentionChunk,
+): IndexedDefinition | null {
+  // SCIP gives us the chunk that contains the reference, but chunks can be
+  // file-wide. Refine via source-text scan: find a line within the chunk's
+  // range where the symbol's leaf identifier actually appears, then look up
+  // the enclosing definition from that precise line. Falls back to the
+  // chunk's start line when source isn't readable / leaf isn't unique.
+  const callerDefs = index.definitionsForFile(callerFile);
+  const refinedLine = refineCallSiteLine(db, callerFile, symbol, refRow.start_line, refRow.end_line);
+  return findEnclosingDefinition(callerDefs, refinedLine);
+}
+
+function wrapperCallerFanIn(
+  callerFileMap: Map<number, Set<string>>,
+  reverseFanIn: Map<string, number>,
+  callerFile: string,
+  enclosing: IndexedDefinition | null,
+): number {
+  // Fan-in: function-level from bulk map, or file-level as fallback.
+  if (enclosing?.isFunctionLike) {
+    const extCallers = [...(callerFileMap.get(enclosing.symbolId) ?? [])]
+      .filter((f) => f !== enclosing.relativePath);
+    if (extCallers.length > 0) return extCallers.length;
+  }
+  return fallbackCallerFanIn(reverseFanIn, callerFile);
 }
 
 /**

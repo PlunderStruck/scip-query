@@ -7,6 +7,15 @@ import { getSourceText } from '../source/source-text.js';
 import { detectAstLanguage, getAst, getTypeContainerMap, type SyntaxNode } from '../source/ast.js';
 import { ProjectIndex } from '../core/project-index.js';
 
+type TypeCandidateIndex = Map<string, Map<string, IndexedDefinition>>;
+
+interface StaleCandidateRow {
+  definition: IndexedDefinition;
+  realConsumers: string[];
+  barrelConsumers: number;
+  transitivelyReachable: boolean;
+}
+
 /**
  * Find stale abstractions: type-level symbols (classes, interfaces, type
  * aliases) that have 0 or 1 *real* cross-file consumers.
@@ -31,76 +40,17 @@ export function staleAbstractions(
   const { scope, minLoc = 3, maxLoc = 80, limit = 30, includeLowConfidence = false } = opts ?? {};
   const index = new ProjectIndex(db);
   const scopedDefinitions = index.scopedDefinitions(scope);
-
   const filesWithFunctions = getFilesWithFunctions(index, scope);
-
-  const typeCandidates = scopedDefinitions
-    .filter((definition) => definition.isTypeLike && definitionLoc(definition) >= minLoc)
-    // Cap candidate LOC. Types over ~80 lines are substantive abstractions
-    // (engine state, request envelopes, etc.) — even if cross-file consumers
-    // are sparse, calling them "stale" is wrong. The cap also protects
-    // against rust-analyzer's chunk-fallback ranges (whole-file ranges that
-    // appear when a real `defn_enclosing_range` isn't emitted), which would
-    // otherwise dominate the report.
-    .filter((definition) => definitionLoc(definition) <= maxLoc)
-    .filter((definition) => !db.isIgnored(definition.relativePath))
-    // Enum variants encode as `Type#Variant#` (parent descriptor also `type`).
-    // The variant isn't an "abstraction" on its own — the enum is. Without
-    // this filter every enum variant gets a separate stale-abstraction
-    // entry, which is noise.
-    .filter((definition) => !isNestedTypeMember(definition.symbol))
-    .filter((definition) => !index.hasSuppressionComment(definition));
+  const typeCandidates = staleTypeCandidates(db, index, scopedDefinitions, { minLoc, maxLoc });
 
   // Consumer map = SCIP mentions (with self-references filtered) ∪ source-text
   // fallback for unique-named types. Without the fallback, a type used only in
   // string-templated contexts or via paths the indexer missed would falsely
   // appear unconsumed.
-  const scipConsumers = index.crossFileCallerMap(typeCandidates);
-  const sourceConsumers = index.sourceFallbackCallerFiles(typeCandidates);
-  const consumerFileMap = mergeConsumerMaps(scipConsumers, sourceConsumers);
+  const consumerFileMap = consumerMapForTypeCandidates(index, typeCandidates);
   const singletonBackedClassIds = getSingletonBackedClassIds(db, index, scopedDefinitions, typeCandidates);
-
-  // Pre-index type candidates by (file, leaf) so the transitive-reachability
-  // check is O(1) per container instead of O(typeCandidates) linear scan.
-  const candidateIndex = new Map<string, Map<string, typeof typeCandidates[number]>>();
-  for (const c of typeCandidates) {
-    let perFile = candidateIndex.get(c.relativePath);
-    if (!perFile) { perFile = new Map(); candidateIndex.set(c.relativePath, perFile); }
-    const leaf = leafName(c.symbol);
-    if (leaf) perFile.set(leaf, c);
-  }
-
-  const rows = typeCandidates
-    .map((definition) => {
-      const allFiles = consumerFileMap.get(definition.symbolId) ?? new Set<string>();
-      const consumerFiles = [...allFiles].filter(
-        (f) => f !== definition.relativePath && !db.isIgnored(f),
-      );
-      const { realConsumers, barrelConsumers } = partitionConsumers(
-        db,
-        definition.relativePath,
-        definition.symbol,
-        consumerFiles,
-      );
-
-      // Transitive: if this type is referenced by a container type in the
-      // SAME file (e.g. `interface Outer { field: This }`) and that container
-      // has cross-file consumers, this type is reachable through the
-      // container's public API — not stale, even with 0 direct consumers.
-      const transitivelyReachable = isTransitivelyConsumed(
-        db,
-        definition,
-        consumerFileMap,
-        candidateIndex,
-      );
-
-      return {
-        definition,
-        realConsumers,
-        barrelConsumers,
-        transitivelyReachable,
-      };
-    })
+  const candidateIndex = buildTypeCandidateIndex(typeCandidates);
+  const rows = staleCandidateRows(db, typeCandidates, consumerFileMap, candidateIndex)
     .filter((row) => !singletonBackedClassIds.has(row.definition.symbolId))
     .filter((row) => !row.transitivelyReachable)
     .filter((row) => row.realConsumers.length <= 1)
@@ -111,33 +61,7 @@ export function staleAbstractions(
 
   const scored = rows
     .filter((row) => isTrueStaleAbstraction(row.definition, row.realConsumers.length, filesWithFunctions))
-    .map((row) => {
-      const kind = detectDefinitionKind(db, row.definition.relativePath, row.definition.startLine);
-      // For type-only files the definer is *expected* not to use what it
-      // defines (their job is exporting types for downstream consumption),
-      // so pretend the definer uses it — that avoids the "1 consumer +
-      // defining file never uses it = high confidence" branch firing on
-      // every type in a `protocol/common.rs`-style module.
-      const definerUsesType = isTypeOnlyFile(row.definition.relativePath)
-        ? true
-        : detectDefinerUsesType(db, row.definition);
-      const { confidence, reason } = scoreConfidence(row.realConsumers.length, kind, definerUsesType);
-
-      return {
-        symbol: row.definition.symbol,
-        shortName: shortenSymbol(row.definition.symbol),
-        file: row.definition.relativePath,
-        startLine: row.definition.startLine,
-        endLine: row.definition.endLine,
-        loc: definitionLoc(row.definition),
-        consumers: row.realConsumers.length,
-        barrelConsumers: row.barrelConsumers,
-        kind,
-        definerUsesType,
-        confidence,
-        reason,
-      } satisfies StaleAbstraction;
-    })
+    .map((row) => scoreStaleCandidate(db, row))
     .filter((row) => includeLowConfidence || row.confidence !== 'low')
     .sort((left, right) => {
       const confOrder = { high: 0, medium: 1, low: 2 } as const;
@@ -148,6 +72,127 @@ export function staleAbstractions(
     });
 
   return scored.slice(0, limit);
+}
+
+function staleTypeCandidates(
+  db: ScipDatabase,
+  index: ProjectIndex,
+  scopedDefinitions: readonly IndexedDefinition[],
+  opts: { minLoc: number; maxLoc: number },
+): IndexedDefinition[] {
+  return scopedDefinitions
+    .filter((definition) => definition.isTypeLike && definitionLoc(definition) >= opts.minLoc)
+    // Cap candidate LOC. Types over ~80 lines are substantive abstractions
+    // (engine state, request envelopes, etc.) — even if cross-file consumers
+    // are sparse, calling them "stale" is wrong. The cap also protects
+    // against rust-analyzer's chunk-fallback ranges (whole-file ranges that
+    // appear when a real `defn_enclosing_range` isn't emitted), which would
+    // otherwise dominate the report.
+    .filter((definition) => definitionLoc(definition) <= opts.maxLoc)
+    .filter((definition) => !db.isIgnored(definition.relativePath))
+    // Enum variants encode as `Type#Variant#` (parent descriptor also `type`).
+    // The variant isn't an "abstraction" on its own — the enum is. Without
+    // this filter every enum variant gets a separate stale-abstraction
+    // entry, which is noise.
+    .filter((definition) => !isNestedTypeMember(definition.symbol))
+    .filter((definition) => !index.hasSuppressionComment(definition));
+}
+
+function consumerMapForTypeCandidates(
+  index: ProjectIndex,
+  typeCandidates: readonly IndexedDefinition[],
+): Map<number, Set<string>> {
+  return mergeConsumerMaps(
+    index.crossFileCallerMap(typeCandidates),
+    index.sourceFallbackCallerFiles(typeCandidates),
+  );
+}
+
+function buildTypeCandidateIndex(
+  typeCandidates: readonly IndexedDefinition[],
+): TypeCandidateIndex {
+  // Pre-index type candidates by (file, leaf) so the transitive-reachability
+  // check is O(1) per container instead of O(typeCandidates) linear scan.
+  const candidateIndex: TypeCandidateIndex = new Map();
+  for (const candidate of typeCandidates) {
+    let perFile = candidateIndex.get(candidate.relativePath);
+    if (!perFile) {
+      perFile = new Map();
+      candidateIndex.set(candidate.relativePath, perFile);
+    }
+    const leaf = leafName(candidate.symbol);
+    if (leaf) perFile.set(leaf, candidate);
+  }
+  return candidateIndex;
+}
+
+function staleCandidateRows(
+  db: ScipDatabase,
+  typeCandidates: readonly IndexedDefinition[],
+  consumerFileMap: Map<number, Set<string>>,
+  candidateIndex: TypeCandidateIndex,
+): StaleCandidateRow[] {
+  return typeCandidates.map((definition) => {
+    const allFiles = consumerFileMap.get(definition.symbolId) ?? new Set<string>();
+    const consumerFiles = [...allFiles].filter(
+      (file) => file !== definition.relativePath && !db.isIgnored(file),
+    );
+    const { realConsumers, barrelConsumers } = partitionConsumers(
+      db,
+      definition.relativePath,
+      definition.symbol,
+      consumerFiles,
+    );
+
+    // Transitive: if this type is referenced by a container type in the
+    // SAME file (e.g. `interface Outer { field: This }`) and that container
+    // has cross-file consumers, this type is reachable through the
+    // container's public API — not stale, even with 0 direct consumers.
+    const transitivelyReachable = isTransitivelyConsumed(
+      db,
+      definition,
+      consumerFileMap,
+      candidateIndex,
+    );
+
+    return {
+      definition,
+      realConsumers,
+      barrelConsumers,
+      transitivelyReachable,
+    };
+  });
+}
+
+function scoreStaleCandidate(
+  db: ScipDatabase,
+  row: StaleCandidateRow,
+): StaleAbstraction {
+  const kind = detectDefinitionKind(db, row.definition.relativePath, row.definition.startLine);
+  // For type-only files the definer is *expected* not to use what it
+  // defines (their job is exporting types for downstream consumption),
+  // so pretend the definer uses it — that avoids the "1 consumer +
+  // defining file never uses it = high confidence" branch firing on
+  // every type in a `protocol/common.rs`-style module.
+  const definerUsesType = isTypeOnlyFile(row.definition.relativePath)
+    ? true
+    : detectDefinerUsesType(db, row.definition);
+  const { confidence, reason } = scoreConfidence(row.realConsumers.length, kind, definerUsesType);
+
+  return {
+    symbol: row.definition.symbol,
+    shortName: shortenSymbol(row.definition.symbol),
+    file: row.definition.relativePath,
+    startLine: row.definition.startLine,
+    endLine: row.definition.endLine,
+    loc: definitionLoc(row.definition),
+    consumers: row.realConsumers.length,
+    barrelConsumers: row.barrelConsumers,
+    kind,
+    definerUsesType,
+    confidence,
+    reason,
+  };
 }
 
 function getSingletonBackedClassIds(

@@ -5,6 +5,9 @@ import { ProjectIndex } from '../core/project-index.js';
 import { semanticCallerMap } from '../semantic/shared-primitives.js';
 import { isCallableSymbol, isModuleLikeSymbol, shortenSymbol } from '../symbols/symbol-parser.js';
 
+type ChangedSymbol = DiffImpactResult['changedSymbols'][number];
+type ConsumerMap = Map<string, Set<string>>;
+
 /**
  * Given a git diff, compute the affected symbol set.
  * Finds all symbols defined in changed files, their fan-in,
@@ -22,47 +25,14 @@ export function diffImpact(
     changedFileLines = getChangedFiles(db.config.projectRoot, base);
   } catch {
     // Not in a git repo or git not available — return empty result
-    return {
-      changedFiles: [],
-      changedSymbols: [],
-      affectedConsumers: [],
-      summary: {
-        totalChangedFiles: 0,
-        totalChangedSymbols: 0,
-        totalAffectedFiles: 0,
-        note: 'Unable to compute git diff.',
-      },
-    };
+    return emptyDiffImpact('Unable to compute git diff.');
   }
 
   if (changedFileLines.length === 0) {
-    return {
-      changedFiles: [],
-      changedSymbols: [],
-      affectedConsumers: [],
-      summary: {
-        totalChangedFiles: 0,
-        totalChangedSymbols: 0,
-        totalAffectedFiles: 0,
-        note: 'No changed files found.',
-      },
-    };
+    return emptyDiffImpact('No changed files found.');
   }
 
-  // Match changed files against the index
-  const changedFiles: string[] = [];
-
-  for (const file of changedFileLines) {
-    const doc = db.get<{ relative_path: string }>(
-      `SELECT relative_path FROM documents
-       WHERE relative_path LIKE ?
-       LIMIT 1`,
-      `%${file}`,
-    );
-    if (doc && !db.isIgnored(doc.relative_path)) {
-      changedFiles.push(doc.relative_path);
-    }
-  }
+  const changedFiles = indexedChangedFiles(db, changedFileLines);
 
   if (changedFiles.length === 0) {
     return {
@@ -80,75 +50,16 @@ export function diffImpact(
 
   const index = new ProjectIndex(db);
   const changedFileSet = new Set(changedFiles);
-  const defs = changedFiles.flatMap((file) => index.definitionsForFile(file))
-    .filter(isDiffImpactCandidate)
-    .sort((a, b) => a.relativePath.localeCompare(b.relativePath) || a.startLine - b.startLine);
+  const defs = changedDefinitions(index, changedFiles);
 
-  // For each symbol, compute fan-in (distinct referencing documents)
-  const changedSymbols: DiffImpactResult['changedSymbols'] = [];
-  const consumerMap = new Map<string, Set<string>>(); // file -> set of consumed symbol shortNames
+  const changedSymbols: ChangedSymbol[] = [];
+  const consumerMap: ConsumerMap = new Map();
 
   for (const def of defs) {
-    // Fan-in: distinct files that reference this symbol
-    const fanInRow = db.get<{ fan_in: number }>(
-      `SELECT COUNT(DISTINCT c.document_id) AS fan_in
-      FROM mentions m
-      JOIN chunks c ON m.chunk_id = c.id
-      WHERE m.symbol_id = ?
-        AND m.role != 1`,
-      def.symbolId,
-    );
-
-    const semanticConsumers = semanticCallerMap(db, [def]).get(def.symbolId) ?? new Set<string>();
-    const fanIn = Math.max(fanInRow?.fan_in ?? 0, semanticConsumers.size);
-    if (!shouldReportChangedDefinition(def, fanIn)) continue;
-
-    const shortName = shortenSymbol(def.symbol);
-
-    changedSymbols.push({
-      symbol: def.symbol,
-      shortName,
-      file: def.relativePath,
-      fanIn,
-    });
-
-    // Collect consumer files (excluding the changed files themselves)
-    const consumers = db.all<{ relative_path: string }>(
-      `SELECT DISTINCT ref_d.relative_path
-      FROM mentions m
-      JOIN chunks c ON m.chunk_id = c.id
-      JOIN documents ref_d ON c.document_id = ref_d.id
-      WHERE m.symbol_id = ?
-        AND m.role != 1
-        AND ref_d.relative_path NOT IN (${changedFiles.map(() => '?').join(',')})
-        ${db.pathExclusionsFor('ref_d')}`,
-      def.symbolId,
-      ...changedFiles,
-    );
-
-    for (const consumer of consumers) {
-      if (db.isIgnored(consumer.relative_path)) continue;
-      if (changedFileSet.has(consumer.relative_path)) continue;
-      if (!consumerMap.has(consumer.relative_path)) {
-        consumerMap.set(consumer.relative_path, new Set());
-      }
-      consumerMap.get(consumer.relative_path)!.add(shortName);
-    }
-    for (const file of semanticConsumers) {
-      if (db.isIgnored(file)) continue;
-      if (changedFileSet.has(file)) continue;
-      if (!consumerMap.has(file)) {
-        consumerMap.set(file, new Set());
-      }
-      consumerMap.get(file)!.add(shortName);
-    }
+    addChangedDefinitionImpact(db, def, changedFiles, changedFileSet, changedSymbols, consumerMap);
   }
 
-  // Build affected consumers list
-  const affectedConsumers = [...consumerMap.entries()]
-    .map(([file, symbols]) => ({ file, consumedSymbols: symbols.size }))
-    .sort((a, b) => b.consumedSymbols - a.consumedSymbols);
-
+  const affectedConsumers = affectedConsumerRows(consumerMap);
   return {
     changedFiles,
     changedSymbols,
@@ -157,6 +68,20 @@ export function diffImpact(
       totalChangedFiles: changedFiles.length,
       totalChangedSymbols: changedSymbols.length,
       totalAffectedFiles: affectedConsumers.length,
+    },
+  };
+}
+
+function emptyDiffImpact(note: string): DiffImpactResult {
+  return {
+    changedFiles: [],
+    changedSymbols: [],
+    affectedConsumers: [],
+    summary: {
+      totalChangedFiles: 0,
+      totalChangedSymbols: 0,
+      totalAffectedFiles: 0,
+      note,
     },
   };
 }
@@ -184,6 +109,123 @@ function getChangedFiles(projectRoot: string, base: string): string[] {
       .map((line) => line.trim())
       .filter((line) => line.length > 0),
   )];
+}
+
+function indexedChangedFiles(
+  db: ScipDatabase,
+  changedFileLines: readonly string[],
+): string[] {
+  const changedFiles: string[] = [];
+  for (const file of changedFileLines) {
+    const doc = db.get<{ relative_path: string }>(
+      `SELECT relative_path FROM documents
+       WHERE relative_path LIKE ?
+       LIMIT 1`,
+      `%${file}`,
+    );
+    if (doc && !db.isIgnored(doc.relative_path)) {
+      changedFiles.push(doc.relative_path);
+    }
+  }
+  return changedFiles;
+}
+
+function changedDefinitions(
+  index: ProjectIndex,
+  changedFiles: readonly string[],
+): IndexedDefinition[] {
+  return changedFiles.flatMap((file) => index.definitionsForFile(file))
+    .filter(isDiffImpactCandidate)
+    .sort((a, b) => a.relativePath.localeCompare(b.relativePath) || a.startLine - b.startLine);
+}
+
+function addChangedDefinitionImpact(
+  db: ScipDatabase,
+  definition: IndexedDefinition,
+  changedFiles: readonly string[],
+  changedFileSet: ReadonlySet<string>,
+  changedSymbols: ChangedSymbol[],
+  consumerMap: ConsumerMap,
+): void {
+  const semanticConsumers = semanticCallerMap(db, [definition]).get(definition.symbolId) ?? new Set<string>();
+  const fanIn = Math.max(scipFanIn(db, definition.symbolId), semanticConsumers.size);
+  if (!shouldReportChangedDefinition(definition, fanIn)) return;
+
+  const shortName = shortenSymbol(definition.symbol);
+  changedSymbols.push({
+    symbol: definition.symbol,
+    shortName,
+    file: definition.relativePath,
+    fanIn,
+  });
+
+  for (const file of scipConsumerFiles(db, definition.symbolId, changedFiles)) {
+    addConsumerFile(db, changedFileSet, consumerMap, file, shortName);
+  }
+  for (const file of semanticConsumers) {
+    addConsumerFile(db, changedFileSet, consumerMap, file, shortName);
+  }
+}
+
+function scipFanIn(
+  db: ScipDatabase,
+  symbolId: number,
+): number {
+  const fanInRow = db.get<{ fan_in: number }>(
+    `SELECT COUNT(DISTINCT c.document_id) AS fan_in
+     FROM mentions m
+     JOIN chunks c ON m.chunk_id = c.id
+     WHERE m.symbol_id = ?
+       AND m.role != 1`,
+    symbolId,
+  );
+  return fanInRow?.fan_in ?? 0;
+}
+
+function scipConsumerFiles(
+  db: ScipDatabase,
+  symbolId: number,
+  changedFiles: readonly string[],
+): string[] {
+  if (changedFiles.length === 0) return [];
+  const consumers = db.all<{ relative_path: string }>(
+    `SELECT DISTINCT ref_d.relative_path
+     FROM mentions m
+     JOIN chunks c ON m.chunk_id = c.id
+     JOIN documents ref_d ON c.document_id = ref_d.id
+     WHERE m.symbol_id = ?
+       AND m.role != 1
+       AND ref_d.relative_path NOT IN (${changedFiles.map(() => '?').join(',')})
+       ${db.pathExclusionsFor('ref_d')}`,
+    symbolId,
+    ...changedFiles,
+  );
+  return consumers.map((consumer) => consumer.relative_path);
+}
+
+function addConsumerFile(
+  db: ScipDatabase,
+  changedFileSet: ReadonlySet<string>,
+  consumerMap: ConsumerMap,
+  file: string,
+  shortName: string,
+): void {
+  if (db.isIgnored(file)) return;
+  if (changedFileSet.has(file)) return;
+  let consumedSymbols = consumerMap.get(file);
+  if (!consumedSymbols) {
+    consumedSymbols = new Set<string>();
+    consumerMap.set(file, consumedSymbols);
+  }
+  consumedSymbols.add(shortName);
+}
+
+function affectedConsumerRows(
+  consumerMap: ConsumerMap,
+): DiffImpactResult['affectedConsumers'] {
+  return [...consumerMap.entries()]
+    .map(([file, symbols]) => ({ file, consumedSymbols: symbols.size }))
+    .sort((a, b) => b.consumedSymbols - a.consumedSymbols);
 }
 
 function isDiffImpactCandidate(definition: IndexedDefinition): boolean {

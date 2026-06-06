@@ -5,6 +5,20 @@ import { getSourceExports, getSourceImports } from '../language-parsers/index.js
 import type { IndexedDefinition, RedundantReexport } from '../domain/types.js';
 import { leafSuffix, shortenSymbol } from '../symbols/symbol-parser.js';
 
+interface ScipReexportRow {
+  barrel_doc_id: number;
+  barrel_path: string;
+  symbol_id: number;
+  symbol: string;
+  original_doc_id: number;
+  original_path: string;
+}
+
+interface ReexportConsumerCounts {
+  barrel_consumers: number;
+  direct_consumers: number;
+}
+
 /**
  * Find barrel re-exports that no consumer actually imports through.
  *
@@ -23,21 +37,63 @@ export function redundantReexports(
   opts: { scope?: string; limit?: number } = {},
 ): RedundantReexport[] {
   const { scope, limit } = opts;
+  const index = new ProjectIndex(db);
+  const withDartFallback = dedupeReexports([
+    ...findScipRedundantReexports(db, scope),
+    ...findSourceRedundantReexports(db, index, scope),
+  ]);
+  sortReexports(withDartFallback);
 
+  return limit ? withDartFallback.slice(0, limit) : withDartFallback;
+}
+
+function findScipRedundantReexports(
+  db: ScipDatabase,
+  scope?: string,
+): RedundantReexport[] {
+  const results: RedundantReexport[] = [];
+  for (const row of loadScipReexportRows(db, scope)) {
+    if (db.isIgnored(row.barrel_path) || db.isIgnored(row.original_path)) continue;
+    if (isLiveBarrel(db, row.barrel_path)) continue;
+
+    const consumerCounts = countReexportConsumers(db, row);
+    const barrelConsumers = consumerCounts?.barrel_consumers ?? 0;
+    const directConsumers = consumerCounts?.direct_consumers ?? 0;
+
+    // In TypeScript, `import * as X from './barrel'` resolves all references
+    // directly to the source file — the barrel is transparent to SCIP.
+    // This means barrelConsumers is always 0 for namespace imports.
+    //
+    // We can only confidently report symbols with 0 consumers EVERYWHERE
+    // (both barrel and direct). These are truly dead re-exports.
+    //
+    // Symbols with directConsumers > 0 but barrelConsumers === 0 might still be
+    // consumed through a namespace import — we can't tell, so we skip them.
+    if (barrelConsumers !== 0 || directConsumers !== 0) continue;
+
+    results.push({
+      barrelFile: row.barrel_path,
+      symbol: row.symbol,
+      shortName: shortenSymbol(row.symbol),
+      originalFile: row.original_path,
+      barrelConsumers,
+      directConsumers,
+    });
+  }
+  return results;
+}
+
+function loadScipReexportRows(
+  db: ScipDatabase,
+  scope?: string,
+): ScipReexportRow[] {
   const scopeFilter = scope ? `AND barrel_d.relative_path LIKE '%${scope}%'` : '';
 
   // Step 1 + 2: Find all barrel files and symbols they re-export.
   // A re-export is a symbol that:
   //   - is mentioned in a barrel file with role=0 (reference/import)
   //   - has its definition (defn_enclosing_ranges) in a DIFFERENT file
-  const reexportRows = db.all<{
-    barrel_doc_id: number;
-    barrel_path: string;
-    symbol_id: number;
-    symbol: string;
-    original_doc_id: number;
-    original_path: string;
-  }>(
+  return db.all<ScipReexportRow>(
     `SELECT DISTINCT
       barrel_d.id AS barrel_doc_id,
       barrel_d.relative_path AS barrel_path,
@@ -70,124 +126,51 @@ export function redundantReexports(
       ${scopeFilter}
     ORDER BY barrel_d.relative_path, gs.symbol`,
   );
+}
 
-  const results: RedundantReexport[] = [];
-  const index = new ProjectIndex(db);
-
-    for (const row of reexportRows) {
-      if (db.isIgnored(row.barrel_path) || db.isIgnored(row.original_path)) continue;
-      if (isLiveBarrel(db, row.barrel_path)) continue;
-
-      // Step 3: Count consumers that reference this symbol through the barrel
-    // A "barrel consumer" is a file (other than the barrel itself and the original file)
-    // that mentions this symbol AND also mentions something from the barrel document.
-    // More precisely: count distinct files that reference this symbol AND whose
-    // chunk is in a document that also has a role=0 mention pointing to the barrel file's symbols.
-    //
-    // Simpler approach: count distinct documents that reference this symbol (role=0)
-    // grouped by whether the reference chunk is in a file that imports from the barrel
-    // or from the original.
-    //
-    // Actually, the most reliable approach with SCIP data: count how many distinct
-    // consumer documents reference this symbol_id with role=0, excluding the barrel
-    // and the original file themselves. Then check if those consumers also reference
-    // ANY symbol through a mention in the barrel doc vs the original doc.
-    //
-    // Simplest correct approach: In SCIP, when file A does `import { foo } from './bar/index'`,
-    // the mention of `foo` in file A points to the same global symbol regardless of import path.
-    // SCIP doesn't track import provenance. BUT the barrel file itself contains mentions
-    // (role=0 references) of the re-exported symbols. So we can check:
-    // - barrelConsumers: files that mention both this symbol AND any symbol whose definition
-    //   is in the barrel (i.e., they import the barrel)
-    // - directConsumers: files that mention this symbol but don't import the barrel
-    //
-    // Even simpler: check if the barrel document is in the deps of the consumer.
-    // A consumer "goes through the barrel" if it has ANY role=0 mention pointing to a
-    // chunk in the barrel file. Otherwise it goes direct.
-
-    const consumerCounts = db.get<{
-      barrel_consumers: number;
-      direct_consumers: number;
-    }>(
-      `SELECT
-        SUM(CASE WHEN uses_barrel = 1 THEN 1 ELSE 0 END) AS barrel_consumers,
-        SUM(CASE WHEN uses_barrel = 0 THEN 1 ELSE 0 END) AS direct_consumers
-      FROM (
-        SELECT
-          consumer_d.id AS consumer_doc_id,
-          MAX(CASE WHEN EXISTS (
-            SELECT 1
-            FROM mentions barrel_m
-            JOIN chunks barrel_c ON barrel_m.chunk_id = barrel_c.id
-            WHERE barrel_c.document_id = consumer_d.id
-              AND barrel_m.role != 1
-              AND barrel_m.symbol_id IN (
-                SELECT m2.symbol_id
-                FROM mentions m2
-                JOIN chunks c2 ON m2.chunk_id = c2.id
-                WHERE c2.document_id = ?
-                  AND m2.role != 1
-              )
-          ) THEN 1 ELSE 0 END) AS uses_barrel
-        FROM mentions ref_m
-        JOIN chunks ref_c ON ref_m.chunk_id = ref_c.id
-        JOIN documents consumer_d ON ref_c.document_id = consumer_d.id
-        WHERE ref_m.symbol_id = ?
-          AND ref_m.role != 1
-          AND consumer_d.id != ?
-          AND consumer_d.id != ?
-          ${db.pathExclusionsFor('consumer_d')}
-        GROUP BY consumer_d.id
-      )`,
-      row.barrel_doc_id,  // for the inner subquery checking barrel mentions
-      row.symbol_id,      // the re-exported symbol
-      row.barrel_doc_id,  // exclude the barrel itself
-      row.original_doc_id, // exclude the original file
-    );
-
-    const barrelConsumers = consumerCounts?.barrel_consumers ?? 0;
-    const directConsumers = consumerCounts?.direct_consumers ?? 0;
-
-    // In TypeScript, `import * as X from './barrel'` resolves all references
-    // directly to the source file — the barrel is transparent to SCIP.
-    // This means barrelConsumers is always 0 for namespace imports.
-    //
-    // We can only confidently report symbols with 0 consumers EVERYWHERE
-    // (both barrel and direct). These are truly dead re-exports.
-    //
-      // Symbols with directConsumers > 0 but barrelConsumers === 0 might still be
-      // consumed through a namespace import — we can't tell, so we skip them.
-      if (barrelConsumers === 0 && directConsumers === 0) {
-        results.push({
-        barrelFile: row.barrel_path,
-        symbol: row.symbol,
-        shortName: shortenSymbol(row.symbol),
-        originalFile: row.original_path,
-        barrelConsumers,
-        directConsumers,
-      });
-    }
-  }
-
-  // Sort: symbols with the most direct consumers first (biggest cleanup wins),
-  // then by barrel file path for stable output
-  results.sort((a, b) =>
-    b.directConsumers - a.directConsumers
-    || a.barrelFile.localeCompare(b.barrelFile)
-    || a.shortName.localeCompare(b.shortName),
+function countReexportConsumers(
+  db: ScipDatabase,
+  row: ScipReexportRow,
+): ReexportConsumerCounts | undefined {
+  // A consumer "goes through the barrel" if it has any role=0 mention pointing
+  // to a symbol that appears in the barrel file. SCIP does not preserve the
+  // literal import path for transparent re-exports, so this is conservative.
+  return db.get<ReexportConsumerCounts>(
+    `SELECT
+      SUM(CASE WHEN uses_barrel = 1 THEN 1 ELSE 0 END) AS barrel_consumers,
+      SUM(CASE WHEN uses_barrel = 0 THEN 1 ELSE 0 END) AS direct_consumers
+    FROM (
+      SELECT
+        consumer_d.id AS consumer_doc_id,
+        MAX(CASE WHEN EXISTS (
+          SELECT 1
+          FROM mentions barrel_m
+          JOIN chunks barrel_c ON barrel_m.chunk_id = barrel_c.id
+          WHERE barrel_c.document_id = consumer_d.id
+            AND barrel_m.role != 1
+            AND barrel_m.symbol_id IN (
+              SELECT m2.symbol_id
+              FROM mentions m2
+              JOIN chunks c2 ON m2.chunk_id = c2.id
+              WHERE c2.document_id = ?
+                AND m2.role != 1
+            )
+        ) THEN 1 ELSE 0 END) AS uses_barrel
+      FROM mentions ref_m
+      JOIN chunks ref_c ON ref_m.chunk_id = ref_c.id
+      JOIN documents consumer_d ON ref_c.document_id = consumer_d.id
+      WHERE ref_m.symbol_id = ?
+        AND ref_m.role != 1
+        AND consumer_d.id != ?
+        AND consumer_d.id != ?
+        ${db.pathExclusionsFor('consumer_d')}
+      GROUP BY consumer_d.id
+    )`,
+    row.barrel_doc_id,
+    row.symbol_id,
+    row.barrel_doc_id,
+    row.original_doc_id,
   );
-
-  const withDartFallback = dedupeReexports([
-    ...results,
-    ...findSourceRedundantReexports(db, index, scope),
-  ]);
-  withDartFallback.sort((a, b) =>
-    b.directConsumers - a.directConsumers
-    || a.barrelFile.localeCompare(b.barrelFile)
-    || a.shortName.localeCompare(b.shortName),
-  );
-
-  return limit ? withDartFallback.slice(0, limit) : withDartFallback;
 }
 
 function findSourceRedundantReexports(
@@ -286,4 +269,12 @@ function dedupeReexports(
     unique.push(row);
   }
   return unique;
+}
+
+function sortReexports(results: RedundantReexport[]): void {
+  results.sort((a, b) =>
+    b.directConsumers - a.directConsumers
+    || a.barrelFile.localeCompare(b.barrelFile)
+    || a.shortName.localeCompare(b.shortName),
+  );
 }
