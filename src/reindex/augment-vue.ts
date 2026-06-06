@@ -767,6 +767,7 @@ function requireVueAugmentDependency(
       throw new Error(
         `Vue augmentation requires ${packageName} to be installed in ${projectRoot}. ` +
         'Install Vue/Volar dependencies for that project, then rerun augment-vue.',
+        { cause: err },
       );
     }
     throw err;
