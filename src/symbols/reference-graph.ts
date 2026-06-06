@@ -431,13 +431,7 @@ export function buildAstCalleeMap(
       const candidates = sameLanguageCandidates(file, leafIndex.get(site.calleeLeaf) ?? []);
       if (!candidates || candidates.length === 0) continue;
 
-      // Prefer same-file resolution (covers free-functions and methods on
-      // types defined in the same file). Otherwise accept a unique global
-      // match. Skip ambiguous names — without scope analysis we'd be guessing.
-      let pick: { symbol: string; file: string } | null = null;
-      const sameFile = candidates.find((c) => c.file === file);
-      if (sameFile) pick = sameFile;
-      else if (candidates.length === 1) pick = candidates[0]!;
+      const pick = pickAstCallCandidate(db, file, candidates, site.memberAccess);
       if (!pick) continue;
       if (pick.symbol === owner.symbol) continue; // skip self-recursion
 
@@ -456,6 +450,34 @@ function sameLanguageCandidates<T extends { file: string }>(
   const sourceFamily = astLanguageFamily(sourceFile);
   if (!sourceFamily) return candidates;
   return candidates.filter((candidate) => astLanguageFamily(candidate.file) === sourceFamily);
+}
+
+function pickAstCallCandidate<T extends { symbol: string; file: string }>(
+  db: ScipDatabase,
+  sourceFile: string,
+  candidates: T[],
+  memberAccess: boolean,
+): T | null {
+  const sameFile = candidates.find((candidate) => candidate.file === sourceFile);
+  if (sameFile) return sameFile;
+
+  if (memberAccess) {
+    const importedSourcePaths = new Set(
+      getSourceImports(db, sourceFile)
+        .map((entry) => entry.sourcePath)
+        .filter((path): path is string => Boolean(path)),
+    );
+    return candidates.find((candidate) =>
+      [...importedSourcePaths].some((sourcePath) => pathsResolveSame(sourcePath, candidate.file)),
+    ) ?? null;
+  }
+
+  return candidates.length === 1 ? candidates[0]! : null;
+}
+
+function pathsResolveSame(a: string, b: string): boolean {
+  const norm = (path: string): string => path.replace(/\\/g, '/').replace(/^\.\//, '');
+  return norm(a) === norm(b);
 }
 
 function astLanguageFamily(relativePath: string): string | null {
@@ -668,9 +690,7 @@ export function buildCrossFileCallerMap(
     for (const site of callsites) {
       const candidates = sameLanguageCandidates(doc.relative_path, leafIndex.get(site.calleeLeaf) ?? []);
       if (!candidates || candidates.length === 0) continue;
-      // Same-file preference (consistent with buildAstCalleeMap).
-      const sameFile = candidates.find((c) => c.file === doc.relative_path);
-      const pick = sameFile ?? (candidates.length === 1 ? candidates[0]! : null);
+      const pick = pickAstCallCandidate(db, doc.relative_path, candidates, site.memberAccess);
       if (!pick) continue;
       // Cross-file caller only — self-references skipped.
       if (pick.file === doc.relative_path) continue;

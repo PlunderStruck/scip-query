@@ -394,6 +394,8 @@ export function getCallableSites(db: ScipDatabase, relativePath: string): Callab
 export interface CallSite {
   /** Leaf name of what is being called — "foo" for `foo()`, `obj.foo()`, `Type::foo()`. */
   calleeLeaf: string;
+  /** True for member/dotted calls like `obj.foo()` where the receiver type is unknown. */
+  memberAccess: boolean;
   line: number;
 }
 
@@ -448,10 +450,21 @@ export function getCallSites(db: ScipDatabase, relativePath: string): CallSite[]
       if (!target || !call) continue;
       const leaf = extractCallLeaf(target);
       if (!leaf) continue;
-      sites.push({ calleeLeaf: leaf, line: call.startPosition.row });
+      sites.push({ calleeLeaf: leaf, memberAccess: isMemberAccessTarget(target), line: call.startPosition.row });
     }
     return sites;
   });
+}
+
+function isMemberAccessTarget(node: SyntaxNode): boolean {
+  switch (node.type) {
+    case 'field_expression':
+    case 'member_expression':
+    case 'attribute':
+      return true;
+    default:
+      return false;
+  }
 }
 
 

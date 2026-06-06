@@ -97,9 +97,14 @@ export function resolveDocumentCandidates(
     }];
   }
 
-  const exactish = scored.filter((row) => row.score >= 800);
-  if (exactish.length > 0) {
-    return opts.allowMultiple ? exactish : [exactish[0]!];
+  const exactPathMatches = scored.filter((row) => row.score >= 1100);
+  if (exactPathMatches.length > 0) {
+    return opts.allowMultiple ? exactPathMatches : [exactPathMatches[0]!];
+  }
+
+  const basenameMatches = scored.filter((row) => row.score >= 800);
+  if (basenameMatches.length > 0) {
+    return opts.allowMultiple ? basenameMatches : [basenameMatches[0]!];
   }
 
   return opts.allowMultiple ? scored : [scored[0]!];

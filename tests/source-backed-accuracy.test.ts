@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/storage/db.js';
 import { callGraph } from '../src/queries/call-graph.js';
 import { code } from '../src/queries/code.js';
+import { dataflow } from '../src/queries/dataflow.js';
 import { symbols } from '../src/queries/symbols.js';
 import { trace } from '../src/queries/trace.js';
 import type { ScipQueryConfig } from '../src/domain/types.js';
@@ -273,6 +274,53 @@ describe('source-backed accuracy regressions', () => {
         expect(graph?.callees.map((row) => row.shortName)).toEqual([
           'src:summary:formatLabel()',
         ]);
+      },
+    );
+  });
+
+  it('does not resolve member calls to unrelated unique global functions', () => {
+    withFixture(
+      'member-call-unique-global',
+      {
+        'backend/src/auth.ts': [
+          'export async function createUser(client: { user: { create(input: unknown): Promise<unknown> } }) {',
+          "  return client.user.create({ email: 'test@example.com' });",
+          '}',
+          '',
+        ].join('\n'),
+        'frontend/src/wizard.ts': [
+          'export function create(path: string) {',
+          '  return { path };',
+          '}',
+          '',
+        ].join('\n'),
+      },
+      (sqliteDb) => {
+        sqliteDb.exec(`
+          INSERT INTO documents (id, language, relative_path) VALUES
+            (1, 'typescript', 'backend/src/auth.ts'),
+            (2, 'typescript', 'frontend/src/wizard.ts');
+
+          INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
+            (1, 'scip-typescript npm fixture 1.0.0 backend/src/\`auth.ts\`/createUser().', 'createUser', 12, 'function createUser|function createUser(): Promise<unknown>'),
+            (2, 'scip-typescript npm fixture 1.0.0 frontend/src/\`wizard.ts\`/create().', 'create', 12, 'function create|function create(path: string): { path: string }');
+
+          INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+            (1, 1, 1, 0, 0, 2, 1),
+            (2, 2, 2, 0, 0, 2, 1);
+
+          INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+            (1, 1, 0, 0, 2, X'00'),
+            (2, 2, 0, 0, 2, X'00');
+
+          INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+            (1, 1, 1),
+            (2, 2, 1);
+        `);
+      },
+      (db) => {
+        const result = dataflow(db, 'createUser');
+        expect(result?.producers.map((row) => row.shortName)).not.toContain('src:wizard:create()');
       },
     );
   });
