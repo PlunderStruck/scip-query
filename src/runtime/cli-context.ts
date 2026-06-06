@@ -90,5 +90,11 @@ export function formatStatus(status: WatcherStatus): string {
       const secs = Math.round((status.until - Date.now()) / 1000);
       return `Cooldown (${secs}s)${status.dirty ? ' — changes pending' : ''}`;
     }
+    default:
+      return assertNever(status);
   }
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled watcher status: ${JSON.stringify(value)}`);
 }

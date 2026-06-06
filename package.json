@@ -34,7 +34,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src/",
+    "lint": "eslint src tests tsup.config.ts",
     "calibrate": "node scripts/accuracy-calibration.mjs",
     "prepublishOnly": "npm run build",
     "postinstall": "node dist/postinstall.js || true"

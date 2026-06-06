@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type * as Setup from '../src/runtime/setup.js';
 
-type SetupModule = typeof import('../src/runtime/setup.js');
+type SetupModule = typeof Setup;
 
 async function loadSetup(): Promise<{
   module: SetupModule;

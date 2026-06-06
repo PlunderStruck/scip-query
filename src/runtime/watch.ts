@@ -105,8 +105,8 @@ export class Watcher {
     this.stopped = true;
     for (const w of this.fsWatchers) w.close();
     this.fsWatchers = [];
-    if (this.debounceTimer) clearTimeout(this.debounceTimer);
-    if (this.cooldownTimer) clearTimeout(this.cooldownTimer);
+    this.clearDebounceTimer();
+    this.clearCooldownTimer();
     this.setStatus({ state: 'idle' });
   }
 
@@ -144,7 +144,7 @@ export class Watcher {
     }
 
     // Reset the debounce timer — every new change pushes the trigger out
-    if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    this.clearDebounceTimer();
 
     const reindexAt = Date.now() + this.watchConfig.debounceMs;
     this.setStatus({ state: 'waiting', changedFiles: this.changedFiles, reindexAt });
@@ -271,6 +271,20 @@ export class Watcher {
   private setStatus(status: WatcherStatus): void {
     this.status = status;
     this.onStatus(status);
+  }
+
+  private clearDebounceTimer(): void {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+  }
+
+  private clearCooldownTimer(): void {
+    if (this.cooldownTimer) {
+      clearTimeout(this.cooldownTimer);
+      this.cooldownTimer = null;
+    }
   }
 }
 

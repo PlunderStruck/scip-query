@@ -33,38 +33,51 @@ export const DOTNET_EXTENSIONS = ['.cs', '.vb'] as const;
 export const DART_EXTENSIONS = ['.dart'] as const;
 export const PHP_EXTENSIONS = ['.php'] as const;
 
-const LANGUAGE_EXTENSION_FAMILIES: ReadonlyArray<readonly string[]> = [
-  JS_EXTENSIONS,
-  PYTHON_EXTENSIONS,
-  JVM_EXTENSIONS,
-  RUST_EXTENSIONS,
-  RUBY_EXTENSIONS,
-  C_LIKE_EXTENSIONS,
-  DOTNET_EXTENSIONS,
-  DART_EXTENSIONS,
-  PHP_EXTENSIONS,
+const JS_EXTENSION_SET = new Set<string>(JS_EXTENSIONS);
+const PYTHON_EXTENSION_SET = new Set<string>(PYTHON_EXTENSIONS);
+const JVM_EXTENSION_SET = new Set<string>(JVM_EXTENSIONS);
+const RUST_EXTENSION_SET = new Set<string>(RUST_EXTENSIONS);
+const RUBY_EXTENSION_SET = new Set<string>(RUBY_EXTENSIONS);
+const C_LIKE_EXTENSION_SET = new Set<string>(C_LIKE_EXTENSIONS);
+const DOTNET_EXTENSION_SET = new Set<string>(DOTNET_EXTENSIONS);
+const DART_EXTENSION_SET = new Set<string>(DART_EXTENSIONS);
+const PHP_EXTENSION_SET = new Set<string>(PHP_EXTENSIONS);
+
+const LANGUAGE_EXTENSION_FAMILIES: ReadonlyArray<{
+  extensions: readonly string[];
+  lookup: ReadonlySet<string>;
+}> = [
+  { extensions: JS_EXTENSIONS, lookup: JS_EXTENSION_SET },
+  { extensions: PYTHON_EXTENSIONS, lookup: PYTHON_EXTENSION_SET },
+  { extensions: JVM_EXTENSIONS, lookup: JVM_EXTENSION_SET },
+  { extensions: RUST_EXTENSIONS, lookup: RUST_EXTENSION_SET },
+  { extensions: RUBY_EXTENSIONS, lookup: RUBY_EXTENSION_SET },
+  { extensions: C_LIKE_EXTENSIONS, lookup: C_LIKE_EXTENSION_SET },
+  { extensions: DOTNET_EXTENSIONS, lookup: DOTNET_EXTENSION_SET },
+  { extensions: DART_EXTENSIONS, lookup: DART_EXTENSION_SET },
+  { extensions: PHP_EXTENSIONS, lookup: PHP_EXTENSION_SET },
 ];
 
-function hasExtensionIn(relativePath: string, extensions: readonly string[]): boolean {
-  return (extensions as readonly string[]).includes(extname(relativePath).toLowerCase());
+function hasExtensionIn(relativePath: string, extensions: ReadonlySet<string>): boolean {
+  return extensions.has(extname(relativePath).toLowerCase());
 }
 
-export function isPythonSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, PYTHON_EXTENSIONS); }
-export function isJvmSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, JVM_EXTENSIONS); }
-export function isRustSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, RUST_EXTENSIONS); }
-export function isRubySourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, RUBY_EXTENSIONS); }
-export function isCLikeSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, C_LIKE_EXTENSIONS); }
-export function isDotNetSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, DOTNET_EXTENSIONS); }
+export function isPythonSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, PYTHON_EXTENSION_SET); }
+export function isJvmSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, JVM_EXTENSION_SET); }
+export function isRustSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, RUST_EXTENSION_SET); }
+export function isRubySourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, RUBY_EXTENSION_SET); }
+export function isCLikeSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, C_LIKE_EXTENSION_SET); }
+export function isDotNetSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, DOTNET_EXTENSION_SET); }
 export function isVisualBasicSourcePath(relativePath: string): boolean { return extname(relativePath).toLowerCase() === '.vb'; }
-export function isDartSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, DART_EXTENSIONS); }
-export function isPhpSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, PHP_EXTENSIONS); }
+export function isDartSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, DART_EXTENSION_SET); }
+export function isPhpSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, PHP_EXTENSION_SET); }
 
 // scip-query: ignore-wrapper — public predicate naming the family-for-extension
 // concept; called from utils.ts which uses it across many call sites.
 export function extensionFamilyFor(relativePath: string): readonly string[] {
   const ext = extname(relativePath).toLowerCase();
   for (const family of LANGUAGE_EXTENSION_FAMILIES) {
-    if ((family as readonly string[]).includes(ext)) return family;
+    if (family.lookup.has(ext)) return family.extensions;
   }
   return JS_EXTENSIONS;
 }
@@ -295,7 +308,7 @@ export function resolveDartImportPath(
 
 function pythonCandidateImportPaths(basePath: string): string[] {
   const ext = extname(basePath);
-  if (PYTHON_EXTENSIONS.includes(ext as typeof PYTHON_EXTENSIONS[number])) {
+  if (PYTHON_EXTENSION_SET.has(ext)) {
     return [basePath];
   }
 
@@ -323,7 +336,7 @@ function firstIndexedOrExistingPath(
 
 function rustCandidateImportPaths(basePath: string): string[] {
   const ext = extname(basePath);
-  if (RUST_EXTENSIONS.includes(ext as typeof RUST_EXTENSIONS[number])) {
+  if (RUST_EXTENSION_SET.has(ext)) {
     return [basePath];
   }
 
@@ -335,7 +348,7 @@ function rustCandidateImportPaths(basePath: string): string[] {
 
 function rubyCandidateImportPaths(basePath: string): string[] {
   const ext = extname(basePath);
-  if (RUBY_EXTENSIONS.includes(ext as typeof RUBY_EXTENSIONS[number])) {
+  if (RUBY_EXTENSION_SET.has(ext)) {
     return [basePath];
   }
 
@@ -347,7 +360,7 @@ function rubyCandidateImportPaths(basePath: string): string[] {
 
 function dartCandidateImportPaths(basePath: string): string[] {
   const ext = extname(basePath);
-  if (DART_EXTENSIONS.includes(ext as typeof DART_EXTENSIONS[number])) {
+  if (DART_EXTENSION_SET.has(ext)) {
     return [basePath];
   }
 

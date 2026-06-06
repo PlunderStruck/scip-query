@@ -11,9 +11,11 @@
     "incremental": true,
     "tsBuildInfoFile": "dist/.tsbuildinfo",
     "strict": true,
+    "strictFunctionTypes": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
+    "types": ["node"],
     "resolveJsonModule": true,
     "isolatedModules": true
   },

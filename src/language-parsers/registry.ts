@@ -19,61 +19,61 @@ import { parseRustExports, parseRustImports } from './rust.js';
 import type { LanguageParser } from './types.js';
 import { selectParser } from './types.js';
 
-const javascript: LanguageParser = {
+const javascript = {
   language: 'javascript',
   extensions: ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs', '.vue'],
   parseImports: parseJavaScriptImports,
-};
+} satisfies LanguageParser;
 
-const python: LanguageParser = {
+const python = {
   language: 'python',
   extensions: ['.py', '.pyi'],
   parseImports: parsePythonImports,
-};
+} satisfies LanguageParser;
 
-const jvm: LanguageParser = {
+const jvm = {
   language: 'jvm',
   extensions: ['.java', '.scala', '.kt', '.kts'],
   parseImports: parseJvmImports,
-};
+} satisfies LanguageParser;
 
-const rust: LanguageParser = {
+const rust = {
   language: 'rust',
   extensions: ['.rs'],
   parseImports: parseRustImports,
   parseExports: parseRustExports,
-};
+} satisfies LanguageParser;
 
-const ruby: LanguageParser = {
+const ruby = {
   language: 'ruby',
   extensions: ['.rb'],
   parseImports: parseRubyImports,
-};
+} satisfies LanguageParser;
 
-const cLike: LanguageParser = {
+const cLike = {
   language: 'c/cpp',
   extensions: ['.c', '.h', '.cc', '.cpp', '.cxx', '.hpp', '.hh', '.hxx'],
   parseImports: parseCLikeImports,
-};
+} satisfies LanguageParser;
 
-const dotnet: LanguageParser = {
+const dotnet = {
   language: 'dotnet',
   extensions: ['.cs', '.vb'],
   parseImports: parseDotNetImports,
-};
+} satisfies LanguageParser;
 
-const dart: LanguageParser = {
+const dart = {
   language: 'dart',
   extensions: ['.dart'],
   parseImports: parseDartImports,
   parseExports: parseDartExports,
-};
+} satisfies LanguageParser;
 
-const php: LanguageParser = {
+const php = {
   language: 'php',
   extensions: ['.php'],
   parseImports: parsePhpImports,
-};
+} satisfies LanguageParser;
 
 const REGISTRY: ReadonlyArray<LanguageParser> = [
   javascript, python, jvm, rust, ruby, cLike, dotnet, dart, php,

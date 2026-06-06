@@ -7,6 +7,18 @@ import { resolveImportPath } from '../../resolution/import-path-resolver.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { leafName } from '../../symbols/symbol-parser.js';
 import type {
+  CallExpression,
+  Identifier,
+  ImportDeclaration,
+  NewExpression,
+  Node,
+  Project,
+  ReferencedSymbol,
+  SourceFile,
+  Symbol,
+} from 'ts-morph';
+import type * as TsMorph from 'ts-morph';
+import type {
   SemanticAvailability,
   SemanticCallee,
   SemanticImportUsage,
@@ -16,16 +28,7 @@ import type {
 } from '../types.js';
 import { discoverTypeScriptTsconfigs } from './tsconfig-discovery.js';
 
-type TsMorphModule = typeof import('ts-morph');
-type Project = import('ts-morph').Project;
-type SourceFile = import('ts-morph').SourceFile;
-type Node = import('ts-morph').Node;
-type CallExpression = import('ts-morph').CallExpression;
-type NewExpression = import('ts-morph').NewExpression;
-type ImportDeclaration = import('ts-morph').ImportDeclaration;
-type Identifier = import('ts-morph').Identifier;
-type ReferencedSymbol = import('ts-morph').ReferencedSymbol;
-type Symbol = import('ts-morph').Symbol;
+type TsMorphModule = typeof TsMorph;
 
 interface ProjectBundle {
   tsconfigPath: string;
@@ -399,37 +402,9 @@ class TsMorphSemanticProvider implements SemanticProvider {
     return cached(this.fileDefinitionNodeCache, relativePath, () => {
       const sourceFile = this.sourceFile(relativePath);
       if (!sourceFile) return new Map();
-      const definitionsByLeaf = new Map<string, IndexedDefinition[]>();
-      for (const definition of getDefinitionsForFile(this.db, relativePath)) {
-        const leaf = leafName(definition.symbol) ?? definition.leaf;
-        if (!leaf) continue;
-        let bucket = definitionsByLeaf.get(leaf);
-        if (!bucket) {
-          bucket = [];
-          definitionsByLeaf.set(leaf, bucket);
-        }
-        bucket.push(definition);
-      }
+      const definitionsByLeaf = definitionsByLeafForFile(this.db, relativePath);
       if (definitionsByLeaf.size === 0) return new Map();
-
-      const nodes = new Map<number, Node>();
-      const distanceBySymbolId = new Map<number, number>();
-      sourceFile.forEachDescendant((node) => {
-        for (const name of nodeNames(this.tsMorph, node)) {
-          const definitions = definitionsByLeaf.get(name);
-          if (!definitions) continue;
-          const line = lineOf(sourceFile, node);
-          for (const definition of definitions) {
-            if (line < definition.startLine - 1 || line > definition.endLine + 1) continue;
-            const distance = Math.abs(line - definition.startLine);
-            const previous = distanceBySymbolId.get(definition.symbolId);
-            if (previous !== undefined && previous <= distance) continue;
-            distanceBySymbolId.set(definition.symbolId, distance);
-            nodes.set(definition.symbolId, node);
-          }
-        }
-      });
-      return nodes;
+      return matchDefinitionNodes(this.tsMorph, sourceFile, definitionsByLeaf);
     });
   }
 
@@ -530,6 +505,46 @@ function importIdentifiers(declaration: ImportDeclaration): ImportIdentifierEntr
     });
   }
   return out;
+}
+
+function definitionsByLeafForFile(db: ScipDatabase, relativePath: string): Map<string, IndexedDefinition[]> {
+  const definitionsByLeaf = new Map<string, IndexedDefinition[]>();
+  for (const definition of getDefinitionsForFile(db, relativePath)) {
+    const leaf = leafName(definition.symbol) ?? definition.leaf;
+    if (!leaf) continue;
+    let bucket = definitionsByLeaf.get(leaf);
+    if (!bucket) {
+      bucket = [];
+      definitionsByLeaf.set(leaf, bucket);
+    }
+    bucket.push(definition);
+  }
+  return definitionsByLeaf;
+}
+
+function matchDefinitionNodes(
+  tsMorph: TsMorphModule,
+  sourceFile: SourceFile,
+  definitionsByLeaf: ReadonlyMap<string, readonly IndexedDefinition[]>,
+): Map<number, Node> {
+  const nodes = new Map<number, Node>();
+  const distanceBySymbolId = new Map<number, number>();
+  sourceFile.forEachDescendant((node) => {
+    for (const name of nodeNames(tsMorph, node)) {
+      const definitions = definitionsByLeaf.get(name);
+      if (!definitions) continue;
+      const line = lineOf(sourceFile, node);
+      for (const definition of definitions) {
+        if (line < definition.startLine - 1 || line > definition.endLine + 1) continue;
+        const distance = Math.abs(line - definition.startLine);
+        const previous = distanceBySymbolId.get(definition.symbolId);
+        if (previous !== undefined && previous <= distance) continue;
+        distanceBySymbolId.set(definition.symbolId, distance);
+        nodes.set(definition.symbolId, node);
+      }
+    }
+  });
+  return nodes;
 }
 
 function typeOnlyImportUsage(

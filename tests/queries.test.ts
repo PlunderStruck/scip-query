@@ -17,7 +17,7 @@ import type { ScipQueryConfig } from '../src/domain/types.js';
  */
 function createFixtureDb(dbPath: string): void {
   const sqliteDb = new Database(dbPath);
-  const run = (sql: string) => sqliteDb.exec(sql);  // eslint-disable-line -- sqlite exec, not child_process
+  const run = (sql: string) => sqliteDb.exec(sql);
 
   // Create the SCIP SQLite schema
   run(`

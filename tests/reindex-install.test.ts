@@ -1,16 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type * as NodeFs from 'node:fs';
+import type * as Install from '../src/reindex/install.js';
 
-type InstallModule = typeof import('../src/reindex/install.js');
+type InstallModule = typeof Install;
+type ExecFileSyncMock = (...args: unknown[]) => unknown;
 
 async function loadInstall(
-  execFileSyncImpl: (...args: any[]) => any,
+  execFileSyncImpl: ExecFileSyncMock,
   options?: {
     platform?: 'linux' | 'darwin' | 'win32';
     existsSyncImpl?: (path: string) => boolean;
   },
 ): Promise<InstallModule> {
   vi.resetModules();
-  const actualFs = await vi.importActual<typeof import('node:fs')>('node:fs');
+  const actualFs = await vi.importActual<typeof NodeFs>('node:fs');
   vi.doMock('node:os', () => ({
     platform: () => options?.platform ?? 'linux',
   }));

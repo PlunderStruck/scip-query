@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type * as ScipCli from '../src/runtime/scip-cli.js';
 
-type ScipCliModule = typeof import('../src/runtime/scip-cli.js');
+type ScipCliModule = typeof ScipCli;
+type ExecFileSyncMock = (...args: unknown[]) => unknown;
 
 async function loadScipCli(opts: {
   platform: NodeJS.Platform;
   arch: string;
   isBinaryAvailable?: (name: string) => boolean;
-  execFileSync?: (...args: any[]) => any;
+  execFileSync?: ExecFileSyncMock;
 }) {
   const userIsBinary = opts.isBinaryAvailable;
   const userExec = opts.execFileSync;
@@ -17,7 +19,7 @@ async function loadScipCli(opts: {
   // helper's return value is driven by the test. Otherwise defer to the
   // test's execFileSync (or the no-op default) so unrelated tests keep
   // their existing behavior.
-  const execFileSync = vi.fn((cmd: string, args: readonly string[], ...rest: any[]) => {
+  const execFileSync = vi.fn((cmd: string, args: readonly string[], ...rest: unknown[]) => {
     if (userIsBinary && (cmd === 'which' || cmd === 'where') && Array.isArray(args)) {
       if (isBinaryAvailable(args[0]!)) return Buffer.from('');
       throw new Error(`${args[0]} not found`);

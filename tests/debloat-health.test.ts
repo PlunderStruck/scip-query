@@ -13,7 +13,7 @@ import type { ScipQueryConfig } from '../src/domain/types.js';
 
 function createDebloatFixtureDb(dbPath: string): void {
   const sqliteDb = new Database(dbPath);
-  const run = (sql: string) => sqliteDb.exec(sql); // eslint-disable-line -- sqlite exec, not child_process
+  const run = (sql: string) => sqliteDb.exec(sql);
 
   run(`
     CREATE TABLE documents (
