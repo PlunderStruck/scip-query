@@ -1,8 +1,42 @@
 # scip-query
 
-Language-agnostic code intelligence CLI powered by [SCIP](https://github.com/sourcegraph/scip) indexes. Index any codebase, then query it for references, dependencies, dead code, similarity, coupling, and more — without an IDE or language server running.
+Language-agnostic code intelligence CLI powered by [SCIP](https://github.com/sourcegraph/scip) indexes. Index a codebase once, then ask direct questions about symbols, references, dependencies, dead code, similarity, coupling, impact, and health without keeping an IDE or language server running.
 
 Works with every language that has a SCIP indexer: TypeScript, JavaScript, Vue, Java, Scala, Kotlin, Rust, Python, Ruby, Go, C/C++, C#, Visual Basic, Dart, PHP.
+
+## Purpose
+
+`scip-query` exists to make codebase understanding operational. A large codebase is a collection of source files, symbols, and dependency paths that people need to change without accidentally breaking users. This project turns compiler-produced code intelligence into terminal commands that answer the questions engineers and agents ask before they edit:
+
+- What is defined here?
+- Who uses this symbol?
+- What depends on this file?
+- What changes if I modify this API?
+- Which cleanup findings are backed by real reference evidence?
+- Where is the architecture drifting, duplicating work, or hiding complexity?
+
+The vision is a reliable code-intelligence layer for both humans and coding agents: fast enough to use during ordinary development, accurate enough to trust for planning, and explicit about confidence when an analysis moves beyond compiler-backed facts.
+
+## Problems It Solves
+
+- **Navigation without IDE state.** Query definitions, references, outlines, members, call graphs, and source snippets from a terminal or automation loop.
+- **Change planning.** Use `affected`, `change-surface`, and `diff-impact` to identify downstream consumers before and after a change.
+- **Architecture visibility.** Use `deps`, `rdeps`, `system`, `surface`, `coupling`, `cycles`, and `deep-chains` to see how modules actually relate.
+- **Codebase cleanup.** Use `dead`, `stale-abstractions`, `wrapper-candidates`, `passthrough-candidates`, `similar`, `similar-signatures`, `extract-candidates`, and `drift` to find removal or consolidation opportunities.
+- **Health reporting.** Use `health` to aggregate cleanup signals into one prioritized report instead of running dozens of commands by hand.
+- **Agent workflows.** Install the bundled Codex/Claude skills so agents can explore, plan, de-bloat, and verify changes with a consistent command vocabulary.
+
+## Accuracy Model
+
+A SCIP index is a database-shaped record of code facts produced by language-aware indexers: the source files they read, the symbols they define, and the references they resolve. Because these facts come from compilers, type checkers, or language servers, direct definition and reference queries are much stronger evidence than text search.
+
+`scip-query` separates three kinds of evidence:
+
+- **Compiler-backed facts** come from the SCIP database. Commands like `symbols`, `refs`, `trace`, `deps`, `rdeps`, `surface`, and most symbol-level counts start here.
+- **Semantic augmentation** adds language-specific checks when available. TypeScript projects use `ts-morph` to verify references, import usage, callers, callees, and signatures when SCIP alone is incomplete.
+- **Source-backed heuristics** use parsed source text or ASTs to keep higher-level cleanup commands useful when an indexer omits call-site details. These findings are designed as investigation leads, not blind deletion instructions.
+
+The goal is not to replace compiler facts with regexes. The goal is to use the strongest available evidence first, fall back only when needed, and keep cleanup commands conservative enough that speed does not trade away accuracy.
 
 ## Workflows
 
@@ -14,12 +48,15 @@ For goal-oriented usage guides (not just command reference), see **[Agent Guide]
 - **[Assess code quality](docs/AGENT_GUIDE.md#workflow-4-assess-code-quality-and-risk)** — health score, complexity hotspots, coupling risks
 - **[Verify change impact](docs/AGENT_GUIDE.md#workflow-5-understand-impact-after-making-changes)** — diff impact, transitive blast radius, consumer blast radius
 
+Historical implementation plans and completed cleanup notes live in [`docs/plans/`](docs/plans/).
+
 ## Quick Start
 
 ```bash
 # Install
 npm install -g scip-query
-scip-query install-skills            # installs built-in Codex/Claude skills, including scip-language-playbook
+scip-query check-deps                # verify optional indexers and parser support
+scip-query install-skills            # install built-in Codex/Claude skills
 
 # Index your project (auto-detects language)
 scip-query reindex
@@ -38,7 +75,7 @@ scip-query diff-impact                   # what did my changes affect?
 ## Prerequisites
 
 - **Node.js** >= 18
-- **scip** CLI — [Install from releases](https://github.com/sourcegraph/scip/releases) (converts index to SQLite)
+- **scip** CLI - [Install from releases](https://github.com/sourcegraph/scip/releases) (converts index data to SQLite)
 - A language-specific SCIP indexer for your project:
 
 | Language | Indexer | Install |
@@ -60,11 +97,11 @@ Vue single-file components (`.vue`) are handled by the JavaScript/TypeScript ind
 
 ## How It Works
 
-1. A SCIP indexer analyzes your source code using the actual compiler/type checker and produces a `index.scip` protobuf file containing every symbol, definition, and reference — fully type-resolved.
+1. A SCIP indexer analyzes your source code using the actual compiler/type checker and produces a `index.scip` protobuf file containing symbols, definitions, and references.
 2. The `scip` CLI converts the protobuf to a SQLite database (`index.db`).
-3. `scip-query` runs SQL queries against that database to answer questions about your codebase.
+3. `scip-query` runs SQL queries and language-aware source augmentation against that database to answer questions about your codebase.
 
-Because the index comes from the real compiler, direct symbol, definition, and reference queries are precise — not grep-based approximations. When a language index is missing enough call-site detail for higher-level analyses, `scip-query` can fall back to source parsing and identifier recovery so those commands stay useful, but they should be treated as source-backed heuristics rather than compiler-proof facts.
+Because the index comes from real language tooling, direct symbol, definition, and reference queries are precise, not grep-based approximations. When a language index is missing enough call-site detail for higher-level analyses, `scip-query` can fall back to AST parsing, semantic providers, and identifier recovery so those commands stay useful while still reporting conservative results.
 
 ## Configuration
 
