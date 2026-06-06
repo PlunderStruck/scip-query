@@ -1079,17 +1079,21 @@ describe('command accuracy fixes', () => {
           (2, 'rust', 'src/app.rs');
         INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
           (1, 'rust-analyzer cargo fixture 0.1.0 main().', 'main', 12, 'fn main()'),
-          (2, 'rust-analyzer cargo fixture 0.1.0 app/run().', 'run', 12, 'pub fn run()');
+          (2, 'rust-analyzer cargo fixture 0.1.0 app/run().', 'run', 12, 'pub fn run()'),
+          (3, 'rust-analyzer cargo fixture 0.1.0 app/RunResetResources#run.', 'run', 8, 'field run');
         INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
           (1, 1, 1, 2, 0, 4, 1),
-          (2, 2, 2, 0, 0, 2, 1);
+          (2, 2, 2, 0, 0, 2, 1),
+          (3, 2, 3, 20, 2, 20, 10);
         INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
           (1, 1, 0, 0, 4, X'00'),
-          (2, 2, 0, 0, 2, X'00');
+          (2, 2, 0, 0, 2, X'00'),
+          (3, 2, 1, 20, 20, X'00');
         INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
           (1, 1, 1),
           (1, 2, 0),
-          (2, 2, 1);
+          (2, 2, 1),
+          (3, 3, 1);
       `);
       sqliteDb.close();
 
@@ -1100,6 +1104,9 @@ describe('command accuracy fixes', () => {
       });
 
       try {
+        expect(findFirstSymbolMatch(rustDb, 'src/app.rs/run')?.symbol).toBe(
+          'rust-analyzer cargo fixture 0.1.0 app/run().',
+        );
         expect(callGraph(rustDb, 'main')?.callees.map((callee) => callee.shortName)).toEqual([
           'app:run()',
         ]);

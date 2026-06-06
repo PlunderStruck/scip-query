@@ -20,7 +20,7 @@
  * catalog and reference graph build on top.
  */
 import type { ScipDatabase } from '../storage/db.js';
-import { isFunctionLikeSymbol, isModuleLikeSymbol, leafName, shortenSymbol } from './symbol-parser.js';
+import { isCallableSymbol, isFunctionLikeSymbol, isModuleLikeSymbol, leafName, shortenSymbol } from './symbol-parser.js';
 import { hydrateSymbolMatch, parentTypeName } from './definition-catalog.js';
 import { type SymbolQueryRow } from '../storage/scip-rows.js';
 import type { SymbolLocation, SymbolMatch } from '../domain/types.js';
@@ -45,7 +45,66 @@ export function findFirstSymbolMatch(
     return fileLine;
   }
 
+  const pathQualified = findPathQualifiedSymbolMatch(db, symbolPattern);
+  if (pathQualified) {
+    return pathQualified;
+  }
+
   return findBestFuzzySymbolMatch(db, symbolPattern);
+}
+
+function findPathQualifiedSymbolMatch(db: ScipDatabase, symbolPattern: string): SymbolMatch | null {
+  const cleaned = normalizeLookupPattern(symbolPattern);
+  const pathLeaf = pathQualifiedLookup(cleaned);
+  if (!pathLeaf) return null;
+
+  const pathLike = `%${pathLeaf.path}%`;
+  const leaf = pathLeaf.leaf;
+  const primary = db.all<SymbolQueryRow>(
+    `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path, gs.display_name, gs.documentation
+     FROM global_symbols gs
+     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
+     JOIN documents d ON der.document_id = d.id
+     WHERE d.relative_path LIKE ?
+       AND (gs.display_name = ? OR gs.symbol LIKE ?)
+       ${db.pathExclusionsFor('d')}`,
+    pathLike, leaf, `%/${leaf}.%`,
+  );
+  const fallback = db.all<SymbolQueryRow>(
+    `SELECT
+      gs.id,
+      gs.symbol,
+      c.document_id,
+      MIN(c.start_line) AS start_line,
+      MAX(c.end_line) AS end_line,
+      d.relative_path,
+      gs.display_name,
+      gs.documentation
+     FROM global_symbols gs
+     JOIN mentions m ON m.symbol_id = gs.id
+     JOIN chunks c ON m.chunk_id = c.id
+     JOIN documents d ON c.document_id = d.id
+     WHERE m.role = 1
+       AND d.relative_path LIKE ?
+       AND (gs.display_name = ? OR gs.symbol LIKE ?)
+       ${db.pathExclusionsFor('d')}
+     GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path, gs.display_name, gs.documentation`,
+    pathLike, leaf, `%/${leaf}.%`,
+  );
+
+  const candidates = mergeSymbolQueryRows([], [...primary, ...fallback])
+    .filter((row) => !db.isIgnored(row.relative_path))
+    .filter((row) => pathQualifiedDirectScore(row, cleaned) > 1);
+
+  candidates.sort((left, right) =>
+    pathQualifiedDirectScore(right, cleaned) - pathQualifiedDirectScore(left, cleaned)
+    || (left.end_line - left.start_line) - (right.end_line - right.start_line)
+    || left.start_line - right.start_line
+    || left.symbol.localeCompare(right.symbol),
+  );
+
+  const best = candidates[0];
+  return best ? hydrateSymbolMatch(db, best) : null;
 }
 
 function findBestFuzzySymbolMatch(db: ScipDatabase, symbolPattern: string): SymbolMatch | null {
@@ -326,6 +385,8 @@ export function scoreSymbolCandidate(
   const display = displayCase.toLowerCase();
   const path = row.relative_path.toLowerCase();
   const looksPathLike = /[/:.]/.test(cleanedPattern);
+  const pathLeaf = pathQualifiedLookup(cleanedPattern);
+  const requestedLeaf = pathLeaf?.leaf.toLowerCase();
 
   let score = 0;
 
@@ -355,6 +416,16 @@ export function scoreSymbolCandidate(
     score += 100 + tokens.length * 15;
   }
 
+  if (pathLeaf && path.includes(pathLeaf.path.toLowerCase())) {
+    score += 360;
+    if (requestedLeaf && (leaf === requestedLeaf
+      || `${leaf}()` === requestedLeaf
+      || `${leaf}()` === `${requestedLeaf}()`)) {
+      score += 700;
+    }
+    if (isCallableSymbol(row.symbol)) score += 180;
+  }
+
   if (isFunctionLikeSymbol(row.symbol) && leaf === noParens) {
     score += 60;
   }
@@ -367,6 +438,18 @@ export function scoreSymbolCandidate(
   score -= Math.min(50, Math.max(0, row.end_line - row.start_line));
 
   return score;
+}
+
+function pathQualifiedLookup(pattern: string): { path: string; leaf: string } | null {
+  const normalized = pattern.trim().replace(/\\/g, '/');
+  const slash = normalized.lastIndexOf('/');
+  if (slash <= 0 || slash === normalized.length - 1) return null;
+  const leaf = normalized.slice(slash + 1).replace(/\(\)$/, '');
+  if (!leaf || leaf.includes('.')) return null;
+  return {
+    path: normalized.slice(0, slash),
+    leaf,
+  };
 }
 
 export function normalizeLookupPattern(symbolPattern: string): string {
@@ -398,6 +481,7 @@ export function findDirectSymbolCandidate(
       || display === trimmed
       || display === cleanedPattern
       || `${display}()` === trimmed
+      || pathQualifiedDirectScore(row, cleanedPattern) > 1
       || row.relative_path === trimmed;
   });
 
@@ -406,11 +490,25 @@ export function findDirectSymbolCandidate(
   }
 
   directMatches.sort((left, right) =>
-    (left.end_line - left.start_line) - (right.end_line - right.start_line)
+    pathQualifiedDirectScore(right, cleanedPattern) - pathQualifiedDirectScore(left, cleanedPattern)
+    || (left.end_line - left.start_line) - (right.end_line - right.start_line)
     || left.relative_path.localeCompare(right.relative_path)
     || left.symbol.localeCompare(right.symbol),
   );
   return directMatches[0] ?? null;
+}
+
+function pathQualifiedDirectScore(row: SymbolQueryRow, cleanedPattern: string): number {
+  const pathLeaf = pathQualifiedLookup(cleanedPattern);
+  if (!pathLeaf) return 0;
+  const path = row.relative_path.toLowerCase();
+  const leaf = leafName(row.symbol).toLowerCase();
+  const requestedPath = pathLeaf.path.toLowerCase();
+  const requestedLeaf = pathLeaf.leaf.toLowerCase();
+  if (!path.includes(requestedPath)) return 0;
+  if (leaf !== requestedLeaf) return 1;
+  if (isCallableSymbol(row.symbol)) return parentTypeName(row.symbol) === null ? 5 : 4;
+  return parentTypeName(row.symbol) === null ? 3 : 2;
 }
 
 // `hydrateSymbolMatch` lives in definition-catalog.ts (it's catalog work

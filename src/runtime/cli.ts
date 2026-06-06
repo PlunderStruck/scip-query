@@ -36,6 +36,10 @@ function loadCliPackageInfo(): { version: string } {
   return { version: '0.0.0' };
 }
 
+function renderHeuristicNotice(label: string): void {
+  console.log(`Heuristic ${label}: review before acting; these are candidates, not exact compiler facts.\n`);
+}
+
 // ── CLI Definition ─────────────────────────────────────────
 
 program
@@ -642,7 +646,7 @@ program
 // similar
 program
   .command('similar [symbol]')
-  .description('Find functions with similar callee fingerprints (consolidation candidates)')
+  .description('Find heuristic function similarity candidates from callee fingerprints')
   .option('--min-similarity <n>', 'Minimum Jaccard similarity (0-1)', parseFloat, 0.4)
   .option('-n, --limit <n>', 'Number of results', parseIntSafe, 20)
   .option('-s, --scope <path>', 'Limit to files matching path')
@@ -655,6 +659,7 @@ program
         limit: opts.limit,
       });
       if (results.length === 0) return render.empty('No similar symbols found.');
+      renderHeuristicNotice('similarity candidates');
       render.list(results, (r) => {
         const basis = r.similarityBasis ?? 'callees';
         const sharedLabel = basis === 'source-tokens' ? 'Shared source tokens' : 'Shared callees';
@@ -678,6 +683,7 @@ program
         crossFileOnly: opts.crossFileOnly,
       });
       if (results.length === 0) return render.empty('No similar symbol pairs found.');
+      renderHeuristicNotice('similarity candidates');
       render.list(results, (r) =>
         `\n${Math.round(r.similarity * 100)}% similar:\n` +
         `  A: ${r.shortNameA}  (${r.fileA})\n` +
@@ -691,7 +697,7 @@ program
 // similar-files
 program
   .command('similar-files [file]')
-  .description('Find files with similar dependency profiles')
+  .description('Find heuristic similar-file candidates from dependency profiles')
   .option('--min-similarity <n>', 'Minimum Jaccard similarity (0-1)', parseFloat, 0.5)
   .option('-n, --limit <n>', 'Number of results', parseIntSafe, 20)
   .option('-s, --scope <path>', 'Limit to files matching path')
@@ -705,6 +711,7 @@ program
       filePattern: file,
     });
     if (results.length === 0) return render.empty('No similar file pairs found.');
+    renderHeuristicNotice('similar file candidates');
     render.list(results, (r) => {
       const lines = [
         `\n${Math.round(r.similarity * 100)}% similar:`,
@@ -722,7 +729,7 @@ program
 // similar-chains — kept inline: enumerated `Chain pair N` headers need the index.
 program
   .command('similar-chains')
-  .description('Find end-to-end dependency flows that diverge at few points')
+  .description('Find heuristic similar-chain candidates from dependency flows')
   .option('--min-similarity <n>', 'Minimum chain similarity (0-1)', parseFloat, 0.5)
   .option('-n, --limit <n>', 'Number of results', parseIntSafe, 15)
   .option('-s, --scope <path>', 'Limit to files matching path')
@@ -737,6 +744,7 @@ program
       maxChainLength: opts.maxLength,
     });
     if (results.length === 0) return render.empty('No similar chains found.');
+    renderHeuristicNotice('similar chain candidates');
     for (let i = 0; i < results.length; i++) {
       const r = results[i]!;
       console.log(`\n── Chain pair ${i + 1} (${Math.round(r.similarity * 100)}% similar, ${r.divergencePoints.length} divergence point(s)) ──`);
@@ -755,7 +763,7 @@ program
 // extract-candidates — kept inline: enumerated `Cluster N` sub-headers need the index.
 program
   .command('extract-candidates')
-  .description('Find functions with natural extraction seams (isolated callee clusters)')
+  .description('Find heuristic extraction candidates from isolated callee clusters')
   .option('-s, --scope <path>', 'Limit to files matching path')
   .option('--min-loc <n>', 'Minimum function LOC', parseIntSafe, 10)
   .option('--min-callees <n>', 'Minimum callees to analyze', parseIntSafe, 6)
@@ -768,6 +776,7 @@ program
       limit: opts.limit,
     });
     if (results.length === 0) return render.empty('No extraction candidates found.');
+    renderHeuristicNotice('extraction candidates');
     for (const r of results) {
       console.log(`\n${displayPathRange(r.relativePath, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC, ${r.totalCallees} callees)`);
       for (let i = 0; i < r.clusters.length; i++) {
@@ -846,11 +855,12 @@ program
 // drift
 program
   .command('drift [module]')
-  .description('Detect unused imports, layer violations, and pattern deviations')
+  .description('Detect heuristic drift candidates: unused imports, layer violations, and pattern deviations')
   .option('--min-deviation <n>', 'Minimum sibling files before reporting unique dependency deviations', parsePositiveInt, 5)
   .action((module, opts) => withDb((db) => {
     const summary = queries.drift(db, { scope: module, minDeviation: opts.minDeviation });
     if (summary.results.length === 0) return render.empty('No drift detected.');
+    renderHeuristicNotice('drift candidates');
     // Original printed a leading `\n${file}` for every group — replicate by
     // emitting a leading blank line before the first group as well.
     console.log('');
@@ -869,13 +879,14 @@ program
 // wrapper-candidates
 program
   .command('wrapper-candidates')
-  .description('Find symbols only called by one consumer (premature abstractions)')
+  .description('Find heuristic wrapper candidates only called by one consumer')
   .option('-s, --scope <path>', 'Limit to files matching path')
   .option('--max-loc <n>', 'Maximum LOC for candidates', parseIntSafe, 15)
   .option('-n, --limit <n>', 'Number of results', parseIntSafe, 30)
   .action((opts) => withDb((db) => {
     const results = queries.wrapperCandidates(db, { scope: opts.scope, maxLoc: opts.maxLoc, limit: opts.limit });
     if (results.length === 0) return render.empty('No wrapper candidates found.');
+    renderHeuristicNotice('wrapper candidates');
     render.list(
       results,
       (r) =>
@@ -888,13 +899,14 @@ program
 // passthrough-candidates
 program
   .command('passthrough-candidates')
-  .description('Find functions that just forward to one other function')
+  .description('Find heuristic passthrough candidates that forward to one callee')
   .option('-s, --scope <path>', 'Limit to files matching path')
   .option('--max-loc <n>', 'Maximum LOC for candidates', parseIntSafe, 15)
   .option('-n, --limit <n>', 'Number of results', parseIntSafe, 30)
   .action((opts) => withDb((db) => {
     const results = queries.passthroughCandidates(db, { scope: opts.scope, maxLoc: opts.maxLoc, limit: opts.limit });
     if (results.length === 0) return render.empty('No passthrough candidates found.');
+    renderHeuristicNotice('passthrough candidates');
     render.list(
       results,
       (r) =>
@@ -907,7 +919,7 @@ program
 // stale-abstractions
 program
   .command('stale-abstractions')
-  .description('Find types/interfaces with 0-1 consumers (premature abstractions)')
+  .description('Find heuristic stale abstraction candidates with 0-1 consumers')
   .option('-s, --scope <path>', 'Limit to files matching path')
   .option('--min-loc <n>', 'Minimum LOC', parseIntSafe, 3)
   .option('-n, --limit <n>', 'Number of results', parseIntSafe, 30)
@@ -920,6 +932,7 @@ program
       includeLowConfidence: Boolean(opts.includeLowConfidence),
     });
     if (results.length === 0) return render.empty('No stale abstractions found.');
+    renderHeuristicNotice('stale abstraction candidates');
     render.list(results, (r) => {
       const consumerLabel = r.consumers === 0 ? 'unused' : `${r.consumers} consumer`;
       const barrelLabel = r.barrelConsumers > 0 ? `, +${r.barrelConsumers} barrel` : '';
@@ -934,13 +947,14 @@ program
 // complexity-hotspots
 program
   .command('complexity-hotspots')
-  .description('Composite complexity score: LOC x fan-in x fan-out')
+  .description('Find heuristic complexity hotspot candidates from LOC x fan-in x fan-out')
   .option('-s, --scope <path>', 'Limit to files matching path')
   .option('--min-loc <n>', 'Minimum LOC', parseIntSafe, 10)
   .option('-n, --limit <n>', 'Number of results', parseIntSafe, 20)
   .action((opts) => withDb((db) => {
     const results = queries.complexityHotspots(db, { scope: opts.scope, minLoc: opts.minLoc, limit: opts.limit });
     if (results.length === 0) return render.empty('No complexity hotspots found.');
+    renderHeuristicNotice('complexity hotspot candidates');
     // Header `LOC` is 3 chars but the body column pads to 4, so override
     // dash widths to match the data widths rather than header lengths.
     render.table(

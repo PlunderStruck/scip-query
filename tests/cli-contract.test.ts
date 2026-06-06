@@ -51,4 +51,20 @@ describe('CLI contract', () => {
       '--base <ref>',
     ]);
   });
+
+  it('labels heuristic commands as candidates in command descriptions', () => {
+    for (const name of [
+      'similar',
+      'similar-files',
+      'similar-chains',
+      'extract-candidates',
+      'drift',
+      'wrapper-candidates',
+      'passthrough-candidates',
+      'stale-abstractions',
+      'complexity-hotspots',
+    ]) {
+      expect(command(name).description().toLowerCase()).toContain('candidate');
+    }
+  });
 });
