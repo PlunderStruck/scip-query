@@ -161,6 +161,11 @@ The TypeScript+Python Vega index exposed several non-dead-code accuracy bugs:
   name matched a unique TypeScript symbol. For example, `os.path.exists()` in
   `scripts/generate_checklist.py` was resolved to a TypeScript `exists()`
   helper. AST leaf fallback now stays inside the source language family.
+- `diff-impact` built its changed symbol list from raw definition mentions,
+  so module surfaces and nested property/data members could flood the impact
+  report. It now uses the canonical per-file definition catalog and filters
+  changed symbols to meaningful callables, types, and externally consumed
+  top-level values.
 
 Vega spot checks after the fixes:
 
@@ -182,6 +187,10 @@ bottlenecks --scope apps/api/src/modules/issues --limit 15
 call-graph parse_cov
   no project callees for Python os.path.exists()
 
+diff-impact --base HEAD~1
+  changed symbol count dropped from 475 to 173
+  no archiveState0/status0/key0-style property noise in sampled output
+
 reindex --language python --force
   Indexed python in 4.4s with scip-python-plus
   symbols scripts/generate_checklist.py returned parse_cov() and generate_checklist()
@@ -196,7 +205,7 @@ init / status / check-deps / install-skills
   exercised with temp HOME/project roots or the Vega cache
 ```
 
-### Remaining command accuracy concerns
+### Interpretation notes
 
 - `drift` is noisy at Vega scale because many sibling directories naturally
   have unique dependency edges. Unique dependency edges are observations, not

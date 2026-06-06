@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process';
 import type { ScipDatabase } from '../storage/db.js';
-import type { DiffImpactResult } from '../domain/types.js';
-import { shortenSymbol } from '../symbols/symbol-parser.js';
+import type { DiffImpactResult, IndexedDefinition } from '../domain/types.js';
+import { ProjectIndex } from '../core/project-index.js';
+import { isCallableSymbol, isModuleLikeSymbol, shortenSymbol } from '../symbols/symbol-parser.js';
 
 /**
  * Given a git diff, compute the affected symbol set.
@@ -49,22 +50,20 @@ export function diffImpact(
 
   // Match changed files against the index
   const changedFiles: string[] = [];
-  const changedDocIds: number[] = [];
 
   for (const file of changedFileLines) {
-    const doc = db.get<{ id: number; relative_path: string }>(
-      `SELECT id, relative_path FROM documents
+    const doc = db.get<{ relative_path: string }>(
+      `SELECT relative_path FROM documents
        WHERE relative_path LIKE ?
        LIMIT 1`,
       `%${file}`,
     );
     if (doc && !db.isIgnored(doc.relative_path)) {
       changedFiles.push(doc.relative_path);
-      changedDocIds.push(doc.id);
     }
   }
 
-  if (changedDocIds.length === 0) {
+  if (changedFiles.length === 0) {
     return {
       changedFiles: changedFileLines,
       changedSymbols: [],
@@ -78,30 +77,17 @@ export function diffImpact(
     };
   }
 
-  // Get all symbols defined in changed files
-  const docPlaceholders = changedDocIds.map(() => '?').join(',');
-  const syms = db.all<{
-    symbol_id: number;
-    symbol: string;
-    relative_path: string;
-  }>(
-    `SELECT DISTINCT gs.id AS symbol_id, gs.symbol, d.relative_path
-    FROM mentions m
-    JOIN chunks c ON m.chunk_id = c.id
-    JOIN global_symbols gs ON m.symbol_id = gs.id
-    JOIN documents d ON c.document_id = d.id
-    WHERE m.role = 1
-      AND c.document_id IN (${docPlaceholders})
-      ${db.symbolNoiseFor('gs')}
-    ORDER BY d.relative_path`,
-    ...changedDocIds,
-  );
+  const index = new ProjectIndex(db);
+  const changedFileSet = new Set(changedFiles);
+  const defs = changedFiles.flatMap((file) => index.definitionsForFile(file))
+    .filter(isDiffImpactCandidate)
+    .sort((a, b) => a.relativePath.localeCompare(b.relativePath) || a.startLine - b.startLine);
 
   // For each symbol, compute fan-in (distinct referencing documents)
   const changedSymbols: DiffImpactResult['changedSymbols'] = [];
   const consumerMap = new Map<string, Set<string>>(); // file -> set of consumed symbol shortNames
 
-  for (const sym of syms) {
+  for (const def of defs) {
     // Fan-in: distinct files that reference this symbol
     const fanInRow = db.get<{ fan_in: number }>(
       `SELECT COUNT(DISTINCT c.document_id) AS fan_in
@@ -109,16 +95,18 @@ export function diffImpact(
       JOIN chunks c ON m.chunk_id = c.id
       WHERE m.symbol_id = ?
         AND m.role != 1`,
-      sym.symbol_id,
+      def.symbolId,
     );
 
     const fanIn = fanInRow?.fan_in ?? 0;
-    const shortName = shortenSymbol(sym.symbol);
+    if (!shouldReportChangedDefinition(def, fanIn)) continue;
+
+    const shortName = shortenSymbol(def.symbol);
 
     changedSymbols.push({
-      symbol: sym.symbol,
+      symbol: def.symbol,
       shortName,
-      file: sym.relative_path,
+      file: def.relativePath,
       fanIn,
     });
 
@@ -132,12 +120,13 @@ export function diffImpact(
         AND m.role != 1
         AND ref_d.relative_path NOT IN (${changedFiles.map(() => '?').join(',')})
         ${db.pathExclusionsFor('ref_d')}`,
-      sym.symbol_id,
+      def.symbolId,
       ...changedFiles,
     );
 
     for (const consumer of consumers) {
       if (db.isIgnored(consumer.relative_path)) continue;
+      if (changedFileSet.has(consumer.relative_path)) continue;
       if (!consumerMap.has(consumer.relative_path)) {
         consumerMap.set(consumer.relative_path, new Set());
       }
@@ -185,4 +174,16 @@ function getChangedFiles(projectRoot: string, base: string): string[] {
       .map((line) => line.trim())
       .filter((line) => line.length > 0),
   )];
+}
+
+function isDiffImpactCandidate(definition: IndexedDefinition): boolean {
+  if (isModuleLikeSymbol(definition.symbol)) return false;
+  if (definition.parentTypeName !== null && !isCallableSymbol(definition.symbol)) return false;
+  return true;
+}
+
+function shouldReportChangedDefinition(definition: IndexedDefinition, fanIn: number): boolean {
+  if (isCallableSymbol(definition.symbol)) return true;
+  if (definition.isTypeLike) return true;
+  return definition.parentTypeName === null && fanIn > 0;
 }

@@ -1,0 +1,171 @@
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import Database from 'better-sqlite3';
+import { afterEach, describe, expect, it } from 'vitest';
+import type { ScipQueryConfig } from '../src/domain/types.js';
+import { diffImpact } from '../src/queries/diff-impact.js';
+import { ScipDatabase } from '../src/storage/db.js';
+
+function createSchema(sqliteDb: Database.Database): void {
+  sqliteDb.exec(`
+    CREATE TABLE documents (
+      id INTEGER PRIMARY KEY,
+      language TEXT,
+      relative_path TEXT NOT NULL UNIQUE,
+      position_encoding TEXT,
+      text TEXT
+    );
+    CREATE TABLE global_symbols (
+      id INTEGER PRIMARY KEY,
+      symbol TEXT NOT NULL UNIQUE,
+      display_name TEXT,
+      kind INTEGER,
+      documentation TEXT,
+      signature BLOB,
+      enclosing_symbol TEXT,
+      relationships BLOB
+    );
+    CREATE TABLE defn_enclosing_ranges (
+      id INTEGER PRIMARY KEY,
+      document_id INTEGER NOT NULL,
+      symbol_id INTEGER NOT NULL,
+      start_line INTEGER NOT NULL,
+      start_char INTEGER NOT NULL,
+      end_line INTEGER NOT NULL,
+      end_char INTEGER NOT NULL
+    );
+    CREATE TABLE mentions (
+      chunk_id INTEGER NOT NULL,
+      symbol_id INTEGER NOT NULL,
+      role INTEGER NOT NULL,
+      PRIMARY KEY (chunk_id, symbol_id, role)
+    );
+    CREATE TABLE chunks (
+      id INTEGER PRIMARY KEY,
+      document_id INTEGER NOT NULL,
+      chunk_index INTEGER NOT NULL,
+      start_line INTEGER NOT NULL,
+      end_line INTEGER NOT NULL,
+      occurrences BLOB NOT NULL
+    );
+    CREATE INDEX idx_mentions_symbol_id_role ON mentions(symbol_id, role);
+    CREATE INDEX idx_defn_enclosing_ranges_symbol_id ON defn_enclosing_ranges(symbol_id);
+    CREATE INDEX idx_defn_enclosing_ranges_document ON defn_enclosing_ranges(document_id, start_line, end_line);
+    CREATE INDEX idx_chunks_doc_id ON chunks(document_id);
+    CREATE INDEX idx_global_symbols_symbol ON global_symbols(symbol);
+  `);
+}
+
+function createFixtureDb(dbPath: string): void {
+  const sqliteDb = new Database(dbPath);
+  createSchema(sqliteDb);
+
+  sqliteDb.exec(`
+    INSERT INTO documents (id, language, relative_path) VALUES
+      (1, 'typescript', 'src/model.ts'),
+      (2, 'typescript', 'src/consumer.ts');
+
+    INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
+      (1, 'scip-typescript npm pkg 1.0.0 src/\`model.ts\`/', '', 1, 'module'),
+      (2, 'scip-typescript npm pkg 1.0.0 src/\`model.ts\`/User#', 'User', 11, 'interface User'),
+      (3, 'scip-typescript npm pkg 1.0.0 src/\`model.ts\`/User#name.', 'name', 8, 'property name'),
+      (4, 'scip-typescript npm pkg 1.0.0 src/\`model.ts\`/updateUser().', 'updateUser', 3, 'function updateUser'),
+      (5, 'scip-typescript npm pkg 1.0.0 src/\`model.ts\`/DEFAULT_STATUS.', 'DEFAULT_STATUS', 8, 'const DEFAULT_STATUS');
+
+    INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+      (1, 1, 1, 0, 0, 7, 0),
+      (2, 1, 2, 0, 0, 2, 0),
+      (3, 1, 3, 1, 2, 1, 14),
+      (4, 1, 4, 4, 0, 4, 40),
+      (5, 1, 5, 6, 0, 6, 34);
+
+    INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+      (1, 1, 0, 0, 7, X'00'),
+      (2, 2, 0, 0, 4, X'00');
+
+    INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+      (1, 1, 1),
+      (1, 2, 1),
+      (1, 3, 1),
+      (1, 4, 1),
+      (1, 5, 1),
+      (2, 2, 0),
+      (2, 3, 0),
+      (2, 4, 0),
+      (2, 5, 0);
+  `);
+
+  sqliteDb.close();
+}
+
+describe('diff-impact accuracy', () => {
+  let tempDir: string | null = null;
+
+  afterEach(() => {
+    if (tempDir) rmSync(tempDir, { recursive: true, force: true });
+    tempDir = null;
+  });
+
+  it('reports meaningful changed definitions without module or property-member noise', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-query-diff-impact-'));
+    mkdirSync(join(tempDir, 'src'), { recursive: true });
+    writeFileSync(
+      join(tempDir, 'src', 'model.ts'),
+      [
+        'export interface User {',
+        '  name: string;',
+        '}',
+        '',
+        'export function updateUser(user: User) { return user; }',
+        '',
+        "export const DEFAULT_STATUS = 'open';",
+        '',
+      ].join('\n'),
+    );
+    writeFileSync(
+      join(tempDir, 'src', 'consumer.ts'),
+      [
+        "import { DEFAULT_STATUS, type User, updateUser } from './model';",
+        '',
+        'const user: User = { name: DEFAULT_STATUS };',
+        'updateUser(user);',
+        '',
+      ].join('\n'),
+    );
+
+    execFileSync('git', ['init'], { cwd: tempDir, stdio: 'ignore' });
+    execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: tempDir });
+    execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: tempDir });
+    execFileSync('git', ['add', '.'], { cwd: tempDir });
+    execFileSync('git', ['commit', '-m', 'initial'], { cwd: tempDir, stdio: 'ignore' });
+    writeFileSync(join(tempDir, 'src', 'model.ts'), '// touched\n', { flag: 'a' });
+
+    const dbPath = join(tempDir, 'index.db');
+    createFixtureDb(dbPath);
+    const config: ScipQueryConfig = {
+      dbPath,
+      indexPath: join(tempDir, 'index.scip'),
+      projectRoot: tempDir,
+    };
+    const db = new ScipDatabase(config);
+
+    try {
+      const result = diffImpact(db, { base: 'HEAD' });
+      const shortNames = result.changedSymbols.map((symbol) => symbol.shortName);
+
+      expect(result.changedFiles).toEqual(['src/model.ts']);
+      expect(shortNames).toEqual([
+        'src:model:User',
+        'src:model:updateUser()',
+        'src:model:DEFAULT_STATUS',
+      ]);
+      expect(shortNames).not.toContain('src:model:User:name');
+      expect(result.changedSymbols.some((symbol) => symbol.symbol.endsWith('`model.ts`/'))).toBe(false);
+      expect(result.affectedConsumers).toEqual([{ file: 'src/consumer.ts', consumedSymbols: 3 }]);
+    } finally {
+      db.close();
+    }
+  });
+});
