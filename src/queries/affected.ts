@@ -4,7 +4,7 @@ import { findEnclosingDefinition } from '../symbols/definition-catalog.js';
 import { getCallerRowsForSymbol } from '../symbols/reference-graph.js';
 import type { SymbolMatch } from '../domain/types.js';
 import type { AffectedResult } from '../domain/types.js';
-import { shortenSymbol } from '../symbols/symbol-parser.js';
+import { leafSuffix, shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
 
 /**
@@ -135,6 +135,9 @@ function getDirectAffectedRows(
     if (match.symbolId === target.symbolId || db.isIgnored(match.relativePath)) {
       continue;
     }
+    if (!canPropagateImpact(match.symbol)) {
+      continue;
+    }
 
     const key = `${match.symbolId}|${match.relativePath}`;
     if (seen.has(key)) continue;
@@ -149,4 +152,9 @@ function getDirectAffectedRows(
   }
 
   return results;
+}
+
+function canPropagateImpact(symbol: string): boolean {
+  const suffix = leafSuffix(symbol);
+  return suffix === 'method' || suffix === 'type' || symbol.endsWith('().');
 }

@@ -67,7 +67,7 @@ export function getDefinitionsForFile(
       relativePath,
     );
 
-    const fallback = primary.length > 0 ? [] : db.all<SymbolQueryRow>(
+    const fallback = db.all<SymbolQueryRow>(
       `SELECT
         gs.id,
         gs.symbol,
@@ -91,10 +91,11 @@ export function getDefinitionsForFile(
       relativePath,
     );
 
+    const rows = mergeDefinitionRows(primary, fallback);
     return correctDefinitionRangesFromSource(
       db,
       relativePath,
-      (primary.length > 0 ? primary : fallback).map((row) => ({
+      rows.map((row) => ({
         symbolId: row.id,
         symbol: row.symbol,
         documentId: row.document_id,
@@ -111,6 +112,33 @@ export function getDefinitionsForFile(
       })),
     );
   });
+}
+
+function mergeDefinitionRows(
+  primary: readonly SymbolQueryRow[],
+  fallback: readonly SymbolQueryRow[],
+): SymbolQueryRow[] {
+  const byId = new Map<number, SymbolQueryRow>();
+  for (const row of fallback) {
+    if (primary.length > 0 && !isPreciseMixedFallbackRow(row)) continue;
+    byId.set(row.id, row);
+  }
+  for (const row of primary) byId.set(row.id, row);
+  return [...byId.values()].sort((left, right) =>
+    left.start_line - right.start_line
+    || left.end_line - right.end_line
+    || left.symbol.localeCompare(right.symbol),
+  );
+}
+
+function isPreciseMixedFallbackRow(row: SymbolQueryRow): boolean {
+  if (parentTypeName(row.symbol) !== null) return false;
+  const documentation = row.documentation ?? '';
+  const cleaned = documentation
+    .replace(/^```\w*\s*/, '')
+    .replace(/\s*```$/, '')
+    .trim();
+  return /^(?:var|let|const|function|class|interface|type|enum)\b/.test(cleaned);
 }
 
 export function getAllDefinitions(
@@ -246,16 +274,17 @@ export function correctDefinitionRangesFromSource(
   relativePath: string,
   definitions: IndexedDefinition[],
 ): IndexedDefinition[] {
+  const source = getSourceText(db, relativePath);
+
   // Tree-sitter path: gives both startLine and endLine in one shot from the
   // parsed AST, so no brace-counting or regex sweeps are needed. This is the
   // primary path for Rust / TS / JS / Python.
   const callables = getCallableSites(db, relativePath);
   if (callables) {
-    return correctDefinitionRangesFromAst(definitions, callables);
+    return correctDefinitionRangesFromAst(definitions, callables, source);
   }
 
   // Regex fallback for languages without tree-sitter support.
-  const source = getSourceText(db, relativePath);
   if (!source) {
     return definitions;
   }
@@ -328,6 +357,7 @@ export function correctDefinitionRangesFromSource(
 export function correctDefinitionRangesFromAst(
   definitions: IndexedDefinition[],
   callables: ReadonlyArray<CallableSite>,
+  source: string | null = null,
 ): IndexedDefinition[] {
   const sitesByName = new Map<string, CallableSite[]>();
   for (const site of callables) {
@@ -337,9 +367,11 @@ export function correctDefinitionRangesFromAst(
   }
 
   return definitions.map((def) => {
-    if (!isCallableDefinition(def.symbol) || !def.leaf) return def;
+    if (!isCallableDefinition(def.symbol) || !def.leaf) {
+      return correctTopLevelTermRangeFromSource(def, source);
+    }
     const sites = sitesByName.get(def.leaf);
-    if (!sites || sites.length === 0) return def;
+    if (!sites || sites.length === 0) return correctTopLevelTermRangeFromSource(def, source);
 
     let best = sites[0]!;
     let bestDistance = Math.abs(best.startLine - def.startLine);
@@ -354,6 +386,21 @@ export function correctDefinitionRangesFromAst(
 
     return { ...def, startLine: best.startLine, endLine: best.endLine };
   });
+}
+
+function correctTopLevelTermRangeFromSource(
+  definition: IndexedDefinition,
+  source: string | null,
+): IndexedDefinition {
+  if (!source || !definition.leaf) return definition;
+  if (leafSuffix(definition.symbol) !== 'term') return definition;
+  if (parentTypeName(definition.symbol) !== null) return definition;
+
+  const escapedLeaf = definition.leaf.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const declaration = new RegExp(`\\b(?:export\\s+)?(?:const|let|var)\\s+${escapedLeaf}\\b`);
+  const lines = source.split(/\r?\n/);
+  const line = lines.findIndex((candidate) => declaration.test(candidate));
+  return line >= 0 ? { ...definition, startLine: line, endLine: line } : definition;
 }
 
 export function resolveCallableDefinitionStartLine(
@@ -553,4 +600,3 @@ export function enclosingTypeNames(rawSymbol: string): string[] {
   }
   return out;
 }
-

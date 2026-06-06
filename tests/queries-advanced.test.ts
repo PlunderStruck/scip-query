@@ -128,7 +128,7 @@ describe('advanced queries', () => {
     );
   });
 
-  it('computes forward slices from downstream cross-file outputs', () => {
+  it('computes forward slices from downstream consumers', () => {
     const result = queries.slice(db, 'normalize', { direction: 'forward' });
 
     expect(result).not.toBeNull();
@@ -136,8 +136,10 @@ describe('advanced queries', () => {
     expect(shortNames(result!.connectedSymbols)).toEqual(
       expect.arrayContaining([
         'app:service:process()',
+        'app:service:prepare()',
         'app:controller:handle()',
-        'core:math:add()',
+        'app:entry:start()',
+        'core:math:pipeline()',
         'infra:http:fetchData()',
         'ui:view:render()',
       ]),
@@ -224,13 +226,11 @@ describe('advanced queries', () => {
     expect(result!.connectedSymbols.length).toBeGreaterThan(0);
 
     for (const connected of result!.connectedSymbols) {
-      const matchesSomeEnclosing = Array.from(enclosingShortNames).some((name) =>
-        connected.relationship.includes(name),
-      );
       expect(
-        matchesSomeEnclosing,
-        `relationship "${connected.relationship}" should name one of the canonical enclosings: ${Array.from(enclosingShortNames).join(', ')}`,
+        enclosingShortNames.has(connected.shortName),
+        `"${connected.shortName}" should be one of the canonical enclosings: ${Array.from(enclosingShortNames).join(', ')}`,
       ).toBe(true);
+      expect(connected.relationship).toContain('references target at ');
     }
   });
 });

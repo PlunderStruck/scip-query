@@ -16,9 +16,11 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/storage/db.js';
 import { findFirstSymbolMatch } from '../src/symbols/symbol-lookup.js';
+import { affected } from '../src/queries/affected.js';
 import { byKind } from '../src/queries/by-kind.js';
 import { callGraph } from '../src/queries/call-graph.js';
 import { changeSurface } from '../src/queries/change-surface.js';
+import { code } from '../src/queries/code.js';
 import { convergence } from '../src/queries/convergence.js';
 import { complexity } from '../src/queries/complexity.js';
 import { dataflow } from '../src/queries/dataflow.js';
@@ -69,10 +71,12 @@ function createFixtureProject(projectRoot: string): void {
     join(projectRoot, 'src', 'consumer.ts'),
     [
       "import { tryInstallScipCli, unusedHelper as ignored } from './utils.js';",
+      "import { settings } from './config.js';",
       "import * as reindexApi from './reindex/index.js';",
       '',
       'tryInstallScipCli();',
       'reindexApi.reindex();',
+      'settings;',
       '',
     ].join('\n'),
   );
@@ -127,6 +131,7 @@ function createFixtureProject(projectRoot: string): void {
       'export class Settings {',
       '  unusedField = 1;',
       '}',
+      'export const settings = new Settings();',
       '',
     ].join('\n'),
   );
@@ -200,7 +205,7 @@ function createFixtureDb(dbPath: string): void {
       (1, 'typescript', 'src/reindex/index.ts'),
       (2, 'typescript', 'src/reindex/indexers.ts'),
       (3, 'typescript', 'src/watch.ts'),
-      (4, 'typescript', 'src/utils.ts'),
+      (4, NULL, 'src/utils.ts'),
       (5, 'typescript', 'src/consumer.ts'),
       (6, 'typescript', 'src/flow.ts'),
       (7, 'typescript', 'src/contracts.ts'),
@@ -223,7 +228,7 @@ function createFixtureDb(dbPath: string): void {
   insertSymbol.run(6, 'scip-typescript npm pkg 1.0.0 src/`watch.ts`/Watcher#start().', 'start', 3, 'method');
   insertSymbol.run(7, 'scip-typescript npm pkg 1.0.0 src/`watch.ts`/Watcher#stop().', 'stop', 3, 'method');
   insertSymbol.run(8, 'scip-typescript npm pkg 1.0.0 src/`utils.ts`/tryInstallScipCli().', 'tryInstallScipCli', 3, 'function');
-  insertSymbol.run(9, 'scip-typescript npm pkg 1.0.0 src/`utils.ts`/unusedHelper().', 'unusedHelper', 3, 'function');
+  insertSymbol.run(9, 'scip-typescript npm pkg 1.0.0 src/`utils.ts`/unusedHelper().', 'unusedHelper', 3, '```ts\nfunction unusedHelper(): Promise<boolean | null>\n```');
   insertSymbol.run(10, 'scip-typescript npm pkg 1.0.0 src/`flow.ts`/', '', 1, 'module');
   insertSymbol.run(11, 'scip-typescript npm pkg 1.0.0 src/`flow.ts`/alpha().', 'alpha', 3, 'function');
   insertSymbol.run(12, 'scip-typescript npm pkg 1.0.0 src/`flow.ts`/beta().', 'beta', 3, 'function');
@@ -241,6 +246,7 @@ function createFixtureDb(dbPath: string): void {
   insertSymbol.run(24, 'scip-typescript npm pkg 1.0.0 src/`predicates.ts`/WorkerStatus#', 'WorkerStatus', null, 'type WorkerStatus');
   insertSymbol.run(25, 'scip-typescript npm pkg 1.0.0 src/`config.ts`/Settings#', 'Settings', 5, 'class Settings');
   insertSymbol.run(26, 'scip-typescript npm pkg 1.0.0 src/`config.ts`/Settings#unusedField.', 'unusedField', 8, 'field unusedField');
+  insertSymbol.run(27, 'scip-typescript npm pkg 1.0.0 src/`config.ts`/settings.', 'settings', 8, '```ts\nvar settings: Settings\n```');
 
   run(`
     INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
@@ -287,7 +293,7 @@ function createFixtureDb(dbPath: string): void {
       (11, 6, 1, 4, 4, X'00'),
       (12, 6, 2, 5, 5, X'00'),
       (13, 6, 3, 6, 6, X'00'),
-      (14, 5, 0, 0, 4, X'00'),
+      (14, 5, 0, 0, 5, X'00'),
       (15, 7, 0, 0, 2, X'00'),
       (16, 8, 0, 0, 0, X'00'),
       (17, 8, 1, 1, 1, X'00'),
@@ -296,7 +302,8 @@ function createFixtureDb(dbPath: string): void {
       (20, 8, 3, 3, 4, X'00'),
       (21, 10, 0, 0, 4, X'00'),
       (22, 8, 4, 6, 6, X'00'),
-      (23, 11, 0, 0, 2, X'00');
+      (23, 11, 0, 0, 3, X'00'),
+      (24, 11, 3, 3, 3, X'00');
   `);
 
   run(`
@@ -338,6 +345,9 @@ function createFixtureDb(dbPath: string): void {
       (22, 24, 1),
       (23, 25, 1),
       (23, 26, 1),
+      (24, 27, 1),
+      (24, 25, 0),
+      (14, 27, 0),
       (21, 8, 0),
       (21, 2, 0);
   `);
@@ -527,6 +537,7 @@ describe('command accuracy fixes', () => {
     expect(importResults).toEqual([
       'tryInstallScipCli',
       'unusedHelper as ignored',
+      'settings',
       '* as reindexApi',
     ]);
     expect(unusedResults).toEqual(['unusedHelper as ignored']);
@@ -563,6 +574,15 @@ describe('command accuracy fixes', () => {
     expect(names).toContain('src:utils:unusedHelper()');
   });
 
+  it('keeps fenced union signatures intact and infers missing document language', () => {
+    const utilSymbols = symbols(db, 'utils.ts');
+    const helper = utilSymbols.find((result) => result.shortName === 'src:utils:unusedHelper()');
+    const snippet = code(db, 'unusedHelper');
+
+    expect(helper?.signature).toBe('function unusedHelper(): Promise<boolean | null>');
+    expect(snippet?.language).toBe('typescript');
+  });
+
   it('keeps change-surface focused on external consumers and blast-radius risk', () => {
     const result = changeSurface(db, 'utils.ts');
 
@@ -592,6 +612,17 @@ describe('command accuracy fixes', () => {
     expect(convergenceResult!.sharedCallees).toEqual(
       expect.arrayContaining(['src:flow:sharedOne()', 'src:flow:sharedTwo()']),
     );
+  });
+
+  it('keeps affected propagation on executable/type consumers instead of module surfaces', () => {
+    const results = affected(db, 'sharedOne', { maxDepth: 1 });
+    const names = results.map((result) => result.shortName);
+
+    expect(names).toEqual(expect.arrayContaining([
+      'src:flow:alpha()',
+      'src:flow:beta()',
+    ]));
+    expect(names).not.toContain('src:flow');
   });
 
   it('isolates callee fingerprints between adjacent functions so ranges do not cross-pollute', () => {
@@ -847,6 +878,18 @@ describe('command accuracy fixes', () => {
 
     expect(defaultResults.symbols.map((result) => result.shortName)).not.toContain('src:config:Settings:unusedField');
     expect(memberResults.symbols.map((result) => result.shortName)).toContain('src:config:Settings:unusedField');
+  });
+
+  it('keeps role-one fallback definitions visible when a file also has enclosing ranges', () => {
+    const configSymbols = symbols(db, 'config.ts');
+    const match = findFirstSymbolMatch(db, 'settings');
+
+    expect(configSymbols.map((result) => result.shortName)).toContain('src:config:settings');
+    expect(configSymbols.find((result) => result.shortName === 'src:config:settings')).toMatchObject({
+      startLine: 3,
+      endLine: 3,
+    });
+    expect(match?.symbol).toBe('scip-typescript npm pkg 1.0.0 src/`config.ts`/settings.');
   });
 
   it('reports consistent symbol ranges across outline/members/change-surface/system/symbols', () => {

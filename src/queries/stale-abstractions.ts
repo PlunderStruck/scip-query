@@ -30,10 +30,11 @@ export function staleAbstractions(
 ): StaleAbstraction[] {
   const { scope, minLoc = 3, maxLoc = 80, limit = 30, includeLowConfidence = false } = opts ?? {};
   const index = new ProjectIndex(db);
+  const scopedDefinitions = index.scopedDefinitions(scope);
 
   const filesWithFunctions = getFilesWithFunctions(index, scope);
 
-  const typeCandidates = index.scopedDefinitions(scope)
+  const typeCandidates = scopedDefinitions
     .filter((definition) => definition.isTypeLike && definitionLoc(definition) >= minLoc)
     // Cap candidate LOC. Types over ~80 lines are substantive abstractions
     // (engine state, request envelopes, etc.) — even if cross-file consumers
@@ -57,6 +58,7 @@ export function staleAbstractions(
   const scipConsumers = index.crossFileCallerMap(typeCandidates);
   const sourceConsumers = index.sourceFallbackCallerFiles(typeCandidates);
   const consumerFileMap = mergeConsumerMaps(scipConsumers, sourceConsumers);
+  const singletonBackedClassIds = getSingletonBackedClassIds(db, index, scopedDefinitions, typeCandidates);
 
   // Pre-index type candidates by (file, leaf) so the transitive-reachability
   // check is O(1) per container instead of O(typeCandidates) linear scan.
@@ -99,6 +101,7 @@ export function staleAbstractions(
         transitivelyReachable,
       };
     })
+    .filter((row) => !singletonBackedClassIds.has(row.definition.symbolId))
     .filter((row) => !row.transitivelyReachable)
     .filter((row) => row.realConsumers.length <= 1)
     // A type whose only observable use is a public-API re-export is not stale —
@@ -145,6 +148,71 @@ export function staleAbstractions(
     });
 
   return scored.slice(0, limit);
+}
+
+function getSingletonBackedClassIds(
+  db: ScipDatabase,
+  index: ProjectIndex,
+  scopedDefinitions: readonly IndexedDefinition[],
+  typeCandidates: readonly IndexedDefinition[],
+): Set<number> {
+  const byFileAndLeaf = new Map<string, IndexedDefinition>();
+  for (const definition of scopedDefinitions) {
+    const leaf = leafName(definition.symbol);
+    if (!leaf) continue;
+    byFileAndLeaf.set(`${definition.relativePath}\0${leaf}`, definition);
+  }
+
+  const singletonVars: IndexedDefinition[] = [];
+  const classBySingletonVarId = new Map<number, number>();
+  for (const definition of typeCandidates) {
+    if (detectDefinitionKind(db, definition.relativePath, definition.startLine) !== 'class') continue;
+    const classLeaf = leafName(definition.symbol);
+    if (!classLeaf) continue;
+    const varName = exportedSingletonVarName(db, definition.relativePath, classLeaf);
+    if (!varName) continue;
+    const singleton = byFileAndLeaf.get(`${definition.relativePath}\0${varName}`);
+    if (!singleton) continue;
+    singletonVars.push(singleton);
+    classBySingletonVarId.set(singleton.symbolId, definition.symbolId);
+  }
+
+  if (singletonVars.length === 0) return new Set();
+
+  const singletonConsumers = mergeConsumerMaps(
+    index.crossFileCallerMap(singletonVars),
+    index.sourceFallbackCallerFiles(singletonVars),
+  );
+  const liveClassIds = new Set<number>();
+  for (const singleton of singletonVars) {
+    const singletonLeaf = leafName(singleton.symbol);
+    if (!singletonLeaf) continue;
+    const consumers = singletonConsumers.get(singleton.symbolId);
+    if (!consumers) continue;
+    const hasRealConsumer = [...consumers].some((file) =>
+      file !== singleton.relativePath
+      && !db.isIgnored(file)
+      && !isImportOnlyConsumer(db, file, singletonLeaf),
+    );
+    if (!hasRealConsumer) continue;
+    const classId = classBySingletonVarId.get(singleton.symbolId);
+    if (classId !== undefined) liveClassIds.add(classId);
+  }
+  return liveClassIds;
+}
+
+function exportedSingletonVarName(
+  db: ScipDatabase,
+  relativePath: string,
+  className: string,
+): string | null {
+  const source = getSourceText(db, relativePath);
+  if (!source) return null;
+  const escapedClassName = className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(
+    `\\bexport\\s+const\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*new\\s+${escapedClassName}\\s*\\(`,
+  );
+  return source.match(pattern)?.[1] ?? null;
 }
 
 function getFilesWithFunctions(

@@ -3,6 +3,7 @@ import { getAllDefinitions } from '../symbols/definition-catalog.js';
 import { getSourceText } from '../source/source-text.js';
 import type { SimilarSignatureGroup } from '../domain/types.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
+import { cleanSignature, extractSignature } from '../storage/scip-rows.js';
 
 /**
  * Find functions with near-identical type signatures (same parameter types
@@ -100,12 +101,7 @@ function resolveNormalizedSignature(
 function extractDocumentedSignature(
   documentation: string | null,
 ): string | null {
-  if (!documentation || !documentation.includes('|')) {
-    return null;
-  }
-
-  const extracted = documentation.slice(documentation.indexOf('|') + 1).replace(/\n/g, ' ').trim();
-  return extracted.length > 0 ? extracted : null;
+  return cleanSignature(extractSignature(documentation));
 }
 
 function extractDeclarationHead(
@@ -212,9 +208,7 @@ function normalizeSourceSignature(
     .replace(/\s+/g, ' ')
     .trim();
 
-  const suffix = declaration.slice(parenIdx)
-    .replace(/\s*\{[\s\S]*$/, '')
-    .replace(/\s*=>[\s\S]*$/, '')
+  const suffix = truncateAtImplementationStart(declaration.slice(parenIdx))
     .replace(/\)\s*=\s*[\s\S]*$/, ')')
     .replace(/\s+throws\s+[^={]+$/i, '')
     .replace(/\s+where\s+.+$/i, '')
@@ -230,6 +224,63 @@ function normalizeSourceSignature(
     .toLowerCase();
 
   return normalized.length >= 3 ? normalized : null;
+}
+
+function truncateAtImplementationStart(suffix: string): string {
+  let parenDepth = 0;
+  let braceDepth = 0;
+  let bracketDepth = 0;
+  let angleDepth = 0;
+  let quote: '"' | '\'' | '`' | null = null;
+  let escaping = false;
+
+  for (let index = 0; index < suffix.length; index += 1) {
+    const char = suffix[index]!;
+
+    if (quote) {
+      if (escaping) {
+        escaping = false;
+        continue;
+      }
+      if (char === '\\') {
+        escaping = true;
+        continue;
+      }
+      if (char === quote) quote = null;
+      continue;
+    }
+
+    if (char === '"' || char === '\'' || char === '`') {
+      quote = char;
+      continue;
+    }
+
+    if (char === '(') parenDepth += 1;
+    else if (char === ')') parenDepth = Math.max(0, parenDepth - 1);
+    else if (char === '[') bracketDepth += 1;
+    else if (char === ']') bracketDepth = Math.max(0, bracketDepth - 1);
+    else if (char === '<') angleDepth += 1;
+    else if (char === '>') angleDepth = Math.max(0, angleDepth - 1);
+    else if (char === '{') {
+      if (parenDepth === 0 && bracketDepth === 0 && angleDepth === 0) {
+        return suffix.slice(0, index);
+      }
+      braceDepth += 1;
+    } else if (char === '}') {
+      braceDepth = Math.max(0, braceDepth - 1);
+    } else if (
+      char === '='
+      && suffix[index + 1] === '>'
+      && parenDepth === 0
+      && braceDepth === 0
+      && bracketDepth === 0
+      && angleDepth === 0
+    ) {
+      return suffix.slice(0, index);
+    }
+  }
+
+  return suffix;
 }
 
 function declarationStartLines(

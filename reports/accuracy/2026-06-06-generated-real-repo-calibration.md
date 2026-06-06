@@ -43,6 +43,25 @@ Done in 37.6s
 Indexed typescript, python in 37.6s
 ```
 
+The replay cache used for command calibration was rebuilt with:
+
+```text
+SCIP_QUERY_PROJECT_ROOT=/Users/aydansalois/Documents/GitHub/Vega_2.0
+SCIP_QUERY_CACHE_DIR=/tmp/scip-query-vega-full-cache
+node dist/cli.js reindex --force --indexer-concurrency 1
+```
+
+The cache metadata recorded:
+
+```text
+status: complete
+requestedLanguages: typescript, python
+indexedLanguages: typescript, python
+skipped: []
+```
+
+The installed bundled Python indexer was `scip-python-plus 0.7.4`.
+
 ### TypeScript-only calibration
 
 A TypeScript-only index was built with an isolated cache:
@@ -106,14 +125,51 @@ No matching dead-code symbols found.
 - `dead` now supplements raw mention evidence with caller-row evidence so a
   callable with a recovered call-graph caller is not reported as dead.
 
+### Multi-language command calibration
+
+The TypeScript+Python Vega index exposed several non-dead-code accuracy bugs:
+
+- Fenced TypeScript signatures containing union types were split at `|`.
+  Signature extraction now treats fenced code blocks as atomic signatures.
+- `code` showed `[unknown]` when an index row omitted document language.
+  It now falls back to the source file extension.
+- Files with both primary `defn_enclosing_ranges` and role-one fallback
+  definitions hid top-level singleton exports. Definition lookup now merges
+  precise top-level fallback rows without reintroducing nested/property noise.
+- Controller classes instantiated as exported singletons were reported as stale
+  abstractions even when the singleton had real cross-file consumers. The stale
+  abstraction query now recognizes that framework/controller pattern.
+- Top-level constants could inherit overly wide fallback ranges and become fake
+  callers. Source correction narrows top-level `const`/`let`/`var` ranges.
+- `slice --forward` answered "symbols used alongside the target." It now
+  answers the command's actual question: enclosing consumers that reference the
+  target.
+- `similar-signatures` truncated TypeScript object/generic return types during
+  source fallback. It now reuses the shared SCIP signature cleaner and preserves
+  object return signatures such as `Promise<{ updated: number; }>`.
+- `affected` propagated through module/file symbols and plain constants. It now
+  restricts propagation to executable callable definitions and type definitions.
+
+Vega spot checks after the fixes:
+
+```text
+slice buildIssueChunks --forward --depth 2
+  issue-embeddings.service.ts module import
+  IssueEmbeddingsService:indexIssue()
+
+affected buildIssueChunks --max-depth 2
+  depth 1: IssueEmbeddingsService:indexIssue()
+  depth 2: IssueEmbeddingsService:reindexIssue()
+
+health --scope apps/api/src/modules/issues
+  Codebase Health Score: 95/100
+```
+
 ### Remaining command accuracy concerns
 
-- `stale-abstractions` still needs calibration for framework/controller
-  singleton patterns. Vega examples like controller classes instantiated in the
-  same module need stricter interpretation before removal recommendations.
 - `drift` is noisy at Vega scale because many sibling directories naturally
   have unique dependency edges. Unique dependency edges are observations, not
   automatic architectural violations.
-- Full multi-language calibration should now use the configured
-  TypeScript+Python index. The remaining calibration work is command precision,
-  not Python indexer availability.
+- `similar` can still produce low-signal pairs when identifier/callee
+  fingerprints are mostly common domain words. Treat low-similarity output as
+  exploratory evidence until sampled against source.

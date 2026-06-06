@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { extname, join } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
 import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
 import { resolveIndexedFile } from '../resolution/path-resolver.js';
@@ -60,7 +60,7 @@ export function code(
     // double-conversion in the CLI and printed labels off by +1.
     startLine,
     endLine,
-    language: doc?.language ?? null,
+    language: doc?.language ?? languageFromPath(match.relativePath),
     source,
   };
 }
@@ -102,7 +102,60 @@ function readFileRange(
     relativePath: doc.relative_path,
     startLine: start,
     endLine: end,
-    language: doc.language,
+    language: doc.language ?? languageFromPath(doc.relative_path),
     source,
   };
+}
+
+function languageFromPath(relativePath: string): string | null {
+  switch (extname(relativePath).toLowerCase()) {
+    case '.ts':
+    case '.tsx':
+    case '.mts':
+    case '.cts':
+      return 'typescript';
+    case '.js':
+    case '.jsx':
+    case '.mjs':
+    case '.cjs':
+      return 'javascript';
+    case '.py':
+    case '.pyi':
+      return 'python';
+    case '.rs':
+      return 'rust';
+    case '.go':
+      return 'go';
+    case '.java':
+      return 'java';
+    case '.kt':
+    case '.kts':
+      return 'kotlin';
+    case '.scala':
+      return 'scala';
+    case '.rb':
+      return 'ruby';
+    case '.php':
+      return 'php';
+    case '.cs':
+      return 'csharp';
+    case '.vb':
+      return 'vb';
+    case '.dart':
+      return 'dart';
+    case '.c':
+    case '.h':
+      return 'c';
+    case '.cc':
+    case '.cpp':
+    case '.cxx':
+    case '.hpp':
+    case '.hh':
+    case '.hxx':
+      return 'cpp';
+    case '.vue':
+      return 'vue';
+    default:
+      return null;
+  }
 }

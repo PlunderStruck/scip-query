@@ -111,6 +111,28 @@ describe('similar-signatures source fallback', () => {
         '',
       ].join('\n'),
     );
+    writeFileSync(
+      join(projectRoot, 'src', 'BulkIssueService.ts'),
+      [
+        'export class BulkIssueService {',
+        '  async bulkArchive(issueIds: string[], userId: string): Promise<{ updated: number }> {',
+        '    return { updated: issueIds.length };',
+        '  }',
+        '}',
+        '',
+      ].join('\n'),
+    );
+    writeFileSync(
+      join(projectRoot, 'src', 'BulkIssueRepository.ts'),
+      [
+        'export class BulkIssueRepository {',
+        '  async bulkRestore(issueIds: string[], userId: string): Promise<{ updated: number }> {',
+        '    return { updated: issueIds.length };',
+        '  }',
+        '}',
+        '',
+      ].join('\n'),
+    );
 
     const sqliteDb = new Database(join(tempDir, 'index.db'));
     createSchema(sqliteDb);
@@ -118,7 +140,9 @@ describe('similar-signatures source fallback', () => {
       INSERT INTO documents (id, language, relative_path) VALUES
         (1, 'java', 'src/StatusAuditReporter.java'),
         (2, 'java', 'src/StatusBoardReporter.java'),
-        (3, 'java', 'src/StatusDigestReporter.java');
+        (3, 'java', 'src/StatusDigestReporter.java'),
+        (4, 'typescript', 'src/BulkIssueService.ts'),
+        (5, 'typescript', 'src/BulkIssueRepository.ts');
 
       INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
         (1, 'semanticdb maven . . fixture/StatusAuditReporter#', 'StatusAuditReporter', 5, 'class StatusAuditReporter|class StatusAuditReporter'),
@@ -126,7 +150,11 @@ describe('similar-signatures source fallback', () => {
         (3, 'semanticdb maven . . fixture/StatusBoardReporter#', 'StatusBoardReporter', 5, 'class StatusBoardReporter|class StatusBoardReporter'),
         (4, 'semanticdb maven . . fixture/StatusBoardReporter#renderBoardStatus().', 'renderBoardStatus', 12, 'semanticdb maven . . fixture/StatusBoardReporter#renderBoardStatus().|'),
         (5, 'semanticdb maven . . fixture/StatusDigestReporter#', 'StatusDigestReporter', 5, 'class StatusDigestReporter|class StatusDigestReporter'),
-        (6, 'semanticdb maven . . fixture/StatusDigestReporter#renderDigestStatus().', 'renderDigestStatus', 12, 'semanticdb maven . . fixture/StatusDigestReporter#renderDigestStatus().|');
+        (6, 'semanticdb maven . . fixture/StatusDigestReporter#renderDigestStatus().', 'renderDigestStatus', 12, 'semanticdb maven . . fixture/StatusDigestReporter#renderDigestStatus().|'),
+        (7, 'scip-typescript npm fixture 1.0.0 src/\`BulkIssueService.ts\`/BulkIssueService#', 'BulkIssueService', 5, NULL),
+        (8, 'scip-typescript npm fixture 1.0.0 src/\`BulkIssueService.ts\`/BulkIssueService#bulkArchive().', 'bulkArchive', 12, NULL),
+        (9, 'scip-typescript npm fixture 1.0.0 src/\`BulkIssueRepository.ts\`/BulkIssueRepository#', 'BulkIssueRepository', 5, NULL),
+        (10, 'scip-typescript npm fixture 1.0.0 src/\`BulkIssueRepository.ts\`/BulkIssueRepository#bulkRestore().', 'bulkRestore', 12, NULL);
 
       INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
         (1, 1, 1, 1, 0, 4, 1),
@@ -134,7 +162,11 @@ describe('similar-signatures source fallback', () => {
         (3, 2, 3, 1, 0, 4, 1),
         (4, 2, 4, 2, 2, 3, 3),
         (5, 3, 5, 1, 0, 4, 1),
-        (6, 3, 6, 2, 2, 3, 3);
+        (6, 3, 6, 2, 2, 3, 3),
+        (7, 4, 7, 0, 0, 4, 1),
+        (8, 4, 8, 1, 2, 3, 3),
+        (9, 5, 9, 0, 0, 4, 1),
+        (10, 5, 10, 1, 2, 3, 3);
     `);
     sqliteDb.close();
 
@@ -152,11 +184,26 @@ describe('similar-signatures source fallback', () => {
 
   it('groups same-shape functions when documentation signatures are missing', () => {
     const groups = similarSignatures(db, { minLoc: 1 });
-    const reporterGroup = groups.find((group) => group.functions.length === 2);
+    const reporterGroup = groups.find((group) =>
+      group.functions.some((fn) => fn.shortName === 'fixture:StatusAuditReporter:renderAuditStatus()')
+    );
     expect(reporterGroup?.functions.map((fn) => fn.shortName)).toEqual(expect.arrayContaining([
       'fixture:StatusAuditReporter:renderAuditStatus()',
       'fixture:StatusBoardReporter:renderBoardStatus()',
     ]));
     expect(reporterGroup?.functions.map((fn) => fn.shortName)).not.toContain('fixture:StatusDigestReporter:renderDigestStatus()');
+  });
+
+  it('keeps object return types intact when normalizing TypeScript source signatures', () => {
+    const groups = similarSignatures(db, { minLoc: 1 });
+    const bulkGroup = groups.find((group) =>
+      group.functions.some((fn) => fn.shortName === 'src:BulkIssueService:BulkIssueService:bulkArchive()')
+    );
+
+    expect(bulkGroup?.signature).toBe('(issueids:string[],userid:string):promise<{updated:number}>');
+    expect(bulkGroup?.functions.map((fn) => fn.shortName)).toEqual(expect.arrayContaining([
+      'src:BulkIssueService:BulkIssueService:bulkArchive()',
+      'src:BulkIssueRepository:BulkIssueRepository:bulkRestore()',
+    ]));
   });
 });

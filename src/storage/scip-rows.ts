@@ -57,7 +57,15 @@ export function cleanSignature(sig: string | null): string | null {
  */
 export function extractSignature(doc: string | null): string | null {
   if (!doc) return null;
+  const fenced = extractFirstFencedBlock(doc);
+  if (fenced) return fenced.replace(/\n/g, ' ');
   const pipeIdx = doc.indexOf('|');
   if (pipeIdx === -1) return doc.replace(/\n/g, ' ');
-  return doc.slice(pipeIdx + 1).replace(/\n/g, ' ');
+  const signatureHalf = doc.slice(pipeIdx + 1);
+  return (extractFirstFencedBlock(signatureHalf) ?? signatureHalf).replace(/\n/g, ' ');
+}
+
+function extractFirstFencedBlock(doc: string): string | null {
+  const match = /^```(?:\w+)?\s*\n?([\s\S]*?)\n?```/.exec(doc.trimStart());
+  return match?.[1]?.trim() || null;
 }

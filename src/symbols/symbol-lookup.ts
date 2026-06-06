@@ -21,7 +21,7 @@
  */
 import type { ScipDatabase } from '../storage/db.js';
 import { isFunctionLikeSymbol, isModuleLikeSymbol, leafName, shortenSymbol } from './symbol-parser.js';
-import { hydrateSymbolMatch } from './definition-catalog.js';
+import { hydrateSymbolMatch, parentTypeName } from './definition-catalog.js';
 import { type SymbolQueryRow } from '../storage/scip-rows.js';
 import type { SymbolLocation, SymbolMatch } from '../domain/types.js';
 
@@ -203,7 +203,7 @@ export function getDefinitionRowsForSymbolId(
   symbolId: number,
 ): SymbolQueryRow[] {
   const primary = db.all<SymbolQueryRow>(
-    `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path, gs.display_name
+    `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path, gs.display_name, gs.documentation
      FROM global_symbols gs
      JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
      JOIN documents d ON der.document_id = d.id
@@ -211,11 +211,7 @@ export function getDefinitionRowsForSymbolId(
      ORDER BY der.start_line, der.end_line`,
     symbolId,
   );
-  if (primary.length > 0) {
-    return primary;
-  }
-
-  return db.all<SymbolQueryRow>(
+  const fallback = db.all<SymbolQueryRow>(
     `SELECT
       gs.id,
       gs.symbol,
@@ -223,7 +219,8 @@ export function getDefinitionRowsForSymbolId(
       MIN(c.start_line) AS start_line,
       MAX(c.end_line) AS end_line,
       d.relative_path,
-      gs.display_name
+      gs.display_name,
+      gs.documentation
      FROM global_symbols gs
      JOIN mentions m ON m.symbol_id = gs.id
      JOIN chunks c ON m.chunk_id = c.id
@@ -231,10 +228,11 @@ export function getDefinitionRowsForSymbolId(
      WHERE gs.id = ?
        AND m.role = 1
        ${db.pathExclusionsFor('d')}
-     GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path, gs.display_name
+     GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path, gs.display_name, gs.documentation
      ORDER BY start_line, end_line`,
     symbolId,
   );
+  return mergeSymbolQueryRows(primary, fallback);
 }
 
 export function getSymbolLookupCandidates(
@@ -250,7 +248,7 @@ export function getSymbolLookupCandidates(
   });
 
   const primary = db.all<SymbolQueryRow>(
-    `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path, gs.display_name
+    `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path, gs.display_name, gs.documentation
      FROM global_symbols gs
      JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
      JOIN documents d ON der.document_id = d.id
@@ -259,11 +257,7 @@ export function getSymbolLookupCandidates(
       LIMIT 200`,
       ...params,
     );
-  if (primary.length > 0) {
-    return primary;
-  }
-
-  return db.all<SymbolQueryRow>(
+  const fallback = db.all<SymbolQueryRow>(
     `SELECT
       gs.id,
       gs.symbol,
@@ -271,7 +265,8 @@ export function getSymbolLookupCandidates(
       MIN(c.start_line) AS start_line,
       MAX(c.end_line) AS end_line,
       d.relative_path,
-      gs.display_name
+      gs.display_name,
+      gs.documentation
      FROM global_symbols gs
      JOIN mentions m ON m.symbol_id = gs.id
      JOIN chunks c ON m.chunk_id = c.id
@@ -279,10 +274,34 @@ export function getSymbolLookupCandidates(
      WHERE m.role = 1
        AND ${tokenClauses.join('\n       AND ')}
        ${db.pathExclusionsFor('d')}
-     GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path, gs.display_name
+     GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path, gs.display_name, gs.documentation
      LIMIT 200`,
     ...params,
   );
+  return mergeSymbolQueryRows(primary, fallback);
+}
+
+function mergeSymbolQueryRows(
+  primary: readonly SymbolQueryRow[],
+  fallback: readonly SymbolQueryRow[],
+): SymbolQueryRow[] {
+  const byId = new Map<number, SymbolQueryRow>();
+  for (const row of fallback) {
+    if (primary.length > 0 && !isPreciseMixedFallbackRow(row)) continue;
+    byId.set(row.id, row);
+  }
+  for (const row of primary) byId.set(row.id, row);
+  return [...byId.values()];
+}
+
+function isPreciseMixedFallbackRow(row: SymbolQueryRow): boolean {
+  if (parentTypeName(row.symbol) !== null) return false;
+  const documentation = row.documentation ?? '';
+  const cleaned = documentation
+    .replace(/^```\w*\s*/, '')
+    .replace(/\s*```$/, '')
+    .trim();
+  return /^(?:var|let|const|function|class|interface|type|enum)\b/.test(cleaned);
 }
 
 export function scoreSymbolCandidate(
@@ -312,8 +331,8 @@ export function scoreSymbolCandidate(
 
   if (rawCase === originalCase || rawCase === cleanedCase) score += 1150;
   if (shortCase === originalCase || shortCase === cleanedCase) score += 1100;
-  if (displayCase === noParensCase) score += 980;
-  if (leafCase === noParensCase) score += 960;
+  if (displayCase === noParensCase) score += 1180;
+  if (leafCase === noParensCase) score += 1160;
   if (`${leafCase}()` === originalCase || `${leafCase}()` === cleanedCase) score += 955;
   if (raw === original || raw === cleaned) score += 1000;
   if (short === original || short === cleaned) score += 950;

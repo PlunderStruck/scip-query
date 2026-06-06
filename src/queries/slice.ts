@@ -92,14 +92,12 @@ function backwardSlice(db: ScipDatabase, match: SymbolMatch, maxDepth: number): 
 // they share the same callee-row + symbol-lookup primitives.
 function forwardSlice(db: ScipDatabase, match: SymbolMatch): SliceResult {
   // Find where the target is referenced, then at each reference site,
-  // find what else the enclosing function defines/exports. Goes through the
-  // canonical reference-site + enclosing-definition helpers so that bounds
-  // are source-corrected and attribution matches every other query that
-  // does the same lookup.
+  // report the enclosing consumer. A forward slice is "what this symbol
+  // feeds into", not "what else is used alongside it".
   const sourceRefs = getSourceReferenceSites(db, match);
   const refs = sourceRefs.length > 0 ? sourceRefs : getResolvedReferenceSites(db, match);
 
-  const seenOutputs = new Set<string>();
+  const seenConsumers = new Set<string>();
   const connected: SliceResult['connectedSymbols'] = [];
   const index = new ProjectIndex(db);
 
@@ -118,27 +116,19 @@ function forwardSlice(db: ScipDatabase, match: SymbolMatch): SliceResult {
     if (!enclosingSymbol || enclosingSymbol === match.symbol) continue;
 
     const enclosingMatch = findExactSymbolMatch(db, enclosingSymbol);
-    if (!enclosingMatch) continue;
+    if (!enclosingMatch || db.isIgnored(enclosingMatch.relativePath)) continue;
+    if (seenConsumers.has(enclosingMatch.symbol)) continue;
+    seenConsumers.add(enclosingMatch.symbol);
 
-    for (const callee of getCalleeRowsForSymbol(db, enclosingMatch)) {
-      if (callee.symbol === match.symbol) continue;
-      if (callee.symbol === enclosingSymbol) continue;
-      if (callee.file === ref.file) continue; // preserve `out_d.id != ref_d.id`
-      if (db.isIgnored(callee.file)) continue;
-      if (seenOutputs.has(callee.symbol)) continue;
-      seenOutputs.add(callee.symbol);
-
-      connected.push({
-        symbol: callee.symbol,
-        shortName: shortenSymbol(callee.symbol),
-        file: callee.file,
-        relationship: `used alongside target in ${shortenSymbol(enclosingSymbol)}`,
-      });
-      if (connected.length >= 30) break;
-    }
+    connected.push({
+      symbol: enclosingMatch.symbol,
+      shortName: shortenSymbol(enclosingMatch.symbol),
+      file: enclosingMatch.relativePath,
+      relationship: `references target at ${ref.file}:${ref.line + 1}`,
+    });
   }
 
-  connected.sort((a, b) => a.file.localeCompare(b.file)); // preserve SQL's ORDER BY out_d.relative_path
+  connected.sort((a, b) => a.file.localeCompare(b.file));
 
   return {
     symbol: match.symbol,
