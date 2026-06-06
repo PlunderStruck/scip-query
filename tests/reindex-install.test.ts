@@ -10,6 +10,7 @@ async function loadInstall(
   },
 ): Promise<InstallModule> {
   vi.resetModules();
+  const actualFs = await vi.importActual<typeof import('node:fs')>('node:fs');
   vi.doMock('node:os', () => ({
     platform: () => options?.platform ?? 'linux',
   }));
@@ -18,6 +19,7 @@ async function loadInstall(
   }));
   vi.doMock('node:fs', () => ({
     existsSync: options?.existsSyncImpl ?? (() => false),
+    readFileSync: actualFs.readFileSync,
   }));
   return await import('../src/reindex/install.js');
 }
@@ -58,6 +60,32 @@ describe('reindex install helpers', () => {
 
     expect(describeIndexerBinary(config)).toBe('scip-python or scip-python-plus');
     expect(resolveIndexerBinary(config)).toBe('scip-python-plus');
+    expect(isIndexerInstalled(config)).toBe(true);
+  });
+
+  it('resolves the bundled scip-python-plus bin when no python indexer is on PATH', async () => {
+    const execFileSync = vi.fn((cmd: string) => {
+      if (cmd === 'which') {
+        throw new Error('missing');
+      }
+      throw new Error(`unexpected command: ${cmd}`);
+    });
+
+    const { isIndexerInstalled, resolveIndexerBinary } = await loadInstall(execFileSync);
+    const config = {
+      language: 'python' as const,
+      indexerBinary: 'scip-python-plus',
+      binaryAliases: ['scip-python'],
+      checkCommand: 'scip-python-plus --version',
+      indexArgs: ({ outputPath, indexerBinary }: { outputPath: string; indexerBinary: string }) => ({
+        binary: indexerBinary,
+        args: ['index', '--output', outputPath],
+      }),
+      markerFiles: ['pyproject.toml'],
+      bundledNpmPackage: 'scip-python-plus',
+    };
+
+    expect(resolveIndexerBinary(config)).toMatch(/node_modules\/scip-python-plus\/index\.js$/);
     expect(isIndexerInstalled(config)).toBe(true);
   });
 

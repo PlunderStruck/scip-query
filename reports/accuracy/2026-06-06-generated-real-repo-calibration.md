@@ -12,7 +12,7 @@ Path: `/Users/aydansalois/Documents/GitHub/Vega_2.0`
 
 ### Full reindex
 
-Status: failed closed.
+Initial status: failed closed.
 
 ```text
 Detected languages: typescript, python
@@ -24,9 +24,24 @@ error: Failed to index all required languages; preserving the previous index.
 ```
 
 The full configured reindex failed closed because Vega_2.0 declares both
-TypeScript and Python and `scip-python` failed during indexing. This is the
-right reliability posture: preserve the previous index unless the user asks for
-`--allow-partial`.
+TypeScript and Python, and scip-query invoked `npx scip-python`. That command
+asks npm for a package literally named `scip-python`, which does not exist in
+the npm registry. The intended package is `scip-python-plus`.
+
+Fix: Python indexing now prefers `scip-python-plus` and executes the bundled
+optional dependency's concrete bin path when it is installed with scip-query.
+
+After the fix, the full Vega_2.0 configured reindex succeeded:
+
+```text
+Detected languages: typescript, python
+Indexing typescript with scip-typescript...
+Indexing python with scip-python-plus...
+Merging 2 language indexes...
+Converting to SQLite...
+Done in 37.6s
+Indexed typescript, python in 37.6s
+```
 
 ### TypeScript-only calibration
 
@@ -99,6 +114,6 @@ No matching dead-code symbols found.
 - `drift` is noisy at Vega scale because many sibling directories naturally
   have unique dependency edges. Unique dependency edges are observations, not
   automatic architectural violations.
-- Full multi-language calibration is blocked until the Vega Python indexing
-  failure is diagnosed or the calibration harness supports intentional
-  language-scoped runs.
+- Full multi-language calibration should now use the configured
+  TypeScript+Python index. The remaining calibration work is command precision,
+  not Python indexer availability.

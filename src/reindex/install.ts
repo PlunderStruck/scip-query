@@ -1,8 +1,8 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { platform } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { IndexerConfig } from '../domain/types.js';
 
 const requireFromHere = createRequire(import.meta.url);
@@ -47,9 +47,9 @@ export function describeIndexerBinary(config: IndexerConfig): string {
 /**
  * Resolve the first available executable name for an indexer.
  *
- * Falls back to the indexer's preferred binary name when the indexer's
- * `bundledNpmPackage` is installed locally — `npx <binary>` will pick it up
- * even when it isn't on PATH.
+ * Falls back to the indexer's bundled npm package bin when it is installed
+ * alongside scip-query. Returning the concrete bin path keeps indexing stable
+ * even when the target project is not itself an npm project.
  */
 export function resolveIndexerBinary(config: IndexerConfig): string | null {
   for (const candidate of getBinaryCandidates(config)) {
@@ -57,10 +57,7 @@ export function resolveIndexerBinary(config: IndexerConfig): string | null {
       return candidate;
     }
   }
-  if (isBundledNpmPackageInstalled(config)) {
-    return config.indexerBinary;
-  }
-  return null;
+  return resolveBundledNpmBinary(config);
 }
 
 /**
@@ -72,17 +69,40 @@ export function isIndexerInstalled(config: IndexerConfig): boolean {
 
 /**
  * Check whether the indexer's bundled npm package (an optionalDependency of
- * scip-query) was successfully installed alongside scip-query. When it was,
- * `npx <binary>` from indexArgs will resolve to the local install — no need
- * to fall through to global install or PATH lookup.
+ * scip-query) was successfully installed alongside scip-query.
  */
 function isBundledNpmPackageInstalled(config: IndexerConfig): boolean {
-  if (!config.bundledNpmPackage) return false;
+  return resolveBundledNpmPackageJson(config) !== null;
+}
+
+function resolveBundledNpmBinary(config: IndexerConfig): string | null {
+  const packageJsonPath = resolveBundledNpmPackageJson(config);
+  if (!packageJsonPath) return null;
+
+  const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
+    bin?: string | Record<string, string>;
+  };
+  const bin = pkg.bin;
+  if (!bin) return null;
+
+  if (typeof bin === 'string') {
+    return join(dirname(packageJsonPath), bin);
+  }
+
+  for (const candidate of getBinaryCandidates(config)) {
+    const relativeBinPath = bin[candidate];
+    if (relativeBinPath) return join(dirname(packageJsonPath), relativeBinPath);
+  }
+
+  return null;
+}
+
+function resolveBundledNpmPackageJson(config: IndexerConfig): string | null {
+  if (!config.bundledNpmPackage) return null;
   try {
-    requireFromHere.resolve(`${config.bundledNpmPackage}/package.json`);
-    return true;
+    return requireFromHere.resolve(`${config.bundledNpmPackage}/package.json`);
   } catch {
-    return false;
+    return null;
   }
 }
 

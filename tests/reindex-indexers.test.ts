@@ -19,6 +19,21 @@ afterEach(() => {
 });
 
 describe('indexer configs', () => {
+  it('uses scip-python-plus directly instead of npx scip-python', () => {
+    const config = getIndexerConfig('python');
+    const command = config.indexArgs({
+      projectRoot: '/tmp/project',
+      outputPath: '/tmp/project/index.scip',
+      indexerBinary: '/tmp/scip-python-plus',
+    });
+
+    expect(config.indexerBinary).toBe('scip-python-plus');
+    expect(command).toEqual({
+      binary: '/tmp/scip-python-plus',
+      args: ['index', '--output', '/tmp/project/index.scip', '--project-name', 'project'],
+    });
+  });
+
   it('uses the current scip-ruby invocation shape and default output path', () => {
     const config = getIndexerConfig('ruby');
     const command = config.indexArgs({

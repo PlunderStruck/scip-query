@@ -99,14 +99,12 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
 
   python: {
     language: 'python',
-    indexerBinary: 'scip-python',
-    binaryAliases: ['scip-python-plus'],
-    // npx resolves to the locally-installed scip-python-plus first (it's an
-    // optionalDependency of scip-query), then falls back to a global install.
-    checkCommand: 'npx scip-python --version',
-    indexArgs: ({ outputPath }) => ({
-      binary: 'npx',
-      args: ['scip-python', 'index', '--output', outputPath, '--project-name', 'project'],
+    indexerBinary: 'scip-python-plus',
+    binaryAliases: ['scip-python'],
+    checkCommand: 'scip-python-plus --version',
+    indexArgs: ({ outputPath, indexerBinary }) => ({
+      binary: indexerBinary,
+      args: ['index', '--output', outputPath, '--project-name', 'project'],
     }),
     markerFiles: ['pyproject.toml', 'setup.py'],
     installMethods: [
