@@ -1,4 +1,5 @@
 import { program } from 'commander';
+import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { existsSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -25,6 +26,9 @@ import {
 
 const require = createRequire(import.meta.url);
 const { version: cliVersion } = loadCliPackageInfo();
+const HEALTH_PHASE_COMMAND = '__health-phase';
+const DIFF_IMPACT_BATCH_COMMAND = '__diff-impact-batch';
+const DIFF_IMPACT_BATCH_SIZE = 10;
 
 function loadCliPackageInfo(): { version: string } {
   for (const path of ['../package.json', '../../package.json']) {
@@ -37,8 +41,162 @@ function loadCliPackageInfo(): { version: string } {
   return { version: '0.0.0' };
 }
 
+type HealthReport = ReturnType<typeof queries.health>;
+type HealthPhaseName = typeof queries.HEALTH_PHASES[number];
+type HealthPhaseResult = ReturnType<typeof queries.healthPhase>;
+type DiffImpactResult = ReturnType<typeof queries.diffImpact>;
+type DiffImpactPartial = ReturnType<typeof queries.diffImpactPartial>;
+
+interface HealthCliOptions {
+  scope?: string;
+  full?: boolean;
+  json?: boolean;
+}
+
+interface DiffImpactCliOptions {
+  base?: string;
+}
+
 export function renderHeuristicNotice(label: string): void {
   console.log(`Heuristic ${label}: review before acting; these are candidates, not exact compiler facts.\n`);
+}
+
+function runIsolatedHealthReport(opts: HealthCliOptions): HealthReport {
+  const phaseResults = queries.HEALTH_PHASES.map((phase) => runHealthPhaseProcess(phase, opts));
+  return queries.healthReportFromPhases(phaseResults);
+}
+
+function runHealthPhaseProcess(phase: HealthPhaseName, opts: HealthCliOptions): HealthPhaseResult {
+  const cliPath = process.argv[1] ?? fileURLToPath(import.meta.url);
+  const args = [...process.execArgv, cliPath, HEALTH_PHASE_COMMAND, phase];
+  if (opts.scope) args.push('--scope', opts.scope);
+  if (opts.full) args.push('--full');
+
+  const result = spawnSync(process.execPath, args, {
+    cwd: process.cwd(),
+    env: process.env,
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024,
+  });
+  if (result.status !== 0) {
+    const stderr = result.stderr.trim();
+    throw new Error(`Health phase "${phase}" failed${stderr ? `:\n${stderr}` : ''}`);
+  }
+  return JSON.parse(result.stdout) as HealthPhaseResult;
+}
+
+function renderHealthReport(report: HealthReport, json: boolean | undefined): void {
+  if (json) {
+    console.log(JSON.stringify(report, null, 2));
+    return;
+  }
+  console.log(`\n  Codebase Health Score: ${report.score}/100\n`);
+  console.log(`  ${report.overview.documents} files | ${report.overview.symbols} symbols | ${formatBytes(report.overview.indexSizeBytes)}\n`);
+
+  if (report.warnings && report.warnings.length > 0) {
+    console.log('  Warnings:');
+    for (const warning of report.warnings) {
+      console.log(`    ${warning}`);
+    }
+    console.log('');
+  }
+
+  console.log('  Findings:');
+  const f = report.findings;
+  if (f.deadSymbols > 0) console.log(`    Dead code:            ${f.deadSymbols} symbols (${f.deadLoc} LOC)`);
+  if (f.isolatedSymbols > 0) console.log(`    Isolated symbols:     ${f.isolatedSymbols} (${f.isolatedLoc} LOC)`);
+  if (f.cycles > 0) console.log(`    Circular deps:        ${f.cycles}`);
+  if (f.similarPairs > 0) console.log(`    Similar pairs:        ${f.similarPairs}`);
+  if (f.extractionCandidates > 0) console.log(`    Extract candidates:   ${f.extractionCandidates}`);
+  if (f.wrappers > 0) console.log(`    Wrapper functions:    ${f.wrappers}`);
+  if (f.passthroughs > 0) console.log(`    Passthroughs:         ${f.passthroughs}`);
+  if (f.staleTypes > 0) console.log(`    Stale abstractions:   ${f.staleTypes}`);
+  if (f.driftedFiles > 0) console.log(`    Pattern drift:        ${f.driftedFiles} files`);
+  if (f.complexityHotspotCount > 0) console.log(`    Complexity hotspots:  ${f.complexityHotspotCount}`);
+
+  if (report.actions.length > 0) {
+    console.log('\n  Prioritized Actions (highest impact + lowest effort first):');
+    for (let i = 0; i < report.actions.length; i++) {
+      const a = report.actions[i]!;
+      const loc = a.locRecoverable > 0 ? ` (~${a.locRecoverable} LOC recoverable)` : '';
+      console.log(`    ${i + 1}. [${a.effort} effort / ${a.impact} impact] ${a.description}${loc}`);
+    }
+  }
+
+  if (report.topComplexity.length > 0) {
+    console.log('\n  Top Complexity Hotspots:');
+    for (const c of report.topComplexity) {
+      console.log(`    ${c.score.toFixed(1).padStart(6)}  ${c.symbol}`);
+    }
+  }
+
+  if (report.actions.length === 0) {
+    console.log('\n  No issues found. Codebase is clean.');
+  }
+}
+
+function runIsolatedDiffImpactReport(opts: DiffImpactCliOptions): DiffImpactResult {
+  return withDb((db) => {
+    const plan = queries.diffImpactPlan(db, { base: opts.base });
+    if (plan.note) {
+      return queries.diffImpact(db, { base: opts.base });
+    }
+    if (plan.changedFiles.length === 0) {
+      return queries.diffImpact(db, { base: opts.base });
+    }
+
+    const partials: DiffImpactPartial[] = [];
+    for (const batch of chunked(plan.changedFiles, DIFF_IMPACT_BATCH_SIZE)) {
+      partials.push(runDiffImpactBatchProcess(batch, opts));
+    }
+    return queries.mergeDiffImpactPartials(plan.changedFiles, partials);
+  });
+}
+
+function runDiffImpactBatchProcess(files: readonly string[], opts: DiffImpactCliOptions): DiffImpactPartial {
+  const cliPath = process.argv[1] ?? fileURLToPath(import.meta.url);
+  const args = [...process.execArgv, cliPath, DIFF_IMPACT_BATCH_COMMAND];
+  if (opts.base) args.push('--base', opts.base);
+  const result = spawnSync(process.execPath, args, {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      SCIP_QUERY_DIFF_IMPACT_FILES: JSON.stringify(files),
+    },
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024,
+  });
+  if (result.status !== 0) {
+    const stderr = result.stderr.trim();
+    throw new Error(`Diff-impact batch failed${stderr ? `:\n${stderr}` : ''}`);
+  }
+  return JSON.parse(result.stdout) as DiffImpactPartial;
+}
+
+function renderDiffImpactReport(result: DiffImpactResult): void {
+  console.log(`Changed files: ${result.summary.totalChangedFiles}`);
+  console.log(`Changed symbols: ${result.summary.totalChangedSymbols}`);
+  console.log(`Affected consumer files: ${result.summary.totalAffectedFiles}`);
+  if (result.summary.note) {
+    console.log(`Note: ${result.summary.note}`);
+  }
+  console.log('');
+  if (result.changedSymbols.length > 0) {
+    console.log('Changed symbols:');
+    render.list(result.changedSymbols, (s) => `  ${s.file}  ${s.shortName}  (fan-in: ${s.fanIn})`);
+  }
+  if (result.affectedConsumers.length > 0) {
+    console.log('\nAffected consumer files:');
+    render.list(result.affectedConsumers, (c) => `  ${c.file}  (${c.consumedSymbols} symbol(s))`);
+  }
+}
+
+function chunked<T>(items: readonly T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let offset = 0; offset < items.length; offset += size) {
+    chunks.push(items.slice(offset, offset + size));
+  }
+  return chunks;
 }
 
 // ── CLI Definition ─────────────────────────────────────────
@@ -829,29 +987,29 @@ program
     });
   }));
 
+program
+  .command(DIFF_IMPACT_BATCH_COMMAND, { hidden: true })
+  .option('--base <ref>', 'Git ref to diff against (default: HEAD)')
+  .action((opts) => withDb((db) => {
+    const files = JSON.parse(process.env['SCIP_QUERY_DIFF_IMPACT_FILES'] ?? '[]') as string[];
+    const plan = queries.diffImpactPlan(db, { base: opts.base });
+    const result = queries.diffImpactPartial(db, files, plan.changedFiles);
+    console.log(JSON.stringify(result));
+  }));
+
 // diff-impact
 program
   .command('diff-impact')
   .description('Compute changed symbols and downstream consumers from current git diff')
   .option('--base <ref>', 'Git ref to diff against (default: HEAD)')
-  .action((opts) => withDb((db) => {
-    const result = queries.diffImpact(db, { base: opts.base });
-    console.log(`Changed files: ${result.summary.totalChangedFiles}`);
-    console.log(`Changed symbols: ${result.summary.totalChangedSymbols}`);
-    console.log(`Affected consumer files: ${result.summary.totalAffectedFiles}`);
-    if (result.summary.note) {
-      console.log(`Note: ${result.summary.note}`);
+  .action((opts) => {
+    try {
+      renderDiffImpactReport(runIsolatedDiffImpactReport({ base: opts.base }));
+    } catch (err) {
+      console.error(`error: ${err instanceof Error ? err.message : err}`);
+      process.exit(1);
     }
-    console.log('');
-    if (result.changedSymbols.length > 0) {
-      console.log('Changed symbols:');
-      render.list(result.changedSymbols, (s) => `  ${s.file}  ${s.shortName}  (fan-in: ${s.fanIn})`);
-    }
-    if (result.affectedConsumers.length > 0) {
-      console.log('\nAffected consumer files:');
-      render.list(result.affectedConsumers, (c) => `  ${c.file}  (${c.consumedSymbols} symbol(s))`);
-    }
-  }));
+  });
 
 // drift
 program
@@ -967,55 +1125,41 @@ program
     );
   }));
 
-// health — kept inline: bespoke layout (banners with leading-space indent,
-// conditional findings, prioritized actions list). Doesn't fit any registry shape.
+program
+  .command(HEALTH_PHASE_COMMAND, { hidden: true })
+  .argument('<phase>')
+  .option('-s, --scope <path>', 'Limit to files matching path')
+  .option('--full', 'Run unbounded candidate analyses on large indexes')
+  .action((phase, opts) => withDb((db) => {
+    if (!queries.HEALTH_PHASES.includes(phase)) {
+      console.error(`error: Unknown health phase: ${phase}`);
+      process.exit(1);
+    }
+    const result = queries.healthPhase(db, phase, { scope: opts.scope, full: Boolean(opts.full) });
+    console.log(JSON.stringify(result));
+  }));
+
+// health — phase-isolated because composite reports can otherwise retain large
+// language-service and graph caches across unrelated checks on huge indexes.
 program
   .command('health')
   .description('Composite codebase health report with prioritized action list')
   .option('-s, --scope <path>', 'Limit to files matching path')
+  .option('--full', 'Run unbounded candidate analyses on large indexes')
   .option('--json', 'Output as JSON for programmatic consumption')
-  .action((opts) => withDb((db) => {
-    const report = queries.health(db, { scope: opts.scope });
-    if (opts.json) {
-      console.log(JSON.stringify(report, null, 2));
-      return;
+  .action((opts) => {
+    try {
+      const report = runIsolatedHealthReport({
+        scope: opts.scope,
+        full: Boolean(opts.full),
+        json: Boolean(opts.json),
+      });
+      renderHealthReport(report, Boolean(opts.json));
+    } catch (err) {
+      console.error(`error: ${err instanceof Error ? err.message : err}`);
+      process.exit(1);
     }
-    console.log(`\n  Codebase Health Score: ${report.score}/100\n`);
-    console.log(`  ${report.overview.documents} files | ${report.overview.symbols} symbols | ${formatBytes(report.overview.indexSizeBytes)}\n`);
-
-    console.log('  Findings:');
-    const f = report.findings;
-    if (f.deadSymbols > 0) console.log(`    Dead code:            ${f.deadSymbols} symbols (${f.deadLoc} LOC)`);
-    if (f.isolatedSymbols > 0) console.log(`    Isolated symbols:     ${f.isolatedSymbols} (${f.isolatedLoc} LOC)`);
-    if (f.cycles > 0) console.log(`    Circular deps:        ${f.cycles}`);
-    if (f.similarPairs > 0) console.log(`    Similar pairs:        ${f.similarPairs}`);
-    if (f.extractionCandidates > 0) console.log(`    Extract candidates:   ${f.extractionCandidates}`);
-    if (f.wrappers > 0) console.log(`    Wrapper functions:    ${f.wrappers}`);
-    if (f.passthroughs > 0) console.log(`    Passthroughs:         ${f.passthroughs}`);
-    if (f.staleTypes > 0) console.log(`    Stale abstractions:   ${f.staleTypes}`);
-    if (f.driftedFiles > 0) console.log(`    Pattern drift:        ${f.driftedFiles} files`);
-    if (f.complexityHotspotCount > 0) console.log(`    Complexity hotspots:  ${f.complexityHotspotCount}`);
-
-    if (report.actions.length > 0) {
-      console.log('\n  Prioritized Actions (highest impact + lowest effort first):');
-      for (let i = 0; i < report.actions.length; i++) {
-        const a = report.actions[i]!;
-        const loc = a.locRecoverable > 0 ? ` (~${a.locRecoverable} LOC recoverable)` : '';
-        console.log(`    ${i + 1}. [${a.effort} effort / ${a.impact} impact] ${a.description}${loc}`);
-      }
-    }
-
-    if (report.topComplexity.length > 0) {
-      console.log('\n  Top Complexity Hotspots:');
-      for (const c of report.topComplexity) {
-        console.log(`    ${c.score.toFixed(1).padStart(6)}  ${c.symbol}`);
-      }
-    }
-
-    if (report.actions.length === 0) {
-      console.log('\n  No issues found. Codebase is clean.');
-    }
-  }));
+  });
 
 // convergence — kept inline: bespoke layout (intro line + A/B side-by-side
 // + shared/unique sub-sections + strategy footer).

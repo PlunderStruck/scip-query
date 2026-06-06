@@ -62,3 +62,8 @@ export function getSourceExports(
     return parser.parseExports(db, normalized, source);
   });
 }
+
+export function clearLanguageParserCaches(db: ScipDatabase): void {
+  SOURCE_IMPORT_CACHE.invalidateAll(db);
+  SOURCE_EXPORT_CACHE.invalidateAll(db);
+}

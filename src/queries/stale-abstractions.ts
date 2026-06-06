@@ -43,13 +43,17 @@ interface SingletonBackedClass {
 // singleton correction, and per-row scoring.
 export function staleAbstractions(
   db: ScipDatabase,
-  opts?: { scope?: string; minLoc?: number; maxLoc?: number; limit?: number; includeLowConfidence?: boolean },
+  opts?: { scope?: string; minLoc?: number; maxLoc?: number; limit?: number; includeLowConfidence?: boolean; scanLimit?: number },
 ): StaleAbstraction[] {
-  const { scope, minLoc = 3, maxLoc = 80, limit = 30, includeLowConfidence = false } = opts ?? {};
+  const { scope, minLoc = 3, maxLoc = 80, limit = 30, includeLowConfidence = false, scanLimit } = opts ?? {};
   const index = new ProjectIndex(db);
   const scopedDefinitions = index.scopedDefinitions(scope);
   const filesWithFunctions = getFilesWithFunctions(index, scope);
-  const typeCandidates = staleTypeCandidates(db, index, scopedDefinitions, { minLoc, maxLoc });
+  const typeCandidates = applyScanLimit(
+    staleTypeCandidates(db, index, scopedDefinitions, { minLoc, maxLoc })
+      .sort((left, right) => definitionLoc(right) - definitionLoc(left) || left.relativePath.localeCompare(right.relativePath)),
+    scanLimit,
+  );
 
   // Consumer map = SCIP mentions (with self-references filtered) ∪ source-text
   // fallback for unique-named types. Without the fallback, a type used only in
@@ -480,6 +484,19 @@ function computeFileLeafUsage(
   };
   walk(tree.rootNode, false);
   return { importedLeaves, usedLeaves };
+}
+
+function applyScanLimit<T>(items: T[], scanLimit: number | undefined): T[] {
+  if (typeof scanLimit !== 'number' || scanLimit <= 0 || items.length <= scanLimit) {
+    return items;
+  }
+  return items.slice(0, scanLimit);
+}
+
+// scip-query: ignore-passthrough — query-local cache lifecycle hook used by
+// composite health runs; keeping it here avoids exposing FILE_USAGE_CACHE.
+export function clearStaleAbstractionsCaches(db: ScipDatabase): void {
+  FILE_USAGE_CACHE.invalidateAll(db);
 }
 
 /**

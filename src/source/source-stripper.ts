@@ -51,6 +51,12 @@ export function getStrippedLines(db: ScipDatabase, relativePath: string, source:
   );
 }
 
+export function clearSourceStripperCache(db: ScipDatabase): void {
+  STRIPPED_LINES_CACHE.invalidateAll(db);
+  stripCacheSource = null;
+  stripCacheResult = '';
+}
+
 // Single-entry cache keyed by source string identity. Each parseXImports/Exports
 // loop calls buildUsageBody many times with the same `source` string, but the
 // previous implementation re-ran the 8-pass stripCommentsAndStrings for every

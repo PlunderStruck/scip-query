@@ -24,12 +24,16 @@ interface MentionChunk {
 // file fan-in are the evidence model for this command.
 export function wrapperCandidates(
   db: ScipDatabase,
-  opts?: { scope?: string; maxLoc?: number; limit?: number },
+  opts?: { scope?: string; maxLoc?: number; limit?: number; scanLimit?: number },
 ): WrapperCandidate[] {
-  const { scope, maxLoc = 15, limit = 30 } = opts ?? {};
+  const { scope, maxLoc = 15, limit = 30, scanLimit } = opts ?? {};
   const index = new ProjectIndex(db);
   const reverseFanIn = buildReverseFileFanIn(index.fileDependencyGraph(scope));
-  const symbols = getWrapperCandidateSymbols(index, scope, maxLoc);
+  const symbols = applyScanLimit(
+    getWrapperCandidateSymbols(index, scope, maxLoc)
+      .sort((left, right) => definitionLoc(left) - definitionLoc(right) || left.relativePath.localeCompare(right.relativePath)),
+    scanLimit,
+  );
 
   // Bulk pre-filter: only process symbols with exactly 1 distinct external
   // caller file. Source-text fallback adds back references the indexer may
@@ -263,4 +267,11 @@ function fallbackCallerFanIn(
   }
 
   return best;
+}
+
+function applyScanLimit<T>(items: T[], scanLimit: number | undefined): T[] {
+  if (typeof scanLimit !== 'number' || scanLimit <= 0 || items.length <= scanLimit) {
+    return items;
+  }
+  return items.slice(0, scanLimit);
 }

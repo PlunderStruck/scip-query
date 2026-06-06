@@ -27,13 +27,18 @@ export { similarChains } from './similar-chains.js';
 export { extractCandidates } from './extract-candidates.js';
 export { affected } from './affected.js';
 export { changeSurface } from './change-surface.js';
-export { diffImpact } from './diff-impact.js';
+export {
+  diffImpact,
+  diffImpactPartial,
+  diffImpactPlan,
+  mergeDiffImpactPartials,
+} from './diff-impact.js';
 export { drift } from './drift.js';
 export { wrapperCandidates } from './wrapper-candidates.js';
 export { passthroughCandidates } from './passthrough-candidates.js';
 export { staleAbstractions } from './stale-abstractions.js';
 export { complexityHotspots } from './complexity-hotspots.js';
-export { health } from './health.js';
+export { HEALTH_PHASES, health, healthPhase, healthReportFromPhases } from './health.js';
 export { convergence } from './convergence.js';
 export { code } from './code.js';
 export { complexity } from './complexity.js';

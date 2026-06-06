@@ -16,11 +16,11 @@ import { ProjectIndex } from '../core/project-index.js';
  */
 export function complexityHotspots(
   db: ScipDatabase,
-  opts?: { scope?: string; minLoc?: number; limit?: number },
+  opts?: { scope?: string; minLoc?: number; limit?: number; scanLimit?: number },
 ): ComplexityHotspot[] {
-  const { scope, minLoc = 10, limit = 30 } = opts ?? {};
+  const { scope, minLoc = 10, limit = 30, scanLimit } = opts ?? {};
 
-  const { definitions, callerMap, calleeMap } = loadComplexityCandidates(db, scope);
+  const { definitions, callerMap, calleeMap } = loadComplexityCandidates(db, scope, scanLimit);
 
   return definitions
     .map((definition) => {
@@ -54,21 +54,30 @@ export function complexityHotspots(
 function loadComplexityCandidates(
   db: ScipDatabase,
   scope: string | undefined,
+  scanLimit: number | undefined,
 ): {
   definitions: IndexedDefinition[];
   callerMap: ReturnType<ProjectIndex['crossFileCallerMap']>;
   calleeMap: ReturnType<ProjectIndex['calleeMap']>;
 } {
   const index = new ProjectIndex(db);
-  const definitions = index.productionCallableDefinitions({
+  const definitions = applyScanLimit(index.productionCallableDefinitions({
     scope,
     requireCallableSymbol: true,
     includeSuppressed: true,
-  });
+    sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
+  }), scanLimit);
 
   return {
     definitions,
     callerMap: index.crossFileCallerMap(definitions),
     calleeMap: index.calleeMap(definitions),
   };
+}
+
+function applyScanLimit<T>(items: T[], scanLimit: number | undefined): T[] {
+  if (typeof scanLimit !== 'number' || scanLimit <= 0 || items.length <= scanLimit) {
+    return items;
+  }
+  return items.slice(0, scanLimit);
 }

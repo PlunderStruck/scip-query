@@ -108,11 +108,11 @@ function comparePair(
  */
 export function similarAll(
   db: ScipDatabase,
-  opts: { minSimilarity?: number; limit?: number; scope?: string; minCallees?: number; crossFileOnly?: boolean } = {},
+  opts: { minSimilarity?: number; limit?: number; scope?: string; minCallees?: number; crossFileOnly?: boolean; scanLimit?: number } = {},
 ): SimilarSymbolResult[] {
-  const { minSimilarity = 0.5, limit = 20, scope, minCallees = 4, crossFileOnly = false } = opts;
+  const { minSimilarity = 0.5, limit = 20, scope, minCallees = 4, crossFileOnly = false, scanLimit } = opts;
 
-  const all = getAllCalleeFingerprints(db, { minCallees, scope });
+  const all = getAllCalleeFingerprints(db, { minCallees, scope, scanLimit });
   const idfWeights = computeIdf(all.map((fp) => fp.callees));
 
   // Inverted index: callee → indexes of fingerprints that include it. Skipping
@@ -237,12 +237,20 @@ function findCallees(
 // fingerprint shaping are one evidence pass.
 function getAllCalleeFingerprints(
   db: ScipDatabase,
-  opts: { minCallees: number; scope?: string; excludeSymbol?: string },
+  opts: { minCallees: number; scope?: string; excludeSymbol?: string; scanLimit?: number },
 ): SymbolFingerprint[] {
-  const { minCallees, scope, excludeSymbol } = opts;
+  const { minCallees, scope, excludeSymbol, scanLimit } = opts;
   const index = new ProjectIndex(db);
 
-  const candidates = index.productionCallableDefinitions({ scope, minLoc: 5, excludeSymbol });
+  const candidates = applyScanLimit(
+    index.productionCallableDefinitions({
+      scope,
+      minLoc: 5,
+      excludeSymbol,
+      sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
+    }),
+    scanLimit,
+  );
   const calleeMap = index.calleeMap(candidates);
 
   return candidates
@@ -253,6 +261,13 @@ function getAllCalleeFingerprints(
       paramCount: index.callableSignature(d)?.paramCount ?? -1,
     }))
     .filter((fp) => fp.callees.size >= minCallees);
+}
+
+function applyScanLimit<T>(items: T[], scanLimit: number | undefined): T[] {
+  if (typeof scanLimit !== 'number' || scanLimit <= 0 || items.length <= scanLimit) {
+    return items;
+  }
+  return items.slice(0, scanLimit);
 }
 
 function meaningfulCallees(callees: Iterable<string>): Set<string> {

@@ -28,11 +28,7 @@ export function isolated(
   });
 
   const scipCallerMap = index.crossFileCallerMap(candidates);
-  const fallbackCallerMap = index.sourceFallbackCallerFiles(candidates);
-  const symbolsWithCallers = new Set<number>([
-    ...scipCallerMap.keys(),
-    ...fallbackCallerMap.keys(),
-  ]);
+  const symbolsWithCallers = new Set<number>(scipCallerMap.keys());
 
   // Same-file string-attr references count as a usage. `buildCrossFileCallerMap`
   // skips same-file callers (correct for cross-file isolation) but a function
@@ -61,24 +57,25 @@ export function isolated(
     }
   }
 
-  const symbolBySymbolId = new Map(candidates.map((d) => [d.symbolId, d.symbol]));
-  // additive: chunk-based callee detection unioned with AST. For "does this
-  // function call anything at all?" we want max recall — Rust trait methods
-  // like `new()` and `from()` resolve via dynamic dispatch and AST attribution
-  // skips them as ambiguous leaves; the chunk path catches them.
-  const calleeMap = index.calleeMap(candidates, { additive: true });
-  const symbolsWithCallees = new Set(
-    [...calleeMap.entries()]
-      .filter(([symbolId, callees]) => {
-        const ownSymbol = symbolBySymbolId.get(symbolId);
-        return callees.some((c) => c.symbol !== ownSymbol);
-      })
-      .map(([id]) => id),
-  );
+  const symbolsWithCallees = connectedCalleeIds(index, candidates, { additive: false });
+  const possiblyIsolated = candidates
+    .filter((definition) => !symbolsWithCallers.has(definition.symbolId))
+    .filter((definition) => !symbolsWithCallees.has(definition.symbolId));
 
-  return candidates
-    .filter((d) => !symbolsWithCallers.has(d.symbolId))
-    .filter((d) => !symbolsWithCallees.has(d.symbolId))
+  const fallbackCallerMap = index.sourceFallbackCallerFiles(possiblyIsolated);
+  for (const symbolId of fallbackCallerMap.keys()) {
+    symbolsWithCallers.add(symbolId);
+  }
+
+  const candidatesNeedingAdditiveCallees = possiblyIsolated
+    .filter((definition) => !symbolsWithCallers.has(definition.symbolId));
+  const additiveCalleeIds = connectedCalleeIds(index, candidatesNeedingAdditiveCallees, { additive: true });
+  for (const symbolId of additiveCalleeIds) {
+    symbolsWithCallees.add(symbolId);
+  }
+
+  return candidatesNeedingAdditiveCallees
+    .filter((definition) => !symbolsWithCallees.has(definition.symbolId))
     .sort((left, right) =>
       (right.endLine - right.startLine) - (left.endLine - left.startLine)
       || left.relativePath.localeCompare(right.relativePath)
@@ -92,4 +89,23 @@ export function isolated(
       endLine: definition.endLine,
       loc: definition.endLine - definition.startLine + 1,
     }));
+}
+
+function connectedCalleeIds(
+  index: ProjectIndex,
+  candidates: readonly ReturnType<ProjectIndex['productionCallableDefinitions']>[number][],
+  opts: { additive: boolean },
+): Set<number> {
+  if (candidates.length === 0) return new Set();
+
+  const symbolBySymbolId = new Map(candidates.map((d) => [d.symbolId, d.symbol]));
+  const calleeMap = index.calleeMap(candidates, { additive: opts.additive });
+  return new Set(
+    [...calleeMap.entries()]
+      .filter(([symbolId, callees]) => {
+        const ownSymbol = symbolBySymbolId.get(symbolId);
+        return callees.some((c) => c.symbol !== ownSymbol);
+      })
+      .map(([id]) => id),
+  );
 }

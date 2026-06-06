@@ -194,6 +194,7 @@ describe('debloat liveness regressions', () => {
 
     expect(report.findings.deadSymbols).toBe(1);
     expect(report.findings.isolatedSymbols).toBe(0);
+    expect(report.warnings).toBeUndefined();
     expect(report.actions.some((action) => action.category === 'Dead code' && action.count === 1)).toBe(true);
     expect(report.actions.some((action) => action.category === 'Isolated symbols')).toBe(false);
   });

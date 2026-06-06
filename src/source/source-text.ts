@@ -23,6 +23,12 @@ export function getSourceText(
   });
 }
 
+// scip-query: ignore-passthrough — cache lifecycle hook used by composite
+// health runs; keeping it here avoids exposing SOURCE_TEXT_CACHE.
+export function clearSourceTextCache(db: ScipDatabase): void {
+  SOURCE_TEXT_CACHE.invalidateAll(db);
+}
+
 const SUPPRESS_COMMENT_RE = /scip-query[\s:-]*ignore[\s:-]*(?:dead(?:-code)?|stale|wrapper|passthrough|drift|extract)?/i;
 
 /**

@@ -8,6 +8,17 @@ import { isCallableSymbol, isModuleLikeSymbol, shortenSymbol } from '../symbols/
 type ChangedSymbol = DiffImpactResult['changedSymbols'][number];
 type ConsumerMap = Map<string, Set<string>>;
 
+export interface DiffImpactPlan {
+  changedFileLines: string[];
+  changedFiles: string[];
+  note?: string;
+}
+
+export interface DiffImpactPartial {
+  changedSymbols: ChangedSymbol[];
+  consumerEntries: Array<{ file: string; symbols: string[] }>;
+}
+
 /**
  * Given a git diff, compute the affected symbol set.
  * Finds all symbols defined in changed files, their fan-in,
@@ -20,51 +31,98 @@ export function diffImpact(
   db: ScipDatabase,
   opts: { base?: string } = {},
 ): DiffImpactResult {
+  const plan = diffImpactPlan(db, opts);
+  if (plan.note) {
+    return emptyDiffImpact(plan.note, plan.changedFileLines);
+  }
+  if (plan.changedFiles.length === 0) {
+    return unindexedChangedFilesResult(plan.changedFileLines);
+  }
+
+  return mergeDiffImpactPartials(
+    plan.changedFiles,
+    [diffImpactPartial(db, plan.changedFiles, plan.changedFiles)],
+  );
+}
+
+export function diffImpactPlan(
+  db: ScipDatabase,
+  opts: { base?: string } = {},
+): DiffImpactPlan {
   const { base = 'HEAD' } = opts;
-
-  // Get changed files from git
-  let changedFileLines: string[];
   try {
-    changedFileLines = getChangedFiles(db.config.projectRoot, base);
-  } catch {
-    // Not in a git repo or git not available — return empty result
-    return emptyDiffImpact('Unable to compute git diff.');
-  }
-
-  if (changedFileLines.length === 0) {
-    return emptyDiffImpact('No changed files found.');
-  }
-
-  const changedFiles = indexedChangedFiles(db, changedFileLines);
-
-  if (changedFiles.length === 0) {
+    const changedFileLines = getChangedFiles(db.config.projectRoot, base);
     return {
-      changedFiles: changedFileLines,
-      changedSymbols: [],
-      affectedConsumers: [],
-      summary: {
-        totalChangedFiles: changedFileLines.length,
-        totalChangedSymbols: 0,
-        totalAffectedFiles: 0,
-        note: 'Changed files are not present in the current SCIP index.',
-      },
+      changedFileLines,
+      changedFiles: indexedChangedFiles(db, changedFileLines),
+      note: changedFileLines.length === 0 ? 'No changed files found.' : undefined,
+    };
+  } catch {
+    return {
+      changedFileLines: [],
+      changedFiles: [],
+      note: 'Unable to compute git diff.',
     };
   }
+}
 
+export function diffImpactPartial(
+  db: ScipDatabase,
+  filesToAnalyze: readonly string[],
+  allChangedFiles: readonly string[],
+): DiffImpactPartial {
   const index = new ProjectIndex(db);
-  const changedFileSet = new Set(changedFiles);
-  const defs = changedDefinitions(index, changedFiles);
-
+  const changedFileSet = new Set(allChangedFiles);
   const changedSymbols: ChangedSymbol[] = [];
   const consumerMap: ConsumerMap = new Map();
 
+  const defs = filesToAnalyze
+    .flatMap((file) => index.definitionsForFile(file))
+    .filter(isDiffImpactCandidate)
+    .sort((a, b) => a.relativePath.localeCompare(b.relativePath) || a.startLine - b.startLine);
+  const semanticConsumers = semanticCallerMap(db, defs);
   for (const def of defs) {
-    addChangedDefinitionImpact(db, def, changedFiles, changedFileSet, changedSymbols, consumerMap);
+    addChangedDefinitionImpact(
+      db,
+      def,
+      allChangedFiles,
+      changedFileSet,
+      changedSymbols,
+      consumerMap,
+      semanticConsumers.get(def.symbolId) ?? new Set<string>(),
+    );
+  }
+
+  return {
+    changedSymbols,
+    consumerEntries: [...consumerMap.entries()].map(([file, symbols]) => ({
+      file,
+      symbols: [...symbols].sort(),
+    })),
+  };
+}
+
+export function mergeDiffImpactPartials(
+  changedFiles: readonly string[],
+  partials: readonly DiffImpactPartial[],
+): DiffImpactResult {
+  const consumerMap: ConsumerMap = new Map();
+  const changedSymbols = partials.flatMap((partial) => partial.changedSymbols);
+
+  for (const partial of partials) {
+    for (const entry of partial.consumerEntries) {
+      let bucket = consumerMap.get(entry.file);
+      if (!bucket) {
+        bucket = new Set();
+        consumerMap.set(entry.file, bucket);
+      }
+      for (const symbol of entry.symbols) bucket.add(symbol);
+    }
   }
 
   const affectedConsumers = affectedConsumerRows(consumerMap);
   return {
-    changedFiles,
+    changedFiles: [...changedFiles],
     changedSymbols,
     affectedConsumers,
     summary: {
@@ -75,16 +133,30 @@ export function diffImpact(
   };
 }
 
-function emptyDiffImpact(note: string): DiffImpactResult {
+function emptyDiffImpact(note: string, changedFiles: string[] = []): DiffImpactResult {
   return {
-    changedFiles: [],
+    changedFiles,
     changedSymbols: [],
     affectedConsumers: [],
     summary: {
-      totalChangedFiles: 0,
+      totalChangedFiles: changedFiles.length,
       totalChangedSymbols: 0,
       totalAffectedFiles: 0,
       note,
+    },
+  };
+}
+
+function unindexedChangedFilesResult(changedFiles: string[]): DiffImpactResult {
+  return {
+    changedFiles,
+    changedSymbols: [],
+    affectedConsumers: [],
+    summary: {
+      totalChangedFiles: changedFiles.length,
+      totalChangedSymbols: 0,
+      totalAffectedFiles: 0,
+      note: 'Changed files are not present in the current SCIP index.',
     },
   };
 }
@@ -133,15 +205,6 @@ function indexedChangedFiles(
   return changedFiles;
 }
 
-function changedDefinitions(
-  index: ProjectIndex,
-  changedFiles: readonly string[],
-): IndexedDefinition[] {
-  return changedFiles.flatMap((file) => index.definitionsForFile(file))
-    .filter(isDiffImpactCandidate)
-    .sort((a, b) => a.relativePath.localeCompare(b.relativePath) || a.startLine - b.startLine);
-}
-
 // scip-query: ignore-extract — this adds one changed-definition impact row:
 // reportability, SCIP fan-in, source consumers, and dedupe all feed the same
 // changed-file evidence set.
@@ -152,8 +215,8 @@ function addChangedDefinitionImpact(
   changedFileSet: ReadonlySet<string>,
   changedSymbols: ChangedSymbol[],
   consumerMap: ConsumerMap,
+  semanticConsumers: ReadonlySet<string>,
 ): void {
-  const semanticConsumers = semanticCallerMap(db, [definition]).get(definition.symbolId) ?? new Set<string>();
   const fanIn = Math.max(scipFanIn(db, definition.symbolId), semanticConsumers.size);
   if (!shouldReportChangedDefinition(definition, fanIn)) return;
 

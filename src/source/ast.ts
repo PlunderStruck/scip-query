@@ -175,6 +175,11 @@ export function isVueSfcPath(relativePath: string): boolean {
 }
 
 const TREE_CACHE = createPerDbSourceCache<Tree | null>('ast-trees');
+// scip-query: ignore-passthrough — cache lifecycle hook used by composite
+// health runs; keeping it here avoids exposing TREE_CACHE outside this module.
+export function clearAstCache(db: ScipDatabase): void {
+  TREE_CACHE.invalidateAll(db);
+}
 
 /**
  * Parse a file with tree-sitter and cache the result. Returns null when the

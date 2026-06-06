@@ -43,10 +43,10 @@ export function openDb(): ScipDatabase {
   return new ScipDatabase(dbConfig, filter);
 }
 
-export function withDb(run: (db: ScipDatabase) => void): void {
+export function withDb<T>(run: (db: ScipDatabase) => T): T {
   const db = openDb();
   try {
-    run(db);
+    return run(db);
   } finally {
     db.close();
   }

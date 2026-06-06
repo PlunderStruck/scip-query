@@ -81,6 +81,12 @@ export type { ReferenceSite } from '../domain/types.js';
 
 const FILE_DEP_GRAPH_CACHE = createPerDbCache<string, Map<string, Set<string>>>('file-dep-graph');
 
+export function clearReferenceGraphCaches(db: ScipDatabase): void {
+  FILE_DEP_GRAPH_CACHE.invalidateAll(db);
+  CALLER_ROWS_CACHE.invalidate(db);
+  GLOBAL_LEAF_INDEX_CACHE.invalidate(db);
+}
+
 // scip-query: ignore-extract — this builds the file dependency graph from
 // SCIP edges plus source-import fallback edges; the two sources intentionally
 // share one normalization path.
@@ -816,16 +822,20 @@ export function buildCrossFileCallerMap(
   definitions?: ReadonlyArray<SymbolLocation>,
 ): Map<number, Set<string>> {
   const map = new Map<number, Set<string>>();
+  if (definitions && definitions.length === 0) {
+    return map;
+  }
   const docs = db.all<{ relative_path: string }>(
     `SELECT relative_path FROM documents
      WHERE 1 = 1 ${db.pathExclusionsFor('documents')}`,
   );
   const leafIndex = getGlobalLeafIndex(db);
   const effectiveDefinitions = definitions ?? getAllDefinitions(db);
+  const targetSymbolIds = new Set(effectiveDefinitions.map((definition) => definition.symbolId));
 
-  addAstCallsiteCallers(db, map, docs, leafIndex);
-  addChunkMentionCallers(db, map, effectiveDefinitions);
-  addRustAttrCallers(db, map, docs, leafIndex);
+  addAstCallsiteCallers(db, map, docs, leafIndex, targetSymbolIds);
+  addChunkMentionCallers(db, map, effectiveDefinitions, targetSymbolIds);
+  addRustAttrCallers(db, map, docs, leafIndex, targetSymbolIds);
   mergeCallerSets(map, semanticCallerMap(db, indexedDefinitions(effectiveDefinitions)));
 
   return map;
@@ -839,6 +849,7 @@ function addAstCallsiteCallers(
   map: Map<number, Set<string>>,
   docs: ReadonlyArray<{ relative_path: string }>,
   leafIndex: Map<string, GlobalLeafCandidate[]>,
+  targetSymbolIds: ReadonlySet<number>,
 ): void {
   // For supported files, walk callsites and attribute each call to the symbol
   // whose leaf it names. This is additive to the chunk path: call_expression
@@ -853,6 +864,7 @@ function addAstCallsiteCallers(
       if (!candidates || candidates.length === 0) continue;
       const pick = pickAstCallCandidate(db, doc.relative_path, candidates, site.memberAccess);
       if (!pick) continue;
+      if (!targetSymbolIds.has(pick.symbolId)) continue;
       // Cross-file caller only — self-references skipped.
       if (pick.file === doc.relative_path) continue;
       addCallerFile(map, pick.symbolId, doc.relative_path);
@@ -864,16 +876,42 @@ function addChunkMentionCallers(
   db: ScipDatabase,
   map: Map<number, Set<string>>,
   definitions: ReadonlyArray<SymbolLocation>,
+  targetSymbolIds: ReadonlySet<number>,
 ): void {
   const selfRanges = definitionSelfRanges(definitions);
-  for (const row of loadChunkMentionCallerRows(db)) {
+  for (const row of loadChunkMentionCallerRows(db, targetSymbolIds)) {
     if (db.isIgnored(row.relative_path)) continue;
     if (isSelfChunkMention(row, selfRanges.get(row.symbol_id))) continue;
     addCallerFile(map, row.symbol_id, row.relative_path);
   }
 }
 
-function loadChunkMentionCallerRows(db: ScipDatabase): ChunkMentionCallerRow[] {
+function loadChunkMentionCallerRows(
+  db: ScipDatabase,
+  targetSymbolIds: ReadonlySet<number> | undefined,
+): ChunkMentionCallerRow[] {
+  if (!targetSymbolIds) {
+    return loadChunkMentionCallerRowsBatch(db);
+  }
+
+  const ids = [...targetSymbolIds];
+  if (ids.length === 0) return [];
+  const rows: ChunkMentionCallerRow[] = [];
+  for (let offset = 0; offset < ids.length; offset += SQLITE_PARAM_BATCH_SIZE) {
+    rows.push(...loadChunkMentionCallerRowsBatch(db, ids.slice(offset, offset + SQLITE_PARAM_BATCH_SIZE)));
+  }
+  return rows;
+}
+
+const SQLITE_PARAM_BATCH_SIZE = 750;
+
+function loadChunkMentionCallerRowsBatch(
+  db: ScipDatabase,
+  symbolIds?: readonly number[],
+): ChunkMentionCallerRow[] {
+  const symbolFilter = symbolIds && symbolIds.length > 0
+    ? `AND m.symbol_id IN (${symbolIds.map(() => '?').join(',')})`
+    : '';
   return db.all<ChunkMentionCallerRow>(
     `SELECT DISTINCT m.symbol_id, d.relative_path, c.document_id,
             c.start_line AS chunk_start, c.end_line AS chunk_end
@@ -881,7 +919,9 @@ function loadChunkMentionCallerRows(db: ScipDatabase): ChunkMentionCallerRow[] {
      JOIN chunks c ON m.chunk_id = c.id
      JOIN documents d ON c.document_id = d.id
      WHERE m.role != 1
+       ${symbolFilter}
        ${db.pathExclusionsFor('d')}`,
+    ...(symbolIds ?? []),
   );
 }
 
@@ -909,6 +949,7 @@ function addRustAttrCallers(
   map: Map<number, Set<string>>,
   docs: ReadonlyArray<{ relative_path: string }>,
   leafIndex: Map<string, GlobalLeafCandidate[]>,
+  targetSymbolIds: ReadonlySet<number>,
 ): void {
   // String-attr helpers (`#[serde(default = "fn")]`, etc.) are framework
   // dispatches that SCIP does not connect back to the helper definition.
@@ -921,6 +962,7 @@ function addRustAttrCallers(
       const candidates = leafIndex.get(name);
       if (!candidates) continue;
       for (const c of candidates) {
+        if (!targetSymbolIds.has(c.symbolId)) continue;
         if (c.file === doc.relative_path) continue; // self-ref, not a caller
         addCallerFile(map, c.symbolId, doc.relative_path);
       }

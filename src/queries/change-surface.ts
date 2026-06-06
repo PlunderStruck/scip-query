@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { ProjectIndex } from '../core/project-index.js';
 import { resolveIndexedFile } from '../resolution/path-resolver.js';
-import type { ChangeSurfaceEntry, ChangeSurfaceResult } from '../domain/types.js';
+import type { ChangeSurfaceEntry, ChangeSurfaceResult, IndexedDefinition } from '../domain/types.js';
 import { semanticCallerMap } from '../semantic/shared-primitives.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
 
@@ -27,9 +27,16 @@ export function changeSurface(
 
   const symbols: ChangeSurfaceEntry[] = [];
   let totalExternalConsumers = 0;
+  const definitions = sortedChangeSurfaceDefinitions(db, doc.relative_path);
+  const semanticConsumers = semanticCallerMap(db, definitions);
 
-  for (const def of sortedChangeSurfaceDefinitions(db, doc.relative_path)) {
-    const externalConsumers = externalConsumerCount(db, doc, def);
+  for (const def of definitions) {
+    const externalConsumers = externalConsumerCount(
+      db,
+      doc,
+      def,
+      semanticConsumers.get(def.symbolId) ?? new Set<string>(),
+    );
     totalExternalConsumers += externalConsumers;
 
     symbols.push({
@@ -70,7 +77,8 @@ function sortedChangeSurfaceDefinitions(db: ScipDatabase, relativePath: string) 
 function externalConsumerCount(
   db: ScipDatabase,
   doc: { id: number; relative_path: string },
-  def: ReturnType<ProjectIndex['definitionsForFile']>[number],
+  def: IndexedDefinition,
+  semanticConsumers: ReadonlySet<string>,
 ): number {
   const consumerRows = db.all<{ relative_path: string }>(
     `SELECT DISTINCT consumer_d.relative_path
@@ -84,7 +92,6 @@ function externalConsumerCount(
     doc.id,
   );
 
-  const semanticConsumers = semanticCallerMap(db, [def]).get(def.symbolId) ?? new Set<string>();
   return new Set([
     ...consumerRows.map((row) => row.relative_path),
     ...[...semanticConsumers].filter((file) => file !== doc.relative_path),

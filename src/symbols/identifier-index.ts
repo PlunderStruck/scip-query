@@ -158,6 +158,12 @@ export function getIdentifiersByLine(
   });
 }
 
+export function clearIdentifierIndexCache(db: ScipDatabase): void {
+  FILE_IDENTIFIER_CACHE.invalidateAll(db);
+  FILE_IDENT_LINES_CACHE.invalidateAll(db);
+  FILE_IDENTS_BY_LINE_CACHE.invalidateAll(db);
+}
+
 function computeIdentifierLineMap(
   db: ScipDatabase,
   relativePath: string,

@@ -17,11 +17,15 @@ import { ProjectIndex } from '../core/project-index.js';
 // summary are one result contract.
 export function passthroughCandidates(
   db: ScipDatabase,
-  opts?: { scope?: string; maxLoc?: number; limit?: number },
+  opts?: { scope?: string; maxLoc?: number; limit?: number; scanLimit?: number },
 ): PassthroughCandidate[] {
-  const { scope, maxLoc = 15, limit = 30 } = opts ?? {};
+  const { scope, maxLoc = 15, limit = 30, scanLimit } = opts ?? {};
   const index = new ProjectIndex(db);
-  const symbols = getPassthroughCandidateSymbols(index, scope, maxLoc);
+  const symbols = applyScanLimit(
+    getPassthroughCandidateSymbols(index, scope, maxLoc)
+      .sort((left, right) => definitionLoc(left) - definitionLoc(right) || left.relativePath.localeCompare(right.relativePath)),
+    scanLimit,
+  );
   const calleeMap = index.calleeMap(symbols);
 
   const results: PassthroughCandidate[] = [];
@@ -92,4 +96,11 @@ function definitionLoc(
   definition: IndexedDefinition,
 ): number {
   return definition.endLine - definition.startLine + 1;
+}
+
+function applyScanLimit<T>(items: T[], scanLimit: number | undefined): T[] {
+  if (typeof scanLimit !== 'number' || scanLimit <= 0 || items.length <= scanLimit) {
+    return items;
+  }
+  return items.slice(0, scanLimit);
 }

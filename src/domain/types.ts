@@ -551,6 +551,7 @@ export interface HealthReport {
   };
   actions: HealthAction[];
   topComplexity: Array<{ symbol: string; score: number }>;
+  warnings?: string[];
 }
 
 export interface ConvergenceResult {

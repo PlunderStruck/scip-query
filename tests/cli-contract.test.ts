@@ -37,6 +37,7 @@ describe('CLI contract', () => {
     expect(command('health').description()).toBe('Composite codebase health report with prioritized action list');
     expect(optionFlags('health')).toEqual([
       '-s, --scope <path>',
+      '--full',
       '--json',
     ]);
 

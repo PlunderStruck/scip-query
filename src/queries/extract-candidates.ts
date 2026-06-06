@@ -32,9 +32,9 @@ interface ScoredCluster {
 // scoring, and aggregate summary are one command contract.
 export function extractCandidates(
   db: ScipDatabase,
-  opts: { scope?: string; minLoc?: number; minCallees?: number; limit?: number } = {},
+  opts: { scope?: string; minLoc?: number; minCallees?: number; limit?: number; scanLimit?: number } = {},
 ): ExtractCandidate[] {
-  const { scope, minLoc = 10, minCallees = 6, limit = 20 } = opts;
+  const { scope, minLoc = 10, minCallees = 6, limit = 20, scanLimit } = opts;
   const index = new ProjectIndex(db);
   const symbols = index.productionCallableDefinitions({
     scope,
@@ -43,12 +43,13 @@ export function extractCandidates(
     requireFunctionLikeSymbol: true,
     sortByLocDesc: true,
   });
+  const scannedSymbols = applyScanLimit(symbols, scanLimit);
 
-  const calleeMap = index.calleeMap(symbols);
+  const calleeMap = index.calleeMap(scannedSymbols);
 
   const results: ExtractCandidate[] = [];
 
-  for (const sym of symbols) {
+  for (const sym of scannedSymbols) {
     const candidate = extractionCandidateForSymbol(sym, calleeMap.get(sym.symbolId) ?? [], minCallees);
     if (candidate) results.push(candidate);
   }
@@ -190,4 +191,11 @@ function definitionLoc(
   definition: IndexedDefinition,
 ): number {
   return definition.endLine - definition.startLine + 1;
+}
+
+function applyScanLimit<T>(items: T[], scanLimit: number | undefined): T[] {
+  if (typeof scanLimit !== 'number' || scanLimit <= 0 || items.length <= scanLimit) {
+    return items;
+  }
+  return items.slice(0, scanLimit);
 }

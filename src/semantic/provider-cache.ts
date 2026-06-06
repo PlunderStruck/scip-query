@@ -20,3 +20,7 @@ export function getSemanticProvider(db: ScipDatabase, relativePath?: string): Se
   perDb.set(key, provider);
   return provider;
 }
+
+export function clearSemanticProviderCache(db: ScipDatabase): void {
+  PROVIDER_CACHE.delete(db);
+}

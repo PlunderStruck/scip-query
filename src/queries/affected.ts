@@ -1,11 +1,10 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { findExactSymbolMatch, findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
-import { findEnclosingDefinition } from '../symbols/definition-catalog.js';
+import { findEnclosingDefinition, getDefinitionsForFile } from '../symbols/definition-catalog.js';
 import { getCallerRowsForSymbol } from '../symbols/reference-graph.js';
 import type { SymbolMatch } from '../domain/types.js';
 import type { AffectedResult } from '../domain/types.js';
 import { leafSuffix, shortenSymbol } from '../symbols/symbol-parser.js';
-import { ProjectIndex } from '../core/project-index.js';
 
 /**
  * Full transitive closure of symbols that could break if a given symbol changes.
@@ -78,9 +77,8 @@ function getDirectAffectedRows(
   file: string;
   symbolMatch: SymbolMatch | null;
 }> {
-  const index = new ProjectIndex(db);
   // Two sources unioned: AST-backed callers (precise enclosing function for
-  // call expressions) PLUS file-level references from the broader caller map
+  // call expressions) PLUS targeted file-level references from SCIP mentions
   // (catches type-annotation users — `function f(x: Target)` doesn't appear
   // as a call but the file IS affected if Target's API changes).
   const callerRows = getCallerRowsForSymbol(db, target, { limit: 500 })
@@ -88,17 +86,14 @@ function getDirectAffectedRows(
     .filter((row) => !scope || row.file.includes(scope));
 
   const callerSeenFiles = new Set(callerRows.map((r) => r.file));
-  const broaderFiles = index.crossFileCallerMap().get(target.symbolId) ?? new Set<string>();
   const typeReferenceRows: Array<{ symbol: string; file: string }> = [];
-  for (const file of broaderFiles) {
+  for (const file of consumerFilesForSymbol(db, target, scope)) {
     if (callerSeenFiles.has(file)) continue;
-    if (db.isIgnored(file)) continue;
-    if (scope && !file.includes(scope)) continue;
     // For type-only consumers, attribute to the file's first definition that
     // mentions the target's leaf in source — the closest "owner" we can name
     // without per-line precision. If no enclosing def is found, attribute to
     // the file as a whole (symbolId: null).
-    const fileDefs = index.definitionsForFile(file);
+    const fileDefs = getDefinitionsForFile(db, file);
     const enclosing = fileDefs.length > 0 ? findEnclosingDefinition(fileDefs, fileDefs[0]!.startLine) : null;
     typeReferenceRows.push({
       symbol: enclosing?.symbol ?? file,
@@ -152,6 +147,33 @@ function getDirectAffectedRows(
   }
 
   return results;
+}
+
+function consumerFilesForSymbol(
+  db: ScipDatabase,
+  target: SymbolMatch,
+  scope: string | undefined,
+): Set<string> {
+  const scopeFilter = scope ? 'AND consumer_d.relative_path LIKE ?' : '';
+  const params: Array<number | string> = [target.symbolId, target.documentId];
+  if (scope) params.push(`%${scope}%`);
+
+  return new Set(
+    db.all<{ relative_path: string }>(
+      `SELECT DISTINCT consumer_d.relative_path
+       FROM mentions m
+       JOIN chunks c ON m.chunk_id = c.id
+       JOIN documents consumer_d ON consumer_d.id = c.document_id
+       WHERE m.symbol_id = ?
+         AND m.role != 1
+         AND c.document_id != ?
+         ${db.pathExclusionsFor('consumer_d')}
+         ${scopeFilter}`,
+      ...params,
+    )
+      .map((row) => row.relative_path)
+      .filter((file) => !db.isIgnored(file)),
+  );
 }
 
 function canPropagateImpact(symbol: string): boolean {
