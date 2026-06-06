@@ -655,8 +655,7 @@ function listVueDocumentFiles(db: Database.Database, projectRoot: string): strin
 
 function createVueLanguageContext(projectRoot: string, configPath: string): VueLanguageContext {
   const requireFromProject = createRequire(pathToFileURL(join(projectRoot, 'package.json')).href);
-  const ts = requireFromProject('typescript') as TsModule;
-  const vueCore = requireFromProject('@vue/language-core') as {
+  const vueCore = requireVueAugmentDependency(requireFromProject, '@vue/language-core', projectRoot) as {
     createParsedCommandLine(ts: TsModule, host: unknown, configFileName: string): {
       vueOptions: Record<string, unknown>;
     };
@@ -676,7 +675,8 @@ function createVueLanguageContext(projectRoot: string, configPath: string): VueL
       sync: (id: string) => void,
     ): VolarLanguage;
   };
-  const volarTs = requireFromProject('@volar/typescript') as {
+  const ts = requireVueAugmentDependency(requireFromProject, 'typescript', projectRoot) as TsModule;
+  const volarTs = requireVueAugmentDependency(requireFromProject, '@volar/typescript', projectRoot) as {
     createLanguageServiceHost(
       ts: TsModule,
       sys: unknown,
@@ -750,6 +750,27 @@ function createVueLanguageContext(projectRoot: string, configPath: string): VueL
     fileNames: parsed.fileNames,
     configDir,
   };
+}
+
+function requireVueAugmentDependency(
+  requireFromProject: ReturnType<typeof createRequire>,
+  packageName: string,
+  projectRoot: string,
+): unknown {
+  try {
+    return requireFromProject(packageName);
+  } catch (err) {
+    const code = typeof err === 'object' && err !== null && 'code' in err
+      ? (err as { code?: unknown }).code
+      : null;
+    if (code === 'MODULE_NOT_FOUND') {
+      throw new Error(
+        `Vue augmentation requires ${packageName} to be installed in ${projectRoot}. ` +
+        'Install Vue/Volar dependencies for that project, then rerun augment-vue.',
+      );
+    }
+    throw err;
+  }
 }
 
 function createSymbolLookup(

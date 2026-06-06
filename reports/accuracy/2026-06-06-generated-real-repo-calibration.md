@@ -181,6 +181,19 @@ bottlenecks --scope apps/api/src/modules/issues --limit 15
 
 call-graph parse_cov
   no project callees for Python os.path.exists()
+
+reindex --language python --force
+  Indexed python in 4.4s with scip-python-plus
+  symbols scripts/generate_checklist.py returned parse_cov() and generate_checklist()
+
+augment-vue --project apps/web/tsconfig.json
+  fails with actionable dependency guidance when @vue/language-core is absent
+
+watch
+  starts and handles SIGINT cleanly in a temp project
+
+init / status / check-deps / install-skills
+  exercised with temp HOME/project roots or the Vega cache
 ```
 
 ### Remaining command accuracy concerns

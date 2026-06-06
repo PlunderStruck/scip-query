@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/storage/db.js';
 import { augmentAuxiliaryDocuments } from '../src/reindex/augment.js';
+import { augmentVueResolvedReferences } from '../src/reindex/augment-vue.js';
 import * as queries from '../src/queries/index.js';
 
 function createDocumentsOnlyDb(dbPath: string): void {
@@ -31,6 +32,15 @@ function createDocumentsOnlyDb(dbPath: string): void {
       chunk_id INTEGER NOT NULL,
       symbol_id INTEGER NOT NULL,
       role INTEGER NOT NULL
+    );
+    CREATE TABLE defn_enclosing_ranges (
+      id INTEGER PRIMARY KEY,
+      document_id INTEGER NOT NULL,
+      symbol_id INTEGER NOT NULL,
+      start_line INTEGER NOT NULL,
+      start_char INTEGER NOT NULL,
+      end_line INTEGER NOT NULL,
+      end_char INTEGER NOT NULL
     );
     CREATE TABLE chunks (
       id INTEGER PRIMARY KEY,
@@ -91,5 +101,24 @@ describe('auxiliary source augmentation', () => {
 
     const result = augmentAuxiliaryDocuments({ projectRoot, dbPath });
     expect(result).toEqual({ scanned: 1_100, inserted: 1_100, existing: 0 });
+  });
+
+  it('explains missing Volar dependencies for Vue reference augmentation', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-augment-vue-missing-'));
+    const dbPath = join(projectRoot, 'index.db');
+    mkdirSync(join(projectRoot, 'src/components'), { recursive: true });
+    writeFileSync(join(projectRoot, 'package.json'), '{"name":"fixture"}\n');
+    writeFileSync(join(projectRoot, 'tsconfig.json'), '{"include":["src/**/*.vue"]}\n');
+    writeFileSync(
+      join(projectRoot, 'src/components/UserList.vue'),
+      '<script setup lang="ts">const count = 1</script>\n<template>{{ count }}</template>\n',
+    );
+    createDocumentsOnlyDb(dbPath);
+
+    expect(() => augmentVueResolvedReferences({
+      projectRoot,
+      dbPath,
+      tsconfig: 'tsconfig.json',
+    })).toThrow(/Vue augmentation requires @vue\/language-core to be installed/);
   });
 });
