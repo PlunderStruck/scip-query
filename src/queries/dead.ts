@@ -4,7 +4,9 @@ import { enclosingTypeNames, getAllDefinitions } from '../symbols/definition-cat
 import { getDefinitionExclusions } from '../analysis/framework-patterns.js';
 import type { DeadOptions, DeadSymbolResult, DeadSummary } from '../domain/types.js';
 import { isCallableSymbol, isFunctionLikeSymbol, isInRustTestModule, isModuleLikeSymbol, isRustTraitImplMember, shortenSymbol } from '../symbols/symbol-parser.js';
+import { getCallerRowsForSymbol } from '../symbols/reference-graph.js';
 import { ProjectIndex } from '../core/project-index.js';
+import { getSourceImports } from '../language-parsers/index.js';
 
 /**
  * Find dead exports: symbols defined locally with no cross-file references.
@@ -81,6 +83,11 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     .filter((definition) => !isInRustTestModule(definition.symbol))
     .filter((definition) => includeMembers || isTopLevelOrCallable(definition))
     .filter((definition) => (definition.endLine - definition.startLine + 1) >= minLoc);
+
+  supplementReferencesFromCallerMap(db, definitions, referencesBySymbol, {
+    includeTests,
+    inactiveBarrelPaths,
+  });
 
   const rows = definitions
     .map((definition) => {
@@ -210,11 +217,59 @@ function supplementReferencesFromAst(
     skipPath: (relativePath) => inactiveBarrelPaths.has(relativePath),
   }, (hit) => {
     if (hit.kind === 'cross-language-dispatch' && hit.target.relativePath === hit.sourceFile) return;
+    if (hit.kind === 'identifier' && isUnusedImportOnlyHit(db, hit)) return;
     const occurrences = hit.kind === 'identifier' && hit.target.relativePath === hit.sourceFile
       ? Math.max(0, hit.occurrences - 1)
       : hit.occurrences;
     recordRef(hit.target.symbolId, hit.sourceFile, occurrences);
   });
+}
+
+function isUnusedImportOnlyHit(
+  db: ScipDatabase,
+  hit: {
+    sourceFile: string;
+    name: string;
+    target: { relativePath: string };
+    occurrences: number;
+  },
+): boolean {
+  if (hit.occurrences > 1) return false;
+  return getSourceImports(db, hit.sourceFile).some((entry) => {
+    if (entry.used || entry.sourcePath !== hit.target.relativePath) return false;
+    return entry.importedName === hit.name || entry.localName === hit.name;
+  });
+}
+
+function supplementReferencesFromCallerMap(
+  db: ScipDatabase,
+  definitions: ReadonlyArray<{
+    documentId: number;
+    symbolId: number;
+    symbol: string;
+    relativePath: string;
+    startLine: number;
+    endLine: number;
+  }>,
+  referencesBySymbol: Map<number, Map<string, number>>,
+  opts: { includeTests: boolean; inactiveBarrelPaths: ReadonlySet<string> },
+): void {
+  for (const definition of definitions) {
+    const callers = getCallerRowsForSymbol(db, definition);
+    if (callers.length === 0) continue;
+    let refsForSymbol = referencesBySymbol.get(definition.symbolId);
+    if (!refsForSymbol) {
+      refsForSymbol = new Map<string, number>();
+      referencesBySymbol.set(definition.symbolId, refsForSymbol);
+    }
+    for (const caller of callers) {
+      const callerFile = caller.file;
+      if (callerFile === definition.relativePath || db.isIgnored(callerFile)) continue;
+      if (opts.inactiveBarrelPaths.has(callerFile)) continue;
+      if (!opts.includeTests && !passesTestFileFilter(callerFile)) continue;
+      refsForSymbol.set(callerFile, Math.max(1, refsForSymbol.get(callerFile) ?? 0));
+    }
+  }
 }
 
 /**

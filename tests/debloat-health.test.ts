@@ -4,7 +4,7 @@ import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/storage/db.js';
-import { getLiveBarrelPaths, isEntrySurface } from '../src/analysis/file-classifier.js';
+import { classifyFile, getLiveBarrelPaths, isEntrySurface } from '../src/analysis/file-classifier.js';
 import { dead } from '../src/queries/dead.js';
 import { health } from '../src/queries/health.js';
 import { isolated } from '../src/queries/isolated.js';
@@ -159,6 +159,8 @@ describe('debloat liveness regressions', () => {
   it('tracks live barrels from structural entry surfaces', () => {
     const liveBarrels = getLiveBarrelPaths(db);
 
+    expect(classifyFile('apps/api/src/index.ts')).toBe('entry');
+    expect(classifyFile('apps/api/src/modules/auth/index.ts')).toBe('barrel');
     expect(liveBarrels.has('src/queries/index.ts')).toBe(true);
     expect(liveBarrels.has('src/unused/index.ts')).toBe(false);
     expect(isEntrySurface(db, 'src/reindex-worker.ts')).toBe(true);

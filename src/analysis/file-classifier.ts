@@ -196,6 +196,7 @@ function isStructuralEntryPath(normalized: string): boolean {
   // Top-level index files only — nested barrels need a live dependency
   // path through these roots before counting as entry surfaces.
   if (basename === 'index.ts' || basename === 'index.js') {
+    if (/(?:^|\/)(?:apps|services)\/[^/]+\/src\/index\.(?:ts|js)$/.test(normalized)) return true;
     return segments.length <= 2;
   }
 

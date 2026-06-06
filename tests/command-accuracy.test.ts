@@ -555,6 +555,14 @@ describe('command accuracy fixes', () => {
     ]);
   });
 
+  it('keeps source-attributed cross-file callers out of dead-code results', () => {
+    const results = dead(db, { minLoc: 1 });
+    const names = results.symbols.map((result) => result.shortName);
+
+    expect(names).not.toContain('src:utils:tryInstallScipCli()');
+    expect(names).toContain('src:utils:unusedHelper()');
+  });
+
   it('keeps change-surface focused on external consumers and blast-radius risk', () => {
     const result = changeSurface(db, 'utils.ts');
 
