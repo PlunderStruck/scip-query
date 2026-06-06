@@ -194,6 +194,25 @@ interface SourceFingerprint {
   tokens: Set<string>;
 }
 
+const INFRASTRUCTURE_CALLEE_FRAGMENTS = [
+  'ScipDatabase#all',
+  'ScipDatabase#get',
+  'ScipDatabase#prepare',
+  'ScipDatabase#pathExclusionsFor',
+  'ScipDatabase#isIgnored',
+  'ScipDatabase#symbolNoiseFor',
+  'PerDbValue#get',
+  'PerDbValue#has',
+  ':storage:db:ScipDatabase:all',
+  ':storage:db:ScipDatabase:get',
+  ':storage:db:ScipDatabase:prepare',
+  ':storage:db:ScipDatabase:pathExclusionsFor',
+  ':storage:db:ScipDatabase:isIgnored',
+  ':storage:db:ScipDatabase:symbolNoiseFor',
+  ':storage:per-db-cache:PerDbValue:get',
+  ':storage:per-db-cache:PerDbValue:has',
+];
+
 function findCallees(
   db: ScipDatabase,
   symbolPattern: string,
@@ -208,7 +227,7 @@ function findCallees(
   return {
     symbol: target.symbol,
     file: target.relativePath,
-    callees: new Set(calleeRows.map((r) => r.symbol)),
+    callees: meaningfulCallees(calleeRows.map((r) => r.symbol)),
     paramCount: index.callableSignature(target)?.paramCount ?? -1,
   };
 }
@@ -230,10 +249,18 @@ function getAllCalleeFingerprints(
     .map((d) => ({
       symbol: d.symbol,
       file: d.relativePath,
-      callees: new Set((calleeMap.get(d.symbolId) ?? []).map((c) => c.symbol)),
+      callees: meaningfulCallees((calleeMap.get(d.symbolId) ?? []).map((c) => c.symbol)),
       paramCount: index.callableSignature(d)?.paramCount ?? -1,
     }))
     .filter((fp) => fp.callees.size >= minCallees);
+}
+
+function meaningfulCallees(callees: Iterable<string>): Set<string> {
+  return new Set([...callees].filter((callee) => !isInfrastructureCallee(callee)));
+}
+
+function isInfrastructureCallee(callee: string): boolean {
+  return INFRASTRUCTURE_CALLEE_FRAGMENTS.some((fragment) => callee.includes(fragment));
 }
 
 function similarBySourceShape(

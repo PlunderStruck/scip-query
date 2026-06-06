@@ -197,14 +197,7 @@ export function resolveRustImportPath(
     basePath = resolve(dirname(importerDir), normalizedSpecifier.slice('super::'.length).replace(/::/g, '/'));
   }
 
-  for (const candidate of rustCandidateImportPaths(basePath)) {
-    const relativeCandidate = normalizePath(relative(db.config.projectRoot, candidate));
-    if (getIndexedPaths(db).has(relativeCandidate) || existsSync(candidate)) {
-      return relativeCandidate;
-    }
-  }
-
-  return null;
+  return firstIndexedOrExistingPath(db, rustCandidateImportPaths(basePath));
 }
 
 export function resolveRubyImportPath(
@@ -214,13 +207,7 @@ export function resolveRubyImportPath(
 ): string | null {
   const importerDir = dirname(join(db.config.projectRoot, importerPath));
   const absolute = resolve(importerDir, specifier);
-  for (const candidate of rubyCandidateImportPaths(absolute)) {
-    const relativeCandidate = normalizePath(relative(db.config.projectRoot, candidate));
-    if (getIndexedPaths(db).has(relativeCandidate) || existsSync(candidate)) {
-      return relativeCandidate;
-    }
-  }
-  return null;
+  return firstIndexedOrExistingPath(db, rubyCandidateImportPaths(absolute));
 }
 
 export function resolveCLikeImportPath(
@@ -228,7 +215,6 @@ export function resolveCLikeImportPath(
   importerPath: string,
   specifier: string,
 ): string | null {
-  const indexedPaths = getIndexedPaths(db);
   const importerDir = dirname(join(db.config.projectRoot, importerPath));
   const candidates = [
     resolve(importerDir, specifier),
@@ -237,14 +223,7 @@ export function resolveCLikeImportPath(
     resolve(db.config.projectRoot, 'src', specifier),
   ];
 
-  for (const candidate of candidates) {
-    const relativeCandidate = normalizePath(relative(db.config.projectRoot, candidate));
-    if (indexedPaths.has(relativeCandidate) || existsSync(candidate)) {
-      return relativeCandidate;
-    }
-  }
-
-  return null;
+  return firstIndexedOrExistingPath(db, candidates);
 }
 
 export function resolveQualifiedImportPath(
@@ -326,6 +305,20 @@ function pythonCandidateImportPaths(basePath: string): string[] {
     join(basePath, '__init__.py'),
     join(basePath, '__init__.pyi'),
   ];
+}
+
+function firstIndexedOrExistingPath(
+  db: ScipDatabase,
+  candidates: readonly string[],
+): string | null {
+  const indexedPaths = getIndexedPaths(db);
+  for (const candidate of candidates) {
+    const relativeCandidate = normalizePath(relative(db.config.projectRoot, candidate));
+    if (indexedPaths.has(relativeCandidate) || existsSync(candidate)) {
+      return relativeCandidate;
+    }
+  }
+  return null;
 }
 
 function rustCandidateImportPaths(basePath: string): string[] {

@@ -1,15 +1,14 @@
 import type { IndexedDefinition, SymbolMatch } from '../domain/types.js';
 import type { ScipDatabase } from '../storage/db.js';
-import type { SemanticCallee, SemanticImportUsage, SemanticReference } from './types.js';
+import type { SemanticCallee, SemanticImportUsage, SemanticProvider, SemanticReference } from './types.js';
 import { getSemanticProvider } from './provider-cache.js';
 
 export function semanticImportUsage(
   db: ScipDatabase,
   file: string,
 ): SemanticImportUsage[] {
-  if (!isTypeScriptLike(file)) return [];
-  const provider = getSemanticProvider(db, file);
-  if (!provider.availability().available) return [];
+  const provider = availableTypeScriptProvider(db, file);
+  if (!provider) return [];
   return provider.importUsage(file);
 }
 
@@ -17,9 +16,8 @@ export function semanticReferences(
   db: ScipDatabase,
   definition: IndexedDefinition,
 ): SemanticReference[] {
-  if (!isTypeScriptLike(definition.relativePath)) return [];
-  const provider = getSemanticProvider(db, definition.relativePath);
-  if (!provider.availability().available) return [];
+  const provider = availableTypeScriptProvider(db, definition.relativePath);
+  if (!provider) return [];
   return provider.referencesFor(definition);
 }
 
@@ -49,9 +47,8 @@ export function semanticCalleeMap(
 ): Map<number, SemanticCallee[]> {
   const result = new Map<number, SemanticCallee[]>();
   for (const definition of definitions) {
-    if (!isTypeScriptLike(definition.relativePath)) continue;
-    const provider = getSemanticProvider(db, definition.relativePath);
-    if (!provider.availability().available) continue;
+    const provider = availableTypeScriptProvider(db, definition.relativePath);
+    if (!provider) continue;
     const callees = provider.calleesFor(definition as IndexedDefinition);
     if (callees.length > 0) result.set(definition.symbolId, callees);
   }
@@ -62,10 +59,15 @@ export function semanticSignature(
   db: ScipDatabase,
   definition: IndexedDefinition,
 ): string | null {
-  if (!isTypeScriptLike(definition.relativePath)) return null;
-  const provider = getSemanticProvider(db, definition.relativePath);
-  if (!provider.availability().available) return null;
+  const provider = availableTypeScriptProvider(db, definition.relativePath);
+  if (!provider) return null;
   return provider.signatureFor(definition);
+}
+
+function availableTypeScriptProvider(db: ScipDatabase, relativePath: string): SemanticProvider | null {
+  if (!isTypeScriptLike(relativePath)) return null;
+  const provider = getSemanticProvider(db, relativePath);
+  return provider.availability().available ? provider : null;
 }
 
 function isTypeScriptLike(relativePath: string): boolean {
