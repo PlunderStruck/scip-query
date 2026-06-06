@@ -149,6 +149,18 @@ The TypeScript+Python Vega index exposed several non-dead-code accuracy bugs:
   object return signatures such as `Promise<{ updated: number; }>`.
 - `affected` propagated through module/file symbols and plain constants. It now
   restricts propagation to executable callable definitions and type definitions.
+- `similar` used lexical source-token fallback when no callee-fingerprint
+  match existed but still labeled those tokens as callees. Results now expose
+  the evidence basis and the CLI prints `Shared source tokens` for fallback
+  matches.
+- `bottlenecks` used file-level fan-out SQL and assigned that fan-out to every
+  symbol in the file, which made modules, singleton variables, route variables,
+  and fields look like coupling hubs. It now uses canonical callable
+  definitions plus caller/callee rows.
+- Python AST call resolution could cross languages when a stdlib/external leaf
+  name matched a unique TypeScript symbol. For example, `os.path.exists()` in
+  `scripts/generate_checklist.py` was resolved to a TypeScript `exists()`
+  helper. AST leaf fallback now stays inside the source language family.
 
 Vega spot checks after the fixes:
 
@@ -163,6 +175,12 @@ affected buildIssueChunks --max-depth 2
 
 health --scope apps/api/src/modules/issues
   Codebase Health Score: 95/100
+
+bottlenecks --scope apps/api/src/modules/issues --limit 15
+  returns callable methods/functions only
+
+call-graph parse_cov
+  no project callees for Python os.path.exists()
 ```
 
 ### Remaining command accuracy concerns
@@ -170,6 +188,6 @@ health --scope apps/api/src/modules/issues
 - `drift` is noisy at Vega scale because many sibling directories naturally
   have unique dependency edges. Unique dependency edges are observations, not
   automatic architectural violations.
-- `similar` can still produce low-signal pairs when identifier/callee
-  fingerprints are mostly common domain words. Treat low-similarity output as
-  exploratory evidence until sampled against source.
+- `similar` source-token fallback can still be low-signal when the shared
+  tokens are common domain words. The output now identifies that evidence as
+  source-token similarity rather than call-graph similarity.

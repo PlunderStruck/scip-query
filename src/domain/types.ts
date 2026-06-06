@@ -462,13 +462,15 @@ export interface SimilarSymbolResult {
   symbolB: string;
   shortNameB: string;
   fileB: string;
-  /** Jaccard similarity of callee sets (0-1) */
+  /** Similarity score (0-1). Basis says what evidence was compared. */
   similarity: number;
-  /** Callees shared by both symbols */
+  /** Evidence used for similarity: call graph callees or lexical source tokens. */
+  similarityBasis?: 'callees' | 'source-tokens';
+  /** Shared callees or source tokens, depending on similarityBasis. */
   sharedCallees: string[];
-  /** Callees unique to A */
+  /** Callees or source tokens unique to A, depending on similarityBasis. */
   uniqueToA: string[];
-  /** Callees unique to B */
+  /** Callees or source tokens unique to B, depending on similarityBasis. */
   uniqueToB: string[];
 }
 

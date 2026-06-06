@@ -17,6 +17,7 @@ import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/storage/db.js';
 import { findFirstSymbolMatch } from '../src/symbols/symbol-lookup.js';
 import { affected } from '../src/queries/affected.js';
+import { bottlenecks } from '../src/queries/bottlenecks.js';
 import { byKind } from '../src/queries/by-kind.js';
 import { callGraph } from '../src/queries/call-graph.js';
 import { changeSurface } from '../src/queries/change-surface.js';
@@ -31,7 +32,7 @@ import { importedBy, imports, unusedImports } from '../src/queries/imports.js';
 import { members } from '../src/queries/members.js';
 import { outline } from '../src/queries/outline.js';
 import { refs } from '../src/queries/refs.js';
-import { similarAll } from '../src/queries/similar.js';
+import { similar, similarAll } from '../src/queries/similar.js';
 import { staleAbstractions } from '../src/queries/stale-abstractions.js';
 import { symbols } from '../src/queries/symbols.js';
 import { system } from '../src/queries/system.js';
@@ -614,6 +615,15 @@ describe('command accuracy fixes', () => {
     );
   });
 
+  it('labels source-token similarity separately from callee similarity', () => {
+    const results = similar(db, 'isWorkerEntrySurface', { minSimilarity: 0.1, limit: 5 });
+    const match = results.find((result) => result.shortNameB === 'src:predicates:isBarrelFile()');
+
+    expect(match).toBeDefined();
+    expect(match!.similarityBasis).toBe('source-tokens');
+    expect(match!.sharedCallees).toContain('path');
+  });
+
   it('keeps affected propagation on executable/type consumers instead of module surfaces', () => {
     const results = affected(db, 'sharedOne', { maxDepth: 1 });
     const names = results.map((result) => result.shortName);
@@ -973,6 +983,11 @@ describe('command accuracy fixes', () => {
 
         const result = complexity(callDb, 'collect');
         expect(result?.calleeCount).toBe(1);
+
+        const bottleneckResults = bottlenecks(callDb, { minFanIn: 0, minFanOut: 1, limit: 20 });
+        expect(bottleneckResults.map((row) => row.shortName)).toContain('src:query:collect()');
+        expect(bottleneckResults.every((row) => row.symbol.endsWith('().'))).toBe(true);
+        expect(bottleneckResults.map((row) => row.shortName)).not.toContain('src:db:Store');
 
         expect(refs(callDb, 'collect')).toEqual([
           { relativePath: 'src/consumer.ts', line: 0 },

@@ -656,14 +656,17 @@ program
       });
       if (results.length === 0) return render.empty('No similar symbols found.');
       render.list(results, (r) => {
+        const basis = r.similarityBasis ?? 'callees';
+        const sharedLabel = basis === 'source-tokens' ? 'Shared source tokens' : 'Shared callees';
+        const onlyLabel = basis === 'source-tokens' ? 'Only tokens in' : 'Only in';
         const lines = [
           `\n${Math.round(r.similarity * 100)}% similar:`,
           `  A: ${r.shortNameA}  (${r.fileA})`,
           `  B: ${r.shortNameB}  (${r.fileB})`,
-          `  Shared callees: ${r.sharedCallees.join(', ')}`,
+          `  ${sharedLabel}: ${r.sharedCallees.join(', ')}`,
         ];
-        if (r.uniqueToA.length) lines.push(`  Only in A: ${r.uniqueToA.join(', ')}`);
-        if (r.uniqueToB.length) lines.push(`  Only in B: ${r.uniqueToB.join(', ')}`);
+        if (r.uniqueToA.length) lines.push(`  ${onlyLabel} A: ${r.uniqueToA.join(', ')}`);
+        if (r.uniqueToB.length) lines.push(`  ${onlyLabel} B: ${r.uniqueToB.join(', ')}`);
         return lines.join('\n');
       });
     } else {
@@ -679,7 +682,7 @@ program
         `\n${Math.round(r.similarity * 100)}% similar:\n` +
         `  A: ${r.shortNameA}  (${r.fileA})\n` +
         `  B: ${r.shortNameB}  (${r.fileB})\n` +
-        `  Shared: ${r.sharedCallees.join(', ')}`,
+        `  Shared ${r.similarityBasis === 'source-tokens' ? 'source tokens' : 'callees'}: ${r.sharedCallees.join(', ')}`,
       );
       console.log(`\n${results.length} similar pair(s) found.`);
     }

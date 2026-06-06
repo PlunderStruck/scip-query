@@ -183,9 +183,11 @@ function createPythonCallFixtureProject(projectRoot: string): void {
   writeFileSync(
     join(projectRoot, 'app.py'),
     [
+      'import os',
       'from simulation import GardenSimulation',
       '',
       'def run():',
+      '    os.path.exists("garden.json")',
       '    sim = GardenSimulation()',
       '    sim.advance_cycle()',
       '',
@@ -233,6 +235,16 @@ function createPythonCallFixtureProject(projectRoot: string): void {
       'def test_model():',
       '    sim = GardenSimulation()',
       '    sim.advance_cycle()',
+      '',
+    ].join('\n'),
+  );
+
+  writeFileSync(
+    join(projectRoot, 'db_helpers.ts'),
+    [
+      'export function exists() {',
+      '  return true;',
+      '}',
       '',
     ].join('\n'),
   );
@@ -295,7 +307,8 @@ function createPythonCallFixtureDb(dbPath: string): void {
       (1, 'python', 'app.py'),
       (2, 'python', 'analysis.py'),
       (3, 'python', 'simulation.py'),
-      (4, 'python', 'tests/test_simulation.py');
+      (4, 'python', 'tests/test_simulation.py'),
+      (5, 'typescript', 'db_helpers.ts');
   `);
 
   const insertSymbol = sqliteDb.prepare(
@@ -312,6 +325,7 @@ function createPythonCallFixtureDb(dbPath: string): void {
   insertSymbol.run(7, 'scip-python python project 0.1.0 app/run().', 'run', null, 'def run():');
   insertSymbol.run(8, 'scip-python python project 0.1.0 analysis/inspect().', 'inspect', null, 'def inspect():');
   insertSymbol.run(9, 'scip-python python project 0.1.0 test_simulation/test_model().', 'test_model', null, 'def test_model():');
+  insertSymbol.run(10, 'scip-typescript npm project 0.1.0 `db_helpers.ts`/exists().', 'exists', 23, 'function exists(): boolean');
 
   run(`
     INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
@@ -321,17 +335,19 @@ function createPythonCallFixtureDb(dbPath: string): void {
       (4, 3, 4, 6, 0, 7, 0),
       (5, 3, 5, 9, 0, 10, 0),
       (6, 3, 6, 12, 0, 13, 0),
-      (7, 1, 7, 2, 0, 4, 0),
+      (7, 1, 7, 3, 0, 6, 0),
       (8, 2, 8, 2, 0, 4, 0),
-      (9, 4, 9, 2, 0, 4, 0);
+      (9, 4, 9, 2, 0, 4, 0),
+      (10, 5, 10, 0, 0, 2, 0);
   `);
 
   run(`
     INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
-      (1, 1, 0, 0, 5, X'00'),
+      (1, 1, 0, 0, 6, X'00'),
       (2, 2, 0, 0, 5, X'00'),
       (3, 3, 0, 0, 13, X'00'),
-      (4, 4, 0, 0, 5, X'00');
+      (4, 4, 0, 0, 5, X'00'),
+      (5, 5, 0, 0, 2, X'00');
   `);
 
   run(`
@@ -344,7 +360,8 @@ function createPythonCallFixtureDb(dbPath: string): void {
       (3, 6, 1),
       (1, 7, 1),
       (2, 8, 1),
-      (4, 9, 1);
+      (4, 9, 1),
+      (5, 10, 1);
   `);
 
   sqliteDb.close();
@@ -476,6 +493,9 @@ describe('python repo accuracy regressions', () => {
           'app:run()',
           'test_simulation:test_model()',
         ]);
+
+        const runGraph = callGraph(callDb, 'run');
+        expect(runGraph?.callees.map((callee) => callee.shortName)).not.toContain('db_helpers:exists()');
 
         const result = complexity(callDb, 'advance_cycle');
         expect(result?.calleeCount).toBe(3);

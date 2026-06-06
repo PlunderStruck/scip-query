@@ -426,7 +426,7 @@ export function buildAstCalleeMap(
       if (!owner) continue;
 
       // Resolve callee leaf to one or more SCIP symbols.
-      const candidates = leafIndex.get(site.calleeLeaf);
+      const candidates = sameLanguageCandidates(file, leafIndex.get(site.calleeLeaf) ?? []);
       if (!candidates || candidates.length === 0) continue;
 
       // Prefer same-file resolution (covers free-functions and methods on
@@ -445,6 +445,24 @@ export function buildAstCalleeMap(
   }
 
   return result;
+}
+
+function sameLanguageCandidates<T extends { file: string }>(
+  sourceFile: string,
+  candidates: T[],
+): T[] {
+  const sourceFamily = astLanguageFamily(sourceFile);
+  if (!sourceFamily) return candidates;
+  return candidates.filter((candidate) => astLanguageFamily(candidate.file) === sourceFamily);
+}
+
+function astLanguageFamily(relativePath: string): string | null {
+  const language = detectAstLanguage(relativePath);
+  if (!language) return null;
+  if (language === 'typescript' || language === 'tsx' || language === 'javascript') {
+    return 'javascript-family';
+  }
+  return language;
 }
 
 const GLOBAL_LEAF_INDEX_CACHE = createPerDbValue<Map<string, Array<{ symbol: string; symbolId: number; file: string }>>>('global-leaf-index');
@@ -646,7 +664,7 @@ export function buildCrossFileCallerMap(
     const callsites = getCallSites(db, doc.relative_path);
     if (!callsites) continue;
     for (const site of callsites) {
-      const candidates = leafIndex.get(site.calleeLeaf);
+      const candidates = sameLanguageCandidates(doc.relative_path, leafIndex.get(site.calleeLeaf) ?? []);
       if (!candidates || candidates.length === 0) continue;
       // Same-file preference (consistent with buildAstCalleeMap).
       const sameFile = candidates.find((c) => c.file === doc.relative_path);
