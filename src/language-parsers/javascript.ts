@@ -71,6 +71,7 @@ function parseJavaScriptImportsAst(
     const specifier = jsImportSpecifier(node);
     if (!specifier) continue;
     const sourcePath = resolveImportPath(db, importerPath, specifier);
+    const clauseTypeOnly = isTypeOnlyImportStatement(node.text);
 
     const importClause = firstChildOfType(node, 'import_clause');
     if (!importClause) {
@@ -98,6 +99,7 @@ function parseJavaScriptImportsAst(
             kind: 'default',
             used: usedNames.has(localName),
             usedMembers: [],
+            isTypeOnly: clauseTypeOnly,
           });
           break;
         }
@@ -116,6 +118,7 @@ function parseJavaScriptImportsAst(
             kind: 'namespace',
             used: usedMembers.length > 0 || usedNames.has(localName),
             usedMembers,
+            isTypeOnly: clauseTypeOnly,
           });
           break;
         }
@@ -134,6 +137,7 @@ function parseJavaScriptImportsAst(
               kind: 'named',
               used: usedNames.has(localName),
               usedMembers: [],
+              isTypeOnly: clauseTypeOnly || isTypeOnlyImportSpecifier(spec.text),
             });
           }
           break;
@@ -150,6 +154,14 @@ function jsImportSpecifier(node: SyntaxNode): string | null {
   if (!str) return null;
   const frag = firstChildOfType(str, 'string_fragment');
   return frag ? frag.text : null;
+}
+
+function isTypeOnlyImportStatement(text: string): boolean {
+  return /^\s*import\s+type\b/.test(text);
+}
+
+function isTypeOnlyImportSpecifier(text: string): boolean {
+  return /^\s*type\b/.test(text.trim());
 }
 
 /**
@@ -267,21 +279,25 @@ function parseImportClause(clause: string): Array<{
   importedName: string;
   localName: string | null;
   kind: 'named' | 'default' | 'namespace' | 'side-effect';
+  isTypeOnly: boolean;
 }> {
-  const trimmed = clause.trim().replace(/^type\s+/, '');
+  const raw = clause.trim();
+  const clauseTypeOnly = /^type\b/.test(raw);
+  const trimmed = raw.replace(/^type\s+/, '');
   const [first, second] = splitImportClause(trimmed);
   const entries: Array<{
     importedName: string;
     localName: string | null;
     kind: 'named' | 'default' | 'namespace' | 'side-effect';
+    isTypeOnly: boolean;
   }> = [];
 
   if (first) {
-    entries.push(...parseImportBinding(first));
+    entries.push(...parseImportBinding(first, clauseTypeOnly));
   }
 
   if (second) {
-    entries.push(...parseImportBinding(second));
+    entries.push(...parseImportBinding(second, clauseTypeOnly));
   }
 
   return entries;
@@ -289,10 +305,12 @@ function parseImportClause(clause: string): Array<{
 
 function parseImportBinding(
   binding: string,
+  clauseTypeOnly: boolean,
 ): Array<{
   importedName: string;
   localName: string | null;
   kind: 'named' | 'default' | 'namespace' | 'side-effect';
+  isTypeOnly: boolean;
 }> {
   const trimmed = binding.trim();
   if (!trimmed) return [];
@@ -302,12 +320,15 @@ function parseImportBinding(
     if (!inner) return [];
 
     return splitTopLevel(inner).map((entry) => {
-      const cleaned = entry.trim().replace(/^type\s+/, '');
+      const raw = entry.trim();
+      const bindingTypeOnly = clauseTypeOnly || /^type\b/.test(raw);
+      const cleaned = raw.replace(/^type\s+/, '');
       const [importedName, alias] = cleaned.split(/\s+as\s+/);
       return {
         importedName: importedName!.trim(),
         localName: (alias ?? importedName)!.trim(),
         kind: 'named' as const,
+        isTypeOnly: bindingTypeOnly,
       };
     });
   }
@@ -317,6 +338,7 @@ function parseImportBinding(
       importedName: '*',
       localName: trimmed.slice(5).trim(),
       kind: 'namespace',
+      isTypeOnly: clauseTypeOnly,
     }];
   }
 
@@ -324,6 +346,7 @@ function parseImportBinding(
     importedName: 'default',
     localName: trimmed,
     kind: 'default',
+    isTypeOnly: clauseTypeOnly,
   }];
 }
 

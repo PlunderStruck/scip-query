@@ -53,10 +53,15 @@ export function drift(
         // This file "depends on" dep but never references its symbols.
         // This can happen when the dep is imported for types only
         // (which don't appear in the mention graph). Skip type-heavy deps.
+        if (hasUsedSourceImport(db, file, dep)) continue;
+        if (isTypeOnlyImport(db, file, dep)) continue;
         if (isLikelyTypeOnlyDep(dep)) continue;
         // Side-effect-only imports (`import 'polyfill'`) intentionally
         // reference nothing — flagging them as "unused" would be wrong.
         if (isSideEffectImport(db, file, dep)) continue;
+        // Vue component imports are often consumed by SFC templates or
+        // component registration rather than a normal symbol reference.
+        if (isVueSingleFileComponent(dep)) continue;
 
         results.push({
           file,
@@ -261,6 +266,20 @@ function inferLayerRules(
 
 function isLikelyTypeOnlyDep(dep: string): boolean {
   return dep.includes('types') || dep.endsWith('.d.ts');
+}
+
+function hasUsedSourceImport(db: ScipDatabase, file: string, dep: string): boolean {
+  const imports = getSourceImports(db, file).filter((entry) => entry.sourcePath === dep);
+  return imports.length > 0 && imports.some((entry) => entry.used);
+}
+
+function isTypeOnlyImport(db: ScipDatabase, file: string, dep: string): boolean {
+  const imports = getSourceImports(db, file).filter((entry) => entry.sourcePath === dep);
+  return imports.length > 0 && imports.every((entry) => entry.isTypeOnly === true);
+}
+
+function isVueSingleFileComponent(dep: string): boolean {
+  return dep.endsWith('.vue');
 }
 
 /**

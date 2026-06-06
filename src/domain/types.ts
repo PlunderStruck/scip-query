@@ -86,6 +86,7 @@ export interface ParsedSourceImport {
   kind: 'named' | 'default' | 'namespace' | 'side-effect';
   used: boolean;
   usedMembers: string[];
+  isTypeOnly?: boolean;
 }
 
 /**
