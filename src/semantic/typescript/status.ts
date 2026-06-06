@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { findNearestTsconfig } from './tsconfig-discovery.js';
+import { discoverTypeScriptTsconfigsForProject } from './tsconfig-discovery.js';
 
 const require = createRequire(import.meta.url);
 
@@ -7,26 +7,29 @@ export interface TypeScriptSemanticStatus {
   available: boolean;
   dependencyAvailable: boolean;
   tsconfigPath?: string;
+  tsconfigPaths?: string[];
   reason?: string;
 }
 
 export function getTypeScriptSemanticStatus(
   projectRoot: string,
-  relativePath?: string,
+  configuredTsconfigs: readonly string[] = [],
 ): TypeScriptSemanticStatus {
   const dependencyAvailable = canResolveTsMorph();
-  const tsconfigPath = findNearestTsconfig(projectRoot, relativePath) ?? undefined;
+  const tsconfigPaths = discoverTypeScriptTsconfigsForProject(projectRoot, configuredTsconfigs);
+  const tsconfigPath = tsconfigPaths[0];
 
   if (!dependencyAvailable) {
     return {
       available: false,
       dependencyAvailable,
       tsconfigPath,
+      tsconfigPaths,
       reason: 'ts-morph is not installed',
     };
   }
 
-  if (!tsconfigPath) {
+  if (tsconfigPaths.length === 0) {
     return {
       available: false,
       dependencyAvailable,
@@ -38,6 +41,7 @@ export function getTypeScriptSemanticStatus(
     available: true,
     dependencyAvailable,
     tsconfigPath,
+    tsconfigPaths,
   };
 }
 

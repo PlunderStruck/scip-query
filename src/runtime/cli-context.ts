@@ -36,6 +36,7 @@ export function openDb(): ScipDatabase {
     indexPath: process.env['SCIP_QUERY_INDEX_SCIP'] ?? paths.indexPath,
     projectRoot,
     entryRoots: config.entryRoots,
+    semantic: config.semantic,
   };
 
   const filter = createGitignoreFilter(projectRoot);

@@ -65,7 +65,8 @@
     "@c4312/scip": "^0.1.0",
     "better-sqlite3": "^12.9.0",
     "commander": "^13.1.0",
-    "ignore": "^7.0.3"
+    "ignore": "^7.0.3",
+    "ts-morph": "^28.0.0"
   },
   "//optionalDependencies": "Native parsers and bundled SCIP indexers go in optionalDependencies so a failed install (missing build tools, restricted registry, incompatible platform) downgrades scip-query gracefully — the affected language falls back to regex parsing or asks the user to install its indexer manually — instead of blocking npm install.",
   "optionalDependencies": {
@@ -83,8 +84,7 @@
     "tree-sitter-ruby": "0.23.1",
     "tree-sitter-rust": "0.23.1",
     "tree-sitter-scala": "0.24.0",
-    "tree-sitter-typescript": "0.23.2",
-    "ts-morph": "^28.0.0"
+    "tree-sitter-typescript": "0.23.2"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

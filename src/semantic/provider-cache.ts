@@ -1,13 +1,11 @@
 import type { ScipDatabase } from '../storage/db.js';
 import type { SemanticProvider } from './types.js';
 import { createTsMorphProvider } from './typescript/ts-morph-provider.js';
-import { findNearestTsconfig } from './typescript/tsconfig-discovery.js';
 
 const PROVIDER_CACHE = new WeakMap<ScipDatabase, Map<string, SemanticProvider>>();
 
 export function getSemanticProvider(db: ScipDatabase, relativePath?: string): SemanticProvider {
-  const tsconfigPath = findNearestTsconfig(db.config.projectRoot, relativePath);
-  const key = `${db.config.projectRoot}:${tsconfigPath ?? '(no-tsconfig)'}`;
+  const key = `${db.config.projectRoot}:typescript-workspace`;
   let perDb = PROVIDER_CACHE.get(db);
   if (!perDb) {
     perDb = new Map();

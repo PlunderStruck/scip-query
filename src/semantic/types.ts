@@ -4,6 +4,7 @@ export interface SemanticAvailability {
   available: boolean;
   reason?: string;
   tsconfigPath?: string;
+  tsconfigPaths?: string[];
 }
 
 export interface SemanticLocation {

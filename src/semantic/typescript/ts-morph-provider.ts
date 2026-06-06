@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { resolveImportPath } from '../../resolution/import-path-resolver.js';
@@ -13,7 +14,7 @@ import type {
   SemanticProvider,
   SemanticReference,
 } from '../types.js';
-import { findNearestTsconfig } from './tsconfig-discovery.js';
+import { discoverTypeScriptTsconfigs } from './tsconfig-discovery.js';
 
 type TsMorphModule = typeof import('ts-morph');
 type Project = import('ts-morph').Project;
@@ -24,31 +25,50 @@ type Identifier = import('ts-morph').Identifier;
 type ReferencedSymbol = import('ts-morph').ReferencedSymbol;
 type Symbol = import('ts-morph').Symbol;
 
+interface ProjectBundle {
+  tsconfigPath: string;
+  project: Project;
+}
+
+interface SourceFileMatch {
+  project: Project;
+  sourceFile: SourceFile;
+}
+
+interface WorkspacePackage {
+  name: string;
+  rootRelative: string;
+  sourceRootRelative: string;
+}
+
 const require = createRequire(import.meta.url);
 let tsMorphModule: TsMorphModule | null | undefined;
 
 export function createTsMorphProvider(
   db: ScipDatabase,
-  relativePath?: string,
+  _relativePath?: string,
 ): SemanticProvider {
   const mod = loadTsMorph();
   if (!mod) {
     return unavailableProvider('ts-morph is not installed');
   }
 
-  const tsconfigPath = findNearestTsconfig(db.config.projectRoot, relativePath);
-  if (!tsconfigPath) {
+  const tsconfigPaths = discoverTypeScriptTsconfigs(db);
+  if (tsconfigPaths.length === 0) {
     return unavailableProvider('no tsconfig found');
   }
 
   try {
-    const project = new mod.Project({
-      tsConfigFilePath: tsconfigPath,
-      skipFileDependencyResolution: false,
-    });
-    return new TsMorphSemanticProvider(db, mod, project, tsconfigPath);
+    const projects = tsconfigPaths.map((tsconfigPath) => ({
+      tsconfigPath,
+      project: new mod.Project({
+        tsConfigFilePath: tsconfigPath,
+        skipFileDependencyResolution: false,
+      }),
+    }));
+    return new TsMorphSemanticProvider(db, mod, projects);
   } catch (error) {
-    return unavailableProvider(error instanceof Error ? error.message : String(error), tsconfigPath);
+    return unavailableProvider(error instanceof Error ? error.message : String(error), tsconfigPaths[0], tsconfigPaths);
   }
 }
 
@@ -62,10 +82,10 @@ function loadTsMorph(): TsMorphModule | null {
   return tsMorphModule;
 }
 
-function unavailableProvider(reason: string, tsconfigPath?: string): SemanticProvider {
+function unavailableProvider(reason: string, tsconfigPath?: string, tsconfigPaths?: string[]): SemanticProvider {
   return {
     language: 'typescript',
-    availability: () => ({ available: false, reason, tsconfigPath }),
+    availability: () => ({ available: false, reason, tsconfigPath, tsconfigPaths }),
     importUsage: () => [],
     referencesFor: () => [],
     calleesFor: () => [],
@@ -80,16 +100,24 @@ class TsMorphSemanticProvider implements SemanticProvider {
   private readonly calleesCache = new Map<number, SemanticCallee[]>();
   private readonly fileCalleesCache = new Map<string, Map<number, SemanticCallee[]>>();
   private readonly signatureCache = new Map<number, string | null>();
+  private readonly sourceFileCache = new Map<string, SourceFileMatch | null>();
+  private packageImportReferenceIndex: Map<string, SemanticReference[]> | null = null;
+  private readonly workspacePackages: WorkspacePackage[];
 
   constructor(
     private readonly db: ScipDatabase,
     private readonly tsMorph: TsMorphModule,
-    private readonly project: Project,
-    private readonly tsconfigPath: string,
-  ) {}
+    private readonly projects: ProjectBundle[],
+  ) {
+    this.workspacePackages = discoverWorkspacePackages(db.config.projectRoot);
+  }
 
   availability(): SemanticAvailability {
-    return { available: true, tsconfigPath: this.tsconfigPath };
+    return {
+      available: true,
+      tsconfigPath: this.projects[0]?.tsconfigPath,
+      tsconfigPaths: this.projects.map((project) => project.tsconfigPath),
+    };
   }
 
   importUsage(file: string): SemanticImportUsage[] {
@@ -107,11 +135,15 @@ class TsMorphSemanticProvider implements SemanticProvider {
   referencesFor(definition: IndexedDefinition): SemanticReference[] {
     return cached(this.referencesCache, definition.symbolId, () => {
       const node = this.nodeForDefinition(definition);
-      if (!node) return [];
+      const packageRefs = this.packageImportReferencesForDefinition(definition);
+      if (!node) return packageRefs;
       const refs = findReferencesForNode(node);
       return dedupeLocations(
-        refs.flatMap((ref: ReferencedSymbol) => referenceLocations(ref, this.db.config.projectRoot))
-          .filter((location) => location.file !== definition.relativePath || location.line < definition.startLine || location.line > definition.endLine),
+        [
+          ...refs.flatMap((ref: ReferencedSymbol) => referenceLocations(ref, this.db.config.projectRoot))
+            .filter((location) => location.file !== definition.relativePath || location.line < definition.startLine || location.line > definition.endLine),
+          ...packageRefs,
+        ],
       );
     });
   }
@@ -193,11 +225,75 @@ class TsMorphSemanticProvider implements SemanticProvider {
   }
 
   private sourceFile(relativePath: string): SourceFile | null {
+    return this.sourceFileMatch(relativePath)?.sourceFile ?? null;
+  }
+
+  private sourceFileMatch(relativePath: string): SourceFileMatch | null {
     if (!isTypeScriptLike(relativePath)) return null;
-    const fullPath = path.join(this.db.config.projectRoot, relativePath);
-    return this.project.getSourceFile(fullPath)
-      ?? this.project.addSourceFileAtPathIfExists(fullPath)
-      ?? null;
+    return cached(this.sourceFileCache, relativePath, () => {
+      const fullPath = path.join(this.db.config.projectRoot, relativePath);
+      for (const { project } of this.projects) {
+        const sourceFile = project.getSourceFile(fullPath)
+          ?? project.addSourceFileAtPathIfExists(fullPath)
+          ?? null;
+        if (sourceFile) return { project, sourceFile };
+      }
+      return null;
+    });
+  }
+
+  private packageImportReferencesForDefinition(definition: IndexedDefinition): SemanticReference[] {
+    const leaf = leafName(definition.symbol) ?? definition.leaf;
+    const owner = packageForDefinition(this.workspacePackages, definition.relativePath);
+    if (!owner || !leaf) return [];
+    const key = packageImportKey(owner.name, leaf);
+    const index = this.packageImportReferences();
+    return index.get(key) ?? [];
+  }
+
+  private packageImportReferences(): Map<string, SemanticReference[]> {
+    if (this.packageImportReferenceIndex) return this.packageImportReferenceIndex;
+    const index = new Map<string, SemanticReference[]>();
+    const documents = this.db.all<{ relative_path: string }>(
+      `SELECT relative_path
+       FROM documents
+       WHERE (
+         relative_path LIKE '%.ts'
+         OR relative_path LIKE '%.tsx'
+         OR relative_path LIKE '%.mts'
+         OR relative_path LIKE '%.cts'
+         OR relative_path LIKE '%.js'
+         OR relative_path LIKE '%.jsx'
+         OR relative_path LIKE '%.mjs'
+         OR relative_path LIKE '%.cjs'
+       )
+         ${this.db.pathExclusionsFor('documents')}`,
+    );
+
+    for (const document of documents) {
+      if (this.db.isIgnored(document.relative_path)) continue;
+      const match = this.sourceFileMatch(document.relative_path);
+      if (!match) continue;
+      for (const declaration of match.sourceFile.getImportDeclarations()) {
+        const packageName = workspacePackageNameForSpecifier(this.workspacePackages, declaration.getModuleSpecifierValue());
+        if (!packageName) continue;
+        for (const entry of importIdentifiers(declaration)) {
+          if (entry.kind !== 'named' || !entry.identifier) continue;
+          const refs = identifierReferenceLocations(entry.identifier, document.relative_path, this.db.config.projectRoot);
+          if (refs.length === 0) continue;
+          const key = packageImportKey(packageName, entry.importedName);
+          const bucket = index.get(key) ?? [];
+          bucket.push(...refs);
+          index.set(key, bucket);
+        }
+      }
+    }
+
+    for (const [key, references] of index) {
+      index.set(key, dedupeLocations(references));
+    }
+    this.packageImportReferenceIndex = index;
+    return index;
   }
 
   private nodeForDefinition(definition: IndexedDefinition): Node | null {
@@ -328,6 +424,92 @@ function importIdentifiers(declaration: ImportDeclaration): Array<{
   return out;
 }
 
+function identifierReferenceLocations(
+  identifier: Identifier,
+  importer: string,
+  projectRoot: string,
+): SemanticReference[] {
+  return textualIdentifierLocations(identifier, importer, projectRoot);
+}
+
+function discoverWorkspacePackages(projectRoot: string): WorkspacePackage[] {
+  const packageJsonPath = path.join(projectRoot, 'package.json');
+  if (!existsSync(packageJsonPath)) return [];
+
+  let rootPackage: { workspaces?: string[] | { packages?: string[] } };
+  try {
+    rootPackage = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as typeof rootPackage;
+  } catch {
+    return [];
+  }
+
+  const patterns = Array.isArray(rootPackage.workspaces)
+    ? rootPackage.workspaces
+    : rootPackage.workspaces?.packages ?? [];
+
+  return patterns
+    .flatMap((pattern) => workspacePackageDirs(projectRoot, pattern))
+    .flatMap((packageRoot) => workspacePackageFromDir(projectRoot, packageRoot));
+}
+
+function workspacePackageDirs(projectRoot: string, pattern: string): string[] {
+  if (!pattern || pattern.startsWith('!') || pattern.includes('node_modules')) return [];
+  if (!pattern.includes('*')) {
+    const candidate = path.join(projectRoot, pattern);
+    return existsSync(path.join(candidate, 'package.json')) ? [candidate] : [];
+  }
+  const star = pattern.indexOf('*');
+  const prefix = pattern.slice(0, star).replace(/\/$/, '');
+  const suffix = pattern.slice(star + 1).replace(/^\//, '');
+  const base = path.join(projectRoot, prefix || '.');
+  if (!existsSync(base)) return [];
+  try {
+    return readdirSync(base)
+      .map((entry) => path.join(base, entry, suffix))
+      .filter((candidate) => existsSync(path.join(candidate, 'package.json')));
+  } catch {
+    return [];
+  }
+}
+
+function workspacePackageFromDir(projectRoot: string, packageRoot: string): WorkspacePackage[] {
+  try {
+    const packageJson = JSON.parse(readFileSync(path.join(packageRoot, 'package.json'), 'utf8')) as { name?: string };
+    if (!packageJson.name) return [];
+    const rootRelative = path.relative(projectRoot, packageRoot).replace(/\\/g, '/');
+    return [{
+      name: packageJson.name,
+      rootRelative,
+      sourceRootRelative: `${rootRelative}/src`,
+    }];
+  } catch {
+    return [];
+  }
+}
+
+function workspacePackageNameForSpecifier(
+  packages: ReadonlyArray<WorkspacePackage>,
+  specifier: string,
+): string | null {
+  for (const pkg of packages) {
+    if (specifier === pkg.name || specifier.startsWith(`${pkg.name}/`)) return pkg.name;
+  }
+  return null;
+}
+
+function packageForDefinition(
+  packages: ReadonlyArray<WorkspacePackage>,
+  relativePath: string,
+): WorkspacePackage | null {
+  return packages.find((pkg) =>
+    relativePath === pkg.sourceRootRelative || relativePath.startsWith(`${pkg.sourceRootRelative}/`),
+  ) ?? null;
+}
+
+function packageImportKey(packageName: string, importedName: string): string {
+  return `${packageName}:${importedName}`;
+}
+
 function referenceLocations(ref: ReferencedSymbol, projectRoot: string): SemanticReference[] {
   return ref.getReferences().map((entry) => {
     const node = entry.getNode();
@@ -364,6 +546,37 @@ function toSemanticLocation(node: Node, projectRoot: string): SemanticLocation {
     line: pos.line - 1,
     column: pos.column - 1,
   };
+}
+
+function textualIdentifierLocations(
+  identifier: Identifier,
+  importer: string,
+  projectRoot: string,
+): SemanticReference[] {
+  const sourceFile = identifier.getSourceFile();
+  const declarationLine = lineOf(sourceFile, identifier);
+  const name = identifier.getText();
+  const pattern = new RegExp(`\\b${escapeRegExp(name)}\\b`, 'g');
+  const lines = sourceFile.getFullText().split('\n');
+  const locations: SemanticReference[] = [];
+
+  for (let line = 0; line < lines.length; line++) {
+    if (line === declarationLine) continue;
+    const text = lines[line] ?? '';
+    pattern.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(text)) !== null) {
+      locations.push({
+        file: importer,
+        line,
+        column: match.index,
+      });
+    }
+  }
+
+  return dedupeLocations(locations.filter((location) =>
+    toRelative(projectRoot, path.join(projectRoot, location.file)) === importer,
+  ));
 }
 
 function isTypeOnlyLocation(node: Node): boolean {
@@ -486,4 +699,8 @@ function normalizeType(type: string): string {
     .replace(/\s+/g, ' ')
     .replace(/\bimport\("[^"]+"\)\./g, '')
     .trim();
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

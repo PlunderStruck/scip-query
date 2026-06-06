@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/storage/db.js';
 import { semanticCallerMap, semanticImportUsage, semanticSignature } from '../src/semantic/shared-primitives.js';
 import { getAllDefinitions } from '../src/symbols/definition-catalog.js';
-import { dead, staleAbstractions } from '../src/queries/index.js';
+import { dead, refs, staleAbstractions } from '../src/queries/index.js';
 
 function createSemanticFixtureDb(dbPath: string): void {
   const db = new Database(dbPath);
@@ -145,6 +145,169 @@ function withSemanticFixture(run: (db: ScipDatabase) => void): void {
   }
 }
 
+function createMonorepoSemanticFixtureDb(dbPath: string): void {
+  const db = new Database(dbPath);
+  db.exec(`
+    CREATE TABLE documents (
+      id INTEGER PRIMARY KEY,
+      language TEXT,
+      relative_path TEXT NOT NULL UNIQUE,
+      position_encoding TEXT,
+      text TEXT
+    );
+    CREATE TABLE global_symbols (
+      id INTEGER PRIMARY KEY,
+      symbol TEXT NOT NULL UNIQUE,
+      display_name TEXT,
+      kind INTEGER,
+      documentation TEXT,
+      signature BLOB,
+      enclosing_symbol TEXT,
+      relationships BLOB
+    );
+    CREATE TABLE defn_enclosing_ranges (
+      id INTEGER PRIMARY KEY,
+      document_id INTEGER NOT NULL,
+      symbol_id INTEGER NOT NULL,
+      start_line INTEGER NOT NULL,
+      start_char INTEGER NOT NULL,
+      end_line INTEGER NOT NULL,
+      end_char INTEGER NOT NULL
+    );
+    CREATE TABLE mentions (
+      chunk_id INTEGER NOT NULL,
+      symbol_id INTEGER NOT NULL,
+      role INTEGER NOT NULL,
+      PRIMARY KEY (chunk_id, symbol_id, role)
+    );
+    CREATE TABLE chunks (
+      id INTEGER PRIMARY KEY,
+      document_id INTEGER NOT NULL,
+      chunk_index INTEGER NOT NULL,
+      start_line INTEGER NOT NULL,
+      end_line INTEGER NOT NULL,
+      occurrences BLOB NOT NULL
+    );
+    CREATE INDEX idx_global_symbols_symbol ON global_symbols(symbol);
+
+    INSERT INTO documents (id, language, relative_path) VALUES
+      (1, 'typescript', 'shared/src/contracts/horses.ts'),
+      (2, 'typescript', 'shared/src/index.ts'),
+      (3, 'typescript', 'backend/src/schemas/horses.ts');
+
+    INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+      (1, 1, 0, 0, 6, X''),
+      (2, 2, 0, 0, 1, X''),
+      (3, 3, 0, 0, 4, X'');
+
+    INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
+      (1, 'scip-typescript npm @fixture/shared 1.0.0 src/contracts/\`horses.ts\`/CreateHorseInput#', 'CreateHorseInput', 11, 'type CreateHorseInput');
+
+    INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+      (1, 1, 1, 0, 0, 5, 2);
+
+    INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+      (1, 1, 1),
+      (2, 1, 2);
+  `);
+  db.close();
+}
+
+function withMonorepoSemanticFixture(run: (db: ScipDatabase) => void): void {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-ts-monorepo-semantic-'));
+  const dbPath = join(projectRoot, 'index.db');
+  mkdirSync(join(projectRoot, 'shared/src/contracts'), { recursive: true });
+  mkdirSync(join(projectRoot, 'backend/src/schemas'), { recursive: true });
+  writeFileSync(
+    join(projectRoot, 'package.json'),
+    JSON.stringify({
+      private: true,
+      workspaces: ['shared', 'backend'],
+    }, null, 2),
+  );
+  writeFileSync(
+    join(projectRoot, 'shared/package.json'),
+    JSON.stringify({
+      name: '@fixture/shared',
+      private: true,
+      types: 'dist/index.d.ts',
+    }, null, 2),
+  );
+  writeFileSync(
+    join(projectRoot, 'backend/package.json'),
+    JSON.stringify({
+      name: '@fixture/backend',
+      private: true,
+      dependencies: {
+        '@fixture/shared': 'file:../shared',
+      },
+    }, null, 2),
+  );
+  writeFileSync(
+    join(projectRoot, 'shared/tsconfig.json'),
+    JSON.stringify({
+      compilerOptions: {
+        target: 'ES2022',
+        module: 'CommonJS',
+        declaration: true,
+        strict: true,
+      },
+      include: ['src/**/*.ts'],
+    }, null, 2),
+  );
+  writeFileSync(
+    join(projectRoot, 'backend/tsconfig.json'),
+    JSON.stringify({
+      compilerOptions: {
+        target: 'ES2022',
+        module: 'CommonJS',
+        moduleResolution: 'Node',
+        strict: true,
+      },
+      include: ['src/**/*.ts'],
+    }, null, 2),
+  );
+  writeFileSync(
+    join(projectRoot, 'shared/src/contracts/horses.ts'),
+    [
+      'export type CreateHorseInput = {',
+      '  name: string;',
+      '  breed?: string;',
+      '  ageYears?: number;',
+      '  notes?: string;',
+      '};',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(
+    join(projectRoot, 'shared/src/index.ts'),
+    "export type { CreateHorseInput } from './contracts/horses';\n",
+  );
+  writeFileSync(
+    join(projectRoot, 'backend/src/schemas/horses.ts'),
+    [
+      "import type { CreateHorseInput } from '@fixture/shared';",
+      '',
+      'export type SchemaInput = CreateHorseInput & { stableId: string };',
+      'export const schemaName = "horse";',
+      '',
+    ].join('\n'),
+  );
+  createMonorepoSemanticFixtureDb(dbPath);
+
+  const db = new ScipDatabase({
+    dbPath,
+    indexPath: join(projectRoot, 'index.scip'),
+    projectRoot,
+  });
+  try {
+    run(db);
+  } finally {
+    db.close();
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+}
+
 describe('TypeScript semantic provider', () => {
   it('uses ts-morph import usage and references as shared liveness evidence', () => {
     withSemanticFixture((db) => {
@@ -178,6 +341,23 @@ describe('TypeScript semantic provider', () => {
       expect(dead(db, { minLoc: 1 }).symbols.map((symbol) => symbol.shortName)).not.toContain('api:namespaceHelper()');
       expect(staleAbstractions(db, { minLoc: 1 }).map((symbol) => symbol.shortName)).not.toContain('api:ApiShape');
       expect(staleAbstractions(db, { minLoc: 1 }).map((symbol) => symbol.shortName)).not.toContain('api:AliasShape');
+    });
+  });
+
+  it('uses workspace package imports as cross-project semantic references', () => {
+    withMonorepoSemanticFixture((db) => {
+      const definition = getAllDefinitions(db)[0];
+      const callerMap = semanticCallerMap(db, [definition]);
+      expect(callerMap.get(definition.symbolId)).toEqual(new Set([
+        'shared/src/index.ts',
+        'backend/src/schemas/horses.ts',
+      ]));
+
+      expect(refs(db, 'CreateHorseInput').map((ref) => ref.relativePath)).toEqual(expect.arrayContaining([
+        'shared/src/index.ts',
+        'backend/src/schemas/horses.ts',
+      ]));
+      expect(staleAbstractions(db, { minLoc: 1 }).map((symbol) => symbol.shortName)).not.toContain('contracts:horses:CreateHorseInput');
     });
   });
 });

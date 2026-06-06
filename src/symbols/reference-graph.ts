@@ -43,7 +43,7 @@ import { isCallableSymbol, leafName } from './symbol-parser.js';
 import { findEnclosingDefinition, getAllDefinitions, getDefinitionsForFile } from './definition-catalog.js';
 import { getFullSymbolMatch } from './symbol-lookup.js';
 import type { IndexedDefinition, ReferenceSite, SymbolLocation, SymbolMatch } from '../domain/types.js';
-import { semanticCalleeMap, semanticCallerMap } from '../semantic/shared-primitives.js';
+import { semanticCalleeMap, semanticCallerMap, semanticReferences } from '../semantic/shared-primitives.js';
 
 export interface CalleeRow {
   symbol: string;
@@ -148,15 +148,19 @@ export function getCallerRowsForSymbol(
   symbol: SymbolMatch,
   opts: { limit?: number } = {},
 ): CallerRow[] {
-  // Delegates to the cached inverse-callee map (built from buildCalleeMap of
-  // all definitions). One inversion per process gives every per-symbol
-  // caller query AST-quality attribution + SCIP fallback in O(1) lookup.
-  const inverse = buildCallerRowsMap(db);
-  const callers = inverse.get(symbol.symbolId) ?? [];
+  const callers = shouldUseTargetedCallerRows(db)
+    ? targetedCallerRowsForSymbol(db, symbol)
+    : buildCallerRowsMap(db).get(symbol.symbolId) ?? [];
   return typeof opts.limit === 'number' ? callers.slice(0, opts.limit) : callers;
 }
 
 const CALLER_ROWS_CACHE = createPerDbValue<Map<number, CallerRow[]>>('caller-rows');
+const TARGETED_CALLER_THRESHOLD = 20_000;
+
+function shouldUseTargetedCallerRows(db: ScipDatabase): boolean {
+  const row = db.get<{ count: number }>('SELECT COUNT(*) AS count FROM global_symbols');
+  return (row?.count ?? 0) > TARGETED_CALLER_THRESHOLD;
+}
 
 /**
  * Inverse of buildCalleeMap: for every (caller, callee) edge, register the
@@ -195,6 +199,66 @@ export function buildCallerRowsMap(db: ScipDatabase): Map<number, CallerRow[]> {
 
     return result;
   });
+}
+
+function targetedCallerRowsForSymbol(db: ScipDatabase, symbol: SymbolMatch): CallerRow[] {
+  const rows: CallerRow[] = [];
+  const seen = new Set<string>();
+  const add = (row: CallerRow): void => {
+    if (row.symbol === symbol.symbol) return;
+    const key = `${row.symbol}|${row.file}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    rows.push(row);
+  };
+
+  for (const site of getResolvedReferenceSites(db, symbol)) {
+    if (site.file === symbol.relativePath) continue;
+    add({
+      symbol: site.enclosingSymbol ?? site.file,
+      file: site.file,
+    });
+  }
+
+  const definition = indexedDefinitionForSymbol(db, symbol);
+  if (definition) {
+    for (const reference of semanticReferences(db, definition)) {
+      if (reference.file === symbol.relativePath || db.isIgnored(reference.file)) continue;
+      const enclosing = findEnclosingDefinition(getDefinitionsForFile(db, reference.file), reference.line);
+      add({
+        symbol: enclosing?.symbol ?? reference.file,
+        file: reference.file,
+      });
+    }
+  }
+
+  return rows;
+}
+
+function indexedDefinitionForSymbol(db: ScipDatabase, symbol: SymbolMatch): IndexedDefinition | null {
+  return db.get<IndexedDefinition>(
+    `SELECT
+       d.id AS documentId,
+       gs.id AS symbolId,
+       gs.symbol,
+       d.relative_path AS relativePath,
+       COALESCE(der.start_line, c.start_line) AS startLine,
+       COALESCE(der.end_line, c.end_line) AS endLine,
+       COALESCE(gs.display_name, '') AS leaf,
+       NULL AS parentTypeName,
+       CASE WHEN gs.kind IN (6, 12, 13) OR gs.symbol LIKE '%().' THEN 1 ELSE 0 END AS isFunctionLike,
+       CASE WHEN gs.kind IN (5, 8, 11) THEN 1 ELSE 0 END AS isTypeLike,
+       gs.kind AS kind,
+       gs.documentation AS documentation,
+       gs.enclosing_symbol AS enclosingSymbol
+     FROM global_symbols gs
+     LEFT JOIN defn_enclosing_ranges der ON der.symbol_id = gs.id
+     LEFT JOIN chunks c ON c.document_id = der.document_id
+     JOIN documents d ON d.id = COALESCE(der.document_id, c.document_id)
+     WHERE gs.id = ?
+     LIMIT 1`,
+    symbol.symbolId,
+  ) ?? null;
 }
 
 // ── Reference-site resolution ──────────────────────────────────

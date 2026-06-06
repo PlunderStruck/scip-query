@@ -1191,9 +1191,11 @@ program
     }
 
     if (languages.includes('typescript')) {
-      const status = getTypeScriptSemanticStatus(projectRoot);
+      const status = getTypeScriptSemanticStatus(projectRoot, config.semantic?.typescript?.tsconfigs);
       const prefix = status.available ? '  OK' : status.dependencyAvailable ? '  WARN' : '  MISSING';
-      const configPath = status.tsconfigPath ? ` (${status.tsconfigPath})` : '';
+      const configPath = status.tsconfigPaths && status.tsconfigPaths.length > 1
+        ? ` (${status.tsconfigPaths.length} tsconfigs)`
+        : status.tsconfigPath ? ` (${status.tsconfigPath})` : '';
       console.log('\nSemantic provider readiness:');
       console.log(`${prefix} typescript: ts-morph${configPath}`);
       if (status.reason) {
@@ -1312,9 +1314,11 @@ program
       console.log(`Config:   ${paths.dbPath} (fallback to project root index.db)`);
     }
     if ((config.languages ?? detectLanguages(projectRoot)).includes('typescript')) {
-      const semanticStatus = getTypeScriptSemanticStatus(projectRoot);
+      const semanticStatus = getTypeScriptSemanticStatus(projectRoot, config.semantic?.typescript?.tsconfigs);
       const semanticState = semanticStatus.available ? 'available' : 'fallback';
-      const suffix = semanticStatus.tsconfigPath ? ` (${semanticStatus.tsconfigPath})` : '';
+      const suffix = semanticStatus.tsconfigPaths && semanticStatus.tsconfigPaths.length > 1
+        ? ` (${semanticStatus.tsconfigPaths.length} tsconfigs)`
+        : semanticStatus.tsconfigPath ? ` (${semanticStatus.tsconfigPath})` : '';
       console.log(`TS sem:   ${semanticState}${suffix}`);
       if (semanticStatus.reason) {
         console.log(`TS note:  ${semanticStatus.reason}`);

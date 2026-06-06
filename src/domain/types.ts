@@ -740,6 +740,8 @@ export interface ScipQueryConfig {
   entryRoots?: EntryRootsConfig;
   /** Paths to .gitignore files to load for filtering */
   gitignorePaths?: string[];
+  /** Optional semantic-provider configuration */
+  semantic?: SemanticConfig;
 }
 
 // ── Project Config (.scipquery.json) ───────────────────────
@@ -755,6 +757,17 @@ export interface ProjectConfig {
   dbPath?: string;
   /** Project-specific externally-live roots for dead-code filtering */
   entryRoots?: EntryRootsConfig;
+  /** Optional semantic-provider configuration */
+  semantic?: SemanticConfig;
+}
+
+export interface SemanticConfig {
+  typescript?: TypeScriptSemanticConfig;
+}
+
+export interface TypeScriptSemanticConfig {
+  /** Explicit tsconfig paths, relative to project root unless absolute */
+  tsconfigs?: string[];
 }
 
 export interface EntryRootsConfig {
