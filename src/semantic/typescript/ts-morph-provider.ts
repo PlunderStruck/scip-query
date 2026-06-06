@@ -41,6 +41,8 @@ interface WorkspacePackage {
   sourceRootRelative: string;
 }
 
+type PackageExportIndex = Map<string, Map<string, Set<number>>>;
+
 const require = createRequire(import.meta.url);
 let tsMorphModule: TsMorphModule | null | undefined;
 
@@ -101,7 +103,9 @@ class TsMorphSemanticProvider implements SemanticProvider {
   private readonly fileCalleesCache = new Map<string, Map<number, SemanticCallee[]>>();
   private readonly signatureCache = new Map<number, string | null>();
   private readonly sourceFileCache = new Map<string, SourceFileMatch | null>();
-  private packageImportReferenceIndex: Map<string, SemanticReference[]> | null = null;
+  private readonly indexedDefinitionLeafCache = new Map<string, Map<string, IndexedDefinition>>();
+  private packageImportReferenceIndex: Map<number, SemanticReference[]> | null = null;
+  private packageExportIndex: PackageExportIndex | null = null;
   private readonly workspacePackages: WorkspacePackage[];
 
   constructor(
@@ -243,17 +247,14 @@ class TsMorphSemanticProvider implements SemanticProvider {
   }
 
   private packageImportReferencesForDefinition(definition: IndexedDefinition): SemanticReference[] {
-    const leaf = leafName(definition.symbol) ?? definition.leaf;
-    const owner = packageForDefinition(this.workspacePackages, definition.relativePath);
-    if (!owner || !leaf) return [];
-    const key = packageImportKey(owner.name, leaf);
     const index = this.packageImportReferences();
-    return index.get(key) ?? [];
+    return index.get(definition.symbolId) ?? [];
   }
 
-  private packageImportReferences(): Map<string, SemanticReference[]> {
+  private packageImportReferences(): Map<number, SemanticReference[]> {
     if (this.packageImportReferenceIndex) return this.packageImportReferenceIndex;
-    const index = new Map<string, SemanticReference[]>();
+    const index = new Map<number, SemanticReference[]>();
+    const exportIndex = this.packageExports();
     const documents = this.db.all<{ relative_path: string }>(
       `SELECT relative_path
        FROM documents
@@ -277,14 +278,19 @@ class TsMorphSemanticProvider implements SemanticProvider {
       for (const declaration of match.sourceFile.getImportDeclarations()) {
         const packageName = workspacePackageNameForSpecifier(this.workspacePackages, declaration.getModuleSpecifierValue());
         if (!packageName) continue;
+        const exportedSymbols = exportIndex.get(packageName);
+        if (!exportedSymbols) continue;
         for (const entry of importIdentifiers(declaration)) {
           if (entry.kind !== 'named' || !entry.identifier) continue;
+          const symbolIds = exportedSymbols.get(entry.importedName);
+          if (!symbolIds || symbolIds.size === 0) continue;
           const refs = identifierReferenceLocations(entry.identifier, document.relative_path, this.db.config.projectRoot);
           if (refs.length === 0) continue;
-          const key = packageImportKey(packageName, entry.importedName);
-          const bucket = index.get(key) ?? [];
-          bucket.push(...refs);
-          index.set(key, bucket);
+          for (const symbolId of symbolIds) {
+            const bucket = index.get(symbolId) ?? [];
+            bucket.push(...refs);
+            index.set(symbolId, bucket);
+          }
         }
       }
     }
@@ -294,6 +300,63 @@ class TsMorphSemanticProvider implements SemanticProvider {
     }
     this.packageImportReferenceIndex = index;
     return index;
+  }
+
+  private packageExports(): PackageExportIndex {
+    if (this.packageExportIndex) return this.packageExportIndex;
+    const index: PackageExportIndex = new Map();
+    for (const pkg of this.workspacePackages) {
+      const exportsForPackage = new Map<string, Set<number>>();
+      for (const entryFile of packageEntryCandidates(pkg)) {
+        this.collectPackageExports(pkg, entryFile, exportsForPackage, new Set());
+      }
+      if (exportsForPackage.size > 0) index.set(pkg.name, exportsForPackage);
+    }
+    this.packageExportIndex = index;
+    return index;
+  }
+
+  private collectPackageExports(
+    pkg: WorkspacePackage,
+    entryFile: string,
+    out: Map<string, Set<number>>,
+    visited: Set<string>,
+  ): void {
+    if (visited.has(entryFile)) return;
+    visited.add(entryFile);
+    const sourceFile = this.sourceFile(entryFile);
+    if (!sourceFile) return;
+
+    for (const declaration of sourceFile.getExportDeclarations()) {
+      const moduleSpecifier = declaration.getModuleSpecifierValue();
+      const sourcePath = moduleSpecifier ? resolveImportPath(this.db, entryFile, moduleSpecifier) : entryFile;
+      if (!sourcePath || !sourcePath.startsWith(`${pkg.sourceRootRelative}/`)) continue;
+
+      const namedExports = declaration.getNamedExports();
+      if (namedExports.length === 0) {
+        if (declaration.isNamespaceExport()) continue;
+        this.collectPackageExports(pkg, sourcePath, out, visited);
+        continue;
+      }
+
+      for (const exported of namedExports) {
+        const sourceName = exported.getNameNode().getText();
+        const exportedName = exported.getAliasNode()?.getText() ?? sourceName;
+        const definition = this.indexedDefinitionByLeaf(sourcePath, sourceName);
+        if (!definition) continue;
+        let bucket = out.get(exportedName);
+        if (!bucket) {
+          bucket = new Set();
+          out.set(exportedName, bucket);
+        }
+        bucket.add(definition.symbolId);
+      }
+    }
+  }
+
+  private indexedDefinitionByLeaf(file: string, leaf: string): IndexedDefinition | null {
+    const byLeaf = cached(this.indexedDefinitionLeafCache, file, () => indexedDefinitionLeafMap(this.db, file));
+    return byLeaf.get(leaf) ?? null;
   }
 
   private nodeForDefinition(definition: IndexedDefinition): Node | null {
@@ -497,17 +560,13 @@ function workspacePackageNameForSpecifier(
   return null;
 }
 
-function packageForDefinition(
-  packages: ReadonlyArray<WorkspacePackage>,
-  relativePath: string,
-): WorkspacePackage | null {
-  return packages.find((pkg) =>
-    relativePath === pkg.sourceRootRelative || relativePath.startsWith(`${pkg.sourceRootRelative}/`),
-  ) ?? null;
-}
-
-function packageImportKey(packageName: string, importedName: string): string {
-  return `${packageName}:${importedName}`;
+function packageEntryCandidates(pkg: WorkspacePackage): string[] {
+  return [
+    `${pkg.sourceRootRelative}/index.ts`,
+    `${pkg.sourceRootRelative}/index.tsx`,
+    `${pkg.sourceRootRelative}/index.mts`,
+    `${pkg.sourceRootRelative}/index.cts`,
+  ];
 }
 
 function referenceLocations(ref: ReferencedSymbol, projectRoot: string): SemanticReference[] {
@@ -633,6 +692,67 @@ function findIndexedDefinitionNear(
     line,
   );
   return rows[0] ?? null;
+}
+
+function indexedDefinitionLeafMap(
+  db: ScipDatabase,
+  file: string,
+): Map<string, IndexedDefinition> {
+  const rows = db.all<IndexedDefinition>(
+    `SELECT
+       d.id AS documentId,
+       gs.id AS symbolId,
+       gs.symbol,
+       d.relative_path AS relativePath,
+       der.start_line AS startLine,
+       der.end_line AS endLine,
+       COALESCE(gs.display_name, '') AS leaf,
+       NULL AS parentTypeName,
+       CASE WHEN gs.kind IN (6, 12, 13) OR gs.symbol LIKE '%().' THEN 1 ELSE 0 END AS isFunctionLike,
+       CASE WHEN gs.kind IN (5, 8, 11) THEN 1 ELSE 0 END AS isTypeLike,
+       gs.kind AS kind,
+       gs.documentation AS documentation,
+       gs.enclosing_symbol AS enclosingSymbol
+     FROM global_symbols gs
+     JOIN defn_enclosing_ranges der ON der.symbol_id = gs.id
+     JOIN documents d ON d.id = der.document_id
+     WHERE d.relative_path = ?
+     UNION ALL
+     SELECT
+       d.id AS documentId,
+       gs.id AS symbolId,
+       gs.symbol,
+       d.relative_path AS relativePath,
+       MIN(c.start_line) AS startLine,
+       MAX(c.end_line) AS endLine,
+       COALESCE(gs.display_name, '') AS leaf,
+       NULL AS parentTypeName,
+       CASE WHEN gs.kind IN (6, 12, 13) OR gs.symbol LIKE '%().' THEN 1 ELSE 0 END AS isFunctionLike,
+       CASE WHEN gs.kind IN (5, 8, 11) THEN 1 ELSE 0 END AS isTypeLike,
+       gs.kind AS kind,
+       gs.documentation AS documentation,
+       gs.enclosing_symbol AS enclosingSymbol
+     FROM global_symbols gs
+     JOIN mentions m ON m.symbol_id = gs.id
+     JOIN chunks c ON c.id = m.chunk_id
+     JOIN documents d ON d.id = c.document_id
+     WHERE d.relative_path = ?
+       AND m.role = 1
+     GROUP BY gs.id, gs.symbol, d.id, d.relative_path, gs.display_name, gs.kind, gs.documentation, gs.enclosing_symbol
+     ORDER BY startLine, endLine`,
+    file,
+    file,
+  );
+  const byId = new Set<number>();
+  const byLeaf = new Map<string, IndexedDefinition>();
+  for (const row of rows) {
+    if (byId.has(row.symbolId)) continue;
+    byId.add(row.symbolId);
+    const leaf = row.leaf || leafName(row.symbol);
+    if (!leaf || byLeaf.has(leaf)) continue;
+    byLeaf.set(leaf, { ...row, leaf });
+  }
+  return byLeaf;
 }
 
 function findContainingDefinition(

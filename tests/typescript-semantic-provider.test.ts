@@ -201,13 +201,16 @@ function createMonorepoSemanticFixtureDb(dbPath: string): void {
       (3, 3, 0, 0, 4, X'');
 
     INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
-      (1, 'scip-typescript npm @fixture/shared 1.0.0 src/contracts/\`horses.ts\`/CreateHorseInput#', 'CreateHorseInput', 11, 'type CreateHorseInput');
+      (1, 'scip-typescript npm @fixture/shared 1.0.0 src/contracts/\`horses.ts\`/CreateHorseInput#', NULL, 11, 'type CreateHorseInput'),
+      (2, 'scip-typescript npm @fixture/shared 1.0.0 src/contracts/\`horses.ts\`/InternalHorseInput#', NULL, 11, 'type InternalHorseInput');
 
     INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
-      (1, 1, 1, 0, 0, 5, 2);
+      (1, 1, 1, 0, 0, 5, 2),
+      (2, 1, 2, 7, 0, 7, 47);
 
     INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
       (1, 1, 1),
+      (1, 2, 1),
       (2, 1, 2);
   `);
   db.close();
@@ -277,18 +280,21 @@ function withMonorepoSemanticFixture(run: (db: ScipDatabase) => void): void {
       '  notes?: string;',
       '};',
       '',
+      'export type InternalHorseInput = { hidden: string };',
+      '',
     ].join('\n'),
   );
   writeFileSync(
     join(projectRoot, 'shared/src/index.ts'),
-    "export type { CreateHorseInput } from './contracts/horses';\n",
+    "export type { CreateHorseInput as PublicHorseInput } from './contracts/horses';\n",
   );
   writeFileSync(
     join(projectRoot, 'backend/src/schemas/horses.ts'),
     [
-      "import type { CreateHorseInput } from '@fixture/shared';",
+      "import type { InternalHorseInput, PublicHorseInput } from '@fixture/shared';",
       '',
-      'export type SchemaInput = CreateHorseInput & { stableId: string };',
+      'export type SchemaInput = PublicHorseInput & { stableId: string };',
+      'export type ShouldNotResolve = InternalHorseInput & { stableId: string };',
       'export const schemaName = "horse";',
       '',
     ].join('\n'),
@@ -346,12 +352,16 @@ describe('TypeScript semantic provider', () => {
 
   it('uses workspace package imports as cross-project semantic references', () => {
     withMonorepoSemanticFixture((db) => {
-      const definition = getAllDefinitions(db)[0];
-      const callerMap = semanticCallerMap(db, [definition]);
-      expect(callerMap.get(definition.symbolId)).toEqual(new Set([
+      const definitions = getAllDefinitions(db);
+      const byName = new Map(definitions.map((definition) => [definition.leaf, definition]));
+      const publicDefinition = byName.get('CreateHorseInput')!;
+      const internalDefinition = byName.get('InternalHorseInput')!;
+      const callerMap = semanticCallerMap(db, [publicDefinition, internalDefinition]);
+      expect(callerMap.get(publicDefinition.symbolId)).toEqual(new Set([
         'shared/src/index.ts',
         'backend/src/schemas/horses.ts',
       ]));
+      expect(callerMap.get(internalDefinition.symbolId)).toBeUndefined();
 
       expect(refs(db, 'CreateHorseInput').map((ref) => ref.relativePath)).toEqual(expect.arrayContaining([
         'shared/src/index.ts',
