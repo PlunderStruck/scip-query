@@ -4,6 +4,7 @@ import { isLiveBarrel } from '../analysis/file-classifier.js';
 import { getSourceExports, getSourceImports } from '../language-parsers/index.js';
 import type { IndexedDefinition } from '../domain/types.js';
 import { leafSuffix, shortenSymbol } from '../symbols/symbol-parser.js';
+import { indexedDocumentPaths } from '../storage/scip-documents.js';
 
 export interface RedundantReexport {
   barrelFile: string;
@@ -202,18 +203,7 @@ function findSourceRedundantReexports(
 }
 
 function sourceBarrelCandidates(db: ScipDatabase, scope?: string): string[] {
-  const files = db.all<{ relative_path: string }>(
-    `SELECT relative_path
-     FROM documents
-     WHERE 1 = 1
-       ${scope ? 'AND relative_path LIKE ?' : ''}
-       ${db.pathExclusionsFor('documents')}
-     ORDER BY relative_path`,
-    ...(scope ? [`%${scope}%`] : []),
-  );
-  return files
-    .map((row) => row.relative_path)
-    .filter((relativePath) => !db.isIgnored(relativePath))
+  return indexedDocumentPaths(db, { scope, includeIgnored: false })
     .filter((relativePath) => getSourceExports(db, relativePath).length > 0);
 }
 

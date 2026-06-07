@@ -99,6 +99,22 @@ export function parseSymbol(raw: string): ScipSymbol | ScipLocalSymbol {
   return { scheme, manager, packageName, version, descriptors, raw };
 }
 
+export function parentTypeName(rawSymbol: string): string | null {
+  const parsed = parseSymbol(rawSymbol);
+  if ('kind' in parsed) {
+    return null;
+  }
+
+  for (let index = parsed.descriptors.length - 2; index >= 0; index--) {
+    const descriptor = parsed.descriptors[index];
+    if (descriptor?.suffix === 'type') {
+      return descriptor.name;
+    }
+  }
+
+  return null;
+}
+
 /**
  * Parse the descriptor chain from a SCIP symbol.
  *

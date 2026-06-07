@@ -344,14 +344,14 @@ function summarizeHealthWrappers(
   scope: string | undefined,
   budget: HealthBudget,
 ): CountLocSummary {
-  return runHealthPhase(db, budget, 'wrapper-candidates', () =>
-    summarizeLoc(wrapperCandidates(db, {
+  return summarizeHealthLocQuery(db, budget, 'wrapper-candidates', () =>
+    wrapperCandidates(db, {
       scope,
       maxLoc: 15,
       limit: 50,
       scanLimit: budget.candidateScanLimit,
       semantic: false,
-    })),
+    }),
   );
 }
 
@@ -360,14 +360,14 @@ function summarizeHealthPassthroughs(
   scope: string | undefined,
   budget: HealthBudget,
 ): CountLocSummary {
-  return runHealthPhase(db, budget, 'passthrough-candidates', () =>
-    summarizeLoc(passthroughCandidates(db, {
+  return summarizeHealthLocQuery(db, budget, 'passthrough-candidates', () =>
+    passthroughCandidates(db, {
       scope,
       maxLoc: 15,
       limit: 50,
       scanLimit: budget.candidateScanLimit,
       semantic: false,
-    })),
+    }),
   );
 }
 
@@ -485,6 +485,15 @@ function runHealthPhase<T>(
   } finally {
     releaseHealthPhaseCaches(db, budget);
   }
+}
+
+function summarizeHealthLocQuery<T extends { loc: number }>(
+  db: ScipDatabase,
+  budget: HealthBudget,
+  name: string,
+  query: () => T[],
+): CountLocSummary {
+  return runHealthPhase(db, budget, name, () => summarizeLoc(query()));
 }
 
 function traceHealthPhase(name: string): void {

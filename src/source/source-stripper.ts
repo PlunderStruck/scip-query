@@ -120,3 +120,12 @@ export function collectNamespaceMembers(body: string, namespaceName: string): st
 export function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+export function parenBalance(value: string): number {
+  let balance = 0;
+  for (const char of value) {
+    if (char === '(') balance += 1;
+    if (char === ')') balance -= 1;
+  }
+  return balance;
+}

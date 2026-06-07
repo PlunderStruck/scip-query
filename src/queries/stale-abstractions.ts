@@ -6,7 +6,7 @@ import { getReExports } from '../language-parsers/index.js';
 import { getSourceText } from '../source/source-text.js';
 import { detectAstLanguage, getAst, getTypeContainerMap, type SyntaxNode } from '../source/ast.js';
 import { ProjectIndex } from '../core/project-index.js';
-import { applyScanLimit, definitionLoc } from './query-utils.js';
+import { applyScanLimit, definitionLoc, mergeMapOfSets } from './query-utils.js';
 
 export interface StaleAbstraction {
   symbol: string;
@@ -161,7 +161,7 @@ function consumerMapForTypeCandidates(
   typeCandidates: readonly IndexedDefinition[],
   opts: { semantic: boolean },
 ): Map<number, Set<string>> {
-  return mergeConsumerMaps(
+  return mergeMapOfSets(
     index.crossFileCallerMap(typeCandidates, { semantic: opts.semantic }),
     index.sourceFallbackCallerFiles(typeCandidates),
   );
@@ -272,7 +272,7 @@ function getSingletonBackedClassIds(
   const singletonVars = singletonBackedClasses.map((entry) => entry.singleton);
   if (singletonBackedClasses.length === 0) return new Set();
 
-  const singletonConsumers = mergeConsumerMaps(
+  const singletonConsumers = mergeMapOfSets(
     index.crossFileCallerMap(singletonVars, { semantic: opts.semantic }),
     index.sourceFallbackCallerFiles(singletonVars),
   );
@@ -671,21 +671,4 @@ function scoreConfidence(
     confidence: 'medium',
     reason: '1 consumer — single-use abstraction',
   };
-}
-
-function mergeConsumerMaps(
-  ...maps: Array<Map<number, Set<string>>>
-): Map<number, Set<string>> {
-  const merged = new Map<number, Set<string>>();
-  for (const m of maps) {
-    for (const [k, v] of m) {
-      let bucket = merged.get(k);
-      if (!bucket) {
-        bucket = new Set();
-        merged.set(k, bucket);
-      }
-      for (const f of v) bucket.add(f);
-    }
-  }
-  return merged;
 }

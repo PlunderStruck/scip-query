@@ -12,6 +12,9 @@ import { clearSourceStripperCacheForFile } from '../source/source-stripper.js';
 import { clearSourceTextCacheForFile } from '../source/source-text.js';
 import { clearIdentifierIndexCacheForFile } from '../symbols/identifier-index.js';
 import { applyScanLimit } from './query-utils.js';
+import { pathsResolveSame } from '../resolution/path-normalization.js';
+import { sourceImportPathsByLocalName } from '../language-parsers/import-index.js';
+import { indexedDocumentPaths as listIndexedDocumentPaths } from '../storage/scip-documents.js';
 
 export interface DeadSymbolResult {
   relativePath: string;
@@ -242,7 +245,7 @@ function deadCandidateDefinitions(
   const isExcluded = buildFileExclusionPredicate(db);
   const candidates: IndexedDefinition[] = [];
 
-  for (const relativePath of deadCandidateDefinitionPaths(db, opts.scope)) {
+  for (const relativePath of listIndexedDocumentPaths(db, { scope: opts.scope })) {
     try {
       for (const definition of getDefinitionsForFile(db, relativePath)) {
         if (db.isIgnored(definition.relativePath)) continue;
@@ -283,20 +286,6 @@ function deadCandidateDefinitions(
   }
 
   return candidates;
-}
-
-function deadCandidateDefinitionPaths(db: ScipDatabase, scope?: string): string[] {
-  const scopeFilter = scope ? 'AND relative_path LIKE ?' : '';
-  const params = scope ? [`%${scope}%`] : [];
-  return db.all<{ relative_path: string }>(
-    `SELECT relative_path
-     FROM documents
-     WHERE 1 = 1
-       ${db.pathExclusionsFor('documents')}
-       ${scopeFilter}
-     ORDER BY relative_path`,
-    ...params,
-  ).map((row) => row.relative_path);
 }
 
 function deadRows(
@@ -413,7 +402,7 @@ function supplementReferencesFromAst(
   // Vue SFCs), so a reference from an unindexed file still credits the
   // symbol it reaches.
   const scanPaths = new Set<string>(index.sourceFiles());
-  for (const path of indexedDocumentPaths(db)) scanPaths.add(path);
+  for (const path of listIndexedDocumentPaths(db)) scanPaths.add(path);
 
   index.scanSourceReferences({
     paths: scanPaths,
@@ -450,14 +439,14 @@ function supplementDeadCodeOnlySourceReferences(
   const index = new ProjectIndex(db);
   const candidatesByLeaf = definitionsByLeaf(definitions);
   const scanPaths = new Set<string>(index.sourceFiles());
-  for (const path of indexedDocumentPaths(db)) scanPaths.add(path);
+  for (const path of listIndexedDocumentPaths(db)) scanPaths.add(path);
   const candidateNames = new Set(candidatesByLeaf.keys());
   const importsBySource = new Map<string, Map<string, Set<string>>>();
 
   const importsForSource = (sourceFile: string): Map<string, Set<string>> => {
     let importsByName = importsBySource.get(sourceFile);
     if (!importsByName) {
-      importsByName = readFileImports(db, sourceFile);
+      importsByName = sourceImportPathsByLocalName(db, sourceFile);
       importsBySource.set(sourceFile, importsByName);
     }
     return importsByName;
@@ -564,14 +553,6 @@ function hasAnyReference(
   return false;
 }
 
-function indexedDocumentPaths(db: ScipDatabase): Set<string> {
-  const rows = db.all<{ relative_path: string }>(
-    `SELECT relative_path FROM documents
-     WHERE 1 = 1 ${db.pathExclusionsFor('documents')}`,
-  );
-  return new Set(rows.map((row) => row.relative_path));
-}
-
 function shouldSkipAstReferenceHit(
   db: ScipDatabase,
   hit: {
@@ -626,38 +607,6 @@ function isUnusedImportOnlyHit(
     if (entry.used || entry.sourcePath !== hit.target.relativePath) return false;
     return entry.importedName === hit.name || entry.localName === hit.name;
   });
-}
-
-function readFileImports(db: ScipDatabase, file: string): Map<string, Set<string>> {
-  const map = new Map<string, Set<string>>();
-  for (const entry of getSourceImports(db, file)) {
-    if (!entry.sourcePath) continue;
-    const localName = entry.localName ?? entry.importedName;
-    if (localName) {
-      let bucket = map.get(localName);
-      if (!bucket) {
-        bucket = new Set();
-        map.set(localName, bucket);
-      }
-      bucket.add(entry.sourcePath);
-    }
-    if (entry.kind === 'namespace') {
-      for (const member of entry.usedMembers) {
-        let bucket = map.get(member);
-        if (!bucket) {
-          bucket = new Set();
-          map.set(member, bucket);
-        }
-        bucket.add(entry.sourcePath);
-      }
-    }
-  }
-  return map;
-}
-
-function pathsResolveSame(a: string, b: string): boolean {
-  const normalize = (path: string): string => path.replace(/\\/g, '/').replace(/^\.\//, '');
-  return normalize(a) === normalize(b);
 }
 
 function supplementReferencesFromCallerMap(

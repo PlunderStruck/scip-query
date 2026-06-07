@@ -16,6 +16,7 @@ import { existsSync } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
+import { indexedDocumentPaths } from '../storage/scip-documents.js';
 
 const INDEXED_PATH_CACHE = createPerDbValue<Set<string>>('indexed-paths');
 
@@ -389,14 +390,7 @@ function candidateImportPaths(absolute: string): string[] {
 function getIndexedPaths(db: ScipDatabase): Set<string> {
   return INDEXED_PATH_CACHE.get(db, () =>
     new Set(
-      db.all<{ relative_path: string }>(
-        `SELECT relative_path
-         FROM documents
-         WHERE 1 = 1
-           ${db.pathExclusionsFor('documents')}`,
-      )
-        .map((row) => normalizePath(row.relative_path))
-        .filter((relativePath) => !db.isIgnored(relativePath)),
+      indexedDocumentPaths(db, { includeIgnored: false }).map(normalizePath),
     ),
   );
 }

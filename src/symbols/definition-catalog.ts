@@ -24,10 +24,13 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { getCallableSites, type CallableSite } from '../source/ast.js';
 import { getSourceText } from '../source/source-text.js';
-import { isFunctionLikeSymbol, leafName, leafSuffix, parseSymbol, shortenSymbol } from './symbol-parser.js';
+import { isFunctionLikeSymbol, leafName, leafSuffix, parentTypeName, parseSymbol, shortenSymbol } from './symbol-parser.js';
 import { createPerDbCache } from '../storage/per-db-cache.js';
 import { cleanSignature, extractSignature, type SymbolQueryRow } from '../storage/scip-rows.js';
 import type { IndexedDefinition, SymbolMatch } from '../domain/types.js';
+import { mergeMixedSymbolQueryRows } from './symbol-row-policy.js';
+
+export { parentTypeName } from './symbol-parser.js';
 
 export const FILE_DEFINITION_CACHE = createPerDbCache<string, IndexedDefinition[]>('file-definitions');
 
@@ -55,9 +58,10 @@ export function getDefinitionsForFile(
   relativePath: string,
 ): IndexedDefinition[] {
   return FILE_DEFINITION_CACHE.get(db, relativePath, () => {
-    const rows = mergeDefinitionRows(
+    const rows = mergeMixedSymbolQueryRows(
       loadPrimaryDefinitionRows(db, relativePath),
       loadFallbackDefinitionRows(db, relativePath),
+      { sort: true },
     );
     return correctDefinitionRangesFromSource(
       db,
@@ -132,33 +136,6 @@ function indexedDefinitionFromRow(row: SymbolQueryRow): IndexedDefinition {
     documentation: row.documentation ?? null,
     enclosingSymbol: row.enclosing_symbol ?? null,
   };
-}
-
-function mergeDefinitionRows(
-  primary: readonly SymbolQueryRow[],
-  fallback: readonly SymbolQueryRow[],
-): SymbolQueryRow[] {
-  const byId = new Map<number, SymbolQueryRow>();
-  for (const row of fallback) {
-    if (primary.length > 0 && !isPreciseMixedFallbackRow(row)) continue;
-    byId.set(row.id, row);
-  }
-  for (const row of primary) byId.set(row.id, row);
-  return [...byId.values()].sort((left, right) =>
-    left.start_line - right.start_line
-    || left.end_line - right.end_line
-    || left.symbol.localeCompare(right.symbol),
-  );
-}
-
-function isPreciseMixedFallbackRow(row: SymbolQueryRow): boolean {
-  if (parentTypeName(row.symbol) !== null) return false;
-  const documentation = row.documentation ?? '';
-  const cleaned = documentation
-    .replace(/^```\w*\s*/, '')
-    .replace(/\s*```$/, '')
-    .trim();
-  return /^(?:var|let|const|function|class|interface|type|enum)\b/.test(cleaned);
 }
 
 export function getAllDefinitions(
@@ -619,25 +596,6 @@ export function maskStructuralLine(line: string): string {
 
 export function isCallableDefinition(symbol: string): boolean {
   return symbol.includes('().');
-}
-
-// scip-query: ignore-wrapper — catalog primitive used inside definition
-// hydration and by symbol lookup; it names the nearest enclosing type concept
-// so callers do not duplicate SCIP descriptor traversal.
-export function parentTypeName(rawSymbol: string): string | null {
-  const parsed = parseSymbol(rawSymbol);
-  if ('kind' in parsed) {
-    return null;
-  }
-
-  for (let index = parsed.descriptors.length - 2; index >= 0; index--) {
-    const descriptor = parsed.descriptors[index];
-    if (descriptor?.suffix === 'type') {
-      return descriptor.name;
-    }
-  }
-
-  return null;
 }
 
 /**

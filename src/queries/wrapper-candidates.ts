@@ -6,7 +6,7 @@ import { leafName } from '../symbols/symbol-parser.js';
 import type { IndexedDefinition } from '../domain/types.js';
 import { isInRustTestModule, shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
-import { applyScanLimit, definitionLoc } from './query-utils.js';
+import { applyScanLimit, definitionLoc, mergeMapOfSets } from './query-utils.js';
 
 export interface WrapperCandidate {
   symbol: string;
@@ -52,7 +52,7 @@ export function wrapperCandidates(
   // caller file. Source-text fallback adds back references the indexer may
   // miss (macros, dynamic dispatch); without it, a function called via a
   // missed path would falsely look like a wrapper.
-  const callerFileMap = mergeCallerMaps(
+  const callerFileMap = mergeMapOfSets(
     index.crossFileCallerMap(symbols, { semantic: opts?.semantic !== false }),
     index.sourceFallbackCallerFiles(symbols),
   );
@@ -220,23 +220,6 @@ function refineCallSiteLine(
     if (line >= chunkStart && line <= chunkEnd) return line;
   }
   return chunkStart;
-}
-
-function mergeCallerMaps(
-  ...maps: Array<Map<number, Set<string>>>
-): Map<number, Set<string>> {
-  const merged = new Map<number, Set<string>>();
-  for (const m of maps) {
-    for (const [k, v] of m) {
-      let bucket = merged.get(k);
-      if (!bucket) {
-        bucket = new Set();
-        merged.set(k, bucket);
-      }
-      for (const f of v) bucket.add(f);
-    }
-  }
-  return merged;
 }
 
 function buildReverseFileFanIn(

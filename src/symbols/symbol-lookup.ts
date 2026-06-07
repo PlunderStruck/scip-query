@@ -24,6 +24,7 @@ import { isCallableSymbol, isFunctionLikeSymbol, isModuleLikeSymbol, leafName, s
 import { hydrateSymbolMatch, parentTypeName } from './definition-catalog.js';
 import { type SymbolQueryRow } from '../storage/scip-rows.js';
 import type { SymbolLocation, SymbolMatch } from '../domain/types.js';
+import { mergeMixedSymbolQueryRows } from './symbol-row-policy.js';
 
 // `cleanSignature`, `extractSignature`, and `SymbolQueryRow` live in
 // `scip-rows.ts` so both this module and `definition-catalog.ts` can use
@@ -71,7 +72,7 @@ function pathQualifiedCandidates(
   leaf: string,
   cleanedPattern: string,
 ): SymbolQueryRow[] {
-  const candidates = mergeSymbolQueryRows([], [
+  const candidates = mergeMixedSymbolQueryRows([], [
     ...pathQualifiedPrimaryRows(db, pathLike, leaf),
     ...pathQualifiedFallbackRows(db, pathLike, leaf),
   ])
@@ -319,7 +320,7 @@ export function getDefinitionRowsForSymbolId(
      ORDER BY start_line, end_line`,
     symbolId,
   );
-  return mergeSymbolQueryRows(primary, fallback);
+  return mergeMixedSymbolQueryRows(primary, fallback);
 }
 
 export function getSymbolLookupCandidates(
@@ -365,30 +366,7 @@ export function getSymbolLookupCandidates(
      LIMIT 200`,
     ...params,
   );
-  return mergeSymbolQueryRows(primary, fallback);
-}
-
-function mergeSymbolQueryRows(
-  primary: readonly SymbolQueryRow[],
-  fallback: readonly SymbolQueryRow[],
-): SymbolQueryRow[] {
-  const byId = new Map<number, SymbolQueryRow>();
-  for (const row of fallback) {
-    if (primary.length > 0 && !isPreciseMixedFallbackRow(row)) continue;
-    byId.set(row.id, row);
-  }
-  for (const row of primary) byId.set(row.id, row);
-  return [...byId.values()];
-}
-
-function isPreciseMixedFallbackRow(row: SymbolQueryRow): boolean {
-  if (parentTypeName(row.symbol) !== null) return false;
-  const documentation = row.documentation ?? '';
-  const cleaned = documentation
-    .replace(/^```\w*\s*/, '')
-    .replace(/\s*```$/, '')
-    .trim();
-  return /^(?:var|let|const|function|class|interface|type|enum)\b/.test(cleaned);
+  return mergeMixedSymbolQueryRows(primary, fallback);
 }
 
 export function scoreSymbolCandidate(

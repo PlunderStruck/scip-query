@@ -1,6 +1,8 @@
 # Compression Atlas
 
-Use this reference when the compression scope is broad enough that local refactors may interact. The atlas is a planning artifact: it should exist before implementation, and it should be updated after each cluster if code changes reveal new facts.
+Use this reference when the compression scope is broad enough that local refactors may interact. The atlas is a written planning artifact: save it before implementation when filesystem edits are allowed, and update it after each cluster if code changes reveal new facts.
+
+Preferred paths are `docs/plans/YYYY-MM-DD-<scope>-compression-atlas.md` or `reports/compression/YYYY-MM-DD-<scope>-atlas.md`. If neither directory exists, create the one that best matches the repository's existing planning/reporting conventions.
 
 ## Atlas Template
 
@@ -8,7 +10,7 @@ Use this reference when the compression scope is broad enough that local refacto
 Scope
 - Target:
 - Assumed boundaries:
-- Explicit non-goals:
+- Explicit non-goals, including health-score or detector-count optimization:
 - Public surfaces to preserve:
 
 System Map
@@ -34,6 +36,14 @@ Opportunity Ledger
   Cluster:
   Public behavior constraints:
 
+Deferred Register
+- Opportunity ID:
+  Evidence:
+  Blocking fact:
+  Dependency or owner:
+  Revisit condition:
+  Next-pass priority:
+
 Compression Clusters
 - Name:
   Thesis:
@@ -58,6 +68,7 @@ Sense-Check
 - Value check:
 - Rework check:
 - Public-surface check:
+- Ambition check:
 
 Final Audit
 - Concepts removed:
@@ -69,7 +80,11 @@ Final Audit
 
 ## Ledger Rules
 
-Every discovered opportunity gets exactly one disposition. If an opportunity is too small, speculative, risky, or outside the current scope, mark it `defer` or `skip` with a reason instead of dropping it.
+Every discovered opportunity gets exactly one disposition. Do not use `defer` just because the change is large or cross-cutting. If an opportunity is false, net-negative, or too speculative, mark it `skip`. If it is valid but blocked, mark it `defer` and add it to the deferred register.
+
+Every deferred entry must name a verified blocking fact and a revisit condition. Acceptable blockers include an explicit scope limit, missing evidence that would make implementation unsafe, dependency on an earlier cluster, conflict with unrelated user changes, unavailable runtime/generated artifacts, or user-imposed time/slice limits.
+
+Major cleanup is in scope when it is the right compression. Prefer ordered clusters, public-behavior validation, and implementation over deferral.
 
 Use `supersede` when a local opportunity will be absorbed by a larger mechanism. For example, a wrapper-candidate finding may be superseded by a broader adapter-core split if the wrapper disappears as part of moving behavior into the core.
 
@@ -95,6 +110,7 @@ Reject an order when it causes a file to be rewritten by multiple clusters witho
 - Does each cluster remove a concept, policy branch, lifecycle, or hand-maintained surface?
 - Does the new mechanism have one clear role, or is it a false center?
 - Are skipped opportunities skipped because of verified facts, not convenience?
-- Are deferred opportunities still visible with a reason and revisit condition?
+- Are deferred opportunities still visible with a blocking fact and revisit condition?
+- Is any major but correct compression being deferred merely because it is large?
 - Would an executor know exactly which files and symbols to change?
 - Can focused validation prove behavior stayed stable after each cluster?

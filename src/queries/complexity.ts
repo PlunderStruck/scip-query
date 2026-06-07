@@ -4,6 +4,7 @@ import type { ScipDatabase } from '../storage/db.js';
 import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
+import { stripCommentsAndStrings } from '../source/source-stripper.js';
 
 export interface ComplexityResult {
   symbol: string;
@@ -164,24 +165,4 @@ function countBranches(source: string, language: string): number {
   }
 
   return count;
-}
-
-/**
- * Rough strip of comments and string literals to reduce false positives
- * in branch counting. Not perfect but good enough for estimation.
- */
-function stripCommentsAndStrings(source: string): string {
-  return source
-    // Block comments
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    // Line comments
-    .replace(/\/\/.*/g, '')
-    // Python/Ruby line comments
-    .replace(/#.*/g, '')
-    // Double-quoted strings
-    .replace(/"(?:[^"\\]|\\.)*"/g, '""')
-    // Single-quoted strings
-    .replace(/'(?:[^'\\]|\\.)*'/g, "''")
-    // Template literals
-    .replace(/`(?:[^`\\]|\\.)*`/g, '``');
 }

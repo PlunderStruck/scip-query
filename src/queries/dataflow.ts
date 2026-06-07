@@ -7,6 +7,7 @@ import {
 } from '../symbols/reference-graph.js';
 import { getSourceReferenceSites } from '../symbols/identifier-attribution.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
+import { uniqueSymbolFileRows } from './query-utils.js';
 
 export interface DataflowResult {
   symbol: string;
@@ -95,32 +96,20 @@ function collectFlowEndpoints(
   normalizedUsageSites: { file: string; enclosingSymbol: string }[],
   opts: { semantic: boolean },
 ): { producers: SymbolRow[]; consumers: SymbolRow[] } {
-  const producers = uniqueSymbolRows(
+  const producers = uniqueSymbolFileRows(
     getCalleeRowsForSymbol(db, match, { limit: 30, semantic: opts.semantic }).map((row) => ({
       symbol: row.symbol,
       file: row.file,
     })),
   );
-  const astConsumers = uniqueSymbolRows(getCallerRowsForSymbol(db, match, { limit: 30, semantic: opts.semantic }));
+  const astConsumers = uniqueSymbolFileRows(getCallerRowsForSymbol(db, match, { limit: 30, semantic: opts.semantic }));
   const consumers = astConsumers.length > 0
     ? astConsumers
-    : uniqueSymbolRows(
+    : uniqueSymbolFileRows(
       normalizedUsageSites.map((site) => ({
         symbol: site.enclosingSymbol === '(top-level)' ? site.file : site.enclosingSymbol,
         file: site.file,
       })),
     );
   return { producers, consumers };
-}
-
-function uniqueSymbolRows<T extends { symbol: string; file: string }>(rows: T[]): T[] {
-  const seen = new Set<string>();
-  const unique: T[] = [];
-  for (const row of rows) {
-    const key = `${row.symbol}|${row.file}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(row);
-  }
-  return unique;
 }

@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { getSourceImports } from '../language-parsers/index.js';
 import { createPerDbCache } from '../storage/per-db-cache.js';
+import { indexedDocumentPaths } from '../storage/scip-documents.js';
 
 const FILE_DEP_GRAPH_CACHE = createPerDbCache<string, Map<string, Set<string>>>('file-dep-graph');
 
@@ -13,7 +14,7 @@ export function buildFileDepGraph(
 ): Map<string, Set<string>> {
   return FILE_DEP_GRAPH_CACHE.get(db, scope ?? '', () => {
     const graph = new Map<string, Set<string>>();
-    const indexedFiles = indexedDocumentPaths(db);
+    const indexedFiles = new Set(indexedDocumentPaths(db, { includeIgnored: false }));
     const addEdge = (fromFile: string, toFile: string): void =>
       addFileDepEdge(db, graph, indexedFiles, fromFile, toFile);
 
@@ -58,20 +59,6 @@ function scipFileDepEdges(
       AND m.role != 1
       ${db.pathExclusionsFor('d1', 'd2')}
       ${scopeFilter}`,
-  );
-}
-
-function indexedDocumentPaths(db: ScipDatabase): Set<string> {
-  return new Set(
-    db.all<{ relative_path: string }>(
-      `SELECT relative_path
-       FROM documents
-       WHERE 1 = 1
-         ${db.pathExclusionsFor('documents')}
-       ORDER BY relative_path`,
-    )
-      .map((row) => row.relative_path)
-      .filter((relativePath) => !db.isIgnored(relativePath)),
   );
 }
 

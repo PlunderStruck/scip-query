@@ -7,7 +7,7 @@
 import type { SyntaxNode, Tree } from '../source/ast.js';
 import type { ScipDatabase } from '../storage/db.js';
 import { resolvePythonImportPath } from '../resolution/import-path-resolver.js';
-import { buildUsageBody, collectNamespaceMembers, hasIdentifierUsage } from '../source/source-stripper.js';
+import { buildUsageBody, collectNamespaceMembers, hasIdentifierUsage, parenBalance } from '../source/source-stripper.js';
 import type { ParsedSourceImport } from '../domain/types.js';
 import { collectIdentifiersOutside, firstChildOfType, parseWithAstFallback, splitTopLevel } from './utils.js';
 
@@ -153,7 +153,7 @@ function collectPythonImportStatements(source: string): Array<{
 
     let statement = line;
     let statementEnd = lineStart + line.length;
-    let balance = pythonParenBalance(line);
+    let balance = parenBalance(line);
 
     while (
       lineIndex + 1 < lines.length
@@ -163,7 +163,7 @@ function collectPythonImportStatements(source: string): Array<{
       const nextLine = lines[lineIndex]!;
       statement += `\n${nextLine}`;
       statementEnd += 1 + nextLine.length;
-      balance += pythonParenBalance(nextLine);
+      balance += parenBalance(nextLine);
       offset += nextLine.length + 1;
     }
 
@@ -284,13 +284,4 @@ function parsePythonImportStatement(
   }
 
   return results;
-}
-
-function pythonParenBalance(value: string): number {
-  let balance = 0;
-  for (const char of value) {
-    if (char === '(') balance++;
-    if (char === ')') balance--;
-  }
-  return balance;
 }

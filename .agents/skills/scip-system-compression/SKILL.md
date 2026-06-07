@@ -9,6 +9,8 @@ description: Use when Codex needs to understand a codebase, module, CLI, subsyst
 
 Use this skill to move between concrete SCIP-backed code facts and higher-level architectural ideas. The goal is not to find similar code; the goal is to find many code units that are doing the same kind of work in principle, build a whole-scope map of the compression opportunities before editing, then propose or execute fewer mechanisms that preserve the same behavior.
 
+This is not a score-improvement workflow. Do not optimize for health scores, strict scores, issue counts, detector counts, or any other numeric proxy. Use diagnostic commands only to find evidence. Judge success by whether the code now has fewer, clearer mechanisms that still preserve the required behavior.
+
 ## Core Terms
 
 System compression names an architecture investigation over real code units such as files, symbols, command handlers, query modules, helper layers, renderers, and tests; it identifies when several concrete mechanisms are separate expressions of one deeper role and replaces them, conceptually or in code, with fewer mechanisms that still explain and produce the same observed behavior.
@@ -34,6 +36,8 @@ A compression opportunity is an observed chance to replace, merge, delete, inlin
 An opportunity ledger is the accounting table for those opportunities; it assigns each opportunity exactly one disposition such as keep, skip, defer, supersede, merge, delete, inline, extract, generate, or enforce, which prevents already-understood work from reappearing as a "new" idea after nearby code changes.
 
 A dependency order is the sequence of proposed changes arranged by what each change makes possible or safer. It puts enabling compressions, such as shared policy definitions or descriptor tables, before the cleanup steps that depend on them.
+
+A deferred register is the written list of opportunities deliberately left out of the current implementation; each entry names the opportunity, the verified blocking fact, why it is not part of the current ordered clusters, and what concrete condition would make it eligible again.
 
 A rework loop is repeated editing of the same file, symbol family, or role because the earlier pass handled one visible symptom without accounting for the wider opportunity set and dependency order.
 
@@ -61,7 +65,6 @@ Useful first-pass commands:
 
 ```bash
 scip-query stats
-scip-query health
 scip-query system <module-or-directory>
 scip-query surface <module-or-directory>
 scip-query deps <file>
@@ -107,7 +110,7 @@ Use the first pass to decide which subsystems deserve deeper ladders, not to cho
 
 ### 3. Build the Compression Atlas
 
-For substantial work, create a compression atlas before implementation. The atlas can be an internal working artifact, a report, or a file if the user asks for a persistent plan. Load `references/compression-atlas.md` when you need the full template.
+For substantial work, write down a compression atlas before implementation. The atlas is a visible planning artifact, not only private reasoning. If filesystem edits are allowed, save it before code changes under `docs/plans/` or `reports/compression/` with a date and scope in the filename, such as `docs/plans/YYYY-MM-DD-<scope>-compression-atlas.md`. If those directories do not exist, create the most locally appropriate one. If the user explicitly asks not to create files, include the atlas in the response instead. Load `references/compression-atlas.md` when you need the full template.
 
 The atlas must include:
 
@@ -115,13 +118,16 @@ The atlas must include:
 Scope Map: directories, entry points, public surfaces, tests, generated artifacts
 Role Inventory: recurring roles and execution shapes, tied to files and symbols
 Opportunity Ledger: every discovered opportunity with evidence and one disposition
+Deferred Register: every deferred opportunity with a blocking fact and revisit condition
 Compression Clusters: opportunities grouped by shared root cause or enabling mechanism
 Dependency Order: what must happen first, what can batch together, what should wait
 Touch Map: files/symbols each cluster will edit, including overlap and conflict risks
 Validation Plan: commands or tests for each cluster and for the final audit
 ```
 
-The ledger is mandatory when the user asks to "think ahead", "do everything at once", "avoid rework", or compress a whole subsystem. Do not leave an opportunity unaccounted because it is small; small opportunities can be marked skip, defer, or batch.
+The ledger is mandatory when the user asks to "think ahead", "do everything at once", "avoid rework", or compress a whole subsystem. Do not leave an opportunity unaccounted because it is small; small opportunities can be marked skip or batch. The saved atlas path must be reported before or alongside any implementation summary.
+
+Default to action, not deferral. Large or cross-cutting changes are in scope when they are the right compression; make them executor-ready, order them safely, and implement them when the current task asks for code changes. Do not defer merely because a change is major, touches many files, requires a new central mechanism, or needs careful sequencing.
 
 Use these dispositions:
 
@@ -132,8 +138,19 @@ Use these dispositions:
 - `generate`: derive a surface from metadata instead of maintaining it by hand
 - `enforce`: centralize a policy or invariant so callers cannot drift
 - `supersede`: absorb a local issue into a larger compression cluster
-- `defer`: keep the opportunity visible but out of the current migration
+- `defer`: keep the opportunity visible but out of the current migration only because of a verified blocker
 - `skip`: reject the opportunity because the compression is false, too costly, or net-negative
+
+Use `defer` only when at least one of these is true:
+
+- the opportunity is outside the user's stated scope
+- required evidence is unavailable and guessing would risk behavior
+- it depends on an earlier cluster that has not been implemented yet
+- it would conflict with unrelated user changes in the current worktree
+- it requires external input, generated artifacts, or runtime access that is currently unavailable
+- it is valid but the user explicitly limited this run to a smaller slice
+
+Every deferred opportunity must appear in the deferred register with: opportunity ID, evidence, blocking fact, dependency or owner, revisit condition, and whether it should be handled in the next compression pass.
 
 Reject a plan that starts editing before it can answer:
 
@@ -141,7 +158,7 @@ Reject a plan that starts editing before it can answer:
 - Which later opportunities become easier after this edit?
 - Which earlier opportunities would make this edit unnecessary?
 - What file-touch conflicts or public surfaces constrain the order?
-- Which discovered opportunities are deliberately skipped or deferred?
+- Which discovered opportunities are deliberately skipped or deferred, and what written evidence justifies each deferral?
 
 ### 4. Climb the Abstraction Ladder
 
@@ -179,7 +196,7 @@ Look for repeated roles across unlike code:
 - help text, README text, command metadata, and tests that all describe the same command surface
 - query modules that each build equivalent graph structures before applying different filters
 - language-specific branches that share one dispatch shape
-- health, dead-code, redundant-export, and liveness checks that carry separate definitions of reachability
+- maintenance, dead-code, redundant-export, and liveness checks that carry separate definitions of reachability
 - scripts that perform separate concrete steps of one lifecycle
 - wrappers, pass-throughs, and adapters that preserve an old surface after the real concept moved
 
@@ -232,8 +249,9 @@ Then run a pre-edit sense-check:
 - Value check: the plan deletes, generates, or enforces complexity instead of adding a larger abstraction
 - Rework check: no step edits a file that a prior enabling cluster would later rewrite again
 - Public-surface check: command names, API exports, file formats, help text, docs, and tests that must stay stable are named
+- Ambition check: any major compression is either planned in dependency order or appears in the deferred register with a real blocker
 
-Skip, split, or defer clusters that fail the value check. Prefer deletion, inlining, and policy centralization over adding broad frameworks. A new abstraction is justified only when it removes more conceptual machinery than it adds.
+Skip or split clusters that fail the value check. Defer only for verified blockers listed in the deferred register. Prefer deletion, inlining, and policy centralization over adding broad frameworks. A new abstraction is justified only when it removes more conceptual machinery than it adds.
 
 ### 8. Descend Back to Concrete Proof
 
@@ -249,6 +267,8 @@ scip-query change-surface <touched-file>
 Read the source for every key symbol named in the proposal. Check tests around the public behavior. If docs, help output, generated files, or command-line text are involved, inspect those artifacts directly.
 
 If implementing, execute in dependency order by cluster. Avoid rescanning or replanning after every small edit unless a falsifying fact appears; instead, finish the current cluster, validate it, update the atlas ledger, then continue.
+
+When the right compression is large, do not shrink it into cosmetic local edits. Break it into ordered clusters, write the atlas, protect public behavior with validation, then make the major change.
 
 After each implemented cluster, run the audit with concrete evidence:
 
@@ -295,6 +315,9 @@ Specific scripts, branches, duplicated policies, hand-maintained text, or helper
 Opportunity Ledger
 Each discovered opportunity with disposition: handled, superseded, deferred, skipped, or out of scope.
 
+Deferred Register
+Every deferred opportunity, the verified blocker, and the concrete revisit condition.
+
 Dependency Order
 The cluster order and the reason earlier clusters enable later ones.
 
@@ -308,7 +331,7 @@ Risks
 The facts that could falsify the compression or make it too expensive.
 ```
 
-If the user asked for implementation, still produce the atlas, thesis, ledger, and dependency order internally before editing. Then implement the ordered clusters that are safe in the current turn, run focused tests, update the audit, and report the evidence.
+If the user asked for implementation, still write down the atlas, thesis, ledger, and dependency order before editing unless the scope is tiny or the user forbids file creation. Then implement the ordered clusters that are safe in the current turn, run focused tests, update the saved atlas audit when useful, and report the evidence.
 
 ## Guardrails
 
@@ -321,3 +344,7 @@ Do not invent a "clean architecture" vocabulary unless it identifies the actual 
 Do not let `health`, `similar`, or `stale-abstractions` decide the answer. They are instruments, not judgment. Use them to find clues; use source reading and SCIP graph facts to validate.
 
 Do not let the implementation loop become the discovery mechanism. Discovery produces the atlas; implementation follows it and changes course only when new verified facts falsify the plan.
+
+Do not measure compression success by health score movement, issue count reduction, or detector output. A compression succeeds when it removes or clarifies real mechanisms while preserving behavior, even if a score does not move.
+
+Do not use deferral as a way to avoid major but correct cleanup. Deferral is a recorded exception for blocked, out-of-scope, or dependency-gated opportunities; otherwise, plan the work and do it.

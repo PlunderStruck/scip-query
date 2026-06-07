@@ -3,6 +3,7 @@ import { detectAstLanguage } from '../source/ast.js';
 import { getSourceImports } from '../language-parsers/index.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
 import { leafName } from './symbol-parser.js';
+import { pathsResolveSame } from '../resolution/path-normalization.js';
 
 export function sameLanguageCandidates<T extends { file: string }>(
   sourceFile: string,
@@ -37,11 +38,6 @@ export function pickAstCallCandidate<T extends { symbol: string; file: string }>
   }
 
   return candidates.length === 1 ? candidates[0]! : null;
-}
-
-function pathsResolveSame(a: string, b: string): boolean {
-  const norm = (path: string): string => path.replace(/\\/g, '/').replace(/^\.\//, '');
-  return norm(a) === norm(b);
 }
 
 function astLanguageFamily(relativePath: string): string | null {

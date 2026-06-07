@@ -21,11 +21,12 @@ import { getFullSymbolMatch } from './symbol-lookup.js';
 import { getGlobalLeafIndex } from './reference-graph.js';
 import type { IndexedDefinition, ReferenceSite, SymbolLocation } from '../domain/types.js';
 import { findIdentifierLines, getFileIdentifiers } from './identifier-index.js';
-import { getSourceImports } from '../language-parsers/index.js';
 import { getSourceText } from '../source/source-text.js';
 import { getSourceFiles } from '../source/source-fileset.js';
 import { semanticReferences } from '../semantic/shared-primitives.js';
 import { leafName } from './symbol-parser.js';
+import { pathsResolveSame } from '../resolution/path-normalization.js';
+import { sourceImportPathsByLocalName } from '../language-parsers/import-index.js';
 
 // ── Public types ─────────────────────────────────────────────────
 
@@ -71,7 +72,7 @@ export function attributeIdentifier(
   // 2. Direct import: refFile imports `identifier` by name from a path
   // that matches a candidate's defining file. Credit ALL candidates in
   // that file (interface dispatch could land on any impl at runtime).
-  const importsByName = readFileImports(db, file);
+  const importsByName = sourceImportPathsByLocalName(db, file);
   const directlyImportedFrom = importsByName.get(identifier);
   if (directlyImportedFrom) {
     for (const sourcePath of directlyImportedFrom) {
@@ -244,37 +245,6 @@ export function findCallerFiles(
 }
 
 // ── Internals ────────────────────────────────────────────────────
-
-/**
- * Per-file imports indexed by local-name → set of source paths the name
- * resolves to. Cached by getSourceImports' own per-DB cache, so this
- * inversion is cheap to recompute as needed.
- */
-function readFileImports(db: ScipDatabase, file: string): Map<string, Set<string>> {
-  const map = new Map<string, Set<string>>();
-  for (const entry of getSourceImports(db, file)) {
-    if (!entry.sourcePath) continue;
-    const localName = entry.localName ?? entry.importedName;
-    if (localName) {
-      let s = map.get(localName);
-      if (!s) { s = new Set(); map.set(localName, s); }
-      s.add(entry.sourcePath);
-    }
-    if (entry.kind === 'namespace') {
-      for (const member of entry.usedMembers) {
-        let s = map.get(member);
-        if (!s) { s = new Set(); map.set(member, s); }
-        s.add(entry.sourcePath);
-      }
-    }
-  }
-  return map;
-}
-
-function pathsResolveSame(a: string, b: string): boolean {
-  const norm = (p: string): string => p.replace(/\\/g, '/').replace(/^\.\//, '');
-  return norm(a) === norm(b);
-}
 
 function toSymbolRef(entry: { symbol: string; symbolId: number; file: string }): SymbolRef {
   return { symbolId: entry.symbolId, symbol: entry.symbol, relativePath: entry.file };

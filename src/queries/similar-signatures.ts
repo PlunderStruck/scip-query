@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { getAllDefinitions } from '../symbols/definition-catalog.js';
 import { getSourceText } from '../source/source-text.js';
+import { parenBalance } from '../source/source-stripper.js';
 import type { IndexedDefinition } from '../domain/types.js';
 import { semanticSignature } from '../semantic/shared-primitives.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
@@ -351,15 +352,6 @@ function declarationStartLines(
   }
 
   return candidates;
-}
-
-function parenBalance(value: string): number {
-  let balance = 0;
-  for (const char of value) {
-    if (char === '(') balance += 1;
-    if (char === ')') balance -= 1;
-  }
-  return balance;
 }
 
 function escapeRegex(value: string): string {
