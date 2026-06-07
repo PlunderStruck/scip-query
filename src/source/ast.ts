@@ -11,168 +11,16 @@
  *     the source string identity so callers that pre-load source via
  *     getSourceText share the cache hit.
  */
-import { extname } from 'node:path';
-import { createRequire } from 'node:module';
 import type { ScipDatabase } from '../storage/db.js';
 import { getSourceText } from './source-text.js';
 import { createPerDbSourceCache } from '../storage/per-db-cache.js';
+import { detectAstLanguage, isVueSfcPath, type AstLanguage } from './ast-language.js';
+import { compileQuery, parseAstSource } from './ast-runtime.js';
+import type { QueryInstance, SyntaxNode, Tree } from './ast-types.js';
 
-const require = createRequire(import.meta.url);
-
-// All grammars are CommonJS native bindings.
-type ParserCtor = new () => ParserInstance;
-interface ParserInstance {
-  setLanguage(lang: unknown): void;
-  parse(source: string | ((index: number, position: { row: number; column: number }) => string | null)): Tree;
-}
-export interface Tree {
-  rootNode: SyntaxNode;
-}
-export interface SyntaxNode {
-  type: string;
-  text: string;
-  startPosition: { row: number; column: number };
-  endPosition: { row: number; column: number };
-  startIndex: number;
-  endIndex: number;
-  childCount: number;
-  namedChildCount: number;
-  children: SyntaxNode[];
-  namedChildren: SyntaxNode[];
-  parent: SyntaxNode | null;
-  child(index: number): SyntaxNode | null;
-  namedChild(index: number): SyntaxNode | null;
-  childForFieldName(name: string): SyntaxNode | null;
-  descendantsOfType(type: string | string[]): SyntaxNode[];
-}
-interface QueryConstructor {
-  new (lang: unknown, queryString: string): QueryInstance;
-}
-export interface QueryInstance {
-  captures(node: SyntaxNode): Array<{ name: string; node: SyntaxNode }>;
-  matches(node: SyntaxNode): Array<{ pattern: number; captures: Array<{ name: string; node: SyntaxNode }> }>;
-}
-
-// `tree-sitter` is an optionalDependency — its native binding can fail to
-// install on minimal environments (no Python / no C++ toolchain). When that
-// happens, `require('tree-sitter')` throws on first use; we cache the failure
-// so callers get a fast `null` and fall back to their regex paths.
-let _Parser: (ParserCtor & { Query: QueryConstructor }) | null = null;
-let _ParserUnavailable = false;
-function getParserCtor(): (ParserCtor & { Query: QueryConstructor }) | null {
-  if (_ParserUnavailable) return null;
-  if (_Parser) return _Parser;
-  try {
-    _Parser = require('tree-sitter') as ParserCtor & { Query: QueryConstructor };
-    return _Parser;
-  } catch {
-    _ParserUnavailable = true;
-    return null;
-  }
-}
-
-// scip-query: ignore-stale — foundational discriminator used by every AST helper
-// in this file plus framework-patterns; the heuristic counts cross-file consumers
-// only and misses the dozens of internal uses.
-export type AstLanguage =
-  | 'rust' | 'typescript' | 'tsx' | 'javascript' | 'python'
-  | 'java' | 'kotlin' | 'scala' | 'ruby' | 'c' | 'cpp' | 'csharp' | 'php' | 'vb';
-
-const LANGUAGE_BY_EXT: Readonly<Record<string, AstLanguage>> = {
-  '.rs': 'rust',
-  '.ts': 'typescript',
-  '.mts': 'typescript',
-  '.cts': 'typescript',
-  '.tsx': 'tsx',
-  '.js': 'javascript',
-  '.jsx': 'javascript',
-  '.mjs': 'javascript',
-  '.cjs': 'javascript',
-  '.py': 'python',
-  '.pyi': 'python',
-  '.java': 'java',
-  '.kt': 'kotlin',
-  '.kts': 'kotlin',
-  '.scala': 'scala',
-  '.sc': 'scala',
-  '.rb': 'ruby',
-  '.c': 'c',
-  '.h': 'c',
-  '.cc': 'cpp',
-  '.cpp': 'cpp',
-  '.cxx': 'cpp',
-  '.hpp': 'cpp',
-  '.hh': 'cpp',
-  '.hxx': 'cpp',
-  '.cs': 'csharp',
-  '.php': 'php',
-  '.vb': 'vb',
-};
-
-const grammarCache = new Map<AstLanguage, unknown>();
-const failedLanguages = new Set<AstLanguage>();
-function loadGrammar(lang: AstLanguage): unknown | null {
-  if (failedLanguages.has(lang)) return null;
-  const cached = grammarCache.get(lang);
-  if (cached) return cached;
-  let g: unknown;
-  try {
-    switch (lang) {
-      case 'rust':       g = require('tree-sitter-rust'); break;
-      case 'typescript': g = (require('tree-sitter-typescript') as { typescript: unknown }).typescript; break;
-      case 'tsx':        g = (require('tree-sitter-typescript') as { tsx: unknown }).tsx; break;
-      case 'javascript': g = require('tree-sitter-javascript'); break;
-      case 'python':     g = require('tree-sitter-python'); break;
-      case 'java':       g = require('tree-sitter-java'); break;
-      case 'kotlin':     g = require('tree-sitter-kotlin'); break;
-      case 'scala':      g = require('tree-sitter-scala'); break;
-      case 'ruby':       g = require('tree-sitter-ruby'); break;
-      case 'c':          g = require('tree-sitter-c'); break;
-      case 'cpp':        g = require('tree-sitter-cpp'); break;
-      case 'csharp':     g = require('tree-sitter-c-sharp'); break;
-      case 'php':        g = (require('tree-sitter-php') as { php: unknown }).php; break;
-      case 'vb': {
-        const m = require('tree-sitter-vb-dotnet') as { language?: unknown };
-        g = m.language ?? m;
-        break;
-      }
-    }
-  } catch {
-    // Native binding missing or incompatible. Mark as failed so callers fall
-    // back to regex; subsequent calls skip the require attempt.
-    failedLanguages.add(lang);
-    return null;
-  }
-  grammarCache.set(lang, g);
-  return g;
-}
-
-const parserPool = new Map<AstLanguage, ParserInstance>();
-function getParser(lang: AstLanguage): ParserInstance | null {
-  const cached = parserPool.get(lang);
-  if (cached) return cached;
-  const grammar = loadGrammar(lang);
-  if (!grammar) return null;
-  const Ctor = getParserCtor();
-  if (!Ctor) return null;
-  const parser = new Ctor();
-  try {
-    parser.setLanguage(grammar);
-  } catch {
-    failedLanguages.add(lang);
-    return null;
-  }
-  parserPool.set(lang, parser);
-  return parser;
-}
-
-export function detectAstLanguage(relativePath: string): AstLanguage | null {
-  return LANGUAGE_BY_EXT[extname(relativePath).toLowerCase()] ?? null;
-}
-
-export function isVueSfcPath(relativePath: string): boolean {
-  return extname(relativePath).toLowerCase() === '.vue';
-}
+export { detectAstLanguage, isVueSfcPath };
+export { compileQuery };
+export type { AstLanguage, QueryInstance, SyntaxNode, Tree };
 
 const TREE_CACHE = createPerDbSourceCache<Tree | null>('ast-trees');
 // scip-query: ignore-passthrough — cache lifecycle hook used by composite
@@ -210,13 +58,7 @@ export function getAst(db: ScipDatabase, relativePath: string): Tree | null {
   if (!source) return null;
 
   return TREE_CACHE.get(db, relativePath, source, () => {
-    const parser = getParser(lang);
-    if (!parser) return null;
-    try {
-      return parseSource(parser, source);
-    } catch {
-      return null;
-    }
+    return parseAstSource(lang, source);
   });
 }
 
@@ -238,23 +80,10 @@ function getVueScriptAst(db: ScipDatabase, relativePath: string): Tree | null {
   return TREE_CACHE.get(db, relativePath, source, () => {
     const block = extractVueScriptBlock(source);
     if (!block) return null;
-    const parser = getParser(block.language);
-    if (!parser) return null;
     // Pad with newlines so the script content sits on its original lines.
     const padded = '\n'.repeat(block.startLine) + block.body;
-    try {
-      return parseSource(parser, padded);
-    } catch {
-      return null;
-    }
+    return parseAstSource(block.language, padded);
   });
-}
-
-function parseSource(parser: ParserInstance, source: string): Tree {
-  const chunkSize = 16 * 1024;
-  return parser.parse((index) => (
-    index >= source.length ? null : source.slice(index, Math.min(source.length, index + chunkSize))
-  ));
 }
 
 interface VueScriptBlock {
@@ -306,31 +135,6 @@ function countNewlinesBefore(source: string, offset: number): number {
     if (source.charCodeAt(i) === 10) count++;
   }
   return count;
-}
-
-const QUERY_CACHE = new Map<string, QueryInstance | null>();
-/** Compile (and cache) a tree-sitter query for the given language + query text. */
-export function compileQuery(lang: AstLanguage, queryString: string): QueryInstance | null {
-  const key = `${lang}::${queryString}`;
-  if (QUERY_CACHE.has(key)) return QUERY_CACHE.get(key) ?? null;
-  const grammar = loadGrammar(lang);
-  if (!grammar) {
-    QUERY_CACHE.set(key, null);
-    return null;
-  }
-  const Ctor = getParserCtor();
-  if (!Ctor) {
-    QUERY_CACHE.set(key, null);
-    return null;
-  }
-  try {
-    const compiled = new Ctor.Query(grammar, queryString);
-    QUERY_CACHE.set(key, compiled);
-    return compiled;
-  } catch {
-    QUERY_CACHE.set(key, null);
-    return null;
-  }
 }
 
 // scip-query: ignore-stale — public return type of getCallableSites; the

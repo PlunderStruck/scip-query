@@ -427,3 +427,5 @@ First slice started in `docs/plans/2026-06-07-project-evidence-isolated-compress
 Language parser adapter slice landed in `docs/plans/2026-06-07-language-parser-adapter-contract-atlas.md`: parser adapters now declare their source-fact capabilities and fallback modes, JavaScript-style re-export parsing dispatches through the registry instead of importing the JavaScript implementation directly, and re-export parsing now shares the same per-database cache ownership as import/export parsing.
 
 Query command algebra slice continued in `docs/plans/2026-06-07-query-command-spec-compression-atlas.md`: simple list/table/grouped commands now use `listQueryCommand`, `tableQueryCommand`, and `groupedQueryCommand`, so metadata, query invocation, render shape, empty state, and post-render behavior live in one command-spec unit instead of split `handleX` symbols plus descriptor entries.
+
+AST runtime split started in `docs/plans/2026-06-07-ast-runtime-split-atlas.md`: the public `src/source/ast.ts` facade stays stable, while parser runtime, language detection, and structural tree/query types move into owned internal modules.
