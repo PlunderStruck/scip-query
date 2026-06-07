@@ -1,0 +1,470 @@
+import type { ScipDatabase } from '../storage/db.js';
+import { detectAstLanguage, getCallSites } from '../source/ast.js';
+import { createPerDbValue } from '../storage/per-db-cache.js';
+import { getIdentifiersByLine } from './identifier-index.js';
+import { isCallableSymbol, leafName } from './symbol-parser.js';
+import { findEnclosingDefinition, getAllDefinitions, getDefinitionsForFile } from './definition-catalog.js';
+import { getResolvedReferenceSites } from './reference-sites.js';
+import type { IndexedDefinition, SymbolLocation, SymbolMatch } from '../domain/types.js';
+import { semanticCalleeMap, semanticReferences } from '../semantic/shared-primitives.js';
+import { getGlobalLeafIndex, pickAstCallCandidate, sameLanguageCandidates } from './leaf-symbol-index.js';
+import type { GlobalLeafCandidate } from './leaf-symbol-index.js';
+
+export interface CalleeRow {
+  symbol: string;
+  file: string;
+  chunkId: number;
+}
+
+export interface CallerRow {
+  symbol: string;
+  file: string;
+}
+
+export function getCalleeRowsForSymbol(
+  db: ScipDatabase,
+  symbol: SymbolMatch,
+  opts: { limit?: number; additive?: boolean; callableOnly?: boolean; semantic?: boolean } = {},
+): CalleeRow[] {
+  // Delegates to the shared bulk path so callers automatically benefit from
+  // tree-sitter call attribution, source-confirmation, and the merged AST +
+  // SCIP results. Avoids the older per-symbol mention-scan that under-
+  // attributed for AST-supported languages and missed call/callee shape
+  // refinements that the bulk helper already handles.
+  const map = buildCalleeMap(db, [symbol], { additive: opts.additive, semantic: opts.semantic });
+  const callees = opts.callableOnly
+    ? (map.get(symbol.symbolId) ?? []).filter((callee) => isCallableSymbol(callee.symbol))
+    : map.get(symbol.symbolId) ?? [];
+  return typeof opts.limit === 'number' ? callees.slice(0, opts.limit) : callees;
+}
+
+export function getCallerRowsForSymbol(
+  db: ScipDatabase,
+  symbol: SymbolMatch,
+  opts: { limit?: number; semantic?: boolean } = {},
+): CallerRow[] {
+  const callers = shouldUseTargetedCallerRows(db)
+    ? targetedCallerRowsForSymbol(db, symbol, { semantic: opts.semantic !== false })
+    : buildCallerRowsMap(db).get(symbol.symbolId) ?? [];
+  return typeof opts.limit === 'number' ? callers.slice(0, opts.limit) : callers;
+}
+
+const CALLER_ROWS_CACHE = createPerDbValue<Map<number, CallerRow[]>>('caller-rows');
+const TARGETED_CALLER_THRESHOLD = 20_000;
+
+function shouldUseTargetedCallerRows(db: ScipDatabase): boolean {
+  const row = db.get<{ count: number }>('SELECT COUNT(*) AS count FROM global_symbols');
+  return (row?.count ?? 0) > TARGETED_CALLER_THRESHOLD;
+}
+
+/**
+ * Inverse of buildCalleeMap: for every (caller, callee) edge, register the
+ * caller's symbol + file under the callee's symbolId. Cached so the entire
+ * inversion happens once per ScipDatabase instance.
+ */
+export function buildCallerRowsMap(db: ScipDatabase): Map<number, CallerRow[]> {
+  return CALLER_ROWS_CACHE.get(db, () => {
+    const allDefs = getAllDefinitions(db);
+    const calleeMap = buildCalleeMap(db, allDefs);
+
+    const symbolToId = new Map<string, number>();
+    for (const def of allDefs) symbolToId.set(def.symbol, def.symbolId);
+
+    const result = new Map<number, CallerRow[]>();
+    const seen = new Map<number, Set<string>>();
+    for (const callerDef of allDefs) {
+      const callees = calleeMap.get(callerDef.symbolId);
+      if (!callees || callees.length === 0) continue;
+      for (const callee of callees) {
+        const calleeId = symbolToId.get(callee.symbol);
+        if (calleeId === undefined) continue;
+        if (calleeId === callerDef.symbolId) continue; // skip self-recursion
+        let bucket = result.get(calleeId);
+        if (!bucket) {
+          bucket = [];
+          result.set(calleeId, bucket);
+          seen.set(calleeId, new Set());
+        }
+        const dedupeKey = `${callerDef.symbol}|${callerDef.relativePath}`;
+        if (seen.get(calleeId)!.has(dedupeKey)) continue;
+        seen.get(calleeId)!.add(dedupeKey);
+        bucket.push({ symbol: callerDef.symbol, file: callerDef.relativePath });
+      }
+    }
+
+    return result;
+  });
+}
+
+// scip-query: ignore-extract — this is the targeted single-symbol caller
+// fallback: resolved reference sites, indexed definition lookup, and file-edge
+// attribution intentionally form one query path.
+function targetedCallerRowsForSymbol(
+  db: ScipDatabase,
+  symbol: SymbolMatch,
+  opts: { semantic: boolean },
+): CallerRow[] {
+  const rows: CallerRow[] = [];
+  const seen = new Set<string>();
+  const add = (row: CallerRow): void => {
+    if (row.symbol === symbol.symbol) return;
+    const key = `${row.symbol}|${row.file}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    rows.push(row);
+  };
+
+  for (const site of getResolvedReferenceSites(db, symbol)) {
+    if (site.file === symbol.relativePath) continue;
+    add({
+      symbol: site.enclosingSymbol ?? site.file,
+      file: site.file,
+    });
+  }
+
+  const definition = opts.semantic ? indexedDefinitionForSymbol(db, symbol) : null;
+  if (definition) {
+    for (const reference of semanticReferences(db, definition)) {
+      if (reference.file === symbol.relativePath || db.isIgnored(reference.file)) continue;
+      const enclosing = findEnclosingDefinition(getDefinitionsForFile(db, reference.file), reference.line);
+      add({
+        symbol: enclosing?.symbol ?? reference.file,
+        file: reference.file,
+      });
+    }
+  }
+
+  return rows;
+}
+
+function indexedDefinitionForSymbol(db: ScipDatabase, symbol: SymbolMatch): IndexedDefinition | null {
+  return db.get<IndexedDefinition>(
+    `SELECT
+       d.id AS documentId,
+       gs.id AS symbolId,
+       gs.symbol,
+       d.relative_path AS relativePath,
+       COALESCE(der.start_line, c.start_line) AS startLine,
+       COALESCE(der.end_line, c.end_line) AS endLine,
+       COALESCE(gs.display_name, '') AS leaf,
+       NULL AS parentTypeName,
+       CASE WHEN gs.kind IN (6, 12, 13) OR gs.symbol LIKE '%().' THEN 1 ELSE 0 END AS isFunctionLike,
+       CASE WHEN gs.kind IN (5, 8, 11) THEN 1 ELSE 0 END AS isTypeLike,
+       gs.kind AS kind,
+       gs.documentation AS documentation,
+       gs.enclosing_symbol AS enclosingSymbol
+     FROM global_symbols gs
+     LEFT JOIN defn_enclosing_ranges der ON der.symbol_id = gs.id
+     LEFT JOIN chunks c ON c.document_id = der.document_id
+     JOIN documents d ON d.id = COALESCE(der.document_id, c.document_id)
+     WHERE gs.id = ?
+     LIMIT 1`,
+    symbol.symbolId,
+  ) ?? null;
+}
+
+// ── Callee map (bulk) ──────────────────────────────────────────
+
+/**
+ * Bulk callee map: for each definition in the list, find every symbol it
+ * actually calls.
+ *
+ * For files with tree-sitter support (Rust, TS/JS, Python), we use AST
+ * call_expression / new_expression nodes — every callsite is exact, every
+ * attribution is to the precise enclosing function.
+ *
+ * For files without AST support (Java, JVM, Ruby, .NET, Dart, PHP, C/C++),
+ * we fall back to chunk-level SCIP mentions.
+ *
+ * `opts.additive`:
+ *   - false (default, "call-strict"): AST is the ground truth for AST files;
+ *     chunk attribution is NOT unioned in. Use for callee fingerprints,
+ *     extract/passthrough analysis, callGraph — anywhere you need exact
+ *     "what does this function call" without false positives from chunk
+ *     attribution placing a mention in the wrong enclosing function.
+ *   - true ("union with chunks"): merges both paths. Use for liveness
+ *     checks (isolated, "has any callee at all") where ambiguous-leaf
+ *     callees that AST resolution skips would otherwise produce false
+ *     positives.
+ */
+// scip-query: ignore-extract — this is the AST/semantic/chunk merge policy
+// for callee evidence; keeping the precedence visible prevents accuracy
+// regressions when one evidence source is noisy.
+export function buildCalleeMap(
+  db: ScipDatabase,
+  definitions: ReadonlyArray<SymbolMatch>,
+  opts: { additive?: boolean; semantic?: boolean } = {},
+): Map<number, CalleeRow[]> {
+  if (definitions.length === 0) return new Map();
+  const additive = opts.additive ?? false;
+
+  const astDefs: SymbolMatch[] = [];
+  const chunkOnlyDefs: SymbolMatch[] = [];
+  for (const def of definitions) {
+    if (detectAstLanguage(def.relativePath) && getCallSites(db, def.relativePath) !== null) {
+      astDefs.push(def);
+    } else {
+      chunkOnlyDefs.push(def);
+    }
+  }
+
+  const merged = new Map<number, CalleeRow[]>();
+  const seenBySymbolId = new Map<number, Set<string>>();
+  const addAll = (
+    src: Map<number, CalleeRow[]>,
+  ): void => {
+    for (const [id, list] of src) {
+      let bucket = merged.get(id);
+      if (!bucket) { bucket = []; merged.set(id, bucket); }
+      let seen = seenBySymbolId.get(id);
+      if (!seen) {
+        seen = new Set();
+        seenBySymbolId.set(id, seen);
+      }
+      for (const c of list) {
+        const key = `${c.symbol}|${c.chunkId}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        bucket.push(c);
+      }
+    }
+  };
+
+  if (astDefs.length > 0) addAll(buildAstCalleeMap(db, astDefs));
+  if (opts.semantic !== false) addAll(toCalleeRows(semanticCalleeMap(db, definitions)));
+  // Chunk path runs for non-AST defs always; for AST defs only when additive.
+  const chunkDefs = additive ? definitions : chunkOnlyDefs;
+  if (chunkDefs.length > 0) addAll(buildChunkCalleeMap(db, chunkDefs));
+  return merged;
+}
+
+/**
+ * AST-based callee detection. For each definition's file:
+ *   1. Walk callsites (cached AST query).
+ *   2. Match each callsite to its enclosing definition by line containment
+ *      against the file's known definitions sorted by start line.
+ *   3. Resolve the callee leaf to a SCIP symbol via the global leaf index.
+ */
+// scip-query: ignore-extract — this is the AST callee fallback builder:
+// per-file definitions, callsites, leaf index lookup, and innermost-caller
+// attribution are one source-scan pass.
+export function buildAstCalleeMap(
+  db: ScipDatabase,
+  definitions: ReadonlyArray<SymbolMatch>,
+): Map<number, Array<{ symbol: string; file: string; chunkId: number }>> {
+  const result = new Map<number, Array<{ symbol: string; file: string; chunkId: number }>>();
+  const byFile = definitionsByFile(definitions, result);
+  const leafIndex = getGlobalLeafIndex(db);
+
+  for (const [file, fileDefs] of byFile) {
+    const callsites = getCallSites(db, file);
+    if (!callsites) continue; // Source unreadable — defs return empty callee arrays.
+
+    for (const site of callsites) {
+      const owner = innermostDefinitionAtLine(fileDefs, site.line);
+      if (!owner) continue;
+
+      const pick = resolveAstCalleeCandidate(db, file, leafIndex, site.calleeLeaf, site.memberAccess);
+      if (!pick) continue;
+      if (pick.symbol === owner.symbol) continue; // skip self-recursion
+
+      result.get(owner.symbolId)!.push({ symbol: pick.symbol, file: pick.file, chunkId: site.line });
+    }
+  }
+
+  return result;
+}
+
+function definitionsByFile(
+  definitions: ReadonlyArray<SymbolMatch>,
+  result: Map<number, Array<{ symbol: string; file: string; chunkId: number }>>,
+): Map<string, SymbolMatch[]> {
+  const byFile = new Map<string, SymbolMatch[]>();
+  for (const def of definitions) {
+    const arr = byFile.get(def.relativePath);
+    if (arr) arr.push(def);
+    else byFile.set(def.relativePath, [def]);
+    result.set(def.symbolId, []);
+  }
+  for (const defs of byFile.values()) {
+    defs.sort((a, b) => (a.endLine - a.startLine) - (b.endLine - b.startLine));
+  }
+  return byFile;
+}
+
+function innermostDefinitionAtLine(
+  definitions: readonly SymbolMatch[],
+  line: number,
+): SymbolMatch | null {
+  return definitions.find((def) => line >= def.startLine && line <= def.endLine) ?? null;
+}
+
+function resolveAstCalleeCandidate(
+  db: ScipDatabase,
+  file: string,
+  leafIndex: Map<string, GlobalLeafCandidate[]>,
+  calleeLeaf: string,
+  memberAccess: boolean,
+): GlobalLeafCandidate | null {
+  const candidates = sameLanguageCandidates(file, leafIndex.get(calleeLeaf) ?? []);
+  if (candidates.length === 0) return null;
+  return pickAstCallCandidate(db, file, candidates, memberAccess);
+}
+
+export function buildChunkCalleeMap(
+  db: ScipDatabase,
+  definitions: ReadonlyArray<SymbolLocation>,
+): Map<number, Array<{ symbol: string; file: string; chunkId: number }>> {
+  if (definitions.length === 0) return new Map();
+
+  // All non-definition mentions with their chunk doc/line range
+  const refRows = db.all<{
+    document_id: number;
+    chunk_id: number;
+    start_line: number;
+    end_line: number;
+    symbol_id: number;
+  }>(
+    `SELECT c.document_id, c.id AS chunk_id, c.start_line, c.end_line, m.symbol_id
+     FROM mentions m
+     JOIN chunks c ON m.chunk_id = c.id
+     WHERE m.role != 1`,
+  );
+
+  // Group by document
+  const byDoc = new Map<number, Array<typeof refRows[number]>>();
+  for (const row of refRows) {
+    if (!byDoc.has(row.document_id)) byDoc.set(row.document_id, []);
+    byDoc.get(row.document_id)!.push(row);
+  }
+
+  // Callee symbol info: symbolId → {symbol string, defining file}.
+  //
+  // Defining file is resolved by preferring `defn_enclosing_ranges` (the
+  // canonical source when populated, e.g. scip-python) and falling back to
+  // any chunk that holds a role=1 mention (every other indexer). global_symbols
+  // is the authoritative symbol table — joining off mentions only would drop
+  // symbols that have no role=1 mention recorded (test fixtures, indexers
+  // that emit definitions only via enclosing ranges).
+  const docPaths = new Map<number, string>(
+    db.all<{ id: number; relative_path: string }>(
+      `SELECT id, relative_path FROM documents`,
+    ).map((r) => [r.id, r.relative_path]),
+  );
+  const calleeInfo = new Map<number, { symbol: string; file: string }>();
+  const calleeRows = db.all<{ symbol_id: number; symbol: string; document_id: number | null }>(
+    `SELECT gs.id AS symbol_id, gs.symbol,
+            COALESCE(der.document_id, def_chunk.document_id) AS document_id
+     FROM global_symbols gs
+     LEFT JOIN defn_enclosing_ranges der ON der.symbol_id = gs.id
+     LEFT JOIN (
+       SELECT m.symbol_id, MIN(c.document_id) AS document_id
+       FROM mentions m
+       JOIN chunks c ON m.chunk_id = c.id
+       WHERE m.role = 1
+       GROUP BY m.symbol_id
+     ) def_chunk ON def_chunk.symbol_id = gs.id`,
+  );
+  for (const r of calleeRows) {
+    if (calleeInfo.has(r.symbol_id)) continue;
+    calleeInfo.set(r.symbol_id, {
+      symbol: r.symbol,
+      file: r.document_id !== null ? (docPaths.get(r.document_id) ?? '') : '',
+    });
+  }
+
+  // Match each definition against mentions in its document/range. Two passes:
+  //   1. SCIP-only: chunk is fully inside the def's range — count.
+  //   2. Source-text confirm: chunk *overlaps* the def's range (but isn't
+  //      contained) — confirm by source-scanning the def's range for the
+  //      callee's leaf identifier. This recovers calls that an indexer
+  //      records via a wide chunk that straddles the function boundary, and
+  //      handles fixtures / hand-built indexes whose chunks are file-wide.
+  //
+  // The per-def `identsInRange` set materialises every leaf appearing inside
+  // the def's range once — turning per-mention source confirmation from an
+  // O(lines) linear scan into an O(1) Set.has lookup. Critical for languages
+  // (e.g. Rust without defn_enclosing_ranges) where chunks are file-wide and
+  // every mention triggers the source-confirm path.
+  const result = new Map<number, Array<{ symbol: string; file: string; chunkId: number }>>();
+  const filePathById = docPaths;
+  for (const def of definitions) {
+    const docMentions = byDoc.get(def.documentId) ?? [];
+    const seenKey = new Set<string>();
+    const callees: Array<{ symbol: string; file: string; chunkId: number }> = [];
+    let identsInRange: Set<string> | null = null;
+    const computeIdentsInRange = (): Set<string> => {
+      if (identsInRange) return identsInRange;
+      const filePath = filePathById.get(def.documentId) ?? '';
+      const out = new Set<string>();
+      if (filePath) {
+        const byLine = getIdentifiersByLine(db, filePath);
+        const start = Math.max(0, def.startLine);
+        const end = Math.min(byLine.length - 1, def.endLine);
+        for (let i = start; i <= end; i += 1) {
+          for (const name of byLine[i]!) out.add(name);
+        }
+      }
+      identsInRange = out;
+      return out;
+    };
+
+    for (const m of docMentions) {
+      if (m.symbol_id === def.symbolId) continue;
+      const info = calleeInfo.get(m.symbol_id);
+      if (!info) continue;
+
+      const containedInRange = m.start_line >= def.startLine && m.end_line <= def.endLine;
+      if (!containedInRange) {
+        const overlapsRange = m.start_line <= def.endLine && m.end_line >= def.startLine;
+        if (!overlapsRange) continue;
+        const leaf = leafName(info.symbol);
+        if (!leaf) continue;
+        if (!computeIdentsInRange().has(leaf)) continue;
+      }
+
+      const key = `${info.symbol}|${m.chunk_id}`;
+      if (seenKey.has(key)) continue;
+      seenKey.add(key);
+      callees.push({ ...info, chunkId: m.chunk_id });
+    }
+    result.set(def.symbolId, callees);
+  }
+
+  return result;
+}
+
+/**
+ * Bulk caller map: symbolId → set of distinct files that reference the
+ * symbol.
+ *
+ * For files with tree-sitter support, callers come from AST call_expression
+ * nodes — each callsite resolves to a real symbol via the global leaf index
+ * with same-file preference. For non-AST files, callers come from SCIP's
+ * mentions table (chunk-level) with self-reference filtering.
+ *
+ * If `definitions` is supplied, references that fall inside the symbol's own
+ * defining file are treated as potential self-references and only counted
+ * when they originate from a different document.
+ */
+// scip-query: ignore-extract — this is the bulk caller-map merge policy:
+// SCIP mentions, AST callsites, Rust attribute calls, and TypeScript semantics
+// intentionally contribute to one cross-file reference map.
+function toCalleeRows(
+  semantic: Map<number, Array<{ symbol: string; file: string }>>,
+): Map<number, CalleeRow[]> {
+  const out = new Map<number, CalleeRow[]>();
+  for (const [symbolId, callees] of semantic) {
+    const rows: CalleeRow[] = [];
+    for (const callee of callees) {
+      rows.push({ symbol: callee.symbol, file: callee.file, chunkId: -1 });
+    }
+    out.set(symbolId, rows);
+  }
+  return out;
+}
+
+
+export function clearCallGraphEvidenceCaches(db: ScipDatabase): void {
+  CALLER_ROWS_CACHE.invalidate(db);
+}

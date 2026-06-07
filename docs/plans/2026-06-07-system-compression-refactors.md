@@ -266,6 +266,30 @@ node dist/cli.js refs ProjectIndex
 node dist/cli.js drift --min-deviation 3
 ```
 
+### Progress
+
+Completed after checkpoint commit `835a52d`:
+
+- Split `src/symbols/reference-graph.ts` into role-focused modules:
+  - `src/symbols/file-dep-graph.ts`: SCIP/file-import dependency edges and file-dependency cache.
+  - `src/symbols/call-graph-evidence.ts`: caller/callee rows, caller maps, AST/chunk/semantic callee merge policy.
+  - `src/symbols/leaf-symbol-index.ts`: global leaf-name index and AST call candidate selection.
+  - `src/symbols/reference-graph.ts`: 43-line compatibility facade and cache-clear orchestration.
+- Kept root exports stable for existing callers and tests.
+- Current line counts: `reference-graph.ts` 43, `file-dep-graph.ts` 100, `call-graph-evidence.ts` 470, `leaf-symbol-index.ts` 104.
+
+Verified:
+
+```bash
+npm run typecheck
+npm test -- tests/queries.test.ts tests/queries-advanced.test.ts tests/command-accuracy.test.ts tests/diff-impact-accuracy.test.ts tests/file-wide-caller-fallback.test.ts
+npm run build
+node dist/cli.js affected buildFileDepGraph --max-depth 2
+node dist/cli.js call-graph ProjectIndex
+node dist/cli.js refs ProjectIndex
+node dist/cli.js drift --min-deviation 3
+```
+
 ## Refactor 4: Language Parser Lifecycle Helper
 
 The language parser subsystem already has a registry. The remaining opportunity is to standardize the per-language lifecycle for "load source, parse AST when available, fall back to source patterns, resolve import paths, return normalized imports."
