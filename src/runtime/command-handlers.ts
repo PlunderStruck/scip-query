@@ -68,6 +68,9 @@ function supportedLanguages(values: readonly string[]): SupportedLanguage[] {
   return values.filter((value): value is SupportedLanguage => SUPPORTED_LANGUAGES.has(value as SupportedLanguage));
 }
 
+// scip-query: ignore-extract — side-effect command lifecycle: option decoding,
+// config/path resolution, reindex execution, and process-facing error handling
+// are one CLI action.
 export async function handleReindex(rawOpts: unknown): Promise<void> {
   const opts = options(rawOpts);
   const projectRoot = resolveProjectRoot();
@@ -238,6 +241,9 @@ export function handleInit(): void {
   console.log(`Detected languages: ${languages.join(', ') || '(none)'}`);
 }
 
+// scip-query: ignore-extract — long-running watch command lifecycle: option
+// overrides, watcher callbacks, start/stop behavior, and SIGINT handling are
+// one process action.
 export function handleWatch(rawOpts: unknown): void {
   const opts = options(rawOpts);
   const projectRoot = resolveProjectRoot();

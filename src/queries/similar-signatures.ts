@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { getAllDefinitions } from '../symbols/definition-catalog.js';
 import { getSourceText } from '../source/source-text.js';
-import type { SimilarSignatureGroup } from '../domain/types.js';
+import type { IndexedDefinition, SimilarSignatureGroup } from '../domain/types.js';
 import { semanticSignature } from '../semantic/shared-primitives.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
 import { cleanSignature, extractSignature } from '../storage/scip-rows.js';
@@ -25,61 +25,66 @@ export function similarSignatures(
 ): SimilarSignatureGroup[] {
   const { scope, minLoc = 1, limit, scanLimit } = opts;
   const includeSemantic = opts.semantic !== false;
+  const groups = groupDefinitionsBySignature(db, similarSignatureCandidates(db, { scope, minLoc, scanLimit }), {
+    semantic: includeSemantic,
+  });
+  const results = sortedSimilarSignatureGroups(groups);
+  return limit ? results.slice(0, limit) : results;
+}
 
-  // Group by normalized signature
-  const sigGroups = new Map<string, Array<{
-    symbol: string;
-    shortName: string;
-    file: string;
-    startLine: number;
-    endLine: number;
-    loc: number;
-  }>>();
+function similarSignatureCandidates(
+  db: ScipDatabase,
+  opts: { scope?: string; minLoc: number; scanLimit?: number },
+): IndexedDefinition[] {
+  const definitions = getAllDefinitions(db, { scope: opts.scope })
+    .filter((definition) => definition.isFunctionLike && !db.isIgnored(definition.relativePath))
+    .filter((definition) => definitionLoc(definition) >= opts.minLoc);
 
-  const definitions = applyScanLimit(
-    getAllDefinitions(db, { scope })
-      .filter((definition) => definition.isFunctionLike && !db.isIgnored(definition.relativePath))
-      .filter((definition) => definition.endLine - definition.startLine + 1 >= minLoc)
-      .sort((left, right) => {
-        if (typeof scanLimit !== 'number' || scanLimit <= 0) return 0;
-        return definitionLoc(right) - definitionLoc(left) || left.relativePath.localeCompare(right.relativePath);
-      }),
-    scanLimit,
-  );
+  if (typeof opts.scanLimit === 'number' && opts.scanLimit > 0) {
+    definitions.sort((left, right) =>
+      definitionLoc(right) - definitionLoc(left) || left.relativePath.localeCompare(right.relativePath));
+  }
 
+  return applyScanLimit(definitions, opts.scanLimit);
+}
+
+function groupDefinitionsBySignature(
+  db: ScipDatabase,
+  definitions: readonly IndexedDefinition[],
+  opts: { semantic: boolean },
+): Map<string, SimilarSignatureGroup['functions']> {
+  const groups = new Map<string, SimilarSignatureGroup['functions']>();
   for (const definition of definitions) {
-    const loc = definitionLoc(definition);
-    const normalized = resolveNormalizedSignature(db, definition, { semantic: includeSemantic });
+    const normalized = resolveNormalizedSignature(db, definition, opts);
     if (!normalized) continue;
-
-    const entry = {
-      symbol: definition.symbol,
-      shortName: shortenSymbol(definition.symbol),
-      file: definition.relativePath,
-      startLine: definition.startLine,
-      endLine: definition.endLine,
-      loc,
-    };
-
-    const existing = sigGroups.get(normalized);
-    if (existing) {
-      existing.push(entry);
-    } else {
-      sigGroups.set(normalized, [entry]);
-    }
+    const bucket = groups.get(normalized) ?? [];
+    bucket.push(similarSignatureEntry(definition));
+    groups.set(normalized, bucket);
   }
+  return groups;
+}
 
-  // Collect groups with 2+ functions
+function similarSignatureEntry(
+  definition: IndexedDefinition,
+): SimilarSignatureGroup['functions'][number] {
+  return {
+    symbol: definition.symbol,
+    shortName: shortenSymbol(definition.symbol),
+    file: definition.relativePath,
+    startLine: definition.startLine,
+    endLine: definition.endLine,
+    loc: definitionLoc(definition),
+  };
+}
+
+function sortedSimilarSignatureGroups(
+  groups: ReadonlyMap<string, SimilarSignatureGroup['functions']>,
+): SimilarSignatureGroup[] {
   const results: SimilarSignatureGroup[] = [];
-
-  for (const [signature, functions] of sigGroups) {
-    if (functions.length < 2) continue;
-
-    results.push({ signature, functions });
+  for (const [signature, functions] of groups) {
+    if (functions.length >= 2) results.push({ signature, functions });
   }
 
-  // Sort by group size descending (largest groups = most duplication),
-  // then by total LOC in the group
   results.sort((a, b) => {
     const sizeDiff = b.functions.length - a.functions.length;
     if (sizeDiff !== 0) return sizeDiff;
@@ -87,8 +92,7 @@ export function similarSignatures(
     const locB = b.functions.reduce((sum, f) => sum + f.loc, 0);
     return locB - locA;
   });
-
-  return limit ? results.slice(0, limit) : results;
+  return results;
 }
 
 // scip-query: ignore-extract — this resolves one normalized signature:

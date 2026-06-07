@@ -419,6 +419,10 @@ function supplementReferencesFromAst(
   });
 }
 
+// scip-query: ignore-extract — this is the dead-code-only source fallback
+// pass: candidate indexing, import-scoped resolution, source scanning,
+// unused-import filtering, reference recording, and cache cleanup are one
+// lifecycle.
 function supplementDeadCodeOnlySourceReferences(
   db: ScipDatabase,
   definitions: readonly IndexedDefinition[],

@@ -21,6 +21,9 @@ interface DefinitionSelfRange {
   endLine: number;
 }
 
+// scip-query: ignore-extract — this assembles one caller evidence map from
+// AST callsites, SCIP chunk mentions, Rust attributes, and semantic callers.
+// Splitting the orchestration would hide the precedence/merge contract.
 export function buildCrossFileCallerMap(
   db: ScipDatabase,
   definitions?: ReadonlyArray<SymbolLocation>,
