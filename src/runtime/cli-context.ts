@@ -4,7 +4,7 @@ import { ScipDatabase } from '../storage/db.js';
 import { createGitignoreFilter } from '../source/gitignore-filter.js';
 import { loadProjectConfig, resolveIndexPaths } from './config.js';
 import * as queries from '../queries/index.js';
-import type { ScipQueryConfig, WatcherStatus } from '../domain/types.js';
+import type { ProjectConfig, ScipQueryConfig, WatcherStatus } from '../domain/types.js';
 
 export { queries };
 
@@ -12,19 +12,27 @@ export function resolveProjectRoot(): string {
   return process.env['SCIP_QUERY_PROJECT_ROOT'] ?? process.cwd();
 }
 
-export function resolveActiveDbPath(projectRoot: string): string {
+interface CliProjectContext {
+  projectRoot: string;
+  config: ProjectConfig;
+  paths: ReturnType<typeof resolveIndexPaths>;
+  dbPath: string;
+}
+
+export function resolveCliProjectContext(projectRoot = resolveProjectRoot()): CliProjectContext {
   const config = loadProjectConfig(projectRoot);
   const paths = resolveIndexPaths(projectRoot, config);
-  return process.env['SCIP_QUERY_INDEX_DB']
+  const dbPath = process.env['SCIP_QUERY_INDEX_DB']
     ?? (existsSync(paths.dbPath) ? paths.dbPath : join(projectRoot, 'index.db'));
+  return { projectRoot, config, paths, dbPath };
+}
+
+export function resolveActiveDbPath(projectRoot: string): string {
+  return resolveCliProjectContext(projectRoot).dbPath;
 }
 
 export function openDb(): ScipDatabase {
-  const projectRoot = resolveProjectRoot();
-  const config = loadProjectConfig(projectRoot);
-  const paths = resolveIndexPaths(projectRoot, config);
-
-  const dbPath = resolveActiveDbPath(projectRoot);
+  const { projectRoot, config, paths, dbPath } = resolveCliProjectContext();
 
   if (!existsSync(dbPath)) {
     console.error(`error: No index.db found. Run: scip-query reindex`);

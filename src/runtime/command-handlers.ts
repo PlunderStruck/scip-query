@@ -10,6 +10,7 @@ import {
   formatBytes,
   formatStatus,
   queries,
+  resolveCliProjectContext,
   resolveActiveDbPath,
   resolveProjectRoot,
   withDb,
@@ -281,10 +282,7 @@ export function handleWatch(rawOpts: unknown): void {
 }
 
 export function handleStatus(): void {
-  const projectRoot = resolveProjectRoot();
-  const config = loadProjectConfig(projectRoot);
-  const paths = resolveIndexPaths(projectRoot, config);
-  const dbPath = resolveActiveDbPath(projectRoot);
+  const { projectRoot, config, paths, dbPath } = resolveCliProjectContext();
   const readiness = getProjectReadiness(projectRoot, config);
 
   console.log(`Project:  ${projectRoot}`);
