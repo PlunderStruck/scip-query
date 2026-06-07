@@ -31,6 +31,8 @@ import type { IndexedDefinition, SymbolMatch } from '../domain/types.js';
 
 export const FILE_DEFINITION_CACHE = createPerDbCache<string, IndexedDefinition[]>('file-definitions');
 
+// scip-query: ignore-passthrough — per-file cache lifecycle hook used by
+// composite invalidation without exposing FILE_DEFINITION_CACHE internals.
 export function clearDefinitionCacheForFile(db: ScipDatabase, relativePath: string): void {
   FILE_DEFINITION_CACHE.invalidate(db, relativePath);
 }

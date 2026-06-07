@@ -1,5 +1,6 @@
 import { formatBytes, queries } from './cli-context.js';
 import { renderHeuristicNotice } from './cli-support.js';
+import type { DeadOptions } from '../domain/types.js';
 import {
   budgetedDbCommand,
   budgetedGroupedByFileCommand,
@@ -72,6 +73,124 @@ export const handleSystem = dbCommand(({ db, args }) => {
     { title: 'DEPENDED ON BY', rows: result.dependedOnBy.map((d) => `  ${d}`) },
   ]);
 });
+
+export const handleTrace = budgetedDbCommand('trace', ({ db, args, budget }) => {
+  const result = queries.trace(db, stringArg(args, 0), { semantic: budget.semantic });
+
+  const definitionRows: string[] = [];
+  for (const d of result.definitions) {
+    const sig = d.signature ? `  — ${d.signature}` : '';
+    definitionRows.push(`  ${displayPathRange(d.relativePath, d.startLine, d.endLine)}${sig}`);
+    if (d.source) {
+      definitionRows.push(d.source
+        .split('\n')
+        .map((line, index) => `    ${displayLine(d.startLine + index)}  ${line}`)
+        .join('\n'));
+    }
+  }
+
+  const refRows: string[] = [];
+  let prevFile = '';
+  for (const ref of result.referencedBy) {
+    if (ref.relativePath !== prevFile) {
+      if (prevFile) refRows.push('');
+      refRows.push(`  ${ref.relativePath}`);
+      prevFile = ref.relativePath;
+    }
+    refRows.push(`    line ${displayLine(ref.line)}  in ${ref.enclosingShort}`);
+  }
+
+  render.sectionedReport([
+    { title: 'DEFINITION', rows: definitionRows },
+    { title: 'REFERENCED BY', rows: refRows },
+  ]);
+});
+
+export const handleDead = budgetedDbCommand('dead', ({ db, args, opts, budget }) => {
+  const deadOpts: DeadOptions = {
+    scope: optionalStringArg(args, 0) || undefined,
+    minLoc: definedNumberOption(opts, 'minLoc', 1),
+    includeTests: booleanOptionValue(opts, 'includeTests'),
+    skipBarrels: booleanOptionValue(opts, 'skipBarrels'),
+    includeMembers: booleanOptionValue(opts, 'includeMembers'),
+    scanLimit: budget.scanLimit,
+    semantic: budget.semantic,
+  };
+
+  const result = queries.dead(db, deadOpts);
+  const deadCode = result.symbols.filter((s) => s.kind === 'dead-code');
+  const fileInternal = result.symbols.filter((s) => s.kind !== 'dead-code');
+  const showDead = !booleanOptionValue(opts, 'onlyInternal');
+  const showInternal = !booleanOptionValue(opts, 'onlyDead');
+  const shownDeadCode = showDead ? deadCode : [];
+  const shownFileInternal = showInternal ? fileInternal : [];
+
+  if (shownDeadCode.length === 0 && shownFileInternal.length === 0) {
+    render.empty('No matching dead-code symbols found.');
+    return;
+  }
+
+  const deadLoc = shownDeadCode.reduce((sum, s) => sum + s.loc, 0);
+  const fiLoc = shownFileInternal.reduce((sum, s) => sum + s.loc, 0);
+  if (shownDeadCode.length > 0) {
+    renderDeadGroup(
+      shownDeadCode,
+      'DEAD CODE',
+      '  Zero references anywhere — no cross-file callers AND no same-file uses.\n  Safe to delete.',
+      deadLoc,
+    );
+  }
+  if (shownFileInternal.length > 0) {
+    if (shownDeadCode.length > 0) console.log('');
+    renderDeadGroup(
+      shownFileInternal,
+      'FILE-INTERNAL ONLY',
+      '  Used only within the same file (no cross-file callers). Could be a\n  single-use helper, an abstraction-in-progress, or a callback registered\n  through a framework path that static analysis cannot trace (signal\n  handlers, event listeners, dependency injection). NOT necessarily dead —\n  review case by case.',
+      fiLoc,
+    );
+  }
+
+  const totalParts: string[] = [];
+  if (showDead) totalParts.push(`${shownDeadCode.length} dead code (${deadLoc} LOC)`);
+  if (showInternal) totalParts.push(`${shownFileInternal.length} file-internal (${fiLoc} LOC)`);
+  console.log('\n───────────────────────────');
+  console.log(`Total: ${shownDeadCode.length + shownFileInternal.length} symbols — ${totalParts.join(' + ')}`);
+});
+
+function renderDeadGroup(
+  rows: ReturnType<typeof queries.dead>['symbols'],
+  title: string,
+  explanation: string,
+  loc: number,
+): void {
+  console.log(`═══ ${title} (${rows.length}, ${loc} LOC) ═══`);
+  console.log(explanation);
+  console.log('');
+  const byFile = new Map<string, typeof rows>();
+  for (const s of rows) {
+    const bucket = byFile.get(s.relativePath) ?? [];
+    bucket.push(s);
+    byFile.set(s.relativePath, bucket);
+  }
+  const fileOrder = [...byFile.entries()]
+    .map(([file, bucket]) => ({
+      file,
+      bucket,
+      totalLoc: bucket.reduce((sum, s) => sum + s.loc, 0),
+    }))
+    .sort((a, b) => b.totalLoc - a.totalLoc || a.file.localeCompare(b.file));
+
+  let first = true;
+  for (const { file, bucket } of fileOrder) {
+    if (!first) console.log('');
+    first = false;
+    console.log(`  ${file}`);
+    bucket.sort((a, b) => a.startLine - b.startLine);
+    for (const s of bucket) {
+      console.log(`    ${displayRange(s.startLine, s.endLine)}  (${s.loc} LOC)  ${s.shortName}`);
+    }
+  }
+}
 
 export const handleSurface = listCommand({
   query: ({ db, args }) => queries.surface(db, stringArg(args, 0)),

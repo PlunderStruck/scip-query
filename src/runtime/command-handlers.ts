@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import type { DeadOptions, SupportedLanguage } from '../domain/types.js';
+import type { SupportedLanguage } from '../domain/types.js';
 import { augmentAuxiliaryDocuments, augmentVueResolvedReferences, detectLanguages, reindex } from '../reindex/index.js';
 import { getProjectReadiness } from '../reindex/readiness.js';
 import { loadProjectConfig, resolveIndexPaths, initProjectConfig } from './config.js';
@@ -14,9 +14,7 @@ import {
   resolveProjectRoot,
   withDb,
 } from './cli-context.js';
-import { displayLine, displayPathRange, displayRange, render } from './render.js';
 import {
-  commandAnalysisBudget,
   renderDiffImpactReport,
   renderHealthReport,
   runIsolatedDiffImpactReport,
@@ -46,10 +44,6 @@ function booleanOption(opts: Options, key: string): boolean {
 function stringArrayOption(opts: Options, key: string): string[] {
   const value = opts[key];
   return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : [];
-}
-
-function definedNumber(opts: Options, key: string, fallback: number): number {
-  return numberOption(opts, key) ?? fallback;
 }
 
 const SUPPORTED_LANGUAGES = new Set<SupportedLanguage>([
@@ -132,132 +126,6 @@ export function handleAugmentVue(rawOpts: unknown): void {
     console.error(`error: ${err instanceof Error ? err.message : err}`);
     process.exit(1);
   }
-}
-
-export function handleTrace(symbol: unknown, rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const budget = commandAnalysisBudget(db, 'trace', booleanOption(opts, 'full'));
-    const result = queries.trace(db, String(symbol), { semantic: budget.semantic });
-
-    const definitionRows: string[] = [];
-    for (const d of result.definitions) {
-      const sig = d.signature ? `  — ${d.signature}` : '';
-      definitionRows.push(`  ${displayPathRange(d.relativePath, d.startLine, d.endLine)}${sig}`);
-      if (d.source) {
-        definitionRows.push(d.source
-          .split('\n')
-          .map((line, index) => `    ${displayLine(d.startLine + index)}  ${line}`)
-          .join('\n'));
-      }
-    }
-
-    const refRows: string[] = [];
-    let prevFile = '';
-    for (const ref of result.referencedBy) {
-      if (ref.relativePath !== prevFile) {
-        if (prevFile) refRows.push('');
-        refRows.push(`  ${ref.relativePath}`);
-        prevFile = ref.relativePath;
-      }
-      refRows.push(`    line ${displayLine(ref.line)}  in ${ref.enclosingShort}`);
-    }
-
-    render.sectionedReport([
-      { title: 'DEFINITION', rows: definitionRows },
-      { title: 'REFERENCED BY', rows: refRows },
-    ]);
-  });
-}
-
-export function handleDead(scope: unknown, rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const budget = commandAnalysisBudget(db, 'dead', booleanOption(opts, 'full'));
-    const scopeValue = typeof scope === 'string' ? scope : undefined;
-    const deadOpts: DeadOptions = {
-      scope: scopeValue || undefined,
-      minLoc: definedNumber(opts, 'minLoc', 1),
-      includeTests: booleanOption(opts, 'includeTests'),
-      skipBarrels: booleanOption(opts, 'skipBarrels'),
-      includeMembers: booleanOption(opts, 'includeMembers'),
-      scanLimit: budget.scanLimit,
-      semantic: budget.semantic,
-    };
-
-    const result = queries.dead(db, deadOpts);
-    const deadCode = result.symbols.filter((s) => s.kind === 'dead-code');
-    const fileInternal = result.symbols.filter((s) => s.kind !== 'dead-code');
-    const showDead = !booleanOption(opts, 'onlyInternal');
-    const showInternal = !booleanOption(opts, 'onlyDead');
-    const shownDeadCode = showDead ? deadCode : [];
-    const shownFileInternal = showInternal ? fileInternal : [];
-
-    if (shownDeadCode.length === 0 && shownFileInternal.length === 0) {
-      return render.empty('No matching dead-code symbols found.');
-    }
-
-    const renderGroup = (
-      rows: typeof result.symbols,
-      title: string,
-      explanation: string,
-      loc: number,
-    ): void => {
-      console.log(`═══ ${title} (${rows.length}, ${loc} LOC) ═══`);
-      console.log(explanation);
-      console.log('');
-      const byFile = new Map<string, typeof rows>();
-      for (const s of rows) {
-        const bucket = byFile.get(s.relativePath) ?? [];
-        bucket.push(s);
-        byFile.set(s.relativePath, bucket);
-      }
-      const fileOrder = [...byFile.entries()]
-        .map(([file, bucket]) => ({
-          file,
-          bucket,
-          totalLoc: bucket.reduce((sum, s) => sum + s.loc, 0),
-        }))
-        .sort((a, b) => b.totalLoc - a.totalLoc || a.file.localeCompare(b.file));
-
-      let first = true;
-      for (const { file, bucket } of fileOrder) {
-        if (!first) console.log('');
-        first = false;
-        console.log(`  ${file}`);
-        bucket.sort((a, b) => a.startLine - b.startLine);
-        for (const s of bucket) {
-          console.log(`    ${displayRange(s.startLine, s.endLine)}  (${s.loc} LOC)  ${s.shortName}`);
-        }
-      }
-    };
-
-    const deadLoc = shownDeadCode.reduce((sum, s) => sum + s.loc, 0);
-    const fiLoc = shownFileInternal.reduce((sum, s) => sum + s.loc, 0);
-    if (shownDeadCode.length > 0) {
-      renderGroup(
-        shownDeadCode,
-        'DEAD CODE',
-        '  Zero references anywhere — no cross-file callers AND no same-file uses.\n  Safe to delete.',
-        deadLoc,
-      );
-    }
-    if (shownFileInternal.length > 0) {
-      if (shownDeadCode.length > 0) console.log('');
-      renderGroup(
-        shownFileInternal,
-        'FILE-INTERNAL ONLY',
-        '  Used only within the same file (no cross-file callers). Could be a\n  single-use helper, an abstraction-in-progress, or a callback registered\n  through a framework path that static analysis cannot trace (signal\n  handlers, event listeners, dependency injection). NOT necessarily dead —\n  review case by case.',
-        fiLoc,
-      );
-    }
-
-    const totalParts: string[] = [];
-    if (showDead) totalParts.push(`${shownDeadCode.length} dead code (${deadLoc} LOC)`);
-    if (showInternal) totalParts.push(`${shownFileInternal.length} file-internal (${fiLoc} LOC)`);
-    console.log('\n───────────────────────────');
-    console.log(`Total: ${shownDeadCode.length + shownFileInternal.length} symbols — ${totalParts.join(' + ')}`);
-  });
 }
 
 export function handleDiffImpactBatch(rawOpts: unknown): void {

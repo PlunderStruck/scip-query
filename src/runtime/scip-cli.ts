@@ -30,6 +30,8 @@ export function isScipInstalled(): boolean {
 /**
  * Get the scip CLI version if installed.
  */
+// scip-query: ignore-wrapper — exported setup API; callers should not know
+// the exact `scip --version` process invocation.
 export function getScipVersion(): string | null {
   try {
     const output = execFileSync('scip', ['--version'], { stdio: 'pipe' }).toString().trim();

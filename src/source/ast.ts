@@ -181,6 +181,8 @@ export function clearAstCache(db: ScipDatabase): void {
   TREE_CACHE.invalidateAll(db);
 }
 
+// scip-query: ignore-passthrough — per-file cache lifecycle hook used by
+// composite invalidation without exposing TREE_CACHE outside this module.
 export function clearAstCacheForFile(db: ScipDatabase, relativePath: string): void {
   TREE_CACHE.invalidate(db, relativePath);
 }

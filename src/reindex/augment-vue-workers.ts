@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import type { VueReferenceComputationResult, VueReferenceTask } from './augment-vue-types.js';
 
+// scip-query: ignore-wrapper — named Vue worker dispatch policy; callers
+// should not duplicate the file-count threshold plus worker-count check.
 export function shouldUseVueWorkers(vueFiles: readonly string[]): boolean {
   return vueFiles.length >= 8 && resolveVueWorkerCount(vueFiles.length) > 1;
 }

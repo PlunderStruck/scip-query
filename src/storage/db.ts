@@ -39,6 +39,8 @@ export class ScipDatabase {
   readonly config: ScipQueryConfig;
   private pathFilter: PathFilter | null;
 
+  // scip-query: ignore-wrapper — public storage boundary; callers construct
+  // ScipDatabase, not better-sqlite3 connections plus pragma setup.
   constructor(config: ScipQueryConfig, pathFilter?: PathFilter) {
     this.config = config;
     this.pathFilter = pathFilter ?? null;

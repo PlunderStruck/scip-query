@@ -42,6 +42,8 @@ export function getResolvedReferenceSites(
   return buildReferenceSites(db, resolvedCandidateLines(db, prelude.match, prelude.identifier));
 }
 
+// scip-query: ignore-wrapper — named precision stage used by reference
+// reporting; keeps SCIP chunk reads separate from source-line refinement.
 export function resolvedCandidateLines(
   db: ScipDatabase,
   match: { symbolId: number; relativePath: string; startLine: number; endLine: number },
@@ -105,6 +107,8 @@ interface ReferencePrelude {
   identifier: string | null;
 }
 
+// scip-query: ignore-wrapper — named lookup stage used by reference reporting;
+// callers should not repeat full-symbol matching plus leaf extraction.
 export function resolveReferencePrelude(
   db: ScipDatabase,
   symbol: SymbolLocation,
@@ -114,6 +118,8 @@ export function resolveReferencePrelude(
   return { match, identifier: leafName(match.symbol) || null };
 }
 
+// scip-query: ignore-wrapper — named attribution stage used by reference
+// reporting; keeps line candidates separate from enclosing-symbol lookup.
 export function buildReferenceSites(
   db: ScipDatabase,
   perFileLines: Map<string, number[]>,

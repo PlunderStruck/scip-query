@@ -109,7 +109,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'semantic',
     renderShape: 'sectioned-report',
     docs: doc('Navigation', ['scip-query trace parseSymbol']),
-    handler: handlers.handleTrace,
+    handler: queryHandlers.handleTrace,
   },
   {
     id: 'deps',
@@ -159,7 +159,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'candidate-scan',
     renderShape: 'custom',
     docs: doc('Cleanup', ['scip-query dead --min-loc 10']),
-    handler: handlers.handleDead,
+    handler: queryHandlers.handleDead,
   },
   {
     id: 'hotspots',
