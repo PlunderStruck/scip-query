@@ -5,6 +5,7 @@ import { getSourceText } from '../source/source-text.js';
 import { getTypeContainerMap } from '../source/ast.js';
 import { ProjectIndex } from '../core/project-index.js';
 import { isImportOnlyConsumer, partitionStaleConsumers } from './internal/stale-consumers.js';
+import { definitionConsumerFileMap } from './internal/consumer-evidence.js';
 import { applyScanLimit, definitionLoc } from './query-utils.js';
 
 export interface StaleAbstraction {
@@ -160,7 +161,7 @@ function consumerMapForTypeCandidates(
   typeCandidates: readonly IndexedDefinition[],
   opts: { semantic: boolean },
 ): Map<number, Set<string>> {
-  return index.callerFileMap(typeCandidates, { semantic: opts.semantic });
+  return definitionConsumerFileMap(index, typeCandidates, { semantic: opts.semantic });
 }
 
 function buildTypeCandidateIndex(
@@ -268,7 +269,7 @@ function getSingletonBackedClassIds(
   const singletonVars = singletonBackedClasses.map((entry) => entry.singleton);
   if (singletonBackedClasses.length === 0) return new Set();
 
-  const singletonConsumers = index.callerFileMap(singletonVars, { semantic: opts.semantic });
+  const singletonConsumers = definitionConsumerFileMap(index, singletonVars, { semantic: opts.semantic });
   const liveClassIds = new Set<number>();
   for (const { singleton, classId } of singletonBackedClasses) {
     if (singletonHasRealConsumer(db, singleton, singletonConsumers)) {

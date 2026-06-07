@@ -6,7 +6,15 @@ import { fingerprintProjectFiles } from './project-files.js';
 import { awaitVueReferenceWorkers, shouldUseVueWorkers } from './augment-vue-workers.js';
 import { createSymbolLookup, createVueComponentSymbolLookup, createVueLanguageContext, createVueSourceReader, createVueSymbolIdLookup, dedupeOccurrences, firstGeneratedOffset, firstSourceOffset, identifierTokens, isExternalDefinition, listVueDocumentFiles, replaceVueDocumentChunks, resolveVueDefinitionSymbolId, toRelativePath } from './augment-vue-runtime.js';
 
-import type { AugmentVueFingerprint, AugmentVueResolvedResult, DefinitionInfo, ResolvedOccurrence, SourceTextInfo, TsLanguageService, VolarMapper, VueIdentifierToken, VueLanguageContext, VueReferenceComputationResult, VueReferenceTask, VueSourceReader } from './augment-vue-types.js';
+import type { AugmentVueResolvedResult, ResolvedOccurrence, VueReferenceComputationResult, VueReferenceTask } from './augment-vue-contracts.js';
+
+type VueLanguageContext = ReturnType<typeof createVueLanguageContext>;
+type VueSourceReader = ReturnType<typeof createVueSourceReader>;
+type DefinitionInfo = Parameters<ReturnType<typeof createSymbolLookup>>[0];
+type SourceTextInfo = NonNullable<ReturnType<VueSourceReader['get']>>;
+type TsLanguageService = VueLanguageContext['languageService'];
+type VolarMapper = ReturnType<VueLanguageContext['language']['maps']['get']>;
+type VueIdentifierToken = ReturnType<typeof identifierTokens> extends Generator<infer Token> ? Token : never;
 
 export interface AugmentVueResolvedOptions {
   projectRoot: string;
@@ -28,6 +36,21 @@ interface VueReferenceComputationOptions {
 interface AugmentVueCache {
   fingerprint: AugmentVueFingerprint;
   result: AugmentVueResolvedResult;
+}
+
+interface AugmentVueFingerprint {
+  version: 2;
+  tsconfig: string;
+  files: ReturnType<typeof fingerprintProjectFiles>;
+  db: {
+    documents: number;
+    symbols: number;
+    chunks: number;
+    mentions: number;
+    ranges: number;
+    maxChunkId: number | null;
+    maxSymbolId: number | null;
+  };
 }
 
 export function augmentVueResolvedReferences(

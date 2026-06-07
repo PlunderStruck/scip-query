@@ -1,12 +1,17 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { mentionedReferenceSymbolRows, mentionReferenceCountRows } from '../../storage/scip-mentions.js';
 
-type ReferenceCounts = Map<number, Map<string, number>>;
-
 export type ReferenceEvidenceSource =
   | 'scip-mention'
   | 'source-fallback'
   | 'caller-map';
+
+export interface ReferenceCountEvidence {
+  occurrences: number;
+  sources: Set<ReferenceEvidenceSource>;
+}
+
+type ReferenceCounts = Map<number, Map<string, ReferenceCountEvidence>>;
 
 export function emptyReferenceCounts(): ReferenceCounts {
   return new Map();
@@ -52,10 +57,14 @@ export function hasAnyReference(
 ): boolean {
   const refs = referencesBySymbol.get(symbolId);
   if (!refs) return false;
-  for (const count of refs.values()) {
-    if (count > 0) return true;
+  for (const evidence of refs.values()) {
+    if (evidence.occurrences > 0) return true;
   }
   return false;
+}
+
+export function referenceOccurrences(evidence: ReferenceCountEvidence | undefined): number {
+  return evidence?.occurrences ?? 0;
 }
 
 export function recordReference(
@@ -63,15 +72,12 @@ export function recordReference(
   symbolId: number,
   file: string,
   occurrences: number,
-  _source: ReferenceEvidenceSource = 'source-fallback',
+  source: ReferenceEvidenceSource = 'source-fallback',
 ): void {
   if (occurrences <= 0) return;
-  let refsForSymbol = referencesBySymbol.get(symbolId);
-  if (!refsForSymbol) {
-    refsForSymbol = new Map<string, number>();
-    referencesBySymbol.set(symbolId, refsForSymbol);
-  }
-  refsForSymbol.set(file, (refsForSymbol.get(file) ?? 0) + occurrences);
+  const evidence = ensureReferenceEvidence(referencesBySymbol, symbolId, file);
+  evidence.occurrences += occurrences;
+  evidence.sources.add(source);
 }
 
 export function recordReferenceAtLeast(
@@ -79,13 +85,28 @@ export function recordReferenceAtLeast(
   symbolId: number,
   file: string,
   minimumOccurrences: number,
-  _source: ReferenceEvidenceSource,
+  source: ReferenceEvidenceSource,
 ): void {
   if (minimumOccurrences <= 0) return;
+  const evidence = ensureReferenceEvidence(referencesBySymbol, symbolId, file);
+  evidence.occurrences = Math.max(minimumOccurrences, evidence.occurrences);
+  evidence.sources.add(source);
+}
+
+function ensureReferenceEvidence(
+  referencesBySymbol: ReferenceCounts,
+  symbolId: number,
+  file: string,
+): ReferenceCountEvidence {
   let refsForSymbol = referencesBySymbol.get(symbolId);
   if (!refsForSymbol) {
-    refsForSymbol = new Map<string, number>();
+    refsForSymbol = new Map<string, ReferenceCountEvidence>();
     referencesBySymbol.set(symbolId, refsForSymbol);
   }
-  refsForSymbol.set(file, Math.max(minimumOccurrences, refsForSymbol.get(file) ?? 0));
+  let evidence = refsForSymbol.get(file);
+  if (!evidence) {
+    evidence = { occurrences: 0, sources: new Set() };
+    refsForSymbol.set(file, evidence);
+  }
+  return evidence;
 }

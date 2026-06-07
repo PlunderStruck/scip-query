@@ -17,6 +17,7 @@ import {
   hasAnyReference,
   loadMentionReferencedSymbolIds,
   loadMentionReferenceCounts,
+  referenceOccurrences,
   recordReferenceAtLeast,
   recordReference,
 } from './internal/reference-counts.js';
@@ -189,12 +190,12 @@ function deadRow(
   definition: IndexedDefinition,
   referencesBySymbol: ReferenceCounts,
 ): DeadRow {
-  const refMap = referencesBySymbol.get(definition.symbolId) ?? new Map<string, number>();
-  const sameFileRefs = refMap.get(definition.relativePath) ?? 0;
+  const refMap = referencesBySymbol.get(definition.symbolId) ?? new Map();
+  const sameFileRefs = referenceOccurrences(refMap.get(definition.relativePath));
   let crossFileRefs = 0;
-  for (const [relativePath, count] of refMap) {
+  for (const [relativePath, evidence] of refMap) {
     if (relativePath === definition.relativePath) continue;
-    crossFileRefs += count;
+    crossFileRefs += evidence.occurrences;
   }
 
   return {

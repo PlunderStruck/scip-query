@@ -8,6 +8,7 @@ import { isInRustTestModule, shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
 import { compareDefinitionsBySmallestLoc, definitionLoc } from './query-utils.js';
 import { runCandidateAnalysis } from './internal/candidate-scan.js';
+import { definitionConsumerFileMap } from './internal/consumer-evidence.js';
 
 export interface WrapperCandidate {
   symbol: string;
@@ -50,7 +51,7 @@ export function wrapperCandidates(
     prepare: (symbols) => ({
       // Source-text fallback adds back references the indexer may miss; without
       // it, dynamic dispatch or macro-style calls can falsely look like wrappers.
-      callerFileMap: index.callerFileMap(symbols, { semantic: opts?.semantic !== false }),
+      callerFileMap: definitionConsumerFileMap(index, symbols, { semantic: opts?.semantic !== false }),
       reverseFanIn,
     }),
     evaluate: (symbol, maps) => wrapperCandidateForSymbol(db, index, symbol, maps),

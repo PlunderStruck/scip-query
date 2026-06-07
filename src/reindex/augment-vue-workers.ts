@@ -2,7 +2,7 @@ import { readFileSync, rmSync, statSync, mkdtempSync } from 'node:fs';
 import { cpus, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
-import type { VueReferenceComputationResult, VueReferenceTask } from './augment-vue-types.js';
+import type { VueReferenceComputationResult, VueReferenceTask } from './augment-vue-contracts.js';
 
 // scip-query: ignore-wrapper — named Vue worker dispatch policy; callers
 // should not duplicate the file-count threshold plus worker-count check.

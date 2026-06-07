@@ -3,7 +3,7 @@ import type { SupportedLanguage } from '../domain/types.js';
 import * as queries from '../queries/index.js';
 import { augmentAuxiliaryDocuments, augmentVueResolvedReferences, detectLanguages, reindex } from '../reindex/index.js';
 import { loadProjectConfig, resolveIndexPaths, initProjectConfig } from './config.js';
-import { getProjectReadiness } from '../reindex/project-readiness.js';
+import { getProjectReadiness } from './project-readiness.js';
 import { Watcher } from './watch.js';
 import { installSkills, isScipInstalled, printScipInstallInstructions } from './setup.js';
 import {

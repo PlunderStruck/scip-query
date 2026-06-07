@@ -397,8 +397,33 @@ const handleSimilarSignatures = budgetedListCommand('similar-signatures', {
   after: (groups) => console.log(`\n${groups.length} group(s) found.`),
 });
 
+type CleanupCommandDescriptor = Omit<CommandDescriptor, 'docs'> & {
+  docs?: CommandDescriptor['docs'];
+};
+
+type HeuristicCleanupCommandDescriptor = Omit<CleanupCommandDescriptor, 'heuristic'> & {
+  heuristicLabel: string;
+};
+
+function cleanupCommand(descriptor: CleanupCommandDescriptor): CommandDescriptor {
+  return {
+    docs: doc('Cleanup'),
+    ...descriptor,
+  };
+}
+
+function heuristicCleanupCommand({
+  heuristicLabel,
+  ...descriptor
+}: HeuristicCleanupCommandDescriptor): CommandDescriptor {
+  return cleanupCommand({
+    ...descriptor,
+    heuristic: { label: heuristicLabel },
+  });
+}
+
 export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
-  {
+  cleanupCommand({
     id: 'dead',
     command: 'dead [scope]',
     description: 'Find dead code and file-internal symbols (no cross-file consumers)',
@@ -415,18 +440,17 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     renderShape: 'custom',
     docs: doc('Cleanup', ['scip-query dead --min-loc 10']),
     handler: handleDead,
-  },
-  {
+  }),
+  cleanupCommand({
     id: 'unused-imports',
     command: 'unused-imports <file>',
     description: 'Find imports not referenced in the same file',
     options: [option('--full', 'Run unbounded semantic analysis on large indexes')],
     budget: 'semantic',
     renderShape: 'list',
-    docs: doc('Cleanup'),
     handler: handleUnusedImports,
-  },
-  {
+  }),
+  cleanupCommand({
     id: 'isolated',
     command: 'isolated',
     description: 'Find completely orphaned symbols (no references at all)',
@@ -437,10 +461,9 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     ],
     budget: 'candidate-scan',
     renderShape: 'grouped-by-file',
-    docs: doc('Cleanup'),
     handler: handleIsolated,
-  },
-  {
+  }),
+  heuristicCleanupCommand({
     id: 'similar',
     command: 'similar [symbol]',
     description: 'Find heuristic function similarity candidates from callee fingerprints',
@@ -452,13 +475,12 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
       option('--cross-file-only', 'Only show cross-file pairs (skip same-file matches)'),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
     ],
-    heuristic: { label: 'similarity candidates' },
+    heuristicLabel: 'similarity candidates',
     budget: 'candidate-scan',
     renderShape: 'custom',
-    docs: doc('Cleanup'),
     handler: handleSimilar,
-  },
-  {
+  }),
+  heuristicCleanupCommand({
     id: 'similar-files',
     command: 'similar-files [file]',
     description: 'Find heuristic similar-file candidates from dependency profiles',
@@ -468,12 +490,11 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--min-deps <n>', 'Minimum dependencies to consider', parseInteger),
     ],
-    heuristic: { label: 'similar file candidates' },
+    heuristicLabel: 'similar file candidates',
     renderShape: 'custom',
-    docs: doc('Cleanup'),
     handler: handleSimilarFiles,
-  },
-  {
+  }),
+  heuristicCleanupCommand({
     id: 'similar-chains',
     command: 'similar-chains',
     description: 'Find heuristic similar-chain candidates from dependency flows',
@@ -484,12 +505,11 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
       option('--min-length <n>', 'Minimum chain length', parseInteger, 3),
       option('--max-length <n>', 'Maximum chain length', parseInteger, 8),
     ],
-    heuristic: { label: 'similar chain candidates' },
+    heuristicLabel: 'similar chain candidates',
     renderShape: 'custom',
-    docs: doc('Cleanup'),
     handler: handleSimilarChains,
-  },
-  {
+  }),
+  heuristicCleanupCommand({
     id: 'extract-candidates',
     command: 'extract-candidates',
     description: 'Find heuristic extraction candidates from isolated callee clusters',
@@ -500,13 +520,12 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
       option('-n, --limit <n>', 'Number of results', parseInteger, 20),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
     ],
-    heuristic: { label: 'extraction candidates' },
+    heuristicLabel: 'extraction candidates',
     budget: 'candidate-scan',
     renderShape: 'custom',
-    docs: doc('Cleanup'),
     handler: handleExtractCandidates,
-  },
-  {
+  }),
+  heuristicCleanupCommand({
     id: 'drift',
     command: 'drift [module]',
     description: 'Detect heuristic drift candidates: unused imports, layer violations, and pattern deviations',
@@ -514,13 +533,12 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
       option('--min-deviation <n>', 'Minimum sibling files before reporting unique dependency deviations', parsePositiveInteger, 5),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
     ],
-    heuristic: { label: 'drift candidates' },
+    heuristicLabel: 'drift candidates',
     budget: 'semantic',
     renderShape: 'grouped-by-file',
-    docs: doc('Cleanup'),
     handler: handleDrift,
-  },
-  {
+  }),
+  heuristicCleanupCommand({
     id: 'wrapper-candidates',
     command: 'wrapper-candidates',
     description: 'Find heuristic wrapper candidates only called by one consumer',
@@ -530,13 +548,12 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
       option('-n, --limit <n>', 'Number of results', parseInteger, 30),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
     ],
-    heuristic: { label: 'wrapper candidates' },
+    heuristicLabel: 'wrapper candidates',
     budget: 'candidate-scan',
     renderShape: 'list',
-    docs: doc('Cleanup'),
     handler: handleWrapperCandidates,
-  },
-  {
+  }),
+  heuristicCleanupCommand({
     id: 'passthrough-candidates',
     command: 'passthrough-candidates',
     description: 'Find heuristic passthrough candidates that forward to one callee',
@@ -546,13 +563,12 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
       option('-n, --limit <n>', 'Number of results', parseInteger, 30),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
     ],
-    heuristic: { label: 'passthrough candidates' },
+    heuristicLabel: 'passthrough candidates',
     budget: 'candidate-scan',
     renderShape: 'list',
-    docs: doc('Cleanup'),
     handler: handlePassthroughCandidates,
-  },
-  {
+  }),
+  heuristicCleanupCommand({
     id: 'stale-abstractions',
     command: 'stale-abstractions',
     description: 'Find heuristic stale abstraction candidates with 0-1 consumers',
@@ -563,13 +579,12 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
       option('--include-low-confidence', 'Include 1-consumer classes (usually encapsulation, not stale)', undefined, false),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
     ],
-    heuristic: { label: 'stale abstraction candidates' },
+    heuristicLabel: 'stale abstraction candidates',
     budget: 'candidate-scan',
     renderShape: 'list',
-    docs: doc('Cleanup'),
     handler: handleStaleAbstractions,
-  },
-  {
+  }),
+  heuristicCleanupCommand({
     id: 'complexity-hotspots',
     command: 'complexity-hotspots',
     description: 'Find heuristic complexity hotspot candidates from LOC x fan-in x fan-out',
@@ -579,22 +594,20 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
       option('-n, --limit <n>', 'Number of results', parseInteger, 20),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
     ],
-    heuristic: { label: 'complexity hotspot candidates' },
+    heuristicLabel: 'complexity hotspot candidates',
     budget: 'candidate-scan',
     renderShape: 'table',
-    docs: doc('Cleanup'),
     handler: handleComplexityHotspots,
-  },
-  {
+  }),
+  cleanupCommand({
     id: 'convergence',
     command: 'convergence <symbol1> <symbol2>',
     description: 'Show what a consolidated version of two similar functions would look like',
     options: [option('--full', 'Run unbounded semantic analysis on large indexes')],
     budget: 'semantic',
     renderShape: 'custom',
-    docs: doc('Cleanup'),
     handler: handleConvergence,
-  },
+  }),
   groupedQueryCommand({
     id: 'redundant-reexports',
     command: 'redundant-reexports',
@@ -615,7 +628,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     emptyMessage: () => 'No redundant re-exports found.',
     after: (rows) => console.log(`\n${rows.length} redundant re-export(s).`),
   }),
-  {
+  cleanupCommand({
     id: 'similar-signatures',
     command: 'similar-signatures',
     description: 'Find functions with near-identical type signatures (same shape)',
@@ -627,7 +640,6 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     ],
     budget: 'candidate-scan',
     renderShape: 'list',
-    docs: doc('Cleanup'),
     handler: handleSimilarSignatures,
-  },
+  }),
 ];

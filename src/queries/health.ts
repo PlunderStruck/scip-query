@@ -159,6 +159,10 @@ function withHealthRun<T>(
 }
 
 export function healthReportFromPhases(phaseResults: HealthPhaseResult[]): HealthReport {
+  return buildHealthReport(healthAnalysesFromPhases(phaseResults));
+}
+
+function healthAnalysesFromPhases(phaseResults: readonly HealthPhaseResult[]): HealthAnalyses {
   const overview = requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'overview' }>>(
     phaseResults,
     'overview',
@@ -201,7 +205,7 @@ export function healthReportFromPhases(phaseResults: HealthPhaseResult[]): Healt
       'complexity-hotspots',
     ).complexity,
   };
-  return buildHealthReport(analyses);
+  return analyses;
 }
 
 function requiredHealthPhase<T extends HealthPhaseResult>(
@@ -219,53 +223,9 @@ function runHealthAnalyses(
   statsResult: ReturnType<typeof stats>,
   budget: HealthBudget,
 ): HealthAnalyses {
-  const reachability = summarizeReachabilityHealth(db, scope, budget);
-  const candidates = summarizeCandidateHealth(db, scope, budget);
-  const structure = summarizeStructureHealth(db, scope, budget);
-  return {
-    statsResult,
-    warnings: budget.warnings,
-    ...reachability,
-    ...candidates,
-    ...structure,
-  };
-}
-
-function summarizeReachabilityHealth(
-  db: ScipDatabase,
-  scope: string | undefined,
-  budget: HealthBudget,
-): Pick<HealthAnalyses, 'dead' | 'isolated' | 'realCycleCount'> {
-  return {
-    dead: summarizeHealthDead(db, scope, budget),
-    isolated: summarizeHealthIsolated(db, scope, budget),
-    realCycleCount: countRealHealthCycles(db, scope, budget),
-  };
-}
-
-function summarizeCandidateHealth(
-  db: ScipDatabase,
-  scope: string | undefined,
-  budget: HealthBudget,
-): Pick<HealthAnalyses, 'similarCount' | 'extractCount' | 'wrappers' | 'passthroughs' | 'stale'> {
-  return {
-    similarCount: countSimilarHealthCandidates(db, scope, budget),
-    extractCount: countExtractionHealthCandidates(db, scope, budget),
-    wrappers: summarizeHealthWrappers(db, scope, budget),
-    passthroughs: summarizeHealthPassthroughs(db, scope, budget),
-    stale: summarizeHealthStaleAbstractions(db, scope, budget),
-  };
-}
-
-function summarizeStructureHealth(
-  db: ScipDatabase,
-  scope: string | undefined,
-  budget: HealthBudget,
-): Pick<HealthAnalyses, 'drift' | 'complexity'> {
-  return {
-    drift: summarizeHealthDrift(db, scope, budget),
-    complexity: summarizeHealthComplexity(db, scope, budget),
-  };
+  return healthAnalysesFromPhases(
+    HEALTH_PHASES.map((phase) => HEALTH_PHASE_RUNNERS[phase](db, scope, budget, statsResult)),
+  );
 }
 
 function summarizeHealthDead(
