@@ -7,7 +7,7 @@ import * as queries from '../src/queries/index.js';
 import { findFirstSymbolMatch } from '../src/symbols/symbol-lookup.js';
 import { findEnclosingDefinition, getDefinitionsForFile } from '../src/symbols/definition-catalog.js';
 import { getResolvedReferenceSites } from '../src/symbols/reference-sites.js';
-import { getSourceReferenceSites } from '../src/symbols/identifier-attribution.js';
+import { findReferences } from '../src/symbols/identifier-attribution.js';
 import { shortenSymbol } from '../src/symbols/symbol-parser.js';
 import type { ScipQueryConfig } from '../src/domain/types.js';
 import { advancedFixture, createAdvancedFixtureDb } from './advanced-fixture.js';
@@ -205,7 +205,7 @@ describe('advanced queries', () => {
     const match = findFirstSymbolMatch(db, 'normalize');
     expect(match).not.toBeNull();
 
-    const sourceRefs = getSourceReferenceSites(db, match!);
+    const sourceRefs = findReferences(db, match!);
     const refs = sourceRefs.length > 0 ? sourceRefs : getResolvedReferenceSites(db, match!);
     expect(refs.length).toBeGreaterThan(0);
 

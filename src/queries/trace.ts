@@ -1,7 +1,6 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { cleanSignature, extractSignature, findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
-import { getResolvedReferenceSites } from '../symbols/reference-sites.js';
-import { getSourceReferenceSites } from '../symbols/identifier-attribution.js';
+import { referenceSitesForSymbol } from '../symbols/reference-sites.js';
 import { getSourceText } from '../source/source-text.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../symbols/symbol-parser.js';
 
@@ -49,12 +48,7 @@ export function trace(
       source: definitionSource(db, match.relativePath, match.startLine, match.endLine),
     }];
 
-  // Primary: cross-file identifier scan. Fallback: mention-resolved sites
-  // with in-chunk line refinement (precise line, not chunk-start).
-  const sourceSites = getSourceReferenceSites(db, match, { semantic: opts.semantic });
-  const resolvedSites = sourceSites.length > 0 ? sourceSites : getResolvedReferenceSites(db, match);
-  const referencedBy = resolvedSites
-    .filter((site) => !db.isIgnored(site.file))
+  const referencedBy = referenceSitesForSymbol(db, match, { semantic: opts.semantic })
     .map((site) => ({
       relativePath: site.file,
       line: site.line,

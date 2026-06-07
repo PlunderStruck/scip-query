@@ -1,7 +1,6 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
-import { getResolvedReferenceSites } from '../symbols/reference-sites.js';
-import { getSourceReferenceSites } from '../symbols/identifier-attribution.js';
+import { referenceSitesForSymbol } from '../symbols/reference-sites.js';
 import { getSourceText } from '../source/source-text.js';
 import { isFunctionLikeSymbol } from '../symbols/symbol-parser.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
@@ -24,11 +23,7 @@ export function refs(
     ? [{ relativePath: match.relativePath, line: match.startLine }]
     : [];
 
-  // Primary: cross-file identifier scan when the leaf name is unique.
-  // Fallback: mention-resolved sites with in-chunk line refinement.
-  const sourceSites = getSourceReferenceSites(db, match, { semantic: opts.semantic });
-  const referenceSites = (sourceSites.length > 0 ? sourceSites : getResolvedReferenceSites(db, match))
-    .filter((site) => !db.isIgnored(site.file))
+  const referenceSites = referenceSitesForSymbol(db, match, { semantic: opts.semantic })
     .map((site) => ({ relativePath: site.file, line: site.line }));
 
   const rubySites = getRubySemanticRefs(db, match);

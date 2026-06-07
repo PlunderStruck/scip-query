@@ -5,7 +5,7 @@ import { getDefinitionsForFile, getScopedDefinitions } from '../symbols/definiti
 import { buildCalleeMap } from '../symbols/call-graph-evidence.js';
 import { buildFileDepGraph } from '../symbols/file-dep-graph.js';
 import { buildCrossFileCallerMap } from '../symbols/reference-callers.js';
-import { buildSourceFallbackCallerFiles } from '../symbols/identifier-attribution.js';
+import { findCallerFiles } from '../symbols/identifier-attribution.js';
 import { isCallableSymbol, isFunctionLikeSymbol, isInRustTestModule, isRustTraitImplMember } from '../symbols/symbol-parser.js';
 import { getCallableSignature } from '../source/ast-signatures.js';
 import { getSourceFiles } from '../source/source-fileset.js';
@@ -93,8 +93,8 @@ export class ProjectIndex {
     return buildCrossFileCallerMap(this.db, definitions, opts);
   }
 
-  sourceFallbackCallerFiles(definitions: ReadonlyArray<IndexedDefinition>): ReturnType<typeof buildSourceFallbackCallerFiles> {
-    return buildSourceFallbackCallerFiles(this.db, definitions);
+  sourceFallbackCallerFiles(definitions: ReadonlyArray<IndexedDefinition>): ReturnType<typeof findCallerFiles> {
+    return findCallerFiles(this.db, definitions);
   }
 
   fileDependencyGraph(scope?: string): ReturnType<typeof buildFileDepGraph> {

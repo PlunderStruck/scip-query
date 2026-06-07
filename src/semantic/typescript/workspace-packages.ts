@@ -9,8 +9,6 @@ export interface WorkspacePackage {
   sourceRootRelative: string;
 }
 
-export type PackageExportIndex = Map<string, Map<string, Set<number>>>;
-
 export function discoverWorkspacePackages(projectRoot: string): WorkspacePackage[] {
   const packageJsonPath = path.join(projectRoot, 'package.json');
   if (!existsSync(packageJsonPath)) return [];

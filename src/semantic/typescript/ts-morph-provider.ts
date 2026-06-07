@@ -8,7 +8,7 @@ import { leafName } from '../../symbols/symbol-parser.js';
 import { findIndexedDefinitionNear, indexedDefinitionLeafMap } from './indexed-definitions.js';
 import { discoverWorkspacePackages, packageEntryCandidates, workspacePackageNameForSpecifier } from './workspace-packages.js';
 import { dedupeLocations, isTypeOnlyLocation, lineOf, referenceLocationsWithoutDeclaration, semanticReferencesForNode, textualIdentifierLocations, toRelative } from './semantic-locations.js';
-import type { PackageExportIndex, WorkspacePackage } from './workspace-packages.js';
+import type { WorkspacePackage } from './workspace-packages.js';
 import type {
   CallExpression,
   Identifier,
@@ -41,6 +41,8 @@ interface SourceFileMatch {
   project: Project;
   sourceFile: SourceFile;
 }
+
+type PackageExportIndex = Map<string, Map<string, Set<number>>>;
 
 
 interface ImportIdentifierEntry {

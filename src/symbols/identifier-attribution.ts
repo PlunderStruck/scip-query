@@ -3,7 +3,7 @@
  * hit in file F, which SCIP symbol(s) does it refer to?"
  *
  * Pre-this-module the same logic lived in four places (sourceCandidateLines,
- * importAttributedCandidateLines, buildSourceFallbackCallerFiles inner loop,
+ * importAttributedCandidateLines, findCallerFiles inner loop,
  * dead.ts:resolveLeaf) with subtle drift. Bug fixes in one site silently
  * coexisted with the bug in the others. The Vue support and interface-
  * dispatch fixes from earlier had to touch all four sites separately.
@@ -140,7 +140,8 @@ export function attributeIdentifierPermissive(
  * Pairs `findIdentifierLines` (line-level positions) with
  * `attributeIdentifier` (which-symbol resolution).
  *
- * Used by the `refs` command and as a fallback for `dataflow`.
+ * Used by `referenceSitesForSymbol` as the source-backed reference evidence
+ * before falling back to SCIP mention chunks.
  */
 export function findReferences(
   db: ScipDatabase,
@@ -268,9 +269,3 @@ function materializeReferenceSites(
   }
   return sites;
 }
-
-// ── Backwards-compatible aliases ─────────────────────────────────
-// Old query-support names. Kept so callers can keep importing the
-// names they're used to without recreating the old symbol evidence barrel.
-export { findReferences as getSourceReferenceSites };
-export { findCallerFiles as buildSourceFallbackCallerFiles };

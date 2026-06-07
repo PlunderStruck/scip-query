@@ -4,6 +4,7 @@ import { findEnclosingDefinition, getDefinitionsForFile } from './definition-cat
 import { getFullSymbolMatch } from './symbol-lookup.js';
 import { leafName } from './symbol-parser.js';
 import { mentionReferenceChunkRows } from '../storage/scip-mentions.js';
+import { findReferences } from './identifier-attribution.js';
 import type { ReferenceSite, SymbolLocation } from '../domain/types.js';
 
 interface ReferenceChunk {
@@ -13,17 +14,15 @@ interface ReferenceChunk {
 
 // ── Reference-site resolution ──────────────────────────────────
 
-// `findReferences` (source-text-based reference scan) and
-// `findCallerFiles` (bulk source-fallback caller-file builder) live in
-// `identifier-attribution.ts`. They used to be re-exported here under
-// their query-support-era names (`getSourceReferenceSites` and
-// `buildSourceFallbackCallerFiles`), but the back-edge created an
-// identifier-attribution cycle that the cycles detector flagged. Callers
-// now import them directly from identifier-attribution.
+// `findReferences` (source-text-based reference scan) lives in
+// `identifier-attribution.ts`; this module owns the query-facing policy that
+// chooses between that source-backed evidence and SCIP mention fallback.
+// `findCallerFiles` remains imported directly from identifier-attribution by
+// callers that need the bulk inverse view.
 
 /**
  * Precision-upgraded fallback for callers/references when
- * `getSourceReferenceSites` bails out (leaf name is shared across symbols,
+ * source-backed reference attribution bails out (leaf name is shared across symbols,
  * or the unique-leaf check doesn't apply). Starts from SCIP's authoritative
  * mention table (role != 1) so resolution is correct, then refines each
  * chunk's coarse `start_line` by source-scanning for the symbol's leaf
@@ -33,6 +32,9 @@ interface ReferenceChunk {
  * Use this instead of raw `c.start_line` for any query that reports where
  * references occur.
  */
+// scip-query: ignore-wrapper — SCIP-only fallback primitive used by the
+// source-primary reference policy and targeted caller rows; keeping it named
+// prevents those evidence modes from collapsing into one behavior.
 export function getResolvedReferenceSites(
   db: ScipDatabase,
   symbol: SymbolLocation,
@@ -40,6 +42,16 @@ export function getResolvedReferenceSites(
   const prelude = resolveReferencePrelude(db, symbol);
   if (!prelude) return [];
   return buildReferenceSites(db, resolvedCandidateLines(db, prelude.match, prelude.identifier));
+}
+
+export function referenceSitesForSymbol(
+  db: ScipDatabase,
+  symbol: SymbolLocation,
+  opts: { semantic?: boolean; includeIgnored?: boolean } = {},
+): ReferenceSite[] {
+  const sourceSites = findReferences(db, symbol, { semantic: opts.semantic });
+  const sites = sourceSites.length > 0 ? sourceSites : getResolvedReferenceSites(db, symbol);
+  return opts.includeIgnored === true ? sites : sites.filter((site) => !db.isIgnored(site.file));
 }
 
 // scip-query: ignore-wrapper — named precision stage used by reference

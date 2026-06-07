@@ -3,8 +3,7 @@ import { ProjectIndex } from '../core/project-index.js';
 import { findExactSymbolMatch, findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
 import { findEnclosingDefinition } from '../symbols/definition-catalog.js';
 import { getCalleeRowsForSymbol } from '../symbols/call-graph-evidence.js';
-import { getResolvedReferenceSites } from '../symbols/reference-sites.js';
-import { getSourceReferenceSites } from '../symbols/identifier-attribution.js';
+import { referenceSitesForSymbol } from '../symbols/reference-sites.js';
 import type { SymbolMatch } from '../domain/types.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
 
@@ -112,20 +111,15 @@ function forwardSlice(
   // Find where the target is referenced, then at each reference site,
   // report the enclosing consumer. A forward slice is "what this symbol
   // feeds into", not "what else is used alongside it".
-  const sourceRefs = getSourceReferenceSites(db, match, { semantic: opts.semantic });
-  const refs = sourceRefs.length > 0 ? sourceRefs : getResolvedReferenceSites(db, match);
-
   const seenConsumers = new Set<string>();
   const connected: SliceResult['connectedSymbols'] = [];
   const index = new ProjectIndex(db);
 
-  for (const ref of refs) {
+  for (const ref of referenceSitesForSymbol(db, match, { semantic: opts.semantic })) {
     if (connected.length >= 30) break;
-    if (db.isIgnored(ref.file)) continue;
 
-    // Enclosing symbol via corrected ranges — use the JS helper so we agree
-    // with getSourceReferenceSites/getResolvedReferenceSites, which already
-    // compute enclosing the same way.
+    // Enclosing symbol via corrected ranges. Reference-site evidence usually
+    // already includes this; this fallback handles older mention-only sites.
     const enclosingSymbol =
       ref.enclosingSymbol ?? findEnclosingDefinition(
         index.definitionsForFile(ref.file),

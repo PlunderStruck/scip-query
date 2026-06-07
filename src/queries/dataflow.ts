@@ -4,8 +4,7 @@ import {
   getCalleeRowsForSymbol,
   getCallerRowsForSymbol,
 } from '../symbols/call-graph-evidence.js';
-import { getResolvedReferenceSites } from '../symbols/reference-sites.js';
-import { getSourceReferenceSites } from '../symbols/identifier-attribution.js';
+import { referenceSitesForSymbol } from '../symbols/reference-sites.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
 import { uniqueSymbolFileRows } from './query-utils.js';
 
@@ -49,15 +48,7 @@ export function dataflow(
     line: match.startLine,
   }];
 
-  // Primary: cross-file identifier scan. Fallback: mention-resolved sites
-  // with in-chunk line refinement so usage lines are precise, not chunk-start.
-  const sourceUsageSites = getSourceReferenceSites(db, match, { semantic: opts.semantic });
-  const resolvedSites = sourceUsageSites.length > 0
-    ? sourceUsageSites
-    : getResolvedReferenceSites(db, match);
-
-  const normalizedUsageSites = resolvedSites
-    .filter((site) => !db.isIgnored(site.file))
+  const normalizedUsageSites = referenceSitesForSymbol(db, match, { semantic: opts.semantic })
     .map((site) => ({
       file: site.file,
       line: site.line,
