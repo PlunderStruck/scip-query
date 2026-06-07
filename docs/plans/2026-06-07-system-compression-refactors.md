@@ -388,6 +388,36 @@ npm run typecheck
 npm test -- tests/command-accuracy.test.ts tests/debloat-health.test.ts
 ```
 
+## Completion Verification
+
+Completed after checkpoint commit `4775042`:
+
+- Fresh index after all refactors: `node dist/cli.js reindex --force --allow-partial`.
+- Final health score: `90`.
+- Final health findings: `deadSymbols: 0`, `isolatedSymbols: 0`, `cycles: 0`, `staleTypes: 0`, `driftedFiles: 0`.
+- Health improved from the plan baseline `87` and the earlier `95 -> 87` regression is explained by the temporary command-handler concentration plus duplicate source-scan responsibilities. The remaining deductions are similarity, wrappers, and passthroughs; reviewed low-risk wrappers/passthroughs are mostly facade/cache boundaries or already documented candidates.
+
+Final verification:
+
+```bash
+npm run typecheck
+npm test
+npm run build
+node dist/cli.js reindex --force --allow-partial
+node dist/cli.js health --json
+node dist/cli.js drift --min-deviation 3
+node dist/cli.js similar-signatures --min-loc 5
+node dist/cli.js stats
+node dist/cli.js refs ProjectIndex
+node dist/cli.js trace ProjectIndex
+node dist/cli.js call-graph ProjectIndex
+node dist/cli.js system src/runtime
+node dist/cli.js system src/symbols
+node dist/cli.js dead --min-loc 10
+node dist/cli.js wrapper-candidates --max-loc 20
+node dist/cli.js similar --min-similarity 0.5 --limit 10
+```
+
 ## Completion Evidence
 
 Before declaring this plan complete:
