@@ -36,6 +36,16 @@ All register items now have landed implementation slices or documented compatibi
 - P2 cache invalidation: composite database/file invalidation is centralized.
 - P2 suppressions: repeated suppression sites were either replaced by named mechanisms or documented as intentional facades.
 
+Second-pass cleanup now landed:
+
+- Query subpaths are explicit in both build entries and `package.json`; helper query modules are no longer published through a wildcard.
+- Query command specs are split into core, navigation, graph, cleanup, impact, and health families behind an ordered aggregator.
+- TypeScript semantic provider bootstrap, source-file resolution, definition-node matching, and cache helpers are separate internal roles.
+- Import-only language parser adapters use a named contract helper instead of repeating capability objects.
+- `dead` owns scoring, while reference-count evidence moved to `src/queries/internal/reference-counts.ts`.
+- `stale-abstractions` owns stale scoring, while real/import-only/re-export-only consumer classification moved to `src/queries/internal/stale-consumers.ts`.
+- Package export expectations are now covered by a CLI contract test.
+
 ## Disgust Ledger
 
 | Priority | Smell | Main files | Why it earns the side-eye | Better shape |

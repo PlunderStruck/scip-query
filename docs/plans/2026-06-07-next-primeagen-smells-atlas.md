@@ -29,19 +29,20 @@ This atlas records the second-order smells a senior reviewer would notice after 
 
 | ID | Opportunity | Evidence | Disposition |
 | --- | --- | --- | --- |
-| QP-1 | Replace query directory scanning and wildcard package exports with an explicit public query manifest. | `tsup.config.ts` scans `src/queries`; `package.json` exports `./queries/*`; internal helpers like `query-utils` and `health-cache-control` are therefore publication-sensitive. | enforce |
-| QC-1 | Split `query-command-specs.ts` by command family after preserving the descriptor-owned command contract. | File is over 1,300 lines and mixes option decoding, query invocation, and rendering. | extract |
-| TS-1 | Split TypeScript semantic provider internal roles. | `ts-morph-provider.ts` handles tsconfig discovery, project creation, cache ownership, reference lookup, source-file resolution, and fallback semantics. | extract |
-| LP-1 | Compress repeated parser adapter capability helpers. | `similar-files` groups language parser modules by identical dependency shape; many adapters share "AST if available, regex/source fallback otherwise." | merge |
-| EV-1 | Deepen `dead` and `stale-abstractions` only after provenance ownership is sufficient. | Both modules still assemble evidence from ProjectIndex, source text, AST, storage rows, and local scoring. | defer |
-| TT-1 | Continue converting incident archive tests into evidence and command contract fixtures. | `tests/command-accuracy.test.ts` and fallback tests remain large even after fixture DSL introduction. | extract |
-| SG-1 | Replace repeated suppression-comment architecture with named boundaries where a repeated policy is visible. | `rg "scip-query: ignore"` still shows clusters in symbols, source, queries, runtime, and reindex. | enforce |
+| QP-1 | Replace query directory scanning and wildcard package exports with an explicit public query manifest. | `tsup.config.ts` scanned `src/queries`; `package.json` exported `./queries/*`; internal helpers like `query-utils` and `health-cache-control` were publication-sensitive. | enforce - landed |
+| QC-1 | Split `query-command-specs.ts` by command family after preserving the descriptor-owned command contract. | File was over 1,300 lines and mixed option decoding, query invocation, and rendering. | extract - landed |
+| TS-1 | Split TypeScript semantic provider internal roles. | `ts-morph-provider.ts` handled tsconfig discovery, project creation, cache ownership, reference lookup, source-file resolution, and fallback semantics. | extract - landed |
+| LP-1 | Compress repeated parser adapter capability helpers. | `similar-files` grouped language parser modules by identical dependency shape; many adapters shared "AST if available, regex/source fallback otherwise." | merge - landed |
+| EV-1 | Deepen `dead` and `stale-abstractions` evidence policy where safe. | Both modules assembled evidence from ProjectIndex, source text, AST, storage rows, and local scoring. | extract - landed |
+| TT-1 | Continue converting incident archive tests into evidence and command contract fixtures. | `tests/command-accuracy.test.ts` and fallback tests remain large even after fixture DSL introduction; package surface had no contract test. | extract - partial landed |
+| SG-1 | Replace repeated suppression-comment architecture with named boundaries where a repeated policy is visible. | `rg "scip-query: ignore"` still shows clusters in symbols, source, queries, runtime, and reindex. | enforce - partial landed |
 
 ## Deferred Register
 
 | ID | Blocking fact | Revisit condition |
 | --- | --- | --- |
-| EV-1 | `dead` and `stale-abstractions` depend on several evidence modes whose provenance model is only partially centralized. A premature split would move policy without making it more true. | After smaller evidence-result helpers expose references/callers/definition ownership with provenance and tests. |
+| TT-1 | `tests/command-accuracy.test.ts` remains a broad command contract archive. The safe next split is by command family after the new family modules stabilize through a full release cycle. | When a command-family fixture helper can preserve current coverage without weakening cross-command regression checks. |
+| SG-1 | Many remaining suppressions mark intentionally broad detector or language-specific parser policies, not missing abstractions. | Revisit when a suppression repeats the same policy in two newly touched files after this pass. |
 
 ## Compression Clusters
 
@@ -78,3 +79,18 @@ This atlas records the second-order smells a senior reviewer would notice after 
 - Cluster D: parser/fallback tests plus command accuracy tests.
 - Cluster E: debloat, stale-abstractions, source-backed accuracy, health, and full test suite.
 - Final audit: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, `npm run reindex` if available, `node dist/cli.js health --json`, `node dist/cli.js drift --min-deviation 3`, `node dist/cli.js stale-abstractions --include-low-confidence --min-loc 1 --limit 120`.
+
+## Implemented Slices
+
+- `acde817` made query package subpaths explicit, removed build-time directory scanning, and added a package export contract test.
+- `041e011` split query command descriptors into core, navigation, graph, cleanup, impact, and health families behind an ordered aggregator.
+- `03bbba7` split TypeScript semantic provider bootstrap, source-file resolution, definition-node matching, and cache helpers into owned modules.
+- `99d22b9` named the import-only language parser adapter shape in the parser contract and used it in the registry.
+- `d7de997` extracted dead-code reference-count evidence and stale-abstraction consumer partitioning into internal policy modules.
+
+## Suppression Disposition
+
+- Keep suppressions that mark true public facades, such as parser registry and cache lifecycle wrappers.
+- Keep language parser `ignore-similar` comments where the AST node shapes differ by grammar even though the result object shape is common.
+- Treat repeated detector `ignore-extract` comments as candidates only when two touched detectors still share the same policy after the new `reference-counts` and `stale-consumers` internals.
+- Prefer named modules over new suppressions when a comment would explain a reusable evidence rule, cache rule, or command-family rule.
