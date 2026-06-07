@@ -29,17 +29,6 @@ type RowRenderer<Row, Ctx extends DbCommandContext> =
   | { kind: 'table'; headers: readonly string[]; dashWidths?: readonly number[] }
   | { kind: 'grouped'; key?: (row: Row, ctx: Ctx) => string };
 
-export type ListCommandSpec<Row> = RowCommandSpec<Row, DbCommandContext>;
-
-export interface TableCommandSpec<Row> extends RowCommandSpec<Row, DbCommandContext> {
-  headers: readonly string[];
-  dashWidths?: readonly number[];
-}
-
-export interface GroupedByFileCommandSpec<Row> extends RowCommandSpec<Row, DbCommandContext> {
-  key?: (row: Row, ctx: DbCommandContext) => string;
-}
-
 export interface ReportCommandSpec<Result, Ctx extends DbCommandContext = DbCommandContext> {
   query: (ctx: Ctx) => Result;
   emptyMessage?: (result: Result, ctx: Ctx) => string | undefined;
@@ -73,16 +62,25 @@ export function budgetedDbCommand(
   });
 }
 
-export function listCommand<Row>(spec: ListCommandSpec<Row>): CommandHandler {
+export function listCommand<Row>(spec: RowCommandSpec<Row, DbCommandContext>): CommandHandler {
   return dbCommand((ctx) => renderRows(ctx, spec, { kind: 'list' }));
 }
 
-export function tableCommand<Row>(spec: TableCommandSpec<Row>): CommandHandler {
+export function tableCommand<Row>(
+  spec: RowCommandSpec<Row, DbCommandContext> & {
+    headers: readonly string[];
+    dashWidths?: readonly number[];
+  },
+): CommandHandler {
   return dbCommand((ctx) =>
     renderRows(ctx, spec, { kind: 'table', headers: spec.headers, dashWidths: spec.dashWidths }));
 }
 
-export function groupedByFileCommand<Row>(spec: GroupedByFileCommandSpec<Row>): CommandHandler {
+export function groupedByFileCommand<Row>(
+  spec: RowCommandSpec<Row, DbCommandContext> & {
+    key?: (row: Row, ctx: DbCommandContext) => string;
+  },
+): CommandHandler {
   return dbCommand((ctx) =>
     renderRows(ctx, spec, { kind: 'grouped', key: spec.key }));
 }

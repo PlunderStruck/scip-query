@@ -24,6 +24,56 @@ import {
 } from './command-execution.js';
 import { displayLine, displayPathRange, displayRange, render } from './render.js';
 
+type QueryCommandMetadata = Omit<CommandDescriptor, 'handler' | 'renderShape'>;
+
+function listQueryCommand<Row>({
+  query,
+  format,
+  emptyMessage,
+  heuristicLabel,
+  after,
+  ...metadata
+}: QueryCommandMetadata & Parameters<typeof listCommand<Row>>[0]): CommandDescriptor {
+  return {
+    ...metadata,
+    renderShape: 'list',
+    handler: listCommand({ query, format, emptyMessage, heuristicLabel, after }),
+  };
+}
+
+function tableQueryCommand<Row>({
+  query,
+  format,
+  emptyMessage,
+  heuristicLabel,
+  after,
+  headers,
+  dashWidths,
+  ...metadata
+}: QueryCommandMetadata & Parameters<typeof tableCommand<Row>>[0]): CommandDescriptor {
+  return {
+    ...metadata,
+    renderShape: 'table',
+    handler: tableCommand({ query, format, emptyMessage, heuristicLabel, after, headers, dashWidths }),
+  };
+}
+
+function groupedQueryCommand<Row>({
+  query,
+  format,
+  emptyMessage,
+  heuristicLabel,
+  after,
+  key,
+  ...metadata
+}: QueryCommandMetadata & Parameters<typeof groupedByFileCommand<Row>>[0]): CommandDescriptor {
+  return {
+    ...metadata,
+    renderShape: 'grouped-by-file',
+    handler: groupedByFileCommand({ query, format, emptyMessage, heuristicLabel, after, key }),
+  };
+}
+
 export const handleStats = dbCommand(({ db }) => {
   const s = queries.stats(db);
   console.log(`Documents:   ${s.documents}`);
@@ -34,34 +84,6 @@ export const handleStats = dbCommand(({ db }) => {
   if (s.lastBuilt) {
     console.log(`Last built:  ${s.lastBuilt.toISOString().replace('T', ' ').slice(0, 19)}`);
   }
-});
-
-export const handleFiles = listCommand({
-  query: ({ db, args }) => queries.files(db, stringArg(args, 0)),
-  format: (r) => r.relativePath,
-});
-
-export const handleSymbols = listCommand({
-  query: ({ db, args }) => queries.symbols(db, stringArg(args, 0)),
-  format: (r) => {
-    const sig = r.signature ? `  — ${r.signature}` : '';
-    return `  ${displayRange(r.startLine, r.endLine)}  ${r.shortName}${sig}`;
-  },
-});
-
-export const handleMethods = listCommand({
-  query: ({ db, args }) => queries.methods(db, stringArg(args, 0)),
-  format: (r) => `  ${displayRange(r.startLine, r.endLine)}  ${r.name}`,
-});
-
-export const handleDeps = listCommand({
-  query: ({ db, args }) => queries.deps(db, stringArg(args, 0)),
-  format: (r) => r.relativePath,
-});
-
-export const handleRdeps = listCommand({
-  query: ({ db, args }) => queries.rdeps(db, stringArg(args, 0)),
-  format: (r) => r.relativePath,
 });
 
 export const handleSystem = dbCommand(({ db, args }) => {
@@ -195,25 +217,6 @@ function renderDeadGroup(
   }
 }
 
-export const handleSurface = listCommand({
-  query: ({ db, args }) => queries.surface(db, stringArg(args, 0)),
-  format: (r) => `  ${r.consumer} → ${r.shortName}`,
-});
-
-export const handleHotspots = tableCommand({
-  headers: ['refs', 'files', 'symbol'],
-  query: ({ db, opts }) => queries.hotspots(db, {
-    limit: definedNumberOption(opts, 'limit', 30),
-    scope: stringOptionValue(opts, 'scope'),
-  }),
-  format: (r) => `  ${String(r.refCount).padStart(4)}  ${String(r.fileCount).padStart(5)}  ${r.shortName}`,
-});
-
-export const handleImportedBy = listCommand({
-  query: ({ db, args }) => queries.importedBy(db, stringArg(args, 0)),
-  format: (r) => `  ${r.fromFile}`,
-});
-
 export const handleOutline = dbCommand(({ db, args }) => {
   const roots = queries.outline(db, stringArg(args, 0));
   function printTree(nodes: typeof roots, indent: number): void {
@@ -224,33 +227,6 @@ export const handleOutline = dbCommand(({ db, args }) => {
     }
   }
   printTree(roots, 0);
-});
-
-export const handleMembers = listCommand({
-  query: ({ db, args }) => queries.members(db, stringArg(args, 0)),
-  format: (r) => `  ${displayRange(r.startLine, r.endLine)}  [${r.kind}]  ${r.shortName}`,
-});
-
-export const handleByKind = listCommand({
-  query: ({ db, args, opts }) => queries.byKind(db, stringArg(args, 0), {
-    scope: stringOptionValue(opts, 'scope'),
-    limit: definedNumberOption(opts, 'limit', 100),
-  }),
-  format: (r) => `  ${displayPathRange(r.relativePath, r.startLine, r.endLine)}  [${r.kindName}]  ${r.shortName}`,
-  emptyMessage: ({ args }) => `No symbols found for kind "${stringArg(args, 0)}". Use "kind-counts" to see available kinds.`,
-  after: (rows) => console.log(`\n${rows.length} symbol(s)`),
-});
-
-export const handleKindCounts = tableCommand({
-  headers: ['count', 'kind'],
-  query: ({ db, opts }) => queries.kindCounts(db, { scope: stringOptionValue(opts, 'scope') }),
-  format: (r) => `  ${String(r.count).padStart(5)}  ${r.kindName} (${r.kind})`,
-});
-
-export const handleHierarchy = listCommand({
-  query: ({ db, args }) => queries.hierarchy(db, stringArg(args, 0)),
-  format: (node) => `${'  '.repeat(node.depth)}${node.shortName}`,
-  emptyMessage: () => 'Symbol not found.',
 });
 
 export const handleImports = budgetedListCommand('imports', {
@@ -738,19 +714,6 @@ export const handleSlice = budgetedDbCommand('slice', ({ db, args, opts, budget 
   console.log(`\n${result.connectedSymbols.length} connected symbol(s).`);
 });
 
-export const handleRedundantReexports = groupedByFileCommand({
-  query: ({ db, opts }) => queries.redundantReexports(db, {
-    scope: stringOptionValue(opts, 'scope'),
-    limit: definedNumberOption(opts, 'limit', 30),
-  }),
-  format: (r) =>
-    `  ${r.shortName}  (from ${r.originalFile})\n` +
-    `    barrel: ${r.barrelConsumers} consumer(s) | direct: ${r.directConsumers} consumer(s)`,
-  key: (r) => r.barrelFile,
-  emptyMessage: () => 'No redundant re-exports found.',
-  after: (rows) => console.log(`\n${rows.length} redundant re-export(s).`),
-});
-
 export const handleSimilarSignatures = budgetedListCommand('similar-signatures', {
   query: ({ db, opts, budget }) => queries.similarSignatures(db, {
     scope: stringOptionValue(opts, 'scope'),
@@ -779,30 +742,33 @@ export const queryCommandDescriptors: CommandDescriptor[] = [
     docs: doc('Core'),
     handler: handleStats,
   },
-  {
+  listQueryCommand({
     id: 'files',
     command: 'files <pattern>',
     description: 'Find files matching a pattern',
-    renderShape: 'list',
     docs: doc('Navigation', ['scip-query files auth']),
-    handler: handleFiles,
-  },
-  {
+    query: ({ db, args }) => queries.files(db, stringArg(args, 0)),
+    format: (r) => r.relativePath,
+  }),
+  listQueryCommand({
     id: 'symbols',
     command: 'symbols <file>',
     description: 'List symbols defined in a file (with line ranges + signatures)',
-    renderShape: 'list',
     docs: doc('Navigation', ['scip-query symbols src/runtime/cli.ts']),
-    handler: handleSymbols,
-  },
-  {
+    query: ({ db, args }) => queries.symbols(db, stringArg(args, 0)),
+    format: (r) => {
+      const sig = r.signature ? `  — ${r.signature}` : '';
+      return `  ${displayRange(r.startLine, r.endLine)}  ${r.shortName}${sig}`;
+    },
+  }),
+  listQueryCommand({
     id: 'methods',
     command: 'methods <className>',
     description: 'List methods of a class (with line ranges)',
-    renderShape: 'list',
     docs: doc('Navigation'),
-    handler: handleMethods,
-  },
+    query: ({ db, args }) => queries.methods(db, stringArg(args, 0)),
+    format: (r) => `  ${displayRange(r.startLine, r.endLine)}  ${r.name}`,
+  }),
   {
     id: 'refs',
     command: 'refs <symbol>',
@@ -823,22 +789,22 @@ export const queryCommandDescriptors: CommandDescriptor[] = [
     docs: doc('Navigation', ['scip-query trace parseSymbol']),
     handler: handleTrace,
   },
-  {
+  listQueryCommand({
     id: 'deps',
     command: 'deps <file>',
     description: 'Files this file depends on (internal)',
-    renderShape: 'list',
     docs: doc('Navigation'),
-    handler: handleDeps,
-  },
-  {
+    query: ({ db, args }) => queries.deps(db, stringArg(args, 0)),
+    format: (r) => r.relativePath,
+  }),
+  listQueryCommand({
     id: 'rdeps',
     command: 'rdeps <file>',
     description: 'Files that depend on this file/module',
-    renderShape: 'list',
     docs: doc('Navigation'),
-    handler: handleRdeps,
-  },
+    query: ({ db, args }) => queries.rdeps(db, stringArg(args, 0)),
+    format: (r) => r.relativePath,
+  }),
   {
     id: 'system',
     command: 'system <module>',
@@ -847,14 +813,14 @@ export const queryCommandDescriptors: CommandDescriptor[] = [
     docs: doc('Navigation', ['scip-query system queries']),
     handler: handleSystem,
   },
-  {
+  listQueryCommand({
     id: 'surface',
     command: 'surface <module>',
     description: 'What symbols consumers actually use from this module',
-    renderShape: 'list',
     docs: doc('Navigation'),
-    handler: handleSurface,
-  },
+    query: ({ db, args }) => queries.surface(db, stringArg(args, 0)),
+    format: (r) => `  ${r.consumer} → ${r.shortName}`,
+  }),
   {
     id: 'dead',
     command: 'dead [scope]',
@@ -873,7 +839,7 @@ export const queryCommandDescriptors: CommandDescriptor[] = [
     docs: doc('Cleanup', ['scip-query dead --min-loc 10']),
     handler: handleDead,
   },
-  {
+  tableQueryCommand({
     id: 'hotspots',
     command: 'hotspots',
     description: 'Most-referenced symbols in the codebase (choke points)',
@@ -881,10 +847,14 @@ export const queryCommandDescriptors: CommandDescriptor[] = [
       option('-n, --limit <n>', 'Number of results', parseInteger, 30),
       option('-s, --scope <path>', 'Limit to files matching path'),
     ],
-    renderShape: 'table',
     docs: doc('Graph'),
-    handler: handleHotspots,
-  },
+    headers: ['refs', 'files', 'symbol'],
+    query: ({ db, opts }) => queries.hotspots(db, {
+      limit: definedNumberOption(opts, 'limit', 30),
+      scope: stringOptionValue(opts, 'scope'),
+    }),
+    format: (r) => `  ${String(r.refCount).padStart(4)}  ${String(r.fileCount).padStart(5)}  ${r.shortName}`,
+  }),
   {
     id: 'imports',
     command: 'imports <file>',
@@ -895,14 +865,14 @@ export const queryCommandDescriptors: CommandDescriptor[] = [
     docs: doc('Navigation'),
     handler: handleImports,
   },
-  {
+  listQueryCommand({
     id: 'imported-by',
     command: 'imported-by <symbol>',
     description: 'Which files import this symbol?',
-    renderShape: 'list',
     docs: doc('Navigation'),
-    handler: handleImportedBy,
-  },
+    query: ({ db, args }) => queries.importedBy(db, stringArg(args, 0)),
+    format: (r) => `  ${r.fromFile}`,
+  }),
   {
     id: 'unused-imports',
     command: 'unused-imports <file>',
@@ -921,14 +891,14 @@ export const queryCommandDescriptors: CommandDescriptor[] = [
     docs: doc('Navigation'),
     handler: handleOutline,
   },
-  {
+  listQueryCommand({
     id: 'members',
     command: 'members <symbol>',
     description: 'All children of a symbol (methods, fields, nested types)',
-    renderShape: 'list',
     docs: doc('Navigation'),
-    handler: handleMembers,
-  },
+    query: ({ db, args }) => queries.members(db, stringArg(args, 0)),
+    format: (r) => `  ${displayRange(r.startLine, r.endLine)}  [${r.kind}]  ${r.shortName}`,
+  }),
   {
     id: 'fan-in',
     command: 'fan-in [symbol]',
@@ -1007,7 +977,7 @@ export const queryCommandDescriptors: CommandDescriptor[] = [
     docs: doc('Cleanup'),
     handler: handleIsolated,
   },
-  {
+  listQueryCommand({
     id: 'by-kind',
     command: 'by-kind <kind>',
     description: 'Find symbols by SCIP kind (class, interface, enum, function, etc.)',
@@ -1015,19 +985,25 @@ export const queryCommandDescriptors: CommandDescriptor[] = [
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('-n, --limit <n>', 'Number of results', parseInteger, 100),
     ],
-    renderShape: 'list',
     docs: doc('Navigation'),
-    handler: handleByKind,
-  },
-  {
+    query: ({ db, args, opts }) => queries.byKind(db, stringArg(args, 0), {
+      scope: stringOptionValue(opts, 'scope'),
+      limit: definedNumberOption(opts, 'limit', 100),
+    }),
+    format: (r) => `  ${displayPathRange(r.relativePath, r.startLine, r.endLine)}  [${r.kindName}]  ${r.shortName}`,
+    emptyMessage: ({ args }) => `No symbols found for kind "${stringArg(args, 0)}". Use "kind-counts" to see available kinds.`,
+    after: (rows) => console.log(`\n${rows.length} symbol(s)`),
+  }),
+  tableQueryCommand({
     id: 'kind-counts',
     command: 'kind-counts',
     description: 'Histogram of symbol kinds in the codebase',
     options: [option('-s, --scope <path>', 'Limit to files matching path')],
-    renderShape: 'table',
     docs: doc('Navigation'),
-    handler: handleKindCounts,
-  },
+    headers: ['count', 'kind'],
+    query: ({ db, opts }) => queries.kindCounts(db, { scope: stringOptionValue(opts, 'scope') }),
+    format: (r) => `  ${String(r.count).padStart(5)}  ${r.kindName} (${r.kind})`,
+  }),
   {
     id: 'deep-chains',
     command: 'deep-chains',
@@ -1041,14 +1017,15 @@ export const queryCommandDescriptors: CommandDescriptor[] = [
     docs: doc('Graph'),
     handler: handleDeepChains,
   },
-  {
+  listQueryCommand({
     id: 'hierarchy',
     command: 'hierarchy <symbol>',
     description: 'Show a symbol\'s ancestry chain (method → class → module)',
-    renderShape: 'list',
     docs: doc('Navigation'),
-    handler: handleHierarchy,
-  },
+    query: ({ db, args }) => queries.hierarchy(db, stringArg(args, 0)),
+    format: (node) => `${'  '.repeat(node.depth)}${node.shortName}`,
+    emptyMessage: () => 'Symbol not found.',
+  }),
   {
     id: 'call-graph',
     command: 'call-graph <symbol>',
@@ -1279,7 +1256,7 @@ export const queryCommandDescriptors: CommandDescriptor[] = [
     docs: doc('Navigation'),
     handler: handleSlice,
   },
-  {
+  groupedQueryCommand({
     id: 'redundant-reexports',
     command: 'redundant-reexports',
     description: 'Find barrel re-exports that nobody imports through',
@@ -1287,10 +1264,18 @@ export const queryCommandDescriptors: CommandDescriptor[] = [
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('-n, --limit <n>', 'Number of results', parseInteger, 30),
     ],
-    renderShape: 'grouped-by-file',
     docs: doc('Cleanup'),
-    handler: handleRedundantReexports,
-  },
+    query: ({ db, opts }) => queries.redundantReexports(db, {
+      scope: stringOptionValue(opts, 'scope'),
+      limit: definedNumberOption(opts, 'limit', 30),
+    }),
+    format: (r) =>
+      `  ${r.shortName}  (from ${r.originalFile})\n` +
+      `    barrel: ${r.barrelConsumers} consumer(s) | direct: ${r.directConsumers} consumer(s)`,
+    key: (r) => r.barrelFile,
+    emptyMessage: () => 'No redundant re-exports found.',
+    after: (rows) => console.log(`\n${rows.length} redundant re-export(s).`),
+  }),
   {
     id: 'similar-signatures',
     command: 'similar-signatures',

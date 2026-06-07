@@ -61,6 +61,9 @@ Cluster B: Descriptor Builders
 - Reduced `src/runtime/command-descriptors.ts` to lifecycle/process commands plus ordered `query('<id>')` references for query commands.
 - Preserved `queries/index.ts` as the public query API barrel because library exports and CLI command declarations are separate surfaces.
 - Preserved command order, command ids, option parsers, render shapes, budget policies, heuristic notices, docs categories, and examples.
+- Added `listQueryCommand`, `tableQueryCommand`, and `groupedQueryCommand` so simple query commands declare metadata, query invocation, and rendering as one command-spec unit instead of a `handleX` plus a separate descriptor.
+- Converted `files`, `symbols`, `methods`, `deps`, `rdeps`, `surface`, `hotspots`, `imported-by`, `members`, `by-kind`, `kind-counts`, `hierarchy`, and `redundant-reexports` to the new command-spec algebra.
+- Kept row/table/group command execution spec shapes internal to `command-execution.ts`; the query spec module now reuses the function parameter types rather than importing single-consumer exported type aliases.
 
 ## Verification Log
 
@@ -79,3 +82,16 @@ Cluster B: Descriptor Builders
 - `node dist/cli.js wrapper-candidates --max-loc 30` - four existing heuristic candidates remained.
 - `node dist/cli.js passthrough-candidates --max-loc 30` - no passthrough candidates found.
 - `node dist/cli.js stale-abstractions --include-low-confidence --min-loc 1 --limit 80` - no stale abstractions found.
+
+Second algebra slice:
+
+- `npm run typecheck` passed.
+- `npm run lint` passed.
+- `npm test -- tests/cli-contract.test.ts tests/command-accuracy.test.ts tests/redundant-reexports-fallback.test.ts` passed: 3 files, 28 tests.
+- `npm test` passed: 36 files, 177 tests.
+- `npm run build` passed.
+- `node dist/cli.js reindex --force --allow-partial` passed.
+- `node dist/cli.js health --json` reported score 100 and zero findings.
+- `node dist/cli.js stale-abstractions --include-low-confidence --min-loc 1 --limit 80` reported no stale abstractions.
+- `node dist/cli.js drift --min-deviation 3` reported no drift.
+- `node dist/cli.js symbols src/runtime/query-command-specs.ts | rg "handle(Files|Symbols|Methods|Deps|Rdeps|Surface|Hotspots|ImportedBy|Members|ByKind|KindCounts|Hierarchy|RedundantReexports)|listQueryCommand|tableQueryCommand|groupedQueryCommand|queryCommandDescriptors"` showed only the new command builders and `queryCommandDescriptors`; the converted `handleX` symbols are gone from the refreshed index.
