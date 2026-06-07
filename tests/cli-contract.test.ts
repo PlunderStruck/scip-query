@@ -67,6 +67,74 @@ describe('CLI contract', () => {
       'Heuristic stale abstraction candidates: review before acting; these are candidates, not exact compiler facts.\n',
     );
   });
+
+  it('keeps query package subpaths explicit and helper modules private', () => {
+    const packageJson = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as {
+      exports: Record<string, unknown>;
+    };
+    const exportKeys = Object.keys(packageJson.exports);
+    const publicQuerySubpaths = [
+      './queries/affected',
+      './queries/bottlenecks',
+      './queries/by-kind',
+      './queries/call-graph',
+      './queries/change-surface',
+      './queries/code',
+      './queries/complexity',
+      './queries/complexity-hotspots',
+      './queries/convergence',
+      './queries/coupling',
+      './queries/cycles',
+      './queries/dataflow',
+      './queries/dead',
+      './queries/deep-chains',
+      './queries/deps',
+      './queries/diff-impact',
+      './queries/drift',
+      './queries/extract-candidates',
+      './queries/fan',
+      './queries/files',
+      './queries/health',
+      './queries/hierarchy',
+      './queries/hotspots',
+      './queries/imports',
+      './queries/index',
+      './queries/isolated',
+      './queries/members',
+      './queries/methods',
+      './queries/outline',
+      './queries/passthrough-candidates',
+      './queries/redundant-reexports',
+      './queries/refs',
+      './queries/similar',
+      './queries/similar-chains',
+      './queries/similar-files',
+      './queries/similar-signatures',
+      './queries/slice',
+      './queries/stale-abstractions',
+      './queries/stats',
+      './queries/surface',
+      './queries/symbols',
+      './queries/system',
+      './queries/trace',
+      './queries/wrapper-candidates',
+    ];
+
+    expect(exportKeys).not.toContain('./queries/*');
+    for (const subpath of publicQuerySubpaths) {
+      expect(Object.hasOwn(packageJson.exports, subpath), `missing query export: ${subpath}`).toBe(true);
+    }
+    for (const privateSubpath of [
+      './queries/dead-exclusions',
+      './queries/drift-policy',
+      './queries/health-cache-control',
+      './queries/health-report',
+      './queries/health-types',
+      './queries/query-utils',
+    ]) {
+      expect(Object.hasOwn(packageJson.exports, privateSubpath), `helper module should not be exported: ${privateSubpath}`).toBe(false);
+    }
+  });
 });
 
 function readDocumentedCommands(path: string): string[] {

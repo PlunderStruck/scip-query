@@ -1,13 +1,54 @@
-import { readdirSync } from 'node:fs';
 import { defineConfig } from 'tsup';
 
+const publicQueryEntries = [
+  'affected',
+  'bottlenecks',
+  'by-kind',
+  'call-graph',
+  'change-surface',
+  'code',
+  'complexity',
+  'complexity-hotspots',
+  'convergence',
+  'coupling',
+  'cycles',
+  'dataflow',
+  'dead',
+  'deep-chains',
+  'deps',
+  'diff-impact',
+  'drift',
+  'extract-candidates',
+  'fan',
+  'files',
+  'health',
+  'hierarchy',
+  'hotspots',
+  'imports',
+  'index',
+  'isolated',
+  'members',
+  'methods',
+  'outline',
+  'passthrough-candidates',
+  'redundant-reexports',
+  'refs',
+  'similar',
+  'similar-chains',
+  'similar-files',
+  'similar-signatures',
+  'slice',
+  'stale-abstractions',
+  'stats',
+  'surface',
+  'symbols',
+  'system',
+  'trace',
+  'wrapper-candidates',
+] as const;
+
 const queryEntries = Object.fromEntries(
-  readdirSync('src/queries', { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.ts'))
-    .map((entry) => [
-      `queries/${entry.name.replace(/\.ts$/, '')}`,
-      `src/queries/${entry.name}`,
-    ]),
+  publicQueryEntries.map((entry) => [`queries/${entry}`, `src/queries/${entry}.ts`]),
 );
 
 // Minify JS to keep the published tarball compact. Sourcemaps are generated

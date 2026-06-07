@@ -23,9 +23,181 @@
       "import": "./dist/queries/index.js",
       "types": "./dist/queries/index.d.ts"
     },
-    "./queries/*": {
-      "import": "./dist/queries/*.js",
-      "types": "./dist/queries/*.d.ts"
+    "./queries/affected": {
+      "import": "./dist/queries/affected.js",
+      "types": "./dist/queries/affected.d.ts"
+    },
+    "./queries/bottlenecks": {
+      "import": "./dist/queries/bottlenecks.js",
+      "types": "./dist/queries/bottlenecks.d.ts"
+    },
+    "./queries/by-kind": {
+      "import": "./dist/queries/by-kind.js",
+      "types": "./dist/queries/by-kind.d.ts"
+    },
+    "./queries/call-graph": {
+      "import": "./dist/queries/call-graph.js",
+      "types": "./dist/queries/call-graph.d.ts"
+    },
+    "./queries/change-surface": {
+      "import": "./dist/queries/change-surface.js",
+      "types": "./dist/queries/change-surface.d.ts"
+    },
+    "./queries/code": {
+      "import": "./dist/queries/code.js",
+      "types": "./dist/queries/code.d.ts"
+    },
+    "./queries/complexity": {
+      "import": "./dist/queries/complexity.js",
+      "types": "./dist/queries/complexity.d.ts"
+    },
+    "./queries/complexity-hotspots": {
+      "import": "./dist/queries/complexity-hotspots.js",
+      "types": "./dist/queries/complexity-hotspots.d.ts"
+    },
+    "./queries/convergence": {
+      "import": "./dist/queries/convergence.js",
+      "types": "./dist/queries/convergence.d.ts"
+    },
+    "./queries/coupling": {
+      "import": "./dist/queries/coupling.js",
+      "types": "./dist/queries/coupling.d.ts"
+    },
+    "./queries/cycles": {
+      "import": "./dist/queries/cycles.js",
+      "types": "./dist/queries/cycles.d.ts"
+    },
+    "./queries/dataflow": {
+      "import": "./dist/queries/dataflow.js",
+      "types": "./dist/queries/dataflow.d.ts"
+    },
+    "./queries/dead": {
+      "import": "./dist/queries/dead.js",
+      "types": "./dist/queries/dead.d.ts"
+    },
+    "./queries/deep-chains": {
+      "import": "./dist/queries/deep-chains.js",
+      "types": "./dist/queries/deep-chains.d.ts"
+    },
+    "./queries/deps": {
+      "import": "./dist/queries/deps.js",
+      "types": "./dist/queries/deps.d.ts"
+    },
+    "./queries/diff-impact": {
+      "import": "./dist/queries/diff-impact.js",
+      "types": "./dist/queries/diff-impact.d.ts"
+    },
+    "./queries/drift": {
+      "import": "./dist/queries/drift.js",
+      "types": "./dist/queries/drift.d.ts"
+    },
+    "./queries/extract-candidates": {
+      "import": "./dist/queries/extract-candidates.js",
+      "types": "./dist/queries/extract-candidates.d.ts"
+    },
+    "./queries/fan": {
+      "import": "./dist/queries/fan.js",
+      "types": "./dist/queries/fan.d.ts"
+    },
+    "./queries/files": {
+      "import": "./dist/queries/files.js",
+      "types": "./dist/queries/files.d.ts"
+    },
+    "./queries/health": {
+      "import": "./dist/queries/health.js",
+      "types": "./dist/queries/health.d.ts"
+    },
+    "./queries/hierarchy": {
+      "import": "./dist/queries/hierarchy.js",
+      "types": "./dist/queries/hierarchy.d.ts"
+    },
+    "./queries/hotspots": {
+      "import": "./dist/queries/hotspots.js",
+      "types": "./dist/queries/hotspots.d.ts"
+    },
+    "./queries/imports": {
+      "import": "./dist/queries/imports.js",
+      "types": "./dist/queries/imports.d.ts"
+    },
+    "./queries/index": {
+      "import": "./dist/queries/index.js",
+      "types": "./dist/queries/index.d.ts"
+    },
+    "./queries/isolated": {
+      "import": "./dist/queries/isolated.js",
+      "types": "./dist/queries/isolated.d.ts"
+    },
+    "./queries/members": {
+      "import": "./dist/queries/members.js",
+      "types": "./dist/queries/members.d.ts"
+    },
+    "./queries/methods": {
+      "import": "./dist/queries/methods.js",
+      "types": "./dist/queries/methods.d.ts"
+    },
+    "./queries/outline": {
+      "import": "./dist/queries/outline.js",
+      "types": "./dist/queries/outline.d.ts"
+    },
+    "./queries/passthrough-candidates": {
+      "import": "./dist/queries/passthrough-candidates.js",
+      "types": "./dist/queries/passthrough-candidates.d.ts"
+    },
+    "./queries/redundant-reexports": {
+      "import": "./dist/queries/redundant-reexports.js",
+      "types": "./dist/queries/redundant-reexports.d.ts"
+    },
+    "./queries/refs": {
+      "import": "./dist/queries/refs.js",
+      "types": "./dist/queries/refs.d.ts"
+    },
+    "./queries/similar": {
+      "import": "./dist/queries/similar.js",
+      "types": "./dist/queries/similar.d.ts"
+    },
+    "./queries/similar-chains": {
+      "import": "./dist/queries/similar-chains.js",
+      "types": "./dist/queries/similar-chains.d.ts"
+    },
+    "./queries/similar-files": {
+      "import": "./dist/queries/similar-files.js",
+      "types": "./dist/queries/similar-files.d.ts"
+    },
+    "./queries/similar-signatures": {
+      "import": "./dist/queries/similar-signatures.js",
+      "types": "./dist/queries/similar-signatures.d.ts"
+    },
+    "./queries/slice": {
+      "import": "./dist/queries/slice.js",
+      "types": "./dist/queries/slice.d.ts"
+    },
+    "./queries/stale-abstractions": {
+      "import": "./dist/queries/stale-abstractions.js",
+      "types": "./dist/queries/stale-abstractions.d.ts"
+    },
+    "./queries/stats": {
+      "import": "./dist/queries/stats.js",
+      "types": "./dist/queries/stats.d.ts"
+    },
+    "./queries/surface": {
+      "import": "./dist/queries/surface.js",
+      "types": "./dist/queries/surface.d.ts"
+    },
+    "./queries/symbols": {
+      "import": "./dist/queries/symbols.js",
+      "types": "./dist/queries/symbols.d.ts"
+    },
+    "./queries/system": {
+      "import": "./dist/queries/system.js",
+      "types": "./dist/queries/system.d.ts"
+    },
+    "./queries/trace": {
+      "import": "./dist/queries/trace.js",
+      "types": "./dist/queries/trace.d.ts"
+    },
+    "./queries/wrapper-candidates": {
+      "import": "./dist/queries/wrapper-candidates.js",
+      "types": "./dist/queries/wrapper-candidates.d.ts"
     },
     "./reindex": {
       "import": "./dist/reindex.js",
