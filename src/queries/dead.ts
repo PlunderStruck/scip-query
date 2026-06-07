@@ -1,5 +1,4 @@
 import type { ScipDatabase } from '../storage/db.js';
-import { getCrossLanguageDispatchNames, getRustAttrReferencedNames } from '../analysis/framework-patterns.js';
 import { buildFileExclusionPredicate } from './dead-exclusions.js';
 import { getInactiveBarrelPaths, isEntrySurface, isRootedSymbol, TEST_FILE_PATTERNS, TEST_SUPPORT_PATH_PATTERNS } from '../analysis/file-classifier.js';
 import { clearDefinitionCacheForFile, enclosingTypeNames, getDefinitionsForFile } from '../symbols/definition-catalog.js';
@@ -8,10 +7,10 @@ import { isCallableSymbol, isFunctionLikeSymbol, isInRustTestModule, isModuleLik
 import { getCallerRowsForSymbol } from '../symbols/reference-graph.js';
 import { ProjectIndex } from '../core/project-index.js';
 import { clearLanguageParserCachesForFile, getSourceImports } from '../language-parsers/index.js';
-import { clearAstCacheForFile, detectAstLanguage, isVueSfcPath } from '../source/ast.js';
+import { clearAstCacheForFile } from '../source/ast.js';
 import { clearSourceStripperCacheForFile } from '../source/source-stripper.js';
 import { clearSourceTextCacheForFile } from '../source/source-text.js';
-import { clearIdentifierIndexCacheForFile, getIdentifierLineMap } from '../symbols/identifier-index.js';
+import { clearIdentifierIndexCacheForFile } from '../symbols/identifier-index.js';
 
 type ReferenceCounts = Map<number, Map<string, number>>;
 const SQLITE_PARAM_BATCH_SIZE = 750;
@@ -432,53 +431,54 @@ function supplementDeadCodeOnlySourceReferences(
   const candidatesByLeaf = definitionsByLeaf(definitions);
   const scanPaths = new Set<string>(index.sourceFiles());
   for (const path of indexedDocumentPaths(db)) scanPaths.add(path);
+  const candidateNames = new Set(candidatesByLeaf.keys());
+  const importsBySource = new Map<string, Map<string, Set<string>>>();
 
-  for (const sourceFile of scanPaths) {
-    const astLanguage = detectAstLanguage(sourceFile);
-    if (!astLanguage && !isVueSfcPath(sourceFile)) continue;
-    if (db.isIgnored(sourceFile)) continue;
-    if (inactiveBarrelPaths.has(sourceFile)) continue;
-
-    try {
-      const importsByName = readFileImports(db, sourceFile);
-      const lineMap = getIdentifierLineMap(db, sourceFile);
-      for (const [name, lines] of lineMap) {
-        const candidates = candidatesByLeaf.get(name);
-        if (!candidates) continue;
-        const targets = deadSourceTargets(sourceFile, name, candidates, importsByName, { permissive: true });
-        for (const target of targets) {
-          const occurrences = sourceFile === target.relativePath ? Math.max(0, lines.length - 1) : lines.length;
-          if (isUnusedImportOnlyHit(db, {
-            sourceFile,
-            name,
-            target,
-            occurrences,
-          })) continue;
-          recordReference(referencesBySymbol, target.symbolId, sourceFile, occurrences);
-        }
-      }
-
-      for (const name of getCrossLanguageDispatchNames(db, sourceFile)) {
-        const candidates = candidatesByLeaf.get(name);
-        if (!candidates) continue;
-        for (const target of deadSourceTargets(sourceFile, name, candidates, importsByName, { permissive: false })) {
-          recordReference(referencesBySymbol, target.symbolId, sourceFile, 1);
-        }
-      }
-
-      if (astLanguage === 'rust') {
-        for (const name of getRustAttrReferencedNames(db, sourceFile)) {
-          const candidates = candidatesByLeaf.get(name);
-          if (!candidates) continue;
-          for (const target of deadSourceTargets(sourceFile, name, candidates, importsByName, { permissive: true })) {
-            recordReference(referencesBySymbol, target.symbolId, sourceFile, 1);
-          }
-        }
-      }
-    } finally {
-      clearDeadSourceFileCaches(db, sourceFile);
+  const importsForSource = (sourceFile: string): Map<string, Set<string>> => {
+    let importsByName = importsBySource.get(sourceFile);
+    if (!importsByName) {
+      importsByName = readFileImports(db, sourceFile);
+      importsBySource.set(sourceFile, importsByName);
     }
-  }
+    return importsByName;
+  };
+
+  index.scanSourceReferences({
+    paths: scanPaths,
+    includeVueSfc: true,
+    includeCrossLanguageDispatchNames: true,
+    includeRustAttributeNames: true,
+    identifierResolution: 'permissive',
+    candidateNames,
+    skipPath: (sourceFile) => inactiveBarrelPaths.has(sourceFile),
+    resolveTargets: ({ sourceFile, name, kind }) => {
+      const candidates = candidatesByLeaf.get(name);
+      if (!candidates) return [];
+      return deadSourceTargets(sourceFile, name, candidates, importsForSource(sourceFile), {
+        permissive: kind !== 'cross-language-dispatch',
+      });
+    },
+    afterPath: (sourceFile) => {
+      importsBySource.delete(sourceFile);
+      clearDeadSourceFileCaches(db, sourceFile);
+    },
+  }, (hit) => {
+    const occurrences = hit.kind === 'identifier' && hit.sourceFile === hit.target.relativePath
+      ? Math.max(0, hit.occurrences - 1)
+      : hit.occurrences;
+    if (
+      hit.kind === 'identifier'
+      && isUnusedImportOnlyHit(db, {
+        sourceFile: hit.sourceFile,
+        name: hit.name,
+        target: hit.target,
+        occurrences,
+      })
+    ) {
+      return;
+    }
+    recordReference(referencesBySymbol, hit.target.symbolId, hit.sourceFile, occurrences);
+  });
 }
 
 function clearDeadSourceFileCaches(db: ScipDatabase, sourceFile: string): void {

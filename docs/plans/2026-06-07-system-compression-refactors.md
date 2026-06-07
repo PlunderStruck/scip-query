@@ -207,6 +207,27 @@ node dist/cli.js health --json
 node dist/cli.js drift --min-deviation 3
 ```
 
+### Progress
+
+Completed after checkpoint commit `532e678`:
+
+- Deepened `src/symbols/source-reference-scan.ts` with a target-resolution hook and per-path cleanup hook.
+- Replaced `src/queries/dead.ts`'s dead-code-only hand-rolled source traversal with `ProjectIndex.scanSourceReferences()`.
+- Kept dead-code-specific target policy in `dead.ts`: same-file preference, import-path disambiguation, permissive fallback for identifier/Rust attribute references, and strict handling for cross-language dispatch names.
+- Removed direct dead-query ownership of framework dispatch scanning, Rust attribute scanning, AST language gating, Vue SFC gating, identifier-line map traversal, and per-file traversal cleanup.
+- Health score improved from the plan baseline `87` to `92` after this plus the CLI execution split.
+
+Verified:
+
+```bash
+npm run typecheck
+npm test -- tests/command-accuracy.test.ts tests/debloat-health.test.ts tests/source-backed-accuracy.test.ts tests/stale-abstractions-accuracy.test.ts
+npm run build
+node dist/cli.js dead --min-loc 10
+node dist/cli.js health --json
+node dist/cli.js drift --min-deviation 3
+```
+
 ## Refactor 3: Reference Graph Role Split
 
 The reference graph module is the compiler/source evidence module whose essential job is to provide graph-shaped facts about files, callers, callees, and reference sites. It currently contains several roles in one high-fan-in file.

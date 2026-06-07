@@ -5,7 +5,12 @@ import { attributeIdentifier, attributeIdentifierPermissive } from './identifier
 import { getIdentifierLineMap } from './identifier-index.js';
 
 type SourceReferenceKind = 'identifier' | 'cross-language-dispatch' | 'rust-attribute';
-type SourceReferenceTarget = ReturnType<typeof attributeIdentifier>[number];
+type DefaultSourceReferenceTarget = ReturnType<typeof attributeIdentifier>[number];
+
+export interface SourceReferenceTarget {
+  symbolId: number;
+  relativePath: string;
+}
 
 interface SourceReferenceHit {
   sourceFile: string;
@@ -23,6 +28,15 @@ interface ScanSourceReferencesOptions {
   identifierResolution?: 'strict' | 'permissive';
   candidateNames?: ReadonlySet<string>;
   skipPath?: (relativePath: string) => boolean;
+  resolveTargets?: (ctx: SourceReferenceResolveContext) => Iterable<SourceReferenceTarget>;
+  afterPath?: (relativePath: string) => void;
+}
+
+interface SourceReferenceResolveContext {
+  sourceFile: string;
+  name: string;
+  kind: SourceReferenceKind;
+  defaultTargets: () => readonly DefaultSourceReferenceTarget[];
 }
 
 export function scanSourceReferences(
@@ -40,48 +54,40 @@ export function scanSourceReferences(
     if (db.isIgnored(sourceFile)) continue;
     if (opts.skipPath?.(sourceFile)) continue;
 
-    const lineMap = getIdentifierLineMap(db, sourceFile);
-    for (const [name, lines] of lineMap) {
-      if (opts.candidateNames && !opts.candidateNames.has(name)) continue;
-      for (const target of resolveIdentifier(db, sourceFile, name)) {
-        visit({
-          sourceFile,
-          name,
-          target,
-          occurrences: lines.length,
-          kind: 'identifier',
-        });
-      }
-    }
+    try {
+      const visitName = (
+        name: string,
+        kind: SourceReferenceKind,
+        occurrences: number,
+        defaultTargets: () => readonly DefaultSourceReferenceTarget[],
+      ): void => {
+        if (opts.candidateNames && !opts.candidateNames.has(name)) return;
+        const targets = opts.resolveTargets
+          ? opts.resolveTargets({ sourceFile, name, kind, defaultTargets })
+          : defaultTargets();
+        for (const target of targets) {
+          visit({ sourceFile, name, target, occurrences, kind });
+        }
+      };
 
-    if (opts.includeCrossLanguageDispatchNames) {
-      for (const name of getCrossLanguageDispatchNames(db, sourceFile)) {
-        if (opts.candidateNames && !opts.candidateNames.has(name)) continue;
-        for (const target of attributeIdentifier(db, sourceFile, name)) {
-          visit({
-            sourceFile,
-            name,
-            target,
-            occurrences: 1,
-            kind: 'cross-language-dispatch',
-          });
+      const lineMap = getIdentifierLineMap(db, sourceFile);
+      for (const [name, lines] of lineMap) {
+        visitName(name, 'identifier', lines.length, () => resolveIdentifier(db, sourceFile, name));
+      }
+
+      if (opts.includeCrossLanguageDispatchNames) {
+        for (const name of getCrossLanguageDispatchNames(db, sourceFile)) {
+          visitName(name, 'cross-language-dispatch', 1, () => attributeIdentifier(db, sourceFile, name));
         }
       }
-    }
 
-    if (opts.includeRustAttributeNames && astLanguage === 'rust') {
-      for (const name of getRustAttrReferencedNames(db, sourceFile)) {
-        if (opts.candidateNames && !opts.candidateNames.has(name)) continue;
-        for (const target of resolveIdentifier(db, sourceFile, name)) {
-          visit({
-            sourceFile,
-            name,
-            target,
-            occurrences: 1,
-            kind: 'rust-attribute',
-          });
+      if (opts.includeRustAttributeNames && astLanguage === 'rust') {
+        for (const name of getRustAttrReferencedNames(db, sourceFile)) {
+          visitName(name, 'rust-attribute', 1, () => resolveIdentifier(db, sourceFile, name));
         }
       }
+    } finally {
+      opts.afterPath?.(sourceFile);
     }
   }
 }
