@@ -465,7 +465,7 @@ function toCalleeRows(
 }
 
 // scip-query: ignore-passthrough — cache lifecycle facade used by
-// reference-graph reset without exposing caller-row cache internals.
+// symbol evidence cache reset without exposing caller-row cache internals.
 export function clearCallGraphEvidenceCaches(db: ScipDatabase): void {
   CALLER_ROWS_CACHE.invalidate(db);
 }

@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../storage/db.js';
-import { buildFileDepGraph } from '../symbols/reference-graph.js';
+import { buildFileDepGraph } from '../symbols/file-dep-graph.js';
 import { jaccard } from '../analysis/similarity.js';
 
 export interface SimilarFileResult {

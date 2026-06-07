@@ -18,7 +18,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { findEnclosingDefinition, getDefinitionsForFile } from './definition-catalog.js';
 import { getFullSymbolMatch } from './symbol-lookup.js';
-import { getGlobalLeafIndex } from './reference-graph.js';
+import { getGlobalLeafIndex } from './leaf-symbol-index.js';
 import type { IndexedDefinition, ReferenceSite, SymbolLocation } from '../domain/types.js';
 import { findIdentifierLines, getFileIdentifiers } from './identifier-index.js';
 import { getSourceText } from '../source/source-text.js';
@@ -271,7 +271,6 @@ function materializeReferenceSites(
 
 // ── Backwards-compatible aliases ─────────────────────────────────
 // Old query-support names. Kept so callers can keep importing the
-// names they're used to without going through reference-graph (which
-// used to re-export them, creating a cycle).
+// names they're used to without recreating the old symbol evidence barrel.
 export { findReferences as getSourceReferenceSites };
 export { findCallerFiles as buildSourceFallbackCallerFiles };

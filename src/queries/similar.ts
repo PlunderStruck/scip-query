@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
-import { getCalleeRowsForSymbol } from '../symbols/reference-graph.js';
+import { getCalleeRowsForSymbol } from '../symbols/call-graph-evidence.js';
 import { getSourceText } from '../source/source-text.js';
 import { computeIdf, difference, intersection, weightedCosine } from '../analysis/similarity.js';
 import { isFunctionLikeSymbol, isInRustTestModule, leafName, shortenSymbol } from '../symbols/symbol-parser.js';

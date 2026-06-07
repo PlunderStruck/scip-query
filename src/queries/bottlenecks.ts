@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../storage/db.js';
-import { getCalleeRowsForSymbol, getCallerRowsForSymbol } from '../symbols/reference-graph.js';
+import { getCalleeRowsForSymbol, getCallerRowsForSymbol } from '../symbols/call-graph-evidence.js';
 import type { IndexedDefinition } from '../domain/types.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';

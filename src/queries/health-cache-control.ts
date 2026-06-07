@@ -6,7 +6,7 @@ import { clearAstCache } from '../source/ast.js';
 import { clearSourceStripperCache } from '../source/source-stripper.js';
 import { clearSourceTextCache } from '../source/source-text.js';
 import { clearIdentifierIndexCache } from '../symbols/identifier-index.js';
-import { clearReferenceGraphCaches } from '../symbols/reference-graph.js';
+import { clearSymbolEvidenceCaches } from '../symbols/symbol-evidence-cache.js';
 
 const GC_HEADROOM_BYTES = 64 * 1024 * 1024;
 
@@ -20,7 +20,7 @@ export function clearHealthAnalysisCaches(
   db: ScipDatabase,
   opts: { semanticProvider?: boolean } = {},
 ): void {
-  clearReferenceGraphCaches(db);
+  clearSymbolEvidenceCaches(db);
   if (opts.semanticProvider === true) clearSemanticProviderCache(db);
   clearIdentifierIndexCache(db);
   clearLanguageParserCaches(db);

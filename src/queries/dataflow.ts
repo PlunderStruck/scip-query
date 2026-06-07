@@ -3,8 +3,8 @@ import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
 import {
   getCalleeRowsForSymbol,
   getCallerRowsForSymbol,
-  getResolvedReferenceSites,
-} from '../symbols/reference-graph.js';
+} from '../symbols/call-graph-evidence.js';
+import { getResolvedReferenceSites } from '../symbols/reference-sites.js';
 import { getSourceReferenceSites } from '../symbols/identifier-attribution.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
 import { uniqueSymbolFileRows } from './query-utils.js';

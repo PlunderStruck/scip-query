@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { findExactSymbolMatch, findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
 import { findEnclosingDefinition, getDefinitionsForFile } from '../symbols/definition-catalog.js';
-import { getCallerRowsForSymbol } from '../symbols/reference-graph.js';
+import { getCallerRowsForSymbol } from '../symbols/call-graph-evidence.js';
 import type { SymbolMatch } from '../domain/types.js';
 import { leafSuffix, shortenSymbol } from '../symbols/symbol-parser.js';
 

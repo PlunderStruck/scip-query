@@ -6,7 +6,7 @@ import { ScipDatabase } from '../src/storage/db.js';
 import * as queries from '../src/queries/index.js';
 import { findFirstSymbolMatch } from '../src/symbols/symbol-lookup.js';
 import { findEnclosingDefinition, getDefinitionsForFile } from '../src/symbols/definition-catalog.js';
-import { getResolvedReferenceSites } from '../src/symbols/reference-graph.js';
+import { getResolvedReferenceSites } from '../src/symbols/reference-sites.js';
 import { getSourceReferenceSites } from '../src/symbols/identifier-attribution.js';
 import { shortenSymbol } from '../src/symbols/symbol-parser.js';
 import type { ScipQueryConfig } from '../src/domain/types.js';
