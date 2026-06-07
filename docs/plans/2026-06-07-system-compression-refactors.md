@@ -328,6 +328,27 @@ node dist/cli.js redundant-reexports
 node dist/cli.js drift --min-deviation 3
 ```
 
+### Progress
+
+Completed after checkpoint commit `c09c4dd`:
+
+- Added `parseWithAstFallback()` to `src/language-parsers/utils.ts` as the common lifecycle for "try tree-sitter AST, otherwise use source fallback."
+- Applied it to the parser families that shared the exact repeated mechanics: JavaScript imports, Python, Ruby, and C/C++.
+- Kept language grammar local to each parser: AST node walkers, regex statement parsing, alias rules, namespace/member tracking, and import-path resolution still live in the language-specific files.
+- Left JVM, .NET, Rust, and PHP on local dispatch because each parser has multi-language or export-specific branching where forcing the helper would hide the grammar boundary more than it would simplify the lifecycle.
+
+Verified:
+
+```bash
+npm run typecheck
+npm test -- tests/import-fallbacks.test.ts tests/redundant-reexports-fallback.test.ts tests/python-accuracy.test.ts tests/command-accuracy.test.ts
+npm run build
+node dist/cli.js imports src/runtime/cli.ts
+node dist/cli.js unused-imports src/runtime/cli.ts
+node dist/cli.js redundant-reexports
+node dist/cli.js drift --min-deviation 3
+```
+
 ## Refactor 5: Low-Risk Cleanup
 
 These are smaller cleanup items surfaced by health signals. Do them after the structural refactors unless they block type cleanup.

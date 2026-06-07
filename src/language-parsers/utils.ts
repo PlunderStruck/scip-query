@@ -15,7 +15,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { extensionFamilyFor, resolveQualifiedImportPath } from '../resolution/import-path-resolver.js';
 import { buildUsageBody, hasIdentifierUsage } from '../source/source-stripper.js';
-import type { SyntaxNode, Tree } from '../source/ast.js';
+import { getAst, type SyntaxNode, type Tree } from '../source/ast.js';
 import type { ParsedSourceImport } from '../domain/types.js';
 
 const REFERENCE_IDENTIFIER_TYPES = new Set([
@@ -121,4 +121,18 @@ export function parseImportLineMatches<T>(
     }
   }
   return results;
+}
+
+export function parseWithAstFallback<T>(
+  db: ScipDatabase,
+  importerPath: string,
+  parseAst: (tree: Tree) => T[] | null,
+  parseFallback: () => T[],
+): T[] {
+  const tree = getAst(db, importerPath);
+  if (tree) {
+    const parsed = parseAst(tree);
+    if (parsed) return parsed;
+  }
+  return parseFallback();
 }

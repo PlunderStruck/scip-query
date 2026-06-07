@@ -16,7 +16,7 @@ import {
   hasIdentifierUsage,
 } from '../source/source-stripper.js';
 import type { ParsedReExport, ParsedSourceImport } from '../domain/types.js';
-import { collectIdentifiersOutside, firstChildOfType, splitTopLevel } from './utils.js';
+import { collectIdentifiersOutside, firstChildOfType, parseWithAstFallback, splitTopLevel } from './utils.js';
 import { createPerDbCache } from '../storage/per-db-cache.js';
 
 export function parseJavaScriptImports(
@@ -24,11 +24,19 @@ export function parseJavaScriptImports(
   importerPath: string,
   source: string,
 ): ParsedSourceImport[] {
-  const tree = getAst(db, importerPath);
-  if (tree) {
-    return parseJavaScriptImportsAst(db, importerPath, tree);
-  }
-  // Fallback: regex parser when AST is unavailable.
+  return parseWithAstFallback(
+    db,
+    importerPath,
+    (tree) => parseJavaScriptImportsAst(db, importerPath, tree),
+    () => parseJavaScriptImportsRegex(db, importerPath, source),
+  );
+}
+
+function parseJavaScriptImportsRegex(
+  db: ScipDatabase,
+  importerPath: string,
+  source: string,
+): ParsedSourceImport[] {
   return parseJavaScriptImportStatements(source)
     .flatMap((statement) => parseJavaScriptImportStatement(
       db,

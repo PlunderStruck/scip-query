@@ -4,24 +4,25 @@
  * cases where the AST is unavailable or where multi-line `from … import (…)`
  * statements need backstop coverage.
  */
-import { getAst, type SyntaxNode, type Tree } from '../source/ast.js';
+import type { SyntaxNode, Tree } from '../source/ast.js';
 import type { ScipDatabase } from '../storage/db.js';
 import { resolvePythonImportPath } from '../resolution/import-path-resolver.js';
 import { buildUsageBody, collectNamespaceMembers, hasIdentifierUsage } from '../source/source-stripper.js';
 import type { ParsedSourceImport } from '../domain/types.js';
-import { collectIdentifiersOutside, firstChildOfType, splitTopLevel } from './utils.js';
+import { collectIdentifiersOutside, firstChildOfType, parseWithAstFallback, splitTopLevel } from './utils.js';
 
 export function parsePythonImports(
   db: ScipDatabase,
   importerPath: string,
   source: string,
 ): ParsedSourceImport[] {
-  const tree = getAst(db, importerPath);
-  if (tree) {
-    return parsePythonImportsAst(db, importerPath, tree);
-  }
-  return collectPythonImportStatements(source).flatMap((statement) =>
-    parsePythonImportStatement(db, importerPath, statement, source),
+  return parseWithAstFallback(
+    db,
+    importerPath,
+    (tree) => parsePythonImportsAst(db, importerPath, tree),
+    () => collectPythonImportStatements(source).flatMap((statement) =>
+      parsePythonImportStatement(db, importerPath, statement, source),
+    ),
   );
 }
 

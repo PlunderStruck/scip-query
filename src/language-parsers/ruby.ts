@@ -5,22 +5,31 @@
  * resolve.
  */
 import { basename } from 'node:path';
-import { getAst, type Tree } from '../source/ast.js';
+import type { Tree } from '../source/ast.js';
 import type { ScipDatabase } from '../storage/db.js';
 import { resolveRubyImportPath } from '../resolution/import-path-resolver.js';
 import { hasIdentifierUsage } from '../source/source-stripper.js';
 import type { ParsedSourceImport } from '../domain/types.js';
-import { collectIdentifiersOutside, parseImportLineMatches } from './utils.js';
+import { collectIdentifiersOutside, parseImportLineMatches, parseWithAstFallback } from './utils.js';
 
 export function parseRubyImports(
   db: ScipDatabase,
   importerPath: string,
   source: string,
 ): ParsedSourceImport[] {
-  const tree = getAst(db, importerPath);
-  if (tree) return parseRubyImportsAst(db, importerPath, tree);
+  return parseWithAstFallback(
+    db,
+    importerPath,
+    (tree) => parseRubyImportsAst(db, importerPath, tree),
+    () => parseRubyImportsRegex(db, importerPath, source),
+  );
+}
 
-  // Regex fallback (only when tree-sitter parse fails on the source).
+function parseRubyImportsRegex(
+  db: ScipDatabase,
+  importerPath: string,
+  source: string,
+): ParsedSourceImport[] {
   return parseImportLineMatches<ParsedSourceImport>(
     source,
     /^[ \t]*(require_relative|require)\s+["']([^"']+)["']\s*$/gm,
