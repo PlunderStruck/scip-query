@@ -29,7 +29,7 @@ A package export index is a TypeScript semantic-provider cache mapping a workspa
 | --- | --- | --- | --- |
 | R1 | Centralize source-primary, SCIP-fallback reference-site selection. | `refs`, `trace`, `dataflow`, and forward `slice` each call `getSourceReferenceSites()`, check length, fall back to `getResolvedReferenceSites()`, and filter ignored files. | extract |
 | R2 | Move `PackageExportIndex` to its only consumer. | `stale-abstractions --include-low-confidence` reports `PackageExportIndex`; `refs` shows all uses in `ts-morph-provider.ts`. | inline |
-| R3 | Keep wrapper candidates that preserve real ownership. | `hydrateSymbolMatch()` belongs with definition range correction, `definitionMentionRows()` pairs with `definitionRangeRows()`, `extractCallLeaf()` is AST target normalization, and `resolveDefinitionSymbolId()` is Vue definition resolution. | skip |
+| R3 | Keep wrapper candidates that preserve real ownership. | `hydrateSymbolMatch()` belongs with definition range correction, `definitionMentionRows()` pairs with `definitionRangeRows()`, `extractCallLeaf()` is AST target normalization, and `resolveVueDefinitionSymbolId()` is Vue definition resolution. | skip |
 | R4 | Keep parser-family similarity skipped. | `parseDotNetImports()` and `parsePhpImports()` still share parser utilities but represent different language grammars. | skip |
 
 ## Compression Clusters
@@ -101,4 +101,4 @@ symbols: 6449
 index size: 4.2 MB
 ```
 
-Remaining low-threshold wrapper candidates are kept with existing dispositions: `hydrateSymbolMatch()` owns AST-corrected hydration in the definition catalog, `definitionMentionRows()` is paired with `definitionRangeRows()`, `extractCallLeaf()` is AST target normalization, and `resolveDefinitionSymbolId()` is Vue-specific definition resolution.
+Remaining low-threshold wrapper candidates are kept with existing dispositions: `hydrateSymbolMatch()` owns AST-corrected hydration in the definition catalog, `definitionMentionRows()` is paired with `definitionRangeRows()`, `extractCallLeaf()` is AST target normalization, and `resolveVueDefinitionSymbolId()` is Vue-specific definition resolution.

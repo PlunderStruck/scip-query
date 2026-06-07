@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { augmentAuxiliaryDocuments } from './augment.js';
 import { fingerprintProjectFiles } from './project-files.js';
 import { awaitVueReferenceWorkers, shouldUseVueWorkers } from './augment-vue-workers.js';
-import { createSymbolLookup, createVueLanguageContext, createVueSourceReader, createVueSymbolIdLookup, createVueSymbolLookup, dedupeOccurrences, firstGeneratedOffset, firstSourceOffset, identifierTokens, isExternalDefinition, listVueDocumentFiles, replaceVueDocumentChunks, resolveDefinitionSymbolId, toRelativePath } from './augment-vue-runtime.js';
+import { createSymbolLookup, createVueComponentSymbolLookup, createVueLanguageContext, createVueSourceReader, createVueSymbolIdLookup, dedupeOccurrences, firstGeneratedOffset, firstSourceOffset, identifierTokens, isExternalDefinition, listVueDocumentFiles, replaceVueDocumentChunks, resolveVueDefinitionSymbolId, toRelativePath } from './augment-vue-runtime.js';
 
 import type { AugmentVueFingerprint, AugmentVueResolvedResult, DefinitionInfo, ResolvedOccurrence, SourceTextInfo, TsLanguageService, VolarMapper, VueIdentifierToken, VueLanguageContext, VueReferenceComputationResult, VueReferenceTask, VueSourceReader } from './augment-vue-types.js';
 
@@ -30,9 +30,6 @@ interface AugmentVueCache {
   result: AugmentVueResolvedResult;
 }
 
-// scip-query: ignore-extract — this is the Vue augmentation transaction
-// pipeline: cache check, compute, dedupe, write chunks, persist metadata.
-// The helper calls own the details and the top-level order is important.
 export function augmentVueResolvedReferences(
   opts: AugmentVueResolvedOptions,
 ): AugmentVueResolvedResult {
@@ -55,15 +52,7 @@ export function augmentVueResolvedReferences(
     const cachedResult = reuseCachedVueAugmentation(cachePath, cacheFingerprint, opts.onStatus);
     if (cachedResult) return cachedResult;
 
-    const vueSymbolLookup = createVueSymbolLookup(db, opts.projectRoot, vueFiles);
-    const computation = computeVueReferenceComputation(db, opts, configPath, vueFiles, vueSymbolLookup);
-    const occurrences = dedupeOccurrences(computation.occurrences);
-    const insertedMentions = writeVueResolvedOccurrences(db, opts, vueFiles, vueSymbolLookup, occurrences);
-    opts.onStatus?.(
-      `Resolved ${occurrences.length} Vue references with Volar; inserted ${insertedMentions} mentions.`,
-    );
-
-    const result = vueResolvedResult(vueFiles, occurrences, insertedMentions, computation, vueSymbolLookup);
+    const result = runVueAugmentationTransaction(db, opts, configPath, vueFiles);
     writeAugmentVueCache(cachePath, computeAugmentVueFingerprint(db, opts.projectRoot, opts.tsconfig), result);
     return result;
   } finally {
@@ -85,12 +74,45 @@ function reuseCachedVueAugmentation(
   return cachedResult;
 }
 
+// scip-query: ignore-extract — Vue augmentation is a transaction: create the
+// component-symbol view, compute Volar-backed references, normalize occurrence
+// facts, replace generated chunks, and return the persisted summary as one unit.
+function runVueAugmentationTransaction(
+  db: Database.Database,
+  opts: AugmentVueResolvedOptions,
+  configPath: string,
+  vueFiles: string[],
+): AugmentVueResolvedResult {
+  const vueSymbolLookup = createVueComponentSymbolLookup(db, opts.projectRoot, vueFiles);
+  const computation = computeVueReferenceComputation(db, opts, configPath, vueFiles, vueSymbolLookup);
+  const occurrences = dedupeOccurrences(computation.occurrences);
+  const insertedMentions = replaceVueDocumentChunks(
+    db,
+    opts.projectRoot,
+    vueFiles,
+    vueSymbolLookup,
+    occurrences,
+  );
+  const result: AugmentVueResolvedResult = {
+    vueFiles: vueFiles.length,
+    resolvedReferences: occurrences.length,
+    insertedMentions,
+    skippedReferences: computation.skippedReferences,
+    syntheticSymbols: vueSymbolLookup.syntheticSymbols,
+  };
+
+  opts.onStatus?.(
+    `Resolved ${result.resolvedReferences} Vue references with Volar; inserted ${result.insertedMentions} mentions.`,
+  );
+  return result;
+}
+
 function computeVueReferenceComputation(
   db: Database.Database,
   opts: AugmentVueResolvedOptions,
   configPath: string,
   vueFiles: string[],
-  vueSymbolLookup: ReturnType<typeof createVueSymbolLookup>,
+  vueSymbolLookup: ReturnType<typeof createVueComponentSymbolLookup>,
 ): VueReferenceComputationResult {
   if (shouldUseVueWorkers(vueFiles)) {
     return awaitVueReferenceWorkers({
@@ -111,38 +133,6 @@ function computeVueReferenceComputation(
     vueSymbolLookup,
     sourceReader,
   });
-}
-
-function writeVueResolvedOccurrences(
-  db: Database.Database,
-  opts: AugmentVueResolvedOptions,
-  vueFiles: string[],
-  vueSymbolLookup: ReturnType<typeof createVueSymbolLookup>,
-  occurrences: ResolvedOccurrence[],
-): number {
-  return replaceVueDocumentChunks(
-    db,
-    opts.projectRoot,
-    vueFiles,
-    vueSymbolLookup,
-    occurrences,
-  );
-}
-
-function vueResolvedResult(
-  vueFiles: string[],
-  occurrences: ResolvedOccurrence[],
-  insertedMentions: number,
-  computation: VueReferenceComputationResult,
-  vueSymbolLookup: ReturnType<typeof createVueSymbolLookup>,
-): AugmentVueResolvedResult {
-  return {
-    vueFiles: vueFiles.length,
-    resolvedReferences: occurrences.length,
-    insertedMentions,
-    skippedReferences: computation.skippedReferences,
-    syntheticSymbols: vueSymbolLookup.syntheticSymbols,
-  };
 }
 
 function readAugmentVueCache(
@@ -311,7 +301,7 @@ function resolveVueTokenReferences(opts: VueReferenceComputationOptions & {
       continue;
     }
 
-    const symbolId = resolveDefinitionSymbolId(
+    const symbolId = resolveVueDefinitionSymbolId(
       definition,
       opts.symbolLookup,
       opts.vueSymbolLookup,

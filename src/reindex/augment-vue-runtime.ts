@@ -277,7 +277,9 @@ function findNearestStart(
   return best?.symbolId ?? null;
 }
 
-export function createVueSymbolLookup(
+// scip-query: ignore-wrapper — transaction phase for materializing synthetic
+// Vue component symbols and exposing the lookup used by definition/mention writes.
+export function createVueComponentSymbolLookup(
   db: Database.Database,
   projectRoot: string,
   vueFiles: string[],
@@ -378,7 +380,10 @@ export function createVueSymbolIdLookup(
   };
 }
 
-export function resolveDefinitionSymbolId(
+// scip-query: ignore-wrapper — bridge from Volar definitions to SCIP symbol ids;
+// Vue component definitions and generated TypeScript definitions follow different
+// evidence paths and should not be re-decided by token-resolution callers.
+export function resolveVueDefinitionSymbolId(
   definition: DefinitionInfo,
   symbolLookup: (definition: DefinitionInfo) => number | null,
   vueSymbolLookup: { get(fileName: string): number | null },

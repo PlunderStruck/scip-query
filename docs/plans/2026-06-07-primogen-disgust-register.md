@@ -82,9 +82,9 @@ Wrapper probes still identify low-threshold candidates:
 - `src/symbols/identifier-attribution.ts:213-246` `findCallerFiles()`
 - `src/symbols/definition-catalog.ts:233-259` `hydrateSymbolMatch()`
 - `src/storage/scip-rows.ts:55-78` `definitionMentionRows()`
-- `src/reindex/augment-vue-runtime.ts:280-313` `createVueSymbolLookup()`
+- `src/reindex/augment-vue-runtime.ts:280-313` `createVueComponentSymbolLookup()`
 - `src/source/ast.ts:626-651` `extractCallLeaf()`
-- `src/reindex/augment-vue-runtime.ts:381-405` `resolveDefinitionSymbolId()`
+- `src/reindex/augment-vue-runtime.ts:381-405` `resolveVueDefinitionSymbolId()`
 
 Some of these were already intentionally kept, but together they point at the same pressure: evidence construction, source/AST interpretation, and augmentation writes are still hard to name at the right level.
 
@@ -355,6 +355,10 @@ What this would delete or simplify:
 Suggested first slice:
 
 Create a `VueAugmentationTransaction` or equivalent internal object that owns the DB write phase and result. Keep Volar context creation separate.
+
+Completed slice:
+
+`docs/plans/2026-06-07-vue-augmentation-transaction-atlas.md` records the transaction boundary. `augmentVueResolvedReferences()` now owns setup/cache concerns, while `runVueAugmentationTransaction()` owns component-symbol creation, Volar computation, occurrence dedupe, chunk replacement, status reporting, and the single `AugmentVueResolvedResult` summary. The previous one-use write/result helpers were inlined into that named transaction.
 
 ## P2: Cache Invalidation Is Convention-Driven
 
