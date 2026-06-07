@@ -1,16 +1,13 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { buildFileExclusionPredicate } from './dead-exclusions.js';
 import { getInactiveBarrelPaths, isEntrySurface, isRootedSymbol, TEST_FILE_PATTERNS, TEST_SUPPORT_PATH_PATTERNS } from '../analysis/file-classifier.js';
-import { clearDefinitionCacheForFile, enclosingTypeNames, getDefinitionsForFile } from '../symbols/definition-catalog.js';
+import { enclosingTypeNames, getDefinitionsForFile } from '../symbols/definition-catalog.js';
 import type { DeadOptions, IndexedDefinition } from '../domain/types.js';
 import { isCallableSymbol, isFunctionLikeSymbol, isInRustTestModule, isModuleLikeSymbol, isRustTraitImplMember, shortenSymbol } from '../symbols/symbol-parser.js';
 import { getCallerRowsForSymbol } from '../symbols/call-graph-evidence.js';
 import { ProjectIndex } from '../core/project-index.js';
-import { clearLanguageParserCachesForFile, getSourceImports } from '../language-parsers/index.js';
-import { clearAstCacheForFile } from '../source/ast.js';
-import { clearSourceStripperCacheForFile } from '../source/source-stripper.js';
-import { clearSourceTextCacheForFile } from '../source/source-text.js';
-import { clearIdentifierIndexCacheForFile } from '../symbols/identifier-index.js';
+import { clearSourceFileEvidenceCaches } from './internal/cache-invalidation.js';
+import { getSourceImports } from '../language-parsers/index.js';
 import { applyScanLimit } from './query-utils.js';
 import { pathsResolveSame } from '../resolution/path-normalization.js';
 import { sourceImportPathsByLocalName } from '../language-parsers/import-index.js';
@@ -198,8 +195,7 @@ function deadCandidateDefinitions(
         candidates.push(definition);
       }
     } finally {
-      clearDefinitionCacheForFile(db, relativePath);
-      clearDeadSourceFileCaches(db, relativePath);
+      clearSourceFileEvidenceCaches(db, relativePath, { definitions: true });
     }
   }
 
@@ -387,7 +383,7 @@ function supplementDeadCodeOnlySourceReferences(
     },
     afterPath: (sourceFile) => {
       importsBySource.delete(sourceFile);
-      clearDeadSourceFileCaches(db, sourceFile);
+      clearSourceFileEvidenceCaches(db, sourceFile);
     },
   }, (hit) => {
     const occurrences = hit.kind === 'identifier' && hit.sourceFile === hit.target.relativePath
@@ -406,14 +402,6 @@ function supplementDeadCodeOnlySourceReferences(
     }
     recordReference(referencesBySymbol, hit.target.symbolId, hit.sourceFile, occurrences);
   });
-}
-
-function clearDeadSourceFileCaches(db: ScipDatabase, sourceFile: string): void {
-  clearIdentifierIndexCacheForFile(db, sourceFile);
-  clearLanguageParserCachesForFile(db, sourceFile);
-  clearSourceStripperCacheForFile(db, sourceFile);
-  clearAstCacheForFile(db, sourceFile);
-  clearSourceTextCacheForFile(db, sourceFile);
 }
 
 function definitionsByLeaf(

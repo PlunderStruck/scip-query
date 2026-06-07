@@ -395,6 +395,10 @@ Suggested first slice:
 
 Do not overbuild. Start with file-scoped source evidence invalidation because `dead.ts` already coordinates several file-local clears manually.
 
+Completed slice:
+
+`docs/plans/2026-06-07-cache-invalidation-registry-atlas.md` records the registry. `src/queries/internal/cache-invalidation.ts` now owns evidence cache kinds and database/file scopes, `health.ts` delegates whole-project cleanup to that registry, and `dead.ts` delegates source-backed file cleanup to the same file-scoped policy. `health-cache-control.ts` now keeps only garbage-collection headroom behavior. Concrete cache modules still own their local cache objects.
+
 ## Attack Order
 
 1. Evidence model: promote `ProjectIndex` into a deeper `ProjectEvidence` interface with provenance-bearing definitions, references, callers, callees, and source facts.

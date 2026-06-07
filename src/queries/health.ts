@@ -12,7 +12,8 @@ import { drift } from './drift.js';
 import { complexityHotspots } from './complexity-hotspots.js';
 import { stats } from './stats.js';
 import { buildHealthReport } from './health-report.js';
-import { clearHealthAnalysisCaches, requestGarbageCollection } from './health-cache-control.js';
+import { clearWholeProjectEvidenceCaches } from './internal/cache-invalidation.js';
+import { requestGarbageCollection } from './health-cache-control.js';
 import type { HealthReport } from './health-report.js';
 
 import type { ComplexitySummary, CountLocSummary, DriftSummary, HealthAnalyses, StaleSummary } from './health-types.js';
@@ -151,7 +152,7 @@ function withHealthRun<T>(
   try {
     return run(statsResult, budget);
   } finally {
-    clearHealthAnalysisCaches(db, { semanticProvider: true });
+    clearWholeProjectEvidenceCaches(db, { semanticProvider: true });
     requestGarbageCollection();
   }
 }
@@ -475,7 +476,7 @@ function healthBudget(
 function releaseHealthPhaseCaches(db: ScipDatabase, budget: HealthBudget): void {
   if (!budget.releaseCachesBetweenPhases) return;
   clearStaleAbstractionsCaches(db);
-  clearHealthAnalysisCaches(db);
+  clearWholeProjectEvidenceCaches(db);
   requestGarbageCollection();
 }
 
