@@ -1,9 +1,6 @@
 import type { ScipDatabase } from '../storage/db.js';
-import { getRustAttrReferencedNames } from '../analysis/framework-patterns.js';
-import { detectAstLanguage } from '../source/ast.js';
-import { leafName, shortenSymbol } from '../symbols/symbol-parser.js';
+import { shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
-import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import { applyScanLimit, definitionLoc } from './query-utils.js';
 
 export interface IsolatedResult {
@@ -45,30 +42,11 @@ export function isolated(
   const scipCallerMap = index.crossFileCallerMap(candidates, { semantic: includeSemantic });
   const symbolsWithCallers = new Set<number>(scipCallerMap.keys());
 
-  // Same-file string-attr references count as a usage. `buildCrossFileCallerMap`
-  // skips same-file callers (correct for cross-file isolation) but a function
-  // referenced by `#[serde(default = "fn")]` in its own file is not isolated
-  // — it's used; just not from another file. Walk every Rust source once and
-  // mark candidates whose leaf appears in the file's serde/schemars attrs.
-  const candidatesByLeaf = new Map<string, number[]>();
-  for (const c of candidates) {
-    const leaf = leafName(c.symbol);
-    if (!leaf) continue;
-    const bucket = candidatesByLeaf.get(leaf) ?? [];
-    bucket.push(c.symbolId);
-    candidatesByLeaf.set(leaf, bucket);
-  }
-  for (const doc of indexedDocumentPaths(db, { includeIgnored: false })) {
-    if (detectAstLanguage(doc) !== 'rust') continue;
-    const refs = getRustAttrReferencedNames(db, doc);
-    for (const name of refs) {
-      const ids = candidatesByLeaf.get(name);
-      if (!ids) continue;
-      for (const id of ids) symbolsWithCallers.add(id);
-    }
+  for (const symbolId of index.frameworkReferencedSymbolIds(candidates)) {
+    symbolsWithCallers.add(symbolId);
   }
 
-  const symbolsWithCallees = connectedCalleeIds(index, candidates, { additive: false, semantic: includeSemantic });
+  const symbolsWithCallees = index.symbolsWithNonSelfCallees(candidates, { additive: false, semantic: includeSemantic });
   const possiblyIsolated = candidates
     .filter((definition) => !symbolsWithCallers.has(definition.symbolId))
     .filter((definition) => !symbolsWithCallees.has(definition.symbolId));
@@ -80,8 +58,7 @@ export function isolated(
 
   const candidatesNeedingAdditiveCallees = possiblyIsolated
     .filter((definition) => !symbolsWithCallers.has(definition.symbolId));
-  const additiveCalleeIds = connectedCalleeIds(
-    index,
+  const additiveCalleeIds = index.symbolsWithNonSelfCallees(
     candidatesNeedingAdditiveCallees,
     { additive: true, semantic: includeSemantic },
   );
@@ -104,23 +81,4 @@ export function isolated(
       endLine: definition.endLine,
       loc: definitionLoc(definition),
     }));
-}
-
-function connectedCalleeIds(
-  index: ProjectIndex,
-  candidates: readonly ReturnType<ProjectIndex['productionCallableDefinitions']>[number][],
-  opts: { additive: boolean; semantic: boolean },
-): Set<number> {
-  if (candidates.length === 0) return new Set();
-
-  const symbolBySymbolId = new Map(candidates.map((d) => [d.symbolId, d.symbol]));
-  const calleeMap = index.calleeMap(candidates, { additive: opts.additive, semantic: opts.semantic });
-  return new Set(
-    [...calleeMap.entries()]
-      .filter(([symbolId, callees]) => {
-        const ownSymbol = symbolBySymbolId.get(symbolId);
-        return callees.some((c) => c.symbol !== ownSymbol);
-      })
-      .map(([id]) => id),
-  );
 }

@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import type { IndexedDefinition, SymbolMatch } from '../domain/types.js';
 import { classifyFile, isEntrySurface } from '../analysis/file-classifier.js';
+import { getRustAttrReferencedNames } from '../analysis/framework-patterns.js';
 import { getDefinitionsForFile, getScopedDefinitions } from '../symbols/definition-catalog.js';
 import { buildCalleeMap } from '../symbols/call-graph-evidence.js';
 import { buildFileDepGraph } from '../symbols/file-dep-graph.js';
@@ -8,9 +9,11 @@ import { buildCrossFileCallerMap } from '../symbols/reference-callers.js';
 import { findCallerFiles } from '../symbols/identifier-attribution.js';
 import { isCallableSymbol, isFunctionLikeSymbol, isInRustTestModule, isRustTraitImplMember } from '../symbols/symbol-parser.js';
 import { getCallableSignature } from '../source/ast-signatures.js';
+import { detectAstLanguage } from '../source/ast.js';
 import { getSourceFiles } from '../source/source-fileset.js';
 import { hasSuppressionComment } from '../source/source-text.js';
 import { scanSourceReferences } from '../symbols/source-reference-scan.js';
+import { indexedDocumentPaths } from '../storage/scip-documents.js';
 
 interface ProductionCallableDefinitionsOptions {
   scope?: string;
@@ -97,6 +100,58 @@ export class ProjectIndex {
     return findCallerFiles(this.db, definitions);
   }
 
+  callerFileMap(
+    definitions: ReadonlyArray<IndexedDefinition>,
+    opts: { semantic?: boolean; sourceFallback?: boolean } = {},
+  ): Map<number, Set<string>> {
+    const callerMap = this.crossFileCallerMap(definitions, { semantic: opts.semantic });
+    return opts.sourceFallback === false
+      ? callerMap
+      : mergeSetMaps(callerMap, this.sourceFallbackCallerFiles(definitions));
+  }
+
+  frameworkReferencedSymbolIds(definitions: ReadonlyArray<IndexedDefinition>): Set<number> {
+    const candidateIdsByLeaf = new Map<string, number[]>();
+    for (const definition of definitions) {
+      if (!definition.leaf) continue;
+      const bucket = candidateIdsByLeaf.get(definition.leaf) ?? [];
+      bucket.push(definition.symbolId);
+      candidateIdsByLeaf.set(definition.leaf, bucket);
+    }
+
+    const referenced = new Set<number>();
+    for (const doc of indexedDocumentPaths(this.db, { includeIgnored: false })) {
+      if (detectAstLanguage(doc) !== 'rust') continue;
+      for (const name of getRustAttrReferencedNames(this.db, doc)) {
+        for (const symbolId of candidateIdsByLeaf.get(name) ?? []) {
+          referenced.add(symbolId);
+        }
+      }
+    }
+    return referenced;
+  }
+
+  // Candidate definitions whose callee evidence includes any symbol other
+  // than themselves. This keeps self-recursive functions from looking
+  // connected only because they call themselves.
+  symbolsWithNonSelfCallees(
+    definitions: ReadonlyArray<IndexedDefinition>,
+    opts: { additive?: boolean; semantic?: boolean } = {},
+  ): Set<number> {
+    if (definitions.length === 0) return new Set();
+
+    const symbolBySymbolId = new Map(definitions.map((definition) => [definition.symbolId, definition.symbol]));
+    const calleeMap = this.calleeMap(definitions, opts);
+    return new Set(
+      [...calleeMap.entries()]
+        .filter(([symbolId, callees]) => {
+          const ownSymbol = symbolBySymbolId.get(symbolId);
+          return callees.some((callee) => callee.symbol !== ownSymbol);
+        })
+        .map(([symbolId]) => symbolId),
+    );
+  }
+
   fileDependencyGraph(scope?: string): ReturnType<typeof buildFileDepGraph> {
     return buildFileDepGraph(this.db, scope);
   }
@@ -147,4 +202,17 @@ function definitionLoc(definition: Pick<IndexedDefinition, 'startLine' | 'endLin
 
 function isTypesFile(relativePath: string): boolean {
   return (relativePath.split('/').pop() ?? '').includes('types');
+}
+
+function mergeSetMaps<K, V>(left: ReadonlyMap<K, ReadonlySet<V>>, right: ReadonlyMap<K, ReadonlySet<V>>): Map<K, Set<V>> {
+  const result = new Map<K, Set<V>>();
+  for (const [key, values] of left) {
+    result.set(key, new Set(values));
+  }
+  for (const [key, values] of right) {
+    const bucket = result.get(key) ?? new Set<V>();
+    for (const value of values) bucket.add(value);
+    result.set(key, bucket);
+  }
+  return result;
 }

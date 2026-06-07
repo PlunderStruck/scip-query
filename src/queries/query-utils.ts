@@ -22,18 +22,3 @@ export function uniqueSymbolFileRows<T extends { symbol: string; file: string }>
   }
   return out;
 }
-
-export function mergeMapOfSets<K, V>(...maps: Array<ReadonlyMap<K, ReadonlySet<V>>>): Map<K, Set<V>> {
-  const merged = new Map<K, Set<V>>();
-  for (const map of maps) {
-    for (const [key, values] of map) {
-      let bucket = merged.get(key);
-      if (!bucket) {
-        bucket = new Set();
-        merged.set(key, bucket);
-      }
-      for (const value of values) bucket.add(value);
-    }
-  }
-  return merged;
-}

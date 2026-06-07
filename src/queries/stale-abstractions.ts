@@ -6,7 +6,7 @@ import { getReExports } from '../language-parsers/index.js';
 import { getSourceText } from '../source/source-text.js';
 import { detectAstLanguage, getAst, getTypeContainerMap, type SyntaxNode } from '../source/ast.js';
 import { ProjectIndex } from '../core/project-index.js';
-import { applyScanLimit, definitionLoc, mergeMapOfSets } from './query-utils.js';
+import { applyScanLimit, definitionLoc } from './query-utils.js';
 
 export interface StaleAbstraction {
   symbol: string;
@@ -161,10 +161,7 @@ function consumerMapForTypeCandidates(
   typeCandidates: readonly IndexedDefinition[],
   opts: { semantic: boolean },
 ): Map<number, Set<string>> {
-  return mergeMapOfSets(
-    index.crossFileCallerMap(typeCandidates, { semantic: opts.semantic }),
-    index.sourceFallbackCallerFiles(typeCandidates),
-  );
+  return index.callerFileMap(typeCandidates, { semantic: opts.semantic });
 }
 
 function buildTypeCandidateIndex(
@@ -272,10 +269,7 @@ function getSingletonBackedClassIds(
   const singletonVars = singletonBackedClasses.map((entry) => entry.singleton);
   if (singletonBackedClasses.length === 0) return new Set();
 
-  const singletonConsumers = mergeMapOfSets(
-    index.crossFileCallerMap(singletonVars, { semantic: opts.semantic }),
-    index.sourceFallbackCallerFiles(singletonVars),
-  );
+  const singletonConsumers = index.callerFileMap(singletonVars, { semantic: opts.semantic });
   const liveClassIds = new Set<number>();
   for (const { singleton, classId } of singletonBackedClasses) {
     if (singletonHasRealConsumer(db, singleton, singletonConsumers)) {

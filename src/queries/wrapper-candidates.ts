@@ -6,7 +6,7 @@ import { leafName } from '../symbols/symbol-parser.js';
 import type { IndexedDefinition } from '../domain/types.js';
 import { isInRustTestModule, shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
-import { applyScanLimit, definitionLoc, mergeMapOfSets } from './query-utils.js';
+import { applyScanLimit, definitionLoc } from './query-utils.js';
 
 export interface WrapperCandidate {
   symbol: string;
@@ -52,10 +52,7 @@ export function wrapperCandidates(
   // caller file. Source-text fallback adds back references the indexer may
   // miss (macros, dynamic dispatch); without it, a function called via a
   // missed path would falsely look like a wrapper.
-  const callerFileMap = mergeMapOfSets(
-    index.crossFileCallerMap(symbols, { semantic: opts?.semantic !== false }),
-    index.sourceFallbackCallerFiles(symbols),
-  );
+  const callerFileMap = index.callerFileMap(symbols, { semantic: opts?.semantic !== false });
 
   const results: WrapperCandidate[] = [];
 
