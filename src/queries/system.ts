@@ -1,7 +1,14 @@
 import type { ScipDatabase } from '../storage/db.js';
-import type { SystemResult, SymbolResult } from '../domain/types.js';
 import { loadFileSymbols } from '../symbols/definition-catalog.js';
 import { resolveIndexedPaths } from '../resolution/path-resolver.js';
+import type { SymbolResult } from './symbols.js';
+
+export interface SystemResult {
+  files: string[];
+  symbols: SymbolResult[];
+  dependsOn: string[];
+  dependedOnBy: string[];
+}
 
 /** Full system map for a module path: files, symbols, deps in/out.
  *

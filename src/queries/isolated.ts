@@ -1,9 +1,18 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { getRustAttrReferencedNames } from '../analysis/framework-patterns.js';
 import { detectAstLanguage } from '../source/ast.js';
-import type { IsolatedResult } from '../domain/types.js';
 import { leafName, shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
+import { applyScanLimit, definitionLoc } from './query-utils.js';
+
+export interface IsolatedResult {
+  symbol: string;
+  shortName: string;
+  relativePath: string;
+  startLine: number;
+  endLine: number;
+  loc: number;
+}
 
 /**
  * Find isolated callables: defined locally, referenced by nothing,
@@ -86,7 +95,7 @@ export function isolated(
   return candidatesNeedingAdditiveCallees
     .filter((definition) => !symbolsWithCallees.has(definition.symbolId))
     .sort((left, right) =>
-      (right.endLine - right.startLine) - (left.endLine - left.startLine)
+      definitionLoc(right) - definitionLoc(left)
       || left.relativePath.localeCompare(right.relativePath)
       || left.startLine - right.startLine,
     )
@@ -96,7 +105,7 @@ export function isolated(
       relativePath: definition.relativePath,
       startLine: definition.startLine,
       endLine: definition.endLine,
-      loc: definition.endLine - definition.startLine + 1,
+      loc: definitionLoc(definition),
     }));
 }
 
@@ -117,11 +126,4 @@ function connectedCalleeIds(
       })
       .map(([id]) => id),
   );
-}
-
-function applyScanLimit<T>(items: T[], scanLimit: number | undefined): T[] {
-  if (typeof scanLimit !== 'number' || scanLimit <= 0 || items.length <= scanLimit) {
-    return items;
-  }
-  return items.slice(0, scanLimit);
 }

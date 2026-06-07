@@ -2,8 +2,13 @@ import { basename } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
 import { ProjectIndex } from '../core/project-index.js';
 import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
-import type { MethodResult } from '../domain/types.js';
 import { isCallableSymbol, leafName } from '../symbols/symbol-parser.js';
+
+export interface MethodResult {
+  startLine: number;
+  endLine: number;
+  name: string;
+}
 
 export function methods(db: ScipDatabase, className: string): MethodResult[] {
   const classMatch = findFirstSymbolMatch(db, className);

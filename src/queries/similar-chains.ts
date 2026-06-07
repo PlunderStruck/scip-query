@@ -1,6 +1,24 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { buildFileDepGraph } from '../symbols/reference-graph.js';
-import type { SimilarChainResult } from '../domain/types.js';
+
+export interface SimilarChainResult {
+  chainA: string[];
+  chainB: string[];
+  /** Fraction of nodes shared (0-1) */
+  similarity: number;
+  /** Edit distance between the two chains */
+  editDistance: number;
+  /** Indices where the chains diverge — the consolidation targets */
+  divergencePoints: Array<{
+    index: number;
+    nodeA: string;
+    nodeB: string;
+  }>;
+  /** Shared prefix */
+  commonPrefix: string[];
+  /** Shared suffix */
+  commonSuffix: string[];
+}
 
 /**
  * Find end-to-end dependency flows that are structurally similar

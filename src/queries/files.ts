@@ -1,5 +1,8 @@
 import type { ScipDatabase } from '../storage/db.js';
-import type { FileResult } from '../domain/types.js';
+
+export interface FileResult {
+  relativePath: string;
+}
 
 /**
  * Convert a glob pattern to a SQL LIKE pattern.

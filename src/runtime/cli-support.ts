@@ -2,7 +2,8 @@ import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import type { ScipDatabase } from '../storage/db.js';
-import { formatBytes, queries, withDb } from './cli-context.js';
+import * as queries from '../queries/index.js';
+import { formatBytes, withDb } from './cli-context.js';
 import { render } from './render.js';
 
 const require = createRequire(import.meta.url);

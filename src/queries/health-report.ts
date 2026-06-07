@@ -1,5 +1,37 @@
-import type { HealthAction, HealthReport } from '../domain/types.js';
 import type { HealthAnalyses } from './health-types.js';
+
+export interface HealthAction {
+  category: string;
+  description: string;
+  effort: 'low' | 'medium' | 'high';
+  impact: 'low' | 'medium' | 'high';
+  count: number;
+  locRecoverable: number;
+}
+
+// scip-query: ignore-stale — public report envelope returned by health() and
+// rendered by CLI/reporting entry points.
+export interface HealthReport {
+  score: number;
+  overview: { documents: number; symbols: number; indexSizeBytes: number };
+  findings: {
+    deadSymbols: number;
+    deadLoc: number;
+    isolatedSymbols: number;
+    isolatedLoc: number;
+    cycles: number;
+    similarPairs: number;
+    extractionCandidates: number;
+    wrappers: number;
+    passthroughs: number;
+    staleTypes: number;
+    driftedFiles: number;
+    complexityHotspotCount: number;
+  };
+  actions: HealthAction[];
+  topComplexity: Array<{ symbol: string; score: number }>;
+  warnings?: string[];
+}
 
 export function buildHealthReport(analyses: HealthAnalyses): HealthReport {
   const actions = buildHealthActions(analyses);

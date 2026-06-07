@@ -1,6 +1,11 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { buildFileDepGraph } from '../symbols/reference-graph.js';
-import type { DeepChainResult } from '../domain/types.js';
+
+export interface DeepChainResult {
+  /** Files in the chain, from leaf to root */
+  chain: string[];
+  depth: number;
+}
 
 /**
  * Find the longest transitive dependency chains between files.

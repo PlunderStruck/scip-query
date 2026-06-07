@@ -1,9 +1,19 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { getCalleeRowsForSymbol, getCallerRowsForSymbol } from '../symbols/reference-graph.js';
 import type { IndexedDefinition } from '../domain/types.js';
-import type { BottleneckResult } from '../domain/types.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
+import { applyScanLimit } from './query-utils.js';
+
+export interface BottleneckResult {
+  symbol: string;
+  shortName: string;
+  fanIn: number;
+  fanOut: number;
+  /** fanIn * fanOut — higher = more central coupling hub */
+  score: number;
+  definedIn: string;
+}
 
 /**
  * Find coupling hubs: symbols with both high fan-in (many consumers)
@@ -59,11 +69,4 @@ function bottleneckRowFor(
     score: fanIn * fanOut,
     definedIn: definition.relativePath,
   };
-}
-
-function applyScanLimit<T>(items: T[], scanLimit: number | undefined): T[] {
-  if (typeof scanLimit !== 'number' || scanLimit <= 0 || items.length <= scanLimit) {
-    return items;
-  }
-  return items.slice(0, scanLimit);
 }

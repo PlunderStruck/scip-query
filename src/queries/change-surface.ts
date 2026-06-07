@@ -1,9 +1,24 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { ProjectIndex } from '../core/project-index.js';
 import { resolveIndexedFile } from '../resolution/path-resolver.js';
-import type { ChangeSurfaceEntry, ChangeSurfaceResult, IndexedDefinition } from '../domain/types.js';
+import type { IndexedDefinition } from '../domain/types.js';
 import { semanticCallerMap } from '../semantic/shared-primitives.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
+
+export interface ChangeSurfaceEntry {
+  symbol: string;
+  shortName: string;
+  startLine: number;
+  endLine: number;
+  externalConsumers: number;
+  riskLevel: 'low' | 'medium' | 'high';
+}
+
+export interface ChangeSurfaceResult {
+  file: string;
+  symbols: ChangeSurfaceEntry[];
+  totalExternalConsumers: number;
+}
 
 /**
  * Pre-change briefing for a file. For each symbol defined in the file,

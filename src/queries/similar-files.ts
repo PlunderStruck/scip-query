@@ -1,7 +1,16 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { buildFileDepGraph } from '../symbols/reference-graph.js';
 import { jaccard } from '../analysis/similarity.js';
-import type { SimilarFileResult } from '../domain/types.js';
+
+export interface SimilarFileResult {
+  fileA: string;
+  fileB: string;
+  /** Jaccard similarity of dependency sets (0-1) */
+  similarity: number;
+  sharedDeps: string[];
+  uniqueToA: string[];
+  uniqueToB: string[];
+}
 
 /**
  * Find files with similar dependency profiles.

@@ -1,8 +1,21 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { isLiteralPassthrough } from '../analysis/passthrough-detect.js';
-import type { IndexedDefinition, PassthroughCandidate } from '../domain/types.js';
+import type { IndexedDefinition } from '../domain/types.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
+import { applyScanLimit, definitionLoc } from './query-utils.js';
+
+export interface PassthroughCandidate {
+  symbol: string;
+  shortName: string;
+  file: string;
+  startLine: number;
+  endLine: number;
+  loc: number;
+  forwardsTo: string;
+  forwardsToShort: string;
+  forwardsToFile: string;
+}
 
 /**
  * Find passthrough candidates: functions that just forward to one
@@ -90,17 +103,4 @@ function getPassthroughCandidateSymbols(
     requireFunctionLikeSymbol: true,
     excludeRustTraitImplMembers: true,
   });
-}
-
-function definitionLoc(
-  definition: IndexedDefinition,
-): number {
-  return definition.endLine - definition.startLine + 1;
-}
-
-function applyScanLimit<T>(items: T[], scanLimit: number | undefined): T[] {
-  if (typeof scanLimit !== 'number' || scanLimit <= 0 || items.length <= scanLimit) {
-    return items;
-  }
-  return items.slice(0, scanLimit);
 }

@@ -2,6 +2,14 @@
 
 Use this reference after the first evidence pass, when generating possible simplification models. These are prompts for thought, not templates to impose.
 
+## Atlas-First Compression
+
+Use when the user wants to think ahead across a whole repository, module family, command surface, query family, or subsystem before editing. The real referents are source files, symbols, command handlers, query modules, docs, tests, generated artifacts, and previously discovered opportunities that could interact. The deeper pattern is that discovery and ordering must be completed before implementation, so local opportunities are not rediscovered as new work after each edit.
+
+Typical compression: build a compression atlas with an opportunity ledger, cluster by root cause, order clusters by enabling power, enrich steps, sense-check overlap and value, then execute the safe clusters in dependency order.
+
+Reject when the scope is a single isolated bug or one clearly bounded refactor where a full atlas would add planning overhead without reducing rework risk.
+
 ## Metadata-Rendered Surface
 
 Use when command help, docs, examples, tests, and runtime behavior all describe the same external surface. The real referents are command registrations, option definitions, usage text, README sections, snapshots, and smoke tests. The deeper pattern is that hand-maintained text should become a rendered view of executable metadata.

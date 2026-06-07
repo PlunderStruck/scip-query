@@ -1,11 +1,46 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { createPerDbCache } from '../storage/per-db-cache.js';
-import type { IndexedDefinition, StaleAbstraction } from '../domain/types.js';
+import type { IndexedDefinition } from '../domain/types.js';
 import { leafName, parseSymbol, shortenSymbol } from '../symbols/symbol-parser.js';
 import { getReExports } from '../language-parsers/index.js';
 import { getSourceText } from '../source/source-text.js';
 import { detectAstLanguage, getAst, getTypeContainerMap, type SyntaxNode } from '../source/ast.js';
 import { ProjectIndex } from '../core/project-index.js';
+import { applyScanLimit, definitionLoc } from './query-utils.js';
+
+export interface StaleAbstraction {
+  symbol: string;
+  shortName: string;
+  file: string;
+  startLine: number;
+  endLine: number;
+  loc: number;
+  /**
+   * Cross-file consumers NOT counting files that only re-export the symbol
+   * through a barrel (`export { X } from '...'`). Barrel files expand the
+   * public surface; they aren't real consumers.
+   */
+  consumers: number;
+  /** Number of files whose only reference is a passthrough re-export. */
+  barrelConsumers: number;
+  /** What the definition is syntactically — detected from source at the definition line. */
+  kind: 'class' | 'interface' | 'type' | 'enum' | 'other';
+  /**
+   * Does the defining file itself reference the type outside its own declaration?
+   * `false` is the strongest stale signal — the type lives in a file that never
+   * uses it (misplaced types file), while another file is its only consumer.
+   */
+  definerUsesType: boolean;
+  /**
+   * Ranked confidence in the "stale" verdict:
+   *   'high'   — consumers === 0, OR consumers === 1 && !definerUsesType && kind !== 'class'.
+   *   'medium' — consumers <= 1 with one of the signals pointing weakly stale.
+   *   'low'    — consumers === 1 but kind === 'class' (likely encapsulation, not over-abstraction).
+   */
+  confidence: 'high' | 'medium' | 'low';
+  /** Short human-readable explanation of why this was flagged. */
+  reason: string;
+}
 
 type TypeCandidateIndex = Map<string, Map<string, IndexedDefinition>>;
 
@@ -500,13 +535,6 @@ function computeFileLeafUsage(
   return { importedLeaves, usedLeaves };
 }
 
-function applyScanLimit<T>(items: T[], scanLimit: number | undefined): T[] {
-  if (typeof scanLimit !== 'number' || scanLimit <= 0 || items.length <= scanLimit) {
-    return items;
-  }
-  return items.slice(0, scanLimit);
-}
-
 // scip-query: ignore-passthrough — query-local cache lifecycle hook used by
 // composite health runs; keeping it here avoids exposing FILE_USAGE_CACHE.
 export function clearStaleAbstractionsCaches(db: ScipDatabase): void {
@@ -643,12 +671,6 @@ function scoreConfidence(
     confidence: 'medium',
     reason: '1 consumer — single-use abstraction',
   };
-}
-
-function definitionLoc(
-  definition: IndexedDefinition,
-): number {
-  return definition.endLine - definition.startLine + 1;
 }
 
 function mergeConsumerMaps(

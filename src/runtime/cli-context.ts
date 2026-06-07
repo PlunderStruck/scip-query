@@ -3,10 +3,7 @@ import { join } from 'node:path';
 import { ScipDatabase } from '../storage/db.js';
 import { createGitignoreFilter } from '../source/gitignore-filter.js';
 import { loadProjectConfig, resolveIndexPaths } from './config.js';
-import * as queries from '../queries/index.js';
 import type { ProjectConfig, ScipQueryConfig, WatcherStatus } from '../domain/types.js';
-
-export { queries };
 
 export function resolveProjectRoot(): string {
   return process.env['SCIP_QUERY_PROJECT_ROOT'] ?? process.cwd();

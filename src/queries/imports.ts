@@ -3,8 +3,20 @@ import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
 import { resolveIndexedFile } from '../resolution/path-resolver.js';
 import { getSourceImports } from '../language-parsers/index.js';
 import { semanticImportUsage } from '../semantic/shared-primitives.js';
-import type { ImportResult, ParsedSourceImport, UnusedImportResult } from '../domain/types.js';
+import type { ParsedSourceImport } from '../domain/types.js';
 import { isModuleLikeSymbol, leafName, shortenSymbol } from '../symbols/symbol-parser.js';
+
+export interface ImportResult {
+  symbol: string;
+  shortName: string;
+  fromFile: string;
+}
+
+export interface UnusedImportResult {
+  symbol: string;
+  shortName: string;
+  importedIn: string;
+}
 
 /**
  * What symbols does this file import?

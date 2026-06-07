@@ -1,8 +1,13 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { ProjectIndex } from '../core/project-index.js';
 import { resolveIndexedPaths } from '../resolution/path-resolver.js';
-import type { SurfaceResult } from '../domain/types.js';
 import { isCallableSymbol, shortenSymbol } from '../symbols/symbol-parser.js';
+
+export interface SurfaceResult {
+  consumer: string;
+  symbol: string;
+  shortName: string;
+}
 
 /** Public API surface: what symbols do external consumers actually use from this module? */
 export function surface(db: ScipDatabase, modulePattern: string): SurfaceResult[] {

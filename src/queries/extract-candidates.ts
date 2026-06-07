@@ -1,7 +1,25 @@
 import type { ScipDatabase } from '../storage/db.js';
-import type { ExtractCandidate, IndexedDefinition } from '../domain/types.js';
+import type { IndexedDefinition } from '../domain/types.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
+import { applyScanLimit, definitionLoc } from './query-utils.js';
+
+export interface ExtractCandidate {
+  symbol: string;
+  shortName: string;
+  relativePath: string;
+  startLine: number;
+  endLine: number;
+  loc: number;
+  /** Total callees */
+  totalCallees: number;
+  /** Distinct clusters of callees (natural extraction seams) */
+  clusters: Array<{
+    callees: string[];
+    /** How isolated this cluster is from the rest (0-1, higher = more extractable) */
+    isolation: number;
+  }>;
+}
 
 interface CalleeChunk {
   symbol: string;
@@ -192,17 +210,4 @@ function scoreExtractionCluster(
     callees: [...cluster].map(shortenSymbol),
     isolation,
   };
-}
-
-function definitionLoc(
-  definition: IndexedDefinition,
-): number {
-  return definition.endLine - definition.startLine + 1;
-}
-
-function applyScanLimit<T>(items: T[], scanLimit: number | undefined): T[] {
-  if (typeof scanLimit !== 'number' || scanLimit <= 0 || items.length <= scanLimit) {
-    return items;
-  }
-  return items.slice(0, scanLimit);
 }

@@ -127,10 +127,6 @@ export class ProjectIndex {
   }
 }
 
-function definitionLoc(definition: Pick<IndexedDefinition, 'startLine' | 'endLine'>): number {
-  return definition.endLine - definition.startLine + 1;
-}
-
 function matchesCallableMode(
   definition: IndexedDefinition,
   opts: { requireFunctionLikeSymbol: boolean; requireCallableSymbol: boolean },
@@ -142,6 +138,10 @@ function matchesCallableMode(
     return isFunctionLikeSymbol(definition.symbol);
   }
   return definition.isFunctionLike;
+}
+
+function definitionLoc(definition: Pick<IndexedDefinition, 'startLine' | 'endLine'>): number {
+  return definition.endLine - definition.startLine + 1;
 }
 
 function isTypesFile(relativePath: string): boolean {

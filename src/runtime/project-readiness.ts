@@ -1,6 +1,6 @@
-import { detectLanguages } from './detect.js';
-import { getIndexerConfig } from './indexers.js';
-import { getIndexerDependencyStatus } from './install.js';
+import { detectLanguages } from '../reindex/detect.js';
+import { getIndexerConfig } from '../reindex/indexers.js';
+import { getIndexerDependencyStatus } from '../reindex/install.js';
 import { getTypeScriptSemanticStatus } from '../semantic/typescript/status.js';
 import type { ProjectConfig, SupportedLanguage } from '../domain/types.js';
 

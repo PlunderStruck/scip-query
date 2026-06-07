@@ -1,9 +1,21 @@
 import { execFileSync } from 'node:child_process';
 import type { ScipDatabase } from '../storage/db.js';
-import type { DiffImpactResult, IndexedDefinition } from '../domain/types.js';
+import type { IndexedDefinition } from '../domain/types.js';
 import { ProjectIndex } from '../core/project-index.js';
 import { semanticCallerMap } from '../semantic/shared-primitives.js';
 import { isCallableSymbol, isModuleLikeSymbol, shortenSymbol } from '../symbols/symbol-parser.js';
+
+export interface DiffImpactResult {
+  changedFiles: string[];
+  changedSymbols: Array<{ symbol: string; shortName: string; file: string; fanIn: number }>;
+  affectedConsumers: Array<{ file: string; consumedSymbols: number }>;
+  summary: {
+    totalChangedFiles: number;
+    totalChangedSymbols: number;
+    totalAffectedFiles: number;
+    note?: string;
+  };
+}
 
 type ChangedSymbol = DiffImpactResult['changedSymbols'][number];
 type ConsumerMap = Map<string, Set<string>>;

@@ -3,8 +3,14 @@ import { findExactSymbolMatch, findFirstSymbolMatch } from '../symbols/symbol-lo
 import { findEnclosingDefinition, getDefinitionsForFile } from '../symbols/definition-catalog.js';
 import { getCallerRowsForSymbol } from '../symbols/reference-graph.js';
 import type { SymbolMatch } from '../domain/types.js';
-import type { AffectedResult } from '../domain/types.js';
 import { leafSuffix, shortenSymbol } from '../symbols/symbol-parser.js';
+
+export interface AffectedResult {
+  symbol: string;
+  shortName: string;
+  file: string;
+  depth: number;
+}
 
 /**
  * Full transitive closure of symbols that could break if a given symbol changes.

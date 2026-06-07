@@ -4,7 +4,11 @@ import { getResolvedReferenceSites } from '../symbols/reference-graph.js';
 import { getSourceReferenceSites } from '../symbols/identifier-attribution.js';
 import { getSourceText } from '../source/source-text.js';
 import { isFunctionLikeSymbol } from '../symbols/symbol-parser.js';
-import type { RefResult } from '../domain/types.js';
+
+export interface RefResult {
+  relativePath: string;
+  line: number;
+}
 
 export function refs(
   db: ScipDatabase,

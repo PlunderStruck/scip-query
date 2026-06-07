@@ -3,9 +3,22 @@ import type { ScipDatabase } from '../storage/db.js';
 import { findEnclosingDefinition } from '../symbols/definition-catalog.js';
 import { getIdentifierLineMap } from '../symbols/identifier-index.js';
 import { leafName } from '../symbols/symbol-parser.js';
-import type { IndexedDefinition, WrapperCandidate } from '../domain/types.js';
+import type { IndexedDefinition } from '../domain/types.js';
 import { isInRustTestModule, shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
+import { applyScanLimit, definitionLoc } from './query-utils.js';
+
+export interface WrapperCandidate {
+  symbol: string;
+  shortName: string;
+  file: string;
+  startLine: number;
+  endLine: number;
+  loc: number;
+  singleCaller: string;
+  singleCallerShort: string;
+  callerFanIn: number;
+}
 
 interface MentionChunk {
   start_line: number;
@@ -100,12 +113,6 @@ function wrapperCandidateForSymbol(
       : basename(callerFile),
     callerFanIn,
   };
-}
-
-function definitionLoc(
-  definition: IndexedDefinition,
-): number {
-  return definition.endLine - definition.startLine + 1;
 }
 
 function getWrapperCandidateSymbols(
@@ -267,11 +274,4 @@ function fallbackCallerFanIn(
   }
 
   return best;
-}
-
-function applyScanLimit<T>(items: T[], scanLimit: number | undefined): T[] {
-  if (typeof scanLimit !== 'number' || scanLimit <= 0 || items.length <= scanLimit) {
-    return items;
-  }
-  return items.slice(0, scanLimit);
 }

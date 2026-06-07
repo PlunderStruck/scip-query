@@ -1,6 +1,7 @@
-import { formatBytes, queries } from './cli-context.js';
+import { formatBytes } from './cli-context.js';
 import { renderHeuristicNotice } from './cli-support.js';
 import type { DeadOptions } from '../domain/types.js';
+import * as queries from '../queries/index.js';
 import {
   budgetedDbCommand,
   budgetedGroupedByFileCommand,

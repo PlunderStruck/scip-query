@@ -1,7 +1,20 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { buildFileDepGraph } from '../symbols/reference-graph.js';
 import { classifyFile, isBarrel as isBarrelFile } from '../analysis/file-classifier.js';
-import type { CycleResult } from '../domain/types.js';
+
+export interface CycleResult {
+  /** Files forming a cycle, in order */
+  path: string[];
+  /**
+   * Classification of the cycle:
+   *   - 'real':            architectural cycle worth fixing
+   *   - 'module-hierarchy': barrel-file pattern (mod.rs / index.ts /
+   *                        __init__.py declaring children that re-import
+   *                        parent re-exports). Standard module structure,
+   *                        not actionable.
+   */
+  kind: 'real' | 'module-hierarchy';
+}
 
 /**
  * Detect circular dependency chains between files.

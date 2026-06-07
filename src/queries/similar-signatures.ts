@@ -1,10 +1,25 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { getAllDefinitions } from '../symbols/definition-catalog.js';
 import { getSourceText } from '../source/source-text.js';
-import type { IndexedDefinition, SimilarSignatureGroup } from '../domain/types.js';
+import type { IndexedDefinition } from '../domain/types.js';
 import { semanticSignature } from '../semantic/shared-primitives.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
 import { cleanSignature, extractSignature } from '../storage/scip-rows.js';
+import { applyScanLimit, definitionLoc } from './query-utils.js';
+
+export interface SimilarSignatureGroup {
+  /** The normalized signature shared by all functions in the group */
+  signature: string;
+  /** Functions that share this signature */
+  functions: Array<{
+    symbol: string;
+    shortName: string;
+    file: string;
+    startLine: number;
+    endLine: number;
+    loc: number;
+  }>;
+}
 
 /**
  * Find functions with near-identical type signatures (same parameter types
@@ -118,19 +133,6 @@ function resolveNormalizedSignature(
     extractDeclarationHead(db, definition.relativePath, definition.startLine, definition.endLine, definition.leaf),
     definition.leaf,
   );
-}
-
-function definitionLoc(
-  definition: ReturnType<typeof getAllDefinitions>[number],
-): number {
-  return definition.endLine - definition.startLine + 1;
-}
-
-function applyScanLimit<T>(items: T[], scanLimit: number | undefined): T[] {
-  if (typeof scanLimit !== 'number' || scanLimit <= 0 || items.length <= scanLimit) {
-    return items;
-  }
-  return items.slice(0, scanLimit);
 }
 
 function extractDocumentedSignature(

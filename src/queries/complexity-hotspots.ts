@@ -1,7 +1,21 @@
 import type { ScipDatabase } from '../storage/db.js';
-import type { ComplexityHotspot, IndexedDefinition } from '../domain/types.js';
+import type { IndexedDefinition } from '../domain/types.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
+import { applyScanLimit } from './query-utils.js';
+
+export interface ComplexityHotspot {
+  symbol: string;
+  shortName: string;
+  file: string;
+  startLine: number;
+  endLine: number;
+  loc: number;
+  fanIn: number;
+  fanOut: number;
+  calleeCount: number;
+  score: number;
+}
 
 /**
  * Find complexity hotspots: symbols with a composite score based on
@@ -74,11 +88,4 @@ function loadComplexityCandidates(
     callerMap: index.crossFileCallerMap(definitions, { semantic }),
     calleeMap: index.calleeMap(definitions, { semantic }),
   };
-}
-
-function applyScanLimit<T>(items: T[], scanLimit: number | undefined): T[] {
-  if (typeof scanLimit !== 'number' || scanLimit <= 0 || items.length <= scanLimit) {
-    return items;
-  }
-  return items.slice(0, scanLimit);
 }

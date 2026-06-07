@@ -2,8 +2,15 @@ import type { ScipDatabase } from '../storage/db.js';
 import { getAllDefinitions } from '../symbols/definition-catalog.js';
 import { getCallerRowsForSymbol } from '../symbols/reference-graph.js';
 import type { IndexedDefinition } from '../domain/types.js';
-import type { HotspotResult } from '../domain/types.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
+
+export interface HotspotResult {
+  symbol: string;
+  shortName: string;
+  refCount: number;
+  fileCount: number;
+  definedIn: string;
+}
 
 /**
  * Find the most-referenced symbols in the codebase — the choke points

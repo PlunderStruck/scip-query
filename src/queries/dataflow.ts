@@ -6,8 +6,21 @@ import {
   getResolvedReferenceSites,
 } from '../symbols/reference-graph.js';
 import { getSourceReferenceSites } from '../symbols/identifier-attribution.js';
-import type { DataflowResult } from '../domain/types.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
+
+export interface DataflowResult {
+  symbol: string;
+  shortName: string;
+  relativePath: string;
+  /** Where the symbol is defined (role=1) */
+  definitionSites: Array<{ file: string; line: number }>;
+  /** Where the symbol is referenced (role!=1) */
+  usageSites: Array<{ file: string; line: number; enclosingSymbol: string; enclosingShort: string }>;
+  /** Symbols that appear in the same function that defines this symbol (producers/inputs) */
+  producers: Array<{ symbol: string; shortName: string; file: string }>;
+  /** Symbols defined by functions that reference this symbol (consumers/outputs) */
+  consumers: Array<{ symbol: string; shortName: string; file: string }>;
+}
 
 /**
  * Reference-level dataflow analysis: where does data around this symbol

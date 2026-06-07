@@ -1,15 +1,15 @@
 import { existsSync } from 'node:fs';
 import type { SupportedLanguage } from '../domain/types.js';
+import * as queries from '../queries/index.js';
 import { augmentAuxiliaryDocuments, augmentVueResolvedReferences, detectLanguages, reindex } from '../reindex/index.js';
-import { getProjectReadiness } from '../reindex/readiness.js';
 import { loadProjectConfig, resolveIndexPaths, initProjectConfig } from './config.js';
+import { getProjectReadiness } from './project-readiness.js';
 import { Watcher } from './watch.js';
 import { BUILTIN_SKILLS, installSkills, isScipInstalled, printScipInstallInstructions } from './setup.js';
 import {
   collect,
   formatBytes,
   formatStatus,
-  queries,
   resolveCliProjectContext,
   resolveActiveDbPath,
   resolveProjectRoot,

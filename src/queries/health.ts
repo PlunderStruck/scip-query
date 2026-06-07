@@ -11,9 +11,9 @@ import { clearStaleAbstractionsCaches, staleAbstractions } from './stale-abstrac
 import { drift } from './drift.js';
 import { complexityHotspots } from './complexity-hotspots.js';
 import { stats } from './stats.js';
-import type { HealthReport } from '../domain/types.js';
 import { buildHealthReport } from './health-report.js';
 import { clearHealthAnalysisCaches, requestGarbageCollection } from './health-cache-control.js';
+import type { HealthReport } from './health-report.js';
 
 import type { ComplexitySummary, CountLocSummary, DriftSummary, HealthAnalyses, HealthBudget, StaleSummary } from './health-types.js';
 

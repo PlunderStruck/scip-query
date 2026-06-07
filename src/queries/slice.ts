@@ -5,8 +5,16 @@ import { findEnclosingDefinition } from '../symbols/definition-catalog.js';
 import { getCalleeRowsForSymbol, getResolvedReferenceSites } from '../symbols/reference-graph.js';
 import { getSourceReferenceSites } from '../symbols/identifier-attribution.js';
 import type { SymbolMatch } from '../domain/types.js';
-import type { SliceResult } from '../domain/types.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
+
+export interface SliceResult {
+  symbol: string;
+  shortName: string;
+  direction: 'backward' | 'forward';
+  /** Backward: symbols referenced in the same function as the target's definition (inputs) */
+  /** Forward: symbols defined by functions that reference the target (outputs) */
+  connectedSymbols: Array<{ symbol: string; shortName: string; file: string; relationship: string }>;
+}
 
 /**
  * Reference-level program slicing: track what affects a symbol (backward)

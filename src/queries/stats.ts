@@ -1,6 +1,14 @@
 import { statSync } from 'node:fs';
 import type { ScipDatabase } from '../storage/db.js';
-import type { StatsResult } from '../domain/types.js';
+
+export interface StatsResult {
+  documents: number;
+  symbols: number;
+  definitions: number;
+  references: number;
+  indexSizeBytes: number;
+  lastBuilt: Date | null;
+}
 
 export function stats(db: ScipDatabase): StatsResult {
   const documents = db.get<{ c: number }>('SELECT COUNT(*) as c FROM documents')!.c;

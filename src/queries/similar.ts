@@ -3,9 +3,28 @@ import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
 import { getCalleeRowsForSymbol } from '../symbols/reference-graph.js';
 import { getSourceText } from '../source/source-text.js';
 import { computeIdf, difference, intersection, weightedCosine } from '../analysis/similarity.js';
-import type { SimilarSymbolResult } from '../domain/types.js';
 import { isFunctionLikeSymbol, isInRustTestModule, leafName, shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
+import { applyScanLimit } from './query-utils.js';
+
+export interface SimilarSymbolResult {
+  symbolA: string;
+  shortNameA: string;
+  fileA: string;
+  symbolB: string;
+  shortNameB: string;
+  fileB: string;
+  /** Similarity score (0-1). Basis says what evidence was compared. */
+  similarity: number;
+  /** Evidence used for similarity: call graph callees or lexical source tokens. */
+  similarityBasis?: 'callees' | 'source-tokens';
+  /** Shared callees or source tokens, depending on similarityBasis. */
+  sharedCallees: string[];
+  /** Callees or source tokens unique to A, depending on similarityBasis. */
+  uniqueToA: string[];
+  /** Callees or source tokens unique to B, depending on similarityBasis. */
+  uniqueToB: string[];
+}
 
 /**
  * Find functions with similar callee fingerprints using TF-IDF weighted
@@ -276,13 +295,6 @@ function getAllCalleeFingerprints(
       paramCount: index.callableSignature(d)?.paramCount ?? -1,
     }))
     .filter((fp) => fp.callees.size >= minCallees);
-}
-
-function applyScanLimit<T>(items: T[], scanLimit: number | undefined): T[] {
-  if (typeof scanLimit !== 'number' || scanLimit <= 0 || items.length <= scanLimit) {
-    return items;
-  }
-  return items.slice(0, scanLimit);
 }
 
 function meaningfulCallees(callees: Iterable<string>): Set<string> {

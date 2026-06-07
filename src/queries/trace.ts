@@ -3,8 +3,23 @@ import { cleanSignature, extractSignature, findFirstSymbolMatch } from '../symbo
 import { getResolvedReferenceSites } from '../symbols/reference-graph.js';
 import { getSourceReferenceSites } from '../symbols/identifier-attribution.js';
 import { getSourceText } from '../source/source-text.js';
-import type { TraceResult } from '../domain/types.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../symbols/symbol-parser.js';
+
+export interface TraceResult {
+  definitions: Array<{
+    relativePath: string;
+    startLine: number;
+    endLine: number;
+    signature: string | null;
+    source: string | null;
+  }>;
+  referencedBy: Array<{
+    relativePath: string;
+    line: number;
+    enclosingSymbol: string | null;
+    enclosingShort: string;
+  }>;
+}
 
 // scip-query: ignore-extract — trace is the user-facing evidence assembly:
 // definition metadata plus source-scan references with mention fallback.

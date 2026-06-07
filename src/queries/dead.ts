@@ -2,7 +2,7 @@ import type { ScipDatabase } from '../storage/db.js';
 import { buildFileExclusionPredicate } from './dead-exclusions.js';
 import { getInactiveBarrelPaths, isEntrySurface, isRootedSymbol, TEST_FILE_PATTERNS, TEST_SUPPORT_PATH_PATTERNS } from '../analysis/file-classifier.js';
 import { clearDefinitionCacheForFile, enclosingTypeNames, getDefinitionsForFile } from '../symbols/definition-catalog.js';
-import type { DeadOptions, DeadSymbolResult, DeadSummary, IndexedDefinition } from '../domain/types.js';
+import type { DeadOptions, IndexedDefinition } from '../domain/types.js';
 import { isCallableSymbol, isFunctionLikeSymbol, isInRustTestModule, isModuleLikeSymbol, isRustTraitImplMember, shortenSymbol } from '../symbols/symbol-parser.js';
 import { getCallerRowsForSymbol } from '../symbols/reference-graph.js';
 import { ProjectIndex } from '../core/project-index.js';
@@ -11,6 +11,29 @@ import { clearAstCacheForFile } from '../source/ast.js';
 import { clearSourceStripperCacheForFile } from '../source/source-stripper.js';
 import { clearSourceTextCacheForFile } from '../source/source-text.js';
 import { clearIdentifierIndexCacheForFile } from '../symbols/identifier-index.js';
+import { applyScanLimit } from './query-utils.js';
+
+export interface DeadSymbolResult {
+  relativePath: string;
+  startLine: number;
+  endLine: number;
+  loc: number;
+  symbol: string;
+  shortName: string;
+  sameFileRefs: number;
+  kind: 'dead-code' | 'file-internal';
+}
+
+export interface DeadSummary {
+  symbols: DeadSymbolResult[];
+  totalCount: number;
+  /** Symbols with zero references anywhere — safe to delete */
+  deadCodeCount: number;
+  /** Symbols referenced only within their own file — no cross-file consumers.
+   *  May be private helpers (fine) or forgotten exports (needs review). */
+  fileInternalCount: number;
+  totalLoc: number;
+}
 
 type ReferenceCounts = Map<number, Map<string, number>>;
 const SQLITE_PARAM_BATCH_SIZE = 750;
@@ -274,13 +297,6 @@ function deadCandidateDefinitionPaths(db: ScipDatabase, scope?: string): string[
      ORDER BY relative_path`,
     ...params,
   ).map((row) => row.relative_path);
-}
-
-function applyScanLimit<T>(items: T[], scanLimit: number | undefined): T[] {
-  if (typeof scanLimit !== 'number' || scanLimit <= 0 || items.length <= scanLimit) {
-    return items;
-  }
-  return items.slice(0, scanLimit);
 }
 
 function deadRows(

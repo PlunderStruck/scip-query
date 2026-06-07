@@ -2,8 +2,19 @@ import type { ScipDatabase } from '../storage/db.js';
 import { ProjectIndex } from '../core/project-index.js';
 import { isLiveBarrel } from '../analysis/file-classifier.js';
 import { getSourceExports, getSourceImports } from '../language-parsers/index.js';
-import type { IndexedDefinition, RedundantReexport } from '../domain/types.js';
+import type { IndexedDefinition } from '../domain/types.js';
 import { leafSuffix, shortenSymbol } from '../symbols/symbol-parser.js';
+
+export interface RedundantReexport {
+  barrelFile: string;
+  symbol: string;
+  shortName: string;
+  originalFile: string;
+  /** How many consumers import through the barrel */
+  barrelConsumers: number;
+  /** How many consumers import directly from the source */
+  directConsumers: number;
+}
 
 interface ScipReexportRow {
   barrel_doc_id: number;

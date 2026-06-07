@@ -2,8 +2,12 @@ import type { ScipDatabase } from '../storage/db.js';
 import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
 import { resolveIndexedFile } from '../resolution/path-resolver.js';
 import { buildFileDepGraph } from '../symbols/reference-graph.js';
-import type { FanResult } from '../domain/types.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
+
+export interface FanResult {
+  name: string;
+  count: number;
+}
 
 /**
  * Fan-in: how many distinct files reference this symbol.

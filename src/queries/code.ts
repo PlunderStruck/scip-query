@@ -3,8 +3,17 @@ import { extname, join } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
 import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
 import { resolveIndexedFile } from '../resolution/path-resolver.js';
-import type { CodeResult } from '../domain/types.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
+
+export interface CodeResult {
+  symbol: string;
+  shortName: string;
+  relativePath: string;
+  startLine: number;
+  endLine: number;
+  language: string | null;
+  source: string;
+}
 
 /**
  * Read the source code for a symbol, bounded to its definition range.

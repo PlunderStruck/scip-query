@@ -1,8 +1,15 @@
 import type { ScipDatabase } from '../storage/db.js';
-import type { OutlineNode } from '../domain/types.js';
 import { loadFileSymbols } from '../symbols/definition-catalog.js';
 import { resolveIndexedPaths } from '../resolution/path-resolver.js';
 import { isAncestorSymbol } from '../symbols/symbol-parser.js';
+
+export interface OutlineNode {
+  symbol: string;
+  shortName: string;
+  startLine: number;
+  endLine: number;
+  children: OutlineNode[];
+}
 
 /**
  * Build a tree-structured outline of symbols in a file,

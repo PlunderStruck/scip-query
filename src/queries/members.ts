@@ -1,8 +1,15 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { ProjectIndex } from '../core/project-index.js';
 import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
-import type { MemberResult } from '../domain/types.js';
 import { isDirectChildSymbol, leafSuffix, shortenSymbol } from '../symbols/symbol-parser.js';
+
+export interface MemberResult {
+  symbol: string;
+  shortName: string;
+  startLine: number;
+  endLine: number;
+  kind: string;
+}
 
 /**
  * Find all direct children of a symbol (methods, fields, nested types).

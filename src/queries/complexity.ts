@@ -2,9 +2,25 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
 import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
-import type { ComplexityResult } from '../domain/types.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
+
+export interface ComplexityResult {
+  symbol: string;
+  shortName: string;
+  relativePath: string;
+  startLine: number;
+  endLine: number;
+  loc: number;
+  /** Branch count from source-level regex (if, else, for, while, switch, catch, ternary, &&, ||) */
+  branches: number;
+  /** Cyclomatic complexity estimate: branches + 1 */
+  cyclomaticEstimate: number;
+  /** Number of distinct callees within the definition */
+  calleeCount: number;
+  fanIn: number;
+  fanOut: number;
+}
 
 /**
  * Per-symbol complexity analysis combining source-level branch counting

@@ -2,10 +2,26 @@ import path from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
 import { classifyFile } from '../analysis/file-classifier.js';
 import { getSourceImports } from '../language-parsers/index.js';
-import type { DriftResult, DriftSummary } from '../domain/types.js';
 import { ProjectIndex } from '../core/project-index.js';
 import { semanticImportUsage } from '../semantic/shared-primitives.js';
 import { getArchitecturalLayer, isKnownProjectLayerDependency, layerPolicyForEdge } from './drift-policy.js';
+
+export interface DriftResult {
+  file: string;
+  kind: 'unused-import' | 'layer-violation' | 'pattern-deviation';
+  description: string;
+  /** The dependency involved */
+  dep: string;
+  /** For layer violations: the expected layer boundary */
+  detail?: string;
+}
+
+export interface DriftSummary {
+  results: DriftResult[];
+  unusedImports: number;
+  layerViolations: number;
+  patternDeviations: number;
+}
 
 /**
  * Detect structural drift using the reference graph, not just import patterns.
