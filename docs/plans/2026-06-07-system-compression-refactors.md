@@ -89,6 +89,40 @@ node dist/cli.js health --json
 node dist/cli.js drift --min-deviation 3
 ```
 
+### Progress
+
+First slice completed after checkpoint commit `ee99e05`:
+
+- Added `src/runtime/command-execution.ts`, a small executor for DB-backed command shapes.
+- Converted these commands from bespoke handlers to descriptor-local execution specs: `stats`, `files`, `symbols`, `methods`, `deps`, `rdeps`, `system`, `surface`, `hotspots`, `imported-by`, `outline`, `members`, `by-kind`, `kind-counts`, and `hierarchy`.
+- Removed the matching exported handlers from `src/runtime/command-handlers.ts`.
+- `src/runtime/command-handlers.ts` dropped from 1172 lines to 1032 lines.
+- Fresh `similar-signatures --min-loc 5` changed command handler groups from 30 `(unknown) => void` and 19 `(unknown, unknown) => void` handlers to 17 `(unknown) => void` and 18 `(unknown, unknown) => void` handlers.
+
+Verified:
+
+```bash
+npm run typecheck
+npm test -- tests/cli-contract.test.ts tests/command-accuracy.test.ts
+npm run build
+node dist/cli.js reindex --force --allow-partial
+node dist/cli.js stats
+node dist/cli.js files runtime/command
+node dist/cli.js symbols src/runtime/command-descriptors.ts
+node dist/cli.js methods ProjectIndex
+node dist/cli.js deps src/runtime/command-descriptors.ts
+node dist/cli.js rdeps src/runtime/command-execution.ts
+node dist/cli.js system src/runtime
+node dist/cli.js surface src/runtime
+node dist/cli.js hotspots -n 3
+node dist/cli.js by-kind class -n 3
+node dist/cli.js kind-counts
+node dist/cli.js imported-by ProjectIndex
+node dist/cli.js outline src/core/project-index.ts
+node dist/cli.js members ProjectIndex
+node dist/cli.js hierarchy ProjectIndex
+```
+
 ## Refactor 2: Source Reference Evidence Pipeline
 
 A source-reference evidence pipeline is the reference-detection path made from source scanning, identifier attribution, import resolution, framework dispatch names, Rust attribute references, and occurrence counting. Its essential job is to decide which source-level mentions count as real symbol references.

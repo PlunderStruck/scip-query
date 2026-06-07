@@ -135,44 +135,6 @@ export function handleAugmentVue(rawOpts: unknown): void {
   }
 }
 
-export function handleStats(): void {
-  withDb((db) => {
-    const s = queries.stats(db);
-    console.log(`Documents:   ${s.documents}`);
-    console.log(`Symbols:     ${s.symbols}`);
-    console.log(`Definitions: ${s.definitions}`);
-    console.log(`References:  ${s.references}`);
-    console.log(`Index size:  ${formatBytes(s.indexSizeBytes)}`);
-    if (s.lastBuilt) {
-      console.log(`Last built:  ${s.lastBuilt.toISOString().replace('T', ' ').slice(0, 19)}`);
-    }
-  });
-}
-
-export function handleFiles(pattern: unknown): void {
-  withDb((db) => {
-    render.list(queries.files(db, String(pattern)), (r) => r.relativePath);
-  });
-}
-
-export function handleSymbols(file: unknown): void {
-  withDb((db) => {
-    render.list(queries.symbols(db, String(file)), (r) => {
-      const sig = r.signature ? `  — ${r.signature}` : '';
-      return `  ${displayRange(r.startLine, r.endLine)}  ${r.shortName}${sig}`;
-    });
-  });
-}
-
-export function handleMethods(className: unknown): void {
-  withDb((db) => {
-    render.list(
-      queries.methods(db, String(className)),
-      (r) => `  ${displayRange(r.startLine, r.endLine)}  ${r.name}`,
-    );
-  });
-}
-
 export function handleRefs(symbol: unknown, rawOpts: unknown): void {
   const opts = options(rawOpts);
   withDb((db) => {
@@ -214,39 +176,6 @@ export function handleTrace(symbol: unknown, rawOpts: unknown): void {
       { title: 'DEFINITION', rows: definitionRows },
       { title: 'REFERENCED BY', rows: refRows },
     ]);
-  });
-}
-
-export function handleDeps(file: unknown): void {
-  withDb((db) => {
-    render.list(queries.deps(db, String(file)), (r) => r.relativePath);
-  });
-}
-
-export function handleRdeps(file: unknown): void {
-  withDb((db) => {
-    render.list(queries.rdeps(db, String(file)), (r) => r.relativePath);
-  });
-}
-
-export function handleSystem(module: unknown): void {
-  withDb((db) => {
-    const result = queries.system(db, String(module));
-    render.sectionedReport([
-      { title: 'FILES', rows: result.files },
-      {
-        title: 'EXPORTED SYMBOLS',
-        rows: result.symbols.map((s) => `  ${displayRange(s.startLine, s.endLine)}  ${s.shortName}`),
-      },
-      { title: 'DEPENDS ON (internal)', rows: result.dependsOn.map((d) => `  ${d}`) },
-      { title: 'DEPENDED ON BY', rows: result.dependedOnBy.map((d) => `  ${d}`) },
-    ]);
-  });
-}
-
-export function handleSurface(module: unknown): void {
-  withDb((db) => {
-    render.list(queries.surface(db, String(module)), (r) => `  ${r.consumer} → ${r.shortName}`);
   });
 }
 
@@ -340,17 +269,6 @@ export function handleDead(scope: unknown, rawOpts: unknown): void {
   });
 }
 
-export function handleHotspots(rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const results = queries.hotspots(db, { limit: definedNumber(opts, 'limit', 30), scope: stringOption(opts, 'scope') });
-    render.table(
-      ['refs', 'files', 'symbol'],
-      results.map((r) => `  ${String(r.refCount).padStart(4)}  ${String(r.fileCount).padStart(5)}  ${r.shortName}`),
-    );
-  });
-}
-
 export function handleImports(file: unknown, rawOpts: unknown): void {
   const opts = options(rawOpts);
   withDb((db) => {
@@ -364,12 +282,6 @@ export function handleImports(file: unknown, rawOpts: unknown): void {
   });
 }
 
-export function handleImportedBy(symbol: unknown): void {
-  withDb((db) => {
-    render.list(queries.importedBy(db, String(symbol)), (r) => `  ${r.fromFile}`);
-  });
-}
-
 export function handleUnusedImports(file: unknown, rawOpts: unknown): void {
   const opts = options(rawOpts);
   withDb((db) => {
@@ -378,29 +290,6 @@ export function handleUnusedImports(file: unknown, rawOpts: unknown): void {
     if (results.length === 0) return render.empty('No unused imports found.');
     render.list(results, (r) => `  ${r.shortName}  in ${r.importedIn}`);
     console.log(`\n${results.length} unused import(s)`);
-  });
-}
-
-export function handleOutline(file: unknown): void {
-  withDb((db) => {
-    const roots = queries.outline(db, String(file));
-    function printTree(nodes: typeof roots, indent: number): void {
-      for (const n of nodes) {
-        const prefix = '  '.repeat(indent);
-        console.log(`${prefix}${displayRange(n.startLine, n.endLine)}  ${n.shortName}`);
-        printTree(n.children, indent + 1);
-      }
-    }
-    printTree(roots, 0);
-  });
-}
-
-export function handleMembers(symbol: unknown): void {
-  withDb((db) => {
-    render.list(
-      queries.members(db, String(symbol)),
-      (r) => `  ${displayRange(r.startLine, r.endLine)}  [${r.kind}]  ${r.shortName}`,
-    );
   });
 }
 
@@ -515,26 +404,6 @@ export function handleIsolated(rawOpts: unknown): void {
   });
 }
 
-export function handleByKind(kind: unknown, rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const results = queries.byKind(db, String(kind), { scope: stringOption(opts, 'scope'), limit: definedNumber(opts, 'limit', 100) });
-    if (results.length === 0) {
-      return render.empty(`No symbols found for kind "${kind}". Use "kind-counts" to see available kinds.`);
-    }
-    render.list(results, (r) => `  ${displayPathRange(r.relativePath, r.startLine, r.endLine)}  [${r.kindName}]  ${r.shortName}`);
-    console.log(`\n${results.length} symbol(s)`);
-  });
-}
-
-export function handleKindCounts(rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const results = queries.kindCounts(db, { scope: stringOption(opts, 'scope') });
-    render.table(['count', 'kind'], results.map((r) => `  ${String(r.count).padStart(5)}  ${r.kindName} (${r.kind})`));
-  });
-}
-
 export function handleDeepChains(rawOpts: unknown): void {
   const opts = options(rawOpts);
   withDb((db) => {
@@ -548,14 +417,6 @@ export function handleDeepChains(rawOpts: unknown): void {
       console.log(`\nChain ${i + 1} (depth ${results[i]!.depth}):`);
       for (const file of results[i]!.chain) console.log(`  → ${file}`);
     }
-  });
-}
-
-export function handleHierarchy(symbol: unknown): void {
-  withDb((db) => {
-    const chain = queries.hierarchy(db, String(symbol));
-    if (chain.length === 0) return render.empty('Symbol not found.');
-    render.list(chain, (node) => `${'  '.repeat(node.depth)}${node.shortName}`);
   });
 }
 

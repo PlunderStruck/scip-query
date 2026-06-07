@@ -79,6 +79,16 @@ function splitCommanderActionArgs(rawArgs: readonly unknown[]): { args: readonly
   const tail = rawArgs[rawArgs.length - 1];
   return {
     args: rawArgs.slice(0, -1),
-    opts: tail && typeof tail === 'object' ? tail as CommandOptions : {},
+    opts: commandOptions(tail),
   };
+}
+
+function commandOptions(value: unknown): CommandOptions {
+  if (!value || typeof value !== 'object') return {};
+  const maybeCommand = value as { opts?: () => unknown };
+  if (typeof maybeCommand.opts === 'function') {
+    const opts = maybeCommand.opts();
+    return opts && typeof opts === 'object' ? opts as CommandOptions : {};
+  }
+  return value as CommandOptions;
 }
