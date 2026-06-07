@@ -372,6 +372,22 @@ Inline only if doing so does not leak cache implementation details across module
 
 Review wrapper candidates, but do not blindly inline wrappers that intentionally preserve a facade boundary. Existing `scip-query: ignore-wrapper` comments should be treated as evidence, not noise.
 
+### Progress
+
+Completed after checkpoint commit `625589d`:
+
+- Preserved `PreparedIndexerRun` and `IndexerRunResult` because they name the handoff record between reindex planning and indexer execution. Added `scip-query: ignore-stale` comments to make that boundary explicit.
+- Preserved `WorkspacePackage` because it names a TypeScript semantic-provider concept: a package root plus source root inside a workspace. Added `scip-query: ignore-stale`.
+- Preserved `clearAstCacheForFile()` and `clearDefinitionCacheForFile()` because they are cache lifecycle facades; inlining would expose cache storage details to query code.
+- Reviewed wrapper candidates. The remaining candidates are facade/public primitive boundaries or internal helpers with existing `ignore-wrapper`/`ignore-extract` evidence; no safe deletion was identified without weakening module boundaries.
+
+Verified:
+
+```bash
+npm run typecheck
+npm test -- tests/command-accuracy.test.ts tests/debloat-health.test.ts
+```
+
 ## Completion Evidence
 
 Before declaring this plan complete:

@@ -4,6 +4,8 @@ import { cpus } from 'node:os';
 import { join } from 'node:path';
 import type { IndexerConfig, SupportedLanguage } from '../domain/types.js';
 
+// scip-query: ignore-stale — exported handoff record between reindex planning
+// and the runner; inlining would smear indexer execution state across modules.
 export interface PreparedIndexerRun {
   language: SupportedLanguage;
   scipPath: string;
@@ -14,6 +16,8 @@ export interface PreparedIndexerRun {
   env: NodeJS.ProcessEnv;
 }
 
+// scip-query: ignore-stale — exported runner result consumed by reindex
+// orchestration; the name keeps successful and skipped indexer outcomes explicit.
 export interface IndexerRunResult {
   language: SupportedLanguage;
   scipPath: string;

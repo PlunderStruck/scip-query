@@ -1,6 +1,8 @@
 import path from 'node:path';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 
+// scip-query: ignore-stale — exported semantic-provider record for a real
+// workspace package root and its source root; structural inlining hides that domain.
 export interface WorkspacePackage {
   name: string;
   rootRelative: string;
