@@ -10,7 +10,7 @@ import type { ScipDatabase } from '../storage/db.js';
 import { resolveCLikeImportPath } from '../resolution/import-path-resolver.js';
 import { hasIdentifierUsage } from '../source/source-stripper.js';
 import type { ParsedSourceImport } from '../domain/types.js';
-import { collectIdentifiersOutside, parseImportLineMatches, parseWithAstFallback } from './utils.js';
+import { buildNamedImport, buildUsedImport, collectIdentifiersOutside, parseImportLineMatches, parseWithAstFallback } from './utils.js';
 
 export function parseCLikeImports(
   db: ScipDatabase,
@@ -37,14 +37,12 @@ function parseCLikeImportsRegex(
       const specifier = match[1]?.trim();
       if (!specifier) return [];
       const localName = basename(specifier).replace(/\.[^.]+$/, '');
-      return [{
-        importedName: specifier,
+      return [buildUsedImport(
+        specifier,
         localName,
-        sourcePath: resolveCLikeImportPath(db, importerPath, specifier),
-        kind: 'named',
-        used: hasIdentifierUsage(body, localName),
-        usedMembers: [],
-      }];
+        resolveCLikeImportPath(db, importerPath, specifier),
+        hasIdentifierUsage(body, localName),
+      )];
     },
   );
 }
@@ -76,14 +74,12 @@ function parseCLikeImportsAst(
     if (!specifier) continue;
 
     const localName = basename(specifier).replace(/\.[^.]+$/, '');
-    results.push({
-      importedName: specifier,
+    results.push(buildNamedImport(
+      specifier,
       localName,
-      sourcePath: resolveCLikeImportPath(db, importerPath, specifier),
-      kind: 'named',
-      used: usedNames.has(localName),
-      usedMembers: [],
-    });
+      resolveCLikeImportPath(db, importerPath, specifier),
+      usedNames,
+    ));
   }
   return results;
 }

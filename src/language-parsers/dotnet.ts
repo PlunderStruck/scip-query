@@ -3,7 +3,7 @@
  * directives (C#) and `Imports` statements (VB), including `using Alias =
  * Target` aliasing.
  */
-import { detectAstLanguage, getAst, type SyntaxNode, type Tree } from '../source/ast.js';
+import type { SyntaxNode, Tree } from '../source/ast.js';
 import type { ScipDatabase } from '../storage/db.js';
 import {
   DOTNET_EXTENSIONS,
@@ -11,44 +11,49 @@ import {
   resolveQualifiedImportPath,
 } from '../resolution/import-path-resolver.js';
 import type { ParsedSourceImport } from '../domain/types.js';
-import { buildSimpleImport, collectIdentifiersOutside, parseImportLineMatches } from './utils.js';
+import { buildNamedImport, buildSimpleImport, collectIdentifiersOutside, parseImportLineMatches, parseWithAstLanguageDispatch } from './utils.js';
 
 export function parseDotNetImports(
   db: ScipDatabase,
   importerPath: string,
   source: string,
 ): ParsedSourceImport[] {
-  const tree = getAst(db, importerPath);
-  const lang = detectAstLanguage(importerPath);
-  if (tree && lang === 'csharp') return parseCSharpImportsAst(db, importerPath, tree);
-  if (tree && lang === 'vb') return parseVbImportsAst(db, importerPath, tree);
+  return parseWithAstLanguageDispatch(
+    db,
+    importerPath,
+    {
+      csharp: (tree) => parseCSharpImportsAst(db, importerPath, tree),
+      vb: (tree) => parseVbImportsAst(db, importerPath, tree),
+    },
+    () => {
+      const lineRegex = isVisualBasicSourcePath(importerPath)
+        ? /^[ \t]*Imports\s+(.+?)\s*$/gm
+        : /^[ \t]*using\s+(.+?)\s*;$/gm;
 
-  const lineRegex = isVisualBasicSourcePath(importerPath)
-    ? /^[ \t]*Imports\s+(.+?)\s*$/gm
-    : /^[ \t]*using\s+(.+?)\s*;$/gm;
+      return parseImportLineMatches(source, lineRegex, (match, body) => {
+        const clause = match[1]?.trim();
+        if (!clause) return [];
 
-  return parseImportLineMatches(source, lineRegex, (match, body) => {
-    const clause = match[1]?.trim();
-    if (!clause) return [];
+        const [aliasPart, targetPart] = clause.split(/\s*=\s*/);
+        const hasAlias = Boolean(targetPart);
+        const qualified = (hasAlias ? targetPart : aliasPart)?.trim() ?? clause;
+        const importedName = qualified.split('.').pop() ?? qualified;
+        const localName = hasAlias
+          ? aliasPart?.trim() ?? importedName
+          : importedName;
 
-    const [aliasPart, targetPart] = clause.split(/\s*=\s*/);
-    const hasAlias = Boolean(targetPart);
-    const qualified = (hasAlias ? targetPart : aliasPart)?.trim() ?? clause;
-    const importedName = qualified.split('.').pop() ?? qualified;
-    const localName = hasAlias
-      ? aliasPart?.trim() ?? importedName
-      : importedName;
-
-    return [buildSimpleImport(
-      db,
-      importerPath,
-      body,
-      qualified,
-      importedName,
-      localName,
-      resolveQualifiedImportPath(db, qualified, DOTNET_EXTENSIONS),
-    )];
-  });
+        return [buildSimpleImport(
+          db,
+          importerPath,
+          body,
+          qualified,
+          importedName,
+          localName,
+          resolveQualifiedImportPath(db, qualified, DOTNET_EXTENSIONS),
+        )];
+      });
+    },
+  );
 }
 
 // scip-query: ignore-similar — per-language AST walker; each language has a
@@ -78,14 +83,13 @@ function parseVbImportsAst(
     const importedName = qualified.split('.').pop() ?? qualified;
     const localName = aliasNode?.text ?? importedName;
 
-    results.push({
+    results.push(buildNamedImport(
       importedName,
       localName,
-      sourcePath: resolveQualifiedImportPath(db, qualified, DOTNET_EXTENSIONS),
-      kind: aliasNode ? 'namespace' : 'named',
-      used: usedNames.has(localName),
-      usedMembers: [],
-    });
+      resolveQualifiedImportPath(db, qualified, DOTNET_EXTENSIONS),
+      usedNames,
+      aliasNode ? 'namespace' : 'named',
+    ));
   }
   return results;
 }
@@ -123,14 +127,13 @@ function parseCSharpImportsAst(
     const importedName = qualified.split('.').pop() ?? qualified;
     const localName = aliasNode?.text ?? importedName;
 
-    results.push({
+    results.push(buildNamedImport(
       importedName,
       localName,
-      sourcePath: resolveQualifiedImportPath(db, qualified, DOTNET_EXTENSIONS),
-      kind: aliasNode ? 'namespace' : 'named',
-      used: usedNames.has(localName),
-      usedMembers: [],
-    });
+      resolveQualifiedImportPath(db, qualified, DOTNET_EXTENSIONS),
+      usedNames,
+      aliasNode ? 'namespace' : 'named',
+    ));
   }
   return results;
 }

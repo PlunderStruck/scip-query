@@ -10,7 +10,7 @@ import type { ScipDatabase } from '../storage/db.js';
 import { resolveRubyImportPath } from '../resolution/import-path-resolver.js';
 import { hasIdentifierUsage } from '../source/source-stripper.js';
 import type { ParsedSourceImport } from '../domain/types.js';
-import { collectIdentifiersOutside, parseImportLineMatches, parseWithAstFallback } from './utils.js';
+import { buildNamedImport, buildSideEffectImport, buildUsedImport, collectIdentifiersOutside, parseImportLineMatches, parseWithAstFallback } from './utils.js';
 
 export function parseRubyImports(
   db: ScipDatabase,
@@ -43,24 +43,10 @@ function parseRubyImportsRegex(
 
       if (sourcePath) {
         const localName = rubyConstantName(specifier);
-        return [{
-          importedName: localName,
-          localName,
-          sourcePath,
-          kind: 'named',
-          used: hasIdentifierUsage(body, localName),
-          usedMembers: [],
-        }];
+        return [buildUsedImport(localName, localName, sourcePath, hasIdentifierUsage(body, localName))];
       }
 
-      return [{
-        importedName: specifier,
-        localName: null,
-        sourcePath,
-        kind: 'side-effect',
-        used: true,
-        usedMembers: [],
-      }];
+      return [buildSideEffectImport(specifier, sourcePath)];
     },
   );
 }
@@ -92,23 +78,9 @@ function parseRubyImportsAst(
 
     if (sourcePath) {
       const localName = rubyConstantName(specifier);
-      results.push({
-        importedName: localName,
-        localName,
-        sourcePath,
-        kind: 'named',
-        used: usedNames.has(localName),
-        usedMembers: [],
-      });
+      results.push(buildNamedImport(localName, localName, sourcePath, usedNames));
     } else {
-      results.push({
-        importedName: specifier,
-        localName: null,
-        sourcePath,
-        kind: 'side-effect',
-        used: true,
-        usedMembers: [],
-      });
+      results.push(buildSideEffectImport(specifier, sourcePath));
     }
   }
   return results;

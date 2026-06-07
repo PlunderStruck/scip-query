@@ -11,7 +11,7 @@ import { getAst, type SyntaxNode, type Tree } from '../source/ast.js';
 import type { ScipDatabase } from '../storage/db.js';
 import { resolveRustImportPath } from '../resolution/import-path-resolver.js';
 import type { ParsedSourceExport, ParsedSourceImport } from '../domain/types.js';
-import { buildSimpleImport, collectIdentifiersOutside, parseImportLineMatches, splitTopLevel } from './utils.js';
+import { buildNamedImport, buildSimpleImport, collectIdentifiersOutside, parseImportLineMatches, parseWithAstFallback, splitTopLevel } from './utils.js';
 
 interface RustImportLeaf {
   qualifiedName: string;
@@ -24,16 +24,16 @@ export function parseRustImports(
   importerPath: string,
   source: string,
 ): ParsedSourceImport[] {
-  const tree = getAst(db, importerPath);
-  if (tree) {
-    return parseRustImportsAst(db, importerPath, tree);
-  }
-  // Fallback: regex parser when AST is unavailable (e.g. unreadable source).
-  return parseImportLineMatches(source, /^[ \t]*use\s+(.+?)\s*;$/gm, (match, body) => {
-    const clause = match[1]?.trim();
-    if (!clause) return [];
-    return parseRustUseClause(db, importerPath, clause, body);
-  });
+  return parseWithAstFallback(
+    db,
+    importerPath,
+    (tree) => parseRustImportsAst(db, importerPath, tree),
+    () => parseImportLineMatches(source, /^[ \t]*use\s+(.+?)\s*;$/gm, (match, body) => {
+      const clause = match[1]?.trim();
+      if (!clause) return [];
+      return parseRustUseClause(db, importerPath, clause, body);
+    }),
+  );
 }
 
 function parseRustImportsAst(
@@ -51,14 +51,7 @@ function parseRustImportsAst(
       if (!leaf.importedName || leaf.importedName === '*') continue;
       const sourcePath = resolveRustImportPath(db, importerPath, leaf.qualifiedName)
         ?? resolveRustImportPath(db, importerPath, leaf.qualifiedName.split('::').slice(0, -1).join('::'));
-      results.push({
-        importedName: leaf.importedName,
-        localName: leaf.localName,
-        sourcePath,
-        kind: 'named',
-        used: usedNames.has(leaf.localName),
-        usedMembers: [],
-      });
+      results.push(buildNamedImport(leaf.importedName, leaf.localName, sourcePath, usedNames));
     }
   }
 

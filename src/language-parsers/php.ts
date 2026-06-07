@@ -2,42 +2,43 @@
  * PHP parser. Owns `.php`. Recognizes `use` statements (including grouped
  * `use Ns\{Foo, Bar};` and `use Ns\Foo as Alias;`).
  */
-import { getAst, type SyntaxNode, type Tree } from '../source/ast.js';
+import type { SyntaxNode, Tree } from '../source/ast.js';
 import type { ScipDatabase } from '../storage/db.js';
 import { PHP_EXTENSIONS, resolveQualifiedImportPath } from '../resolution/import-path-resolver.js';
 import type { ParsedSourceImport } from '../domain/types.js';
-import { buildSimpleImport, collectIdentifiersOutside, parseImportLineMatches, splitTopLevel } from './utils.js';
+import { buildNamedImport, buildSimpleImport, collectIdentifiersOutside, parseImportLineMatches, parseWithAstFallback, splitTopLevel } from './utils.js';
 
 export function parsePhpImports(
   db: ScipDatabase,
   importerPath: string,
   source: string,
 ): ParsedSourceImport[] {
-  const tree = getAst(db, importerPath);
-  if (tree) return parsePhpImportsAst(db, importerPath, tree);
-
-  // Regex fallback (only when tree-sitter parse fails).
-  return parseImportLineMatches(source, /^[ \t]*use\s+(.+?)\s*;$/gm, (match, body) => {
-    const clause = match[1]?.trim();
-    if (!clause) return [];
-    return splitTopLevel(clause).flatMap((entry) => {
-      const cleaned = entry.trim();
-      if (!cleaned) return [];
-      const [qualifiedPart, aliasPart] = cleaned.split(/\s+as\s+/i);
-      const qualified = qualifiedPart?.trim() ?? cleaned;
-      const importedName = qualified.split('\\').pop() ?? qualified;
-      const localName = (aliasPart ?? importedName).trim();
-      return [buildSimpleImport(
-        db,
-        importerPath,
-        body,
-        qualified,
-        importedName,
-        localName,
-        resolveQualifiedImportPath(db, qualified.replace(/\\/g, '.'), PHP_EXTENSIONS),
-      )];
-    });
-  });
+  return parseWithAstFallback(
+    db,
+    importerPath,
+    (tree) => parsePhpImportsAst(db, importerPath, tree),
+    () => parseImportLineMatches(source, /^[ \t]*use\s+(.+?)\s*;$/gm, (match, body) => {
+      const clause = match[1]?.trim();
+      if (!clause) return [];
+      return splitTopLevel(clause).flatMap((entry) => {
+        const cleaned = entry.trim();
+        if (!cleaned) return [];
+        const [qualifiedPart, aliasPart] = cleaned.split(/\s+as\s+/i);
+        const qualified = qualifiedPart?.trim() ?? cleaned;
+        const importedName = qualified.split('\\').pop() ?? qualified;
+        const localName = (aliasPart ?? importedName).trim();
+        return [buildSimpleImport(
+          db,
+          importerPath,
+          body,
+          qualified,
+          importedName,
+          localName,
+          resolveQualifiedImportPath(db, qualified.replace(/\\/g, '.'), PHP_EXTENSIONS),
+        )];
+      });
+    }),
+  );
 }
 
 // scip-query: ignore-similar — PHP-specific: `use Foo\Bar;`, `use function`,
@@ -51,14 +52,12 @@ function parsePhpImportsAst(
   const results: ParsedSourceImport[] = [];
 
   const emit = (qualified: string, importedName: string, localName: string): void => {
-    results.push({
+    results.push(buildNamedImport(
       importedName,
       localName,
-      sourcePath: resolveQualifiedImportPath(db, qualified.replace(/\\/g, '.'), PHP_EXTENSIONS),
-      kind: 'named',
-      used: usedNames.has(localName),
-      usedMembers: [],
-    });
+      resolveQualifiedImportPath(db, qualified.replace(/\\/g, '.'), PHP_EXTENSIONS),
+      usedNames,
+    ));
   };
 
   for (const decl of tree.rootNode.descendantsOfType('namespace_use_declaration')) {

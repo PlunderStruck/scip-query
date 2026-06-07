@@ -15,7 +15,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { extensionFamilyFor, resolveQualifiedImportPath } from '../resolution/import-path-resolver.js';
 import { buildUsageBody, hasIdentifierUsage } from '../source/source-stripper.js';
-import { getAst, type SyntaxNode, type Tree } from '../source/ast.js';
+import { detectAstLanguage, getAst, type SyntaxNode, type Tree } from '../source/ast.js';
 import type { ParsedSourceImport } from '../domain/types.js';
 
 const REFERENCE_IDENTIFIER_TYPES = new Set([
@@ -106,6 +106,69 @@ export function buildSimpleImport(
   };
 }
 
+export function buildNamedImport(
+  importedName: string,
+  localName: string,
+  sourcePath: string | null,
+  usedNames: ReadonlySet<string>,
+  kind: ParsedSourceImport['kind'] = 'named',
+): ParsedSourceImport {
+  return {
+    importedName,
+    localName,
+    sourcePath,
+    kind,
+    used: usedNames.has(localName),
+    usedMembers: [],
+  };
+}
+
+export function buildUsedImport(
+  importedName: string,
+  localName: string,
+  sourcePath: string | null,
+  used: boolean,
+  kind: ParsedSourceImport['kind'] = 'named',
+  usedMembers: string[] = [],
+): ParsedSourceImport {
+  return {
+    importedName,
+    localName,
+    sourcePath,
+    kind,
+    used,
+    usedMembers,
+  };
+}
+
+export function buildSideEffectImport(
+  importedName: string,
+  sourcePath: string | null,
+): ParsedSourceImport {
+  return {
+    importedName,
+    localName: null,
+    sourcePath,
+    kind: 'side-effect',
+    used: true,
+    usedMembers: [],
+  };
+}
+
+export function buildNamespaceImport(
+  importedName: string,
+  sourcePath: string | null,
+): ParsedSourceImport {
+  return {
+    importedName,
+    localName: null,
+    sourcePath,
+    kind: 'namespace',
+    used: true,
+    usedMembers: [],
+  };
+}
+
 export function parseImportLineMatches<T>(
   source: string,
   pattern: RegExp,
@@ -135,4 +198,16 @@ export function parseWithAstFallback<T>(
     if (parsed) return parsed;
   }
   return parseFallback();
+}
+
+export function parseWithAstLanguageDispatch<T>(
+  db: ScipDatabase,
+  importerPath: string,
+  parsers: Readonly<Record<string, (tree: Tree) => T[]>>,
+  parseFallback: () => T[],
+): T[] {
+  const tree = getAst(db, importerPath);
+  const lang = detectAstLanguage(importerPath);
+  const parseAst = lang ? parsers[lang] : undefined;
+  return tree && parseAst ? parseAst(tree) : parseFallback();
 }
