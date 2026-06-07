@@ -99,6 +99,8 @@ export function getGlobalLeafIndex(
 
 
 
+// scip-query: ignore-passthrough — cache lifecycle facade used by
+// reference-graph reset without exposing global leaf-index internals.
 export function clearGlobalLeafIndexCache(db: ScipDatabase): void {
   GLOBAL_LEAF_INDEX_CACHE.invalidate(db);
 }

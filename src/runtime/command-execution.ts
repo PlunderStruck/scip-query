@@ -16,31 +16,45 @@ export interface BudgetedCommandContext extends DbCommandContext {
   budget: ReturnType<typeof commandAnalysisBudget>;
 }
 
-export interface ListCommandSpec<Row> {
-  query: (ctx: DbCommandContext) => readonly Row[];
-  format: (row: Row, ctx: DbCommandContext) => string;
-  emptyMessage?: (ctx: DbCommandContext) => string;
+interface RowCommandSpec<Row, Ctx extends DbCommandContext> {
+  query: (ctx: Ctx) => readonly Row[];
+  format: (row: Row, ctx: Ctx) => string;
+  emptyMessage?: (ctx: Ctx) => string;
   heuristicLabel?: string;
-  after?: (rows: readonly Row[], ctx: DbCommandContext) => void;
+  after?: (rows: readonly Row[], ctx: Ctx) => void;
 }
 
-export interface TableCommandSpec<Row> {
+type RowRenderer<Row, Ctx extends DbCommandContext> =
+  | { kind: 'list' }
+  | { kind: 'table'; headers: readonly string[]; dashWidths?: readonly number[] }
+  | { kind: 'grouped'; key?: (row: Row, ctx: Ctx) => string };
+
+export interface ListCommandSpec<Row> extends RowCommandSpec<Row, DbCommandContext> {
+}
+
+export interface TableCommandSpec<Row> extends RowCommandSpec<Row, DbCommandContext> {
   headers: readonly string[];
-  query: (ctx: DbCommandContext) => readonly Row[];
-  format: (row: Row, ctx: DbCommandContext) => string;
-  emptyMessage?: (ctx: DbCommandContext) => string;
-  heuristicLabel?: string;
-  after?: (rows: readonly Row[], ctx: DbCommandContext) => void;
   dashWidths?: readonly number[];
 }
 
-export interface GroupedByFileCommandSpec<Row> {
-  query: (ctx: DbCommandContext) => readonly Row[];
-  format: (row: Row, ctx: DbCommandContext) => string;
+export interface GroupedByFileCommandSpec<Row> extends RowCommandSpec<Row, DbCommandContext> {
   key?: (row: Row, ctx: DbCommandContext) => string;
-  emptyMessage?: (ctx: DbCommandContext) => string;
+}
+
+export interface ReportCommandSpec<Result, Ctx extends DbCommandContext = DbCommandContext> {
+  query: (ctx: Ctx) => Result;
+  emptyMessage?: (result: Result, ctx: Ctx) => string | undefined;
   heuristicLabel?: string;
-  after?: (rows: readonly Row[], ctx: DbCommandContext) => void;
+  render: (result: Result, ctx: Ctx) => void;
+  after?: (result: Result, ctx: Ctx) => void;
+}
+
+interface CommandOutputSpec<Output, Ctx extends DbCommandContext> {
+  query: (ctx: Ctx) => Output;
+  emptyMessage?: (output: Output, ctx: Ctx) => string | undefined;
+  heuristicLabel?: string;
+  render: (output: Output, ctx: Ctx) => void;
+  after?: (output: Output, ctx: Ctx) => void;
 }
 
 export function dbCommand(run: (ctx: DbCommandContext) => void): CommandHandler {
@@ -61,89 +75,56 @@ export function budgetedDbCommand(
 }
 
 export function listCommand<Row>(spec: ListCommandSpec<Row>): CommandHandler {
-  return dbCommand((ctx) => {
-    const rows = spec.query(ctx);
-    if (rows.length === 0 && spec.emptyMessage) {
-      render.empty(spec.emptyMessage(ctx));
-      return;
-    }
-    if (spec.heuristicLabel) renderHeuristicNotice(spec.heuristicLabel);
-    render.list(rows, (row) => spec.format(row, ctx));
-    spec.after?.(rows, ctx);
-  });
+  return dbCommand((ctx) => renderRows(ctx, spec, { kind: 'list' }));
 }
 
 export function tableCommand<Row>(spec: TableCommandSpec<Row>): CommandHandler {
-  return dbCommand((ctx) => {
-    const rows = spec.query(ctx);
-    if (rows.length === 0 && spec.emptyMessage) {
-      render.empty(spec.emptyMessage(ctx));
-      return;
-    }
-    if (spec.heuristicLabel) renderHeuristicNotice(spec.heuristicLabel);
-    render.table(spec.headers, rows.map((row) => spec.format(row, ctx)), spec.dashWidths);
-    spec.after?.(rows, ctx);
-  });
+  return dbCommand((ctx) =>
+    renderRows(ctx, spec, { kind: 'table', headers: spec.headers, dashWidths: spec.dashWidths }));
 }
 
 export function groupedByFileCommand<Row>(spec: GroupedByFileCommandSpec<Row>): CommandHandler {
-  return dbCommand((ctx) => {
-    const rows = spec.query(ctx);
-    if (rows.length === 0 && spec.emptyMessage) {
-      render.empty(spec.emptyMessage(ctx));
-      return;
-    }
-    if (spec.heuristicLabel) renderHeuristicNotice(spec.heuristicLabel);
-    render.groupedByFile(
-      rows,
-      (row) => spec.format(row, ctx),
-      spec.key ? (row) => spec.key!(row, ctx) : undefined,
-    );
-    spec.after?.(rows, ctx);
-  });
+  return dbCommand((ctx) =>
+    renderRows(ctx, spec, { kind: 'grouped', key: spec.key }));
+}
+
+export function reportCommand<Result>(spec: ReportCommandSpec<Result>): CommandHandler {
+  return dbCommand((ctx) => runCommandOutput(ctx, spec));
+}
+
+export function budgetedReportCommand<Result>(
+  commandName: string,
+  spec: ReportCommandSpec<Result, BudgetedCommandContext>,
+): CommandHandler {
+  return budgetedDbCommand(commandName, (ctx) => runCommandOutput(ctx, spec));
 }
 
 export function budgetedListCommand<Row>(
   commandName: string,
-  spec: Omit<ListCommandSpec<Row>, 'query' | 'format'> & {
-    query: (ctx: BudgetedCommandContext) => readonly Row[];
-    format: (row: Row, ctx: BudgetedCommandContext) => string;
-    after?: (rows: readonly Row[], ctx: BudgetedCommandContext) => void;
-  },
+  spec: RowCommandSpec<Row, BudgetedCommandContext>,
 ): CommandHandler {
-  return budgetedDbCommand(commandName, (ctx) => {
-    const rows = spec.query(ctx);
-    if (rows.length === 0 && spec.emptyMessage) {
-      render.empty(spec.emptyMessage(ctx));
-      return;
-    }
-    if (spec.heuristicLabel) renderHeuristicNotice(spec.heuristicLabel);
-    render.list(rows, (row) => spec.format(row, ctx));
-    spec.after?.(rows, ctx);
-  });
+  return budgetedDbCommand(commandName, (ctx) => renderRows(ctx, spec, { kind: 'list' }));
 }
 
 export function budgetedTableCommand<Row>(
   commandName: string,
-  spec: Omit<TableCommandSpec<Row>, 'query' | 'format'> & {
-    query: (ctx: BudgetedCommandContext) => readonly Row[];
-    format: (row: Row, ctx: BudgetedCommandContext) => string;
-    after?: (rows: readonly Row[], ctx: BudgetedCommandContext) => void;
+  spec: RowCommandSpec<Row, BudgetedCommandContext> & {
+    headers: readonly string[];
+    dashWidths?: readonly number[];
   },
 ): CommandHandler {
-  return budgetedDbCommand(commandName, (ctx) => renderRows(ctx, spec, 'table'));
+  return budgetedDbCommand(commandName, (ctx) =>
+    renderRows(ctx, spec, { kind: 'table', headers: spec.headers, dashWidths: spec.dashWidths }));
 }
 
 export function budgetedGroupedByFileCommand<Row>(
   commandName: string,
-  spec: Omit<GroupedByFileCommandSpec<Row>, 'query' | 'format' | 'key'> & {
-    query: (ctx: BudgetedCommandContext) => readonly Row[];
-    format: (row: Row, ctx: BudgetedCommandContext) => string;
+  spec: RowCommandSpec<Row, BudgetedCommandContext> & {
     key?: (row: Row, ctx: BudgetedCommandContext) => string;
-    after?: (rows: readonly Row[], ctx: BudgetedCommandContext) => void;
   },
 ): CommandHandler {
-  return budgetedDbCommand(commandName, (ctx) => renderRows(ctx, spec, 'grouped'));
+  return budgetedDbCommand(commandName, (ctx) =>
+    renderRows(ctx, spec, { kind: 'grouped', key: spec.key }));
 }
 
 export function stringArg(args: readonly unknown[], index: number): string {
@@ -173,41 +154,47 @@ export function definedNumberOption(opts: CommandOptions, key: string, fallback:
   return numberOptionValue(opts, key) ?? fallback;
 }
 
-function renderRows<Row>(
-  ctx: BudgetedCommandContext,
-  spec: (
-    | (Omit<TableCommandSpec<Row>, 'query' | 'format'> & {
-      query: (ctx: BudgetedCommandContext) => readonly Row[];
-      format: (row: Row, ctx: BudgetedCommandContext) => string;
-      after?: (rows: readonly Row[], ctx: BudgetedCommandContext) => void;
-    })
-    | (Omit<GroupedByFileCommandSpec<Row>, 'query' | 'format' | 'key'> & {
-      query: (ctx: BudgetedCommandContext) => readonly Row[];
-      format: (row: Row, ctx: BudgetedCommandContext) => string;
-      key?: (row: Row, ctx: BudgetedCommandContext) => string;
-      after?: (rows: readonly Row[], ctx: BudgetedCommandContext) => void;
-    })
-  ),
-  shape: 'table' | 'grouped',
+function renderRows<Row, Ctx extends DbCommandContext>(
+  ctx: Ctx,
+  spec: RowCommandSpec<Row, Ctx>,
+  renderer: RowRenderer<Row, Ctx>,
 ): void {
-  const rows = spec.query(ctx);
-  if (rows.length === 0 && spec.emptyMessage) {
-    render.empty(spec.emptyMessage(ctx));
+  runCommandOutput(ctx, {
+    query: spec.query,
+    emptyMessage: (rows, rowCtx) => rows.length === 0 && spec.emptyMessage
+      ? spec.emptyMessage(rowCtx)
+      : undefined,
+    heuristicLabel: spec.heuristicLabel,
+    render: (rows, rowCtx) => {
+      if (renderer.kind === 'list') {
+        render.list(rows, (row) => spec.format(row, rowCtx));
+      } else if (renderer.kind === 'table') {
+        render.table(renderer.headers, rows.map((row) => spec.format(row, rowCtx)), renderer.dashWidths);
+      } else {
+        render.groupedByFile(
+          rows,
+          (row) => spec.format(row, rowCtx),
+          renderer.key ? (row) => renderer.key!(row, rowCtx) : undefined,
+        );
+      }
+    },
+    after: spec.after,
+  });
+}
+
+function runCommandOutput<Output, Ctx extends DbCommandContext>(
+  ctx: Ctx,
+  spec: CommandOutputSpec<Output, Ctx>,
+): void {
+  const output = spec.query(ctx);
+  const emptyMessage = spec.emptyMessage?.(output, ctx);
+  if (emptyMessage) {
+    render.empty(emptyMessage);
     return;
   }
   if (spec.heuristicLabel) renderHeuristicNotice(spec.heuristicLabel);
-  if (shape === 'table') {
-    const table = spec as TableCommandSpec<Row>;
-    render.table(table.headers, rows.map((row) => table.format(row, ctx)), table.dashWidths);
-  } else {
-    const grouped = spec as GroupedByFileCommandSpec<Row>;
-    render.groupedByFile(
-      rows,
-      (row) => grouped.format(row, ctx),
-      grouped.key ? (row) => grouped.key!(row, ctx) : undefined,
-    );
-  }
-  spec.after?.(rows, ctx);
+  spec.render(output, ctx);
+  spec.after?.(output, ctx);
 }
 
 function splitCommanderActionArgs(rawArgs: readonly unknown[]): { args: readonly unknown[]; opts: CommandOptions } {

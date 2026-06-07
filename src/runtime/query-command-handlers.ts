@@ -4,13 +4,16 @@ import {
   budgetedDbCommand,
   budgetedGroupedByFileCommand,
   budgetedListCommand,
+  budgetedReportCommand,
   budgetedTableCommand,
   booleanOptionValue,
   dbCommand,
   definedNumberOption,
   groupedByFileCommand,
   listCommand,
+  numberOptionValue,
   optionalStringArg,
+  reportCommand,
   stringArg,
   stringOptionValue,
   tableCommand,
@@ -338,6 +341,45 @@ export const handleCoupling = dbCommand(({ db, args, opts }) => {
   );
 });
 
+export const handleCycles = reportCommand({
+  query: ({ db, opts }) => queries.cycles(db, {
+    scope: stringOptionValue(opts, 'scope'),
+    maxDepth: definedNumberOption(opts, 'maxDepth', 10),
+  }),
+  emptyMessage: (results) => results.length === 0 ? 'No circular dependencies found.' : undefined,
+  render: (results) => {
+    const real = results.filter((r) => r.kind === 'real');
+    const moduleHierarchy = results.filter((r) => r.kind === 'module-hierarchy');
+    for (let i = 0; i < real.length; i++) {
+      console.log(`\nCycle ${i + 1} (${real[i]!.path.length - 1} files):`);
+      for (let j = 0; j < real[i]!.path.length; j++) {
+        const arrow = j < real[i]!.path.length - 1 ? ' →' : ' (cycle)';
+        console.log(`  ${real[i]!.path[j]}${arrow}`);
+      }
+    }
+    if (real.length === 0) console.log('No real circular dependencies found.');
+    else console.log(`\n${real.length} real cycle(s) found.`);
+    if (moduleHierarchy.length > 0) {
+      console.log(`(${moduleHierarchy.length} module-hierarchy cycle(s) hidden — barrel files participating in normal parent/child re-export patterns. Pass --include-module-hierarchy to see them.)`);
+    }
+  },
+});
+
+export const handleDeepChains = reportCommand({
+  query: ({ db, opts }) => queries.deepChains(db, {
+    limit: definedNumberOption(opts, 'limit', 10),
+    scope: stringOptionValue(opts, 'scope'),
+    minDepth: definedNumberOption(opts, 'minDepth', 3),
+  }),
+  emptyMessage: (results) => results.length === 0 ? 'No deep chains found.' : undefined,
+  render: (results) => {
+    for (let i = 0; i < results.length; i++) {
+      console.log(`\nChain ${i + 1} (depth ${results[i]!.depth}):`);
+      for (const file of results[i]!.chain) console.log(`  → ${file}`);
+    }
+  },
+});
+
 export const handleAffected = dbCommand(({ db, args, opts }) => {
   const results = queries.affected(db, stringArg(args, 0), {
     maxDepth: definedNumberOption(opts, 'maxDepth', 5),
@@ -377,6 +419,118 @@ export const handleComplexity = budgetedDbCommand('complexity', ({ db, args, bud
   console.log(`  Fan-out:              ${result.fanOut}`);
 });
 
+export const handleSimilar = budgetedReportCommand('similar', {
+  query: ({ db, args, opts, budget }) => {
+    const symbol = optionalStringArg(args, 0);
+    if (symbol) {
+      return {
+        mode: 'target' as const,
+        rows: queries.similar(db, symbol, {
+          minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.4),
+          limit: definedNumberOption(opts, 'limit', 20),
+          scanLimit: budget.scanLimit,
+          semantic: budget.semantic,
+        }),
+      };
+    }
+    return {
+      mode: 'all' as const,
+      rows: queries.similarAll(db, {
+        minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.4),
+        limit: definedNumberOption(opts, 'limit', 20),
+        scope: stringOptionValue(opts, 'scope'),
+        minCallees: definedNumberOption(opts, 'minCallees', 4),
+        crossFileOnly: booleanOptionValue(opts, 'crossFileOnly'),
+        scanLimit: budget.scanLimit,
+        semantic: budget.semantic,
+      }),
+    };
+  },
+  emptyMessage: (result) => {
+    if (result.rows.length > 0) return undefined;
+    return result.mode === 'target' ? 'No similar symbols found.' : 'No similar symbol pairs found.';
+  },
+  heuristicLabel: 'similarity candidates',
+  render: (result) => {
+    if (result.mode === 'target') {
+      render.list(result.rows, (r) => {
+        const basis = r.similarityBasis ?? 'callees';
+        const sharedLabel = basis === 'source-tokens' ? 'Shared source tokens' : 'Shared callees';
+        const onlyLabel = basis === 'source-tokens' ? 'Only tokens in' : 'Only in';
+        const lines = [
+          `\n${Math.round(r.similarity * 100)}% similar:`,
+          `  A: ${r.shortNameA}  (${r.fileA})`,
+          `  B: ${r.shortNameB}  (${r.fileB})`,
+          `  ${sharedLabel}: ${r.sharedCallees.join(', ')}`,
+        ];
+        if (r.uniqueToA.length) lines.push(`  ${onlyLabel} A: ${r.uniqueToA.join(', ')}`);
+        if (r.uniqueToB.length) lines.push(`  ${onlyLabel} B: ${r.uniqueToB.join(', ')}`);
+        return lines.join('\n');
+      });
+      return;
+    }
+
+    render.list(result.rows, (r) =>
+      `\n${Math.round(r.similarity * 100)}% similar:\n` +
+      `  A: ${r.shortNameA}  (${r.fileA})\n` +
+      `  B: ${r.shortNameB}  (${r.fileB})\n` +
+      `  Shared ${r.similarityBasis === 'source-tokens' ? 'source tokens' : 'callees'}: ${r.sharedCallees.join(', ')}`,
+    );
+    console.log(`\n${result.rows.length} similar pair(s) found.`);
+  },
+});
+
+export const handleSimilarFiles = reportCommand({
+  query: ({ db, args, opts }) => queries.similarFiles(db, {
+    minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.5),
+    limit: definedNumberOption(opts, 'limit', 20),
+    scope: stringOptionValue(opts, 'scope'),
+    minDeps: numberOptionValue(opts, 'minDeps'),
+    filePattern: optionalStringArg(args, 0),
+  }),
+  emptyMessage: (results) => results.length === 0 ? 'No similar file pairs found.' : undefined,
+  heuristicLabel: 'similar file candidates',
+  render: (results) => {
+    render.list(results, (r) => {
+      const lines = [
+        `\n${Math.round(r.similarity * 100)}% similar:`,
+        `  ${r.fileA}`,
+        `  ${r.fileB}`,
+        `  Shared deps (${r.sharedDeps.length}): ${r.sharedDeps.join(', ')}`,
+      ];
+      if (r.uniqueToA.length) lines.push(`  Only in first:  ${r.uniqueToA.join(', ')}`);
+      if (r.uniqueToB.length) lines.push(`  Only in second: ${r.uniqueToB.join(', ')}`);
+      return lines.join('\n');
+    });
+    console.log(`\n${results.length} similar pair(s) found.`);
+  },
+});
+
+export const handleSimilarChains = reportCommand({
+  query: ({ db, opts }) => queries.similarChains(db, {
+    minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.5),
+    limit: definedNumberOption(opts, 'limit', 15),
+    scope: stringOptionValue(opts, 'scope'),
+    minChainLength: definedNumberOption(opts, 'minLength', 3),
+    maxChainLength: definedNumberOption(opts, 'maxLength', 8),
+  }),
+  emptyMessage: (results) => results.length === 0 ? 'No similar chains found.' : undefined,
+  heuristicLabel: 'similar chain candidates',
+  render: (results) => {
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i]!;
+      console.log(`\n── Chain pair ${i + 1} (${Math.round(r.similarity * 100)}% similar, ${r.divergencePoints.length} divergence point(s)) ──`);
+      console.log(`  Chain A: ${r.chainA.join(' → ')}`);
+      console.log(`  Chain B: ${r.chainB.join(' → ')}`);
+      if (r.commonPrefix.length) console.log(`  Common prefix: ${r.commonPrefix.join(' → ')}`);
+      if (r.commonSuffix.length) console.log(`  Common suffix: ${r.commonSuffix.join(' → ')}`);
+      console.log('  Divergence points (consolidation targets):');
+      for (const d of r.divergencePoints) console.log(`    [${d.index}] ${d.nodeA}  ↔  ${d.nodeB}`);
+    }
+    console.log(`\n${results.length} similar chain pair(s) found.`);
+  },
+});
+
 export const handleDataflow = budgetedDbCommand('dataflow', ({ db, args, budget }) => {
   const result = queries.dataflow(db, stringArg(args, 0), { semantic: budget.semantic });
   if (!result) return render.empty('Symbol not found.');
@@ -397,6 +551,52 @@ export const handleDataflow = budgetedDbCommand('dataflow', ({ db, args, budget 
     console.log('\n  ═══ CONSUMERS (this feeds into) ═══');
     for (const c of result.consumers) console.log(`    ${c.file}  ${c.shortName}`);
   }
+});
+
+export const handleDrift = budgetedReportCommand('drift', {
+  query: ({ db, args, opts, budget }) => queries.drift(db, {
+    scope: optionalStringArg(args, 0),
+    minDeviation: definedNumberOption(opts, 'minDeviation', 5),
+    semantic: budget.semantic,
+  }),
+  emptyMessage: (summary) => summary.results.length === 0 ? 'No drift detected.' : undefined,
+  heuristicLabel: 'drift candidates',
+  render: (summary) => {
+    console.log('');
+    render.groupedByFile(
+      summary.results,
+      (r) => {
+        const tag = r.kind === 'unused-import' ? 'UNUSED' : r.kind === 'layer-violation' ? 'LAYER' : 'UNIQUE';
+        const head = `  [${tag}] ${r.description}`;
+        return r.detail ? `${head}\n         ${r.detail}` : head;
+      },
+      (r) => r.file,
+    );
+    console.log(`\n${summary.unusedImports} unused import(s), ${summary.layerViolations} layer violation(s), ${summary.patternDeviations} pattern deviation(s)`);
+  },
+});
+
+export const handleConvergence = budgetedReportCommand('convergence', {
+  query: ({ db, args, budget }) =>
+    queries.convergence(db, stringArg(args, 0), stringArg(args, 1), { semantic: budget.semantic }),
+  emptyMessage: (result) => result ? undefined : 'One or both symbols not found.',
+  render: (result) => {
+    if (!result) return;
+    console.log(`\n${Math.round(result.similarity * 100)}% callee overlap\n`);
+    console.log(`  A: ${result.symbolA.shortName}  (${result.symbolA.file}, ${result.symbolA.loc} LOC)`);
+    console.log(`  B: ${result.symbolB.shortName}  (${result.symbolB.file}, ${result.symbolB.loc} LOC)\n`);
+    console.log(`  Shared callees (${result.sharedCallees.length}):`);
+    for (const c of result.sharedCallees) console.log(`    ${c}`);
+    if (result.uniqueToA.length > 0) {
+      console.log(`\n  Unique to A (${result.uniqueToA.length}):`);
+      for (const c of result.uniqueToA) console.log(`    ${c}`);
+    }
+    if (result.uniqueToB.length > 0) {
+      console.log(`\n  Unique to B (${result.uniqueToB.length}):`);
+      for (const c of result.uniqueToB) console.log(`    ${c}`);
+    }
+    console.log(`\n  Strategy: ${result.consolidationStrategy}`);
+  },
 });
 
 export const handleSlice = budgetedDbCommand('slice', ({ db, args, opts, budget }) => {

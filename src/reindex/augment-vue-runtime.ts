@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, extname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { DefinitionInfo, DefinitionRangeLookup, ResolvedOccurrence, SourceTextInfo, TsModule, VolarLanguage, VolarMapper, VolarTsModule, VueCoreModule, VueIdentifierToken, VueLanguageContext, VueLanguageDependencies } from './augment-vue-types.js';
+import type { DefinitionInfo, DefinitionRangeLookup, ResolvedOccurrence, SourceTextInfo, TsModule, VolarLanguage, VolarMapper, VolarTsModule, VueCoreModule, VueIdentifierToken, VueLanguageContext, VueLanguageDependencies, VueSourceReader } from './augment-vue-types.js';
 
 function clearVueDocumentChunks(db: Database.Database): void {
   const tx = db.transaction(() => {
@@ -28,6 +28,8 @@ function clearVueDocumentChunks(db: Database.Database): void {
   tx();
 }
 
+// scip-query: ignore-wrapper — DB read-side for the Vue augmentation input set;
+// callers should not duplicate the Vue document predicate.
 export function listVueDocumentFiles(db: Database.Database, projectRoot: string): string[] {
   const rows = db.prepare(`
     SELECT relative_path AS relativePath
@@ -182,15 +184,15 @@ function requireVueAugmentDependency(
 export function createSymbolLookup(
   db: Database.Database,
   projectRoot: string,
-  sourceCache: (fileName: string) => SourceTextInfo | null,
+  sourceReader: VueSourceReader,
 ): (definition: DefinitionInfo) => number | null {
   const rangesByFile = loadDefinitionRanges(db);
 
   return (definition: DefinitionInfo): number | null => {
     const relativePath = toRelativePath(projectRoot, definition.fileName);
-    const sourceInfo = sourceCache(definition.fileName);
+    const sourceInfo = sourceReader.get(definition.fileName);
     if (!sourceInfo) return null;
-    const pos = offsetToLineChar(sourceInfo, definition.textSpan.start);
+    const pos = sourceReader.positionAt(sourceInfo, definition.textSpan.start);
     const lookup = rangesByFile.get(relativePath);
     if (!lookup) return null;
     const containing = lookup.containingByLine.get(pos.line);
@@ -283,10 +285,10 @@ export function createVueSymbolLookup(
       const relativePath = toRelativePath(projectRoot, fileName);
       const symbol = vueDefaultExportSymbol(packageInfo.name, packageInfo.version, relativePath);
       insertSymbol.run(symbol, 'default', 7, `Vue component|${relativePath}`);
-      const symbolRow = select.get(symbol) as { id: number } | undefined;
-      if (!symbolRow) continue;
+      const symbolId = findVueSymbolId(select, packageInfo, projectRoot, fileName);
+      if (!symbolId) continue;
       syntheticSymbols++;
-      byFile.set(fileName, symbolRow.id);
+      byFile.set(fileName, symbolId);
     }
   });
   tx();
@@ -299,6 +301,8 @@ export function createVueSymbolLookup(
   };
 }
 
+// scip-query: ignore-wrapper — transaction boundary for replacing generated Vue
+// chunks; callers pass facts, this function owns delete/definition/mention order.
 export function replaceVueDocumentChunks(
   db: Database.Database,
   projectRoot: string,
@@ -354,10 +358,7 @@ export function createVueSymbolIdLookup(
       if (byFile.has(fileName)) {
         return byFile.get(fileName) ?? null;
       }
-      const relativePath = toRelativePath(projectRoot, fileName);
-      const symbol = vueDefaultExportSymbol(packageInfo.name, packageInfo.version, relativePath);
-      const row = select.get(symbol) as { id: number } | undefined;
-      const id = row?.id ?? null;
+      const id = findVueSymbolId(select, packageInfo, projectRoot, fileName);
       byFile.set(fileName, id);
       return id;
     },
@@ -390,6 +391,8 @@ export function resolveDefinitionSymbolId(
   return symbolLookup(definition);
 }
 
+// scip-query: ignore-wrapper — public normalization step shared by direct and
+// worker modes before writing resolved mentions.
 export function dedupeOccurrences(occurrences: ResolvedOccurrence[]): ResolvedOccurrence[] {
   const seen = new Set<string>();
   const deduped: ResolvedOccurrence[] = [];
@@ -460,6 +463,8 @@ export function* identifierTokens(source: string): Generator<VueIdentifierToken>
   }
 }
 
+// scip-query: ignore-wrapper — Volar mapper adapter; hides generator semantics
+// and the navigation-data predicate from the token resolver.
 export function firstGeneratedOffset(map: VolarMapper, sourceOffset: number): number | null {
   for (const [offset] of map.toGeneratedLocation(sourceOffset, (data) => !!data.navigation)) {
     return offset;
@@ -467,6 +472,8 @@ export function firstGeneratedOffset(map: VolarMapper, sourceOffset: number): nu
   return null;
 }
 
+// scip-query: ignore-wrapper — inverse Volar mapper adapter; keeps highlight and
+// definition mapping on the same navigation-data policy.
 export function firstSourceOffset(map: VolarMapper, generatedOffset: number): number | null {
   const anyMap = map as unknown as {
     toSourceLocation(
@@ -480,7 +487,7 @@ export function firstSourceOffset(map: VolarMapper, generatedOffset: number): nu
   return null;
 }
 
-export function offsetToLineChar(source: SourceTextInfo, offset: number): { line: number; character: number } {
+function offsetToLineChar(source: SourceTextInfo, offset: number): { line: number; character: number } {
   let low = 0;
   let high = source.lineStarts.length - 1;
   while (low <= high) {
@@ -496,11 +503,15 @@ export function offsetToLineChar(source: SourceTextInfo, offset: number): { line
   return { line, character: offset - source.lineStarts[line]! };
 }
 
+// scip-query: ignore-passthrough — names the project-boundary policy for Vue
+// definitions; the relative-path check is the current implementation.
 export function isExternalDefinition(projectRoot: string, fileName: string): boolean {
   const rel = toRelativePath(projectRoot, fileName);
   return rel.startsWith('node_modules/');
 }
 
+// scip-query: ignore-wrapper — canonical path normalization for Vue augmentation
+// DB lookups and generated SCIP symbol names.
 export function toRelativePath(projectRoot: string, fileName: string): string {
   return relative(projectRoot, fileName).replaceAll('\\', '/');
 }
@@ -528,21 +539,26 @@ function languageIdForPath(fileName: string): string {
   }
 }
 
-export function createSourceTextCache(): (fileName: string) => SourceTextInfo | null {
+// scip-query: ignore-wrapper — source-text pipeline primitive for Vue direct
+// and worker modes; owns both cached reads and offset-to-line conversion.
+export function createVueSourceReader(): VueSourceReader {
   const cache = new Map<string, SourceTextInfo | null>();
-  return (fileName: string) => {
-    if (cache.has(fileName)) {
-      return cache.get(fileName) ?? null;
-    }
-    try {
-      const text = readFileSync(fileName, 'utf-8');
-      const info = { text, lineStarts: createLineStarts(text) };
-      cache.set(fileName, info);
-      return info;
-    } catch {
-      cache.set(fileName, null);
-      return null;
-    }
+  return {
+    get(fileName: string) {
+      if (cache.has(fileName)) {
+        return cache.get(fileName) ?? null;
+      }
+      try {
+        const text = readFileSync(fileName, 'utf-8');
+        const info = { text, lineStarts: createLineStarts(text) };
+        cache.set(fileName, info);
+        return info;
+      } catch {
+        cache.set(fileName, null);
+        return null;
+      }
+    },
+    positionAt: offsetToLineChar,
   };
 }
 
@@ -581,6 +597,18 @@ function readPackageInfo(projectRoot: string): { name: string; version: string }
   } catch {
     return { name: 'workspace', version: '0.0.0' };
   }
+}
+
+function findVueSymbolId(
+  select: Database.Statement,
+  packageInfo: { name: string; version: string },
+  projectRoot: string,
+  fileName: string,
+): number | null {
+  const relativePath = toRelativePath(projectRoot, fileName);
+  const symbol = vueDefaultExportSymbol(packageInfo.name, packageInfo.version, relativePath);
+  const row = select.get(symbol) as { id: number } | undefined;
+  return row?.id ?? null;
 }
 
 function vueDefaultExportSymbol(packageName: string, version: string, relativePath: string): string {

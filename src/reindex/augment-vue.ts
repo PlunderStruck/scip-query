@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { augmentAuxiliaryDocuments } from './augment.js';
 import { fingerprintProjectFiles } from './project-files.js';
 import { awaitVueReferenceWorkers, shouldUseVueWorkers } from './augment-vue-workers.js';
-import { createSourceTextCache, createSymbolLookup, createVueLanguageContext, createVueSymbolIdLookup, createVueSymbolLookup, dedupeOccurrences, firstGeneratedOffset, firstSourceOffset, identifierTokens, isExternalDefinition, listVueDocumentFiles, offsetToLineChar, replaceVueDocumentChunks, resolveDefinitionSymbolId, toRelativePath } from './augment-vue-runtime.js';
+import { createSymbolLookup, createVueLanguageContext, createVueSourceReader, createVueSymbolIdLookup, createVueSymbolLookup, dedupeOccurrences, firstGeneratedOffset, firstSourceOffset, identifierTokens, isExternalDefinition, listVueDocumentFiles, replaceVueDocumentChunks, resolveDefinitionSymbolId, toRelativePath } from './augment-vue-runtime.js';
 
 import type { AugmentVueCache, AugmentVueFingerprint, AugmentVueResolvedOptions, AugmentVueResolvedResult, ResolvedOccurrence, SourceTextInfo, TsLanguageService, VolarMapper, VueIdentifierToken, VueReferenceComputationOptions, VueReferenceComputationResult, VueReferenceTask } from './augment-vue-types.js';
 
@@ -79,15 +79,15 @@ function computeVueReferenceComputation(
     });
   }
 
-  const sourceCache = createSourceTextCache();
+  const sourceReader = createVueSourceReader();
   const context = createVueLanguageContext(opts.projectRoot, configPath);
   return computeVueResolvedReferencesForFiles({
     projectRoot: opts.projectRoot,
     vueFiles: context.fileNames.filter((file) => file.endsWith('.vue')),
     context,
-    symbolLookup: createSymbolLookup(db, opts.projectRoot, sourceCache),
+    symbolLookup: createSymbolLookup(db, opts.projectRoot, sourceReader),
     vueSymbolLookup,
-    sourceCache,
+    sourceReader,
   });
 }
 
@@ -184,15 +184,15 @@ export function computeVueResolvedReferencesForWorker(opts: {
   const context = createVueLanguageContext(opts.projectRoot, configPath);
   const db = new Database(opts.dbPath, { readonly: true });
   try {
-    const sourceCache = createSourceTextCache();
+    const sourceReader = createVueSourceReader();
     return computeVueResolvedReferencesForFiles({
       projectRoot: opts.projectRoot,
       vueFiles: opts.vueFiles ?? [],
       tasks: opts.tasks,
       context,
-      symbolLookup: createSymbolLookup(db, opts.projectRoot, sourceCache),
+      symbolLookup: createSymbolLookup(db, opts.projectRoot, sourceReader),
       vueSymbolLookup: createVueSymbolIdLookup(db, opts.projectRoot),
-      sourceCache,
+      sourceReader,
     });
   } finally {
     db.close();
@@ -234,7 +234,7 @@ function computeVueReferenceTask(
     return { occurrences: [], skippedReferences: task.countFileSkip ? 1 : 0 };
   }
 
-  const sourceInfo = opts.sourceCache(task.fileName);
+  const sourceInfo = opts.sourceReader.get(task.fileName);
   if (!sourceInfo) {
     return { occurrences: [], skippedReferences: task.countFileSkip ? 1 : 0 };
   }
@@ -301,7 +301,7 @@ function resolveVueTokenReferences(opts: VueReferenceComputationOptions & {
       continue;
     }
 
-    addVueOccurrence(occurrences, opts.sourceInfo, opts.sourceFile, token, symbolId);
+    addVueOccurrence(occurrences, opts.sourceReader, opts.sourceInfo, opts.sourceFile, token, symbolId);
     opts.tokenContext.processedStarts.add(token.start);
     addVueHighlightedOccurrences(occurrences, opts, token, generated, symbolId);
   }
@@ -328,19 +328,20 @@ function addVueHighlightedOccurrences(
     if (opts.tokenContext.processedStarts.has(highlightedStart)) continue;
     const highlightedToken = opts.tokenContext.tokenByStart.get(highlightedStart);
     if (!highlightedToken) continue;
-    addVueOccurrence(occurrences, opts.sourceInfo, opts.sourceFile, highlightedToken, symbolId);
+    addVueOccurrence(occurrences, opts.sourceReader, opts.sourceInfo, opts.sourceFile, highlightedToken, symbolId);
     opts.tokenContext.processedStarts.add(highlightedStart);
   }
 }
 
 function addVueOccurrence(
   occurrences: ResolvedOccurrence[],
+  sourceReader: VueReferenceComputationOptions['sourceReader'],
   sourceInfo: SourceTextInfo,
   sourceFile: string,
   token: VueIdentifierToken,
   symbolId: number,
 ): void {
-  const sourcePos = offsetToLineChar(sourceInfo, token.start);
+  const sourcePos = sourceReader.positionAt(sourceInfo, token.start);
   occurrences.push({
     sourceFile,
     sourceLine: sourcePos.line,

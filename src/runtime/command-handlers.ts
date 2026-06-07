@@ -19,7 +19,6 @@ import {
   commandAnalysisBudget,
   renderDiffImpactReport,
   renderHealthReport,
-  renderHeuristicNotice,
   runIsolatedDiffImpactReport,
   runIsolatedHealthReport,
 } from './cli-support.js';
@@ -261,147 +260,6 @@ export function handleDead(scope: unknown, rawOpts: unknown): void {
   });
 }
 
-export function handleCycles(rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const results = queries.cycles(db, { scope: stringOption(opts, 'scope'), maxDepth: definedNumber(opts, 'maxDepth', 10) });
-    if (results.length === 0) return render.empty('No circular dependencies found.');
-    const real = results.filter((r) => r.kind === 'real');
-    const moduleHierarchy = results.filter((r) => r.kind === 'module-hierarchy');
-    for (let i = 0; i < real.length; i++) {
-      console.log(`\nCycle ${i + 1} (${real[i]!.path.length - 1} files):`);
-      for (let j = 0; j < real[i]!.path.length; j++) {
-        const arrow = j < real[i]!.path.length - 1 ? ' →' : ' (cycle)';
-        console.log(`  ${real[i]!.path[j]}${arrow}`);
-      }
-    }
-    if (real.length === 0) console.log('No real circular dependencies found.');
-    else console.log(`\n${real.length} real cycle(s) found.`);
-    if (moduleHierarchy.length > 0) {
-      console.log(`(${moduleHierarchy.length} module-hierarchy cycle(s) hidden — barrel files participating in normal parent/child re-export patterns. Pass --include-module-hierarchy to see them.)`);
-    }
-  });
-}
-
-export function handleDeepChains(rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const results = queries.deepChains(db, {
-      limit: definedNumber(opts, 'limit', 10),
-      scope: stringOption(opts, 'scope'),
-      minDepth: definedNumber(opts, 'minDepth', 3),
-    });
-    if (results.length === 0) return render.empty('No deep chains found.');
-    for (let i = 0; i < results.length; i++) {
-      console.log(`\nChain ${i + 1} (depth ${results[i]!.depth}):`);
-      for (const file of results[i]!.chain) console.log(`  → ${file}`);
-    }
-  });
-}
-
-export function handleSimilar(symbol: unknown, rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const budget = commandAnalysisBudget(db, 'similar', booleanOption(opts, 'full'));
-    if (typeof symbol === 'string') {
-      const results = queries.similar(db, symbol, {
-        minSimilarity: definedNumber(opts, 'minSimilarity', 0.4),
-        limit: definedNumber(opts, 'limit', 20),
-        scanLimit: budget.scanLimit,
-        semantic: budget.semantic,
-      });
-      if (results.length === 0) return render.empty('No similar symbols found.');
-      renderHeuristicNotice('similarity candidates');
-      render.list(results, (r) => {
-        const basis = r.similarityBasis ?? 'callees';
-        const sharedLabel = basis === 'source-tokens' ? 'Shared source tokens' : 'Shared callees';
-        const onlyLabel = basis === 'source-tokens' ? 'Only tokens in' : 'Only in';
-        const lines = [
-          `\n${Math.round(r.similarity * 100)}% similar:`,
-          `  A: ${r.shortNameA}  (${r.fileA})`,
-          `  B: ${r.shortNameB}  (${r.fileB})`,
-          `  ${sharedLabel}: ${r.sharedCallees.join(', ')}`,
-        ];
-        if (r.uniqueToA.length) lines.push(`  ${onlyLabel} A: ${r.uniqueToA.join(', ')}`);
-        if (r.uniqueToB.length) lines.push(`  ${onlyLabel} B: ${r.uniqueToB.join(', ')}`);
-        return lines.join('\n');
-      });
-    } else {
-      const results = queries.similarAll(db, {
-        minSimilarity: definedNumber(opts, 'minSimilarity', 0.4),
-        limit: definedNumber(opts, 'limit', 20),
-        scope: stringOption(opts, 'scope'),
-        minCallees: definedNumber(opts, 'minCallees', 4),
-        crossFileOnly: booleanOption(opts, 'crossFileOnly'),
-        scanLimit: budget.scanLimit,
-        semantic: budget.semantic,
-      });
-      if (results.length === 0) return render.empty('No similar symbol pairs found.');
-      renderHeuristicNotice('similarity candidates');
-      render.list(results, (r) =>
-        `\n${Math.round(r.similarity * 100)}% similar:\n` +
-        `  A: ${r.shortNameA}  (${r.fileA})\n` +
-        `  B: ${r.shortNameB}  (${r.fileB})\n` +
-        `  Shared ${r.similarityBasis === 'source-tokens' ? 'source tokens' : 'callees'}: ${r.sharedCallees.join(', ')}`,
-      );
-      console.log(`\n${results.length} similar pair(s) found.`);
-    }
-  });
-}
-
-export function handleSimilarFiles(file: unknown, rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const results = queries.similarFiles(db, {
-      minSimilarity: definedNumber(opts, 'minSimilarity', 0.5),
-      limit: definedNumber(opts, 'limit', 20),
-      scope: stringOption(opts, 'scope'),
-      minDeps: numberOption(opts, 'minDeps'),
-      filePattern: typeof file === 'string' ? file : undefined,
-    });
-    if (results.length === 0) return render.empty('No similar file pairs found.');
-    renderHeuristicNotice('similar file candidates');
-    render.list(results, (r) => {
-      const lines = [
-        `\n${Math.round(r.similarity * 100)}% similar:`,
-        `  ${r.fileA}`,
-        `  ${r.fileB}`,
-        `  Shared deps (${r.sharedDeps.length}): ${r.sharedDeps.join(', ')}`,
-      ];
-      if (r.uniqueToA.length) lines.push(`  Only in first:  ${r.uniqueToA.join(', ')}`);
-      if (r.uniqueToB.length) lines.push(`  Only in second: ${r.uniqueToB.join(', ')}`);
-      return lines.join('\n');
-    });
-    console.log(`\n${results.length} similar pair(s) found.`);
-  });
-}
-
-export function handleSimilarChains(rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const results = queries.similarChains(db, {
-      minSimilarity: definedNumber(opts, 'minSimilarity', 0.5),
-      limit: definedNumber(opts, 'limit', 15),
-      scope: stringOption(opts, 'scope'),
-      minChainLength: definedNumber(opts, 'minLength', 3),
-      maxChainLength: definedNumber(opts, 'maxLength', 8),
-    });
-    if (results.length === 0) return render.empty('No similar chains found.');
-    renderHeuristicNotice('similar chain candidates');
-    for (let i = 0; i < results.length; i++) {
-      const r = results[i]!;
-      console.log(`\n── Chain pair ${i + 1} (${Math.round(r.similarity * 100)}% similar, ${r.divergencePoints.length} divergence point(s)) ──`);
-      console.log(`  Chain A: ${r.chainA.join(' → ')}`);
-      console.log(`  Chain B: ${r.chainB.join(' → ')}`);
-      if (r.commonPrefix.length) console.log(`  Common prefix: ${r.commonPrefix.join(' → ')}`);
-      if (r.commonSuffix.length) console.log(`  Common suffix: ${r.commonSuffix.join(' → ')}`);
-      console.log('  Divergence points (consolidation targets):');
-      for (const d of r.divergencePoints) console.log(`    [${d.index}] ${d.nodeA}  ↔  ${d.nodeB}`);
-    }
-    console.log(`\n${results.length} similar chain pair(s) found.`);
-  });
-}
-
 export function handleDiffImpactBatch(rawOpts: unknown): void {
   const opts = options(rawOpts);
   withDb((db) => {
@@ -420,31 +278,6 @@ export function handleDiffImpact(rawOpts: unknown): void {
     console.error(`error: ${err instanceof Error ? err.message : err}`);
     process.exit(1);
   }
-}
-
-export function handleDrift(module: unknown, rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const budget = commandAnalysisBudget(db, 'drift', booleanOption(opts, 'full'));
-    const summary = queries.drift(db, {
-      scope: typeof module === 'string' ? module : undefined,
-      minDeviation: definedNumber(opts, 'minDeviation', 5),
-      semantic: budget.semantic,
-    });
-    if (summary.results.length === 0) return render.empty('No drift detected.');
-    renderHeuristicNotice('drift candidates');
-    console.log('');
-    render.groupedByFile(
-      summary.results,
-      (r) => {
-        const tag = r.kind === 'unused-import' ? 'UNUSED' : r.kind === 'layer-violation' ? 'LAYER' : 'UNIQUE';
-        const head = `  [${tag}] ${r.description}`;
-        return r.detail ? `${head}\n         ${r.detail}` : head;
-      },
-      (r) => r.file,
-    );
-    console.log(`\n${summary.unusedImports} unused import(s), ${summary.layerViolations} layer violation(s), ${summary.patternDeviations} pattern deviation(s)`);
-  });
 }
 
 export function handleHealthPhase(phase: unknown, rawOpts: unknown): void {
@@ -475,29 +308,6 @@ export function handleHealth(rawOpts: unknown): void {
     console.error(`error: ${err instanceof Error ? err.message : err}`);
     process.exit(1);
   }
-}
-
-export function handleConvergence(symbol1: unknown, symbol2: unknown, rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const budget = commandAnalysisBudget(db, 'convergence', booleanOption(opts, 'full'));
-    const result = queries.convergence(db, String(symbol1), String(symbol2), { semantic: budget.semantic });
-    if (!result) return render.empty('One or both symbols not found.');
-    console.log(`\n${Math.round(result.similarity * 100)}% callee overlap\n`);
-    console.log(`  A: ${result.symbolA.shortName}  (${result.symbolA.file}, ${result.symbolA.loc} LOC)`);
-    console.log(`  B: ${result.symbolB.shortName}  (${result.symbolB.file}, ${result.symbolB.loc} LOC)\n`);
-    console.log(`  Shared callees (${result.sharedCallees.length}):`);
-    for (const c of result.sharedCallees) console.log(`    ${c}`);
-    if (result.uniqueToA.length > 0) {
-      console.log(`\n  Unique to A (${result.uniqueToA.length}):`);
-      for (const c of result.uniqueToA) console.log(`    ${c}`);
-    }
-    if (result.uniqueToB.length > 0) {
-      console.log(`\n  Unique to B (${result.uniqueToB.length}):`);
-      for (const c of result.uniqueToB) console.log(`    ${c}`);
-    }
-    console.log(`\n  Strategy: ${result.consolidationStrategy}`);
-  });
 }
 
 export function handleInstallSkills(): void {

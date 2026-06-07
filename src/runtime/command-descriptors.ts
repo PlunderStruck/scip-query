@@ -263,7 +263,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     ],
     renderShape: 'custom',
     docs: doc('Graph'),
-    handler: handlers.handleCycles,
+    handler: queryHandlers.handleCycles,
   },
   {
     id: 'bottlenecks',
@@ -327,7 +327,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     ],
     renderShape: 'custom',
     docs: doc('Graph'),
-    handler: handlers.handleDeepChains,
+    handler: queryHandlers.handleDeepChains,
   },
   {
     id: 'hierarchy',
@@ -363,7 +363,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'candidate-scan',
     renderShape: 'custom',
     docs: doc('Cleanup'),
-    handler: handlers.handleSimilar,
+    handler: queryHandlers.handleSimilar,
   },
   {
     id: 'similar-files',
@@ -378,7 +378,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     heuristic: { label: 'similar file candidates' },
     renderShape: 'custom',
     docs: doc('Cleanup'),
-    handler: handlers.handleSimilarFiles,
+    handler: queryHandlers.handleSimilarFiles,
   },
   {
     id: 'similar-chains',
@@ -394,7 +394,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     heuristic: { label: 'similar chain candidates' },
     renderShape: 'custom',
     docs: doc('Cleanup'),
-    handler: handlers.handleSimilarChains,
+    handler: queryHandlers.handleSimilarChains,
   },
   {
     id: 'extract-candidates',
@@ -465,7 +465,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'semantic',
     renderShape: 'grouped-by-file',
     docs: doc('Cleanup'),
-    handler: handlers.handleDrift,
+    handler: queryHandlers.handleDrift,
   },
   {
     id: 'wrapper-candidates',
@@ -566,7 +566,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'semantic',
     renderShape: 'custom',
     docs: doc('Cleanup'),
-    handler: handlers.handleConvergence,
+    handler: queryHandlers.handleConvergence,
   },
   {
     id: 'code',

@@ -176,7 +176,7 @@ export interface VueReferenceComputationOptions {
   context: VueLanguageContext;
   symbolLookup: (definition: DefinitionInfo) => number | null;
   vueSymbolLookup: { get(fileName: string): number | null };
-  sourceCache: (fileName: string) => SourceTextInfo | null;
+  sourceReader: VueSourceReader;
 }
 
 export interface VueIdentifierToken {
@@ -188,6 +188,16 @@ export interface VueIdentifierToken {
 export interface SourceTextInfo {
   text: string;
   lineStarts: number[];
+}
+
+export interface SourcePosition {
+  line: number;
+  character: number;
+}
+
+export interface VueSourceReader {
+  get(fileName: string): SourceTextInfo | null;
+  positionAt(source: SourceTextInfo, offset: number): SourcePosition;
 }
 
 export interface DefinitionRangeLookup {

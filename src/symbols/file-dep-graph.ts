@@ -95,6 +95,8 @@ function addFileDepEdge(
 
 
 
+// scip-query: ignore-passthrough — cache lifecycle facade used by
+// reference-graph reset without exposing file-dependency graph internals.
 export function clearFileDepGraphCache(db: ScipDatabase): void {
   FILE_DEP_GRAPH_CACHE.invalidateAll(db);
 }
