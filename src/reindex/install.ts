@@ -4,10 +4,11 @@ import { createRequire } from 'node:module';
 import { platform } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { IndexerConfig } from '../domain/types.js';
+import { isBinaryAvailable } from '../runtime/binary.js';
 
 const requireFromHere = createRequire(import.meta.url);
 
-const IS_WINDOWS = platform() === 'win32';
+export { isBinaryAvailable };
 
 export interface IndexerDependencyStatus {
   language: IndexerConfig['language'];
@@ -17,19 +18,6 @@ export interface IndexerDependencyStatus {
   resolvedBinary: string | null;
   installUrl?: string;
   note?: string;
-}
-
-/**
- * Check if a binary is available on PATH.
- */
-export function isBinaryAvailable(name: string): boolean {
-  const cmd = IS_WINDOWS ? 'where' : 'which';
-  try {
-    execFileSync(cmd, [name], { stdio: 'pipe' });
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function getBinaryCandidates(config: IndexerConfig): string[] {

@@ -1,30 +1,14 @@
 import { execFileSync } from 'node:child_process';
 import { platform, arch } from 'node:os';
+import { isBinaryAvailable } from './binary.js';
 
-const IS_WINDOWS = platform() === 'win32';
 const SCIP_VERSION = 'v0.7.0';
-
-function isBinaryAvailable(name: string): boolean {
-  const cmd = IS_WINDOWS ? 'where' : 'which';
-  try {
-    execFileSync(cmd, [name], { stdio: 'pipe' });
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Check if the `scip` CLI binary is available on PATH.
  */
 export function isScipInstalled(): boolean {
-  try {
-    const cmd = IS_WINDOWS ? 'where' : 'which';
-    execFileSync(cmd, ['scip'], { stdio: 'pipe' });
-    return true;
-  } catch {
-    return false;
-  }
+  return isBinaryAvailable('scip');
 }
 
 /**

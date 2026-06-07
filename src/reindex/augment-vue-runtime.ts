@@ -345,6 +345,8 @@ function insertVueDefinitionMentions(
   }
 }
 
+// scip-query: ignore-wrapper — memoized Vue symbol lookup shared by direct and
+// worker augmentation paths; hides package-info and SQL lookup details.
 export function createVueSymbolIdLookup(
   db: Database.Database,
   projectRoot: string,

@@ -138,6 +138,8 @@ export function getIdentifierLineMap(
  * pay per definition.
  */
 const FILE_IDENTS_BY_LINE_CACHE = createPerDbCache<string, Array<Set<string>>>('file-idents-by-line');
+// scip-query: ignore-wrapper — line-index view of identifier evidence used by
+// call-graph evidence; hides the cached identifier map materialization.
 export function getIdentifiersByLine(
   db: ScipDatabase,
   relativePath: string,

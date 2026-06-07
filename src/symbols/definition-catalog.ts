@@ -168,6 +168,8 @@ export function getAllDefinitions(
   return getScopedDefinitions(db, opts.scope);
 }
 
+// scip-query: ignore-wrapper — catalog-wide definition read primitive used
+// behind ProjectIndex; it owns document iteration plus ignored-path filtering.
 export function getScopedDefinitions(
   db: ScipDatabase,
   scope?: string,

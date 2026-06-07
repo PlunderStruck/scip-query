@@ -16,6 +16,9 @@ const SIGNATURE_CACHE = new WeakMap<Tree, Map<string, CallableSignature>>();
  * On first call per file, walks the entire AST once and indexes every
  * callable's signature by (startLine, endLine). Subsequent calls are O(1)
  * Map lookups — critical when called for thousands of candidates.
+ *
+ * scip-query: ignore-wrapper — public AST-signature primitive used through
+ * ProjectIndex; callers should not know the per-tree signature cache shape.
  */
 export function getCallableSignature(
   db: ScipDatabase,

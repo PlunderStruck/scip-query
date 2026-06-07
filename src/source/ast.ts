@@ -388,6 +388,8 @@ const CALLABLE_CACHE = new WeakMap<Tree, CallableSite[]>();
  * by name in O(1) instead of regex-scanning the file. For non-AST languages,
  * the tree-sitter path is unavailable and callers fall back to regex.
  */
+// scip-query: ignore-wrapper — callable-site index primitive consumed by the
+// definition catalog; it hides tree-sitter query execution and cache policy.
 export function getCallableSites(db: ScipDatabase, relativePath: string): CallableSite[] | null {
   return runCachedAstQuery(db, relativePath, CALLABLE_CACHE, CALLABLE_QUERY_BY_LANG, (matches) => {
     const sites: CallableSite[] = [];
@@ -557,6 +559,8 @@ export function getTypeContainerMap(
   }) ?? new Map();
 }
 
+// scip-query: ignore-wrapper — cached AST-walk primitive; callers supply the
+// accumulator and visitor while this owns language/tree/cache lifecycle.
 export function runCachedAstWalk<T>(
   db: ScipDatabase,
   relativePath: string,
