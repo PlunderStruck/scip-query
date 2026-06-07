@@ -429,3 +429,5 @@ Language parser adapter slice landed in `docs/plans/2026-06-07-language-parser-a
 Query command algebra slice continued in `docs/plans/2026-06-07-query-command-spec-compression-atlas.md`: simple list/table/grouped commands now use `listQueryCommand`, `tableQueryCommand`, and `groupedQueryCommand`, so metadata, query invocation, render shape, empty state, and post-render behavior live in one command-spec unit instead of split `handleX` symbols plus descriptor entries.
 
 AST runtime split started in `docs/plans/2026-06-07-ast-runtime-split-atlas.md`: the public `src/source/ast.ts` facade stays stable, while parser runtime, language detection, and structural tree/query types move into owned internal modules.
+
+Test fixture DSL slice started in `docs/plans/2026-06-07-test-fixture-dsl-atlas.md`: `tests/evidence-fixture.ts` now owns the minimal SCIP-like SQLite schema, source-file writing, and document/symbol/definition/chunk/mention insertion contract for fallback tests.
