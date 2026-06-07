@@ -12,6 +12,12 @@ interface ReferenceChunk {
   end_line: number;
 }
 
+export type ReferenceEvidenceProvenance = 'source-attribution' | 'scip-reference-chunk';
+
+export interface ReferenceEvidenceSite extends ReferenceSite {
+  provenance: ReferenceEvidenceProvenance;
+}
+
 // ── Reference-site resolution ──────────────────────────────────
 
 // `findReferences` (source-text-based reference scan) lives in
@@ -49,9 +55,31 @@ export function referenceSitesForSymbol(
   symbol: SymbolLocation,
   opts: { semantic?: boolean; includeIgnored?: boolean } = {},
 ): ReferenceSite[] {
+  return referenceEvidenceForSymbol(db, symbol, opts)
+    .map((site) => ({
+      file: site.file,
+      line: site.line,
+      enclosingSymbol: site.enclosingSymbol,
+    }));
+}
+
+export function referenceEvidenceForSymbol(
+  db: ScipDatabase,
+  symbol: SymbolLocation,
+  opts: { semantic?: boolean; includeIgnored?: boolean } = {},
+): ReferenceEvidenceSite[] {
   const sourceSites = findReferences(db, symbol, { semantic: opts.semantic });
-  const sites = sourceSites.length > 0 ? sourceSites : getResolvedReferenceSites(db, symbol);
+  const sites = sourceSites.length > 0
+    ? withReferenceProvenance(sourceSites, 'source-attribution')
+    : withReferenceProvenance(getResolvedReferenceSites(db, symbol), 'scip-reference-chunk');
   return opts.includeIgnored === true ? sites : sites.filter((site) => !db.isIgnored(site.file));
+}
+
+function withReferenceProvenance(
+  sites: readonly ReferenceSite[],
+  provenance: ReferenceEvidenceProvenance,
+): ReferenceEvidenceSite[] {
+  return sites.map((site) => ({ ...site, provenance }));
 }
 
 // scip-query: ignore-wrapper — named precision stage used by reference

@@ -6,7 +6,8 @@ import { leafName } from '../symbols/symbol-parser.js';
 import type { IndexedDefinition } from '../domain/types.js';
 import { isInRustTestModule, shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
-import { applyScanLimit, definitionLoc } from './query-utils.js';
+import { compareDefinitionsBySmallestLoc, definitionLoc } from './query-utils.js';
+import { runCandidateAnalysis } from './internal/candidate-scan.js';
 
 export interface WrapperCandidate {
   symbol: string;
@@ -42,30 +43,20 @@ export function wrapperCandidates(
   const { scope, maxLoc = 15, limit = 30, scanLimit } = opts ?? {};
   const index = new ProjectIndex(db);
   const reverseFanIn = buildReverseFileFanIn(index.fileDependencyGraph(scope));
-  const symbols = applyScanLimit(
-    getWrapperCandidateSymbols(index, scope, maxLoc)
-      .sort((left, right) => definitionLoc(left) - definitionLoc(right) || left.relativePath.localeCompare(right.relativePath)),
+  return runCandidateAnalysis({
+    candidates: () => getWrapperCandidateSymbols(index, scope, maxLoc),
+    orderCandidates: compareDefinitionsBySmallestLoc,
     scanLimit,
-  );
-
-  // Bulk pre-filter: only process symbols with exactly 1 distinct external
-  // caller file. Source-text fallback adds back references the indexer may
-  // miss (macros, dynamic dispatch); without it, a function called via a
-  // missed path would falsely look like a wrapper.
-  const callerFileMap = index.callerFileMap(symbols, { semantic: opts?.semantic !== false });
-
-  const results: WrapperCandidate[] = [];
-
-  for (const symbol of symbols) {
-    const candidate = wrapperCandidateForSymbol(db, index, symbol, {
-      callerFileMap,
+    prepare: (symbols) => ({
+      // Source-text fallback adds back references the indexer may miss; without
+      // it, dynamic dispatch or macro-style calls can falsely look like wrappers.
+      callerFileMap: index.callerFileMap(symbols, { semantic: opts?.semantic !== false }),
       reverseFanIn,
-    });
-    if (candidate) results.push(candidate);
-  }
-
-  results.sort((left, right) => right.callerFanIn - left.callerFanIn || right.loc - left.loc);
-  return results.slice(0, limit);
+    }),
+    evaluate: (symbol, maps) => wrapperCandidateForSymbol(db, index, symbol, maps),
+    orderResults: (left, right) => right.callerFanIn - left.callerFanIn || right.loc - left.loc,
+    limit,
+  });
 }
 
 // scip-query: ignore-extract — this is the single-symbol wrapper decision:

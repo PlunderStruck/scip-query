@@ -4,6 +4,10 @@ export function definitionLoc(definition: Pick<IndexedDefinition, 'startLine' | 
   return definition.endLine - definition.startLine + 1;
 }
 
+export function compareDefinitionsBySmallestLoc(left: IndexedDefinition, right: IndexedDefinition): number {
+  return definitionLoc(left) - definitionLoc(right) || left.relativePath.localeCompare(right.relativePath);
+}
+
 export function applyScanLimit<T>(items: T[], scanLimit: number | undefined): T[] {
   if (typeof scanLimit !== 'number' || scanLimit <= 0 || items.length <= scanLimit) {
     return items;

@@ -6,7 +6,7 @@ import { ScipDatabase } from '../src/storage/db.js';
 import * as queries from '../src/queries/index.js';
 import { findFirstSymbolMatch } from '../src/symbols/symbol-lookup.js';
 import { findEnclosingDefinition, getDefinitionsForFile } from '../src/symbols/definition-catalog.js';
-import { getResolvedReferenceSites } from '../src/symbols/reference-sites.js';
+import { getResolvedReferenceSites, referenceEvidenceForSymbol } from '../src/symbols/reference-sites.js';
 import { findReferences } from '../src/symbols/identifier-attribution.js';
 import { shortenSymbol } from '../src/symbols/symbol-parser.js';
 import type { ScipQueryConfig } from '../src/domain/types.js';
@@ -232,5 +232,14 @@ describe('advanced queries', () => {
       ).toBe(true);
       expect(connected.relationship).toContain('references target at ');
     }
+  });
+
+  it('reference evidence records the selected provenance mode', () => {
+    const match = findFirstSymbolMatch(db, 'normalize');
+    expect(match).not.toBeNull();
+
+    const evidence = referenceEvidenceForSymbol(db, match!);
+    expect(evidence.length).toBeGreaterThan(0);
+    expect(new Set(evidence.map((site) => site.provenance))).toEqual(new Set(['scip-reference-chunk']));
   });
 });

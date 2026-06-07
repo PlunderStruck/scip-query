@@ -167,6 +167,14 @@ Suggested first slice:
 
 Model `candidate-scan` as a small internal API and migrate `wrapper-candidates`, `passthrough-candidates`, and `complexity-hotspots` first. Then tackle `dead` and `stale-abstractions` after `ProjectEvidence` exists.
 
+Completed slice:
+
+`docs/plans/2026-06-07-candidate-analysis-kernel-atlas.md` records the first detector kernel. `src/queries/internal/candidate-scan.ts` now owns the shared candidate lifecycle for small detectors: source, ordering, scan budget, bulk evidence preparation, evaluation, result ordering, and report limit. `wrapper-candidates`, `passthrough-candidates`, and `complexity-hotspots` now use that kernel while keeping detector-specific scoring local. `dead` and `stale-abstractions` remain intentionally outside this first kernel until the deeper evidence-provenance model is mature enough for them.
+
+Evidence provenance slice:
+
+`docs/plans/2026-06-07-reference-evidence-provenance-atlas.md` records the first provenance-bearing evidence record. `referenceEvidenceForSymbol()` now returns reference sites tagged with `source-attribution` or `scip-reference-chunk`, while `referenceSitesForSymbol()` remains the compatibility wrapper for callers that only need plain locations.
+
 ## P1: Query Command Specs Are Better, But Not Done
 
 What the reviewer sees:
@@ -420,14 +428,14 @@ Completed slice:
 
 ## Best Next Refactor
 
-The most professionally embarrassing smell is the distributed evidence policy. The next refactor should be a `ProjectEvidence` compression pass.
+The most professionally embarrassing smell was the distributed evidence policy. The first pass deepened `ProjectIndex` as the project evidence owner and moved cache invalidation behind an evidence-cache registry. The next evidence refactor should add explicit provenance records where callers genuinely need to distinguish SCIP, semantic, AST, and source fallback facts.
 
 Success would look like this:
 
 - Query modules import fewer low-level source/symbol/storage modules.
 - Evidence records carry provenance.
 - `dead`, `isolated`, and `stale-abstractions` stop manually deciding how to combine SCIP, semantic, AST, and source fallback facts.
-- Cache invalidation starts moving behind the evidence layer.
+- Cache invalidation lives behind a query evidence-cache registry.
 - Health remains 100, drift remains clean, and command accuracy tests still pass.
 
 First slice started in `docs/plans/2026-06-07-project-evidence-isolated-compression-atlas.md`: `isolated` no longer imports framework-pattern AST helpers, AST language detection, or indexed-document iteration directly for framework reference evidence, and no longer hand-projects non-self callees from raw callee maps. `stale-abstractions` and `wrapper-candidates` also no longer hand-merge indexed caller evidence with source-fallback caller evidence.

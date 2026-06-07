@@ -3,7 +3,8 @@ import { isLiteralPassthrough } from '../analysis/passthrough-detect.js';
 import type { IndexedDefinition } from '../domain/types.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
-import { applyScanLimit, definitionLoc } from './query-utils.js';
+import { compareDefinitionsBySmallestLoc, definitionLoc } from './query-utils.js';
+import { runCandidateAnalysis } from './internal/candidate-scan.js';
 
 export interface PassthroughCandidate {
   symbol: string;
@@ -34,22 +35,15 @@ export function passthroughCandidates(
 ): PassthroughCandidate[] {
   const { scope, maxLoc = 15, limit = 30, scanLimit } = opts ?? {};
   const index = new ProjectIndex(db);
-  const symbols = applyScanLimit(
-    getPassthroughCandidateSymbols(index, scope, maxLoc)
-      .sort((left, right) => definitionLoc(left) - definitionLoc(right) || left.relativePath.localeCompare(right.relativePath)),
+  return runCandidateAnalysis({
+    candidates: () => getPassthroughCandidateSymbols(index, scope, maxLoc),
+    orderCandidates: compareDefinitionsBySmallestLoc,
     scanLimit,
-  );
-  const calleeMap = index.calleeMap(symbols, { semantic: opts?.semantic !== false });
-
-  const results: PassthroughCandidate[] = [];
-
-  for (const sym of symbols) {
-    const candidate = passthroughCandidateForSymbol(db, sym, calleeMap.get(sym.symbolId) ?? []);
-    if (candidate) results.push(candidate);
-  }
-
-  results.sort((a, b) => a.loc - b.loc || a.file.localeCompare(b.file));
-  return results.slice(0, limit);
+    prepare: (symbols) => index.calleeMap(symbols, { semantic: opts?.semantic !== false }),
+    evaluate: (sym, calleeMap) => passthroughCandidateForSymbol(db, sym, calleeMap.get(sym.symbolId) ?? []),
+    orderResults: (a, b) => a.loc - b.loc || a.file.localeCompare(b.file),
+    limit,
+  });
 }
 
 function passthroughCandidateForSymbol(

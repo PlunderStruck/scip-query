@@ -2,7 +2,7 @@ import type { ScipDatabase } from '../storage/db.js';
 import type { IndexedDefinition } from '../domain/types.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
-import { applyScanLimit } from './query-utils.js';
+import { runCandidateAnalysis } from './internal/candidate-scan.js';
 
 export interface ComplexityHotspot {
   symbol: string;
@@ -33,59 +33,51 @@ export function complexityHotspots(
   opts?: { scope?: string; minLoc?: number; limit?: number; scanLimit?: number; semantic?: boolean },
 ): ComplexityHotspot[] {
   const { scope, minLoc = 10, limit = 30, scanLimit } = opts ?? {};
+  const index = new ProjectIndex(db);
 
-  const { definitions, callerMap, calleeMap } = loadComplexityCandidates(db, scope, scanLimit, opts?.semantic !== false);
-
-  return definitions
-    .map((definition) => {
-      const loc = definition.endLine - definition.startLine + 1;
-      const fanIn = callerMap.get(definition.symbolId)?.size ?? 0;
-      const callees = calleeMap.get(definition.symbolId) ?? [];
-      const externalCallees = callees.filter((c) => c.file !== definition.relativePath);
-      const fanOut = new Set(externalCallees.map((c) => `${c.symbol}|${c.file}`)).size;
-      const calleeCount = new Set(callees.map((c) => `${c.symbol}|${c.file}`)).size;
-      return {
-        symbol: definition.symbol,
-        shortName: shortenSymbol(definition.symbol),
-        file: definition.relativePath,
-        startLine: definition.startLine,
-        endLine: definition.endLine,
-        loc,
-        fanIn,
-        fanOut,
-        calleeCount,
-        score: Math.round((loc / 50) * (fanIn / 5) * Math.max(fanOut / 5, 1) * 100) / 100,
-      };
-    })
-    .filter((row) => row.loc >= minLoc)
-    .sort((left, right) => right.score - left.score || right.loc - left.loc)
-    .slice(0, limit);
+  return runCandidateAnalysis({
+    candidates: () => index.productionCallableDefinitions({
+      scope,
+      requireCallableSymbol: true,
+      includeSuppressed: true,
+      sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
+    }),
+    scanLimit,
+    prepare: (definitions) => ({
+      callerMap: index.crossFileCallerMap(definitions, { semantic: opts?.semantic !== false }),
+      calleeMap: index.calleeMap(definitions, { semantic: opts?.semantic !== false }),
+    }),
+    evaluate: (definition, maps) => complexityHotspotForDefinition(definition, maps, minLoc),
+    orderResults: (left, right) => right.score - left.score || right.loc - left.loc,
+    limit,
+  });
 }
 
-// scip-query: ignore-similar — shape overlap with isolated() is just the
-// shared "load definitions, build callee+caller maps" pattern; the analyses
-// are unrelated (complexity scoring vs disconnected-leaf detection).
-function loadComplexityCandidates(
-  db: ScipDatabase,
-  scope: string | undefined,
-  scanLimit: number | undefined,
-  semantic: boolean,
-): {
-  definitions: IndexedDefinition[];
-  callerMap: ReturnType<ProjectIndex['crossFileCallerMap']>;
-  calleeMap: ReturnType<ProjectIndex['calleeMap']>;
-} {
-  const index = new ProjectIndex(db);
-  const definitions = applyScanLimit(index.productionCallableDefinitions({
-    scope,
-    requireCallableSymbol: true,
-    includeSuppressed: true,
-    sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
-  }), scanLimit);
-
+function complexityHotspotForDefinition(
+  definition: IndexedDefinition,
+  maps: {
+    callerMap: ReturnType<ProjectIndex['crossFileCallerMap']>;
+    calleeMap: ReturnType<ProjectIndex['calleeMap']>;
+  },
+  minLoc: number,
+): ComplexityHotspot | null {
+  const loc = definition.endLine - definition.startLine + 1;
+  if (loc < minLoc) return null;
+  const fanIn = maps.callerMap.get(definition.symbolId)?.size ?? 0;
+  const callees = maps.calleeMap.get(definition.symbolId) ?? [];
+  const externalCallees = callees.filter((c) => c.file !== definition.relativePath);
+  const fanOut = new Set(externalCallees.map((c) => `${c.symbol}|${c.file}`)).size;
+  const calleeCount = new Set(callees.map((c) => `${c.symbol}|${c.file}`)).size;
   return {
-    definitions,
-    callerMap: index.crossFileCallerMap(definitions, { semantic }),
-    calleeMap: index.calleeMap(definitions, { semantic }),
+    symbol: definition.symbol,
+    shortName: shortenSymbol(definition.symbol),
+    file: definition.relativePath,
+    startLine: definition.startLine,
+    endLine: definition.endLine,
+    loc,
+    fanIn,
+    fanOut,
+    calleeCount,
+    score: Math.round((loc / 50) * (fanIn / 5) * Math.max(fanOut / 5, 1) * 100) / 100,
   };
 }
