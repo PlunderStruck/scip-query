@@ -1,9 +1,15 @@
 import type { CommandDescriptor, CommandOptionParser } from './command-descriptor-types.js';
-import { collect, parseIntSafe, parsePositiveInt } from './cli-context.js';
+import { collect } from './cli-context.js';
 
 export const collectValues = collect as CommandOptionParser;
-export const parseInteger = parseIntSafe as CommandOptionParser;
-export const parsePositiveInteger = parsePositiveInt as CommandOptionParser;
+export const parseInteger = ((value: string) => parseInt(value, 10)) as CommandOptionParser;
+export const parsePositiveInteger = ((value: string) => {
+  const parsed = parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    throw new Error(`Expected a positive integer, got ${value}`);
+  }
+  return parsed;
+}) as CommandOptionParser;
 export const parseNumber = parseFloat as CommandOptionParser;
 export const parseIntegerLoose = parseInt as CommandOptionParser;
 

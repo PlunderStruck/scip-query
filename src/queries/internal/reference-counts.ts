@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { mentionedReferenceSymbolRows, mentionReferenceCountRows } from '../../storage/scip-mentions.js';
 
-export type ReferenceCounts = Map<number, Map<string, number>>;
+type ReferenceCounts = Map<number, Map<string, number>>;
 
 export type ReferenceEvidenceSource =
   | 'scip-mention'

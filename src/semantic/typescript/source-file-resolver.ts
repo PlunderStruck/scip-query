@@ -9,23 +9,20 @@ export interface SourceFileMatch {
   sourceFile: SourceFile;
 }
 
-export class TypeScriptSourceFiles {
-  private readonly sourceFileCache = new Map<string, SourceFileMatch | null>();
-
-  constructor(
-    private readonly db: ScipDatabase,
-    private readonly projects: readonly ProjectBundle[],
-  ) {}
-
-  sourceFile(relativePath: string): SourceFile | null {
-    return this.sourceFileMatch(relativePath)?.sourceFile ?? null;
-  }
-
-  sourceFileMatch(relativePath: string): SourceFileMatch | null {
+export function createTypeScriptSourceFiles(
+  db: ScipDatabase,
+  projects: readonly ProjectBundle[],
+): {
+  sourceFile(relativePath: string): SourceFile | null;
+  sourceFileMatch(relativePath: string): SourceFileMatch | null;
+  indexedTypeScriptLikeDocuments(): string[];
+} {
+  const sourceFileCache = new Map<string, SourceFileMatch | null>();
+  const sourceFileMatch = (relativePath: string): SourceFileMatch | null => {
     if (!isTypeScriptLike(relativePath)) return null;
-    return cached(this.sourceFileCache, relativePath, () => {
-      const fullPath = path.join(this.db.config.projectRoot, relativePath);
-      for (const { project } of this.projects) {
+    return cached(sourceFileCache, relativePath, () => {
+      const fullPath = path.join(db.config.projectRoot, relativePath);
+      for (const { project } of projects) {
         const sourceFile = project.getSourceFile(fullPath)
           ?? project.addSourceFileAtPathIfExists(fullPath)
           ?? null;
@@ -33,10 +30,12 @@ export class TypeScriptSourceFiles {
       }
       return null;
     });
-  }
+  };
 
-  indexedTypeScriptLikeDocuments(): string[] {
-    return this.db.all<{ relative_path: string }>(
+  return {
+    sourceFile: (relativePath) => sourceFileMatch(relativePath)?.sourceFile ?? null,
+    sourceFileMatch,
+    indexedTypeScriptLikeDocuments: () => db.all<{ relative_path: string }>(
       `SELECT relative_path
        FROM documents
        WHERE (
@@ -49,9 +48,9 @@ export class TypeScriptSourceFiles {
          OR relative_path LIKE '%.mjs'
          OR relative_path LIKE '%.cjs'
        )
-         ${this.db.pathExclusionsFor('documents')}`,
-    ).map((document) => document.relative_path);
-  }
+         ${db.pathExclusionsFor('documents')}`,
+    ).map((document) => document.relative_path),
+  };
 }
 
 function isTypeScriptLike(relativePath: string): boolean {

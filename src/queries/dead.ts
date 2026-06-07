@@ -19,7 +19,6 @@ import {
   loadMentionReferenceCounts,
   recordReferenceAtLeast,
   recordReference,
-  type ReferenceCounts,
 } from './internal/reference-counts.js';
 
 export interface DeadSymbolResult {
@@ -60,6 +59,8 @@ interface DeadRow {
   same_file_refs: number;
   cross_file_refs: number;
 }
+
+type ReferenceCounts = ReturnType<typeof emptyReferenceCounts>;
 
 /**
  * Find dead exports: symbols defined locally with no cross-file references.

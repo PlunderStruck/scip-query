@@ -53,6 +53,8 @@ export function isImportOnlyConsumer(
   return usage.importedLeaves.has(leaf) && !usage.usedLeaves.has(leaf);
 }
 
+// scip-query: ignore-passthrough — cache lifecycle hook for stale consumer
+// classification; callers should not know the FILE_USAGE_CACHE key or shape.
 export function clearStaleConsumerCaches(db: ScipDatabase): void {
   FILE_USAGE_CACHE.invalidateAll(db);
 }

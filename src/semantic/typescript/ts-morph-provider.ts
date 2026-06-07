@@ -5,7 +5,7 @@ import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { cached } from './cache.js';
 import { definitionNodesForSourceFile } from './definition-node-matcher.js';
 import { findIndexedDefinitionNear, indexedDefinitionLeafMap } from './indexed-definitions.js';
-import { TypeScriptSourceFiles } from './source-file-resolver.js';
+import { createTypeScriptSourceFiles } from './source-file-resolver.js';
 import { discoverWorkspacePackages, packageEntryCandidates, workspacePackageNameForSpecifier } from './workspace-packages.js';
 import { dedupeLocations, isTypeOnlyLocation, lineOf, referenceLocationsWithoutDeclaration, semanticReferencesForNode, textualIdentifierLocations, toRelative } from './semantic-locations.js';
 import type { WorkspacePackage } from './workspace-packages.js';
@@ -84,7 +84,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
   private packageImportReferenceIndex: Map<number, SemanticReference[]> | null = null;
   private packageExportIndex: PackageExportIndex | null = null;
   private readonly workspacePackages: WorkspacePackage[];
-  private readonly sourceFiles: TypeScriptSourceFiles;
+  private readonly sourceFiles: ReturnType<typeof createTypeScriptSourceFiles>;
 
   constructor(
     private readonly db: ScipDatabase,
@@ -92,7 +92,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
     private readonly projects: ProjectBundle[],
   ) {
     this.workspacePackages = discoverWorkspacePackages(db.config.projectRoot);
-    this.sourceFiles = new TypeScriptSourceFiles(db, projects);
+    this.sourceFiles = createTypeScriptSourceFiles(db, projects);
   }
 
   availability(): SemanticAvailability {

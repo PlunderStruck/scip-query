@@ -7,12 +7,13 @@ import { similarAll } from './similar.js';
 import { extractCandidates } from './extract-candidates.js';
 import { wrapperCandidates } from './wrapper-candidates.js';
 import { passthroughCandidates } from './passthrough-candidates.js';
-import { clearStaleAbstractionsCaches, staleAbstractions } from './stale-abstractions.js';
+import { staleAbstractions } from './stale-abstractions.js';
 import { drift } from './drift.js';
 import { complexityHotspots } from './complexity-hotspots.js';
 import { stats } from './stats.js';
 import { buildHealthReport } from './health-report.js';
 import { clearWholeProjectEvidenceCaches } from './internal/cache-invalidation.js';
+import { clearStaleConsumerCaches } from './internal/stale-consumers.js';
 import { requestGarbageCollection } from './health-cache-control.js';
 import type { HealthReport } from './health-report.js';
 
@@ -475,7 +476,7 @@ function healthBudget(
 
 function releaseHealthPhaseCaches(db: ScipDatabase, budget: HealthBudget): void {
   if (!budget.releaseCachesBetweenPhases) return;
-  clearStaleAbstractionsCaches(db);
+  clearStaleConsumerCaches(db);
   clearWholeProjectEvidenceCaches(db);
   requestGarbageCollection();
 }

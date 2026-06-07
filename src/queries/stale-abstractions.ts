@@ -4,7 +4,7 @@ import { leafName, parseSymbol, shortenSymbol } from '../symbols/symbol-parser.j
 import { getSourceText } from '../source/source-text.js';
 import { getTypeContainerMap } from '../source/ast.js';
 import { ProjectIndex } from '../core/project-index.js';
-import { clearStaleConsumerCaches, isImportOnlyConsumer, partitionStaleConsumers } from './internal/stale-consumers.js';
+import { isImportOnlyConsumer, partitionStaleConsumers } from './internal/stale-consumers.js';
 import { applyScanLimit, definitionLoc } from './query-utils.js';
 
 export interface StaleAbstraction {
@@ -442,12 +442,6 @@ function isTransitivelyConsumed(
     }
   }
   return false;
-}
-
-// scip-query: ignore-passthrough — query-local cache lifecycle hook used by
-// composite health runs; keeping it here preserves the query-level contract.
-export function clearStaleAbstractionsCaches(db: ScipDatabase): void {
-  clearStaleConsumerCaches(db);
 }
 
 /**

@@ -61,19 +61,6 @@ export function collect(value: string, prev: string[]): string[] {
   return prev.concat([value]);
 }
 
-/** parseInt wrapper safe for commander (which passes default as 2nd arg = radix) */
-export function parseIntSafe(value: string): number {
-  return parseInt(value, 10);
-}
-
-export function parsePositiveInt(value: string): number {
-  const parsed = parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed < 1) {
-    throw new Error(`Expected a positive integer, got ${value}`);
-  }
-  return parsed;
-}
-
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
