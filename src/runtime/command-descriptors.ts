@@ -1,22 +1,9 @@
 import type { CommandDescriptor, CommandOptionParser } from './command-descriptor-types.js';
-import { collect, formatBytes, parseIntSafe, parsePositiveInt, queries } from './cli-context.js';
-import { DIFF_IMPACT_BATCH_COMMAND, HEALTH_PHASE_COMMAND, renderHeuristicNotice } from './cli-support.js';
-import {
-  budgetedDbCommand,
-  budgetedGroupedByFileCommand,
-  budgetedListCommand,
-  budgetedTableCommand,
-  booleanOptionValue,
-  dbCommand,
-  definedNumberOption,
-  listCommand,
-  stringArg,
-  stringOptionValue,
-  tableCommand,
-} from './command-execution.js';
-import { displayPathRange, displayRange, render } from './render.js';
+import { collect, parseIntSafe, parsePositiveInt } from './cli-context.js';
+import { DIFF_IMPACT_BATCH_COMMAND, HEALTH_PHASE_COMMAND } from './cli-support.js';
 import { BUILTIN_SKILLS } from './setup.js';
 import * as handlers from './command-handlers.js';
+import * as queryHandlers from './query-command-handlers.js';
 
 const collectValues = collect as CommandOptionParser;
 const parseInteger = parseIntSafe as CommandOptionParser;
@@ -38,274 +25,6 @@ function option(
 function doc(category: string, examples: readonly string[] = []): NonNullable<CommandDescriptor['docs']> {
   return { category, examples };
 }
-
-const handleStats = dbCommand(({ db }) => {
-  const s = queries.stats(db);
-  console.log(`Documents:   ${s.documents}`);
-  console.log(`Symbols:     ${s.symbols}`);
-  console.log(`Definitions: ${s.definitions}`);
-  console.log(`References:  ${s.references}`);
-  console.log(`Index size:  ${formatBytes(s.indexSizeBytes)}`);
-  if (s.lastBuilt) {
-    console.log(`Last built:  ${s.lastBuilt.toISOString().replace('T', ' ').slice(0, 19)}`);
-  }
-});
-
-const handleFiles = listCommand({
-  query: ({ db, args }) => queries.files(db, stringArg(args, 0)),
-  format: (r) => r.relativePath,
-});
-
-const handleSymbols = listCommand({
-  query: ({ db, args }) => queries.symbols(db, stringArg(args, 0)),
-  format: (r) => {
-    const sig = r.signature ? `  — ${r.signature}` : '';
-    return `  ${displayRange(r.startLine, r.endLine)}  ${r.shortName}${sig}`;
-  },
-});
-
-const handleMethods = listCommand({
-  query: ({ db, args }) => queries.methods(db, stringArg(args, 0)),
-  format: (r) => `  ${displayRange(r.startLine, r.endLine)}  ${r.name}`,
-});
-
-const handleDeps = listCommand({
-  query: ({ db, args }) => queries.deps(db, stringArg(args, 0)),
-  format: (r) => r.relativePath,
-});
-
-const handleRdeps = listCommand({
-  query: ({ db, args }) => queries.rdeps(db, stringArg(args, 0)),
-  format: (r) => r.relativePath,
-});
-
-const handleSystem = dbCommand(({ db, args }) => {
-  const result = queries.system(db, stringArg(args, 0));
-  render.sectionedReport([
-    { title: 'FILES', rows: result.files },
-    {
-      title: 'EXPORTED SYMBOLS',
-      rows: result.symbols.map((s) => `  ${displayRange(s.startLine, s.endLine)}  ${s.shortName}`),
-    },
-    { title: 'DEPENDS ON (internal)', rows: result.dependsOn.map((d) => `  ${d}`) },
-    { title: 'DEPENDED ON BY', rows: result.dependedOnBy.map((d) => `  ${d}`) },
-  ]);
-});
-
-const handleSurface = listCommand({
-  query: ({ db, args }) => queries.surface(db, stringArg(args, 0)),
-  format: (r) => `  ${r.consumer} → ${r.shortName}`,
-});
-
-const handleHotspots = tableCommand({
-  headers: ['refs', 'files', 'symbol'],
-  query: ({ db, opts }) => queries.hotspots(db, {
-    limit: definedNumberOption(opts, 'limit', 30),
-    scope: stringOptionValue(opts, 'scope'),
-  }),
-  format: (r) => `  ${String(r.refCount).padStart(4)}  ${String(r.fileCount).padStart(5)}  ${r.shortName}`,
-});
-
-const handleImportedBy = listCommand({
-  query: ({ db, args }) => queries.importedBy(db, stringArg(args, 0)),
-  format: (r) => `  ${r.fromFile}`,
-});
-
-const handleOutline = dbCommand(({ db, args }) => {
-  const roots = queries.outline(db, stringArg(args, 0));
-  function printTree(nodes: typeof roots, indent: number): void {
-    for (const n of nodes) {
-      const prefix = '  '.repeat(indent);
-      console.log(`${prefix}${displayRange(n.startLine, n.endLine)}  ${n.shortName}`);
-      printTree(n.children, indent + 1);
-    }
-  }
-  printTree(roots, 0);
-});
-
-const handleMembers = listCommand({
-  query: ({ db, args }) => queries.members(db, stringArg(args, 0)),
-  format: (r) => `  ${displayRange(r.startLine, r.endLine)}  [${r.kind}]  ${r.shortName}`,
-});
-
-const handleByKind = listCommand({
-  query: ({ db, args, opts }) => queries.byKind(db, stringArg(args, 0), {
-    scope: stringOptionValue(opts, 'scope'),
-    limit: definedNumberOption(opts, 'limit', 100),
-  }),
-  format: (r) => `  ${displayPathRange(r.relativePath, r.startLine, r.endLine)}  [${r.kindName}]  ${r.shortName}`,
-  emptyMessage: ({ args }) => `No symbols found for kind "${stringArg(args, 0)}". Use "kind-counts" to see available kinds.`,
-  after: (rows) => console.log(`\n${rows.length} symbol(s)`),
-});
-
-const handleKindCounts = tableCommand({
-  headers: ['count', 'kind'],
-  query: ({ db, opts }) => queries.kindCounts(db, { scope: stringOptionValue(opts, 'scope') }),
-  format: (r) => `  ${String(r.count).padStart(5)}  ${r.kindName} (${r.kind})`,
-});
-
-const handleHierarchy = listCommand({
-  query: ({ db, args }) => queries.hierarchy(db, stringArg(args, 0)),
-  format: (node) => `${'  '.repeat(node.depth)}${node.shortName}`,
-  emptyMessage: () => 'Symbol not found.',
-});
-
-const handleImports = budgetedListCommand('imports', {
-  query: ({ db, args, budget }) => queries.imports(db, stringArg(args, 0), { semantic: budget.semantic }),
-  format: (r) => `  ${r.shortName}  ← ${r.fromFile}`,
-  emptyMessage: () => 'No imports found (indexer may not emit role=2 for this language).',
-});
-
-const handleUnusedImports = budgetedListCommand('unused-imports', {
-  query: ({ db, args, budget }) => queries.unusedImports(db, stringArg(args, 0), { semantic: budget.semantic }),
-  format: (r) => `  ${r.shortName}  in ${r.importedIn}`,
-  emptyMessage: () => 'No unused imports found.',
-  after: (rows) => console.log(`\n${rows.length} unused import(s)`),
-});
-
-const handleBottlenecks = budgetedTableCommand('bottlenecks', {
-  headers: ['score', 'fan-in', 'fan-out', 'symbol'],
-  query: ({ db, opts, budget }) => queries.bottlenecks(db, {
-    limit: definedNumberOption(opts, 'limit', 20),
-    scope: stringOptionValue(opts, 'scope'),
-    minFanIn: definedNumberOption(opts, 'minFanIn', 2),
-    minFanOut: definedNumberOption(opts, 'minFanOut', 2),
-    scanLimit: budget.scanLimit,
-    semantic: budget.semantic,
-  }),
-  format: (r) =>
-    `  ${String(r.score).padStart(5)}  ${String(r.fanIn).padStart(6)}  ` +
-    `${String(r.fanOut).padStart(7)}  ${r.shortName}`,
-  emptyMessage: () => 'No bottlenecks found.',
-});
-
-const handleIsolated = budgetedGroupedByFileCommand('isolated', {
-  query: ({ db, opts, budget }) => queries.isolated(db, {
-    scope: stringOptionValue(opts, 'scope'),
-    minLoc: definedNumberOption(opts, 'minLoc', 3),
-    scanLimit: budget.scanLimit,
-    semantic: budget.semantic,
-  }),
-  format: (r) => `  ${displayRange(r.startLine, r.endLine)}  (${r.loc} LOC)  ${r.shortName}`,
-  emptyMessage: () => 'No isolated symbols found.',
-  after: (rows) => console.log(`\n${rows.length} isolated symbol(s)`),
-});
-
-const handleCallGraph = budgetedDbCommand('call-graph', ({ db, args, budget }) => {
-  const result = queries.callGraph(db, stringArg(args, 0), { semantic: budget.semantic });
-  if (!result) return render.empty('Symbol not found.');
-  console.log(`Symbol: ${result.shortName}\n`);
-  render.sectionedReport([
-    { title: `CALLERS (${result.callers.length})`, rows: result.callers.map((c) => `  ${c.file}  ${c.shortName}`) },
-    { title: `CALLEES (${result.callees.length})`, rows: result.callees.map((c) => `  ${c.file}  ${c.shortName}`) },
-  ]);
-});
-
-const handleExtractCandidates = budgetedDbCommand('extract-candidates', ({ db, opts, budget }) => {
-  const results = queries.extractCandidates(db, {
-    scope: stringOptionValue(opts, 'scope'),
-    minLoc: definedNumberOption(opts, 'minLoc', 10),
-    minCallees: definedNumberOption(opts, 'minCallees', 6),
-    limit: definedNumberOption(opts, 'limit', 20),
-    scanLimit: budget.scanLimit,
-    semantic: budget.semantic,
-  });
-  if (results.length === 0) return render.empty('No extraction candidates found.');
-  renderHeuristicNotice('extraction candidates');
-  for (const r of results) {
-    console.log(`\n${displayPathRange(r.relativePath, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC, ${r.totalCallees} callees)`);
-    for (let i = 0; i < r.clusters.length; i++) {
-      const c = r.clusters[i]!;
-      console.log(`  Cluster ${i + 1} (${Math.round(c.isolation * 100)}% isolated, ${c.callees.length} callees):`);
-      for (const callee of c.callees) console.log(`    ${callee}`);
-    }
-  }
-  console.log(`\n${results.length} extraction candidate(s) found.`);
-});
-
-const handleChangeSurface = budgetedDbCommand('change-surface', ({ db, args, budget }) => {
-  const result = queries.changeSurface(db, stringArg(args, 0), { semantic: budget.semantic });
-  if (!result) return render.empty('File not found in index.');
-  console.log(`File: ${result.file}`);
-  console.log(`External consumers: ${result.totalExternalConsumers}\n`);
-  render.list(result.symbols, (s) => {
-    const risk = s.riskLevel === 'high' ? ' *** HIGH RISK ***' : s.riskLevel === 'medium' ? ' * medium risk *' : '';
-    return `  ${displayRange(s.startLine, s.endLine)}  ${s.shortName}  [${s.externalConsumers} consumers]${risk}`;
-  });
-});
-
-const handleWrapperCandidates = budgetedListCommand('wrapper-candidates', {
-  query: ({ db, opts, budget }) => queries.wrapperCandidates(db, {
-    scope: stringOptionValue(opts, 'scope'),
-    maxLoc: definedNumberOption(opts, 'maxLoc', 15),
-    limit: definedNumberOption(opts, 'limit', 30),
-    scanLimit: budget.scanLimit,
-    semantic: budget.semantic,
-  }),
-  format: (r) =>
-    `  ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC)\n` +
-    `    Only called by: ${r.singleCallerShort}  (fan-in: ${r.callerFanIn})`,
-  emptyMessage: () => 'No wrapper candidates found.',
-  heuristicLabel: 'wrapper candidates',
-  after: (rows) => console.log(`\n${rows.length} wrapper candidate(s).`),
-});
-
-const handlePassthroughCandidates = budgetedListCommand('passthrough-candidates', {
-  query: ({ db, opts, budget }) => queries.passthroughCandidates(db, {
-    scope: stringOptionValue(opts, 'scope'),
-    maxLoc: definedNumberOption(opts, 'maxLoc', 15),
-    limit: definedNumberOption(opts, 'limit', 30),
-    scanLimit: budget.scanLimit,
-    semantic: budget.semantic,
-  }),
-  format: (r) =>
-    `  ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC)\n` +
-    `    Forwards to: ${r.forwardsToShort}  (${r.forwardsToFile})`,
-  emptyMessage: () => 'No passthrough candidates found.',
-  heuristicLabel: 'passthrough candidates',
-  after: (rows) => console.log(`\n${rows.length} passthrough candidate(s).`),
-});
-
-const handleStaleAbstractions = budgetedListCommand('stale-abstractions', {
-  query: ({ db, opts, budget }) => queries.staleAbstractions(db, {
-    scope: stringOptionValue(opts, 'scope'),
-    minLoc: definedNumberOption(opts, 'minLoc', 3),
-    limit: definedNumberOption(opts, 'limit', 30),
-    includeLowConfidence: booleanOptionValue(opts, 'includeLowConfidence'),
-    scanLimit: budget.scanLimit,
-    semantic: budget.semantic,
-  }),
-  format: (r) => {
-    const consumerLabel = r.consumers === 0 ? 'unused' : `${r.consumers} consumer`;
-    const barrelLabel = r.barrelConsumers > 0 ? `, +${r.barrelConsumers} barrel` : '';
-    return (
-      `  [${r.confidence}] ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  ` +
-      `(${r.kind}, ${r.loc} LOC, ${consumerLabel}${barrelLabel})\n` +
-      `           ${r.reason}`
-    );
-  },
-  emptyMessage: () => 'No stale abstractions found.',
-  heuristicLabel: 'stale abstraction candidates',
-  after: (rows) => console.log(`\n${rows.length} stale abstraction(s).`),
-});
-
-const handleComplexityHotspots = budgetedTableCommand('complexity-hotspots', {
-  headers: ['score', ' LOC', 'fan-in', 'fan-out', 'callees', 'symbol'],
-  query: ({ db, opts, budget }) => queries.complexityHotspots(db, {
-    scope: stringOptionValue(opts, 'scope'),
-    minLoc: definedNumberOption(opts, 'minLoc', 10),
-    limit: definedNumberOption(opts, 'limit', 20),
-    scanLimit: budget.scanLimit,
-    semantic: budget.semantic,
-  }),
-  format: (r) =>
-    `  ${r.score.toFixed(1).padStart(5)}  ${String(r.loc).padStart(4)}  ` +
-    `${String(r.fanIn).padStart(6)}  ${String(r.fanOut).padStart(7)}  ` +
-    `${String(r.calleeCount).padStart(7)}  ${r.shortName}`,
-  emptyMessage: () => 'No complexity hotspots found.',
-  heuristicLabel: 'complexity hotspot candidates',
-  dashWidths: [5, 4, 6, 7, 7, 6],
-});
 
 export const commandDescriptors: CommandDescriptor[] = [
   {
@@ -346,7 +65,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     description: 'Show index statistics',
     renderShape: 'custom',
     docs: doc('Core'),
-    handler: handleStats,
+    handler: queryHandlers.handleStats,
   },
   {
     id: 'files',
@@ -354,7 +73,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     description: 'Find files matching a pattern',
     renderShape: 'list',
     docs: doc('Navigation', ['scip-query files auth']),
-    handler: handleFiles,
+    handler: queryHandlers.handleFiles,
   },
   {
     id: 'symbols',
@@ -362,7 +81,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     description: 'List symbols defined in a file (with line ranges + signatures)',
     renderShape: 'list',
     docs: doc('Navigation', ['scip-query symbols src/runtime/cli.ts']),
-    handler: handleSymbols,
+    handler: queryHandlers.handleSymbols,
   },
   {
     id: 'methods',
@@ -370,7 +89,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     description: 'List methods of a class (with line ranges)',
     renderShape: 'list',
     docs: doc('Navigation'),
-    handler: handleMethods,
+    handler: queryHandlers.handleMethods,
   },
   {
     id: 'refs',
@@ -380,7 +99,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'semantic',
     renderShape: 'grouped-by-file',
     docs: doc('Navigation', ['scip-query refs login']),
-    handler: handlers.handleRefs,
+    handler: queryHandlers.handleRefs,
   },
   {
     id: 'trace',
@@ -398,7 +117,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     description: 'Files this file depends on (internal)',
     renderShape: 'list',
     docs: doc('Navigation'),
-    handler: handleDeps,
+    handler: queryHandlers.handleDeps,
   },
   {
     id: 'rdeps',
@@ -406,7 +125,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     description: 'Files that depend on this file/module',
     renderShape: 'list',
     docs: doc('Navigation'),
-    handler: handleRdeps,
+    handler: queryHandlers.handleRdeps,
   },
   {
     id: 'system',
@@ -414,7 +133,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     description: 'Full module map: files, symbols, deps in/out',
     renderShape: 'sectioned-report',
     docs: doc('Navigation', ['scip-query system queries']),
-    handler: handleSystem,
+    handler: queryHandlers.handleSystem,
   },
   {
     id: 'surface',
@@ -422,7 +141,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     description: 'What symbols consumers actually use from this module',
     renderShape: 'list',
     docs: doc('Navigation'),
-    handler: handleSurface,
+    handler: queryHandlers.handleSurface,
   },
   {
     id: 'dead',
@@ -452,7 +171,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     ],
     renderShape: 'table',
     docs: doc('Graph'),
-    handler: handleHotspots,
+    handler: queryHandlers.handleHotspots,
   },
   {
     id: 'imports',
@@ -462,7 +181,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'semantic',
     renderShape: 'list',
     docs: doc('Navigation'),
-    handler: handleImports,
+    handler: queryHandlers.handleImports,
   },
   {
     id: 'imported-by',
@@ -470,7 +189,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     description: 'Which files import this symbol?',
     renderShape: 'list',
     docs: doc('Navigation'),
-    handler: handleImportedBy,
+    handler: queryHandlers.handleImportedBy,
   },
   {
     id: 'unused-imports',
@@ -480,7 +199,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'semantic',
     renderShape: 'list',
     docs: doc('Cleanup'),
-    handler: handleUnusedImports,
+    handler: queryHandlers.handleUnusedImports,
   },
   {
     id: 'outline',
@@ -488,7 +207,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     description: 'Tree view of symbols in a file (using nesting hierarchy)',
     renderShape: 'custom',
     docs: doc('Navigation'),
-    handler: handleOutline,
+    handler: queryHandlers.handleOutline,
   },
   {
     id: 'members',
@@ -496,7 +215,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     description: 'All children of a symbol (methods, fields, nested types)',
     renderShape: 'list',
     docs: doc('Navigation'),
-    handler: handleMembers,
+    handler: queryHandlers.handleMembers,
   },
   {
     id: 'fan-in',
@@ -508,7 +227,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     ],
     renderShape: 'custom',
     docs: doc('Graph'),
-    handler: handlers.handleFanIn,
+    handler: queryHandlers.handleFanIn,
   },
   {
     id: 'fan-out',
@@ -520,7 +239,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     ],
     renderShape: 'custom',
     docs: doc('Graph'),
-    handler: handlers.handleFanOut,
+    handler: queryHandlers.handleFanOut,
   },
   {
     id: 'coupling',
@@ -532,7 +251,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     ],
     renderShape: 'custom',
     docs: doc('Graph'),
-    handler: handlers.handleCoupling,
+    handler: queryHandlers.handleCoupling,
   },
   {
     id: 'cycles',
@@ -560,7 +279,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'candidate-scan',
     renderShape: 'table',
     docs: doc('Graph'),
-    handler: handleBottlenecks,
+    handler: queryHandlers.handleBottlenecks,
   },
   {
     id: 'isolated',
@@ -574,7 +293,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'candidate-scan',
     renderShape: 'grouped-by-file',
     docs: doc('Cleanup'),
-    handler: handleIsolated,
+    handler: queryHandlers.handleIsolated,
   },
   {
     id: 'by-kind',
@@ -586,7 +305,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     ],
     renderShape: 'list',
     docs: doc('Navigation'),
-    handler: handleByKind,
+    handler: queryHandlers.handleByKind,
   },
   {
     id: 'kind-counts',
@@ -595,7 +314,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     options: [option('-s, --scope <path>', 'Limit to files matching path')],
     renderShape: 'table',
     docs: doc('Navigation'),
-    handler: handleKindCounts,
+    handler: queryHandlers.handleKindCounts,
   },
   {
     id: 'deep-chains',
@@ -616,7 +335,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     description: 'Show a symbol\'s ancestry chain (method → class → module)',
     renderShape: 'list',
     docs: doc('Navigation'),
-    handler: handleHierarchy,
+    handler: queryHandlers.handleHierarchy,
   },
   {
     id: 'call-graph',
@@ -626,7 +345,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'semantic',
     renderShape: 'sectioned-report',
     docs: doc('Graph'),
-    handler: handleCallGraph,
+    handler: queryHandlers.handleCallGraph,
   },
   {
     id: 'similar',
@@ -692,7 +411,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'candidate-scan',
     renderShape: 'custom',
     docs: doc('Cleanup'),
-    handler: handleExtractCandidates,
+    handler: queryHandlers.handleExtractCandidates,
   },
   {
     id: 'affected',
@@ -704,7 +423,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     ],
     renderShape: 'custom',
     docs: doc('Impact'),
-    handler: handlers.handleAffected,
+    handler: queryHandlers.handleAffected,
   },
   {
     id: 'change-surface',
@@ -714,7 +433,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'semantic',
     renderShape: 'list',
     docs: doc('Impact'),
-    handler: handleChangeSurface,
+    handler: queryHandlers.handleChangeSurface,
   },
   {
     id: DIFF_IMPACT_BATCH_COMMAND,
@@ -762,7 +481,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'candidate-scan',
     renderShape: 'list',
     docs: doc('Cleanup'),
-    handler: handleWrapperCandidates,
+    handler: queryHandlers.handleWrapperCandidates,
   },
   {
     id: 'passthrough-candidates',
@@ -778,7 +497,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'candidate-scan',
     renderShape: 'list',
     docs: doc('Cleanup'),
-    handler: handlePassthroughCandidates,
+    handler: queryHandlers.handlePassthroughCandidates,
   },
   {
     id: 'stale-abstractions',
@@ -795,7 +514,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'candidate-scan',
     renderShape: 'list',
     docs: doc('Cleanup'),
-    handler: handleStaleAbstractions,
+    handler: queryHandlers.handleStaleAbstractions,
   },
   {
     id: 'complexity-hotspots',
@@ -811,7 +530,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'candidate-scan',
     renderShape: 'table',
     docs: doc('Cleanup'),
-    handler: handleComplexityHotspots,
+    handler: queryHandlers.handleComplexityHotspots,
   },
   {
     id: HEALTH_PHASE_COMMAND,
@@ -856,7 +575,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     options: [option('-C, --context <n>', 'Extra lines of context above/below', parseInteger, 0)],
     renderShape: 'custom',
     docs: doc('Navigation'),
-    handler: handlers.handleCode,
+    handler: queryHandlers.handleCode,
   },
   {
     id: 'complexity',
@@ -866,7 +585,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'semantic',
     renderShape: 'custom',
     docs: doc('Health'),
-    handler: handlers.handleComplexity,
+    handler: queryHandlers.handleComplexity,
   },
   {
     id: 'dataflow',
@@ -876,7 +595,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'semantic',
     renderShape: 'custom',
     docs: doc('Navigation'),
-    handler: handlers.handleDataflow,
+    handler: queryHandlers.handleDataflow,
   },
   {
     id: 'slice',
@@ -890,7 +609,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'semantic',
     renderShape: 'custom',
     docs: doc('Navigation'),
-    handler: handlers.handleSlice,
+    handler: queryHandlers.handleSlice,
   },
   {
     id: 'install-skills',
@@ -918,7 +637,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     ],
     renderShape: 'grouped-by-file',
     docs: doc('Cleanup'),
-    handler: handlers.handleRedundantReexports,
+    handler: queryHandlers.handleRedundantReexports,
   },
   {
     id: 'similar-signatures',
@@ -933,7 +652,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'candidate-scan',
     renderShape: 'list',
     docs: doc('Cleanup'),
-    handler: handlers.handleSimilarSignatures,
+    handler: queryHandlers.handleSimilarSignatures,
   },
   {
     id: 'init',

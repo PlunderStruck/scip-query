@@ -149,6 +149,27 @@ node dist/cli.js stale-abstractions -n 3
 node dist/cli.js complexity-hotspots -n 3
 ```
 
+Third slice completed after checkpoint commit `02c0e8d`:
+
+- Converted `refs`, `fan-in`, `fan-out`, `coupling`, `affected`, `code`, `complexity`, `dataflow`, `slice`, `redundant-reexports`, and `similar-signatures` to shared DB/budgeted/grouped/list execution shapes.
+- Split query-shaped handlers out of `src/runtime/command-descriptors.ts` into `src/runtime/query-command-handlers.ts` so descriptors remain CLI metadata instead of becoming the new long command center.
+- Current line counts: `command-descriptors.ts` 685 lines, `query-command-handlers.ts` 449 lines, `command-handlers.ts` 635 lines.
+- Remaining handlers in `command-handlers.ts` are either side-effect lifecycles (`reindex`, `watch`, `status`, `check-deps`, augmentation), isolated worker lifecycles (`health`, `diff-impact`), or intentionally custom high-structure reports (`trace`, `dead`, `similar`, `similar-files`, `similar-chains`, `drift`, `convergence`, `cycles`, `deep-chains`).
+
+Verified:
+
+```bash
+npm run typecheck
+npm test -- tests/cli-contract.test.ts tests/command-accuracy.test.ts
+npm run build
+node dist/cli.js --help
+node dist/cli.js stats
+node dist/cli.js refs ProjectIndex
+node dist/cli.js fan-in -n 3
+node dist/cli.js wrapper-candidates --max-loc 20 -n 2
+node dist/cli.js similar-signatures --min-loc 5 -n 2
+```
+
 ## Refactor 2: Source Reference Evidence Pipeline
 
 A source-reference evidence pipeline is the reference-detection path made from source scanning, identifier attribution, import resolution, framework dispatch names, Rust attribute references, and occurrence counting. Its essential job is to decide which source-level mentions count as real symbol references.

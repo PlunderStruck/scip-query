@@ -135,14 +135,6 @@ export function handleAugmentVue(rawOpts: unknown): void {
   }
 }
 
-export function handleRefs(symbol: unknown, rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const budget = commandAnalysisBudget(db, 'refs', booleanOption(opts, 'full'));
-    render.groupedByFile(queries.refs(db, String(symbol), { semantic: budget.semantic }), (r) => `  line ${displayLine(r.line)}`);
-  });
-}
-
 export function handleTrace(symbol: unknown, rawOpts: unknown): void {
   const opts = options(rawOpts);
   withDb((db) => {
@@ -266,59 +258,6 @@ export function handleDead(scope: unknown, rawOpts: unknown): void {
     if (showInternal) totalParts.push(`${shownFileInternal.length} file-internal (${fiLoc} LOC)`);
     console.log('\n───────────────────────────');
     console.log(`Total: ${shownDeadCode.length + shownFileInternal.length} symbols — ${totalParts.join(' + ')}`);
-  });
-}
-
-export function handleFanIn(symbol: unknown, rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    if (typeof symbol === 'string') {
-      const results = queries.fanIn(db, symbol);
-      if (results.length === 0) return render.empty(`No fan-in for ${symbol}.`);
-      render.list(results, (r) => `  ${String(r.count).padStart(4)} files  ${r.name}`);
-    } else {
-      render.table(
-        ['files', 'symbol'],
-        queries.topFanIn(db, { limit: definedNumber(opts, 'limit', 30), scope: stringOption(opts, 'scope') }).map(
-          (r) => `  ${String(r.count).padStart(5)}  ${r.name}`,
-        ),
-      );
-    }
-  });
-}
-
-export function handleFanOut(file: unknown, rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    if (typeof file === 'string') {
-      const results = queries.fanOut(db, file);
-      if (results.length === 0) return render.empty(`No fan-out for ${file}.`);
-      render.list(results, (r) => `  ${String(r.count).padStart(4)} symbols  ${r.name}`);
-    } else {
-      render.table(
-        ['symbols', 'file'],
-        queries.topFanOut(db, { limit: definedNumber(opts, 'limit', 30), scope: stringOption(opts, 'scope') }).map(
-          (r) => `  ${String(r.count).padStart(7)}  ${r.name}`,
-        ),
-      );
-    }
-  });
-}
-
-export function handleCoupling(file1: unknown, file2: unknown, rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    if (typeof file1 === 'string' && typeof file2 === 'string') {
-      const result = queries.coupling(db, file1, file2);
-      console.log(`${result.file1} ↔ ${result.file2}: ${result.sharedSymbols} shared symbols`);
-    } else {
-      render.table(
-        ['shared', 'file1 → file2'],
-        queries.topCoupling(db, { limit: definedNumber(opts, 'limit', 20), scope: stringOption(opts, 'scope') }).map(
-          (r) => `  ${String(r.sharedSymbols).padStart(6)}  ${r.file1} → ${r.file2}`,
-        ),
-      );
-    }
   });
 }
 
@@ -463,23 +402,6 @@ export function handleSimilarChains(rawOpts: unknown): void {
   });
 }
 
-export function handleAffected(symbol: unknown, rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const results = queries.affected(db, String(symbol), { maxDepth: definedNumber(opts, 'maxDepth', 5), scope: stringOption(opts, 'scope') });
-    if (results.length === 0) return render.empty('No affected symbols found.');
-    let prevDepth = -1;
-    for (const r of results) {
-      if (r.depth !== prevDepth) {
-        console.log(`\n  ── Depth ${r.depth} ──`);
-        prevDepth = r.depth;
-      }
-      console.log(`  ${r.file}  ${r.shortName}`);
-    }
-    console.log(`\n${results.length} affected symbol(s) across ${new Set(results.map((r) => r.file)).size} files.`);
-  });
-}
-
 export function handleDiffImpactBatch(rawOpts: unknown): void {
   const opts = options(rawOpts);
   withDb((db) => {
@@ -578,82 +500,6 @@ export function handleConvergence(symbol1: unknown, symbol2: unknown, rawOpts: u
   });
 }
 
-export function handleCode(symbol: unknown, rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const result = queries.code(db, String(symbol), { context: definedNumber(opts, 'context', 0) });
-    if (!result) return render.empty('Symbol not found or file unreadable.');
-    console.log(`${displayPathRange(result.relativePath, result.startLine, result.endLine)}  ${result.shortName}  [${result.language ?? 'unknown'}]\n`);
-    const lines = result.source.split('\n');
-    for (let i = 0; i < lines.length; i++) {
-      console.log(`  ${String(displayLine(result.startLine + i)).padStart(4)}  ${lines[i]}`);
-    }
-  });
-}
-
-export function handleComplexity(symbol: unknown, rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const budget = commandAnalysisBudget(db, 'complexity', booleanOption(opts, 'full'));
-    const result = queries.complexity(db, String(symbol), { semantic: budget.semantic });
-    if (!result) return render.empty('Symbol not found.');
-    console.log(`${displayPathRange(result.relativePath, result.startLine, result.endLine)}  ${result.shortName}\n`);
-    console.log(`  LOC:                  ${result.loc}`);
-    console.log(`  Branches:             ${result.branches}`);
-    console.log(`  Cyclomatic estimate:  ${result.cyclomaticEstimate}`);
-    console.log(`  Callees:              ${result.calleeCount}`);
-    console.log(`  Fan-in:               ${result.fanIn}`);
-    console.log(`  Fan-out:              ${result.fanOut}`);
-  });
-}
-
-export function handleDataflow(symbol: unknown, rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const budget = commandAnalysisBudget(db, 'dataflow', booleanOption(opts, 'full'));
-    const result = queries.dataflow(db, String(symbol), { semantic: budget.semantic });
-    if (!result) return render.empty('Symbol not found.');
-    console.log(`${result.shortName}  (${result.relativePath})\n`);
-    if (result.definitionSites.length > 0) {
-      console.log('  ═══ DEFINED AT ═══');
-      for (const s of result.definitionSites) console.log(`    ${s.file}:${displayLine(s.line)}`);
-    }
-    if (result.usageSites.length > 0) {
-      console.log('\n  ═══ USED AT ═══');
-      for (const s of result.usageSites) console.log(`    ${s.file}:${displayLine(s.line)}  in ${s.enclosingShort}`);
-    }
-    if (result.producers.length > 0) {
-      console.log('\n  ═══ PRODUCERS (feeds into this) ═══');
-      for (const p of result.producers) console.log(`    ${p.file}  ${p.shortName}`);
-    }
-    if (result.consumers.length > 0) {
-      console.log('\n  ═══ CONSUMERS (this feeds into) ═══');
-      for (const c of result.consumers) console.log(`    ${c.file}  ${c.shortName}`);
-    }
-  });
-}
-
-export function handleSlice(symbol: unknown, rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const direction = booleanOption(opts, 'forward') ? 'forward' : 'backward';
-    const budget = commandAnalysisBudget(db, 'slice', booleanOption(opts, 'full'));
-    const result = queries.slice(db, String(symbol), {
-      direction,
-      maxDepth: definedNumber(opts, 'depth', 3),
-      semantic: budget.semantic,
-    });
-    if (!result) return render.empty('Symbol not found.');
-    console.log(`${result.direction} slice of ${result.shortName}\n`);
-    if (result.connectedSymbols.length === 0) {
-      console.log('  No connected symbols found.');
-      return;
-    }
-    render.list(result.connectedSymbols, (s) => `  ${s.file}  ${s.shortName}\n    ${s.relationship}`);
-    console.log(`\n${result.connectedSymbols.length} connected symbol(s).`);
-  });
-}
-
 export function handleInstallSkills(): void {
   const result = installSkills();
   const total = result.installed.length + result.alreadyLinked.length;
@@ -704,45 +550,6 @@ export function handleCheckDeps(): void {
   }
 
   process.exitCode = hasProblems ? 1 : 0;
-}
-
-export function handleRedundantReexports(rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const results = queries.redundantReexports(db, { scope: stringOption(opts, 'scope'), limit: definedNumber(opts, 'limit', 30) });
-    if (results.length === 0) return render.empty('No redundant re-exports found.');
-    render.groupedByFile(
-      results,
-      (r) =>
-        `  ${r.shortName}  (from ${r.originalFile})\n` +
-        `    barrel: ${r.barrelConsumers} consumer(s) | direct: ${r.directConsumers} consumer(s)`,
-      (r) => r.barrelFile,
-    );
-    console.log(`\n${results.length} redundant re-export(s).`);
-  });
-}
-
-export function handleSimilarSignatures(rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const budget = commandAnalysisBudget(db, 'similar-signatures', booleanOption(opts, 'full'));
-    const groups = queries.similarSignatures(db, {
-      scope: stringOption(opts, 'scope'),
-      minLoc: definedNumber(opts, 'minLoc', 3),
-      limit: definedNumber(opts, 'limit', 20),
-      scanLimit: budget.scanLimit,
-      semantic: budget.semantic,
-    });
-    if (groups.length === 0) return render.empty('No same-shape function groups found.');
-    render.list(groups, (g) => {
-      const head = `\nSignature: ${g.signature}  (${g.functions.length} functions)`;
-      const body = g.functions
-        .map((f) => `  ${displayPathRange(f.file, f.startLine, f.endLine)}  ${f.shortName}  (${f.loc} LOC)`)
-        .join('\n');
-      return `${head}\n${body}`;
-    });
-    console.log(`\n${groups.length} group(s) found.`);
-  });
 }
 
 export function handleInit(): void {
