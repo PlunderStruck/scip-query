@@ -1,11 +1,14 @@
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { resolveImportPath } from '../../resolution/import-path-resolver.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { leafName } from '../../symbols/symbol-parser.js';
+import { findIndexedDefinitionNear, indexedDefinitionLeafMap } from './indexed-definitions.js';
+import { discoverWorkspacePackages, packageEntryCandidates, workspacePackageNameForSpecifier } from './workspace-packages.js';
+import { dedupeLocations, isTypeOnlyLocation, lineOf, referenceLocationsWithoutDeclaration, semanticReferencesForNode, textualIdentifierLocations, toRelative } from './semantic-locations.js';
+import type { PackageExportIndex, WorkspacePackage } from './workspace-packages.js';
 import type {
   CallExpression,
   Identifier,
@@ -13,7 +16,6 @@ import type {
   NewExpression,
   Node,
   Project,
-  ReferencedSymbol,
   SourceFile,
   Symbol,
 } from 'ts-morph';
@@ -40,13 +42,6 @@ interface SourceFileMatch {
   sourceFile: SourceFile;
 }
 
-interface WorkspacePackage {
-  name: string;
-  rootRelative: string;
-  sourceRootRelative: string;
-}
-
-type PackageExportIndex = Map<string, Map<string, Set<number>>>;
 
 interface ImportIdentifierEntry {
   identifier: Identifier | null;
@@ -579,181 +574,6 @@ function addSemanticCallee(
   bucket.push(target);
 }
 
-function discoverWorkspacePackages(projectRoot: string): WorkspacePackage[] {
-  const packageJsonPath = path.join(projectRoot, 'package.json');
-  if (!existsSync(packageJsonPath)) return [];
-
-  let rootPackage: { workspaces?: string[] | { packages?: string[] } };
-  try {
-    rootPackage = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as typeof rootPackage;
-  } catch {
-    return [];
-  }
-
-  const patterns = Array.isArray(rootPackage.workspaces)
-    ? rootPackage.workspaces
-    : rootPackage.workspaces?.packages ?? [];
-
-  return patterns
-    .flatMap((pattern) => workspacePackageDirs(projectRoot, pattern))
-    .flatMap((packageRoot) => workspacePackageFromDir(projectRoot, packageRoot));
-}
-
-function workspacePackageDirs(projectRoot: string, pattern: string): string[] {
-  if (!pattern || pattern.startsWith('!') || pattern.includes('node_modules')) return [];
-  if (!pattern.includes('*')) {
-    const candidate = path.join(projectRoot, pattern);
-    return existsSync(path.join(candidate, 'package.json')) ? [candidate] : [];
-  }
-  const star = pattern.indexOf('*');
-  const prefix = pattern.slice(0, star).replace(/\/$/, '');
-  const suffix = pattern.slice(star + 1).replace(/^\//, '');
-  const base = path.join(projectRoot, prefix || '.');
-  if (!existsSync(base)) return [];
-  try {
-    return readdirSync(base)
-      .map((entry) => path.join(base, entry, suffix))
-      .filter((candidate) => existsSync(path.join(candidate, 'package.json')));
-  } catch {
-    return [];
-  }
-}
-
-function workspacePackageFromDir(projectRoot: string, packageRoot: string): WorkspacePackage[] {
-  try {
-    const packageJson = JSON.parse(readFileSync(path.join(packageRoot, 'package.json'), 'utf8')) as { name?: string };
-    if (!packageJson.name) return [];
-    const rootRelative = path.relative(projectRoot, packageRoot).replace(/\\/g, '/');
-    return [{
-      name: packageJson.name,
-      rootRelative,
-      sourceRootRelative: `${rootRelative}/src`,
-    }];
-  } catch {
-    return [];
-  }
-}
-
-function workspacePackageNameForSpecifier(
-  packages: ReadonlyArray<WorkspacePackage>,
-  specifier: string,
-): string | null {
-  for (const pkg of packages) {
-    if (specifier === pkg.name || specifier.startsWith(`${pkg.name}/`)) return pkg.name;
-  }
-  return null;
-}
-
-function packageEntryCandidates(pkg: WorkspacePackage): string[] {
-  return [
-    `${pkg.sourceRootRelative}/index.ts`,
-    `${pkg.sourceRootRelative}/index.tsx`,
-    `${pkg.sourceRootRelative}/index.mts`,
-    `${pkg.sourceRootRelative}/index.cts`,
-  ];
-}
-
-function referenceLocations(ref: ReferencedSymbol, projectRoot: string): SemanticReference[] {
-  return ref.getReferences().map((entry) => {
-    const node = entry.getNode();
-    return toSemanticLocation(node, projectRoot);
-  });
-}
-
-function findReferencesForNode(node: Node): ReferencedSymbol[] {
-  const maybeReferenceable = node as Node & { findReferences?: () => ReferencedSymbol[] };
-  if (typeof maybeReferenceable.findReferences === 'function') {
-    return maybeReferenceable.findReferences();
-  }
-  return [];
-}
-
-function semanticReferencesForNode(
-  node: Node,
-  definition: IndexedDefinition,
-  packageRefs: readonly SemanticReference[],
-  projectRoot: string,
-): SemanticReference[] {
-  const locations: SemanticReference[] = [];
-  for (const ref of findReferencesForNode(node)) {
-    for (const location of referenceLocations(ref, projectRoot)) {
-      if (location.file === definition.relativePath && location.line >= definition.startLine && location.line <= definition.endLine) {
-        continue;
-      }
-      locations.push(location);
-    }
-  }
-  for (const location of packageRefs) locations.push(location);
-  return dedupeLocations(locations);
-}
-
-function referenceLocationsWithoutDeclaration(
-  ref: ReferencedSymbol,
-  importer: string,
-  declarationIdentifier: Identifier | null,
-  projectRoot: string,
-): Array<{ location: SemanticLocation; node: Node }> {
-  const out: Array<{ location: SemanticLocation; node: Node }> = [];
-  const declarationStart = declarationIdentifier?.getStart();
-  for (const entry of ref.getReferences()) {
-    const node = entry.getNode();
-    if (toRelative(projectRoot, node.getSourceFile().getFilePath()) !== importer) continue;
-    if (declarationStart !== undefined && node.getStart() === declarationStart) continue;
-    out.push({ location: toSemanticLocation(node, projectRoot), node });
-  }
-  return out;
-}
-
-function toSemanticLocation(node: Node, projectRoot: string): SemanticLocation {
-  const sourceFile = node.getSourceFile();
-  const pos = sourceFile.getLineAndColumnAtPos(node.getStart());
-  return {
-    file: toRelative(projectRoot, sourceFile.getFilePath()) ?? sourceFile.getBaseName(),
-    line: pos.line - 1,
-    column: pos.column - 1,
-  };
-}
-
-function textualIdentifierLocations(
-  identifier: Identifier,
-  importer: string,
-  projectRoot: string,
-): SemanticReference[] {
-  const sourceFile = identifier.getSourceFile();
-  const declarationLine = lineOf(sourceFile, identifier);
-  const name = identifier.getText();
-  const pattern = new RegExp(`\\b${escapeRegExp(name)}\\b`, 'g');
-  const lines = sourceFile.getFullText().split('\n');
-  const locations: SemanticReference[] = [];
-
-  for (let line = 0; line < lines.length; line++) {
-    if (line === declarationLine) continue;
-    const text = lines[line] ?? '';
-    pattern.lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(text)) !== null) {
-      locations.push({
-        file: importer,
-        line,
-        column: match.index,
-      });
-    }
-  }
-
-  return dedupeLocations(locations.filter((location) =>
-    toRelative(projectRoot, path.join(projectRoot, location.file)) === importer,
-  ));
-}
-
-function isTypeOnlyLocation(node: Node): boolean {
-  for (let current: Node | undefined = node; current; current = current.getParent()) {
-    const kind = current.getKindName();
-    if (kind.includes('Type') || kind === 'InterfaceDeclaration' || kind === 'TypeAliasDeclaration') return true;
-    if (kind === 'CallExpression' || kind === 'NewExpression' || kind === 'ExpressionStatement') return false;
-  }
-  return false;
-}
-
 function nodeNames(tsMorph: TsMorphModule, node: Node): string[] {
   const names: string[] = [];
   const add = (name: string | undefined): void => {
@@ -771,102 +591,6 @@ function nodeNames(tsMorph: TsMorphModule, node: Node): string[] {
   return names;
 }
 
-function findIndexedDefinitionNear(
-  db: ScipDatabase,
-  file: string,
-  line: number,
-  symbolName: string,
-): IndexedDefinition | null {
-  const rows = db.all<IndexedDefinition>(
-    `SELECT
-       gs.id AS symbolId,
-       gs.symbol,
-       d.relative_path AS relativePath,
-       COALESCE(der.start_line, c.start_line) AS startLine,
-       COALESCE(der.end_line, c.end_line) AS endLine,
-       COALESCE(gs.display_name, '') AS leaf,
-       NULL AS parentTypeName,
-       CASE WHEN gs.kind IN (6, 12, 13) OR gs.symbol LIKE '%().' THEN 1 ELSE 0 END AS isFunctionLike,
-       CASE WHEN gs.kind IN (5, 8, 11) THEN 1 ELSE 0 END AS isTypeLike,
-       gs.kind AS kind,
-       gs.documentation AS documentation,
-       gs.enclosing_symbol AS enclosingSymbol
-     FROM global_symbols gs
-     LEFT JOIN defn_enclosing_ranges der ON der.symbol_id = gs.id
-     LEFT JOIN chunks c ON c.document_id = der.document_id
-     JOIN documents d ON d.id = der.document_id
-     WHERE d.relative_path = ?
-       AND COALESCE(gs.display_name, gs.symbol) LIKE ?
-     ORDER BY ABS(COALESCE(der.start_line, c.start_line) - ?)
-     LIMIT 5`,
-    file,
-    `%${symbolName}%`,
-    line,
-  );
-  return rows[0] ?? null;
-}
-
-function indexedDefinitionLeafMap(
-  db: ScipDatabase,
-  file: string,
-): Map<string, IndexedDefinition> {
-  const rows = db.all<IndexedDefinition>(
-    `SELECT
-       d.id AS documentId,
-       gs.id AS symbolId,
-       gs.symbol,
-       d.relative_path AS relativePath,
-       der.start_line AS startLine,
-       der.end_line AS endLine,
-       COALESCE(gs.display_name, '') AS leaf,
-       NULL AS parentTypeName,
-       CASE WHEN gs.kind IN (6, 12, 13) OR gs.symbol LIKE '%().' THEN 1 ELSE 0 END AS isFunctionLike,
-       CASE WHEN gs.kind IN (5, 8, 11) THEN 1 ELSE 0 END AS isTypeLike,
-       gs.kind AS kind,
-       gs.documentation AS documentation,
-       gs.enclosing_symbol AS enclosingSymbol
-     FROM global_symbols gs
-     JOIN defn_enclosing_ranges der ON der.symbol_id = gs.id
-     JOIN documents d ON d.id = der.document_id
-     WHERE d.relative_path = ?
-     UNION ALL
-     SELECT
-       d.id AS documentId,
-       gs.id AS symbolId,
-       gs.symbol,
-       d.relative_path AS relativePath,
-       MIN(c.start_line) AS startLine,
-       MAX(c.end_line) AS endLine,
-       COALESCE(gs.display_name, '') AS leaf,
-       NULL AS parentTypeName,
-       CASE WHEN gs.kind IN (6, 12, 13) OR gs.symbol LIKE '%().' THEN 1 ELSE 0 END AS isFunctionLike,
-       CASE WHEN gs.kind IN (5, 8, 11) THEN 1 ELSE 0 END AS isTypeLike,
-       gs.kind AS kind,
-       gs.documentation AS documentation,
-       gs.enclosing_symbol AS enclosingSymbol
-     FROM global_symbols gs
-     JOIN mentions m ON m.symbol_id = gs.id
-     JOIN chunks c ON c.id = m.chunk_id
-     JOIN documents d ON d.id = c.document_id
-     WHERE d.relative_path = ?
-       AND m.role = 1
-     GROUP BY gs.id, gs.symbol, d.id, d.relative_path, gs.display_name, gs.kind, gs.documentation, gs.enclosing_symbol
-     ORDER BY startLine, endLine`,
-    file,
-    file,
-  );
-  const byId = new Set<number>();
-  const byLeaf = new Map<string, IndexedDefinition>();
-  for (const row of rows) {
-    if (byId.has(row.symbolId)) continue;
-    byId.add(row.symbolId);
-    const leaf = row.leaf || leafName(row.symbol);
-    if (!leaf || byLeaf.has(leaf)) continue;
-    byLeaf.set(leaf, { ...row, leaf });
-  }
-  return byLeaf;
-}
-
 function findContainingDefinition(
   definitions: ReadonlyArray<IndexedDefinition>,
   line: number,
@@ -879,22 +603,6 @@ function findContainingDefinition(
     }
   }
   return best;
-}
-
-function lineOf(sourceFile: SourceFile, node: Node): number {
-  return sourceFile.getLineAndColumnAtPos(node.getStart()).line - 1;
-}
-
-function dedupeLocations(locations: SemanticReference[]): SemanticReference[] {
-  const seen = new Set<string>();
-  const out: SemanticReference[] = [];
-  for (const location of locations) {
-    const key = `${location.file}:${location.line}:${location.column}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(location);
-  }
-  return out;
 }
 
 function addReferencesForSymbols(
@@ -928,12 +636,6 @@ function cached<K, V>(map: Map<K, V>, key: K, compute: () => V): V {
   return value;
 }
 
-function toRelative(root: string, fullPath: string): string | null {
-  const relative = path.relative(root || process.cwd(), fullPath).replace(/\\/g, '/');
-  if (!relative || relative.startsWith('..')) return null;
-  return relative;
-}
-
 function isTypeScriptLike(relativePath: string): boolean {
   return /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(relativePath);
 }
@@ -943,8 +645,4 @@ function normalizeType(type: string): string {
     .replace(/\s+/g, ' ')
     .replace(/\bimport\("[^"]+"\)\./g, '')
     .trim();
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

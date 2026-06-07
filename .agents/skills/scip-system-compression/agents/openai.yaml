@@ -1,0 +1,4 @@
+interface:
+  display_name: "SCIP System Compression"
+  short_description: "Find higher-level simplifications with SCIP"
+  default_prompt: "Use $scip-system-compression to understand this codebase at a high level and propose principled simplifications."

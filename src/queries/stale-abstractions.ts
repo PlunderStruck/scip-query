@@ -348,7 +348,8 @@ function isNestedTypeMember(symbol: string): boolean {
 function isTypeOnlyFile(relativePath: string): boolean {
   const basename = relativePath.split('/').pop() ?? '';
   const stem = basename.replace(/\.[^.]+$/, '');
-  if (stem === 'types' || stem === 'models' || stem === 'schema'
+  if (stem === 'types' || stem.endsWith('-types')
+      || stem === 'models' || stem === 'schema'
       || stem === 'common' || stem === 'protocol' || stem === 'proto'
       || stem === 'dto' || stem === 'mod') return true;
   if (/(^|\/)types(\/|\.)/.test(relativePath)) return true;

@@ -1,0 +1,589 @@
+import type Database from 'better-sqlite3';
+import { createRequire } from 'node:module';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, extname, join, relative, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import type { DefinitionInfo, DefinitionRangeLookup, ResolvedOccurrence, SourceTextInfo, TsModule, VolarLanguage, VolarMapper, VolarTsModule, VueCoreModule, VueIdentifierToken, VueLanguageContext, VueLanguageDependencies } from './augment-vue-types.js';
+
+function clearVueDocumentChunks(db: Database.Database): void {
+  const tx = db.transaction(() => {
+    db.prepare(`
+      DELETE FROM mentions
+      WHERE chunk_id IN (
+        SELECT c.id
+        FROM chunks c
+        JOIN documents d ON d.id = c.document_id
+        WHERE d.language = 'vue' OR d.relative_path LIKE '%.vue'
+      )
+    `).run();
+    db.prepare(`
+      DELETE FROM chunks
+      WHERE document_id IN (
+        SELECT id
+        FROM documents
+        WHERE language = 'vue' OR relative_path LIKE '%.vue'
+      )
+    `).run();
+  });
+  tx();
+}
+
+export function listVueDocumentFiles(db: Database.Database, projectRoot: string): string[] {
+  const rows = db.prepare(`
+    SELECT relative_path AS relativePath
+    FROM documents
+    WHERE language = 'vue' OR relative_path LIKE '%.vue'
+    ORDER BY relative_path
+  `).all() as { relativePath: string }[];
+  return rows.map((row) => resolve(projectRoot, row.relativePath));
+}
+
+// scip-query: ignore-extract — this creates the Volar/TypeScript language
+// context; dependency loading, tsconfig parsing, project host construction, and
+// language creation are one initialization boundary.
+export function createVueLanguageContext(projectRoot: string, configPath: string): VueLanguageContext {
+  const { vueCore, ts, volarTs } = loadVueLanguageDependencies(projectRoot);
+  const { parsed, vueOptions } = parseVueTsConfig(vueCore, ts, configPath);
+
+  const configDir = dirname(configPath);
+  const vuePlugin = vueCore.createVueLanguagePlugin(ts, parsed.options, vueOptions, (id) => id);
+  const language = createVolarLanguage(vueCore, ts, vuePlugin);
+  const projectHost = createVueProjectHost(configDir, parsed);
+
+  const { languageServiceHost } = volarTs.createLanguageServiceHost(
+    ts,
+    ts.sys,
+    language,
+    (id) => id,
+    projectHost,
+  );
+  const languageService = ts.createLanguageService(languageServiceHost);
+
+  return {
+    ts,
+    language,
+    languageService,
+    fileNames: parsed.fileNames,
+    configDir,
+  };
+}
+
+function loadVueLanguageDependencies(projectRoot: string): VueLanguageDependencies {
+  const requireFromProject = createRequire(pathToFileURL(join(projectRoot, 'package.json')).href);
+  return {
+    vueCore: requireVueAugmentDependency(
+      requireFromProject,
+      '@vue/language-core',
+      projectRoot,
+    ) as VueCoreModule,
+    ts: requireVueAugmentDependency(requireFromProject, 'typescript', projectRoot) as TsModule,
+    volarTs: requireVueAugmentDependency(
+      requireFromProject,
+      '@volar/typescript',
+      projectRoot,
+    ) as VolarTsModule,
+  };
+}
+
+function parseVueTsConfig(
+  vueCore: VueCoreModule,
+  ts: TsModule,
+  configPath: string,
+): {
+  parsed: ReturnType<TsModule['parseJsonConfigFileContent']>;
+  vueOptions: Record<string, unknown>;
+} {
+  const config = ts.readConfigFile(configPath, ts.sys.readFile);
+  if (config.error || !config.config) {
+    throw new Error(`Failed to read ${configPath}`);
+  }
+
+  const vueParsed = vueCore.createParsedCommandLine(ts, ts.sys, configPath);
+  const vueOptions = vueParsed.vueOptions;
+  if (typeof vueCore.createGlobalTypesWriter === 'function') {
+    vueOptions['globalTypesPath'] = vueCore.createGlobalTypesWriter(vueOptions, ts.sys.writeFile);
+  }
+
+  return {
+    parsed: ts.parseJsonConfigFileContent(
+      config.config,
+      ts.sys,
+      dirname(configPath),
+      undefined,
+      configPath,
+      undefined,
+      vueCore.getAllExtensions(vueOptions).map((extension) => ({
+        extension: extension.slice(1),
+        isMixedContent: true,
+        scriptKind: ts.ScriptKind['Deferred'],
+      })),
+    ),
+    vueOptions,
+  };
+}
+
+function createVolarLanguage(
+  vueCore: VueCoreModule,
+  ts: TsModule,
+  vuePlugin: { getLanguageId(id: string): string | undefined },
+): VolarLanguage {
+  const languageRef: { current?: VolarLanguage } = {};
+  const language = vueCore.createLanguage([vuePlugin], new Map(), (id) => {
+    if (!existsSync(id)) return;
+    const text = readFileSync(id, 'utf-8');
+    languageRef.current?.scripts.set(
+      id,
+      ts.ScriptSnapshot.fromString(text),
+      vuePlugin.getLanguageId(id) ?? languageIdForPath(id),
+    );
+  });
+  languageRef.current = language;
+  return language;
+}
+
+function createVueProjectHost(
+  configDir: string,
+  parsed: ReturnType<TsModule['parseJsonConfigFileContent']>,
+): unknown {
+  return {
+    getCurrentDirectory: () => configDir,
+    getCompilationSettings: () => parsed.options,
+    getScriptFileNames: () => parsed.fileNames,
+    getProjectReferences: () => parsed.projectReferences,
+    getProjectVersion: () => '0',
+  };
+}
+
+function requireVueAugmentDependency(
+  requireFromProject: ReturnType<typeof createRequire>,
+  packageName: string,
+  projectRoot: string,
+): unknown {
+  try {
+    return requireFromProject(packageName);
+  } catch (err) {
+    const code = typeof err === 'object' && err !== null && 'code' in err
+      ? (err as { code?: unknown }).code
+      : null;
+    if (code === 'MODULE_NOT_FOUND') {
+      throw new Error(
+        `Vue augmentation requires ${packageName} to be installed in ${projectRoot}. ` +
+        'Install Vue/Volar dependencies for that project, then rerun augment-vue.',
+        { cause: err },
+      );
+    }
+    throw err;
+  }
+}
+
+// scip-query: ignore-extract — this creates the Vue generated-source symbol
+// lookup; definition ranges, source-map position conversion, nearest-start
+// matching, and path normalization are one bridge.
+export function createSymbolLookup(
+  db: Database.Database,
+  projectRoot: string,
+  sourceCache: (fileName: string) => SourceTextInfo | null,
+): (definition: DefinitionInfo) => number | null {
+  const rangesByFile = loadDefinitionRanges(db);
+
+  return (definition: DefinitionInfo): number | null => {
+    const relativePath = toRelativePath(projectRoot, definition.fileName);
+    const sourceInfo = sourceCache(definition.fileName);
+    if (!sourceInfo) return null;
+    const pos = offsetToLineChar(sourceInfo, definition.textSpan.start);
+    const lookup = rangesByFile.get(relativePath);
+    if (!lookup) return null;
+    const containing = lookup.containingByLine.get(pos.line);
+    if (containing !== undefined) return containing;
+    return findNearestStart(lookup.starts, pos.line, 2);
+  };
+}
+
+function loadDefinitionRanges(db: Database.Database): Map<string, DefinitionRangeLookup> {
+  const rows = db.prepare(`
+    SELECT
+      d.relative_path AS relativePath,
+      der.start_line AS startLine,
+      der.end_line AS endLine,
+      der.symbol_id AS symbolId
+    FROM defn_enclosing_ranges der
+    JOIN documents d ON d.id = der.document_id
+    ORDER BY d.relative_path, (der.end_line - der.start_line) DESC
+  `).all() as {
+    relativePath: string;
+    startLine: number;
+    endLine: number;
+    symbolId: number;
+  }[];
+
+  const byFile = new Map<string, DefinitionRangeLookup>();
+  for (const row of rows) {
+    let lookup = byFile.get(row.relativePath);
+    if (!lookup) {
+      lookup = { containingByLine: new Map(), starts: [] };
+      byFile.set(row.relativePath, lookup);
+    }
+    lookup.starts.push({ line: row.startLine, symbolId: row.symbolId });
+    for (let line = row.startLine; line <= row.endLine; line++) {
+      lookup.containingByLine.set(line, row.symbolId);
+    }
+  }
+
+  for (const lookup of byFile.values()) {
+    lookup.starts.sort((a, b) => a.line - b.line);
+  }
+  return byFile;
+}
+
+function findNearestStart(
+  starts: readonly { line: number; symbolId: number }[],
+  targetLine: number,
+  maxDistance: number,
+): number | null {
+  let low = 0;
+  let high = starts.length - 1;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    if (starts[mid]!.line < targetLine) {
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  let best: { distance: number; symbolId: number } | null = null;
+  for (const index of [high, low]) {
+    const candidate = starts[index];
+    if (!candidate) continue;
+    const distance = Math.abs(candidate.line - targetLine);
+    if (distance > maxDistance) continue;
+    if (!best || distance < best.distance) {
+      best = { distance, symbolId: candidate.symbolId };
+    }
+  }
+  return best?.symbolId ?? null;
+}
+
+export function createVueSymbolLookup(
+  db: Database.Database,
+  projectRoot: string,
+  vueFiles: string[],
+): { get(fileName: string): number | null; syntheticSymbols: number } {
+  const packageInfo = readPackageInfo(projectRoot);
+  const select = db.prepare(`SELECT id FROM global_symbols WHERE symbol = ?`);
+  const insertSymbol = db.prepare(`
+    INSERT OR IGNORE INTO global_symbols (symbol, display_name, kind, documentation)
+    VALUES (?, ?, ?, ?)
+  `);
+
+  let syntheticSymbols = 0;
+  const byFile = new Map<string, number>();
+  const tx = db.transaction(() => {
+    for (const fileName of vueFiles) {
+      const relativePath = toRelativePath(projectRoot, fileName);
+      const symbol = vueDefaultExportSymbol(packageInfo.name, packageInfo.version, relativePath);
+      insertSymbol.run(symbol, 'default', 7, `Vue component|${relativePath}`);
+      const symbolRow = select.get(symbol) as { id: number } | undefined;
+      if (!symbolRow) continue;
+      syntheticSymbols++;
+      byFile.set(fileName, symbolRow.id);
+    }
+  });
+  tx();
+
+  return {
+    get(fileName: string) {
+      return byFile.get(fileName) ?? null;
+    },
+    syntheticSymbols,
+  };
+}
+
+export function replaceVueDocumentChunks(
+  db: Database.Database,
+  projectRoot: string,
+  vueFiles: readonly string[],
+  vueSymbolLookup: { get(fileName: string): number | null },
+  occurrences: ResolvedOccurrence[],
+): number {
+  const tx = db.transaction(() => {
+    clearVueDocumentChunks(db);
+    insertVueDefinitionMentions(db, projectRoot, vueFiles, vueSymbolLookup);
+    return insertOccurrencesWithoutTransaction(db, occurrences);
+  });
+  return tx() as number;
+}
+
+function insertVueDefinitionMentions(
+  db: Database.Database,
+  projectRoot: string,
+  vueFiles: readonly string[],
+  vueSymbolLookup: { get(fileName: string): number | null },
+): void {
+  const selectDoc = db.prepare(`SELECT id FROM documents WHERE relative_path = ?`);
+  const insertChunk = db.prepare(`
+    INSERT INTO chunks (document_id, chunk_index, start_line, end_line, occurrences)
+    VALUES (?, ?, ?, ?, X'00')
+  `);
+  const insertMention = db.prepare(`
+    INSERT OR IGNORE INTO mentions (chunk_id, symbol_id, role)
+    VALUES (?, ?, 1)
+  `);
+
+  for (const fileName of vueFiles) {
+    const symbolId = vueSymbolLookup.get(fileName);
+    if (!symbolId) continue;
+    const relativePath = toRelativePath(projectRoot, fileName);
+    const docRow = selectDoc.get(relativePath) as { id: number } | undefined;
+    if (!docRow) continue;
+    const chunk = insertChunk.run(docRow.id, -1, 0, 0);
+    insertMention.run(Number(chunk.lastInsertRowid), symbolId);
+  }
+}
+
+export function createVueSymbolIdLookup(
+  db: Database.Database,
+  projectRoot: string,
+): { get(fileName: string): number | null } {
+  const packageInfo = readPackageInfo(projectRoot);
+  const select = db.prepare(`SELECT id FROM global_symbols WHERE symbol = ?`);
+  const byFile = new Map<string, number | null>();
+
+  return {
+    get(fileName: string) {
+      if (byFile.has(fileName)) {
+        return byFile.get(fileName) ?? null;
+      }
+      const relativePath = toRelativePath(projectRoot, fileName);
+      const symbol = vueDefaultExportSymbol(packageInfo.name, packageInfo.version, relativePath);
+      const row = select.get(symbol) as { id: number } | undefined;
+      const id = row?.id ?? null;
+      byFile.set(fileName, id);
+      return id;
+    },
+  };
+}
+
+export function resolveDefinitionSymbolId(
+  definition: DefinitionInfo,
+  symbolLookup: (definition: DefinitionInfo) => number | null,
+  vueSymbolLookup: { get(fileName: string): number | null },
+  context: VueLanguageContext,
+  projectRoot: string,
+): number | null {
+  if (definition.fileName.endsWith('.vue')) {
+    const sourceScript = context.language.scripts.get(definition.fileName);
+    const serviceScript = sourceScript?.generated?.languagePlugin.typescript
+      ?.getServiceScript(sourceScript.generated.root)?.code;
+    if (sourceScript && serviceScript) {
+      const map = context.language.maps.get(serviceScript, sourceScript);
+      const sourceLoc = firstSourceOffset(map, definition.textSpan.start);
+      if (sourceLoc !== null) {
+        return vueSymbolLookup.get(definition.fileName);
+      }
+    }
+    if (definition.fileName.startsWith(projectRoot)) {
+      return vueSymbolLookup.get(definition.fileName);
+    }
+    return null;
+  }
+  return symbolLookup(definition);
+}
+
+export function dedupeOccurrences(occurrences: ResolvedOccurrence[]): ResolvedOccurrence[] {
+  const seen = new Set<string>();
+  const deduped: ResolvedOccurrence[] = [];
+  for (const occurrence of occurrences) {
+    const key = occurrenceKey(occurrence);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(occurrence);
+  }
+  return deduped;
+}
+
+function occurrenceKey(occurrence: ResolvedOccurrence): string {
+  return [
+    occurrence.sourceFile,
+    occurrence.sourceLine,
+    occurrence.sourceStartChar,
+    occurrence.sourceEndChar,
+    occurrence.symbolId,
+  ].join(':');
+}
+
+function insertOccurrencesWithoutTransaction(
+  db: Database.Database,
+  occurrences: ResolvedOccurrence[],
+): number {
+  const docIds = selectDocumentIds(db, [...new Set(occurrences.map((occurrence) => occurrence.sourceFile))]);
+  const insertChunk = db.prepare(`
+    INSERT INTO chunks (document_id, chunk_index, start_line, end_line, occurrences)
+    VALUES (?, ?, ?, ?, X'00')
+  `);
+  const insertMention = db.prepare(`
+    INSERT OR IGNORE INTO mentions (chunk_id, symbol_id, role)
+    VALUES (?, ?, 0)
+  `);
+
+  const seen = new Set<string>();
+  let inserted = 0;
+  let chunkIndex = 0;
+  for (const occurrence of occurrences) {
+    const key = occurrenceKey(occurrence);
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const documentId = docIds.get(occurrence.sourceFile);
+    if (!documentId) continue;
+    const chunk = insertChunk.run(documentId, chunkIndex++, occurrence.sourceLine, occurrence.sourceLine);
+    const info = insertMention.run(Number(chunk.lastInsertRowid), occurrence.symbolId);
+    inserted += Number(info.changes);
+  }
+  return inserted;
+}
+
+// scip-query: ignore-passthrough — owns Vue lexical token filtering; Set.has is incidental.
+export function* identifierTokens(source: string): Generator<VueIdentifierToken> {
+  const re = /\b[A-Za-z_$][A-Za-z0-9_$]*\b/g;
+  const ignored = new Set([
+    'script', 'setup', 'template', 'style', 'lang', 'scoped', 'true', 'false',
+    'null', 'undefined', 'const', 'let', 'var', 'import', 'from', 'export',
+    'return', 'if', 'else', 'for', 'while', 'function', 'class', 'type',
+    'interface', 'as', 'await', 'async',
+  ]);
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(source))) {
+    const text = match[0]!;
+    if (ignored.has(text)) continue;
+    yield { text, start: match.index, end: match.index + text.length };
+  }
+}
+
+export function firstGeneratedOffset(map: VolarMapper, sourceOffset: number): number | null {
+  for (const [offset] of map.toGeneratedLocation(sourceOffset, (data) => !!data.navigation)) {
+    return offset;
+  }
+  return null;
+}
+
+export function firstSourceOffset(map: VolarMapper, generatedOffset: number): number | null {
+  const anyMap = map as unknown as {
+    toSourceLocation(
+      generatedOffset: number,
+      filter?: (data: { navigation?: unknown }) => boolean,
+    ): Generator<readonly [number, { data: { navigation?: unknown } }]>;
+  };
+  for (const [offset] of anyMap.toSourceLocation(generatedOffset, (data) => !!data.navigation)) {
+    return offset;
+  }
+  return null;
+}
+
+export function offsetToLineChar(source: SourceTextInfo, offset: number): { line: number; character: number } {
+  let low = 0;
+  let high = source.lineStarts.length - 1;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const lineStart = source.lineStarts[mid]!;
+    if (lineStart <= offset) {
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  const line = Math.max(0, high);
+  return { line, character: offset - source.lineStarts[line]! };
+}
+
+export function isExternalDefinition(projectRoot: string, fileName: string): boolean {
+  const rel = toRelativePath(projectRoot, fileName);
+  return rel.startsWith('node_modules/');
+}
+
+export function toRelativePath(projectRoot: string, fileName: string): string {
+  return relative(projectRoot, fileName).replaceAll('\\', '/');
+}
+
+function languageIdForPath(fileName: string): string {
+  switch (extname(fileName)) {
+    case '.vue':
+      return 'vue';
+    case '.tsx':
+      return 'typescriptreact';
+    case '.ts':
+    case '.mts':
+    case '.cts':
+      return 'typescript';
+    case '.jsx':
+      return 'javascriptreact';
+    case '.js':
+    case '.mjs':
+    case '.cjs':
+      return 'javascript';
+    case '.json':
+      return 'json';
+    default:
+      return 'typescript';
+  }
+}
+
+export function createSourceTextCache(): (fileName: string) => SourceTextInfo | null {
+  const cache = new Map<string, SourceTextInfo | null>();
+  return (fileName: string) => {
+    if (cache.has(fileName)) {
+      return cache.get(fileName) ?? null;
+    }
+    try {
+      const text = readFileSync(fileName, 'utf-8');
+      const info = { text, lineStarts: createLineStarts(text) };
+      cache.set(fileName, info);
+      return info;
+    } catch {
+      cache.set(fileName, null);
+      return null;
+    }
+  };
+}
+
+function createLineStarts(source: string): number[] {
+  const starts = [0];
+  for (let i = 0; i < source.length; i++) {
+    if (source.charCodeAt(i) === 10) {
+      starts.push(i + 1);
+    }
+  }
+  return starts;
+}
+
+function selectDocumentIds(db: Database.Database, relativePaths: readonly string[]): Map<string, number> {
+  const ids = new Map<string, number>();
+  const chunkSize = 500;
+  for (let start = 0; start < relativePaths.length; start += chunkSize) {
+    const chunk = relativePaths.slice(start, start + chunkSize);
+    const rows = db.prepare(
+      `SELECT id, relative_path AS relativePath FROM documents WHERE relative_path IN (${chunk.map(() => '?').join(',')})`,
+    ).all(...chunk) as { id: number; relativePath: string }[];
+    for (const row of rows) {
+      ids.set(row.relativePath, row.id);
+    }
+  }
+  return ids;
+}
+
+function readPackageInfo(projectRoot: string): { name: string; version: string } {
+  try {
+    const raw = JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf-8')) as {
+      name?: string;
+      version?: string;
+    };
+    return { name: raw.name ?? 'workspace', version: raw.version ?? '0.0.0' };
+  } catch {
+    return { name: 'workspace', version: '0.0.0' };
+  }
+}
+
+function vueDefaultExportSymbol(packageName: string, version: string, relativePath: string): string {
+  const escaped = relativePath.split('/').map((part) => `\`${part.replaceAll('`', '')}\``).join('/');
+  return `scip-vue npm ${packageName} ${version} ${escaped}/default.`;
+}

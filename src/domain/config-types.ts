@@ -1,0 +1,136 @@
+// ── Auto-Install Types ────────────────────────────────────
+
+export interface InstallMethod {
+  /** Human-readable label (e.g., "npm", "pip", "go install") */
+  label: string;
+  /** Binary that must exist for this install method to work (e.g., "npm", "pip3", "go") */
+  prerequisite: string;
+  /** Command to execute */
+  binary: string;
+  /** Arguments for the command */
+  args: string[];
+}
+
+// ── Reindex Types ──────────────────────────────────────────
+
+export type SupportedLanguage =
+  | 'typescript'
+  | 'javascript'
+  | 'java'
+  | 'scala'
+  | 'kotlin'
+  | 'rust'
+  | 'python'
+  | 'ruby'
+  | 'go'
+  | 'cpp'
+  | 'c'
+  | 'csharp'
+  | 'vb'
+  | 'dart'
+  | 'php';
+
+export interface IndexerConfig {
+  language: SupportedLanguage;
+  /** Preferred executable name for the indexer */
+  indexerBinary: string;
+  /** Additional executable names accepted on PATH for the same indexer */
+  binaryAliases?: string[];
+  /** Project-local executable paths to prefer when they exist */
+  projectLocalBinaries?: string[];
+  /** Command to check if the indexer is installed */
+  checkCommand: string;
+  /** Returns the binary + args array for execFileSync (no shell injection) */
+  indexArgs: (opts: {
+    projectRoot: string;
+    outputPath: string;
+    pnpmWorkspaces?: boolean;
+    indexerBinary: string;
+  }) => { binary: string; args: string[] };
+  /** Relative output path written by the indexer when it ignores outputPath */
+  defaultOutputPath?: string;
+  /** Marker files that indicate this language is present */
+  markerFiles: string[];
+  /** Installation methods to try in order of preference */
+  installMethods?: InstallMethod[];
+  /** URL for manual installation if auto-install fails */
+  installUrl?: string;
+  /**
+   * npm package bundled with scip-query as an optionalDependency. When this
+   * package resolves locally (i.e. it installed successfully), the indexer is
+   * considered available even if its binary isn't on PATH — `npx <binary>`
+   * will pick up the local install.
+   */
+  bundledNpmPackage?: string;
+}
+
+// ── Database Config ────────────────────────────────────────
+
+export interface ScipQueryConfig {
+  /** Path to the SQLite database (index.db) */
+  dbPath: string;
+  /** Path to the SCIP protobuf index (index.scip) */
+  indexPath: string;
+  /** Project root directory */
+  projectRoot: string;
+  /** Project-specific externally-live roots for dead-code filtering */
+  entryRoots?: EntryRootsConfig;
+  /** Paths to .gitignore files to load for filtering */
+  gitignorePaths?: string[];
+  /** Optional semantic-provider configuration */
+  semantic?: SemanticConfig;
+}
+
+// ── Project Config (.scipquery.json) ───────────────────────
+
+export interface ProjectConfig {
+  /** Override which languages to index (default: auto-detect) */
+  languages?: SupportedLanguage[];
+  /** Watch mode settings */
+  watch?: WatchConfig;
+  /** Per-language indexer overrides */
+  indexer?: Partial<Record<SupportedLanguage, IndexerOverrides>>;
+  /** Override the database storage path (default: ~/.cache/scip-query/<hash>/) */
+  dbPath?: string;
+  /** Project-specific externally-live roots for dead-code filtering */
+  entryRoots?: EntryRootsConfig;
+  /** Optional semantic-provider configuration */
+  semantic?: SemanticConfig;
+}
+
+export interface SemanticConfig {
+  typescript?: TypeScriptSemanticConfig;
+}
+
+// scip-query: ignore-stale — exported config surface even when only referenced structurally.
+export interface TypeScriptSemanticConfig {
+  /** Explicit tsconfig paths, relative to project root unless absolute */
+  tsconfigs?: string[];
+}
+
+export interface EntryRootsConfig {
+  /** Any symbol defined in these path prefixes is externally live */
+  pathPrefixes?: string[];
+  /** Any symbol defined in these exact files is externally live */
+  files?: string[];
+  /** Symbols matching these regular expressions are externally live */
+  symbolPatterns?: string[];
+  /** Qualified var names like my.ns/my-fn that are externally live */
+  qualifiedVars?: string[];
+}
+
+export interface WatchConfig {
+  /** Enable file watching (default: false, must opt in) */
+  enabled?: boolean;
+  /** Ms to wait after the last file change before triggering reindex (default: 30000) */
+  debounceMs?: number;
+  /** Minimum ms between reindex completions (default: 60000) */
+  cooldownMs?: number;
+  /** Extra glob patterns to ignore beyond .gitignore */
+  ignore?: string[];
+}
+
+export interface IndexerOverrides {
+  /** Enable pnpm workspace support (TypeScript) */
+  pnpmWorkspaces?: boolean;
+}

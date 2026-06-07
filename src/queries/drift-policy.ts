@@ -47,7 +47,7 @@ function isAllowedSrcLayerDependency(from: string, to: string): boolean {
     core: new Set(['analysis', 'domain', 'resolution', 'source', 'storage', 'symbols']),
     'language-parsers': new Set(['domain', 'resolution', 'source', 'storage']),
     queries: new Set(['analysis', 'core', 'domain', 'language-parsers', 'resolution', 'semantic', 'source', 'storage', 'symbols']),
-    reindex: new Set(['domain', 'language-parsers', 'resolution', 'runtime', 'source', 'storage', 'symbols']),
+    reindex: new Set(['domain', 'language-parsers', 'resolution', 'runtime', 'semantic', 'source', 'storage', 'symbols']),
     resolution: new Set(['domain', 'source', 'storage', 'symbols']),
     runtime: new Set(['domain', 'queries', 'reindex', 'resolution', 'source', 'storage', 'symbols']),
     semantic: new Set(['domain', 'resolution', 'storage', 'symbols']),

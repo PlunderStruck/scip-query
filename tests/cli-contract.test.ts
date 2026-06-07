@@ -1,5 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import { program, renderHeuristicNotice } from '../src/runtime/cli.js';
+import { commandDescriptors } from '../src/runtime/command-descriptors.js';
+import { commandDocEntries } from '../src/runtime/command-docs.js';
 
 function command(name: string) {
   const cmd = program.commands.find((entry) => entry.name() === name);
@@ -12,61 +16,45 @@ function optionFlags(name: string): string[] {
 }
 
 describe('CLI contract', () => {
-  it('keeps the command names we depend on', () => {
-    const names = new Set(program.commands.map((entry) => entry.name()));
+  it('registers every descriptor-backed command in descriptor order', () => {
+    const names = program.commands.map((entry) => entry.name());
 
-    expect(names.has('dead')).toBe(true);
-    expect(names.has('health')).toBe(true);
-    expect(names.has('redundant-reexports')).toBe(true);
-    expect(names.has('diff-impact')).toBe(true);
-    expect(names.has('drift')).toBe(true);
-    expect(names.has('test-coverage')).toBe(false);
+    expect(names).toEqual(commandDescriptors.map((descriptor) => descriptor.id));
   });
 
-  it('preserves representative command options and descriptions', () => {
-    expect(command('dead').description()).toBe('Find dead code and file-internal symbols (no cross-file consumers)');
-    expect(optionFlags('dead')).toEqual([
-      '--min-loc <n>',
-      '--include-tests',
-      '--skip-barrels',
-      '--include-members',
-      '--only-dead',
-      '--only-internal',
-      '--full',
-    ]);
+  it('registers command descriptions and option flags from descriptors', () => {
+    for (const descriptor of commandDescriptors.filter((entry) => !entry.hidden)) {
+      expect(command(descriptor.id).description()).toBe(descriptor.description);
+      expect(optionFlags(descriptor.id)).toEqual((descriptor.options ?? []).map((option) => option.flags));
+    }
+  });
 
-    expect(command('health').description()).toBe('Composite codebase health report with prioritized action list');
-    expect(optionFlags('health')).toEqual([
+  it('keeps heuristic classification descriptor-owned', () => {
+    for (const descriptor of commandDescriptors.filter((entry) => entry.heuristic)) {
+      expect(command(descriptor.id).description().toLowerCase()).toContain('candidate');
+    }
+  });
+
+  it('keeps public command docs derived from descriptors', () => {
+    const docs = commandDocEntries(commandDescriptors);
+    expect(docs.map((entry) => entry.id)).toEqual(commandDescriptors.filter((descriptor) => !descriptor.hidden).map((descriptor) => descriptor.id));
+    expect(docs.find((entry) => entry.id === 'health')?.options).toEqual([
       '-s, --scope <path>',
       '--full',
       '--json',
     ]);
-
-    expect(command('redundant-reexports').description()).toBe('Find barrel re-exports that nobody imports through');
-    expect(optionFlags('redundant-reexports')).toEqual([
-      '-s, --scope <path>',
-      '-n, --limit <n>',
-    ]);
-
-    expect(command('diff-impact').description()).toBe('Compute changed symbols and downstream consumers from current git diff');
-    expect(optionFlags('diff-impact')).toEqual([
-      '--base <ref>',
-    ]);
   });
 
-  it('labels heuristic commands as candidates in command descriptions', () => {
-    for (const name of [
-      'similar',
-      'similar-files',
-      'similar-chains',
-      'extract-candidates',
-      'drift',
-      'wrapper-candidates',
-      'passthrough-candidates',
-      'stale-abstractions',
-      'complexity-hotspots',
-    ]) {
-      expect(command(name).description().toLowerCase()).toContain('candidate');
+  it('keeps README and agent guide command references descriptor-backed', () => {
+    const publicCommandIds = new Set(commandDescriptors.filter((descriptor) => !descriptor.hidden).map((descriptor) => descriptor.id));
+    const documentedCommands = [
+      ...readDocumentedCommands('README.md'),
+      ...readDocumentedCommands('docs/AGENT_GUIDE.md'),
+    ];
+
+    expect(documentedCommands).not.toHaveLength(0);
+    for (const documentedCommand of documentedCommands) {
+      expect(publicCommandIds.has(documentedCommand), `documented command is not descriptor-backed: ${documentedCommand}`).toBe(true);
     }
   });
 
@@ -80,3 +68,9 @@ describe('CLI contract', () => {
     );
   });
 });
+
+function readDocumentedCommands(path: string): string[] {
+  const content = readFileSync(join(process.cwd(), path), 'utf8');
+  const matches = content.matchAll(/\bscip-query\s+([a-z][a-z0-9-]*)\b/g);
+  return [...matches].map((match) => match[1]!);
+}
