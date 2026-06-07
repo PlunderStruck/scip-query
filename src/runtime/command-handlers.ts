@@ -3,9 +3,9 @@ import type { SupportedLanguage } from '../domain/types.js';
 import * as queries from '../queries/index.js';
 import { augmentAuxiliaryDocuments, augmentVueResolvedReferences, detectLanguages, reindex } from '../reindex/index.js';
 import { loadProjectConfig, resolveIndexPaths, initProjectConfig } from './config.js';
-import { getProjectReadiness } from './project-readiness.js';
+import { getProjectReadiness } from '../reindex/project-readiness.js';
 import { Watcher } from './watch.js';
-import { BUILTIN_SKILLS, installSkills, isScipInstalled, printScipInstallInstructions } from './setup.js';
+import { installSkills, isScipInstalled, printScipInstallInstructions } from './setup.js';
 import {
   collect,
   formatBytes,
@@ -21,31 +21,13 @@ import {
   runIsolatedDiffImpactReport,
   runIsolatedHealthReport,
 } from './cli-support.js';
-
-type Options = Record<string, unknown>;
-
-function options(value: unknown): Options {
-  return value && typeof value === 'object' ? value as Options : {};
-}
-
-function stringOption(opts: Options, key: string): string | undefined {
-  const value = opts[key];
-  return typeof value === 'string' ? value : undefined;
-}
-
-function numberOption(opts: Options, key: string): number | undefined {
-  const value = opts[key];
-  return typeof value === 'number' ? value : undefined;
-}
-
-function booleanOption(opts: Options, key: string): boolean {
-  return Boolean(opts[key]);
-}
-
-function stringArrayOption(opts: Options, key: string): string[] {
-  const value = opts[key];
-  return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : [];
-}
+import {
+  booleanOptionValue,
+  commandOptions,
+  numberOptionValue,
+  stringArrayOptionValue,
+  stringOptionValue,
+} from './command-execution.js';
 
 const SUPPORTED_LANGUAGES = new Set<SupportedLanguage>([
   'typescript',
@@ -73,21 +55,21 @@ function supportedLanguages(values: readonly string[]): SupportedLanguage[] {
 // config/path resolution, reindex execution, and process-facing error handling
 // are one CLI action.
 export async function handleReindex(rawOpts: unknown): Promise<void> {
-  const opts = options(rawOpts);
+  const opts = commandOptions(rawOpts);
   const projectRoot = resolveProjectRoot();
   const config = loadProjectConfig(projectRoot);
   const paths = resolveIndexPaths(projectRoot, config);
   try {
-    const languages = supportedLanguages(stringArrayOption(opts, 'language'));
+    const languages = supportedLanguages(stringArrayOptionValue(opts, 'language'));
     const result = await reindex({
       projectRoot,
       languages: languages.length > 0 ? languages : config.languages,
       outputScip: paths.indexPath,
       outputDb: paths.dbPath,
-      pnpmWorkspaces: booleanOption(opts, 'pnpmWorkspaces') || config.indexer?.typescript?.pnpmWorkspaces,
-      skipIfUnchanged: !booleanOption(opts, 'force'),
-      allowPartial: booleanOption(opts, 'allowPartial'),
-      indexerConcurrency: numberOption(opts, 'indexerConcurrency'),
+      pnpmWorkspaces: booleanOptionValue(opts, 'pnpmWorkspaces') || config.indexer?.typescript?.pnpmWorkspaces,
+      skipIfUnchanged: !booleanOptionValue(opts, 'force'),
+      allowPartial: booleanOptionValue(opts, 'allowPartial'),
+      indexerConcurrency: numberOptionValue(opts, 'indexerConcurrency'),
     });
     console.log(`${result.reused ? 'Reused' : 'Indexed'} ${result.languages.join(', ')} in ${(result.durationMs / 1000).toFixed(1)}s`);
   } catch (err) {
@@ -113,14 +95,14 @@ export function handleAugmentSources(): void {
 }
 
 export function handleAugmentVue(rawOpts: unknown): void {
-  const opts = options(rawOpts);
+  const opts = commandOptions(rawOpts);
   const projectRoot = resolveProjectRoot();
   const dbPath = resolveActiveDbPath(projectRoot);
   try {
     const result = augmentVueResolvedReferences({
       projectRoot,
       dbPath,
-      tsconfig: stringOption(opts, 'project') ?? 'frontend/tsconfig.scip.json',
+      tsconfig: stringOptionValue(opts, 'project') ?? 'frontend/tsconfig.scip.json',
       onStatus: (message) => console.log(message),
     });
     console.log(
@@ -133,19 +115,19 @@ export function handleAugmentVue(rawOpts: unknown): void {
 }
 
 export function handleDiffImpactBatch(rawOpts: unknown): void {
-  const opts = options(rawOpts);
+  const opts = commandOptions(rawOpts);
   withDb((db) => {
     const files = JSON.parse(process.env['SCIP_QUERY_DIFF_IMPACT_FILES'] ?? '[]') as string[];
-    const plan = queries.diffImpactPlan(db, { base: stringOption(opts, 'base') });
+    const plan = queries.diffImpactPlan(db, { base: stringOptionValue(opts, 'base') });
     const result = queries.diffImpactPartial(db, files, plan.changedFiles);
     console.log(JSON.stringify(result));
   });
 }
 
 export function handleDiffImpact(rawOpts: unknown): void {
-  const opts = options(rawOpts);
+  const opts = commandOptions(rawOpts);
   try {
-    renderDiffImpactReport(runIsolatedDiffImpactReport({ base: stringOption(opts, 'base') }));
+    renderDiffImpactReport(runIsolatedDiffImpactReport({ base: stringOptionValue(opts, 'base') }));
   } catch (err) {
     console.error(`error: ${err instanceof Error ? err.message : err}`);
     process.exit(1);
@@ -153,29 +135,29 @@ export function handleDiffImpact(rawOpts: unknown): void {
 }
 
 export function handleHealthPhase(phase: unknown, rawOpts: unknown): void {
-  const opts = options(rawOpts);
+  const opts = commandOptions(rawOpts);
   withDb((db) => {
     if (!queries.HEALTH_PHASES.includes(phase as typeof queries.HEALTH_PHASES[number])) {
       console.error(`error: Unknown health phase: ${phase}`);
       process.exit(1);
     }
     const result = queries.healthPhase(db, phase as typeof queries.HEALTH_PHASES[number], {
-      scope: stringOption(opts, 'scope'),
-      full: booleanOption(opts, 'full'),
+      scope: stringOptionValue(opts, 'scope'),
+      full: booleanOptionValue(opts, 'full'),
     });
     console.log(JSON.stringify(result));
   });
 }
 
 export function handleHealth(rawOpts: unknown): void {
-  const opts = options(rawOpts);
+  const opts = commandOptions(rawOpts);
   try {
     const report = runIsolatedHealthReport({
-      scope: stringOption(opts, 'scope'),
-      full: booleanOption(opts, 'full'),
-      json: booleanOption(opts, 'json'),
+      scope: stringOptionValue(opts, 'scope'),
+      full: booleanOptionValue(opts, 'full'),
+      json: booleanOptionValue(opts, 'json'),
     });
-    renderHealthReport(report, booleanOption(opts, 'json'));
+    renderHealthReport(report, booleanOptionValue(opts, 'json'));
   } catch (err) {
     console.error(`error: ${err instanceof Error ? err.message : err}`);
     process.exit(1);
@@ -246,11 +228,11 @@ export function handleInit(): void {
 // overrides, watcher callbacks, start/stop behavior, and SIGINT handling are
 // one process action.
 export function handleWatch(rawOpts: unknown): void {
-  const opts = options(rawOpts);
+  const opts = commandOptions(rawOpts);
   const projectRoot = resolveProjectRoot();
   const config = loadProjectConfig(projectRoot);
-  const debounce = numberOption(opts, 'debounce');
-  const cooldown = numberOption(opts, 'cooldown');
+  const debounce = numberOptionValue(opts, 'debounce');
+  const cooldown = numberOptionValue(opts, 'cooldown');
   if (debounce) (config.watch ??= {}).debounceMs = debounce;
   if (cooldown) (config.watch ??= {}).cooldownMs = cooldown;
 

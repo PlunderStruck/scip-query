@@ -1,12 +1,5 @@
 import type { fingerprintProjectFiles } from './project-files.js';
 
-export interface AugmentVueResolvedOptions {
-  projectRoot: string;
-  dbPath: string;
-  tsconfig: string;
-  onStatus?: (message: string) => void;
-}
-
 export interface AugmentVueResolvedResult {
   vueFiles: number;
   resolvedReferences: number;
@@ -110,12 +103,6 @@ export interface VolarTsModule {
   ): { languageServiceHost: unknown };
 }
 
-export interface VueLanguageDependencies {
-  vueCore: VueCoreModule;
-  ts: TsModule;
-  volarTs: VolarTsModule;
-}
-
 export interface VolarLanguage {
   scripts: {
     get(id: string, includeFsFiles?: boolean, shouldRegister?: boolean): VolarSourceScript | undefined;
@@ -169,16 +156,6 @@ export interface VueReferenceTask {
   countFileSkip: boolean;
 }
 
-export interface VueReferenceComputationOptions {
-  projectRoot: string;
-  vueFiles: string[];
-  tasks?: VueReferenceTask[];
-  context: VueLanguageContext;
-  symbolLookup: (definition: DefinitionInfo) => number | null;
-  vueSymbolLookup: { get(fileName: string): number | null };
-  sourceReader: VueSourceReader;
-}
-
 export interface VueIdentifierToken {
   text: string;
   start: number;
@@ -200,11 +177,6 @@ export interface VueSourceReader {
   positionAt(source: SourceTextInfo, offset: number): SourcePosition;
 }
 
-export interface DefinitionRangeLookup {
-  containingByLine: Map<number, number>;
-  starts: { line: number; symbolId: number }[];
-}
-
 export interface AugmentVueFingerprint {
   version: 2;
   tsconfig: string;
@@ -218,9 +190,4 @@ export interface AugmentVueFingerprint {
     maxChunkId: number | null;
     maxSymbolId: number | null;
   };
-}
-
-export interface AugmentVueCache {
-  fingerprint: AugmentVueFingerprint;
-  result: AugmentVueResolvedResult;
 }

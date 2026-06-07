@@ -15,10 +15,10 @@ function option(
   flags: string,
   description: string,
   parser?: CommandOptionParser,
-  defaultValue?: unknown,
+  ...defaultValue: [unknown?]
 ): NonNullable<CommandDescriptor['options']>[number] {
-  return Object.hasOwn(arguments, '3')
-    ? { flags, description, parser, defaultValue }
+  return defaultValue.length > 0
+    ? { flags, description, parser, defaultValue: defaultValue[0] }
     : { flags, description, parser };
 }
 

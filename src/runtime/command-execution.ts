@@ -29,8 +29,7 @@ type RowRenderer<Row, Ctx extends DbCommandContext> =
   | { kind: 'table'; headers: readonly string[]; dashWidths?: readonly number[] }
   | { kind: 'grouped'; key?: (row: Row, ctx: Ctx) => string };
 
-export interface ListCommandSpec<Row> extends RowCommandSpec<Row, DbCommandContext> {
-}
+export type ListCommandSpec<Row> = RowCommandSpec<Row, DbCommandContext>;
 
 export interface TableCommandSpec<Row> extends RowCommandSpec<Row, DbCommandContext> {
   headers: readonly string[];
@@ -150,6 +149,11 @@ export function booleanOptionValue(opts: CommandOptions, key: string): boolean {
   return Boolean(opts[key]);
 }
 
+export function stringArrayOptionValue(opts: CommandOptions, key: string): string[] {
+  const value = opts[key];
+  return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : [];
+}
+
 export function definedNumberOption(opts: CommandOptions, key: string, fallback: number): number {
   return numberOptionValue(opts, key) ?? fallback;
 }
@@ -206,7 +210,7 @@ function splitCommanderActionArgs(rawArgs: readonly unknown[]): { args: readonly
   };
 }
 
-function commandOptions(value: unknown): CommandOptions {
+export function commandOptions(value: unknown): CommandOptions {
   if (!value || typeof value !== 'object') return {};
   const maybeCommand = value as { opts?: () => unknown };
   if (typeof maybeCommand.opts === 'function') {

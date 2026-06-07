@@ -3,7 +3,18 @@ import { createRequire } from 'node:module';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, extname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { DefinitionInfo, DefinitionRangeLookup, ResolvedOccurrence, SourceTextInfo, TsModule, VolarLanguage, VolarMapper, VolarTsModule, VueCoreModule, VueIdentifierToken, VueLanguageContext, VueLanguageDependencies, VueSourceReader } from './augment-vue-types.js';
+import type { DefinitionInfo, ResolvedOccurrence, SourceTextInfo, TsModule, VolarLanguage, VolarMapper, VolarTsModule, VueCoreModule, VueIdentifierToken, VueLanguageContext, VueSourceReader } from './augment-vue-types.js';
+
+interface VueLanguageDependencies {
+  vueCore: VueCoreModule;
+  ts: TsModule;
+  volarTs: VolarTsModule;
+}
+
+interface DefinitionRangeLookup {
+  containingByLine: Map<number, number>;
+  starts: { line: number; symbolId: number }[];
+}
 
 function clearVueDocumentChunks(db: Database.Database): void {
   const tx = db.transaction(() => {

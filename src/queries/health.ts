@@ -15,7 +15,13 @@ import { buildHealthReport } from './health-report.js';
 import { clearHealthAnalysisCaches, requestGarbageCollection } from './health-cache-control.js';
 import type { HealthReport } from './health-report.js';
 
-import type { ComplexitySummary, CountLocSummary, DriftSummary, HealthAnalyses, HealthBudget, StaleSummary } from './health-types.js';
+import type { ComplexitySummary, CountLocSummary, DriftSummary, HealthAnalyses, StaleSummary } from './health-types.js';
+
+interface HealthBudget {
+  candidateScanLimit: number | undefined;
+  releaseCachesBetweenPhases: boolean;
+  warnings: string[];
+}
 
 const EXTREME_COMPLEXITY_SCORE = 50;
 const LARGE_HEALTH_SYMBOL_THRESHOLD = 75_000;

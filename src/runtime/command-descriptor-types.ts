@@ -1,5 +1,3 @@
-import type { Command } from 'commander';
-
 export type CommandOptionParser = (value: string, previous: unknown) => unknown;
 export type CommandHandler = (...args: unknown[]) => void | Promise<void>;
 
@@ -38,9 +36,4 @@ export interface CommandDescriptor {
   renderShape: CommandRenderShape;
   docs?: CommandDocumentation;
   handler: CommandHandler;
-}
-
-export interface RegisteredCommandDescriptor {
-  descriptor: CommandDescriptor;
-  command: Command;
 }

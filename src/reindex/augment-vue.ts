@@ -6,7 +6,29 @@ import { fingerprintProjectFiles } from './project-files.js';
 import { awaitVueReferenceWorkers, shouldUseVueWorkers } from './augment-vue-workers.js';
 import { createSymbolLookup, createVueLanguageContext, createVueSourceReader, createVueSymbolIdLookup, createVueSymbolLookup, dedupeOccurrences, firstGeneratedOffset, firstSourceOffset, identifierTokens, isExternalDefinition, listVueDocumentFiles, replaceVueDocumentChunks, resolveDefinitionSymbolId, toRelativePath } from './augment-vue-runtime.js';
 
-import type { AugmentVueCache, AugmentVueFingerprint, AugmentVueResolvedOptions, AugmentVueResolvedResult, ResolvedOccurrence, SourceTextInfo, TsLanguageService, VolarMapper, VueIdentifierToken, VueReferenceComputationOptions, VueReferenceComputationResult, VueReferenceTask } from './augment-vue-types.js';
+import type { AugmentVueFingerprint, AugmentVueResolvedResult, DefinitionInfo, ResolvedOccurrence, SourceTextInfo, TsLanguageService, VolarMapper, VueIdentifierToken, VueLanguageContext, VueReferenceComputationResult, VueReferenceTask, VueSourceReader } from './augment-vue-types.js';
+
+export interface AugmentVueResolvedOptions {
+  projectRoot: string;
+  dbPath: string;
+  tsconfig: string;
+  onStatus?: (message: string) => void;
+}
+
+interface VueReferenceComputationOptions {
+  projectRoot: string;
+  vueFiles: string[];
+  tasks?: VueReferenceTask[];
+  context: VueLanguageContext;
+  symbolLookup: (definition: DefinitionInfo) => number | null;
+  vueSymbolLookup: { get(fileName: string): number | null };
+  sourceReader: VueSourceReader;
+}
+
+interface AugmentVueCache {
+  fingerprint: AugmentVueFingerprint;
+  result: AugmentVueResolvedResult;
+}
 
 // scip-query: ignore-extract — this is the Vue augmentation transaction
 // pipeline: cache check, compute, dedupe, write chunks, persist metadata.

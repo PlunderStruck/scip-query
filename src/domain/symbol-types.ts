@@ -1,5 +1,5 @@
 // ── Indexed-symbol Types (shared by path-resolver / symbol-lookup /
-//    definition-catalog / reference-graph) ────────────────────────────
+//    definition-catalog / symbol evidence modules) ───────────────────
 
 /**
  * A symbol's location in the SCIP index. The minimum data needed to
@@ -58,6 +58,8 @@ export interface IndexedDefinition extends SymbolMatch {
  * candidates against a user-supplied file pattern. Not part of any
  * public CLI interface.
  */
+// scip-query: ignore-stale — exported path-resolution scoring record kept as
+// part of the public domain type surface for downstream analysis tools.
 export interface DocumentPathCandidate {
   relativePath: string;
   score: number;
@@ -123,6 +125,8 @@ export interface ParsedReExport {
 // ── SCIP Symbol Grammar Types ──────────────────────────────
 
 /** Parsed components of a SCIP symbol string */
+// scip-query: ignore-stale — exported SCIP grammar record returned by
+// parseSymbol; callers use it to inspect parsed global symbol identity.
 export interface ScipSymbol {
   /** The indexer scheme (e.g. "scip-typescript", "scip-java", "rust-analyzer") */
   scheme: string;
@@ -154,6 +158,8 @@ export type DescriptorSuffix =
   | 'macro';      // !
 
 /** A local symbol (file-scoped, no cross-file identity) */
+// scip-query: ignore-stale — exported SCIP grammar record returned by
+// parseSymbol for file-local symbols.
 export interface ScipLocalSymbol {
   kind: 'local';
   id: string;

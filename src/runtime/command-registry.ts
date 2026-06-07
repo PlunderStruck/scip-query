@@ -1,7 +1,12 @@
 import type { Command } from 'commander';
-import type { CommandDescriptor, RegisteredCommandDescriptor } from './command-descriptor-types.js';
+import type { CommandDescriptor } from './command-descriptor-types.js';
 
 type PlainCommanderDefault = string | boolean | string[] | undefined;
+
+interface RegisteredCommandDescriptor {
+  descriptor: CommandDescriptor;
+  command: Command;
+}
 
 export function registerCommandDescriptors(
   program: Command,

@@ -35,9 +35,3 @@ export interface ComplexitySummary {
   top: Array<{ symbol: string; score: number }>;
   extremeCount: number;
 }
-
-export interface HealthBudget {
-  candidateScanLimit: number | undefined;
-  releaseCachesBetweenPhases: boolean;
-  warnings: string[];
-}
