@@ -4,7 +4,7 @@ import { getInactiveBarrelPaths, isEntrySurface, isRootedSymbol, TEST_FILE_PATTE
 import { clearDefinitionCacheForFile, enclosingTypeNames, getDefinitionsForFile } from '../symbols/definition-catalog.js';
 import type { DeadOptions, IndexedDefinition } from '../domain/types.js';
 import { isCallableSymbol, isFunctionLikeSymbol, isInRustTestModule, isModuleLikeSymbol, isRustTraitImplMember, shortenSymbol } from '../symbols/symbol-parser.js';
-import { getCallerRowsForSymbol } from '../symbols/reference-graph.js';
+import { getCallerRowsForSymbol } from '../symbols/call-graph-evidence.js';
 import { ProjectIndex } from '../core/project-index.js';
 import { clearLanguageParserCachesForFile, getSourceImports } from '../language-parsers/index.js';
 import { clearAstCacheForFile } from '../source/ast.js';
@@ -15,6 +15,7 @@ import { applyScanLimit } from './query-utils.js';
 import { pathsResolveSame } from '../resolution/path-normalization.js';
 import { sourceImportPathsByLocalName } from '../language-parsers/import-index.js';
 import { indexedDocumentPaths as listIndexedDocumentPaths } from '../storage/scip-documents.js';
+import { mentionedReferenceSymbolRows, mentionReferenceCountRows } from '../storage/scip-mentions.js';
 
 export interface DeadSymbolResult {
   relativePath: string;
@@ -39,7 +40,6 @@ export interface DeadSummary {
 }
 
 type ReferenceCounts = Map<number, Map<string, number>>;
-const SQLITE_PARAM_BATCH_SIZE = 750;
 
 interface DeadCandidateOptions {
   scope?: string;
@@ -124,28 +124,8 @@ function loadMentionReferenceCounts(
   inactiveBarrelPaths: ReadonlySet<string>,
   symbolIds?: readonly number[],
 ): ReferenceCounts {
-  if (symbolIds) {
-    return loadMentionReferenceCountsForSymbols(db, inactiveBarrelPaths, symbolIds);
-  }
-  const referenceRows = db.all<{
-    symbol_id: number;
-    relative_path: string;
-    ref_count: number;
-  }>(
-    `SELECT
-      m.symbol_id,
-      d.relative_path,
-      COUNT(*) AS ref_count
-     FROM mentions m
-     JOIN chunks c ON m.chunk_id = c.id
-     JOIN documents d ON c.document_id = d.id
-     WHERE m.role != 1
-       ${db.pathExclusionsFor('d')}
-     GROUP BY m.symbol_id, d.relative_path`,
-  );
-
   const referencesBySymbol: ReferenceCounts = new Map();
-  for (const row of referenceRows) {
+  for (const row of mentionReferenceCountRows(db, symbolIds)) {
     if (db.isIgnored(row.relative_path)) continue;
     if (inactiveBarrelPaths.has(row.relative_path)) continue;
 
@@ -159,80 +139,18 @@ function loadMentionReferenceCounts(
   return referencesBySymbol;
 }
 
-function loadMentionReferenceCountsForSymbols(
-  db: ScipDatabase,
-  inactiveBarrelPaths: ReadonlySet<string>,
-  symbolIds: readonly number[],
-): ReferenceCounts {
-  const referencesBySymbol: ReferenceCounts = new Map();
-  for (let offset = 0; offset < symbolIds.length; offset += SQLITE_PARAM_BATCH_SIZE) {
-    for (const row of loadMentionReferenceCountBatch(db, symbolIds.slice(offset, offset + SQLITE_PARAM_BATCH_SIZE))) {
-      if (db.isIgnored(row.relative_path)) continue;
-      if (inactiveBarrelPaths.has(row.relative_path)) continue;
-
-      let refsForSymbol = referencesBySymbol.get(row.symbol_id);
-      if (!refsForSymbol) {
-        refsForSymbol = new Map<string, number>();
-        referencesBySymbol.set(row.symbol_id, refsForSymbol);
-      }
-      refsForSymbol.set(row.relative_path, row.ref_count);
-    }
-  }
-  return referencesBySymbol;
-}
-
-function loadMentionReferenceCountBatch(
-  db: ScipDatabase,
-  symbolIds: readonly number[],
-): Array<{ symbol_id: number; relative_path: string; ref_count: number }> {
-  if (symbolIds.length === 0) return [];
-  return db.all<{ symbol_id: number; relative_path: string; ref_count: number }>(
-    `SELECT
-      m.symbol_id,
-      d.relative_path,
-      COUNT(*) AS ref_count
-     FROM mentions m
-     JOIN chunks c ON m.chunk_id = c.id
-     JOIN documents d ON c.document_id = d.id
-     WHERE m.role != 1
-       AND m.symbol_id IN (${symbolIds.map(() => '?').join(',')})
-       ${db.pathExclusionsFor('d')}
-     GROUP BY m.symbol_id, d.relative_path`,
-    ...symbolIds,
-  );
-}
-
 function loadMentionReferencedSymbolIds(
   db: ScipDatabase,
   symbolIds: readonly number[],
   inactiveBarrelPaths: ReadonlySet<string>,
 ): Set<number> {
   const result = new Set<number>();
-  for (let offset = 0; offset < symbolIds.length; offset += SQLITE_PARAM_BATCH_SIZE) {
-    for (const row of loadMentionReferencedSymbolIdBatch(db, symbolIds.slice(offset, offset + SQLITE_PARAM_BATCH_SIZE))) {
-      if (db.isIgnored(row.relative_path)) continue;
-      if (inactiveBarrelPaths.has(row.relative_path)) continue;
-      result.add(row.symbol_id);
-    }
+  for (const row of mentionedReferenceSymbolRows(db, symbolIds)) {
+    if (db.isIgnored(row.relative_path)) continue;
+    if (inactiveBarrelPaths.has(row.relative_path)) continue;
+    result.add(row.symbol_id);
   }
   return result;
-}
-
-function loadMentionReferencedSymbolIdBatch(
-  db: ScipDatabase,
-  symbolIds: readonly number[],
-): Array<{ symbol_id: number; relative_path: string }> {
-  if (symbolIds.length === 0) return [];
-  return db.all<{ symbol_id: number; relative_path: string }>(
-    `SELECT DISTINCT m.symbol_id, d.relative_path
-     FROM mentions m
-     JOIN chunks c ON m.chunk_id = c.id
-     JOIN documents d ON c.document_id = d.id
-     WHERE m.role != 1
-       AND m.symbol_id IN (${symbolIds.map(() => '?').join(',')})
-       ${db.pathExclusionsFor('d')}`,
-    ...symbolIds,
-  ).filter((row) => row.symbol_id !== null);
 }
 
 // scip-query: ignore-extract — this is the shared dead-code candidate gate:

@@ -15,7 +15,7 @@
  * document path scores > 0.
  *
  * This module is a foundation layer — depended on by definition-catalog
- * (`loadFileSymbols`) and reference-graph; it depends only on
+ * (`loadFileSymbols`) and symbol evidence modules; it depends only on
  * symbol-lookup (one-way: path-resolver → symbol-lookup, for the
  * symbol-pattern fallback).
  */
@@ -23,7 +23,12 @@ import type { ScipDatabase } from '../storage/db.js';
 import { existsSync as existsSyncFs } from 'node:fs';
 import { basename, isAbsolute as isAbsolutePath, join as pathJoin } from 'node:path';
 import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
-import type { DocumentPathCandidate } from '../domain/types.js';
+import { indexedDocumentPaths } from '../storage/scip-documents.js';
+
+interface DocumentPathCandidate {
+  relativePath: string;
+  score: number;
+}
 
 export function resolveIndexedFile(
   db: ScipDatabase,
@@ -71,19 +76,10 @@ export function resolveDocumentCandidates(
     return [];
   }
 
-  const rows = db.all<{ relative_path: string }>(
-    `SELECT relative_path
-     FROM documents
-     WHERE 1 = 1
-       ${db.pathExclusionsFor('documents')}
-     ORDER BY relative_path`,
-  );
-
-  const scored = rows
-    .filter((row) => !db.isIgnored(row.relative_path))
-    .map((row) => ({
-      relativePath: row.relative_path,
-      score: scoreDocumentPath(row.relative_path, normalizedPattern),
+  const scored = indexedDocumentPaths(db, { includeIgnored: false })
+    .map((relativePath) => ({
+      relativePath,
+      score: scoreDocumentPath(relativePath, normalizedPattern),
     }))
     .filter((row) => row.score > 0)
     .sort((a, b) => b.score - a.score || a.relativePath.localeCompare(b.relativePath));

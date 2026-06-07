@@ -7,6 +7,7 @@
  * (which IS catalog work) lives in `definition-catalog.ts`; the row shape
  * and string-massage helpers live here.
  */
+import type { ScipDatabase } from './db.js';
 
 /**
  * The minimum set of columns every "look up a definition / mention" query
@@ -25,6 +26,63 @@ export interface SymbolQueryRow {
   kind?: number | null;
   documentation?: string | null;
   enclosing_symbol?: string | null;
+}
+
+export interface SymbolRowQuery {
+  where: string;
+  params?: readonly unknown[];
+  orderBy?: string;
+  limit?: number;
+}
+
+// scip-query: ignore-wrapper — storage primitive paired with
+// definitionMentionRows; symbol-lookup owns ranking, this owns the primary
+// definition-row SQL shape.
+export function definitionRangeRows(db: ScipDatabase, query: SymbolRowQuery): SymbolQueryRow[] {
+  return db.all<SymbolQueryRow>(
+    `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path, gs.display_name, gs.documentation
+     FROM global_symbols gs
+     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
+     JOIN documents d ON der.document_id = d.id
+     WHERE ${query.where}
+       ${db.pathExclusionsFor('d')}
+     ${orderByClause(query.orderBy)}
+     ${limitClause(query.limit)}`,
+    ...(query.params ?? []),
+  );
+}
+
+export function definitionMentionRows(db: ScipDatabase, query: SymbolRowQuery): SymbolQueryRow[] {
+  return db.all<SymbolQueryRow>(
+    `SELECT
+      gs.id,
+      gs.symbol,
+      c.document_id,
+      MIN(c.start_line) AS start_line,
+      MAX(c.end_line) AS end_line,
+      d.relative_path,
+      gs.display_name,
+      gs.documentation
+     FROM global_symbols gs
+     JOIN mentions m ON m.symbol_id = gs.id
+     JOIN chunks c ON m.chunk_id = c.id
+     JOIN documents d ON c.document_id = d.id
+     WHERE m.role = 1
+       AND ${query.where}
+       ${db.pathExclusionsFor('d')}
+     GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path, gs.display_name, gs.documentation
+     ${orderByClause(query.orderBy)}
+     ${limitClause(query.limit)}`,
+    ...(query.params ?? []),
+  );
+}
+
+function orderByClause(orderBy: string | undefined): string {
+  return orderBy ? `ORDER BY ${orderBy}` : '';
+}
+
+function limitClause(limit: number | undefined): string {
+  return typeof limit === 'number' ? `LIMIT ${limit}` : '';
 }
 
 /**

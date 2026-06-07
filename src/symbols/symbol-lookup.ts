@@ -22,7 +22,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { isCallableSymbol, isFunctionLikeSymbol, isModuleLikeSymbol, leafName, shortenSymbol } from './symbol-parser.js';
 import { hydrateSymbolMatch, parentTypeName } from './definition-catalog.js';
-import { type SymbolQueryRow } from '../storage/scip-rows.js';
+import { definitionMentionRows, definitionRangeRows, type SymbolQueryRow } from '../storage/scip-rows.js';
 import type { SymbolLocation, SymbolMatch } from '../domain/types.js';
 import { mergeMixedSymbolQueryRows } from './symbol-row-policy.js';
 
@@ -93,16 +93,10 @@ function pathQualifiedPrimaryRows(
   pathLike: string,
   leaf: string,
 ): SymbolQueryRow[] {
-  return db.all<SymbolQueryRow>(
-    `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path, gs.display_name, gs.documentation
-     FROM global_symbols gs
-     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-     JOIN documents d ON der.document_id = d.id
-     WHERE d.relative_path LIKE ?
-       AND (gs.display_name = ? OR gs.symbol LIKE ?)
-       ${db.pathExclusionsFor('d')}`,
-    pathLike, leaf, `%/${leaf}.%`,
-  );
+  return definitionRangeRows(db, {
+    where: 'd.relative_path LIKE ? AND (gs.display_name = ? OR gs.symbol LIKE ?)',
+    params: [pathLike, leaf, `%/${leaf}.%`],
+  });
 }
 
 function pathQualifiedFallbackRows(
@@ -110,27 +104,10 @@ function pathQualifiedFallbackRows(
   pathLike: string,
   leaf: string,
 ): SymbolQueryRow[] {
-  return db.all<SymbolQueryRow>(
-    `SELECT
-      gs.id,
-      gs.symbol,
-      c.document_id,
-      MIN(c.start_line) AS start_line,
-      MAX(c.end_line) AS end_line,
-      d.relative_path,
-      gs.display_name,
-      gs.documentation
-     FROM global_symbols gs
-     JOIN mentions m ON m.symbol_id = gs.id
-     JOIN chunks c ON m.chunk_id = c.id
-     JOIN documents d ON c.document_id = d.id
-     WHERE m.role = 1
-       AND d.relative_path LIKE ?
-       AND (gs.display_name = ? OR gs.symbol LIKE ?)
-       ${db.pathExclusionsFor('d')}
-     GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path, gs.display_name, gs.documentation`,
-    pathLike, leaf, `%/${leaf}.%`,
-  );
+  return definitionMentionRows(db, {
+    where: 'd.relative_path LIKE ? AND (gs.display_name = ? OR gs.symbol LIKE ?)',
+    params: [pathLike, leaf, `%/${leaf}.%`],
+  });
 }
 
 // scip-query: ignore-extract — this is the fuzzy symbol lookup policy:
@@ -188,18 +165,12 @@ function findDefinitionRangeRow(
   startLine: number,
   endLine: number,
 ): SymbolQueryRow | undefined {
-  return db.get<SymbolQueryRow>(
-    `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path
-    FROM global_symbols gs
-    JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-    JOIN documents d ON der.document_id = d.id
-    WHERE d.relative_path LIKE ?
-      AND der.start_line <= ? AND der.end_line >= ?
-      ${db.pathExclusionsFor('d')}
-    ORDER BY (der.end_line - der.start_line) ASC
-      LIMIT 1`,
-    `%${filePath}%`, startLine, endLine,
-  );
+  return definitionRangeRows(db, {
+    where: 'd.relative_path LIKE ? AND der.start_line <= ? AND der.end_line >= ?',
+    params: [`%${filePath}%`, startLine, endLine],
+    orderBy: '(der.end_line - der.start_line) ASC',
+    limit: 1,
+  })[0];
 }
 
 function findDefinitionChunkRow(
@@ -208,59 +179,31 @@ function findDefinitionChunkRow(
   startLine: number,
   endLine: number,
 ): SymbolQueryRow | undefined {
-  return db.get<SymbolQueryRow>(
-    `SELECT gs.id, gs.symbol, c.document_id, MIN(c.start_line) AS start_line, MAX(c.end_line) AS end_line, d.relative_path
-     FROM global_symbols gs
-     JOIN mentions m ON m.symbol_id = gs.id
-     JOIN chunks c ON m.chunk_id = c.id
-     JOIN documents d ON c.document_id = d.id
-     WHERE m.role = 1
-       AND d.relative_path LIKE ?
-       AND c.start_line <= ? AND c.end_line >= ?
-       ${db.pathExclusionsFor('d')}
-     GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path
-     ORDER BY (MAX(c.end_line) - MIN(c.start_line)) ASC
-     LIMIT 1`,
-    `%${filePath}%`, startLine, endLine,
-  );
+  return definitionMentionRows(db, {
+    where: 'd.relative_path LIKE ? AND c.start_line <= ? AND c.end_line >= ?',
+    params: [`%${filePath}%`, startLine, endLine],
+    orderBy: '(MAX(c.end_line) - MIN(c.start_line)) ASC',
+    limit: 1,
+  })[0];
 }
 
 export function findExactSymbolMatch(
   db: ScipDatabase,
   symbol: string,
 ): SymbolMatch | null {
-  const primary = db.get<SymbolQueryRow>(
-    `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path
-     FROM global_symbols gs
-     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-     JOIN documents d ON der.document_id = d.id
-     WHERE gs.symbol = ?
-       ${db.pathExclusionsFor('d')}
-     ORDER BY d.relative_path, der.start_line
-     LIMIT 1`,
-    symbol,
-  );
+  const primary = definitionRangeRows(db, {
+    where: 'gs.symbol = ?',
+    params: [symbol],
+    orderBy: 'd.relative_path, der.start_line',
+    limit: 1,
+  })[0];
 
-  const row = primary ?? db.get<SymbolQueryRow>(
-    `SELECT
-      gs.id,
-      gs.symbol,
-      c.document_id,
-      MIN(c.start_line) AS start_line,
-      MAX(c.end_line) AS end_line,
-      d.relative_path
-     FROM global_symbols gs
-     JOIN mentions m ON m.symbol_id = gs.id
-     JOIN chunks c ON m.chunk_id = c.id
-     JOIN documents d ON c.document_id = d.id
-     WHERE gs.symbol = ?
-       AND m.role = 1
-       ${db.pathExclusionsFor('d')}
-     GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path
-     ORDER BY d.relative_path, start_line
-     LIMIT 1`,
-    symbol,
-  );
+  const row = primary ?? definitionMentionRows(db, {
+    where: 'gs.symbol = ?',
+    params: [symbol],
+    orderBy: 'd.relative_path, start_line',
+    limit: 1,
+  })[0];
 
   if (!row || db.isIgnored(row.relative_path)) {
     return null;
@@ -290,36 +233,16 @@ export function getDefinitionRowsForSymbolId(
   db: ScipDatabase,
   symbolId: number,
 ): SymbolQueryRow[] {
-  const primary = db.all<SymbolQueryRow>(
-    `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path, gs.display_name, gs.documentation
-     FROM global_symbols gs
-     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-     JOIN documents d ON der.document_id = d.id
-     WHERE gs.id = ?
-     ORDER BY der.start_line, der.end_line`,
-    symbolId,
-  );
-  const fallback = db.all<SymbolQueryRow>(
-    `SELECT
-      gs.id,
-      gs.symbol,
-      c.document_id,
-      MIN(c.start_line) AS start_line,
-      MAX(c.end_line) AS end_line,
-      d.relative_path,
-      gs.display_name,
-      gs.documentation
-     FROM global_symbols gs
-     JOIN mentions m ON m.symbol_id = gs.id
-     JOIN chunks c ON m.chunk_id = c.id
-     JOIN documents d ON c.document_id = d.id
-     WHERE gs.id = ?
-       AND m.role = 1
-       ${db.pathExclusionsFor('d')}
-     GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path, gs.display_name, gs.documentation
-     ORDER BY start_line, end_line`,
-    symbolId,
-  );
+  const primary = definitionRangeRows(db, {
+    where: 'gs.id = ?',
+    params: [symbolId],
+    orderBy: 'der.start_line, der.end_line',
+  });
+  const fallback = definitionMentionRows(db, {
+    where: 'gs.id = ?',
+    params: [symbolId],
+    orderBy: 'start_line, end_line',
+  });
   return mergeMixedSymbolQueryRows(primary, fallback);
 }
 
@@ -335,37 +258,9 @@ export function getSymbolLookupCandidates(
     return [like, like, like];
   });
 
-  const primary = db.all<SymbolQueryRow>(
-    `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path, gs.display_name, gs.documentation
-     FROM global_symbols gs
-     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
-     JOIN documents d ON der.document_id = d.id
-     WHERE ${tokenClauses.join('\n       AND ')}
-       ${db.pathExclusionsFor('d')}
-      LIMIT 200`,
-      ...params,
-    );
-  const fallback = db.all<SymbolQueryRow>(
-    `SELECT
-      gs.id,
-      gs.symbol,
-      c.document_id,
-      MIN(c.start_line) AS start_line,
-      MAX(c.end_line) AS end_line,
-      d.relative_path,
-      gs.display_name,
-      gs.documentation
-     FROM global_symbols gs
-     JOIN mentions m ON m.symbol_id = gs.id
-     JOIN chunks c ON m.chunk_id = c.id
-     JOIN documents d ON c.document_id = d.id
-     WHERE m.role = 1
-       AND ${tokenClauses.join('\n       AND ')}
-       ${db.pathExclusionsFor('d')}
-     GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path, gs.display_name, gs.documentation
-     LIMIT 200`,
-    ...params,
-  );
+  const where = tokenClauses.join('\n       AND ');
+  const primary = definitionRangeRows(db, { where, params, limit: 200 });
+  const fallback = definitionMentionRows(db, { where, params, limit: 200 });
   return mergeMixedSymbolQueryRows(primary, fallback);
 }
 

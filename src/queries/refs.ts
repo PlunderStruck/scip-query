@@ -1,9 +1,10 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
-import { getResolvedReferenceSites } from '../symbols/reference-graph.js';
+import { getResolvedReferenceSites } from '../symbols/reference-sites.js';
 import { getSourceReferenceSites } from '../symbols/identifier-attribution.js';
 import { getSourceText } from '../source/source-text.js';
 import { isFunctionLikeSymbol } from '../symbols/symbol-parser.js';
+import { indexedDocumentPaths } from '../storage/scip-documents.js';
 
 export interface RefResult {
   relativePath: string;
@@ -59,18 +60,9 @@ function getRubySemanticRefs(
     return [];
   }
 
-  const rows = db.all<{ relative_path: string }>(
-    `SELECT relative_path
-     FROM documents
-     WHERE relative_path LIKE '%.rb'
-       ${db.pathExclusionsFor('documents')}
-     ORDER BY relative_path`,
-  );
-
   const results: RefResult[] = [];
-  for (const row of rows) {
-    if (db.isIgnored(row.relative_path)) continue;
-    const source = getSourceText(db, row.relative_path);
+  for (const relativePath of indexedDocumentPaths(db, { extensions: ['.rb'], includeIgnored: false })) {
+    const source = getSourceText(db, relativePath);
     if (!source) continue;
 
     const lines = source.split('\n');
@@ -78,7 +70,7 @@ function getRubySemanticRefs(
       const line = lines[index] ?? '';
       if (tokens.some((token) => new RegExp(`@${token}\\b|\\b${token}:`).test(line))) {
         results.push({
-          relativePath: row.relative_path,
+          relativePath,
           line: index,
         });
       }

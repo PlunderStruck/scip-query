@@ -19,7 +19,7 @@
  * (Rust file-wide chunks, callable signatures inside larger blocks).
  *
  * Layer position: built on path-resolver and symbol-lookup. Used by
- * reference-graph and many query commands.
+ * symbol evidence modules and many query commands.
  */
 import type { ScipDatabase } from '../storage/db.js';
 import { getCallableSites, type CallableSite } from '../source/ast.js';
@@ -27,6 +27,7 @@ import { getSourceText } from '../source/source-text.js';
 import { isFunctionLikeSymbol, leafName, leafSuffix, parentTypeName, parseSymbol, shortenSymbol } from './symbol-parser.js';
 import { createPerDbCache } from '../storage/per-db-cache.js';
 import { cleanSignature, extractSignature, type SymbolQueryRow } from '../storage/scip-rows.js';
+import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import type { IndexedDefinition, SymbolMatch } from '../domain/types.js';
 import { mergeMixedSymbolQueryRows } from './symbol-row-policy.js';
 
@@ -151,17 +152,8 @@ export function getScopedDefinitions(
   db: ScipDatabase,
   scope?: string,
 ): IndexedDefinition[] {
-  const scopeFilter = scope ? `AND relative_path LIKE '%${scope}%'` : '';
-
-  return db.all<{ relative_path: string }>(
-    `SELECT relative_path
-     FROM documents
-     WHERE 1 = 1
-       ${db.pathExclusionsFor('documents')}
-       ${scopeFilter}
-     ORDER BY relative_path`,
-  )
-    .flatMap((row) => getDefinitionsForFile(db, row.relative_path))
+  return indexedDocumentPaths(db, { scope, includeIgnored: false })
+    .flatMap((relativePath) => getDefinitionsForFile(db, relativePath))
     .filter((row) => !db.isIgnored(row.relativePath));
 }
 

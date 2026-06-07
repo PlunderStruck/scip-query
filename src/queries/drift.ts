@@ -4,6 +4,7 @@ import { classifyFile } from '../analysis/file-classifier.js';
 import { getSourceImports } from '../language-parsers/index.js';
 import { ProjectIndex } from '../core/project-index.js';
 import { semanticImportUsage } from '../semantic/shared-primitives.js';
+import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import { getArchitecturalLayer, isKnownProjectLayerDependency, layerPolicyForEdge } from './drift-policy.js';
 
 export interface DriftResult {
@@ -279,16 +280,12 @@ function addSourceScannedSymbolRefEdges(
   graph: Map<string, Set<string>>,
 ): void {
   const index = new ProjectIndex(db);
-  const docs = db.all<{ relative_path: string }>(
-    `SELECT relative_path FROM documents
-     WHERE 1 = 1 ${db.pathExclusionsFor('documents')}`,
-  );
   // SCIP mentions miss many cross-file references (rust-analyzer skips a lot
   // of inherent-method calls; tsc-batch can drop method receivers). Without
   // augmentation, the drift "unused import" check fires whenever a real
   // dependency goes through one of those gaps.
   index.scanSourceReferences({
-    paths: docs.map((doc) => doc.relative_path),
+    paths: indexedDocumentPaths(db, { includeIgnored: false }),
     includeRustAttributeNames: true,
     identifierResolution: 'permissive',
   }, (hit) => {

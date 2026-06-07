@@ -3,6 +3,7 @@ import { findIdentifierLines } from './identifier-index.js';
 import { findEnclosingDefinition, getDefinitionsForFile } from './definition-catalog.js';
 import { getFullSymbolMatch } from './symbol-lookup.js';
 import { leafName } from './symbol-parser.js';
+import { mentionReferenceChunkRows } from '../storage/scip-mentions.js';
 import type { ReferenceSite, SymbolLocation } from '../domain/types.js';
 
 interface ReferenceChunk {
@@ -16,10 +17,9 @@ interface ReferenceChunk {
 // `findCallerFiles` (bulk source-fallback caller-file builder) live in
 // `identifier-attribution.ts`. They used to be re-exported here under
 // their query-support-era names (`getSourceReferenceSites` and
-// `buildSourceFallbackCallerFiles`) but the back-edge created a
-// reference-graph ↔ identifier-attribution cycle that the cycles
-// detector flagged. Callers now import them directly from
-// identifier-attribution.
+// `buildSourceFallbackCallerFiles`), but the back-edge created an
+// identifier-attribution cycle that the cycles detector flagged. Callers
+// now import them directly from identifier-attribution.
 
 /**
  * Precision-upgraded fallback for callers/references when
@@ -58,25 +58,14 @@ export function resolvedCandidateLines(
 
 function referenceChunksByFile(db: ScipDatabase, symbolId: number): Map<string, ReferenceChunk[]> {
   const chunksByFile = new Map<string, ReferenceChunk[]>();
-  const rows = db.all<{ relative_path: string; start_line: number; end_line: number }>(
-    `SELECT DISTINCT d.relative_path, c.start_line, c.end_line
-     FROM mentions m
-     JOIN chunks c ON m.chunk_id = c.id
-     JOIN documents d ON c.document_id = d.id
-     WHERE m.symbol_id = ?
-       AND m.role != 1
-       ${db.pathExclusionsFor('d')}
-     ORDER BY d.relative_path, c.start_line`,
-    symbolId,
-  );
-  for (const row of rows) {
+  for (const row of mentionReferenceChunkRows(db, [symbolId])) {
     if (db.isIgnored(row.relative_path)) continue;
     let bucket = chunksByFile.get(row.relative_path);
     if (!bucket) {
       bucket = [];
       chunksByFile.set(row.relative_path, bucket);
     }
-    bucket.push({ start_line: row.start_line, end_line: row.end_line });
+    bucket.push({ start_line: row.chunk_start, end_line: row.chunk_end });
   }
   return chunksByFile;
 }

@@ -3,6 +3,7 @@ import { getRustAttrReferencedNames } from '../analysis/framework-patterns.js';
 import { detectAstLanguage } from '../source/ast.js';
 import { leafName, shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
+import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import { applyScanLimit, definitionLoc } from './query-utils.js';
 
 export interface IsolatedResult {
@@ -57,13 +58,9 @@ export function isolated(
     bucket.push(c.symbolId);
     candidatesByLeaf.set(leaf, bucket);
   }
-  const docs = db.all<{ relative_path: string }>(
-    `SELECT relative_path FROM documents WHERE 1 = 1 ${db.pathExclusionsFor('documents')}`,
-  );
-  for (const doc of docs) {
-    if (db.isIgnored(doc.relative_path)) continue;
-    if (detectAstLanguage(doc.relative_path) !== 'rust') continue;
-    const refs = getRustAttrReferencedNames(db, doc.relative_path);
+  for (const doc of indexedDocumentPaths(db, { includeIgnored: false })) {
+    if (detectAstLanguage(doc) !== 'rust') continue;
+    const refs = getRustAttrReferencedNames(db, doc);
     for (const name of refs) {
       const ids = candidatesByLeaf.get(name);
       if (!ids) continue;

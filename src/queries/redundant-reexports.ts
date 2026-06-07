@@ -240,20 +240,12 @@ function countDirectImporters(
   targetPath: string,
   excludedPath: string,
 ): number {
-  const files = db.all<{ relative_path: string }>(
-    `SELECT relative_path
-     FROM documents
-     WHERE 1 = 1
-       ${db.pathExclusionsFor('documents')}
-     ORDER BY relative_path`,
-  );
-
   const importers = new Set<string>();
-  for (const row of files) {
-    if (db.isIgnored(row.relative_path) || row.relative_path === excludedPath) continue;
-    for (const imported of getSourceImports(db, row.relative_path)) {
+  for (const relativePath of indexedDocumentPaths(db, { includeIgnored: false })) {
+    if (relativePath === excludedPath) continue;
+    for (const imported of getSourceImports(db, relativePath)) {
       if (imported.sourcePath === targetPath) {
-        importers.add(row.relative_path);
+        importers.add(relativePath);
       }
     }
   }

@@ -3,6 +3,7 @@ import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
 import { resolveIndexedFile } from '../resolution/path-resolver.js';
 import { getSourceImports } from '../language-parsers/index.js';
 import { semanticImportUsage } from '../semantic/shared-primitives.js';
+import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import type { ParsedSourceImport } from '../domain/types.js';
 import { isModuleLikeSymbol, leafName, shortenSymbol } from '../symbols/symbol-parser.js';
 
@@ -104,25 +105,15 @@ function sourceImportersForSymbol(db: ScipDatabase, symbolPattern: string): Impo
   const targetLeaf = target ? leafName(target.symbol) : symbolPattern.replace(/\(\)$/, '');
   const targetIsModule = target ? isModuleLikeSymbol(target.symbol) : false;
 
-  const files = db.all<{ relative_path: string }>(
-    `SELECT relative_path
-     FROM documents
-     WHERE 1 = 1
-       ${db.pathExclusionsFor('documents')}
-     ORDER BY relative_path`,
-  );
-
   const importers = new Set<string>();
-  for (const row of files) {
-    if (db.isIgnored(row.relative_path)) continue;
-
-    for (const entry of getSourceImports(db, row.relative_path)) {
-      if (sourceImportMatchesTarget(entry, row.relative_path, {
+  for (const relativePath of indexedDocumentPaths(db, { includeIgnored: false })) {
+    for (const entry of getSourceImports(db, relativePath)) {
+      if (sourceImportMatchesTarget(entry, relativePath, {
         targetFile,
         targetLeaf,
         targetIsModule,
       })) {
-        importers.add(row.relative_path);
+        importers.add(relativePath);
       }
     }
   }

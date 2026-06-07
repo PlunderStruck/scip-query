@@ -23,6 +23,7 @@ import { readdirSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
 import { createPerDbCache } from '../storage/per-db-cache.js';
+import { indexedDocumentPaths } from '../storage/scip-documents.js';
 
 /**
  * The complete set of source-file extensions scip-query knows how to
@@ -103,16 +104,9 @@ export function getSourceFiles(
   return SOURCE_FILES_CACHE.get(db, cacheKey, () => {
     const out = new Set<string>();
     if (includeIndexed) {
-      const rows = db.all<{ relative_path: string }>(
-        `SELECT relative_path
-         FROM documents
-         WHERE 1 = 1
-           ${db.pathExclusionsFor('documents')}`,
-      );
-      for (const row of rows) {
-        if (db.isIgnored(row.relative_path)) continue;
-        if (!extensions.has(extname(row.relative_path).toLowerCase())) continue;
-        out.add(row.relative_path);
+      for (const relativePath of indexedDocumentPaths(db, { includeIgnored: false })) {
+        if (!extensions.has(extname(relativePath).toLowerCase())) continue;
+        out.add(relativePath);
       }
     }
     if (includeAuxiliary) {

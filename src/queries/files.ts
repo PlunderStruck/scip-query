@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../storage/db.js';
+import { indexedDocumentPaths } from '../storage/scip-documents.js';
 
 export interface FileResult {
   relativePath: string;
@@ -25,15 +26,6 @@ function globToLike(pattern: string): string {
 
 export function files(db: ScipDatabase, pattern: string): FileResult[] {
   const likePattern = globToLike(pattern);
-  const rows = db.all<{ relative_path: string }>(
-    `SELECT relative_path FROM documents
-     WHERE relative_path LIKE ?
-     ORDER BY relative_path`,
-    likePattern,
-  );
-
-  // Apply gitignore filtering
-  return rows
-    .filter((r) => !db.isIgnored(r.relative_path))
-    .map((r) => ({ relativePath: r.relative_path }));
+  return indexedDocumentPaths(db, { like: likePattern, includeIgnored: false })
+    .map((relativePath) => ({ relativePath }));
 }

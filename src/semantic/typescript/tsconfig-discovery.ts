@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
+import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 
 const TSCONFIG_CANDIDATES = [
   'tsconfig.json',
@@ -41,24 +42,12 @@ export function discoverTypeScriptTsconfigs(db: ScipDatabase): string[] {
     db.config.semantic?.typescript?.tsconfigs,
   ));
 
-  const documents = db.all<{ relative_path: string }>(
-    `SELECT relative_path
-     FROM documents
-     WHERE (
-       relative_path LIKE '%.ts'
-       OR relative_path LIKE '%.tsx'
-       OR relative_path LIKE '%.mts'
-       OR relative_path LIKE '%.cts'
-       OR relative_path LIKE '%.js'
-       OR relative_path LIKE '%.jsx'
-       OR relative_path LIKE '%.mjs'
-       OR relative_path LIKE '%.cjs'
-     )
-       ${db.pathExclusionsFor('documents')}`,
-  );
+  const documents = indexedDocumentPaths(db, {
+    includeIgnored: false,
+    extensions: ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'],
+  });
   for (const document of documents) {
-    if (db.isIgnored(document.relative_path)) continue;
-    const nearest = findNearestTsconfig(projectRoot, document.relative_path);
+    const nearest = findNearestTsconfig(projectRoot, document);
     if (nearest) found.add(path.resolve(nearest));
   }
 
