@@ -21,6 +21,21 @@ The biggest remaining smell is not the long command file. The biggest smell is t
 
 The next best architecture move is an evidence-model pass: make "definition/reference/caller/callee evidence with provenance" a deeper module, then make analysis pipelines consume that model instead of hand-assembling truth from lower layers.
 
+## Current Status
+
+All register items now have landed implementation slices or documented compatibility boundaries:
+
+- P0 evidence policy: `ProjectIndex` owns more shared evidence policy, reference-site evidence now carries provenance, and cache invalidation moved behind an evidence-cache registry.
+- P0 analysis pipelines: `src/queries/internal/candidate-scan.ts` owns the first shared detector lifecycle for wrapper, passthrough, and complexity hotspot candidates.
+- P1 query command specs: simple command declaration/handler units were collapsed with command-spec builders.
+- P1 AST runtime: parser runtime, language catalog, and AST types were split behind the stable AST facade.
+- P1 tests: raw fallback fixtures moved behind an evidence fixture DSL.
+- P1 public API: package exports are tiered with explicit `reindex` and `runtime` subpaths.
+- P2 parser adapters: parser capabilities and fallback modes are explicit in the adapter contract.
+- P2 Vue augmentation: the transaction lifecycle is named and verified.
+- P2 cache invalidation: composite database/file invalidation is centralized.
+- P2 suppressions: repeated suppression sites were either replaced by named mechanisms or documented as intentional facades.
+
 ## Disgust Ledger
 
 | Priority | Smell | Main files | Why it earns the side-eye | Better shape |
