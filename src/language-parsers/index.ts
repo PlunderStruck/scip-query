@@ -1,8 +1,8 @@
 /**
  * Public entry-point of the language-parsers directory. Hides the
  * registry, the per-language adapters, and the per-(db, file) source
- * caches. Callers see two functions: `getSourceImports` and
- * `getSourceExports`.
+ * caches. Callers see source-fact functions: imports, exports, and
+ * JavaScript-style re-exports.
  *
  * The cache layer here matters: every query that walks the import graph
  * calls `getSourceImports` for many files in a tight loop. Without
@@ -14,26 +14,25 @@ import { normalizePath } from '../resolution/import-path-resolver.js';
 import { createPerDbCache } from '../storage/per-db-cache.js';
 import type { ParsedReExport, ParsedSourceExport, ParsedSourceImport } from '../domain/types.js';
 import { getSourceText } from '../source/source-text.js';
-import { parseReExports } from './javascript.js';
 import { getParserForPath } from './registry.js';
 
-/**
- * Parse `export … from '…'` statements in a JS/TS source and resolve the
- * target paths. Public entry point of the language-parsers barrel so callers
- * don't reach into the JS-specific implementation file.
- */
-// scip-query: ignore-wrapper — barrel-layer entry point that hides the
-// per-language adapter. Inlining would reintroduce a queries → JS-impl
-// layer dependency that drift correctly flags.
+const SOURCE_IMPORT_CACHE = createPerDbCache<string, ParsedSourceImport[]>('source-imports');
+const SOURCE_EXPORT_CACHE = createPerDbCache<string, ParsedSourceExport[]>('source-exports');
+const SOURCE_REEXPORT_CACHE = createPerDbCache<string, ParsedReExport[]>('source-reexports');
+
 export function getReExports(
   db: ScipDatabase,
   relativePath: string,
 ): ParsedReExport[] {
-  return parseReExports(db, relativePath);
+  const normalized = normalizePath(relativePath);
+  return SOURCE_REEXPORT_CACHE.get(db, normalized, () => {
+    const parser = getParserForPath(normalized);
+    if (!parser?.parseReExports) return [];
+    const source = getSourceText(db, normalized);
+    if (!source) return [];
+    return parser.parseReExports(db, normalized, source);
+  });
 }
-
-const SOURCE_IMPORT_CACHE = createPerDbCache<string, ParsedSourceImport[]>('source-imports');
-const SOURCE_EXPORT_CACHE = createPerDbCache<string, ParsedSourceExport[]>('source-exports');
 
 export function getSourceImports(
   db: ScipDatabase,
@@ -66,10 +65,12 @@ export function getSourceExports(
 export function clearLanguageParserCaches(db: ScipDatabase): void {
   SOURCE_IMPORT_CACHE.invalidateAll(db);
   SOURCE_EXPORT_CACHE.invalidateAll(db);
+  SOURCE_REEXPORT_CACHE.invalidateAll(db);
 }
 
 export function clearLanguageParserCachesForFile(db: ScipDatabase, relativePath: string): void {
   const normalized = normalizePath(relativePath);
   SOURCE_IMPORT_CACHE.invalidate(db, normalized);
   SOURCE_EXPORT_CACHE.invalidate(db, normalized);
+  SOURCE_REEXPORT_CACHE.invalidate(db, normalized);
 }

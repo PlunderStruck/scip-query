@@ -423,3 +423,5 @@ Success would look like this:
 - Health remains 100, drift remains clean, and command accuracy tests still pass.
 
 First slice started in `docs/plans/2026-06-07-project-evidence-isolated-compression-atlas.md`: `isolated` no longer imports framework-pattern AST helpers, AST language detection, or indexed-document iteration directly for framework reference evidence, and no longer hand-projects non-self callees from raw callee maps. `stale-abstractions` and `wrapper-candidates` also no longer hand-merge indexed caller evidence with source-fallback caller evidence.
+
+Language parser adapter slice landed in `docs/plans/2026-06-07-language-parser-adapter-contract-atlas.md`: parser adapters now declare their source-fact capabilities and fallback modes, JavaScript-style re-export parsing dispatches through the registry instead of importing the JavaScript implementation directly, and re-export parsing now shares the same per-database cache ownership as import/export parsing.

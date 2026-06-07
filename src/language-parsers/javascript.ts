@@ -437,12 +437,11 @@ function splitImportClause(clause: string): [string, string | null] {
 export function parseReExports(
   db: ScipDatabase,
   relativePath: string,
+  source: string,
 ): ParsedReExport[] {
   const tree = getAst(db, relativePath);
   if (tree) return getReExportsAst(db, relativePath, tree);
-
-  const source = getSourceText(db, relativePath);
-  return source ? parseReExportsRegex(db, relativePath, source) : [];
+  return parseReExportsRegex(db, relativePath, source);
 }
 
 function parseReExportsRegex(
