@@ -1,7 +1,12 @@
 import type { CommandDescriptor, CommandOptionParser } from './command-descriptor-types.js';
 import { collect, formatBytes, parseIntSafe, parsePositiveInt, queries } from './cli-context.js';
-import { DIFF_IMPACT_BATCH_COMMAND, HEALTH_PHASE_COMMAND } from './cli-support.js';
+import { DIFF_IMPACT_BATCH_COMMAND, HEALTH_PHASE_COMMAND, renderHeuristicNotice } from './cli-support.js';
 import {
+  budgetedDbCommand,
+  budgetedGroupedByFileCommand,
+  budgetedListCommand,
+  budgetedTableCommand,
+  booleanOptionValue,
   dbCommand,
   definedNumberOption,
   listCommand,
@@ -143,6 +148,163 @@ const handleHierarchy = listCommand({
   query: ({ db, args }) => queries.hierarchy(db, stringArg(args, 0)),
   format: (node) => `${'  '.repeat(node.depth)}${node.shortName}`,
   emptyMessage: () => 'Symbol not found.',
+});
+
+const handleImports = budgetedListCommand('imports', {
+  query: ({ db, args, budget }) => queries.imports(db, stringArg(args, 0), { semantic: budget.semantic }),
+  format: (r) => `  ${r.shortName}  ← ${r.fromFile}`,
+  emptyMessage: () => 'No imports found (indexer may not emit role=2 for this language).',
+});
+
+const handleUnusedImports = budgetedListCommand('unused-imports', {
+  query: ({ db, args, budget }) => queries.unusedImports(db, stringArg(args, 0), { semantic: budget.semantic }),
+  format: (r) => `  ${r.shortName}  in ${r.importedIn}`,
+  emptyMessage: () => 'No unused imports found.',
+  after: (rows) => console.log(`\n${rows.length} unused import(s)`),
+});
+
+const handleBottlenecks = budgetedTableCommand('bottlenecks', {
+  headers: ['score', 'fan-in', 'fan-out', 'symbol'],
+  query: ({ db, opts, budget }) => queries.bottlenecks(db, {
+    limit: definedNumberOption(opts, 'limit', 20),
+    scope: stringOptionValue(opts, 'scope'),
+    minFanIn: definedNumberOption(opts, 'minFanIn', 2),
+    minFanOut: definedNumberOption(opts, 'minFanOut', 2),
+    scanLimit: budget.scanLimit,
+    semantic: budget.semantic,
+  }),
+  format: (r) =>
+    `  ${String(r.score).padStart(5)}  ${String(r.fanIn).padStart(6)}  ` +
+    `${String(r.fanOut).padStart(7)}  ${r.shortName}`,
+  emptyMessage: () => 'No bottlenecks found.',
+});
+
+const handleIsolated = budgetedGroupedByFileCommand('isolated', {
+  query: ({ db, opts, budget }) => queries.isolated(db, {
+    scope: stringOptionValue(opts, 'scope'),
+    minLoc: definedNumberOption(opts, 'minLoc', 3),
+    scanLimit: budget.scanLimit,
+    semantic: budget.semantic,
+  }),
+  format: (r) => `  ${displayRange(r.startLine, r.endLine)}  (${r.loc} LOC)  ${r.shortName}`,
+  emptyMessage: () => 'No isolated symbols found.',
+  after: (rows) => console.log(`\n${rows.length} isolated symbol(s)`),
+});
+
+const handleCallGraph = budgetedDbCommand('call-graph', ({ db, args, budget }) => {
+  const result = queries.callGraph(db, stringArg(args, 0), { semantic: budget.semantic });
+  if (!result) return render.empty('Symbol not found.');
+  console.log(`Symbol: ${result.shortName}\n`);
+  render.sectionedReport([
+    { title: `CALLERS (${result.callers.length})`, rows: result.callers.map((c) => `  ${c.file}  ${c.shortName}`) },
+    { title: `CALLEES (${result.callees.length})`, rows: result.callees.map((c) => `  ${c.file}  ${c.shortName}`) },
+  ]);
+});
+
+const handleExtractCandidates = budgetedDbCommand('extract-candidates', ({ db, opts, budget }) => {
+  const results = queries.extractCandidates(db, {
+    scope: stringOptionValue(opts, 'scope'),
+    minLoc: definedNumberOption(opts, 'minLoc', 10),
+    minCallees: definedNumberOption(opts, 'minCallees', 6),
+    limit: definedNumberOption(opts, 'limit', 20),
+    scanLimit: budget.scanLimit,
+    semantic: budget.semantic,
+  });
+  if (results.length === 0) return render.empty('No extraction candidates found.');
+  renderHeuristicNotice('extraction candidates');
+  for (const r of results) {
+    console.log(`\n${displayPathRange(r.relativePath, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC, ${r.totalCallees} callees)`);
+    for (let i = 0; i < r.clusters.length; i++) {
+      const c = r.clusters[i]!;
+      console.log(`  Cluster ${i + 1} (${Math.round(c.isolation * 100)}% isolated, ${c.callees.length} callees):`);
+      for (const callee of c.callees) console.log(`    ${callee}`);
+    }
+  }
+  console.log(`\n${results.length} extraction candidate(s) found.`);
+});
+
+const handleChangeSurface = budgetedDbCommand('change-surface', ({ db, args, budget }) => {
+  const result = queries.changeSurface(db, stringArg(args, 0), { semantic: budget.semantic });
+  if (!result) return render.empty('File not found in index.');
+  console.log(`File: ${result.file}`);
+  console.log(`External consumers: ${result.totalExternalConsumers}\n`);
+  render.list(result.symbols, (s) => {
+    const risk = s.riskLevel === 'high' ? ' *** HIGH RISK ***' : s.riskLevel === 'medium' ? ' * medium risk *' : '';
+    return `  ${displayRange(s.startLine, s.endLine)}  ${s.shortName}  [${s.externalConsumers} consumers]${risk}`;
+  });
+});
+
+const handleWrapperCandidates = budgetedListCommand('wrapper-candidates', {
+  query: ({ db, opts, budget }) => queries.wrapperCandidates(db, {
+    scope: stringOptionValue(opts, 'scope'),
+    maxLoc: definedNumberOption(opts, 'maxLoc', 15),
+    limit: definedNumberOption(opts, 'limit', 30),
+    scanLimit: budget.scanLimit,
+    semantic: budget.semantic,
+  }),
+  format: (r) =>
+    `  ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC)\n` +
+    `    Only called by: ${r.singleCallerShort}  (fan-in: ${r.callerFanIn})`,
+  emptyMessage: () => 'No wrapper candidates found.',
+  heuristicLabel: 'wrapper candidates',
+  after: (rows) => console.log(`\n${rows.length} wrapper candidate(s).`),
+});
+
+const handlePassthroughCandidates = budgetedListCommand('passthrough-candidates', {
+  query: ({ db, opts, budget }) => queries.passthroughCandidates(db, {
+    scope: stringOptionValue(opts, 'scope'),
+    maxLoc: definedNumberOption(opts, 'maxLoc', 15),
+    limit: definedNumberOption(opts, 'limit', 30),
+    scanLimit: budget.scanLimit,
+    semantic: budget.semantic,
+  }),
+  format: (r) =>
+    `  ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC)\n` +
+    `    Forwards to: ${r.forwardsToShort}  (${r.forwardsToFile})`,
+  emptyMessage: () => 'No passthrough candidates found.',
+  heuristicLabel: 'passthrough candidates',
+  after: (rows) => console.log(`\n${rows.length} passthrough candidate(s).`),
+});
+
+const handleStaleAbstractions = budgetedListCommand('stale-abstractions', {
+  query: ({ db, opts, budget }) => queries.staleAbstractions(db, {
+    scope: stringOptionValue(opts, 'scope'),
+    minLoc: definedNumberOption(opts, 'minLoc', 3),
+    limit: definedNumberOption(opts, 'limit', 30),
+    includeLowConfidence: booleanOptionValue(opts, 'includeLowConfidence'),
+    scanLimit: budget.scanLimit,
+    semantic: budget.semantic,
+  }),
+  format: (r) => {
+    const consumerLabel = r.consumers === 0 ? 'unused' : `${r.consumers} consumer`;
+    const barrelLabel = r.barrelConsumers > 0 ? `, +${r.barrelConsumers} barrel` : '';
+    return (
+      `  [${r.confidence}] ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  ` +
+      `(${r.kind}, ${r.loc} LOC, ${consumerLabel}${barrelLabel})\n` +
+      `           ${r.reason}`
+    );
+  },
+  emptyMessage: () => 'No stale abstractions found.',
+  heuristicLabel: 'stale abstraction candidates',
+  after: (rows) => console.log(`\n${rows.length} stale abstraction(s).`),
+});
+
+const handleComplexityHotspots = budgetedTableCommand('complexity-hotspots', {
+  headers: ['score', ' LOC', 'fan-in', 'fan-out', 'callees', 'symbol'],
+  query: ({ db, opts, budget }) => queries.complexityHotspots(db, {
+    scope: stringOptionValue(opts, 'scope'),
+    minLoc: definedNumberOption(opts, 'minLoc', 10),
+    limit: definedNumberOption(opts, 'limit', 20),
+    scanLimit: budget.scanLimit,
+    semantic: budget.semantic,
+  }),
+  format: (r) =>
+    `  ${r.score.toFixed(1).padStart(5)}  ${String(r.loc).padStart(4)}  ` +
+    `${String(r.fanIn).padStart(6)}  ${String(r.fanOut).padStart(7)}  ` +
+    `${String(r.calleeCount).padStart(7)}  ${r.shortName}`,
+  emptyMessage: () => 'No complexity hotspots found.',
+  heuristicLabel: 'complexity hotspot candidates',
+  dashWidths: [5, 4, 6, 7, 7, 6],
 });
 
 export const commandDescriptors: CommandDescriptor[] = [
@@ -300,7 +462,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'semantic',
     renderShape: 'list',
     docs: doc('Navigation'),
-    handler: handlers.handleImports,
+    handler: handleImports,
   },
   {
     id: 'imported-by',
@@ -318,7 +480,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'semantic',
     renderShape: 'list',
     docs: doc('Cleanup'),
-    handler: handlers.handleUnusedImports,
+    handler: handleUnusedImports,
   },
   {
     id: 'outline',
@@ -398,7 +560,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'candidate-scan',
     renderShape: 'table',
     docs: doc('Graph'),
-    handler: handlers.handleBottlenecks,
+    handler: handleBottlenecks,
   },
   {
     id: 'isolated',
@@ -412,7 +574,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'candidate-scan',
     renderShape: 'grouped-by-file',
     docs: doc('Cleanup'),
-    handler: handlers.handleIsolated,
+    handler: handleIsolated,
   },
   {
     id: 'by-kind',
@@ -464,7 +626,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'semantic',
     renderShape: 'sectioned-report',
     docs: doc('Graph'),
-    handler: handlers.handleCallGraph,
+    handler: handleCallGraph,
   },
   {
     id: 'similar',
@@ -530,7 +692,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'candidate-scan',
     renderShape: 'custom',
     docs: doc('Cleanup'),
-    handler: handlers.handleExtractCandidates,
+    handler: handleExtractCandidates,
   },
   {
     id: 'affected',
@@ -552,7 +714,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'semantic',
     renderShape: 'list',
     docs: doc('Impact'),
-    handler: handlers.handleChangeSurface,
+    handler: handleChangeSurface,
   },
   {
     id: DIFF_IMPACT_BATCH_COMMAND,
@@ -600,7 +762,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'candidate-scan',
     renderShape: 'list',
     docs: doc('Cleanup'),
-    handler: handlers.handleWrapperCandidates,
+    handler: handleWrapperCandidates,
   },
   {
     id: 'passthrough-candidates',
@@ -616,7 +778,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'candidate-scan',
     renderShape: 'list',
     docs: doc('Cleanup'),
-    handler: handlers.handlePassthroughCandidates,
+    handler: handlePassthroughCandidates,
   },
   {
     id: 'stale-abstractions',
@@ -633,7 +795,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'candidate-scan',
     renderShape: 'list',
     docs: doc('Cleanup'),
-    handler: handlers.handleStaleAbstractions,
+    handler: handleStaleAbstractions,
   },
   {
     id: 'complexity-hotspots',
@@ -649,7 +811,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     budget: 'candidate-scan',
     renderShape: 'table',
     docs: doc('Cleanup'),
-    handler: handlers.handleComplexityHotspots,
+    handler: handleComplexityHotspots,
   },
   {
     id: HEALTH_PHASE_COMMAND,

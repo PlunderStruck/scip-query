@@ -269,30 +269,6 @@ export function handleDead(scope: unknown, rawOpts: unknown): void {
   });
 }
 
-export function handleImports(file: unknown, rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const budget = commandAnalysisBudget(db, 'imports', booleanOption(opts, 'full'));
-    const results = queries.imports(db, String(file), { semantic: budget.semantic });
-    if (results.length === 0) {
-      render.empty('No imports found (indexer may not emit role=2 for this language).');
-      return;
-    }
-    render.list(results, (r) => `  ${r.shortName}  ← ${r.fromFile}`);
-  });
-}
-
-export function handleUnusedImports(file: unknown, rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const budget = commandAnalysisBudget(db, 'unused-imports', booleanOption(opts, 'full'));
-    const results = queries.unusedImports(db, String(file), { semantic: budget.semantic });
-    if (results.length === 0) return render.empty('No unused imports found.');
-    render.list(results, (r) => `  ${r.shortName}  in ${r.importedIn}`);
-    console.log(`\n${results.length} unused import(s)`);
-  });
-}
-
 export function handleFanIn(symbol: unknown, rawOpts: unknown): void {
   const opts = options(rawOpts);
   withDb((db) => {
@@ -368,42 +344,6 @@ export function handleCycles(rawOpts: unknown): void {
   });
 }
 
-export function handleBottlenecks(rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const budget = commandAnalysisBudget(db, 'bottlenecks', booleanOption(opts, 'full'));
-    const results = queries.bottlenecks(db, {
-      limit: definedNumber(opts, 'limit', 20),
-      scope: stringOption(opts, 'scope'),
-      minFanIn: definedNumber(opts, 'minFanIn', 2),
-      minFanOut: definedNumber(opts, 'minFanOut', 2),
-      scanLimit: budget.scanLimit,
-      semantic: budget.semantic,
-    });
-    if (results.length === 0) return render.empty('No bottlenecks found.');
-    render.table(
-      ['score', 'fan-in', 'fan-out', 'symbol'],
-      results.map((r) => `  ${String(r.score).padStart(5)}  ${String(r.fanIn).padStart(6)}  ${String(r.fanOut).padStart(7)}  ${r.shortName}`),
-    );
-  });
-}
-
-export function handleIsolated(rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const budget = commandAnalysisBudget(db, 'isolated', booleanOption(opts, 'full'));
-    const results = queries.isolated(db, {
-      scope: stringOption(opts, 'scope'),
-      minLoc: definedNumber(opts, 'minLoc', 3),
-      scanLimit: budget.scanLimit,
-      semantic: budget.semantic,
-    });
-    if (results.length === 0) return render.empty('No isolated symbols found.');
-    render.groupedByFile(results, (r) => `  ${displayRange(r.startLine, r.endLine)}  (${r.loc} LOC)  ${r.shortName}`);
-    console.log(`\n${results.length} isolated symbol(s)`);
-  });
-}
-
 export function handleDeepChains(rawOpts: unknown): void {
   const opts = options(rawOpts);
   withDb((db) => {
@@ -417,20 +357,6 @@ export function handleDeepChains(rawOpts: unknown): void {
       console.log(`\nChain ${i + 1} (depth ${results[i]!.depth}):`);
       for (const file of results[i]!.chain) console.log(`  → ${file}`);
     }
-  });
-}
-
-export function handleCallGraph(symbol: unknown, rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const budget = commandAnalysisBudget(db, 'call-graph', booleanOption(opts, 'full'));
-    const result = queries.callGraph(db, String(symbol), { semantic: budget.semantic });
-    if (!result) return render.empty('Symbol not found.');
-    console.log(`Symbol: ${result.shortName}\n`);
-    render.sectionedReport([
-      { title: `CALLERS (${result.callers.length})`, rows: result.callers.map((c) => `  ${c.file}  ${c.shortName}`) },
-      { title: `CALLEES (${result.callees.length})`, rows: result.callees.map((c) => `  ${c.file}  ${c.shortName}`) },
-    ]);
   });
 }
 
@@ -537,32 +463,6 @@ export function handleSimilarChains(rawOpts: unknown): void {
   });
 }
 
-export function handleExtractCandidates(rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const budget = commandAnalysisBudget(db, 'extract-candidates', booleanOption(opts, 'full'));
-    const results = queries.extractCandidates(db, {
-      scope: stringOption(opts, 'scope'),
-      minLoc: definedNumber(opts, 'minLoc', 10),
-      minCallees: definedNumber(opts, 'minCallees', 6),
-      limit: definedNumber(opts, 'limit', 20),
-      scanLimit: budget.scanLimit,
-      semantic: budget.semantic,
-    });
-    if (results.length === 0) return render.empty('No extraction candidates found.');
-    renderHeuristicNotice('extraction candidates');
-    for (const r of results) {
-      console.log(`\n${displayPathRange(r.relativePath, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC, ${r.totalCallees} callees)`);
-      for (let i = 0; i < r.clusters.length; i++) {
-        const c = r.clusters[i]!;
-        console.log(`  Cluster ${i + 1} (${Math.round(c.isolation * 100)}% isolated, ${c.callees.length} callees):`);
-        for (const callee of c.callees) console.log(`    ${callee}`);
-      }
-    }
-    console.log(`\n${results.length} extraction candidate(s) found.`);
-  });
-}
-
 export function handleAffected(symbol: unknown, rawOpts: unknown): void {
   const opts = options(rawOpts);
   withDb((db) => {
@@ -577,21 +477,6 @@ export function handleAffected(symbol: unknown, rawOpts: unknown): void {
       console.log(`  ${r.file}  ${r.shortName}`);
     }
     console.log(`\n${results.length} affected symbol(s) across ${new Set(results.map((r) => r.file)).size} files.`);
-  });
-}
-
-export function handleChangeSurface(file: unknown, rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const budget = commandAnalysisBudget(db, 'change-surface', booleanOption(opts, 'full'));
-    const result = queries.changeSurface(db, String(file), { semantic: budget.semantic });
-    if (!result) return render.empty('File not found in index.');
-    console.log(`File: ${result.file}`);
-    console.log(`External consumers: ${result.totalExternalConsumers}\n`);
-    render.list(result.symbols, (s) => {
-      const risk = s.riskLevel === 'high' ? ' *** HIGH RISK ***' : s.riskLevel === 'medium' ? ' * medium risk *' : '';
-      return `  ${displayRange(s.startLine, s.endLine)}  ${s.shortName}  [${s.externalConsumers} consumers]${risk}`;
-    });
   });
 }
 
@@ -637,95 +522,6 @@ export function handleDrift(module: unknown, rawOpts: unknown): void {
       (r) => r.file,
     );
     console.log(`\n${summary.unusedImports} unused import(s), ${summary.layerViolations} layer violation(s), ${summary.patternDeviations} pattern deviation(s)`);
-  });
-}
-
-export function handleWrapperCandidates(rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const budget = commandAnalysisBudget(db, 'wrapper-candidates', booleanOption(opts, 'full'));
-    const results = queries.wrapperCandidates(db, {
-      scope: stringOption(opts, 'scope'),
-      maxLoc: definedNumber(opts, 'maxLoc', 15),
-      limit: definedNumber(opts, 'limit', 30),
-      scanLimit: budget.scanLimit,
-      semantic: budget.semantic,
-    });
-    if (results.length === 0) return render.empty('No wrapper candidates found.');
-    renderHeuristicNotice('wrapper candidates');
-    render.list(results, (r) =>
-      `  ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC)\n` +
-      `    Only called by: ${r.singleCallerShort}  (fan-in: ${r.callerFanIn})`,
-    );
-    console.log(`\n${results.length} wrapper candidate(s).`);
-  });
-}
-
-export function handlePassthroughCandidates(rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const budget = commandAnalysisBudget(db, 'passthrough-candidates', booleanOption(opts, 'full'));
-    const results = queries.passthroughCandidates(db, {
-      scope: stringOption(opts, 'scope'),
-      maxLoc: definedNumber(opts, 'maxLoc', 15),
-      limit: definedNumber(opts, 'limit', 30),
-      scanLimit: budget.scanLimit,
-      semantic: budget.semantic,
-    });
-    if (results.length === 0) return render.empty('No passthrough candidates found.');
-    renderHeuristicNotice('passthrough candidates');
-    render.list(results, (r) =>
-      `  ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC)\n` +
-      `    Forwards to: ${r.forwardsToShort}  (${r.forwardsToFile})`,
-    );
-    console.log(`\n${results.length} passthrough candidate(s).`);
-  });
-}
-
-export function handleStaleAbstractions(rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const budget = commandAnalysisBudget(db, 'stale-abstractions', booleanOption(opts, 'full'));
-    const results = queries.staleAbstractions(db, {
-      scope: stringOption(opts, 'scope'),
-      minLoc: definedNumber(opts, 'minLoc', 3),
-      limit: definedNumber(opts, 'limit', 30),
-      includeLowConfidence: booleanOption(opts, 'includeLowConfidence'),
-      scanLimit: budget.scanLimit,
-      semantic: budget.semantic,
-    });
-    if (results.length === 0) return render.empty('No stale abstractions found.');
-    renderHeuristicNotice('stale abstraction candidates');
-    render.list(results, (r) => {
-      const consumerLabel = r.consumers === 0 ? 'unused' : `${r.consumers} consumer`;
-      const barrelLabel = r.barrelConsumers > 0 ? `, +${r.barrelConsumers} barrel` : '';
-      return (
-        `  [${r.confidence}] ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  (${r.kind}, ${r.loc} LOC, ${consumerLabel}${barrelLabel})\n` +
-        `           ${r.reason}`
-      );
-    });
-    console.log(`\n${results.length} stale abstraction(s).`);
-  });
-}
-
-export function handleComplexityHotspots(rawOpts: unknown): void {
-  const opts = options(rawOpts);
-  withDb((db) => {
-    const budget = commandAnalysisBudget(db, 'complexity-hotspots', booleanOption(opts, 'full'));
-    const results = queries.complexityHotspots(db, {
-      scope: stringOption(opts, 'scope'),
-      minLoc: definedNumber(opts, 'minLoc', 10),
-      limit: definedNumber(opts, 'limit', 20),
-      scanLimit: budget.scanLimit,
-      semantic: budget.semantic,
-    });
-    if (results.length === 0) return render.empty('No complexity hotspots found.');
-    renderHeuristicNotice('complexity hotspot candidates');
-    render.table(
-      ['score', ' LOC', 'fan-in', 'fan-out', 'callees', 'symbol'],
-      results.map((r) => `  ${r.score.toFixed(1).padStart(5)}  ${String(r.loc).padStart(4)}  ${String(r.fanIn).padStart(6)}  ${String(r.fanOut).padStart(7)}  ${String(r.calleeCount).padStart(7)}  ${r.shortName}`),
-      [5, 4, 6, 7, 7, 6],
-    );
   });
 }
 
