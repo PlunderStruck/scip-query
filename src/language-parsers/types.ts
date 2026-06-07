@@ -69,6 +69,27 @@ export interface LanguageParser {
   ): ParsedReExport[];
 }
 
+export interface ImportOnlyLanguageParserConfig {
+  language: string;
+  extensions: readonly string[];
+  imports: ParserFallbackMode;
+  parseImports: LanguageParser['parseImports'];
+}
+
+export function importOnlyLanguageParser({
+  language,
+  extensions,
+  imports,
+  parseImports,
+}: ImportOnlyLanguageParserConfig): LanguageParser {
+  return {
+    language,
+    extensions,
+    capabilities: { imports },
+    parseImports,
+  };
+}
+
 /**
  * Returns the parser whose extensions claim the path, or null when no
  * adapter matches. Lowercase-comparison on extension only.
