@@ -16,6 +16,8 @@ export default defineConfig([
   {
     entry: {
       index: 'src/index.ts',
+      reindex: 'src/reindex/index.ts',
+      runtime: 'src/runtime/index.ts',
       ...queryEntries,
     },
     format: ['esm'],

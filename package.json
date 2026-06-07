@@ -26,6 +26,14 @@
     "./queries/*": {
       "import": "./dist/queries/*.js",
       "types": "./dist/queries/*.d.ts"
+    },
+    "./reindex": {
+      "import": "./dist/reindex.js",
+      "types": "./dist/reindex.d.ts"
+    },
+    "./runtime": {
+      "import": "./dist/runtime.js",
+      "types": "./dist/runtime.d.ts"
     }
   },
   "scripts": {

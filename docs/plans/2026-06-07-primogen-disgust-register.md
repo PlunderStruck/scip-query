@@ -431,3 +431,5 @@ Query command algebra slice continued in `docs/plans/2026-06-07-query-command-sp
 AST runtime split started in `docs/plans/2026-06-07-ast-runtime-split-atlas.md`: the public `src/source/ast.ts` facade stays stable, while parser runtime, language detection, and structural tree/query types move into owned internal modules.
 
 Test fixture DSL slice started in `docs/plans/2026-06-07-test-fixture-dsl-atlas.md`: `tests/evidence-fixture.ts` now owns the minimal SCIP-like SQLite schema, source-file writing, and document/symbol/definition/chunk/mention insertion contract for fallback tests.
+
+Public API surface slice started in `docs/plans/2026-06-07-public-api-surface-atlas.md`: the root export remains stable, while explicit `scip-query/reindex` and `scip-query/runtime` subpath tiers now have source barrels, build entries, and package exports.
