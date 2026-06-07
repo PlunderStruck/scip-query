@@ -1,11 +1,10 @@
 import type { ScipDatabase } from '../storage/db.js';
-import { createPerDbCache } from '../storage/per-db-cache.js';
 import type { IndexedDefinition } from '../domain/types.js';
 import { leafName, parseSymbol, shortenSymbol } from '../symbols/symbol-parser.js';
-import { getReExports } from '../language-parsers/index.js';
 import { getSourceText } from '../source/source-text.js';
-import { detectAstLanguage, getAst, getTypeContainerMap, type SyntaxNode } from '../source/ast.js';
+import { getTypeContainerMap } from '../source/ast.js';
 import { ProjectIndex } from '../core/project-index.js';
+import { clearStaleConsumerCaches, isImportOnlyConsumer, partitionStaleConsumers } from './internal/stale-consumers.js';
 import { applyScanLimit, definitionLoc } from './query-utils.js';
 
 export interface StaleAbstraction {
@@ -193,7 +192,7 @@ function staleCandidateRows(
     const consumerFiles = [...allFiles].filter(
       (file) => file !== definition.relativePath && !db.isIgnored(file),
     );
-    const { realConsumers, barrelConsumers } = partitionConsumers(
+    const { realConsumers, barrelConsumers } = partitionStaleConsumers(
       db,
       definition.relativePath,
       definition.symbol,
@@ -406,37 +405,6 @@ function isTrueStaleAbstraction(
   return true;
 }
 
-
-/**
- * Split consumers into "real" (actually use the type) vs "barrel" (their only
- * reference to the type is a passthrough re-export like
- * `export { X } from './defFile'` or `export * from './defFile'`).
- */
-function partitionConsumers(
-  db: ScipDatabase,
-  definitionFile: string,
-  symbol: string,
-  consumerFiles: string[],
-): { realConsumers: string[]; barrelConsumers: number } {
-  const realConsumers: string[] = [];
-  let barrelConsumers = 0;
-  const leaf = leafName(symbol);
-
-  for (const consumer of consumerFiles) {
-    if (isReExportOnlyConsumer(db, consumer, definitionFile, leaf)) {
-      barrelConsumers++;
-    } else if (isImportOnlyConsumer(db, consumer, leaf)) {
-      // File imports the type but never references it outside the import.
-      // Counts as phantom consumer (the import itself is dead too).
-      barrelConsumers++;
-    } else {
-      realConsumers.push(consumer);
-    }
-  }
-
-  return { realConsumers, barrelConsumers };
-}
-
 /**
  * True when this type isn't referenced cross-file directly, but a container
  * type in the same file references it AND the container HAS cross-file
@@ -476,105 +444,10 @@ function isTransitivelyConsumed(
   return false;
 }
 
-/**
- * True when the only occurrences of `leaf` in `consumerFile` are inside
- * import statements — i.e. the consumer imports the type but never uses it.
- *
- * Uses per-file caches: one walk per file produces (a) the set of leaves
- * mentioned ONLY inside imports and (b) the set of leaves mentioned
- * elsewhere. Repeat checks for different leaves on the same file then
- * become O(1) Set lookups.
- */
-const FILE_USAGE_CACHE = createPerDbCache<string, { importedLeaves: Set<string>; usedLeaves: Set<string> }>('stale-abs-file-usage');
-function isImportOnlyConsumer(
-  db: ScipDatabase,
-  consumerFile: string,
-  leaf: string,
-): boolean {
-  if (!leaf) return false;
-  const lang = detectAstLanguage(consumerFile);
-  if (!lang) return false;
-  const usage = FILE_USAGE_CACHE.get(db, consumerFile, () =>
-    computeFileLeafUsage(db, consumerFile, lang),
-  );
-  return usage.importedLeaves.has(leaf) && !usage.usedLeaves.has(leaf);
-}
-
-function computeFileLeafUsage(
-  db: ScipDatabase,
-  file: string,
-  lang: string,
-): { importedLeaves: Set<string>; usedLeaves: Set<string> } {
-  const importedLeaves = new Set<string>();
-  const usedLeaves = new Set<string>();
-  const tree = getAst(db, file);
-  if (!tree) return { importedLeaves, usedLeaves };
-
-  const importTypes = lang === 'rust'
-    ? new Set(['use_declaration'])
-    : lang === 'python'
-      ? new Set(['import_statement', 'import_from_statement'])
-      : new Set(['import_statement']); // TS/JS — value exports are NOT included
-
-  const walk = (node: SyntaxNode, insideImport: boolean): void => {
-    const nowInside = insideImport || importTypes.has(node.type);
-    if (node.type === 'identifier' || node.type === 'type_identifier'
-        || node.type === 'property_identifier' || node.type === 'field_identifier') {
-      if (nowInside) importedLeaves.add(node.text);
-      else usedLeaves.add(node.text);
-    }
-    for (const child of node.children) walk(child, nowInside);
-  };
-  walk(tree.rootNode, false);
-  return { importedLeaves, usedLeaves };
-}
-
 // scip-query: ignore-passthrough — query-local cache lifecycle hook used by
-// composite health runs; keeping it here avoids exposing FILE_USAGE_CACHE.
+// composite health runs; keeping it here preserves the query-level contract.
 export function clearStaleAbstractionsCaches(db: ScipDatabase): void {
-  FILE_USAGE_CACHE.invalidateAll(db);
-}
-
-/**
- * True when every mention of `leaf` in `consumerFile` sits inside a
- * re-export statement (`export { X } from '...'` or `export * from '...'`).
- * That makes the file a public-API passthrough, not a real consumer.
- *
- * We intentionally do NOT require the re-export's resolved path to equal
- * `definitionFile`: re-exports sometimes point at the wrong file (e.g.
- * pointing at a sibling module whose compiler-resolved types route back
- * to the real definition). What matters is that the consumer file never
- * *uses* the type — if every occurrence of the leaf is on a re-export
- * line, the file is forwarding the type to downstream consumers.
- */
-function isReExportOnlyConsumer(
-  db: ScipDatabase,
-  consumerFile: string,
-  _definitionFile: string,
-  leaf: string,
-): boolean {
-  if (!leaf) return false;
-  const source = getSourceText(db, consumerFile);
-  if (!source) return false;
-
-  const reExports = getReExports(db, consumerFile);
-  if (reExports.length === 0) return false;
-
-  const escaped = leaf.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const wordRegex = new RegExp(`\\b${escaped}\\b`);
-  const lines = source.split('\n');
-
-  let occurrenceCount = 0;
-  for (let i = 0; i < lines.length; i++) {
-    if (!wordRegex.test(lines[i] ?? '')) continue;
-    occurrenceCount++;
-    const coveredBy = reExports.find((r) => r.startLine <= i && i <= r.endLine);
-    if (!coveredBy) return false;
-  }
-
-  // If the leaf never appears in source but SCIP records a mention, there's
-  // nothing to attribute — treat as not a passthrough (defensive fallback).
-  return occurrenceCount > 0;
+  clearStaleConsumerCaches(db);
 }
 
 /**

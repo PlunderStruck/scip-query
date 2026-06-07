@@ -12,7 +12,15 @@ import { applyScanLimit } from './query-utils.js';
 import { pathsResolveSame } from '../resolution/path-normalization.js';
 import { sourceImportPathsByLocalName } from '../language-parsers/import-index.js';
 import { indexedDocumentPaths as listIndexedDocumentPaths } from '../storage/scip-documents.js';
-import { mentionedReferenceSymbolRows, mentionReferenceCountRows } from '../storage/scip-mentions.js';
+import {
+  emptyReferenceCounts,
+  hasAnyReference,
+  loadMentionReferencedSymbolIds,
+  loadMentionReferenceCounts,
+  recordReferenceAtLeast,
+  recordReference,
+  type ReferenceCounts,
+} from './internal/reference-counts.js';
 
 export interface DeadSymbolResult {
   relativePath: string;
@@ -35,8 +43,6 @@ export interface DeadSummary {
   fileInternalCount: number;
   totalLoc: number;
 }
-
-type ReferenceCounts = Map<number, Map<string, number>>;
 
 interface DeadCandidateOptions {
   scope?: string;
@@ -86,7 +92,7 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
 
   const inactiveBarrelPaths = skipBarrels ? new Set(getInactiveBarrelPaths(db)) : new Set<string>();
   const referencesBySymbol = deadCodeOnly
-    ? new Map<number, Map<string, number>>()
+    ? emptyReferenceCounts()
     : loadMentionReferenceCounts(db, inactiveBarrelPaths, definitions.map((definition) => definition.symbolId));
   const scipReferencedIds = deadCodeOnly
     ? loadMentionReferencedSymbolIds(db, definitions.map((definition) => definition.symbolId), inactiveBarrelPaths)
@@ -114,40 +120,6 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     ? sourceCandidates.filter((definition) => !hasAnyReference(referencesBySymbol, definition.symbolId))
     : definitions;
   return deadSummary(db, deadRows(reportedDefinitions, referencesBySymbol));
-}
-
-function loadMentionReferenceCounts(
-  db: ScipDatabase,
-  inactiveBarrelPaths: ReadonlySet<string>,
-  symbolIds?: readonly number[],
-): ReferenceCounts {
-  const referencesBySymbol: ReferenceCounts = new Map();
-  for (const row of mentionReferenceCountRows(db, symbolIds)) {
-    if (db.isIgnored(row.relative_path)) continue;
-    if (inactiveBarrelPaths.has(row.relative_path)) continue;
-
-    let refsForSymbol = referencesBySymbol.get(row.symbol_id);
-    if (!refsForSymbol) {
-      refsForSymbol = new Map<string, number>();
-      referencesBySymbol.set(row.symbol_id, refsForSymbol);
-    }
-    refsForSymbol.set(row.relative_path, row.ref_count);
-  }
-  return referencesBySymbol;
-}
-
-function loadMentionReferencedSymbolIds(
-  db: ScipDatabase,
-  symbolIds: readonly number[],
-  inactiveBarrelPaths: ReadonlySet<string>,
-): Set<number> {
-  const result = new Set<number>();
-  for (const row of mentionedReferenceSymbolRows(db, symbolIds)) {
-    if (db.isIgnored(row.relative_path)) continue;
-    if (inactiveBarrelPaths.has(row.relative_path)) continue;
-    result.add(row.symbol_id);
-  }
-  return result;
 }
 
 // scip-query: ignore-extract — this is the shared dead-code candidate gate:
@@ -334,6 +306,7 @@ function supplementReferencesFromAst(
       hit.target.symbolId,
       hit.sourceFile,
       astReferenceOccurrences(hit),
+      'source-fallback',
     );
   });
 }
@@ -400,7 +373,7 @@ function supplementDeadCodeOnlySourceReferences(
     ) {
       return;
     }
-    recordReference(referencesBySymbol, hit.target.symbolId, hit.sourceFile, occurrences);
+    recordReference(referencesBySymbol, hit.target.symbolId, hit.sourceFile, occurrences, 'source-fallback');
   });
 }
 
@@ -447,18 +420,6 @@ function deadSourceTargets(
   return opts.permissive ? [...candidates] : [];
 }
 
-function hasAnyReference(
-  referencesBySymbol: ReferenceCounts,
-  symbolId: number,
-): boolean {
-  const refs = referencesBySymbol.get(symbolId);
-  if (!refs) return false;
-  for (const count of refs.values()) {
-    if (count > 0) return true;
-  }
-  return false;
-}
-
 function shouldSkipAstReferenceHit(
   db: ScipDatabase,
   hit: {
@@ -482,21 +443,6 @@ function astReferenceOccurrences(hit: {
   return hit.kind === 'identifier' && hit.target.relativePath === hit.sourceFile
     ? Math.max(0, hit.occurrences - 1)
     : hit.occurrences;
-}
-
-function recordReference(
-  referencesBySymbol: ReferenceCounts,
-  symbolId: number,
-  file: string,
-  occurrences: number,
-): void {
-  if (occurrences <= 0) return;
-  let refsForSymbol = referencesBySymbol.get(symbolId);
-  if (!refsForSymbol) {
-    refsForSymbol = new Map<string, number>();
-    referencesBySymbol.set(symbolId, refsForSymbol);
-  }
-  refsForSymbol.set(file, (refsForSymbol.get(file) ?? 0) + occurrences);
 }
 
 function isUnusedImportOnlyHit(
@@ -531,17 +477,12 @@ function supplementReferencesFromCallerMap(
   for (const definition of definitions) {
     const callers = getCallerRowsForSymbol(db, definition, { semantic: opts.includeSemantic !== false });
     if (callers.length === 0) continue;
-    let refsForSymbol = referencesBySymbol.get(definition.symbolId);
-    if (!refsForSymbol) {
-      refsForSymbol = new Map<string, number>();
-      referencesBySymbol.set(definition.symbolId, refsForSymbol);
-    }
     for (const caller of callers) {
       const callerFile = caller.file;
       if (callerFile === definition.relativePath || db.isIgnored(callerFile)) continue;
       if (opts.inactiveBarrelPaths.has(callerFile)) continue;
       if (!opts.includeTests && !passesTestFileFilter(callerFile)) continue;
-      refsForSymbol.set(callerFile, Math.max(1, refsForSymbol.get(callerFile) ?? 0));
+      recordReferenceAtLeast(referencesBySymbol, definition.symbolId, callerFile, 1, 'caller-map');
     }
   }
 }
