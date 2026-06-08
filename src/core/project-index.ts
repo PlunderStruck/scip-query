@@ -6,7 +6,7 @@ import { buildCalleeMap } from '../symbols/call-graph-evidence.js';
 import { buildFileDepGraph } from '../symbols/file-dep-graph.js';
 import { callerFileEvidenceMap, crossFileCallerEvidenceMap, sourceFallbackCallerEvidenceMap } from '../symbols/caller-evidence.js';
 import { isCallableSymbol, isFunctionLikeSymbol, isInRustTestModule, isRustTraitImplMember } from '../symbols/symbol-parser.js';
-import { detectAstLanguage, getCallableSignature, getRustAttrReferencedNames } from '../source/ast.js';
+import { detectAstLanguage, getRustAttrReferencedNames, getSourceFacts } from '../source/ast.js';
 import { getSourceFiles } from '../source/source-fileset.js';
 import { hasSuppressionComment } from '../source/source-text.js';
 import { scanSourceReferences } from '../symbols/source-reference-scan.js';
@@ -172,8 +172,13 @@ export class ProjectIndex {
     scanSourceReferences(this.db, opts, visit);
   }
 
-  callableSignature(definition: Pick<IndexedDefinition, 'relativePath' | 'startLine' | 'endLine'>): ReturnType<typeof getCallableSignature> {
-    return getCallableSignature(this.db, definition.relativePath, definition.startLine, definition.endLine);
+  callableSignature(
+    definition: Pick<IndexedDefinition, 'relativePath' | 'startLine' | 'endLine'>,
+  ): { paramCount: number } | null {
+    const callable = getSourceFacts(this.db, definition.relativePath)?.callables.find((candidate) =>
+      candidate.startLine === definition.startLine && candidate.endLine === definition.endLine,
+    );
+    return callable ? { paramCount: callable.paramCount } : null;
   }
 }
 

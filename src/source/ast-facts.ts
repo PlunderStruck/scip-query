@@ -1,16 +1,8 @@
 import type { ScipDatabase } from '../storage/db.js';
-import { detectAstLanguage, type AstLanguage } from './ast-language.js';
-import { getAst } from './ast-core.js';
-import type { Tree } from './ast-types.js';
+import type { AstLanguage } from './ast-language.js';
 import { getSourceFacts, extractCallLeaf } from './source-facts.js';
 
 const CALLABLE_FACT_LANGUAGES = new Set<AstLanguage>(['rust', 'typescript', 'tsx', 'javascript', 'python']);
-
-export interface CallableSite {
-  name: string;
-  startLine: number;
-  endLine: number;
-}
 
 export interface CallSite {
   /** Leaf name of what is being called, for example "foo" for `obj.foo()`. */
@@ -22,7 +14,10 @@ export interface CallSite {
 
 // scip-query: ignore-wrapper — public callable-site view kept stable while
 // source-facts owns the underlying per-file AST bundle.
-export function getCallableSites(db: ScipDatabase, relativePath: string): CallableSite[] | null {
+export function getCallableSites(
+  db: ScipDatabase,
+  relativePath: string,
+): Array<{ name: string; startLine: number; endLine: number }> | null {
   const facts = getSourceFacts(db, relativePath);
   if (!facts) return null;
   if (!CALLABLE_FACT_LANGUAGES.has(facts.language)) return null;
@@ -45,27 +40,6 @@ export function getTypeContainerMap(
   relativePath: string,
 ): Map<string, Set<string>> {
   return getSourceFacts(db, relativePath)?.typeContainerMap ?? new Map();
-}
-
-// scip-query: ignore-wrapper — cached AST-walk primitive used by policy-heavy
-// framework helpers that have not yet moved into source-facts.
-export function runCachedAstWalk<T>(
-  db: ScipDatabase,
-  relativePath: string,
-  cache: WeakMap<Tree, T>,
-  init: () => T,
-  walk: (tree: Tree, lang: AstLanguage, acc: T) => void,
-): T | null {
-  const lang = detectAstLanguage(relativePath);
-  if (!lang) return null;
-  const tree = getAst(db, relativePath);
-  if (!tree) return null;
-  const cached = cache.get(tree);
-  if (cached) return cached;
-  const acc = init();
-  walk(tree, lang, acc);
-  cache.set(tree, acc);
-  return acc;
 }
 
 export { extractCallLeaf };

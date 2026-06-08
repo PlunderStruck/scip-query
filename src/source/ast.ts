@@ -13,10 +13,8 @@ export {
   getCallableSites,
   getCallSites,
   getTypeContainerMap,
-  runCachedAstWalk,
 } from './ast-facts.js';
 export {
-  getCallableSignature,
   getCrossLanguageDispatchNames,
   getRustAttrReferencedNames,
   getSourceFacts,
@@ -24,6 +22,6 @@ export {
 } from './source-facts.js';
 export { compileQuery } from './ast-runtime.js';
 export type { AstLanguage } from './ast-language.js';
-export type { CallSite, CallableSite } from './ast-facts.js';
-export type { CallableSignature, SourceFacts } from './source-facts.js';
+export type { CallSite } from './ast-facts.js';
+export type { SourceFacts } from './source-facts.js';
 export type { QueryInstance, SyntaxNode, Tree } from './ast-types.js';

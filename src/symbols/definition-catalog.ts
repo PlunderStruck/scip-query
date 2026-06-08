@@ -22,7 +22,7 @@
  * symbol evidence modules and many query commands.
  */
 import type { ScipDatabase } from '../storage/db.js';
-import { getCallableSites, type CallableSite } from '../source/ast.js';
+import { getCallableSites } from '../source/ast.js';
 import { getSourceText } from '../source/source-text.js';
 import { isFunctionLikeSymbol, leafName, leafSuffix, parentTypeName, parseSymbol, shortenSymbol } from './symbol-parser.js';
 import { createPerDbCache } from '../storage/per-db-cache.js';
@@ -379,10 +379,10 @@ function applyCorrectedRanges(
  */
 export function correctDefinitionRangesFromAst(
   definitions: IndexedDefinition[],
-  callables: ReadonlyArray<CallableSite>,
+  callables: ReadonlyArray<{ name: string; startLine: number; endLine: number }>,
   source: string | null = null,
 ): IndexedDefinition[] {
-  const sitesByName = new Map<string, CallableSite[]>();
+  const sitesByName = new Map<string, Array<{ name: string; startLine: number; endLine: number }>>();
   for (const site of callables) {
     const arr = sitesByName.get(site.name);
     if (arr) arr.push(site);

@@ -392,42 +392,46 @@ function rustAttributeTexts(item: SyntaxNode): string[] {
   return attrs;
 }
 
+const RUST_FRAMEWORK_ATTR_REASONS: ReadonlyArray<{ re: RegExp; reason: string }> = [
+  { re: /#\[\s*tauri::command\b/, reason: '#[tauri::command]' },
+  { re: /#\[\s*command\b/, reason: '#[command]' }, // tauri shorthand
+  { re: /#\[\s*test\b/, reason: '#[test]' },
+  { re: /#\[\s*bench\b/, reason: '#[bench]' },
+  { re: /#\[\s*tokio::test\b/, reason: '#[tokio::test]' },
+  { re: /#\[\s*async_std::test\b/, reason: '#[async_std::test]' },
+  { re: /#\[\s*wasm_bindgen\b/, reason: '#[wasm_bindgen]' },
+  { re: /#\[\s*no_mangle\b/, reason: '#[no_mangle]' },
+  { re: /#\[\s*napi\b/, reason: '#[napi]' },
+  { re: /#\[\s*pyfunction\b/, reason: '#[pyfunction]' },
+  { re: /#\[\s*pymethod\b/, reason: '#[pymethod]' },
+  { re: /#\[\s*pyo3\b/, reason: '#[pyo3]' },
+  { re: /#\[\s*cfg\s*\(\s*test\s*\)/, reason: '#[cfg(test)]' },
+  { re: /#\[\s*doc\s*\(\s*hidden\s*\)/, reason: '#[doc(hidden)]' },
+];
+
 function rustFrameworkAttrReason(attrText: string): string | null {
-  if (/#\[\s*tauri::command\b/.test(attrText)) return '#[tauri::command]';
-  if (/#\[\s*command\b/.test(attrText)) return '#[command]'; // tauri shorthand
-  if (/#\[\s*test\b/.test(attrText)) return '#[test]';
-  if (/#\[\s*bench\b/.test(attrText)) return '#[bench]';
-  if (/#\[\s*tokio::test\b/.test(attrText)) return '#[tokio::test]';
-  if (/#\[\s*async_std::test\b/.test(attrText)) return '#[async_std::test]';
-  if (/#\[\s*wasm_bindgen\b/.test(attrText)) return '#[wasm_bindgen]';
-  if (/#\[\s*no_mangle\b/.test(attrText)) return '#[no_mangle]';
-  if (/#\[\s*napi\b/.test(attrText)) return '#[napi]';
-  if (/#\[\s*pyfunction\b/.test(attrText)) return '#[pyfunction]';
-  if (/#\[\s*pymethod\b/.test(attrText)) return '#[pymethod]';
-  if (/#\[\s*pyo3\b/.test(attrText)) return '#[pyo3]';
-  if (/#\[\s*cfg\s*\(\s*test\s*\)/.test(attrText)) return '#[cfg(test)]';
-  if (/#\[\s*doc\s*\(\s*hidden\s*\)/.test(attrText)) return '#[doc(hidden)]';
-  return null;
+  return RUST_FRAMEWORK_ATTR_REASONS.find(({ re }) => re.test(attrText))?.reason ?? null;
 }
+
+const RUST_REFLECTIVE_DERIVE_RES: ReadonlyArray<RegExp> = [
+  /\bSerialize\b/,
+  /\bDeserialize\b/,
+  /\bFromRow\b/,             // sqlx
+  /\bsqlx::FromRow\b/,
+  /\bDeriveEntityModel\b/,   // sea-orm
+  /\bIntoSchema\b/,          // utoipa
+  /\bToSchema\b/,            // utoipa
+  /\bDeriveValueType\b/,
+  /\bError\b/,               // thiserror and compatible generated Display impls
+  /\bthiserror::Error\b/,
+];
 
 function isRustReflectiveDeriveAttr(attrText: string): boolean {
   if (!/#\[\s*derive\s*\(/.test(attrText)) return false;
   // Any derive that touches fields via reflection / macro expansion. SCIP
   // doesn't see these accesses; without the exclusion every field of these
   // structs looks dead.
-  return /\bSerialize\b/.test(attrText)
-    || /\bDeserialize\b/.test(attrText)
-    || /\bFromRow\b/.test(attrText)        // sqlx
-    || /\bDeriveEntityModel\b/.test(attrText) // sea-orm
-    || /\bIntoSchema\b/.test(attrText)     // utoipa
-    || /\bToSchema\b/.test(attrText)       // utoipa
-    || /\bDeriveValueType\b/.test(attrText)
-    || /\bsqlx::FromRow\b/.test(attrText)
-    // thiserror — `#[error("... {field}")]` interpolates field names via the
-    // generated Display impl, which SCIP can't see. Without this every
-    // variant field of every error enum looks dead.
-    || /\bError\b/.test(attrText)
-    || /\bthiserror::Error\b/.test(attrText);
+  return RUST_REFLECTIVE_DERIVE_RES.some((re) => re.test(attrText));
 }
 
 function isRustAllowDeadCodeAttr(attrText: string): boolean {

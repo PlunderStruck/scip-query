@@ -29,10 +29,6 @@ export interface SourceFacts {
   crossLanguageDispatchNames: Set<string>;
 }
 
-export interface CallableSignature {
-  paramCount: number;
-}
-
 const SOURCE_FACTS_CACHE = new WeakMap<Tree, SourceFacts>();
 
 const RUST_IDENTIFIER_TYPES = new Set(['identifier', 'type_identifier', 'field_identifier']);
@@ -86,16 +82,6 @@ export function getSourceFacts(db: ScipDatabase, relativePath: string): SourceFa
   return facts;
 }
 
-export function getCallableSignature(
-  db: ScipDatabase,
-  relativePath: string,
-  startLine: number,
-  endLine: number,
-): CallableSignature | null {
-  const callable = findCallableFact(db, relativePath, startLine, endLine);
-  return callable ? { paramCount: callable.paramCount } : null;
-}
-
 export function isLiteralPassthrough(
   db: ScipDatabase,
   relativePath: string,
@@ -113,17 +99,6 @@ export function getRustAttrReferencedNames(db: ScipDatabase, relativePath: strin
 
 export function getCrossLanguageDispatchNames(db: ScipDatabase, relativePath: string): Set<string> {
   return getSourceFacts(db, relativePath)?.crossLanguageDispatchNames ?? new Set();
-}
-
-function findCallableFact(
-  db: ScipDatabase,
-  relativePath: string,
-  startLine: number,
-  endLine: number,
-): CallableFact | null {
-  const facts = getSourceFacts(db, relativePath);
-  if (!facts) return null;
-  return findCallableInFacts(facts, startLine, endLine);
 }
 
 function findCallableInFacts(
