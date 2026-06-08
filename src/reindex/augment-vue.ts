@@ -15,6 +15,7 @@ type SourceTextInfo = NonNullable<ReturnType<VueSourceReader['get']>>;
 type TsLanguageService = VueLanguageContext['languageService'];
 type VolarMapper = ReturnType<VueLanguageContext['language']['maps']['get']>;
 type VueIdentifierToken = ReturnType<typeof identifierTokens> extends Generator<infer Token> ? Token : never;
+type VueSymbolLookup = { get(fileName: string): number | null };
 
 export interface AugmentVueResolvedOptions {
   projectRoot: string;
@@ -29,7 +30,15 @@ interface VueReferenceComputationOptions {
   tasks?: VueReferenceTask[];
   context: VueLanguageContext;
   symbolLookup: (definition: DefinitionInfo) => number | null;
-  vueSymbolLookup: { get(fileName: string): number | null };
+  vueSymbolLookup: VueSymbolLookup;
+  sourceReader: VueSourceReader;
+}
+
+interface VueReferenceComputationContext {
+  projectRoot: string;
+  context: VueLanguageContext;
+  symbolLookup: (definition: DefinitionInfo) => number | null;
+  vueSymbolLookup: VueSymbolLookup;
   sourceReader: VueSourceReader;
 }
 
@@ -158,15 +167,15 @@ function computeVueReferenceComputation(
     });
   }
 
-  const sourceReader = createVueSourceReader();
-  const context = createVueLanguageContext(ctx.projectRoot, ctx.configPath);
-  return computeVueResolvedReferencesForFiles({
+  const computationContext = createVueReferenceComputationContext({
+    db: ctx.db,
     projectRoot: ctx.projectRoot,
-    vueFiles: context.fileNames.filter((file) => file.endsWith('.vue')),
-    context,
-    symbolLookup: createSymbolLookup(ctx.db, ctx.projectRoot, sourceReader),
+    configPath: ctx.configPath,
     vueSymbolLookup,
-    sourceReader,
+  });
+  return computeVueResolvedReferencesForFiles({
+    ...computationContext,
+    vueFiles: computationContext.context.fileNames.filter((file) => file.endsWith('.vue')),
   });
 }
 
@@ -228,22 +237,38 @@ export function computeVueResolvedReferencesForWorker(opts: {
   tasks?: VueReferenceTask[];
 }): VueReferenceComputationResult {
   const configPath = resolve(opts.projectRoot, opts.tsconfig);
-  const context = createVueLanguageContext(opts.projectRoot, configPath);
   const db = new Database(opts.dbPath, { readonly: true });
   try {
-    const sourceReader = createVueSourceReader();
-    return computeVueResolvedReferencesForFiles({
+    const computationContext = createVueReferenceComputationContext({
+      db,
       projectRoot: opts.projectRoot,
+      configPath,
+      vueSymbolLookup: createVueSymbolIdLookup(db, opts.projectRoot),
+    });
+    return computeVueResolvedReferencesForFiles({
       vueFiles: opts.vueFiles ?? [],
       tasks: opts.tasks,
-      context,
-      symbolLookup: createSymbolLookup(db, opts.projectRoot, sourceReader),
-      vueSymbolLookup: createVueSymbolIdLookup(db, opts.projectRoot),
-      sourceReader,
+      ...computationContext,
     });
   } finally {
     db.close();
   }
+}
+
+function createVueReferenceComputationContext(opts: {
+  db: Database.Database;
+  projectRoot: string;
+  configPath: string;
+  vueSymbolLookup: VueSymbolLookup;
+}): VueReferenceComputationContext {
+  const sourceReader = createVueSourceReader();
+  return {
+    projectRoot: opts.projectRoot,
+    context: createVueLanguageContext(opts.projectRoot, opts.configPath),
+    symbolLookup: createSymbolLookup(opts.db, opts.projectRoot, sourceReader),
+    vueSymbolLookup: opts.vueSymbolLookup,
+    sourceReader,
+  };
 }
 
 function computeVueResolvedReferencesForFiles(

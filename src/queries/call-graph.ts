@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
-import { getCalleeRowsForSymbol, getCallerRowsForSymbol } from '../symbols/call-graph-evidence.js';
+import { getCalleeRowsForSymbol } from '../symbols/call-graph-evidence.js';
+import { callerRowsForSymbol } from '../symbols/caller-evidence.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
 import { uniqueSymbolFileRows } from './query-utils.js';
 
@@ -31,7 +32,7 @@ export function callGraph(
   if (!target) return null;
 
   const includeSemantic = opts.semantic !== false;
-  const callerRows = getCallerRowsForSymbol(db, target, { limit: 50, semantic: includeSemantic });
+  const callerRows = callerRowsForSymbol(db, target, { limit: 50, semantic: includeSemantic });
 
   // CALLEES: symbols referenced within our target's definition range.
   const calleeRows = uniqueSymbolFileRows(getCalleeRowsForSymbol(db, target, {

@@ -23,8 +23,8 @@ export interface ReferenceEvidenceSite extends ReferenceSite {
 // `findReferences` (source-text-based reference scan) lives in
 // `identifier-attribution.ts`; this module owns the query-facing policy that
 // chooses between that source-backed evidence and SCIP mention fallback.
-// `findCallerFiles` remains imported directly from identifier-attribution by
-// callers that need the bulk inverse view.
+// Bulk caller evidence is exposed through `caller-evidence.ts`, which composes
+// the inverse source-attribution view with cross-file caller maps.
 
 /**
  * Precision-upgraded fallback for callers/references when

@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { getAllDefinitions } from '../symbols/definition-catalog.js';
-import { getCallerRowsForSymbol } from '../symbols/call-graph-evidence.js';
+import { callerRowsForSymbol } from '../symbols/caller-evidence.js';
 import type { IndexedDefinition } from '../domain/types.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
 
@@ -93,7 +93,7 @@ function hotspotRowFor(
   db: ScipDatabase,
   definition: IndexedDefinition,
 ): HotspotResult {
-  const callerRows = getCallerRowsForSymbol(db, definition, { limit: 500 });
+  const callerRows = callerRowsForSymbol(db, definition, { limit: 500 });
   return {
     symbol: definition.symbol,
     shortName: shortenSymbol(definition.symbol),

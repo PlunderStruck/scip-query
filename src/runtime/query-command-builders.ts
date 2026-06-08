@@ -1,7 +1,9 @@
 import type { CommandDescriptor } from './command-descriptor-types.js';
 import {
+  budgetedSectionedReportCommand,
   groupedByFileCommand,
   listCommand,
+  sectionedReportCommand,
   tableCommand,
 } from './command-execution.js';
 
@@ -52,5 +54,38 @@ export function groupedQueryCommand<Row>({
     ...metadata,
     renderShape: 'grouped-by-file',
     handler: groupedByFileCommand({ query, format, emptyMessage, heuristicLabel, after, key }),
+  };
+}
+
+export function sectionedQueryCommand<Result>({
+  query,
+  emptyMessage,
+  heuristicLabel,
+  sections,
+  before,
+  after,
+  ...metadata
+}: QueryCommandMetadata & Parameters<typeof sectionedReportCommand<Result>>[0]): CommandDescriptor {
+  return {
+    ...metadata,
+    renderShape: 'sectioned-report',
+    handler: sectionedReportCommand({ query, emptyMessage, heuristicLabel, before, sections, after }),
+  };
+}
+
+export function budgetedSectionedQueryCommand<Result>({
+  query,
+  emptyMessage,
+  heuristicLabel,
+  sections,
+  before,
+  after,
+  ...metadata
+}: QueryCommandMetadata & Parameters<typeof budgetedSectionedReportCommand<Result>>[1]): CommandDescriptor {
+  return {
+    ...metadata,
+    budget: metadata.budget ?? 'semantic',
+    renderShape: 'sectioned-report',
+    handler: budgetedSectionedReportCommand(metadata.id, { query, emptyMessage, heuristicLabel, before, sections, after }),
   };
 }

@@ -4,7 +4,7 @@ import { getInactiveBarrelPaths, isEntrySurface, isRootedSymbol } from '../analy
 import { getDefinitionsForFile } from '../symbols/definition-catalog.js';
 import type { DeadOptions, IndexedDefinition } from '../domain/types.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
-import { getCallerRowsForSymbol } from '../symbols/call-graph-evidence.js';
+import { callerRowsForSymbol } from '../symbols/caller-evidence.js';
 import { ProjectIndex } from '../core/project-index.js';
 import { clearSourceFileEvidenceCaches } from './internal/cache-invalidation.js';
 import { deadCandidateDecision, passesDeadTestFileFilter } from './internal/dead-candidate-gate.js';
@@ -456,7 +456,7 @@ function supplementReferencesFromCallerMap(
   opts: { includeTests: boolean; inactiveBarrelPaths: ReadonlySet<string>; includeSemantic?: boolean },
 ): void {
   for (const definition of definitions) {
-    const callers = getCallerRowsForSymbol(db, definition, { semantic: opts.includeSemantic !== false });
+    const callers = callerRowsForSymbol(db, definition, { semantic: opts.includeSemantic !== false });
     if (callers.length === 0) continue;
     for (const caller of callers) {
       const callerFile = caller.file;

@@ -2,16 +2,14 @@ import * as queries from '../../queries/index.js';
 import type { CommandDescriptor } from '../command-descriptor-types.js';
 import { doc, option, parseInteger } from '../command-spec-builders.js';
 import {
-  budgetedDbCommand,
   budgetedTableCommand,
   dbCommand,
   definedNumberOption,
   optionalStringArg,
   reportCommand,
-  stringArg,
   stringOptionValue,
 } from '../command-execution.js';
-import { tableQueryCommand } from '../query-command-builders.js';
+import { budgetedSectionedQueryCommand, tableQueryCommand } from '../query-command-builders.js';
 import { render } from '../render.js';
 
 const handleBottlenecks = budgetedTableCommand('bottlenecks', {
@@ -28,16 +26,6 @@ const handleBottlenecks = budgetedTableCommand('bottlenecks', {
     `  ${String(r.score).padStart(5)}  ${String(r.fanIn).padStart(6)}  ` +
     `${String(r.fanOut).padStart(7)}  ${r.shortName}`,
   emptyMessage: () => 'No bottlenecks found.',
-});
-
-const handleCallGraph = budgetedDbCommand('call-graph', ({ db, args, budget }) => {
-  const result = queries.callGraph(db, stringArg(args, 0), { semantic: budget.semantic });
-  if (!result) return render.empty('Symbol not found.');
-  console.log(`Symbol: ${result.shortName}\n`);
-  render.sectionedReport([
-    { title: `CALLERS (${result.callers.length})`, rows: result.callers.map((c) => `  ${c.file}  ${c.shortName}`) },
-    { title: `CALLEES (${result.callees.length})`, rows: result.callees.map((c) => `  ${c.file}  ${c.shortName}`) },
-  ]);
 });
 
 const handleFanIn = dbCommand(({ db, args, opts }) => {
@@ -221,14 +209,23 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     docs: doc('Graph'),
     handler: handleDeepChains,
   },
-  {
+  budgetedSectionedQueryCommand({
     id: 'call-graph',
     command: 'call-graph <symbol>',
     description: 'Show incoming callers and outgoing callees for a symbol',
     options: [option('--full', 'Run unbounded semantic analysis on large indexes')],
     budget: 'semantic',
-    renderShape: 'sectioned-report',
     docs: doc('Graph'),
-    handler: handleCallGraph,
-  },
+    query: ({ db, args, budget }) => queries.callGraph(db, String(args[0]), { semantic: budget.semantic }),
+    emptyMessage: (result) => result ? undefined : 'Symbol not found.',
+    before: (result) => {
+      if (result) console.log(`Symbol: ${result.shortName}\n`);
+    },
+    sections: (result) => result
+      ? [
+        { title: `CALLERS (${result.callers.length})`, rows: result.callers.map((c) => `  ${c.file}  ${c.shortName}`) },
+        { title: `CALLEES (${result.callees.length})`, rows: result.callees.map((c) => `  ${c.file}  ${c.shortName}`) },
+      ]
+      : [],
+  }),
 ];

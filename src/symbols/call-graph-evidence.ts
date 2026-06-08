@@ -20,6 +20,8 @@ export interface CalleeRow {
   source: CalleeEvidenceSource;
 }
 
+// scip-query: ignore-stale — exported caller evidence record shared through
+// caller-evidence; provenance is part of the cross-query evidence contract.
 export interface CallerRow {
   symbol: string;
   file: string;
@@ -43,6 +45,8 @@ export function getCalleeRowsForSymbol(
   return typeof opts.limit === 'number' ? callees.slice(0, opts.limit) : callees;
 }
 
+// scip-query: ignore-wrapper — caller row lookup owns targeted-vs-inverted
+// evidence selection; query modules reach it through caller-evidence.
 export function getCallerRowsForSymbol(
   db: ScipDatabase,
   symbol: SymbolMatch,

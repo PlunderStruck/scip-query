@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../storage/db.js';
-import { getCalleeRowsForSymbol, getCallerRowsForSymbol } from '../symbols/call-graph-evidence.js';
+import { getCalleeRowsForSymbol } from '../symbols/call-graph-evidence.js';
+import { callerRowsForSymbol } from '../symbols/caller-evidence.js';
 import type { IndexedDefinition } from '../domain/types.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
@@ -54,7 +55,7 @@ function bottleneckRowFor(
   semantic: boolean,
 ): BottleneckResult {
   const fanIn = new Set(
-    getCallerRowsForSymbol(db, definition, { limit: 500, semantic }).map((row) => row.file),
+    callerRowsForSymbol(db, definition, { limit: 500, semantic }).map((row) => row.file),
   ).size;
   const fanOut = new Set(
     getCalleeRowsForSymbol(db, definition, { limit: 500, semantic })

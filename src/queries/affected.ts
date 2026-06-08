@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { findExactSymbolMatch, findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
 import { findEnclosingDefinition, getDefinitionsForFile } from '../symbols/definition-catalog.js';
-import { getCallerRowsForSymbol } from '../symbols/call-graph-evidence.js';
+import { callerRowsForSymbol } from '../symbols/caller-evidence.js';
 import type { SymbolMatch } from '../domain/types.js';
 import { leafSuffix, shortenSymbol } from '../symbols/symbol-parser.js';
 
@@ -87,7 +87,7 @@ function getDirectAffectedRows(
   // call expressions) PLUS targeted file-level references from SCIP mentions
   // (catches type-annotation users — `function f(x: Target)` doesn't appear
   // as a call but the file IS affected if Target's API changes).
-  const callerRows = getCallerRowsForSymbol(db, target, { limit: 500 })
+  const callerRows = callerRowsForSymbol(db, target, { limit: 500 })
     .filter((row) => !db.isIgnored(row.file))
     .filter((row) => !scope || row.file.includes(scope));
 

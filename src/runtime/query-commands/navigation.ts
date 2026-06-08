@@ -11,25 +11,11 @@ import {
   stringArg,
   stringOptionValue,
 } from '../command-execution.js';
-import { listQueryCommand, tableQueryCommand } from '../query-command-builders.js';
+import { budgetedSectionedQueryCommand, listQueryCommand, sectionedQueryCommand, tableQueryCommand } from '../query-command-builders.js';
 import { displayLine, displayPathRange, displayRange, render } from '../render.js';
+import type { ReportSection } from '../render.js';
 
-const handleSystem = dbCommand(({ db, args }) => {
-  const result = queries.system(db, stringArg(args, 0));
-  render.sectionedReport([
-    { title: 'FILES', rows: result.files },
-    {
-      title: 'EXPORTED SYMBOLS',
-      rows: result.symbols.map((s) => `  ${displayRange(s.startLine, s.endLine)}  ${s.shortName}`),
-    },
-    { title: 'DEPENDS ON (internal)', rows: result.dependsOn.map((d) => `  ${d}`) },
-    { title: 'DEPENDED ON BY', rows: result.dependedOnBy.map((d) => `  ${d}`) },
-  ]);
-});
-
-const handleTrace = budgetedDbCommand('trace', ({ db, args, budget }) => {
-  const result = queries.trace(db, stringArg(args, 0), { semantic: budget.semantic });
-
+function traceSections(result: ReturnType<typeof queries.trace>): ReportSection[] {
   const definitionRows: string[] = [];
   for (const d of result.definitions) {
     const sig = d.signature ? `  — ${d.signature}` : '';
@@ -53,11 +39,11 @@ const handleTrace = budgetedDbCommand('trace', ({ db, args, budget }) => {
     refRows.push(`    line ${displayLine(ref.line)}  in ${ref.enclosingShort}`);
   }
 
-  render.sectionedReport([
+  return [
     { title: 'DEFINITION', rows: definitionRows },
     { title: 'REFERENCED BY', rows: refRows },
-  ]);
-});
+  ];
+}
 
 const handleOutline = dbCommand(({ db, args }) => {
   const roots = queries.outline(db, stringArg(args, 0));
@@ -169,16 +155,16 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     docs: doc('Navigation', ['scip-query refs login']),
     handler: handleRefs,
   },
-  {
+  budgetedSectionedQueryCommand({
     id: 'trace',
     command: 'trace <symbol>',
     description: 'Trace a symbol: definition + all references',
     options: [option('--full', 'Run unbounded semantic analysis on large indexes')],
     budget: 'semantic',
-    renderShape: 'sectioned-report',
     docs: doc('Navigation', ['scip-query trace parseSymbol']),
-    handler: handleTrace,
-  },
+    query: ({ db, args, budget }) => queries.trace(db, stringArg(args, 0), { semantic: budget.semantic }),
+    sections: traceSections,
+  }),
   listQueryCommand({
     id: 'deps',
     command: 'deps <file>',
@@ -195,14 +181,22 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     query: ({ db, args }) => queries.rdeps(db, stringArg(args, 0)),
     format: (r) => r.relativePath,
   }),
-  {
+  sectionedQueryCommand({
     id: 'system',
     command: 'system <module>',
     description: 'Full module map: files, symbols, deps in/out',
-    renderShape: 'sectioned-report',
     docs: doc('Navigation', ['scip-query system queries']),
-    handler: handleSystem,
-  },
+    query: ({ db, args }) => queries.system(db, stringArg(args, 0)),
+    sections: (result) => [
+      { title: 'FILES', rows: result.files },
+      {
+        title: 'EXPORTED SYMBOLS',
+        rows: result.symbols.map((s) => `  ${displayRange(s.startLine, s.endLine)}  ${s.shortName}`),
+      },
+      { title: 'DEPENDS ON (internal)', rows: result.dependsOn.map((d) => `  ${d}`) },
+      { title: 'DEPENDED ON BY', rows: result.dependedOnBy.map((d) => `  ${d}`) },
+    ],
+  }),
   listQueryCommand({
     id: 'surface',
     command: 'surface <module>',

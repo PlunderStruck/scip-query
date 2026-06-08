@@ -3,6 +3,7 @@ import type { CommandHandler } from './command-descriptor-types.js';
 import { withDb } from './cli-context.js';
 import { commandAnalysisBudget, renderHeuristicNotice } from './cli-support.js';
 import { render } from './render.js';
+import type { ReportSection } from './render.js';
 
 export type CommandOptions = Record<string, unknown>;
 
@@ -33,7 +34,17 @@ export interface ReportCommandSpec<Result, Ctx extends DbCommandContext = DbComm
   query: (ctx: Ctx) => Result;
   emptyMessage?: (result: Result, ctx: Ctx) => string | undefined;
   heuristicLabel?: string;
+  before?: (result: Result, ctx: Ctx) => void;
   render: (result: Result, ctx: Ctx) => void;
+  after?: (result: Result, ctx: Ctx) => void;
+}
+
+export interface SectionedReportCommandSpec<Result, Ctx extends DbCommandContext = DbCommandContext> {
+  query: (ctx: Ctx) => Result;
+  emptyMessage?: (result: Result, ctx: Ctx) => string | undefined;
+  heuristicLabel?: string;
+  before?: (result: Result, ctx: Ctx) => void;
+  sections: (result: Result, ctx: Ctx) => readonly ReportSection[];
   after?: (result: Result, ctx: Ctx) => void;
 }
 
@@ -41,6 +52,7 @@ interface CommandOutputSpec<Output, Ctx extends DbCommandContext> {
   query: (ctx: Ctx) => Output;
   emptyMessage?: (output: Output, ctx: Ctx) => string | undefined;
   heuristicLabel?: string;
+  before?: (output: Output, ctx: Ctx) => void;
   render: (output: Output, ctx: Ctx) => void;
   after?: (output: Output, ctx: Ctx) => void;
 }
@@ -89,11 +101,36 @@ export function reportCommand<Result>(spec: ReportCommandSpec<Result>): CommandH
   return dbCommand((ctx) => runCommandOutput(ctx, spec));
 }
 
+export function sectionedReportCommand<Result>(spec: SectionedReportCommandSpec<Result>): CommandHandler {
+  return reportCommand({
+    query: spec.query,
+    emptyMessage: spec.emptyMessage,
+    heuristicLabel: spec.heuristicLabel,
+    before: spec.before,
+    render: (result, ctx) => render.sectionedReport(spec.sections(result, ctx)),
+    after: spec.after,
+  });
+}
+
 export function budgetedReportCommand<Result>(
   commandName: string,
   spec: ReportCommandSpec<Result, BudgetedCommandContext>,
 ): CommandHandler {
   return budgetedDbCommand(commandName, (ctx) => runCommandOutput(ctx, spec));
+}
+
+export function budgetedSectionedReportCommand<Result>(
+  commandName: string,
+  spec: SectionedReportCommandSpec<Result, BudgetedCommandContext>,
+): CommandHandler {
+  return budgetedReportCommand(commandName, {
+    query: spec.query,
+    emptyMessage: spec.emptyMessage,
+    heuristicLabel: spec.heuristicLabel,
+    before: spec.before,
+    render: (result, ctx) => render.sectionedReport(spec.sections(result, ctx)),
+    after: spec.after,
+  });
 }
 
 export function budgetedListCommand<Row>(
@@ -195,6 +232,7 @@ function runCommandOutput<Output, Ctx extends DbCommandContext>(
     return;
   }
   if (spec.heuristicLabel) renderHeuristicNotice(spec.heuristicLabel);
+  spec.before?.(output, ctx);
   spec.render(output, ctx);
   spec.after?.(output, ctx);
 }

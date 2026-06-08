@@ -1,9 +1,9 @@
-import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import type { ScipDatabase } from '../storage/db.js';
 import * as queries from '../queries/index.js';
 import { formatBytes, withDb } from './cli-context.js';
+import { chunked, runIsolatedJsonProcess } from './isolated-analysis-runner.js';
 import { render } from './render.js';
 
 const require = createRequire(import.meta.url);
@@ -81,21 +81,16 @@ export function runIsolatedHealthReport(opts: HealthCliOptions): HealthReport {
 
 function runHealthPhaseProcess(phase: HealthPhaseName, opts: HealthCliOptions): HealthPhaseResult {
   const cliPath = process.argv[1] ?? fileURLToPath(import.meta.url);
-  const args = [...process.execArgv, cliPath, HEALTH_PHASE_COMMAND, phase];
+  const args: string[] = [phase];
   if (opts.scope) args.push('--scope', opts.scope);
   if (opts.full) args.push('--full');
 
-  const result = spawnSync(process.execPath, args, {
-    cwd: process.cwd(),
-    env: process.env,
-    encoding: 'utf8',
-    maxBuffer: 10 * 1024 * 1024,
+  return runIsolatedJsonProcess<HealthPhaseResult>({
+    cliPath,
+    command: HEALTH_PHASE_COMMAND,
+    args,
+    label: `Health phase "${phase}"`,
   });
-  if (result.status !== 0) {
-    const stderr = result.stderr.trim();
-    throw new Error(`Health phase "${phase}" failed${stderr ? `:\n${stderr}` : ''}`);
-  }
-  return JSON.parse(result.stdout) as HealthPhaseResult;
 }
 
 export function renderHealthReport(report: HealthReport, json: boolean | undefined): void {
@@ -168,22 +163,19 @@ export function runIsolatedDiffImpactReport(opts: DiffImpactCliOptions): DiffImp
 
 function runDiffImpactBatchProcess(files: readonly string[], opts: DiffImpactCliOptions): DiffImpactPartial {
   const cliPath = process.argv[1] ?? fileURLToPath(import.meta.url);
-  const args = [...process.execArgv, cliPath, DIFF_IMPACT_BATCH_COMMAND];
+  const args: string[] = [];
   if (opts.base) args.push('--base', opts.base);
-  const result = spawnSync(process.execPath, args, {
-    cwd: process.cwd(),
+
+  return runIsolatedJsonProcess<DiffImpactPartial>({
+    cliPath,
+    command: DIFF_IMPACT_BATCH_COMMAND,
+    args,
     env: {
       ...process.env,
       SCIP_QUERY_DIFF_IMPACT_FILES: JSON.stringify(files),
     },
-    encoding: 'utf8',
-    maxBuffer: 10 * 1024 * 1024,
+    label: 'Diff-impact batch',
   });
-  if (result.status !== 0) {
-    const stderr = result.stderr.trim();
-    throw new Error(`Diff-impact batch failed${stderr ? `:\n${stderr}` : ''}`);
-  }
-  return JSON.parse(result.stdout) as DiffImpactPartial;
 }
 
 export function renderDiffImpactReport(result: DiffImpactResult): void {
@@ -202,12 +194,4 @@ export function renderDiffImpactReport(result: DiffImpactResult): void {
     console.log('\nAffected consumer files:');
     render.list(result.affectedConsumers, (c) => `  ${c.file}  (${c.consumedSymbols} symbol(s))`);
   }
-}
-
-function chunked<T>(items: readonly T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let offset = 0; offset < items.length; offset += size) {
-    chunks.push(items.slice(offset, offset + size));
-  }
-  return chunks;
 }

@@ -5,8 +5,7 @@ import { getRustAttrReferencedNames } from '../analysis/framework-patterns.js';
 import { getDefinitionsForFile, getScopedDefinitions } from '../symbols/definition-catalog.js';
 import { buildCalleeMap } from '../symbols/call-graph-evidence.js';
 import { buildFileDepGraph } from '../symbols/file-dep-graph.js';
-import { buildCrossFileCallerMap } from '../symbols/reference-callers.js';
-import { findCallerFiles } from '../symbols/identifier-attribution.js';
+import { callerFileEvidenceMap, crossFileCallerEvidenceMap, sourceFallbackCallerEvidenceMap } from '../symbols/caller-evidence.js';
 import { isCallableSymbol, isFunctionLikeSymbol, isInRustTestModule, isRustTraitImplMember } from '../symbols/symbol-parser.js';
 import { getCallableSignature } from '../source/ast-signatures.js';
 import { detectAstLanguage } from '../source/ast.js';
@@ -92,22 +91,19 @@ export class ProjectIndex {
   crossFileCallerMap(
     definitions?: ReadonlyArray<SymbolMatch>,
     opts: { semantic?: boolean } = {},
-  ): ReturnType<typeof buildCrossFileCallerMap> {
-    return buildCrossFileCallerMap(this.db, definitions, opts);
+  ): ReturnType<typeof crossFileCallerEvidenceMap> {
+    return crossFileCallerEvidenceMap(this.db, definitions, opts);
   }
 
-  sourceFallbackCallerFiles(definitions: ReadonlyArray<IndexedDefinition>): ReturnType<typeof findCallerFiles> {
-    return findCallerFiles(this.db, definitions);
+  sourceFallbackCallerFiles(definitions: ReadonlyArray<IndexedDefinition>): ReturnType<typeof sourceFallbackCallerEvidenceMap> {
+    return sourceFallbackCallerEvidenceMap(this.db, definitions);
   }
 
   callerFileMap(
     definitions: ReadonlyArray<IndexedDefinition>,
     opts: { semantic?: boolean; sourceFallback?: boolean } = {},
   ): Map<number, Set<string>> {
-    const callerMap = this.crossFileCallerMap(definitions, { semantic: opts.semantic });
-    return opts.sourceFallback === false
-      ? callerMap
-      : mergeSetMaps(callerMap, this.sourceFallbackCallerFiles(definitions));
+    return callerFileEvidenceMap(this.db, definitions, opts);
   }
 
   frameworkReferencedSymbolIds(definitions: ReadonlyArray<IndexedDefinition>): Set<number> {
@@ -202,17 +198,4 @@ function definitionLoc(definition: Pick<IndexedDefinition, 'startLine' | 'endLin
 
 function isTypesFile(relativePath: string): boolean {
   return (relativePath.split('/').pop() ?? '').includes('types');
-}
-
-function mergeSetMaps<K, V>(left: ReadonlyMap<K, ReadonlySet<V>>, right: ReadonlyMap<K, ReadonlySet<V>>): Map<K, Set<V>> {
-  const result = new Map<K, Set<V>>();
-  for (const [key, values] of left) {
-    result.set(key, new Set(values));
-  }
-  for (const [key, values] of right) {
-    const bucket = result.get(key) ?? new Set<V>();
-    for (const value of values) bucket.add(value);
-    result.set(key, bucket);
-  }
-  return result;
 }

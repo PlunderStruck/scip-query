@@ -210,6 +210,8 @@ export function findReferences(
  * candidate-leaf hit in the file at once, instead of N walks per
  * candidate. Used by the dead-code source-fallback path.
  */
+// scip-query: ignore-wrapper — inverse source-attribution view used by
+// caller-evidence; callers should not rebuild this cache shape.
 export function findCallerFiles(
   db: ScipDatabase,
   candidates: ReadonlyArray<IndexedDefinition>,

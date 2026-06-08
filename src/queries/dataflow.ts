@@ -1,9 +1,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
-import {
-  getCalleeRowsForSymbol,
-  getCallerRowsForSymbol,
-} from '../symbols/call-graph-evidence.js';
+import { getCalleeRowsForSymbol } from '../symbols/call-graph-evidence.js';
+import { callerRowsForSymbol } from '../symbols/caller-evidence.js';
 import { referenceSitesForSymbol } from '../symbols/reference-sites.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
 import { uniqueSymbolFileRows } from './query-utils.js';
@@ -93,7 +91,7 @@ function collectFlowEndpoints(
       file: row.file,
     })),
   );
-  const astConsumers = uniqueSymbolFileRows(getCallerRowsForSymbol(db, match, { limit: 30, semantic: opts.semantic }));
+  const astConsumers = uniqueSymbolFileRows(callerRowsForSymbol(db, match, { limit: 30, semantic: opts.semantic }));
   const consumers = astConsumers.length > 0
     ? astConsumers
     : uniqueSymbolFileRows(

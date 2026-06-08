@@ -23,7 +23,7 @@ export interface ComplexityHotspot {
  *
  * Score = (loc / 50) * (fanIn / 5) * max(fanOut / 5, 1)
  *
- * Bulk fan-in/out via buildCrossFileCallerMap + buildCalleeMap so we pay
+ * Bulk fan-in/out via caller evidence + buildCalleeMap so we pay
  * one SQL pass per kind regardless of how many definitions we score —
  * replaces the previous per-symbol getCaller/CalleeRowsForSymbol calls
  * that were O(symbols × files) on large indexes.
