@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import { program, renderHeuristicNotice } from '../src/runtime/cli.js';
 import { commandDescriptors } from '../src/runtime/command-descriptors.js';
-import { commandDocEntries } from '../src/runtime/command-docs.js';
+import { commandDocEntries, renderCommandReferenceMarkdown } from '../src/runtime/command-docs.js';
 
 function command(name: string) {
   const cmd = program.commands.find((entry) => entry.name() === name);
@@ -56,6 +56,12 @@ describe('CLI contract', () => {
     for (const documentedCommand of documentedCommands) {
       expect(publicCommandIds.has(documentedCommand), `documented command is not descriptor-backed: ${documentedCommand}`).toBe(true);
     }
+  });
+
+  it('keeps README command syntax generated from descriptors', () => {
+    const readme = readFileSync(join(process.cwd(), 'README.md'), 'utf8');
+
+    expect(extractGeneratedCommandReference(readme)).toBe(renderCommandReferenceMarkdown(commandDescriptors));
   });
 
   it('prints an explicit heuristic disclaimer for candidate output', () => {
@@ -149,6 +155,12 @@ describe('CLI contract', () => {
 
 function readDocumentedCommands(path: string): string[] {
   const content = readFileSync(join(process.cwd(), path), 'utf8');
-  const matches = content.matchAll(/\bscip-query\s+([a-z][a-z0-9-]*)\b/g);
+  const matches = content.matchAll(/^\s*scip-query\s+([a-z][a-z0-9-]*)\b/gm);
   return [...matches].map((match) => match[1]!);
+}
+
+function extractGeneratedCommandReference(content: string): string {
+  const match = content.match(/<!-- BEGIN GENERATED COMMAND REFERENCE -->[\s\S]*?<!-- END GENERATED COMMAND REFERENCE -->/);
+  expect(match, 'README is missing generated command reference block').not.toBeNull();
+  return match![0];
 }

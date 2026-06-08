@@ -117,6 +117,11 @@ describe('source-backed accuracy regressions', () => {
           '  return firstHelper();',
           '}',
           '',
+          'export const assignedTarget = () => {',
+          '  const value = firstHelper();',
+          '  return value;',
+          '};',
+          '',
         ].join('\n'),
       },
       (sqliteDb) => {
@@ -126,20 +131,25 @@ describe('source-backed accuracy regressions', () => {
 
           INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
             (1, 'scip-typescript npm fixture 1.0.0 src/\`helpers.ts\`/firstHelper().', 'firstHelper', 12, 'function firstHelper|function firstHelper(): string'),
-            (2, 'scip-typescript npm fixture 1.0.0 src/\`helpers.ts\`/targetHelper().', 'targetHelper', 12, 'function targetHelper|function targetHelper(): string');
+            (2, 'scip-typescript npm fixture 1.0.0 src/\`helpers.ts\`/targetHelper().', 'targetHelper', 12, 'function targetHelper|function targetHelper(): string'),
+            (3, 'scip-typescript npm fixture 1.0.0 src/\`helpers.ts\`/assignedTarget.', 'assignedTarget', 13, 'const assignedTarget|const assignedTarget: () => string');
 
           INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
             (1, 1, 1, 0, 0, 2, 1),
-            (2, 1, 2, 0, 0, 2, 1);
+            (2, 1, 2, 0, 0, 2, 1),
+            (3, 1, 3, 8, 0, 8, 37);
 
           INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
             (1, 1, 0, 0, 2, X'00'),
-            (2, 1, 1, 4, 6, X'00');
+            (2, 1, 1, 4, 6, X'00'),
+            (3, 1, 2, 8, 8, X'00');
 
           INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
             (1, 1, 1),
             (2, 2, 1),
-            (2, 1, 0);
+            (2, 1, 0),
+            (3, 3, 1),
+            (3, 1, 0);
         `);
       },
       (db) => {
@@ -156,6 +166,17 @@ describe('source-backed accuracy regressions', () => {
         const traced = trace(db, 'src:helpers:targetHelper()');
         expect(traced.definitions[0]?.source).toContain('targetHelper');
         expect(traced.definitions[0]?.source).toContain('firstHelper()');
+
+        const assignedRow = symbols(db, 'helpers.ts')
+          .find((row) => row.shortName.includes('assignedTarget'));
+        expect(assignedRow).toBeDefined();
+        expect(assignedRow!.startLine).toBe(8);
+        expect(assignedRow!.endLine).toBe(11);
+
+        const assignedSnippet = code(db, 'assignedTarget');
+        expect(assignedSnippet?.source).toContain('export const assignedTarget = () => {');
+        expect(assignedSnippet?.source).toContain('const value = firstHelper();');
+        expect(assignedSnippet?.source).toContain('return value;');
       },
     );
   });

@@ -390,7 +390,7 @@ export function correctDefinitionRangesFromAst(
   }
 
   return definitions.map((def) => {
-    if (!isCallableDefinition(def.symbol) || !def.leaf) {
+    if (!canUseCallableSiteRange(def) || !def.leaf) {
       return correctTopLevelTermRangeFromSource(def, source);
     }
     const sites = sitesByName.get(def.leaf);
@@ -409,6 +409,11 @@ export function correctDefinitionRangesFromAst(
 
     return { ...def, startLine: best.startLine, endLine: best.endLine };
   });
+}
+
+function canUseCallableSiteRange(definition: IndexedDefinition): boolean {
+  if (isCallableDefinition(definition.symbol)) return true;
+  return leafSuffix(definition.symbol) === 'term' && parentTypeName(definition.symbol) === null;
 }
 
 function correctTopLevelTermRangeFromSource(

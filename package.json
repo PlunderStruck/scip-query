@@ -1,6 +1,6 @@
 {
   "name": "scip-query",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "Language-agnostic code intelligence CLI powered by SCIP indexes",
   "type": "module",
   "main": "dist/index.js",
@@ -216,6 +216,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src tests tsup.config.ts",
     "calibrate": "node scripts/accuracy-calibration.mjs",
+    "docs:commands": "vite-node scripts/render-command-reference.ts",
     "prepublishOnly": "npm run build",
     "postinstall": "node dist/postinstall.js || true"
   },
