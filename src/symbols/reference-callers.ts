@@ -1,6 +1,5 @@
 import type { ScipDatabase } from '../storage/db.js';
-import { detectAstLanguage, getCallSites } from '../source/ast.js';
-import { getRustAttrReferencedNames } from '../analysis/framework-patterns.js';
+import { detectAstLanguage, getCallSites, getRustAttrReferencedNames } from '../source/ast.js';
 import { semanticCallerMap } from '../semantic/shared-primitives.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import { mentionReferenceChunkRows } from '../storage/scip-mentions.js';

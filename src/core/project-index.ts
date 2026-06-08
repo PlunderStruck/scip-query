@@ -1,14 +1,12 @@
 import type { ScipDatabase } from '../storage/db.js';
 import type { IndexedDefinition, SymbolMatch } from '../domain/types.js';
 import { classifyFile, isEntrySurface } from '../analysis/file-classifier.js';
-import { getRustAttrReferencedNames } from '../analysis/framework-patterns.js';
 import { getDefinitionsForFile, getScopedDefinitions } from '../symbols/definition-catalog.js';
 import { buildCalleeMap } from '../symbols/call-graph-evidence.js';
 import { buildFileDepGraph } from '../symbols/file-dep-graph.js';
 import { callerFileEvidenceMap, crossFileCallerEvidenceMap, sourceFallbackCallerEvidenceMap } from '../symbols/caller-evidence.js';
 import { isCallableSymbol, isFunctionLikeSymbol, isInRustTestModule, isRustTraitImplMember } from '../symbols/symbol-parser.js';
-import { getCallableSignature } from '../source/ast-signatures.js';
-import { detectAstLanguage } from '../source/ast.js';
+import { detectAstLanguage, getCallableSignature, getRustAttrReferencedNames } from '../source/ast.js';
 import { getSourceFiles } from '../source/source-fileset.js';
 import { hasSuppressionComment } from '../source/source-text.js';
 import { scanSourceReferences } from '../symbols/source-reference-scan.js';

@@ -16,18 +16,11 @@
  * AST path uses tree-sitter; regex fallback uses the source-stripper to
  * tokenize comment- and string-free source into identifier tokens.
  */
-import { detectAstLanguage, getAst, type SyntaxNode } from '../source/ast.js';
+import { getSourceFacts } from '../source/ast.js';
 import type { ScipDatabase } from '../storage/db.js';
 import { createPerDbCache } from '../storage/per-db-cache.js';
-import { escapeRegex, getStrippedLines, stripCommentsAndStrings } from '../source/source-stripper.js';
+import { stripCommentsAndStrings } from '../source/source-stripper.js';
 import { getSourceText } from '../source/source-text.js';
-
-const RUST_IDENTIFIER_TYPES = new Set(['identifier', 'type_identifier', 'field_identifier']);
-const PYTHON_IDENTIFIER_TYPES = new Set(['identifier']);
-const DEFAULT_IDENTIFIER_TYPES = new Set(['identifier', 'property_identifier', 'type_identifier']);
-const INTERPOLATION_LANGUAGES = new Set(['rust', 'python']);
-const BRACE_BLOCK_RE = /\{([^{}]*)\}/g;
-const IDENT_IN_BLOCK_RE = /\b([A-Za-z_][\w]*)\b/g;
 
 /**
  * Lines in `relativePath` where `identifier` appears (0-indexed). Excludes
@@ -57,30 +50,8 @@ export function findIdentifierLines(
     return [];
   }
 
-  // AST path: getIdentifierLineMap already walks the tree once per file
-  // and caches the result. For the AST-supported languages this is more
-  // accurate than regex (correctly handles raw strings, JSX text, format
-  // string interpolation, nested template literals) AND faster on the
-  // second-and-later identifier lookup in the same file.
-  if (detectAstLanguage(relativePath)) {
-    const lineMap = getIdentifierLineMap(db, relativePath);
-    const lines = lineMap.get(identifier) ?? [];
-    return lines.filter((line) => !inExcludedRange(line, opts));
-  }
-
-  // Regex fallback for languages without an AST parser.
-  const lines = getStrippedLines(db, relativePath, source);
-  const regex = new RegExp(`\\b${escapeRegex(identifier)}\\b`);
-  const results: number[] = [];
-
-  for (let line = 0; line < lines.length; line++) {
-    if (inExcludedRange(line, opts)) continue;
-    if (regex.test(lines[line] ?? '')) {
-      results.push(line);
-    }
-  }
-
-  return results;
+  const lines = getIdentifierLineMap(db, relativePath).get(identifier) ?? [];
+  return lines.filter((line) => !inExcludedRange(line, opts));
 }
 
 function inExcludedRange(
@@ -109,8 +80,11 @@ export function getFileIdentifiers(
   db: ScipDatabase,
   relativePath: string,
 ): Set<string> {
+  const facts = getSourceFacts(db, relativePath);
+  if (facts) return facts.fileIdentifiers;
+
   return FILE_IDENTIFIER_CACHE.get(db, relativePath, () =>
-    // Derive from the line-map walk so we don't pay the AST traversal twice.
+    // Derive from the fallback line map so we don't tokenize twice.
     new Set(getIdentifierLineMap(db, relativePath).keys()),
   );
 }
@@ -125,8 +99,11 @@ export function getIdentifierLineMap(
   db: ScipDatabase,
   relativePath: string,
 ): Map<string, number[]> {
+  const facts = getSourceFacts(db, relativePath);
+  if (facts) return facts.identifierLineMap;
+
   return FILE_IDENT_LINES_CACHE.get(db, relativePath, () =>
-    computeIdentifierLineMap(db, relativePath),
+    computeFallbackIdentifierLineMap(db, relativePath),
   );
 }
 
@@ -144,6 +121,9 @@ export function getIdentifiersByLine(
   db: ScipDatabase,
   relativePath: string,
 ): Array<Set<string>> {
+  const facts = getSourceFacts(db, relativePath);
+  if (facts) return facts.identifiersByLine;
+
   return FILE_IDENTS_BY_LINE_CACHE.get(db, relativePath, () => {
     const lineMap = getIdentifierLineMap(db, relativePath);
     let maxLine = 0;
@@ -172,7 +152,7 @@ export function clearIdentifierIndexCacheForFile(db: ScipDatabase, relativePath:
   FILE_IDENTS_BY_LINE_CACHE.invalidate(db, relativePath);
 }
 
-function computeIdentifierLineMap(
+function computeFallbackIdentifierLineMap(
   db: ScipDatabase,
   relativePath: string,
 ): Map<string, number[]> {
@@ -185,41 +165,6 @@ function computeIdentifierLineMap(
     }
     if (arr[arr.length - 1] !== line) arr.push(line);
   };
-
-  if (detectAstLanguage(relativePath)) {
-    const tree = getAst(db, relativePath);
-    if (tree) {
-      const lang = detectAstLanguage(relativePath);
-      const identifierTypes = lang === 'rust'
-        ? RUST_IDENTIFIER_TYPES
-        : lang === 'python'
-          ? PYTHON_IDENTIFIER_TYPES
-          : DEFAULT_IDENTIFIER_TYPES;
-      // Rust + Python format strings interpolate identifiers inside the
-      // string content (`format!("{IDENT}")` since Rust 1.58, f-strings in
-      // Python). tree-sitter doesn't break those into identifier nodes —
-      // the whole quoted text is one string_content node. Without
-      // extracting the names, they look unreferenced and the dead-code
-      // detector flags `IDENT` as dead. We pull every `{...}` block and
-      // extract every identifier in it: covers `{name}`, `{:<NAME$}`
-      // (width-from-variable), `{name:<.PREC$}`, `{name:?}`, etc.
-      const walk = (node: SyntaxNode): void => {
-        if (identifierTypes.has(node.type)) record(node.text, node.startPosition.row);
-        if (lang && INTERPOLATION_LANGUAGES.has(lang) && node.type === 'string_content') {
-          const baseLine = node.startPosition.row;
-          for (const block of node.text.matchAll(BRACE_BLOCK_RE)) {
-            const inner = block[1] ?? '';
-            for (const ident of inner.matchAll(IDENT_IN_BLOCK_RE)) {
-              if (ident[1]) record(ident[1], baseLine);
-            }
-          }
-        }
-        for (const child of node.children) walk(child);
-      };
-      walk(tree.rootNode);
-      return out;
-    }
-  }
 
   const source = getSourceText(db, relativePath);
   if (!source) return out;

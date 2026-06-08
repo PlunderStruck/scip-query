@@ -1,6 +1,10 @@
 import type { ScipDatabase } from '../storage/db.js';
-import { getCrossLanguageDispatchNames, getRustAttrReferencedNames } from '../analysis/framework-patterns.js';
-import { detectAstLanguage, isVueSfcPath } from '../source/ast.js';
+import {
+  detectAstLanguage,
+  getCrossLanguageDispatchNames,
+  getRustAttrReferencedNames,
+  isVueSfcPath,
+} from '../source/ast.js';
 import { attributeIdentifier, attributeIdentifierPermissive } from './identifier-attribution.js';
 import { getIdentifierLineMap } from './identifier-index.js';
 

@@ -11,16 +11,12 @@
  * Owned here today:
  *  - getDefinitionExclusions: the dead-code "skip this, it's framework-
  *    invoked" verdict.
- *  - getCrossLanguageDispatchNames: Tauri-style `invoke('cmd_name', ...)`
- *    string-arg dispatches that cross language boundaries.
  *  - Generic suppression-comment honoring (`// scip-query: ignore-dead`).
  */
 import type { ScipDatabase } from '../storage/db.js';
 import {
   detectAstLanguage,
-  extractCallLeaf,
   getAst,
-  runCachedAstWalk,
   type SyntaxNode,
   type Tree,
 } from '../source/ast.js';
@@ -485,78 +481,8 @@ function isGeneratedFileHeader(root: SyntaxNode): boolean {
   return false;
 }
 
-// Pre-compiled attribute scanners. Source attrs are tiny strings, so a few
-// alternation regexes are cheaper than parsing the macro-token-tree by hand.
-const ATTR_HELPER_RES: ReadonlyArray<{ key: string; re: RegExp }> = [
-  { key: 'default',              re: /\bdefault\s*=\s*"([^"]+)"/g },
-  { key: 'with',                 re: /\bwith\s*=\s*"([^"]+)"/g },
-  { key: 'serialize_with',       re: /\bserialize_with\s*=\s*"([^"]+)"/g },
-  { key: 'deserialize_with',     re: /\bdeserialize_with\s*=\s*"([^"]+)"/g },
-  { key: 'skip_serializing_if',  re: /\bskip_serializing_if\s*=\s*"([^"]+)"/g },
-  { key: 'getter',               re: /\bgetter\s*=\s*"([^"]+)"/g },
-  { key: 'rename_all_with',      re: /\brename_all_with\s*=\s*"([^"]+)"/g },
-  { key: 'schema_with',          re: /\bschema_with\s*=\s*"([^"]+)"/g },
-];
 const SERDE_ATTR_HEAD = /^#!?\[\s*serde\s*\(/;
-const SCHEMARS_ATTR_HEAD = /^#!?\[\s*schemars\s*\(/;
-const VALIDATE_ATTR_HEAD = /^#!?\[\s*validate\s*\(/;
 const SERDE_WITH_RE = /\bwith\s*=\s*"([^"]+)"/g;
-
-/**
- * Walk the file's `attribute_item`s looking for string-keyed serde / schemars
- * helpers — `default = "fn"`, `with = "mod"`, `serialize_with = "fn"`,
- * `deserialize_with = "fn"`, `skip_serializing_if = "fn"`, `schemars(default
- * = "fn")`, `schemars(schema_with = "fn")`. The keys live inside an opaque
- * `token_tree`, so we regex-scan the attribute text rather than re-parsing.
- *
- * Each name is registered as if the *file* called it: dead.ts attributes the
- * call to whatever definition the leaf resolves to. This compensates for
- * SCIP graphs that don't link string-literal attribute args to the function
- * they name.
- */
-export function getRustAttrReferencedNames(
-  db: ScipDatabase,
-  relativePath: string,
-): Set<string> {
-  return runCachedAstWalk(db, relativePath, ATTR_REF_CACHE, () => new Set<string>(), (tree, lang, out) => {
-    if (lang !== 'rust') return;
-    for (const attr of tree.rootNode.descendantsOfType('attribute_item')) {
-      collectAttrHelperNames(attr.text, out);
-    }
-    for (const attr of tree.rootNode.descendantsOfType('inner_attribute_item')) {
-      collectAttrHelperNames(attr.text, out);
-    }
-  }) ?? new Set();
-}
-
-const ATTR_REF_CACHE = new WeakMap<Tree, Set<string>>();
-
-function collectAttrHelperNames(attrText: string, out: Set<string>): void {
-  // Restrict to attrs we know carry helper-name strings. Without this guard,
-  // a `cfg(feature = "x")` would leak feature names into the dead-code
-  // reference set.
-  const isSerde = SERDE_ATTR_HEAD.test(attrText);
-  const isSchemars = SCHEMARS_ATTR_HEAD.test(attrText);
-  const isValidate = VALIDATE_ATTR_HEAD.test(attrText);
-  if (!isSerde && !isSchemars && !isValidate) return;
-
-  for (const { re } of ATTR_HELPER_RES) {
-    re.lastIndex = 0;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(attrText)) !== null) {
-      const value = m[1]!;
-      // Path-style values resolve by leaf: `crate::helpers::fn` → `fn`. The
-      // dead-code attribution layer disambiguates by file scope.
-      const leaf = value.split('::').pop() ?? value;
-      // Stdlib helpers like `Option::is_none` and `String::is_empty` aren't
-      // user definitions; skip them so we don't mask a legitimately dead
-      // local helper that happens to share the name.
-      if (leaf === 'is_none' && /\bOption\b/.test(value)) continue;
-      if (leaf === 'is_empty' && /\b(String|Vec|HashMap|BTreeMap|HashSet|BTreeSet)\b/.test(value)) continue;
-      if (leaf) out.add(leaf);
-    }
-  }
-}
 
 /**
  * Subset of attribute scanning aimed at `serde(with = "module_name")` —
@@ -577,58 +503,3 @@ function collectSerdeWithModNames(root: SyntaxNode): Set<string> {
   }
   return out;
 }
-
-/**
- * Names known to take a command-string argument that dispatches to a
- * cross-language handler. Hits in source code like `invoke('start_job', ...)`
- * are treated as references to a function named `start_job` defined in
- * another language (typically Rust via Tauri's IPC bridge).
- */
-const CROSS_LANG_DISPATCH_NAMES = new Set([
-  'invoke',           // Tauri JS API
-  'invokeTauriCommand',
-  'listen',           // Tauri event listener
-  'once',             // Tauri one-shot listener
-  'emit',             // Tauri event emit
-  'subscribe',
-  'dispatch',
-  'sendCommand',
-  'callRust',
-]);
-
-/**
- * Walk TS/JS callsites looking for string-arg dispatches like
- * `invoke('cmd_name')`. Returns the set of dispatched command names.
- *
- * Used by the dead-code detector: a Rust function whose leaf name appears
- * here was reached from JS even though no static call exists in the SCIP
- * graph. Without this, every Tauri command not annotated `#[tauri::command]`
- * (the framework allows lower-level registrations too) looks dead.
- */
-export function getCrossLanguageDispatchNames(
-  db: ScipDatabase,
-  relativePath: string,
-): Set<string> {
-  return runCachedAstWalk(db, relativePath, DISPATCH_NAMES_CACHE, () => new Set<string>(), (tree, lang, out) => {
-    if (lang !== 'typescript' && lang !== 'tsx' && lang !== 'javascript') return;
-
-    for (const call of tree.rootNode.descendantsOfType('call_expression')) {
-      const target = call.namedChild(0);
-      if (!target) continue;
-      // Resolve the call target's leaf — handles `invoke(...)`,
-      // `tauri.invoke(...)`, `window.__TAURI__.invoke(...)`.
-      const leaf = extractCallLeaf(target);
-      if (!leaf || !CROSS_LANG_DISPATCH_NAMES.has(leaf)) continue;
-
-      const args = call.namedChildren.find((c) => c.type === 'arguments');
-      if (!args) continue;
-      const firstArg = args.namedChild(0);
-      if (!firstArg) continue;
-      if (firstArg.type !== 'string') continue;
-      const frag = firstArg.namedChildren.find((c) => c.type === 'string_fragment');
-      if (frag) out.add(frag.text);
-    }
-  }) ?? new Set();
-}
-
-const DISPATCH_NAMES_CACHE = new WeakMap<Tree, Set<string>>();

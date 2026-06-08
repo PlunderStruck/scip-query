@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../storage/db.js';
-import { isLiteralPassthrough } from '../analysis/passthrough-detect.js';
+import { isLiteralPassthrough } from '../source/ast.js';
 import type { IndexedDefinition } from '../domain/types.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
