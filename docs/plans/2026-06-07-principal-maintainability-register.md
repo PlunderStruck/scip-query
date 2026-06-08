@@ -31,7 +31,7 @@ Implementation pass status:
 - Health full-report assembly now uses the same phase-result composition path as isolated health phases, removing the second parallel health-analysis assembly path.
 - Detector consumer evidence now has a named boundary in `src/queries/internal/consumer-evidence.ts`, used by `stale-abstractions` and `wrapper-candidates`.
 - Dead-code reference counts now retain evidence provenance in `src/queries/internal/reference-counts.ts`, distinguishing SCIP mention, source fallback, and caller-map evidence while preserving the existing report counts.
-- JavaScript parser compression was evaluated and deferred: its size is real, but merging it with other parser adapters would hide essential JavaScript/Vue source-fact variation.
+- JavaScript parser compression was evaluated in two layers: merging it with other parser adapters would hide essential grammar variation, but splitting its own import, re-export, and Vue non-script identifier facts was justified and completed.
 
 Evidence commands run:
 
@@ -52,11 +52,11 @@ find src tests -type f | xargs wc -l | sort -nr | head -40
 rg -n "scip-query: ignore-(extract|wrapper|passthrough|similar|stale)" src
 ```
 
-Final verified health summary:
+Final verified health summary after the JavaScript parser split:
 
 - Score: 100.
-- Documents: 167.
-- Symbols: 6,604.
+- Documents: 170.
+- Symbols: 6,607.
 - Health findings: 0 stale abstractions and 0 drifted files.
 - Top complexity symbols: `shortenSymbol`, `parseSymbol`, `indexedDocumentPaths`, `findFirstSymbolMatch`, `ProjectIndex.productionCallableDefinitions`.
 - Wrapper and passthrough probes: no candidates.
@@ -65,7 +65,6 @@ Final verified health summary:
 Largest current source/test files:
 
 - `tests/command-accuracy.test.ts` - 672 LOC.
-- `src/language-parsers/javascript.ts` - 650 LOC.
 - `src/reindex/augment-vue-runtime.ts` - 635 LOC.
 - `src/analysis/framework-patterns.ts` - 634 LOC.
 - `src/runtime/query-commands/cleanup.ts` - 633 LOC.
@@ -85,20 +84,17 @@ Largest current source/test files:
 | P1 | Cleanup query commands reconverged into one family module with handlers, renderers, and descriptors. | `src/runtime/query-commands/cleanup.ts` is a large command family module; `scip-query outline` shows handlers plus `cleanupQueryCommandDescriptors`. | The earlier command-spec compression fixed the giant global file, but the cleanup family still repeated category and heuristic descriptor policy across commands. | Add a small detector-command declaration helper for the repeated candidate commands, then split truly custom commands like `dead` and `similar` only if the helper does not clarify them. | Completed for the first slice: `cleanupCommand()` and `heuristicCleanupCommand()` now own repeated descriptor policy. |
 | P1 | Health reporting knows each detector's private result shape. | `src/queries/health.ts` had per-detector summarizers plus a full-report assembly path separate from isolated phase result assembly. | Health is a dashboard over detector contracts, but parallel assembly paths make detector changes touch more places than needed. | Give health one phase-result composition path before introducing broader detector adapters. | Reduced: full health reports now compose through `healthAnalysesFromPhases()`, the same phase-result model used by isolated phases. |
 | P2 | Suppression comments are numerous enough to be an architectural signal. | `rg` finds many `scip-query: ignore-*` comments under `src`, including comments that explain whole policies such as fallback strategies, transactions, state machines, and parser boundaries. | Many comments are legitimate: they prevent the tool from flattening essential boundaries. The smell is that the comment channel is also serving as the architecture register for policy decisions. | Keep suppressions for real false positives, but move repeated policy language into named mechanisms or local module docs. | Partially addressed through named mechanisms in cleanup descriptors, health phases, and consumer evidence; broader suppression audit deferred. |
-| P2 | Parser adapter similarity is mostly false compression, but the JavaScript parser remains a real large boundary. | `scip-query similar-files` reports high similarity across parser adapters; source inspection shows a named `LanguageParser` contract and shared import emitters. `src/language-parsers/javascript.ts` remains large because it owns imports, re-exports, Vue non-script identifiers, member usage, and source fallback. | Collapsing per-language AST walkers would hide essential grammar differences. JavaScript is different: it has several source facts in one file and may still have multiple reasons to change. | Do not merge parser AST walkers. Consider a later JavaScript-only atlas that separates import parsing, re-export parsing, and Vue identifier support behind the existing adapter. | Evaluated and deferred as essential variation plus a future JavaScript-only slice. |
+| P2 | Parser adapter similarity is mostly false compression, but the JavaScript parser had a real large internal boundary. | `scip-query similar-files` reports high similarity across parser adapters; source inspection shows a named `LanguageParser` contract and shared import emitters. `src/language-parsers/javascript.ts` owned imports, re-exports, Vue non-script identifiers, member usage, and source fallback. | Collapsing per-language AST walkers would hide essential grammar differences. JavaScript was different: it had several source facts in one file and multiple reasons to change. | Do not merge parser AST walkers. Split the JavaScript adapter internally by import parsing, re-export parsing, and Vue identifier support behind the existing adapter. | Completed: `src/language-parsers/javascript.ts` is now a facade over `javascript-imports.ts`, `javascript-reexports.ts`, and `vue-non-script-identifiers.ts`. |
 
 ## Next Slice
 
-The next high-value slice is a JavaScript-parser atlas. The parser should not be merged with sibling adapters, but it can be split internally if a scoped atlas proves import parsing, re-export parsing, Vue non-script identifiers, and member-usage policy have separate reasons to change.
+The next highest-signal extraction candidates are lifecycle or evidence coordinators, not obvious duplication:
 
-Suggested implementation:
+1. `src/semantic/typescript/source-file-resolver.ts:createTypeScriptSourceFiles()`.
+2. `src/runtime/watch.ts:Watcher:handleFileChange()`.
+3. `src/queries/similar-chains.ts:compareFilteredChains()`.
 
-1. Build a scope map for `src/language-parsers/javascript.ts`.
-2. Separate essential JavaScript/TypeScript syntax variation from Vue-specific source facts.
-3. Split only if one extracted module owns a real policy, not just a pile of helper functions.
-4. Re-run import fallback, command accuracy, and source-backed accuracy tests.
-
-Expected result: either a smaller JavaScript parser boundary or an explicit deferred-boundary record explaining why the file should remain whole.
+Each should be inspected before changing. A candidate is only worth extracting if the extracted name captures a real policy, such as project-file selection, watcher event lifecycle, or chain-overlap scoring. Do not extract just to reduce line count.
 
 ## Deferred Boundaries
 
@@ -116,7 +112,7 @@ For this review artifact:
 test -f docs/plans/2026-06-07-principal-maintainability-register.md
 ```
 
-For the next implementation slice:
+For subsequent implementation slices:
 
 ```bash
 scip-query drift
