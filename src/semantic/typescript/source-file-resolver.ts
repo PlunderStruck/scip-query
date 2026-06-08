@@ -1,6 +1,8 @@
 import path from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
+import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { cached } from './cache.js';
+import { isTypeScriptLike, TYPESCRIPT_SEMANTIC_EXTENSIONS } from './source-kinds.js';
 import type { ProjectBundle } from './ts-morph-runtime.js';
 import type { Project, SourceFile } from 'ts-morph';
 
@@ -35,24 +37,8 @@ export function createTypeScriptSourceFiles(
   return {
     sourceFile: (relativePath) => sourceFileMatch(relativePath)?.sourceFile ?? null,
     sourceFileMatch,
-    indexedTypeScriptLikeDocuments: () => db.all<{ relative_path: string }>(
-      `SELECT relative_path
-       FROM documents
-       WHERE (
-         relative_path LIKE '%.ts'
-         OR relative_path LIKE '%.tsx'
-         OR relative_path LIKE '%.mts'
-         OR relative_path LIKE '%.cts'
-         OR relative_path LIKE '%.js'
-         OR relative_path LIKE '%.jsx'
-         OR relative_path LIKE '%.mjs'
-         OR relative_path LIKE '%.cjs'
-       )
-         ${db.pathExclusionsFor('documents')}`,
-    ).map((document) => document.relative_path),
+    indexedTypeScriptLikeDocuments: () => indexedDocumentPaths(db, {
+      extensions: TYPESCRIPT_SEMANTIC_EXTENSIONS,
+    }),
   };
-}
-
-function isTypeScriptLike(relativePath: string): boolean {
-  return /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(relativePath);
 }

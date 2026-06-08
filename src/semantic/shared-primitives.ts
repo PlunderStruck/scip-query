@@ -2,6 +2,7 @@ import type { IndexedDefinition, SymbolMatch } from '../domain/types.js';
 import type { ScipDatabase } from '../storage/db.js';
 import type { SemanticCallee, SemanticImportUsage, SemanticProvider, SemanticReference } from './types.js';
 import { getSemanticProvider } from './provider-cache.js';
+import { isTypeScriptLike } from './typescript/source-kinds.js';
 
 export function semanticImportUsage(
   db: ScipDatabase,
@@ -71,8 +72,4 @@ function availableTypeScriptProvider(db: ScipDatabase, relativePath: string): Se
   if (!isTypeScriptLike(relativePath)) return null;
   const provider = getSemanticProvider(db, relativePath);
   return provider.availability().available ? provider : null;
-}
-
-function isTypeScriptLike(relativePath: string): boolean {
-  return /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(relativePath);
 }

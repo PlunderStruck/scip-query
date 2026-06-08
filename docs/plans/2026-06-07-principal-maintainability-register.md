@@ -32,6 +32,7 @@ Implementation pass status:
 - Detector consumer evidence now has a named boundary in `src/queries/internal/consumer-evidence.ts`, used by `stale-abstractions` and `wrapper-candidates`.
 - Dead-code reference counts now retain evidence provenance in `src/queries/internal/reference-counts.ts`, distinguishing SCIP mention, source fallback, and caller-map evidence while preserving the existing report counts.
 - JavaScript parser compression was evaluated in two layers: merging it with other parser adapters would hide essential grammar variation, but splitting its own import, re-export, and Vue non-script identifier facts was justified and completed.
+- TypeScript-like semantic source classification now lives in `src/semantic/typescript/source-kinds.ts`, so source-file lookup, semantic provider gating, and tsconfig discovery share one extension policy.
 
 Evidence commands run:
 
@@ -55,8 +56,8 @@ rg -n "scip-query: ignore-(extract|wrapper|passthrough|similar|stale)" src
 Final verified health summary after the JavaScript parser split:
 
 - Score: 100.
-- Documents: 170.
-- Symbols: 6,607.
+- Documents: 171.
+- Symbols: 6,608.
 - Health findings: 0 stale abstractions and 0 drifted files.
 - Top complexity symbols: `shortenSymbol`, `parseSymbol`, `indexedDocumentPaths`, `findFirstSymbolMatch`, `ProjectIndex.productionCallableDefinitions`.
 - Wrapper and passthrough probes: no candidates.
@@ -88,13 +89,19 @@ Largest current source/test files:
 
 ## Next Slice
 
-The next highest-signal extraction candidates are lifecycle or evidence coordinators, not obvious duplication:
+The next highest-signal extraction candidates are lifecycle, scoring, or evidence coordinators, not obvious duplication:
 
 1. `src/semantic/typescript/source-file-resolver.ts:createTypeScriptSourceFiles()`.
 2. `src/runtime/watch.ts:Watcher:handleFileChange()`.
 3. `src/queries/similar-chains.ts:compareFilteredChains()`.
 
-Each should be inspected before changing. A candidate is only worth extracting if the extracted name captures a real policy, such as project-file selection, watcher event lifecycle, or chain-overlap scoring. Do not extract just to reduce line count.
+Disposition after follow-up pass:
+
+1. `createTypeScriptSourceFiles()` no longer carries the duplicated TypeScript-like extension policy; the remaining method is a source-file resolver closure plus document listing.
+2. `Watcher.handleFileChange()` is preserved as the watcher event lifecycle: path normalization, ignore checks, index-file suppression, dirty-state handling, cooldown handling, and debounce scheduling must remain readable together.
+3. `compareFilteredChains()` is preserved as local chain-pair acceptance policy; moving its sequence edit-distance helpers into the generic set/cosine similarity kernel would mix different mathematical referents.
+
+A candidate is only worth extracting if the extracted name captures a real policy, such as project-file selection, watcher event lifecycle, or chain-overlap scoring. Do not extract just to reduce line count.
 
 ## Deferred Boundaries
 

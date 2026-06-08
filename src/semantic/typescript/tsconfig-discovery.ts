@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
+import { TYPESCRIPT_SEMANTIC_EXTENSIONS } from './source-kinds.js';
 
 const TSCONFIG_CANDIDATES = [
   'tsconfig.json',
@@ -44,7 +45,7 @@ export function discoverTypeScriptTsconfigs(db: ScipDatabase): string[] {
 
   const documents = indexedDocumentPaths(db, {
     includeIgnored: false,
-    extensions: ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'],
+    extensions: TYPESCRIPT_SEMANTIC_EXTENSIONS,
   });
   for (const document of documents) {
     const nearest = findNearestTsconfig(projectRoot, document);
