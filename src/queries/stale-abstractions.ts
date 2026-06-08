@@ -4,8 +4,7 @@ import { leafName, parseSymbol, shortenSymbol } from '../symbols/symbol-parser.j
 import { getSourceText } from '../source/source-text.js';
 import { getTypeContainerMap } from '../source/ast.js';
 import { ProjectIndex } from '../core/project-index.js';
-import { isImportOnlyConsumer, partitionStaleConsumers } from './internal/stale-consumers.js';
-import { definitionConsumerFileMap } from './internal/consumer-evidence.js';
+import { definitionConsumerFileMap, isImportOnlyConsumer, partitionDefinitionConsumers } from './internal/consumer-evidence.js';
 import { applyScanLimit, definitionLoc } from './query-utils.js';
 
 export interface StaleAbstraction {
@@ -193,10 +192,9 @@ function staleCandidateRows(
     const consumerFiles = [...allFiles].filter(
       (file) => file !== definition.relativePath && !db.isIgnored(file),
     );
-    const { realConsumers, barrelConsumers } = partitionStaleConsumers(
+    const { realConsumers, barrelConsumers, importOnlyConsumers } = partitionDefinitionConsumers(
       db,
-      definition.relativePath,
-      definition.symbol,
+      definition,
       consumerFiles,
     );
 
@@ -214,7 +212,7 @@ function staleCandidateRows(
     return {
       definition,
       realConsumers,
-      barrelConsumers,
+      barrelConsumers: barrelConsumers + importOnlyConsumers,
       transitivelyReachable,
     };
   });

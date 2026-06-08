@@ -6,9 +6,12 @@ Scope: `src/source/ast.ts` facade and internal AST runtime modules.
 ## Scope Map
 
 - `src/source/ast.ts`
+- `src/source/ast-core.ts`
+- `src/source/ast-facts.ts`
 - `src/source/ast-language.ts`
 - `src/source/ast-runtime.ts`
 - `src/source/ast-types.ts`
+- `src/source/vue-script.ts`
 - `docs/plans/2026-06-07-primogen-disgust-register.md`
 
 ## Role Inventory
@@ -21,6 +24,10 @@ A language catalog is the extension-to-AST-language map. Its essential role is t
 
 An AST structural type module is the shared type description for tree-sitter trees, syntax nodes, and compiled queries. Its essential role is to let runtime and facade modules share structural contracts without importing each other.
 
+An AST fact extractor is the source-evidence module that turns a parsed syntax tree into callable sites, call sites, and type-container relationships. Its essential role is to keep tree walking and query projection together while letting the public AST facade stay small.
+
+A Vue script extractor is the source-evidence module that finds the script-bearing part of a Vue single-file component. Its essential role is to turn the component file into the JavaScript or TypeScript text that tree-sitter can parse while preserving original line numbers.
+
 ## Opportunity Ledger
 
 | ID | Opportunity | Evidence | Disposition |
@@ -29,14 +36,14 @@ An AST structural type module is the shared type description for tree-sitter tre
 | A2 | Move extension/language detection out of `ast.ts`. | `LANGUAGE_BY_EXT`, `detectAstLanguage`, and `isVueSfcPath` are parser catalog policy, not AST fact extraction. | extract |
 | A3 | Move tree/query structural interfaces out of `ast.ts`. | Runtime code and facade code both need `Tree`, `SyntaxNode`, and `QueryInstance`; keeping them in the facade would create a cycle after extracting runtime. | extract |
 | A4 | Keep the public `src/source/ast.ts` import surface stable. | More than twenty modules import AST helpers and types through `./ast.js`. | enforce |
-| A5 | Defer Vue script extraction and AST fact extraction splits. | This first slice creates parser/language seams; moving Vue/fact logic next is safer after the runtime split has a clean verification pass. | defer |
+| A5 | Split Vue script extraction and AST fact extraction after the runtime seam was verified. | `ast.ts` still owned Vue script selection plus callable, callsite, type-container, cached query, and cached walk facts after the first split. | extract - landed |
 
 ## Compression Cluster
 
 Cluster A: AST Runtime And Language Catalog
 
 - Old mechanism: one 651-line `ast.ts` owned optional dependency loading, language detection, parser pooling, Vue script parsing, query compilation, cached AST walks, callable/callsite facts, type-container facts, and call leaf normalization.
-- New mechanism: `ast.ts` remains the public AST facade, while `ast-runtime.ts` owns parser loading/pooling/parsing, `ast-language.ts` owns extension language detection, and `ast-types.ts` owns structural tree/query types.
+- New mechanism: `ast.ts` remains the public AST facade, while `ast-core.ts` owns parsed-tree caching and Vue dispatch, `vue-script.ts` owns Vue script-block extraction, `ast-facts.ts` owns callable/callsite/type-container facts, `ast-runtime.ts` owns parser loading/pooling/parsing, `ast-language.ts` owns extension language detection, and `ast-types.ts` owns structural tree/query types.
 - Behavior preserved: all current consumers still import from `src/source/ast.ts`; no query modules or language parsers changed their import paths.
 
 ## Validation Plan
@@ -69,3 +76,12 @@ node dist/cli.js deps src/source/ast.ts
 - `node dist/cli.js wrapper-candidates --max-loc 40` returned the same pre-existing six candidates after suppressing the intentional `compileQuery` runtime facade.
 - `node dist/cli.js symbols src/source/ast.ts` shows `ast.ts` at 456 indexed lines, down from 651 source lines before the split.
 - `node dist/cli.js deps src/source/ast.ts` shows the facade now depends on `ast-language.ts`, `ast-runtime.ts`, and `ast-types.ts`.
+
+## 2026-06-07 Follow-Up Closure
+
+- Vue script extraction now lives in `src/source/vue-script.ts`.
+- Parsed-tree cache and Vue dispatch now live in `src/source/ast-core.ts`.
+- Callable, callsite, type-container, cached-query, and cached-walk facts now live in `src/source/ast-facts.ts`.
+- `src/source/ast.ts` remains the compatibility facade for existing imports.
+- `npm run typecheck` passed after this closure slice.
+- Final closure verification also passed `npm run lint`, `npm test` (38 files, 185 tests), `npm run build`, `node dist/cli.js reindex --force --allow-partial`, and `node dist/cli.js stale-abstractions --include-low-confidence --min-loc 1 --limit 120`.

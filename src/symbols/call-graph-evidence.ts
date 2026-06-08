@@ -10,15 +10,20 @@ import { semanticCalleeMap, semanticReferences } from '../semantic/shared-primit
 import { getGlobalLeafIndex, pickAstCallCandidate, sameLanguageCandidates } from './leaf-symbol-index.js';
 import type { GlobalLeafCandidate } from './leaf-symbol-index.js';
 
+export type CalleeEvidenceSource = 'ast-callsite' | 'semantic-callee' | 'scip-chunk';
+export type CallerEvidenceSource = 'caller-map-inversion' | 'resolved-reference' | 'semantic-reference';
+
 export interface CalleeRow {
   symbol: string;
   file: string;
   chunkId: number;
+  source: CalleeEvidenceSource;
 }
 
 export interface CallerRow {
   symbol: string;
   file: string;
+  source: CallerEvidenceSource;
 }
 
 export function getCalleeRowsForSymbol(
@@ -88,7 +93,11 @@ export function buildCallerRowsMap(db: ScipDatabase): Map<number, CallerRow[]> {
         const dedupeKey = `${callerDef.symbol}|${callerDef.relativePath}`;
         if (seen.get(calleeId)!.has(dedupeKey)) continue;
         seen.get(calleeId)!.add(dedupeKey);
-        bucket.push({ symbol: callerDef.symbol, file: callerDef.relativePath });
+        bucket.push({
+          symbol: callerDef.symbol,
+          file: callerDef.relativePath,
+          source: 'caller-map-inversion',
+        });
       }
     }
 
@@ -119,6 +128,7 @@ function targetedCallerRowsForSymbol(
     add({
       symbol: site.enclosingSymbol ?? site.file,
       file: site.file,
+      source: 'resolved-reference',
     });
   }
 
@@ -130,6 +140,7 @@ function targetedCallerRowsForSymbol(
       add({
         symbol: enclosing?.symbol ?? reference.file,
         file: reference.file,
+        source: 'semantic-reference',
       });
     }
   }
@@ -251,8 +262,8 @@ export function buildCalleeMap(
 export function buildAstCalleeMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<SymbolMatch>,
-): Map<number, Array<{ symbol: string; file: string; chunkId: number }>> {
-  const result = new Map<number, Array<{ symbol: string; file: string; chunkId: number }>>();
+): Map<number, CalleeRow[]> {
+  const result = new Map<number, CalleeRow[]>();
   const byFile = definitionsByFile(definitions, result);
   const leafIndex = getGlobalLeafIndex(db);
 
@@ -268,7 +279,12 @@ export function buildAstCalleeMap(
       if (!pick) continue;
       if (pick.symbol === owner.symbol) continue; // skip self-recursion
 
-      result.get(owner.symbolId)!.push({ symbol: pick.symbol, file: pick.file, chunkId: site.line });
+      result.get(owner.symbolId)!.push({
+        symbol: pick.symbol,
+        file: pick.file,
+        chunkId: site.line,
+        source: 'ast-callsite',
+      });
     }
   }
 
@@ -277,7 +293,7 @@ export function buildAstCalleeMap(
 
 function definitionsByFile(
   definitions: ReadonlyArray<SymbolMatch>,
-  result: Map<number, Array<{ symbol: string; file: string; chunkId: number }>>,
+  result: Map<number, CalleeRow[]>,
 ): Map<string, SymbolMatch[]> {
   const byFile = new Map<string, SymbolMatch[]>();
   for (const def of definitions) {
@@ -314,7 +330,7 @@ function resolveAstCalleeCandidate(
 export function buildChunkCalleeMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<SymbolLocation>,
-): Map<number, Array<{ symbol: string; file: string; chunkId: number }>> {
+): Map<number, CalleeRow[]> {
   if (definitions.length === 0) return new Map();
 
   // All non-definition mentions with their chunk doc/line range
@@ -386,12 +402,12 @@ export function buildChunkCalleeMap(
   // O(lines) linear scan into an O(1) Set.has lookup. Critical for languages
   // (e.g. Rust without defn_enclosing_ranges) where chunks are file-wide and
   // every mention triggers the source-confirm path.
-  const result = new Map<number, Array<{ symbol: string; file: string; chunkId: number }>>();
+  const result = new Map<number, CalleeRow[]>();
   const filePathById = docPaths;
   for (const def of definitions) {
     const docMentions = byDoc.get(def.documentId) ?? [];
     const seenKey = new Set<string>();
-    const callees: Array<{ symbol: string; file: string; chunkId: number }> = [];
+    const callees: CalleeRow[] = [];
     let identsInRange: Set<string> | null = null;
     const computeIdentsInRange = (): Set<string> => {
       if (identsInRange) return identsInRange;
@@ -426,7 +442,7 @@ export function buildChunkCalleeMap(
       const key = `${info.symbol}|${m.chunk_id}`;
       if (seenKey.has(key)) continue;
       seenKey.add(key);
-      callees.push({ ...info, chunkId: m.chunk_id });
+      callees.push({ ...info, chunkId: m.chunk_id, source: 'scip-chunk' });
     }
     result.set(def.symbolId, callees);
   }
@@ -457,7 +473,7 @@ function toCalleeRows(
   for (const [symbolId, callees] of semantic) {
     const rows: CalleeRow[] = [];
     for (const callee of callees) {
-      rows.push({ symbol: callee.symbol, file: callee.file, chunkId: -1 });
+      rows.push({ symbol: callee.symbol, file: callee.file, chunkId: -1, source: 'semantic-callee' });
     }
     out.set(symbolId, rows);
   }

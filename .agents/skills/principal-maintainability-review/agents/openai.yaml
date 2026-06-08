@@ -1,0 +1,4 @@
+interface:
+  display_name: "Principal Maintainability Review"
+  short_description: "Find deep codebase smells and refactor targets"
+  default_prompt: "Use $principal-maintainability-review to find the highest-value maintainability smells in this codebase."

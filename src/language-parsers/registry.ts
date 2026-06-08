@@ -16,12 +16,23 @@ import { parsePhpImports } from './php.js';
 import { parsePythonImports } from './python.js';
 import { parseRubyImports } from './ruby.js';
 import { parseRustExports, parseRustImports } from './rust.js';
+import {
+  C_LIKE_EXTENSIONS,
+  DART_EXTENSIONS,
+  DOTNET_EXTENSIONS,
+  JS_EXTENSIONS,
+  JVM_EXTENSIONS,
+  PHP_EXTENSIONS,
+  PYTHON_EXTENSIONS,
+  RUBY_EXTENSIONS,
+  RUST_EXTENSIONS,
+} from '../resolution/import-path-resolver.js';
 import { importOnlyLanguageParser, type LanguageParser } from './types.js';
 import { selectParser } from './types.js';
 
 const javascript = {
   language: 'javascript',
-  extensions: ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs', '.vue'],
+  extensions: JS_EXTENSIONS,
   capabilities: {
     imports: 'ast-with-regex-fallback',
     reExports: 'ast-with-regex-fallback',
@@ -32,21 +43,21 @@ const javascript = {
 
 const python = importOnlyLanguageParser({
   language: 'python',
-  extensions: ['.py', '.pyi'],
+  extensions: PYTHON_EXTENSIONS,
   imports: 'ast-with-regex-fallback',
   parseImports: parsePythonImports,
 });
 
 const jvm = importOnlyLanguageParser({
   language: 'jvm',
-  extensions: ['.java', '.scala', '.kt', '.kts'],
+  extensions: JVM_EXTENSIONS,
   imports: 'ast-dispatch-with-regex-fallback',
   parseImports: parseJvmImports,
 });
 
 const rust = {
   language: 'rust',
-  extensions: ['.rs'],
+  extensions: RUST_EXTENSIONS,
   capabilities: {
     imports: 'ast-with-regex-fallback',
     exports: 'ast-with-regex-fallback',
@@ -57,28 +68,28 @@ const rust = {
 
 const ruby = importOnlyLanguageParser({
   language: 'ruby',
-  extensions: ['.rb'],
+  extensions: RUBY_EXTENSIONS,
   imports: 'ast-with-regex-fallback',
   parseImports: parseRubyImports,
 });
 
 const cLike = importOnlyLanguageParser({
   language: 'c/cpp',
-  extensions: ['.c', '.h', '.cc', '.cpp', '.cxx', '.hpp', '.hh', '.hxx'],
+  extensions: C_LIKE_EXTENSIONS,
   imports: 'ast-with-regex-fallback',
   parseImports: parseCLikeImports,
 });
 
 const dotnet = importOnlyLanguageParser({
   language: 'dotnet',
-  extensions: ['.cs', '.vb'],
+  extensions: DOTNET_EXTENSIONS,
   imports: 'ast-dispatch-with-regex-fallback',
   parseImports: parseDotNetImports,
 });
 
 const dart = {
   language: 'dart',
-  extensions: ['.dart'],
+  extensions: DART_EXTENSIONS,
   capabilities: {
     imports: 'regex-only',
     exports: 'regex-only',
@@ -89,7 +100,7 @@ const dart = {
 
 const php = importOnlyLanguageParser({
   language: 'php',
-  extensions: ['.php'],
+  extensions: PHP_EXTENSIONS,
   imports: 'ast-with-regex-fallback',
   parseImports: parsePhpImports,
 });

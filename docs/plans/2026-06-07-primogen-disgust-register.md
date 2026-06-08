@@ -43,7 +43,7 @@ Second-pass cleanup now landed:
 - TypeScript semantic provider bootstrap, source-file resolution, definition-node matching, and cache helpers are separate internal roles.
 - Import-only language parser adapters use a named contract helper instead of repeating capability objects.
 - `dead` owns scoring, while reference-count evidence moved to `src/queries/internal/reference-counts.ts`.
-- `stale-abstractions` owns stale scoring, while real/import-only/re-export-only consumer classification moved to `src/queries/internal/stale-consumers.ts`.
+- `stale-abstractions` owns stale scoring, while real/import-only/re-export-only consumer classification moved to `src/queries/internal/consumer-evidence.ts`.
 - Package export expectations are now covered by a CLI contract test.
 
 Language parser import-pipeline compression now landed:
@@ -52,7 +52,7 @@ Language parser import-pipeline compression now landed:
 - JVM and .NET import adapters use a shared AST-language dispatch/fallback runner instead of hand-rolling `getAst`, language detection, parser selection, and regex fallback.
 - PHP and Rust import parsing use the existing AST/fallback runner where their previous entrypoint shape already matched it.
 - C-like, Ruby, PHP, Rust, JVM, and .NET adapters share import-entry construction while keeping grammar-specific AST walkers local.
-- JavaScript remains intentionally deferred because it combines import, export, re-export, Vue SFC, source cache, and member-usage policy in one larger subsystem; Dart stays separate as a regex-only parser.
+- JavaScript import parsing now uses the shared import emitters after the JavaScript parser split; re-export and Vue non-script identifier facts remain separate JavaScript-specific modules. Dart stays separate as a regex-only parser.
 
 ## Disgust Ledger
 

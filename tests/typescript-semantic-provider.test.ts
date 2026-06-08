@@ -7,52 +7,12 @@ import { ScipDatabase } from '../src/storage/db.js';
 import { semanticCallerMap, semanticImportUsage, semanticSignature } from '../src/semantic/shared-primitives.js';
 import { getAllDefinitions } from '../src/symbols/definition-catalog.js';
 import { dead, refs, staleAbstractions } from '../src/queries/index.js';
+import { createEvidenceSchema } from './evidence-fixture.js';
 
 function createSemanticFixtureDb(dbPath: string): void {
   const db = new Database(dbPath);
+  createEvidenceSchema(db);
   db.exec(`
-    CREATE TABLE documents (
-      id INTEGER PRIMARY KEY,
-      language TEXT,
-      relative_path TEXT NOT NULL UNIQUE,
-      position_encoding TEXT,
-      text TEXT
-    );
-    CREATE TABLE global_symbols (
-      id INTEGER PRIMARY KEY,
-      symbol TEXT NOT NULL UNIQUE,
-      display_name TEXT,
-      kind INTEGER,
-      documentation TEXT,
-      signature BLOB,
-      enclosing_symbol TEXT,
-      relationships BLOB
-    );
-    CREATE TABLE defn_enclosing_ranges (
-      id INTEGER PRIMARY KEY,
-      document_id INTEGER NOT NULL,
-      symbol_id INTEGER NOT NULL,
-      start_line INTEGER NOT NULL,
-      start_char INTEGER NOT NULL,
-      end_line INTEGER NOT NULL,
-      end_char INTEGER NOT NULL
-    );
-    CREATE TABLE mentions (
-      chunk_id INTEGER NOT NULL,
-      symbol_id INTEGER NOT NULL,
-      role INTEGER NOT NULL,
-      PRIMARY KEY (chunk_id, symbol_id, role)
-    );
-    CREATE TABLE chunks (
-      id INTEGER PRIMARY KEY,
-      document_id INTEGER NOT NULL,
-      chunk_index INTEGER NOT NULL,
-      start_line INTEGER NOT NULL,
-      end_line INTEGER NOT NULL,
-      occurrences BLOB NOT NULL
-    );
-    CREATE INDEX idx_global_symbols_symbol ON global_symbols(symbol);
-
     INSERT INTO documents (id, language, relative_path) VALUES
       (1, 'typescript', 'src/api.ts'),
       (2, 'typescript', 'src/consumer.ts');
@@ -147,49 +107,8 @@ function withSemanticFixture(run: (db: ScipDatabase) => void): void {
 
 function createMonorepoSemanticFixtureDb(dbPath: string): void {
   const db = new Database(dbPath);
+  createEvidenceSchema(db);
   db.exec(`
-    CREATE TABLE documents (
-      id INTEGER PRIMARY KEY,
-      language TEXT,
-      relative_path TEXT NOT NULL UNIQUE,
-      position_encoding TEXT,
-      text TEXT
-    );
-    CREATE TABLE global_symbols (
-      id INTEGER PRIMARY KEY,
-      symbol TEXT NOT NULL UNIQUE,
-      display_name TEXT,
-      kind INTEGER,
-      documentation TEXT,
-      signature BLOB,
-      enclosing_symbol TEXT,
-      relationships BLOB
-    );
-    CREATE TABLE defn_enclosing_ranges (
-      id INTEGER PRIMARY KEY,
-      document_id INTEGER NOT NULL,
-      symbol_id INTEGER NOT NULL,
-      start_line INTEGER NOT NULL,
-      start_char INTEGER NOT NULL,
-      end_line INTEGER NOT NULL,
-      end_char INTEGER NOT NULL
-    );
-    CREATE TABLE mentions (
-      chunk_id INTEGER NOT NULL,
-      symbol_id INTEGER NOT NULL,
-      role INTEGER NOT NULL,
-      PRIMARY KEY (chunk_id, symbol_id, role)
-    );
-    CREATE TABLE chunks (
-      id INTEGER PRIMARY KEY,
-      document_id INTEGER NOT NULL,
-      chunk_index INTEGER NOT NULL,
-      start_line INTEGER NOT NULL,
-      end_line INTEGER NOT NULL,
-      occurrences BLOB NOT NULL
-    );
-    CREATE INDEX idx_global_symbols_symbol ON global_symbols(symbol);
-
     INSERT INTO documents (id, language, relative_path) VALUES
       (1, 'typescript', 'shared/src/contracts/horses.ts'),
       (2, 'typescript', 'shared/src/index.ts'),

@@ -5,7 +5,7 @@
  * pattern matching that's distinct from the AST runtime everyone shares.
  */
 import type { ScipDatabase } from '../storage/db.js';
-import { type AstLanguage, detectAstLanguage, getAst, type SyntaxNode, type Tree } from '../source/ast.js';
+import { type AstLanguage, callableBodyNodeTypesForLanguage, detectAstLanguage, getAst, type SyntaxNode, type Tree } from '../source/ast.js';
 
 /**
  * True when a function's body is a *direct* forward to one other call —
@@ -42,11 +42,7 @@ export function isLiteralPassthrough(
 const PASSTHROUGH_CACHE = new WeakMap<Tree, Map<string, boolean>>();
 
 function buildPassthroughIndex(tree: Tree, lang: AstLanguage): Map<string, boolean> {
-  const callableNodeTypes = lang === 'rust'
-    ? new Set(['function_item', 'function_signature_item'])
-    : lang === 'python'
-      ? new Set(['function_definition'])
-      : new Set(['function_declaration', 'method_definition', 'arrow_function', 'function_expression']);
+  const callableNodeTypes = callableBodyNodeTypesForLanguage(lang);
   const index = new Map<string, boolean>();
   const walk = (node: SyntaxNode): void => {
     if (callableNodeTypes.has(node.type)) {

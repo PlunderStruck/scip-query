@@ -13,7 +13,7 @@ import { complexityHotspots } from './complexity-hotspots.js';
 import { stats } from './stats.js';
 import { buildHealthReport } from './health-report.js';
 import { clearWholeProjectEvidenceCaches } from './internal/cache-invalidation.js';
-import { clearStaleConsumerCaches } from './internal/stale-consumers.js';
+import { clearDefinitionConsumerEvidenceCaches } from './internal/consumer-evidence.js';
 import { requestGarbageCollection } from './health-cache-control.js';
 import type { HealthReport } from './health-report.js';
 
@@ -436,7 +436,7 @@ function healthBudget(
 
 function releaseHealthPhaseCaches(db: ScipDatabase, budget: HealthBudget): void {
   if (!budget.releaseCachesBetweenPhases) return;
-  clearStaleConsumerCaches(db);
+  clearDefinitionConsumerEvidenceCaches(db);
   clearWholeProjectEvidenceCaches(db);
   requestGarbageCollection();
 }

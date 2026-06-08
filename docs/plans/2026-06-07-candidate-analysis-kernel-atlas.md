@@ -29,14 +29,14 @@ A scan budget is the maximum number of candidates a detector should inspect duri
 | A1 | Extract the shared candidate lifecycle. | `wrapperCandidates()`, `passthroughCandidates()`, and `complexityHotspots()` each loaded candidates, applied scan limits, prepared maps, looped, sorted, and sliced. | extract |
 | A2 | Keep detector-specific scoring local. | Wrapper fan-in, literal passthrough body checks, and complexity scoring are different domain decisions. | keep |
 | A3 | Centralize repeated candidate ordering. | Wrapper and passthrough used identical "smallest LOC, then file path" ordering. | extract |
-| A4 | Do not migrate heavyweight detectors yet. | `dead()` and `staleAbstractions()` still have richer evidence and candidate gates; forcing them through the first kernel would obscure their policies. | defer |
+| A4 | Do not migrate heavyweight detectors into this small kernel. | `dead()` and `staleAbstractions()` have richer evidence and candidate gates; forcing them through the first kernel would obscure their policies. Follow-up evidence boundaries landed in `reference-counts`, `consumer-evidence`, and `dead-candidate-gate` instead. | skip - closed |
 
 ## Dependency Order
 
 1. Add `runCandidateAnalysis()` as the small kernel.
 2. Migrate wrapper and passthrough detectors because they have the clearest loop shape.
 3. Migrate complexity hotspots to prove the kernel handles bulk evidence maps and row projection.
-4. Leave `dead()` and `staleAbstractions()` for a later evidence-provenance pass.
+4. Keep `dead()` and `staleAbstractions()` outside this kernel; their follow-up work is evidence provenance and candidate-gate naming, which landed in later passes.
 
 ## Touch Map
 
@@ -83,3 +83,11 @@ Validation result:
 ## Compression Audit
 
 This removes a detector-family concept from individual query modules: candidate lifecycle mechanics now have one home, while detector evidence and scoring remain local. The kernel is intentionally narrow. It does not try to model every analysis command; it only captures the lifecycle already shared by the small candidate detectors.
+
+## Deferred-Task Closure
+
+No detector migration remains deferred here. The small candidate kernel is the
+right shape for wrapper, passthrough, and complexity-hotspot scans. The heavier
+detectors were closed through named evidence modules rather than migration into
+this kernel, because their real shared problem is evidence truth rather than
+loop mechanics.

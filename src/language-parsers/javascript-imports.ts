@@ -15,7 +15,7 @@ import {
   hasIdentifierUsage,
 } from '../source/source-stripper.js';
 import type { ParsedSourceImport } from '../domain/types.js';
-import { collectIdentifiersOutside, firstChildOfType, parseWithAstFallback, splitTopLevel } from './utils.js';
+import { buildNamedImport, buildNamespaceImport, buildSideEffectImport, buildUsedImport, collectIdentifiersOutside, firstChildOfType, parseWithAstFallback, splitTopLevel } from './utils.js';
 import { collectVueNonScriptIdentifiers } from './vue-non-script-identifiers.js';
 
 export function parseJavaScriptImports(
@@ -94,7 +94,7 @@ function parseAstImportNode(
   const sourcePath = resolveImportPath(db, importerPath, specifier);
   const importClause = firstChildOfType(node, 'import_clause');
   if (!importClause) {
-    return [sideEffectImport(sourcePath)];
+    return [buildSideEffectImport('*', sourcePath)];
   }
 
   return parseAstImportClause(
@@ -127,32 +127,13 @@ function parseAstImportClause(
   return results;
 }
 
-function sideEffectImport(sourcePath: string | null): ParsedSourceImport {
-  return {
-    importedName: '*',
-    localName: null,
-    sourcePath,
-    kind: 'side-effect',
-    used: true,
-    usedMembers: [],
-  };
-}
-
 function defaultImport(
   localName: string,
   sourcePath: string | null,
   usedNames: ReadonlySet<string>,
   isTypeOnly: boolean,
 ): ParsedSourceImport {
-  return {
-    importedName: 'default',
-    localName,
-    sourcePath,
-    kind: 'default',
-    used: usedNames.has(localName),
-    usedMembers: [],
-    isTypeOnly,
-  };
+  return buildNamedImport('default', localName, sourcePath, usedNames, 'default', { isTypeOnly });
 }
 
 function namespaceImport(
@@ -166,15 +147,12 @@ function namespaceImport(
   const localName = idNode?.text ?? '';
   if (!localName) return null;
   const usedMembers = collectMemberAccesses(tree, localName);
-  return {
-    importedName: '*',
+  return buildNamespaceImport('*', sourcePath, {
     localName,
-    sourcePath,
-    kind: 'namespace',
-    used: usedMembers.length > 0 || usedNames.has(localName),
     usedMembers,
     isTypeOnly,
-  };
+    used: usedMembers.length > 0 || usedNames.has(localName),
+  });
 }
 
 function namedImports(
@@ -191,15 +169,9 @@ function namedImports(
     if (!importedNode) continue;
     const importedName = importedNode.text;
     const localName = aliasNode?.text ?? importedName;
-    results.push({
-      importedName,
-      localName,
-      sourcePath,
-      kind: 'named',
-      used: usedNames.has(localName),
-      usedMembers: [],
+    results.push(buildNamedImport(importedName, localName, sourcePath, usedNames, 'named', {
       isTypeOnly: clauseTypeOnly || isTypeOnlyImportSpecifier(spec.text),
-    });
+    }));
   }
   return results;
 }
@@ -289,7 +261,7 @@ function parseJavaScriptImportStatement(
   const body = buildUsageBody(source, start, end);
 
   if (!clause) {
-    return [sideEffectImport(resolvedSource)];
+    return [buildSideEffectImport('*', resolvedSource)];
   }
 
   const bindings = parseImportClause(clause).map((binding) => ({
@@ -300,22 +272,27 @@ function parseJavaScriptImportStatement(
   return bindings.map((binding) => {
     if (binding.kind === 'namespace') {
       const usedMembers = collectNamespaceMembers(body, binding.localName!);
-      return {
-        ...binding,
-        used: usedMembers.length > 0 || hasIdentifierUsage(body, binding.localName!),
+      return buildNamespaceImport(binding.importedName, binding.sourcePath, {
+        localName: binding.localName,
         usedMembers,
-      };
+        used: usedMembers.length > 0 || hasIdentifierUsage(body, binding.localName!),
+        isTypeOnly: binding.isTypeOnly,
+      });
     }
 
     if (binding.kind === 'side-effect') {
-      return { ...binding, used: true, usedMembers: [] };
+      return buildSideEffectImport(binding.importedName, binding.sourcePath);
     }
 
-    return {
-      ...binding,
-      used: binding.localName ? hasIdentifierUsage(body, binding.localName) : false,
-      usedMembers: [],
-    };
+    return buildUsedImport(
+      binding.importedName,
+      binding.localName ?? '',
+      binding.sourcePath,
+      binding.localName ? hasIdentifierUsage(body, binding.localName) : false,
+      binding.kind,
+      [],
+      { isTypeOnly: binding.isTypeOnly },
+    );
   });
 }
 

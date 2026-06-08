@@ -30,14 +30,15 @@ This atlas covers the next parser-adapter compression pass. The target is the re
 | IP-2 | Replace ad hoc AST dispatch in JVM/.NET with a shared dispatcher. | `jvm.ts` and `dotnet.ts` both call `getAst`, `detectAstLanguage`, branch by language, then run regex fallback. | extract |
 | IP-3 | Extend `parseWithAstFallback` to PHP/Rust where equivalent. | PHP and Rust hand-roll `getAst` + fallback; `parseWithAstFallback` already exists and fits import parsing. | merge |
 | IP-4 | Keep grammar-specific AST walkers separate. | Similarity output shows shared dependencies, but Java/Kotlin/Scala/C#/VB/PHP/Rust AST nodes and alias/wildcard semantics differ. | skip |
-| IP-5 | Keep JavaScript out of the first import-emitter pass. | `javascript.ts` owns imports, re-exports, Vue SFC handling, per-DB cache, source text, and richer `usedMembers`; touching it risks widening the pass too much. | defer |
+| IP-5 | Bring JavaScript onto the shared import emitters after its parser split. | The later JavaScript parser split moved imports to `javascript-imports.ts`, leaving the import-entry construction isolated enough to share helpers without touching re-export or Vue non-script facts. | merge - landed |
 | IP-6 | Keep Dart regex-only parser separate. | Dart has regex-only imports/exports and no AST fallback, so forcing it into the AST pipeline would add concept count. | skip |
 
 ## Deferred Register
 
-| ID | Blocking fact | Revisit condition |
-| --- | --- | --- |
-| IP-5 | JavaScript parser is the largest parser and combines import, re-export, Vue, cache, and source fallback policy. It deserves a dedicated atlas. | After import-emitter and dispatch helpers prove stable in simpler parser families. |
+No remaining import-pipeline deferrals. JavaScript still owns its grammar-specific
+AST and regex parsing, but `javascript-imports.ts` now uses the shared
+`ParsedSourceImport` emitters for side-effect, default, named, and namespace
+imports while preserving type-only and `usedMembers` facts.
 
 ## Compression Clusters
 
@@ -61,6 +62,8 @@ This atlas covers the next parser-adapter compression pass. The target is the re
 ## Implemented Shape
 
 - `buildNamedImport()`, `buildUsedImport()`, `buildSideEffectImport()`, and `buildNamespaceImport()` now name the common import-entry construction.
+- JavaScript import parsing now uses those same emitters after grammar-specific
+  extraction, preserving its richer type-only and namespace-member facts.
 - `parseWithAstLanguageDispatch()` now owns multi-grammar AST parser selection and fallback for JVM and .NET.
 - PHP and Rust import entrypoints now reuse `parseWithAstFallback()` instead of locally repeating the AST-or-regex choice.
 - Grammar-specific syntax extraction remains in each adapter; the shared helpers start only after the adapter has identified the import facts.
@@ -72,3 +75,14 @@ This atlas covers the next parser-adapter compression pass. The target is the re
 - Static: `npm run typecheck`, `npm run lint`.
 - Full: `npm test`, `npm run build`, `node dist/cli.js reindex`.
 - Structural: `node dist/cli.js health --json`, `node dist/cli.js drift --min-deviation 3`, `node dist/cli.js stale-abstractions --include-low-confidence --min-loc 1 --limit 120`, `node dist/cli.js wrapper-candidates --max-loc 15 --limit 40`, `node dist/cli.js passthrough-candidates --max-loc 15 --limit 40`, `node dist/cli.js similar-files --min-similarity 0.5 --limit 80 --scope src/language-parsers`.
+
+## 2026-06-07 Deferred-Task Closure Verification
+
+- `npm run lint` passed.
+- `npm run typecheck` passed.
+- `npm test` passed: 38 files, 185 tests.
+- `npm run build` passed.
+- `node dist/cli.js reindex --force --allow-partial` passed.
+- `node dist/cli.js stale-abstractions --include-low-confidence --min-loc 1 --limit 120` reported no stale abstractions.
+- `node dist/cli.js drift --min-deviation 3` reported no drift.
+- JavaScript import parsing is now on the shared emitters while keeping grammar-specific parsing local to `javascript-imports.ts`.

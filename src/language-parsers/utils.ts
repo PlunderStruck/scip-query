@@ -112,6 +112,7 @@ export function buildNamedImport(
   sourcePath: string | null,
   usedNames: ReadonlySet<string>,
   kind: ParsedSourceImport['kind'] = 'named',
+  opts: { isTypeOnly?: boolean } = {},
 ): ParsedSourceImport {
   return {
     importedName,
@@ -120,6 +121,7 @@ export function buildNamedImport(
     kind,
     used: usedNames.has(localName),
     usedMembers: [],
+    isTypeOnly: opts.isTypeOnly,
   };
 }
 
@@ -130,6 +132,7 @@ export function buildUsedImport(
   used: boolean,
   kind: ParsedSourceImport['kind'] = 'named',
   usedMembers: string[] = [],
+  opts: { isTypeOnly?: boolean } = {},
 ): ParsedSourceImport {
   return {
     importedName,
@@ -138,6 +141,7 @@ export function buildUsedImport(
     kind,
     used,
     usedMembers,
+    isTypeOnly: opts.isTypeOnly,
   };
 }
 
@@ -158,14 +162,21 @@ export function buildSideEffectImport(
 export function buildNamespaceImport(
   importedName: string,
   sourcePath: string | null,
+  opts: {
+    localName?: string | null;
+    used?: boolean;
+    usedMembers?: string[];
+    isTypeOnly?: boolean;
+  } = {},
 ): ParsedSourceImport {
   return {
     importedName,
-    localName: null,
+    localName: opts.localName ?? null,
     sourcePath,
     kind: 'namespace',
-    used: true,
-    usedMembers: [],
+    used: opts.used ?? true,
+    usedMembers: opts.usedMembers ?? [],
+    isTypeOnly: opts.isTypeOnly,
   };
 }
 

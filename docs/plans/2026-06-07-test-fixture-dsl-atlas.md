@@ -27,7 +27,7 @@ A fixture definition range is a test database record connecting a symbol to its 
 | T1 | Centralize the minimal SCIP SQLite schema used by hand-built tests. | `import-fallbacks` and `redundant-reexports-fallback` each declared their own schema. | extract |
 | T2 | Replace raw `INSERT INTO` blocks with document/symbol/definition operations. | Both fallback tests only need documents, symbols, and definition ranges, but encoded that as SQL strings. | enforce |
 | T3 | Centralize source-file writing for small fixture projects. | Both fallback tests manually created directories and wrote source files. | extract |
-| T4 | Leave large fixture migrations incremental. | `command-accuracy-fixtures`, `stale-abstractions-accuracy`, and semantic-provider tests have broader hand-built evidence; this first slice establishes the contract before migrating larger suites. | defer |
+| T4 | Move large fixture suites onto the shared SCIP-like schema while keeping their domain rows local. | `command-accuracy-fixtures`, `stale-abstractions-accuracy`, and semantic-provider tests still need hand-built evidence rows, but not hand-built schema. | extract - landed |
 
 ## Compression Cluster
 
@@ -35,6 +35,8 @@ Cluster A: Evidence Fixture Contract
 
 - Old mechanism: each fallback test owned schema creation, file writing, and SQL insertion.
 - New mechanism: `tests/evidence-fixture.ts` owns the schema and exposes `writeFixtureFiles()` plus a chainable `evidenceFixtureDb()` builder.
+- Large fixture suites now call `createEvidenceSchema()` for the shared database
+  shape while keeping their command- or semantic-specific rows local.
 - Behavior preserved: fallback tests still create the same project files and database rows, then query through `ScipDatabase`.
 
 ## Validation Plan
@@ -63,3 +65,13 @@ node dist/cli.js stale-abstractions --include-low-confidence --min-loc 1 --limit
 - `node dist/cli.js drift --min-deviation 3` reported no drift.
 - `node dist/cli.js stale-abstractions --include-low-confidence --min-loc 1 --limit 80` reported no stale abstractions.
 - `rg -n "function createSchema|INSERT INTO documents|new Database\\(join\\(tempDir, 'index.db'\\)" tests/import-fallbacks.test.ts tests/redundant-reexports-fallback.test.ts tests/evidence-fixture.ts` shows document insertion only in the shared fixture helper.
+
+## 2026-06-07 Deferred-Task Closure Verification
+
+- `createEvidenceSchema()` now serves fallback, command-accuracy, stale-abstraction, and TypeScript semantic-provider fixtures.
+- `npm run lint` passed.
+- `npm run typecheck` passed.
+- `npm test` passed: 38 files, 185 tests.
+- `npm run build` passed.
+- `node dist/cli.js reindex --force --allow-partial` passed.
+- `node dist/cli.js stale-abstractions --include-low-confidence --min-loc 1 --limit 120` reported no stale abstractions.

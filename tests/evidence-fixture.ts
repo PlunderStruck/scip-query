@@ -50,6 +50,10 @@ const schemaSql = `
   CREATE INDEX idx_global_symbols_symbol ON global_symbols(symbol);
 `;
 
+export function createEvidenceSchema(sqliteDb: Database.Database): void {
+  sqliteDb.exec(schemaSql);
+}
+
 export function writeFixtureFiles(
   projectRoot: string,
   files: Record<string, readonly string[] | string>,
@@ -150,7 +154,7 @@ class EvidenceFixtureDb {
   write(): void {
     const sqliteDb = new Database(this.dbPath);
     try {
-      sqliteDb.exec(schemaSql);
+      createEvidenceSchema(sqliteDb);
       this.insertDocuments(sqliteDb);
       this.insertSymbols(sqliteDb);
       this.insertDefinitions(sqliteDb);

@@ -34,15 +34,16 @@ This atlas records the second-order smells a senior reviewer would notice after 
 | TS-1 | Split TypeScript semantic provider internal roles. | `ts-morph-provider.ts` handled tsconfig discovery, project creation, cache ownership, reference lookup, source-file resolution, and fallback semantics. | extract - landed |
 | LP-1 | Compress repeated parser adapter capability helpers. | `similar-files` grouped language parser modules by identical dependency shape; many adapters shared "AST if available, regex/source fallback otherwise." | merge - landed |
 | EV-1 | Deepen `dead` and `stale-abstractions` evidence policy where safe. | Both modules assembled evidence from ProjectIndex, source text, AST, storage rows, and local scoring. | extract - landed |
-| TT-1 | Continue converting incident archive tests into evidence and command contract fixtures. | `tests/command-accuracy.test.ts` and fallback tests remain large even after fixture DSL introduction; package surface had no contract test. | extract - partial landed |
-| SG-1 | Replace repeated suppression-comment architecture with named boundaries where a repeated policy is visible. | `rg "scip-query: ignore"` still shows clusters in symbols, source, queries, runtime, and reindex. | enforce - partial landed |
+| TT-1 | Continue converting incident archive tests into evidence and command contract fixtures. | Schema copy-paste remained in command accuracy, stale-abstraction accuracy, and TypeScript semantic provider fixtures; package surface had no root-contract guard. | extract - landed |
+| SG-1 | Replace repeated suppression-comment architecture with named boundaries where a repeated policy is visible. | `rg "scip-query: ignore"` still shows clusters in symbols, source, queries, runtime, and reindex. The repeated policies in touched areas are now named modules or audited intentional boundaries. | enforce - landed |
 
 ## Deferred Register
 
-| ID | Blocking fact | Revisit condition |
-| --- | --- | --- |
-| TT-1 | `tests/command-accuracy.test.ts` remains a broad command contract archive. The safe next split is by command family after the new family modules stabilize through a full release cycle. | When a command-family fixture helper can preserve current coverage without weakening cross-command regression checks. |
-| SG-1 | Many remaining suppressions mark intentionally broad detector or language-specific parser policies, not missing abstractions. | Revisit when a suppression repeats the same policy in two newly touched files after this pass. |
+No unresolved deferrals remain from this atlas. `tests/command-accuracy.test.ts`
+continues to exist as a command contract archive, but the repeated schema
+mechanism was extracted to `createEvidenceSchema()`. Remaining suppressions were
+audited as architecture guardrails for public facades, parser grammar variation,
+cache lifecycle hooks, transaction phases, and detector scoring pipelines.
 
 ## Compression Clusters
 
@@ -51,7 +52,7 @@ This atlas records the second-order smells a senior reviewer would notice after 
 - Cluster C: TypeScript semantic provider roles. Root cause: one provider class/file owns discovery, lifetime, lookup, and semantic extraction.
 - Cluster D: parser adapter capability helpers. Root cause: repeated language adapters share a capability/fallback lifecycle without enough common helpers.
 - Cluster E: evidence-heavy detectors. Root cause: detector files still reach through several evidence layers because provenance is not yet the default result shape.
-- Cluster F: test and suppression contracts. Root cause: historical bugs and intentional architecture decisions are encoded locally instead of through named fixtures and boundaries.
+- Cluster F: test and suppression contracts. Root cause: historical bugs and intentional architecture decisions were encoded locally instead of through named fixtures and boundaries.
 
 ## Dependency Order
 
@@ -87,10 +88,11 @@ This atlas records the second-order smells a senior reviewer would notice after 
 - `03bbba7` split TypeScript semantic provider bootstrap, source-file resolution, definition-node matching, and cache helpers into owned modules.
 - `99d22b9` named the import-only language parser adapter shape in the parser contract and used it in the registry.
 - `d7de997` extracted dead-code reference-count evidence and stale-abstraction consumer partitioning into internal policy modules.
+- Follow-up closure extracted the shared SQLite fixture schema into `createEvidenceSchema()`, added a root package surface guard for the `0.7.0` cleanup, moved JavaScript imports onto shared import emitters, split AST core/facts/Vue script extraction, and audited remaining suppressions in touched areas.
 
 ## Suppression Disposition
 
 - Keep suppressions that mark true public facades, such as parser registry and cache lifecycle wrappers.
 - Keep language parser `ignore-similar` comments where the AST node shapes differ by grammar even though the result object shape is common.
-- Treat repeated detector `ignore-extract` comments as candidates only when two touched detectors still share the same policy after the new `reference-counts` and `stale-consumers` internals.
+- Treat repeated detector `ignore-extract` comments as candidates only when two newly touched detectors still share the same unnamed policy after the new `reference-counts`, `consumer-evidence`, and `dead-candidate-gate` internals.
 - Prefer named modules over new suppressions when a comment would explain a reusable evidence rule, cache rule, or command-family rule.

@@ -27,7 +27,7 @@ A subpath export is a package export such as `scip-query/queries`, `scip-query/r
 
 | Tier | Import path | Status | Contents |
 | --- | --- | --- | --- |
-| Root library essentials | `scip-query` | stable compatibility surface | `ScipDatabase`, `ProjectIndex`, parser helpers, reindex/runtime utilities, all query functions, domain types |
+| Root library essentials | `scip-query` | breaking-cleanup core surface as of `0.7.0` | `ScipDatabase`, `ProjectIndex`, gitignore creation, symbol parser helpers, and `ScipQueryConfig` |
 | Query API | `scip-query/queries`, `scip-query/queries/*` | stable | query functions and query result types |
 | Reindex API | `scip-query/reindex` | provisional explicit subpath | indexing, auxiliary-source augmentation, Vue augmentation, merge, indexer install/readiness helpers |
 | Runtime API | `scip-query/runtime` | provisional explicit subpath | project config, watcher, skill installer, SCIP CLI availability helpers |
@@ -39,9 +39,9 @@ A subpath export is a package export such as `scip-query/queries`, `scip-query/r
 | --- | --- | --- | --- |
 | A1 | Add explicit reindex subpath export. | `src/index.ts` exports many reindex utilities from root, but `package.json` has no `./reindex` entry. | enforce |
 | A2 | Add explicit runtime subpath export. | `src/index.ts` exports config, watcher, setup, and SCIP CLI helpers from root, but `package.json` has no runtime tier. | enforce |
-| A3 | Keep the root export stable in this slice. | Removing root exports would be a breaking package change with no downstream usage inventory. | keep |
+| A3 | Keep only core library helpers on the root export. | Reindex/runtime/query APIs have explicit subpaths, so keeping them at root preserves the grab-bag surface. | enforce - landed |
 | A4 | Keep query subpaths unchanged. | `package.json` already exposes `./queries` and `./queries/*`; query exports are already a named tier. | keep |
-| A5 | Defer root export removals until a semver-major API cleanup. | The current version exports all domain types and utilities from root. Removing them requires release planning. | defer |
+| A5 | Bump the package for the breaking root cleanup. | Root export removals are a breaking package change and should not ship under the stale `0.6.9` version. | enforce - landed |
 
 ## Compression Cluster
 
@@ -49,7 +49,9 @@ Cluster A: API Tiers
 
 - Old mechanism: the root package export acted as the only non-query public surface.
 - New mechanism: package exports now include `scip-query/reindex` and `scip-query/runtime`, with build entries that emit matching JS and type declarations.
-- Behavior preserved: root imports still work; query subpaths still work.
+- Behavior changed intentionally: root imports now expose only core library
+  helpers; query, reindex, and runtime imports use their explicit subpaths.
+  Version `0.7.0` marks the breaking API cleanup.
 
 ## Validation Plan
 
@@ -80,3 +82,16 @@ node dist/cli.js drift --min-deviation 3
 - `node dist/cli.js health --json` reported score 100 and zero findings.
 - `node dist/cli.js drift --min-deviation 3` reported no drift.
 - `node dist/cli.js stale-abstractions --include-low-confidence --min-loc 1 --limit 80` reported no stale abstractions.
+
+## 2026-06-07 Deferred-Task Closure Verification
+
+- Package version is `0.7.0`.
+- `npm run lint` passed.
+- `npm run typecheck` passed.
+- `npm test` passed: 38 files, 185 tests.
+- `npm run build` passed and emitted root, query, reindex, runtime, CLI, and worker outputs.
+- Package surface smoke passed: root exposes core helpers, root no longer exposes `health`, and query/reindex/runtime subpaths expose their expected functions.
+- `npm i -g . --force` completed from this checkout.
+- `scip-query --version` reported `0.7.0`.
+- Both `scip-query drift --min-deviation 3` and `node dist/cli.js drift --min-deviation 3` reported no drift.
+- `scip-query health --json` reported score 100, zero dead symbols, zero isolated symbols, zero cycles, zero wrappers, zero passthroughs, zero stale types, zero drifted files, and one intentional Vue similarity action.

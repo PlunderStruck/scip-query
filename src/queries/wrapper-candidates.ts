@@ -8,7 +8,7 @@ import { isInRustTestModule, shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
 import { compareDefinitionsBySmallestLoc, definitionLoc } from './query-utils.js';
 import { runCandidateAnalysis } from './internal/candidate-scan.js';
-import { definitionConsumerFileMap } from './internal/consumer-evidence.js';
+import { definitionConsumerFileMap, partitionDefinitionConsumers } from './internal/consumer-evidence.js';
 
 export interface WrapperCandidate {
   symbol: string;
@@ -72,7 +72,7 @@ function wrapperCandidateForSymbol(
     reverseFanIn: Map<string, number>;
   },
 ): WrapperCandidate | null {
-  const externalFiles = externalCallerFiles(index, symbol, maps.callerFileMap);
+  const externalFiles = externalCallerFiles(db, index, symbol, maps.callerFileMap);
   if (externalFiles.length !== 1) return null;
 
   const callerFile = externalFiles[0]!;
@@ -118,6 +118,7 @@ function getWrapperCandidateSymbols(
 }
 
 function externalCallerFiles(
+  db: ScipDatabase,
   index: ProjectIndex,
   symbol: IndexedDefinition,
   callerFileMap: Map<number, Set<string>>,
@@ -130,13 +131,14 @@ function externalCallerFiles(
   // from tests; the wrapper signal is supposed to flag production
   // indirection, not "only used in tests" (which is a different
   // signal — likely dead production code, surfaced by `dead`).
-  return [...(callerFileMap.get(symbol.symbolId) ?? [])]
+  const consumerFiles = [...(callerFileMap.get(symbol.symbolId) ?? [])]
     .filter((f) => f !== symbol.relativePath)
     .filter((f) => basename(f, extname(f)) !== symbolStem)
     .filter((f) => {
       const kind = index.fileKind(f);
       return kind !== 'barrel' && kind !== 'entry' && kind !== 'test';
     });
+  return partitionDefinitionConsumers(db, symbol, consumerFiles).realConsumers;
 }
 
 function mentionChunkForCaller(

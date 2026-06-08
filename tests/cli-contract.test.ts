@@ -135,6 +135,16 @@ describe('CLI contract', () => {
       expect(Object.hasOwn(packageJson.exports, privateSubpath), `helper module should not be exported: ${privateSubpath}`).toBe(false);
     }
   });
+
+  it('keeps root package exports focused on core library helpers', () => {
+    const source = readFileSync(join(process.cwd(), 'src/index.ts'), 'utf8');
+
+    expect(source).toContain("export { ScipDatabase }");
+    expect(source).toContain("export { ProjectIndex }");
+    expect(source).not.toContain("export * from './queries/index.js'");
+    expect(source).not.toContain("from './reindex/index.js'");
+    expect(source).not.toContain("from './runtime/");
+  });
 });
 
 function readDocumentedCommands(path: string): string[] {

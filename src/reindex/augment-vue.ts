@@ -53,6 +53,16 @@ interface AugmentVueFingerprint {
   };
 }
 
+interface VueAugmentationTransactionContext {
+  db: Database.Database;
+  projectRoot: string;
+  dbPath: string;
+  tsconfig: string;
+  configPath: string;
+  vueFiles: string[];
+  onStatus?: (message: string) => void;
+}
+
 export function augmentVueResolvedReferences(
   opts: AugmentVueResolvedOptions,
 ): AugmentVueResolvedResult {
@@ -75,7 +85,15 @@ export function augmentVueResolvedReferences(
     const cachedResult = reuseCachedVueAugmentation(cachePath, cacheFingerprint, opts.onStatus);
     if (cachedResult) return cachedResult;
 
-    const result = runVueAugmentationTransaction(db, opts, configPath, vueFiles);
+    const result = runVueAugmentationTransaction({
+      db,
+      projectRoot: opts.projectRoot,
+      dbPath: opts.dbPath,
+      tsconfig: opts.tsconfig,
+      configPath,
+      vueFiles,
+      onStatus: opts.onStatus,
+    });
     writeAugmentVueCache(cachePath, computeAugmentVueFingerprint(db, opts.projectRoot, opts.tsconfig), result);
     return result;
   } finally {
@@ -101,58 +119,52 @@ function reuseCachedVueAugmentation(
 // component-symbol view, compute Volar-backed references, normalize occurrence
 // facts, replace generated chunks, and return the persisted summary as one unit.
 function runVueAugmentationTransaction(
-  db: Database.Database,
-  opts: AugmentVueResolvedOptions,
-  configPath: string,
-  vueFiles: string[],
+  ctx: VueAugmentationTransactionContext,
 ): AugmentVueResolvedResult {
-  const vueSymbolLookup = createVueComponentSymbolLookup(db, opts.projectRoot, vueFiles);
-  const computation = computeVueReferenceComputation(db, opts, configPath, vueFiles, vueSymbolLookup);
+  const vueSymbolLookup = createVueComponentSymbolLookup(ctx.db, ctx.projectRoot, ctx.vueFiles);
+  const computation = computeVueReferenceComputation(ctx, vueSymbolLookup);
   const occurrences = dedupeOccurrences(computation.occurrences);
   const insertedMentions = replaceVueDocumentChunks(
-    db,
-    opts.projectRoot,
-    vueFiles,
+    ctx.db,
+    ctx.projectRoot,
+    ctx.vueFiles,
     vueSymbolLookup,
     occurrences,
   );
   const result: AugmentVueResolvedResult = {
-    vueFiles: vueFiles.length,
+    vueFiles: ctx.vueFiles.length,
     resolvedReferences: occurrences.length,
     insertedMentions,
     skippedReferences: computation.skippedReferences,
     syntheticSymbols: vueSymbolLookup.syntheticSymbols,
   };
 
-  opts.onStatus?.(
+  ctx.onStatus?.(
     `Resolved ${result.resolvedReferences} Vue references with Volar; inserted ${result.insertedMentions} mentions.`,
   );
   return result;
 }
 
 function computeVueReferenceComputation(
-  db: Database.Database,
-  opts: AugmentVueResolvedOptions,
-  configPath: string,
-  vueFiles: string[],
+  ctx: VueAugmentationTransactionContext,
   vueSymbolLookup: ReturnType<typeof createVueComponentSymbolLookup>,
 ): VueReferenceComputationResult {
-  if (shouldUseVueWorkers(vueFiles)) {
+  if (shouldUseVueWorkers(ctx.vueFiles)) {
     return awaitVueReferenceWorkers({
-      projectRoot: opts.projectRoot,
-      dbPath: opts.dbPath,
-      tsconfig: opts.tsconfig,
-      vueFiles,
+      projectRoot: ctx.projectRoot,
+      dbPath: ctx.dbPath,
+      tsconfig: ctx.tsconfig,
+      vueFiles: ctx.vueFiles,
     });
   }
 
   const sourceReader = createVueSourceReader();
-  const context = createVueLanguageContext(opts.projectRoot, configPath);
+  const context = createVueLanguageContext(ctx.projectRoot, ctx.configPath);
   return computeVueResolvedReferencesForFiles({
-    projectRoot: opts.projectRoot,
+    projectRoot: ctx.projectRoot,
     vueFiles: context.fileNames.filter((file) => file.endsWith('.vue')),
     context,
-    symbolLookup: createSymbolLookup(db, opts.projectRoot, sourceReader),
+    symbolLookup: createSymbolLookup(ctx.db, ctx.projectRoot, sourceReader),
     vueSymbolLookup,
     sourceReader,
   });

@@ -1,12 +1,13 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { buildFileExclusionPredicate } from './dead-exclusions.js';
-import { getInactiveBarrelPaths, isEntrySurface, isRootedSymbol, TEST_FILE_PATTERNS, TEST_SUPPORT_PATH_PATTERNS } from '../analysis/file-classifier.js';
-import { enclosingTypeNames, getDefinitionsForFile } from '../symbols/definition-catalog.js';
+import { getInactiveBarrelPaths, isEntrySurface, isRootedSymbol } from '../analysis/file-classifier.js';
+import { getDefinitionsForFile } from '../symbols/definition-catalog.js';
 import type { DeadOptions, IndexedDefinition } from '../domain/types.js';
-import { isCallableSymbol, isFunctionLikeSymbol, isInRustTestModule, isModuleLikeSymbol, isRustTraitImplMember, shortenSymbol } from '../symbols/symbol-parser.js';
+import { shortenSymbol } from '../symbols/symbol-parser.js';
 import { getCallerRowsForSymbol } from '../symbols/call-graph-evidence.js';
 import { ProjectIndex } from '../core/project-index.js';
 import { clearSourceFileEvidenceCaches } from './internal/cache-invalidation.js';
+import { deadCandidateDecision, passesDeadTestFileFilter } from './internal/dead-candidate-gate.js';
 import { getSourceImports } from '../language-parsers/index.js';
 import { applyScanLimit } from './query-utils.js';
 import { pathsResolveSame } from '../resolution/path-normalization.js';
@@ -137,36 +138,14 @@ function deadCandidateDefinitions(
   for (const relativePath of listIndexedDocumentPaths(db, { scope: opts.scope })) {
     try {
       for (const definition of getDefinitionsForFile(db, relativePath)) {
-        if (db.isIgnored(definition.relativePath)) continue;
-        if (isModuleLikeSymbol(definition.symbol)) continue;
-        if (!looksValueLikeDefinition(definition.symbol)) continue;
-        if (
-          !definition.isFunctionLike
-          && definition.enclosingSymbol
-          && looksValueLikeDefinition(definition.enclosingSymbol)
-        ) continue;
-        if (!opts.includeTests && !passesTestFileFilter(definition.relativePath)) continue;
-        if (
-          !opts.includeTests
-          && isExcluded(definition.relativePath, definition.startLine, definition.symbol, definition.parentTypeName)
-        ) continue;
-        // rust-analyzer encodes trait impls as `impl#[Type][Trait]Member.` and
-        // inherent impls as `impl#[Type]Member.`. Trait-impl members (methods,
-        // associated consts, associated types) are reached through the trait —
-        // SCIP can't see those calls, and the AST line-range exclusion only
-        // catches them when the symbol's reported range actually sits inside
-        // the impl block. For associated consts, rust-analyzer often emits no
-        // `defn_enclosing_range` row, so the fallback chunk range pushes them
-        // outside any AST exclusion. Filtering by symbol structure side-steps
-        // that whole issue.
-        if (isRustTraitImplMember(definition.symbol)) continue;
-        // Inline test mods (`#[cfg(test)] mod tests`) live in regular source
-        // files but the items inside them aren't shippable code — treating
-        // them as "potentially dead" floods the report with helper fns.
-        if (isInRustTestModule(definition.symbol)) continue;
-        if (!opts.includeMembers && !isTopLevelOrCallable(definition)) continue;
-        if ((definition.endLine - definition.startLine + 1) < opts.minLoc) continue;
-        candidates.push(definition);
+        const decision = deadCandidateDecision(definition, {
+          minLoc: opts.minLoc,
+          includeTests: opts.includeTests,
+          includeMembers: opts.includeMembers,
+          isIgnoredPath: (path) => db.isIgnored(path),
+          isExcludedRegion: isExcluded,
+        });
+        if (decision.accepted) candidates.push(definition);
       }
     } finally {
       clearSourceFileEvidenceCaches(db, relativePath, { definitions: true });
@@ -483,29 +462,8 @@ function supplementReferencesFromCallerMap(
       const callerFile = caller.file;
       if (callerFile === definition.relativePath || db.isIgnored(callerFile)) continue;
       if (opts.inactiveBarrelPaths.has(callerFile)) continue;
-      if (!opts.includeTests && !passesTestFileFilter(callerFile)) continue;
+      if (!opts.includeTests && !passesDeadTestFileFilter(callerFile)) continue;
       recordReferenceAtLeast(referencesBySymbol, definition.symbolId, callerFile, 1, 'caller-map');
     }
   }
-}
-
-function passesTestFileFilter(relativePath: string): boolean {
-  const patterns = [...new Set([...TEST_FILE_PATTERNS, ...TEST_SUPPORT_PATH_PATTERNS])];
-  return patterns.every((pattern) => !likeMatches(relativePath, pattern));
-}
-
-function likeMatches(value: string, pattern: string): boolean {
-  const regex = new RegExp(`^${pattern
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    .replace(/%/g, '.*')
-    .replace(/_/g, '.')}$`);
-  return regex.test(value);
-}
-
-function looksValueLikeDefinition(rawSymbol: string): boolean {
-  return isFunctionLikeSymbol(rawSymbol) || rawSymbol.endsWith('().') || rawSymbol.endsWith('.');
-}
-
-function isTopLevelOrCallable(definition: { isFunctionLike: boolean; parentTypeName: string | null; symbol: string }): boolean {
-  return isCallableSymbol(definition.symbol) || enclosingTypeNames(definition.symbol).length === 0;
 }

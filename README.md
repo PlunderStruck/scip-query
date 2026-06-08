@@ -1194,9 +1194,11 @@ Every CLI command is also a TypeScript function. The `queries` namespace exports
 ```typescript
 import {
   ScipDatabase, createGitignoreFilter,
+} from 'scip-query';
+import {
   health, affected, changeSurface, diffImpact,
   hotspots, similar, dead, convergence,
-} from 'scip-query';
+} from 'scip-query/queries';
 
 const filter = createGitignoreFilter('/path/to/project');
 const db = new ScipDatabase({

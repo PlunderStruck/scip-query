@@ -1,4 +1,4 @@
-import { detectAstLanguage, getAst } from './ast.js';
+import { callableBodyNodeTypesForLanguage, detectAstLanguage, getAst } from './ast.js';
 import type { AstLanguage, SyntaxNode, Tree } from './ast.js';
 import type { ScipDatabase } from '../storage/db.js';
 
@@ -40,12 +40,7 @@ export function getCallableSignature(
 }
 
 function buildSignatureIndex(tree: Tree, lang: AstLanguage): Map<string, CallableSignature> {
-  const callableNodeTypes = lang === 'rust'
-    ? new Set(['function_item', 'function_signature_item'])
-    : lang === 'python'
-      ? new Set(['function_definition'])
-      : new Set(['function_declaration', 'method_definition', 'arrow_function', 'function_expression']);
-
+  const callableNodeTypes = callableBodyNodeTypesForLanguage(lang);
   const index = new Map<string, CallableSignature>();
   const walk = (node: SyntaxNode): void => {
     if (callableNodeTypes.has(node.type)) {

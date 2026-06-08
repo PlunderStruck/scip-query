@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { createEvidenceSchema } from './evidence-fixture.js';
 
 export function createFixtureProject(projectRoot: string): void {
   mkdirSync(join(projectRoot, 'src', 'reindex'), { recursive: true });
@@ -117,53 +118,7 @@ export function createFixtureDb(dbPath: string): void {
   const sqliteDb = new Database(dbPath);
   const run = (sql: string) => sqliteDb.exec(sql);
 
-  run(`
-    CREATE TABLE documents (
-      id INTEGER PRIMARY KEY,
-      language TEXT,
-      relative_path TEXT NOT NULL UNIQUE,
-      position_encoding TEXT,
-      text TEXT
-    );
-    CREATE TABLE global_symbols (
-      id INTEGER PRIMARY KEY,
-      symbol TEXT NOT NULL UNIQUE,
-      display_name TEXT,
-      kind INTEGER,
-      documentation TEXT,
-      signature BLOB,
-      enclosing_symbol TEXT,
-      relationships BLOB
-    );
-    CREATE TABLE defn_enclosing_ranges (
-      id INTEGER PRIMARY KEY,
-      document_id INTEGER NOT NULL,
-      symbol_id INTEGER NOT NULL,
-      start_line INTEGER NOT NULL,
-      start_char INTEGER NOT NULL,
-      end_line INTEGER NOT NULL,
-      end_char INTEGER NOT NULL
-    );
-    CREATE TABLE mentions (
-      chunk_id INTEGER NOT NULL,
-      symbol_id INTEGER NOT NULL,
-      role INTEGER NOT NULL,
-      PRIMARY KEY (chunk_id, symbol_id, role)
-    );
-    CREATE TABLE chunks (
-      id INTEGER PRIMARY KEY,
-      document_id INTEGER NOT NULL,
-      chunk_index INTEGER NOT NULL,
-      start_line INTEGER NOT NULL,
-      end_line INTEGER NOT NULL,
-      occurrences BLOB NOT NULL
-    );
-    CREATE INDEX idx_mentions_symbol_id_role ON mentions(symbol_id, role);
-    CREATE INDEX idx_defn_enclosing_ranges_symbol_id ON defn_enclosing_ranges(symbol_id);
-    CREATE INDEX idx_defn_enclosing_ranges_document ON defn_enclosing_ranges(document_id, start_line, end_line);
-    CREATE INDEX idx_chunks_doc_id ON chunks(document_id);
-    CREATE INDEX idx_global_symbols_symbol ON global_symbols(symbol);
-  `);
+  createEvidenceSchema(sqliteDb);
 
   run(`
     INSERT INTO documents (id, language, relative_path) VALUES
@@ -362,53 +317,7 @@ export function createTypeScriptCallFixtureDb(dbPath: string): void {
   const sqliteDb = new Database(dbPath);
   const run = (sql: string) => sqliteDb.exec(sql);
 
-  run(`
-    CREATE TABLE documents (
-      id INTEGER PRIMARY KEY,
-      language TEXT,
-      relative_path TEXT NOT NULL UNIQUE,
-      position_encoding TEXT,
-      text TEXT
-    );
-    CREATE TABLE global_symbols (
-      id INTEGER PRIMARY KEY,
-      symbol TEXT NOT NULL UNIQUE,
-      display_name TEXT,
-      kind INTEGER,
-      documentation TEXT,
-      signature BLOB,
-      enclosing_symbol TEXT,
-      relationships BLOB
-    );
-    CREATE TABLE defn_enclosing_ranges (
-      id INTEGER PRIMARY KEY,
-      document_id INTEGER NOT NULL,
-      symbol_id INTEGER NOT NULL,
-      start_line INTEGER NOT NULL,
-      start_char INTEGER NOT NULL,
-      end_line INTEGER NOT NULL,
-      end_char INTEGER NOT NULL
-    );
-    CREATE TABLE mentions (
-      chunk_id INTEGER NOT NULL,
-      symbol_id INTEGER NOT NULL,
-      role INTEGER NOT NULL,
-      PRIMARY KEY (chunk_id, symbol_id, role)
-    );
-    CREATE TABLE chunks (
-      id INTEGER PRIMARY KEY,
-      document_id INTEGER NOT NULL,
-      chunk_index INTEGER NOT NULL,
-      start_line INTEGER NOT NULL,
-      end_line INTEGER NOT NULL,
-      occurrences BLOB NOT NULL
-    );
-    CREATE INDEX idx_mentions_symbol_id_role ON mentions(symbol_id, role);
-    CREATE INDEX idx_defn_enclosing_ranges_symbol_id ON defn_enclosing_ranges(symbol_id);
-    CREATE INDEX idx_defn_enclosing_ranges_document ON defn_enclosing_ranges(document_id, start_line, end_line);
-    CREATE INDEX idx_chunks_doc_id ON chunks(document_id);
-    CREATE INDEX idx_global_symbols_symbol ON global_symbols(symbol);
-  `);
+  createEvidenceSchema(sqliteDb);
 
   run(`
     INSERT INTO documents (id, language, relative_path) VALUES

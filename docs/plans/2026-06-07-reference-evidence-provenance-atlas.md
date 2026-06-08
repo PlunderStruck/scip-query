@@ -18,7 +18,15 @@ Reference evidence provenance is the recorded origin of a reported reference sit
 | --- | --- | --- | --- |
 | P1 | Preserve provenance when choosing source-backed references or SCIP fallback references. | `referenceSitesForSymbol()` already chose between `findReferences()` and `getResolvedReferenceSites()`, but returned plain rows. | extract |
 | P2 | Keep old callers compatible. | `refs`, `trace`, `dataflow`, and `slice` consume plain reference rows. | keep |
-| P3 | Do not force all caller/callee maps onto provenance records yet. | Caller/callee detectors need a broader result migration; this slice proves the record shape at the reference-site boundary. | defer |
+| P3 | Add provenance to caller/callee row records without rewriting every map consumer. | `CallerRow` and `CalleeRow` are the compatibility records consumed by call-graph, dataflow, slice, bottlenecks, affected, and similar queries. | merge - landed |
+
+## Follow-Up Slice
+
+`CalleeRow` now records `ast-callsite`, `semantic-callee`, or `scip-chunk`.
+`CallerRow` now records `caller-map-inversion`, `resolved-reference`, or
+`semantic-reference`. Existing callers keep their row shape and can ignore the
+new field, while future detectors no longer have to infer evidence origin from
+which helper produced the row.
 
 ## Validation Plan
 
@@ -45,6 +53,16 @@ Validation result:
 - `node dist/cli.js health --json`: score 100, zero findings.
 - `node dist/cli.js drift --min-deviation 3`: no drift.
 - `node dist/cli.js stale-abstractions --include-low-confidence --min-loc 1 --limit 120`: no stale abstractions.
+
+Deferred-task closure result:
+
+- `npm run lint` passed.
+- `npm run typecheck` passed.
+- `npm test` passed: 38 files, 185 tests.
+- `npm run build` passed.
+- `node dist/cli.js reindex --force --allow-partial` passed.
+- `node dist/cli.js health --json` reported score 100, zero stale types, zero drifted files, zero wrappers, zero passthroughs, zero dead symbols, and zero isolated symbols.
+- Caller and callee row provenance is now recorded in `src/symbols/call-graph-evidence.ts`.
 
 ## Compression Audit
 

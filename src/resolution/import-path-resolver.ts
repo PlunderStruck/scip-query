@@ -20,10 +20,9 @@ import { indexedDocumentPaths } from '../storage/scip-documents.js';
 
 const INDEXED_PATH_CACHE = createPerDbValue<Set<string>>('indexed-paths');
 
-// Source-extension families. Kept in sync with the per-language parser
-// extensions list in src/language-parsers/registry.ts. Duplicated here
-// because the resolver needs to know "given a path, which extension family
-// does it belong to?" without reaching into the parser registry.
+// Source-extension families. The language-parser registry imports these
+// constants too, so adding an extension changes resolution and parser dispatch
+// from one source of truth.
 export const JS_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs', '.vue'] as const;
 export const PYTHON_EXTENSIONS = ['.py', '.pyi'] as const;
 export const JVM_EXTENSIONS = ['.java', '.scala', '.kt', '.kts'] as const;
