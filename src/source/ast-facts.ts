@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import type { AstLanguage } from './ast-language.js';
-import { getSourceFacts, extractCallLeaf } from './source-facts.js';
+import { extractCallLeaf } from './source-calls.js';
+import { getSourceFacts } from './source-facts.js';
 
 const CALLABLE_FACT_LANGUAGES = new Set<AstLanguage>(['rust', 'typescript', 'tsx', 'javascript', 'python']);
 

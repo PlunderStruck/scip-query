@@ -6,7 +6,7 @@ import { buildCalleeMap } from '../symbols/call-graph-evidence.js';
 import { buildFileDepGraph } from '../symbols/file-dep-graph.js';
 import { callerFileEvidenceMap, crossFileCallerEvidenceMap, sourceFallbackCallerEvidenceMap } from '../symbols/caller-evidence.js';
 import { isCallableSymbol, isFunctionLikeSymbol, isInRustTestModule, isRustTraitImplMember } from '../symbols/symbol-parser.js';
-import { detectAstLanguage, getRustAttrReferencedNames, getSourceFacts } from '../source/ast.js';
+import { detectAstLanguage, frameworkSourceReferences, getSourceFacts } from '../source/ast.js';
 import { getSourceFiles } from '../source/source-fileset.js';
 import { hasSuppressionComment } from '../source/source-text.js';
 import { scanSourceReferences } from '../symbols/source-reference-scan.js';
@@ -116,7 +116,7 @@ export class ProjectIndex {
     const referenced = new Set<number>();
     for (const doc of indexedDocumentPaths(this.db, { includeIgnored: false })) {
       if (detectAstLanguage(doc) !== 'rust') continue;
-      for (const name of getRustAttrReferencedNames(this.db, doc)) {
+      for (const { name } of frameworkSourceReferences(this.db, doc, { includeRustAttributeNames: true })) {
         for (const symbolId of candidateIdsByLeaf.get(name) ?? []) {
           referenced.add(symbolId);
         }

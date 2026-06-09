@@ -248,3 +248,222 @@ deliberately not compressed. Their referents are named definition sites,
 including variable declarators and public fields whose function value has to be
 bound back to a symbol name. The new helper's referents are body-bearing AST
 nodes indexed by range. Those are related but not identical facts.
+
+## 2026-06-09 Fresh Review Addendum
+
+This pass rebuilt `dist/`, rebuilt the local SCIP/SQLite index, and reviewed the
+current checkout after the four architecture-deepening slices recorded on
+2026-06-08. The current package version is `0.7.2`, so the older `0.7.0`
+verification notes should be read as historical evidence, not as the current
+package-state claim.
+
+A source fact is a fact about a source file that is derived from its parsed
+syntax tree or from a stripped source-text fallback, such as where identifiers
+appear, where callable bodies start and end, what calls are made, and which
+framework strings name symbols. It is a kind of code evidence whose essential
+function is to make source-text behavior available to query code without making
+each query reparse the file.
+
+A syntax tree is the parsed structure of a source file, where nested nodes stand
+for concrete language constructs such as functions, calls, classes, attributes,
+and identifiers. Its essential role here is to preserve grammatical position, so
+the tool can distinguish a symbol used in executable code from the same text in
+a comment, string, or unrelated syntax position.
+
+A source-reference policy is the rule for deciding when source text that is not
+already connected by SCIP mentions still counts as a reference to a symbol. It
+belongs to the wider class of evidence policies, and it is essential because
+dead-code and caller queries depend on treating Rust framework attributes,
+JavaScript/Tauri dispatch strings, and ordinary identifiers differently.
+
+Fresh evidence commands:
+
+```bash
+npm run build
+node dist/cli.js reindex --force --allow-partial
+node dist/cli.js health --json
+node dist/cli.js drift --min-deviation 3
+node dist/cli.js stale-abstractions --include-low-confidence --min-loc 1 --limit 120
+node dist/cli.js wrapper-candidates --limit 120
+node dist/cli.js passthrough-candidates --limit 120
+node dist/cli.js extract-candidates --limit 80
+node dist/cli.js similar-files --limit 60
+node dist/cli.js similar --limit 20
+node dist/cli.js outline src/source/source-facts.ts
+node dist/cli.js rdeps src/source/source-facts.ts
+```
+
+Fresh signal summary:
+
+- `node dist/cli.js health --json`: score 100, 177 documents, 6,809 symbols,
+  0 dead symbols, 0 isolated symbols, 0 cycles, 0 similar pairs, 0 wrappers,
+  0 passthroughs, 0 stale types, 0 drifted files, and 1 health-gated extraction
+  candidate.
+- `node dist/cli.js drift --min-deviation 3`: no drift detected.
+- `node dist/cli.js stale-abstractions --include-low-confidence --min-loc 1
+  --limit 120`: no stale abstractions found.
+- Wrapper, passthrough, and similar-symbol probes reported no candidates.
+- Standalone extraction probing reported four candidates: `buildSourceFacts()`,
+  `augmentVueResolvedReferences()`, `complexityHotspots()`, and
+  `maybePrintUpdateNotice()`.
+- `similar-files` still mostly reports language-parser adapter siblings; that
+  remains essential variation because the referents are different language
+  grammars and import/export rules.
+
+Current implementation status against the 2026-06-08 deepening slices:
+
+- Vue reference computation context is present in `src/reindex/augment-vue.ts`.
+  Both the direct transaction path and readonly worker path now call
+  `createVueReferenceComputationContext()`.
+- Query command report shapes are present in
+  `src/runtime/query-command-builders.ts` through `sectionedQueryCommand()` and
+  `budgetedSectionedQueryCommand()`.
+- Caller evidence maps are present in `src/symbols/caller-evidence.ts`, which
+  keeps targeted rows, bulk cross-file caller evidence, and source fallback
+  evidence behind a caller-facing module.
+- The isolated analysis runner is present in
+  `src/runtime/isolated-analysis-runner.ts`, and `src/runtime/cli-support.ts`
+  uses it for health phases and diff-impact batches.
+
+| Priority | Smell | Evidence | Why it hurts | Better shape | Disposition |
+| --- | --- | --- | --- | --- | --- |
+| P1 | `source-facts.ts` has become the next real source-evidence boundary. | `node dist/cli.js extract-candidates --limit 80` flags `src/source/source-facts.ts:114-165 buildSourceFacts()` with 8 isolated callees. The file is now 510 LOC and exports the shared source-fact bundle consumed by `src/source/ast-facts.ts`, `src/symbols/identifier-index.ts`, `src/symbols/source-reference-scan.ts`, `src/symbols/reference-callers.ts`, `src/core/project-index.ts`, and `src/queries/passthrough-candidates.ts`. | The single cached tree walk is good. The smell is that one module now owns several different reasons to change: callable shape, passthrough-body shape, callsite extraction, identifier indexing, type-container links, Rust attribute helper references, and cross-language dispatch strings. A future source-reference bug could be fixed beside callable-range code with no local interface making that policy visible. | Keep one cached source-facts bundle, but split policy families behind named source-owned collectors: callable facts, identifier facts, type-container facts, and framework/reference string facts. Route `source-reference-scan` through the source-reference collector instead of reaching directly for Rust attr names and cross-language dispatch names. | Open. This is the best next slice because it names a real evidence policy without undoing the useful one-walk cache. |
+| P1 | Source-reference special cases have only direct extraction tests, not query-contract tests. | `tests/source-facts.test.ts` verifies `getRustAttrReferencedNames()` and `getCrossLanguageDispatchNames()` directly. The consumers that turn those names into dead-code or caller evidence are `src/symbols/source-reference-scan.ts`, `src/symbols/reference-callers.ts`, and `src/core/project-index.ts`. | The unit tests prove parsing, but not the contract that these framework strings keep symbols alive or count as caller evidence. A maintainer could preserve extraction while breaking the downstream evidence meaning. | Add focused tests where a Rust serde/schemars helper and a JavaScript/Tauri dispatch target affect the query that depends on them, not just the low-level extractor. | Open. Pair with the source-reference collector slice. |
+| P2 | `augmentVueResolvedReferences()` still appears as an extraction candidate, but most of the earlier drift risk has been removed. | The current outline shows `VueReferenceComputationContext` and `createVueReferenceComputationContext()` in `src/reindex/augment-vue.ts`; both direct and worker paths use it. The remaining candidate is the 37 LOC outer lifecycle that computes a cache fingerprint, reuses cache, runs the transaction, and writes cache. | Extracting the outer lifecycle would mostly rename a short transaction/caching sequence that is already readable. The earlier harmful duplication was the computation context setup, and that is gone. | Leave the outer function intact unless cache policy grows another caller. | Rejected as false compression for now. |
+| P2 | `complexityHotspots()` and `maybePrintUpdateNotice()` are extraction candidates but not maintainability smells yet. | `complexityHotspots()` already delegates scanning, preparation, evaluation, ordering, and limiting to `runCandidateAnalysis()`. `maybePrintUpdateNotice()` is a 17 LOC runtime lifecycle around cache-dir resolution, cache read, version check, refresh, render, and write. | Both candidates are local lifecycles with one reason to change. Extracting them would add names without moving hidden policy out of callers. | Keep them local until a second command shares the scoring lifecycle or another runtime path shares update-notice cache behavior. | Rejected as false compression. |
+
+Updated next slice:
+
+1. Introduce a source-reference facts boundary inside `src/source` or
+   `src/symbols` that owns Rust attribute helper names and cross-language
+   dispatch names as one source-reference policy.
+2. Keep the source-facts cache and single AST walk; the slice should name
+   policy families without re-walking files.
+3. Add query-facing tests proving framework string references affect caller or
+   dead-code evidence, not only extractor output.
+4. Re-run `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, and
+   `node dist/cli.js health --json`.
+
+## 2026-06-09 Source-Reference Slice Closure
+
+Implemented the source-reference slice by adding
+`src/source/source-references.ts`. The new `frameworkSourceReferences()` helper
+owns framework/string source references as a named source fact view:
+cross-language dispatch strings and Rust attribute helper strings now move
+through one collector instead of separate direct getter calls.
+
+Consumers updated:
+
+- `src/symbols/source-reference-scan.ts` now routes framework references through
+  `frameworkSourceReferences()`.
+- `src/symbols/reference-callers.ts` now uses the same collector for Rust
+  attribute caller evidence.
+- `src/core/project-index.ts` now uses the same collector for framework
+  referenced symbol IDs.
+
+The slice also fixed a real source-reference policy bug. `deadCodeOnly` already
+extracted cross-language dispatch strings, but its strict target resolver refused
+to credit a unique project-wide target unless an import also named it. That made
+a Tauri-style `invoke('start_job')` target look deletable. `deadSourceTargets()`
+now credits a unique strict target while keeping ambiguous strict dispatch names
+uncredited unless imports disambiguate them.
+
+Tests added to `tests/source-facts.test.ts`:
+
+- Rust `#[serde(default = "crate::defaults::default_port")]` keeps the helper
+  out of `dead(..., { deadCodeOnly: true })`.
+- TypeScript/Tauri-style `invoke('start_job')` keeps the unique Rust command
+  target out of `dead(..., { deadCodeOnly: true })`.
+
+Deliberately not compressed:
+
+- Ordinary identifier references still live in `src/symbols/identifier-index.ts`
+  and `src/symbols/identifier-attribution.ts`. Their referents are identifier
+  tokens and import/scope attribution, not framework string references.
+- `source-facts.ts` still owns the single cached AST walk. The new helper names
+  a policy view over that cache; it does not introduce a second parse path.
+
+Verification:
+
+```bash
+npm test -- tests/source-facts.test.ts
+npm run typecheck
+npm run lint
+npm test
+npm run build
+node dist/cli.js reindex --force --allow-partial
+node dist/cli.js health --json
+node dist/cli.js drift --min-deviation 3
+node dist/cli.js stale-abstractions --include-low-confidence --min-loc 1 --limit 120
+node dist/cli.js wrapper-candidates --limit 120
+node dist/cli.js passthrough-candidates --limit 120
+```
+
+Results: full test suite passed with 40 files and 196 tests. Health score stayed
+100 with no dead symbols, isolated symbols, cycles, similar pairs, wrappers,
+passthroughs, stale types, or drifted files.
+
+## 2026-06-09 Source-Facts Role Split Closure
+
+Implemented the next source-facts slice by keeping `src/source/source-facts.ts`
+as the cached single-walk orchestrator and moving fact-family policy into
+source-owned modules:
+
+- `src/source/source-callables.ts` owns callable fact extraction, parameter
+  counts, and literal passthrough body shape.
+- `src/source/source-calls.ts` owns callsite extraction and call-leaf reduction.
+- `src/source/source-identifiers.ts` owns per-language identifier node policy,
+  interpolation identifiers, and line-index materialization.
+- `src/source/source-type-containers.ts` owns type-container relationship
+  extraction.
+- `src/source/source-reference-collectors.ts` owns the raw syntax collection for
+  Rust attribute helper names and cross-language dispatch names.
+- `src/source/source-node-kinds.ts` owns the shared comment-node predicate.
+
+`source-facts.ts` dropped from 510 LOC to 126 LOC. Its remaining responsibility
+is now one lifecycle: detect language, load/cache the syntax tree, walk it once,
+delegate fact-family decisions, and return a `SourceFacts` bundle.
+
+The wrapper probe initially flagged the single-consumer source helper functions.
+Those were kept and suppressed intentionally because `source-facts.ts` owns the
+single traversal while the helpers own policy families. Inlining them would make
+the file smaller in symbol count but larger in maintainer concept load.
+
+Deliberately not compressed:
+
+- The single cached tree walk still lives in `source-facts.ts`; adding separate
+  walks per fact family would trade readability for repeated parse traversal.
+- The low-level source-facts getters for Rust attribute names and
+  cross-language dispatch names remain for compatibility with existing tests and
+  callers, while query-facing consumers use `frameworkSourceReferences()`.
+
+Verification:
+
+```bash
+npm run typecheck
+npm run lint
+npm test -- tests/source-facts.test.ts tests/source-backed-accuracy.test.ts tests/file-wide-caller-fallback.test.ts tests/identifier-attribution.test.ts tests/ast-parser-fallback.test.ts
+npm test
+npm run build
+node dist/cli.js reindex --force --allow-partial
+node dist/cli.js health --json
+node dist/cli.js wrapper-candidates --limit 120
+node dist/cli.js stale-abstractions --include-low-confidence --min-loc 1 --limit 120
+node dist/cli.js drift --min-deviation 3
+node dist/cli.js extract-candidates --limit 80
+```
+
+Results: full test suite passed with 40 files and 196 tests. Health score is
+100. `source-facts.ts` no longer appears in extraction candidates. Wrapper,
+stale-abstraction, and drift probes report no findings.
+
+Remaining extraction candidates after this slice:
+
+- `src/reindex/augment-vue.ts:augmentVueResolvedReferences()` — still likely a
+  readable outer cache/transaction lifecycle, not worth extracting unless cache
+  policy grows another caller.
+- `src/queries/complexity-hotspots.ts:complexityHotspots()` — still delegates to
+  `runCandidateAnalysis()`; further extraction would mostly rename a compact
+  scorer.
+- `src/runtime/update-notice.ts:maybePrintUpdateNotice()` — local runtime
+  lifecycle; leave alone unless another update-notice path appears.

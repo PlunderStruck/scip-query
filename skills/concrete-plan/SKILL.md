@@ -67,7 +67,7 @@ This skill deliberately excludes `Grep` and `Read` from its allowed tools. This 
 - Using `Read` via a subagent to browse files for discovery. Subagents must also use scip-query.
 - Spawning Explore agents that fall back to grep and file reads. If a subagent's output does not cite scip-query commands, reject its findings and re-run.
 
-**Instead, use scip-query (full reference at `/Users/aydansalois/Documents/GitHub/scip-query/README.md`):**
+**Instead, use scip-query (full reference at `/Users/aydansalois/Documents/GitHub/scip-query/docs/COMMAND_REFERENCE.md`):**
 
 | You want to... | Use this |
 |---|---|
@@ -107,7 +107,7 @@ If none of these can answer your question, say so explicitly in the plan rather 
 
 ### Full Documentation
 
-- **Every command with options and examples:** `/Users/aydansalois/Documents/GitHub/scip-query/README.md`
+- **Every command with options and examples:** `/Users/aydansalois/Documents/GitHub/scip-query/docs/COMMAND_REFERENCE.md`
 - **Goal-oriented agent workflows:** `/Users/aydansalois/Documents/GitHub/scip-query/docs/AGENT_GUIDE.md`
 
 ---
@@ -314,7 +314,7 @@ Quality:
 - `scip-query complexity-hotspots` — riskiest symbols
 - `scip-query cycles` — circular dependencies
 
-Full command reference: /Users/aydansalois/Documents/GitHub/scip-query/README.md
+Full command reference: /Users/aydansalois/Documents/GitHub/scip-query/docs/COMMAND_REFERENCE.md
 Agent workflows guide: /Users/aydansalois/Documents/GitHub/scip-query/docs/AGENT_GUIDE.md
 
 ### Rules

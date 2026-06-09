@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../storage/db.js';
-import { detectAstLanguage, getCallSites, getRustAttrReferencedNames } from '../source/ast.js';
+import { detectAstLanguage, frameworkSourceReferences, getCallSites } from '../source/ast.js';
 import { semanticCallerMap } from '../semantic/shared-primitives.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import { mentionReferenceChunkRows } from '../storage/scip-mentions.js';
@@ -130,9 +130,9 @@ function addRustAttrCallers(
   // dispatches that SCIP does not connect back to the helper definition.
   for (const doc of docs) {
     if (detectAstLanguage(doc) !== 'rust') continue;
-    const attrRefs = getRustAttrReferencedNames(db, doc);
-    if (attrRefs.size === 0) continue;
-    for (const name of attrRefs) {
+    const attrRefs = frameworkSourceReferences(db, doc, { includeRustAttributeNames: true });
+    if (attrRefs.length === 0) continue;
+    for (const { name } of attrRefs) {
       const candidates = leafIndex.get(name);
       if (!candidates) continue;
       for (const c of candidates) {

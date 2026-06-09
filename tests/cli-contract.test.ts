@@ -45,11 +45,12 @@ describe('CLI contract', () => {
     ]);
   });
 
-  it('keeps README and agent guide command references descriptor-backed', () => {
+  it('keeps public command references descriptor-backed', () => {
     const publicCommandIds = new Set(commandDescriptors.filter((descriptor) => !descriptor.hidden).map((descriptor) => descriptor.id));
     const documentedCommands = [
       ...readDocumentedCommands('README.md'),
       ...readDocumentedCommands('docs/AGENT_GUIDE.md'),
+      ...readDocumentedCommands('docs/COMMAND_REFERENCE.md'),
     ];
 
     expect(documentedCommands).not.toHaveLength(0);
@@ -58,10 +59,10 @@ describe('CLI contract', () => {
     }
   });
 
-  it('keeps README command syntax generated from descriptors', () => {
-    const readme = readFileSync(join(process.cwd(), 'README.md'), 'utf8');
+  it('keeps command reference syntax generated from descriptors', () => {
+    const commandReference = readFileSync(join(process.cwd(), 'docs/COMMAND_REFERENCE.md'), 'utf8');
 
-    expect(extractGeneratedCommandReference(readme)).toBe(renderCommandReferenceMarkdown(commandDescriptors));
+    expect(extractGeneratedCommandReference(commandReference)).toBe(renderCommandReferenceMarkdown(commandDescriptors));
   });
 
   it('prints an explicit heuristic disclaimer for candidate output', () => {
@@ -161,6 +162,6 @@ function readDocumentedCommands(path: string): string[] {
 
 function extractGeneratedCommandReference(content: string): string {
   const match = content.match(/<!-- BEGIN GENERATED COMMAND REFERENCE -->[\s\S]*?<!-- END GENERATED COMMAND REFERENCE -->/);
-  expect(match, 'README is missing generated command reference block').not.toBeNull();
+  expect(match, 'command reference is missing generated command reference block').not.toBeNull();
   return match![0];
 }

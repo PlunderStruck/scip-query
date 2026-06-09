@@ -380,6 +380,9 @@ function deadSourceTargets(
 ): IndexedDefinition[] {
   const sameFile = candidates.filter((candidate) => candidate.relativePath === sourceFile);
   if (sameFile.length > 0) return sameFile;
+  // Strict framework references, such as Tauri command strings, can still
+  // credit a unique project-wide target even when no import names it.
+  if (!opts.permissive && candidates.length === 1) return [...candidates];
 
   const directlyImportedFrom = importsByName.get(name);
   if (directlyImportedFrom) {

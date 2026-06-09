@@ -1,14 +1,14 @@
 import type { ScipDatabase } from '../storage/db.js';
 import {
   detectAstLanguage,
-  getCrossLanguageDispatchNames,
-  getRustAttrReferencedNames,
+  frameworkSourceReferences,
   isVueSfcPath,
 } from '../source/ast.js';
+import type { FrameworkSourceReferenceKind } from '../source/ast.js';
 import { attributeIdentifier, attributeIdentifierPermissive } from './identifier-attribution.js';
 import { getIdentifierLineMap } from './identifier-index.js';
 
-type SourceReferenceKind = 'identifier' | 'cross-language-dispatch' | 'rust-attribute';
+type SourceReferenceKind = 'identifier' | FrameworkSourceReferenceKind;
 type DefaultSourceReferenceTarget = ReturnType<typeof attributeIdentifier>[number];
 
 export interface SourceReferenceTarget {
@@ -79,16 +79,14 @@ export function scanSourceReferences(
         visitName(name, 'identifier', lines.length, () => resolveIdentifier(db, sourceFile, name));
       }
 
-      if (opts.includeCrossLanguageDispatchNames) {
-        for (const name of getCrossLanguageDispatchNames(db, sourceFile)) {
-          visitName(name, 'cross-language-dispatch', 1, () => attributeIdentifier(db, sourceFile, name));
-        }
-      }
-
-      if (opts.includeRustAttributeNames && astLanguage === 'rust') {
-        for (const name of getRustAttrReferencedNames(db, sourceFile)) {
-          visitName(name, 'rust-attribute', 1, () => resolveIdentifier(db, sourceFile, name));
-        }
+      for (const reference of frameworkSourceReferences(db, sourceFile, {
+        includeCrossLanguageDispatchNames: opts.includeCrossLanguageDispatchNames,
+        includeRustAttributeNames: opts.includeRustAttributeNames,
+      })) {
+        const resolveDefaultTargets = reference.kind === 'cross-language-dispatch'
+          ? () => attributeIdentifier(db, sourceFile, reference.name)
+          : () => resolveIdentifier(db, sourceFile, reference.name);
+        visitName(reference.name, reference.kind, reference.occurrences, resolveDefaultTargets);
       }
     } finally {
       opts.afterPath?.(sourceFile);

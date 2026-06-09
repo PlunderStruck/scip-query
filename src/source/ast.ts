@@ -20,8 +20,10 @@ export {
   getSourceFacts,
   isLiteralPassthrough,
 } from './source-facts.js';
+export { frameworkSourceReferences } from './source-references.js';
 export { compileQuery } from './ast-runtime.js';
 export type { AstLanguage } from './ast-language.js';
 export type { CallSite } from './ast-facts.js';
+export type { FrameworkSourceReference, FrameworkSourceReferenceKind } from './source-references.js';
 export type { SourceFacts } from './source-facts.js';
 export type { QueryInstance, SyntaxNode, Tree } from './ast-types.js';

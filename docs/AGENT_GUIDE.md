@@ -2,7 +2,7 @@
 
 Goal-oriented workflows for AI agents and developers. Each section starts with a goal and walks through the exact commands to run, what to expect back, and how to use the results.
 
-For command syntax and options reference, see [README.md](../README.md).
+For command syntax and options reference, see [Command Reference](COMMAND_REFERENCE.md).
 
 ---
 
