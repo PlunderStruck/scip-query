@@ -14,6 +14,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { buildFileDepGraph } from '../symbols/file-dep-graph.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
+import { getSourceFacts } from '../source/ast.js';
 import { getSourceFiles } from '../source/source-fileset.js';
 import { isPackageSurfaceFile } from './package-surface.js';
 
@@ -84,10 +85,35 @@ export function isLiveBarrel(db: ScipDatabase, file: string): boolean {
  * Barrel files that exist in the index but no entry/worker reaches.
  * Useful for dead-code skip-barrels: refs from these don't count
  * because the barrels themselves aren't really used.
+ *
+ * A file that DEFINES functions is not re-export glue, whatever its name —
+ * server entrypoints are routinely called `backend/src/index.ts`, nothing
+ * imports them, and discarding their outgoing references made everything
+ * they exclusively use look dead (caught live by cleanup-plan --verify).
  */
 export function getInactiveBarrelPaths(db: ScipDatabase): string[] {
   const live = getLiveBarrelPaths(db);
-  return getSourceFiles(db).filter((path) => isBarrel(path) && !live.has(path));
+  return getSourceFiles(db).filter((path) =>
+    isBarrel(path) && !live.has(path) && !definesFunctions(db, path));
+}
+
+function definesFunctions(db: ScipDatabase, relativePath: string): boolean {
+  const normalized = normalizePath(relativePath);
+  // AST callables catch arrow functions whose SCIP symbols carry no
+  // function marker (`const shutdown = async () => {...}`).
+  const callables = getSourceFacts(db, normalized)?.callables;
+  if (callables && callables.length > 0) return true;
+  // Fallback without an AST: any multi-line definition is real code,
+  // not a re-export line.
+  const row = db.get<{ n: number }>(
+    `SELECT COUNT(*) AS n
+     FROM defn_enclosing_ranges der
+     JOIN documents d ON d.id = der.document_id
+     WHERE d.relative_path = ?
+       AND der.end_line - der.start_line >= 2`,
+    normalized,
+  );
+  return (row?.n ?? 0) > 0;
 }
 
 /**

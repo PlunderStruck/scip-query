@@ -72,10 +72,16 @@ string stripper and corrupted brace counts ("unclosed delimiter"). End state:
 VegaAssistant batch 0 (TS + Rust incl. a 99-LOC Rust method) COMPILER-VERIFIED by
 tsc + cargo check in 64s.
 
-Follow-up (queued): the Stable_Management catch indicates dead-code misses
-import-specifier/callback references in `backend/src/index.ts`-style entry files that
-classifyFile doesn't recognize as entry surfaces (monorepo `*/src/index.ts`). Investigate
-both the classifier pattern and the reference counting before trusting dead on that shape.
+Follow-up ✅ RESOLVED: root cause was BARREL MISCLASSIFICATION, not reference counting.
+`backend/src/index.ts` matches the `*/index.ts` barrel pattern, nothing imports a server
+entrypoint, so it was an "inactive barrel" — and skipBarrels discards all references
+originating from inactive barrels, making everything the entrypoint exclusively used look
+dead. Fix: a file that DEFINES functions is not re-export glue — getInactiveBarrelPaths
+now excludes files with AST callables (catches `const shutdown = async () => {}` arrow
+functions whose SCIP symbols carry no function marker) or any multi-line definition.
+After the fix the Stable_Management plan shrank from 7 symbols (5 false) to 2 genuinely
+dead symbols — and COMPILER-VERIFIED. The oracle caught the detector's lie, the lie got
+root-caused, the detector got fixed, and the proof now passes. Full feedback loop.
 
 ## 4 — `unused-params`: speculative generality
 AI's signature move: parameters and options nobody uses. V1 scope: TRAILING unused
