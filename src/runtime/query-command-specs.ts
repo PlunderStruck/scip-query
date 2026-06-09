@@ -5,11 +5,11 @@ import { graphQueryCommandDescriptors } from './query-commands/graph.js';
 import { healthQueryCommandDescriptors } from './query-commands/health.js';
 import { impactQueryCommandDescriptors } from './query-commands/impact.js';
 import { navigationQueryCommandDescriptors } from './query-commands/navigation.js';
+import { planningQueryCommandDescriptors } from './query-commands/planning.js';
 
 const queryCommandOrder = [
   'stats',
   'files',
-  'symbols',
   'methods',
   'refs',
   'trace',
@@ -41,11 +41,15 @@ const queryCommandOrder = [
   'extract-candidates',
   'affected',
   'change-surface',
+  'cleanup-plan',
+  'co-change',
+  'plan-context',
   'drift',
   'wrapper-candidates',
   'passthrough-candidates',
   'stale-abstractions',
   'complexity-hotspots',
+  'self-audit',
   'convergence',
   'code',
   'complexity',
@@ -61,6 +65,7 @@ const queryCommandFamilies = [
   graphQueryCommandDescriptors,
   cleanupQueryCommandDescriptors,
   impactQueryCommandDescriptors,
+  planningQueryCommandDescriptors,
   healthQueryCommandDescriptors,
 ];
 

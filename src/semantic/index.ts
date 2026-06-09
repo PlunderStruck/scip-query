@@ -1,4 +1,4 @@
-export { clearSemanticProviderCache, getSemanticProvider } from './provider-cache.js';
+export { getSemanticProvider } from './provider-cache.js';
 export {
   semanticCalleeMap,
   semanticCallerMap,

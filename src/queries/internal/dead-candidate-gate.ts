@@ -1,4 +1,4 @@
-import { TEST_FILE_PATTERNS, TEST_SUPPORT_PATH_PATTERNS } from '../../analysis/file-classifier.js';
+import { classifyFile } from '../../analysis/file-classifier.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { enclosingTypeNames } from '../../symbols/definition-catalog.js';
 import {
@@ -76,21 +76,17 @@ export function deadCandidateDecision(
   return { accepted: true };
 }
 
+/**
+ * One test-file policy for the whole detector family: `classifyFile` is the
+ * single owner of "is this a test file?". This used to re-implement the
+ * answer with SQL LIKE patterns, which drifted from the classifier.
+ */
 export function passesDeadTestFileFilter(relativePath: string): boolean {
-  const patterns = [...new Set([...TEST_FILE_PATTERNS, ...TEST_SUPPORT_PATH_PATTERNS])];
-  return patterns.every((pattern) => !likeMatches(relativePath, pattern));
+  return classifyFile(relativePath) !== 'test';
 }
 
 function rejectDeadCandidate(rejectionReason: DeadCandidateRejectionReason): DeadCandidateDecision {
   return { accepted: false, rejectionReason };
-}
-
-function likeMatches(value: string, pattern: string): boolean {
-  const regex = new RegExp(`^${pattern
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    .replace(/%/g, '.*')
-    .replace(/_/g, '.')}$`);
-  return regex.test(value);
 }
 
 function looksValueLikeDefinition(rawSymbol: string): boolean {

@@ -3,7 +3,7 @@ import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
 import { getCalleeRowsForSymbol } from '../symbols/call-graph-evidence.js';
 import { getSourceText } from '../source/source-text.js';
 import { computeIdf, difference, intersection, weightedCosine } from '../analysis/similarity.js';
-import { isFunctionLikeSymbol, isInRustTestModule, leafName, shortenSymbol } from '../symbols/symbol-parser.js';
+import { isFunctionLikeSymbol, leafName, shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
 import { applyScanLimit } from './query-utils.js';
 
@@ -375,10 +375,9 @@ function buildSourceFingerprintTokens(
 // text-similarity pass.
 function getAllSourceFingerprints(db: ScipDatabase): SourceFingerprint[] {
   const index = new ProjectIndex(db);
-  return index.scopedDefinitions()
-    .filter((definition) => definition.isFunctionLike)
-    .filter((definition) => index.fileKind(definition.relativePath) !== 'test')
-    .filter((definition) => !isInRustTestModule(definition.symbol))
+  // The shared production gate owns candidate policy (tests, rust test
+  // modules, ignored paths, suppression comments) — no local re-filtering.
+  return index.productionCallableDefinitions()
     .map((definition) => ({
       symbol: definition.symbol,
       file: definition.relativePath,

@@ -25,7 +25,7 @@ You are writing a production implementation plan as a markdown checklist. Every 
 
 ## Symbol Lookup Tips
 
-scip-query accepts partial symbol names — you don't need the full SCIP symbol path. These all work:
+`scip-query` accepts partial symbol names — you don't need the full SCIP symbol path. These all work:
 
 ```bash
 scip-query code processVegaMention              # just the function name
@@ -52,7 +52,7 @@ scip-query code 'src/modules/chat/chat.service.ts:100-200'
 
 **If "Symbol not found":**
 1. Try a shorter/simpler name — `login` instead of `AuthService:login`
-2. Try `scip-query symbols <file>` to see what symbols exist in the file
+2. Try `scip-query outline <file>` to see what symbols exist in the file
 3. Try `scip-query trace <name>` which uses a different lookup path
 4. Use the `file:line-line` syntax for `code` if you know the location
 
@@ -73,7 +73,7 @@ This skill deliberately excludes `Grep` and `Read` from its allowed tools. This 
 |---|---|
 | **Read source code** | `scip-query code <symbol>` (reads file, bounded to definition range) |
 | **Read source with context** | `scip-query code <symbol> -C 5` (5 extra lines above/below) |
-| Find a symbol / list file contents | `scip-query symbols <file>` (all symbols with line ranges + signatures) |
+| Find a symbol / list file contents | `scip-query outline <file>` (all symbols with line ranges + signatures) |
 | Find files by name | `scip-query files <pattern>` |
 | See callers + callees | `scip-query call-graph <symbol>` |
 | Full module map | `scip-query system <module>` |
@@ -284,7 +284,7 @@ You have the `scip-query` CLI for compiler-resolved code intelligence. Use it fo
 Navigation:
 - `scip-query code <symbol>` — read source code (bounded to definition range)
 - `scip-query code <symbol> -C 5` — read source with 5 extra context lines
-- `scip-query symbols <file>` — all symbols in a file with line ranges + signatures
+- `scip-query outline <file>` — all symbols in a file with line ranges + signatures
 - `scip-query files <pattern>` — find files by name
 - `scip-query refs <symbol>` — every file referencing a symbol
 - `scip-query trace <symbol>` — definition + signature + all references

@@ -16,9 +16,10 @@ import type { ParsedReExport, ParsedSourceExport, ParsedSourceImport } from '../
 import { getSourceText } from '../source/source-text.js';
 import { getParserForPath } from './registry.js';
 
-const SOURCE_IMPORT_CACHE = createPerDbCache<string, ParsedSourceImport[]>('source-imports');
-const SOURCE_EXPORT_CACHE = createPerDbCache<string, ParsedSourceExport[]>('source-exports');
-const SOURCE_REEXPORT_CACHE = createPerDbCache<string, ParsedReExport[]>('source-reexports');
+const PARSER_CACHE_GROUPS = { clearGroups: ['whole-project', 'source-file'] } as const;
+const SOURCE_IMPORT_CACHE = createPerDbCache<string, ParsedSourceImport[]>('source-imports', PARSER_CACHE_GROUPS);
+const SOURCE_EXPORT_CACHE = createPerDbCache<string, ParsedSourceExport[]>('source-exports', PARSER_CACHE_GROUPS);
+const SOURCE_REEXPORT_CACHE = createPerDbCache<string, ParsedReExport[]>('source-reexports', PARSER_CACHE_GROUPS);
 
 export function getReExports(
   db: ScipDatabase,
@@ -60,17 +61,4 @@ export function getSourceExports(
     if (!source) return [];
     return parser.parseExports(db, normalized, source);
   });
-}
-
-export function clearLanguageParserCaches(db: ScipDatabase): void {
-  SOURCE_IMPORT_CACHE.invalidateAll(db);
-  SOURCE_EXPORT_CACHE.invalidateAll(db);
-  SOURCE_REEXPORT_CACHE.invalidateAll(db);
-}
-
-export function clearLanguageParserCachesForFile(db: ScipDatabase, relativePath: string): void {
-  const normalized = normalizePath(relativePath);
-  SOURCE_IMPORT_CACHE.invalidate(db, normalized);
-  SOURCE_EXPORT_CACHE.invalidate(db, normalized);
-  SOURCE_REEXPORT_CACHE.invalidate(db, normalized);
 }

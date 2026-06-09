@@ -424,14 +424,14 @@ describe('command accuracy fixes', () => {
     const report = health(db);
     const staleAction = report.actions.find((action) => action.category === 'Stale abstractions');
 
-    expect(stale.map((result) => result.shortName)).toEqual(expect.arrayContaining([
-      'src:contracts:PathFilter',
-      'src:types:InstallMethod',
-    ]));
-    expect(stale).toHaveLength(2);
+    // PathFilter lives in a contracts file: contract modules define types for
+    // other modules by design, so single-consumer is their normal state — only
+    // UNUSED contract types are stale. InstallMethod (0 consumers) stays.
+    expect(stale.map((result) => result.shortName)).toEqual(['src:types:InstallMethod']);
+    expect(stale.map((result) => result.shortName)).not.toContain('src:contracts:PathFilter');
     expect(report.findings.staleTypes).toBe(stale.length);
     expect(staleAction?.count).toBe(stale.length);
-    expect(staleAction?.description).toContain('1 unused, 1 single-consumer');
+    expect(staleAction?.description).toContain('1 unused');
   });
 
   it('does not call data members dead code unless member analysis is explicitly requested', () => {
@@ -454,8 +454,8 @@ describe('command accuracy fixes', () => {
     expect(match?.symbol).toBe('scip-typescript npm pkg 1.0.0 src/`config.ts`/settings.');
   });
 
-  it('reports consistent symbol ranges across outline/members/change-surface/system/symbols', () => {
-    // The invariant: a given symbol's (startLine, endLine) must not depend
+  it('reports consistent symbol ranges and signatures across outline/members/change-surface/system/symbols', () => {
+    // The invariant: a given symbol's (startLine, endLine) and signature must not depend
     // on which query you asked. Prior to the line-accuracy pass, outline
     // and members read raw der.* while symbols ran through the source-
     // correcting path, so they could disagree by a few lines.
@@ -464,26 +464,36 @@ describe('command accuracy fixes', () => {
     const systemResult = system(db, 'utils.ts');
     const changeSurfaceResult = changeSurface(db, 'utils.ts');
 
-    const rangeBySymbol = new Map<string, { startLine: number; endLine: number }>();
+    const rangeBySymbol = new Map<string, { startLine: number; endLine: number; signature: string | null }>();
     for (const s of utilSymbols) {
-      rangeBySymbol.set(s.symbol, { startLine: s.startLine, endLine: s.endLine });
+      rangeBySymbol.set(s.symbol, { startLine: s.startLine, endLine: s.endLine, signature: s.signature });
     }
     expect(rangeBySymbol.size).toBeGreaterThan(0);
 
     for (const node of outlineNodes) {
       const expected = rangeBySymbol.get(node.symbol);
       if (!expected) continue;
-      expect({ startLine: node.startLine, endLine: node.endLine }).toEqual(expected);
+      expect({ startLine: node.startLine, endLine: node.endLine }).toEqual({
+        startLine: expected.startLine,
+        endLine: expected.endLine,
+      });
+      expect(node.signature).toBe(expected.signature);
     }
     for (const sym of systemResult.symbols) {
       const expected = rangeBySymbol.get(sym.symbol);
       if (!expected) continue;
-      expect({ startLine: sym.startLine, endLine: sym.endLine }).toEqual(expected);
+      expect({ startLine: sym.startLine, endLine: sym.endLine }).toEqual({
+        startLine: expected.startLine,
+        endLine: expected.endLine,
+      });
     }
     for (const entry of changeSurfaceResult!.symbols) {
       const expected = rangeBySymbol.get(entry.symbol);
       if (!expected) continue;
-      expect({ startLine: entry.startLine, endLine: entry.endLine }).toEqual(expected);
+      expect({ startLine: entry.startLine, endLine: entry.endLine }).toEqual({
+        startLine: expected.startLine,
+        endLine: expected.endLine,
+      });
     }
 
     const watcherMembers = members(db, 'Watcher');

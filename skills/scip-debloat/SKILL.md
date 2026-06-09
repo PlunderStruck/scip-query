@@ -9,6 +9,8 @@ keywords: [debloat, clean, cleanup, refactor, dead-code, duplication, dry, conso
 
 You are performing a comprehensive codebase audit to find every opportunity to reduce bloat, eliminate duplication, consolidate similar code, remove unnecessary abstractions, and improve structural health. You are thorough — you check from every angle, not just the obvious ones. Every finding must come from `scip-query`.
 
+This is not a score-maxing workflow. Health scores, finding counts, and LOC totals are diagnostic signals. The objective is to make the codebase easier to understand and safer to change by removing unnecessary structure, naming hidden policies, and preserving real behavior.
+
 ---
 
 ## When to Use This Skill
@@ -28,19 +30,23 @@ You are performing a comprehensive codebase audit to find every opportunity to r
 
 1. **Run `scip-query health` first.** It aggregates all analyses and gives you the prioritized starting point. Don't skip it.
 
-2. **Check from every angle.** Dead code is the easy win. Go deeper — similar functions, stale abstractions, wrapper indirection, pattern drift, convergence opportunities, passthrough functions. Each catches a different class of bloat.
+2. **Do not chase the score.** Do not recommend work merely because it raises `health`, reduces a detector count, or deletes LOC. A finding is actionable only when the change removes a real maintenance burden while preserving required behavior.
 
-3. **Verify before recommending deletion.** Before saying "delete X," confirm it's truly unused: check `scip-query refs`, `scip-query affected`, and whether it's an entry point (CLI, worker, test file). Entry points appear dead because nothing imports them.
+3. **Check from every angle.** Dead code is the easy win. Go deeper — similar functions, stale abstractions, wrapper indirection, pattern drift, convergence opportunities, passthrough functions. Each catches a different class of bloat.
 
-4. **Produce concrete actions.** Don't say "there's some duplication." Say "functions A and B have 80% callee overlap — consolidate into a shared helper with the 2 divergent callees as parameters (per `scip-query convergence A B`)."
+4. **Verify before recommending deletion.** Before saying "delete X," confirm it's truly unused: check `scip-query refs`, `scip-query affected`, and whether it's an entry point (CLI, worker, test file). Entry points appear dead because nothing imports them.
 
-5. **The report goes in `reports/debloat/YYYY-MM-DD-<scope>.md`.** If no reports directory exists, use the project root.
+5. **Distinguish accidental variation from essential variation.** Accidental variation is difference in code shape that does not reflect a real behavior, domain, runtime, or compatibility difference. Essential variation is difference that must remain because the real units differ. Consolidate the first; preserve the second.
+
+6. **Produce concrete actions.** Don't say "there's some duplication." Say "functions A and B have 80% callee overlap — consolidate into a shared helper with the 2 divergent callees as parameters (per `scip-query convergence A B`)."
+
+7. **The report goes in `reports/debloat/YYYY-MM-DD-<scope>.md`.** If no reports directory exists, use the project root.
 
 ---
 
 ## Symbol Lookup Tips
 
-scip-query accepts partial symbol names — you don't need the full SCIP symbol path. These all work:
+`scip-query` accepts partial symbol names — you don't need the full SCIP symbol path. These all work:
 
 ```bash
 scip-query code processVegaMention              # just the function name
@@ -67,7 +73,7 @@ scip-query code 'src/modules/chat/chat.service.ts:100-200'
 
 **If "Symbol not found":**
 1. Try a shorter/simpler name — `login` instead of `AuthService:login`
-2. Try `scip-query symbols <file>` to see what symbols exist in the file
+2. Try `scip-query outline <file>` to see what symbols exist in the file
 3. Try `scip-query trace <name>` which uses a different lookup path
 4. Use the `file:line-line` syntax for `code` if you know the location
 
@@ -276,7 +282,7 @@ scip-query reindex                         # Ensure index is fresh
 scip-query health                          # Get the full report
 ```
 
-Read the health score, the findings breakdown, and the prioritized action list. This is your roadmap.
+Read the health score, the findings breakdown, and the prioritized action list as evidence. They are not the goal. Use them to find places where unnecessary structure, hidden policy, accidental variation, or disconnected code creates maintenance cost.
 
 ### Phase 2: Deep Scan (10-15 minutes)
 

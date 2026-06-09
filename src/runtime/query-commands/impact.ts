@@ -27,6 +27,29 @@ const handleAffected = dbCommand(({ db, args, opts }) => {
   console.log(`\n${results.length} affected symbol(s) across ${new Set(results.map((r) => r.file)).size} files.`);
 });
 
+const handleCoChange = dbCommand(({ db, args, opts }) => {
+  const file = args[0] === undefined ? undefined : stringArg(args, 0);
+  const result = queries.coChange(db, file, {
+    minTogether: definedNumberOption(opts, 'minTogether', 4),
+    limit: definedNumberOption(opts, 'limit', 30),
+    includeLinked: opts['all'] === true,
+  });
+  if (!result.available) return render.empty('No git history available (not a repository, or git missing).');
+  if (result.findings.length === 0) {
+    return render.empty(file
+      ? `No co-change partners found for ${file} in ${result.commitsAnalyzed} commits.`
+      : `No hidden coupling found in ${result.commitsAnalyzed} commits.`);
+  }
+  console.log(file
+    ? `Co-change partners (${result.commitsAnalyzed} commits analyzed):\n`
+    : `Hidden coupling — pairs that co-change with no dependency edge (${result.commitsAnalyzed} commits analyzed):\n`);
+  for (const finding of result.findings) {
+    const linked = finding.structurallyLinked ? '  [dep edge]' : '';
+    console.log(`  ${finding.together}x (${Math.round(finding.confidence * 100)}%)  ${finding.fileA}  <->  ${finding.fileB}${linked}`);
+  }
+  console.log(`\n${result.findings.length} pair(s). Co-editing one side without the other is how drift starts.`);
+});
+
 const handleChangeSurface = budgetedDbCommand('change-surface', ({ db, args, budget }) => {
   const result = queries.changeSurface(db, stringArg(args, 0), { semantic: budget.semantic });
   if (!result) return render.empty('File not found in index.');
@@ -60,5 +83,19 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     renderShape: 'list',
     docs: doc('Impact'),
     handler: handleChangeSurface,
+  },
+  {
+    id: 'co-change',
+    command: 'co-change [file]',
+    description: 'Files that change together in git history without a dependency edge — hidden coupling candidates',
+    options: [
+      option('--min-together <n>', 'Minimum commits where both files changed', parseInteger, 4),
+      option('-n, --limit <n>', 'Maximum pairs to report', parseInteger, 30),
+      option('--all', 'Include pairs that already have a dependency edge'),
+    ],
+    heuristic: { label: 'co-change candidates' },
+    renderShape: 'custom',
+    docs: doc('Impact', ['scip-query co-change', 'scip-query co-change src/runtime/config.ts']),
+    handler: handleCoChange,
   },
 ];

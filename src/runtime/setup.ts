@@ -12,6 +12,7 @@ export const BUILTIN_SKILLS = [
   'concrete-plan',
   'scip-explore',
   'scip-debloat',
+  'scip-maintainability',
   'scip-verify',
   'scip-language-playbook',
 ] as const;
@@ -24,8 +25,9 @@ export interface InstallSkillsResult {
 }
 
 /**
- * Install scip-query skills into both Claude Code (~/.claude/skills/)
- * and Codex (~/.codex/skills/). Uses symlinks (junctions on Windows)
+ * Install scip-query skills into Claude Code (~/.claude/skills/),
+ * Codex (~/.codex/skills/), and the shared agents skill root (~/.agents/skills/).
+ * Uses symlinks (junctions on Windows)
  * so skills auto-update when the package updates.
  */
 export function installSkills(
@@ -38,6 +40,7 @@ export function installSkills(
   const targets = [
     join(homedir(), '.claude', 'skills'),
     join(homedir(), '.codex', 'skills'),
+    join(homedir(), '.agents', 'skills'),
   ];
 
   const result: InstallSkillsResult = {
@@ -54,7 +57,7 @@ export function installSkills(
     }
 
     mkdirSync(targetDir, { recursive: true });
-    const toolName = targetDir.includes('.codex') ? 'Codex' : 'Claude';
+    const toolName = toolNameForTarget(targetDir);
 
     for (const skill of BUILTIN_SKILLS) {
       const source = join(skillsSource, skill);
@@ -90,6 +93,12 @@ export function installSkills(
   }
 
   return result;
+}
+
+function toolNameForTarget(targetDir: string): string {
+  if (targetDir.includes('.codex')) return 'Codex';
+  if (targetDir.includes('.agents')) return 'Agents';
+  return 'Claude';
 }
 
 // ── First-Run Setup ────────────────────────────────────────

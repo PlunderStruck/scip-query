@@ -1,13 +1,15 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import Database from 'better-sqlite3';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/storage/db.js';
 import { classifyFile, getLiveBarrelPaths, isEntrySurface } from '../src/analysis/file-classifier.js';
 import { dead } from '../src/queries/dead.js';
 import { health } from '../src/queries/health.js';
+import { checkHealthBaseline, writeHealthBaseline } from '../src/queries/health-baseline.js';
 import { isolated } from '../src/queries/isolated.js';
+import { selfAudit } from '../src/queries/self-audit.js';
 import { redundantReexports } from '../src/queries/redundant-reexports.js';
 import type { ScipQueryConfig } from '../src/domain/types.js';
 
@@ -207,5 +209,29 @@ describe('debloat liveness regressions', () => {
     expect(shortNames.some((name) => name.includes('src:index'))).toBe(false);
     expect(shortNames.some((name) => name.includes('reindex-worker'))).toBe(false);
     expect(shortNames.some((name) => name.includes('postinstall'))).toBe(false);
+  });
+
+  it('reports self-audit as unavailable without a semantic provider', () => {
+    const result = selfAudit(db, { samples: 5 });
+
+    expect(result.available).toBe(false);
+    expect(result.scores).toEqual([]);
+  });
+
+  it('ratchets findings through write-baseline / check-baseline round trips', () => {
+    const written = writeHealthBaseline(db);
+    expect(written.findingCount).toBeGreaterThan(0);
+
+    // Same findings → no new, no fixed.
+    const clean = checkHealthBaseline(db);
+    expect(clean.newFindings).toEqual([]);
+    expect(clean.fixedFindings).toEqual([]);
+
+    // Tamper: drop one baselined finding → the check reports it as new.
+    const baseline = JSON.parse(readFileSync(written.path, 'utf-8')) as { version: 1; findings: string[] };
+    const removed = baseline.findings.pop()!;
+    writeFileSync(written.path, JSON.stringify(baseline));
+    const regressed = checkHealthBaseline(db);
+    expect(regressed.newFindings).toEqual([removed]);
   });
 });

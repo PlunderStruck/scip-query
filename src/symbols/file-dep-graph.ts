@@ -3,7 +3,11 @@ import { getSourceImports } from '../language-parsers/index.js';
 import { createPerDbCache } from '../storage/per-db-cache.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
 
-const FILE_DEP_GRAPH_CACHE = createPerDbCache<string, Map<string, Set<string>>>('file-dep-graph');
+// Keyed by scope (not path) — only whole-project clears apply; mixes SCIP
+// edges with source-import evidence, so it must drop when sources change.
+const FILE_DEP_GRAPH_CACHE = createPerDbCache<string, Map<string, Set<string>>>('file-dep-graph', {
+  clearGroups: ['whole-project'],
+});
 
 // scip-query: ignore-extract — this builds the file dependency graph from
 // SCIP edges plus source-import fallback edges; the two sources intentionally
@@ -82,8 +86,3 @@ function addFileDepEdge(
 
 
 
-// scip-query: ignore-passthrough — cache lifecycle facade used by
-// symbol evidence cache reset without exposing file-dependency internals.
-export function clearFileDepGraphCache(db: ScipDatabase): void {
-  FILE_DEP_GRAPH_CACHE.invalidateAll(db);
-}

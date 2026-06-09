@@ -27,7 +27,7 @@ Run these in almost every codebase, regardless of language:
 ```bash
 scip-query stats
 scip-query files <feature-or-module-name>
-scip-query symbols <file>
+scip-query outline <file>
 scip-query trace <symbol>
 scip-query code <symbol>
 ```
@@ -68,7 +68,7 @@ Vue note: `.vue` single-file components are handled by the same path. scip-query
 
 Use first:
 ```bash
-scip-query symbols <file>
+scip-query outline <file>
 scip-query outline <file>
 scip-query system <module-or-file>
 scip-query imports <file>
@@ -209,7 +209,7 @@ Use first:
 scip-query trace <symbol>
 scip-query call-graph <symbol>
 scip-query refs <symbol>
-scip-query symbols <file>
+scip-query outline <file>
 scip-query outline <file>
 ```
 
@@ -347,7 +347,7 @@ scip-query extract-candidates
 
 ```bash
 scip-query files <feature>
-scip-query symbols <file>
+scip-query outline <file>
 scip-query trace <entry-symbol>
 scip-query call-graph <entry-symbol>
 scip-query code <entry-symbol>

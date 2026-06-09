@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "findings": [
+    "extract:src/runtime/command-docs.ts:src:runtime:command-docs:renderCommandReferenceMarkdown()",
+    "stale:src/queries/health-report.ts:src:queries:health-report:HealthReport"
+  ]
+}

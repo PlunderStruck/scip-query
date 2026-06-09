@@ -15,6 +15,7 @@ import type { ScipDatabase } from '../storage/db.js';
 import { buildFileDepGraph } from '../symbols/file-dep-graph.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
 import { getSourceFiles } from '../source/source-fileset.js';
+import { isPackageSurfaceFile } from './package-surface.js';
 
 export type FileKind =
   | 'entry'   // CLI/server bootstraps, main.rs, top-level index.ts, src/bin/*, scripts
@@ -70,7 +71,10 @@ export function getLiveBarrelPaths(db: ScipDatabase): Set<string> {
   });
 }
 
-const liveBarrelCache = createPerDbValue<Set<string>>('live-barrels');
+// Derives from the dep graph + source files, so it must drop when they do.
+const liveBarrelCache = createPerDbValue<Set<string>>('live-barrels', {
+  clearGroups: ['whole-project'],
+});
 
 export function isLiveBarrel(db: ScipDatabase, file: string): boolean {
   return getLiveBarrelPaths(db).has(normalizePath(file));
@@ -98,10 +102,16 @@ export function isEntrySurface(db: ScipDatabase, file: string): boolean {
   return kind === 'entry' || kind === 'worker' || isLiveBarrel(db, file);
 }
 
+/**
+ * True when the symbol is externally live — reachable by consumers the index
+ * cannot see. Two sources, merged: the package surface derived from
+ * package.json (exports/main/bin), and explicit `entryRoots` config.
+ */
 export function isRootedSymbol(db: ScipDatabase, symbol: string, file: string): boolean {
+  const normalized = normalizePath(file);
+  if (isPackageSurfaceFile(db, normalized)) return true;
   const roots = db.config.entryRoots;
   if (!roots) return false;
-  const normalized = normalizePath(file);
   if (roots.files?.some((candidate) => normalizePath(candidate) === normalized)) return true;
   if (roots.pathPrefixes?.some((prefix) => normalized.startsWith(normalizePath(prefix)))) return true;
   if (roots.qualifiedVars?.some((qualified) => symbolMatchesQualifiedVar(symbol, qualified))) return true;
@@ -116,30 +126,6 @@ export function isRootedSymbol(db: ScipDatabase, symbol: string, file: string): 
 }
 
 // ── Pattern internals ────────────────────────────────────────────
-
-/**
- * SQL LIKE patterns matching common test-file conventions across
- * languages. Used by query-support's TEST_FILE_PATTERNS exports too.
- */
-export const TEST_FILE_PATTERNS = [
-  '%/__tests__/%',
-  '%.test.%',
-  '%.spec.%',
-  '%/test/%',
-  '%/tests/%',
-  '%_test.%',
-  '%_spec.%',
-  '%/test_%.%',
-  '%/spec_%.%',
-] as const;
-
-/**
- * Path patterns matching test-support files (helpers, utilities) that
- * ride alongside tests.
- */
-export const TEST_SUPPORT_PATH_PATTERNS = [
-  '%/test-utils/%',
-] as const;
 
 function matchesTestPattern(normalized: string): boolean {
   // Direct test files

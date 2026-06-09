@@ -58,7 +58,9 @@ export function getCallerRowsForSymbol(
   return typeof opts.limit === 'number' ? callers.slice(0, opts.limit) : callers;
 }
 
-const CALLER_ROWS_CACHE = createPerDbValue<Map<number, CallerRow[]>>('caller-rows');
+const CALLER_ROWS_CACHE = createPerDbValue<Map<number, CallerRow[]>>('caller-rows', {
+  clearGroups: ['whole-project'],
+});
 const TARGETED_CALLER_THRESHOLD = 20_000;
 
 function shouldUseTargetedCallerRows(db: ScipDatabase): boolean {
@@ -484,8 +486,3 @@ function toCalleeRows(
   return out;
 }
 
-// scip-query: ignore-passthrough — cache lifecycle facade used by
-// symbol evidence cache reset without exposing caller-row cache internals.
-export function clearCallGraphEvidenceCaches(db: ScipDatabase): void {
-  CALLER_ROWS_CACHE.invalidate(db);
-}

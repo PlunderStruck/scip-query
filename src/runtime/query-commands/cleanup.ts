@@ -422,7 +422,55 @@ function heuristicCleanupCommand({
   });
 }
 
+const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, opts, budget }) => {
+  const result = queries.cleanupPlan(db, {
+    scope: stringOptionValue(opts, 'scope'),
+    minLoc: definedNumberOption(opts, 'minLoc', 1),
+    maxDepth: definedNumberOption(opts, 'maxDepth', 5),
+    scanLimit: budget.scanLimit,
+  });
+  if (result.batches.length === 0) {
+    return render.empty('Nothing deletable found — no graph-fact dead code to seed a cascade.');
+  }
+  console.log(`Cleanup plan: ${result.totalSymbols} symbol(s), ${result.totalLoc} LOC across ${result.batches.length} batch(es).`);
+  console.log('Apply one batch at a time; run your typecheck between batches.\n');
+  for (const batch of result.batches) {
+    const header = batch.depth === 0
+      ? `── Batch 0: deletable now (graph-fact, ${batch.loc} LOC) ──`
+      : `── Batch ${batch.depth}: dead once batch ${batch.depth - 1} lands (cascade, ${batch.loc} LOC) ──`;
+    console.log(header);
+    for (const entry of batch.entries) {
+      console.log(`  ${entry.file}:${entry.startLine + 1}-${entry.endLine + 1}  ${entry.shortName}  (${entry.loc} LOC)`);
+    }
+    if (batch.filesEmptied.length > 0) {
+      console.log(`  -> empties: ${batch.filesEmptied.join(', ')}`);
+    }
+    console.log('');
+  }
+  if (result.blocked.length > 0) {
+    console.log('Cascade blocked (references outside the removal set):');
+    for (const entry of result.blocked) {
+      console.log(`  ${entry.shortName}  (${entry.file})  blocked by ${entry.blockingFiles.join(', ')}`);
+    }
+  }
+});
+
 export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
+  cleanupCommand({
+    id: 'cleanup-plan',
+    command: 'cleanup-plan',
+    description: 'Ordered, batched deletion plan: graph-fact dead code plus the cascade candidates it unlocks',
+    options: [
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option('--min-loc <n>', 'Only include symbols >= N lines', parseInteger, 1),
+      option('--max-depth <n>', 'Maximum cascade depth', parseInteger, 5),
+      option('--full', 'Run unbounded analysis on large indexes'),
+    ],
+    budget: 'candidate-scan',
+    renderShape: 'custom',
+    docs: doc('Cleanup', ['scip-query cleanup-plan --min-loc 3']),
+    handler: handleCleanupPlan,
+  }),
   cleanupCommand({
     id: 'dead',
     command: 'dead [scope]',

@@ -27,6 +27,10 @@ export { similarChains } from './similar-chains.js';
 export { extractCandidates } from './extract-candidates.js';
 export { affected } from './affected.js';
 export { changeSurface } from './change-surface.js';
+export { cleanupPlan } from './cleanup-plan.js';
+export { coChange } from './co-change.js';
+export { planContext } from './plan-context.js';
+export { checkHealthBaseline, collectBaselineFindings, writeHealthBaseline } from './health-baseline.js';
 export {
   diffImpact,
   diffImpactPartial,
@@ -45,6 +49,7 @@ export { complexity } from './complexity.js';
 export { dataflow } from './dataflow.js';
 export { slice } from './slice.js';
 export { redundantReexports } from './redundant-reexports.js';
+export { selfAudit } from './self-audit.js';
 export { similarSignatures } from './similar-signatures.js';
 
 export type { StatsResult } from './stats.js';
@@ -87,6 +92,11 @@ export type { DataflowResult } from './dataflow.js';
 export type { SliceResult } from './slice.js';
 export type { AffectedResult } from './affected.js';
 export type { ChangeSurfaceEntry, ChangeSurfaceResult } from './change-surface.js';
+export type { CleanupBatch, CleanupPlanEntry, CleanupPlanResult } from './cleanup-plan.js';
+export type { CoChangeFinding, CoChangeResult } from './co-change.js';
+export type { BaselineComparison, HealthBaselineFile } from './health-baseline.js';
+export type { PlanContextOptions, PlanContextResult } from './plan-context.js';
 export type { DiffImpactResult } from './diff-impact.js';
 export type { RedundantReexport } from './redundant-reexports.js';
+export type { AuditDisagreement, AuditQuestionScore, SelfAuditResult } from './self-audit.js';
 export type { SimilarSignatureGroup } from './similar-signatures.js';

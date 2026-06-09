@@ -95,6 +95,9 @@ function getPassthroughCandidateSymbols(
     minLoc: 3,
     maxLoc,
     requireFunctionLikeSymbol: true,
+    // "Inline this passthrough" is wrong advice for published API — external
+    // consumers the index can't see depend on the forwarding entry point.
+    excludeRootedSymbols: true,
     excludeRustTraitImplMembers: true,
   });
 }

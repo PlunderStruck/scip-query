@@ -2,7 +2,8 @@ import type { ScipDatabase } from '../storage/db.js';
 import type { IndexedDefinition } from '../domain/types.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
-import { applyScanLimit, definitionLoc } from './query-utils.js';
+import { runCandidateAnalysis } from './internal/candidate-scan.js';
+import { definitionLoc } from './query-utils.js';
 
 export interface ExtractCandidate {
   symbol: string;
@@ -61,26 +62,20 @@ export function extractCandidates(
 ): ExtractCandidate[] {
   const { scope, minLoc = 10, minCallees = 6, limit = 20, scanLimit } = opts;
   const index = new ProjectIndex(db);
-  const symbols = index.productionCallableDefinitions({
-    scope,
-    minLoc,
-    excludeTypesFiles: true,
-    requireFunctionLikeSymbol: true,
-    sortByLocDesc: true,
+  return runCandidateAnalysis({
+    candidates: () => index.productionCallableDefinitions({
+      scope,
+      minLoc,
+      excludeTypesFiles: true,
+      requireFunctionLikeSymbol: true,
+      sortByLocDesc: true,
+    }),
+    scanLimit,
+    prepare: (symbols) => index.calleeMap(symbols, { semantic: opts.semantic !== false }),
+    evaluate: (sym, calleeMap) => extractionCandidateForSymbol(sym, calleeMap.get(sym.symbolId) ?? [], minCallees),
+    orderResults: (a, b) => b.clusters.length - a.clusters.length || b.loc - a.loc,
+    limit,
   });
-  const scannedSymbols = applyScanLimit(symbols, scanLimit);
-
-  const calleeMap = index.calleeMap(scannedSymbols, { semantic: opts.semantic !== false });
-
-  const results: ExtractCandidate[] = [];
-
-  for (const sym of scannedSymbols) {
-    const candidate = extractionCandidateForSymbol(sym, calleeMap.get(sym.symbolId) ?? [], minCallees);
-    if (candidate) results.push(candidate);
-  }
-
-  results.sort((a, b) => b.clusters.length - a.clusters.length || b.loc - a.loc);
-  return results.slice(0, limit);
 }
 
 // scip-query: ignore-extract — this is the detector's own per-symbol scoring

@@ -7,7 +7,7 @@
  */
 export { detectAstLanguage, isVueSfcPath } from './ast-language.js';
 export { callableBodyNodeTypesForLanguage } from './ast-callables.js';
-export { clearAstCache, clearAstCacheForFile, getAst } from './ast-core.js';
+export { getAst } from './ast-core.js';
 export {
   extractCallLeaf,
   getCallableSites,

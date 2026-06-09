@@ -1,9 +1,10 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import { program, renderHeuristicNotice } from '../src/runtime/cli.js';
 import { commandDescriptors } from '../src/runtime/command-descriptors.js';
 import { commandDocEntries, renderCommandReferenceMarkdown } from '../src/runtime/command-docs.js';
+import { PRIVATE_QUERY_MODULES, PUBLIC_QUERY_ENTRIES } from '../src/queries/public-query-entries.js';
 
 function command(name: string) {
   const cmd = program.commands.find((entry) => entry.name() === name);
@@ -20,6 +21,7 @@ describe('CLI contract', () => {
     const names = program.commands.map((entry) => entry.name());
 
     expect(names).toEqual(commandDescriptors.map((descriptor) => descriptor.id));
+    expect(names).not.toContain('symbols');
   });
 
   it('registers command descriptions and option flags from descriptors', () => {
@@ -42,20 +44,29 @@ describe('CLI contract', () => {
       '-s, --scope <path>',
       '--full',
       '--json',
+      '--baseline',
+      '--write-baseline',
     ]);
+    expect(docs.find((entry) => entry.id === 'plan-context')).toMatchObject({
+      command: 'plan-context <target>',
+      category: 'Planning',
+    });
   });
 
   it('keeps public command references descriptor-backed', () => {
     const publicCommandIds = new Set(commandDescriptors.filter((descriptor) => !descriptor.hidden).map((descriptor) => descriptor.id));
+    const skillDocs = readdirSync(join(process.cwd(), 'skills'))
+      .map((skill) => `skills/${skill}/SKILL.md`);
     const documentedCommands = [
-      ...readDocumentedCommands('README.md'),
-      ...readDocumentedCommands('docs/AGENT_GUIDE.md'),
-      ...readDocumentedCommands('docs/COMMAND_REFERENCE.md'),
-    ];
+      'README.md',
+      'docs/AGENT_GUIDE.md',
+      'docs/COMMAND_REFERENCE.md',
+      ...skillDocs,
+    ].flatMap((path) => readDocumentedCommands(path).map((command) => ({ path, command })));
 
     expect(documentedCommands).not.toHaveLength(0);
-    for (const documentedCommand of documentedCommands) {
-      expect(publicCommandIds.has(documentedCommand), `documented command is not descriptor-backed: ${documentedCommand}`).toBe(true);
+    for (const { path, command } of documentedCommands) {
+      expect(publicCommandIds.has(command), `documented command is not descriptor-backed: ${command} (${path})`).toBe(true);
     }
   });
 
@@ -63,6 +74,16 @@ describe('CLI contract', () => {
     const commandReference = readFileSync(join(process.cwd(), 'docs/COMMAND_REFERENCE.md'), 'utf8');
 
     expect(extractGeneratedCommandReference(commandReference)).toBe(renderCommandReferenceMarkdown(commandDescriptors));
+    expect(commandReference).toContain('### Planning');
+    expect(commandReference).toContain('`plan-context <target>`');
+  });
+
+  it('registers plan-context as a semantic custom query command', () => {
+    expect(commandDescriptors.find((descriptor) => descriptor.id === 'plan-context')).toMatchObject({
+      command: 'plan-context <target>',
+      budget: 'semantic',
+      renderShape: 'custom',
+    });
   });
 
   it('prints an explicit heuristic disclaimer for candidate output', () => {
@@ -75,72 +96,35 @@ describe('CLI contract', () => {
     );
   });
 
-  it('keeps query package subpaths explicit and helper modules private', () => {
+  it('keeps package.json query subpaths in lockstep with the public-query manifest', () => {
     const packageJson = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as {
       exports: Record<string, unknown>;
     };
     const exportKeys = Object.keys(packageJson.exports);
-    const publicQuerySubpaths = [
-      './queries/affected',
-      './queries/bottlenecks',
-      './queries/by-kind',
-      './queries/call-graph',
-      './queries/change-surface',
-      './queries/code',
-      './queries/complexity',
-      './queries/complexity-hotspots',
-      './queries/convergence',
-      './queries/coupling',
-      './queries/cycles',
-      './queries/dataflow',
-      './queries/dead',
-      './queries/deep-chains',
-      './queries/deps',
-      './queries/diff-impact',
-      './queries/drift',
-      './queries/extract-candidates',
-      './queries/fan',
-      './queries/files',
-      './queries/health',
-      './queries/hierarchy',
-      './queries/hotspots',
-      './queries/imports',
-      './queries/index',
-      './queries/isolated',
-      './queries/members',
-      './queries/methods',
-      './queries/outline',
-      './queries/passthrough-candidates',
-      './queries/redundant-reexports',
-      './queries/refs',
-      './queries/similar',
-      './queries/similar-chains',
-      './queries/similar-files',
-      './queries/similar-signatures',
-      './queries/slice',
-      './queries/stale-abstractions',
-      './queries/stats',
-      './queries/surface',
-      './queries/symbols',
-      './queries/system',
-      './queries/trace',
-      './queries/wrapper-candidates',
-    ];
 
     expect(exportKeys).not.toContain('./queries/*');
-    for (const subpath of publicQuerySubpaths) {
-      expect(Object.hasOwn(packageJson.exports, subpath), `missing query export: ${subpath}`).toBe(true);
+    // Bidirectional: every manifest entry is exported, and every exported
+    // query subpath is in the manifest — neither list can drift.
+    const exportedQuerySubpaths = exportKeys.filter((key) => key.startsWith('./queries/')).sort();
+    const manifestSubpaths = PUBLIC_QUERY_ENTRIES.map((entry) => `./queries/${entry}`).sort();
+    expect(exportedQuerySubpaths).toEqual(manifestSubpaths);
+
+    for (const privateModule of PRIVATE_QUERY_MODULES) {
+      expect(
+        Object.hasOwn(packageJson.exports, `./queries/${privateModule}`),
+        `helper module should not be exported: ${privateModule}`,
+      ).toBe(false);
     }
-    for (const privateSubpath of [
-      './queries/dead-exclusions',
-      './queries/drift-policy',
-      './queries/health-cache-control',
-      './queries/health-report',
-      './queries/health-types',
-      './queries/query-utils',
-    ]) {
-      expect(Object.hasOwn(packageJson.exports, privateSubpath), `helper module should not be exported: ${privateSubpath}`).toBe(false);
-    }
+  });
+
+  it('classifies every query module in the manifest as public or private', () => {
+    const queryModules = readdirSync(join(process.cwd(), 'src/queries'))
+      .filter((entry) => entry.endsWith('.ts'))
+      .map((entry) => entry.replace(/\.ts$/, ''))
+      .sort();
+    const classified = [...PUBLIC_QUERY_ENTRIES, ...PRIVATE_QUERY_MODULES].sort();
+
+    expect(queryModules).toEqual(classified);
   });
 
   it('keeps root package exports focused on core library helpers', () => {

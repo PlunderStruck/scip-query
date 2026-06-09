@@ -8,6 +8,7 @@ export interface OutlineNode {
   shortName: string;
   startLine: number;
   endLine: number;
+  signature: string | null;
   children: OutlineNode[];
 }
 
@@ -28,6 +29,7 @@ export function outline(db: ScipDatabase, filePattern: string): OutlineNode[] {
     shortName: d.shortName,
     startLine: d.startLine,
     endLine: d.endLine,
+    signature: d.signature,
     children: [],
   }));
 

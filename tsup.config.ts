@@ -1,54 +1,8 @@
 import { defineConfig } from 'tsup';
-
-const publicQueryEntries = [
-  'affected',
-  'bottlenecks',
-  'by-kind',
-  'call-graph',
-  'change-surface',
-  'code',
-  'complexity',
-  'complexity-hotspots',
-  'convergence',
-  'coupling',
-  'cycles',
-  'dataflow',
-  'dead',
-  'deep-chains',
-  'deps',
-  'diff-impact',
-  'drift',
-  'extract-candidates',
-  'fan',
-  'files',
-  'health',
-  'hierarchy',
-  'hotspots',
-  'imports',
-  'index',
-  'isolated',
-  'members',
-  'methods',
-  'outline',
-  'passthrough-candidates',
-  'redundant-reexports',
-  'refs',
-  'similar',
-  'similar-chains',
-  'similar-files',
-  'similar-signatures',
-  'slice',
-  'stale-abstractions',
-  'stats',
-  'surface',
-  'symbols',
-  'system',
-  'trace',
-  'wrapper-candidates',
-] as const;
+import { PUBLIC_QUERY_ENTRIES } from './src/queries/public-query-entries.js';
 
 const queryEntries = Object.fromEntries(
-  publicQueryEntries.map((entry) => [`queries/${entry}`, `src/queries/${entry}.ts`]),
+  PUBLIC_QUERY_ENTRIES.map((entry) => [`queries/${entry}`, `src/queries/${entry}.ts`]),
 );
 
 // Minify JS to keep the published tarball compact. Sourcemaps are generated

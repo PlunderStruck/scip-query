@@ -43,6 +43,14 @@
       "import": "./dist/queries/change-surface.js",
       "types": "./dist/queries/change-surface.d.ts"
     },
+    "./queries/cleanup-plan": {
+      "import": "./dist/queries/cleanup-plan.js",
+      "types": "./dist/queries/cleanup-plan.d.ts"
+    },
+    "./queries/co-change": {
+      "import": "./dist/queries/co-change.js",
+      "types": "./dist/queries/co-change.d.ts"
+    },
     "./queries/code": {
       "import": "./dist/queries/code.js",
       "types": "./dist/queries/code.d.ts"
@@ -143,6 +151,10 @@
       "import": "./dist/queries/passthrough-candidates.js",
       "types": "./dist/queries/passthrough-candidates.d.ts"
     },
+    "./queries/plan-context": {
+      "import": "./dist/queries/plan-context.js",
+      "types": "./dist/queries/plan-context.d.ts"
+    },
     "./queries/redundant-reexports": {
       "import": "./dist/queries/redundant-reexports.js",
       "types": "./dist/queries/redundant-reexports.d.ts"
@@ -150,6 +162,10 @@
     "./queries/refs": {
       "import": "./dist/queries/refs.js",
       "types": "./dist/queries/refs.d.ts"
+    },
+    "./queries/self-audit": {
+      "import": "./dist/queries/self-audit.js",
+      "types": "./dist/queries/self-audit.d.ts"
     },
     "./queries/similar": {
       "import": "./dist/queries/similar.js",

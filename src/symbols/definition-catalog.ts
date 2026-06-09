@@ -33,13 +33,11 @@ import { mergeMixedSymbolQueryRows } from './symbol-row-policy.js';
 
 export { parentTypeName } from './symbol-parser.js';
 
-export const FILE_DEFINITION_CACHE = createPerDbCache<string, IndexedDefinition[]>('file-definitions');
-
-// scip-query: ignore-passthrough — per-file cache lifecycle hook used by
-// composite invalidation without exposing FILE_DEFINITION_CACHE internals.
-export function clearDefinitionCacheForFile(db: ScipDatabase, relativePath: string): void {
-  FILE_DEFINITION_CACHE.invalidate(db, relativePath);
-}
+// Opt-in group: definition rows come from the read-only index, so they only
+// clear per file when a scan explicitly refines definitions from source.
+export const FILE_DEFINITION_CACHE = createPerDbCache<string, IndexedDefinition[]>('file-definitions', {
+  clearGroups: ['definition-catalog'],
+});
 
 export interface FileSymbolResult {
   startLine: number;

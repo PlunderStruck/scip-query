@@ -151,6 +151,10 @@ export function handleHealthPhase(phase: unknown, rawOpts: unknown): void {
 
 export function handleHealth(rawOpts: unknown): void {
   const opts = commandOptions(rawOpts);
+  if (booleanOptionValue(opts, 'writeBaseline') || booleanOptionValue(opts, 'baseline')) {
+    handleHealthBaseline(opts);
+    return;
+  }
   try {
     const report = runIsolatedHealthReport({
       scope: stringOptionValue(opts, 'scope'),
@@ -162,6 +166,33 @@ export function handleHealth(rawOpts: unknown): void {
     console.error(`error: ${err instanceof Error ? err.message : err}`);
     process.exit(1);
   }
+}
+
+// The ratchet: `--write-baseline` snapshots finding identities;
+// `--baseline` exits 1 when findings appear that the snapshot lacks.
+// "Don't get worse" is the objective CI gate — absolute scores are not.
+function handleHealthBaseline(opts: Record<string, unknown>): void {
+  const scope = stringOptionValue(opts, 'scope');
+  withDb((db) => {
+    if (booleanOptionValue(opts, 'writeBaseline')) {
+      const result = queries.writeHealthBaseline(db, { scope });
+      console.log(`Baseline written to ${result.path} (${result.findingCount} finding(s)).`);
+      return;
+    }
+    const comparison = queries.checkHealthBaseline(db, { scope });
+    if (comparison.fixedFindings.length > 0) {
+      console.log(`${comparison.fixedFindings.length} finding(s) fixed since baseline. Re-run --write-baseline to ratchet down.`);
+    }
+    if (comparison.newFindings.length === 0) {
+      console.log(`OK: no new findings vs baseline (${comparison.baselineCount} baselined, ${comparison.current.length} current).`);
+      return;
+    }
+    console.log(`FAIL: ${comparison.newFindings.length} new finding(s) vs ${comparison.baselinePath}:`);
+    for (const finding of comparison.newFindings) {
+      console.log(`  + ${finding}`);
+    }
+    process.exitCode = 1;
+  });
 }
 
 export function handleInstallSkills(): void {

@@ -9,7 +9,9 @@ import { join } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
 import { createPerDbCache } from '../storage/per-db-cache.js';
 
-const SOURCE_TEXT_CACHE = createPerDbCache<string, string>('source-text');
+const SOURCE_TEXT_CACHE = createPerDbCache<string, string>('source-text', {
+  clearGroups: ['whole-project', 'source-file'],
+});
 
 export function getSourceText(
   db: ScipDatabase,
@@ -21,16 +23,6 @@ export function getSourceText(
     if (!existsSync(fullPath)) return '';
     return readFileSync(fullPath, 'utf-8');
   });
-}
-
-// scip-query: ignore-passthrough — cache lifecycle hook used by composite
-// health runs; keeping it here avoids exposing SOURCE_TEXT_CACHE.
-export function clearSourceTextCache(db: ScipDatabase): void {
-  SOURCE_TEXT_CACHE.invalidateAll(db);
-}
-
-export function clearSourceTextCacheForFile(db: ScipDatabase, relativePath: string): void {
-  SOURCE_TEXT_CACHE.invalidate(db, relativePath.replace(/\\/g, '/'));
 }
 
 const SUPPRESS_COMMENT_RE = /scip-query[\s:-]*ignore[\s:-]*(?:dead(?:-code)?|stale|wrapper|passthrough|drift|extract)?/i;

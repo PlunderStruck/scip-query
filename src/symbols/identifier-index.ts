@@ -73,7 +73,9 @@ function inExcludedRange(
  * Cached per (db, file) so repeat queries — e.g. health's many subcommands —
  * pay the parse cost exactly once per file per process.
  */
-const FILE_IDENTIFIER_CACHE = createPerDbCache<string, Set<string>>('file-identifiers');
+const FILE_IDENTIFIER_CACHE = createPerDbCache<string, Set<string>>('file-identifiers', {
+  clearGroups: ['whole-project', 'source-file'],
+});
 // scip-query: ignore-wrapper — public read-side of FILE_IDENTIFIER_CACHE, expresses
 // "set of identifiers in this file" as a distinct interface from the line-map cache.
 export function getFileIdentifiers(
@@ -94,7 +96,9 @@ export function getFileIdentifiers(
  * Powers source-text refinement of SCIP mentions when a chunk's start line
  * is too coarse to identify the precise enclosing function. Cached per file.
  */
-const FILE_IDENT_LINES_CACHE = createPerDbCache<string, Map<string, number[]>>('file-ident-lines');
+const FILE_IDENT_LINES_CACHE = createPerDbCache<string, Map<string, number[]>>('file-ident-lines', {
+  clearGroups: ['whole-project', 'source-file'],
+});
 export function getIdentifierLineMap(
   db: ScipDatabase,
   relativePath: string,
@@ -114,7 +118,9 @@ export function getIdentifierLineMap(
  * — avoiding the O(file identifiers) scan that buildCalleeMap would otherwise
  * pay per definition.
  */
-const FILE_IDENTS_BY_LINE_CACHE = createPerDbCache<string, Array<Set<string>>>('file-idents-by-line');
+const FILE_IDENTS_BY_LINE_CACHE = createPerDbCache<string, Array<Set<string>>>('file-idents-by-line', {
+  clearGroups: ['whole-project', 'source-file'],
+});
 // scip-query: ignore-wrapper — line-index view of identifier evidence used by
 // call-graph evidence; hides the cached identifier map materialization.
 export function getIdentifiersByLine(
@@ -138,18 +144,6 @@ export function getIdentifiersByLine(
     }
     return out;
   });
-}
-
-export function clearIdentifierIndexCache(db: ScipDatabase): void {
-  FILE_IDENTIFIER_CACHE.invalidateAll(db);
-  FILE_IDENT_LINES_CACHE.invalidateAll(db);
-  FILE_IDENTS_BY_LINE_CACHE.invalidateAll(db);
-}
-
-export function clearIdentifierIndexCacheForFile(db: ScipDatabase, relativePath: string): void {
-  FILE_IDENTIFIER_CACHE.invalidate(db, relativePath);
-  FILE_IDENT_LINES_CACHE.invalidate(db, relativePath);
-  FILE_IDENTS_BY_LINE_CACHE.invalidate(db, relativePath);
 }
 
 function computeFallbackIdentifierLineMap(

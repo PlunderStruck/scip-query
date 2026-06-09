@@ -37,7 +37,7 @@ You are verifying that a code change was implemented correctly. Every check must
 
 ## Symbol Lookup Tips
 
-scip-query accepts partial symbol names — you don't need the full SCIP symbol path. These all work:
+`scip-query` accepts partial symbol names — you don't need the full SCIP symbol path. These all work:
 
 ```bash
 scip-query code processVegaMention              # just the function name
@@ -64,7 +64,7 @@ scip-query code 'src/modules/chat/chat.service.ts:100-200'
 
 **If "Symbol not found":**
 1. Try a shorter/simpler name — `login` instead of `AuthService:login`
-2. Try `scip-query symbols <file>` to see what symbols exist in the file
+2. Try `scip-query outline <file>` to see what symbols exist in the file
 3. Try `scip-query trace <name>` which uses a different lookup path
 4. Use the `file:line-line` syntax for `code` if you know the location
 

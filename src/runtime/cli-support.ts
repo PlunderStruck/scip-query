@@ -98,7 +98,9 @@ export function renderHealthReport(report: HealthReport, json: boolean | undefin
     console.log(JSON.stringify(report, null, 2));
     return;
   }
-  console.log(`\n  Codebase Health Score: ${report.score}/100\n`);
+  console.log(`\n  Codebase Health Score: ${report.score}/100`);
+  console.log(`    Risk:    ${report.riskScore}/100  (validated predictors: graph facts + change graph)`);
+  console.log(`    Hygiene: ${report.hygieneScore}/100  (tidiness candidates)\n`);
   console.log(`  ${report.overview.documents} files | ${report.overview.symbols} symbols | ${formatBytes(report.overview.indexSizeBytes)}\n`);
 
   if (report.warnings && report.warnings.length > 0) {
@@ -138,8 +140,46 @@ export function renderHealthReport(report: HealthReport, json: boolean | undefin
     }
   }
 
+  renderHealthAxes(report);
+
+  if (report.scoreBreakdown.length > 0) {
+    console.log('\n  Score Breakdown (100 minus the following):');
+    for (const deduction of report.scoreBreakdown) {
+      console.log(`    -${String(deduction.points).padStart(2)}  ${deduction.axis}: ${deduction.detail}`);
+    }
+  }
+
   if (report.actions.length === 0) {
     console.log('\n  No issues found. Codebase is clean.');
+  }
+}
+
+function renderHealthAxes(report: HealthReport): void {
+  const axes = report.axes;
+  console.log('\n  Axes:');
+  console.log(`    Deletable:            ${axes.deletable.loc} LOC across ${axes.deletable.symbols} symbols`);
+  if (axes.changeAmplification) {
+    const amp = axes.changeAmplification;
+    console.log(`    Change amplification: ${amp.medianFilesPerCommit} files/commit median, ${amp.p90FilesPerCommit} p90 (${amp.commitsAnalyzed} commits)`);
+  }
+  if (axes.hiddenCoupling && axes.hiddenCoupling.pairCount > 0) {
+    console.log(`    Hidden coupling:      ${axes.hiddenCoupling.pairCount} co-changing pair(s) without a dependency edge`);
+    for (const pair of axes.hiddenCoupling.top.slice(0, 3)) {
+      console.log(`      ${pair.fileA} <-> ${pair.fileB}  (${pair.together}x together, ${Math.round(pair.confidence * 100)}%)`);
+    }
+  }
+  if (axes.churnWeightedComplexity && axes.churnWeightedComplexity.length > 0) {
+    const top = axes.churnWeightedComplexity[0]!;
+    if (top.weighted > 0) {
+      console.log(`    Churn x complexity:   hottest is ${top.symbol} (${top.changes} changes, weighted ${top.weighted})`);
+    }
+  }
+  const quality = axes.evidenceQuality;
+  console.log(`    Evidence quality:     ${quality.graphFindings} graph-fact finding(s), ${quality.heuristicFindings} heuristic finding(s), ${quality.userSuppressed} user-suppressed`);
+  if (report.validation && report.validation.flaggedFiles > 0) {
+    const v = report.validation;
+    const ratio = v.ratio === null ? 'n/a' : `${v.ratio}x`;
+    console.log(`    Validation:           flagged files fix-density ${v.flaggedFixDensity} vs baseline ${v.baselineFixDensity} (${ratio})`);
   }
 }
 

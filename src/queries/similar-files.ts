@@ -18,6 +18,12 @@ export interface SimilarFileResult {
  * Two files that depend on (import from) the same set of other files
  * are structurally doing similar work. High Jaccard similarity between
  * their dependency sets = likely copy-paste variants or consolidation candidates.
+ *
+ * Evidence policy: a pair must share at least two *distinctive* deps —
+ * deps with low global fan-in. Files that overlap only on family
+ * infrastructure (the modules everyone in their directory imports) are
+ * not copy-paste variants; adapter families sharing an SDK scored 100%
+ * before this gate while differing in everything that matters.
  */
 export function similarFiles(
   db: ScipDatabase,
@@ -33,7 +39,7 @@ export function similarFiles(
   const minDeps = opts.minDeps ?? (filePattern ? 1 : 3);
 
   // Build dependency profile for each file
-  const profiles = buildFileProfiles(db, { scope, minDeps });
+  const { profiles, distinctiveDeps } = buildFileProfiles(db, { scope, minDeps });
 
   const results: SimilarFileResult[] = [];
 
@@ -44,14 +50,14 @@ export function similarFiles(
 
     for (const candidate of profiles) {
       if (candidate.file === target.file) continue;
-      const result = compareProfiles(target, candidate, minSimilarity);
+      const result = compareProfiles(target, candidate, minSimilarity, distinctiveDeps);
       if (result) results.push(result);
     }
   } else {
     // Pairwise comparison across all files
     for (let i = 0; i < profiles.length; i++) {
       for (let j = i + 1; j < profiles.length; j++) {
-        const result = compareProfiles(profiles[i]!, profiles[j]!, minSimilarity);
+        const result = compareProfiles(profiles[i]!, profiles[j]!, minSimilarity, distinctiveDeps);
         if (result) results.push(result);
       }
       if (results.length > limit * 5) break;
@@ -72,10 +78,10 @@ interface FileProfile {
 function buildFileProfiles(
   db: ScipDatabase,
   opts: { scope?: string; minDeps: number },
-): FileProfile[] {
+): { profiles: FileProfile[]; distinctiveDeps: Set<string> } {
   const { scope, minDeps } = opts;
   const depMap = buildFileDepGraph(db, scope);
-  const universalDeps = findUniversalDependencies(depMap);
+  const { universalDeps, distinctiveDeps } = classifyDependencyPopularity(depMap);
 
   // Filter to files with enough deps
   const profiles: FileProfile[] = [];
@@ -88,15 +94,16 @@ function buildFileProfiles(
     }
   }
 
-  return profiles;
+  return { profiles, distinctiveDeps };
 }
 
-function findUniversalDependencies(
+function classifyDependencyPopularity(
   depMap: Map<string, Set<string>>,
-): Set<string> {
+): { universalDeps: Set<string>; distinctiveDeps: Set<string> } {
   const universalDeps = new Set<string>();
+  const distinctiveDeps = new Set<string>();
   const fileCount = depMap.size;
-  if (fileCount === 0) return universalDeps;
+  if (fileCount === 0) return { universalDeps, distinctiveDeps };
 
   const depCounts = new Map<string, number>();
   for (const deps of depMap.values()) {
@@ -104,6 +111,11 @@ function findUniversalDependencies(
       depCounts.set(dep, (depCounts.get(dep) ?? 0) + 1);
     }
   }
+
+  // A dep is *distinctive* when few files import it — sharing one is real
+  // evidence the two importers do related work. Scale with project size but
+  // never below 3 importers.
+  const distinctiveMax = Math.max(3, Math.ceil(fileCount * 0.03));
 
   for (const [dep, count] of depCounts) {
     // Treat any dep imported by more than 30% of files as "infrastructure"
@@ -113,16 +125,19 @@ function findUniversalDependencies(
     // needs them, not because the importers are similar to each other.
     if (count >= 5 && count / fileCount > 0.3) {
       universalDeps.add(dep);
+    } else if (count <= distinctiveMax) {
+      distinctiveDeps.add(dep);
     }
   }
 
-  return universalDeps;
+  return { universalDeps, distinctiveDeps };
 }
 
 function compareProfiles(
   a: FileProfile,
   b: FileProfile,
   minSimilarity: number,
+  distinctiveDeps: ReadonlySet<string>,
 ): SimilarFileResult | null {
   const shared = new Set<string>();
   for (const dep of a.deps) {
@@ -135,6 +150,15 @@ function compareProfiles(
   // even though neither file has enough structural surface to compare.
   if (shared.size < 3) return null;
   if (a.deps.size < 4 || b.deps.size < 4) return null;
+
+  // Distinctive-evidence gate: overlap made only of mid-popularity family
+  // infrastructure (every adapter imports the same SDK modules) is not
+  // copy-paste evidence. Require at least two low-fan-in shared deps.
+  let distinctiveShared = 0;
+  for (const dep of shared) {
+    if (distinctiveDeps.has(dep)) distinctiveShared++;
+  }
+  if (distinctiveShared < 2) return null;
 
   const similarity = jaccard(a.deps, b.deps);
 

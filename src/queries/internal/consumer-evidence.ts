@@ -18,7 +18,9 @@ export interface DefinitionConsumerPartition {
   importOnlyConsumers: number;
 }
 
-const FILE_USAGE_CACHE = createPerDbCache<string, { importedLeaves: Set<string>; usedLeaves: Set<string> }>('definition-consumer-file-usage');
+const FILE_USAGE_CACHE = createPerDbCache<string, { importedLeaves: Set<string>; usedLeaves: Set<string> }>('definition-consumer-file-usage', {
+  clearGroups: ['whole-project', 'source-file'],
+});
 
 /**
  * Consumer evidence for detector queries: cross-file callers plus optional
@@ -79,10 +81,6 @@ export function isImportOnlyConsumer(
 
 // scip-query: ignore-passthrough — cache lifecycle hook for consumer
 // classification; callers should not know the FILE_USAGE_CACHE key or shape.
-export function clearDefinitionConsumerEvidenceCaches(db: ScipDatabase): void {
-  FILE_USAGE_CACHE.invalidateAll(db);
-}
-
 function computeFileLeafUsage(
   db: ScipDatabase,
   file: string,

@@ -1,8 +1,17 @@
 import type { ScipDatabase } from '../storage/db.js';
+import { registerCacheClear } from '../storage/cache-registry.js';
 import type { SemanticProvider } from './types.js';
 import { createTsMorphProvider } from './typescript/ts-morph-provider.js';
 
 const PROVIDER_CACHE = new WeakMap<ScipDatabase, Map<string, SemanticProvider>>();
+
+// Opt-in group: provider construction is expensive, so composite analyses
+// clear it only when they explicitly request a semantic reset.
+registerCacheClear({
+  name: 'semantic-provider',
+  groups: ['semantic-provider'],
+  clearAll: (db) => PROVIDER_CACHE.delete(db),
+});
 
 // scip-query: ignore-wrapper — public provider cache boundary exported from
 // semantic/index.ts; keeping provider construction behind this function
@@ -19,8 +28,4 @@ export function getSemanticProvider(db: ScipDatabase, relativePath?: string): Se
   const provider = createTsMorphProvider(db, relativePath);
   perDb.set(key, provider);
   return provider;
-}
-
-export function clearSemanticProviderCache(db: ScipDatabase): void {
-  PROVIDER_CACHE.delete(db);
 }

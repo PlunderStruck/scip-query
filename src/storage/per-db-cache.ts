@@ -1,9 +1,19 @@
 import type { ScipDatabase } from './db.js';
+import { registerCacheClear, type CacheClearGroup } from './cache-registry.js';
 
 /**
  * Per-database keyed cache. Computes once per (db, key); subsequent calls hit
  * cache. The DB is held weakly so closing a DB doesn't leak its entries.
+ *
+ * Every factory requires `clearGroups` — the cache's invalidation membership
+ * (see cache-registry.ts). Pass an explicit `[]` for caches derived purely
+ * from the read-only index, with a comment saying why. Caches in the
+ * 'source-file' group MUST be keyed by normalized relative path.
  */
+export interface PerDbCacheOptions {
+  clearGroups: readonly CacheClearGroup[];
+}
+
 export interface PerDbCache<K, V> {
   /** Get-or-compute. Computes once per (db, key). */
   get(db: ScipDatabase, key: K, compute: () => V): V;
@@ -24,14 +34,25 @@ export interface PerDbValue<V> {
   has(db: ScipDatabase): boolean;
 }
 
-export function createPerDbCache<K, V>(_name: string): PerDbCache<K, V> {
+/** Shared per-db map store — the WeakMap-ensure boilerplate both keyed factories need. */
+function createPerDbMapStore<K, V>(): {
+  cache: WeakMap<ScipDatabase, Map<K, V>>;
+  ensure: (db: ScipDatabase) => Map<K, V>;
+} {
   const cache = new WeakMap<ScipDatabase, Map<K, V>>();
-  const ensure = (db: ScipDatabase): Map<K, V> => {
-    let m = cache.get(db);
-    if (!m) { m = new Map<K, V>(); cache.set(db, m); }
-    return m;
-  };
   return {
+    cache,
+    ensure(db) {
+      let m = cache.get(db);
+      if (!m) { m = new Map<K, V>(); cache.set(db, m); }
+      return m;
+    },
+  };
+}
+
+export function createPerDbCache<K, V>(name: string, opts: PerDbCacheOptions): PerDbCache<K, V> {
+  const { cache, ensure } = createPerDbMapStore<K, V>();
+  const api: PerDbCache<K, V> = {
     get(db, key, compute) {
       const m = ensure(db);
       if (m.has(key)) return m.get(key) as V;
@@ -49,11 +70,19 @@ export function createPerDbCache<K, V>(_name: string): PerDbCache<K, V> {
       return cache.get(db)?.size ?? 0;
     },
   };
+  registerCacheClear({
+    name,
+    groups: opts.clearGroups,
+    clearAll: (db) => api.invalidateAll(db),
+    // Sound only for path-keyed caches — the 'source-file' group contract.
+    clearFile: (db, relativePath) => api.invalidate(db, relativePath as unknown as K),
+  });
+  return api;
 }
 
-export function createPerDbValue<V>(_name: string): PerDbValue<V> {
+export function createPerDbValue<V>(name: string, opts: PerDbCacheOptions): PerDbValue<V> {
   const cache = new WeakMap<ScipDatabase, { value: V }>();
-  return {
+  const api: PerDbValue<V> = {
     get(db, compute) {
       const cached = cache.get(db);
       if (cached) return cached.value;
@@ -68,6 +97,13 @@ export function createPerDbValue<V>(_name: string): PerDbValue<V> {
       return cache.has(db);
     },
   };
+  registerCacheClear({
+    name,
+    groups: opts.clearGroups,
+    clearAll: (db) => api.invalidate(db),
+    // Single value per db — a file-scoped clear conservatively drops it all.
+  });
+  return api;
 }
 
 /**
@@ -82,14 +118,12 @@ export interface PerDbSourceCache<V> {
   invalidateAll(db: ScipDatabase): void;
 }
 
-export function createPerDbSourceCache<V>(_name: string): PerDbSourceCache<V> {
-  const cache = new WeakMap<ScipDatabase, Map<string, { source: string; value: V }>>();
-  const ensure = (db: ScipDatabase): Map<string, { source: string; value: V }> => {
-    let m = cache.get(db);
-    if (!m) { m = new Map(); cache.set(db, m); }
-    return m;
-  };
-  return {
+// scip-query: ignore-similar — deliberately mirrors createPerDbCache; the
+// source-equality check in get() is the contract difference, and folding the
+// two factories into one strategy-parameterized function would hide it.
+export function createPerDbSourceCache<V>(name: string, opts: PerDbCacheOptions): PerDbSourceCache<V> {
+  const { cache, ensure } = createPerDbMapStore<string, { source: string; value: V }>();
+  const api: PerDbSourceCache<V> = {
     get(db, file, source, compute) {
       const m = ensure(db);
       const cached = m.get(file);
@@ -105,4 +139,11 @@ export function createPerDbSourceCache<V>(_name: string): PerDbSourceCache<V> {
       cache.delete(db);
     },
   };
+  registerCacheClear({
+    name,
+    groups: opts.clearGroups,
+    clearAll: (db) => api.invalidateAll(db),
+    clearFile: (db, relativePath) => api.invalidate(db, relativePath),
+  });
+  return api;
 }

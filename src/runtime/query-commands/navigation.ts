@@ -45,17 +45,29 @@ function traceSections(result: ReturnType<typeof queries.trace>): ReportSection[
   ];
 }
 
-const handleOutline = dbCommand(({ db, args }) => {
-  const roots = queries.outline(db, stringArg(args, 0));
+const handleOutline = dbCommand(({ db, args, opts }) => {
+  const filePattern = stringArg(args, 0);
+  const showSignatures = booleanOptionValue(opts, 'signatures');
+  const roots = queries.outline(db, filePattern);
+  if (roots.length === 0) {
+    return render.empty(`No symbols found for "${filePattern}".`);
+  }
+
   function printTree(nodes: typeof roots, indent: number): void {
     for (const n of nodes) {
       const prefix = '  '.repeat(indent);
-      console.log(`${prefix}${displayRange(n.startLine, n.endLine)}  ${n.shortName}`);
+      const sig = showSignatures && n.signature ? `  - ${trimSignature(n.signature)}` : '';
+      console.log(`${prefix}${displayRange(n.startLine, n.endLine)}  ${n.shortName}${sig}`);
       printTree(n.children, indent + 1);
     }
   }
   printTree(roots, 0);
 });
+
+function trimSignature(signature: string): string {
+  const maxLength = 120;
+  return signature.length > maxLength ? `${signature.slice(0, maxLength - 3)}...` : signature;
+}
 
 const handleImports = budgetedListCommand('imports', {
   query: ({ db, args, budget }) => queries.imports(db, stringArg(args, 0), { semantic: budget.semantic }),
@@ -125,17 +137,6 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     docs: doc('Navigation', ['scip-query files auth']),
     query: ({ db, args }) => queries.files(db, stringArg(args, 0)),
     format: (r) => r.relativePath,
-  }),
-  listQueryCommand({
-    id: 'symbols',
-    command: 'symbols <file>',
-    description: 'List symbols defined in a file (with line ranges + signatures)',
-    docs: doc('Navigation', ['scip-query symbols src/runtime/cli.ts']),
-    query: ({ db, args }) => queries.symbols(db, stringArg(args, 0)),
-    format: (r) => {
-      const sig = r.signature ? `  — ${r.signature}` : '';
-      return `  ${displayRange(r.startLine, r.endLine)}  ${r.shortName}${sig}`;
-    },
   }),
   listQueryCommand({
     id: 'methods',
@@ -226,7 +227,8 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'outline',
     command: 'outline <file>',
-    description: 'Tree view of symbols in a file (using nesting hierarchy)',
+    description: 'Tree view of symbols in a file, with line ranges',
+    options: [option('--signatures', 'Show trimmed symbol signatures')],
     renderShape: 'custom',
     docs: doc('Navigation'),
     handler: handleOutline,

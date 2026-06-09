@@ -1,11 +1,13 @@
 import type { ScipDatabase } from '../storage/db.js';
 import type { IndexedDefinition } from '../domain/types.js';
+import { classifyFile, isRootedSymbol } from '../analysis/file-classifier.js';
 import { leafName, parseSymbol, shortenSymbol } from '../symbols/symbol-parser.js';
 import { getSourceText } from '../source/source-text.js';
 import { getTypeContainerMap } from '../source/ast.js';
 import { ProjectIndex } from '../core/project-index.js';
+import { runCandidateAnalysis } from './internal/candidate-scan.js';
 import { definitionConsumerFileMap, isImportOnlyConsumer, partitionDefinitionConsumers } from './internal/consumer-evidence.js';
-import { applyScanLimit, definitionLoc } from './query-utils.js';
+import { definitionLoc } from './query-utils.js';
 
 export interface StaleAbstraction {
   symbol: string;
@@ -92,43 +94,45 @@ export function staleAbstractions(
   const index = new ProjectIndex(db);
   const scopedDefinitions = index.scopedDefinitions(scope);
   const filesWithFunctions = getFilesWithFunctions(index, scope);
-  const typeCandidates = applyScanLimit(
-    staleTypeCandidates(db, index, scopedDefinitions, { minLoc, maxLoc })
-      .sort((left, right) => definitionLoc(right) - definitionLoc(left) || left.relativePath.localeCompare(right.relativePath)),
+  const confOrder = { high: 0, medium: 1, low: 2 } as const;
+
+  return runCandidateAnalysis({
+    candidates: () => staleTypeCandidates(db, index, scopedDefinitions, { minLoc, maxLoc }),
+    orderCandidates: (left, right) =>
+      definitionLoc(right) - definitionLoc(left) || left.relativePath.localeCompare(right.relativePath),
     scanLimit,
-  );
-
-  // Consumer map = SCIP mentions (with self-references filtered) ∪ source-text
-  // fallback for unique-named types. Without the fallback, a type used only in
-  // string-templated contexts or via paths the indexer missed would falsely
-  // appear unconsumed.
-  const consumerFileMap = consumerMapForTypeCandidates(index, typeCandidates, { semantic: includeSemantic });
-  const singletonBackedClassIds = getSingletonBackedClassIds(db, index, scopedDefinitions, typeCandidates, {
-    semantic: includeSemantic,
+    // Consumer map = SCIP mentions (with self-references filtered) ∪ source-text
+    // fallback for unique-named types. Without the fallback, a type used only in
+    // string-templated contexts or via paths the indexer missed would falsely
+    // appear unconsumed.
+    prepare: (typeCandidates) => ({
+      consumerFileMap: consumerMapForTypeCandidates(index, typeCandidates, { semantic: includeSemantic }),
+      singletonBackedClassIds: getSingletonBackedClassIds(db, index, scopedDefinitions, typeCandidates, {
+        semantic: includeSemantic,
+      }),
+      candidateIndex: buildTypeCandidateIndex(typeCandidates),
+    }),
+    evaluate: (definition, evidence) => {
+      if (evidence.singletonBackedClassIds.has(definition.symbolId)) return null;
+      const row = staleCandidateRow(db, definition, evidence.consumerFileMap, evidence.candidateIndex);
+      if (row.transitivelyReachable) return null;
+      if (row.realConsumers.length > 1) return null;
+      // A type whose only observable use is a public-API re-export is not stale —
+      // it's part of the surface the library exposes to external consumers we
+      // can't see in the index. Skip those entirely.
+      if (row.realConsumers.length === 0 && row.barrelConsumers > 0) return null;
+      if (!isTrueStaleAbstraction(row.definition, row.realConsumers.length, filesWithFunctions)) return null;
+      const scored = scoreStaleCandidate(db, row);
+      if (!includeLowConfidence && scored.confidence === 'low') return null;
+      return scored;
+    },
+    orderResults: (left, right) =>
+      confOrder[left.confidence] - confOrder[right.confidence]
+      || right.loc - left.loc
+      || left.file.localeCompare(right.file)
+      || left.startLine - right.startLine,
+    limit,
   });
-  const candidateIndex = buildTypeCandidateIndex(typeCandidates);
-  const rows = staleCandidateRows(db, typeCandidates, consumerFileMap, candidateIndex)
-    .filter((row) => !singletonBackedClassIds.has(row.definition.symbolId))
-    .filter((row) => !row.transitivelyReachable)
-    .filter((row) => row.realConsumers.length <= 1)
-    // A type whose only observable use is a public-API re-export is not stale —
-    // it's part of the surface the library exposes to external consumers we
-    // can't see in the index. Skip those entirely.
-    .filter((row) => !(row.realConsumers.length === 0 && row.barrelConsumers > 0));
-
-  const scored = rows
-    .filter((row) => isTrueStaleAbstraction(row.definition, row.realConsumers.length, filesWithFunctions))
-    .map((row) => scoreStaleCandidate(db, row))
-    .filter((row) => includeLowConfidence || row.confidence !== 'low')
-    .sort((left, right) => {
-      const confOrder = { high: 0, medium: 1, low: 2 } as const;
-      return confOrder[left.confidence] - confOrder[right.confidence]
-        || right.loc - left.loc
-        || left.file.localeCompare(right.file)
-        || left.startLine - right.startLine;
-    });
-
-  return scored.slice(0, limit);
 }
 
 function staleTypeCandidates(
@@ -147,6 +151,12 @@ function staleTypeCandidates(
     // otherwise dominate the report.
     .filter((definition) => definitionLoc(definition) <= opts.maxLoc)
     .filter((definition) => !db.isIgnored(definition.relativePath))
+    // Test fixtures aren't abstractions; types in test files are noise here.
+    .filter((definition) => classifyFile(definition.relativePath) !== 'test')
+    // Externally-live types (package surface / entryRoots) are published
+    // contracts: consumers outside the index reach them, so a low in-index
+    // consumer count says nothing about staleness.
+    .filter((definition) => !isRootedSymbol(db, definition.symbol, definition.relativePath))
     // Enum variants encode as `Type#Variant#` (parent descriptor also `type`).
     // The variant isn't an "abstraction" on its own — the enum is. Without
     // this filter every enum variant gets a separate stale-abstraction
@@ -181,41 +191,39 @@ function buildTypeCandidateIndex(
   return candidateIndex;
 }
 
-function staleCandidateRows(
+function staleCandidateRow(
   db: ScipDatabase,
-  typeCandidates: readonly IndexedDefinition[],
+  definition: IndexedDefinition,
   consumerFileMap: Map<number, Set<string>>,
   candidateIndex: TypeCandidateIndex,
-): StaleCandidateRow[] {
-  return typeCandidates.map((definition) => {
-    const allFiles = consumerFileMap.get(definition.symbolId) ?? new Set<string>();
-    const consumerFiles = [...allFiles].filter(
-      (file) => file !== definition.relativePath && !db.isIgnored(file),
-    );
-    const { realConsumers, barrelConsumers, importOnlyConsumers } = partitionDefinitionConsumers(
-      db,
-      definition,
-      consumerFiles,
-    );
+): StaleCandidateRow {
+  const allFiles = consumerFileMap.get(definition.symbolId) ?? new Set<string>();
+  const consumerFiles = [...allFiles].filter(
+    (file) => file !== definition.relativePath && !db.isIgnored(file),
+  );
+  const { realConsumers, barrelConsumers, importOnlyConsumers } = partitionDefinitionConsumers(
+    db,
+    definition,
+    consumerFiles,
+  );
 
-    // Transitive: if this type is referenced by a container type in the
-    // SAME file (e.g. `interface Outer { field: This }`) and that container
-    // has cross-file consumers, this type is reachable through the
-    // container's public API — not stale, even with 0 direct consumers.
-    const transitivelyReachable = isTransitivelyConsumed(
-      db,
-      definition,
-      consumerFileMap,
-      candidateIndex,
-    );
+  // Transitive: if this type is referenced by a container type in the
+  // SAME file (e.g. `interface Outer { field: This }`) and that container
+  // has cross-file consumers, this type is reachable through the
+  // container's public API — not stale, even with 0 direct consumers.
+  const transitivelyReachable = isTransitivelyConsumed(
+    db,
+    definition,
+    consumerFileMap,
+    candidateIndex,
+  );
 
-    return {
-      definition,
-      realConsumers,
-      barrelConsumers: barrelConsumers + importOnlyConsumers,
-      transitivelyReachable,
-    };
-  });
+  return {
+    definition,
+    realConsumers,
+    barrelConsumers: barrelConsumers + importOnlyConsumers,
+    transitivelyReachable,
+  };
 }
 
 // scip-query: ignore-extract — this is the final stale-abstraction scoring
@@ -378,11 +386,15 @@ function isTypeOnlyFile(relativePath: string): boolean {
   if (stem === 'types' || stem.endsWith('-types')
       || stem === 'models' || stem === 'schema'
       || stem === 'common' || stem === 'protocol' || stem === 'proto'
-      || stem === 'dto' || stem === 'mod') return true;
+      || stem === 'dto' || stem === 'mod' || stem === 'contracts') return true;
   if (/(^|\/)types(\/|\.)/.test(relativePath)) return true;
   if (/(^|\/)models?(\/|\.)/.test(relativePath)) return true;
   if (/(^|\/)proto(?:col)?(\/|\.)/.test(relativePath)) return true;
   if (/(^|\/)schema(\/|\.)/.test(relativePath)) return true;
+  // Shared contract packages (monorepo `shared/contracts/*`, `api-contracts/`)
+  // exist to define types for other workspaces — "definer never uses it" is
+  // their normal state, not a stale signal.
+  if (/(^|\/)contracts?(\/|\.)/.test(relativePath)) return true;
   return false;
 }
 

@@ -13,19 +13,9 @@ import type { Tree } from './ast-types.js';
 import { getSourceText } from './source-text.js';
 import { extractVueScriptBlock } from './vue-script.js';
 
-const TREE_CACHE = createPerDbSourceCache<Tree | null>('ast-trees');
-
-// scip-query: ignore-passthrough — cache lifecycle hook used by composite
-// health runs; keeping it here avoids exposing TREE_CACHE outside this module.
-export function clearAstCache(db: ScipDatabase): void {
-  TREE_CACHE.invalidateAll(db);
-}
-
-// scip-query: ignore-passthrough — per-file cache lifecycle hook used by
-// composite invalidation without exposing TREE_CACHE outside this module.
-export function clearAstCacheForFile(db: ScipDatabase, relativePath: string): void {
-  TREE_CACHE.invalidate(db, relativePath);
-}
+const TREE_CACHE = createPerDbSourceCache<Tree | null>('ast-trees', {
+  clearGroups: ['whole-project', 'source-file'],
+});
 
 /**
  * Parse a file with tree-sitter and cache the result. Returns null when the

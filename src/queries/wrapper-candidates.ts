@@ -86,8 +86,11 @@ function wrapperCandidateForSymbol(
   // tests" signal, distinct from production over-abstraction.
   if (enclosing && isInRustTestModule(enclosing.symbol)) return null;
 
-  const callerFanIn = wrapperCallerFanIn(maps.callerFileMap, maps.reverseFanIn, callerFile, enclosing);
-  if (callerFanIn <= 3) return null;
+  const { fanIn: callerFanIn, source: fanInSource } = wrapperCallerFanIn(maps.callerFileMap, maps.reverseFanIn, callerFile, enclosing);
+  // Function-level fan-in is precise evidence. File-level fan-in is a proxy
+  // that a single new importer can bump — require a margin so one added
+  // import doesn't flip a whole family of borderline findings at once.
+  if (fanInSource === 'function' ? callerFanIn <= 3 : callerFanIn <= 5) return null;
 
   return {
     symbol: symbol.symbol,
@@ -114,6 +117,9 @@ function getWrapperCandidateSymbols(
     minLoc: 2,
     maxLoc,
     requireFunctionLikeSymbol: true,
+    // "Inline this wrapper" is wrong advice for published API — external
+    // consumers the index can't see depend on the wrapper staying put.
+    excludeRootedSymbols: true,
   });
 }
 
@@ -180,14 +186,14 @@ function wrapperCallerFanIn(
   reverseFanIn: Map<string, number>,
   callerFile: string,
   enclosing: IndexedDefinition | null,
-): number {
+): { fanIn: number; source: 'function' | 'file' } {
   // Fan-in: function-level from bulk map, or file-level as fallback.
   if (enclosing?.isFunctionLike) {
     const extCallers = [...(callerFileMap.get(enclosing.symbolId) ?? [])]
       .filter((f) => f !== enclosing.relativePath);
-    if (extCallers.length > 0) return extCallers.length;
+    if (extCallers.length > 0) return { fanIn: extCallers.length, source: 'function' };
   }
-  return fallbackCallerFanIn(reverseFanIn, callerFile);
+  return { fanIn: fallbackCallerFanIn(reverseFanIn, callerFile), source: 'file' };
 }
 
 /**

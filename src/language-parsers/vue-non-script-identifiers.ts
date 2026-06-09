@@ -2,7 +2,9 @@ import type { ScipDatabase } from '../storage/db.js';
 import { createPerDbCache } from '../storage/per-db-cache.js';
 import { getSourceText } from '../source/source-text.js';
 
-const VUE_NON_SCRIPT_IDENTIFIERS_CACHE = createPerDbCache<string, Set<string>>('vue-non-script-identifiers');
+const VUE_NON_SCRIPT_IDENTIFIERS_CACHE = createPerDbCache<string, Set<string>>('vue-non-script-identifiers', {
+  clearGroups: ['whole-project', 'source-file'],
+});
 
 /**
  * Collect identifier-shaped tokens from the parts of a Vue SFC that are not

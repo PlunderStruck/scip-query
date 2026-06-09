@@ -67,9 +67,9 @@ For command syntax and options reference, see [Command Reference](COMMAND_REFERE
 1. **Map the target area**
    ```bash
    scip-query system <module-path>
-   scip-query symbols <each-file-you-will-modify>
+   scip-query outline <each-file-you-will-modify>
    ```
-   Get the full symbol inventory with line ranges and signatures for every file in scope.
+   Get the structural outline with line ranges for every file in scope. Add `--signatures` only when type details are useful.
 
 2. **Identify the public contract you must preserve**
    ```bash

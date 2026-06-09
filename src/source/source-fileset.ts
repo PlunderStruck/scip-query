@@ -119,7 +119,8 @@ export function getSourceFiles(
   });
 }
 
-const SOURCE_FILES_CACHE = createPerDbCache<string, string[]>('source-files');
+// Derived from the read-only index — valid for the connection's lifetime.
+const SOURCE_FILES_CACHE = createPerDbCache<string, string[]>('source-files', { clearGroups: [] });
 
 function listOnDiskSources(absRoot: string, extensions: ReadonlySet<string>): Set<string> {
   const out = new Set<string>();

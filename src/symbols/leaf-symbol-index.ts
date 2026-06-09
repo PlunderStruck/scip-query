@@ -51,7 +51,9 @@ function astLanguageFamily(relativePath: string): string | null {
 
 export type GlobalLeafCandidate = { symbol: string; symbolId: number; file: string };
 
-const GLOBAL_LEAF_INDEX_CACHE = createPerDbValue<Map<string, GlobalLeafCandidate[]>>('global-leaf-index');
+const GLOBAL_LEAF_INDEX_CACHE = createPerDbValue<Map<string, GlobalLeafCandidate[]>>('global-leaf-index', {
+  clearGroups: ['whole-project'],
+});
 // scip-query: ignore-extract — this builds the global leaf-name candidate
 // index; SQL loading, ignore filtering, noise filtering, and language tagging
 // define one cache value.
@@ -95,8 +97,3 @@ export function getGlobalLeafIndex(
 
 
 
-// scip-query: ignore-passthrough — cache lifecycle facade used by
-// symbol evidence cache reset without exposing global leaf-index internals.
-export function clearGlobalLeafIndexCache(db: ScipDatabase): void {
-  GLOBAL_LEAF_INDEX_CACHE.invalidate(db);
-}

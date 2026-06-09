@@ -18,7 +18,8 @@ import type { ScipDatabase } from '../storage/db.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
 
-const INDEXED_PATH_CACHE = createPerDbValue<Set<string>>('indexed-paths');
+// Derived from the read-only index — valid for the connection's lifetime.
+const INDEXED_PATH_CACHE = createPerDbValue<Set<string>>('indexed-paths', { clearGroups: [] });
 
 // Source-extension families. The language-parser registry imports these
 // constants too, so adding an extension changes resolution and parser dispatch

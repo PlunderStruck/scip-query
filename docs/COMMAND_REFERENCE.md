@@ -23,7 +23,6 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 | Command | Description | Options |
 |---|---|---|
 | `files <pattern>` | Find files matching a pattern | - |
-| `symbols <file>` | List symbols defined in a file (with line ranges + signatures) | - |
 | `methods <className>` | List methods of a class (with line ranges) | - |
 | `refs <symbol>` | Find all files referencing a symbol | `--full` |
 | `trace <symbol>` | Trace a symbol: definition + all references | `--full` |
@@ -33,7 +32,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 | `surface <module>` | What symbols consumers actually use from this module | - |
 | `imports <file>` | What symbols does this file import? | `--full` |
 | `imported-by <symbol>` | Which files import this symbol? | - |
-| `outline <file>` | Tree view of symbols in a file (using nesting hierarchy) | - |
+| `outline <file>` | Tree view of symbols in a file, with line ranges | `--signatures` |
 | `members <symbol>` | All children of a symbol (methods, fields, nested types) | - |
 | `by-kind <kind>` | Find symbols by SCIP kind (class, interface, enum, function, etc.) | `-s, --scope <path>`<br>`-n, --limit <n>` |
 | `kind-counts` | Histogram of symbol kinds in the codebase | `-s, --scope <path>` |
@@ -53,6 +52,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 | `similar-files [file]` | Find heuristic similar-file candidates from dependency profiles | `--min-similarity <n>`<br>`-n, --limit <n>`<br>`-s, --scope <path>`<br>`--min-deps <n>` |
 | `similar-chains` | Find heuristic similar-chain candidates from dependency flows | `--min-similarity <n>`<br>`-n, --limit <n>`<br>`-s, --scope <path>`<br>`--min-length <n>`<br>`--max-length <n>` |
 | `extract-candidates` | Find heuristic extraction candidates from isolated callee clusters | `-s, --scope <path>`<br>`--min-loc <n>`<br>`--min-callees <n>`<br>`-n, --limit <n>`<br>`--full` |
+| `cleanup-plan` | Ordered, batched deletion plan: graph-fact dead code plus the cascade candidates it unlocks | `-s, --scope <path>`<br>`--min-loc <n>`<br>`--max-depth <n>`<br>`--full` |
 | `drift [module]` | Detect heuristic drift candidates: unused imports, layer violations, and pattern deviations | `--min-deviation <n>`<br>`--full` |
 | `wrapper-candidates` | Find heuristic wrapper candidates only called by one consumer | `-s, --scope <path>`<br>`--max-loc <n>`<br>`-n, --limit <n>`<br>`--full` |
 | `passthrough-candidates` | Find heuristic passthrough candidates that forward to one callee | `-s, --scope <path>`<br>`--max-loc <n>`<br>`-n, --limit <n>`<br>`--full` |
@@ -81,20 +81,28 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 |---|---|---|
 | `affected <symbol>` | Transitive closure of symbols that could break if this symbol changes | `--max-depth <n>`<br>`-s, --scope <path>` |
 | `change-surface <file>` | Pre-change briefing: exports, consumers, and blast-radius risk | `--full` |
+| `co-change [file]` | Files that change together in git history without a dependency edge — hidden coupling candidates | `--min-together <n>`<br>`-n, --limit <n>`<br>`--all` |
 | `diff-impact` | Compute changed symbols and downstream consumers from current git diff | `--base <ref>` |
+
+### Planning
+
+| Command | Description | Options |
+|---|---|---|
+| `plan-context <target>` | Pre-edit planning context for a symbol, file, or module | `--impact-depth <n>`<br>`--slice-depth <n>`<br>`-s, --scope <path>`<br>`-n, --limit <n>`<br>`--full` |
 
 ### Health
 
 | Command | Description | Options |
 |---|---|---|
-| `health` | Composite codebase health report with prioritized action list | `-s, --scope <path>`<br>`--full`<br>`--json` |
+| `self-audit` | Score the cheap evidence paths against the TypeScript compiler oracle on sampled symbols | `--samples <n>`<br>`-s, --scope <path>` |
+| `health` | Composite codebase health report with prioritized action list | `-s, --scope <path>`<br>`--full`<br>`--json`<br>`--baseline`<br>`--write-baseline` |
 | `complexity <symbol>` | Per-symbol complexity: branches, cyclomatic estimate, fan-in/out, callees | `--full` |
 
 ### Maintenance
 
 | Command | Description | Options |
 |---|---|---|
-| `install-skills` | Install skills (concrete-plan, scip-explore, scip-debloat, scip-verify, scip-language-playbook) into Claude Code and Codex | - |
+| `install-skills` | Install skills (concrete-plan, scip-explore, scip-debloat, scip-maintainability, scip-verify, scip-language-playbook) into Claude Code, Codex, and shared agent roots | - |
 | `check-deps` | Check whether scip-query and the detected language indexers are actually runnable | - |
 | `init` | Create a .scipquery.json config file for this project | - |
 | `watch` | Watch for file changes and reindex automatically | `--debounce <ms>`<br>`--cooldown <ms>` |

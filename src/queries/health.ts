@@ -11,13 +11,23 @@ import { staleAbstractions } from './stale-abstractions.js';
 import { drift } from './drift.js';
 import { complexityHotspots } from './complexity-hotspots.js';
 import { stats } from './stats.js';
+import { coChange } from './co-change.js';
+import { getChangeAmplification, getFileChurn } from '../analysis/git-history.js';
+import { getSuppressionInventory } from '../analysis/suppressions.js';
 import { buildHealthReport } from './health-report.js';
 import { clearWholeProjectEvidenceCaches } from './internal/cache-invalidation.js';
-import { clearDefinitionConsumerEvidenceCaches } from './internal/consumer-evidence.js';
 import { requestGarbageCollection } from './health-cache-control.js';
 import type { HealthReport } from './health-report.js';
 
-import type { ComplexitySummary, CountLocSummary, DriftSummary, HealthAnalyses, StaleSummary } from './health-types.js';
+import type {
+  ComplexitySummary,
+  CountLocSummary,
+  DriftSummary,
+  GitEvidenceSummary,
+  HealthAnalyses,
+  StaleSummary,
+  SuppressionSummary,
+} from './health-types.js';
 
 interface HealthBudget {
   candidateScanLimit: number | undefined;
@@ -41,6 +51,8 @@ export const HEALTH_PHASES = [
   'stale-abstractions',
   'drift',
   'complexity-hotspots',
+  'git-evidence',
+  'suppressions',
 ] as const;
 
 export type HealthPhaseName = typeof HEALTH_PHASES[number];
@@ -56,7 +68,9 @@ type HealthPhaseResult =
   | { phase: 'passthrough-candidates'; passthroughs: CountLocSummary }
   | { phase: 'stale-abstractions'; stale: StaleSummary }
   | { phase: 'drift'; drift: DriftSummary }
-  | { phase: 'complexity-hotspots'; complexity: ComplexitySummary };
+  | { phase: 'complexity-hotspots'; complexity: ComplexitySummary }
+  | { phase: 'git-evidence'; gitEvidence: GitEvidenceSummary | null }
+  | { phase: 'suppressions'; suppressions: SuppressionSummary };
 
 type HealthPhaseRunner = (
   db: ScipDatabase,
@@ -110,6 +124,14 @@ const HEALTH_PHASE_RUNNERS: Record<HealthPhaseName, HealthPhaseRunner> = {
   'complexity-hotspots': (db, scope, budget) => ({
     phase: 'complexity-hotspots',
     complexity: summarizeHealthComplexity(db, scope, budget),
+  }),
+  'git-evidence': (db, _scope, budget) => ({
+    phase: 'git-evidence',
+    gitEvidence: summarizeGitEvidence(db, budget),
+  }),
+  suppressions: (db, _scope, budget) => ({
+    phase: 'suppressions',
+    suppressions: summarizeSuppressions(db, budget),
   }),
 };
 
@@ -204,8 +226,24 @@ function healthAnalysesFromPhases(phaseResults: readonly HealthPhaseResult[]): H
       phaseResults,
       'complexity-hotspots',
     ).complexity,
+    // Optional phases — older phase orchestrations may not run them.
+    gitEvidence: optionalHealthPhase<Extract<HealthPhaseResult, { phase: 'git-evidence' }>>(
+      phaseResults,
+      'git-evidence',
+    )?.gitEvidence ?? null,
+    suppressions: optionalHealthPhase<Extract<HealthPhaseResult, { phase: 'suppressions' }>>(
+      phaseResults,
+      'suppressions',
+    )?.suppressions ?? null,
   };
   return analyses;
+}
+
+function optionalHealthPhase<T extends HealthPhaseResult>(
+  results: readonly HealthPhaseResult[],
+  phase: T['phase'],
+): T | undefined {
+  return results.find((entry) => entry.phase === phase) as T | undefined;
 }
 
 function requiredHealthPhase<T extends HealthPhaseResult>(
@@ -356,9 +394,42 @@ function summarizeHealthStaleAbstractions(
     return {
       count: staleResult.length,
       loc: staleResult.reduce((sum, r) => sum + r.loc, 0),
+      files: [...new Set(staleResult.map((r) => r.file))],
       unused,
       singleUse: staleResult.length - unused,
     };
+  });
+}
+
+function summarizeGitEvidence(db: ScipDatabase, budget: HealthBudget): GitEvidenceSummary | null {
+  return runHealthPhase(db, budget, 'git-evidence', () => {
+    const churn = getFileChurn(db);
+    if (!churn) return null;
+    const coChangeResult = coChange(db, undefined, { limit: 50 });
+    const fileStats: Record<string, { changes: number; fixChanges: number }> = {};
+    for (const [file, entry] of churn) {
+      fileStats[file] = { changes: entry.changes, fixChanges: entry.fixChanges };
+    }
+    return {
+      amplification: getChangeAmplification(db),
+      hiddenCoupling: {
+        pairCount: coChangeResult.findings.length,
+        top: coChangeResult.findings.slice(0, 5).map((finding) => ({
+          fileA: finding.fileA,
+          fileB: finding.fileB,
+          together: finding.together,
+          confidence: finding.confidence,
+        })),
+      },
+      fileStats,
+    };
+  });
+}
+
+function summarizeSuppressions(db: ScipDatabase, budget: HealthBudget): SuppressionSummary {
+  return runHealthPhase(db, budget, 'suppressions', () => {
+    const inventory = getSuppressionInventory(db);
+    return { total: inventory.total, byCategory: { ...inventory.byCategory } };
   });
 }
 
@@ -394,6 +465,7 @@ function summarizeHealthComplexity(
       top: complexResult.slice(0, 5).map((r) => ({
         symbol: r.shortName,
         score: r.score,
+        file: r.file,
       })),
       extremeCount: complexResult.filter((r) => r.score > EXTREME_COMPLEXITY_SCORE).length,
     };
@@ -436,7 +508,6 @@ function healthBudget(
 
 function releaseHealthPhaseCaches(db: ScipDatabase, budget: HealthBudget): void {
   if (!budget.releaseCachesBetweenPhases) return;
-  clearDefinitionConsumerEvidenceCaches(db);
   clearWholeProjectEvidenceCaches(db);
   requestGarbageCollection();
 }
@@ -472,7 +543,7 @@ function traceHealthPhase(name: string): void {
 function filterHealthDeadSymbols(
   db: ScipDatabase,
   symbols: Array<{ relativePath: string; symbol: string; kind: string; loc: number }>,
-): Array<{ loc: number }> {
+): Array<{ loc: number; relativePath: string }> {
   return symbols.filter(
     (symbol) => !isEntrySurface(db, symbol.relativePath)
       && !isRootedSymbol(db, symbol.symbol, symbol.relativePath)
@@ -483,16 +554,22 @@ function filterHealthDeadSymbols(
 function filterHealthIsolatedSymbols(
   db: ScipDatabase,
   symbols: Array<{ relativePath: string; symbol: string; loc: number }>,
-): Array<{ loc: number }> {
+): Array<{ loc: number; relativePath: string }> {
   return symbols.filter(
     (symbol) => !isEntrySurface(db, symbol.relativePath)
       && !isRootedSymbol(db, symbol.symbol, symbol.relativePath),
   );
 }
 
-function summarizeLoc(items: Array<{ loc: number }>): CountLocSummary {
+function summarizeLoc(items: Array<{ loc: number; relativePath?: string; file?: string }>): CountLocSummary {
+  const files = new Set<string>();
+  for (const item of items) {
+    const file = item.relativePath ?? item.file;
+    if (file) files.add(file);
+  }
   return {
     count: items.length,
     loc: items.reduce((sum, item) => sum + item.loc, 0),
+    files: [...files],
   };
 }

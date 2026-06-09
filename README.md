@@ -101,7 +101,7 @@ A SCIP index is a database-shaped record of code facts produced by language-awar
 
 `scip-query` keeps evidence levels separate:
 
-- Compiler-backed facts come from the SCIP database. Commands like `symbols`, `refs`, `trace`, `deps`, `rdeps`, `system`, `surface`, and many symbol counts start here.
+- Compiler-backed facts come from the SCIP database. Commands like `outline`, `refs`, `trace`, `deps`, `rdeps`, `system`, `surface`, and many symbol counts start here.
 - Semantic augmentation adds language-specific checks when available. TypeScript projects use `ts-morph` to verify references, imports, callers, callees, and signatures when SCIP alone is incomplete.
 - Source-backed heuristics use parsed source text or ASTs for higher-level cleanup signals when an indexer omits details. These results are candidates to inspect, not blind refactoring orders.
 

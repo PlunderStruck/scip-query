@@ -24,19 +24,21 @@ You are exploring a codebase to build a deep, accurate understanding of how a sy
 
 ## Hard Rules
 
-1. **Every claim must come from scip-query.** If you say "function X calls function Y," you must have run `scip-query call-graph X` or `scip-query code X` to verify it. No memory. No assumptions.
+1. **Use a current index.** Before exploration, run `scip-query status` when available and check whether the index is missing, stale, or built for a different project root. If the codebase has changed, the status is uncertain, or the user asks for current facts, run `scip-query reindex` before trusting results. If reindexing fails, report that the index may be stale and mark affected claims as unverified.
 
-2. **Read the code.** Don't describe what a function "probably does" — run `scip-query code <symbol>` and describe what it actually does.
+2. **Every claim must come from scip-query.** If you say "function X calls function Y," you must have run `scip-query call-graph X` or `scip-query code X` to verify it. No memory. No assumptions.
 
-3. **Follow the graph, not the folder structure.** File organization can be misleading. Use `scip-query deps`, `scip-query rdeps`, `scip-query call-graph`, and `scip-query dataflow` to trace actual execution paths.
+3. **Read the code.** Don't describe what a function "probably does" — run `scip-query code <symbol>` and describe what it actually does.
 
-4. **Start wide, then narrow.** Begin with `scip-query system` for the module map, then drill into specific symbols with `scip-query call-graph`, `scip-query code`, and `scip-query dataflow`.
+4. **Follow the graph, not the folder structure.** File organization can be misleading. Use `scip-query deps`, `scip-query rdeps`, `scip-query call-graph`, and `scip-query dataflow` to trace actual execution paths.
+
+5. **Start wide, then narrow.** Begin with `scip-query system` for the module map, then drill into specific symbols with `scip-query call-graph`, `scip-query code`, and `scip-query dataflow`.
 
 ---
 
 ## Symbol Lookup Tips
 
-scip-query accepts partial symbol names — you don't need the full SCIP symbol path. These all work:
+`scip-query` accepts partial symbol names — you don't need the full SCIP symbol path. These all work:
 
 ```bash
 scip-query code processVegaMention              # just the function name
@@ -63,13 +65,24 @@ scip-query code 'src/modules/chat/chat.service.ts:100-200'
 
 **If "Symbol not found":**
 1. Try a shorter/simpler name — `login` instead of `AuthService:login`
-2. Try `scip-query symbols <file>` to see what symbols exist in the file
+2. Try `scip-query outline <file>` to see what symbols exist in the file
 3. Try `scip-query trace <name>` which uses a different lookup path
 4. Use the `file:line-line` syntax for `code` if you know the location
 
 ---
 
 ## Exploration Workflow
+
+### Step 0: Verify the index
+
+Start by making sure the SCIP facts are current enough to trust:
+
+```bash
+scip-query status                    # Check index location, freshness, and project root
+scip-query reindex                   # Run when missing, stale, uncertain, or after code changes
+```
+
+If `status` is unavailable or inconclusive, run `scip-query stats` and `scip-query reindex` when the repository has changed. Do not explore from an index you know is stale.
 
 ### Step 1: Orient — What are we looking at?
 
@@ -78,7 +91,7 @@ Start with the high-level map. Run these first:
 ```bash
 scip-query stats                      # How big is this codebase?
 scip-query system <module>            # Full module map: files, symbols, deps
-scip-query symbols <entry-file>       # What's in the entry point?
+scip-query outline <entry-file>       # What's in the entry point?
 ```
 
 **Output:** List all files in the module, the key symbols, what it depends on, and what depends on it. This is your map.
@@ -152,7 +165,7 @@ scip-query complexity X               # How complex is it
 
 ### "What happens when a user does Y?"
 
-1. Find the entry point: `scip-query files <handler-pattern>` or `scip-query symbols <route-file>`
+1. Find the entry point: `scip-query files <handler-pattern>` or `scip-query outline <route-file>`
 2. Read the handler: `scip-query code <handler>`
 3. Follow each call: `scip-query call-graph <callee>` → `scip-query code <callee>` → repeat
 4. Trace the data: `scip-query dataflow <key-variable>` at each step
@@ -207,7 +220,7 @@ Every file path, line number, and behavioral claim includes the scip-query comma
 | Purpose | Command |
 |---|---|
 | Read source code | `scip-query code <symbol> [-C N]` |
-| All symbols in a file | `scip-query symbols <file>` |
+| All symbols in a file | `scip-query outline <file>` |
 | Find files | `scip-query files <pattern>` |
 | Full module map | `scip-query system <module>` |
 | True public API | `scip-query surface <module>` |
