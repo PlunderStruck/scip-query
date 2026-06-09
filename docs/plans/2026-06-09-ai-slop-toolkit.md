@@ -72,6 +72,14 @@ string stripper and corrupted brace counts ("unclosed delimiter"). End state:
 VegaAssistant batch 0 (TS + Rust incl. a 99-LOC Rust method) COMPILER-VERIFIED by
 tsc + cargo check in 64s.
 
+ORACLE COVERAGE (extended after release): --verify now detects go.mod → `go build ./...`
+and Python projects → ruff undefined-name checks (F821/F822 — what deletion breaks in a
+dynamic language) with compileall syntax fallback. Detection unit-tested; live
+field-validation on real Go/Python repos still pending — treat first runs there with the
+same scrutiny the TS/Rust paths got. JVM/dotnet checkers deferred (minutes-slow builds).
+self-audit accuracy oracle remains TS-only by design (compile-verification is the
+universal oracle; per-language semantic providers are not).
+
 Follow-up ✅ RESOLVED: root cause was BARREL MISCLASSIFICATION, not reference counting.
 `backend/src/index.ts` matches the `*/index.ts` barrel pattern, nothing imports a server
 entrypoint, so it was an "inactive barrel" — and skipBarrels discards all references

@@ -63,7 +63,7 @@ flowchart LR
 
 1. **The reference graph** — who defines, references, calls, imports what. Built from SCIP indexes produced by real compilers and language servers, not text search.
 2. **The change graph** — what git history knows that no compiler can: files that always change together without any dependency edge (one concept scattered across artifacts), churn-weighted complexity (gnarly code nobody touches costs nothing), and whether flagged files actually attract fix commits.
-3. **Verification oracles** — your own toolchain as ground truth. Deletion plans are applied in a throwaway worktree and run through `tsc`/`cargo check` before being stamped `COMPILER-VERIFIED`. The tool even audits *itself*: `self-audit` scores its cheap evidence paths against the TypeScript compiler and reports precision/recall as a tracked number.
+3. **Verification oracles** — your own toolchain as ground truth. Deletion plans are applied in a throwaway worktree and run through your own toolchain — `tsc`, `cargo check`, `go build`, `ruff` — before being stamped `COMPILER-VERIFIED`. The tool even audits *itself*: `self-audit` scores its cheap evidence paths against the TypeScript compiler and reports precision/recall as a tracked number.
 
 ## At a Glance
 

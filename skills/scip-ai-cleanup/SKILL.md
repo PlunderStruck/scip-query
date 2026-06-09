@@ -98,7 +98,7 @@ scip-query cleanup-plan --verify
 - Batches are ordered: batch 0 is graph-fact dead now; batch n is dead once
   batch n-1 lands (the cascade). Apply ONE batch at a time.
 - `COMPILER-VERIFIED` means the deletion was applied in a throwaway worktree
-  and your own checker (tsc / cargo check) passed differentially.
+  and your own checker (tsc / cargo check / go build / ruff) passed differentially.
 - `FAILED` errors name real references — usually barrel export lines or
   imports that must be removed together with the symbol, occasionally a
   detector false positive. Investigate before deleting anything.

@@ -134,14 +134,26 @@ interface Checker {
 
 const TS_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.vue'];
 
-/** Detect every applicable checker — mixed-language repos need all of them. */
-function detectCheckers(projectRoot: string): Checker[] {
+/** Detect every applicable checker — mixed-language repos need all of them. Exported for tests. */
+export function detectCheckers(projectRoot: string): Checker[] {
   const checkers: Checker[] = [];
   if (existsSync(join(projectRoot, 'tsconfig.json'))) {
     const localTsc = join(projectRoot, 'node_modules', '.bin', 'tsc');
     checkers.push(existsSync(localTsc)
       ? { label: 'tsc --noEmit', binary: localTsc, args: ['--noEmit'], coversExtensions: TS_EXTENSIONS }
       : { label: 'npx tsc --noEmit', binary: 'npx', args: ['tsc', '--noEmit'], coversExtensions: TS_EXTENSIONS });
+  }
+  if (existsSync(join(projectRoot, 'go.mod'))) {
+    checkers.push({
+      label: 'go build ./...',
+      binary: 'go',
+      args: ['build', './...'],
+      coversExtensions: ['.go'],
+    });
+  }
+  if (['pyproject.toml', 'setup.py', 'requirements.txt'].some((marker) => existsSync(join(projectRoot, marker)))) {
+    const pythonChecker = detectPythonChecker();
+    if (pythonChecker) checkers.push(pythonChecker);
   }
   for (const manifest of findCargoManifests(projectRoot)) {
     checkers.push({
@@ -157,6 +169,39 @@ function detectCheckers(projectRoot: string): Checker[] {
     });
   }
   return checkers;
+}
+
+/**
+ * Python deletion oracle: ruff's undefined-name checks (F821/F822) catch
+ * exactly what deleting a symbol breaks in a dynamic language; syntax-only
+ * compileall is the fallback (catches bisected statements, not dead names).
+ */
+function detectPythonChecker(): Checker | null {
+  if (binaryAvailable('ruff')) {
+    return {
+      label: 'ruff check --select E9,F821,F822',
+      binary: 'ruff',
+      args: ['check', '--quiet', '--select', 'E9,F821,F822', '.'],
+      coversExtensions: ['.py'],
+    };
+  }
+  if (binaryAvailable('python3')) {
+    return {
+      label: 'python3 -m compileall (syntax only)',
+      binary: 'python3',
+      args: ['-m', 'compileall', '-q', '.'],
+      coversExtensions: ['.py'],
+    };
+  }
+  return null;
+}
+
+function binaryAvailable(binary: string): boolean {
+  try {
+    return spawnSync(binary, ['--version'], { stdio: 'ignore', timeout: 10_000 }).status === 0;
+  } catch {
+    return false;
+  }
 }
 
 /** Cargo.toml at the root or one level down (src-tauri/, backend/, ...). */

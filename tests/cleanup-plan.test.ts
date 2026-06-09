@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { RemovedRangeIndex } from '../src/queries/cleanup-plan.js';
-import { deleteLineRanges, errorKey } from '../src/runtime/cleanup-verify.js';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { deleteLineRanges, detectCheckers, errorKey } from '../src/runtime/cleanup-verify.js';
 
 describe('cleanup plan removed-range index', () => {
   it('answers membership per file and line range', () => {
@@ -53,5 +56,26 @@ describe('verification error identity', () => {
       .toBe(errorKey('error[E0432]: unresolved import --> src/lib.rs:9:1'));
     expect(errorKey("a.ts(1,1): error TS2304: Cannot find name 'x'"))
       .not.toBe(errorKey("a.ts(1,1): error TS2304: Cannot find name 'y'"));
+  });
+});
+
+describe('checker detection', () => {
+  it('detects per-language checkers from project manifests', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-checkers-'));
+    try {
+      expect(detectCheckers(root)).toEqual([]);
+
+      writeFileSync(join(root, 'go.mod'), 'module example.com/m');
+      writeFileSync(join(root, 'Cargo.toml'), '[package]');
+      const labels = detectCheckers(root).map((checker) => checker.label);
+      expect(labels.some((label) => label.startsWith('go build'))).toBe(true);
+      expect(labels.some((label) => label.startsWith('cargo check'))).toBe(true);
+
+      const covered = detectCheckers(root).flatMap((checker) => checker.coversExtensions);
+      expect(covered).toContain('.go');
+      expect(covered).toContain('.rs');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
