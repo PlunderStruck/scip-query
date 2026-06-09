@@ -3,7 +3,16 @@ import type { SyntaxNode } from './ast-types.js';
 
 const RUST_IDENTIFIER_TYPES = new Set(['identifier', 'type_identifier', 'field_identifier']);
 const PYTHON_IDENTIFIER_TYPES = new Set(['identifier']);
-const DEFAULT_IDENTIFIER_TYPES = new Set(['identifier', 'property_identifier', 'type_identifier']);
+// Shorthand object properties ({ messageId }) and destructuring patterns are
+// variable references — omitting them made fully-forwarded parameters look
+// unused (caught live by unused-params on a foreign repo).
+const DEFAULT_IDENTIFIER_TYPES = new Set([
+  'identifier',
+  'property_identifier',
+  'type_identifier',
+  'shorthand_property_identifier',
+  'shorthand_property_identifier_pattern',
+]);
 const INTERPOLATION_LANGUAGES = new Set<AstLanguage>(['rust', 'python']);
 const BRACE_BLOCK_RE = /\{([^{}]*)\}/g;
 const IDENT_IN_BLOCK_RE = /\b([A-Za-z_][\w]*)\b/g;

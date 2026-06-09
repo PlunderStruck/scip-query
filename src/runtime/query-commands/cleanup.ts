@@ -543,7 +543,36 @@ const handleDocDrift = dbCommand(({ db, args, opts }) => {
   console.log('\nStale standards docs are worse than none — agents implement to a dead spec.');
 });
 
+const handleUnusedParams = budgetedListCommand('unused-params', {
+  query: ({ db, opts, budget }) => queries.unusedParams(db, {
+    scope: stringOptionValue(opts, 'scope'),
+    limit: definedNumberOption(opts, 'limit', 30),
+    scanLimit: budget.scanLimit,
+  }),
+  format: (r) =>
+    `  ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}\n` +
+    `    trailing unused: ${r.unusedTrailing.join(', ')}  (${r.unusedTrailing.length} of ${r.paramCount} params — safe to drop)`,
+  emptyMessage: () => 'No trailing unused parameters found.',
+  heuristicLabel: 'unused trailing parameter candidates',
+  after: (rows) => console.log(`\n${rows.length} function(s) with trailing unused parameters.`),
+});
+
 export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
+  cleanupCommand({
+    id: 'unused-params',
+    command: 'unused-params',
+    description: 'Speculative-generality candidates: trailing parameters no body ever uses (TS/JS)',
+    options: [
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option('-n, --limit <n>', 'Maximum findings', parseInteger, 30),
+      option('--full', 'Run unbounded analysis on large indexes'),
+    ],
+    budget: 'candidate-scan',
+    heuristic: { label: 'unused trailing parameter candidates' },
+    renderShape: 'list',
+    docs: doc('Cleanup', ['scip-query unused-params -s src/services']),
+    handler: handleUnusedParams,
+  }),
   cleanupCommand({
     id: 'cleanup-plan',
     command: 'cleanup-plan',

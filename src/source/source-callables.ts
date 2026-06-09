@@ -9,6 +9,12 @@ const JAVASCRIPT_NAMED_CALLABLE_TYPES = new Set([
   'function_signature',
 ]);
 
+export interface CallableParamFact {
+  name: string;
+  /** False when the parameter is a pattern/rest/this — not a simple identifier. */
+  simple: boolean;
+}
+
 export function callableFactForNode(
   node: SyntaxNode,
   language: AstLanguage,
@@ -20,6 +26,8 @@ export function callableFactForNode(
       startLine: named.definitionNode.startPosition.row,
       endLine: named.definitionNode.endPosition.row,
       paramCount: parameterCount(named.functionNode),
+      params: parameterFacts(named.functionNode),
+      paramsEndLine: parametersEndLine(named.functionNode),
       isLiteralPassthrough: isPassthroughBody(named.functionNode, language),
     };
   }
@@ -36,8 +44,44 @@ export function callableFactForNode(
     startLine: node.startPosition.row,
     endLine: node.endPosition.row,
     paramCount: parameterCount(node),
+    params: parameterFacts(node),
+    paramsEndLine: parametersEndLine(node),
     isLiteralPassthrough: isPassthroughBody(node, language),
   };
+}
+
+function parametersNode(fnNode: SyntaxNode): SyntaxNode | undefined {
+  return fnNode.namedChildren.find((child) =>
+    child.type === 'parameters' || child.type === 'formal_parameters',
+  );
+}
+
+/** Ordered parameter facts; patterns/rest params are marked non-simple. */
+function parameterFacts(fnNode: SyntaxNode): CallableParamFact[] {
+  const paramsNode = parametersNode(fnNode);
+  if (!paramsNode) return [];
+  const facts: CallableParamFact[] = [];
+  for (const param of paramsNode.namedChildren) {
+    if (isCommentNode(param)) continue;
+    if (param.type === 'identifier') {
+      facts.push({ name: param.text, simple: true });
+      continue;
+    }
+    // required_parameter / optional_parameter wrap the identifier in TS.
+    const pattern = param.childForFieldName('pattern');
+    if (pattern && pattern.type === 'identifier') {
+      facts.push({ name: pattern.text, simple: true });
+      continue;
+    }
+    const id = param.namedChildren.find((child) => child.type === 'identifier');
+    facts.push({ name: id?.text ?? '', simple: false });
+  }
+  return facts;
+}
+
+function parametersEndLine(fnNode: SyntaxNode): number {
+  const paramsNode = parametersNode(fnNode);
+  return paramsNode ? paramsNode.endPosition.row : fnNode.startPosition.row;
 }
 
 function isNamedCallableType(nodeType: string, language: AstLanguage): boolean {

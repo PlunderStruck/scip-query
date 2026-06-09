@@ -83,13 +83,17 @@ After the fix the Stable_Management plan shrank from 7 symbols (5 false) to 2 ge
 dead symbols — and COMPILER-VERIFIED. The oracle caught the detector's lie, the lie got
 root-caused, the detector got fixed, and the proof now passes. Full feedback loop.
 
-## 4 — `unused-params`: speculative generality
-AI's signature move: parameters and options nobody uses. V1 scope: TRAILING unused
-parameters only (safe to delete without breaking positional contracts), skipping
-`_`-prefixed names. Needs param names from source facts + body identifier usage.
-- [ ] Check ast-callables for param-name availability; extend if absent (TS-first).
-- [ ] Detector + command (Cleanup family), conservative gates (no interface-conformance
-      breakage: trailing-only), heuristic disclaimer.
+## 4 — `unused-params` ✅ DONE — speculative generality
+- [x] Callable facts extended with ordered param names (+ simple/pattern flag, params end
+      line); detector flags TRAILING unused runs only (type-safe removal under TS function
+      variance), skips `_`-prefixed, pattern params, one-liners, and rooted/public symbols.
+- [x] First live run produced loud false positives ("10 of 10 params unused") that traced
+      to a GLOBAL evidence gap: shorthand object properties ({ messageId }) are variable
+      references but tree-sitter types them shorthand_property_identifier, which the
+      identifier policy didn't record. Fixed in source-identifiers — improves liveness
+      evidence for every detector, not just this one. After the fix: zero findings on
+      scip-query, Vega_2.0, and Stable_Management — honest, and each prior "finding" is
+      accounted for by the fixed gap.
 
 ## Verification
 Suite + build green; live runs on scip-query, Stable_Management, Vega_2.0,

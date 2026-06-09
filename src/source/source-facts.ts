@@ -20,6 +20,8 @@ export interface SourceFacts {
     startLine: number;
     endLine: number;
     paramCount: number;
+    params: Array<{ name: string; simple: boolean }>;
+    paramsEndLine: number;
     isLiteralPassthrough: boolean;
   }>;
   callSites: Array<{

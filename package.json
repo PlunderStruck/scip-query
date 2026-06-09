@@ -219,6 +219,10 @@
       "import": "./dist/queries/trace.js",
       "types": "./dist/queries/trace.d.ts"
     },
+    "./queries/unused-params": {
+      "import": "./dist/queries/unused-params.js",
+      "types": "./dist/queries/unused-params.d.ts"
+    },
     "./queries/wrapper-candidates": {
       "import": "./dist/queries/wrapper-candidates.js",
       "types": "./dist/queries/wrapper-candidates.d.ts"

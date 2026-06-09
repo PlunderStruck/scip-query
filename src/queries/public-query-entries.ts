@@ -60,6 +60,7 @@ export const PUBLIC_QUERY_ENTRIES = [
   'symbols',
   'system',
   'trace',
+  'unused-params',
   'wrapper-candidates',
 ] as const;
 

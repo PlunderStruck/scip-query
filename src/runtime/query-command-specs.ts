@@ -45,6 +45,7 @@ const queryCommandOrder = [
   'co-change',
   'recent-duplicates',
   'doc-drift',
+  'unused-params',
   'plan-context',
   'drift',
   'wrapper-candidates',
