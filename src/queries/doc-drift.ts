@@ -107,8 +107,8 @@ export function docDrift(
   for (const docFile of docFiles) {
     if (doc !== undefined && !docFile.includes(doc)) continue;
     // Explicitly requested docs bypass the archival filter (detail mode).
-    if (doc === undefined && isArchivalDoc(docFile)) continue;
-    if (!existsSync(join(db.config.projectRoot, docFile))) continue;
+    if (doc === undefined && !isLivingDoc(db, docFile)) continue;
+    if (doc !== undefined && !existsSync(join(db.config.projectRoot, docFile))) continue;
     const docLastChangedAt = Math.max(0, ...(changeTimes.get(docFile) ?? []));
 
     const subjects = new Map<string, DocDriftSubject>();
@@ -179,6 +179,9 @@ export function docDrift(
  * Docs whose text cites any of the target files — diff-gate uses this to ask
  * "you changed these files; which docs claim to describe them?"
  */
+// scip-query: ignore-similar — deliberately shares the doc-walking toolkit
+// (isLivingDoc, extractFileReferences) with docDrift; the two ask different
+// questions and merging them would parameterize away their meaning.
 export function docsCitingFiles(
   db: ScipDatabase,
   targets: ReadonlySet<string>,
@@ -187,14 +190,19 @@ export function docsCitingFiles(
   const trackedBySuffix = buildSuffixIndex(tracked);
   const out: Array<{ doc: string; cited: string[] }> = [];
   for (const docFile of tracked) {
-    if (!DOC_FILE_PATTERN.test(docFile)) continue;
-    if (isArchivalDoc(docFile)) continue;
-    if (!existsSync(join(db.config.projectRoot, docFile))) continue;
+    if (!isLivingDoc(db, docFile)) continue;
     const { resolved } = extractFileReferences(db, docFile, tracked, trackedBySuffix, new Set());
     const cited = [...resolved].filter((file) => targets.has(file));
     if (cited.length > 0) out.push({ doc: docFile, cited: cited.sort() });
   }
   return out;
+}
+
+/** A doc that exists, isn't archival, and is eligible for drift tracking. */
+function isLivingDoc(db: ScipDatabase, docFile: string): boolean {
+  return DOC_FILE_PATTERN.test(docFile)
+    && !isArchivalDoc(docFile)
+    && existsSync(join(db.config.projectRoot, docFile));
 }
 
 /** Map "suffix after last two segments" → full tracked paths, for short citations. */

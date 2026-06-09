@@ -1,11 +1,4 @@
 {
   "version": 1,
-  "findings": [
-    "extract:src/queries/self-audit.ts:src:queries:self-audit:selfAudit()",
-    "extract:src/runtime/command-docs.ts:src:runtime:command-docs:renderCommandReferenceMarkdown()",
-    "similar:scip-typescript npm scip-query 0.8.0 src/queries/`doc-drift.ts`/docDrift().|scip-typescript npm scip-query 0.8.0 src/queries/`doc-drift.ts`/docsCitingFiles().",
-    "wrapper:src/analysis/similarity.ts:src:analysis:similarity:difference()",
-    "wrapper:src/analysis/similarity.ts:src:analysis:similarity:intersection()",
-    "wrapper:src/core/project-index.ts:src:core:project-index:ProjectIndex:callableSignature()"
-  ]
+  "findings": []
 }

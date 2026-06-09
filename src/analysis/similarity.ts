@@ -11,6 +11,8 @@
  * stateless — callers own corpus caching.
  */
 
+// scip-query: ignore-wrapper — multi-call-site math primitive; the module's
+// documented job is owning these, single consumer FILE notwithstanding.
 /** Set intersection. */
 export function intersection<T>(a: Set<T>, b: Set<T>): Set<T> {
   const out = new Set<T>();
@@ -20,6 +22,7 @@ export function intersection<T>(a: Set<T>, b: Set<T>): Set<T> {
   return out;
 }
 
+// scip-query: ignore-wrapper — same: named primitive with multiple call sites.
 /** Set difference: items in a not in b. */
 export function difference<T>(a: Set<T>, b: Set<T>): Set<T> {
   const out = new Set<T>();

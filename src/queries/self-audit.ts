@@ -57,6 +57,9 @@ export interface SelfAuditResult {
  * The point: "make every command as accurate as possible" is only meaningful
  * once accuracy is a number you can track. This is that number.
  */
+// scip-query: ignore-extract — one audit pass: sampling, dual-path
+// questioning, tallying, and disagreement collection are a single
+// measurement; splitting them would thread state through helpers.
 export function selfAudit(
   db: ScipDatabase,
   opts: { samples?: number; scope?: string; maxDisagreements?: number } = {},

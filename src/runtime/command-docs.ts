@@ -24,6 +24,8 @@ export function commandDocEntries(descriptors: readonly CommandDescriptor[]): Co
     }));
 }
 
+// scip-query: ignore-extract — the generated-reference renderer is one
+// formatting pipeline; its sections have no other consumers.
 export function renderCommandReferenceMarkdown(descriptors: readonly CommandDescriptor[]): string {
   const entries = commandDocEntries(descriptors);
   const categories = unique(entries.map((entry) => entry.category));

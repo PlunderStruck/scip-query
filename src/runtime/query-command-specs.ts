@@ -76,12 +76,6 @@ const queryCommandFamilies = [
 const familyDescriptors = queryCommandFamilies.flat();
 const QUERY_COMMANDS_BY_ID = new Map(familyDescriptors.map((descriptor) => [descriptor.id, descriptor]));
 
-export const queryCommandDescriptors: CommandDescriptor[] = queryCommandOrder.map((id) => {
-  const descriptor = QUERY_COMMANDS_BY_ID.get(id);
-  if (!descriptor) throw new Error(`Missing query command descriptor: ${id}`);
-  return descriptor;
-});
-
 for (const descriptor of familyDescriptors) {
   if (!queryCommandOrder.includes(descriptor.id as typeof queryCommandOrder[number])) {
     throw new Error(`Query command descriptor is not ordered: ${descriptor.id}`);

@@ -180,6 +180,9 @@ export class ProjectIndex {
     scanSourceReferences(this.db, opts, visit);
   }
 
+  // scip-query: ignore-wrapper — facade method keeps query modules on
+  // ProjectIndex instead of reaching into source facts (same idiom as
+  // fileKind / hasSuppressionComment above).
   callableSignature(
     definition: Pick<IndexedDefinition, 'relativePath' | 'startLine' | 'endLine'>,
   ): { paramCount: number } | null {
