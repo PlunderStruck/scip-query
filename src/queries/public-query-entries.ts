@@ -28,6 +28,7 @@ export const PUBLIC_QUERY_ENTRIES = [
   'dead',
   'deep-chains',
   'deps',
+  'diff-gate',
   'diff-impact',
   'doc-drift',
   'drift',

@@ -38,6 +38,14 @@ export interface DocDriftResult {
 }
 
 const DOC_FILE_PATTERN = /\.(?:md|mdx|rst|txt)$/i;
+/**
+ * Archival docs (dated plans, ADRs, RFCs, changelogs) record a moment in
+ * time — they cite code as of their date and are never meant to track it.
+ */
+export function isArchivalDoc(path: string): boolean {
+  return /(?:^|\/)(?:docs\/plans|plans|adrs?|rfcs?|decisions|changelogs?|archive|reports?)\//i.test(path)
+    || /(?:^|\/)CHANGELOG\.(?:md|mdx|rst|txt)$/i.test(path);
+}
 const MIN_COUPLING = 3;
 /** Path-shaped tokens with a code-ish extension — what docs use to cite files. */
 const PATH_REFERENCE_PATTERN = /[A-Za-z0-9_@-]+(?:\/[A-Za-z0-9_.@-]+)+\.[A-Za-z0-9]{1,6}\b/g;
@@ -98,6 +106,8 @@ export function docDrift(
   const findings: DocDriftFinding[] = [];
   for (const docFile of docFiles) {
     if (doc !== undefined && !docFile.includes(doc)) continue;
+    // Explicitly requested docs bypass the archival filter (detail mode).
+    if (doc === undefined && isArchivalDoc(docFile)) continue;
     if (!existsSync(join(db.config.projectRoot, docFile))) continue;
     const docLastChangedAt = Math.max(0, ...(changeTimes.get(docFile) ?? []));
 
@@ -165,7 +175,30 @@ export function docDrift(
   };
 }
 
+/**
+ * Docs whose text cites any of the target files — diff-gate uses this to ask
+ * "you changed these files; which docs claim to describe them?"
+ */
+export function docsCitingFiles(
+  db: ScipDatabase,
+  targets: ReadonlySet<string>,
+): Array<{ doc: string; cited: string[] }> {
+  const tracked = getTrackedFiles(db) ?? new Set<string>();
+  const trackedBySuffix = buildSuffixIndex(tracked);
+  const out: Array<{ doc: string; cited: string[] }> = [];
+  for (const docFile of tracked) {
+    if (!DOC_FILE_PATTERN.test(docFile)) continue;
+    if (isArchivalDoc(docFile)) continue;
+    if (!existsSync(join(db.config.projectRoot, docFile))) continue;
+    const { resolved } = extractFileReferences(db, docFile, tracked, trackedBySuffix, new Set());
+    const cited = [...resolved].filter((file) => targets.has(file));
+    if (cited.length > 0) out.push({ doc: docFile, cited: cited.sort() });
+  }
+  return out;
+}
+
 /** Map "suffix after last two segments" → full tracked paths, for short citations. */
+
 function buildSuffixIndex(tracked: ReadonlySet<string>): Map<string, string[]> {
   const index = new Map<string, string[]>();
   for (const file of tracked) {

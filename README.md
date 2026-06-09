@@ -79,6 +79,7 @@ flowchart LR
 | What new code duplicates old code? | `scip-query recent-duplicates` |
 | Which docs lie about the code now? | `scip-query doc-drift` |
 | What changes together but isn't linked? | `scip-query co-change` |
+| Gate an agent's diff before merging | `scip-query diff-gate` |
 | Did the findings get worse? (CI gate) | `scip-query health --baseline` |
 
 ## Cleaning Up AI-Generated Code
@@ -116,7 +117,14 @@ When verification *fails*, the errors name the exact references the static evide
 
 **5. Surface hidden coupling.** `co-change` finds file pairs that repeatedly change in the same commits with *no* dependency edge — schema ↔ generated inventory ↔ doc triangles, backend schemas ↔ frontend stores, `.env.example` ↔ its parser. The reference graph cannot see these; the change graph can.
 
-**6. Ratchet it in CI.** `health --write-baseline` snapshots finding identities into a committable file; `health --baseline` exits 1 on any *new* finding. "Don't get worse" is an objective gate that no score arithmetic can game.
+**6. Gate every diff.** `diff-gate` runs the whole suite scoped to what a change *introduces* — echoes of established code, missing co-change partners, docs that cite the changed files, fresh unused params, new dead symbols, baseline regressions — in seconds, exit-code friendly, with a remediation per finding an agent can act on without human triage:
+
+```
+[co-change-partner] schema.prisma changed, but scripts/scope-inventory.mjs did not — they change together 12x (86% of the time)
+  -> Update scripts/scope-inventory.mjs alongside this change, or confirm the coupling no longer holds.
+```
+
+**7. Ratchet it in CI.** `health --write-baseline` snapshots finding identities into a committable file; `health --baseline` exits 1 on any *new* finding. "Don't get worse" is an objective gate that no score arithmetic can game.
 
 Before any edit, `plan-context <target>` bundles the structural picture — definitions, references, call graph, blast radius — plus a HISTORY section: churn, fix-commit density, and the files that usually change together with the target ("editing this usually means editing these").
 

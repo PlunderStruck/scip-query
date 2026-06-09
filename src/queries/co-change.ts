@@ -27,6 +27,10 @@ export interface CoChangeResult {
 
 // Changelogs co-change with everything BY POLICY — intentional coupling,
 // not a hidden concept (same class as tests and same-stem siblings).
+export function isCoChangeNoiseFile(file: string): boolean {
+  return NOISE_FILE_PATTERN.test(file);
+}
+
 const NOISE_FILE_PATTERN = /(?:^|\/)(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock|CHANGELOG(?:\.[a-z]+)?|.*\.map)$|(?:^|\/)(?:dist|build|out|node_modules)\//i;
 
 /**

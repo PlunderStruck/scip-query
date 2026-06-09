@@ -1,6 +1,6 @@
 {
   "name": "scip-query",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "description": "Language-agnostic code intelligence CLI powered by SCIP indexes",
   "type": "module",
   "main": "dist/index.js",
@@ -90,6 +90,10 @@
     "./queries/deps": {
       "import": "./dist/queries/deps.js",
       "types": "./dist/queries/deps.d.ts"
+    },
+    "./queries/diff-gate": {
+      "import": "./dist/queries/diff-gate.js",
+      "types": "./dist/queries/diff-gate.d.ts"
     },
     "./queries/diff-impact": {
       "import": "./dist/queries/diff-impact.js",

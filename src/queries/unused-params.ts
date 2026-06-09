@@ -35,9 +35,10 @@ export interface UnusedParamsFinding {
  */
 export function unusedParams(
   db: ScipDatabase,
-  opts: { scope?: string; limit?: number; scanLimit?: number } = {},
+  opts: { scope?: string; limit?: number; scanLimit?: number; files?: readonly string[] } = {},
 ): UnusedParamsFinding[] {
   const { scope, limit = 30, scanLimit } = opts;
+  const fileFilter = opts.files === undefined ? null : new Set(opts.files);
   const index = new ProjectIndex(db);
   return runCandidateAnalysis({
     candidates: () => index.productionCallableDefinitions({
@@ -45,7 +46,8 @@ export function unusedParams(
       minLoc: 2,
       excludeRootedSymbols: true,
       requireFunctionLikeSymbol: true,
-    }).filter((definition) => isTypeScriptFamily(definition.relativePath)),
+    }).filter((definition) => isTypeScriptFamily(definition.relativePath)
+      && (fileFilter === null || fileFilter.has(definition.relativePath))),
     scanLimit,
     evaluate: (definition) => {
       const callable = getSourceFacts(db, definition.relativePath)?.callables.find((candidate) =>

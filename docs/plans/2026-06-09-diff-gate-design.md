@@ -1,6 +1,9 @@
 # Design: `diff-gate` — slop prevention at the moment of creation
 
-Status: DESIGNED, not built. The next major feature.
+Status: BUILT (same day). Live notes: first self-run caught a real co-change advisory
+(command-descriptors without command-handlers) and three honest baseline regressions from
+the day's own additions; doc-reference noise led to the archival-doc filter (docs/plans,
+ADRs, reports, changelogs) which also de-noised doc-drift itself.
 
 ## The idea
 

@@ -61,6 +61,32 @@ const handleChangeSurface = budgetedDbCommand('change-surface', ({ db, args, bud
   });
 });
 
+const handleDiffGate = dbCommand(({ db, opts }) => {
+  const result = queries.diffGate(db, {
+    base: stringOptionValue(opts, 'base'),
+    minTogether: definedNumberOption(opts, 'minTogether', 6),
+    maxEchoChecks: definedNumberOption(opts, 'maxEchoChecks', 10),
+  });
+  if (result.changedFiles.length === 0) {
+    return render.empty(result.note ?? `No changes vs ${result.base}.`);
+  }
+  console.log(`Diff gate vs ${result.base}: ${result.changedFiles.length} file(s), ${result.changedSymbols} symbol(s) changed.`);
+  console.log(`Checks: ${result.checksRun.join(', ')}\n`);
+  for (const skip of result.skipped) {
+    console.log(`  skipped ${skip.check}: ${skip.reason}`);
+  }
+  if (result.findings.length === 0) {
+    console.log('PASS: this change introduces no gate findings.');
+    return;
+  }
+  for (const finding of result.findings) {
+    console.log(`  [${finding.check}] ${finding.message}`);
+    console.log(`    -> ${finding.remediation}`);
+  }
+  console.log(`\nFAIL: ${result.findings.length} finding(s). Fix or knowingly accept before merging.`);
+  process.exitCode = 1;
+});
+
 export const impactQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'affected',
@@ -83,6 +109,20 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     renderShape: 'list',
     docs: doc('Impact'),
     handler: handleChangeSurface,
+  },
+  {
+    id: 'diff-gate',
+    command: 'diff-gate',
+    description: 'Gate the current diff: echo candidates, missing co-change partners, uncited doc updates, unused params, new dead symbols; exit 1 on findings',
+    options: [
+      option('--base <ref>', 'Git ref to diff against (default: HEAD)'),
+      option('--min-together <n>', 'Minimum historical co-changes for the partner check', parseInteger, 6),
+      option('--max-echo-checks <n>', 'Maximum changed symbols to test for echoes', parseInteger, 10),
+    ],
+    heuristic: { label: 'diff gate candidates' },
+    renderShape: 'custom',
+    docs: doc('Impact', ['scip-query diff-gate', 'scip-query diff-gate --base origin/main']),
+    handler: handleDiffGate,
   },
   {
     id: 'co-change',

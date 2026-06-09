@@ -110,7 +110,12 @@ scip-query cleanup-plan --verify
 ```bash
 scip-query health --write-baseline   # commit .scipquery-baseline.json
 scip-query health --baseline         # exit 1 on any NEW finding — wire into CI
+scip-query diff-gate                 # per-diff gate: echoes, missing partners, uncited docs
 ```
+
+`diff-gate` is the leading indicator: run it on every agent commit / PR
+(`--base origin/main` in CI). Each finding carries a remediation the agent
+can apply directly.
 
 After each cleanup round, re-run `--write-baseline` to ratchet the count
 down. The gate is "don't get worse" — objective and ungameable.

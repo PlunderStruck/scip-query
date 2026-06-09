@@ -76,6 +76,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   query('recent-duplicates'),
   query('doc-drift'),
   query('unused-params'),
+  query('diff-gate'),
   query('plan-context'),
   {
     id: DIFF_IMPACT_BATCH_COMMAND,
