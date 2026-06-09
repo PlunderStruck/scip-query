@@ -1,6 +1,8 @@
-<h1 align="center">
-  <img src="docs/assets/scip-query-logo.png" alt="scip-query logo" width="56"> scip-query <img src="docs/assets/title-spacer.svg" alt="" width="56">
-</h1>
+<p align="center">
+  <img src="docs/assets/scip-query-logo.png" alt="scip-query logo" width="120">
+</p>
+
+<h1 align="center">scip-query</h1>
 
 <p align="center">
   <strong>Structural code intelligence for AI agents and engineers.</strong>
