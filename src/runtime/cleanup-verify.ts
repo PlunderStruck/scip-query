@@ -11,7 +11,7 @@
  * which also exercises the cascade claim itself.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CleanupBatch, CleanupPlanResult } from '../queries/cleanup-plan.js';
@@ -25,8 +25,10 @@ export interface BatchVerification {
 }
 
 export interface CleanupVerification {
-  /** Human-readable checker invocation, or null when none was detected. */
-  checker: string | null;
+  /** Human-readable checker invocations, empty when none was detected. */
+  checkers: string[];
+  /** Plan files no detected checker covers — their entries are NOT verified. */
+  uncoveredFiles: string[];
   /**
    * Pre-existing checker errors on the UNMODIFIED tree. When > 0, batches
    * verify differentially: pass = no NEW errors beyond this baseline.
@@ -45,10 +47,11 @@ export function verifyCleanupPlan(
   plan: CleanupPlanResult,
   opts: { timeoutMs?: number } = {},
 ): CleanupVerification {
-  const checker = detectChecker(projectRoot);
-  if (!checker) {
-    return { checker: null, baselineErrors: 0, dirtyOverlap: [], batches: [] };
+  const checkers = detectCheckers(projectRoot);
+  if (checkers.length === 0) {
+    return { checkers: [], uncoveredFiles: [], baselineErrors: 0, dirtyOverlap: [], batches: [] };
   }
+  const uncoveredFiles = planFilesWithoutChecker(plan, checkers);
 
   const timeoutMs = opts.timeoutMs ?? CHECK_TIMEOUT_MS;
   const dirtyOverlap = dirtyPlanFiles(projectRoot, plan);
@@ -63,14 +66,22 @@ export function verifyCleanupPlan(
 
     // Differential baseline: many projects don't check clean at the root
     // (workspace tsconfigs, pre-existing errors). Pass = no NEW errors.
-    const baseline = runChecker(checker, worktree, timeoutMs);
-    baselineErrors = baseline.errorKeys.size;
+    const baselineKeys = new Set<string>();
+    for (const checker of checkers) {
+      for (const key of runChecker(checker, worktree, timeoutMs).errorKeys) {
+        baselineKeys.add(key);
+      }
+    }
+    baselineErrors = baselineKeys.size;
 
     for (const batch of plan.batches) {
       applyBatchDeletions(worktree, batch);
-      const result = runChecker(checker, worktree, timeoutMs);
-      const newErrors = result.rawErrors.filter((error) =>
-        !baseline.errorKeys.has(errorKey(error)));
+      const newErrors: string[] = [];
+      for (const checker of checkers) {
+        const result = runChecker(checker, worktree, timeoutMs);
+        newErrors.push(...result.rawErrors.filter((error) =>
+          !baselineKeys.has(errorKey(error))));
+      }
       if (newErrors.length === 0) {
         batches.push({ depth: batch.depth, status: 'verified' });
       } else {
@@ -86,7 +97,23 @@ export function verifyCleanupPlan(
     }
   }
 
-  return { checker: checker.label, baselineErrors, dirtyOverlap, batches };
+  return {
+    checkers: checkers.map((checker) => checker.label),
+    uncoveredFiles,
+    baselineErrors,
+    dirtyOverlap,
+    batches,
+  };
+}
+
+/** Plan files whose extension no detected checker examines. */
+function planFilesWithoutChecker(plan: CleanupPlanResult, checkers: Checker[]): string[] {
+  const covered = new Set(checkers.flatMap((checker) => checker.coversExtensions));
+  const files = new Set(plan.batches.flatMap((batch) => batch.entries.map((entry) => entry.file)));
+  return [...files].filter((file) => {
+    const extension = file.slice(file.lastIndexOf('.'));
+    return !covered.has(extension);
+  }).sort();
 }
 
 /**
@@ -101,26 +128,57 @@ interface Checker {
   label: string;
   binary: string;
   args: string[];
+  coversExtensions: string[];
   env?: NodeJS.ProcessEnv;
 }
 
-function detectChecker(projectRoot: string): Checker | null {
+const TS_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.vue'];
+
+/** Detect every applicable checker — mixed-language repos need all of them. */
+function detectCheckers(projectRoot: string): Checker[] {
+  const checkers: Checker[] = [];
   if (existsSync(join(projectRoot, 'tsconfig.json'))) {
     const localTsc = join(projectRoot, 'node_modules', '.bin', 'tsc');
-    return existsSync(localTsc)
-      ? { label: 'tsc --noEmit', binary: localTsc, args: ['--noEmit'] }
-      : { label: 'npx tsc --noEmit', binary: 'npx', args: ['tsc', '--noEmit'] };
+    checkers.push(existsSync(localTsc)
+      ? { label: 'tsc --noEmit', binary: localTsc, args: ['--noEmit'], coversExtensions: TS_EXTENSIONS }
+      : { label: 'npx tsc --noEmit', binary: 'npx', args: ['tsc', '--noEmit'], coversExtensions: TS_EXTENSIONS });
   }
-  if (existsSync(join(projectRoot, 'Cargo.toml'))) {
-    return {
-      label: 'cargo check --quiet',
+  for (const manifest of findCargoManifests(projectRoot)) {
+    checkers.push({
+      label: `cargo check --quiet --manifest-path ${manifest}`,
       binary: 'cargo',
-      args: ['check', '--quiet'],
+      args: ['check', '--quiet', '--manifest-path', manifest],
+      coversExtensions: ['.rs'],
       // Reuse the project's build cache — a cold target dir takes minutes.
-      env: { ...process.env, CARGO_TARGET_DIR: join(projectRoot, 'target') },
-    };
+      env: {
+        ...process.env,
+        CARGO_TARGET_DIR: join(projectRoot, manifest, '..', 'target'),
+      },
+    });
   }
-  return null;
+  return checkers;
+}
+
+/** Cargo.toml at the root or one level down (src-tauri/, backend/, ...). */
+function findCargoManifests(projectRoot: string): string[] {
+  const manifests: string[] = [];
+  if (existsSync(join(projectRoot, 'Cargo.toml'))) {
+    manifests.push('Cargo.toml');
+    return manifests; // root workspace covers members
+  }
+  let entries: string[] = [];
+  try {
+    entries = readdirSync(projectRoot);
+  } catch {
+    return manifests;
+  }
+  for (const entry of entries) {
+    if (entry === 'node_modules' || entry.startsWith('.')) continue;
+    if (existsSync(join(projectRoot, entry, 'Cargo.toml'))) {
+      manifests.push(`${entry}/Cargo.toml`);
+    }
+  }
+  return manifests;
 }
 
 function dirtyPlanFiles(projectRoot: string, plan: CleanupPlanResult): string[] {
@@ -164,7 +222,7 @@ function applyBatchDeletions(worktree: string, batch: CleanupBatch): void {
   for (const [file, ranges] of rangesByFile) {
     const path = join(worktree, file);
     if (!existsSync(path)) continue;
-    writeFileSync(path, deleteLineRanges(readFileSync(path, 'utf-8'), ranges));
+    writeFileSync(path, deleteLineRanges(readFileSync(path, 'utf-8'), ranges, { rust: file.endsWith('.rs') }));
   }
 }
 
@@ -178,17 +236,50 @@ function applyBatchDeletions(worktree: string, batch: CleanupBatch): void {
 export function deleteLineRanges(
   content: string,
   ranges: ReadonlyArray<{ start: number; end: number }>,
+  opts: { rust?: boolean } = {},
 ): string {
   const lines = content.split('\n');
-  const strippedLines = stripCommentsAndStrings(content).split('\n');
+  // Rust lifetimes ('a) look like unterminated char literals to the generic
+  // masker, corrupting bracket counts — use a quote-aware Rust variant.
+  const strippedLines = (opts.rust === true
+    ? stripRustCommentsAndStrings(content)
+    : stripCommentsAndStrings(content)
+  ).split('\n');
   const remove = new Set<number>();
   for (const range of ranges) {
-    const end = extendToBalanced(strippedLines, range.start, Math.min(range.end, lines.length - 1));
-    for (let line = range.start; line <= end && line < lines.length; line++) {
+    const start = extendOverLeadingDocLines(lines, range.start);
+    const end = extendToBalanced(strippedLines, start, Math.min(range.end, lines.length - 1));
+    for (let line = start; line <= end && line < lines.length; line++) {
       remove.add(line);
     }
   }
   return lines.filter((_line, index) => !remove.has(index)).join('\n');
+}
+
+/** Mask comments and double-quoted strings only — single quotes stay (lifetimes). */
+function stripRustCommentsAndStrings(source: string): string {
+  return source
+    .replace(/\/\/.*$/gm, (segment) => segment.replace(/[^\r\n]/g, ' '))
+    .replace(/\/\*[\s\S]*?\*\//g, (segment) => segment.replace(/[^\r\n]/g, ' '))
+    .replace(/"(?:\\.|[^"\\\r\n])*"/g, (segment) => segment.replace(/[^\r\n]/g, ' '));
+}
+
+/**
+ * Deleting an item must take its attached doc comments and attributes with
+ * it — an orphaned `///` above a removed item is a syntax error in Rust
+ * ("expected item after doc comment").
+ */
+function extendOverLeadingDocLines(lines: readonly string[], start: number): number {
+  let line = start;
+  while (line > 0) {
+    const above = (lines[line - 1] ?? '').trim();
+    if (/^(?:\/\/\/|\/\/!|#\[|#!\[|\/\*\*|\*|\*\/|@\w)/.test(above)) {
+      line -= 1;
+    } else {
+      break;
+    }
+  }
+  return line;
 }
 
 const MAX_BALANCE_EXTENSION = 200;

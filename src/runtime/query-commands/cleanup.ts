@@ -460,11 +460,16 @@ const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, opts, budget 
   if (booleanOptionValue(opts, 'verify')) {
     console.log('\nVerifying batches against the project checker (throwaway worktree at HEAD)...');
     const verification = verifyCleanupPlan(resolveProjectRoot(), result);
-    if (!verification.checker) {
-      console.log('  No checker detected (need tsconfig.json or Cargo.toml at the project root) — skipped.');
+    if (verification.checkers.length === 0) {
+      console.log('  No checker detected (need tsconfig.json or a Cargo.toml) — skipped.');
       return;
     }
-    console.log(`  Checker: ${verification.checker}`);
+    for (const checker of verification.checkers) {
+      console.log(`  Checker: ${checker}`);
+    }
+    if (verification.uncoveredFiles.length > 0) {
+      console.log(`  WARNING: no checker covers these plan files (entries there are NOT verified): ${verification.uncoveredFiles.join(', ')}`);
+    }
     if (verification.baselineErrors > 0) {
       console.log(`  Baseline has ${verification.baselineErrors} pre-existing error(s) — verifying differentially (no NEW errors).`);
     }

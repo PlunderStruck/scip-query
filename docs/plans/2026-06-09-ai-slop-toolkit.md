@@ -61,6 +61,17 @@ Every language ships its own ground truth (tsc, cargo check, ...).
       callback references there; the oracle stopped a build-breaking deletion. Failure
       output = the exact missed references. 53s end-to-end.
 
+MULTI-LANGUAGE (added after VegaAssistant testing): checker detection now collects ALL
+applicable checkers — root tsconfig + Cargo.toml at root or one level down
+(src-tauri/) — runs each per batch, and WARNS about plan files no checker covers
+(a tsc-only pass must not stamp Rust deletions verified). Rust hardening from a live
+cargo catch: (1) deletions extend UPWARD over attached doc comments/attributes
+(orphaned /// is a syntax error: "expected item after doc comment"); (2) bracket
+balance uses a Rust-aware masker — lifetimes ('a) fooled the generic single-quote
+string stripper and corrupted brace counts ("unclosed delimiter"). End state:
+VegaAssistant batch 0 (TS + Rust incl. a 99-LOC Rust method) COMPILER-VERIFIED by
+tsc + cargo check in 64s.
+
 Follow-up (queued): the Stable_Management catch indicates dead-code misses
 import-specifier/callback references in `backend/src/index.ts`-style entry files that
 classifyFile doesn't recognize as entry surfaces (monorepo `*/src/index.ts`). Investigate
