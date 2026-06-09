@@ -167,6 +167,29 @@ function percentile(sorted: readonly number[], fraction: number): number {
   return sorted[index]!;
 }
 
+// Keyed by HEAD like the other git caches.
+const trackedFilesCache = createPerDbValue<{ head: string; files: Set<string> | null }>(
+  'git-tracked-files',
+  { clearGroups: ['whole-project'] },
+);
+
+/** All git-tracked files (including docs, configs — not just indexed sources). */
+export function getTrackedFiles(db: ScipDatabase): Set<string> | null {
+  const head = resolveHead(db.config.projectRoot);
+  if (!head) return null;
+  const cached = trackedFilesCache.has(db) ? trackedFilesCache.get(db, () => ({ head: '', files: null })) : null;
+  if (cached && cached.head === head) return cached.files;
+  trackedFilesCache.invalidate(db);
+  return trackedFilesCache.get(db, () => {
+    try {
+      const raw = runGit(db.config.projectRoot, ['ls-files']);
+      return { head, files: new Set(raw.split('\n').map((line) => line.trim()).filter((line) => line !== '')) };
+    } catch {
+      return { head, files: null };
+    }
+  }).files;
+}
+
 export interface FileAddRecord {
   /** Commits ago (0 = newest) of the file's earliest known add in the window. */
   commitsAgo: number;

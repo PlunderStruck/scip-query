@@ -54,7 +54,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 | `extract-candidates` | Find heuristic extraction candidates from isolated callee clusters | `-s, --scope <path>`<br>`--min-loc <n>`<br>`--min-callees <n>`<br>`-n, --limit <n>`<br>`--full` |
 | `cleanup-plan` | Ordered, batched deletion plan: graph-fact dead code plus the cascade candidates it unlocks | `-s, --scope <path>`<br>`--min-loc <n>`<br>`--max-depth <n>`<br>`--full` |
 | `recent-duplicates` | Directional duplicate candidates: recent code that re-implements established code | `--window <n>`<br>`--min-similarity <n>`<br>`-n, --limit <n>`<br>`-s, --scope <path>`<br>`--full` |
-| `doc-drift [doc]` | Stale-doc candidates: docs whose historically-coupled code kept changing after the doc stopped | `-n, --limit <n>`<br>`--min-coupling <n>` |
+| `doc-drift [doc]` | Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped | `-n, --limit <n>`<br>`--min-coupling <n>` |
 | `drift [module]` | Detect heuristic drift candidates: unused imports, layer violations, and pattern deviations | `--min-deviation <n>`<br>`--full` |
 | `wrapper-candidates` | Find heuristic wrapper candidates only called by one consumer | `-s, --scope <path>`<br>`--max-loc <n>`<br>`-n, --limit <n>`<br>`--full` |
 | `passthrough-candidates` | Find heuristic passthrough candidates that forward to one callee | `-s, --scope <path>`<br>`--max-loc <n>`<br>`-n, --limit <n>`<br>`--full` |

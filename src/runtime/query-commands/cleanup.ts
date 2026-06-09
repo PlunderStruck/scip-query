@@ -490,13 +490,21 @@ const handleDocDrift = dbCommand(({ db, args, opts }) => {
   });
   if (!result.available) return render.empty('No git history available (not a repository, or git missing).');
   if (result.findings.length === 0) {
-    return render.empty('No drifting docs found — historically-coupled code has not moved since each doc last changed.');
+    return render.empty(`No drifting docs found across ${result.docsScanned} doc(s) — referenced and co-changed code has not moved since each doc last changed.`);
   }
-  console.log(`Docs whose historically-coupled code moved on without them (${result.commitsAnalyzed} commits analyzed):\n`);
+  console.log(`Docs whose referenced or co-changed code moved on without them (${result.docsScanned} docs scanned, ${result.commitsAnalyzed} commits analyzed):\n`);
   for (const finding of result.findings) {
     console.log(`  staleness ${finding.staleness}  ${finding.doc}`);
+    for (const broken of finding.brokenReferences.slice(0, 4)) {
+      console.log(`    BROKEN REFERENCE: cites ${broken} — that file no longer exists`);
+    }
     for (const subject of finding.subjects.slice(0, 4)) {
-      console.log(`    ${subject.changesSinceDocUpdate} change(s) since doc update  ${subject.file}  (coupled ${subject.coChanges}x historically)`);
+      const evidence = subject.evidence === 'both'
+        ? `referenced by doc + coupled ${subject.coChanges}x`
+        : subject.evidence === 'reference'
+          ? 'referenced by doc'
+          : `coupled ${subject.coChanges}x historically`;
+      console.log(`    ${subject.changesSinceDocUpdate} change(s) since doc update  ${subject.file}  (${evidence})`);
     }
   }
   console.log('\nStale standards docs are worse than none — agents implement to a dead spec.');
@@ -538,7 +546,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'doc-drift',
     command: 'doc-drift [doc]',
-    description: 'Stale-doc candidates: docs whose historically-coupled code kept changing after the doc stopped',
+    description: 'Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped',
     options: [
       option('-n, --limit <n>', 'Maximum docs to report', parseInteger, 20),
       option('--min-coupling <n>', 'Minimum historical co-changes to track a subject', parseInteger, 3),

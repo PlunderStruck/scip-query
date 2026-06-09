@@ -32,6 +32,15 @@ code files but has NOT changed while those files kept churning is drifting.
 - [x] Also: co-change noise filter for changelog-by-policy files (CHANGELOG.md co-changes
       with everything by design — same class as tests/sibling stems).
 - [x] Wire (Cleanup family) + tests on the synthetic git fixture.
+- [x] CONTENT-REFERENCE MODE (added after Stable_Management testing exposed the blind
+      spot): only 2 of 56 agent-os standards had co-change history — write-once docs were
+      invisible. Now every tracked doc is scanned for file-path citations, resolved
+      against git ls-files (exact + unambiguous 2-3 segment suffix); subjects merge both
+      evidence sources ('reference' | 'co-change' | 'both'). BROKEN REFERENCES detected:
+      cited paths that existed in history but no longer exist (spec points at deleted
+      code) — weighted 10x in staleness. Result on agent-os: domain-model.md cites four
+      deleted frontend/src/api/* files; prisma-migrations.md unchanged through 43 schema
+      changes; waitlist.md standard behind 22 endpoint-contract changes. 318 docs in 0.4s.
 
 ## 3 — `cleanup-plan --verify`: compile-verified deletion (the universal oracle)
 Every language ships its own ground truth (tsc, cargo check, ...). Verifying deletion
