@@ -1,6 +1,27 @@
-# scip-query
+<h1 align="center">
+  <img src="docs/assets/scip-query-logo.png" alt="scip-query logo" width="56"> scip-query <img src="docs/assets/title-spacer.svg" alt="" width="56">
+</h1>
 
-Structural code intelligence for AI agents and engineers.
+<p align="center">
+  <strong>Structural code intelligence for AI agents and engineers.</strong>
+</p>
+
+<p align="center">
+  Ask compiler-backed questions about how a codebase is wired together, then trace systems end to end before editing.
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/scip-query"><img alt="npm version" src="https://img.shields.io/npm/v/scip-query.svg"></a>
+  <a href="https://www.npmjs.com/package/scip-query"><img alt="npm downloads" src="https://img.shields.io/npm/dm/scip-query.svg"></a>
+  <a href="package.json"><img alt="Node version" src="https://img.shields.io/node/v/scip-query.svg"></a>
+  <a href="https://www.apache.org/licenses/LICENSE-2.0"><img alt="License" src="https://img.shields.io/npm/l/scip-query.svg"></a>
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/scip-query"><img alt="Install from npm" src="https://img.shields.io/badge/install-npm-cb3837?style=for-the-badge&logo=npm&logoColor=white"></a>
+  <a href="docs/AGENT_GUIDE.md"><img alt="Agent guide" src="https://img.shields.io/badge/agent-guide-2563eb?style=for-the-badge"></a>
+  <a href="docs/COMMAND_REFERENCE.md"><img alt="Command reference" src="https://img.shields.io/badge/command-reference-111827?style=for-the-badge"></a>
+</p>
 
 `scip-query` lets a model ask precise questions about how a codebase is wired together: where a symbol is defined, who references it, what calls it, what it calls, what depends on it, and what would be affected by changing it. It uses [SCIP](https://github.com/sourcegraph/scip) indexes, so the strongest answers come from compiler and language-server facts instead of text search.
 
@@ -18,6 +39,25 @@ Or run it without a global install:
 ```bash
 npx scip-query@latest --version
 npx scip-query@latest reindex
+```
+
+## At a Glance
+
+| Ask this | Run this |
+|---|---|
+| What is in this module? | `scip-query system src/auth` |
+| Who uses this symbol? | `scip-query trace login` |
+| What calls this function? | `scip-query call-graph login` |
+| What might break if I change it? | `scip-query affected login` |
+| What did my git diff affect? | `scip-query diff-impact` |
+| What can be cleaned up? | `scip-query health` |
+
+```mermaid
+flowchart LR
+  A["Language indexer"] --> B["SCIP index"]
+  B --> C["scip-query"]
+  C --> D["Structural answers"]
+  D --> E["Plan, edit, debug, verify"]
 ```
 
 ## The Problem
