@@ -10,6 +10,7 @@ import { getScipVersion, isScipInstalled, printScipInstallInstructions, tryInsta
 const IS_WINDOWS = platform() === 'win32';
 export const BUILTIN_SKILLS = [
   'concrete-plan',
+  'scip-ai-cleanup',
   'scip-explore',
   'scip-debloat',
   'scip-maintainability',

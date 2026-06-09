@@ -44,6 +44,30 @@ This is not a score-maxing workflow. Health scores, finding counts, and LOC tota
 
 ---
 
+## Start Here: The Verified Pipeline
+
+Before working the angles below one by one, run the high-leverage trio:
+
+```bash
+scip-query cleanup-plan --verify     # cascade dead-code plan, COMPILER-VERIFIED per batch
+scip-query recent-duplicates         # recent code that re-implements established code
+scip-query doc-drift                 # docs whose referenced code moved on without them
+```
+
+`cleanup-plan --verify` subsumes the manual dead-code workflow: it runs dead
+code to a fixpoint (deleting batch 0 makes batch 1 dead), applies each batch
+in a throwaway worktree, and runs the project's own checker (tsc / cargo
+check) differentially. Only act on batches stamped COMPILER-VERIFIED; FAILED
+output names the references the static evidence missed. For AI-generated
+codebases specifically, prefer the dedicated scip-ai-cleanup skill.
+
+After cleanup, ratchet the result so it never regresses:
+
+```bash
+scip-query health --write-baseline   # commit .scipquery-baseline.json
+scip-query health --baseline         # CI gate: exit 1 on any NEW finding
+```
+
 ## Symbol Lookup Tips
 
 `scip-query` accepts partial symbol names — you don't need the full SCIP symbol path. These all work:
