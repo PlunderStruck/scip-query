@@ -42,16 +42,29 @@ code files but has NOT changed while those files kept churning is drifting.
       deleted frontend/src/api/* files; prisma-migrations.md unchanged through 43 schema
       changes; waitlist.md standard behind 22 endpoint-contract changes. 318 docs in 0.4s.
 
-## 3 — `cleanup-plan --verify`: compile-verified deletion (the universal oracle)
-Every language ships its own ground truth (tsc, cargo check, ...). Verifying deletion
-batches with the project's own compiler upgrades findings from candidates to proofs and
-solves the multi-language trust gap (Rust/Python have no semantic provider).
-- [ ] `src/runtime/cleanup-verify.ts`: temp `git worktree add --detach`, apply batch-0
-      deletions textually (descending line order per file), run the detected checker
-      (tsconfig → `npx tsc --noEmit`; Cargo.toml → `cargo check --quiet`), time-boxed;
-      clean up worktree. Warn when dirty working-tree files intersect the plan.
-- [ ] Stamp entries `compiler-verified` on success; on failure print the first errors —
-      those errors are themselves signal (hidden dynamic references).
+## 3 — `cleanup-plan --verify` ✅ DONE — compile-verified deletion (the universal oracle)
+Every language ships its own ground truth (tsc, cargo check, ...).
+- [x] `src/runtime/cleanup-verify.ts`: throwaway `git worktree add --detach` at HEAD,
+      node_modules symlinked in (worktrees lack untracked deps), CARGO_TARGET_DIR reuse
+      for Rust; batches applied CUMULATIVELY (also exercises the cascade claim);
+      dirty-overlap warning; worktree always removed.
+- [x] Truncated-range hardening: index ranges sometimes cover only a declaration's first
+      line — deletions extend until brackets balance (on comment/string-stripped text) so
+      a statement is never bisected. Caught live on scip-query: a 5-line declaration with
+      a 1-line index range; verify failed, fix applied, then COMPILER-VERIFIED in 6s.
+- [x] DIFFERENTIAL BASELINE: most repos don't check clean at the root (Stable_Management:
+      3,329 pre-existing tsc errors from workspace tsconfigs). The unmodified worktree is
+      checked first; pass = no NEW errors (position-independent error identity, tested).
+- [x] Live catch on Stable_Management: 5 new errors distilled from 3,329 — the entry
+      file backend/src/index.ts imports all three "dead" startup functions and wires
+      `shutdown` into signal handlers. The dead detector's evidence missed import +
+      callback references there; the oracle stopped a build-breaking deletion. Failure
+      output = the exact missed references. 53s end-to-end.
+
+Follow-up (queued): the Stable_Management catch indicates dead-code misses
+import-specifier/callback references in `backend/src/index.ts`-style entry files that
+classifyFile doesn't recognize as entry surfaces (monorepo `*/src/index.ts`). Investigate
+both the classifier pattern and the reference counting before trusting dead on that shape.
 
 ## 4 — `unused-params`: speculative generality
 AI's signature move: parameters and options nobody uses. V1 scope: TRAILING unused

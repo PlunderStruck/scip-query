@@ -1,5 +1,7 @@
 import type { DeadOptions } from '../../domain/types.js';
 import * as queries from '../../queries/index.js';
+import { resolveProjectRoot } from '../cli-context.js';
+import { verifyCleanupPlan } from '../cleanup-verify.js';
 import { renderHeuristicNotice } from '../cli-support.js';
 import type { CommandDescriptor } from '../command-descriptor-types.js';
 import { doc, option, parseInteger, parseNumber, parsePositiveInteger } from '../command-spec-builders.js';
@@ -454,6 +456,32 @@ const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, opts, budget 
       console.log(`  ${entry.shortName}  (${entry.file})  blocked by ${entry.blockingFiles.join(', ')}`);
     }
   }
+
+  if (booleanOptionValue(opts, 'verify')) {
+    console.log('\nVerifying batches against the project checker (throwaway worktree at HEAD)...');
+    const verification = verifyCleanupPlan(resolveProjectRoot(), result);
+    if (!verification.checker) {
+      console.log('  No checker detected (need tsconfig.json or Cargo.toml at the project root) — skipped.');
+      return;
+    }
+    console.log(`  Checker: ${verification.checker}`);
+    if (verification.baselineErrors > 0) {
+      console.log(`  Baseline has ${verification.baselineErrors} pre-existing error(s) — verifying differentially (no NEW errors).`);
+    }
+    if (verification.dirtyOverlap.length > 0) {
+      console.log(`  WARNING: plan files dirty in working tree (verification runs at HEAD): ${verification.dirtyOverlap.join(', ')}`);
+    }
+    for (const batch of verification.batches) {
+      if (batch.status === 'verified') {
+        console.log(`  Batch ${batch.depth}: COMPILER-VERIFIED`);
+      } else {
+        console.log(`  Batch ${batch.depth}: FAILED — the errors below name references the static evidence missed:`);
+        for (const error of batch.errors ?? []) {
+          console.log(`    ${error}`);
+        }
+      }
+    }
+  }
 });
 
 const handleRecentDuplicates = budgetedDbCommand('recent-duplicates', ({ db, opts, budget }) => {
@@ -519,11 +547,12 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--min-loc <n>', 'Only include symbols >= N lines', parseInteger, 1),
       option('--max-depth <n>', 'Maximum cascade depth', parseInteger, 5),
+      option('--verify', 'Apply batches in a throwaway worktree and run the project checker (tsc / cargo check)'),
       option('--full', 'Run unbounded analysis on large indexes'),
     ],
     budget: 'candidate-scan',
     renderShape: 'custom',
-    docs: doc('Cleanup', ['scip-query cleanup-plan --min-loc 3']),
+    docs: doc('Cleanup', ['scip-query cleanup-plan --min-loc 3', 'scip-query cleanup-plan --verify']),
     handler: handleCleanupPlan,
   }),
   cleanupCommand({
