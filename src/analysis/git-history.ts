@@ -53,19 +53,27 @@ const MAX_COMMITS = 2_000;
 const BULK_COMMIT_FILE_CAP = 50;
 const FIX_SUBJECT_PATTERN = /\b(?:fix(?:es|ed)?|bug|regression|hotfix)\b/i;
 
-// Keyed by HEAD so long-lived processes (watch mode) recompute after commits.
-const historyCache = createPerDbValue<{ head: string; history: CommitHistory | null }>(
-  'git-commit-history',
-  { clearGroups: ['whole-project'] },
-);
+/**
+ * The one lifecycle every git-derived value shares: cache per db, revalidate
+ * against HEAD so long-lived processes (watch mode) recompute after commits,
+ * return null when git is unavailable.
+ */
+function headKeyedGitValue<T>(name: string): (db: ScipDatabase, load: (projectRoot: string, head: string) => T | null) => T | null {
+  const cache = createPerDbValue<{ head: string; value: T | null }>(name, { clearGroups: ['whole-project'] });
+  return (db, load) => {
+    const head = resolveHead(db.config.projectRoot);
+    if (!head) return null;
+    const cached = cache.has(db) ? cache.get(db, () => ({ head: '', value: null })) : null;
+    if (cached && cached.head === head) return cached.value;
+    cache.invalidate(db);
+    return cache.get(db, () => ({ head, value: load(db.config.projectRoot, head) })).value;
+  };
+}
+
+const commitHistoryCache = headKeyedGitValue<CommitHistory>('git-commit-history');
 
 export function getCommitHistory(db: ScipDatabase): CommitHistory | null {
-  const head = resolveHead(db.config.projectRoot);
-  if (!head) return null;
-  const cached = historyCache.has(db) ? historyCache.get(db, () => ({ head: '', history: null })) : null;
-  if (cached && cached.head === head) return cached.history;
-  historyCache.invalidate(db);
-  return historyCache.get(db, () => ({ head, history: loadCommitHistory(db.config.projectRoot, head) })).history;
+  return commitHistoryCache(db, loadCommitHistory);
 }
 
 function resolveHead(projectRoot: string): string | null {
@@ -167,27 +175,18 @@ function percentile(sorted: readonly number[], fraction: number): number {
   return sorted[index]!;
 }
 
-// Keyed by HEAD like the other git caches.
-const trackedFilesCache = createPerDbValue<{ head: string; files: Set<string> | null }>(
-  'git-tracked-files',
-  { clearGroups: ['whole-project'] },
-);
+const trackedFilesCache = headKeyedGitValue<Set<string>>('git-tracked-files');
 
 /** All git-tracked files (including docs, configs — not just indexed sources). */
 export function getTrackedFiles(db: ScipDatabase): Set<string> | null {
-  const head = resolveHead(db.config.projectRoot);
-  if (!head) return null;
-  const cached = trackedFilesCache.has(db) ? trackedFilesCache.get(db, () => ({ head: '', files: null })) : null;
-  if (cached && cached.head === head) return cached.files;
-  trackedFilesCache.invalidate(db);
-  return trackedFilesCache.get(db, () => {
+  return trackedFilesCache(db, (projectRoot) => {
     try {
-      const raw = runGit(db.config.projectRoot, ['ls-files']);
-      return { head, files: new Set(raw.split('\n').map((line) => line.trim()).filter((line) => line !== '')) };
+      const raw = runGit(projectRoot, ['ls-files']);
+      return new Set(raw.split('\n').map((line) => line.trim()).filter((line) => line !== ''));
     } catch {
-      return { head, files: null };
+      return null;
     }
-  }).files;
+  });
 }
 
 export interface FileAddRecord {
@@ -196,11 +195,7 @@ export interface FileAddRecord {
   addedAt: number;
 }
 
-// Keyed by HEAD like the main history cache.
-const fileAddCache = createPerDbValue<{ head: string; adds: Map<string, FileAddRecord> | null }>(
-  'git-file-adds',
-  { clearGroups: ['whole-project'] },
-);
+const fileAddCache = headKeyedGitValue<Map<string, FileAddRecord>>('git-file-adds');
 
 /**
  * When each file was first added, from `git log --diff-filter=A` over the
@@ -208,12 +203,7 @@ const fileAddCache = createPerDbValue<{ head: string; adds: Map<string, FileAddR
  * treat absence as "established".
  */
 export function getFileAddRecords(db: ScipDatabase): Map<string, FileAddRecord> | null {
-  const head = resolveHead(db.config.projectRoot);
-  if (!head) return null;
-  const cached = fileAddCache.has(db) ? fileAddCache.get(db, () => ({ head: '', adds: null })) : null;
-  if (cached && cached.head === head) return cached.adds;
-  fileAddCache.invalidate(db);
-  return fileAddCache.get(db, () => ({ head, adds: loadFileAddRecords(db.config.projectRoot) })).adds;
+  return fileAddCache(db, (projectRoot) => loadFileAddRecords(projectRoot));
 }
 
 function loadFileAddRecords(projectRoot: string): Map<string, FileAddRecord> | null {

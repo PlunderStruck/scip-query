@@ -15,6 +15,7 @@ import { coChange } from './co-change.js';
 import { getChangeAmplification, getFileChurn } from '../analysis/git-history.js';
 import { getSuppressionInventory } from '../analysis/suppressions.js';
 import { buildHealthReport } from './health-report.js';
+import { HEALTH_DETECTOR_PROFILES } from './internal/health-detector-profiles.js';
 import { clearWholeProjectEvidenceCaches } from './internal/cache-invalidation.js';
 import { requestGarbageCollection } from './health-cache-control.js';
 import type { HealthReport } from './health-report.js';
@@ -272,14 +273,7 @@ function summarizeHealthDead(
   budget: HealthBudget,
 ): CountLocSummary {
   return runHealthPhase(db, budget, 'dead', () => {
-    const deadResult = dead(db, {
-      scope,
-      minLoc: 3,
-      skipBarrels: true,
-      deadCodeOnly: true,
-      scanLimit: budget.candidateScanLimit,
-      semantic: false,
-    });
+    const deadResult = dead(db, { scope, ...HEALTH_DETECTOR_PROFILES.dead, scanLimit: budget.candidateScanLimit });
     return summarizeLoc(filterHealthDeadSymbols(db, deadResult.symbols));
   });
 }
@@ -290,12 +284,7 @@ function summarizeHealthIsolated(
   budget: HealthBudget,
 ): CountLocSummary {
   return runHealthPhase(db, budget, 'isolated', () => {
-    const isolatedResult = isolated(db, {
-      scope,
-      minLoc: 3,
-      scanLimit: budget.candidateScanLimit,
-      semantic: false,
-    });
+    const isolatedResult = isolated(db, { scope, ...HEALTH_DETECTOR_PROFILES.isolated, scanLimit: budget.candidateScanLimit });
     return summarizeLoc(filterHealthIsolatedSymbols(db, isolatedResult));
   });
 }
@@ -317,14 +306,7 @@ function countSimilarHealthCandidates(
   budget: HealthBudget,
 ): number {
   return runHealthPhase(db, budget, 'similar', () =>
-    similarAll(db, {
-      scope,
-      minSimilarity: 0.6,
-      limit: 50,
-      minCallees: 4,
-      scanLimit: budget.candidateScanLimit,
-      semantic: false,
-    }).length,
+    similarAll(db, { scope, ...HEALTH_DETECTOR_PROFILES.similar, scanLimit: budget.candidateScanLimit }).length,
   );
 }
 
@@ -334,14 +316,7 @@ function countExtractionHealthCandidates(
   budget: HealthBudget,
 ): number {
   return runHealthPhase(db, budget, 'extract-candidates', () =>
-    extractCandidates(db, {
-      scope,
-      minLoc: 15,
-      minCallees: 5,
-      limit: 50,
-      scanLimit: budget.candidateScanLimit,
-      semantic: false,
-    }).length,
+    extractCandidates(db, { scope, ...HEALTH_DETECTOR_PROFILES.extract, scanLimit: budget.candidateScanLimit }).length,
   );
 }
 
@@ -351,13 +326,7 @@ function summarizeHealthWrappers(
   budget: HealthBudget,
 ): CountLocSummary {
   return summarizeHealthLocQuery(db, budget, 'wrapper-candidates', () =>
-    wrapperCandidates(db, {
-      scope,
-      maxLoc: 15,
-      limit: 50,
-      scanLimit: budget.candidateScanLimit,
-      semantic: false,
-    }),
+    wrapperCandidates(db, { scope, ...HEALTH_DETECTOR_PROFILES.wrappers, scanLimit: budget.candidateScanLimit }),
   );
 }
 
@@ -367,13 +336,7 @@ function summarizeHealthPassthroughs(
   budget: HealthBudget,
 ): CountLocSummary {
   return summarizeHealthLocQuery(db, budget, 'passthrough-candidates', () =>
-    passthroughCandidates(db, {
-      scope,
-      maxLoc: 15,
-      limit: 50,
-      scanLimit: budget.candidateScanLimit,
-      semantic: false,
-    }),
+    passthroughCandidates(db, { scope, ...HEALTH_DETECTOR_PROFILES.passthroughs, scanLimit: budget.candidateScanLimit }),
   );
 }
 
@@ -383,13 +346,7 @@ function summarizeHealthStaleAbstractions(
   budget: HealthBudget,
 ): StaleSummary {
   return runHealthPhase(db, budget, 'stale-abstractions', () => {
-    const staleResult = staleAbstractions(db, {
-      scope,
-      minLoc: 3,
-      limit: 50,
-      scanLimit: budget.candidateScanLimit,
-      semantic: false,
-    });
+    const staleResult = staleAbstractions(db, { scope, ...HEALTH_DETECTOR_PROFILES.stale, scanLimit: budget.candidateScanLimit });
     const unused = staleResult.filter((s) => s.consumers === 0).length;
     return {
       count: staleResult.length,
@@ -439,7 +396,7 @@ function summarizeHealthDrift(
   budget: HealthBudget,
 ): DriftSummary {
   return runHealthPhase(db, budget, 'drift', () => {
-    const driftResult = drift(db, { scope, semantic: false });
+    const driftResult = drift(db, { scope, ...HEALTH_DETECTOR_PROFILES.drift });
     return {
       count: driftResult.unusedImports + driftResult.layerViolations,
       unusedImports: driftResult.unusedImports,

@@ -8,13 +8,14 @@
  * and pair keys). Git-derived findings are deliberately excluded — new
  * commits would churn them without any code change.
  *
- * Detector options mirror the health profile but the contract that matters
- * is self-consistency between `--write-baseline` and `--baseline` runs.
+ * Detector options come from HEALTH_DETECTOR_PROFILES — the same constants
+ * health uses, so the ratchet and the report always describe the same runs.
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
 import { isEntrySurface, isRootedSymbol } from '../analysis/file-classifier.js';
+import { HEALTH_DETECTOR_PROFILES } from './internal/health-detector-profiles.js';
 import { cycles } from './cycles.js';
 import { dead } from './dead.js';
 import { drift } from './drift.js';
@@ -66,7 +67,7 @@ export function collectBaselineFindings(
   const scanLimit = baselineScanLimit(db);
   const findings: string[] = [];
 
-  const deadResult = dead(db, { scope, minLoc: 3, skipBarrels: true, deadCodeOnly: true, scanLimit, semantic: false });
+  const deadResult = dead(db, { scope, ...HEALTH_DETECTOR_PROFILES.dead, scanLimit });
   for (const symbol of deadResult.symbols) {
     if (isEntrySurface(db, symbol.relativePath)) continue;
     if (isRootedSymbol(db, symbol.symbol, symbol.relativePath)) continue;
@@ -74,7 +75,7 @@ export function collectBaselineFindings(
     findings.push(`dead:${symbol.relativePath}:${symbol.shortName}`);
   }
 
-  for (const symbol of isolated(db, { scope, minLoc: 3, scanLimit, semantic: false })) {
+  for (const symbol of isolated(db, { scope, ...HEALTH_DETECTOR_PROFILES.isolated, scanLimit })) {
     if (isEntrySurface(db, symbol.relativePath)) continue;
     if (isRootedSymbol(db, symbol.symbol, symbol.relativePath)) continue;
     findings.push(`isolated:${symbol.relativePath}:${symbol.shortName}`);
@@ -85,27 +86,27 @@ export function collectBaselineFindings(
     findings.push(`cycle:${canonicalCycleKey(cycle.path)}`);
   }
 
-  for (const pair of similarAll(db, { scope, minSimilarity: 0.6, limit: 50, minCallees: 4, scanLimit, semantic: false })) {
+  for (const pair of similarAll(db, { scope, ...HEALTH_DETECTOR_PROFILES.similar, scanLimit })) {
     findings.push(`similar:${[pair.symbolA, pair.symbolB].sort().join('|')}`);
   }
 
-  for (const candidate of extractCandidates(db, { scope, minLoc: 15, minCallees: 5, limit: 50, scanLimit, semantic: false })) {
+  for (const candidate of extractCandidates(db, { scope, ...HEALTH_DETECTOR_PROFILES.extract, scanLimit })) {
     findings.push(`extract:${candidate.relativePath}:${candidate.shortName}`);
   }
 
-  for (const candidate of wrapperCandidates(db, { scope, maxLoc: 15, limit: 50, scanLimit, semantic: false })) {
+  for (const candidate of wrapperCandidates(db, { scope, ...HEALTH_DETECTOR_PROFILES.wrappers, scanLimit })) {
     findings.push(`wrapper:${candidate.file}:${candidate.shortName}`);
   }
 
-  for (const candidate of passthroughCandidates(db, { scope, maxLoc: 15, limit: 50, scanLimit, semantic: false })) {
+  for (const candidate of passthroughCandidates(db, { scope, ...HEALTH_DETECTOR_PROFILES.passthroughs, scanLimit })) {
     findings.push(`passthrough:${candidate.file}:${candidate.shortName}`);
   }
 
-  for (const candidate of staleAbstractions(db, { scope, minLoc: 3, limit: 50, scanLimit, semantic: false })) {
+  for (const candidate of staleAbstractions(db, { scope, ...HEALTH_DETECTOR_PROFILES.stale, scanLimit })) {
     findings.push(`stale:${candidate.file}:${candidate.shortName}`);
   }
 
-  for (const result of drift(db, { scope, semantic: false }).results) {
+  for (const result of drift(db, { scope, ...HEALTH_DETECTOR_PROFILES.drift }).results) {
     if (result.kind === 'pattern-deviation') continue; // advisory, too noisy to ratchet
     findings.push(`drift:${result.kind}:${result.file}:${result.dep}`);
   }
