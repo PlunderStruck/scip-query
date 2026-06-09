@@ -23,6 +23,36 @@ You are writing a production implementation plan as a markdown checklist. Every 
 
 ---
 
+## Gather Context Fast
+
+Start every plan with the bundled context command — it replaces a half-dozen
+separate queries and adds evidence no single query has:
+
+```bash
+scip-query plan-context <symbol-or-file>
+```
+
+Use its sections directly in the plan:
+
+- **DEFINITIONS / REFERENCES / CALL GRAPH / DOWNSTREAM IMPACT** — the Source
+  citations for your steps.
+- **HISTORY** — files that usually change together with the target. If the
+  plan edits the target, the plan MUST either cover its co-change partners or
+  state why they're untouched this time. This is how plans stop causing drift.
+- **CHANGE RISK** — high-risk consumers get their own verification steps.
+
+Two pre-plan checks that prevent planning mistakes:
+
+```bash
+scip-query doc-drift <standard.md>    # is the standard this plan follows stale?
+scip-query recent-duplicates          # does the helper you're about to plan already exist?
+```
+
+If `doc-drift` shows the standard's referenced code moved on without it,
+updating that standard becomes step 0 of the plan. If the plan creates a new
+helper, cite the `similar` / `recent-duplicates` evidence that nothing
+established already does the job.
+
 ## Symbol Lookup Tips
 
 `scip-query` accepts partial symbol names — you don't need the full SCIP symbol path. These all work:
