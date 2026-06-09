@@ -10,6 +10,7 @@ import {
   getCommitHistory,
   getFileChurn,
 } from '../src/analysis/git-history.js';
+import { docDrift } from '../src/queries/doc-drift.js';
 
 let repoRoot: string;
 
@@ -18,6 +19,8 @@ function fakeDb(projectRoot: string): ScipDatabase {
   return { config: { projectRoot } } as ScipDatabase;
 }
 
+let commitClock = 1_700_000_000;
+
 function git(...args: string[]): void {
   execFileSync('git', ['-C', repoRoot, ...args], {
     stdio: 'ignore',
@@ -25,11 +28,15 @@ function git(...args: string[]): void {
       ...process.env,
       GIT_AUTHOR_NAME: 'test', GIT_AUTHOR_EMAIL: 't@t.t',
       GIT_COMMITTER_NAME: 'test', GIT_COMMITTER_EMAIL: 't@t.t',
+      // Distinct timestamps per commit — doc-drift compares them strictly.
+      GIT_AUTHOR_DATE: `${commitClock} +0000`,
+      GIT_COMMITTER_DATE: `${commitClock} +0000`,
     },
   });
 }
 
 function commit(message: string, files: Record<string, string>): void {
+  commitClock += 60;
   for (const [path, content] of Object.entries(files)) {
     writeFileSync(join(repoRoot, path), content);
   }
@@ -41,11 +48,13 @@ beforeAll(() => {
   repoRoot = mkdtempSync(join(tmpdir(), 'scip-git-history-'));
   git('init');
   // a.ts and b.ts always change together; c.ts changes alone.
-  commit('initial', { 'a.ts': '1', 'b.ts': '1', 'c.ts': '1' });
-  commit('feature one', { 'a.ts': '2', 'b.ts': '2' });
-  commit('fix: regression in pair', { 'a.ts': '3', 'b.ts': '3' });
+  // guide.md documents a.ts (co-changes 3x), then a.ts moves on without it.
+  commit('initial', { 'a.ts': '1', 'b.ts': '1', 'c.ts': '1', 'guide.md': 'v1' });
+  commit('feature one', { 'a.ts': '2', 'b.ts': '2', 'guide.md': 'v2' });
+  commit('fix: regression in pair', { 'a.ts': '3', 'b.ts': '3', 'guide.md': 'v3' });
   commit('feature two', { 'a.ts': '4', 'b.ts': '4' });
   commit('solo change', { 'c.ts': '2' });
+  commit('feature three', { 'a.ts': '5' });
 });
 
 afterAll(() => {
@@ -56,8 +65,8 @@ describe('git history evidence', () => {
   it('parses bounded commit history', () => {
     const history = getCommitHistory(fakeDb(repoRoot));
     expect(history).not.toBeNull();
-    expect(history!.commits).toHaveLength(5);
-    expect(history!.commits[0]!.files).toContain('c.ts');
+    expect(history!.commits).toHaveLength(6);
+    expect(history!.commits[0]!.files).toContain('a.ts');
   });
 
   it('returns null outside a git repository', () => {
@@ -68,7 +77,7 @@ describe('git history evidence', () => {
 
   it('computes per-file churn with fix-commit counts', () => {
     const churn = getFileChurn(fakeDb(repoRoot))!;
-    expect(churn.get('a.ts')!.changes).toBe(4);
+    expect(churn.get('a.ts')!.changes).toBe(5);
     expect(churn.get('a.ts')!.fixChanges).toBe(1);
     expect(churn.get('c.ts')!.changes).toBe(2);
     expect(churn.get('c.ts')!.fixChanges).toBe(0);
@@ -76,8 +85,21 @@ describe('git history evidence', () => {
 
   it('computes change amplification percentiles', () => {
     const amplification = getChangeAmplification(fakeDb(repoRoot))!;
-    expect(amplification.commitsAnalyzed).toBe(5);
-    expect(amplification.medianFilesPerCommit).toBe(2);
+    expect(amplification.commitsAnalyzed).toBe(6);
+    expect(amplification.medianFilesPerCommit).toBe(3);
+  });
+
+  it('flags docs whose coupled code moved on without them', () => {
+    const result = docDrift(fakeDb(repoRoot));
+    expect(result.available).toBe(true);
+    const guide = result.findings.find((finding) => finding.doc === 'guide.md');
+    expect(guide).toBeDefined();
+    // a.ts changed twice after guide.md's last update; b.ts once.
+    expect(guide!.subjects).toEqual([
+      expect.objectContaining({ file: 'a.ts', coChanges: 3, changesSinceDocUpdate: 2 }),
+      expect.objectContaining({ file: 'b.ts', coChanges: 3, changesSinceDocUpdate: 1 }),
+    ]);
+    expect(guide!.staleness).toBe(3);
   });
 
   it('finds high-confidence co-change pairs', () => {

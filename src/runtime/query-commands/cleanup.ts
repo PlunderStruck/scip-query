@@ -6,6 +6,7 @@ import { doc, option, parseInteger, parseNumber, parsePositiveInteger } from '..
 import {
   booleanOptionValue,
   budgetedDbCommand,
+  dbCommand,
   budgetedGroupedByFileCommand,
   budgetedListCommand,
   budgetedReportCommand,
@@ -455,6 +456,52 @@ const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, opts, budget 
   }
 });
 
+const handleRecentDuplicates = budgetedDbCommand('recent-duplicates', ({ db, opts, budget }) => {
+  const result = queries.recentDuplicates(db, {
+    windowCommits: definedNumberOption(opts, 'window', 100),
+    minSimilarity: numberOptionValue(opts, 'minSimilarity') ?? 0.7,
+    limit: definedNumberOption(opts, 'limit', 30),
+    scope: stringOptionValue(opts, 'scope'),
+    scanLimit: budget.scanLimit,
+    semantic: budget.semantic,
+  });
+  if (!result.available) return render.empty('No git history available (not a repository, or git missing).');
+  if (result.findings.length === 0) {
+    return render.empty(`No recent re-implementations found (window: last ${result.windowCommits} commits).`);
+  }
+  console.log(`Recent re-implementations (window: last ${result.windowCommits} commits):\n`);
+  for (const finding of result.findings) {
+    if (finding.kind === 'echo') {
+      console.log(`  ${Math.round(finding.similarity * 100)}%  ECHO  ${finding.echoFile}  ${finding.echoSymbol}  (added ${finding.echoAgeCommits} commits ago)`);
+      console.log(`        duplicates established  ${finding.establishedFile}  ${finding.establishedSymbol}`);
+    } else {
+      console.log(`  ${Math.round(finding.similarity * 100)}%  TWIN  ${finding.echoFile}  ${finding.echoSymbol}`);
+      console.log(`        and                     ${finding.establishedFile}  ${finding.establishedSymbol}  (both new — consolidate before they diverge)`);
+    }
+  }
+  console.log(`\n${result.findings.length} finding(s). ECHO: prefer extending the established side and deleting the echo.`);
+});
+
+const handleDocDrift = dbCommand(({ db, args, opts }) => {
+  const result = queries.docDrift(db, {
+    doc: args[0] === undefined ? undefined : stringArg(args, 0),
+    limit: definedNumberOption(opts, 'limit', 20),
+    minCoupling: definedNumberOption(opts, 'minCoupling', 3),
+  });
+  if (!result.available) return render.empty('No git history available (not a repository, or git missing).');
+  if (result.findings.length === 0) {
+    return render.empty('No drifting docs found — historically-coupled code has not moved since each doc last changed.');
+  }
+  console.log(`Docs whose historically-coupled code moved on without them (${result.commitsAnalyzed} commits analyzed):\n`);
+  for (const finding of result.findings) {
+    console.log(`  staleness ${finding.staleness}  ${finding.doc}`);
+    for (const subject of finding.subjects.slice(0, 4)) {
+      console.log(`    ${subject.changesSinceDocUpdate} change(s) since doc update  ${subject.file}  (coupled ${subject.coChanges}x historically)`);
+    }
+  }
+  console.log('\nStale standards docs are worse than none — agents implement to a dead spec.');
+});
+
 export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'cleanup-plan',
@@ -470,6 +517,36 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     renderShape: 'custom',
     docs: doc('Cleanup', ['scip-query cleanup-plan --min-loc 3']),
     handler: handleCleanupPlan,
+  }),
+  cleanupCommand({
+    id: 'recent-duplicates',
+    command: 'recent-duplicates',
+    description: 'Directional duplicate candidates: recent code that re-implements established code',
+    options: [
+      option('--window <n>', 'How many commits back counts as "recent"', parseInteger, 100),
+      option('--min-similarity <n>', 'Minimum similarity (0-1)', parseNumber, 0.7),
+      option('-n, --limit <n>', 'Maximum findings', parseInteger, 30),
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option('--full', 'Run unbounded semantic analysis on large indexes'),
+    ],
+    budget: 'candidate-scan',
+    heuristic: { label: 'recent re-implementation candidates' },
+    renderShape: 'custom',
+    docs: doc('Cleanup', ['scip-query recent-duplicates --window 50']),
+    handler: handleRecentDuplicates,
+  }),
+  cleanupCommand({
+    id: 'doc-drift',
+    command: 'doc-drift [doc]',
+    description: 'Stale-doc candidates: docs whose historically-coupled code kept changing after the doc stopped',
+    options: [
+      option('-n, --limit <n>', 'Maximum docs to report', parseInteger, 20),
+      option('--min-coupling <n>', 'Minimum historical co-changes to track a subject', parseInteger, 3),
+    ],
+    heuristic: { label: 'doc drift candidates' },
+    renderShape: 'custom',
+    docs: doc('Cleanup', ['scip-query doc-drift', 'scip-query doc-drift AGENTS.md']),
+    handler: handleDocDrift,
   }),
   cleanupCommand({
     id: 'dead',

@@ -73,6 +73,8 @@ export const commandDescriptors: CommandDescriptor[] = [
   query('change-surface'),
   query('cleanup-plan'),
   query('co-change'),
+  query('recent-duplicates'),
+  query('doc-drift'),
   query('plan-context'),
   {
     id: DIFF_IMPACT_BATCH_COMMAND,

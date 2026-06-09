@@ -167,6 +167,66 @@ function percentile(sorted: readonly number[], fraction: number): number {
   return sorted[index]!;
 }
 
+export interface FileAddRecord {
+  /** Commits ago (0 = newest) of the file's earliest known add in the window. */
+  commitsAgo: number;
+  addedAt: number;
+}
+
+// Keyed by HEAD like the main history cache.
+const fileAddCache = createPerDbValue<{ head: string; adds: Map<string, FileAddRecord> | null }>(
+  'git-file-adds',
+  { clearGroups: ['whole-project'] },
+);
+
+/**
+ * When each file was first added, from `git log --diff-filter=A` over the
+ * bounded window. Files older than the window are absent — callers should
+ * treat absence as "established".
+ */
+export function getFileAddRecords(db: ScipDatabase): Map<string, FileAddRecord> | null {
+  const head = resolveHead(db.config.projectRoot);
+  if (!head) return null;
+  const cached = fileAddCache.has(db) ? fileAddCache.get(db, () => ({ head: '', adds: null })) : null;
+  if (cached && cached.head === head) return cached.adds;
+  fileAddCache.invalidate(db);
+  return fileAddCache.get(db, () => ({ head, adds: loadFileAddRecords(db.config.projectRoot) })).adds;
+}
+
+function loadFileAddRecords(projectRoot: string): Map<string, FileAddRecord> | null {
+  let raw: string;
+  try {
+    raw = runGit(projectRoot, [
+      'log',
+      '--no-merges',
+      '--diff-filter=A',
+      '--name-only',
+      '-n', String(MAX_COMMITS),
+      '--pretty=format:%x01%H%x00%ct%x00%s',
+    ]);
+  } catch {
+    return null;
+  }
+  const adds = new Map<string, FileAddRecord>();
+  let commitsAgo = -1;
+  for (const block of raw.split('\x01')) {
+    if (block.trim() === '') continue;
+    commitsAgo += 1;
+    const newline = block.indexOf('\n');
+    const header = newline >= 0 ? block.slice(0, newline) : block;
+    const [, timestampRaw] = header.split('\x00');
+    const addedAt = Number(timestampRaw) || 0;
+    if (newline < 0) continue;
+    for (const line of block.slice(newline + 1).split('\n')) {
+      const file = line.trim();
+      if (file === '') continue;
+      // Newest-first walk: keep the OLDEST add we see (re-adds overwrite).
+      adds.set(file, { commitsAgo, addedAt });
+    }
+  }
+  return adds;
+}
+
 /**
  * Pairwise co-change counts across the bounded history. Pair generation is
  * O(k²) per commit but k is capped at BULK_COMMIT_FILE_CAP.

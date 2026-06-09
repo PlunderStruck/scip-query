@@ -95,6 +95,10 @@
       "import": "./dist/queries/diff-impact.js",
       "types": "./dist/queries/diff-impact.d.ts"
     },
+    "./queries/doc-drift": {
+      "import": "./dist/queries/doc-drift.js",
+      "types": "./dist/queries/doc-drift.d.ts"
+    },
     "./queries/drift": {
       "import": "./dist/queries/drift.js",
       "types": "./dist/queries/drift.d.ts"
@@ -154,6 +158,10 @@
     "./queries/plan-context": {
       "import": "./dist/queries/plan-context.js",
       "types": "./dist/queries/plan-context.d.ts"
+    },
+    "./queries/recent-duplicates": {
+      "import": "./dist/queries/recent-duplicates.js",
+      "types": "./dist/queries/recent-duplicates.d.ts"
     },
     "./queries/redundant-reexports": {
       "import": "./dist/queries/redundant-reexports.js",

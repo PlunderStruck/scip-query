@@ -29,6 +29,8 @@ export { affected } from './affected.js';
 export { changeSurface } from './change-surface.js';
 export { cleanupPlan } from './cleanup-plan.js';
 export { coChange } from './co-change.js';
+export { docDrift } from './doc-drift.js';
+export { recentDuplicates } from './recent-duplicates.js';
 export { planContext } from './plan-context.js';
 export { checkHealthBaseline, collectBaselineFindings, writeHealthBaseline } from './health-baseline.js';
 export {
@@ -94,6 +96,8 @@ export type { AffectedResult } from './affected.js';
 export type { ChangeSurfaceEntry, ChangeSurfaceResult } from './change-surface.js';
 export type { CleanupBatch, CleanupPlanEntry, CleanupPlanResult } from './cleanup-plan.js';
 export type { CoChangeFinding, CoChangeResult } from './co-change.js';
+export type { DocDriftFinding, DocDriftResult, DocDriftSubject } from './doc-drift.js';
+export type { RecentDuplicateFinding, RecentDuplicatesResult } from './recent-duplicates.js';
 export type { BaselineComparison, HealthBaselineFile } from './health-baseline.js';
 export type { PlanContextOptions, PlanContextResult } from './plan-context.js';
 export type { DiffImpactResult } from './diff-impact.js';

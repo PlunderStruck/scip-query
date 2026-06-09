@@ -43,6 +43,8 @@ const queryCommandOrder = [
   'change-surface',
   'cleanup-plan',
   'co-change',
+  'recent-duplicates',
+  'doc-drift',
   'plan-context',
   'drift',
   'wrapper-candidates',

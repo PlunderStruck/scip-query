@@ -25,7 +25,9 @@ export interface CoChangeResult {
   findings: CoChangeFinding[];
 }
 
-const NOISE_FILE_PATTERN = /(?:^|\/)(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock|.*\.map)$|(?:^|\/)(?:dist|build|out|node_modules)\//;
+// Changelogs co-change with everything BY POLICY — intentional coupling,
+// not a hidden concept (same class as tests and same-stem siblings).
+const NOISE_FILE_PATTERN = /(?:^|\/)(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock|CHANGELOG(?:\.[a-z]+)?|.*\.map)$|(?:^|\/)(?:dist|build|out|node_modules)\//i;
 
 /**
  * Hidden coupling from the change graph: file pairs that repeatedly change
