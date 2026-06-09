@@ -13,6 +13,7 @@ export const BUILTIN_SKILLS = [
   'scip-ai-cleanup',
   'scip-explore',
   'scip-debloat',
+  'scip-doc-reconcile',
   'scip-maintainability',
   'scip-verify',
   'scip-language-playbook',

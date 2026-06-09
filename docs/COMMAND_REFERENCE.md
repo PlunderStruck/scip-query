@@ -106,7 +106,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 
 | Command | Description | Options |
 |---|---|---|
-| `install-skills` | Install skills (concrete-plan, scip-ai-cleanup, scip-explore, scip-debloat, scip-maintainability, scip-verify, scip-language-playbook) into Claude Code, Codex, and shared agent roots | - |
+| `install-skills` | Install skills (concrete-plan, scip-ai-cleanup, scip-explore, scip-debloat, scip-doc-reconcile, scip-maintainability, scip-verify, scip-language-playbook) into Claude Code, Codex, and shared agent roots | - |
 | `check-deps` | Check whether scip-query and the detected language indexers are actually runnable | - |
 | `init` | Create a .scipquery.json config file for this project | - |
 | `watch` | Watch for file changes and reindex automatically | `--debounce <ms>`<br>`--cooldown <ms>` |
