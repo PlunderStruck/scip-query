@@ -1,6 +1,6 @@
 import * as queries from '../../queries/index.js';
 import type { CommandDescriptor } from '../command-descriptor-types.js';
-import { doc, option, parseInteger } from '../command-spec-builders.js';
+import { doc, option, parseInteger, parseNumber } from '../command-spec-builders.js';
 import {
   budgetedDbCommand,
   dbCommand,
@@ -8,6 +8,7 @@ import {
   stringArg,
   stringOptionValue,
 } from '../command-execution.js';
+import { formatGateBlockReason, isStopHookReentry, readHookInput } from '../agent-setup.js';
 import { displayRange, render } from '../render.js';
 
 const handleAffected = dbCommand(({ db, args, opts }) => {
@@ -61,12 +62,53 @@ const handleChangeSurface = budgetedDbCommand('change-surface', ({ db, args, bud
   });
 });
 
+const handleIncompleteMigration = dbCommand(({ db, opts }) => {
+  const result = queries.incompleteMigration(db, {
+    base: stringOptionValue(opts, 'base'),
+    minContainment: definedNumberOption(opts, 'minContainment', 0.7),
+    maxHelpers: definedNumberOption(opts, 'maxHelpers', 10),
+    limit: definedNumberOption(opts, 'limit', 20),
+  });
+  if (!result.available) return render.empty('No git history available (not a repository, or git missing).');
+  if (result.changedFiles.length === 0) return render.empty(`No changes vs ${result.base}.`);
+  console.log(`Incomplete migrations vs ${result.base}: ${result.changedFiles.length} changed file(s), ${result.helpersChecked} new helper(s) scored.`);
+  if (result.note) console.log(`  note: ${result.note}`);
+  for (const skip of result.skipped) {
+    console.log(`  skipped ${skip.helperShortName} (${skip.helperFile}): ${skip.reason}`);
+  }
+  if (result.findings.length === 0) {
+    console.log('\nNo incomplete migrations detected.');
+    return;
+  }
+  for (const finding of result.findings) {
+    console.log(`\n  ${finding.helperShortName}  (${finding.helperFile})`);
+    console.log(`    wired into: ${finding.migratedFiles.join(', ')}`);
+    for (const leftover of finding.leftovers) {
+      console.log(`    un-migrated: ${Math.round(leftover.containment * 100)}%  ${leftover.shortName}  (${leftover.file})`);
+      console.log(`      shared: ${leftover.sharedCallees.join(', ')}`);
+    }
+  }
+  console.log(`\n${result.findings.length} helper(s) with un-migrated sites. Finish the extraction or confirm the sites differ on purpose.`);
+});
+
 const handleDiffGate = dbCommand(({ db, opts }) => {
+  const hookMode = opts['hook'] === true;
+  if (hookMode && isStopHookReentry(readHookInput())) {
+    return; // this turn was already continued by a previous block — don't loop
+  }
   const result = queries.diffGate(db, {
     base: stringOptionValue(opts, 'base'),
     minTogether: definedNumberOption(opts, 'minTogether', 6),
     maxEchoChecks: definedNumberOption(opts, 'maxEchoChecks', 10),
   });
+  if (hookMode) {
+    // Hook contract (Claude Code and Codex): silent exit 0 = allow stop,
+    // exit 2 with stderr = block and feed the reason back to the agent.
+    if (result.findings.length === 0) return;
+    console.error(formatGateBlockReason(result));
+    process.exitCode = 2;
+    return;
+  }
   if (result.changedFiles.length === 0) {
     return render.empty(result.note ?? `No changes vs ${result.base}.`);
   }
@@ -113,16 +155,32 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'diff-gate',
     command: 'diff-gate',
-    description: 'Gate the current diff: echo candidates, missing co-change partners, uncited doc updates, unused params, new dead symbols; exit 1 on findings',
+    description: 'Gate the current diff: echo candidates, incomplete migrations, missing co-change partners, uncited doc updates, unused params, new dead symbols; exit 1 on findings',
     options: [
       option('--base <ref>', 'Git ref to diff against (default: HEAD)'),
       option('--min-together <n>', 'Minimum historical co-changes for the partner check', parseInteger, 6),
       option('--max-echo-checks <n>', 'Maximum changed symbols to test for echoes', parseInteger, 10),
+      option('--hook', 'Agent Stop-hook mode: silent on pass, exit 2 with findings on stderr to block the stop'),
     ],
     heuristic: { label: 'diff gate candidates' },
     renderShape: 'custom',
     docs: doc('Impact', ['scip-query diff-gate', 'scip-query diff-gate --base origin/main']),
     handler: handleDiffGate,
+  },
+  {
+    id: 'incomplete-migration',
+    command: 'incomplete-migration',
+    description: 'Partially-completed extraction candidates: new helpers in the diff wired into some sites while similar un-migrated sites remain',
+    options: [
+      option('--base <ref>', 'Git ref to diff against (default: HEAD)'),
+      option('--min-containment <n>', 'Minimum share of helper callees a site must contain (0-1)', parseNumber, 0.7),
+      option('--max-helpers <n>', 'Maximum new helpers to score', parseInteger, 10),
+      option('-n, --limit <n>', 'Maximum findings to report', parseInteger, 20),
+    ],
+    heuristic: { label: 'incomplete migration candidates' },
+    renderShape: 'custom',
+    docs: doc('Impact', ['scip-query incomplete-migration', 'scip-query incomplete-migration --base origin/main']),
+    handler: handleIncompleteMigration,
   },
   {
     id: 'co-change',

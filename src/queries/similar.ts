@@ -214,7 +214,7 @@ export function similarAll(
 
 // ── Internal helpers ───────────────────────────────────────
 
-interface SymbolFingerprint {
+export interface SymbolFingerprint {
   symbol: string;
   file: string;
   callees: Set<string>;
@@ -269,7 +269,7 @@ function findCallees(
 // scip-query: ignore-extract — this builds callee-set fingerprints for
 // similarity; callable selection, signature lookup, callee filtering, and
 // fingerprint shaping are one evidence pass.
-function getAllCalleeFingerprints(
+export function getAllCalleeFingerprints(
   db: ScipDatabase,
   opts: { minCallees: number; scope?: string; excludeSymbol?: string; scanLimit?: number; semantic?: boolean },
 ): SymbolFingerprint[] {
@@ -297,7 +297,7 @@ function getAllCalleeFingerprints(
     .filter((fp) => fp.callees.size >= minCallees);
 }
 
-function meaningfulCallees(callees: Iterable<string>): Set<string> {
+export function meaningfulCallees(callees: Iterable<string>): Set<string> {
   return new Set([...callees].filter((callee) => !isInfrastructureCallee(callee)));
 }
 

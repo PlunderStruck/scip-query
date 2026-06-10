@@ -47,6 +47,7 @@ const queryCommandOrder = [
   'doc-drift',
   'unused-params',
   'diff-gate',
+  'incomplete-migration',
   'plan-context',
   'drift',
   'wrapper-candidates',

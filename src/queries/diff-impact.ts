@@ -26,6 +26,9 @@ export interface DiffImpactPlan {
   note?: string;
 }
 
+/** Plan note when git itself failed (not a repo, bad ref) — vs an empty diff. */
+export const GIT_DIFF_UNAVAILABLE_NOTE = 'Unable to compute git diff.';
+
 export interface DiffImpactPartial {
   changedSymbols: ChangedSymbol[];
   consumerEntries: Array<{ file: string; symbols: string[] }>;
@@ -73,7 +76,7 @@ export function diffImpactPlan(
     return {
       changedFileLines: [],
       changedFiles: [],
-      note: 'Unable to compute git diff.',
+      note: GIT_DIFF_UNAVAILABLE_NOTE,
     };
   }
 }

@@ -5,6 +5,7 @@ import { augmentAuxiliaryDocuments, augmentVueResolvedReferences, detectLanguage
 import { loadProjectConfig, resolveIndexPaths, initProjectConfig } from './config.js';
 import { getProjectReadiness } from './project-readiness.js';
 import { Watcher } from './watch.js';
+import { setupAgent } from './agent-setup.js';
 import { installSkills, isScipInstalled, printScipInstallInstructions } from './setup.js';
 import {
   collect,
@@ -253,6 +254,17 @@ export function handleInit(): void {
   const configPath = initProjectConfig(projectRoot, languages);
   console.log(`Config written to ${configPath}`);
   console.log(`Detected languages: ${languages.join(', ') || '(none)'}`);
+}
+
+export function handleSetupAgent(rawOpts: unknown): void {
+  const opts = commandOptions(rawOpts);
+  const projectRoot = resolveProjectRoot();
+  const result = setupAgent(projectRoot, { gitHook: booleanOptionValue(opts, 'gitHook') });
+  for (const target of result.written) console.log(`  done: ${target}`);
+  for (const target of result.unchanged) console.log(`  ok:   ${target} (already wired)`);
+  for (const skip of result.skipped) console.log(`  skip: ${skip.target} — ${skip.reason}`);
+  console.log('\nAgents reading this project now know to route through the scip-query skills and gate their diffs.');
+  console.log('Keep the index fresh (`scip-query reindex` or `scip-query watch`) so the gate sees current code.');
 }
 
 // scip-query: ignore-extract — long-running watch command lifecycle: option

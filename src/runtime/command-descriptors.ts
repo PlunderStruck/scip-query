@@ -77,6 +77,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   query('doc-drift'),
   query('unused-params'),
   query('diff-gate'),
+  query('incomplete-migration'),
   query('plan-context'),
   {
     id: DIFF_IMPACT_BATCH_COMMAND,
@@ -160,6 +161,15 @@ export const commandDescriptors: CommandDescriptor[] = [
     renderShape: 'custom',
     docs: doc('Maintenance'),
     handler: handlers.handleInit,
+  },
+  {
+    id: 'setup-agent',
+    command: 'setup-agent',
+    description: 'Seed agent guidance for this project: AGENTS.md/CLAUDE.md block pointing agents at the scip-query skills and diff gate, plus an optional git pre-commit backstop',
+    options: [option('--git-hook', 'Also install a git pre-commit hook that runs diff-gate')],
+    renderShape: 'custom',
+    docs: doc('Maintenance', ['scip-query setup-agent', 'scip-query setup-agent --git-hook']),
+    handler: handlers.handleSetupAgent,
   },
   {
     id: 'watch',

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeIdf,
+  containment,
   difference,
   getMedianIdf,
   intersection,
@@ -37,6 +38,28 @@ describe('similarity kernel', () => {
     it('matches |A∩B|/|A∪B|', () => {
       // {1,2,3} ∩ {2,3,4} = {2,3}; union = {1,2,3,4}; 2/4 = 0.5
       expect(jaccard(new Set([1, 2, 3]), new Set([2, 3, 4]))).toBeCloseTo(0.5, 6);
+    });
+  });
+
+  describe('containment', () => {
+    it('returns 0 for an empty A (no division by zero)', () => {
+      expect(containment(new Set(), new Set([1, 2]))).toBe(0);
+    });
+
+    it('returns 1 when A is fully inside B, regardless of B extras', () => {
+      expect(containment(new Set([1, 2]), new Set([1, 2, 3, 4]))).toBe(1);
+    });
+
+    it('returns the contained fraction of A', () => {
+      // {1,2,3,4} ∩ {1,2} = {1,2}; 2/|A| = 2/4
+      expect(containment(new Set([1, 2, 3, 4]), new Set([1, 2]))).toBeCloseTo(0.5, 6);
+    });
+
+    it('is asymmetric (unlike jaccard)', () => {
+      const small = new Set([1, 2]);
+      const big = new Set([1, 2, 3, 4]);
+      expect(containment(small, big)).toBe(1);
+      expect(containment(big, small)).toBeCloseTo(0.5, 6);
     });
   });
 

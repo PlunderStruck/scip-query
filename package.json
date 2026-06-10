@@ -1,6 +1,6 @@
 {
   "name": "scip-query",
-  "version": "0.8.2",
+  "version": "0.9.0",
   "description": "Language-agnostic code intelligence CLI powered by SCIP indexes",
   "type": "module",
   "main": "dist/index.js",
@@ -134,6 +134,10 @@
     "./queries/imports": {
       "import": "./dist/queries/imports.js",
       "types": "./dist/queries/imports.d.ts"
+    },
+    "./queries/incomplete-migration": {
+      "import": "./dist/queries/incomplete-migration.js",
+      "types": "./dist/queries/incomplete-migration.d.ts"
     },
     "./queries/index": {
       "import": "./dist/queries/index.js",

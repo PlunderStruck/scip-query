@@ -6,6 +6,7 @@
  * files.ts uses Jaccard inline. similar-chains.ts uses edit distance over
  * sequences (different algorithm), and similar-signatures.ts does exact
  * matching on normalized strings (no similarity math).
+ * incomplete-migration.ts uses containment + IDF significance.
  *
  * What this module owns: the math primitives the first two share. It is
  * stateless — callers own corpus caching.
@@ -39,6 +40,19 @@ export function jaccard<T>(a: Set<T>, b: Set<T>): number {
   for (const item of a) if (b.has(item)) shared += 1;
   const union = a.size + b.size - shared;
   return union === 0 ? 0 : shared / union;
+}
+
+/**
+ * Containment: |A∩B| / |A| — how much of A lives inside B. Asymmetric on
+ * purpose: a site that inlines a helper's logic plus its own surrounding
+ * logic contains the helper fully even though cosine/Jaccard would be
+ * diluted by the site's unique features. Returns 0 for an empty A.
+ */
+export function containment<T>(a: Set<T>, b: Set<T>): number {
+  if (a.size === 0) return 0;
+  let shared = 0;
+  for (const item of a) if (b.has(item)) shared += 1;
+  return shared / a.size;
 }
 
 /**

@@ -39,6 +39,7 @@ export const PUBLIC_QUERY_ENTRIES = [
   'hierarchy',
   'hotspots',
   'imports',
+  'incomplete-migration',
   'index',
   'isolated',
   'members',

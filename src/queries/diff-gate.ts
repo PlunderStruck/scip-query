@@ -7,11 +7,13 @@ import { isCoChangeNoiseFile } from './co-change.js';
 import { diffImpact } from './diff-impact.js';
 import { docsCitingFiles } from './doc-drift.js';
 import { checkHealthBaseline, resolveBaselinePath } from './health-baseline.js';
+import { incompleteMigration } from './incomplete-migration.js';
 import { similar } from './similar.js';
 import { unusedParams } from './unused-params.js';
 
 export type DiffGateCheck =
   | 'echo'
+  | 'incomplete-migration'
   | 'co-change-partner'
   | 'doc-reference'
   | 'unused-params'
@@ -44,6 +46,9 @@ export interface DiffGateResult {
  * Checks:
  * - echo:               a symbol this diff touched closely resembles
  *                       established code elsewhere — likely re-implementation.
+ * - incomplete-migration: a helper added in this diff was wired into some
+ *                       sites, but similar un-migrated sites remain elsewhere
+ *                       — the extraction stopped partway.
  * - co-change-partner:  a changed file's strong historical partner is NOT in
  *                       the diff — the change-graph contract says they move
  *                       together (auto-derived sync enforcement).
@@ -83,6 +88,7 @@ export function diffGate(
   if (changedFiles.length === 0) return result;
 
   runEchoCheck(db, impact.changedSymbols, changed, maxEchoChecks, minSimilarity, result);
+  runIncompleteMigrationCheck(db, base, result);
   runCoChangePartnerCheck(db, changed, minTogether, minConfidence, result);
   runDocReferenceCheck(db, changed, result);
   runUnusedParamsCheck(db, changedFiles, result);
@@ -118,6 +124,32 @@ function runEchoCheck(
     result.skipped.push({
       check: 'echo',
       reason: `echo check capped at ${maxEchoChecks} of ${changedSymbols.length} changed symbols`,
+    });
+  }
+}
+
+function runIncompleteMigrationCheck(
+  db: ScipDatabase,
+  base: string,
+  result: DiffGateResult,
+): void {
+  const migration = incompleteMigration(db, { base });
+  if (!migration.available) {
+    result.skipped.push({ check: 'incomplete-migration', reason: 'no git history' });
+    return;
+  }
+  result.checksRun.push('incomplete-migration');
+  if (migration.note) {
+    result.skipped.push({ check: 'incomplete-migration', reason: migration.note });
+  }
+  for (const finding of migration.findings) {
+    const sites = finding.leftovers
+      .map((leftover) => `${leftover.shortName} (${leftover.file}, ${Math.round(leftover.containment * 100)}%)`)
+      .join(', ');
+    result.findings.push({
+      check: 'incomplete-migration',
+      message: `new helper ${finding.helperShortName} (${finding.helperFile}) is wired into ${finding.migratedFiles.length} file(s), but ${finding.leftovers.length} similar un-migrated site(s) remain: ${sites}`,
+      remediation: `Migrate the remaining sites to ${finding.helperShortName}, or confirm they are intentionally different.`,
     });
   }
 }
