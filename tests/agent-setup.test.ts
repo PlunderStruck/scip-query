@@ -20,13 +20,17 @@ afterEach(() => {
 });
 
 describe('setupAgent', () => {
-  it('creates AGENTS.md with the managed block on a fresh project', () => {
+  it('creates AGENTS.md with the block and a CLAUDE.md @AGENTS.md shim on a fresh project', () => {
     const result = setupAgent(projectRoot);
 
-    expect(result.written).toEqual(['AGENTS.md']);
+    expect(result.written).toEqual(['AGENTS.md', 'CLAUDE.md']);
     const agentsMd = readFileSync(join(projectRoot, 'AGENTS.md'), 'utf-8');
     expect(agentsMd).toContain('scip-query diff-gate');
     expect(agentsMd).toContain('scip-query:agent-setup:begin');
+    // Claude Code doesn't read AGENTS.md natively — the shim bridges it.
+    const claudeMd = readFileSync(join(projectRoot, 'CLAUDE.md'), 'utf-8');
+    expect(claudeMd).toContain('@AGENTS.md');
+    expect(claudeMd).toContain('scip-query:agent-setup:begin');
   });
 
   it('is idempotent — a second run changes nothing', () => {
@@ -34,22 +38,32 @@ describe('setupAgent', () => {
     const second = setupAgent(projectRoot);
 
     expect(second.written).toEqual([]);
-    expect(second.unchanged).toEqual(['AGENTS.md']);
+    expect(second.unchanged).toEqual(['AGENTS.md', 'CLAUDE.md']);
   });
 
-  it('updates existing instruction files instead of creating AGENTS.md', () => {
+  it('appends the shim to an existing CLAUDE.md without touching its content', () => {
     writeFileSync(join(projectRoot, 'CLAUDE.md'), '# My project\n\nRules here.\n');
 
     setupAgent(projectRoot);
 
-    expect(existsSync(join(projectRoot, 'AGENTS.md'))).toBe(false);
     const claudeMd = readFileSync(join(projectRoot, 'CLAUDE.md'), 'utf-8');
     expect(claudeMd).toContain('# My project');
-    expect(claudeMd).toContain('scip-query diff-gate');
+    expect(claudeMd).toContain('@AGENTS.md');
+    // The canonical block lives in AGENTS.md, not duplicated into CLAUDE.md.
+    expect(claudeMd).not.toContain('scip-query plan-context');
     // Re-run replaces the managed block rather than appending a duplicate.
     setupAgent(projectRoot);
     const again = readFileSync(join(projectRoot, 'CLAUDE.md'), 'utf-8');
     expect(again.match(/scip-query:agent-setup:begin/g)).toHaveLength(1);
+  });
+
+  it('leaves CLAUDE.md alone when the user already imports AGENTS.md', () => {
+    writeFileSync(join(projectRoot, 'CLAUDE.md'), '# Shim\n\n@AGENTS.md\n');
+
+    const result = setupAgent(projectRoot);
+
+    expect(result.unchanged).toContain('CLAUDE.md');
+    expect(readFileSync(join(projectRoot, 'CLAUDE.md'), 'utf-8')).toBe('# Shim\n\n@AGENTS.md\n');
   });
 
   it('installs an executable git pre-commit hook when asked', () => {
@@ -79,7 +93,7 @@ describe('setupAgent', () => {
     const result = setupAgent(projectRoot, { gitHook: true });
 
     expect(result.skipped.some((skip) => skip.target === '.git/hooks/pre-commit')).toBe(true);
-    expect(result.written).toEqual(['AGENTS.md']);
+    expect(result.written).toEqual(['AGENTS.md', 'CLAUDE.md']);
   });
 });
 

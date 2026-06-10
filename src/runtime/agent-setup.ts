@@ -85,8 +85,12 @@ export function setupAgent(
 }
 
 /**
- * Seed a managed instructions block. Updates files that exist (AGENTS.md and
- * CLAUDE.md); creates AGENTS.md — the cross-tool standard — when neither does.
+ * Seed the agent instructions. AGENTS.md gets the canonical managed block
+ * (the cross-tool standard file: Codex, Cursor, Gemini, opencode, ...).
+ * Claude Code does NOT read AGENTS.md natively (anthropics/claude-code#6235),
+ * so CLAUDE.md gets a managed `@AGENTS.md` import shim — the ecosystem-
+ * standard bridge that Claude Code expands at load time. Only the content
+ * between our markers is ever touched; user content is preserved.
  */
 function writeInstructionsBlock(projectRoot: string, result: SetupAgentResult): void {
   const block = [
@@ -101,25 +105,41 @@ function writeInstructionsBlock(projectRoot: string, result: SetupAgentResult): 
     MD_BLOCK_END,
   ].join('\n');
 
-  const existing = ['AGENTS.md', 'CLAUDE.md'].filter((name) => existsSync(join(projectRoot, name)));
-  const targets = existing.length > 0 ? existing : ['AGENTS.md'];
+  upsertManagedBlock(projectRoot, 'AGENTS.md', block, result);
 
-  for (const name of targets) {
-    const path = join(projectRoot, name);
-    const current = existsSync(path) ? readFileSync(path, 'utf-8') : '';
-    let next: string;
-    if (current.includes(MD_BLOCK_BEGIN)) {
-      const pattern = new RegExp(`${MD_BLOCK_BEGIN}[\\s\\S]*?${MD_BLOCK_END}`);
-      next = current.replace(pattern, block);
-    } else {
-      next = current.length > 0 ? `${current.replace(/\n*$/, '\n\n')}${block}\n` : `${block}\n`;
-    }
-    if (next === current) {
-      result.unchanged.push(name);
-    } else {
-      writeFileSync(path, next);
-      result.written.push(name);
-    }
+  const claudeCurrent = existsSync(join(projectRoot, 'CLAUDE.md'))
+    ? readFileSync(join(projectRoot, 'CLAUDE.md'), 'utf-8')
+    : '';
+  if (claudeCurrent.includes('@AGENTS.md') && !claudeCurrent.includes(MD_BLOCK_BEGIN)) {
+    // The user already bridges AGENTS.md into Claude Code themselves.
+    result.unchanged.push('CLAUDE.md');
+    return;
+  }
+  const shim = [MD_BLOCK_BEGIN, '@AGENTS.md', MD_BLOCK_END].join('\n');
+  upsertManagedBlock(projectRoot, 'CLAUDE.md', shim, result);
+}
+
+/** Create the file with the block, or replace/append only our marked block. */
+function upsertManagedBlock(
+  projectRoot: string,
+  name: string,
+  block: string,
+  result: SetupAgentResult,
+): void {
+  const path = join(projectRoot, name);
+  const current = existsSync(path) ? readFileSync(path, 'utf-8') : '';
+  let next: string;
+  if (current.includes(MD_BLOCK_BEGIN)) {
+    const pattern = new RegExp(`${MD_BLOCK_BEGIN}[\\s\\S]*?${MD_BLOCK_END}`);
+    next = current.replace(pattern, block);
+  } else {
+    next = current.length > 0 ? `${current.replace(/\n*$/, '\n\n')}${block}\n` : `${block}\n`;
+  }
+  if (next === current) {
+    result.unchanged.push(name);
+  } else {
+    writeFileSync(path, next);
+    result.written.push(name);
   }
 }
 

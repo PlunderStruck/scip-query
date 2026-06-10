@@ -84,7 +84,7 @@ flowchart LR
 
 ## Cleaning Up AI-Generated Code
 
-This is the workflow the tool is built around. Each detector targets a specific way AI-assisted development rots a codebase:
+This is the workflow the tool is built around. Each detector targets a specific way AI-assisted development rots a codebase — the full catalog, with the prevention wiring for each, is in [docs/AI_FAILURE_MODES.md](docs/AI_FAILURE_MODES.md):
 
 **1. Find the echoes.** Agents re-implement helpers they didn't know existed. `recent-duplicates` makes similarity *directional* using git file ages — which side is the established original, which is the recent echo:
 
@@ -95,7 +95,16 @@ This is the workflow the tool is built around. Each detector targets a specific 
      (both new — one agent session duplicated itself; consolidate before they diverge)
 ```
 
-**2. Catch your standards docs lying.** If you keep in-repo standards for agents to read before implementing, a stale standard is worse than none. `doc-drift` reads every doc's file citations *and* its co-change history, then flags docs whose code moved on without them — including **broken references** to files that no longer exist:
+**2. Finish the half-done extraction.** Agents extract a helper, rewire one or two call sites, and abandon the rest — the extracted logic survives inline at every site they missed. `incomplete-migration` finds helpers that are new in the diff, confirms they were wired in somewhere, and lists the established sites that still contain the helper's logic but never call it (containment scoring, because a missed site holds the helper's logic *plus* its own):
+
+```
+src/utils/priceLabel.ts  priceLabel()
+  wired into: src/cards/price-summary-a.ts
+  un-migrated: 100%  buildReportB()  (src/cards/price-summary-b.ts)
+  un-migrated: 100%  buildReportC()  (src/cards/price-summary-c.ts)
+```
+
+**3. Catch your standards docs lying.** If you keep in-repo standards for agents to read before implementing, a stale standard is worse than none. `doc-drift` reads every doc's file citations *and* its co-change history, then flags docs whose code moved on without them — including **broken references** to files that no longer exist:
 
 ```
 staleness 94  product/domain-model.md
@@ -103,7 +112,7 @@ staleness 94  product/domain-model.md
   22 change(s) since doc update  src/workflows/serviceTasks.ts  (referenced by doc)
 ```
 
-**3. Delete with proof.** `cleanup-plan` runs dead-code analysis to a *fixpoint* — deleting batch 0 makes batch 1 dead, and the plan shows the cascade. `--verify` applies each batch in a throwaway git worktree and runs your own compiler (differentially, so pre-existing errors don't drown the signal):
+**4. Delete with proof.** `cleanup-plan` runs dead-code analysis to a *fixpoint* — deleting batch 0 makes batch 1 dead, and the plan shows the cascade. `--verify` applies each batch in a throwaway git worktree and runs your own compiler (differentially, so pre-existing errors don't drown the signal):
 
 ```
 ── Batch 0: deletable now (graph-fact, 67 LOC) ──
@@ -113,18 +122,18 @@ Batch 0: COMPILER-VERIFIED
 
 When verification *fails*, the errors name the exact references the static evidence missed — that failure has caught real detector mistakes and stopped build-breaking deletions.
 
-**4. Trim speculative generality.** `unused-params` finds trailing parameters no body ever uses (the classic "options for later"), scoped to removals that are type-safe by construction.
+**5. Trim speculative generality.** `unused-params` finds trailing parameters no body ever uses (the classic "options for later"), scoped to removals that are type-safe by construction.
 
-**5. Surface hidden coupling.** `co-change` finds file pairs that repeatedly change in the same commits with *no* dependency edge — schema ↔ generated inventory ↔ doc triangles, backend schemas ↔ frontend stores, `.env.example` ↔ its parser. The reference graph cannot see these; the change graph can.
+**6. Surface hidden coupling.** `co-change` finds file pairs that repeatedly change in the same commits with *no* dependency edge — schema ↔ generated inventory ↔ doc triangles, backend schemas ↔ frontend stores, `.env.example` ↔ its parser. The reference graph cannot see these; the change graph can.
 
-**6. Gate every diff.** `diff-gate` runs the whole suite scoped to what a change *introduces* — echoes of established code, missing co-change partners, docs that cite the changed files, fresh unused params, new dead symbols, baseline regressions — in seconds, exit-code friendly, with a remediation per finding an agent can act on without human triage:
+**7. Gate every diff.** `diff-gate` runs the whole suite scoped to what a change *introduces* — echoes of established code, incomplete migrations, missing co-change partners, docs that cite the changed files, fresh unused params, new dead symbols, baseline regressions — in seconds, exit-code friendly, with a remediation per finding an agent can act on without human triage:
 
 ```
 [co-change-partner] schema.prisma changed, but scripts/scope-inventory.mjs did not — they change together 12x (86% of the time)
   -> Update scripts/scope-inventory.mjs alongside this change, or confirm the coupling no longer holds.
 ```
 
-**7. Ratchet it in CI.** `health --write-baseline` snapshots finding identities into a committable file; `health --baseline` exits 1 on any *new* finding. "Don't get worse" is an objective gate that no score arithmetic can game.
+**8. Ratchet it in CI.** `health --write-baseline` snapshots finding identities into a committable file; `health --baseline` exits 1 on any *new* finding. "Don't get worse" is an objective gate that no score arithmetic can game.
 
 Before any edit, `plan-context <target>` bundles the structural picture — definitions, references, call graph, blast radius — plus a HISTORY section: churn, fix-commit density, and the files that usually change together with the target ("editing this usually means editing these").
 
@@ -171,7 +180,9 @@ Heuristic detectors carry guardrails learned from real codebases: published `pac
 
 ## Agent Skills
 
-`scip-query install-skills` symlinks ready-made skills into Claude Code, Codex, and shared agent roots — workflows for exploring (`scip-explore`), debloating (`scip-debloat`), maintainability review (`scip-maintainability`), claim verification (`scip-verify`), per-language guidance (`scip-language-playbook`), and grounded planning (`concrete-plan`).
+`scip-query install-skills` symlinks ready-made skills into Claude Code, Codex, and shared agent roots (`~/.agents/skills/`) — they update automatically with the package. The `scip-query` router skill triggers on any codebase work and dispatches to the right specialist: exploring (`scip-explore`), debloating (`scip-debloat`), maintainability review (`scip-maintainability`), post-change verification (`scip-verify`), doc reconciliation (`scip-doc-reconcile`), AI-rot cleanup (`scip-ai-cleanup`), per-language guidance (`scip-language-playbook`), and grounded planning (`concrete-plan`).
+
+Then, once per project, `scip-query setup-agent` seeds the `AGENTS.md` guidance block (plus a `CLAUDE.md` import shim, since Claude Code doesn't read AGENTS.md natively), and `--git-hook` adds a pre-commit diff gate that fires no matter which agent — or human — wrote the change.
 
 ## Quick Start
 
@@ -258,6 +269,7 @@ Query results are filtered through the project's `.gitignore`. If none exists, c
 
 ## Documentation
 
+- [AI Failure Modes](docs/AI_FAILURE_MODES.md): every specific way AI coding rots a codebase, the detector built for it, and how to wire prevention in.
 - [Agent Guide](docs/AGENT_GUIDE.md): goal-oriented workflows for tracing, planning, cleanup, quality checks, and change verification.
 - [Command Reference](docs/COMMAND_REFERENCE.md): generated command syntax, descriptions, and options.
 - [Programmatic API](docs/API.md): using the query functions from TypeScript.
