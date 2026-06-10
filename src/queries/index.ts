@@ -28,7 +28,7 @@ export { extractCandidates } from './extract-candidates.js';
 export { affected } from './affected.js';
 export { changeSurface } from './change-surface.js';
 export { cleanupPlan } from './cleanup-plan.js';
-export { diffGate } from './diff-gate.js';
+export { DIFF_GATE_CHECKS, diffGate } from './diff-gate.js';
 export { incompleteMigration } from './incomplete-migration.js';
 export { coChange } from './co-change.js';
 export { docDrift } from './doc-drift.js';

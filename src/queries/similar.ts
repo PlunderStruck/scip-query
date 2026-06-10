@@ -5,6 +5,7 @@ import { getSourceText } from '../source/source-text.js';
 import { computeIdf, difference, intersection, weightedCosine } from '../analysis/similarity.js';
 import { isFunctionLikeSymbol, leafName, shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
+import { createPerDbValue } from '../storage/per-db-cache.js';
 import { applyScanLimit } from './query-utils.js';
 
 export interface SimilarSymbolResult {
@@ -266,26 +267,56 @@ function findCallees(
   };
 }
 
-// scip-query: ignore-extract — this builds callee-set fingerprints for
-// similarity; callable selection, signature lookup, callee filtering, and
-// fingerprint shaping are one evidence pass.
+// Corpus memo: building callee fingerprints walks every production callable
+// (AST callsites + semantic callees) — by far the dominant cost of similar(),
+// similarAll(), and incompleteMigration(). One build per (db, options) per
+// process; consumers only iterate the array, never mutate it. Subscribed
+// conservatively to 'definition-catalog' so any definition refinement drops
+// the memo; deliberately NOT in 'source-file' — those clears release per-file
+// source evidence for memory, which doesn't stale already-extracted
+// fingerprints and would thrash the memo mid-scan.
+const CALLEE_FINGERPRINT_CORPUS = createPerDbValue<Map<string, SymbolFingerprint[]>>(
+  'callee-fingerprint-corpus',
+  { clearGroups: ['whole-project', 'definition-catalog'] },
+);
+
 export function getAllCalleeFingerprints(
   db: ScipDatabase,
   opts: { minCallees: number; scope?: string; excludeSymbol?: string; scanLimit?: number; semantic?: boolean },
 ): SymbolFingerprint[] {
   const { minCallees, scope, excludeSymbol, scanLimit } = opts;
+  const semantic = opts.semantic !== false;
+  const byOptions = CALLEE_FINGERPRINT_CORPUS.get(db, () => new Map());
+  const key = `${minCallees}|${scope ?? ''}|${scanLimit ?? ''}|${semantic}`;
+  let corpus = byOptions.get(key);
+  if (!corpus) {
+    corpus = buildCalleeFingerprints(db, { minCallees, scope, scanLimit, semantic });
+    byOptions.set(key, corpus);
+  }
+  // excludeSymbol stays out of the memo key: exclusion is a plain symbol skip,
+  // identical whether applied during the build or as a post-filter.
+  return excludeSymbol === undefined ? corpus : corpus.filter((fp) => fp.symbol !== excludeSymbol);
+}
+
+// scip-query: ignore-extract — this builds callee-set fingerprints for
+// similarity; callable selection, signature lookup, callee filtering, and
+// fingerprint shaping are one evidence pass.
+function buildCalleeFingerprints(
+  db: ScipDatabase,
+  opts: { minCallees: number; scope?: string; scanLimit?: number; semantic: boolean },
+): SymbolFingerprint[] {
+  const { minCallees, scope, scanLimit, semantic } = opts;
   const index = new ProjectIndex(db);
 
   const candidates = applyScanLimit(
     index.productionCallableDefinitions({
       scope,
       minLoc: 5,
-      excludeSymbol,
       sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
     }),
     scanLimit,
   );
-  const calleeMap = index.calleeMap(candidates, { semantic: opts.semantic !== false });
+  const calleeMap = index.calleeMap(candidates, { semantic });
 
   return candidates
     .map((d) => ({
@@ -370,10 +401,21 @@ function buildSourceFingerprintTokens(
   return tokens.size > 0 ? tokens : null;
 }
 
+// Same memo rationale (and group membership) as CALLEE_FINGERPRINT_CORPUS:
+// the lexical fallback corpus tokenizes every production callable's source.
+const SOURCE_FINGERPRINT_CORPUS = createPerDbValue<SourceFingerprint[]>(
+  'source-fingerprint-corpus',
+  { clearGroups: ['whole-project', 'definition-catalog'] },
+);
+
+function getAllSourceFingerprints(db: ScipDatabase): SourceFingerprint[] {
+  return SOURCE_FINGERPRINT_CORPUS.get(db, () => buildSourceFingerprints(db));
+}
+
 // scip-query: ignore-extract — this builds source-token fingerprints; scoped
 // definitions, file-kind filtering, snippets, and token extraction are one
 // text-similarity pass.
-function getAllSourceFingerprints(db: ScipDatabase): SourceFingerprint[] {
+function buildSourceFingerprints(db: ScipDatabase): SourceFingerprint[] {
   const index = new ProjectIndex(db);
   // The shared production gate owns candidate policy (tests, rust test
   // modules, ignored paths, suppression comments) — no local re-filtering.

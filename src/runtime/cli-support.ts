@@ -51,16 +51,18 @@ interface CommandAnalysisBudget {
   semantic: boolean;
 }
 
+export function isLargeCommandIndex(db: ScipDatabase): boolean {
+  const statsResult = queries.stats(db);
+  return statsResult.symbols >= LARGE_COMMAND_SYMBOL_THRESHOLD
+    || statsResult.documents >= LARGE_COMMAND_DOCUMENT_THRESHOLD;
+}
+
 export function commandAnalysisBudget(
   db: ScipDatabase,
   commandName: string,
   full: boolean | undefined,
 ): CommandAnalysisBudget {
-  const statsResult = queries.stats(db);
-  const isLargeIndex = statsResult.symbols >= LARGE_COMMAND_SYMBOL_THRESHOLD
-    || statsResult.documents >= LARGE_COMMAND_DOCUMENT_THRESHOLD;
-
-  if (!isLargeIndex) return { semantic: true };
+  if (!isLargeCommandIndex(db)) return { semantic: true };
 
   if (full) {
     console.error(`Large index detected; ${commandName} is running the unbounded semantic pass because --full was supplied.`);

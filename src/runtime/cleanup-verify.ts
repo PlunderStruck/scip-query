@@ -57,22 +57,20 @@ export function verifyCleanupPlan(
   const dirtyOverlap = dirtyPlanFiles(projectRoot, plan);
   const worktree = mkdtempSync(join(tmpdir(), 'scip-cleanup-verify-'));
   const batches: BatchVerification[] = [];
-  let baselineErrors = 0;
+  // Differential baseline: many projects don't check clean at the root
+  // (workspace tsconfigs, pre-existing errors). Pass = no NEW errors.
+  const baselineKeys = new Set<string>();
   try {
     execFileSync('git', ['-C', projectRoot, 'worktree', 'add', '--detach', '--force', worktree, 'HEAD'], {
       stdio: 'ignore',
     });
     linkUntrackedDeps(projectRoot, worktree);
 
-    // Differential baseline: many projects don't check clean at the root
-    // (workspace tsconfigs, pre-existing errors). Pass = no NEW errors.
-    const baselineKeys = new Set<string>();
     for (const checker of checkers) {
       for (const key of runChecker(checker, worktree, timeoutMs).errorKeys) {
         baselineKeys.add(key);
       }
     }
-    baselineErrors = baselineKeys.size;
 
     for (const batch of plan.batches) {
       applyBatchDeletions(worktree, batch);
@@ -100,7 +98,7 @@ export function verifyCleanupPlan(
   return {
     checkers: checkers.map((checker) => checker.label),
     uncoveredFiles,
-    baselineErrors,
+    baselineErrors: baselineKeys.size,
     dirtyOverlap,
     batches,
   };
@@ -211,7 +209,7 @@ function findCargoManifests(projectRoot: string): string[] {
     manifests.push('Cargo.toml');
     return manifests; // root workspace covers members
   }
-  let entries: string[] = [];
+  let entries: string[];
   try {
     entries = readdirSync(projectRoot);
   } catch {

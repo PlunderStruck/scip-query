@@ -85,7 +85,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 | `affected <symbol>` | Transitive closure of symbols that could break if this symbol changes | `--max-depth <n>`<br>`-s, --scope <path>` |
 | `change-surface <file>` | Pre-change briefing: exports, consumers, and blast-radius risk | `--full` |
 | `co-change [file]` | Files that change together in git history without a dependency edge — hidden coupling candidates | `--min-together <n>`<br>`-n, --limit <n>`<br>`--all` |
-| `diff-gate` | Gate the current diff: echo candidates, incomplete migrations, missing co-change partners, uncited doc updates, unused params, new dead symbols; exit 1 on findings | `--base <ref>`<br>`--min-together <n>`<br>`--max-echo-checks <n>`<br>`--hook` |
+| `diff-gate` | Gate the current diff: echo candidates, incomplete migrations, missing co-change partners, uncited doc updates, unused params, new dead symbols; exit 1 on findings | `--base <ref>`<br>`--min-together <n>`<br>`--max-echo-checks <n>`<br>`--max-helpers <n>`<br>`--skip <check>`<br>`--hook` |
 | `incomplete-migration` | Partially-completed extraction candidates: new helpers in the diff wired into some sites while similar un-migrated sites remain | `--base <ref>`<br>`--min-containment <n>`<br>`--max-helpers <n>`<br>`-n, --limit <n>` |
 | `diff-impact` | Compute changed symbols and downstream consumers from current git diff | `--base <ref>` |
 

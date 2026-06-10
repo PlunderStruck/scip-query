@@ -2,6 +2,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
 import { getCommitHistory, getTrackedFiles } from '../analysis/git-history.js';
+import {
+  fileContentHash,
+  readCachedFileEvidence,
+  writeCachedFileEvidence,
+} from '../storage/evidence-cache.js';
 
 export interface DocDriftSubject {
   file: string;
@@ -231,15 +236,10 @@ function extractFileReferences(
 ): { resolved: Set<string>; broken: string[] } {
   const resolved = new Set<string>();
   const broken = new Set<string>();
-  let content: string;
-  try {
-    content = readFileSync(join(db.config.projectRoot, docFile), 'utf-8');
-  } catch {
-    return { resolved, broken: [] };
-  }
+  const candidates = docPathCandidates(db, docFile);
+  if (!candidates) return { resolved, broken: [] };
 
-  for (const match of content.matchAll(PATH_REFERENCE_PATTERN)) {
-    const candidate = match[0].replace(/^\.?\//, '');
+  for (const candidate of candidates) {
     if (tracked.has(candidate)) {
       resolved.add(candidate);
       continue;
@@ -255,4 +255,34 @@ function extractFileReferences(
     if (everSeenInHistory.has(candidate)) broken.add(candidate);
   }
   return { resolved, broken: [...broken] };
+}
+
+/**
+ * The path-shaped tokens in a doc's text, persistently cached by content
+ * hash — the regex scan over large docs dominates diff-gate's doc-reference
+ * check on doc-heavy repos. Only extraction is cached; resolution against the
+ * tracked-file set stays live, so results track the current repo exactly.
+ * Null = doc unreadable.
+ */
+function docPathCandidates(db: ScipDatabase, docFile: string): string[] | null {
+  let content: string;
+  try {
+    content = readFileSync(join(db.config.projectRoot, docFile), 'utf-8');
+  } catch {
+    return null;
+  }
+  const contentHash = fileContentHash(db, docFile, content);
+  const cached = readCachedFileEvidence(db, 'doc-path-tokens', docFile, contentHash);
+  if (cached !== null) {
+    try {
+      return JSON.parse(cached) as string[];
+    } catch {
+      // corrupt payload — fall through and re-extract
+    }
+  }
+  const candidates = [...new Set(
+    [...content.matchAll(PATH_REFERENCE_PATTERN)].map((match) => match[0].replace(/^\.?\//, '')),
+  )];
+  writeCachedFileEvidence(db, 'doc-path-tokens', docFile, contentHash, JSON.stringify(candidates));
+  return candidates;
 }

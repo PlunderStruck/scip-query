@@ -1,7 +1,14 @@
 import type { ScipDatabase } from '../storage/db.js';
+import {
+  fileContentHash,
+  readCachedFileEvidence,
+  writeCachedFileEvidence,
+} from '../storage/evidence-cache.js';
+import { createPerDbSourceCache } from '../storage/per-db-cache.js';
 import { detectAstLanguage, type AstLanguage } from './ast-language.js';
 import { getAst } from './ast-core.js';
 import type { SyntaxNode, Tree } from './ast-types.js';
+import { getSourceText } from './source-text.js';
 import { callableFactForNode } from './source-callables.js';
 import { callSiteForNode } from './source-calls.js';
 import {
@@ -37,20 +44,87 @@ export interface SourceFacts {
   crossLanguageDispatchNames: Set<string>;
 }
 
-const SOURCE_FACTS_CACHE = new WeakMap<Tree, SourceFacts>();
+// In-process layer keyed by (db, path, source) — previously a WeakMap on the
+// parsed Tree, but a persistent-cache hit never parses a Tree at all.
+const SOURCE_FACTS_CACHE = createPerDbSourceCache<SourceFacts | null>('source-facts', {
+  clearGroups: ['whole-project', 'source-file'],
+});
 
 export function getSourceFacts(db: ScipDatabase, relativePath: string): SourceFacts | null {
   const language = detectAstLanguage(relativePath);
   if (!language) return null;
+  const source = getSourceText(db, relativePath);
+  if (!source) return null;
+  return SOURCE_FACTS_CACHE.get(db, relativePath, source, () =>
+    loadOrBuildSourceFacts(db, relativePath, language, source));
+}
+
+function loadOrBuildSourceFacts(
+  db: ScipDatabase,
+  relativePath: string,
+  language: AstLanguage,
+  source: string,
+): SourceFacts | null {
+  const contentHash = fileContentHash(db, relativePath, source);
+  const cached = readCachedFileEvidence(db, 'source-facts', relativePath, contentHash);
+  if (cached) {
+    const facts = deserializeSourceFacts(cached);
+    if (facts && facts.language === language) return facts;
+  }
+
   const tree = getAst(db, relativePath);
   if (!tree) return null;
-
-  const cached = SOURCE_FACTS_CACHE.get(tree);
-  if (cached) return cached;
-
   const facts = buildSourceFacts(tree, language);
-  SOURCE_FACTS_CACHE.set(tree, facts);
+  writeCachedFileEvidence(db, 'source-facts', relativePath, contentHash, serializeSourceFacts(facts));
   return facts;
+}
+
+/**
+ * Persistent form. `identifiersByLine` and `fileIdentifiers` are derived from
+ * `identifierLineMap`, so only the map is stored and both are rebuilt through
+ * the same helpers — structurally identical to a fresh build.
+ */
+interface SerializedSourceFacts {
+  language: AstLanguage;
+  callables: SourceFacts['callables'];
+  callSites: SourceFacts['callSites'];
+  typeContainerMap: Array<[string, string[]]>;
+  identifierLineMap: Array<[string, number[]]>;
+  rustAttrReferencedNames: string[];
+  crossLanguageDispatchNames: string[];
+}
+
+function serializeSourceFacts(facts: SourceFacts): string {
+  const serialized: SerializedSourceFacts = {
+    language: facts.language,
+    callables: facts.callables,
+    callSites: facts.callSites,
+    typeContainerMap: [...facts.typeContainerMap.entries()].map(([key, value]) => [key, [...value]]),
+    identifierLineMap: [...facts.identifierLineMap.entries()],
+    rustAttrReferencedNames: [...facts.rustAttrReferencedNames],
+    crossLanguageDispatchNames: [...facts.crossLanguageDispatchNames],
+  };
+  return JSON.stringify(serialized);
+}
+
+function deserializeSourceFacts(payload: string): SourceFacts | null {
+  try {
+    const raw = JSON.parse(payload) as SerializedSourceFacts;
+    const identifierLineMap = new Map(raw.identifierLineMap);
+    return {
+      language: raw.language,
+      callables: raw.callables,
+      callSites: raw.callSites,
+      typeContainerMap: new Map(raw.typeContainerMap.map(([key, value]) => [key, new Set(value)])),
+      identifierLineMap,
+      identifiersByLine: identifiersByLine(identifierLineMap),
+      fileIdentifiers: new Set(identifierLineMap.keys()),
+      rustAttrReferencedNames: new Set(raw.rustAttrReferencedNames),
+      crossLanguageDispatchNames: new Set(raw.crossLanguageDispatchNames),
+    };
+  } catch {
+    return null; // corrupt payload — treat as a miss and rebuild
+  }
 }
 
 export function isLiteralPassthrough(

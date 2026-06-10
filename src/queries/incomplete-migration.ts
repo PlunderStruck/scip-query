@@ -80,7 +80,13 @@ export function incompleteMigration(
     semantic?: boolean;
   } = {},
 ): IncompleteMigrationResult {
-  const { base = 'HEAD', minContainment = 0.7, minCallees = 3, maxHelpers = 10, limit = 20 } = opts;
+  const {
+    base = 'HEAD',
+    minContainment = 0.7,
+    minCallees = 3,
+    maxHelpers = Number.POSITIVE_INFINITY,
+    limit = 20,
+  } = opts;
   const semantic = opts.semantic !== false;
 
   const plan = diffImpactPlan(db, { base });

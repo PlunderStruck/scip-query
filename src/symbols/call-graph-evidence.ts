@@ -1,11 +1,22 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { detectAstLanguage, getCallSites } from '../source/ast.js';
-import { createPerDbValue } from '../storage/per-db-cache.js';
+import { getSourceText } from '../source/source-text.js';
+import {
+  fileContentHash,
+  readCachedSemanticCallees,
+  sha256Hex,
+  writeCachedSemanticCalleesBatch,
+} from '../storage/evidence-cache.js';
+import { createPerDbCache, createPerDbValue } from '../storage/per-db-cache.js';
 import { getIdentifiersByLine } from './identifier-index.js';
 import { isCallableSymbol, leafName } from './symbol-parser.js';
 import { findEnclosingDefinition, getAllDefinitions, getDefinitionsForFile } from './definition-catalog.js';
+import { buildFileDepGraph } from './file-dep-graph.js';
 import { getResolvedReferenceSites } from './reference-sites.js';
 import type { IndexedDefinition, SymbolLocation, SymbolMatch } from '../domain/types.js';
+import type { SemanticCallee } from '../semantic/types.js';
+import { getSemanticProvider } from '../semantic/provider-cache.js';
+import { isTypeScriptLike } from '../semantic/typescript/source-kinds.js';
 import { semanticCalleeMap, semanticReferences } from '../semantic/shared-primitives.js';
 import { getGlobalLeafIndex, pickAstCallCandidate, sameLanguageCandidates } from './leaf-symbol-index.js';
 import type { GlobalLeafCandidate } from './leaf-symbol-index.js';
@@ -248,11 +259,83 @@ export function buildCalleeMap(
   };
 
   if (astDefs.length > 0) addAll(buildAstCalleeMap(db, astDefs));
-  if (opts.semantic !== false) addAll(toCalleeRows(semanticCalleeMap(db, definitions)));
+  if (opts.semantic !== false) addAll(toCalleeRows(cachedSemanticCalleeMap(db, definitions)));
   // Chunk path runs for non-AST defs always; for AST defs only when additive.
   const chunkDefs = additive ? definitions : chunkOnlyDefs;
   if (chunkDefs.length > 0) addAll(buildChunkCalleeMap(db, chunkDefs));
   return merged;
+}
+
+/**
+ * Persistent-cache wrapper around `semanticCalleeMap`. A full-hit batch is
+ * served without touching the provider at all — provider construction (an
+ * eager ts-morph project load) is the dominant cost this avoids on warm runs.
+ * Rows are keyed by the file's content hash plus a digest of its direct deps'
+ * content hashes, so import/barrel changes invalidate; transitive-only
+ * resolution drift is the same staleness class the SCIP index itself accepts
+ * between reindexes. Results are only written when the provider is available,
+ * so "provider missing" is never frozen into the cache as an empty result.
+ */
+function cachedSemanticCalleeMap(
+  db: ScipDatabase,
+  definitions: ReadonlyArray<IndexedDefinition | SymbolMatch>,
+): Map<number, SemanticCallee[]> {
+  const result = new Map<number, SemanticCallee[]>();
+  const misses: Array<{ def: IndexedDefinition | SymbolMatch; contentHash: string; depsDigest: string }> = [];
+  const unkeyed: Array<IndexedDefinition | SymbolMatch> = [];
+  for (const def of definitions) {
+    if (!isTypeScriptLike(def.relativePath)) continue;
+    const source = getSourceText(db, def.relativePath);
+    if (!source) {
+      unkeyed.push(def);
+      continue;
+    }
+    const contentHash = fileContentHash(db, def.relativePath, source);
+    const depsDigest = depsDigestFor(db, def.relativePath);
+    const cached = readCachedSemanticCallees(db, def.relativePath, def.symbol, contentHash, depsDigest);
+    if (cached !== null) {
+      const callees = parseCachedCallees(cached);
+      if (callees) {
+        if (callees.length > 0) result.set(def.symbolId, callees);
+        continue;
+      }
+    }
+    misses.push({ def, contentHash, depsDigest });
+  }
+  if (misses.length === 0 && unkeyed.length === 0) return result;
+
+  const computed = semanticCalleeMap(db, [...unkeyed, ...misses.map((miss) => miss.def)]);
+  for (const [symbolId, callees] of computed) result.set(symbolId, callees);
+  if (getSemanticProvider(db).availability().available) {
+    writeCachedSemanticCalleesBatch(db, misses.map((miss) => ({
+      relativePath: miss.def.relativePath,
+      symbol: miss.def.symbol,
+      contentHash: miss.contentHash,
+      depsDigest: miss.depsDigest,
+      payload: JSON.stringify(computed.get(miss.def.symbolId) ?? []),
+    })));
+  }
+  return result;
+}
+
+function parseCachedCallees(payload: string): SemanticCallee[] | null {
+  try {
+    return JSON.parse(payload) as SemanticCallee[];
+  } catch {
+    return null; // corrupt payload — treat as a miss and recompute
+  }
+}
+
+const DEPS_DIGEST_CACHE = createPerDbCache<string, string>('semantic-deps-digest', {
+  clearGroups: ['whole-project', 'source-file'],
+});
+
+function depsDigestFor(db: ScipDatabase, relativePath: string): string {
+  return DEPS_DIGEST_CACHE.get(db, relativePath, () => {
+    const deps = [...(buildFileDepGraph(db).get(relativePath) ?? [])].sort();
+    const parts = deps.map((dep) => `${dep}:${fileContentHash(db, dep, getSourceText(db, dep))}`);
+    return sha256Hex(parts.join('|'));
+  });
 }
 
 /**

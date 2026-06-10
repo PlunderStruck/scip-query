@@ -95,7 +95,15 @@ export function diffImpactPartial(
     .flatMap((file) => index.definitionsForFile(file))
     .filter(isDiffImpactCandidate)
     .sort((a, b) => a.relativePath.localeCompare(b.relativePath) || a.startLine - b.startLine);
-  const semanticConsumers = semanticCallerMap(db, defs);
+  // Semantic caller evidence costs a whole-project findReferences per
+  // definition — spend it only where it can change an outcome: defs the SCIP
+  // index shows zero consumers for. Indexed fan-in already proves liveness
+  // for the rest.
+  const fanInBySymbolId = new Map(defs.map((def) => [def.symbolId, scipFanIn(db, def.symbolId)]));
+  const semanticConsumers = semanticCallerMap(
+    db,
+    defs.filter((def) => fanInBySymbolId.get(def.symbolId) === 0),
+  );
   for (const def of defs) {
     addChangedDefinitionImpact(
       db,
@@ -105,6 +113,7 @@ export function diffImpactPartial(
       changedSymbols,
       consumerMap,
       semanticConsumers.get(def.symbolId) ?? new Set<string>(),
+      fanInBySymbolId.get(def.symbolId) ?? 0,
     );
   }
 
@@ -231,8 +240,9 @@ function addChangedDefinitionImpact(
   changedSymbols: ChangedSymbol[],
   consumerMap: ConsumerMap,
   semanticConsumers: ReadonlySet<string>,
+  indexedFanIn: number,
 ): void {
-  const fanIn = Math.max(scipFanIn(db, definition.symbolId), semanticConsumers.size);
+  const fanIn = Math.max(indexedFanIn, semanticConsumers.size);
   if (!shouldReportChangedDefinition(definition, fanIn)) return;
 
   const shortName = shortenSymbol(definition.symbol);

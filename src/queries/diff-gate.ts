@@ -20,6 +20,17 @@ export type DiffGateCheck =
   | 'new-dead'
   | 'baseline';
 
+/** Canonical check list — the CLI validates `--skip` values against this. */
+export const DIFF_GATE_CHECKS: readonly DiffGateCheck[] = [
+  'echo',
+  'incomplete-migration',
+  'co-change-partner',
+  'doc-reference',
+  'unused-params',
+  'new-dead',
+  'baseline',
+];
+
 export interface DiffGateFinding {
   check: DiffGateCheck;
   message: string;
@@ -67,11 +78,20 @@ export function diffGate(
     minTogether?: number;
     minConfidence?: number;
     maxEchoChecks?: number;
+    maxHelpers?: number;
     minSimilarity?: number;
+    skip?: readonly DiffGateCheck[];
   } = {},
 ): DiffGateResult {
   const base = opts.base ?? 'HEAD';
-  const { minTogether = 6, minConfidence = 0.6, maxEchoChecks = 10, minSimilarity = 0.8 } = opts;
+  const {
+    minTogether = 6,
+    minConfidence = 0.6,
+    maxEchoChecks = Number.POSITIVE_INFINITY,
+    maxHelpers = Number.POSITIVE_INFINITY,
+    minSimilarity = 0.8,
+  } = opts;
+  const skip = new Set(opts.skip ?? []);
 
   const impact = diffImpact(db, { base });
   const changedFiles = impact.changedFiles;
@@ -87,13 +107,20 @@ export function diffGate(
   };
   if (changedFiles.length === 0) return result;
 
-  runEchoCheck(db, impact.changedSymbols, changed, maxEchoChecks, minSimilarity, result);
-  runIncompleteMigrationCheck(db, base, result);
-  runCoChangePartnerCheck(db, changed, minTogether, minConfidence, result);
-  runDocReferenceCheck(db, changed, result);
-  runUnusedParamsCheck(db, changedFiles, result);
-  runNewDeadCheck(db, impact.changedSymbols, result);
-  runBaselineCheck(db, result);
+  const runUnlessSkipped = (check: DiffGateCheck, run: () => void): void => {
+    if (skip.has(check)) {
+      result.skipped.push({ check, reason: 'skipped via --skip' });
+      return;
+    }
+    run();
+  };
+  runUnlessSkipped('echo', () => runEchoCheck(db, impact.changedSymbols, changed, maxEchoChecks, minSimilarity, result));
+  runUnlessSkipped('incomplete-migration', () => runIncompleteMigrationCheck(db, base, maxHelpers, result));
+  runUnlessSkipped('co-change-partner', () => runCoChangePartnerCheck(db, changed, minTogether, minConfidence, result));
+  runUnlessSkipped('doc-reference', () => runDocReferenceCheck(db, changed, result));
+  runUnlessSkipped('unused-params', () => runUnusedParamsCheck(db, changedFiles, result));
+  runUnlessSkipped('new-dead', () => runNewDeadCheck(db, impact.changedSymbols, result));
+  runUnlessSkipped('baseline', () => runBaselineCheck(db, result));
 
   return result;
 }
@@ -131,9 +158,10 @@ function runEchoCheck(
 function runIncompleteMigrationCheck(
   db: ScipDatabase,
   base: string,
+  maxHelpers: number,
   result: DiffGateResult,
 ): void {
-  const migration = incompleteMigration(db, { base });
+  const migration = incompleteMigration(db, { base, maxHelpers });
   if (!migration.available) {
     result.skipped.push({ check: 'incomplete-migration', reason: 'no git history' });
     return;

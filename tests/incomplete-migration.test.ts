@@ -304,4 +304,34 @@ describe('incomplete-migration', () => {
     expect(findings[0]!.message).toContain('src/site-b.ts');
     expect(findings[0]!.remediation).toContain('formatThing');
   });
+
+  it('runs uncapped by default — no cap-skip entries', () => {
+    const result = diffGate(db, { base: 'HEAD' });
+
+    expect(result.skipped.filter((skip) => skip.reason.includes('capped'))).toHaveLength(0);
+  });
+
+  it('honors finite caps and reports them as skips', () => {
+    const result = diffGate(db, { base: 'HEAD', maxEchoChecks: 1, maxHelpers: 0 });
+
+    const echoSkip = result.skipped.find((skip) => skip.check === 'echo');
+    expect(echoSkip).toBeDefined();
+    expect(echoSkip!.reason).toContain('capped at 1');
+
+    const migrationSkip = result.skipped.find((skip) => skip.check === 'incomplete-migration');
+    expect(migrationSkip).toBeDefined();
+    expect(migrationSkip!.reason).toContain('capped at 0');
+    expect(result.findings.filter((finding) => finding.check === 'incomplete-migration')).toHaveLength(0);
+  });
+
+  it('skips named checks via the skip option', () => {
+    const result = diffGate(db, { base: 'HEAD', skip: ['incomplete-migration', 'doc-reference'] });
+
+    expect(result.checksRun).not.toContain('incomplete-migration');
+    expect(result.checksRun).not.toContain('doc-reference');
+    expect(result.checksRun).toContain('echo');
+    expect(result.skipped).toContainEqual({ check: 'incomplete-migration', reason: 'skipped via --skip' });
+    expect(result.skipped).toContainEqual({ check: 'doc-reference', reason: 'skipped via --skip' });
+    expect(result.findings.filter((finding) => finding.check === 'incomplete-migration')).toHaveLength(0);
+  });
 });

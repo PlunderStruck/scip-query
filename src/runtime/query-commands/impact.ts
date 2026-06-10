@@ -1,14 +1,18 @@
 import * as queries from '../../queries/index.js';
+import type { DiffGateCheck } from '../../queries/diff-gate.js';
 import type { CommandDescriptor } from '../command-descriptor-types.js';
-import { doc, option, parseInteger, parseNumber } from '../command-spec-builders.js';
+import { collectValues, doc, option, parseInteger, parseNumber } from '../command-spec-builders.js';
 import {
   budgetedDbCommand,
   dbCommand,
   definedNumberOption,
+  numberOptionValue,
   stringArg,
   stringOptionValue,
 } from '../command-execution.js';
+import { semanticCalleeRowCount } from '../../storage/evidence-cache.js';
 import { formatGateBlockReason, isStopHookReentry, readHookInput } from '../agent-setup.js';
+import { isLargeCommandIndex } from '../cli-support.js';
 import { displayRange, render } from '../render.js';
 
 const handleAffected = dbCommand(({ db, args, opts }) => {
@@ -66,7 +70,7 @@ const handleIncompleteMigration = dbCommand(({ db, opts }) => {
   const result = queries.incompleteMigration(db, {
     base: stringOptionValue(opts, 'base'),
     minContainment: definedNumberOption(opts, 'minContainment', 0.7),
-    maxHelpers: definedNumberOption(opts, 'maxHelpers', 10),
+    maxHelpers: numberOptionValue(opts, 'maxHelpers'),
     limit: definedNumberOption(opts, 'limit', 20),
   });
   if (!result.available) return render.empty('No git history available (not a repository, or git missing).');
@@ -91,15 +95,36 @@ const handleIncompleteMigration = dbCommand(({ db, opts }) => {
   console.log(`\n${result.findings.length} helper(s) with un-migrated sites. Finish the extraction or confirm the sites differ on purpose.`);
 });
 
+function parseSkipChecks(value: unknown): DiffGateCheck[] {
+  const names = Array.isArray(value) ? (value as string[]) : [];
+  const unknown = names.filter((name) => !(queries.DIFF_GATE_CHECKS as readonly string[]).includes(name));
+  if (unknown.length > 0) {
+    console.error(`error: unknown --skip check(s): ${unknown.join(', ')}. Valid checks: ${queries.DIFF_GATE_CHECKS.join(', ')}`);
+    process.exit(1);
+  }
+  return names as DiffGateCheck[];
+}
+
 const handleDiffGate = dbCommand(({ db, opts }) => {
   const hookMode = opts['hook'] === true;
   if (hookMode && isStopHookReentry(readHookInput())) {
     return; // this turn was already continued by a previous block — don't loop
   }
+  // Full coverage means a one-time semantic pass over every production
+  // callable; on a large index with no evidence cache yet, say so instead of
+  // looking hung. Re-runs only re-analyze changed files.
+  if (!hookMode && isLargeCommandIndex(db) && semanticCalleeRowCount(db) === 0) {
+    console.error(
+      'Large index with a cold evidence cache: this first run computes semantic callee evidence '
+      + 'for every production callable and can take minutes. Re-runs are incremental (evidence.db).',
+    );
+  }
   const result = queries.diffGate(db, {
     base: stringOptionValue(opts, 'base'),
     minTogether: definedNumberOption(opts, 'minTogether', 6),
-    maxEchoChecks: definedNumberOption(opts, 'maxEchoChecks', 10),
+    maxEchoChecks: numberOptionValue(opts, 'maxEchoChecks'),
+    maxHelpers: numberOptionValue(opts, 'maxHelpers'),
+    skip: parseSkipChecks(opts['skip']),
   });
   if (hookMode) {
     // Hook contract (Claude Code and Codex): silent exit 0 = allow stop,
@@ -159,7 +184,9 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     options: [
       option('--base <ref>', 'Git ref to diff against (default: HEAD)'),
       option('--min-together <n>', 'Minimum historical co-changes for the partner check', parseInteger, 6),
-      option('--max-echo-checks <n>', 'Maximum changed symbols to test for echoes', parseInteger, 10),
+      option('--max-echo-checks <n>', 'Maximum changed symbols to test for echoes (default: all)', parseInteger),
+      option('--max-helpers <n>', 'Maximum new helpers to score for incomplete-migration (default: all)', parseInteger),
+      option('--skip <check>', 'Skip a check (repeatable): echo, incomplete-migration, co-change-partner, doc-reference, unused-params, new-dead, baseline', collectValues, []),
       option('--hook', 'Agent Stop-hook mode: silent on pass, exit 2 with findings on stderr to block the stop'),
     ],
     heuristic: { label: 'diff gate candidates' },
@@ -174,7 +201,7 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     options: [
       option('--base <ref>', 'Git ref to diff against (default: HEAD)'),
       option('--min-containment <n>', 'Minimum share of helper callees a site must contain (0-1)', parseNumber, 0.7),
-      option('--max-helpers <n>', 'Maximum new helpers to score', parseInteger, 10),
+      option('--max-helpers <n>', 'Maximum new helpers to score (default: all)', parseInteger),
       option('-n, --limit <n>', 'Maximum findings to report', parseInteger, 20),
     ],
     heuristic: { label: 'incomplete migration candidates' },
