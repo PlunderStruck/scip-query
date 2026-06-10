@@ -270,6 +270,7 @@ Query results are filtered through the project's `.gitignore`. If none exists, c
 ## Documentation
 
 - [AI Failure Modes](docs/AI_FAILURE_MODES.md): every specific way AI coding rots a codebase, the detector built for it, and how to wire prevention in.
+- [Detector Guide](docs/DETECTOR_GUIDE.md): what each detector measures, the differences between the confusable ones, and which check to run after which kind of change.
 - [Agent Guide](docs/AGENT_GUIDE.md): goal-oriented workflows for tracing, planning, cleanup, quality checks, and change verification.
 - [Command Reference](docs/COMMAND_REFERENCE.md): generated command syntax, descriptions, and options.
 - [Programmatic API](docs/API.md): using the query functions from TypeScript.
