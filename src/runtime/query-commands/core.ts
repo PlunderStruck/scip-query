@@ -1,11 +1,15 @@
 import * as queries from '../../queries/index.js';
 import type { CommandDescriptor } from '../command-descriptor-types.js';
-import { doc } from '../command-spec-builders.js';
-import { dbCommand } from '../command-execution.js';
+import { doc, jsonOption } from '../command-spec-builders.js';
+import { booleanOptionValue, dbCommand, printJsonEnvelope } from '../command-execution.js';
 import { formatBytes } from '../cli-context.js';
 
-const handleStats = dbCommand(({ db }) => {
+const handleStats = dbCommand(({ db, args, opts }) => {
   const s = queries.stats(db);
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('stats', args, opts, s);
+    return;
+  }
   console.log(`Documents:   ${s.documents}`);
   console.log(`Symbols:     ${s.symbols}`);
   console.log(`Definitions: ${s.definitions}`);
@@ -21,6 +25,7 @@ export const coreQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'stats',
     command: 'stats',
     description: 'Show index statistics',
+    options: [jsonOption()],
     renderShape: 'custom',
     docs: doc('Core'),
     handler: handleStats,

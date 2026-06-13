@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import {
   closeSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -76,10 +77,11 @@ interface PreparedIndexerPlan {
 }
 
 interface ReindexMetadata {
-  version: 2;
+  version: 2 | 3;
   status: 'complete' | 'partial';
   updatedAt: string;
   fingerprint: ReindexFingerprint;
+  languageFingerprints?: Partial<Record<SupportedLanguage, ReindexFingerprint>>;
   requestedLanguages: SupportedLanguage[];
   indexedLanguages: SupportedLanguage[];
   skipped: { language: SupportedLanguage; reason: string }[];
@@ -103,6 +105,7 @@ type IndexedOutput = { language: SupportedLanguage; scipPath: string };
 interface FreshIndexRun {
   indexedOutputs: IndexedOutput[];
   skippedLanguages: { language: SupportedLanguage; reason: string }[];
+  reusedLanguages: SupportedLanguage[];
 }
 
 /**
@@ -264,7 +267,10 @@ async function runFreshReindex(opts: {
     NODE_OPTIONS: `--max-old-space-size=${opts.maxHeapMb}`,
   };
 
-  const { indexedOutputs, skippedLanguages } = await runLanguageIndexersForFreshReindex(opts, env);
+  const { indexedOutputs, skippedLanguages, reusedLanguages } = await runLanguageIndexersForFreshReindex(opts, env);
+  if (reusedLanguages.length > 0) {
+    opts.onStatus(`Reused ${reusedLanguages.length} cached language shard(s): ${reusedLanguages.join(', ')}`);
+  }
   publishFreshReindexArtifacts(opts, env, indexedOutputs, skippedLanguages);
 
   const durationMs = Date.now() - opts.start;
@@ -283,8 +289,13 @@ async function runLanguageIndexersForFreshReindex(
   opts: Parameters<typeof runFreshReindex>[0],
   env: NodeJS.ProcessEnv,
 ): Promise<FreshIndexRun> {
+  const reusableOutputs = reusableLanguageOutputs(opts);
+  const reused = new Set(reusableOutputs.map((output) => output.language));
+  for (const language of reused) {
+    opts.onStatus(`Reusing cached ${language} SCIP shard (language inputs unchanged).`);
+  }
   const { preparedRuns, skippedLanguages } = prepareIndexerRuns({
-    languages: opts.languages,
+    languages: opts.languages.filter((language) => !reused.has(language)),
     tempOutputScip: opts.tempPaths.tempOutputScip,
     projectRoot: opts.projectRoot,
     env,
@@ -300,8 +311,9 @@ async function runLanguageIndexersForFreshReindex(
     opts.opts.indexerConcurrency,
   );
   const { indexedOutputs } = collectIndexerOutputs(runResults, skippedLanguages);
-  validateIndexingOutcome(indexedOutputs, skippedLanguages, opts.languages, opts.opts.allowPartial, opts.onStatus);
-  return { indexedOutputs, skippedLanguages };
+  const allIndexedOutputs = [...reusableOutputs, ...indexedOutputs];
+  validateIndexingOutcome(allIndexedOutputs, skippedLanguages, opts.languages, opts.opts.allowPartial, opts.onStatus);
+  return { indexedOutputs: allIndexedOutputs, skippedLanguages, reusedLanguages: [...reused] };
 }
 
 // scip-query: ignore-extract — this is the publish phase for a fresh index:
@@ -313,6 +325,7 @@ function publishFreshReindexArtifacts(
   indexedOutputs: readonly IndexedOutput[],
   skippedLanguages: readonly { language: SupportedLanguage; reason: string }[],
 ): void {
+  cacheLanguageShards(opts.paths.outputDb, indexedOutputs);
   materializeScipOutput(indexedOutputs, opts.tempPaths.tempOutputScip, opts.onStatus);
   convertScipToSqlite(opts.tempPaths.tempOutputScip, opts.tempPaths.tempOutputDb, env, opts.onStatus);
 
@@ -323,10 +336,13 @@ function publishFreshReindexArtifacts(
   });
 
   writeReindexMeta(opts.tempPaths.tempMetaPath, {
-    version: 2,
+    version: 3,
     status: skippedLanguages.length === 0 ? 'complete' : 'partial',
     updatedAt: new Date().toISOString(),
     fingerprint: opts.fingerprint,
+    languageFingerprints: computeLanguageFingerprints(opts.projectRoot, opts.languages, {
+      pnpmWorkspaces: opts.opts.pnpmWorkspaces,
+    }),
     requestedLanguages: opts.languages,
     indexedLanguages: indexedOutputs.map((o) => o.language),
     skipped: [...skippedLanguages],
@@ -339,6 +355,40 @@ function publishFreshReindexArtifacts(
     outputDb: opts.paths.outputDb,
     metaPath: opts.paths.metaPath,
   });
+}
+
+function reusableLanguageOutputs(opts: Parameters<typeof runFreshReindex>[0]): IndexedOutput[] {
+  let meta: Partial<ReindexMetadata>;
+  try {
+    meta = JSON.parse(readFileSync(opts.paths.metaPath, 'utf-8')) as Partial<ReindexMetadata>;
+  } catch {
+    return [];
+  }
+  if (meta.version !== 3 || !meta.languageFingerprints) return [];
+  const outputs: IndexedOutput[] = [];
+  const current = computeLanguageFingerprints(opts.projectRoot, opts.languages, {
+    pnpmWorkspaces: opts.opts.pnpmWorkspaces,
+  });
+  for (const language of opts.languages) {
+    const scipPath = languageShardPath(opts.paths.outputDb, language);
+    if (
+      existsSync(scipPath)
+      && stableJson(meta.languageFingerprints[language]) === stableJson(current[language])
+    ) {
+      outputs.push({ language, scipPath });
+    }
+  }
+  return outputs;
+}
+
+function cacheLanguageShards(outputDb: string, indexedOutputs: readonly IndexedOutput[]): void {
+  for (const output of indexedOutputs) {
+    const shardPath = languageShardPath(outputDb, output.language);
+    mkdirSync(dirname(shardPath), { recursive: true });
+    if (output.scipPath !== shardPath) {
+      copyFileSync(output.scipPath, shardPath);
+    }
+  }
 }
 
 function ensureScipCliAvailable(skipAutoInstall: boolean, onStatus: (message: string) => void): void {
@@ -604,10 +654,30 @@ function computeReindexFingerprint(
   };
 }
 
+function computeLanguageFingerprints(
+  projectRoot: string,
+  languages: readonly SupportedLanguage[],
+  opts: { pnpmWorkspaces?: boolean },
+): Partial<Record<SupportedLanguage, ReindexFingerprint>> {
+  return Object.fromEntries(languages.map((language) => {
+    const markerFiles = getIndexerConfig(language).markerFiles;
+    return [language, {
+      version: 1,
+      languages: [language],
+      pnpmWorkspaces: language === 'typescript' && opts.pnpmWorkspaces === true,
+      files: fingerprintProjectFiles(projectRoot, { language, markerFiles }),
+    }];
+  })) as Partial<Record<SupportedLanguage, ReindexFingerprint>>;
+}
+
+function languageShardPath(outputDb: string, language: SupportedLanguage): string {
+  return join(dirname(outputDb), 'language-indexes', `${language}.scip`);
+}
+
 function isUnchangedReindex(metaPath: string, fingerprint: ReindexFingerprint): boolean {
   try {
     const meta = JSON.parse(readFileSync(metaPath, 'utf-8')) as Partial<ReindexMetadata>;
-    return meta.version === 2
+    return (meta.version === 2 || meta.version === 3)
       && meta.status === 'complete'
       && stableJson(meta.fingerprint) === stableJson(fingerprint)
       && stableJson([...(meta.indexedLanguages ?? [])].sort()) === stableJson(fingerprint.languages);

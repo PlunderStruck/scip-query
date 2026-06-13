@@ -1,4 +1,5 @@
 import type { CommandDescriptor } from './command-descriptor-types.js';
+import { withJsonOption as appendJsonOption } from './command-spec-builders.js';
 import {
   budgetedSectionedReportCommand,
   groupedByFileCommand,
@@ -9,6 +10,10 @@ import {
 
 type QueryCommandMetadata = Omit<CommandDescriptor, 'handler' | 'renderShape'>;
 
+function withJsonOption(metadata: QueryCommandMetadata): QueryCommandMetadata {
+  return { ...metadata, options: appendJsonOption(metadata.options) };
+}
+
 export function listQueryCommand<Row>({
   query,
   format,
@@ -17,10 +22,11 @@ export function listQueryCommand<Row>({
   after,
   ...metadata
 }: QueryCommandMetadata & Parameters<typeof listCommand<Row>>[0]): CommandDescriptor {
+  const commandMetadata = withJsonOption(metadata);
   return {
-    ...metadata,
+    ...commandMetadata,
     renderShape: 'list',
-    handler: listCommand({ query, format, emptyMessage, heuristicLabel, after }),
+    handler: listCommand({ commandName: commandMetadata.id, query, format, emptyMessage, heuristicLabel, after }),
   };
 }
 
@@ -34,10 +40,11 @@ export function tableQueryCommand<Row>({
   dashWidths,
   ...metadata
 }: QueryCommandMetadata & Parameters<typeof tableCommand<Row>>[0]): CommandDescriptor {
+  const commandMetadata = withJsonOption(metadata);
   return {
-    ...metadata,
+    ...commandMetadata,
     renderShape: 'table',
-    handler: tableCommand({ query, format, emptyMessage, heuristicLabel, after, headers, dashWidths }),
+    handler: tableCommand({ commandName: commandMetadata.id, query, format, emptyMessage, heuristicLabel, after, headers, dashWidths }),
   };
 }
 
@@ -50,10 +57,11 @@ export function groupedQueryCommand<Row>({
   key,
   ...metadata
 }: QueryCommandMetadata & Parameters<typeof groupedByFileCommand<Row>>[0]): CommandDescriptor {
+  const commandMetadata = withJsonOption(metadata);
   return {
-    ...metadata,
+    ...commandMetadata,
     renderShape: 'grouped-by-file',
-    handler: groupedByFileCommand({ query, format, emptyMessage, heuristicLabel, after, key }),
+    handler: groupedByFileCommand({ commandName: commandMetadata.id, query, format, emptyMessage, heuristicLabel, after, key }),
   };
 }
 
@@ -66,10 +74,11 @@ export function sectionedQueryCommand<Result>({
   after,
   ...metadata
 }: QueryCommandMetadata & Parameters<typeof sectionedReportCommand<Result>>[0]): CommandDescriptor {
+  const commandMetadata = withJsonOption(metadata);
   return {
-    ...metadata,
+    ...commandMetadata,
     renderShape: 'sectioned-report',
-    handler: sectionedReportCommand({ query, emptyMessage, heuristicLabel, before, sections, after }),
+    handler: sectionedReportCommand({ commandName: commandMetadata.id, query, emptyMessage, heuristicLabel, before, sections, after }),
   };
 }
 
@@ -82,10 +91,11 @@ export function budgetedSectionedQueryCommand<Result>({
   after,
   ...metadata
 }: QueryCommandMetadata & Parameters<typeof budgetedSectionedReportCommand<Result>>[1]): CommandDescriptor {
+  const commandMetadata = withJsonOption(metadata);
   return {
-    ...metadata,
-    budget: metadata.budget ?? 'semantic',
+    ...commandMetadata,
+    budget: commandMetadata.budget ?? 'semantic',
     renderShape: 'sectioned-report',
-    handler: budgetedSectionedReportCommand(metadata.id, { query, emptyMessage, heuristicLabel, before, sections, after }),
+    handler: budgetedSectionedReportCommand(commandMetadata.id, { commandName: commandMetadata.id, query, emptyMessage, heuristicLabel, before, sections, after }),
   };
 }

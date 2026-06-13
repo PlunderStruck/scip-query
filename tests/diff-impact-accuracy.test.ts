@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ScipQueryConfig } from '../src/domain/types.js';
-import { diffImpact } from '../src/queries/diff-impact.js';
+import { diffImpact, diffImpactPartial } from '../src/queries/diff-impact.js';
 import { ScipDatabase } from '../src/storage/db.js';
 
 function createSchema(sqliteDb: Database.Database): void {
@@ -108,7 +108,7 @@ describe('diff-impact accuracy', () => {
     tempDir = null;
   });
 
-  it('reports meaningful changed definitions without module or property-member noise', () => {
+  it('reports only definitions touched by changed hunks without sibling definition noise', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-query-diff-impact-'));
     mkdirSync(join(tempDir, 'src'), { recursive: true });
     writeFileSync(
@@ -140,7 +140,19 @@ describe('diff-impact accuracy', () => {
     execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: tempDir });
     execFileSync('git', ['add', '.'], { cwd: tempDir });
     execFileSync('git', ['commit', '-m', 'initial'], { cwd: tempDir, stdio: 'ignore' });
-    writeFileSync(join(tempDir, 'src', 'model.ts'), '// touched\n', { flag: 'a' });
+    writeFileSync(
+      join(tempDir, 'src', 'model.ts'),
+      [
+        'export interface User {',
+        '  name: string;',
+        '}',
+        '',
+        'export function updateUser(user: User) { return { ...user }; }',
+        '',
+        "export const DEFAULT_STATUS = 'open';",
+        '',
+      ].join('\n'),
+    );
 
     const dbPath = join(tempDir, 'index.db');
     createFixtureDb(dbPath);
@@ -156,14 +168,73 @@ describe('diff-impact accuracy', () => {
       const shortNames = result.changedSymbols.map((symbol) => symbol.shortName);
 
       expect(result.changedFiles).toEqual(['src/model.ts']);
-      expect(shortNames).toEqual([
-        'src:model:User',
+      expect(shortNames).toEqual(['src:model:updateUser()']);
+      expect(shortNames).not.toContain('src:model:User:name');
+      expect(result.changedSymbols.some((symbol) => symbol.symbol.endsWith('`model.ts`/'))).toBe(false);
+      expect(result.changedSymbols[0]?.startLine).toBe(4);
+      expect(result.changedSymbols[0]?.endLine).toBe(4);
+      expect(result.affectedConsumers).toEqual([{ file: 'src/consumer.ts', consumedSymbols: 1 }]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('preserves per-symbol fan-in and consumers when multiple changed definitions are batched', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-query-diff-impact-'));
+    mkdirSync(join(tempDir, 'src'), { recursive: true });
+    writeFileSync(
+      join(tempDir, 'src', 'model.ts'),
+      [
+        'export interface User {',
+        '  name: string;',
+        '}',
+        '',
+        'export function updateUser(user: User) { return user; }',
+        '',
+        "export const DEFAULT_STATUS = 'open';",
+        '',
+      ].join('\n'),
+    );
+    writeFileSync(
+      join(tempDir, 'src', 'consumer.ts'),
+      [
+        "import { DEFAULT_STATUS, type User, updateUser } from './model';",
+        '',
+        'const user: User = { name: DEFAULT_STATUS };',
+        'updateUser(user);',
+        '',
+      ].join('\n'),
+    );
+
+    const dbPath = join(tempDir, 'index.db');
+    createFixtureDb(dbPath);
+    const config: ScipQueryConfig = {
+      dbPath,
+      indexPath: join(tempDir, 'index.scip'),
+      projectRoot: tempDir,
+    };
+    const db = new ScipDatabase(config);
+
+    try {
+      const result = diffImpactPartial(
+        db,
+        ['src/model.ts'],
+        ['src/model.ts'],
+        [
+          { file: 'src/model.ts', startLine: 4, endLine: 4 },
+          { file: 'src/model.ts', startLine: 6, endLine: 6 },
+        ],
+      );
+
+      expect(result.changedSymbols.map((symbol) => symbol.shortName)).toEqual([
         'src:model:updateUser()',
         'src:model:DEFAULT_STATUS',
       ]);
-      expect(shortNames).not.toContain('src:model:User:name');
-      expect(result.changedSymbols.some((symbol) => symbol.symbol.endsWith('`model.ts`/'))).toBe(false);
-      expect(result.affectedConsumers).toEqual([{ file: 'src/consumer.ts', consumedSymbols: 3 }]);
+      expect(result.changedSymbols.map((symbol) => symbol.fanIn)).toEqual([1, 1]);
+      expect(result.consumerEntries).toEqual([{
+        file: 'src/consumer.ts',
+        symbols: ['src:model:DEFAULT_STATUS', 'src:model:updateUser()'],
+      }]);
     } finally {
       db.close();
     }

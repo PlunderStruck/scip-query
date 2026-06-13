@@ -34,7 +34,19 @@ export function registerCommandDescriptors(
       }
     }
 
-    command.action((...args: unknown[]) => descriptor.handler(...args));
-    return { descriptor, command };
-  });
+      command.action(async (...args: unknown[]) => {
+        try {
+          await descriptor.handler(...args);
+        } catch (err) {
+          handleCommandError(err);
+        }
+      });
+      return { descriptor, command };
+    });
+}
+
+function handleCommandError(err: unknown): void {
+  const message = err instanceof Error ? err.message : String(err);
+  console.error(`error: ${message}`);
+  process.exitCode = 1;
 }

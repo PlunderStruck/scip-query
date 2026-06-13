@@ -1,0 +1,69 @@
+{
+  "declaredCouplings": [
+    {
+      "name": "cleanup detector family",
+      "reason": "These query files implement the cleanup and maintainability detectors that share candidate, evidence, and health policy changes.",
+      "files": [
+        "src/queries/complexity-hotspots.ts",
+        "src/queries/dead.ts",
+        "src/queries/drift.ts",
+        "src/queries/extract-candidates.ts",
+        "src/queries/isolated.ts",
+        "src/queries/passthrough-candidates.ts",
+        "src/queries/redundant-reexports.ts",
+        "src/queries/similar.ts",
+        "src/queries/stale-abstractions.ts",
+        "src/queries/wrapper-candidates.ts"
+      ]
+    },
+    {
+      "name": "graph summary query family",
+      "reason": "These query files report related fan-in, fan-out, hotspot, and bottleneck graph summaries.",
+      "files": [
+        "src/queries/bottlenecks.ts",
+        "src/queries/fan.ts",
+        "src/queries/hotspots.ts"
+      ]
+    },
+    {
+      "name": "reference navigation query family",
+      "reason": "These query files expose nearby views of definition and reference navigation.",
+      "files": [
+        "src/queries/refs.ts",
+        "src/queries/trace.ts"
+      ]
+    },
+    {
+      "name": "package build surface",
+      "reason": "Package metadata and bundle entrypoints intentionally move together when the published CLI surface changes.",
+      "files": [
+        "package.json",
+        "tsup.config.ts"
+      ]
+    },
+    {
+      "name": "command reference documentation",
+      "reason": "The generated command reference and query implementations move together when public command behavior changes.",
+      "files": [
+        "docs/COMMAND_REFERENCE.md",
+        "src/queries/doc-drift.ts"
+      ]
+    },
+    {
+      "name": "agent skill documentation family",
+      "reason": "Bundled agent skills share guidance and examples when the agent workflow surface changes.",
+      "files": [
+        "skills/concrete-plan/SKILL.md",
+        "skills/scip-debloat/SKILL.md"
+      ]
+    },
+    {
+      "name": "runtime command dispatch",
+      "reason": "Command descriptors and command execution intentionally move together when CLI registration or dispatch behavior changes.",
+      "files": [
+        "src/runtime/command-descriptors.ts",
+        "src/runtime/command-execution.ts"
+      ]
+    }
+  ]
+}

@@ -27,7 +27,7 @@
 
 `scip-query` answers precise questions about how a codebase is wired together — where a symbol is defined, who references it, what calls it, what breaks if it changes — and turns those answers into something rarer: **cleanup you can trust**. Findings are ranked by evidence quality, validated against your repo's own git history, and (for deletions) proven safe by your own compiler before you touch anything.
 
-Works with every language that has a [SCIP](https://github.com/sourcegraph/scip) indexer: TypeScript, JavaScript, Vue, Java, Scala, Kotlin, Rust, Python, Ruby, Go, C/C++, C#, Visual Basic, Dart, PHP.
+Graph navigation works with every language that has a [SCIP](https://github.com/sourcegraph/scip) indexer: TypeScript, JavaScript, Vue, Java, Scala, Kotlin, Rust, Python, Ruby, Go, C/C++, C#, Visual Basic, Dart, PHP. The higher-confidence layers are explicit: TypeScript currently has the semantic provider, source/AST fallbacks vary by language, and cleanup verification depends on the checkers detected in your repo. Run `scip-query capabilities` or `scip-query capability-matrix --json` to see the exact support matrix for the current project.
 
 ## Install
 
@@ -135,6 +135,14 @@ When verification *fails*, the errors name the exact references the static evide
 
 **8. Ratchet it in CI.** `health --write-baseline` snapshots finding identities into a committable file; `health --baseline` exits 1 on any *new* finding. "Don't get worse" is an objective gate that no score arithmetic can game.
 
+Accepted findings can be recorded without weakening the rest of the gate:
+
+```bash
+scip-query suppress SQABC123DEF456 --check echo --reason "intentional compatibility shim"
+```
+
+This appends a reasoned entry to `.scipquery.json`; `config-validate` rejects suppressions without an identity and reason, and `diff-gate --json` reports both active and suppressed findings.
+
 Before any edit, `plan-context <target>` bundles the structural picture — definitions, references, call graph, blast radius — plus a HISTORY section: churn, fix-commit density, and the files that usually change together with the target ("editing this usually means editing these").
 
 ## A Health Score You Can Argue With
@@ -222,13 +230,21 @@ For Python, the executable may be `scip-python`, `scip-python-plus`, or both. `s
 
 Vue single-file components are handled through the JavaScript/TypeScript indexer. `scip-query` also extracts the `<script>` or `<script setup>` block so symbol, reference, and import queries cover Vue components alongside regular `.ts` and `.js` files.
 
+`scip-query capabilities` prints project-level readiness plus a per-language matrix for SCIP indexing, source fallback evidence, semantic provider support, cleanup detector support, and cleanup verification coverage. Use it when you need to know whether a finding is graph-backed, semantic, heuristic, or compiler-verified for the language in front of you.
+
 ## How It Works
 
 1. A SCIP indexer analyzes source code with the actual compiler, type checker, or language server and produces `index.scip`.
 2. The `scip` CLI converts that protobuf file to a SQLite database: `index.db`.
 3. `scip-query` runs SQL queries, language-aware source augmentation, and git-history analysis against it.
 
-By default, indexes live in `~/.cache/scip-query/projects/<hash>/`, keeping project directories clean. Override paths with `.scipquery.json` or `SCIP_QUERY_*` environment variables.
+By default, indexes live in `~/.cache/scip-query/projects/<hash>/`, keeping project directories clean. Override paths with `.scipquery.json` or `SCIP_QUERY_*` environment variables. Reindexing writes per-language SCIP shards next to the SQLite index, so a mixed-language repo can reuse unchanged language outputs and rerun only the languages whose source/config inputs changed.
+
+Most read-only commands accept `--json` and use the same envelope:
+
+```json
+{ "command": "fan-in", "args": ["login"], "options": { "json": true }, "result": [] }
+```
 
 ## Configuration
 
@@ -253,6 +269,26 @@ It creates `.scipquery.json`:
       "pnpmWorkspaces": true
     }
   }
+}
+```
+
+Use `declaredCouplings` for files that intentionally form one maintenance unit.
+These pairs are treated as structurally linked by `co-change` and health, while
+still appearing in file-specific exploration:
+
+```json
+{
+  "declaredCouplings": [
+    {
+      "name": "cleanup detector family",
+      "reason": "These detectors share candidate, evidence, and health policy changes.",
+      "files": [
+        "src/queries/dead.ts",
+        "src/queries/isolated.ts",
+        "src/queries/stale-abstractions.ts"
+      ]
+    }
+  ]
 }
 ```
 

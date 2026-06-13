@@ -235,10 +235,15 @@ export function writeCachedSemanticCalleesBatch(
   if (!connection) return;
   try {
     connection.evidence.transaction(() => {
+      const staleDeleteKeys = new Set<string>();
       for (const entry of entries) {
         // Rows from previous contents of this file can never match again —
         // drop them so the table tracks the live symbol set, not its history.
-        connection.dropStaleCallees.run(entry.relativePath, entry.contentHash);
+        const staleDeleteKey = `${entry.relativePath}\0${entry.contentHash}`;
+        if (!staleDeleteKeys.has(staleDeleteKey)) {
+          staleDeleteKeys.add(staleDeleteKey);
+          connection.dropStaleCallees.run(entry.relativePath, entry.contentHash);
+        }
         connection.writeCallees.run(
           entry.relativePath,
           entry.symbol,

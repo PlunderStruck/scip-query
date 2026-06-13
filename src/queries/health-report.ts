@@ -28,7 +28,7 @@ export interface HealthAxes {
   cycles: { count: number };
   /** Files touched per commit — the measured cost of one conceptual change. */
   changeAmplification: ChangeAmplificationSummary | null;
-  /** File pairs that co-change without a dependency edge — concepts the reference graph can't see. */
+    /** File pairs that co-change without a structural link — concepts the visible graph can't see. */
   hiddenCoupling: {
     pairCount: number;
     top: Array<{ fileA: string; fileB: string; together: number; confidence: number }>;
@@ -348,9 +348,9 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
   if (analyses.gitEvidence && analyses.gitEvidence.hiddenCoupling.pairCount > 0) {
     const top = analyses.gitEvidence.hiddenCoupling.top[0];
     actions.push({
-      category: 'Hidden coupling',
-      evidence: 'change-graph',
-      description: `${analyses.gitEvidence.hiddenCoupling.pairCount} file pair(s) co-change without a dependency edge`
+        category: 'Hidden coupling',
+        evidence: 'change-graph',
+        description: `${analyses.gitEvidence.hiddenCoupling.pairCount} file pair(s) co-change without a structural link`
         + (top ? ` (e.g. ${top.fileA} ↔ ${top.fileB})` : '')
         + ' — name the shared concept or enforce the sync',
       effort: 'medium',
@@ -436,10 +436,10 @@ function computeHealthScore(analyses: HealthAnalyses): { breakdown: ScoreDeducti
   deduct('complexity', Math.min(5, analyses.complexity.extremeCount * 2),
     `${analyses.complexity.extremeCount} extreme complexity hotspot(s)`);
 
-  if (analyses.gitEvidence) {
-    deduct('hidden-coupling', Math.min(5, analyses.gitEvidence.hiddenCoupling.pairCount),
-      `${analyses.gitEvidence.hiddenCoupling.pairCount} co-changing pair(s) without a dependency edge`);
-  }
+    if (analyses.gitEvidence) {
+      deduct('hidden-coupling', Math.min(5, analyses.gitEvidence.hiddenCoupling.pairCount),
+        `${analyses.gitEvidence.hiddenCoupling.pairCount} co-changing pair(s) without a structural link`);
+    }
 
   return { breakdown };
 }

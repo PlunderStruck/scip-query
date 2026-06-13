@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
 import { getCalleeRowsForSymbol } from '../symbols/call-graph-evidence.js';
-import { getSourceText } from '../source/source-text.js';
+import { getSourceLines } from '../source/source-text.js';
 import { computeIdf, difference, intersection, weightedCosine } from '../analysis/similarity.js';
 import { isFunctionLikeSymbol, leafName, shortenSymbol } from '../symbols/symbol-parser.js';
 import { ProjectIndex } from '../core/project-index.js';
@@ -167,10 +167,11 @@ export function similarAll(
     }
   }
 
-  const results: SimilarSymbolResult[] = [];
+  const topResults: RankedSimilarResult[] = [];
+  let resultOrder = 0;
   const seenPair = new Set<string>();
 
-  outer: for (let i = 0; i < all.length; i += 1) {
+  for (let i = 0; i < all.length; i += 1) {
     const a = all[i]!;
     const candidates = new Set<number>();
     for (const callee of a.callees) {
@@ -203,14 +204,13 @@ export function similarAll(
         requireSharedCount: 4,
       });
       if (!result) continue;
-      results.push(result);
-
-      if (results.length > limit * 5) break outer;
+      insertTopSimilarResult(topResults, result, limit, resultOrder);
+      resultOrder += 1;
     }
   }
 
-  results.sort((a, b) => b.similarity - a.similarity);
-  return results.slice(0, limit);
+  topResults.sort((a, b) => b.result.similarity - a.result.similarity || a.order - b.order);
+  return topResults.map((entry) => entry.result);
 }
 
 // ── Internal helpers ───────────────────────────────────────
@@ -226,6 +226,40 @@ interface SourceFingerprint {
   symbol: string;
   file: string;
   tokens: Set<string>;
+}
+
+export interface RankedSimilarResult {
+  result: SimilarSymbolResult;
+  order: number;
+}
+
+export function insertTopSimilarResult(
+  top: RankedSimilarResult[],
+  result: SimilarSymbolResult,
+  limit: number,
+  order: number,
+): void {
+  if (limit <= 0) return;
+  if (top.length < limit) {
+    top.push({ result, order });
+    return;
+  }
+
+  let worstIndex = 0;
+  for (let i = 1; i < top.length; i += 1) {
+    const current = top[i]!;
+    const worst = top[worstIndex]!;
+    if (
+      current.result.similarity < worst.result.similarity
+      || (current.result.similarity === worst.result.similarity && current.order > worst.order)
+    ) {
+      worstIndex = i;
+    }
+  }
+
+  const worst = top[worstIndex]!;
+  if (result.similarity <= worst.result.similarity) return;
+  top[worstIndex] = { result, order };
 }
 
 const INFRASTRUCTURE_CALLEE_FRAGMENTS = [
@@ -348,8 +382,13 @@ function similarBySourceShape(
 
   const minSimilarity = opts.minSimilarity >= 0.5 ? opts.minSimilarity : 0.3;
   const results: SimilarSymbolResult[] = [];
+  const candidates = new Set<SourceFingerprint>();
+  const tokenIndex = sourceFingerprintTokenIndex(getAllSourceFingerprints(db));
+  for (const token of target.tokens) {
+    for (const candidate of tokenIndex.get(token) ?? []) candidates.add(candidate);
+  }
 
-  for (const candidate of getAllSourceFingerprints(db)) {
+  for (const candidate of candidates) {
     if (candidate.symbol === target.symbol || candidate.tokens.size < 3) continue;
 
     const shared = intersection(target.tokens, candidate.tokens);
@@ -412,6 +451,23 @@ function getAllSourceFingerprints(db: ScipDatabase): SourceFingerprint[] {
   return SOURCE_FINGERPRINT_CORPUS.get(db, () => buildSourceFingerprints(db));
 }
 
+function sourceFingerprintTokenIndex(
+  fingerprints: readonly SourceFingerprint[],
+): Map<string, SourceFingerprint[]> {
+  const index = new Map<string, SourceFingerprint[]>();
+  for (const fingerprint of fingerprints) {
+    for (const token of fingerprint.tokens) {
+      let bucket = index.get(token);
+      if (!bucket) {
+        bucket = [];
+        index.set(token, bucket);
+      }
+      bucket.push(fingerprint);
+    }
+  }
+  return index;
+}
+
 // scip-query: ignore-extract — this builds source-token fingerprints; scoped
 // definitions, file-kind filtering, snippets, and token extraction are one
 // text-similarity pass.
@@ -438,12 +494,11 @@ function definitionSnippet(
   endLine: number,
   leaf: string,
 ): string {
-  const source = getSourceText(db, relativePath);
-  if (!source) {
+  const lines = getSourceLines(db, relativePath);
+  if (lines.length === 0) {
     return '';
   }
 
-  const lines = source.split('\n');
   if (endLine >= startLine && (endLine - startLine) <= 12) {
     return lines.slice(startLine, endLine + 1).join('\n');
   }

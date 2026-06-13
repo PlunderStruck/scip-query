@@ -4,6 +4,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { program, renderHeuristicNotice } from '../src/runtime/cli.js';
 import { commandDescriptors } from '../src/runtime/command-descriptors.js';
 import { commandDocEntries, renderCommandReferenceMarkdown } from '../src/runtime/command-docs.js';
+import { printJsonEnvelope } from '../src/runtime/command-execution.js';
 import { PRIVATE_QUERY_MODULES, PUBLIC_QUERY_ENTRIES } from '../src/queries/public-query-entries.js';
 
 function command(name: string) {
@@ -47,6 +48,7 @@ describe('CLI contract', () => {
       '--baseline',
       '--write-baseline',
     ]);
+    expect(docs.find((entry) => entry.id === 'diff-gate')?.options).toContain('--json');
     expect(docs.find((entry) => entry.id === 'plan-context')).toMatchObject({
       command: 'plan-context <target>',
       category: 'Planning',
@@ -94,6 +96,25 @@ describe('CLI contract', () => {
     expect(log).toHaveBeenCalledWith(
       'Heuristic stale abstraction candidates: review before acting; these are candidates, not exact compiler facts.\n',
     );
+  });
+
+  it('prints stable JSON envelopes with only scalar positional args', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    printJsonEnvelope('fan-in', ['symbolName', { json: true }], { json: true }, { rows: [] });
+
+    const payload = JSON.parse(log.mock.calls[0]![0] as string) as {
+      command: string;
+      args: unknown[];
+      options: Record<string, unknown>;
+      result: unknown;
+    };
+    expect(payload).toEqual({
+      command: 'fan-in',
+      args: ['symbolName'],
+      options: { json: true },
+      result: { rows: [] },
+    });
   });
 
   it('keeps package.json query subpaths in lockstep with the public-query manifest', () => {

@@ -1,9 +1,18 @@
+import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
-import { RemovedRangeIndex } from '../src/queries/cleanup-plan.js';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { RemovedRangeIndex, type CleanupBatch } from '../src/queries/cleanup-plan.js';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { deleteLineRanges, detectCheckers, errorKey } from '../src/runtime/cleanup-verify.js';
+import {
+  applyCleanupBatches,
+  cleanupVerificationFailures,
+  createCleanupPatch,
+  deleteLineRanges,
+  detectCheckers,
+  errorKey,
+  selectCleanupBatches,
+} from '../src/runtime/cleanup-verify.js';
 
 describe('cleanup plan removed-range index', () => {
   it('answers membership per file and line range', () => {
@@ -56,6 +65,82 @@ describe('verification error identity', () => {
       .toBe(errorKey('error[E0432]: unresolved import --> src/lib.rs:9:1'));
     expect(errorKey("a.ts(1,1): error TS2304: Cannot find name 'x'"))
       .not.toBe(errorKey("a.ts(1,1): error TS2304: Cannot find name 'y'"));
+  });
+});
+
+describe('cleanup patch and apply helpers', () => {
+  function sampleBatch(): CleanupBatch {
+    return {
+      depth: 0,
+      loc: 1,
+      filesEmptied: [],
+      entries: [{
+        symbol: 'scip-typescript npm pkg 1.0.0 src/`a.ts`/dead().',
+        shortName: 'src:a:dead()',
+        file: 'src/a.ts',
+        startLine: 1,
+        endLine: 1,
+        loc: 1,
+        evidence: 'graph-fact',
+      }],
+    };
+  }
+
+  it('creates a git patch from the same deletion primitive used by apply', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-cleanup-patch-test-'));
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(join(root, 'src', 'a.ts'), 'export const keep = 1;\nexport const dead = 2;\n');
+      execFileSync('git', ['init'], { cwd: root, stdio: 'ignore' });
+      execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: root });
+      execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: root });
+      execFileSync('git', ['add', '.'], { cwd: root });
+      execFileSync('git', ['commit', '-m', 'initial'], { cwd: root, stdio: 'ignore' });
+
+      const patch = createCleanupPatch(root, [sampleBatch()]);
+
+      expect(patch).toContain('diff --git a/src/a.ts b/src/a.ts');
+      expect(patch).toContain('-export const dead = 2;');
+      expect(readFileSync(join(root, 'src', 'a.ts'), 'utf-8')).toContain('dead');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('applies selected cleanup batches to the working tree', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-cleanup-apply-test-'));
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(join(root, 'src', 'a.ts'), 'export const keep = 1;\nexport const dead = 2;\n');
+
+      applyCleanupBatches(root, [sampleBatch()]);
+
+      expect(readFileSync(join(root, 'src', 'a.ts'), 'utf-8')).toBe('export const keep = 1;\n');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('selects batches and reports verification policy failures', () => {
+    const batch = sampleBatch();
+    const plan = { batches: [batch], totalSymbols: 1, totalLoc: 1, blocked: [] };
+
+    expect(selectCleanupBatches(plan, { batch: 0 })).toEqual([batch]);
+    expect(selectCleanupBatches(plan, { batch: 9 })).toEqual([]);
+    expect(cleanupVerificationFailures({
+      checkers: ['tsc --noEmit'],
+      uncoveredFiles: [],
+      baselineErrors: 0,
+      dirtyOverlap: ['src/a.ts'],
+      batches: [{ depth: 0, status: 'verified' }],
+    }, [batch])).toContain('Plan files are dirty in the working tree: src/a.ts.');
+    expect(cleanupVerificationFailures({
+      checkers: ['tsc --noEmit'],
+      uncoveredFiles: [],
+      baselineErrors: 0,
+      dirtyOverlap: ['src/a.ts'],
+      batches: [{ depth: 0, status: 'verified' }],
+    }, [batch], { allowDirty: true })).toEqual([]);
   });
 });
 

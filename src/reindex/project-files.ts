@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { SupportedLanguage } from '../domain/types.js';
 
 interface ProjectFileFingerprint {
   path: string;
@@ -15,8 +16,14 @@ export function listProjectFiles(projectRoot: string): string[] {
     .sort();
 }
 
-export function fingerprintProjectFiles(projectRoot: string): ProjectFileFingerprint[] {
-  return listProjectFiles(projectRoot).map((relativePath) => {
+export function fingerprintProjectFiles(
+  projectRoot: string,
+  opts: { language?: SupportedLanguage; markerFiles?: readonly string[] } = {},
+): ProjectFileFingerprint[] {
+  const files = opts.language
+    ? listProjectFiles(projectRoot).filter((path) => isLanguageRelevantPath(path, opts.language!, opts.markerFiles))
+    : listProjectFiles(projectRoot);
+  return files.map((relativePath) => {
     const absPath = join(projectRoot, relativePath);
     try {
       const data = readFileSync(absPath);
@@ -33,6 +40,18 @@ export function fingerprintProjectFiles(projectRoot: string): ProjectFileFingerp
       };
     }
   });
+}
+
+function isLanguageRelevantPath(
+  relativePath: string,
+  language: SupportedLanguage,
+  markerFiles: readonly string[] | undefined,
+): boolean {
+  const basename = relativePath.split('/').at(-1) ?? relativePath;
+  if (markerFiles?.includes(relativePath) || markerFiles?.includes(basename)) return true;
+  if (COMMON_INDEX_INPUTS.has(basename)) return true;
+  const extension = relativePath.includes('.') ? `.${relativePath.split('.').at(-1)!.toLowerCase()}` : '';
+  return (LANGUAGE_SOURCE_EXTENSIONS[language] ?? []).includes(extension);
 }
 
 function listGitProjectFiles(projectRoot: string): string[] | null {
@@ -98,3 +117,51 @@ const PROJECT_ARTIFACT_DIRS = new Set([
   '.nuxt',
   'target',
 ]);
+
+const COMMON_INDEX_INPUTS = new Set([
+  'package.json',
+  'package-lock.json',
+  'pnpm-lock.yaml',
+  'yarn.lock',
+  'bun.lockb',
+  'tsconfig.json',
+  'tsconfig.base.json',
+  'pyproject.toml',
+  'setup.py',
+  'setup.cfg',
+  'Cargo.toml',
+  'Cargo.lock',
+  'go.mod',
+  'go.sum',
+  'pom.xml',
+  'build.gradle',
+  'build.gradle.kts',
+  'build.sbt',
+  'compile_commands.json',
+  'CMakeLists.txt',
+  'Makefile',
+  'Gemfile',
+  'Gemfile.lock',
+  'composer.json',
+  'composer.lock',
+  'pubspec.yaml',
+  'pubspec.lock',
+]);
+
+const LANGUAGE_SOURCE_EXTENSIONS: Record<SupportedLanguage, readonly string[]> = {
+  typescript: ['.ts', '.tsx', '.mts', '.cts'],
+  javascript: ['.js', '.jsx', '.mjs', '.cjs'],
+  java: ['.java'],
+  scala: ['.scala'],
+  kotlin: ['.kt', '.kts'],
+  rust: ['.rs'],
+  python: ['.py', '.pyi'],
+  ruby: ['.rb'],
+  go: ['.go'],
+  cpp: ['.cc', '.cpp', '.cxx', '.hpp', '.hh', '.hxx'],
+  c: ['.c', '.h'],
+  csharp: ['.cs'],
+  vb: ['.vb'],
+  dart: ['.dart'],
+  php: ['.php'],
+};

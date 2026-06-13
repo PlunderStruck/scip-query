@@ -1,9 +1,11 @@
 import * as queries from '../../queries/index.js';
 import type { CommandDescriptor } from '../command-descriptor-types.js';
-import { doc, option, parseInteger } from '../command-spec-builders.js';
+import { doc, option, parseInteger, withJsonOption } from '../command-spec-builders.js';
 import {
+  booleanOptionValue,
   budgetedDbCommand,
   definedNumberOption,
+  printJsonEnvelope,
   stringArg,
   stringOptionValue,
 } from '../command-execution.js';
@@ -24,7 +26,16 @@ const handlePlanContext = budgetedDbCommand('plan-context', ({ db, args, opts, b
   });
 
   if (result.warnings.length === 1 && result.warnings[0] === 'No symbol, file, or module matched target.') {
+    if (booleanOptionValue(opts, 'json')) {
+      printJsonEnvelope('plan-context', args, opts, result);
+      return;
+    }
     return render.empty(result.warnings[0]);
+  }
+
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('plan-context', args, opts, result);
+    return;
   }
 
   const sections = [
@@ -49,13 +60,13 @@ export const planningQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'plan-context',
     command: 'plan-context <target>',
     description: 'Pre-edit planning context for a symbol, file, or module',
-    options: [
+    options: withJsonOption([
       option('--impact-depth <n>', 'Maximum affected traversal depth', parseInteger, 3),
       option('--slice-depth <n>', 'Maximum backward slice depth', parseInteger, 3),
       option('-s, --scope <path>', 'Limit downstream impact to files matching path'),
       option('-n, --limit <n>', 'Rows per section', parseInteger, 20),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
-    ],
+    ]),
     budget: 'semantic',
     renderShape: 'custom',
     docs: doc('Planning', ['scip-query plan-context parseSymbol']),

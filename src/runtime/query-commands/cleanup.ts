@@ -1,10 +1,16 @@
 import type { DeadOptions } from '../../domain/types.js';
 import * as queries from '../../queries/index.js';
 import { resolveProjectRoot } from '../cli-context.js';
-import { verifyCleanupPlan } from '../cleanup-verify.js';
+import {
+  applyCleanupBatches,
+  cleanupVerificationFailures,
+  createCleanupPatch,
+  selectCleanupBatches,
+  verifyCleanupPlan,
+} from '../cleanup-verify.js';
 import { renderHeuristicNotice } from '../cli-support.js';
 import type { CommandDescriptor } from '../command-descriptor-types.js';
-import { doc, option, parseInteger, parseNumber, parsePositiveInteger } from '../command-spec-builders.js';
+import { doc, option, parseInteger, parseNumber, parsePositiveInteger, withJsonOption } from '../command-spec-builders.js';
 import {
   booleanOptionValue,
   budgetedDbCommand,
@@ -16,6 +22,7 @@ import {
   definedNumberOption,
   numberOptionValue,
   optionalStringArg,
+  printJsonEnvelope,
   reportCommand,
   stringArg,
   stringOptionValue,
@@ -41,6 +48,20 @@ const handleDead = budgetedDbCommand('dead', ({ db, args, opts, budget }) => {
   const showInternal = !booleanOptionValue(opts, 'onlyDead');
   const shownDeadCode = showDead ? deadCode : [];
   const shownFileInternal = showInternal ? fileInternal : [];
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('dead', args, opts, {
+      ...result,
+      shown: {
+        deadCode: shownDeadCode,
+        fileInternal: shownFileInternal,
+      },
+      totals: {
+        deadCode: deadCode.length,
+        fileInternal: fileInternal.length,
+      },
+    });
+    return;
+  }
 
   if (shownDeadCode.length === 0 && shownFileInternal.length === 0) {
     render.empty('No matching dead-code symbols found.');
@@ -128,7 +149,7 @@ const handleIsolated = budgetedGroupedByFileCommand('isolated', {
   after: (rows) => console.log(`\n${rows.length} isolated symbol(s)`),
 });
 
-const handleExtractCandidates = budgetedDbCommand('extract-candidates', ({ db, opts, budget }) => {
+const handleExtractCandidates = budgetedDbCommand('extract-candidates', ({ db, args, opts, budget }) => {
   const results = queries.extractCandidates(db, {
     scope: stringOptionValue(opts, 'scope'),
     minLoc: definedNumberOption(opts, 'minLoc', 10),
@@ -137,6 +158,10 @@ const handleExtractCandidates = budgetedDbCommand('extract-candidates', ({ db, o
     scanLimit: budget.scanLimit,
     semantic: budget.semantic,
   });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('extract-candidates', args, opts, results);
+    return;
+  }
   if (results.length === 0) return render.empty('No extraction candidates found.');
   renderHeuristicNotice('extraction candidates');
   for (const r of results) {
@@ -285,6 +310,7 @@ const handleSimilar = budgetedReportCommand('similar', {
 });
 
 const handleSimilarFiles = reportCommand({
+  commandName: 'similar-files',
   query: ({ db, args, opts }) => queries.similarFiles(db, {
     minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.5),
     limit: definedNumberOption(opts, 'limit', 20),
@@ -311,6 +337,7 @@ const handleSimilarFiles = reportCommand({
 });
 
 const handleSimilarChains = reportCommand({
+  commandName: 'similar-chains',
   query: ({ db, opts }) => queries.similarChains(db, {
     minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.5),
     limit: definedNumberOption(opts, 'limit', 15),
@@ -425,16 +452,55 @@ function heuristicCleanupCommand({
   });
 }
 
-const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, opts, budget }) => {
+const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, args, opts, budget }) => {
   const result = queries.cleanupPlan(db, {
     scope: stringOptionValue(opts, 'scope'),
     minLoc: definedNumberOption(opts, 'minLoc', 1),
     maxDepth: definedNumberOption(opts, 'maxDepth', 5),
     scanLimit: budget.scanLimit,
   });
+  const projectRoot = resolveProjectRoot();
+  const wantsPatch = booleanOptionValue(opts, 'patch');
+  const wantsJson = booleanOptionValue(opts, 'json');
+  const wantsVerify = booleanOptionValue(opts, 'verify') || wantsPatch;
+  if (wantsPatch && !booleanOptionValue(opts, 'verify')) {
+    console.error('error: cleanup-plan --patch requires --verify.');
+    process.exitCode = 1;
+    return;
+  }
   if (result.batches.length === 0) {
+    if (wantsJson) {
+      printJsonEnvelope('cleanup-plan', args, opts, result);
+      return;
+    }
     return render.empty('Nothing deletable found — no graph-fact dead code to seed a cascade.');
   }
+  const selectedBatches = selectCleanupBatches(result);
+  const verification = wantsVerify ? verifyCleanupPlan(projectRoot, result) : undefined;
+
+  if (wantsJson) {
+    printJsonEnvelope('cleanup-plan', args, opts, { result, verification });
+    return;
+  }
+
+  if (wantsPatch) {
+    const failures = cleanupVerificationFailures(verification!, selectedBatches);
+    if (failures.length > 0) {
+      for (const failure of failures) console.error(`error: ${failure}`);
+      process.exitCode = 1;
+      return;
+    }
+    const patch = createCleanupPatch(projectRoot, selectedBatches);
+    if (patch.trim() === '') {
+      console.error('error: verified cleanup plan produced an empty patch.');
+      process.exitCode = 1;
+      return;
+    }
+    console.error(`cleanup-plan --patch: ${selectedBatches.length} compiler-verified batch(es), ${result.totalLoc} LOC.`);
+    console.log(patch);
+    return;
+  }
+
   console.log(`Cleanup plan: ${result.totalSymbols} symbol(s), ${result.totalLoc} LOC across ${result.batches.length} batch(es).`);
   console.log('Apply one batch at a time; run your typecheck between batches.\n');
   for (const batch of result.batches) {
@@ -457,9 +523,8 @@ const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, opts, budget 
     }
   }
 
-  if (booleanOptionValue(opts, 'verify')) {
+  if (verification) {
     console.log('\nVerifying batches against the project checker (throwaway worktree at HEAD)...');
-    const verification = verifyCleanupPlan(resolveProjectRoot(), result);
     if (verification.checkers.length === 0) {
       console.log('  No checker detected (need tsconfig.json or a Cargo.toml) — skipped.');
       return;
@@ -489,7 +554,54 @@ const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, opts, budget 
   }
 });
 
-const handleRecentDuplicates = budgetedDbCommand('recent-duplicates', ({ db, opts, budget }) => {
+const handleCleanupApply = budgetedDbCommand('cleanup-apply', ({ db, opts, budget }) => {
+  if (!booleanOptionValue(opts, 'verified')) {
+    console.error('error: cleanup-apply requires --verified so deletions are checked before mutating files.');
+    process.exitCode = 1;
+    return;
+  }
+  const all = booleanOptionValue(opts, 'all');
+  const batch = numberOptionValue(opts, 'batch');
+  if (all === (batch !== undefined)) {
+    console.error('error: choose exactly one of --all or --batch <n>.');
+    process.exitCode = 1;
+    return;
+  }
+  const result = queries.cleanupPlan(db, {
+    scope: stringOptionValue(opts, 'scope'),
+    minLoc: definedNumberOption(opts, 'minLoc', 1),
+    maxDepth: definedNumberOption(opts, 'maxDepth', 5),
+    scanLimit: budget.scanLimit,
+  });
+  if (result.batches.length === 0) {
+    render.empty('Nothing deletable found — no graph-fact dead code to seed a cascade.');
+    return;
+  }
+  const selectedBatches = selectCleanupBatches(result, { all, batch });
+  if (selectedBatches.length === 0) {
+    console.error(`error: No cleanup batch ${batch} exists.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const projectRoot = resolveProjectRoot();
+  const verification = verifyCleanupPlan(projectRoot, result);
+  const failures = cleanupVerificationFailures(verification, selectedBatches, {
+    allowDirty: booleanOptionValue(opts, 'forceDirty'),
+  });
+  if (failures.length > 0) {
+    for (const failure of failures) console.error(`error: ${failure}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  applyCleanupBatches(projectRoot, selectedBatches);
+  const symbols = selectedBatches.reduce((sum, cleanupBatch) => sum + cleanupBatch.entries.length, 0);
+  const loc = selectedBatches.reduce((sum, cleanupBatch) => sum + cleanupBatch.loc, 0);
+  console.log(`Applied ${selectedBatches.length} compiler-verified cleanup batch(es): ${symbols} symbol(s), ${loc} LOC.`);
+});
+
+const handleRecentDuplicates = budgetedDbCommand('recent-duplicates', ({ db, args, opts, budget }) => {
   const result = queries.recentDuplicates(db, {
     windowCommits: definedNumberOption(opts, 'window', 100),
     minSimilarity: numberOptionValue(opts, 'minSimilarity') ?? 0.7,
@@ -498,6 +610,10 @@ const handleRecentDuplicates = budgetedDbCommand('recent-duplicates', ({ db, opt
     scanLimit: budget.scanLimit,
     semantic: budget.semantic,
   });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('recent-duplicates', args, opts, result);
+    return;
+  }
   if (!result.available) return render.empty('No git history available (not a repository, or git missing).');
   if (result.findings.length === 0) {
     return render.empty(`No recent re-implementations found (window: last ${result.windowCommits} commits).`);
@@ -521,6 +637,10 @@ const handleDocDrift = dbCommand(({ db, args, opts }) => {
     limit: definedNumberOption(opts, 'limit', 20),
     minCoupling: definedNumberOption(opts, 'minCoupling', 3),
   });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('doc-drift', args, opts, result);
+    return;
+  }
   if (!result.available) return render.empty('No git history available (not a repository, or git missing).');
   if (result.findings.length === 0) {
     return render.empty(`No drifting docs found across ${result.docsScanned} doc(s) — referenced and co-changed code has not moved since each doc last changed.`);
@@ -562,11 +682,11 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'unused-params',
     command: 'unused-params',
     description: 'Speculative-generality candidates: trailing parameters no body ever uses (TS/JS)',
-    options: [
+    options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('-n, --limit <n>', 'Maximum findings', parseInteger, 30),
       option('--full', 'Run unbounded analysis on large indexes'),
-    ],
+    ]),
     budget: 'candidate-scan',
     heuristic: { label: 'unused trailing parameter candidates' },
     renderShape: 'list',
@@ -582,6 +702,8 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
       option('--min-loc <n>', 'Only include symbols >= N lines', parseInteger, 1),
       option('--max-depth <n>', 'Maximum cascade depth', parseInteger, 5),
       option('--verify', 'Apply batches in a throwaway worktree and run the project checker (tsc / cargo check)'),
+      option('--patch', 'With --verify, print the compiler-verified deletion patch to stdout'),
+      option('--json', 'Output as JSON for programmatic consumption'),
       option('--full', 'Run unbounded analysis on large indexes'),
     ],
     budget: 'candidate-scan',
@@ -590,16 +712,35 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     handler: handleCleanupPlan,
   }),
   cleanupCommand({
+    id: 'cleanup-apply',
+    command: 'cleanup-apply',
+    description: 'Apply a compiler-verified cleanup-plan batch to the working tree',
+    options: [
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option('--min-loc <n>', 'Only include symbols >= N lines', parseInteger, 1),
+      option('--max-depth <n>', 'Maximum cascade depth', parseInteger, 5),
+      option('--verified', 'Required: verify the selected cleanup batch before applying it'),
+      option('--batch <n>', 'Apply one batch depth', parseInteger),
+      option('--all', 'Apply every compiler-verified batch in the plan'),
+      option('--force-dirty', 'Allow applying when plan files already have working-tree edits'),
+      option('--full', 'Run unbounded analysis on large indexes'),
+    ],
+    budget: 'candidate-scan',
+    renderShape: 'custom',
+    docs: doc('Cleanup', ['scip-query cleanup-apply --verified --batch 0']),
+    handler: handleCleanupApply,
+  }),
+  cleanupCommand({
     id: 'recent-duplicates',
     command: 'recent-duplicates',
     description: 'Directional duplicate candidates: recent code that re-implements established code',
-    options: [
+    options: withJsonOption([
       option('--window <n>', 'How many commits back counts as "recent"', parseInteger, 100),
       option('--min-similarity <n>', 'Minimum similarity (0-1)', parseNumber, 0.7),
       option('-n, --limit <n>', 'Maximum findings', parseInteger, 30),
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
-    ],
+    ]),
     budget: 'candidate-scan',
     heuristic: { label: 'recent re-implementation candidates' },
     renderShape: 'custom',
@@ -610,10 +751,10 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'doc-drift',
     command: 'doc-drift [doc]',
     description: 'Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped',
-    options: [
+    options: withJsonOption([
       option('-n, --limit <n>', 'Maximum docs to report', parseInteger, 20),
       option('--min-coupling <n>', 'Minimum historical co-changes to track a subject', parseInteger, 3),
-    ],
+    ]),
     heuristic: { label: 'doc drift candidates' },
     renderShape: 'custom',
     docs: doc('Cleanup', ['scip-query doc-drift', 'scip-query doc-drift AGENTS.md']),
@@ -623,7 +764,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'dead',
     command: 'dead [scope]',
     description: 'Find dead code and file-internal symbols (no cross-file consumers)',
-    options: [
+    options: withJsonOption([
       option('--min-loc <n>', 'Only show symbols >= N lines', parseInteger, 1),
       option('--include-tests', 'Include test files'),
       option('--skip-barrels', 'Ignore refs from barrel re-export files'),
@@ -631,7 +772,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
       option('--only-dead', 'Show only [dead code] symbols (skip [file-internal only])'),
       option('--only-internal', 'Show only [file-internal only] symbols (skip [dead code])'),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
-    ],
+    ]),
     budget: 'candidate-scan',
     renderShape: 'custom',
     docs: doc('Cleanup', ['scip-query dead --min-loc 10']),
@@ -641,7 +782,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'unused-imports',
     command: 'unused-imports <file>',
     description: 'Find imports not referenced in the same file',
-    options: [option('--full', 'Run unbounded semantic analysis on large indexes')],
+    options: withJsonOption([option('--full', 'Run unbounded semantic analysis on large indexes')]),
     budget: 'semantic',
     renderShape: 'list',
     handler: handleUnusedImports,
@@ -650,11 +791,11 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'isolated',
     command: 'isolated',
     description: 'Find completely orphaned symbols (no references at all)',
-    options: [
+    options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--min-loc <n>', 'Minimum lines of code', parseInteger, 3),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
-    ],
+    ]),
     budget: 'candidate-scan',
     renderShape: 'grouped-by-file',
     handler: handleIsolated,
@@ -663,14 +804,14 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'similar',
     command: 'similar [symbol]',
     description: 'Find heuristic function similarity candidates from callee fingerprints',
-    options: [
+    options: withJsonOption([
       option('--min-similarity <n>', 'Minimum Jaccard similarity (0-1)', parseNumber, 0.4),
       option('-n, --limit <n>', 'Number of results', parseInteger, 20),
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--min-callees <n>', 'Minimum callees to consider', parseInteger, 4),
       option('--cross-file-only', 'Only show cross-file pairs (skip same-file matches)'),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
-    ],
+    ]),
     heuristicLabel: 'similarity candidates',
     budget: 'candidate-scan',
     renderShape: 'custom',
@@ -680,12 +821,12 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'similar-files',
     command: 'similar-files [file]',
     description: 'Find heuristic similar-file candidates from dependency profiles',
-    options: [
+    options: withJsonOption([
       option('--min-similarity <n>', 'Minimum Jaccard similarity (0-1)', parseNumber, 0.5),
       option('-n, --limit <n>', 'Number of results', parseInteger, 20),
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--min-deps <n>', 'Minimum dependencies to consider', parseInteger),
-    ],
+    ]),
     heuristicLabel: 'similar file candidates',
     renderShape: 'custom',
     handler: handleSimilarFiles,
@@ -694,13 +835,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'similar-chains',
     command: 'similar-chains',
     description: 'Find heuristic similar-chain candidates from dependency flows',
-    options: [
+    options: withJsonOption([
       option('--min-similarity <n>', 'Minimum chain similarity (0-1)', parseNumber, 0.5),
       option('-n, --limit <n>', 'Number of results', parseInteger, 15),
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--min-length <n>', 'Minimum chain length', parseInteger, 3),
       option('--max-length <n>', 'Maximum chain length', parseInteger, 8),
-    ],
+    ]),
     heuristicLabel: 'similar chain candidates',
     renderShape: 'custom',
     handler: handleSimilarChains,
@@ -709,13 +850,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'extract-candidates',
     command: 'extract-candidates',
     description: 'Find heuristic extraction candidates from isolated callee clusters',
-    options: [
+    options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--min-loc <n>', 'Minimum function LOC', parseInteger, 10),
       option('--min-callees <n>', 'Minimum callees to analyze', parseInteger, 6),
       option('-n, --limit <n>', 'Number of results', parseInteger, 20),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
-    ],
+    ]),
     heuristicLabel: 'extraction candidates',
     budget: 'candidate-scan',
     renderShape: 'custom',
@@ -725,10 +866,10 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'drift',
     command: 'drift [module]',
     description: 'Detect heuristic drift candidates: unused imports, layer violations, and pattern deviations',
-    options: [
+    options: withJsonOption([
       option('--min-deviation <n>', 'Minimum sibling files before reporting unique dependency deviations', parsePositiveInteger, 5),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
-    ],
+    ]),
     heuristicLabel: 'drift candidates',
     budget: 'semantic',
     renderShape: 'grouped-by-file',
@@ -738,12 +879,12 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'wrapper-candidates',
     command: 'wrapper-candidates',
     description: 'Find heuristic wrapper candidates only called by one consumer',
-    options: [
+    options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--max-loc <n>', 'Maximum LOC for candidates', parseInteger, 15),
       option('-n, --limit <n>', 'Number of results', parseInteger, 30),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
-    ],
+    ]),
     heuristicLabel: 'wrapper candidates',
     budget: 'candidate-scan',
     renderShape: 'list',
@@ -753,12 +894,12 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'passthrough-candidates',
     command: 'passthrough-candidates',
     description: 'Find heuristic passthrough candidates that forward to one callee',
-    options: [
+    options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--max-loc <n>', 'Maximum LOC for candidates', parseInteger, 15),
       option('-n, --limit <n>', 'Number of results', parseInteger, 30),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
-    ],
+    ]),
     heuristicLabel: 'passthrough candidates',
     budget: 'candidate-scan',
     renderShape: 'list',
@@ -768,13 +909,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'stale-abstractions',
     command: 'stale-abstractions',
     description: 'Find heuristic stale abstraction candidates with 0-1 consumers',
-    options: [
+    options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--min-loc <n>', 'Minimum LOC', parseInteger, 3),
       option('-n, --limit <n>', 'Number of results', parseInteger, 30),
       option('--include-low-confidence', 'Include 1-consumer classes (usually encapsulation, not stale)', undefined, false),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
-    ],
+    ]),
     heuristicLabel: 'stale abstraction candidates',
     budget: 'candidate-scan',
     renderShape: 'list',
@@ -784,12 +925,12 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'complexity-hotspots',
     command: 'complexity-hotspots',
     description: 'Find heuristic complexity hotspot candidates from LOC x fan-in x fan-out',
-    options: [
+    options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--min-loc <n>', 'Minimum LOC', parseInteger, 10),
       option('-n, --limit <n>', 'Number of results', parseInteger, 20),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
-    ],
+    ]),
     heuristicLabel: 'complexity hotspot candidates',
     budget: 'candidate-scan',
     renderShape: 'table',
@@ -799,7 +940,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'convergence',
     command: 'convergence <symbol1> <symbol2>',
     description: 'Show what a consolidated version of two similar functions would look like',
-    options: [option('--full', 'Run unbounded semantic analysis on large indexes')],
+    options: withJsonOption([option('--full', 'Run unbounded semantic analysis on large indexes')]),
     budget: 'semantic',
     renderShape: 'custom',
     handler: handleConvergence,
@@ -828,12 +969,12 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'similar-signatures',
     command: 'similar-signatures',
     description: 'Find functions with near-identical type signatures (same shape)',
-    options: [
+    options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--min-loc <n>', 'Minimum LOC per function', parseInteger, 3),
       option('-n, --limit <n>', 'Number of groups', parseInteger, 20),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
-    ],
+    ]),
     budget: 'candidate-scan',
     renderShape: 'list',
     handler: handleSimilarSignatures,

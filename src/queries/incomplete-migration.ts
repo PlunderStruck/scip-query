@@ -4,7 +4,9 @@ import { containment } from '../analysis/similarity.js';
 import { ProjectIndex } from '../core/project-index.js';
 import { shortenSymbol } from '../symbols/symbol-parser.js';
 import { GIT_DIFF_UNAVAILABLE_NOTE, diffImpactPlan } from './diff-impact.js';
+import type { DiffImpactPlan } from './diff-impact.js';
 import { getAllCalleeFingerprints, meaningfulCallees } from './similar.js';
+import type { SymbolFingerprint } from './similar.js';
 
 export interface IncompleteMigrationLeftover {
   symbol: string;
@@ -78,6 +80,7 @@ export function incompleteMigration(
     maxHelpers?: number;
     limit?: number;
     semantic?: boolean;
+    diffPlan?: DiffImpactPlan;
   } = {},
 ): IncompleteMigrationResult {
   const {
@@ -89,7 +92,7 @@ export function incompleteMigration(
   } = opts;
   const semantic = opts.semantic !== false;
 
-  const plan = diffImpactPlan(db, { base });
+  const plan = opts.diffPlan ?? diffImpactPlan(db, { base });
   const result: IncompleteMigrationResult = {
     available: plan.note !== GIT_DIFF_UNAVAILABLE_NOTE,
     base,
@@ -121,6 +124,17 @@ export function incompleteMigration(
   const docFreq = new Map<string, number>();
   for (const fp of candidates) for (const callee of fp.callees) docFreq.set(callee, (docFreq.get(callee) ?? 0) + 1);
   const ubiquityThreshold = Math.max(8, Math.ceil(Math.sqrt(candidates.length)));
+  const candidatesByCallee = new Map<string, SymbolFingerprint[]>();
+  for (const candidate of candidates) {
+    for (const callee of candidate.callees) {
+      let bucket = candidatesByCallee.get(callee);
+      if (!bucket) {
+        bucket = [];
+        candidatesByCallee.set(callee, bucket);
+      }
+      bucket.push(candidate);
+    }
+  }
 
   for (const { def, callees } of helperFingerprints) {
     const shortName = shortenSymbol(def.symbol);
@@ -143,9 +157,13 @@ export function incompleteMigration(
     }
     result.helpersChecked += 1;
 
-    const leftovers: IncompleteMigrationLeftover[] = [];
-    for (const candidate of candidates) {
-      if (candidate.symbol === def.symbol) continue;
+      const leftovers: IncompleteMigrationLeftover[] = [];
+      const candidateSet = new Set<SymbolFingerprint>();
+      for (const callee of callees) {
+        for (const candidate of candidatesByCallee.get(callee) ?? []) candidateSet.add(candidate);
+      }
+      for (const candidate of candidateSet) {
+        if (candidate.symbol === def.symbol) continue;
       if (changed.has(candidate.file)) continue; // touched files are the agent's active edit set
       if (candidate.callees.has(def.symbol)) continue; // already migrated
       const score = containment(callees, candidate.callees);

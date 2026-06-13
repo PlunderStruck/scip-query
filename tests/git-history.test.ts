@@ -10,13 +10,21 @@ import {
   getCommitHistory,
   getFileChurn,
 } from '../src/analysis/git-history.js';
+import { coChange } from '../src/queries/co-change.js';
 import { docDrift } from '../src/queries/doc-drift.js';
+import type { ScipQueryConfig } from '../src/domain/types.js';
 
 let repoRoot: string;
 
-// git-history only reads db.config.projectRoot and uses the db as a cache key.
-function fakeDb(projectRoot: string): ScipDatabase {
-  return { config: { projectRoot } } as ScipDatabase;
+// Git-history only reads db.config.projectRoot; coChange also asks for an empty
+// dependency graph, so the query methods return no indexed edges.
+function fakeDb(projectRoot: string, config: Partial<ScipQueryConfig> = {}): ScipDatabase {
+  return {
+    config: { projectRoot, ...config },
+    all: () => [],
+    pathExclusionsFor: () => '',
+    isIgnored: () => false,
+  } as unknown as ScipDatabase;
 }
 
 let commitClock = 1_700_000_000;
@@ -108,5 +116,40 @@ describe('git history evidence', () => {
     expect(pair).toBeDefined();
     expect(pair!.together).toBe(4);
     expect(pair!.confidence).toBe(1);
+  });
+
+  it('can ignore broad commits when computing co-change pairs', () => {
+    const pairs = getCoChangePairs(fakeDb(repoRoot), {
+      minTogether: 3,
+      minConfidence: 0.6,
+      maxFilesPerCommit: 2,
+    })!;
+
+    expect(pairs).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ fileA: 'a.ts', fileB: 'b.ts' }),
+    ]));
+  });
+
+  it('treats declared coupling groups as structural links', () => {
+    const plain = coChange(fakeDb(repoRoot), undefined, { minTogether: 3, minConfidence: 0.6, limit: 10 });
+    expect(plain.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ fileA: 'a.ts', fileB: 'b.ts', structurallyLinked: false }),
+    ]));
+
+    const declared = fakeDb(repoRoot, {
+      declaredCouplings: [{
+        name: 'fixture pair',
+        files: ['a.ts', 'b.ts'],
+        reason: 'The fixture deliberately moves these files together.',
+      }],
+    });
+    expect(coChange(declared, undefined, { minTogether: 3, minConfidence: 0.6, limit: 10 }).findings)
+      .not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ fileA: 'a.ts', fileB: 'b.ts' }),
+      ]));
+
+    const partner = coChange(declared, 'a.ts', { minTogether: 3, limit: 10 })
+      .findings.find((entry) => entry.fileA === 'a.ts' && entry.fileB === 'b.ts');
+    expect(partner).toEqual(expect.objectContaining({ structurallyLinked: true }));
   });
 });

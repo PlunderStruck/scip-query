@@ -14,7 +14,7 @@ export interface CoChangeFinding {
   confidence: number;
   changesA: number;
   changesB: number;
-  /** True when a dependency edge already explains the coupling. */
+  /** True when a dependency edge or declared coupling already explains the pair. */
   structurallyLinked: boolean;
 }
 
@@ -31,11 +31,11 @@ export function isCoChangeNoiseFile(file: string): boolean {
   return NOISE_FILE_PATTERN.test(file);
 }
 
-const NOISE_FILE_PATTERN = /(?:^|\/)(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock|CHANGELOG(?:\.[a-z]+)?|.*\.map)$|(?:^|\/)(?:dist|build|out|node_modules)\//i;
+const NOISE_FILE_PATTERN = /(?:^|\/)(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock|CHANGELOG(?:\.[a-z]+)?|.*\.map)$|(?:^|\/)(?:dist|build|out|node_modules|docs\/plans)\//i;
 
 /**
  * Hidden coupling from the change graph: file pairs that repeatedly change
- * in the same commits but have NO dependency edge between them.
+ * in the same commits but have no structural link between them.
  *
  * The reference graph cannot see that two mechanisms implement one concept —
  * a config list and the test that checks it share no symbols. The commit
@@ -47,18 +47,26 @@ const NOISE_FILE_PATTERN = /(?:^|\/)(?:package-lock\.json|pnpm-lock\.yaml|yarn\.
 export function coChange(
   db: ScipDatabase,
   file?: string,
-  opts: { minTogether?: number; minConfidence?: number; limit?: number; includeLinked?: boolean } = {},
+  opts: {
+    minTogether?: number;
+    minConfidence?: number;
+    limit?: number;
+    includeLinked?: boolean;
+    maxFilesPerCommit?: number;
+  } = {},
 ): CoChangeResult {
-  const { minTogether = 4, minConfidence = 0.6, limit = 30 } = opts;
+  const { minTogether = 4, minConfidence = 0.6, limit = 30, maxFilesPerCommit = 20 } = opts;
   const history = getCommitHistory(db);
   const partnersMode = file !== undefined;
   const pairs = getCoChangePairs(db, {
     minTogether: partnersMode ? Math.min(minTogether, 2) : minTogether,
     minConfidence: partnersMode ? 0 : minConfidence,
+    maxFilesPerCommit,
   });
   if (!history || !pairs) return { available: false, commitsAnalyzed: 0, findings: [] };
 
   const graph = buildFileDepGraph(db);
+  const declaredCouplings = declaredCouplingSets(db);
   const includeLinked = opts.includeLinked === true || partnersMode;
 
   const findings: CoChangeFinding[] = [];
@@ -76,7 +84,7 @@ export function coChange(
       // split across files — expected coupling, not a hidden concept.
       if (isSameStemSibling(pair.fileA, pair.fileB)) continue;
     }
-    const structurallyLinked = hasDependencyEdge(graph, pair.fileA, pair.fileB);
+    const structurallyLinked = hasStructuralLink(graph, declaredCouplings, pair.fileA, pair.fileB);
     if (!includeLinked && structurallyLinked) continue;
     findings.push({ ...pair, structurallyLinked });
     if (findings.length >= limit) break;
@@ -102,10 +110,20 @@ function isSameStemSibling(fileA: string, fileB: string): boolean {
   return stemA !== '' && stemA === stemB;
 }
 
-function hasDependencyEdge(
+function declaredCouplingSets(db: ScipDatabase): Array<ReadonlySet<string>> {
+  return (db.config.declaredCouplings ?? [])
+    .filter((coupling) => Array.isArray(coupling.files) && coupling.files.length >= 2)
+    .map((coupling) => new Set(coupling.files));
+}
+
+function hasStructuralLink(
   graph: Map<string, Set<string>>,
+  declaredCouplings: readonly ReadonlySet<string>[],
   fileA: string,
   fileB: string,
 ): boolean {
-  return graph.get(fileA)?.has(fileB) === true || graph.get(fileB)?.has(fileA) === true;
+  if (graph.get(fileA)?.has(fileB) === true || graph.get(fileB)?.has(fileA) === true) {
+    return true;
+  }
+  return declaredCouplings.some((group) => group.has(fileA) && group.has(fileB));
 }

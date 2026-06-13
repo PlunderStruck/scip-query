@@ -246,9 +246,13 @@ function loadFileAddRecords(projectRoot: string): Map<string, FileAddRecord> | n
  */
 export function getCoChangePairs(
   db: ScipDatabase,
-  opts: { minTogether?: number; minConfidence?: number } = {},
+  opts: { minTogether?: number; minConfidence?: number; maxFilesPerCommit?: number } = {},
 ): CoChangePair[] | null {
-  const { minTogether = 4, minConfidence = 0.6 } = opts;
+  const {
+    minTogether = 4,
+    minConfidence = 0.6,
+    maxFilesPerCommit = BULK_COMMIT_FILE_CAP,
+  } = opts;
   const history = getCommitHistory(db);
   if (!history) return null;
 
@@ -256,6 +260,7 @@ export function getCoChangePairs(
   const pairCounts = new Map<string, number>();
   for (const commit of history.commits) {
     const files = [...new Set(commit.files)].sort();
+    if (files.length > maxFilesPerCommit) continue;
     for (const file of files) {
       fileChanges.set(file, (fileChanges.get(file) ?? 0) + 1);
     }

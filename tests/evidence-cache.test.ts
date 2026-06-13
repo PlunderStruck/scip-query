@@ -14,7 +14,7 @@ import {
   writeCachedFileEvidence,
 } from '../src/storage/evidence-cache.js';
 import { getSourceFacts } from '../src/source/source-facts.js';
-import { getSourceText } from '../src/source/source-text.js';
+import { getSourceLines, getSourceText } from '../src/source/source-text.js';
 import { evidenceFixtureDb, writeFixtureFiles } from './evidence-fixture.js';
 
 const FILE = 'src/sample.ts';
@@ -48,6 +48,20 @@ describe('evidence cache', () => {
 
   afterAll(() => {
     rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('serves cached source lines from the same source text', () => {
+    const db = openDb();
+    try {
+      const first = getSourceLines(db, FILE);
+      const second = getSourceLines(db, FILE);
+
+      expect(first).toBe(second);
+      expect(first).toEqual(getSourceText(db, FILE).split('\n'));
+      expect(getSourceLines(db, 'src/missing.ts')).toEqual([]);
+    } finally {
+      db.close();
+    }
   });
 
   it('persists source facts and serves them to a fresh connection', () => {
@@ -161,14 +175,20 @@ describe('evidence cache', () => {
     const db = openDb();
     try {
       const payload = JSON.stringify([{ symbol: 'x', file: 'src/x.ts', line: 3 }]);
-      writeCachedSemanticCalleesBatch(db, [{ relativePath: FILE, symbol: 'sym#greet', contentHash: 'hash-a', depsDigest: 'digest-a', payload }]);
+      const otherPayload = JSON.stringify([{ symbol: 'y', file: 'src/y.ts', line: 5 }]);
+      writeCachedSemanticCalleesBatch(db, [
+        { relativePath: FILE, symbol: 'sym#greet', contentHash: 'hash-a', depsDigest: 'digest-a', payload },
+        { relativePath: FILE, symbol: 'sym#other', contentHash: 'hash-a', depsDigest: 'digest-a', payload: otherPayload },
+      ]);
       expect(readCachedSemanticCallees(db, FILE, 'sym#greet', 'hash-a', 'digest-a')).toBe(payload);
+      expect(readCachedSemanticCallees(db, FILE, 'sym#other', 'hash-a', 'digest-a')).toBe(otherPayload);
       expect(readCachedSemanticCallees(db, FILE, 'sym#greet', 'hash-b', 'digest-a')).toBeNull();
       expect(readCachedSemanticCallees(db, FILE, 'sym#greet', 'hash-a', 'digest-b')).toBeNull();
 
       // Writing under a new content hash drops the path's stale rows.
       writeCachedSemanticCalleesBatch(db, [{ relativePath: FILE, symbol: 'sym#other', contentHash: 'hash-b', depsDigest: 'digest-a', payload }]);
       expect(readCachedSemanticCallees(db, FILE, 'sym#greet', 'hash-a', 'digest-a')).toBeNull();
+      expect(readCachedSemanticCallees(db, FILE, 'sym#other', 'hash-a', 'digest-a')).toBeNull();
       expect(readCachedSemanticCallees(db, FILE, 'sym#other', 'hash-b', 'digest-a')).toBe(payload);
     } finally {
       db.close();

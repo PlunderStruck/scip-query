@@ -13,6 +13,10 @@ const SOURCE_TEXT_CACHE = createPerDbCache<string, string>('source-text', {
   clearGroups: ['whole-project', 'source-file'],
 });
 
+const SOURCE_LINES_CACHE = createPerDbCache<string, readonly string[]>('source-lines', {
+  clearGroups: ['whole-project', 'source-file'],
+});
+
 export function getSourceText(
   db: ScipDatabase,
   relativePath: string,
@@ -22,6 +26,17 @@ export function getSourceText(
     const fullPath = join(db.config.projectRoot, normalized);
     if (!existsSync(fullPath)) return '';
     return readFileSync(fullPath, 'utf-8');
+  });
+}
+
+export function getSourceLines(
+  db: ScipDatabase,
+  relativePath: string,
+): readonly string[] {
+  const normalized = relativePath.replace(/\\/g, '/');
+  return SOURCE_LINES_CACHE.get(db, normalized, () => {
+    const source = getSourceText(db, normalized);
+    return source ? source.split('\n') : [];
   });
 }
 
@@ -39,9 +54,8 @@ export function hasSuppressionComment(
   startLine: number,
 ): boolean {
   if (startLine <= 0) return false;
-  const source = getSourceText(db, relativePath);
-  if (!source) return false;
-  const lines = source.split('\n');
+  const lines = getSourceLines(db, relativePath);
+  if (lines.length === 0) return false;
   // Walk upward through contiguous comment / blank / decorator lines so a
   // suppression comment placed two lines above (with a JSDoc in between, etc.)
   // still counts.

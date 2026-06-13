@@ -39,6 +39,10 @@ export interface CleanupVerification {
   batches: BatchVerification[];
 }
 
+export interface CleanupVerificationPolicy {
+  allowDirty?: boolean;
+}
+
 const CHECK_TIMEOUT_MS = 300_000;
 const MAX_ERROR_LINES = 12;
 
@@ -267,6 +271,74 @@ function applyBatchDeletions(worktree: string, batch: CleanupBatch): void {
     if (!existsSync(path)) continue;
     writeFileSync(path, deleteLineRanges(readFileSync(path, 'utf-8'), ranges, { rust: file.endsWith('.rs') }));
   }
+}
+
+export function applyCleanupBatches(projectRoot: string, batches: readonly CleanupBatch[]): void {
+  for (const batch of batches) applyBatchDeletions(projectRoot, batch);
+}
+
+export function createCleanupPatch(
+  projectRoot: string,
+  batches: readonly CleanupBatch[],
+): string {
+  const worktree = mkdtempSync(join(tmpdir(), 'scip-cleanup-patch-'));
+  try {
+    execFileSync('git', ['-C', projectRoot, 'worktree', 'add', '--detach', '--force', worktree, 'HEAD'], {
+      stdio: 'ignore',
+    });
+    applyCleanupBatches(worktree, batches);
+    return execFileSync('git', ['-C', worktree, 'diff', '--binary'], {
+      encoding: 'utf-8',
+      maxBuffer: 32 * 1024 * 1024,
+    });
+  } finally {
+    try {
+      execFileSync('git', ['-C', projectRoot, 'worktree', 'remove', '--force', worktree], { stdio: 'ignore' });
+    } catch {
+      rmSync(worktree, { recursive: true, force: true });
+    }
+  }
+}
+
+export function selectCleanupBatches(
+  plan: CleanupPlanResult,
+  opts: { batch?: number; all?: boolean } = {},
+): CleanupBatch[] {
+  if (opts.all) return [...plan.batches];
+  if (opts.batch !== undefined) {
+    const batch = plan.batches.find((candidate) => candidate.depth === opts.batch);
+    return batch ? [batch] : [];
+  }
+  return [...plan.batches];
+}
+
+export function cleanupVerificationFailures(
+  verification: CleanupVerification,
+  selectedBatches: readonly CleanupBatch[],
+  policy: CleanupVerificationPolicy = {},
+): string[] {
+  const failures: string[] = [];
+  if (verification.checkers.length === 0) {
+    failures.push('No project checker was detected, so no deletion patch is compiler-verified.');
+  }
+  if (verification.uncoveredFiles.length > 0) {
+    failures.push(`No detected checker covers: ${verification.uncoveredFiles.join(', ')}.`);
+  }
+  if (!policy.allowDirty && verification.dirtyOverlap.length > 0) {
+    failures.push(`Plan files are dirty in the working tree: ${verification.dirtyOverlap.join(', ')}.`);
+  }
+
+  const verifiedDepths = new Set(
+    verification.batches
+      .filter((batch) => batch.status === 'verified')
+      .map((batch) => batch.depth),
+  );
+  for (const batch of selectedBatches) {
+    if (!verifiedDepths.has(batch.depth)) {
+      failures.push(`Batch ${batch.depth} is not compiler-verified.`);
+    }
+  }
+  return failures;
 }
 
 /**

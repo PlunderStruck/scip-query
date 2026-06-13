@@ -20,6 +20,7 @@
  * file type would too.
  */
 import { readdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { extname, join } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
 import { createPerDbCache } from '../storage/per-db-cache.js';
@@ -101,26 +102,52 @@ export function getSourceFiles(
   const extensions = customExtensions ? new Set(customExtensions) : DEFAULT_EXTENSION_SET;
   const extensionKey = customExtensions ? [...extensions].sort().join(',') : DEFAULT_EXTENSION_CACHE_KEY;
   const cacheKey = `${includeIndexed ? '1' : '0'}|${includeAuxiliary ? '1' : '0'}|${extensionKey}`;
-  return SOURCE_FILES_CACHE.get(db, cacheKey, () => {
-    const out = new Set<string>();
-    if (includeIndexed) {
-      for (const relativePath of indexedDocumentPaths(db, { includeIgnored: false })) {
-        if (!extensions.has(extname(relativePath).toLowerCase())) continue;
+    return SOURCE_FILES_CACHE.get(db, cacheKey, () => {
+      const out = new Set<string>();
+      if (includeIndexed) {
+        for (const relativePath of indexedDocumentPaths(db, { includeIgnored: false })) {
+          if (!extensions.has(extname(relativePath).toLowerCase())) continue;
         out.add(relativePath);
+        }
       }
-    }
-    if (includeAuxiliary) {
-      for (const file of listOnDiskSources(db.config.projectRoot, extensions)) {
-        if (db.isIgnored(file)) continue;
-        out.add(file);
+      if (includeAuxiliary) {
+        for (const file of listProjectSources(db.config.projectRoot, extensions)) {
+          if (db.isIgnored(file)) continue;
+          if (includeIndexed && out.has(file)) continue;
+          out.add(file);
+        }
       }
-    }
     return [...out].sort();
   });
 }
 
 // Derived from the read-only index — valid for the connection's lifetime.
 const SOURCE_FILES_CACHE = createPerDbCache<string, string[]>('source-files', { clearGroups: [] });
+
+function listProjectSources(absRoot: string, extensions: ReadonlySet<string>): Set<string> {
+  return listGitSources(absRoot, extensions) ?? listOnDiskSources(absRoot, extensions);
+}
+
+function listGitSources(absRoot: string, extensions: ReadonlySet<string>): Set<string> | null {
+  try {
+    const output = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], {
+      cwd: absRoot,
+      encoding: 'utf-8',
+      timeout: 10_000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    const out = new Set<string>();
+    for (const line of output.split('\n')) {
+      const file = line.trim();
+      if (!file) continue;
+      if (!extensions.has(extname(file).toLowerCase())) continue;
+      out.add(file);
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
 
 function listOnDiskSources(absRoot: string, extensions: ReadonlySet<string>): Set<string> {
   const out = new Set<string>();

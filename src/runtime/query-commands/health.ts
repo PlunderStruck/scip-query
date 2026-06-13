@@ -1,11 +1,15 @@
 import * as queries from '../../queries/index.js';
 import type { CommandDescriptor } from '../command-descriptor-types.js';
-import { doc, option, parseInteger } from '../command-spec-builders.js';
-import { budgetedDbCommand, dbCommand, definedNumberOption, stringArg, stringOptionValue } from '../command-execution.js';
+import { doc, option, parseInteger, withJsonOption } from '../command-spec-builders.js';
+import { booleanOptionValue, budgetedDbCommand, dbCommand, definedNumberOption, printJsonEnvelope, stringArg, stringOptionValue } from '../command-execution.js';
 import { displayPathRange, render } from '../render.js';
 
-const handleComplexity = budgetedDbCommand('complexity', ({ db, args, budget }) => {
+const handleComplexity = budgetedDbCommand('complexity', ({ db, args, opts, budget }) => {
   const result = queries.complexity(db, stringArg(args, 0), { semantic: budget.semantic });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('complexity', args, opts, result);
+    return;
+  }
   if (!result) return render.empty('Symbol not found.');
   console.log(`${displayPathRange(result.relativePath, result.startLine, result.endLine)}  ${result.shortName}\n`);
   console.log(`  LOC:                  ${result.loc}`);
@@ -16,11 +20,15 @@ const handleComplexity = budgetedDbCommand('complexity', ({ db, args, budget }) 
   console.log(`  Fan-out:              ${result.fanOut}`);
 });
 
-const handleSelfAudit = dbCommand(({ db, opts }) => {
+const handleSelfAudit = dbCommand(({ db, args, opts }) => {
   const result = queries.selfAudit(db, {
     samples: definedNumberOption(opts, 'samples', 50),
     scope: stringOptionValue(opts, 'scope'),
   });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('self-audit', args, opts, result);
+    return;
+  }
   if (!result.available) {
     return render.empty('No semantic provider available to audit against (TypeScript projects only).');
   }
@@ -47,10 +55,10 @@ export const healthQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'self-audit',
     command: 'self-audit',
     description: 'Score the cheap evidence paths against the TypeScript compiler oracle on sampled symbols',
-    options: [
+    options: withJsonOption([
       option('--samples <n>', 'Number of symbols to sample', parseInteger, 50),
       option('-s, --scope <path>', 'Limit sampling to files matching path'),
-    ],
+    ]),
     renderShape: 'custom',
     docs: doc('Health', ['scip-query self-audit --samples 100']),
     handler: handleSelfAudit,
@@ -59,7 +67,7 @@ export const healthQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'complexity',
     command: 'complexity <symbol>',
     description: 'Per-symbol complexity: branches, cyclomatic estimate, fan-in/out, callees',
-    options: [option('--full', 'Run unbounded semantic analysis on large indexes')],
+    options: withJsonOption([option('--full', 'Run unbounded semantic analysis on large indexes')]),
     budget: 'semantic',
     renderShape: 'custom',
     docs: doc('Health'),

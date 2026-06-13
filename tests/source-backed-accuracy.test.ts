@@ -14,6 +14,7 @@ import { code } from '../src/queries/code.js';
 import { dataflow } from '../src/queries/dataflow.js';
 import { symbols } from '../src/queries/symbols.js';
 import { trace } from '../src/queries/trace.js';
+import { buildAstCalleeMap, buildChunkCalleeMap } from '../src/symbols/call-graph-evidence.js';
 import type { ScipQueryConfig } from '../src/domain/types.js';
 
 function createSchema(sqliteDb: Database.Database): void {
@@ -104,6 +105,161 @@ function withFixture(
 }
 
 describe('source-backed accuracy regressions', () => {
+  it('attributes AST callsites to the innermost containing definition', () => {
+    withFixture(
+      'ast-line-owner',
+      {
+        'src/nested.ts': [
+          'export function outer() {',
+          '  function inner() {',
+          '    return helper();',
+          '  }',
+          '  return inner();',
+          '}',
+          '',
+          'export function helper() {',
+          '  return 1;',
+          '}',
+          '',
+        ].join('\n'),
+      },
+      (sqliteDb) => {
+        sqliteDb.exec(`
+          INSERT INTO documents (id, language, relative_path) VALUES
+            (1, 'typescript', 'src/nested.ts');
+
+          INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
+            (1, 'scip-typescript npm fixture 1.0.0 src/\`nested.ts\`/outer().', 'outer', 12, 'function outer|function outer(): number'),
+            (2, 'scip-typescript npm fixture 1.0.0 src/\`nested.ts\`/outer().inner().', 'inner', 12, 'function inner|function inner(): number'),
+            (3, 'scip-typescript npm fixture 1.0.0 src/\`nested.ts\`/helper().', 'helper', 12, 'function helper|function helper(): number');
+
+          INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+            (1, 1, 1, 0, 0, 5, 1),
+            (2, 1, 2, 1, 2, 3, 3),
+            (3, 1, 3, 7, 0, 9, 1);
+
+          INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+            (1, 1, 0, 0, 5, X'00'),
+            (2, 1, 1, 1, 3, X'00'),
+            (3, 1, 2, 7, 9, X'00');
+
+          INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+            (1, 1, 1),
+            (2, 2, 1),
+            (3, 3, 1);
+        `);
+      },
+      (db) => {
+        const map = buildAstCalleeMap(db, [
+          {
+            symbolId: 1,
+            documentId: 1,
+            startLine: 0,
+            endLine: 5,
+            symbol: 'scip-typescript npm fixture 1.0.0 src/`nested.ts`/outer().',
+            relativePath: 'src/nested.ts',
+          },
+          {
+            symbolId: 2,
+            documentId: 1,
+            startLine: 1,
+            endLine: 3,
+            symbol: 'scip-typescript npm fixture 1.0.0 src/`nested.ts`/outer().inner().',
+            relativePath: 'src/nested.ts',
+          },
+          {
+            symbolId: 3,
+            documentId: 1,
+            startLine: 7,
+            endLine: 9,
+            symbol: 'scip-typescript npm fixture 1.0.0 src/`nested.ts`/helper().',
+            relativePath: 'src/nested.ts',
+          },
+        ]);
+
+        expect(map.get(2)).toContainEqual({
+          symbol: 'scip-typescript npm fixture 1.0.0 src/`nested.ts`/helper().',
+          file: 'src/nested.ts',
+          chunkId: 2,
+          source: 'ast-callsite',
+        });
+        expect(map.get(1)).toContainEqual({
+          symbol: 'scip-typescript npm fixture 1.0.0 src/`nested.ts`/outer().inner().',
+          file: 'src/nested.ts',
+          chunkId: 4,
+          source: 'ast-callsite',
+        });
+      },
+    );
+  });
+
+  it('keeps chunk callee evidence scoped to requested definition documents', () => {
+    withFixture(
+      'chunk-callee-scope',
+      {
+        'src/target.custom': [
+          'def target',
+          '  helper()',
+          'end',
+          '',
+          'def helper',
+          'end',
+          '',
+        ].join('\n'),
+        'src/unrelated.custom': [
+          'def unrelated',
+          '  noisy()',
+          'end',
+          '',
+        ].join('\n'),
+      },
+      (sqliteDb) => {
+        sqliteDb.exec(`
+          INSERT INTO documents (id, language, relative_path) VALUES
+            (1, 'text', 'src/target.custom'),
+            (2, 'text', 'src/unrelated.custom');
+
+          INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
+            (1, 'custom src/\`target.custom\`/target().', 'target', 12, 'target'),
+            (2, 'custom src/\`target.custom\`/helper().', 'helper', 12, 'helper'),
+            (3, 'custom src/\`unrelated.custom\`/noisy().', 'noisy', 12, 'noisy');
+
+          INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+            (1, 1, 1, 0, 0, 2, 3),
+            (2, 1, 2, 4, 0, 5, 3),
+            (3, 2, 3, 0, 0, 2, 3);
+
+          INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+            (1, 1, 0, 0, 2, X'00'),
+            (2, 1, 1, 4, 5, X'00'),
+            (3, 2, 0, 0, 2, X'00');
+
+          INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+            (1, 1, 1),
+            (1, 2, 0),
+            (2, 2, 1),
+            (3, 3, 1),
+            (3, 3, 0);
+        `);
+      },
+      (db) => {
+        const map = buildChunkCalleeMap(db, [{
+          documentId: 1,
+          startLine: 0,
+          endLine: 2,
+          symbolId: 1,
+        }]);
+
+        expect(map.get(1)).toEqual([{
+          symbol: 'custom src/`target.custom`/helper().',
+          file: 'src/target.custom',
+          chunkId: 1,
+          source: 'scip-chunk',
+        }]);
+      },
+    );
+  });
+
   it('repairs callable definition ranges before rendering code and symbols', () => {
     withFixture(
       'definition-range',

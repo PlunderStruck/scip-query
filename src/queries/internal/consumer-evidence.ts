@@ -2,7 +2,7 @@ import type { ProjectIndex } from '../../core/project-index.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { getReExports } from '../../language-parsers/index.js';
 import { detectAstLanguage, getAst, type SyntaxNode } from '../../source/ast.js';
-import { getSourceText } from '../../source/source-text.js';
+import { getSourceLines, getSourceText } from '../../source/source-text.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { createPerDbCache } from '../../storage/per-db-cache.js';
 import { leafName } from '../../symbols/symbol-parser.js';
@@ -121,15 +121,14 @@ function isReExportOnlyConsumer(
   leaf: string,
 ): boolean {
   if (!leaf) return false;
-  const source = getSourceText(db, consumerFile);
-  if (!source) return false;
+  const lines = getSourceLines(db, consumerFile);
+  if (lines.length === 0) return false;
 
   const reExports = getReExports(db, consumerFile);
   if (reExports.length === 0) return false;
 
   const escaped = leaf.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const wordRegex = new RegExp(`\\b${escaped}\\b`);
-  const lines = source.split('\n');
 
   let occurrenceCount = 0;
   for (let i = 0; i < lines.length; i++) {

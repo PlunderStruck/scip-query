@@ -79,6 +79,10 @@ export interface ScipQueryConfig {
   gitignorePaths?: string[];
   /** Optional semantic-provider configuration */
   semantic?: SemanticConfig;
+  /** Machine-readable accepted findings. */
+  suppressions?: FindingSuppression[];
+  /** Project-declared file groups that intentionally change together. */
+  declaredCouplings?: DeclaredCouplingConfig[];
 }
 
 // ── Project Config (.scipquery.json) ───────────────────────
@@ -96,6 +100,32 @@ export interface ProjectConfig {
   entryRoots?: EntryRootsConfig;
   /** Optional semantic-provider configuration */
   semantic?: SemanticConfig;
+  /** Machine-readable accepted findings. */
+  suppressions?: FindingSuppression[];
+  /** Project-declared file groups that intentionally change together. */
+  declaredCouplings?: DeclaredCouplingConfig[];
+}
+
+export interface DeclaredCouplingConfig {
+  /** Human-readable name for the maintenance unit. */
+  name: string;
+  /** Exact relative file paths that form one intentional co-change group. */
+  files: string[];
+  /** Human reason for why these files should move together. */
+  reason?: string;
+}
+
+export interface FindingSuppression {
+  /** Stable finding id, for example SQABC123DEF456. */
+  id?: string;
+  /** Detector/check name, for example diff-gate's "echo". */
+  check?: string;
+  /** Optional file path to narrow check-level suppressions. */
+  file?: string;
+  /** Human reason for accepting the finding. Required by config validation. */
+  reason: string;
+  /** ISO date after which the suppression no longer applies. */
+  expiresAt?: string;
 }
 
 export interface SemanticConfig {

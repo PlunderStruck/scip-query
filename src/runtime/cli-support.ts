@@ -61,18 +61,23 @@ export function commandAnalysisBudget(
   db: ScipDatabase,
   commandName: string,
   full: boolean | undefined,
+  opts: { quiet?: boolean } = {},
 ): CommandAnalysisBudget {
   if (!isLargeCommandIndex(db)) return { semantic: true };
 
   if (full) {
-    console.error(`Large index detected; ${commandName} is running the unbounded semantic pass because --full was supplied.`);
+    if (!opts.quiet) {
+      console.error(`Large index detected; ${commandName} is running the unbounded semantic pass because --full was supplied.`);
+    }
     return { semantic: true };
   }
 
-  console.error(
-    `Large index detected; ${commandName} will scan the highest-priority ${DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT} candidates with semantic enrichment disabled. ` +
-    `Run "scip-query ${commandName} --full" for the unbounded semantic pass.`,
-  );
+  if (!opts.quiet) {
+    console.error(
+      `Large index detected; ${commandName} will scan the highest-priority ${DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT} candidates with semantic enrichment disabled. ` +
+      `Run "scip-query ${commandName} --full" for the unbounded semantic pass.`,
+    );
+  }
   return { scanLimit: DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT, semantic: false };
 }
 

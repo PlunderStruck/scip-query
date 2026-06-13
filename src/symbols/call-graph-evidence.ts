@@ -10,7 +10,7 @@ import {
 import { createPerDbCache, createPerDbValue } from '../storage/per-db-cache.js';
 import { getIdentifiersByLine } from './identifier-index.js';
 import { isCallableSymbol, leafName } from './symbol-parser.js';
-import { findEnclosingDefinition, getAllDefinitions, getDefinitionsForFile } from './definition-catalog.js';
+import { createDefinitionLineIndex, findEnclosingDefinition, getAllDefinitions, getDefinitionsForFile } from './definition-catalog.js';
 import { buildFileDepGraph } from './file-dep-graph.js';
 import { getResolvedReferenceSites } from './reference-sites.js';
 import type { IndexedDefinition, SymbolLocation, SymbolMatch } from '../domain/types.js';
@@ -359,9 +359,10 @@ export function buildAstCalleeMap(
   for (const [file, fileDefs] of byFile) {
     const callsites = getCallSites(db, file);
     if (!callsites) continue; // Source unreadable — defs return empty callee arrays.
+    const ownerByLine = createDefinitionLineIndex(fileDefs);
 
     for (const site of callsites) {
-      const owner = innermostDefinitionAtLine(fileDefs, site.line);
+      const owner = ownerByLine.get(site.line);
       if (!owner) continue;
 
       const pick = resolveAstCalleeCandidate(db, file, leafIndex, site.calleeLeaf, site.memberAccess);
@@ -397,13 +398,6 @@ function definitionsByFile(
   return byFile;
 }
 
-function innermostDefinitionAtLine(
-  definitions: readonly SymbolMatch[],
-  line: number,
-): SymbolMatch | null {
-  return definitions.find((def) => line >= def.startLine && line <= def.endLine) ?? null;
-}
-
 function resolveAstCalleeCandidate(
   db: ScipDatabase,
   file: string,
@@ -421,23 +415,26 @@ export function buildChunkCalleeMap(
   definitions: ReadonlyArray<SymbolLocation>,
 ): Map<number, CalleeRow[]> {
   if (definitions.length === 0) return new Map();
+  const definitionDocumentIds = uniqueNumbers(definitions.map((def) => def.documentId));
 
-  // All non-definition mentions with their chunk doc/line range
-  const refRows = db.all<{
+  type ChunkMentionRow = {
     document_id: number;
     chunk_id: number;
     start_line: number;
     end_line: number;
     symbol_id: number;
-  }>(
+  };
+  const refRows = definitionDocumentIds.flatMap((documentIds) => db.all<ChunkMentionRow>(
     `SELECT c.document_id, c.id AS chunk_id, c.start_line, c.end_line, m.symbol_id
      FROM mentions m
      JOIN chunks c ON m.chunk_id = c.id
-     WHERE m.role != 1`,
-  );
+     WHERE m.role != 1
+       AND c.document_id IN (${documentIds.map(() => '?').join(',')})`,
+    ...documentIds,
+  ));
 
   // Group by document
-  const byDoc = new Map<number, Array<typeof refRows[number]>>();
+  const byDoc = new Map<number, ChunkMentionRow[]>();
   for (const row of refRows) {
     if (!byDoc.has(row.document_id)) byDoc.set(row.document_id, []);
     byDoc.get(row.document_id)!.push(row);
@@ -451,13 +448,8 @@ export function buildChunkCalleeMap(
   // is the authoritative symbol table — joining off mentions only would drop
   // symbols that have no role=1 mention recorded (test fixtures, indexers
   // that emit definitions only via enclosing ranges).
-  const docPaths = new Map<number, string>(
-    db.all<{ id: number; relative_path: string }>(
-      `SELECT id, relative_path FROM documents`,
-    ).map((r) => [r.id, r.relative_path]),
-  );
-  const calleeInfo = new Map<number, { symbol: string; file: string }>();
-  const calleeRows = db.all<{ symbol_id: number; symbol: string; document_id: number | null }>(
+  const mentionedSymbolIds = uniqueNumbers(refRows.map((row) => row.symbol_id));
+  const calleeRows = mentionedSymbolIds.flatMap((symbolIds) => db.all<{ symbol_id: number; symbol: string; document_id: number | null }>(
     `SELECT gs.id AS symbol_id, gs.symbol,
             COALESCE(der.document_id, def_chunk.document_id) AS document_id
      FROM global_symbols gs
@@ -467,9 +459,25 @@ export function buildChunkCalleeMap(
        FROM mentions m
        JOIN chunks c ON m.chunk_id = c.id
        WHERE m.role = 1
+         AND m.symbol_id IN (${symbolIds.map(() => '?').join(',')})
        GROUP BY m.symbol_id
-     ) def_chunk ON def_chunk.symbol_id = gs.id`,
+     ) def_chunk ON def_chunk.symbol_id = gs.id
+     WHERE gs.id IN (${symbolIds.map(() => '?').join(',')})`,
+    ...symbolIds,
+    ...symbolIds,
+  ));
+  const documentIdsForPaths = uniqueNumbers([
+    ...definitions.map((def) => def.documentId),
+    ...calleeRows.flatMap((row) => row.document_id === null ? [] : [row.document_id]),
+  ]);
+  const docPaths = new Map<number, string>(
+    documentIdsForPaths.flatMap((documentIds) => db.all<{ id: number; relative_path: string }>(
+      `SELECT id, relative_path FROM documents
+       WHERE id IN (${documentIds.map(() => '?').join(',')})`,
+      ...documentIds,
+    ).map((r) => [r.id, r.relative_path] as const)),
   );
+  const calleeInfo = new Map<number, { symbol: string; file: string }>();
   for (const r of calleeRows) {
     if (calleeInfo.has(r.symbol_id)) continue;
     calleeInfo.set(r.symbol_id, {
@@ -539,6 +547,17 @@ export function buildChunkCalleeMap(
   return result;
 }
 
+const SQLITE_IN_BATCH_SIZE = 500;
+
+function uniqueNumbers(values: Iterable<number>): number[][] {
+  const unique = [...new Set(values)];
+  const batches: number[][] = [];
+  for (let i = 0; i < unique.length; i += SQLITE_IN_BATCH_SIZE) {
+    batches.push(unique.slice(i, i + SQLITE_IN_BATCH_SIZE));
+  }
+  return batches;
+}
+
 /**
  * Bulk caller map: symbolId → set of distinct files that reference the
  * symbol.
@@ -568,4 +587,3 @@ function toCalleeRows(
   }
   return out;
 }
-

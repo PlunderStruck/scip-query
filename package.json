@@ -11,6 +11,7 @@
   "files": [
     "dist/**/*.js",
     "dist/**/*.d.ts",
+    "docs/**/*.md",
     "skills/**/SKILL.md"
   ],
   "sideEffects": false,

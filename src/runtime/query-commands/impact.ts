@@ -1,12 +1,14 @@
 import * as queries from '../../queries/index.js';
 import type { DiffGateCheck } from '../../queries/diff-gate.js';
 import type { CommandDescriptor } from '../command-descriptor-types.js';
-import { collectValues, doc, option, parseInteger, parseNumber } from '../command-spec-builders.js';
+import { collectValues, doc, option, parseInteger, parseNumber, withJsonOption } from '../command-spec-builders.js';
 import {
   budgetedDbCommand,
+  booleanOptionValue,
   dbCommand,
   definedNumberOption,
   numberOptionValue,
+  printJsonEnvelope,
   stringArg,
   stringOptionValue,
 } from '../command-execution.js';
@@ -20,6 +22,10 @@ const handleAffected = dbCommand(({ db, args, opts }) => {
     maxDepth: definedNumberOption(opts, 'maxDepth', 5),
     scope: stringOptionValue(opts, 'scope'),
   });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('affected', args, opts, results);
+    return;
+  }
   if (results.length === 0) return render.empty('No affected symbols found.');
   let prevDepth = -1;
   for (const r of results) {
@@ -39,6 +45,10 @@ const handleCoChange = dbCommand(({ db, args, opts }) => {
     limit: definedNumberOption(opts, 'limit', 30),
     includeLinked: opts['all'] === true,
   });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('co-change', args, opts, result);
+    return;
+  }
   if (!result.available) return render.empty('No git history available (not a repository, or git missing).');
   if (result.findings.length === 0) {
     return render.empty(file
@@ -55,8 +65,12 @@ const handleCoChange = dbCommand(({ db, args, opts }) => {
   console.log(`\n${result.findings.length} pair(s). Co-editing one side without the other is how drift starts.`);
 });
 
-const handleChangeSurface = budgetedDbCommand('change-surface', ({ db, args, budget }) => {
+const handleChangeSurface = budgetedDbCommand('change-surface', ({ db, args, opts, budget }) => {
   const result = queries.changeSurface(db, stringArg(args, 0), { semantic: budget.semantic });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('change-surface', args, opts, result);
+    return;
+  }
   if (!result) return render.empty('File not found in index.');
   console.log(`File: ${result.file}`);
   console.log(`External consumers: ${result.totalExternalConsumers}\n`);
@@ -66,13 +80,18 @@ const handleChangeSurface = budgetedDbCommand('change-surface', ({ db, args, bud
   });
 });
 
-const handleIncompleteMigration = dbCommand(({ db, opts }) => {
+const handleIncompleteMigration = dbCommand(({ db, args, opts }) => {
   const result = queries.incompleteMigration(db, {
     base: stringOptionValue(opts, 'base'),
     minContainment: definedNumberOption(opts, 'minContainment', 0.7),
     maxHelpers: numberOptionValue(opts, 'maxHelpers'),
     limit: definedNumberOption(opts, 'limit', 20),
   });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('incomplete-migration', args, opts, result);
+    if (result.available && result.findings.length > 0) process.exitCode = 1;
+    return;
+  }
   if (!result.available) return render.empty('No git history available (not a repository, or git missing).');
   if (result.changedFiles.length === 0) return render.empty(`No changes vs ${result.base}.`);
   console.log(`Incomplete migrations vs ${result.base}: ${result.changedFiles.length} changed file(s), ${result.helpersChecked} new helper(s) scored.`);
@@ -119,14 +138,22 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
       + 'for every production callable and can take minutes. Re-runs are incremental (evidence.db).',
     );
   }
-  const result = queries.diffGate(db, {
-    base: stringOptionValue(opts, 'base'),
-    minTogether: definedNumberOption(opts, 'minTogether', 6),
+    const result = queries.diffGate(db, {
+      base: stringOptionValue(opts, 'base'),
+      minTogether: definedNumberOption(opts, 'minTogether', 6),
     maxEchoChecks: numberOptionValue(opts, 'maxEchoChecks'),
     maxHelpers: numberOptionValue(opts, 'maxHelpers'),
-    skip: parseSkipChecks(opts['skip']),
-  });
-  if (hookMode) {
+      skip: parseSkipChecks(opts['skip']),
+    });
+    if (!hookMode && booleanOptionValue(opts, 'json')) {
+      printJsonEnvelope('diff-gate', [], opts, {
+        exitCode: result.findings.length > 0 ? 1 : 0,
+        ...result,
+      });
+      if (result.findings.length > 0) process.exitCode = 1;
+      return;
+    }
+    if (hookMode) {
     // Hook contract (Claude Code and Codex): silent exit 0 = allow stop,
     // exit 2 with stderr = block and feed the reason back to the agent.
     if (result.findings.length === 0) return;
@@ -159,10 +186,10 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'affected',
     command: 'affected <symbol>',
     description: 'Transitive closure of symbols that could break if this symbol changes',
-    options: [
+    options: withJsonOption([
       option('--max-depth <n>', 'Maximum traversal depth', parseInteger, 5),
       option('-s, --scope <path>', 'Limit to files matching path'),
-    ],
+    ]),
     renderShape: 'custom',
     docs: doc('Impact'),
     handler: handleAffected,
@@ -171,7 +198,7 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'change-surface',
     command: 'change-surface <file>',
     description: 'Pre-change briefing: exports, consumers, and blast-radius risk',
-    options: [option('--full', 'Run unbounded semantic analysis on large indexes')],
+    options: withJsonOption([option('--full', 'Run unbounded semantic analysis on large indexes')]),
     budget: 'semantic',
     renderShape: 'list',
     docs: doc('Impact'),
@@ -185,10 +212,11 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
       option('--base <ref>', 'Git ref to diff against (default: HEAD)'),
       option('--min-together <n>', 'Minimum historical co-changes for the partner check', parseInteger, 6),
       option('--max-echo-checks <n>', 'Maximum changed symbols to test for echoes (default: all)', parseInteger),
-      option('--max-helpers <n>', 'Maximum new helpers to score for incomplete-migration (default: all)', parseInteger),
-      option('--skip <check>', 'Skip a check (repeatable): echo, incomplete-migration, co-change-partner, doc-reference, unused-params, new-dead, baseline', collectValues, []),
-      option('--hook', 'Agent Stop-hook mode: silent on pass, exit 2 with findings on stderr to block the stop'),
-    ],
+        option('--max-helpers <n>', 'Maximum new helpers to score for incomplete-migration (default: all)', parseInteger),
+        option('--skip <check>', 'Skip a check (repeatable): echo, incomplete-migration, co-change-partner, doc-reference, unused-params, new-dead, baseline', collectValues, []),
+        option('--hook', 'Agent Stop-hook mode: silent on pass, exit 2 with findings on stderr to block the stop'),
+        option('--json', 'Output as JSON for programmatic consumption'),
+      ],
     heuristic: { label: 'diff gate candidates' },
     renderShape: 'custom',
     docs: doc('Impact', ['scip-query diff-gate', 'scip-query diff-gate --base origin/main']),
@@ -198,12 +226,12 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'incomplete-migration',
     command: 'incomplete-migration',
     description: 'Partially-completed extraction candidates: new helpers in the diff wired into some sites while similar un-migrated sites remain',
-    options: [
+    options: withJsonOption([
       option('--base <ref>', 'Git ref to diff against (default: HEAD)'),
       option('--min-containment <n>', 'Minimum share of helper callees a site must contain (0-1)', parseNumber, 0.7),
       option('--max-helpers <n>', 'Maximum new helpers to score (default: all)', parseInteger),
       option('-n, --limit <n>', 'Maximum findings to report', parseInteger, 20),
-    ],
+    ]),
     heuristic: { label: 'incomplete migration candidates' },
     renderShape: 'custom',
     docs: doc('Impact', ['scip-query incomplete-migration', 'scip-query incomplete-migration --base origin/main']),
@@ -213,11 +241,11 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'co-change',
     command: 'co-change [file]',
     description: 'Files that change together in git history without a dependency edge — hidden coupling candidates',
-    options: [
+    options: withJsonOption([
       option('--min-together <n>', 'Minimum commits where both files changed', parseInteger, 4),
       option('-n, --limit <n>', 'Maximum pairs to report', parseInteger, 30),
       option('--all', 'Include pairs that already have a dependency edge'),
-    ],
+    ]),
     heuristic: { label: 'co-change candidates' },
     renderShape: 'custom',
     docs: doc('Impact', ['scip-query co-change', 'scip-query co-change src/runtime/config.ts']),

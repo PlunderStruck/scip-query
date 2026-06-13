@@ -18,10 +18,12 @@ export interface BudgetedCommandContext extends DbCommandContext {
 }
 
 interface RowCommandSpec<Row, Ctx extends DbCommandContext> {
+  commandName?: string;
   query: (ctx: Ctx) => readonly Row[];
   format: (row: Row, ctx: Ctx) => string;
   emptyMessage?: (ctx: Ctx) => string;
   heuristicLabel?: string;
+  toJson?: (rows: readonly Row[], ctx: Ctx) => unknown;
   after?: (rows: readonly Row[], ctx: Ctx) => void;
 }
 
@@ -31,29 +33,35 @@ type RowRenderer<Row, Ctx extends DbCommandContext> =
   | { kind: 'grouped'; key?: (row: Row, ctx: Ctx) => string };
 
 export interface ReportCommandSpec<Result, Ctx extends DbCommandContext = DbCommandContext> {
+  commandName?: string;
   query: (ctx: Ctx) => Result;
   emptyMessage?: (result: Result, ctx: Ctx) => string | undefined;
   heuristicLabel?: string;
   before?: (result: Result, ctx: Ctx) => void;
   render: (result: Result, ctx: Ctx) => void;
+  toJson?: (result: Result, ctx: Ctx) => unknown;
   after?: (result: Result, ctx: Ctx) => void;
 }
 
 export interface SectionedReportCommandSpec<Result, Ctx extends DbCommandContext = DbCommandContext> {
+  commandName?: string;
   query: (ctx: Ctx) => Result;
   emptyMessage?: (result: Result, ctx: Ctx) => string | undefined;
   heuristicLabel?: string;
   before?: (result: Result, ctx: Ctx) => void;
   sections: (result: Result, ctx: Ctx) => readonly ReportSection[];
+  toJson?: (result: Result, ctx: Ctx) => unknown;
   after?: (result: Result, ctx: Ctx) => void;
 }
 
 interface CommandOutputSpec<Output, Ctx extends DbCommandContext> {
+  commandName?: string;
   query: (ctx: Ctx) => Output;
   emptyMessage?: (output: Output, ctx: Ctx) => string | undefined;
   heuristicLabel?: string;
   before?: (output: Output, ctx: Ctx) => void;
   render: (output: Output, ctx: Ctx) => void;
+  toJson?: (output: Output, ctx: Ctx) => unknown;
   after?: (output: Output, ctx: Ctx) => void;
 }
 
@@ -69,7 +77,9 @@ export function budgetedDbCommand(
   run: (ctx: BudgetedCommandContext) => void,
 ): CommandHandler {
   return dbCommand((ctx) => {
-    const budget = commandAnalysisBudget(ctx.db, commandName, booleanOptionValue(ctx.opts, 'full'));
+    const budget = commandAnalysisBudget(ctx.db, commandName, booleanOptionValue(ctx.opts, 'full'), {
+      quiet: booleanOptionValue(ctx.opts, 'json'),
+    });
     run({ ...ctx, budget });
   });
 }
@@ -103,11 +113,13 @@ export function reportCommand<Result>(spec: ReportCommandSpec<Result>): CommandH
 
 export function sectionedReportCommand<Result>(spec: SectionedReportCommandSpec<Result>): CommandHandler {
   return reportCommand({
+    commandName: spec.commandName,
     query: spec.query,
     emptyMessage: spec.emptyMessage,
     heuristicLabel: spec.heuristicLabel,
     before: spec.before,
     render: (result, ctx) => render.sectionedReport(spec.sections(result, ctx)),
+    toJson: spec.toJson,
     after: spec.after,
   });
 }
@@ -116,7 +128,7 @@ export function budgetedReportCommand<Result>(
   commandName: string,
   spec: ReportCommandSpec<Result, BudgetedCommandContext>,
 ): CommandHandler {
-  return budgetedDbCommand(commandName, (ctx) => runCommandOutput(ctx, spec));
+  return budgetedDbCommand(commandName, (ctx) => runCommandOutput(ctx, { ...spec, commandName: spec.commandName ?? commandName }));
 }
 
 export function budgetedSectionedReportCommand<Result>(
@@ -124,11 +136,13 @@ export function budgetedSectionedReportCommand<Result>(
   spec: SectionedReportCommandSpec<Result, BudgetedCommandContext>,
 ): CommandHandler {
   return budgetedReportCommand(commandName, {
+    commandName: spec.commandName ?? commandName,
     query: spec.query,
     emptyMessage: spec.emptyMessage,
     heuristicLabel: spec.heuristicLabel,
     before: spec.before,
     render: (result, ctx) => render.sectionedReport(spec.sections(result, ctx)),
+    toJson: spec.toJson,
     after: spec.after,
   });
 }
@@ -137,7 +151,7 @@ export function budgetedListCommand<Row>(
   commandName: string,
   spec: RowCommandSpec<Row, BudgetedCommandContext>,
 ): CommandHandler {
-  return budgetedDbCommand(commandName, (ctx) => renderRows(ctx, spec, { kind: 'list' }));
+  return budgetedDbCommand(commandName, (ctx) => renderRows(ctx, { ...spec, commandName }, { kind: 'list' }));
 }
 
 export function budgetedTableCommand<Row>(
@@ -148,7 +162,7 @@ export function budgetedTableCommand<Row>(
   },
 ): CommandHandler {
   return budgetedDbCommand(commandName, (ctx) =>
-    renderRows(ctx, spec, { kind: 'table', headers: spec.headers, dashWidths: spec.dashWidths }));
+    renderRows(ctx, { ...spec, commandName }, { kind: 'table', headers: spec.headers, dashWidths: spec.dashWidths }));
 }
 
 export function budgetedGroupedByFileCommand<Row>(
@@ -158,7 +172,7 @@ export function budgetedGroupedByFileCommand<Row>(
   },
 ): CommandHandler {
   return budgetedDbCommand(commandName, (ctx) =>
-    renderRows(ctx, spec, { kind: 'grouped', key: spec.key }));
+    renderRows(ctx, { ...spec, commandName }, { kind: 'grouped', key: spec.key }));
 }
 
 export function stringArg(args: readonly unknown[], index: number): string {
@@ -199,6 +213,7 @@ function renderRows<Row, Ctx extends DbCommandContext>(
   renderer: RowRenderer<Row, Ctx>,
 ): void {
   runCommandOutput(ctx, {
+    commandName: spec.commandName,
     query: spec.query,
     emptyMessage: (rows, rowCtx) => rows.length === 0 && spec.emptyMessage
       ? spec.emptyMessage(rowCtx)
@@ -217,6 +232,7 @@ function renderRows<Row, Ctx extends DbCommandContext>(
         );
       }
     },
+    toJson: spec.toJson,
     after: spec.after,
   });
 }
@@ -226,6 +242,10 @@ function runCommandOutput<Output, Ctx extends DbCommandContext>(
   spec: CommandOutputSpec<Output, Ctx>,
 ): void {
   const output = spec.query(ctx);
+  if (booleanOptionValue(ctx.opts, 'json')) {
+    printJsonEnvelope(spec.commandName, ctx.args, ctx.opts, spec.toJson ? spec.toJson(output, ctx) : output);
+    return;
+  }
   const emptyMessage = spec.emptyMessage?.(output, ctx);
   if (emptyMessage) {
     render.empty(emptyMessage);
@@ -235,6 +255,20 @@ function runCommandOutput<Output, Ctx extends DbCommandContext>(
   spec.before?.(output, ctx);
   spec.render(output, ctx);
   spec.after?.(output, ctx);
+}
+
+export function printJsonEnvelope(
+  command: string | undefined,
+  args: readonly unknown[],
+  options: CommandOptions,
+  result: unknown,
+): void {
+  console.log(JSON.stringify({ command, args: jsonPositionals(args), options, result }, null, 2));
+}
+
+function jsonPositionals(args: readonly unknown[]): readonly unknown[] {
+  return args.filter((arg) =>
+    typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean');
 }
 
 function splitCommanderActionArgs(rawArgs: readonly unknown[]): { args: readonly unknown[]; opts: CommandOptions } {

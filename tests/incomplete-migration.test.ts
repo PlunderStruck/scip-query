@@ -6,6 +6,7 @@ import Database from 'better-sqlite3';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ScipQueryConfig } from '../src/domain/types.js';
 import { diffGate } from '../src/queries/diff-gate.js';
+import { diffImpactPlan } from '../src/queries/diff-impact.js';
 import { incompleteMigration } from '../src/queries/incomplete-migration.js';
 import { ScipDatabase } from '../src/storage/db.js';
 import { createEvidenceSchema } from './evidence-fixture.js';
@@ -248,6 +249,25 @@ describe('incomplete-migration', () => {
     expect(finding.leftovers[0]!.sharedCallees).toHaveLength(3);
   });
 
+  it('reuses a supplied diff plan without changing incomplete-migration findings', () => {
+    const diffPlan = diffImpactPlan(db, { base: 'HEAD' });
+    const result = incompleteMigration(db, { base: 'HEAD', semantic: false, diffPlan });
+
+    expect(result.available).toBe(true);
+    expect(result.changedFiles.sort()).toEqual(['src/site-a.ts', 'src/site-e.ts', 'src/util.ts']);
+    expect(result.helpersChecked).toBe(1);
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0]).toMatchObject({
+      helperShortName: expect.stringContaining('formatThing'),
+      helperFile: 'src/util.ts',
+      migratedFiles: expect.arrayContaining(['src/site-a.ts']),
+      leftovers: [
+        expect.objectContaining({ file: 'src/site-b.ts', containment: 1 }),
+        expect.objectContaining({ file: 'src/site-c.ts', containment: 1 }),
+      ],
+    });
+  });
+
   it('does not report already-migrated sites or files inside the diff', () => {
     const result = incompleteMigration(db, { base: 'HEAD', semantic: false });
     const leftoverFiles = result.findings.flatMap((finding) =>
@@ -303,6 +323,45 @@ describe('incomplete-migration', () => {
     expect(findings[0]!.message).toContain('formatThing');
     expect(findings[0]!.message).toContain('src/site-b.ts');
     expect(findings[0]!.remediation).toContain('formatThing');
+    expect(findings[0]!).toMatchObject({
+      id: expect.stringMatching(/^SQ[A-F0-9]{12}$/),
+      severity: 'warning',
+      evidence: 'heuristic',
+      file: 'src/util.ts',
+      symbol: expect.stringContaining('formatThing'),
+      relatedFiles: expect.arrayContaining(['src/site-a.ts', 'src/site-b.ts', 'src/site-c.ts']),
+      suppressionHint: expect.stringContaining('scip-query: ignore incomplete-migration'),
+    });
+    expect(findings[0]!.confidence).toBeGreaterThan(0);
+    expect(findings[0]!.why).toEqual(expect.arrayContaining([
+      expect.stringContaining('formatThing'),
+    ]));
+  });
+
+  it('honors structured diff-gate suppressions from config', () => {
+    const unsuppressed = diffGate(db, { base: 'HEAD' });
+    const finding = unsuppressed.findings.find((candidate) => candidate.check === 'incomplete-migration');
+    expect(finding).toBeDefined();
+
+    const suppressedDb = new ScipDatabase({
+      dbPath: join(repoRoot, 'index.db'),
+      indexPath: join(repoRoot, 'index.scip'),
+      projectRoot: repoRoot,
+      suppressions: [{ id: finding!.id, reason: 'accepted fixture finding' }],
+    });
+    try {
+      const result = diffGate(suppressedDb, { base: 'HEAD' });
+
+      expect(result.findings.some((candidate) => candidate.id === finding!.id)).toBe(false);
+      expect(result.suppressed).toEqual([
+        expect.objectContaining({
+          finding: expect.objectContaining({ id: finding!.id }),
+          suppression: expect.objectContaining({ reason: 'accepted fixture finding' }),
+        }),
+      ]);
+    } finally {
+      suppressedDb.close();
+    }
   });
 
   it('runs uncapped by default — no cap-skip entries', () => {

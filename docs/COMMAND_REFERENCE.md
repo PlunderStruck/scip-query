@@ -16,92 +16,93 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 
 | Command | Description | Options |
 |---|---|---|
-| `stats` | Show index statistics | - |
+| `stats` | Show index statistics | `--json` |
 
 ### Navigation
 
 | Command | Description | Options |
 |---|---|---|
-| `files <pattern>` | Find files matching a pattern | - |
-| `methods <className>` | List methods of a class (with line ranges) | - |
-| `refs <symbol>` | Find all files referencing a symbol | `--full` |
-| `trace <symbol>` | Trace a symbol: definition + all references | `--full` |
-| `deps <file>` | Files this file depends on (internal) | - |
-| `rdeps <file>` | Files that depend on this file/module | - |
-| `system <module>` | Full module map: files, symbols, deps in/out | - |
-| `surface <module>` | What symbols consumers actually use from this module | - |
-| `imports <file>` | What symbols does this file import? | `--full` |
-| `imported-by <symbol>` | Which files import this symbol? | - |
-| `outline <file>` | Tree view of symbols in a file, with line ranges | `--signatures` |
-| `members <symbol>` | All children of a symbol (methods, fields, nested types) | - |
-| `by-kind <kind>` | Find symbols by SCIP kind (class, interface, enum, function, etc.) | `-s, --scope <path>`<br>`-n, --limit <n>` |
-| `kind-counts` | Histogram of symbol kinds in the codebase | `-s, --scope <path>` |
-| `hierarchy <symbol>` | Show a symbol's ancestry chain (method → class → module) | - |
-| `code <symbol>` | Read the source code for a symbol (bounded to its definition range) | `-C, --context <n>` |
-| `dataflow <symbol>` | Reference-level dataflow: definition sites, usage sites, producers, consumers | `--full` |
-| `slice <symbol>` | Reference-level program slice: what affects this (backward) or what this affects (forward) | `--forward`<br>`--depth <n>`<br>`--full` |
+| `files <pattern>` | Find files matching a pattern | `--json` |
+| `methods <className>` | List methods of a class (with line ranges) | `--json` |
+| `refs <symbol>` | Find all files referencing a symbol | `--full`<br>`--json` |
+| `trace <symbol>` | Trace a symbol: definition + all references | `--full`<br>`--json` |
+| `deps <file>` | Files this file depends on (internal) | `--json` |
+| `rdeps <file>` | Files that depend on this file/module | `--json` |
+| `system <module>` | Full module map: files, symbols, deps in/out | `--json` |
+| `surface <module>` | What symbols consumers actually use from this module | `--json` |
+| `imports <file>` | What symbols does this file import? | `--full`<br>`--json` |
+| `imported-by <symbol>` | Which files import this symbol? | `--json` |
+| `outline <file>` | Tree view of symbols in a file, with line ranges | `--signatures`<br>`--json` |
+| `members <symbol>` | All children of a symbol (methods, fields, nested types) | `--json` |
+| `by-kind <kind>` | Find symbols by SCIP kind (class, interface, enum, function, etc.) | `-s, --scope <path>`<br>`-n, --limit <n>`<br>`--json` |
+| `kind-counts` | Histogram of symbol kinds in the codebase | `-s, --scope <path>`<br>`--json` |
+| `hierarchy <symbol>` | Show a symbol's ancestry chain (method → class → module) | `--json` |
+| `code <symbol>` | Read the source code for a symbol (bounded to its definition range) | `-C, --context <n>`<br>`--json` |
+| `dataflow <symbol>` | Reference-level dataflow: definition sites, usage sites, producers, consumers | `--full`<br>`--json` |
+| `slice <symbol>` | Reference-level program slice: what affects this (backward) or what this affects (forward) | `--forward`<br>`--depth <n>`<br>`--full`<br>`--json` |
 
 ### Cleanup
 
 | Command | Description | Options |
 |---|---|---|
-| `dead [scope]` | Find dead code and file-internal symbols (no cross-file consumers) | `--min-loc <n>`<br>`--include-tests`<br>`--skip-barrels`<br>`--include-members`<br>`--only-dead`<br>`--only-internal`<br>`--full` |
-| `unused-imports <file>` | Find imports not referenced in the same file | `--full` |
-| `isolated` | Find completely orphaned symbols (no references at all) | `-s, --scope <path>`<br>`--min-loc <n>`<br>`--full` |
-| `similar [symbol]` | Find heuristic function similarity candidates from callee fingerprints | `--min-similarity <n>`<br>`-n, --limit <n>`<br>`-s, --scope <path>`<br>`--min-callees <n>`<br>`--cross-file-only`<br>`--full` |
-| `similar-files [file]` | Find heuristic similar-file candidates from dependency profiles | `--min-similarity <n>`<br>`-n, --limit <n>`<br>`-s, --scope <path>`<br>`--min-deps <n>` |
-| `similar-chains` | Find heuristic similar-chain candidates from dependency flows | `--min-similarity <n>`<br>`-n, --limit <n>`<br>`-s, --scope <path>`<br>`--min-length <n>`<br>`--max-length <n>` |
-| `extract-candidates` | Find heuristic extraction candidates from isolated callee clusters | `-s, --scope <path>`<br>`--min-loc <n>`<br>`--min-callees <n>`<br>`-n, --limit <n>`<br>`--full` |
-| `cleanup-plan` | Ordered, batched deletion plan: graph-fact dead code plus the cascade candidates it unlocks | `-s, --scope <path>`<br>`--min-loc <n>`<br>`--max-depth <n>`<br>`--verify`<br>`--full` |
-| `recent-duplicates` | Directional duplicate candidates: recent code that re-implements established code | `--window <n>`<br>`--min-similarity <n>`<br>`-n, --limit <n>`<br>`-s, --scope <path>`<br>`--full` |
-| `doc-drift [doc]` | Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped | `-n, --limit <n>`<br>`--min-coupling <n>` |
-| `unused-params` | Speculative-generality candidates: trailing parameters no body ever uses (TS/JS) | `-s, --scope <path>`<br>`-n, --limit <n>`<br>`--full` |
-| `drift [module]` | Detect heuristic drift candidates: unused imports, layer violations, and pattern deviations | `--min-deviation <n>`<br>`--full` |
-| `wrapper-candidates` | Find heuristic wrapper candidates only called by one consumer | `-s, --scope <path>`<br>`--max-loc <n>`<br>`-n, --limit <n>`<br>`--full` |
-| `passthrough-candidates` | Find heuristic passthrough candidates that forward to one callee | `-s, --scope <path>`<br>`--max-loc <n>`<br>`-n, --limit <n>`<br>`--full` |
-| `stale-abstractions` | Find heuristic stale abstraction candidates with 0-1 consumers | `-s, --scope <path>`<br>`--min-loc <n>`<br>`-n, --limit <n>`<br>`--include-low-confidence`<br>`--full` |
-| `complexity-hotspots` | Find heuristic complexity hotspot candidates from LOC x fan-in x fan-out | `-s, --scope <path>`<br>`--min-loc <n>`<br>`-n, --limit <n>`<br>`--full` |
-| `convergence <symbol1> <symbol2>` | Show what a consolidated version of two similar functions would look like | `--full` |
-| `redundant-reexports` | Find barrel re-exports that nobody imports through | `-s, --scope <path>`<br>`-n, --limit <n>` |
-| `similar-signatures` | Find functions with near-identical type signatures (same shape) | `-s, --scope <path>`<br>`--min-loc <n>`<br>`-n, --limit <n>`<br>`--full` |
+| `dead [scope]` | Find dead code and file-internal symbols (no cross-file consumers) | `--min-loc <n>`<br>`--include-tests`<br>`--skip-barrels`<br>`--include-members`<br>`--only-dead`<br>`--only-internal`<br>`--full`<br>`--json` |
+| `unused-imports <file>` | Find imports not referenced in the same file | `--full`<br>`--json` |
+| `isolated` | Find completely orphaned symbols (no references at all) | `-s, --scope <path>`<br>`--min-loc <n>`<br>`--full`<br>`--json` |
+| `similar [symbol]` | Find heuristic function similarity candidates from callee fingerprints | `--min-similarity <n>`<br>`-n, --limit <n>`<br>`-s, --scope <path>`<br>`--min-callees <n>`<br>`--cross-file-only`<br>`--full`<br>`--json` |
+| `similar-files [file]` | Find heuristic similar-file candidates from dependency profiles | `--min-similarity <n>`<br>`-n, --limit <n>`<br>`-s, --scope <path>`<br>`--min-deps <n>`<br>`--json` |
+| `similar-chains` | Find heuristic similar-chain candidates from dependency flows | `--min-similarity <n>`<br>`-n, --limit <n>`<br>`-s, --scope <path>`<br>`--min-length <n>`<br>`--max-length <n>`<br>`--json` |
+| `extract-candidates` | Find heuristic extraction candidates from isolated callee clusters | `-s, --scope <path>`<br>`--min-loc <n>`<br>`--min-callees <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
+| `cleanup-plan` | Ordered, batched deletion plan: graph-fact dead code plus the cascade candidates it unlocks | `-s, --scope <path>`<br>`--min-loc <n>`<br>`--max-depth <n>`<br>`--verify`<br>`--patch`<br>`--json`<br>`--full` |
+| `cleanup-apply` | Apply a compiler-verified cleanup-plan batch to the working tree | `-s, --scope <path>`<br>`--min-loc <n>`<br>`--max-depth <n>`<br>`--verified`<br>`--batch <n>`<br>`--all`<br>`--force-dirty`<br>`--full` |
+| `recent-duplicates` | Directional duplicate candidates: recent code that re-implements established code | `--window <n>`<br>`--min-similarity <n>`<br>`-n, --limit <n>`<br>`-s, --scope <path>`<br>`--full`<br>`--json` |
+| `doc-drift [doc]` | Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped | `-n, --limit <n>`<br>`--min-coupling <n>`<br>`--json` |
+| `unused-params` | Speculative-generality candidates: trailing parameters no body ever uses (TS/JS) | `-s, --scope <path>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
+| `drift [module]` | Detect heuristic drift candidates: unused imports, layer violations, and pattern deviations | `--min-deviation <n>`<br>`--full`<br>`--json` |
+| `wrapper-candidates` | Find heuristic wrapper candidates only called by one consumer | `-s, --scope <path>`<br>`--max-loc <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
+| `passthrough-candidates` | Find heuristic passthrough candidates that forward to one callee | `-s, --scope <path>`<br>`--max-loc <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
+| `stale-abstractions` | Find heuristic stale abstraction candidates with 0-1 consumers | `-s, --scope <path>`<br>`--min-loc <n>`<br>`-n, --limit <n>`<br>`--include-low-confidence`<br>`--full`<br>`--json` |
+| `complexity-hotspots` | Find heuristic complexity hotspot candidates from LOC x fan-in x fan-out | `-s, --scope <path>`<br>`--min-loc <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
+| `convergence <symbol1> <symbol2>` | Show what a consolidated version of two similar functions would look like | `--full`<br>`--json` |
+| `redundant-reexports` | Find barrel re-exports that nobody imports through | `-s, --scope <path>`<br>`-n, --limit <n>`<br>`--json` |
+| `similar-signatures` | Find functions with near-identical type signatures (same shape) | `-s, --scope <path>`<br>`--min-loc <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
 
 ### Graph
 
 | Command | Description | Options |
 |---|---|---|
-| `hotspots` | Most-referenced symbols in the codebase (choke points) | `-n, --limit <n>`<br>`-s, --scope <path>` |
-| `fan-in [symbol]` | How many files reference a symbol (or top fan-in across codebase) | `-n, --limit <n>`<br>`-s, --scope <path>` |
-| `fan-out [file]` | How many external symbols a file uses (or top fan-out across codebase) | `-n, --limit <n>`<br>`-s, --scope <path>` |
-| `coupling [file1] [file2]` | Coupling between two files, or top coupled pairs in codebase | `-n, --limit <n>`<br>`-s, --scope <path>` |
-| `cycles` | Detect circular dependency chains between files | `-s, --scope <path>`<br>`--max-depth <n>` |
-| `bottlenecks` | Find coupling hubs: high fan-in AND high fan-out | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--min-fan-in <n>`<br>`--min-fan-out <n>`<br>`--full` |
-| `deep-chains` | Find the longest transitive dependency chains | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--min-depth <n>` |
-| `call-graph <symbol>` | Show incoming callers and outgoing callees for a symbol | `--full` |
+| `hotspots` | Most-referenced symbols in the codebase (choke points) | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--json` |
+| `fan-in [symbol]` | How many files reference a symbol (or top fan-in across codebase) | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--json` |
+| `fan-out [file]` | How many external symbols a file uses (or top fan-out across codebase) | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--json` |
+| `coupling [file1] [file2]` | Coupling between two files, or top coupled pairs in codebase | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--json` |
+| `cycles` | Detect circular dependency chains between files | `-s, --scope <path>`<br>`--max-depth <n>`<br>`--json` |
+| `bottlenecks` | Find coupling hubs: high fan-in AND high fan-out | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--min-fan-in <n>`<br>`--min-fan-out <n>`<br>`--full`<br>`--json` |
+| `deep-chains` | Find the longest transitive dependency chains | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--min-depth <n>`<br>`--json` |
+| `call-graph <symbol>` | Show incoming callers and outgoing callees for a symbol | `--full`<br>`--json` |
 
 ### Impact
 
 | Command | Description | Options |
 |---|---|---|
-| `affected <symbol>` | Transitive closure of symbols that could break if this symbol changes | `--max-depth <n>`<br>`-s, --scope <path>` |
-| `change-surface <file>` | Pre-change briefing: exports, consumers, and blast-radius risk | `--full` |
-| `co-change [file]` | Files that change together in git history without a dependency edge — hidden coupling candidates | `--min-together <n>`<br>`-n, --limit <n>`<br>`--all` |
-| `diff-gate` | Gate the current diff: echo candidates, incomplete migrations, missing co-change partners, uncited doc updates, unused params, new dead symbols; exit 1 on findings | `--base <ref>`<br>`--min-together <n>`<br>`--max-echo-checks <n>`<br>`--max-helpers <n>`<br>`--skip <check>`<br>`--hook` |
-| `incomplete-migration` | Partially-completed extraction candidates: new helpers in the diff wired into some sites while similar un-migrated sites remain | `--base <ref>`<br>`--min-containment <n>`<br>`--max-helpers <n>`<br>`-n, --limit <n>` |
+| `affected <symbol>` | Transitive closure of symbols that could break if this symbol changes | `--max-depth <n>`<br>`-s, --scope <path>`<br>`--json` |
+| `change-surface <file>` | Pre-change briefing: exports, consumers, and blast-radius risk | `--full`<br>`--json` |
+| `co-change [file]` | Files that change together in git history without a dependency edge — hidden coupling candidates | `--min-together <n>`<br>`-n, --limit <n>`<br>`--all`<br>`--json` |
+| `diff-gate` | Gate the current diff: echo candidates, incomplete migrations, missing co-change partners, uncited doc updates, unused params, new dead symbols; exit 1 on findings | `--base <ref>`<br>`--min-together <n>`<br>`--max-echo-checks <n>`<br>`--max-helpers <n>`<br>`--skip <check>`<br>`--hook`<br>`--json` |
+| `incomplete-migration` | Partially-completed extraction candidates: new helpers in the diff wired into some sites while similar un-migrated sites remain | `--base <ref>`<br>`--min-containment <n>`<br>`--max-helpers <n>`<br>`-n, --limit <n>`<br>`--json` |
 | `diff-impact` | Compute changed symbols and downstream consumers from current git diff | `--base <ref>` |
 
 ### Planning
 
 | Command | Description | Options |
 |---|---|---|
-| `plan-context <target>` | Pre-edit planning context for a symbol, file, or module | `--impact-depth <n>`<br>`--slice-depth <n>`<br>`-s, --scope <path>`<br>`-n, --limit <n>`<br>`--full` |
+| `plan-context <target>` | Pre-edit planning context for a symbol, file, or module | `--impact-depth <n>`<br>`--slice-depth <n>`<br>`-s, --scope <path>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
 
 ### Health
 
 | Command | Description | Options |
 |---|---|---|
-| `self-audit` | Score the cheap evidence paths against the TypeScript compiler oracle on sampled symbols | `--samples <n>`<br>`-s, --scope <path>` |
+| `self-audit` | Score the cheap evidence paths against the TypeScript compiler oracle on sampled symbols | `--samples <n>`<br>`-s, --scope <path>`<br>`--json` |
 | `health` | Composite codebase health report with prioritized action list | `-s, --scope <path>`<br>`--full`<br>`--json`<br>`--baseline`<br>`--write-baseline` |
-| `complexity <symbol>` | Per-symbol complexity: branches, cyclomatic estimate, fan-in/out, callees | `--full` |
+| `complexity <symbol>` | Per-symbol complexity: branches, cyclomatic estimate, fan-in/out, callees | `--full`<br>`--json` |
 
 ### Maintenance
 
@@ -109,9 +110,15 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 |---|---|---|
 | `install-skills` | Install skills (scip-query, concrete-plan, scip-ai-cleanup, scip-explore, scip-debloat, scip-doc-reconcile, scip-maintainability, scip-verify, scip-language-playbook) into Claude Code, Codex, and shared agent roots | - |
 | `check-deps` | Check whether scip-query and the detected language indexers are actually runnable | - |
+| `capabilities` | Report which evidence and verification capabilities are available in this project | `--json` |
+| `capability-matrix` | Report the evidence and verification capability matrix by language | `--json` |
 | `init` | Create a .scipquery.json config file for this project | - |
+| `config-validate` | Validate .scipquery.json, including structured suppressions and declared coupling groups | `--json` |
+| `suppress <id>` | Record an accepted finding in .scipquery.json with a required reason | `--reason <text>`<br>`--check <check>`<br>`--file <path>`<br>`--expires-at <iso>`<br>`--json` |
+| `doctor` | Diagnose config, index freshness, dependency readiness, and project capabilities | `--json` |
 | `setup-agent` | Seed agent guidance for this project: AGENTS.md/CLAUDE.md block pointing agents at the scip-query skills and diff gate, plus an optional git pre-commit backstop | `--git-hook` |
+| `setup-ci` | Write a GitHub Actions workflow that runs scip-query reindex and diff-gate on pull requests | `--force`<br>`--dry-run` |
 | `watch` | Watch for file changes and reindex automatically | `--debounce <ms>`<br>`--cooldown <ms>` |
-| `status` | Show index status for this project | - |
+| `status` | Show index status for this project | `--json`<br>`--capabilities` |
 
 <!-- END GENERATED COMMAND REFERENCE -->

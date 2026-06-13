@@ -24,6 +24,17 @@ export function option(
     : { flags, description, parser };
 }
 
+export function jsonOption(): NonNullable<CommandDescriptor['options']>[number] {
+  return option('--json', 'Output as JSON for programmatic consumption');
+}
+
+export function withJsonOption(
+  options: NonNullable<CommandDescriptor['options']> = [],
+): NonNullable<CommandDescriptor['options']> {
+  if (options.some((entry) => entry.flags === '--json')) return options;
+  return [...options, jsonOption()];
+}
+
 export function doc(category: string, examples: readonly string[] = []): NonNullable<CommandDescriptor['docs']> {
   return { category, examples };
 }

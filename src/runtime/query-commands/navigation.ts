@@ -1,6 +1,6 @@
 import * as queries from '../../queries/index.js';
 import type { CommandDescriptor } from '../command-descriptor-types.js';
-import { doc, option, parseInteger } from '../command-spec-builders.js';
+import { doc, option, parseInteger, withJsonOption } from '../command-spec-builders.js';
 import {
   booleanOptionValue,
   budgetedDbCommand,
@@ -8,6 +8,7 @@ import {
   budgetedListCommand,
   dbCommand,
   definedNumberOption,
+  printJsonEnvelope,
   stringArg,
   stringOptionValue,
 } from '../command-execution.js';
@@ -49,6 +50,10 @@ const handleOutline = dbCommand(({ db, args, opts }) => {
   const filePattern = stringArg(args, 0);
   const showSignatures = booleanOptionValue(opts, 'signatures');
   const roots = queries.outline(db, filePattern);
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('outline', args, opts, roots);
+    return;
+  }
   if (roots.length === 0) {
     return render.empty(`No symbols found for "${filePattern}".`);
   }
@@ -82,6 +87,10 @@ const handleRefs = budgetedGroupedByFileCommand('refs', {
 
 const handleCode = dbCommand(({ db, args, opts }) => {
   const result = queries.code(db, stringArg(args, 0), { context: definedNumberOption(opts, 'context', 0) });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('code', args, opts, result);
+    return;
+  }
   if (!result) return render.empty('Symbol not found or file unreadable.');
   console.log(`${displayPathRange(result.relativePath, result.startLine, result.endLine)}  ${result.shortName}  [${result.language ?? 'unknown'}]\n`);
   const lines = result.source.split('\n');
@@ -90,8 +99,12 @@ const handleCode = dbCommand(({ db, args, opts }) => {
   }
 });
 
-const handleDataflow = budgetedDbCommand('dataflow', ({ db, args, budget }) => {
+const handleDataflow = budgetedDbCommand('dataflow', ({ db, args, opts, budget }) => {
   const result = queries.dataflow(db, stringArg(args, 0), { semantic: budget.semantic });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('dataflow', args, opts, result);
+    return;
+  }
   if (!result) return render.empty('Symbol not found.');
   console.log(`${result.shortName}  (${result.relativePath})\n`);
   if (result.definitionSites.length > 0) {
@@ -119,6 +132,10 @@ const handleSlice = budgetedDbCommand('slice', ({ db, args, opts, budget }) => {
     maxDepth: definedNumberOption(opts, 'depth', 3),
     semantic: budget.semantic,
   });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('slice', args, opts, result);
+    return;
+  }
   if (!result) return render.empty('Symbol not found.');
   console.log(`${result.direction} slice of ${result.shortName}\n`);
   if (result.connectedSymbols.length === 0) {
@@ -149,8 +166,11 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'refs',
     command: 'refs <symbol>',
-    description: 'Find all files referencing a symbol',
-    options: [option('--full', 'Run unbounded semantic analysis on large indexes')],
+      description: 'Find all files referencing a symbol',
+      options: [
+        option('--full', 'Run unbounded semantic analysis on large indexes'),
+        option('--json', 'Output as JSON for programmatic consumption'),
+      ],
     budget: 'semantic',
     renderShape: 'grouped-by-file',
     docs: doc('Navigation', ['scip-query refs login']),
@@ -209,8 +229,11 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'imports',
     command: 'imports <file>',
-    description: 'What symbols does this file import?',
-    options: [option('--full', 'Run unbounded semantic analysis on large indexes')],
+      description: 'What symbols does this file import?',
+      options: [
+        option('--full', 'Run unbounded semantic analysis on large indexes'),
+        option('--json', 'Output as JSON for programmatic consumption'),
+      ],
     budget: 'semantic',
     renderShape: 'list',
     docs: doc('Navigation'),
@@ -228,7 +251,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'outline',
     command: 'outline <file>',
     description: 'Tree view of symbols in a file, with line ranges',
-    options: [option('--signatures', 'Show trimmed symbol signatures')],
+    options: withJsonOption([option('--signatures', 'Show trimmed symbol signatures')]),
     renderShape: 'custom',
     docs: doc('Navigation'),
     handler: handleOutline,
@@ -281,7 +304,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'code',
     command: 'code <symbol>',
     description: 'Read the source code for a symbol (bounded to its definition range)',
-    options: [option('-C, --context <n>', 'Extra lines of context above/below', parseInteger, 0)],
+    options: withJsonOption([option('-C, --context <n>', 'Extra lines of context above/below', parseInteger, 0)]),
     renderShape: 'custom',
     docs: doc('Navigation'),
     handler: handleCode,
@@ -290,7 +313,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'dataflow',
     command: 'dataflow <symbol>',
     description: 'Reference-level dataflow: definition sites, usage sites, producers, consumers',
-    options: [option('--full', 'Run unbounded semantic analysis on large indexes')],
+    options: withJsonOption([option('--full', 'Run unbounded semantic analysis on large indexes')]),
     budget: 'semantic',
     renderShape: 'custom',
     docs: doc('Navigation'),
@@ -300,11 +323,11 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'slice',
     command: 'slice <symbol>',
     description: 'Reference-level program slice: what affects this (backward) or what this affects (forward)',
-    options: [
+    options: withJsonOption([
       option('--forward', 'Forward slice (what does this affect). Default is backward.'),
       option('--depth <n>', 'Max transitive depth for backward slice', parseInteger, 3),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
-    ],
+    ]),
     budget: 'semantic',
     renderShape: 'custom',
     docs: doc('Navigation'),

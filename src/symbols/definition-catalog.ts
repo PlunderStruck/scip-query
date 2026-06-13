@@ -49,6 +49,13 @@ export interface FileSymbolResult {
   enclosingSymbol: string | null;
 }
 
+export type DefinitionLineIndex<T extends { startLine: number; endLine: number }> = Map<number, T>;
+
+const ENCLOSING_DEFINITION_LINE_INDEX_CACHE = new WeakMap<
+  IndexedDefinition[],
+  DefinitionLineIndex<IndexedDefinition>
+>();
+
 // scip-query: ignore-extract — this is the definition-catalog read path:
 // primary rows, fallback rows, merging, and source-corrected ranges define the
 // authoritative per-file definition set.
@@ -201,20 +208,38 @@ export function loadFileSymbols(
   }));
 }
 
+export function createDefinitionLineIndex<T extends { startLine: number; endLine: number }>(
+  definitions: readonly T[],
+): DefinitionLineIndex<T> {
+  const owners: DefinitionLineIndex<T> = new Map();
+  const ordered = definitions
+    .map((definition, index) => ({
+      definition,
+      index,
+      span: definition.endLine - definition.startLine,
+    }))
+    .sort((a, b) => a.span - b.span || a.index - b.index);
+
+  for (const { definition } of ordered) {
+    for (let line = definition.startLine; line <= definition.endLine; line += 1) {
+      if (!owners.has(line)) owners.set(line, definition);
+    }
+  }
+
+  return owners;
+}
+
 export function findEnclosingDefinition(
   definitions: IndexedDefinition[],
   line: number,
 ): IndexedDefinition | null {
-  let best: IndexedDefinition | null = null;
-
-  for (const definition of definitions) {
-    if (definition.startLine > line || definition.endLine < line) continue;
-    if (!best || (definition.endLine - definition.startLine) < (best.endLine - best.startLine)) {
-      best = definition;
-    }
+  let index = ENCLOSING_DEFINITION_LINE_INDEX_CACHE.get(definitions);
+  if (!index) {
+    index = createDefinitionLineIndex(definitions);
+    ENCLOSING_DEFINITION_LINE_INDEX_CACHE.set(definitions, index);
   }
 
-  return best;
+  return index.get(line) ?? null;
 }
 
 /**

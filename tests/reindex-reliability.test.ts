@@ -137,6 +137,38 @@ describe('reindex reliability', () => {
     expect(result.skipped).toEqual([]);
     expect(statuses.join('\n')).toContain('Retrying python indexer serially after parallel failure');
   });
+
+  it('reuses unchanged per-language SCIP shards across mixed-language reindexes', async () => {
+    const projectRoot = createProject('scip-query-reindex-shards-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    const statuses: string[] = [];
+
+    const { reindex, attempts } = await loadReindexFixture({
+      languages: ['typescript', 'python'],
+    });
+
+    await reindex({
+      projectRoot,
+      outputScip: join(cacheDir, 'index.scip'),
+      outputDb: join(cacheDir, 'index.db'),
+      onStatus: (message) => statuses.push(message),
+      indexerConcurrency: 1,
+    });
+    writeFileSync(join(projectRoot, 'src', 'main.ts'), 'export const answer = 43;\n');
+    const second = await reindex({
+      projectRoot,
+      outputScip: join(cacheDir, 'index.scip'),
+      outputDb: join(cacheDir, 'index.db'),
+      onStatus: (message) => statuses.push(message),
+      indexerConcurrency: 1,
+    });
+
+    expect(second.languages.sort()).toEqual(['python', 'typescript']);
+    expect(attempts.get('typescript')).toBe(2);
+    expect(attempts.get('python')).toBe(1);
+    expect(statuses.join('\n')).toContain('Reusing cached python SCIP shard');
+  });
 });
 
 async function loadReindexFixture(opts: {
@@ -227,7 +259,7 @@ async function loadReindexFixture(opts: {
     };
   });
 
-  return await import('../src/reindex/index.js');
+  return { ...await import('../src/reindex/index.js'), attempts };
 }
 
 function configFor(language: SupportedLanguage) {

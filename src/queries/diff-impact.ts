@@ -7,7 +7,14 @@ import { isCallableSymbol, isModuleLikeSymbol, shortenSymbol } from '../symbols/
 
 export interface DiffImpactResult {
   changedFiles: string[];
-  changedSymbols: Array<{ symbol: string; shortName: string; file: string; fanIn: number }>;
+  changedSymbols: Array<{
+    symbol: string;
+    shortName: string;
+    file: string;
+    startLine: number;
+    endLine: number;
+    fanIn: number;
+  }>;
   affectedConsumers: Array<{ file: string; consumedSymbols: number }>;
   summary: {
     totalChangedFiles: number;
@@ -23,11 +30,18 @@ type ConsumerMap = Map<string, Set<string>>;
 export interface DiffImpactPlan {
   changedFileLines: string[];
   changedFiles: string[];
+  changedRanges: ChangedLineRange[];
   note?: string;
 }
 
 /** Plan note when git itself failed (not a repo, bad ref) — vs an empty diff. */
 export const GIT_DIFF_UNAVAILABLE_NOTE = 'Unable to compute git diff.';
+
+export interface ChangedLineRange {
+  file: string;
+  startLine: number;
+  endLine: number;
+}
 
 export interface DiffImpactPartial {
   changedSymbols: ChangedSymbol[];
@@ -44,9 +58,9 @@ export interface DiffImpactPartial {
 // the user-facing result order.
 export function diffImpact(
   db: ScipDatabase,
-  opts: { base?: string } = {},
+  opts: { base?: string; plan?: DiffImpactPlan } = {},
 ): DiffImpactResult {
-  const plan = diffImpactPlan(db, opts);
+  const plan = opts.plan ?? diffImpactPlan(db, opts);
   if (plan.note) {
     return emptyDiffImpact(plan.note, plan.changedFileLines);
   }
@@ -56,7 +70,7 @@ export function diffImpact(
 
   return mergeDiffImpactPartials(
     plan.changedFiles,
-    [diffImpactPartial(db, plan.changedFiles, plan.changedFiles)],
+    [diffImpactPartial(db, plan.changedFiles, plan.changedFiles, plan.changedRanges)],
   );
 }
 
@@ -67,15 +81,21 @@ export function diffImpactPlan(
   const { base = 'HEAD' } = opts;
   try {
     const changedFileLines = getChangedFiles(db.config.projectRoot, base);
+    const changedRanges = indexedChangedRanges(
+      db,
+      getChangedLineRanges(db.config.projectRoot, base),
+    );
     return {
       changedFileLines,
       changedFiles: indexedChangedFiles(db, changedFileLines),
+      changedRanges,
       note: changedFileLines.length === 0 ? 'No changed files found.' : undefined,
     };
   } catch {
     return {
       changedFileLines: [],
       changedFiles: [],
+      changedRanges: [],
       note: GIT_DIFF_UNAVAILABLE_NOTE,
     };
   }
@@ -85,21 +105,26 @@ export function diffImpactPartial(
   db: ScipDatabase,
   filesToAnalyze: readonly string[],
   allChangedFiles: readonly string[],
+  changedRanges: readonly ChangedLineRange[] = [],
 ): DiffImpactPartial {
   const index = new ProjectIndex(db);
   const changedFileSet = new Set(allChangedFiles);
+  const changedRangeMap = rangesByFile(changedRanges);
   const changedSymbols: ChangedSymbol[] = [];
   const consumerMap: ConsumerMap = new Map();
 
   const defs = filesToAnalyze
     .flatMap((file) => index.definitionsForFile(file))
     .filter(isDiffImpactCandidate)
+    .filter((def) => definitionTouchesChangedRange(def, changedRangeMap))
     .sort((a, b) => a.relativePath.localeCompare(b.relativePath) || a.startLine - b.startLine);
+  const symbolIds = defs.map((def) => def.symbolId);
   // Semantic caller evidence costs a whole-project findReferences per
   // definition — spend it only where it can change an outcome: defs the SCIP
   // index shows zero consumers for. Indexed fan-in already proves liveness
   // for the rest.
-  const fanInBySymbolId = new Map(defs.map((def) => [def.symbolId, scipFanIn(db, def.symbolId)]));
+  const fanInBySymbolId = scipFanInBySymbolId(db, symbolIds);
+  const consumerFilesBySymbolId = scipConsumerFilesBySymbolId(db, symbolIds, allChangedFiles);
   const semanticConsumers = semanticCallerMap(
     db,
     defs.filter((def) => fanInBySymbolId.get(def.symbolId) === 0),
@@ -108,12 +133,12 @@ export function diffImpactPartial(
     addChangedDefinitionImpact(
       db,
       def,
-      allChangedFiles,
       changedFileSet,
       changedSymbols,
       consumerMap,
       semanticConsumers.get(def.symbolId) ?? new Set<string>(),
       fanInBySymbolId.get(def.symbolId) ?? 0,
+      consumerFilesBySymbolId.get(def.symbolId) ?? new Set<string>(),
     );
   }
 
@@ -210,23 +235,144 @@ function getChangedFiles(projectRoot: string, base: string): string[] {
   )];
 }
 
+function getChangedLineRanges(projectRoot: string, base: string): ChangedLineRange[] {
+  const diff = execFileSync('git', ['diff', '--unified=0', base], {
+    encoding: 'utf-8',
+    cwd: projectRoot,
+    timeout: 10_000,
+  });
+  const staged = execFileSync('git', ['diff', '--unified=0', '--cached', base], {
+    encoding: 'utf-8',
+    cwd: projectRoot,
+    timeout: 10_000,
+  });
+
+  return dedupeRanges([
+    ...parseChangedLineRanges(diff),
+    ...parseChangedLineRanges(staged),
+  ]);
+}
+
 function indexedChangedFiles(
   db: ScipDatabase,
   changedFileLines: readonly string[],
 ): string[] {
+  const resolver = indexedDocumentResolver(db);
   const changedFiles: string[] = [];
   for (const file of changedFileLines) {
-    const doc = db.get<{ relative_path: string }>(
-      `SELECT relative_path FROM documents
-       WHERE relative_path LIKE ?
-       LIMIT 1`,
-      `%${file}`,
-    );
-    if (doc && !db.isIgnored(doc.relative_path)) {
-      changedFiles.push(doc.relative_path);
+    const relativePath = resolver(file);
+    if (relativePath && !db.isIgnored(relativePath)) {
+      changedFiles.push(relativePath);
     }
   }
   return changedFiles;
+}
+
+function indexedChangedRanges(
+  db: ScipDatabase,
+  changedRanges: readonly ChangedLineRange[],
+): ChangedLineRange[] {
+  const resolver = indexedDocumentResolver(db);
+  const ranges: ChangedLineRange[] = [];
+  for (const range of changedRanges) {
+    const relativePath = resolver(range.file);
+    if (relativePath && !db.isIgnored(relativePath)) {
+      ranges.push({ ...range, file: relativePath });
+    }
+  }
+  return dedupeRanges(ranges);
+}
+
+function indexedDocumentResolver(db: ScipDatabase): (file: string) => string | null {
+  const docs = db.all<{ relative_path: string }>(
+    `SELECT relative_path FROM documents
+     ORDER BY id`,
+  ).map((doc) => doc.relative_path);
+  const exact = new Map(docs.map((path) => [path, path]));
+  return (file: string) => {
+    const normalized = file.replace(/\\/g, '/');
+    const exactMatch = exact.get(normalized);
+    if (exactMatch) return exactMatch;
+    return docs.find((path) => path.endsWith(normalized)) ?? null;
+  };
+}
+
+function parseChangedLineRanges(diff: string): ChangedLineRange[] {
+  const ranges: ChangedLineRange[] = [];
+  let currentFile: string | null = null;
+  for (const line of diff.split('\n')) {
+    if (line.startsWith('+++ ')) {
+      currentFile = normalizeDiffPath(line.slice(4).trim());
+      continue;
+    }
+    if (!currentFile || !line.startsWith('@@ ')) continue;
+    const match = /@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
+    if (!match) continue;
+    const start = Math.max(0, Number(match[1]) - 1);
+    const count = match[2] === undefined ? 1 : Number(match[2]);
+    ranges.push({
+      file: currentFile,
+      startLine: start,
+      endLine: Math.max(start, start + Math.max(count, 1) - 1),
+    });
+  }
+  return ranges;
+}
+
+function normalizeDiffPath(path: string): string | null {
+  if (path === '/dev/null') return null;
+  if (path.startsWith('a/') || path.startsWith('b/')) return path.slice(2);
+  return path;
+}
+
+function dedupeRanges(ranges: readonly ChangedLineRange[]): ChangedLineRange[] {
+  const seen = new Set<string>();
+  const unique: ChangedLineRange[] = [];
+  for (const range of ranges) {
+    const key = `${range.file}:${range.startLine}:${range.endLine}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(range);
+  }
+  return unique;
+}
+
+function rangesByFile(
+  ranges: readonly ChangedLineRange[],
+): ReadonlyMap<string, readonly ChangedLineRange[]> {
+  const map = new Map<string, ChangedLineRange[]>();
+  for (const range of ranges) {
+    let bucket = map.get(range.file);
+    if (!bucket) {
+      bucket = [];
+      map.set(range.file, bucket);
+    }
+    bucket.push(range);
+  }
+  return map;
+}
+
+function definitionTouchesChangedRange(
+  definition: IndexedDefinition,
+  changedRanges: ReadonlyMap<string, readonly ChangedLineRange[]>,
+): boolean {
+  const ranges = changedRanges.get(definition.relativePath);
+  if (!ranges || ranges.length === 0) return true;
+  return ranges.some((range) => rangesOverlap(
+    definition.startLine,
+    definition.endLine,
+    range.startLine,
+    range.endLine,
+  ));
+}
+
+function rangesOverlap(
+  startA: number,
+  endA: number,
+  startB: number,
+  endB: number,
+): boolean {
+  return startA <= endB && startB <= endA;
 }
 
 // scip-query: ignore-extract — this adds one changed-definition impact row:
@@ -235,12 +381,12 @@ function indexedChangedFiles(
 function addChangedDefinitionImpact(
   db: ScipDatabase,
   definition: IndexedDefinition,
-  changedFiles: readonly string[],
   changedFileSet: ReadonlySet<string>,
   changedSymbols: ChangedSymbol[],
   consumerMap: ConsumerMap,
   semanticConsumers: ReadonlySet<string>,
   indexedFanIn: number,
+  indexedConsumers: ReadonlySet<string>,
 ): void {
   const fanIn = Math.max(indexedFanIn, semanticConsumers.size);
   if (!shouldReportChangedDefinition(definition, fanIn)) return;
@@ -250,10 +396,12 @@ function addChangedDefinitionImpact(
     symbol: definition.symbol,
     shortName,
     file: definition.relativePath,
+    startLine: definition.startLine,
+    endLine: definition.endLine,
     fanIn,
   });
 
-  for (const file of scipConsumerFiles(db, definition.symbolId, changedFiles)) {
+  for (const file of indexedConsumers) {
     addConsumerFile(db, changedFileSet, consumerMap, file, shortName);
   }
   for (const file of semanticConsumers) {
@@ -261,40 +409,51 @@ function addChangedDefinitionImpact(
   }
 }
 
-function scipFanIn(
+function scipFanInBySymbolId(
   db: ScipDatabase,
-  symbolId: number,
-): number {
-  const fanInRow = db.get<{ fan_in: number }>(
-    `SELECT COUNT(DISTINCT c.document_id) AS fan_in
+  symbolIds: readonly number[],
+): Map<number, number> {
+  if (symbolIds.length === 0) return new Map();
+  const rows = db.all<{ symbol_id: number; fan_in: number }>(
+    `SELECT m.symbol_id, COUNT(DISTINCT c.document_id) AS fan_in
      FROM mentions m
      JOIN chunks c ON m.chunk_id = c.id
-     WHERE m.symbol_id = ?
-       AND m.role != 1`,
-    symbolId,
+     WHERE m.symbol_id IN (${symbolIds.map(() => '?').join(',')})
+       AND m.role != 1
+     GROUP BY m.symbol_id`,
+    ...symbolIds,
   );
-  return fanInRow?.fan_in ?? 0;
+  return new Map(rows.map((row) => [row.symbol_id, row.fan_in]));
 }
 
-function scipConsumerFiles(
+function scipConsumerFilesBySymbolId(
   db: ScipDatabase,
-  symbolId: number,
+  symbolIds: readonly number[],
   changedFiles: readonly string[],
-): string[] {
-  if (changedFiles.length === 0) return [];
-  const consumers = db.all<{ relative_path: string }>(
-    `SELECT DISTINCT ref_d.relative_path
+): Map<number, Set<string>> {
+  if (symbolIds.length === 0 || changedFiles.length === 0) return new Map();
+  const rows = db.all<{ symbol_id: number; relative_path: string }>(
+    `SELECT DISTINCT m.symbol_id, ref_d.relative_path
      FROM mentions m
      JOIN chunks c ON m.chunk_id = c.id
      JOIN documents ref_d ON c.document_id = ref_d.id
-     WHERE m.symbol_id = ?
+     WHERE m.symbol_id IN (${symbolIds.map(() => '?').join(',')})
        AND m.role != 1
        AND ref_d.relative_path NOT IN (${changedFiles.map(() => '?').join(',')})
-       ${db.pathExclusionsFor('ref_d')}`,
-    symbolId,
+     ${db.pathExclusionsFor('ref_d')}`,
+    ...symbolIds,
     ...changedFiles,
   );
-  return consumers.map((consumer) => consumer.relative_path);
+  const consumersBySymbolId = new Map<number, Set<string>>();
+  for (const row of rows) {
+    let consumers = consumersBySymbolId.get(row.symbol_id);
+    if (!consumers) {
+      consumers = new Set();
+      consumersBySymbolId.set(row.symbol_id, consumers);
+    }
+    consumers.add(row.relative_path);
+  }
+  return consumersBySymbolId;
 }
 
 function addConsumerFile(

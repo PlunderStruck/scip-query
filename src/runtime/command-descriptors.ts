@@ -1,5 +1,5 @@
 import type { CommandDescriptor } from './command-descriptor-types.js';
-import { collectValues, doc, option, parseIntegerLoose, parsePositiveInteger } from './command-spec-builders.js';
+import { collectValues, doc, option, parseIntegerLoose, parsePositiveInteger, withJsonOption } from './command-spec-builders.js';
 import { DIFF_IMPACT_BATCH_COMMAND, HEALTH_PHASE_COMMAND } from './cli-support.js';
 import { BUILTIN_SKILLS } from './setup.js';
 import * as handlers from './command-handlers.js';
@@ -72,6 +72,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   query('affected'),
   query('change-surface'),
   query('cleanup-plan'),
+  query('cleanup-apply'),
   query('co-change'),
   query('recent-duplicates'),
   query('doc-drift'),
@@ -152,6 +153,24 @@ export const commandDescriptors: CommandDescriptor[] = [
     docs: doc('Maintenance'),
     handler: handlers.handleCheckDeps,
   },
+  {
+    id: 'capabilities',
+    command: 'capabilities',
+    description: 'Report which evidence and verification capabilities are available in this project',
+    options: [option('--json', 'Output as JSON for programmatic consumption')],
+    renderShape: 'custom',
+    docs: doc('Maintenance'),
+    handler: handlers.handleCapabilities,
+  },
+  {
+    id: 'capability-matrix',
+    command: 'capability-matrix',
+    description: 'Report the evidence and verification capability matrix by language',
+    options: [option('--json', 'Output as JSON for programmatic consumption')],
+    renderShape: 'custom',
+    docs: doc('Maintenance'),
+    handler: handlers.handleCapabilityMatrix,
+  },
   query('redundant-reexports'),
   query('similar-signatures'),
   {
@@ -163,6 +182,38 @@ export const commandDescriptors: CommandDescriptor[] = [
     handler: handlers.handleInit,
   },
   {
+    id: 'config-validate',
+    command: 'config-validate',
+    description: 'Validate .scipquery.json, including structured suppressions and declared coupling groups',
+    options: [option('--json', 'Output as JSON for programmatic consumption')],
+    renderShape: 'custom',
+    docs: doc('Maintenance', ['scip-query config-validate']),
+    handler: handlers.handleConfigValidate,
+  },
+  {
+    id: 'suppress',
+    command: 'suppress <id>',
+    description: 'Record an accepted finding in .scipquery.json with a required reason',
+    options: withJsonOption([
+      option('--reason <text>', 'Required human reason for accepting the finding'),
+      option('--check <check>', 'Optional detector/check name to narrow the suppression'),
+      option('--file <path>', 'Optional file path to narrow the suppression'),
+      option('--expires-at <iso>', 'Optional ISO date after which the suppression expires'),
+    ]),
+    renderShape: 'custom',
+    docs: doc('Maintenance', ['scip-query suppress SQABC123DEF456 --reason "intentional boundary"']),
+    handler: handlers.handleSuppress,
+  },
+  {
+    id: 'doctor',
+    command: 'doctor',
+    description: 'Diagnose config, index freshness, dependency readiness, and project capabilities',
+    options: [option('--json', 'Output as JSON for programmatic consumption')],
+    renderShape: 'custom',
+    docs: doc('Maintenance'),
+    handler: handlers.handleDoctor,
+  },
+  {
     id: 'setup-agent',
     command: 'setup-agent',
     description: 'Seed agent guidance for this project: AGENTS.md/CLAUDE.md block pointing agents at the scip-query skills and diff gate, plus an optional git pre-commit backstop',
@@ -170,6 +221,18 @@ export const commandDescriptors: CommandDescriptor[] = [
     renderShape: 'custom',
     docs: doc('Maintenance', ['scip-query setup-agent', 'scip-query setup-agent --git-hook']),
     handler: handlers.handleSetupAgent,
+  },
+  {
+    id: 'setup-ci',
+    command: 'setup-ci',
+    description: 'Write a GitHub Actions workflow that runs scip-query reindex and diff-gate on pull requests',
+    options: [
+      option('--force', 'Overwrite an existing workflow'),
+      option('--dry-run', 'Print the workflow without writing it'),
+    ],
+    renderShape: 'custom',
+    docs: doc('Maintenance', ['scip-query setup-ci']),
+    handler: handlers.handleSetupCi,
   },
   {
     id: 'watch',
@@ -187,6 +250,10 @@ export const commandDescriptors: CommandDescriptor[] = [
     id: 'status',
     command: 'status',
     description: 'Show index status for this project',
+    options: [
+      option('--json', 'Output as JSON for programmatic consumption'),
+      option('--capabilities', 'Include the project capability matrix'),
+    ],
     renderShape: 'custom',
     docs: doc('Maintenance'),
     handler: handlers.handleStatus,

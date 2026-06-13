@@ -113,9 +113,14 @@ describe('stop-hook helpers (diff-gate --hook)', () => {
       changedSymbols: 1,
       checksRun: ['incomplete-migration'],
       skipped: [],
+      suppressed: [],
       findings: [{
+        id: 'SQ123456789ABC',
         check: 'incomplete-migration',
+        severity: 'warning',
+        evidence: 'heuristic',
         message: 'new helper x is wired into 1 file(s), but 2 similar un-migrated site(s) remain',
+        why: ['helper x was added in this diff'],
         remediation: 'Migrate the remaining sites to x.',
       }],
     };
