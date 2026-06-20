@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { buildFileDepGraph } from '../symbols/file-dep-graph.js';
 import { jaccard } from '../analysis/similarity.js';
+import { rankedPairwiseProfileResults, type PairwiseFileProfile } from './internal/pairwise-profiles.js';
 
 export interface SimilarFileResult {
   fileA: string;
@@ -41,36 +42,18 @@ export function similarFiles(
   // Build dependency profile for each file
   const { profiles, distinctiveDeps } = buildFileProfiles(db, { scope, minDeps });
 
-  const results: SimilarFileResult[] = [];
-
-  if (filePattern) {
-    // Compare one file against all others
-    const target = profiles.find((p) => p.file.includes(filePattern));
-    if (!target) return [];
-
-    for (const candidate of profiles) {
-      if (candidate.file === target.file) continue;
-      const result = compareProfiles(target, candidate, minSimilarity, distinctiveDeps);
-      if (result) results.push(result);
-    }
-  } else {
-    // Pairwise comparison across all files
-    for (let i = 0; i < profiles.length; i++) {
-      for (let j = i + 1; j < profiles.length; j++) {
-        const result = compareProfiles(profiles[i]!, profiles[j]!, minSimilarity, distinctiveDeps);
-        if (result) results.push(result);
-      }
-      if (results.length > limit * 5) break;
-    }
-  }
-
-  results.sort((a, b) => b.similarity - a.similarity);
-  return results.slice(0, limit);
+  return rankedPairwiseProfileResults({
+    profiles,
+    limit,
+    filePattern,
+    overrunFactor: 5,
+    compare: (a, b) => compareProfiles(a, b, minSimilarity, distinctiveDeps),
+  });
 }
 
 // ── Internal ───────────────────────────────────────────────
 
-interface FileProfile {
+interface FileProfile extends PairwiseFileProfile {
   file: string;
   deps: Set<string>;
 }

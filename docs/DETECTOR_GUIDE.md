@@ -43,7 +43,7 @@ different evidence — and two of them add *direction*:
 | `similar-signatures` | function | normalized parameter + return types | "What has the same *shape*, regardless of body?" |
 | `similar-files` | file | Jaccard on import/dependency profiles | "Which files are copy-paste variants of each other?" |
 | `similar-chains` | pipeline | edit distance on infrastructure-filtered dependency chains | "Which end-to-end flows are parallel re-implementations?" |
-| `recent-duplicates` | function + **git age** | similarity + file-add history | "Which side is the established original, which is the fresh echo?" (ECHO = new copies old; TWIN = both new) |
+| `recent-duplicates` | callable/frontend unit + **git age** | callable, React, and Vue similarity + file-add history | "Which side is the established original, which is the fresh echo?" (ECHO = new copies old; TWIN = both new) |
 | `incomplete-migration` | function + **git diff** | callee *containment* vs new-in-diff helpers | "I just extracted a helper — which call sites still have the logic inline and were never migrated?" |
 | `convergence <a> <b>` | a known pair | shared/unique callees | "I already know these two overlap — give me the merge prescription." |
 
@@ -52,8 +52,10 @@ How to keep them straight:
 - Use `similar` when you have **one symbol** in hand; `similar-files` /
   `similar-chains` for repo-wide sweeps at coarser grain;
   `similar-signatures` when implementations differ but the shape repeats.
-- `recent-duplicates` is `similar` **plus direction in time** — it tells you
-  which copy to delete. Run it after agent sessions.
+- `recent-duplicates` is duplicate evidence **plus direction in time** - it tells you
+  which copy to delete. Run it after agent sessions. It covers generic callables,
+  React component structure, React hook behavior, Vue template structure, and
+  Vue composable-like behavior.
 - `incomplete-migration` is the **inverse of an echo**: the *new* code is the
   canonical one (the helper you just extracted), and the *established* code is
   what should disappear. It also scores by containment, not symmetric

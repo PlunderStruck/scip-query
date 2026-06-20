@@ -14,11 +14,12 @@ import { doc, option, parseInteger, parseNumber, parsePositiveInteger, withJsonO
 import {
   booleanOptionValue,
   budgetedDbCommand,
-  dbCommand,
   budgetedGroupedByFileCommand,
   budgetedListCommand,
   budgetedReportCommand,
   budgetedTableCommand,
+  dbCommand,
+  definedLimitOption,
   definedNumberOption,
   numberOptionValue,
   optionalStringArg,
@@ -154,7 +155,7 @@ const handleExtractCandidates = budgetedDbCommand('extract-candidates', ({ db, a
     scope: stringOptionValue(opts, 'scope'),
     minLoc: definedNumberOption(opts, 'minLoc', 10),
     minCallees: definedNumberOption(opts, 'minCallees', 6),
-    limit: definedNumberOption(opts, 'limit', 20),
+    limit: definedLimitOption(opts, 'limit', 20),
     scanLimit: budget.scanLimit,
     semantic: budget.semantic,
   });
@@ -179,7 +180,7 @@ const handleWrapperCandidates = budgetedListCommand('wrapper-candidates', {
   query: ({ db, opts, budget }) => queries.wrapperCandidates(db, {
     scope: stringOptionValue(opts, 'scope'),
     maxLoc: definedNumberOption(opts, 'maxLoc', 15),
-    limit: definedNumberOption(opts, 'limit', 30),
+    limit: definedLimitOption(opts, 'limit', 30),
     scanLimit: budget.scanLimit,
     semantic: budget.semantic,
   }),
@@ -195,7 +196,7 @@ const handlePassthroughCandidates = budgetedListCommand('passthrough-candidates'
   query: ({ db, opts, budget }) => queries.passthroughCandidates(db, {
     scope: stringOptionValue(opts, 'scope'),
     maxLoc: definedNumberOption(opts, 'maxLoc', 15),
-    limit: definedNumberOption(opts, 'limit', 30),
+    limit: definedLimitOption(opts, 'limit', 30),
     scanLimit: budget.scanLimit,
     semantic: budget.semantic,
   }),
@@ -211,7 +212,7 @@ const handleStaleAbstractions = budgetedListCommand('stale-abstractions', {
   query: ({ db, opts, budget }) => queries.staleAbstractions(db, {
     scope: stringOptionValue(opts, 'scope'),
     minLoc: definedNumberOption(opts, 'minLoc', 3),
-    limit: definedNumberOption(opts, 'limit', 30),
+    limit: definedLimitOption(opts, 'limit', 30),
     includeLowConfidence: booleanOptionValue(opts, 'includeLowConfidence'),
     scanLimit: budget.scanLimit,
     semantic: budget.semantic,
@@ -235,7 +236,7 @@ const handleComplexityHotspots = budgetedTableCommand('complexity-hotspots', {
   query: ({ db, opts, budget }) => queries.complexityHotspots(db, {
     scope: stringOptionValue(opts, 'scope'),
     minLoc: definedNumberOption(opts, 'minLoc', 10),
-    limit: definedNumberOption(opts, 'limit', 20),
+    limit: definedLimitOption(opts, 'limit', 20),
     scanLimit: budget.scanLimit,
     semantic: budget.semantic,
   }),
@@ -256,7 +257,7 @@ const handleSimilar = budgetedReportCommand('similar', {
         mode: 'target' as const,
         rows: queries.similar(db, symbol, {
           minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.4),
-          limit: definedNumberOption(opts, 'limit', 20),
+          limit: definedLimitOption(opts, 'limit', 20),
           scanLimit: budget.scanLimit,
           semantic: budget.semantic,
         }),
@@ -266,7 +267,7 @@ const handleSimilar = budgetedReportCommand('similar', {
       mode: 'all' as const,
       rows: queries.similarAll(db, {
         minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.4),
-        limit: definedNumberOption(opts, 'limit', 20),
+        limit: definedLimitOption(opts, 'limit', 20),
         scope: stringOptionValue(opts, 'scope'),
         minCallees: definedNumberOption(opts, 'minCallees', 4),
         crossFileOnly: booleanOptionValue(opts, 'crossFileOnly'),
@@ -313,7 +314,7 @@ const handleSimilarFiles = reportCommand({
   commandName: 'similar-files',
   query: ({ db, args, opts }) => queries.similarFiles(db, {
     minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.5),
-    limit: definedNumberOption(opts, 'limit', 20),
+    limit: definedLimitOption(opts, 'limit', 20),
     scope: stringOptionValue(opts, 'scope'),
     minDeps: numberOptionValue(opts, 'minDeps'),
     filePattern: optionalStringArg(args, 0),
@@ -336,11 +337,190 @@ const handleSimilarFiles = reportCommand({
   },
 });
 
+const handleReactComponentDuplicates = budgetedReportCommand('react-component-duplicates', {
+  query: ({ db, args, opts, budget }) => queries.reactComponentDuplicates(db, {
+    minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.62),
+    minTokens: definedNumberOption(opts, 'minTokens', 8),
+    limit: definedLimitOption(opts, 'limit', 20),
+    scope: stringOptionValue(opts, 'scope'),
+    scanLimit: budget.scanLimit,
+    filePattern: optionalStringArg(args, 0),
+  }),
+  emptyMessage: (results) => results.length === 0 ? 'No duplicated React component structures found.' : undefined,
+  heuristicLabel: 'React component duplicate candidates',
+  render: (results) => {
+    render.list(results, (r) => {
+      const lines = [
+        `\n${Math.round(r.similarity * 100)}% similar React structure:`,
+        `  ${r.componentA}  (${r.fileA})`,
+        `  ${r.componentB}  (${r.fileB})`,
+      ];
+      if (r.sharedComponents.length) lines.push(`  Shared components: ${r.sharedComponents.join(', ')}`);
+      if (r.sharedNativeTags.length) lines.push(`  Shared native tags: ${r.sharedNativeTags.join(', ')}`);
+      if (r.sharedProps.length) lines.push(`  Shared props: ${r.sharedProps.join(', ')}`);
+      if (r.sharedEvents.length) lines.push(`  Shared events: ${r.sharedEvents.join(', ')}`);
+      if (r.sharedBindings.length) lines.push(`  Shared bindings: ${r.sharedBindings.slice(0, 20).join(', ')}`);
+      return lines.join('\n');
+    });
+    console.log(`\n${results.length} duplicated React component pair(s) found.`);
+  },
+});
+
+const handleReactHookCandidates = budgetedReportCommand('react-hook-candidates', {
+  query: ({ db, args, opts, budget }) => queries.reactHookCandidates(db, {
+    minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.45),
+    minSharedBehaviors: definedNumberOption(opts, 'minSharedBehaviors', 6),
+    limit: definedLimitOption(opts, 'limit', 20),
+    scope: stringOptionValue(opts, 'scope'),
+    scanLimit: budget.scanLimit,
+    filePattern: optionalStringArg(args, 0),
+  }),
+  emptyMessage: (results) => results.length === 0 ? 'No duplicated React hook behavior candidates found.' : undefined,
+  heuristicLabel: 'React hook extraction candidates',
+  render: (results) => {
+    render.list(results, (r) => {
+      const lines = [
+        `\n${Math.round(r.similarity * 100)}% similar React behavior:`,
+        `  ${r.componentA}  (${r.fileA})`,
+        `  ${r.componentB}  (${r.fileB})`,
+        `  ${r.reason}`,
+      ];
+      if (r.sharedHooks.length) lines.push(`  Shared hooks: ${r.sharedHooks.join(', ')}`);
+      if (r.sharedReactHooks.length) lines.push(`  Shared React hooks: ${r.sharedReactHooks.join(', ')}`);
+      if (r.sharedEffects.length) lines.push(`  Shared effects: ${r.sharedEffects.join(', ')}`);
+      if (r.sharedState.length) lines.push(`  Shared state: ${r.sharedState.join(', ')}`);
+      if (r.sharedRequests.length) lines.push(`  Shared requests: ${r.sharedRequests.join(', ')}`);
+      if (r.sharedHandlers.length) lines.push(`  Shared handlers: ${r.sharedHandlers.slice(0, 12).join(', ')}`);
+      if (r.sharedHandlerVerbs.length) lines.push(`  Shared action verbs: ${r.sharedHandlerVerbs.slice(0, 12).join(', ')}`);
+      return lines.join('\n');
+    });
+    console.log(`\n${results.length} React hook candidate pair(s) found.`);
+  },
+});
+
+const handleReactLargeComponentPressure = budgetedReportCommand('react-large-component-pressure', {
+  query: ({ db, args, opts, budget }) => queries.reactLargeComponentPressure(db, {
+    minComponentLines: definedNumberOption(opts, 'minComponentLines', 300),
+    minFileLines: definedNumberOption(opts, 'minFileLines', 800),
+    minJsxTokens: definedNumberOption(opts, 'minJsxTokens', 80),
+    minBehaviorTokens: definedNumberOption(opts, 'minBehaviorTokens', 40),
+    limit: definedLimitOption(opts, 'limit', 20),
+    scope: stringOptionValue(opts, 'scope'),
+    scanLimit: budget.scanLimit,
+    filePattern: optionalStringArg(args, 0),
+  }),
+  emptyMessage: (results) => results.length === 0 ? 'No large React component pressure found.' : undefined,
+  heuristicLabel: 'large React component pressure candidates',
+  render: (results) => {
+    render.list(results, (r) => {
+      const lines = [
+        `\n${r.componentLines} component line(s): ${r.component}  (${r.file})`,
+        `  Dominant pressure: ${r.dominantPressure}`,
+        `  File lines: ${r.fileLines}; JSX tokens: ${r.jsxTokens}; behavior tokens: ${r.behaviorTokens}`,
+        `  Reasons: ${r.reasons.join('; ')}`,
+      ];
+      return lines.join('\n');
+    });
+    console.log(`\n${results.length} large React component(s) found.`);
+  },
+});
+
+const handleVueComponentDuplicates = budgetedReportCommand('vue-component-duplicates', {
+  query: ({ db, args, opts, budget }) => queries.vueComponentDuplicates(db, {
+    minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.62),
+    minTokens: definedNumberOption(opts, 'minTokens', 8),
+    limit: definedLimitOption(opts, 'limit', 20),
+    scope: stringOptionValue(opts, 'scope'),
+    scanLimit: budget.scanLimit,
+    filePattern: optionalStringArg(args, 0),
+  }),
+  emptyMessage: (results) => results.length === 0 ? 'No duplicated Vue component structures found.' : undefined,
+  heuristicLabel: 'Vue component duplicate candidates',
+  render: (results) => {
+    render.list(results, (r) => {
+      const lines = [
+        `\n${Math.round(r.similarity * 100)}% similar Vue structure:`,
+        `  ${r.fileA}`,
+        `  ${r.fileB}`,
+      ];
+      if (r.sharedComponents.length) lines.push(`  Shared components: ${r.sharedComponents.join(', ')}`);
+      if (r.sharedProps.length) lines.push(`  Shared props: ${r.sharedProps.join(', ')}`);
+      if (r.sharedEvents.length) lines.push(`  Shared events: ${r.sharedEvents.join(', ')}`);
+      if (r.sharedDirectives.length) lines.push(`  Shared directives: ${r.sharedDirectives.join(', ')}`);
+      if (r.sharedSlots.length) lines.push(`  Shared slots: ${r.sharedSlots.join(', ')}`);
+      if (r.sharedIdentifiers.length) lines.push(`  Shared identifiers: ${r.sharedIdentifiers.slice(0, 20).join(', ')}`);
+      return lines.join('\n');
+    });
+    console.log(`\n${results.length} duplicated Vue component pair(s) found.`);
+  },
+});
+
+const handleVueComposableCandidates = budgetedReportCommand('vue-composable-candidates', {
+  query: ({ db, args, opts, budget }) => queries.vueComposableCandidates(db, {
+    minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.45),
+    minSharedBehaviors: definedNumberOption(opts, 'minSharedBehaviors', 6),
+    limit: definedLimitOption(opts, 'limit', 20),
+    scope: stringOptionValue(opts, 'scope'),
+    scanLimit: budget.scanLimit,
+    filePattern: optionalStringArg(args, 0),
+  }),
+  emptyMessage: (results) => results.length === 0 ? 'No duplicated Vue behavior candidates found.' : undefined,
+  heuristicLabel: 'Vue composable extraction candidates',
+  render: (results) => {
+    render.list(results, (r) => {
+      const lines = [
+        `\n${Math.round(r.similarity * 100)}% similar Vue behavior:`,
+        `  ${r.fileA}`,
+        `  ${r.fileB}`,
+        `  ${r.reason}`,
+      ];
+      if (r.sharedComposables.length) lines.push(`  Shared composables: ${r.sharedComposables.join(', ')}`);
+      if (r.sharedStores.length) lines.push(`  Shared stores: ${r.sharedStores.join(', ')}`);
+      if (r.sharedRequests.length) lines.push(`  Shared requests: ${r.sharedRequests.join(', ')}`);
+      if (r.sharedLifecycle.length) lines.push(`  Shared lifecycle: ${r.sharedLifecycle.join(', ')}`);
+      if (r.sharedFunctions.length) lines.push(`  Shared functions: ${r.sharedFunctions.slice(0, 12).join(', ')}`);
+      if (r.sharedFunctionVerbs.length) lines.push(`  Shared action verbs: ${r.sharedFunctionVerbs.slice(0, 12).join(', ')}`);
+      if (r.sharedBindings.length) lines.push(`  Shared bindings: ${r.sharedBindings.slice(0, 20).join(', ')}`);
+      if (r.sharedTemplateEvents.length) lines.push(`  Shared template events: ${r.sharedTemplateEvents.slice(0, 20).join(', ')}`);
+      return lines.join('\n');
+    });
+    console.log(`\n${results.length} Vue composable candidate pair(s) found.`);
+  },
+});
+
+const handleVueLargeViewPressure = budgetedReportCommand('vue-large-view-pressure', {
+  query: ({ db, args, opts, budget }) => queries.vueLargeViewPressure(db, {
+    minTotalLines: definedNumberOption(opts, 'minTotalLines', 800),
+    minTemplateLines: definedNumberOption(opts, 'minTemplateLines', 300),
+    minScriptLines: definedNumberOption(opts, 'minScriptLines', 300),
+    minStyleLines: definedNumberOption(opts, 'minStyleLines', 500),
+    limit: definedLimitOption(opts, 'limit', 20),
+    scope: stringOptionValue(opts, 'scope'),
+    scanLimit: budget.scanLimit,
+    filePattern: optionalStringArg(args, 0),
+  }),
+  emptyMessage: (results) => results.length === 0 ? 'No large Vue view pressure found.' : undefined,
+  heuristicLabel: 'large Vue view pressure candidates',
+  render: (results) => {
+    render.list(results, (r) => {
+      const lines = [
+        `\n${r.totalLines} total line(s): ${r.file}`,
+        `  Dominant pressure: ${r.dominantPressure}`,
+        `  Blocks: template ${r.templateLines}, script ${r.scriptLines}, style ${r.styleLines}, external script ${r.externalScriptLines}, custom ${r.customBlockLines}`,
+      ];
+      if (r.externalScriptPaths.length) lines.push(`  External scripts: ${r.externalScriptPaths.join(', ')}`);
+      lines.push(`  Reasons: ${r.reasons.join('; ')}`);
+      return lines.join('\n');
+    });
+    console.log(`\n${results.length} large Vue view pressure file(s) found.`);
+  },
+});
+
 const handleSimilarChains = reportCommand({
   commandName: 'similar-chains',
   query: ({ db, opts }) => queries.similarChains(db, {
     minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.5),
-    limit: definedNumberOption(opts, 'limit', 15),
+    limit: definedLimitOption(opts, 'limit', 15),
     scope: stringOptionValue(opts, 'scope'),
     minChainLength: definedNumberOption(opts, 'minLength', 3),
     maxChainLength: definedNumberOption(opts, 'maxLength', 8),
@@ -412,7 +592,7 @@ const handleSimilarSignatures = budgetedListCommand('similar-signatures', {
   query: ({ db, opts, budget }) => queries.similarSignatures(db, {
     scope: stringOptionValue(opts, 'scope'),
     minLoc: definedNumberOption(opts, 'minLoc', 3),
-    limit: definedNumberOption(opts, 'limit', 20),
+    limit: definedLimitOption(opts, 'limit', 20),
     scanLimit: budget.scanLimit,
     semantic: budget.semantic,
   }),
@@ -604,8 +784,8 @@ const handleCleanupApply = budgetedDbCommand('cleanup-apply', ({ db, opts, budge
 const handleRecentDuplicates = budgetedDbCommand('recent-duplicates', ({ db, args, opts, budget }) => {
   const result = queries.recentDuplicates(db, {
     windowCommits: definedNumberOption(opts, 'window', 100),
-    minSimilarity: numberOptionValue(opts, 'minSimilarity') ?? 0.7,
-    limit: definedNumberOption(opts, 'limit', 30),
+    minSimilarity: numberOptionValue(opts, 'minSimilarity'),
+    limit: definedLimitOption(opts, 'limit', 30),
     scope: stringOptionValue(opts, 'scope'),
     scanLimit: budget.scanLimit,
     semantic: budget.semantic,
@@ -620,13 +800,16 @@ const handleRecentDuplicates = budgetedDbCommand('recent-duplicates', ({ db, arg
   }
   console.log(`Recent re-implementations (window: last ${result.windowCommits} commits):\n`);
   for (const finding of result.findings) {
+    const evidence = finding.sharedEvidence.slice(0, 16).join(', ');
     if (finding.kind === 'echo') {
-      console.log(`  ${Math.round(finding.similarity * 100)}%  ECHO  ${finding.echoFile}  ${finding.echoSymbol}  (added ${finding.echoAgeCommits} commits ago)`);
+      console.log(`  ${Math.round(finding.similarity * 100)}%  ECHO  ${finding.domain}  ${finding.echoFile}  ${finding.echoSymbol}  (added ${finding.echoAgeCommits} commits ago)`);
       console.log(`        duplicates established  ${finding.establishedFile}  ${finding.establishedSymbol}`);
     } else {
-      console.log(`  ${Math.round(finding.similarity * 100)}%  TWIN  ${finding.echoFile}  ${finding.echoSymbol}`);
+      console.log(`  ${Math.round(finding.similarity * 100)}%  TWIN  ${finding.domain}  ${finding.echoFile}  ${finding.echoSymbol}`);
       console.log(`        and                     ${finding.establishedFile}  ${finding.establishedSymbol}  (both new — consolidate before they diverge)`);
     }
+    console.log(`        basis: ${finding.basis}`);
+    if (evidence.length > 0) console.log(`        shared: ${evidence}`);
   }
   console.log(`\n${result.findings.length} finding(s). ECHO: prefer extending the established side and deleting the echo.`);
 });
@@ -634,7 +817,7 @@ const handleRecentDuplicates = budgetedDbCommand('recent-duplicates', ({ db, arg
 const handleDocDrift = dbCommand(({ db, args, opts }) => {
   const result = queries.docDrift(db, {
     doc: args[0] === undefined ? undefined : stringArg(args, 0),
-    limit: definedNumberOption(opts, 'limit', 20),
+    limit: definedLimitOption(opts, 'limit', 20),
     minCoupling: definedNumberOption(opts, 'minCoupling', 3),
   });
   if (booleanOptionValue(opts, 'json')) {
@@ -666,7 +849,7 @@ const handleDocDrift = dbCommand(({ db, args, opts }) => {
 const handleUnusedParams = budgetedListCommand('unused-params', {
   query: ({ db, opts, budget }) => queries.unusedParams(db, {
     scope: stringOptionValue(opts, 'scope'),
-    limit: definedNumberOption(opts, 'limit', 30),
+    limit: definedLimitOption(opts, 'limit', 30),
     scanLimit: budget.scanLimit,
   }),
   format: (r) =>
@@ -733,10 +916,10 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'recent-duplicates',
     command: 'recent-duplicates',
-    description: 'Directional duplicate candidates: recent code that re-implements established code',
+    description: 'Directional duplicate candidates: recent code that re-implements established callable, React, or Vue code',
     options: withJsonOption([
       option('--window <n>', 'How many commits back counts as "recent"', parseInteger, 100),
-      option('--min-similarity <n>', 'Minimum similarity (0-1)', parseNumber, 0.7),
+      option('--min-similarity <n>', 'Minimum similarity (0-1); omitted uses detector defaults', parseNumber),
       option('-n, --limit <n>', 'Maximum findings', parseInteger, 30),
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
@@ -751,10 +934,11 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'doc-drift',
     command: 'doc-drift [doc]',
     description: 'Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped',
-    options: withJsonOption([
-      option('-n, --limit <n>', 'Maximum docs to report', parseInteger, 20),
-      option('--min-coupling <n>', 'Minimum historical co-changes to track a subject', parseInteger, 3),
-    ]),
+      options: withJsonOption([
+        option('-n, --limit <n>', 'Maximum docs to report', parseInteger, 20),
+        option('--min-coupling <n>', 'Minimum historical co-changes to track a subject', parseInteger, 3),
+        option('--full', 'Run unbounded analysis on large indexes'),
+      ]),
     heuristic: { label: 'doc drift candidates' },
     renderShape: 'custom',
     docs: doc('Cleanup', ['scip-query doc-drift', 'scip-query doc-drift AGENTS.md']),
@@ -821,27 +1005,129 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'similar-files',
     command: 'similar-files [file]',
     description: 'Find heuristic similar-file candidates from dependency profiles',
-    options: withJsonOption([
-      option('--min-similarity <n>', 'Minimum Jaccard similarity (0-1)', parseNumber, 0.5),
-      option('-n, --limit <n>', 'Number of results', parseInteger, 20),
-      option('-s, --scope <path>', 'Limit to files matching path'),
-      option('--min-deps <n>', 'Minimum dependencies to consider', parseInteger),
-    ]),
+      options: withJsonOption([
+        option('--min-similarity <n>', 'Minimum Jaccard similarity (0-1)', parseNumber, 0.5),
+        option('-n, --limit <n>', 'Number of results', parseInteger, 20),
+        option('-s, --scope <path>', 'Limit to files matching path'),
+        option('--min-deps <n>', 'Minimum dependencies to consider', parseInteger),
+        option('--full', 'Run unbounded analysis on large indexes'),
+      ]),
     heuristicLabel: 'similar file candidates',
     renderShape: 'custom',
     handler: handleSimilarFiles,
   }),
   heuristicCleanupCommand({
+    id: 'react-component-duplicates',
+    command: 'react-component-duplicates [file]',
+    description: 'Find heuristic duplicated React component structure candidates from JSX tags, props, events, and bindings',
+    options: withJsonOption([
+      option('--min-similarity <n>', 'Minimum JSX structure similarity (0-1)', parseNumber, 0.62),
+      option('--min-tokens <n>', 'Minimum structural tokens to consider', parseInteger, 8),
+      option('-n, --limit <n>', 'Number of results', parseInteger, 20),
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option('--full', 'Run unbounded analysis on large indexes'),
+    ]),
+    heuristicLabel: 'React component duplicate candidates',
+    budget: 'candidate-scan',
+    renderShape: 'custom',
+    handler: handleReactComponentDuplicates,
+  }),
+  heuristicCleanupCommand({
+    id: 'react-hook-candidates',
+    command: 'react-hook-candidates [file]',
+    description: 'Find heuristic React hook extraction candidates from shared state, effects, requests, and handlers',
+    options: withJsonOption([
+      option('--min-similarity <n>', 'Minimum behavior similarity (0-1)', parseNumber, 0.45),
+      option('--min-shared-behaviors <n>', 'Minimum shared behavior tokens', parseInteger, 6),
+      option('-n, --limit <n>', 'Number of results', parseInteger, 20),
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option('--full', 'Run unbounded analysis on large indexes'),
+    ]),
+    heuristicLabel: 'React hook extraction candidates',
+    budget: 'candidate-scan',
+    renderShape: 'custom',
+    handler: handleReactHookCandidates,
+  }),
+  heuristicCleanupCommand({
+    id: 'react-large-component-pressure',
+    command: 'react-large-component-pressure [file]',
+    description: 'Find heuristic large React component pressure candidates from component lines, JSX structure, and hook behavior',
+    options: withJsonOption([
+      option('--min-component-lines <n>', 'Minimum component lines', parseInteger, 300),
+      option('--min-file-lines <n>', 'Minimum file lines', parseInteger, 800),
+      option('--min-jsx-tokens <n>', 'Minimum JSX structure tokens', parseInteger, 80),
+      option('--min-behavior-tokens <n>', 'Minimum behavior tokens', parseInteger, 40),
+      option('-n, --limit <n>', 'Number of results', parseInteger, 20),
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option('--full', 'Run unbounded analysis on large indexes'),
+    ]),
+    heuristicLabel: 'large React component pressure candidates',
+    budget: 'candidate-scan',
+    renderShape: 'custom',
+    handler: handleReactLargeComponentPressure,
+  }),
+  heuristicCleanupCommand({
+    id: 'vue-component-duplicates',
+    command: 'vue-component-duplicates [file]',
+    description: 'Find heuristic duplicated Vue component structure candidates from template tags, bindings, slots, and directives',
+    options: withJsonOption([
+      option('--min-similarity <n>', 'Minimum template similarity (0-1)', parseNumber, 0.62),
+      option('--min-tokens <n>', 'Minimum structural tokens to consider', parseInteger, 8),
+      option('-n, --limit <n>', 'Number of results', parseInteger, 20),
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option('--full', 'Run unbounded analysis on large indexes'),
+    ]),
+    heuristicLabel: 'Vue component duplicate candidates',
+    budget: 'candidate-scan',
+    renderShape: 'custom',
+    handler: handleVueComponentDuplicates,
+  }),
+  heuristicCleanupCommand({
+    id: 'vue-composable-candidates',
+    command: 'vue-composable-candidates [file]',
+    description: 'Find heuristic Vue composable extraction candidates from shared state, effects, requests, and template bindings',
+    options: withJsonOption([
+      option('--min-similarity <n>', 'Minimum behavior similarity (0-1)', parseNumber, 0.45),
+      option('--min-shared-behaviors <n>', 'Minimum shared behavior tokens', parseInteger, 6),
+      option('-n, --limit <n>', 'Number of results', parseInteger, 20),
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option('--full', 'Run unbounded analysis on large indexes'),
+    ]),
+    heuristicLabel: 'Vue composable extraction candidates',
+    budget: 'candidate-scan',
+    renderShape: 'custom',
+    handler: handleVueComposableCandidates,
+  }),
+  heuristicCleanupCommand({
+    id: 'vue-large-view-pressure',
+    command: 'vue-large-view-pressure [file]',
+    description: 'Find heuristic large Vue view pressure candidates from template, script, style, and external script line counts',
+    options: withJsonOption([
+      option('--min-total-lines <n>', 'Minimum total component lines', parseInteger, 800),
+      option('--min-template-lines <n>', 'Minimum template lines', parseInteger, 300),
+      option('--min-script-lines <n>', 'Minimum script lines', parseInteger, 300),
+      option('--min-style-lines <n>', 'Minimum style lines', parseInteger, 500),
+      option('-n, --limit <n>', 'Number of results', parseInteger, 20),
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option('--full', 'Run unbounded analysis on large indexes'),
+    ]),
+    heuristicLabel: 'large Vue view pressure candidates',
+    budget: 'candidate-scan',
+    renderShape: 'custom',
+    handler: handleVueLargeViewPressure,
+  }),
+  heuristicCleanupCommand({
     id: 'similar-chains',
     command: 'similar-chains',
     description: 'Find heuristic similar-chain candidates from dependency flows',
-    options: withJsonOption([
-      option('--min-similarity <n>', 'Minimum chain similarity (0-1)', parseNumber, 0.5),
-      option('-n, --limit <n>', 'Number of results', parseInteger, 15),
-      option('-s, --scope <path>', 'Limit to files matching path'),
-      option('--min-length <n>', 'Minimum chain length', parseInteger, 3),
-      option('--max-length <n>', 'Maximum chain length', parseInteger, 8),
-    ]),
+      options: withJsonOption([
+        option('--min-similarity <n>', 'Minimum chain similarity (0-1)', parseNumber, 0.5),
+        option('-n, --limit <n>', 'Number of results', parseInteger, 15),
+        option('-s, --scope <path>', 'Limit to files matching path'),
+        option('--min-length <n>', 'Minimum chain length', parseInteger, 3),
+        option('--max-length <n>', 'Maximum chain length', parseInteger, 8),
+        option('--full', 'Run unbounded analysis on large indexes'),
+      ]),
     heuristicLabel: 'similar chain candidates',
     renderShape: 'custom',
     handler: handleSimilarChains,
@@ -949,15 +1235,16 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'redundant-reexports',
     command: 'redundant-reexports',
     description: 'Find barrel re-exports that nobody imports through',
-    options: [
-      option('-s, --scope <path>', 'Limit to files matching path'),
-      option('-n, --limit <n>', 'Number of results', parseInteger, 30),
-    ],
+      options: [
+        option('-s, --scope <path>', 'Limit to files matching path'),
+        option('-n, --limit <n>', 'Number of results', parseInteger, 30),
+        option('--full', 'Run unbounded analysis on large indexes'),
+      ],
     docs: doc('Cleanup'),
-    query: ({ db, opts }) => queries.redundantReexports(db, {
-      scope: stringOptionValue(opts, 'scope'),
-      limit: definedNumberOption(opts, 'limit', 30),
-    }),
+      query: ({ db, opts }) => queries.redundantReexports(db, {
+        scope: stringOptionValue(opts, 'scope'),
+        limit: definedLimitOption(opts, 'limit', 30),
+      }),
     format: (r) =>
       `  ${r.shortName}  (from ${r.originalFile})\n` +
       `    barrel: ${r.barrelConsumers} consumer(s) | direct: ${r.directConsumers} consumer(s)`,

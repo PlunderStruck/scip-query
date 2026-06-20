@@ -1,8 +1,7 @@
 ---
 name: scip-maintainability
-description: Principled maintainability review using scip-query. Finds hidden policies, scattered concepts, accidental variation, weak boundaries, and system-compression opportunities, then proposes or executes structural improvements without chasing health scores.
+description: Principled maintainability review using scip-query. Finds hidden policies, scattered concepts, accidental variation, weak boundaries, and system-compression opportunities, then proposes or executes structural improvements and verifies post-change wiring without chasing health scores.
 allowed-tools: [Bash, Write, Edit, Glob, Agent, TaskCreate, TaskUpdate, TaskGet, TaskList]
-keywords: [maintainability, architecture, compression, simplify, principal, staff, smell, hidden-policy, concept-boundary, accidental-variation, refactor]
 ---
 
 # SCIP Maintainability Review
@@ -244,12 +243,34 @@ scip-query passthrough-candidates
 scip-query similar-files
 ```
 
+Then run the post-change checks that match what the fix actually did:
+
+| Change made | Required post-check |
+| --- | --- |
+| Extracted a helper, hook, composable, component logic, or named abstraction | `scip-query incomplete-migration`; migrate every unchanged site that still contains the extracted logic or document essential variation |
+| Added a new helper, module, component, hook, or composable | `scip-query similar <new-symbol>` when symbol-like, plus `scip-query recent-duplicates --full`; delete echoes of established code |
+| Consolidated duplicated files, command handlers, adapters, or workflows | rerun the detector that motivated the change: `similar-files`, `similar-chains`, `wrapper-candidates`, `passthrough-candidates`, frontend duplicate commands, or `health --full` |
+| Added parameters, options, config flags, props, or broad option objects | `scip-query unused-params`; remove speculative inputs that no body uses |
+| Added a wrapper, adapter, facade, re-export, or forwarding layer | `scip-query wrapper-candidates`, `scip-query passthrough-candidates`, and `scip-query redundant-reexports` when exports changed |
+| Added an interface, base class, type alias, or abstraction boundary | `scip-query stale-abstractions --include-low-confidence`; prove the abstraction has real consumers and policy |
+| Changed schema, config, generated files, command descriptors, package surface, or docs-backed behavior | `scip-query co-change <file>` and `scip-query doc-drift`; update historical partners and stale docs |
+| Deleted code | `scip-query cleanup-plan --verify`; take the compiler-proven cascade or explain why not |
+
+Always finish implemented maintainability work with:
+
+```bash
+scip-query diff-impact
+scip-query reindex && scip-query diff-gate
+```
+
+Treat `diff-gate` findings as unfinished work. Fix them or state a concrete acceptance reason; do not silently report success.
+
 Report:
 
 - the named smell addressed
 - the mechanism introduced, deleted, or simplified
 - what was deliberately not compressed
-- verification results
+- verification results, including the post-change checks that matched the edit
 - commit hash, when committed
 
 ---

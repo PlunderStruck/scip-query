@@ -14,18 +14,19 @@ heuristic candidates are labeled, and heuristic output always says so.
 
 ## 1. Re-implementing code that already exists
 
-**What the agent does:** it can't see the whole repo, so it writes a helper
-that already exists — a date formatter, a retry wrapper, a validation guard.
-Now there are two implementations that drift independently until they
+**What the agent does:** it can't see the whole repo, so it writes a helper,
+hook, composable, or frontend component that already exists - a date formatter,
+a retry wrapper, a validation guard, a table toolbar. Now there are two implementations that drift independently until they
 contradict each other.
 
 **The detector:** `recent-duplicates` makes similarity *directional* using git
-file ages — which side is the established original, which is the freshly-added
+file ages - which side is the established original, which is the freshly-added
 echo:
 
 ```
-91%  ECHO  src/components/ProjectCardVisual.tsx  (added 62 commits ago)
+91%  ECHO  react-component  src/components/ProjectCardVisual.tsx  ProjectCardVisual  (added 62 commits ago)
      duplicates established  src/pages/HomePage.tsx  RecentProjectRow()
+     basis: jsx-structure
 ```
 
 **Use it:**

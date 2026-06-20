@@ -9,7 +9,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
 import { getSourceFiles } from '../source/source-fileset.js';
-import { getSourceText } from '../source/source-text.js';
+import { getSourceText, suppressionCommentCategory } from '../source/source-text.js';
 
 export type SuppressionCategory =
   | 'dead'
@@ -26,8 +26,6 @@ export interface SuppressionInventory {
   byCategory: Record<SuppressionCategory, number>;
   byFile: Map<string, number>;
 }
-
-const SUPPRESSION_SCAN_RE = /scip-query[\s:-]*ignore[\s:-]*(dead(?:-code)?|stale|wrapper|passthrough|drift|extract|similar)?/gi;
 
 // Derived from source text on disk — drops with the other source evidence.
 const inventoryCache = createPerDbValue<SuppressionInventory>('suppression-inventory', {
@@ -55,10 +53,12 @@ function scanSuppressions(db: ScipDatabase): SuppressionInventory {
   for (const file of getSourceFiles(db)) {
     const source = getSourceText(db, file);
     if (!source || !source.includes('scip-query')) continue;
-    for (const match of source.matchAll(SUPPRESSION_SCAN_RE)) {
+    for (const line of source.split(/\r?\n/)) {
+      const rawCategory = suppressionCommentCategory(line);
+      if (rawCategory === null) continue;
       total += 1;
       byFile.set(file, (byFile.get(file) ?? 0) + 1);
-      const category = normalizeCategory(match[1]);
+      const category = normalizeCategory(rawCategory);
       byCategory[category] += 1;
     }
   }
@@ -66,7 +66,7 @@ function scanSuppressions(db: ScipDatabase): SuppressionInventory {
   return { total, byCategory, byFile };
 }
 
-function normalizeCategory(raw: string | undefined): SuppressionCategory {
+function normalizeCategory(raw: string | undefined | null): SuppressionCategory {
   if (!raw) return 'uncategorized';
   const lower = raw.toLowerCase();
   return lower === 'dead-code' ? 'dead' : lower as SuppressionCategory;

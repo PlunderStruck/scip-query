@@ -47,6 +47,9 @@ export const PUBLIC_QUERY_ENTRIES = [
   'outline',
   'passthrough-candidates',
   'plan-context',
+  'react-component-duplicates',
+  'react-hook-candidates',
+  'react-large-component-pressure',
   'recent-duplicates',
   'redundant-reexports',
   'refs',
@@ -63,6 +66,9 @@ export const PUBLIC_QUERY_ENTRIES = [
   'system',
   'trace',
   'unused-params',
+  'vue-composable-candidates',
+  'vue-component-duplicates',
+  'vue-large-view-pressure',
   'wrapper-candidates',
 ] as const;
 

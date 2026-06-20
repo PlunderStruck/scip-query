@@ -4,6 +4,12 @@ import { dead } from './dead.js';
 import { isolated } from './isolated.js';
 import { cycles } from './cycles.js';
 import { similarAll } from './similar.js';
+import { reactComponentDuplicates } from './react-component-duplicates.js';
+import { reactHookCandidates } from './react-hook-candidates.js';
+import { reactLargeComponentPressure } from './react-large-component-pressure.js';
+import { vueComponentDuplicates } from './vue-component-duplicates.js';
+import { vueComposableCandidates } from './vue-composable-candidates.js';
+import { vueLargeViewPressure } from './vue-large-view-pressure.js';
 import { extractCandidates } from './extract-candidates.js';
 import { wrapperCandidates } from './wrapper-candidates.js';
 import { passthroughCandidates } from './passthrough-candidates.js';
@@ -32,6 +38,8 @@ import type {
 
 interface HealthBudget {
   candidateScanLimit: number | undefined;
+  candidateResultLimit: number;
+  complexityResultLimit: number;
   releaseCachesBetweenPhases: boolean;
   warnings: string[];
 }
@@ -40,12 +48,20 @@ const EXTREME_COMPLEXITY_SCORE = 50;
 const LARGE_HEALTH_SYMBOL_THRESHOLD = 75_000;
 const LARGE_HEALTH_DOCUMENT_THRESHOLD = 5_000;
 const DEFAULT_HEALTH_CANDIDATE_SCAN_LIMIT = 2_500;
+const DEFAULT_HEALTH_CANDIDATE_RESULT_LIMIT = 50;
+const DEFAULT_HEALTH_COMPLEXITY_RESULT_LIMIT = 10;
 export const HEALTH_PHASES = [
   'overview',
   'dead',
   'isolated',
   'cycles',
   'similar',
+  'react-component-duplicates',
+  'react-hook-candidates',
+  'react-large-component-pressure',
+  'vue-component-duplicates',
+  'vue-composable-candidates',
+  'vue-large-view-pressure',
   'extract-candidates',
   'wrapper-candidates',
   'passthrough-candidates',
@@ -64,6 +80,12 @@ type HealthPhaseResult =
   | { phase: 'isolated'; isolated: CountLocSummary }
   | { phase: 'cycles'; realCycleCount: number }
   | { phase: 'similar'; similarCount: number }
+  | { phase: 'react-component-duplicates'; reactComponentDuplicates: CountLocSummary }
+  | { phase: 'react-hook-candidates'; reactHookCandidates: CountLocSummary }
+  | { phase: 'react-large-component-pressure'; reactLargeComponentPressure: CountLocSummary }
+  | { phase: 'vue-component-duplicates'; vueComponentDuplicates: CountLocSummary }
+  | { phase: 'vue-composable-candidates'; vueComposableCandidates: CountLocSummary }
+  | { phase: 'vue-large-view-pressure'; vueLargeViewPressure: CountLocSummary }
   | { phase: 'extract-candidates'; extractCount: number }
   | { phase: 'wrapper-candidates'; wrappers: CountLocSummary }
   | { phase: 'passthrough-candidates'; passthroughs: CountLocSummary }
@@ -101,6 +123,30 @@ const HEALTH_PHASE_RUNNERS: Record<HealthPhaseName, HealthPhaseRunner> = {
   similar: (db, scope, budget) => ({
     phase: 'similar',
     similarCount: countSimilarHealthCandidates(db, scope, budget),
+  }),
+  'react-component-duplicates': (db, scope, budget) => ({
+    phase: 'react-component-duplicates',
+    reactComponentDuplicates: summarizeReactComponentDuplicates(db, scope, budget),
+  }),
+  'react-hook-candidates': (db, scope, budget) => ({
+    phase: 'react-hook-candidates',
+    reactHookCandidates: summarizeReactHookCandidates(db, scope, budget),
+  }),
+  'react-large-component-pressure': (db, scope, budget) => ({
+    phase: 'react-large-component-pressure',
+    reactLargeComponentPressure: summarizeReactLargeComponentPressure(db, scope, budget),
+  }),
+  'vue-component-duplicates': (db, scope, budget) => ({
+    phase: 'vue-component-duplicates',
+    vueComponentDuplicates: summarizeVueComponentDuplicates(db, scope, budget),
+  }),
+  'vue-composable-candidates': (db, scope, budget) => ({
+    phase: 'vue-composable-candidates',
+    vueComposableCandidates: summarizeVueComposableCandidates(db, scope, budget),
+  }),
+  'vue-large-view-pressure': (db, scope, budget) => ({
+    phase: 'vue-large-view-pressure',
+    vueLargeViewPressure: summarizeVueLargeViewPressure(db, scope, budget),
   }),
   'extract-candidates': (db, scope, budget) => ({
     phase: 'extract-candidates',
@@ -206,6 +252,30 @@ function healthAnalysesFromPhases(phaseResults: readonly HealthPhaseResult[]): H
       phaseResults,
       'similar',
     ).similarCount,
+    reactComponentDuplicates: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'react-component-duplicates' }>>(
+      phaseResults,
+      'react-component-duplicates',
+    ).reactComponentDuplicates,
+    reactHookCandidates: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'react-hook-candidates' }>>(
+      phaseResults,
+      'react-hook-candidates',
+    ).reactHookCandidates,
+    reactLargeComponentPressure: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'react-large-component-pressure' }>>(
+      phaseResults,
+      'react-large-component-pressure',
+    ).reactLargeComponentPressure,
+    vueComponentDuplicates: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'vue-component-duplicates' }>>(
+      phaseResults,
+      'vue-component-duplicates',
+    ).vueComponentDuplicates,
+    vueComposableCandidates: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'vue-composable-candidates' }>>(
+      phaseResults,
+      'vue-composable-candidates',
+    ).vueComposableCandidates,
+    vueLargeViewPressure: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'vue-large-view-pressure' }>>(
+      phaseResults,
+      'vue-large-view-pressure',
+    ).vueLargeViewPressure,
     extractCount: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'extract-candidates' }>>(
       phaseResults,
       'extract-candidates',
@@ -306,7 +376,12 @@ function countSimilarHealthCandidates(
   budget: HealthBudget,
 ): number {
   return runHealthPhase(db, budget, 'similar', () =>
-    similarAll(db, { scope, ...HEALTH_DETECTOR_PROFILES.similar, scanLimit: budget.candidateScanLimit }).length,
+    similarAll(db, {
+      scope,
+      ...HEALTH_DETECTOR_PROFILES.similar,
+      limit: budget.candidateResultLimit,
+      scanLimit: budget.candidateScanLimit,
+    }).length,
   );
 }
 
@@ -316,8 +391,103 @@ function countExtractionHealthCandidates(
   budget: HealthBudget,
 ): number {
   return runHealthPhase(db, budget, 'extract-candidates', () =>
-    extractCandidates(db, { scope, ...HEALTH_DETECTOR_PROFILES.extract, scanLimit: budget.candidateScanLimit }).length,
+    extractCandidates(db, {
+      scope,
+      ...HEALTH_DETECTOR_PROFILES.extract,
+      limit: budget.candidateResultLimit,
+      scanLimit: budget.candidateScanLimit,
+    }).length,
   );
+}
+
+function summarizeReactComponentDuplicates(
+  db: ScipDatabase,
+  scope: string | undefined,
+  budget: HealthBudget,
+): CountLocSummary {
+  return runHealthPhase(db, budget, 'react-component-duplicates', () => {
+    const results = reactComponentDuplicates(db, {
+      scope,
+      limit: budget.candidateResultLimit,
+      scanLimit: budget.candidateScanLimit,
+    });
+    return summarizePairLoc(results);
+  });
+}
+
+function summarizeReactHookCandidates(
+  db: ScipDatabase,
+  scope: string | undefined,
+  budget: HealthBudget,
+): CountLocSummary {
+  return runHealthPhase(db, budget, 'react-hook-candidates', () => {
+    const results = reactHookCandidates(db, {
+      scope,
+      limit: budget.candidateResultLimit,
+      scanLimit: budget.candidateScanLimit,
+    });
+    return summarizePairLocWithScore(results, reactHookHealthScore);
+  });
+}
+
+function summarizeReactLargeComponentPressure(
+  db: ScipDatabase,
+  scope: string | undefined,
+  budget: HealthBudget,
+): CountLocSummary {
+  return runHealthPhase(db, budget, 'react-large-component-pressure', () => {
+    const results = reactLargeComponentPressure(db, {
+      scope,
+      limit: budget.candidateResultLimit,
+      scanLimit: budget.candidateScanLimit,
+    });
+    return summarizeUniqueFileLoc(results);
+  });
+}
+
+function summarizeVueComponentDuplicates(
+  db: ScipDatabase,
+  scope: string | undefined,
+  budget: HealthBudget,
+): CountLocSummary {
+  return runHealthPhase(db, budget, 'vue-component-duplicates', () => {
+    const results = vueComponentDuplicates(db, {
+      scope,
+      limit: budget.candidateResultLimit,
+      scanLimit: budget.candidateScanLimit,
+    });
+    return summarizePairLoc(results);
+  });
+}
+
+function summarizeVueComposableCandidates(
+  db: ScipDatabase,
+  scope: string | undefined,
+  budget: HealthBudget,
+): CountLocSummary {
+  return runHealthPhase(db, budget, 'vue-composable-candidates', () => {
+    const results = vueComposableCandidates(db, {
+      scope,
+      limit: budget.candidateResultLimit,
+      scanLimit: budget.candidateScanLimit,
+    });
+    return summarizePairLocWithScore(results, vueComposableHealthScore);
+  });
+}
+
+function summarizeVueLargeViewPressure(
+  db: ScipDatabase,
+  scope: string | undefined,
+  budget: HealthBudget,
+): CountLocSummary {
+  return runHealthPhase(db, budget, 'vue-large-view-pressure', () => {
+    const results = vueLargeViewPressure(db, {
+      scope,
+      limit: budget.candidateResultLimit,
+      scanLimit: budget.candidateScanLimit,
+    });
+    return summarizeLoc(results);
+  });
 }
 
 function summarizeHealthWrappers(
@@ -326,7 +496,12 @@ function summarizeHealthWrappers(
   budget: HealthBudget,
 ): CountLocSummary {
   return summarizeHealthLocQuery(db, budget, 'wrapper-candidates', () =>
-    wrapperCandidates(db, { scope, ...HEALTH_DETECTOR_PROFILES.wrappers, scanLimit: budget.candidateScanLimit }),
+    wrapperCandidates(db, {
+      scope,
+      ...HEALTH_DETECTOR_PROFILES.wrappers,
+      limit: budget.candidateResultLimit,
+      scanLimit: budget.candidateScanLimit,
+    }),
   );
 }
 
@@ -336,7 +511,12 @@ function summarizeHealthPassthroughs(
   budget: HealthBudget,
 ): CountLocSummary {
   return summarizeHealthLocQuery(db, budget, 'passthrough-candidates', () =>
-    passthroughCandidates(db, { scope, ...HEALTH_DETECTOR_PROFILES.passthroughs, scanLimit: budget.candidateScanLimit }),
+    passthroughCandidates(db, {
+      scope,
+      ...HEALTH_DETECTOR_PROFILES.passthroughs,
+      limit: budget.candidateResultLimit,
+      scanLimit: budget.candidateScanLimit,
+    }),
   );
 }
 
@@ -346,7 +526,12 @@ function summarizeHealthStaleAbstractions(
   budget: HealthBudget,
 ): StaleSummary {
   return runHealthPhase(db, budget, 'stale-abstractions', () => {
-    const staleResult = staleAbstractions(db, { scope, ...HEALTH_DETECTOR_PROFILES.stale, scanLimit: budget.candidateScanLimit });
+    const staleResult = staleAbstractions(db, {
+      scope,
+      ...HEALTH_DETECTOR_PROFILES.stale,
+      limit: budget.candidateResultLimit,
+      scanLimit: budget.candidateScanLimit,
+    });
     const unused = staleResult.filter((s) => s.consumers === 0).length;
     return {
       count: staleResult.length,
@@ -362,7 +547,7 @@ function summarizeGitEvidence(db: ScipDatabase, budget: HealthBudget): GitEviden
   return runHealthPhase(db, budget, 'git-evidence', () => {
     const churn = getFileChurn(db);
     if (!churn) return null;
-    const coChangeResult = coChange(db, undefined, { limit: 50 });
+    const coChangeResult = coChange(db, undefined, { limit: budget.candidateResultLimit });
     const fileStats: Record<string, { changes: number; fixChanges: number }> = {};
     for (const [file, entry] of churn) {
       fileStats[file] = { changes: entry.changes, fixChanges: entry.fixChanges };
@@ -414,7 +599,7 @@ function summarizeHealthComplexity(
     const complexResult = complexityHotspots(db, {
       scope,
       minLoc: 10,
-      limit: 10,
+      limit: budget.complexityResultLimit,
       scanLimit: budget.candidateScanLimit,
       semantic: false,
     });
@@ -435,30 +620,32 @@ function healthBudget(
 ): HealthBudget {
   const isLargeIndex = statsResult.symbols >= LARGE_HEALTH_SYMBOL_THRESHOLD
     || statsResult.documents >= LARGE_HEALTH_DOCUMENT_THRESHOLD;
+  const candidateResultLimit = full
+    ? Number.POSITIVE_INFINITY
+    : DEFAULT_HEALTH_CANDIDATE_RESULT_LIMIT;
+  const complexityResultLimit = full
+    ? Number.POSITIVE_INFINITY
+    : DEFAULT_HEALTH_COMPLEXITY_RESULT_LIMIT;
 
-  if (!isLargeIndex) {
+  if (!isLargeIndex || full) {
     return {
       candidateScanLimit: undefined,
+      candidateResultLimit,
+      complexityResultLimit,
       releaseCachesBetweenPhases: true,
-      warnings: [],
-    };
-  }
-
-  if (full) {
-    return {
-      candidateScanLimit: undefined,
-      releaseCachesBetweenPhases: true,
-      warnings: [
-        'Large index detected; running unbounded health analyses because --full was supplied.',
-      ],
+      warnings: full && isLargeIndex
+        ? ['Large index detected; running health without candidate scan or result caps because --full was supplied.']
+        : [],
     };
   }
 
   return {
     candidateScanLimit: DEFAULT_HEALTH_CANDIDATE_SCAN_LIMIT,
+    candidateResultLimit,
+    complexityResultLimit,
     releaseCachesBetweenPhases: true,
     warnings: [
-      `Large index detected; candidate-style health checks scanned their highest-priority ${DEFAULT_HEALTH_CANDIDATE_SCAN_LIMIT} symbols. Run "scip-query health --full" for unbounded candidate counts.`,
+      `Large index detected; candidate-style health checks scanned their highest-priority ${DEFAULT_HEALTH_CANDIDATE_SCAN_LIMIT} symbols and reported their top ${DEFAULT_HEALTH_CANDIDATE_RESULT_LIMIT} findings. Run "scip-query health --full" for unbounded candidate counts.`,
     ],
   };
 }
@@ -530,3 +717,143 @@ function summarizeLoc(items: Array<{ loc: number; relativePath?: string; file?: 
     files: [...files],
   };
 }
+
+function summarizeUniqueFileLoc(items: Array<{ file: string; loc: number }>): CountLocSummary {
+  const fileLoc = new Map<string, number>();
+  for (const item of items) {
+    fileLoc.set(item.file, Math.max(fileLoc.get(item.file) ?? 0, item.loc));
+  }
+  return {
+    count: fileLoc.size,
+    loc: [...fileLoc.values()].reduce((sum, loc) => sum + loc, 0),
+    files: [...fileLoc.keys()],
+  };
+}
+
+function summarizePairLoc(items: Array<{ fileA: string; fileB: string; locA: number; locB: number }>): CountLocSummary {
+  const fileLoc = new Map<string, number>();
+  for (const item of items) {
+    fileLoc.set(item.fileA, Math.max(fileLoc.get(item.fileA) ?? 0, item.locA));
+    fileLoc.set(item.fileB, Math.max(fileLoc.get(item.fileB) ?? 0, item.locB));
+  }
+  return {
+    count: items.length,
+    loc: [...fileLoc.values()].reduce((sum, loc) => sum + loc, 0),
+    files: [...fileLoc.keys()],
+  };
+}
+
+function summarizePairLocWithScore<T extends { fileA: string; fileB: string; locA: number; locB: number }>(
+  items: T[],
+  score: (item: T) => number,
+): CountLocSummary {
+  const summary = summarizePairLoc(items);
+  return {
+    ...summary,
+    scoreCount: roundHealthScoreCount(items.reduce((sum, item) => sum + score(item), 0)),
+  };
+}
+
+function reactHookHealthScore(candidate: {
+  sharedHooks: readonly string[];
+  sharedState: readonly string[];
+  sharedRequests: readonly string[];
+  sharedEffects: readonly string[];
+  sharedHandlers: readonly string[];
+  sharedHandlerVerbs: readonly string[];
+}): number {
+  const existingSharedAbstraction = candidate.sharedHooks.length > 0;
+  const concreteSignals = concreteBehaviorSignalCount({
+    namedState: candidate.sharedState,
+    requests: candidate.sharedRequests,
+    lifecycle: candidate.sharedEffects,
+    functions: candidate.sharedHandlers,
+  });
+  if (existingSharedAbstraction && concreteSignals <= 2) return 0;
+  if (existingSharedAbstraction) return 0.5;
+  if (hasOnlyGenericBehavior(candidate.sharedState, candidate.sharedHandlers, candidate.sharedHandlerVerbs)) return 0.25;
+  return concreteSignals >= 2 ? 1 : 0.5;
+}
+
+function vueComposableHealthScore(candidate: {
+  sharedComposables: readonly string[];
+  sharedStores: readonly string[];
+  sharedRequests: readonly string[];
+  sharedLifecycle: readonly string[];
+  sharedFunctions: readonly string[];
+  sharedFunctionVerbs: readonly string[];
+  sharedBindings: readonly string[];
+}): number {
+  const existingSharedAbstraction = candidate.sharedComposables.length + candidate.sharedStores.length > 0;
+  const concreteSignals = concreteBehaviorSignalCount({
+    namedState: candidate.sharedBindings,
+    requests: candidate.sharedRequests,
+    lifecycle: candidate.sharedLifecycle,
+    functions: candidate.sharedFunctions,
+  });
+  if (existingSharedAbstraction && concreteSignals <= 2) return 0;
+  if (existingSharedAbstraction) return 0.5;
+  if (hasOnlyGenericBehavior(candidate.sharedBindings, candidate.sharedFunctions, candidate.sharedFunctionVerbs)) return 0.25;
+  return concreteSignals >= 2 ? 1 : 0.5;
+}
+
+function concreteBehaviorSignalCount(parts: {
+  namedState: readonly string[];
+  requests: readonly string[];
+  lifecycle: readonly string[];
+  functions: readonly string[];
+}): number {
+  return (parts.requests.length * 2)
+    + parts.lifecycle.length
+    + parts.namedState.filter((name) => !GENERIC_BEHAVIOR_NAMES.has(normalizeBehaviorName(name))).length
+    + Math.min(parts.functions.length, 3);
+}
+
+function hasOnlyGenericBehavior(
+  names: readonly string[],
+  functions: readonly string[],
+  verbs: readonly string[],
+): boolean {
+  const tokens = [...names, ...functions, ...verbs].map(normalizeBehaviorName);
+  return tokens.length > 0 && tokens.every((token) => GENERIC_BEHAVIOR_NAMES.has(token));
+}
+
+function normalizeBehaviorName(name: string): string {
+  return name.replace(/^handle/, '').replace(/^is/, '').replace(/^has/, '').toLowerCase();
+}
+
+function roundHealthScoreCount(count: number): number {
+  return Math.round(count * 100) / 100;
+}
+
+const GENERIC_BEHAVIOR_NAMES = new Set([
+  'add',
+  'apply',
+  'cancel',
+  'change',
+  'clear',
+  'close',
+  'create',
+  'delete',
+  'draft',
+  'edit',
+  'error',
+  'filter',
+  'form',
+  'load',
+  'loading',
+  'name',
+  'open',
+  'refresh',
+  'remove',
+  'reset',
+  'save',
+  'saving',
+  'search',
+  'select',
+  'selected',
+  'submit',
+  'toggle',
+  'update',
+  'value',
+]);

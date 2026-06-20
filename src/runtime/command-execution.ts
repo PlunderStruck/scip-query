@@ -6,6 +6,10 @@ import { render } from './render.js';
 import type { ReportSection } from './render.js';
 
 export type CommandOptions = Record<string, unknown>;
+const OPTION_VALUE_SOURCE = Symbol('option-value-source');
+type CommandOptionsWithSources = CommandOptions & {
+  [OPTION_VALUE_SOURCE]?: (key: string) => string | undefined;
+};
 
 export interface DbCommandContext {
   db: ScipDatabase;
@@ -207,6 +211,22 @@ export function definedNumberOption(opts: CommandOptions, key: string, fallback:
   return numberOptionValue(opts, key) ?? fallback;
 }
 
+export function definedLimitOption(opts: CommandOptions, key: string, fallback: number): number {
+  const explicitLimit = numberOptionValue(opts, key);
+  const hasUserLimit = explicitLimit !== undefined && optionValueSource(opts, key) !== 'default';
+  if (booleanOptionValue(opts, 'full')) {
+    if (hasUserLimit) {
+      throw new Error('--full cannot be combined with --limit. Use --full for all findings, or --limit N for a capped report.');
+    }
+    return Number.POSITIVE_INFINITY;
+  }
+  return explicitLimit ?? fallback;
+}
+
+function optionValueSource(opts: CommandOptions, key: string): string | undefined {
+  return (opts as CommandOptionsWithSources)[OPTION_VALUE_SOURCE]?.(key);
+}
+
 function renderRows<Row, Ctx extends DbCommandContext>(
   ctx: Ctx,
   spec: RowCommandSpec<Row, Ctx>,
@@ -282,10 +302,20 @@ function splitCommanderActionArgs(rawArgs: readonly unknown[]): { args: readonly
 
 export function commandOptions(value: unknown): CommandOptions {
   if (!value || typeof value !== 'object') return {};
-  const maybeCommand = value as { opts?: () => unknown };
+  const maybeCommand = value as {
+    opts?: () => unknown;
+    getOptionValueSource?: (key: string) => string | undefined;
+  };
   if (typeof maybeCommand.opts === 'function') {
     const opts = maybeCommand.opts();
-    return opts && typeof opts === 'object' ? opts as CommandOptions : {};
+    if (!opts || typeof opts !== 'object') return {};
+    if (typeof maybeCommand.getOptionValueSource === 'function') {
+      Object.defineProperty(opts, OPTION_VALUE_SOURCE, {
+        value: (key: string) => maybeCommand.getOptionValueSource!(key),
+        enumerable: false,
+      });
+    }
+    return opts as CommandOptions;
   }
   return value as CommandOptions;
 }

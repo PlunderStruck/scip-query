@@ -1,98 +1,106 @@
-<p align="center">
-  <img src="docs/assets/scip-query-logo.png" alt="scip-query logo" width="120">
-</p>
+# scip-query
 
-<h1 align="center">scip-query</h1>
+**Evidence and verification for AI coding agents.**
 
-<p align="center">
-  <strong>Structural code intelligence for AI agents and engineers.</strong>
-</p>
+_Map the repo. Reuse what exists. Finish the refactor. Gate the diff._
 
-<p align="center">
-  Ask compiler-backed questions about how a codebase is wired together, find what's rotting, and delete it with a compiler proof in hand.
-</p>
+[![npm version](https://img.shields.io/npm/v/scip-query.svg)](https://www.npmjs.com/package/scip-query)
+[![npm downloads](https://img.shields.io/npm/dm/scip-query.svg)](https://www.npmjs.com/package/scip-query)
+[![Node version](https://img.shields.io/node/v/scip-query.svg)](package.json)
+[![License](https://img.shields.io/npm/l/scip-query.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
-<p align="center">
-  <a href="https://www.npmjs.com/package/scip-query"><img alt="npm version" src="https://img.shields.io/npm/v/scip-query.svg"></a>
-  <a href="https://www.npmjs.com/package/scip-query"><img alt="npm downloads" src="https://img.shields.io/npm/dm/scip-query.svg"></a>
-  <a href="package.json"><img alt="Node version" src="https://img.shields.io/node/v/scip-query.svg"></a>
-  <a href="https://www.apache.org/licenses/LICENSE-2.0"><img alt="License" src="https://img.shields.io/npm/l/scip-query.svg"></a>
-</p>
+`scip-query` is a TypeScript CLI and npm package that turns SCIP indexes, git history, language-aware source analysis, and your repository's own checks into commands AI coding agents can use before, during, and after a change.
 
-<p align="center">
-  <a href="https://www.npmjs.com/package/scip-query"><img alt="Install from npm" src="https://img.shields.io/badge/install-npm-cb3837?style=for-the-badge&logo=npm&logoColor=white"></a>
-  <a href="docs/AGENT_GUIDE.md"><img alt="Agent guide" src="https://img.shields.io/badge/agent-guide-2563eb?style=for-the-badge"></a>
-  <a href="docs/COMMAND_REFERENCE.md"><img alt="Command reference" src="https://img.shields.io/badge/command-reference-111827?style=for-the-badge"></a>
-</p>
+Agents are effective at editing the code in front of them. They are less reliable at preserving a whole-repository model across a long task: they miss existing helpers, plan from partial context, migrate only some call sites, overlook files coupled only by history, and declare a diff finished while it still adds duplication, dead code, or stale documentation.
 
-`scip-query` answers precise questions about how a codebase is wired together — where a symbol is defined, who references it, what calls it, what breaks if it changes — and turns those answers into something rarer: **cleanup you can trust**. Findings are ranked by evidence quality, validated against your repo's own git history, and (for deletions) proven safe by your own compiler before you touch anything.
+`scip-query` gives them a repeatable operating loop: map the target and its blast radius, build a concrete plan from repository evidence, check for reuse before adding a concept, detect unfinished migrations and hidden coupling, and gate the final diff. It does not replace the compiler, tests, or review; it makes structural evidence and repository checks easy for agents to invoke and report.
 
-Graph navigation works with every language that has a [SCIP](https://github.com/sourcegraph/scip) indexer: TypeScript, JavaScript, Vue, Java, Scala, Kotlin, Rust, Python, Ruby, Go, C/C++, C#, Visual Basic, Dart, PHP. The higher-confidence layers are explicit: TypeScript currently has the semantic provider, source/AST fallbacks vary by language, and cleanup verification depends on the checkers detected in your repo. Run `scip-query capabilities` or `scip-query capability-matrix --json` to see the exact support matrix for the current project.
+## The Agent Loop
+
+| Phase | What the agent needs to establish | Commands |
+|---|---|---|
+| Orient | What exists, where it is defined, and what depends on it | `system`, `trace`, `affected`, `plan-context` |
+| Plan | Externally consumed surfaces, change scope, blast radius, and historical partners | `surface`, `change-surface`, `co-change` |
+| Reuse | Whether the helper, component, hook, or composable already exists | `similar`, `recent-duplicates` |
+| Finish | Whether an extraction or migration reached every relevant site | `incomplete-migration`, `unused-params` |
+| Verify | What the diff affected and whether covered structural checks regressed | `diff-impact`, `doc-drift`, `diff-gate`, `health --baseline` |
+| Clean up | Candidate removals and newly exposed dead-code cascades | `cleanup-plan --verify` |
+
+React and Vue repositories get additional framework-aware checks for repeated component/template structure, hook/composable behavior, and large-component or large-view pressure. These extend the same reuse and completion workflow; the core graph, history, planning, cleanup, and diff-gate commands are not frontend-specific.
 
 ## Install
 
 ```bash
 npm install -g scip-query@latest
-scip-query reindex          # index the current project
-scip-query health           # see where you stand
+scip-query check-deps
+scip-query reindex
 ```
 
 Or without a global install: `npx scip-query@latest reindex`.
 
-## The Problem
+## Start with One Change
 
-Two problems, actually.
+```bash
+# Before editing: establish structure, consumers, history, and blast radius
+scip-query plan-context <symbol-or-file>
 
-**Agents lose the thread.** A codebase is files connected by definitions, references, imports, calls, and dependency paths. Reading files gives local text, not verified structure. Search finds matching words, not real references. Before editing one unit you need to know what it is, who uses it, and what depends on it — with evidence, not vibes.
+# Before creating a helper or abstraction: look for the existing concept
+scip-query similar <closest-symbol>
 
-**AI-generated code rots in specific ways.** Agents re-implement helpers they didn't know existed. They leave parallel half-wired implementations behind. They add parameters and options "for later" that never come. And the standards docs you write *for* them drift away from the code — so the next agent implements against a dead spec. Generic linters don't see any of this, because none of it is visible in a single file.
+# After an extraction or migration: find sites that still contain old logic
+scip-query incomplete-migration
 
-`scip-query` attacks both: structural questions with evidence-backed answers, and rot detectors tuned to how code actually decays — each one validated, and each one honest about its own confidence.
+# Before declaring the work complete: refresh the index and gate the diff
+scip-query reindex && scip-query diff-gate
+```
 
-## Three Sources of Evidence
+For a repository-wide cleanup pass:
 
-Most code tools have one lens. `scip-query` has three, and tells you which one each answer came from:
+```bash
+scip-query health
+scip-query recent-duplicates
+scip-query cleanup-plan --verify
+scip-query health --write-baseline
+```
+
+## Evidence and Confidence
+
+`scip-query` keeps the source and strength of each answer visible:
 
 ```mermaid
 flowchart LR
-  A["Reference graph<br/>(SCIP: compilers & language servers)"] --> D["scip-query"]
-  B["Change graph<br/>(git history: co-change, churn, fix density)"] --> D
-  C["Verification oracles<br/>(tsc / cargo check / ts-morph)"] --> D
-  D --> E["Evidence-ranked answers<br/>graph-fact · change-graph · heuristic · compiler-verified"]
+  A["SCIP graph facts"] --> F["evidence-ranked findings"]
+  B["semantic augmentation"] --> F
+  C["source-backed candidates"] --> F
+  D["git-history signals"] --> F
+  E["repository checks"] --> F
 ```
 
-1. **The reference graph** — who defines, references, calls, imports what. Built from SCIP indexes produced by real compilers and language servers, not text search.
-2. **The change graph** — what git history knows that no compiler can: files that always change together without any dependency edge (one concept scattered across artifacts), churn-weighted complexity (gnarly code nobody touches costs nothing), and whether flagged files actually attract fix commits.
-3. **Verification oracles** — your own toolchain as ground truth. Deletion plans are applied in a throwaway worktree and run through your own toolchain — `tsc`, `cargo check`, `go build`, `ruff` — before being stamped `COMPILER-VERIFIED`. The tool even audits *itself*: `self-audit` scores its cheap evidence paths against the TypeScript compiler and reports precision/recall as a tracked number.
+1. **SCIP graph facts** for definitions, references, imports, calls, and dependencies.
+2. **Semantic augmentation** for TypeScript where the SCIP index needs more detail.
+3. **Source-backed candidates** for similarity, maintainability, and cleanup checks.
+4. **Git-history signals** for churn, co-change, recency, and documentation drift.
+5. **Repository-toolchain verification** for supported cleanup plans.
 
-## At a Glance
+Heuristic findings are candidates for inspection, not proof of equivalence or bad design. Run `scip-query capabilities` to see which evidence and verification layers are available for the current repository and language.
 
-| Ask this | Run this |
-|---|---|
-| What is in this module? | `scip-query system src/auth` |
-| Who uses this symbol? | `scip-query trace login` |
-| What might break if I change it? | `scip-query affected login` |
-| Everything I need before editing this | `scip-query plan-context login` |
-| What did my git diff affect? | `scip-query diff-impact` |
-| How healthy is this codebase, really? | `scip-query health` |
-| What can I delete — *prove it* | `scip-query cleanup-plan --verify` |
-| What new code duplicates old code? | `scip-query recent-duplicates` |
-| Which docs lie about the code now? | `scip-query doc-drift` |
-| What changes together but isn't linked? | `scip-query co-change` |
-| Gate an agent's diff before merging | `scip-query diff-gate` |
-| Did the findings get worse? (CI gate) | `scip-query health --baseline` |
+## Language and Framework Coverage
+
+Graph navigation works through supported [SCIP](https://github.com/sourcegraph/scip) indexers. Higher-confidence augmentation and verification vary by language and project toolchain. TypeScript currently has the richest semantic augmentation. React and Vue add built-in framework-aware maintainability checks on top of the core workflow.
 
 ## Cleaning Up AI-Generated Code
 
-This is the workflow the tool is built around. Each detector targets a specific way AI-assisted development rots a codebase — the full catalog, with the prevention wiring for each, is in [docs/AI_FAILURE_MODES.md](docs/AI_FAILURE_MODES.md):
+These checks target specific ways AI-assisted development rots a codebase. The full catalog, with prevention wiring for each detector, is in [docs/AI_FAILURE_MODES.md](docs/AI_FAILURE_MODES.md):
 
-**1. Find the echoes.** Agents re-implement helpers they didn't know existed. `recent-duplicates` makes similarity *directional* using git file ages — which side is the established original, which is the recent echo:
+**1. Find the echoes.** Agents re-implement helpers, hooks, composables, and frontend components they didn't know existed. `recent-duplicates` makes similarity *directional* using git file ages - which side is the established original, which is the recent echo:
 
 ```
-91%  ECHO  src/components/ProjectCardVisual.tsx  ProjectCardVisual()  (added 62 commits ago)
+91%  ECHO  react-component  src/components/ProjectCardVisual.tsx  ProjectCardVisual  (added 62 commits ago)
      duplicates established  src/pages/HomePage.tsx  RecentProjectRow()
+     basis: jsx-structure
+     shared: component:ProjectCard, prop:title, event:click
 100% TWIN  src/workflows/a.ts ensureAccessible() / src/workflows/b.ts ensureAccessible()
-     (both new — one agent session duplicated itself; consolidate before they diverge)
+     (both new - one agent session duplicated itself; consolidate before they diverge)
 ```
 
 **2. Finish the half-done extraction.** Agents extract a helper, rewire one or two call sites, and abandon the rest — the extracted logic survives inline at every site they missed. `incomplete-migration` finds helpers that are new in the diff, confirms they were wired in somewhere, and lists the established sites that still contain the helper's logic but never call it (containment scoring, because a missed site holds the helper's logic *plus* its own):
@@ -112,7 +120,7 @@ staleness 94  product/domain-model.md
   22 change(s) since doc update  src/workflows/serviceTasks.ts  (referenced by doc)
 ```
 
-**4. Delete with proof.** `cleanup-plan` runs dead-code analysis to a *fixpoint* — deleting batch 0 makes batch 1 dead, and the plan shows the cascade. `--verify` applies each batch in a throwaway git worktree and runs your own compiler (differentially, so pre-existing errors don't drown the signal):
+**4. Delete with project checks.** `cleanup-plan` runs dead-code analysis to a *fixpoint* — deleting batch 0 makes batch 1 dead, and the plan shows the cascade. `--verify` applies each batch in a throwaway git worktree and runs the supported checker detected for your project (differentially, so pre-existing errors don't drown the signal):
 
 ```
 ── Batch 0: deletable now (graph-fact, 67 LOC) ──
@@ -124,16 +132,18 @@ When verification *fails*, the errors name the exact references the static evide
 
 **5. Trim speculative generality.** `unused-params` finds trailing parameters no body ever uses (the classic "options for later"), scoped to removals that are type-safe by construction.
 
-**6. Surface hidden coupling.** `co-change` finds file pairs that repeatedly change in the same commits with *no* dependency edge — schema ↔ generated inventory ↔ doc triangles, backend schemas ↔ frontend stores, `.env.example` ↔ its parser. The reference graph cannot see these; the change graph can.
+**6. Keep frontend reuse honest.** React and Vue have dedicated frontend hygiene checks: component-duplicate commands compare JSX/template structure, hook/composable commands compare state/effect/request behavior, and large-component/view commands flag files that concentrate too many reasons to change. `health --full` includes these as hygiene pressure, while `incomplete-migration` remains the direct check for a hook/composable/helper extraction that was wired into some sites but not all of them.
 
-**7. Gate every diff.** `diff-gate` runs the whole suite scoped to what a change *introduces* — echoes of established code, incomplete migrations, missing co-change partners, docs that cite the changed files, fresh unused params, new dead symbols, baseline regressions — in seconds, exit-code friendly, with a remediation per finding an agent can act on without human triage:
+**7. Surface hidden coupling.** `co-change` finds file pairs that repeatedly change in the same commits with *no* dependency edge — schema ↔ generated inventory ↔ doc triangles, backend schemas ↔ frontend stores, `.env.example` ↔ its parser. The reference graph cannot see these; the change graph can.
+
+**8. Gate every diff.** `diff-gate` runs a defined set of checks scoped to what a change *introduces* — echoes of established code, incomplete migrations, missing co-change partners, docs that cite the changed files, fresh unused params, new dead symbols, baseline regressions — and exits nonzero with remediation text for each finding:
 
 ```
 [co-change-partner] schema.prisma changed, but scripts/scope-inventory.mjs did not — they change together 12x (86% of the time)
   -> Update scripts/scope-inventory.mjs alongside this change, or confirm the coupling no longer holds.
 ```
 
-**8. Ratchet it in CI.** `health --write-baseline` snapshots finding identities into a committable file; `health --baseline` exits 1 on any *new* finding. "Don't get worse" is an objective gate that no score arithmetic can game.
+**9. Ratchet it in CI.** `health --write-baseline` snapshots finding identities into a committable file; `health --baseline` exits 1 on any *new* finding. "Don't get worse" is an objective gate that no score arithmetic can game.
 
 Accepted findings can be recorded without weakening the rest of the gate:
 
@@ -151,7 +161,7 @@ Before any edit, `plan-context <target>` bundles the structural picture — defi
 
 ```
 Codebase Health Score: 95/100
-  Risk:    95/100  (validated predictors: graph facts + change graph)
+  Risk:    95/100  (history-correlated signals: graph facts + change graph)
   Hygiene: 100/100 (tidiness candidates)
 
 Score Breakdown (100 minus the following):
@@ -164,9 +174,9 @@ Axes:
   Validation:           flagged fix-density 0.12 vs baseline 0.20 (0.6x)
 ```
 
-- **Risk vs. Hygiene** are separate claims: risk components are empirically fix-predictive; hygiene components are tidiness. Blending them is how scores become meaningless.
+- **Risk vs. Hygiene** are separate claims: risk components are tied to graph facts and repository-history signals; hygiene components are tidiness. Blending them is how scores become meaningless.
 - **Every deduction is itemized** — the scalar is auditable, not vibes.
-- **The validation axis is a falsifiability loop**: it measures whether flagged files actually attract more fix commits than the rest *in your repo*, per detector. On some codebases passthrough findings predict fixes at 6× baseline; on others they're noise — the tool reports which, instead of assuming.
+- **The validation axis is a falsifiability loop**: it measures whether flagged files actually attract more fix commits than the rest *in your repo*, per detector. On some codebases a detector tracks repeated fixes; on others it is mostly noise — the tool reports which, instead of assuming.
 - **Suppressions are data**: every `// scip-query: ignore-*` comment is a precision label, counted and reported.
 
 ## Accuracy Model
@@ -188,7 +198,7 @@ Heuristic detectors carry guardrails learned from real codebases: published `pac
 
 ## Agent Skills
 
-`scip-query install-skills` symlinks ready-made skills into Claude Code, Codex, and shared agent roots (`~/.agents/skills/`) — they update automatically with the package. The `scip-query` router skill triggers on any codebase work and dispatches to the right specialist: exploring (`scip-explore`), debloating (`scip-debloat`), maintainability review (`scip-maintainability`), post-change verification (`scip-verify`), doc reconciliation (`scip-doc-reconcile`), AI-rot cleanup (`scip-ai-cleanup`), per-language guidance (`scip-language-playbook`), and grounded planning (`concrete-plan`).
+`scip-query install-skills` symlinks ready-made skills into Claude Code, Codex, and shared agent roots (`~/.agents/skills/`) — they update automatically with the package. The `scip-query` router skill triggers on any codebase work and dispatches to the right specialist: exploring (`scip-explore`), debloating (`scip-debloat`), maintainability review (`scip-maintainability`), React frontend maintainability review (`scip-react-maintainability`), Vue frontend maintainability review (`scip-vue-maintainability`), post-change verification (`scip-verify`), doc reconciliation (`scip-doc-reconcile`), AI-rot cleanup (`scip-ai-cleanup`), per-language guidance (`scip-language-playbook`), and grounded planning (`concrete-plan`).
 
 Then, once per project, `scip-query setup-agent` seeds the `AGENTS.md` guidance block (plus a `CLAUDE.md` import shim, since Claude Code doesn't read AGENTS.md natively), and `--git-hook` adds a pre-commit diff gate that fires no matter which agent — or human — wrote the change.
 

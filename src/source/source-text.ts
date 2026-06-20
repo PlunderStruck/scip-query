@@ -40,7 +40,13 @@ export function getSourceLines(
   });
 }
 
-const SUPPRESS_COMMENT_RE = /scip-query[\s:-]*ignore[\s:-]*(?:dead(?:-code)?|stale|wrapper|passthrough|drift|extract)?/i;
+const SUPPRESS_COMMENT_RE = /^\s*(?:\/\/|#|\/\*+|\*)\s*scip-query[\s:-]*ignore(?:[\s:-]+(dead(?:-code)?|stale|wrapper|passthrough|drift|extract|similar))?\b/i;
+
+export function suppressionCommentCategory(line: string): string | null {
+  const match = SUPPRESS_COMMENT_RE.exec(line);
+  if (!match) return null;
+  return match[1] ?? '';
+}
 
 /**
  * True when a `// scip-query: ignore-...` (or similar) comment appears on
@@ -62,7 +68,7 @@ export function hasSuppressionComment(
   for (let i = startLine - 1; i >= 0 && i >= startLine - 5; i -= 1) {
     const line = (lines[i] ?? '').trim();
     if (line === '') continue;
-    if (SUPPRESS_COMMENT_RE.test(line)) return true;
+    if (suppressionCommentCategory(line) !== null) return true;
     // Stop scanning once we hit a non-comment, non-decorator line.
     if (!line.startsWith('//') && !line.startsWith('*') && !line.startsWith('/*') && !line.startsWith('@') && !line.startsWith('#')) {
       return false;

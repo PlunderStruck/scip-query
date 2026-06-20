@@ -118,6 +118,14 @@ export interface PerDbSourceCache<V> {
   invalidateAll(db: ScipDatabase): void;
 }
 
+const SOURCE_FILE_CACHE_OPTIONS = {
+  clearGroups: ['whole-project', 'source-file'],
+} as const;
+
+export function createSourceFileCache<V>(name: string): PerDbSourceCache<V> {
+  return createPerDbSourceCache<V>(name, SOURCE_FILE_CACHE_OPTIONS);
+}
+
 // scip-query: ignore-similar — deliberately mirrors createPerDbCache; the
 // source-equality check in get() is the contract difference, and folding the
 // two factories into one strategy-parameterized function would hide it.

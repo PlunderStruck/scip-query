@@ -16,6 +16,8 @@ export const BUILTIN_SKILLS = [
   'scip-debloat',
   'scip-doc-reconcile',
   'scip-maintainability',
+  'scip-react-maintainability',
+  'scip-vue-maintainability',
   'scip-verify',
   'scip-language-playbook',
 ] as const;

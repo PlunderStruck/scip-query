@@ -124,6 +124,16 @@ export function renderHealthReport(report: HealthReport, json: boolean | undefin
   if (f.isolatedSymbols > 0) console.log(`    Isolated symbols:     ${f.isolatedSymbols} (${f.isolatedLoc} LOC)`);
   if (f.cycles > 0) console.log(`    Circular deps:        ${f.cycles}`);
   if (f.similarPairs > 0) console.log(`    Similar pairs:        ${f.similarPairs}`);
+  if (f.reactComponentDuplicatePairs > 0) console.log(`    React components:     ${f.reactComponentDuplicatePairs} duplicate pair(s)`);
+    if (f.reactHookCandidatePairs > 0) {
+      console.log(`    React hook reuse:     ${formatScoreAwareCount(f.reactHookCandidatePairs, f.reactHookCandidateScoreCount)} candidate pair(s)`);
+    }
+  if (f.reactLargeComponentPressureFiles > 0) console.log(`    React large comps:    ${f.reactLargeComponentPressureFiles} component(s)`);
+  if (f.vueComponentDuplicatePairs > 0) console.log(`    Vue components:       ${f.vueComponentDuplicatePairs} duplicate pair(s)`);
+    if (f.vueComposableCandidatePairs > 0) {
+      console.log(`    Vue composables:      ${formatScoreAwareCount(f.vueComposableCandidatePairs, f.vueComposableCandidateScoreCount)} candidate pair(s)`);
+    }
+  if (f.vueLargeViewPressureFiles > 0) console.log(`    Vue large views:      ${f.vueLargeViewPressureFiles} file(s)`);
   if (f.extractionCandidates > 0) console.log(`    Extract candidates:   ${f.extractionCandidates}`);
   if (f.wrappers > 0) console.log(`    Wrapper functions:    ${f.wrappers}`);
   if (f.passthroughs > 0) console.log(`    Passthroughs:         ${f.passthroughs}`);
@@ -148,6 +158,7 @@ export function renderHealthReport(report: HealthReport, json: boolean | undefin
   }
 
   renderHealthAxes(report);
+  renderHealthPressure(report);
 
   if (report.scoreBreakdown.length > 0) {
     console.log('\n  Score Breakdown (100 minus the following):');
@@ -158,6 +169,26 @@ export function renderHealthReport(report: HealthReport, json: boolean | undefin
 
   if (report.actions.length === 0) {
     console.log('\n  No issues found. Codebase is clean.');
+  }
+}
+
+function formatScoreAwareCount(rawCount: number, scoreCount: number): string {
+  if (Math.abs(rawCount - scoreCount) < 0.01) return String(rawCount);
+  return `${rawCount} (${formatCompactNumber(scoreCount)} score-weighted)`;
+}
+
+function formatCompactNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function renderHealthPressure(report: HealthReport): void {
+  if (report.pressure.length === 0) return;
+  console.log('\n  Maintenance Pressure:');
+  for (const pressure of report.pressure) {
+    console.log(
+      `    ${pressure.category}: ${pressure.count} / ${pressure.threshold} threshold ` +
+      `(${pressure.ratio}x, -${pressure.extraPenalty} ${pressure.kind})`,
+    );
   }
 }
 

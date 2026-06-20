@@ -33,6 +33,9 @@ import {
   stringOptionValue,
 } from './command-execution.js';
 
+// Descriptor-backed query commands live under runtime/query-commands/*.
+// This file owns side-effect lifecycles such as reindex, setup, watch, and
+// install commands.
 const SUPPORTED_LANGUAGES = new Set<SupportedLanguage>([
   'typescript',
   'javascript',

@@ -2,7 +2,7 @@ import type { ProjectIndex } from '../../core/project-index.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { getReExports } from '../../language-parsers/index.js';
 import { detectAstLanguage, getAst, type SyntaxNode } from '../../source/ast.js';
-import { getSourceLines, getSourceText } from '../../source/source-text.js';
+import { getSourceLines } from '../../source/source-text.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { createPerDbCache } from '../../storage/per-db-cache.js';
 import { leafName } from '../../symbols/symbol-parser.js';

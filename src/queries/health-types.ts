@@ -18,6 +18,12 @@ export interface HealthAnalyses {
   isolated: CountLocSummary;
   realCycleCount: number;
   similarCount: number;
+  reactComponentDuplicates: CountLocSummary;
+  reactHookCandidates: CountLocSummary;
+  reactLargeComponentPressure: CountLocSummary;
+  vueComponentDuplicates: CountLocSummary;
+  vueComposableCandidates: CountLocSummary;
+  vueLargeViewPressure: CountLocSummary;
   extractCount: number;
   wrappers: CountLocSummary;
   passthroughs: CountLocSummary;
@@ -31,7 +37,10 @@ export interface HealthAnalyses {
 }
 
 export interface CountLocSummary {
+  /** Raw finding count reported to users. */
   count: number;
+  /** Score-pressure count; lower than count when findings are broad discovery leads. */
+  scoreCount?: number;
   loc: number;
   /** Files contributing findings — feeds fix-density validation. */
   files?: string[];

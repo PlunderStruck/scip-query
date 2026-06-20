@@ -4,6 +4,7 @@ import { doc, option, parseInteger, withJsonOption } from '../command-spec-build
 import {
   booleanOptionValue,
   budgetedDbCommand,
+  definedLimitOption,
   definedNumberOption,
   printJsonEnvelope,
   stringArg,
@@ -17,7 +18,7 @@ interface LimitedRows {
 }
 
 const handlePlanContext = budgetedDbCommand('plan-context', ({ db, args, opts, budget }) => {
-  const limit = definedNumberOption(opts, 'limit', 20);
+  const limit = definedLimitOption(opts, 'limit', 20);
   const result = queries.planContext(db, stringArg(args, 0), {
     semantic: budget.semantic,
     impactDepth: definedNumberOption(opts, 'impactDepth', 3),

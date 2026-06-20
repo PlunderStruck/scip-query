@@ -2,7 +2,6 @@
 name: scip-query
 description: Router for codebase work in scip-query-indexed projects. Use whenever exploring, planning, implementing, refactoring, extracting helpers, verifying changes, hunting duplication or bloat, fixing stale docs, or cleaning up after an AI coding session — or when unsure which scip-* skill applies. Picks the right specialist skill and the commands that must run for each phase of work.
 allowed-tools: [Bash, Skill]
-keywords: [scip, codebase, explore, plan, implement, refactor, extract, verify, check-work, cleanup, duplication, bloat, drift, route, which-skill]
 ---
 
 # scip-query Router
@@ -39,6 +38,8 @@ When the user asks you to build, change, or fix something non-trivial:
 | Clean up after AI-assisted coding sessions | `scip-ai-cleanup` | `scip-query recent-duplicates`, `scip-query incomplete-migration` |
 | Reconcile docs/standards that drifted from the code | `scip-doc-reconcile` | `scip-query doc-drift <doc>` |
 | Review architecture, boundaries, hidden policies | `scip-maintainability` | `scip-query bottlenecks`, `scip-query coupling` |
+| Review React frontend reuse, components, hooks, or TSX/JSX maintainability | `scip-react-maintainability` | `scip-query react-component-duplicates --full`, `scip-query react-hook-candidates --full` |
+| Review Vue frontend reuse, SFCs, templates, or composables | `scip-vue-maintainability` | `scip-query vue-component-duplicates --full`, `scip-query vue-composable-candidates --full` |
 
 Invoke skills by name (Skill tool or slash command). If skill invocation is
 unavailable in this harness, read `~/.agents/skills/<name>/SKILL.md` and

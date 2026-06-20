@@ -8,6 +8,7 @@ import { basename } from 'node:path';
 import type { Tree } from '../source/ast.js';
 import type { ScipDatabase } from '../storage/db.js';
 import { resolveRubyImportPath } from '../resolution/import-path-resolver.js';
+import { pascalCaseSeparated } from '../source/name-normalization.js';
 import { hasIdentifierUsage } from '../source/source-stripper.js';
 import type { ParsedSourceImport } from '../domain/types.js';
 import { buildNamedImport, buildSideEffectImport, buildUsedImport, collectIdentifiersOutside, parseImportLineMatches, parseWithAstFallback } from './utils.js';
@@ -87,10 +88,5 @@ function parseRubyImportsAst(
 }
 
 function rubyConstantName(specifier: string): string {
-  return basename(specifier)
-    .replace(/\.[^.]+$/, '')
-    .split('_')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join('');
+  return pascalCaseSeparated(basename(specifier).replace(/\.[^.]+$/, ''), /_/);
 }

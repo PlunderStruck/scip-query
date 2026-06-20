@@ -5,10 +5,11 @@ import {
   writeCachedFileEvidence,
 } from '../storage/evidence-cache.js';
 import { createPerDbSourceCache } from '../storage/per-db-cache.js';
-import { detectAstLanguage, type AstLanguage } from './ast-language.js';
+import { detectAstLanguage, isVueSfcPath, type AstLanguage } from './ast-language.js';
 import { getAst } from './ast-core.js';
 import type { SyntaxNode, Tree } from './ast-types.js';
 import { getSourceText } from './source-text.js';
+import { extractVueScriptBlock } from './vue-script.js';
 import { callableFactForNode } from './source-callables.js';
 import { callSiteForNode } from './source-calls.js';
 import {
@@ -51,12 +52,19 @@ const SOURCE_FACTS_CACHE = createPerDbSourceCache<SourceFacts | null>('source-fa
 });
 
 export function getSourceFacts(db: ScipDatabase, relativePath: string): SourceFacts | null {
-  const language = detectAstLanguage(relativePath);
-  if (!language) return null;
   const source = getSourceText(db, relativePath);
   if (!source) return null;
+  const language = sourceFactsLanguage(relativePath, source);
+  if (!language) return null;
   return SOURCE_FACTS_CACHE.get(db, relativePath, source, () =>
     loadOrBuildSourceFacts(db, relativePath, language, source));
+}
+
+function sourceFactsLanguage(relativePath: string, source: string): AstLanguage | null {
+  if (isVueSfcPath(relativePath)) {
+    return extractVueScriptBlock(source)?.language ?? null;
+  }
+  return detectAstLanguage(relativePath);
 }
 
 function loadOrBuildSourceFacts(

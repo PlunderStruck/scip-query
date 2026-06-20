@@ -1,7 +1,7 @@
 {
   "name": "scip-query",
   "version": "0.10.0",
-  "description": "Language-agnostic code intelligence CLI powered by SCIP indexes",
+  "description": "Evidence and verification for AI coding agents: map code, reuse concepts, finish migrations, and gate diffs.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -196,6 +196,30 @@
       "import": "./dist/queries/similar-files.js",
       "types": "./dist/queries/similar-files.d.ts"
     },
+    "./queries/react-component-duplicates": {
+      "import": "./dist/queries/react-component-duplicates.js",
+      "types": "./dist/queries/react-component-duplicates.d.ts"
+    },
+    "./queries/react-hook-candidates": {
+      "import": "./dist/queries/react-hook-candidates.js",
+      "types": "./dist/queries/react-hook-candidates.d.ts"
+    },
+    "./queries/react-large-component-pressure": {
+      "import": "./dist/queries/react-large-component-pressure.js",
+      "types": "./dist/queries/react-large-component-pressure.d.ts"
+    },
+    "./queries/vue-component-duplicates": {
+      "import": "./dist/queries/vue-component-duplicates.js",
+      "types": "./dist/queries/vue-component-duplicates.d.ts"
+    },
+    "./queries/vue-composable-candidates": {
+      "import": "./dist/queries/vue-composable-candidates.js",
+      "types": "./dist/queries/vue-composable-candidates.d.ts"
+    },
+    "./queries/vue-large-view-pressure": {
+      "import": "./dist/queries/vue-large-view-pressure.js",
+      "types": "./dist/queries/vue-large-view-pressure.d.ts"
+    },
     "./queries/similar-signatures": {
       "import": "./dist/queries/similar-signatures.js",
       "types": "./dist/queries/similar-signatures.d.ts"
@@ -281,6 +305,8 @@
   "dependencies": {
     "@bufbuild/protobuf": "^2.11.0",
     "@c4312/scip": "^0.1.0",
+    "@vue/compiler-dom": "^3.5.38",
+    "@vue/compiler-sfc": "^3.5.38",
     "better-sqlite3": "^12.9.0",
     "commander": "^13.1.0",
     "ignore": "^7.0.3",

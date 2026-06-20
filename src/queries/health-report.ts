@@ -22,6 +22,16 @@ export interface ScoreDeduction {
   kind: 'risk' | 'hygiene';
 }
 
+export interface HealthPressure {
+  axis: string;
+  category: string;
+  kind: ScoreDeduction['kind'];
+  count: number;
+  threshold: number;
+  ratio: number;
+  extraPenalty: number;
+}
+
 export interface HealthAxes {
   /** LOC provably removable with behavior preserved (dead + isolated). */
   deletable: { loc: number; symbols: number };
@@ -71,8 +81,16 @@ export interface HealthReport {
     isolatedSymbols: number;
     isolatedLoc: number;
     cycles: number;
-    similarPairs: number;
-    extractionCandidates: number;
+      similarPairs: number;
+      reactComponentDuplicatePairs: number;
+      reactHookCandidatePairs: number;
+      reactHookCandidateScoreCount: number;
+      reactLargeComponentPressureFiles: number;
+      vueComponentDuplicatePairs: number;
+      vueComposableCandidatePairs: number;
+      vueComposableCandidateScoreCount: number;
+      vueLargeViewPressureFiles: number;
+      extractionCandidates: number;
     wrappers: number;
     passthroughs: number;
     staleTypes: number;
@@ -84,13 +102,18 @@ export interface HealthReport {
   validation: HealthValidation | null;
   suppressions: { total: number; byCategory: Record<string, number> } | null;
   actions: HealthAction[];
+  pressure: HealthPressure[];
   topComplexity: Array<{ symbol: string; score: number; file?: string }>;
   warnings?: string[];
 }
 
+function healthScoreCount(summary: { count: number; scoreCount?: number }): number {
+  return summary.scoreCount ?? summary.count;
+}
+
 export function buildHealthReport(analyses: HealthAnalyses): HealthReport {
   const actions = buildHealthActions(analyses);
-  const { breakdown } = computeHealthScore(analyses);
+  const { breakdown, pressure } = computeHealthScore(analyses);
   const riskScore = scoreFromDeductions(breakdown, 'risk');
   const hygieneScore = scoreFromDeductions(breakdown, 'hygiene');
 
@@ -110,7 +133,15 @@ export function buildHealthReport(analyses: HealthAnalyses): HealthReport {
       isolatedSymbols: analyses.isolated.count,
       isolatedLoc: analyses.isolated.loc,
       cycles: analyses.realCycleCount,
-      similarPairs: analyses.similarCount,
+        similarPairs: analyses.similarCount,
+        reactComponentDuplicatePairs: analyses.reactComponentDuplicates.count,
+        reactHookCandidatePairs: analyses.reactHookCandidates.count,
+        reactHookCandidateScoreCount: healthScoreCount(analyses.reactHookCandidates),
+        reactLargeComponentPressureFiles: analyses.reactLargeComponentPressure.count,
+        vueComponentDuplicatePairs: analyses.vueComponentDuplicates.count,
+        vueComposableCandidatePairs: analyses.vueComposableCandidates.count,
+        vueComposableCandidateScoreCount: healthScoreCount(analyses.vueComposableCandidates),
+        vueLargeViewPressureFiles: analyses.vueLargeViewPressure.count,
       extractionCandidates: analyses.extractCount,
       wrappers: analyses.wrappers.count,
       passthroughs: analyses.passthroughs.count,
@@ -123,6 +154,7 @@ export function buildHealthReport(analyses: HealthAnalyses): HealthReport {
     validation: buildHealthValidation(analyses),
     suppressions: analyses.suppressions,
     actions,
+    pressure,
     topComplexity: analyses.complexity.top,
     warnings: analyses.warnings.length > 0 ? analyses.warnings : undefined,
   };
@@ -144,6 +176,12 @@ function buildHealthAxes(analyses: HealthAnalyses): HealthAxes {
       graphFindings: analyses.dead.count + analyses.isolated.count + analyses.realCycleCount,
       // Heuristics: every "candidate"-style detector.
       heuristicFindings: analyses.similarCount
+        + analyses.reactComponentDuplicates.count
+        + analyses.reactHookCandidates.count
+        + analyses.reactLargeComponentPressure.count
+        + analyses.vueComponentDuplicates.count
+        + analyses.vueComposableCandidates.count
+        + analyses.vueLargeViewPressure.count
         + analyses.extractCount
         + analyses.wrappers.count
         + analyses.passthroughs.count
@@ -181,6 +219,12 @@ function buildHealthValidation(analyses: HealthAnalyses): HealthValidation | nul
     wrappers: analyses.wrappers.files ?? [],
     passthroughs: analyses.passthroughs.files ?? [],
     stale: analyses.stale.files ?? [],
+    reactComponents: analyses.reactComponentDuplicates.files ?? [],
+    reactHooks: analyses.reactHookCandidates.files ?? [],
+    reactLargeComponents: analyses.reactLargeComponentPressure.files ?? [],
+    vueComponents: analyses.vueComponentDuplicates.files ?? [],
+    vueComposables: analyses.vueComposableCandidates.files ?? [],
+    vueLargeViews: analyses.vueLargeViewPressure.files ?? [],
   };
   const flagged = new Set<string>(Object.values(categories).flat());
 
@@ -226,6 +270,23 @@ function buildHealthValidation(analyses: HealthAnalyses): HealthValidation | nul
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+function formatScoreCount(count: number): string {
+  return Number.isInteger(count) ? String(count) : count.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function scoreCountNote(summary: { count: number; scoreCount?: number }): string {
+  const scoreCount = healthScoreCount(summary);
+  if (Math.abs(scoreCount - summary.count) < 0.01) return '';
+  return ` (${formatScoreCount(scoreCount)} score-weighted after existing shared infrastructure discount)`;
+}
+
+function scoreWeightedDetail(summary: { count: number; scoreCount?: number }, unit: string): string {
+  const scoreCount = healthScoreCount(summary);
+  const raw = `${summary.count} ${unit}`;
+  if (Math.abs(scoreCount - summary.count) < 0.01) return raw;
+  return `${raw} (${formatScoreCount(scoreCount)} score-weighted)`;
 }
 
 function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
@@ -275,6 +336,78 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
       effort: 'medium',
       impact: 'medium',
       count: analyses.similarCount,
+      locRecoverable: 0,
+    });
+  }
+
+  if (analyses.reactComponentDuplicates.count > 0) {
+    actions.push({
+      category: 'Duplicated React components',
+      evidence: 'heuristic',
+      description: `${analyses.reactComponentDuplicates.count} React component pair(s) share JSX structure — extract or reuse the shared UI concept`,
+      effort: 'medium',
+      impact: 'medium',
+      count: analyses.reactComponentDuplicates.count,
+      locRecoverable: analyses.reactComponentDuplicates.loc,
+    });
+  }
+
+  if (analyses.reactHookCandidates.count > 0) {
+    actions.push({
+      category: 'Duplicated React hook behavior',
+      evidence: 'heuristic',
+      description: `${analyses.reactHookCandidates.count} React component pair(s) share state/effect/request behavior${scoreCountNote(analyses.reactHookCandidates)} — extract or reuse a hook`,
+      effort: 'medium',
+      impact: 'medium',
+      count: analyses.reactHookCandidates.count,
+      locRecoverable: analyses.reactHookCandidates.loc,
+    });
+  }
+
+  if (analyses.reactLargeComponentPressure.count > 0) {
+    actions.push({
+      category: 'Large React components',
+      evidence: 'heuristic',
+      description: `${analyses.reactLargeComponentPressure.count} React component(s) concentrate JSX/behavior pressure — split by reason to change`,
+      effort: 'medium',
+      impact: 'medium',
+      count: analyses.reactLargeComponentPressure.count,
+      locRecoverable: 0,
+    });
+  }
+
+  if (analyses.vueComponentDuplicates.count > 0) {
+    actions.push({
+      category: 'Duplicated Vue components',
+      evidence: 'heuristic',
+      description: `${analyses.vueComponentDuplicates.count} Vue component pair(s) share template structure — extract or reuse the shared UI concept`,
+      effort: 'medium',
+      impact: 'medium',
+      count: analyses.vueComponentDuplicates.count,
+      locRecoverable: analyses.vueComponentDuplicates.loc,
+    });
+  }
+
+  if (analyses.vueComposableCandidates.count > 0) {
+    actions.push({
+      category: 'Duplicated Vue behavior',
+      evidence: 'heuristic',
+      description: `${analyses.vueComposableCandidates.count} Vue component pair(s) share state/effect/request behavior${scoreCountNote(analyses.vueComposableCandidates)} — extract or reuse a composable`,
+      effort: 'medium',
+      impact: 'medium',
+      count: analyses.vueComposableCandidates.count,
+      locRecoverable: analyses.vueComposableCandidates.loc,
+    });
+  }
+
+  if (analyses.vueLargeViewPressure.count > 0) {
+    actions.push({
+      category: 'Large Vue views',
+      evidence: 'heuristic',
+      description: `${analyses.vueLargeViewPressure.count} Vue file(s) concentrate template/script/style pressure — split by reason to change`,
+      effort: 'medium',
+      impact: 'medium',
+      count: analyses.vueLargeViewPressure.count,
       locRecoverable: 0,
     });
   }
@@ -348,9 +481,9 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
   if (analyses.gitEvidence && analyses.gitEvidence.hiddenCoupling.pairCount > 0) {
     const top = analyses.gitEvidence.hiddenCoupling.top[0];
     actions.push({
-        category: 'Hidden coupling',
-        evidence: 'change-graph',
-        description: `${analyses.gitEvidence.hiddenCoupling.pairCount} file pair(s) co-change without a structural link`
+      category: 'Hidden coupling',
+      evidence: 'change-graph',
+      description: `${analyses.gitEvidence.hiddenCoupling.pairCount} file pair(s) co-change without a structural link`
         + (top ? ` (e.g. ${top.fileA} ↔ ${top.fileB})` : '')
         + ' — name the shared concept or enforce the sync',
       effort: 'medium',
@@ -379,12 +512,33 @@ const DEDUCTION_KIND: Record<string, ScoreDeduction['kind']> = {
   cycles: 'risk',
   complexity: 'risk',
   'hidden-coupling': 'risk',
+  'cycles-pressure': 'risk',
+  'complexity-pressure': 'risk',
+  'hidden-coupling-pressure': 'risk',
   similar: 'hygiene',
+  'react-component-duplicates': 'hygiene',
+  'react-hook-candidates': 'hygiene',
+  'react-large-component-pressure': 'hygiene',
+  'vue-component-duplicates': 'hygiene',
+  'vue-composable-candidates': 'hygiene',
+  'vue-large-view-pressure': 'hygiene',
   extract: 'hygiene',
   wrappers: 'hygiene',
   passthroughs: 'hygiene',
   'stale-abstractions': 'hygiene',
   drift: 'hygiene',
+  'similar-pressure': 'hygiene',
+  'react-component-duplicates-pressure': 'hygiene',
+  'react-hook-candidates-pressure': 'hygiene',
+  'react-large-component-pressure-pressure': 'hygiene',
+  'vue-component-duplicates-pressure': 'hygiene',
+  'vue-composable-candidates-pressure': 'hygiene',
+  'vue-large-view-pressure-pressure': 'hygiene',
+  'extract-pressure': 'hygiene',
+  'wrappers-pressure': 'hygiene',
+  'passthroughs-pressure': 'hygiene',
+  'stale-abstractions-pressure': 'hygiene',
+  'drift-pressure': 'hygiene',
 };
 
 function scoreFromDeductions(breakdown: readonly ScoreDeduction[], kind: ScoreDeduction['kind']): number {
@@ -393,12 +547,43 @@ function scoreFromDeductions(breakdown: readonly ScoreDeduction[], kind: ScoreDe
   return Math.max(0, Math.min(100, 100 - total));
 }
 
-function computeHealthScore(analyses: HealthAnalyses): { breakdown: ScoreDeduction[] } {
+function computeHealthScore(analyses: HealthAnalyses): { breakdown: ScoreDeduction[]; pressure: HealthPressure[] } {
   const fileCount = Math.max(analyses.statsResult.documents, 1);
   const symbolCount = Math.max(analyses.statsResult.symbols, 1);
   const breakdown: ScoreDeduction[] = [];
+  const pressure: HealthPressure[] = [];
   const deduct = (axis: string, points: number, detail: string): void => {
     if (points > 0) breakdown.push({ axis, points, detail, kind: DEDUCTION_KIND[axis] ?? 'hygiene' });
+  };
+  const pressureDeduct = (
+    axis: string,
+    category: string,
+    count: number,
+    threshold: number,
+    maxPoints: number,
+    weight: number,
+    unit: string,
+  ): void => {
+    const normalizedThreshold = Math.max(threshold, 1);
+    if (count <= normalizedThreshold) return;
+    const ratio = count / normalizedThreshold;
+    const points = Math.min(maxPoints, Math.ceil(Math.log2(ratio) * weight));
+    if (points <= 0) return;
+    const kind = DEDUCTION_KIND[axis] ?? 'hygiene';
+    pressure.push({
+      axis,
+      category,
+      kind,
+      count,
+      threshold: round2(normalizedThreshold),
+      ratio: round2(ratio),
+      extraPenalty: points,
+    });
+    deduct(
+      axis,
+      points,
+      `${count} ${unit} exceed pressure threshold ${round2(normalizedThreshold)} (${round2(ratio)}x)`,
+    );
   };
 
   const deadPercent = analyses.dead.count / symbolCount;
@@ -415,6 +600,32 @@ function computeHealthScore(analyses: HealthAnalyses): { breakdown: ScoreDeducti
   const similarPerMille = analyses.similarCount / symbolCount * 1000;
   deduct('similar', Math.min(10, Math.round(similarPerMille)),
     `${analyses.similarCount} similar function pair(s)`);
+
+  const reactDuplicatePerMille = analyses.reactComponentDuplicates.count / fileCount * 1000;
+  deduct('react-component-duplicates', Math.min(10, Math.round(reactDuplicatePerMille)),
+    `${analyses.reactComponentDuplicates.count} duplicated React component pair(s)`);
+
+  const reactHookScoreCount = healthScoreCount(analyses.reactHookCandidates);
+  const reactHookPerMille = reactHookScoreCount / fileCount * 1000;
+  deduct('react-hook-candidates', Math.min(10, Math.round(reactHookPerMille)),
+    scoreWeightedDetail(analyses.reactHookCandidates, 'duplicated React behavior pair(s)'));
+
+  const reactLargeComponentPerMille = analyses.reactLargeComponentPressure.count / fileCount * 1000;
+  deduct('react-large-component-pressure', Math.min(5, Math.round(reactLargeComponentPerMille / 2)),
+    `${analyses.reactLargeComponentPressure.count} large React component pressure file(s)`);
+
+  const vueDuplicatePerMille = analyses.vueComponentDuplicates.count / fileCount * 1000;
+  deduct('vue-component-duplicates', Math.min(10, Math.round(vueDuplicatePerMille)),
+    `${analyses.vueComponentDuplicates.count} duplicated Vue component pair(s)`);
+
+  const vueComposableScoreCount = healthScoreCount(analyses.vueComposableCandidates);
+  const vueComposablePerMille = vueComposableScoreCount / fileCount * 1000;
+  deduct('vue-composable-candidates', Math.min(10, Math.round(vueComposablePerMille)),
+    scoreWeightedDetail(analyses.vueComposableCandidates, 'duplicated Vue behavior pair(s)'));
+
+  const vueLargeViewPerMille = analyses.vueLargeViewPressure.count / fileCount * 1000;
+  deduct('vue-large-view-pressure', Math.min(5, Math.round(vueLargeViewPerMille / 2)),
+    `${analyses.vueLargeViewPressure.count} large Vue view pressure file(s)`);
 
   const extractPerMille = analyses.extractCount / symbolCount * 1000;
   deduct('extract', Math.min(5, Math.round(extractPerMille / 2)),
@@ -436,10 +647,141 @@ function computeHealthScore(analyses: HealthAnalyses): { breakdown: ScoreDeducti
   deduct('complexity', Math.min(5, analyses.complexity.extremeCount * 2),
     `${analyses.complexity.extremeCount} extreme complexity hotspot(s)`);
 
-    if (analyses.gitEvidence) {
-      deduct('hidden-coupling', Math.min(5, analyses.gitEvidence.hiddenCoupling.pairCount),
-        `${analyses.gitEvidence.hiddenCoupling.pairCount} co-changing pair(s) without a structural link`);
-    }
+  if (analyses.gitEvidence) {
+    deduct('hidden-coupling', Math.min(5, analyses.gitEvidence.hiddenCoupling.pairCount),
+      `${analyses.gitEvidence.hiddenCoupling.pairCount} co-changing pair(s) without a structural link`);
+  }
 
-  return { breakdown };
+  pressureDeduct('cycles-pressure', 'Circular dependencies', analyses.realCycleCount, 3, 10, 3, 'cycle(s)');
+  pressureDeduct(
+    'complexity-pressure',
+    'Extreme complexity',
+    analyses.complexity.extremeCount,
+    3,
+    5,
+    2,
+    'extreme complexity hotspot(s)',
+  );
+  if (analyses.gitEvidence) {
+    pressureDeduct(
+      'hidden-coupling-pressure',
+      'Hidden coupling',
+      analyses.gitEvidence.hiddenCoupling.pairCount,
+      50,
+      10,
+      4,
+      'co-changing pair(s)',
+    );
+  }
+
+  pressureDeduct(
+    'similar-pressure',
+    'Similar functions',
+    analyses.similarCount,
+    Math.max(50, symbolCount * 0.01),
+    8,
+    4,
+    'similar function pair(s)',
+  );
+  pressureDeduct(
+    'react-component-duplicates-pressure',
+    'Duplicated React components',
+    analyses.reactComponentDuplicates.count,
+    Math.max(10, fileCount * 0.01),
+    8,
+    4,
+    'duplicated React component pair(s)',
+  );
+  pressureDeduct(
+    'react-hook-candidates-pressure',
+    'Duplicated React hook behavior',
+    reactHookScoreCount,
+    Math.max(10, fileCount * 0.01),
+    8,
+    4,
+    'duplicated React behavior pair(s)',
+  );
+  pressureDeduct(
+    'react-large-component-pressure-pressure',
+    'Large React components',
+    analyses.reactLargeComponentPressure.count,
+    Math.max(10, fileCount * 0.01),
+    4,
+    2,
+    'large React component pressure file(s)',
+  );
+  pressureDeduct(
+    'vue-component-duplicates-pressure',
+    'Duplicated Vue components',
+    analyses.vueComponentDuplicates.count,
+    Math.max(10, fileCount * 0.01),
+    8,
+    4,
+    'duplicated Vue component pair(s)',
+  );
+  pressureDeduct(
+    'vue-composable-candidates-pressure',
+    'Duplicated Vue behavior',
+    vueComposableScoreCount,
+    Math.max(10, fileCount * 0.01),
+    8,
+    4,
+    'duplicated Vue behavior pair(s)',
+  );
+  pressureDeduct(
+    'vue-large-view-pressure-pressure',
+    'Large Vue views',
+    analyses.vueLargeViewPressure.count,
+    Math.max(10, fileCount * 0.01),
+    4,
+    2,
+    'large Vue view pressure file(s)',
+  );
+  pressureDeduct(
+    'extract-pressure',
+    'Extraction candidates',
+    analyses.extractCount,
+    Math.max(50, symbolCount * 0.01),
+    4,
+    2,
+    'extraction candidate(s)',
+  );
+  pressureDeduct(
+    'wrappers-pressure',
+    'Wrapper functions',
+    analyses.wrappers.count,
+    50,
+    4,
+    2,
+    'wrapper candidate(s)',
+  );
+  pressureDeduct(
+    'passthroughs-pressure',
+    'Passthrough functions',
+    analyses.passthroughs.count,
+    50,
+    4,
+    2,
+    'passthrough candidate(s)',
+  );
+  pressureDeduct(
+    'stale-abstractions-pressure',
+    'Stale abstractions',
+    analyses.stale.count,
+    Math.max(50, symbolCount * 0.02),
+    4,
+    2,
+    'stale abstraction(s)',
+  );
+  pressureDeduct(
+    'drift-pressure',
+    'Structural drift',
+    analyses.drift.count,
+    Math.max(10, fileCount * 0.1),
+    4,
+    2,
+    'drift finding(s)',
+  );
+
+  return { breakdown, pressure };
 }

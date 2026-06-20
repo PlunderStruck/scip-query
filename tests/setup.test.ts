@@ -88,6 +88,12 @@ describe('skill installation', () => {
     expect(result.installed).toContain('Claude/scip-maintainability');
     expect(result.installed).toContain('Codex/scip-maintainability');
     expect(result.installed).toContain('Agents/scip-maintainability');
+    expect(result.installed).toContain('Claude/scip-react-maintainability');
+    expect(result.installed).toContain('Codex/scip-react-maintainability');
+    expect(result.installed).toContain('Agents/scip-react-maintainability');
+    expect(result.installed).toContain('Claude/scip-vue-maintainability');
+    expect(result.installed).toContain('Codex/scip-vue-maintainability');
+    expect(result.installed).toContain('Agents/scip-vue-maintainability');
     expect(symlinkSync).toHaveBeenCalledWith(
       '/pkg/skills/scip-language-playbook',
       '/home/test/.claude/skills/scip-language-playbook',
@@ -111,6 +117,36 @@ describe('skill installation', () => {
     expect(symlinkSync).toHaveBeenCalledWith(
       '/pkg/skills/scip-maintainability',
       '/home/test/.agents/skills/scip-maintainability',
+      'dir',
+    );
+    expect(symlinkSync).toHaveBeenCalledWith(
+      '/pkg/skills/scip-react-maintainability',
+      '/home/test/.claude/skills/scip-react-maintainability',
+      'dir',
+    );
+    expect(symlinkSync).toHaveBeenCalledWith(
+      '/pkg/skills/scip-react-maintainability',
+      '/home/test/.codex/skills/scip-react-maintainability',
+      'dir',
+    );
+    expect(symlinkSync).toHaveBeenCalledWith(
+      '/pkg/skills/scip-react-maintainability',
+      '/home/test/.agents/skills/scip-react-maintainability',
+      'dir',
+    );
+    expect(symlinkSync).toHaveBeenCalledWith(
+      '/pkg/skills/scip-vue-maintainability',
+      '/home/test/.claude/skills/scip-vue-maintainability',
+      'dir',
+    );
+    expect(symlinkSync).toHaveBeenCalledWith(
+      '/pkg/skills/scip-vue-maintainability',
+      '/home/test/.codex/skills/scip-vue-maintainability',
+      'dir',
+    );
+    expect(symlinkSync).toHaveBeenCalledWith(
+      '/pkg/skills/scip-vue-maintainability',
+      '/home/test/.agents/skills/scip-vue-maintainability',
       'dir',
     );
   });

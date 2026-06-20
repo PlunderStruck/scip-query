@@ -5,6 +5,7 @@ import {
   budgetedTableCommand,
   booleanOptionValue,
   dbCommand,
+  definedLimitOption,
   definedNumberOption,
   optionalStringArg,
   printJsonEnvelope,
@@ -17,7 +18,7 @@ import { render } from '../render.js';
 const handleBottlenecks = budgetedTableCommand('bottlenecks', {
   headers: ['score', 'fan-in', 'fan-out', 'symbol'],
   query: ({ db, opts, budget }) => queries.bottlenecks(db, {
-    limit: definedNumberOption(opts, 'limit', 20),
+    limit: definedLimitOption(opts, 'limit', 20),
     scope: stringOptionValue(opts, 'scope'),
     minFanIn: definedNumberOption(opts, 'minFanIn', 2),
     minFanOut: definedNumberOption(opts, 'minFanOut', 2),
@@ -32,6 +33,7 @@ const handleBottlenecks = budgetedTableCommand('bottlenecks', {
 
 const handleFanIn = dbCommand(({ db, args, opts }) => {
   const symbol = optionalStringArg(args, 0);
+  const limit = definedLimitOption(opts, 'limit', 30);
   if (symbol) {
     const results = queries.fanIn(db, symbol);
     if (booleanOptionValue(opts, 'json')) {
@@ -42,7 +44,7 @@ const handleFanIn = dbCommand(({ db, args, opts }) => {
     render.list(results, (r) => `  ${String(r.count).padStart(4)} files  ${r.name}`);
     return;
   }
-  const results = queries.topFanIn(db, { limit: definedNumberOption(opts, 'limit', 30), scope: stringOptionValue(opts, 'scope') });
+  const results = queries.topFanIn(db, { limit, scope: stringOptionValue(opts, 'scope') });
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('fan-in', args, opts, { mode: 'top', rows: results });
     return;
@@ -55,6 +57,7 @@ const handleFanIn = dbCommand(({ db, args, opts }) => {
 
 const handleFanOut = dbCommand(({ db, args, opts }) => {
   const file = optionalStringArg(args, 0);
+  const limit = definedLimitOption(opts, 'limit', 30);
   if (file) {
     const results = queries.fanOut(db, file);
     if (booleanOptionValue(opts, 'json')) {
@@ -65,7 +68,7 @@ const handleFanOut = dbCommand(({ db, args, opts }) => {
     render.list(results, (r) => `  ${String(r.count).padStart(4)} symbols  ${r.name}`);
     return;
   }
-  const results = queries.topFanOut(db, { limit: definedNumberOption(opts, 'limit', 30), scope: stringOptionValue(opts, 'scope') });
+  const results = queries.topFanOut(db, { limit, scope: stringOptionValue(opts, 'scope') });
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('fan-out', args, opts, { mode: 'top', rows: results });
     return;
@@ -79,6 +82,7 @@ const handleFanOut = dbCommand(({ db, args, opts }) => {
 const handleCoupling = dbCommand(({ db, args, opts }) => {
   const file1 = optionalStringArg(args, 0);
   const file2 = optionalStringArg(args, 1);
+  const limit = definedLimitOption(opts, 'limit', 20);
   if (file1 && file2) {
     const result = queries.coupling(db, file1, file2);
     if (booleanOptionValue(opts, 'json')) {
@@ -88,7 +92,7 @@ const handleCoupling = dbCommand(({ db, args, opts }) => {
     console.log(`${result.file1} ↔ ${result.file2}: ${result.sharedSymbols} shared symbols`);
     return;
   }
-  const results = queries.topCoupling(db, { limit: definedNumberOption(opts, 'limit', 20), scope: stringOptionValue(opts, 'scope') });
+  const results = queries.topCoupling(db, { limit, scope: stringOptionValue(opts, 'scope') });
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('coupling', args, opts, { mode: 'top', rows: results });
     return;
@@ -127,7 +131,7 @@ const handleCycles = reportCommand({
 const handleDeepChains = reportCommand({
   commandName: 'deep-chains',
   query: ({ db, opts }) => queries.deepChains(db, {
-    limit: definedNumberOption(opts, 'limit', 10),
+    limit: definedLimitOption(opts, 'limit', 10),
     scope: stringOptionValue(opts, 'scope'),
     minDepth: definedNumberOption(opts, 'minDepth', 3),
   }),
@@ -145,14 +149,15 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'hotspots',
     command: 'hotspots',
     description: 'Most-referenced symbols in the codebase (choke points)',
-    options: [
-      option('-n, --limit <n>', 'Number of results', parseInteger, 30),
-      option('-s, --scope <path>', 'Limit to files matching path'),
-    ],
+      options: [
+        option('-n, --limit <n>', 'Number of results', parseInteger, 30),
+        option('-s, --scope <path>', 'Limit to files matching path'),
+        option('--full', 'Run unbounded analysis on large indexes'),
+      ],
     docs: doc('Graph'),
     headers: ['refs', 'files', 'symbol'],
     query: ({ db, opts }) => queries.hotspots(db, {
-      limit: definedNumberOption(opts, 'limit', 30),
+      limit: definedLimitOption(opts, 'limit', 30),
       scope: stringOptionValue(opts, 'scope'),
     }),
     format: (r) => `  ${String(r.refCount).padStart(4)}  ${String(r.fileCount).padStart(5)}  ${r.shortName}`,
@@ -162,9 +167,10 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     command: 'fan-in [symbol]',
     description: 'How many files reference a symbol (or top fan-in across codebase)',
     options: withJsonOption([
-      option('-n, --limit <n>', 'Number of results for top mode', parseInteger, 30),
-      option('-s, --scope <path>', 'Limit to files matching path'),
-    ]),
+        option('-n, --limit <n>', 'Number of results for top mode', parseInteger, 30),
+        option('-s, --scope <path>', 'Limit to files matching path'),
+        option('--full', 'Run unbounded analysis on large indexes'),
+      ]),
     renderShape: 'custom',
     docs: doc('Graph'),
     handler: handleFanIn,
@@ -174,9 +180,10 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     command: 'fan-out [file]',
     description: 'How many external symbols a file uses (or top fan-out across codebase)',
     options: withJsonOption([
-      option('-n, --limit <n>', 'Number of results for top mode', parseInteger, 30),
-      option('-s, --scope <path>', 'Limit to files matching path'),
-    ]),
+        option('-n, --limit <n>', 'Number of results for top mode', parseInteger, 30),
+        option('-s, --scope <path>', 'Limit to files matching path'),
+        option('--full', 'Run unbounded analysis on large indexes'),
+      ]),
     renderShape: 'custom',
     docs: doc('Graph'),
     handler: handleFanOut,
@@ -186,9 +193,10 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     command: 'coupling [file1] [file2]',
     description: 'Coupling between two files, or top coupled pairs in codebase',
     options: withJsonOption([
-      option('-n, --limit <n>', 'Number of results for top mode', parseInteger, 20),
-      option('-s, --scope <path>', 'Limit to files matching path'),
-    ]),
+        option('-n, --limit <n>', 'Number of results for top mode', parseInteger, 20),
+        option('-s, --scope <path>', 'Limit to files matching path'),
+        option('--full', 'Run unbounded analysis on large indexes'),
+      ]),
     renderShape: 'custom',
     docs: doc('Graph'),
     handler: handleCoupling,
@@ -226,10 +234,11 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     command: 'deep-chains',
     description: 'Find the longest transitive dependency chains',
     options: withJsonOption([
-      option('-n, --limit <n>', 'Number of chains to show', parseInteger, 10),
-      option('-s, --scope <path>', 'Limit to files matching path'),
-      option('--min-depth <n>', 'Minimum chain depth', parseInteger, 3),
-    ]),
+        option('-n, --limit <n>', 'Number of chains to show', parseInteger, 10),
+        option('-s, --scope <path>', 'Limit to files matching path'),
+        option('--min-depth <n>', 'Minimum chain depth', parseInteger, 3),
+        option('--full', 'Run unbounded analysis on large indexes'),
+      ]),
     renderShape: 'custom',
     docs: doc('Graph'),
     handler: handleDeepChains,

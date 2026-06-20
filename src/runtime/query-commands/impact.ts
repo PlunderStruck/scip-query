@@ -6,6 +6,7 @@ import {
   budgetedDbCommand,
   booleanOptionValue,
   dbCommand,
+  definedLimitOption,
   definedNumberOption,
   numberOptionValue,
   printJsonEnvelope,
@@ -40,10 +41,10 @@ const handleAffected = dbCommand(({ db, args, opts }) => {
 
 const handleCoChange = dbCommand(({ db, args, opts }) => {
   const file = args[0] === undefined ? undefined : stringArg(args, 0);
-  const result = queries.coChange(db, file, {
-    minTogether: definedNumberOption(opts, 'minTogether', 4),
-    limit: definedNumberOption(opts, 'limit', 30),
-    includeLinked: opts['all'] === true,
+    const result = queries.coChange(db, file, {
+      minTogether: definedNumberOption(opts, 'minTogether', 4),
+      limit: definedLimitOption(opts, 'limit', 30),
+      includeLinked: opts['all'] === true,
   });
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('co-change', args, opts, result);
@@ -83,9 +84,9 @@ const handleChangeSurface = budgetedDbCommand('change-surface', ({ db, args, opt
 const handleIncompleteMigration = dbCommand(({ db, args, opts }) => {
   const result = queries.incompleteMigration(db, {
     base: stringOptionValue(opts, 'base'),
-    minContainment: definedNumberOption(opts, 'minContainment', 0.7),
-    maxHelpers: numberOptionValue(opts, 'maxHelpers'),
-    limit: definedNumberOption(opts, 'limit', 20),
+      minContainment: definedNumberOption(opts, 'minContainment', 0.7),
+      maxHelpers: numberOptionValue(opts, 'maxHelpers'),
+      limit: definedLimitOption(opts, 'limit', 20),
   });
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('incomplete-migration', args, opts, result);
@@ -229,9 +230,10 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     options: withJsonOption([
       option('--base <ref>', 'Git ref to diff against (default: HEAD)'),
       option('--min-containment <n>', 'Minimum share of helper callees a site must contain (0-1)', parseNumber, 0.7),
-      option('--max-helpers <n>', 'Maximum new helpers to score (default: all)', parseInteger),
-      option('-n, --limit <n>', 'Maximum findings to report', parseInteger, 20),
-    ]),
+        option('--max-helpers <n>', 'Maximum new helpers to score (default: all)', parseInteger),
+        option('-n, --limit <n>', 'Maximum findings to report', parseInteger, 20),
+        option('--full', 'Run unbounded analysis on large indexes'),
+      ]),
     heuristic: { label: 'incomplete migration candidates' },
     renderShape: 'custom',
     docs: doc('Impact', ['scip-query incomplete-migration', 'scip-query incomplete-migration --base origin/main']),
@@ -242,10 +244,11 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     command: 'co-change [file]',
     description: 'Files that change together in git history without a dependency edge — hidden coupling candidates',
     options: withJsonOption([
-      option('--min-together <n>', 'Minimum commits where both files changed', parseInteger, 4),
-      option('-n, --limit <n>', 'Maximum pairs to report', parseInteger, 30),
-      option('--all', 'Include pairs that already have a dependency edge'),
-    ]),
+        option('--min-together <n>', 'Minimum commits where both files changed', parseInteger, 4),
+        option('-n, --limit <n>', 'Maximum pairs to report', parseInteger, 30),
+        option('--all', 'Include pairs that already have a dependency edge'),
+        option('--full', 'Run unbounded analysis on large indexes'),
+      ]),
     heuristic: { label: 'co-change candidates' },
     renderShape: 'custom',
     docs: doc('Impact', ['scip-query co-change', 'scip-query co-change src/runtime/config.ts']),

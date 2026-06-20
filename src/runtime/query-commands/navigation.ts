@@ -7,6 +7,7 @@ import {
   budgetedGroupedByFileCommand,
   budgetedListCommand,
   dbCommand,
+  definedLimitOption,
   definedNumberOption,
   printJsonEnvelope,
   stringArg,
@@ -271,11 +272,12 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     options: [
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('-n, --limit <n>', 'Number of results', parseInteger, 100),
+      option('--full', 'Run unbounded analysis on large indexes'),
     ],
     docs: doc('Navigation'),
     query: ({ db, args, opts }) => queries.byKind(db, stringArg(args, 0), {
       scope: stringOptionValue(opts, 'scope'),
-      limit: definedNumberOption(opts, 'limit', 100),
+      limit: definedLimitOption(opts, 'limit', 100),
     }),
     format: (r) => `  ${displayPathRange(r.relativePath, r.startLine, r.endLine)}  [${r.kindName}]  ${r.shortName}`,
     emptyMessage: ({ args }) => `No symbols found for kind "${stringArg(args, 0)}". Use "kind-counts" to see available kinds.`,

@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { program, renderHeuristicNotice } from '../src/runtime/cli.js';
 import { commandDescriptors } from '../src/runtime/command-descriptors.js';
 import { commandDocEntries, renderCommandReferenceMarkdown } from '../src/runtime/command-docs.js';
-import { printJsonEnvelope } from '../src/runtime/command-execution.js';
+import { commandOptions, definedLimitOption, printJsonEnvelope } from '../src/runtime/command-execution.js';
 import { PRIVATE_QUERY_MODULES, PUBLIC_QUERY_ENTRIES } from '../src/queries/public-query-entries.js';
 
 function command(name: string) {
@@ -115,6 +115,56 @@ describe('CLI contract', () => {
       options: { json: true },
       result: { rows: [] },
     });
+  });
+
+  it('treats --full as an unbounded result limit unless --limit is explicit', () => {
+    expect(definedLimitOption({}, 'limit', 30)).toBe(30);
+    expect(definedLimitOption({ full: true }, 'limit', 30)).toBe(Number.POSITIVE_INFINITY);
+    expect(() => definedLimitOption({ full: true, limit: 7 }, 'limit', 30)).toThrow(
+      '--full cannot be combined with --limit',
+    );
+
+    const defaultedOpts = commandOptions({
+      opts: () => ({ full: true, limit: 30 }),
+      getOptionValueSource: (key: string) => key === 'limit' ? 'default' : 'cli',
+    });
+    const explicitOpts = commandOptions({
+      opts: () => ({ full: true, limit: 7 }),
+      getOptionValueSource: (key: string) => key === 'limit' ? 'cli' : 'cli',
+    });
+
+    expect(definedLimitOption(defaultedOpts, 'limit', 30)).toBe(Number.POSITIVE_INFINITY);
+    expect(() => definedLimitOption(explicitOpts, 'limit', 30)).toThrow(
+      '--full cannot be combined with --limit',
+    );
+  });
+
+  it('keeps default result limits full-aware', () => {
+    const limitedDescriptors = commandDescriptors.filter((descriptor) =>
+      descriptor.options?.some((option) => option.flags.includes('--limit ')),
+    );
+
+    expect(limitedDescriptors.map((descriptor) => descriptor.id)).not.toEqual([]);
+    for (const descriptor of limitedDescriptors) {
+      expect(
+        descriptor.options?.some((option) => option.flags === '--full'),
+        `${descriptor.id} exposes --limit without --full`,
+      ).toBe(true);
+    }
+
+    const commandSources = readdirSync(join(process.cwd(), 'src/runtime/query-commands'))
+      .filter((entry) => entry.endsWith('.ts'))
+      .map((entry) => readFileSync(join(process.cwd(), 'src/runtime/query-commands', entry), 'utf8'))
+      .join('\n');
+    expect(commandSources).not.toContain("definedNumberOption(opts, 'limit'");
+  });
+
+  it('parses graph top-mode limits before targeted-mode branches', () => {
+    const source = readFileSync(join(process.cwd(), 'src/runtime/query-commands/graph.ts'), 'utf8');
+
+    expect(source).toMatch(/const handleFanIn[\s\S]*?const symbol = optionalStringArg\(args, 0\);[\s\S]*?const limit = definedLimitOption\(opts, 'limit', 30\);[\s\S]*?if \(symbol\)/);
+    expect(source).toMatch(/const handleFanOut[\s\S]*?const file = optionalStringArg\(args, 0\);[\s\S]*?const limit = definedLimitOption\(opts, 'limit', 30\);[\s\S]*?if \(file\)/);
+    expect(source).toMatch(/const handleCoupling[\s\S]*?const file1 = optionalStringArg\(args, 0\);[\s\S]*?const file2 = optionalStringArg\(args, 1\);[\s\S]*?const limit = definedLimitOption\(opts, 'limit', 20\);[\s\S]*?if \(file1 && file2\)/);
   });
 
   it('keeps package.json query subpaths in lockstep with the public-query manifest', () => {

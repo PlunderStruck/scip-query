@@ -23,6 +23,12 @@ export { hierarchy } from './hierarchy.js';
 export { callGraph } from './call-graph.js';
 export { similar, similarAll } from './similar.js';
 export { similarFiles } from './similar-files.js';
+export { reactComponentDuplicates } from './react-component-duplicates.js';
+export { reactHookCandidates } from './react-hook-candidates.js';
+export { reactLargeComponentPressure } from './react-large-component-pressure.js';
+export { vueComponentDuplicates } from './vue-component-duplicates.js';
+export { vueComposableCandidates } from './vue-composable-candidates.js';
+export { vueLargeViewPressure } from './vue-large-view-pressure.js';
 export { similarChains } from './similar-chains.js';
 export { extractCandidates } from './extract-candidates.js';
 export { affected } from './affected.js';
@@ -88,6 +94,12 @@ export type { UnusedParamsFinding } from './unused-params.js';
 export type { ComplexityHotspot } from './complexity-hotspots.js';
 export type { SimilarSymbolResult } from './similar.js';
 export type { SimilarFileResult } from './similar-files.js';
+export type { ReactComponentDuplicateResult } from './react-component-duplicates.js';
+export type { ReactHookCandidateResult } from './react-hook-candidates.js';
+export type { ReactLargeComponentPressureResult } from './react-large-component-pressure.js';
+export type { VueComponentDuplicateResult } from './vue-component-duplicates.js';
+export type { VueComposableCandidateResult } from './vue-composable-candidates.js';
+export type { VueLargeViewPressureResult } from './vue-large-view-pressure.js';
 export type { SimilarChainResult } from './similar-chains.js';
 export type { ExtractCandidate } from './extract-candidates.js';
 export type { HealthAction, HealthReport } from './health-report.js';
@@ -102,7 +114,12 @@ export type { CleanupBatch, CleanupPlanEntry, CleanupPlanResult } from './cleanu
 export type { DiffGateCheck, DiffGateFinding, DiffGateResult } from './diff-gate.js';
 export type { CoChangeFinding, CoChangeResult } from './co-change.js';
 export type { DocDriftFinding, DocDriftResult, DocDriftSubject } from './doc-drift.js';
-export type { RecentDuplicateFinding, RecentDuplicatesResult } from './recent-duplicates.js';
+export type {
+  RecentDuplicateBasis,
+  RecentDuplicateDomain,
+  RecentDuplicateFinding,
+  RecentDuplicatesResult,
+} from './recent-duplicates.js';
 export type { BaselineComparison, HealthBaselineFile } from './health-baseline.js';
 export type { PlanContextOptions, PlanContextResult } from './plan-context.js';
 export type { DiffImpactResult } from './diff-impact.js';

@@ -189,7 +189,7 @@ export function getTrackedFiles(db: ScipDatabase): Set<string> | null {
   });
 }
 
-export interface FileAddRecord {
+interface FileAddRecord {
   /** Commits ago (0 = newest) of the file's earliest known add in the window. */
   commitsAgo: number;
   addedAt: number;
