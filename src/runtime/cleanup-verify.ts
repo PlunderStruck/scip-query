@@ -14,7 +14,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { CleanupBatch, CleanupPlanResult } from '../queries/cleanup-plan.js';
+import type { CleanupBatch, CleanupPlanResult } from '../queries/cleanup/cleanup-plan.js';
 import { stripCommentsAndStrings } from '../source/source-stripper.js';
 
 export interface BatchVerification {

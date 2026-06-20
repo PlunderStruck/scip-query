@@ -150,26 +150,24 @@ export function buildVueScriptFacts(unit: VueSfcUnit): VueScriptFacts {
     }
   }
 
-  facts.composables = uniqueSorted(facts.calls
-    .filter((call) => call.categories.includes('composable'))
-    .map((call) => call.name));
-  facts.stores = uniqueSorted(facts.calls
-    .filter((call) => call.categories.includes('store'))
-    .map((call) => call.name));
-  facts.reactivity = uniqueSorted(facts.calls
-    .filter((call) => call.categories.includes('reactivity'))
-    .map((call) => call.name));
-  facts.lifecycle = uniqueSorted(facts.calls
-    .filter((call) => call.categories.includes('lifecycle'))
-    .map((call) => call.name));
-  facts.requests = uniqueSorted(facts.calls
-    .filter((call) => call.categories.includes('request'))
-    .map((call) => call.name));
-  facts.macros = uniqueSorted(facts.calls
-    .filter((call) => call.categories.includes('macro'))
-    .map((call) => call.name));
+  finalizeVueScriptCallCategories(facts);
   facts.externalScriptPaths = uniqueSorted(facts.externalScriptPaths);
   return facts;
+}
+
+function finalizeVueScriptCallCategories(facts: VueScriptFacts): void {
+  facts.composables = callsInCategory(facts, 'composable');
+  facts.stores = callsInCategory(facts, 'store');
+  facts.reactivity = callsInCategory(facts, 'reactivity');
+  facts.lifecycle = callsInCategory(facts, 'lifecycle');
+  facts.requests = callsInCategory(facts, 'request');
+  facts.macros = callsInCategory(facts, 'macro');
+}
+
+function callsInCategory(facts: VueScriptFacts, category: VueScriptCallCategory): string[] {
+  return uniqueSorted(facts.calls
+    .filter((call) => call.categories.includes(category))
+    .map((call) => call.name));
 }
 
 function collectAstScriptFacts(

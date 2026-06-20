@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ScipQueryConfig } from '../src/domain/types.js';
-import { diffImpact, diffImpactPartial } from '../src/queries/diff-impact.js';
+import { diffImpact, diffImpactPartial } from '../src/queries/impact/diff-impact.js';
 import { ScipDatabase } from '../src/storage/db.js';
 
 function createSchema(sqliteDb: Database.Database): void {

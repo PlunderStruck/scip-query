@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/storage/db.js';
-import { health } from '../src/queries/health.js';
+import { health } from '../src/queries/health/health.js';
 import type { ScipQueryConfig } from '../src/domain/types.js';
 
 function createHealthFullFixtureDb(dbPath: string): void {

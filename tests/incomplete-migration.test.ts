@@ -5,9 +5,9 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ScipQueryConfig } from '../src/domain/types.js';
-import { diffGate } from '../src/queries/diff-gate.js';
-import { diffImpactPlan } from '../src/queries/diff-impact.js';
-import { incompleteMigration } from '../src/queries/incomplete-migration.js';
+import { diffGate } from '../src/queries/impact/diff-gate.js';
+import { diffImpactPlan } from '../src/queries/impact/diff-impact.js';
+import { incompleteMigration } from '../src/queries/impact/incomplete-migration.js';
 import { ScipDatabase } from '../src/storage/db.js';
 import { createEvidenceSchema } from './evidence-fixture.js';
 
@@ -23,8 +23,8 @@ import { createEvidenceSchema } from './evidence-fixture.js';
 let repoRoot: string;
 let db: ScipDatabase;
 
-function git(...args: string[]): void {
-  execFileSync('git', ['-C', repoRoot, ...args], {
+function gitIn(root: string, ...args: string[]): void {
+  execFileSync('git', ['-C', root, ...args], {
     stdio: 'ignore',
     env: {
       ...process.env,
@@ -34,6 +34,10 @@ function git(...args: string[]): void {
       GIT_COMMITTER_DATE: '1700000000 +0000',
     },
   });
+}
+
+function git(...args: string[]): void {
+  gitIn(repoRoot, ...args);
 }
 
 const sym = (path: string, name: string) =>
@@ -295,6 +299,70 @@ describe('incomplete-migration', () => {
     const result = incompleteMigration(db, { base: 'HEAD', semantic: false });
     const helperNames = result.findings.map((finding) => finding.helperShortName);
     expect(helperNames.every((name) => name.includes('formatThing'))).toBe(true);
+  });
+
+  it('does not score existing callables as new helpers when a file is moved unstaged', () => {
+    const movedRepo = mkdtempSync(join(tmpdir(), 'scip-moved-query-'));
+    try {
+      mkdirSync(join(movedRepo, 'src', 'queries', 'cleanup'), { recursive: true });
+      mkdirSync(join(movedRepo, 'src', 'queries'), { recursive: true });
+      gitIn(movedRepo, 'init');
+      writeFileSync(join(movedRepo, 'src', 'queries', 'doc-drift.ts'), [
+        'export function docPathCandidates(path: string) {',
+        '  return path.split("/").filter(Boolean);',
+        '}',
+        '',
+      ].join('\n'));
+      gitIn(movedRepo, 'add', '-A');
+      gitIn(movedRepo, 'commit', '-m', 'base', '--no-gpg-sign');
+      rmSync(join(movedRepo, 'src', 'queries', 'doc-drift.ts'));
+      writeFileSync(join(movedRepo, 'src', 'queries', 'cleanup', 'doc-drift.ts'), [
+        'export function docPathCandidates(path: string) {',
+        '  return path.split("/").filter(Boolean);',
+        '}',
+        '',
+      ].join('\n'));
+
+      const dbPath = join(movedRepo, 'index.db');
+      const sqliteDb = new Database(dbPath);
+      createEvidenceSchema(sqliteDb);
+      sqliteDb.exec(`
+        INSERT INTO documents (id, language, relative_path) VALUES
+          (1, 'typescript', 'src/queries/cleanup/doc-drift.ts');
+
+        INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
+          (1, '${sym('queries/cleanup/doc-drift.ts', 'docPathCandidates')}', 'docPathCandidates', 3, 'function');
+
+        INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+          (1, 1, 1, 0, 0, 2, 1);
+      `);
+      sqliteDb.close();
+
+      const movedDb = new ScipDatabase({
+        dbPath,
+        indexPath: join(movedRepo, 'index.scip'),
+        projectRoot: movedRepo,
+      });
+      try {
+        const plan = diffImpactPlan(movedDb, { base: 'HEAD' });
+        expect(plan.renamedFiles).toContainEqual(expect.objectContaining({
+          from: 'src/queries/doc-drift.ts',
+          to: 'src/queries/cleanup/doc-drift.ts',
+        }));
+
+        const result = incompleteMigration(movedDb, { base: 'HEAD', semantic: false, diffPlan: plan });
+        expect(result.changedFiles).toEqual(['src/queries/cleanup/doc-drift.ts']);
+        expect(result.helpersChecked).toBe(0);
+        expect(result.findings).toHaveLength(0);
+        expect(result.skipped.map((skip) => skip.helperShortName)).not.toContain(
+          expect.stringContaining('docPathCandidates'),
+        );
+      } finally {
+        movedDb.close();
+      }
+    } finally {
+      rmSync(movedRepo, { recursive: true, force: true });
+    }
   });
 
   it('returns unavailable outside a git repository', () => {

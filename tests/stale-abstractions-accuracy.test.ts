@@ -11,7 +11,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/storage/db.js';
-import { staleAbstractions } from '../src/queries/stale-abstractions.js';
+import { staleAbstractions } from '../src/queries/cleanup/stale-abstractions.js';
 import type { ScipQueryConfig } from '../src/domain/types.js';
 import { createEvidenceSchema } from './evidence-fixture.js';
 

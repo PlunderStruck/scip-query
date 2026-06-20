@@ -1,5 +1,5 @@
 import * as queries from '../../queries/index.js';
-import type { DiffGateCheck } from '../../queries/diff-gate.js';
+import type { DiffGateCheck } from '../../queries/impact/diff-gate.js';
 import type { CommandDescriptor } from '../command-descriptor-types.js';
 import { collectValues, doc, option, parseInteger, parseNumber, withJsonOption } from '../command-spec-builders.js';
 import {

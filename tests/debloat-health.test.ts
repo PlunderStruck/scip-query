@@ -5,12 +5,12 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/storage/db.js';
 import { classifyFile, getLiveBarrelPaths, isEntrySurface } from '../src/analysis/file-classifier.js';
-import { dead } from '../src/queries/dead.js';
-import { health } from '../src/queries/health.js';
-import { checkHealthBaseline, writeHealthBaseline } from '../src/queries/health-baseline.js';
-import { isolated } from '../src/queries/isolated.js';
-import { selfAudit } from '../src/queries/self-audit.js';
-import { redundantReexports } from '../src/queries/redundant-reexports.js';
+import { dead } from '../src/queries/cleanup/dead.js';
+import { health } from '../src/queries/health/health.js';
+import { checkHealthBaseline, writeHealthBaseline } from '../src/queries/health/health-baseline.js';
+import { isolated } from '../src/queries/cleanup/isolated.js';
+import { selfAudit } from '../src/queries/quality/self-audit.js';
+import { redundantReexports } from '../src/queries/cleanup/redundant-reexports.js';
 import type { ScipQueryConfig } from '../src/domain/types.js';
 
 function createDebloatFixtureDb(dbPath: string): void {
@@ -70,8 +70,8 @@ function createDebloatFixtureDb(dbPath: string): void {
       (1, 'typescript', 'src/cli.ts'),
       (2, 'typescript', 'src/index.ts'),
       (3, 'typescript', 'src/queries/index.ts'),
-      (4, 'typescript', 'src/queries/health.ts'),
-      (5, 'typescript', 'src/queries/redundant-reexports.ts'),
+      (4, 'typescript', 'src/queries/health/health.ts'),
+      (5, 'typescript', 'src/queries/cleanup/redundant-reexports.ts'),
       (6, 'typescript', 'src/reindex-worker.ts'),
       (7, 'typescript', 'src/unused/index.ts'),
       (8, 'typescript', 'src/unused/helper.ts'),

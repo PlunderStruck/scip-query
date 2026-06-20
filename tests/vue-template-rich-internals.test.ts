@@ -4,10 +4,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/storage/db.js';
 import { buildVueComponentBehaviorProfile, getCallSites, getVueSfcUnit, getVueTemplateFacts } from '../src/source/ast.js';
-import { vueComposableCandidates } from '../src/queries/vue-composable-candidates.js';
-import { vueComponentDuplicates } from '../src/queries/vue-component-duplicates.js';
-import { vueLargeViewPressure } from '../src/queries/vue-large-view-pressure.js';
-import { health } from '../src/queries/health.js';
+import { vueComposableCandidates } from '../src/queries/frontend/vue-composable-candidates.js';
+import { vueComponentDuplicates } from '../src/queries/frontend/vue-component-duplicates.js';
+import { vueLargeViewPressure } from '../src/queries/frontend/vue-large-view-pressure.js';
+import { health } from '../src/queries/health/health.js';
 import type { ScipQueryConfig } from '../src/domain/types.js';
 import { evidenceFixtureDb, writeFixtureFiles } from './evidence-fixture.js';
 

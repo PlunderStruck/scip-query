@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writ
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { DiffGateResult } from '../src/queries/diff-gate.js';
+import type { DiffGateResult } from '../src/queries/impact/diff-gate.js';
 import {
   formatGateBlockReason,
   isStopHookReentry,

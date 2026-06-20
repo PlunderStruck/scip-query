@@ -10,8 +10,8 @@ import {
   getCommitHistory,
   getFileChurn,
 } from '../src/analysis/git-history.js';
-import { coChange } from '../src/queries/co-change.js';
-import { docDrift } from '../src/queries/doc-drift.js';
+import { coChange } from '../src/queries/impact/co-change.js';
+import { docDrift } from '../src/queries/cleanup/doc-drift.js';
 import type { ScipQueryConfig } from '../src/domain/types.js';
 
 let repoRoot: string;

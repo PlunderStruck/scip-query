@@ -1,8 +1,8 @@
 import { defineConfig } from 'tsup';
-import { PUBLIC_QUERY_ENTRIES } from './src/queries/public-query-entries.js';
+import { PUBLIC_QUERY_ENTRIES, PUBLIC_QUERY_SOURCE_PATHS } from './src/queries/public-query-entries.js';
 
 const queryEntries = Object.fromEntries(
-  PUBLIC_QUERY_ENTRIES.map((entry) => [`queries/${entry}`, `src/queries/${entry}.ts`]),
+  PUBLIC_QUERY_ENTRIES.map((entry) => [`queries/${entry}`, PUBLIC_QUERY_SOURCE_PATHS[entry]]),
 );
 
 // Minify JS to keep the published tarball compact. Sourcemaps are generated

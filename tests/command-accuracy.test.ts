@@ -16,26 +16,26 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/storage/db.js';
 import { findFirstSymbolMatch } from '../src/symbols/symbol-lookup.js';
-import { affected } from '../src/queries/affected.js';
-import { bottlenecks } from '../src/queries/bottlenecks.js';
-import { byKind } from '../src/queries/by-kind.js';
-import { callGraph } from '../src/queries/call-graph.js';
-import { changeSurface } from '../src/queries/change-surface.js';
-import { code } from '../src/queries/code.js';
-import { convergence } from '../src/queries/convergence.js';
-import { complexity } from '../src/queries/complexity.js';
-import { dataflow } from '../src/queries/dataflow.js';
-import { dead } from '../src/queries/dead.js';
-import { fanIn } from '../src/queries/fan.js';
-import { health } from '../src/queries/health.js';
-import { importedBy, imports, unusedImports } from '../src/queries/imports.js';
-import { members } from '../src/queries/members.js';
-import { outline } from '../src/queries/outline.js';
-import { refs } from '../src/queries/refs.js';
-import { similar, similarAll } from '../src/queries/similar.js';
-import { staleAbstractions } from '../src/queries/stale-abstractions.js';
-import { symbols } from '../src/queries/symbols.js';
-import { system } from '../src/queries/system.js';
+import { affected } from '../src/queries/graph/affected.js';
+import { bottlenecks } from '../src/queries/graph/bottlenecks.js';
+import { byKind } from '../src/queries/navigation/by-kind.js';
+import { callGraph } from '../src/queries/navigation/call-graph.js';
+import { changeSurface } from '../src/queries/impact/change-surface.js';
+import { code } from '../src/queries/navigation/code.js';
+import { convergence } from '../src/queries/cleanup/convergence.js';
+import { complexity } from '../src/queries/quality/complexity.js';
+import { dataflow } from '../src/queries/navigation/dataflow.js';
+import { dead } from '../src/queries/cleanup/dead.js';
+import { fanIn } from '../src/queries/graph/fan.js';
+import { health } from '../src/queries/health/health.js';
+import { importedBy, imports, unusedImports } from '../src/queries/navigation/imports.js';
+import { members } from '../src/queries/navigation/members.js';
+import { outline } from '../src/queries/navigation/outline.js';
+import { refs } from '../src/queries/navigation/refs.js';
+import { similar, similarAll } from '../src/queries/cleanup/similar.js';
+import { staleAbstractions } from '../src/queries/cleanup/stale-abstractions.js';
+import { symbols } from '../src/queries/navigation/symbols.js';
+import { system } from '../src/queries/navigation/system.js';
 import type { ScipQueryConfig } from '../src/domain/types.js';
 import { createFixtureDb, createFixtureProject, createTypeScriptCallFixtureDb, createTypeScriptCallFixtureProject } from './command-accuracy-fixtures.js';
 
@@ -188,7 +188,7 @@ describe('command accuracy fixes', () => {
   });
 
   it('isolates callee fingerprints between adjacent functions so ranges do not cross-pollute', () => {
-    // Regression guard for src/queries/similar.ts getAllCalleeFingerprints.
+    // Regression guard for src/queries/cleanup/similar.ts getAllCalleeFingerprints.
     //
     // Prior to the canonical-range refactor the helper selected raw
     // defn_enclosing_ranges.start_line/end_line and fed those directly

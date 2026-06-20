@@ -16,11 +16,11 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/storage/db.js';
 import { findFirstSymbolMatch } from '../src/symbols/symbol-lookup.js';
-import { callGraph } from '../src/queries/call-graph.js';
-import { code } from '../src/queries/code.js';
-import { methods } from '../src/queries/methods.js';
-import { symbols } from '../src/queries/symbols.js';
-import { trace } from '../src/queries/trace.js';
+import { callGraph } from '../src/queries/navigation/call-graph.js';
+import { code } from '../src/queries/navigation/code.js';
+import { methods } from '../src/queries/navigation/methods.js';
+import { symbols } from '../src/queries/navigation/symbols.js';
+import { trace } from '../src/queries/navigation/trace.js';
 import type { ScipQueryConfig } from '../src/domain/types.js';
 
 function createFallbackFixtureProject(projectRoot: string): void {

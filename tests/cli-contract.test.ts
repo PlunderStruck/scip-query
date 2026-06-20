@@ -5,7 +5,11 @@ import { program, renderHeuristicNotice } from '../src/runtime/cli.js';
 import { commandDescriptors } from '../src/runtime/command-descriptors.js';
 import { commandDocEntries, renderCommandReferenceMarkdown } from '../src/runtime/command-docs.js';
 import { commandOptions, definedLimitOption, printJsonEnvelope } from '../src/runtime/command-execution.js';
-import { PRIVATE_QUERY_MODULES, PUBLIC_QUERY_ENTRIES } from '../src/queries/public-query-entries.js';
+import {
+  PRIVATE_QUERY_MODULES,
+  PUBLIC_QUERY_ENTRIES,
+  QUERY_SOURCE_PATHS,
+} from '../src/queries/public-query-entries.js';
 
 function command(name: string) {
   const cmd = program.commands.find((entry) => entry.name() === name);
@@ -188,12 +192,11 @@ describe('CLI contract', () => {
     }
   });
 
-  it('classifies every query module in the manifest as public or private', () => {
-    const queryModules = readdirSync(join(process.cwd(), 'src/queries'))
-      .filter((entry) => entry.endsWith('.ts'))
-      .map((entry) => entry.replace(/\.ts$/, ''))
+  it('classifies every query source file in the manifest as public or private', () => {
+    const queryModules = querySourceFiles('src/queries')
+      .filter((entry) => !entry.startsWith('src/queries/internal/'))
       .sort();
-    const classified = [...PUBLIC_QUERY_ENTRIES, ...PRIVATE_QUERY_MODULES].sort();
+    const classified = Object.values(QUERY_SOURCE_PATHS).sort();
 
     expect(queryModules).toEqual(classified);
   });
@@ -213,6 +216,16 @@ function readDocumentedCommands(path: string): string[] {
   const content = readFileSync(join(process.cwd(), path), 'utf8');
   const matches = content.matchAll(/^\s*scip-query\s+([a-z][a-z0-9-]*)\b/gm);
   return [...matches].map((match) => match[1]!);
+}
+
+function querySourceFiles(relativeDir: string): string[] {
+  return readdirSync(join(process.cwd(), relativeDir), { withFileTypes: true }).flatMap((entry) => {
+    const relativePath = `${relativeDir}/${entry.name}`;
+    if (entry.isDirectory()) {
+      return querySourceFiles(relativePath);
+    }
+    return entry.isFile() && entry.name.endsWith('.ts') ? [relativePath] : [];
+  });
 }
 
 function extractGeneratedCommandReference(content: string): string {

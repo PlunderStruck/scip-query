@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import { ScipDatabase } from '../src/storage/db.js';
-import { dead } from '../src/queries/dead.js';
-import { symbols } from '../src/queries/symbols.js';
+import { dead } from '../src/queries/cleanup/dead.js';
+import { symbols } from '../src/queries/navigation/symbols.js';
 import { getCrossLanguageDispatchNames, getRustAttrReferencedNames } from '../src/source/ast.js';
 import { evidenceFixtureDb, writeFixtureFiles } from './evidence-fixture.js';
 

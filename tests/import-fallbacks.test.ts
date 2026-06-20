@@ -13,7 +13,7 @@ import {
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/storage/db.js';
-import { importedBy, imports } from '../src/queries/imports.js';
+import { importedBy, imports } from '../src/queries/navigation/imports.js';
 import type { ScipQueryConfig } from '../src/domain/types.js';
 import { evidenceFixtureDb, writeFixtureFiles } from './evidence-fixture.js';
 

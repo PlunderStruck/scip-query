@@ -1,12 +1,14 @@
 /**
  * Single source of truth for the published query surface.
  *
- * One name list drives all three artifacts that previously had to be
- * hand-synchronized: the tsup build entries (tsup.config.ts), the
+ * One name list drives all three published-surface artifacts that previously
+ * had to be hand-synchronized: the tsup build entries (tsup.config.ts), the
  * package.json `./queries/*` subpath exports, and the contract test that
- * checks them (tests/cli-contract.test.ts). The contract test also verifies
- * this manifest against the real files in src/queries/, so adding a query
- * module without classifying it here fails the build.
+ * checks them (tests/cli-contract.test.ts).
+ *
+ * Query source paths are intentionally separate from published names. The
+ * package contract remains `scip-query/queries/<name>` even when the source
+ * implementation lives in a domain folder under src/queries/.
  */
 
 /** Query modules published as `scip-query/queries/<name>` subpath exports. */
@@ -72,6 +74,70 @@ export const PUBLIC_QUERY_ENTRIES = [
   'wrapper-candidates',
 ] as const;
 
+export type PublicQueryEntry = (typeof PUBLIC_QUERY_ENTRIES)[number];
+
+export const PUBLIC_QUERY_SOURCE_PATHS = {
+  affected: 'src/queries/graph/affected.ts',
+  bottlenecks: 'src/queries/graph/bottlenecks.ts',
+  'by-kind': 'src/queries/navigation/by-kind.ts',
+  'call-graph': 'src/queries/navigation/call-graph.ts',
+  'change-surface': 'src/queries/impact/change-surface.ts',
+  'cleanup-plan': 'src/queries/cleanup/cleanup-plan.ts',
+  'co-change': 'src/queries/impact/co-change.ts',
+  code: 'src/queries/navigation/code.ts',
+  complexity: 'src/queries/quality/complexity.ts',
+  'complexity-hotspots': 'src/queries/quality/complexity-hotspots.ts',
+  convergence: 'src/queries/cleanup/convergence.ts',
+  coupling: 'src/queries/graph/coupling.ts',
+  cycles: 'src/queries/graph/cycles.ts',
+  dataflow: 'src/queries/navigation/dataflow.ts',
+  dead: 'src/queries/cleanup/dead.ts',
+  'deep-chains': 'src/queries/graph/deep-chains.ts',
+  deps: 'src/queries/navigation/deps.ts',
+  'diff-gate': 'src/queries/impact/diff-gate.ts',
+  'diff-impact': 'src/queries/impact/diff-impact.ts',
+  'doc-drift': 'src/queries/cleanup/doc-drift.ts',
+  drift: 'src/queries/cleanup/drift.ts',
+  'extract-candidates': 'src/queries/cleanup/extract-candidates.ts',
+  fan: 'src/queries/graph/fan.ts',
+  files: 'src/queries/navigation/files.ts',
+  health: 'src/queries/health/health.ts',
+  hierarchy: 'src/queries/navigation/hierarchy.ts',
+  hotspots: 'src/queries/graph/hotspots.ts',
+  imports: 'src/queries/navigation/imports.ts',
+  'incomplete-migration': 'src/queries/impact/incomplete-migration.ts',
+  index: 'src/queries/index.ts',
+  isolated: 'src/queries/cleanup/isolated.ts',
+  members: 'src/queries/navigation/members.ts',
+  methods: 'src/queries/navigation/methods.ts',
+  outline: 'src/queries/navigation/outline.ts',
+  'passthrough-candidates': 'src/queries/cleanup/passthrough-candidates.ts',
+  'plan-context': 'src/queries/impact/plan-context.ts',
+  'react-component-duplicates': 'src/queries/frontend/react-component-duplicates.ts',
+  'react-hook-candidates': 'src/queries/frontend/react-hook-candidates.ts',
+  'react-large-component-pressure': 'src/queries/frontend/react-large-component-pressure.ts',
+  'recent-duplicates': 'src/queries/cleanup/recent-duplicates.ts',
+  'redundant-reexports': 'src/queries/cleanup/redundant-reexports.ts',
+  refs: 'src/queries/navigation/refs.ts',
+  'self-audit': 'src/queries/quality/self-audit.ts',
+  similar: 'src/queries/cleanup/similar.ts',
+  'similar-chains': 'src/queries/cleanup/similar-chains.ts',
+  'similar-files': 'src/queries/cleanup/similar-files.ts',
+  'similar-signatures': 'src/queries/cleanup/similar-signatures.ts',
+  slice: 'src/queries/navigation/slice.ts',
+  'stale-abstractions': 'src/queries/cleanup/stale-abstractions.ts',
+  stats: 'src/queries/navigation/stats.ts',
+  surface: 'src/queries/navigation/surface.ts',
+  symbols: 'src/queries/navigation/symbols.ts',
+  system: 'src/queries/navigation/system.ts',
+  trace: 'src/queries/navigation/trace.ts',
+  'unused-params': 'src/queries/cleanup/unused-params.ts',
+  'vue-composable-candidates': 'src/queries/frontend/vue-composable-candidates.ts',
+  'vue-component-duplicates': 'src/queries/frontend/vue-component-duplicates.ts',
+  'vue-large-view-pressure': 'src/queries/frontend/vue-large-view-pressure.ts',
+  'wrapper-candidates': 'src/queries/cleanup/wrapper-candidates.ts',
+} as const satisfies Record<PublicQueryEntry, string>;
+
 /** Query-directory helper modules that must NOT be published. */
 export const PRIVATE_QUERY_MODULES = [
   'dead-exclusions',
@@ -83,3 +149,21 @@ export const PRIVATE_QUERY_MODULES = [
   'public-query-entries',
   'query-utils',
 ] as const;
+
+export type PrivateQueryModule = (typeof PRIVATE_QUERY_MODULES)[number];
+
+export const PRIVATE_QUERY_SOURCE_PATHS = {
+  'dead-exclusions': 'src/queries/cleanup/dead-exclusions.ts',
+  'drift-policy': 'src/queries/cleanup/drift-policy.ts',
+  'health-baseline': 'src/queries/health/health-baseline.ts',
+  'health-cache-control': 'src/queries/health/health-cache-control.ts',
+  'health-report': 'src/queries/health/health-report.ts',
+  'health-types': 'src/queries/health/health-types.ts',
+  'public-query-entries': 'src/queries/public-query-entries.ts',
+  'query-utils': 'src/queries/query-utils.ts',
+} as const satisfies Record<PrivateQueryModule, string>;
+
+export const QUERY_SOURCE_PATHS = {
+  ...PUBLIC_QUERY_SOURCE_PATHS,
+  ...PRIVATE_QUERY_SOURCE_PATHS,
+} as const;

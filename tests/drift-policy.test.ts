@@ -3,11 +3,11 @@ import {
   getArchitecturalLayer,
   isKnownProjectLayerDependency,
   layerPolicyForEdge,
-} from '../src/queries/drift-policy.js';
+} from '../src/queries/cleanup/drift-policy.js';
 
 describe('drift layer policy', () => {
   it('classifies source subdirectories as project layers', () => {
-    expect(getArchitecturalLayer('src/queries/dead.ts')).toBe('src/queries');
+    expect(getArchitecturalLayer('src/queries/cleanup/dead.ts')).toBe('src/queries');
     expect(getArchitecturalLayer('src/reindex/index.ts')).toBe('src/reindex');
   });
 
@@ -26,7 +26,7 @@ describe('drift layer policy', () => {
   });
 
   it('distinguishes this project policy from generic project shapes', () => {
-    expect(isKnownProjectLayerDependency('src/queries/dead.ts', 'src/core/project-index.ts')).toBe(true);
+    expect(isKnownProjectLayerDependency('src/queries/cleanup/dead.ts', 'src/core/project-index.ts')).toBe(true);
     expect(isKnownProjectLayerDependency('app/service.ts', 'core/state.ts')).toBe(false);
   });
 });

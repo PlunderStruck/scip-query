@@ -304,9 +304,9 @@ still appearing in file-specific exploration:
       "name": "cleanup detector family",
       "reason": "These detectors share candidate, evidence, and health policy changes.",
       "files": [
-        "src/queries/dead.ts",
-        "src/queries/isolated.ts",
-        "src/queries/stale-abstractions.ts"
+        "src/queries/cleanup/dead.ts",
+        "src/queries/cleanup/isolated.ts",
+        "src/queries/cleanup/stale-abstractions.ts"
       ]
     }
   ]

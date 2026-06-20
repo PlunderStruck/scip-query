@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ScipQueryConfig } from '../src/domain/types.js';
-import { recentDuplicates } from '../src/queries/recent-duplicates.js';
+import { recentDuplicates } from '../src/queries/cleanup/recent-duplicates.js';
 import { ScipDatabase } from '../src/storage/db.js';
 import { evidenceFixtureDb, writeFixtureFiles } from './evidence-fixture.js';
 

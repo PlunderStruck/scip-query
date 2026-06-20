@@ -15,15 +15,15 @@ import {
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/storage/db.js';
-import { byKind, kindCounts } from '../src/queries/by-kind.js';
-import { callGraph } from '../src/queries/call-graph.js';
-import { complexity } from '../src/queries/complexity.js';
-import { drift } from '../src/queries/drift.js';
-import { fanIn } from '../src/queries/fan.js';
-import { importedBy, imports, unusedImports } from '../src/queries/imports.js';
-import { outline } from '../src/queries/outline.js';
-import { symbols } from '../src/queries/symbols.js';
-import { system } from '../src/queries/system.js';
+import { byKind, kindCounts } from '../src/queries/navigation/by-kind.js';
+import { callGraph } from '../src/queries/navigation/call-graph.js';
+import { complexity } from '../src/queries/quality/complexity.js';
+import { drift } from '../src/queries/cleanup/drift.js';
+import { fanIn } from '../src/queries/graph/fan.js';
+import { importedBy, imports, unusedImports } from '../src/queries/navigation/imports.js';
+import { outline } from '../src/queries/navigation/outline.js';
+import { symbols } from '../src/queries/navigation/symbols.js';
+import { system } from '../src/queries/navigation/system.js';
 import type { ScipQueryConfig } from '../src/domain/types.js';
 
 function createPythonFixtureProject(projectRoot: string): void {

@@ -15,7 +15,7 @@ import {
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/storage/db.js';
-import { isolated } from '../src/queries/isolated.js';
+import { isolated } from '../src/queries/cleanup/isolated.js';
 import type { ScipQueryConfig } from '../src/domain/types.js';
 
 function createSchema(sqliteDb: Database.Database): void {

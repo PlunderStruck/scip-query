@@ -17,7 +17,7 @@
  */
 import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { DiffGateResult } from '../queries/diff-gate.js';
+import type { DiffGateResult } from '../queries/impact/diff-gate.js';
 
 const MD_BLOCK_BEGIN = '<!-- scip-query:agent-setup:begin -->';
 const MD_BLOCK_END = '<!-- scip-query:agent-setup:end -->';

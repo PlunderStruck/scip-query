@@ -15,8 +15,8 @@ import {
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/storage/db.js';
-import { callGraph } from '../src/queries/call-graph.js';
-import { wrapperCandidates } from '../src/queries/wrapper-candidates.js';
+import { callGraph } from '../src/queries/navigation/call-graph.js';
+import { wrapperCandidates } from '../src/queries/cleanup/wrapper-candidates.js';
 import type { ScipQueryConfig } from '../src/domain/types.js';
 
 function createSchema(sqliteDb: Database.Database): void {

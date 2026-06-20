@@ -15,7 +15,7 @@ import {
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/storage/db.js';
-import { similarSignatures } from '../src/queries/similar-signatures.js';
+import { similarSignatures } from '../src/queries/cleanup/similar-signatures.js';
 import type { ScipQueryConfig } from '../src/domain/types.js';
 
 function createSchema(sqliteDb: Database.Database): void {

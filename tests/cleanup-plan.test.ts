@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
-import { RemovedRangeIndex, type CleanupBatch } from '../src/queries/cleanup-plan.js';
+import { RemovedRangeIndex, type CleanupBatch } from '../src/queries/cleanup/cleanup-plan.js';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

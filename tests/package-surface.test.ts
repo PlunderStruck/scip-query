@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -35,9 +35,11 @@ describe('derivePackageSurface', () => {
         },
       },
     });
+    mkdirSync(join(root, 'src/queries/impact'), { recursive: true });
+    writeFileSync(join(root, 'src/queries/impact/plan-context.ts'), '');
 
     const surface = derivePackageSurface(root);
-    expect(surface.files.has('src/queries/plan-context.ts')).toBe(true);
+    expect(surface.files.has('src/queries/impact/plan-context.ts')).toBe(true);
     expect(surface.files.has('dist/queries/plan-context.js')).toBe(true);
     expect(surface.files.has('queries/plan-context.ts')).toBe(true);
   });

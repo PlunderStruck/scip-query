@@ -9,11 +9,11 @@ import {
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/storage/db.js';
-import { callGraph } from '../src/queries/call-graph.js';
-import { code } from '../src/queries/code.js';
-import { dataflow } from '../src/queries/dataflow.js';
-import { symbols } from '../src/queries/symbols.js';
-import { trace } from '../src/queries/trace.js';
+import { callGraph } from '../src/queries/navigation/call-graph.js';
+import { code } from '../src/queries/navigation/code.js';
+import { dataflow } from '../src/queries/navigation/dataflow.js';
+import { symbols } from '../src/queries/navigation/symbols.js';
+import { trace } from '../src/queries/navigation/trace.js';
 import { buildAstCalleeMap, buildChunkCalleeMap } from '../src/symbols/call-graph-evidence.js';
 import type { ScipQueryConfig } from '../src/domain/types.js';
 

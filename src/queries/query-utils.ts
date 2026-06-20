@@ -1,8 +1,7 @@
 import type { IndexedDefinition } from '../domain/types.js';
+import { definitionLoc } from '../symbols/definition-loc.js';
 
-export function definitionLoc(definition: Pick<IndexedDefinition, 'startLine' | 'endLine'>): number {
-  return definition.endLine - definition.startLine + 1;
-}
+export { definitionLoc } from '../symbols/definition-loc.js';
 
 export function compareDefinitionsBySmallestLoc(left: IndexedDefinition, right: IndexedDefinition): number {
   return definitionLoc(left) - definitionLoc(right) || left.relativePath.localeCompare(right.relativePath);

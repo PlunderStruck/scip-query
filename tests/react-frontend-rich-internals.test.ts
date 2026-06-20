@@ -4,10 +4,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../src/storage/db.js';
 import { buildReactComponentBehaviorProfilesForFile } from '../src/source/ast.js';
-import { reactComponentDuplicates } from '../src/queries/react-component-duplicates.js';
-import { reactHookCandidates } from '../src/queries/react-hook-candidates.js';
-import { reactLargeComponentPressure } from '../src/queries/react-large-component-pressure.js';
-import { health } from '../src/queries/health.js';
+import { reactComponentDuplicates } from '../src/queries/frontend/react-component-duplicates.js';
+import { reactHookCandidates } from '../src/queries/frontend/react-hook-candidates.js';
+import { reactLargeComponentPressure } from '../src/queries/frontend/react-large-component-pressure.js';
+import { health } from '../src/queries/health/health.js';
 import type { ScipQueryConfig } from '../src/domain/types.js';
 import { evidenceFixtureDb, writeFixtureFiles } from './evidence-fixture.js';
 

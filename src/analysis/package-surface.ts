@@ -12,7 +12,7 @@
  * plausible source paths. Candidates that don't correspond to real indexed
  * files simply never match, so over-generation is harmless.
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
@@ -57,7 +57,7 @@ export function derivePackageSurface(projectRoot: string): PackageSurface {
   const files = new Set<string>();
   const pathPrefixes: string[] = [];
   for (const target of collectExportTargets(manifest)) {
-    expandTarget(target, files, pathPrefixes);
+    expandTarget(projectRoot, target, files, pathPrefixes);
   }
   return { files, pathPrefixes };
 }
@@ -110,7 +110,7 @@ function collectExportsLeaves(node: unknown, out: string[]): void {
  * the build directory swapped for `src/` or stripped, across common source
  * extensions.
  */
-function expandTarget(target: string, files: Set<string>, pathPrefixes: string[]): void {
+function expandTarget(projectRoot: string, target: string, files: Set<string>, pathPrefixes: string[]): void {
   const normalized = target.replace(/\\/g, '/').replace(/^\.\//, '');
   if (normalized === '' || normalized.startsWith('..')) return;
 
@@ -127,7 +127,7 @@ function expandTarget(target: string, files: Set<string>, pathPrefixes: string[]
   for (const variant of pathVariants(base)) {
     if (variant === base && variant === normalized) files.add(normalized);
     for (const extension of SOURCE_EXTENSIONS) {
-      files.add(variant + extension);
+      addSourceCandidate(projectRoot, files, variant + extension);
     }
   }
   // Keep the literal target too — source-published packages export real files.
@@ -142,4 +142,38 @@ function pathVariants(path: string): string[] {
     variants.push(path.replace(BUILD_DIR_PATTERN, ''));
   }
   return variants;
+}
+
+function addSourceCandidate(projectRoot: string, files: Set<string>, candidate: string): void {
+  files.add(candidate);
+  if (!candidate.startsWith('src/') || existsSync(join(projectRoot, candidate))) return;
+
+  const extension = SOURCE_EXTENSIONS.find((entry) => candidate.endsWith(entry));
+  if (!extension) return;
+
+  const withoutExtension = candidate.slice(0, -extension.length);
+  const slash = withoutExtension.lastIndexOf('/');
+  if (slash <= 'src/'.length) return;
+
+  const directory = withoutExtension.slice(0, slash);
+  const basename = withoutExtension.slice(slash + 1);
+  for (const match of nestedSourceCandidates(projectRoot, directory, `${basename}${extension}`)) {
+    files.add(match);
+  }
+}
+
+function nestedSourceCandidates(projectRoot: string, relativeDirectory: string, filename: string): string[] {
+  const absoluteDirectory = join(projectRoot, relativeDirectory);
+  if (!existsSync(absoluteDirectory)) return [];
+
+  const matches: string[] = [];
+  for (const entry of readdirSync(absoluteDirectory, { withFileTypes: true })) {
+    const relativePath = `${relativeDirectory}/${entry.name}`;
+    if (entry.isDirectory()) {
+      matches.push(...nestedSourceCandidates(projectRoot, relativePath, filename));
+    } else if (entry.isFile() && entry.name === filename) {
+      matches.push(relativePath);
+    }
+  }
+  return matches;
 }
