@@ -8,3 +8,7 @@ This repo is indexed by scip-query (compiler-resolved code intelligence).
 - After the change, run the check matching what you did: extracted a helper -> `scip-query incomplete-migration`; new helper -> `scip-query recent-duplicates`; new params -> `scip-query unused-params`; new wrapper -> `scip-query wrapper-candidates`; schema/config change -> `scip-query co-change <file>`; deleted code -> `scip-query cleanup-plan --verify`.
 - Before declaring the work done: `scip-query reindex && scip-query diff-gate` — fix findings or state why each is accepted.
 <!-- scip-query:agent-setup:end -->
+
+## Git workflow
+
+- Work directly on `main` unless the user explicitly asks for a separate branch.
