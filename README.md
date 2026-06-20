@@ -1,13 +1,21 @@
-# scip-query
+<h1 align="center">
+  <img src="docs/assets/scip-query-logo.svg" alt="scip-query" width="360">
+</h1>
 
-**Evidence and verification for AI coding agents.**
+<p align="center">
+  <strong>Evidence and verification for AI coding agents.</strong>
+</p>
 
-_Map the repo. Reuse what exists. Finish the refactor. Gate the diff._
+<p align="center">
+  <em>Map the repo. Reuse what exists. Finish the refactor. Gate the diff.</em>
+</p>
 
-[![npm version](https://img.shields.io/npm/v/scip-query.svg)](https://www.npmjs.com/package/scip-query)
-[![npm downloads](https://img.shields.io/npm/dm/scip-query.svg)](https://www.npmjs.com/package/scip-query)
-[![Node version](https://img.shields.io/node/v/scip-query.svg)](package.json)
-[![License](https://img.shields.io/npm/l/scip-query.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+<p align="center">
+  <a href="https://www.npmjs.com/package/scip-query"><img alt="npm version" src="https://img.shields.io/npm/v/scip-query.svg"></a>
+  <a href="https://www.npmjs.com/package/scip-query"><img alt="npm downloads" src="https://img.shields.io/npm/dm/scip-query.svg"></a>
+  <a href="package.json"><img alt="Node version" src="https://img.shields.io/node/v/scip-query.svg"></a>
+  <a href="https://www.apache.org/licenses/LICENSE-2.0"><img alt="License" src="https://img.shields.io/npm/l/scip-query.svg"></a>
+</p>
 
 `scip-query` is a TypeScript CLI and npm package that turns SCIP indexes, git history, language-aware source analysis, and your repository's own checks into commands AI coding agents can use before, during, and after a change.
 

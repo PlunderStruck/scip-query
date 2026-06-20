@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="136" viewBox="0 0 560 136" role="img" aria-labelledby="title desc">
+  <title id="title">scip-query</title>
+  <desc id="desc">A minimal scip-query wordmark with a blue underscore cursor.</desc>
+  <style>
+    .wordmark {
+      fill: #111827;
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 58px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+  </style>
+  <text
+    class="wordmark"
+    x="38"
+    y="83"
+    textLength="372"
+    lengthAdjust="spacingAndGlyphs"
+  >scip-query</text>
+  <rect x="430" y="76" width="50" height="8" rx="4" fill="#2563EB" />
+</svg>
