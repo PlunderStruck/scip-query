@@ -69,5 +69,5 @@ function scanSuppressions(db: ScipDatabase): SuppressionInventory {
 function normalizeCategory(raw: string | undefined | null): SuppressionCategory {
   if (!raw) return 'uncategorized';
   const lower = raw.toLowerCase();
-  return lower === 'dead-code' ? 'dead' : lower as SuppressionCategory;
+  return lower === 'dead-code' ? 'dead' : (lower as SuppressionCategory);
 }

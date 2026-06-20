@@ -170,9 +170,7 @@ function normalizeForIgnore(projectRoot: string, inputPath: string): string | nu
     return inputPath.replaceAll('\\', '/');
   }
 
-  const absolutePath = isAbsolute(inputPath)
-    ? inputPath
-    : resolve(projectRoot, inputPath);
+  const absolutePath = isAbsolute(inputPath) ? inputPath : resolve(projectRoot, inputPath);
   const relativePath = relative(projectRoot, absolutePath).replaceAll('\\', '/');
 
   if (!relativePath || relativePath === '.' || relativePath.startsWith('..')) {

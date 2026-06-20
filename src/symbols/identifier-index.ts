@@ -54,14 +54,13 @@ export function findIdentifierLines(
   return lines.filter((line) => !inExcludedRange(line, opts));
 }
 
-function inExcludedRange(
-  line: number,
-  opts: { excludeStartLine?: number; excludeEndLine?: number },
-): boolean {
-  return typeof opts.excludeStartLine === 'number'
-    && typeof opts.excludeEndLine === 'number'
-    && line >= opts.excludeStartLine
-    && line <= opts.excludeEndLine;
+function inExcludedRange(line: number, opts: { excludeStartLine?: number; excludeEndLine?: number }): boolean {
+  return (
+    typeof opts.excludeStartLine === 'number' &&
+    typeof opts.excludeEndLine === 'number' &&
+    line >= opts.excludeStartLine &&
+    line <= opts.excludeEndLine
+  );
 }
 
 /**
@@ -78,16 +77,16 @@ const FILE_IDENTIFIER_CACHE = createPerDbCache<string, Set<string>>('file-identi
 });
 // scip-query: ignore-wrapper — public read-side of FILE_IDENTIFIER_CACHE, expresses
 // "set of identifiers in this file" as a distinct interface from the line-map cache.
-export function getFileIdentifiers(
-  db: ScipDatabase,
-  relativePath: string,
-): Set<string> {
+export function getFileIdentifiers(db: ScipDatabase, relativePath: string): Set<string> {
   const facts = getSourceFacts(db, relativePath);
   if (facts) return facts.fileIdentifiers;
 
-  return FILE_IDENTIFIER_CACHE.get(db, relativePath, () =>
-    // Derive from the fallback line map so we don't tokenize twice.
-    new Set(getIdentifierLineMap(db, relativePath).keys()),
+  return FILE_IDENTIFIER_CACHE.get(
+    db,
+    relativePath,
+    () =>
+      // Derive from the fallback line map so we don't tokenize twice.
+      new Set(getIdentifierLineMap(db, relativePath).keys()),
   );
 }
 
@@ -99,16 +98,11 @@ export function getFileIdentifiers(
 const FILE_IDENT_LINES_CACHE = createPerDbCache<string, Map<string, number[]>>('file-ident-lines', {
   clearGroups: ['whole-project', 'source-file'],
 });
-export function getIdentifierLineMap(
-  db: ScipDatabase,
-  relativePath: string,
-): Map<string, number[]> {
+export function getIdentifierLineMap(db: ScipDatabase, relativePath: string): Map<string, number[]> {
   const facts = getSourceFacts(db, relativePath);
   if (facts) return facts.identifierLineMap;
 
-  return FILE_IDENT_LINES_CACHE.get(db, relativePath, () =>
-    computeFallbackIdentifierLineMap(db, relativePath),
-  );
+  return FILE_IDENT_LINES_CACHE.get(db, relativePath, () => computeFallbackIdentifierLineMap(db, relativePath));
 }
 
 /**
@@ -123,10 +117,7 @@ const FILE_IDENTS_BY_LINE_CACHE = createPerDbCache<string, Array<Set<string>>>('
 });
 // scip-query: ignore-wrapper — line-index view of identifier evidence used by
 // call-graph evidence; hides the cached identifier map materialization.
-export function getIdentifiersByLine(
-  db: ScipDatabase,
-  relativePath: string,
-): Array<Set<string>> {
+export function getIdentifiersByLine(db: ScipDatabase, relativePath: string): Array<Set<string>> {
   const facts = getSourceFacts(db, relativePath);
   if (facts) return facts.identifiersByLine;
 
@@ -146,10 +137,7 @@ export function getIdentifiersByLine(
   });
 }
 
-function computeFallbackIdentifierLineMap(
-  db: ScipDatabase,
-  relativePath: string,
-): Map<string, number[]> {
+function computeFallbackIdentifierLineMap(db: ScipDatabase, relativePath: string): Map<string, number[]> {
   const out = new Map<string, number[]>();
   const record = (name: string, line: number): void => {
     const arr = out.get(name);

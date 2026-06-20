@@ -18,21 +18,20 @@ export function methods(db: ScipDatabase, className: string): MethodResult[] {
 
   const ownerName = leafName(classMatch.symbol);
   const index = new ProjectIndex(db);
-  const definitions = index.definitionsForFile(classMatch.relativePath)
+  const definitions = index
+    .definitionsForFile(classMatch.relativePath)
     .filter((definition) => isCallableSymbol(definition.symbol));
 
-  const directMethods = definitions.filter((definition) => (
-      definition.parentTypeName === ownerName
-      || definition.symbol.includes(ownerName)
-    ));
+  const directMethods = definitions.filter(
+    (definition) => definition.parentTypeName === ownerName || definition.symbol.includes(ownerName),
+  );
 
-  const fileScopedMethods = directMethods.length > 0
-    ? directMethods
-    : (
-      stripExtension(basename(classMatch.relativePath)) === ownerName
+  const fileScopedMethods =
+    directMethods.length > 0
+      ? directMethods
+      : stripExtension(basename(classMatch.relativePath)) === ownerName
         ? definitions.filter((definition) => definition.symbol.includes('<invalid-global-code>'))
-        : []
-    );
+        : [];
 
   return fileScopedMethods.map((definition) => ({
     startLine: definition.startLine,

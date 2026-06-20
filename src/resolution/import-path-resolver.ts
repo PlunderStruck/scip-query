@@ -63,15 +63,33 @@ function hasExtensionIn(relativePath: string, extensions: ReadonlySet<string>): 
   return extensions.has(extname(relativePath).toLowerCase());
 }
 
-export function isPythonSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, PYTHON_EXTENSION_SET); }
-export function isJvmSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, JVM_EXTENSION_SET); }
-export function isRustSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, RUST_EXTENSION_SET); }
-export function isRubySourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, RUBY_EXTENSION_SET); }
-export function isCLikeSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, C_LIKE_EXTENSION_SET); }
-export function isDotNetSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, DOTNET_EXTENSION_SET); }
-export function isVisualBasicSourcePath(relativePath: string): boolean { return extname(relativePath).toLowerCase() === '.vb'; }
-export function isDartSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, DART_EXTENSION_SET); }
-export function isPhpSourcePath(relativePath: string): boolean { return hasExtensionIn(relativePath, PHP_EXTENSION_SET); }
+export function isPythonSourcePath(relativePath: string): boolean {
+  return hasExtensionIn(relativePath, PYTHON_EXTENSION_SET);
+}
+export function isJvmSourcePath(relativePath: string): boolean {
+  return hasExtensionIn(relativePath, JVM_EXTENSION_SET);
+}
+export function isRustSourcePath(relativePath: string): boolean {
+  return hasExtensionIn(relativePath, RUST_EXTENSION_SET);
+}
+export function isRubySourcePath(relativePath: string): boolean {
+  return hasExtensionIn(relativePath, RUBY_EXTENSION_SET);
+}
+export function isCLikeSourcePath(relativePath: string): boolean {
+  return hasExtensionIn(relativePath, C_LIKE_EXTENSION_SET);
+}
+export function isDotNetSourcePath(relativePath: string): boolean {
+  return hasExtensionIn(relativePath, DOTNET_EXTENSION_SET);
+}
+export function isVisualBasicSourcePath(relativePath: string): boolean {
+  return extname(relativePath).toLowerCase() === '.vb';
+}
+export function isDartSourcePath(relativePath: string): boolean {
+  return hasExtensionIn(relativePath, DART_EXTENSION_SET);
+}
+export function isPhpSourcePath(relativePath: string): boolean {
+  return hasExtensionIn(relativePath, PHP_EXTENSION_SET);
+}
 
 // scip-query: ignore-wrapper — public predicate naming the family-for-extension
 // concept; called from utils.ts which uses it across many call sites.
@@ -92,11 +110,7 @@ function isQualifiedDotImportPath(path: string): boolean {
  * importer file's extension. Returns null when the specifier can't be
  * resolved to an indexed path.
  */
-export function resolveImportPath(
-  db: ScipDatabase,
-  importerPath: string,
-  specifier: string,
-): string | null {
+export function resolveImportPath(db: ScipDatabase, importerPath: string, specifier: string): string | null {
   if (isPythonSourcePath(importerPath)) {
     return resolvePythonImportPath(db, importerPath, specifier);
   }
@@ -127,11 +141,7 @@ export function resolveImportPath(
 // scip-query: ignore-extract — this is the JavaScript import-path decision
 // table: path aliases, package names, relative candidates, indexed paths, and
 // disk fallback are tried in priority order.
-export function resolveJavaScriptImportPath(
-  db: ScipDatabase,
-  importerPath: string,
-  specifier: string,
-): string | null {
+export function resolveJavaScriptImportPath(db: ScipDatabase, importerPath: string, specifier: string): string | null {
   if (!specifier.startsWith('.') && !specifier.startsWith('/')) {
     return null;
   }
@@ -153,11 +163,7 @@ export function resolveJavaScriptImportPath(
 // scip-query: ignore-extract — this is the Python import-path decision table:
 // direct module candidates, package __init__ candidates, and indexed-path
 // fallback are ordered from most to least specific.
-export function resolvePythonImportPath(
-  db: ScipDatabase,
-  importerPath: string,
-  specifier: string,
-): string | null {
+export function resolvePythonImportPath(db: ScipDatabase, importerPath: string, specifier: string): string | null {
   const indexedPaths = getIndexedPaths(db);
 
   let basePath: string;
@@ -173,9 +179,7 @@ export function resolvePythonImportPath(
       baseDir = dirname(baseDir);
     }
 
-    basePath = remainder
-      ? resolve(baseDir, remainder.replace(/\./g, '/'))
-      : baseDir;
+    basePath = remainder ? resolve(baseDir, remainder.replace(/\./g, '/')) : baseDir;
   } else {
     basePath = resolve(db.config.projectRoot, specifier.replace(/\./g, '/'));
   }
@@ -190,14 +194,14 @@ export function resolvePythonImportPath(
   return null;
 }
 
-export function resolveRustImportPath(
-  db: ScipDatabase,
-  importerPath: string,
-  specifier: string,
-): string | null {
+export function resolveRustImportPath(db: ScipDatabase, importerPath: string, specifier: string): string | null {
   if (!specifier) return null;
   const normalizedSpecifier = specifier.replace(/\s+as\s+.+$/, '').trim();
-  if (!normalizedSpecifier.startsWith('crate::') && !normalizedSpecifier.startsWith('self::') && !normalizedSpecifier.startsWith('super::')) {
+  if (
+    !normalizedSpecifier.startsWith('crate::') &&
+    !normalizedSpecifier.startsWith('self::') &&
+    !normalizedSpecifier.startsWith('super::')
+  ) {
     return null;
   }
 
@@ -214,21 +218,13 @@ export function resolveRustImportPath(
   return firstIndexedOrExistingPath(db, rustCandidateImportPaths(basePath));
 }
 
-export function resolveRubyImportPath(
-  db: ScipDatabase,
-  importerPath: string,
-  specifier: string,
-): string | null {
+export function resolveRubyImportPath(db: ScipDatabase, importerPath: string, specifier: string): string | null {
   const importerDir = dirname(join(db.config.projectRoot, importerPath));
   const absolute = resolve(importerDir, specifier);
   return firstIndexedOrExistingPath(db, rubyCandidateImportPaths(absolute));
 }
 
-export function resolveCLikeImportPath(
-  db: ScipDatabase,
-  importerPath: string,
-  specifier: string,
-): string | null {
+export function resolveCLikeImportPath(db: ScipDatabase, importerPath: string, specifier: string): string | null {
   const importerDir = dirname(join(db.config.projectRoot, importerPath));
   const candidates = [
     resolve(importerDir, specifier),
@@ -246,7 +242,10 @@ export function resolveQualifiedImportPath(
   extensions: readonly string[],
 ): string | null {
   const indexedPaths = getIndexedPaths(db);
-  const normalized = specifier.replace(/\\/g, '.').replace(/::/g, '.').replace(/^global::/, '');
+  const normalized = specifier
+    .replace(/\\/g, '.')
+    .replace(/::/g, '.')
+    .replace(/^global::/, '');
   const pathified = normalized.replace(/\./g, '/');
   const basenameOnly = normalized.split('.').pop() ?? normalized;
 
@@ -263,10 +262,7 @@ export function resolveQualifiedImportPath(
 
   const folderMatches = [...indexedPaths]
     .filter((relativePath) => extensions.includes(extname(relativePath).toLowerCase()))
-    .filter((relativePath) => (
-      relativePath.includes(`/${pathified}/`)
-      || relativePath.includes(`/${basenameOnly}/`)
-    ))
+    .filter((relativePath) => relativePath.includes(`/${pathified}/`) || relativePath.includes(`/${basenameOnly}/`))
     .sort((left, right) => left.localeCompare(right));
   if (folderMatches.length === 1) {
     return folderMatches[0]!;
@@ -278,20 +274,14 @@ export function resolveQualifiedImportPath(
 // scip-query: ignore-extract — this is the Dart import-path decision table:
 // package, relative, and indexed-path candidates are intentionally tried in a
 // single priority order.
-export function resolveDartImportPath(
-  db: ScipDatabase,
-  importerPath: string,
-  specifier: string,
-): string | null {
+export function resolveDartImportPath(db: ScipDatabase, importerPath: string, specifier: string): string | null {
   const indexedPaths = getIndexedPaths(db);
   if (specifier.startsWith('package:')) {
     const withoutScheme = specifier.slice('package:'.length);
     const slashIndex = withoutScheme.indexOf('/');
     if (slashIndex < 0) return null;
     const packageRelative = withoutScheme.slice(slashIndex + 1);
-    const candidate = normalizePath(packageRelative.startsWith('lib/')
-      ? packageRelative
-      : `lib/${packageRelative}`);
+    const candidate = normalizePath(packageRelative.startsWith('lib/') ? packageRelative : `lib/${packageRelative}`);
     if (indexedPaths.has(candidate)) return candidate;
     return null;
   }
@@ -313,18 +303,10 @@ function pythonCandidateImportPaths(basePath: string): string[] {
     return [basePath];
   }
 
-  return [
-    `${basePath}.py`,
-    `${basePath}.pyi`,
-    join(basePath, '__init__.py'),
-    join(basePath, '__init__.pyi'),
-  ];
+  return [`${basePath}.py`, `${basePath}.pyi`, join(basePath, '__init__.py'), join(basePath, '__init__.pyi')];
 }
 
-function firstIndexedOrExistingPath(
-  db: ScipDatabase,
-  candidates: readonly string[],
-): string | null {
+function firstIndexedOrExistingPath(db: ScipDatabase, candidates: readonly string[]): string | null {
   const indexedPaths = getIndexedPaths(db);
   for (const candidate of candidates) {
     const relativeCandidate = normalizePath(relative(db.config.projectRoot, candidate));
@@ -341,10 +323,7 @@ function rustCandidateImportPaths(basePath: string): string[] {
     return [basePath];
   }
 
-  return [
-    `${basePath}.rs`,
-    join(basePath, 'mod.rs'),
-  ];
+  return [`${basePath}.rs`, join(basePath, 'mod.rs')];
 }
 
 function rubyCandidateImportPaths(basePath: string): string[] {
@@ -353,10 +332,7 @@ function rubyCandidateImportPaths(basePath: string): string[] {
     return [basePath];
   }
 
-  return [
-    `${basePath}.rb`,
-    join(basePath, 'index.rb'),
-  ];
+  return [`${basePath}.rb`, join(basePath, 'index.rb')];
 }
 
 function dartCandidateImportPaths(basePath: string): string[] {
@@ -388,10 +364,9 @@ function candidateImportPaths(absolute: string): string[] {
 }
 
 function getIndexedPaths(db: ScipDatabase): Set<string> {
-  return INDEXED_PATH_CACHE.get(db, () =>
-    new Set(
-      indexedDocumentPaths(db, { includeIgnored: false }).map(normalizePath),
-    ),
+  return INDEXED_PATH_CACHE.get(
+    db,
+    () => new Set(indexedDocumentPaths(db, { includeIgnored: false }).map(normalizePath)),
   );
 }
 

@@ -18,10 +18,7 @@ export interface HotspotResult {
  */
 // scip-query: ignore-similar — shares SCIP-DB join shape with bottlenecks /
 // topFanOut; counts cross-file references per definition. Different question.
-export function hotspots(
-  db: ScipDatabase,
-  opts: { limit?: number; scope?: string } = {},
-): HotspotResult[] {
+export function hotspots(db: ScipDatabase, opts: { limit?: number; scope?: string } = {}): HotspotResult[] {
   const { limit = 30, scope } = opts;
 
   const scopeFilter = scope ? `AND def_d.relative_path LIKE '%${scope}%'` : '';
@@ -76,11 +73,7 @@ export function hotspots(
   return hotspotsByDefinitionFallback(db, scope, limit);
 }
 
-function hotspotsByDefinitionFallback(
-  db: ScipDatabase,
-  scope: string | undefined,
-  limit: number,
-): HotspotResult[] {
+function hotspotsByDefinitionFallback(db: ScipDatabase, scope: string | undefined, limit: number): HotspotResult[] {
   return getAllDefinitions(db, { scope })
     .filter((definition) => !db.isIgnored(definition.relativePath))
     .map((definition) => hotspotRowFor(db, definition))
@@ -89,10 +82,7 @@ function hotspotsByDefinitionFallback(
     .slice(0, limit);
 }
 
-function hotspotRowFor(
-  db: ScipDatabase,
-  definition: IndexedDefinition,
-): HotspotResult {
+function hotspotRowFor(db: ScipDatabase, definition: IndexedDefinition): HotspotResult {
   const callerRows = callerRowsForSymbol(db, definition, { limit: 500 });
   return {
     symbol: definition.symbol,

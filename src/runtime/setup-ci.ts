@@ -9,10 +9,7 @@ export interface SetupCiResult {
   reason?: string;
 }
 
-export function setupCiWorkflow(
-  projectRoot: string,
-  opts: { force?: boolean; dryRun?: boolean } = {},
-): SetupCiResult {
+export function setupCiWorkflow(projectRoot: string, opts: { force?: boolean; dryRun?: boolean } = {}): SetupCiResult {
   const path = join(projectRoot, '.github', 'workflows', 'scip-query.yml');
   const content = renderScipQueryWorkflow();
   if (existsSync(path) && !opts.force) {

@@ -97,10 +97,7 @@ function resolveBundledNpmPackageJson(config: IndexerConfig): string | null {
 /**
  * Resolve a project-local indexer binary when the project vendors its own executable.
  */
-export function resolveProjectLocalIndexerBinary(
-  config: IndexerConfig,
-  projectRoot: string,
-): string | null {
+export function resolveProjectLocalIndexerBinary(config: IndexerConfig, projectRoot: string): string | null {
   for (const relativePath of config.projectLocalBinaries ?? []) {
     const candidate = join(projectRoot, relativePath);
     if (existsSync(candidate)) {
@@ -114,10 +111,7 @@ export function resolveProjectLocalIndexerBinary(
 /**
  * Resolve an indexer binary, preferring a project-local executable when present.
  */
-export function resolveIndexerBinaryForProject(
-  config: IndexerConfig,
-  projectRoot: string,
-): string | null {
+export function resolveIndexerBinaryForProject(config: IndexerConfig, projectRoot: string): string | null {
   return resolveProjectLocalIndexerBinary(config, projectRoot) ?? resolveIndexerBinary(config);
 }
 
@@ -153,10 +147,7 @@ export function getIndexerExecutionEnv(
 /**
  * Check whether an indexer is installed and runnable in the current environment.
  */
-export function getIndexerDependencyStatus(
-  config: IndexerConfig,
-  projectRoot?: string,
-): IndexerDependencyStatus {
+export function getIndexerDependencyStatus(config: IndexerConfig, projectRoot?: string): IndexerDependencyStatus {
   const binaryLabel = describeIndexerBinary(config);
   const resolvedBinary = projectRoot
     ? resolveIndexerBinaryForProject(config, projectRoot)
@@ -200,10 +191,7 @@ export function getIndexerDependencyStatus(
  * Tries each method in order, checking prerequisites first.
  * Returns true if installation succeeded.
  */
-export function tryInstallIndexer(
-  config: IndexerConfig,
-  onStatus: (msg: string) => void,
-): boolean {
+export function tryInstallIndexer(config: IndexerConfig, onStatus: (msg: string) => void): boolean {
   const methods = config.installMethods;
   const binaryLabel = describeIndexerBinary(config);
   if (!methods?.length) {
@@ -229,9 +217,7 @@ export function tryInstallIndexer(
 
       const resolvedBinary = resolveIndexerBinary(config);
       if (resolvedBinary) {
-        const resolutionNote = resolvedBinary === config.indexerBinary
-          ? ''
-          : ` (using ${resolvedBinary})`;
+        const resolutionNote = resolvedBinary === config.indexerBinary ? '' : ` (using ${resolvedBinary})`;
         onStatus(`Successfully installed ${binaryLabel} via ${method.label}${resolutionNote}`);
         return true;
       }
@@ -263,19 +249,17 @@ function probeDotnetRuntime(binary: string): { runnable: boolean; note?: string 
   }
 
   const attemptedRoots = getDotnetRootCandidates(process.env);
-  const attemptedNote = attemptedRoots.length > 0
-    ? `.NET 9 runtime still unavailable after checking ${attemptedRoots.join(', ')}`
-    : 'binary is present, but scip-dotnet still needs a .NET 9 runtime';
+  const attemptedNote =
+    attemptedRoots.length > 0
+      ? `.NET 9 runtime still unavailable after checking ${attemptedRoots.join(', ')}`
+      : 'binary is present, but scip-dotnet still needs a .NET 9 runtime';
   return {
     runnable: false,
     note: attemptedNote,
   };
 }
 
-function resolveWorkingDotnetRoot(
-  binary: string,
-  env: NodeJS.ProcessEnv,
-): string | null {
+function resolveWorkingDotnetRoot(binary: string, env: NodeJS.ProcessEnv): string | null {
   for (const dotnetRoot of getDotnetRootCandidates(env)) {
     if (canRunDotnetIndexer(binary, { ...env, DOTNET_ROOT: dotnetRoot })) {
       return dotnetRoot;
@@ -285,9 +269,7 @@ function resolveWorkingDotnetRoot(
   return null;
 }
 
-function getDotnetRootCandidates(
-  env: NodeJS.ProcessEnv,
-): string[] {
+function getDotnetRootCandidates(env: NodeJS.ProcessEnv): string[] {
   const candidates: string[] = [];
   const configured = env['DOTNET_ROOT'];
   if (configured && existsSync(configured)) {
@@ -299,7 +281,9 @@ function getDotnetRootCandidates(
       const prefix = execFileSync('brew', ['--prefix', 'dotnet@9'], {
         stdio: 'pipe',
         env,
-      }).toString().trim();
+      })
+        .toString()
+        .trim();
       const candidate = join(prefix, 'libexec');
       if (existsSync(candidate) && !candidates.includes(candidate)) {
         candidates.push(candidate);
@@ -312,10 +296,7 @@ function getDotnetRootCandidates(
   return candidates;
 }
 
-function canRunDotnetIndexer(
-  binary: string,
-  env: NodeJS.ProcessEnv,
-): boolean {
+function canRunDotnetIndexer(binary: string, env: NodeJS.ProcessEnv): boolean {
   try {
     execFileSync(binary, ['--version'], {
       stdio: 'pipe',

@@ -131,9 +131,7 @@ function connectionFor(db: ScipDatabase): EvidenceConnection | null {
         `INSERT OR REPLACE INTO semantic_callees
          (relative_path, symbol, content_hash, deps_digest, version, payload) VALUES (?, ?, ?, ?, ?, ?)`,
       ),
-      dropStaleCallees: evidence.prepare(
-        'DELETE FROM semantic_callees WHERE relative_path = ? AND content_hash != ?',
-      ),
+      dropStaleCallees: evidence.prepare('DELETE FROM semantic_callees WHERE relative_path = ? AND content_hash != ?'),
     };
   } catch (error) {
     debugLog('disabled (open failed)', error);
@@ -191,9 +189,9 @@ export function semanticCalleeRowCount(db: ScipDatabase): number {
   const connection = connectionFor(db);
   if (!connection) return 0;
   try {
-    const row = connection.evidence
-      .prepare('SELECT COUNT(*) AS count FROM semantic_callees')
-      .get() as { count: number } | undefined;
+    const row = connection.evidence.prepare('SELECT COUNT(*) AS count FROM semantic_callees').get() as
+      | { count: number }
+      | undefined;
     return row?.count ?? 0;
   } catch (error) {
     disable(db, 'semantic_callees count', error);
@@ -226,10 +224,7 @@ export function readCachedSemanticCallees(
  * repo writes one row per production callable; per-row autocommit would pay
  * a WAL commit each, turning a seconds-long pass into minutes.
  */
-export function writeCachedSemanticCalleesBatch(
-  db: ScipDatabase,
-  entries: readonly SemanticCalleeCacheEntry[],
-): void {
+export function writeCachedSemanticCalleesBatch(db: ScipDatabase, entries: readonly SemanticCalleeCacheEntry[]): void {
   if (entries.length === 0) return;
   const connection = connectionFor(db);
   if (!connection) return;

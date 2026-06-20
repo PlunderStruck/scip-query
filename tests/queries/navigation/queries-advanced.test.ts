@@ -6,7 +6,10 @@ import { ScipDatabase } from '../../../src/storage/db.js';
 import * as queries from '../../../src/queries/index.js';
 import { findFirstSymbolMatch } from '../../../src/symbols/symbol-lookup.js';
 import { findEnclosingDefinition, getDefinitionsForFile } from '../../../src/symbols/definition-catalog.js';
-import { getResolvedReferenceSites, referenceEvidenceForSymbol } from '../../../src/symbols/references/reference-sites.js';
+import {
+  getResolvedReferenceSites,
+  referenceEvidenceForSymbol,
+} from '../../../src/symbols/references/reference-sites.js';
 import { findReferences } from '../../../src/symbols/identifier-attribution.js';
 import { shortenSymbol } from '../../../src/symbols/symbol-parser.js';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
@@ -16,15 +19,10 @@ function shortNames(items: readonly { shortName: string }[]): string[] {
   return items.map((item) => item.shortName);
 }
 
-function hasPair(
-  results: readonly { fileA: string; fileB: string }[],
-  first: string,
-  second: string,
-): boolean {
+function hasPair(results: readonly { fileA: string; fileB: string }[], first: string, second: string): boolean {
   return results.some(
     (result) =>
-      (result.fileA === first && result.fileB === second) ||
-      (result.fileA === second && result.fileB === first),
+      (result.fileA === first && result.fileB === second) || (result.fileA === second && result.fileB === first),
   );
 }
 
@@ -90,9 +88,7 @@ describe('advanced queries', () => {
     expect(result!.symbol).toBe(advancedFixture.symbols.process);
     expect(result!.shortName).toBe('app:service:process()');
     expect(result!.definitionSites).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ file: advancedFixture.files.service }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ file: advancedFixture.files.service })]),
     );
     expect(shortNames(result!.producers)).toEqual(
       expect.arrayContaining([
@@ -106,9 +102,7 @@ describe('advanced queries', () => {
     expect(result!.usageSites.map((site) => site.file)).toEqual(
       expect.arrayContaining([advancedFixture.files.controller, advancedFixture.files.entry]),
     );
-    expect(
-      result!.consumers.some((consumer) => consumer.shortName === 'app:controller:handle()'),
-    ).toBe(true);
+    expect(result!.consumers.some((consumer) => consumer.shortName === 'app:controller:handle()')).toBe(true);
   });
 
   it('computes backward slices from direct tracked inputs', () => {
@@ -180,19 +174,14 @@ describe('advanced queries', () => {
     expect(results.length).toBeGreaterThan(0);
     expect(hasPair(results, advancedFixture.files.service, advancedFixture.files.controller)).toBe(true);
 
-    const pair = results.find(
-      (result) =>
-        hasPair([result], advancedFixture.files.service, advancedFixture.files.controller),
+    const pair = results.find((result) =>
+      hasPair([result], advancedFixture.files.service, advancedFixture.files.controller),
     );
 
     expect(pair).toBeDefined();
     expect(pair!.similarity).toBeGreaterThanOrEqual(0.5);
     expect(pair!.sharedDeps).toEqual(
-      expect.arrayContaining([
-        advancedFixture.files.math,
-        advancedFixture.files.http,
-        advancedFixture.files.view,
-      ]),
+      expect.arrayContaining([advancedFixture.files.math, advancedFixture.files.http, advancedFixture.files.view]),
     );
   });
 
@@ -212,9 +201,7 @@ describe('advanced queries', () => {
     const enclosingShortNames = new Set<string>();
     for (const ref of refs) {
       const enclosingSymbol =
-        ref.enclosingSymbol ??
-        findEnclosingDefinition(getDefinitionsForFile(db, ref.file), ref.line)?.symbol ??
-        null;
+        ref.enclosingSymbol ?? findEnclosingDefinition(getDefinitionsForFile(db, ref.file), ref.line)?.symbol ?? null;
       if (!enclosingSymbol) continue;
       if (enclosingSymbol === match!.symbol) continue;
       enclosingShortNames.add(shortenSymbol(enclosingSymbol));

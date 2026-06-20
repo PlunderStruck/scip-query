@@ -10,7 +10,12 @@ import {
 import { createPerDbCache, createPerDbValue } from '../../storage/per-db-cache.js';
 import { getIdentifiersByLine } from '../identifier-index.js';
 import { isCallableSymbol, leafName } from '../symbol-parser.js';
-import { createDefinitionLineIndex, findEnclosingDefinition, getAllDefinitions, getDefinitionsForFile } from '../definition-catalog.js';
+import {
+  createDefinitionLineIndex,
+  findEnclosingDefinition,
+  getAllDefinitions,
+  getDefinitionsForFile,
+} from '../definition-catalog.js';
 import { buildFileDepGraph } from './file-dep-graph.js';
 import { getResolvedReferenceSites } from '../references/reference-sites.js';
 import type { IndexedDefinition, SymbolLocation, SymbolMatch } from '../../domain/types.js';
@@ -52,7 +57,7 @@ export function getCalleeRowsForSymbol(
   const map = buildCalleeMap(db, [symbol], { additive: opts.additive, semantic: opts.semantic });
   const callees = opts.callableOnly
     ? (map.get(symbol.symbolId) ?? []).filter((callee) => isCallableSymbol(callee.symbol))
-    : map.get(symbol.symbolId) ?? [];
+    : (map.get(symbol.symbolId) ?? []);
   return typeof opts.limit === 'number' ? callees.slice(0, opts.limit) : callees;
 }
 
@@ -65,7 +70,7 @@ export function getCallerRowsForSymbol(
 ): CallerRow[] {
   const callers = shouldUseTargetedCallerRows(db)
     ? targetedCallerRowsForSymbol(db, symbol, { semantic: opts.semantic !== false })
-    : buildCallerRowsMap(db).get(symbol.symbolId) ?? [];
+    : (buildCallerRowsMap(db).get(symbol.symbolId) ?? []);
   return typeof opts.limit === 'number' ? callers.slice(0, opts.limit) : callers;
 }
 
@@ -125,11 +130,7 @@ export function buildCallerRowsMap(db: ScipDatabase): Map<number, CallerRow[]> {
 // scip-query: ignore-extract — this is the targeted single-symbol caller
 // fallback: resolved reference sites, indexed definition lookup, and file-edge
 // attribution intentionally form one query path.
-function targetedCallerRowsForSymbol(
-  db: ScipDatabase,
-  symbol: SymbolMatch,
-  opts: { semantic: boolean },
-): CallerRow[] {
+function targetedCallerRowsForSymbol(db: ScipDatabase, symbol: SymbolMatch, opts: { semantic: boolean }): CallerRow[] {
   const rows: CallerRow[] = [];
   const seen = new Set<string>();
   const add = (row: CallerRow): void => {
@@ -166,8 +167,9 @@ function targetedCallerRowsForSymbol(
 }
 
 function indexedDefinitionForSymbol(db: ScipDatabase, symbol: SymbolMatch): IndexedDefinition | null {
-  return db.get<IndexedDefinition>(
-    `SELECT
+  return (
+    db.get<IndexedDefinition>(
+      `SELECT
        d.id AS documentId,
        gs.id AS symbolId,
        gs.symbol,
@@ -187,8 +189,9 @@ function indexedDefinitionForSymbol(db: ScipDatabase, symbol: SymbolMatch): Inde
      JOIN documents d ON d.id = COALESCE(der.document_id, c.document_id)
      WHERE gs.id = ?
      LIMIT 1`,
-    symbol.symbolId,
-  ) ?? null;
+      symbol.symbolId,
+    ) ?? null
+  );
 }
 
 // ── Callee map (bulk) ──────────────────────────────────────────
@@ -238,12 +241,13 @@ export function buildCalleeMap(
 
   const merged = new Map<number, CalleeRow[]>();
   const seenBySymbolId = new Map<number, Set<string>>();
-  const addAll = (
-    src: Map<number, CalleeRow[]>,
-  ): void => {
+  const addAll = (src: Map<number, CalleeRow[]>): void => {
     for (const [id, list] of src) {
       let bucket = merged.get(id);
-      if (!bucket) { bucket = []; merged.set(id, bucket); }
+      if (!bucket) {
+        bucket = [];
+        merged.set(id, bucket);
+      }
       let seen = seenBySymbolId.get(id);
       if (!seen) {
         seen = new Set();
@@ -307,13 +311,16 @@ function cachedSemanticCalleeMap(
   const computed = semanticCalleeMap(db, [...unkeyed, ...misses.map((miss) => miss.def)]);
   for (const [symbolId, callees] of computed) result.set(symbolId, callees);
   if (getSemanticProvider(db).availability().available) {
-    writeCachedSemanticCalleesBatch(db, misses.map((miss) => ({
-      relativePath: miss.def.relativePath,
-      symbol: miss.def.symbol,
-      contentHash: miss.contentHash,
-      depsDigest: miss.depsDigest,
-      payload: JSON.stringify(computed.get(miss.def.symbolId) ?? []),
-    })));
+    writeCachedSemanticCalleesBatch(
+      db,
+      misses.map((miss) => ({
+        relativePath: miss.def.relativePath,
+        symbol: miss.def.symbol,
+        contentHash: miss.contentHash,
+        depsDigest: miss.depsDigest,
+        payload: JSON.stringify(computed.get(miss.def.symbolId) ?? []),
+      })),
+    );
   }
   return result;
 }
@@ -348,10 +355,7 @@ function depsDigestFor(db: ScipDatabase, relativePath: string): string {
 // scip-query: ignore-extract — this is the AST callee fallback builder:
 // per-file definitions, callsites, leaf index lookup, and innermost-caller
 // attribution are one source-scan pass.
-export function buildAstCalleeMap(
-  db: ScipDatabase,
-  definitions: ReadonlyArray<SymbolMatch>,
-): Map<number, CalleeRow[]> {
+export function buildAstCalleeMap(db: ScipDatabase, definitions: ReadonlyArray<SymbolMatch>): Map<number, CalleeRow[]> {
   const result = new Map<number, CalleeRow[]>();
   const byFile = definitionsByFile(definitions, result);
   const leafIndex = getGlobalLeafIndex(db);
@@ -393,7 +397,7 @@ function definitionsByFile(
     result.set(def.symbolId, []);
   }
   for (const defs of byFile.values()) {
-    defs.sort((a, b) => (a.endLine - a.startLine) - (b.endLine - b.startLine));
+    defs.sort((a, b) => a.endLine - a.startLine - (b.endLine - b.startLine));
   }
   return byFile;
 }
@@ -424,14 +428,16 @@ export function buildChunkCalleeMap(
     end_line: number;
     symbol_id: number;
   };
-  const refRows = definitionDocumentIds.flatMap((documentIds) => db.all<ChunkMentionRow>(
-    `SELECT c.document_id, c.id AS chunk_id, c.start_line, c.end_line, m.symbol_id
+  const refRows = definitionDocumentIds.flatMap((documentIds) =>
+    db.all<ChunkMentionRow>(
+      `SELECT c.document_id, c.id AS chunk_id, c.start_line, c.end_line, m.symbol_id
      FROM mentions m
      JOIN chunks c ON m.chunk_id = c.id
      WHERE m.role != 1
        AND c.document_id IN (${documentIds.map(() => '?').join(',')})`,
-    ...documentIds,
-  ));
+      ...documentIds,
+    ),
+  );
 
   // Group by document
   const byDoc = new Map<number, ChunkMentionRow[]>();
@@ -449,8 +455,9 @@ export function buildChunkCalleeMap(
   // symbols that have no role=1 mention recorded (test fixtures, indexers
   // that emit definitions only via enclosing ranges).
   const mentionedSymbolIds = uniqueNumbers(refRows.map((row) => row.symbol_id));
-  const calleeRows = mentionedSymbolIds.flatMap((symbolIds) => db.all<{ symbol_id: number; symbol: string; document_id: number | null }>(
-    `SELECT gs.id AS symbol_id, gs.symbol,
+  const calleeRows = mentionedSymbolIds.flatMap((symbolIds) =>
+    db.all<{ symbol_id: number; symbol: string; document_id: number | null }>(
+      `SELECT gs.id AS symbol_id, gs.symbol,
             COALESCE(der.document_id, def_chunk.document_id) AS document_id
      FROM global_symbols gs
      LEFT JOIN defn_enclosing_ranges der ON der.symbol_id = gs.id
@@ -463,19 +470,24 @@ export function buildChunkCalleeMap(
        GROUP BY m.symbol_id
      ) def_chunk ON def_chunk.symbol_id = gs.id
      WHERE gs.id IN (${symbolIds.map(() => '?').join(',')})`,
-    ...symbolIds,
-    ...symbolIds,
-  ));
+      ...symbolIds,
+      ...symbolIds,
+    ),
+  );
   const documentIdsForPaths = uniqueNumbers([
     ...definitions.map((def) => def.documentId),
-    ...calleeRows.flatMap((row) => row.document_id === null ? [] : [row.document_id]),
+    ...calleeRows.flatMap((row) => (row.document_id === null ? [] : [row.document_id])),
   ]);
   const docPaths = new Map<number, string>(
-    documentIdsForPaths.flatMap((documentIds) => db.all<{ id: number; relative_path: string }>(
-      `SELECT id, relative_path FROM documents
+    documentIdsForPaths.flatMap((documentIds) =>
+      db
+        .all<{ id: number; relative_path: string }>(
+          `SELECT id, relative_path FROM documents
        WHERE id IN (${documentIds.map(() => '?').join(',')})`,
-      ...documentIds,
-    ).map((r) => [r.id, r.relative_path] as const)),
+          ...documentIds,
+        )
+        .map((r) => [r.id, r.relative_path] as const),
+    ),
   );
   const calleeInfo = new Map<number, { symbol: string; file: string }>();
   for (const r of calleeRows) {
@@ -574,9 +586,7 @@ function uniqueNumbers(values: Iterable<number>): number[][] {
 // scip-query: ignore-extract — this is the bulk caller-map merge policy:
 // SCIP mentions, AST callsites, Rust attribute calls, and TypeScript semantics
 // intentionally contribute to one cross-file reference map.
-function toCalleeRows(
-  semantic: Map<number, Array<{ symbol: string; file: string }>>,
-): Map<number, CalleeRow[]> {
+function toCalleeRows(semantic: Map<number, Array<{ symbol: string; file: string }>>): Map<number, CalleeRow[]> {
   const out = new Map<number, CalleeRow[]>();
   for (const [symbolId, callees] of semantic) {
     const rows: CalleeRow[] = [];

@@ -7,34 +7,29 @@
 import type { SyntaxNode, Tree } from '../../source/ast.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { resolvePythonImportPath } from '../../resolution/import-path-resolver.js';
-import { buildUsageBody, collectNamespaceMembers, hasIdentifierUsage, parenBalance } from '../../source/source-stripper.js';
+import {
+  buildUsageBody,
+  collectNamespaceMembers,
+  hasIdentifierUsage,
+  parenBalance,
+} from '../../source/source-stripper.js';
 import type { ParsedSourceImport } from '../../domain/types.js';
 import { collectIdentifiersOutside, firstChildOfType, parseWithAstFallback, splitTopLevel } from '../utils.js';
 
-export function parsePythonImports(
-  db: ScipDatabase,
-  importerPath: string,
-  source: string,
-): ParsedSourceImport[] {
+export function parsePythonImports(db: ScipDatabase, importerPath: string, source: string): ParsedSourceImport[] {
   return parseWithAstFallback(
     db,
     importerPath,
     (tree) => parsePythonImportsAst(db, importerPath, tree),
-    () => collectPythonImportStatements(source).flatMap((statement) =>
-      parsePythonImportStatement(db, importerPath, statement, source),
-    ),
+    () =>
+      collectPythonImportStatements(source).flatMap((statement) =>
+        parsePythonImportStatement(db, importerPath, statement, source),
+      ),
   );
 }
 
-function parsePythonImportsAst(
-  db: ScipDatabase,
-  importerPath: string,
-  tree: Tree,
-): ParsedSourceImport[] {
-  const usedNames = collectIdentifiersOutside(
-    tree,
-    new Set(['import_statement', 'import_from_statement']),
-  );
+function parsePythonImportsAst(db: ScipDatabase, importerPath: string, tree: Tree): ParsedSourceImport[] {
+  const usedNames = collectIdentifiersOutside(tree, new Set(['import_statement', 'import_from_statement']));
   const results: ParsedSourceImport[] = [];
 
   // Plain `import X` and `import X as Y`, possibly comma-separated.
@@ -155,10 +150,7 @@ function collectPythonImportStatements(source: string): Array<{
     let statementEnd = lineStart + line.length;
     let balance = parenBalance(line);
 
-    while (
-      lineIndex + 1 < lines.length
-      && (balance > 0 || statement.trimEnd().endsWith('\\'))
-    ) {
+    while (lineIndex + 1 < lines.length && (balance > 0 || statement.trimEnd().endsWith('\\'))) {
       lineIndex++;
       const nextLine = lines[lineIndex]!;
       statement += `\n${nextLine}`;
@@ -185,9 +177,7 @@ function parsePythonStatementHeader(statement: string): {
   module: string | null;
   clause: string;
 } | null {
-  const normalized = statement
-    .replace(/\\\s*\n/g, ' ')
-    .trim();
+  const normalized = statement.replace(/\\\s*\n/g, ' ').trim();
 
   if (normalized.startsWith('import ')) {
     return {
@@ -240,20 +230,20 @@ function parsePythonImportStatement(
       const sourcePath = resolvePythonImportPath(db, importerPath, importedName);
       const usedMembers = collectNamespaceMembers(body, localName);
 
-      return [{
-        importedName,
-        localName,
-        sourcePath,
-        kind: 'namespace' as const,
-        used: hasIdentifierUsage(body, localName) || usedMembers.length > 0,
-        usedMembers,
-      }];
+      return [
+        {
+          importedName,
+          localName,
+          sourcePath,
+          kind: 'namespace' as const,
+          used: hasIdentifierUsage(body, localName) || usedMembers.length > 0,
+          usedMembers,
+        },
+      ];
     });
   }
 
-  const sourcePath = statement.module
-    ? resolvePythonImportPath(db, importerPath, statement.module)
-    : null;
+  const sourcePath = statement.module ? resolvePythonImportPath(db, importerPath, statement.module) : null;
   const results: ParsedSourceImport[] = [];
   for (const entry of splitTopLevel(normalizedClause)) {
     const cleaned = entry.trim().replace(/,$/, '');

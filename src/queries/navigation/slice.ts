@@ -46,7 +46,6 @@ export function slice(
   }
 }
 
-
 // scip-query: ignore-similar — shares callee-row helpers with forwardSlice but
 // implements transitive BFS; forwardSlice does single-hop reference attribution.
 // Different algorithms, intentionally split.
@@ -103,11 +102,7 @@ function backwardSlice(
 // scip-query: ignore-similar — single-hop reference + enclosing-definition
 // walk; different algorithm from backwardSlice's transitive BFS even though
 // they share the same callee-row + symbol-lookup primitives.
-function forwardSlice(
-  db: ScipDatabase,
-  match: SymbolMatch,
-  opts: { semantic: boolean },
-): SliceResult {
+function forwardSlice(db: ScipDatabase, match: SymbolMatch, opts: { semantic: boolean }): SliceResult {
   // Find where the target is referenced, then at each reference site,
   // report the enclosing consumer. A forward slice is "what this symbol
   // feeds into", not "what else is used alongside it".
@@ -121,10 +116,7 @@ function forwardSlice(
     // Enclosing symbol via corrected ranges. Reference-site evidence usually
     // already includes this; this fallback handles older mention-only sites.
     const enclosingSymbol =
-      ref.enclosingSymbol ?? findEnclosingDefinition(
-        index.definitionsForFile(ref.file),
-        ref.line,
-      )?.symbol ?? null;
+      ref.enclosingSymbol ?? findEnclosingDefinition(index.definitionsForFile(ref.file), ref.line)?.symbol ?? null;
     if (!enclosingSymbol || enclosingSymbol === match.symbol) continue;
 
     const enclosingMatch = findExactSymbolMatch(db, enclosingSymbol);

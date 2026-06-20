@@ -4,19 +4,13 @@ import type { SemanticCallee, SemanticImportUsage, SemanticProvider, SemanticRef
 import { getSemanticProvider } from './provider-cache.js';
 import { isTypeScriptLike } from './typescript/source-kinds.js';
 
-export function semanticImportUsage(
-  db: ScipDatabase,
-  file: string,
-): SemanticImportUsage[] {
+export function semanticImportUsage(db: ScipDatabase, file: string): SemanticImportUsage[] {
   const provider = availableTypeScriptProvider(db, file);
   if (!provider) return [];
   return provider.importUsage(file);
 }
 
-export function semanticReferences(
-  db: ScipDatabase,
-  definition: IndexedDefinition,
-): SemanticReference[] {
+export function semanticReferences(db: ScipDatabase, definition: IndexedDefinition): SemanticReference[] {
   const provider = availableTypeScriptProvider(db, definition.relativePath);
   if (!provider) return [];
   return provider.referencesFor(definition);
@@ -59,10 +53,7 @@ export function semanticCalleeMap(
   return result;
 }
 
-export function semanticSignature(
-  db: ScipDatabase,
-  definition: IndexedDefinition,
-): string | null {
+export function semanticSignature(db: ScipDatabase, definition: IndexedDefinition): string | null {
   const provider = availableTypeScriptProvider(db, definition.relativePath);
   if (!provider) return null;
   return provider.signatureFor(definition);

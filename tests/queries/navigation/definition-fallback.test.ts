@@ -1,17 +1,6 @@
 import Database from 'better-sqlite3';
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  it,
-} from 'vitest';
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
@@ -51,12 +40,9 @@ function createFallbackFixtureProject(projectRoot: string): void {
 
   writeFileSync(
     join(projectRoot, 'src', 'Selector.scala'),
-    [
-      'class CandidateSelector {',
-      '  def select(snapshot: String, sessions: List[String]): Unit = ()',
-      '}',
-      '',
-    ].join('\n'),
+    ['class CandidateSelector {', '  def select(snapshot: String, sessions: List[String]): Unit = ()', '}', ''].join(
+      '\n',
+    ),
   );
 }
 
@@ -122,14 +108,62 @@ function createFallbackFixtureDb(dbPath: string): void {
      VALUES (?, ?, ?, ?, ?)`,
   );
 
-  insertSymbol.run(1, 'semanticdb maven . . example/RunCoordinator#', 'RunCoordinator', 5, 'class RunCoordinator|class RunCoordinator');
-  insertSymbol.run(2, 'semanticdb maven . . example/RunCoordinator#scanBoard().', 'scanBoard', 12, 'def scanBoard|def scanBoard(): Unit');
-  insertSymbol.run(3, 'semanticdb maven . . example/RunCoordinator#recoverStaleRuns().', 'recoverStaleRuns', 12, 'def recoverStaleRuns|def recoverStaleRuns(): Unit');
-  insertSymbol.run(4, 'semanticdb maven . . example/CompanionAdapter#', 'CompanionAdapter', 5, 'trait CompanionAdapter|trait CompanionAdapter');
-  insertSymbol.run(5, 'semanticdb maven . . example/CompanionAdapter#fetchBoardSnapshot().', 'fetchBoardSnapshot', 12, 'def fetchBoardSnapshot|def fetchBoardSnapshot(): String');
-  insertSymbol.run(6, 'semanticdb maven . . example/CompanionAdapter#fetchActiveSessions().', 'fetchActiveSessions', 12, 'def fetchActiveSessions|def fetchActiveSessions(): List[String]');
-  insertSymbol.run(7, 'semanticdb maven . . example/CandidateSelector#', 'CandidateSelector', 5, 'class CandidateSelector|class CandidateSelector');
-  insertSymbol.run(8, 'semanticdb maven . . example/CandidateSelector#select().', 'select', 12, 'def select|def select(snapshot: String, sessions: List[String]): Unit');
+  insertSymbol.run(
+    1,
+    'semanticdb maven . . example/RunCoordinator#',
+    'RunCoordinator',
+    5,
+    'class RunCoordinator|class RunCoordinator',
+  );
+  insertSymbol.run(
+    2,
+    'semanticdb maven . . example/RunCoordinator#scanBoard().',
+    'scanBoard',
+    12,
+    'def scanBoard|def scanBoard(): Unit',
+  );
+  insertSymbol.run(
+    3,
+    'semanticdb maven . . example/RunCoordinator#recoverStaleRuns().',
+    'recoverStaleRuns',
+    12,
+    'def recoverStaleRuns|def recoverStaleRuns(): Unit',
+  );
+  insertSymbol.run(
+    4,
+    'semanticdb maven . . example/CompanionAdapter#',
+    'CompanionAdapter',
+    5,
+    'trait CompanionAdapter|trait CompanionAdapter',
+  );
+  insertSymbol.run(
+    5,
+    'semanticdb maven . . example/CompanionAdapter#fetchBoardSnapshot().',
+    'fetchBoardSnapshot',
+    12,
+    'def fetchBoardSnapshot|def fetchBoardSnapshot(): String',
+  );
+  insertSymbol.run(
+    6,
+    'semanticdb maven . . example/CompanionAdapter#fetchActiveSessions().',
+    'fetchActiveSessions',
+    12,
+    'def fetchActiveSessions|def fetchActiveSessions(): List[String]',
+  );
+  insertSymbol.run(
+    7,
+    'semanticdb maven . . example/CandidateSelector#',
+    'CandidateSelector',
+    5,
+    'class CandidateSelector|class CandidateSelector',
+  );
+  insertSymbol.run(
+    8,
+    'semanticdb maven . . example/CandidateSelector#select().',
+    'select',
+    12,
+    'def select|def select(snapshot: String, sessions: List[String]): Unit',
+  );
 
   run(`
     INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
@@ -190,11 +224,13 @@ describe('definition fallback', () => {
     expect(match?.endLine).toBe(1);
 
     const symbolRows = symbols(db, 'src/RunCoordinator.scala');
-    expect(symbolRows.map((row) => row.shortName)).toEqual(expect.arrayContaining([
-      'example:RunCoordinator',
-      'example:RunCoordinator:scanBoard()',
-      'example:RunCoordinator:recoverStaleRuns()',
-    ]));
+    expect(symbolRows.map((row) => row.shortName)).toEqual(
+      expect.arrayContaining([
+        'example:RunCoordinator',
+        'example:RunCoordinator:scanBoard()',
+        'example:RunCoordinator:recoverStaleRuns()',
+      ]),
+    );
 
     const snippet = code(db, 'scanBoard');
     expect(snippet?.source).toContain('selector.select');
@@ -203,10 +239,7 @@ describe('definition fallback', () => {
 
   it('recovers methods, trace, and call graph from definition mentions', () => {
     const methodRows = methods(db, 'RunCoordinator');
-    expect(methodRows.map((row) => row.name)).toEqual(expect.arrayContaining([
-      'scanBoard',
-      'recoverStaleRuns',
-    ]));
+    expect(methodRows.map((row) => row.name)).toEqual(expect.arrayContaining(['scanBoard', 'recoverStaleRuns']));
 
     const traced = trace(db, 'scanBoard');
     expect(traced.definitions).toHaveLength(1);
@@ -214,10 +247,12 @@ describe('definition fallback', () => {
 
     const graph = callGraph(db, 'scanBoard');
     expect(graph).not.toBeNull();
-    expect(graph?.callees.map((row) => row.shortName)).toEqual(expect.arrayContaining([
-      'example:CompanionAdapter:fetchBoardSnapshot()',
-      'example:CompanionAdapter:fetchActiveSessions()',
-      'example:CandidateSelector:select()',
-    ]));
+    expect(graph?.callees.map((row) => row.shortName)).toEqual(
+      expect.arrayContaining([
+        'example:CompanionAdapter:fetchBoardSnapshot()',
+        'example:CompanionAdapter:fetchActiveSessions()',
+        'example:CandidateSelector:select()',
+      ]),
+    );
   });
 });

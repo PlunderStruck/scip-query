@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { insertTopSimilarResult, type RankedSimilarResult, type SimilarSymbolResult } from '../../../src/queries/cleanup/similar.js';
+import {
+  insertTopSimilarResult,
+  type RankedSimilarResult,
+  type SimilarSymbolResult,
+} from '../../../src/queries/cleanup/similar.js';
 
 function result(name: string, similarity: number): SimilarSymbolResult {
   return {

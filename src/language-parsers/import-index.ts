@@ -6,10 +6,7 @@ import { getSourceImports } from './index.js';
  * identifier can resolve to. Namespace members are included because a member
  * access can carry the same attribution signal as a direct named import.
  */
-export function sourceImportPathsByLocalName(
-  db: ScipDatabase,
-  file: string,
-): Map<string, Set<string>> {
+export function sourceImportPathsByLocalName(db: ScipDatabase, file: string): Map<string, Set<string>> {
   const map = new Map<string, Set<string>>();
   for (const entry of getSourceImports(db, file)) {
     if (!entry.sourcePath) continue;

@@ -155,18 +155,15 @@ function getDirectAffectedRows(
   return results;
 }
 
-function consumerFilesForSymbol(
-  db: ScipDatabase,
-  target: SymbolMatch,
-  scope: string | undefined,
-): Set<string> {
+function consumerFilesForSymbol(db: ScipDatabase, target: SymbolMatch, scope: string | undefined): Set<string> {
   const scopeFilter = scope ? 'AND consumer_d.relative_path LIKE ?' : '';
   const params: Array<number | string> = [target.symbolId, target.documentId];
   if (scope) params.push(`%${scope}%`);
 
   return new Set(
-    db.all<{ relative_path: string }>(
-      `SELECT DISTINCT consumer_d.relative_path
+    db
+      .all<{ relative_path: string }>(
+        `SELECT DISTINCT consumer_d.relative_path
        FROM mentions m
        JOIN chunks c ON m.chunk_id = c.id
        JOIN documents consumer_d ON consumer_d.id = c.document_id
@@ -175,8 +172,8 @@ function consumerFilesForSymbol(
          AND c.document_id != ?
          ${db.pathExclusionsFor('consumer_d')}
          ${scopeFilter}`,
-      ...params,
-    )
+        ...params,
+      )
       .map((row) => row.relative_path)
       .filter((file) => !db.isIgnored(file)),
   );

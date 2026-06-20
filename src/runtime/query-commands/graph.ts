@@ -17,14 +17,15 @@ import { render } from '../render.js';
 
 const handleBottlenecks = budgetedTableCommand('bottlenecks', {
   headers: ['score', 'fan-in', 'fan-out', 'symbol'],
-  query: ({ db, opts, budget }) => queries.bottlenecks(db, {
-    limit: definedLimitOption(opts, 'limit', 20),
-    scope: stringOptionValue(opts, 'scope'),
-    minFanIn: definedNumberOption(opts, 'minFanIn', 2),
-    minFanOut: definedNumberOption(opts, 'minFanOut', 2),
-    scanLimit: budget.scanLimit,
-    semantic: budget.semantic,
-  }),
+  query: ({ db, opts, budget }) =>
+    queries.bottlenecks(db, {
+      limit: definedLimitOption(opts, 'limit', 20),
+      scope: stringOptionValue(opts, 'scope'),
+      minFanIn: definedNumberOption(opts, 'minFanIn', 2),
+      minFanOut: definedNumberOption(opts, 'minFanOut', 2),
+      scanLimit: budget.scanLimit,
+      semantic: budget.semantic,
+    }),
   format: (r) =>
     `  ${String(r.score).padStart(5)}  ${String(r.fanIn).padStart(6)}  ` +
     `${String(r.fanOut).padStart(7)}  ${r.shortName}`,
@@ -105,11 +106,12 @@ const handleCoupling = dbCommand(({ db, args, opts }) => {
 
 const handleCycles = reportCommand({
   commandName: 'cycles',
-  query: ({ db, opts }) => queries.cycles(db, {
-    scope: stringOptionValue(opts, 'scope'),
-    maxDepth: definedNumberOption(opts, 'maxDepth', 10),
-  }),
-  emptyMessage: (results) => results.length === 0 ? 'No circular dependencies found.' : undefined,
+  query: ({ db, opts }) =>
+    queries.cycles(db, {
+      scope: stringOptionValue(opts, 'scope'),
+      maxDepth: definedNumberOption(opts, 'maxDepth', 10),
+    }),
+  emptyMessage: (results) => (results.length === 0 ? 'No circular dependencies found.' : undefined),
   render: (results) => {
     const real = results.filter((r) => r.kind === 'real');
     const moduleHierarchy = results.filter((r) => r.kind === 'module-hierarchy');
@@ -123,19 +125,22 @@ const handleCycles = reportCommand({
     if (real.length === 0) console.log('No real circular dependencies found.');
     else console.log(`\n${real.length} real cycle(s) found.`);
     if (moduleHierarchy.length > 0) {
-      console.log(`(${moduleHierarchy.length} module-hierarchy cycle(s) hidden — barrel files participating in normal parent/child re-export patterns. Pass --include-module-hierarchy to see them.)`);
+      console.log(
+        `(${moduleHierarchy.length} module-hierarchy cycle(s) hidden — barrel files participating in normal parent/child re-export patterns. Pass --include-module-hierarchy to see them.)`,
+      );
     }
   },
 });
 
 const handleDeepChains = reportCommand({
   commandName: 'deep-chains',
-  query: ({ db, opts }) => queries.deepChains(db, {
-    limit: definedLimitOption(opts, 'limit', 10),
-    scope: stringOptionValue(opts, 'scope'),
-    minDepth: definedNumberOption(opts, 'minDepth', 3),
-  }),
-  emptyMessage: (results) => results.length === 0 ? 'No deep chains found.' : undefined,
+  query: ({ db, opts }) =>
+    queries.deepChains(db, {
+      limit: definedLimitOption(opts, 'limit', 10),
+      scope: stringOptionValue(opts, 'scope'),
+      minDepth: definedNumberOption(opts, 'minDepth', 3),
+    }),
+  emptyMessage: (results) => (results.length === 0 ? 'No deep chains found.' : undefined),
   render: (results) => {
     for (let i = 0; i < results.length; i++) {
       console.log(`\nChain ${i + 1} (depth ${results[i]!.depth}):`);
@@ -149,17 +154,18 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'hotspots',
     command: 'hotspots',
     description: 'Most-referenced symbols in the codebase (choke points)',
-      options: [
-        option('-n, --limit <n>', 'Number of results', parseInteger, 30),
-        option('-s, --scope <path>', 'Limit to files matching path'),
-        option('--full', 'Run unbounded analysis on large indexes'),
-      ],
+    options: [
+      option('-n, --limit <n>', 'Number of results', parseInteger, 30),
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option('--full', 'Run unbounded analysis on large indexes'),
+    ],
     docs: doc('Graph'),
     headers: ['refs', 'files', 'symbol'],
-    query: ({ db, opts }) => queries.hotspots(db, {
-      limit: definedLimitOption(opts, 'limit', 30),
-      scope: stringOptionValue(opts, 'scope'),
-    }),
+    query: ({ db, opts }) =>
+      queries.hotspots(db, {
+        limit: definedLimitOption(opts, 'limit', 30),
+        scope: stringOptionValue(opts, 'scope'),
+      }),
     format: (r) => `  ${String(r.refCount).padStart(4)}  ${String(r.fileCount).padStart(5)}  ${r.shortName}`,
   }),
   {
@@ -167,10 +173,10 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     command: 'fan-in [symbol]',
     description: 'How many files reference a symbol (or top fan-in across codebase)',
     options: withJsonOption([
-        option('-n, --limit <n>', 'Number of results for top mode', parseInteger, 30),
-        option('-s, --scope <path>', 'Limit to files matching path'),
-        option('--full', 'Run unbounded analysis on large indexes'),
-      ]),
+      option('-n, --limit <n>', 'Number of results for top mode', parseInteger, 30),
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option('--full', 'Run unbounded analysis on large indexes'),
+    ]),
     renderShape: 'custom',
     docs: doc('Graph'),
     handler: handleFanIn,
@@ -180,10 +186,10 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     command: 'fan-out [file]',
     description: 'How many external symbols a file uses (or top fan-out across codebase)',
     options: withJsonOption([
-        option('-n, --limit <n>', 'Number of results for top mode', parseInteger, 30),
-        option('-s, --scope <path>', 'Limit to files matching path'),
-        option('--full', 'Run unbounded analysis on large indexes'),
-      ]),
+      option('-n, --limit <n>', 'Number of results for top mode', parseInteger, 30),
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option('--full', 'Run unbounded analysis on large indexes'),
+    ]),
     renderShape: 'custom',
     docs: doc('Graph'),
     handler: handleFanOut,
@@ -193,10 +199,10 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     command: 'coupling [file1] [file2]',
     description: 'Coupling between two files, or top coupled pairs in codebase',
     options: withJsonOption([
-        option('-n, --limit <n>', 'Number of results for top mode', parseInteger, 20),
-        option('-s, --scope <path>', 'Limit to files matching path'),
-        option('--full', 'Run unbounded analysis on large indexes'),
-      ]),
+      option('-n, --limit <n>', 'Number of results for top mode', parseInteger, 20),
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option('--full', 'Run unbounded analysis on large indexes'),
+    ]),
     renderShape: 'custom',
     docs: doc('Graph'),
     handler: handleCoupling,
@@ -234,11 +240,11 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     command: 'deep-chains',
     description: 'Find the longest transitive dependency chains',
     options: withJsonOption([
-        option('-n, --limit <n>', 'Number of chains to show', parseInteger, 10),
-        option('-s, --scope <path>', 'Limit to files matching path'),
-        option('--min-depth <n>', 'Minimum chain depth', parseInteger, 3),
-        option('--full', 'Run unbounded analysis on large indexes'),
-      ]),
+      option('-n, --limit <n>', 'Number of chains to show', parseInteger, 10),
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option('--min-depth <n>', 'Minimum chain depth', parseInteger, 3),
+      option('--full', 'Run unbounded analysis on large indexes'),
+    ]),
     renderShape: 'custom',
     docs: doc('Graph'),
     handler: handleDeepChains,
@@ -251,15 +257,22 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     budget: 'semantic',
     docs: doc('Graph'),
     query: ({ db, args, budget }) => queries.callGraph(db, String(args[0]), { semantic: budget.semantic }),
-    emptyMessage: (result) => result ? undefined : 'Symbol not found.',
+    emptyMessage: (result) => (result ? undefined : 'Symbol not found.'),
     before: (result) => {
       if (result) console.log(`Symbol: ${result.shortName}\n`);
     },
-    sections: (result) => result
-      ? [
-        { title: `CALLERS (${result.callers.length})`, rows: result.callers.map((c) => `  ${c.file}  ${c.shortName}`) },
-        { title: `CALLEES (${result.callees.length})`, rows: result.callees.map((c) => `  ${c.file}  ${c.shortName}`) },
-      ]
-      : [],
+    sections: (result) =>
+      result
+        ? [
+            {
+              title: `CALLERS (${result.callers.length})`,
+              rows: result.callers.map((c) => `  ${c.file}  ${c.shortName}`),
+            },
+            {
+              title: `CALLEES (${result.callees.length})`,
+              rows: result.callees.map((c) => `  ${c.file}  ${c.shortName}`),
+            },
+          ]
+        : [],
   }),
 ];

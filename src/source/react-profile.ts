@@ -57,13 +57,7 @@ const BUILTIN_HOOKS = new Set([
 ]);
 const EFFECT_HOOKS = new Set(['useEffect', 'useInsertionEffect', 'useLayoutEffect']);
 const STATE_HOOKS = new Set(['useActionState', 'useOptimistic', 'useReducer', 'useRef', 'useState']);
-const GENERIC_HOOKS = new Set([
-  'useLocation',
-  'useNavigate',
-  'useParams',
-  'useSearchParams',
-  'useTranslation',
-]);
+const GENERIC_HOOKS = new Set(['useLocation', 'useNavigate', 'useParams', 'useSearchParams', 'useTranslation']);
 const REQUEST_CALLS = new Set([
   'axios',
   'fetch',
@@ -100,16 +94,7 @@ const HANDLER_VERBS = new Set([
   'toggle',
   'update',
 ]);
-const JSX_TOKEN_STOP_WORDS = new Set([
-  'children',
-  'className',
-  'false',
-  'key',
-  'null',
-  'style',
-  'true',
-  'undefined',
-]);
+const JSX_TOKEN_STOP_WORDS = new Set(['children', 'className', 'false', 'key', 'null', 'style', 'true', 'undefined']);
 const JSX_PROP_STOP_WORDS = new Set([
   'aria-hidden',
   'className',
@@ -136,15 +121,16 @@ export function buildReactComponentBehaviorProfiles(
   const files = getSourceFiles(db, { extensions: REACT_EXTENSIONS })
     .filter((file) => !opts.scope || file.includes(opts.scope))
     .sort();
-  const limitedFiles = typeof opts.scanLimit === 'number' && opts.scanLimit > 0
-    ? files.slice(0, opts.scanLimit)
-    : files;
+  const limitedFiles =
+    typeof opts.scanLimit === 'number' && opts.scanLimit > 0 ? files.slice(0, opts.scanLimit) : files;
 
   return limitedFiles
     .flatMap((file) => buildReactComponentBehaviorProfilesForFile(db, file))
-    .filter((profile) =>
-      (opts.minJsxTokens === undefined || profile.jsxTokens.size >= opts.minJsxTokens)
-      && (opts.minBehaviorTokens === undefined || profile.behaviorTokens.size >= opts.minBehaviorTokens));
+    .filter(
+      (profile) =>
+        (opts.minJsxTokens === undefined || profile.jsxTokens.size >= opts.minJsxTokens) &&
+        (opts.minBehaviorTokens === undefined || profile.behaviorTokens.size >= opts.minBehaviorTokens),
+    );
 }
 
 export function buildReactComponentBehaviorProfilesForFile(
@@ -157,8 +143,9 @@ export function buildReactComponentBehaviorProfilesForFile(
   const tree = getAst(db, file);
   if (!tree) return [];
   const fileLines = getSourceLines(db, file).length;
-  const candidates = collectReactCandidates(tree.rootNode, language)
-    .filter((candidate) => candidate.kind === 'hook' || containsJsx(candidate.bodyNode));
+  const candidates = collectReactCandidates(tree.rootNode, language).filter(
+    (candidate) => candidate.kind === 'hook' || containsJsx(candidate.bodyNode),
+  );
 
   return candidates.map((candidate) => {
     const jsxFacts = collectJsxFacts(candidate.bodyNode);
@@ -249,8 +236,9 @@ function unwrapReactCallable(node: SyntaxNode): SyntaxNode | null {
   const callName = callableCalleeName(node);
   if (callName !== 'memo' && callName !== 'forwardRef') return null;
   const args = node.namedChildren.find((child) => child.type === 'arguments');
-  const fn = args?.namedChildren.find((child) =>
-    child.type === 'arrow_function' || child.type === 'function_expression');
+  const fn = args?.namedChildren.find(
+    (child) => child.type === 'arrow_function' || child.type === 'function_expression',
+  );
   return fn ?? null;
 }
 
@@ -258,10 +246,10 @@ function hasFunctionAncestor(node: SyntaxNode): boolean {
   let parent = node.parent;
   while (parent) {
     if (
-      parent.type === 'function_declaration'
-      || parent.type === 'function_expression'
-      || parent.type === 'arrow_function'
-      || parent.type === 'method_definition'
+      parent.type === 'function_declaration' ||
+      parent.type === 'function_expression' ||
+      parent.type === 'arrow_function' ||
+      parent.type === 'method_definition'
     ) {
       return true;
     }
@@ -362,11 +350,11 @@ function recordJsxExpression(node: SyntaxNode, facts: JsxFacts): void {
 function jsxTagName(node: SyntaxNode): string | null {
   for (const child of node.namedChildren) {
     if (
-      child.type === 'identifier'
-      || child.type === 'jsx_identifier'
-      || child.type === 'property_identifier'
-      || child.type === 'member_expression'
-      || child.type === 'jsx_member_expression'
+      child.type === 'identifier' ||
+      child.type === 'jsx_identifier' ||
+      child.type === 'property_identifier' ||
+      child.type === 'member_expression' ||
+      child.type === 'jsx_member_expression'
     ) {
       return child.text;
     }
@@ -376,11 +364,7 @@ function jsxTagName(node: SyntaxNode): string | null {
 
 function jsxAttributeName(node: SyntaxNode): string | null {
   for (const child of node.namedChildren) {
-    if (
-      child.type === 'property_identifier'
-      || child.type === 'identifier'
-      || child.type === 'jsx_identifier'
-    ) {
+    if (child.type === 'property_identifier' || child.type === 'identifier' || child.type === 'jsx_identifier') {
       return child.text;
     }
   }
@@ -471,9 +455,10 @@ function recordHandlerName(name: string, facts: BehaviorFacts): void {
 }
 
 function leadingVerb(name: string): string | null {
-  const normalized = name.startsWith('handle') && name.length > 'handle'.length
-    ? name.slice('handle'.length).replace(/^[A-Z]/, (match) => match.toLowerCase())
-    : name;
+  const normalized =
+    name.startsWith('handle') && name.length > 'handle'.length
+      ? name.slice('handle'.length).replace(/^[A-Z]/, (match) => match.toLowerCase())
+      : name;
   return /^[a-z]+/.exec(normalized)?.[0] ?? null;
 }
 
@@ -488,9 +473,9 @@ function normalizeJsxName(name: string): string {
 function simpleIdentifier(node: SyntaxNode | null | undefined): string | null {
   if (!node) return null;
   if (
-    node.type === 'identifier'
-    || node.type === 'property_identifier'
-    || node.type === 'shorthand_property_identifier'
+    node.type === 'identifier' ||
+    node.type === 'property_identifier' ||
+    node.type === 'shorthand_property_identifier'
   ) {
     return node.text;
   }

@@ -26,9 +26,7 @@ export function hierarchy(db: ScipDatabase, symbolPattern: string): HierarchyNod
   );
   if (!sym) return [];
 
-  const chain: HierarchyNode[] = [
-    { symbol: sym.symbol, shortName: shortenSymbol(sym.symbol), depth: 0 },
-  ];
+  const chain: HierarchyNode[] = [{ symbol: sym.symbol, shortName: shortenSymbol(sym.symbol), depth: 0 }];
 
   // Walk enclosing_symbol chain if available
   let current = sym.enclosing_symbol;
@@ -69,9 +67,16 @@ export function hierarchy(db: ScipDatabase, symbolPattern: string): HierarchyNod
   const syntheticChain = [chain[0]!];
   for (let i = descriptors.length - 2, syntheticDepth = 1; i >= 0; i--, syntheticDepth++) {
     const partial = descriptors.slice(0, i + 1);
-    const shortName = partial.map((descriptor) =>
-      descriptor.suffix === 'method' ? `${descriptor.name}()` : descriptor.name.replace(/\.(ts|tsx|js|jsx|mjs|cjs|py|pyi|rs|java|scala|kt|kts|rb|go|cs|vb|dart|php|c|cc|cpp|cxx|h|hpp)$/, ''),
-    ).join(':');
+    const shortName = partial
+      .map((descriptor) =>
+        descriptor.suffix === 'method'
+          ? `${descriptor.name}()`
+          : descriptor.name.replace(
+              /\.(ts|tsx|js|jsx|mjs|cjs|py|pyi|rs|java|scala|kt|kts|rb|go|cs|vb|dart|php|c|cc|cpp|cxx|h|hpp)$/,
+              '',
+            ),
+      )
+      .join(':');
     syntheticChain.push({
       symbol: shortName,
       shortName,

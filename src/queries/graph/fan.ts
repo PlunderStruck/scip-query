@@ -13,10 +13,7 @@ export interface FanResult {
  * Fan-in: how many distinct files reference this symbol.
  * High fan-in = widely depended upon = high blast radius for changes.
  */
-export function fanIn(
-  db: ScipDatabase,
-  symbolPattern: string,
-): FanResult[] {
+export function fanIn(db: ScipDatabase, symbolPattern: string): FanResult[] {
   const match = findFirstSymbolMatch(db, symbolPattern);
   if (!match) {
     return [];
@@ -31,20 +28,19 @@ export function fanIn(
     match.symbolId,
   );
 
-  return [{
-    name: shortenSymbol(match.symbol),
-    count: row?.file_count ?? 0,
-  }];
+  return [
+    {
+      name: shortenSymbol(match.symbol),
+      count: row?.file_count ?? 0,
+    },
+  ];
 }
 
 /**
  * Fan-out: how many external symbols does this file reference.
  * High fan-out = depends on many things = fragile to upstream changes.
  */
-export function fanOut(
-  db: ScipDatabase,
-  filePattern: string,
-): FanResult[] {
+export function fanOut(db: ScipDatabase, filePattern: string): FanResult[] {
   const resolvedFile = resolveIndexedFile(db, filePattern);
   if (!resolvedFile) {
     return [];
@@ -92,19 +88,18 @@ export function fanOut(
     return [];
   }
 
-  return [{
-    name: resolvedFile,
-    count: deps.size,
-  }];
+  return [
+    {
+      name: resolvedFile,
+      count: deps.size,
+    },
+  ];
 }
 
 /**
  * Top fan-in across the whole codebase — the most depended-on symbols.
  */
-export function topFanIn(
-  db: ScipDatabase,
-  opts: { limit?: number; scope?: string } = {},
-): FanResult[] {
+export function topFanIn(db: ScipDatabase, opts: { limit?: number; scope?: string } = {}): FanResult[] {
   return fetchTopFanInRows(db, opts).map((r) => ({
     name: shortenSymbol(r.symbol),
     count: r.file_count,
@@ -116,9 +111,7 @@ function fetchTopFanInRows(
   opts: { limit?: number; scope?: string },
 ): Array<{ symbol: string; file_count: number }> {
   const { limit = 30, scope } = opts;
-  const scopeFilter = scope
-    ? `AND def_d.relative_path LIKE '%${scope}%'`
-    : '';
+  const scopeFilter = scope ? `AND def_d.relative_path LIKE '%${scope}%'` : '';
 
   return db.all<{ symbol: string; file_count: number }>(
     `SELECT gs.symbol, COUNT(DISTINCT c.document_id) AS file_count
@@ -151,14 +144,9 @@ function fetchTopFanInRows(
 // scip-query: ignore-similar — shares SCIP-DB join shape with bottlenecks +
 // hotspots; measures per-file external-symbol count. Each query asks a
 // different question of the same SCIP graph.
-export function topFanOut(
-  db: ScipDatabase,
-  opts: { limit?: number; scope?: string } = {},
-): FanResult[] {
+export function topFanOut(db: ScipDatabase, opts: { limit?: number; scope?: string } = {}): FanResult[] {
   const { limit = 30, scope } = opts;
-  const scopeFilter = scope
-    ? `AND d.relative_path LIKE '%${scope}%'`
-    : '';
+  const scopeFilter = scope ? `AND d.relative_path LIKE '%${scope}%'` : '';
 
   const rows = db.all<{
     relative_path: string;

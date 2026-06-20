@@ -35,12 +35,7 @@ export const DIFF_GATE_CHECKS: readonly DiffGateCheck[] = [
   'baseline',
 ];
 
-export type DiffGateEvidence =
-  | 'graph-fact'
-  | 'semantic'
-  | 'heuristic'
-  | 'change-graph'
-  | 'baseline';
+export type DiffGateEvidence = 'graph-fact' | 'semantic' | 'heuristic' | 'change-graph' | 'baseline';
 
 export type DiffGateSeverity = 'info' | 'warning' | 'error';
 
@@ -143,7 +138,9 @@ export function diffGate(
     }
     run();
   };
-  runUnlessSkipped('echo', () => runEchoCheck(db, impact.changedSymbols, changed, movedSymbolPreexisted, maxEchoChecks, minSimilarity, result));
+  runUnlessSkipped('echo', () =>
+    runEchoCheck(db, impact.changedSymbols, changed, movedSymbolPreexisted, maxEchoChecks, minSimilarity, result),
+  );
   runUnlessSkipped('incomplete-migration', () => runIncompleteMigrationCheck(db, base, impactPlan, maxHelpers, result));
   runUnlessSkipped('co-change-partner', () => runCoChangePartnerCheck(db, changed, minTogether, minConfidence, result));
   runUnlessSkipped('doc-reference', () => runDocReferenceCheck(db, changed, impactPlan.changedRanges, result));
@@ -155,10 +152,7 @@ export function diffGate(
   return result;
 }
 
-function applyStructuredSuppressions(
-  result: DiffGateResult,
-  suppressions: readonly FindingSuppression[],
-): void {
+function applyStructuredSuppressions(result: DiffGateResult, suppressions: readonly FindingSuppression[]): void {
   if (suppressions.length === 0 || result.findings.length === 0) return;
   const kept: DiffGateFinding[] = [];
   for (const finding of result.findings) {
@@ -172,10 +166,7 @@ function applyStructuredSuppressions(
   result.findings = kept;
 }
 
-function suppressionMatches(
-  suppression: FindingSuppression,
-  finding: DiffGateFinding,
-): boolean {
+function suppressionMatches(suppression: FindingSuppression, finding: DiffGateFinding): boolean {
   if (!suppression.reason || suppression.reason.trim() === '') return false;
   if (suppression.expiresAt && Date.parse(suppression.expiresAt) <= Date.now()) return false;
   if (suppression.id && suppression.id !== finding.id) return false;
@@ -251,13 +242,11 @@ function runIncompleteMigrationCheck(
     const sites = finding.leftovers
       .map((leftover) => `${leftover.shortName} (${leftover.file}, ${Math.round(leftover.containment * 100)}%)`)
       .join(', ');
-    const relatedFiles = [
-      ...finding.migratedFiles,
-      ...finding.leftovers.map((leftover) => leftover.file),
-    ];
-    const confidence = finding.leftovers.length === 0
-      ? undefined
-      : Math.max(...finding.leftovers.map((leftover) => leftover.containment));
+    const relatedFiles = [...finding.migratedFiles, ...finding.leftovers.map((leftover) => leftover.file)];
+    const confidence =
+      finding.leftovers.length === 0
+        ? undefined
+        : Math.max(...finding.leftovers.map((leftover) => leftover.containment));
     const id = findingId('incomplete-migration', finding.helperSymbol, finding.helperFile, relatedFiles.join('|'));
     result.findings.push({
       id,
@@ -386,11 +375,7 @@ function changedRangesByFile(
   return ranges;
 }
 
-function hasDocRelevantChange(
-  db: ScipDatabase,
-  file: string,
-  ranges: readonly ChangedLineRange[],
-): boolean {
+function hasDocRelevantChange(db: ScipDatabase, file: string, ranges: readonly ChangedLineRange[]): boolean {
   if (ranges.length === 0) return false;
   if (!SOURCE_FILE_PATTERN.test(file)) return true;
   const absolutePath = `${db.config.projectRoot}/${file}`;
@@ -426,15 +411,10 @@ function staticImportExportLines(lines: readonly string[]): ReadonlySet<number> 
 }
 
 function isStaticImportExportStart(trimmed: string): boolean {
-  return /^import(?:\s|$)/.test(trimmed)
-    || /^export(?:\s+type)?\s+(?:\*|\{)/.test(trimmed);
+  return /^import(?:\s|$)/.test(trimmed) || /^export(?:\s+type)?\s+(?:\*|\{)/.test(trimmed);
 }
 
-function runUnusedParamsCheck(
-  db: ScipDatabase,
-  changedFiles: readonly string[],
-  result: DiffGateResult,
-): void {
+function runUnusedParamsCheck(db: ScipDatabase, changedFiles: readonly string[], result: DiffGateResult): void {
   result.checksRun.push('unused-params');
   for (const finding of unusedParams(db, { files: changedFiles, limit: 50 })) {
     const id = findingId('unused-params', finding.symbol, finding.file, finding.unusedTrailing.join('|'));
@@ -525,7 +505,10 @@ function escapeRegex(value: string): string {
 
 function runBaselineCheck(db: ScipDatabase, result: DiffGateResult): void {
   if (!existsSync(resolveBaselinePath(db))) {
-    result.skipped.push({ check: 'baseline', reason: 'no .scipquery-baseline.json — run health --write-baseline to enable' });
+    result.skipped.push({
+      check: 'baseline',
+      reason: 'no .scipquery-baseline.json — run health --write-baseline to enable',
+    });
     return;
   }
   result.checksRun.push('baseline');

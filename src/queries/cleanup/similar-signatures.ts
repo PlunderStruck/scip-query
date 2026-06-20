@@ -57,8 +57,10 @@ function similarSignatureCandidates(
     .filter((definition) => definitionLoc(definition) >= opts.minLoc);
 
   if (typeof opts.scanLimit === 'number' && opts.scanLimit > 0) {
-    definitions.sort((left, right) =>
-      definitionLoc(right) - definitionLoc(left) || left.relativePath.localeCompare(right.relativePath));
+    definitions.sort(
+      (left, right) =>
+        definitionLoc(right) - definitionLoc(left) || left.relativePath.localeCompare(right.relativePath),
+    );
   }
 
   return applyScanLimit(definitions, opts.scanLimit);
@@ -80,9 +82,7 @@ function groupDefinitionsBySignature(
   return groups;
 }
 
-function similarSignatureEntry(
-  definition: IndexedDefinition,
-): SimilarSignatureGroup['functions'][number] {
+function similarSignatureEntry(definition: IndexedDefinition): SimilarSignatureGroup['functions'][number] {
   return {
     symbol: definition.symbol,
     shortName: shortenSymbol(definition.symbol),
@@ -136,9 +136,7 @@ function resolveNormalizedSignature(
   );
 }
 
-function extractDocumentedSignature(
-  documentation: string | null,
-): string | null {
+function extractDocumentedSignature(documentation: string | null): string | null {
   return cleanSignature(extractSignature(documentation));
 }
 
@@ -178,9 +176,11 @@ function looksCompleteDeclaration(declaration: string): boolean {
   const normalized = declaration.replace(/\s+/g, ' ').trim();
   if (!normalized.includes('(')) return false;
   if (parenBalance(normalized) > 0) return false;
-  return /[;{]$/.test(normalized)
-    || /\)\s*(?::\s*[^={]+)?\s*(?:=>|=|throws\b|where\b|$)/i.test(normalized)
-    || /\)\s*As\s+.+$/i.test(normalized);
+  return (
+    /[;{]$/.test(normalized) ||
+    /\)\s*(?::\s*[^={]+)?\s*(?:=>|=|throws\b|where\b|$)/i.test(normalized) ||
+    /\)\s*As\s+.+$/i.test(normalized)
+  );
 }
 
 /**
@@ -224,10 +224,7 @@ function normalizeSignature(raw: string): string | null {
   return sig;
 }
 
-function normalizeSourceSignature(
-  raw: string | null,
-  leaf: string,
-): string | null {
+function normalizeSourceSignature(raw: string | null, leaf: string): string | null {
   if (!raw || !raw.trim()) return null;
 
   const declaration = raw.replace(/\s+/g, ' ').trim();
@@ -242,7 +239,10 @@ function normalizeSourceSignature(
   }
 
   prefix = prefix
-    .replace(/\b(public|private|protected|internal|final|static|abstract|sealed|virtual|override|async|suspend|inline|constexpr|consteval|constinit|const|pub|fn|function|def|sub|friend|shared|readonly|new|open|partial|export)\b/gi, ' ')
+    .replace(
+      /\b(public|private|protected|internal|final|static|abstract|sealed|virtual|override|async|suspend|inline|constexpr|consteval|constinit|const|pub|fn|function|def|sub|friend|shared|readonly|new|open|partial|export)\b/gi,
+      ' ',
+    )
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -257,9 +257,7 @@ function normalizeSourceSignature(
     return null;
   }
 
-  const normalized = `${prefix ? `${prefix} ` : ''}${suffix}`
-    .replace(/\s+/g, '')
-    .toLowerCase();
+  const normalized = `${prefix ? `${prefix} ` : ''}${suffix}`.replace(/\s+/g, '').toLowerCase();
 
   return normalized.length >= 3 ? normalized : null;
 }
@@ -269,7 +267,7 @@ function truncateAtImplementationStart(suffix: string): string {
   let braceDepth = 0;
   let bracketDepth = 0;
   let angleDepth = 0;
-  let quote: '"' | '\'' | '`' | null = null;
+  let quote: '"' | "'" | '`' | null = null;
   let escaping = false;
 
   for (let index = 0; index < suffix.length; index += 1) {
@@ -288,7 +286,7 @@ function truncateAtImplementationStart(suffix: string): string {
       continue;
     }
 
-    if (char === '"' || char === '\'' || char === '`') {
+    if (char === '"' || char === "'" || char === '`') {
       quote = char;
       continue;
     }
@@ -307,12 +305,12 @@ function truncateAtImplementationStart(suffix: string): string {
     } else if (char === '}') {
       braceDepth = Math.max(0, braceDepth - 1);
     } else if (
-      char === '='
-      && suffix[index + 1] === '>'
-      && parenDepth === 0
-      && braceDepth === 0
-      && bracketDepth === 0
-      && angleDepth === 0
+      char === '=' &&
+      suffix[index + 1] === '>' &&
+      parenDepth === 0 &&
+      braceDepth === 0 &&
+      bracketDepth === 0 &&
+      angleDepth === 0
     ) {
       return suffix.slice(0, index);
     }
@@ -321,12 +319,7 @@ function truncateAtImplementationStart(suffix: string): string {
   return suffix;
 }
 
-function declarationStartLines(
-  lines: string[],
-  startLine: number,
-  endLine: number,
-  leaf: string,
-): number[] {
+function declarationStartLines(lines: string[], startLine: number, endLine: number, leaf: string): number[] {
   const escapedLeaf = escapeRegex(leaf);
   const callablePattern = new RegExp(`\\b${escapedLeaf}\\b\\s*\\(`, 'i');
   const rubyPattern = new RegExp(`\\bdef\\s+${escapedLeaf}\\b`, 'i');

@@ -31,10 +31,7 @@ export function findIndexedDefinitionNear(
   return nearestDefinition(fallback, line);
 }
 
-export function indexedDefinitionLeafMap(
-  db: ScipDatabase,
-  file: string,
-): Map<string, IndexedDefinition> {
+export function indexedDefinitionLeafMap(db: ScipDatabase, file: string): Map<string, IndexedDefinition> {
   const byLeaf = new Map<string, IndexedDefinition>();
   for (const [leaf, candidates] of indexedDefinitionCandidatesByLeaf(db, file)) {
     const first = candidates[0];
@@ -43,10 +40,7 @@ export function indexedDefinitionLeafMap(
   return byLeaf;
 }
 
-function indexedDefinitionCandidatesByLeaf(
-  db: ScipDatabase,
-  file: string,
-): Map<string, IndexedDefinition[]> {
+function indexedDefinitionCandidatesByLeaf(db: ScipDatabase, file: string): Map<string, IndexedDefinition[]> {
   return TS_DEFINITION_LEAF_CANDIDATES.get(db, file, () => {
     const byLeaf = new Map<string, IndexedDefinition[]>();
     for (const definition of getDefinitionsForFile(db, file)) {
@@ -61,28 +55,21 @@ function indexedDefinitionCandidatesByLeaf(
     }
 
     for (const bucket of byLeaf.values()) {
-      bucket.sort((left, right) =>
-        left.startLine - right.startLine
-        || left.endLine - right.endLine
-        || left.symbolId - right.symbolId,
+      bucket.sort(
+        (left, right) =>
+          left.startLine - right.startLine || left.endLine - right.endLine || left.symbolId - right.symbolId,
       );
     }
     return byLeaf;
   });
 }
 
-function nearestDefinition(
-  candidates: readonly IndexedDefinition[],
-  line: number,
-): IndexedDefinition | null {
+function nearestDefinition(candidates: readonly IndexedDefinition[], line: number): IndexedDefinition | null {
   let best: IndexedDefinition | null = null;
   let bestDistance = Number.POSITIVE_INFINITY;
   for (const candidate of candidates) {
     const distance = Math.abs(candidate.startLine - line);
-    if (
-      distance < bestDistance
-      || (distance === bestDistance && best && candidate.startLine < best.startLine)
-    ) {
+    if (distance < bestDistance || (distance === bestDistance && best && candidate.startLine < best.startLine)) {
       best = candidate;
       bestDistance = distance;
     }

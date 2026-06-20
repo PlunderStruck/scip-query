@@ -7,23 +7,14 @@ export function createFixtureProject(projectRoot: string): void {
   mkdirSync(join(projectRoot, 'src', 'reindex'), { recursive: true });
   mkdirSync(join(projectRoot, 'tests'), { recursive: true });
 
-  writeFileSync(
-    join(projectRoot, 'src', 'reindex', 'index.ts'),
-    "export function reindex() { return 'ok'; }\n",
-  );
+  writeFileSync(join(projectRoot, 'src', 'reindex', 'index.ts'), "export function reindex() { return 'ok'; }\n");
   writeFileSync(
     join(projectRoot, 'src', 'reindex', 'indexers.ts'),
     'export function getIndexerConfig() { return {}; }\n',
   );
   writeFileSync(
     join(projectRoot, 'src', 'watch.ts'),
-    [
-      'export class Watcher {',
-      '  start() { return true; }',
-      '  stop() { return false; }',
-      '}',
-      '',
-    ].join('\n'),
+    ['export class Watcher {', '  start() { return true; }', '  stop() { return false; }', '}', ''].join('\n'),
   );
   writeFileSync(
     join(projectRoot, 'src', 'utils.ts'),
@@ -61,12 +52,7 @@ export function createFixtureProject(projectRoot: string): void {
   );
   writeFileSync(
     join(projectRoot, 'src', 'contracts.ts'),
-    [
-      'export interface PathFilter {',
-      '  isIgnored(path: string): boolean;',
-      '}',
-      '',
-    ].join('\n'),
+    ['export interface PathFilter {', '  isIgnored(path: string): boolean;', '}', ''].join('\n'),
   );
   writeFileSync(
     join(projectRoot, 'src', 'predicates.ts'),
@@ -84,22 +70,11 @@ export function createFixtureProject(projectRoot: string): void {
   );
   writeFileSync(
     join(projectRoot, 'src', 'types.ts'),
-    [
-      'export interface InstallMethod {',
-      '  label: string;',
-      '}',
-      '',
-    ].join('\n'),
+    ['export interface InstallMethod {', '  label: string;', '}', ''].join('\n'),
   );
   writeFileSync(
     join(projectRoot, 'src', 'config.ts'),
-    [
-      'export class Settings {',
-      '  unusedField = 1;',
-      '}',
-      'export const settings = new Settings();',
-      '',
-    ].join('\n'),
+    ['export class Settings {', '  unusedField = 1;', '}', 'export const settings = new Settings();', ''].join('\n'),
   );
   writeFileSync(
     join(projectRoot, 'tests', 'utils.test.ts'),
@@ -137,18 +112,36 @@ export function createFixtureDb(dbPath: string): void {
 
   const insertSymbol = sqliteDb.prepare(
     `INSERT INTO global_symbols (id, symbol, display_name, kind, documentation)
-     VALUES (?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?)`,
   );
 
   insertSymbol.run(1, 'scip-typescript npm pkg 1.0.0 src/reindex/`index.ts`/', '', 1, 'module');
   insertSymbol.run(2, 'scip-typescript npm pkg 1.0.0 src/reindex/`index.ts`/reindex().', 'reindex', 3, 'function');
   insertSymbol.run(3, 'scip-typescript npm pkg 1.0.0 src/reindex/`indexers.ts`/', '', 1, 'module');
-  insertSymbol.run(4, 'scip-typescript npm pkg 1.0.0 src/reindex/`indexers.ts`/getIndexerConfig().', 'getIndexerConfig', 3, 'function');
+  insertSymbol.run(
+    4,
+    'scip-typescript npm pkg 1.0.0 src/reindex/`indexers.ts`/getIndexerConfig().',
+    'getIndexerConfig',
+    3,
+    'function',
+  );
   insertSymbol.run(5, 'scip-typescript npm pkg 1.0.0 src/`watch.ts`/Watcher#', 'Watcher', null, 'class Watcher');
   insertSymbol.run(6, 'scip-typescript npm pkg 1.0.0 src/`watch.ts`/Watcher#start().', 'start', 3, 'method');
   insertSymbol.run(7, 'scip-typescript npm pkg 1.0.0 src/`watch.ts`/Watcher#stop().', 'stop', 3, 'method');
-  insertSymbol.run(8, 'scip-typescript npm pkg 1.0.0 src/`utils.ts`/tryInstallScipCli().', 'tryInstallScipCli', 3, 'function');
-  insertSymbol.run(9, 'scip-typescript npm pkg 1.0.0 src/`utils.ts`/unusedHelper().', 'unusedHelper', 3, '```ts\nfunction unusedHelper(): Promise<boolean | null>\n```');
+  insertSymbol.run(
+    8,
+    'scip-typescript npm pkg 1.0.0 src/`utils.ts`/tryInstallScipCli().',
+    'tryInstallScipCli',
+    3,
+    'function',
+  );
+  insertSymbol.run(
+    9,
+    'scip-typescript npm pkg 1.0.0 src/`utils.ts`/unusedHelper().',
+    'unusedHelper',
+    3,
+    '```ts\nfunction unusedHelper(): Promise<boolean | null>\n```',
+  );
   insertSymbol.run(10, 'scip-typescript npm pkg 1.0.0 src/`flow.ts`/', '', 1, 'module');
   insertSymbol.run(11, 'scip-typescript npm pkg 1.0.0 src/`flow.ts`/alpha().', 'alpha', 3, 'function');
   insertSymbol.run(12, 'scip-typescript npm pkg 1.0.0 src/`flow.ts`/beta().', 'beta', 3, 'function');
@@ -157,16 +150,70 @@ export function createFixtureDb(dbPath: string): void {
   insertSymbol.run(15, 'scip-typescript npm pkg 1.0.0 src/`flow.ts`/uniqueAlpha().', 'uniqueAlpha', 3, 'function');
   insertSymbol.run(16, 'scip-typescript npm pkg 1.0.0 src/`flow.ts`/uniqueBeta().', 'uniqueBeta', 3, 'function');
   insertSymbol.run(17, 'scip-typescript npm pkg 1.0.0 src/`flow.ts`/gamma().', 'gamma', 3, 'function');
-  insertSymbol.run(18, 'scip-typescript npm pkg 1.0.0 src/`contracts.ts`/PathFilter#', 'PathFilter', null, 'interface PathFilter');
-  insertSymbol.run(19, 'scip-typescript npm pkg 1.0.0 src/`predicates.ts`/normalizePath().', 'normalizePath', 3, 'function');
-  insertSymbol.run(20, 'scip-typescript npm pkg 1.0.0 src/`predicates.ts`/isWorkerEntrySurface().', 'isWorkerEntrySurface', 3, 'function');
-  insertSymbol.run(21, 'scip-typescript npm pkg 1.0.0 src/`predicates.ts`/isBarrelFile().', 'isBarrelFile', 3, 'function');
-  insertSymbol.run(22, 'scip-typescript npm pkg 1.0.0 src/`types.ts`/InstallMethod#', 'InstallMethod', null, 'interface InstallMethod');
-  insertSymbol.run(23, 'scip-typescript npm pkg 1.0.0 src/`predicates.ts`/TempOptions#', 'TempOptions', null, 'interface TempOptions');
-  insertSymbol.run(24, 'scip-typescript npm pkg 1.0.0 src/`predicates.ts`/WorkerStatus#', 'WorkerStatus', null, 'type WorkerStatus');
+  insertSymbol.run(
+    18,
+    'scip-typescript npm pkg 1.0.0 src/`contracts.ts`/PathFilter#',
+    'PathFilter',
+    null,
+    'interface PathFilter',
+  );
+  insertSymbol.run(
+    19,
+    'scip-typescript npm pkg 1.0.0 src/`predicates.ts`/normalizePath().',
+    'normalizePath',
+    3,
+    'function',
+  );
+  insertSymbol.run(
+    20,
+    'scip-typescript npm pkg 1.0.0 src/`predicates.ts`/isWorkerEntrySurface().',
+    'isWorkerEntrySurface',
+    3,
+    'function',
+  );
+  insertSymbol.run(
+    21,
+    'scip-typescript npm pkg 1.0.0 src/`predicates.ts`/isBarrelFile().',
+    'isBarrelFile',
+    3,
+    'function',
+  );
+  insertSymbol.run(
+    22,
+    'scip-typescript npm pkg 1.0.0 src/`types.ts`/InstallMethod#',
+    'InstallMethod',
+    null,
+    'interface InstallMethod',
+  );
+  insertSymbol.run(
+    23,
+    'scip-typescript npm pkg 1.0.0 src/`predicates.ts`/TempOptions#',
+    'TempOptions',
+    null,
+    'interface TempOptions',
+  );
+  insertSymbol.run(
+    24,
+    'scip-typescript npm pkg 1.0.0 src/`predicates.ts`/WorkerStatus#',
+    'WorkerStatus',
+    null,
+    'type WorkerStatus',
+  );
   insertSymbol.run(25, 'scip-typescript npm pkg 1.0.0 src/`config.ts`/Settings#', 'Settings', 5, 'class Settings');
-  insertSymbol.run(26, 'scip-typescript npm pkg 1.0.0 src/`config.ts`/Settings#unusedField.', 'unusedField', 8, 'field unusedField');
-  insertSymbol.run(27, 'scip-typescript npm pkg 1.0.0 src/`config.ts`/settings.', 'settings', 8, '```ts\nvar settings: Settings\n```');
+  insertSymbol.run(
+    26,
+    'scip-typescript npm pkg 1.0.0 src/`config.ts`/Settings#unusedField.',
+    'unusedField',
+    8,
+    'field unusedField',
+  );
+  insertSymbol.run(
+    27,
+    'scip-typescript npm pkg 1.0.0 src/`config.ts`/settings.',
+    'settings',
+    8,
+    '```ts\nvar settings: Settings\n```',
+  );
 
   run(`
     INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
@@ -280,12 +327,7 @@ export function createTypeScriptCallFixtureProject(projectRoot: string): void {
 
   writeFileSync(
     join(projectRoot, 'src', 'db.ts'),
-    [
-      'export class Store {',
-      '  all() { return []; }',
-      '}',
-      '',
-    ].join('\n'),
+    ['export class Store {', '  all() { return []; }', '}', ''].join('\n'),
   );
 
   writeFileSync(
@@ -328,12 +370,18 @@ export function createTypeScriptCallFixtureDb(dbPath: string): void {
 
   const insertSymbol = sqliteDb.prepare(
     `INSERT INTO global_symbols (id, symbol, display_name, kind, documentation)
-     VALUES (?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?)`,
   );
 
   insertSymbol.run(1, 'scip-typescript npm pkg 1.0.0 src/`db.ts`/Store#', 'Store', 9, 'class Store');
   insertSymbol.run(2, 'scip-typescript npm pkg 1.0.0 src/`db.ts`/Store#all().', 'all', 23, 'all(): unknown[]');
-  insertSymbol.run(3, 'scip-typescript npm pkg 1.0.0 src/`query.ts`/collect().', 'collect', 23, 'collect(store: Store)');
+  insertSymbol.run(
+    3,
+    'scip-typescript npm pkg 1.0.0 src/`query.ts`/collect().',
+    'collect',
+    23,
+    'collect(store: Store)',
+  );
 
   run(`
     INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES

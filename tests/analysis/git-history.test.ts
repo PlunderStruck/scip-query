@@ -34,8 +34,10 @@ function git(...args: string[]): void {
     stdio: 'ignore',
     env: {
       ...process.env,
-      GIT_AUTHOR_NAME: 'test', GIT_AUTHOR_EMAIL: 't@t.t',
-      GIT_COMMITTER_NAME: 'test', GIT_COMMITTER_EMAIL: 't@t.t',
+      GIT_AUTHOR_NAME: 'test',
+      GIT_AUTHOR_EMAIL: 't@t.t',
+      GIT_COMMITTER_NAME: 'test',
+      GIT_COMMITTER_EMAIL: 't@t.t',
       // Distinct timestamps per commit — doc-drift compares them strictly.
       GIT_AUTHOR_DATE: `${commitClock} +0000`,
       GIT_COMMITTER_DATE: `${commitClock} +0000`,
@@ -125,31 +127,31 @@ describe('git history evidence', () => {
       maxFilesPerCommit: 2,
     })!;
 
-    expect(pairs).not.toEqual(expect.arrayContaining([
-      expect.objectContaining({ fileA: 'a.ts', fileB: 'b.ts' }),
-    ]));
+    expect(pairs).not.toEqual(expect.arrayContaining([expect.objectContaining({ fileA: 'a.ts', fileB: 'b.ts' })]));
   });
 
   it('treats declared coupling groups as structural links', () => {
     const plain = coChange(fakeDb(repoRoot), undefined, { minTogether: 3, minConfidence: 0.6, limit: 10 });
-    expect(plain.findings).toEqual(expect.arrayContaining([
-      expect.objectContaining({ fileA: 'a.ts', fileB: 'b.ts', structurallyLinked: false }),
-    ]));
+    expect(plain.findings).toEqual(
+      expect.arrayContaining([expect.objectContaining({ fileA: 'a.ts', fileB: 'b.ts', structurallyLinked: false })]),
+    );
 
     const declared = fakeDb(repoRoot, {
-      declaredCouplings: [{
-        name: 'fixture pair',
-        files: ['a.ts', 'b.ts'],
-        reason: 'The fixture deliberately moves these files together.',
-      }],
+      declaredCouplings: [
+        {
+          name: 'fixture pair',
+          files: ['a.ts', 'b.ts'],
+          reason: 'The fixture deliberately moves these files together.',
+        },
+      ],
     });
-    expect(coChange(declared, undefined, { minTogether: 3, minConfidence: 0.6, limit: 10 }).findings)
-      .not.toEqual(expect.arrayContaining([
-        expect.objectContaining({ fileA: 'a.ts', fileB: 'b.ts' }),
-      ]));
+    expect(coChange(declared, undefined, { minTogether: 3, minConfidence: 0.6, limit: 10 }).findings).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ fileA: 'a.ts', fileB: 'b.ts' })]),
+    );
 
-    const partner = coChange(declared, 'a.ts', { minTogether: 3, limit: 10 })
-      .findings.find((entry) => entry.fileA === 'a.ts' && entry.fileB === 'b.ts');
+    const partner = coChange(declared, 'a.ts', { minTogether: 3, limit: 10 }).findings.find(
+      (entry) => entry.fileA === 'a.ts' && entry.fileB === 'b.ts',
+    );
     expect(partner).toEqual(expect.objectContaining({ structurallyLinked: true }));
   });
 });

@@ -51,9 +51,10 @@ const defaultCases = [
 ];
 
 const requestedRoots = process.argv.slice(2).map((entry) => resolve(entry));
-const cases = requestedRoots.length > 0
-  ? defaultCases.filter((testCase) => requestedRoots.includes(resolve(testCase.projectRoot)))
-  : defaultCases;
+const cases =
+  requestedRoots.length > 0
+    ? defaultCases.filter((testCase) => requestedRoots.includes(resolve(testCase.projectRoot)))
+    : defaultCases;
 
 mkdirSync(outDir, { recursive: true });
 
@@ -146,16 +147,18 @@ function runCase(testCase, projectRoot, cacheDir) {
   const slice = run(['slice', testCase.symbol, ...(testCase.sliceArgs ?? [])], projectRoot, env, 60_000);
   checks.push(checkExit('slice', slice));
   checks.push(assertIncludes('slice output', slice.stdout, testCase.expectedSlice));
-  checks.push(commandDurations({
-    symbols,
-    code,
-    refs,
-    trace,
-    callGraph,
-    complexity,
-    dataflow,
-    slice,
-  }));
+  checks.push(
+    commandDurations({
+      symbols,
+      code,
+      refs,
+      trace,
+      callGraph,
+      complexity,
+      dataflow,
+      slice,
+    }),
+  );
 
   return checks;
 }
@@ -223,8 +226,6 @@ function assertIncludes(name, text, expectedValues) {
   return {
     name,
     pass: missing.length === 0,
-    evidence: missing.length === 0
-      ? ''
-      : `Missing: ${missing.join(', ')}\n\nOutput:\n${text.slice(0, 2_000)}`,
+    evidence: missing.length === 0 ? '' : `Missing: ${missing.join(', ')}\n\nOutput:\n${text.slice(0, 2_000)}`,
   };
 }

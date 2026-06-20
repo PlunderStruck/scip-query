@@ -1,8 +1,19 @@
 import { existsSync } from 'node:fs';
 import type { SupportedLanguage } from '../../domain/types.js';
 import * as queries from '../../queries/index.js';
-import { augmentAuxiliaryDocuments, augmentVueResolvedReferences, detectLanguages, reindex } from '../../reindex/index.js';
-import { addFindingSuppression, loadProjectConfig, resolveIndexPaths, initProjectConfig, validateProjectConfig } from '../config.js';
+import {
+  augmentAuxiliaryDocuments,
+  augmentVueResolvedReferences,
+  detectLanguages,
+  reindex,
+} from '../../reindex/index.js';
+import {
+  addFindingSuppression,
+  loadProjectConfig,
+  resolveIndexPaths,
+  initProjectConfig,
+  validateProjectConfig,
+} from '../config.js';
 import { getIndexFreshness } from '../index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from '../project-readiness.js';
 import { Watcher } from '../watch.js';
@@ -78,7 +89,9 @@ export async function handleReindex(rawOpts: unknown): Promise<void> {
       allowPartial: booleanOptionValue(opts, 'allowPartial'),
       indexerConcurrency: numberOptionValue(opts, 'indexerConcurrency'),
     });
-    console.log(`${result.reused ? 'Reused' : 'Indexed'} ${result.languages.join(', ')} in ${(result.durationMs / 1000).toFixed(1)}s`);
+    console.log(
+      `${result.reused ? 'Reused' : 'Indexed'} ${result.languages.join(', ')} in ${(result.durationMs / 1000).toFixed(1)}s`,
+    );
   } catch (err) {
     console.error(`error: ${err instanceof Error ? err.message : err}`);
     process.exit(1);
@@ -144,11 +157,11 @@ export function handleDiffImpact(rawOpts: unknown): void {
 export function handleHealthPhase(phase: unknown, rawOpts: unknown): void {
   const opts = commandOptions(rawOpts);
   withDb((db) => {
-    if (!queries.HEALTH_PHASES.includes(phase as typeof queries.HEALTH_PHASES[number])) {
+    if (!queries.HEALTH_PHASES.includes(phase as (typeof queries.HEALTH_PHASES)[number])) {
       console.error(`error: Unknown health phase: ${phase}`);
       process.exit(1);
     }
-    const result = queries.healthPhase(db, phase as typeof queries.HEALTH_PHASES[number], {
+    const result = queries.healthPhase(db, phase as (typeof queries.HEALTH_PHASES)[number], {
       scope: stringOptionValue(opts, 'scope'),
       full: booleanOptionValue(opts, 'full'),
     });
@@ -192,10 +205,14 @@ function handleHealthBaseline(opts: Record<string, unknown>): void {
     }
     const comparison = queries.checkHealthBaseline(db, { scope });
     if (comparison.fixedFindings.length > 0) {
-      console.log(`${comparison.fixedFindings.length} finding(s) fixed since baseline. Re-run --write-baseline to ratchet down.`);
+      console.log(
+        `${comparison.fixedFindings.length} finding(s) fixed since baseline. Re-run --write-baseline to ratchet down.`,
+      );
     }
     if (comparison.newFindings.length === 0) {
-      console.log(`OK: no new findings vs baseline (${comparison.baselineCount} baselined, ${comparison.current.length} current).`);
+      console.log(
+        `OK: no new findings vs baseline (${comparison.baselineCount} baselined, ${comparison.current.length} current).`,
+      );
       return;
     }
     console.log(`FAIL: ${comparison.newFindings.length} new finding(s) vs ${comparison.baselinePath}:`);
@@ -209,7 +226,9 @@ function handleHealthBaseline(opts: Record<string, unknown>): void {
 export function handleInstallSkills(): void {
   const result = installSkills();
   const total = result.installed.length + result.alreadyLinked.length;
-  console.log(`\n${result.installed.length} installed, ${result.alreadyLinked.length} already linked, ${result.skipped.length} skipped.`);
+  console.log(
+    `\n${result.installed.length} installed, ${result.alreadyLinked.length} already linked, ${result.skipped.length} skipped.`,
+  );
   if (total > 0) {
     console.log('Skills will be available in your next Claude Code / Codex session.');
   }
@@ -247,9 +266,12 @@ export function handleCheckDeps(): void {
   if (readiness.semantic) {
     const status = readiness.semantic;
     const prefix = status.available ? '  OK' : status.dependencyAvailable ? '  WARN' : '  MISSING';
-    const configPath = status.tsconfigPaths && status.tsconfigPaths.length > 1
-      ? ` (${status.tsconfigPaths.length} tsconfigs)`
-      : status.tsconfigPath ? ` (${status.tsconfigPath})` : '';
+    const configPath =
+      status.tsconfigPaths && status.tsconfigPaths.length > 1
+        ? ` (${status.tsconfigPaths.length} tsconfigs)`
+        : status.tsconfigPath
+          ? ` (${status.tsconfigPath})`
+          : '';
     console.log('\nSemantic provider readiness:');
     console.log(`${prefix} typescript: ts-morph${configPath}`);
     if (status.reason) console.log(`    ${status.reason}; semantic checks will fall back to SCIP/source evidence`);
@@ -364,10 +386,11 @@ function buildProjectDiagnosticReport(command: 'doctor' | 'status'): {
   const capabilities = getProjectCapabilities(readiness);
   const freshness = getIndexFreshness(projectRoot, config, paths);
   const hasIndexerProblems = readiness.indexers.some((indexer) => !indexer.runnable);
-  const hasErrors = configDiagnostics.some((diagnostic) => diagnostic.level === 'error')
-    || hasIndexerProblems
-    || freshness.state === 'missing'
-    || freshness.state === 'stale';
+  const hasErrors =
+    configDiagnostics.some((diagnostic) => diagnostic.level === 'error') ||
+    hasIndexerProblems ||
+    freshness.state === 'missing' ||
+    freshness.state === 'stale';
   return {
     report: {
       command,
@@ -477,7 +500,9 @@ function renderDoctorReport(
       console.log(`  MISSING ${indexer.language}: ${indexer.note ?? indexer.binaryLabel}`);
     }
   }
-  console.log(`  Freshness: ${report.freshness.state}${report.freshness.remedy ? ` (${report.freshness.remedy})` : ''}`);
+  console.log(
+    `  Freshness: ${report.freshness.state}${report.freshness.remedy ? ` (${report.freshness.remedy})` : ''}`,
+  );
   renderCapabilityReport(report.capabilities);
 }
 
@@ -492,9 +517,12 @@ function renderStatusReport(
   }
   if (report.readiness.semantic) {
     const semanticState = report.readiness.semantic.available ? 'available' : 'fallback';
-    const suffix = report.readiness.semantic.tsconfigPaths && report.readiness.semantic.tsconfigPaths.length > 1
-      ? ` (${report.readiness.semantic.tsconfigPaths.length} tsconfigs)`
-      : report.readiness.semantic.tsconfigPath ? ` (${report.readiness.semantic.tsconfigPath})` : '';
+    const suffix =
+      report.readiness.semantic.tsconfigPaths && report.readiness.semantic.tsconfigPaths.length > 1
+        ? ` (${report.readiness.semantic.tsconfigPaths.length} tsconfigs)`
+        : report.readiness.semantic.tsconfigPath
+          ? ` (${report.readiness.semantic.tsconfigPath})`
+          : '';
     console.log(`TS sem:   ${semanticState}${suffix}`);
     if (report.readiness.semantic.reason) console.log(`TS note:  ${report.readiness.semantic.reason}`);
   }
@@ -508,12 +536,14 @@ function renderStatusReport(
   }
 }
 
-function statusStats(exists: boolean): {
-  symbols: number;
-  files: number;
-  indexSizeBytes: number;
-  lastBuilt?: string;
-} | undefined {
+function statusStats(exists: boolean):
+  | {
+      symbols: number;
+      files: number;
+      indexSizeBytes: number;
+      lastBuilt?: string;
+    }
+  | undefined {
   if (!exists) return undefined;
   return withDb((db) => {
     const s = queries.stats(db);
@@ -551,13 +581,7 @@ function renderCapabilityReport(report: ReturnType<typeof getProjectCapabilities
   console.log('\nLanguage matrix:');
   for (const row of report.matrix) {
     console.log(`  ${row.language}`);
-    for (const capability of [
-      row.indexing,
-      row.sourceFacts,
-      row.semantic,
-      row.detectors,
-      row.cleanupVerification,
-    ]) {
+    for (const capability of [row.indexing, row.sourceFacts, row.semantic, row.detectors, row.cleanupVerification]) {
       console.log(`    ${capability.status.toUpperCase().padEnd(11)} ${capability.label}`);
       console.log(`               ${capability.reason}`);
     }

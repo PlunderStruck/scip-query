@@ -1,15 +1,5 @@
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  it,
-} from 'vitest';
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-} from 'node:fs';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
@@ -33,10 +23,7 @@ describe('redundant re-export fallbacks', () => {
         '}',
         '',
       ],
-      'src/analysis_status_exports.rs': [
-        'pub use crate::analysis_status_core::normalize_status_label;',
-        '',
-      ],
+      'src/analysis_status_exports.rs': ['pub use crate::analysis_status_core::normalize_status_label;', ''],
     });
 
     evidenceFixtureDb(join(tempDir, 'index.db'))
@@ -65,12 +52,14 @@ describe('redundant re-export fallbacks', () => {
   });
 
   it('reports unused Rust pub use barrels from source exports', () => {
-    expect(redundantReexports(db)).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        barrelFile: 'src/analysis_status_exports.rs',
-        originalFile: 'src/analysis_status_core.rs',
-        symbol: expect.stringContaining('normalize_status_label'),
-      }),
-    ]));
+    expect(redundantReexports(db)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          barrelFile: 'src/analysis_status_exports.rs',
+          originalFile: 'src/analysis_status_core.rs',
+          symbol: expect.stringContaining('normalize_status_label'),
+        }),
+      ]),
+    );
   });
 });

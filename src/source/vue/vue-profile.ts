@@ -53,21 +53,19 @@ export function buildVueComponentBehaviorProfiles(
   const files = getSourceFiles(db, { extensions: ['.vue'] })
     .filter((file) => !opts.scope || file.includes(opts.scope))
     .sort();
-  const limitedFiles = typeof opts.scanLimit === 'number' && opts.scanLimit > 0
-    ? files.slice(0, opts.scanLimit)
-    : files;
+  const limitedFiles =
+    typeof opts.scanLimit === 'number' && opts.scanLimit > 0 ? files.slice(0, opts.scanLimit) : files;
 
   return limitedFiles
     .map((file) => buildVueComponentBehaviorProfile(db, file))
-    .filter((profile) =>
-      (opts.minTemplateTokens === undefined || profile.templateTokens.size >= opts.minTemplateTokens)
-      && (opts.minBehaviorTokens === undefined || profile.behaviorTokens.size >= opts.minBehaviorTokens));
+    .filter(
+      (profile) =>
+        (opts.minTemplateTokens === undefined || profile.templateTokens.size >= opts.minTemplateTokens) &&
+        (opts.minBehaviorTokens === undefined || profile.behaviorTokens.size >= opts.minBehaviorTokens),
+    );
 }
 
-export function buildVueComponentBehaviorProfile(
-  db: ScipDatabase,
-  relativePath: string,
-): VueComponentBehaviorProfile {
+export function buildVueComponentBehaviorProfile(db: ScipDatabase, relativePath: string): VueComponentBehaviorProfile {
   const file = relativePath.replace(/\\/g, '/');
   const sfc = getVueSfcUnit(db, file);
   const templateFacts = getVueTemplateFacts(db, file);

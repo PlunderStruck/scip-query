@@ -54,15 +54,19 @@ function withSemanticFixture(run: (db: ScipDatabase) => void): void {
   mkdirSync(join(projectRoot, 'src'), { recursive: true });
   writeFileSync(
     join(projectRoot, 'tsconfig.json'),
-    JSON.stringify({
-      compilerOptions: {
-        target: 'ES2022',
-        module: 'ESNext',
-        moduleResolution: 'Node',
-        strict: true,
+    JSON.stringify(
+      {
+        compilerOptions: {
+          target: 'ES2022',
+          module: 'ESNext',
+          moduleResolution: 'Node',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
       },
-      include: ['src/**/*.ts'],
-    }, null, 2),
+      null,
+      2,
+    ),
   );
   writeFileSync(
     join(projectRoot, 'src/api.ts'),
@@ -142,52 +146,72 @@ function withMonorepoSemanticFixture(run: (db: ScipDatabase) => void): void {
   mkdirSync(join(projectRoot, 'backend/src/schemas'), { recursive: true });
   writeFileSync(
     join(projectRoot, 'package.json'),
-    JSON.stringify({
-      private: true,
-      workspaces: ['shared', 'backend'],
-    }, null, 2),
+    JSON.stringify(
+      {
+        private: true,
+        workspaces: ['shared', 'backend'],
+      },
+      null,
+      2,
+    ),
   );
   writeFileSync(
     join(projectRoot, 'shared/package.json'),
-    JSON.stringify({
-      name: '@fixture/shared',
-      private: true,
-      types: 'dist/index.d.ts',
-    }, null, 2),
+    JSON.stringify(
+      {
+        name: '@fixture/shared',
+        private: true,
+        types: 'dist/index.d.ts',
+      },
+      null,
+      2,
+    ),
   );
   writeFileSync(
     join(projectRoot, 'backend/package.json'),
-    JSON.stringify({
-      name: '@fixture/backend',
-      private: true,
-      dependencies: {
-        '@fixture/shared': 'file:../shared',
+    JSON.stringify(
+      {
+        name: '@fixture/backend',
+        private: true,
+        dependencies: {
+          '@fixture/shared': 'file:../shared',
+        },
       },
-    }, null, 2),
+      null,
+      2,
+    ),
   );
   writeFileSync(
     join(projectRoot, 'shared/tsconfig.json'),
-    JSON.stringify({
-      compilerOptions: {
-        target: 'ES2022',
-        module: 'CommonJS',
-        declaration: true,
-        strict: true,
+    JSON.stringify(
+      {
+        compilerOptions: {
+          target: 'ES2022',
+          module: 'CommonJS',
+          declaration: true,
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
       },
-      include: ['src/**/*.ts'],
-    }, null, 2),
+      null,
+      2,
+    ),
   );
   writeFileSync(
     join(projectRoot, 'backend/tsconfig.json'),
-    JSON.stringify({
-      compilerOptions: {
-        target: 'ES2022',
-        module: 'CommonJS',
-        moduleResolution: 'Node',
-        strict: true,
+    JSON.stringify(
+      {
+        compilerOptions: {
+          target: 'ES2022',
+          module: 'CommonJS',
+          moduleResolution: 'Node',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
       },
-      include: ['src/**/*.ts'],
-    }, null, 2),
+      null,
+      2,
+    ),
   );
   writeFileSync(
     join(projectRoot, 'shared/src/contracts/horses.ts'),
@@ -237,19 +261,23 @@ describe('TypeScript semantic provider', () => {
   it('uses ts-morph import usage and references as shared liveness evidence', () => {
     withSemanticFixture((db) => {
       const imports = semanticImportUsage(db, 'src/consumer.ts');
-      expect(imports.map((entry) => ({
-        localName: entry.localName,
-        sourcePath: entry.sourcePath,
-        isTypeOnly: entry.isTypeOnly,
-        isUsed: entry.isUsed,
-      }))).toEqual(expect.arrayContaining([
-        { localName: 'ApiShape', sourcePath: 'src/api.ts', isTypeOnly: true, isUsed: true },
-        { localName: 'AliasShape', sourcePath: 'src/api.ts', isTypeOnly: true, isUsed: true },
-        { localName: 'defaultHelper', sourcePath: 'src/api.ts', isTypeOnly: false, isUsed: true },
-        { localName: 'usedHelper', sourcePath: 'src/api.ts', isTypeOnly: false, isUsed: true },
-        { localName: 'renamed', sourcePath: 'src/api.ts', isTypeOnly: false, isUsed: true },
-        { localName: 'api', sourcePath: 'src/api.ts', isTypeOnly: false, isUsed: true },
-      ]));
+      expect(
+        imports.map((entry) => ({
+          localName: entry.localName,
+          sourcePath: entry.sourcePath,
+          isTypeOnly: entry.isTypeOnly,
+          isUsed: entry.isUsed,
+        })),
+      ).toEqual(
+        expect.arrayContaining([
+          { localName: 'ApiShape', sourcePath: 'src/api.ts', isTypeOnly: true, isUsed: true },
+          { localName: 'AliasShape', sourcePath: 'src/api.ts', isTypeOnly: true, isUsed: true },
+          { localName: 'defaultHelper', sourcePath: 'src/api.ts', isTypeOnly: false, isUsed: true },
+          { localName: 'usedHelper', sourcePath: 'src/api.ts', isTypeOnly: false, isUsed: true },
+          { localName: 'renamed', sourcePath: 'src/api.ts', isTypeOnly: false, isUsed: true },
+          { localName: 'api', sourcePath: 'src/api.ts', isTypeOnly: false, isUsed: true },
+        ]),
+      );
 
       const definitions = getAllDefinitions(db);
       const callerMap = semanticCallerMap(db, definitions);
@@ -276,17 +304,17 @@ describe('TypeScript semantic provider', () => {
       const publicDefinition = byName.get('CreateHorseInput')!;
       const internalDefinition = byName.get('InternalHorseInput')!;
       const callerMap = semanticCallerMap(db, [publicDefinition, internalDefinition]);
-      expect(callerMap.get(publicDefinition.symbolId)).toEqual(new Set([
-        'shared/src/index.ts',
-        'backend/src/schemas/horses.ts',
-      ]));
+      expect(callerMap.get(publicDefinition.symbolId)).toEqual(
+        new Set(['shared/src/index.ts', 'backend/src/schemas/horses.ts']),
+      );
       expect(callerMap.get(internalDefinition.symbolId)).toBeUndefined();
 
-      expect(refs(db, 'CreateHorseInput').map((ref) => ref.relativePath)).toEqual(expect.arrayContaining([
-        'shared/src/index.ts',
-        'backend/src/schemas/horses.ts',
-      ]));
-      expect(staleAbstractions(db, { minLoc: 1 }).map((symbol) => symbol.shortName)).not.toContain('contracts:horses:CreateHorseInput');
+      expect(refs(db, 'CreateHorseInput').map((ref) => ref.relativePath)).toEqual(
+        expect.arrayContaining(['shared/src/index.ts', 'backend/src/schemas/horses.ts']),
+      );
+      expect(staleAbstractions(db, { minLoc: 1 }).map((symbol) => symbol.shortName)).not.toContain(
+        'contracts:horses:CreateHorseInput',
+      );
     });
   });
 });

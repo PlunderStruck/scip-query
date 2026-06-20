@@ -252,9 +252,7 @@ export function shortenSymbol(raw: string): string {
 }
 
 function shortDescriptorName(desc: ScipDescriptor): string {
-  const name = desc.suffix === 'namespace'
-    ? stripSourceExtension(desc.name)
-    : desc.name;
+  const name = desc.suffix === 'namespace' ? stripSourceExtension(desc.name) : desc.name;
   if (!name) return '';
   return desc.suffix === 'method' ? `${name}()` : name;
 }
@@ -371,10 +369,7 @@ export function isDirectChildSymbol(parentRaw: string, candidateRaw: string): bo
   for (let i = 0; i < parentDescriptors.length; i++) {
     const parentDesc = parentDescriptors[i]!;
     const candidateDesc = candidateDescriptors[i]!;
-    if (
-      parentDesc.name !== candidateDesc.name
-      || parentDesc.suffix !== candidateDesc.suffix
-    ) {
+    if (parentDesc.name !== candidateDesc.name || parentDesc.suffix !== candidateDesc.suffix) {
       return false;
     }
   }
@@ -404,10 +399,7 @@ export function isAncestorSymbol(ancestorRaw: string, descendantRaw: string): bo
   for (let i = 0; i < ancestorDescriptors.length; i++) {
     const ancestorDesc = ancestorDescriptors[i]!;
     const descendantDesc = descendantDescriptors[i]!;
-    if (
-      ancestorDesc.name !== descendantDesc.name
-      || ancestorDesc.suffix !== descendantDesc.suffix
-    ) {
+    if (ancestorDesc.name !== descendantDesc.name || ancestorDesc.suffix !== descendantDesc.suffix) {
       return false;
     }
   }

@@ -23,10 +23,7 @@ export function loadTsMorph(): TsMorphModule | null {
   return tsMorphModule;
 }
 
-export function createTsMorphProjectBundles(
-  tsMorph: TsMorphModule,
-  tsconfigPaths: readonly string[],
-): ProjectBundle[] {
+export function createTsMorphProjectBundles(tsMorph: TsMorphModule, tsconfigPaths: readonly string[]): ProjectBundle[] {
   return tsconfigPaths.map((tsconfigPath) => ({
     tsconfigPath,
     project: new tsMorph.Project({
@@ -36,11 +33,7 @@ export function createTsMorphProjectBundles(
   }));
 }
 
-export function unavailableProvider(
-  reason: string,
-  tsconfigPath?: string,
-  tsconfigPaths?: string[],
-): SemanticProvider {
+export function unavailableProvider(reason: string, tsconfigPath?: string, tsconfigPaths?: string[]): SemanticProvider {
   return {
     language: 'typescript',
     availability: () => ({ available: false, reason, tsconfigPath, tsconfigPaths }),

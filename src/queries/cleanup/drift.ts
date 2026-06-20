@@ -126,8 +126,7 @@ function layerViolationDrift(depGraph: Map<string, Set<string>>): DriftResult[] 
       const depLayer = getArchitecturalLayer(dep);
       if (fileLayer === depLayer) continue; // same layer, fine
 
-      const violation = layerPolicyForEdge(fileLayer, depLayer)
-        ?? layerRules.get(`${fileLayer}->${depLayer}`);
+      const violation = layerPolicyForEdge(fileLayer, depLayer) ?? layerRules.get(`${fileLayer}->${depLayer}`);
       if (violation === 'violation') {
         results.push({
           file,
@@ -144,10 +143,7 @@ function layerViolationDrift(depGraph: Map<string, Set<string>>): DriftResult[] 
 
 // scip-query: ignore-extract — this is the sibling-pattern scoring pass; the
 // directory grouping, dependency frequency, and threshold are one decision.
-function patternDeviationDrift(
-  depGraph: Map<string, Set<string>>,
-  minDeviation: number,
-): DriftResult[] {
+function patternDeviationDrift(depGraph: Map<string, Set<string>>, minDeviation: number): DriftResult[] {
   const results: DriftResult[] = [];
   for (const [dir, files] of filesByDirectory(depGraph)) {
     // Need a meaningful sample of siblings before "only one file does X" is
@@ -207,10 +203,7 @@ function filesByDirectory(depGraph: Map<string, Set<string>>): Map<string, strin
   return dirToFiles;
 }
 
-function dependencyFrequency(
-  depGraph: Map<string, Set<string>>,
-  files: string[],
-): Map<string, number> {
+function dependencyFrequency(depGraph: Map<string, Set<string>>, files: string[]): Map<string, number> {
   const depFreq = new Map<string, number>();
   for (const file of files) {
     for (const dep of depGraph.get(file) ?? []) {
@@ -226,30 +219,20 @@ function dependencyFrequency(
  * This is more precise than the dep graph because it uses actual
  * symbol mentions, not just import statements.
  */
-function buildSymbolRefGraph(
-  db: ScipDatabase,
-  scope?: string,
-): Map<string, Set<string>> {
+function buildSymbolRefGraph(db: ScipDatabase, scope?: string): Map<string, Set<string>> {
   const graph = new Map<string, Set<string>>();
   addScipSymbolRefEdges(db, graph, scope);
   addSourceScannedSymbolRefEdges(db, graph);
   return graph;
 }
 
-function addScipSymbolRefEdges(
-  db: ScipDatabase,
-  graph: Map<string, Set<string>>,
-  scope?: string,
-): void {
+function addScipSymbolRefEdges(db: ScipDatabase, graph: Map<string, Set<string>>, scope?: string): void {
   for (const edge of scipSymbolRefEdges(db, scope)) {
     addSymbolRefEdge(db, graph, edge.from_file, edge.to_file);
   }
 }
 
-function scipSymbolRefEdges(
-  db: ScipDatabase,
-  scope?: string,
-): Array<{ from_file: string; to_file: string }> {
+function scipSymbolRefEdges(db: ScipDatabase, scope?: string): Array<{ from_file: string; to_file: string }> {
   const scopeFilter = scope ? `AND d1.relative_path LIKE '%${scope}%'` : '';
   return db.all<{ from_file: string; to_file: string }>(
     `SELECT DISTINCT d1.relative_path AS from_file, d2.relative_path AS to_file
@@ -275,32 +258,27 @@ function scipSymbolRefEdges(
 // scip-query: ignore-extract — this adds source-scanned symbol edges; document
 // loading, ignore filtering, source-reference scanning, and graph mutation are
 // one fallback evidence source.
-function addSourceScannedSymbolRefEdges(
-  db: ScipDatabase,
-  graph: Map<string, Set<string>>,
-): void {
+function addSourceScannedSymbolRefEdges(db: ScipDatabase, graph: Map<string, Set<string>>): void {
   const index = new ProjectIndex(db);
   // SCIP mentions miss many cross-file references (rust-analyzer skips a lot
   // of inherent-method calls; tsc-batch can drop method receivers). Without
   // augmentation, the drift "unused import" check fires whenever a real
   // dependency goes through one of those gaps.
-  index.scanSourceReferences({
-    paths: indexedDocumentPaths(db, { includeIgnored: false }),
-    includeRustAttributeNames: true,
-    identifierResolution: 'permissive',
-  }, (hit) => {
-    if (hit.target.relativePath === hit.sourceFile) return;
-    if (db.isIgnored(hit.target.relativePath)) return;
-    addSymbolRefEdge(db, graph, hit.sourceFile, hit.target.relativePath);
-  });
+  index.scanSourceReferences(
+    {
+      paths: indexedDocumentPaths(db, { includeIgnored: false }),
+      includeRustAttributeNames: true,
+      identifierResolution: 'permissive',
+    },
+    (hit) => {
+      if (hit.target.relativePath === hit.sourceFile) return;
+      if (db.isIgnored(hit.target.relativePath)) return;
+      addSymbolRefEdge(db, graph, hit.sourceFile, hit.target.relativePath);
+    },
+  );
 }
 
-function addSymbolRefEdge(
-  db: ScipDatabase,
-  graph: Map<string, Set<string>>,
-  fromFile: string,
-  toFile: string,
-): void {
+function addSymbolRefEdge(db: ScipDatabase, graph: Map<string, Set<string>>, fromFile: string, toFile: string): void {
   if (db.isIgnored(fromFile) || db.isIgnored(toFile)) return;
   let bucket = graph.get(fromFile);
   if (!bucket) {
@@ -315,9 +293,7 @@ function addSymbolRefEdge(
  * If directory A never depends on directory B across the entire codebase,
  * then a new A→B dependency is a violation.
  */
-function inferLayerRules(
-  depGraph: Map<string, Set<string>>,
-): Map<string, 'ok' | 'violation'> {
+function inferLayerRules(depGraph: Map<string, Set<string>>): Map<string, 'ok' | 'violation'> {
   const layerEdges = new Map<string, number>();
 
   for (const [file, deps] of depGraph) {
@@ -380,9 +356,9 @@ function isSideEffectImport(db: ScipDatabase, file: string, dep: string): boolea
   if (imports.length === 0) return false;
   // If every import for this dep is a side-effect (no bindings), or an unused
   // namespace import, treat it as intentional.
-  return imports.every((entry) =>
-    entry.kind === 'side-effect'
-    || (entry.kind === 'namespace' && entry.usedMembers.length === 0 && !entry.used),
+  return imports.every(
+    (entry) =>
+      entry.kind === 'side-effect' || (entry.kind === 'namespace' && entry.usedMembers.length === 0 && !entry.used),
   );
 }
 

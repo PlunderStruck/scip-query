@@ -66,7 +66,7 @@ function readManifest(projectRoot: string): Record<string, unknown> | null {
   try {
     const raw = readFileSync(join(projectRoot, 'package.json'), 'utf-8');
     const parsed: unknown = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : null;
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
   } catch {
     return null;
   }

@@ -25,9 +25,7 @@ describe('source facts', () => {
           '}',
         ],
       });
-      evidenceFixtureDb(dbPath)
-        .document(1, 'rust', 'src/config.rs')
-        .write();
+      evidenceFixtureDb(dbPath).document(1, 'rust', 'src/config.rs').write();
 
       const db = new ScipDatabase({
         projectRoot,
@@ -35,10 +33,7 @@ describe('source facts', () => {
         indexPath: join(tempDir, 'index.scip'),
       });
       try {
-        expect([...getRustAttrReferencedNames(db, 'src/config.rs')].sort()).toEqual([
-          'default_port',
-          'port_schema',
-        ]);
+        expect([...getRustAttrReferencedNames(db, 'src/config.rs')].sort()).toEqual(['default_port', 'port_schema']);
       } finally {
         db.close();
       }
@@ -59,9 +54,7 @@ describe('source facts', () => {
           "export function stop() { return window.__TAURI__.invoke('stop_job'); }",
         ],
       });
-      evidenceFixtureDb(dbPath)
-        .document(1, 'typescript', 'src/commands.ts')
-        .write();
+      evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/commands.ts').write();
 
       const db = new ScipDatabase({
         projectRoot,
@@ -69,10 +62,7 @@ describe('source facts', () => {
         indexPath: join(tempDir, 'index.scip'),
       });
       try {
-        expect([...getCrossLanguageDispatchNames(db, 'src/commands.ts')].sort()).toEqual([
-          'start_job',
-          'stop_job',
-        ]);
+        expect([...getCrossLanguageDispatchNames(db, 'src/commands.ts')].sort()).toEqual(['start_job', 'stop_job']);
       } finally {
         db.close();
       }
@@ -87,11 +77,7 @@ describe('source facts', () => {
       const projectRoot = join(tempDir, 'project');
       const dbPath = join(tempDir, 'index.db');
       writeFixtureFiles(projectRoot, {
-        'src/defaults.rs': [
-          'pub fn default_port() -> u16 {',
-          '    8080',
-          '}',
-        ],
+        'src/defaults.rs': ['pub fn default_port() -> u16 {', '    8080', '}'],
         'src/config.rs': [
           'struct Config {',
           '    #[serde(default = "crate::defaults::default_port")]',
@@ -102,12 +88,7 @@ describe('source facts', () => {
       evidenceFixtureDb(dbPath)
         .document(1, 'rust', 'src/defaults.rs')
         .document(2, 'rust', 'src/config.rs')
-        .symbol(
-          1,
-          'scip-rust cargo fixture 0.1.0 src/defaults.rs/default_port().',
-          'default_port',
-          12,
-        )
+        .symbol(1, 'scip-rust cargo fixture 0.1.0 src/defaults.rs/default_port().', 'default_port', 12)
         .definition(1, 1, 1, 0, 0, 2, 1)
         .chunk(1, 1, 0, 2)
         .chunk(2, 2, 0, 3)
@@ -137,10 +118,7 @@ describe('source facts', () => {
       const projectRoot = join(tempDir, 'project');
       const dbPath = join(tempDir, 'index.db');
       writeFixtureFiles(projectRoot, {
-        'src/commands.rs': [
-          'pub fn start_job() {',
-          '}',
-        ],
+        'src/commands.rs': ['pub fn start_job() {', '}'],
         'src/client.ts': [
           "import { invoke } from '@tauri-apps/api/core';",
           "export function start() { return invoke('start_job'); }",
@@ -149,12 +127,7 @@ describe('source facts', () => {
       evidenceFixtureDb(dbPath)
         .document(1, 'rust', 'src/commands.rs')
         .document(2, 'typescript', 'src/client.ts')
-        .symbol(
-          1,
-          'scip-rust cargo fixture 0.1.0 src/commands.rs/start_job().',
-          'start_job',
-          12,
-        )
+        .symbol(1, 'scip-rust cargo fixture 0.1.0 src/commands.rs/start_job().', 'start_job', 12)
         .definition(1, 1, 1, 0, 0, 1, 1)
         .chunk(1, 1, 0, 1)
         .chunk(2, 2, 0, 1)

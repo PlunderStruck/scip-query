@@ -38,13 +38,19 @@ export interface HealthAxes {
   cycles: { count: number };
   /** Files touched per commit — the measured cost of one conceptual change. */
   changeAmplification: ChangeAmplificationSummary | null;
-    /** File pairs that co-change without a structural link — concepts the visible graph can't see. */
+  /** File pairs that co-change without a structural link — concepts the visible graph can't see. */
   hiddenCoupling: {
     pairCount: number;
     top: Array<{ fileA: string; fileB: string; together: number; confidence: number }>;
   } | null;
   /** Complexity hotspots weighted by churn — complex code nobody touches costs nothing. */
-  churnWeightedComplexity: Array<{ symbol: string; file?: string; score: number; changes: number; weighted: number }> | null;
+  churnWeightedComplexity: Array<{
+    symbol: string;
+    file?: string;
+    score: number;
+    changes: number;
+    weighted: number;
+  }> | null;
   /** What fraction of findings rest on graph facts vs heuristics, and how many the user has rejected. */
   evidenceQuality: {
     graphFindings: number;
@@ -81,16 +87,16 @@ export interface HealthReport {
     isolatedSymbols: number;
     isolatedLoc: number;
     cycles: number;
-      similarPairs: number;
-      reactComponentDuplicatePairs: number;
-      reactHookCandidatePairs: number;
-      reactHookCandidateScoreCount: number;
-      reactLargeComponentPressureFiles: number;
-      vueComponentDuplicatePairs: number;
-      vueComposableCandidatePairs: number;
-      vueComposableCandidateScoreCount: number;
-      vueLargeViewPressureFiles: number;
-      extractionCandidates: number;
+    similarPairs: number;
+    reactComponentDuplicatePairs: number;
+    reactHookCandidatePairs: number;
+    reactHookCandidateScoreCount: number;
+    reactLargeComponentPressureFiles: number;
+    vueComponentDuplicatePairs: number;
+    vueComposableCandidatePairs: number;
+    vueComposableCandidateScoreCount: number;
+    vueLargeViewPressureFiles: number;
+    extractionCandidates: number;
     wrappers: number;
     passthroughs: number;
     staleTypes: number;
@@ -133,15 +139,15 @@ export function buildHealthReport(analyses: HealthAnalyses): HealthReport {
       isolatedSymbols: analyses.isolated.count,
       isolatedLoc: analyses.isolated.loc,
       cycles: analyses.realCycleCount,
-        similarPairs: analyses.similarCount,
-        reactComponentDuplicatePairs: analyses.reactComponentDuplicates.count,
-        reactHookCandidatePairs: analyses.reactHookCandidates.count,
-        reactHookCandidateScoreCount: healthScoreCount(analyses.reactHookCandidates),
-        reactLargeComponentPressureFiles: analyses.reactLargeComponentPressure.count,
-        vueComponentDuplicatePairs: analyses.vueComponentDuplicates.count,
-        vueComposableCandidatePairs: analyses.vueComposableCandidates.count,
-        vueComposableCandidateScoreCount: healthScoreCount(analyses.vueComposableCandidates),
-        vueLargeViewPressureFiles: analyses.vueLargeViewPressure.count,
+      similarPairs: analyses.similarCount,
+      reactComponentDuplicatePairs: analyses.reactComponentDuplicates.count,
+      reactHookCandidatePairs: analyses.reactHookCandidates.count,
+      reactHookCandidateScoreCount: healthScoreCount(analyses.reactHookCandidates),
+      reactLargeComponentPressureFiles: analyses.reactLargeComponentPressure.count,
+      vueComponentDuplicatePairs: analyses.vueComponentDuplicates.count,
+      vueComposableCandidatePairs: analyses.vueComposableCandidates.count,
+      vueComposableCandidateScoreCount: healthScoreCount(analyses.vueComposableCandidates),
+      vueLargeViewPressureFiles: analyses.vueLargeViewPressure.count,
       extractionCandidates: analyses.extractCount,
       wrappers: analyses.wrappers.count,
       passthroughs: analyses.passthroughs.count,
@@ -175,31 +181,30 @@ function buildHealthAxes(analyses: HealthAnalyses): HealthAxes {
       // directly off the reference graph.
       graphFindings: analyses.dead.count + analyses.isolated.count + analyses.realCycleCount,
       // Heuristics: every "candidate"-style detector.
-      heuristicFindings: analyses.similarCount
-        + analyses.reactComponentDuplicates.count
-        + analyses.reactHookCandidates.count
-        + analyses.reactLargeComponentPressure.count
-        + analyses.vueComponentDuplicates.count
-        + analyses.vueComposableCandidates.count
-        + analyses.vueLargeViewPressure.count
-        + analyses.extractCount
-        + analyses.wrappers.count
-        + analyses.passthroughs.count
-        + analyses.stale.count
-        + analyses.drift.count,
+      heuristicFindings:
+        analyses.similarCount +
+        analyses.reactComponentDuplicates.count +
+        analyses.reactHookCandidates.count +
+        analyses.reactLargeComponentPressure.count +
+        analyses.vueComponentDuplicates.count +
+        analyses.vueComposableCandidates.count +
+        analyses.vueLargeViewPressure.count +
+        analyses.extractCount +
+        analyses.wrappers.count +
+        analyses.passthroughs.count +
+        analyses.stale.count +
+        analyses.drift.count,
       userSuppressed: analyses.suppressions?.total ?? 0,
     },
   };
 }
 
-function buildChurnWeightedComplexity(
-  analyses: HealthAnalyses,
-): HealthAxes['churnWeightedComplexity'] {
+function buildChurnWeightedComplexity(analyses: HealthAnalyses): HealthAxes['churnWeightedComplexity'] {
   const fileStats = analyses.gitEvidence?.fileStats;
   if (!fileStats) return null;
   return analyses.complexity.top
     .map((entry) => {
-      const changes = entry.file ? fileStats[entry.file]?.changes ?? 0 : 0;
+      const changes = entry.file ? (fileStats[entry.file]?.changes ?? 0) : 0;
       return {
         ...entry,
         changes,
@@ -261,9 +266,7 @@ function buildHealthValidation(analyses: HealthAnalyses): HealthValidation | nul
     flaggedFiles: flagged.size,
     flaggedFixDensity,
     baselineFixDensity,
-    ratio: flagged.size > 0 && baselineFixDensity > 0
-      ? round2(flaggedFixDensity / baselineFixDensity)
-      : null,
+    ratio: flagged.size > 0 && baselineFixDensity > 0 ? round2(flaggedFixDensity / baselineFixDensity) : null,
     byCategory,
   };
 }
@@ -483,9 +486,10 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Hidden coupling',
       evidence: 'change-graph',
-      description: `${analyses.gitEvidence.hiddenCoupling.pairCount} file pair(s) co-change without a structural link`
-        + (top ? ` (e.g. ${top.fileA} ↔ ${top.fileB})` : '')
-        + ' — name the shared concept or enforce the sync',
+      description:
+        `${analyses.gitEvidence.hiddenCoupling.pairCount} file pair(s) co-change without a structural link` +
+        (top ? ` (e.g. ${top.fileA} ↔ ${top.fileB})` : '') +
+        ' — name the shared concept or enforce the sync',
       effort: 'medium',
       impact: 'high',
       count: analyses.gitEvidence.hiddenCoupling.pairCount,
@@ -542,8 +546,7 @@ const DEDUCTION_KIND: Record<string, ScoreDeduction['kind']> = {
 };
 
 function scoreFromDeductions(breakdown: readonly ScoreDeduction[], kind: ScoreDeduction['kind']): number {
-  const total = breakdown.filter((entry) => entry.kind === kind)
-    .reduce((sum, entry) => sum + entry.points, 0);
+  const total = breakdown.filter((entry) => entry.kind === kind).reduce((sum, entry) => sum + entry.points, 0);
   return Math.max(0, Math.min(100, 100 - total));
 }
 
@@ -587,69 +590,100 @@ function computeHealthScore(analyses: HealthAnalyses): { breakdown: ScoreDeducti
   };
 
   const deadPercent = analyses.dead.count / symbolCount;
-  deduct('dead-code', Math.min(20, Math.round(deadPercent * 200)),
-    `${analyses.dead.count} dead symbols (${analyses.dead.loc} LOC deletable)`);
+  deduct(
+    'dead-code',
+    Math.min(20, Math.round(deadPercent * 200)),
+    `${analyses.dead.count} dead symbols (${analyses.dead.loc} LOC deletable)`,
+  );
 
   const isolatedPercent = analyses.isolated.count / symbolCount;
-  deduct('isolated', Math.min(10, Math.round(isolatedPercent * 200)),
-    `${analyses.isolated.count} isolated symbols (${analyses.isolated.loc} LOC deletable)`);
+  deduct(
+    'isolated',
+    Math.min(10, Math.round(isolatedPercent * 200)),
+    `${analyses.isolated.count} isolated symbols (${analyses.isolated.loc} LOC deletable)`,
+  );
 
-  deduct('cycles', Math.min(15, analyses.realCycleCount * 5),
-    `${analyses.realCycleCount} real dependency cycle(s)`);
+  deduct('cycles', Math.min(15, analyses.realCycleCount * 5), `${analyses.realCycleCount} real dependency cycle(s)`);
 
-  const similarPerMille = analyses.similarCount / symbolCount * 1000;
-  deduct('similar', Math.min(10, Math.round(similarPerMille)),
-    `${analyses.similarCount} similar function pair(s)`);
+  const similarPerMille = (analyses.similarCount / symbolCount) * 1000;
+  deduct('similar', Math.min(10, Math.round(similarPerMille)), `${analyses.similarCount} similar function pair(s)`);
 
-  const reactDuplicatePerMille = analyses.reactComponentDuplicates.count / fileCount * 1000;
-  deduct('react-component-duplicates', Math.min(10, Math.round(reactDuplicatePerMille)),
-    `${analyses.reactComponentDuplicates.count} duplicated React component pair(s)`);
+  const reactDuplicatePerMille = (analyses.reactComponentDuplicates.count / fileCount) * 1000;
+  deduct(
+    'react-component-duplicates',
+    Math.min(10, Math.round(reactDuplicatePerMille)),
+    `${analyses.reactComponentDuplicates.count} duplicated React component pair(s)`,
+  );
 
   const reactHookScoreCount = healthScoreCount(analyses.reactHookCandidates);
-  const reactHookPerMille = reactHookScoreCount / fileCount * 1000;
-  deduct('react-hook-candidates', Math.min(10, Math.round(reactHookPerMille)),
-    scoreWeightedDetail(analyses.reactHookCandidates, 'duplicated React behavior pair(s)'));
+  const reactHookPerMille = (reactHookScoreCount / fileCount) * 1000;
+  deduct(
+    'react-hook-candidates',
+    Math.min(10, Math.round(reactHookPerMille)),
+    scoreWeightedDetail(analyses.reactHookCandidates, 'duplicated React behavior pair(s)'),
+  );
 
-  const reactLargeComponentPerMille = analyses.reactLargeComponentPressure.count / fileCount * 1000;
-  deduct('react-large-component-pressure', Math.min(5, Math.round(reactLargeComponentPerMille / 2)),
-    `${analyses.reactLargeComponentPressure.count} large React component pressure file(s)`);
+  const reactLargeComponentPerMille = (analyses.reactLargeComponentPressure.count / fileCount) * 1000;
+  deduct(
+    'react-large-component-pressure',
+    Math.min(5, Math.round(reactLargeComponentPerMille / 2)),
+    `${analyses.reactLargeComponentPressure.count} large React component pressure file(s)`,
+  );
 
-  const vueDuplicatePerMille = analyses.vueComponentDuplicates.count / fileCount * 1000;
-  deduct('vue-component-duplicates', Math.min(10, Math.round(vueDuplicatePerMille)),
-    `${analyses.vueComponentDuplicates.count} duplicated Vue component pair(s)`);
+  const vueDuplicatePerMille = (analyses.vueComponentDuplicates.count / fileCount) * 1000;
+  deduct(
+    'vue-component-duplicates',
+    Math.min(10, Math.round(vueDuplicatePerMille)),
+    `${analyses.vueComponentDuplicates.count} duplicated Vue component pair(s)`,
+  );
 
   const vueComposableScoreCount = healthScoreCount(analyses.vueComposableCandidates);
-  const vueComposablePerMille = vueComposableScoreCount / fileCount * 1000;
-  deduct('vue-composable-candidates', Math.min(10, Math.round(vueComposablePerMille)),
-    scoreWeightedDetail(analyses.vueComposableCandidates, 'duplicated Vue behavior pair(s)'));
+  const vueComposablePerMille = (vueComposableScoreCount / fileCount) * 1000;
+  deduct(
+    'vue-composable-candidates',
+    Math.min(10, Math.round(vueComposablePerMille)),
+    scoreWeightedDetail(analyses.vueComposableCandidates, 'duplicated Vue behavior pair(s)'),
+  );
 
-  const vueLargeViewPerMille = analyses.vueLargeViewPressure.count / fileCount * 1000;
-  deduct('vue-large-view-pressure', Math.min(5, Math.round(vueLargeViewPerMille / 2)),
-    `${analyses.vueLargeViewPressure.count} large Vue view pressure file(s)`);
+  const vueLargeViewPerMille = (analyses.vueLargeViewPressure.count / fileCount) * 1000;
+  deduct(
+    'vue-large-view-pressure',
+    Math.min(5, Math.round(vueLargeViewPerMille / 2)),
+    `${analyses.vueLargeViewPressure.count} large Vue view pressure file(s)`,
+  );
 
-  const extractPerMille = analyses.extractCount / symbolCount * 1000;
-  deduct('extract', Math.min(5, Math.round(extractPerMille / 2)),
-    `${analyses.extractCount} extraction candidate(s)`);
+  const extractPerMille = (analyses.extractCount / symbolCount) * 1000;
+  deduct('extract', Math.min(5, Math.round(extractPerMille / 2)), `${analyses.extractCount} extraction candidate(s)`);
 
-  deduct('wrappers', Math.min(3, analyses.wrappers.count),
-    `${analyses.wrappers.count} wrapper candidate(s)`);
-  deduct('passthroughs', Math.min(3, analyses.passthroughs.count),
-    `${analyses.passthroughs.count} passthrough candidate(s)`);
+  deduct('wrappers', Math.min(3, analyses.wrappers.count), `${analyses.wrappers.count} wrapper candidate(s)`);
+  deduct(
+    'passthroughs',
+    Math.min(3, analyses.passthroughs.count),
+    `${analyses.passthroughs.count} passthrough candidate(s)`,
+  );
 
   const stalePercent = analyses.stale.count / Math.max(symbolCount * 0.1, 1);
-  deduct('stale-abstractions', Math.min(8, Math.round(stalePercent * 10)),
-    `${analyses.stale.count} stale abstraction(s)`);
+  deduct(
+    'stale-abstractions',
+    Math.min(8, Math.round(stalePercent * 10)),
+    `${analyses.stale.count} stale abstraction(s)`,
+  );
 
   const driftPercent = analyses.drift.count / fileCount;
-  deduct('drift', Math.min(5, Math.round(driftPercent * 50)),
-    `${analyses.drift.count} drift finding(s)`);
+  deduct('drift', Math.min(5, Math.round(driftPercent * 50)), `${analyses.drift.count} drift finding(s)`);
 
-  deduct('complexity', Math.min(5, analyses.complexity.extremeCount * 2),
-    `${analyses.complexity.extremeCount} extreme complexity hotspot(s)`);
+  deduct(
+    'complexity',
+    Math.min(5, analyses.complexity.extremeCount * 2),
+    `${analyses.complexity.extremeCount} extreme complexity hotspot(s)`,
+  );
 
   if (analyses.gitEvidence) {
-    deduct('hidden-coupling', Math.min(5, analyses.gitEvidence.hiddenCoupling.pairCount),
-      `${analyses.gitEvidence.hiddenCoupling.pairCount} co-changing pair(s) without a structural link`);
+    deduct(
+      'hidden-coupling',
+      Math.min(5, analyses.gitEvidence.hiddenCoupling.pairCount),
+      `${analyses.gitEvidence.hiddenCoupling.pairCount} co-changing pair(s) without a structural link`,
+    );
   }
 
   pressureDeduct('cycles-pressure', 'Circular dependencies', analyses.realCycleCount, 3, 10, 3, 'cycle(s)');
@@ -746,15 +780,7 @@ function computeHealthScore(analyses: HealthAnalyses): { breakdown: ScoreDeducti
     2,
     'extraction candidate(s)',
   );
-  pressureDeduct(
-    'wrappers-pressure',
-    'Wrapper functions',
-    analyses.wrappers.count,
-    50,
-    4,
-    2,
-    'wrapper candidate(s)',
-  );
+  pressureDeduct('wrappers-pressure', 'Wrapper functions', analyses.wrappers.count, 50, 4, 2, 'wrapper candidate(s)');
   pressureDeduct(
     'passthroughs-pressure',
     'Passthrough functions',

@@ -1,8 +1,5 @@
 import { difference, intersection, jaccard } from '../../analysis/similarity.js';
-import {
-  buildReactComponentBehaviorProfiles,
-  type ReactComponentBehaviorProfile,
-} from '../../source/react-profile.js';
+import { buildReactComponentBehaviorProfiles, type ReactComponentBehaviorProfile } from '../../source/react-profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { rankedPairwiseProfileResults, type PairwiseFileProfile } from '../internal/pairwise-profiles.js';
 
@@ -42,14 +39,7 @@ export function reactComponentDuplicates(
     filePattern?: string;
   } = {},
 ): ReactComponentDuplicateResult[] {
-  const {
-    minSimilarity = 0.62,
-    minTokens = 8,
-    limit = 20,
-    scope,
-    scanLimit,
-    filePattern,
-  } = opts;
+  const { minSimilarity = 0.62, minTokens = 8, limit = 20, scope, scanLimit, filePattern } = opts;
   const profiles = buildReactComponentBehaviorProfiles(db, {
     scope,
     minJsxTokens: minTokens,
@@ -68,11 +58,12 @@ export function reactComponentDuplicates(
     limit,
     filePattern,
     compare: (a, b) => compareProfiles(a, b, minSimilarity),
-    sort: (a, b) => b.similarity - a.similarity
-      || a.fileA.localeCompare(b.fileA)
-      || a.componentA.localeCompare(b.componentA)
-      || a.fileB.localeCompare(b.fileB)
-      || a.componentB.localeCompare(b.componentB),
+    sort: (a, b) =>
+      b.similarity - a.similarity ||
+      a.fileA.localeCompare(b.fileA) ||
+      a.componentA.localeCompare(b.componentA) ||
+      a.fileB.localeCompare(b.fileB) ||
+      a.componentB.localeCompare(b.componentB),
   });
 }
 
@@ -112,10 +103,10 @@ function hasMeaningfulReactStructureOverlap(shared: ReadonlySet<string>): boolea
   for (const token of shared) {
     if (token.startsWith('component:')) componentLike += 1;
     if (
-      token.startsWith('prop:')
-      || token.startsWith('event:')
-      || token.startsWith('native:')
-      || token.startsWith('jsx:')
+      token.startsWith('prop:') ||
+      token.startsWith('event:') ||
+      token.startsWith('native:') ||
+      token.startsWith('jsx:')
     ) {
       shapeLike += 1;
     }

@@ -11,11 +11,7 @@ export interface CouplingResult {
  * Measure coupling between two files: how many symbols do they share
  * (symbols defined in one and referenced in the other, or vice versa).
  */
-export function coupling(
-  db: ScipDatabase,
-  file1: string,
-  file2: string,
-): CouplingResult {
+export function coupling(db: ScipDatabase, file1: string, file2: string): CouplingResult {
   const resolvedFile1 = resolveIndexedFile(db, file1) ?? file1;
   const resolvedFile2 = resolveIndexedFile(db, file2) ?? file2;
 
@@ -53,8 +49,10 @@ export function coupling(
         WHERE m.symbol_id = gs.id AND m.role != 1 AND d.relative_path = ?
       )
     )`,
-    resolvedFile1, resolvedFile2,
-    resolvedFile2, resolvedFile1,
+    resolvedFile1,
+    resolvedFile2,
+    resolvedFile2,
+    resolvedFile1,
   );
 
   return {
@@ -67,14 +65,9 @@ export function coupling(
 /**
  * Find the most coupled file pairs in the codebase.
  */
-export function topCoupling(
-  db: ScipDatabase,
-  opts: { limit?: number; scope?: string } = {},
-): CouplingResult[] {
+export function topCoupling(db: ScipDatabase, opts: { limit?: number; scope?: string } = {}): CouplingResult[] {
   const { limit = 20, scope } = opts;
-  const scopeFilter = scope
-    ? `AND d1.relative_path LIKE '%${scope}%' AND d2.relative_path LIKE '%${scope}%'`
-    : '';
+  const scopeFilter = scope ? `AND d1.relative_path LIKE '%${scope}%' AND d2.relative_path LIKE '%${scope}%'` : '';
 
   // Find file pairs that share the most symbols (one defines, other references)
   const rows = db.all<{

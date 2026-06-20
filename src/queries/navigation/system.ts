@@ -28,13 +28,12 @@ export function system(db: ScipDatabase, modulePattern: string): SystemResult {
      ORDER BY relative_path`,
     ...matchedPaths,
   );
-  const files = fileRows
-    .map((r) => r.relative_path)
-    .filter((p) => !db.isIgnored(p));
+  const files = fileRows.map((r) => r.relative_path).filter((p) => !db.isIgnored(p));
 
   // Exported symbols: corrected ranges + documentation filter.
-  const symbols: SymbolResult[] = loadFileSymbols(db, files, { onlyDocumented: true, sort: true })
-    .map(({ relativePath: _r, ...rest }) => rest);
+  const symbols: SymbolResult[] = loadFileSymbols(db, files, { onlyDocumented: true, sort: true }).map(
+    ({ relativePath: _r, ...rest }) => rest,
+  );
 
   const depRows = db.all<{ relative_path: string }>(
     `SELECT DISTINCT d2.relative_path
@@ -57,9 +56,7 @@ export function system(db: ScipDatabase, modulePattern: string): SystemResult {
     ...matchedPaths,
     ...matchedPaths,
   );
-  const dependsOn = depRows
-    .map((r) => r.relative_path)
-    .filter((p) => !db.isIgnored(p));
+  const dependsOn = depRows.map((r) => r.relative_path).filter((p) => !db.isIgnored(p));
 
   const rdepRows = db.all<{ relative_path: string }>(
     `SELECT DISTINCT d1.relative_path
@@ -81,9 +78,7 @@ export function system(db: ScipDatabase, modulePattern: string): SystemResult {
     ...matchedPaths,
     ...matchedPaths,
   );
-  const dependedOnBy = rdepRows
-    .map((r) => r.relative_path)
-    .filter((p) => !db.isIgnored(p));
+  const dependedOnBy = rdepRows.map((r) => r.relative_path).filter((p) => !db.isIgnored(p));
 
   return { files, symbols, dependsOn, dependedOnBy };
 }

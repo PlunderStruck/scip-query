@@ -26,11 +26,7 @@ import type { ScipDatabase } from './db.js';
  */
 // scip-query: ignore-stale — registry contract vocabulary; consumed via the
 // factory options type as well as direct registrations.
-export type CacheClearGroup =
-  | 'whole-project'
-  | 'source-file'
-  | 'semantic-provider'
-  | 'definition-catalog';
+export type CacheClearGroup = 'whole-project' | 'source-file' | 'semantic-provider' | 'definition-catalog';
 
 export interface CacheClearRegistration {
   name: string;

@@ -30,7 +30,14 @@ describe('indexer configs', () => {
 
     expect(command).toEqual({
       binary: '/tmp/scip-typescript',
-      args: ['index', '--pnpm-workspaces', '--infer-tsconfig', '--output', '/tmp/project/index.scip', '--no-progress-bar'],
+      args: [
+        'index',
+        '--pnpm-workspaces',
+        '--infer-tsconfig',
+        '--output',
+        '/tmp/project/index.scip',
+        '--no-progress-bar',
+      ],
     });
   });
 

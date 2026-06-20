@@ -16,9 +16,7 @@ if (!projectRoot || !outputScip || !outputDb) {
   process.exit(1);
 }
 
-const languages = languagesRaw
-  ? (languagesRaw.split(',').filter(Boolean) as SupportedLanguage[])
-  : undefined;
+const languages = languagesRaw ? (languagesRaw.split(',').filter(Boolean) as SupportedLanguage[]) : undefined;
 
 reindex({
   projectRoot,
@@ -27,9 +25,11 @@ reindex({
   languages: languages?.length ? languages : undefined,
   pnpmWorkspaces,
   onStatus: (msg) => process.stderr.write(`[reindex] ${msg}\n`),
-}).then(() => {
-  process.exit(0);
-}).catch((err) => {
-  console.error(`reindex-worker error: ${err}`);
-  process.exit(1);
-});
+})
+  .then(() => {
+    process.exit(0);
+  })
+  .catch((err) => {
+    console.error(`reindex-worker error: ${err}`);
+    process.exit(1);
+  });

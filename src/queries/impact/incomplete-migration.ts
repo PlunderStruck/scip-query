@@ -167,9 +167,11 @@ export function incompleteMigration(
     });
   }
 
-  result.findings.sort((a, b) =>
-    (b.leftovers[0]?.containment ?? 0) - (a.leftovers[0]?.containment ?? 0)
-    || a.helperFile.localeCompare(b.helperFile));
+  result.findings.sort(
+    (a, b) =>
+      (b.leftovers[0]?.containment ?? 0) - (a.leftovers[0]?.containment ?? 0) ||
+      a.helperFile.localeCompare(b.helperFile),
+  );
   result.findings = result.findings.slice(0, limit);
   return result;
 }
@@ -216,7 +218,9 @@ function collectLeftoversForHelper(opts: {
     const score = containment(opts.helperCallees, candidate.callees);
     if (score < opts.minContainment) continue;
     const shared = [...opts.helperCallees].filter((callee) => candidate.callees.has(callee));
-    if (!shared.some((callee) => (opts.candidateIndex.docFreq.get(callee) ?? 0) <= opts.candidateIndex.ubiquityThreshold)) {
+    if (
+      !shared.some((callee) => (opts.candidateIndex.docFreq.get(callee) ?? 0) <= opts.candidateIndex.ubiquityThreshold)
+    ) {
       continue;
     }
     leftovers.push({
@@ -243,18 +247,16 @@ function newCallablesInDiff(
   renamedFromByFile: ReadonlyMap<string, string>,
 ) {
   const baseContent = new Map<string, string | null>();
-  return index
-    .productionCallableDefinitions({ requireFunctionLikeSymbol: true })
-    .filter((def) => {
-      if (!changed.has(def.relativePath)) return false;
-      const basePath = renamedFromByFile.get(def.relativePath) ?? def.relativePath;
-      let content = baseContent.get(basePath);
-      if (content === undefined) {
-        content = fileContentAtBase(db.config.projectRoot, base, basePath);
-        baseContent.set(basePath, content);
-      }
-      return content === null || !new RegExp(`\\b${escapeRegex(def.leaf)}\\b`).test(content);
-    });
+  return index.productionCallableDefinitions({ requireFunctionLikeSymbol: true }).filter((def) => {
+    if (!changed.has(def.relativePath)) return false;
+    const basePath = renamedFromByFile.get(def.relativePath) ?? def.relativePath;
+    let content = baseContent.get(basePath);
+    if (content === undefined) {
+      content = fileContentAtBase(db.config.projectRoot, base, basePath);
+      baseContent.set(basePath, content);
+    }
+    return content === null || !new RegExp(`\\b${escapeRegex(def.leaf)}\\b`).test(content);
+  });
 }
 
 /** Distinct files with a non-definition mention of the symbol (own file included — intra-file wiring counts). */

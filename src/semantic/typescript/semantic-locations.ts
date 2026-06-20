@@ -27,7 +27,11 @@ export function semanticReferencesForNode(
   const locations: SemanticReference[] = [];
   for (const ref of findReferencesForNode(node)) {
     for (const location of referenceLocations(ref, projectRoot)) {
-      if (location.file === definition.relativePath && location.line >= definition.startLine && location.line <= definition.endLine) {
+      if (
+        location.file === definition.relativePath &&
+        location.line >= definition.startLine &&
+        location.line <= definition.endLine
+      ) {
         continue;
       }
       locations.push(location);
@@ -90,9 +94,9 @@ export function textualIdentifierLocations(
     }
   }
 
-  return dedupeLocations(locations.filter((location) =>
-    toRelative(projectRoot, path.join(projectRoot, location.file)) === importer,
-  ));
+  return dedupeLocations(
+    locations.filter((location) => toRelative(projectRoot, path.join(projectRoot, location.file)) === importer),
+  );
 }
 
 export function isTypeOnlyLocation(node: Node): boolean {

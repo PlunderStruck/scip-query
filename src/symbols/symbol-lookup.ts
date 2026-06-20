@@ -20,7 +20,13 @@
  * catalog and reference graph build on top.
  */
 import type { ScipDatabase } from '../storage/db.js';
-import { isCallableSymbol, isFunctionLikeSymbol, isModuleLikeSymbol, leafName, shortenSymbol } from './symbol-parser.js';
+import {
+  isCallableSymbol,
+  isFunctionLikeSymbol,
+  isModuleLikeSymbol,
+  leafName,
+  shortenSymbol,
+} from './symbol-parser.js';
 import { hydrateSymbolMatch, parentTypeName } from './definition-catalog.js';
 import { definitionMentionRows, definitionRangeRows, type SymbolQueryRow } from '../storage/scip-rows.js';
 import type { SymbolLocation, SymbolMatch } from '../domain/types.js';
@@ -32,10 +38,7 @@ import { mergeMixedSymbolQueryRows } from './symbol-row-policy.js';
 // import them from this module.
 export { cleanSignature, extractSignature, type SymbolQueryRow } from '../storage/scip-rows.js';
 
-export function findFirstSymbolMatch(
-  db: ScipDatabase,
-  symbolPattern: string,
-): SymbolMatch | null {
+export function findFirstSymbolMatch(db: ScipDatabase, symbolPattern: string): SymbolMatch | null {
   const exact = findExactSymbolMatch(db, symbolPattern.trim());
   if (exact) {
     return exact;
@@ -72,38 +75,31 @@ function pathQualifiedCandidates(
   leaf: string,
   cleanedPattern: string,
 ): SymbolQueryRow[] {
-  const candidates = mergeMixedSymbolQueryRows([], [
-    ...pathQualifiedPrimaryRows(db, pathLike, leaf),
-    ...pathQualifiedFallbackRows(db, pathLike, leaf),
-  ])
+  const candidates = mergeMixedSymbolQueryRows(
+    [],
+    [...pathQualifiedPrimaryRows(db, pathLike, leaf), ...pathQualifiedFallbackRows(db, pathLike, leaf)],
+  )
     .filter((row) => !db.isIgnored(row.relative_path))
     .filter((row) => pathQualifiedDirectScore(row, cleanedPattern) > 1);
 
-  candidates.sort((left, right) =>
-    pathQualifiedDirectScore(right, cleanedPattern) - pathQualifiedDirectScore(left, cleanedPattern)
-    || (left.end_line - left.start_line) - (right.end_line - right.start_line)
-    || left.start_line - right.start_line
-    || left.symbol.localeCompare(right.symbol),
+  candidates.sort(
+    (left, right) =>
+      pathQualifiedDirectScore(right, cleanedPattern) - pathQualifiedDirectScore(left, cleanedPattern) ||
+      left.end_line - left.start_line - (right.end_line - right.start_line) ||
+      left.start_line - right.start_line ||
+      left.symbol.localeCompare(right.symbol),
   );
   return candidates;
 }
 
-function pathQualifiedPrimaryRows(
-  db: ScipDatabase,
-  pathLike: string,
-  leaf: string,
-): SymbolQueryRow[] {
+function pathQualifiedPrimaryRows(db: ScipDatabase, pathLike: string, leaf: string): SymbolQueryRow[] {
   return definitionRangeRows(db, {
     where: 'd.relative_path LIKE ? AND (gs.display_name = ? OR gs.symbol LIKE ?)',
     params: [pathLike, leaf, `%/${leaf}.%`],
   });
 }
 
-function pathQualifiedFallbackRows(
-  db: ScipDatabase,
-  pathLike: string,
-  leaf: string,
-): SymbolQueryRow[] {
+function pathQualifiedFallbackRows(db: ScipDatabase, pathLike: string, leaf: string): SymbolQueryRow[] {
   return definitionMentionRows(db, {
     where: 'd.relative_path LIKE ? AND (gs.display_name = ? OR gs.symbol LIKE ?)',
     params: [pathLike, leaf, `%/${leaf}.%`],
@@ -154,8 +150,9 @@ function findFileLineSymbolMatch(db: ScipDatabase, symbolPattern: string): Symbo
   const [, filePath, startStr, endStr] = fileLineMatch;
   const userStart0 = Math.max(0, parseInt(startStr!, 10) - 1);
   const userEnd0 = Math.max(userStart0, parseInt(endStr!, 10) - 1);
-  const row = findDefinitionRangeRow(db, filePath!, userStart0, userEnd0)
-    ?? findDefinitionChunkRow(db, filePath!, userStart0, userEnd0);
+  const row =
+    findDefinitionRangeRow(db, filePath!, userStart0, userEnd0) ??
+    findDefinitionChunkRow(db, filePath!, userStart0, userEnd0);
   return row && !db.isIgnored(row.relative_path) ? hydrateSymbolMatch(db, row) : null;
 }
 
@@ -187,10 +184,7 @@ function findDefinitionChunkRow(
   })[0];
 }
 
-export function findExactSymbolMatch(
-  db: ScipDatabase,
-  symbol: string,
-): SymbolMatch | null {
+export function findExactSymbolMatch(db: ScipDatabase, symbol: string): SymbolMatch | null {
   const primary = definitionRangeRows(db, {
     where: 'gs.symbol = ?',
     params: [symbol],
@@ -198,12 +192,14 @@ export function findExactSymbolMatch(
     limit: 1,
   })[0];
 
-  const row = primary ?? definitionMentionRows(db, {
-    where: 'gs.symbol = ?',
-    params: [symbol],
-    orderBy: 'd.relative_path, start_line',
-    limit: 1,
-  })[0];
+  const row =
+    primary ??
+    definitionMentionRows(db, {
+      where: 'gs.symbol = ?',
+      params: [symbol],
+      orderBy: 'd.relative_path, start_line',
+      limit: 1,
+    })[0];
 
   if (!row || db.isIgnored(row.relative_path)) {
     return null;
@@ -212,10 +208,7 @@ export function findExactSymbolMatch(
   return hydrateSymbolMatch(db, row);
 }
 
-export function getFullSymbolMatch(
-  db: ScipDatabase,
-  symbol: SymbolLocation,
-): SymbolMatch | null {
+export function getFullSymbolMatch(db: ScipDatabase, symbol: SymbolLocation): SymbolMatch | null {
   if ('symbol' in symbol && 'relativePath' in symbol) {
     return symbol as SymbolMatch;
   }
@@ -229,10 +222,7 @@ export function getFullSymbolMatch(
   return hydrateSymbolMatch(db, row);
 }
 
-export function getDefinitionRowsForSymbolId(
-  db: ScipDatabase,
-  symbolId: number,
-): SymbolQueryRow[] {
+export function getDefinitionRowsForSymbolId(db: ScipDatabase, symbolId: number): SymbolQueryRow[] {
   const primary = definitionRangeRows(db, {
     where: 'gs.id = ?',
     params: [symbolId],
@@ -246,10 +236,7 @@ export function getDefinitionRowsForSymbolId(
   return mergeMixedSymbolQueryRows(primary, fallback);
 }
 
-export function getSymbolLookupCandidates(
-  db: ScipDatabase,
-  tokens: string[],
-): SymbolQueryRow[] {
+export function getSymbolLookupCandidates(db: ScipDatabase, tokens: string[]): SymbolQueryRow[] {
   const tokenClauses = tokens.map(
     () => `(gs.symbol LIKE ? OR d.relative_path LIKE ? OR COALESCE(gs.display_name, '') LIKE ?)`,
   );
@@ -310,18 +297,21 @@ export function scoreSymbolCandidate(
   if (path.includes(cleaned)) score += 140;
   if (display.includes(cleaned)) score += 110;
 
-  if (tokens.every((token) => {
-    const lower = token.toLowerCase();
-    return raw.includes(lower) || short.includes(lower) || path.includes(lower) || display.includes(lower);
-  })) {
+  if (
+    tokens.every((token) => {
+      const lower = token.toLowerCase();
+      return raw.includes(lower) || short.includes(lower) || path.includes(lower) || display.includes(lower);
+    })
+  ) {
     score += 100 + tokens.length * 15;
   }
 
   if (pathLeaf && path.includes(pathLeaf.path.toLowerCase())) {
     score += 360;
-    if (requestedLeaf && (leaf === requestedLeaf
-      || `${leaf}()` === requestedLeaf
-      || `${leaf}()` === `${requestedLeaf}()`)) {
+    if (
+      requestedLeaf &&
+      (leaf === requestedLeaf || `${leaf}()` === requestedLeaf || `${leaf}()` === `${requestedLeaf}()`)
+    ) {
       score += 700;
     }
     if (isCallableSymbol(row.symbol)) score += 180;
@@ -376,25 +366,28 @@ export function findDirectSymbolCandidate(
   const directMatches = candidates.filter((row) => {
     const short = shortenSymbol(row.symbol);
     const display = (row.display_name ?? '').trim();
-    return row.symbol === trimmed
-      || short === trimmed
-      || short === cleanedPattern
-      || display === trimmed
-      || display === cleanedPattern
-      || `${display}()` === trimmed
-      || pathQualifiedDirectScore(row, cleanedPattern) > 1
-      || row.relative_path === trimmed;
+    return (
+      row.symbol === trimmed ||
+      short === trimmed ||
+      short === cleanedPattern ||
+      display === trimmed ||
+      display === cleanedPattern ||
+      `${display}()` === trimmed ||
+      pathQualifiedDirectScore(row, cleanedPattern) > 1 ||
+      row.relative_path === trimmed
+    );
   });
 
   if (directMatches.length === 0) {
     return null;
   }
 
-  directMatches.sort((left, right) =>
-    pathQualifiedDirectScore(right, cleanedPattern) - pathQualifiedDirectScore(left, cleanedPattern)
-    || (left.end_line - left.start_line) - (right.end_line - right.start_line)
-    || left.relative_path.localeCompare(right.relative_path)
-    || left.symbol.localeCompare(right.symbol),
+  directMatches.sort(
+    (left, right) =>
+      pathQualifiedDirectScore(right, cleanedPattern) - pathQualifiedDirectScore(left, cleanedPattern) ||
+      left.end_line - left.start_line - (right.end_line - right.start_line) ||
+      left.relative_path.localeCompare(right.relative_path) ||
+      left.symbol.localeCompare(right.symbol),
   );
   return directMatches[0] ?? null;
 }

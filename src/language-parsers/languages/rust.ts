@@ -11,7 +11,14 @@ import { getAst, type SyntaxNode, type Tree } from '../../source/ast.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { resolveRustImportPath } from '../../resolution/import-path-resolver.js';
 import type { ParsedSourceExport, ParsedSourceImport } from '../../domain/types.js';
-import { buildNamedImport, buildSimpleImport, collectIdentifiersOutside, parseImportLineMatches, parseWithAstFallback, splitTopLevel } from '../utils.js';
+import {
+  buildNamedImport,
+  buildSimpleImport,
+  collectIdentifiersOutside,
+  parseImportLineMatches,
+  parseWithAstFallback,
+  splitTopLevel,
+} from '../utils.js';
 
 interface RustImportLeaf {
   qualifiedName: string;
@@ -19,28 +26,21 @@ interface RustImportLeaf {
   localName: string;
 }
 
-export function parseRustImports(
-  db: ScipDatabase,
-  importerPath: string,
-  source: string,
-): ParsedSourceImport[] {
+export function parseRustImports(db: ScipDatabase, importerPath: string, source: string): ParsedSourceImport[] {
   return parseWithAstFallback(
     db,
     importerPath,
     (tree) => parseRustImportsAst(db, importerPath, tree),
-    () => parseImportLineMatches(source, /^[ \t]*use\s+(.+?)\s*;$/gm, (match, body) => {
-      const clause = match[1]?.trim();
-      if (!clause) return [];
-      return parseRustUseClause(db, importerPath, clause, body);
-    }),
+    () =>
+      parseImportLineMatches(source, /^[ \t]*use\s+(.+?)\s*;$/gm, (match, body) => {
+        const clause = match[1]?.trim();
+        if (!clause) return [];
+        return parseRustUseClause(db, importerPath, clause, body);
+      }),
   );
 }
 
-function parseRustImportsAst(
-  db: ScipDatabase,
-  importerPath: string,
-  tree: Tree,
-): ParsedSourceImport[] {
+function parseRustImportsAst(db: ScipDatabase, importerPath: string, tree: Tree): ParsedSourceImport[] {
   const usedNames = collectIdentifiersOutside(tree, new Set(['use_declaration']));
   const results: ParsedSourceImport[] = [];
 
@@ -49,8 +49,9 @@ function parseRustImportsAst(
     if (!root) continue;
     for (const leaf of flattenRustUseTree(root, '')) {
       if (!leaf.importedName || leaf.importedName === '*') continue;
-      const sourcePath = resolveRustImportPath(db, importerPath, leaf.qualifiedName)
-        ?? resolveRustImportPath(db, importerPath, leaf.qualifiedName.split('::').slice(0, -1).join('::'));
+      const sourcePath =
+        resolveRustImportPath(db, importerPath, leaf.qualifiedName) ??
+        resolveRustImportPath(db, importerPath, leaf.qualifiedName.split('::').slice(0, -1).join('::'));
       results.push(buildNamedImport(leaf.importedName, leaf.localName, sourcePath, usedNames));
     }
   }
@@ -65,20 +66,24 @@ function flattenRustUseTree(node: SyntaxNode, prefix: string): RustImportLeaf[] 
     case 'self':
     case 'crate': {
       const name = node.text;
-      return [{
-        qualifiedName: joinRustPath(prefix, name),
-        importedName: name,
-        localName: name,
-      }];
+      return [
+        {
+          qualifiedName: joinRustPath(prefix, name),
+          importedName: name,
+          localName: name,
+        },
+      ];
     }
     case 'scoped_identifier': {
       const text = node.text;
       const last = text.split('::').pop() ?? text;
-      return [{
-        qualifiedName: joinRustPath(prefix, text),
-        importedName: last,
-        localName: last,
-      }];
+      return [
+        {
+          qualifiedName: joinRustPath(prefix, text),
+          importedName: last,
+          localName: last,
+        },
+      ];
     }
     case 'scoped_use_list': {
       const pathNode = node.namedChild(0);
@@ -109,11 +114,13 @@ function flattenRustUseTree(node: SyntaxNode, prefix: string): RustImportLeaf[] 
     case 'use_wildcard': {
       const path = node.namedChild(0);
       const text = path ? path.text : '';
-      return [{
-        qualifiedName: joinRustPath(prefix, `${text}::*`),
-        importedName: '*',
-        localName: '*',
-      }];
+      return [
+        {
+          qualifiedName: joinRustPath(prefix, `${text}::*`),
+          importedName: '*',
+          localName: '*',
+        },
+      ];
     }
     default:
       return [];
@@ -144,41 +151,42 @@ function parseRustUseClause(
       if (!importedName) return [];
       const localName = (aliasPart ?? importedName.split('::').pop() ?? importedName).trim();
       const moduleSpecifier = `${prefix}::${importedName}`.replace(/::::/g, '::');
-      return [buildSimpleImport(
-        db,
-        importerPath,
-        body,
-        moduleSpecifier,
-        importedName.split('::').pop() ?? importedName,
-        localName,
-        resolveRustImportPath(db, importerPath, prefix),
-      )];
+      return [
+        buildSimpleImport(
+          db,
+          importerPath,
+          body,
+          moduleSpecifier,
+          importedName.split('::').pop() ?? importedName,
+          localName,
+          resolveRustImportPath(db, importerPath, prefix),
+        ),
+      ];
     });
   }
 
   const [importedPart, aliasPart] = trimmed.split(/\s+as\s+/);
   const importedName = importedPart?.trim() ?? trimmed;
   const localName = (aliasPart ?? importedName.split('::').pop() ?? importedName).trim();
-  const resolved = resolveRustImportPath(db, importerPath, importedName)
-    ?? resolveRustImportPath(db, importerPath, importedName.split('::').slice(0, -1).join('::'));
-  return [buildSimpleImport(
-    db,
-    importerPath,
-    body,
-    importedName,
-    importedName.split('::').pop() ?? importedName,
-    localName,
-    resolved,
-  )];
+  const resolved =
+    resolveRustImportPath(db, importerPath, importedName) ??
+    resolveRustImportPath(db, importerPath, importedName.split('::').slice(0, -1).join('::'));
+  return [
+    buildSimpleImport(
+      db,
+      importerPath,
+      body,
+      importedName,
+      importedName.split('::').pop() ?? importedName,
+      localName,
+      resolved,
+    ),
+  ];
 }
 
 // ── Exports (pub use) ─────────────────────────────────────────────
 
-export function parseRustExports(
-  db: ScipDatabase,
-  importerPath: string,
-  source: string,
-): ParsedSourceExport[] {
+export function parseRustExports(db: ScipDatabase, importerPath: string, source: string): ParsedSourceExport[] {
   const tree = getAst(db, importerPath);
   if (tree) {
     return parseRustExportsAst(db, importerPath, tree);
@@ -193,11 +201,7 @@ export function parseRustExports(
   return statements;
 }
 
-function parseRustExportsAst(
-  db: ScipDatabase,
-  importerPath: string,
-  tree: Tree,
-): ParsedSourceExport[] {
+function parseRustExportsAst(db: ScipDatabase, importerPath: string, tree: Tree): ParsedSourceExport[] {
   const results: ParsedSourceExport[] = [];
 
   for (const useDecl of tree.rootNode.descendantsOfType('use_declaration')) {
@@ -226,11 +230,7 @@ function hasPubVisibility(node: SyntaxNode): boolean {
   return false;
 }
 
-function parseRustExportClause(
-  db: ScipDatabase,
-  importerPath: string,
-  clause: string,
-): ParsedSourceExport[] {
+function parseRustExportClause(db: ScipDatabase, importerPath: string, clause: string): ParsedSourceExport[] {
   const trimmed = clause.trim();
   if (trimmed.includes('{') && trimmed.includes('}')) {
     const prefix = trimmed.slice(0, trimmed.indexOf('{')).replace(/::$/, '').trim();
@@ -247,14 +247,11 @@ function parseRustExportClause(
   return [buildRustExport(db, importerPath, trimmed)];
 }
 
-function buildRustExport(
-  db: ScipDatabase,
-  importerPath: string,
-  specifier: string,
-): ParsedSourceExport {
+function buildRustExport(db: ScipDatabase, importerPath: string, specifier: string): ParsedSourceExport {
   return {
     specifier,
-    sourcePath: resolveRustImportPath(db, importerPath, specifier)
-      ?? resolveRustImportPath(db, importerPath, specifier.split('::').slice(0, -1).join('::')),
+    sourcePath:
+      resolveRustImportPath(db, importerPath, specifier) ??
+      resolveRustImportPath(db, importerPath, specifier.split('::').slice(0, -1).join('::')),
   };
 }

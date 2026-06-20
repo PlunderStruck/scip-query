@@ -23,16 +23,14 @@ export interface UnusedImportResult {
  * What symbols does this file import?
  * Uses role=2 (import) from the SCIP mentions table.
  */
-export function imports(
-  db: ScipDatabase,
-  filePattern: string,
-  opts: { semantic?: boolean } = {},
-): ImportResult[] {
-  return loadFileImportEntries(db, filePattern, opts)?.map((entry) => ({
-    symbol: entry.symbol,
-    shortName: entry.shortName,
-    fromFile: entry.fromFile,
-  })) ?? [];
+export function imports(db: ScipDatabase, filePattern: string, opts: { semantic?: boolean } = {}): ImportResult[] {
+  return (
+    loadFileImportEntries(db, filePattern, opts)?.map((entry) => ({
+      symbol: entry.symbol,
+      shortName: entry.shortName,
+      fromFile: entry.fromFile,
+    })) ?? []
+  );
 }
 
 /**
@@ -40,9 +38,7 @@ export function imports(
  */
 export function importedBy(db: ScipDatabase, symbolPattern: string): ImportResult[] {
   const indexedResults = indexedImporters(db, symbolPattern);
-  return indexedResults.length > 0
-    ? indexedResults
-    : sourceImportersForSymbol(db, symbolPattern);
+  return indexedResults.length > 0 ? indexedResults : sourceImportersForSymbol(db, symbolPattern);
 }
 
 /**
@@ -54,13 +50,15 @@ export function unusedImports(
   filePattern: string,
   opts: { semantic?: boolean } = {},
 ): UnusedImportResult[] {
-  return loadFileImportEntries(db, filePattern, opts)
-    ?.filter((entry) => !entry.used)
-    .map((entry) => ({
-      symbol: entry.symbol,
-      shortName: entry.shortName,
-      importedIn: entry.importer,
-    })) ?? [];
+  return (
+    loadFileImportEntries(db, filePattern, opts)
+      ?.filter((entry) => !entry.used)
+      .map((entry) => ({
+        symbol: entry.symbol,
+        shortName: entry.shortName,
+        importedIn: entry.importer,
+      })) ?? []
+  );
 }
 
 interface ImportEntry {
@@ -108,11 +106,13 @@ function sourceImportersForSymbol(db: ScipDatabase, symbolPattern: string): Impo
   const importers = new Set<string>();
   for (const relativePath of indexedDocumentPaths(db, { includeIgnored: false })) {
     for (const entry of getSourceImports(db, relativePath)) {
-      if (sourceImportMatchesTarget(entry, relativePath, {
-        targetFile,
-        targetLeaf,
-        targetIsModule,
-      })) {
+      if (
+        sourceImportMatchesTarget(entry, relativePath, {
+          targetFile,
+          targetLeaf,
+          targetIsModule,
+        })
+      ) {
         importers.add(relativePath);
       }
     }
@@ -149,9 +149,11 @@ function loadFileImportEntries(
   const importer = resolveIndexedFile(db, filePattern);
   if (!importer) return null;
 
-  return indexedFileImportEntries(db, importer, opts)
-    ?? (opts.semantic === false ? null : semanticFileImportEntries(db, importer))
-    ?? sourceFileImportEntries(db, importer);
+  return (
+    indexedFileImportEntries(db, importer, opts) ??
+    (opts.semantic === false ? null : semanticFileImportEntries(db, importer)) ??
+    sourceFileImportEntries(db, importer)
+  );
 }
 
 function indexedFileImportEntries(
@@ -203,9 +205,7 @@ function indexedFileImportEntries(
       shortName: shortenSymbol(r.symbol),
       fromFile: r.from_file ?? '(external)',
       importer: r.importer,
-      used: r.used !== 0 || semantic.some((entry) =>
-        entry.isUsed && entry.sourcePath === r.from_file,
-        ),
+      used: r.used !== 0 || semantic.some((entry) => entry.isUsed && entry.sourcePath === r.from_file),
     }));
   }
 

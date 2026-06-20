@@ -1,8 +1,5 @@
 import { difference, intersection, jaccard } from '../../analysis/similarity.js';
-import {
-  buildVueComponentBehaviorProfiles,
-  type VueComponentBehaviorProfile,
-} from '../../source/vue/vue-profile.js';
+import { buildVueComponentBehaviorProfiles, type VueComponentBehaviorProfile } from '../../source/vue/vue-profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { rankedPairwiseProfileResults, type PairwiseFileProfile } from '../internal/pairwise-profiles.js';
 
@@ -44,14 +41,7 @@ export function vueComposableCandidates(
     filePattern?: string;
   } = {},
 ): VueComposableCandidateResult[] {
-  const {
-    minSimilarity = 0.45,
-    minSharedBehaviors = 6,
-    limit = 20,
-    scope,
-    scanLimit,
-    filePattern,
-  } = opts;
+  const { minSimilarity = 0.45, minSharedBehaviors = 6, limit = 20, scope, scanLimit, filePattern } = opts;
   const profiles = buildVueComponentBehaviorProfiles(db, {
     scope,
     minBehaviorTokens: Math.max(3, minSharedBehaviors),
@@ -67,9 +57,7 @@ export function vueComposableCandidates(
     limit,
     filePattern,
     compare: (a, b) => compareProfiles(a, b, minSimilarity, minSharedBehaviors),
-    sort: (a, b) => b.similarity - a.similarity
-      || a.fileA.localeCompare(b.fileA)
-      || a.fileB.localeCompare(b.fileB),
+    sort: (a, b) => b.similarity - a.similarity || a.fileA.localeCompare(b.fileA) || a.fileB.localeCompare(b.fileB),
   });
 }
 
@@ -154,19 +142,22 @@ function hasMeaningfulBehaviorOverlap(shared: ReadonlySet<string>): boolean {
     } else if (token.startsWith('reactivity:')) {
       reactivityBehavior += 1;
     } else if (
-      token.startsWith('function-verb:')
-      || token.startsWith('template-binding:')
-      || token.startsWith('template-event:')
+      token.startsWith('function-verb:') ||
+      token.startsWith('template-binding:') ||
+      token.startsWith('template-event:')
     ) {
       supportingBehavior += 1;
     }
   }
   const reusableHookBehavior = composableBehavior + storeBehavior;
-  const namedBehavior = reusableHookBehavior + requestBehavior + lifecycleBehavior + functionBehavior + supportingBehavior;
-  return (requestBehavior >= 1 && namedBehavior >= 4)
-    || (lifecycleBehavior >= 1 && functionBehavior >= 2 && namedBehavior >= 4)
-    || (reusableHookBehavior >= 2 && (requestBehavior >= 1 || functionBehavior >= 2) && namedBehavior >= 5)
-    || (functionBehavior >= 2 && reactivityBehavior >= 1 && namedBehavior >= 4);
+  const namedBehavior =
+    reusableHookBehavior + requestBehavior + lifecycleBehavior + functionBehavior + supportingBehavior;
+  return (
+    (requestBehavior >= 1 && namedBehavior >= 4) ||
+    (lifecycleBehavior >= 1 && functionBehavior >= 2 && namedBehavior >= 4) ||
+    (reusableHookBehavior >= 2 && (requestBehavior >= 1 || functionBehavior >= 2) && namedBehavior >= 5) ||
+    (functionBehavior >= 2 && reactivityBehavior >= 1 && namedBehavior >= 4)
+  );
 }
 
 function behaviorReason(parts: {
@@ -184,8 +175,10 @@ function behaviorReason(parts: {
   if (parts.sharedRequests.length) reasons.push(`shared request helpers: ${parts.sharedRequests.join(', ')}`);
   if (parts.sharedLifecycle.length) reasons.push(`shared lifecycle: ${parts.sharedLifecycle.join(', ')}`);
   if (parts.sharedFunctions.length) reasons.push(`shared functions: ${parts.sharedFunctions.slice(0, 6).join(', ')}`);
-  if (parts.sharedFunctionVerbs.length) reasons.push(`shared action verbs: ${parts.sharedFunctionVerbs.slice(0, 6).join(', ')}`);
-  if (parts.sharedBindings.length) reasons.push(`shared template bindings: ${parts.sharedBindings.slice(0, 6).join(', ')}`);
+  if (parts.sharedFunctionVerbs.length)
+    reasons.push(`shared action verbs: ${parts.sharedFunctionVerbs.slice(0, 6).join(', ')}`);
+  if (parts.sharedBindings.length)
+    reasons.push(`shared template bindings: ${parts.sharedBindings.slice(0, 6).join(', ')}`);
   return reasons.join('; ') || 'shared Vue behavior profile';
 }
 

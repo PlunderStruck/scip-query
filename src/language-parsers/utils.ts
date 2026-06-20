@@ -145,10 +145,7 @@ export function buildUsedImport(
   };
 }
 
-export function buildSideEffectImport(
-  importedName: string,
-  sourcePath: string | null,
-): ParsedSourceImport {
+export function buildSideEffectImport(importedName: string, sourcePath: string | null): ParsedSourceImport {
   return {
     importedName,
     localName: null,

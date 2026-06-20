@@ -1,16 +1,7 @@
-import {
-  buildVueComponentBehaviorProfiles,
-  type VueComponentBehaviorProfile,
-} from '../../source/vue/vue-profile.js';
+import { buildVueComponentBehaviorProfiles, type VueComponentBehaviorProfile } from '../../source/vue/vue-profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
 
-export type VueLargeViewPressureAxis =
-  | 'template'
-  | 'script'
-  | 'style'
-  | 'external-script'
-  | 'custom-block'
-  | 'total';
+export type VueLargeViewPressureAxis = 'template' | 'script' | 'style' | 'external-script' | 'custom-block' | 'total';
 
 export interface VueLargeViewPressureResult {
   file: string;
@@ -50,15 +41,18 @@ export function vueLargeViewPressure(
     scanLimit,
     filePattern,
   } = opts;
-  const profiles = buildVueComponentBehaviorProfiles(db, { scope, scanLimit })
-    .filter((profile) => !filePattern || profile.file.includes(filePattern));
+  const profiles = buildVueComponentBehaviorProfiles(db, { scope, scanLimit }).filter(
+    (profile) => !filePattern || profile.file.includes(filePattern),
+  );
   return profiles
-    .map((profile) => pressureResult(profile, {
-      minTotalLines,
-      minTemplateLines,
-      minScriptLines,
-      minStyleLines,
-    }))
+    .map((profile) =>
+      pressureResult(profile, {
+        minTotalLines,
+        minTemplateLines,
+        minScriptLines,
+        minStyleLines,
+      }),
+    )
     .filter((result): result is VueLargeViewPressureResult => result !== null)
     .sort((a, b) => b.totalLines - a.totalLines || a.file.localeCompare(b.file))
     .slice(0, limit);

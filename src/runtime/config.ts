@@ -60,10 +60,7 @@ export function loadProjectConfig(projectRoot: string): ProjectConfig {
   }
 }
 
-export function validateProjectConfig(
-  config: ProjectConfig,
-  opts: { now?: Date } = {},
-): ConfigDiagnostic[] {
+export function validateProjectConfig(config: ProjectConfig, opts: { now?: Date } = {}): ConfigDiagnostic[] {
   const diagnostics: ConfigDiagnostic[] = [];
   const supported = new Set(SUPPORTED_LANGUAGES);
   for (const [index, language] of (config.languages ?? []).entries()) {
@@ -90,7 +87,11 @@ export function validateProjectConfig(
         diagnostics.push({ level: 'error', path: `${path}.name`, message: 'Declared coupling name is required.' });
       }
       if (!Array.isArray(coupling.files) || coupling.files.length < 2) {
-        diagnostics.push({ level: 'error', path: `${path}.files`, message: 'Declared coupling needs at least two files.' });
+        diagnostics.push({
+          level: 'error',
+          path: `${path}.files`,
+          message: 'Declared coupling needs at least two files.',
+        });
       } else {
         for (const [fileIndex, file] of coupling.files.entries()) {
           if (!file || file.trim() === '') {
@@ -103,7 +104,11 @@ export function validateProjectConfig(
         }
       }
       if (coupling.reason !== undefined && coupling.reason.trim() === '') {
-        diagnostics.push({ level: 'error', path: `${path}.reason`, message: 'Declared coupling reason cannot be blank.' });
+        diagnostics.push({
+          level: 'error',
+          path: `${path}.reason`,
+          message: 'Declared coupling reason cannot be blank.',
+        });
       }
     }
   }
@@ -156,10 +161,7 @@ export function resolveCacheDir(projectRoot: string, config?: ProjectConfig): st
   // Default: XDG cache dir / fallback to ~/.cache
   const xdgCache = process.env['XDG_CACHE_HOME'];
   const cacheBase = xdgCache || join(homedir(), '.cache');
-  const projectHash = createHash('sha256')
-    .update(resolve(projectRoot))
-    .digest('hex')
-    .slice(0, 12);
+  const projectHash = createHash('sha256').update(resolve(projectRoot)).digest('hex').slice(0, 12);
 
   const dir = join(cacheBase, 'scip-query', 'projects', projectHash);
   return ensureDir(dir);
@@ -168,7 +170,10 @@ export function resolveCacheDir(projectRoot: string, config?: ProjectConfig): st
 /**
  * Resolve all paths for a project's index files.
  */
-export function resolveIndexPaths(projectRoot: string, config?: ProjectConfig): {
+export function resolveIndexPaths(
+  projectRoot: string,
+  config?: ProjectConfig,
+): {
   cacheDir: string;
   dbPath: string;
   indexPath: string;

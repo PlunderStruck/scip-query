@@ -18,14 +18,12 @@ function globToLike(pattern: string): string {
     return `%${pattern}%`;
   }
   // Replace ** first (greedy multi-segment), then * (single-segment acts same in LIKE)
-  return pattern
-    .replace(/\*\*/g, '%')
-    .replace(/\*/g, '%')
-    .replace(/\?/g, '_');
+  return pattern.replace(/\*\*/g, '%').replace(/\*/g, '%').replace(/\?/g, '_');
 }
 
 export function files(db: ScipDatabase, pattern: string): FileResult[] {
   const likePattern = globToLike(pattern);
-  return indexedDocumentPaths(db, { like: likePattern, includeIgnored: false })
-    .map((relativePath) => ({ relativePath }));
+  return indexedDocumentPaths(db, { like: likePattern, includeIgnored: false }).map((relativePath) => ({
+    relativePath,
+  }));
 }

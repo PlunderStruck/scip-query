@@ -1,14 +1,7 @@
-import {
-  buildReactComponentBehaviorProfiles,
-  type ReactComponentBehaviorProfile,
-} from '../../source/react-profile.js';
+import { buildReactComponentBehaviorProfiles, type ReactComponentBehaviorProfile } from '../../source/react-profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
 
-export type ReactLargeComponentPressureAxis =
-  | 'component'
-  | 'file'
-  | 'jsx-structure'
-  | 'hook-behavior';
+export type ReactLargeComponentPressureAxis = 'component' | 'file' | 'jsx-structure' | 'hook-behavior';
 
 export interface ReactLargeComponentPressureResult {
   file: string;
@@ -49,12 +42,14 @@ export function reactLargeComponentPressure(
     .filter((profile) => profile.kind === 'component')
     .filter((profile) => !filePattern || profile.file.includes(filePattern) || profile.name.includes(filePattern));
   return profiles
-    .map((profile) => pressureResult(profile, {
-      minComponentLines,
-      minFileLines,
-      minJsxTokens,
-      minBehaviorTokens,
-    }))
+    .map((profile) =>
+      pressureResult(profile, {
+        minComponentLines,
+        minFileLines,
+        minJsxTokens,
+        minBehaviorTokens,
+      }),
+    )
     .filter((result): result is ReactLargeComponentPressureResult => result !== null)
     .sort((a, b) => b.componentLines - a.componentLines || b.fileLines - a.fileLines || a.file.localeCompare(b.file))
     .slice(0, limit);

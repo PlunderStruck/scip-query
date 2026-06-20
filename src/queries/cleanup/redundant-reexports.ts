@@ -62,10 +62,7 @@ export function redundantReexports(
 // scip-query: ignore-extract — this is the SCIP-backed redundant re-export
 // decision: barrel/source rows, live-barrel guard, and conservative consumer
 // counts must be evaluated together.
-function findScipRedundantReexports(
-  db: ScipDatabase,
-  scope?: string,
-): RedundantReexport[] {
+function findScipRedundantReexports(db: ScipDatabase, scope?: string): RedundantReexport[] {
   const results: RedundantReexport[] = [];
   for (const row of loadScipReexportRows(db, scope)) {
     if (db.isIgnored(row.barrel_path) || db.isIgnored(row.original_path)) continue;
@@ -98,10 +95,7 @@ function findScipRedundantReexports(
   return results;
 }
 
-function loadScipReexportRows(
-  db: ScipDatabase,
-  scope?: string,
-): ScipReexportRow[] {
+function loadScipReexportRows(db: ScipDatabase, scope?: string): ScipReexportRow[] {
   const scopeFilter = scope ? `AND barrel_d.relative_path LIKE '%${scope}%'` : '';
 
   // Step 1 + 2: Find all barrel files and symbols they re-export.
@@ -143,10 +137,7 @@ function loadScipReexportRows(
   );
 }
 
-function countReexportConsumers(
-  db: ScipDatabase,
-  row: ScipReexportRow,
-): ReexportConsumerCounts | undefined {
+function countReexportConsumers(db: ScipDatabase, row: ScipReexportRow): ReexportConsumerCounts | undefined {
   // A consumer "goes through the barrel" if it has any role=0 mention pointing
   // to a symbol that appears in the barrel file. SCIP does not preserve the
   // literal import path for transparent re-exports, so this is conservative.
@@ -188,11 +179,7 @@ function countReexportConsumers(
   );
 }
 
-function findSourceRedundantReexports(
-  db: ScipDatabase,
-  index: ProjectIndex,
-  scope?: string,
-): RedundantReexport[] {
+function findSourceRedundantReexports(db: ScipDatabase, index: ProjectIndex, scope?: string): RedundantReexport[] {
   const results: RedundantReexport[] = [];
   for (const barrelPath of sourceBarrelCandidates(db, scope)) {
     const barrelConsumers = countDirectImporters(db, barrelPath, barrelPath);
@@ -203,8 +190,9 @@ function findSourceRedundantReexports(
 }
 
 function sourceBarrelCandidates(db: ScipDatabase, scope?: string): string[] {
-  return indexedDocumentPaths(db, { scope, includeIgnored: false })
-    .filter((relativePath) => getSourceExports(db, relativePath).length > 0);
+  return indexedDocumentPaths(db, { scope, includeIgnored: false }).filter(
+    (relativePath) => getSourceExports(db, relativePath).length > 0,
+  );
 }
 
 function sourceRedundantReexportsForBarrel(
@@ -225,21 +213,19 @@ function sourceRedundantReexportForExport(
 ): RedundantReexport[] {
   const representative = representativeExportSymbol(index, sourcePath);
   if (!representative) return [];
-  return [{
-    barrelFile: barrelPath,
-    symbol: representative.symbol,
-    shortName: shortenSymbol(representative.symbol),
-    originalFile: sourcePath,
-    barrelConsumers: 0,
-    directConsumers: countDirectImporters(db, sourcePath, barrelPath),
-  }];
+  return [
+    {
+      barrelFile: barrelPath,
+      symbol: representative.symbol,
+      shortName: shortenSymbol(representative.symbol),
+      originalFile: sourcePath,
+      barrelConsumers: 0,
+      directConsumers: countDirectImporters(db, sourcePath, barrelPath),
+    },
+  ];
 }
 
-function countDirectImporters(
-  db: ScipDatabase,
-  targetPath: string,
-  excludedPath: string,
-): number {
+function countDirectImporters(db: ScipDatabase, targetPath: string, excludedPath: string): number {
   const importers = new Set<string>();
   for (const relativePath of indexedDocumentPaths(db, { includeIgnored: false })) {
     if (relativePath === excludedPath) continue;
@@ -253,19 +239,12 @@ function countDirectImporters(
   return importers.size;
 }
 
-function representativeExportSymbol(
-  index: ProjectIndex,
-  sourcePath: string,
-): IndexedDefinition | null {
+function representativeExportSymbol(index: ProjectIndex, sourcePath: string): IndexedDefinition | null {
   const definitions = index.definitionsForFile(sourcePath);
-  return definitions.find((definition) => leafSuffix(definition.symbol) === 'method')
-    ?? definitions[0]
-    ?? null;
+  return definitions.find((definition) => leafSuffix(definition.symbol) === 'method') ?? definitions[0] ?? null;
 }
 
-function dedupeReexports(
-  rows: RedundantReexport[],
-): RedundantReexport[] {
+function dedupeReexports(rows: RedundantReexport[]): RedundantReexport[] {
   const seen = new Set<string>();
   const unique: RedundantReexport[] = [];
   for (const row of rows) {
@@ -278,9 +257,10 @@ function dedupeReexports(
 }
 
 function sortReexports(results: RedundantReexport[]): void {
-  results.sort((a, b) =>
-    b.directConsumers - a.directConsumers
-    || a.barrelFile.localeCompare(b.barrelFile)
-    || a.shortName.localeCompare(b.shortName),
+  results.sort(
+    (a, b) =>
+      b.directConsumers - a.directConsumers ||
+      a.barrelFile.localeCompare(b.barrelFile) ||
+      a.shortName.localeCompare(b.shortName),
   );
 }

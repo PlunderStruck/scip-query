@@ -3,7 +3,12 @@ import type { IndexedDefinition } from '../domain/types.js';
 import type { ScipDatabase } from '../storage/db.js';
 import { getScopedDefinitions } from '../symbols/definition-catalog.js';
 import { definitionLoc } from '../symbols/definition-loc.js';
-import { isCallableSymbol, isFunctionLikeSymbol, isInRustTestModule, isRustTraitImplMember } from '../symbols/symbol-parser.js';
+import {
+  isCallableSymbol,
+  isFunctionLikeSymbol,
+  isInRustTestModule,
+  isRustTraitImplMember,
+} from '../symbols/symbol-parser.js';
 import { hasSuppressionComment } from '../source/source-text.js';
 
 export function productionCallableDefinitions(
@@ -61,9 +66,7 @@ export function productionCallableDefinitions(
     definitions.push(definition);
   }
 
-  return sortByLocDesc
-    ? definitions.sort((left, right) => definitionLoc(right) - definitionLoc(left))
-    : definitions;
+  return sortByLocDesc ? definitions.sort((left, right) => definitionLoc(right) - definitionLoc(left)) : definitions;
 }
 
 function matchesCallableMode(

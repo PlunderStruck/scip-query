@@ -193,10 +193,7 @@ interface KindRow {
   end_line: number;
 }
 
-function loadKindRows(
-  db: ScipDatabase,
-  scope?: string,
-): KindRow[] {
+function loadKindRows(db: ScipDatabase, scope?: string): KindRow[] {
   return getAllDefinitions(db, { scope }).map(mapDefinitionToKindRow);
 }
 
@@ -212,18 +209,16 @@ function mapDefinitionToKindRow(definition: IndexedDefinition): KindRow {
   };
 }
 
-function resolveKindNumber(row: Pick<KindRow, 'symbol' | 'kind' | 'documentation' | 'enclosing_symbol'>): number | null {
+function resolveKindNumber(
+  row: Pick<KindRow, 'symbol' | 'kind' | 'documentation' | 'enclosing_symbol'>,
+): number | null {
   if (row.kind !== null && row.kind !== 0) {
     return normalizeIndexedKind(row.kind, row.symbol, row.documentation);
   }
   return inferKindNumber(row.symbol, row.documentation, row.enclosing_symbol);
 }
 
-function normalizeIndexedKind(
-  kind: number,
-  symbol: string,
-  documentation: string | null,
-): number {
+function normalizeIndexedKind(kind: number, symbol: string, documentation: string | null): number {
   const signature = (documentation ?? '').toLowerCase();
   const suffix = leafSuffix(symbol);
 
@@ -238,11 +233,7 @@ function normalizeIndexedKind(
   return kind;
 }
 
-function inferKindNumber(
-  symbol: string,
-  documentation: string | null,
-  enclosingSymbol: string | null,
-): number | null {
+function inferKindNumber(symbol: string, documentation: string | null, enclosingSymbol: string | null): number | null {
   const parsed = parseSymbol(symbol);
   if ('kind' in parsed) {
     return null;

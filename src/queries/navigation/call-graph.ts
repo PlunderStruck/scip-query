@@ -35,27 +35,27 @@ export function callGraph(
   const callerRows = callerRowsForSymbol(db, target, { limit: 50, semantic: includeSemantic });
 
   // CALLEES: symbols referenced within our target's definition range.
-  const calleeRows = uniqueSymbolFileRows(getCalleeRowsForSymbol(db, target, {
-    limit: 50,
-    additive: true,
-    callableOnly: true,
-    semantic: includeSemantic,
-  }));
+  const calleeRows = uniqueSymbolFileRows(
+    getCalleeRowsForSymbol(db, target, {
+      limit: 50,
+      additive: true,
+      callableOnly: true,
+      semantic: includeSemantic,
+    }),
+  );
 
   return {
     symbol: target.symbol,
     shortName: shortenSymbol(target.symbol),
-    callers: callerRows
-      .map((r) => ({
-        symbol: r.symbol,
-        shortName: shortenSymbol(r.symbol),
-        file: r.file,
-      })),
-    callees: calleeRows
-      .map((r) => ({
-        symbol: r.symbol,
-        shortName: shortenSymbol(r.symbol),
-        file: r.file,
-      })),
+    callers: callerRows.map((r) => ({
+      symbol: r.symbol,
+      shortName: shortenSymbol(r.symbol),
+      file: r.file,
+    })),
+    callees: calleeRows.map((r) => ({
+      symbol: r.symbol,
+      shortName: shortenSymbol(r.symbol),
+      file: r.file,
+    })),
   };
 }

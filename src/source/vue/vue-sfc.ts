@@ -47,8 +47,7 @@ const VUE_SFC_UNIT_CACHE = createSourceFileCache<VueSfcUnit>('vue-sfc-units');
 export function getVueSfcUnit(db: ScipDatabase, relativePath: string): VueSfcUnit {
   const normalized = normalizeProjectPath(relativePath);
   const source = getSourceText(db, normalized);
-  return VUE_SFC_UNIT_CACHE.get(db, normalized, source, () =>
-    buildVueSfcUnit(db, normalized, source));
+  return VUE_SFC_UNIT_CACHE.get(db, normalized, source, () => buildVueSfcUnit(db, normalized, source));
 }
 
 export function normalizeProjectPath(path: string): string {
@@ -103,8 +102,7 @@ function buildVueSfcUnit(db: ScipDatabase, relativePath: string, source: string)
   unit.styles = descriptor.styles.map((style) => resolveBlock(db, relativePath, 'style', style));
   unit.customBlocks = descriptor.customBlocks.map((block) => resolveBlock(db, relativePath, 'custom', block));
   unit.errors.push(
-    ...[unit.template, ...unit.scripts, ...unit.styles, ...unit.customBlocks]
-      .flatMap((block) => block?.errors ?? []),
+    ...[unit.template, ...unit.scripts, ...unit.styles, ...unit.customBlocks].flatMap((block) => block?.errors ?? []),
   );
   return unit;
 }
@@ -132,11 +130,7 @@ function resolveBlock(
 ): VueSfcResolvedBlock {
   const attrs = cloneAttrs(block.attrs);
   const lang = typeof attrs['lang'] === 'string' ? attrs['lang'] : null;
-  const src = typeof attrs['src'] === 'string'
-    ? attrs['src']
-    : typeof block.src === 'string'
-      ? block.src
-      : undefined;
+  const src = typeof attrs['src'] === 'string' ? attrs['src'] : typeof block.src === 'string' ? block.src : undefined;
   if (src) {
     const resolvedPath = resolveVueBlockSourcePath(ownerPath, src);
     if (!resolvedPath) {

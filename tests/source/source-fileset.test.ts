@@ -16,9 +16,7 @@ describe('source fileset', () => {
   });
 
   function openFixtureDb(projectRoot: string, dbPath: string): ScipDatabase {
-    evidenceFixtureDb(dbPath)
-      .document(1, 'typescript', 'src/index.ts')
-      .write();
+    evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/index.ts').write();
     return new ScipDatabase({
       projectRoot,
       dbPath,

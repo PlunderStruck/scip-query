@@ -65,10 +65,7 @@ export interface DiffImpactPartial {
 // scip-query: ignore-extract — this is the report assembly pipeline; the
 // helper calls already own the real work and the remaining body preserves
 // the user-facing result order.
-export function diffImpact(
-  db: ScipDatabase,
-  opts: { base?: string; plan?: DiffImpactPlan } = {},
-): DiffImpactResult {
+export function diffImpact(db: ScipDatabase, opts: { base?: string; plan?: DiffImpactPlan } = {}): DiffImpactResult {
   const plan = opts.plan ?? diffImpactPlan(db, opts);
   if (plan.note) {
     return emptyDiffImpact(plan.note, plan.changedFileLines);
@@ -77,24 +74,17 @@ export function diffImpact(
     return unindexedChangedFilesResult(plan.changedFileLines);
   }
 
-  return mergeDiffImpactPartials(
-    plan.changedFiles,
-    [diffImpactPartial(db, plan.changedFiles, plan.changedFiles, plan.changedRanges)],
-  );
+  return mergeDiffImpactPartials(plan.changedFiles, [
+    diffImpactPartial(db, plan.changedFiles, plan.changedFiles, plan.changedRanges),
+  ]);
 }
 
-export function diffImpactPlan(
-  db: ScipDatabase,
-  opts: { base?: string } = {},
-): DiffImpactPlan {
+export function diffImpactPlan(db: ScipDatabase, opts: { base?: string } = {}): DiffImpactPlan {
   const { base = 'HEAD' } = opts;
   try {
     const changedFileLines = getChangedFiles(db.config.projectRoot, base);
     const changedFiles = indexedChangedFiles(db, changedFileLines);
-    const changedRanges = indexedChangedRanges(
-      db,
-      getChangedLineRanges(db.config.projectRoot, base),
-    );
+    const changedRanges = indexedChangedRanges(db, getChangedLineRanges(db.config.projectRoot, base));
     return {
       changedFileLines,
       changedFiles,
@@ -239,12 +229,14 @@ function getChangedFiles(projectRoot: string, base: string): string[] {
     timeout: 10_000,
   });
 
-  return [...new Set(
-    [diff, staged, untracked]
-      .flatMap((chunk) => chunk.split('\n'))
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0),
-  )];
+  return [
+    ...new Set(
+      [diff, staged, untracked]
+        .flatMap((chunk) => chunk.split('\n'))
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0),
+    ),
+  ];
 }
 
 function getChangedLineRanges(projectRoot: string, base: string): ChangedLineRange[] {
@@ -259,10 +251,7 @@ function getChangedLineRanges(projectRoot: string, base: string): ChangedLineRan
     timeout: 10_000,
   });
 
-  return dedupeRanges([
-    ...parseChangedLineRanges(diff),
-    ...parseChangedLineRanges(staged),
-  ]);
+  return dedupeRanges([...parseChangedLineRanges(diff), ...parseChangedLineRanges(staged)]);
 }
 
 export function fileContentAtBase(projectRoot: string, base: string, relativePath: string): string | null {
@@ -282,11 +271,7 @@ export function fileContentAtBase(projectRoot: string, base: string, relativePat
   }
 }
 
-function detectRenamedFiles(
-  projectRoot: string,
-  base: string,
-  changedFiles: readonly string[],
-): RenamedFile[] {
+function detectRenamedFiles(projectRoot: string, base: string, changedFiles: readonly string[]): RenamedFile[] {
   if (changedFiles.length === 0) return [];
 
   const renamed = new Map<string, RenamedFile>();
@@ -387,10 +372,7 @@ function lines(value: string): string[] {
     .filter((line) => line.length > 0);
 }
 
-function indexedChangedFiles(
-  db: ScipDatabase,
-  changedFileLines: readonly string[],
-): string[] {
+function indexedChangedFiles(db: ScipDatabase, changedFileLines: readonly string[]): string[] {
   const resolver = indexedDocumentResolver(db);
   const changedFiles: string[] = [];
   for (const file of changedFileLines) {
@@ -402,10 +384,7 @@ function indexedChangedFiles(
   return changedFiles;
 }
 
-function indexedChangedRanges(
-  db: ScipDatabase,
-  changedRanges: readonly ChangedLineRange[],
-): ChangedLineRange[] {
+function indexedChangedRanges(db: ScipDatabase, changedRanges: readonly ChangedLineRange[]): ChangedLineRange[] {
   const resolver = indexedDocumentResolver(db);
   const ranges: ChangedLineRange[] = [];
   for (const range of changedRanges) {
@@ -418,10 +397,12 @@ function indexedChangedRanges(
 }
 
 function indexedDocumentResolver(db: ScipDatabase): (file: string) => string | null {
-  const docs = db.all<{ relative_path: string }>(
-    `SELECT relative_path FROM documents
+  const docs = db
+    .all<{ relative_path: string }>(
+      `SELECT relative_path FROM documents
      ORDER BY id`,
-  ).map((doc) => doc.relative_path);
+    )
+    .map((doc) => doc.relative_path);
   const exact = new Map(docs.map((path) => [path, path]));
   return (file: string) => {
     const normalized = file.replace(/\\/g, '/');
@@ -471,9 +452,7 @@ function dedupeRanges(ranges: readonly ChangedLineRange[]): ChangedLineRange[] {
   return unique;
 }
 
-function rangesByFile(
-  ranges: readonly ChangedLineRange[],
-): ReadonlyMap<string, readonly ChangedLineRange[]> {
+function rangesByFile(ranges: readonly ChangedLineRange[]): ReadonlyMap<string, readonly ChangedLineRange[]> {
   const map = new Map<string, ChangedLineRange[]>();
   for (const range of ranges) {
     let bucket = map.get(range.file);
@@ -492,20 +471,12 @@ function definitionTouchesChangedRange(
 ): boolean {
   const ranges = changedRanges.get(definition.relativePath);
   if (!ranges || ranges.length === 0) return true;
-  return ranges.some((range) => rangesOverlap(
-    definition.startLine,
-    definition.endLine,
-    range.startLine,
-    range.endLine,
-  ));
+  return ranges.some((range) =>
+    rangesOverlap(definition.startLine, definition.endLine, range.startLine, range.endLine),
+  );
 }
 
-function rangesOverlap(
-  startA: number,
-  endA: number,
-  startB: number,
-  endB: number,
-): boolean {
+function rangesOverlap(startA: number, endA: number, startB: number, endB: number): boolean {
   return startA <= endB && startB <= endA;
 }
 
@@ -543,10 +514,7 @@ function addChangedDefinitionImpact(
   }
 }
 
-function scipFanInBySymbolId(
-  db: ScipDatabase,
-  symbolIds: readonly number[],
-): Map<number, number> {
+function scipFanInBySymbolId(db: ScipDatabase, symbolIds: readonly number[]): Map<number, number> {
   if (symbolIds.length === 0) return new Map();
   const rows = db.all<{ symbol_id: number; fan_in: number }>(
     `SELECT m.symbol_id, COUNT(DISTINCT c.document_id) AS fan_in
@@ -607,9 +575,7 @@ function addConsumerFile(
   consumedSymbols.add(shortName);
 }
 
-function affectedConsumerRows(
-  consumerMap: ConsumerMap,
-): DiffImpactResult['affectedConsumers'] {
+function affectedConsumerRows(consumerMap: ConsumerMap): DiffImpactResult['affectedConsumers'] {
   return [...consumerMap.entries()]
     .map(([file, symbols]) => ({ file, consumedSymbols: symbols.size }))
     .sort((a, b) => b.consumedSymbols - a.consumedSymbols);

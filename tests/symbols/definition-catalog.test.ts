@@ -2,12 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { findEnclosingDefinition } from '../../src/symbols/definition-catalog.js';
 import type { IndexedDefinition } from '../../src/domain/types.js';
 
-function definition(
-  symbol: string,
-  startLine: number,
-  endLine: number,
-  symbolId: number,
-): IndexedDefinition {
+function definition(symbol: string, startLine: number, endLine: number, symbolId: number): IndexedDefinition {
   return {
     symbol,
     symbolId,

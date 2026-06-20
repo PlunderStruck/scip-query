@@ -1,8 +1,5 @@
 import { difference, intersection, jaccard } from '../../analysis/similarity.js';
-import {
-  buildVueComponentBehaviorProfiles,
-  type VueComponentBehaviorProfile,
-} from '../../source/vue/vue-profile.js';
+import { buildVueComponentBehaviorProfiles, type VueComponentBehaviorProfile } from '../../source/vue/vue-profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { rankedPairwiseProfileResults, type PairwiseFileProfile } from '../internal/pairwise-profiles.js';
 
@@ -45,23 +42,14 @@ export function vueComponentDuplicates(
     filePattern?: string;
   } = {},
 ): VueComponentDuplicateResult[] {
-  const {
-    minSimilarity = 0.62,
-    minTokens = 8,
-    limit = 20,
-    scope,
-    scanLimit,
-    filePattern,
-  } = opts;
+  const { minSimilarity = 0.62, minTokens = 8, limit = 20, scope, scanLimit, filePattern } = opts;
   const profiles = buildVueComponentProfiles(db, { scope, minTokens, scanLimit });
   return rankedPairwiseProfileResults({
     profiles,
     limit,
     filePattern,
     compare: (a, b) => compareProfiles(a, b, minSimilarity),
-    sort: (a, b) => b.similarity - a.similarity
-      || a.fileA.localeCompare(b.fileA)
-      || a.fileB.localeCompare(b.fileB),
+    sort: (a, b) => b.similarity - a.similarity || a.fileA.localeCompare(b.fileA) || a.fileB.localeCompare(b.fileB),
   });
 }
 
@@ -119,10 +107,10 @@ function hasMeaningfulVueOverlap(shared: ReadonlySet<string>): boolean {
   for (const token of shared) {
     if (token.startsWith('component:')) componentLike += 1;
     if (
-      token.startsWith('prop:')
-      || token.startsWith('event:')
-      || token.startsWith('directive:')
-      || token.startsWith('slot:')
+      token.startsWith('prop:') ||
+      token.startsWith('event:') ||
+      token.startsWith('directive:') ||
+      token.startsWith('slot:')
     ) {
       behaviorLike += 1;
     }

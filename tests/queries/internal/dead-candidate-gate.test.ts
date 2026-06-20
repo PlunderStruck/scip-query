@@ -27,23 +27,33 @@ describe('dead candidate gate', () => {
   });
 
   it('reports the first load-bearing rejection reason in gate order', () => {
-    expect(deadCandidateDecision({
-      ...baseDefinition,
-      relativePath: 'tests/domain.test.ts',
-      symbol: 'scip-typescript npm fixture 1.0.0 src/`domain.ts`/outer().value.',
-      isFunctionLike: false,
-      enclosingSymbol: 'scip-typescript npm fixture 1.0.0 src/`domain.ts`/outer().',
-    }, baseOptions)).toEqual({
+    expect(
+      deadCandidateDecision(
+        {
+          ...baseDefinition,
+          relativePath: 'tests/domain.test.ts',
+          symbol: 'scip-typescript npm fixture 1.0.0 src/`domain.ts`/outer().value.',
+          isFunctionLike: false,
+          enclosingSymbol: 'scip-typescript npm fixture 1.0.0 src/`domain.ts`/outer().',
+        },
+        baseOptions,
+      ),
+    ).toEqual({
       accepted: false,
       rejectionReason: 'nested-non-callable-value',
     });
   });
 
   it('keeps Rust trait impl members out of dead-code candidates', () => {
-    expect(deadCandidateDecision({
-      ...baseDefinition,
-      symbol: 'rust-analyzer cargo fixture 0.1.0 src/`lib.rs`/impl#[Service][Display]fmt().',
-    }, baseOptions)).toEqual({
+    expect(
+      deadCandidateDecision(
+        {
+          ...baseDefinition,
+          symbol: 'rust-analyzer cargo fixture 0.1.0 src/`lib.rs`/impl#[Service][Display]fmt().',
+        },
+        baseOptions,
+      ),
+    ).toEqual({
       accepted: false,
       rejectionReason: 'rust-trait-impl-member',
     });
@@ -61,9 +71,11 @@ describe('dead candidate gate', () => {
       accepted: false,
       rejectionReason: 'member',
     });
-    expect(deadCandidateDecision(member, {
-      ...baseOptions,
-      includeMembers: true,
-    })).toEqual({ accepted: true });
+    expect(
+      deadCandidateDecision(member, {
+        ...baseOptions,
+        includeMembers: true,
+      }),
+    ).toEqual({ accepted: true });
   });
 });

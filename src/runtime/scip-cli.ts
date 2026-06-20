@@ -37,16 +37,31 @@ function getScipDownloadUrl(): { url: string; filename: string } | null {
   let ext: string;
 
   switch (os) {
-    case 'darwin': osName = 'darwin'; ext = 'tar.gz'; break;
-    case 'linux': osName = 'linux'; ext = 'tar.gz'; break;
-    case 'win32': osName = 'windows'; ext = 'zip'; break;
-    default: return null;
+    case 'darwin':
+      osName = 'darwin';
+      ext = 'tar.gz';
+      break;
+    case 'linux':
+      osName = 'linux';
+      ext = 'tar.gz';
+      break;
+    case 'win32':
+      osName = 'windows';
+      ext = 'zip';
+      break;
+    default:
+      return null;
   }
 
   switch (cpu) {
-    case 'arm64': archName = 'arm64'; break;
-    case 'x64': archName = 'amd64'; break;
-    default: return null;
+    case 'arm64':
+      archName = 'arm64';
+      break;
+    case 'x64':
+      archName = 'amd64';
+      break;
+    default:
+      return null;
   }
 
   const filename = `scip-${osName}-${archName}.${ext}`;
@@ -84,9 +99,7 @@ export function printScipInstallInstructions(): void {
  * Tries brew (macOS), then go install, then prints manual instructions.
  * Returns true if installation succeeded.
  */
-export function tryInstallScipCli(
-  onStatus: (msg: string) => void,
-): boolean {
+export function tryInstallScipCli(onStatus: (msg: string) => void): boolean {
   // macOS: try Homebrew first
   if (platform() === 'darwin' && isBinaryAvailable('brew')) {
     onStatus('Installing scip CLI via Homebrew...');

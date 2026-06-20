@@ -81,22 +81,13 @@ function withDriftFixture(run: (db: ScipDatabase) => void): void {
       '',
     ].join('\n'),
   );
-  writeFileSync(
-    join(projectRoot, 'src/views/HorseProfilePanel.vue'),
-    '<template><section /></template>\n',
-  );
-  writeFileSync(
-    join(projectRoot, 'src/views/panel-model.ts'),
-    "export type HorsePanelMode = 'care' | 'records';\n",
-  );
+  writeFileSync(join(projectRoot, 'src/views/HorseProfilePanel.vue'), '<template><section /></template>\n');
+  writeFileSync(join(projectRoot, 'src/views/panel-model.ts'), "export type HorsePanelMode = 'care' | 'records';\n");
   writeFileSync(
     join(projectRoot, 'src/views/used-helper.ts'),
     "export function usedHelper(): 'care' { return 'care'; }\n",
   );
-  writeFileSync(
-    join(projectRoot, 'src/views/unused-helper.ts'),
-    'export function unusedHelper(): void {}\n',
-  );
+  writeFileSync(join(projectRoot, 'src/views/unused-helper.ts'), 'export function unusedHelper(): void {}\n');
   createDocumentsOnlyDb(dbPath);
 
   const db = new ScipDatabase({

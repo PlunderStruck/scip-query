@@ -17,10 +17,7 @@ const SOURCE_LINES_CACHE = createPerDbCache<string, readonly string[]>('source-l
   clearGroups: ['whole-project', 'source-file'],
 });
 
-export function getSourceText(
-  db: ScipDatabase,
-  relativePath: string,
-): string {
+export function getSourceText(db: ScipDatabase, relativePath: string): string {
   const normalized = relativePath.replace(/\\/g, '/');
   return SOURCE_TEXT_CACHE.get(db, normalized, () => {
     const fullPath = join(db.config.projectRoot, normalized);
@@ -29,10 +26,7 @@ export function getSourceText(
   });
 }
 
-export function getSourceLines(
-  db: ScipDatabase,
-  relativePath: string,
-): readonly string[] {
+export function getSourceLines(db: ScipDatabase, relativePath: string): readonly string[] {
   const normalized = relativePath.replace(/\\/g, '/');
   return SOURCE_LINES_CACHE.get(db, normalized, () => {
     const source = getSourceText(db, normalized);
@@ -40,7 +34,8 @@ export function getSourceLines(
   });
 }
 
-const SUPPRESS_COMMENT_RE = /^\s*(?:\/\/|#|\/\*+|\*)\s*scip-query[\s:-]*ignore(?:[\s:-]+(dead(?:-code)?|stale|wrapper|passthrough|drift|extract|similar))?\b/i;
+const SUPPRESS_COMMENT_RE =
+  /^\s*(?:\/\/|#|\/\*+|\*)\s*scip-query[\s:-]*ignore(?:[\s:-]+(dead(?:-code)?|stale|wrapper|passthrough|drift|extract|similar))?\b/i;
 
 export function suppressionCommentCategory(line: string): string | null {
   const match = SUPPRESS_COMMENT_RE.exec(line);
@@ -54,11 +49,7 @@ export function suppressionCommentCategory(line: string): string | null {
  * health-suite heuristics to let users opt out of false positives without
  * touching the detector.
  */
-export function hasSuppressionComment(
-  db: ScipDatabase,
-  relativePath: string,
-  startLine: number,
-): boolean {
+export function hasSuppressionComment(db: ScipDatabase, relativePath: string, startLine: number): boolean {
   if (startLine <= 0) return false;
   const lines = getSourceLines(db, relativePath);
   if (lines.length === 0) return false;
@@ -70,7 +61,13 @@ export function hasSuppressionComment(
     if (line === '') continue;
     if (suppressionCommentCategory(line) !== null) return true;
     // Stop scanning once we hit a non-comment, non-decorator line.
-    if (!line.startsWith('//') && !line.startsWith('*') && !line.startsWith('/*') && !line.startsWith('@') && !line.startsWith('#')) {
+    if (
+      !line.startsWith('//') &&
+      !line.startsWith('*') &&
+      !line.startsWith('/*') &&
+      !line.startsWith('@') &&
+      !line.startsWith('#')
+    ) {
       return false;
     }
   }

@@ -101,10 +101,12 @@ export class ScipDatabase {
   /** Build SQL path exclusions for one or more document table aliases */
   pathExclusionsFor(...aliases: string[]): string {
     return aliases
-      .flatMap((alias) => SQL_EXCLUDED_PATH_SEGMENTS.flatMap((segment) => [
-        `AND ${alias}.relative_path NOT LIKE '${segment}/%'`,
-        `AND ${alias}.relative_path NOT LIKE '%/${segment}/%'`,
-      ]))
+      .flatMap((alias) =>
+        SQL_EXCLUDED_PATH_SEGMENTS.flatMap((segment) => [
+          `AND ${alias}.relative_path NOT LIKE '${segment}/%'`,
+          `AND ${alias}.relative_path NOT LIKE '%/${segment}/%'`,
+        ]),
+      )
       .join('\n      ');
   }
 

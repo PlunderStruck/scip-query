@@ -4,7 +4,11 @@ import { classifyFile } from '../analysis/file-classifier.js';
 import { getDefinitionsForFile, getScopedDefinitions } from '../symbols/definition-catalog.js';
 import { buildCalleeMap } from '../symbols/graph/call-graph-evidence.js';
 import { buildFileDepGraph } from '../symbols/graph/file-dep-graph.js';
-import { callerFileEvidenceMap, crossFileCallerEvidenceMap, sourceFallbackCallerEvidenceMap } from '../symbols/references/caller-evidence.js';
+import {
+  callerFileEvidenceMap,
+  crossFileCallerEvidenceMap,
+  sourceFallbackCallerEvidenceMap,
+} from '../symbols/references/caller-evidence.js';
 import { detectAstLanguage, frameworkSourceReferences, getSourceFacts } from '../source/ast.js';
 import { getSourceFiles } from '../source/source-fileset.js';
 import { hasSuppressionComment } from '../source/source-text.js';
@@ -45,7 +49,9 @@ export class ProjectIndex {
     return crossFileCallerEvidenceMap(this.db, definitions, opts);
   }
 
-  sourceFallbackCallerFiles(definitions: ReadonlyArray<IndexedDefinition>): ReturnType<typeof sourceFallbackCallerEvidenceMap> {
+  sourceFallbackCallerFiles(
+    definitions: ReadonlyArray<IndexedDefinition>,
+  ): ReturnType<typeof sourceFallbackCallerEvidenceMap> {
     return sourceFallbackCallerEvidenceMap(this.db, definitions);
   }
 
@@ -113,6 +119,8 @@ export class ProjectIndex {
     return hasSuppressionComment(this.db, definition.relativePath, definition.startLine);
   }
 
+  // scip-query: ignore-wrapper — query modules stay on ProjectIndex instead of
+  // reaching into source-file caches directly.
   sourceFiles(): string[] {
     return getSourceFiles(this.db);
   }
@@ -130,8 +138,8 @@ export class ProjectIndex {
   callableSignature(
     definition: Pick<IndexedDefinition, 'relativePath' | 'startLine' | 'endLine'>,
   ): { paramCount: number } | null {
-    const callable = getSourceFacts(this.db, definition.relativePath)?.callables.find((candidate) =>
-      candidate.startLine === definition.startLine && candidate.endLine === definition.endLine,
+    const callable = getSourceFacts(this.db, definition.relativePath)?.callables.find(
+      (candidate) => candidate.startLine === definition.startLine && candidate.endLine === definition.endLine,
     );
     return callable ? { paramCount: callable.paramCount } : null;
   }

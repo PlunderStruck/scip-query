@@ -86,9 +86,7 @@ export function getMedianIdf<T>(idf: Map<T, number>): number {
   const values = [...idf.values()].sort((a, b) => a - b);
   if (values.length === 0) return 0;
   const mid = Math.floor(values.length / 2);
-  return values.length % 2 === 0
-    ? (values[mid - 1]! + values[mid]!) / 2
-    : values[mid]!;
+  return values.length % 2 === 0 ? (values[mid - 1]! + values[mid]!) / 2 : values[mid]!;
 }
 
 export interface WeightedCosineResult<T> {
@@ -110,11 +108,7 @@ export interface WeightedCosineResult<T> {
  * "trivial" (< median IDF), so callers can show which shared features
  * actually distinguish the pair.
  */
-export function weightedCosine<T>(
-  a: Set<T>,
-  b: Set<T>,
-  idf: Map<T, number>,
-): WeightedCosineResult<T> {
+export function weightedCosine<T>(a: Set<T>, b: Set<T>, idf: Map<T, number>): WeightedCosineResult<T> {
   const shared = intersection(a, b);
   if (shared.size === 0) {
     return { similarity: 0, significantShared: [], trivialShared: [] };

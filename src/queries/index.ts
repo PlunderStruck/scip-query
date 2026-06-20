@@ -41,12 +41,7 @@ export { docDrift } from './cleanup/doc-drift.js';
 export { recentDuplicates } from './cleanup/recent-duplicates.js';
 export { planContext } from './impact/plan-context.js';
 export { checkHealthBaseline, collectBaselineFindings, writeHealthBaseline } from './health/health-baseline.js';
-export {
-  diffImpact,
-  diffImpactPartial,
-  diffImpactPlan,
-  mergeDiffImpactPartials,
-} from './impact/diff-impact.js';
+export { diffImpact, diffImpactPartial, diffImpactPlan, mergeDiffImpactPartials } from './impact/diff-impact.js';
 export { drift } from './cleanup/drift.js';
 export { wrapperCandidates } from './cleanup/wrapper-candidates.js';
 export { passthroughCandidates } from './cleanup/passthrough-candidates.js';

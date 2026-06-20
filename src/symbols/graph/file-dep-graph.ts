@@ -12,10 +12,7 @@ const FILE_DEP_GRAPH_CACHE = createPerDbCache<string, Map<string, Set<string>>>(
 // scip-query: ignore-extract — this builds the file dependency graph from
 // SCIP edges plus source-import fallback edges; the two sources intentionally
 // share one normalization path.
-export function buildFileDepGraph(
-  db: ScipDatabase,
-  scope?: string,
-): Map<string, Set<string>> {
+export function buildFileDepGraph(db: ScipDatabase, scope?: string): Map<string, Set<string>> {
   return FILE_DEP_GRAPH_CACHE.get(db, scope ?? '', () => {
     const graph = new Map<string, Set<string>>();
     const indexedFiles = new Set(indexedDocumentPaths(db, { includeIgnored: false }));
@@ -38,10 +35,7 @@ export function buildFileDepGraph(
   });
 }
 
-function scipFileDepEdges(
-  db: ScipDatabase,
-  scope?: string,
-): Array<{ from_file: string; to_file: string }> {
+function scipFileDepEdges(db: ScipDatabase, scope?: string): Array<{ from_file: string; to_file: string }> {
   const scopeFilter = scope ? `AND d1.relative_path LIKE '%${scope}%'` : '';
   return db.all<{ from_file: string; to_file: string }>(
     `SELECT DISTINCT
@@ -83,6 +77,3 @@ function addFileDepEdge(
   }
   bucket.add(toFile);
 }
-
-
-

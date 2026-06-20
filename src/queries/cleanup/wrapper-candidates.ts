@@ -86,7 +86,12 @@ function wrapperCandidateForSymbol(
   // tests" signal, distinct from production over-abstraction.
   if (enclosing && isInRustTestModule(enclosing.symbol)) return null;
 
-  const { fanIn: callerFanIn, source: fanInSource } = wrapperCallerFanIn(maps.callerFileMap, maps.reverseFanIn, callerFile, enclosing);
+  const { fanIn: callerFanIn, source: fanInSource } = wrapperCallerFanIn(
+    maps.callerFileMap,
+    maps.reverseFanIn,
+    callerFile,
+    enclosing,
+  );
   // Function-level fan-in is precise evidence. File-level fan-in is a proxy
   // that a single new importer can bump — require a margin so one added
   // import doesn't flip a whole family of borderline findings at once.
@@ -100,9 +105,7 @@ function wrapperCandidateForSymbol(
     endLine: symbol.endLine,
     loc: definitionLoc(symbol),
     singleCaller: enclosing?.symbol ?? '',
-    singleCallerShort: enclosing?.isFunctionLike
-      ? shortenSymbol(enclosing.symbol)
-      : basename(callerFile),
+    singleCallerShort: enclosing?.isFunctionLike ? shortenSymbol(enclosing.symbol) : basename(callerFile),
     callerFanIn,
   };
 }
@@ -147,11 +150,7 @@ function externalCallerFiles(
   return partitionDefinitionConsumers(db, symbol, consumerFiles).realConsumers;
 }
 
-function mentionChunkForCaller(
-  db: ScipDatabase,
-  symbolId: number,
-  callerFile: string,
-): MentionChunk | undefined {
+function mentionChunkForCaller(db: ScipDatabase, symbolId: number, callerFile: string): MentionChunk | undefined {
   return db.get<MentionChunk>(
     `SELECT c.start_line, c.end_line
      FROM mentions m
@@ -189,8 +188,7 @@ function wrapperCallerFanIn(
 ): { fanIn: number; source: 'function' | 'file' } {
   // Fan-in: function-level from bulk map, or file-level as fallback.
   if (enclosing?.isFunctionLike) {
-    const extCallers = [...(callerFileMap.get(enclosing.symbolId) ?? [])]
-      .filter((f) => f !== enclosing.relativePath);
+    const extCallers = [...(callerFileMap.get(enclosing.symbolId) ?? [])].filter((f) => f !== enclosing.relativePath);
     if (extCallers.length > 0) return { fanIn: extCallers.length, source: 'function' };
   }
   return { fanIn: fallbackCallerFanIn(reverseFanIn, callerFile), source: 'file' };
@@ -219,9 +217,7 @@ function refineCallSiteLine(
   return chunkStart;
 }
 
-function buildReverseFileFanIn(
-  graph: Map<string, Set<string>>,
-): Map<string, number> {
+function buildReverseFileFanIn(graph: Map<string, Set<string>>): Map<string, number> {
   const reverse = new Map<string, number>();
   for (const [fromFile, deps] of graph) {
     if (!reverse.has(fromFile)) {
@@ -234,10 +230,7 @@ function buildReverseFileFanIn(
   return reverse;
 }
 
-function fallbackCallerFanIn(
-  reverseFanIn: Map<string, number>,
-  callerFile: string,
-): number {
+function fallbackCallerFanIn(reverseFanIn: Map<string, number>, callerFile: string): number {
   const direct = reverseFanIn.get(callerFile) ?? 0;
   if (direct > 0) {
     return direct;

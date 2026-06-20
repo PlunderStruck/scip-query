@@ -21,10 +21,7 @@ export interface MentionReferenceChunkRow {
   chunk_end: number;
 }
 
-export function mentionReferenceCountRows(
-  db: ScipDatabase,
-  symbolIds?: readonly number[],
-): MentionReferenceCountRow[] {
+export function mentionReferenceCountRows(db: ScipDatabase, symbolIds?: readonly number[]): MentionReferenceCountRow[] {
   return batchedMentionRows(db, symbolIds, (ids) => {
     const symbolFilter = ids ? `AND m.symbol_id IN (${ids.map(() => '?').join(',')})` : '';
     return db.all<MentionReferenceCountRow>(
@@ -63,10 +60,7 @@ export function mentionedReferenceSymbolRows(
   }).filter((row) => row.symbol_id !== null);
 }
 
-export function mentionReferenceChunkRows(
-  db: ScipDatabase,
-  symbolIds?: readonly number[],
-): MentionReferenceChunkRow[] {
+export function mentionReferenceChunkRows(db: ScipDatabase, symbolIds?: readonly number[]): MentionReferenceChunkRow[] {
   return batchedMentionRows(db, symbolIds, (ids) => {
     const symbolFilter = ids ? `AND m.symbol_id IN (${ids.map(() => '?').join(',')})` : '';
     return db.all<MentionReferenceChunkRow>(

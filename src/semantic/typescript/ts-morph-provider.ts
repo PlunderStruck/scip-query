@@ -6,18 +6,22 @@ import { cached } from './cache.js';
 import { definitionNodesForSourceFile } from './definition-node-matcher.js';
 import { findIndexedDefinitionNear, indexedDefinitionLeafMap } from './indexed-definitions.js';
 import { createTypeScriptSourceFiles } from './source-file-resolver.js';
-import { discoverWorkspacePackages, packageEntryCandidates, workspacePackageNameForSpecifier } from './workspace-packages.js';
-import { dedupeLocations, isTypeOnlyLocation, lineOf, referenceLocationsWithoutDeclaration, semanticReferencesForNode, textualIdentifierLocations, toRelative } from './semantic-locations.js';
+import {
+  discoverWorkspacePackages,
+  packageEntryCandidates,
+  workspacePackageNameForSpecifier,
+} from './workspace-packages.js';
+import {
+  dedupeLocations,
+  isTypeOnlyLocation,
+  lineOf,
+  referenceLocationsWithoutDeclaration,
+  semanticReferencesForNode,
+  textualIdentifierLocations,
+  toRelative,
+} from './semantic-locations.js';
 import type { WorkspacePackage } from './workspace-packages.js';
-import type {
-  CallExpression,
-  Identifier,
-  ImportDeclaration,
-  NewExpression,
-  Node,
-  SourceFile,
-  Symbol,
-} from 'ts-morph';
+import type { CallExpression, Identifier, ImportDeclaration, NewExpression, Node, SourceFile, Symbol } from 'ts-morph';
 import type {
   SemanticAvailability,
   SemanticCallee,
@@ -37,7 +41,6 @@ import {
 
 type PackageExportIndex = Map<string, Map<string, Set<number>>>;
 
-
 interface ImportIdentifierEntry {
   identifier: Identifier | null;
   importedName: string;
@@ -49,10 +52,7 @@ interface ImportIdentifierEntry {
 // scip-query: ignore-extract — this is the provider bootstrap boundary:
 // optional dependency loading, tsconfig discovery, project construction, and
 // unavailable-provider fallbacks define whether TypeScript semantics are live.
-export function createTsMorphProvider(
-  db: ScipDatabase,
-  _relativePath?: string,
-): SemanticProvider {
+export function createTsMorphProvider(db: ScipDatabase, _relativePath?: string): SemanticProvider {
   const mod = loadTsMorph();
   if (!mod) {
     return unavailableProvider('ts-morph is not installed');
@@ -139,18 +139,22 @@ class TsMorphSemanticProvider implements SemanticProvider {
     return cached(this.signatureCache, definition.symbolId, () => {
       const node = this.nodeForDefinition(definition);
       if (!node) return null;
-      if (!this.tsMorph.Node.isFunctionDeclaration(node)
-        && !this.tsMorph.Node.isMethodDeclaration(node)
-        && !this.tsMorph.Node.isArrowFunction(node)
-        && !this.tsMorph.Node.isFunctionExpression(node)
-        && !this.tsMorph.Node.isConstructorDeclaration(node)) {
+      if (
+        !this.tsMorph.Node.isFunctionDeclaration(node) &&
+        !this.tsMorph.Node.isMethodDeclaration(node) &&
+        !this.tsMorph.Node.isArrowFunction(node) &&
+        !this.tsMorph.Node.isFunctionExpression(node) &&
+        !this.tsMorph.Node.isConstructorDeclaration(node)
+      ) {
         return null;
       }
       const signature = node.getType().getCallSignatures()[0];
       if (!signature) return null;
       const params = signature.getParameters().map((param) => {
         const decl = param.getDeclarations()[0];
-        const type = decl ? param.getTypeAtLocation(decl).getText(decl) : param.getValueDeclaration()?.getType().getText() ?? 'unknown';
+        const type = decl
+          ? param.getTypeAtLocation(decl).getText(decl)
+          : (param.getValueDeclaration()?.getType().getText() ?? 'unknown');
         return normalizeType(type);
       });
       const returnType = signature.getReturnType().getText(node);
@@ -158,10 +162,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
     });
   }
 
-  private importUsageForDeclaration(
-    importer: string,
-    declaration: ImportDeclaration,
-  ): SemanticImportUsage[] {
+  private importUsageForDeclaration(importer: string, declaration: ImportDeclaration): SemanticImportUsage[] {
     const sourcePath = resolveImportPath(this.db, importer, declaration.getModuleSpecifierValue());
     const entries = importIdentifiers(declaration);
     if (declaration.getImportClause()?.isTypeOnly()) {
@@ -178,7 +179,12 @@ class TsMorphSemanticProvider implements SemanticProvider {
     const refs = entry.identifier ? entry.identifier.findReferences() : [];
     const referenceLocations: Array<{ location: SemanticLocation; node: Node }> = [];
     for (const ref of refs) {
-      for (const location of referenceLocationsWithoutDeclaration(ref, importer, entry.identifier, this.db.config.projectRoot)) {
+      for (const location of referenceLocationsWithoutDeclaration(
+        ref,
+        importer,
+        entry.identifier,
+        this.db.config.projectRoot,
+      )) {
         referenceLocations.push(location);
       }
     }
@@ -318,8 +324,10 @@ class TsMorphSemanticProvider implements SemanticProvider {
   // definition; source-file lookup, name matching, and line matching are one
   // semantic bridge.
   private nodeForDefinition(definition: IndexedDefinition): Node | null {
-    return cached(this.definitionNodeCache, definition.symbolId, () =>
-      this.definitionNodesForFile(definition.relativePath).get(definition.symbolId) ?? null,
+    return cached(
+      this.definitionNodeCache,
+      definition.symbolId,
+      () => this.definitionNodesForFile(definition.relativePath).get(definition.symbolId) ?? null,
     );
   }
 
@@ -351,8 +359,9 @@ class TsMorphSemanticProvider implements SemanticProvider {
     const sourceFile = this.sourceFiles.sourceFile(relativePath);
     if (!sourceFile) return new Map();
 
-    const definitions = getDefinitionsForFile(this.db, relativePath)
-      .sort((left, right) => left.startLine - right.startLine || right.endLine - left.endLine);
+    const definitions = getDefinitionsForFile(this.db, relativePath).sort(
+      (left, right) => left.startLine - right.startLine || right.endLine - left.endLine,
+    );
     if (definitions.length === 0) return new Map();
 
     const out = new Map<number, SemanticCallee[]>();
@@ -409,7 +418,7 @@ function importIdentifiers(declaration: ImportDeclaration): ImportIdentifierEntr
   for (const named of declaration.getNamedImports()) {
     const name = named.getNameNode();
     const alias = named.getAliasNode();
-    const identifier = alias ?? (name.getKindName() === 'Identifier' ? name as Identifier : null);
+    const identifier = alias ?? (name.getKindName() === 'Identifier' ? (name as Identifier) : null);
     out.push({
       identifier,
       importedName: name.getText(),
@@ -449,11 +458,7 @@ function typeOnlyImportUsage(
   };
 }
 
-function addSemanticCallee(
-  out: Map<number, SemanticCallee[]>,
-  callerId: number,
-  target: SemanticCallee,
-): void {
+function addSemanticCallee(out: Map<number, SemanticCallee[]>, callerId: number, target: SemanticCallee): void {
   let bucket = out.get(callerId);
   if (!bucket) {
     bucket = [];

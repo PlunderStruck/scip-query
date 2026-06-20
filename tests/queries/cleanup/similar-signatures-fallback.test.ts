@@ -1,17 +1,6 @@
 import Database from 'better-sqlite3';
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  it,
-} from 'vitest';
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
@@ -185,25 +174,31 @@ describe('similar-signatures source fallback', () => {
   it('groups same-shape functions when documentation signatures are missing', () => {
     const groups = similarSignatures(db, { minLoc: 1 });
     const reporterGroup = groups.find((group) =>
-      group.functions.some((fn) => fn.shortName === 'fixture:StatusAuditReporter:renderAuditStatus()')
+      group.functions.some((fn) => fn.shortName === 'fixture:StatusAuditReporter:renderAuditStatus()'),
     );
-    expect(reporterGroup?.functions.map((fn) => fn.shortName)).toEqual(expect.arrayContaining([
-      'fixture:StatusAuditReporter:renderAuditStatus()',
-      'fixture:StatusBoardReporter:renderBoardStatus()',
-    ]));
-    expect(reporterGroup?.functions.map((fn) => fn.shortName)).not.toContain('fixture:StatusDigestReporter:renderDigestStatus()');
+    expect(reporterGroup?.functions.map((fn) => fn.shortName)).toEqual(
+      expect.arrayContaining([
+        'fixture:StatusAuditReporter:renderAuditStatus()',
+        'fixture:StatusBoardReporter:renderBoardStatus()',
+      ]),
+    );
+    expect(reporterGroup?.functions.map((fn) => fn.shortName)).not.toContain(
+      'fixture:StatusDigestReporter:renderDigestStatus()',
+    );
   });
 
   it('keeps object return types intact when normalizing TypeScript source signatures', () => {
     const groups = similarSignatures(db, { minLoc: 1 });
     const bulkGroup = groups.find((group) =>
-      group.functions.some((fn) => fn.shortName === 'src:BulkIssueService:BulkIssueService:bulkArchive()')
+      group.functions.some((fn) => fn.shortName === 'src:BulkIssueService:BulkIssueService:bulkArchive()'),
     );
 
     expect(bulkGroup?.signature).toBe('(issueids:string[],userid:string):promise<{updated:number}>');
-    expect(bulkGroup?.functions.map((fn) => fn.shortName)).toEqual(expect.arrayContaining([
-      'src:BulkIssueService:BulkIssueService:bulkArchive()',
-      'src:BulkIssueRepository:BulkIssueRepository:bulkRestore()',
-    ]));
+    expect(bulkGroup?.functions.map((fn) => fn.shortName)).toEqual(
+      expect.arrayContaining([
+        'src:BulkIssueService:BulkIssueService:bulkArchive()',
+        'src:BulkIssueRepository:BulkIssueRepository:bulkRestore()',
+      ]),
+    );
   });
 });

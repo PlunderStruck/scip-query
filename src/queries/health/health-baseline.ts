@@ -34,8 +34,8 @@ const LARGE_BASELINE_SCAN_LIMIT = 2_500;
 
 function baselineScanLimit(db: ScipDatabase): number | undefined {
   const overview = stats(db);
-  const isLarge = overview.symbols >= LARGE_BASELINE_SYMBOL_THRESHOLD
-    || overview.documents >= LARGE_BASELINE_DOCUMENT_THRESHOLD;
+  const isLarge =
+    overview.symbols >= LARGE_BASELINE_SYMBOL_THRESHOLD || overview.documents >= LARGE_BASELINE_DOCUMENT_THRESHOLD;
   return isLarge ? LARGE_BASELINE_SCAN_LIMIT : undefined;
 }
 
@@ -59,10 +59,7 @@ export function resolveBaselinePath(db: ScipDatabase, path?: string): string {
   return join(db.config.projectRoot, path ?? DEFAULT_BASELINE_FILENAME);
 }
 
-export function collectBaselineFindings(
-  db: ScipDatabase,
-  opts: { scope?: string } = {},
-): string[] {
+export function collectBaselineFindings(db: ScipDatabase, opts: { scope?: string } = {}): string[] {
   const { scope } = opts;
   const scanLimit = baselineScanLimit(db);
   const findings: string[] = [];

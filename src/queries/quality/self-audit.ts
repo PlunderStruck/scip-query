@@ -84,12 +84,21 @@ export function selfAudit(
 
   const oracleCallees = semanticCalleeMap(db, sampled);
   for (const definition of sampled) {
-    const oracleRefs = crossFileSet(definition, semanticReferences(db, definition).map((ref) => ref.file));
-    const oracleCals = crossFileSet(definition, (oracleCallees.get(definition.symbolId) ?? []).map((callee) => callee.file));
+    const oracleRefs = crossFileSet(
+      definition,
+      semanticReferences(db, definition).map((ref) => ref.file),
+    );
+    const oracleCals = crossFileSet(
+      definition,
+      (oracleCallees.get(definition.symbolId) ?? []).map((callee) => callee.file),
+    );
     if (oracleRefs.size === 0 && oracleCals.size === 0) continue; // oracle had nothing to say
     oracleAnswered += 1;
 
-    const cheapRefs = crossFileSet(definition, getResolvedReferenceSites(db, definition).map((site) => site.file));
+    const cheapRefs = crossFileSet(
+      definition,
+      getResolvedReferenceSites(db, definition).map((site) => site.file),
+    );
     const cheapCals = crossFileSet(
       definition,
       (index.calleeMap([definition], { semantic: false }).get(definition.symbolId) ?? []).map((callee) => callee.file),
@@ -99,8 +108,10 @@ export function selfAudit(
     scoreQuestion(tallies.callees, definition, 'callees', cheapCals, oracleCals, disagreements);
   }
 
-  disagreements.sort((left, right) =>
-    (right.cheapOnly.length + right.oracleOnly.length) - (left.cheapOnly.length + left.oracleOnly.length));
+  disagreements.sort(
+    (left, right) =>
+      right.cheapOnly.length + right.oracleOnly.length - (left.cheapOnly.length + left.oracleOnly.length),
+  );
 
   return {
     available: true,
@@ -193,9 +204,7 @@ function finalizeScore(question: AuditQuestion, tally: QuestionTally): AuditQues
   return {
     question,
     comparedSymbols: tally.comparedSymbols,
-    precision: ORACLE_COMPLETE[question] && tally.cheapTotal > 0
-      ? round3(tally.agreed / tally.cheapTotal)
-      : null,
+    precision: ORACLE_COMPLETE[question] && tally.cheapTotal > 0 ? round3(tally.agreed / tally.cheapTotal) : null,
     recall: round3(recall),
     unverified,
   };

@@ -10,21 +10,13 @@ import { resolveImportPath } from '../../resolution/import-path-resolver.js';
 import type { ParsedReExport } from '../../domain/types.js';
 import { firstChildOfType, splitTopLevel } from '../utils.js';
 
-export function parseReExports(
-  db: ScipDatabase,
-  relativePath: string,
-  source: string,
-): ParsedReExport[] {
+export function parseReExports(db: ScipDatabase, relativePath: string, source: string): ParsedReExport[] {
   const tree = getAst(db, relativePath);
   if (tree) return getReExportsAst(db, relativePath, tree);
   return parseReExportsRegex(db, relativePath, source);
 }
 
-function parseReExportsRegex(
-  db: ScipDatabase,
-  relativePath: string,
-  source: string,
-): ParsedReExport[] {
+function parseReExportsRegex(db: ScipDatabase, relativePath: string, source: string): ParsedReExport[] {
   return [
     ...parseNamedReExportsRegex(db, relativePath, source),
     ...parseStarAsReExportsRegex(db, relativePath, source),
@@ -32,11 +24,7 @@ function parseReExportsRegex(
   ];
 }
 
-function parseNamedReExportsRegex(
-  db: ScipDatabase,
-  relativePath: string,
-  source: string,
-): ParsedReExport[] {
+function parseNamedReExportsRegex(db: ScipDatabase, relativePath: string, source: string): ParsedReExport[] {
   const results: ParsedReExport[] = [];
   const namedRegex = /^[ \t]*export\s+(?:type\s+)?\{([\s\S]*?)\}\s+from\s+['"]([^'"]+)['"]\s*;?/gm;
   for (const match of source.matchAll(namedRegex)) {
@@ -59,11 +47,7 @@ function parseNamedReExportsRegex(
   return results;
 }
 
-function parseStarAsReExportsRegex(
-  db: ScipDatabase,
-  relativePath: string,
-  source: string,
-): ParsedReExport[] {
+function parseStarAsReExportsRegex(db: ScipDatabase, relativePath: string, source: string): ParsedReExport[] {
   const results: ParsedReExport[] = [];
   const starAsRegex = /^[ \t]*export\s+\*\s+as\s+(\w+)\s+from\s+['"]([^'"]+)['"]\s*;?/gm;
   for (const match of source.matchAll(starAsRegex)) {
@@ -82,11 +66,7 @@ function parseStarAsReExportsRegex(
   return results;
 }
 
-function parseStarReExportsRegex(
-  db: ScipDatabase,
-  relativePath: string,
-  source: string,
-): ParsedReExport[] {
+function parseStarReExportsRegex(db: ScipDatabase, relativePath: string, source: string): ParsedReExport[] {
   const results: ParsedReExport[] = [];
   const starRegex = /^[ \t]*export\s+\*\s+from\s+['"]([^'"]+)['"]\s*;?/gm;
   for (const match of source.matchAll(starRegex)) {
@@ -113,7 +93,7 @@ function parseReExportBinding(entry: string): string | null {
   const asMatch = cleaned.match(/^(\w+)\s+as\s+(\w+)$/);
   if (asMatch) return asMatch[2] ?? null;
   const plainMatch = cleaned.match(/^(\w+)$/);
-  return plainMatch ? plainMatch[1] ?? null : null;
+  return plainMatch ? (plainMatch[1] ?? null) : null;
 }
 
 function lineOf(source: string, offset: number): number {
@@ -124,11 +104,7 @@ function lineOf(source: string, offset: number): number {
   return line;
 }
 
-function getReExportsAst(
-  db: ScipDatabase,
-  importerPath: string,
-  tree: Tree,
-): ParsedReExport[] {
+function getReExportsAst(db: ScipDatabase, importerPath: string, tree: Tree): ParsedReExport[] {
   const results: ParsedReExport[] = [];
 
   for (const node of tree.rootNode.descendantsOfType('export_statement')) {

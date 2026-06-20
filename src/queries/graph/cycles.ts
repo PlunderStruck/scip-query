@@ -23,10 +23,7 @@ export interface CycleResult {
  * Uses the same dependency edges as the `deps` command (symbol definitions
  * referenced across files), then runs DFS cycle detection.
  */
-export function cycles(
-  db: ScipDatabase,
-  opts: { scope?: string; maxDepth?: number } = {},
-): CycleResult[] {
+export function cycles(db: ScipDatabase, opts: { scope?: string; maxDepth?: number } = {}): CycleResult[] {
   const { scope, maxDepth = 10 } = opts;
   const graph = buildFileDepGraph(db, scope);
 
@@ -44,14 +41,8 @@ export function cycles(
       if (cycleStart !== -1) {
         const cyclePath = stack.slice(cycleStart).concat(node);
         // Normalize: start from the lexicographically smallest file
-        const minIdx = cyclePath.indexOf(
-          cyclePath.reduce((a, b) => (a < b ? a : b)),
-        );
-        const normalized = [
-          ...cyclePath.slice(minIdx, -1),
-          ...cyclePath.slice(0, minIdx),
-          cyclePath[minIdx]!,
-        ];
+        const minIdx = cyclePath.indexOf(cyclePath.reduce((a, b) => (a < b ? a : b)));
+        const normalized = [...cyclePath.slice(minIdx, -1), ...cyclePath.slice(0, minIdx), cyclePath[minIdx]!];
         // Deduplicate
         const key = normalized.join(' -> ');
         if (!seenCycles.has(key)) {

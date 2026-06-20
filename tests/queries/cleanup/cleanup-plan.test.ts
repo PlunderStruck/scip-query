@@ -35,7 +35,12 @@ describe('verification line deletion', () => {
     const content = ['l0', 'l1', 'l2', 'l3', 'l4', 'l5'].join('\n');
 
     expect(deleteLineRanges(content, [{ start: 1, end: 2 }])).toBe('l0\nl3\nl4\nl5');
-    expect(deleteLineRanges(content, [{ start: 1, end: 3 }, { start: 2, end: 4 }])).toBe('l0\nl5');
+    expect(
+      deleteLineRanges(content, [
+        { start: 1, end: 3 },
+        { start: 2, end: 4 },
+      ]),
+    ).toBe('l0\nl5');
     expect(deleteLineRanges(content, [{ start: 4, end: 99 }])).toBe('l0\nl1\nl2\nl3');
     expect(deleteLineRanges(content, [])).toBe(content);
   });
@@ -49,8 +54,7 @@ describe('verification line deletion', () => {
       'const alsoKeep = 2;',
     ].join('\n');
 
-    expect(deleteLineRanges(content, [{ start: 1, end: 1 }]))
-      .toBe('const keep = 1;\nconst alsoKeep = 2;');
+    expect(deleteLineRanges(content, [{ start: 1, end: 1 }])).toBe('const keep = 1;\nconst alsoKeep = 2;');
     // Strings containing brackets must not confuse the balance.
     const tricky = ['const a = "}{";', 'const dead = [', '  1,', '];'].join('\n');
     expect(deleteLineRanges(tricky, [{ start: 1, end: 1 }])).toBe('const a = "}{";');
@@ -59,12 +63,15 @@ describe('verification line deletion', () => {
 
 describe('verification error identity', () => {
   it('is position-independent so shifted pre-existing errors still match the baseline', () => {
-    expect(errorKey("src/app.ts(12,8): error TS1259: Module 'x' can only be default-imported"))
-      .toBe(errorKey("src/app.ts(99,8): error TS1259: Module 'x' can only be default-imported"));
-    expect(errorKey('error[E0432]: unresolved import --> src/lib.rs:4:5'))
-      .toBe(errorKey('error[E0432]: unresolved import --> src/lib.rs:9:1'));
-    expect(errorKey("a.ts(1,1): error TS2304: Cannot find name 'x'"))
-      .not.toBe(errorKey("a.ts(1,1): error TS2304: Cannot find name 'y'"));
+    expect(errorKey("src/app.ts(12,8): error TS1259: Module 'x' can only be default-imported")).toBe(
+      errorKey("src/app.ts(99,8): error TS1259: Module 'x' can only be default-imported"),
+    );
+    expect(errorKey('error[E0432]: unresolved import --> src/lib.rs:4:5')).toBe(
+      errorKey('error[E0432]: unresolved import --> src/lib.rs:9:1'),
+    );
+    expect(errorKey("a.ts(1,1): error TS2304: Cannot find name 'x'")).not.toBe(
+      errorKey("a.ts(1,1): error TS2304: Cannot find name 'y'"),
+    );
   });
 });
 
@@ -74,15 +81,17 @@ describe('cleanup patch and apply helpers', () => {
       depth: 0,
       loc: 1,
       filesEmptied: [],
-      entries: [{
-        symbol: 'scip-typescript npm pkg 1.0.0 src/`a.ts`/dead().',
-        shortName: 'src:a:dead()',
-        file: 'src/a.ts',
-        startLine: 1,
-        endLine: 1,
-        loc: 1,
-        evidence: 'graph-fact',
-      }],
+      entries: [
+        {
+          symbol: 'scip-typescript npm pkg 1.0.0 src/`a.ts`/dead().',
+          shortName: 'src:a:dead()',
+          file: 'src/a.ts',
+          startLine: 1,
+          endLine: 1,
+          loc: 1,
+          evidence: 'graph-fact',
+        },
+      ],
     };
   }
 
@@ -127,20 +136,31 @@ describe('cleanup patch and apply helpers', () => {
 
     expect(selectCleanupBatches(plan, { batch: 0 })).toEqual([batch]);
     expect(selectCleanupBatches(plan, { batch: 9 })).toEqual([]);
-    expect(cleanupVerificationFailures({
-      checkers: ['tsc --noEmit'],
-      uncoveredFiles: [],
-      baselineErrors: 0,
-      dirtyOverlap: ['src/a.ts'],
-      batches: [{ depth: 0, status: 'verified' }],
-    }, [batch])).toContain('Plan files are dirty in the working tree: src/a.ts.');
-    expect(cleanupVerificationFailures({
-      checkers: ['tsc --noEmit'],
-      uncoveredFiles: [],
-      baselineErrors: 0,
-      dirtyOverlap: ['src/a.ts'],
-      batches: [{ depth: 0, status: 'verified' }],
-    }, [batch], { allowDirty: true })).toEqual([]);
+    expect(
+      cleanupVerificationFailures(
+        {
+          checkers: ['tsc --noEmit'],
+          uncoveredFiles: [],
+          baselineErrors: 0,
+          dirtyOverlap: ['src/a.ts'],
+          batches: [{ depth: 0, status: 'verified' }],
+        },
+        [batch],
+      ),
+    ).toContain('Plan files are dirty in the working tree: src/a.ts.');
+    expect(
+      cleanupVerificationFailures(
+        {
+          checkers: ['tsc --noEmit'],
+          uncoveredFiles: [],
+          baselineErrors: 0,
+          dirtyOverlap: ['src/a.ts'],
+          batches: [{ depth: 0, status: 'verified' }],
+        },
+        [batch],
+        { allowDirty: true },
+      ),
+    ).toEqual([]);
   });
 });
 

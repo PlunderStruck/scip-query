@@ -1,17 +1,6 @@
 import Database from 'better-sqlite3';
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  it,
-} from 'vitest';
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../src/storage/db.js';
@@ -24,22 +13,12 @@ function createCaseFixtureProject(projectRoot: string): void {
 
   writeFileSync(
     join(projectRoot, 'lib', 'src', 'run_store.dart'),
-    [
-      'abstract class RunStore {',
-      '  List<String> openRecords();',
-      '}',
-      '',
-    ].join('\n'),
+    ['abstract class RunStore {', '  List<String> openRecords();', '}', ''].join('\n'),
   );
 
   writeFileSync(
     join(projectRoot, 'lib', 'src', 'proof.dart'),
-    [
-      'class ProofCollector {',
-      '  String collect() => "proof";',
-      '}',
-      '',
-    ].join('\n'),
+    ['class ProofCollector {', '  String collect() => "proof";', '}', ''].join('\n'),
   );
 
   writeFileSync(
@@ -122,7 +101,12 @@ function createCaseFixtureDb(dbPath: string): void {
   insertSymbol.run(2, 'scip-dart pub fixture . lib/src/`proof.dart`/ProofCollector#', 'ProofCollector', 5);
   insertSymbol.run(3, 'scip-dart pub fixture . lib/src/`coordinator.dart`/RunCoordinator#', 'RunCoordinator', 5);
   insertSymbol.run(4, 'scip-dart pub fixture . lib/src/`coordinator.dart`/RunCoordinator#runStore.', 'runStore', 8);
-  insertSymbol.run(5, 'scip-dart pub fixture . lib/src/`coordinator.dart`/RunCoordinator#proofCollector.', 'proofCollector', 8);
+  insertSymbol.run(
+    5,
+    'scip-dart pub fixture . lib/src/`coordinator.dart`/RunCoordinator#proofCollector.',
+    'proofCollector',
+    8,
+  );
 
   run(`
     INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
@@ -186,21 +170,33 @@ describe('case-sensitive symbol resolution', () => {
   });
 
   it('prefers exact-case type symbols over similarly named members', () => {
-    expect(findFirstSymbolMatch(db, 'RunStore')?.symbol).toBe('scip-dart pub fixture . lib/src/`run_store.dart`/RunStore#');
-    expect(findFirstSymbolMatch(db, 'ProofCollector')?.symbol).toBe('scip-dart pub fixture . lib/src/`proof.dart`/ProofCollector#');
-    expect(findFirstSymbolMatch(db, 'runStore')?.symbol).toBe('scip-dart pub fixture . lib/src/`coordinator.dart`/RunCoordinator#runStore.');
-    expect(findFirstSymbolMatch(db, 'proofCollector')?.symbol).toBe('scip-dart pub fixture . lib/src/`coordinator.dart`/RunCoordinator#proofCollector.');
+    expect(findFirstSymbolMatch(db, 'RunStore')?.symbol).toBe(
+      'scip-dart pub fixture . lib/src/`run_store.dart`/RunStore#',
+    );
+    expect(findFirstSymbolMatch(db, 'ProofCollector')?.symbol).toBe(
+      'scip-dart pub fixture . lib/src/`proof.dart`/ProofCollector#',
+    );
+    expect(findFirstSymbolMatch(db, 'runStore')?.symbol).toBe(
+      'scip-dart pub fixture . lib/src/`coordinator.dart`/RunCoordinator#runStore.',
+    );
+    expect(findFirstSymbolMatch(db, 'proofCollector')?.symbol).toBe(
+      'scip-dart pub fixture . lib/src/`coordinator.dart`/RunCoordinator#proofCollector.',
+    );
   });
 
   it('keeps refs aligned with the resolved symbol intent', () => {
-    expect(refs(db, 'RunStore')).toEqual(expect.arrayContaining([
-      { relativePath: 'lib/src/run_store.dart', line: 0 },
-      { relativePath: 'lib/src/coordinator.dart', line: 1 },
-    ]));
+    expect(refs(db, 'RunStore')).toEqual(
+      expect.arrayContaining([
+        { relativePath: 'lib/src/run_store.dart', line: 0 },
+        { relativePath: 'lib/src/coordinator.dart', line: 1 },
+      ]),
+    );
 
-    expect(refs(db, 'ProofCollector')).toEqual(expect.arrayContaining([
-      { relativePath: 'lib/src/proof.dart', line: 0 },
-      { relativePath: 'lib/src/coordinator.dart', line: 2 },
-    ]));
+    expect(refs(db, 'ProofCollector')).toEqual(
+      expect.arrayContaining([
+        { relativePath: 'lib/src/proof.dart', line: 0 },
+        { relativePath: 'lib/src/coordinator.dart', line: 2 },
+      ]),
+    );
   });
 });

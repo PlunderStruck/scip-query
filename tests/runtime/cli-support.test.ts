@@ -21,16 +21,17 @@ describe('commandAnalysisBudget', () => {
   it('suppresses large-index warnings for JSON commands without changing the budget', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-    expect(commandAnalysisBudget(fakeLargeDb(), 'cleanup-plan', false, { quiet: true }))
-      .toEqual({ scanLimit: 2500, semantic: false });
+    expect(commandAnalysisBudget(fakeLargeDb(), 'cleanup-plan', false, { quiet: true })).toEqual({
+      scanLimit: 2500,
+      semantic: false,
+    });
     expect(error).not.toHaveBeenCalled();
   });
 
   it('keeps large-index warnings for human output', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-    expect(commandAnalysisBudget(fakeLargeDb(), 'cleanup-plan', false))
-      .toEqual({ scanLimit: 2500, semantic: false });
+    expect(commandAnalysisBudget(fakeLargeDb(), 'cleanup-plan', false)).toEqual({ scanLimit: 2500, semantic: false });
     expect(error).toHaveBeenCalledWith(expect.stringContaining('Large index detected'));
   });
 });

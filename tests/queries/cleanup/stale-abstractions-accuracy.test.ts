@@ -67,10 +67,7 @@ describe('staleAbstractions accuracy', () => {
           '}',
           '',
         ].join('\n'),
-        'src/index.ts': [
-          "export { type PublicApi } from './lib.js';",
-          '',
-        ].join('\n'),
+        'src/index.ts': ["export { type PublicApi } from './lib.js';", ''].join('\n'),
       },
       (sqliteDb) => {
         sqliteDb.exec(`
@@ -113,10 +110,7 @@ describe('staleAbstractions accuracy', () => {
           '}',
           '',
         ].join('\n'),
-        'src/index.ts': [
-          "export { type Shape } from './wrong-path.js';",
-          '',
-        ].join('\n'),
+        'src/index.ts': ["export { type Shape } from './wrong-path.js';", ''].join('\n'),
       },
       (sqliteDb) => {
         sqliteDb.exec(`
@@ -151,18 +145,10 @@ describe('staleAbstractions accuracy', () => {
     withFixture(
       'mixed-consumers',
       {
-        'src/lib.ts': [
-          'export interface Entry {',
-          '  id: number;',
-          '  tag: string;',
-          '  note: string;',
-          '}',
-          '',
-        ].join('\n'),
-        'src/index.ts': [
-          "export { type Entry } from './lib.js';",
-          '',
-        ].join('\n'),
+        'src/lib.ts': ['export interface Entry {', '  id: number;', '  tag: string;', '  note: string;', '}', ''].join(
+          '\n',
+        ),
+        'src/index.ts': ["export { type Entry } from './lib.js';", ''].join('\n'),
         'src/user.ts': [
           "import type { Entry } from './lib.js';",
           'export function describe(e: Entry): string {',

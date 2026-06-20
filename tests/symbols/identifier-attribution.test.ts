@@ -12,19 +12,8 @@
  *   T5. Otherwise -> empty (no over-attribution)
  */
 import Database from 'better-sqlite3';
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  it,
-} from 'vitest';
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../src/storage/db.js';
@@ -127,10 +116,7 @@ describe('attributeIdentifier — tier pinning', () => {
     // self-referrer all have `compute`); no signal disambiguates → empty.
     writeFileSync(
       join(projectRoot, 'src', 'tier5-no-signal.ts'),
-      [
-        'export function unrelated(x: number): number { return x * 2; }',
-        '',
-      ].join('\n'),
+      ['export function unrelated(x: number): number { return x * 2; }', ''].join('\n'),
     );
 
     // ── Leaf `dispatch`: ambiguous within ONE file (T4 fixture) ─────────

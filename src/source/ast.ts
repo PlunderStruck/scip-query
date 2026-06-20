@@ -8,12 +8,7 @@
 export { detectAstLanguage, isVueSfcPath } from './ast/ast-language.js';
 export { callableBodyNodeTypesForLanguage } from './ast/ast-callables.js';
 export { getAst } from './ast/ast-core.js';
-export {
-  extractCallLeaf,
-  getCallableSites,
-  getCallSites,
-  getTypeContainerMap,
-} from './ast/ast-facts.js';
+export { extractCallLeaf, getCallableSites, getCallSites, getTypeContainerMap } from './ast/ast-facts.js';
 export {
   getCrossLanguageDispatchNames,
   getRustAttrReferencedNames,
@@ -37,12 +32,7 @@ export type {
   VueTemplateIdentifierFact,
   VueTemplateTagFact,
 } from './vue/vue-template.js';
-export type {
-  VueSfcBlockKind,
-  VueSfcResolvedBlock,
-  VueSfcScriptBlock,
-  VueSfcUnit,
-} from './vue/vue-sfc.js';
+export type { VueSfcBlockKind, VueSfcResolvedBlock, VueSfcScriptBlock, VueSfcUnit } from './vue/vue-sfc.js';
 export type { VueComponentBehaviorProfile } from './vue/vue-profile.js';
 export type { ReactComponentBehaviorProfile } from './react-profile.js';
 export type {

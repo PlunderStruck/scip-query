@@ -6,12 +6,7 @@ import { similarAll } from './similar.js';
 import { vueComponentDuplicates } from '../frontend/vue-component-duplicates.js';
 import { vueComposableCandidates } from '../frontend/vue-composable-candidates.js';
 
-export type RecentDuplicateDomain =
-  | 'callable'
-  | 'react-component'
-  | 'react-hook'
-  | 'vue-component'
-  | 'vue-composable';
+export type RecentDuplicateDomain = 'callable' | 'react-component' | 'react-hook' | 'vue-component' | 'vue-composable';
 
 export type RecentDuplicateBasis =
   | 'callees'
@@ -117,12 +112,14 @@ export function recentDuplicates(
     .filter((finding): finding is RecentDuplicateFinding => finding !== null);
 
   // Echoes first (clear directionality), then by similarity.
-  findings.sort((left, right) =>
-    (left.kind === right.kind ? 0 : left.kind === 'echo' ? -1 : 1)
-    || right.similarity - left.similarity
-    || left.echoFile.localeCompare(right.echoFile)
-    || left.echoSymbol.localeCompare(right.echoSymbol)
-    || left.domain.localeCompare(right.domain));
+  findings.sort(
+    (left, right) =>
+      (left.kind === right.kind ? 0 : left.kind === 'echo' ? -1 : 1) ||
+      right.similarity - left.similarity ||
+      left.echoFile.localeCompare(right.echoFile) ||
+      left.echoSymbol.localeCompare(right.echoSymbol) ||
+      left.domain.localeCompare(right.domain),
+  );
   return { available: true, windowCommits, findings: findings.slice(0, limit) };
 }
 
@@ -205,23 +202,25 @@ function reactComponentDuplicateCandidates(
     minSimilarity: opts.minSimilarity,
     limit: opts.limit,
     scanLimit: opts.scanLimit,
-  }).filter((pair) => pair.fileA !== pair.fileB).map((pair) => ({
-    domain: 'react-component',
-    basis: 'jsx-structure',
-    symbolA: pair.componentA,
-    fileA: pair.fileA,
-    symbolB: pair.componentB,
-    fileB: pair.fileB,
-    similarity: pair.similarity,
-    sharedEvidence: evidenceFromBuckets(
-      ['component', pair.sharedComponents],
-      ['tag', pair.sharedNativeTags],
-      ['prop', pair.sharedProps],
-      ['event', pair.sharedEvents],
-      ['binding', pair.sharedBindings],
-    ),
-    sharedCallees: [],
-  }));
+  })
+    .filter((pair) => pair.fileA !== pair.fileB)
+    .map((pair) => ({
+      domain: 'react-component',
+      basis: 'jsx-structure',
+      symbolA: pair.componentA,
+      fileA: pair.fileA,
+      symbolB: pair.componentB,
+      fileB: pair.fileB,
+      similarity: pair.similarity,
+      sharedEvidence: evidenceFromBuckets(
+        ['component', pair.sharedComponents],
+        ['tag', pair.sharedNativeTags],
+        ['prop', pair.sharedProps],
+        ['event', pair.sharedEvents],
+        ['binding', pair.sharedBindings],
+      ),
+      sharedCallees: [],
+    }));
 }
 
 function reactHookDuplicateCandidates(
@@ -233,25 +232,27 @@ function reactHookDuplicateCandidates(
     minSimilarity: opts.minSimilarity,
     limit: opts.limit,
     scanLimit: opts.scanLimit,
-  }).filter((pair) => pair.fileA !== pair.fileB).map((pair) => ({
-    domain: 'react-hook',
-    basis: 'react-behavior',
-    symbolA: pair.componentA,
-    fileA: pair.fileA,
-    symbolB: pair.componentB,
-    fileB: pair.fileB,
-    similarity: pair.similarity,
-    sharedEvidence: evidenceFromBuckets(
-      ['hook', pair.sharedHooks],
-      ['react-hook', pair.sharedReactHooks],
-      ['effect', pair.sharedEffects],
-      ['state', pair.sharedState],
-      ['request', pair.sharedRequests],
-      ['handler', pair.sharedHandlers],
-      ['action', pair.sharedHandlerVerbs],
-    ),
-    sharedCallees: [],
-  }));
+  })
+    .filter((pair) => pair.fileA !== pair.fileB)
+    .map((pair) => ({
+      domain: 'react-hook',
+      basis: 'react-behavior',
+      symbolA: pair.componentA,
+      fileA: pair.fileA,
+      symbolB: pair.componentB,
+      fileB: pair.fileB,
+      similarity: pair.similarity,
+      sharedEvidence: evidenceFromBuckets(
+        ['hook', pair.sharedHooks],
+        ['react-hook', pair.sharedReactHooks],
+        ['effect', pair.sharedEffects],
+        ['state', pair.sharedState],
+        ['request', pair.sharedRequests],
+        ['handler', pair.sharedHandlers],
+        ['action', pair.sharedHandlerVerbs],
+      ),
+      sharedCallees: [],
+    }));
 }
 
 function vueComponentDuplicateCandidates(
@@ -263,24 +264,26 @@ function vueComponentDuplicateCandidates(
     minSimilarity: opts.minSimilarity,
     limit: opts.limit,
     scanLimit: opts.scanLimit,
-  }).filter((pair) => pair.fileA !== pair.fileB).map((pair) => ({
-    domain: 'vue-component',
-    basis: 'vue-template',
-    symbolA: fileStem(pair.fileA),
-    fileA: pair.fileA,
-    symbolB: fileStem(pair.fileB),
-    fileB: pair.fileB,
-    similarity: pair.similarity,
-    sharedEvidence: evidenceFromBuckets(
-      ['component', pair.sharedComponents],
-      ['prop', pair.sharedProps],
-      ['event', pair.sharedEvents],
-      ['directive', pair.sharedDirectives],
-      ['slot', pair.sharedSlots],
-      ['identifier', pair.sharedIdentifiers],
-    ),
-    sharedCallees: [],
-  }));
+  })
+    .filter((pair) => pair.fileA !== pair.fileB)
+    .map((pair) => ({
+      domain: 'vue-component',
+      basis: 'vue-template',
+      symbolA: fileStem(pair.fileA),
+      fileA: pair.fileA,
+      symbolB: fileStem(pair.fileB),
+      fileB: pair.fileB,
+      similarity: pair.similarity,
+      sharedEvidence: evidenceFromBuckets(
+        ['component', pair.sharedComponents],
+        ['prop', pair.sharedProps],
+        ['event', pair.sharedEvents],
+        ['directive', pair.sharedDirectives],
+        ['slot', pair.sharedSlots],
+        ['identifier', pair.sharedIdentifiers],
+      ),
+      sharedCallees: [],
+    }));
 }
 
 function vueComposableDuplicateCandidates(
@@ -292,27 +295,29 @@ function vueComposableDuplicateCandidates(
     minSimilarity: opts.minSimilarity,
     limit: opts.limit,
     scanLimit: opts.scanLimit,
-  }).filter((pair) => pair.fileA !== pair.fileB).map((pair) => ({
-    domain: 'vue-composable',
-    basis: 'vue-behavior',
-    symbolA: fileStem(pair.fileA),
-    fileA: pair.fileA,
-    symbolB: fileStem(pair.fileB),
-    fileB: pair.fileB,
-    similarity: pair.similarity,
-    sharedEvidence: evidenceFromBuckets(
-      ['composable', pair.sharedComposables],
-      ['store', pair.sharedStores],
-      ['reactivity', pair.sharedReactivity],
-      ['lifecycle', pair.sharedLifecycle],
-      ['request', pair.sharedRequests],
-      ['function', pair.sharedFunctions],
-      ['action', pair.sharedFunctionVerbs],
-      ['binding', pair.sharedBindings],
-      ['template-event', pair.sharedTemplateEvents],
-    ),
-    sharedCallees: [],
-  }));
+  })
+    .filter((pair) => pair.fileA !== pair.fileB)
+    .map((pair) => ({
+      domain: 'vue-composable',
+      basis: 'vue-behavior',
+      symbolA: fileStem(pair.fileA),
+      fileA: pair.fileA,
+      symbolB: fileStem(pair.fileB),
+      fileB: pair.fileB,
+      similarity: pair.similarity,
+      sharedEvidence: evidenceFromBuckets(
+        ['composable', pair.sharedComposables],
+        ['store', pair.sharedStores],
+        ['reactivity', pair.sharedReactivity],
+        ['lifecycle', pair.sharedLifecycle],
+        ['request', pair.sharedRequests],
+        ['function', pair.sharedFunctions],
+        ['action', pair.sharedFunctionVerbs],
+        ['binding', pair.sharedBindings],
+        ['template-event', pair.sharedTemplateEvents],
+      ),
+      sharedCallees: [],
+    }));
 }
 
 function orientRecentDuplicate(

@@ -36,7 +36,11 @@ const IGNORED_DIRS = new Set([
  * Ordered roughly by specificity — more specific markers first.
  */
 const LANGUAGE_MARKERS: LanguageMarker[] = [
-  { language: 'typescript', files: ['tsconfig.json', 'tsconfig.base.json'], extensions: ['.ts', '.tsx', '.mts', '.cts'] },
+  {
+    language: 'typescript',
+    files: ['tsconfig.json', 'tsconfig.base.json'],
+    extensions: ['.ts', '.tsx', '.mts', '.cts'],
+  },
   { language: 'rust', files: ['Cargo.toml'], extensions: ['.rs'] },
   { language: 'go', files: ['go.mod'], extensions: ['.go'] },
   { language: 'java', files: ['pom.xml', 'build.gradle', 'build.gradle.kts'], extensions: ['.java'] },
@@ -44,7 +48,11 @@ const LANGUAGE_MARKERS: LanguageMarker[] = [
   { language: 'scala', files: ['build.sbt'], extensions: ['.scala'] },
   { language: 'python', files: ['pyproject.toml', 'setup.py', 'setup.cfg', 'Pipfile'], extensions: ['.py', '.pyi'] },
   { language: 'ruby', files: ['Gemfile'], extensions: ['.rb'] },
-  { language: 'cpp', files: ['compile_commands.json', 'CMakeLists.txt', 'Makefile'], extensions: ['.cc', '.cpp', '.cxx', '.hpp', '.hh', '.hxx'] },
+  {
+    language: 'cpp',
+    files: ['compile_commands.json', 'CMakeLists.txt', 'Makefile'],
+    extensions: ['.cc', '.cpp', '.cxx', '.hpp', '.hh', '.hxx'],
+  },
   { language: 'c', files: ['compile_commands.json', 'CMakeLists.txt', 'Makefile'], extensions: ['.c', '.h'] },
   { language: 'csharp', globs: ['*.csproj', '*.sln'], extensions: ['.cs'] },
   { language: 'vb', globs: ['*.vbproj'], extensions: ['.vb'] },
@@ -175,15 +183,11 @@ function collectExtensions(projectRoot: string): Set<string> {
 
 function collectGitTrackedExtensions(projectRoot: string): Set<string> | null {
   try {
-    const stdout = execFileSync(
-      'git',
-      ['-C', projectRoot, 'ls-files', '-co', '--exclude-standard', '--', '.'],
-      {
-        encoding: 'utf-8',
-        maxBuffer: 25 * 1024 * 1024,
-        stdio: ['ignore', 'pipe', 'ignore'],
-      },
-    );
+    const stdout = execFileSync('git', ['-C', projectRoot, 'ls-files', '-co', '--exclude-standard', '--', '.'], {
+      encoding: 'utf-8',
+      maxBuffer: 25 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
     const found = new Set<string>();
     for (const line of stdout.split('\n')) {
       if (!line) continue;

@@ -9,20 +9,21 @@
 import { isVueSfcPath, type SyntaxNode, type Tree } from '../../source/ast.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { resolveImportPath } from '../../resolution/import-path-resolver.js';
-import {
-  buildUsageBody,
-  collectNamespaceMembers,
-  hasIdentifierUsage,
-} from '../../source/source-stripper.js';
+import { buildUsageBody, collectNamespaceMembers, hasIdentifierUsage } from '../../source/source-stripper.js';
 import type { ParsedSourceImport } from '../../domain/types.js';
-import { buildNamedImport, buildNamespaceImport, buildSideEffectImport, buildUsedImport, collectIdentifiersOutside, firstChildOfType, parseWithAstFallback, splitTopLevel } from '../utils.js';
+import {
+  buildNamedImport,
+  buildNamespaceImport,
+  buildSideEffectImport,
+  buildUsedImport,
+  collectIdentifiersOutside,
+  firstChildOfType,
+  parseWithAstFallback,
+  splitTopLevel,
+} from '../utils.js';
 import { collectVueNonScriptIdentifiers } from './vue-non-script-identifiers.js';
 
-export function parseJavaScriptImports(
-  db: ScipDatabase,
-  importerPath: string,
-  source: string,
-): ParsedSourceImport[] {
+export function parseJavaScriptImports(db: ScipDatabase, importerPath: string, source: string): ParsedSourceImport[] {
   return parseWithAstFallback(
     db,
     importerPath,
@@ -31,13 +32,9 @@ export function parseJavaScriptImports(
   );
 }
 
-function parseJavaScriptImportsRegex(
-  db: ScipDatabase,
-  importerPath: string,
-  source: string,
-): ParsedSourceImport[] {
-  return parseJavaScriptImportStatements(source)
-    .flatMap((statement) => parseJavaScriptImportStatement(
+function parseJavaScriptImportsRegex(db: ScipDatabase, importerPath: string, source: string): ParsedSourceImport[] {
+  return parseJavaScriptImportStatements(source).flatMap((statement) =>
+    parseJavaScriptImportStatement(
       db,
       importerPath,
       statement.clause,
@@ -45,14 +42,11 @@ function parseJavaScriptImportsRegex(
       statement.start,
       statement.end,
       source,
-    ));
+    ),
+  );
 }
 
-function parseJavaScriptImportsAst(
-  db: ScipDatabase,
-  importerPath: string,
-  tree: Tree,
-): ParsedSourceImport[] {
+function parseJavaScriptImportsAst(db: ScipDatabase, importerPath: string, tree: Tree): ParsedSourceImport[] {
   const usedNames = astImportUsedNames(db, importerPath, tree);
   const results: ParsedSourceImport[] = [];
   for (const node of tree.rootNode.descendantsOfType('import_statement')) {
@@ -61,11 +55,7 @@ function parseJavaScriptImportsAst(
   return results;
 }
 
-function astImportUsedNames(
-  db: ScipDatabase,
-  importerPath: string,
-  tree: Tree,
-): Set<string> {
+function astImportUsedNames(db: ScipDatabase, importerPath: string, tree: Tree): Set<string> {
   // Only IMPORT contexts are exclusions; value exports like `export function f()`
   // are also `export_statement` nodes, so excluding them here would make every
   // identifier used inside an exported function body look unused.
@@ -97,13 +87,7 @@ function parseAstImportNode(
     return [buildSideEffectImport('*', sourcePath)];
   }
 
-  return parseAstImportClause(
-    tree,
-    importClause,
-    sourcePath,
-    usedNames,
-    isTypeOnlyImportStatement(node.text),
-  );
+  return parseAstImportClause(tree, importClause, sourcePath, usedNames, isTypeOnlyImportStatement(node.text));
 }
 
 function parseAstImportClause(
@@ -169,9 +153,11 @@ function namedImports(
     if (!importedNode) continue;
     const importedName = importedNode.text;
     const localName = aliasNode?.text ?? importedName;
-    results.push(buildNamedImport(importedName, localName, sourcePath, usedNames, 'named', {
-      isTypeOnly: clauseTypeOnly || isTypeOnlyImportSpecifier(spec.text),
-    }));
+    results.push(
+      buildNamedImport(importedName, localName, sourcePath, usedNames, 'named', {
+        isTypeOnly: clauseTypeOnly || isTypeOnlyImportSpecifier(spec.text),
+      }),
+    );
   }
   return results;
 }
@@ -355,20 +341,24 @@ function parseImportBinding(
   }
 
   if (trimmed.startsWith('* as ')) {
-    return [{
-      importedName: '*',
-      localName: trimmed.slice(5).trim(),
-      kind: 'namespace',
-      isTypeOnly: clauseTypeOnly,
-    }];
+    return [
+      {
+        importedName: '*',
+        localName: trimmed.slice(5).trim(),
+        kind: 'namespace',
+        isTypeOnly: clauseTypeOnly,
+      },
+    ];
   }
 
-  return [{
-    importedName: 'default',
-    localName: trimmed,
-    kind: 'default',
-    isTypeOnly: clauseTypeOnly,
-  }];
+  return [
+    {
+      importedName: 'default',
+      localName: trimmed,
+      kind: 'default',
+      isTypeOnly: clauseTypeOnly,
+    },
+  ];
 }
 
 function splitImportClause(clause: string): [string, string | null] {

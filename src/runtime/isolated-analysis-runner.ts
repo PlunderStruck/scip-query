@@ -12,16 +12,12 @@ interface IsolatedJsonProcessOptions {
 // scip-query: ignore-wrapper — subprocess JSON handoff boundary shared by
 // health phases and diff-impact batches.
 export function runIsolatedJsonProcess<T>(opts: IsolatedJsonProcessOptions): T {
-  const result = spawnSync(
-    process.execPath,
-    [...process.execArgv, opts.cliPath, opts.command, ...(opts.args ?? [])],
-    {
-      cwd: process.cwd(),
-      env: opts.env ?? process.env,
-      encoding: 'utf8',
-      maxBuffer: opts.maxBuffer ?? 10 * 1024 * 1024,
-    },
-  );
+  const result = spawnSync(process.execPath, [...process.execArgv, opts.cliPath, opts.command, ...(opts.args ?? [])], {
+    cwd: process.cwd(),
+    env: opts.env ?? process.env,
+    encoding: 'utf8',
+    maxBuffer: opts.maxBuffer ?? 10 * 1024 * 1024,
+  });
   if (result.status !== 0) {
     const stderr = result.stderr.trim();
     throw new Error(`${opts.label} failed${stderr ? `:\n${stderr}` : ''}`);

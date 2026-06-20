@@ -4,17 +4,10 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { TYPESCRIPT_SEMANTIC_EXTENSIONS } from './source-kinds.js';
 
-const TSCONFIG_CANDIDATES = [
-  'tsconfig.json',
-  'tsconfig.app.json',
-  'tsconfig.node.json',
-  'tsconfig.base.json',
-];
+const TSCONFIG_CANDIDATES = ['tsconfig.json', 'tsconfig.app.json', 'tsconfig.node.json', 'tsconfig.base.json'];
 
 export function findNearestTsconfig(projectRoot: string, relativePath?: string): string | null {
-  const startDir = relativePath
-    ? path.dirname(path.join(projectRoot, relativePath))
-    : projectRoot;
+  const startDir = relativePath ? path.dirname(path.join(projectRoot, relativePath)) : projectRoot;
   let current = startDir;
   const root = path.resolve(projectRoot);
 
@@ -38,10 +31,7 @@ export function findNearestTsconfig(projectRoot: string, relativePath?: string):
 
 export function discoverTypeScriptTsconfigs(db: ScipDatabase): string[] {
   const projectRoot = db.config.projectRoot;
-  const found = new Set(discoverTypeScriptTsconfigsForProject(
-    projectRoot,
-    db.config.semantic?.typescript?.tsconfigs,
-  ));
+  const found = new Set(discoverTypeScriptTsconfigsForProject(projectRoot, db.config.semantic?.typescript?.tsconfigs));
 
   const documents = indexedDocumentPaths(db, {
     includeIgnored: false,
@@ -101,9 +91,7 @@ function discoverWorkspaceDirs(projectRoot: string): string[] {
     return [];
   }
 
-  const patterns = Array.isArray(parsed.workspaces)
-    ? parsed.workspaces
-    : parsed.workspaces?.packages ?? [];
+  const patterns = Array.isArray(parsed.workspaces) ? parsed.workspaces : (parsed.workspaces?.packages ?? []);
 
   return patterns.flatMap((pattern) => expandWorkspacePattern(projectRoot, pattern));
 }
@@ -136,9 +124,11 @@ function isDirectory(candidate: string): boolean {
 
 function isIgnoredTsconfig(projectRoot: string, tsconfigPath: string): boolean {
   const relative = path.relative(projectRoot, tsconfigPath).replace(/\\/g, '/');
-  return relative.startsWith('..')
-    || relative.includes('/node_modules/')
-    || relative.startsWith('node_modules/')
-    || relative.includes('/dist/')
-    || relative.startsWith('dist/');
+  return (
+    relative.startsWith('..') ||
+    relative.includes('/node_modules/') ||
+    relative.startsWith('node_modules/') ||
+    relative.includes('/dist/') ||
+    relative.startsWith('dist/')
+  );
 }

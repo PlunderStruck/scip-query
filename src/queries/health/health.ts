@@ -72,7 +72,7 @@ export const HEALTH_PHASES = [
   'suppressions',
 ] as const;
 
-export type HealthPhaseName = typeof HEALTH_PHASES[number];
+export type HealthPhaseName = (typeof HEALTH_PHASES)[number];
 
 type HealthPhaseResult =
   | { phase: 'overview'; statsResult: ReturnType<typeof stats>; warnings: string[] }
@@ -192,10 +192,7 @@ const HEALTH_PHASE_RUNNERS: Record<HealthPhaseName, HealthPhaseRunner> = {
  * - Consistent import patterns across sibling modules (not duplication)
  * - Barrel and orchestrator files deviating from sibling patterns (expected)
  */
-export function health(
-  db: ScipDatabase,
-  opts: { scope?: string; full?: boolean } = {},
-): HealthReport {
+export function health(db: ScipDatabase, opts: { scope?: string; full?: boolean } = {}): HealthReport {
   return withHealthRun(db, opts.full === true, (statsResult, budget) => {
     const analyses = runHealthAnalyses(db, opts.scope, statsResult, budget);
     return buildHealthReport(analyses);
@@ -232,26 +229,16 @@ export function healthReportFromPhases(phaseResults: HealthPhaseResult[]): Healt
 }
 
 function healthAnalysesFromPhases(phaseResults: readonly HealthPhaseResult[]): HealthAnalyses {
-  const overview = requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'overview' }>>(
-    phaseResults,
-    'overview',
-  );
+  const overview = requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'overview' }>>(phaseResults, 'overview');
   const analyses: HealthAnalyses = {
     statsResult: overview.statsResult,
     warnings: overview.warnings,
     dead: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'dead' }>>(phaseResults, 'dead').dead,
-    isolated: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'isolated' }>>(
-      phaseResults,
-      'isolated',
-    ).isolated,
-    realCycleCount: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'cycles' }>>(
-      phaseResults,
-      'cycles',
-    ).realCycleCount,
-    similarCount: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'similar' }>>(
-      phaseResults,
-      'similar',
-    ).similarCount,
+    isolated: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'isolated' }>>(phaseResults, 'isolated').isolated,
+    realCycleCount: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'cycles' }>>(phaseResults, 'cycles')
+      .realCycleCount,
+    similarCount: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'similar' }>>(phaseResults, 'similar')
+      .similarCount,
     reactComponentDuplicates: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'react-component-duplicates' }>>(
       phaseResults,
       'react-component-duplicates',
@@ -260,10 +247,9 @@ function healthAnalysesFromPhases(phaseResults: readonly HealthPhaseResult[]): H
       phaseResults,
       'react-hook-candidates',
     ).reactHookCandidates,
-    reactLargeComponentPressure: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'react-large-component-pressure' }>>(
-      phaseResults,
-      'react-large-component-pressure',
-    ).reactLargeComponentPressure,
+    reactLargeComponentPressure: requiredHealthPhase<
+      Extract<HealthPhaseResult, { phase: 'react-large-component-pressure' }>
+    >(phaseResults, 'react-large-component-pressure').reactLargeComponentPressure,
     vueComponentDuplicates: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'vue-component-duplicates' }>>(
       phaseResults,
       'vue-component-duplicates',
@@ -298,14 +284,12 @@ function healthAnalysesFromPhases(phaseResults: readonly HealthPhaseResult[]): H
       'complexity-hotspots',
     ).complexity,
     // Optional phases — older phase orchestrations may not run them.
-    gitEvidence: optionalHealthPhase<Extract<HealthPhaseResult, { phase: 'git-evidence' }>>(
-      phaseResults,
-      'git-evidence',
-    )?.gitEvidence ?? null,
-    suppressions: optionalHealthPhase<Extract<HealthPhaseResult, { phase: 'suppressions' }>>(
-      phaseResults,
-      'suppressions',
-    )?.suppressions ?? null,
+    gitEvidence:
+      optionalHealthPhase<Extract<HealthPhaseResult, { phase: 'git-evidence' }>>(phaseResults, 'git-evidence')
+        ?.gitEvidence ?? null,
+    suppressions:
+      optionalHealthPhase<Extract<HealthPhaseResult, { phase: 'suppressions' }>>(phaseResults, 'suppressions')
+        ?.suppressions ?? null,
   };
   return analyses;
 }
@@ -317,10 +301,7 @@ function optionalHealthPhase<T extends HealthPhaseResult>(
   return results.find((entry) => entry.phase === phase) as T | undefined;
 }
 
-function requiredHealthPhase<T extends HealthPhaseResult>(
-  results: readonly HealthPhaseResult[],
-  phase: T['phase'],
-): T {
+function requiredHealthPhase<T extends HealthPhaseResult>(results: readonly HealthPhaseResult[], phase: T['phase']): T {
   const result = results.find((entry) => entry.phase === phase);
   if (!result) throw new Error(`Missing health phase result: ${phase}`);
   return result as T;
@@ -337,66 +318,58 @@ function runHealthAnalyses(
   );
 }
 
-function summarizeHealthDead(
-  db: ScipDatabase,
-  scope: string | undefined,
-  budget: HealthBudget,
-): CountLocSummary {
+function summarizeHealthDead(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): CountLocSummary {
   return runHealthPhase(db, budget, 'dead', () => {
     const deadResult = dead(db, { scope, ...HEALTH_DETECTOR_PROFILES.dead, scanLimit: budget.candidateScanLimit });
     return summarizeLoc(filterHealthDeadSymbols(db, deadResult.symbols));
   });
 }
 
-function summarizeHealthIsolated(
-  db: ScipDatabase,
-  scope: string | undefined,
-  budget: HealthBudget,
-): CountLocSummary {
+function summarizeHealthIsolated(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): CountLocSummary {
   return runHealthPhase(db, budget, 'isolated', () => {
-    const isolatedResult = isolated(db, { scope, ...HEALTH_DETECTOR_PROFILES.isolated, scanLimit: budget.candidateScanLimit });
+    const isolatedResult = isolated(db, {
+      scope,
+      ...HEALTH_DETECTOR_PROFILES.isolated,
+      scanLimit: budget.candidateScanLimit,
+    });
     return summarizeLoc(filterHealthIsolatedSymbols(db, isolatedResult));
   });
 }
 
-function countRealHealthCycles(
-  db: ScipDatabase,
-  scope: string | undefined,
-  budget: HealthBudget,
-): number {
+function countRealHealthCycles(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): number {
   return runHealthPhase(db, budget, 'cycles', () => {
     const cycleResult = cycles(db, { scope });
     return cycleResult.filter((cycle) => cycle.kind === 'real').length;
   });
 }
 
-function countSimilarHealthCandidates(
-  db: ScipDatabase,
-  scope: string | undefined,
-  budget: HealthBudget,
-): number {
-  return runHealthPhase(db, budget, 'similar', () =>
-    similarAll(db, {
-      scope,
-      ...HEALTH_DETECTOR_PROFILES.similar,
-      limit: budget.candidateResultLimit,
-      scanLimit: budget.candidateScanLimit,
-    }).length,
+function countSimilarHealthCandidates(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): number {
+  return runHealthPhase(
+    db,
+    budget,
+    'similar',
+    () =>
+      similarAll(db, {
+        scope,
+        ...HEALTH_DETECTOR_PROFILES.similar,
+        limit: budget.candidateResultLimit,
+        scanLimit: budget.candidateScanLimit,
+      }).length,
   );
 }
 
-function countExtractionHealthCandidates(
-  db: ScipDatabase,
-  scope: string | undefined,
-  budget: HealthBudget,
-): number {
-  return runHealthPhase(db, budget, 'extract-candidates', () =>
-    extractCandidates(db, {
-      scope,
-      ...HEALTH_DETECTOR_PROFILES.extract,
-      limit: budget.candidateResultLimit,
-      scanLimit: budget.candidateScanLimit,
-    }).length,
+function countExtractionHealthCandidates(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): number {
+  return runHealthPhase(
+    db,
+    budget,
+    'extract-candidates',
+    () =>
+      extractCandidates(db, {
+        scope,
+        ...HEALTH_DETECTOR_PROFILES.extract,
+        limit: budget.candidateResultLimit,
+        scanLimit: budget.candidateScanLimit,
+      }).length,
   );
 }
 
@@ -490,11 +463,7 @@ function summarizeVueLargeViewPressure(
   });
 }
 
-function summarizeHealthWrappers(
-  db: ScipDatabase,
-  scope: string | undefined,
-  budget: HealthBudget,
-): CountLocSummary {
+function summarizeHealthWrappers(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): CountLocSummary {
   return summarizeHealthLocQuery(db, budget, 'wrapper-candidates', () =>
     wrapperCandidates(db, {
       scope,
@@ -575,11 +544,7 @@ function summarizeSuppressions(db: ScipDatabase, budget: HealthBudget): Suppress
   });
 }
 
-function summarizeHealthDrift(
-  db: ScipDatabase,
-  scope: string | undefined,
-  budget: HealthBudget,
-): DriftSummary {
+function summarizeHealthDrift(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): DriftSummary {
   return runHealthPhase(db, budget, 'drift', () => {
     const driftResult = drift(db, { scope, ...HEALTH_DETECTOR_PROFILES.drift });
     return {
@@ -614,18 +579,11 @@ function summarizeHealthComplexity(
   });
 }
 
-function healthBudget(
-  statsResult: ReturnType<typeof stats>,
-  full: boolean,
-): HealthBudget {
-  const isLargeIndex = statsResult.symbols >= LARGE_HEALTH_SYMBOL_THRESHOLD
-    || statsResult.documents >= LARGE_HEALTH_DOCUMENT_THRESHOLD;
-  const candidateResultLimit = full
-    ? Number.POSITIVE_INFINITY
-    : DEFAULT_HEALTH_CANDIDATE_RESULT_LIMIT;
-  const complexityResultLimit = full
-    ? Number.POSITIVE_INFINITY
-    : DEFAULT_HEALTH_COMPLEXITY_RESULT_LIMIT;
+function healthBudget(statsResult: ReturnType<typeof stats>, full: boolean): HealthBudget {
+  const isLargeIndex =
+    statsResult.symbols >= LARGE_HEALTH_SYMBOL_THRESHOLD || statsResult.documents >= LARGE_HEALTH_DOCUMENT_THRESHOLD;
+  const candidateResultLimit = full ? Number.POSITIVE_INFINITY : DEFAULT_HEALTH_CANDIDATE_RESULT_LIMIT;
+  const complexityResultLimit = full ? Number.POSITIVE_INFINITY : DEFAULT_HEALTH_COMPLEXITY_RESULT_LIMIT;
 
   if (!isLargeIndex || full) {
     return {
@@ -633,9 +591,10 @@ function healthBudget(
       candidateResultLimit,
       complexityResultLimit,
       releaseCachesBetweenPhases: true,
-      warnings: full && isLargeIndex
-        ? ['Large index detected; running health without candidate scan or result caps because --full was supplied.']
-        : [],
+      warnings:
+        full && isLargeIndex
+          ? ['Large index detected; running health without candidate scan or result caps because --full was supplied.']
+          : [],
     };
   }
 
@@ -656,12 +615,7 @@ function releaseHealthPhaseCaches(db: ScipDatabase, budget: HealthBudget): void 
   requestGarbageCollection();
 }
 
-function runHealthPhase<T>(
-  db: ScipDatabase,
-  budget: HealthBudget,
-  name: string,
-  analyze: () => T,
-): T {
+function runHealthPhase<T>(db: ScipDatabase, budget: HealthBudget, name: string, analyze: () => T): T {
   traceHealthPhase(name);
   try {
     return analyze();
@@ -689,9 +643,10 @@ function filterHealthDeadSymbols(
   symbols: Array<{ relativePath: string; symbol: string; kind: string; loc: number }>,
 ): Array<{ loc: number; relativePath: string }> {
   return symbols.filter(
-    (symbol) => !isEntrySurface(db, symbol.relativePath)
-      && !isRootedSymbol(db, symbol.symbol, symbol.relativePath)
-      && symbol.kind === 'dead-code',
+    (symbol) =>
+      !isEntrySurface(db, symbol.relativePath) &&
+      !isRootedSymbol(db, symbol.symbol, symbol.relativePath) &&
+      symbol.kind === 'dead-code',
   );
 }
 
@@ -700,8 +655,7 @@ function filterHealthIsolatedSymbols(
   symbols: Array<{ relativePath: string; symbol: string; loc: number }>,
 ): Array<{ loc: number; relativePath: string }> {
   return symbols.filter(
-    (symbol) => !isEntrySurface(db, symbol.relativePath)
-      && !isRootedSymbol(db, symbol.symbol, symbol.relativePath),
+    (symbol) => !isEntrySurface(db, symbol.relativePath) && !isRootedSymbol(db, symbol.symbol, symbol.relativePath),
   );
 }
 
@@ -771,7 +725,8 @@ function reactHookHealthScore(candidate: {
   });
   if (existingSharedAbstraction && concreteSignals <= 2) return 0;
   if (existingSharedAbstraction) return 0.5;
-  if (hasOnlyGenericBehavior(candidate.sharedState, candidate.sharedHandlers, candidate.sharedHandlerVerbs)) return 0.25;
+  if (hasOnlyGenericBehavior(candidate.sharedState, candidate.sharedHandlers, candidate.sharedHandlerVerbs))
+    return 0.25;
   return concreteSignals >= 2 ? 1 : 0.5;
 }
 
@@ -793,7 +748,8 @@ function vueComposableHealthScore(candidate: {
   });
   if (existingSharedAbstraction && concreteSignals <= 2) return 0;
   if (existingSharedAbstraction) return 0.5;
-  if (hasOnlyGenericBehavior(candidate.sharedBindings, candidate.sharedFunctions, candidate.sharedFunctionVerbs)) return 0.25;
+  if (hasOnlyGenericBehavior(candidate.sharedBindings, candidate.sharedFunctions, candidate.sharedFunctionVerbs))
+    return 0.25;
   return concreteSignals >= 2 ? 1 : 0.5;
 }
 
@@ -803,10 +759,12 @@ function concreteBehaviorSignalCount(parts: {
   lifecycle: readonly string[];
   functions: readonly string[];
 }): number {
-  return (parts.requests.length * 2)
-    + parts.lifecycle.length
-    + parts.namedState.filter((name) => !GENERIC_BEHAVIOR_NAMES.has(normalizeBehaviorName(name))).length
-    + Math.min(parts.functions.length, 3);
+  return (
+    parts.requests.length * 2 +
+    parts.lifecycle.length +
+    parts.namedState.filter((name) => !GENERIC_BEHAVIOR_NAMES.has(normalizeBehaviorName(name))).length +
+    Math.min(parts.functions.length, 3)
+  );
 }
 
 function hasOnlyGenericBehavior(
@@ -819,7 +777,11 @@ function hasOnlyGenericBehavior(
 }
 
 function normalizeBehaviorName(name: string): string {
-  return name.replace(/^handle/, '').replace(/^is/, '').replace(/^has/, '').toLowerCase();
+  return name
+    .replace(/^handle/, '')
+    .replace(/^is/, '')
+    .replace(/^has/, '')
+    .toLowerCase();
 }
 
 function roundHealthScoreCount(count: number): number {

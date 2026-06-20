@@ -28,7 +28,14 @@ export interface BottleneckResult {
 // Different intent, intentionally separate query.
 export function bottlenecks(
   db: ScipDatabase,
-  opts: { limit?: number; scope?: string; minFanIn?: number; minFanOut?: number; scanLimit?: number; semantic?: boolean } = {},
+  opts: {
+    limit?: number;
+    scope?: string;
+    minFanIn?: number;
+    minFanOut?: number;
+    scanLimit?: number;
+    semantic?: boolean;
+  } = {},
 ): BottleneckResult[] {
   const { limit = 20, scope, minFanIn = 2, minFanOut = 2, scanLimit } = opts;
   const index = new ProjectIndex(db);
@@ -49,14 +56,8 @@ export function bottlenecks(
     .slice(0, limit);
 }
 
-function bottleneckRowFor(
-  db: ScipDatabase,
-  definition: IndexedDefinition,
-  semantic: boolean,
-): BottleneckResult {
-  const fanIn = new Set(
-    callerRowsForSymbol(db, definition, { limit: 500, semantic }).map((row) => row.file),
-  ).size;
+function bottleneckRowFor(db: ScipDatabase, definition: IndexedDefinition, semantic: boolean): BottleneckResult {
+  const fanIn = new Set(callerRowsForSymbol(db, definition, { limit: 500, semantic }).map((row) => row.file)).size;
   const fanOut = new Set(
     getCalleeRowsForSymbol(db, definition, { limit: 500, semantic })
       .filter((row) => row.file !== definition.relativePath)

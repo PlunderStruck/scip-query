@@ -29,9 +29,10 @@ export async function maybePrintUpdateNotice(opts: UpdateNoticeOptions = {}): Pr
   const now = opts.now ?? Date.now();
   const currentVersion = opts.currentVersion ?? cliVersion;
   const cached = readUpdateNoticeCache(cacheDir);
-  const latestVersion = cached && now - cached.checkedAt < UPDATE_CHECK_INTERVAL_MS
-    ? cached.latestVersion
-    : await refreshLatestVersion(cacheDir, opts.fetchLatestVersion ?? fetchLatestVersion, now);
+  const latestVersion =
+    cached && now - cached.checkedAt < UPDATE_CHECK_INTERVAL_MS
+      ? cached.latestVersion
+      : await refreshLatestVersion(cacheDir, opts.fetchLatestVersion ?? fetchLatestVersion, now);
 
   if (!latestVersion || !isNewerVersion(latestVersion, currentVersion)) return;
 
@@ -110,7 +111,7 @@ async function fetchLatestVersion(): Promise<string | null> {
   });
   if (!response.ok) return null;
 
-  const body = await response.json() as { version?: unknown };
+  const body = (await response.json()) as { version?: unknown };
   return typeof body.version === 'string' ? body.version : null;
 }
 

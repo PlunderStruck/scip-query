@@ -33,21 +33,43 @@ import { indexedDocumentPaths } from '../storage/scip-documents.js';
  */
 export const ALL_SOURCE_EXTENSIONS: readonly string[] = [
   // JS/TS family
-  '.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs',
+  '.ts',
+  '.tsx',
+  '.mts',
+  '.cts',
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.cjs',
   // Vue SFCs
   '.vue',
   // Other AST-supported languages
-  '.rs', '.py', '.pyi',
+  '.rs',
+  '.py',
+  '.pyi',
   // JVM
-  '.java', '.kt', '.kts', '.scala', '.sc',
+  '.java',
+  '.kt',
+  '.kts',
+  '.scala',
+  '.sc',
   // Ruby
   '.rb',
   // C/C++
-  '.c', '.h', '.cc', '.cpp', '.cxx', '.hpp', '.hh', '.hxx',
+  '.c',
+  '.h',
+  '.cc',
+  '.cpp',
+  '.cxx',
+  '.hpp',
+  '.hh',
+  '.hxx',
   // .NET
-  '.cs', '.vb',
+  '.cs',
+  '.vb',
   // PHP / Dart
-  '.php', '.dart',
+  '.php',
+  '.dart',
 ];
 
 /**
@@ -63,10 +85,23 @@ const DEFAULT_EXTENSION_CACHE_KEY = [...DEFAULT_EXTENSION_SET].sort().join(',');
  * walks. Owned here so every consumer agrees.
  */
 export const SKIP_DIRS: ReadonlySet<string> = new Set([
-  'node_modules', '.git', 'target', 'dist', 'build',
-  '.next', '.nuxt', '.cache', '.turbo', 'out', 'coverage',
-  '.scipquery-cache', '__pycache__', '.venv', 'venv',
-  '.idea', '.vscode',
+  'node_modules',
+  '.git',
+  'target',
+  'dist',
+  'build',
+  '.next',
+  '.nuxt',
+  '.cache',
+  '.turbo',
+  'out',
+  'coverage',
+  '.scipquery-cache',
+  '__pycache__',
+  '.venv',
+  'venv',
+  '.idea',
+  '.vscode',
 ]);
 
 export interface SourceFilesetOptions {
@@ -92,31 +127,28 @@ export interface SourceFilesetOptions {
 // scip-query: ignore-extract — this is the canonical source-file set builder:
 // indexed documents, on-disk fallback files, ignore rules, and extension
 // filtering must agree for every source-scanning query.
-export function getSourceFiles(
-  db: ScipDatabase,
-  opts: SourceFilesetOptions = {},
-): string[] {
+export function getSourceFiles(db: ScipDatabase, opts: SourceFilesetOptions = {}): string[] {
   const includeIndexed = opts.includeIndexed ?? true;
   const includeAuxiliary = opts.includeAuxiliary ?? true;
   const customExtensions = opts.extensions?.map((e) => e.toLowerCase());
   const extensions = customExtensions ? new Set(customExtensions) : DEFAULT_EXTENSION_SET;
   const extensionKey = customExtensions ? [...extensions].sort().join(',') : DEFAULT_EXTENSION_CACHE_KEY;
   const cacheKey = `${includeIndexed ? '1' : '0'}|${includeAuxiliary ? '1' : '0'}|${extensionKey}`;
-    return SOURCE_FILES_CACHE.get(db, cacheKey, () => {
-      const out = new Set<string>();
-      if (includeIndexed) {
-        for (const relativePath of indexedDocumentPaths(db, { includeIgnored: false })) {
-          if (!extensions.has(extname(relativePath).toLowerCase())) continue;
+  return SOURCE_FILES_CACHE.get(db, cacheKey, () => {
+    const out = new Set<string>();
+    if (includeIndexed) {
+      for (const relativePath of indexedDocumentPaths(db, { includeIgnored: false })) {
+        if (!extensions.has(extname(relativePath).toLowerCase())) continue;
         out.add(relativePath);
-        }
       }
-      if (includeAuxiliary) {
-        for (const file of listProjectSources(db.config.projectRoot, extensions)) {
-          if (db.isIgnored(file)) continue;
-          if (includeIndexed && out.has(file)) continue;
-          out.add(file);
-        }
+    }
+    if (includeAuxiliary) {
+      for (const file of listProjectSources(db.config.projectRoot, extensions)) {
+        if (db.isIgnored(file)) continue;
+        if (includeIndexed && out.has(file)) continue;
+        out.add(file);
       }
+    }
     return [...out].sort();
   });
 }

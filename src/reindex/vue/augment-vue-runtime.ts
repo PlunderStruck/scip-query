@@ -34,7 +34,10 @@ export interface TsModule {
   };
   ScriptKind: Record<string, number>;
   ScriptSnapshot: { fromString(text: string): TsScriptSnapshot };
-  readConfigFile(configPath: string, readFile: (path: string) => string | undefined): {
+  readConfigFile(
+    configPath: string,
+    readFile: (path: string) => string | undefined,
+  ): {
     config?: unknown;
     error?: unknown;
   };
@@ -62,15 +65,21 @@ export interface TsLanguageService {
     fileName: string,
     position: number,
     filesToSearch: string[],
-  ): {
-    fileName: string;
-    highlightSpans: { textSpan: { start: number; length: number } }[];
-  }[] | undefined;
+  ):
+    | {
+        fileName: string;
+        highlightSpans: { textSpan: { start: number; length: number } }[];
+      }[]
+    | undefined;
   getProgram(): { getSourceFile(fileName: string): unknown } | undefined;
 }
 
 export interface VueCoreModule {
-  createParsedCommandLine(ts: TsModule, host: unknown, configFileName: string): {
+  createParsedCommandLine(
+    ts: TsModule,
+    host: unknown,
+    configFileName: string,
+  ): {
     vueOptions: Record<string, unknown>;
   };
   createGlobalTypesWriter?(options: unknown, writeFile: (path: string, data: string) => void): unknown;
@@ -83,11 +92,7 @@ export interface VueCoreModule {
   ): {
     getLanguageId(id: string): string | undefined;
   };
-  createLanguage(
-    plugins: unknown[],
-    scripts: Map<string, unknown>,
-    sync: (id: string) => void,
-  ): VolarLanguage;
+  createLanguage(plugins: unknown[], scripts: Map<string, unknown>, sync: (id: string) => void): VolarLanguage;
 }
 
 export interface VolarTsModule {
@@ -167,7 +172,8 @@ interface DefinitionRangeLookup {
 
 function clearVueDocumentChunks(db: Database.Database): void {
   const tx = db.transaction(() => {
-    db.prepare(`
+    db.prepare(
+      `
       DELETE FROM mentions
       WHERE chunk_id IN (
         SELECT c.id
@@ -175,15 +181,18 @@ function clearVueDocumentChunks(db: Database.Database): void {
         JOIN documents d ON d.id = c.document_id
         WHERE d.language = 'vue' OR d.relative_path LIKE '%.vue'
       )
-    `).run();
-    db.prepare(`
+    `,
+    ).run();
+    db.prepare(
+      `
       DELETE FROM chunks
       WHERE document_id IN (
         SELECT id
         FROM documents
         WHERE language = 'vue' OR relative_path LIKE '%.vue'
       )
-    `).run();
+    `,
+    ).run();
   });
   tx();
 }
@@ -191,12 +200,16 @@ function clearVueDocumentChunks(db: Database.Database): void {
 // scip-query: ignore-wrapper — DB read-side for the Vue augmentation input set;
 // callers should not duplicate the Vue document predicate.
 export function listVueDocumentFiles(db: Database.Database, projectRoot: string): string[] {
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT relative_path AS relativePath
     FROM documents
     WHERE language = 'vue' OR relative_path LIKE '%.vue'
     ORDER BY relative_path
-  `).all() as { relativePath: string }[];
+  `,
+    )
+    .all() as { relativePath: string }[];
   return rows.map((row) => resolve(projectRoot, row.relativePath));
 }
 
@@ -212,13 +225,7 @@ export function createVueLanguageContext(projectRoot: string, configPath: string
   const language = createVolarLanguage(vueCore, ts, vuePlugin);
   const projectHost = createVueProjectHost(configDir, parsed);
 
-  const { languageServiceHost } = volarTs.createLanguageServiceHost(
-    ts,
-    ts.sys,
-    language,
-    (id) => id,
-    projectHost,
-  );
+  const { languageServiceHost } = volarTs.createLanguageServiceHost(ts, ts.sys, language, (id) => id, projectHost);
   const languageService = ts.createLanguageService(languageServiceHost);
 
   return {
@@ -233,17 +240,9 @@ export function createVueLanguageContext(projectRoot: string, configPath: string
 function loadVueLanguageDependencies(projectRoot: string): VueLanguageDependencies {
   const requireFromProject = createRequire(pathToFileURL(join(projectRoot, 'package.json')).href);
   return {
-    vueCore: requireVueAugmentDependency(
-      requireFromProject,
-      '@vue/language-core',
-      projectRoot,
-    ) as VueCoreModule,
+    vueCore: requireVueAugmentDependency(requireFromProject, '@vue/language-core', projectRoot) as VueCoreModule,
     ts: requireVueAugmentDependency(requireFromProject, 'typescript', projectRoot) as TsModule,
-    volarTs: requireVueAugmentDependency(
-      requireFromProject,
-      '@volar/typescript',
-      projectRoot,
-    ) as VolarTsModule,
+    volarTs: requireVueAugmentDependency(requireFromProject, '@volar/typescript', projectRoot) as VolarTsModule,
   };
 }
 
@@ -303,10 +302,7 @@ function createVolarLanguage(
   return language;
 }
 
-function createVueProjectHost(
-  configDir: string,
-  parsed: ReturnType<TsModule['parseJsonConfigFileContent']>,
-): unknown {
+function createVueProjectHost(configDir: string, parsed: ReturnType<TsModule['parseJsonConfigFileContent']>): unknown {
   return {
     getCurrentDirectory: () => configDir,
     getCompilationSettings: () => parsed.options,
@@ -324,13 +320,11 @@ function requireVueAugmentDependency(
   try {
     return requireFromProject(packageName);
   } catch (err) {
-    const code = typeof err === 'object' && err !== null && 'code' in err
-      ? (err as { code?: unknown }).code
-      : null;
+    const code = typeof err === 'object' && err !== null && 'code' in err ? (err as { code?: unknown }).code : null;
     if (code === 'MODULE_NOT_FOUND') {
       throw new Error(
         `Vue augmentation requires ${packageName} to be installed in ${projectRoot}. ` +
-        'Install Vue/Volar dependencies for that project, then rerun augment-vue.',
+          'Install Vue/Volar dependencies for that project, then rerun augment-vue.',
         { cause: err },
       );
     }
@@ -362,7 +356,9 @@ export function createSymbolLookup(
 }
 
 function loadDefinitionRanges(db: Database.Database): Map<string, DefinitionRangeLookup> {
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT
       d.relative_path AS relativePath,
       der.start_line AS startLine,
@@ -371,7 +367,9 @@ function loadDefinitionRanges(db: Database.Database): Map<string, DefinitionRang
     FROM defn_enclosing_ranges der
     JOIN documents d ON d.id = der.document_id
     ORDER BY d.relative_path, (der.end_line - der.start_line) DESC
-  `).all() as {
+  `,
+    )
+    .all() as {
     relativePath: string;
     startLine: number;
     endLine: number;
@@ -541,8 +539,9 @@ export function resolveVueDefinitionSymbolId(
 ): number | null {
   if (definition.fileName.endsWith('.vue')) {
     const sourceScript = context.language.scripts.get(definition.fileName);
-    const serviceScript = sourceScript?.generated?.languagePlugin.typescript
-      ?.getServiceScript(sourceScript.generated.root)?.code;
+    const serviceScript = sourceScript?.generated?.languagePlugin.typescript?.getServiceScript(
+      sourceScript.generated.root,
+    )?.code;
     if (sourceScript && serviceScript) {
       const map = context.language.maps.get(serviceScript, sourceScript);
       const sourceLoc = firstSourceOffset(map, definition.textSpan.start);
@@ -582,10 +581,7 @@ function occurrenceKey(occurrence: ResolvedOccurrence): string {
   ].join(':');
 }
 
-function insertOccurrencesWithoutTransaction(
-  db: Database.Database,
-  occurrences: ResolvedOccurrence[],
-): number {
+function insertOccurrencesWithoutTransaction(db: Database.Database, occurrences: ResolvedOccurrence[]): number {
   const docIds = selectDocumentIds(db, [...new Set(occurrences.map((occurrence) => occurrence.sourceFile))]);
   const insertChunk = db.prepare(`
     INSERT INTO chunks (document_id, chunk_index, start_line, end_line, occurrences)
@@ -617,10 +613,34 @@ function insertOccurrencesWithoutTransaction(
 export function* identifierTokens(source: string): Generator<VueIdentifierToken> {
   const re = /\b[A-Za-z_$][A-Za-z0-9_$]*\b/g;
   const ignored = new Set([
-    'script', 'setup', 'template', 'style', 'lang', 'scoped', 'true', 'false',
-    'null', 'undefined', 'const', 'let', 'var', 'import', 'from', 'export',
-    'return', 'if', 'else', 'for', 'while', 'function', 'class', 'type',
-    'interface', 'as', 'await', 'async',
+    'script',
+    'setup',
+    'template',
+    'style',
+    'lang',
+    'scoped',
+    'true',
+    'false',
+    'null',
+    'undefined',
+    'const',
+    'let',
+    'var',
+    'import',
+    'from',
+    'export',
+    'return',
+    'if',
+    'else',
+    'for',
+    'while',
+    'function',
+    'class',
+    'type',
+    'interface',
+    'as',
+    'await',
+    'async',
   ]);
   let match: RegExpExecArray | null;
   while ((match = re.exec(source))) {
@@ -744,9 +764,11 @@ function selectDocumentIds(db: Database.Database, relativePaths: readonly string
   const chunkSize = 500;
   for (let start = 0; start < relativePaths.length; start += chunkSize) {
     const chunk = relativePaths.slice(start, start + chunkSize);
-    const rows = db.prepare(
-      `SELECT id, relative_path AS relativePath FROM documents WHERE relative_path IN (${chunk.map(() => '?').join(',')})`,
-    ).all(...chunk) as { id: number; relativePath: string }[];
+    const rows = db
+      .prepare(
+        `SELECT id, relative_path AS relativePath FROM documents WHERE relative_path IN (${chunk.map(() => '?').join(',')})`,
+      )
+      .all(...chunk) as { id: number; relativePath: string }[];
     for (const row of rows) {
       ids.set(row.relativePath, row.id);
     }
@@ -779,6 +801,9 @@ function findVueSymbolId(
 }
 
 function vueDefaultExportSymbol(packageName: string, version: string, relativePath: string): string {
-  const escaped = relativePath.split('/').map((part) => `\`${part.replaceAll('`', '')}\``).join('/');
+  const escaped = relativePath
+    .split('/')
+    .map((part) => `\`${part.replaceAll('`', '')}\``)
+    .join('/');
   return `scip-vue npm ${packageName} ${version} ${escaped}/default.`;
 }

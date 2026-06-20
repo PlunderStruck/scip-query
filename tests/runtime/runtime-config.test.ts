@@ -54,27 +54,27 @@ describe('loadProjectConfig', () => {
 describe('validateProjectConfig', () => {
   it('requires structured suppressions to include an identity and reason', () => {
     const diagnostics = validateProjectConfig({
-      suppressions: [
-        { reason: '' },
-        { check: 'echo', reason: 'accepted duplicate', expiresAt: 'not-a-date' },
-      ],
+      suppressions: [{ reason: '' }, { check: 'echo', reason: 'accepted duplicate', expiresAt: 'not-a-date' }],
     });
 
-    expect(diagnostics).toEqual(expect.arrayContaining([
-      expect.objectContaining({ level: 'error', path: 'suppressions[0].reason' }),
-      expect.objectContaining({ level: 'error', path: 'suppressions[0]' }),
-      expect.objectContaining({ level: 'error', path: 'suppressions[1].expiresAt' }),
-    ]));
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ level: 'error', path: 'suppressions[0].reason' }),
+        expect.objectContaining({ level: 'error', path: 'suppressions[0]' }),
+        expect.objectContaining({ level: 'error', path: 'suppressions[1].expiresAt' }),
+      ]),
+    );
   });
 
   it('warns when a structured suppression has expired', () => {
-    const diagnostics = validateProjectConfig({
-      suppressions: [{ id: 'SQABC123DEF456', reason: 'temporary', expiresAt: '2020-01-01T00:00:00.000Z' }],
-    }, { now: new Date('2026-06-13T00:00:00.000Z') });
+    const diagnostics = validateProjectConfig(
+      {
+        suppressions: [{ id: 'SQABC123DEF456', reason: 'temporary', expiresAt: '2020-01-01T00:00:00.000Z' }],
+      },
+      { now: new Date('2026-06-13T00:00:00.000Z') },
+    );
 
-    expect(diagnostics).toEqual([
-      expect.objectContaining({ level: 'warning', path: 'suppressions[0].expiresAt' }),
-    ]);
+    expect(diagnostics).toEqual([expect.objectContaining({ level: 'warning', path: 'suppressions[0].expiresAt' })]);
   });
 
   it('requires declared coupling groups to name at least two files', () => {
@@ -85,12 +85,14 @@ describe('validateProjectConfig', () => {
       ],
     });
 
-    expect(diagnostics).toEqual(expect.arrayContaining([
-      expect.objectContaining({ level: 'error', path: 'declaredCouplings[0].name' }),
-      expect.objectContaining({ level: 'error', path: 'declaredCouplings[0].files' }),
-      expect.objectContaining({ level: 'error', path: 'declaredCouplings[0].reason' }),
-      expect.objectContaining({ level: 'error', path: 'declaredCouplings[1].files[1]' }),
-    ]));
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ level: 'error', path: 'declaredCouplings[0].name' }),
+        expect.objectContaining({ level: 'error', path: 'declaredCouplings[0].files' }),
+        expect.objectContaining({ level: 'error', path: 'declaredCouplings[0].reason' }),
+        expect.objectContaining({ level: 'error', path: 'declaredCouplings[1].files[1]' }),
+      ]),
+    );
   });
 });
 
@@ -123,9 +125,11 @@ describe('addFindingSuppression', () => {
   it('rejects suppressions without a reason', () => {
     const projectRoot = createProject();
 
-    expect(() => addFindingSuppression(projectRoot, {
-      id: 'SQABC123DEF456',
-      reason: '',
-    })).toThrow(/reason is required/);
+    expect(() =>
+      addFindingSuppression(projectRoot, {
+        id: 'SQABC123DEF456',
+        reason: '',
+      }),
+    ).toThrow(/reason is required/);
   });
 });

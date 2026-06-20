@@ -1,17 +1,6 @@
 import Database from 'better-sqlite3';
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  it,
-} from 'vitest';
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../src/storage/db.js';
@@ -46,25 +35,12 @@ function createPythonFixtureProject(projectRoot: string): void {
 
   writeFileSync(
     join(projectRoot, 'analysis.py'),
-    [
-      'from simulation import GardenSimulation',
-      '',
-      'def inspect():',
-      '    return GardenSimulation',
-      '',
-    ].join('\n'),
+    ['from simulation import GardenSimulation', '', 'def inspect():', '    return GardenSimulation', ''].join('\n'),
   );
 
   writeFileSync(
     join(projectRoot, 'simulation.py'),
-    [
-      'class GardenSimulation:',
-      '    pass',
-      '',
-      'def helper():',
-      '    return 1',
-      '',
-    ].join('\n'),
+    ['class GardenSimulation:', '    pass', '', 'def helper():', '    return 1', ''].join('\n'),
   );
 
   writeFileSync(
@@ -141,11 +117,17 @@ function createPythonFixtureDb(dbPath: string): void {
 
   const insertSymbol = sqliteDb.prepare(
     `INSERT INTO global_symbols (id, symbol, display_name, kind, documentation)
-     VALUES (?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?)`,
   );
 
   insertSymbol.run(1, 'scip-python python project 0.1.0 simulation/', 'simulation', null, 'module');
-  insertSymbol.run(2, 'scip-python python project 0.1.0 simulation/GardenSimulation#', 'GardenSimulation', null, 'class GardenSimulation:');
+  insertSymbol.run(
+    2,
+    'scip-python python project 0.1.0 simulation/GardenSimulation#',
+    'GardenSimulation',
+    null,
+    'class GardenSimulation:',
+  );
   insertSymbol.run(3, 'scip-python python project 0.1.0 simulation/helper().', 'helper', null, 'def helper():');
 
   run(`
@@ -241,12 +223,7 @@ function createPythonCallFixtureProject(projectRoot: string): void {
 
   writeFileSync(
     join(projectRoot, 'db_helpers.ts'),
-    [
-      'export function exists() {',
-      '  return true;',
-      '}',
-      '',
-    ].join('\n'),
+    ['export function exists() {', '  return true;', '}', ''].join('\n'),
   );
 }
 
@@ -313,19 +290,61 @@ function createPythonCallFixtureDb(dbPath: string): void {
 
   const insertSymbol = sqliteDb.prepare(
     `INSERT INTO global_symbols (id, symbol, display_name, kind, documentation)
-     VALUES (?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?)`,
   );
 
   insertSymbol.run(1, 'scip-python python project 0.1.0 simulation/', 'simulation', null, 'module');
-  insertSymbol.run(2, 'scip-python python project 0.1.0 simulation/GardenSimulation#', 'GardenSimulation', null, 'class GardenSimulation:');
-  insertSymbol.run(3, 'scip-python python project 0.1.0 simulation/GardenSimulation#advance_cycle().', 'advance_cycle', null, 'def advance_cycle(self):');
-  insertSymbol.run(4, 'scip-python python project 0.1.0 simulation/GardenSimulation#_apply_weather().', '_apply_weather', null, 'def _apply_weather(self):');
-  insertSymbol.run(5, 'scip-python python project 0.1.0 simulation/GardenSimulation#_apply_weeds().', '_apply_weeds', null, 'def _apply_weeds(self):');
-  insertSymbol.run(6, 'scip-python python project 0.1.0 simulation/GardenSimulation#recalculate_mood().', 'recalculate_mood', null, 'def recalculate_mood(self):');
+  insertSymbol.run(
+    2,
+    'scip-python python project 0.1.0 simulation/GardenSimulation#',
+    'GardenSimulation',
+    null,
+    'class GardenSimulation:',
+  );
+  insertSymbol.run(
+    3,
+    'scip-python python project 0.1.0 simulation/GardenSimulation#advance_cycle().',
+    'advance_cycle',
+    null,
+    'def advance_cycle(self):',
+  );
+  insertSymbol.run(
+    4,
+    'scip-python python project 0.1.0 simulation/GardenSimulation#_apply_weather().',
+    '_apply_weather',
+    null,
+    'def _apply_weather(self):',
+  );
+  insertSymbol.run(
+    5,
+    'scip-python python project 0.1.0 simulation/GardenSimulation#_apply_weeds().',
+    '_apply_weeds',
+    null,
+    'def _apply_weeds(self):',
+  );
+  insertSymbol.run(
+    6,
+    'scip-python python project 0.1.0 simulation/GardenSimulation#recalculate_mood().',
+    'recalculate_mood',
+    null,
+    'def recalculate_mood(self):',
+  );
   insertSymbol.run(7, 'scip-python python project 0.1.0 app/run().', 'run', null, 'def run():');
   insertSymbol.run(8, 'scip-python python project 0.1.0 analysis/inspect().', 'inspect', null, 'def inspect():');
-  insertSymbol.run(9, 'scip-python python project 0.1.0 test_simulation/test_model().', 'test_model', null, 'def test_model():');
-  insertSymbol.run(10, 'scip-typescript npm project 0.1.0 `db_helpers.ts`/exists().', 'exists', 23, 'function exists(): boolean');
+  insertSymbol.run(
+    9,
+    'scip-python python project 0.1.0 test_simulation/test_model().',
+    'test_model',
+    null,
+    'def test_model():',
+  );
+  insertSymbol.run(
+    10,
+    'scip-typescript npm project 0.1.0 `db_helpers.ts`/exists().',
+    'exists',
+    23,
+    'function exists(): boolean',
+  );
 
   run(`
     INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
@@ -391,10 +410,12 @@ describe('python repo accuracy regressions', () => {
   });
 
   it('parses Python imports for imports/imported-by/unused-imports fallback', () => {
-    expect(imports(db, 'app.py').map((result) => ({
-      shortName: result.shortName,
-      fromFile: result.fromFile,
-    }))).toEqual([
+    expect(
+      imports(db, 'app.py').map((result) => ({
+        shortName: result.shortName,
+        fromFile: result.fromFile,
+      })),
+    ).toEqual([
       { shortName: 'asyncio as aio', fromFile: '(external)' },
       { shortName: 'json as unused_json', fromFile: '(external)' },
       { shortName: 'GardenSimulation', fromFile: 'simulation.py' },
@@ -407,9 +428,7 @@ describe('python repo accuracy regressions', () => {
       'tests/test_simulation.py',
     ]);
 
-    expect(unusedImports(db, 'app.py').map((result) => result.shortName)).toEqual([
-      'json as unused_json',
-    ]);
+    expect(unusedImports(db, 'app.py').map((result) => result.shortName)).toEqual(['json as unused_json']);
   });
 
   it('does not invent layer violations for flat root-level Python modules or tests', () => {
@@ -422,11 +441,9 @@ describe('python repo accuracy regressions', () => {
   it('resolves file-oriented commands to the exact Python file instead of fuzzy matches', () => {
     const symbolNames = symbols(db, 'simulation.py').map((result) => result.shortName);
     expect(symbolNames).toHaveLength(3);
-    expect(symbolNames).toEqual(expect.arrayContaining([
-      'simulation',
-      'simulation:GardenSimulation',
-      'simulation:helper()',
-    ]));
+    expect(symbolNames).toEqual(
+      expect.arrayContaining(['simulation', 'simulation:GardenSimulation', 'simulation:helper()']),
+    );
 
     // outline returns a tree — root is the module, children are nested under it
     const roots = outline(db, 'simulation.py');
@@ -435,11 +452,9 @@ describe('python repo accuracy regressions', () => {
     }
     const outlineNames = collectNames(roots);
     expect(outlineNames).toHaveLength(3);
-    expect(outlineNames).toEqual(expect.arrayContaining([
-      'simulation',
-      'simulation:GardenSimulation',
-      'simulation:helper()',
-    ]));
+    expect(outlineNames).toEqual(
+      expect.arrayContaining(['simulation', 'simulation:GardenSimulation', 'simulation:helper()']),
+    );
 
     const result = system(db, 'simulation.py');
     expect(result.files).toEqual(['simulation.py']);
@@ -447,13 +462,9 @@ describe('python repo accuracy regressions', () => {
   });
 
   it('infers useful kinds when the Python index omits kind metadata', () => {
-    expect(byKind(db, 'class').map((result) => result.shortName)).toEqual([
-      'simulation:GardenSimulation',
-    ]);
+    expect(byKind(db, 'class').map((result) => result.shortName)).toEqual(['simulation:GardenSimulation']);
 
-    expect(byKind(db, 'function').map((result) => result.shortName)).toEqual([
-      'simulation:helper()',
-    ]);
+    expect(byKind(db, 'function').map((result) => result.shortName)).toEqual(['simulation:helper()']);
 
     expect(kindCounts(db)).toEqual([
       { kind: 9, kindName: 'Class', count: 1 },
@@ -463,9 +474,7 @@ describe('python repo accuracy regressions', () => {
   });
 
   it('resolves fan-in against the exact Python symbol', () => {
-    expect(fanIn(db, 'GardenSimulation')).toEqual([
-      { name: 'simulation:GardenSimulation', count: 3 },
-    ]);
+    expect(fanIn(db, 'GardenSimulation')).toEqual([{ name: 'simulation:GardenSimulation', count: 3 }]);
   });
 
   it('falls back to Python source calls when the index omits function-internal mentions', () => {

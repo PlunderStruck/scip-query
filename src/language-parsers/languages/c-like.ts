@@ -10,13 +10,15 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { resolveCLikeImportPath } from '../../resolution/import-path-resolver.js';
 import { hasIdentifierUsage } from '../../source/source-stripper.js';
 import type { ParsedSourceImport } from '../../domain/types.js';
-import { buildNamedImport, buildUsedImport, collectIdentifiersOutside, parseImportLineMatches, parseWithAstFallback } from '../utils.js';
+import {
+  buildNamedImport,
+  buildUsedImport,
+  collectIdentifiersOutside,
+  parseImportLineMatches,
+  parseWithAstFallback,
+} from '../utils.js';
 
-export function parseCLikeImports(
-  db: ScipDatabase,
-  importerPath: string,
-  source: string,
-): ParsedSourceImport[] {
+export function parseCLikeImports(db: ScipDatabase, importerPath: string, source: string): ParsedSourceImport[] {
   return parseWithAstFallback(
     db,
     importerPath,
@@ -25,33 +27,23 @@ export function parseCLikeImports(
   );
 }
 
-function parseCLikeImportsRegex(
-  db: ScipDatabase,
-  importerPath: string,
-  source: string,
-): ParsedSourceImport[] {
-  return parseImportLineMatches(
-    source,
-    /^[ \t]*#include\s+[<"]([^">]+)[">]\s*$/gm,
-    (match, body) => {
-      const specifier = match[1]?.trim();
-      if (!specifier) return [];
-      const localName = basename(specifier).replace(/\.[^.]+$/, '');
-      return [buildUsedImport(
+function parseCLikeImportsRegex(db: ScipDatabase, importerPath: string, source: string): ParsedSourceImport[] {
+  return parseImportLineMatches(source, /^[ \t]*#include\s+[<"]([^">]+)[">]\s*$/gm, (match, body) => {
+    const specifier = match[1]?.trim();
+    if (!specifier) return [];
+    const localName = basename(specifier).replace(/\.[^.]+$/, '');
+    return [
+      buildUsedImport(
         specifier,
         localName,
         resolveCLikeImportPath(db, importerPath, specifier),
         hasIdentifierUsage(body, localName),
-      )];
-    },
-  );
+      ),
+    ];
+  });
 }
 
-function parseCLikeImportsAst(
-  db: ScipDatabase,
-  importerPath: string,
-  tree: Tree,
-): ParsedSourceImport[] {
+function parseCLikeImportsAst(db: ScipDatabase, importerPath: string, tree: Tree): ParsedSourceImport[] {
   const usedNames = collectIdentifiersOutside(tree, new Set(['preproc_include']));
   const results: ParsedSourceImport[] = [];
 
@@ -74,12 +66,9 @@ function parseCLikeImportsAst(
     if (!specifier) continue;
 
     const localName = basename(specifier).replace(/\.[^.]+$/, '');
-    results.push(buildNamedImport(
-      specifier,
-      localName,
-      resolveCLikeImportPath(db, importerPath, specifier),
-      usedNames,
-    ));
+    results.push(
+      buildNamedImport(specifier, localName, resolveCLikeImportPath(db, importerPath, specifier), usedNames),
+    );
   }
   return results;
 }

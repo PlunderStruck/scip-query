@@ -74,43 +74,175 @@ const BUILTIN_TAGS = new Set([
 ]);
 
 const NATIVE_HTML_TAGS = new Set([
-  'a', 'abbr', 'address', 'area', 'article', 'aside', 'audio', 'b', 'base',
-  'bdi', 'bdo', 'blockquote', 'body', 'br', 'button', 'canvas', 'caption',
-  'cite', 'code', 'col', 'colgroup', 'data', 'datalist', 'dd', 'del',
-  'details', 'dfn', 'dialog', 'div', 'dl', 'dt', 'em', 'embed', 'fieldset',
-  'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5',
-  'h6', 'head', 'header', 'hgroup', 'hr', 'html', 'i', 'iframe', 'img',
-  'input', 'ins', 'kbd', 'label', 'legend', 'li', 'link', 'main', 'map',
-  'mark', 'menu', 'meta', 'meter', 'nav', 'noscript', 'object', 'ol',
-  'optgroup', 'option', 'output', 'p', 'param', 'picture', 'pre', 'progress',
-  'q', 'rp', 'rt', 'ruby', 's', 'samp', 'script', 'search', 'section',
-  'select', 'slot', 'small', 'source', 'span', 'strong', 'style', 'sub',
-  'summary', 'sup', 'svg', 'table', 'tbody', 'td', 'template', 'textarea',
-  'tfoot', 'th', 'thead', 'time', 'title', 'tr', 'track', 'u', 'ul', 'var',
-  'video', 'wbr',
+  'a',
+  'abbr',
+  'address',
+  'area',
+  'article',
+  'aside',
+  'audio',
+  'b',
+  'base',
+  'bdi',
+  'bdo',
+  'blockquote',
+  'body',
+  'br',
+  'button',
+  'canvas',
+  'caption',
+  'cite',
+  'code',
+  'col',
+  'colgroup',
+  'data',
+  'datalist',
+  'dd',
+  'del',
+  'details',
+  'dfn',
+  'dialog',
+  'div',
+  'dl',
+  'dt',
+  'em',
+  'embed',
+  'fieldset',
+  'figcaption',
+  'figure',
+  'footer',
+  'form',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'head',
+  'header',
+  'hgroup',
+  'hr',
+  'html',
+  'i',
+  'iframe',
+  'img',
+  'input',
+  'ins',
+  'kbd',
+  'label',
+  'legend',
+  'li',
+  'link',
+  'main',
+  'map',
+  'mark',
+  'menu',
+  'meta',
+  'meter',
+  'nav',
+  'noscript',
+  'object',
+  'ol',
+  'optgroup',
+  'option',
+  'output',
+  'p',
+  'param',
+  'picture',
+  'pre',
+  'progress',
+  'q',
+  'rp',
+  'rt',
+  'ruby',
+  's',
+  'samp',
+  'script',
+  'search',
+  'section',
+  'select',
+  'slot',
+  'small',
+  'source',
+  'span',
+  'strong',
+  'style',
+  'sub',
+  'summary',
+  'sup',
+  'svg',
+  'table',
+  'tbody',
+  'td',
+  'template',
+  'textarea',
+  'tfoot',
+  'th',
+  'thead',
+  'time',
+  'title',
+  'tr',
+  'track',
+  'u',
+  'ul',
+  'var',
+  'video',
+  'wbr',
 ]);
 
-const GENERIC_NATIVE_TAGS = new Set([
-  'div', 'span', 'template',
-]);
+const GENERIC_NATIVE_TAGS = new Set(['div', 'span', 'template']);
 
 const EXPRESSION_STOP_WORDS = new Set([
-  'as', 'await', 'break', 'case', 'catch', 'class', 'const', 'continue',
-  'debugger', 'default', 'delete', 'do', 'else', 'export', 'extends', 'false',
-  'finally', 'for', 'from', 'function', 'if', 'import', 'in', 'instanceof',
-  'let', 'new', 'null', 'of', 'return', 'super', 'switch', 'this', 'throw',
-  'true', 'try', 'typeof', 'undefined', 'var', 'void', 'while', 'with',
+  'as',
+  'await',
+  'break',
+  'case',
+  'catch',
+  'class',
+  'const',
+  'continue',
+  'debugger',
+  'default',
+  'delete',
+  'do',
+  'else',
+  'export',
+  'extends',
+  'false',
+  'finally',
+  'for',
+  'from',
+  'function',
+  'if',
+  'import',
+  'in',
+  'instanceof',
+  'let',
+  'new',
+  'null',
+  'of',
+  'return',
+  'super',
+  'switch',
+  'this',
+  'throw',
+  'true',
+  'try',
+  'typeof',
+  'undefined',
+  'var',
+  'void',
+  'while',
+  'with',
   'yield',
 ]);
 
-export function getVueTemplateFacts(
-  db: ScipDatabase,
-  relativePath: string,
-): VueTemplateFacts {
+export function getVueTemplateFacts(db: ScipDatabase, relativePath: string): VueTemplateFacts {
   const normalized = relativePath.replace(/\\/g, '/');
   const source = getSourceText(db, normalized);
   return VUE_TEMPLATE_FACTS_CACHE.get(db, normalized, source, () =>
-    buildVueTemplateFactsFromBlock(normalized, getVueSfcUnit(db, normalized).template));
+    buildVueTemplateFactsFromBlock(normalized, getVueSfcUnit(db, normalized).template),
+  );
 }
 
 export function extractVueTemplateBlock(source: string): VueTemplateBlock | null {
@@ -282,9 +414,8 @@ function directiveDisplayName(prop: DirectiveNode): string {
 
 function expressionSource(expression: ExpressionNode | undefined): string | null {
   if (!expression) return null;
-  const content = ('content' in expression && typeof expression.content === 'string'
-    ? expression.content
-    : expression.loc.source
+  const content = (
+    'content' in expression && typeof expression.content === 'string' ? expression.content : expression.loc.source
   ).trim();
   return content ? content : null;
 }
@@ -325,8 +456,10 @@ function stripExpressionStrings(expression: string): string {
   return expression
     .replace(/\/\*[\s\S]*?\*\//g, ' ')
     .replace(/\/\/.*$/gm, ' ')
-    .replace(/`(?:\\[\s\S]|\$\{([^}]*)\}|[^`\\])*`/g, (_match, interpolation: string | undefined) =>
-      interpolation ?? ' ')
+    .replace(
+      /`(?:\\[\s\S]|\$\{([^}]*)\}|[^`\\])*`/g,
+      (_match, interpolation: string | undefined) => interpolation ?? ' ',
+    )
     .replace(/'(?:\\[\s\S]|[^'\\])*'/g, ' ')
     .replace(/"(?:\\[\s\S]|[^"\\])*"/g, ' ');
 }

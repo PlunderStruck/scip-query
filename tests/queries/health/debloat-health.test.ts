@@ -80,14 +80,20 @@ function createDebloatFixtureDb(dbPath: string): void {
 
   const insertSymbol = sqliteDb.prepare(
     `INSERT INTO global_symbols (id, symbol, display_name, kind, documentation)
-     VALUES (?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?)`,
   );
 
   insertSymbol.run(1, 'src:cli', 'cli', 1, 'CLI module');
   insertSymbol.run(2, 'src:index', 'index', 1, 'Root entry surface');
   insertSymbol.run(3, 'src:queries:index', 'queries/index', 1, 'Queries barrel');
   insertSymbol.run(4, 'src:queries:health:health().', 'health', 3, 'health query');
-  insertSymbol.run(5, 'src:queries:redundant-reexports:redundantReexports().', 'redundantReexports', 3, 'redundant re-export query');
+  insertSymbol.run(
+    5,
+    'src:queries:redundant-reexports:redundantReexports().',
+    'redundantReexports',
+    3,
+    'redundant re-export query',
+  );
   insertSymbol.run(6, 'src:reindex-worker', 'reindex-worker', 1, 'Worker entry surface');
   insertSymbol.run(7, 'src:unused:helper:unusedHelper().', 'unusedHelper', 3, 'Only referenced by an inactive barrel');
   insertSymbol.run(8, 'src:postinstall', 'postinstall', 1, 'Postinstall entry surface');

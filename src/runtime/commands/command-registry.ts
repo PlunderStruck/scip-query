@@ -34,15 +34,15 @@ export function registerCommandDescriptors(
       }
     }
 
-      command.action(async (...args: unknown[]) => {
-        try {
-          await descriptor.handler(...args);
-        } catch (err) {
-          handleCommandError(err);
-        }
-      });
-      return { descriptor, command };
+    command.action(async (...args: unknown[]) => {
+      try {
+        await descriptor.handler(...args);
+      } catch (err) {
+        handleCommandError(err);
+      }
     });
+    return { descriptor, command };
+  });
 }
 
 function handleCommandError(err: unknown): void {

@@ -68,7 +68,9 @@ export function cleanupPlan(
   }
 
   // Worklist: cascade can only spread to symbols the removed code referenced.
-  let frontier = seed.map((entry) => entry.definition).filter((definition): definition is IndexedDefinition => definition !== null);
+  let frontier = seed
+    .map((entry) => entry.definition)
+    .filter((definition): definition is IndexedDefinition => definition !== null);
   const visited = new Set<string>(seed.map((entry) => entry.symbol));
 
   for (let depth = 1; depth <= maxDepth && frontier.length > 0; depth++) {
@@ -106,7 +108,9 @@ export function cleanupPlan(
     if (next.length === 0) break;
     for (const entry of next) removedRanges.add(entry);
     batches.push(buildBatch(db, depth, next, removedRanges));
-    frontier = next.map((entry) => entry.definition).filter((definition): definition is IndexedDefinition => definition !== null);
+    frontier = next
+      .map((entry) => entry.definition)
+      .filter((definition): definition is IndexedDefinition => definition !== null);
   }
 
   const totalLoc = batches.reduce((sum, batch) => sum + batch.loc, 0);
@@ -168,8 +172,7 @@ function resolveDefinition(db: ScipDatabase, symbol: string): IndexedDefinition 
     symbol,
   );
   if (!row) return null;
-  return getDefinitionsForFile(db, row.relative_path)
-    .find((definition) => definition.symbol === symbol) ?? null;
+  return getDefinitionsForFile(db, row.relative_path).find((definition) => definition.symbol === symbol) ?? null;
 }
 
 function cascadeVerdict(
@@ -185,8 +188,8 @@ function cascadeVerdict(
   }
   const blockingFiles = new Set<string>();
   for (const site of sites) {
-    if (site.file === definition.relativePath
-      && site.line >= definition.startLine && site.line <= definition.endLine) continue; // self
+    if (site.file === definition.relativePath && site.line >= definition.startLine && site.line <= definition.endLine)
+      continue; // self
     if (removedRanges.contains(site.file, site.line)) continue;
     blockingFiles.add(site.file);
   }
@@ -199,14 +202,17 @@ function buildBatch(
   entries: PlanEntryInternal[],
   removedRanges: RemovedRangeIndex,
 ): CleanupBatch {
-  const sorted = [...entries].sort((left, right) =>
-    left.file.localeCompare(right.file) || left.startLine - right.startLine);
+  const sorted = [...entries].sort(
+    (left, right) => left.file.localeCompare(right.file) || left.startLine - right.startLine,
+  );
   const candidateFiles = new Set(sorted.map((entry) => entry.file));
   const filesEmptied: string[] = [];
   for (const file of candidateFiles) {
     const definitions = getDefinitionsForFile(db, file);
-    if (definitions.length > 0 && definitions.every((definition) =>
-      removedRanges.contains(file, definition.startLine))) {
+    if (
+      definitions.length > 0 &&
+      definitions.every((definition) => removedRanges.contains(file, definition.startLine))
+    ) {
       filesEmptied.push(file);
     }
   }

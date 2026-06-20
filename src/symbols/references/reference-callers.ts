@@ -113,10 +113,9 @@ function definitionSelfRanges(definitions: ReadonlyArray<SymbolLocation>): Map<n
 }
 
 function isSelfChunkMention(row: ChunkMentionCallerRow, range: DefinitionSelfRange | undefined): boolean {
-  return !!range
-    && range.docId === row.document_id
-    && row.chunk_start >= range.startLine
-    && row.chunk_end <= range.endLine;
+  return (
+    !!range && range.docId === row.document_id && row.chunk_start >= range.startLine && row.chunk_end <= range.endLine
+  );
 }
 
 function addRustAttrCallers(
@@ -154,8 +153,9 @@ function addCallerFile(map: Map<number, Set<string>>, symbolId: number, file: st
 }
 
 function indexedDefinitions(definitions: ReadonlyArray<SymbolLocation>): IndexedDefinition[] {
-  return definitions.filter((definition): definition is IndexedDefinition =>
-    'relativePath' in definition && 'symbol' in definition && 'leaf' in definition,
+  return definitions.filter(
+    (definition): definition is IndexedDefinition =>
+      'relativePath' in definition && 'symbol' in definition && 'leaf' in definition,
   );
 }
 

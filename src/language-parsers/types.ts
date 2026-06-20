@@ -16,10 +16,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import type { ParsedReExport, ParsedSourceExport, ParsedSourceImport } from '../domain/types.js';
 
-export type ParserFallbackMode =
-  | 'ast-with-regex-fallback'
-  | 'ast-dispatch-with-regex-fallback'
-  | 'regex-only';
+export type ParserFallbackMode = 'ast-with-regex-fallback' | 'ast-dispatch-with-regex-fallback' | 'regex-only';
 
 export interface LanguageParserCapabilities {
   imports: ParserFallbackMode;
@@ -41,32 +38,20 @@ export interface LanguageParser {
    * Returns the file's imports as ParsedSourceImport entries. Each entry's
    * `sourcePath` should be project-relative (or null when unresolvable).
    */
-  parseImports(
-    db: ScipDatabase,
-    importerPath: string,
-    source: string,
-  ): ParsedSourceImport[];
+  parseImports(db: ScipDatabase, importerPath: string, source: string): ParsedSourceImport[];
 
   /**
    * Returns the file's exports. Optional — most languages don't have a
    * distinct re-export construct that the consumer needs to read.
    */
-  parseExports?(
-    db: ScipDatabase,
-    importerPath: string,
-    source: string,
-  ): ParsedSourceExport[];
+  parseExports?(db: ScipDatabase, importerPath: string, source: string): ParsedSourceExport[];
 
   /**
    * Returns JavaScript-style re-export statements (`export ... from`).
    * Optional because most languages either have no equivalent or expose it
    * through parseExports instead.
    */
-  parseReExports?(
-    db: ScipDatabase,
-    importerPath: string,
-    source: string,
-  ): ParsedReExport[];
+  parseReExports?(db: ScipDatabase, importerPath: string, source: string): ParsedReExport[];
 }
 
 export interface ImportOnlyLanguageParserConfig {
@@ -94,10 +79,7 @@ export function importOnlyLanguageParser({
  * Returns the parser whose extensions claim the path, or null when no
  * adapter matches. Lowercase-comparison on extension only.
  */
-export function selectParser(
-  parsers: ReadonlyArray<LanguageParser>,
-  relativePath: string,
-): LanguageParser | null {
+export function selectParser(parsers: ReadonlyArray<LanguageParser>, relativePath: string): LanguageParser | null {
   const lower = relativePath.toLowerCase();
   for (const parser of parsers) {
     for (const ext of parser.extensions) {

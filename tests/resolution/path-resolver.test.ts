@@ -81,12 +81,8 @@ function withPathFixture(run: (db: ScipDatabase) => void): void {
 describe('path resolver', () => {
   it('keeps full path matches from broadening to same-basename files', () => {
     withPathFixture((db) => {
-      expect(resolveIndexedPaths(db, 'shared/src/contracts/horses.ts')).toEqual([
-        'shared/src/contracts/horses.ts',
-      ]);
-      expect(resolveIndexedPaths(db, 'backend/src/routes/horses.ts')).toEqual([
-        'backend/src/routes/horses.ts',
-      ]);
+      expect(resolveIndexedPaths(db, 'shared/src/contracts/horses.ts')).toEqual(['shared/src/contracts/horses.ts']);
+      expect(resolveIndexedPaths(db, 'backend/src/routes/horses.ts')).toEqual(['backend/src/routes/horses.ts']);
     });
   });
 

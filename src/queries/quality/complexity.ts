@@ -75,12 +75,7 @@ function languageForFile(db: ScipDatabase, relativePath: string): string {
   return doc?.language ?? 'unknown';
 }
 
-function readSymbolSource(
-  db: ScipDatabase,
-  relativePath: string,
-  startLine: number,
-  endLine: number,
-): string {
+function readSymbolSource(db: ScipDatabase, relativePath: string, startLine: number, endLine: number): string {
   try {
     const lines = readFileSync(join(db.config.projectRoot, relativePath), 'utf-8').split('\n');
     return lines.slice(startLine, endLine + 1).join('\n');
@@ -90,22 +85,19 @@ function readSymbolSource(
 }
 
 function fanInForSymbol(db: ScipDatabase, symbolId: number): number {
-  return db.get<{ c: number }>(
-    `SELECT COUNT(DISTINCT c.document_id) AS c
+  return (
+    db.get<{ c: number }>(
+      `SELECT COUNT(DISTINCT c.document_id) AS c
     FROM mentions m
     JOIN chunks c ON m.chunk_id = c.id
     WHERE m.symbol_id = ? AND m.role != 1`,
-    symbolId,
-  )?.c ?? 0;
+      symbolId,
+    )?.c ?? 0
+  );
 }
 
-function fanOutForCallees(
-  callees: ReadonlyArray<{ symbol: string; file: string }>,
-  relativePath: string,
-): number {
-  return new Set(
-    callees.filter((callee) => callee.file !== relativePath).map((callee) => callee.symbol),
-  ).size;
+function fanOutForCallees(callees: ReadonlyArray<{ symbol: string; file: string }>, relativePath: string): number {
+  return new Set(callees.filter((callee) => callee.file !== relativePath).map((callee) => callee.symbol)).size;
 }
 
 /**
@@ -127,7 +119,7 @@ function countBranches(source: string, language: string): number {
     /\bswitch\b/g,
     /\bcase\b/g,
     /\bcatch\b/g,
-    /\?\s*[^?]/g,    // ternary (but not ??)
+    /\?\s*[^?]/g, // ternary (but not ??)
     /&&/g,
     /\|\|/g,
   ];

@@ -3,7 +3,12 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
-import { buildVueComponentBehaviorProfile, getCallSites, getVueSfcUnit, getVueTemplateFacts } from '../../../src/source/ast.js';
+import {
+  buildVueComponentBehaviorProfile,
+  getCallSites,
+  getVueSfcUnit,
+  getVueTemplateFacts,
+} from '../../../src/source/ast.js';
 import { vueComposableCandidates } from '../../../src/queries/frontend/vue-composable-candidates.js';
 import { vueComponentDuplicates } from '../../../src/queries/frontend/vue-component-duplicates.js';
 import { vueLargeViewPressure } from '../../../src/queries/frontend/vue-large-view-pressure.js';
@@ -44,8 +49,7 @@ function saveRecord(row: unknown) {
 </script>
 `;
 
-const INCIDENT_PANEL = ISSUE_PANEL
-  .replace("const title = 'Issues';", "const title = 'Incidents';");
+const INCIDENT_PANEL = ISSUE_PANEL.replace("const title = 'Issues';", "const title = 'Incidents';");
 
 const CALENDAR_PANEL = `<template>
   <CalendarShell>
@@ -183,11 +187,13 @@ describe('Vue template rich internals', () => {
     try {
       const unit = getVueSfcUnit(db, 'src/components/SharedBehaviorExternal.vue');
       expect(unit.scripts).toHaveLength(1);
-      expect(unit.scripts[0]).toEqual(expect.objectContaining({
-        external: true,
-        sourcePath: 'src/components/SharedBehaviorExternal.script.ts',
-        startLine: 0,
-      }));
+      expect(unit.scripts[0]).toEqual(
+        expect.objectContaining({
+          external: true,
+          sourcePath: 'src/components/SharedBehaviorExternal.script.ts',
+          startLine: 0,
+        }),
+      );
 
       const profile = buildVueComponentBehaviorProfile(db, 'src/components/SharedBehaviorExternal.vue');
       expect(profile.scriptFacts.composables).toEqual(expect.arrayContaining(['useResource', 'useToast']));
@@ -195,11 +201,9 @@ describe('Vue template rich internals', () => {
       expect(profile.scriptFacts.lifecycle).toContain('onMounted');
       expect(profile.externalScriptPaths).toEqual(['src/components/SharedBehaviorExternal.script.ts']);
       expect(profile.externalScriptLines).toBeGreaterThan(0);
-      expect([...profile.behaviorTokens]).toEqual(expect.arrayContaining([
-        'composable:useResource',
-        'request:runRequest',
-        'template-binding:visibleRows',
-      ]));
+      expect([...profile.behaviorTokens]).toEqual(
+        expect.arrayContaining(['composable:useResource', 'request:runRequest', 'template-binding:visibleRows']),
+      );
 
       const candidates = vueComposableCandidates(db, {
         limit: 10,
@@ -265,10 +269,12 @@ describe('Vue template rich internals', () => {
       });
 
       expect(duplicates).toHaveLength(1);
-      expect(duplicates[0]).toEqual(expect.objectContaining({
-        fileA: 'src/components/IncidentPanel.vue',
-        fileB: 'src/components/IssuePanel.vue',
-      }));
+      expect(duplicates[0]).toEqual(
+        expect.objectContaining({
+          fileA: 'src/components/IncidentPanel.vue',
+          fileB: 'src/components/IssuePanel.vue',
+        }),
+      );
       expect(duplicates[0]?.sharedComponents).toEqual(
         expect.arrayContaining(['PageShell', 'RecordTable', 'ToolbarPanel', 'UiButton']),
       );

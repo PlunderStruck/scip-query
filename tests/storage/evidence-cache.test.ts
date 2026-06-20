@@ -101,17 +101,26 @@ describe('evidence cache', () => {
     const evidence = new Database(join(tempDir, EVIDENCE_DB_FILENAME));
     const planted = JSON.stringify({
       language: 'typescript',
-      callables: [{
-        name: 'plantedMarker', startLine: 0, endLine: 3, paramCount: 1,
-        params: [{ name: 'name', simple: true }], paramsEndLine: 0, isLiteralPassthrough: false,
-      }],
+      callables: [
+        {
+          name: 'plantedMarker',
+          startLine: 0,
+          endLine: 3,
+          paramCount: 1,
+          params: [{ name: 'name', simple: true }],
+          paramsEndLine: 0,
+          isLiteralPassthrough: false,
+        },
+      ],
       callSites: [],
       typeContainerMap: [],
       identifierLineMap: [],
       rustAttrReferencedNames: [],
       crossLanguageDispatchNames: [],
     });
-    evidence.prepare("UPDATE file_evidence SET payload = ? WHERE kind = 'source-facts' AND relative_path = ?").run(planted, FILE);
+    evidence
+      .prepare("UPDATE file_evidence SET payload = ? WHERE kind = 'source-facts' AND relative_path = ?")
+      .run(planted, FILE);
     evidence.close();
 
     const db2 = openDb();
@@ -125,7 +134,8 @@ describe('evidence cache', () => {
 
   it('ignores rows whose content hash or version no longer match', () => {
     const evidence = new Database(join(tempDir, EVIDENCE_DB_FILENAME));
-    evidence.prepare("UPDATE file_evidence SET content_hash = ? WHERE kind = 'source-facts' AND relative_path = ?")
+    evidence
+      .prepare("UPDATE file_evidence SET content_hash = ? WHERE kind = 'source-facts' AND relative_path = ?")
       .run(sha256Hex('different content'), FILE);
     evidence.close();
 
@@ -139,7 +149,9 @@ describe('evidence cache', () => {
     }
 
     const reopened = new Database(join(tempDir, EVIDENCE_DB_FILENAME));
-    reopened.prepare("UPDATE file_evidence SET version = ? WHERE kind = 'source-facts' AND relative_path = ?").run('0.0.0-other', FILE);
+    reopened
+      .prepare("UPDATE file_evidence SET version = ? WHERE kind = 'source-facts' AND relative_path = ?")
+      .run('0.0.0-other', FILE);
     reopened.close();
 
     const db2 = openDb();
@@ -158,7 +170,10 @@ describe('evidence cache', () => {
     db.close();
 
     const evidence = new Database(join(tempDir, EVIDENCE_DB_FILENAME));
-    evidence.prepare("UPDATE file_evidence SET payload = ?, content_hash = ? WHERE kind = 'source-facts' AND relative_path = ?")
+    evidence
+      .prepare(
+        "UPDATE file_evidence SET payload = ?, content_hash = ? WHERE kind = 'source-facts' AND relative_path = ?",
+      )
       .run('{not json', hash, FILE);
     evidence.close();
 
@@ -178,7 +193,13 @@ describe('evidence cache', () => {
       const otherPayload = JSON.stringify([{ symbol: 'y', file: 'src/y.ts', line: 5 }]);
       writeCachedSemanticCalleesBatch(db, [
         { relativePath: FILE, symbol: 'sym#greet', contentHash: 'hash-a', depsDigest: 'digest-a', payload },
-        { relativePath: FILE, symbol: 'sym#other', contentHash: 'hash-a', depsDigest: 'digest-a', payload: otherPayload },
+        {
+          relativePath: FILE,
+          symbol: 'sym#other',
+          contentHash: 'hash-a',
+          depsDigest: 'digest-a',
+          payload: otherPayload,
+        },
       ]);
       expect(readCachedSemanticCallees(db, FILE, 'sym#greet', 'hash-a', 'digest-a')).toBe(payload);
       expect(readCachedSemanticCallees(db, FILE, 'sym#other', 'hash-a', 'digest-a')).toBe(otherPayload);
@@ -186,7 +207,9 @@ describe('evidence cache', () => {
       expect(readCachedSemanticCallees(db, FILE, 'sym#greet', 'hash-a', 'digest-b')).toBeNull();
 
       // Writing under a new content hash drops the path's stale rows.
-      writeCachedSemanticCalleesBatch(db, [{ relativePath: FILE, symbol: 'sym#other', contentHash: 'hash-b', depsDigest: 'digest-a', payload }]);
+      writeCachedSemanticCalleesBatch(db, [
+        { relativePath: FILE, symbol: 'sym#other', contentHash: 'hash-b', depsDigest: 'digest-a', payload },
+      ]);
       expect(readCachedSemanticCallees(db, FILE, 'sym#greet', 'hash-a', 'digest-a')).toBeNull();
       expect(readCachedSemanticCallees(db, FILE, 'sym#other', 'hash-a', 'digest-a')).toBeNull();
       expect(readCachedSemanticCallees(db, FILE, 'sym#other', 'hash-b', 'digest-a')).toBe(payload);

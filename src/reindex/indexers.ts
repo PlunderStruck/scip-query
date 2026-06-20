@@ -107,9 +107,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       args: ['index', '--output', outputPath, '--project-name', 'project'],
     }),
     markerFiles: ['pyproject.toml', 'setup.py'],
-    installMethods: [
-      { label: 'npm', prerequisite: 'npm', binary: 'npm', args: ['install', '-g', 'scip-python-plus'] },
-    ],
+    installMethods: [{ label: 'npm', prerequisite: 'npm', binary: 'npm', args: ['install', '-g', 'scip-python-plus'] }],
     installUrl: 'https://github.com/PlunderStruck/scip-python',
     bundledNpmPackage: 'scip-python-plus',
   },
@@ -138,7 +136,12 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     }),
     markerFiles: ['go.mod'],
     installMethods: [
-      { label: 'go install', prerequisite: 'go', binary: 'go', args: ['install', 'github.com/sourcegraph/scip-go@latest'] },
+      {
+        label: 'go install',
+        prerequisite: 'go',
+        binary: 'go',
+        args: ['install', 'github.com/sourcegraph/scip-go@latest'],
+      },
     ],
     installUrl: 'https://github.com/sourcegraph/scip-go',
   },
@@ -175,11 +178,23 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     checkCommand: 'scip-dotnet --version',
     indexArgs: ({ projectRoot, outputPath }) => ({
       binary: 'scip-dotnet',
-      args: ['index', resolveDotnetProject(projectRoot, ['.sln', '.csproj']) ?? projectRoot, '--output', outputPath, '--working-directory', projectRoot],
+      args: [
+        'index',
+        resolveDotnetProject(projectRoot, ['.sln', '.csproj']) ?? projectRoot,
+        '--output',
+        outputPath,
+        '--working-directory',
+        projectRoot,
+      ],
     }),
     markerFiles: ['*.csproj', '*.sln'],
     installMethods: [
-      { label: 'dotnet', prerequisite: 'dotnet', binary: 'dotnet', args: ['tool', 'install', '--global', 'scip-dotnet'] },
+      {
+        label: 'dotnet',
+        prerequisite: 'dotnet',
+        binary: 'dotnet',
+        args: ['tool', 'install', '--global', 'scip-dotnet'],
+      },
     ],
     installUrl: 'https://github.com/sourcegraph/scip-dotnet/releases',
   },
@@ -190,11 +205,23 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     checkCommand: 'scip-dotnet --version',
     indexArgs: ({ projectRoot, outputPath }) => ({
       binary: 'scip-dotnet',
-      args: ['index', resolveDotnetProject(projectRoot, ['.sln', '.vbproj']) ?? projectRoot, '--output', outputPath, '--working-directory', projectRoot],
+      args: [
+        'index',
+        resolveDotnetProject(projectRoot, ['.sln', '.vbproj']) ?? projectRoot,
+        '--output',
+        outputPath,
+        '--working-directory',
+        projectRoot,
+      ],
     }),
     markerFiles: ['*.vbproj', '*.sln'],
     installMethods: [
-      { label: 'dotnet', prerequisite: 'dotnet', binary: 'dotnet', args: ['tool', 'install', '--global', 'scip-dotnet'] },
+      {
+        label: 'dotnet',
+        prerequisite: 'dotnet',
+        binary: 'dotnet',
+        args: ['tool', 'install', '--global', 'scip-dotnet'],
+      },
     ],
     installUrl: 'https://github.com/sourcegraph/scip-dotnet/releases',
   },
@@ -229,11 +256,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
           : indexerBinary;
       return {
         binary: 'php',
-        args: [
-          '-d',
-          'error_reporting=E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED',
-          targetBinary,
-        ],
+        args: ['-d', 'error_reporting=E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED', targetBinary],
       };
     },
     defaultOutputPath: 'index.scip',
@@ -248,10 +271,7 @@ export function getIndexerConfig(language: SupportedLanguage): IndexerConfig {
   return INDEXER_CONFIGS[language];
 }
 
-function resolveDotnetProject(
-  projectRoot: string,
-  suffixes: readonly string[],
-): string | null {
+function resolveDotnetProject(projectRoot: string, suffixes: readonly string[]): string | null {
   let entries: string[];
   try {
     entries = readdirSync(projectRoot);

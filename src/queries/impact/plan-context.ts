@@ -55,41 +55,35 @@ export interface PlanContextResult {
   warnings: string[];
 }
 
-export function planContext(
-  db: ScipDatabase,
-  target: string,
-  opts: PlanContextOptions = {},
-): PlanContextResult {
+export function planContext(db: ScipDatabase, target: string, opts: PlanContextOptions = {}): PlanContextResult {
   const impactDepth = opts.impactDepth ?? 3;
   const sliceDepth = opts.sliceDepth ?? 3;
   const semantic = opts.semantic;
   const symbolTarget = !looksLikePathTarget(target);
 
-  const traceResult = symbolTarget
-    ? trace(db, target, { semantic })
-    : { definitions: [], referencedBy: [] };
+  const traceResult = symbolTarget ? trace(db, target, { semantic }) : { definitions: [], referencedBy: [] };
   const callGraphResult = symbolTarget ? callGraph(db, target, { semantic }) : null;
   const complexityResult = symbolTarget ? complexity(db, target, { semantic }) : null;
   const dataflowResult = symbolTarget ? dataflow(db, target, { semantic }) : null;
   const backwardSliceResult = symbolTarget
     ? slice(db, target, {
-      direction: 'backward',
-      maxDepth: sliceDepth,
-      semantic,
-    })
+        direction: 'backward',
+        maxDepth: sliceDepth,
+        semantic,
+      })
     : null;
   const forwardSliceResult = symbolTarget
     ? slice(db, target, {
-      direction: 'forward',
-      maxDepth: sliceDepth,
-      semantic,
-    })
+        direction: 'forward',
+        maxDepth: sliceDepth,
+        semantic,
+      })
     : null;
   const affectedResults = symbolTarget
     ? affected(db, target, {
-      maxDepth: impactDepth,
-      scope: opts.scope,
-    })
+        maxDepth: impactDepth,
+        scope: opts.scope,
+      })
     : [];
 
   const changeSurfaceResult = changeSurface(db, target, { semantic });
@@ -99,20 +93,17 @@ export function planContext(
   const surfaceResults = surface(db, target);
 
   const matched = {
-    symbol: traceResult.definitions.length > 0
-      || traceResult.referencedBy.length > 0
-      || callGraphResult !== null
-      || complexityResult !== null
-      || dataflowResult !== null
-      || backwardSliceResult !== null
-      || forwardSliceResult !== null
-      || affectedResults.length > 0,
-    file: changeSurfaceResult !== null
-      || depsResults.length > 0
-      || rdepsResults.length > 0,
-    module: systemResult.files.length > 0
-      || systemResult.symbols.length > 0
-      || surfaceResults.length > 0,
+    symbol:
+      traceResult.definitions.length > 0 ||
+      traceResult.referencedBy.length > 0 ||
+      callGraphResult !== null ||
+      complexityResult !== null ||
+      dataflowResult !== null ||
+      backwardSliceResult !== null ||
+      forwardSliceResult !== null ||
+      affectedResults.length > 0,
+    file: changeSurfaceResult !== null || depsResults.length > 0 || rdepsResults.length > 0,
+    module: systemResult.files.length > 0 || systemResult.symbols.length > 0 || surfaceResults.length > 0,
   };
 
   const warnings: string[] = [];
@@ -120,9 +111,7 @@ export function planContext(
     warnings.push('No symbol, file, or module matched target.');
   }
 
-  const historyFile = changeSurfaceResult?.file
-    ?? traceResult.definitions[0]?.relativePath
-    ?? null;
+  const historyFile = changeSurfaceResult?.file ?? traceResult.definitions[0]?.relativePath ?? null;
 
   return {
     target,
@@ -171,7 +160,5 @@ function buildPlanContextHistory(db: ScipDatabase, file: string | null): PlanCon
 }
 
 function looksLikePathTarget(target: string): boolean {
-  return target.includes('/')
-    || target.includes('\\')
-    || /\.[A-Za-z0-9]+(?::\d+(?:-\d+)?)?$/.test(target);
+  return target.includes('/') || target.includes('\\') || /\.[A-Za-z0-9]+(?::\d+(?:-\d+)?)?$/.test(target);
 }

@@ -1,12 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { create } from '@bufbuild/protobuf';
-import {
-  deserializeSCIP,
-  serializeSCIP,
-  DocumentSchema,
-  IndexSchema,
-  SymbolInformationSchema,
-} from '@c4312/scip';
+import { deserializeSCIP, serializeSCIP, DocumentSchema, IndexSchema, SymbolInformationSchema } from '@c4312/scip';
 import type { Document, Index, Relationship, SymbolInformation } from '@c4312/scip';
 
 export interface MergeScipResult {
@@ -43,10 +37,7 @@ export function mergeScipIndexes(indexes: readonly Index[]): Index {
   });
 }
 
-export function mergeScipFiles(
-  inputPaths: readonly string[],
-  outputPath: string,
-): MergeScipResult {
+export function mergeScipFiles(inputPaths: readonly string[], outputPath: string): MergeScipResult {
   if (inputPaths.length === 0) {
     throw new Error('Cannot merge zero SCIP files');
   }
@@ -91,14 +82,17 @@ function mergeDocuments(documents: readonly Document[]): Document[] {
       continue;
     }
 
-    byPath.set(document.relativePath, create(DocumentSchema, {
-      language: existing.language || document.language,
-      relativePath: existing.relativePath || document.relativePath,
-      occurrences: [...existing.occurrences, ...document.occurrences],
-      symbols: mergeSymbolInfos([...existing.symbols, ...document.symbols]),
-      text: chooseText(existing.text, document.text),
-      positionEncoding: existing.positionEncoding || document.positionEncoding,
-    }));
+    byPath.set(
+      document.relativePath,
+      create(DocumentSchema, {
+        language: existing.language || document.language,
+        relativePath: existing.relativePath || document.relativePath,
+        occurrences: [...existing.occurrences, ...document.occurrences],
+        symbols: mergeSymbolInfos([...existing.symbols, ...document.symbols]),
+        text: chooseText(existing.text, document.text),
+        positionEncoding: existing.positionEncoding || document.positionEncoding,
+      }),
+    );
   }
 
   return [...byPath.values()];
@@ -114,15 +108,18 @@ function mergeSymbolInfos(symbols: readonly SymbolInformation[]): SymbolInformat
       continue;
     }
 
-    bySymbol.set(symbol.symbol, create(SymbolInformationSchema, {
-      symbol: existing.symbol,
-      documentation: uniqueStrings([...existing.documentation, ...symbol.documentation]),
-      relationships: mergeRelationships([...existing.relationships, ...symbol.relationships]),
-      kind: existing.kind || symbol.kind,
-      displayName: existing.displayName || symbol.displayName,
-      enclosingSymbol: existing.enclosingSymbol || symbol.enclosingSymbol,
-      signatureDocumentation: existing.signatureDocumentation ?? symbol.signatureDocumentation,
-    }));
+    bySymbol.set(
+      symbol.symbol,
+      create(SymbolInformationSchema, {
+        symbol: existing.symbol,
+        documentation: uniqueStrings([...existing.documentation, ...symbol.documentation]),
+        relationships: mergeRelationships([...existing.relationships, ...symbol.relationships]),
+        kind: existing.kind || symbol.kind,
+        displayName: existing.displayName || symbol.displayName,
+        enclosingSymbol: existing.enclosingSymbol || symbol.enclosingSymbol,
+        signatureDocumentation: existing.signatureDocumentation ?? symbol.signatureDocumentation,
+      }),
+    );
   }
 
   return [...bySymbol.values()];

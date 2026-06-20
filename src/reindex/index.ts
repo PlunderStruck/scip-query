@@ -116,12 +116,7 @@ interface FreshIndexRun {
 // reindex; hiding the ordered steps behind another helper would make failure
 // behavior harder to audit.
 export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
-  const {
-    projectRoot,
-    maxHeapMb = 8192,
-    onStatus = console.log,
-    skipAutoInstall = false,
-  } = opts;
+  const { projectRoot, maxHeapMb = 8192, onStatus = console.log, skipAutoInstall = false } = opts;
 
   const paths = resolveReindexOutputPaths(opts);
   const start = Date.now();
@@ -133,7 +128,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
   if (languages.length === 0) {
     throw new Error(
       'No supported languages detected in this project. ' +
-      'Looked for: tsconfig.json, Cargo.toml, go.mod, pyproject.toml, etc.',
+        'Looked for: tsconfig.json, Cargo.toml, go.mod, pyproject.toml, etc.',
     );
   }
 
@@ -215,10 +210,10 @@ function reuseExistingIndexIfPossible(opts: {
   onStatus: (message: string) => void;
 }): ReindexResult | null {
   if (
-    opts.opts.skipIfUnchanged === false
-    || !existsSync(opts.paths.outputScip)
-    || !existsSync(opts.paths.outputDb)
-    || !isUnchangedReindex(opts.paths.metaPath, opts.fingerprint)
+    opts.opts.skipIfUnchanged === false ||
+    !existsSync(opts.paths.outputScip) ||
+    !existsSync(opts.paths.outputDb) ||
+    !isUnchangedReindex(opts.paths.metaPath, opts.fingerprint)
   ) {
     return null;
   }
@@ -371,10 +366,7 @@ function reusableLanguageOutputs(opts: Parameters<typeof runFreshReindex>[0]): I
   });
   for (const language of opts.languages) {
     const scipPath = languageShardPath(opts.paths.outputDb, language);
-    if (
-      existsSync(scipPath)
-      && stableJson(meta.languageFingerprints[language]) === stableJson(current[language])
-    ) {
+    if (existsSync(scipPath) && stableJson(meta.languageFingerprints[language]) === stableJson(current[language])) {
       outputs.push({ language, scipPath });
     }
   }
@@ -399,7 +391,7 @@ function ensureScipCliAvailable(skipAutoInstall: boolean, onStatus: (message: st
   if (skipAutoInstall) {
     throw new Error(
       'The scip CLI is required but not found on PATH.\n' +
-      'Install from: https://github.com/sourcegraph/scip/releases',
+        'Install from: https://github.com/sourcegraph/scip/releases',
     );
   }
 
@@ -407,7 +399,7 @@ function ensureScipCliAvailable(skipAutoInstall: boolean, onStatus: (message: st
   if (!tryInstallScipCli(onStatus)) {
     throw new Error(
       'The scip CLI is required but could not be installed.\n' +
-      'Install manually from: https://github.com/sourcegraph/scip/releases',
+        'Install manually from: https://github.com/sourcegraph/scip/releases',
     );
   }
 }
@@ -425,9 +417,7 @@ function prepareIndexerRuns(opts: {
   const skippedLanguages: { language: SupportedLanguage; reason: string }[] = [];
   const languageOutputs = opts.languages.map((language, index) => ({
     language,
-    scipPath: opts.languages.length > 1
-      ? tempScipPath(opts.tempOutputScip, language, index)
-      : opts.tempOutputScip,
+    scipPath: opts.languages.length > 1 ? tempScipPath(opts.tempOutputScip, language, index) : opts.tempOutputScip,
   }));
 
   for (const { language, scipPath } of languageOutputs) {
@@ -522,7 +512,7 @@ function validateIndexingOutcome(
     const detail = skippedLanguages.map((s) => `  - ${s.language}: ${s.reason}`).join('\n');
     throw new Error(
       'No language indexers ran successfully. Install at least one indexer for the languages in this project.\n' +
-      detail,
+        detail,
     );
   }
 
@@ -530,12 +520,14 @@ function validateIndexingOutcome(
     return;
   }
 
-  onStatus(`Indexed ${indexedOutputs.length} of ${requestedLanguages.length} languages; skipped ${skippedLanguages.map((s) => s.language).join(', ')}.`);
+  onStatus(
+    `Indexed ${indexedOutputs.length} of ${requestedLanguages.length} languages; skipped ${skippedLanguages.map((s) => s.language).join(', ')}.`,
+  );
   if (!allowPartial) {
     throw new Error(
       'Failed to index all required languages; preserving the previous index. ' +
-      'Pass --allow-partial to intentionally write an incomplete index.\n' +
-      skippedLanguages.map((s) => `  - ${s.language}: ${s.reason}`).join('\n'),
+        'Pass --allow-partial to intentionally write an incomplete index.\n' +
+        skippedLanguages.map((s) => `  - ${s.language}: ${s.reason}`).join('\n'),
     );
   }
 }
@@ -547,7 +539,10 @@ function materializeScipOutput(
 ): void {
   if (indexedOutputs.length > 1) {
     onStatus(`Merging ${indexedOutputs.length} language indexes...`);
-    mergeScipFiles(indexedOutputs.map((entry) => entry.scipPath), tempOutputScip);
+    mergeScipFiles(
+      indexedOutputs.map((entry) => entry.scipPath),
+      tempOutputScip,
+    );
   } else if (indexedOutputs[0]!.scipPath !== tempOutputScip) {
     renameSync(indexedOutputs[0]!.scipPath, tempOutputScip);
   }
@@ -569,7 +564,7 @@ function convertScipToSqlite(
     if (sanitized.removedDefinitionOccurrences > 0) {
       onStatus(
         `Sanitized ${sanitized.removedDefinitionOccurrences} invalid definition occurrences ` +
-        `across ${sanitized.touchedDocuments} documents before SQLite conversion.`,
+          `across ${sanitized.touchedDocuments} documents before SQLite conversion.`,
       );
     }
     execFileSync('scip', ['expt-convert', '--output', tempOutputDb, tempOutputScip], {
@@ -601,10 +596,13 @@ function acquireReindexLock(lockPath: string): () => void {
     throw err;
   }
 
-  writeFileSync(fd, JSON.stringify({
-    pid: process.pid,
-    startedAt: new Date().toISOString(),
-  }) + '\n');
+  writeFileSync(
+    fd,
+    JSON.stringify({
+      pid: process.pid,
+      startedAt: new Date().toISOString(),
+    }) + '\n',
+  );
 
   return () => {
     try {
@@ -659,15 +657,20 @@ function computeLanguageFingerprints(
   languages: readonly SupportedLanguage[],
   opts: { pnpmWorkspaces?: boolean },
 ): Partial<Record<SupportedLanguage, ReindexFingerprint>> {
-  return Object.fromEntries(languages.map((language) => {
-    const markerFiles = getIndexerConfig(language).markerFiles;
-    return [language, {
-      version: 1,
-      languages: [language],
-      pnpmWorkspaces: language === 'typescript' && opts.pnpmWorkspaces === true,
-      files: fingerprintProjectFiles(projectRoot, { language, markerFiles }),
-    }];
-  })) as Partial<Record<SupportedLanguage, ReindexFingerprint>>;
+  return Object.fromEntries(
+    languages.map((language) => {
+      const markerFiles = getIndexerConfig(language).markerFiles;
+      return [
+        language,
+        {
+          version: 1,
+          languages: [language],
+          pnpmWorkspaces: language === 'typescript' && opts.pnpmWorkspaces === true,
+          files: fingerprintProjectFiles(projectRoot, { language, markerFiles }),
+        },
+      ];
+    }),
+  ) as Partial<Record<SupportedLanguage, ReindexFingerprint>>;
 }
 
 function languageShardPath(outputDb: string, language: SupportedLanguage): string {
@@ -677,10 +680,12 @@ function languageShardPath(outputDb: string, language: SupportedLanguage): strin
 function isUnchangedReindex(metaPath: string, fingerprint: ReindexFingerprint): boolean {
   try {
     const meta = JSON.parse(readFileSync(metaPath, 'utf-8')) as Partial<ReindexMetadata>;
-    return (meta.version === 2 || meta.version === 3)
-      && meta.status === 'complete'
-      && stableJson(meta.fingerprint) === stableJson(fingerprint)
-      && stableJson([...(meta.indexedLanguages ?? [])].sort()) === stableJson(fingerprint.languages);
+    return (
+      (meta.version === 2 || meta.version === 3) &&
+      meta.status === 'complete' &&
+      stableJson(meta.fingerprint) === stableJson(fingerprint) &&
+      stableJson([...(meta.indexedLanguages ?? [])].sort()) === stableJson(fingerprint.languages)
+    );
   } catch {
     return false;
   }

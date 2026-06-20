@@ -4,9 +4,29 @@ import { dirname, join, resolve } from 'node:path';
 import { augmentAuxiliaryDocuments } from '../augment.js';
 import { fingerprintProjectFiles } from '../project-files.js';
 import { awaitVueReferenceWorkers, shouldUseVueWorkers } from './augment-vue-workers.js';
-import { createSymbolLookup, createVueComponentSymbolLookup, createVueLanguageContext, createVueSourceReader, createVueSymbolIdLookup, dedupeOccurrences, firstGeneratedOffset, firstSourceOffset, identifierTokens, isExternalDefinition, listVueDocumentFiles, replaceVueDocumentChunks, resolveVueDefinitionSymbolId, toRelativePath } from './augment-vue-runtime.js';
+import {
+  createSymbolLookup,
+  createVueComponentSymbolLookup,
+  createVueLanguageContext,
+  createVueSourceReader,
+  createVueSymbolIdLookup,
+  dedupeOccurrences,
+  firstGeneratedOffset,
+  firstSourceOffset,
+  identifierTokens,
+  isExternalDefinition,
+  listVueDocumentFiles,
+  replaceVueDocumentChunks,
+  resolveVueDefinitionSymbolId,
+  toRelativePath,
+} from './augment-vue-runtime.js';
 
-import type { AugmentVueResolvedResult, ResolvedOccurrence, VueReferenceComputationResult, VueReferenceTask } from './augment-vue-contracts.js';
+import type {
+  AugmentVueResolvedResult,
+  ResolvedOccurrence,
+  VueReferenceComputationResult,
+  VueReferenceTask,
+} from './augment-vue-contracts.js';
 
 type VueLanguageContext = ReturnType<typeof createVueLanguageContext>;
 type VueSourceReader = ReturnType<typeof createVueSourceReader>;
@@ -72,9 +92,7 @@ interface VueAugmentationTransactionContext {
   onStatus?: (message: string) => void;
 }
 
-export function augmentVueResolvedReferences(
-  opts: AugmentVueResolvedOptions,
-): AugmentVueResolvedResult {
+export function augmentVueResolvedReferences(opts: AugmentVueResolvedOptions): AugmentVueResolvedResult {
   augmentAuxiliaryDocuments({
     projectRoot: opts.projectRoot,
     dbPath: opts.dbPath,
@@ -117,9 +135,7 @@ function reuseCachedVueAugmentation(
 ): AugmentVueResolvedResult | null {
   const cachedResult = readAugmentVueCache(cachePath, cacheFingerprint);
   if (cachedResult) {
-    onStatus?.(
-      `Vue references unchanged; reused ${cachedResult.resolvedReferences} cached resolved references.`,
-    );
+    onStatus?.(`Vue references unchanged; reused ${cachedResult.resolvedReferences} cached resolved references.`);
   }
   return cachedResult;
 }
@@ -127,9 +143,7 @@ function reuseCachedVueAugmentation(
 // scip-query: ignore-extract — Vue augmentation is a transaction: create the
 // component-symbol view, compute Volar-backed references, normalize occurrence
 // facts, replace generated chunks, and return the persisted summary as one unit.
-function runVueAugmentationTransaction(
-  ctx: VueAugmentationTransactionContext,
-): AugmentVueResolvedResult {
+function runVueAugmentationTransaction(ctx: VueAugmentationTransactionContext): AugmentVueResolvedResult {
   const vueSymbolLookup = createVueComponentSymbolLookup(ctx.db, ctx.projectRoot, ctx.vueFiles);
   const computation = computeVueReferenceComputation(ctx, vueSymbolLookup);
   const occurrences = dedupeOccurrences(computation.occurrences);
@@ -179,15 +193,10 @@ function computeVueReferenceComputation(
   });
 }
 
-function readAugmentVueCache(
-  cachePath: string,
-  fingerprint: AugmentVueFingerprint,
-): AugmentVueResolvedResult | null {
+function readAugmentVueCache(cachePath: string, fingerprint: AugmentVueFingerprint): AugmentVueResolvedResult | null {
   try {
     const cache = JSON.parse(readFileSync(cachePath, 'utf-8')) as AugmentVueCache;
-    return JSON.stringify(cache.fingerprint) === JSON.stringify(fingerprint)
-      ? cache.result
-      : null;
+    return JSON.stringify(cache.fingerprint) === JSON.stringify(fingerprint) ? cache.result : null;
   } catch {
     return null;
   }
@@ -198,11 +207,18 @@ function writeAugmentVueCache(
   fingerprint: AugmentVueFingerprint,
   result: AugmentVueResolvedResult,
 ): void {
-  writeFileSync(cachePath, JSON.stringify({
-    updatedAt: new Date().toISOString(),
-    fingerprint,
-    result,
-  }, null, 2) + '\n');
+  writeFileSync(
+    cachePath,
+    JSON.stringify(
+      {
+        updatedAt: new Date().toISOString(),
+        fingerprint,
+        result,
+      },
+      null,
+      2,
+    ) + '\n',
+  );
 }
 
 function computeAugmentVueFingerprint(
@@ -210,7 +226,9 @@ function computeAugmentVueFingerprint(
   projectRoot: string,
   tsconfig: string,
 ): AugmentVueFingerprint {
-  const dbStats = db.prepare(`
+  const dbStats = db
+    .prepare(
+      `
     SELECT
       (SELECT COUNT(*) FROM documents) AS documents,
       (SELECT COUNT(*) FROM global_symbols) AS symbols,
@@ -219,7 +237,9 @@ function computeAugmentVueFingerprint(
       (SELECT COUNT(*) FROM defn_enclosing_ranges) AS ranges,
       (SELECT MAX(id) FROM chunks) AS maxChunkId,
       (SELECT MAX(id) FROM global_symbols) AS maxSymbolId
-  `).get() as AugmentVueFingerprint['db'];
+  `,
+    )
+    .get() as AugmentVueFingerprint['db'];
 
   return {
     version: 2,
@@ -271,17 +291,17 @@ function createVueReferenceComputationContext(opts: {
   };
 }
 
-function computeVueResolvedReferencesForFiles(
-  opts: VueReferenceComputationOptions,
-): VueReferenceComputationResult {
+function computeVueResolvedReferencesForFiles(opts: VueReferenceComputationOptions): VueReferenceComputationResult {
   const occurrences: ResolvedOccurrence[] = [];
   let skippedReferences = 0;
-  const tasks = opts.tasks ?? opts.vueFiles.map((fileName) => ({
-    fileName,
-    startOffset: 0,
-    endOffset: Number.POSITIVE_INFINITY,
-    countFileSkip: true,
-  }));
+  const tasks =
+    opts.tasks ??
+    opts.vueFiles.map((fileName) => ({
+      fileName,
+      startOffset: 0,
+      endOffset: Number.POSITIVE_INFINITY,
+      countFileSkip: true,
+    }));
 
   for (const task of tasks) {
     const result = computeVueReferenceTask(opts, task);
@@ -300,8 +320,9 @@ function computeVueReferenceTask(
   task: VueReferenceTask,
 ): VueReferenceComputationResult {
   const sourceScript = opts.context.language.scripts.get(task.fileName);
-  const serviceScript = sourceScript?.generated?.languagePlugin.typescript
-    ?.getServiceScript(sourceScript.generated.root)?.code;
+  const serviceScript = sourceScript?.generated?.languagePlugin.typescript?.getServiceScript(
+    sourceScript.generated.root,
+  )?.code;
   if (!sourceScript || !serviceScript) {
     return { occurrences: [], skippedReferences: task.countFileSkip ? 1 : 0 };
   }
@@ -334,18 +355,20 @@ function computeVueReferenceTask(
 // scip-query: ignore-extract — this is the per-token Volar resolution loop:
 // generated offsets, definitions, symbol IDs, primary occurrences, and
 // highlighted occurrences all advance the same processed-starts state.
-function resolveVueTokenReferences(opts: VueReferenceComputationOptions & {
-  fileName: string;
-  sourceInfo: SourceTextInfo;
-  sourceFile: string;
-  map: VolarMapper;
-  tokenContext: {
-    tokens: VueIdentifierToken[];
-    tokenByStart: Map<number, VueIdentifierToken>;
-    tokenTextCounts: Map<string, number>;
-    processedStarts: Set<number>;
-  };
-}): VueReferenceComputationResult {
+function resolveVueTokenReferences(
+  opts: VueReferenceComputationOptions & {
+    fileName: string;
+    sourceInfo: SourceTextInfo;
+    sourceFile: string;
+    map: VolarMapper;
+    tokenContext: {
+      tokens: VueIdentifierToken[];
+      tokenByStart: Map<number, VueIdentifierToken>;
+      tokenTextCounts: Map<string, number>;
+      processedStarts: Set<number>;
+    };
+  },
+): VueReferenceComputationResult {
   const occurrences: ResolvedOccurrence[] = [];
   let skippedReferences = 0;
 

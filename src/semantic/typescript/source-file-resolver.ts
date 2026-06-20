@@ -25,9 +25,7 @@ export function createTypeScriptSourceFiles(
     return cached(sourceFileCache, relativePath, () => {
       const fullPath = path.join(db.config.projectRoot, relativePath);
       for (const { project } of projects) {
-        const sourceFile = project.getSourceFile(fullPath)
-          ?? project.addSourceFileAtPathIfExists(fullPath)
-          ?? null;
+        const sourceFile = project.getSourceFile(fullPath) ?? project.addSourceFileAtPathIfExists(fullPath) ?? null;
         if (sourceFile) return { project, sourceFile };
       }
       return null;
@@ -37,8 +35,9 @@ export function createTypeScriptSourceFiles(
   return {
     sourceFile: (relativePath) => sourceFileMatch(relativePath)?.sourceFile ?? null,
     sourceFileMatch,
-    indexedTypeScriptLikeDocuments: () => indexedDocumentPaths(db, {
-      extensions: TYPESCRIPT_SEMANTIC_EXTENSIONS,
-    }),
+    indexedTypeScriptLikeDocuments: () =>
+      indexedDocumentPaths(db, {
+        extensions: TYPESCRIPT_SEMANTIC_EXTENSIONS,
+      }),
   };
 }

@@ -58,13 +58,12 @@ export function getIndexFreshness(
     const metadata = JSON.parse(readFileSync(paths.metaPath, 'utf-8')) as ReindexMetadataLike;
     const languages = config.languages ?? detectLanguages(projectRoot);
     const current = runtimeFingerprint(projectRoot, languages, config);
-    const metadataLanguages = Array.isArray(metadata.indexedLanguages)
-      ? [...metadata.indexedLanguages].sort()
-      : [];
-    const fresh = (metadata.version === 2 || metadata.version === 3)
-      && metadata.status === 'complete'
-      && JSON.stringify(metadata.fingerprint) === JSON.stringify(current)
-      && JSON.stringify(metadataLanguages) === JSON.stringify(current.languages);
+    const metadataLanguages = Array.isArray(metadata.indexedLanguages) ? [...metadata.indexedLanguages].sort() : [];
+    const fresh =
+      (metadata.version === 2 || metadata.version === 3) &&
+      metadata.status === 'complete' &&
+      JSON.stringify(metadata.fingerprint) === JSON.stringify(current) &&
+      JSON.stringify(metadataLanguages) === JSON.stringify(current.languages);
     return {
       state: fresh ? 'fresh' : 'stale',
       checkedAt,

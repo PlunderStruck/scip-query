@@ -18,9 +18,12 @@ export interface DefinitionConsumerPartition {
   importOnlyConsumers: number;
 }
 
-const FILE_USAGE_CACHE = createPerDbCache<string, { importedLeaves: Set<string>; usedLeaves: Set<string> }>('definition-consumer-file-usage', {
-  clearGroups: ['whole-project', 'source-file'],
-});
+const FILE_USAGE_CACHE = createPerDbCache<string, { importedLeaves: Set<string>; usedLeaves: Set<string> }>(
+  'definition-consumer-file-usage',
+  {
+    clearGroups: ['whole-project', 'source-file'],
+  },
+);
 
 /**
  * Consumer evidence for detector queries: cross-file callers plus optional
@@ -65,17 +68,11 @@ export function partitionDefinitionConsumers(
   return { realConsumers, barrelConsumers, importOnlyConsumers };
 }
 
-export function isImportOnlyConsumer(
-  db: ScipDatabase,
-  consumerFile: string,
-  leaf: string,
-): boolean {
+export function isImportOnlyConsumer(db: ScipDatabase, consumerFile: string, leaf: string): boolean {
   if (!leaf) return false;
   const lang = detectAstLanguage(consumerFile);
   if (!lang) return false;
-  const usage = FILE_USAGE_CACHE.get(db, consumerFile, () =>
-    computeFileLeafUsage(db, consumerFile, lang),
-  );
+  const usage = FILE_USAGE_CACHE.get(db, consumerFile, () => computeFileLeafUsage(db, consumerFile, lang));
   return usage.importedLeaves.has(leaf) && !usage.usedLeaves.has(leaf);
 }
 
@@ -91,16 +88,21 @@ function computeFileLeafUsage(
   const tree = getAst(db, file);
   if (!tree) return { importedLeaves, usedLeaves };
 
-  const importTypes = lang === 'rust'
-    ? new Set(['use_declaration'])
-    : lang === 'python'
-      ? new Set(['import_statement', 'import_from_statement'])
-      : new Set(['import_statement']);
+  const importTypes =
+    lang === 'rust'
+      ? new Set(['use_declaration'])
+      : lang === 'python'
+        ? new Set(['import_statement', 'import_from_statement'])
+        : new Set(['import_statement']);
 
   const walk = (node: SyntaxNode, insideImport: boolean): void => {
     const nowInside = insideImport || importTypes.has(node.type);
-    if (node.type === 'identifier' || node.type === 'type_identifier'
-        || node.type === 'property_identifier' || node.type === 'field_identifier') {
+    if (
+      node.type === 'identifier' ||
+      node.type === 'type_identifier' ||
+      node.type === 'property_identifier' ||
+      node.type === 'field_identifier'
+    ) {
       if (nowInside) importedLeaves.add(node.text);
       else usedLeaves.add(node.text);
     }

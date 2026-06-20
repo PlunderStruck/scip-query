@@ -8,16 +8,20 @@ import type { Tree } from '../../source/ast.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { JVM_EXTENSIONS, resolveQualifiedImportPath } from '../../resolution/import-path-resolver.js';
 import type { ParsedSourceImport } from '../../domain/types.js';
-import { buildNamedImport, buildNamespaceImport, buildSimpleImport, collectIdentifiersOutside, parseImportLineMatches, parseWithAstLanguageDispatch, splitTopLevel } from '../utils.js';
+import {
+  buildNamedImport,
+  buildNamespaceImport,
+  buildSimpleImport,
+  collectIdentifiersOutside,
+  parseImportLineMatches,
+  parseWithAstLanguageDispatch,
+  splitTopLevel,
+} from '../utils.js';
 
 // scip-query: ignore-extract — this is the JVM import parser dispatcher:
 // Java, Scala, Kotlin, and regex fallback import shapes share one public
 // parser boundary.
-export function parseJvmImports(
-  db: ScipDatabase,
-  importerPath: string,
-  source: string,
-): ParsedSourceImport[] {
+export function parseJvmImports(db: ScipDatabase, importerPath: string, source: string): ParsedSourceImport[] {
   return parseWithAstLanguageDispatch(
     db,
     importerPath,
@@ -26,21 +30,18 @@ export function parseJvmImports(
       kotlin: (tree) => parseKotlinImportsAst(db, importerPath, tree),
       scala: (tree) => parseScalaImportsAst(db, importerPath, tree),
     },
-    () => parseImportLineMatches(source, /^[ \t]*import\s+(?:static\s+)?(.+?)\s*;?$/gm, (match, body) => {
-      const clause = match[1]?.trim();
-      if (!clause) return [];
-      return parseJvmImportClause(db, importerPath, clause, body);
-    }),
+    () =>
+      parseImportLineMatches(source, /^[ \t]*import\s+(?:static\s+)?(.+?)\s*;?$/gm, (match, body) => {
+        const clause = match[1]?.trim();
+        if (!clause) return [];
+        return parseJvmImportClause(db, importerPath, clause, body);
+      }),
   );
 }
 
 // scip-query: ignore-similar — Java-specific: scoped_identifier nodes, no
 // aliases, asterisk wildcards. Per-language AST shapes intentionally split.
-function parseJavaImportsAst(
-  db: ScipDatabase,
-  importerPath: string,
-  tree: Tree,
-): ParsedSourceImport[] {
+function parseJavaImportsAst(db: ScipDatabase, importerPath: string, tree: Tree): ParsedSourceImport[] {
   const usedNames = collectIdentifiersOutside(tree, new Set(['import_declaration']));
   const results: ParsedSourceImport[] = [];
 
@@ -58,18 +59,21 @@ function parseJavaImportsAst(
     }
 
     const importedName = qualified.split('.').pop() ?? qualified;
-    results.push(buildNamedImport(importedName, importedName, resolveQualifiedImportPath(db, qualified, JVM_EXTENSIONS), usedNames));
+    results.push(
+      buildNamedImport(
+        importedName,
+        importedName,
+        resolveQualifiedImportPath(db, qualified, JVM_EXTENSIONS),
+        usedNames,
+      ),
+    );
   }
   return results;
 }
 
 // scip-query: ignore-similar — Kotlin-specific: import_header + import_alias +
 // wildcard_import nodes. Per-language AST shapes intentionally split.
-function parseKotlinImportsAst(
-  db: ScipDatabase,
-  importerPath: string,
-  tree: Tree,
-): ParsedSourceImport[] {
+function parseKotlinImportsAst(db: ScipDatabase, importerPath: string, tree: Tree): ParsedSourceImport[] {
   const usedNames = collectIdentifiersOutside(tree, new Set(['import_header', 'import_list']));
   const results: ParsedSourceImport[] = [];
 
@@ -89,7 +93,9 @@ function parseKotlinImportsAst(
     const aliasName = aliasNode?.namedChild(0)?.text;
     const localName = aliasName ?? importedName;
 
-    results.push(buildNamedImport(importedName, localName, resolveQualifiedImportPath(db, qualified, JVM_EXTENSIONS), usedNames));
+    results.push(
+      buildNamedImport(importedName, localName, resolveQualifiedImportPath(db, qualified, JVM_EXTENSIONS), usedNames),
+    );
   }
   return results;
 }
@@ -97,11 +103,7 @@ function parseKotlinImportsAst(
 // scip-query: ignore-similar — Scala-specific: namespace_selectors with
 // arrow_renamed_identifier (`{X => Y}`) syntax, three import-shape branches.
 // Per-language AST shapes intentionally split.
-function parseScalaImportsAst(
-  db: ScipDatabase,
-  importerPath: string,
-  tree: Tree,
-): ParsedSourceImport[] {
+function parseScalaImportsAst(db: ScipDatabase, importerPath: string, tree: Tree): ParsedSourceImport[] {
   const usedNames = collectIdentifiersOutside(tree, new Set(['import_declaration']));
   const results: ParsedSourceImport[] = [];
 
@@ -130,20 +132,24 @@ function parseScalaImportsAst(
           const importedName = orig.text;
           const localName = alias?.text ?? importedName;
           if (importedName === '_') continue;
-          results.push(buildNamedImport(
-            importedName,
-            localName,
-            resolveQualifiedImportPath(db, `${prefix}.${importedName}`, JVM_EXTENSIONS),
-            usedNames,
-          ));
+          results.push(
+            buildNamedImport(
+              importedName,
+              localName,
+              resolveQualifiedImportPath(db, `${prefix}.${importedName}`, JVM_EXTENSIONS),
+              usedNames,
+            ),
+          );
         } else if (sel.type === 'identifier') {
           const importedName = sel.text;
-          results.push(buildNamedImport(
-            importedName,
-            importedName,
-            resolveQualifiedImportPath(db, `${prefix}.${importedName}`, JVM_EXTENSIONS),
-            usedNames,
-          ));
+          results.push(
+            buildNamedImport(
+              importedName,
+              importedName,
+              resolveQualifiedImportPath(db, `${prefix}.${importedName}`, JVM_EXTENSIONS),
+              usedNames,
+            ),
+          );
         }
       }
       continue;
@@ -151,17 +157,23 @@ function parseScalaImportsAst(
 
     // Bare `import x.Y` — last segment is the imported name.
     const importedName = pathSegments[pathSegments.length - 1]?.text ?? prefix;
-    const qualifiedPrefix = pathSegments.slice(0, -1).map((s) => s.text).join('.') || prefix;
-    results.push(buildNamedImport(
-      importedName,
-      importedName,
-      resolveQualifiedImportPath(
-        db,
-        qualifiedPrefix && pathSegments.length > 1 ? `${qualifiedPrefix}.${importedName}` : prefix,
-        JVM_EXTENSIONS,
+    const qualifiedPrefix =
+      pathSegments
+        .slice(0, -1)
+        .map((s) => s.text)
+        .join('.') || prefix;
+    results.push(
+      buildNamedImport(
+        importedName,
+        importedName,
+        resolveQualifiedImportPath(
+          db,
+          qualifiedPrefix && pathSegments.length > 1 ? `${qualifiedPrefix}.${importedName}` : prefix,
+          JVM_EXTENSIONS,
+        ),
+        usedNames,
       ),
-      usedNames,
-    ));
+    );
   }
   return results;
 }
@@ -178,25 +190,23 @@ function parseJvmImportClause(
     return splitTopLevel(inner).flatMap((entry) => {
       const cleaned = entry.trim();
       if (!cleaned) return [];
-      const [importedPart, aliasPart] = cleaned.includes('=>')
-        ? cleaned.split(/\s*=>\s*/)
-        : cleaned.split(/\s+as\s+/);
+      const [importedPart, aliasPart] = cleaned.includes('=>') ? cleaned.split(/\s*=>\s*/) : cleaned.split(/\s+as\s+/);
       const importedName = importedPart?.trim();
       if (!importedName || importedName === '_') return [];
       const localName = (aliasPart ?? importedName.split('.').pop() ?? importedName).trim();
-      const qualified = importedName === '_'
-        ? prefix
-        : `${prefix}.${importedName}`.replace(/\.\./g, '.');
+      const qualified = importedName === '_' ? prefix : `${prefix}.${importedName}`.replace(/\.\./g, '.');
       return [buildSimpleImport(db, importerPath, body, qualified, importedName, localName)];
     });
   }
 
-  return [buildSimpleImport(
-    db,
-    importerPath,
-    body,
-    clause,
-    clause.split('.').pop() ?? clause,
-    clause.split('.').pop() ?? clause,
-  )];
+  return [
+    buildSimpleImport(
+      db,
+      importerPath,
+      body,
+      clause,
+      clause.split('.').pop() ?? clause,
+      clause.split('.').pop() ?? clause,
+    ),
+  ];
 }

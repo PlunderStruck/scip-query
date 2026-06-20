@@ -40,17 +40,24 @@ export function unusedParams(
   const fileFilter = opts.files === undefined ? null : new Set(opts.files);
   const index = new ProjectIndex(db);
   return runCandidateAnalysis({
-    candidates: () => index.productionCallableDefinitions({
-      scope,
-      minLoc: 2,
-      excludeRootedSymbols: true,
-      requireFunctionLikeSymbol: true,
-    }).filter((definition) => isTypeScriptFamily(definition.relativePath)
-      && (fileFilter === null || fileFilter.has(definition.relativePath))),
+    candidates: () =>
+      index
+        .productionCallableDefinitions({
+          scope,
+          minLoc: 2,
+          excludeRootedSymbols: true,
+          requireFunctionLikeSymbol: true,
+        })
+        .filter(
+          (definition) =>
+            isTypeScriptFamily(definition.relativePath) &&
+            (fileFilter === null || fileFilter.has(definition.relativePath)),
+        ),
     scanLimit,
     evaluate: (definition) => {
-      const callable = getSourceFacts(db, definition.relativePath)?.callables.find((candidate) =>
-        candidate.startLine === definition.startLine && candidate.endLine === definition.endLine);
+      const callable = getSourceFacts(db, definition.relativePath)?.callables.find(
+        (candidate) => candidate.startLine === definition.startLine && candidate.endLine === definition.endLine,
+      );
       if (!callable || callable.params.length === 0) return null;
       if (callable.params.some((param) => !param.simple)) return null;
       if (callable.paramsEndLine >= callable.endLine) return null; // one-liner
@@ -76,9 +83,9 @@ export function unusedParams(
       };
     },
     orderResults: (left, right) =>
-      right.unusedTrailing.length - left.unusedTrailing.length
-      || left.file.localeCompare(right.file)
-      || left.startLine - right.startLine,
+      right.unusedTrailing.length - left.unusedTrailing.length ||
+      left.file.localeCompare(right.file) ||
+      left.startLine - right.startLine,
     limit,
   });
 }
@@ -89,11 +96,7 @@ function isTypeScriptFamily(relativePath: string): boolean {
 }
 
 /** Used = the identifier appears on a line strictly inside the body. */
-function isUsedInBody(
-  lines: readonly number[] | undefined,
-  paramsEndLine: number,
-  endLine: number,
-): boolean {
+function isUsedInBody(lines: readonly number[] | undefined, paramsEndLine: number, endLine: number): boolean {
   if (!lines) return false;
   return lines.some((line) => line > paramsEndLine && line <= endLine);
 }

@@ -13,9 +13,7 @@ export function buildTypeContainerMap(tree: Tree, language: AstLanguage): Map<st
     bucket.add(container);
   };
 
-  const refTypes = language === 'python'
-    ? new Set(['identifier'])
-    : new Set(['type_identifier']);
+  const refTypes = language === 'python' ? new Set(['identifier']) : new Set(['type_identifier']);
   const collectChildren = (root: SyntaxNode, container: string): void => {
     const walk = (node: SyntaxNode): void => {
       if (refTypes.has(node.type) && node.text !== container) {
@@ -30,9 +28,12 @@ export function buildTypeContainerMap(tree: Tree, language: AstLanguage): Map<st
     for (const node of tree.rootNode.descendantsOfType(['struct_item', 'enum_item', 'union_item', 'type_item'])) {
       const name = node.namedChildren.find((child) => child.type === 'type_identifier')?.text;
       if (!name) continue;
-      const body = node.namedChildren.find((child) => child.type === 'field_declaration_list'
-        || child.type === 'enum_variant_list'
-        || child.type === 'ordered_field_declaration_list');
+      const body = node.namedChildren.find(
+        (child) =>
+          child.type === 'field_declaration_list' ||
+          child.type === 'enum_variant_list' ||
+          child.type === 'ordered_field_declaration_list',
+      );
       if (body) collectChildren(body, name);
       if (node.type === 'type_item') collectChildren(node, name);
     }
@@ -49,7 +50,11 @@ export function buildTypeContainerMap(tree: Tree, language: AstLanguage): Map<st
       }
     }
   } else {
-    for (const node of tree.rootNode.descendantsOfType(['interface_declaration', 'type_alias_declaration', 'class_declaration'])) {
+    for (const node of tree.rootNode.descendantsOfType([
+      'interface_declaration',
+      'type_alias_declaration',
+      'class_declaration',
+    ])) {
       const name = node.namedChildren.find((child) => child.type === 'type_identifier')?.text;
       if (!name) continue;
       collectChildren(node, name);

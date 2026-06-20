@@ -69,7 +69,8 @@ function loadExternalSurfaceRows(db: ScipDatabase, matchedPaths: string[]): Surf
 function loadExposedCallableDefinitions(db: ScipDatabase, matchedPaths: string[]): SurfaceRow[] {
   const index = new ProjectIndex(db);
   return matchedPaths.flatMap((relativePath) =>
-    index.definitionsForFile(relativePath)
+    index
+      .definitionsForFile(relativePath)
       .filter((definition) => isCallableSymbol(definition.symbol))
       .map((definition) => ({
         relative_path: relativePath,

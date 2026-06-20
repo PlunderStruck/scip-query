@@ -28,8 +28,10 @@ function gitIn(root: string, ...args: string[]): void {
     stdio: 'ignore',
     env: {
       ...process.env,
-      GIT_AUTHOR_NAME: 'test', GIT_AUTHOR_EMAIL: 't@t.t',
-      GIT_COMMITTER_NAME: 'test', GIT_COMMITTER_EMAIL: 't@t.t',
+      GIT_AUTHOR_NAME: 'test',
+      GIT_AUTHOR_EMAIL: 't@t.t',
+      GIT_COMMITTER_NAME: 'test',
+      GIT_COMMITTER_EMAIL: 't@t.t',
       GIT_AUTHOR_DATE: '1700000000 +0000',
       GIT_COMMITTER_DATE: '1700000000 +0000',
     },
@@ -40,8 +42,7 @@ function git(...args: string[]): void {
   gitIn(repoRoot, ...args);
 }
 
-const sym = (path: string, name: string) =>
-  `scip-typescript npm pkg 1.0.0 src/\`${path}\`/${name}().`;
+const sym = (path: string, name: string) => `scip-typescript npm pkg 1.0.0 src/\`${path}\`/${name}().`;
 
 const SITE_BODY = [
   "import { coreOne, coreTwo, coreThree } from './core.js';",
@@ -56,62 +57,77 @@ const SITE_BODY = [
 ].join('\n');
 
 function writeBaseFiles(): void {
-  writeFileSync(join(repoRoot, 'src', 'core.ts'), [
-    'export function coreOne() { return 1; }',
-    'export function coreTwo() { return 2; }',
-    'export function coreThree() { return 3; }',
-    '',
-  ].join('\n'));
+  writeFileSync(
+    join(repoRoot, 'src', 'core.ts'),
+    [
+      'export function coreOne() { return 1; }',
+      'export function coreTwo() { return 2; }',
+      'export function coreThree() { return 3; }',
+      '',
+    ].join('\n'),
+  );
   writeFileSync(join(repoRoot, 'src', 'util.ts'), 'export const placeholder = 1;\n');
   writeFileSync(join(repoRoot, 'src', 'site-a.ts'), 'export function siteA() { return 0; }\n');
-  writeFileSync(join(repoRoot, 'src', 'site-b.ts'), [
-    "import { coreOne, coreTwo, coreThree } from './core.js';",
-    'export function extraB() { return 9; }',
-    'export function siteB() {',
-    '  const a = coreOne();',
-    '  const b = coreTwo();',
-    '  const c = coreThree();',
-    '  return a + b + c + extraB();',
-    '}',
-    '',
-  ].join('\n'));
+  writeFileSync(
+    join(repoRoot, 'src', 'site-b.ts'),
+    [
+      "import { coreOne, coreTwo, coreThree } from './core.js';",
+      'export function extraB() { return 9; }',
+      'export function siteB() {',
+      '  const a = coreOne();',
+      '  const b = coreTwo();',
+      '  const c = coreThree();',
+      '  return a + b + c + extraB();',
+      '}',
+      '',
+    ].join('\n'),
+  );
   writeFileSync(join(repoRoot, 'src', 'site-c.ts'), SITE_BODY.replace('%NAME%', 'siteC'));
-  writeFileSync(join(repoRoot, 'src', 'site-d.ts'), [
-    "import { coreOne, coreTwo, coreThree } from './core.js';",
-    "import { formatThing } from './util.js';",
-    'export function siteD() {',
-    '  const a = coreOne();',
-    '  const b = coreTwo();',
-    '  const c = coreThree();',
-    '  return a + b + c + formatThing();',
-    '}',
-    '',
-  ].join('\n'));
+  writeFileSync(
+    join(repoRoot, 'src', 'site-d.ts'),
+    [
+      "import { coreOne, coreTwo, coreThree } from './core.js';",
+      "import { formatThing } from './util.js';",
+      'export function siteD() {',
+      '  const a = coreOne();',
+      '  const b = coreTwo();',
+      '  const c = coreThree();',
+      '  return a + b + c + formatThing();',
+      '}',
+      '',
+    ].join('\n'),
+  );
   writeFileSync(join(repoRoot, 'src', 'site-e.ts'), 'export function siteE() { return 5; }\n');
 }
 
 function writeWorkingTreeChanges(): void {
-  writeFileSync(join(repoRoot, 'src', 'util.ts'), [
-    "import { coreOne, coreTwo, coreThree } from './core.js';",
-    '',
-    'export function formatThing() {',
-    '  const a = coreOne();',
-    '  const b = coreTwo();',
-    '  const c = coreThree();',
-    '  return a + b + c;',
-    '}',
-    'export function tinyHelper() { return coreOne(); }',
-    'export function orphanHelper() { return coreOne() + coreTwo() + coreThree(); }',
-    '',
-  ].join('\n'));
-  writeFileSync(join(repoRoot, 'src', 'site-a.ts'), [
-    "import { formatThing } from './util.js';",
-    '',
-    'export function siteA() {',
-    '  return formatThing();',
-    '}',
-    '',
-  ].join('\n'));
+  writeFileSync(
+    join(repoRoot, 'src', 'util.ts'),
+    [
+      "import { coreOne, coreTwo, coreThree } from './core.js';",
+      '',
+      'export function formatThing() {',
+      '  const a = coreOne();',
+      '  const b = coreTwo();',
+      '  const c = coreThree();',
+      '  return a + b + c;',
+      '}',
+      'export function tinyHelper() { return coreOne(); }',
+      'export function orphanHelper() { return coreOne() + coreTwo() + coreThree(); }',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(
+    join(repoRoot, 'src', 'site-a.ts'),
+    [
+      "import { formatThing } from './util.js';",
+      '',
+      'export function siteA() {',
+      '  return formatThing();',
+      '}',
+      '',
+    ].join('\n'),
+  );
   writeFileSync(join(repoRoot, 'src', 'site-e.ts'), SITE_BODY.replace('%NAME%', 'siteE'));
 }
 
@@ -274,8 +290,7 @@ describe('incomplete-migration', () => {
 
   it('does not report already-migrated sites or files inside the diff', () => {
     const result = incompleteMigration(db, { base: 'HEAD', semantic: false });
-    const leftoverFiles = result.findings.flatMap((finding) =>
-      finding.leftovers.map((leftover) => leftover.file));
+    const leftoverFiles = result.findings.flatMap((finding) => finding.leftovers.map((leftover) => leftover.file));
 
     // site-d calls the helper; site-e is part of the diff itself.
     expect(leftoverFiles).not.toContain('src/site-d.ts');
@@ -307,21 +322,27 @@ describe('incomplete-migration', () => {
       mkdirSync(join(movedRepo, 'src', 'queries', 'cleanup'), { recursive: true });
       mkdirSync(join(movedRepo, 'src', 'queries'), { recursive: true });
       gitIn(movedRepo, 'init');
-      writeFileSync(join(movedRepo, 'src', 'queries', 'doc-drift.ts'), [
-        'export function docPathCandidates(path: string) {',
-        '  return path.split("/").filter(Boolean);',
-        '}',
-        '',
-      ].join('\n'));
+      writeFileSync(
+        join(movedRepo, 'src', 'queries', 'doc-drift.ts'),
+        [
+          'export function docPathCandidates(path: string) {',
+          '  return path.split("/").filter(Boolean);',
+          '}',
+          '',
+        ].join('\n'),
+      );
       gitIn(movedRepo, 'add', '-A');
       gitIn(movedRepo, 'commit', '-m', 'base', '--no-gpg-sign');
       rmSync(join(movedRepo, 'src', 'queries', 'doc-drift.ts'));
-      writeFileSync(join(movedRepo, 'src', 'queries', 'cleanup', 'doc-drift.ts'), [
-        'export function docPathCandidates(path: string) {',
-        '  return path.split("/").filter(Boolean);',
-        '}',
-        '',
-      ].join('\n'));
+      writeFileSync(
+        join(movedRepo, 'src', 'queries', 'cleanup', 'doc-drift.ts'),
+        [
+          'export function docPathCandidates(path: string) {',
+          '  return path.split("/").filter(Boolean);',
+          '}',
+          '',
+        ].join('\n'),
+      );
 
       const dbPath = join(movedRepo, 'index.db');
       const sqliteDb = new Database(dbPath);
@@ -345,10 +366,12 @@ describe('incomplete-migration', () => {
       });
       try {
         const plan = diffImpactPlan(movedDb, { base: 'HEAD' });
-        expect(plan.renamedFiles).toContainEqual(expect.objectContaining({
-          from: 'src/queries/doc-drift.ts',
-          to: 'src/queries/cleanup/doc-drift.ts',
-        }));
+        expect(plan.renamedFiles).toContainEqual(
+          expect.objectContaining({
+            from: 'src/queries/doc-drift.ts',
+            to: 'src/queries/cleanup/doc-drift.ts',
+          }),
+        );
 
         const result = incompleteMigration(movedDb, { base: 'HEAD', semantic: false, diffPlan: plan });
         expect(result.changedFiles).toEqual(['src/queries/cleanup/doc-drift.ts']);
@@ -371,12 +394,15 @@ describe('incomplete-migration', () => {
       mkdirSync(join(movedRepo, 'src', 'queries', 'cleanup'), { recursive: true });
       mkdirSync(join(movedRepo, 'src', 'queries'), { recursive: true });
       gitIn(movedRepo, 'init');
-      writeFileSync(join(movedRepo, 'src', 'queries', 'doc-drift.ts'), [
-        'export function docPathCandidates(path: string) {',
-        '  return path.split("/").filter(Boolean);',
-        '}',
-        '',
-      ].join('\n'));
+      writeFileSync(
+        join(movedRepo, 'src', 'queries', 'doc-drift.ts'),
+        [
+          'export function docPathCandidates(path: string) {',
+          '  return path.split("/").filter(Boolean);',
+          '}',
+          '',
+        ].join('\n'),
+      );
       gitIn(movedRepo, 'add', '-A');
       gitIn(movedRepo, 'commit', '-m', 'base', '--no-gpg-sign');
       gitIn(movedRepo, 'mv', 'src/queries/doc-drift.ts', 'src/queries/cleanup/doc-drift.ts');
@@ -408,10 +434,12 @@ describe('incomplete-migration', () => {
         expect(deletedOnly).toBe('');
 
         const plan = diffImpactPlan(movedDb, { base: 'HEAD' });
-        expect(plan.renamedFiles).toContainEqual(expect.objectContaining({
-          from: 'src/queries/doc-drift.ts',
-          to: 'src/queries/cleanup/doc-drift.ts',
-        }));
+        expect(plan.renamedFiles).toContainEqual(
+          expect.objectContaining({
+            from: 'src/queries/doc-drift.ts',
+            to: 'src/queries/cleanup/doc-drift.ts',
+          }),
+        );
       } finally {
         movedDb.close();
       }
@@ -456,9 +484,7 @@ describe('incomplete-migration', () => {
       suppressionHint: expect.stringContaining('scip-query: ignore incomplete-migration'),
     });
     expect(findings[0]!.confidence).toBeGreaterThan(0);
-    expect(findings[0]!.why).toEqual(expect.arrayContaining([
-      expect.stringContaining('formatThing'),
-    ]));
+    expect(findings[0]!.why).toEqual(expect.arrayContaining([expect.stringContaining('formatThing')]));
   });
 
   it('honors structured diff-gate suppressions from config', () => {
@@ -523,24 +549,30 @@ describe('incomplete-migration', () => {
       mkdirSync(join(importOnlyRepo, 'src'), { recursive: true });
       gitIn(importOnlyRepo, 'init');
       writeFileSync(join(importOnlyRepo, 'README.md'), 'The cleanup detector lives in src/dead.ts.\n');
-      writeFileSync(join(importOnlyRepo, 'src', 'dead.ts'), [
-        "import { helper } from './old-helper.js';",
-        '',
-        'export function cleanupDetector() {',
-        '  return helper();',
-        '}',
-        '',
-      ].join('\n'));
+      writeFileSync(
+        join(importOnlyRepo, 'src', 'dead.ts'),
+        [
+          "import { helper } from './old-helper.js';",
+          '',
+          'export function cleanupDetector() {',
+          '  return helper();',
+          '}',
+          '',
+        ].join('\n'),
+      );
       gitIn(importOnlyRepo, 'add', '-A');
       gitIn(importOnlyRepo, 'commit', '-m', 'base', '--no-gpg-sign');
-      writeFileSync(join(importOnlyRepo, 'src', 'dead.ts'), [
-        "import { helper } from './new-helper.js';",
-        '',
-        'export function cleanupDetector() {',
-        '  return helper();',
-        '}',
-        '',
-      ].join('\n'));
+      writeFileSync(
+        join(importOnlyRepo, 'src', 'dead.ts'),
+        [
+          "import { helper } from './new-helper.js';",
+          '',
+          'export function cleanupDetector() {',
+          '  return helper();',
+          '}',
+          '',
+        ].join('\n'),
+      );
 
       const dbPath = join(importOnlyRepo, 'index.db');
       const sqliteDb = new Database(dbPath);

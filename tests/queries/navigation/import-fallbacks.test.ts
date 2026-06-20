@@ -1,15 +1,5 @@
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  it,
-} from 'vitest';
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-} from 'node:fs';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
@@ -28,11 +18,7 @@ describe('import fallbacks', () => {
     mkdirSync(join(projectRoot, 'lib'), { recursive: true });
 
     writeFixtureFiles(projectRoot, {
-      'src/CompanionAdapter.java': [
-        'package fixture;',
-        'public interface CompanionAdapter {}',
-        '',
-      ],
+      'src/CompanionAdapter.java': ['package fixture;', 'public interface CompanionAdapter {}', ''],
       'src/RunCoordinator.java': [
         'package fixture;',
         'import fixture.CompanionAdapter;',
@@ -42,20 +28,8 @@ describe('import fallbacks', () => {
         '}',
         '',
       ],
-      'lib/companion_adapter.rb': [
-        'module Fixture',
-        '  class CompanionAdapter',
-        '  end',
-        'end',
-        '',
-      ],
-      'lib/fixture.rb': [
-        'require_relative "companion_adapter"',
-        '',
-        'module Fixture',
-        'end',
-        '',
-      ],
+      'lib/companion_adapter.rb': ['module Fixture', '  class CompanionAdapter', '  end', 'end', ''],
+      'lib/fixture.rb': ['require_relative "companion_adapter"', '', 'module Fixture', 'end', ''],
     });
 
     evidenceFixtureDb(join(tempDir, 'index.db'))
@@ -83,31 +57,39 @@ describe('import fallbacks', () => {
   });
 
   it('recovers java import edges from source when role=2 is missing', () => {
-    expect(imports(db, 'src/RunCoordinator.java')).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        shortName: 'CompanionAdapter',
-        fromFile: 'src/CompanionAdapter.java',
-      }),
-    ]));
+    expect(imports(db, 'src/RunCoordinator.java')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          shortName: 'CompanionAdapter',
+          fromFile: 'src/CompanionAdapter.java',
+        }),
+      ]),
+    );
 
-    expect(importedBy(db, 'CompanionAdapter')).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        fromFile: 'src/RunCoordinator.java',
-      }),
-    ]));
+    expect(importedBy(db, 'CompanionAdapter')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fromFile: 'src/RunCoordinator.java',
+        }),
+      ]),
+    );
   });
 
   it('treats require_relative as an importer of the loaded ruby file', () => {
-    expect(imports(db, 'lib/fixture.rb')).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        fromFile: 'lib/companion_adapter.rb',
-      }),
-    ]));
+    expect(imports(db, 'lib/fixture.rb')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fromFile: 'lib/companion_adapter.rb',
+        }),
+      ]),
+    );
 
-    expect(importedBy(db, 'scip-ruby gem fixture . lib/companion_adapter.rb/Fixture/CompanionAdapter#')).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        fromFile: 'lib/fixture.rb',
-      }),
-    ]));
+    expect(importedBy(db, 'scip-ruby gem fixture . lib/companion_adapter.rb/Fixture/CompanionAdapter#')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fromFile: 'lib/fixture.rb',
+        }),
+      ]),
+    );
   });
 });

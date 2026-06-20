@@ -23,7 +23,8 @@ export function members(db: ScipDatabase, symbolPattern: string): MemberResult[]
   if (!parent) return [];
 
   const index = new ProjectIndex(db);
-  return index.definitionsForFile(parent.relativePath)
+  return index
+    .definitionsForFile(parent.relativePath)
     .filter((definition) => definition.symbol !== parent.symbol)
     .filter((definition) => isDirectChildSymbol(parent.symbol, definition.symbol))
     .sort((a, b) => a.startLine - b.startLine || a.endLine - b.endLine)

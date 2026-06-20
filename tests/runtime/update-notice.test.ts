@@ -2,11 +2,7 @@ import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  isNewerVersion,
-  maybePrintUpdateNotice,
-  renderUpdateNotice,
-} from '../../src/runtime/update-notice.js';
+import { isNewerVersion, maybePrintUpdateNotice, renderUpdateNotice } from '../../src/runtime/update-notice.js';
 
 function tempCacheDir(): string {
   return mkdtempSync(join(tmpdir(), 'scip-query-update-notice-'));

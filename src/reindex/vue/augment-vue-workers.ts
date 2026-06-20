@@ -68,9 +68,8 @@ export function awaitVueReferenceWorkers(opts: {
 
 function resolveVueWorkerCount(fileCount: number): number {
   const configured = Number(process.env['SCIP_QUERY_AUGMENT_VUE_WORKERS'] ?? 0);
-  const maxWorkers = Number.isFinite(configured) && configured > 0
-    ? configured
-    : Math.min(8, Math.max(1, cpus().length - 1));
+  const maxWorkers =
+    Number.isFinite(configured) && configured > 0 ? configured : Math.min(8, Math.max(1, cpus().length - 1));
   return Math.max(1, Math.min(fileCount, maxWorkers));
 }
 
@@ -89,9 +88,8 @@ function createVueReferenceTasks(files: readonly string[]): VueReferenceTask[] {
       tasks.push({
         fileName,
         startOffset: Math.floor((weight * shard) / shardCount),
-        endOffset: shard === shardCount - 1
-          ? Number.POSITIVE_INFINITY
-          : Math.floor((weight * (shard + 1)) / shardCount),
+        endOffset:
+          shard === shardCount - 1 ? Number.POSITIVE_INFINITY : Math.floor((weight * (shard + 1)) / shardCount),
         countFileSkip: shard === 0,
       });
     }
@@ -108,14 +106,10 @@ function partitionTasks(tasks: readonly VueReferenceTask[], workerCount: number)
     tasks: [] as VueReferenceTask[],
     weight: 0,
   }));
-  const weightedTasks = tasks
-    .map((task) => ({ task, weight: taskWeight(task) }))
-    .sort((a, b) => b.weight - a.weight);
+  const weightedTasks = tasks.map((task) => ({ task, weight: taskWeight(task) })).sort((a, b) => b.weight - a.weight);
 
   for (const entry of weightedTasks) {
-    const partition = partitions.reduce((lightest, current) => (
-      current.weight < lightest.weight ? current : lightest
-    ));
+    const partition = partitions.reduce((lightest, current) => (current.weight < lightest.weight ? current : lightest));
     partition.tasks.push(entry.task);
     partition.weight += entry.weight;
   }

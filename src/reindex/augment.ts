@@ -26,12 +26,8 @@ export interface AugmentAuxiliaryDocumentsResult {
 // scip-query: ignore-extract — this is the auxiliary-document transaction
 // pipeline; the helper calls already own discovery/filtering/language
 // detection, and keeping the DB write sequence together is clearer.
-export function augmentAuxiliaryDocuments(
-  opts: AugmentAuxiliaryDocumentsOptions,
-): AugmentAuxiliaryDocumentsResult {
-  const extensions = new Set(
-    (opts.extensions ?? AUXILIARY_EXTENSIONS).map((ext) => ext.toLowerCase()),
-  );
+export function augmentAuxiliaryDocuments(opts: AugmentAuxiliaryDocumentsOptions): AugmentAuxiliaryDocumentsResult {
+  const extensions = new Set((opts.extensions ?? AUXILIARY_EXTENSIONS).map((ext) => ext.toLowerCase()));
 
   if (extensions.size === 0) {
     return { scanned: 0, inserted: 0, existing: 0 };
@@ -41,8 +37,7 @@ export function augmentAuxiliaryDocuments(
   }
 
   const filter = createGitignoreFilter(opts.projectRoot);
-  const files = listAuxiliaryFiles(opts.projectRoot, extensions)
-    .filter((file) => !filter.isIgnored(file));
+  const files = listAuxiliaryFiles(opts.projectRoot, extensions).filter((file) => !filter.isIgnored(file));
 
   const db = new Database(opts.dbPath);
   try {
@@ -113,15 +108,11 @@ function listAuxiliaryFiles(absRoot: string, extensions: ReadonlySet<string>): s
 
 function listGitTrackedFiles(absRoot: string, extensions: ReadonlySet<string>): string[] | null {
   try {
-    const stdout = execFileSync(
-      'git',
-      ['-C', absRoot, 'ls-files', '-co', '--exclude-standard', '--', '.'],
-      {
-        encoding: 'utf-8',
-        maxBuffer: 25 * 1024 * 1024,
-        stdio: ['ignore', 'pipe', 'ignore'],
-      },
-    );
+    const stdout = execFileSync('git', ['-C', absRoot, 'ls-files', '-co', '--exclude-standard', '--', '.'], {
+      encoding: 'utf-8',
+      maxBuffer: 25 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
     return stdout
       .split('\n')
       .filter((file) => file && extensions.has(extname(file).toLowerCase()))
@@ -136,9 +127,9 @@ function selectExistingDocuments(db: Database.Database, files: readonly string[]
   const chunkSize = 500;
   for (let start = 0; start < files.length; start += chunkSize) {
     const chunk = files.slice(start, start + chunkSize);
-    const rows = db.prepare(
-      `SELECT relative_path FROM documents WHERE relative_path IN (${chunk.map(() => '?').join(',')})`,
-    ).all(...chunk) as { relative_path: string }[];
+    const rows = db
+      .prepare(`SELECT relative_path FROM documents WHERE relative_path IN (${chunk.map(() => '?').join(',')})`)
+      .all(...chunk) as { relative_path: string }[];
     for (const row of rows) {
       existing.add(row.relative_path);
     }

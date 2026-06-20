@@ -80,9 +80,10 @@ function buildFileProfiles(
   return { profiles, distinctiveDeps };
 }
 
-function classifyDependencyPopularity(
-  depMap: Map<string, Set<string>>,
-): { universalDeps: Set<string>; distinctiveDeps: Set<string> } {
+function classifyDependencyPopularity(depMap: Map<string, Set<string>>): {
+  universalDeps: Set<string>;
+  distinctiveDeps: Set<string>;
+} {
   const universalDeps = new Set<string>();
   const distinctiveDeps = new Set<string>();
   const fileCount = depMap.size;

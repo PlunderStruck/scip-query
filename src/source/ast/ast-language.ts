@@ -3,8 +3,20 @@ import { extname } from 'node:path';
 // scip-query: ignore-stale — foundational discriminator used by AST helpers,
 // framework-patterns, source scans, and parser fallbacks.
 export type AstLanguage =
-  | 'rust' | 'typescript' | 'tsx' | 'javascript' | 'python'
-  | 'java' | 'kotlin' | 'scala' | 'ruby' | 'c' | 'cpp' | 'csharp' | 'php' | 'vb';
+  | 'rust'
+  | 'typescript'
+  | 'tsx'
+  | 'javascript'
+  | 'python'
+  | 'java'
+  | 'kotlin'
+  | 'scala'
+  | 'ruby'
+  | 'c'
+  | 'cpp'
+  | 'csharp'
+  | 'php'
+  | 'vb';
 
 const LANGUAGE_BY_EXT: Readonly<Record<string, AstLanguage>> = {
   '.rs': 'rust',

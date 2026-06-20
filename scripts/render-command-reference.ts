@@ -1,7 +1,7 @@
-import { commandDescriptors } from '../src/runtime/command-descriptors.js';
-import { renderCommandReferenceMarkdown } from '../src/runtime/command-docs.js';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { commandDescriptors } from '../src/runtime/commands/command-descriptors.js';
+import { renderCommandReferenceMarkdown } from '../src/runtime/commands/command-docs.js';
 
 const generated = renderCommandReferenceMarkdown(commandDescriptors);
 

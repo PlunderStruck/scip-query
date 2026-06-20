@@ -2,11 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getCommitHistory, getTrackedFiles } from '../../analysis/git-history.js';
-import {
-  fileContentHash,
-  readCachedFileEvidence,
-  writeCachedFileEvidence,
-} from '../../storage/evidence-cache.js';
+import { fileContentHash, readCachedFileEvidence, writeCachedFileEvidence } from '../../storage/evidence-cache.js';
 
 export interface DocDriftSubject {
   file: string;
@@ -58,8 +54,10 @@ const DOC_FILE_PATTERN = /\.(?:md|mdx|rst|txt)$/i;
  * time — they cite code as of their date and are never meant to track it.
  */
 export function isArchivalDoc(path: string): boolean {
-  return /(?:^|\/)(?:docs\/plans|plans|adrs?|rfcs?|decisions|changelogs?|archive|reports?)\//i.test(path)
-    || /(?:^|\/)CHANGELOG\.(?:md|mdx|rst|txt)$/i.test(path);
+  return (
+    /(?:^|\/)(?:docs\/plans|plans|adrs?|rfcs?|decisions|changelogs?|archive|reports?)\//i.test(path) ||
+    /(?:^|\/)CHANGELOG\.(?:md|mdx|rst|txt)$/i.test(path)
+  );
 }
 const MIN_COUPLING = 3;
 /** Path-shaped tokens with a code-ish extension — what docs use to cite files. */
@@ -99,12 +97,17 @@ export function docDrift(
 
     // Evidence 1: content references.
     const { resolved, broken } = extractFileReferences(
-      db, docFile, scan.tracked, scan.trackedBySuffix, scan.everSeenInHistory,
+      db,
+      docFile,
+      scan.tracked,
+      scan.trackedBySuffix,
+      scan.everSeenInHistory,
     );
     for (const referenced of resolved) {
       if (referenced === docFile || DOC_FILE_PATTERN.test(referenced)) continue;
-      const changesSince = (scan.changeTimes.get(referenced) ?? [])
-        .filter((timestamp) => timestamp > docLastChangedAt).length;
+      const changesSince = (scan.changeTimes.get(referenced) ?? []).filter(
+        (timestamp) => timestamp > docLastChangedAt,
+      ).length;
       if (changesSince === 0) continue;
       subjects.set(referenced, {
         file: referenced,
@@ -118,8 +121,9 @@ export function docDrift(
     for (const [codeFile, together] of scan.coupling.get(docFile) ?? []) {
       if (together < minCoupling) continue;
       if (!scan.tracked.has(codeFile)) continue;
-      const changesSince = (scan.changeTimes.get(codeFile) ?? [])
-        .filter((timestamp) => timestamp > docLastChangedAt).length;
+      const changesSince = (scan.changeTimes.get(codeFile) ?? []).filter(
+        (timestamp) => timestamp > docLastChangedAt,
+      ).length;
       if (changesSince === 0) continue;
       const existing = subjects.get(codeFile);
       if (existing) {
@@ -137,14 +141,14 @@ export function docDrift(
 
     if (subjects.size === 0 && broken.length === 0) continue;
 
-    const ordered = [...subjects.values()].sort((left, right) =>
-      right.changesSinceDocUpdate - left.changesSinceDocUpdate);
+    const ordered = [...subjects.values()].sort(
+      (left, right) => right.changesSinceDocUpdate - left.changesSinceDocUpdate,
+    );
     findings.push({
       doc: docFile,
       docLastChangedAt,
       // Broken references weigh heavily — the spec cites deleted code.
-      staleness: ordered.reduce((sum, subject) => sum + subject.changesSinceDocUpdate, 0)
-        + broken.length * 10,
+      staleness: ordered.reduce((sum, subject) => sum + subject.changesSinceDocUpdate, 0) + broken.length * 10,
       subjects: ordered.slice(0, 8),
       brokenReferences: broken,
     });
@@ -227,9 +231,7 @@ export function docsCitingFiles(
 
 /** A doc that exists, isn't archival, and is eligible for drift tracking. */
 function isLivingDoc(db: ScipDatabase, docFile: string): boolean {
-  return DOC_FILE_PATTERN.test(docFile)
-    && !isArchivalDoc(docFile)
-    && existsSync(join(db.config.projectRoot, docFile));
+  return DOC_FILE_PATTERN.test(docFile) && !isArchivalDoc(docFile) && existsSync(join(db.config.projectRoot, docFile));
 }
 
 /** Map "suffix after last two segments" → full tracked paths, for short citations. */
@@ -302,9 +304,9 @@ function docPathCandidates(db: ScipDatabase, docFile: string): string[] | null {
       // corrupt payload — fall through and re-extract
     }
   }
-  const candidates = [...new Set(
-    [...content.matchAll(PATH_REFERENCE_PATTERN)].map((match) => match[0].replace(/^\.?\//, '')),
-  )];
+  const candidates = [
+    ...new Set([...content.matchAll(PATH_REFERENCE_PATTERN)].map((match) => match[0].replace(/^\.?\//, ''))),
+  ];
   writeCachedFileEvidence(db, 'doc-path-tokens', docFile, contentHash, JSON.stringify(candidates));
   return candidates;
 }

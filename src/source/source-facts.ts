@@ -1,9 +1,5 @@
 import type { ScipDatabase } from '../storage/db.js';
-import {
-  fileContentHash,
-  readCachedFileEvidence,
-  writeCachedFileEvidence,
-} from '../storage/evidence-cache.js';
+import { fileContentHash, readCachedFileEvidence, writeCachedFileEvidence } from '../storage/evidence-cache.js';
 import { createPerDbSourceCache } from '../storage/per-db-cache.js';
 import { detectAstLanguage, isVueSfcPath, type AstLanguage } from './ast/ast-language.js';
 import { getAst } from './ast/ast-core.js';
@@ -57,7 +53,8 @@ export function getSourceFacts(db: ScipDatabase, relativePath: string): SourceFa
   const language = sourceFactsLanguage(relativePath, source);
   if (!language) return null;
   return SOURCE_FACTS_CACHE.get(db, relativePath, source, () =>
-    loadOrBuildSourceFacts(db, relativePath, language, source));
+    loadOrBuildSourceFacts(db, relativePath, language, source),
+  );
 }
 
 function sourceFactsLanguage(relativePath: string, source: string): AstLanguage | null {
@@ -159,9 +156,7 @@ function findCallableInFacts(
   startLine: number,
   endLine: number,
 ): SourceFacts['callables'][number] | null {
-  return facts.callables.find((callable) =>
-    callable.startLine === startLine && callable.endLine === endLine,
-  ) ?? null;
+  return facts.callables.find((callable) => callable.startLine === startLine && callable.endLine === endLine) ?? null;
 }
 
 function buildSourceFacts(tree: Tree, language: AstLanguage): SourceFacts {

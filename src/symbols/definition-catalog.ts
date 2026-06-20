@@ -24,7 +24,14 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { getCallableSites } from '../source/ast.js';
 import { getSourceText } from '../source/source-text.js';
-import { isFunctionLikeSymbol, leafName, leafSuffix, parentTypeName, parseSymbol, shortenSymbol } from './symbol-parser.js';
+import {
+  isFunctionLikeSymbol,
+  leafName,
+  leafSuffix,
+  parentTypeName,
+  parseSymbol,
+  shortenSymbol,
+} from './symbol-parser.js';
 import { createPerDbCache } from '../storage/per-db-cache.js';
 import { cleanSignature, extractSignature, type SymbolQueryRow } from '../storage/scip-rows.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
@@ -59,21 +66,14 @@ const ENCLOSING_DEFINITION_LINE_INDEX_CACHE = new WeakMap<
 // scip-query: ignore-extract — this is the definition-catalog read path:
 // primary rows, fallback rows, merging, and source-corrected ranges define the
 // authoritative per-file definition set.
-export function getDefinitionsForFile(
-  db: ScipDatabase,
-  relativePath: string,
-): IndexedDefinition[] {
+export function getDefinitionsForFile(db: ScipDatabase, relativePath: string): IndexedDefinition[] {
   return FILE_DEFINITION_CACHE.get(db, relativePath, () => {
     const rows = mergeMixedSymbolQueryRows(
       loadPrimaryDefinitionRows(db, relativePath),
       loadFallbackDefinitionRows(db, relativePath),
       { sort: true },
     );
-    return correctDefinitionRangesFromSource(
-      db,
-      relativePath,
-      rows.map(indexedDefinitionFromRow),
-    );
+    return correctDefinitionRangesFromSource(db, relativePath, rows.map(indexedDefinitionFromRow));
   });
 }
 
@@ -144,19 +144,13 @@ function indexedDefinitionFromRow(row: SymbolQueryRow): IndexedDefinition {
   };
 }
 
-export function getAllDefinitions(
-  db: ScipDatabase,
-  opts: { scope?: string } = {},
-): IndexedDefinition[] {
+export function getAllDefinitions(db: ScipDatabase, opts: { scope?: string } = {}): IndexedDefinition[] {
   return getScopedDefinitions(db, opts.scope);
 }
 
 // scip-query: ignore-wrapper — catalog-wide definition read primitive used
 // behind ProjectIndex; it owns document iteration plus ignored-path filtering.
-export function getScopedDefinitions(
-  db: ScipDatabase,
-  scope?: string,
-): IndexedDefinition[] {
+export function getScopedDefinitions(db: ScipDatabase, scope?: string): IndexedDefinition[] {
   return indexedDocumentPaths(db, { scope, includeIgnored: false })
     .flatMap((relativePath) => getDefinitionsForFile(db, relativePath))
     .filter((row) => !db.isIgnored(row.relativePath));
@@ -190,10 +184,8 @@ export function loadFileSymbols(
     definitions = definitions.filter((d) => d.documentation !== null && d.documentation !== '');
   }
   if (opts.sort) {
-    definitions = definitions.sort((a, b) =>
-      a.relativePath.localeCompare(b.relativePath)
-      || a.startLine - b.startLine
-      || a.endLine - b.endLine,
+    definitions = definitions.sort(
+      (a, b) => a.relativePath.localeCompare(b.relativePath) || a.startLine - b.startLine || a.endLine - b.endLine,
     );
   }
 
@@ -229,10 +221,7 @@ export function createDefinitionLineIndex<T extends { startLine: number; endLine
   return owners;
 }
 
-export function findEnclosingDefinition(
-  definitions: IndexedDefinition[],
-  line: number,
-): IndexedDefinition | null {
+export function findEnclosingDefinition(definitions: IndexedDefinition[], line: number): IndexedDefinition | null {
   let index = ENCLOSING_DEFINITION_LINE_INDEX_CACHE.get(definitions);
   if (!index) {
     index = createDefinitionLineIndex(definitions);
@@ -253,12 +242,8 @@ export function findEnclosingDefinition(
  * the per-file catalog — putting hydrate next to its data source breaks
  * what would otherwise be a symbol-lookup ↔ definition-catalog cycle.
  */
-export function hydrateSymbolMatch(
-  db: ScipDatabase,
-  row: SymbolQueryRow,
-): SymbolMatch {
-  const corrected = getDefinitionsForFile(db, row.relative_path)
-    .find((definition) => definition.symbolId === row.id);
+export function hydrateSymbolMatch(db: ScipDatabase, row: SymbolQueryRow): SymbolMatch {
+  const corrected = getDefinitionsForFile(db, row.relative_path).find((definition) => definition.symbolId === row.id);
 
   if (corrected) {
     return {
@@ -317,19 +302,13 @@ function correctDefinitionRangesWithRegexFallback(
   return applyCorrectedRanges(definitions, correctedRanges);
 }
 
-function correctedCallableStartLines(
-  definitions: IndexedDefinition[],
-  lines: string[],
-): Map<number, number> {
+function correctedCallableStartLines(definitions: IndexedDefinition[], lines: string[]): Map<number, number> {
   const declarationLines = definitions.some((d) => isCallableDefinition(d.symbol))
     ? buildDeclarationCandidatesMap(lines)
     : null;
   const correctedStarts = new Map<number, number>();
   for (const definition of definitions) {
-    correctedStarts.set(
-      definition.symbolId,
-      resolveCallableDefinitionStartLine(lines, declarationLines, definition),
-    );
+    correctedStarts.set(definition.symbolId, resolveCallableDefinitionStartLine(lines, declarationLines, definition));
   }
   return correctedStarts;
 }
@@ -344,10 +323,11 @@ function sortedCallableDefinitionsWithStarts(
       definition,
       startLine: correctedStarts.get(definition.symbolId) ?? definition.startLine,
     }))
-    .sort((left, right) =>
-      left.startLine - right.startLine
-      || left.definition.startLine - right.definition.startLine
-      || left.definition.symbol.localeCompare(right.definition.symbol),
+    .sort(
+      (left, right) =>
+        left.startLine - right.startLine ||
+        left.definition.startLine - right.definition.startLine ||
+        left.definition.symbol.localeCompare(right.definition.symbol),
     );
 }
 
@@ -359,18 +339,11 @@ function correctedCallableRanges(
   for (let index = 0; index < callableDefinitions.length; index += 1) {
     const current = callableDefinitions[index]!;
     const next = callableDefinitions[index + 1];
-    const maxEndLine = next
-      ? Math.max(current.startLine, next.startLine - 1)
-      : lines.length - 1;
+    const maxEndLine = next ? Math.max(current.startLine, next.startLine - 1) : lines.length - 1;
 
     correctedRanges.set(current.definition.symbolId, {
       startLine: current.startLine,
-      endLine: resolveCallableDefinitionEndLine(
-        lines,
-        current.definition,
-        current.startLine,
-        maxEndLine,
-      ),
+      endLine: resolveCallableDefinitionEndLine(lines, current.definition, current.startLine, maxEndLine),
     });
   }
   return correctedRanges;
@@ -439,10 +412,7 @@ function canUseCallableSiteRange(definition: IndexedDefinition): boolean {
   return leafSuffix(definition.symbol) === 'term' && parentTypeName(definition.symbol) === null;
 }
 
-function correctTopLevelTermRangeFromSource(
-  definition: IndexedDefinition,
-  source: string | null,
-): IndexedDefinition {
+function correctTopLevelTermRangeFromSource(definition: IndexedDefinition, source: string | null): IndexedDefinition {
   if (!source || !definition.leaf) return definition;
   if (leafSuffix(definition.symbol) !== 'term') return definition;
   if (parentTypeName(definition.symbol) !== null) return definition;
@@ -495,7 +465,8 @@ type DeclarationCandidatesMap = Map<string, number[]>;
 export function buildDeclarationCandidatesMap(lines: string[]): DeclarationCandidatesMap {
   const namedFunction = /\b(?:function|def|fn)\s+([A-Za-z_$][\w$]*)/g;
   const assignedFunction = /\b([A-Za-z_$][\w$]*)\s*[:=]\s*(?:async\s*)?(?:function\b|\()/g;
-  const methodDeclaration = /^\s*(?:(?:export|public|private|protected|static|readonly|async|abstract|get|set)\s+)*([A-Za-z_$][\w$]*)\s*(?:<[^(]*>)?\s*\(/;
+  const methodDeclaration =
+    /^\s*(?:(?:export|public|private|protected|static|readonly|async|abstract|get|set)\s+)*([A-Za-z_$][\w$]*)\s*(?:<[^(]*>)?\s*\(/;
   const callShape = /\b([A-Za-z_$][\w$]*)\s*\(/g;
 
   const map: DeclarationCandidatesMap = new Map();
@@ -569,7 +540,7 @@ export function resolveCallableDefinitionEndLine(
 
 export function maskStructuralLine(line: string): string {
   let masked = '';
-  let quote: '"' | '\'' | '`' | null = null;
+  let quote: '"' | "'" | '`' | null = null;
   let escaping = false;
 
   for (let index = 0; index < line.length; index += 1) {
@@ -602,7 +573,7 @@ export function maskStructuralLine(line: string): string {
       continue;
     }
 
-    if (char === '"' || char === '\'' || char === '`') {
+    if (char === '"' || char === "'" || char === '`') {
       quote = char;
       masked += ' ';
       continue;

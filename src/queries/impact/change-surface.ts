@@ -44,9 +44,8 @@ export function changeSurface(
   const symbols: ChangeSurfaceEntry[] = [];
   let totalExternalConsumers = 0;
   const definitions = sortedChangeSurfaceDefinitions(db, doc.relative_path);
-  const semanticConsumers = opts.semantic === false
-    ? new Map<number, Set<string>>()
-    : semanticCallerMap(db, definitions);
+  const semanticConsumers =
+    opts.semantic === false ? new Map<number, Set<string>>() : semanticCallerMap(db, definitions);
 
   for (const def of definitions) {
     const externalConsumers = externalConsumerCount(
@@ -78,17 +77,20 @@ function loadChangeSurfaceDocument(
   db: ScipDatabase,
   relativePath: string,
 ): { id: number; relative_path: string } | null {
-  return db.get<{ id: number; relative_path: string }>(
-    `SELECT id, relative_path FROM documents
+  return (
+    db.get<{ id: number; relative_path: string }>(
+      `SELECT id, relative_path FROM documents
      WHERE relative_path = ?
        ${db.pathExclusionsFor('documents')}
      LIMIT 1`,
-    relativePath,
-  ) ?? null;
+      relativePath,
+    ) ?? null
+  );
 }
 
 function sortedChangeSurfaceDefinitions(db: ScipDatabase, relativePath: string) {
-  return new ProjectIndex(db).definitionsForFile(relativePath)
+  return new ProjectIndex(db)
+    .definitionsForFile(relativePath)
     .sort((a, b) => a.startLine - b.startLine || a.endLine - b.endLine);
 }
 

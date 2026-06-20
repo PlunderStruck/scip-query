@@ -38,8 +38,7 @@ export function IssuePanel() {
 }
 `;
 
-const REACT_INCIDENT_PANEL = REACT_ISSUE_PANEL
-  .replace('IssuePanel', 'IncidentPanel')
+const REACT_INCIDENT_PANEL = REACT_ISSUE_PANEL.replace('IssuePanel', 'IncidentPanel')
   .replace("useResource('issues')", "useResource('incidents')")
   .replaceAll("fetch('/issues')", "fetch('/incidents')")
   .replace('title="Issues"', 'title="Incidents"');
@@ -77,8 +76,7 @@ function saveRecord(row: unknown) {
 </script>
 `;
 
-const VUE_INCIDENT_PANEL = VUE_ISSUE_PANEL
-  .replace("const title = 'Issues';", "const title = 'Incidents';");
+const VUE_INCIDENT_PANEL = VUE_ISSUE_PANEL.replace("const title = 'Issues';", "const title = 'Incidents';");
 
 describe('frontend recent duplicates', () => {
   let tempDirs: string[] = [];
@@ -108,39 +106,41 @@ describe('frontend recent duplicates', () => {
       });
 
       expect(result.available).toBe(true);
-      expect(result.findings).toEqual(expect.arrayContaining([
-        expect.objectContaining({
-          kind: 'echo',
-          domain: 'react-component',
-          basis: 'jsx-structure',
-          echoFile: 'src/components/IncidentPanel.tsx',
-          echoSymbol: 'IncidentPanel',
-          establishedFile: 'src/components/IssuePanel.tsx',
-          establishedSymbol: 'IssuePanel',
-          sharedEvidence: expect.arrayContaining(['component:RecordTable', 'event:click', 'prop:rows']),
-          sharedCallees: [],
-        }),
-        expect.objectContaining({
-          kind: 'echo',
-          domain: 'vue-component',
-          basis: 'vue-template',
-          echoFile: 'src/components/IncidentPanel.vue',
-          echoSymbol: 'IncidentPanel',
-          establishedFile: 'src/components/IssuePanel.vue',
-          establishedSymbol: 'IssuePanel',
-          sharedEvidence: expect.arrayContaining(['component:RecordTable', 'event:click', 'slot:actions']),
-          sharedCallees: [],
-        }),
-      ]));
+      expect(result.findings).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'echo',
+            domain: 'react-component',
+            basis: 'jsx-structure',
+            echoFile: 'src/components/IncidentPanel.tsx',
+            echoSymbol: 'IncidentPanel',
+            establishedFile: 'src/components/IssuePanel.tsx',
+            establishedSymbol: 'IssuePanel',
+            sharedEvidence: expect.arrayContaining(['component:RecordTable', 'event:click', 'prop:rows']),
+            sharedCallees: [],
+          }),
+          expect.objectContaining({
+            kind: 'echo',
+            domain: 'vue-component',
+            basis: 'vue-template',
+            echoFile: 'src/components/IncidentPanel.vue',
+            echoSymbol: 'IncidentPanel',
+            establishedFile: 'src/components/IssuePanel.vue',
+            establishedSymbol: 'IssuePanel',
+            sharedEvidence: expect.arrayContaining(['component:RecordTable', 'event:click', 'slot:actions']),
+            sharedCallees: [],
+          }),
+        ]),
+      );
     } finally {
       db.close();
     }
   });
 
-  function createGitFixture(input: {
-    established: Record<string, string>;
-    recent: Record<string, string>;
-  }): { db: ScipDatabase; projectRoot: string } {
+  function createGitFixture(input: { established: Record<string, string>; recent: Record<string, string> }): {
+    db: ScipDatabase;
+    projectRoot: string;
+  } {
     const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-frontend-recent-'));
     tempDirs.push(projectRoot);
 

@@ -41,19 +41,45 @@ function loadGrammar(lang: AstLanguage): unknown | null {
   let grammar: unknown;
   try {
     switch (lang) {
-      case 'rust':       grammar = require('tree-sitter-rust'); break;
-      case 'typescript': grammar = (require('tree-sitter-typescript') as { typescript: unknown }).typescript; break;
-      case 'tsx':        grammar = (require('tree-sitter-typescript') as { tsx: unknown }).tsx; break;
-      case 'javascript': grammar = require('tree-sitter-javascript'); break;
-      case 'python':     grammar = require('tree-sitter-python'); break;
-      case 'java':       grammar = require('tree-sitter-java'); break;
-      case 'kotlin':     grammar = require('tree-sitter-kotlin'); break;
-      case 'scala':      grammar = require('tree-sitter-scala'); break;
-      case 'ruby':       grammar = require('tree-sitter-ruby'); break;
-      case 'c':          grammar = require('tree-sitter-c'); break;
-      case 'cpp':        grammar = require('tree-sitter-cpp'); break;
-      case 'csharp':     grammar = require('tree-sitter-c-sharp'); break;
-      case 'php':        grammar = (require('tree-sitter-php') as { php: unknown }).php; break;
+      case 'rust':
+        grammar = require('tree-sitter-rust');
+        break;
+      case 'typescript':
+        grammar = (require('tree-sitter-typescript') as { typescript: unknown }).typescript;
+        break;
+      case 'tsx':
+        grammar = (require('tree-sitter-typescript') as { tsx: unknown }).tsx;
+        break;
+      case 'javascript':
+        grammar = require('tree-sitter-javascript');
+        break;
+      case 'python':
+        grammar = require('tree-sitter-python');
+        break;
+      case 'java':
+        grammar = require('tree-sitter-java');
+        break;
+      case 'kotlin':
+        grammar = require('tree-sitter-kotlin');
+        break;
+      case 'scala':
+        grammar = require('tree-sitter-scala');
+        break;
+      case 'ruby':
+        grammar = require('tree-sitter-ruby');
+        break;
+      case 'c':
+        grammar = require('tree-sitter-c');
+        break;
+      case 'cpp':
+        grammar = require('tree-sitter-cpp');
+        break;
+      case 'csharp':
+        grammar = require('tree-sitter-c-sharp');
+        break;
+      case 'php':
+        grammar = (require('tree-sitter-php') as { php: unknown }).php;
+        break;
       case 'vb': {
         const module = require('tree-sitter-vb-dotnet') as { language?: unknown };
         grammar = module.language ?? module;
@@ -90,9 +116,9 @@ function getParser(lang: AstLanguage): ParserInstance | null {
 
 function parseSource(parser: ParserInstance, source: string): Tree {
   const chunkSize = 16 * 1024;
-  return parser.parse((index) => (
-    index >= source.length ? null : source.slice(index, Math.min(source.length, index + chunkSize))
-  ));
+  return parser.parse((index) =>
+    index >= source.length ? null : source.slice(index, Math.min(source.length, index + chunkSize)),
+  );
 }
 
 // scip-query: ignore-wrapper — public parser-runtime operation consumed by

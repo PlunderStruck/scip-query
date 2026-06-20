@@ -36,12 +36,13 @@ export function complexityHotspots(
   const index = new ProjectIndex(db);
 
   return runCandidateAnalysis({
-    candidates: () => index.productionCallableDefinitions({
-      scope,
-      requireCallableSymbol: true,
-      includeSuppressed: true,
-      sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
-    }),
+    candidates: () =>
+      index.productionCallableDefinitions({
+        scope,
+        requireCallableSymbol: true,
+        includeSuppressed: true,
+        sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
+      }),
     scanLimit,
     prepare: (definitions) => ({
       callerMap: index.crossFileCallerMap(definitions, { semantic: opts?.semantic !== false }),

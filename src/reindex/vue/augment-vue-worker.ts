@@ -17,10 +17,13 @@ try {
   });
   writeFileSync(data.resultPath, JSON.stringify({ ok: true, result }));
 } catch (error) {
-  writeFileSync(data.resultPath, JSON.stringify({
-    ok: false,
-    error: error instanceof Error ? error.message : String(error),
-  }));
+  writeFileSync(
+    data.resultPath,
+    JSON.stringify({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    }),
+  );
 } finally {
   const signal = new Int32Array(data.sharedBuffer);
   Atomics.add(signal, 0, 1);

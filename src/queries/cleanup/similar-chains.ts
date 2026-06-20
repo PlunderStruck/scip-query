@@ -50,13 +50,7 @@ export function similarChains(
     maxChainLength?: number;
   } = {},
 ): SimilarChainResult[] {
-  const {
-    minSimilarity = 0.5,
-    limit = 15,
-    scope,
-    minChainLength = 3,
-    maxChainLength = 8,
-  } = opts;
+  const { minSimilarity = 0.5, limit = 15, scope, minChainLength = 3, maxChainLength = 8 } = opts;
 
   const graph = buildFileDepGraph(db, scope);
   const rawChains = generateChains(graph, minChainLength, maxChainLength);
@@ -67,10 +61,7 @@ export function similarChains(
 
   if (filteredChains.length < 2) return [];
 
-  return dedupeChainResults(
-    findSimilarChainPairs(filteredChains, minSimilarity, limit),
-    limit,
-  );
+  return dedupeChainResults(findSimilarChainPairs(filteredChains, minSimilarity, limit), limit);
 }
 
 interface FilteredChain {
@@ -162,11 +153,7 @@ function findSimilarChainPairs(
   return results;
 }
 
-function compareFilteredChains(
-  a: FilteredChain,
-  b: FilteredChain,
-  minSimilarity: number,
-): SimilarChainResult | null {
+function compareFilteredChains(a: FilteredChain, b: FilteredChain, minSimilarity: number): SimilarChainResult | null {
   if (!sharesNode(a.filtered, b.filtered)) return null;
 
   const { distance, ops } = editDistance(a.filtered, b.filtered);
@@ -209,8 +196,7 @@ function dedupeChainResults(results: SimilarChainResult[], limit: number): Simil
   const deduped: SimilarChainResult[] = [];
   for (const r of results) {
     const isDuplicate = deduped.some(
-      (existing) =>
-        isSubChain(r.chainA, existing.chainA) && isSubChain(r.chainB, existing.chainB),
+      (existing) => isSubChain(r.chainA, existing.chainA) && isSubChain(r.chainB, existing.chainB),
     );
     if (!isDuplicate) deduped.push(r);
     if (deduped.length >= limit) break;
@@ -221,11 +207,7 @@ function dedupeChainResults(results: SimilarChainResult[], limit: number): Simil
 
 // ── Chain generation ───────────────────────────────────────
 
-function generateChains(
-  graph: Map<string, Set<string>>,
-  minLen: number,
-  maxLen: number,
-): string[][] {
+function generateChains(graph: Map<string, Set<string>>, minLen: number, maxLen: number): string[][] {
   const chains: string[][] = [];
   const maxChains = 500;
 
@@ -297,24 +279,23 @@ function editDistance(a: string[], b: string[]): { distance: number; ops: EditOp
       if (a[i - 1] === b[j - 1]) {
         dp[i]![j] = dp[i - 1]![j - 1]!;
       } else {
-        dp[i]![j] = 1 + Math.min(
-          dp[i - 1]![j]!,
-          dp[i]![j - 1]!,
-          dp[i - 1]![j - 1]!,
-        );
+        dp[i]![j] = 1 + Math.min(dp[i - 1]![j]!, dp[i]![j - 1]!, dp[i - 1]![j - 1]!);
       }
     }
   }
 
   const ops: EditOp[] = [];
-  let i = m, j = n;
+  let i = m,
+    j = n;
   while (i > 0 || j > 0) {
     if (i > 0 && j > 0 && a[i - 1] === b[j - 1]) {
       ops.unshift({ type: 'match', indexA: i - 1, indexB: j - 1 });
-      i--; j--;
+      i--;
+      j--;
     } else if (i > 0 && j > 0 && dp[i]![j] === dp[i - 1]![j - 1]! + 1) {
       ops.unshift({ type: 'substitute', indexA: i - 1, indexB: j - 1 });
-      i--; j--;
+      i--;
+      j--;
     } else if (j > 0 && dp[i]![j] === dp[i]![j - 1]! + 1) {
       ops.unshift({ type: 'insert', indexA: i, indexB: j - 1 });
       j--;
@@ -344,7 +325,8 @@ function getCommonSuffix(a: string[], b: string[]): string[] {
   let bi = b.length - 1;
   while (ai >= 0 && bi >= 0 && a[ai] === b[bi]) {
     suffix.unshift(a[ai]!);
-    ai--; bi--;
+    ai--;
+    bi--;
   }
   return suffix;
 }

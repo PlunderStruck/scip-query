@@ -39,13 +39,15 @@ describe('reindex reliability', () => {
       failIndexers: new Set(['python']),
     });
 
-    await expect(reindex({
-      projectRoot,
-      outputScip,
-      outputDb,
-      onStatus: () => undefined,
-      indexerConcurrency: 1,
-    })).rejects.toThrow(/failed to index all required languages/i);
+    await expect(
+      reindex({
+        projectRoot,
+        outputScip,
+        outputDb,
+        onStatus: () => undefined,
+        indexerConcurrency: 1,
+      }),
+    ).rejects.toThrow(/failed to index all required languages/i);
 
     expect(readFileSync(outputScip, 'utf-8')).toBe('old-scip');
     expect(readFileSync(outputDb, 'utf-8')).toBe('old-db');
@@ -66,12 +68,14 @@ describe('reindex reliability', () => {
       failConvert: true,
     });
 
-    await expect(reindex({
-      projectRoot,
-      outputScip,
-      outputDb,
-      onStatus: () => undefined,
-    })).rejects.toThrow(/failed to convert scip index/i);
+    await expect(
+      reindex({
+        projectRoot,
+        outputScip,
+        outputDb,
+        onStatus: () => undefined,
+      }),
+    ).rejects.toThrow(/failed to convert scip index/i);
 
     expect(readFileSync(outputScip, 'utf-8')).toBe('old-scip');
     expect(readFileSync(outputDb, 'utf-8')).toBe('old-db');
@@ -100,9 +104,7 @@ describe('reindex reliability', () => {
     });
 
     expect(result.languages).toEqual(['typescript']);
-    expect(result.skipped).toEqual([
-      expect.objectContaining({ language: 'python' }),
-    ]);
+    expect(result.skipped).toEqual([expect.objectContaining({ language: 'python' })]);
     expect(readFileSync(outputDb, 'utf-8')).toBe('new-db');
     expect(JSON.parse(readFileSync(metaPath, 'utf-8'))).toEqual(
       expect.objectContaining({
@@ -182,31 +184,28 @@ async function loadReindexFixture(opts: {
 
   vi.doMock('node:child_process', async () => {
     const fs = await import('node:fs');
-    const execFile = vi.fn((
-      binary: string,
-      args: readonly string[],
-      _options: unknown,
-      callback: (error: Error | null) => void,
-    ) => {
-      const language = binaryToLanguage(binary);
-      if (language) {
-        attempts.set(language, (attempts.get(language) ?? 0) + 1);
-      }
-      if (language && opts.failIndexers?.has(language)) {
-        callback(new Error(`${language} failed`));
-        return;
-      }
-      if (language && opts.failFirstIndexers?.has(language) && attempts.get(language) === 1) {
-        callback(new Error(`${language} failed once`));
-        return;
-      }
-      const outputPath = outputArg(args);
-      if (outputPath) {
-        fs.mkdirSync(dirname(outputPath), { recursive: true });
-        fs.writeFileSync(outputPath, `${binary} scip`);
-      }
-      callback(null);
-    });
+    const execFile = vi.fn(
+      (binary: string, args: readonly string[], _options: unknown, callback: (error: Error | null) => void) => {
+        const language = binaryToLanguage(binary);
+        if (language) {
+          attempts.set(language, (attempts.get(language) ?? 0) + 1);
+        }
+        if (language && opts.failIndexers?.has(language)) {
+          callback(new Error(`${language} failed`));
+          return;
+        }
+        if (language && opts.failFirstIndexers?.has(language) && attempts.get(language) === 1) {
+          callback(new Error(`${language} failed once`));
+          return;
+        }
+        const outputPath = outputArg(args);
+        if (outputPath) {
+          fs.mkdirSync(dirname(outputPath), { recursive: true });
+          fs.writeFileSync(outputPath, `${binary} scip`);
+        }
+        callback(null);
+      },
+    );
     const execFileSync = vi.fn((cmd: string, args: readonly string[]) => {
       if (cmd === 'git') {
         throw new Error('not a git repo');
@@ -259,7 +258,7 @@ async function loadReindexFixture(opts: {
     };
   });
 
-  return { ...await import('../../src/reindex/index.js'), attempts };
+  return { ...(await import('../../src/reindex/index.js')), attempts };
 }
 
 function configFor(language: SupportedLanguage) {
@@ -277,10 +276,10 @@ function configFor(language: SupportedLanguage) {
 
 function binaryToLanguage(binary: string): SupportedLanguage | null {
   const match = /^([a-z]+)-indexer$/.exec(binary);
-  return match ? match[1] as SupportedLanguage : null;
+  return match ? (match[1] as SupportedLanguage) : null;
 }
 
 function outputArg(args: readonly string[]): string | null {
   const index = args.indexOf('--output');
-  return index === -1 ? null : args[index + 1] ?? null;
+  return index === -1 ? null : (args[index + 1] ?? null);
 }

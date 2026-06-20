@@ -81,8 +81,7 @@ export function verifyCleanupPlan(
       const newErrors: string[] = [];
       for (const checker of checkers) {
         const result = runChecker(checker, worktree, timeoutMs);
-        newErrors.push(...result.rawErrors.filter((error) =>
-          !baselineKeys.has(errorKey(error))));
+        newErrors.push(...result.rawErrors.filter((error) => !baselineKeys.has(errorKey(error))));
       }
       if (newErrors.length === 0) {
         batches.push({ depth: batch.depth, status: 'verified' });
@@ -112,10 +111,12 @@ export function verifyCleanupPlan(
 function planFilesWithoutChecker(plan: CleanupPlanResult, checkers: Checker[]): string[] {
   const covered = new Set(checkers.flatMap((checker) => checker.coversExtensions));
   const files = new Set(plan.batches.flatMap((batch) => batch.entries.map((entry) => entry.file)));
-  return [...files].filter((file) => {
-    const extension = file.slice(file.lastIndexOf('.'));
-    return !covered.has(extension);
-  }).sort();
+  return [...files]
+    .filter((file) => {
+      const extension = file.slice(file.lastIndexOf('.'));
+      return !covered.has(extension);
+    })
+    .sort();
 }
 
 /**
@@ -141,9 +142,11 @@ export function detectCheckers(projectRoot: string): Checker[] {
   const checkers: Checker[] = [];
   if (existsSync(join(projectRoot, 'tsconfig.json'))) {
     const localTsc = join(projectRoot, 'node_modules', '.bin', 'tsc');
-    checkers.push(existsSync(localTsc)
-      ? { label: 'tsc --noEmit', binary: localTsc, args: ['--noEmit'], coversExtensions: TS_EXTENSIONS }
-      : { label: 'npx tsc --noEmit', binary: 'npx', args: ['tsc', '--noEmit'], coversExtensions: TS_EXTENSIONS });
+    checkers.push(
+      existsSync(localTsc)
+        ? { label: 'tsc --noEmit', binary: localTsc, args: ['--noEmit'], coversExtensions: TS_EXTENSIONS }
+        : { label: 'npx tsc --noEmit', binary: 'npx', args: ['tsc', '--noEmit'], coversExtensions: TS_EXTENSIONS },
+    );
   }
   if (existsSync(join(projectRoot, 'go.mod'))) {
     checkers.push({
@@ -236,7 +239,8 @@ function dirtyPlanFiles(projectRoot: string, plan: CleanupPlanResult): string[] 
     return [];
   }
   const dirty = new Set(
-    status.split('\n')
+    status
+      .split('\n')
       .map((line) => line.slice(3).trim())
       .filter((line) => line !== ''),
   );
@@ -277,10 +281,7 @@ export function applyCleanupBatches(projectRoot: string, batches: readonly Clean
   for (const batch of batches) applyBatchDeletions(projectRoot, batch);
 }
 
-export function createCleanupPatch(
-  projectRoot: string,
-  batches: readonly CleanupBatch[],
-): string {
+export function createCleanupPatch(projectRoot: string, batches: readonly CleanupBatch[]): string {
   const worktree = mkdtempSync(join(tmpdir(), 'scip-cleanup-patch-'));
   try {
     execFileSync('git', ['-C', projectRoot, 'worktree', 'add', '--detach', '--force', worktree, 'HEAD'], {
@@ -329,9 +330,7 @@ export function cleanupVerificationFailures(
   }
 
   const verifiedDepths = new Set(
-    verification.batches
-      .filter((batch) => batch.status === 'verified')
-      .map((batch) => batch.depth),
+    verification.batches.filter((batch) => batch.status === 'verified').map((batch) => batch.depth),
   );
   for (const batch of selectedBatches) {
     if (!verifiedDepths.has(batch.depth)) {
@@ -356,9 +355,8 @@ export function deleteLineRanges(
   const lines = content.split('\n');
   // Rust lifetimes ('a) look like unterminated char literals to the generic
   // masker, corrupting bracket counts — use a quote-aware Rust variant.
-  const strippedLines = (opts.rust === true
-    ? stripRustCommentsAndStrings(content)
-    : stripCommentsAndStrings(content)
+  const strippedLines = (
+    opts.rust === true ? stripRustCommentsAndStrings(content) : stripCommentsAndStrings(content)
   ).split('\n');
   const remove = new Set<number>();
   for (const range of ranges) {
@@ -426,7 +424,8 @@ function runChecker(
   });
   if (result.status === 0) return { ok: true, rawErrors: [], errorKeys: new Set() };
   const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
-  const rawErrors = output.split('\n')
+  const rawErrors = output
+    .split('\n')
     .map((line) => line.trim())
     .filter((line) => /\berror\b/i.test(line));
   if (result.error && rawErrors.length === 0) rawErrors.push(String(result.error));

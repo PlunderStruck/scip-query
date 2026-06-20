@@ -15,11 +15,7 @@ describe('definition consumer evidence', () => {
 
     try {
       writeFixtureFiles(projectRoot, {
-        'src/lib.ts': [
-          'export interface PublicApi {',
-          '  id: string;',
-          '}',
-        ],
+        'src/lib.ts': ['export interface PublicApi {', '  id: string;', '}'],
         'src/index.ts': "export { type PublicApi } from './lib.js';\n",
         'src/unused-import.ts': "import type { PublicApi } from './lib.js';\n",
         'src/real.ts': [

@@ -1,11 +1,6 @@
 import Database from 'better-sqlite3';
 import { describe, expect, it } from 'vitest';
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../src/storage/db.js';
@@ -197,21 +192,8 @@ describe('source-backed accuracy regressions', () => {
     withFixture(
       'chunk-callee-scope',
       {
-        'src/target.custom': [
-          'def target',
-          '  helper()',
-          'end',
-          '',
-          'def helper',
-          'end',
-          '',
-        ].join('\n'),
-        'src/unrelated.custom': [
-          'def unrelated',
-          '  noisy()',
-          'end',
-          '',
-        ].join('\n'),
+        'src/target.custom': ['def target', '  helper()', 'end', '', 'def helper', 'end', ''].join('\n'),
+        'src/unrelated.custom': ['def unrelated', '  noisy()', 'end', ''].join('\n'),
       },
       (sqliteDb) => {
         sqliteDb.exec(`
@@ -243,19 +225,23 @@ describe('source-backed accuracy regressions', () => {
         `);
       },
       (db) => {
-        const map = buildChunkCalleeMap(db, [{
-          documentId: 1,
-          startLine: 0,
-          endLine: 2,
-          symbolId: 1,
-        }]);
+        const map = buildChunkCalleeMap(db, [
+          {
+            documentId: 1,
+            startLine: 0,
+            endLine: 2,
+            symbolId: 1,
+          },
+        ]);
 
-        expect(map.get(1)).toEqual([{
-          symbol: 'custom src/`target.custom`/helper().',
-          file: 'src/target.custom',
-          chunkId: 1,
-          source: 'scip-chunk',
-        }]);
+        expect(map.get(1)).toEqual([
+          {
+            symbol: 'custom src/`target.custom`/helper().',
+            file: 'src/target.custom',
+            chunkId: 1,
+            source: 'scip-chunk',
+          },
+        ]);
       },
     );
   });
@@ -309,22 +295,20 @@ describe('source-backed accuracy regressions', () => {
         `);
       },
       (db) => {
-        const targetRow = symbols(db, 'helpers.ts')
-          .find((row) => row.shortName === 'src:helpers:targetHelper()');
+        const targetRow = symbols(db, 'helpers.ts').find((row) => row.shortName === 'src:helpers:targetHelper()');
         expect(targetRow).toBeDefined();
         expect(targetRow!.endLine).toBeGreaterThan(targetRow!.startLine);
 
         const snippet = code(db, 'src:helpers:targetHelper()');
         expect(snippet?.source).toContain('export function targetHelper()');
         expect(snippet?.source).toContain('return firstHelper();');
-        expect(snippet?.source).not.toContain('return \'first\';');
+        expect(snippet?.source).not.toContain("return 'first';");
 
         const traced = trace(db, 'src:helpers:targetHelper()');
         expect(traced.definitions[0]?.source).toContain('targetHelper');
         expect(traced.definitions[0]?.source).toContain('firstHelper()');
 
-        const assignedRow = symbols(db, 'helpers.ts')
-          .find((row) => row.shortName.includes('assignedTarget'));
+        const assignedRow = symbols(db, 'helpers.ts').find((row) => row.shortName.includes('assignedTarget'));
         expect(assignedRow).toBeDefined();
         expect(assignedRow!.startLine).toBe(8);
         expect(assignedRow!.endLine).toBe(11);
@@ -341,12 +325,7 @@ describe('source-backed accuracy regressions', () => {
     withFixture(
       'caller-merge',
       {
-        'src/api.ts': [
-          'export function renderReport() {',
-          "  return 'ready';",
-          '}',
-          '',
-        ].join('\n'),
+        'src/api.ts': ['export function renderReport() {', "  return 'ready';", '}', ''].join('\n'),
         'src/consumer.ts': [
           "import { renderReport } from './api.js';",
           '',
@@ -390,9 +369,7 @@ describe('source-backed accuracy regressions', () => {
       },
       (db) => {
         const graph = callGraph(db, 'renderReport');
-        expect(graph?.callers.map((row) => row.shortName)).toEqual([
-          'src:consumer:realCaller()',
-        ]);
+        expect(graph?.callers.map((row) => row.shortName)).toEqual(['src:consumer:realCaller()']);
       },
     );
   });
@@ -448,9 +425,7 @@ describe('source-backed accuracy regressions', () => {
       },
       (db) => {
         const graph = callGraph(db, 'buildSummary');
-        expect(graph?.callees.map((row) => row.shortName)).toEqual([
-          'src:summary:formatLabel()',
-        ]);
+        expect(graph?.callees.map((row) => row.shortName)).toEqual(['src:summary:formatLabel()']);
       },
     );
   });
@@ -465,12 +440,7 @@ describe('source-backed accuracy regressions', () => {
           '}',
           '',
         ].join('\n'),
-        'frontend/src/wizard.ts': [
-          'export function create(path: string) {',
-          '  return { path };',
-          '}',
-          '',
-        ].join('\n'),
+        'frontend/src/wizard.ts': ['export function create(path: string) {', '  return { path };', '}', ''].join('\n'),
       },
       (sqliteDb) => {
         sqliteDb.exec(`

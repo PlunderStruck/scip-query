@@ -14,12 +14,7 @@
  *  - Generic suppression-comment honoring (`// scip-query: ignore-dead`).
  */
 import type { ScipDatabase } from '../storage/db.js';
-import {
-  detectAstLanguage,
-  getAst,
-  type SyntaxNode,
-  type Tree,
-} from '../source/ast.js';
+import { detectAstLanguage, getAst, type SyntaxNode, type Tree } from '../source/ast.js';
 
 export interface ExclusionEntry {
   startLine: number;
@@ -37,10 +32,7 @@ const EXCLUSION_CACHE = new WeakMap<Tree, ExclusionEntry[]>();
  * fields (touched by serde reflection); TS/JS test files (any file containing
  * top-level `describe()`, `it()`, `test()`, `beforeEach()`, etc. calls).
  */
-export function getDefinitionExclusions(
-  db: ScipDatabase,
-  relativePath: string,
-): ExclusionEntry[] {
+export function getDefinitionExclusions(db: ScipDatabase, relativePath: string): ExclusionEntry[] {
   const lang = detectAstLanguage(relativePath);
   if (lang === 'rust') return getRustExclusions(db, relativePath);
   if (lang === 'typescript' || lang === 'tsx' || lang === 'javascript') {
@@ -50,15 +42,25 @@ export function getDefinitionExclusions(
 }
 
 const TEST_FRAMEWORK_NAMES = new Set([
-  'describe', 'it', 'test', 'fdescribe', 'fit', 'xdescribe', 'xit',
-  'beforeEach', 'afterEach', 'beforeAll', 'afterAll', 'before', 'after',
-  'suite', 'bench', 'benchmark',
+  'describe',
+  'it',
+  'test',
+  'fdescribe',
+  'fit',
+  'xdescribe',
+  'xit',
+  'beforeEach',
+  'afterEach',
+  'beforeAll',
+  'afterAll',
+  'before',
+  'after',
+  'suite',
+  'bench',
+  'benchmark',
 ]);
 
-function getJsTestExclusions(
-  db: ScipDatabase,
-  relativePath: string,
-): ExclusionEntry[] {
+function getJsTestExclusions(db: ScipDatabase, relativePath: string): ExclusionEntry[] {
   const tree = getAst(db, relativePath);
   if (!tree) return [];
   const cached = EXCLUSION_CACHE.get(tree);
@@ -66,8 +68,9 @@ function getJsTestExclusions(
 
   // Next.js / Remix file conventions: any top-level export in a page-like
   // path is framework-invoked by the router.
-  const isNextRoute = /(^|\/)(pages|app)\/.+\.(tsx?|jsx?)$/.test(relativePath)
-    || /(^|\/)(layout|page|loading|error|not-found|head|template|default)\.(tsx?|jsx?)$/.test(relativePath);
+  const isNextRoute =
+    /(^|\/)(pages|app)\/.+\.(tsx?|jsx?)$/.test(relativePath) ||
+    /(^|\/)(layout|page|loading|error|not-found|head|template|default)\.(tsx?|jsx?)$/.test(relativePath);
   // Vite/Vue route component conventions
   const isViteRoute = /(^|\/)src\/(pages|views|routes)\/.+\.(tsx?|jsx?|vue)$/.test(relativePath);
 
@@ -82,9 +85,8 @@ function getJsTestExclusions(
     if (!call || call.type !== 'call_expression') continue;
     const target = call.namedChild(0);
     if (!target) continue;
-    const name = target.type === 'member_expression'
-      ? target.namedChild(target.namedChildCount - 1)?.text
-      : target.text;
+    const name =
+      target.type === 'member_expression' ? target.namedChild(target.namedChildCount - 1)?.text : target.text;
     if (name && TEST_FRAMEWORK_NAMES.has(name)) {
       isTestFile = true;
       break;
@@ -146,11 +148,22 @@ function getJsTestExclusions(
     }
   }
 
-  out.push(...collectSuppressionExclusions(
-    tree,
-    new Set(['function_declaration', 'method_definition', 'class_declaration', 'interface_declaration', 'type_alias_declaration', 'enum_declaration', 'variable_declarator', 'export_statement']),
-    new Set(['comment']),
-  ));
+  out.push(
+    ...collectSuppressionExclusions(
+      tree,
+      new Set([
+        'function_declaration',
+        'method_definition',
+        'class_declaration',
+        'interface_declaration',
+        'type_alias_declaration',
+        'enum_declaration',
+        'variable_declarator',
+        'export_statement',
+      ]),
+      new Set(['comment']),
+    ),
+  );
   EXCLUSION_CACHE.set(tree, out);
   return out;
 }
@@ -211,10 +224,7 @@ function collectSuppressionExclusions(
 // scip-query: ignore-extract — this is the Rust exclusion policy aggregator:
 // generated-file shortcut, AST exclusions, suppression comments, and serde
 // module handling are one accuracy contract for dead-code filtering.
-function getRustExclusions(
-  db: ScipDatabase,
-  relativePath: string,
-): ExclusionEntry[] {
+function getRustExclusions(db: ScipDatabase, relativePath: string): ExclusionEntry[] {
   const tree = getAst(db, relativePath);
   if (!tree) return [];
 
@@ -232,11 +242,23 @@ function getRustExclusions(
   collectRustAstExclusions(tree.rootNode, out, false, false);
 
   // Suppression comments override the heuristic checks above.
-  out.push(...collectSuppressionExclusions(
-    tree,
-    new Set(['function_item', 'function_signature_item', 'struct_item', 'enum_item', 'union_item', 'impl_item', 'mod_item', 'static_item', 'const_item']),
-    new Set(['line_comment', 'block_comment']),
-  ));
+  out.push(
+    ...collectSuppressionExclusions(
+      tree,
+      new Set([
+        'function_item',
+        'function_signature_item',
+        'struct_item',
+        'enum_item',
+        'union_item',
+        'impl_item',
+        'mod_item',
+        'static_item',
+        'const_item',
+      ]),
+      new Set(['line_comment', 'block_comment']),
+    ),
+  );
 
   out.push(...serdeWithModuleExclusions(tree.rootNode));
 
@@ -251,11 +273,13 @@ function generatedRustFileExclusion(tree: Tree): ExclusionEntry[] | null {
   // graph never connects callers to it. Bail out wholesale instead of
   // case-handling each indirection.
   if (!isGeneratedFileHeader(tree.rootNode)) return null;
-  return [{
-    startLine: 0,
-    endLine: tree.rootNode.endPosition.row,
-    reason: 'generated file (@generated header)',
-  }];
+  return [
+    {
+      startLine: 0,
+      endLine: tree.rootNode.endPosition.row,
+      reason: 'generated file (@generated header)',
+    },
+  ];
 }
 
 // scip-query: ignore-extract — this is the recursive Rust syntax visitor for
@@ -320,19 +344,21 @@ function collectRustFunctionExclusion(
   else if (inTestMod) reason = 'inside #[cfg(test)] mod';
   for (const attr of attrs) {
     const frameworkReason = rustFrameworkAttrReason(attr);
-    if (frameworkReason) { reason = frameworkReason; break; }
-    if (isRustAllowDeadCodeAttr(attr)) { reason = '#[allow(dead_code)]'; break; }
+    if (frameworkReason) {
+      reason = frameworkReason;
+      break;
+    }
+    if (isRustAllowDeadCodeAttr(attr)) {
+      reason = '#[allow(dead_code)]';
+      break;
+    }
   }
   if (reason) {
     out.push({ startLine: node.startPosition.row, endLine: node.endPosition.row, reason });
   }
 }
 
-function collectRustTypeExclusions(
-  node: SyntaxNode,
-  out: ExclusionEntry[],
-  inTestMod: boolean,
-): void {
+function collectRustTypeExclusions(node: SyntaxNode, out: ExclusionEntry[], inTestMod: boolean): void {
   const attrs = rustAttributeTexts(node);
   const typeName = node.namedChildren.find((c) => c.type === 'type_identifier')?.text;
 
@@ -416,13 +442,13 @@ function rustFrameworkAttrReason(attrText: string): string | null {
 const RUST_REFLECTIVE_DERIVE_RES: ReadonlyArray<RegExp> = [
   /\bSerialize\b/,
   /\bDeserialize\b/,
-  /\bFromRow\b/,             // sqlx
+  /\bFromRow\b/, // sqlx
   /\bsqlx::FromRow\b/,
-  /\bDeriveEntityModel\b/,   // sea-orm
-  /\bIntoSchema\b/,          // utoipa
-  /\bToSchema\b/,            // utoipa
+  /\bDeriveEntityModel\b/, // sea-orm
+  /\bIntoSchema\b/, // utoipa
+  /\bToSchema\b/, // utoipa
   /\bDeriveValueType\b/,
-  /\bError\b/,               // thiserror and compatible generated Display impls
+  /\bError\b/, // thiserror and compatible generated Display impls
   /\bthiserror::Error\b/,
 ];
 
@@ -439,10 +465,12 @@ function isRustAllowDeadCodeAttr(attrText: string): boolean {
 }
 
 function isRustAssociatedTraitItem(node: SyntaxNode): boolean {
-  return node.type === 'const_item'
-    || node.type === 'type_item'
-    || node.type === 'static_item'
-    || node.type === 'associated_type';
+  return (
+    node.type === 'const_item' ||
+    node.type === 'type_item' ||
+    node.type === 'static_item' ||
+    node.type === 'associated_type'
+  );
 }
 
 function serdeWithModuleExclusions(root: SyntaxNode): ExclusionEntry[] {

@@ -24,11 +24,7 @@ export interface CodeResult {
  *   - Full short name: "src:modules:chat:processVegaMention"
  *   - File:line-line syntax: "src/chat/service.ts:100-200"
  */
-export function code(
-  db: ScipDatabase,
-  symbolPattern: string,
-  opts: { context?: number } = {},
-): CodeResult | null {
+export function code(db: ScipDatabase, symbolPattern: string, opts: { context?: number } = {}): CodeResult | null {
   const { context = 0 } = opts;
 
   // Handle direct file:line-line syntax (bypass symbol lookup)

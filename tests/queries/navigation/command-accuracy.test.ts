@@ -1,17 +1,6 @@
 import Database from 'better-sqlite3';
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  it,
-} from 'vitest';
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
@@ -37,7 +26,12 @@ import { staleAbstractions } from '../../../src/queries/cleanup/stale-abstractio
 import { symbols } from '../../../src/queries/navigation/symbols.js';
 import { system } from '../../../src/queries/navigation/system.js';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
-import { createFixtureDb, createFixtureProject, createTypeScriptCallFixtureDb, createTypeScriptCallFixtureProject } from '../../fixtures/command-accuracy-fixtures.js';
+import {
+  createFixtureDb,
+  createFixtureProject,
+  createTypeScriptCallFixtureDb,
+  createTypeScriptCallFixtureProject,
+} from '../../fixtures/command-accuracy-fixtures.js';
 
 describe('command accuracy fixes', () => {
   let db: ScipDatabase;
@@ -87,12 +81,7 @@ describe('command accuracy fixes', () => {
     const unusedResults = unusedImports(db, 'consumer.ts').map((result) => result.shortName);
     const importers = importedBy(db, 'tryInstallScipCli').map((result) => result.fromFile);
 
-    expect(importResults).toEqual([
-      'tryInstallScipCli',
-      'unusedHelper as ignored',
-      'settings',
-      '* as reindexApi',
-    ]);
+    expect(importResults).toEqual(['tryInstallScipCli', 'unusedHelper as ignored', 'settings', '* as reindexApi']);
     expect(unusedResults).toEqual(['unusedHelper as ignored']);
     expect(importers).toEqual(['src/consumer.ts', 'tests/utils.test.ts']);
   });
@@ -105,18 +94,14 @@ describe('command accuracy fixes', () => {
     expect(classes).toContain('src:watch:Watcher');
     expect(classes).not.toContain('src:contracts:PathFilter');
     expect(classes).not.toContain('src:predicates:WorkerStatus');
-    expect(interfaces).toEqual(expect.arrayContaining([
-      'src:contracts:PathFilter',
-      'src:predicates:TempOptions',
-      'src:types:InstallMethod',
-    ]));
+    expect(interfaces).toEqual(
+      expect.arrayContaining(['src:contracts:PathFilter', 'src:predicates:TempOptions', 'src:types:InstallMethod']),
+    );
     expect(typeAliases).toContain('src:predicates:WorkerStatus');
   });
 
   it('resolves fan-in against the matched symbol instead of fuzzy nested matches', () => {
-    expect(fanIn(db, 'tryInstallScipCli')).toEqual([
-      { name: 'src:utils:tryInstallScipCli()', count: 2 },
-    ]);
+    expect(fanIn(db, 'tryInstallScipCli')).toEqual([{ name: 'src:utils:tryInstallScipCli()', count: 2 }]);
   });
 
   it('keeps source-attributed cross-file callers out of dead-code results', () => {
@@ -142,11 +127,13 @@ describe('command accuracy fixes', () => {
     expect(result).not.toBeNull();
     expect(result!.file).toBe('src/utils.ts');
     expect(result!.totalExternalConsumers).toBe(2);
-    expect(result!.symbols.map((entry) => ({
-      shortName: entry.shortName,
-      consumers: entry.externalConsumers,
-      risk: entry.riskLevel,
-    }))).toEqual([
+    expect(
+      result!.symbols.map((entry) => ({
+        shortName: entry.shortName,
+        consumers: entry.externalConsumers,
+        risk: entry.riskLevel,
+      })),
+    ).toEqual([
       { shortName: 'src:utils:tryInstallScipCli()', consumers: 2, risk: 'medium' },
       { shortName: 'src:utils:unusedHelper()', consumers: 0, risk: 'low' },
     ]);
@@ -160,7 +147,9 @@ describe('command accuracy fixes', () => {
     });
     const convergenceResult = convergence(db, 'src:flow:alpha()', 'src:flow:beta()');
 
-    expect(similarResults.some((result) => result.shortNameA === 'src:flow' || result.shortNameB === 'src:flow')).toBe(false);
+    expect(similarResults.some((result) => result.shortNameA === 'src:flow' || result.shortNameB === 'src:flow')).toBe(
+      false,
+    );
     expect(convergenceResult).not.toBeNull();
     expect(convergenceResult!.sharedCallees).toEqual(
       expect.arrayContaining(['src:flow:sharedOne()', 'src:flow:sharedTwo()']),
@@ -180,10 +169,7 @@ describe('command accuracy fixes', () => {
     const results = affected(db, 'sharedOne', { maxDepth: 1 });
     const names = results.map((result) => result.shortName);
 
-    expect(names).toEqual(expect.arrayContaining([
-      'src:flow:alpha()',
-      'src:flow:beta()',
-    ]));
+    expect(names).toEqual(expect.arrayContaining(['src:flow:alpha()', 'src:flow:beta()']));
     expect(names).not.toContain('src:flow');
   });
 
@@ -388,10 +374,7 @@ describe('command accuracy fixes', () => {
 
         // Shared callees must be exactly sharedThree + sharedFour — the
         // two helpers both functions actually call.
-        expect(new Set(shared)).toEqual(new Set([
-          'src:iso:sharedThree()',
-          'src:iso:sharedFour()',
-        ]));
+        expect(new Set(shared)).toEqual(new Set(['src:iso:sharedThree()', 'src:iso:sharedFour()']));
       } finally {
         isoDb.close();
       }
@@ -498,7 +481,9 @@ describe('command accuracy fixes', () => {
 
     const watcherMembers = members(db, 'Watcher');
     const watcherSymbols = symbols(db, 'watch.ts');
-    const watcherRanges = new Map(watcherSymbols.map((s) => [s.symbol, { startLine: s.startLine, endLine: s.endLine }]));
+    const watcherRanges = new Map(
+      watcherSymbols.map((s) => [s.symbol, { startLine: s.startLine, endLine: s.endLine }]),
+    );
     for (const m of watcherMembers) {
       const expected = watcherRanges.get(m.symbol);
       if (!expected) continue;
@@ -539,9 +524,7 @@ describe('command accuracy fixes', () => {
 
       try {
         const graph = callGraph(callDb, 'collect');
-        expect(graph?.callees.map((callee) => callee.shortName)).toEqual([
-          'src:db:Store:all()',
-        ]);
+        expect(graph?.callees.map((callee) => callee.shortName)).toEqual(['src:db:Store:all()']);
 
         const result = complexity(callDb, 'collect');
         expect(result?.calleeCount).toBe(1);
@@ -557,9 +540,7 @@ describe('command accuracy fixes', () => {
         ]);
 
         const flow = dataflow(callDb, 'collect');
-        expect(flow?.definitionSites).toEqual([
-          { file: 'src/query.ts', line: 2 },
-        ]);
+        expect(flow?.definitionSites).toEqual([{ file: 'src/query.ts', line: 2 }]);
       } finally {
         callDb.close();
       }
@@ -574,23 +555,11 @@ describe('command accuracy fixes', () => {
       mkdirSync(join(rustTempDir, 'src'), { recursive: true });
       writeFileSync(
         join(rustTempDir, 'src', 'main.rs'),
-        [
-          '//! Native entry point.',
-          '',
-          'fn main() {',
-          '    synth_runner_rust::run();',
-          '}',
-          '',
-        ].join('\n'),
+        ['//! Native entry point.', '', 'fn main() {', '    synth_runner_rust::run();', '}', ''].join('\n'),
       );
       writeFileSync(
         join(rustTempDir, 'src', 'app.rs'),
-        [
-          'pub fn run() {',
-          '    build_app().run();',
-          '}',
-          '',
-        ].join('\n'),
+        ['pub fn run() {', '    build_app().run();', '}', ''].join('\n'),
       );
 
       const dbPath = join(rustTempDir, 'index.db');
@@ -669,9 +638,7 @@ describe('command accuracy fixes', () => {
         expect(findFirstSymbolMatch(rustDb, 'src/app.rs/run')?.symbol).toBe(
           'rust-analyzer cargo fixture 0.1.0 app/run().',
         );
-        expect(callGraph(rustDb, 'main')?.callees.map((callee) => callee.shortName)).toEqual([
-          'app:run()',
-        ]);
+        expect(callGraph(rustDb, 'main')?.callees.map((callee) => callee.shortName)).toEqual(['app:run()']);
       } finally {
         rustDb.close();
       }

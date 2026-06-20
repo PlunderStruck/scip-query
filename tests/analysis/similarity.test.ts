@@ -81,12 +81,18 @@ describe('similarity kernel', () => {
 
   describe('weightedCosine', () => {
     it('returns 0 for disjoint sets', () => {
-      const idf = new Map([['a', 1], ['b', 1]]);
+      const idf = new Map([
+        ['a', 1],
+        ['b', 1],
+      ]);
       expect(weightedCosine(new Set(['a']), new Set(['b']), idf).similarity).toBe(0);
     });
 
     it('returns 1 for identical sets with non-zero weight', () => {
-      const idf = new Map([['a', 1], ['b', 0.5]]);
+      const idf = new Map([
+        ['a', 1],
+        ['b', 0.5],
+      ]);
       const r = weightedCosine(new Set(['a', 'b']), new Set(['a', 'b']), idf);
       expect(r.similarity).toBeCloseTo(1, 6);
     });
@@ -94,7 +100,11 @@ describe('similarity kernel', () => {
     it('splits shared features around the median IDF', () => {
       // Three features with weights 0.1, 0.5, 0.9. Median = 0.5; "significant"
       // means ≥ 0.5, so b and c, while a is "trivial".
-      const idf = new Map([['a', 0.1], ['b', 0.5], ['c', 0.9]]);
+      const idf = new Map([
+        ['a', 0.1],
+        ['b', 0.5],
+        ['c', 0.9],
+      ]);
       const r = weightedCosine(new Set(['a', 'b', 'c']), new Set(['a', 'b', 'c']), idf);
       expect(r.significantShared.sort()).toEqual(['b', 'c']);
       expect(r.trivialShared).toEqual(['a']);
@@ -103,7 +113,10 @@ describe('similarity kernel', () => {
     it('zero-weight feature contributes nothing to the cosine', () => {
       // 'shared' has weight 0 (every doc has it); only the unique-shared
       // feature 'rare' actually drives similarity.
-      const idf = new Map([['shared', 0], ['rare', 2]]);
+      const idf = new Map([
+        ['shared', 0],
+        ['rare', 2],
+      ]);
       const r = weightedCosine(new Set(['shared', 'rare']), new Set(['shared', 'rare']), idf);
       expect(r.similarity).toBeCloseTo(1, 6);
       expect(r.significantShared).toEqual(['rare']);
@@ -116,11 +129,28 @@ describe('similarity kernel', () => {
     });
 
     it('odd count returns the middle value', () => {
-      expect(getMedianIdf(new Map([['a', 1], ['b', 3], ['c', 5]]))).toBe(3);
+      expect(
+        getMedianIdf(
+          new Map([
+            ['a', 1],
+            ['b', 3],
+            ['c', 5],
+          ]),
+        ),
+      ).toBe(3);
     });
 
     it('even count returns the mean of the two middles', () => {
-      expect(getMedianIdf(new Map([['a', 1], ['b', 2], ['c', 3], ['d', 4]]))).toBe(2.5);
+      expect(
+        getMedianIdf(
+          new Map([
+            ['a', 1],
+            ['b', 2],
+            ['c', 3],
+            ['d', 4],
+          ]),
+        ),
+      ).toBe(2.5);
     });
   });
 });

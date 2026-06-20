@@ -96,9 +96,17 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
   const inactiveBarrelPaths = skipBarrels ? new Set(getInactiveBarrelPaths(db)) : new Set<string>();
   const referencesBySymbol = deadCodeOnly
     ? emptyReferenceCounts()
-    : loadMentionReferenceCounts(db, inactiveBarrelPaths, definitions.map((definition) => definition.symbolId));
+    : loadMentionReferenceCounts(
+        db,
+        inactiveBarrelPaths,
+        definitions.map((definition) => definition.symbolId),
+      );
   const scipReferencedIds = deadCodeOnly
-    ? loadMentionReferencedSymbolIds(db, definitions.map((definition) => definition.symbolId), inactiveBarrelPaths)
+    ? loadMentionReferencedSymbolIds(
+        db,
+        definitions.map((definition) => definition.symbolId),
+        inactiveBarrelPaths,
+      )
     : new Set<number>();
 
   const sourceCandidates = deadCodeOnly
@@ -128,10 +136,7 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
 // scip-query: ignore-extract — this is the shared dead-code candidate gate:
 // ignore rules, test-file policy, callable/top-level shape, and value-like
 // filtering define the command's candidate set.
-function deadCandidateDefinitions(
-  db: ScipDatabase,
-  opts: DeadCandidateOptions,
-): IndexedDefinition[] {
+function deadCandidateDefinitions(db: ScipDatabase, opts: DeadCandidateOptions): IndexedDefinition[] {
   const isExcluded = buildFileExclusionPredicate(db);
   const candidates: IndexedDefinition[] = [];
 
@@ -155,20 +160,14 @@ function deadCandidateDefinitions(
   return candidates;
 }
 
-function deadRows(
-  definitions: readonly IndexedDefinition[],
-  referencesBySymbol: ReferenceCounts,
-): DeadRow[] {
+function deadRows(definitions: readonly IndexedDefinition[], referencesBySymbol: ReferenceCounts): DeadRow[] {
   return definitions
     .map((definition) => deadRow(definition, referencesBySymbol))
     .filter((row) => row.cross_file_refs === 0)
     .sort((a, b) => b.loc - a.loc || a.relative_path.localeCompare(b.relative_path) || a.start_line - b.start_line);
 }
 
-function deadRow(
-  definition: IndexedDefinition,
-  referencesBySymbol: ReferenceCounts,
-): DeadRow {
+function deadRow(definition: IndexedDefinition, referencesBySymbol: ReferenceCounts): DeadRow {
   const refMap = referencesBySymbol.get(definition.symbolId) ?? new Map();
   const sameFileRefs = referenceOccurrences(refMap.get(definition.relativePath));
   let crossFileRefs = 0;
@@ -188,10 +187,7 @@ function deadRow(
   };
 }
 
-function deadSummary(
-  db: ScipDatabase,
-  rows: readonly DeadRow[],
-): DeadSummary {
+function deadSummary(db: ScipDatabase, rows: readonly DeadRow[]): DeadSummary {
   const symbols: DeadSymbolResult[] = [];
   let deadCodeCount = 0;
   let fileInternalCount = 0;
@@ -271,25 +267,28 @@ function supplementReferencesFromAst(
   const scanPaths = new Set<string>(index.sourceFiles());
   for (const path of listIndexedDocumentPaths(db)) scanPaths.add(path);
 
-  index.scanSourceReferences({
-    paths: scanPaths,
-    includeVueSfc: true,
-    includeCrossLanguageDispatchNames: true,
-    includeRustAttributeNames: true,
-    identifierResolution: 'permissive',
-    candidateNames,
-    skipPath: (relativePath) => inactiveBarrelPaths.has(relativePath),
-  }, (hit) => {
-    if (!targetIds.has(hit.target.symbolId)) return;
-    if (shouldSkipAstReferenceHit(db, hit)) return;
-    recordReference(
-      referencesBySymbol,
-      hit.target.symbolId,
-      hit.sourceFile,
-      astReferenceOccurrences(hit),
-      'source-fallback',
-    );
-  });
+  index.scanSourceReferences(
+    {
+      paths: scanPaths,
+      includeVueSfc: true,
+      includeCrossLanguageDispatchNames: true,
+      includeRustAttributeNames: true,
+      identifierResolution: 'permissive',
+      candidateNames,
+      skipPath: (relativePath) => inactiveBarrelPaths.has(relativePath),
+    },
+    (hit) => {
+      if (!targetIds.has(hit.target.symbolId)) return;
+      if (shouldSkipAstReferenceHit(db, hit)) return;
+      recordReference(
+        referencesBySymbol,
+        hit.target.symbolId,
+        hit.sourceFile,
+        astReferenceOccurrences(hit),
+        'source-fallback',
+      );
+    },
+  );
 }
 
 // scip-query: ignore-extract — this is the dead-code-only source fallback
@@ -320,47 +319,49 @@ function supplementDeadCodeOnlySourceReferences(
     return importsByName;
   };
 
-  index.scanSourceReferences({
-    paths: scanPaths,
-    includeVueSfc: true,
-    includeCrossLanguageDispatchNames: true,
-    includeRustAttributeNames: true,
-    identifierResolution: 'permissive',
-    candidateNames,
-    skipPath: (sourceFile) => inactiveBarrelPaths.has(sourceFile),
-    resolveTargets: ({ sourceFile, name, kind }) => {
-      const candidates = candidatesByLeaf.get(name);
-      if (!candidates) return [];
-      return deadSourceTargets(sourceFile, name, candidates, importsForSource(sourceFile), {
-        permissive: kind !== 'cross-language-dispatch',
-      });
+  index.scanSourceReferences(
+    {
+      paths: scanPaths,
+      includeVueSfc: true,
+      includeCrossLanguageDispatchNames: true,
+      includeRustAttributeNames: true,
+      identifierResolution: 'permissive',
+      candidateNames,
+      skipPath: (sourceFile) => inactiveBarrelPaths.has(sourceFile),
+      resolveTargets: ({ sourceFile, name, kind }) => {
+        const candidates = candidatesByLeaf.get(name);
+        if (!candidates) return [];
+        return deadSourceTargets(sourceFile, name, candidates, importsForSource(sourceFile), {
+          permissive: kind !== 'cross-language-dispatch',
+        });
+      },
+      afterPath: (sourceFile) => {
+        importsBySource.delete(sourceFile);
+        clearSourceFileEvidenceCaches(db, sourceFile);
+      },
     },
-    afterPath: (sourceFile) => {
-      importsBySource.delete(sourceFile);
-      clearSourceFileEvidenceCaches(db, sourceFile);
+    (hit) => {
+      const occurrences =
+        hit.kind === 'identifier' && hit.sourceFile === hit.target.relativePath
+          ? Math.max(0, hit.occurrences - 1)
+          : hit.occurrences;
+      if (
+        hit.kind === 'identifier' &&
+        isUnusedImportOnlyHit(db, {
+          sourceFile: hit.sourceFile,
+          name: hit.name,
+          target: hit.target,
+          occurrences,
+        })
+      ) {
+        return;
+      }
+      recordReference(referencesBySymbol, hit.target.symbolId, hit.sourceFile, occurrences, 'source-fallback');
     },
-  }, (hit) => {
-    const occurrences = hit.kind === 'identifier' && hit.sourceFile === hit.target.relativePath
-      ? Math.max(0, hit.occurrences - 1)
-      : hit.occurrences;
-    if (
-      hit.kind === 'identifier'
-      && isUnusedImportOnlyHit(db, {
-        sourceFile: hit.sourceFile,
-        name: hit.name,
-        target: hit.target,
-        occurrences,
-      })
-    ) {
-      return;
-    }
-    recordReference(referencesBySymbol, hit.target.symbolId, hit.sourceFile, occurrences, 'source-fallback');
-  });
+  );
 }
 
-function definitionsByLeaf(
-  definitions: readonly IndexedDefinition[],
-): Map<string, IndexedDefinition[]> {
+function definitionsByLeaf(definitions: readonly IndexedDefinition[]): Map<string, IndexedDefinition[]> {
   const result = new Map<string, IndexedDefinition[]>();
   for (const definition of definitions) {
     if (!definition.leaf) continue;

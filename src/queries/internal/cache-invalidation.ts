@@ -11,14 +11,9 @@ import { clearRegisteredCaches } from '../../storage/cache-registry.js';
  * Whole-project evidence invalidation used by composite analyses after a phase
  * has consumed parser, source, semantic, and symbol evidence caches.
  */
-export function clearWholeProjectEvidenceCaches(
-  db: ScipDatabase,
-  opts: { semanticProvider?: boolean } = {},
-): void {
+export function clearWholeProjectEvidenceCaches(db: ScipDatabase, opts: { semanticProvider?: boolean } = {}): void {
   clearRegisteredCaches(db, {
-    groups: opts.semanticProvider === true
-      ? ['whole-project', 'semantic-provider']
-      : ['whole-project'],
+    groups: opts.semanticProvider === true ? ['whole-project', 'semantic-provider'] : ['whole-project'],
   });
 }
 
@@ -27,15 +22,15 @@ export function clearWholeProjectEvidenceCaches(
  * a candidate file whose cached source, AST, parser, or identifier facts can be
  * safely discarded.
  */
+// scip-query: ignore-wrapper — file-scoped cache clearing is a named
+// invalidation moment; callers should not know registry groups.
 export function clearSourceFileEvidenceCaches(
   db: ScipDatabase,
   relativePath: string,
   opts: { definitions?: boolean } = {},
 ): void {
   clearRegisteredCaches(db, {
-    groups: opts.definitions === true
-      ? ['source-file', 'definition-catalog']
-      : ['source-file'],
+    groups: opts.definitions === true ? ['source-file', 'definition-catalog'] : ['source-file'],
     file: relativePath.replace(/\\/g, '/'),
   });
 }

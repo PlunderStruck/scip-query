@@ -54,10 +54,7 @@ export function createEvidenceSchema(sqliteDb: Database.Database): void {
   sqliteDb.exec(schemaSql);
 }
 
-export function writeFixtureFiles(
-  projectRoot: string,
-  files: Record<string, readonly string[] | string>,
-): void {
+export function writeFixtureFiles(projectRoot: string, files: Record<string, readonly string[] | string>): void {
   for (const [relativePath, source] of Object.entries(files)) {
     const fullPath = join(projectRoot, relativePath);
     mkdirSync(dirname(fullPath), { recursive: true });
@@ -135,13 +132,7 @@ class EvidenceFixtureDb {
     return this;
   }
 
-  chunk(
-    id: number,
-    documentId: number,
-    startLine: number,
-    endLine: number,
-    chunkIndex = 0,
-  ): this {
+  chunk(id: number, documentId: number, startLine: number, endLine: number, chunkIndex = 0): this {
     this.chunks.push({ id, documentId, chunkIndex, startLine, endLine });
     return this;
   }
@@ -166,9 +157,7 @@ class EvidenceFixtureDb {
   }
 
   private insertDocuments(sqliteDb: Database.Database): void {
-    const stmt = sqliteDb.prepare(
-      'INSERT INTO documents (id, language, relative_path) VALUES (?, ?, ?)',
-    );
+    const stmt = sqliteDb.prepare('INSERT INTO documents (id, language, relative_path) VALUES (?, ?, ?)');
     for (const doc of this.documents) stmt.run(doc.id, doc.language, doc.relativePath);
   }
 
@@ -204,9 +193,7 @@ class EvidenceFixtureDb {
   }
 
   private insertMentions(sqliteDb: Database.Database): void {
-    const stmt = sqliteDb.prepare(
-      'INSERT INTO mentions (chunk_id, symbol_id, role) VALUES (?, ?, ?)',
-    );
+    const stmt = sqliteDb.prepare('INSERT INTO mentions (chunk_id, symbol_id, role) VALUES (?, ?, ?)');
     for (const mention of this.mentions) stmt.run(mention.chunkId, mention.symbolId, mention.role);
   }
 }

@@ -14,9 +14,7 @@ interface RankedPairwiseProfileOptions<Profile extends PairwiseFileProfile, Resu
 export function rankedPairwiseProfileResults<
   Profile extends PairwiseFileProfile,
   Result extends { similarity: number },
->(
-  opts: RankedPairwiseProfileOptions<Profile, Result>,
-): Result[] {
+>(opts: RankedPairwiseProfileOptions<Profile, Result>): Result[] {
   const results: Result[] = [];
 
   if (opts.filePattern) {
@@ -28,9 +26,10 @@ export function rankedPairwiseProfileResults<
       if (result) results.push(result);
     }
   } else {
-    const stopAt = typeof opts.overrunFactor === 'number' && Number.isFinite(opts.limit)
-      ? opts.limit * opts.overrunFactor
-      : Number.POSITIVE_INFINITY;
+    const stopAt =
+      typeof opts.overrunFactor === 'number' && Number.isFinite(opts.limit)
+        ? opts.limit * opts.overrunFactor
+        : Number.POSITIVE_INFINITY;
     for (let i = 0; i < opts.profiles.length; i += 1) {
       for (let j = i + 1; j < opts.profiles.length; j += 1) {
         const result = opts.compare(opts.profiles[i]!, opts.profiles[j]!);

@@ -3,11 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { DiffGateResult } from '../../src/queries/impact/diff-gate.js';
-import {
-  formatGateBlockReason,
-  isStopHookReentry,
-  setupAgent,
-} from '../../src/runtime/agent-setup.js';
+import { formatGateBlockReason, isStopHookReentry, setupAgent } from '../../src/runtime/agent-setup.js';
 
 let projectRoot: string;
 
@@ -114,15 +110,17 @@ describe('stop-hook helpers (diff-gate --hook)', () => {
       checksRun: ['incomplete-migration'],
       skipped: [],
       suppressed: [],
-      findings: [{
-        id: 'SQ123456789ABC',
-        check: 'incomplete-migration',
-        severity: 'warning',
-        evidence: 'heuristic',
-        message: 'new helper x is wired into 1 file(s), but 2 similar un-migrated site(s) remain',
-        why: ['helper x was added in this diff'],
-        remediation: 'Migrate the remaining sites to x.',
-      }],
+      findings: [
+        {
+          id: 'SQ123456789ABC',
+          check: 'incomplete-migration',
+          severity: 'warning',
+          evidence: 'heuristic',
+          message: 'new helper x is wired into 1 file(s), but 2 similar un-migrated site(s) remain',
+          why: ['helper x was added in this diff'],
+          remediation: 'Migrate the remaining sites to x.',
+        },
+      ],
     };
 
     const reason = formatGateBlockReason(result);

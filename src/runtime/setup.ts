@@ -1,7 +1,4 @@
-import {
-  existsSync, mkdirSync, symlinkSync, readlinkSync,
-  unlinkSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, symlinkSync, readlinkSync, unlinkSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { homedir, platform } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -35,9 +32,7 @@ export interface InstallSkillsResult {
  * Uses symlinks (junctions on Windows)
  * so skills auto-update when the package updates.
  */
-export function installSkills(
-  opts: { quiet?: boolean } = {},
-): InstallSkillsResult {
+export function installSkills(opts: { quiet?: boolean } = {}): InstallSkillsResult {
   const log = opts.quiet ? () => {} : console.log;
   const thisFile = fileURLToPath(import.meta.url);
   const skillsSource = resolve(dirname(thisFile), '..', 'skills');

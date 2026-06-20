@@ -106,8 +106,20 @@ const symbols = [
   { id: 8, symbol: advancedFixture.symbols.state, displayName: 'State', kind: 1, documentation: 'Shared state type' },
   { id: 9, symbol: advancedFixture.symbols.fetchData, displayName: 'fetchData', kind: 2, documentation: 'HTTP fetch' },
   { id: 10, symbol: advancedFixture.symbols.render, displayName: 'render', kind: 2, documentation: 'View render' },
-  { id: 11, symbol: advancedFixture.symbols.normalize, displayName: 'normalize', kind: 2, documentation: 'Shared normalization' },
-  { id: 12, symbol: advancedFixture.symbols.response, displayName: 'Response', kind: 1, documentation: 'HTTP response type' },
+  {
+    id: 11,
+    symbol: advancedFixture.symbols.normalize,
+    displayName: 'normalize',
+    kind: 2,
+    documentation: 'Shared normalization',
+  },
+  {
+    id: 12,
+    symbol: advancedFixture.symbols.response,
+    displayName: 'Response',
+    kind: 1,
+    documentation: 'HTTP response type',
+  },
   { id: 13, symbol: advancedFixture.symbols.extra, displayName: 'Extra', kind: 1, documentation: 'Extra type' },
 ] as const;
 
@@ -206,9 +218,7 @@ export function createAdvancedFixtureDb(dbPath: string): void {
 
   exec(schemaSql);
 
-  const documentStmt = sqliteDb.prepare(
-    'INSERT INTO documents (id, language, relative_path) VALUES (?, ?, ?)',
-  );
+  const documentStmt = sqliteDb.prepare('INSERT INTO documents (id, language, relative_path) VALUES (?, ?, ?)');
   for (const doc of documents) {
     documentStmt.run(doc.id, doc.language, doc.relativePath);
   }
@@ -230,15 +240,13 @@ export function createAdvancedFixtureDb(dbPath: string): void {
   }
 
   const chunkStmt = sqliteDb.prepare(
-    'INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES (?, ?, 0, ?, ?, X\'00\')',
+    "INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES (?, ?, 0, ?, ?, X'00')",
   );
   for (const chunk of chunks) {
     chunkStmt.run(chunk.id, chunk.documentId, chunk.startLine, chunk.endLine);
   }
 
-  const mentionStmt = sqliteDb.prepare(
-    'INSERT INTO mentions (chunk_id, symbol_id, role) VALUES (?, ?, ?)',
-  );
+  const mentionStmt = sqliteDb.prepare('INSERT INTO mentions (chunk_id, symbol_id, role) VALUES (?, ?, ?)');
   for (const mention of mentions) {
     mentionStmt.run(mention.chunkId, mention.symbolId, mention.role);
   }

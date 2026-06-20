@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+.scipquery-cache/
+index.db*
+*.db-journal
+index.scip
+*.tgz

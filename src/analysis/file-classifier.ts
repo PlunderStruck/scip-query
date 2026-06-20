@@ -19,10 +19,10 @@ import { getSourceFiles } from '../source/source-fileset.js';
 import { isPackageSurfaceFile } from './package-surface.js';
 
 export type FileKind =
-  | 'entry'   // CLI/server bootstraps, main.rs, top-level index.ts, src/bin/*, scripts
-  | 'barrel'  // re-export-only modules: index.ts/js, mod.rs, __init__.py
-  | 'worker'  // background workers, child-process entry points (foo.worker.ts, etc.)
-  | 'test'    // matches a test file pattern
+  | 'entry' // CLI/server bootstraps, main.rs, top-level index.ts, src/bin/*, scripts
+  | 'barrel' // re-export-only modules: index.ts/js, mod.rs, __init__.py
+  | 'worker' // background workers, child-process entry points (foo.worker.ts, etc.)
+  | 'test' // matches a test file pattern
   | 'source'; // everything else — regular code
 
 /**
@@ -40,7 +40,9 @@ export function classifyFile(file: string): FileKind {
 
 // ── Convenience predicates ───────────────────────────────────────
 
-export function isBarrel(file: string): boolean { return classifyFile(file) === 'barrel'; }
+export function isBarrel(file: string): boolean {
+  return classifyFile(file) === 'barrel';
+}
 
 // ── Live-barrel transitive closure (DB-dependent) ────────────────
 
@@ -91,10 +93,11 @@ export function isLiveBarrel(db: ScipDatabase, file: string): boolean {
  * imports them, and discarding their outgoing references made everything
  * they exclusively use look dead (caught live by cleanup-plan --verify).
  */
+// scip-query: ignore-wrapper — skip-barrels policy stays in the classifier so
+// dead.ts does not duplicate live-barrel and function-entry rules.
 export function getInactiveBarrelPaths(db: ScipDatabase): string[] {
   const live = getLiveBarrelPaths(db);
-  return getSourceFiles(db).filter((path) =>
-    isBarrel(path) && !live.has(path) && !definesFunctions(db, path));
+  return getSourceFiles(db).filter((path) => isBarrel(path) && !live.has(path) && !definesFunctions(db, path));
 }
 
 function definesFunctions(db: ScipDatabase, relativePath: string): boolean {
@@ -141,13 +144,16 @@ export function isRootedSymbol(db: ScipDatabase, symbol: string, file: string): 
   if (roots.files?.some((candidate) => normalizePath(candidate) === normalized)) return true;
   if (roots.pathPrefixes?.some((prefix) => normalized.startsWith(normalizePath(prefix)))) return true;
   if (roots.qualifiedVars?.some((qualified) => symbolMatchesQualifiedVar(symbol, qualified))) return true;
-  if (roots.symbolPatterns?.some((pattern) => {
-    try {
-      return new RegExp(pattern).test(symbol);
-    } catch {
-      return false;
-    }
-  })) return true;
+  if (
+    roots.symbolPatterns?.some((pattern) => {
+      try {
+        return new RegExp(pattern).test(symbol);
+      } catch {
+        return false;
+      }
+    })
+  )
+    return true;
   return false;
 }
 
@@ -160,7 +166,7 @@ function matchesTestPattern(normalized: string): boolean {
   if (/(?:^|\/)spec_[^/]+$/i.test(normalized)) return true;
   if (/(?:^|\/)[^/]+_test\.[a-z0-9]+$/i.test(normalized)) return true;
   if (/(?:^|\/)[^/]+_tests\.rs$/i.test(normalized)) return true; // Rust convention for inline-tests modules
-  if (/(?:^|\/)tests\.rs$/i.test(normalized)) return true;       // Rust `mod tests;` body file
+  if (/(?:^|\/)tests\.rs$/i.test(normalized)) return true; // Rust `mod tests;` body file
   if (/(?:^|\/)[^/]+_spec\.[a-z0-9]+$/i.test(normalized)) return true;
   // Test directories (only when path actually traverses them; not bare basenames)
   if (/(?:^|\/)__tests__\//i.test(normalized)) return true;
@@ -183,17 +189,17 @@ function isStructuralEntryPath(normalized: string): boolean {
   const basename = segments[segments.length - 1] ?? normalized;
 
   if (
-    basename === 'cli.ts'
-    || basename === 'cli.js'
-    || basename === 'postinstall.ts'
-    || basename === 'postinstall.js'
-    || basename === 'main.ts'
-    || basename === 'main.js'
-    || basename === 'main.rs'
-    || basename === 'main.go'
-    || basename === 'main.py'
-    || basename === 'build.rs'
-    || basename === 'lib.rs'
+    basename === 'cli.ts' ||
+    basename === 'cli.js' ||
+    basename === 'postinstall.ts' ||
+    basename === 'postinstall.js' ||
+    basename === 'main.ts' ||
+    basename === 'main.js' ||
+    basename === 'main.rs' ||
+    basename === 'main.go' ||
+    basename === 'main.py' ||
+    basename === 'build.rs' ||
+    basename === 'lib.rs'
   ) {
     return true;
   }
@@ -216,12 +222,14 @@ function isStructuralEntryPath(normalized: string): boolean {
 }
 
 function isBarrelPath(normalized: string): boolean {
-  return normalized === 'index.ts'
-    || normalized === 'index.js'
-    || normalized.endsWith('/index.ts')
-    || normalized.endsWith('/index.js')
-    || normalized.endsWith('/mod.rs')
-    || normalized.endsWith('/__init__.py');
+  return (
+    normalized === 'index.ts' ||
+    normalized === 'index.js' ||
+    normalized.endsWith('/index.ts') ||
+    normalized.endsWith('/index.js') ||
+    normalized.endsWith('/mod.rs') ||
+    normalized.endsWith('/__init__.py')
+  );
 }
 
 function normalizePath(path: string): string {
@@ -233,12 +241,9 @@ function symbolMatchesQualifiedVar(symbol: string, qualified: string): boolean {
   if (slash < 0) return false;
   const ns = qualified.slice(0, slash);
   const name = qualified.slice(slash + 1);
-  return symbol.includes(formatScipName(ns) + '/')
-    && symbol.includes(formatScipName(name) + '.');
+  return symbol.includes(formatScipName(ns) + '/') && symbol.includes(formatScipName(name) + '.');
 }
 
 function formatScipName(value: string): string {
-  return /^[A-Za-z0-9_$+-]+$/.test(value)
-    ? value
-    : '`' + value.replace(/`/g, '``') + '`';
+  return /^[A-Za-z0-9_$+-]+$/.test(value) ? value : '`' + value.replace(/`/g, '``') + '`';
 }

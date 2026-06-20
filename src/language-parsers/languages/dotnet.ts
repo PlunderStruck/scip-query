@@ -11,13 +11,15 @@ import {
   resolveQualifiedImportPath,
 } from '../../resolution/import-path-resolver.js';
 import type { ParsedSourceImport } from '../../domain/types.js';
-import { buildNamedImport, buildSimpleImport, collectIdentifiersOutside, parseImportLineMatches, parseWithAstLanguageDispatch } from '../utils.js';
+import {
+  buildNamedImport,
+  buildSimpleImport,
+  collectIdentifiersOutside,
+  parseImportLineMatches,
+  parseWithAstLanguageDispatch,
+} from '../utils.js';
 
-export function parseDotNetImports(
-  db: ScipDatabase,
-  importerPath: string,
-  source: string,
-): ParsedSourceImport[] {
+export function parseDotNetImports(db: ScipDatabase, importerPath: string, source: string): ParsedSourceImport[] {
   return parseWithAstLanguageDispatch(
     db,
     importerPath,
@@ -38,19 +40,19 @@ export function parseDotNetImports(
         const hasAlias = Boolean(targetPart);
         const qualified = (hasAlias ? targetPart : aliasPart)?.trim() ?? clause;
         const importedName = qualified.split('.').pop() ?? qualified;
-        const localName = hasAlias
-          ? aliasPart?.trim() ?? importedName
-          : importedName;
+        const localName = hasAlias ? (aliasPart?.trim() ?? importedName) : importedName;
 
-        return [buildSimpleImport(
-          db,
-          importerPath,
-          body,
-          qualified,
-          importedName,
-          localName,
-          resolveQualifiedImportPath(db, qualified, DOTNET_EXTENSIONS),
-        )];
+        return [
+          buildSimpleImport(
+            db,
+            importerPath,
+            body,
+            qualified,
+            importedName,
+            localName,
+            resolveQualifiedImportPath(db, qualified, DOTNET_EXTENSIONS),
+          ),
+        ];
       });
     },
   );
@@ -60,11 +62,7 @@ export function parseDotNetImports(
 // distinct AST node shape (imports_statement / using_directive / import_declaration)
 // and distinct alias/wildcard semantics. Convergence would require a Strategy
 // abstraction that's harder to read than the per-language version.
-function parseVbImportsAst(
-  db: ScipDatabase,
-  importerPath: string,
-  tree: Tree,
-): ParsedSourceImport[] {
+function parseVbImportsAst(db: ScipDatabase, importerPath: string, tree: Tree): ParsedSourceImport[] {
   const usedNames = collectIdentifiersOutside(tree, new Set(['imports_statement']));
   const results: ParsedSourceImport[] = [];
 
@@ -83,24 +81,22 @@ function parseVbImportsAst(
     const importedName = qualified.split('.').pop() ?? qualified;
     const localName = aliasNode?.text ?? importedName;
 
-    results.push(buildNamedImport(
-      importedName,
-      localName,
-      resolveQualifiedImportPath(db, qualified, DOTNET_EXTENSIONS),
-      usedNames,
-      aliasNode ? 'namespace' : 'named',
-    ));
+    results.push(
+      buildNamedImport(
+        importedName,
+        localName,
+        resolveQualifiedImportPath(db, qualified, DOTNET_EXTENSIONS),
+        usedNames,
+        aliasNode ? 'namespace' : 'named',
+      ),
+    );
   }
   return results;
 }
 
 // scip-query: ignore-similar — handles C#-specific `using static`, alias
 // (`using A = B`), and 3-shape AST patterns; not interchangeable with VB / JVM.
-function parseCSharpImportsAst(
-  db: ScipDatabase,
-  importerPath: string,
-  tree: Tree,
-): ParsedSourceImport[] {
+function parseCSharpImportsAst(db: ScipDatabase, importerPath: string, tree: Tree): ParsedSourceImport[] {
   const usedNames = collectIdentifiersOutside(tree, new Set(['using_directive']));
   const results: ParsedSourceImport[] = [];
 
@@ -115,8 +111,11 @@ function parseCSharpImportsAst(
     let aliasNode: SyntaxNode | null = null;
     let targetNode: SyntaxNode;
 
-    if (namedChildren.length >= 2 && namedChildren[0]!.type === 'identifier'
-        && (namedChildren[1]!.type === 'qualified_name' || namedChildren[1]!.type === 'identifier')) {
+    if (
+      namedChildren.length >= 2 &&
+      namedChildren[0]!.type === 'identifier' &&
+      (namedChildren[1]!.type === 'qualified_name' || namedChildren[1]!.type === 'identifier')
+    ) {
       aliasNode = namedChildren[0]!;
       targetNode = namedChildren[1]!;
     } else {
@@ -127,13 +126,15 @@ function parseCSharpImportsAst(
     const importedName = qualified.split('.').pop() ?? qualified;
     const localName = aliasNode?.text ?? importedName;
 
-    results.push(buildNamedImport(
-      importedName,
-      localName,
-      resolveQualifiedImportPath(db, qualified, DOTNET_EXTENSIONS),
-      usedNames,
-      aliasNode ? 'namespace' : 'named',
-    ));
+    results.push(
+      buildNamedImport(
+        importedName,
+        localName,
+        resolveQualifiedImportPath(db, qualified, DOTNET_EXTENSIONS),
+        usedNames,
+        aliasNode ? 'namespace' : 'named',
+      ),
+    );
   }
   return results;
 }

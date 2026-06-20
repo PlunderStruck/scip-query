@@ -54,9 +54,7 @@ export function renderCommandReferenceMarkdown(descriptors: readonly CommandDesc
 }
 
 function formatOptions(options: readonly string[]): string {
-  return options.length > 0
-    ? options.map((option) => `\`${escapeCode(option)}\``).join('<br>')
-    : '-';
+  return options.length > 0 ? options.map((option) => `\`${escapeCode(option)}\``).join('<br>') : '-';
 }
 
 function unique(values: readonly string[]): string[] {

@@ -36,10 +36,7 @@ export function getCallSites(db: ScipDatabase, relativePath: string): CallSite[]
   return facts.callSites;
 }
 
-export function getTypeContainerMap(
-  db: ScipDatabase,
-  relativePath: string,
-): Map<string, Set<string>> {
+export function getTypeContainerMap(db: ScipDatabase, relativePath: string): Map<string, Set<string>> {
   return getSourceFacts(db, relativePath)?.typeContainerMap ?? new Map();
 }
 

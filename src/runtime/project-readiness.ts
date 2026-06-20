@@ -81,7 +81,10 @@ const LANGUAGE_EXTENSIONS: Record<SupportedLanguage, string[]> = {
 };
 
 const SOURCE_FACT_SUPPORT: Record<SupportedLanguage, { status: CapabilityStatus; reason: string }> = {
-  typescript: { status: 'available', reason: 'AST/source fallback covers TypeScript imports, references, and source-backed evidence.' },
+  typescript: {
+    status: 'available',
+    reason: 'AST/source fallback covers TypeScript imports, references, and source-backed evidence.',
+  },
   javascript: { status: 'available', reason: 'AST/source fallback covers JavaScript, JSX, and Vue script evidence.' },
   java: { status: 'available', reason: 'AST-dispatched source fallback covers Java imports.' },
   scala: { status: 'available', reason: 'AST-dispatched source fallback covers Scala imports.' },
@@ -110,9 +113,9 @@ export function getProjectReadiness(projectRoot: string, config: ProjectConfig):
   });
   const semantic = languages.includes('typescript')
     ? {
-      language: 'typescript' as const,
-      ...getTypeScriptSemanticStatus(projectRoot, config.semantic?.typescript?.tsconfigs),
-    }
+        language: 'typescript' as const,
+        ...getTypeScriptSemanticStatus(projectRoot, config.semantic?.typescript?.tsconfigs),
+      }
     : undefined;
   const checkers = detectCheckers(projectRoot).map((checker) => ({
     label: checker.label,
@@ -124,12 +127,13 @@ export function getProjectReadiness(projectRoot: string, config: ProjectConfig):
 
 export function getProjectCapabilities(readiness: ProjectReadiness): ProjectCapabilityReport {
   const runnableIndexers = readiness.indexers.filter((indexer) => indexer.runnable).length;
-  const graphStatus = readiness.languages.length === 0 || runnableIndexers === 0
-    ? 'unavailable'
-    : runnableIndexers === readiness.indexers.length ? 'available' : 'partial';
-  const semanticStatus = readiness.semantic
-    ? readiness.semantic.available ? 'available' : 'partial'
-    : 'unavailable';
+  const graphStatus =
+    readiness.languages.length === 0 || runnableIndexers === 0
+      ? 'unavailable'
+      : runnableIndexers === readiness.indexers.length
+        ? 'available'
+        : 'partial';
+  const semanticStatus = readiness.semantic ? (readiness.semantic.available ? 'available' : 'partial') : 'unavailable';
 
   return {
     languages: readiness.languages,
@@ -140,9 +144,10 @@ export function getProjectCapabilities(readiness: ProjectReadiness): ProjectCapa
         label: 'SCIP indexing',
         status: graphStatus,
         evidence: 'graph-fact',
-        reason: graphStatus === 'available'
-          ? 'All detected/configured language indexers are runnable.'
-          : `${runnableIndexers}/${readiness.indexers.length} detected/configured language indexers are runnable.`,
+        reason:
+          graphStatus === 'available'
+            ? 'All detected/configured language indexers are runnable.'
+            : `${runnableIndexers}/${readiness.indexers.length} detected/configured language indexers are runnable.`,
       },
       {
         id: 'semantic-typescript',
@@ -152,7 +157,7 @@ export function getProjectCapabilities(readiness: ProjectReadiness): ProjectCapa
         reason: readiness.semantic
           ? readiness.semantic.available
             ? 'ts-morph can load the configured TypeScript project.'
-            : readiness.semantic.reason ?? 'TypeScript semantic checks will fall back to SCIP/source evidence.'
+            : (readiness.semantic.reason ?? 'TypeScript semantic checks will fall back to SCIP/source evidence.')
           : 'TypeScript is not detected/configured for this project.',
       },
       {
@@ -160,18 +165,20 @@ export function getProjectCapabilities(readiness: ProjectReadiness): ProjectCapa
         label: 'Heuristic cleanup detectors',
         status: graphStatus === 'unavailable' ? 'unavailable' : 'available',
         evidence: 'heuristic',
-        reason: graphStatus === 'unavailable'
-          ? 'Heuristic detectors need an indexed code graph.'
-          : 'Similarity, migration, wrapper, stale-abstraction, and doc-drift detectors can run over the index.',
+        reason:
+          graphStatus === 'unavailable'
+            ? 'Heuristic detectors need an indexed code graph.'
+            : 'Similarity, migration, wrapper, stale-abstraction, and doc-drift detectors can run over the index.',
       },
       {
         id: 'cleanup-verification',
         label: 'Compiler cleanup verification',
         status: readiness.checkers.length > 0 ? 'available' : 'unavailable',
         evidence: 'compiler',
-        reason: readiness.checkers.length > 0
-          ? readiness.checkers.map((checker) => checker.label).join(', ')
-          : 'No project checker was detected for cleanup-plan --verify.',
+        reason:
+          readiness.checkers.length > 0
+            ? readiness.checkers.map((checker) => checker.label).join(', ')
+            : 'No project checker was detected for cleanup-plan --verify.',
       },
       {
         id: 'diff-gate',
@@ -190,15 +197,16 @@ function languageCapability(readiness: ProjectReadiness, language: SupportedLang
   const indexer = readiness.indexers.find((entry) => entry.language === language);
   const indexingStatus: CapabilityStatus = indexer?.runnable ? 'available' : 'unavailable';
   const sourceSupport = SOURCE_FACT_SUPPORT[language];
-  const semantic = language === 'typescript'
-    ? typescriptSemanticCapability(readiness)
-    : {
-      id: 'semantic',
-      label: 'Semantic provider',
-      status: 'unavailable' as const,
-      evidence: 'semantic' as const,
-      reason: `No semantic provider is registered for ${language}; commands use graph and source evidence instead.`,
-    };
+  const semantic =
+    language === 'typescript'
+      ? typescriptSemanticCapability(readiness)
+      : {
+          id: 'semantic',
+          label: 'Semantic provider',
+          status: 'unavailable' as const,
+          evidence: 'semantic' as const,
+          reason: `No semantic provider is registered for ${language}; commands use graph and source evidence instead.`,
+        };
   const coveredByCheckers = checkersForLanguage(readiness, language);
 
   return {
@@ -210,16 +218,17 @@ function languageCapability(readiness: ProjectReadiness, language: SupportedLang
       evidence: 'graph-fact',
       reason: indexer?.runnable
         ? `${indexer.binaryLabel} is runnable${indexer.resolvedBinary ? ` at ${indexer.resolvedBinary}` : ''}.`
-        : indexer?.note ?? `${language} indexing is not runnable in this project.`,
+        : (indexer?.note ?? `${language} indexing is not runnable in this project.`),
     },
     sourceFacts: {
       id: 'source-facts',
       label: 'Source fallback',
       status: indexingStatus === 'unavailable' ? 'unavailable' : sourceSupport.status,
       evidence: 'heuristic',
-      reason: indexingStatus === 'unavailable'
-        ? 'Source fallback needs indexed documents before it can attach evidence.'
-        : sourceSupport.reason,
+      reason:
+        indexingStatus === 'unavailable'
+          ? 'Source fallback needs indexed documents before it can attach evidence.'
+          : sourceSupport.reason,
     },
     semantic,
     detectors: {
@@ -227,18 +236,20 @@ function languageCapability(readiness: ProjectReadiness, language: SupportedLang
       label: 'Cleanup detectors',
       status: indexingStatus === 'unavailable' ? 'unavailable' : 'available',
       evidence: 'heuristic',
-      reason: indexingStatus === 'unavailable'
-        ? 'Cleanup detectors need an indexed graph for this language.'
-        : 'Graph-backed cleanup detectors can analyze this language; source and semantic precision depends on the rows above.',
+      reason:
+        indexingStatus === 'unavailable'
+          ? 'Cleanup detectors need an indexed graph for this language.'
+          : 'Graph-backed cleanup detectors can analyze this language; source and semantic precision depends on the rows above.',
     },
     cleanupVerification: {
       id: 'cleanup-verification',
       label: 'Cleanup verification',
       status: coveredByCheckers.length > 0 ? 'available' : 'unavailable',
       evidence: 'compiler',
-      reason: coveredByCheckers.length > 0
-        ? coveredByCheckers.map((checker) => checker.label).join(', ')
-        : `No detected checker covers ${LANGUAGE_EXTENSIONS[language].join(', ')} files.`,
+      reason:
+        coveredByCheckers.length > 0
+          ? coveredByCheckers.map((checker) => checker.label).join(', ')
+          : `No detected checker covers ${LANGUAGE_EXTENSIONS[language].join(', ')} files.`,
     },
   };
 }
@@ -261,14 +272,15 @@ function typescriptSemanticCapability(readiness: ProjectReadiness): ProjectCapab
     evidence: 'semantic',
     reason: readiness.semantic.available
       ? 'ts-morph can load the configured TypeScript project.'
-      : readiness.semantic.reason ?? 'TypeScript semantic checks fall back to SCIP/source evidence.',
+      : (readiness.semantic.reason ?? 'TypeScript semantic checks fall back to SCIP/source evidence.'),
   };
 }
 
 function checkersForLanguage(readiness: ProjectReadiness, language: SupportedLanguage): Array<{ label: string }> {
   const extensions = new Set(LANGUAGE_EXTENSIONS[language]);
   return readiness.checkers.filter((checker) =>
-    checker.coversExtensions.some((extension) => extensions.has(extension)));
+    checker.coversExtensions.some((extension) => extensions.has(extension)),
+  );
 }
 
 function gitAvailable(projectRoot: string): boolean {

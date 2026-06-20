@@ -51,11 +51,7 @@ interface SymbolRef {
 // scip-query: ignore-extract — this is an ordered resolution strategy stack:
 // unique leaf, same-file, direct import, then indirect factory/method access.
 // Splitting the strategy order would make attribution rules harder to audit.
-export function attributeIdentifier(
-  db: ScipDatabase,
-  file: string,
-  identifier: string,
-): SymbolRef[] {
+export function attributeIdentifier(db: ScipDatabase, file: string, identifier: string): SymbolRef[] {
   const bucket = getGlobalLeafIndex(db).get(identifier);
   if (!bucket || bucket.length === 0) return [];
 
@@ -114,11 +110,7 @@ export function attributeIdentifier(
  * Bias: prefer false negatives (live code stays live) over false
  * positives (deleting referenced code).
  */
-export function attributeIdentifierPermissive(
-  db: ScipDatabase,
-  file: string,
-  identifier: string,
-): SymbolRef[] {
+export function attributeIdentifierPermissive(db: ScipDatabase, file: string, identifier: string): SymbolRef[] {
   const strict = attributeIdentifier(db, file, identifier);
   if (strict.length > 0) return strict;
   // Strict returned empty → ambiguous textual hit. Credit every candidate:
@@ -191,9 +183,7 @@ export function findReferences(
       db,
       file,
       identifier,
-      file === match.relativePath
-        ? { excludeStartLine: match.startLine, excludeEndLine: match.endLine }
-        : {},
+      file === match.relativePath ? { excludeStartLine: match.startLine, excludeEndLine: match.endLine } : {},
     );
     if (lines.length > 0) fileLines.set(file, lines);
   }
@@ -238,7 +228,10 @@ export function findCallerFiles(
         if (!candidateIds.has(ref.symbolId)) continue;
         if (file === ref.relativePath) continue; // self-reference, not a caller
         let bucket = result.get(ref.symbolId);
-        if (!bucket) { bucket = new Set(); result.set(ref.symbolId, bucket); }
+        if (!bucket) {
+          bucket = new Set();
+          result.set(ref.symbolId, bucket);
+        }
         bucket.add(file);
       }
     }
@@ -253,10 +246,7 @@ function toSymbolRef(entry: { symbol: string; symbolId: number; file: string }):
   return { symbolId: entry.symbolId, symbol: entry.symbol, relativePath: entry.file };
 }
 
-function materializeReferenceSites(
-  db: ScipDatabase,
-  perFileLines: Map<string, number[]>,
-): ReferenceSite[] {
+function materializeReferenceSites(db: ScipDatabase, perFileLines: Map<string, number[]>): ReferenceSite[] {
   const sites: ReferenceSite[] = [];
   const seen = new Set<string>();
   for (const [file, lines] of perFileLines) {

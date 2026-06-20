@@ -1,5 +1,12 @@
 import type { CommandDescriptor } from './command-descriptor-types.js';
-import { collectValues, doc, option, parseIntegerLoose, parsePositiveInteger, withJsonOption } from './command-spec-builders.js';
+import {
+  collectValues,
+  doc,
+  option,
+  parseIntegerLoose,
+  parsePositiveInteger,
+  withJsonOption,
+} from './command-spec-builders.js';
 import { DIFF_IMPACT_BATCH_COMMAND, HEALTH_PHASE_COMMAND } from '../cli-support.js';
 import { BUILTIN_SKILLS } from '../setup.js';
 import * as handlers from './command-handlers.js';
@@ -222,7 +229,8 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'setup-agent',
     command: 'setup-agent',
-    description: 'Seed agent guidance for this project: AGENTS.md/CLAUDE.md block pointing agents at the scip-query skills and diff gate, plus an optional git pre-commit backstop',
+    description:
+      'Seed agent guidance for this project: AGENTS.md/CLAUDE.md block pointing agents at the scip-query skills and diff gate, plus an optional git pre-commit backstop',
     options: [option('--git-hook', 'Also install a git pre-commit hook that runs diff-gate')],
     renderShape: 'custom',
     docs: doc('Maintenance', ['scip-query setup-agent', 'scip-query setup-agent --git-hook']),

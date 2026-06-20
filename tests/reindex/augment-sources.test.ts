@@ -51,9 +51,7 @@ function createDocumentsOnlyDb(dbPath: string): void {
       occurrences BLOB NOT NULL
     );
   `);
-  db.prepare(
-    `INSERT INTO documents (language, relative_path) VALUES (?, ?)`,
-  ).run('typescript', 'src/main.ts');
+  db.prepare(`INSERT INTO documents (language, relative_path) VALUES (?, ?)`).run('typescript', 'src/main.ts');
   db.close();
 }
 
@@ -79,8 +77,7 @@ describe('auxiliary source augmentation', () => {
     });
     try {
       expect(queries.stats(db).documents).toBe(2);
-      expect(queries.files(db, '*.vue').map((file) => file.relativePath))
-        .toEqual(['src/components/UserList.vue']);
+      expect(queries.files(db, '*.vue').map((file) => file.relativePath)).toEqual(['src/components/UserList.vue']);
     } finally {
       db.close();
     }
@@ -115,10 +112,12 @@ describe('auxiliary source augmentation', () => {
     );
     createDocumentsOnlyDb(dbPath);
 
-    expect(() => augmentVueResolvedReferences({
-      projectRoot,
-      dbPath,
-      tsconfig: 'tsconfig.json',
-    })).toThrow(/Vue augmentation requires @vue\/language-core to be installed/);
+    expect(() =>
+      augmentVueResolvedReferences({
+        projectRoot,
+        dbPath,
+        tsconfig: 'tsconfig.json',
+      }),
+    ).toThrow(/Vue augmentation requires @vue\/language-core to be installed/);
   });
 });

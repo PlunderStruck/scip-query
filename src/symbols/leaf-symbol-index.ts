@@ -5,10 +5,7 @@ import { createPerDbValue } from '../storage/per-db-cache.js';
 import { leafName } from './symbol-parser.js';
 import { pathsResolveSame } from '../resolution/path-normalization.js';
 
-export function sameLanguageCandidates<T extends { file: string }>(
-  sourceFile: string,
-  candidates: T[],
-): T[] {
+export function sameLanguageCandidates<T extends { file: string }>(sourceFile: string, candidates: T[]): T[] {
   const sourceFamily = astLanguageFamily(sourceFile);
   if (!sourceFamily) return candidates;
   return candidates.filter((candidate) => astLanguageFamily(candidate.file) === sourceFamily);
@@ -57,9 +54,7 @@ const GLOBAL_LEAF_INDEX_CACHE = createPerDbValue<Map<string, GlobalLeafCandidate
 // scip-query: ignore-extract — this builds the global leaf-name candidate
 // index; SQL loading, ignore filtering, noise filtering, and language tagging
 // define one cache value.
-export function getGlobalLeafIndex(
-  db: ScipDatabase,
-): Map<string, GlobalLeafCandidate[]> {
+export function getGlobalLeafIndex(db: ScipDatabase): Map<string, GlobalLeafCandidate[]> {
   return GLOBAL_LEAF_INDEX_CACHE.get(db, () => {
     const rows = db.all<{ id: number; symbol: string; relative_path: string | null }>(
       `SELECT gs.id, gs.symbol,
@@ -85,7 +80,10 @@ export function getGlobalLeafIndex(
       const leaf = leafName(row.symbol);
       if (!leaf) continue;
       let bucket = index.get(leaf);
-      if (!bucket) { bucket = []; index.set(leaf, bucket); }
+      if (!bucket) {
+        bucket = [];
+        index.set(leaf, bucket);
+      }
       // Dedupe: same symbol can show up via both joins.
       if (!bucket.some((e) => e.symbolId === row.id)) {
         bucket.push({ symbol: row.symbol, symbolId: row.id, file: row.relative_path });
@@ -94,6 +92,3 @@ export function getGlobalLeafIndex(
     return index;
   });
 }
-
-
-

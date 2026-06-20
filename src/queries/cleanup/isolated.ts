@@ -46,7 +46,10 @@ export function isolated(
     symbolsWithCallers.add(symbolId);
   }
 
-  const symbolsWithCallees = index.symbolsWithNonSelfCallees(candidates, { additive: false, semantic: includeSemantic });
+  const symbolsWithCallees = index.symbolsWithNonSelfCallees(candidates, {
+    additive: false,
+    semantic: includeSemantic,
+  });
   const possiblyIsolated = candidates
     .filter((definition) => !symbolsWithCallers.has(definition.symbolId))
     .filter((definition) => !symbolsWithCallees.has(definition.symbolId));
@@ -56,22 +59,24 @@ export function isolated(
     symbolsWithCallers.add(symbolId);
   }
 
-  const candidatesNeedingAdditiveCallees = possiblyIsolated
-    .filter((definition) => !symbolsWithCallers.has(definition.symbolId));
-  const additiveCalleeIds = index.symbolsWithNonSelfCallees(
-    candidatesNeedingAdditiveCallees,
-    { additive: true, semantic: includeSemantic },
+  const candidatesNeedingAdditiveCallees = possiblyIsolated.filter(
+    (definition) => !symbolsWithCallers.has(definition.symbolId),
   );
+  const additiveCalleeIds = index.symbolsWithNonSelfCallees(candidatesNeedingAdditiveCallees, {
+    additive: true,
+    semantic: includeSemantic,
+  });
   for (const symbolId of additiveCalleeIds) {
     symbolsWithCallees.add(symbolId);
   }
 
   return candidatesNeedingAdditiveCallees
     .filter((definition) => !symbolsWithCallees.has(definition.symbolId))
-    .sort((left, right) =>
-      definitionLoc(right) - definitionLoc(left)
-      || left.relativePath.localeCompare(right.relativePath)
-      || left.startLine - right.startLine,
+    .sort(
+      (left, right) =>
+        definitionLoc(right) - definitionLoc(left) ||
+        left.relativePath.localeCompare(right.relativePath) ||
+        left.startLine - right.startLine,
     )
     .map((definition) => ({
       symbol: definition.symbol,

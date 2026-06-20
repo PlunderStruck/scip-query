@@ -41,12 +41,10 @@ export interface IndexerConfig {
   /** Command to check if the indexer is installed */
   checkCommand: string;
   /** Returns the binary + args array for execFileSync (no shell injection) */
-  indexArgs: (opts: {
-    projectRoot: string;
-    outputPath: string;
-    pnpmWorkspaces?: boolean;
-    indexerBinary: string;
-  }) => { binary: string; args: string[] };
+  indexArgs: (opts: { projectRoot: string; outputPath: string; pnpmWorkspaces?: boolean; indexerBinary: string }) => {
+    binary: string;
+    args: string[];
+  };
   /** Relative output path written by the indexer when it ignores outputPath */
   defaultOutputPath?: string;
   /** Marker files that indicate this language is present */

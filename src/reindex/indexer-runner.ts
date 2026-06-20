@@ -29,11 +29,7 @@ interface DefaultOutputBackup {
   backupPath: string | null;
 }
 
-function moveDefaultOutputIfNeeded(
-  config: IndexerConfig,
-  projectRoot: string,
-  outputScip: string,
-): void {
+function moveDefaultOutputIfNeeded(config: IndexerConfig, projectRoot: string, outputScip: string): void {
   if (!config.defaultOutputPath) {
     return;
   }
@@ -84,11 +80,12 @@ function resolveIndexerConcurrency(runCount: number, configured?: number): numbe
   }
 
   const envValue = Number(process.env['SCIP_QUERY_INDEXER_CONCURRENCY'] ?? 0);
-  const requested = Number.isFinite(configured) && configured && configured > 0
-    ? configured
-    : Number.isFinite(envValue) && envValue > 0
-      ? envValue
-      : Math.min(2, Math.max(1, cpus().length - 1));
+  const requested =
+    Number.isFinite(configured) && configured && configured > 0
+      ? configured
+      : Number.isFinite(envValue) && envValue > 0
+        ? envValue
+        : Math.min(2, Math.max(1, cpus().length - 1));
   return Math.max(1, Math.min(runCount, Math.floor(requested)));
 }
 
@@ -103,10 +100,8 @@ export async function runPreparedIndexers(
   const results: IndexerRunResult[] = [];
   const concurrency = resolveIndexerConcurrency(directOutputRuns.length, configuredConcurrency);
 
-  const directResults = await runWithConcurrency(
-    directOutputRuns,
-    concurrency,
-    (run) => runPreparedIndexer(run, projectRoot, onStatus),
+  const directResults = await runWithConcurrency(directOutputRuns, concurrency, (run) =>
+    runPreparedIndexer(run, projectRoot, onStatus),
   );
 
   if (concurrency > 1) {
@@ -126,8 +121,10 @@ export async function runPreparedIndexers(
     results.push(await runPreparedIndexer(run, projectRoot, onStatus));
   }
 
-  return results.sort((a, b) => runs.findIndex((run) => run.language === a.language)
-    - runs.findIndex((run) => run.language === b.language));
+  return results.sort(
+    (a, b) =>
+      runs.findIndex((run) => run.language === a.language) - runs.findIndex((run) => run.language === b.language),
+  );
 }
 
 // scip-query: ignore-extract — this is the per-indexer backup/run/restore

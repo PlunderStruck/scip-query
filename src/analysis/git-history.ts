@@ -58,7 +58,9 @@ const FIX_SUBJECT_PATTERN = /\b(?:fix(?:es|ed)?|bug|regression|hotfix)\b/i;
  * against HEAD so long-lived processes (watch mode) recompute after commits,
  * return null when git is unavailable.
  */
-function headKeyedGitValue<T>(name: string): (db: ScipDatabase, load: (projectRoot: string, head: string) => T | null) => T | null {
+function headKeyedGitValue<T>(
+  name: string,
+): (db: ScipDatabase, load: (projectRoot: string, head: string) => T | null) => T | null {
   const cache = createPerDbValue<{ head: string; value: T | null }>(name, { clearGroups: ['whole-project'] });
   return (db, load) => {
     const head = resolveHead(db.config.projectRoot);
@@ -99,7 +101,8 @@ function loadCommitHistory(projectRoot: string, head: string): CommitHistory | n
       'log',
       '--no-merges',
       '--name-only',
-      `-n`, String(MAX_COMMITS),
+      `-n`,
+      String(MAX_COMMITS),
       '--pretty=format:%x01%H%x00%ct%x00%s',
     ]);
   } catch {
@@ -114,9 +117,14 @@ function loadCommitHistory(projectRoot: string, head: string): CommitHistory | n
     const header = newline >= 0 ? block.slice(0, newline) : block;
     const [hash, timestampRaw, subject] = header.split('\x00');
     if (!hash || !timestampRaw) continue;
-    const files = newline >= 0
-      ? block.slice(newline + 1).split('\n').map((line) => line.trim()).filter((line) => line !== '')
-      : [];
+    const files =
+      newline >= 0
+        ? block
+            .slice(newline + 1)
+            .split('\n')
+            .map((line) => line.trim())
+            .filter((line) => line !== '')
+        : [];
     if (files.length > BULK_COMMIT_FILE_CAP) {
       skippedBulkCommits += 1;
       continue;
@@ -182,7 +190,12 @@ export function getTrackedFiles(db: ScipDatabase): Set<string> | null {
   return trackedFilesCache(db, (projectRoot) => {
     try {
       const raw = runGit(projectRoot, ['ls-files']);
-      return new Set(raw.split('\n').map((line) => line.trim()).filter((line) => line !== ''));
+      return new Set(
+        raw
+          .split('\n')
+          .map((line) => line.trim())
+          .filter((line) => line !== ''),
+      );
     } catch {
       return null;
     }
@@ -214,7 +227,8 @@ function loadFileAddRecords(projectRoot: string): Map<string, FileAddRecord> | n
       '--no-merges',
       '--diff-filter=A',
       '--name-only',
-      '-n', String(MAX_COMMITS),
+      '-n',
+      String(MAX_COMMITS),
       '--pretty=format:%x01%H%x00%ct%x00%s',
     ]);
   } catch {
@@ -248,11 +262,7 @@ export function getCoChangePairs(
   db: ScipDatabase,
   opts: { minTogether?: number; minConfidence?: number; maxFilesPerCommit?: number } = {},
 ): CoChangePair[] | null {
-  const {
-    minTogether = 4,
-    minConfidence = 0.6,
-    maxFilesPerCommit = BULK_COMMIT_FILE_CAP,
-  } = opts;
+  const { minTogether = 4, minConfidence = 0.6, maxFilesPerCommit = BULK_COMMIT_FILE_CAP } = opts;
   const history = getCommitHistory(db);
   if (!history) return null;
 
@@ -283,10 +293,9 @@ export function getCoChangePairs(
     pairs.push({ fileA, fileB, together, confidence, changesA, changesB });
   }
 
-  pairs.sort((left, right) =>
-    right.together - left.together
-    || right.confidence - left.confidence
-    || left.fileA.localeCompare(right.fileA),
+  pairs.sort(
+    (left, right) =>
+      right.together - left.together || right.confidence - left.confidence || left.fileA.localeCompare(right.fileA),
   );
   return pairs;
 }

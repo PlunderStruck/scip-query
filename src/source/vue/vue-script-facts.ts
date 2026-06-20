@@ -5,14 +5,7 @@ import { callSiteForNode } from '../source-calls.js';
 import type { VueSfcScriptBlock, VueSfcUnit } from './vue-sfc.js';
 import { vueBlockLineCount } from './vue-sfc.js';
 
-export type VueScriptCallCategory =
-  | 'call'
-  | 'composable'
-  | 'store'
-  | 'reactivity'
-  | 'lifecycle'
-  | 'request'
-  | 'macro';
+export type VueScriptCallCategory = 'call' | 'composable' | 'store' | 'reactivity' | 'lifecycle' | 'request' | 'macro';
 
 export interface VueScriptImportFact {
   local: string;
@@ -56,14 +49,7 @@ export interface VueScriptFacts {
   unresolvedScripts: Array<{ sourcePath: string; reason: string }>;
 }
 
-const REACTIVITY_CALLS = new Set([
-  'ref',
-  'shallowRef',
-  'reactive',
-  'computed',
-  'watch',
-  'watchEffect',
-]);
+const REACTIVITY_CALLS = new Set(['ref', 'shallowRef', 'reactive', 'computed', 'watch', 'watchEffect']);
 
 const LIFECYCLE_CALLS = new Set([
   'onBeforeMount',
@@ -77,14 +63,7 @@ const LIFECYCLE_CALLS = new Set([
   'onErrorCaptured',
 ]);
 
-const REQUEST_CALLS = new Set([
-  'axios',
-  'fetch',
-  'runRequest',
-  'useAsyncData',
-  'useFetch',
-  'useResource',
-]);
+const REQUEST_CALLS = new Set(['axios', 'fetch', 'runRequest', 'useAsyncData', 'useFetch', 'useResource']);
 
 const MACRO_CALLS = new Set([
   'defineEmits',
@@ -95,15 +74,7 @@ const MACRO_CALLS = new Set([
   'withDefaults',
 ]);
 
-const CALL_FALLBACK_STOP_WORDS = new Set([
-  'catch',
-  'for',
-  'function',
-  'if',
-  'return',
-  'switch',
-  'while',
-]);
+const CALL_FALLBACK_STOP_WORDS = new Set(['catch', 'for', 'function', 'if', 'return', 'switch', 'while']);
 
 export function buildVueScriptFacts(unit: VueSfcUnit): VueScriptFacts {
   const facts: VueScriptFacts = {
@@ -165,16 +136,10 @@ function finalizeVueScriptCallCategories(facts: VueScriptFacts): void {
 }
 
 function callsInCategory(facts: VueScriptFacts, category: VueScriptCallCategory): string[] {
-  return uniqueSorted(facts.calls
-    .filter((call) => call.categories.includes(category))
-    .map((call) => call.name));
+  return uniqueSorted(facts.calls.filter((call) => call.categories.includes(category)).map((call) => call.name));
 }
 
-function collectAstScriptFacts(
-  block: VueSfcScriptBlock,
-  root: SyntaxNode,
-  facts: VueScriptFacts,
-): void {
+function collectAstScriptFacts(block: VueSfcScriptBlock, root: SyntaxNode, facts: VueScriptFacts): void {
   const seenCalls = new Set<string>();
   const seenFunctions = new Set<string>();
 
@@ -240,7 +205,9 @@ function collectFallbackScriptFacts(block: VueSfcScriptBlock, facts: VueScriptFa
     });
   }
 
-  for (const match of block.body.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:function\b|\([^)]*\)\s*=>|[A-Za-z_$][\w$]*\s*=>)/g)) {
+  for (const match of block.body.matchAll(
+    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:function\b|\([^)]*\)\s*=>|[A-Za-z_$][\w$]*\s*=>)/g,
+  )) {
     const name = match[1];
     if (!name) continue;
     const line = block.startLine + lineAtOffset(block.body, match.index ?? 0);
@@ -270,7 +237,10 @@ function extractImportFacts(block: VueSfcScriptBlock): VueScriptImportFact[] {
 
 function localNamesFromImportClause(clause: string): string[] {
   const names: string[] = [];
-  const parts = clause.split(',').map((part) => part.trim()).filter(Boolean);
+  const parts = clause
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
   const first = parts[0];
   if (first && !first.startsWith('{') && !first.startsWith('*')) {
     names.push(first);

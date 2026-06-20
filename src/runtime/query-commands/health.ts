@@ -1,7 +1,15 @@
 import * as queries from '../../queries/index.js';
 import type { CommandDescriptor } from '../commands/command-descriptor-types.js';
 import { doc, option, parseInteger, withJsonOption } from '../commands/command-spec-builders.js';
-import { booleanOptionValue, budgetedDbCommand, dbCommand, definedNumberOption, printJsonEnvelope, stringArg, stringOptionValue } from '../commands/command-execution.js';
+import {
+  booleanOptionValue,
+  budgetedDbCommand,
+  dbCommand,
+  definedNumberOption,
+  printJsonEnvelope,
+  stringArg,
+  stringOptionValue,
+} from '../commands/command-execution.js';
 import { displayPathRange, render } from '../render.js';
 
 const handleComplexity = budgetedDbCommand('complexity', ({ db, args, opts, budget }) => {
@@ -35,10 +43,13 @@ const handleSelfAudit = dbCommand(({ db, args, opts }) => {
   console.log(`Sampled ${result.sampleSize} symbols; oracle answered ${Math.round(result.oracleCoverage * 100)}%.\n`);
   console.log('Agreement with compiler semantics (file-level):');
   for (const score of result.scores) {
-    const precision = score.precision === null
-      ? `unverified ${score.unverified} (oracle partial — no precision claim)`
-      : `precision ${score.precision}`;
-    console.log(`  ${score.question.padEnd(11)} ${precision}  recall ${score.recall}  (${score.comparedSymbols} symbols)`);
+    const precision =
+      score.precision === null
+        ? `unverified ${score.unverified} (oracle partial — no precision claim)`
+        : `precision ${score.precision}`;
+    console.log(
+      `  ${score.question.padEnd(11)} ${precision}  recall ${score.recall}  (${score.comparedSymbols} symbols)`,
+    );
   }
   if (result.topDisagreements.length > 0) {
     console.log('\nTop disagreements (debugging targets):');

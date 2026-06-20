@@ -1,9 +1,5 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import {
-  detectAstLanguage,
-  frameworkSourceReferences,
-  isVueSfcPath,
-} from '../../source/ast.js';
+import { detectAstLanguage, frameworkSourceReferences, isVueSfcPath } from '../../source/ast.js';
 import type { FrameworkSourceReferenceKind } from '../../source/ast.js';
 import { attributeIdentifier, attributeIdentifierPermissive } from '../identifier-attribution.js';
 import { getIdentifierLineMap } from '../identifier-index.js';
@@ -48,9 +44,8 @@ export function scanSourceReferences(
   opts: ScanSourceReferencesOptions,
   visit: (hit: SourceReferenceHit) => void,
 ): void {
-  const resolveIdentifier = opts.identifierResolution === 'strict'
-    ? attributeIdentifier
-    : attributeIdentifierPermissive;
+  const resolveIdentifier =
+    opts.identifierResolution === 'strict' ? attributeIdentifier : attributeIdentifierPermissive;
 
   for (const sourceFile of opts.paths) {
     const astLanguage = detectAstLanguage(sourceFile);
@@ -83,9 +78,10 @@ export function scanSourceReferences(
         includeCrossLanguageDispatchNames: opts.includeCrossLanguageDispatchNames,
         includeRustAttributeNames: opts.includeRustAttributeNames,
       })) {
-        const resolveDefaultTargets = reference.kind === 'cross-language-dispatch'
-          ? () => attributeIdentifier(db, sourceFile, reference.name)
-          : () => resolveIdentifier(db, sourceFile, reference.name);
+        const resolveDefaultTargets =
+          reference.kind === 'cross-language-dispatch'
+            ? () => attributeIdentifier(db, sourceFile, reference.name)
+            : () => resolveIdentifier(db, sourceFile, reference.name);
         visitName(reference.name, reference.kind, reference.occurrences, resolveDefaultTargets);
       }
     } finally {

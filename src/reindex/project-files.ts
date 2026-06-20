@@ -56,15 +56,13 @@ function isLanguageRelevantPath(
 
 function listGitProjectFiles(projectRoot: string): string[] | null {
   try {
-    return execFileSync(
-      'git',
-      ['-C', projectRoot, 'ls-files', '-co', '--exclude-standard', '--', '.'],
-      {
-        encoding: 'utf-8',
-        maxBuffer: 50 * 1024 * 1024,
-        stdio: ['ignore', 'pipe', 'ignore'],
-      },
-    ).split('\n').filter(Boolean);
+    return execFileSync('git', ['-C', projectRoot, 'ls-files', '-co', '--exclude-standard', '--', '.'], {
+      encoding: 'utf-8',
+      maxBuffer: 50 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .split('\n')
+      .filter(Boolean);
   } catch {
     return null;
   }
@@ -98,11 +96,13 @@ function listFilesystemProjectFiles(projectRoot: string): string[] {
 
 function isProjectArtifactPath(relativePath: string): boolean {
   const parts = relativePath.split('/');
-  return parts.some((part) => PROJECT_ARTIFACT_DIRS.has(part))
-    || relativePath.endsWith('.db')
-    || relativePath.endsWith('.db-wal')
-    || relativePath.endsWith('.db-shm')
-    || relativePath.endsWith('.scip');
+  return (
+    parts.some((part) => PROJECT_ARTIFACT_DIRS.has(part)) ||
+    relativePath.endsWith('.db') ||
+    relativePath.endsWith('.db-wal') ||
+    relativePath.endsWith('.db-shm') ||
+    relativePath.endsWith('.scip')
+  );
 }
 
 const PROJECT_ARTIFACT_DIRS = new Set([

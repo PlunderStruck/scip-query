@@ -148,14 +148,14 @@ export interface ScipDescriptor {
 }
 
 export type DescriptorSuffix =
-  | 'namespace'   // /
-  | 'type'        // #
-  | 'term'        // .
-  | 'method'      // ().
-  | 'type-param'  // [
-  | 'parameter'   // ()
-  | 'meta'        // :
-  | 'macro';      // !
+  | 'namespace' // /
+  | 'type' // #
+  | 'term' // .
+  | 'method' // ().
+  | 'type-param' // [
+  | 'parameter' // ()
+  | 'meta' // :
+  | 'macro'; // !
 
 /** A local symbol (file-scoped, no cross-file identity) */
 // scip-query: ignore-stale — exported SCIP grammar record returned by

@@ -15,10 +15,7 @@ export interface CallableParamFact {
   simple: boolean;
 }
 
-export function callableFactForNode(
-  node: SyntaxNode,
-  language: AstLanguage,
-) {
+export function callableFactForNode(node: SyntaxNode, language: AstLanguage) {
   const named = namedCallableNode(node, language);
   if (named) {
     return {
@@ -33,10 +30,9 @@ export function callableFactForNode(
   }
 
   if (!isNamedCallableType(node.type, language)) return null;
-  const nameNode = node.childForFieldName('name')
-    ?? node.namedChildren.find((child) =>
-      child.type === 'identifier' || child.type === 'property_identifier',
-    );
+  const nameNode =
+    node.childForFieldName('name') ??
+    node.namedChildren.find((child) => child.type === 'identifier' || child.type === 'property_identifier');
   if (!nameNode) return null;
 
   return {
@@ -51,9 +47,7 @@ export function callableFactForNode(
 }
 
 function parametersNode(fnNode: SyntaxNode): SyntaxNode | undefined {
-  return fnNode.namedChildren.find((child) =>
-    child.type === 'parameters' || child.type === 'formal_parameters',
-  );
+  return fnNode.namedChildren.find((child) => child.type === 'parameters' || child.type === 'formal_parameters');
 }
 
 /** Ordered parameter facts; patterns/rest params are marked non-simple. */
@@ -69,8 +63,9 @@ function parameterFacts(fnNode: SyntaxNode): CallableParamFact[] {
     }
     // TS parameter properties (constructor(private readonly bucket: ...))
     // declare class fields — their use sites live outside the constructor.
-    const isParameterProperty = param.namedChildren.some((child) =>
-      child.type.endsWith('_modifier')) || /^\s*(?:public|private|protected|readonly|override)\b/.test(param.text);
+    const isParameterProperty =
+      param.namedChildren.some((child) => child.type.endsWith('_modifier')) ||
+      /^\s*(?:public|private|protected|readonly|override)\b/.test(param.text);
     // required_parameter / optional_parameter wrap the identifier in TS.
     const pattern = param.childForFieldName('pattern');
     if (!isParameterProperty && pattern && pattern.type === 'identifier') {
@@ -78,7 +73,7 @@ function parameterFacts(fnNode: SyntaxNode): CallableParamFact[] {
       continue;
     }
     const id = param.namedChildren.find((child) => child.type === 'identifier');
-    facts.push({ name: pattern?.type === 'identifier' ? pattern.text : id?.text ?? '', simple: false });
+    facts.push({ name: pattern?.type === 'identifier' ? pattern.text : (id?.text ?? ''), simple: false });
   }
   return facts;
 }
@@ -123,8 +118,8 @@ function namedCallableNode(
 }
 
 function parameterCount(fnNode: SyntaxNode): number {
-  const paramsNode = fnNode.namedChildren.find((child) =>
-    child.type === 'parameters' || child.type === 'formal_parameters',
+  const paramsNode = fnNode.namedChildren.find(
+    (child) => child.type === 'parameters' || child.type === 'formal_parameters',
   );
   if (!paramsNode) return 0;
 
@@ -137,9 +132,7 @@ function parameterCount(fnNode: SyntaxNode): number {
 }
 
 function isPassthroughBody(fnNode: SyntaxNode, language: AstLanguage): boolean {
-  const body = fnNode.namedChildren.find((child) =>
-    child.type === 'block' || child.type === 'statement_block',
-  );
+  const body = fnNode.namedChildren.find((child) => child.type === 'block' || child.type === 'statement_block');
   if (!body) return false;
 
   const statements = body.namedChildren.filter((child) => !isCommentNode(child));
@@ -159,14 +152,12 @@ function isPassthroughBody(fnNode: SyntaxNode, language: AstLanguage): boolean {
   const callType = language === 'python' ? 'call' : 'call_expression';
   if (callNode.type !== callType) return false;
 
-  const argsNode = callNode.namedChildren.find((child) =>
-    child.type === 'arguments' || child.type === 'argument_list',
-  );
+  const argsNode = callNode.namedChildren.find((child) => child.type === 'arguments' || child.type === 'argument_list');
   if (!argsNode) return false;
   const callArgs = argsNode.namedChildren.filter((child) => !isCommentNode(child));
 
-  const paramsNode = fnNode.namedChildren.find((child) =>
-    child.type === 'parameters' || child.type === 'formal_parameters',
+  const paramsNode = fnNode.namedChildren.find(
+    (child) => child.type === 'parameters' || child.type === 'formal_parameters',
   );
   if (!paramsNode) return false;
 

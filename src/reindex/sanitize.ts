@@ -1,12 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { create } from '@bufbuild/protobuf';
-import {
-  deserializeSCIP,
-  DocumentSchema,
-  IndexSchema,
-  serializeSCIP,
-  SymbolRole,
-} from '@c4312/scip';
+import { deserializeSCIP, DocumentSchema, IndexSchema, serializeSCIP, SymbolRole } from '@c4312/scip';
 import type { Document, Index } from '@c4312/scip';
 
 export interface SanitizeScipResult {
@@ -63,24 +57,27 @@ export function sanitizeScipIndex(index: Index): SanitizeScipResult & { index: I
     }
 
     touchedDocuments += 1;
-    documents.push(create(DocumentSchema, {
-      language: document.language,
-      relativePath: document.relativePath,
-      occurrences,
-      symbols: document.symbols,
-      text: document.text,
-      positionEncoding: document.positionEncoding,
-    }));
+    documents.push(
+      create(DocumentSchema, {
+        language: document.language,
+        relativePath: document.relativePath,
+        occurrences,
+        symbols: document.symbols,
+        text: document.text,
+        positionEncoding: document.positionEncoding,
+      }),
+    );
   }
 
   return {
-    index: removedDefinitionOccurrences === 0
-      ? index
-      : create(IndexSchema, {
-        metadata: index.metadata,
-        documents,
-        externalSymbols: index.externalSymbols,
-      }),
+    index:
+      removedDefinitionOccurrences === 0
+        ? index
+        : create(IndexSchema, {
+            metadata: index.metadata,
+            documents,
+            externalSymbols: index.externalSymbols,
+          }),
     removedDefinitionOccurrences,
     touchedDocuments,
   };

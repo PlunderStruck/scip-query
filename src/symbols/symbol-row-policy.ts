@@ -29,9 +29,11 @@ export function mergeMixedSymbolQueryRows(
   for (const row of primary) byId.set(row.id, row);
   const rows = [...byId.values()];
   return opts.sort
-    ? rows.sort((left, right) =>
-      left.start_line - right.start_line
-      || left.end_line - right.end_line
-      || left.symbol.localeCompare(right.symbol))
+    ? rows.sort(
+        (left, right) =>
+          left.start_line - right.start_line ||
+          left.end_line - right.end_line ||
+          left.symbol.localeCompare(right.symbol),
+      )
     : rows;
 }

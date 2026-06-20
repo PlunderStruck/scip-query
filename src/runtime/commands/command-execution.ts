@@ -76,10 +76,7 @@ export function dbCommand(run: (ctx: DbCommandContext) => void): CommandHandler 
   };
 }
 
-export function budgetedDbCommand(
-  commandName: string,
-  run: (ctx: BudgetedCommandContext) => void,
-): CommandHandler {
+export function budgetedDbCommand(commandName: string, run: (ctx: BudgetedCommandContext) => void): CommandHandler {
   return dbCommand((ctx) => {
     const budget = commandAnalysisBudget(ctx.db, commandName, booleanOptionValue(ctx.opts, 'full'), {
       quiet: booleanOptionValue(ctx.opts, 'json'),
@@ -99,7 +96,8 @@ export function tableCommand<Row>(
   },
 ): CommandHandler {
   return dbCommand((ctx) =>
-    renderRows(ctx, spec, { kind: 'table', headers: spec.headers, dashWidths: spec.dashWidths }));
+    renderRows(ctx, spec, { kind: 'table', headers: spec.headers, dashWidths: spec.dashWidths }),
+  );
 }
 
 export function groupedByFileCommand<Row>(
@@ -107,8 +105,7 @@ export function groupedByFileCommand<Row>(
     key?: (row: Row, ctx: DbCommandContext) => string;
   },
 ): CommandHandler {
-  return dbCommand((ctx) =>
-    renderRows(ctx, spec, { kind: 'grouped', key: spec.key }));
+  return dbCommand((ctx) => renderRows(ctx, spec, { kind: 'grouped', key: spec.key }));
 }
 
 export function reportCommand<Result>(spec: ReportCommandSpec<Result>): CommandHandler {
@@ -132,7 +129,9 @@ export function budgetedReportCommand<Result>(
   commandName: string,
   spec: ReportCommandSpec<Result, BudgetedCommandContext>,
 ): CommandHandler {
-  return budgetedDbCommand(commandName, (ctx) => runCommandOutput(ctx, { ...spec, commandName: spec.commandName ?? commandName }));
+  return budgetedDbCommand(commandName, (ctx) =>
+    runCommandOutput(ctx, { ...spec, commandName: spec.commandName ?? commandName }),
+  );
 }
 
 export function budgetedSectionedReportCommand<Result>(
@@ -166,7 +165,8 @@ export function budgetedTableCommand<Row>(
   },
 ): CommandHandler {
   return budgetedDbCommand(commandName, (ctx) =>
-    renderRows(ctx, { ...spec, commandName }, { kind: 'table', headers: spec.headers, dashWidths: spec.dashWidths }));
+    renderRows(ctx, { ...spec, commandName }, { kind: 'table', headers: spec.headers, dashWidths: spec.dashWidths }),
+  );
 }
 
 export function budgetedGroupedByFileCommand<Row>(
@@ -176,7 +176,8 @@ export function budgetedGroupedByFileCommand<Row>(
   },
 ): CommandHandler {
   return budgetedDbCommand(commandName, (ctx) =>
-    renderRows(ctx, { ...spec, commandName }, { kind: 'grouped', key: spec.key }));
+    renderRows(ctx, { ...spec, commandName }, { kind: 'grouped', key: spec.key }),
+  );
 }
 
 export function stringArg(args: readonly unknown[], index: number): string {
@@ -216,7 +217,9 @@ export function definedLimitOption(opts: CommandOptions, key: string, fallback: 
   const hasUserLimit = explicitLimit !== undefined && optionValueSource(opts, key) !== 'default';
   if (booleanOptionValue(opts, 'full')) {
     if (hasUserLimit) {
-      throw new Error('--full cannot be combined with --limit. Use --full for all findings, or --limit N for a capped report.');
+      throw new Error(
+        '--full cannot be combined with --limit. Use --full for all findings, or --limit N for a capped report.',
+      );
     }
     return Number.POSITIVE_INFINITY;
   }
@@ -235,15 +238,17 @@ function renderRows<Row, Ctx extends DbCommandContext>(
   runCommandOutput(ctx, {
     commandName: spec.commandName,
     query: spec.query,
-    emptyMessage: (rows, rowCtx) => rows.length === 0 && spec.emptyMessage
-      ? spec.emptyMessage(rowCtx)
-      : undefined,
+    emptyMessage: (rows, rowCtx) => (rows.length === 0 && spec.emptyMessage ? spec.emptyMessage(rowCtx) : undefined),
     heuristicLabel: spec.heuristicLabel,
     render: (rows, rowCtx) => {
       if (renderer.kind === 'list') {
         render.list(rows, (row) => spec.format(row, rowCtx));
       } else if (renderer.kind === 'table') {
-        render.table(renderer.headers, rows.map((row) => spec.format(row, rowCtx)), renderer.dashWidths);
+        render.table(
+          renderer.headers,
+          rows.map((row) => spec.format(row, rowCtx)),
+          renderer.dashWidths,
+        );
       } else {
         render.groupedByFile(
           rows,
@@ -257,10 +262,7 @@ function renderRows<Row, Ctx extends DbCommandContext>(
   });
 }
 
-function runCommandOutput<Output, Ctx extends DbCommandContext>(
-  ctx: Ctx,
-  spec: CommandOutputSpec<Output, Ctx>,
-): void {
+function runCommandOutput<Output, Ctx extends DbCommandContext>(ctx: Ctx, spec: CommandOutputSpec<Output, Ctx>): void {
   const output = spec.query(ctx);
   if (booleanOptionValue(ctx.opts, 'json')) {
     printJsonEnvelope(spec.commandName, ctx.args, ctx.opts, spec.toJson ? spec.toJson(output, ctx) : output);
@@ -287,8 +289,7 @@ export function printJsonEnvelope(
 }
 
 function jsonPositionals(args: readonly unknown[]): readonly unknown[] {
-  return args.filter((arg) =>
-    typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean');
+  return args.filter((arg) => typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean');
 }
 
 function splitCommanderActionArgs(rawArgs: readonly unknown[]): { args: readonly unknown[]; opts: CommandOptions } {

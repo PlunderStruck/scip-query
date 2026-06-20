@@ -6,7 +6,11 @@ import { getSourceText } from '../../source/source-text.js';
 import { getTypeContainerMap } from '../../source/ast.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { runCandidateAnalysis } from '../internal/candidate-scan.js';
-import { definitionConsumerFileMap, isImportOnlyConsumer, partitionDefinitionConsumers } from '../internal/consumer-evidence.js';
+import {
+  definitionConsumerFileMap,
+  isImportOnlyConsumer,
+  partitionDefinitionConsumers,
+} from '../internal/consumer-evidence.js';
 import { definitionLoc } from '../query-utils.js';
 
 export interface StaleAbstraction {
@@ -127,10 +131,10 @@ export function staleAbstractions(
       return scored;
     },
     orderResults: (left, right) =>
-      confOrder[left.confidence] - confOrder[right.confidence]
-      || right.loc - left.loc
-      || left.file.localeCompare(right.file)
-      || left.startLine - right.startLine,
+      confOrder[left.confidence] - confOrder[right.confidence] ||
+      right.loc - left.loc ||
+      left.file.localeCompare(right.file) ||
+      left.startLine - right.startLine,
     limit,
   });
 }
@@ -141,28 +145,30 @@ function staleTypeCandidates(
   scopedDefinitions: readonly IndexedDefinition[],
   opts: { minLoc: number; maxLoc: number },
 ): IndexedDefinition[] {
-  return scopedDefinitions
-    .filter((definition) => definition.isTypeLike && definitionLoc(definition) >= opts.minLoc)
-    // Cap candidate LOC. Types over ~80 lines are substantive abstractions
-    // (engine state, request envelopes, etc.) — even if cross-file consumers
-    // are sparse, calling them "stale" is wrong. The cap also protects
-    // against rust-analyzer's chunk-fallback ranges (whole-file ranges that
-    // appear when a real `defn_enclosing_range` isn't emitted), which would
-    // otherwise dominate the report.
-    .filter((definition) => definitionLoc(definition) <= opts.maxLoc)
-    .filter((definition) => !db.isIgnored(definition.relativePath))
-    // Test fixtures aren't abstractions; types in test files are noise here.
-    .filter((definition) => classifyFile(definition.relativePath) !== 'test')
-    // Externally-live types (package surface / entryRoots) are published
-    // contracts: consumers outside the index reach them, so a low in-index
-    // consumer count says nothing about staleness.
-    .filter((definition) => !isRootedSymbol(db, definition.symbol, definition.relativePath))
-    // Enum variants encode as `Type#Variant#` (parent descriptor also `type`).
-    // The variant isn't an "abstraction" on its own — the enum is. Without
-    // this filter every enum variant gets a separate stale-abstraction
-    // entry, which is noise.
-    .filter((definition) => !isNestedTypeMember(definition.symbol))
-    .filter((definition) => !index.hasSuppressionComment(definition));
+  return (
+    scopedDefinitions
+      .filter((definition) => definition.isTypeLike && definitionLoc(definition) >= opts.minLoc)
+      // Cap candidate LOC. Types over ~80 lines are substantive abstractions
+      // (engine state, request envelopes, etc.) — even if cross-file consumers
+      // are sparse, calling them "stale" is wrong. The cap also protects
+      // against rust-analyzer's chunk-fallback ranges (whole-file ranges that
+      // appear when a real `defn_enclosing_range` isn't emitted), which would
+      // otherwise dominate the report.
+      .filter((definition) => definitionLoc(definition) <= opts.maxLoc)
+      .filter((definition) => !db.isIgnored(definition.relativePath))
+      // Test fixtures aren't abstractions; types in test files are noise here.
+      .filter((definition) => classifyFile(definition.relativePath) !== 'test')
+      // Externally-live types (package surface / entryRoots) are published
+      // contracts: consumers outside the index reach them, so a low in-index
+      // consumer count says nothing about staleness.
+      .filter((definition) => !isRootedSymbol(db, definition.symbol, definition.relativePath))
+      // Enum variants encode as `Type#Variant#` (parent descriptor also `type`).
+      // The variant isn't an "abstraction" on its own — the enum is. Without
+      // this filter every enum variant gets a separate stale-abstraction
+      // entry, which is noise.
+      .filter((definition) => !isNestedTypeMember(definition.symbol))
+      .filter((definition) => !index.hasSuppressionComment(definition))
+  );
 }
 
 function consumerMapForTypeCandidates(
@@ -173,9 +179,7 @@ function consumerMapForTypeCandidates(
   return definitionConsumerFileMap(index, typeCandidates, { semantic: opts.semantic });
 }
 
-function buildTypeCandidateIndex(
-  typeCandidates: readonly IndexedDefinition[],
-): TypeCandidateIndex {
+function buildTypeCandidateIndex(typeCandidates: readonly IndexedDefinition[]): TypeCandidateIndex {
   // Pre-index type candidates by (file, leaf) so the transitive-reachability
   // check is O(1) per container instead of O(typeCandidates) linear scan.
   const candidateIndex: TypeCandidateIndex = new Map();
@@ -198,9 +202,7 @@ function staleCandidateRow(
   candidateIndex: TypeCandidateIndex,
 ): StaleCandidateRow {
   const allFiles = consumerFileMap.get(definition.symbolId) ?? new Set<string>();
-  const consumerFiles = [...allFiles].filter(
-    (file) => file !== definition.relativePath && !db.isIgnored(file),
-  );
+  const consumerFiles = [...allFiles].filter((file) => file !== definition.relativePath && !db.isIgnored(file));
   const { realConsumers, barrelConsumers, importOnlyConsumers } = partitionDefinitionConsumers(
     db,
     definition,
@@ -211,12 +213,7 @@ function staleCandidateRow(
   // SAME file (e.g. `interface Outer { field: This }`) and that container
   // has cross-file consumers, this type is reachable through the
   // container's public API — not stale, even with 0 direct consumers.
-  const transitivelyReachable = isTransitivelyConsumed(
-    db,
-    definition,
-    consumerFileMap,
-    candidateIndex,
-  );
+  const transitivelyReachable = isTransitivelyConsumed(db, definition, consumerFileMap, candidateIndex);
 
   return {
     definition,
@@ -229,10 +226,7 @@ function staleCandidateRow(
 // scip-query: ignore-extract — this is the final stale-abstraction scoring
 // projection; definition kind, definer usage, confidence, and result shape are
 // one report decision.
-function scoreStaleCandidate(
-  db: ScipDatabase,
-  row: StaleCandidateRow,
-): StaleAbstraction {
+function scoreStaleCandidate(db: ScipDatabase, row: StaleCandidateRow): StaleAbstraction {
   const kind = detectDefinitionKind(db, row.definition.relativePath, row.definition.startLine);
   // For type-only files the definer is *expected* not to use what it
   // defines (their job is exporting types for downstream consumption),
@@ -285,7 +279,9 @@ function getSingletonBackedClassIds(
   return liveClassIds;
 }
 
-function scopedDefinitionsByFileAndLeaf(scopedDefinitions: readonly IndexedDefinition[]): Map<string, IndexedDefinition> {
+function scopedDefinitionsByFileAndLeaf(
+  scopedDefinitions: readonly IndexedDefinition[],
+): Map<string, IndexedDefinition> {
   const byFileAndLeaf = new Map<string, IndexedDefinition>();
   for (const definition of scopedDefinitions) {
     const leaf = leafName(definition.symbol);
@@ -316,7 +312,7 @@ function singletonForClassDefinition(
   const classLeaf = leafName(definition.symbol);
   if (!classLeaf) return null;
   const varName = exportedSingletonVarName(db, definition.relativePath, classLeaf);
-  return varName ? byFileAndLeaf.get(fileLeafKey(definition.relativePath, varName)) ?? null : null;
+  return varName ? (byFileAndLeaf.get(fileLeafKey(definition.relativePath, varName)) ?? null) : null;
 }
 
 function singletonHasRealConsumer(
@@ -327,10 +323,8 @@ function singletonHasRealConsumer(
   const singletonLeaf = leafName(singleton.symbol);
   const consumers = singletonConsumers.get(singleton.symbolId);
   if (!singletonLeaf || !consumers) return false;
-  return [...consumers].some((file) =>
-    file !== singleton.relativePath
-    && !db.isIgnored(file)
-    && !isImportOnlyConsumer(db, file, singletonLeaf),
+  return [...consumers].some(
+    (file) => file !== singleton.relativePath && !db.isIgnored(file) && !isImportOnlyConsumer(db, file, singletonLeaf),
   );
 }
 
@@ -338,27 +332,21 @@ function fileLeafKey(relativePath: string, leaf: string): string {
   return `${relativePath}\0${leaf}`;
 }
 
-function exportedSingletonVarName(
-  db: ScipDatabase,
-  relativePath: string,
-  className: string,
-): string | null {
+function exportedSingletonVarName(db: ScipDatabase, relativePath: string, className: string): string | null {
   const source = getSourceText(db, relativePath);
   if (!source) return null;
   const escapedClassName = className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = new RegExp(
-    `\\bexport\\s+const\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*new\\s+${escapedClassName}\\s*\\(`,
-  );
+  const pattern = new RegExp(`\\bexport\\s+const\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*new\\s+${escapedClassName}\\s*\\(`);
   return source.match(pattern)?.[1] ?? null;
 }
 
-function getFilesWithFunctions(
-  index: ProjectIndex,
-  scope?: string,
-): Set<string> {
-  return new Set(index.scopedDefinitions(scope)
-    .filter((definition) => definition.isFunctionLike)
-    .map((definition) => definition.relativePath));
+function getFilesWithFunctions(index: ProjectIndex, scope?: string): Set<string> {
+  return new Set(
+    index
+      .scopedDefinitions(scope)
+      .filter((definition) => definition.isFunctionLike)
+      .map((definition) => definition.relativePath),
+  );
 }
 
 // True when a `type`-suffix symbol's parent descriptor is also a type — i.e.
@@ -383,10 +371,19 @@ function isNestedTypeMember(symbol: string): boolean {
 function isTypeOnlyFile(relativePath: string): boolean {
   const basename = relativePath.split('/').pop() ?? '';
   const stem = basename.replace(/\.[^.]+$/, '');
-  if (stem === 'types' || stem.endsWith('-types')
-      || stem === 'models' || stem === 'schema'
-      || stem === 'common' || stem === 'protocol' || stem === 'proto'
-      || stem === 'dto' || stem === 'mod' || stem === 'contracts') return true;
+  if (
+    stem === 'types' ||
+    stem.endsWith('-types') ||
+    stem === 'models' ||
+    stem === 'schema' ||
+    stem === 'common' ||
+    stem === 'protocol' ||
+    stem === 'proto' ||
+    stem === 'dto' ||
+    stem === 'mod' ||
+    stem === 'contracts'
+  )
+    return true;
   if (/(^|\/)types(\/|\.)/.test(relativePath)) return true;
   if (/(^|\/)models?(\/|\.)/.test(relativePath)) return true;
   if (/(^|\/)proto(?:col)?(\/|\.)/.test(relativePath)) return true;

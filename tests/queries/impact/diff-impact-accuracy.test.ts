@@ -231,10 +231,12 @@ describe('diff-impact accuracy', () => {
         'src:model:DEFAULT_STATUS',
       ]);
       expect(result.changedSymbols.map((symbol) => symbol.fanIn)).toEqual([1, 1]);
-      expect(result.consumerEntries).toEqual([{
-        file: 'src/consumer.ts',
-        symbols: ['src:model:DEFAULT_STATUS', 'src:model:updateUser()'],
-      }]);
+      expect(result.consumerEntries).toEqual([
+        {
+          file: 'src/consumer.ts',
+          symbols: ['src:model:DEFAULT_STATUS', 'src:model:updateUser()'],
+        },
+      ]);
     } finally {
       db.close();
     }

@@ -44,7 +44,9 @@ describe('CLI contract', () => {
 
   it('keeps public command docs derived from descriptors', () => {
     const docs = commandDocEntries(commandDescriptors);
-    expect(docs.map((entry) => entry.id)).toEqual(commandDescriptors.filter((descriptor) => !descriptor.hidden).map((descriptor) => descriptor.id));
+    expect(docs.map((entry) => entry.id)).toEqual(
+      commandDescriptors.filter((descriptor) => !descriptor.hidden).map((descriptor) => descriptor.id),
+    );
     expect(docs.find((entry) => entry.id === 'health')?.options).toEqual([
       '-s, --scope <path>',
       '--full',
@@ -60,19 +62,19 @@ describe('CLI contract', () => {
   });
 
   it('keeps public command references descriptor-backed', () => {
-    const publicCommandIds = new Set(commandDescriptors.filter((descriptor) => !descriptor.hidden).map((descriptor) => descriptor.id));
-    const skillDocs = readdirSync(join(process.cwd(), 'skills'))
-      .map((skill) => `skills/${skill}/SKILL.md`);
-    const documentedCommands = [
-      'README.md',
-      'docs/AGENT_GUIDE.md',
-      'docs/COMMAND_REFERENCE.md',
-      ...skillDocs,
-    ].flatMap((path) => readDocumentedCommands(path).map((command) => ({ path, command })));
+    const publicCommandIds = new Set(
+      commandDescriptors.filter((descriptor) => !descriptor.hidden).map((descriptor) => descriptor.id),
+    );
+    const skillDocs = readdirSync(join(process.cwd(), 'skills')).map((skill) => `skills/${skill}/SKILL.md`);
+    const documentedCommands = ['README.md', 'docs/AGENT_GUIDE.md', 'docs/COMMAND_REFERENCE.md', ...skillDocs].flatMap(
+      (path) => readDocumentedCommands(path).map((command) => ({ path, command })),
+    );
 
     expect(documentedCommands).not.toHaveLength(0);
     for (const { path, command } of documentedCommands) {
-      expect(publicCommandIds.has(command), `documented command is not descriptor-backed: ${command} (${path})`).toBe(true);
+      expect(publicCommandIds.has(command), `documented command is not descriptor-backed: ${command} (${path})`).toBe(
+        true,
+      );
     }
   });
 
@@ -130,17 +132,15 @@ describe('CLI contract', () => {
 
     const defaultedOpts = commandOptions({
       opts: () => ({ full: true, limit: 30 }),
-      getOptionValueSource: (key: string) => key === 'limit' ? 'default' : 'cli',
+      getOptionValueSource: (key: string) => (key === 'limit' ? 'default' : 'cli'),
     });
     const explicitOpts = commandOptions({
       opts: () => ({ full: true, limit: 7 }),
-      getOptionValueSource: (key: string) => key === 'limit' ? 'cli' : 'cli',
+      getOptionValueSource: (key: string) => (key === 'limit' ? 'cli' : 'cli'),
     });
 
     expect(definedLimitOption(defaultedOpts, 'limit', 30)).toBe(Number.POSITIVE_INFINITY);
-    expect(() => definedLimitOption(explicitOpts, 'limit', 30)).toThrow(
-      '--full cannot be combined with --limit',
-    );
+    expect(() => definedLimitOption(explicitOpts, 'limit', 30)).toThrow('--full cannot be combined with --limit');
   });
 
   it('keeps default result limits full-aware', () => {
@@ -166,9 +166,15 @@ describe('CLI contract', () => {
   it('parses graph top-mode limits before targeted-mode branches', () => {
     const source = readFileSync(join(process.cwd(), 'src/runtime/query-commands/graph.ts'), 'utf8');
 
-    expect(source).toMatch(/const handleFanIn[\s\S]*?const symbol = optionalStringArg\(args, 0\);[\s\S]*?const limit = definedLimitOption\(opts, 'limit', 30\);[\s\S]*?if \(symbol\)/);
-    expect(source).toMatch(/const handleFanOut[\s\S]*?const file = optionalStringArg\(args, 0\);[\s\S]*?const limit = definedLimitOption\(opts, 'limit', 30\);[\s\S]*?if \(file\)/);
-    expect(source).toMatch(/const handleCoupling[\s\S]*?const file1 = optionalStringArg\(args, 0\);[\s\S]*?const file2 = optionalStringArg\(args, 1\);[\s\S]*?const limit = definedLimitOption\(opts, 'limit', 20\);[\s\S]*?if \(file1 && file2\)/);
+    expect(source).toMatch(
+      /const handleFanIn[\s\S]*?const symbol = optionalStringArg\(args, 0\);[\s\S]*?const limit = definedLimitOption\(opts, 'limit', 30\);[\s\S]*?if \(symbol\)/,
+    );
+    expect(source).toMatch(
+      /const handleFanOut[\s\S]*?const file = optionalStringArg\(args, 0\);[\s\S]*?const limit = definedLimitOption\(opts, 'limit', 30\);[\s\S]*?if \(file\)/,
+    );
+    expect(source).toMatch(
+      /const handleCoupling[\s\S]*?const file1 = optionalStringArg\(args, 0\);[\s\S]*?const file2 = optionalStringArg\(args, 1\);[\s\S]*?const limit = definedLimitOption\(opts, 'limit', 20\);[\s\S]*?if \(file1 && file2\)/,
+    );
   });
 
   it('keeps package.json query subpaths in lockstep with the public-query manifest', () => {
@@ -204,8 +210,8 @@ describe('CLI contract', () => {
   it('keeps root package exports focused on core library helpers', () => {
     const source = readFileSync(join(process.cwd(), 'src/index.ts'), 'utf8');
 
-    expect(source).toContain("export { ScipDatabase }");
-    expect(source).toContain("export { ProjectIndex }");
+    expect(source).toContain('export { ScipDatabase }');
+    expect(source).toContain('export { ProjectIndex }');
     expect(source).not.toContain("export * from './queries/index.js'");
     expect(source).not.toContain("from './reindex/index.js'");
     expect(source).not.toContain("from './runtime/");
@@ -229,7 +235,9 @@ function querySourceFiles(relativeDir: string): string[] {
 }
 
 function extractGeneratedCommandReference(content: string): string {
-  const match = content.match(/<!-- BEGIN GENERATED COMMAND REFERENCE -->[\s\S]*?<!-- END GENERATED COMMAND REFERENCE -->/);
+  const match = content.match(
+    /<!-- BEGIN GENERATED COMMAND REFERENCE -->[\s\S]*?<!-- END GENERATED COMMAND REFERENCE -->/,
+  );
   expect(match, 'command reference is missing generated command reference block').not.toBeNull();
   return match![0];
 }

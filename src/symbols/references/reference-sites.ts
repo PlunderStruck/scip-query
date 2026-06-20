@@ -41,10 +41,7 @@ export interface ReferenceEvidenceSite extends ReferenceSite {
 // scip-query: ignore-wrapper — SCIP-only fallback primitive used by the
 // source-primary reference policy and targeted caller rows; keeping it named
 // prevents those evidence modes from collapsing into one behavior.
-export function getResolvedReferenceSites(
-  db: ScipDatabase,
-  symbol: SymbolLocation,
-): ReferenceSite[] {
+export function getResolvedReferenceSites(db: ScipDatabase, symbol: SymbolLocation): ReferenceSite[] {
   const prelude = resolveReferencePrelude(db, symbol);
   if (!prelude) return [];
   return buildReferenceSites(db, resolvedCandidateLines(db, prelude.match, prelude.identifier));
@@ -55,12 +52,11 @@ export function referenceSitesForSymbol(
   symbol: SymbolLocation,
   opts: { semantic?: boolean; includeIgnored?: boolean } = {},
 ): ReferenceSite[] {
-  return referenceEvidenceForSymbol(db, symbol, opts)
-    .map((site) => ({
-      file: site.file,
-      line: site.line,
-      enclosingSymbol: site.enclosingSymbol,
-    }));
+  return referenceEvidenceForSymbol(db, symbol, opts).map((site) => ({
+    file: site.file,
+    line: site.line,
+    enclosingSymbol: site.enclosingSymbol,
+  }));
 }
 
 export function referenceEvidenceForSymbol(
@@ -69,9 +65,10 @@ export function referenceEvidenceForSymbol(
   opts: { semantic?: boolean; includeIgnored?: boolean } = {},
 ): ReferenceEvidenceSite[] {
   const sourceSites = findReferences(db, symbol, { semantic: opts.semantic });
-  const sites = sourceSites.length > 0
-    ? withReferenceProvenance(sourceSites, 'source-attribution')
-    : withReferenceProvenance(getResolvedReferenceSites(db, symbol), 'scip-reference-chunk');
+  const sites =
+    sourceSites.length > 0
+      ? withReferenceProvenance(sourceSites, 'source-attribution')
+      : withReferenceProvenance(getResolvedReferenceSites(db, symbol), 'scip-reference-chunk');
   return opts.includeIgnored === true ? sites : sites.filter((site) => !db.isIgnored(site.file));
 }
 
@@ -117,12 +114,9 @@ function resolvedLinesForFile(
   match: { relativePath: string; startLine: number; endLine: number },
   identifier: string | null,
 ): number[] {
-  const excludeOpts = file === match.relativePath
-    ? { excludeStartLine: match.startLine, excludeEndLine: match.endLine }
-    : {};
-  const allHits = identifier
-    ? findIdentifierLines(db, file, identifier, excludeOpts)
-    : [];
+  const excludeOpts =
+    file === match.relativePath ? { excludeStartLine: match.startLine, excludeEndLine: match.endLine } : {};
+  const allHits = identifier ? findIdentifierLines(db, file, identifier, excludeOpts) : [];
   return chunks.flatMap((chunk) => hitsOrChunkStart(allHits, chunk));
 }
 
@@ -138,10 +132,7 @@ interface ReferencePrelude {
 
 // scip-query: ignore-wrapper — named lookup stage used by reference reporting;
 // callers should not repeat full-symbol matching plus leaf extraction.
-export function resolveReferencePrelude(
-  db: ScipDatabase,
-  symbol: SymbolLocation,
-): ReferencePrelude | null {
+export function resolveReferencePrelude(db: ScipDatabase, symbol: SymbolLocation): ReferencePrelude | null {
   const match = getFullSymbolMatch(db, symbol);
   if (!match) return null;
   return { match, identifier: leafName(match.symbol) || null };
@@ -149,10 +140,7 @@ export function resolveReferencePrelude(
 
 // scip-query: ignore-wrapper — named attribution stage used by reference
 // reporting; keeps line candidates separate from enclosing-symbol lookup.
-export function buildReferenceSites(
-  db: ScipDatabase,
-  perFileLines: Map<string, number[]>,
-): ReferenceSite[] {
+export function buildReferenceSites(db: ScipDatabase, perFileLines: Map<string, number[]>): ReferenceSite[] {
   const sites: ReferenceSite[] = [];
   const seen = new Set<string>();
   for (const [file, lines] of perFileLines) {

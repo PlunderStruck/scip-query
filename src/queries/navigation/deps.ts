@@ -33,9 +33,7 @@ export function deps(db: ScipDatabase, filePattern: string): DepResult[] {
     resolvedFile,
   );
 
-  return rows
-    .filter((r) => !db.isIgnored(r.relative_path))
-    .map((r) => ({ relativePath: r.relative_path }));
+  return rows.filter((r) => !db.isIgnored(r.relative_path)).map((r) => ({ relativePath: r.relative_path }));
 }
 
 /** What files depend on this file/module? (reverse dependencies) */
@@ -66,7 +64,5 @@ export function rdeps(db: ScipDatabase, filePattern: string): DepResult[] {
     resolvedFile,
   );
 
-  return rows
-    .filter((r) => !db.isIgnored(r.relative_path))
-    .map((r) => ({ relativePath: r.relative_path }));
+  return rows.filter((r) => !db.isIgnored(r.relative_path)).map((r) => ({ relativePath: r.relative_path }));
 }

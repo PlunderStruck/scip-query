@@ -27,11 +27,7 @@ const CROSS_LANG_DISPATCH_NAMES = new Set([
   'callRust',
 ]);
 
-export function collectCrossLanguageDispatchName(
-  node: SyntaxNode,
-  language: AstLanguage,
-  out: Set<string>,
-): void {
+export function collectCrossLanguageDispatchName(node: SyntaxNode, language: AstLanguage, out: Set<string>): void {
   if (language !== 'typescript' && language !== 'tsx' && language !== 'javascript') return;
   if (node.type !== 'call_expression') return;
 

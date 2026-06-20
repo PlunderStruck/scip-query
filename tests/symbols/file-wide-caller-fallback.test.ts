@@ -1,17 +1,6 @@
 import Database from 'better-sqlite3';
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  it,
-} from 'vitest';
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../src/storage/db.js';
@@ -208,21 +197,25 @@ describe('file-wide caller fallback', () => {
 
   it('recovers callers when file-wide chunks start above every method definition', () => {
     const graph = callGraph(db, 'renderStatusBadge');
-    expect(graph?.callers.map((row) => row.shortName)).toEqual(expect.arrayContaining([
-      'fixture:StatusAuditReporter:renderAuditStatus()',
-      'fixture:StatusBoardReporter:renderBoardStatus()',
-      'fixture:StatusDigestReporter:renderDigestStatus()',
-      'fixture:StatusPreviewReporter:renderPreviewStatus()',
-    ]));
+    expect(graph?.callers.map((row) => row.shortName)).toEqual(
+      expect.arrayContaining([
+        'fixture:StatusAuditReporter:renderAuditStatus()',
+        'fixture:StatusBoardReporter:renderBoardStatus()',
+        'fixture:StatusDigestReporter:renderDigestStatus()',
+        'fixture:StatusPreviewReporter:renderPreviewStatus()',
+      ]),
+    );
   });
 
   it('finds wrapper candidates when the sole caller is discovered from source', () => {
-    expect(wrapperCandidates(db)).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        shortName: 'fixture:StatusBadgeRelay:normalizeBadgeStatus()',
-        singleCallerShort: 'fixture:AnalysisStatusPresenter:renderStatusBadge()',
-        callerFanIn: 4,
-      }),
-    ]));
+    expect(wrapperCandidates(db)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          shortName: 'fixture:StatusBadgeRelay:normalizeBadgeStatus()',
+          singleCallerShort: 'fixture:AnalysisStatusPresenter:renderStatusBadge()',
+          callerFanIn: 4,
+        }),
+      ]),
+    );
   });
 });

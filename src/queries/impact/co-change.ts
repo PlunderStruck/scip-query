@@ -31,7 +31,8 @@ export function isCoChangeNoiseFile(file: string): boolean {
   return NOISE_FILE_PATTERN.test(file);
 }
 
-const NOISE_FILE_PATTERN = /(?:^|\/)(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock|CHANGELOG(?:\.[a-z]+)?|.*\.map)$|(?:^|\/)(?:dist|build|out|node_modules|docs\/plans)\//i;
+const NOISE_FILE_PATTERN =
+  /(?:^|\/)(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock|CHANGELOG(?:\.[a-z]+)?|.*\.map)$|(?:^|\/)(?:dist|build|out|node_modules|docs\/plans)\//i;
 
 /**
  * Hidden coupling from the change graph: file pairs that repeatedly change

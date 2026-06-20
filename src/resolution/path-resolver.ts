@@ -30,10 +30,7 @@ interface DocumentPathCandidate {
   score: number;
 }
 
-export function resolveIndexedFile(
-  db: ScipDatabase,
-  filePattern: string,
-): string | null {
+export function resolveIndexedFile(db: ScipDatabase, filePattern: string): string | null {
   const indexed = resolveDocumentCandidates(db, filePattern, { allowMultiple: false })[0]?.relativePath;
   if (indexed) return indexed;
 
@@ -45,10 +42,7 @@ export function resolveIndexedFile(
   return resolveOnDiskFile(db, filePattern);
 }
 
-export function resolveIndexedPaths(
-  db: ScipDatabase,
-  filePattern: string,
-): string[] {
+export function resolveIndexedPaths(db: ScipDatabase, filePattern: string): string[] {
   return resolveDocumentCandidates(db, filePattern, { allowMultiple: true }).map((candidate) => candidate.relativePath);
 }
 
@@ -56,9 +50,10 @@ export function resolveOnDiskFile(db: ScipDatabase, filePattern: string): string
   if (!filePattern) return null;
   const normalized = filePattern.replace(/\\/g, '/').replace(/^\.\//, '');
   // Try exact-relative-to-project resolution first.
-  const rel = isAbsolutePath(normalized) && normalized.startsWith(db.config.projectRoot)
-    ? normalized.slice(db.config.projectRoot.length).replace(/^\/+/, '')
-    : normalized;
+  const rel =
+    isAbsolutePath(normalized) && normalized.startsWith(db.config.projectRoot)
+      ? normalized.slice(db.config.projectRoot.length).replace(/^\/+/, '')
+      : normalized;
   const abs = pathJoin(db.config.projectRoot, rel);
   return existsSyncFs(abs) ? rel : null;
 }
@@ -90,10 +85,12 @@ export function resolveDocumentCandidates(
       return [];
     }
 
-    return [{
-      relativePath: symbolMatch.relativePath,
-      score: 700,
-    }];
+    return [
+      {
+        relativePath: symbolMatch.relativePath,
+        score: 700,
+      },
+    ];
   }
 
   const exactPathMatches = scored.filter((row) => row.score >= 1100);
@@ -109,10 +106,7 @@ export function resolveDocumentCandidates(
   return opts.allowMultiple ? scored : [scored[0]!];
 }
 
-export function scoreDocumentPath(
-  relativePath: string,
-  rawPattern: string,
-): number {
+export function scoreDocumentPath(relativePath: string, rawPattern: string): number {
   const normalizedPath = normalizeLookupPath(relativePath);
   const pathBase = basename(normalizedPath);
   const patternBase = basename(rawPattern);
@@ -128,10 +122,5 @@ export function scoreDocumentPath(
 }
 
 export function normalizeLookupPath(filePattern: string): string {
-  return filePattern
-    .trim()
-    .replace(/\\/g, '/')
-    .replace(/^\.\//, '')
-    .replace(/^\/+/, '')
-    .replace(/\/+$/, '');
+  return filePattern.trim().replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '').replace(/\/+$/, '');
 }

@@ -1,0 +1,851 @@
+import type { DeadOptions } from '../../../domain/types.js';
+import * as queries from '../../../queries/index.js';
+import { resolveProjectRoot } from '../../cli-context.js';
+import {
+  applyCleanupBatches,
+  cleanupVerificationFailures,
+  createCleanupPatch,
+  selectCleanupBatches,
+  verifyCleanupPlan,
+} from '../../cleanup-verify.js';
+import { renderHeuristicNotice } from '../../cli-support.js';
+import {
+  booleanOptionValue,
+  budgetedDbCommand,
+  budgetedGroupedByFileCommand,
+  budgetedListCommand,
+  budgetedReportCommand,
+  budgetedTableCommand,
+  dbCommand,
+  definedLimitOption,
+  definedNumberOption,
+  numberOptionValue,
+  optionalStringArg,
+  printJsonEnvelope,
+  reportCommand,
+  stringArg,
+  stringOptionValue,
+} from '../../commands/command-execution.js';
+import { displayPathRange, displayRange, render } from '../../render.js';
+import { renderDeadGroup } from './renderers.js';
+
+export const handleDead = budgetedDbCommand('dead', ({ db, args, opts, budget }) => {
+  const deadOpts: DeadOptions = {
+    scope: optionalStringArg(args, 0) || undefined,
+    minLoc: definedNumberOption(opts, 'minLoc', 1),
+    includeTests: booleanOptionValue(opts, 'includeTests'),
+    skipBarrels: booleanOptionValue(opts, 'skipBarrels'),
+    includeMembers: booleanOptionValue(opts, 'includeMembers'),
+    scanLimit: budget.scanLimit,
+    semantic: budget.semantic,
+  };
+
+  const result = queries.dead(db, deadOpts);
+  const deadCode = result.symbols.filter((s) => s.kind === 'dead-code');
+  const fileInternal = result.symbols.filter((s) => s.kind !== 'dead-code');
+  const showDead = !booleanOptionValue(opts, 'onlyInternal');
+  const showInternal = !booleanOptionValue(opts, 'onlyDead');
+  const shownDeadCode = showDead ? deadCode : [];
+  const shownFileInternal = showInternal ? fileInternal : [];
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('dead', args, opts, {
+      ...result,
+      shown: {
+        deadCode: shownDeadCode,
+        fileInternal: shownFileInternal,
+      },
+      totals: {
+        deadCode: deadCode.length,
+        fileInternal: fileInternal.length,
+      },
+    });
+    return;
+  }
+
+  if (shownDeadCode.length === 0 && shownFileInternal.length === 0) {
+    render.empty('No matching dead-code symbols found.');
+    return;
+  }
+
+  const deadLoc = shownDeadCode.reduce((sum, s) => sum + s.loc, 0);
+  const fiLoc = shownFileInternal.reduce((sum, s) => sum + s.loc, 0);
+  if (shownDeadCode.length > 0) {
+    renderDeadGroup(
+      shownDeadCode,
+      'DEAD CODE',
+      '  Zero references anywhere — no cross-file callers AND no same-file uses.\n  Safe to delete.',
+      deadLoc,
+    );
+  }
+  if (shownFileInternal.length > 0) {
+    if (shownDeadCode.length > 0) console.log('');
+    renderDeadGroup(
+      shownFileInternal,
+      'FILE-INTERNAL ONLY',
+      '  Used only within the same file (no cross-file callers). Could be a\n  single-use helper, an abstraction-in-progress, or a callback registered\n  through a framework path that static analysis cannot trace (signal\n  handlers, event listeners, dependency injection). NOT necessarily dead —\n  review case by case.',
+      fiLoc,
+    );
+  }
+
+  const totalParts: string[] = [];
+  if (showDead) totalParts.push(`${shownDeadCode.length} dead code (${deadLoc} LOC)`);
+  if (showInternal) totalParts.push(`${shownFileInternal.length} file-internal (${fiLoc} LOC)`);
+  console.log('\n───────────────────────────');
+  console.log(`Total: ${shownDeadCode.length + shownFileInternal.length} symbols — ${totalParts.join(' + ')}`);
+});
+
+export const handleUnusedImports = budgetedListCommand('unused-imports', {
+  query: ({ db, args, budget }) => queries.unusedImports(db, stringArg(args, 0), { semantic: budget.semantic }),
+  format: (r) => `  ${r.shortName}  in ${r.importedIn}`,
+  emptyMessage: () => 'No unused imports found.',
+  after: (rows) => console.log(`\n${rows.length} unused import(s)`),
+});
+
+export const handleIsolated = budgetedGroupedByFileCommand('isolated', {
+  query: ({ db, opts, budget }) =>
+    queries.isolated(db, {
+      scope: stringOptionValue(opts, 'scope'),
+      minLoc: definedNumberOption(opts, 'minLoc', 3),
+      scanLimit: budget.scanLimit,
+      semantic: budget.semantic,
+    }),
+  format: (r) => `  ${displayRange(r.startLine, r.endLine)}  (${r.loc} LOC)  ${r.shortName}`,
+  emptyMessage: () => 'No isolated symbols found.',
+  after: (rows) => console.log(`\n${rows.length} isolated symbol(s)`),
+});
+
+export const handleExtractCandidates = budgetedDbCommand('extract-candidates', ({ db, args, opts, budget }) => {
+  const results = queries.extractCandidates(db, {
+    scope: stringOptionValue(opts, 'scope'),
+    minLoc: definedNumberOption(opts, 'minLoc', 10),
+    minCallees: definedNumberOption(opts, 'minCallees', 6),
+    limit: definedLimitOption(opts, 'limit', 20),
+    scanLimit: budget.scanLimit,
+    semantic: budget.semantic,
+  });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('extract-candidates', args, opts, results);
+    return;
+  }
+  if (results.length === 0) return render.empty('No extraction candidates found.');
+  renderHeuristicNotice('extraction candidates');
+  for (const r of results) {
+    console.log(
+      `\n${displayPathRange(r.relativePath, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC, ${r.totalCallees} callees)`,
+    );
+    for (let i = 0; i < r.clusters.length; i++) {
+      const c = r.clusters[i]!;
+      console.log(`  Cluster ${i + 1} (${Math.round(c.isolation * 100)}% isolated, ${c.callees.length} callees):`);
+      for (const callee of c.callees) console.log(`    ${callee}`);
+    }
+  }
+  console.log(`\n${results.length} extraction candidate(s) found.`);
+});
+
+export const handleWrapperCandidates = budgetedListCommand('wrapper-candidates', {
+  query: ({ db, opts, budget }) =>
+    queries.wrapperCandidates(db, {
+      scope: stringOptionValue(opts, 'scope'),
+      maxLoc: definedNumberOption(opts, 'maxLoc', 15),
+      limit: definedLimitOption(opts, 'limit', 30),
+      scanLimit: budget.scanLimit,
+      semantic: budget.semantic,
+    }),
+  format: (r) =>
+    `  ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC)\n` +
+    `    Only called by: ${r.singleCallerShort}  (fan-in: ${r.callerFanIn})`,
+  emptyMessage: () => 'No wrapper candidates found.',
+  heuristicLabel: 'wrapper candidates',
+  after: (rows) => console.log(`\n${rows.length} wrapper candidate(s).`),
+});
+
+export const handlePassthroughCandidates = budgetedListCommand('passthrough-candidates', {
+  query: ({ db, opts, budget }) =>
+    queries.passthroughCandidates(db, {
+      scope: stringOptionValue(opts, 'scope'),
+      maxLoc: definedNumberOption(opts, 'maxLoc', 15),
+      limit: definedLimitOption(opts, 'limit', 30),
+      scanLimit: budget.scanLimit,
+      semantic: budget.semantic,
+    }),
+  format: (r) =>
+    `  ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC)\n` +
+    `    Forwards to: ${r.forwardsToShort}  (${r.forwardsToFile})`,
+  emptyMessage: () => 'No passthrough candidates found.',
+  heuristicLabel: 'passthrough candidates',
+  after: (rows) => console.log(`\n${rows.length} passthrough candidate(s).`),
+});
+
+export const handleStaleAbstractions = budgetedListCommand('stale-abstractions', {
+  query: ({ db, opts, budget }) =>
+    queries.staleAbstractions(db, {
+      scope: stringOptionValue(opts, 'scope'),
+      minLoc: definedNumberOption(opts, 'minLoc', 3),
+      limit: definedLimitOption(opts, 'limit', 30),
+      includeLowConfidence: booleanOptionValue(opts, 'includeLowConfidence'),
+      scanLimit: budget.scanLimit,
+      semantic: budget.semantic,
+    }),
+  format: (r) => {
+    const consumerLabel = r.consumers === 0 ? 'unused' : `${r.consumers} consumer`;
+    const barrelLabel = r.barrelConsumers > 0 ? `, +${r.barrelConsumers} barrel` : '';
+    return (
+      `  [${r.confidence}] ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  ` +
+      `(${r.kind}, ${r.loc} LOC, ${consumerLabel}${barrelLabel})\n` +
+      `           ${r.reason}`
+    );
+  },
+  emptyMessage: () => 'No stale abstractions found.',
+  heuristicLabel: 'stale abstraction candidates',
+  after: (rows) => console.log(`\n${rows.length} stale abstraction(s).`),
+});
+
+export const handleComplexityHotspots = budgetedTableCommand('complexity-hotspots', {
+  headers: ['score', ' LOC', 'fan-in', 'fan-out', 'callees', 'symbol'],
+  query: ({ db, opts, budget }) =>
+    queries.complexityHotspots(db, {
+      scope: stringOptionValue(opts, 'scope'),
+      minLoc: definedNumberOption(opts, 'minLoc', 10),
+      limit: definedLimitOption(opts, 'limit', 20),
+      scanLimit: budget.scanLimit,
+      semantic: budget.semantic,
+    }),
+  format: (r) =>
+    `  ${r.score.toFixed(1).padStart(5)}  ${String(r.loc).padStart(4)}  ` +
+    `${String(r.fanIn).padStart(6)}  ${String(r.fanOut).padStart(7)}  ` +
+    `${String(r.calleeCount).padStart(7)}  ${r.shortName}`,
+  emptyMessage: () => 'No complexity hotspots found.',
+  heuristicLabel: 'complexity hotspot candidates',
+  dashWidths: [5, 4, 6, 7, 7, 6],
+});
+
+export const handleSimilar = budgetedReportCommand('similar', {
+  query: ({ db, args, opts, budget }) => {
+    const symbol = optionalStringArg(args, 0);
+    if (symbol) {
+      return {
+        mode: 'target' as const,
+        rows: queries.similar(db, symbol, {
+          minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.4),
+          limit: definedLimitOption(opts, 'limit', 20),
+          scanLimit: budget.scanLimit,
+          semantic: budget.semantic,
+        }),
+      };
+    }
+    return {
+      mode: 'all' as const,
+      rows: queries.similarAll(db, {
+        minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.4),
+        limit: definedLimitOption(opts, 'limit', 20),
+        scope: stringOptionValue(opts, 'scope'),
+        minCallees: definedNumberOption(opts, 'minCallees', 4),
+        crossFileOnly: booleanOptionValue(opts, 'crossFileOnly'),
+        scanLimit: budget.scanLimit,
+        semantic: budget.semantic,
+      }),
+    };
+  },
+  emptyMessage: (result) => {
+    if (result.rows.length > 0) return undefined;
+    return result.mode === 'target' ? 'No similar symbols found.' : 'No similar symbol pairs found.';
+  },
+  heuristicLabel: 'similarity candidates',
+  render: (result) => {
+    if (result.mode === 'target') {
+      render.list(result.rows, (r) => {
+        const basis = r.similarityBasis ?? 'callees';
+        const sharedLabel = basis === 'source-tokens' ? 'Shared source tokens' : 'Shared callees';
+        const onlyLabel = basis === 'source-tokens' ? 'Only tokens in' : 'Only in';
+        const lines = [
+          `\n${Math.round(r.similarity * 100)}% similar:`,
+          `  A: ${r.shortNameA}  (${r.fileA})`,
+          `  B: ${r.shortNameB}  (${r.fileB})`,
+          `  ${sharedLabel}: ${r.sharedCallees.join(', ')}`,
+        ];
+        if (r.uniqueToA.length) lines.push(`  ${onlyLabel} A: ${r.uniqueToA.join(', ')}`);
+        if (r.uniqueToB.length) lines.push(`  ${onlyLabel} B: ${r.uniqueToB.join(', ')}`);
+        return lines.join('\n');
+      });
+      return;
+    }
+
+    render.list(
+      result.rows,
+      (r) =>
+        `\n${Math.round(r.similarity * 100)}% similar:\n` +
+        `  A: ${r.shortNameA}  (${r.fileA})\n` +
+        `  B: ${r.shortNameB}  (${r.fileB})\n` +
+        `  Shared ${r.similarityBasis === 'source-tokens' ? 'source tokens' : 'callees'}: ${r.sharedCallees.join(', ')}`,
+    );
+    console.log(`\n${result.rows.length} similar pair(s) found.`);
+  },
+});
+
+export const handleSimilarFiles = reportCommand({
+  commandName: 'similar-files',
+  query: ({ db, args, opts }) =>
+    queries.similarFiles(db, {
+      minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.5),
+      limit: definedLimitOption(opts, 'limit', 20),
+      scope: stringOptionValue(opts, 'scope'),
+      minDeps: numberOptionValue(opts, 'minDeps'),
+      filePattern: optionalStringArg(args, 0),
+    }),
+  emptyMessage: (results) => (results.length === 0 ? 'No similar file pairs found.' : undefined),
+  heuristicLabel: 'similar file candidates',
+  render: (results) => {
+    render.list(results, (r) => {
+      const lines = [
+        `\n${Math.round(r.similarity * 100)}% similar:`,
+        `  ${r.fileA}`,
+        `  ${r.fileB}`,
+        `  Shared deps (${r.sharedDeps.length}): ${r.sharedDeps.join(', ')}`,
+      ];
+      if (r.uniqueToA.length) lines.push(`  Only in first:  ${r.uniqueToA.join(', ')}`);
+      if (r.uniqueToB.length) lines.push(`  Only in second: ${r.uniqueToB.join(', ')}`);
+      return lines.join('\n');
+    });
+    console.log(`\n${results.length} similar pair(s) found.`);
+  },
+});
+
+export const handleReactComponentDuplicates = budgetedReportCommand('react-component-duplicates', {
+  query: ({ db, args, opts, budget }) =>
+    queries.reactComponentDuplicates(db, {
+      minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.62),
+      minTokens: definedNumberOption(opts, 'minTokens', 8),
+      limit: definedLimitOption(opts, 'limit', 20),
+      scope: stringOptionValue(opts, 'scope'),
+      scanLimit: budget.scanLimit,
+      filePattern: optionalStringArg(args, 0),
+    }),
+  emptyMessage: (results) => (results.length === 0 ? 'No duplicated React component structures found.' : undefined),
+  heuristicLabel: 'React component duplicate candidates',
+  render: (results) => {
+    render.list(results, (r) => {
+      const lines = [
+        `\n${Math.round(r.similarity * 100)}% similar React structure:`,
+        `  ${r.componentA}  (${r.fileA})`,
+        `  ${r.componentB}  (${r.fileB})`,
+      ];
+      if (r.sharedComponents.length) lines.push(`  Shared components: ${r.sharedComponents.join(', ')}`);
+      if (r.sharedNativeTags.length) lines.push(`  Shared native tags: ${r.sharedNativeTags.join(', ')}`);
+      if (r.sharedProps.length) lines.push(`  Shared props: ${r.sharedProps.join(', ')}`);
+      if (r.sharedEvents.length) lines.push(`  Shared events: ${r.sharedEvents.join(', ')}`);
+      if (r.sharedBindings.length) lines.push(`  Shared bindings: ${r.sharedBindings.slice(0, 20).join(', ')}`);
+      return lines.join('\n');
+    });
+    console.log(`\n${results.length} duplicated React component pair(s) found.`);
+  },
+});
+
+export const handleReactHookCandidates = budgetedReportCommand('react-hook-candidates', {
+  query: ({ db, args, opts, budget }) =>
+    queries.reactHookCandidates(db, {
+      minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.45),
+      minSharedBehaviors: definedNumberOption(opts, 'minSharedBehaviors', 6),
+      limit: definedLimitOption(opts, 'limit', 20),
+      scope: stringOptionValue(opts, 'scope'),
+      scanLimit: budget.scanLimit,
+      filePattern: optionalStringArg(args, 0),
+    }),
+  emptyMessage: (results) => (results.length === 0 ? 'No duplicated React hook behavior candidates found.' : undefined),
+  heuristicLabel: 'React hook extraction candidates',
+  render: (results) => {
+    render.list(results, (r) => {
+      const lines = [
+        `\n${Math.round(r.similarity * 100)}% similar React behavior:`,
+        `  ${r.componentA}  (${r.fileA})`,
+        `  ${r.componentB}  (${r.fileB})`,
+        `  ${r.reason}`,
+      ];
+      if (r.sharedHooks.length) lines.push(`  Shared hooks: ${r.sharedHooks.join(', ')}`);
+      if (r.sharedReactHooks.length) lines.push(`  Shared React hooks: ${r.sharedReactHooks.join(', ')}`);
+      if (r.sharedEffects.length) lines.push(`  Shared effects: ${r.sharedEffects.join(', ')}`);
+      if (r.sharedState.length) lines.push(`  Shared state: ${r.sharedState.join(', ')}`);
+      if (r.sharedRequests.length) lines.push(`  Shared requests: ${r.sharedRequests.join(', ')}`);
+      if (r.sharedHandlers.length) lines.push(`  Shared handlers: ${r.sharedHandlers.slice(0, 12).join(', ')}`);
+      if (r.sharedHandlerVerbs.length)
+        lines.push(`  Shared action verbs: ${r.sharedHandlerVerbs.slice(0, 12).join(', ')}`);
+      return lines.join('\n');
+    });
+    console.log(`\n${results.length} React hook candidate pair(s) found.`);
+  },
+});
+
+export const handleReactLargeComponentPressure = budgetedReportCommand('react-large-component-pressure', {
+  query: ({ db, args, opts, budget }) =>
+    queries.reactLargeComponentPressure(db, {
+      minComponentLines: definedNumberOption(opts, 'minComponentLines', 300),
+      minFileLines: definedNumberOption(opts, 'minFileLines', 800),
+      minJsxTokens: definedNumberOption(opts, 'minJsxTokens', 80),
+      minBehaviorTokens: definedNumberOption(opts, 'minBehaviorTokens', 40),
+      limit: definedLimitOption(opts, 'limit', 20),
+      scope: stringOptionValue(opts, 'scope'),
+      scanLimit: budget.scanLimit,
+      filePattern: optionalStringArg(args, 0),
+    }),
+  emptyMessage: (results) => (results.length === 0 ? 'No large React component pressure found.' : undefined),
+  heuristicLabel: 'large React component pressure candidates',
+  render: (results) => {
+    render.list(results, (r) => {
+      const lines = [
+        `\n${r.componentLines} component line(s): ${r.component}  (${r.file})`,
+        `  Dominant pressure: ${r.dominantPressure}`,
+        `  File lines: ${r.fileLines}; JSX tokens: ${r.jsxTokens}; behavior tokens: ${r.behaviorTokens}`,
+        `  Reasons: ${r.reasons.join('; ')}`,
+      ];
+      return lines.join('\n');
+    });
+    console.log(`\n${results.length} large React component(s) found.`);
+  },
+});
+
+export const handleVueComponentDuplicates = budgetedReportCommand('vue-component-duplicates', {
+  query: ({ db, args, opts, budget }) =>
+    queries.vueComponentDuplicates(db, {
+      minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.62),
+      minTokens: definedNumberOption(opts, 'minTokens', 8),
+      limit: definedLimitOption(opts, 'limit', 20),
+      scope: stringOptionValue(opts, 'scope'),
+      scanLimit: budget.scanLimit,
+      filePattern: optionalStringArg(args, 0),
+    }),
+  emptyMessage: (results) => (results.length === 0 ? 'No duplicated Vue component structures found.' : undefined),
+  heuristicLabel: 'Vue component duplicate candidates',
+  render: (results) => {
+    render.list(results, (r) => {
+      const lines = [`\n${Math.round(r.similarity * 100)}% similar Vue structure:`, `  ${r.fileA}`, `  ${r.fileB}`];
+      if (r.sharedComponents.length) lines.push(`  Shared components: ${r.sharedComponents.join(', ')}`);
+      if (r.sharedProps.length) lines.push(`  Shared props: ${r.sharedProps.join(', ')}`);
+      if (r.sharedEvents.length) lines.push(`  Shared events: ${r.sharedEvents.join(', ')}`);
+      if (r.sharedDirectives.length) lines.push(`  Shared directives: ${r.sharedDirectives.join(', ')}`);
+      if (r.sharedSlots.length) lines.push(`  Shared slots: ${r.sharedSlots.join(', ')}`);
+      if (r.sharedIdentifiers.length)
+        lines.push(`  Shared identifiers: ${r.sharedIdentifiers.slice(0, 20).join(', ')}`);
+      return lines.join('\n');
+    });
+    console.log(`\n${results.length} duplicated Vue component pair(s) found.`);
+  },
+});
+
+export const handleVueComposableCandidates = budgetedReportCommand('vue-composable-candidates', {
+  query: ({ db, args, opts, budget }) =>
+    queries.vueComposableCandidates(db, {
+      minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.45),
+      minSharedBehaviors: definedNumberOption(opts, 'minSharedBehaviors', 6),
+      limit: definedLimitOption(opts, 'limit', 20),
+      scope: stringOptionValue(opts, 'scope'),
+      scanLimit: budget.scanLimit,
+      filePattern: optionalStringArg(args, 0),
+    }),
+  emptyMessage: (results) => (results.length === 0 ? 'No duplicated Vue behavior candidates found.' : undefined),
+  heuristicLabel: 'Vue composable extraction candidates',
+  render: (results) => {
+    render.list(results, (r) => {
+      const lines = [
+        `\n${Math.round(r.similarity * 100)}% similar Vue behavior:`,
+        `  ${r.fileA}`,
+        `  ${r.fileB}`,
+        `  ${r.reason}`,
+      ];
+      if (r.sharedComposables.length) lines.push(`  Shared composables: ${r.sharedComposables.join(', ')}`);
+      if (r.sharedStores.length) lines.push(`  Shared stores: ${r.sharedStores.join(', ')}`);
+      if (r.sharedRequests.length) lines.push(`  Shared requests: ${r.sharedRequests.join(', ')}`);
+      if (r.sharedLifecycle.length) lines.push(`  Shared lifecycle: ${r.sharedLifecycle.join(', ')}`);
+      if (r.sharedFunctions.length) lines.push(`  Shared functions: ${r.sharedFunctions.slice(0, 12).join(', ')}`);
+      if (r.sharedFunctionVerbs.length)
+        lines.push(`  Shared action verbs: ${r.sharedFunctionVerbs.slice(0, 12).join(', ')}`);
+      if (r.sharedBindings.length) lines.push(`  Shared bindings: ${r.sharedBindings.slice(0, 20).join(', ')}`);
+      if (r.sharedTemplateEvents.length)
+        lines.push(`  Shared template events: ${r.sharedTemplateEvents.slice(0, 20).join(', ')}`);
+      return lines.join('\n');
+    });
+    console.log(`\n${results.length} Vue composable candidate pair(s) found.`);
+  },
+});
+
+export const handleVueLargeViewPressure = budgetedReportCommand('vue-large-view-pressure', {
+  query: ({ db, args, opts, budget }) =>
+    queries.vueLargeViewPressure(db, {
+      minTotalLines: definedNumberOption(opts, 'minTotalLines', 800),
+      minTemplateLines: definedNumberOption(opts, 'minTemplateLines', 300),
+      minScriptLines: definedNumberOption(opts, 'minScriptLines', 300),
+      minStyleLines: definedNumberOption(opts, 'minStyleLines', 500),
+      limit: definedLimitOption(opts, 'limit', 20),
+      scope: stringOptionValue(opts, 'scope'),
+      scanLimit: budget.scanLimit,
+      filePattern: optionalStringArg(args, 0),
+    }),
+  emptyMessage: (results) => (results.length === 0 ? 'No large Vue view pressure found.' : undefined),
+  heuristicLabel: 'large Vue view pressure candidates',
+  render: (results) => {
+    render.list(results, (r) => {
+      const lines = [
+        `\n${r.totalLines} total line(s): ${r.file}`,
+        `  Dominant pressure: ${r.dominantPressure}`,
+        `  Blocks: template ${r.templateLines}, script ${r.scriptLines}, style ${r.styleLines}, external script ${r.externalScriptLines}, custom ${r.customBlockLines}`,
+      ];
+      if (r.externalScriptPaths.length) lines.push(`  External scripts: ${r.externalScriptPaths.join(', ')}`);
+      lines.push(`  Reasons: ${r.reasons.join('; ')}`);
+      return lines.join('\n');
+    });
+    console.log(`\n${results.length} large Vue view pressure file(s) found.`);
+  },
+});
+
+export const handleSimilarChains = reportCommand({
+  commandName: 'similar-chains',
+  query: ({ db, opts }) =>
+    queries.similarChains(db, {
+      minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.5),
+      limit: definedLimitOption(opts, 'limit', 15),
+      scope: stringOptionValue(opts, 'scope'),
+      minChainLength: definedNumberOption(opts, 'minLength', 3),
+      maxChainLength: definedNumberOption(opts, 'maxLength', 8),
+    }),
+  emptyMessage: (results) => (results.length === 0 ? 'No similar chains found.' : undefined),
+  heuristicLabel: 'similar chain candidates',
+  render: (results) => {
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i]!;
+      console.log(
+        `\n── Chain pair ${i + 1} (${Math.round(r.similarity * 100)}% similar, ${r.divergencePoints.length} divergence point(s)) ──`,
+      );
+      console.log(`  Chain A: ${r.chainA.join(' → ')}`);
+      console.log(`  Chain B: ${r.chainB.join(' → ')}`);
+      if (r.commonPrefix.length) console.log(`  Common prefix: ${r.commonPrefix.join(' → ')}`);
+      if (r.commonSuffix.length) console.log(`  Common suffix: ${r.commonSuffix.join(' → ')}`);
+      console.log('  Divergence points (consolidation targets):');
+      for (const d of r.divergencePoints) console.log(`    [${d.index}] ${d.nodeA}  ↔  ${d.nodeB}`);
+    }
+    console.log(`\n${results.length} similar chain pair(s) found.`);
+  },
+});
+
+export const handleDrift = budgetedReportCommand('drift', {
+  query: ({ db, args, opts, budget }) =>
+    queries.drift(db, {
+      scope: optionalStringArg(args, 0),
+      minDeviation: definedNumberOption(opts, 'minDeviation', 5),
+      semantic: budget.semantic,
+    }),
+  emptyMessage: (summary) => (summary.results.length === 0 ? 'No drift detected.' : undefined),
+  heuristicLabel: 'drift candidates',
+  render: (summary) => {
+    console.log('');
+    render.groupedByFile(
+      summary.results,
+      (r) => {
+        const tag = r.kind === 'unused-import' ? 'UNUSED' : r.kind === 'layer-violation' ? 'LAYER' : 'UNIQUE';
+        const head = `  [${tag}] ${r.description}`;
+        return r.detail ? `${head}\n         ${r.detail}` : head;
+      },
+      (r) => r.file,
+    );
+    console.log(
+      `\n${summary.unusedImports} unused import(s), ${summary.layerViolations} layer violation(s), ${summary.patternDeviations} pattern deviation(s)`,
+    );
+  },
+});
+
+export const handleConvergence = budgetedReportCommand('convergence', {
+  query: ({ db, args, budget }) =>
+    queries.convergence(db, stringArg(args, 0), stringArg(args, 1), { semantic: budget.semantic }),
+  emptyMessage: (result) => (result ? undefined : 'One or both symbols not found.'),
+  render: (result) => {
+    if (!result) return;
+    console.log(`\n${Math.round(result.similarity * 100)}% callee overlap\n`);
+    console.log(`  A: ${result.symbolA.shortName}  (${result.symbolA.file}, ${result.symbolA.loc} LOC)`);
+    console.log(`  B: ${result.symbolB.shortName}  (${result.symbolB.file}, ${result.symbolB.loc} LOC)\n`);
+    console.log(`  Shared callees (${result.sharedCallees.length}):`);
+    for (const c of result.sharedCallees) console.log(`    ${c}`);
+    if (result.uniqueToA.length > 0) {
+      console.log(`\n  Unique to A (${result.uniqueToA.length}):`);
+      for (const c of result.uniqueToA) console.log(`    ${c}`);
+    }
+    if (result.uniqueToB.length > 0) {
+      console.log(`\n  Unique to B (${result.uniqueToB.length}):`);
+      for (const c of result.uniqueToB) console.log(`    ${c}`);
+    }
+    console.log(`\n  Strategy: ${result.consolidationStrategy}`);
+  },
+});
+
+export const handleSimilarSignatures = budgetedListCommand('similar-signatures', {
+  query: ({ db, opts, budget }) =>
+    queries.similarSignatures(db, {
+      scope: stringOptionValue(opts, 'scope'),
+      minLoc: definedNumberOption(opts, 'minLoc', 3),
+      limit: definedLimitOption(opts, 'limit', 20),
+      scanLimit: budget.scanLimit,
+      semantic: budget.semantic,
+    }),
+  format: (g) => {
+    const head = `\nSignature: ${g.signature}  (${g.functions.length} functions)`;
+    const body = g.functions
+      .map((f) => `  ${displayPathRange(f.file, f.startLine, f.endLine)}  ${f.shortName}  (${f.loc} LOC)`)
+      .join('\n');
+    return `${head}\n${body}`;
+  },
+  emptyMessage: () => 'No same-shape function groups found.',
+  after: (groups) => console.log(`\n${groups.length} group(s) found.`),
+});
+
+export const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, args, opts, budget }) => {
+  const result = queries.cleanupPlan(db, {
+    scope: stringOptionValue(opts, 'scope'),
+    minLoc: definedNumberOption(opts, 'minLoc', 1),
+    maxDepth: definedNumberOption(opts, 'maxDepth', 5),
+    scanLimit: budget.scanLimit,
+  });
+  const projectRoot = resolveProjectRoot();
+  const wantsPatch = booleanOptionValue(opts, 'patch');
+  const wantsJson = booleanOptionValue(opts, 'json');
+  const wantsVerify = booleanOptionValue(opts, 'verify') || wantsPatch;
+  if (wantsPatch && !booleanOptionValue(opts, 'verify')) {
+    console.error('error: cleanup-plan --patch requires --verify.');
+    process.exitCode = 1;
+    return;
+  }
+  if (result.batches.length === 0) {
+    if (wantsJson) {
+      printJsonEnvelope('cleanup-plan', args, opts, result);
+      return;
+    }
+    return render.empty('Nothing deletable found — no graph-fact dead code to seed a cascade.');
+  }
+  const selectedBatches = selectCleanupBatches(result);
+  const verification = wantsVerify ? verifyCleanupPlan(projectRoot, result) : undefined;
+
+  if (wantsJson) {
+    printJsonEnvelope('cleanup-plan', args, opts, { result, verification });
+    return;
+  }
+
+  if (wantsPatch) {
+    const failures = cleanupVerificationFailures(verification!, selectedBatches);
+    if (failures.length > 0) {
+      for (const failure of failures) console.error(`error: ${failure}`);
+      process.exitCode = 1;
+      return;
+    }
+    const patch = createCleanupPatch(projectRoot, selectedBatches);
+    if (patch.trim() === '') {
+      console.error('error: verified cleanup plan produced an empty patch.');
+      process.exitCode = 1;
+      return;
+    }
+    console.error(
+      `cleanup-plan --patch: ${selectedBatches.length} compiler-verified batch(es), ${result.totalLoc} LOC.`,
+    );
+    console.log(patch);
+    return;
+  }
+
+  console.log(
+    `Cleanup plan: ${result.totalSymbols} symbol(s), ${result.totalLoc} LOC across ${result.batches.length} batch(es).`,
+  );
+  console.log('Apply one batch at a time; run your typecheck between batches.\n');
+  for (const batch of result.batches) {
+    const header =
+      batch.depth === 0
+        ? `── Batch 0: deletable now (graph-fact, ${batch.loc} LOC) ──`
+        : `── Batch ${batch.depth}: dead once batch ${batch.depth - 1} lands (cascade, ${batch.loc} LOC) ──`;
+    console.log(header);
+    for (const entry of batch.entries) {
+      console.log(
+        `  ${entry.file}:${entry.startLine + 1}-${entry.endLine + 1}  ${entry.shortName}  (${entry.loc} LOC)`,
+      );
+    }
+    if (batch.filesEmptied.length > 0) {
+      console.log(`  -> empties: ${batch.filesEmptied.join(', ')}`);
+    }
+    console.log('');
+  }
+  if (result.blocked.length > 0) {
+    console.log('Cascade blocked (references outside the removal set):');
+    for (const entry of result.blocked) {
+      console.log(`  ${entry.shortName}  (${entry.file})  blocked by ${entry.blockingFiles.join(', ')}`);
+    }
+  }
+
+  if (verification) {
+    console.log('\nVerifying batches against the project checker (throwaway worktree at HEAD)...');
+    if (verification.checkers.length === 0) {
+      console.log('  No checker detected (need tsconfig.json or a Cargo.toml) — skipped.');
+      return;
+    }
+    for (const checker of verification.checkers) {
+      console.log(`  Checker: ${checker}`);
+    }
+    if (verification.uncoveredFiles.length > 0) {
+      console.log(
+        `  WARNING: no checker covers these plan files (entries there are NOT verified): ${verification.uncoveredFiles.join(', ')}`,
+      );
+    }
+    if (verification.baselineErrors > 0) {
+      console.log(
+        `  Baseline has ${verification.baselineErrors} pre-existing error(s) — verifying differentially (no NEW errors).`,
+      );
+    }
+    if (verification.dirtyOverlap.length > 0) {
+      console.log(
+        `  WARNING: plan files dirty in working tree (verification runs at HEAD): ${verification.dirtyOverlap.join(', ')}`,
+      );
+    }
+    for (const batch of verification.batches) {
+      if (batch.status === 'verified') {
+        console.log(`  Batch ${batch.depth}: COMPILER-VERIFIED`);
+      } else {
+        console.log(`  Batch ${batch.depth}: FAILED — the errors below name references the static evidence missed:`);
+        for (const error of batch.errors ?? []) {
+          console.log(`    ${error}`);
+        }
+      }
+    }
+  }
+});
+
+export const handleCleanupApply = budgetedDbCommand('cleanup-apply', ({ db, opts, budget }) => {
+  if (!booleanOptionValue(opts, 'verified')) {
+    console.error('error: cleanup-apply requires --verified so deletions are checked before mutating files.');
+    process.exitCode = 1;
+    return;
+  }
+  const all = booleanOptionValue(opts, 'all');
+  const batch = numberOptionValue(opts, 'batch');
+  if (all === (batch !== undefined)) {
+    console.error('error: choose exactly one of --all or --batch <n>.');
+    process.exitCode = 1;
+    return;
+  }
+  const result = queries.cleanupPlan(db, {
+    scope: stringOptionValue(opts, 'scope'),
+    minLoc: definedNumberOption(opts, 'minLoc', 1),
+    maxDepth: definedNumberOption(opts, 'maxDepth', 5),
+    scanLimit: budget.scanLimit,
+  });
+  if (result.batches.length === 0) {
+    render.empty('Nothing deletable found — no graph-fact dead code to seed a cascade.');
+    return;
+  }
+  const selectedBatches = selectCleanupBatches(result, { all, batch });
+  if (selectedBatches.length === 0) {
+    console.error(`error: No cleanup batch ${batch} exists.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const projectRoot = resolveProjectRoot();
+  const verification = verifyCleanupPlan(projectRoot, result);
+  const failures = cleanupVerificationFailures(verification, selectedBatches, {
+    allowDirty: booleanOptionValue(opts, 'forceDirty'),
+  });
+  if (failures.length > 0) {
+    for (const failure of failures) console.error(`error: ${failure}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  applyCleanupBatches(projectRoot, selectedBatches);
+  const symbols = selectedBatches.reduce((sum, cleanupBatch) => sum + cleanupBatch.entries.length, 0);
+  const loc = selectedBatches.reduce((sum, cleanupBatch) => sum + cleanupBatch.loc, 0);
+  console.log(
+    `Applied ${selectedBatches.length} compiler-verified cleanup batch(es): ${symbols} symbol(s), ${loc} LOC.`,
+  );
+});
+
+export const handleRecentDuplicates = budgetedDbCommand('recent-duplicates', ({ db, args, opts, budget }) => {
+  const result = queries.recentDuplicates(db, {
+    windowCommits: definedNumberOption(opts, 'window', 100),
+    minSimilarity: numberOptionValue(opts, 'minSimilarity'),
+    limit: definedLimitOption(opts, 'limit', 30),
+    scope: stringOptionValue(opts, 'scope'),
+    scanLimit: budget.scanLimit,
+    semantic: budget.semantic,
+  });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('recent-duplicates', args, opts, result);
+    return;
+  }
+  if (!result.available) return render.empty('No git history available (not a repository, or git missing).');
+  if (result.findings.length === 0) {
+    return render.empty(`No recent re-implementations found (window: last ${result.windowCommits} commits).`);
+  }
+  console.log(`Recent re-implementations (window: last ${result.windowCommits} commits):\n`);
+  for (const finding of result.findings) {
+    const evidence = finding.sharedEvidence.slice(0, 16).join(', ');
+    if (finding.kind === 'echo') {
+      console.log(
+        `  ${Math.round(finding.similarity * 100)}%  ECHO  ${finding.domain}  ${finding.echoFile}  ${finding.echoSymbol}  (added ${finding.echoAgeCommits} commits ago)`,
+      );
+      console.log(`        duplicates established  ${finding.establishedFile}  ${finding.establishedSymbol}`);
+    } else {
+      console.log(
+        `  ${Math.round(finding.similarity * 100)}%  TWIN  ${finding.domain}  ${finding.echoFile}  ${finding.echoSymbol}`,
+      );
+      console.log(
+        `        and                     ${finding.establishedFile}  ${finding.establishedSymbol}  (both new — consolidate before they diverge)`,
+      );
+    }
+    console.log(`        basis: ${finding.basis}`);
+    if (evidence.length > 0) console.log(`        shared: ${evidence}`);
+  }
+  console.log(
+    `\n${result.findings.length} finding(s). ECHO: prefer extending the established side and deleting the echo.`,
+  );
+});
+
+export const handleDocDrift = dbCommand(({ db, args, opts }) => {
+  const result = queries.docDrift(db, {
+    doc: args[0] === undefined ? undefined : stringArg(args, 0),
+    limit: definedLimitOption(opts, 'limit', 20),
+    minCoupling: definedNumberOption(opts, 'minCoupling', 3),
+  });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('doc-drift', args, opts, result);
+    return;
+  }
+  if (!result.available) return render.empty('No git history available (not a repository, or git missing).');
+  if (result.findings.length === 0) {
+    return render.empty(
+      `No drifting docs found across ${result.docsScanned} doc(s) — referenced and co-changed code has not moved since each doc last changed.`,
+    );
+  }
+  console.log(
+    `Docs whose referenced or co-changed code moved on without them (${result.docsScanned} docs scanned, ${result.commitsAnalyzed} commits analyzed):\n`,
+  );
+  for (const finding of result.findings) {
+    console.log(`  staleness ${finding.staleness}  ${finding.doc}`);
+    for (const broken of finding.brokenReferences.slice(0, 4)) {
+      console.log(`    BROKEN REFERENCE: cites ${broken} — that file no longer exists`);
+    }
+    for (const subject of finding.subjects.slice(0, 4)) {
+      const evidence =
+        subject.evidence === 'both'
+          ? `referenced by doc + coupled ${subject.coChanges}x`
+          : subject.evidence === 'reference'
+            ? 'referenced by doc'
+            : `coupled ${subject.coChanges}x historically`;
+      console.log(`    ${subject.changesSinceDocUpdate} change(s) since doc update  ${subject.file}  (${evidence})`);
+    }
+  }
+  console.log('\nStale standards docs are worse than none — agents implement to a dead spec.');
+});
+
+export const handleUnusedParams = budgetedListCommand('unused-params', {
+  query: ({ db, opts, budget }) =>
+    queries.unusedParams(db, {
+      scope: stringOptionValue(opts, 'scope'),
+      limit: definedLimitOption(opts, 'limit', 30),
+      scanLimit: budget.scanLimit,
+    }),
+  format: (r) =>
+    `  ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}\n` +
+    `    trailing unused: ${r.unusedTrailing.join(', ')}  (${r.unusedTrailing.length} of ${r.paramCount} params — safe to drop)`,
+  emptyMessage: () => 'No trailing unused parameters found.',
+  heuristicLabel: 'unused trailing parameter candidates',
+  after: (rows) => console.log(`\n${rows.length} function(s) with trailing unused parameters.`),
+});

@@ -10,21 +10,20 @@ export interface RefResult {
   line: number;
 }
 
-export function refs(
-  db: ScipDatabase,
-  symbolPattern: string,
-  opts: { semantic?: boolean } = {},
-): RefResult[] {
+export function refs(db: ScipDatabase, symbolPattern: string, opts: { semantic?: boolean } = {}): RefResult[] {
   const match = findFirstSymbolMatch(db, symbolPattern);
   if (!match) return [];
 
   const includeDefinitionSite = !isFunctionLikeSymbol(match.symbol);
-  const definitionRows: RefResult[] = includeDefinitionSite && !db.isIgnored(match.relativePath)
-    ? [{ relativePath: match.relativePath, line: match.startLine }]
-    : [];
+  const definitionRows: RefResult[] =
+    includeDefinitionSite && !db.isIgnored(match.relativePath)
+      ? [{ relativePath: match.relativePath, line: match.startLine }]
+      : [];
 
-  const referenceSites = referenceSitesForSymbol(db, match, { semantic: opts.semantic })
-    .map((site) => ({ relativePath: site.file, line: site.line }));
+  const referenceSites = referenceSitesForSymbol(db, match, { semantic: opts.semantic }).map((site) => ({
+    relativePath: site.file,
+    line: site.line,
+  }));
 
   const rubySites = getRubySemanticRefs(db, match);
 

@@ -88,41 +88,48 @@ function definitionRows(result: queries.PlanContextResult, limit: number): strin
     const sig = definition.signature ? `  -- ${definition.signature}` : '';
     rows.push(`  ${displayPathRange(definition.relativePath, definition.startLine, definition.endLine)}${sig}`);
     if (definition.source) {
-      rows.push(...definition.source
-        .split('\n')
-      .map((line, index) => `    ${String(displayLine(definition.startLine + index)).padStart(4)}  ${line}`));
+      rows.push(
+        ...definition.source
+          .split('\n')
+          .map((line, index) => `    ${String(displayLine(definition.startLine + index)).padStart(4)}  ${line}`),
+      );
     }
   }
   if (rows.length === 0) {
-    rows.push(...result.system.symbols.map((symbol) =>
-      `  ${displayRange(symbol.startLine, symbol.endLine)}  ${symbol.shortName}`));
+    rows.push(
+      ...result.system.symbols.map(
+        (symbol) => `  ${displayRange(symbol.startLine, symbol.endLine)}  ${symbol.shortName}`,
+      ),
+    );
   }
   return cappedRows(rows, limit).rows;
 }
 
 function referenceRows(result: queries.PlanContextResult, limit: number): string[] {
-  const rows = result.trace.referencedBy.map((ref) =>
-    `  ${ref.relativePath}:${displayLine(ref.line)}  in ${ref.enclosingShort}`);
+  const rows = result.trace.referencedBy.map(
+    (ref) => `  ${ref.relativePath}:${displayLine(ref.line)}  in ${ref.enclosingShort}`,
+  );
   return withOmitted(cappedRows(rows, limit));
 }
 
 function callGraphRows(result: queries.PlanContextResult, limit: number): string[] {
   if (!result.callGraph) return [];
-  const callerRows = result.callGraph.callers.map((caller) =>
-    `  caller  ${caller.file}  ${caller.shortName}`);
-  const calleeRows = result.callGraph.callees.map((callee) =>
-    `  callee  ${callee.file}  ${callee.shortName}`);
+  const callerRows = result.callGraph.callers.map((caller) => `  caller  ${caller.file}  ${caller.shortName}`);
+  const calleeRows = result.callGraph.callees.map((callee) => `  callee  ${callee.file}  ${callee.shortName}`);
   return withOmitted(cappedRows([...callerRows, ...calleeRows], limit));
 }
 
 function dataflowRows(result: queries.PlanContextResult, limit: number): string[] {
   if (!result.dataflow) return [];
-  const producerRows = result.dataflow.producers.map((producer) =>
-    `  producer  ${producer.file}  ${producer.shortName}`);
-  const consumerRows = result.dataflow.consumers.map((consumer) =>
-    `  consumer  ${consumer.file}  ${consumer.shortName}`);
-  const usageRows = result.dataflow.usageSites.map((usage) =>
-    `  usage     ${usage.file}:${displayLine(usage.line)}  in ${usage.enclosingShort}`);
+  const producerRows = result.dataflow.producers.map(
+    (producer) => `  producer  ${producer.file}  ${producer.shortName}`,
+  );
+  const consumerRows = result.dataflow.consumers.map(
+    (consumer) => `  consumer  ${consumer.file}  ${consumer.shortName}`,
+  );
+  const usageRows = result.dataflow.usageSites.map(
+    (usage) => `  usage     ${usage.file}:${displayLine(usage.line)}  in ${usage.enclosingShort}`,
+  );
   return withOmitted(cappedRows([...producerRows, ...consumerRows, ...usageRows], limit));
 }
 
@@ -139,10 +146,10 @@ function dependencyRows(result: queries.PlanContextResult, limit: number): strin
 function surfaceRows(result: queries.PlanContextResult, limit: number): string[] {
   const rows = [
     ...result.system.files.map((file) => `  file    ${file}`),
-    ...result.system.symbols.map((symbol) =>
-      `  export  ${displayRange(symbol.startLine, symbol.endLine)}  ${symbol.shortName}`),
-    ...result.surface.map((surface) =>
-      `  use     ${surface.consumer} -> ${surface.shortName}`),
+    ...result.system.symbols.map(
+      (symbol) => `  export  ${displayRange(symbol.startLine, symbol.endLine)}  ${symbol.shortName}`,
+    ),
+    ...result.surface.map((surface) => `  use     ${surface.consumer} -> ${surface.shortName}`),
   ];
   return withOmitted(cappedRows(rows, limit));
 }
@@ -165,17 +172,18 @@ function riskRows(result: queries.PlanContextResult, limit: number): string[] {
   if (result.changeSurface) {
     rows.push(`  File: ${result.changeSurface.file}`);
     rows.push(`  External consumers: ${result.changeSurface.totalExternalConsumers}`);
-    rows.push(...result.changeSurface.symbols.map((symbol) => {
-      const risk = symbol.riskLevel === 'high'
-        ? ' *** HIGH RISK ***'
-        : symbol.riskLevel === 'medium'
-          ? ' * medium risk *'
-          : '';
-      return `  ${displayRange(symbol.startLine, symbol.endLine)}  ${symbol.shortName}  [${symbol.externalConsumers} consumers]${risk}`;
-    }));
+    rows.push(
+      ...result.changeSurface.symbols.map((symbol) => {
+        const risk =
+          symbol.riskLevel === 'high' ? ' *** HIGH RISK ***' : symbol.riskLevel === 'medium' ? ' * medium risk *' : '';
+        return `  ${displayRange(symbol.startLine, symbol.endLine)}  ${symbol.shortName}  [${symbol.externalConsumers} consumers]${risk}`;
+      }),
+    );
   }
   if (result.complexity) {
-    rows.push(`  Complexity: ${displayPathRange(result.complexity.relativePath, result.complexity.startLine, result.complexity.endLine)}  ${result.complexity.shortName}`);
+    rows.push(
+      `  Complexity: ${displayPathRange(result.complexity.relativePath, result.complexity.startLine, result.complexity.endLine)}  ${result.complexity.shortName}`,
+    );
     rows.push(`  LOC: ${result.complexity.loc}`);
     rows.push(`  Branches: ${result.complexity.branches}`);
     rows.push(`  Cyclomatic estimate: ${result.complexity.cyclomaticEstimate}`);
@@ -195,10 +203,14 @@ function historyRows(result: queries.PlanContextResult): string[] {
     rows.push(`  Churn: ${history.churn.changes} change(s) in recent history${fixes}`);
   }
   for (const partner of history.coChangePartners) {
-    rows.push(`  Usually changes with: ${partner.file}  (${partner.together}x, ${Math.round(partner.confidence * 100)}%)`);
+    rows.push(
+      `  Usually changes with: ${partner.file}  (${partner.together}x, ${Math.round(partner.confidence * 100)}%)`,
+    );
   }
   if (history.suppressionsInFile > 0) {
-    rows.push(`  Detector suppressions in file: ${history.suppressionsInFile} (accepted findings — read the reasons before refactoring)`);
+    rows.push(
+      `  Detector suppressions in file: ${history.suppressionsInFile} (accepted findings — read the reasons before refactoring)`,
+    );
   }
   return rows;
 }
@@ -227,9 +239,7 @@ function cappedRows(rows: readonly string[], limit: number): LimitedRows {
 }
 
 function withOmitted(result: LimitedRows): string[] {
-  return result.omitted > 0
-    ? [...result.rows, `  ... ${result.omitted} more`]
-    : result.rows;
+  return result.omitted > 0 ? [...result.rows, `  ... ${result.omitted} more`] : result.rows;
 }
 
 function yesNo(value: boolean): string {

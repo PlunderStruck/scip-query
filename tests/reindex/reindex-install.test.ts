@@ -111,7 +111,8 @@ describe('reindex install helpers', () => {
 
     const { getIndexerExecutionEnv } = await loadInstall(execFileSync, {
       platform: 'darwin',
-      existsSyncImpl: (path) => path === '/opt/homebrew/opt/dotnet@9/libexec' || path === '/opt/homebrew/opt/dotnet/libexec',
+      existsSyncImpl: (path) =>
+        path === '/opt/homebrew/opt/dotnet@9/libexec' || path === '/opt/homebrew/opt/dotnet/libexec',
     });
 
     const config = {

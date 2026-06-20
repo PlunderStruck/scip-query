@@ -82,16 +82,64 @@ function createFixtureDb(dbPath: string): void {
 
   // Insert test symbols
   const insertSymbol = sqliteDb.prepare(
-    `INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES (?, ?, ?, ?, ?)`
+    `INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES (?, ?, ?, ?, ?)`,
   );
-  insertSymbol.run(1, "scip-typescript npm my-app 1.0.0 src/services/`auth.service.ts`/AuthService#", 'AuthService', 1, 'AuthService class|class AuthService');
-  insertSymbol.run(2, "scip-typescript npm my-app 1.0.0 src/services/`auth.service.ts`/AuthService#login().", 'login', 2, "Login method|```ts\n(method) login(email: string): Promise<Token>\n```");
-  insertSymbol.run(3, "scip-typescript npm my-app 1.0.0 src/services/`auth.service.ts`/AuthService#logout().", 'logout', 2, "Logout method|```ts\n(method) logout(): void\n```");
-  insertSymbol.run(4, "scip-typescript npm my-app 1.0.0 src/services/`user.service.ts`/UserService#", 'UserService', 1, 'User service|class UserService');
-  insertSymbol.run(5, "scip-typescript npm my-app 1.0.0 src/services/`user.service.ts`/UserService#findById().", 'findById', 2, "Find by ID|```ts\n(method) findById(id: string): Promise<User>\n```");
-  insertSymbol.run(6, "scip-typescript npm my-app 1.0.0 src/services/`user.service.ts`/deadExport.", 'deadExport', 3, 'Not used anywhere|function deadExport(): void');
-  insertSymbol.run(7, "scip-python pip my-lib 1.0.0 lib/`utils.py`/format_name.", 'format_name', 3, 'Format name|def format_name(name: str) -> str');
-  insertSymbol.run(8, "rust-analyzer cargo my-crate 0.1.0 src/`main.rs`/Config#", 'Config', 1, 'Config struct|struct Config');
+  insertSymbol.run(
+    1,
+    'scip-typescript npm my-app 1.0.0 src/services/`auth.service.ts`/AuthService#',
+    'AuthService',
+    1,
+    'AuthService class|class AuthService',
+  );
+  insertSymbol.run(
+    2,
+    'scip-typescript npm my-app 1.0.0 src/services/`auth.service.ts`/AuthService#login().',
+    'login',
+    2,
+    'Login method|```ts\n(method) login(email: string): Promise<Token>\n```',
+  );
+  insertSymbol.run(
+    3,
+    'scip-typescript npm my-app 1.0.0 src/services/`auth.service.ts`/AuthService#logout().',
+    'logout',
+    2,
+    'Logout method|```ts\n(method) logout(): void\n```',
+  );
+  insertSymbol.run(
+    4,
+    'scip-typescript npm my-app 1.0.0 src/services/`user.service.ts`/UserService#',
+    'UserService',
+    1,
+    'User service|class UserService',
+  );
+  insertSymbol.run(
+    5,
+    'scip-typescript npm my-app 1.0.0 src/services/`user.service.ts`/UserService#findById().',
+    'findById',
+    2,
+    'Find by ID|```ts\n(method) findById(id: string): Promise<User>\n```',
+  );
+  insertSymbol.run(
+    6,
+    'scip-typescript npm my-app 1.0.0 src/services/`user.service.ts`/deadExport.',
+    'deadExport',
+    3,
+    'Not used anywhere|function deadExport(): void',
+  );
+  insertSymbol.run(
+    7,
+    'scip-python pip my-lib 1.0.0 lib/`utils.py`/format_name.',
+    'format_name',
+    3,
+    'Format name|def format_name(name: str) -> str',
+  );
+  insertSymbol.run(
+    8,
+    'rust-analyzer cargo my-crate 0.1.0 src/`main.rs`/Config#',
+    'Config',
+    1,
+    'Config struct|struct Config',
+  );
 
   // Insert definition ranges
   run(`

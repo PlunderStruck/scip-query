@@ -13,7 +13,12 @@ import {
   stringArg,
   stringOptionValue,
 } from '../commands/command-execution.js';
-import { budgetedSectionedQueryCommand, listQueryCommand, sectionedQueryCommand, tableQueryCommand } from '../commands/query-command-builders.js';
+import {
+  budgetedSectionedQueryCommand,
+  listQueryCommand,
+  sectionedQueryCommand,
+  tableQueryCommand,
+} from '../commands/query-command-builders.js';
 import { displayLine, displayPathRange, displayRange, render } from '../render.js';
 import type { ReportSection } from '../render.js';
 
@@ -23,10 +28,12 @@ function traceSections(result: ReturnType<typeof queries.trace>): ReportSection[
     const sig = d.signature ? `  — ${d.signature}` : '';
     definitionRows.push(`  ${displayPathRange(d.relativePath, d.startLine, d.endLine)}${sig}`);
     if (d.source) {
-      definitionRows.push(d.source
-        .split('\n')
-        .map((line, index) => `    ${displayLine(d.startLine + index)}  ${line}`)
-        .join('\n'));
+      definitionRows.push(
+        d.source
+          .split('\n')
+          .map((line, index) => `    ${displayLine(d.startLine + index)}  ${line}`)
+          .join('\n'),
+      );
     }
   }
 
@@ -93,7 +100,9 @@ const handleCode = dbCommand(({ db, args, opts }) => {
     return;
   }
   if (!result) return render.empty('Symbol not found or file unreadable.');
-  console.log(`${displayPathRange(result.relativePath, result.startLine, result.endLine)}  ${result.shortName}  [${result.language ?? 'unknown'}]\n`);
+  console.log(
+    `${displayPathRange(result.relativePath, result.startLine, result.endLine)}  ${result.shortName}  [${result.language ?? 'unknown'}]\n`,
+  );
   const lines = result.source.split('\n');
   for (let i = 0; i < lines.length; i++) {
     console.log(`  ${String(displayLine(result.startLine + i)).padStart(4)}  ${lines[i]}`);
@@ -167,11 +176,11 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'refs',
     command: 'refs <symbol>',
-      description: 'Find all files referencing a symbol',
-      options: [
-        option('--full', 'Run unbounded semantic analysis on large indexes'),
-        option('--json', 'Output as JSON for programmatic consumption'),
-      ],
+    description: 'Find all files referencing a symbol',
+    options: [
+      option('--full', 'Run unbounded semantic analysis on large indexes'),
+      option('--json', 'Output as JSON for programmatic consumption'),
+    ],
     budget: 'semantic',
     renderShape: 'grouped-by-file',
     docs: doc('Navigation', ['scip-query refs login']),
@@ -230,11 +239,11 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'imports',
     command: 'imports <file>',
-      description: 'What symbols does this file import?',
-      options: [
-        option('--full', 'Run unbounded semantic analysis on large indexes'),
-        option('--json', 'Output as JSON for programmatic consumption'),
-      ],
+    description: 'What symbols does this file import?',
+    options: [
+      option('--full', 'Run unbounded semantic analysis on large indexes'),
+      option('--json', 'Output as JSON for programmatic consumption'),
+    ],
     budget: 'semantic',
     renderShape: 'list',
     docs: doc('Navigation'),
@@ -275,12 +284,14 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       option('--full', 'Run unbounded analysis on large indexes'),
     ],
     docs: doc('Navigation'),
-    query: ({ db, args, opts }) => queries.byKind(db, stringArg(args, 0), {
-      scope: stringOptionValue(opts, 'scope'),
-      limit: definedLimitOption(opts, 'limit', 100),
-    }),
+    query: ({ db, args, opts }) =>
+      queries.byKind(db, stringArg(args, 0), {
+        scope: stringOptionValue(opts, 'scope'),
+        limit: definedLimitOption(opts, 'limit', 100),
+      }),
     format: (r) => `  ${displayPathRange(r.relativePath, r.startLine, r.endLine)}  [${r.kindName}]  ${r.shortName}`,
-    emptyMessage: ({ args }) => `No symbols found for kind "${stringArg(args, 0)}". Use "kind-counts" to see available kinds.`,
+    emptyMessage: ({ args }) =>
+      `No symbols found for kind "${stringArg(args, 0)}". Use "kind-counts" to see available kinds.`,
     after: (rows) => console.log(`\n${rows.length} symbol(s)`),
   }),
   tableQueryCommand({
@@ -296,7 +307,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   listQueryCommand({
     id: 'hierarchy',
     command: 'hierarchy <symbol>',
-    description: 'Show a symbol\'s ancestry chain (method → class → module)',
+    description: "Show a symbol's ancestry chain (method → class → module)",
     docs: doc('Navigation'),
     query: ({ db, args }) => queries.hierarchy(db, stringArg(args, 0)),
     format: (node) => `${'  '.repeat(node.depth)}${node.shortName}`,

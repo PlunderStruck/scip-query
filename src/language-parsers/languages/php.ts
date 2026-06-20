@@ -6,58 +6,62 @@ import type { SyntaxNode, Tree } from '../../source/ast.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { PHP_EXTENSIONS, resolveQualifiedImportPath } from '../../resolution/import-path-resolver.js';
 import type { ParsedSourceImport } from '../../domain/types.js';
-import { buildNamedImport, buildSimpleImport, collectIdentifiersOutside, parseImportLineMatches, parseWithAstFallback, splitTopLevel } from '../utils.js';
+import {
+  buildNamedImport,
+  buildSimpleImport,
+  collectIdentifiersOutside,
+  parseImportLineMatches,
+  parseWithAstFallback,
+  splitTopLevel,
+} from '../utils.js';
 
-export function parsePhpImports(
-  db: ScipDatabase,
-  importerPath: string,
-  source: string,
-): ParsedSourceImport[] {
+export function parsePhpImports(db: ScipDatabase, importerPath: string, source: string): ParsedSourceImport[] {
   return parseWithAstFallback(
     db,
     importerPath,
     (tree) => parsePhpImportsAst(db, importerPath, tree),
-    () => parseImportLineMatches(source, /^[ \t]*use\s+(.+?)\s*;$/gm, (match, body) => {
-      const clause = match[1]?.trim();
-      if (!clause) return [];
-      return splitTopLevel(clause).flatMap((entry) => {
-        const cleaned = entry.trim();
-        if (!cleaned) return [];
-        const [qualifiedPart, aliasPart] = cleaned.split(/\s+as\s+/i);
-        const qualified = qualifiedPart?.trim() ?? cleaned;
-        const importedName = qualified.split('\\').pop() ?? qualified;
-        const localName = (aliasPart ?? importedName).trim();
-        return [buildSimpleImport(
-          db,
-          importerPath,
-          body,
-          qualified,
-          importedName,
-          localName,
-          resolveQualifiedImportPath(db, qualified.replace(/\\/g, '.'), PHP_EXTENSIONS),
-        )];
-      });
-    }),
+    () =>
+      parseImportLineMatches(source, /^[ \t]*use\s+(.+?)\s*;$/gm, (match, body) => {
+        const clause = match[1]?.trim();
+        if (!clause) return [];
+        return splitTopLevel(clause).flatMap((entry) => {
+          const cleaned = entry.trim();
+          if (!cleaned) return [];
+          const [qualifiedPart, aliasPart] = cleaned.split(/\s+as\s+/i);
+          const qualified = qualifiedPart?.trim() ?? cleaned;
+          const importedName = qualified.split('\\').pop() ?? qualified;
+          const localName = (aliasPart ?? importedName).trim();
+          return [
+            buildSimpleImport(
+              db,
+              importerPath,
+              body,
+              qualified,
+              importedName,
+              localName,
+              resolveQualifiedImportPath(db, qualified.replace(/\\/g, '.'), PHP_EXTENSIONS),
+            ),
+          ];
+        });
+      }),
   );
 }
 
 // scip-query: ignore-similar — PHP-specific: `use Foo\Bar;`, `use function`,
 // `use const`, group `use Foo\{A, B}`. Per-language AST shapes intentionally split.
-function parsePhpImportsAst(
-  db: ScipDatabase,
-  importerPath: string,
-  tree: Tree,
-): ParsedSourceImport[] {
+function parsePhpImportsAst(db: ScipDatabase, importerPath: string, tree: Tree): ParsedSourceImport[] {
   const usedNames = collectIdentifiersOutside(tree, new Set(['namespace_use_declaration']));
   const results: ParsedSourceImport[] = [];
 
   const emit = (qualified: string, importedName: string, localName: string): void => {
-    results.push(buildNamedImport(
-      importedName,
-      localName,
-      resolveQualifiedImportPath(db, qualified.replace(/\\/g, '.'), PHP_EXTENSIONS),
-      usedNames,
-    ));
+    results.push(
+      buildNamedImport(
+        importedName,
+        localName,
+        resolveQualifiedImportPath(db, qualified.replace(/\\/g, '.'), PHP_EXTENSIONS),
+        usedNames,
+      ),
+    );
   };
 
   for (const decl of tree.rootNode.descendantsOfType('namespace_use_declaration')) {

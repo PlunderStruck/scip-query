@@ -77,9 +77,7 @@ function createHealthFullFixtureDb(dbPath: string): void {
     `INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences)
      VALUES (?, 1, 0, ?, ?, X'00')`,
   );
-  const insertMention = sqliteDb.prepare(
-    'INSERT INTO mentions (chunk_id, symbol_id, role) VALUES (?, ?, ?)',
-  );
+  const insertMention = sqliteDb.prepare('INSERT INTO mentions (chunk_id, symbol_id, role) VALUES (?, ?, ?)');
 
   const callerIdsByGroup: number[][] = [[], []];
   const helperIdsByGroup: number[][] = [[], []];

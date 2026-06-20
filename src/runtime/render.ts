@@ -117,11 +117,7 @@ export const render = {
    * width is column-specific.
    * Used by hotspots/bottlenecks/complexity-hotspots/kind-counts/top-fan-in/top-fan-out.
    */
-  table(
-    headers: readonly string[],
-    rows: readonly string[],
-    dashWidths?: readonly number[],
-  ): void {
+  table(headers: readonly string[], rows: readonly string[], dashWidths?: readonly number[]): void {
     console.log(`  ${headers.join('  ')}`);
     const widths = dashWidths ?? headers.map((h) => h.length);
     console.log(`  ${widths.map((w) => '─'.repeat(w)).join('  ')}`);

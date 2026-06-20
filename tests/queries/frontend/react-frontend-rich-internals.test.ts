@@ -41,8 +41,7 @@ export function IssuePanel() {
 }
 `;
 
-const INCIDENT_PANEL = ISSUE_PANEL
-  .replace('IssuePanel', 'IncidentPanel')
+const INCIDENT_PANEL = ISSUE_PANEL.replace('IssuePanel', 'IncidentPanel')
   .replace("useResource('issues')", "useResource('incidents')")
   .replace("fetch('/issues')", "fetch('/incidents')")
   .replace("fetch('/issues')", "fetch('/incidents')")
@@ -87,10 +86,12 @@ describe('React frontend rich internals', () => {
       const profiles = buildReactComponentBehaviorProfilesForFile(db, 'src/components/IssuePanel.tsx');
       const profile = profiles.find((candidate) => candidate.name === 'IssuePanel');
 
-      expect(profile).toEqual(expect.objectContaining({
-        kind: 'component',
-        file: 'src/components/IssuePanel.tsx',
-      }));
+      expect(profile).toEqual(
+        expect.objectContaining({
+          kind: 'component',
+          file: 'src/components/IssuePanel.tsx',
+        }),
+      );
       expect(profile?.componentNames).toEqual(
         expect.arrayContaining(['PageShell', 'RecordTable', 'StatusPill', 'ToolbarPanel', 'UiButton']),
       );
@@ -98,24 +99,16 @@ describe('React frontend rich internals', () => {
         expect.arrayContaining(['columns', 'disabled', 'filters', 'loading', 'rows', 'title', 'tone']),
       );
       expect(profile?.eventNames).toEqual(expect.arrayContaining(['click', 'reset', 'select']));
-      expect(profile?.hookNames).toEqual(
-        expect.arrayContaining(['useEffect', 'useMemo', 'useResource', 'useState']),
-      );
+      expect(profile?.hookNames).toEqual(expect.arrayContaining(['useEffect', 'useMemo', 'useResource', 'useState']));
       expect(profile?.requestNames).toEqual(expect.arrayContaining(['fetch', 'useResource']));
       expect(profile?.stateNames).toContain('rows');
       expect(profile?.handlerNames).toEqual(expect.arrayContaining(['handleRefresh', 'handleSelect']));
-      expect([...(profile?.jsxTokens ?? [])]).toEqual(expect.arrayContaining([
-        'component:RecordTable',
-        'component:UiButton',
-        'event:click',
-        'prop:rows',
-      ]));
-      expect([...(profile?.behaviorTokens ?? [])]).toEqual(expect.arrayContaining([
-        'hook:useResource',
-        'request:fetch',
-        'state:rows',
-        'handler-verb:refresh',
-      ]));
+      expect([...(profile?.jsxTokens ?? [])]).toEqual(
+        expect.arrayContaining(['component:RecordTable', 'component:UiButton', 'event:click', 'prop:rows']),
+      );
+      expect([...(profile?.behaviorTokens ?? [])]).toEqual(
+        expect.arrayContaining(['hook:useResource', 'request:fetch', 'state:rows', 'handler-verb:refresh']),
+      );
     } finally {
       db.close();
     }

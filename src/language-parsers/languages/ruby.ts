@@ -11,13 +11,16 @@ import { resolveRubyImportPath } from '../../resolution/import-path-resolver.js'
 import { pascalCaseSeparated } from '../../source/name-normalization.js';
 import { hasIdentifierUsage } from '../../source/source-stripper.js';
 import type { ParsedSourceImport } from '../../domain/types.js';
-import { buildNamedImport, buildSideEffectImport, buildUsedImport, collectIdentifiersOutside, parseImportLineMatches, parseWithAstFallback } from '../utils.js';
+import {
+  buildNamedImport,
+  buildSideEffectImport,
+  buildUsedImport,
+  collectIdentifiersOutside,
+  parseImportLineMatches,
+  parseWithAstFallback,
+} from '../utils.js';
 
-export function parseRubyImports(
-  db: ScipDatabase,
-  importerPath: string,
-  source: string,
-): ParsedSourceImport[] {
+export function parseRubyImports(db: ScipDatabase, importerPath: string, source: string): ParsedSourceImport[] {
   return parseWithAstFallback(
     db,
     importerPath,
@@ -26,11 +29,7 @@ export function parseRubyImports(
   );
 }
 
-function parseRubyImportsRegex(
-  db: ScipDatabase,
-  importerPath: string,
-  source: string,
-): ParsedSourceImport[] {
+function parseRubyImportsRegex(db: ScipDatabase, importerPath: string, source: string): ParsedSourceImport[] {
   return parseImportLineMatches<ParsedSourceImport>(
     source,
     /^[ \t]*(require_relative|require)\s+["']([^"']+)["']\s*$/gm,
@@ -38,9 +37,7 @@ function parseRubyImportsRegex(
       const kind = match[1];
       const specifier = match[2];
       if (!kind || !specifier) return [];
-      const sourcePath = kind === 'require_relative'
-        ? resolveRubyImportPath(db, importerPath, specifier)
-        : null;
+      const sourcePath = kind === 'require_relative' ? resolveRubyImportPath(db, importerPath, specifier) : null;
 
       if (sourcePath) {
         const localName = rubyConstantName(specifier);
@@ -52,11 +49,7 @@ function parseRubyImportsRegex(
   );
 }
 
-function parseRubyImportsAst(
-  db: ScipDatabase,
-  importerPath: string,
-  tree: Tree,
-): ParsedSourceImport[] {
+function parseRubyImportsAst(db: ScipDatabase, importerPath: string, tree: Tree): ParsedSourceImport[] {
   const usedNames = collectIdentifiersOutside(tree, new Set([]));
   const results: ParsedSourceImport[] = [];
   const REQUIRE_KINDS = new Set(['require', 'require_relative', 'load']);
@@ -73,9 +66,7 @@ function parseRubyImportsAst(
     const specifier = fragment?.text;
     if (!specifier) continue;
 
-    const sourcePath = method.text === 'require_relative'
-      ? resolveRubyImportPath(db, importerPath, specifier)
-      : null;
+    const sourcePath = method.text === 'require_relative' ? resolveRubyImportPath(db, importerPath, specifier) : null;
 
     if (sourcePath) {
       const localName = rubyConstantName(specifier);

@@ -46,8 +46,14 @@ const STRIPPED_LINES_CACHE = createPerDbSourceCache<string[]>('stripped-lines', 
 registerCacheClear({
   name: 'stripped-source-singleton',
   groups: ['whole-project', 'source-file'],
-  clearAll: () => { stripCacheSource = null; stripCacheResult = ''; },
-  clearFile: () => { stripCacheSource = null; stripCacheResult = ''; },
+  clearAll: () => {
+    stripCacheSource = null;
+    stripCacheResult = '';
+  },
+  clearFile: () => {
+    stripCacheSource = null;
+    stripCacheResult = '';
+  },
 });
 
 /**
@@ -59,9 +65,7 @@ registerCacheClear({
 // scip-query: ignore-wrapper — owns STRIPPED_LINES_CACHE; the cached read is the
 // abstraction, not the lambda inside.
 export function getStrippedLines(db: ScipDatabase, relativePath: string, source: string): string[] {
-  return STRIPPED_LINES_CACHE.get(db, relativePath, source, () =>
-    stripCommentsAndStrings(source).split('\n'),
-  );
+  return STRIPPED_LINES_CACHE.get(db, relativePath, source, () => stripCommentsAndStrings(source).split('\n'));
 }
 
 // Single-entry cache keyed by source string identity. Each parseXImports/Exports

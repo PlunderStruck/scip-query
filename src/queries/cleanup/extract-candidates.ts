@@ -63,13 +63,14 @@ export function extractCandidates(
   const { scope, minLoc = 10, minCallees = 6, limit = 20, scanLimit } = opts;
   const index = new ProjectIndex(db);
   return runCandidateAnalysis({
-    candidates: () => index.productionCallableDefinitions({
-      scope,
-      minLoc,
-      excludeTypesFiles: true,
-      requireFunctionLikeSymbol: true,
-      sortByLocDesc: true,
-    }),
+    candidates: () =>
+      index.productionCallableDefinitions({
+        scope,
+        minLoc,
+        excludeTypesFiles: true,
+        requireFunctionLikeSymbol: true,
+        sortByLocDesc: true,
+      }),
     scanLimit,
     prepare: (symbols) => index.calleeMap(symbols, { semantic: opts.semantic !== false }),
     evaluate: (sym, calleeMap) => extractionCandidateForSymbol(sym, calleeMap.get(sym.symbolId) ?? [], minCallees),

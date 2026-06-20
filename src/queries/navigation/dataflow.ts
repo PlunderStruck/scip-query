@@ -41,18 +41,19 @@ export function dataflow(
   const match = findFirstSymbolMatch(db, symbolPattern);
   if (!match) return null;
 
-  const defSites = [{
-    file: match.relativePath,
-    line: match.startLine,
-  }];
+  const defSites = [
+    {
+      file: match.relativePath,
+      line: match.startLine,
+    },
+  ];
 
-  const normalizedUsageSites = referenceSitesForSymbol(db, match, { semantic: opts.semantic })
-    .map((site) => ({
-      file: site.file,
-      line: site.line,
-      enclosingSymbol: site.enclosingSymbol ?? '(top-level)',
-      enclosingShort: site.enclosingSymbol ? shortenSymbol(site.enclosingSymbol) : '(top-level)',
-    }));
+  const normalizedUsageSites = referenceSitesForSymbol(db, match, { semantic: opts.semantic }).map((site) => ({
+    file: site.file,
+    line: site.line,
+    enclosingSymbol: site.enclosingSymbol ?? '(top-level)',
+    enclosingShort: site.enclosingSymbol ? shortenSymbol(site.enclosingSymbol) : '(top-level)',
+  }));
 
   const { producers, consumers } = collectFlowEndpoints(db, match, normalizedUsageSites, {
     semantic: opts.semantic !== false,
@@ -77,7 +78,10 @@ export function dataflow(
   };
 }
 
-interface SymbolRow { symbol: string; file: string }
+interface SymbolRow {
+  symbol: string;
+  file: string;
+}
 
 function collectFlowEndpoints(
   db: ScipDatabase,
@@ -92,13 +96,14 @@ function collectFlowEndpoints(
     })),
   );
   const astConsumers = uniqueSymbolFileRows(callerRowsForSymbol(db, match, { limit: 30, semantic: opts.semantic }));
-  const consumers = astConsumers.length > 0
-    ? astConsumers
-    : uniqueSymbolFileRows(
-      normalizedUsageSites.map((site) => ({
-        symbol: site.enclosingSymbol === '(top-level)' ? site.file : site.enclosingSymbol,
-        file: site.file,
-      })),
-    );
+  const consumers =
+    astConsumers.length > 0
+      ? astConsumers
+      : uniqueSymbolFileRows(
+          normalizedUsageSites.map((site) => ({
+            symbol: site.enclosingSymbol === '(top-level)' ? site.file : site.enclosingSymbol,
+            file: site.file,
+          })),
+        );
   return { producers, consumers };
 }

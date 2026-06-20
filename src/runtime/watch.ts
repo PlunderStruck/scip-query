@@ -82,21 +82,19 @@ export class Watcher {
     // This is supported on macOS (FSEvents) and Windows
     // On Linux, falls back to inotify (may need per-directory watchers for large trees)
     try {
-      const watcher = watch(
-        this.projectRoot,
-        { recursive: true },
-        (_event, filename) => {
-          if (filename && !this.stopped) {
-            this.handleFileChange(filename);
-          }
-        },
-      );
+      const watcher = watch(this.projectRoot, { recursive: true }, (_event, filename) => {
+        if (filename && !this.stopped) {
+          this.handleFileChange(filename);
+        }
+      });
       this.fsWatchers.push(watcher);
     } catch {
-      this.onError(new Error(
-        'Failed to start file watcher. On Linux, you may need to increase inotify limits: ' +
-        'sysctl -w fs.inotify.max_user_watches=524288',
-      ));
+      this.onError(
+        new Error(
+          'Failed to start file watcher. On Linux, you may need to increase inotify limits: ' +
+            'sysctl -w fs.inotify.max_user_watches=524288',
+        ),
+      );
     }
   }
 
@@ -119,8 +117,12 @@ export class Watcher {
     if (this.extraIgnore.ignores(rel)) return;
 
     // Skip the index files themselves
-    if (filename.endsWith('index.db') || filename.endsWith('index.scip') ||
-        filename.endsWith('index.db.tmp') || filename.endsWith('.scipquery.json')) {
+    if (
+      filename.endsWith('index.db') ||
+      filename.endsWith('index.scip') ||
+      filename.endsWith('index.db.tmp') ||
+      filename.endsWith('.scipquery.json')
+    ) {
       return;
     }
 
@@ -229,21 +231,17 @@ export class Watcher {
       const tmpScip = tempScipPath(this.indexPaths.indexPath);
 
       // Fork a child that runs the reindex
-      const child = fork(
-        new URL('./reindex-worker.js', import.meta.url).pathname,
-        [],
-        {
-          env: {
-            ...process.env,
-            SCIP_REINDEX_PROJECT_ROOT: this.projectRoot,
-            SCIP_REINDEX_OUTPUT_SCIP: tmpScip,
-            SCIP_REINDEX_OUTPUT_DB: tmpDb,
-            SCIP_REINDEX_LANGUAGES: this.languages?.join(',') ?? '',
-            SCIP_REINDEX_PNPM_WORKSPACES: this.pnpmWorkspaces ? '1' : '',
-          },
-          stdio: 'pipe',
+      const child = fork(new URL('./reindex-worker.js', import.meta.url).pathname, [], {
+        env: {
+          ...process.env,
+          SCIP_REINDEX_PROJECT_ROOT: this.projectRoot,
+          SCIP_REINDEX_OUTPUT_SCIP: tmpScip,
+          SCIP_REINDEX_OUTPUT_DB: tmpDb,
+          SCIP_REINDEX_LANGUAGES: this.languages?.join(',') ?? '',
+          SCIP_REINDEX_PNPM_WORKSPACES: this.pnpmWorkspaces ? '1' : '',
         },
-      );
+        stdio: 'pipe',
+      });
 
       child.on('exit', (code) => {
         if (code === 0) {
@@ -289,7 +287,5 @@ export class Watcher {
 }
 
 export function tempScipPath(indexPath: string): string {
-  return indexPath.endsWith('.scip')
-    ? indexPath.slice(0, -'.scip'.length) + '.tmp.scip'
-    : indexPath + '.tmp.scip';
+  return indexPath.endsWith('.scip') ? indexPath.slice(0, -'.scip'.length) + '.tmp.scip' : indexPath + '.tmp.scip';
 }

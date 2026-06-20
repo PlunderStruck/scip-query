@@ -88,27 +88,41 @@ describe('SCIP merge support', () => {
     const secondPath = join(dir, 'second.scip');
     const mergedPath = join(dir, 'merged.scip');
 
-    writeFileSync(firstPath, Buffer.from(serializeSCIP(createFixtureIndex({
-      documents: [
-        createDocument({
-          language: 'typescript',
-          relativePath: 'src/a.ts',
-          symbol: 'scip-typescript npm fixture 1.0.0 src/`a.ts`/a().',
-          text: 'export const a = 1;\n',
-        }),
-      ],
-    }))));
+    writeFileSync(
+      firstPath,
+      Buffer.from(
+        serializeSCIP(
+          createFixtureIndex({
+            documents: [
+              createDocument({
+                language: 'typescript',
+                relativePath: 'src/a.ts',
+                symbol: 'scip-typescript npm fixture 1.0.0 src/`a.ts`/a().',
+                text: 'export const a = 1;\n',
+              }),
+            ],
+          }),
+        ),
+      ),
+    );
 
-    writeFileSync(secondPath, Buffer.from(serializeSCIP(createFixtureIndex({
-      documents: [
-        createDocument({
-          language: 'python',
-          relativePath: 'src/b.py',
-          symbol: 'scip-python python fixture 1.0.0 src/b.py/b().',
-          text: 'def b():\n    return 1\n',
-        }),
-      ],
-    }))));
+    writeFileSync(
+      secondPath,
+      Buffer.from(
+        serializeSCIP(
+          createFixtureIndex({
+            documents: [
+              createDocument({
+                language: 'python',
+                relativePath: 'src/b.py',
+                symbol: 'scip-python python fixture 1.0.0 src/b.py/b().',
+                text: 'def b():\n    return 1\n',
+              }),
+            ],
+          }),
+        ),
+      ),
+    );
 
     const result = mergeScipFiles([firstPath, secondPath], mergedPath);
     const merged = deserializeSCIP(readFileSync(mergedPath));
@@ -134,12 +148,7 @@ function createFixtureIndex(opts: {
   });
 }
 
-function createDocument(opts: {
-  language: string;
-  relativePath: string;
-  symbol: string;
-  text: string;
-}) {
+function createDocument(opts: { language: string; relativePath: string; symbol: string; text: string }) {
   return create(DocumentSchema, {
     language: opts.language,
     relativePath: opts.relativePath,
@@ -159,11 +168,7 @@ function createDocument(opts: {
   });
 }
 
-function createSymbolInformation(opts: {
-  symbol: string;
-  documentation?: string[];
-  displayName?: string;
-}) {
+function createSymbolInformation(opts: { symbol: string; documentation?: string[]; displayName?: string }) {
   return create(SymbolInformationSchema, {
     symbol: opts.symbol,
     documentation: opts.documentation ?? [],

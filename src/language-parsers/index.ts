@@ -21,10 +21,7 @@ const SOURCE_IMPORT_CACHE = createPerDbCache<string, ParsedSourceImport[]>('sour
 const SOURCE_EXPORT_CACHE = createPerDbCache<string, ParsedSourceExport[]>('source-exports', PARSER_CACHE_GROUPS);
 const SOURCE_REEXPORT_CACHE = createPerDbCache<string, ParsedReExport[]>('source-reexports', PARSER_CACHE_GROUPS);
 
-export function getReExports(
-  db: ScipDatabase,
-  relativePath: string,
-): ParsedReExport[] {
+export function getReExports(db: ScipDatabase, relativePath: string): ParsedReExport[] {
   const normalized = normalizePath(relativePath);
   return SOURCE_REEXPORT_CACHE.get(db, normalized, () => {
     const parser = getParserForPath(normalized);
@@ -35,10 +32,7 @@ export function getReExports(
   });
 }
 
-export function getSourceImports(
-  db: ScipDatabase,
-  relativePath: string,
-): ParsedSourceImport[] {
+export function getSourceImports(db: ScipDatabase, relativePath: string): ParsedSourceImport[] {
   const normalized = normalizePath(relativePath);
   return SOURCE_IMPORT_CACHE.get(db, normalized, () => {
     const parser = getParserForPath(normalized);
@@ -49,10 +43,7 @@ export function getSourceImports(
   });
 }
 
-export function getSourceExports(
-  db: ScipDatabase,
-  relativePath: string,
-): ParsedSourceExport[] {
+export function getSourceExports(db: ScipDatabase, relativePath: string): ParsedSourceExport[] {
   const normalized = normalizePath(relativePath);
   return SOURCE_EXPORT_CACHE.get(db, normalized, () => {
     const parser = getParserForPath(normalized);

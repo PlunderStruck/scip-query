@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { create } from '@bufbuild/protobuf';
-import {
-  DocumentSchema,
-  IndexSchema,
-  OccurrenceSchema,
-  SymbolInformationSchema,
-  SymbolRole,
-} from '@c4312/scip';
+import { DocumentSchema, IndexSchema, OccurrenceSchema, SymbolInformationSchema, SymbolRole } from '@c4312/scip';
 import { sanitizeScipIndex } from '../../src/reindex/sanitize.js';
 
 describe('SCIP sanitizer', () => {
@@ -49,10 +43,7 @@ describe('SCIP sanitizer', () => {
 
     expect(result.removedDefinitionOccurrences).toBe(1);
     expect(result.touchedDocuments).toBe(1);
-    expect(result.index.documents[0]!.occurrences.map((occurrence) => occurrence.symbol)).toEqual([
-      valid,
-      invalid,
-    ]);
+    expect(result.index.documents[0]!.occurrences.map((occurrence) => occurrence.symbol)).toEqual([valid, invalid]);
     expect(result.index.documents[0]!.occurrences[1]!.symbolRoles).toBe(0);
   });
 });

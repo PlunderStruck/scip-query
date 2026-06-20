@@ -44,7 +44,10 @@ function createPerDbMapStore<K, V>(): {
     cache,
     ensure(db) {
       let m = cache.get(db);
-      if (!m) { m = new Map<K, V>(); cache.set(db, m); }
+      if (!m) {
+        m = new Map<K, V>();
+        cache.set(db, m);
+      }
       return m;
     },
   };

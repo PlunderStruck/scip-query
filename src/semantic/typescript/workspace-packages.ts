@@ -22,7 +22,7 @@ export function discoverWorkspacePackages(projectRoot: string): WorkspacePackage
 
   const patterns = Array.isArray(rootPackage.workspaces)
     ? rootPackage.workspaces
-    : rootPackage.workspaces?.packages ?? [];
+    : (rootPackage.workspaces?.packages ?? []);
 
   return patterns
     .flatMap((pattern) => workspacePackageDirs(projectRoot, pattern))
@@ -54,11 +54,13 @@ function workspacePackageFromDir(projectRoot: string, packageRoot: string): Work
     const packageJson = JSON.parse(readFileSync(path.join(packageRoot, 'package.json'), 'utf8')) as { name?: string };
     if (!packageJson.name) return [];
     const rootRelative = path.relative(projectRoot, packageRoot).replace(/\\/g, '/');
-    return [{
-      name: packageJson.name,
-      rootRelative,
-      sourceRootRelative: `${rootRelative}/src`,
-    }];
+    return [
+      {
+        name: packageJson.name,
+        rootRelative,
+        sourceRootRelative: `${rootRelative}/src`,
+      },
+    ];
   } catch {
     return [];
   }

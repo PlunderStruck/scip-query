@@ -44,7 +44,16 @@ export function tableQueryCommand<Row>({
   return {
     ...commandMetadata,
     renderShape: 'table',
-    handler: tableCommand({ commandName: commandMetadata.id, query, format, emptyMessage, heuristicLabel, after, headers, dashWidths }),
+    handler: tableCommand({
+      commandName: commandMetadata.id,
+      query,
+      format,
+      emptyMessage,
+      heuristicLabel,
+      after,
+      headers,
+      dashWidths,
+    }),
   };
 }
 
@@ -61,7 +70,15 @@ export function groupedQueryCommand<Row>({
   return {
     ...commandMetadata,
     renderShape: 'grouped-by-file',
-    handler: groupedByFileCommand({ commandName: commandMetadata.id, query, format, emptyMessage, heuristicLabel, after, key }),
+    handler: groupedByFileCommand({
+      commandName: commandMetadata.id,
+      query,
+      format,
+      emptyMessage,
+      heuristicLabel,
+      after,
+      key,
+    }),
   };
 }
 
@@ -78,7 +95,15 @@ export function sectionedQueryCommand<Result>({
   return {
     ...commandMetadata,
     renderShape: 'sectioned-report',
-    handler: sectionedReportCommand({ commandName: commandMetadata.id, query, emptyMessage, heuristicLabel, before, sections, after }),
+    handler: sectionedReportCommand({
+      commandName: commandMetadata.id,
+      query,
+      emptyMessage,
+      heuristicLabel,
+      before,
+      sections,
+      after,
+    }),
   };
 }
 
@@ -96,6 +121,14 @@ export function budgetedSectionedQueryCommand<Result>({
     ...commandMetadata,
     budget: commandMetadata.budget ?? 'semantic',
     renderShape: 'sectioned-report',
-    handler: budgetedSectionedReportCommand(commandMetadata.id, { commandName: commandMetadata.id, query, emptyMessage, heuristicLabel, before, sections, after }),
+    handler: budgetedSectionedReportCommand(commandMetadata.id, {
+      commandName: commandMetadata.id,
+      query,
+      emptyMessage,
+      heuristicLabel,
+      before,
+      sections,
+      after,
+    }),
   };
 }

@@ -109,9 +109,7 @@ function comparePair(
     return null;
   }
 
-  const displayShared = significantShared.length > 0
-    ? significantShared
-    : [...intersection(a.callees, b.callees)];
+  const displayShared = significantShared.length > 0 ? significantShared : [...intersection(a.callees, b.callees)];
 
   return {
     symbolA: a.symbol,
@@ -162,7 +160,10 @@ export function similarAll(
     for (const callee of all[i]!.callees) {
       if ((docFreq.get(callee) ?? 0) > ubiquityThreshold) continue;
       let bucket = calleeIndex.get(callee);
-      if (!bucket) { bucket = []; calleeIndex.set(callee, bucket); }
+      if (!bucket) {
+        bucket = [];
+        calleeIndex.set(callee, bucket);
+      }
       bucket.push(i);
     }
   }
@@ -250,8 +251,8 @@ export function insertTopSimilarResult(
     const current = top[i]!;
     const worst = top[worstIndex]!;
     if (
-      current.result.similarity < worst.result.similarity
-      || (current.result.similarity === worst.result.similarity && current.order > worst.order)
+      current.result.similarity < worst.result.similarity ||
+      (current.result.similarity === worst.result.similarity && current.order > worst.order)
     ) {
       worstIndex = i;
     }
@@ -281,11 +282,7 @@ const INFRASTRUCTURE_CALLEE_FRAGMENTS = [
   ':storage:per-db-cache:PerDbValue:has',
 ];
 
-function findCallees(
-  db: ScipDatabase,
-  symbolPattern: string,
-  opts: { semantic: boolean },
-): SymbolFingerprint | null {
+function findCallees(db: ScipDatabase, symbolPattern: string, opts: { semantic: boolean }): SymbolFingerprint | null {
   const target = findFirstSymbolMatch(db, symbolPattern);
   const index = new ProjectIndex(db);
 
@@ -309,10 +306,9 @@ function findCallees(
 // the memo; deliberately NOT in 'source-file' — those clears release per-file
 // source evidence for memory, which doesn't stale already-extracted
 // fingerprints and would thrash the memo mid-scan.
-const CALLEE_FINGERPRINT_CORPUS = createPerDbValue<Map<string, SymbolFingerprint[]>>(
-  'callee-fingerprint-corpus',
-  { clearGroups: ['whole-project', 'definition-catalog'] },
-);
+const CALLEE_FINGERPRINT_CORPUS = createPerDbValue<Map<string, SymbolFingerprint[]>>('callee-fingerprint-corpus', {
+  clearGroups: ['whole-project', 'definition-catalog'],
+});
 
 export function getAllCalleeFingerprints(
   db: ScipDatabase,
@@ -417,10 +413,7 @@ function similarBySourceShape(
   return results.slice(0, opts.limit);
 }
 
-function findSourceFingerprint(
-  db: ScipDatabase,
-  symbolPattern: string,
-): SourceFingerprint | null {
+function findSourceFingerprint(db: ScipDatabase, symbolPattern: string): SourceFingerprint | null {
   const match = findFirstSymbolMatch(db, symbolPattern);
   if (!match || !isFunctionLikeSymbol(match.symbol)) {
     return null;
@@ -442,18 +435,15 @@ function buildSourceFingerprintTokens(
 
 // Same memo rationale (and group membership) as CALLEE_FINGERPRINT_CORPUS:
 // the lexical fallback corpus tokenizes every production callable's source.
-const SOURCE_FINGERPRINT_CORPUS = createPerDbValue<SourceFingerprint[]>(
-  'source-fingerprint-corpus',
-  { clearGroups: ['whole-project', 'definition-catalog'] },
-);
+const SOURCE_FINGERPRINT_CORPUS = createPerDbValue<SourceFingerprint[]>('source-fingerprint-corpus', {
+  clearGroups: ['whole-project', 'definition-catalog'],
+});
 
 function getAllSourceFingerprints(db: ScipDatabase): SourceFingerprint[] {
   return SOURCE_FINGERPRINT_CORPUS.get(db, () => buildSourceFingerprints(db));
 }
 
-function sourceFingerprintTokenIndex(
-  fingerprints: readonly SourceFingerprint[],
-): Map<string, SourceFingerprint[]> {
+function sourceFingerprintTokenIndex(fingerprints: readonly SourceFingerprint[]): Map<string, SourceFingerprint[]> {
   const index = new Map<string, SourceFingerprint[]>();
   for (const fingerprint of fingerprints) {
     for (const token of fingerprint.tokens) {
@@ -475,7 +465,8 @@ function buildSourceFingerprints(db: ScipDatabase): SourceFingerprint[] {
   const index = new ProjectIndex(db);
   // The shared production gate owns candidate policy (tests, rust test
   // modules, ignored paths, suppression comments) — no local re-filtering.
-  return index.productionCallableDefinitions()
+  return index
+    .productionCallableDefinitions()
     .map((definition) => ({
       symbol: definition.symbol,
       file: definition.relativePath,
@@ -499,7 +490,7 @@ function definitionSnippet(
     return '';
   }
 
-  if (endLine >= startLine && (endLine - startLine) <= 12) {
+  if (endLine >= startLine && endLine - startLine <= 12) {
     return lines.slice(startLine, endLine + 1).join('\n');
   }
 
@@ -529,18 +520,36 @@ function definitionSnippet(
   return lines.slice(startLine, Math.min(lines.length, startLine + 8)).join('\n');
 }
 
-function sourceTokens(
-  snippet: string,
-  leaf: string,
-): Set<string> {
+function sourceTokens(snippet: string, leaf: string): Set<string> {
   if (!snippet) {
     return new Set();
   }
 
   const stopWords = new Set([
-    'public', 'private', 'protected', 'final', 'static', 'class', 'def', 'fun', 'fn', 'function',
-    'return', 'string', 'bool', 'boolean', 'void', 'unit', 'self', 'this', 'new', 'const', 'let', 'var',
-    'end', 'pub',
+    'public',
+    'private',
+    'protected',
+    'final',
+    'static',
+    'class',
+    'def',
+    'fun',
+    'fn',
+    'function',
+    'return',
+    'string',
+    'bool',
+    'boolean',
+    'void',
+    'unit',
+    'self',
+    'this',
+    'new',
+    'const',
+    'let',
+    'var',
+    'end',
+    'pub',
   ]);
   const normalizedLeafParts = splitIdentifier(leaf);
   const normalized = snippet

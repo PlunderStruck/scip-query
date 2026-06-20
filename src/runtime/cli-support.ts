@@ -27,7 +27,7 @@ function loadCliPackageInfo(): { version: string } {
 }
 
 type HealthReport = ReturnType<typeof queries.health>;
-type HealthPhaseName = typeof queries.HEALTH_PHASES[number];
+type HealthPhaseName = (typeof queries.HEALTH_PHASES)[number];
 type HealthPhaseResult = ReturnType<typeof queries.healthPhase>;
 type DiffImpactResult = ReturnType<typeof queries.diffImpact>;
 type DiffImpactPartial = ReturnType<typeof queries.diffImpactPartial>;
@@ -53,8 +53,9 @@ interface CommandAnalysisBudget {
 
 export function isLargeCommandIndex(db: ScipDatabase): boolean {
   const statsResult = queries.stats(db);
-  return statsResult.symbols >= LARGE_COMMAND_SYMBOL_THRESHOLD
-    || statsResult.documents >= LARGE_COMMAND_DOCUMENT_THRESHOLD;
+  return (
+    statsResult.symbols >= LARGE_COMMAND_SYMBOL_THRESHOLD || statsResult.documents >= LARGE_COMMAND_DOCUMENT_THRESHOLD
+  );
 }
 
 export function commandAnalysisBudget(
@@ -67,7 +68,9 @@ export function commandAnalysisBudget(
 
   if (full) {
     if (!opts.quiet) {
-      console.error(`Large index detected; ${commandName} is running the unbounded semantic pass because --full was supplied.`);
+      console.error(
+        `Large index detected; ${commandName} is running the unbounded semantic pass because --full was supplied.`,
+      );
     }
     return { semantic: true };
   }
@@ -75,7 +78,7 @@ export function commandAnalysisBudget(
   if (!opts.quiet) {
     console.error(
       `Large index detected; ${commandName} will scan the highest-priority ${DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT} candidates with semantic enrichment disabled. ` +
-      `Run "scip-query ${commandName} --full" for the unbounded semantic pass.`,
+        `Run "scip-query ${commandName} --full" for the unbounded semantic pass.`,
     );
   }
   return { scanLimit: DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT, semantic: false };
@@ -108,7 +111,9 @@ export function renderHealthReport(report: HealthReport, json: boolean | undefin
   console.log(`\n  Codebase Health Score: ${report.score}/100`);
   console.log(`    Risk:    ${report.riskScore}/100  (validated predictors: graph facts + change graph)`);
   console.log(`    Hygiene: ${report.hygieneScore}/100  (tidiness candidates)\n`);
-  console.log(`  ${report.overview.documents} files | ${report.overview.symbols} symbols | ${formatBytes(report.overview.indexSizeBytes)}\n`);
+  console.log(
+    `  ${report.overview.documents} files | ${report.overview.symbols} symbols | ${formatBytes(report.overview.indexSizeBytes)}\n`,
+  );
 
   if (report.warnings && report.warnings.length > 0) {
     console.log('  Warnings:');
@@ -124,15 +129,22 @@ export function renderHealthReport(report: HealthReport, json: boolean | undefin
   if (f.isolatedSymbols > 0) console.log(`    Isolated symbols:     ${f.isolatedSymbols} (${f.isolatedLoc} LOC)`);
   if (f.cycles > 0) console.log(`    Circular deps:        ${f.cycles}`);
   if (f.similarPairs > 0) console.log(`    Similar pairs:        ${f.similarPairs}`);
-  if (f.reactComponentDuplicatePairs > 0) console.log(`    React components:     ${f.reactComponentDuplicatePairs} duplicate pair(s)`);
-    if (f.reactHookCandidatePairs > 0) {
-      console.log(`    React hook reuse:     ${formatScoreAwareCount(f.reactHookCandidatePairs, f.reactHookCandidateScoreCount)} candidate pair(s)`);
-    }
-  if (f.reactLargeComponentPressureFiles > 0) console.log(`    React large comps:    ${f.reactLargeComponentPressureFiles} component(s)`);
-  if (f.vueComponentDuplicatePairs > 0) console.log(`    Vue components:       ${f.vueComponentDuplicatePairs} duplicate pair(s)`);
-    if (f.vueComposableCandidatePairs > 0) {
-      console.log(`    Vue composables:      ${formatScoreAwareCount(f.vueComposableCandidatePairs, f.vueComposableCandidateScoreCount)} candidate pair(s)`);
-    }
+  if (f.reactComponentDuplicatePairs > 0)
+    console.log(`    React components:     ${f.reactComponentDuplicatePairs} duplicate pair(s)`);
+  if (f.reactHookCandidatePairs > 0) {
+    console.log(
+      `    React hook reuse:     ${formatScoreAwareCount(f.reactHookCandidatePairs, f.reactHookCandidateScoreCount)} candidate pair(s)`,
+    );
+  }
+  if (f.reactLargeComponentPressureFiles > 0)
+    console.log(`    React large comps:    ${f.reactLargeComponentPressureFiles} component(s)`);
+  if (f.vueComponentDuplicatePairs > 0)
+    console.log(`    Vue components:       ${f.vueComponentDuplicatePairs} duplicate pair(s)`);
+  if (f.vueComposableCandidatePairs > 0) {
+    console.log(
+      `    Vue composables:      ${formatScoreAwareCount(f.vueComposableCandidatePairs, f.vueComposableCandidateScoreCount)} candidate pair(s)`,
+    );
+  }
   if (f.vueLargeViewPressureFiles > 0) console.log(`    Vue large views:      ${f.vueLargeViewPressureFiles} file(s)`);
   if (f.extractionCandidates > 0) console.log(`    Extract candidates:   ${f.extractionCandidates}`);
   if (f.wrappers > 0) console.log(`    Wrapper functions:    ${f.wrappers}`);
@@ -187,7 +199,7 @@ function renderHealthPressure(report: HealthReport): void {
   for (const pressure of report.pressure) {
     console.log(
       `    ${pressure.category}: ${pressure.count} / ${pressure.threshold} threshold ` +
-      `(${pressure.ratio}x, -${pressure.extraPenalty} ${pressure.kind})`,
+        `(${pressure.ratio}x, -${pressure.extraPenalty} ${pressure.kind})`,
     );
   }
 }
@@ -198,26 +210,38 @@ function renderHealthAxes(report: HealthReport): void {
   console.log(`    Deletable:            ${axes.deletable.loc} LOC across ${axes.deletable.symbols} symbols`);
   if (axes.changeAmplification) {
     const amp = axes.changeAmplification;
-    console.log(`    Change amplification: ${amp.medianFilesPerCommit} files/commit median, ${amp.p90FilesPerCommit} p90 (${amp.commitsAnalyzed} commits)`);
+    console.log(
+      `    Change amplification: ${amp.medianFilesPerCommit} files/commit median, ${amp.p90FilesPerCommit} p90 (${amp.commitsAnalyzed} commits)`,
+    );
   }
   if (axes.hiddenCoupling && axes.hiddenCoupling.pairCount > 0) {
-    console.log(`    Hidden coupling:      ${axes.hiddenCoupling.pairCount} co-changing pair(s) without a dependency edge`);
+    console.log(
+      `    Hidden coupling:      ${axes.hiddenCoupling.pairCount} co-changing pair(s) without a dependency edge`,
+    );
     for (const pair of axes.hiddenCoupling.top.slice(0, 3)) {
-      console.log(`      ${pair.fileA} <-> ${pair.fileB}  (${pair.together}x together, ${Math.round(pair.confidence * 100)}%)`);
+      console.log(
+        `      ${pair.fileA} <-> ${pair.fileB}  (${pair.together}x together, ${Math.round(pair.confidence * 100)}%)`,
+      );
     }
   }
   if (axes.churnWeightedComplexity && axes.churnWeightedComplexity.length > 0) {
     const top = axes.churnWeightedComplexity[0]!;
     if (top.weighted > 0) {
-      console.log(`    Churn x complexity:   hottest is ${top.symbol} (${top.changes} changes, weighted ${top.weighted})`);
+      console.log(
+        `    Churn x complexity:   hottest is ${top.symbol} (${top.changes} changes, weighted ${top.weighted})`,
+      );
     }
   }
   const quality = axes.evidenceQuality;
-  console.log(`    Evidence quality:     ${quality.graphFindings} graph-fact finding(s), ${quality.heuristicFindings} heuristic finding(s), ${quality.userSuppressed} user-suppressed`);
+  console.log(
+    `    Evidence quality:     ${quality.graphFindings} graph-fact finding(s), ${quality.heuristicFindings} heuristic finding(s), ${quality.userSuppressed} user-suppressed`,
+  );
   if (report.validation && report.validation.flaggedFiles > 0) {
     const v = report.validation;
     const ratio = v.ratio === null ? 'n/a' : `${v.ratio}x`;
-    console.log(`    Validation:           flagged files fix-density ${v.flaggedFixDensity} vs baseline ${v.baselineFixDensity} (${ratio})`);
+    console.log(
+      `    Validation:           flagged files fix-density ${v.flaggedFixDensity} vs baseline ${v.baselineFixDensity} (${ratio})`,
+    );
   }
 }
 

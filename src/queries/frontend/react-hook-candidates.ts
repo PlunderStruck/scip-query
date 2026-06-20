@@ -1,8 +1,5 @@
 import { difference, intersection, jaccard } from '../../analysis/similarity.js';
-import {
-  buildReactComponentBehaviorProfiles,
-  type ReactComponentBehaviorProfile,
-} from '../../source/react-profile.js';
+import { buildReactComponentBehaviorProfiles, type ReactComponentBehaviorProfile } from '../../source/react-profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { rankedPairwiseProfileResults, type PairwiseFileProfile } from '../internal/pairwise-profiles.js';
 
@@ -45,14 +42,7 @@ export function reactHookCandidates(
     filePattern?: string;
   } = {},
 ): ReactHookCandidateResult[] {
-  const {
-    minSimilarity = 0.45,
-    minSharedBehaviors = 6,
-    limit = 20,
-    scope,
-    scanLimit,
-    filePattern,
-  } = opts;
+  const { minSimilarity = 0.45, minSharedBehaviors = 6, limit = 20, scope, scanLimit, filePattern } = opts;
   const profiles = buildReactComponentBehaviorProfiles(db, {
     scope,
     minBehaviorTokens: Math.max(3, minSharedBehaviors),
@@ -69,11 +59,12 @@ export function reactHookCandidates(
     limit,
     filePattern,
     compare: (a, b) => compareProfiles(a, b, minSimilarity, minSharedBehaviors),
-    sort: (a, b) => b.similarity - a.similarity
-      || a.fileA.localeCompare(b.fileA)
-      || a.componentA.localeCompare(b.componentA)
-      || a.fileB.localeCompare(b.fileB)
-      || a.componentB.localeCompare(b.componentB),
+    sort: (a, b) =>
+      b.similarity - a.similarity ||
+      a.fileA.localeCompare(b.fileA) ||
+      a.componentA.localeCompare(b.componentA) ||
+      a.fileB.localeCompare(b.fileB) ||
+      a.componentB.localeCompare(b.componentB),
   });
 }
 
@@ -153,9 +144,11 @@ function hasMeaningfulBehaviorOverlap(shared: ReadonlySet<string>): boolean {
   }
   const states = namedStates + stateHooks;
   const namedBehavior = customHooks + reactHooks + effects + requests + handlers + states;
-  return (requests >= 1 && namedBehavior >= 4)
-    || (customHooks >= 1 && (requests >= 1 || namedStates >= 1 || handlers >= 2) && namedBehavior >= 5)
-    || (namedStates >= 1 && handlers >= 2 && (effects >= 1 || reactHooks >= 2) && namedBehavior >= 5);
+  return (
+    (requests >= 1 && namedBehavior >= 4) ||
+    (customHooks >= 1 && (requests >= 1 || namedStates >= 1 || handlers >= 2) && namedBehavior >= 5) ||
+    (namedStates >= 1 && handlers >= 2 && (effects >= 1 || reactHooks >= 2) && namedBehavior >= 5)
+  );
 }
 
 function behaviorReason(parts: {
@@ -174,7 +167,8 @@ function behaviorReason(parts: {
   if (parts.sharedState.length) reasons.push(`shared state: ${parts.sharedState.join(', ')}`);
   if (parts.sharedRequests.length) reasons.push(`shared requests: ${parts.sharedRequests.join(', ')}`);
   if (parts.sharedHandlers.length) reasons.push(`shared handlers: ${parts.sharedHandlers.slice(0, 6).join(', ')}`);
-  if (parts.sharedHandlerVerbs.length) reasons.push(`shared action verbs: ${parts.sharedHandlerVerbs.slice(0, 6).join(', ')}`);
+  if (parts.sharedHandlerVerbs.length)
+    reasons.push(`shared action verbs: ${parts.sharedHandlerVerbs.slice(0, 6).join(', ')}`);
   return reasons.join('; ') || 'shared React behavior profile';
 }
 

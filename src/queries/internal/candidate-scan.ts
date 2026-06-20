@@ -18,9 +18,7 @@ interface CandidateAnalysis<TCandidate, TContext, TResult> {
 export function runCandidateAnalysis<TCandidate, TContext = undefined, TResult = never>(
   opts: CandidateAnalysis<TCandidate, TContext, TResult>,
 ): TResult[] {
-  const ordered = opts.orderCandidates
-    ? [...opts.candidates()].sort(opts.orderCandidates)
-    : opts.candidates();
+  const ordered = opts.orderCandidates ? [...opts.candidates()].sort(opts.orderCandidates) : opts.candidates();
   const candidates = applyScanLimit(ordered, opts.scanLimit);
   const context = opts.prepare?.(candidates) ?? (undefined as TContext);
   const results: TResult[] = [];
@@ -33,4 +31,3 @@ export function runCandidateAnalysis<TCandidate, TContext = undefined, TResult =
   if (opts.orderResults) results.sort(opts.orderResults);
   return typeof opts.limit === 'number' ? results.slice(0, opts.limit) : results;
 }
-

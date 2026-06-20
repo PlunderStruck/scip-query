@@ -69,10 +69,7 @@ export interface SetupAgentResult {
   skipped: Array<{ target: string; reason: string }>;
 }
 
-export function setupAgent(
-  projectRoot: string,
-  opts: { gitHook?: boolean } = {},
-): SetupAgentResult {
+export function setupAgent(projectRoot: string, opts: { gitHook?: boolean } = {}): SetupAgentResult {
   const result: SetupAgentResult = { written: [], unchanged: [], skipped: [] };
 
   writeInstructionsBlock(projectRoot, result);
@@ -121,12 +118,7 @@ function writeInstructionsBlock(projectRoot: string, result: SetupAgentResult): 
 }
 
 /** Create the file with the block, or replace/append only our marked block. */
-function upsertManagedBlock(
-  projectRoot: string,
-  name: string,
-  block: string,
-  result: SetupAgentResult,
-): void {
+function upsertManagedBlock(projectRoot: string, name: string, block: string, result: SetupAgentResult): void {
   const path = join(projectRoot, name);
   const current = existsSync(path) ? readFileSync(path, 'utf-8') : '';
   let next: string;

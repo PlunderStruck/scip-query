@@ -19,8 +19,8 @@ interface CliProjectContext {
 export function resolveCliProjectContext(projectRoot = resolveProjectRoot()): CliProjectContext {
   const config = loadProjectConfig(projectRoot);
   const paths = resolveIndexPaths(projectRoot, config);
-  const dbPath = process.env['SCIP_QUERY_INDEX_DB']
-    ?? (existsSync(paths.dbPath) ? paths.dbPath : join(projectRoot, 'index.db'));
+  const dbPath =
+    process.env['SCIP_QUERY_INDEX_DB'] ?? (existsSync(paths.dbPath) ? paths.dbPath : join(projectRoot, 'index.db'));
   return { projectRoot, config, paths, dbPath };
 }
 
