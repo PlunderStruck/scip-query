@@ -1,5 +1,8 @@
 <h1 align="center">
-  <img src="docs/assets/scip-query-logo.svg" alt="scip-query" width="360">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/scip-query-logo-dark.svg">
+    <img src="docs/assets/scip-query-logo.svg" alt="scip-query" width="360">
+  </picture>
 </h1>
 
 <p align="center">
