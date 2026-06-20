@@ -4,7 +4,7 @@ import { getInactiveBarrelPaths, isEntrySurface, isRootedSymbol } from '../../an
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import type { DeadOptions, IndexedDefinition } from '../../domain/types.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
-import { callerRowsForSymbol } from '../../symbols/caller-evidence.js';
+import { callerRowsForSymbol } from '../../symbols/references/caller-evidence.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { clearSourceFileEvidenceCaches } from '../internal/cache-invalidation.js';
 import { deadCandidateDecision, passesDeadTestFileFilter } from '../internal/dead-candidate-gate.js';

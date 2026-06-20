@@ -3,7 +3,7 @@ import type { IndexedDefinition } from '../../domain/types.js';
 import { isEntrySurface, isRootedSymbol } from '../../analysis/file-classifier.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
-import { getResolvedReferenceSites } from '../../symbols/reference-sites.js';
+import { getResolvedReferenceSites } from '../../symbols/references/reference-sites.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { dead } from './dead.js';
 

@@ -1,5 +1,5 @@
-import type { AstLanguage } from './ast-language.js';
-import type { SyntaxNode } from './ast-types.js';
+import type { AstLanguage } from './ast/ast-language.js';
+import type { SyntaxNode } from './ast/ast-types.js';
 
 // scip-query: ignore-wrapper — source-facts owns the single tree walk; this
 // helper owns the callsite-shape policy used during that walk.

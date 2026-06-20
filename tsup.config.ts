@@ -35,7 +35,7 @@ export default defineConfig([
   {
     entry: {
       'reindex-worker': 'src/reindex/worker.ts',
-      'augment-vue-worker': 'src/reindex/augment-vue-worker.ts',
+      'augment-vue-worker': 'src/reindex/vue/augment-vue-worker.ts',
       postinstall: 'src/runtime/postinstall.ts',
     },
     format: ['esm'],

@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import { buildFileDepGraph } from '../../symbols/file-dep-graph.js';
+import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
 import { jaccard } from '../../analysis/similarity.js';
 import { rankedPairwiseProfileResults, type PairwiseFileProfile } from '../internal/pairwise-profiles.js';
 

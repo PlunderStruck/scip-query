@@ -1,7 +1,7 @@
 import {
   buildVueComponentBehaviorProfiles,
   type VueComponentBehaviorProfile,
-} from '../../source/vue-profile.js';
+} from '../../source/vue/vue-profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
 
 export type VueLargeViewPressureAxis =

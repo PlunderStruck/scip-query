@@ -2,13 +2,13 @@ import type { ScipDatabase } from '../storage/db.js';
 import type { IndexedDefinition, SymbolMatch } from '../domain/types.js';
 import { classifyFile } from '../analysis/file-classifier.js';
 import { getDefinitionsForFile, getScopedDefinitions } from '../symbols/definition-catalog.js';
-import { buildCalleeMap } from '../symbols/call-graph-evidence.js';
-import { buildFileDepGraph } from '../symbols/file-dep-graph.js';
-import { callerFileEvidenceMap, crossFileCallerEvidenceMap, sourceFallbackCallerEvidenceMap } from '../symbols/caller-evidence.js';
+import { buildCalleeMap } from '../symbols/graph/call-graph-evidence.js';
+import { buildFileDepGraph } from '../symbols/graph/file-dep-graph.js';
+import { callerFileEvidenceMap, crossFileCallerEvidenceMap, sourceFallbackCallerEvidenceMap } from '../symbols/references/caller-evidence.js';
 import { detectAstLanguage, frameworkSourceReferences, getSourceFacts } from '../source/ast.js';
 import { getSourceFiles } from '../source/source-fileset.js';
 import { hasSuppressionComment } from '../source/source-text.js';
-import { scanSourceReferences } from '../symbols/source-reference-scan.js';
+import { scanSourceReferences } from '../symbols/references/source-reference-scan.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import { productionCallableDefinitions } from './production-callables.js';
 

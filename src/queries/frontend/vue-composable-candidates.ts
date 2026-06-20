@@ -2,7 +2,7 @@ import { difference, intersection, jaccard } from '../../analysis/similarity.js'
 import {
   buildVueComponentBehaviorProfiles,
   type VueComponentBehaviorProfile,
-} from '../../source/vue-profile.js';
+} from '../../source/vue/vue-profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { rankedPairwiseProfileResults, type PairwiseFileProfile } from '../internal/pairwise-profiles.js';
 

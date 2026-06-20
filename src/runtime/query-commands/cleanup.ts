@@ -9,8 +9,8 @@ import {
   verifyCleanupPlan,
 } from '../cleanup-verify.js';
 import { renderHeuristicNotice } from '../cli-support.js';
-import type { CommandDescriptor } from '../command-descriptor-types.js';
-import { doc, option, parseInteger, parseNumber, parsePositiveInteger, withJsonOption } from '../command-spec-builders.js';
+import type { CommandDescriptor } from '../commands/command-descriptor-types.js';
+import { doc, option, parseInteger, parseNumber, parsePositiveInteger, withJsonOption } from '../commands/command-spec-builders.js';
 import {
   booleanOptionValue,
   budgetedDbCommand,
@@ -27,8 +27,8 @@ import {
   reportCommand,
   stringArg,
   stringOptionValue,
-} from '../command-execution.js';
-import { groupedQueryCommand } from '../query-command-builders.js';
+} from '../commands/command-execution.js';
+import { groupedQueryCommand } from '../commands/query-command-builders.js';
 import { displayPathRange, displayRange, render } from '../render.js';
 
 const handleDead = budgetedDbCommand('dead', ({ db, args, opts, budget }) => {

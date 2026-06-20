@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import type { ScipDatabase } from '../../storage/db.js';
 import { isEntrySurface, isRootedSymbol } from '../../analysis/file-classifier.js';
 import { getCoChangePairs } from '../../analysis/git-history.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { isCoChangeNoiseFile } from './co-change.js';
 import { diffImpact, diffImpactPlan, fileContentAtBase } from './diff-impact.js';
-import type { DiffImpactPlan } from './diff-impact.js';
+import type { ChangedLineRange, DiffImpactPlan } from './diff-impact.js';
 import { docsCitingFiles } from '../cleanup/doc-drift.js';
 import { checkHealthBaseline, resolveBaselinePath } from '../health/health-baseline.js';
 import { incompleteMigration } from './incomplete-migration.js';
@@ -146,7 +146,7 @@ export function diffGate(
   runUnlessSkipped('echo', () => runEchoCheck(db, impact.changedSymbols, changed, movedSymbolPreexisted, maxEchoChecks, minSimilarity, result));
   runUnlessSkipped('incomplete-migration', () => runIncompleteMigrationCheck(db, base, impactPlan, maxHelpers, result));
   runUnlessSkipped('co-change-partner', () => runCoChangePartnerCheck(db, changed, minTogether, minConfidence, result));
-  runUnlessSkipped('doc-reference', () => runDocReferenceCheck(db, changed, result));
+  runUnlessSkipped('doc-reference', () => runDocReferenceCheck(db, changed, impactPlan.changedRanges, result));
   runUnlessSkipped('unused-params', () => runUnusedParamsCheck(db, changedFiles, result));
   runUnlessSkipped('new-dead', () => runNewDeadCheck(db, impact.changedSymbols, movedSymbolPreexisted, result));
   runUnlessSkipped('baseline', () => runBaselineCheck(db, result));
@@ -331,10 +331,13 @@ function runCoChangePartnerCheck(
 function runDocReferenceCheck(
   db: ScipDatabase,
   changed: ReadonlySet<string>,
+  changedRanges: readonly ChangedLineRange[],
   result: DiffGateResult,
 ): void {
   result.checksRun.push('doc-reference');
-  for (const citation of docsCitingFiles(db, changed)) {
+  const targets = docReferenceTargets(db, changed, changedRanges);
+  if (targets.size === 0) return;
+  for (const citation of docsCitingFiles(db, targets)) {
     if (changed.has(citation.doc)) continue; // doc updated in the same diff
     const id = findingId('doc-reference', citation.doc, citation.cited.join('|'));
     result.findings.push({
@@ -354,6 +357,77 @@ function runDocReferenceCheck(
       suppressionHint: `scip-query: ignore doc-reference ${id} -- <reason>`,
     });
   }
+}
+
+function docReferenceTargets(
+  db: ScipDatabase,
+  changed: ReadonlySet<string>,
+  changedRanges: readonly ChangedLineRange[],
+): ReadonlySet<string> {
+  const ranges = changedRangesByFile(changedRanges);
+  const targets = new Set<string>();
+  for (const file of changed) {
+    if (hasDocRelevantChange(db, file, ranges.get(file) ?? [])) {
+      targets.add(file);
+    }
+  }
+  return targets;
+}
+
+function changedRangesByFile(
+  changedRanges: readonly ChangedLineRange[],
+): ReadonlyMap<string, readonly ChangedLineRange[]> {
+  const ranges = new Map<string, ChangedLineRange[]>();
+  for (const range of changedRanges) {
+    const bucket = ranges.get(range.file) ?? [];
+    bucket.push(range);
+    ranges.set(range.file, bucket);
+  }
+  return ranges;
+}
+
+function hasDocRelevantChange(
+  db: ScipDatabase,
+  file: string,
+  ranges: readonly ChangedLineRange[],
+): boolean {
+  if (ranges.length === 0) return false;
+  if (!SOURCE_FILE_PATTERN.test(file)) return true;
+  const absolutePath = `${db.config.projectRoot}/${file}`;
+  if (!existsSync(absolutePath)) return true;
+  const lines = readFileSync(absolutePath, 'utf-8').split(/\r?\n/);
+  const importLines = staticImportExportLines(lines);
+  for (const range of ranges) {
+    for (let line = range.startLine; line <= range.endLine; line += 1) {
+      if ((lines[line] ?? '').trim() === '') continue;
+      if (!importLines.has(line)) return true;
+    }
+  }
+  return false;
+}
+
+const SOURCE_FILE_PATTERN = /\.(?:[cm]?[jt]sx?)$/i;
+
+function staticImportExportLines(lines: readonly string[]): ReadonlySet<number> {
+  const out = new Set<number>();
+  let inDeclaration = false;
+  for (let i = 0; i < lines.length; i += 1) {
+    const trimmed = lines[i]!.trim();
+    if (!inDeclaration && isStaticImportExportStart(trimmed)) {
+      inDeclaration = true;
+    }
+    if (!inDeclaration) continue;
+    out.add(i);
+    if (trimmed.endsWith(';')) {
+      inDeclaration = false;
+    }
+  }
+  return out;
+}
+
+function isStaticImportExportStart(trimmed: string): boolean {
+  return /^import(?:\s|$)/.test(trimmed)
+    || /^export(?:\s+type)?\s+(?:\*|\{)/.test(trimmed);
 }
 
 function runUnusedParamsCheck(

@@ -1,7 +1,7 @@
 import * as queries from '../../queries/index.js';
 import type { DiffGateCheck } from '../../queries/impact/diff-gate.js';
-import type { CommandDescriptor } from '../command-descriptor-types.js';
-import { collectValues, doc, option, parseInteger, parseNumber, withJsonOption } from '../command-spec-builders.js';
+import type { CommandDescriptor } from '../commands/command-descriptor-types.js';
+import { collectValues, doc, option, parseInteger, parseNumber, withJsonOption } from '../commands/command-spec-builders.js';
 import {
   budgetedDbCommand,
   booleanOptionValue,
@@ -12,7 +12,7 @@ import {
   printJsonEnvelope,
   stringArg,
   stringOptionValue,
-} from '../command-execution.js';
+} from '../commands/command-execution.js';
 import { semanticCalleeRowCount } from '../../storage/evidence-cache.js';
 import { formatGateBlockReason, isStopHookReentry, readHookInput } from '../agent-setup.js';
 import { isLargeCommandIndex } from '../cli-support.js';

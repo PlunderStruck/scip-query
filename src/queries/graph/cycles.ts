@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import { buildFileDepGraph } from '../../symbols/file-dep-graph.js';
+import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
 import { classifyFile, isBarrel as isBarrelFile } from '../../analysis/file-classifier.js';
 
 export interface CycleResult {

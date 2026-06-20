@@ -1,5 +1,5 @@
-import type { AstLanguage } from './ast-language.js';
-import type { SyntaxNode, Tree } from './ast-types.js';
+import type { AstLanguage } from './ast/ast-language.js';
+import type { SyntaxNode, Tree } from './ast/ast-types.js';
 
 export function buildTypeContainerMap(tree: Tree, language: AstLanguage): Map<string, Set<string>> {
   const result = new Map<string, Set<string>>();

@@ -1,5 +1,5 @@
-import type { AstLanguage } from './ast-language.js';
-import type { SyntaxNode } from './ast-types.js';
+import type { AstLanguage } from './ast/ast-language.js';
+import type { SyntaxNode } from './ast/ast-types.js';
 import { isCommentNode } from './source-node-kinds.js';
 
 const JAVASCRIPT_NAMED_CALLABLE_TYPES = new Set([

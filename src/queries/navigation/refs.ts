@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
-import { referenceSitesForSymbol } from '../../symbols/reference-sites.js';
+import { referenceSitesForSymbol } from '../../symbols/references/reference-sites.js';
 import { getSourceText } from '../../source/source-text.js';
 import { isFunctionLikeSymbol } from '../../symbols/symbol-parser.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';

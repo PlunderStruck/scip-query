@@ -3,7 +3,7 @@ import type { IndexedDefinition } from '../../domain/types.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { getSemanticProvider } from '../../semantic/index.js';
 import { semanticCalleeMap, semanticReferences } from '../../semantic/shared-primitives.js';
-import { getResolvedReferenceSites } from '../../symbols/reference-sites.js';
+import { getResolvedReferenceSites } from '../../symbols/references/reference-sites.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 
 export type AuditQuestion = 'references' | 'callees';

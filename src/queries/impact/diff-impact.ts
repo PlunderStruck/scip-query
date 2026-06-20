@@ -287,8 +287,7 @@ function detectRenamedFiles(
   base: string,
   changedFiles: readonly string[],
 ): RenamedFile[] {
-  const deletedFiles = getDeletedFiles(projectRoot, base);
-  if (deletedFiles.length === 0 || changedFiles.length === 0) return [];
+  if (changedFiles.length === 0) return [];
 
   const renamed = new Map<string, RenamedFile>();
   const claimedSources = new Set<string>();
@@ -296,6 +295,11 @@ function detectRenamedFiles(
     if (!changedFiles.includes(rename.to)) continue;
     renamed.set(rename.to, rename);
     claimedSources.add(rename.from);
+  }
+
+  const deletedFiles = getDeletedFiles(projectRoot, base);
+  if (deletedFiles.length === 0) {
+    return [...renamed.values()].sort((left, right) => left.to.localeCompare(right.to));
   }
 
   for (const to of changedFiles) {

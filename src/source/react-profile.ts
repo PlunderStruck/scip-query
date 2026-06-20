@@ -1,8 +1,8 @@
 import { extname } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
-import { getAst } from './ast-core.js';
-import type { SyntaxNode } from './ast-types.js';
-import { detectAstLanguage, type AstLanguage } from './ast-language.js';
+import { getAst } from './ast/ast-core.js';
+import type { SyntaxNode } from './ast/ast-types.js';
+import { detectAstLanguage, type AstLanguage } from './ast/ast-language.js';
 import { callSiteForNode } from './source-calls.js';
 import { getSourceFiles } from './source-fileset.js';
 import { getSourceLines } from './source-text.js';

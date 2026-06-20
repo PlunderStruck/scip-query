@@ -182,7 +182,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
 
 export { detectLanguages } from './detect.js';
 export { augmentAuxiliaryDocuments } from './augment.js';
-export { augmentVueResolvedReferences } from './augment-vue.js';
+export { augmentVueResolvedReferences } from './vue/augment-vue.js';
 export { getIndexerConfig, INDEXER_CONFIGS } from './indexers.js';
 export { mergeScipFiles, mergeScipIndexes } from './merge.js';
 export {

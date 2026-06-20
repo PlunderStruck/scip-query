@@ -7,15 +7,15 @@
  * the REGISTRY array; the registry has no knowledge of any language's
  * internals.
  */
-import { parseCLikeImports } from './c-like.js';
-import { parseDartExports, parseDartImports } from './dart.js';
-import { parseDotNetImports } from './dotnet.js';
-import { parseJavaScriptImports, parseReExports } from './javascript.js';
-import { parseJvmImports } from './jvm.js';
-import { parsePhpImports } from './php.js';
-import { parsePythonImports } from './python.js';
-import { parseRubyImports } from './ruby.js';
-import { parseRustExports, parseRustImports } from './rust.js';
+import { parseCLikeImports } from './languages/c-like.js';
+import { parseDartExports, parseDartImports } from './languages/dart.js';
+import { parseDotNetImports } from './languages/dotnet.js';
+import { parseJavaScriptImports, parseReExports } from './languages/javascript.js';
+import { parseJvmImports } from './languages/jvm.js';
+import { parsePhpImports } from './languages/php.js';
+import { parsePythonImports } from './languages/python.js';
+import { parseRubyImports } from './languages/ruby.js';
+import { parseRustExports, parseRustImports } from './languages/rust.js';
 import {
   C_LIKE_EXTENSIONS,
   DART_EXTENSIONS,

@@ -1,5 +1,5 @@
-import type { AstLanguage } from './ast-language.js';
-import type { SyntaxNode } from './ast-types.js';
+import type { AstLanguage } from './ast/ast-language.js';
+import type { SyntaxNode } from './ast/ast-types.js';
 import { extractCallLeaf } from './source-calls.js';
 
 const ATTR_HELPER_RES: ReadonlyArray<RegExp> = [

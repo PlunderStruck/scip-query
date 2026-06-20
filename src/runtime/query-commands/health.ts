@@ -1,7 +1,7 @@
 import * as queries from '../../queries/index.js';
-import type { CommandDescriptor } from '../command-descriptor-types.js';
-import { doc, option, parseInteger, withJsonOption } from '../command-spec-builders.js';
-import { booleanOptionValue, budgetedDbCommand, dbCommand, definedNumberOption, printJsonEnvelope, stringArg, stringOptionValue } from '../command-execution.js';
+import type { CommandDescriptor } from '../commands/command-descriptor-types.js';
+import { doc, option, parseInteger, withJsonOption } from '../commands/command-spec-builders.js';
+import { booleanOptionValue, budgetedDbCommand, dbCommand, definedNumberOption, printJsonEnvelope, stringArg, stringOptionValue } from '../commands/command-execution.js';
 import { displayPathRange, render } from '../render.js';
 
 const handleComplexity = budgetedDbCommand('complexity', ({ db, args, opts, budget }) => {

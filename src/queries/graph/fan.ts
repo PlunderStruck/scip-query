@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { resolveIndexedFile } from '../../resolution/path-resolver.js';
-import { buildFileDepGraph } from '../../symbols/file-dep-graph.js';
+import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 
 export interface FanResult {

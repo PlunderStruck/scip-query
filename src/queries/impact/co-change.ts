@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
 import { classifyFile } from '../../analysis/file-classifier.js';
 import { getCoChangePairs, getCommitHistory } from '../../analysis/git-history.js';
-import { buildFileDepGraph } from '../../symbols/file-dep-graph.js';
+import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
 
 export interface CoChangeFinding {
   fileA: string;

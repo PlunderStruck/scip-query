@@ -1,7 +1,7 @@
 import * as queries from '../../queries/index.js';
-import type { CommandDescriptor } from '../command-descriptor-types.js';
-import { doc, jsonOption } from '../command-spec-builders.js';
-import { booleanOptionValue, dbCommand, printJsonEnvelope } from '../command-execution.js';
+import type { CommandDescriptor } from '../commands/command-descriptor-types.js';
+import { doc, jsonOption } from '../commands/command-spec-builders.js';
+import { booleanOptionValue, dbCommand, printJsonEnvelope } from '../commands/command-execution.js';
 import { formatBytes } from '../cli-context.js';
 
 const handleStats = dbCommand(({ db, args, opts }) => {

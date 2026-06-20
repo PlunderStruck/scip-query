@@ -2,8 +2,8 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { findExactSymbolMatch, findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { findEnclosingDefinition } from '../../symbols/definition-catalog.js';
-import { getCalleeRowsForSymbol } from '../../symbols/call-graph-evidence.js';
-import { referenceSitesForSymbol } from '../../symbols/reference-sites.js';
+import { getCalleeRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
+import { referenceSitesForSymbol } from '../../symbols/references/reference-sites.js';
 import type { SymbolMatch } from '../../domain/types.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 

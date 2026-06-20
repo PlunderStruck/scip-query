@@ -1,5 +1,5 @@
-import type { AstLanguage } from './ast-language.js';
-import type { SyntaxNode } from './ast-types.js';
+import type { AstLanguage } from './ast/ast-language.js';
+import type { SyntaxNode } from './ast/ast-types.js';
 
 const RUST_IDENTIFIER_TYPES = new Set(['identifier', 'type_identifier', 'field_identifier']);
 const PYTHON_IDENTIFIER_TYPES = new Set(['identifier']);

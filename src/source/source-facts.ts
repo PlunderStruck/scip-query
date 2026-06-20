@@ -5,11 +5,11 @@ import {
   writeCachedFileEvidence,
 } from '../storage/evidence-cache.js';
 import { createPerDbSourceCache } from '../storage/per-db-cache.js';
-import { detectAstLanguage, isVueSfcPath, type AstLanguage } from './ast-language.js';
-import { getAst } from './ast-core.js';
-import type { SyntaxNode, Tree } from './ast-types.js';
+import { detectAstLanguage, isVueSfcPath, type AstLanguage } from './ast/ast-language.js';
+import { getAst } from './ast/ast-core.js';
+import type { SyntaxNode, Tree } from './ast/ast-types.js';
 import { getSourceText } from './source-text.js';
-import { extractVueScriptBlock } from './vue-script.js';
+import { extractVueScriptBlock } from './vue/vue-script.js';
 import { callableFactForNode } from './source-callables.js';
 import { callSiteForNode } from './source-calls.js';
 import {

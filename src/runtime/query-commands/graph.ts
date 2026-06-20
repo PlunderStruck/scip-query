@@ -1,6 +1,6 @@
 import * as queries from '../../queries/index.js';
-import type { CommandDescriptor } from '../command-descriptor-types.js';
-import { doc, option, parseInteger, withJsonOption } from '../command-spec-builders.js';
+import type { CommandDescriptor } from '../commands/command-descriptor-types.js';
+import { doc, option, parseInteger, withJsonOption } from '../commands/command-spec-builders.js';
 import {
   budgetedTableCommand,
   booleanOptionValue,
@@ -11,8 +11,8 @@ import {
   printJsonEnvelope,
   reportCommand,
   stringOptionValue,
-} from '../command-execution.js';
-import { budgetedSectionedQueryCommand, tableQueryCommand } from '../query-command-builders.js';
+} from '../commands/command-execution.js';
+import { budgetedSectionedQueryCommand, tableQueryCommand } from '../commands/query-command-builders.js';
 import { render } from '../render.js';
 
 const handleBottlenecks = budgetedTableCommand('bottlenecks', {

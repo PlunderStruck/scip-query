@@ -2,8 +2,8 @@ import { program } from 'commander';
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { cliVersion, renderHeuristicNotice } from './cli-support.js';
-import { commandDescriptors } from './command-descriptors.js';
-import { registerCommandDescriptors } from './command-registry.js';
+import { commandDescriptors } from './commands/command-descriptors.js';
+import { registerCommandDescriptors } from './commands/command-registry.js';
 import { maybePrintUpdateNotice } from './update-notice.js';
 
 program
