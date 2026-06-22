@@ -18,6 +18,8 @@ This slice implements the co-change calibration follow-up that asked the tool to
 - Updated CLI text output so `co-change` and `diff-gate` show partner class and declaration suggestions.
 - Added focused fixtures for repeated doc/code and schema/script histories plus a diff-gate changed-partner case.
 
+2026-06-22 note: the later `diff-gate.ts` doc-reference same-diff fix does not change the co-change-partner label fields described here.
+
 ## Verification
 
 - `npx prettier --check src/queries/impact/co-change.ts src/queries/impact/diff-gate.ts src/runtime/query-commands/impact.ts tests/queries/impact/co-change-partner-labels.test.ts` passed.

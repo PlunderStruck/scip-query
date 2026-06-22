@@ -20,6 +20,8 @@ This slice implements historical-note intent classification for `doc-drift` co-c
 - Added a regression fixture with a historical note and a current guide that both co-change with code before code moves on.
 - Tightened historical-note terms after local output showed generic "history" language would over-discount README-style docs.
 
+2026-06-22 note: the later `doc-drift.ts` lint cleanup only removes a useless initial assignment and does not change historical-intent classification behavior.
+
 ## Verification
 
 - `npx vitest run tests/analysis/git-history.test.ts` passed: 1 file, 11 tests.

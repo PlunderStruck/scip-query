@@ -42,7 +42,11 @@ describe('similarAll top-k collector', () => {
   it('classifies concrete domain behavior as direct evidence', () => {
     expect(
       classifySimilarityEvidence(
-        ['src:workflows:horses:createHorseRecord()', 'src:workflows:horses:validateHorseStatus()', 'src:audit:writeAuditLog()'],
+        [
+          'src:workflows:horses:createHorseRecord()',
+          'src:workflows:horses:validateHorseStatus()',
+          'src:audit:writeAuditLog()',
+        ],
         'callees',
       ),
     ).toEqual(
@@ -56,7 +60,10 @@ describe('similarAll top-k collector', () => {
 
   it('classifies access and query scaffolding as a signal', () => {
     expect(
-      classifySimilarityEvidence(['src:auth:getSession()', 'src:db:prisma:findMany()', 'src:routes:guardRoute()'], 'callees'),
+      classifySimilarityEvidence(
+        ['src:auth:getSession()', 'src:db:prisma:findMany()', 'src:routes:guardRoute()'],
+        'callees',
+      ),
     ).toEqual(
       expect.objectContaining({
         evidenceClass: 'access-query-scaffolding',

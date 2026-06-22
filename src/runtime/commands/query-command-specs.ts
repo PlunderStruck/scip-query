@@ -45,6 +45,7 @@ const queryCommandOrder = [
   'vue-large-view-pressure',
   'similar-chains',
   'extract-candidates',
+  'locality-candidates',
   'affected',
   'change-surface',
   'cleanup-plan',

@@ -181,6 +181,7 @@ export function diffGate(
   const impact = diffImpact(db, { base, plan: impactPlan });
   const changedFiles = impact.changedFiles;
   const changed = new Set(changedFiles);
+  const changedGitFiles = new Set(impactPlan.changedFileLines);
   const movedSymbolPreexisted = movedSymbolPreexistenceChecker(db.config.projectRoot, base, impactPlan);
   const result: DiffGateResult = {
     base,
@@ -207,7 +208,9 @@ export function diffGate(
   );
   runUnlessSkipped('incomplete-migration', () => runIncompleteMigrationCheck(db, base, impactPlan, maxHelpers, result));
   runUnlessSkipped('co-change-partner', () => runCoChangePartnerCheck(db, changed, minTogether, minConfidence, result));
-  runUnlessSkipped('doc-reference', () => runDocReferenceCheck(db, changed, impactPlan.changedRanges, result));
+  runUnlessSkipped('doc-reference', () =>
+    runDocReferenceCheck(db, changed, changedGitFiles, impactPlan.changedRanges, result),
+  );
   runUnlessSkipped('unused-params', () => runUnusedParamsCheck(db, changedFiles, result));
   runUnlessSkipped('new-dead', () => runNewDeadCheck(db, impact.changedSymbols, movedSymbolPreexisted, result));
   runUnlessSkipped('baseline', () => runBaselineCheck(db, result));
@@ -639,6 +642,7 @@ function formatUnixDate(timestampSeconds: number): string {
 function runDocReferenceCheck(
   db: ScipDatabase,
   changed: ReadonlySet<string>,
+  changedGitFiles: ReadonlySet<string>,
   changedRanges: readonly ChangedLineRange[],
   result: DiffGateResult,
 ): void {
@@ -646,7 +650,7 @@ function runDocReferenceCheck(
   const targets = docReferenceTargets(db, changed, changedRanges);
   if (targets.size === 0) return;
   for (const citation of docsCitingFiles(db, targets)) {
-    if (changed.has(citation.doc)) continue; // doc updated in the same diff
+    if (changedGitFiles.has(citation.doc)) continue; // doc updated in the same diff
     const citedClaims =
       citation.citedClaims.length > 0 ? citation.citedClaims : docCitationContexts(db, citation.doc, citation.cited);
     const classification = classifyDocCitation(citedClaims);

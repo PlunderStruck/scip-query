@@ -21,6 +21,8 @@ Before the slice, a filesystem check of `.scipquery.json` found 18 stale declare
 - Runtime command dispatch moved under `src/runtime/commands/`.
 - `doc-drift` moved to `src/queries/cleanup/doc-drift.ts`.
 
+2026-06-22 note: the later `doc-drift.ts` lint cleanup does not change this declared-coupling freshness claim or the current file path.
+
 After the slice:
 
 - `.scipquery.json` has 0 stale declared-coupling paths.

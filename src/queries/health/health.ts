@@ -643,15 +643,6 @@ function runHealthPhase<T>(db: ScipDatabase, budget: HealthBudget, name: string,
   }
 }
 
-function summarizeHealthLocQuery<T extends { loc: number }>(
-  db: ScipDatabase,
-  budget: HealthBudget,
-  name: string,
-  query: () => T[],
-): CountLocSummary {
-  return runHealthPhase(db, budget, name, () => summarizeLoc(query()));
-}
-
 function traceHealthPhase(name: string): void {
   if (process.env['SCIP_QUERY_HEALTH_TRACE'] !== '1') return;
   console.error(`[health] ${name}`);

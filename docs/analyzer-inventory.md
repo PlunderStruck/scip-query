@@ -80,6 +80,7 @@ The declared-coupling config has been refreshed after the inventory surfaced old
 | `similar-chains`      | Dependency chain generation, infrastructure filtering, edit distance                                                                           | Contextual signal                                             | Finds duplicated pipelines, but pipeline ownership and abstraction shape require design judgment.                                                                                             |
 | `similar-signatures`  | Semantic/documented/source normalized function signatures                                                                                      | Contextual signal                                             | Same type shape is only a weak lead. Useful for search, not scoring unless combined with behavior evidence.                                                                                   |
 | `convergence`         | Two symbols' shared and unique callees                                                                                                         | Support/contextual signal                                     | It explains a possible consolidation strategy; it should not score by itself.                                                                                                                 |
+| `locality-candidates` | Candidate symbol/file path, directory ancestry, consumer files, consumer coverage, nearest common owner, boundary markers, and counterevidence | Contextual signal                                             | Guides placement and ownership review for extracted or shared code. It is deliberately report-only and should not force moves or affect health score without repair-outcome evidence.         |
 | `doc-drift`           | Living docs, path citations, cited-claim contexts, doc-code co-change, doc intent, action tier, code churn after doc update, broken references | Split by evidence                                             | Broken references are direct repair. Path-cited stale subjects now expose citation context. Co-change-only staleness is signal for current guidance and support for historical notes.         |
 
 ## Graph, Risk, and Planning Analyzers
@@ -144,14 +145,14 @@ Recommended model:
 Suggested initial tier map:
 
 - Direct: `cleanup-plan`, `dead-code`, `isolated`, `real cycles`, `unused-params`, `new-dead`, `incomplete-migration`, behavioral/current `doc-reference` claims, broken `doc-drift` references, `redundant-reexports` with zero consumers, direct passthrough rows with no boundary or public-facade role, `unused-import` drift, high branch/cyclomatic `complexity`, large React/Vue pressure.
-- Signal: `co-change`, `co-change-partner`, ordinary `similar`, `similar-files`, `similar-chains`, `similar-signatures`, `convergence`, `extract-candidates`, `wrapper-candidates`, `passthrough-candidates` with boundary or public-facade roles, single-consumer `stale-abstractions`, React/Vue duplicate or behavior candidates, bottlenecks, hotspots, coupling, deep chains, inferred layer or pattern drift, doc staleness from churn.
+- Signal: `co-change`, `co-change-partner`, ordinary `similar`, `similar-files`, `similar-chains`, `similar-signatures`, `convergence`, `extract-candidates`, `locality-candidates`, `wrapper-candidates`, `passthrough-candidates` with boundary or public-facade roles, single-consumer `stale-abstractions`, React/Vue duplicate or behavior candidates, bottlenecks, hotspots, coupling, deep chains, inferred layer or pattern drift, doc staleness from churn.
 - Support: navigation commands, `affected`, `change-surface`, `plan-context`, `stats`, `self-audit`, suppression inventory, baseline comparison mechanics, configuration-example and intentional-record `doc-reference` rows.
 
-## Missing Analyzer Family
+## Directory Locality Analyzer
 
-There is no analyzer that evaluates extraction locality after a large component/view or helper extraction. The missing referents are directories, feature folders, local shared folders, global shared folders, import distances, consumer sets, and abstraction ownership. The useful analyzer would classify where an extracted unit belongs by comparing actual consumers and directory boundaries.
+`locality-candidates` now evaluates extraction locality after a large component/view or helper extraction. The referents are directories, feature folders, local shared folders, global shared folders, import distances, consumer sets, and abstraction ownership. The analyzer classifies where an extracted unit may belong by comparing actual consumers and directory boundaries.
 
-Proposed command shape:
+Command shape:
 
 - `scip-query locality-candidates [symbol-or-file]`
 - Inputs: extracted or candidate symbol/file, consumer files, nearest common ancestor, feature/domain folders, existing shared folders, import path depth, package/workspace boundaries, and whether consumers cross feature boundaries.

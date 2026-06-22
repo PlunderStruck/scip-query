@@ -155,6 +155,42 @@ export const handleExtractCandidates = budgetedDbCommand('extract-candidates', (
   console.log(`\n${results.length} extraction candidate(s) found.`);
 });
 
+export const handleLocalityCandidates = budgetedDbCommand('locality-candidates', ({ db, args, opts, budget }) => {
+  const results = queries.localityCandidates(db, {
+    target: optionalStringArg(args, 0) || undefined,
+    scope: stringOptionValue(opts, 'scope'),
+    minConsumers: definedNumberOption(opts, 'minConsumers', 1),
+    limit: definedLimitOption(opts, 'limit', 20),
+    scanLimit: budget.scanLimit,
+    semantic: budget.semantic,
+  });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('locality-candidates', args, opts, results);
+    return;
+  }
+  if (results.length === 0) return render.empty('No locality candidates found.');
+  renderHeuristicNotice('locality candidates');
+  for (const r of results) {
+    const location =
+      r.sourceUnit.kind === 'symbol' && r.sourceUnit.startLine !== undefined && r.sourceUnit.endLine !== undefined
+        ? displayPathRange(r.sourceUnit.file, r.sourceUnit.startLine, r.sourceUnit.endLine)
+        : r.sourceUnit.file;
+    console.log(`\n${location}  ${r.sourceUnit.shortName}`);
+    console.log(`  Current directory: ${r.currentDirectory}; tier: ${r.recommendedTier}; action: ${r.actionTier}`);
+    console.log(`  Consumer coverage: ${r.consumerCoverage}; consumers: ${r.consumerFiles.length}`);
+    if (r.nearestCommonOwner) console.log(`  Nearest common owner: ${r.nearestCommonOwner}`);
+    if (r.suggestedHome) console.log(`  Suggested home: ${r.suggestedHome}`);
+    if (r.boundaryMarkers.length > 0) console.log(`  Boundary markers: ${r.boundaryMarkers.join('; ')}`);
+    console.log(`  Recommendation: ${r.recommendation}`);
+    if (r.consumerFiles.length > 0) {
+      for (const consumer of r.consumerFiles.slice(0, 8)) console.log(`  - consumer: ${consumer}`);
+      if (r.consumerFiles.length > 8) console.log(`  - ... ${r.consumerFiles.length - 8} more consumer(s)`);
+    }
+    for (const counter of r.counterevidence) console.log(`  - counterevidence: ${counter}`);
+  }
+  console.log(`\n${results.length} locality candidate(s) found.`);
+});
+
 export const handleWrapperCandidates = budgetedListCommand('wrapper-candidates', {
   query: ({ db, opts, budget }) =>
     queries.wrapperCandidates(db, {

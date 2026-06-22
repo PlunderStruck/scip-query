@@ -82,6 +82,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   query('vue-large-view-pressure'),
   query('similar-chains'),
   query('extract-candidates'),
+  query('locality-candidates'),
   query('affected'),
   query('change-surface'),
   query('cleanup-plan'),

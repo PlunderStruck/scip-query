@@ -193,7 +193,7 @@ interface DocDriftIntentClassification {
 }
 
 function classifyDocDriftIntent(db: ScipDatabase, docFile: string): DocDriftIntentClassification {
-  let text = '';
+  let text: string;
   try {
     text = readFileSync(join(db.config.projectRoot, docFile), 'utf8').slice(0, 6_000);
   } catch {

@@ -4,11 +4,11 @@ Date: 2026-06-21
 
 ## Verdict
 
-AVL-014 is complete. The public query command registry exposes 61 commands, and the validation docs now name all of them either as analyzers, support/evidence providers, composite reports, or action commands.
+AVL-014 is complete. As of the 2026-06-22 locality implementation addendum, the public query command registry exposes 62 commands, and the validation docs now name all of them either as analyzers, support/evidence providers, composite reports, or action commands.
 
 ## Source of Truth
 
-`scip-query code src/runtime/commands/query-command-specs.ts:10-83` reported the complete `queryCommandOrder` list. `scip-query code queryCommandDescriptor -C 8` showed that descriptor lookup throws for unknown command ids, and that the registry checks every descriptor id is present in the order list.
+`scip-query code src/runtime/commands/query-command-specs.ts:10-73` reports the complete `queryCommandOrder` list. `scip-query code queryCommandDescriptor -C 8` showed that descriptor lookup throws for unknown command ids, and that the registry checks every descriptor id is present in the order list.
 
 ## Coverage Findings
 
@@ -22,13 +22,14 @@ The pre-patch mechanical coverage check found:
 
 - `docs/analyzer-inventory.md` now includes `unused-imports` as a direct cleanup analyzer.
 - `docs/analyzer-inventory.md` now classifies `cleanup-apply` as an action command rather than an analyzer.
-- `docs/analyzer-validation-ledger.md` now includes a public command coverage checklist naming all 61 commands from `queryCommandOrder`.
+- `docs/analyzer-validation-ledger.md` now includes a public command coverage checklist naming the current commands from `queryCommandOrder`.
 - `docs/validation/2026-06-21-analyzer-calibration-memo.md` now marks public command surface coverage complete and routes the next slice to AVL-005 implementation parity.
+- 2026-06-22 addendum: `locality-candidates` is now implemented as a public contextual analyzer, listed in `queryCommandOrder`, exported through `PUBLIC_QUERY_ENTRIES`, and documented in the generated command reference.
 
 ## Command Groups
 
 - Direct cleanup analyzers: `dead`, `isolated`, `unused-imports`, `cleanup-plan`, `unused-params`, `passthrough-candidates`, `redundant-reexports`
-- Contextual cleanup/reuse analyzers: `similar`, `similar-files`, `similar-chains`, `similar-signatures`, `recent-duplicates`, `extract-candidates`, `wrapper-candidates`, `stale-abstractions`, `doc-drift`, `drift`, `convergence`
+- Contextual cleanup/reuse analyzers: `similar`, `similar-files`, `similar-chains`, `similar-signatures`, `recent-duplicates`, `extract-candidates`, `locality-candidates`, `wrapper-candidates`, `stale-abstractions`, `doc-drift`, `drift`, `convergence`
 - Frontend analyzers: `react-component-duplicates`, `react-hook-candidates`, `react-large-component-pressure`, `vue-component-duplicates`, `vue-composable-candidates`, `vue-large-view-pressure`
 - Graph/risk analyzers: `hotspots`, `fan-in`, `fan-out`, `coupling`, `cycles`, `bottlenecks`, `deep-chains`, `complexity-hotspots`, `complexity`
 - Diff/impact analyzers and composites: `affected`, `change-surface`, `co-change`, `diff-gate`, `incomplete-migration`, `plan-context`

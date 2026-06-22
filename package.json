@@ -149,6 +149,10 @@
       "import": "./dist/queries/isolated.js",
       "types": "./dist/queries/isolated.d.ts"
     },
+    "./queries/locality-candidates": {
+      "import": "./dist/queries/locality-candidates.js",
+      "types": "./dist/queries/locality-candidates.d.ts"
+    },
     "./queries/members": {
       "import": "./dist/queries/members.js",
       "types": "./dist/queries/members.d.ts"

@@ -19,6 +19,8 @@ This slice implements the co-change follow-up that asked for broad-feature-sweep
 - Added diff-gate explanation lines for broad-sweep and stale history caveats.
 - Added regression coverage for focused/recent, broad-sweep/recent, and focused/stale pair history.
 
+2026-06-22 note: the later `diff-gate.ts` doc-reference same-diff fix does not change the co-change commit-scope or recency behavior described here.
+
 ## Verification
 
 - `npx vitest run tests/analysis/git-history.test.ts` passed: 1 file, 10 tests.

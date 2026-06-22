@@ -34,6 +34,8 @@ Source anchors:
 - `scip-query trace queryCommandOrder --json` -> `src/runtime/commands/query-command-specs.ts:9`
 - `scip-query trace DIFF_GATE_CHECKS --json` -> `src/queries/impact/diff-gate.ts:27`
 
+2026-06-22 note: `queryCommandOrder` remains the correct public-command anchor after the `locality-candidates` implementation; the command list now includes that contextual analyzer.
+
 ## Command Status
 
 | Repository          | Revision                                   | Baseline status                                                                                        | Analyzer status                                                                             |

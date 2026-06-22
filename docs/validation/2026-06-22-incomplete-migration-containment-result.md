@@ -18,6 +18,8 @@ This slice implements the diff-gate calibration follow-up for incomplete migrati
 - Updated diff-gate and CLI text output to show helper shape, helper/site containment, and extra site callees.
 - Extended the incomplete-migration fixture with a broad unchanged site that contains the helper calls plus many extra calls, proving that broad embedded-fragment matches are rejected.
 
+2026-06-22 note: the later `diff-gate.ts` doc-reference same-diff fix does not change the incomplete-migration containment behavior described here.
+
 ## Verification
 
 - `npx vitest run tests/queries/impact/incomplete-migration.test.ts` passed: 1 file, 21 tests. The run still prints the known noisy `git diff` warning from the fixture.

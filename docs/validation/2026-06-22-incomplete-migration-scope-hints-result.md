@@ -17,6 +17,8 @@ A migration-scope hint is a structured review label attached to an unchanged lef
 - `src/queries/impact/diff-gate.ts` includes scope hints in the finding message and `why` text, and changes remediation when possible subtype/variant rows are present.
 - `tests/queries/impact/incomplete-migration.test.ts` adds `src/billing.ts` as a callee-matching but out-of-scope leftover. The fixture now proves `site-b` and `site-c` stay `same-scope`, while `billing.ts` stays visible as `possible-subtype`.
 
+2026-06-22 note: the later `diff-gate.ts` doc-reference same-diff fix does not change the incomplete-migration scope-hint behavior described here.
+
 ## Verification
 
 Completed:

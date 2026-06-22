@@ -1082,6 +1082,48 @@ describe('incomplete-migration', () => {
     }
   });
 
+  it('does not ask updated docs to update again for changed source citations', () => {
+    const updatedDocRepo = mkdtempSync(join(tmpdir(), 'scip-doc-reference-updated-doc-'));
+    try {
+      mkdirSync(join(updatedDocRepo, 'src'), { recursive: true });
+      gitIn(updatedDocRepo, 'init');
+      writeFileSync(join(updatedDocRepo, 'README.md'), 'The cleanup detector lives in src/dead.ts.\n');
+      writeFileSync(join(updatedDocRepo, 'src', 'dead.ts'), 'export function cleanupDetector() { return 1; }\n');
+      gitIn(updatedDocRepo, 'add', '-A');
+      gitIn(updatedDocRepo, 'commit', '-m', 'base', '--no-gpg-sign');
+      writeFileSync(join(updatedDocRepo, 'README.md'), 'The cleanup detector still lives in src/dead.ts.\n');
+      writeFileSync(join(updatedDocRepo, 'src', 'dead.ts'), 'export function cleanupDetector() { return 2; }\n');
+
+      const dbPath = join(updatedDocRepo, 'index.db');
+      const sqliteDb = new Database(dbPath);
+      createEvidenceSchema(sqliteDb);
+      sqliteDb.exec(`
+        INSERT INTO documents (id, language, relative_path) VALUES
+          (1, 'typescript', 'src/dead.ts');
+      `);
+      sqliteDb.close();
+
+      const updatedDocDb = new ScipDatabase({
+        dbPath,
+        indexPath: join(updatedDocRepo, 'index.scip'),
+        projectRoot: updatedDocRepo,
+      });
+      try {
+        const result = diffGate(updatedDocDb, {
+          base: 'HEAD',
+          skip: ['echo', 'incomplete-migration', 'co-change-partner', 'unused-params', 'new-dead', 'baseline'],
+        });
+
+        expect(result.checksRun).toEqual(['doc-reference']);
+        expect(result.findings).toHaveLength(0);
+      } finally {
+        updatedDocDb.close();
+      }
+    } finally {
+      rmSync(updatedDocRepo, { recursive: true, force: true });
+    }
+  });
+
   it('classifies behavioral doc references as direct evidence with cited claims', () => {
     const behavioralRepo = mkdtempSync(join(tmpdir(), 'scip-doc-reference-behavioral-'));
     try {

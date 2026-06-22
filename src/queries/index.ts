@@ -31,6 +31,7 @@ export { vueComposableCandidates } from './frontend/vue-composable-candidates.js
 export { vueLargeViewPressure } from './frontend/vue-large-view-pressure.js';
 export { similarChains } from './cleanup/similar-chains.js';
 export { extractCandidates } from './cleanup/extract-candidates.js';
+export { localityCandidates } from './cleanup/locality-candidates.js';
 export { affected } from './graph/affected.js';
 export { changeSurface } from './impact/change-surface.js';
 export { cleanupPlan } from './cleanup/cleanup-plan.js';
@@ -117,6 +118,15 @@ export type {
   ExtractCandidateActionTier,
   ExtractCandidateKind,
 } from './cleanup/extract-candidates.js';
+export type {
+  LocalityActionTier,
+  LocalityCandidate,
+  LocalityCandidatesOptions,
+  LocalityConsumerCoverage,
+  LocalityDirectoryAncestor,
+  LocalityRecommendedTier,
+  LocalitySourceUnit,
+} from './cleanup/locality-candidates.js';
 export type { HealthAction, HealthReport } from './health/health-report.js';
 export type { ConvergenceResult } from './cleanup/convergence.js';
 export type { CodeResult } from './navigation/code.js';

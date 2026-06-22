@@ -236,7 +236,17 @@ const LOCAL_COMPONENT_NAME_SUFFIX_TOKENS = new Set([
   'table',
   'toolbar',
 ]);
-const ROUTE_DIRECTORY_TOKENS = new Set(['landing', 'page', 'pages', 'route', 'routes', 'screen', 'screens', 'view', 'views']);
+const ROUTE_DIRECTORY_TOKENS = new Set([
+  'landing',
+  'page',
+  'pages',
+  'route',
+  'routes',
+  'screen',
+  'screens',
+  'view',
+  'views',
+]);
 const ROUTE_NAME_TOKENS = new Set(['landing', 'page', 'route', 'screen', 'view']);
 
 function titleCaseToken(token: string): string {

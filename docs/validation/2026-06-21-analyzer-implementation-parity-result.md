@@ -34,6 +34,12 @@ AVL-005 is complete for the current public analyzer surface. Command descriptors
 - `health` and `diff-impact` are public package query entries even though they are registered as composite/custom commands rather than descriptor-backed query commands.
 - `fan-in`/`fan-out`, `imported-by`, and `kind-counts` remain command-level aliases over their module entries.
 
+## 2026-06-22 Locality Addendum
+
+`locality-candidates` is now an implemented public analyzer, not only a design note. It is registered through `src/runtime/query-commands/cleanup/descriptors.ts`, ordered in `src/runtime/commands/query-command-specs.ts`, exposed from `src/queries/index.ts`, included in `src/queries/public-query-entries.ts`, and exported as `./queries/locality-candidates` in `package.json`.
+
+The command stays outside health scoring. Its defining output is a report-only directory-locality claim: a candidate symbol or file, directory ancestry, consumer files, consumer coverage, nearest common owner, suggested home, and counterevidence.
+
 ## Verification
 
 Completed:
