@@ -115,7 +115,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 
 | Command | Description | Options |
 |---|---|---|
-| `install-skills` | Install skills (scip-query, concrete-plan, scip-ai-cleanup, scip-explore, scip-debloat, scip-doc-reconcile, scip-maintainability, scip-react-maintainability, scip-vue-maintainability, scip-verify, scip-language-playbook) into Claude Code, Codex, and shared agent roots | - |
+| `install-skills` | Install skills (scip-query, scip-query-setup, concrete-plan, scip-ai-cleanup, scip-explore, scip-debloat, scip-doc-reconcile, scip-directory-architecture, scip-maintainability, scip-react-maintainability, scip-vue-maintainability, scip-verify, scip-language-playbook) into Claude Code, Codex, and shared agent roots | - |
 | `check-deps` | Check whether scip-query and the detected language indexers are actually runnable | - |
 | `capabilities` | Report which evidence and verification capabilities are available in this project | `--json` |
 | `capability-matrix` | Report the evidence and verification capability matrix by language | `--json` |

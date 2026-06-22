@@ -31,7 +31,7 @@ scip-query react-component-duplicates --scope <react-source-scope> --full --json
 scip-query react-hook-candidates --scope <react-source-scope> --full --json
 scip-query react-large-component-pressure --scope <react-source-scope> --full --json
 scip-query recent-duplicates --scope <react-source-scope> --full --json
-scip-query health --scope <react-source-scope> --full --json
+scip-query health --scope <react-source-scope> --json
 ```
 
 ## Workflow

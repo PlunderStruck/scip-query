@@ -193,7 +193,7 @@ const HEALTH_PHASE_RUNNERS: Record<HealthPhaseName, HealthPhaseRunner> = {
  * - Barrel and orchestrator files deviating from sibling patterns (expected)
  */
 export function health(db: ScipDatabase, opts: { scope?: string; full?: boolean } = {}): HealthReport {
-  return withHealthRun(db, opts.full === true, (statsResult, budget) => {
+  return withHealthRun(db, opts.full !== false, (statsResult, budget) => {
     const analyses = runHealthAnalyses(db, opts.scope, statsResult, budget);
     return buildHealthReport(analyses);
   });
@@ -204,7 +204,7 @@ export function healthPhase(
   phase: HealthPhaseName,
   opts: { scope?: string; full?: boolean } = {},
 ): HealthPhaseResult {
-  return withHealthRun(db, opts.full === true, (statsResult, budget) =>
+  return withHealthRun(db, opts.full !== false, (statsResult, budget) =>
     HEALTH_PHASE_RUNNERS[phase](db, opts.scope, budget, statsResult),
   );
 }
@@ -612,7 +612,7 @@ function healthBudget(statsResult: ReturnType<typeof stats>, full: boolean): Hea
       releaseCachesBetweenPhases: true,
       warnings:
         full && isLargeIndex
-          ? ['Large index detected; running health without candidate scan or result caps because --full was supplied.']
+          ? ['Large index detected; running health without candidate scan or result caps because full mode is enabled.']
           : [],
     };
   }
@@ -623,7 +623,7 @@ function healthBudget(statsResult: ReturnType<typeof stats>, full: boolean): Hea
     complexityResultLimit,
     releaseCachesBetweenPhases: true,
     warnings: [
-      `Large index detected; candidate-style health checks scanned their highest-priority ${DEFAULT_HEALTH_CANDIDATE_SCAN_LIMIT} symbols and reported their top ${DEFAULT_HEALTH_CANDIDATE_RESULT_LIMIT} findings. Run "scip-query health --full" for unbounded candidate counts.`,
+      `Large index detected; candidate-style health checks scanned their highest-priority ${DEFAULT_HEALTH_CANDIDATE_SCAN_LIMIT} symbols and reported their top ${DEFAULT_HEALTH_CANDIDATE_RESULT_LIMIT} findings. Enable full mode for unbounded candidate counts.`,
     ],
   };
 }

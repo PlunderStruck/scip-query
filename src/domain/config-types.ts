@@ -81,6 +81,8 @@ export interface ScipQueryConfig {
   suppressions?: FindingSuppression[];
   /** Project-declared file groups that intentionally change together. */
   declaredCouplings?: DeclaredCouplingConfig[];
+  /** Optional analyzer configuration. */
+  locality?: LocalityConfig;
 }
 
 // ── Project Config (.scipquery.json) ───────────────────────
@@ -102,6 +104,13 @@ export interface ProjectConfig {
   suppressions?: FindingSuppression[];
   /** Project-declared file groups that intentionally change together. */
   declaredCouplings?: DeclaredCouplingConfig[];
+  /** Optional locality analyzer configuration. */
+  locality?: LocalityConfig;
+}
+
+export interface LocalityConfig {
+  /** Folder names that should be treated as architectural ownership boundaries. */
+  architecturalBoundarySegments?: string[];
 }
 
 export interface DeclaredCouplingConfig {

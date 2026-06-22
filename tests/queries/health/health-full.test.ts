@@ -159,12 +159,15 @@ describe('health --full', () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('removes the health detector result cap when full is true', () => {
-    const regularReport = health(db);
+  it('runs uncapped by default and keeps bounded mode explicit', () => {
+    const regularReport = health(db, { full: false });
+    const defaultReport = health(db);
     const fullReport = health(db, { full: true });
 
     expect(regularReport.findings.similarPairs).toBe(50);
+    expect(defaultReport.findings.similarPairs).toBe(56);
     expect(fullReport.findings.similarPairs).toBe(56);
+    expect(defaultReport.pressure).toEqual(fullReport.pressure);
     expect(regularReport.pressure).toEqual([]);
     expect(fullReport.pressure).toEqual(
       expect.arrayContaining([

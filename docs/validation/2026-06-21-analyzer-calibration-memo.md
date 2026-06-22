@@ -60,6 +60,8 @@ Implementation anchors:
 | Stale health summary      | `scip-query code summarizeHealthStaleAbstractions --json` | `summarizeHealthStaleAbstractions()` counts `unused` and `singleUse`, but score still uses total stale count.                                                                   |
 | Score formula follow-up   | `scip-query code computeHealthScore --json`               | `computeHealthScore()` still scores `extract` and `stale-abstractions` from raw counts.                                                                                         |
 
+2026-06-22 note: `health()` still anchors the composite health report in `src/queries/health/health.ts`; the later default-policy change makes full mode the default for `health`, so the historical `plan-context health --full` evidence remains valid but is no longer required for the visible health command.
+
 Stable_Management score baseline:
 
 | Metric                | Value |

@@ -163,6 +163,7 @@ export const handleLocalityCandidates = budgetedDbCommand('locality-candidates',
     limit: definedLimitOption(opts, 'limit', 20),
     scanLimit: budget.scanLimit,
     semantic: budget.semantic,
+    architecturalBoundarySegments: db.config.locality?.architecturalBoundarySegments,
   });
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('locality-candidates', args, opts, results);
@@ -180,6 +181,7 @@ export const handleLocalityCandidates = budgetedDbCommand('locality-candidates',
     console.log(`  Consumer coverage: ${r.consumerCoverage}; consumers: ${r.consumerFiles.length}`);
     if (r.nearestCommonOwner) console.log(`  Nearest common owner: ${r.nearestCommonOwner}`);
     if (r.suggestedHome) console.log(`  Suggested home: ${r.suggestedHome}`);
+    if (r.whyNoSuggestedHome) console.log(`  Suggested home withheld: ${r.whyNoSuggestedHome}`);
     if (r.boundaryMarkers.length > 0) console.log(`  Boundary markers: ${r.boundaryMarkers.join('; ')}`);
     console.log(`  Recommendation: ${r.recommendation}`);
     if (r.consumerFiles.length > 0) {

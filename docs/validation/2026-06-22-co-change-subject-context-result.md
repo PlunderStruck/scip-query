@@ -20,6 +20,8 @@ External issue/PR label metadata means labels assigned by a hosting or tracker s
 
 2026-06-22 note: the later `diff-gate.ts` doc-reference same-diff fix does not change the co-change subject-context propagation described here.
 
+2026-06-22 note: the later health full-default change in `src/queries/health/health.ts` does not change subject-context propagation into health JSON summaries.
+
 ## Coverage
 
 - `tests/analysis/git-history.test.ts` covers conventional subject labels, issue refs, newest subject samples, and the explicit unavailable external-label status.

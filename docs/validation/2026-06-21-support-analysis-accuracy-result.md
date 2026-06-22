@@ -22,6 +22,8 @@ That aligns `status` and `doctor` with `config-validate` for stale declared-coup
 
 Regression coverage was added through `handleStatus({ json: true })` in a temp project selected with `SCIP_QUERY_PROJECT_ROOT`. The test asserts that status JSON includes the stale declared-coupling warning from root-aware config validation.
 
+2026-06-22 locality-config note: the later `locality.architecturalBoundarySegments` config support still uses `validateProjectConfig()` in `src/runtime/config.ts`; this support-analysis target remains current.
+
 ## Command Review
 
 Target: `validateProjectConfig()` in `src/runtime/config.ts`.

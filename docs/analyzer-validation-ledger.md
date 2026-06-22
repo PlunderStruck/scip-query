@@ -108,6 +108,8 @@ Current pilot:
 - Doc parser second-corpus validation result: `docs/validation/2026-06-22-doc-parser-second-corpus-validation-result.md`
 - Validation ledger closeout result: `docs/validation/2026-06-22-validation-ledger-closeout-result.md`
 - Global install cross-verification result: `docs/validation/2026-06-22-global-install-cross-verification-result.md`
+- Stable Management locality suggested-home review: `docs/validation/2026-06-22-stable-management-locality-suggested-home-review.md`
+- Locality positive suggested-home result: `docs/validation/2026-06-22-locality-positive-suggested-home-result.md`
 - Stable_Management wrapper confirmation: `docs/validation/2026-06-21-stable-management-wrapper-boundary-confirmation.md`
 - Vue pressure-kind output result: `docs/validation/2026-06-21-vue-pressure-kind-output-result.md`
 - Similarity evidence split result: `docs/validation/2026-06-21-similarity-evidence-split-result.md`

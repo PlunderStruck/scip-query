@@ -143,7 +143,7 @@ When verification *fails*, the errors name the exact references the static evide
 
 **5. Trim speculative generality.** `unused-params` finds trailing parameters no body ever uses (the classic "options for later"), scoped to removals that are type-safe by construction.
 
-**6. Keep frontend reuse honest.** React and Vue have dedicated frontend hygiene checks: component-duplicate commands compare JSX/template structure, hook/composable commands compare state/effect/request behavior, and large-component/view commands flag files that concentrate too many reasons to change. `health --full` includes these as hygiene pressure, while `incomplete-migration` remains the direct check for a hook/composable/helper extraction that was wired into some sites but not all of them.
+**6. Keep frontend reuse honest.** React and Vue have dedicated frontend hygiene checks: component-duplicate commands compare JSX/template structure, hook/composable commands compare state/effect/request behavior, and large-component/view commands flag files that concentrate too many reasons to change. `health` includes these as hygiene pressure, while `incomplete-migration` remains the direct check for a hook/composable/helper extraction that was wired into some sites but not all of them.
 
 **7. Surface hidden coupling.** `co-change` finds file pairs that repeatedly change in the same commits with *no* dependency edge — schema ↔ generated inventory ↔ doc triangles, backend schemas ↔ frontend stores, `.env.example` ↔ its parser. The reference graph cannot see these; the change graph can.
 
@@ -209,7 +209,7 @@ Heuristic detectors carry guardrails learned from real codebases: published `pac
 
 ## Agent Skills
 
-`scip-query install-skills` symlinks ready-made skills into Claude Code, Codex, and shared agent roots (`~/.agents/skills/`) — they update automatically with the package. The `scip-query` router skill triggers on any codebase work and dispatches to the right specialist: exploring (`scip-explore`), debloating (`scip-debloat`), maintainability review (`scip-maintainability`), React frontend maintainability review (`scip-react-maintainability`), Vue frontend maintainability review (`scip-vue-maintainability`), post-change verification (`scip-verify`), doc reconciliation (`scip-doc-reconcile`), AI-rot cleanup (`scip-ai-cleanup`), per-language guidance (`scip-language-playbook`), and grounded planning (`concrete-plan`).
+`scip-query install-skills` symlinks ready-made skills into Claude Code, Codex, and shared agent roots (`~/.agents/skills/`) — they update automatically with the package. The `scip-query` router skill triggers on any codebase work and dispatches to the right specialist: exploring (`scip-explore`), debloating (`scip-debloat`), directory architecture review (`scip-directory-architecture`), maintainability review (`scip-maintainability`), React frontend maintainability review (`scip-react-maintainability`), Vue frontend maintainability review (`scip-vue-maintainability`), post-change verification (`scip-verify`), doc reconciliation (`scip-doc-reconcile`), AI-rot cleanup (`scip-ai-cleanup`), per-language guidance (`scip-language-playbook`), and grounded planning (`concrete-plan`).
 
 Then, once per project, `scip-query setup-agent` seeds the `AGENTS.md` guidance block (plus a `CLAUDE.md` import shim, since Claude Code doesn't read AGENTS.md natively), and `--git-hook` adds a pre-commit diff gate that fires no matter which agent — or human — wrote the change.
 

@@ -40,6 +40,10 @@ AVL-005 is complete for the current public analyzer surface. Command descriptors
 
 The command stays outside health scoring. Its defining output is a report-only directory-locality claim: a candidate symbol or file, directory ancestry, consumer files, consumer coverage, nearest common owner, suggested home, and counterevidence.
 
+## 2026-06-22 Health Default Addendum
+
+`src/runtime/commands/command-descriptors.ts` still owns the composite `health` command descriptor. The visible `--full` option is now a compatibility flag because the health report runs unbounded candidate analyses by default.
+
 ## Verification
 
 Completed:

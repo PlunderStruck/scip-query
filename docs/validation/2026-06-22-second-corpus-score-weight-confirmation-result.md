@@ -118,6 +118,8 @@ Completed so far:
 - `node dist/cli.js recent-duplicates --json` returned 0 findings.
 - `node dist/cli.js unused-params --json` returned 0 findings.
 - `node dist/cli.js wrapper-candidates --json` returned 0 findings.
+
+2026-06-22 note: the later health full-default change in `src/queries/health/health.ts` does not alter hidden-coupling score weighting. Current `health --json` is equivalent to the historical `health --full --json` aggregate run for this purpose.
 - `node dist/cli.js passthrough-candidates --json` returned 0 findings.
 - `npm test` passed: 67 files, 336 tests. The run still prints the known noisy `git diff` fixture warning from the existing incomplete-migration fixture.
 - `npx prettier --check ...` passed for touched files.

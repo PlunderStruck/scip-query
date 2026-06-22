@@ -36,6 +36,8 @@ Source anchors:
 
 2026-06-22 note: `queryCommandOrder` remains the correct public-command anchor after the `locality-candidates` implementation; the command list now includes that contextual analyzer.
 
+2026-06-22 note: `src/queries/health/health.ts` remains the composite health implementation anchor after health became full-by-default. This pilot's historical raw commands are unchanged.
+
 ## Command Status
 
 | Repository          | Revision                                   | Baseline status                                                                                        | Analyzer status                                                                             |

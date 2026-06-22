@@ -178,7 +178,7 @@ export function handleHealth(rawOpts: unknown): void {
   try {
     const report = runIsolatedHealthReport({
       scope: stringOptionValue(opts, 'scope'),
-      full: booleanOptionValue(opts, 'full'),
+      full: true,
       json: booleanOptionValue(opts, 'json'),
     });
     if (booleanOptionValue(opts, 'json')) {

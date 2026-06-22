@@ -126,6 +126,27 @@ describe('validateProjectConfig', () => {
     );
   });
 
+  it('validates locality architectural boundary segments', () => {
+    const diagnostics = validateProjectConfig({
+      locality: {
+        architecturalBoundarySegments: ['policies', '', 'workflow/helpers'],
+      },
+    });
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        path: 'locality.architecturalBoundarySegments[1]',
+        message: 'Boundary segment must be a non-empty string.',
+      }),
+      expect.objectContaining({
+        level: 'error',
+        path: 'locality.architecturalBoundarySegments[2]',
+        message: 'Boundary segment must be a single folder name, not a path.',
+      }),
+    ]);
+  });
+
   it('warns when declared coupling file paths do not exist', () => {
     const projectRoot = createProject();
     mkdirSync(join(projectRoot, 'src'), { recursive: true });

@@ -81,6 +81,39 @@ export function validateProjectConfig(
   if (config.watch?.cooldownMs !== undefined && config.watch.cooldownMs <= 0) {
     diagnostics.push({ level: 'error', path: 'watch.cooldownMs', message: 'Must be greater than 0.' });
   }
+  if (config.locality !== undefined) {
+    if (!isConfigObject(config.locality)) {
+      diagnostics.push({ level: 'error', path: 'locality', message: 'Must be an object.' });
+    } else {
+      const segments = config.locality.architecturalBoundarySegments as unknown;
+      if (segments !== undefined) {
+        if (!Array.isArray(segments)) {
+          diagnostics.push({
+            level: 'error',
+            path: 'locality.architecturalBoundarySegments',
+            message: 'Must be an array.',
+          });
+        } else {
+          for (const [index, segment] of segments.entries()) {
+            const path = `locality.architecturalBoundarySegments[${index}]`;
+            if (typeof segment !== 'string' || segment.trim() === '') {
+              diagnostics.push({
+                level: 'error',
+                path,
+                message: 'Boundary segment must be a non-empty string.',
+              });
+            } else if (segment.includes('/') || segment.includes('\\')) {
+              diagnostics.push({
+                level: 'error',
+                path,
+                message: 'Boundary segment must be a single folder name, not a path.',
+              });
+            }
+          }
+        }
+      }
+    }
+  }
   if (config.declaredCouplings !== undefined && !Array.isArray(config.declaredCouplings)) {
     diagnostics.push({ level: 'error', path: 'declaredCouplings', message: 'Must be an array.' });
   } else {
@@ -254,4 +287,8 @@ export function addFindingSuppression(
 function ensureDir(dir: string): string {
   mkdirSync(dir, { recursive: true });
   return dir;
+}
+
+function isConfigObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

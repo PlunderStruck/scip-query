@@ -21,6 +21,8 @@ This slice implements the co-change follow-up that asked for broad-feature-sweep
 
 2026-06-22 note: the later `diff-gate.ts` doc-reference same-diff fix does not change the co-change commit-scope or recency behavior described here.
 
+2026-06-22 note: the later health full-default change in `src/queries/health/health.ts` does not change how commit scope or recency flow into health hidden-coupling summaries.
+
 ## Verification
 
 - `npx vitest run tests/analysis/git-history.test.ts` passed: 1 file, 10 tests.

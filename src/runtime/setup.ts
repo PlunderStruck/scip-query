@@ -7,11 +7,13 @@ import { getScipVersion, isScipInstalled, printScipInstallInstructions, tryInsta
 const IS_WINDOWS = platform() === 'win32';
 export const BUILTIN_SKILLS = [
   'scip-query',
+  'scip-query-setup',
   'concrete-plan',
   'scip-ai-cleanup',
   'scip-explore',
   'scip-debloat',
   'scip-doc-reconcile',
+  'scip-directory-architecture',
   'scip-maintainability',
   'scip-react-maintainability',
   'scip-vue-maintainability',

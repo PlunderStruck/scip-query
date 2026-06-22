@@ -37,7 +37,8 @@ When the user asks you to build, change, or fix something non-trivial:
 | Find dead code, duplication, or structural bloat | `scip-debloat` | `scip-query health` |
 | Clean up after AI-assisted coding sessions | `scip-ai-cleanup` | `scip-query recent-duplicates`, `scip-query incomplete-migration` |
 | Reconcile docs/standards that drifted from the code | `scip-doc-reconcile` | `scip-query doc-drift <doc>` |
-| Review architecture, boundaries, hidden policies | `scip-maintainability` | `scip-query bottlenecks`, `scip-query coupling` |
+| Review or redesign source folder structure and ownership boundaries | `scip-directory-architecture` | `scip-query locality-candidates --json --full`, `scip-query similar-files --full` |
+| Review architecture, hidden policies, weak boundaries beyond folder structure | `scip-maintainability` | `scip-query bottlenecks`, `scip-query coupling` |
 | Review React frontend reuse, components, hooks, or TSX/JSX maintainability | `scip-react-maintainability` | `scip-query react-component-duplicates --full`, `scip-query react-hook-candidates --full` |
 | Review Vue frontend reuse, SFCs, templates, or composables | `scip-vue-maintainability` | `scip-query vue-component-duplicates --full`, `scip-query vue-composable-candidates --full` |
 

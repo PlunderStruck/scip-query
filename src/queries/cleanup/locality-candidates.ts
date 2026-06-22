@@ -12,6 +12,8 @@ export type LocalityActionTier = 'signal';
 
 export type LocalityConsumerCoverage = 'exact' | 'file-level' | 'none';
 
+export type LocalityDestinationConfidence = 'exact' | 'withheld';
+
 export type LocalityRecommendedTier =
   | 'same-file'
   | 'sibling-folder'
@@ -48,6 +50,8 @@ export interface LocalityCandidate {
   boundaryMarkers: string[];
   recommendedTier: LocalityRecommendedTier;
   suggestedHome: string | null;
+  destinationConfidence: LocalityDestinationConfidence;
+  whyNoSuggestedHome: string | null;
   counterevidence: string[];
   reasons: string[];
   recommendation: string;
@@ -60,11 +64,18 @@ export interface LocalityCandidatesOptions {
   minConsumers?: number;
   scanLimit?: number;
   semantic?: boolean;
+  architecturalBoundarySegments?: readonly string[];
 }
 
 interface SourceUnitWithDefinition {
   unit: LocalitySourceUnit;
   definition?: IndexedDefinition;
+}
+
+interface DestinationAssessment {
+  suggestedHome: string | null;
+  confidence: LocalityDestinationConfidence;
+  whyNoSuggestedHome: string | null;
 }
 
 const DEFAULT_LIMIT = 20;
@@ -121,18 +132,55 @@ const SHARED_HOME_SEGMENTS = new Set([
   'utils',
 ]);
 
+const DEFAULT_ARCHITECTURAL_BOUNDARY_SEGMENTS = new Set([
+  'access',
+  'api',
+  'auth',
+  'config',
+  'db',
+  'effect',
+  'errors',
+  'hooks',
+  'lib',
+  'middleware',
+  'permissions',
+  'routes',
+  'schemas',
+  'servicetasks',
+  'services',
+  'startup',
+  'store',
+  'stores',
+  'test-utils',
+  'repository',
+  'repositories',
+  'tests',
+  'types',
+  'ui',
+  'utils',
+  'workflow',
+  'workflows',
+]);
+
 export function localityCandidates(db: ScipDatabase, options: LocalityCandidatesOptions = {}): LocalityCandidate[] {
   const limit = positiveInteger(options.limit, DEFAULT_LIMIT);
   const minConsumers = positiveInteger(options.minConsumers, DEFAULT_MIN_CONSUMERS);
   const index = new ProjectIndex(db);
   const graph = index.fileDependencyGraph(options.scope);
+  const indexedDirectories = directorySetForIndexedFiles(indexedDocumentPaths(db, { includeIgnored: false }));
+  const architecturalBoundarySegments = architecturalBoundarySegmentsFor(
+    db.config.locality?.architecturalBoundarySegments,
+    options.architecturalBoundarySegments,
+  );
 
   const sourceUnits = options.target
     ? resolveTargetSourceUnits(db, index, options.target)
     : scanFileSourceUnits(db, options.scope, options.scanLimit);
 
   const candidates = sourceUnits
-    .map((source) => buildLocalityCandidate(index, graph, source, options))
+    .map((source) =>
+      buildLocalityCandidate(index, graph, source, options, indexedDirectories, architecturalBoundarySegments),
+    )
     .filter((candidate) => candidate.consumerFiles.length >= minConsumers || options.target)
     .sort(compareLocalityCandidates);
 
@@ -188,6 +236,8 @@ function buildLocalityCandidate(
   graph: Map<string, Set<string>>,
   source: SourceUnitWithDefinition,
   options: LocalityCandidatesOptions,
+  indexedDirectories: Set<string>,
+  architecturalBoundarySegments: ReadonlySet<string>,
 ): LocalityCandidate {
   const consumerFiles = source.definition
     ? symbolConsumerFiles(index, source.definition, options.semantic)
@@ -208,15 +258,31 @@ function buildLocalityCandidate(
     ...(nearestCommonOwner ? boundaryMarkersForPath(nearestCommonOwner) : []),
   ]);
   const tier = recommendedTier(source.unit, currentDirectory, nearestCommonOwner, consumerFiles);
-  const suggestedHome = suggestedHomeFor(tier, nearestCommonOwner, consumerFiles);
+  const destination = destinationAssessmentFor(
+    tier,
+    source.unit,
+    currentDirectory,
+    nearestCommonOwner,
+    consumerFiles,
+    indexedDirectories,
+    architecturalBoundarySegments,
+  );
   const counterevidence = counterevidenceFor(
     source.unit,
     consumerCoverage,
     nearestCommonOwner,
     consumerFiles,
     currentDirectory,
+    destination.whyNoSuggestedHome,
   );
-  const reasons = reasonsFor(source.unit, currentDirectory, nearestCommonOwner, consumerFiles, suggestedHome);
+  const reasons = reasonsFor(
+    source.unit,
+    currentDirectory,
+    nearestCommonOwner,
+    consumerFiles,
+    destination.suggestedHome,
+    destination.whyNoSuggestedHome,
+  );
 
   return {
     actionTier: 'signal',
@@ -229,10 +295,12 @@ function buildLocalityCandidate(
     nearestCommonOwner,
     boundaryMarkers,
     recommendedTier: tier,
-    suggestedHome,
+    suggestedHome: destination.suggestedHome,
+    destinationConfidence: destination.confidence,
+    whyNoSuggestedHome: destination.whyNoSuggestedHome,
     counterevidence,
     reasons,
-    recommendation: recommendationFor(tier, suggestedHome, consumerCoverage),
+    recommendation: recommendationFor(tier, destination.suggestedHome, consumerCoverage),
   };
 }
 
@@ -396,27 +464,153 @@ function recommendedTier(
   return 'sibling-folder';
 }
 
-function suggestedHomeFor(
+function destinationAssessmentFor(
   tier: LocalityRecommendedTier,
+  sourceUnit: LocalitySourceUnit,
+  currentDirectory: string,
   nearestCommonOwner: string | null,
   consumerFiles: string[],
-): string | null {
+  indexedDirectories: Set<string>,
+  architecturalBoundarySegments: ReadonlySet<string>,
+): DestinationAssessment {
+  const unsupportedReason = unsupportedDestinationReason(tier, nearestCommonOwner);
+  if (unsupportedReason) return withheldDestination(unsupportedReason);
+
+  const sourceRoot = sourceRootFor(sourceUnit.file);
+  const directDestination = directDestinationFor(
+    tier,
+    currentDirectory,
+    sourceRoot,
+    consumerFiles,
+    architecturalBoundarySegments,
+  );
+  if (directDestination) return directDestination;
+
+  const owner = nearestCommonOwner!;
+  if (normalizeDirectory(currentDirectory) === normalizeDirectory(owner)) {
+    return withheldDestination(`${currentDirectory} is already the nearest common owner for its consumers.`);
+  }
+
+  const sharedOwnerDestination = sharedOwnerDestinationFor(
+    owner,
+    currentDirectory,
+    sourceRoot,
+    architecturalBoundarySegments,
+  );
+  if (sharedOwnerDestination) return sharedOwnerDestination;
+
+  return proposedSharedHomeDestinationFor(
+    owner,
+    currentDirectory,
+    sourceRoot,
+    indexedDirectories,
+    architecturalBoundarySegments,
+  );
+}
+
+function unsupportedDestinationReason(tier: LocalityRecommendedTier, nearestCommonOwner: string | null): string | null {
   if (!nearestCommonOwner) {
-    return null;
+    return 'No consumer owner could be inferred from the current index.';
   }
   if (tier === 'no-exact-consumers' || tier === 'repository-level-review') {
-    return null;
+    return 'The inferred owner is too broad or unsupported for an exact destination.';
   }
+  return null;
+}
+
+function directDestinationFor(
+  tier: LocalityRecommendedTier,
+  currentDirectory: string,
+  sourceRoot: string,
+  consumerFiles: string[],
+  architecturalBoundarySegments: ReadonlySet<string>,
+): DestinationAssessment | null {
   if (tier === 'same-file') {
-    return consumerFiles[0] ?? null;
+    const home = consumerFiles[0] ?? null;
+    return home ? exactDestination(home) : withheldDestination('No same-file consumer path was available.');
   }
   if (tier === 'sibling-folder' && consumerFiles.length === 1) {
-    return normalizeDirectory(posix.dirname(consumerFiles[0]));
+    const destination = normalizeDirectory(posix.dirname(consumerFiles[0]));
+    const boundaryReason = boundaryDestinationReason(
+      currentDirectory,
+      sourceRoot,
+      destination,
+      architecturalBoundarySegments,
+    );
+    if (boundaryReason) return withheldDestination(boundaryReason);
+    return exactDestination(destination);
   }
-  if (endsWithSharedHomeSegment(nearestCommonOwner)) {
-    return nearestCommonOwner;
+  return null;
+}
+
+function sharedOwnerDestinationFor(
+  owner: string,
+  currentDirectory: string,
+  sourceRoot: string,
+  architecturalBoundarySegments: ReadonlySet<string>,
+): DestinationAssessment | null {
+  if (!endsWithSharedHomeSegment(owner)) return null;
+  return exactDestinationWithinBoundary(
+    owner,
+    currentDirectory,
+    sourceRoot,
+    architecturalBoundarySegments,
+    `Nearest shared owner ${owner} is outside source root ${sourceRoot}.`,
+  );
+}
+
+function proposedSharedHomeDestinationFor(
+  owner: string,
+  currentDirectory: string,
+  sourceRoot: string,
+  indexedDirectories: Set<string>,
+  architecturalBoundarySegments: ReadonlySet<string>,
+): DestinationAssessment {
+  if (owner === '.') {
+    return withheldDestination('The nearest common owner is the repository root.');
   }
-  return nearestCommonOwner === '.' ? null : `${nearestCommonOwner}/shared`;
+  const proposedHome = `${owner}/shared`;
+  const destination = exactDestinationWithinBoundary(
+    proposedHome,
+    currentDirectory,
+    sourceRoot,
+    architecturalBoundarySegments,
+    `Proposed home ${proposedHome} is outside source root ${sourceRoot}.`,
+  );
+  if (destination.confidence === 'withheld') return destination;
+  if (!indexedDirectories.has(proposedHome)) {
+    return withheldDestination(`${proposedHome} does not exist in the indexed project.`);
+  }
+
+  return destination;
+}
+
+function exactDestinationWithinBoundary(
+  destination: string,
+  currentDirectory: string,
+  sourceRoot: string,
+  architecturalBoundarySegments: ReadonlySet<string>,
+  outsideSourceRootReason: string,
+): DestinationAssessment {
+  if (!isWithinDirectory(destination, sourceRoot)) {
+    return withheldDestination(outsideSourceRootReason);
+  }
+  const boundaryReason = boundaryDestinationReason(
+    currentDirectory,
+    sourceRoot,
+    destination,
+    architecturalBoundarySegments,
+  );
+  if (boundaryReason) return withheldDestination(boundaryReason);
+  return exactDestination(destination);
+}
+
+function exactDestination(suggestedHome: string): DestinationAssessment {
+  return { suggestedHome, confidence: 'exact', whyNoSuggestedHome: null };
+}
+
+function withheldDestination(whyNoSuggestedHome: string): DestinationAssessment {
+  return { suggestedHome: null, confidence: 'withheld', whyNoSuggestedHome };
 }
 
 function counterevidenceFor(
@@ -425,6 +619,7 @@ function counterevidenceFor(
   nearestCommonOwner: string | null,
   consumerFiles: string[],
   currentDirectory: string,
+  whyNoSuggestedHome: string | null,
 ): string[] {
   const evidence: string[] = ['Report-only signal; review ownership before moving files.'];
   if (consumerCoverage === 'none') {
@@ -447,6 +642,9 @@ function counterevidenceFor(
   if (nearestCommonOwner && currentDirectory.startsWith(`${nearestCommonOwner}/`)) {
     evidence.push('Candidate already lives under the nearest common owner.');
   }
+  if (whyNoSuggestedHome) {
+    evidence.push(`No exact suggested home: ${whyNoSuggestedHome}`);
+  }
   return evidence;
 }
 
@@ -456,6 +654,7 @@ function reasonsFor(
   nearestCommonOwner: string | null,
   consumerFiles: string[],
   suggestedHome: string | null,
+  whyNoSuggestedHome: string | null,
 ): string[] {
   const reasons: string[] = [];
   reasons.push(`${sourceUnit.shortName} currently lives in ${currentDirectory}.`);
@@ -466,6 +665,8 @@ function reasonsFor(
   }
   if (suggestedHome) {
     reasons.push(`Suggested home is ${suggestedHome}.`);
+  } else if (whyNoSuggestedHome) {
+    reasons.push(`No exact suggested home: ${whyNoSuggestedHome}`);
   }
   return reasons;
 }
@@ -509,6 +710,90 @@ function scoreLocalityCandidate(candidate: LocalityCandidate): number {
   return score;
 }
 
+function directorySetForIndexedFiles(files: string[]): Set<string> {
+  const directories = new Set<string>(['.']);
+  for (const file of files) {
+    let directory = normalizeDirectory(posix.dirname(file));
+    while (!directories.has(directory)) {
+      directories.add(directory);
+      if (directory === '.') {
+        break;
+      }
+      directory = normalizeDirectory(posix.dirname(directory));
+    }
+  }
+  return directories;
+}
+
+function sourceRootFor(path: string): string {
+  const segments = pathSegments(path);
+  const sourceIndex = segments.indexOf('src');
+  if (sourceIndex >= 0) {
+    return segments.slice(0, sourceIndex + 1).join('/');
+  }
+  if (segments.length <= 1) {
+    return '.';
+  }
+  return segments[0]!;
+}
+
+function isWithinDirectory(path: string, directory: string): boolean {
+  const normalizedPath = normalizeDirectory(path);
+  const normalizedDirectory = normalizeDirectory(directory);
+  return (
+    normalizedDirectory === '.' ||
+    normalizedPath === normalizedDirectory ||
+    normalizedPath.startsWith(`${normalizedDirectory}/`)
+  );
+}
+
+function isArchitecturalBoundaryDirectory(
+  currentDirectory: string,
+  sourceRoot: string,
+  architecturalBoundarySegments: ReadonlySet<string>,
+): boolean {
+  const currentSegments = pathSegments(currentDirectory);
+  const rootSegments = pathSegments(sourceRoot);
+  const localSegments = isWithinDirectory(currentDirectory, sourceRoot)
+    ? currentSegments.slice(rootSegments.length)
+    : currentSegments;
+
+  return localSegments.some((segment) => architecturalBoundarySegments.has(segment.toLowerCase()));
+}
+
+function boundaryDestinationReason(
+  currentDirectory: string,
+  sourceRoot: string,
+  destination: string,
+  architecturalBoundarySegments: ReadonlySet<string>,
+): string | null {
+  if (normalizeDirectory(currentDirectory) === normalizeDirectory(destination)) {
+    return null;
+  }
+  if (!isArchitecturalBoundaryDirectory(currentDirectory, sourceRoot, architecturalBoundarySegments)) {
+    return null;
+  }
+  return `${currentDirectory} is a named architectural boundary; an exact move to ${destination} needs human design.`;
+}
+
+function architecturalBoundarySegmentsFor(...segmentLists: Array<readonly string[] | undefined>): ReadonlySet<string> {
+  const segments = new Set(DEFAULT_ARCHITECTURAL_BOUNDARY_SEGMENTS);
+  for (const list of segmentLists) {
+    for (const segment of list ?? []) {
+      const normalized = normalizeArchitecturalBoundarySegment(segment);
+      if (normalized) {
+        segments.add(normalized);
+      }
+    }
+  }
+  return segments;
+}
+
+function normalizeArchitecturalBoundarySegment(segment: string): string | null {
+  const normalized = segment.trim().toLowerCase();
+  return normalized === '' ? null : normalized;
+}
+
 function hasMarker(path: string, marker: string): boolean {
   return markerLabelsForPath(path).includes(marker);
 }
@@ -531,6 +816,11 @@ function normalizePath(path: string): string {
 function normalizeDirectory(directory: string): string {
   const normalized = normalizePath(directory);
   return normalized === '' ? '.' : normalized;
+}
+
+function pathSegments(path: string): string[] {
+  const normalized = normalizePath(path);
+  return normalized === '.' ? [] : normalized.split('/').filter(Boolean);
 }
 
 function positiveInteger(value: number | undefined, fallback: number): number {

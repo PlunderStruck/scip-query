@@ -137,7 +137,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     description: 'Composite codebase health report with prioritized action list',
     options: [
       option('-s, --scope <path>', 'Limit to files matching path'),
-      option('--full', 'Run unbounded candidate analyses on large indexes'),
+      option('--full', 'Compatibility flag; health already runs unbounded candidate analyses by default'),
       option('--json', 'Output as JSON for programmatic consumption'),
       option('--baseline', 'Compare findings against the committed baseline; exit 1 on new findings'),
       option('--write-baseline', 'Snapshot current finding identities to the baseline file'),

@@ -38,7 +38,7 @@ Run the Vue review commands uncapped when doing a serious frontend pass. Do not 
 scip-query vue-component-duplicates --scope <vue-source-scope> --full --json
 scip-query vue-composable-candidates --scope <vue-source-scope> --full --json
 scip-query vue-large-view-pressure --scope <vue-source-scope> --full --json
-scip-query health --full --json
+scip-query health --json
 ```
 
 ## Workflow

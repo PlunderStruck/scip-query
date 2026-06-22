@@ -249,7 +249,7 @@ Then run the post-change checks that match what the fix actually did:
 | --- | --- |
 | Extracted a helper, hook, composable, component logic, or named abstraction | `scip-query incomplete-migration`; migrate every unchanged site that still contains the extracted logic or document essential variation |
 | Added a new helper, module, component, hook, or composable | `scip-query similar <new-symbol>` when symbol-like, plus `scip-query recent-duplicates --full`; delete echoes of established code |
-| Consolidated duplicated files, command handlers, adapters, or workflows | rerun the detector that motivated the change: `similar-files`, `similar-chains`, `wrapper-candidates`, `passthrough-candidates`, frontend duplicate commands, or `health --full` |
+| Consolidated duplicated files, command handlers, adapters, or workflows | rerun the detector that motivated the change: `similar-files`, `similar-chains`, `wrapper-candidates`, `passthrough-candidates`, frontend duplicate commands, or `health` |
 | Added parameters, options, config flags, props, or broad option objects | `scip-query unused-params`; remove speculative inputs that no body uses |
 | Added a wrapper, adapter, facade, re-export, or forwarding layer | `scip-query wrapper-candidates`, `scip-query passthrough-candidates`, and `scip-query redundant-reexports` when exports changed |
 | Added an interface, base class, type alias, or abstraction boundary | `scip-query stale-abstractions --include-low-confidence`; prove the abstraction has real consumers and policy |

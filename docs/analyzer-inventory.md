@@ -22,7 +22,7 @@ The action tiers are:
 
 The published query surface lives in `src/queries/public-query-entries.ts`. The CLI command order and families live in `src/runtime/commands/query-command-specs.ts`. The composite health score runs the phases listed in `HEALTH_PHASES` in `src/queries/health/health.ts`. The diff gate runs the checks listed in `DIFF_GATE_CHECKS` in `src/queries/impact/diff-gate.ts`.
 
-`health --full --json` on this repository currently reports:
+`health --json` on this repository currently reports:
 
 - score 100, riskScore 100, hygieneScore 100
 - zero active findings across all health phases
