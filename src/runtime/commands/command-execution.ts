@@ -226,7 +226,7 @@ export function definedLimitOption(opts: CommandOptions, key: string, fallback: 
   return explicitLimit ?? fallback;
 }
 
-function optionValueSource(opts: CommandOptions, key: string): string | undefined {
+export function optionValueSource(opts: CommandOptions, key: string): string | undefined {
   return (opts as CommandOptionsWithSources)[OPTION_VALUE_SOURCE]?.(key);
 }
 

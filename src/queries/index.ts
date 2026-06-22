@@ -81,22 +81,42 @@ export type { ByKindResult } from './navigation/by-kind.js';
 export type { DeepChainResult } from './graph/deep-chains.js';
 export type { HierarchyNode } from './navigation/hierarchy.js';
 export type { CallGraphResult } from './navigation/call-graph.js';
-export type { DriftResult, DriftSummary } from './cleanup/drift.js';
-export type { WrapperCandidate } from './cleanup/wrapper-candidates.js';
+export type { DriftActionTier, DriftPolicyBasis, DriftResult, DriftSummary } from './cleanup/drift.js';
+export type { WrapperActionTier, WrapperCandidate } from './cleanup/wrapper-candidates.js';
 export type { PassthroughCandidate } from './cleanup/passthrough-candidates.js';
-export type { StaleAbstraction } from './cleanup/stale-abstractions.js';
+export type { StaleAbstraction, StaleAbstractionActionTier, StalenessKind } from './cleanup/stale-abstractions.js';
 export type { UnusedParamsFinding } from './cleanup/unused-params.js';
 export type { ComplexityHotspot } from './quality/complexity-hotspots.js';
-export type { SimilarSymbolResult } from './cleanup/similar.js';
+export type { SimilarActionTier, SimilarEvidenceClass, SimilarSymbolResult } from './cleanup/similar.js';
 export type { SimilarFileResult } from './cleanup/similar-files.js';
 export type { ReactComponentDuplicateResult } from './frontend/react-component-duplicates.js';
-export type { ReactHookCandidateResult } from './frontend/react-hook-candidates.js';
-export type { ReactLargeComponentPressureResult } from './frontend/react-large-component-pressure.js';
+export type {
+  ReactHookActionTier,
+  ReactHookCandidateResult,
+  ReactHookEvidenceClass,
+} from './frontend/react-hook-candidates.js';
+export type {
+  ReactLargeComponentContextKind,
+  ReactLargeComponentPressureResult,
+  ReactLargeComponentRecommendationKind,
+} from './frontend/react-large-component-pressure.js';
 export type { VueComponentDuplicateResult } from './frontend/vue-component-duplicates.js';
-export type { VueComposableCandidateResult } from './frontend/vue-composable-candidates.js';
-export type { VueLargeViewPressureResult } from './frontend/vue-large-view-pressure.js';
+export type {
+  VueComposableActionTier,
+  VueComposableCandidateResult,
+  VueComposableEvidenceClass,
+} from './frontend/vue-composable-candidates.js';
+export type {
+  VueLargeViewContextKind,
+  VueLargeViewPressureResult,
+  VueLargeViewRecommendationKind,
+} from './frontend/vue-large-view-pressure.js';
 export type { SimilarChainResult } from './cleanup/similar-chains.js';
-export type { ExtractCandidate } from './cleanup/extract-candidates.js';
+export type {
+  ExtractCandidate,
+  ExtractCandidateActionTier,
+  ExtractCandidateKind,
+} from './cleanup/extract-candidates.js';
 export type { HealthAction, HealthReport } from './health/health-report.js';
 export type { ConvergenceResult } from './cleanup/convergence.js';
 export type { CodeResult } from './navigation/code.js';
@@ -106,9 +126,15 @@ export type { SliceResult } from './navigation/slice.js';
 export type { AffectedResult } from './graph/affected.js';
 export type { ChangeSurfaceEntry, ChangeSurfaceResult } from './impact/change-surface.js';
 export type { CleanupBatch, CleanupPlanEntry, CleanupPlanResult } from './cleanup/cleanup-plan.js';
-export type { DiffGateCheck, DiffGateFinding, DiffGateResult } from './impact/diff-gate.js';
+export type {
+  DiffGateActionTier,
+  DiffGateCheck,
+  DiffGateFinding,
+  DiffGateResult,
+  DocCitationKind,
+} from './impact/diff-gate.js';
 export type { CoChangeFinding, CoChangeResult } from './impact/co-change.js';
-export type { DocDriftFinding, DocDriftResult, DocDriftSubject } from './cleanup/doc-drift.js';
+export type { DocDriftFinding, DocDriftResult, DocDriftSubject, DocFileCitation } from './cleanup/doc-drift.js';
 export type {
   RecentDuplicateBasis,
   RecentDuplicateDomain,
@@ -118,6 +144,6 @@ export type {
 export type { BaselineComparison, HealthBaselineFile } from './health/health-baseline.js';
 export type { PlanContextOptions, PlanContextResult } from './impact/plan-context.js';
 export type { DiffImpactResult } from './impact/diff-impact.js';
-export type { RedundantReexport } from './cleanup/redundant-reexports.js';
+export type { RedundantReexport, RedundantReexportActionTier } from './cleanup/redundant-reexports.js';
 export type { AuditDisagreement, AuditQuestionScore, SelfAuditResult } from './quality/self-audit.js';
 export type { SimilarSignatureGroup } from './cleanup/similar-signatures.js';

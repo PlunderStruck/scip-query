@@ -23,7 +23,7 @@ import {
 import { semanticCalleeRowCount } from '../../storage/evidence-cache.js';
 import { formatGateBlockReason, isStopHookReentry, readHookInput } from '../agent-setup.js';
 import { isLargeCommandIndex } from '../cli-support.js';
-import { displayRange, render } from '../render.js';
+import { displayRange, displaySnippet, render } from '../render.js';
 
 const handleAffected = dbCommand(({ db, args, opts }) => {
   const results = queries.affected(db, stringArg(args, 0), {
@@ -72,12 +72,48 @@ const handleCoChange = dbCommand(({ db, args, opts }) => {
   );
   for (const finding of result.findings) {
     const linked = finding.structurallyLinked ? '  [dep edge]' : '';
+    const partnerClass = `  [${finding.partnerClass}]`;
+    const historyContext = `  [${finding.commitScope}/${finding.recency}]`;
     console.log(
-      `  ${finding.together}x (${Math.round(finding.confidence * 100)}%)  ${finding.fileA}  <->  ${finding.fileB}${linked}`,
+      `  ${finding.together}x (${Math.round(finding.confidence * 100)}%)  ${finding.fileA}  <->  ${finding.fileB}${partnerClass}${historyContext}${linked}`,
     );
+    console.log(
+      `    history: ${finding.focusedTogether} focused, ${finding.broadTogether} broad-sweep (${Math.round(
+        finding.broadCommitRatio * 100,
+      )}% broad), ${finding.recentTogether} recent; last ${formatUnixDate(finding.lastTogetherAt)}`,
+    );
+    console.log(`    subjects: ${formatCoChangeSubjectContext(finding.subjectContext)}`);
+    if (finding.declaredCouplingSuggestion) {
+      console.log(
+        `    declare coupling: ${finding.declaredCouplingSuggestion.name} (${finding.declaredCouplingSuggestion.reason})`,
+      );
+    }
   }
   console.log(`\n${result.findings.length} pair(s). Co-editing one side without the other is how drift starts.`);
 });
+
+function formatUnixDate(timestampSeconds: number): string {
+  if (timestampSeconds <= 0) return 'unknown';
+  return new Date(timestampSeconds * 1000).toISOString().slice(0, 10);
+}
+
+function formatCoChangeSubjectContext(context: {
+  subjectLabels: readonly string[];
+  issueRefs: readonly string[];
+  sampleSubjects: readonly string[];
+  externalIssueLabelStatus: string;
+}): string {
+  const labels = context.subjectLabels.length > 0 ? context.subjectLabels.slice(0, 5).join(', ') : 'none inferred';
+  const refs = context.issueRefs.length > 0 ? context.issueRefs.slice(0, 5).join(', ') : 'none';
+  const samples =
+    context.sampleSubjects.length > 0
+      ? context.sampleSubjects
+          .slice(0, 3)
+          .map((subject) => `"${subject}"`)
+          .join('; ')
+      : 'none';
+  return `labels ${labels}; refs ${refs}; samples ${samples}; external issue/PR labels ${context.externalIssueLabelStatus}`;
+}
 
 const handleChangeSurface = budgetedDbCommand('change-surface', ({ db, args, opts, budget }) => {
   const result = queries.changeSurface(db, stringArg(args, 0), { semantic: budget.semantic });
@@ -121,11 +157,19 @@ const handleIncompleteMigration = dbCommand(({ db, args, opts }) => {
   }
   for (const finding of result.findings) {
     console.log(`\n  ${finding.helperShortName}  (${finding.helperFile})`);
+    console.log(
+      `    helper shape: ${finding.helperShape} (${finding.specificHelperCalleeCount}/${finding.helperCalleeCount} specific callees)`,
+    );
     console.log(`    wired into: ${finding.migratedFiles.join(', ')}`);
     for (const leftover of finding.leftovers) {
       console.log(
-        `    un-migrated: ${Math.round(leftover.containment * 100)}%  ${leftover.shortName}  (${leftover.file})`,
+        `    un-migrated: ${Math.round(leftover.containment * 100)}% helper / ${Math.round(
+          leftover.siteCoverage * 100,
+        )}% site  [${leftover.migrationScope}]  ${leftover.shortName}  (${leftover.file})`,
       );
+      console.log(`      scope: ${leftover.migrationScopeReasons.join('; ')}`);
+      if (leftover.uniqueSiteCalleeCount > 0)
+        console.log(`      extra site callees: ${leftover.uniqueSiteCalleeCount}`);
       console.log(`      shared: ${leftover.sharedCallees.join(', ')}`);
     }
   }
@@ -197,11 +241,54 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
     console.log('PASS: this change introduces no gate findings.');
     return;
   }
+  const multiFindingGroups = result.rootCauseGroups?.filter((group) => group.count > 1) ?? [];
+  if (multiFindingGroups.length > 0) {
+    console.log(`Root-cause groups (${multiFindingGroups.length}):`);
+    for (const group of multiFindingGroups) {
+      console.log(
+        `  [${group.check}] ${group.count} finding(s), ${group.severity}${
+          group.actionTier ? `, tier: ${group.actionTier}` : ''
+        }`,
+      );
+      if (group.sourceAnalyzer || group.rootCauseKey) {
+        console.log(
+          `    source: ${group.sourceAnalyzer ?? group.check}${
+            group.rootCauseKey ? `  root cause: ${group.rootCauseKey}` : ''
+          }`,
+        );
+      }
+      const files = [...new Set([...group.files, ...group.relatedFiles])].slice(0, 6);
+      if (files.length > 0) console.log(`    files: ${files.join(', ')}`);
+      console.log(`    -> ${group.remediation}`);
+    }
+    console.log('');
+  }
   for (const finding of result.findings) {
     console.log(`  [${finding.check}] ${finding.message}`);
+    if (finding.partnerClass) {
+      console.log(`    partner class: ${finding.partnerClass}`);
+      for (const reason of finding.partnerClassReasons ?? []) console.log(`      reason: ${reason}`);
+    }
+    if (finding.citationKind) {
+      console.log(
+        `    citation kind: ${finding.citationKind}${finding.actionTier ? ` (tier: ${finding.actionTier})` : ''}`,
+      );
+    }
+    for (const citedClaim of finding.citedClaims?.slice(0, 2) ?? []) {
+      console.log(`    cited claim: ${displaySnippet(citedClaim)}`);
+    }
+    if (finding.declaredCouplingSuggestion) {
+      console.log(
+        `    declare coupling: ${finding.declaredCouplingSuggestion.name} (${finding.declaredCouplingSuggestion.reason})`,
+      );
+    }
     console.log(`    -> ${finding.remediation}`);
   }
-  console.log(`\nFAIL: ${result.findings.length} finding(s). Fix or knowingly accept before merging.`);
+  console.log(
+    `\nFAIL: ${result.findings.length} finding(s), ${
+      result.rootCauseGroups?.length ?? result.findings.length
+    } root-cause group(s). Fix or knowingly accept before merging.`,
+  );
   process.exitCode = 1;
 });
 

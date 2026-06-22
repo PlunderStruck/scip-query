@@ -3,6 +3,10 @@ import { join } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getCommitHistory, getTrackedFiles } from '../../analysis/git-history.js';
 import { fileContentHash, readCachedFileEvidence, writeCachedFileEvidence } from '../../storage/evidence-cache.js';
+import { markdownCitationContext } from './doc-citation-context.js';
+
+export type DocDriftIntent = 'current-guidance' | 'historical-note' | 'unknown';
+export type DocDriftActionTier = 'direct' | 'signal' | 'support';
 
 export interface DocDriftSubject {
   file: string;
@@ -16,6 +20,20 @@ export interface DocDriftSubject {
   coChanges: number;
   /** Commits touching the subject AFTER the doc's last change. */
   changesSinceDocUpdate: number;
+  /** Strength of action implied by the evidence and doc intent. */
+  actionTier: DocDriftActionTier;
+  /** Whether the doc reads like current guidance, historical context, or neither. */
+  docIntent: DocDriftIntent;
+  /** Bounded reasons for the doc intent classification. */
+  docIntentReasons: string[];
+  /** Nearby doc text that gives the file citation its meaning, when available. */
+  citationContexts?: string[];
+}
+
+export interface DocFileCitation {
+  file: string;
+  /** Bounded nearby doc text for each citation of this file. */
+  contexts: string[];
 }
 
 export interface DocDriftFinding {
@@ -92,17 +110,19 @@ export function docDrift(
     if (doc === undefined && !isLivingDoc(db, docFile)) continue;
     if (doc !== undefined && !existsSync(join(db.config.projectRoot, docFile))) continue;
     const docLastChangedAt = Math.max(0, ...(scan.changeTimes.get(docFile) ?? []));
+    const docIntent = classifyDocDriftIntent(db, docFile);
 
     const subjects = new Map<string, DocDriftSubject>();
 
     // Evidence 1: content references.
-    const { resolved, broken } = extractFileReferences(
+    const { resolved, broken, citations } = extractFileReferences(
       db,
       docFile,
       scan.tracked,
       scan.trackedBySuffix,
       scan.everSeenInHistory,
     );
+    const citationsByFile = new Map(citations.map((citation) => [citation.file, citation.contexts]));
     for (const referenced of resolved) {
       if (referenced === docFile || DOC_FILE_PATTERN.test(referenced)) continue;
       const changesSince = (scan.changeTimes.get(referenced) ?? []).filter(
@@ -114,6 +134,8 @@ export function docDrift(
         evidence: 'reference',
         coChanges: 0,
         changesSinceDocUpdate: changesSince,
+        ...docDriftSubjectMetadata('reference', docIntent),
+        citationContexts: citationsByFile.get(referenced),
       });
     }
 
@@ -129,12 +151,14 @@ export function docDrift(
       if (existing) {
         existing.evidence = 'both';
         existing.coChanges = together;
+        Object.assign(existing, docDriftSubjectMetadata('both', docIntent));
       } else {
         subjects.set(codeFile, {
           file: codeFile,
           evidence: 'co-change',
           coChanges: together,
           changesSinceDocUpdate: changesSince,
+          ...docDriftSubjectMetadata('co-change', docIntent),
         });
       }
     }
@@ -161,6 +185,83 @@ export function docDrift(
     docsScanned: scan.docFiles.length,
     findings: findings.slice(0, limit),
   };
+}
+
+interface DocDriftIntentClassification {
+  docIntent: DocDriftIntent;
+  reasons: string[];
+}
+
+function classifyDocDriftIntent(db: ScipDatabase, docFile: string): DocDriftIntentClassification {
+  let text = '';
+  try {
+    text = readFileSync(join(db.config.projectRoot, docFile), 'utf8').slice(0, 6_000);
+  } catch {
+    return { docIntent: 'unknown', reasons: ['doc text unavailable'] };
+  }
+
+  const haystack = `${docFile}\n${text}`.toLowerCase();
+  const historicalHits = matchingDocIntentTerms(haystack, [
+    'historical note',
+    'historical record',
+    'history note',
+    'retrospective',
+    'postmortem',
+    'post-mortem',
+    'archived',
+    'archive',
+    'previously',
+    'legacy',
+    'recorded',
+    'record of',
+    'snapshot',
+    'as of',
+    'migration note',
+    'decision record',
+  ]);
+  if (historicalHits.length > 0) {
+    return { docIntent: 'historical-note', reasons: [`historical-note terms: ${historicalHits.join(', ')}`] };
+  }
+
+  const currentHits = matchingDocIntentTerms(haystack, [
+    'current',
+    'standard',
+    'standards',
+    'must',
+    'should',
+    'policy',
+    'guide',
+    'guidance',
+    'workflow',
+    'contract',
+    'invariant',
+    'source of truth',
+  ]);
+  if (currentHits.length > 0) {
+    return { docIntent: 'current-guidance', reasons: [`current-guidance terms: ${currentHits.join(', ')}`] };
+  }
+
+  return { docIntent: 'unknown', reasons: ['no current-guidance or historical-note markers found'] };
+}
+
+function matchingDocIntentTerms(haystack: string, terms: readonly string[]): string[] {
+  return terms.filter((term) => haystack.includes(term));
+}
+
+function docDriftSubjectMetadata(
+  evidence: DocDriftSubject['evidence'],
+  intent: DocDriftIntentClassification,
+): Pick<DocDriftSubject, 'actionTier' | 'docIntent' | 'docIntentReasons'> {
+  return {
+    actionTier: docDriftActionTier(evidence, intent.docIntent),
+    docIntent: intent.docIntent,
+    docIntentReasons: intent.reasons,
+  };
+}
+
+function docDriftActionTier(evidence: DocDriftSubject['evidence'], intent: DocDriftIntent): DocDriftActionTier {
+  if (intent === 'historical-note') return 'support';
+  return evidence === 'co-change' ? 'signal' : 'direct';
 }
 
 function buildDocDriftScanIndex(db: ScipDatabase): DocDriftScanIndex | null {
@@ -216,15 +317,25 @@ function buildDocDriftScanIndex(db: ScipDatabase): DocDriftScanIndex | null {
 export function docsCitingFiles(
   db: ScipDatabase,
   targets: ReadonlySet<string>,
-): Array<{ doc: string; cited: string[] }> {
+): Array<{ doc: string; cited: string[]; citations: DocFileCitation[]; citedClaims: string[] }> {
   const tracked = getTrackedFiles(db) ?? new Set<string>();
   const trackedBySuffix = buildSuffixIndex(tracked);
-  const out: Array<{ doc: string; cited: string[] }> = [];
+  const out: Array<{ doc: string; cited: string[]; citations: DocFileCitation[]; citedClaims: string[] }> = [];
   for (const docFile of tracked) {
     if (!isLivingDoc(db, docFile)) continue;
-    const { resolved } = extractFileReferences(db, docFile, tracked, trackedBySuffix, new Set());
+    const { resolved, citations } = extractFileReferences(db, docFile, tracked, trackedBySuffix, new Set());
     const cited = [...resolved].filter((file) => targets.has(file));
-    if (cited.length > 0) out.push({ doc: docFile, cited: cited.sort() });
+    if (cited.length > 0) {
+      const sortedCited = cited.sort();
+      const citedSet = new Set(sortedCited);
+      const matchedCitations = citations.filter((citation) => citedSet.has(citation.file));
+      out.push({
+        doc: docFile,
+        cited: sortedCited,
+        citations: matchedCitations,
+        citedClaims: uniqueCitationContexts(matchedCitations.flatMap((citation) => citation.contexts)).slice(0, 3),
+      });
+    }
   }
   return out;
 }
@@ -257,20 +368,32 @@ function extractFileReferences(
   tracked: ReadonlySet<string>,
   trackedBySuffix: ReadonlyMap<string, string[]>,
   everSeenInHistory: ReadonlySet<string>,
-): { resolved: Set<string>; broken: string[] } {
+): { resolved: Set<string>; broken: string[]; citations: DocFileCitation[] } {
   const resolved = new Set<string>();
   const broken = new Set<string>();
   const candidates = docPathCandidates(db, docFile);
-  if (!candidates) return { resolved, broken: [] };
+  if (!candidates) return { resolved, broken: [], citations: [] };
+  const contextsByCandidate = docCitationContextWindows(db, docFile, candidates);
+  const contextsByFile = new Map<string, string[]>();
+
+  const recordCitation = (file: string, candidate: string): void => {
+    const contexts = contextsByCandidate.get(candidate);
+    if (!contexts || contexts.length === 0) return;
+    const bucket = contextsByFile.get(file) ?? [];
+    bucket.push(...contexts);
+    contextsByFile.set(file, uniqueCitationContexts(bucket).slice(0, 3));
+  };
 
   for (const candidate of candidates) {
     if (tracked.has(candidate)) {
       resolved.add(candidate);
+      recordCitation(candidate, candidate);
       continue;
     }
     const bySuffix = trackedBySuffix.get(candidate);
     if (bySuffix && bySuffix.length === 1) {
       resolved.add(bySuffix[0]!);
+      recordCitation(bySuffix[0]!, candidate);
       continue;
     }
     if (bySuffix && bySuffix.length > 1) continue; // ambiguous citation — skip
@@ -278,7 +401,67 @@ function extractFileReferences(
     // illustrative example path in prose never did.
     if (everSeenInHistory.has(candidate)) broken.add(candidate);
   }
-  return { resolved, broken: [...broken] };
+  return {
+    resolved,
+    broken: [...broken],
+    citations: [...contextsByFile].map(([file, contexts]) => ({ file, contexts })),
+  };
+}
+
+function docCitationContextWindows(
+  db: ScipDatabase,
+  docFile: string,
+  candidates: readonly string[],
+): Map<string, string[]> {
+  let lines: string[];
+  try {
+    lines = readFileSync(join(db.config.projectRoot, docFile), 'utf-8').split(/\r?\n/);
+  } catch {
+    return new Map();
+  }
+
+  const candidateSet = new Set(candidates);
+  const contexts = new Map<string, string[]>();
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex] ?? '';
+    for (const match of line.matchAll(PATH_REFERENCE_PATTERN)) {
+      const candidate = match[0].replace(/^\.?\//, '');
+      if (!candidateSet.has(candidate)) continue;
+      const context = markdownCitationContext(lines, lineIndex);
+      if (context.length === 0) continue;
+      const bucket = contexts.get(candidate) ?? [];
+      bucket.push(context);
+      contexts.set(candidate, uniqueCitationContexts(bucket).slice(0, 3));
+    }
+  }
+  return contexts;
+}
+
+function uniqueCitationContexts(values: readonly string[]): string[] {
+  const contexts: string[] = [];
+  for (const value of new Set(values)) {
+    if (contexts.some((existing) => citationContextsOverlap(existing, value))) continue;
+    contexts.push(value);
+  }
+  return contexts;
+}
+
+function citationContextsOverlap(left: string, right: string): boolean {
+  if (left === right) return true;
+  const leftLines = left
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  const rightLines = right
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  const smaller = Math.min(leftLines.length, rightLines.length);
+  if (smaller === 0) return false;
+  if (smaller < 3) return left.includes(right) || right.includes(left);
+  const rightSet = new Set(rightLines);
+  const shared = leftLines.filter((line) => rightSet.has(line)).length;
+  return shared >= 3 && shared / smaller >= 0.6;
 }
 
 /**

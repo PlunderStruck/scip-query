@@ -147,7 +147,8 @@ export function renderHealthReport(report: HealthReport, json: boolean | undefin
   }
   if (f.vueLargeViewPressureFiles > 0) console.log(`    Vue large views:      ${f.vueLargeViewPressureFiles} file(s)`);
   if (f.extractionCandidates > 0) console.log(`    Extract candidates:   ${f.extractionCandidates}`);
-  if (f.wrappers > 0) console.log(`    Wrapper functions:    ${f.wrappers}`);
+  if (f.wrappers > 0)
+    console.log(`    Wrapper functions:    ${formatScoreAwareCount(f.wrappers, f.wrapperScoreCount)}`);
   if (f.passthroughs > 0) console.log(`    Passthroughs:         ${f.passthroughs}`);
   if (f.staleTypes > 0) console.log(`    Stale abstractions:   ${f.staleTypes}`);
   if (f.driftedFiles > 0) console.log(`    Pattern drift:        ${f.driftedFiles} files`);

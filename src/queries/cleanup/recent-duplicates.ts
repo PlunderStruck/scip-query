@@ -21,6 +21,10 @@ export interface RecentDuplicateFinding {
   kind: 'echo' | 'twin';
   domain: RecentDuplicateDomain;
   basis: RecentDuplicateBasis;
+  /** Stable grouping key for repeated pairwise rows behind one review item. */
+  groupKey?: string;
+  /** Stable root-cause identity without the analyzer prefix. */
+  rootCauseKey?: string;
   echoSymbol: string;
   echoFile: string;
   /** Commits ago the echo's file was added. */
@@ -36,11 +40,30 @@ export interface RecentDuplicateFinding {
   sharedCallees: string[];
 }
 
+export interface RecentDuplicateRootCauseGroup {
+  groupKey: string;
+  rootCauseKey: string;
+  kind: 'echo' | 'twin';
+  domain: RecentDuplicateDomain;
+  basis: RecentDuplicateBasis;
+  count: number;
+  maxSimilarity: number;
+  findingIndexes: number[];
+  echoFiles: string[];
+  establishedFile?: string;
+  establishedSymbol?: string;
+  relatedFiles: string[];
+  sharedEvidence: string[];
+  recommendation: string;
+}
+
 export interface RecentDuplicatesResult {
   /** False when git history is unavailable. */
   available: boolean;
   windowCommits: number;
   findings: RecentDuplicateFinding[];
+  /** Root-cause review items derived from the pairwise findings above. */
+  rootCauseGroups?: RecentDuplicateRootCauseGroup[];
 }
 
 interface RecentDuplicateCandidate {
@@ -120,7 +143,13 @@ export function recentDuplicates(
       left.echoSymbol.localeCompare(right.echoSymbol) ||
       left.domain.localeCompare(right.domain),
   );
-  return { available: true, windowCommits, findings: findings.slice(0, limit) };
+  const limitedFindings = findings.slice(0, limit).map(withRecentDuplicateGroupKey);
+  return {
+    available: true,
+    windowCommits,
+    findings: limitedFindings,
+    rootCauseGroups: recentDuplicateRootCauseGroups(limitedFindings),
+  };
 }
 
 function collectRecentDuplicateCandidates(
@@ -364,6 +393,89 @@ function orientRecentDuplicate(
     sharedEvidence: candidate.sharedEvidence,
     sharedCallees: candidate.sharedCallees,
   };
+}
+
+function withRecentDuplicateGroupKey(finding: RecentDuplicateFinding): RecentDuplicateFinding {
+  const rootCauseKey = recentDuplicateRootCauseKey(finding);
+  return {
+    ...finding,
+    rootCauseKey,
+    groupKey: `recent-duplicate:${rootCauseKey}`,
+  };
+}
+
+function recentDuplicateRootCauseKey(finding: RecentDuplicateFinding): string {
+  if (finding.kind === 'echo') {
+    return ['echo', finding.domain, finding.basis, finding.establishedSymbol].join(':');
+  }
+  const evidence = finding.sharedEvidence.slice().sort().join('|');
+  const fallback = [finding.echoSymbol, finding.establishedSymbol].sort().join('|');
+  return ['twin', finding.domain, finding.basis, evidence || fallback].join(':');
+}
+
+function recentDuplicateRootCauseGroups(findings: readonly RecentDuplicateFinding[]): RecentDuplicateRootCauseGroup[] {
+  const groups = new Map<
+    string,
+    Omit<RecentDuplicateRootCauseGroup, 'echoFiles' | 'relatedFiles' | 'sharedEvidence'> & {
+      echoFiles: Set<string>;
+      relatedFiles: Set<string>;
+      sharedEvidence: Set<string>;
+    }
+  >();
+
+  for (const [index, finding] of findings.entries()) {
+    const rootCauseKey = finding.rootCauseKey ?? recentDuplicateRootCauseKey(finding);
+    const groupKey = finding.groupKey ?? `recent-duplicate:${rootCauseKey}`;
+    let group = groups.get(groupKey);
+    if (!group) {
+      group = {
+        groupKey,
+        rootCauseKey,
+        kind: finding.kind,
+        domain: finding.domain,
+        basis: finding.basis,
+        count: 0,
+        maxSimilarity: finding.similarity,
+        findingIndexes: [],
+        echoFiles: new Set<string>(),
+        establishedFile: finding.kind === 'echo' ? finding.establishedFile : undefined,
+        establishedSymbol: finding.kind === 'echo' ? finding.establishedSymbol : undefined,
+        relatedFiles: new Set<string>(),
+        sharedEvidence: new Set<string>(),
+        recommendation: recentDuplicateGroupRecommendation(finding),
+      };
+      groups.set(groupKey, group);
+    }
+
+    group.count += 1;
+    group.maxSimilarity = Math.max(group.maxSimilarity, finding.similarity);
+    group.findingIndexes.push(index);
+    group.echoFiles.add(finding.echoFile);
+    group.relatedFiles.add(finding.echoFile);
+    group.relatedFiles.add(finding.establishedFile);
+    for (const evidence of finding.sharedEvidence) group.sharedEvidence.add(evidence);
+  }
+
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      echoFiles: [...group.echoFiles].sort(),
+      relatedFiles: [...group.relatedFiles].sort(),
+      sharedEvidence: [...group.sharedEvidence].sort().slice(0, 16),
+    }))
+    .sort(
+      (left, right) =>
+        right.count - left.count ||
+        right.maxSimilarity - left.maxSimilarity ||
+        left.groupKey.localeCompare(right.groupKey),
+    );
+}
+
+function recentDuplicateGroupRecommendation(finding: RecentDuplicateFinding): string {
+  if (finding.kind === 'echo') {
+    return 'Review the established side once, then migrate or delete every echo in this group.';
+  }
+  return 'Pick one owner for the new twins and consolidate the group before the copies diverge.';
 }
 
 function expandedCandidateLimit(limit: number): number {

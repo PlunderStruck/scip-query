@@ -257,6 +257,10 @@
       "import": "./dist/queries/unused-params.js",
       "types": "./dist/queries/unused-params.d.ts"
     },
+    "./queries/unused-imports": {
+      "import": "./dist/queries/unused-imports.js",
+      "types": "./dist/queries/unused-imports.d.ts"
+    },
     "./queries/wrapper-candidates": {
       "import": "./dist/queries/wrapper-candidates.js",
       "types": "./dist/queries/wrapper-candidates.d.ts"

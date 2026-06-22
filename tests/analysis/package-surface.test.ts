@@ -59,6 +59,43 @@ describe('derivePackageSurface', () => {
     expect(surface.files.has('src/cli.ts')).toBe(true);
   });
 
+  it('maps package entry targets to source directory index files', () => {
+    const root = projectWithManifest({
+      exports: {
+        './runtime': {
+          import: './dist/runtime.js',
+          types: './dist/runtime.d.ts',
+        },
+      },
+    });
+    mkdirSync(join(root, 'src/runtime'), { recursive: true });
+    writeFileSync(join(root, 'src/runtime/index.ts'), '');
+
+    const surface = derivePackageSurface(root);
+    expect(surface.files.has('src/runtime/index.ts')).toBe(true);
+  });
+
+  it('derives surfaces from nested package manifests', () => {
+    const root = projectWithManifest({});
+    mkdirSync(join(root, 'packages/shared/src/schemas'), { recursive: true });
+    writeFileSync(join(root, 'packages/shared/src/schemas/index.ts'), '');
+    writeFileSync(
+      join(root, 'packages/shared/package.json'),
+      JSON.stringify({
+        name: '@fixture/shared',
+        exports: {
+          './schemas': {
+            import: './dist/schemas/index.js',
+            types: './dist/schemas/index.d.ts',
+          },
+        },
+      }),
+    );
+
+    const surface = derivePackageSurface(root);
+    expect(surface.files.has('packages/shared/src/schemas/index.ts')).toBe(true);
+  });
+
   it('supports string bin and source-published targets verbatim', () => {
     const root = projectWithManifest({
       bin: './cli.mjs',

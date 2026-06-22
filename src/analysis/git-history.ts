@@ -38,6 +38,18 @@ export interface ChangeAmplification {
   commitsAnalyzed: number;
 }
 
+export type CoChangeCommitScope = 'focused' | 'mixed' | 'broad-sweep';
+export type CoChangeRecency = 'recent' | 'stale';
+export type CoChangeExternalIssueLabelStatus = 'unavailable';
+
+export interface CoChangeSubjectContext {
+  /** Locally inferred from commit subjects, not issue tracker metadata. */
+  subjectLabels: string[];
+  issueRefs: string[];
+  sampleSubjects: string[];
+  externalIssueLabelStatus: CoChangeExternalIssueLabelStatus;
+}
+
 export interface CoChangePair {
   fileA: string;
   fileB: string;
@@ -47,11 +59,25 @@ export interface CoChangePair {
   confidence: number;
   changesA: number;
   changesB: number;
+  focusedTogether: number;
+  broadTogether: number;
+  broadCommitRatio: number;
+  lastTogetherAt: number;
+  recentTogether: number;
+  commitScope: CoChangeCommitScope;
+  recency: CoChangeRecency;
+  subjectContext: CoChangeSubjectContext;
 }
 
 const MAX_COMMITS = 2_000;
 const BULK_COMMIT_FILE_CAP = 50;
+const BROAD_COCHANGE_FILE_THRESHOLD = 8;
+const BROAD_COCHANGE_AREA_THRESHOLD = 3;
+const RECENT_COCHANGE_WINDOW_SECONDS = 90 * 24 * 60 * 60;
 const FIX_SUBJECT_PATTERN = /\b(?:fix(?:es|ed)?|bug|regression|hotfix)\b/i;
+const SUBJECT_SAMPLE_LIMIT = 3;
+const ISSUE_REF_PATTERN = /#\d+|\b[A-Z][A-Z0-9]+-\d+\b/g;
+const CONVENTIONAL_SUBJECT_PATTERN = /^([a-z][a-z0-9-]+)(?:\([^)]+\))?!?:/i;
 
 /**
  * The one lifecycle every git-derived value shares: cache per db, revalidate
@@ -267,30 +293,79 @@ export function getCoChangePairs(
   if (!history) return null;
 
   const fileChanges = new Map<string, number>();
-  const pairCounts = new Map<string, number>();
+  const pairContext = new Map<
+    string,
+    {
+      together: number;
+      focusedTogether: number;
+      broadTogether: number;
+      lastTogetherAt: number;
+      timestamps: number[];
+      subjects: string[];
+    }
+  >();
+  let newestAnalyzedAt = 0;
   for (const commit of history.commits) {
     const files = [...new Set(commit.files)].sort();
     if (files.length > maxFilesPerCommit) continue;
+    if (commit.timestamp > newestAnalyzedAt) newestAnalyzedAt = commit.timestamp;
+    const broadCommit = isBroadCoChangeCommit(files);
     for (const file of files) {
       fileChanges.set(file, (fileChanges.get(file) ?? 0) + 1);
     }
     for (let i = 0; i < files.length; i++) {
       for (let j = i + 1; j < files.length; j++) {
         const key = `${files[i]}\x00${files[j]}`;
-        pairCounts.set(key, (pairCounts.get(key) ?? 0) + 1);
+        const entry = pairContext.get(key) ?? {
+          together: 0,
+          focusedTogether: 0,
+          broadTogether: 0,
+          lastTogetherAt: 0,
+          timestamps: [],
+          subjects: [],
+        };
+        entry.together += 1;
+        if (broadCommit) {
+          entry.broadTogether += 1;
+        } else {
+          entry.focusedTogether += 1;
+        }
+        if (commit.timestamp > entry.lastTogetherAt) entry.lastTogetherAt = commit.timestamp;
+        entry.timestamps.push(commit.timestamp);
+        entry.subjects.push(commit.subject);
+        pairContext.set(key, entry);
       }
     }
   }
 
   const pairs: CoChangePair[] = [];
-  for (const [key, together] of pairCounts) {
+  const recentCutoff = newestAnalyzedAt - RECENT_COCHANGE_WINDOW_SECONDS;
+  for (const [key, context] of pairContext) {
+    const together = context.together;
     if (together < minTogether) continue;
     const [fileA, fileB] = key.split('\x00') as [string, string];
     const changesA = fileChanges.get(fileA) ?? together;
     const changesB = fileChanges.get(fileB) ?? together;
     const confidence = Math.max(together / changesA, together / changesB);
     if (confidence < minConfidence) continue;
-    pairs.push({ fileA, fileB, together, confidence, changesA, changesB });
+    const broadCommitRatio = context.broadTogether / together;
+    const recentTogether = context.timestamps.filter((timestamp) => timestamp >= recentCutoff).length;
+    pairs.push({
+      fileA,
+      fileB,
+      together,
+      confidence,
+      changesA,
+      changesB,
+      focusedTogether: context.focusedTogether,
+      broadTogether: context.broadTogether,
+      broadCommitRatio,
+      lastTogetherAt: context.lastTogetherAt,
+      recentTogether,
+      commitScope: coChangeCommitScope(context.broadTogether, together),
+      recency: recentTogether > 0 ? 'recent' : 'stale',
+      subjectContext: coChangeSubjectContext(context.subjects),
+    });
   }
 
   pairs.sort(
@@ -298,4 +373,70 @@ export function getCoChangePairs(
       right.together - left.together || right.confidence - left.confidence || left.fileA.localeCompare(right.fileA),
   );
   return pairs;
+}
+
+function isBroadCoChangeCommit(files: readonly string[]): boolean {
+  if (files.length >= BROAD_COCHANGE_FILE_THRESHOLD) return true;
+  return coChangeAreas(files).size >= BROAD_COCHANGE_AREA_THRESHOLD;
+}
+
+function coChangeAreas(files: readonly string[]): Set<string> {
+  const areas = new Set<string>();
+  for (const file of files) {
+    const slash = file.indexOf('/');
+    areas.add(slash >= 0 ? file.slice(0, slash) : '.');
+  }
+  return areas;
+}
+
+function coChangeCommitScope(broadTogether: number, together: number): CoChangeCommitScope {
+  if (broadTogether === 0) return 'focused';
+  return broadTogether / together >= 0.5 ? 'broad-sweep' : 'mixed';
+}
+
+function coChangeSubjectContext(subjects: readonly string[]): CoChangeSubjectContext {
+  const labels = new Set<string>();
+  const issueRefs: string[] = [];
+  const sampleSubjects: string[] = [];
+
+  for (const subject of subjects) {
+    if (!sampleSubjects.includes(subject) && sampleSubjects.length < SUBJECT_SAMPLE_LIMIT) {
+      sampleSubjects.push(subject);
+    }
+    for (const label of subjectLabelsFor(subject)) {
+      labels.add(label);
+    }
+    for (const ref of subject.match(ISSUE_REF_PATTERN) ?? []) {
+      if (!issueRefs.includes(ref)) issueRefs.push(ref);
+    }
+  }
+
+  return {
+    subjectLabels: [...labels].sort(),
+    issueRefs,
+    sampleSubjects,
+    externalIssueLabelStatus: 'unavailable',
+  };
+}
+
+function subjectLabelsFor(subject: string): string[] {
+  const labels = new Set<string>();
+  const conventional = CONVENTIONAL_SUBJECT_PATTERN.exec(subject)?.[1]?.toLowerCase();
+  if (conventional) labels.add(normalizeSubjectLabel(conventional));
+  if (/\b(?:feat|feature)\b/i.test(subject)) labels.add('feature');
+  if (/\b(?:fix(?:es|ed)?|bug|regression|hotfix)\b/i.test(subject)) labels.add('fix');
+  if (/\b(?:docs?|documentation|guide|readme)\b/i.test(subject)) labels.add('docs');
+  if (/\brefactor(?:ing|ed)?\b/i.test(subject)) labels.add('refactor');
+  if (/\btests?\b/i.test(subject)) labels.add('test');
+  if (/\b(?:release|version|v\d+\.\d+)\b/i.test(subject)) labels.add('release');
+  if (/\bchore\b/i.test(subject)) labels.add('chore');
+  if (/\bbuild\b/i.test(subject)) labels.add('build');
+  if (/\bci\b/i.test(subject)) labels.add('ci');
+  if (/\bperf(?:ormance)?\b/i.test(subject)) labels.add('perf');
+  return [...labels];
+}
+
+function normalizeSubjectLabel(label: string): string {
+  if (label === 'feat') return 'feature';
+  return label;
 }

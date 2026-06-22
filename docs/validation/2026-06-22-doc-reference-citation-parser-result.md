@@ -1,0 +1,56 @@
+# Doc Reference Citation Parser Result
+
+Date: 2026-06-22
+
+## Verdict
+
+The doc-reference citation parser follow-up is closed. Path-reference doc output now extracts a Markdown-local cited claim instead of a fixed line window, so neighboring sections no longer contaminate the citation kind.
+
+A Markdown-local cited claim is the smallest document unit that gives a file-path citation its review meaning: a paragraph, list item, table block, or fenced code example. It differs from a fixed line window because it follows the author's document structure and avoids mixing unrelated nearby sections into the classification evidence.
+
+## Implementation
+
+- Added `src/queries/cleanup/doc-citation-context.ts` with `markdownCitationContext()`.
+- `markdownCitationContext()` extracts:
+  - fenced code blocks as whole fenced examples,
+  - contiguous Markdown table blocks,
+  - list items with indented continuations,
+  - ordinary paragraphs bounded by blank lines, headings, tables, lists, and fences.
+- `src/queries/cleanup/doc-drift.ts` now uses that helper in `docCitationContextWindows()`, so path-reference `doc-drift` and `docsCitingFiles()` share the structured claim extraction.
+- `src/queries/impact/diff-gate.ts` uses the same helper in its fallback `docCitationContexts()`, keeping doc-reference fallback behavior aligned with doc-drift.
+- `src/queries/public-query-entries.ts` classifies `doc-citation-context.ts` as a private helper module, keeping the public query manifest contract explicit.
+- The helper's Markdown boundary checks now share a single interruption classifier, so the implementation does not introduce a new health-baseline similarity finding.
+- `tests/queries/impact/incomplete-migration.test.ts` adds a regression where configuration prose appears near a behavioral citation. The finding stays `citationKind: "behavioral-claim"` and `actionTier: "direct"`, and the cited claim excludes `declaredCouplings`.
+
+## Verification
+
+Completed:
+
+- `npx vitest run tests/queries/impact/incomplete-migration.test.ts -t doc-reference` passed 1 selected test.
+- `npx vitest run tests/analysis/git-history.test.ts -t "citation context"` passed 1 selected test.
+- `npx vitest run tests/queries/impact/incomplete-migration.test.ts` passed 22 tests. The run still prints the known noisy `git diff` usage warning from the existing fixture.
+- `npx prettier --check src/queries/cleanup/doc-citation-context.ts src/queries/cleanup/doc-drift.ts src/queries/impact/diff-gate.ts tests/queries/impact/incomplete-migration.test.ts tests/analysis/git-history.test.ts docs/plans/2026-06-22-doc-reference-citation-parser.md` passed.
+- `npm run typecheck` passed.
+- `npm run build` passed.
+- `node dist/cli.js similar markdownCitationContext --json` returned no rows.
+- `node dist/cli.js recent-duplicates --json` returned no findings or root-cause groups.
+- `node dist/cli.js unused-params --json` returned `[]`.
+- `node dist/cli.js wrapper-candidates --json` returned `[]`.
+- `node dist/cli.js passthrough-candidates --json` returned `[]`.
+- `node dist/cli.js incomplete-migration --json` reported no findings on the real repository diff.
+- `node dist/cli.js health --json` reported score 100, risk score 100, hygiene score 100, and no pressure rows.
+- `npx vitest run tests/runtime/cli-contract.test.ts` passed 16 tests after the private-helper manifest classification.
+- `npm test` passed 66 files and 335 tests. The run still prints the known noisy `git diff` usage warning from the existing fixture.
+- `npm run typecheck` passed after the helper-manifest and boundary-classifier changes.
+- `npm run build` passed after the helper-manifest and boundary-classifier changes.
+- `node dist/cli.js similar isParagraphContinuation --json` returned no rows after the boundary-classifier cleanup.
+- `node dist/cli.js reindex` passed after the final build.
+- `node dist/cli.js diff-gate --json` returned only accepted warnings `SQ36D93309ABEA` and `SQ30E6CF5F9B38`.
+  - `SQ36D93309ABEA` is the already-reviewed signal-tier echo between compile-time contract detection and indexed definition parsing.
+  - `SQ30E6CF5F9B38` is the already-reviewed support-tier README configuration example; the cited claim is now limited to the fenced JSON example.
+
+## Residual Risk
+
+The parser intentionally handles common Markdown structure, not every possible prose convention. That is enough for the current direct/signal/support split because doc-reference remains a review prompt, and the output now carries the cited claim that reviewers can inspect.
+
+The next precision candidate is passthrough package/export and public-facade caveats.

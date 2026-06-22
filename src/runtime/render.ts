@@ -32,6 +32,12 @@ export function displayPathRange(relativePath: string, startLine: number, endLin
   return `${relativePath}:${displayRange(startLine, endLine)}`;
 }
 
+/** Collapse a multi-line evidence snippet into one bounded terminal row. */
+export function displaySnippet(value: string, maxLength = 180): string {
+  const compact = value.replace(/\s+/g, ' ').trim();
+  return compact.length > maxLength ? `${compact.slice(0, maxLength - 3)}...` : compact;
+}
+
 /** A single section in a sectioned report. */
 export interface ReportSection {
   /** Section banner text (rendered as `═══ {title} ═══`). Skipped if undefined. */

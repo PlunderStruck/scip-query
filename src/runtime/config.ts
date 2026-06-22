@@ -60,7 +60,10 @@ export function loadProjectConfig(projectRoot: string): ProjectConfig {
   }
 }
 
-export function validateProjectConfig(config: ProjectConfig, opts: { now?: Date } = {}): ConfigDiagnostic[] {
+export function validateProjectConfig(
+  config: ProjectConfig,
+  opts: { now?: Date; projectRoot?: string } = {},
+): ConfigDiagnostic[] {
   const diagnostics: ConfigDiagnostic[] = [];
   const supported = new Set(SUPPORTED_LANGUAGES);
   for (const [index, language] of (config.languages ?? []).entries()) {
@@ -100,6 +103,12 @@ export function validateProjectConfig(config: ProjectConfig, opts: { now?: Date 
               path: `${path}.files[${fileIndex}]`,
               message: 'Declared coupling file path is required.',
             });
+          } else if (opts.projectRoot && !existsSync(join(opts.projectRoot, file))) {
+            diagnostics.push({
+              level: 'warning',
+              path: `${path}.files[${fileIndex}]`,
+              message: `Declared coupling file does not exist: ${file}`,
+            });
           }
         }
       }
@@ -120,6 +129,17 @@ export function validateProjectConfig(config: ProjectConfig, opts: { now?: Date 
     }
     if (!suppression.id && !suppression.check) {
       diagnostics.push({ level: 'error', path, message: 'Suppression must include id or check.' });
+    }
+    if (suppression.file !== undefined) {
+      if (suppression.file.trim() === '') {
+        diagnostics.push({ level: 'error', path: `${path}.file`, message: 'Suppression file path cannot be blank.' });
+      } else if (opts.projectRoot && !existsSync(join(opts.projectRoot, suppression.file))) {
+        diagnostics.push({
+          level: 'warning',
+          path: `${path}.file`,
+          message: `Suppression file does not exist: ${suppression.file}`,
+        });
+      }
     }
     if (suppression.expiresAt) {
       const expires = Date.parse(suppression.expiresAt);
@@ -222,7 +242,7 @@ export function addFindingSuppression(
     ...config,
     suppressions: [...(config.suppressions ?? []), suppression],
   };
-  const errors = validateProjectConfig(next).filter((diagnostic) => diagnostic.level === 'error');
+  const errors = validateProjectConfig(next, { projectRoot }).filter((diagnostic) => diagnostic.level === 'error');
   if (errors.length > 0) {
     const detail = errors.map((diagnostic) => `${diagnostic.path}: ${diagnostic.message}`).join('; ');
     throw new Error(`invalid suppression: ${detail}`);

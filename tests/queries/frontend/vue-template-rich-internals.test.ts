@@ -214,6 +214,12 @@ describe('Vue template rich internals', () => {
         expect.objectContaining({
           fileA: 'src/components/SharedBehaviorExternal.vue',
           fileB: 'src/components/SharedBehaviorPanel.vue',
+          evidenceClass: 'mixed',
+          actionTier: 'signal',
+          evidenceClassReasons: expect.arrayContaining([
+            expect.stringContaining('shared composable has domain term(s): useToast'),
+          ]),
+          recommendation: expect.stringContaining('domain-specific behavior'),
           sharedComposables: expect.arrayContaining(['useResource', 'useToast']),
           sharedRequests: expect.arrayContaining(['fetch', 'runRequest', 'useResource']),
           sharedLifecycle: expect.arrayContaining(['onMounted']),
@@ -234,6 +240,10 @@ describe('Vue template rich internals', () => {
             externalScriptPaths: ['src/components/SharedBehaviorExternal.script.ts'],
             externalScriptLines: expect.any(Number),
             dominantPressure: 'external-script',
+            pressureKinds: expect.arrayContaining(['script', 'external-script']),
+            contextKind: 'component',
+            recommendationKind: 'external-script-boundary',
+            recommendation: expect.stringContaining('external script boundary'),
           }),
         ]),
       );
@@ -250,6 +260,45 @@ describe('Vue template rich internals', () => {
           }),
         ]),
       );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('classifies large route-page pressure separately from component pressure', () => {
+    const routeTemplateRows = Array.from({ length: 14 }, (_, index) => `    <DashboardPanel${index} />`).join('\n');
+    const { db } = createVueFixture({
+      'src/views/LandingView.vue': [
+        '<template>',
+        '  <PageShell>',
+        routeTemplateRows,
+        '  </PageShell>',
+        '</template>',
+        '<script setup lang="ts">',
+        "const title = 'Landing';",
+        '</script>',
+        '',
+      ].join('\n'),
+    });
+    try {
+      const pressure = vueLargeViewPressure(db, {
+        limit: 10,
+        minTotalLines: 10,
+        minTemplateLines: 10,
+        minScriptLines: 100,
+        minStyleLines: 100,
+      });
+
+      expect(pressure).toEqual([
+        expect.objectContaining({
+          file: 'src/views/LandingView.vue',
+          dominantPressure: 'template',
+          pressureKinds: expect.arrayContaining(['total', 'template']),
+          contextKind: 'route-page',
+          recommendationKind: 'template-decomposition',
+          recommendation: expect.stringContaining('route template'),
+        }),
+      ]);
     } finally {
       db.close();
     }

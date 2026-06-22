@@ -30,7 +30,8 @@ const EXCLUSION_CACHE = new WeakMap<Tree, ExclusionEntry[]>();
  * framework-invoked: Rust `#[tauri::command]`, `#[test]`, `#[bench]`, anything
  * inside `#[cfg(test)] mod`, and `#[derive(Serialize/Deserialize)]` struct
  * fields (touched by serde reflection); TS/JS test files (any file containing
- * top-level `describe()`, `it()`, `test()`, `beforeEach()`, etc. calls).
+ * top-level `describe()`, `it()`, `test()`, `beforeEach()`, etc. calls), plus
+ * explicit suppressions and React custom hooks.
  */
 export function getDefinitionExclusions(db: ScipDatabase, relativePath: string): ExclusionEntry[] {
   const lang = detectAstLanguage(relativePath);
@@ -66,14 +67,6 @@ function getJsTestExclusions(db: ScipDatabase, relativePath: string): ExclusionE
   const cached = EXCLUSION_CACHE.get(tree);
   if (cached) return cached;
 
-  // Next.js / Remix file conventions: any top-level export in a page-like
-  // path is framework-invoked by the router.
-  const isNextRoute =
-    /(^|\/)(pages|app)\/.+\.(tsx?|jsx?)$/.test(relativePath) ||
-    /(^|\/)(layout|page|loading|error|not-found|head|template|default)\.(tsx?|jsx?)$/.test(relativePath);
-  // Vite/Vue route component conventions
-  const isViteRoute = /(^|\/)src\/(pages|views|routes)\/.+\.(tsx?|jsx?|vue)$/.test(relativePath);
-
   // Scan top-level `expression_statement > call_expression > identifier`
   // for test-framework names. Presence of any one classifies the whole
   // file as a test file — its top-level helpers are then framework-owned.
@@ -99,16 +92,6 @@ function getJsTestExclusions(db: ScipDatabase, relativePath: string): ExclusionE
       startLine: 0,
       endLine: program.endPosition.row,
       reason: 'TS/JS test file (describe/it/test at top level)',
-    });
-  }
-
-  if (isNextRoute || isViteRoute) {
-    // Framework-routed file: every exported function/component is invoked
-    // by the framework's router, not by static code.
-    out.push({
-      startLine: 0,
-      endLine: program.endPosition.row,
-      reason: isNextRoute ? 'Next.js / Remix route file' : 'Vite/Vue route component',
     });
   }
 

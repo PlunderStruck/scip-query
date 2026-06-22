@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { containment } from '../../analysis/similarity.js';
 import { ProjectIndex } from '../../core/project-index.js';
-import { shortenSymbol } from '../../symbols/symbol-parser.js';
+import { leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { GIT_DIFF_UNAVAILABLE_NOTE, diffImpactPlan, fileContentAtBase } from './diff-impact.js';
 import type { DiffImpactPlan } from './diff-impact.js';
 import { getAllCalleeFingerprints, meaningfulCallees } from '../cleanup/similar.js';
@@ -11,15 +11,26 @@ export interface IncompleteMigrationLeftover {
   symbol: string;
   shortName: string;
   file: string;
+  migrationScope: IncompleteMigrationScope;
+  migrationScopeReasons: string[];
   /** |helper callees ∩ site callees| / |helper callees| (0-1). */
   containment: number;
+  /** |helper callees ∩ site callees| / |site callees| (0-1). */
+  siteCoverage: number;
+  uniqueSiteCalleeCount: number;
   sharedCallees: string[];
 }
+
+export type IncompleteMigrationHelperShape = 'specific-callee-cluster';
+export type IncompleteMigrationScope = 'same-scope' | 'possible-subtype' | 'unknown';
 
 export interface IncompleteMigrationFinding {
   helperSymbol: string;
   helperShortName: string;
   helperFile: string;
+  helperShape: IncompleteMigrationHelperShape;
+  helperCalleeCount: number;
+  specificHelperCalleeCount: number;
   /** Files referencing the helper. The helper is new, so every one of these references landed in this diff. */
   migratedFiles: string[];
   /** Un-migrated sites: contain the helper's callee set inline, don't call it. */
@@ -82,6 +93,7 @@ export function incompleteMigration(
     base?: string;
     minContainment?: number;
     minCallees?: number;
+    minSiteCoverage?: number;
     maxHelpers?: number;
     limit?: number;
     semantic?: boolean;
@@ -92,6 +104,7 @@ export function incompleteMigration(
     base = 'HEAD',
     minContainment = 0.7,
     minCallees = 3,
+    minSiteCoverage = 0.4,
     maxHelpers = Number.POSITIVE_INFINITY,
     limit = 20,
   } = opts;
@@ -137,6 +150,15 @@ export function incompleteMigration(
       });
       continue;
     }
+    const specificHelperCalleeCount = specificCalleeCount(callees, candidateIndex);
+    if (specificHelperCalleeCount === 0) {
+      result.skipped.push({
+        helperShortName: shortName,
+        helperFile: def.relativePath,
+        reason: 'helper callee pattern is all project-wide infrastructure — too generic to score',
+      });
+      continue;
+    }
     const migratedFiles = referencingFiles(db, def.symbolId);
     if (migratedFiles.length === 0) {
       result.skipped.push({
@@ -152,16 +174,28 @@ export function incompleteMigration(
       candidateIndex,
       changed,
       helperCallees: callees,
+      helperFile: def.relativePath,
       helperSymbol: def.symbol,
       minContainment,
+      minSiteCoverage,
+      migratedFiles,
     });
     if (leftovers.length === 0) continue;
 
-    leftovers.sort((a, b) => b.containment - a.containment || a.file.localeCompare(b.file));
+    leftovers.sort(
+      (a, b) =>
+        migrationScopeRank(b.migrationScope) - migrationScopeRank(a.migrationScope) ||
+        b.containment - a.containment ||
+        b.siteCoverage - a.siteCoverage ||
+        a.file.localeCompare(b.file),
+    );
     result.findings.push({
       helperSymbol: def.symbol,
       helperShortName: shortName,
       helperFile: def.relativePath,
+      helperShape: 'specific-callee-cluster',
+      helperCalleeCount: callees.size,
+      specificHelperCalleeCount,
       migratedFiles: migratedFiles.sort(),
       leftovers: leftovers.slice(0, MAX_LEFTOVERS_PER_HELPER),
     });
@@ -203,10 +237,14 @@ function collectLeftoversForHelper(opts: {
   candidateIndex: IncompleteMigrationCandidateIndex;
   changed: ReadonlySet<string>;
   helperCallees: Set<string>;
+  helperFile: string;
   helperSymbol: string;
   minContainment: number;
+  minSiteCoverage: number;
+  migratedFiles: readonly string[];
 }): IncompleteMigrationLeftover[] {
   const leftovers: IncompleteMigrationLeftover[] = [];
+  const migrationScopeTokens = migrationScopeTokensForHelper(opts.helperSymbol, opts.helperFile, opts.migratedFiles);
   const candidateSet = new Set<SymbolFingerprint>();
   for (const callee of opts.helperCallees) {
     for (const candidate of opts.candidateIndex.candidatesByCallee.get(callee) ?? []) candidateSet.add(candidate);
@@ -218,20 +256,121 @@ function collectLeftoversForHelper(opts: {
     const score = containment(opts.helperCallees, candidate.callees);
     if (score < opts.minContainment) continue;
     const shared = [...opts.helperCallees].filter((callee) => candidate.callees.has(callee));
+    const siteCoverage = candidate.callees.size === 0 ? 0 : shared.length / candidate.callees.size;
+    if (siteCoverage < opts.minSiteCoverage) continue;
     if (
       !shared.some((callee) => (opts.candidateIndex.docFreq.get(callee) ?? 0) <= opts.candidateIndex.ubiquityThreshold)
     ) {
       continue;
     }
+    const scopeHint = migrationScopeForLeftover(migrationScopeTokens, candidate.symbol, candidate.file);
     leftovers.push({
       symbol: candidate.symbol,
       shortName: shortenSymbol(candidate.symbol),
       file: candidate.file,
+      ...scopeHint,
       containment: score,
+      siteCoverage,
+      uniqueSiteCalleeCount: Math.max(0, candidate.callees.size - shared.length),
       sharedCallees: shared.map(shortenSymbol).sort(),
     });
   }
   return leftovers;
+}
+
+function migrationScopeRank(scope: IncompleteMigrationScope): number {
+  if (scope === 'same-scope') return 2;
+  if (scope === 'unknown') return 1;
+  return 0;
+}
+
+function migrationScopeTokensForHelper(
+  helperSymbol: string,
+  helperFile: string,
+  migratedFiles: readonly string[],
+): Set<string> {
+  const tokens = new Set<string>([...scopeTokensFromPath(helperFile), ...scopeTokensFromText(leafName(helperSymbol))]);
+  for (const file of migratedFiles) {
+    for (const token of scopeTokensFromPath(file)) tokens.add(token);
+  }
+  return tokens;
+}
+
+function migrationScopeForLeftover(
+  migrationScopeTokens: ReadonlySet<string>,
+  leftoverSymbol: string,
+  leftoverFile: string,
+): { migrationScope: IncompleteMigrationScope; migrationScopeReasons: string[] } {
+  const leftoverTokens = new Set<string>([
+    ...scopeTokensFromPath(leftoverFile),
+    ...scopeTokensFromText(leafName(leftoverSymbol)),
+  ]);
+  if (migrationScopeTokens.size === 0 || leftoverTokens.size === 0) {
+    return {
+      migrationScope: 'unknown',
+      migrationScopeReasons: ['insufficient path/name tokens to infer migration scope'],
+    };
+  }
+
+  const sharedTokens = [...leftoverTokens].filter((token) => migrationScopeTokens.has(token)).sort();
+  if (sharedTokens.length > 0) {
+    return {
+      migrationScope: 'same-scope',
+      migrationScopeReasons: [`shares migration-scope token(s): ${sharedTokens.slice(0, 5).join(', ')}`],
+    };
+  }
+
+  return {
+    migrationScope: 'possible-subtype',
+    migrationScopeReasons: ['no path/name tokens shared with the helper or already migrated files'],
+  };
+}
+
+const MIGRATION_SCOPE_STOP_TOKENS = new Set([
+  'app',
+  'apps',
+  'common',
+  'component',
+  'components',
+  'helper',
+  'helpers',
+  'index',
+  'lib',
+  'package',
+  'packages',
+  'page',
+  'pages',
+  'route',
+  'routes',
+  'service',
+  'services',
+  'shared',
+  'spec',
+  'src',
+  'test',
+  'tests',
+  'util',
+  'utils',
+]);
+
+function scopeTokensFromPath(path: string): string[] {
+  return scopeTokensFromText(path.replace(/\.[^.]+$/, ''));
+}
+
+function scopeTokensFromText(value: string): string[] {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 1 && !MIGRATION_SCOPE_STOP_TOKENS.has(token));
+}
+
+function specificCalleeCount(callees: ReadonlySet<string>, candidateIndex: IncompleteMigrationCandidateIndex): number {
+  let count = 0;
+  for (const callee of callees) {
+    if ((candidateIndex.docFreq.get(callee) ?? 0) <= candidateIndex.ubiquityThreshold) count += 1;
+  }
+  return count;
 }
 
 /**

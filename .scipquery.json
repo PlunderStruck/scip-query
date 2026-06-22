@@ -4,27 +4,27 @@
       "name": "cleanup detector family",
       "reason": "These query files implement the cleanup and maintainability detectors that share candidate, evidence, and health policy changes.",
       "files": [
-        "src/queries/complexity-hotspots.ts",
-        "src/queries/dead.ts",
-        "src/queries/drift.ts",
-        "src/queries/extract-candidates.ts",
-        "src/queries/isolated.ts",
-        "src/queries/passthrough-candidates.ts",
-        "src/queries/redundant-reexports.ts",
-        "src/queries/similar.ts",
-        "src/queries/stale-abstractions.ts",
-        "src/queries/wrapper-candidates.ts"
+        "src/queries/quality/complexity-hotspots.ts",
+        "src/queries/cleanup/dead.ts",
+        "src/queries/cleanup/drift.ts",
+        "src/queries/cleanup/extract-candidates.ts",
+        "src/queries/cleanup/isolated.ts",
+        "src/queries/cleanup/passthrough-candidates.ts",
+        "src/queries/cleanup/redundant-reexports.ts",
+        "src/queries/cleanup/similar.ts",
+        "src/queries/cleanup/stale-abstractions.ts",
+        "src/queries/cleanup/wrapper-candidates.ts"
       ]
     },
     {
       "name": "graph summary query family",
       "reason": "These query files report related fan-in, fan-out, hotspot, and bottleneck graph summaries.",
-      "files": ["src/queries/bottlenecks.ts", "src/queries/fan.ts", "src/queries/hotspots.ts"]
+      "files": ["src/queries/graph/bottlenecks.ts", "src/queries/graph/fan.ts", "src/queries/graph/hotspots.ts"]
     },
     {
       "name": "reference navigation query family",
       "reason": "These query files expose nearby views of definition and reference navigation.",
-      "files": ["src/queries/refs.ts", "src/queries/trace.ts"]
+      "files": ["src/queries/navigation/refs.ts", "src/queries/navigation/trace.ts"]
     },
     {
       "name": "package build surface",
@@ -34,7 +34,7 @@
     {
       "name": "command reference documentation",
       "reason": "The generated command reference and query implementations move together when public command behavior changes.",
-      "files": ["docs/COMMAND_REFERENCE.md", "src/queries/doc-drift.ts"]
+      "files": ["docs/COMMAND_REFERENCE.md", "src/queries/cleanup/doc-drift.ts"]
     },
     {
       "name": "agent skill documentation family",
@@ -44,7 +44,7 @@
     {
       "name": "runtime command dispatch",
       "reason": "Command descriptors and command execution intentionally move together when CLI registration or dispatch behavior changes.",
-      "files": ["src/runtime/command-descriptors.ts", "src/runtime/command-execution.ts"]
+      "files": ["src/runtime/commands/command-descriptors.ts", "src/runtime/commands/command-execution.ts"]
     }
   ]
 }

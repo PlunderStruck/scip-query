@@ -84,7 +84,21 @@ describe('file-wide caller fallback', () => {
         'package fixture;',
         'public final class AnalysisStatusPresenter {',
         '  public String renderStatusBadge(String rawStatus) {',
+        '    JumpActionRelay.tryStartJump();',
         '    return StatusBadgeRelay.normalizeBadgeStatus(rawStatus);',
+        '  }',
+        '}',
+        '',
+      ].join('\n'),
+    );
+    writeFileSync(
+      join(projectRoot, 'src', 'JumpActionRelay.java'),
+      [
+        'package fixture;',
+        'public final class JumpActionRelay {',
+        '  private JumpActionRelay() {}',
+        '  public static boolean tryStartJump() {',
+        '    return true;',
         '  }',
         '}',
         '',
@@ -123,7 +137,8 @@ describe('file-wide caller fallback', () => {
         (3, 'java', 'src/StatusAuditReporter.java'),
         (4, 'java', 'src/StatusBoardReporter.java'),
         (5, 'java', 'src/StatusDigestReporter.java'),
-        (6, 'java', 'src/StatusPreviewReporter.java');
+        (6, 'java', 'src/StatusPreviewReporter.java'),
+        (7, 'java', 'src/JumpActionRelay.java');
 
       INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
         (1, 'semanticdb maven . . fixture/StatusBadgeRelay#', 'StatusBadgeRelay', 5, 'class StatusBadgeRelay|class StatusBadgeRelay'),
@@ -137,13 +152,15 @@ describe('file-wide caller fallback', () => {
         (9, 'semanticdb maven . . fixture/StatusDigestReporter#', 'StatusDigestReporter', 5, 'class StatusDigestReporter|class StatusDigestReporter'),
         (10, 'semanticdb maven . . fixture/StatusDigestReporter#renderDigestStatus().', 'renderDigestStatus', 12, 'renderDigestStatus|String renderDigestStatus(String rawStatus)'),
         (11, 'semanticdb maven . . fixture/StatusPreviewReporter#', 'StatusPreviewReporter', 5, 'class StatusPreviewReporter|class StatusPreviewReporter'),
-        (12, 'semanticdb maven . . fixture/StatusPreviewReporter#renderPreviewStatus().', 'renderPreviewStatus', 12, 'renderPreviewStatus|String renderPreviewStatus(String rawStatus)');
+        (12, 'semanticdb maven . . fixture/StatusPreviewReporter#renderPreviewStatus().', 'renderPreviewStatus', 12, 'renderPreviewStatus|String renderPreviewStatus(String rawStatus)'),
+        (13, 'semanticdb maven . . fixture/JumpActionRelay#', 'JumpActionRelay', 5, 'class JumpActionRelay|class JumpActionRelay'),
+        (14, 'semanticdb maven . . fixture/JumpActionRelay#tryStartJump().', 'tryStartJump', 12, 'tryStartJump|boolean tryStartJump()');
 
       INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
         (1, 1, 1, 1, 0, 5, 1),
         (2, 1, 2, 2, 2, 4, 3),
-        (3, 2, 3, 1, 0, 4, 1),
-        (4, 2, 4, 2, 2, 3, 3),
+        (3, 2, 3, 1, 0, 5, 1),
+        (4, 2, 4, 2, 2, 4, 3),
         (5, 3, 5, 1, 0, 5, 1),
         (6, 3, 6, 3, 2, 4, 3),
         (7, 4, 7, 1, 0, 5, 1),
@@ -151,15 +168,18 @@ describe('file-wide caller fallback', () => {
         (9, 5, 9, 1, 0, 5, 1),
         (10, 5, 10, 3, 2, 4, 3),
         (11, 6, 11, 1, 0, 5, 1),
-        (12, 6, 12, 3, 2, 4, 3);
+        (12, 6, 12, 3, 2, 4, 3),
+        (13, 7, 13, 1, 0, 5, 1),
+        (14, 7, 14, 2, 2, 4, 3);
 
       INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
         (1, 1, 0, 0, 6, X'00'),
-        (2, 2, 0, 0, 5, X'00'),
+        (2, 2, 0, 0, 6, X'00'),
         (3, 3, 0, 0, 6, X'00'),
         (4, 4, 0, 0, 6, X'00'),
         (5, 5, 0, 0, 6, X'00'),
-        (6, 6, 0, 0, 6, X'00');
+        (6, 6, 0, 0, 6, X'00'),
+        (7, 7, 0, 0, 6, X'00');
 
       INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
         (1, 1, 1),
@@ -167,6 +187,7 @@ describe('file-wide caller fallback', () => {
         (2, 3, 1),
         (2, 4, 1),
         (2, 2, 0),
+        (2, 14, 0),
         (3, 5, 1),
         (3, 6, 1),
         (3, 4, 0),
@@ -178,7 +199,9 @@ describe('file-wide caller fallback', () => {
         (5, 4, 0),
         (6, 11, 1),
         (6, 12, 1),
-        (6, 4, 0);
+        (6, 4, 0),
+        (7, 13, 1),
+        (7, 14, 1);
     `);
     sqliteDb.close();
 
@@ -208,14 +231,37 @@ describe('file-wide caller fallback', () => {
   });
 
   it('finds wrapper candidates when the sole caller is discovered from source', () => {
-    expect(wrapperCandidates(db)).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          shortName: 'fixture:StatusBadgeRelay:normalizeBadgeStatus()',
-          singleCallerShort: 'fixture:AnalysisStatusPresenter:renderStatusBadge()',
-          callerFanIn: 4,
-        }),
-      ]),
+    const candidate = wrapperCandidates(db).find(
+      (row) => row.shortName === 'fixture:StatusBadgeRelay:normalizeBadgeStatus()',
+    );
+
+    expect(candidate).toEqual(
+      expect.objectContaining({
+        singleCallerShort: 'fixture:AnalysisStatusPresenter:renderStatusBadge()',
+        callerFanIn: 4,
+        actionTier: 'signal',
+        boundaryEvidence: expect.arrayContaining([
+          'wrapper name has relay term: relay',
+          'wrapper name has normalization term: normalize',
+          'caller name has presenter term: presenter',
+        ]),
+      }),
+    );
+  });
+
+  it('classifies domain action wrappers as signal instead of direct inline debt', () => {
+    const candidate = wrapperCandidates(db).find((row) => row.shortName === 'fixture:JumpActionRelay:tryStartJump()');
+
+    expect(candidate).toEqual(
+      expect.objectContaining({
+        singleCallerShort: 'fixture:AnalysisStatusPresenter:renderStatusBadge()',
+        callerFanIn: 4,
+        actionTier: 'signal',
+        boundaryEvidence: expect.arrayContaining([
+          'wrapper name has fallible action term: try',
+          'wrapper name has gameplay action term: jump',
+        ]),
+      }),
     );
   });
 });

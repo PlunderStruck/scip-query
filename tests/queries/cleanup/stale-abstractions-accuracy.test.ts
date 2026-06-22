@@ -55,6 +55,49 @@ function withFixture(
 }
 
 describe('staleAbstractions accuracy', () => {
+  it('marks a zero-consumer type as a direct unused-abstraction cleanup', () => {
+    withFixture(
+      'unused-type',
+      {
+        'src/lib.ts': [
+          'export interface UnusedShape {',
+          '  id: string;',
+          '  name: string;',
+          '  rank: number;',
+          '}',
+          '',
+        ].join('\n'),
+      },
+      (sqliteDb) => {
+        sqliteDb.exec(`
+          INSERT INTO documents (id, language, relative_path) VALUES
+            (1, 'typescript', 'src/lib.ts');
+
+          INSERT INTO global_symbols (id, symbol, display_name, kind) VALUES
+            (1, 'scip-typescript npm fixture 1.0.0 src/\`lib.ts\`/UnusedShape#', 'UnusedShape', 11);
+
+          INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+            (1, 1, 1, 0, 0, 4, 1);
+
+          INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+            (1, 1, 0, 0, 4, X'00');
+
+          INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+            (1, 1, 1);
+        `);
+      },
+      (db) => {
+        const results = staleAbstractions(db, { minLoc: 3 });
+        const hit = results.find((r) => r.shortName.endsWith('UnusedShape'));
+        expect(hit).toBeDefined();
+        expect(hit!.confidence).toBe('high');
+        expect(hit!.actionTier).toBe('direct');
+        expect(hit!.stalenessKind).toBe('unused-abstraction');
+        expect(hit!.recommendation).toContain('Delete the abstraction or wire the missing consumer');
+      },
+    );
+  });
+
   it('does not flag a public-API type whose only consumer re-exports it through a barrel', () => {
     withFixture(
       'barrel-re-export',
@@ -190,6 +233,9 @@ describe('staleAbstractions accuracy', () => {
         expect(hit).toBeDefined();
         expect(hit!.consumers).toBe(1);
         expect(hit!.barrelConsumers).toBe(1);
+        expect(hit!.actionTier).toBe('signal');
+        expect(hit!.stalenessKind).toBe('misplaced-single-consumer-type');
+        expect(hit!.recommendation).toContain('co-locating the type with its only real consumer');
       },
     );
   });
@@ -248,6 +294,9 @@ describe('staleAbstractions accuracy', () => {
         expect(hit).toBeDefined();
         expect(hit!.kind).toBe('class');
         expect(hit!.confidence).toBe('low');
+        expect(hit!.actionTier).toBe('signal');
+        expect(hit!.stalenessKind).toBe('one-to-one-class-encapsulation');
+        expect(hit!.recommendation).toContain('one-consumer class may be intentional encapsulation');
       },
     );
   });
@@ -304,6 +353,9 @@ describe('staleAbstractions accuracy', () => {
         expect(hit).toBeDefined();
         expect(hit!.confidence).toBe('high');
         expect(hit!.definerUsesType).toBe(false);
+        expect(hit!.actionTier).toBe('signal');
+        expect(hit!.stalenessKind).toBe('misplaced-single-consumer-type');
+        expect(hit!.recommendation).toContain('only real consumer');
       },
     );
   });
@@ -366,6 +418,9 @@ describe('staleAbstractions accuracy', () => {
         expect(hit).toBeDefined();
         expect(hit!.definerUsesType).toBe(true);
         expect(hit!.confidence).toBe('medium');
+        expect(hit!.actionTier).toBe('signal');
+        expect(hit!.stalenessKind).toBe('single-consumer-abstraction');
+        expect(hit!.recommendation).toContain('single-consumer abstraction');
       },
     );
   });

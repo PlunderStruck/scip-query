@@ -3,6 +3,13 @@ import { buildReactComponentBehaviorProfiles, type ReactComponentBehaviorProfile
 import type { ScipDatabase } from '../../storage/db.js';
 import { rankedPairwiseProfileResults, type PairwiseFileProfile } from '../internal/pairwise-profiles.js';
 
+export type ReactHookEvidenceClass =
+  | 'domain-behavior'
+  | 'generic-workflow-scaffolding'
+  | 'mixed'
+  | 'shared-abstraction';
+export type ReactHookActionTier = 'signal' | 'support';
+
 export interface ReactHookCandidateResult {
   fileA: string;
   componentA: string;
@@ -17,6 +24,10 @@ export interface ReactHookCandidateResult {
   sharedRequests: string[];
   sharedHandlers: string[];
   sharedHandlerVerbs: string[];
+  evidenceClass: ReactHookEvidenceClass;
+  actionTier: ReactHookActionTier;
+  evidenceClassReasons: string[];
+  recommendation: string;
   uniqueToA: string[];
   uniqueToB: string[];
   reason: string;
@@ -87,6 +98,15 @@ function compareProfiles(
   const sharedRequests = tokenValues(shared, 'request:');
   const sharedHandlers = tokenValues(shared, 'handler:');
   const sharedHandlerVerbs = tokenValues(shared, 'handler-verb:');
+  const evidence = classifyReactHookEvidence({
+    sharedHooks,
+    sharedReactHooks,
+    sharedEffects,
+    sharedState,
+    sharedRequests,
+    sharedHandlers,
+    sharedHandlerVerbs,
+  });
 
   return {
     fileA: a.file,
@@ -102,6 +122,10 @@ function compareProfiles(
     sharedRequests,
     sharedHandlers,
     sharedHandlerVerbs,
+    evidenceClass: evidence.evidenceClass,
+    actionTier: evidence.actionTier,
+    evidenceClassReasons: evidence.reasons,
+    recommendation: evidence.recommendation,
     uniqueToA: sortedTokens(difference(a.tokens, b.tokens)).slice(0, 25),
     uniqueToB: sortedTokens(difference(b.tokens, a.tokens)).slice(0, 25),
     reason: behaviorReason({
@@ -116,6 +140,107 @@ function compareProfiles(
     locA: a.profile.loc,
     locB: b.profile.loc,
   };
+}
+
+function classifyReactHookEvidence(parts: {
+  sharedHooks: readonly string[];
+  sharedReactHooks: readonly string[];
+  sharedEffects: readonly string[];
+  sharedState: readonly string[];
+  sharedRequests: readonly string[];
+  sharedHandlers: readonly string[];
+  sharedHandlerVerbs: readonly string[];
+}): {
+  actionTier: ReactHookActionTier;
+  evidenceClass: ReactHookEvidenceClass;
+  recommendation: string;
+  reasons: string[];
+} {
+  const domainReasons: string[] = [];
+  const genericReasons: string[] = [];
+  const sharedAbstractionReasons: string[] = [];
+
+  if (parts.sharedReactHooks.length) {
+    genericReasons.push(`shared React primitives: ${parts.sharedReactHooks.join(', ')}`);
+  }
+  if (parts.sharedEffects.length) {
+    genericReasons.push(`shared lifecycle primitive: ${parts.sharedEffects.join(', ')}`);
+  }
+  classifyNames(parts.sharedHooks, 'shared hook', domainReasons, sharedAbstractionReasons);
+  classifyNames(parts.sharedRequests, 'shared request', domainReasons, genericReasons);
+  classifyNames(parts.sharedState, 'shared state', domainReasons, genericReasons);
+  classifyNames(parts.sharedHandlers, 'shared handler', domainReasons, genericReasons);
+  classifyNames(parts.sharedHandlerVerbs, 'shared action verb', domainReasons, genericReasons);
+
+  const hasDomain = domainReasons.length > 0;
+  const hasGeneric = genericReasons.length > 0;
+  const hasSharedAbstraction = sharedAbstractionReasons.length > 0;
+  const evidenceClass: ReactHookEvidenceClass = hasDomain
+    ? hasGeneric || hasSharedAbstraction
+      ? 'mixed'
+      : 'domain-behavior'
+    : hasSharedAbstraction
+      ? 'shared-abstraction'
+      : 'generic-workflow-scaffolding';
+  const actionTier: ReactHookActionTier =
+    evidenceClass === 'domain-behavior' || evidenceClass === 'mixed' ? 'signal' : 'support';
+  const reasons = [...domainReasons, ...sharedAbstractionReasons, ...genericReasons].slice(0, 6);
+  return {
+    actionTier,
+    evidenceClass,
+    reasons,
+    recommendation: reactHookRecommendation(evidenceClass),
+  };
+}
+
+function classifyNames(
+  names: readonly string[],
+  label: string,
+  domainReasons: string[],
+  genericReasons: string[],
+): void {
+  const domainNames: string[] = [];
+  const genericNames: string[] = [];
+  for (const name of names) {
+    if (hasDomainBehaviorWords(name)) {
+      domainNames.push(name);
+    } else {
+      genericNames.push(name);
+    }
+  }
+  if (domainNames.length) domainReasons.push(`${label} has domain term(s): ${domainNames.slice(0, 6).join(', ')}`);
+  if (genericNames.length) genericReasons.push(`${label} is generic workflow: ${genericNames.slice(0, 6).join(', ')}`);
+}
+
+function hasDomainBehaviorWords(name: string): boolean {
+  const words = behaviorWords(name).filter((word) => !GENERIC_REACT_BEHAVIOR_WORDS.has(word));
+  return words.length > 0;
+}
+
+function behaviorWords(name: string): string[] {
+  return name
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/^use(?=[A-Z])/, '')
+    .replace(/^handle(?=[A-Z])/, '')
+    .replace(/^is(?=[A-Z])/, '')
+    .replace(/^has(?=[A-Z])/, '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+function reactHookRecommendation(evidenceClass: ReactHookEvidenceClass): string {
+  switch (evidenceClass) {
+    case 'domain-behavior':
+      return 'Review for a shared hook, controller, or feature module around the named domain behavior.';
+    case 'mixed':
+      return 'Separate generic React mechanics from domain-specific behavior before extracting a shared hook.';
+    case 'shared-abstraction':
+      return 'Review the existing shared hook usage first; extract only if duplicated behavior remains outside it.';
+    case 'generic-workflow-scaffolding':
+      return 'Treat as support evidence for a repeated workflow shape, not direct hook-extraction evidence.';
+  }
 }
 
 function behaviorSimilarity(a: Set<string>, b: Set<string>): number {
@@ -182,3 +307,56 @@ function tokenValues(tokens: ReadonlySet<string>, prefix: string): string[] {
 function sortedTokens(tokens: ReadonlySet<string>): string[] {
   return [...tokens].sort();
 }
+
+const GENERIC_REACT_BEHAVIOR_WORDS = new Set([
+  'add',
+  'apply',
+  'async',
+  'callback',
+  'cancel',
+  'change',
+  'clear',
+  'close',
+  'create',
+  'data',
+  'delete',
+  'draft',
+  'edit',
+  'effect',
+  'error',
+  'fetch',
+  'filter',
+  'form',
+  'handle',
+  'has',
+  'is',
+  'item',
+  'items',
+  'load',
+  'loader',
+  'loading',
+  'memo',
+  'name',
+  'open',
+  'reducer',
+  'refresh',
+  'ref',
+  'remove',
+  'request',
+  'reset',
+  'resource',
+  'row',
+  'rows',
+  'save',
+  'saving',
+  'search',
+  'select',
+  'selected',
+  'state',
+  'store',
+  'submit',
+  'toggle',
+  'update',
+  'use',
+  'value',
+]);

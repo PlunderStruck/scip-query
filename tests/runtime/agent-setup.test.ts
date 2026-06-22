@@ -125,6 +125,7 @@ describe('stop-hook helpers (diff-gate --hook)', () => {
 
     const reason = formatGateBlockReason(result);
     expect(reason).toContain('1 issue(s)');
+    expect(reason).toContain('1 root-cause group(s)');
     expect(reason).toContain('[incomplete-migration]');
     expect(reason).toContain('Migrate the remaining sites to x.');
   });

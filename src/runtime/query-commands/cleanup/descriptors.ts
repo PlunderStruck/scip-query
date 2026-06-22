@@ -316,6 +316,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
       option('--min-template-lines <n>', 'Minimum template lines', parseInteger, 300),
       option('--min-script-lines <n>', 'Minimum script lines', parseInteger, 300),
       option('--min-style-lines <n>', 'Minimum style lines', parseInteger, 500),
+      option('--review-thresholds', 'Use lower review thresholds without changing health scoring'),
       option('-n, --limit <n>', 'Number of results', parseInteger, 20),
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--full', 'Run unbounded analysis on large indexes'),
@@ -467,7 +468,9 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
       }),
     format: (r) =>
       `  ${r.shortName}  (from ${r.originalFile})\n` +
-      `    barrel: ${r.barrelConsumers} consumer(s) | direct: ${r.directConsumers} consumer(s)`,
+      `    barrel: ${r.barrelConsumers} consumer(s) | direct: ${r.directConsumers} consumer(s) | tier: ${r.actionTier}\n` +
+      `    Recommendation: ${r.recommendation}` +
+      (r.surfaceEvidence.length > 0 ? `\n    Surface evidence: ${r.surfaceEvidence.join('; ')}` : ''),
     key: (r) => r.barrelFile,
     emptyMessage: () => 'No redundant re-exports found.',
     after: (rows) => console.log(`\n${rows.length} redundant re-export(s).`),

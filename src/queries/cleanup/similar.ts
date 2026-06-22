@@ -25,6 +25,25 @@ export interface SimilarSymbolResult {
   uniqueToA: string[];
   /** Callees or source tokens unique to B, depending on similarityBasis. */
   uniqueToB: string[];
+  evidenceClass: SimilarEvidenceClass;
+  actionTier: SimilarActionTier;
+  evidenceClassReasons: string[];
+  recommendation: string;
+}
+
+export type SimilarEvidenceClass =
+  | 'access-query-scaffolding'
+  | 'domain-behavior'
+  | 'framework-scaffolding'
+  | 'mixed'
+  | 'structural-overlap';
+export type SimilarActionTier = 'direct' | 'signal';
+
+export interface SimilarEvidenceClassification {
+  evidenceClass: SimilarEvidenceClass;
+  actionTier: SimilarActionTier;
+  evidenceClassReasons: string[];
+  recommendation: string;
 }
 
 /**
@@ -110,6 +129,7 @@ function comparePair(
   }
 
   const displayShared = significantShared.length > 0 ? significantShared : [...intersection(a.callees, b.callees)];
+  const classification = classifySimilarityEvidence(displayShared, 'callees');
 
   return {
     symbolA: a.symbol,
@@ -123,6 +143,7 @@ function comparePair(
     sharedCallees: displayShared.map(shortenSymbol),
     uniqueToA: [...difference(a.callees, b.callees)].map(shortenSymbol),
     uniqueToB: [...difference(b.callees, a.callees)].map(shortenSymbol),
+    ...classification,
   };
 }
 
@@ -406,12 +427,258 @@ function similarBySourceShape(
       sharedCallees: [...shared].sort(),
       uniqueToA: [...difference(target.tokens, candidate.tokens)].sort(),
       uniqueToB: [...difference(candidate.tokens, target.tokens)].sort(),
+      ...classifySimilarityEvidence([...shared], 'source-tokens'),
     });
   }
 
   results.sort((a, b) => b.similarity - a.similarity || a.shortNameB.localeCompare(b.shortNameB));
   return results.slice(0, opts.limit);
 }
+
+export function classifySimilarityEvidence(
+  sharedEvidence: readonly string[],
+  basis: NonNullable<SimilarSymbolResult['similarityBasis']>,
+): SimilarEvidenceClassification {
+  const tokens = sharedEvidence.flatMap(similarityEvidenceTokens);
+  const domainTokens = sharedEvidence.flatMap((value) => domainEvidenceTokens(value, basis));
+  const accessHits = matchingTokens(tokens, ACCESS_QUERY_SCAFFOLDING_TOKENS);
+  const frameworkHits = matchingTokens(tokens, FRAMEWORK_SCAFFOLDING_TOKENS);
+  const domainHits = matchingTokens(domainTokens, DOMAIN_BEHAVIOR_TOKENS);
+  const concreteDomainTerms = [...new Set(domainTokens.filter(isConcreteDomainEvidenceToken))];
+  const domainEvidenceCount = sharedEvidence.filter((value) => {
+    const evidenceTokens = domainEvidenceTokens(value, basis);
+    return (
+      evidenceTokens.some((token) => DOMAIN_BEHAVIOR_TOKENS.has(token)) &&
+      evidenceTokens.some(isConcreteDomainEvidenceToken)
+    );
+  }).length;
+  const reasons: string[] = [];
+
+  if (accessHits.length > 0) reasons.push(`access/query scaffolding: ${accessHits.slice(0, 5).join(', ')}`);
+  if (frameworkHits.length > 0) reasons.push(`framework/generic scaffolding: ${frameworkHits.slice(0, 5).join(', ')}`);
+  if (domainHits.length > 0) reasons.push(`domain behavior verbs: ${domainHits.slice(0, 5).join(', ')}`);
+  if (domainHits.length > 0 && concreteDomainTerms.length > 0) {
+    reasons.push(`domain-specific terms: ${concreteDomainTerms.slice(0, 5).join(', ')}`);
+  }
+  const genericSourceTokenOverlap =
+    basis === 'source-tokens' && tokens.length > 0 && tokens.every((token) => GENERIC_SOURCE_TOKEN_EVIDENCE.has(token));
+  if (genericSourceTokenOverlap) {
+    reasons.push('shared source tokens are generic scaffolding');
+  }
+
+  const hasDomainBehavior = domainHits.length > 0 && concreteDomainTerms.length > 0;
+  const hasScaffolding = accessHits.length + frameworkHits.length > 0;
+  const strongDomainBehavior =
+    basis === 'callees' &&
+    hasDomainBehavior &&
+    sharedEvidence.length >= 4 &&
+    concreteDomainTerms.length >= 4 &&
+    domainEvidenceCount >= 2;
+  const evidenceClass: SimilarEvidenceClass = strongDomainBehavior
+    ? 'domain-behavior'
+    : hasDomainBehavior
+      ? hasScaffolding
+        ? 'mixed'
+        : 'domain-behavior'
+      : accessHits.length > 0
+        ? 'access-query-scaffolding'
+        : frameworkHits.length > 0 || genericSourceTokenOverlap
+          ? 'framework-scaffolding'
+          : 'structural-overlap';
+  if (evidenceClass === 'structural-overlap' && sharedEvidence.length > 0) {
+    reasons.push(`shared ${basis} overlap has no recognized domain or scaffolding category`);
+  }
+  const actionTier: SimilarActionTier =
+    evidenceClass === 'domain-behavior' && (sharedEvidence.length >= 3 || strongDomainBehavior) ? 'direct' : 'signal';
+  return {
+    evidenceClass,
+    actionTier,
+    evidenceClassReasons: reasons,
+    recommendation: similarityRecommendation(evidenceClass, actionTier),
+  };
+}
+
+function similarityRecommendation(evidenceClass: SimilarEvidenceClass, actionTier: SimilarActionTier): string {
+  if (actionTier === 'direct') {
+    return 'Shared domain behavior looks concrete; review for an extract/reuse opportunity.';
+  }
+  if (evidenceClass === 'mixed') {
+    return 'Shared evidence mixes domain behavior with scaffolding; review semantics before extracting anything.';
+  }
+  if (evidenceClass === 'access-query-scaffolding') {
+    return 'Shared evidence is mostly access/query scaffolding; compare product semantics before reusing code.';
+  }
+  if (evidenceClass === 'structural-overlap') {
+    return 'Shared structure has no domain or scaffolding classification; inspect names and behavior before reusing code.';
+  }
+  return 'Shared evidence is mostly framework or generic scaffolding; treat as a contextual signal.';
+}
+
+function matchingTokens(tokens: readonly string[], dictionary: ReadonlySet<string>): string[] {
+  return [...new Set(tokens.filter((token) => dictionary.has(token)))];
+}
+
+function similarityEvidenceTokens(value: string): string[] {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 1);
+}
+
+function domainEvidenceTokens(value: string, basis: NonNullable<SimilarSymbolResult['similarityBasis']>): string[] {
+  if (basis === 'source-tokens') return similarityEvidenceTokens(value);
+  const parsedLeaf = leafName(value);
+  return similarityEvidenceTokens(parsedLeaf.length > 0 ? parsedLeaf : fallbackEvidenceLeaf(value));
+}
+
+function fallbackEvidenceLeaf(value: string): string {
+  const normalized = value.replace(/[()`]/g, ' ').replace(/\.[a-z][a-z0-9]+(?=\s|$)/gi, ' ');
+  const segments = normalized
+    .split(/[:/\\\s]+/)
+    .map((segment) => segment.trim())
+    .filter((segment) => /[A-Za-z]/.test(segment));
+  return segments.at(-1)?.replace(/\.$/, '') ?? value;
+}
+
+function isConcreteDomainEvidenceToken(token: string): boolean {
+  return (
+    token.length > 3 &&
+    !DOMAIN_BEHAVIOR_TOKENS.has(token) &&
+    !ACCESS_QUERY_SCAFFOLDING_TOKENS.has(token) &&
+    !FRAMEWORK_SCAFFOLDING_TOKENS.has(token) &&
+    !GENERIC_SOURCE_TOKEN_EVIDENCE.has(token) &&
+    !NON_DOMAIN_CONTEXT_TOKENS.has(token)
+  );
+}
+
+const DOMAIN_BEHAVIOR_TOKENS = new Set([
+  'archive',
+  'assign',
+  'book',
+  'cancel',
+  'create',
+  'delete',
+  'ensure',
+  'export',
+  'import',
+  'notify',
+  'persist',
+  'publish',
+  'restore',
+  'schedule',
+  'send',
+  'set',
+  'submit',
+  'sync',
+  'update',
+  'upload',
+  'validate',
+  'write',
+]);
+
+const ACCESS_QUERY_SCAFFOLDING_TOKENS = new Set([
+  'access',
+  'auth',
+  'authorize',
+  'cache',
+  'context',
+  'db',
+  'find',
+  'get',
+  'guard',
+  'list',
+  'permission',
+  'permissions',
+  'prisma',
+  'query',
+  'request',
+  'response',
+  'role',
+  'route',
+  'session',
+  'sql',
+  'where',
+]);
+
+const FRAMEWORK_SCAFFOLDING_TOKENS = new Set([
+  'bytes',
+  'computed',
+  'crypto',
+  'describe',
+  'effect',
+  'expect',
+  'fetch',
+  'filter',
+  'hex',
+  'hook',
+  'json',
+  'map',
+  'mounted',
+  'on',
+  'promise',
+  'random',
+  'react',
+  'reduce',
+  'ref',
+  'render',
+  'state',
+  'test',
+  'token',
+  'trim',
+  'uuid',
+  'vue',
+  'watch',
+]);
+
+const GENERIC_SOURCE_TOKEN_EVIDENCE = new Set([
+  'bytes',
+  'crypto',
+  'data',
+  'false',
+  'get',
+  'hex',
+  'id',
+  'key',
+  'map',
+  'name',
+  'num',
+  'random',
+  'result',
+  'secret',
+  'set',
+  'string',
+  'to',
+  'token',
+  'true',
+  'type',
+  'value',
+]);
+
+const NON_DOMAIN_CONTEXT_TOKENS = new Set([
+  'best',
+  'backend',
+  'conflict',
+  'database',
+  'effect',
+  'effects',
+  'error',
+  'errors',
+  'frontend',
+  'found',
+  'helpers',
+  'javascript',
+  'module',
+  'modules',
+  'scip',
+  'shared',
+  'source',
+  'typescript',
+  'utils',
+  'with',
+  'workflow',
+  'workflows',
+]);
 
 function findSourceFingerprint(db: ScipDatabase, symbolPattern: string): SourceFingerprint | null {
   const match = findFirstSymbolMatch(db, symbolPattern);

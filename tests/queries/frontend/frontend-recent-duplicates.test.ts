@@ -43,6 +43,11 @@ const REACT_INCIDENT_PANEL = REACT_ISSUE_PANEL.replace('IssuePanel', 'IncidentPa
   .replaceAll("fetch('/issues')", "fetch('/incidents')")
   .replace('title="Issues"', 'title="Incidents"');
 
+const REACT_TASK_PANEL = REACT_ISSUE_PANEL.replace('IssuePanel', 'TaskPanel')
+  .replace("useResource('issues')", "useResource('tasks')")
+  .replaceAll("fetch('/issues')", "fetch('/tasks')")
+  .replace('title="Issues"', 'title="Tasks"');
+
 const VUE_ISSUE_PANEL = `<template>
   <PageShell :title="title">
     <ToolbarPanel v-if="hasFilters" :filters="filters" @reset="resetFilters">
@@ -94,6 +99,7 @@ describe('frontend recent duplicates', () => {
       },
       recent: {
         'src/components/IncidentPanel.tsx': REACT_INCIDENT_PANEL,
+        'src/components/TaskPanel.tsx': REACT_TASK_PANEL,
         'src/components/IncidentPanel.vue': VUE_INCIDENT_PANEL,
       },
     });
@@ -132,6 +138,24 @@ describe('frontend recent duplicates', () => {
           }),
         ]),
       );
+
+      const reactGroup = result.rootCauseGroups?.find(
+        (group) =>
+          group.kind === 'echo' &&
+          group.domain === 'react-component' &&
+          group.establishedFile === 'src/components/IssuePanel.tsx',
+      );
+      expect(reactGroup).toMatchObject({
+        count: 2,
+        establishedSymbol: 'IssuePanel',
+        echoFiles: ['src/components/IncidentPanel.tsx', 'src/components/TaskPanel.tsx'],
+        relatedFiles: expect.arrayContaining([
+          'src/components/IssuePanel.tsx',
+          'src/components/IncidentPanel.tsx',
+          'src/components/TaskPanel.tsx',
+        ]),
+        recommendation: expect.stringContaining('established side once'),
+      });
     } finally {
       db.close();
     }

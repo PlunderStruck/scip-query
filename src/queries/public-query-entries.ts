@@ -41,6 +41,7 @@ export const PUBLIC_QUERY_ENTRIES = [
   'hierarchy',
   'hotspots',
   'imports',
+  'unused-imports',
   'incomplete-migration',
   'index',
   'isolated',
@@ -105,6 +106,7 @@ export const PUBLIC_QUERY_SOURCE_PATHS = {
   hierarchy: 'src/queries/navigation/hierarchy.ts',
   hotspots: 'src/queries/graph/hotspots.ts',
   imports: 'src/queries/navigation/imports.ts',
+  'unused-imports': 'src/queries/navigation/imports.ts',
   'incomplete-migration': 'src/queries/impact/incomplete-migration.ts',
   index: 'src/queries/index.ts',
   isolated: 'src/queries/cleanup/isolated.ts',
@@ -140,7 +142,9 @@ export const PUBLIC_QUERY_SOURCE_PATHS = {
 
 /** Query-directory helper modules that must NOT be published. */
 export const PRIVATE_QUERY_MODULES = [
+  'boundary-evidence',
   'dead-exclusions',
+  'doc-citation-context',
   'drift-policy',
   'health-baseline',
   'health-cache-control',
@@ -153,7 +157,9 @@ export const PRIVATE_QUERY_MODULES = [
 export type PrivateQueryModule = (typeof PRIVATE_QUERY_MODULES)[number];
 
 export const PRIVATE_QUERY_SOURCE_PATHS = {
+  'boundary-evidence': 'src/queries/cleanup/boundary-evidence.ts',
   'dead-exclusions': 'src/queries/cleanup/dead-exclusions.ts',
+  'doc-citation-context': 'src/queries/cleanup/doc-citation-context.ts',
   'drift-policy': 'src/queries/cleanup/drift-policy.ts',
   'health-baseline': 'src/queries/health/health-baseline.ts',
   'health-cache-control': 'src/queries/health/health-cache-control.ts',

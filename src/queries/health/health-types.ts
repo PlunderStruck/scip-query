@@ -55,6 +55,8 @@ export interface DriftSummary {
   count: number;
   unusedImports: number;
   layerViolations: number;
+  direct: number;
+  signal: number;
 }
 
 export interface ComplexitySummary {
@@ -66,7 +68,27 @@ export interface GitEvidenceSummary {
   amplification: ChangeAmplificationSummary | null;
   hiddenCoupling: {
     pairCount: number;
-    top: Array<{ fileA: string; fileB: string; together: number; confidence: number }>;
+    scoreCount: number;
+    top: Array<{
+      fileA: string;
+      fileB: string;
+      together: number;
+      confidence: number;
+      focusedTogether: number;
+      broadTogether: number;
+      broadCommitRatio: number;
+      lastTogetherAt: number;
+      recentTogether: number;
+      commitScope: 'focused' | 'mixed' | 'broad-sweep';
+      recency: 'recent' | 'stale';
+      scoreWeight: number;
+      subjectContext: {
+        subjectLabels: string[];
+        issueRefs: string[];
+        sampleSubjects: string[];
+        externalIssueLabelStatus: 'unavailable';
+      };
+    }>;
   };
   /** Per-file change counts over the analyzed window (tracked files only). */
   fileStats: Record<string, { changes: number; fixChanges: number }>;

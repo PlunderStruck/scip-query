@@ -11,13 +11,13 @@ import { vueComponentDuplicates } from '../frontend/vue-component-duplicates.js'
 import { vueComposableCandidates } from '../frontend/vue-composable-candidates.js';
 import { vueLargeViewPressure } from '../frontend/vue-large-view-pressure.js';
 import { extractCandidates } from '../cleanup/extract-candidates.js';
-import { wrapperCandidates } from '../cleanup/wrapper-candidates.js';
+import { wrapperCandidates, type WrapperCandidate } from '../cleanup/wrapper-candidates.js';
 import { passthroughCandidates } from '../cleanup/passthrough-candidates.js';
 import { staleAbstractions } from '../cleanup/stale-abstractions.js';
 import { drift } from '../cleanup/drift.js';
 import { complexityHotspots } from '../quality/complexity-hotspots.js';
 import { stats } from '../navigation/stats.js';
-import { coChange } from '../impact/co-change.js';
+import { coChange, type CoChangeFinding } from '../impact/co-change.js';
 import { getChangeAmplification, getFileChurn } from '../../analysis/git-history.js';
 import { getSuppressionInventory } from '../../analysis/suppressions.js';
 import { buildHealthReport } from './health-report.js';
@@ -464,14 +464,15 @@ function summarizeVueLargeViewPressure(
 }
 
 function summarizeHealthWrappers(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): CountLocSummary {
-  return summarizeHealthLocQuery(db, budget, 'wrapper-candidates', () =>
-    wrapperCandidates(db, {
+  return runHealthPhase(db, budget, 'wrapper-candidates', () => {
+    const results = wrapperCandidates(db, {
       scope,
       ...HEALTH_DETECTOR_PROFILES.wrappers,
       limit: budget.candidateResultLimit,
       scanLimit: budget.candidateScanLimit,
-    }),
-  );
+    });
+    return summarizeLocWithScore(results, wrapperHealthScore);
+  });
 }
 
 function summarizeHealthPassthroughs(
@@ -479,14 +480,15 @@ function summarizeHealthPassthroughs(
   scope: string | undefined,
   budget: HealthBudget,
 ): CountLocSummary {
-  return summarizeHealthLocQuery(db, budget, 'passthrough-candidates', () =>
-    passthroughCandidates(db, {
+  return runHealthPhase(db, budget, 'passthrough-candidates', () => {
+    const results = passthroughCandidates(db, {
       scope,
       ...HEALTH_DETECTOR_PROFILES.passthroughs,
       limit: budget.candidateResultLimit,
       scanLimit: budget.candidateScanLimit,
-    }),
-  );
+    });
+    return summarizeLocWithScore(results, passthroughHealthScore);
+  });
 }
 
 function summarizeHealthStaleAbstractions(
@@ -525,11 +527,23 @@ function summarizeGitEvidence(db: ScipDatabase, budget: HealthBudget): GitEviden
       amplification: getChangeAmplification(db),
       hiddenCoupling: {
         pairCount: coChangeResult.findings.length,
+        scoreCount: roundHealthScoreCount(
+          coChangeResult.findings.reduce((sum, finding) => sum + hiddenCouplingHealthScore(finding), 0),
+        ),
         top: coChangeResult.findings.slice(0, 5).map((finding) => ({
           fileA: finding.fileA,
           fileB: finding.fileB,
           together: finding.together,
           confidence: finding.confidence,
+          focusedTogether: finding.focusedTogether,
+          broadTogether: finding.broadTogether,
+          broadCommitRatio: finding.broadCommitRatio,
+          lastTogetherAt: finding.lastTogetherAt,
+          recentTogether: finding.recentTogether,
+          commitScope: finding.commitScope,
+          recency: finding.recency,
+          scoreWeight: hiddenCouplingHealthScore(finding),
+          subjectContext: finding.subjectContext,
         })),
       },
       fileStats,
@@ -547,10 +561,15 @@ function summarizeSuppressions(db: ScipDatabase, budget: HealthBudget): Suppress
 function summarizeHealthDrift(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): DriftSummary {
   return runHealthPhase(db, budget, 'drift', () => {
     const driftResult = drift(db, { scope, ...HEALTH_DETECTOR_PROFILES.drift });
+    const healthVisible = driftResult.results.filter((result) => result.kind !== 'pattern-deviation');
+    const direct = healthVisible.filter((result) => result.actionTier === 'direct').length;
+    const signal = healthVisible.length - direct;
     return {
-      count: driftResult.unusedImports + driftResult.layerViolations,
+      count: healthVisible.length,
       unusedImports: driftResult.unusedImports,
       layerViolations: driftResult.layerViolations,
+      direct,
+      signal,
     };
   });
 }
@@ -672,6 +691,17 @@ function summarizeLoc(items: Array<{ loc: number; relativePath?: string; file?: 
   };
 }
 
+function summarizeLocWithScore<T extends { loc: number; relativePath?: string; file?: string }>(
+  items: T[],
+  score: (item: T) => number,
+): CountLocSummary {
+  const summary = summarizeLoc(items);
+  return {
+    ...summary,
+    scoreCount: roundHealthScoreCount(items.reduce((sum, item) => sum + score(item), 0)),
+  };
+}
+
 function summarizeUniqueFileLoc(items: Array<{ file: string; loc: number }>): CountLocSummary {
   const fileLoc = new Map<string, number>();
   for (const item of items) {
@@ -782,6 +812,20 @@ function normalizeBehaviorName(name: string): string {
     .replace(/^is/, '')
     .replace(/^has/, '')
     .toLowerCase();
+}
+
+function wrapperHealthScore(candidate: WrapperCandidate): number {
+  return candidate.actionTier === 'signal' ? 0.25 : 1;
+}
+
+function passthroughHealthScore(candidate: { actionTier?: 'direct' | 'signal' }): number {
+  return candidate.actionTier === 'signal' ? 0.25 : 1;
+}
+
+function hiddenCouplingHealthScore(finding: Pick<CoChangeFinding, 'commitScope' | 'recency'>): number {
+  if (finding.commitScope === 'broad-sweep') return finding.recency === 'recent' ? 0.25 : 0;
+  if (finding.commitScope === 'mixed') return finding.recency === 'recent' ? 0.5 : 0.25;
+  return finding.recency === 'recent' ? 1 : 0.5;
 }
 
 function roundHealthScoreCount(count: number): number {

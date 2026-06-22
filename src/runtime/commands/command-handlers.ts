@@ -313,7 +313,7 @@ export function handleConfigValidate(rawOpts: unknown): void {
   const opts = commandOptions(rawOpts);
   const projectRoot = resolveProjectRoot();
   const config = loadProjectConfig(projectRoot);
-  const diagnostics = validateProjectConfig(config);
+  const diagnostics = validateProjectConfig(config, { projectRoot });
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('config-validate', [], opts, { diagnostics });
   } else if (diagnostics.length === 0) {
@@ -381,7 +381,7 @@ function buildProjectDiagnosticReport(command: 'doctor' | 'status'): {
   hasErrors: boolean;
 } {
   const { projectRoot, config, paths, dbPath } = resolveCliProjectContext();
-  const configDiagnostics = validateProjectConfig(config);
+  const configDiagnostics = validateProjectConfig(config, { projectRoot });
   const readiness = getProjectReadiness(projectRoot, config);
   const capabilities = getProjectCapabilities(readiness);
   const freshness = getIndexFreshness(projectRoot, config, paths);

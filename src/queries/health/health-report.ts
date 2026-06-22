@@ -41,7 +41,8 @@ export interface HealthAxes {
   /** File pairs that co-change without a structural link — concepts the visible graph can't see. */
   hiddenCoupling: {
     pairCount: number;
-    top: Array<{ fileA: string; fileB: string; together: number; confidence: number }>;
+    scoreCount: number;
+    top: Array<{ fileA: string; fileB: string; together: number; confidence: number; scoreWeight?: number }>;
   } | null;
   /** Complexity hotspots weighted by churn — complex code nobody touches costs nothing. */
   churnWeightedComplexity: Array<{
@@ -98,11 +99,13 @@ export interface HealthReport {
     vueLargeViewPressureFiles: number;
     extractionCandidates: number;
     wrappers: number;
+    wrapperScoreCount: number;
     passthroughs: number;
     staleTypes: number;
     driftedFiles: number;
     complexityHotspotCount: number;
     hiddenCouplingPairs: number | null;
+    hiddenCouplingScoreCount: number | null;
   };
   axes: HealthAxes;
   validation: HealthValidation | null;
@@ -150,11 +153,13 @@ export function buildHealthReport(analyses: HealthAnalyses): HealthReport {
       vueLargeViewPressureFiles: analyses.vueLargeViewPressure.count,
       extractionCandidates: analyses.extractCount,
       wrappers: analyses.wrappers.count,
+      wrapperScoreCount: healthScoreCount(analyses.wrappers),
       passthroughs: analyses.passthroughs.count,
       staleTypes: analyses.stale.count,
       driftedFiles: analyses.drift.count,
       complexityHotspotCount: analyses.complexity.extremeCount,
       hiddenCouplingPairs: analyses.gitEvidence?.hiddenCoupling.pairCount ?? null,
+      hiddenCouplingScoreCount: analyses.gitEvidence?.hiddenCoupling.scoreCount ?? null,
     },
     axes: buildHealthAxes(analyses),
     validation: buildHealthValidation(analyses),
@@ -279,10 +284,13 @@ function formatScoreCount(count: number): string {
   return Number.isInteger(count) ? String(count) : count.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
 }
 
-function scoreCountNote(summary: { count: number; scoreCount?: number }): string {
+function scoreCountNote(
+  summary: { count: number; scoreCount?: number },
+  reason = 'existing shared infrastructure discount',
+): string {
   const scoreCount = healthScoreCount(summary);
   if (Math.abs(scoreCount - summary.count) < 0.01) return '';
-  return ` (${formatScoreCount(scoreCount)} score-weighted after existing shared infrastructure discount)`;
+  return ` (${formatScoreCount(scoreCount)} score-weighted after ${reason})`;
 }
 
 function scoreWeightedDetail(summary: { count: number; scoreCount?: number }, unit: string): string {
@@ -419,7 +427,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Extraction candidates',
       evidence: 'heuristic',
-      description: `${analyses.extractCount} large functions with isolated callee clusters — extract method opportunities`,
+      description: `${analyses.extractCount} large functions with isolated callee clusters — review same-file or feature-local extraction seams`,
       effort: 'medium',
       impact: 'medium',
       count: analyses.extractCount,
@@ -431,7 +439,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Wrapper functions',
       evidence: 'heuristic',
-      description: `${analyses.wrappers.count} single-consumer symbols that could be inlined`,
+      description: `${analyses.wrappers.count} single-consumer symbols${scoreCountNote(analyses.wrappers, 'boundary-evidence discount')} — inline direct wrappers or review boundary signals`,
       effort: 'low',
       impact: 'low',
       count: analyses.wrappers.count,
@@ -458,7 +466,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Stale abstractions',
       evidence: 'heuristic',
-      description: `${parts.join(', ')} — premature abstraction`,
+      description: `${parts.join(', ')} — remove unused abstractions; review single-consumer ownership before moving or inlining`,
       effort: 'low',
       impact: 'medium',
       count: analyses.stale.count,
@@ -473,7 +481,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Structural drift',
       evidence: 'heuristic',
-      description: parts.join(', '),
+      description: `${parts.join(', ')} — remove direct drift; review signal drift against layer ownership`,
       effort: analyses.drift.layerViolations > 0 ? 'medium' : 'low',
       impact: analyses.drift.layerViolations > 0 ? 'medium' : 'low',
       count: analyses.drift.count,
@@ -488,6 +496,13 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
       evidence: 'change-graph',
       description:
         `${analyses.gitEvidence.hiddenCoupling.pairCount} file pair(s) co-change without a structural link` +
+        scoreCountNote(
+          {
+            count: analyses.gitEvidence.hiddenCoupling.pairCount,
+            scoreCount: analyses.gitEvidence.hiddenCoupling.scoreCount,
+          },
+          'broad/stale-history discount',
+        ) +
         (top ? ` (e.g. ${top.fileA} ↔ ${top.fileB})` : '') +
         ' — name the shared concept or enforce the sync',
       effort: 'medium',
@@ -652,25 +667,27 @@ function computeHealthScore(analyses: HealthAnalyses): { breakdown: ScoreDeducti
     `${analyses.vueLargeViewPressure.count} large Vue view pressure file(s)`,
   );
 
-  const extractPerMille = (analyses.extractCount / symbolCount) * 1000;
-  deduct('extract', Math.min(5, Math.round(extractPerMille / 2)), `${analyses.extractCount} extraction candidate(s)`);
-
-  deduct('wrappers', Math.min(3, analyses.wrappers.count), `${analyses.wrappers.count} wrapper candidate(s)`);
+  const wrapperScoreCount = healthScoreCount(analyses.wrappers);
+  deduct('wrappers', Math.min(3, wrapperScoreCount), scoreWeightedDetail(analyses.wrappers, 'wrapper candidate(s)'));
+  const passthroughScoreCount = healthScoreCount(analyses.passthroughs);
   deduct(
     'passthroughs',
-    Math.min(3, analyses.passthroughs.count),
-    `${analyses.passthroughs.count} passthrough candidate(s)`,
+    Math.min(3, passthroughScoreCount),
+    scoreWeightedDetail(analyses.passthroughs, 'passthrough candidate(s)'),
   );
 
-  const stalePercent = analyses.stale.count / Math.max(symbolCount * 0.1, 1);
   deduct(
     'stale-abstractions',
-    Math.min(8, Math.round(stalePercent * 10)),
-    `${analyses.stale.count} stale abstraction(s)`,
+    Math.min(8, analyses.stale.unused),
+    `${analyses.stale.unused} unused stale abstraction(s); ${analyses.stale.singleUse} single-consumer signal(s)`,
   );
 
-  const driftPercent = analyses.drift.count / fileCount;
-  deduct('drift', Math.min(5, Math.round(driftPercent * 50)), `${analyses.drift.count} drift finding(s)`);
+  const driftPercent = analyses.drift.direct / fileCount;
+  deduct(
+    'drift',
+    Math.min(5, Math.round(driftPercent * 50)),
+    `${analyses.drift.direct} direct drift finding(s); ${analyses.drift.signal} signal drift finding(s)`,
+  );
 
   deduct(
     'complexity',
@@ -679,10 +696,14 @@ function computeHealthScore(analyses: HealthAnalyses): { breakdown: ScoreDeducti
   );
 
   if (analyses.gitEvidence) {
+    const hiddenCouplingScoreCount = analyses.gitEvidence.hiddenCoupling.scoreCount;
     deduct(
       'hidden-coupling',
-      Math.min(5, analyses.gitEvidence.hiddenCoupling.pairCount),
-      `${analyses.gitEvidence.hiddenCoupling.pairCount} co-changing pair(s) without a structural link`,
+      Math.min(5, Math.ceil(hiddenCouplingScoreCount / 10)),
+      scoreWeightedDetail(
+        { count: analyses.gitEvidence.hiddenCoupling.pairCount, scoreCount: hiddenCouplingScoreCount },
+        'co-changing pair(s) without a structural link',
+      ),
     );
   }
 
@@ -697,14 +718,15 @@ function computeHealthScore(analyses: HealthAnalyses): { breakdown: ScoreDeducti
     'extreme complexity hotspot(s)',
   );
   if (analyses.gitEvidence) {
+    const hiddenCouplingScoreCount = analyses.gitEvidence.hiddenCoupling.scoreCount;
     pressureDeduct(
       'hidden-coupling-pressure',
       'Hidden coupling',
-      analyses.gitEvidence.hiddenCoupling.pairCount,
+      hiddenCouplingScoreCount,
       50,
       10,
       4,
-      'co-changing pair(s)',
+      'score-weighted co-changing pair(s)',
     );
   }
 
@@ -780,11 +802,11 @@ function computeHealthScore(analyses: HealthAnalyses): { breakdown: ScoreDeducti
     2,
     'extraction candidate(s)',
   );
-  pressureDeduct('wrappers-pressure', 'Wrapper functions', analyses.wrappers.count, 50, 4, 2, 'wrapper candidate(s)');
+  pressureDeduct('wrappers-pressure', 'Wrapper functions', wrapperScoreCount, 50, 4, 2, 'wrapper candidate(s)');
   pressureDeduct(
     'passthroughs-pressure',
     'Passthrough functions',
-    analyses.passthroughs.count,
+    passthroughScoreCount,
     50,
     4,
     2,
@@ -792,21 +814,21 @@ function computeHealthScore(analyses: HealthAnalyses): { breakdown: ScoreDeducti
   );
   pressureDeduct(
     'stale-abstractions-pressure',
-    'Stale abstractions',
-    analyses.stale.count,
+    'Single-consumer stale abstraction signals',
+    analyses.stale.singleUse,
     Math.max(50, symbolCount * 0.02),
     4,
     2,
-    'stale abstraction(s)',
+    'single-consumer stale abstraction signal(s)',
   );
   pressureDeduct(
     'drift-pressure',
-    'Structural drift',
-    analyses.drift.count,
+    'Structural drift signals',
+    analyses.drift.signal,
     Math.max(10, fileCount * 0.1),
     4,
     2,
-    'drift finding(s)',
+    'signal drift finding(s)',
   );
 
   return { breakdown, pressure };

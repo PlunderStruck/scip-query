@@ -1,10 +1,14 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { isLiveBarrel } from '../../analysis/file-classifier.js';
-import { getSourceExports, getSourceImports } from '../../language-parsers/index.js';
+import { getReExports, getSourceExports, getSourceImports } from '../../language-parsers/index.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { leafSuffix, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
+import { getSourceText } from '../../source/source-text.js';
+import { isPackageSurfaceFile } from '../../analysis/package-surface.js';
+
+export type RedundantReexportActionTier = 'direct' | 'signal';
 
 export interface RedundantReexport {
   barrelFile: string;
@@ -15,6 +19,9 @@ export interface RedundantReexport {
   barrelConsumers: number;
   /** How many consumers import directly from the source */
   directConsumers: number;
+  actionTier: RedundantReexportActionTier;
+  surfaceEvidence: string[];
+  recommendation: string;
 }
 
 interface ScipReexportRow {
@@ -67,6 +74,7 @@ function findScipRedundantReexports(db: ScipDatabase, scope?: string): Redundant
   for (const row of loadScipReexportRows(db, scope)) {
     if (db.isIgnored(row.barrel_path) || db.isIgnored(row.original_path)) continue;
     if (isLiveBarrel(db, row.barrel_path)) continue;
+    if (getSourceText(db, row.barrel_path) && getSourceExports(db, row.barrel_path).length === 0) continue;
 
     const consumerCounts = countReexportConsumers(db, row);
     const barrelConsumers = consumerCounts?.barrel_consumers ?? 0;
@@ -90,6 +98,7 @@ function findScipRedundantReexports(db: ScipDatabase, scope?: string): Redundant
       originalFile: row.original_path,
       barrelConsumers,
       directConsumers,
+      ...redundantReexportCaveat(db, row.barrel_path),
     });
   }
   return results;
@@ -191,7 +200,7 @@ function findSourceRedundantReexports(db: ScipDatabase, index: ProjectIndex, sco
 
 function sourceBarrelCandidates(db: ScipDatabase, scope?: string): string[] {
   return indexedDocumentPaths(db, { scope, includeIgnored: false }).filter(
-    (relativePath) => getSourceExports(db, relativePath).length > 0,
+    (relativePath) => getSourceExports(db, relativePath).length > 0 || getReExports(db, relativePath).length > 0,
   );
 }
 
@@ -200,9 +209,13 @@ function sourceRedundantReexportsForBarrel(
   index: ProjectIndex,
   barrelPath: string,
 ): RedundantReexport[] {
-  return getSourceExports(db, barrelPath)
+  const sourceExportRows = getSourceExports(db, barrelPath)
     .filter((entry) => entry.sourcePath && !db.isIgnored(entry.sourcePath))
     .flatMap((entry) => sourceRedundantReexportForExport(db, index, barrelPath, entry.sourcePath!));
+  const reExportRows = getReExports(db, barrelPath)
+    .filter((entry) => entry.sourcePath && !db.isIgnored(entry.sourcePath))
+    .flatMap((entry) => sourceRedundantReexportForExport(db, index, barrelPath, entry.sourcePath!));
+  return [...sourceExportRows, ...reExportRows];
 }
 
 function sourceRedundantReexportForExport(
@@ -221,8 +234,33 @@ function sourceRedundantReexportForExport(
       originalFile: sourcePath,
       barrelConsumers: 0,
       directConsumers: countDirectImporters(db, sourcePath, barrelPath),
+      ...redundantReexportCaveat(db, barrelPath),
     },
   ];
+}
+
+function redundantReexportCaveat(
+  db: ScipDatabase,
+  barrelFile: string,
+): {
+  actionTier: RedundantReexportActionTier;
+  surfaceEvidence: string[];
+  recommendation: string;
+} {
+  if (isPackageSurfaceFile(db, barrelFile)) {
+    const surfaceEvidence = ['barrel file is declared on the package public surface'];
+    return {
+      actionTier: 'signal',
+      surfaceEvidence,
+      recommendation:
+        'Review the package API before removing this re-export; local consumers are zero, but external consumers may import through the public barrel.',
+    };
+  }
+  return {
+    actionTier: 'direct',
+    surfaceEvidence: [],
+    recommendation: 'Remove this unused re-export when the barrel is not part of an external API surface.',
+  };
 }
 
 function countDirectImporters(db: ScipDatabase, targetPath: string, excludedPath: string): number {

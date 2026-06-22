@@ -21,12 +21,13 @@ import {
   definedNumberOption,
   numberOptionValue,
   optionalStringArg,
+  optionValueSource,
   printJsonEnvelope,
   reportCommand,
   stringArg,
   stringOptionValue,
 } from '../../commands/command-execution.js';
-import { displayPathRange, displayRange, render } from '../../render.js';
+import { displayPathRange, displayRange, displaySnippet, render } from '../../render.js';
 import { renderDeadGroup } from './renderers.js';
 
 export const handleDead = budgetedDbCommand('dead', ({ db, args, opts, budget }) => {
@@ -47,6 +48,14 @@ export const handleDead = budgetedDbCommand('dead', ({ db, args, opts, budget })
   const showInternal = !booleanOptionValue(opts, 'onlyDead');
   const shownDeadCode = showDead ? deadCode : [];
   const shownFileInternal = showInternal ? fileInternal : [];
+  const deadLoc = shownDeadCode.reduce((sum, s) => sum + s.loc, 0);
+  const fiLoc = shownFileInternal.reduce((sum, s) => sum + s.loc, 0);
+  const shownCounts = {
+    total: shownDeadCode.length + shownFileInternal.length,
+    deadCode: shownDeadCode.length,
+    fileInternal: shownFileInternal.length,
+    loc: deadLoc + fiLoc,
+  };
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('dead', args, opts, {
       ...result,
@@ -54,9 +63,12 @@ export const handleDead = budgetedDbCommand('dead', ({ db, args, opts, budget })
         deadCode: shownDeadCode,
         fileInternal: shownFileInternal,
       },
+      shownCounts,
       totals: {
-        deadCode: deadCode.length,
-        fileInternal: fileInternal.length,
+        total: result.counts.total,
+        deadCode: result.counts.deadCode,
+        fileInternal: result.counts.fileInternal,
+        loc: result.counts.loc,
       },
     });
     return;
@@ -67,8 +79,6 @@ export const handleDead = budgetedDbCommand('dead', ({ db, args, opts, budget })
     return;
   }
 
-  const deadLoc = shownDeadCode.reduce((sum, s) => sum + s.loc, 0);
-  const fiLoc = shownFileInternal.reduce((sum, s) => sum + s.loc, 0);
   if (shownDeadCode.length > 0) {
     renderDeadGroup(
       shownDeadCode,
@@ -133,6 +143,9 @@ export const handleExtractCandidates = budgetedDbCommand('extract-candidates', (
     console.log(
       `\n${displayPathRange(r.relativePath, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC, ${r.totalCallees} callees)`,
     );
+    console.log(`  Kind: ${r.extractionKind}; tier: ${r.actionTier}`);
+    console.log(`  Recommendation: ${r.recommendation}`);
+    for (const reason of r.evidenceReasons) console.log(`  - ${reason}`);
     for (let i = 0; i < r.clusters.length; i++) {
       const c = r.clusters[i]!;
       console.log(`  Cluster ${i + 1} (${Math.round(c.isolation * 100)}% isolated, ${c.callees.length} callees):`);
@@ -153,7 +166,8 @@ export const handleWrapperCandidates = budgetedListCommand('wrapper-candidates',
     }),
   format: (r) =>
     `  ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC)\n` +
-    `    Only called by: ${r.singleCallerShort}  (fan-in: ${r.callerFanIn})`,
+    `    Only called by: ${r.singleCallerShort}  (fan-in: ${r.callerFanIn}, tier: ${r.actionTier})` +
+    (r.boundaryEvidence.length > 0 ? `\n    Boundary evidence: ${r.boundaryEvidence.join('; ')}` : ''),
   emptyMessage: () => 'No wrapper candidates found.',
   heuristicLabel: 'wrapper candidates',
   after: (rows) => console.log(`\n${rows.length} wrapper candidate(s).`),
@@ -170,7 +184,10 @@ export const handlePassthroughCandidates = budgetedListCommand('passthrough-cand
     }),
   format: (r) =>
     `  ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC)\n` +
-    `    Forwards to: ${r.forwardsToShort}  (${r.forwardsToFile})`,
+    `    Forwards to: ${r.forwardsToShort}  (${r.forwardsToFile}, tier: ${r.actionTier})\n` +
+    `    Recommendation: ${r.recommendation}` +
+    (r.boundaryEvidence.length > 0 ? `\n    Boundary evidence: ${r.boundaryEvidence.join('; ')}` : '') +
+    (r.publicFacadeEvidence.length > 0 ? `\n    Public facade evidence: ${r.publicFacadeEvidence.join('; ')}` : ''),
   emptyMessage: () => 'No passthrough candidates found.',
   heuristicLabel: 'passthrough candidates',
   after: (rows) => console.log(`\n${rows.length} passthrough candidate(s).`),
@@ -192,7 +209,9 @@ export const handleStaleAbstractions = budgetedListCommand('stale-abstractions',
     return (
       `  [${r.confidence}] ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  ` +
       `(${r.kind}, ${r.loc} LOC, ${consumerLabel}${barrelLabel})\n` +
-      `           ${r.reason}`
+      `           ${r.reason}\n` +
+      `           Kind: ${r.stalenessKind}; tier: ${r.actionTier}\n` +
+      `           Recommendation: ${r.recommendation}`
     );
   },
   emptyMessage: () => 'No stale abstractions found.',
@@ -261,8 +280,11 @@ export const handleSimilar = budgetedReportCommand('similar', {
           `\n${Math.round(r.similarity * 100)}% similar:`,
           `  A: ${r.shortNameA}  (${r.fileA})`,
           `  B: ${r.shortNameB}  (${r.fileB})`,
+          `  Evidence class: ${r.evidenceClass}  (tier: ${r.actionTier})`,
+          `  Recommendation: ${r.recommendation}`,
           `  ${sharedLabel}: ${r.sharedCallees.join(', ')}`,
         ];
+        if (r.evidenceClassReasons.length) lines.push(`  Evidence reasons: ${r.evidenceClassReasons.join('; ')}`);
         if (r.uniqueToA.length) lines.push(`  ${onlyLabel} A: ${r.uniqueToA.join(', ')}`);
         if (r.uniqueToB.length) lines.push(`  ${onlyLabel} B: ${r.uniqueToB.join(', ')}`);
         return lines.join('\n');
@@ -276,6 +298,9 @@ export const handleSimilar = budgetedReportCommand('similar', {
         `\n${Math.round(r.similarity * 100)}% similar:\n` +
         `  A: ${r.shortNameA}  (${r.fileA})\n` +
         `  B: ${r.shortNameB}  (${r.fileB})\n` +
+        `  Evidence class: ${r.evidenceClass}  (tier: ${r.actionTier})\n` +
+        `  Recommendation: ${r.recommendation}\n` +
+        (r.evidenceClassReasons.length ? `  Evidence reasons: ${r.evidenceClassReasons.join('; ')}\n` : '') +
         `  Shared ${r.similarityBasis === 'source-tokens' ? 'source tokens' : 'callees'}: ${r.sharedCallees.join(', ')}`,
     );
     console.log(`\n${result.rows.length} similar pair(s) found.`);
@@ -358,8 +383,11 @@ export const handleReactHookCandidates = budgetedReportCommand('react-hook-candi
         `\n${Math.round(r.similarity * 100)}% similar React behavior:`,
         `  ${r.componentA}  (${r.fileA})`,
         `  ${r.componentB}  (${r.fileB})`,
+        `  Evidence class: ${r.evidenceClass}  (tier: ${r.actionTier})`,
+        `  Recommendation: ${r.recommendation}`,
         `  ${r.reason}`,
       ];
+      if (r.evidenceClassReasons.length) lines.push(`  Evidence reasons: ${r.evidenceClassReasons.join('; ')}`);
       if (r.sharedHooks.length) lines.push(`  Shared hooks: ${r.sharedHooks.join(', ')}`);
       if (r.sharedReactHooks.length) lines.push(`  Shared React hooks: ${r.sharedReactHooks.join(', ')}`);
       if (r.sharedEffects.length) lines.push(`  Shared effects: ${r.sharedEffects.join(', ')}`);
@@ -392,8 +420,10 @@ export const handleReactLargeComponentPressure = budgetedReportCommand('react-la
     render.list(results, (r) => {
       const lines = [
         `\n${r.componentLines} component line(s): ${r.component}  (${r.file})`,
-        `  Dominant pressure: ${r.dominantPressure}`,
+        `  Dominant pressure: ${r.dominantPressure}  (context: ${r.contextKind})`,
+        `  Pressure kinds: ${r.pressureKinds.join(', ')}`,
         `  File lines: ${r.fileLines}; JSX tokens: ${r.jsxTokens}; behavior tokens: ${r.behaviorTokens}`,
+        `  Recommendation: ${r.recommendationKind} - ${r.recommendation}`,
         `  Reasons: ${r.reasons.join('; ')}`,
       ];
       return lines.join('\n');
@@ -448,8 +478,11 @@ export const handleVueComposableCandidates = budgetedReportCommand('vue-composab
         `\n${Math.round(r.similarity * 100)}% similar Vue behavior:`,
         `  ${r.fileA}`,
         `  ${r.fileB}`,
+        `  Evidence class: ${r.evidenceClass}  (tier: ${r.actionTier})`,
+        `  Recommendation: ${r.recommendation}`,
         `  ${r.reason}`,
       ];
+      if (r.evidenceClassReasons.length) lines.push(`  Evidence reasons: ${r.evidenceClassReasons.join('; ')}`);
       if (r.sharedComposables.length) lines.push(`  Shared composables: ${r.sharedComposables.join(', ')}`);
       if (r.sharedStores.length) lines.push(`  Shared stores: ${r.sharedStores.join(', ')}`);
       if (r.sharedRequests.length) lines.push(`  Shared requests: ${r.sharedRequests.join(', ')}`);
@@ -469,7 +502,10 @@ export const handleVueComposableCandidates = budgetedReportCommand('vue-composab
 export const handleVueLargeViewPressure = budgetedReportCommand('vue-large-view-pressure', {
   query: ({ db, args, opts, budget }) =>
     queries.vueLargeViewPressure(db, {
-      minTotalLines: definedNumberOption(opts, 'minTotalLines', 800),
+      minTotalLines:
+        booleanOptionValue(opts, 'reviewThresholds') && optionValueSource(opts, 'minTotalLines') === 'default'
+          ? 300
+          : definedNumberOption(opts, 'minTotalLines', 800),
       minTemplateLines: definedNumberOption(opts, 'minTemplateLines', 300),
       minScriptLines: definedNumberOption(opts, 'minScriptLines', 300),
       minStyleLines: definedNumberOption(opts, 'minStyleLines', 500),
@@ -484,8 +520,10 @@ export const handleVueLargeViewPressure = budgetedReportCommand('vue-large-view-
     render.list(results, (r) => {
       const lines = [
         `\n${r.totalLines} total line(s): ${r.file}`,
-        `  Dominant pressure: ${r.dominantPressure}`,
+        `  Dominant pressure: ${r.dominantPressure}  (context: ${r.contextKind})`,
+        `  Pressure kinds: ${r.pressureKinds.join(', ')}`,
         `  Blocks: template ${r.templateLines}, script ${r.scriptLines}, style ${r.styleLines}, external script ${r.externalScriptLines}, custom ${r.customBlockLines}`,
+        `  Recommendation: ${r.recommendationKind} - ${r.recommendation}`,
       ];
       if (r.externalScriptPaths.length) lines.push(`  External scripts: ${r.externalScriptPaths.join(', ')}`);
       lines.push(`  Reasons: ${r.reasons.join('; ')}`);
@@ -539,8 +577,15 @@ export const handleDrift = budgetedReportCommand('drift', {
       summary.results,
       (r) => {
         const tag = r.kind === 'unused-import' ? 'UNUSED' : r.kind === 'layer-violation' ? 'LAYER' : 'UNIQUE';
-        const head = `  [${tag}] ${r.description}`;
-        return r.detail ? `${head}\n         ${r.detail}` : head;
+        const policy = r.policyBasis ? `, policy: ${r.policyBasis}` : '';
+        const lines = [
+          `  [${tag}] ${r.description}`,
+          `         Tier: ${r.actionTier}${policy}`,
+          `         Recommendation: ${r.recommendation}`,
+          `         Evidence: ${r.evidenceReasons.join('; ')}`,
+        ];
+        if (r.detail) lines.push(`         ${r.detail}`);
+        return lines.join('\n');
       },
       (r) => r.file,
     );
@@ -775,6 +820,23 @@ export const handleRecentDuplicates = budgetedDbCommand('recent-duplicates', ({ 
     return render.empty(`No recent re-implementations found (window: last ${result.windowCommits} commits).`);
   }
   console.log(`Recent re-implementations (window: last ${result.windowCommits} commits):\n`);
+  const multiFindingGroups = result.rootCauseGroups?.filter((group) => group.count > 1) ?? [];
+  if (multiFindingGroups.length > 0) {
+    console.log(`Root-cause groups (${multiFindingGroups.length}):`);
+    for (const group of multiFindingGroups) {
+      console.log(
+        `  ${group.count} pair(s)  ${group.kind.toUpperCase()}  ${group.domain}  ${Math.round(
+          group.maxSimilarity * 100,
+        )}% max`,
+      );
+      if (group.establishedFile && group.establishedSymbol) {
+        console.log(`        established: ${group.establishedFile}  ${group.establishedSymbol}`);
+      }
+      console.log(`        files: ${group.relatedFiles.slice(0, 6).join(', ')}`);
+      console.log(`        -> ${group.recommendation}`);
+    }
+    console.log('');
+  }
   for (const finding of result.findings) {
     const evidence = finding.sharedEvidence.slice(0, 16).join(', ');
     if (finding.kind === 'echo') {
@@ -829,7 +891,13 @@ export const handleDocDrift = dbCommand(({ db, args, opts }) => {
           : subject.evidence === 'reference'
             ? 'referenced by doc'
             : `coupled ${subject.coChanges}x historically`;
-      console.log(`    ${subject.changesSinceDocUpdate} change(s) since doc update  ${subject.file}  (${evidence})`);
+      console.log(
+        `    ${subject.changesSinceDocUpdate} change(s) since doc update  ${subject.file}  (${evidence}; ${subject.actionTier}/${subject.docIntent})`,
+      );
+      const intentReason = subject.docIntentReasons[0];
+      if (intentReason) console.log(`      intent: ${intentReason}`);
+      const citedClaim = subject.citationContexts?.[0];
+      if (citedClaim) console.log(`      cited claim: ${displaySnippet(citedClaim)}`);
     }
   }
   console.log('\nStale standards docs are worse than none — agents implement to a dead spec.');

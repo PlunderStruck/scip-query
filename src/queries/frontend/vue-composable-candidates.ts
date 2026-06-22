@@ -3,6 +3,13 @@ import { buildVueComponentBehaviorProfiles, type VueComponentBehaviorProfile } f
 import type { ScipDatabase } from '../../storage/db.js';
 import { rankedPairwiseProfileResults, type PairwiseFileProfile } from '../internal/pairwise-profiles.js';
 
+export type VueComposableEvidenceClass =
+  | 'domain-behavior'
+  | 'generic-workflow-scaffolding'
+  | 'mixed'
+  | 'shared-abstraction';
+export type VueComposableActionTier = 'signal' | 'support';
+
 export interface VueComposableCandidateResult {
   fileA: string;
   fileB: string;
@@ -17,6 +24,10 @@ export interface VueComposableCandidateResult {
   sharedFunctionVerbs: string[];
   sharedBindings: string[];
   sharedTemplateEvents: string[];
+  evidenceClass: VueComposableEvidenceClass;
+  actionTier: VueComposableActionTier;
+  evidenceClassReasons: string[];
+  recommendation: string;
   uniqueToA: string[];
   uniqueToB: string[];
   reason: string;
@@ -82,6 +93,17 @@ function compareProfiles(
   const sharedFunctionVerbs = tokenValues(shared, 'function-verb:');
   const sharedBindings = tokenValues(shared, 'template-binding:');
   const sharedTemplateEvents = tokenValues(shared, 'template-event:');
+  const evidence = classifyVueComposableEvidence({
+    sharedComposables,
+    sharedStores,
+    sharedReactivity,
+    sharedLifecycle,
+    sharedRequests,
+    sharedFunctions,
+    sharedFunctionVerbs,
+    sharedBindings,
+    sharedTemplateEvents,
+  });
 
   return {
     fileA: a.file,
@@ -97,6 +119,10 @@ function compareProfiles(
     sharedFunctionVerbs,
     sharedBindings,
     sharedTemplateEvents,
+    evidenceClass: evidence.evidenceClass,
+    actionTier: evidence.actionTier,
+    evidenceClassReasons: evidence.reasons,
+    recommendation: evidence.recommendation,
     uniqueToA: sortedTokens(difference(a.tokens, b.tokens)).slice(0, 25),
     uniqueToB: sortedTokens(difference(b.tokens, a.tokens)).slice(0, 25),
     reason: behaviorReason({
@@ -111,6 +137,106 @@ function compareProfiles(
     locA: a.profile.totalLines,
     locB: b.profile.totalLines,
   };
+}
+
+function classifyVueComposableEvidence(parts: {
+  sharedComposables: readonly string[];
+  sharedStores: readonly string[];
+  sharedReactivity: readonly string[];
+  sharedLifecycle: readonly string[];
+  sharedRequests: readonly string[];
+  sharedFunctions: readonly string[];
+  sharedFunctionVerbs: readonly string[];
+  sharedBindings: readonly string[];
+  sharedTemplateEvents: readonly string[];
+}): {
+  actionTier: VueComposableActionTier;
+  evidenceClass: VueComposableEvidenceClass;
+  recommendation: string;
+  reasons: string[];
+} {
+  const domainReasons: string[] = [];
+  const genericReasons: string[] = [];
+  const sharedAbstractionReasons: string[] = [];
+
+  if (parts.sharedReactivity.length) {
+    genericReasons.push(`shared reactivity primitive: ${parts.sharedReactivity.join(', ')}`);
+  }
+  if (parts.sharedLifecycle.length) {
+    genericReasons.push(`shared lifecycle primitive: ${parts.sharedLifecycle.join(', ')}`);
+  }
+  classifyNames(parts.sharedComposables, 'shared composable', domainReasons, sharedAbstractionReasons);
+  classifyNames(parts.sharedStores, 'shared store', domainReasons, sharedAbstractionReasons);
+  classifyNames(parts.sharedRequests, 'shared request', domainReasons, genericReasons);
+  classifyNames(parts.sharedFunctions, 'shared function', domainReasons, genericReasons);
+  classifyNames(parts.sharedFunctionVerbs, 'shared action verb', domainReasons, genericReasons);
+  classifyNames(parts.sharedBindings, 'shared binding', domainReasons, genericReasons);
+  classifyNames(parts.sharedTemplateEvents, 'shared template event', domainReasons, genericReasons);
+
+  const hasDomain = domainReasons.length > 0;
+  const hasGeneric = genericReasons.length > 0;
+  const hasSharedAbstraction = sharedAbstractionReasons.length > 0;
+  const evidenceClass: VueComposableEvidenceClass = hasDomain
+    ? hasGeneric || hasSharedAbstraction
+      ? 'mixed'
+      : 'domain-behavior'
+    : hasSharedAbstraction
+      ? 'shared-abstraction'
+      : 'generic-workflow-scaffolding';
+  const actionTier: VueComposableActionTier =
+    evidenceClass === 'domain-behavior' || evidenceClass === 'mixed' ? 'signal' : 'support';
+  return {
+    actionTier,
+    evidenceClass,
+    reasons: [...domainReasons, ...sharedAbstractionReasons, ...genericReasons].slice(0, 6),
+    recommendation: vueComposableRecommendation(evidenceClass),
+  };
+}
+
+function classifyNames(
+  names: readonly string[],
+  label: string,
+  domainReasons: string[],
+  genericReasons: string[],
+): void {
+  const domainNames: string[] = [];
+  const genericNames: string[] = [];
+  for (const name of names) {
+    if (hasDomainBehaviorWords(name)) {
+      domainNames.push(name);
+    } else {
+      genericNames.push(name);
+    }
+  }
+  if (domainNames.length) domainReasons.push(`${label} has domain term(s): ${domainNames.slice(0, 6).join(', ')}`);
+  if (genericNames.length) genericReasons.push(`${label} is generic workflow: ${genericNames.slice(0, 6).join(', ')}`);
+}
+
+function hasDomainBehaviorWords(name: string): boolean {
+  const words = behaviorWords(name).filter((word) => !GENERIC_VUE_BEHAVIOR_WORDS.has(word));
+  return words.length > 0;
+}
+
+function behaviorWords(name: string): string[] {
+  return name
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+function vueComposableRecommendation(evidenceClass: VueComposableEvidenceClass): string {
+  switch (evidenceClass) {
+    case 'domain-behavior':
+      return 'Review for a shared composable, store, or feature module around the named domain behavior.';
+    case 'mixed':
+      return 'Separate generic Vue mechanics from domain-specific behavior before extracting a composable.';
+    case 'shared-abstraction':
+      return 'Review the existing composable/store usage first; extract only if duplicated behavior remains outside it.';
+    case 'generic-workflow-scaffolding':
+      return 'Treat as support evidence for a repeated workflow shape, not direct composable-extraction evidence.';
+  }
 }
 
 function behaviorSimilarity(a: Set<string>, b: Set<string>): number {
@@ -192,3 +318,49 @@ function tokenValues(tokens: ReadonlySet<string>, prefix: string): string[] {
 function sortedTokens(tokens: ReadonlySet<string>): string[] {
   return [...tokens].sort();
 }
+
+const GENERIC_VUE_BEHAVIOR_WORDS = new Set([
+  'add',
+  'apply',
+  'cancel',
+  'change',
+  'clear',
+  'close',
+  'composable',
+  'create',
+  'data',
+  'delete',
+  'draft',
+  'edit',
+  'error',
+  'fetch',
+  'filter',
+  'form',
+  'item',
+  'items',
+  'load',
+  'loading',
+  'name',
+  'open',
+  'reactive',
+  'ref',
+  'refresh',
+  'remove',
+  'request',
+  'reset',
+  'resource',
+  'row',
+  'rows',
+  'save',
+  'saving',
+  'search',
+  'select',
+  'selected',
+  'store',
+  'submit',
+  'toggle',
+  'update',
+  'use',
+  'value',
+  'watch',
+]);

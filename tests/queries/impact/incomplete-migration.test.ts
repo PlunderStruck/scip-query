@@ -1,10 +1,11 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
+import { collectBaselineFindings } from '../../../src/queries/health/health-baseline.js';
 import { diffGate } from '../../../src/queries/impact/diff-gate.js';
 import { diffImpactPlan } from '../../../src/queries/impact/diff-impact.js';
 import { incompleteMigration } from '../../../src/queries/impact/incomplete-migration.js';
@@ -43,6 +44,7 @@ function git(...args: string[]): void {
 }
 
 const sym = (path: string, name: string) => `scip-typescript npm pkg 1.0.0 src/\`${path}\`/${name}().`;
+const typeSym = (path: string, name: string) => `scip-typescript npm pkg 1.0.0 src/\`${path}\`/${name}#`;
 
 const SITE_BODY = [
   "import { coreOne, coreTwo, coreThree } from './core.js';",
@@ -63,6 +65,12 @@ function writeBaseFiles(): void {
       'export function coreOne() { return 1; }',
       'export function coreTwo() { return 2; }',
       'export function coreThree() { return 3; }',
+      'export function extraFOne() { return 4; }',
+      'export function extraFTwo() { return 5; }',
+      'export function extraFThree() { return 6; }',
+      'export function extraFFour() { return 7; }',
+      'export function extraFFive() { return 8; }',
+      'export function extraFSix() { return 9; }',
       '',
     ].join('\n'),
   );
@@ -83,6 +91,26 @@ function writeBaseFiles(): void {
     ].join('\n'),
   );
   writeFileSync(join(repoRoot, 'src', 'site-c.ts'), SITE_BODY.replace('%NAME%', 'siteC'));
+  writeFileSync(join(repoRoot, 'src', 'billing.ts'), SITE_BODY.replace('%NAME%', 'processBilling'));
+  writeFileSync(
+    join(repoRoot, 'src', 'site-f.ts'),
+    [
+      "import { coreOne, coreTwo, coreThree, extraFFive, extraFFour, extraFOne, extraFSix, extraFThree, extraFTwo } from './core.js';",
+      'export function siteF() {',
+      '  const a = coreOne();',
+      '  const b = coreTwo();',
+      '  const c = coreThree();',
+      '  const d = extraFOne();',
+      '  const e = extraFTwo();',
+      '  const f = extraFThree();',
+      '  const g = extraFFour();',
+      '  const h = extraFFive();',
+      '  const i = extraFSix();',
+      '  return a + b + c + d + e + f + g + h + i;',
+      '}',
+      '',
+    ].join('\n'),
+  );
   writeFileSync(
     join(repoRoot, 'src', 'site-d.ts'),
     [
@@ -143,7 +171,9 @@ function createFixtureDb(dbPath: string): void {
       (4, 'typescript', 'src/site-b.ts'),
       (5, 'typescript', 'src/site-c.ts'),
       (6, 'typescript', 'src/site-d.ts'),
-      (7, 'typescript', 'src/site-e.ts');
+      (7, 'typescript', 'src/site-e.ts'),
+      (8, 'typescript', 'src/site-f.ts'),
+      (9, 'typescript', 'src/billing.ts');
 
     INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
       (1, '${sym('core.ts', 'coreOne')}', 'coreOne', 3, 'function'),
@@ -157,7 +187,15 @@ function createFixtureDb(dbPath: string): void {
       (9, '${sym('site-b.ts', 'extraB')}', 'extraB', 3, 'function'),
       (10, '${sym('site-c.ts', 'siteC')}', 'siteC', 3, 'function'),
       (11, '${sym('site-d.ts', 'siteD')}', 'siteD', 3, 'function'),
-      (12, '${sym('site-e.ts', 'siteE')}', 'siteE', 3, 'function');
+      (12, '${sym('site-e.ts', 'siteE')}', 'siteE', 3, 'function'),
+      (13, '${sym('site-f.ts', 'siteF')}', 'siteF', 3, 'function'),
+      (14, '${sym('core.ts', 'extraFOne')}', 'extraFOne', 3, 'function'),
+      (15, '${sym('core.ts', 'extraFTwo')}', 'extraFTwo', 3, 'function'),
+      (16, '${sym('core.ts', 'extraFThree')}', 'extraFThree', 3, 'function'),
+      (17, '${sym('core.ts', 'extraFFour')}', 'extraFFour', 3, 'function'),
+      (18, '${sym('core.ts', 'extraFFive')}', 'extraFFive', 3, 'function'),
+      (19, '${sym('core.ts', 'extraFSix')}', 'extraFSix', 3, 'function'),
+      (20, '${sym('billing.ts', 'processBilling')}', 'processBilling', 3, 'function');
 
     INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
       (1, 1, 1, 0, 0, 0, 40),
@@ -171,10 +209,18 @@ function createFixtureDb(dbPath: string): void {
       (9, 4, 9, 1, 0, 1, 38),
       (10, 5, 10, 2, 0, 7, 1),
       (11, 6, 11, 2, 0, 7, 1),
-      (12, 7, 12, 2, 0, 7, 1);
+      (12, 7, 12, 2, 0, 7, 1),
+      (13, 8, 13, 1, 0, 11, 1),
+      (14, 1, 14, 3, 0, 3, 42),
+      (15, 1, 15, 4, 0, 4, 42),
+      (16, 1, 16, 5, 0, 5, 44),
+      (17, 1, 17, 6, 0, 6, 43),
+      (18, 1, 18, 7, 0, 7, 43),
+      (19, 1, 19, 8, 0, 8, 42),
+      (20, 9, 20, 2, 0, 7, 1);
 
     INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
-      (1, 1, 0, 0, 2, X'00'),
+      (1, 1, 0, 0, 8, X'00'),
       (2, 2, 0, 2, 7, X'00'),
       (3, 2, 1, 8, 8, X'00'),
       (4, 2, 2, 9, 9, X'00'),
@@ -183,12 +229,20 @@ function createFixtureDb(dbPath: string): void {
       (7, 4, 1, 1, 1, X'00'),
       (8, 5, 0, 2, 7, X'00'),
       (9, 6, 0, 2, 7, X'00'),
-      (10, 7, 0, 2, 7, X'00');
+      (10, 7, 0, 2, 7, X'00'),
+      (11, 8, 0, 1, 11, X'00'),
+      (12, 9, 0, 2, 7, X'00');
 
     INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
       (1, 1, 1),
       (1, 2, 1),
       (1, 3, 1),
+      (1, 14, 1),
+      (1, 15, 1),
+      (1, 16, 1),
+      (1, 17, 1),
+      (1, 18, 1),
+      (1, 19, 1),
       (2, 4, 1),
       (2, 1, 0),
       (2, 2, 0),
@@ -219,7 +273,21 @@ function createFixtureDb(dbPath: string): void {
       (10, 12, 1),
       (10, 1, 0),
       (10, 2, 0),
-      (10, 3, 0);
+      (10, 3, 0),
+      (11, 13, 1),
+      (11, 1, 0),
+      (11, 2, 0),
+      (11, 3, 0),
+      (11, 14, 0),
+      (11, 15, 0),
+      (11, 16, 0),
+      (11, 17, 0),
+      (11, 18, 0),
+      (11, 19, 0),
+      (12, 20, 1),
+      (12, 1, 0),
+      (12, 2, 0),
+      (12, 3, 0);
   `);
 
   sqliteDb.close();
@@ -261,12 +329,35 @@ describe('incomplete-migration', () => {
     const finding = result.findings[0]!;
     expect(finding.helperShortName).toContain('formatThing');
     expect(finding.helperFile).toBe('src/util.ts');
+    expect(finding).toMatchObject({
+      helperShape: 'specific-callee-cluster',
+      helperCalleeCount: 3,
+      specificHelperCalleeCount: 3,
+    });
     expect(finding.migratedFiles).toContain('src/site-a.ts');
 
     const leftoverFiles = finding.leftovers.map((leftover) => leftover.file);
-    expect(leftoverFiles).toEqual(['src/site-b.ts', 'src/site-c.ts']);
-    expect(finding.leftovers[0]!.containment).toBe(1);
-    expect(finding.leftovers[0]!.sharedCallees).toHaveLength(3);
+    expect(leftoverFiles).toEqual(['src/site-c.ts', 'src/site-b.ts', 'src/billing.ts']);
+    expect(leftoverFiles).not.toContain('src/site-f.ts');
+    const siteB = finding.leftovers.find((leftover) => leftover.file === 'src/site-b.ts')!;
+    const siteC = finding.leftovers.find((leftover) => leftover.file === 'src/site-c.ts')!;
+    const billing = finding.leftovers.find((leftover) => leftover.file === 'src/billing.ts')!;
+    expect(siteB).toMatchObject({
+      containment: 1,
+      siteCoverage: 0.75,
+      uniqueSiteCalleeCount: 1,
+      migrationScope: 'same-scope',
+    });
+    expect(siteB.migrationScopeReasons[0]).toContain('site');
+    expect(siteC.migrationScope).toBe('same-scope');
+    expect(billing).toMatchObject({
+      containment: 1,
+      siteCoverage: 1,
+      uniqueSiteCalleeCount: 0,
+      migrationScope: 'possible-subtype',
+    });
+    expect(billing.migrationScopeReasons[0]).toContain('no path/name tokens shared');
+    expect(siteB.sharedCallees).toHaveLength(3);
   });
 
   it('reuses a supplied diff plan without changing incomplete-migration findings', () => {
@@ -280,11 +371,15 @@ describe('incomplete-migration', () => {
     expect(result.findings[0]).toMatchObject({
       helperShortName: expect.stringContaining('formatThing'),
       helperFile: 'src/util.ts',
+      helperShape: 'specific-callee-cluster',
+      helperCalleeCount: 3,
+      specificHelperCalleeCount: 3,
       migratedFiles: expect.arrayContaining(['src/site-a.ts']),
-      leftovers: [
-        expect.objectContaining({ file: 'src/site-b.ts', containment: 1 }),
-        expect.objectContaining({ file: 'src/site-c.ts', containment: 1 }),
-      ],
+      leftovers: expect.arrayContaining([
+        expect.objectContaining({ file: 'src/site-b.ts', containment: 1, siteCoverage: 0.75 }),
+        expect.objectContaining({ file: 'src/site-c.ts', containment: 1, siteCoverage: 1 }),
+        expect.objectContaining({ file: 'src/billing.ts', migrationScope: 'possible-subtype' }),
+      ]),
     });
   });
 
@@ -295,6 +390,7 @@ describe('incomplete-migration', () => {
     // site-d calls the helper; site-e is part of the diff itself.
     expect(leftoverFiles).not.toContain('src/site-d.ts');
     expect(leftoverFiles).not.toContain('src/site-e.ts');
+    expect(leftoverFiles).not.toContain('src/site-f.ts');
   });
 
   it('skips unscoreable helpers with explicit reasons instead of silence', () => {
@@ -473,7 +569,9 @@ describe('incomplete-migration', () => {
     expect(findings.length).toBeGreaterThanOrEqual(1);
     expect(findings[0]!.message).toContain('formatThing');
     expect(findings[0]!.message).toContain('src/site-b.ts');
+    expect(findings[0]!.message).toContain('possible-subtype');
     expect(findings[0]!.remediation).toContain('formatThing');
+    expect(findings[0]!.remediation).toContain('possible subtype/variant');
     expect(findings[0]!).toMatchObject({
       id: expect.stringMatching(/^SQ[A-F0-9]{12}$/),
       severity: 'warning',
@@ -484,7 +582,215 @@ describe('incomplete-migration', () => {
       suppressionHint: expect.stringContaining('scip-query: ignore incomplete-migration'),
     });
     expect(findings[0]!.confidence).toBeGreaterThan(0);
-    expect(findings[0]!.why).toEqual(expect.arrayContaining([expect.stringContaining('formatThing')]));
+    expect(findings[0]!.why).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('formatThing'),
+        expect.stringContaining('Helper shape'),
+        expect.stringContaining('Migration scope hints'),
+      ]),
+    );
+  });
+
+  it('groups echo evidence by changed symbol and exposes the action tier', () => {
+    const result = diffGate(db, {
+      base: 'HEAD',
+      skip: ['incomplete-migration', 'co-change-partner', 'doc-reference', 'unused-params', 'new-dead', 'baseline'],
+    });
+
+    const echoFindings = result.findings.filter((finding) => finding.check === 'echo');
+    const formatEcho = echoFindings.find((finding) => finding.symbol?.includes('formatThing'));
+
+    expect(formatEcho).toBeDefined();
+    expect(echoFindings.filter((finding) => finding.symbol === formatEcho!.symbol)).toHaveLength(1);
+    expect(formatEcho).toMatchObject({
+      actionTier: 'signal',
+      groupKey: formatEcho!.id,
+      relatedFiles: expect.arrayContaining(['src/site-b.ts', 'src/site-c.ts']),
+    });
+    expect(formatEcho!.message).toContain('established symbol');
+    expect(formatEcho!.remediation).toContain('Review whether');
+  });
+
+  it('keeps exact same-name helper echoes in the direct tier', () => {
+    const helperRepo = mkdtempSync(join(tmpdir(), 'scip-helper-echo-query-'));
+    try {
+      mkdirSync(join(helperRepo, 'src'), { recursive: true });
+      gitIn(helperRepo, 'init');
+      writeFileSync(
+        join(helperRepo, 'src', 'existing.ts'),
+        [
+          'export function hasOwn(payload: object, key: string) {',
+          '  return Object.prototype.hasOwnProperty.call(payload, key);',
+          '}',
+          '',
+        ].join('\n'),
+      );
+      gitIn(helperRepo, 'add', '-A');
+      gitIn(helperRepo, 'commit', '-m', 'base', '--no-gpg-sign');
+      writeFileSync(
+        join(helperRepo, 'src', 'new-helper.ts'),
+        [
+          'export function hasOwn(payload: object, key: string) {',
+          '  return Object.prototype.hasOwnProperty.call(payload, key);',
+          '}',
+          '',
+        ].join('\n'),
+      );
+
+      const dbPath = join(helperRepo, 'index.db');
+      const sqliteDb = new Database(dbPath);
+      createEvidenceSchema(sqliteDb);
+      sqliteDb.exec(`
+        INSERT INTO documents (id, language, relative_path) VALUES
+          (1, 'typescript', 'src/new-helper.ts'),
+          (2, 'typescript', 'src/existing.ts');
+
+        INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
+          (1, '${sym('new-helper.ts', 'hasOwn')}', 'hasOwn', 3, 'function hasOwn'),
+          (2, '${sym('existing.ts', 'hasOwn')}', 'hasOwn', 3, 'function hasOwn');
+
+        INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+          (1, 1, 1, 0, 0, 2, 1),
+          (2, 2, 2, 0, 0, 2, 1);
+
+        INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+          (1, 1, 0, 0, 2, X'00'),
+          (2, 2, 0, 0, 2, X'00');
+
+        INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+          (1, 1, 1),
+          (2, 2, 1);
+      `);
+      sqliteDb.close();
+
+      const helperDb = new ScipDatabase({
+        dbPath,
+        indexPath: join(helperRepo, 'index.scip'),
+        projectRoot: helperRepo,
+      });
+      try {
+        const result = diffGate(helperDb, {
+          base: 'HEAD',
+          skip: ['incomplete-migration', 'co-change-partner', 'doc-reference', 'unused-params', 'new-dead', 'baseline'],
+        });
+        const echo = result.findings.find((finding) => finding.symbol?.includes('new-helper'));
+
+        expect(echo).toBeDefined();
+        expect(echo).toMatchObject({
+          actionTier: 'direct',
+          relatedFiles: ['src/existing.ts'],
+        });
+        expect(echo!.remediation).toContain('Extract or reuse');
+      } finally {
+        helperDb.close();
+      }
+    } finally {
+      rmSync(helperRepo, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps generic token-generation source matches as review signals', () => {
+    const tokenRepo = mkdtempSync(join(tmpdir(), 'scip-token-echo-query-'));
+    try {
+      mkdirSync(join(tokenRepo, 'src'), { recursive: true });
+      gitIn(tokenRepo, 'init');
+      writeFileSync(
+        join(tokenRepo, 'src', 'auth.ts'),
+        [
+          "import crypto from 'node:crypto';",
+          '',
+          'export function generateCsrfToken() {',
+          '  const bytes = crypto.randomBytes(32);',
+          "  return bytes.toString('hex');",
+          '}',
+          '',
+        ].join('\n'),
+      );
+      writeFileSync(
+        join(tokenRepo, 'src', 'accounts.ts'),
+        [
+          "import crypto from 'node:crypto';",
+          '',
+          'export function generateOpaqueToken() {',
+          '  const bytes = crypto.randomBytes(32);',
+          "  return bytes.toString('hex');",
+          '}',
+          '',
+        ].join('\n'),
+      );
+      gitIn(tokenRepo, 'add', '-A');
+      gitIn(tokenRepo, 'commit', '-m', 'base', '--no-gpg-sign');
+      writeFileSync(
+        join(tokenRepo, 'src', 'payment.ts'),
+        [
+          "import crypto from 'node:crypto';",
+          '',
+          'export function fakePaymentIntentSecret() {',
+          '  const bytes = crypto.randomBytes(8);',
+          "  return `fake_${bytes.toString('hex')}`;",
+          '}',
+          '',
+        ].join('\n'),
+      );
+
+      const dbPath = join(tokenRepo, 'index.db');
+      const sqliteDb = new Database(dbPath);
+      createEvidenceSchema(sqliteDb);
+      sqliteDb.exec(`
+        INSERT INTO documents (id, language, relative_path) VALUES
+          (1, 'typescript', 'src/payment.ts'),
+          (2, 'typescript', 'src/auth.ts'),
+          (3, 'typescript', 'src/accounts.ts');
+
+        INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
+          (1, '${sym('payment.ts', 'fakePaymentIntentSecret')}', 'fakePaymentIntentSecret', 3, 'function fakePaymentIntentSecret'),
+          (2, '${sym('auth.ts', 'generateCsrfToken')}', 'generateCsrfToken', 3, 'function generateCsrfToken'),
+          (3, '${sym('accounts.ts', 'generateOpaqueToken')}', 'generateOpaqueToken', 3, 'function generateOpaqueToken');
+
+        INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+          (1, 1, 1, 2, 0, 5, 1),
+          (2, 2, 2, 2, 0, 5, 1),
+          (3, 3, 3, 2, 0, 5, 1);
+
+        INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+          (1, 1, 0, 2, 5, X'00'),
+          (2, 2, 0, 2, 5, X'00'),
+          (3, 3, 0, 2, 5, X'00');
+
+        INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+          (1, 1, 1),
+          (2, 2, 1),
+          (3, 3, 1);
+      `);
+      sqliteDb.close();
+
+      const tokenDb = new ScipDatabase({
+        dbPath,
+        indexPath: join(tokenRepo, 'index.scip'),
+        projectRoot: tokenRepo,
+      });
+      try {
+        const result = diffGate(tokenDb, {
+          base: 'HEAD',
+          skip: ['incomplete-migration', 'co-change-partner', 'doc-reference', 'unused-params', 'new-dead', 'baseline'],
+        });
+        const echo = result.findings.find((finding) => finding.symbol?.includes('fakePaymentIntentSecret'));
+
+        expect(echo).toBeDefined();
+        expect(echo).toMatchObject({
+          actionTier: 'signal',
+          groupKey: echo!.id,
+          relatedFiles: expect.arrayContaining(['src/auth.ts', 'src/accounts.ts']),
+        });
+        expect(echo!.why.join('\n')).toContain('source-tokens evidence');
+        expect(echo!.remediation).toContain('Review whether');
+        expect(echo!.remediation).not.toContain('Extract or reuse');
+      } finally {
+        tokenDb.close();
+      }
+    } finally {
+      rmSync(tokenRepo, { recursive: true, force: true });
+    }
   });
 
   it('honors structured diff-gate suppressions from config', () => {
@@ -532,6 +838,65 @@ describe('incomplete-migration', () => {
     expect(result.findings.filter((finding) => finding.check === 'incomplete-migration')).toHaveLength(0);
   });
 
+  it('does not report compile-time type contract assertions as new dead production code', () => {
+    const contractRepo = mkdtempSync(join(tmpdir(), 'scip-type-contract-query-'));
+    try {
+      mkdirSync(join(contractRepo, 'src'), { recursive: true });
+      gitIn(contractRepo, 'init');
+      writeFileSync(join(contractRepo, 'README.md'), 'base\n');
+      gitIn(contractRepo, 'add', '-A');
+      gitIn(contractRepo, 'commit', '-m', 'base', '--no-gpg-sign');
+      writeFileSync(
+        join(contractRepo, 'src', 'contracts.ts'),
+        [
+          'type Equal<A, B> = A extends B ? (B extends A ? true : false) : false;',
+          'export type _AssertPaymentIntentSecret = Equal<string, string>;',
+          '',
+        ].join('\n'),
+      );
+
+      const dbPath = join(contractRepo, 'index.db');
+      const sqliteDb = new Database(dbPath);
+      createEvidenceSchema(sqliteDb);
+      sqliteDb.exec(`
+        INSERT INTO documents (id, language, relative_path) VALUES
+          (1, 'typescript', 'src/contracts.ts');
+
+        INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
+          (1, '${typeSym('contracts.ts', '_AssertPaymentIntentSecret')}', '_AssertPaymentIntentSecret', 11, 'type _AssertPaymentIntentSecret');
+
+        INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+          (1, 1, 1, 1, 0, 1, 68);
+
+        INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+          (1, 1, 0, 1, 1, X'00');
+
+        INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+          (1, 1, 1);
+      `);
+      sqliteDb.close();
+
+      const contractDb = new ScipDatabase({
+        dbPath,
+        indexPath: join(contractRepo, 'index.scip'),
+        projectRoot: contractRepo,
+      });
+      try {
+        const result = diffGate(contractDb, {
+          base: 'HEAD',
+          skip: ['echo', 'incomplete-migration', 'co-change-partner', 'doc-reference', 'unused-params', 'baseline'],
+        });
+
+        expect(result.changedSymbols).toBe(1);
+        expect(result.findings.filter((finding) => finding.check === 'new-dead')).toHaveLength(0);
+      } finally {
+        contractDb.close();
+      }
+    } finally {
+      rmSync(contractRepo, { recursive: true, force: true });
+    }
+  });
+
   it('skips named checks via the skip option', () => {
     const result = diffGate(db, { base: 'HEAD', skip: ['incomplete-migration', 'doc-reference'] });
 
@@ -541,6 +906,54 @@ describe('incomplete-migration', () => {
     expect(result.skipped).toContainEqual({ check: 'incomplete-migration', reason: 'skipped via --skip' });
     expect(result.skipped).toContainEqual({ check: 'doc-reference', reason: 'skipped via --skip' });
     expect(result.findings.filter((finding) => finding.check === 'incomplete-migration')).toHaveLength(0);
+  });
+
+  it('inherits analyzer metadata for baseline findings', () => {
+    const current = collectBaselineFindings(db);
+    expect(current.length).toBeGreaterThan(0);
+
+    const missingFinding = current[0]!;
+    const baselinePath = join(repoRoot, '.scipquery-baseline.json');
+    writeFileSync(baselinePath, JSON.stringify({ version: 1, findings: current.slice(1) }, null, 2));
+    try {
+      const result = diffGate(db, {
+        base: 'HEAD',
+        skip: ['echo', 'incomplete-migration', 'co-change-partner', 'doc-reference', 'unused-params', 'new-dead'],
+      });
+      const finding = result.findings.find((candidate) => candidate.check === 'baseline');
+
+      expect(finding).toMatchObject({
+        check: 'baseline',
+        actionTier: expect.stringMatching(/^(direct|signal)$/),
+        sourceAnalyzer: missingFinding.split(':')[0],
+        rootCauseKey: expect.any(String),
+        groupKey: expect.stringContaining('baseline:'),
+        message: expect.stringContaining(missingFinding),
+        remediation: expect.stringContaining('health --write-baseline'),
+      });
+      expect(finding!.why).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('Underlying analyzer:'),
+          expect.stringContaining('Inherited action tier:'),
+          expect.stringContaining('Root cause key:'),
+        ]),
+      );
+      expect(result.rootCauseGroups).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            groupKey: finding!.groupKey,
+            check: 'baseline',
+            count: 1,
+            findingIds: [finding!.id],
+            sourceAnalyzer: finding!.sourceAnalyzer,
+            rootCauseKey: finding!.rootCauseKey,
+            remediation: finding!.remediation,
+          }),
+        ]),
+      );
+    } finally {
+      unlinkSync(baselinePath);
+    }
   });
 
   it('does not ask docs to update for import-only source path rewrites', () => {
@@ -600,6 +1013,183 @@ describe('incomplete-migration', () => {
       }
     } finally {
       rmSync(importOnlyRepo, { recursive: true, force: true });
+    }
+  });
+
+  it('classifies configuration-example doc references as support evidence', () => {
+    const configExampleRepo = mkdtempSync(join(tmpdir(), 'scip-doc-reference-config-example-'));
+    try {
+      mkdirSync(join(configExampleRepo, 'src'), { recursive: true });
+      gitIn(configExampleRepo, 'init');
+      writeFileSync(
+        join(configExampleRepo, 'README.md'),
+        [
+          'Use `.scipquery.json` for declared coupling groups.',
+          '',
+          '```json',
+          '{',
+          '  "declaredCouplings": [',
+          '    {',
+          '      "name": "cleanup detector family",',
+          '      "reason": "These files intentionally move together.",',
+          '      "files": ["src/dead.ts", "src/unused.ts"]',
+          '    }',
+          '  ]',
+          '}',
+          '```',
+          '',
+        ].join('\n'),
+      );
+      writeFileSync(join(configExampleRepo, 'src', 'dead.ts'), 'export function cleanupDetector() { return 1; }\n');
+      gitIn(configExampleRepo, 'add', '-A');
+      gitIn(configExampleRepo, 'commit', '-m', 'base', '--no-gpg-sign');
+      writeFileSync(join(configExampleRepo, 'src', 'dead.ts'), 'export function cleanupDetector() { return 2; }\n');
+
+      const dbPath = join(configExampleRepo, 'index.db');
+      const sqliteDb = new Database(dbPath);
+      createEvidenceSchema(sqliteDb);
+      sqliteDb.exec(`
+        INSERT INTO documents (id, language, relative_path) VALUES
+          (1, 'typescript', 'src/dead.ts');
+      `);
+      sqliteDb.close();
+
+      const configExampleDb = new ScipDatabase({
+        dbPath,
+        indexPath: join(configExampleRepo, 'index.scip'),
+        projectRoot: configExampleRepo,
+      });
+      try {
+        const result = diffGate(configExampleDb, {
+          base: 'HEAD',
+          skip: ['echo', 'incomplete-migration', 'co-change-partner', 'unused-params', 'new-dead', 'baseline'],
+        });
+        const finding = result.findings.find((candidate) => candidate.check === 'doc-reference');
+
+        expect(finding).toMatchObject({
+          citationKind: 'configuration-example',
+          actionTier: 'support',
+          message: expect.stringContaining('configuration example'),
+          remediation: expect.stringContaining('Verify the configuration example'),
+          citationKindReasons: expect.arrayContaining([expect.stringContaining('declaredcouplings')]),
+          citedClaims: expect.arrayContaining([expect.stringContaining('cleanup detector family')]),
+        });
+      } finally {
+        configExampleDb.close();
+      }
+    } finally {
+      rmSync(configExampleRepo, { recursive: true, force: true });
+    }
+  });
+
+  it('classifies behavioral doc references as direct evidence with cited claims', () => {
+    const behavioralRepo = mkdtempSync(join(tmpdir(), 'scip-doc-reference-behavioral-'));
+    try {
+      mkdirSync(join(behavioralRepo, 'src'), { recursive: true });
+      gitIn(behavioralRepo, 'init');
+      writeFileSync(
+        join(behavioralRepo, 'README.md'),
+        [
+          'Cleanup detector behavior lives in src/dead.ts.',
+          'The detector returns the number of cleanup candidates.',
+          '',
+        ].join('\n'),
+      );
+      writeFileSync(join(behavioralRepo, 'src', 'dead.ts'), 'export function cleanupDetector() { return 1; }\n');
+      gitIn(behavioralRepo, 'add', '-A');
+      gitIn(behavioralRepo, 'commit', '-m', 'base', '--no-gpg-sign');
+      writeFileSync(join(behavioralRepo, 'src', 'dead.ts'), 'export function cleanupDetector() { return 2; }\n');
+
+      const dbPath = join(behavioralRepo, 'index.db');
+      const sqliteDb = new Database(dbPath);
+      createEvidenceSchema(sqliteDb);
+      sqliteDb.exec(`
+        INSERT INTO documents (id, language, relative_path) VALUES
+          (1, 'typescript', 'src/dead.ts');
+      `);
+      sqliteDb.close();
+
+      const behavioralDb = new ScipDatabase({
+        dbPath,
+        indexPath: join(behavioralRepo, 'index.scip'),
+        projectRoot: behavioralRepo,
+      });
+      try {
+        const result = diffGate(behavioralDb, {
+          base: 'HEAD',
+          skip: ['echo', 'incomplete-migration', 'co-change-partner', 'unused-params', 'new-dead', 'baseline'],
+        });
+        const finding = result.findings.find((candidate) => candidate.check === 'doc-reference');
+
+        expect(finding).toMatchObject({
+          citationKind: 'behavioral-claim',
+          actionTier: 'direct',
+          citedClaims: expect.arrayContaining([expect.stringContaining('Cleanup detector behavior')]),
+        });
+      } finally {
+        behavioralDb.close();
+      }
+    } finally {
+      rmSync(behavioralRepo, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps neighboring configuration prose out of behavioral doc-reference claims', () => {
+    const behavioralRepo = mkdtempSync(join(tmpdir(), 'scip-doc-reference-behavioral-neighbor-'));
+    try {
+      mkdirSync(join(behavioralRepo, 'src'), { recursive: true });
+      gitIn(behavioralRepo, 'init');
+      writeFileSync(
+        join(behavioralRepo, 'README.md'),
+        [
+          '## Configuration',
+          '',
+          'Use `.scipquery.json` for declaredCouplings configuration.',
+          '',
+          '## Cleanup behavior',
+          '',
+          'Cleanup detector behavior lives in src/dead.ts.',
+          'The detector returns the number of cleanup candidates.',
+          '',
+        ].join('\n'),
+      );
+      writeFileSync(join(behavioralRepo, 'src', 'dead.ts'), 'export function cleanupDetector() { return 1; }\n');
+      gitIn(behavioralRepo, 'add', '-A');
+      gitIn(behavioralRepo, 'commit', '-m', 'base', '--no-gpg-sign');
+      writeFileSync(join(behavioralRepo, 'src', 'dead.ts'), 'export function cleanupDetector() { return 2; }\n');
+
+      const dbPath = join(behavioralRepo, 'index.db');
+      const sqliteDb = new Database(dbPath);
+      createEvidenceSchema(sqliteDb);
+      sqliteDb.exec(`
+        INSERT INTO documents (id, language, relative_path) VALUES
+          (1, 'typescript', 'src/dead.ts');
+      `);
+      sqliteDb.close();
+
+      const behavioralDb = new ScipDatabase({
+        dbPath,
+        indexPath: join(behavioralRepo, 'index.scip'),
+        projectRoot: behavioralRepo,
+      });
+      try {
+        const result = diffGate(behavioralDb, {
+          base: 'HEAD',
+          skip: ['echo', 'incomplete-migration', 'co-change-partner', 'unused-params', 'new-dead', 'baseline'],
+        });
+        const finding = result.findings.find((candidate) => candidate.check === 'doc-reference');
+
+        expect(finding).toMatchObject({
+          citationKind: 'behavioral-claim',
+          actionTier: 'direct',
+          citedClaims: expect.arrayContaining([expect.stringContaining('Cleanup detector behavior')]),
+        });
+        expect(finding?.citedClaims?.[0]).not.toContain('declaredCouplings');
+      } finally {
+        behavioralDb.close();
+      }
+    } finally {
+      rmSync(behavioralRepo, { recursive: true, force: true });
     }
   });
 });

@@ -1,7 +1,8 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { handleStatus } from '../../src/runtime/commands/command-handlers.js';
 import { addFindingSuppression, loadProjectConfig, validateProjectConfig } from '../../src/runtime/config.js';
 
 const tempDirs: string[] = [];
@@ -77,6 +78,36 @@ describe('validateProjectConfig', () => {
     expect(diagnostics).toEqual([expect.objectContaining({ level: 'warning', path: 'suppressions[0].expiresAt' })]);
   });
 
+  it('validates structured suppression file paths', () => {
+    const projectRoot = createProject();
+    mkdirSync(join(projectRoot, 'src'), { recursive: true });
+    writeFileSync(join(projectRoot, 'src/example.ts'), 'export const example = 1;\n');
+
+    const diagnostics = validateProjectConfig(
+      {
+        suppressions: [
+          { id: 'SQABC123DEF456', reason: 'accepted', file: 'src/example.ts' },
+          { id: 'SQDEF456ABC789', reason: 'blank file', file: '  ' },
+          { id: 'SQFED654CBA987', reason: 'stale file', file: 'src/missing.ts' },
+        ],
+      },
+      { projectRoot },
+    );
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        path: 'suppressions[1].file',
+        message: 'Suppression file path cannot be blank.',
+      }),
+      expect.objectContaining({
+        level: 'warning',
+        path: 'suppressions[2].file',
+        message: 'Suppression file does not exist: src/missing.ts',
+      }),
+    ]);
+  });
+
   it('requires declared coupling groups to name at least two files', () => {
     const diagnostics = validateProjectConfig({
       declaredCouplings: [
@@ -93,6 +124,27 @@ describe('validateProjectConfig', () => {
         expect.objectContaining({ level: 'error', path: 'declaredCouplings[1].files[1]' }),
       ]),
     );
+  });
+
+  it('warns when declared coupling file paths do not exist', () => {
+    const projectRoot = createProject();
+    mkdirSync(join(projectRoot, 'src'), { recursive: true });
+    writeFileSync(join(projectRoot, 'src/a.ts'), 'export const a = 1;\n');
+
+    const diagnostics = validateProjectConfig(
+      {
+        declaredCouplings: [{ name: 'freshness', files: ['src/a.ts', 'src/missing.ts'] }],
+      },
+      { projectRoot },
+    );
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        level: 'warning',
+        path: 'declaredCouplings[0].files[1]',
+        message: 'Declared coupling file does not exist: src/missing.ts',
+      }),
+    ]);
   });
 });
 
@@ -131,5 +183,46 @@ describe('addFindingSuppression', () => {
         reason: '',
       }),
     ).toThrow(/reason is required/);
+  });
+});
+
+describe('status config diagnostics', () => {
+  it('uses root-aware config validation in status JSON output', () => {
+    const projectRoot = createProject();
+    mkdirSync(join(projectRoot, 'src'), { recursive: true });
+    writeFileSync(join(projectRoot, 'src/a.ts'), 'export const a = 1;\n');
+    writeFileSync(
+      join(projectRoot, '.scipquery.json'),
+      `${JSON.stringify({
+        languages: ['typescript'],
+        declaredCouplings: [{ name: 'stale group', files: ['src/a.ts', 'src/missing.ts'] }],
+      })}\n`,
+    );
+
+    const previousProjectRoot = process.env['SCIP_QUERY_PROJECT_ROOT'];
+    process.env['SCIP_QUERY_PROJECT_ROOT'] = projectRoot;
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    try {
+      handleStatus({ json: true });
+      const payload = JSON.parse(log.mock.calls[0]![0] as string) as {
+        result: { configDiagnostics: unknown[] };
+      };
+
+      expect(payload.result.configDiagnostics).toEqual([
+        expect.objectContaining({
+          level: 'warning',
+          path: 'declaredCouplings[0].files[1]',
+          message: 'Declared coupling file does not exist: src/missing.ts',
+        }),
+      ]);
+    } finally {
+      log.mockRestore();
+      if (previousProjectRoot === undefined) {
+        delete process.env['SCIP_QUERY_PROJECT_ROOT'];
+      } else {
+        process.env['SCIP_QUERY_PROJECT_ROOT'] = previousProjectRoot;
+      }
+    }
   });
 });

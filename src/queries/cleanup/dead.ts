@@ -34,8 +34,16 @@ export interface DeadSymbolResult {
   kind: 'dead-code' | 'file-internal';
 }
 
+export interface DeadCounts {
+  total: number;
+  deadCode: number;
+  fileInternal: number;
+  loc: number;
+}
+
 export interface DeadSummary {
   symbols: DeadSymbolResult[];
+  counts: DeadCounts;
   totalCount: number;
   /** Symbols with zero references anywhere — safe to delete */
   deadCodeCount: number;
@@ -220,6 +228,12 @@ function deadSummary(db: ScipDatabase, rows: readonly DeadRow[]): DeadSummary {
 
   return {
     symbols,
+    counts: {
+      total: symbols.length,
+      deadCode: deadCodeCount,
+      fileInternal: fileInternalCount,
+      loc: totalLoc,
+    },
     totalCount: symbols.length,
     deadCodeCount,
     fileInternalCount,

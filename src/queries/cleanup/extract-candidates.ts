@@ -5,6 +5,9 @@ import { ProjectIndex } from '../../core/project-index.js';
 import { runCandidateAnalysis } from '../internal/candidate-scan.js';
 import { definitionLoc } from '../query-utils.js';
 
+export type ExtractCandidateKind = 'workflow-orchestration' | 'broad-helper-cluster' | 'cohesive-helper-cluster';
+export type ExtractCandidateActionTier = 'signal';
+
 export interface ExtractCandidate {
   symbol: string;
   shortName: string;
@@ -14,6 +17,12 @@ export interface ExtractCandidate {
   loc: number;
   /** Total callees */
   totalCallees: number;
+  /** Reviewer-facing shape of the extraction signal. */
+  extractionKind: ExtractCandidateKind;
+  /** Extraction candidates are contextual signals, not direct repair mandates. */
+  actionTier: ExtractCandidateActionTier;
+  evidenceReasons: string[];
+  recommendation: string;
   /** Distinct clusters of callees (natural extraction seams) */
   clusters: Array<{
     callees: string[];
@@ -99,17 +108,121 @@ function extractionCandidateForSymbol(
   const scoredClusters = scoreExtractionClusters(clusters, cooccurrence);
   if (scoredClusters.length === 0) return null;
 
+  const shortName = shortenSymbol(definition.symbol);
+  const classification = classifyExtractionCandidate(shortName, calleeSet.size, clusters.length, scoredClusters);
+
   return {
     symbol: definition.symbol,
-    shortName: shortenSymbol(definition.symbol),
+    shortName,
     relativePath: definition.relativePath,
     startLine: definition.startLine,
     endLine: definition.endLine,
     loc: definitionLoc(definition),
     totalCallees: calleeSet.size,
+    extractionKind: classification.extractionKind,
+    actionTier: 'signal',
+    evidenceReasons: classification.evidenceReasons,
+    recommendation: classification.recommendation,
     clusters: scoredClusters,
   };
 }
+
+function classifyExtractionCandidate(
+  shortName: string,
+  totalCallees: number,
+  detectedClusterCount: number,
+  scoredClusters: readonly ScoredCluster[],
+): {
+  extractionKind: ExtractCandidateKind;
+  evidenceReasons: string[];
+  recommendation: string;
+} {
+  const largestClusterSize = Math.max(...scoredClusters.map((cluster) => cluster.callees.length));
+  const bestIsolation = Math.max(...scoredClusters.map((cluster) => cluster.isolation));
+  const reasons = [
+    `${totalCallees} distinct callees across ${detectedClusterCount} co-occurrence cluster(s)`,
+    `${scoredClusters.length} extractable cluster(s) passed size and isolation thresholds`,
+    `largest extractable cluster has ${largestClusterSize} callees at ${Math.round(bestIsolation * 100)}% isolation`,
+  ];
+
+  const orchestrationReason = workflowOrchestrationReason(shortName, totalCallees, detectedClusterCount);
+  if (orchestrationReason !== null) {
+    return {
+      extractionKind: 'workflow-orchestration',
+      evidenceReasons: [...reasons, orchestrationReason],
+      recommendation:
+        'Review the isolated helper group as a possible private or feature-local helper, but keep the orchestration sequence together when it preserves the workflow.',
+    };
+  }
+
+  if (largestClusterSize >= 6) {
+    return {
+      extractionKind: 'broad-helper-cluster',
+      evidenceReasons: [...reasons, 'one isolated helper group is broad enough to deserve a named review'],
+      recommendation:
+        'Review whether the broad helper cluster has a stable concept name before extracting it; avoid creating a bag-of-helpers abstraction.',
+    };
+  }
+
+  return {
+    extractionKind: 'cohesive-helper-cluster',
+    evidenceReasons: reasons,
+    recommendation:
+      'Review the isolated callee group as a possible same-file or feature-local helper; extract only if the new name preserves the current behavior.',
+  };
+}
+
+function workflowOrchestrationReason(
+  shortName: string,
+  totalCallees: number,
+  detectedClusterCount: number,
+): string | null {
+  if (totalCallees >= 10) return `callee breadth suggests orchestration: ${totalCallees} callees`;
+  if (detectedClusterCount >= 4) {
+    return `multiple disconnected callee groups suggest orchestration: ${detectedClusterCount} groups`;
+  }
+  const leaf = callableLeaf(shortName);
+  if (ORCHESTRATION_VERBS.has(leaf)) return `caller verb suggests orchestration: ${leaf}`;
+  return null;
+}
+
+function callableLeaf(shortName: string): string {
+  return (
+    shortName
+      .split(':')
+      .pop()
+      ?.replace(/\(\)$/, '')
+      .replace(/[^A-Za-z0-9_]/g, '')
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .split(/[_\s-]+/)
+      .filter(Boolean)[0]
+      ?.toLowerCase() ?? ''
+  );
+}
+
+const ORCHESTRATION_VERBS = new Set([
+  'apply',
+  'build',
+  'check',
+  'collect',
+  'create',
+  'diff',
+  'execute',
+  'find',
+  'handle',
+  'load',
+  'prepare',
+  'process',
+  'render',
+  'resolve',
+  'run',
+  'select',
+  'sync',
+  'update',
+  'validate',
+  'verify',
+  'write',
+]);
 
 function buildCooccurrenceGraph(
   calleeSet: ReadonlySet<string>,

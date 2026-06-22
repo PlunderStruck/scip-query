@@ -5,6 +5,10 @@ export interface CouplingResult {
   file1: string;
   file2: string;
   sharedSymbols: number;
+  actionTier: 'signal';
+  couplingKind: 'shared-symbol-coupling';
+  evidenceReasons: string[];
+  recommendation: string;
 }
 
 /**
@@ -56,9 +60,7 @@ export function coupling(db: ScipDatabase, file1: string, file2: string): Coupli
   );
 
   return {
-    file1: resolvedFile1,
-    file2: resolvedFile2,
-    sharedSymbols: row?.shared ?? 0,
+    ...couplingResult(resolvedFile1, resolvedFile2, row?.shared ?? 0),
   };
 }
 
@@ -103,9 +105,18 @@ export function topCoupling(db: ScipDatabase, opts: { limit?: number; scope?: st
 
   return rows
     .filter((r) => !db.isIgnored(r.file1) && !db.isIgnored(r.file2))
-    .map((r) => ({
-      file1: r.file1,
-      file2: r.file2,
-      sharedSymbols: r.shared,
-    }));
+    .map((r) => couplingResult(r.file1, r.file2, r.shared));
+}
+
+function couplingResult(file1: string, file2: string, sharedSymbols: number): CouplingResult {
+  return {
+    file1,
+    file2,
+    sharedSymbols,
+    actionTier: 'signal',
+    couplingKind: 'shared-symbol-coupling',
+    evidenceReasons: [`${sharedSymbols} symbol(s) are defined in one file and referenced by the other`],
+    recommendation:
+      'Review whether the shared symbol surface is an intentional boundary or hidden coordination pressure before moving code.',
+  };
 }

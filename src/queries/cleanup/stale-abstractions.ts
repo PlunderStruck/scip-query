@@ -13,6 +13,13 @@ import {
 } from '../internal/consumer-evidence.js';
 import { definitionLoc } from '../query-utils.js';
 
+export type StaleAbstractionActionTier = 'direct' | 'signal';
+export type StalenessKind =
+  | 'unused-abstraction'
+  | 'misplaced-single-consumer-type'
+  | 'single-consumer-abstraction'
+  | 'one-to-one-class-encapsulation';
+
 export interface StaleAbstraction {
   symbol: string;
   shortName: string;
@@ -45,6 +52,11 @@ export interface StaleAbstraction {
   confidence: 'high' | 'medium' | 'low';
   /** Short human-readable explanation of why this was flagged. */
   reason: string;
+  /** Direct cleanup for unused abstractions; contextual signal for one-consumer ownership questions. */
+  actionTier: StaleAbstractionActionTier;
+  /** Reviewer-facing stale shape. */
+  stalenessKind: StalenessKind;
+  recommendation: string;
 }
 
 type TypeCandidateIndex = Map<string, Map<string, IndexedDefinition>>;
@@ -237,6 +249,7 @@ function scoreStaleCandidate(db: ScipDatabase, row: StaleCandidateRow): StaleAbs
     ? true
     : detectDefinerUsesType(db, row.definition);
   const { confidence, reason } = scoreConfidence(row.realConsumers.length, kind, definerUsesType);
+  const classification = classifyStaleAction(row.realConsumers.length, kind, definerUsesType);
 
   return {
     symbol: row.definition.symbol,
@@ -251,6 +264,52 @@ function scoreStaleCandidate(db: ScipDatabase, row: StaleCandidateRow): StaleAbs
     definerUsesType,
     confidence,
     reason,
+    actionTier: classification.actionTier,
+    stalenessKind: classification.stalenessKind,
+    recommendation: classification.recommendation,
+  };
+}
+
+function classifyStaleAction(
+  consumers: number,
+  kind: StaleAbstraction['kind'],
+  definerUsesType: boolean,
+): {
+  actionTier: StaleAbstractionActionTier;
+  stalenessKind: StalenessKind;
+  recommendation: string;
+} {
+  if (consumers === 0) {
+    return {
+      actionTier: 'direct',
+      stalenessKind: 'unused-abstraction',
+      recommendation: 'Delete the abstraction or wire the missing consumer after checking public/package surfaces.',
+    };
+  }
+
+  if (kind === 'class') {
+    return {
+      actionTier: 'signal',
+      stalenessKind: 'one-to-one-class-encapsulation',
+      recommendation:
+        'Treat as weak signal: a one-consumer class may be intentional encapsulation, so inline only after reviewing ownership and state boundaries.',
+    };
+  }
+
+  if (!definerUsesType) {
+    return {
+      actionTier: 'signal',
+      stalenessKind: 'misplaced-single-consumer-type',
+      recommendation:
+        'Review moving or co-locating the type with its only real consumer; keep it here only if this file owns the public contract.',
+    };
+  }
+
+  return {
+    actionTier: 'signal',
+    stalenessKind: 'single-consumer-abstraction',
+    recommendation:
+      'Review whether this single-consumer abstraction earns its name or should be folded into the owning feature.',
   };
 }
 

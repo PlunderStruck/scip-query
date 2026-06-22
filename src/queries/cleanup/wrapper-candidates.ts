@@ -9,6 +9,9 @@ import { ProjectIndex } from '../../core/project-index.js';
 import { compareDefinitionsBySmallestLoc, definitionLoc } from '../query-utils.js';
 import { runCandidateAnalysis } from '../internal/candidate-scan.js';
 import { definitionConsumerFileMap, partitionDefinitionConsumers } from '../internal/consumer-evidence.js';
+import { boundaryEvidenceForSurfaces } from './boundary-evidence.js';
+
+export type WrapperActionTier = 'direct' | 'signal';
 
 export interface WrapperCandidate {
   symbol: string;
@@ -20,6 +23,8 @@ export interface WrapperCandidate {
   singleCaller: string;
   singleCallerShort: string;
   callerFanIn: number;
+  actionTier: WrapperActionTier;
+  boundaryEvidence: string[];
 }
 
 interface MentionChunk {
@@ -97,6 +102,7 @@ function wrapperCandidateForSymbol(
   // import doesn't flip a whole family of borderline findings at once.
   if (fanInSource === 'function' ? callerFanIn <= 3 : callerFanIn <= 5) return null;
 
+  const boundaryEvidence = wrapperBoundaryEvidence(db, symbol, callerFile, enclosing);
   return {
     symbol: symbol.symbol,
     shortName: shortenSymbol(symbol.symbol),
@@ -107,6 +113,8 @@ function wrapperCandidateForSymbol(
     singleCaller: enclosing?.symbol ?? '',
     singleCallerShort: enclosing?.isFunctionLike ? shortenSymbol(enclosing.symbol) : basename(callerFile),
     callerFanIn,
+    actionTier: boundaryEvidence.length > 0 ? 'signal' : 'direct',
+    boundaryEvidence,
   };
 }
 
@@ -247,4 +255,25 @@ function fallbackCallerFanIn(reverseFanIn: Map<string, number>, callerFile: stri
   }
 
   return best;
+}
+
+function wrapperBoundaryEvidence(
+  db: ScipDatabase,
+  symbol: IndexedDefinition,
+  callerFile: string,
+  enclosing: IndexedDefinition | null,
+): string[] {
+  return boundaryEvidenceForSurfaces(
+    db,
+    symbol.relativePath,
+    symbol.startLine,
+    'wrapper',
+    'explicit ignore-wrapper comment',
+    [
+      { label: 'wrapper name', value: shortenSymbol(symbol.symbol) },
+      { label: 'caller name', value: enclosing?.symbol ? shortenSymbol(enclosing.symbol) : basename(callerFile) },
+      { label: 'wrapper path', value: symbol.relativePath },
+      { label: 'caller path', value: callerFile },
+    ],
+  );
 }

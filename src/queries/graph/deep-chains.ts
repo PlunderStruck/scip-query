@@ -5,6 +5,10 @@ export interface DeepChainResult {
   /** Files in the chain, from leaf to root */
   chain: string[];
   depth: number;
+  actionTier: 'signal';
+  chainKind: 'transitive-dependency-depth';
+  evidenceReasons: string[];
+  recommendation: string;
 }
 
 /**
@@ -152,9 +156,42 @@ export function deepChains(
     const key = chain.join(' ');
     if (seen.has(key)) continue;
     seen.add(key);
-    results.push({ chain, depth: chain.length });
+    results.push(deepChainResult(chain));
   }
 
   results.sort((a, b) => b.depth - a.depth);
-  return results.slice(0, limit);
+  return dedupeSuffixChains(results).slice(0, limit);
+}
+
+function deepChainResult(chain: string[]): DeepChainResult {
+  return {
+    chain,
+    depth: chain.length,
+    actionTier: 'signal',
+    chainKind: 'transitive-dependency-depth',
+    evidenceReasons: [
+      `${chain.length} file(s) form the representative transitive dependency path`,
+      'cycles are condensed before longest-path calculation',
+    ],
+    recommendation:
+      'Review whether the chain crosses ownership or layer boundaries; shorten it only when the dependency direction is accidental.',
+  };
+}
+
+function dedupeSuffixChains(results: DeepChainResult[]): DeepChainResult[] {
+  const retained: DeepChainResult[] = [];
+  for (const result of results) {
+    if (retained.some((existing) => isStrictSuffixChain(result.chain, existing.chain))) continue;
+    retained.push(result);
+  }
+  return retained;
+}
+
+function isStrictSuffixChain(candidate: readonly string[], existing: readonly string[]): boolean {
+  if (candidate.length >= existing.length) return false;
+  const offset = existing.length - candidate.length;
+  for (let i = 0; i < candidate.length; i++) {
+    if (candidate[i] !== existing[offset + i]) return false;
+  }
+  return true;
 }

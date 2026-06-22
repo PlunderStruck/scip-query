@@ -7,6 +7,9 @@ import { semanticImportUsage } from '../../semantic/shared-primitives.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { getArchitecturalLayer, isKnownProjectLayerDependency, layerPolicyForEdge } from './drift-policy.js';
 
+export type DriftActionTier = 'direct' | 'signal';
+export type DriftPolicyBasis = 'explicit' | 'inferred';
+
 export interface DriftResult {
   file: string;
   kind: 'unused-import' | 'layer-violation' | 'pattern-deviation';
@@ -15,6 +18,11 @@ export interface DriftResult {
   dep: string;
   /** For layer violations: the expected layer boundary */
   detail?: string;
+  actionTier: DriftActionTier;
+  /** For layer violations: whether the rule was explicit or inferred from rare edges. */
+  policyBasis?: DriftPolicyBasis;
+  evidenceReasons: string[];
+  recommendation: string;
 }
 
 export interface DriftSummary {
@@ -105,6 +113,12 @@ function unusedImportDrift(
           kind: 'unused-import',
           description: `Depends on ${dep} but references none of its symbols`,
           dep,
+          actionTier: 'direct',
+          evidenceReasons: [
+            `dependency edge exists from ${file} to ${dep}`,
+            'no semantic, source, type-only, side-effect, or Vue-template usage survived the conservative skip gates',
+          ],
+          recommendation: 'Remove the unused import or dependency edge after running the project checks.',
         });
       }
     }
@@ -126,14 +140,29 @@ function layerViolationDrift(depGraph: Map<string, Set<string>>): DriftResult[] 
       const depLayer = getArchitecturalLayer(dep);
       if (fileLayer === depLayer) continue; // same layer, fine
 
-      const violation = layerPolicyForEdge(fileLayer, depLayer) ?? layerRules.get(`${fileLayer}->${depLayer}`);
+      const explicitPolicy = layerPolicyForEdge(fileLayer, depLayer);
+      const policyBasis: DriftPolicyBasis = explicitPolicy ? 'explicit' : 'inferred';
+      const violation = explicitPolicy ?? layerRules.get(`${fileLayer}->${depLayer}`);
       if (violation === 'violation') {
+        const actionTier: DriftActionTier = policyBasis === 'explicit' ? 'direct' : 'signal';
         results.push({
           file,
           kind: 'layer-violation',
           description: `Imports from ${depLayer}/ (${dep}) — may cross architectural boundary`,
           dep,
           detail: `${fileLayer}/ should not depend on ${depLayer}/`,
+          actionTier,
+          policyBasis,
+          evidenceReasons: [
+            `dependency edge exists from ${file} to ${dep}`,
+            policyBasis === 'explicit'
+              ? `explicit layer policy rejects ${fileLayer}/ -> ${depLayer}/`
+              : `rare cross-layer edge ${fileLayer}/ -> ${depLayer}/ is inferred as a violation`,
+          ],
+          recommendation:
+            policyBasis === 'explicit'
+              ? 'Move the dependency behind an allowed layer boundary or document a policy change.'
+              : 'Review whether this is a real boundary break or an intentional exception before moving code.',
         });
       }
     }
@@ -173,6 +202,13 @@ function patternDeviationDrift(depGraph: Map<string, Set<string>>, minDeviation:
           kind: 'pattern-deviation',
           description: `Only file in ${dir}/ that depends on ${dep}`,
           dep,
+          actionTier: 'signal',
+          evidenceReasons: [
+            `${realSiblings.length} sibling file(s) in ${dir}/ were compared`,
+            `${file} is the only non-skipped sibling depending on ${dep}`,
+          ],
+          recommendation:
+            'Review sibling ownership before changing this import; unique dependency shape can be intentional specialization.',
         });
       }
     }

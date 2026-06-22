@@ -3,7 +3,38 @@ import { join } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
 import { classifyFile } from '../../analysis/file-classifier.js';
 import { getCoChangePairs, getCommitHistory } from '../../analysis/git-history.js';
+import type { CoChangeCommitScope, CoChangeRecency, CoChangeSubjectContext } from '../../analysis/git-history.js';
 import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
+
+export type CoChangePartnerClass =
+  | 'doc-code'
+  | 'config-code'
+  | 'schema-script'
+  | 'model-view'
+  | 'test-code'
+  | 'same-feature'
+  | 'unknown';
+
+export interface CoChangePartnerClassification {
+  partnerClass: CoChangePartnerClass;
+  reasons: string[];
+}
+
+export interface DeclaredCouplingSuggestion {
+  name: string;
+  files: string[];
+  reason: string;
+}
+
+export interface CoChangePairEvidence {
+  fileA: string;
+  fileB: string;
+  together: number;
+  confidence: number;
+  commitScope?: CoChangeCommitScope;
+  recency?: CoChangeRecency;
+  subjectContext?: CoChangeSubjectContext;
+}
 
 export interface CoChangeFinding {
   fileA: string;
@@ -14,8 +45,19 @@ export interface CoChangeFinding {
   confidence: number;
   changesA: number;
   changesB: number;
+  focusedTogether: number;
+  broadTogether: number;
+  broadCommitRatio: number;
+  lastTogetherAt: number;
+  recentTogether: number;
+  commitScope: CoChangeCommitScope;
+  recency: CoChangeRecency;
+  subjectContext: CoChangeSubjectContext;
   /** True when a dependency edge or declared coupling already explains the pair. */
   structurallyLinked: boolean;
+  partnerClass: CoChangePartnerClass;
+  partnerClassReasons: string[];
+  declaredCouplingSuggestion?: DeclaredCouplingSuggestion;
 }
 
 export interface CoChangeResult {
@@ -68,6 +110,7 @@ export function coChange(
 
   const graph = buildFileDepGraph(db);
   const declaredCouplings = declaredCouplingSets(db);
+  const structurallyLinkedPair = coChangeStructuralLinkChecker(db, graph, declaredCouplings);
   const includeLinked = opts.includeLinked === true || partnersMode;
 
   const findings: CoChangeFinding[] = [];
@@ -85,9 +128,17 @@ export function coChange(
       // split across files — expected coupling, not a hidden concept.
       if (isSameStemSibling(pair.fileA, pair.fileB)) continue;
     }
-    const structurallyLinked = hasStructuralLink(graph, declaredCouplings, pair.fileA, pair.fileB);
+    const structurallyLinked = structurallyLinkedPair(pair.fileA, pair.fileB);
     if (!includeLinked && structurallyLinked) continue;
-    findings.push({ ...pair, structurallyLinked });
+    const classification = classifyCoChangePartner(pair.fileA, pair.fileB);
+    const declaredCouplingSuggestion = declaredCouplingSuggestionForPair(pair, classification, structurallyLinked);
+    findings.push({
+      ...pair,
+      structurallyLinked,
+      partnerClass: classification.partnerClass,
+      partnerClassReasons: classification.reasons,
+      ...(declaredCouplingSuggestion ? { declaredCouplingSuggestion } : {}),
+    });
     if (findings.length >= limit) break;
   }
 
@@ -100,6 +151,83 @@ export function coChange(
 
 function fileStillExists(db: ScipDatabase, relativePath: string): boolean {
   return existsSync(join(db.config.projectRoot, relativePath));
+}
+
+export function classifyCoChangePartner(fileA: string, fileB: string): CoChangePartnerClassification {
+  const left = coChangePathFacts(fileA);
+  const right = coChangePathFacts(fileB);
+  const reasons: string[] = [];
+
+  const addReason = (reason: string): void => {
+    if (!reasons.includes(reason)) reasons.push(reason);
+  };
+
+  const hasPair = (first: CoChangePathTag, second: CoChangePathTag): boolean =>
+    (left.tags.has(first) && right.tags.has(second)) || (left.tags.has(second) && right.tags.has(first));
+
+  if (hasPair('doc', 'code')) {
+    addReason('one side is documentation and the other is executable source');
+    return { partnerClass: 'doc-code', reasons };
+  }
+  if (left.tags.has('test') || right.tags.has('test')) {
+    addReason('one side is classified as a test file');
+    return { partnerClass: 'test-code', reasons };
+  }
+  if (hasPair('schema', 'script')) {
+    addReason('schema or contract file changes with a script or generated-code path');
+    return { partnerClass: 'schema-script', reasons };
+  }
+  if (hasPair('model', 'view')) {
+    addReason('model or state path changes with a view or component path');
+    return { partnerClass: 'model-view', reasons };
+  }
+  if (hasPair('config', 'code')) {
+    addReason('configuration file changes with executable source');
+    return { partnerClass: 'config-code', reasons };
+  }
+
+  const sharedFeatureTokens = sharedTokens(left.tokens, right.tokens).filter(
+    (token) => !GENERIC_PATH_TOKENS.has(token),
+  );
+  if (sameDirectory(fileA, fileB) || sharedFeatureTokens.length >= 2) {
+    addReason(
+      sameDirectory(fileA, fileB)
+        ? 'both files live in the same directory'
+        : `files share feature tokens: ${sharedFeatureTokens.slice(0, 4).join(', ')}`,
+    );
+    return { partnerClass: 'same-feature', reasons };
+  }
+
+  addReason('no specific relationship pattern matched');
+  return { partnerClass: 'unknown', reasons };
+}
+
+export function declaredCouplingSuggestionForPair(
+  pair: CoChangePairEvidence,
+  classification: CoChangePartnerClassification,
+  structurallyLinked: boolean,
+): DeclaredCouplingSuggestion | undefined {
+  if (structurallyLinked) return undefined;
+  if (pair.together < 4 || pair.confidence < 0.75) return undefined;
+  if (pair.commitScope === 'broad-sweep' || pair.recency === 'stale') return undefined;
+  if (!DECLARABLE_PARTNER_CLASSES.has(classification.partnerClass)) return undefined;
+
+  const files = [pair.fileA, pair.fileB].sort();
+  return {
+    name: `co-change ${classification.partnerClass}: ${suggestionName(files)}`,
+    files,
+    reason: `${classification.partnerClass} pair changed together ${pair.together}x with ${Math.round(
+      pair.confidence * 100,
+    )}% confidence; declare it if future edits should require both sides.`,
+  };
+}
+
+export function coChangeStructuralLinkChecker(
+  db: ScipDatabase,
+  graph = buildFileDepGraph(db),
+  declaredCouplings = declaredCouplingSets(db),
+): (fileA: string, fileB: string) => boolean {
+  return (fileA, fileB) => hasStructuralLink(graph, declaredCouplings, fileA, fileB);
 }
 
 function isSameStemSibling(fileA: string, fileB: string): boolean {
@@ -127,4 +255,96 @@ function hasStructuralLink(
     return true;
   }
   return declaredCouplings.some((group) => group.has(fileA) && group.has(fileB));
+}
+
+type CoChangePathTag = 'doc' | 'config' | 'schema' | 'script' | 'model' | 'view' | 'test' | 'code';
+
+interface CoChangePathFacts {
+  tags: Set<CoChangePathTag>;
+  tokens: string[];
+}
+
+const DOC_FILE_PATTERN = /(?:^|\/)(?:readme|docs?|guides?|adr|architecture|design)(?:\/|$)|\.(?:md|mdx|rst|adoc|txt)$/i;
+const CONFIG_FILE_PATTERN =
+  /(?:^|\/)(?:\.[a-z0-9-]+rc|config|configs|settings|\.github)(?:\/|$)|(?:^|\/)(?:package\.json|tsconfig(?:\.[^.]+)?\.json|vite\.config\.[cm]?[jt]s|rollup\.config\.[cm]?[jt]s|eslint\.config\.[cm]?[jt]s)$|\.(?:json|ya?ml|toml|ini|env)$/i;
+const SCHEMA_FILE_PATTERN =
+  /(?:^|\/)(?:schemas?|contracts?|migrations?|models?|types?)(?:\/|$)|(?:^|\/)[^/]*(?:schema|contract|migration|model|types?)[^/]*|(?:\.schema)?\.(?:graphql|gql|proto|prisma)$/i;
+const SCRIPT_FILE_PATTERN =
+  /(?:^|\/)(?:scripts?|bin|tools?|tasks?|generators?|codegen|migrations?|seeds?)(?:\/|$)|(?:^|\/)[^/]*(?:generate|codegen|migrate|seed|script)[^/]*\.[cm]?[jt]s$/i;
+const MODEL_FILE_PATTERN =
+  /(?:^|\/)(?:models?|entities|domain|state|stores?|reducers?)(?:\/|$)|(?:^|\/)[^/]*(?:model|entity|state|store|reducer|viewmodel)[^/]*\.[^.]+$/i;
+const VIEW_FILE_PATTERN =
+  /(?:^|\/)(?:views?|pages?|components?|screens?|routes?|templates?)(?:\/|$)|(?:^|\/)[^/]*(?:view|page|component|screen|template)[^/]*\.[^.]+$|\.(?:vue|svelte|tsx|jsx)$/i;
+
+const DECLARABLE_PARTNER_CLASSES = new Set<CoChangePartnerClass>([
+  'doc-code',
+  'config-code',
+  'schema-script',
+  'model-view',
+  'test-code',
+]);
+
+const GENERIC_PATH_TOKENS = new Set([
+  'src',
+  'lib',
+  'app',
+  'test',
+  'tests',
+  'spec',
+  'index',
+  'main',
+  'utils',
+  'util',
+  'types',
+  'type',
+  'config',
+  'docs',
+  'doc',
+]);
+
+function coChangePathFacts(file: string): CoChangePathFacts {
+  const normalized = file.replace(/\\/g, '/');
+  const tags = new Set<CoChangePathTag>();
+  if (DOC_FILE_PATTERN.test(normalized)) tags.add('doc');
+  if (CONFIG_FILE_PATTERN.test(normalized)) tags.add('config');
+  if (SCHEMA_FILE_PATTERN.test(normalized)) tags.add('schema');
+  if (SCRIPT_FILE_PATTERN.test(normalized)) tags.add('script');
+  if (MODEL_FILE_PATTERN.test(normalized)) tags.add('model');
+  if (VIEW_FILE_PATTERN.test(normalized)) tags.add('view');
+  if (classifyFile(normalized) === 'test') tags.add('test');
+  if (!tags.has('doc') && !tags.has('config')) tags.add('code');
+  return { tags, tokens: pathTokens(normalized) };
+}
+
+function sameDirectory(fileA: string, fileB: string): boolean {
+  const slashA = fileA.lastIndexOf('/');
+  const slashB = fileB.lastIndexOf('/');
+  const left = slashA >= 0 ? fileA.slice(0, slashA) : '';
+  const right = slashB >= 0 ? fileB.slice(0, slashB) : '';
+  return left !== '' && left === right;
+}
+
+function pathTokens(file: string): string[] {
+  return file
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .split(/[^A-Za-z0-9]+/)
+    .map((token) => token.toLowerCase())
+    .filter((token) => token.length >= 2);
+}
+
+function sharedTokens(left: readonly string[], right: readonly string[]): string[] {
+  const rightTokens = new Set(right);
+  return [...new Set(left.filter((token) => rightTokens.has(token)))].sort();
+}
+
+function suggestionName(files: readonly string[]): string {
+  return files
+    .map(
+      (file) =>
+        file
+          .split('/')
+          .pop()
+          ?.replace(/\.[^.]+$/, '') || file,
+    )
+    .join(' + ');
 }

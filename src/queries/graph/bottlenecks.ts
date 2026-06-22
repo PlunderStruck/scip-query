@@ -14,6 +14,10 @@ export interface BottleneckResult {
   /** fanIn * fanOut — higher = more central coupling hub */
   score: number;
   definedIn: string;
+  actionTier: 'signal';
+  riskKind: 'coordination-hotspot';
+  evidenceReasons: string[];
+  recommendation: string;
 }
 
 /**
@@ -63,12 +67,22 @@ function bottleneckRowFor(db: ScipDatabase, definition: IndexedDefinition, seman
       .filter((row) => row.file !== definition.relativePath)
       .map((row) => `${row.symbol}|${row.file}`),
   ).size;
+  const score = fanIn * fanOut;
   return {
     symbol: definition.symbol,
     shortName: shortenSymbol(definition.symbol),
     fanIn,
     fanOut,
-    score: fanIn * fanOut,
+    score,
     definedIn: definition.relativePath,
+    actionTier: 'signal',
+    riskKind: 'coordination-hotspot',
+    evidenceReasons: [
+      `${fanIn} incoming file(s) reference this symbol`,
+      `${fanOut} distinct cross-file callee symbol(s) are reached from it`,
+      `centrality score is ${score} (fan-in * fan-out)`,
+    ],
+    recommendation:
+      'Review ownership, API stability, and caller groups before changing this central symbol; do not refactor solely from graph centrality.',
   };
 }

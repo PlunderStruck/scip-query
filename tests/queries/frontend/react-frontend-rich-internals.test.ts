@@ -70,6 +70,33 @@ ${Array.from({ length: 305 }, (_entry, index) => `      <div data-row="${index}"
 }
 `;
 
+const ROUTE_PAGE = `export function AccountPage() {
+  return (
+    <main>
+${Array.from({ length: 40 }, (_entry, index) => `      <section data-panel="${index}"><h2>Panel ${index}</h2></section>`).join('\n')}
+    </main>
+  );
+}
+`;
+
+const ROUTE_LOCAL_COMPONENT = `export function AccountModal() {
+  return (
+    <dialog>
+${Array.from({ length: 40 }, (_entry, index) => `      <section data-step="${index}"><h2>Step ${index}</h2></section>`).join('\n')}
+    </dialog>
+  );
+}
+`;
+
+const ROUTE_SIBLING_COMPONENT = `export function AccountDialog() {
+  return (
+    <dialog>
+${Array.from({ length: 40 }, (_entry, index) => `      <section data-row="${index}"><h2>Row ${index}</h2></section>`).join('\n')}
+    </dialog>
+  );
+}
+`;
+
 describe('React frontend rich internals', () => {
   let tempDirs: string[] = [];
 
@@ -120,6 +147,9 @@ describe('React frontend rich internals', () => {
       'src/components/IncidentPanel.tsx': INCIDENT_PANEL,
       'src/components/IssuePanel.tsx': ISSUE_PANEL,
       'src/components/LargeDashboard.tsx': LARGE_DASHBOARD,
+      'src/pages/AccountPage.tsx': ROUTE_PAGE,
+      'src/routes/account/components/AccountModal.tsx': ROUTE_LOCAL_COMPONENT,
+      'src/routes/account/AccountDialog.tsx': ROUTE_SIBLING_COMPONENT,
     });
     try {
       const duplicates = reactComponentDuplicates(db, {
@@ -149,6 +179,12 @@ describe('React frontend rich internals', () => {
           componentA: 'IncidentPanel',
           fileB: 'src/components/IssuePanel.tsx',
           componentB: 'IssuePanel',
+          evidenceClass: 'shared-abstraction',
+          actionTier: 'support',
+          evidenceClassReasons: expect.arrayContaining([
+            expect.stringContaining('shared hook is generic workflow: useResource'),
+          ]),
+          recommendation: expect.stringContaining('existing shared hook'),
           sharedHooks: expect.arrayContaining(['useResource']),
           sharedReactHooks: expect.arrayContaining(['useEffect', 'useMemo', 'useState']),
           sharedRequests: expect.arrayContaining(['fetch', 'useResource']),
@@ -160,7 +196,7 @@ describe('React frontend rich internals', () => {
         limit: 10,
         minComponentLines: 10,
         minFileLines: 100,
-        minJsxTokens: 8,
+        minJsxTokens: 3,
         minBehaviorTokens: 8,
       });
       expect(pressure).toEqual(
@@ -169,6 +205,31 @@ describe('React frontend rich internals', () => {
             file: 'src/components/IssuePanel.tsx',
             component: 'IssuePanel',
             dominantPressure: expect.any(String),
+            pressureKinds: expect.arrayContaining(['component', 'jsx-structure']),
+            contextKind: 'component',
+            recommendationKind: expect.any(String),
+            recommendation: expect.any(String),
+          }),
+          expect.objectContaining({
+            file: 'src/pages/AccountPage.tsx',
+            component: 'AccountPage',
+            contextKind: 'route-page',
+            pressureKinds: expect.arrayContaining(['component', 'jsx-structure']),
+            recommendationKind: 'route-page-decomposition',
+          }),
+          expect.objectContaining({
+            file: 'src/routes/account/components/AccountModal.tsx',
+            component: 'AccountModal',
+            contextKind: 'component',
+            pressureKinds: expect.arrayContaining(['component', 'jsx-structure']),
+            recommendationKind: 'jsx-decomposition',
+          }),
+          expect.objectContaining({
+            file: 'src/routes/account/AccountDialog.tsx',
+            component: 'AccountDialog',
+            contextKind: 'component',
+            pressureKinds: expect.arrayContaining(['component', 'jsx-structure']),
+            recommendationKind: 'jsx-decomposition',
           }),
         ]),
       );

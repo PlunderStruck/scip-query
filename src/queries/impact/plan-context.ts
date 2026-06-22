@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { getFileChurn } from '../../analysis/git-history.js';
+import type { CoChangeSubjectContext } from '../../analysis/git-history.js';
 import { getSuppressionInventory } from '../../analysis/suppressions.js';
 import { affected, type AffectedResult } from '../graph/affected.js';
 import { callGraph, type CallGraphResult } from '../navigation/call-graph.js';
@@ -27,7 +28,12 @@ export interface PlanContextHistory {
   file: string | null;
   churn: { changes: number; fixChanges: number; lastChangedAt: number } | null;
   /** Files that usually change together with this one — edit checklist. */
-  coChangePartners: Array<{ file: string; together: number; confidence: number }>;
+  coChangePartners: Array<{
+    file: string;
+    together: number;
+    confidence: number;
+    subjectContext: CoChangeSubjectContext;
+  }>;
   /** Detector suppressions present in the file — known accepted findings. */
   suppressionsInFile: number;
 }
@@ -154,6 +160,7 @@ function buildPlanContextHistory(db: ScipDatabase, file: string | null): PlanCon
       file: finding.fileA === file ? finding.fileB : finding.fileA,
       together: finding.together,
       confidence: finding.confidence,
+      subjectContext: finding.subjectContext,
     })),
     suppressionsInFile: getSuppressionInventory(db).byFile.get(file) ?? 0,
   };

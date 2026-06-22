@@ -16,6 +16,7 @@ import { buildFileDepGraph } from '../symbols/graph/file-dep-graph.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
 import { getSourceFacts } from '../source/ast.js';
 import { getSourceFiles } from '../source/source-fileset.js';
+import { leafName } from '../symbols/symbol-parser.js';
 import { isPackageSurfaceFile } from './package-surface.js';
 
 export type FileKind =
@@ -139,6 +140,7 @@ export function isEntrySurface(db: ScipDatabase, file: string): boolean {
 export function isRootedSymbol(db: ScipDatabase, symbol: string, file: string): boolean {
   const normalized = normalizePath(file);
   if (isPackageSurfaceFile(db, normalized)) return true;
+  if (isFrameworkDiscoveredEntrypointSymbol(symbol, normalized)) return true;
   const roots = db.config.entryRoots;
   if (!roots) return false;
   if (roots.files?.some((candidate) => normalizePath(candidate) === normalized)) return true;
@@ -158,6 +160,65 @@ export function isRootedSymbol(db: ScipDatabase, symbol: string, file: string): 
 }
 
 // ── Pattern internals ────────────────────────────────────────────
+
+const HTTP_METHOD_EXPORTS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
+const NEXT_APP_PAGE_EXPORTS = new Set(['default', 'generateMetadata', 'generateStaticParams']);
+const NEXT_PAGES_EXPORTS = new Set(['default', 'getStaticProps', 'getServerSideProps', 'getStaticPaths', 'config']);
+const REMIX_ROUTE_EXPORTS = new Set([
+  'default',
+  'loader',
+  'action',
+  'clientLoader',
+  'clientAction',
+  'headers',
+  'links',
+  'meta',
+  'shouldRevalidate',
+  'ErrorBoundary',
+  'HydrateFallback',
+]);
+const SVELTEKIT_ROUTE_EXPORTS = new Set(['load', 'actions', 'entries', ...HTTP_METHOD_EXPORTS]);
+const VITE_ROUTE_EXPORTS = new Set(['default']);
+
+function isFrameworkDiscoveredEntrypointSymbol(symbol: string, normalized: string): boolean {
+  const name = leafName(symbol);
+  if (name === '') return false;
+  if (isNextAppRoutePath(normalized)) return HTTP_METHOD_EXPORTS.has(name);
+  if (isNextAppPagePath(normalized)) return NEXT_APP_PAGE_EXPORTS.has(name);
+  if (isNextPagesPath(normalized)) return NEXT_PAGES_EXPORTS.has(name);
+  if (isRemixRoutePath(normalized)) return REMIX_ROUTE_EXPORTS.has(name);
+  if (isSvelteKitRoutePath(normalized)) return SVELTEKIT_ROUTE_EXPORTS.has(name);
+  if (isViteRoutePath(normalized)) return VITE_ROUTE_EXPORTS.has(name);
+  return false;
+}
+
+function isNextAppRoutePath(normalized: string): boolean {
+  return /(?:^|\/)app(?:\/[^/]+)*\/route\.(?:ts|tsx|js|jsx|mjs|cjs)$/.test(normalized);
+}
+
+function isNextAppPagePath(normalized: string): boolean {
+  return /(?:^|\/)app(?:\/[^/]+)*\/(?:page|layout|template|loading|error|not-found|global-error|head|default)\.(?:ts|tsx|js|jsx|mjs|cjs)$/.test(
+    normalized,
+  );
+}
+
+function isNextPagesPath(normalized: string): boolean {
+  return /(?:^|\/)pages\/.+\.(?:ts|tsx|js|jsx|mjs|cjs)$/.test(normalized);
+}
+
+function isRemixRoutePath(normalized: string): boolean {
+  return /(?:^|\/)app\/routes\/.+\.(?:ts|tsx|js|jsx|mjs|cjs)$/.test(normalized);
+}
+
+function isSvelteKitRoutePath(normalized: string): boolean {
+  return /(?:^|\/)src\/routes\/(?:.*\/)?\+(?:page|page\.server|layout|layout\.server|server)\.(?:ts|js)$/.test(
+    normalized,
+  );
+}
+
+function isViteRoutePath(normalized: string): boolean {
+  return /(?:^|\/)src\/(?:pages|views|routes)\/.+\.(?:ts|tsx|js|jsx|vue)$/.test(normalized);
+}
 
 function matchesTestPattern(normalized: string): boolean {
   // Direct test files

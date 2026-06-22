@@ -51,9 +51,15 @@ export function isStopHookReentry(hookInput: string): boolean {
 
 /** Compact, agent-facing reason for blocking the stop. */
 export function formatGateBlockReason(result: DiffGateResult): string {
+  const groupCount = result.rootCauseGroups?.length ?? result.findings.length;
   const lines = [
-    `scip-query diff-gate found ${result.findings.length} issue(s) in this diff — fix or knowingly accept them before finishing:`,
+    `scip-query diff-gate found ${result.findings.length} issue(s) in ${groupCount} root-cause group(s) in this diff — fix or knowingly accept them before finishing:`,
   ];
+  const multiFindingGroups = result.rootCauseGroups?.filter((group) => group.count > 1) ?? [];
+  for (const group of multiFindingGroups) {
+    lines.push(`- group [${group.check}] ${group.count} finding(s): ${group.message}`);
+    lines.push(`  -> ${group.remediation}`);
+  }
   for (const finding of result.findings) {
     lines.push(`- [${finding.check}] ${finding.message}`);
     lines.push(`  -> ${finding.remediation}`);

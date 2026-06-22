@@ -33,6 +33,19 @@ const TARGET_EXTENSION_PATTERN = /\.(?:d\.ts|d\.mts|d\.cts|ts|tsx|mts|cts|js|jsx
 
 const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'] as const;
 
+const PACKAGE_MANIFEST_SCAN_EXCLUSIONS = new Set([
+  '.git',
+  '.next',
+  '.turbo',
+  'build',
+  'coverage',
+  'dist',
+  'node_modules',
+  'out',
+]);
+
+const MAX_PACKAGE_MANIFEST_DEPTH = 4;
+
 // Derives from package.json on disk, which can change in watch mode.
 const packageSurfaceCache = createPerDbValue<PackageSurface>('package-surface', {
   clearGroups: ['whole-project'],
@@ -51,20 +64,54 @@ export function isPackageSurfaceFile(db: ScipDatabase, normalizedRelativePath: s
 }
 
 export function derivePackageSurface(projectRoot: string): PackageSurface {
-  const manifest = readManifest(projectRoot);
-  if (!manifest) return EMPTY_SURFACE;
-
   const files = new Set<string>();
   const pathPrefixes: string[] = [];
-  for (const target of collectExportTargets(manifest)) {
-    expandTarget(projectRoot, target, files, pathPrefixes);
+  for (const { manifest, packageRoot } of readPackageManifests(projectRoot)) {
+    for (const target of collectExportTargets(manifest)) {
+      expandTarget(projectRoot, packageRoot, target, files, pathPrefixes);
+    }
   }
+  if (files.size === 0 && pathPrefixes.length === 0) return EMPTY_SURFACE;
   return { files, pathPrefixes };
 }
 
-function readManifest(projectRoot: string): Record<string, unknown> | null {
+interface PackageManifestEntry {
+  manifest: Record<string, unknown>;
+  packageRoot: string;
+}
+
+function readPackageManifests(projectRoot: string): PackageManifestEntry[] {
+  const entries: PackageManifestEntry[] = [];
+  const rootManifest = readManifestAt(projectRoot, '');
+  if (rootManifest) entries.push({ manifest: rootManifest, packageRoot: '' });
+  collectNestedPackageManifests(projectRoot, '', entries, 0);
+  return entries;
+}
+
+function collectNestedPackageManifests(
+  projectRoot: string,
+  relativeDirectory: string,
+  entries: PackageManifestEntry[],
+  depth: number,
+): void {
+  if (depth >= MAX_PACKAGE_MANIFEST_DEPTH) return;
+  const absoluteDirectory = join(projectRoot, relativeDirectory);
+  if (!existsSync(absoluteDirectory)) return;
+
+  for (const entry of readdirSync(absoluteDirectory, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    if (PACKAGE_MANIFEST_SCAN_EXCLUSIONS.has(entry.name)) continue;
+
+    const childRelative = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name;
+    const manifest = readManifestAt(projectRoot, childRelative);
+    if (manifest) entries.push({ manifest, packageRoot: childRelative });
+    collectNestedPackageManifests(projectRoot, childRelative, entries, depth + 1);
+  }
+}
+
+function readManifestAt(projectRoot: string, packageRoot: string): Record<string, unknown> | null {
   try {
-    const raw = readFileSync(join(projectRoot, 'package.json'), 'utf-8');
+    const raw = readFileSync(join(projectRoot, packageRoot, 'package.json'), 'utf-8');
     const parsed: unknown = JSON.parse(raw);
     return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
   } catch {
@@ -110,7 +157,13 @@ function collectExportsLeaves(node: unknown, out: string[]): void {
  * the build directory swapped for `src/` or stripped, across common source
  * extensions.
  */
-function expandTarget(projectRoot: string, target: string, files: Set<string>, pathPrefixes: string[]): void {
+function expandTarget(
+  projectRoot: string,
+  packageRoot: string,
+  target: string,
+  files: Set<string>,
+  pathPrefixes: string[],
+): void {
   const normalized = target.replace(/\\/g, '/').replace(/^\.\//, '');
   if (normalized === '' || normalized.startsWith('..')) return;
 
@@ -118,20 +171,20 @@ function expandTarget(projectRoot: string, target: string, files: Set<string>, p
   if (wildcard >= 0) {
     const prefix = normalized.slice(0, wildcard);
     for (const variant of pathVariants(prefix)) {
-      if (variant !== '') pathPrefixes.push(variant);
+      if (variant !== '') pathPrefixes.push(packagePath(packageRoot, variant));
     }
     return;
   }
 
   const base = normalized.replace(TARGET_EXTENSION_PATTERN, '');
   for (const variant of pathVariants(base)) {
-    if (variant === base && variant === normalized) files.add(normalized);
+    if (variant === base && variant === normalized) files.add(packagePath(packageRoot, normalized));
     for (const extension of SOURCE_EXTENSIONS) {
-      addSourceCandidate(projectRoot, files, variant + extension);
+      addSourceCandidate(projectRoot, files, packageRoot, variant + extension);
     }
   }
   // Keep the literal target too — source-published packages export real files.
-  files.add(normalized);
+  files.add(packagePath(packageRoot, normalized));
 }
 
 /** The path as written, with its build dir swapped for `src/`, and stripped. */
@@ -144,36 +197,59 @@ function pathVariants(path: string): string[] {
   return variants;
 }
 
-function addSourceCandidate(projectRoot: string, files: Set<string>, candidate: string): void {
-  files.add(candidate);
-  if (!candidate.startsWith('src/') || existsSync(join(projectRoot, candidate))) return;
+function addSourceCandidate(projectRoot: string, files: Set<string>, packageRoot: string, candidate: string): void {
+  const projectRelativeCandidate = packagePath(packageRoot, candidate);
+  files.add(projectRelativeCandidate);
+  if (!candidate.startsWith('src/') || existsSync(join(projectRoot, projectRelativeCandidate))) return;
 
   const extension = SOURCE_EXTENSIONS.find((entry) => candidate.endsWith(entry));
   if (!extension) return;
 
   const withoutExtension = candidate.slice(0, -extension.length);
+  addDirectoryIndexCandidate(projectRoot, files, packageRoot, withoutExtension, extension);
+
   const slash = withoutExtension.lastIndexOf('/');
   if (slash <= 'src/'.length) return;
 
   const directory = withoutExtension.slice(0, slash);
   const basename = withoutExtension.slice(slash + 1);
-  for (const match of nestedSourceCandidates(projectRoot, directory, `${basename}${extension}`)) {
+  for (const match of nestedSourceCandidates(projectRoot, packageRoot, directory, `${basename}${extension}`)) {
     files.add(match);
   }
 }
 
-function nestedSourceCandidates(projectRoot: string, relativeDirectory: string, filename: string): string[] {
-  const absoluteDirectory = join(projectRoot, relativeDirectory);
+function addDirectoryIndexCandidate(
+  projectRoot: string,
+  files: Set<string>,
+  packageRoot: string,
+  withoutExtension: string,
+  extension: (typeof SOURCE_EXTENSIONS)[number],
+): void {
+  const indexCandidate = packagePath(packageRoot, `${withoutExtension}/index${extension}`);
+  if (existsSync(join(projectRoot, indexCandidate))) files.add(indexCandidate);
+}
+
+function nestedSourceCandidates(
+  projectRoot: string,
+  packageRoot: string,
+  relativeDirectory: string,
+  filename: string,
+): string[] {
+  const absoluteDirectory = join(projectRoot, packageRoot, relativeDirectory);
   if (!existsSync(absoluteDirectory)) return [];
 
   const matches: string[] = [];
   for (const entry of readdirSync(absoluteDirectory, { withFileTypes: true })) {
     const relativePath = `${relativeDirectory}/${entry.name}`;
     if (entry.isDirectory()) {
-      matches.push(...nestedSourceCandidates(projectRoot, relativePath, filename));
+      matches.push(...nestedSourceCandidates(projectRoot, packageRoot, relativePath, filename));
     } else if (entry.isFile() && entry.name === filename) {
-      matches.push(relativePath);
+      matches.push(packagePath(packageRoot, relativePath));
     }
   }
   return matches;
+}
+
+function packagePath(packageRoot: string, relativePath: string): string {
+  return packageRoot ? `${packageRoot}/${relativePath}` : relativePath;
 }

@@ -16,7 +16,7 @@ import { budgetedSectionedQueryCommand, tableQueryCommand } from '../commands/qu
 import { render } from '../render.js';
 
 const handleBottlenecks = budgetedTableCommand('bottlenecks', {
-  headers: ['score', 'fan-in', 'fan-out', 'symbol'],
+  headers: ['tier', 'risk', 'score', 'fan-in', 'fan-out', 'symbol'],
   query: ({ db, opts, budget }) =>
     queries.bottlenecks(db, {
       limit: definedLimitOption(opts, 'limit', 20),
@@ -27,7 +27,7 @@ const handleBottlenecks = budgetedTableCommand('bottlenecks', {
       semantic: budget.semantic,
     }),
   format: (r) =>
-    `  ${String(r.score).padStart(5)}  ${String(r.fanIn).padStart(6)}  ` +
+    `  ${r.actionTier.padEnd(6)}  ${r.riskKind.padEnd(20)}  ${String(r.score).padStart(5)}  ${String(r.fanIn).padStart(6)}  ` +
     `${String(r.fanOut).padStart(7)}  ${r.shortName}`,
   emptyMessage: () => 'No bottlenecks found.',
 });
@@ -90,7 +90,9 @@ const handleCoupling = dbCommand(({ db, args, opts }) => {
       printJsonEnvelope('coupling', args, opts, { mode: 'pair', result });
       return;
     }
-    console.log(`${result.file1} ↔ ${result.file2}: ${result.sharedSymbols} shared symbols`);
+    console.log(`${result.file1} ↔ ${result.file2}: ${result.sharedSymbols} shared symbols (${result.actionTier})`);
+    console.log(`  Risk: ${result.couplingKind}`);
+    console.log(`  Recommendation: ${result.recommendation}`);
     return;
   }
   const results = queries.topCoupling(db, { limit, scope: stringOptionValue(opts, 'scope') });
@@ -99,8 +101,11 @@ const handleCoupling = dbCommand(({ db, args, opts }) => {
     return;
   }
   render.table(
-    ['shared', 'file1 → file2'],
-    results.map((r) => `  ${String(r.sharedSymbols).padStart(6)}  ${r.file1} → ${r.file2}`),
+    ['tier', 'risk', 'shared', 'file1 → file2'],
+    results.map(
+      (r) =>
+        `  ${r.actionTier.padEnd(6)}  ${r.couplingKind.padEnd(22)}  ${String(r.sharedSymbols).padStart(6)}  ${r.file1} → ${r.file2}`,
+    ),
   );
 });
 
@@ -145,6 +150,9 @@ const handleDeepChains = reportCommand({
     for (let i = 0; i < results.length; i++) {
       console.log(`\nChain ${i + 1} (depth ${results[i]!.depth}):`);
       for (const file of results[i]!.chain) console.log(`  → ${file}`);
+      console.log(`  Tier: ${results[i]!.actionTier}  Risk: ${results[i]!.chainKind}`);
+      console.log(`  Recommendation: ${results[i]!.recommendation}`);
+      console.log(`  Evidence: ${results[i]!.evidenceReasons.join('; ')}`);
     }
   },
 });

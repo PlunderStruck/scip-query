@@ -137,6 +137,7 @@ describe('drift accuracy', () => {
           expect.objectContaining({
             kind: 'unused-import',
             dep: 'src/views/unused-helper.ts',
+            actionTier: 'direct',
           }),
         ]),
       );

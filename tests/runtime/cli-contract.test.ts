@@ -189,6 +189,12 @@ describe('CLI contract', () => {
     const exportedQuerySubpaths = exportKeys.filter((key) => key.startsWith('./queries/')).sort();
     const manifestSubpaths = PUBLIC_QUERY_ENTRIES.map((entry) => `./queries/${entry}`).sort();
     expect(exportedQuerySubpaths).toEqual(manifestSubpaths);
+    for (const entry of PUBLIC_QUERY_ENTRIES) {
+      expect(packageJson.exports[`./queries/${entry}`]).toEqual({
+        import: `./dist/queries/${entry}.js`,
+        types: `./dist/queries/${entry}.d.ts`,
+      });
+    }
 
     for (const privateModule of PRIVATE_QUERY_MODULES) {
       expect(
@@ -198,11 +204,28 @@ describe('CLI contract', () => {
     }
   });
 
+  it('keeps command-level query aliases published in the public-query manifest', () => {
+    const commandQueryAliases = new Map([
+      ['fan-in', 'fan'],
+      ['fan-out', 'fan'],
+      ['imported-by', 'imports'],
+      ['kind-counts', 'by-kind'],
+      ['unused-imports', 'unused-imports'],
+    ]);
+    const commandIds = new Set(commandDescriptors.map((descriptor) => descriptor.id));
+
+    for (const [commandId, queryEntry] of commandQueryAliases) {
+      expect(commandIds.has(commandId), `missing command descriptor: ${commandId}`).toBe(true);
+      expect(PUBLIC_QUERY_ENTRIES).toContain(queryEntry);
+      expect(QUERY_SOURCE_PATHS[queryEntry as keyof typeof QUERY_SOURCE_PATHS]).toMatch(/^src\/queries\//);
+    }
+  });
+
   it('classifies every query source file in the manifest as public or private', () => {
     const queryModules = querySourceFiles('src/queries')
       .filter((entry) => !entry.startsWith('src/queries/internal/'))
       .sort();
-    const classified = Object.values(QUERY_SOURCE_PATHS).sort();
+    const classified = [...new Set(Object.values(QUERY_SOURCE_PATHS))].sort();
 
     expect(queryModules).toEqual(classified);
   });
