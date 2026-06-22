@@ -288,10 +288,30 @@ export function getCoChangePairs(
   db: ScipDatabase,
   opts: { minTogether?: number; minConfidence?: number; maxFilesPerCommit?: number } = {},
 ): CoChangePair[] | null {
-  const { minTogether = 4, minConfidence = 0.6, maxFilesPerCommit = BULK_COMMIT_FILE_CAP } = opts;
   const history = getCommitHistory(db);
   if (!history) return null;
 
+  return coChangePairsFromHistory(history, opts);
+}
+
+export function getCoChangePairsForFiles(
+  db: ScipDatabase,
+  files: ReadonlySet<string>,
+  opts: { minTogether?: number; minConfidence?: number; maxFilesPerCommit?: number } = {},
+): CoChangePair[] | null {
+  const history = getCommitHistory(db);
+  if (!history) return null;
+  if (files.size === 0) return [];
+
+  return coChangePairsFromHistory(history, opts, files);
+}
+
+function coChangePairsFromHistory(
+  history: CommitHistory,
+  opts: { minTogether?: number; minConfidence?: number; maxFilesPerCommit?: number },
+  focusFiles?: ReadonlySet<string>,
+): CoChangePair[] {
+  const { minTogether = 4, minConfidence = 0.6, maxFilesPerCommit = BULK_COMMIT_FILE_CAP } = opts;
   const fileChanges = new Map<string, number>();
   const pairContext = new Map<
     string,
@@ -310,11 +330,14 @@ export function getCoChangePairs(
     if (files.length > maxFilesPerCommit) continue;
     if (commit.timestamp > newestAnalyzedAt) newestAnalyzedAt = commit.timestamp;
     const broadCommit = isBroadCoChangeCommit(files);
+    const hasFocusFile = focusFiles === undefined || files.some((file) => focusFiles.has(file));
     for (const file of files) {
       fileChanges.set(file, (fileChanges.get(file) ?? 0) + 1);
     }
+    if (!hasFocusFile) continue;
     for (let i = 0; i < files.length; i++) {
       for (let j = i + 1; j < files.length; j++) {
+        if (focusFiles && !focusFiles.has(files[i]!) && !focusFiles.has(files[j]!)) continue;
         const key = `${files[i]}\x00${files[j]}`;
         const entry = pairContext.get(key) ?? {
           together: 0,

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import type { ScipDatabase } from '../../storage/db.js';
 import { isEntrySurface, isRootedSymbol } from '../../analysis/file-classifier.js';
-import { getCoChangePairs } from '../../analysis/git-history.js';
+import { getCoChangePairsForFiles } from '../../analysis/git-history.js';
 import type { CoChangeCommitScope, CoChangeRecency, CoChangeSubjectContext } from '../../analysis/git-history.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import {
@@ -182,7 +182,7 @@ export function diffGate(
   const changedFiles = impact.changedFiles;
   const changed = new Set(changedFiles);
   const changedGitFiles = new Set(impactPlan.changedFileLines);
-  const movedSymbolPreexisted = movedSymbolPreexistenceChecker(db.config.projectRoot, base, impactPlan);
+  const symbolPreexistedAtBase = symbolPreexistenceChecker(db.config.projectRoot, base, impactPlan);
   const result: DiffGateResult = {
     base,
     changedFiles,
@@ -204,7 +204,7 @@ export function diffGate(
     run();
   };
   runUnlessSkipped('echo', () =>
-    runEchoCheck(db, impact.changedSymbols, changed, movedSymbolPreexisted, maxEchoChecks, minSimilarity, result),
+    runEchoCheck(db, impact.changedSymbols, changed, symbolPreexistedAtBase, maxEchoChecks, minSimilarity, result),
   );
   runUnlessSkipped('incomplete-migration', () => runIncompleteMigrationCheck(db, base, impactPlan, maxHelpers, result));
   runUnlessSkipped('co-change-partner', () => runCoChangePartnerCheck(db, changed, minTogether, minConfidence, result));
@@ -212,7 +212,7 @@ export function diffGate(
     runDocReferenceCheck(db, changed, changedGitFiles, impactPlan.changedRanges, result),
   );
   runUnlessSkipped('unused-params', () => runUnusedParamsCheck(db, changedFiles, result));
-  runUnlessSkipped('new-dead', () => runNewDeadCheck(db, impact.changedSymbols, movedSymbolPreexisted, result));
+  runUnlessSkipped('new-dead', () => runNewDeadCheck(db, impact.changedSymbols, symbolPreexistedAtBase, result));
   runUnlessSkipped('baseline', () => runBaselineCheck(db, result));
   applyStructuredSuppressions(result, db.config.suppressions ?? []);
   result.rootCauseGroups = diffGateRootCauseGroups(result.findings);
@@ -320,14 +320,14 @@ function runEchoCheck(
   db: ScipDatabase,
   changedSymbols: ReadonlyArray<{ symbol: string; shortName: string; file: string }>,
   changed: ReadonlySet<string>,
-  movedSymbolPreexisted: (changedSymbol: { symbol: string; file: string }) => boolean,
+  symbolPreexistedAtBase: (changedSymbol: { symbol: string; file: string }) => boolean,
   maxEchoChecks: number,
   minSimilarity: number,
   result: DiffGateResult,
 ): void {
   result.checksRun.push('echo');
   for (const changedSymbol of changedSymbols.slice(0, maxEchoChecks)) {
-    if (movedSymbolPreexisted(changedSymbol)) continue;
+    if (symbolPreexistedAtBase(changedSymbol)) continue;
     const matches = similar(db, changedSymbol.symbol, { minSimilarity, limit: 5 });
     const eligibleMatches: EchoMatch[] = [];
     for (const match of matches) {
@@ -515,14 +515,14 @@ function runCoChangePartnerCheck(
   minConfidence: number,
   result: DiffGateResult,
 ): void {
-  const pairs = getCoChangePairs(db, { minTogether, minConfidence: 0, maxFilesPerCommit: 20 });
+  const pairs = getCoChangePairsForFiles(db, changed, { minTogether, minConfidence: 0, maxFilesPerCommit: 20 });
   if (!pairs) {
     result.skipped.push({ check: 'co-change-partner', reason: 'no git history' });
     return;
   }
   result.checksRun.push('co-change-partner');
   const reported = new Set<string>();
-  const structurallyLinked = coChangeStructuralLinkChecker(db);
+  let structurallyLinked: ReturnType<typeof coChangeStructuralLinkChecker> | undefined;
   for (const pair of pairs) {
     const aChanged = changed.has(pair.fileA);
     const bChanged = changed.has(pair.fileB);
@@ -551,7 +551,7 @@ function runCoChangePartnerCheck(
         subjectContext: pair.subjectContext,
       },
       classification,
-      structurallyLinked(changedSide, partner),
+      (structurallyLinked ??= coChangeStructuralLinkChecker(db))(changedSide, partner),
     );
     const rootCauseKey = [changedSide, partner].sort().join('|');
     result.findings.push({
@@ -876,13 +876,13 @@ function runUnusedParamsCheck(db: ScipDatabase, changedFiles: readonly string[],
 function runNewDeadCheck(
   db: ScipDatabase,
   changedSymbols: ReadonlyArray<{ symbol: string; shortName: string; file: string; fanIn: number }>,
-  movedSymbolPreexisted: (changedSymbol: { symbol: string; file: string }) => boolean,
+  symbolPreexistedAtBase: (changedSymbol: { symbol: string; file: string }) => boolean,
   result: DiffGateResult,
 ): void {
   result.checksRun.push('new-dead');
   const index = new ProjectIndex(db);
   for (const changedSymbol of changedSymbols) {
-    if (movedSymbolPreexisted(changedSymbol)) continue;
+    if (symbolPreexistedAtBase(changedSymbol)) continue;
     if (changedSymbol.fanIn > 0) continue;
     if (index.fileKind(changedSymbol.file) === 'test') continue;
     if (isEntrySurface(db, changedSymbol.file)) continue;
@@ -915,7 +915,7 @@ function isCompileTimeContractAssertion(symbol: string): boolean {
   return name.startsWith('_Assert') || name.startsWith('Assert');
 }
 
-function movedSymbolPreexistenceChecker(
+export function symbolPreexistenceChecker(
   projectRoot: string,
   base: string,
   diffPlan: DiffImpactPlan,
@@ -923,8 +923,7 @@ function movedSymbolPreexistenceChecker(
   const renamedFromByFile = new Map(diffPlan.renamedFiles.map((rename) => [rename.to, rename.from]));
   const contentCache = new Map<string, string | null>();
   return (changedSymbol) => {
-    const oldPath = renamedFromByFile.get(changedSymbol.file);
-    if (!oldPath) return false;
+    const oldPath = renamedFromByFile.get(changedSymbol.file) ?? changedSymbol.file;
     const leaf = leafName(changedSymbol.symbol);
     if (!leaf) return false;
     let content = contentCache.get(oldPath);

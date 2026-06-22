@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildCalleeFingerprintIndex,
+  candidateFingerprintsForTarget,
   classifySimilarityEvidence,
   insertTopSimilarResult,
   type RankedSimilarResult,
+  type SymbolFingerprint,
   type SimilarSymbolResult,
 } from '../../../src/queries/cleanup/similar.js';
 
@@ -23,6 +26,15 @@ function result(name: string, similarity: number): SimilarSymbolResult {
   };
 }
 
+function fingerprint(symbol: string, callees: readonly string[]): SymbolFingerprint {
+  return {
+    symbol,
+    file: `${symbol}.ts`,
+    callees: new Set(callees),
+    paramCount: 0,
+  };
+}
+
 describe('similarAll top-k collector', () => {
   it('keeps exact top scores without displacing earlier equal-score ties', () => {
     const top: RankedSimilarResult[] = [];
@@ -37,6 +49,31 @@ describe('similarAll top-k collector', () => {
       .map((entry) => entry.result.shortNameA);
 
     expect(ranked).toEqual(['third.a', 'first.a']);
+  });
+
+  it('uses rare shared callees to prune targeted similarity candidates', () => {
+    const rareMatch = fingerprint('rare-match', ['common', 'rare', 'domain']);
+    const commonOnly = Array.from({ length: 9 }, (_, index) =>
+      fingerprint(`common-${index}`, ['common', `left-${index}`, `right-${index}`]),
+    );
+    const index = buildCalleeFingerprintIndex([rareMatch, ...commonOnly]);
+
+    const candidates = candidateFingerprintsForTarget(fingerprint('target', ['common', 'rare']), index);
+
+    expect(candidates.map((candidate) => candidate.symbol)).toEqual(['rare-match']);
+    expect(index.docFreq.get('common')).toBe(10);
+    expect(index.ubiquityThreshold).toBe(8);
+  });
+
+  it('falls back to the full corpus when every target overlap is ubiquitous', () => {
+    const commonOnly = Array.from({ length: 9 }, (_, index) =>
+      fingerprint(`common-${index}`, ['common', `left-${index}`, `right-${index}`]),
+    );
+    const index = buildCalleeFingerprintIndex(commonOnly);
+
+    const candidates = candidateFingerprintsForTarget(fingerprint('target', ['common']), index);
+
+    expect(candidates.map((candidate) => candidate.symbol)).toEqual(commonOnly.map((candidate) => candidate.symbol));
   });
 
   it('classifies concrete domain behavior as direct evidence', () => {

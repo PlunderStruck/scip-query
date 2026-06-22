@@ -5,7 +5,8 @@ import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
 import { coChange } from '../../../src/queries/impact/co-change.js';
-import { diffGate, type DiffGateCheck } from '../../../src/queries/impact/diff-gate.js';
+import { diffGate, symbolPreexistenceChecker, type DiffGateCheck } from '../../../src/queries/impact/diff-gate.js';
+import type { DiffImpactPlan } from '../../../src/queries/impact/diff-impact.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { evidenceFixtureDb } from '../../fixtures/evidence-fixture.js';
 
@@ -186,5 +187,30 @@ describe('co-change partner labels', () => {
         rootCauseKey: 'docs/api.md|src/api.ts',
       }),
     ]);
+  });
+
+  it('treats symbols already present at the base revision as preexisting echo candidates', () => {
+    const { repoRoot } = createFixture();
+    writeFileSync(join(repoRoot, 'src/api.ts'), 'export const apiVersion = 99;\n');
+    const plan: DiffImpactPlan = {
+      changedFileLines: ['src/api.ts'],
+      changedFiles: ['src/api.ts'],
+      changedRanges: [],
+      renamedFiles: [],
+    };
+    const checker = symbolPreexistenceChecker(repoRoot, 'HEAD', plan);
+
+    expect(
+      checker({
+        symbol: 'scip-typescript npm pkg 1.0.0 src/`api.ts`/apiVersion.',
+        file: 'src/api.ts',
+      }),
+    ).toBe(true);
+    expect(
+      checker({
+        symbol: 'scip-typescript npm pkg 1.0.0 src/`api.ts`/brandNewThing().',
+        file: 'src/api.ts',
+      }),
+    ).toBe(false);
   });
 });

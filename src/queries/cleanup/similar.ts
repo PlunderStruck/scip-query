@@ -86,13 +86,13 @@ function compareAgainstFingerprints(
   minSimilarity: number,
   opts: { scanLimit?: number; semantic: boolean },
 ): SimilarSymbolResult[] {
-  const candidates = getAllCalleeFingerprints(db, {
+  const index = getCalleeFingerprintIndex(db, {
     minCallees: 3,
-    excludeSymbol: target.symbol,
     scanLimit: opts.scanLimit,
     semantic: opts.semantic,
   });
-  const idfWeights = computeIdf([target, ...candidates].map((fp) => fp.callees));
+  const candidates = candidateFingerprintsForTarget(target, index);
+  const idfWeights = computeIdf([target, ...index.corpus].map((fp) => fp.callees));
 
   const results: SimilarSymbolResult[] = [];
   for (const candidate of candidates) {
@@ -244,10 +244,24 @@ export interface SymbolFingerprint {
   paramCount: number;
 }
 
+export interface CalleeFingerprintIndex {
+  corpus: readonly SymbolFingerprint[];
+  candidateByCallee: ReadonlyMap<string, readonly SymbolFingerprint[]>;
+  docFreq: ReadonlyMap<string, number>;
+  ubiquityThreshold: number;
+}
+
 interface SourceFingerprint {
   symbol: string;
   file: string;
   tokens: Set<string>;
+}
+
+interface SourceFingerprintIndex {
+  corpus: readonly SourceFingerprint[];
+  candidateByToken: ReadonlyMap<string, readonly SourceFingerprint[]>;
+  docFreq: ReadonlyMap<string, number>;
+  ubiquityThreshold: number;
 }
 
 export interface RankedSimilarResult {
@@ -330,6 +344,9 @@ function findCallees(db: ScipDatabase, symbolPattern: string, opts: { semantic: 
 const CALLEE_FINGERPRINT_CORPUS = createPerDbValue<Map<string, SymbolFingerprint[]>>('callee-fingerprint-corpus', {
   clearGroups: ['whole-project', 'definition-catalog'],
 });
+const CALLEE_FINGERPRINT_INDEX = createPerDbValue<Map<string, CalleeFingerprintIndex>>('callee-fingerprint-index', {
+  clearGroups: ['whole-project', 'definition-catalog'],
+});
 
 export function getAllCalleeFingerprints(
   db: ScipDatabase,
@@ -347,6 +364,66 @@ export function getAllCalleeFingerprints(
   // excludeSymbol stays out of the memo key: exclusion is a plain symbol skip,
   // identical whether applied during the build or as a post-filter.
   return excludeSymbol === undefined ? corpus : corpus.filter((fp) => fp.symbol !== excludeSymbol);
+}
+
+function getCalleeFingerprintIndex(
+  db: ScipDatabase,
+  opts: { minCallees: number; scope?: string; scanLimit?: number; semantic?: boolean },
+): CalleeFingerprintIndex {
+  const { minCallees, scope, scanLimit } = opts;
+  const semantic = opts.semantic !== false;
+  const byOptions = CALLEE_FINGERPRINT_INDEX.get(db, () => new Map());
+  const key = `${minCallees}|${scope ?? ''}|${scanLimit ?? ''}|${semantic}`;
+  let index = byOptions.get(key);
+  if (!index) {
+    index = buildCalleeFingerprintIndex(
+      getAllCalleeFingerprints(db, {
+        minCallees,
+        scope,
+        scanLimit,
+        semantic,
+      }),
+    );
+    byOptions.set(key, index);
+  }
+  return index;
+}
+
+export function buildCalleeFingerprintIndex(corpus: readonly SymbolFingerprint[]): CalleeFingerprintIndex {
+  const docFreq = new Map<string, number>();
+  for (const fp of corpus) for (const callee of fp.callees) docFreq.set(callee, (docFreq.get(callee) ?? 0) + 1);
+
+  const ubiquityThreshold = Math.max(8, Math.ceil(Math.sqrt(corpus.length)));
+  const candidateByCallee = new Map<string, SymbolFingerprint[]>();
+  for (const fp of corpus) {
+    for (const callee of fp.callees) {
+      if ((docFreq.get(callee) ?? 0) > ubiquityThreshold) continue;
+      let bucket = candidateByCallee.get(callee);
+      if (!bucket) {
+        bucket = [];
+        candidateByCallee.set(callee, bucket);
+      }
+      bucket.push(fp);
+    }
+  }
+
+  return { corpus, candidateByCallee, docFreq, ubiquityThreshold };
+}
+
+export function candidateFingerprintsForTarget(
+  target: SymbolFingerprint,
+  index: CalleeFingerprintIndex,
+): SymbolFingerprint[] {
+  const candidates = new Map<string, SymbolFingerprint>();
+  for (const callee of target.callees) {
+    for (const candidate of index.candidateByCallee.get(callee) ?? []) {
+      if (candidate.symbol === target.symbol) continue;
+      candidates.set(candidate.symbol, candidate);
+    }
+  }
+
+  if (candidates.size > 0) return [...candidates.values()];
+  return index.corpus.filter((fp) => fp.symbol !== target.symbol);
 }
 
 // scip-query: ignore-extract — this builds callee-set fingerprints for
@@ -399,11 +476,7 @@ function similarBySourceShape(
 
   const minSimilarity = opts.minSimilarity >= 0.5 ? opts.minSimilarity : 0.3;
   const results: SimilarSymbolResult[] = [];
-  const candidates = new Set<SourceFingerprint>();
-  const tokenIndex = sourceFingerprintTokenIndex(getAllSourceFingerprints(db));
-  for (const token of target.tokens) {
-    for (const candidate of tokenIndex.get(token) ?? []) candidates.add(candidate);
-  }
+  const candidates = sourceCandidatesForTarget(target, getSourceFingerprintIndex(db));
 
   for (const candidate of candidates) {
     if (candidate.symbol === target.symbol || candidate.tokens.size < 3) continue;
@@ -705,24 +778,52 @@ function buildSourceFingerprintTokens(
 const SOURCE_FINGERPRINT_CORPUS = createPerDbValue<SourceFingerprint[]>('source-fingerprint-corpus', {
   clearGroups: ['whole-project', 'definition-catalog'],
 });
+const SOURCE_FINGERPRINT_INDEX = createPerDbValue<SourceFingerprintIndex>('source-fingerprint-index', {
+  clearGroups: ['whole-project', 'definition-catalog'],
+});
 
 function getAllSourceFingerprints(db: ScipDatabase): SourceFingerprint[] {
   return SOURCE_FINGERPRINT_CORPUS.get(db, () => buildSourceFingerprints(db));
 }
 
-function sourceFingerprintTokenIndex(fingerprints: readonly SourceFingerprint[]): Map<string, SourceFingerprint[]> {
-  const index = new Map<string, SourceFingerprint[]>();
-  for (const fingerprint of fingerprints) {
+function getSourceFingerprintIndex(db: ScipDatabase): SourceFingerprintIndex {
+  return SOURCE_FINGERPRINT_INDEX.get(db, () => buildSourceFingerprintIndex(getAllSourceFingerprints(db)));
+}
+
+function buildSourceFingerprintIndex(corpus: readonly SourceFingerprint[]): SourceFingerprintIndex {
+  const docFreq = new Map<string, number>();
+  for (const fingerprint of corpus) {
+    for (const token of fingerprint.tokens) docFreq.set(token, (docFreq.get(token) ?? 0) + 1);
+  }
+
+  const ubiquityThreshold = Math.max(8, Math.ceil(Math.sqrt(corpus.length)));
+  const candidateByToken = new Map<string, SourceFingerprint[]>();
+  for (const fingerprint of corpus) {
     for (const token of fingerprint.tokens) {
-      let bucket = index.get(token);
+      if ((docFreq.get(token) ?? 0) > ubiquityThreshold) continue;
+      let bucket = candidateByToken.get(token);
       if (!bucket) {
         bucket = [];
-        index.set(token, bucket);
+        candidateByToken.set(token, bucket);
       }
       bucket.push(fingerprint);
     }
   }
-  return index;
+
+  return { corpus, candidateByToken, docFreq, ubiquityThreshold };
+}
+
+function sourceCandidatesForTarget(target: SourceFingerprint, index: SourceFingerprintIndex): SourceFingerprint[] {
+  const candidates = new Map<string, SourceFingerprint>();
+  for (const token of target.tokens) {
+    for (const candidate of index.candidateByToken.get(token) ?? []) {
+      if (candidate.symbol === target.symbol) continue;
+      candidates.set(candidate.symbol, candidate);
+    }
+  }
+
+  if (candidates.size > 0) return [...candidates.values()];
+  return index.corpus.filter((fingerprint) => fingerprint.symbol !== target.symbol);
 }
 
 // scip-query: ignore-extract — this builds source-token fingerprints; scoped

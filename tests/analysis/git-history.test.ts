@@ -7,6 +7,7 @@ import type { ScipDatabase } from '../../src/storage/db.js';
 import {
   getChangeAmplification,
   getCoChangePairs,
+  getCoChangePairsForFiles,
   getCommitHistory,
   getFileChurn,
 } from '../../src/analysis/git-history.js';
@@ -220,6 +221,26 @@ describe('git history evidence', () => {
           sampleSubjects: ['feature two', 'fix(api): regression in pair (#42)', 'feature one'],
           externalIssueLabelStatus: 'unavailable',
         },
+      }),
+    );
+  });
+
+  it('computes focused co-change pairs without losing directional churn', () => {
+    const pairs = getCoChangePairsForFiles(fakeDb(repoRoot), new Set(['a.ts']), {
+      minTogether: 3,
+      minConfidence: 0,
+    })!;
+
+    expect(pairs.every((entry) => entry.fileA === 'a.ts' || entry.fileB === 'a.ts')).toBe(true);
+    expect(pairs).not.toEqual(expect.arrayContaining([expect.objectContaining({ fileA: 'b.ts', fileB: 'guide.md' })]));
+
+    const pair = pairs.find((entry) => entry.fileA === 'a.ts' && entry.fileB === 'b.ts');
+    expect(pair).toEqual(
+      expect.objectContaining({
+        together: 4,
+        changesA: 5,
+        changesB: 4,
+        confidence: 1,
       }),
     );
   });
