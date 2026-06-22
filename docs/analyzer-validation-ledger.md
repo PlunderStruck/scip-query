@@ -107,6 +107,7 @@ Current pilot:
 - Incomplete migration second-corpus scope result: `docs/validation/2026-06-22-incomplete-migration-second-corpus-scope-result.md`
 - Doc parser second-corpus validation result: `docs/validation/2026-06-22-doc-parser-second-corpus-validation-result.md`
 - Validation ledger closeout result: `docs/validation/2026-06-22-validation-ledger-closeout-result.md`
+- Global install cross-verification result: `docs/validation/2026-06-22-global-install-cross-verification-result.md`
 - Stable_Management wrapper confirmation: `docs/validation/2026-06-21-stable-management-wrapper-boundary-confirmation.md`
 - Vue pressure-kind output result: `docs/validation/2026-06-21-vue-pressure-kind-output-result.md`
 - Similarity evidence split result: `docs/validation/2026-06-21-similarity-evidence-split-result.md`
