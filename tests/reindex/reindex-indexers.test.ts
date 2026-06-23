@@ -123,6 +123,30 @@ describe('indexer configs', () => {
     ]);
   });
 
+  it('prefers a C# solution over Unity-generated project files', () => {
+    const projectRoot = createProject('scip-query-indexers-unity-');
+    writeFileSync(join(projectRoot, 'Assembly-CSharp-Editor.csproj'), '<Project />\n');
+    writeFileSync(join(projectRoot, 'Assembly-CSharp.csproj'), '<Project />\n');
+    writeFileSync(join(projectRoot, 'Birds.sln'), 'Microsoft Visual Studio Solution File\n');
+
+    const config = getIndexerConfig('csharp');
+    const command = config.indexArgs({
+      projectRoot,
+      outputPath: join(projectRoot, 'index.scip'),
+      indexerBinary: 'scip-dotnet',
+    });
+
+    expect(command.binary).toBe('scip-dotnet');
+    expect(command.args).toEqual([
+      'index',
+      join(projectRoot, 'Birds.sln'),
+      '--output',
+      join(projectRoot, 'index.scip'),
+      '--working-directory',
+      projectRoot,
+    ]);
+  });
+
   it('prefers a project-local scip-php binary and writes the default in-place output', () => {
     const projectRoot = createProject('scip-query-indexers-php-');
     mkdirSync(join(projectRoot, 'vendor', 'bin'), { recursive: true });

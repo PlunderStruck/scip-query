@@ -279,9 +279,11 @@ function resolveDotnetProject(projectRoot: string, suffixes: readonly string[]):
     return null;
   }
 
-  for (const entry of entries) {
-    if (suffixes.some((suffix) => entry.endsWith(suffix))) {
-      return join(projectRoot, entry);
+  for (const suffix of suffixes) {
+    for (const entry of entries) {
+      if (entry.endsWith(suffix)) {
+        return join(projectRoot, entry);
+      }
     }
   }
 
