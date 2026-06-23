@@ -49,3 +49,7 @@ Completed:
 The scope label is intentionally heuristic. It compares stable path/name words; it does not prove product subtype semantics. That is the right boundary for this analyzer because incomplete-migration remains a diff-gate review warning, not an automatic rewrite instruction.
 
 The next precision candidate is doc-reference citation parser improvement, especially stronger extraction of the cited sentence or section around path references.
+
+## 2026-06-23 Citation Refresh
+
+The maintainability-register completion slice rechecked the behavioral claim that `diff-gate.ts` includes incomplete-migration scope hints in messages, `why` text, and remediation. That claim remains current; `recordFinding()` only standardizes the final suppression hint and does not alter scope-hint construction.

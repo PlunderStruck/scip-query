@@ -54,3 +54,7 @@ Completed:
 The parser intentionally handles common Markdown structure, not every possible prose convention. That is enough for the current direct/signal/support split because doc-reference remains a review prompt, and the output now carries the cited claim that reviewers can inspect.
 
 The next precision candidate is passthrough package/export and public-facade caveats.
+
+## 2026-06-23 Citation Refresh
+
+The maintainability-register completion slice rechecked the behavioral claim that `diff-gate.ts` uses the shared Markdown citation helper for doc-reference fallback contexts. That claim remains current; the slice only moved diff-gate finding emission behind `recordFinding()` after citation classification and remediation are selected.

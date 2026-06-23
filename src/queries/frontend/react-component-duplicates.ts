@@ -1,6 +1,7 @@
 import { difference, intersection, jaccard } from '../../analysis/similarity.js';
 import { buildReactComponentBehaviorProfiles, type ReactComponentBehaviorProfile } from '../../source/react-profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
+import { sortedTokens, tokenValues } from '../internal/frontend-behavior-evidence.js';
 import { rankedPairwiseProfileResults, type PairwiseFileProfile } from '../internal/pairwise-profiles.js';
 
 export interface ReactComponentDuplicateResult {
@@ -112,15 +113,4 @@ function hasMeaningfulReactStructureOverlap(shared: ReadonlySet<string>): boolea
     }
   }
   return componentLike >= 1 || shapeLike >= 4;
-}
-
-function tokenValues(tokens: ReadonlySet<string>, prefix: string): string[] {
-  return [...tokens]
-    .filter((token) => token.startsWith(prefix))
-    .map((token) => token.slice(prefix.length))
-    .sort();
-}
-
-function sortedTokens(tokens: ReadonlySet<string>): string[] {
-  return [...tokens].sort();
 }

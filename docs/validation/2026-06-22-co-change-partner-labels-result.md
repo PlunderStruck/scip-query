@@ -42,3 +42,7 @@ Post-check judgment: the low-score `similar` rows on the new helpers are accepte
 ## Judgment
 
 Verdict: implemented. The output now separates the fact that two files co-changed from the reviewer judgment about what kind of relationship the pair appears to express. That keeps broad same-feature churn visible as signal while promoting specific doc/code, config/code, schema/script, model/view, and test/code pairs into declared-coupling candidates only when repeated history is strong enough.
+
+## 2026-06-23 Citation Refresh
+
+The maintainability-register completion slice rechecked the `diff-gate.ts` citation in this result. The co-change-partner label fields and declared-coupling suggestion behavior are unchanged; only diff-gate finding emission now goes through `recordFinding()` for consistent suppression hints.

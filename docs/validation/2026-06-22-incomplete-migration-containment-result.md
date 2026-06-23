@@ -40,3 +40,7 @@ This slice implements the diff-gate calibration follow-up for incomplete migrati
 ## Judgment
 
 Verdict: implemented. The detector still catches the intended failure mode, a newly introduced helper that is adopted in some places while equivalent old sites remain. It now refuses a weaker claim: that any broad old function containing the helper calls is itself an incomplete migration. The output exposes both sides of the comparison so reviewers can distinguish a direct leftover from a broad site that happens to include the same small fragment.
+
+## 2026-06-23 Citation Refresh
+
+The maintainability-register completion slice rechecked the `diff-gate.ts` citation in this result. Incomplete-migration containment, helper-shape metadata, and broad-site rejection are unchanged; diff-gate finding emission now derives the suppression hint centrally after the incomplete-migration finding is built.

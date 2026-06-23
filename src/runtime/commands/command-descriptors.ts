@@ -10,7 +10,18 @@ import {
 import { DIFF_IMPACT_BATCH_COMMAND, HEALTH_PHASE_COMMAND } from '../cli-support.js';
 import { BUILTIN_SKILLS } from '../setup.js';
 import * as handlers from './command-handlers.js';
-import { queryCommandDescriptor as query } from './query-command-specs.js';
+import { orderedQueryCommandDescriptors } from './query-command-specs.js';
+
+const queryCommandsBeforeDiffImpact = orderedQueryCommandDescriptors.slice(0, queryIndexAfter('plan-context'));
+const queryCommandsBeforeHealth = orderedQueryCommandDescriptors.slice(
+  queryIndex('drift'),
+  queryIndexAfter('self-audit'),
+);
+const queryCommandsBeforeMaintenance = orderedQueryCommandDescriptors.slice(
+  queryIndex('convergence'),
+  queryIndexAfter('slice'),
+);
+const queryCommandsAfterMaintenance = orderedQueryCommandDescriptors.slice(queryIndex('redundant-reexports'));
 
 export const commandDescriptors: CommandDescriptor[] = [
   {
@@ -45,55 +56,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     docs: doc('Indexing'),
     handler: handlers.handleAugmentVue,
   },
-  query('stats'),
-  query('files'),
-  query('methods'),
-  query('refs'),
-  query('trace'),
-  query('deps'),
-  query('rdeps'),
-  query('system'),
-  query('surface'),
-  query('dead'),
-  query('hotspots'),
-  query('imports'),
-  query('imported-by'),
-  query('unused-imports'),
-  query('outline'),
-  query('members'),
-  query('fan-in'),
-  query('fan-out'),
-  query('coupling'),
-  query('cycles'),
-  query('bottlenecks'),
-  query('isolated'),
-  query('by-kind'),
-  query('kind-counts'),
-  query('deep-chains'),
-  query('hierarchy'),
-  query('call-graph'),
-  query('similar'),
-  query('similar-files'),
-  query('react-component-duplicates'),
-  query('react-hook-candidates'),
-  query('react-large-component-pressure'),
-  query('vue-component-duplicates'),
-  query('vue-composable-candidates'),
-  query('vue-large-view-pressure'),
-  query('similar-chains'),
-  query('extract-candidates'),
-  query('locality-candidates'),
-  query('affected'),
-  query('change-surface'),
-  query('cleanup-plan'),
-  query('cleanup-apply'),
-  query('co-change'),
-  query('recent-duplicates'),
-  query('doc-drift'),
-  query('unused-params'),
-  query('diff-gate'),
-  query('incomplete-migration'),
-  query('plan-context'),
+  ...queryCommandsBeforeDiffImpact,
   {
     id: DIFF_IMPACT_BATCH_COMMAND,
     command: DIFF_IMPACT_BATCH_COMMAND,
@@ -112,12 +75,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     docs: doc('Impact'),
     handler: handlers.handleDiffImpact,
   },
-  query('drift'),
-  query('wrapper-candidates'),
-  query('passthrough-candidates'),
-  query('stale-abstractions'),
-  query('complexity-hotspots'),
-  query('self-audit'),
+  ...queryCommandsBeforeHealth,
   {
     id: HEALTH_PHASE_COMMAND,
     command: HEALTH_PHASE_COMMAND,
@@ -146,11 +104,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     docs: doc('Health', ['scip-query health --json', 'scip-query health --baseline']),
     handler: handlers.handleHealth,
   },
-  query('convergence'),
-  query('code'),
-  query('complexity'),
-  query('dataflow'),
-  query('slice'),
+  ...queryCommandsBeforeMaintenance,
   {
     id: 'install-skills',
     command: 'install-skills',
@@ -185,8 +139,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     docs: doc('Maintenance'),
     handler: handlers.handleCapabilityMatrix,
   },
-  query('redundant-reexports'),
-  query('similar-signatures'),
+  ...queryCommandsAfterMaintenance,
   {
     id: 'init',
     command: 'init',
@@ -274,3 +227,13 @@ export const commandDescriptors: CommandDescriptor[] = [
     handler: handlers.handleStatus,
   },
 ];
+
+function queryIndex(id: string): number {
+  const index = orderedQueryCommandDescriptors.findIndex((descriptor) => descriptor.id === id);
+  if (index < 0) throw new Error(`Ordered query command descriptor is missing: ${id}`);
+  return index;
+}
+
+function queryIndexAfter(id: string): number {
+  return queryIndex(id) + 1;
+}

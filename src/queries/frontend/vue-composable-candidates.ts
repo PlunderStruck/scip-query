@@ -1,14 +1,18 @@
-import { difference, intersection, jaccard } from '../../analysis/similarity.js';
+import { difference, intersection } from '../../analysis/similarity.js';
 import { buildVueComponentBehaviorProfiles, type VueComponentBehaviorProfile } from '../../source/vue/vue-profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { rankedPairwiseProfileResults, type PairwiseFileProfile } from '../internal/pairwise-profiles.js';
+import {
+  behaviorSimilarity,
+  classifyFrontendBehaviorEvidence,
+  sortedTokens,
+  tokenValues,
+  type FrontendBehaviorActionTier,
+  type FrontendBehaviorEvidenceClass,
+} from '../internal/frontend-behavior-evidence.js';
 
-export type VueComposableEvidenceClass =
-  | 'domain-behavior'
-  | 'generic-workflow-scaffolding'
-  | 'mixed'
-  | 'shared-abstraction';
-export type VueComposableActionTier = 'signal' | 'support';
+export type VueComposableEvidenceClass = FrontendBehaviorEvidenceClass;
+export type VueComposableActionTier = FrontendBehaviorActionTier;
 
 export interface VueComposableCandidateResult {
   fileA: string;
@@ -155,75 +159,23 @@ function classifyVueComposableEvidence(parts: {
   recommendation: string;
   reasons: string[];
 } {
-  const domainReasons: string[] = [];
-  const genericReasons: string[] = [];
-  const sharedAbstractionReasons: string[] = [];
-
-  if (parts.sharedReactivity.length) {
-    genericReasons.push(`shared reactivity primitive: ${parts.sharedReactivity.join(', ')}`);
-  }
-  if (parts.sharedLifecycle.length) {
-    genericReasons.push(`shared lifecycle primitive: ${parts.sharedLifecycle.join(', ')}`);
-  }
-  classifyNames(parts.sharedComposables, 'shared composable', domainReasons, sharedAbstractionReasons);
-  classifyNames(parts.sharedStores, 'shared store', domainReasons, sharedAbstractionReasons);
-  classifyNames(parts.sharedRequests, 'shared request', domainReasons, genericReasons);
-  classifyNames(parts.sharedFunctions, 'shared function', domainReasons, genericReasons);
-  classifyNames(parts.sharedFunctionVerbs, 'shared action verb', domainReasons, genericReasons);
-  classifyNames(parts.sharedBindings, 'shared binding', domainReasons, genericReasons);
-  classifyNames(parts.sharedTemplateEvents, 'shared template event', domainReasons, genericReasons);
-
-  const hasDomain = domainReasons.length > 0;
-  const hasGeneric = genericReasons.length > 0;
-  const hasSharedAbstraction = sharedAbstractionReasons.length > 0;
-  const evidenceClass: VueComposableEvidenceClass = hasDomain
-    ? hasGeneric || hasSharedAbstraction
-      ? 'mixed'
-      : 'domain-behavior'
-    : hasSharedAbstraction
-      ? 'shared-abstraction'
-      : 'generic-workflow-scaffolding';
-  const actionTier: VueComposableActionTier =
-    evidenceClass === 'domain-behavior' || evidenceClass === 'mixed' ? 'signal' : 'support';
-  return {
-    actionTier,
-    evidenceClass,
-    reasons: [...domainReasons, ...sharedAbstractionReasons, ...genericReasons].slice(0, 6),
-    recommendation: vueComposableRecommendation(evidenceClass),
-  };
-}
-
-function classifyNames(
-  names: readonly string[],
-  label: string,
-  domainReasons: string[],
-  genericReasons: string[],
-): void {
-  const domainNames: string[] = [];
-  const genericNames: string[] = [];
-  for (const name of names) {
-    if (hasDomainBehaviorWords(name)) {
-      domainNames.push(name);
-    } else {
-      genericNames.push(name);
-    }
-  }
-  if (domainNames.length) domainReasons.push(`${label} has domain term(s): ${domainNames.slice(0, 6).join(', ')}`);
-  if (genericNames.length) genericReasons.push(`${label} is generic workflow: ${genericNames.slice(0, 6).join(', ')}`);
-}
-
-function hasDomainBehaviorWords(name: string): boolean {
-  const words = behaviorWords(name).filter((word) => !GENERIC_VUE_BEHAVIOR_WORDS.has(word));
-  return words.length > 0;
-}
-
-function behaviorWords(name: string): string[] {
-  return name
-    .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean);
+  return classifyFrontendBehaviorEvidence({
+    genericWords: GENERIC_VUE_BEHAVIOR_WORDS,
+    primitiveGroups: [
+      { values: parts.sharedReactivity, reasonPrefix: 'shared reactivity primitive', bucket: 'generic' },
+      { values: parts.sharedLifecycle, reasonPrefix: 'shared lifecycle primitive', bucket: 'generic' },
+    ],
+    nameGroups: [
+      { names: parts.sharedComposables, label: 'shared composable', fallbackBucket: 'shared-abstraction' },
+      { names: parts.sharedStores, label: 'shared store', fallbackBucket: 'shared-abstraction' },
+      { names: parts.sharedRequests, label: 'shared request', fallbackBucket: 'generic' },
+      { names: parts.sharedFunctions, label: 'shared function', fallbackBucket: 'generic' },
+      { names: parts.sharedFunctionVerbs, label: 'shared action verb', fallbackBucket: 'generic' },
+      { names: parts.sharedBindings, label: 'shared binding', fallbackBucket: 'generic' },
+      { names: parts.sharedTemplateEvents, label: 'shared template event', fallbackBucket: 'generic' },
+    ],
+    recommendation: vueComposableRecommendation,
+  });
 }
 
 function vueComposableRecommendation(evidenceClass: VueComposableEvidenceClass): string {
@@ -237,13 +189,6 @@ function vueComposableRecommendation(evidenceClass: VueComposableEvidenceClass):
     case 'generic-workflow-scaffolding':
       return 'Treat as support evidence for a repeated workflow shape, not direct composable-extraction evidence.';
   }
-}
-
-function behaviorSimilarity(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 || b.size === 0) return 0;
-  const shared = intersection(a, b).size;
-  const overlap = shared / Math.min(a.size, b.size);
-  return Math.max(jaccard(a, b), overlap);
 }
 
 function hasMeaningfulBehaviorOverlap(shared: ReadonlySet<string>): boolean {
@@ -306,17 +251,6 @@ function behaviorReason(parts: {
   if (parts.sharedBindings.length)
     reasons.push(`shared template bindings: ${parts.sharedBindings.slice(0, 6).join(', ')}`);
   return reasons.join('; ') || 'shared Vue behavior profile';
-}
-
-function tokenValues(tokens: ReadonlySet<string>, prefix: string): string[] {
-  return [...tokens]
-    .filter((token) => token.startsWith(prefix))
-    .map((token) => token.slice(prefix.length))
-    .sort();
-}
-
-function sortedTokens(tokens: ReadonlySet<string>): string[] {
-  return [...tokens].sort();
 }
 
 const GENERIC_VUE_BEHAVIOR_WORDS = new Set([

@@ -140,3 +140,7 @@ Completed first-pass samples:
 5. Output contract: record a schema-quality verdict for `dead --only-dead --json`.
 
 The first target was at least 30 reviewed verdicts before changing analyzer thresholds or score weights; this pass reviewed 68 rows. The next step is calibration planning, not threshold changes directly from this pilot.
+
+## 2026-06-23 Citation Refresh
+
+The maintainability-register completion slice rechecked the pilot's diff-gate and query-order citations. `diffGate()` still runs the same check family, with finding construction now normalized by `recordFinding()`. `queryCommandOrder` still starts the public query command surface, and `orderedQueryCommandDescriptors` now exposes that order for CLI registration.

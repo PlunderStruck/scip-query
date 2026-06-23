@@ -1,6 +1,7 @@
 import { difference, intersection, jaccard } from '../../analysis/similarity.js';
 import { buildVueComponentBehaviorProfiles, type VueComponentBehaviorProfile } from '../../source/vue/vue-profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
+import { sortedTokens, tokenValues } from '../internal/frontend-behavior-evidence.js';
 import { rankedPairwiseProfileResults, type PairwiseFileProfile } from '../internal/pairwise-profiles.js';
 
 export interface VueComponentDuplicateResult {
@@ -116,15 +117,4 @@ function hasMeaningfulVueOverlap(shared: ReadonlySet<string>): boolean {
     }
   }
   return componentLike >= 1 || behaviorLike >= 3;
-}
-
-function tokenValues(tokens: ReadonlySet<string>, prefix: string): string[] {
-  return [...tokens]
-    .filter((token) => token.startsWith(prefix))
-    .map((token) => token.slice(prefix.length))
-    .sort();
-}
-
-function sortedTokens(tokens: ReadonlySet<string>): string[] {
-  return [...tokens].sort();
 }

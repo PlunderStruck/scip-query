@@ -63,3 +63,7 @@ Completed:
 ## Next Slice
 
 The next validation slice should be AVL-008, performance and budget behavior. The command surface is now covered and implementation parity is repaired, so the next risk is whether large-index defaults, `--full`, scan limits, and graceful degradation are documented and actually behave as intended.
+
+## 2026-06-23 Citation Refresh
+
+The maintainability-register completion slice supersedes the earlier note that descriptor-backed query commands are registered through individual `query(...)` calls in `src/runtime/commands/command-descriptors.ts`. Query registration now consumes slices of `orderedQueryCommandDescriptors`, which is derived from `queryCommandOrder` in `src/runtime/commands/query-command-specs.ts`. The composite `health`, `diff-impact`, and maintenance commands still stay explicit in `command-descriptors.ts`.

@@ -1,4 +1,6 @@
 {
   "version": 1,
-  "findings": []
+  "findings": [
+    "similar:scip-typescript npm scip-query 0.10.3 src/queries/frontend/`react-component-duplicates.ts`/compareProfiles().|scip-typescript npm scip-query 0.10.3 src/queries/frontend/`vue-component-duplicates.ts`/compareProfiles()."
+  ]
 }

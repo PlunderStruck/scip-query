@@ -133,6 +133,8 @@ export interface DiffGateResult {
   note?: string;
 }
 
+type DiffGateFindingDraft = Omit<DiffGateFinding, 'suppressionHint'>;
+
 /**
  * Slop prevention at the moment of creation: every detector, scoped to what
  * THIS diff introduces. O(diff), no LLM calls, exit-code friendly — the
@@ -316,6 +318,13 @@ function suppressionMatches(suppression: FindingSuppression, finding: DiffGateFi
   return Boolean(suppression.id || suppression.check);
 }
 
+function recordFinding(result: DiffGateResult, finding: DiffGateFindingDraft): void {
+  result.findings.push({
+    ...finding,
+    suppressionHint: `scip-query: ignore ${finding.check} ${finding.id} -- <reason>`,
+  });
+}
+
 function runEchoCheck(
   db: ScipDatabase,
   changedSymbols: ReadonlyArray<{ symbol: string; shortName: string; file: string }>,
@@ -353,7 +362,7 @@ function runEchoCheck(
       ...eligibleMatches.map((match) => `${match.otherSymbol}|${match.otherFile}`).sort(),
     );
     const actionTier = echoActionTier(changedSymbol, eligibleMatches);
-    result.findings.push({
+    recordFinding(result, {
       id,
       groupKey: id,
       actionTier,
@@ -367,7 +376,6 @@ function runEchoCheck(
       message: echoMessage(changedSymbol, eligibleMatches),
       why: echoWhy(changedSymbol, eligibleMatches),
       remediation: echoRemediation(actionTier, changedSymbol.shortName, topMatch.otherShort),
-      suppressionHint: `scip-query: ignore echo ${id} -- <reason>`,
     });
   }
   if (changedSymbols.length > maxEchoChecks) {
@@ -484,7 +492,7 @@ function runIncompleteMigrationCheck(
         : Math.max(...finding.leftovers.map((leftover) => Math.min(leftover.containment, leftover.siteCoverage)));
     const hasPossibleSubtype = finding.leftovers.some((leftover) => leftover.migrationScope === 'possible-subtype');
     const id = findingId('incomplete-migration', finding.helperSymbol, finding.helperFile, relatedFiles.join('|'));
-    result.findings.push({
+    recordFinding(result, {
       id,
       check: 'incomplete-migration',
       severity: 'warning',
@@ -503,7 +511,6 @@ function runIncompleteMigrationCheck(
       remediation: hasPossibleSubtype
         ? `Migrate same-scope sites to ${finding.helperShortName}; review possible subtype/variant sites before applying the helper.`
         : `Migrate the remaining sites to ${finding.helperShortName}, or confirm they are intentionally different.`,
-      suppressionHint: `scip-query: ignore incomplete-migration ${id} -- <reason>`,
     });
   }
 }
@@ -589,7 +596,6 @@ function runCoChangePartnerCheck(
       remediation: declaredCouplingSuggestion
         ? `Update ${partner} alongside this change, declare the coupling "${declaredCouplingSuggestion.name}", or confirm the coupling no longer holds.`
         : `Update ${partner} alongside this change, or confirm the coupling no longer holds.`,
-      suppressionHint: `scip-query: ignore co-change-partner ${id} -- <reason>`,
     });
   }
 }
@@ -655,7 +661,7 @@ function runDocReferenceCheck(
       citation.citedClaims.length > 0 ? citation.citedClaims : docCitationContexts(db, citation.doc, citation.cited);
     const classification = classifyDocCitation(citedClaims);
     const id = findingId('doc-reference', citation.doc, citation.cited.join('|'));
-    result.findings.push({
+    recordFinding(result, {
       id,
       check: 'doc-reference',
       severity: 'warning',
@@ -674,7 +680,6 @@ function runDocReferenceCheck(
         ...classification.reasons.map((reason) => `Citation kind evidence: ${reason}`),
       ],
       remediation: docCitationRemediation(classification.citationKind, citation.doc),
-      suppressionHint: `scip-query: ignore doc-reference ${id} -- <reason>`,
     });
   }
 }
@@ -852,7 +857,7 @@ function runUnusedParamsCheck(db: ScipDatabase, changedFiles: readonly string[],
   result.checksRun.push('unused-params');
   for (const finding of unusedParams(db, { files: changedFiles, limit: 50 })) {
     const id = findingId('unused-params', finding.symbol, finding.file, finding.unusedTrailing.join('|'));
-    result.findings.push({
+    recordFinding(result, {
       id,
       check: 'unused-params',
       severity: 'warning',
@@ -868,7 +873,6 @@ function runUnusedParamsCheck(db: ScipDatabase, changedFiles: readonly string[],
         `The trailing parameter(s) ${finding.unusedTrailing.join(', ')} are not referenced in the function body.`,
       ],
       remediation: 'Drop the unused trailing parameters and their call-site arguments.',
-      suppressionHint: `scip-query: ignore unused-params ${id} -- <reason>`,
     });
   }
 }
@@ -889,7 +893,7 @@ function runNewDeadCheck(
     if (isRootedSymbol(db, changedSymbol.symbol, changedSymbol.file)) continue;
     if (isCompileTimeContractAssertion(changedSymbol.symbol)) continue;
     const id = findingId('new-dead', changedSymbol.symbol, changedSymbol.file);
-    result.findings.push({
+    recordFinding(result, {
       id,
       check: 'new-dead',
       severity: 'warning',
@@ -904,7 +908,6 @@ function runNewDeadCheck(
         'The symbol is not in a detected entry surface or configured live root.',
       ],
       remediation: 'Wire it up, or remove it before it becomes permanent dead code.',
-      suppressionHint: `scip-query: ignore new-dead ${id} -- <reason>`,
     });
   }
 }
@@ -956,7 +959,7 @@ function runBaselineCheck(db: ScipDatabase, result: DiffGateResult): void {
   for (const finding of comparison.newFindings) {
     const metadata = baselineFindingMetadata(finding);
     const id = findingId('baseline', finding);
-    result.findings.push({
+    recordFinding(result, {
       id,
       groupKey: `baseline:${metadata.sourceAnalyzer}:${metadata.rootCauseKey}`,
       check: 'baseline',
@@ -978,7 +981,6 @@ function runBaselineCheck(db: ScipDatabase, result: DiffGateResult): void {
         ...metadata.why,
       ],
       remediation: metadata.remediation,
-      suppressionHint: `scip-query: ignore baseline ${id} -- <reason>`,
     });
   }
 }

@@ -91,6 +91,10 @@ for (const descriptor of familyDescriptors) {
   }
 }
 
+export const orderedQueryCommandDescriptors: CommandDescriptor[] = queryCommandOrder.map((id) =>
+  queryCommandDescriptor(id),
+);
+
 export function queryCommandDescriptor(id: string): CommandDescriptor {
   const descriptor = QUERY_COMMANDS_BY_ID.get(id);
   if (!descriptor) throw new Error(`Unknown query command descriptor: ${id}`);

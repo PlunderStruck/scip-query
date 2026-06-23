@@ -45,3 +45,7 @@ This slice implements the co-change follow-up that asked for broad-feature-sweep
 ## Judgment
 
 Verdict: implemented. Co-change remains a contextual signal, but the output now says whether the history came from focused repeated edits, a mixed history, or broad sweeps, and whether the pair is still current in the analyzed history window. That keeps real coordination warnings visible without treating stale or broad batch history as equally strong declared-coupling evidence.
+
+## 2026-06-23 Citation Refresh
+
+The maintainability-register completion slice rechecked the `diff-gate.ts` citation in this result. Commit-scope and recency propagation into diff-gate output are unchanged; the slice only centralized finding emission after those fields are assembled.

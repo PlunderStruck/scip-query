@@ -339,3 +339,7 @@ Not approved yet:
 - Scoring one-consumer stale abstractions like unused direct cleanup.
 
 The implementation plan for the first three approved items is `docs/plans/2026-06-21-analyzer-precision-implementation.md`.
+
+## 2026-06-23 Citation Refresh
+
+The maintainability-register completion slice rechecked the diff-gate source references in this memo. `diffGate()` still owns the same check lifecycle; the new `recordFinding()` helper only centralizes suppression-hint construction for those checks and does not change the analyzer-calibration conclusions here.

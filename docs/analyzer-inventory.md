@@ -160,3 +160,7 @@ Command shape:
 - Action tier: contextual signal. It guides placement; it should not force moves without architecture judgment.
 
 This should pair with `react-large-component-pressure`, `vue-large-view-pressure`, `extract-candidates`, and `incomplete-migration` so agents do not reduce size scores by dumping extracted pieces into flat local directories.
+
+## 2026-06-23 Citation Refresh
+
+The maintainability-register completion slice rechecked the command and diff-gate guide references above. `src/runtime/commands/query-command-specs.ts` still owns the public query order, now also exporting `orderedQueryCommandDescriptors` so CLI registration can derive from that order. `src/queries/impact/diff-gate.ts` still owns `DIFF_GATE_CHECKS`; the slice only centralized finding emission through a local recorder and did not change the listed check family.

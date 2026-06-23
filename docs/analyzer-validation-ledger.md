@@ -260,3 +260,7 @@ The first concrete run was intentionally narrow:
 6. Produce one calibration memo that says whether the current direct/signal/support split still holds.
 
 That slice tested the ledger, the protocol, the review burden, and the score model before the later completion passes covered the remaining analyzer families.
+
+## 2026-06-23 Citation Refresh
+
+The maintainability-register completion slice rechecked the ledger's command-surface and diff-gate citations. `queryCommandOrder` remains the canonical public query order, and `orderedQueryCommandDescriptors` is now derived from that list for CLI registration. `diffGate()` still runs the same check families recorded in the ledger; finding construction now goes through a local recorder that derives the suppression hint consistently.

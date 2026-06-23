@@ -53,3 +53,7 @@ Completed:
 - `node dist/cli.js diff-gate --json` exited 1 with two accepted warning-level findings:
   - `SQ36D93309ABEA`: accepted signal-tier echo because `isCompileTimeContractAssertion()` and `indexedDefinitionFromRow()` both use symbol leaf helpers but make different product decisions.
   - `SQ30E6CF5F9B38`: accepted support-tier doc-reference because the README citation is a fenced declared-coupling configuration example that still points at the intended files.
+
+## 2026-06-23 Citation Refresh
+
+The maintainability-register completion slice rechecked the behavioral claim that `diff-gate.ts` carries `subjectContext` into co-change-partner findings. That claim remains current; `recordFinding()` now wraps the completed finding object after the subject-context evidence and `why` text have already been built.

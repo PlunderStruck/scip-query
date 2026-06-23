@@ -54,3 +54,7 @@ Completed:
 ## Next Slice
 
 The next validation slice should be AVL-005, analyzer implementation parity. It should walk command descriptors, handler wiring, query entrypoints, and health summaries to verify that documented behavior matches implementation behavior.
+
+## 2026-06-23 Citation Refresh
+
+The maintainability-register completion slice rechecked the public command surface after changing CLI registration. `queryCommandOrder` remains the complete public query order, and `orderedQueryCommandDescriptors` is now the derived descriptor list consumed by `commandDescriptors`; this removes the older duplicate hand-written query registration list without changing the command groups above.

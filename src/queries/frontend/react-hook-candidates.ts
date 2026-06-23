@@ -1,14 +1,18 @@
-import { difference, intersection, jaccard } from '../../analysis/similarity.js';
+import { difference, intersection } from '../../analysis/similarity.js';
 import { buildReactComponentBehaviorProfiles, type ReactComponentBehaviorProfile } from '../../source/react-profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { rankedPairwiseProfileResults, type PairwiseFileProfile } from '../internal/pairwise-profiles.js';
+import {
+  behaviorSimilarity,
+  classifyFrontendBehaviorEvidence,
+  sortedTokens,
+  tokenValues,
+  type FrontendBehaviorActionTier,
+  type FrontendBehaviorEvidenceClass,
+} from '../internal/frontend-behavior-evidence.js';
 
-export type ReactHookEvidenceClass =
-  | 'domain-behavior'
-  | 'generic-workflow-scaffolding'
-  | 'mixed'
-  | 'shared-abstraction';
-export type ReactHookActionTier = 'signal' | 'support';
+export type ReactHookEvidenceClass = FrontendBehaviorEvidenceClass;
+export type ReactHookActionTier = FrontendBehaviorActionTier;
 
 export interface ReactHookCandidateResult {
   fileA: string;
@@ -156,78 +160,22 @@ function classifyReactHookEvidence(parts: {
   recommendation: string;
   reasons: string[];
 } {
-  const domainReasons: string[] = [];
-  const genericReasons: string[] = [];
-  const sharedAbstractionReasons: string[] = [];
-
-  if (parts.sharedReactHooks.length) {
-    genericReasons.push(`shared React primitives: ${parts.sharedReactHooks.join(', ')}`);
-  }
-  if (parts.sharedEffects.length) {
-    genericReasons.push(`shared lifecycle primitive: ${parts.sharedEffects.join(', ')}`);
-  }
-  classifyNames(parts.sharedHooks, 'shared hook', domainReasons, sharedAbstractionReasons);
-  classifyNames(parts.sharedRequests, 'shared request', domainReasons, genericReasons);
-  classifyNames(parts.sharedState, 'shared state', domainReasons, genericReasons);
-  classifyNames(parts.sharedHandlers, 'shared handler', domainReasons, genericReasons);
-  classifyNames(parts.sharedHandlerVerbs, 'shared action verb', domainReasons, genericReasons);
-
-  const hasDomain = domainReasons.length > 0;
-  const hasGeneric = genericReasons.length > 0;
-  const hasSharedAbstraction = sharedAbstractionReasons.length > 0;
-  const evidenceClass: ReactHookEvidenceClass = hasDomain
-    ? hasGeneric || hasSharedAbstraction
-      ? 'mixed'
-      : 'domain-behavior'
-    : hasSharedAbstraction
-      ? 'shared-abstraction'
-      : 'generic-workflow-scaffolding';
-  const actionTier: ReactHookActionTier =
-    evidenceClass === 'domain-behavior' || evidenceClass === 'mixed' ? 'signal' : 'support';
-  const reasons = [...domainReasons, ...sharedAbstractionReasons, ...genericReasons].slice(0, 6);
-  return {
-    actionTier,
-    evidenceClass,
-    reasons,
-    recommendation: reactHookRecommendation(evidenceClass),
-  };
-}
-
-function classifyNames(
-  names: readonly string[],
-  label: string,
-  domainReasons: string[],
-  genericReasons: string[],
-): void {
-  const domainNames: string[] = [];
-  const genericNames: string[] = [];
-  for (const name of names) {
-    if (hasDomainBehaviorWords(name)) {
-      domainNames.push(name);
-    } else {
-      genericNames.push(name);
-    }
-  }
-  if (domainNames.length) domainReasons.push(`${label} has domain term(s): ${domainNames.slice(0, 6).join(', ')}`);
-  if (genericNames.length) genericReasons.push(`${label} is generic workflow: ${genericNames.slice(0, 6).join(', ')}`);
-}
-
-function hasDomainBehaviorWords(name: string): boolean {
-  const words = behaviorWords(name).filter((word) => !GENERIC_REACT_BEHAVIOR_WORDS.has(word));
-  return words.length > 0;
-}
-
-function behaviorWords(name: string): string[] {
-  return name
-    .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/^use(?=[A-Z])/, '')
-    .replace(/^handle(?=[A-Z])/, '')
-    .replace(/^is(?=[A-Z])/, '')
-    .replace(/^has(?=[A-Z])/, '')
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean);
+  return classifyFrontendBehaviorEvidence({
+    genericWords: GENERIC_REACT_BEHAVIOR_WORDS,
+    stripPrefixes: REACT_BEHAVIOR_PREFIXES,
+    primitiveGroups: [
+      { values: parts.sharedReactHooks, reasonPrefix: 'shared React primitives', bucket: 'generic' },
+      { values: parts.sharedEffects, reasonPrefix: 'shared lifecycle primitive', bucket: 'generic' },
+    ],
+    nameGroups: [
+      { names: parts.sharedHooks, label: 'shared hook', fallbackBucket: 'shared-abstraction' },
+      { names: parts.sharedRequests, label: 'shared request', fallbackBucket: 'generic' },
+      { names: parts.sharedState, label: 'shared state', fallbackBucket: 'generic' },
+      { names: parts.sharedHandlers, label: 'shared handler', fallbackBucket: 'generic' },
+      { names: parts.sharedHandlerVerbs, label: 'shared action verb', fallbackBucket: 'generic' },
+    ],
+    recommendation: reactHookRecommendation,
+  });
 }
 
 function reactHookRecommendation(evidenceClass: ReactHookEvidenceClass): string {
@@ -241,13 +189,6 @@ function reactHookRecommendation(evidenceClass: ReactHookEvidenceClass): string 
     case 'generic-workflow-scaffolding':
       return 'Treat as support evidence for a repeated workflow shape, not direct hook-extraction evidence.';
   }
-}
-
-function behaviorSimilarity(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 || b.size === 0) return 0;
-  const shared = intersection(a, b).size;
-  const overlap = shared / Math.min(a.size, b.size);
-  return Math.max(jaccard(a, b), overlap);
 }
 
 function hasMeaningfulBehaviorOverlap(shared: ReadonlySet<string>): boolean {
@@ -295,17 +236,6 @@ function behaviorReason(parts: {
   if (parts.sharedHandlerVerbs.length)
     reasons.push(`shared action verbs: ${parts.sharedHandlerVerbs.slice(0, 6).join(', ')}`);
   return reasons.join('; ') || 'shared React behavior profile';
-}
-
-function tokenValues(tokens: ReadonlySet<string>, prefix: string): string[] {
-  return [...tokens]
-    .filter((token) => token.startsWith(prefix))
-    .map((token) => token.slice(prefix.length))
-    .sort();
-}
-
-function sortedTokens(tokens: ReadonlySet<string>): string[] {
-  return [...tokens].sort();
 }
 
 const GENERIC_REACT_BEHAVIOR_WORDS = new Set([
@@ -360,3 +290,5 @@ const GENERIC_REACT_BEHAVIOR_WORDS = new Set([
   'use',
   'value',
 ]);
+
+const REACT_BEHAVIOR_PREFIXES = [/^use(?=[A-Z])/, /^handle(?=[A-Z])/, /^is(?=[A-Z])/, /^has(?=[A-Z])/] as const;
