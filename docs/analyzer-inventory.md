@@ -20,7 +20,7 @@ The action tiers are:
 
 ## Current Surfaces
 
-The published query surface lives in `src/queries/public-query-entries.ts`. The CLI command order and families live in `src/runtime/commands/query-command-specs.ts`. The composite health score runs the phases listed in `HEALTH_PHASES` in `src/queries/health/health.ts`. The diff gate runs the checks listed in `DIFF_GATE_CHECKS` in `src/queries/impact/diff-gate.ts`.
+The published query surface and private query-helper manifest live in `src/queries/public-query-entries.ts`. The CLI command order and families live in `src/runtime/commands/query-command-specs.ts`. The composite health score runs the phases listed in `HEALTH_PHASES` in `src/queries/health/health.ts`. The diff gate runs the checks listed in `DIFF_GATE_CHECKS` in `src/queries/impact/diff-gate.ts`, with doc-reference and baseline policy helpers kept private to the query tree.
 
 `health --json` on this repository currently reports:
 

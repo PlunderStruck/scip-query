@@ -43,3 +43,7 @@ This slice implements historical-note intent classification for `doc-drift` co-c
 ## Judgment
 
 Verdict: implemented. Co-change-only doc drift now says whether the document reads like current guidance, historical context, or neither, and the action tier follows that intent. The detector still shows historical-note drift as evidence, but it no longer frames that evidence as a direct doc-update demand.
+
+## 2026-06-23 Current Sweep Citation Refresh
+
+The current maintainability sweep rechecked the `doc-drift.ts` citation after the generic doc-term matcher moved into `src/queries/cleanup/doc-terms.ts`. Historical-intent classification and action-tier behavior remain unchanged; only the shared term-matching helper location changed.

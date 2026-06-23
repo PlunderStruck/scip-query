@@ -21,12 +21,6 @@ import {
   handleIsolated,
   handleSimilar,
   handleSimilarFiles,
-  handleReactComponentDuplicates,
-  handleReactHookCandidates,
-  handleReactLargeComponentPressure,
-  handleVueComponentDuplicates,
-  handleVueComposableCandidates,
-  handleVueLargeViewPressure,
   handleSimilarChains,
   handleExtractCandidates,
   handleLocalityCandidates,
@@ -38,6 +32,14 @@ import {
   handleConvergence,
   handleSimilarSignatures,
 } from './handlers.js';
+import {
+  handleReactComponentDuplicates,
+  handleReactHookCandidates,
+  handleReactLargeComponentPressure,
+  handleVueComponentDuplicates,
+  handleVueComposableCandidates,
+  handleVueLargeViewPressure,
+} from './frontend-handlers.js';
 
 type CleanupCommandDescriptor = Omit<CommandDescriptor, 'docs'> & {
   docs?: CommandDescriptor['docs'];

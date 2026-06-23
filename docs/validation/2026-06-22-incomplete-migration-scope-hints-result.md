@@ -53,3 +53,7 @@ The next precision candidate is doc-reference citation parser improvement, espec
 ## 2026-06-23 Citation Refresh
 
 The maintainability-register completion slice rechecked the behavioral claim that `diff-gate.ts` includes incomplete-migration scope hints in messages, `why` text, and remediation. That claim remains current; `recordFinding()` only standardizes the final suppression hint and does not alter scope-hint construction.
+
+## 2026-06-23 Current Sweep Citation Refresh
+
+The current maintainability sweep rechecked the scope-hint claim after doc-reference and baseline policy helpers moved into private modules. Scope hints still come from the incomplete-migration check before the finding is recorded, so this validation result remains current.

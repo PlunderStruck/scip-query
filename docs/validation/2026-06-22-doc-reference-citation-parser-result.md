@@ -18,7 +18,7 @@ A Markdown-local cited claim is the smallest document unit that gives a file-pat
   - ordinary paragraphs bounded by blank lines, headings, tables, lists, and fences.
 - `src/queries/cleanup/doc-drift.ts` now uses that helper in `docCitationContextWindows()`, so path-reference `doc-drift` and `docsCitingFiles()` share the structured claim extraction.
 - `src/queries/impact/diff-gate.ts` uses the same helper in its fallback `docCitationContexts()`, keeping doc-reference fallback behavior aligned with doc-drift.
-- `src/queries/public-query-entries.ts` classifies `doc-citation-context.ts` as a private helper module, keeping the public query manifest contract explicit. The later `locality-candidates` public entry does not change that private-helper classification.
+- `src/queries/public-query-entries.ts` classifies `doc-citation-context.ts`, `doc-terms.ts`, and diff-gate policy/type helpers as private helper modules, keeping the public query manifest contract explicit. The later `locality-candidates` public entry does not change that private-helper classification.
 - The helper's Markdown boundary checks now share a single interruption classifier, so the implementation does not introduce a new health-baseline similarity finding.
 - `tests/queries/impact/incomplete-migration.test.ts` adds a regression where configuration prose appears near a behavioral citation. The finding stays `citationKind: "behavioral-claim"` and `actionTier: "direct"`, and the cited claim excludes `declaredCouplings`.
 

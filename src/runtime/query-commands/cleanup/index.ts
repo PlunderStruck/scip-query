@@ -1,1 +1,3 @@
-export { cleanupQueryCommandDescriptors } from './descriptors.js';
+import { cleanupQueryCommandDescriptors } from './descriptors.js';
+
+export { cleanupQueryCommandDescriptors };

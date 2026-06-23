@@ -49,3 +49,7 @@ Verdict: implemented. Co-change remains a contextual signal, but the output now 
 ## 2026-06-23 Citation Refresh
 
 The maintainability-register completion slice rechecked the `diff-gate.ts` citation in this result. Commit-scope and recency propagation into diff-gate output are unchanged; the slice only centralized finding emission after those fields are assembled.
+
+## 2026-06-23 Current Sweep Citation Refresh
+
+The current maintainability sweep rechecked this result after private doc-reference and baseline policy helpers moved out of `diff-gate.ts`. Commit-scope and recency evidence still flow through the same co-change-partner check before finding emission.

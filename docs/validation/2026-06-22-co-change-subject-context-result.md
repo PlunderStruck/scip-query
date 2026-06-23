@@ -57,3 +57,7 @@ Completed:
 ## 2026-06-23 Citation Refresh
 
 The maintainability-register completion slice rechecked the behavioral claim that `diff-gate.ts` carries `subjectContext` into co-change-partner findings. That claim remains current; `recordFinding()` now wraps the completed finding object after the subject-context evidence and `why` text have already been built.
+
+## 2026-06-23 Current Sweep Citation Refresh
+
+The current maintainability sweep rechecked the `subjectContext` claim after doc-reference and baseline policy helpers moved into private modules. The co-change-partner finding assembly still carries `subjectContext` before the finding is recorded, so this result remains current.

@@ -4,6 +4,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { getCommitHistory, getTrackedFiles } from '../../analysis/git-history.js';
 import { fileContentHash, readCachedFileEvidence, writeCachedFileEvidence } from '../../storage/evidence-cache.js';
 import { markdownCitationContext } from './doc-citation-context.js';
+import { matchingDocTerms } from './doc-terms.js';
 
 export type DocDriftIntent = 'current-guidance' | 'historical-note' | 'unknown';
 export type DocDriftActionTier = 'direct' | 'signal' | 'support';
@@ -201,7 +202,7 @@ function classifyDocDriftIntent(db: ScipDatabase, docFile: string): DocDriftInte
   }
 
   const haystack = `${docFile}\n${text}`.toLowerCase();
-  const historicalHits = matchingDocIntentTerms(haystack, [
+  const historicalHits = matchingDocTerms(haystack, [
     'historical note',
     'historical record',
     'history note',
@@ -223,7 +224,7 @@ function classifyDocDriftIntent(db: ScipDatabase, docFile: string): DocDriftInte
     return { docIntent: 'historical-note', reasons: [`historical-note terms: ${historicalHits.join(', ')}`] };
   }
 
-  const currentHits = matchingDocIntentTerms(haystack, [
+  const currentHits = matchingDocTerms(haystack, [
     'current',
     'standard',
     'standards',
@@ -242,10 +243,6 @@ function classifyDocDriftIntent(db: ScipDatabase, docFile: string): DocDriftInte
   }
 
   return { docIntent: 'unknown', reasons: ['no current-guidance or historical-note markers found'] };
-}
-
-function matchingDocIntentTerms(haystack: string, terms: readonly string[]): string[] {
-  return terms.filter((term) => haystack.includes(term));
 }
 
 function docDriftSubjectMetadata(

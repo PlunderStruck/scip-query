@@ -44,3 +44,7 @@ Verdict: implemented. The detector still catches the intended failure mode, a ne
 ## 2026-06-23 Citation Refresh
 
 The maintainability-register completion slice rechecked the `diff-gate.ts` citation in this result. Incomplete-migration containment, helper-shape metadata, and broad-site rejection are unchanged; diff-gate finding emission now derives the suppression hint centrally after the incomplete-migration finding is built.
+
+## 2026-06-23 Current Sweep Citation Refresh
+
+The current maintainability sweep rechecked this result after doc-reference and baseline policy helpers moved out of `diff-gate.ts`. Incomplete-migration containment still runs through the same diff-gate check, and the private helper extraction does not alter the containment behavior recorded here.

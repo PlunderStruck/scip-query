@@ -343,3 +343,7 @@ The implementation plan for the first three approved items is `docs/plans/2026-0
 ## 2026-06-23 Citation Refresh
 
 The maintainability-register completion slice rechecked the diff-gate source references in this memo. `diffGate()` still owns the same check lifecycle; the new `recordFinding()` helper only centralizes suppression-hint construction for those checks and does not change the analyzer-calibration conclusions here.
+
+## 2026-06-23 Current Sweep Citation Refresh
+
+The current maintainability sweep rechecked the diff-gate source references after doc-reference and baseline policy helpers moved into private query modules. The memo remains accurate as a calibration record: `diffGate()` still owns the check lifecycle, and the moved helpers do not change the direct/signal/support conclusions recorded here.

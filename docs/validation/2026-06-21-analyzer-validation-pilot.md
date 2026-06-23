@@ -144,3 +144,7 @@ The first target was at least 30 reviewed verdicts before changing analyzer thre
 ## 2026-06-23 Citation Refresh
 
 The maintainability-register completion slice rechecked the pilot's diff-gate and query-order citations. `diffGate()` still runs the same check family, with finding construction now normalized by `recordFinding()`. `queryCommandOrder` still starts the public query command surface, and `orderedQueryCommandDescriptors` now exposes that order for CLI registration.
+
+## 2026-06-23 Current Sweep Citation Refresh
+
+The current maintainability sweep rechecked the pilot's `diff-gate.ts` citation after doc-reference and baseline helper policy moved into private modules. The pilot remains a historical validation record: `diffGate()` and `DIFF_GATE_CHECKS` still identify the same diff-gate surface.

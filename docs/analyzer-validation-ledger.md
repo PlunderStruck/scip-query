@@ -264,3 +264,7 @@ That slice tested the ledger, the protocol, the review burden, and the score mod
 ## 2026-06-23 Citation Refresh
 
 The maintainability-register completion slice rechecked the ledger's command-surface and diff-gate citations. `queryCommandOrder` remains the canonical public query order, and `orderedQueryCommandDescriptors` is now derived from that list for CLI registration. `diffGate()` still runs the same check families recorded in the ledger; finding construction now goes through a local recorder that derives the suppression hint consistently.
+
+## 2026-06-23 Current Sweep Citation Refresh
+
+The current maintainability sweep rechecked the `diff-gate.ts` citation again after doc-reference and baseline policy helpers moved into private query modules. The ledger remains accurate because `diffGate()` and `DIFF_GATE_CHECKS` still live in `src/queries/impact/diff-gate.ts`; only helper policy bodies moved behind the same entry point.

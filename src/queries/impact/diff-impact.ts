@@ -6,6 +6,7 @@ import type { IndexedDefinition } from '../../domain/types.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { semanticCallerMap } from '../../semantic/shared-primitives.js';
 import { isCallableSymbol, isModuleLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
+import { rangesByFile } from './diff-ranges.js';
 
 export interface DiffImpactResult {
   changedFiles: string[];
@@ -450,19 +451,6 @@ function dedupeRanges(ranges: readonly ChangedLineRange[]): ChangedLineRange[] {
     unique.push(range);
   }
   return unique;
-}
-
-function rangesByFile(ranges: readonly ChangedLineRange[]): ReadonlyMap<string, readonly ChangedLineRange[]> {
-  const map = new Map<string, ChangedLineRange[]>();
-  for (const range of ranges) {
-    let bucket = map.get(range.file);
-    if (!bucket) {
-      bucket = [];
-      map.set(range.file, bucket);
-    }
-    bucket.push(range);
-  }
-  return map;
 }
 
 function definitionTouchesChangedRange(

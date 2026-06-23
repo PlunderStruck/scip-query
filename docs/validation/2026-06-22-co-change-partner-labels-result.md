@@ -46,3 +46,7 @@ Verdict: implemented. The output now separates the fact that two files co-change
 ## 2026-06-23 Citation Refresh
 
 The maintainability-register completion slice rechecked the `diff-gate.ts` citation in this result. The co-change-partner label fields and declared-coupling suggestion behavior are unchanged; only diff-gate finding emission now goes through `recordFinding()` for consistent suppression hints.
+
+## 2026-06-23 Current Sweep Citation Refresh
+
+The current maintainability sweep rechecked this result after private doc-reference and baseline policy helpers moved out of `diff-gate.ts`. Co-change-partner label propagation remains in the same diff-gate workflow, so the historical result remains accurate.
