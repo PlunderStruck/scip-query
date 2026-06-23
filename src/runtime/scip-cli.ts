@@ -1,14 +1,70 @@
 import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { platform, arch } from 'node:os';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { isBinaryAvailable } from './binary.js';
 
-const SCIP_VERSION = 'v0.7.0';
+const SCIP_VERSION = 'v0.8.1';
+const SCIP_RELEASE_URL = 'https://github.com/scip-code/scip';
+const MANAGED_SCIP_BINARY: Partial<Record<NodeJS.Platform, Partial<Record<string, string>>>> = {
+  win32: {
+    x64: join('vendor', 'scip', 'win32-x64', 'scip.exe'),
+    arm64: join('vendor', 'scip', 'win32-arm64', 'scip.exe'),
+  },
+};
+
+function resolvePackageRoot(): string | null {
+  let current = dirname(fileURLToPath(import.meta.url));
+
+  while (true) {
+    const packageJsonPath = join(current, 'package.json');
+    if (existsSync(packageJsonPath)) {
+      try {
+        const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf-8')) as { name?: string };
+        if (pkg.name === 'scip-query') {
+          return current;
+        }
+      } catch {
+        // Keep walking upward; a malformed parent package should not break setup.
+      }
+    }
+
+    const parent = dirname(current);
+    if (parent === current) {
+      return null;
+    }
+    current = parent;
+  }
+}
+
+export function resolveManagedScipBinary(): string | null {
+  const relativePath = MANAGED_SCIP_BINARY[platform()]?.[arch()];
+  if (!relativePath) {
+    return null;
+  }
+
+  const packageRoot = resolvePackageRoot();
+  if (!packageRoot) {
+    return null;
+  }
+
+  const candidate = join(packageRoot, relativePath);
+  return existsSync(candidate) ? candidate : null;
+}
+
+export function resolveScipBinary(): string | null {
+  if (isBinaryAvailable('scip')) {
+    return 'scip';
+  }
+  return resolveManagedScipBinary();
+}
 
 /**
- * Check if the `scip` CLI binary is available on PATH.
+ * Check if the `scip` CLI binary is available on PATH or packaged with scip-query.
  */
 export function isScipInstalled(): boolean {
-  return isBinaryAvailable('scip');
+  return resolveScipBinary() !== null;
 }
 
 /**
@@ -17,8 +73,13 @@ export function isScipInstalled(): boolean {
 // scip-query: ignore-wrapper — exported setup API; callers should not know
 // the exact `scip --version` process invocation.
 export function getScipVersion(): string | null {
+  const scipBinary = resolveScipBinary();
+  if (!scipBinary) {
+    return null;
+  }
+
   try {
-    const output = execFileSync('scip', ['--version'], { stdio: 'pipe' }).toString().trim();
+    const output = execFileSync(scipBinary, ['--version'], { stdio: 'pipe' }).toString().trim();
     return output;
   } catch {
     return null;
@@ -45,10 +106,6 @@ function getScipDownloadUrl(): { url: string; filename: string } | null {
       osName = 'linux';
       ext = 'tar.gz';
       break;
-    case 'win32':
-      osName = 'windows';
-      ext = 'zip';
-      break;
     default:
       return null;
   }
@@ -65,7 +122,7 @@ function getScipDownloadUrl(): { url: string; filename: string } | null {
   }
 
   const filename = `scip-${osName}-${archName}.${ext}`;
-  const url = `https://github.com/sourcegraph/scip/releases/download/${SCIP_VERSION}/${filename}`;
+  const url = `${SCIP_RELEASE_URL}/releases/download/${SCIP_VERSION}/${filename}`;
   return { url, filename };
 }
 
@@ -81,6 +138,11 @@ export function printScipInstallInstructions(): void {
     console.log('Install via Homebrew:');
     console.log('  brew install sourcegraph/scip/scip\n');
     console.log('Or download manually:');
+  } else if (platform() === 'win32') {
+    console.log('Windows installs should include a managed scip.exe in the scip-query package.');
+    console.log('Reinstall scip-query, or build the managed binary from source with:');
+    console.log('  npm run build:scip-windows\n');
+    console.log('Upstream release page:');
   } else {
     console.log('Download from:');
   }
@@ -88,7 +150,7 @@ export function printScipInstallInstructions(): void {
   if (download) {
     console.log(`  ${download.url}\n`);
   } else {
-    console.log(`  https://github.com/sourcegraph/scip/releases/tag/${SCIP_VERSION}\n`);
+    console.log(`  ${SCIP_RELEASE_URL}/releases/tag/${SCIP_VERSION}\n`);
   }
 
   console.log('After installing, ensure `scip` is on your PATH and run `scip-query reindex`.');
@@ -100,6 +162,12 @@ export function printScipInstallInstructions(): void {
  * Returns true if installation succeeded.
  */
 export function tryInstallScipCli(onStatus: (msg: string) => void): boolean {
+  const managedBinary = resolveManagedScipBinary();
+  if (managedBinary) {
+    onStatus(`Using bundled scip CLI at ${managedBinary}`);
+    return true;
+  }
+
   // macOS: try Homebrew first
   if (platform() === 'darwin' && isBinaryAvailable('brew')) {
     onStatus('Installing scip CLI via Homebrew...');
@@ -139,6 +207,6 @@ export function tryInstallScipCli(onStatus: (msg: string) => void): boolean {
   }
 
   onStatus('Could not auto-install scip CLI.');
-  onStatus('Install manually from: https://github.com/sourcegraph/scip/releases');
+  onStatus(`Install manually from: ${SCIP_RELEASE_URL}/releases`);
   return false;
 }

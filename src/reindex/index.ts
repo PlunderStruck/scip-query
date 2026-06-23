@@ -12,7 +12,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, extname, join } from 'node:path';
-import { tryInstallScipCli } from '../runtime/scip-cli.js';
+import { resolveScipBinary, tryInstallScipCli } from '../runtime/scip-cli.js';
 import type { SupportedLanguage } from '../domain/types.js';
 import { augmentAuxiliaryDocuments } from './augment.js';
 import { detectLanguages } from './detect.js';
@@ -384,7 +384,7 @@ function cacheLanguageShards(outputDb: string, indexedOutputs: readonly IndexedO
 }
 
 function ensureScipCliAvailable(skipAutoInstall: boolean, onStatus: (message: string) => void): void {
-  if (isBinaryAvailable('scip')) {
+  if (resolveScipBinary()) {
     return;
   }
 
@@ -567,7 +567,11 @@ function convertScipToSqlite(
           `across ${sanitized.touchedDocuments} documents before SQLite conversion.`,
       );
     }
-    execFileSync('scip', ['expt-convert', '--output', tempOutputDb, tempOutputScip], {
+    const scipBinary = resolveScipBinary();
+    if (!scipBinary) {
+      throw new Error('scip CLI is not available');
+    }
+    execFileSync(scipBinary, ['expt-convert', '--output', tempOutputDb, tempOutputScip], {
       env,
       stdio: 'pipe',
       maxBuffer: 50 * 1024 * 1024,

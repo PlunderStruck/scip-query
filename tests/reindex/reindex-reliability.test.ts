@@ -243,6 +243,7 @@ async function loadReindexFixture(opts: {
     tryInstallIndexer: () => true,
   }));
   vi.doMock('../../src/runtime/scip-cli.js', () => ({
+    resolveScipBinary: () => 'scip',
     tryInstallScipCli: () => true,
   }));
   vi.doMock('../../src/reindex/augment.js', () => ({

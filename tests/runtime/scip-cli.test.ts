@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type * as NodeFs from 'node:fs';
 import type * as ScipCli from '../../src/runtime/scip-cli.js';
 
 type ScipCliModule = typeof ScipCli;
@@ -9,9 +10,11 @@ async function loadScipCli(opts: {
   arch: string;
   isBinaryAvailable?: (name: string) => boolean;
   execFileSync?: ExecFileSyncMock;
+  existsSync?: (path: string) => boolean;
 }) {
   const userIsBinary = opts.isBinaryAvailable;
   const userExec = opts.execFileSync;
+  const actualFs = await vi.importActual<typeof NodeFs>('node:fs');
   const isBinaryAvailable = vi.fn(userIsBinary ?? (() => false));
   // scip-cli.ts inlines an `isBinaryAvailable` helper that calls
   // `execFileSync('which'|'where', [name])`. When a test customizes
@@ -35,6 +38,10 @@ async function loadScipCli(opts: {
   }));
   vi.doMock('node:child_process', () => ({
     execFileSync,
+  }));
+  vi.doMock('node:fs', () => ({
+    existsSync: vi.fn(opts.existsSync ?? (() => false)),
+    readFileSync: actualFs.readFileSync,
   }));
 
   const mod = (await import('../../src/runtime/scip-cli.js')) as ScipCliModule;
@@ -93,7 +100,53 @@ describe('scip CLI helpers', () => {
 
     expect(log.mock.calls.flat().join('\n')).toContain('brew install sourcegraph/scip/scip');
     expect(log.mock.calls.flat().join('\n')).toContain('scip-darwin-arm64.tar.gz');
-    expect(log.mock.calls.flat().join('\n')).toContain('https://github.com/sourcegraph/scip/releases/download/v0.7.0/');
+    expect(log.mock.calls.flat().join('\n')).toContain('https://github.com/scip-code/scip/releases/download/v0.8.1/');
+  });
+
+  it('uses the managed Windows scip binary when scip is not on PATH', async () => {
+    const execFileSync = vi.fn((cmd: string, args: readonly string[]) => {
+      if (cmd === 'where') {
+        throw new Error('missing');
+      }
+      if (cmd.endsWith('/vendor/scip/win32-x64/scip.exe') && args[0] === '--version') {
+        return Buffer.from('v0.8.1\n');
+      }
+      throw new Error(`unexpected command: ${cmd} ${args.join(' ')}`);
+    });
+
+    const { getScipVersion, isScipInstalled, resolveScipBinary } = await loadScipCli({
+      platform: 'win32',
+      arch: 'x64',
+      execFileSync,
+      existsSync: (path) => path.endsWith('/package.json') || path.endsWith('/vendor/scip/win32-x64/scip.exe'),
+    });
+
+    const resolved = resolveScipBinary();
+    expect(resolved).toMatch(/vendor\/scip\/win32-x64\/scip\.exe$/);
+    expect(isScipInstalled()).toBe(true);
+    expect(getScipVersion()).toBe('v0.8.1');
+    expect(execFileSync).toHaveBeenCalledWith(
+      expect.stringMatching(/vendor\/scip\/win32-x64\/scip\.exe$/),
+      ['--version'],
+      expect.objectContaining({ stdio: 'pipe' }),
+    );
+  });
+
+  it('does not print nonexistent upstream Windows download assets', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    await loadScipCli({
+      platform: 'win32',
+      arch: 'x64',
+    });
+
+    const { printScipInstallInstructions } = await import('../../src/runtime/scip-cli.js');
+    printScipInstallInstructions();
+
+    const output = log.mock.calls.flat().join('\n');
+    expect(output).toContain('Windows installs should include a managed scip.exe');
+    expect(output).toContain('npm run build:scip-windows');
+    expect(output).toContain('https://github.com/scip-code/scip/releases/tag/v0.8.1');
+    expect(output).not.toContain('scip-windows-amd64.zip');
   });
 
   it('tries go install when brew is unavailable and confirms scip afterward', async () => {
@@ -141,7 +194,7 @@ describe('scip CLI helpers', () => {
     const status: string[] = [];
     expect(tryInstallScipCli((message) => status.push(message))).toBe(false);
     expect(status).toContain('Could not auto-install scip CLI.');
-    expect(status).toContain('Install manually from: https://github.com/sourcegraph/scip/releases');
+    expect(status).toContain('Install manually from: https://github.com/scip-code/scip/releases');
   });
 
   it('keeps postinstall as orchestration around the shared scip helpers', async () => {
