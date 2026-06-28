@@ -41,14 +41,16 @@ export function vueComponentDuplicates(
     scope?: string;
     scanLimit?: number;
     filePattern?: string;
+    focusFiles?: ReadonlySet<string>;
   } = {},
 ): VueComponentDuplicateResult[] {
-  const { minSimilarity = 0.62, minTokens = 8, limit = 20, scope, scanLimit, filePattern } = opts;
+  const { minSimilarity = 0.62, minTokens = 8, limit = 20, scope, scanLimit, filePattern, focusFiles } = opts;
   const profiles = buildVueComponentProfiles(db, { scope, minTokens, scanLimit });
   return rankedPairwiseProfileResults({
     profiles,
     limit,
     filePattern,
+    focusFiles,
     compare: (a, b) => compareProfiles(a, b, minSimilarity),
     sort: (a, b) => b.similarity - a.similarity || a.fileA.localeCompare(b.fileA) || a.fileB.localeCompare(b.fileB),
   });

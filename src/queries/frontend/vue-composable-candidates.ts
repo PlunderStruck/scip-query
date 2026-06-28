@@ -54,9 +54,10 @@ export function vueComposableCandidates(
     scope?: string;
     scanLimit?: number;
     filePattern?: string;
+    focusFiles?: ReadonlySet<string>;
   } = {},
 ): VueComposableCandidateResult[] {
-  const { minSimilarity = 0.45, minSharedBehaviors = 6, limit = 20, scope, scanLimit, filePattern } = opts;
+  const { minSimilarity = 0.45, minSharedBehaviors = 6, limit = 20, scope, scanLimit, filePattern, focusFiles } = opts;
   const profiles = buildVueComponentBehaviorProfiles(db, {
     scope,
     minBehaviorTokens: Math.max(3, minSharedBehaviors),
@@ -71,6 +72,7 @@ export function vueComposableCandidates(
     profiles,
     limit,
     filePattern,
+    focusFiles,
     compare: (a, b) => compareProfiles(a, b, minSimilarity, minSharedBehaviors),
     sort: (a, b) => b.similarity - a.similarity || a.fileA.localeCompare(b.fileA) || a.fileB.localeCompare(b.fileB),
   });

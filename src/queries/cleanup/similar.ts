@@ -199,6 +199,7 @@ export function similarAll(
     crossFileOnly?: boolean;
     scanLimit?: number;
     semantic?: boolean;
+    focusFiles?: ReadonlySet<string>;
   } = {},
 ): SimilarSymbolResult[] {
   const { minSimilarity = 0.5, limit = 20, scope, minCallees = 4, crossFileOnly = false, scanLimit } = opts;
@@ -210,18 +211,24 @@ export function similarAll(
     semantic: opts.semantic !== false,
   });
   const all = index.corpus;
+  const focusFiles = opts.focusFiles;
 
   const topResults: RankedSimilarResult[] = [];
   let resultOrder = 0;
 
   for (let i = 0; i < all.length; i += 1) {
     const a = all[i]!;
+    const aFocused = focusFiles?.has(a.file) ?? false;
     const magnitudeA = index.weightedMagnitudes[i]!;
     const candidates = new Set<number>();
     for (const callee of a.callees) {
       const bucket = index.candidateIndexesByCallee.get(callee);
       if (!bucket) continue;
-      for (const j of bucket) if (j > i) candidates.add(j);
+      for (const j of bucket) {
+        if (j <= i) continue;
+        if (focusFiles && !aFocused && !focusFiles.has(all[j]!.file)) continue;
+        candidates.add(j);
+      }
     }
     for (const j of candidates) {
       const b = all[j]!;

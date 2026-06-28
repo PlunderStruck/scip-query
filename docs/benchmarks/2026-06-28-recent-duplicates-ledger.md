@@ -21,6 +21,7 @@
 | Vega_2.0 component timing `vue-composable-candidates --json --full`  |                                                                           0.197s |       pending |            pending | Vue behavior candidate component; negligible on Vega.                                                                                                                             |
 | Vega_2.0 set-kernel smaller-set iteration trial                      |                                                                    4.897s-5.174s | 5.269s median |             slower | Output hash stayed unchanged, but repeats were 5.970s, 5.269s, 4.956s; reverted.                                                                                                  |
 | Vega_2.0 stable evidence cache version after `0.10.9` bump           |                                                       multi-minute semantic miss |        5.287s | restores warm path | Existing `0.10.8` semantic callee rows reused by content/digest-compatible reads; stdout 3,618 bytes; SHA-256 `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`. |
+| Vega_2.0 full focus-file pair pruning                                |                                                                           5.344s | 4.190s median |   -1.154s / -21.6% | Four post-change warm repeats: 4.242s, 4.182s, 4.194s, 4.186s; stdout 3,618 bytes; SHA-256 unchanged at `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`.       |
 
 ## Current Pipeline
 
@@ -52,14 +53,11 @@ reactHookCandidates -C 10`.
 - Accepted: cache raw per-file React behavior profiles in
   `src/source/react-profile.ts` with the existing source-file cache primitive,
   then clone mutable `Set`/array fields before returning them.
-- Use the recent-file add records earlier. Today the command computes all top
-  duplicate candidates and only afterwards drops pairs where both files are
-  established. This remains deferred because changing candidate pruning before
-  per-detector limits can alter which findings surface.
-- For React-heavy repos, target the shared pairwise frontend helper so the
-  expensive structure/behavior comparisons can skip pairs where neither side is
-  recent, while preserving the exact recent-duplicate output contract. This is
-  deferred until the result-contract question is resolved.
+- Accepted: use the recent-file add records earlier for the unbounded `--full`
+  path. The command now computes a focus-file set from the same
+  `FileAddRecord.commitsAgo <= windowCommits` rule used by
+  `orientRecentDuplicate()`, then passes that set to callable and frontend
+  pairwise detectors only when `limit` is infinite.
 - Rejected: making `intersection()` and `jaccard()` iterate the smaller set.
   The math stayed equivalent, but the Vega `recent-duplicates --json --full`
   workload got slower in repeated runs, so the code/test edit was reverted and
@@ -85,9 +83,13 @@ reactHookCandidates -C 10`.
 - Accepted: stable evidence-cache versioning with compatible legacy reads. This
   avoids turning `recent-duplicates --full` into a cold semantic rebuild after a
   package patch bump while keeping the same output hash.
-- Deferred: pair-level recent-file pruning in pairwise detectors. It may be a
-  larger win, but must prove it does not change the command's ranked output
-  contract unless the contract is explicitly widened.
+- Accepted: focus-file pair pruning for `recent-duplicates --full`. It skips
+  candidate pairs where neither side can become a recent echo/twin, preserves
+  the Vega output hash, and moves the latest warm median to 4.190s.
+- Rejected: sharing one React profile array between React component and hook
+  detectors. The output hash stayed unchanged, but Vega remained in the same
+  4.18s-4.24s band while the change widened detector API surface, so it was
+  removed.
 
 ## Verification
 

@@ -87,6 +87,7 @@ interface RecentDuplicateCandidateOptions {
   scanLimit?: number;
   scope?: string;
   semantic?: boolean;
+  focusFiles?: ReadonlySet<string>;
 }
 
 interface FrontendDuplicatePair {
@@ -100,6 +101,7 @@ interface FrontendDuplicateOptions {
   minSimilarity: number;
   scanLimit?: number;
   scope?: string;
+  focusFiles?: ReadonlySet<string>;
 }
 
 interface FrontendDuplicateCandidateSource<TPair extends FrontendDuplicatePair> {
@@ -144,6 +146,10 @@ export function recentDuplicates(
   const adds = getFileAddRecords(db);
   if (!adds) return { available: false, windowCommits, findings: [] };
   if (limit <= 0) return { available: true, windowCommits, findings: [] };
+  const focusFiles = recentDuplicateFocusFiles(adds, windowCommits);
+  if (focusFiles.size === 0) {
+    return { available: true, windowCommits, findings: [] };
+  }
 
   const candidates = collectRecentDuplicateCandidates(db, {
     limit,
@@ -151,6 +157,7 @@ export function recentDuplicates(
     scanLimit,
     scope,
     semantic: opts.semantic,
+    focusFiles: Number.isFinite(limit) ? undefined : focusFiles,
   });
 
   const findings = candidates
@@ -187,6 +194,7 @@ function collectRecentDuplicateCandidates(
       limit: candidateLimit,
       scanLimit: opts.scanLimit,
       semantic: opts.semantic,
+      focusFiles: opts.focusFiles,
     }),
   ];
 
@@ -198,12 +206,14 @@ function collectRecentDuplicateCandidates(
         minSimilarity: opts.minSimilarity ?? FRONTEND_STRUCTURE_MIN_SIMILARITY,
         limit: candidateLimit,
         scanLimit: opts.scanLimit,
+        focusFiles: opts.focusFiles,
       }),
       ...reactHookDuplicateCandidates(db, {
         scope: opts.scope,
         minSimilarity: opts.minSimilarity ?? FRONTEND_BEHAVIOR_MIN_SIMILARITY,
         limit: candidateLimit,
         scanLimit: opts.scanLimit,
+        focusFiles: opts.focusFiles,
       }),
     );
   }
@@ -215,12 +225,14 @@ function collectRecentDuplicateCandidates(
         minSimilarity: opts.minSimilarity ?? FRONTEND_STRUCTURE_MIN_SIMILARITY,
         limit: candidateLimit,
         scanLimit: opts.scanLimit,
+        focusFiles: opts.focusFiles,
       }),
       ...vueComposableDuplicateCandidates(db, {
         scope: opts.scope,
         minSimilarity: opts.minSimilarity ?? FRONTEND_BEHAVIOR_MIN_SIMILARITY,
         limit: candidateLimit,
         scanLimit: opts.scanLimit,
+        focusFiles: opts.focusFiles,
       }),
     );
   }
@@ -236,6 +248,7 @@ function callableDuplicateCandidates(
     scope?: string;
     scanLimit?: number;
     semantic?: boolean;
+    focusFiles?: ReadonlySet<string>;
   },
 ): RecentDuplicateCandidate[] {
   return similarAll(db, {
@@ -245,6 +258,7 @@ function callableDuplicateCandidates(
     crossFileOnly: true,
     scanLimit: opts.scanLimit,
     semantic: opts.semantic,
+    focusFiles: opts.focusFiles,
   }).map((pair) => ({
     domain: 'callable',
     basis: pair.similarityBasis ?? 'callees',
@@ -260,7 +274,7 @@ function callableDuplicateCandidates(
 
 function reactComponentDuplicateCandidates(
   db: ScipDatabase,
-  opts: { minSimilarity: number; limit: number; scope?: string; scanLimit?: number },
+  opts: FrontendDuplicateOptions,
 ): RecentDuplicateCandidate[] {
   return frontendDuplicateCandidates(db, opts, {
     query: reactComponentDuplicates,
@@ -299,10 +313,7 @@ function frontendDuplicateCandidates<TPair extends FrontendDuplicatePair>(
     }));
 }
 
-function reactHookDuplicateCandidates(
-  db: ScipDatabase,
-  opts: { minSimilarity: number; limit: number; scope?: string; scanLimit?: number },
-): RecentDuplicateCandidate[] {
+function reactHookDuplicateCandidates(db: ScipDatabase, opts: FrontendDuplicateOptions): RecentDuplicateCandidate[] {
   return frontendDuplicateCandidates(db, opts, {
     query: reactHookCandidates,
     domain: 'react-hook',
@@ -321,10 +332,7 @@ function reactHookDuplicateCandidates(
   });
 }
 
-function vueComponentDuplicateCandidates(
-  db: ScipDatabase,
-  opts: { minSimilarity: number; limit: number; scope?: string; scanLimit?: number },
-): RecentDuplicateCandidate[] {
+function vueComponentDuplicateCandidates(db: ScipDatabase, opts: FrontendDuplicateOptions): RecentDuplicateCandidate[] {
   return frontendDuplicateCandidates(db, opts, {
     query: vueComponentDuplicates,
     domain: 'vue-component',
@@ -344,7 +352,7 @@ function vueComponentDuplicateCandidates(
 
 function vueComposableDuplicateCandidates(
   db: ScipDatabase,
-  opts: { minSimilarity: number; limit: number; scope?: string; scanLimit?: number },
+  opts: FrontendDuplicateOptions,
 ): RecentDuplicateCandidate[] {
   return frontendDuplicateCandidates(db, opts, {
     query: vueComposableCandidates,
@@ -364,6 +372,14 @@ function vueComposableDuplicateCandidates(
       ['template-event', pair.sharedTemplateEvents],
     ],
   });
+}
+
+function recentDuplicateFocusFiles(adds: FileAddRecords, windowCommits: number): Set<string> {
+  const files = new Set<string>();
+  for (const [file, record] of adds) {
+    if (record.commitsAgo <= windowCommits) files.add(file);
+  }
+  return files;
 }
 
 function orientRecentDuplicate(

@@ -30,8 +30,13 @@
   counts, and filters fingerprints below `minCallees`.
   Source: `scip-query code buildCalleeFingerprints -C 8`.
 - `buildCalleeFingerprintIndex` computes callee document frequencies, IDF
-  weights, a ubiquity threshold, a callee-to-fingerprint index, and median IDF.
-  Source: `scip-query code 'src/queries/cleanup/similar.ts:387-470'`.
+  weights, a ubiquity threshold, a callee-to-fingerprint index, cached weighted
+  magnitudes, and median IDF.
+  Source: `scip-query code 'src/queries/cleanup/similar.ts:424-454'`.
+- 2026-06-28 focus-pruning refresh: `similarAll()` can now accept an internal
+  focus-file set so `recent-duplicates --full` skips old-old pairs that cannot
+  become findings. Direct `similar --full` output remains unchanged because the
+  public command does not pass that option.
 - `comparePair` computes weighted cosine similarity, drops weak pairs, shortens
   symbols, computes unique callee sets, and classifies evidence.
   Source: `scip-query code comparePair -C 8`.

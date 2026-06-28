@@ -14,25 +14,25 @@ A suppression is a maintainer's recorded acceptance of an analyzer finding. It i
 
 `node dist/cli.js health --full --json` reported 174 source suppressions:
 
-| Category | Count | Judgment |
-| --- | ---: | --- |
-| `extract` | 72 | Mostly pipeline and parser routines where splitting would hide shared state or traversal context. |
-| `wrapper` | 62 | Mostly public facades, cache boundaries, and evidence projection helpers. |
-| `stale` | 17 | Mostly exported contracts whose consumers are structural or external to the local count. |
-| `similar` | 15 | Mostly language-specific parser branches or deliberately mirrored cache/doc workflows. |
-| `passthrough` | 8 | Mostly stable facade methods or tiny policy names that hide lower-level ownership. |
-| `dead`, `drift`, `uncategorized` | 0 | No active source suppressions in these categories. |
+| Category                         | Count | Judgment                                                                                          |
+| -------------------------------- | ----: | ------------------------------------------------------------------------------------------------- |
+| `extract`                        |    72 | Mostly pipeline and parser routines where splitting would hide shared state or traversal context. |
+| `wrapper`                        |    62 | Mostly public facades, cache boundaries, and evidence projection helpers.                         |
+| `stale`                          |    17 | Mostly exported contracts whose consumers are structural or external to the local count.          |
+| `similar`                        |    15 | Mostly language-specific parser branches or deliberately mirrored cache/doc workflows.            |
+| `passthrough`                    |     8 | Mostly stable facade methods or tiny policy names that hide lower-level ownership.                |
+| `dead`, `drift`, `uncategorized` |     0 | No active source suppressions in these categories.                                                |
 
 A production-regex scan of `src` matched the same 174 directive comments. All 174 had reason text. The top concentration points were:
 
-| File | Count | Interpretation |
-| --- | ---: | --- |
-| `src/reindex/vue/augment-vue-runtime.ts` | 14 | Vue augmentation contains adapter, mapper, and transaction boundaries that heuristics see as wrappers/extraction opportunities. |
-| `src/queries/internal/reference-counts.ts` | 7 | Shared reference evidence mutation/projection helpers are intentionally named. |
-| `src/symbols/graph/call-graph-evidence.ts` | 6 | Caller/callee evidence assembly keeps fallback stages explicit. |
-| `src/core/project-index.ts` | 5 | The stable facade intentionally hides lower-level services from query modules. |
-| `src/resolution/import-path-resolver.ts` | 5 | Path-resolution policies are named because language/package rules differ. |
-| `src/semantic/typescript/ts-morph-provider.ts` | 5 | Semantic-provider bootstrap and export walking are stateful analyzer phases. |
+| File                                           | Count | Interpretation                                                                                                                  |
+| ---------------------------------------------- | ----: | ------------------------------------------------------------------------------------------------------------------------------- |
+| `src/reindex/vue/augment-vue-runtime.ts`       |    14 | Vue augmentation contains adapter, mapper, and transaction boundaries that heuristics see as wrappers/extraction opportunities. |
+| `src/queries/internal/reference-counts.ts`     |     7 | Shared reference evidence mutation/projection helpers are intentionally named.                                                  |
+| `src/symbols/graph/call-graph-evidence.ts`     |     6 | Caller/callee evidence assembly keeps fallback stages explicit.                                                                 |
+| `src/core/project-index.ts`                    |     5 | The stable facade intentionally hides lower-level services from query modules.                                                  |
+| `src/resolution/import-path-resolver.ts`       |     5 | Path-resolution policies are named because language/package rules differ.                                                       |
+| `src/semantic/typescript/ts-morph-provider.ts` |     5 | Semantic-provider bootstrap and export walking are stateful analyzer phases.                                                    |
 
 Git blame over the suppression lines found the oldest current directives on 2026-05-04 and the newest on 2026-06-20. That does not prove every comment is eternally valid, but it does show the current set is recent enough to treat as deliberate calibration feedback rather than abandoned ignore dust.
 
@@ -40,20 +40,20 @@ Git blame over the suppression lines found the oldest current directives on 2026
 
 Reviewed source examples:
 
-| Category | Location | Verdict | Reason |
-| --- | --- | --- | --- |
-| `wrapper` | `src/language-parsers/registry.ts:110` | accepted design | Public parser registry facade hides registry storage and selection details. |
-| `wrapper` | `src/resolution/import-path-resolver.ts:94` | accepted design | Names the extension-family concept used across path resolution. |
-| `wrapper` | `src/queries/internal/reference-counts.ts:68` | accepted design | Keeps count mutation and provenance paired. |
-| `extract` | `src/queries/navigation/by-kind.ts:130` | accepted design | The detected cluster is the tail of one filter pipeline, not an independent concept. |
-| `extract` | `src/analysis/framework-patterns.ts:224` | accepted design | Rust dead-code exclusions are one accuracy contract spanning generated files, AST exclusions, suppression comments, and serde modules. |
-| `extract` | `src/queries/cleanup/similar.ts:402` | accepted design | Callee-set fingerprint indexing is one evidence pass whose options interact; it now also owns per-fingerprint weighted magnitudes so repeated pair scoring can stay exact without recomputing vector lengths. |
-| `stale` | `src/source/gitignore-filter.ts:45` | accepted design | `PathFilter` is the canonical shape passed through `ScipDatabase`, even when local type consumers are low. |
-| `stale` | `src/source/vue/vue-template.ts:47` | accepted design | Vue template facts are a public analyzer envelope consumed by profile/reporting layers. |
-| `similar` | `src/language-parsers/languages/dotnet.ts:61` | accepted design | Per-language AST walkers share shape but differ in node and alias semantics. |
-| `similar` | `src/storage/per-db-cache.ts:132` | accepted design | The mirrored cache factory differs by source-equality contract; merging would hide the distinction. |
-| `passthrough` | `src/core/project-index.ts:111` | accepted design | The facade keeps query modules on `ProjectIndex` instead of importing lower-level classifiers. |
-| `passthrough` | `src/reindex/vue/augment-vue-runtime.ts:612` | accepted design | The function owns Vue lexical token filtering; the `Set.has` body is incidental. |
+| Category      | Location                                      | Verdict         | Reason                                                                                                                                                                                                                                                                                                                  |
+| ------------- | --------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wrapper`     | `src/language-parsers/registry.ts:110`        | accepted design | Public parser registry facade hides registry storage and selection details.                                                                                                                                                                                                                                             |
+| `wrapper`     | `src/resolution/import-path-resolver.ts:94`   | accepted design | Names the extension-family concept used across path resolution.                                                                                                                                                                                                                                                         |
+| `wrapper`     | `src/queries/internal/reference-counts.ts:68` | accepted design | Keeps count mutation and provenance paired.                                                                                                                                                                                                                                                                             |
+| `extract`     | `src/queries/navigation/by-kind.ts:130`       | accepted design | The detected cluster is the tail of one filter pipeline, not an independent concept.                                                                                                                                                                                                                                    |
+| `extract`     | `src/analysis/framework-patterns.ts:224`      | accepted design | Rust dead-code exclusions are one accuracy contract spanning generated files, AST exclusions, suppression comments, and serde modules.                                                                                                                                                                                  |
+| `extract`     | `src/queries/cleanup/similar.ts:424`          | accepted design | Callee-set fingerprint indexing is one evidence pass whose options interact; it now also owns per-fingerprint weighted magnitudes so repeated pair scoring can stay exact without recomputing vector lengths. The later focus-file pruning option lives in `similarAll()` and does not change this extraction decision. |
+| `stale`       | `src/source/gitignore-filter.ts:45`           | accepted design | `PathFilter` is the canonical shape passed through `ScipDatabase`, even when local type consumers are low.                                                                                                                                                                                                              |
+| `stale`       | `src/source/vue/vue-template.ts:47`           | accepted design | Vue template facts are a public analyzer envelope consumed by profile/reporting layers.                                                                                                                                                                                                                                 |
+| `similar`     | `src/language-parsers/languages/dotnet.ts:61` | accepted design | Per-language AST walkers share shape but differ in node and alias semantics.                                                                                                                                                                                                                                            |
+| `similar`     | `src/storage/per-db-cache.ts:132`             | accepted design | The mirrored cache factory differs by source-equality contract; merging would hide the distinction.                                                                                                                                                                                                                     |
+| `passthrough` | `src/core/project-index.ts:111`               | accepted design | The facade keeps query modules on `ProjectIndex` instead of importing lower-level classifiers.                                                                                                                                                                                                                          |
+| `passthrough` | `src/reindex/vue/augment-vue-runtime.ts:612`  | accepted design | The function owns Vue lexical token filtering; the `Set.has` body is incidental.                                                                                                                                                                                                                                        |
 
 No sampled source suppression looked expired or unjustified. The sample does not prove every one of 174 comments is perfect, but it supports the current trust judgment: these comments are precision feedback for broad candidate detectors, especially `extract` and `wrapper`, rather than direct cleanup tasks.
 

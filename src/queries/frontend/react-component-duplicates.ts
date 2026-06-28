@@ -38,9 +38,10 @@ export function reactComponentDuplicates(
     scope?: string;
     scanLimit?: number;
     filePattern?: string;
+    focusFiles?: ReadonlySet<string>;
   } = {},
 ): ReactComponentDuplicateResult[] {
-  const { minSimilarity = 0.62, minTokens = 8, limit = 20, scope, scanLimit, filePattern } = opts;
+  const { minSimilarity = 0.62, minTokens = 8, limit = 20, scope, scanLimit, filePattern, focusFiles } = opts;
   const profiles = buildReactComponentBehaviorProfiles(db, {
     scope,
     minJsxTokens: minTokens,
@@ -58,6 +59,7 @@ export function reactComponentDuplicates(
     profiles,
     limit,
     filePattern,
+    focusFiles,
     compare: (a, b) => compareProfiles(a, b, minSimilarity),
     sort: (a, b) =>
       b.similarity - a.similarity ||
