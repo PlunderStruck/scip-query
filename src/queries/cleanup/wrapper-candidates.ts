@@ -9,6 +9,7 @@ import { ProjectIndex } from '../../core/project-index.js';
 import { compareDefinitionsBySmallestLoc, definitionLoc } from '../query-utils.js';
 import { runCandidateAnalysis } from '../internal/candidate-scan.js';
 import { definitionConsumerFileMap, partitionDefinitionConsumers } from '../internal/consumer-evidence.js';
+import { mergeSetMaps } from '../../symbols/references/caller-evidence.js';
 import { boundaryEvidenceForSurfaces } from './boundary-evidence.js';
 
 export type WrapperActionTier = 'direct' | 'signal';
@@ -56,13 +57,45 @@ export function wrapperCandidates(
     prepare: (symbols) => ({
       // Source-text fallback adds back references the indexer may miss; without
       // it, dynamic dispatch or macro-style calls can falsely look like wrappers.
-      callerFileMap: definitionConsumerFileMap(index, symbols, { semantic: opts?.semantic !== false }),
+      callerFileMap: consumerMapForWrapperCandidates(db, index, symbols, { semantic: opts?.semantic !== false }),
       reverseFanIn,
     }),
     evaluate: (symbol, maps) => wrapperCandidateForSymbol(db, index, symbol, maps),
     orderResults: (left, right) => right.callerFanIn - left.callerFanIn || right.loc - left.loc,
     limit,
   });
+}
+
+function consumerMapForWrapperCandidates(
+  db: ScipDatabase,
+  index: ProjectIndex,
+  symbols: readonly IndexedDefinition[],
+  opts: { semantic: boolean },
+): Map<number, Set<string>> {
+  const indexedConsumerFileMap = definitionConsumerFileMap(index, symbols, {
+    semantic: opts.semantic,
+    sourceFallback: false,
+  });
+  const symbolById = new Map(symbols.map((symbol) => [symbol.symbolId, symbol]));
+  const fallbackCandidatesById = new Map<number, IndexedDefinition>();
+  for (const symbol of symbols) {
+    const externalFiles = externalCallerFiles(db, index, symbol, indexedConsumerFileMap);
+    if (externalFiles.length > 1) continue;
+    fallbackCandidatesById.set(symbol.symbolId, symbol);
+    if (externalFiles.length !== 1) continue;
+
+    const callerFile = externalFiles[0]!;
+    const refRow = mentionChunkForCaller(db, symbol.symbolId, callerFile);
+    if (!refRow) continue;
+    const enclosing = enclosingCaller(index, db, callerFile, symbol.symbol, refRow);
+    if (enclosing?.isFunctionLike && symbolById.has(enclosing.symbolId)) {
+      fallbackCandidatesById.set(enclosing.symbolId, symbolById.get(enclosing.symbolId)!);
+    }
+  }
+  const fallbackCandidates = [...fallbackCandidatesById.values()];
+  return fallbackCandidates.length === 0
+    ? indexedConsumerFileMap
+    : mergeSetMaps(indexedConsumerFileMap, index.sourceFallbackCallerFiles(fallbackCandidates));
 }
 
 // scip-query: ignore-extract — this is the single-symbol wrapper decision:

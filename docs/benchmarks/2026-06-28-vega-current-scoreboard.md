@@ -190,6 +190,26 @@ down from the immediately previous full matrix's 3.453s, with the same output
 size and hash. `health --json` is now the slowest command in the matrix at
 3.077s.
 
+## Post Wrapper Source-Fallback Prefilter Refresh
+
+Focused rerun with the local built CLI after routing wrapper candidate caller
+evidence through a viability prefilter. The accepted pass skips source fallback
+for wrapper scan symbols that cheap indexed/semantic caller evidence already
+rules out, while preserving the original fan-in evidence domain.
+
+| Command                                            | Current median | Warm repeats          | stdout bytes | SHA-256                                                            |
+| -------------------------------------------------- | -------------: | --------------------- | -----------: | ------------------------------------------------------------------ |
+| `scip-query wrapper-candidates --json --full`      |         2.150s | 2.169s-2.124s-2.150s  |       78,437 | `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58` |
+| `scip-query __health-phase wrapper-candidates`     |         2.096s | 2.064s-2.096s-2.107s  |        1,585 | `9c61a0f9565f11c9a1b04477549cacd330585a2b2ad0e9fc92dafafe26ea965b` |
+| `scip-query health --json`                         |         2.879s | 2.871s-2.879s-2.932s  |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+
+The baseline/current comparison preserved byte-identical output for all three
+commands. The standalone wrapper command moved from 2.165s to 2.147s in the
+paired probe, while composite `health --json` moved from 2.991s to 2.890s in
+that same probe. The improvement is intentionally recorded as modest: Vega
+pruned 290 of 3,310 wrapper scan symbols from source fallback, so the next
+large win likely needs a deeper source-fallback or health-phase change.
+
 ## Biggest Confirmed Delta
 
 | Command                                       | Earlier heavy/focused baseline | Current warm | Notes                                                                                                                                                                                                                                                                                       |
@@ -204,8 +224,9 @@ size and hash. `health --json` is now the slowest command in the matrix at
 
 ## Current Next Targets
 
-1. `health --json` is the current slowest warm command at 3.077s; trace its
-   phase aggregation next.
+1. `health --json` is the current slowest command in the latest full warm
+   matrix at 3.077s; focused wrapper work has it around 2.879s, so rerun the
+   full matrix before reshuffling the global ranking.
 2. `diff-gate --json` and `dead --json --full` now sit just below health at
    2.857s and 2.746s respectively.
 3. Re-run the full Vega warm matrix with the installed CLI after the next

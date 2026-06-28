@@ -52,7 +52,7 @@ Implementation anchors:
 | Doc reference gate        | `scip-query code runDocReferenceCheck --json`             | `runDocReferenceCheck()` is at `src/queries/impact/diff-gate.ts:642` and now skips docs changed anywhere in the same git diff, including Markdown files outside the SCIP index. |
 | New dead gate             | `scip-query code runNewDeadCheck --json`                  | `runNewDeadCheck()` is at `src/queries/impact/diff-gate.ts:876`.                                                                                                                |
 | Baseline gate             | `scip-query code runBaselineCheck --json`                 | `runBaselineCheck()` is at `src/queries/impact/diff-gate.ts:947`.                                                                                                               |
-| Wrapper detector          | `scip-query code wrapperCandidates --json`                | `wrapperCandidates()` is at `src/queries/cleanup/wrapper-candidates.ts:39`.                                                                                                     |
+| Wrapper detector          | `scip-query code wrapperCandidates --json`                | `wrapperCandidates()` is at `src/queries/cleanup/wrapper-candidates.ts:46`; `consumerMapForWrapperCandidates()` is at `src/queries/cleanup/wrapper-candidates.ts:69`.             |
 | Similar detector          | `scip-query code similarAll --json`                       | `similarAll()` is at `src/queries/cleanup/similar.ts:192` and now reuses cached weighted magnitudes from the callee fingerprint index during pair scoring.                      |
 | Co-change detector        | `scip-query code coChange --json`                         | `coChange()` is at `src/queries/impact/co-change.ts:47`.                                                                                                                        |
 | Vue pressure detector     | `scip-query code vueLargeViewPressure --json`             | `vueLargeViewPressure()` is at `src/queries/frontend/vue-large-view-pressure.ts:20`.                                                                                            |
@@ -162,6 +162,7 @@ Evidence:
 - Stable_Management had 48 wrapper candidates and lost 3 hygiene points.
 - The top 10 wrapper rows reviewed were all `accepted_design`.
 - `wrapperCandidates()` reports small symbols with one caller and orders results by caller fan-in and LOC.
+- `consumerMapForWrapperCandidates()` keeps the same evidence domain while skipping source fallback for symbols that indexed/semantic caller evidence already rules out.
 - Reviewed rows included DB context boundaries, Express middleware, audit side-effect boundaries, route registry helpers, validation middleware, and a type guard.
 
 Next action:
