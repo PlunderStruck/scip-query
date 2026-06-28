@@ -18,9 +18,12 @@ import {
 } from '../../src/storage/evidence-cache.js';
 import { getSourceFacts } from '../../src/source/source-facts.js';
 import { getSourceLines, getSourceText } from '../../src/source/source-text.js';
+import { getReExports } from '../../src/language-parsers/index.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
 const FILE = 'src/sample.ts';
+const REEXPORT_FILE = 'src/barrel.ts';
+const REEXPORT_TARGET_FILE = 'src/target.ts';
 const SOURCE_LINES = [
   'export function greet(name: string) {',
   '  const message = `hello ${name}`;',
@@ -45,8 +48,16 @@ describe('evidence cache', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-query-evidence-cache-'));
     projectRoot = join(tempDir, 'project');
     dbPath = join(tempDir, 'index.db');
-    writeFixtureFiles(projectRoot, { [FILE]: SOURCE_LINES });
-    evidenceFixtureDb(dbPath).document(1, 'typescript', FILE).write();
+    writeFixtureFiles(projectRoot, {
+      [FILE]: SOURCE_LINES,
+      [REEXPORT_FILE]: ["export { targetValue } from './target.js';"],
+      [REEXPORT_TARGET_FILE]: ['export const targetValue = 1;'],
+    });
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', FILE)
+      .document(2, 'typescript', REEXPORT_FILE)
+      .document(3, 'typescript', REEXPORT_TARGET_FILE)
+      .write();
   });
 
   afterAll(() => {
@@ -130,6 +141,46 @@ describe('evidence cache', () => {
     try {
       expect(getSourceFacts(db2, FILE)!.callables[0]!.name).toBe('plantedMarker');
       expect(readCachedFileEvidence(db2, 'source-facts', FILE, hash)).toBe(planted);
+    } finally {
+      db2.close();
+    }
+  });
+
+  it('persists re-exports and serves them to a fresh connection', () => {
+    const db1 = openDb();
+    let originalPayload: string | null;
+    try {
+      expect(getReExports(db1, REEXPORT_FILE)).toEqual([
+        expect.objectContaining({
+          kind: 'named',
+          sourcePath: REEXPORT_TARGET_FILE,
+          names: ['targetValue'],
+          startLine: 0,
+          endLine: 0,
+        }),
+      ]);
+      const hash = fileContentHash(db1, REEXPORT_FILE, getSourceText(db1, REEXPORT_FILE));
+      originalPayload = readCachedFileEvidence(db1, 'source-reexports', REEXPORT_FILE, hash);
+      expect(originalPayload).not.toBeNull();
+    } finally {
+      db1.close();
+    }
+
+    const planted = JSON.stringify({
+      ...JSON.parse(originalPayload!),
+      reExports: [{ kind: 'star', sourcePath: 'src/planted.ts', names: [], startLine: 7, endLine: 8 }],
+    });
+    const evidence = new Database(join(tempDir, EVIDENCE_DB_FILENAME));
+    evidence
+      .prepare("UPDATE file_evidence SET payload = ? WHERE kind = 'source-reexports' AND relative_path = ?")
+      .run(planted, REEXPORT_FILE);
+    evidence.close();
+
+    const db2 = openDb();
+    try {
+      expect(getReExports(db2, REEXPORT_FILE)).toEqual([
+        { kind: 'star', sourcePath: 'src/planted.ts', names: [], startLine: 7, endLine: 8 },
+      ]);
     } finally {
       db2.close();
     }

@@ -7,9 +7,10 @@ JS/TS framework-exclusion prefilter, doc path evidence cache, SQLite
 statement-cache, dead scoped-cache reuse, wrapper source-fallback prefilter, and
 incomplete-migration lazy-index passes. The focused dead refresh also includes
 the definition-exclusion persistent cache, and the focused diff-gate refreshes
-include callable and bounded source-fallback prefilters. Focused reruns after
-the full matrix are recorded separately below so partial measurements do not
-silently reshuffle the whole ranking.
+include callable and bounded source-fallback prefilters. The latest focused
+refresh adds persistent JavaScript/TypeScript re-export evidence. Focused
+reruns after the full matrix are recorded separately below so partial
+measurements do not silently reshuffle the whole ranking.
 
 ## Corpus
 
@@ -321,6 +322,28 @@ such as diff-gate echo.
 All probes remained byte-identical. The unbounded `similar --json --full`
 guardrail confirms the complete corpus path is unchanged.
 
+## Post Source-Reexports Evidence Cache Refresh
+
+Focused rerun with the local built CLI after persisting JavaScript/TypeScript
+`getReExports()` results as content-hash-keyed `source-reexports` file
+evidence, additionally guarded by the import-resolution fingerprint. A CPU
+profile of warm `wrapper-candidates --json --full` showed 158 `tree-sitter`
+parse calls in re-export parsing before this change; a post-cache parse hook
+reported zero parse calls on the same warm command.
+
+| Command                                           | Baseline median | Current median | Warm repeats           | stdout bytes | SHA-256                                                            |
+| ------------------------------------------------- | --------------: | -------------: | ---------------------- | -----------: | ------------------------------------------------------------------ |
+| `scip-query wrapper-candidates --json --full`     |          2.236s |         1.608s | 1.608s-1.598s-1.616s   |       78,437 | `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58` |
+| `scip-query stale-abstractions --json --full`     |          2.202s |         1.527s | 1.542s-1.527s-1.520s   |       83,654 | `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2` |
+| `scip-query health --json`                        |          2.903s |         2.512s | 2.597s-2.500s-2.512s   |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query health --json --full`                 |          2.959s |         2.530s | 2.512s-2.586s-2.530s   |       15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
+| `scip-query diff-gate --json`                     |          2.711s |         2.763s | 3.676s-2.763s-2.718s   |        3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
+
+The first patched `wrapper-candidates --json --full` run populated the new
+cache in 2.916s and kept the same 78,437-byte output hash. The focused stale
+run was measured after wrapper populated shared re-export evidence, which is
+the intended warm health path.
+
 ## Biggest Confirmed Delta
 
 | Command                                       | Earlier heavy/focused baseline | Current warm | Notes                                                                                                                                                                                                                                                                                                                                                     |
@@ -328,23 +351,26 @@ guardrail confirms the complete corpus path is unchanged.
 | `scip-query similar --json --full`            |  300.7s heavy / 315.3s focused |       2.169s | Same 88,859-byte output and SHA-256 `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf`; stable evidence-cache reads avoid post-version-bump semantic cache misses.                                                                                                                                                                        |
 | `scip-query recent-duplicates --json --full`  |                         6.439s |       1.936s | Same 3,618-byte output and SHA-256 `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`; full-mode scans skip old-old pairs and React profile rows now persist across CLI processes.                                                                                                                                                        |
 | `scip-query doc-drift --json --full`          |                         3.472s |       1.085s | Same 963,953-byte output and SHA-256 `7f8765a247b9e6a0ab2cbd0e99b38b51acf7ce689cd7b7b02165cdb80f97cc8c`; markdown path candidates and citation contexts now persist as content-hash evidence.                                                                                                                                                             |
-| `scip-query health --json`                    |                         6.864s |       3.913s | Same 15,342-byte output and SHA-256 `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d`; latest warm matrix is materially lower, but attribution is mixed with runtime/cache noise.                                                                                                                                                        |
+| `scip-query health --json`                    |                         6.864s |       2.512s | Same 15,342-byte output and SHA-256 `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d`; latest focused warm path benefits from source-reexports evidence after wrapper/stale stopped reparsing barrel files.                                                                                                                               |
 | `scip-query diff-gate --json`                 |                         4.193s |       2.620s | Same 3,089-byte output and SHA-256 `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`; targeted similarity reuses callee-index work, skips non-callable echo targets, and bounds lexical source fallback for large-index callers.                                                                                                         |
 | `scip-query dead --json --full`               |                         4.325s |       1.968s | Same 3,803,655-byte output and SHA-256 `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1`; JS/TS exclusion prefilter avoids ordinary React hook-call files, SQL statements are cached per connection, dead reuses scoped definition caches through source fallback, and framework definition exclusions persist as content-hash evidence. |
-| `scip-query stale-abstractions --json --full` |      43.268s cold / 3.13s warm |       2.362s | Same 83,654-byte output and SHA-256 `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2`; source fallback now reuses per-file import local-name maps.                                                                                                                                                                                       |
+| `scip-query wrapper-candidates --json --full` |                         2.236s |       1.608s | Same 78,437-byte output and SHA-256 `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58`; re-export parsing now persists across fresh CLI processes.                                                                                                                                                                                        |
+| `scip-query stale-abstractions --json --full` |      43.268s cold / 3.13s warm |       1.527s | Same 83,654-byte output and SHA-256 `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2`; source fallback reuses per-file import local-name maps and re-export parsing now persists across fresh CLI processes.                                                                                                                               |
 
 ## Current Next Targets
 
-1. `health --json` is now the likely top warm target, still hovering around
-   2.9s in focused runs. The latest focused diff-gate source-fallback pass moves
-   the paired Vega `diff-gate --json` median from 2.913s to 2.620s.
-2. The latest focused dead probe drops `dead --json --full` to 1.968s, below
-   `wrapper-candidates --json --full` and `stale-abstractions --json --full`
-   from the last full matrix. The next likely standalone targets are wrapper
-   and stale at 2.191s and 2.171s, but caller-map staging and larger mention
-   batches have already been ruled out. The next pass should target repeated
-   source-facts/source-fallback work or health orchestration.
-3. Re-run the full Vega warm matrix with the installed CLI after the next
+1. `diff-gate --json` and `health --json` are the likely top warm targets after
+   the source-reexports pass. The latest focused `health --json` median is
+   2.512s, while the latest focused `diff-gate --json` median is effectively
+   flat at 2.763s.
+2. `wrapper-candidates --json --full` and
+   `stale-abstractions --json --full` moved below the 1.7s band in focused
+   warm runs. The next full matrix should confirm their new rank before another
+   wrapper/stale-specific change.
+3. The latest focused dead probe drops `dead --json --full` to 1.968s. The next
+   standalone target is whichever of `diff-gate`, `health`, or `dead` remains
+   slowest in the next full Vega warm matrix.
+4. Re-run the full Vega warm matrix with the installed CLI after the next
    package install/publish so `health` captures the persistent React profile
    cache through the normal `scip-query` command.
 

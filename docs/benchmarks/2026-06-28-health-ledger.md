@@ -46,6 +46,28 @@ Current-only warm medians after the patch:
 | `scip-query __health-phase wrapper-candidates` | 2.096s | 2.064s, 2.096s, 2.107s |
 | `scip-query health --json` | 2.879s | 2.871s, 2.879s, 2.932s |
 
+## Accepted Source-Reexports Cache Measurements
+
+CPU profiling of warm `wrapper-candidates --json --full` showed 158
+`tree-sitter` parses under JavaScript re-export parsing. `source-imports` and
+`source-facts` were already persisted in Vega's evidence database, but
+`getReExports()` only had an in-process cache, so every fresh health subprocess
+reparsed the same barrel files.
+
+The accepted pass persists `source-reexports` rows by file content hash plus
+the same import-resolution fingerprint used by `source-imports`. The first
+patched wrapper run populated the new cache in 2.916s and preserved the
+78,437-byte output hash. A follow-up parse hook on warm `wrapper-candidates`
+reported zero `tree-sitter` parse calls.
+
+| Case | Baseline median | Current median | Warm repeats | stdout bytes | SHA-256 |
+| --- | ---: | ---: | --- | ---: | --- |
+| `scip-query wrapper-candidates --json --full` | 2.236s | 1.608s | 1.608s, 1.598s, 1.616s | 78,437 | `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58` |
+| `scip-query stale-abstractions --json --full` | 2.202s | 1.527s | 1.542s, 1.527s, 1.520s | 83,654 | `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2` |
+| `scip-query health --json` | 2.903s | 2.512s | 2.597s, 2.500s, 2.512s | 15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query health --json --full` | 2.959s | 2.530s | 2.512s, 2.586s, 2.530s | 15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
+| `scip-query diff-gate --json` | 2.711s | 2.763s | 3.676s, 2.763s, 2.718s | 3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
+
 ## Current Pipeline
 
 - `health()` calls `withHealthRun()`, runs `runHealthAnalyses()`, and returns
@@ -70,6 +92,10 @@ Current-only warm medians after the patch:
   Source: `scip-query code definitionConsumerFileMap -C 8`;
   `scip-query code ProjectIndex.callerFileMap -C 8`;
   `scip-query code callerFileEvidenceMap -C 8`.
+- `isReExportOnlyConsumer()` calls `getReExports()` while filtering barrel-only
+  consumers for wrapper and stale-abstraction evidence. Source:
+  `scip-query code getReExports -C 8`;
+  `scip-query code isReExportOnlyConsumer -C 8`.
 
 ## Hypotheses
 
@@ -87,6 +113,9 @@ Current-only warm medians after the patch:
 - Rejected variant: adding fallback evidence for arbitrary enclosing caller
   functions. This changed fan-in evidence for callers that were not in the
   original wrapper candidate set, which altered Vega wrapper findings.
+- Accepted: persist JavaScript/TypeScript re-export parse results. The output
+  contract is unchanged because the payload is keyed by source content and
+  import-resolution fingerprint; corrupt or stale rows fall back to the parser.
 
 ## Decisions
 
@@ -97,3 +126,7 @@ Current-only warm medians after the patch:
   `wrapper-candidates --json --full`. Runtime impact is modest on Vega_2.0
   because only 290 of 3,310 scanned wrapper symbols are pruned from source
   fallback; this is still a safe reduction in unnecessary source scanning.
+- Accepted: add `source-reexports` file evidence and route `getReExports()`
+  through it. This removes repeated warm tree-sitter re-export parsing across
+  fresh CLI processes and materially improves wrapper, stale, and composite
+  health timings with byte-identical Vega outputs.

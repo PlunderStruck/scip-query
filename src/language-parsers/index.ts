@@ -27,6 +27,11 @@ interface SerializedSourceImports {
   imports: ParsedSourceImport[];
 }
 
+interface SerializedReExports {
+  resolutionFingerprint: string;
+  reExports: ParsedReExport[];
+}
+
 export function getReExports(db: ScipDatabase, relativePath: string): ParsedReExport[] {
   const normalized = normalizePath(relativePath);
   return SOURCE_REEXPORT_CACHE.get(db, normalized, () => {
@@ -34,7 +39,28 @@ export function getReExports(db: ScipDatabase, relativePath: string): ParsedReEx
     if (!parser?.parseReExports) return [];
     const source = getSourceText(db, normalized);
     if (!source) return [];
-    return parser.parseReExports(db, normalized, source);
+    const contentHash = fileContentHash(db, normalized, source);
+    const resolutionFingerprint = importResolutionFingerprint(db);
+    const cached = readCachedFileEvidence(db, 'source-reexports', normalized, contentHash);
+    if (cached !== null) {
+      try {
+        const payload = JSON.parse(cached) as SerializedReExports;
+        if (payload.resolutionFingerprint === resolutionFingerprint && Array.isArray(payload.reExports)) {
+          return payload.reExports;
+        }
+      } catch {
+        // corrupt payload — fall through and rebuild
+      }
+    }
+    const reExports = parser.parseReExports(db, normalized, source);
+    writeCachedFileEvidence(
+      db,
+      'source-reexports',
+      normalized,
+      contentHash,
+      JSON.stringify({ resolutionFingerprint, reExports } satisfies SerializedReExports),
+    );
+    return reExports;
   });
 }
 

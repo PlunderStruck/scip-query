@@ -30,6 +30,7 @@ export type FileEvidenceKind =
   | 'doc-path-tokens'
   | 'doc-path-evidence'
   | 'source-imports'
+  | 'source-reexports'
   | 'consumer-file-usage'
   | 'react-component-behavior-profiles';
 
