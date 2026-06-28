@@ -16,7 +16,7 @@ A Markdown-local cited claim is the smallest document unit that gives a file-pat
   - contiguous Markdown table blocks,
   - list items with indented continuations,
   - ordinary paragraphs bounded by blank lines, headings, tables, lists, and fences.
-- `src/queries/cleanup/doc-drift.ts` now uses that helper in `docCitationContextWindows()`, so path-reference `doc-drift` and `docsCitingFiles()` share the structured claim extraction.
+- `src/queries/cleanup/doc-drift.ts` uses that helper while building doc path evidence, so path-reference `doc-drift` and `docsCitingFiles()` share the structured claim extraction.
 - `src/queries/impact/diff-gate.ts` uses the same helper in its fallback `docCitationContexts()`, keeping doc-reference fallback behavior aligned with doc-drift.
 - `src/queries/public-query-entries.ts` classifies `doc-citation-context.ts`, `doc-terms.ts`, and diff-gate policy/type helpers as private helper modules, keeping the public query manifest contract explicit. The later `locality-candidates` public entry does not change that private-helper classification.
 - The helper's Markdown boundary checks now share a single interruption classifier, so the implementation does not introduce a new health-baseline similarity finding.
@@ -62,3 +62,7 @@ The maintainability-register completion slice rechecked the behavioral claim tha
 ## 2026-06-27 Citation Refresh
 
 The persistent-refresh coordination slice rechecked the doc-reference fallback claim in `diff-gate.ts`. The fallback citation-context behavior remains aligned with doc-drift; the changed refresh and hook code does not alter doc-reference citation parsing.
+
+## 2026-06-28 Path Evidence Cache Refresh
+
+The doc-drift path-evidence cache removed the old `docCitationContextWindows()` wrapper. The citation parser claim remains current because `docPathEvidence()` still calls `markdownCitationContext()` when it builds cached path candidates and citation contexts, and both `doc-drift` and `docsCitingFiles()` consume that shared evidence.

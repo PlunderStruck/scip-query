@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getCommitHistory, getTrackedFiles } from '../../analysis/git-history.js';
 import { fileContentHash, readCachedFileEvidence, writeCachedFileEvidence } from '../../storage/evidence-cache.js';
+import { isRecord, stringArray } from '../../storage/evidence-payload.js';
 import { markdownCitationContext } from './doc-citation-context.js';
 import { matchingDocTerms } from './doc-terms.js';
 
@@ -65,6 +66,16 @@ interface DocDriftScanIndex {
   historyCommitCount: number;
   tracked: Set<string>;
   trackedBySuffix: Map<string, string[]>;
+}
+
+interface DocPathEvidence {
+  candidates: string[];
+  contextsByCandidate: Map<string, string[]>;
+}
+
+interface SerializedDocPathEvidence {
+  candidates: string[];
+  contextsByCandidate: Array<[string, string[]]>;
 }
 
 const DOC_FILE_PATTERN = /\.(?:md|mdx|rst|txt)$/i;
@@ -322,18 +333,25 @@ export function docsCitingFiles(
   const out: Array<{ doc: string; cited: string[]; citations: DocFileCitation[]; citedClaims: string[] }> = [];
   for (const docFile of tracked) {
     if (!isLivingDoc(db, docFile)) continue;
-    const candidates = docPathCandidates(db, docFile);
-    if (!candidates) continue;
-    const citedByCandidate = citedTargetsFromCandidates(candidates, targets, targetCandidates, tracked, trackedBySuffix);
+    const pathEvidence = docPathEvidence(db, docFile);
+    if (!pathEvidence) continue;
+    const citedByCandidate = citedTargetsFromCandidates(
+      pathEvidence.candidates,
+      targets,
+      targetCandidates,
+      tracked,
+      trackedBySuffix,
+    );
     if (citedByCandidate.size === 0) continue;
 
     const contextCandidates = [...new Set([...citedByCandidate.values()].flatMap((cited) => [...cited]))];
-    const contextsByCandidate = docCitationContextWindows(db, docFile, contextCandidates);
+    const contextsByCandidate = citationContextsForCandidates(pathEvidence.contextsByCandidate, contextCandidates);
     const citations: DocFileCitation[] = [...citedByCandidate]
       .map(([file, fileCandidates]) => ({
         file,
-        contexts: uniqueCitationContexts([...fileCandidates].flatMap((candidate) => contextsByCandidate.get(candidate) ?? []))
-          .slice(0, 3),
+        contexts: uniqueCitationContexts(
+          [...fileCandidates].flatMap((candidate) => contextsByCandidate.get(candidate) ?? []),
+        ).slice(0, 3),
       }))
       .filter((citation) => citation.contexts.length > 0);
     const cited = [...citedByCandidate.keys()];
@@ -423,9 +441,10 @@ function extractFileReferences(
 ): { resolved: Set<string>; broken: string[]; citations: DocFileCitation[] } {
   const resolved = new Set<string>();
   const broken = new Set<string>();
-  const candidates = docPathCandidates(db, docFile);
-  if (!candidates) return { resolved, broken: [], citations: [] };
-  const contextsByCandidate = docCitationContextWindows(db, docFile, candidates);
+  const pathEvidence = docPathEvidence(db, docFile);
+  if (!pathEvidence) return { resolved, broken: [], citations: [] };
+  const candidates = pathEvidence.candidates;
+  const contextsByCandidate = pathEvidence.contextsByCandidate;
   const contextsByFile = new Map<string, string[]>();
 
   const recordCitation = (file: string, candidate: string): void => {
@@ -460,25 +479,47 @@ function extractFileReferences(
   };
 }
 
-function docCitationContextWindows(
-  db: ScipDatabase,
-  docFile: string,
+function citationContextsForCandidates(
+  contextsByCandidate: ReadonlyMap<string, readonly string[]>,
   candidates: readonly string[],
 ): Map<string, string[]> {
-  let lines: string[];
+  const contexts = new Map<string, string[]>();
+  for (const candidate of candidates) {
+    const candidateContexts = contextsByCandidate.get(candidate);
+    if (candidateContexts && candidateContexts.length > 0) contexts.set(candidate, [...candidateContexts]);
+  }
+  return contexts;
+}
+
+function docPathEvidence(db: ScipDatabase, docFile: string): DocPathEvidence | null {
+  let content: string;
   try {
-    lines = readFileSync(join(db.config.projectRoot, docFile), 'utf-8').split(/\r?\n/);
+    content = readFileSync(join(db.config.projectRoot, docFile), 'utf-8');
   } catch {
-    return new Map();
+    return null;
   }
 
-  const candidateSet = new Set(candidates);
+  const contentHash = fileContentHash(db, docFile, content);
+  const cached = readCachedFileEvidence(db, 'doc-path-evidence', docFile, contentHash);
+  if (cached !== null) {
+    const evidence = deserializeDocPathEvidence(cached);
+    if (evidence) return evidence;
+  }
+
+  const evidence = extractDocPathEvidence(content);
+  writeCachedFileEvidence(db, 'doc-path-evidence', docFile, contentHash, serializeDocPathEvidence(evidence));
+  return evidence;
+}
+
+function extractDocPathEvidence(content: string): DocPathEvidence {
+  const lines = content.split(/\r?\n/);
+  const candidateSet = new Set<string>();
   const contexts = new Map<string, string[]>();
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
     const line = lines[lineIndex] ?? '';
     for (const match of line.matchAll(PATH_REFERENCE_PATTERN)) {
       const candidate = match[0].replace(/^\.?\//, '');
-      if (!candidateSet.has(candidate)) continue;
+      candidateSet.add(candidate);
       const context = markdownCitationContext(lines, lineIndex);
       if (context.length === 0) continue;
       const bucket = contexts.get(candidate) ?? [];
@@ -486,7 +527,40 @@ function docCitationContextWindows(
       contexts.set(candidate, uniqueCitationContexts(bucket).slice(0, 3));
     }
   }
-  return contexts;
+  return { candidates: [...candidateSet], contextsByCandidate: contexts };
+}
+
+function serializeDocPathEvidence(evidence: DocPathEvidence): string {
+  const serialized: SerializedDocPathEvidence = {
+    candidates: evidence.candidates,
+    contextsByCandidate: [...evidence.contextsByCandidate.entries()],
+  };
+  return JSON.stringify(serialized);
+}
+
+function deserializeDocPathEvidence(payload: string): DocPathEvidence | null {
+  try {
+    const raw = JSON.parse(payload) as unknown;
+    if (!isRecord(raw)) return null;
+    const candidates = stringArray(raw['candidates']);
+    const contextsByCandidate = stringTuples(raw['contextsByCandidate']);
+    if (!candidates || !contextsByCandidate) return null;
+    return { candidates, contextsByCandidate: new Map(contextsByCandidate) };
+  } catch {
+    return null;
+  }
+}
+
+function stringTuples(value: unknown): Array<[string, string[]]> | null {
+  if (!Array.isArray(value)) return null;
+  const tuples: Array<[string, string[]]> = [];
+  for (const item of value) {
+    if (!Array.isArray(item) || item.length !== 2 || typeof item[0] !== 'string') return null;
+    const contexts = stringArray(item[1]);
+    if (!contexts) return null;
+    tuples.push([item[0], contexts]);
+  }
+  return tuples;
 }
 
 function uniqueCitationContexts(values: readonly string[]): string[] {
@@ -514,34 +588,4 @@ function citationContextsOverlap(left: string, right: string): boolean {
   const rightSet = new Set(rightLines);
   const shared = leftLines.filter((line) => rightSet.has(line)).length;
   return shared >= 3 && shared / smaller >= 0.6;
-}
-
-/**
- * The path-shaped tokens in a doc's text, persistently cached by content
- * hash — the regex scan over large docs dominates diff-gate's doc-reference
- * check on doc-heavy repos. Only extraction is cached; resolution against the
- * tracked-file set stays live, so results track the current repo exactly.
- * Null = doc unreadable.
- */
-function docPathCandidates(db: ScipDatabase, docFile: string): string[] | null {
-  let content: string;
-  try {
-    content = readFileSync(join(db.config.projectRoot, docFile), 'utf-8');
-  } catch {
-    return null;
-  }
-  const contentHash = fileContentHash(db, docFile, content);
-  const cached = readCachedFileEvidence(db, 'doc-path-tokens', docFile, contentHash);
-  if (cached !== null) {
-    try {
-      return JSON.parse(cached) as string[];
-    } catch {
-      // corrupt payload — fall through and re-extract
-    }
-  }
-  const candidates = [
-    ...new Set([...content.matchAll(PATH_REFERENCE_PATTERN)].map((match) => match[0].replace(/^\.?\//, ''))),
-  ];
-  writeCachedFileEvidence(db, 'doc-path-tokens', docFile, contentHash, JSON.stringify(candidates));
-  return candidates;
 }

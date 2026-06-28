@@ -1,9 +1,9 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { ScipDatabase } from '../../src/storage/db.js';
+import { ScipDatabase } from '../../src/storage/db.js';
 import {
   getChangeAmplification,
   getCoChangePairs,
@@ -14,6 +14,8 @@ import {
 import { coChange } from '../../src/queries/impact/co-change.js';
 import { docDrift } from '../../src/queries/cleanup/doc-drift.js';
 import type { ScipQueryConfig } from '../../src/domain/types.js';
+import { fileContentHash, readCachedFileEvidence } from '../../src/storage/evidence-cache.js';
+import { evidenceFixtureDb } from '../fixtures/evidence-fixture.js';
 
 let repoRoot: string;
 
@@ -133,19 +135,43 @@ describe('git history evidence', () => {
       commitIn(referencedRepo, 'code moves on', {
         'src/a.ts': 'export const version = 2;\n',
       });
+      const dbPath = join(referencedRepo, 'index.db');
+      const config = {
+        projectRoot: referencedRepo,
+        dbPath,
+        indexPath: join(referencedRepo, 'index.scip'),
+      };
+      evidenceFixtureDb(dbPath).document(1, 'markdown', 'docs/guide.md').document(2, 'typescript', 'src/a.ts').write();
 
-      const result = docDrift(fakeDb(referencedRepo));
-      const guide = result.findings.find((finding) => finding.doc === 'docs/guide.md');
+      const db = new ScipDatabase(config);
+      let guide: ReturnType<typeof docDrift>['findings'][number] | undefined;
+      try {
+        const result = docDrift(db);
+        guide = result.findings.find((finding) => finding.doc === 'docs/guide.md');
+        const docContent = readFileSync(join(referencedRepo, 'docs/guide.md'), 'utf-8');
+        const docHash = fileContentHash(db, 'docs/guide.md', docContent);
 
-      expect(guide).toBeDefined();
-      expect(guide!.subjects).toEqual([
-        expect.objectContaining({
-          file: 'src/a.ts',
-          evidence: 'reference',
-          changesSinceDocUpdate: 1,
-          citationContexts: expect.arrayContaining([expect.stringContaining('Cleanup detector behavior')]),
-        }),
-      ]);
+        expect(guide).toBeDefined();
+        expect(guide!.subjects).toEqual([
+          expect.objectContaining({
+            file: 'src/a.ts',
+            evidence: 'reference',
+            changesSinceDocUpdate: 1,
+            citationContexts: expect.arrayContaining([expect.stringContaining('Cleanup detector behavior')]),
+          }),
+        ]);
+        expect(readCachedFileEvidence(db, 'doc-path-evidence', 'docs/guide.md', docHash)).not.toBeNull();
+      } finally {
+        db.close();
+      }
+
+      const reopened = new ScipDatabase(config);
+      try {
+        const warmGuide = docDrift(reopened).findings.find((finding) => finding.doc === 'docs/guide.md');
+        expect(warmGuide).toEqual(guide);
+      } finally {
+        reopened.close();
+      }
     } finally {
       rmSync(referencedRepo, { recursive: true, force: true });
     }

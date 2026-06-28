@@ -27,6 +27,7 @@ export const EVIDENCE_DB_FILENAME = 'evidence.db';
 export type FileEvidenceKind =
   | 'source-facts'
   | 'doc-path-tokens'
+  | 'doc-path-evidence'
   | 'source-imports'
   | 'consumer-file-usage'
   | 'react-component-behavior-profiles';

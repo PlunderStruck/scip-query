@@ -51,3 +51,7 @@ The current maintainability sweep rechecked the `doc-drift.ts` citation after th
 ## 2026-06-27 Diff-Gate Performance Refresh
 
 The `src/queries/cleanup/doc-drift.ts` change now narrows `docsCitingFiles()` so diff-gate resolves target path tokens before building citation contexts. Historical-intent classification is still owned by `classifyDocDriftIntent()`, and its behavior is unchanged. Verification reran `tests/queries/cleanup/drift-accuracy.test.ts`, `tests/queries/cleanup/drift-policy.test.ts`, the full `npm test` suite, and `scip-query doc-drift --json`.
+
+## 2026-06-28 Path Evidence Cache Refresh
+
+The path-evidence cache changes `docsCitingFiles()` and `doc-drift` to reuse cached path candidates and citation contexts. Historical-intent classification is still owned by `classifyDocDriftIntent()`, and its behavior is unchanged.

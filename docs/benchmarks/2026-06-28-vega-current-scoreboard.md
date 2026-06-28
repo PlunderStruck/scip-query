@@ -131,12 +131,34 @@ This measurement used `node /Users/aydansalois/Documents/GitHub/scip-query/dist/
 from the checkout build; the shell `scip-query` command still points at the
 installed Hermes package until the package is installed or published.
 
+## Post Doc Drift Path Evidence Cache Refresh
+
+Focused rerun with the local built CLI after adding content-hash-keyed
+`doc-path-evidence` rows that cache both markdown path candidates and citation
+contexts:
+
+| Command                              | Current                      | stdout bytes | SHA-256                                                            |
+| ------------------------------------ | ---------------------------- | -----------: | ------------------------------------------------------------------ |
+| `scip-query doc-drift --json --full` | 1.085s median                |      963,953 | `7f8765a247b9e6a0ab2cbd0e99b38b51acf7ce689cd7b7b02165cdb80f97cc8c` |
+| first patched run                    | 3.760s, populated cache rows |      963,953 | same                                                               |
+| warm repeats                         | 1.085s-1.087s-1.053s         |      963,953 | same                                                               |
+
+The previous local-CLI warm median was 3.472s, so the persistent doc path
+evidence cache removes 2.387s from the warm path, a 3.2x speedup, while keeping
+the ranked findings and citation-context payload byte-identical.
+
+Final verification after extracting shared evidence-payload validators kept the
+same output hash. The local built CLI repeated at 1.755s, 1.112s, and 1.076s;
+the first run was a process outlier, and the two following warm probes stayed
+in the same ~1.09s band.
+
 ## Biggest Confirmed Delta
 
 | Command                                       | Earlier heavy/focused baseline | Current warm | Notes                                                                                                                                                                                              |
 | --------------------------------------------- | -----------------------------: | -----------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `scip-query similar --json --full`            |  300.7s heavy / 315.3s focused |       2.169s | Same 88,859-byte output and SHA-256 `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf`; stable evidence-cache reads avoid post-version-bump semantic cache misses.                 |
 | `scip-query recent-duplicates --json --full`  |                         6.439s |       1.936s | Same 3,618-byte output and SHA-256 `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`; full-mode scans skip old-old pairs and React profile rows now persist across CLI processes. |
+| `scip-query doc-drift --json --full`          |                         3.472s |       1.085s | Same 963,953-byte output and SHA-256 `7f8765a247b9e6a0ab2cbd0e99b38b51acf7ce689cd7b7b02165cdb80f97cc8c`; markdown path candidates and citation contexts now persist as content-hash evidence.      |
 | `scip-query health --json`                    |                         6.864s |       3.913s | Same 15,342-byte output and SHA-256 `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d`; latest warm matrix is materially lower, but attribution is mixed with runtime/cache noise. |
 | `scip-query diff-gate --json`                 |                         4.193s |       3.053s | Same 3,089-byte output and SHA-256 `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`; targeted similarity and incomplete-migration now reuse existing callee-index work.          |
 | `scip-query dead --json --full`               |                         4.325s |       3.312s | Same 3,803,655-byte output and SHA-256 `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1`; JS/TS exclusion prefilter now avoids ordinary React hook-call files.                    |
@@ -144,8 +166,8 @@ installed Hermes package until the package is installed or published.
 
 ## Current Next Targets
 
-1. `health --json` and `doc-drift --json --full`: latest focused runs before
-   the React profile persistent-cache slice were 3.876s and 3.628s respectively.
+1. `health --json`: still sits near the 4s band in focused repeats and should
+   be traced by phase to identify the current dominant path.
 2. `dead --json --full`: now around 3.31s in focused warm repeats; remaining
    work is likely caller-map, source-reference, or candidate definition
    correction rather than the JS/TS exclusion prefilter.

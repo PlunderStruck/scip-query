@@ -1,6 +1,7 @@
 import { extname } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
 import { fileContentHash, readCachedFileEvidence, writeCachedFileEvidence } from '../storage/evidence-cache.js';
+import { isRecord, stringArray } from '../storage/evidence-payload.js';
 import { createSourceFileCache } from '../storage/per-db-cache.js';
 import { getAst } from './ast/ast-core.js';
 import type { SyntaxNode } from './ast/ast-types.js';
@@ -325,16 +326,8 @@ function deserializeReactComponentBehaviorProfile(raw: unknown): ReactComponentB
   };
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
-}
-
-function stringArray(value: unknown): string[] | null {
-  return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : null;
 }
 
 interface ReactCandidate {

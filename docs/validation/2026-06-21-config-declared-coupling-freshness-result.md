@@ -27,6 +27,8 @@ Before the slice, a filesystem check of `.scipquery.json` found 18 stale declare
 
 2026-06-23 setup-command note: `src/runtime/commands/command-handlers.ts` still passes `projectRoot` to `validateProjectConfig()` for `config-validate`; the new `setup` orchestration also validates project config with `projectRoot` before indexing.
 
+2026-06-28 doc-drift cache note: `src/queries/cleanup/doc-drift.ts` is still the intended current file path. The path-evidence cache change affects repeated markdown citation scanning, not declared-coupling path freshness.
+
 After the slice:
 
 - `.scipquery.json` has 0 stale declared-coupling paths.
