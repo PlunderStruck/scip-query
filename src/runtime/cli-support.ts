@@ -108,9 +108,14 @@ export function commandAnalysisBudget(
 }
 
 export async function runIsolatedHealthReport(opts: HealthCliOptions): Promise<HealthReport> {
-  const applicability = withDb((db) => healthPhaseApplicability(db, opts));
+  const { applicability, overview } = withDb((db) => ({
+    applicability: healthPhaseApplicability(db, opts),
+    overview: queries.healthPhase(db, 'overview', opts),
+  }));
   const resultByPhase = new Map<HealthPhaseName, HealthPhaseResult>();
+  resultByPhase.set('overview', overview);
   const runnablePhases = queries.HEALTH_PHASES.filter((phase) => {
+    if (phase === 'overview') return false;
     if (shouldRunHealthPhase(phase, applicability)) return true;
     resultByPhase.set(phase, skippedHealthPhaseResult(phase));
     return false;

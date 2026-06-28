@@ -127,6 +127,10 @@ reported zero `tree-sitter` parse calls.
 - Rejected for now: small cleanup phase grouping. The best small groups were
   `dead,isolated` at 1.968s and `isolated,wrapper-candidates` at 1.960s, but
   they serialize enough work to lose the current parallel health schedule.
+- Accepted: compute the `overview` health phase in the parent process while the
+  parent already has the database open for phase applicability. The overview
+  phase is cheap, but spawning a separate CLI process for it still pays process
+  startup and database-open cost.
 
 ## Decisions
 
@@ -144,6 +148,10 @@ reported zero `tree-sitter` parse calls.
 - Accepted: add `includePatternDeviations` to `drift()` and pass `false` from
   health and health-baseline. This preserves the public `drift` default while
   skipping rows that the health report and baseline identities never expose.
+- Accepted: run the `overview` health phase in `runIsolatedHealthReport()`
+  before scheduling subprocess phases. This keeps phase aggregation and skipped
+  phase semantics unchanged while removing one child process from every health
+  command.
 
 ## Post Health Drift Pattern-Deviation Skip
 
@@ -166,3 +174,19 @@ keeps both health hashes unchanged. The next health pass should target the
 shared definition/source-facts setup cost or a different orchestration model,
 but the measured bulk catalog and small phase-grouping variants above should
 stay rejected unless new evidence changes the tradeoff.
+
+## Post Parent Overview Scheduling
+
+Focused rerun with the local built CLI after `runIsolatedHealthReport()`
+computed `overview` in the parent process while it already had the database open
+for phase applicability. The change removes one health subprocess and preserves
+the byte-identical JSON contracts.
+
+| Case | Baseline median | Current median | Warm repeats | stdout bytes | SHA-256 |
+| --- | ---: | ---: | --- | ---: | --- |
+| `scip-query health --json` | 2.608s | 2.442s | 2.674s, 2.442s, 2.518s, 2.391s, 2.408s, 2.432s, 2.543s | 15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query health --json --full` | 2.550s | 2.432s | 2.438s, 2.420s, 2.413s, 2.553s, 2.432s | 15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
+
+The standard health path improved by 166ms versus the same-session pre-patch
+median and kept the exact same 15,342-byte payload hash. Full health also moved
+below the previous focused 2.55s median while preserving its 15,360-byte hash.

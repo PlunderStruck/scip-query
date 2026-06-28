@@ -9,9 +9,10 @@ incomplete-migration lazy-index passes. The focused dead refresh also includes
 the definition-exclusion persistent cache, and the focused diff-gate refreshes
 include callable and bounded source-fallback prefilters. The latest focused
 refreshes add persistent JavaScript/TypeScript re-export evidence and
-source-token fingerprint evidence. Focused reruns after the full matrix are
-recorded separately below so partial measurements do not silently reshuffle the
-whole ranking.
+source-token fingerprint evidence. The latest focused health rerun also removes
+the separate overview subprocess from health scheduling. Focused reruns after
+the full matrix are recorded separately below so partial measurements do not
+silently reshuffle the whole ranking.
 
 ## Corpus
 
@@ -396,6 +397,18 @@ Rejected probes from this health pass:
 | `__health-phase drift,wrapper-candidates,stale-abstractions` | 2.920s median | Do not group |
 | `__health-phase dead,isolated,similar,extract-candidates` | 2.245s median | Do not group |
 
+## Post Parent Overview Scheduling Refresh
+
+Focused rerun with the local built CLI after health computed the cheap
+`overview` phase in the parent process while the parent already had the database
+open for phase applicability. This avoids one child process per health command
+without changing phase aggregation or output payloads.
+
+| Command | Baseline median | Current median | Warm repeats | stdout bytes | SHA-256 |
+| --- | ---: | ---: | --- | ---: | --- |
+| `scip-query health --json` | 2.608s | 2.442s | 2.674s-2.442s-2.518s-2.391s-2.408s-2.432s-2.543s | 15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query health --json --full` | 2.550s | 2.432s | 2.438s-2.420s-2.413s-2.553s-2.432s | 15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
+
 ## Biggest Confirmed Delta
 
 | Command                                       | Earlier heavy/focused baseline | Current warm | Notes                                                                                                                                                                                                                                                                                                                                                     |
@@ -403,7 +416,7 @@ Rejected probes from this health pass:
 | `scip-query similar --json --full`            |  300.7s heavy / 315.3s focused |       2.169s | Same 88,859-byte output and SHA-256 `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf`; stable evidence-cache reads avoid post-version-bump semantic cache misses.                                                                                                                                                                        |
 | `scip-query recent-duplicates --json --full`  |                         6.439s |       1.936s | Same 3,618-byte output and SHA-256 `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`; full-mode scans skip old-old pairs and React profile rows now persist across CLI processes.                                                                                                                                                        |
 | `scip-query doc-drift --json --full`          |                         3.472s |       1.085s | Same 963,953-byte output and SHA-256 `7f8765a247b9e6a0ab2cbd0e99b38b51acf7ce689cd7b7b02165cdb80f97cc8c`; markdown path candidates and citation contexts now persist as content-hash evidence.                                                                                                                                                             |
-| `scip-query health --json`                    |                         6.864s |       2.512s | Same 15,342-byte output and SHA-256 `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d`; latest focused warm path benefits from source-reexports evidence after wrapper/stale stopped reparsing barrel files.                                                                                                                               |
+| `scip-query health --json`                    |                         6.864s |       2.442s | Same 15,342-byte output and SHA-256 `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d`; latest focused warm path benefits from source-reexports evidence, hidden drift-row skipping, and parent-process overview scheduling.                                                                                                                |
 | `scip-query diff-gate --json`                 |                         4.193s |       2.152s | Same 3,089-byte output and SHA-256 `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`; targeted similarity reuses callee-index work, skips non-callable echo targets, bounds lexical source fallback for large-index callers, and persists source-token fingerprints.                                                                    |
 | `scip-query dead --json --full`               |                         4.325s |       1.968s | Same 3,803,655-byte output and SHA-256 `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1`; JS/TS exclusion prefilter avoids ordinary React hook-call files, SQL statements are cached per connection, dead reuses scoped definition caches through source fallback, and framework definition exclusions persist as content-hash evidence. |
 | `scip-query wrapper-candidates --json --full` |                         2.236s |       1.608s | Same 78,437-byte output and SHA-256 `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58`; re-export parsing now persists across fresh CLI processes.                                                                                                                                                                                        |
@@ -411,11 +424,12 @@ Rejected probes from this health pass:
 
 ## Current Next Targets
 
-1. `health --json` remains the top warm target around 2.53s. The current slow
+1. `health --json` remains the top warm target around 2.44s. The current slow
    cluster is broad: drift 1.745s, isolated 1.694s, wrapper 1.646s, and stale
    1.598s. The next health attempt should target shared definition/source-facts
-   setup or a new orchestration model, not the rejected bulk catalog or small
-   grouping probes above.
+   setup or a deeper orchestration model, not the rejected bulk catalog or small
+   grouping probes above. The parent overview pass removed the cheapest
+   standalone subprocess but did not change the heavier phase cluster.
 2. `diff-gate --json` is the next public-command target after health, with the
    latest focused warm median at 2.152s after source-fingerprint evidence is
    warm.

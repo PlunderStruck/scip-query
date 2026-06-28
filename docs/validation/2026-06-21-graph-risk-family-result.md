@@ -103,3 +103,12 @@ Continue with config and declared-coupling freshness, because the inventory foun
 ## 2026-06-27 Performance Pass Reference Check
 
 The `src/runtime/cli-support.ts` reference in this result remains current after the performance pass. The file still owns CLI-side health orchestration and command-budget support; the new bounded parallel health phase runner changes wall-clock behavior, not the graph-risk family judgment recorded here.
+
+## 2026-06-28 Health Scheduling Reference Check
+
+The same `src/runtime/cli-support.ts` reference remains current after the health
+scheduler follow-up. The file still owns CLI-side health orchestration; the
+latest change computes the cheap `overview` phase in the parent process before
+scheduling child phases, which reduces health command startup work without
+changing the graph-risk family result or the meaning of the coupling sample
+above.
