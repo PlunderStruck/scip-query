@@ -225,3 +225,38 @@ phase payload. Public `drift --json` keeps the same 725,970-byte result hash and
 now runs in the same 0.72s band. Aggregate health is only modestly better
 because isolated, wrapper, stale, dead, complexity, and git-evidence phases now
 dominate the subprocess schedule.
+
+## Post Scoped Callable-Row Loading
+
+Focused rerun with the local built CLI after `productionCallableDefinitions()`
+kept the original all-definition catalog path for function-like health
+detectors, added per-file entry/test role caches in the final filter, and used a
+direct merged primary/fallback row loader only for `requireCallableSymbol`
+callers. The direct loader materializes the same source-corrected
+`requireCallableSymbol` candidate set as the old all-definition filter on
+Vega_2.0: 6,442 candidates, identical ordered symbol IDs, and no range
+mismatches.
+
+| Case | Previous focused median | Current median | Warm repeats | stdout bytes | SHA-256 |
+| --- | ---: | ---: | --- | ---: | --- |
+| `scip-query __health-phase isolated --full` | 1.694s | 1.672s | 2.391s, 1.627s, 1.672s | 63 | `483ba1fc03707fcb197b8eb48207444c446feda7e73732b3e45813b77c0da329` |
+| `scip-query isolated --json --full` | 1.857s | 1.744s | 1.750s, 1.744s, 1.734s | 130 | `04e17adcb38811e37d69fc5abbaadb8b2d79cdf7a9992a30c27648e520acb702` |
+| `scip-query health --json --full` | 2.455s | 2.326s | 2.341s, 2.294s, 2.326s | 15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
+| `scip-query health --json` | 2.384s | 2.329s | 2.400s, 2.309s, 2.329s | 15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query wrapper-candidates --json --full` | 1.608s | 1.689s | 1.744s, 1.689s, 1.684s | 78,437 | `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58` |
+| `scip-query stale-abstractions --json --full` | 1.527s | 1.672s | 1.672s, 1.610s, 1.677s | 83,654 | `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2` |
+| `scip-query complexity-hotspots --json --full` | 1.603s | 1.528s | 1.528s, 1.499s, 1.533s | 2,160,117 | `77edc0f3482e8ccd5520c5b178383d3ab3f1aef586888a4e2054551b6c14765f` |
+
+Rejected variants from this pass:
+
+| Probe | Result | Decision |
+| --- | ---: | --- |
+| Preselect files with callable-shaped symbols, then load full per-file catalogs | `health --json --full` moved to 2.637s and `isolated --json --full` to 2.034s | Rejected; extra query cost did not repay the smaller file set |
+| Use direct merged row loading for every callable mode | `health --json --full` moved to 2.580s and `health --json` to 2.524s | Rejected for health slowdown despite a `complexity-hotspots` win |
+| Include `bottlenecks --json --full` in the same timed sweep | Still running after multiple minutes | Stopped; not used as evidence for this scoped production-callables change |
+
+The accepted scoped version preserves the target health hashes and improves the
+current focused health medians while keeping the `requireCallableSymbol` fast
+path available for complexity-style scans. The next pass should target the
+remaining isolated graph checks or the long-running `bottlenecks --json --full`
+path separately.

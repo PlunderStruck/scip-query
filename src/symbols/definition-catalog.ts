@@ -156,6 +156,93 @@ export function getScopedDefinitions(db: ScipDatabase, scope?: string): IndexedD
     .filter((row) => !db.isIgnored(row.relativePath));
 }
 
+export function getScopedDefinitionsMatchingSymbols(
+  db: ScipDatabase,
+  opts: { scope?: string; symbolMatches: (symbol: string) => boolean },
+): IndexedDefinition[] {
+  const primaryByFile = groupRowsByFile(loadScopedPrimaryDefinitionRows(db, opts.scope));
+  const fallbackByFile = groupRowsByFile(loadScopedFallbackDefinitionRows(db, opts.scope));
+  const files = new Set([...primaryByFile.keys(), ...fallbackByFile.keys()]);
+  const definitions: IndexedDefinition[] = [];
+
+  for (const relativePath of [...files].sort()) {
+    if (db.isIgnored(relativePath)) continue;
+    const rows = mergeMixedSymbolQueryRows(primaryByFile.get(relativePath) ?? [], fallbackByFile.get(relativePath) ?? [], {
+      sort: true,
+    }).filter((row) => opts.symbolMatches(row.symbol));
+    if (rows.length === 0) continue;
+    definitions.push(...correctDefinitionRangesFromSource(db, relativePath, rows.map(indexedDefinitionFromRow)));
+  }
+
+  return definitions;
+}
+
+function loadScopedPrimaryDefinitionRows(db: ScipDatabase, scope?: string): SymbolQueryRow[] {
+  const scopeFilter = scope ? 'AND d.relative_path LIKE ?' : '';
+  const params = scope ? [`%${scope}%`] : [];
+  return db.all<SymbolQueryRow>(
+    `SELECT
+      gs.id,
+      gs.symbol,
+      der.document_id,
+      der.start_line,
+      der.end_line,
+      d.relative_path,
+      gs.display_name,
+      gs.kind,
+      gs.documentation,
+      gs.enclosing_symbol
+     FROM global_symbols gs
+     JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
+     JOIN documents d ON der.document_id = d.id
+     WHERE 1 = 1
+       ${db.pathExclusionsFor('d')}
+       ${scopeFilter}
+       ${db.symbolNoiseFor('gs')}
+     ORDER BY d.relative_path, der.start_line, der.end_line`,
+    ...params,
+  );
+}
+
+function loadScopedFallbackDefinitionRows(db: ScipDatabase, scope?: string): SymbolQueryRow[] {
+  const scopeFilter = scope ? 'AND d.relative_path LIKE ?' : '';
+  const params = scope ? [`%${scope}%`] : [];
+  return db.all<SymbolQueryRow>(
+    `SELECT
+      gs.id,
+      gs.symbol,
+      c.document_id,
+      MIN(c.start_line) AS start_line,
+      MAX(c.end_line) AS end_line,
+      d.relative_path,
+      gs.display_name,
+      gs.kind,
+      gs.documentation,
+      gs.enclosing_symbol
+     FROM global_symbols gs
+     JOIN mentions m ON m.symbol_id = gs.id
+     JOIN chunks c ON m.chunk_id = c.id
+     JOIN documents d ON c.document_id = d.id
+     WHERE m.role = 1
+       ${db.pathExclusionsFor('d')}
+       ${scopeFilter}
+       ${db.symbolNoiseFor('gs')}
+     GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path
+     ORDER BY d.relative_path, start_line, end_line`,
+    ...params,
+  );
+}
+
+function groupRowsByFile(rows: SymbolQueryRow[]): Map<string, SymbolQueryRow[]> {
+  const byFile = new Map<string, SymbolQueryRow[]>();
+  for (const row of rows) {
+    const existing = byFile.get(row.relative_path);
+    if (existing) existing.push(row);
+    else byFile.set(row.relative_path, [row]);
+  }
+  return byFile;
+}
+
 /**
  * Project a set of file paths into the symbol-list shape shared by
  * `symbols`, `system`, and `outline`. Encapsulates the read → filter

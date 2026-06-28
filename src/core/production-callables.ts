@@ -1,7 +1,7 @@
 import { classifyFile, isEntrySurface, isRootedSymbol } from '../analysis/file-classifier.js';
 import type { IndexedDefinition } from '../domain/types.js';
 import type { ScipDatabase } from '../storage/db.js';
-import { getScopedDefinitions } from '../symbols/definition-catalog.js';
+import { getScopedDefinitions, getScopedDefinitionsMatchingSymbols } from '../symbols/definition-catalog.js';
 import { definitionLoc } from '../symbols/definition-loc.js';
 import {
   isCallableSymbol,
@@ -49,10 +49,30 @@ export function productionCallableDefinitions(
   } = opts;
 
   const definitions: IndexedDefinition[] = [];
-  for (const definition of getScopedDefinitions(db, scope)) {
+  const candidates = requireCallableSymbol
+    ? getScopedDefinitionsMatchingSymbols(db, { scope, symbolMatches: isCallableSymbol })
+    : getScopedDefinitions(db, scope);
+  const entrySurfaceByFile = new Map<string, boolean>();
+  const fileKindByFile = new Map<string, ReturnType<typeof classifyFile>>();
+  const getEntrySurface = (relativePath: string): boolean => {
+    const cached = entrySurfaceByFile.get(relativePath);
+    if (cached !== undefined) return cached;
+    const value = isEntrySurface(db, relativePath);
+    entrySurfaceByFile.set(relativePath, value);
+    return value;
+  };
+  const getFileKind = (relativePath: string): ReturnType<typeof classifyFile> => {
+    const cached = fileKindByFile.get(relativePath);
+    if (cached !== undefined) return cached;
+    const value = classifyFile(relativePath);
+    fileKindByFile.set(relativePath, value);
+    return value;
+  };
+
+  for (const definition of candidates) {
     const relativePath = definition.relativePath;
     if (db.isIgnored(relativePath)) continue;
-    if (excludeEntrySurfaces && isEntrySurface(db, relativePath)) continue;
+    if (excludeEntrySurfaces && getEntrySurface(relativePath)) continue;
     if (!matchesCallableMode(definition, { requireFunctionLikeSymbol, requireCallableSymbol })) continue;
     if (excludeSymbol !== undefined && definition.symbol === excludeSymbol) continue;
     const loc = definitionLoc(definition);
@@ -60,7 +80,7 @@ export function productionCallableDefinitions(
     if (excludeTypesFiles && isTypesFile(relativePath)) continue;
     if (excludeRootedSymbols && isRootedSymbol(db, definition.symbol, relativePath)) continue;
     if (excludeRustTraitImplMembers && isRustTraitImplMember(definition.symbol)) continue;
-    if (classifyFile(relativePath) === 'test') continue;
+    if (getFileKind(relativePath) === 'test') continue;
     if (isInRustTestModule(definition.symbol)) continue;
     if (!includeSuppressed && hasSuppressionComment(db, relativePath, definition.startLine)) continue;
     definitions.push(definition);

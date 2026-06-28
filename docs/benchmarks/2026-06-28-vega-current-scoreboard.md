@@ -11,9 +11,11 @@ include callable and bounded source-fallback prefilters. The latest focused
 refreshes add persistent JavaScript/TypeScript re-export evidence and
 source-token fingerprint evidence. The latest focused health reruns also remove
 the separate overview subprocess from health scheduling and make drift's
-source-reference fallback candidate-first. Focused reruns after the full matrix
-are recorded separately below so partial measurements do not silently reshuffle
-the whole ranking.
+source-reference fallback candidate-first. The newest focused production
+callable pass adds per-file role caches and a scoped direct row loader for
+`requireCallableSymbol` scans. Focused reruns after the full matrix are recorded
+separately below so partial measurements do not silently reshuffle the whole
+ranking.
 
 ## Corpus
 
@@ -434,6 +436,30 @@ Rejected probes from this continuation:
 | Same priority order with concurrency 12 | 2.565s median | Keep default cap |
 | Same priority order with concurrency 14 | 2.550s median | Keep default cap |
 
+## Post Scoped Callable-Row Loading Refresh
+
+Focused rerun with the local built CLI after `productionCallableDefinitions()`
+kept function-like health detectors on the original catalog path, cached
+per-file role checks during filtering, and used direct merged primary/fallback
+row loading only for `requireCallableSymbol` scans. A candidate-set probe on
+Vega confirmed the new `requireCallableSymbol` path returns the same 6,442
+source-corrected definitions as the old all-definition filter.
+
+| Command | Previous focused median | Current median | Warm repeats | stdout bytes | SHA-256 |
+| --- | ---: | ---: | --- | ---: | --- |
+| `scip-query __health-phase isolated --full` | 1.694s | 1.672s | 2.391s-1.627s-1.672s | 63 | `483ba1fc03707fcb197b8eb48207444c446feda7e73732b3e45813b77c0da329` |
+| `scip-query isolated --json --full` | 1.857s | 1.744s | 1.750s-1.744s-1.734s | 130 | `04e17adcb38811e37d69fc5abbaadb8b2d79cdf7a9992a30c27648e520acb702` |
+| `scip-query health --json --full` | 2.455s | 2.326s | 2.341s-2.294s-2.326s | 15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
+| `scip-query health --json` | 2.384s | 2.329s | 2.400s-2.309s-2.329s | 15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query wrapper-candidates --json --full` | 1.608s | 1.689s | 1.744s-1.689s-1.684s | 78,437 | `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58` |
+| `scip-query stale-abstractions --json --full` | 1.527s | 1.672s | 1.672s-1.610s-1.677s | 83,654 | `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2` |
+| `scip-query complexity-hotspots --json --full` | 1.603s | 1.528s | 1.528s-1.499s-1.533s | 2,160,117 | `77edc0f3482e8ccd5520c5b178383d3ab3f1aef586888a4e2054551b6c14765f` |
+
+Rejected variants: file-only preselection slowed health full to 2.637s, and
+using the direct merged row loader for every callable mode slowed health full
+to 2.580s. The scoped version keeps the health win and limits the direct loader
+to the command family where the candidate-set shortcut is behavior-identical.
+
 ## Biggest Confirmed Delta
 
 | Command                                       | Earlier heavy/focused baseline | Current warm | Notes                                                                                                                                                                                                                                                                                                                                                     |
@@ -441,7 +467,7 @@ Rejected probes from this continuation:
 | `scip-query similar --json --full`            |  300.7s heavy / 315.3s focused |       2.169s | Same 88,859-byte output and SHA-256 `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf`; stable evidence-cache reads avoid post-version-bump semantic cache misses.                                                                                                                                                                        |
 | `scip-query recent-duplicates --json --full`  |                         6.439s |       1.936s | Same 3,618-byte output and SHA-256 `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`; full-mode scans skip old-old pairs and React profile rows now persist across CLI processes.                                                                                                                                                        |
 | `scip-query doc-drift --json --full`          |                         3.472s |       1.085s | Same 963,953-byte output and SHA-256 `7f8765a247b9e6a0ab2cbd0e99b38b51acf7ce689cd7b7b02165cdb80f97cc8c`; markdown path candidates and citation contexts now persist as content-hash evidence.                                                                                                                                                             |
-| `scip-query health --json`                    |                         6.864s |       2.384s | Same 15,342-byte output and SHA-256 `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d`; latest focused warm path benefits from source-reexports evidence, hidden drift-row skipping, parent-process overview scheduling, and candidate-first drift source scanning.                                                                           |
+| `scip-query health --json`                    |                         6.864s |       2.329s | Same 15,342-byte output and SHA-256 `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d`; latest focused warm path benefits from source-reexports evidence, hidden drift-row skipping, parent-process overview scheduling, candidate-first drift source scanning, and cached production-callable file-role checks.                                |
 | `scip-query diff-gate --json`                 |                         4.193s |       2.152s | Same 3,089-byte output and SHA-256 `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`; targeted similarity reuses callee-index work, skips non-callable echo targets, bounds lexical source fallback for large-index callers, and persists source-token fingerprints.                                                                    |
 | `scip-query dead --json --full`               |                         4.325s |       1.968s | Same 3,803,655-byte output and SHA-256 `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1`; JS/TS exclusion prefilter avoids ordinary React hook-call files, SQL statements are cached per connection, dead reuses scoped definition caches through source fallback, and framework definition exclusions persist as content-hash evidence. |
 | `scip-query wrapper-candidates --json --full` |                         2.236s |       1.608s | Same 78,437-byte output and SHA-256 `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58`; re-export parsing now persists across fresh CLI processes.                                                                                                                                                                                        |
@@ -450,10 +476,11 @@ Rejected probes from this continuation:
 
 ## Current Next Targets
 
-1. `health --json` remains the top warm target around 2.38s. Drift is no longer
+1. `health --json` remains the top warm target around 2.33s. Drift is no longer
    the slowest health phase after dropping to 0.723s. The remaining slow cluster
-   is isolated around 1.68s, wrapper around 1.60s, stale around 1.54s, dead
-   around 1.27s, complexity around 1.23s, and git-evidence around 0.87s. The
+   is isolated around 1.67s, wrapper around 1.69s, stale around 1.67s, dead
+   around 1.27s, complexity around 1.53s in public full mode, and git-evidence
+   around 0.87s. The
    next health attempt should target shared setup or one of those phase-local
    paths; the priority scheduler and higher-concurrency probes should stay
    rejected unless new evidence changes the tradeoff.
