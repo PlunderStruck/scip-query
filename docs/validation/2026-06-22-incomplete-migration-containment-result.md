@@ -73,3 +73,11 @@ source-shape fallback. The latest `similar.ts` change only limits the lexical
 source-fingerprint corpus for bounded targeted similarity callers; containment
 semantics, helper-shape metadata, skipped-helper reasons, and
 incomplete-migration output are unchanged.
+
+## 2026-06-28 Source-Fingerprint Cache Follow-Up
+
+The incomplete-migration containment notes remain accurate after targeted
+source-token fingerprints became persistent evidence. Incomplete-migration uses
+callee fingerprints for containment; the new `similar.ts` cache only affects
+targeted lexical fallback for echo/similar probes and does not change
+containment semantics or output.

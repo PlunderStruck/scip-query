@@ -119,3 +119,10 @@ fallback. The change only lets bounded callers pass their scan-limit budget
 into the lexical source-fingerprint corpus; it does not change
 `structural-overlap`, source-token evidence classification, or cross-language
 support boundaries.
+
+## 2026-06-28 Source-Fingerprint Cache Follow-Up
+
+The capability-boundary notes remain accurate after persisting source-token
+fingerprints. The cache stores the same lexical evidence behind content and
+callable-range keys; it does not change `structural-overlap`, source-token
+classification, or cross-language support boundaries.

@@ -82,3 +82,11 @@ source-shape fallback. The new `similar.ts` behavior only applies scan-limit
 budgeting to lexical fallback for bounded targeted similarity callers; scope
 labels, scope reasons, ordering, CLI rendering, and remediation text are
 unchanged.
+
+## 2026-06-28 Source-Fingerprint Cache Follow-Up
+
+The incomplete-migration scope-hint notes remain accurate after targeted
+source-token fingerprints became persistent evidence. The new `similar.ts`
+cache is used by lexical fallback for echo/similar probes, not by
+incomplete-migration scope labeling, ordering, CLI rendering, or remediation
+text.

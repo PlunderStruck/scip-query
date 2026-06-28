@@ -41,6 +41,11 @@
   its scan limit into the lexical source-shape fallback. Bounded callers such as
   diff-gate echo use a bounded source-fingerprint corpus, while unbounded
   `similar --json --full` still builds the complete corpus.
+- 2026-06-28 source-fingerprint evidence refresh: targeted source-shape
+  fallback now persists per-file source-token fingerprints behind source bytes
+  and callable-range keys. This preserves the same source-token comparison
+  contract while avoiding repeated corpus tokenization across fresh CLI
+  processes.
 - `comparePair` computes weighted cosine similarity, drops weak pairs, shortens
   symbols, computes unique callee sets, and classifies evidence.
   Source: `scip-query code comparePair -C 8`.
@@ -93,6 +98,11 @@
   dependency digest, or project fingerprint. This restored Vega's existing
   `0.10.8` semantic callee cache after the `0.10.9` package bump without
   changing the `similar --json --full` output hash.
+- Accepted: persist source-token fingerprints for targeted source-shape
+  fallback. The cache key combines the source file content hash with
+  symbol/start/end/leaf definition identity, so changed source bytes or changed
+  callable ranges rebuild tokens. Vega targeted `similar` probes and
+  `diff-gate` stayed byte-identical.
 - Rejected: a provider-local `definitionFromSymbol` cache. It passed focused
   tests but did not make the Vega semantic callee-map phase complete within the
   30s diagnostic window, so the source change was reverted.
@@ -113,3 +123,10 @@ The `similar --full` contract remains unchanged. The source-shape fallback now
 uses the same scan-limit budget as callee fingerprints for bounded callers, but
 the public unbounded `similar --json --full` command still uses the complete
 source-fingerprint corpus.
+
+## 2026-06-28 Source-Fingerprint Evidence Follow-Up
+
+The source-shape similarity contract remains unchanged. Targeted `similar()`
+now reads cached source-token fingerprints when the source bytes and
+symbol/start/end/leaf definition key match; stale or missing rows fall back to
+the same `definitionSnippet()` plus `sourceTokens()` path documented above.

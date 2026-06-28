@@ -194,6 +194,12 @@ where neither file is recent. The calibration examples above remain about the
 standalone similarity evidence contract; that public command still runs without
 focus pruning.
 
+2026-06-28 source-fingerprint cache follow-up: targeted `similar()` now
+persists source-token fingerprints for the lexical fallback path, keyed by
+source bytes and callable identity. This is a runtime optimization only; the
+calibration judgment and evidence categories for similar findings are
+unchanged.
+
 Next action:
 
 - Keep a small score effect for similarity backlog pressure.

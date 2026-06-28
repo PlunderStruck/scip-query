@@ -122,3 +122,10 @@ The accepted `similar.ts` suppression-lifecycle record remains intentional after
 bounded source-shape fallback. The change keys source-fingerprint caches by scan
 limit for bounded callers and does not alter the sampled suppression category or
 reason.
+
+## 2026-06-28 Source-Fingerprint Cache Follow-Up
+
+The accepted `similar.ts` suppression-lifecycle record remains intentional after
+persisting source-token fingerprints. The cache is keyed by source bytes and
+callable identity and does not alter the sampled suppression category, reason,
+or lifecycle semantics.

@@ -1,7 +1,8 @@
 import type { ScipDatabase } from '../../storage/db.js';
+import type { IndexedDefinition } from '../../domain/types.js';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { getCalleeRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
-import { getSourceLines } from '../../source/source-text.js';
+import { getSourceLines, getSourceText } from '../../source/source-text.js';
 import {
   computeIdfFromDocFreq,
   difference,
@@ -15,6 +16,7 @@ import { isFunctionLikeSymbol, leafName, shortenSymbol } from '../../symbols/sym
 import { ProjectIndex } from '../../core/project-index.js';
 import { createPerDbValue } from '../../storage/per-db-cache.js';
 import { applyScanLimit } from '../query-utils.js';
+import { fileContentHash, readCachedFileEvidence, writeCachedFileEvidence } from '../../storage/evidence-cache.js';
 
 export interface SimilarSymbolResult {
   symbolA: string;
@@ -291,6 +293,19 @@ interface SourceFingerprint {
   symbol: string;
   file: string;
   tokens: Set<string>;
+}
+
+interface SerializedSourceFingerprintEntry {
+  key: string;
+  symbol: string;
+  startLine: number;
+  endLine: number;
+  leaf: string;
+  tokens: string[];
+}
+
+interface SerializedSourceFingerprintFile {
+  entries: SerializedSourceFingerprintEntry[];
 }
 
 interface SourceFingerprintIndex {
@@ -900,21 +915,67 @@ function buildSourceFingerprints(db: ScipDatabase, opts: { scanLimit?: number } 
   const { scanLimit } = opts;
   // The shared production gate owns candidate policy (tests, rust test
   // modules, ignored paths, suppression comments) — no local re-filtering.
-  return applyScanLimit(
+  const definitions = applyScanLimit(
     index.productionCallableDefinitions({
       sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
     }),
     scanLimit,
-  )
-    .map((definition) => ({
-      symbol: definition.symbol,
-      file: definition.relativePath,
-      tokens: sourceTokens(
-        definitionSnippet(db, definition.relativePath, definition.startLine, definition.endLine, definition.leaf),
-        definition.leaf,
-      ),
-    }))
-    .filter((fingerprint) => fingerprint.tokens.size > 0);
+  );
+  return sourceFingerprintsForDefinitions(db, definitions);
+}
+
+function sourceFingerprintsForDefinitions(
+  db: ScipDatabase,
+  definitions: readonly IndexedDefinition[],
+): SourceFingerprint[] {
+  const definitionsByFile = new Map<string, IndexedDefinition[]>();
+  for (const definition of definitions) {
+    const bucket = definitionsByFile.get(definition.relativePath) ?? [];
+    bucket.push(definition);
+    definitionsByFile.set(definition.relativePath, bucket);
+  }
+
+  const bySymbol = new Map<string, SourceFingerprint>();
+  for (const [relativePath, fileDefinitions] of definitionsByFile) {
+    const source = getSourceText(db, relativePath);
+    if (!source) continue;
+    const lines = getSourceLines(db, relativePath);
+    const contentHash = fileContentHash(db, relativePath, source);
+    const cachedEntries = readSourceFingerprintCache(db, relativePath, contentHash);
+    let changed = false;
+
+    for (const definition of fileDefinitions) {
+      const key = sourceFingerprintDefinitionKey(definition);
+      const cached = cachedEntries.get(key);
+      let tokens = cached ? new Set(cached.tokens) : null;
+      if (!tokens) {
+        tokens = sourceTokens(
+          definitionSnippetFromLines(lines, definition.startLine, definition.endLine, definition.leaf),
+          definition.leaf,
+        );
+        cachedEntries.set(key, {
+          key,
+          symbol: definition.symbol,
+          startLine: definition.startLine,
+          endLine: definition.endLine,
+          leaf: definition.leaf,
+          tokens: [...tokens].sort(),
+        });
+        changed = true;
+      }
+      if (tokens.size > 0) {
+        bySymbol.set(definition.symbol, {
+          symbol: definition.symbol,
+          file: definition.relativePath,
+          tokens,
+        });
+      }
+    }
+
+    if (changed) writeSourceFingerprintCache(db, relativePath, contentHash, cachedEntries);
+  }
+
+  return definitions.map((definition) => bySymbol.get(definition.symbol)).filter((fp): fp is SourceFingerprint => !!fp);
 }
 
 function definitionSnippet(
@@ -929,6 +990,10 @@ function definitionSnippet(
     return '';
   }
 
+  return definitionSnippetFromLines(lines, startLine, endLine, leaf);
+}
+
+function definitionSnippetFromLines(lines: readonly string[], startLine: number, endLine: number, leaf: string): string {
   if (endLine >= startLine && endLine - startLine <= 12) {
     return lines.slice(startLine, endLine + 1).join('\n');
   }
@@ -957,6 +1022,54 @@ function definitionSnippet(
   }
 
   return lines.slice(startLine, Math.min(lines.length, startLine + 8)).join('\n');
+}
+
+function sourceFingerprintDefinitionKey(definition: IndexedDefinition): string {
+  return `${definition.symbol}\0${definition.startLine}\0${definition.endLine}\0${definition.leaf}`;
+}
+
+function readSourceFingerprintCache(
+  db: ScipDatabase,
+  relativePath: string,
+  contentHash: string,
+): Map<string, SerializedSourceFingerprintEntry> {
+  const cached = readCachedFileEvidence(db, 'source-fingerprints', relativePath, contentHash);
+  if (!cached) return new Map();
+  try {
+    const payload = JSON.parse(cached) as SerializedSourceFingerprintFile;
+    if (!Array.isArray(payload.entries)) return new Map();
+    const entries = new Map<string, SerializedSourceFingerprintEntry>();
+    for (const entry of payload.entries) {
+      if (
+        !entry ||
+        typeof entry.key !== 'string' ||
+        typeof entry.symbol !== 'string' ||
+        typeof entry.startLine !== 'number' ||
+        typeof entry.endLine !== 'number' ||
+        typeof entry.leaf !== 'string' ||
+        !Array.isArray(entry.tokens) ||
+        !entry.tokens.every((token) => typeof token === 'string')
+      ) {
+        return new Map();
+      }
+      entries.set(entry.key, entry);
+    }
+    return entries;
+  } catch {
+    return new Map();
+  }
+}
+
+function writeSourceFingerprintCache(
+  db: ScipDatabase,
+  relativePath: string,
+  contentHash: string,
+  entries: ReadonlyMap<string, SerializedSourceFingerprintEntry>,
+): void {
+  const payload: SerializedSourceFingerprintFile = {
+    entries: [...entries.values()].sort((a, b) => a.key.localeCompare(b.key)),
+  };
+  writeCachedFileEvidence(db, 'source-fingerprints', relativePath, contentHash, JSON.stringify(payload));
 }
 
 function sourceTokens(snippet: string, leaf: string): Set<string> {
