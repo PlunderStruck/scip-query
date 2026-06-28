@@ -263,6 +263,26 @@ is 38.4% faster with byte-identical output. Composite `health --json` is neutral
 because wrapper/stale/source-fallback work now dominates the remaining parallel
 phase wall time.
 
+## Deferred Caller Evidence Probe Refresh
+
+Focused paired rerun with the local built CLI after testing two rejected caller
+evidence ideas: staged source-callsite evidence for wrapper/stale candidates
+and a larger SQLite mention `IN (...)` batch. Both preserved output hashes, but
+neither improved the public command medians enough to keep the code change.
+
+| Command                                        | Baseline median | Candidate median | Delta | stdout bytes | SHA-256                                                            |
+| ---------------------------------------------- | --------------: | ---------------: | ----: | -----------: | ------------------------------------------------------------------ |
+| `scip-query wrapper-candidates --json --full`  |          2.139s |           2.162s | +22ms |       78,437 | `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58` |
+| `scip-query stale-abstractions --json --full`  |          2.125s |           2.116s | -10ms |       83,654 | `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2` |
+| `scip-query __health-phase wrapper-candidates` |          2.103s |           2.107s |  +4ms |        1,585 | `9c61a0f9565f11c9a1b04477549cacd330585a2b2ad0e9fc92dafafe26ea965b` |
+| `scip-query __health-phase stale-abstractions` |          2.109s |           2.120s | +11ms |        2,755 | `8827e8f0a99315a51d38b6604e096deab5b452421fcd6f984c835cdd879cf322` |
+| `scip-query health --json`                     |          2.916s |           2.937s | +21ms |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query diff-gate --json`                  |          3.027s |           3.045s | +18ms |        3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
+
+The source tree was reverted after this probe. The next candidate should focus
+on reducing repeated source-facts/source-fallback work or health orchestration
+rather than changing caller-map staging or SQLite mention batch size.
+
 ## Biggest Confirmed Delta
 
 | Command                                       | Earlier heavy/focused baseline | Current warm | Notes                                                                                                                                                                                                                                                                                                                                                     |
@@ -282,7 +302,9 @@ phase wall time.
 2. The latest focused dead probe drops `dead --json --full` to 1.968s, below
    `wrapper-candidates --json --full` and `stale-abstractions --json --full`
    from the last full matrix. The next likely standalone targets are wrapper
-   and stale at 2.191s and 2.171s, plus the shared source-fallback path they use.
+   and stale at 2.191s and 2.171s, but caller-map staging and larger mention
+   batches have already been ruled out. The next pass should target repeated
+   source-facts/source-fallback work or health orchestration.
 3. Re-run the full Vega warm matrix with the installed CLI after the next
    package install/publish so `health` captures the persistent React profile
    cache through the normal `scip-query` command.
