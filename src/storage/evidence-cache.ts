@@ -26,6 +26,7 @@ export const EVIDENCE_DB_FILENAME = 'evidence.db';
 /** Per-file payload kinds. Each is a pure function of one file's content. */
 export type FileEvidenceKind =
   | 'source-facts'
+  | 'definition-exclusions'
   | 'doc-path-tokens'
   | 'doc-path-evidence'
   | 'source-imports'

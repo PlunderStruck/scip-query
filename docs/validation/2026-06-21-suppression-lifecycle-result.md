@@ -105,3 +105,7 @@ The `src/queries/navigation/by-kind.ts` suppression example remains valid after 
 ## 2026-06-28 JS Exclusion Regex Guard Reference Check
 
 The `src/analysis/framework-patterns.ts:224` suppression example remains valid after the JS/TS exclusion regex guard. The accepted suppression still describes the Rust exclusion contract near the cited area; this pass changed only the private TS/JS prefilter in the same file and did not change the sampled suppression target or reason.
+
+## 2026-06-28 Definition-Exclusion Cache Reference Check
+
+The `src/analysis/framework-patterns.ts:224` suppression example remains valid after adding persistent definition-exclusion evidence. The cache stores the same Rust and TS/JS exclusion entries behind a content hash; it does not change the sampled suppression target, reason, or exclusion semantics.

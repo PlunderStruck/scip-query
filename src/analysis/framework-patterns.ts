@@ -14,6 +14,7 @@
  *  - Generic suppression-comment honoring (`// scip-query: ignore-dead`).
  */
 import type { ScipDatabase } from '../storage/db.js';
+import { fileContentHash, readCachedFileEvidence, writeCachedFileEvidence } from '../storage/evidence-cache.js';
 import { detectAstLanguage, getAst, type SyntaxNode, type Tree } from '../source/ast.js';
 import { getSourceText } from '../source/source-text.js';
 
@@ -36,11 +37,39 @@ const EXCLUSION_CACHE = new WeakMap<Tree, ExclusionEntry[]>();
  */
 export function getDefinitionExclusions(db: ScipDatabase, relativePath: string): ExclusionEntry[] {
   const lang = detectAstLanguage(relativePath);
-  if (lang === 'rust') return getRustExclusions(db, relativePath);
-  if (lang === 'typescript' || lang === 'tsx' || lang === 'javascript') {
-    return getJsTestExclusions(db, relativePath);
+  const supported = lang === 'rust' || lang === 'typescript' || lang === 'tsx' || lang === 'javascript';
+  if (!supported) return [];
+  const source = getSourceText(db, relativePath);
+  if (!source) return [];
+  const contentHash = fileContentHash(db, relativePath, source);
+  const cached = readCachedFileEvidence(db, 'definition-exclusions', relativePath, contentHash);
+  if (cached) {
+    const entries = parseCachedDefinitionExclusions(cached);
+    if (entries) return entries;
   }
-  return [];
+  const entries = lang === 'rust' ? getRustExclusions(db, relativePath) : getJsTestExclusions(db, relativePath);
+  writeCachedFileEvidence(db, 'definition-exclusions', relativePath, contentHash, JSON.stringify(entries));
+  return entries;
+}
+
+function parseCachedDefinitionExclusions(payload: string): ExclusionEntry[] | null {
+  try {
+    const value = JSON.parse(payload) as unknown;
+    if (!Array.isArray(value)) return null;
+    if (!value.every(isExclusionEntry)) return null;
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+function isExclusionEntry(value: unknown): value is ExclusionEntry {
+  if (!value || typeof value !== 'object') return false;
+  const entry = value as Partial<ExclusionEntry>;
+  if (typeof entry.startLine !== 'number' || !Number.isFinite(entry.startLine)) return false;
+  if (typeof entry.endLine !== 'number' || !Number.isFinite(entry.endLine)) return false;
+  if (typeof entry.reason !== 'string') return false;
+  return entry.containerName === undefined || typeof entry.containerName === 'string';
 }
 
 const TEST_FRAMEWORK_NAMES = new Set([
