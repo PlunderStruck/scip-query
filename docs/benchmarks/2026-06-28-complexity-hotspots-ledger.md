@@ -43,6 +43,12 @@
 - Accepted: compute unique callees and unique external callees in a single
   scoring loop instead of allocating filtered arrays and mapped key arrays per
   candidate.
+- Accepted: push the callable-symbol suffix prefilter into the scoped
+  definition SQL used by `productionCallableDefinitions({ requireCallableSymbol:
+true })`. The JS `isCallableSymbol` filter remains authoritative, and loaded
+  rows still pass through mixed-row merge and source range correction, so this
+  only avoids loading obviously non-callable definition rows before the same
+  filtering pipeline.
 
 ## Post LOC-Prefilter Measurements
 
@@ -57,3 +63,35 @@ and the remaining large evidence passes now dominate the ~1.4s warm path. The
 change is still accepted because it removes 1,800 impossible Vega candidates
 before evidence preparation and keeps both standalone and health outputs
 byte-identical.
+
+## Post Callable SQL-Prefilter Measurements
+
+Focused rerun with the rebuilt local CLI after the scoped definition catalog
+added a SQL prefilter for callable-shaped symbols when the caller already asks
+for `requireCallableSymbol`. The result set still goes through
+`isCallableSymbol`, `mergeMixedSymbolQueryRows()`, and
+`correctDefinitionRangesFromSource()`.
+
+Stage probe:
+
+| Case                                                      | Current value / timing | Evidence                                                               |
+| --------------------------------------------------------- | ---------------------- | ---------------------------------------------------------------------- |
+| Vega callable candidates at `minLoc >= 10`                | 4,642 candidates       | Same count as the prior ledger measurements.                           |
+| `productionCallableDefinitions()` with callable prefilter | 339ms                  | Fresh source-module stage probe against Vega index.                    |
+| `complexityHotspots(... semantic: true, full)`            | 952ms                  | Same process after candidate stage; useful for stage attribution only. |
+| `complexityHotspots(... semantic: false, health shape)`   | 365ms                  | Same process after candidate stage; useful for stage attribution only. |
+
+CLI rerun:
+
+| Case                                      | Baseline median | Current median | Warm repeats                                                   | stdout bytes | SHA-256                                                            |
+| ----------------------------------------- | --------------: | -------------: | -------------------------------------------------------------- | -----------: | ------------------------------------------------------------------ |
+| Vega `complexity-hotspots --json --full`  |          1.480s |         1.376s | 2.023s outlier, then 1.336s-1.395s-1.375s-1.413s-1.376s-1.369s |    2,160,117 | `77edc0f3482e8ccd5520c5b178383d3ab3f1aef586888a4e2054551b6c14765f` |
+| Vega `__health-phase complexity-hotspots` |          1.127s |         0.957s | 1.070s-1.007s-0.942s-0.938s-0.957s-0.957s-0.936s               |          670 | `38b928cf4b5e56ece26278a67c8bec1ad8b076629846392bbb91c8baac67741a` |
+| Vega `health --json`                      |          1.766s |   noisy 1.938s | 1.881s-1.938s-1.932s-2.138s-2.021s                             |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| Vega `health --json --full`               |          1.791s |   noisy 2.049s | 2.058s-1.907s-1.972s-2.583s-2.049s                             |       15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
+
+The accepted change is judged on the standalone command and isolated health
+phase because those directly exercise the optimized catalog path. Aggregate
+health kept byte-identical output but did not produce a clean same-session
+runtime win in the short rerun; other parallel phases and machine noise
+dominated that composite measurement.

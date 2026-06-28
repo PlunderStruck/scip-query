@@ -86,10 +86,13 @@ work before the function-like check is wasted.
    reading callable signatures for type/interface/module-like targets.
 2. In `runEchoCheck()`, skip symbols that fail `isCallableSymbol()` before
    calling `similar()`. This uses the same callable predicate as production
-   callable selection (`matchesCallableMode()` in
-   `src/core/production-callables.ts:112-123`; Source:
-   `scip-query code matchesCallableMode -C 20`) and avoids running code-echo
-   similarity for changed constants like Vega's `NAV_TRANSITION`.
+   callable selection (`candidateDefinitions()` / `matchesCallableMode()` in
+   `src/core/production-callables.ts`; Source:
+   `scip-query code candidateDefinitions -C 30`;
+   `scip-query code matchesCallableMode -C 20`). Later performance work added a
+   SQL callable-symbol prefilter below the same JS predicate, but the echo
+   guard still shares the authoritative callable semantics and avoids running
+   code-echo similarity for changed constants like Vega's `NAV_TRANSITION`.
 
 ## Result
 

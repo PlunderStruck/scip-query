@@ -105,7 +105,11 @@ function candidateDefinitions(
   }
 
   return opts.requireCallableSymbol
-    ? getScopedDefinitionsMatchingSymbols(db, { scope: opts.scope, symbolMatches: isCallableSymbol })
+    ? getScopedDefinitionsMatchingSymbols(db, {
+        scope: opts.scope,
+        symbolMatches: isCallableSymbol,
+        sqlPrefilter: 'callable',
+      })
     : getScopedDefinitions(db, opts.scope);
 }
 

@@ -261,10 +261,10 @@ export function getScopedDefinitions(db: ScipDatabase, scope?: string): IndexedD
 
 export function getScopedDefinitionsMatchingSymbols(
   db: ScipDatabase,
-  opts: { scope?: string; symbolMatches: (symbol: string) => boolean },
+  opts: { scope?: string; symbolMatches: (symbol: string) => boolean; sqlPrefilter?: 'callable' },
 ): IndexedDefinition[] {
-  const primaryByFile = groupRowsByFile(loadScopedPrimaryDefinitionRows(db, opts.scope));
-  const fallbackByFile = groupRowsByFile(loadScopedFallbackDefinitionRows(db, opts.scope));
+  const primaryByFile = groupRowsByFile(loadScopedPrimaryDefinitionRows(db, opts.scope, opts.sqlPrefilter));
+  const fallbackByFile = groupRowsByFile(loadScopedFallbackDefinitionRows(db, opts.scope, opts.sqlPrefilter));
   const files = new Set([...primaryByFile.keys(), ...fallbackByFile.keys()]);
   const definitions: IndexedDefinition[] = [];
 
@@ -284,8 +284,13 @@ export function getScopedDefinitionsMatchingSymbols(
   return definitions;
 }
 
-function loadScopedPrimaryDefinitionRows(db: ScipDatabase, scope?: string): SymbolQueryRow[] {
+function loadScopedPrimaryDefinitionRows(
+  db: ScipDatabase,
+  scope?: string,
+  sqlPrefilter?: 'callable',
+): SymbolQueryRow[] {
   const scopeFilter = scope ? 'AND d.relative_path LIKE ?' : '';
+  const symbolFilter = sqlPrefilter === 'callable' ? `AND ${callableSymbolSqlPredicate('gs')}` : '';
   const params = scope ? [`%${scope}%`] : [];
   return db.all<SymbolQueryRow>(
     `SELECT
@@ -305,14 +310,20 @@ function loadScopedPrimaryDefinitionRows(db: ScipDatabase, scope?: string): Symb
      WHERE 1 = 1
        ${db.pathExclusionsFor('d')}
        ${scopeFilter}
+       ${symbolFilter}
        ${db.symbolNoiseFor('gs')}
      ORDER BY d.relative_path, der.start_line, der.end_line`,
     ...params,
   );
 }
 
-function loadScopedFallbackDefinitionRows(db: ScipDatabase, scope?: string): SymbolQueryRow[] {
+function loadScopedFallbackDefinitionRows(
+  db: ScipDatabase,
+  scope?: string,
+  sqlPrefilter?: 'callable',
+): SymbolQueryRow[] {
   const scopeFilter = scope ? 'AND d.relative_path LIKE ?' : '';
+  const symbolFilter = sqlPrefilter === 'callable' ? `AND ${callableSymbolSqlPredicate('gs')}` : '';
   const params = scope ? [`%${scope}%`] : [];
   return db.all<SymbolQueryRow>(
     `SELECT
@@ -333,11 +344,16 @@ function loadScopedFallbackDefinitionRows(db: ScipDatabase, scope?: string): Sym
      WHERE m.role = 1
        ${db.pathExclusionsFor('d')}
        ${scopeFilter}
+       ${symbolFilter}
        ${db.symbolNoiseFor('gs')}
      GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path
      ORDER BY d.relative_path, start_line, end_line`,
     ...params,
   );
+}
+
+function callableSymbolSqlPredicate(alias: string): string {
+  return `(${alias}.symbol LIKE '%().' OR ${alias}.symbol LIKE '%()')`;
 }
 
 function groupRowsByFile(rows: SymbolQueryRow[]): Map<string, SymbolQueryRow[]> {

@@ -15,16 +15,8 @@ describe('unused params', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-query-unused-params-'));
     const projectRoot = join(tempDir, 'project');
     writeFixtureFiles(projectRoot, {
-      'src/changed.ts': [
-        'export function changed(used: string, unused: string) {',
-        '  return used;',
-        '}',
-      ],
-      'src/other.ts': [
-        'export function other(used: string, unused: string) {',
-        '  return used;',
-        '}',
-      ],
+      'src/changed.ts': ['export function changed(used: string, unused: string) {', '  return used;', '}'],
+      'src/other.ts': ['export function other(used: string, unused: string) {', '  return used;', '}'],
     });
 
     const dbPath = join(tempDir, 'index.db');
@@ -33,12 +25,15 @@ describe('unused params', () => {
       .document(2, 'typescript', 'src/other.ts')
       .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`changed.ts`/changed().', 'changed', 12)
       .symbol(2, 'scip-typescript npm fixture 1.0.0 src/`other.ts`/other().', 'other', 12)
+      .symbol(3, 'scip-typescript npm fixture 1.0.0 src/`changed.ts`/ChangedType#', 'ChangedType', 5)
       .definition(1, 1, 1, 0, 0, 2, 1)
       .definition(2, 2, 2, 0, 0, 2, 1)
+      .definition(3, 1, 3, 0, 0, 0, 1)
       .chunk(1, 1, 0, 2)
       .chunk(2, 2, 0, 2)
       .mention(1, 1, 1)
       .mention(2, 2, 1)
+      .mention(1, 3, 1)
       .write();
 
     db = new ScipDatabase({ dbPath, projectRoot });
@@ -57,6 +52,18 @@ describe('unused params', () => {
     });
 
     expect(callables.map((row) => row.relativePath)).toEqual(['src/changed.ts']);
+  });
+
+  it('loads callable-mode production candidates without type definitions', () => {
+    const callables = productionCallableDefinitions(db, {
+      requireCallableSymbol: true,
+      includeSuppressed: true,
+    });
+
+    expect(callables.map((row) => row.symbol)).toEqual([
+      'scip-typescript npm fixture 1.0.0 src/`changed.ts`/changed().',
+      'scip-typescript npm fixture 1.0.0 src/`other.ts`/other().',
+    ]);
   });
 
   it('honors file-scoped unused parameter checks', () => {
