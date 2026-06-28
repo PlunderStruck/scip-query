@@ -32,6 +32,8 @@ const VUE_HEALTH_PHASES = new Set<HealthPhaseName>([
   'vue-composable-candidates',
   'vue-large-view-pressure',
 ]);
+const VUE_HEALTH_TASK_PHASES = new Set<HealthPhaseName>([...VUE_HEALTH_PHASES, 'suppressions']);
+const SIMILAR_EXTRACT_HEALTH_PHASES = new Set<HealthPhaseName>(['similar', 'extract-candidates']);
 
 function loadCliPackageInfo(): { version: string } {
   for (const path of ['../package.json', '../../package.json']) {
@@ -144,7 +146,7 @@ export function shouldRunHealthPhase(
 }
 
 export function healthPhaseTasks(phases: readonly HealthPhaseName[]): HealthPhaseTask[] {
-  const groupedPhaseSets = [REACT_HEALTH_PHASES, VUE_HEALTH_PHASES];
+  const groupedPhaseSets = [REACT_HEALTH_PHASES, VUE_HEALTH_TASK_PHASES, SIMILAR_EXTRACT_HEALTH_PHASES];
   const handled = new Set<HealthPhaseName>();
   const tasks: HealthPhaseTask[] = [];
 

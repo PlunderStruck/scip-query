@@ -78,6 +78,30 @@ describe('frontend health phase pruning', () => {
     ]);
   });
 
+  it('groups cheap health phases to avoid a late second scheduling wave', () => {
+    expect(
+      healthPhaseTasks([
+        'dead',
+        'cycles',
+        'similar',
+        'react-component-duplicates',
+        'react-hook-candidates',
+        'react-large-component-pressure',
+        'vue-component-duplicates',
+        'vue-composable-candidates',
+        'vue-large-view-pressure',
+        'extract-candidates',
+        'suppressions',
+      ]),
+    ).toEqual([
+      ['dead'],
+      ['cycles'],
+      ['similar', 'extract-candidates'],
+      ['react-component-duplicates', 'react-hook-candidates', 'react-large-component-pressure'],
+      ['vue-component-duplicates', 'vue-composable-candidates', 'vue-large-view-pressure', 'suppressions'],
+    ]);
+  });
+
   it('runs frontend phases only when matching files are present', () => {
     expect(
       shouldRunHealthPhase('react-component-duplicates', {

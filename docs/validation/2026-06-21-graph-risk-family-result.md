@@ -117,3 +117,9 @@ The later health concurrency-ceiling pass also leaves this reference current:
 `src/runtime/cli-support.ts` still owns the health subprocess scheduler, and
 raising the adaptive default phase cap from 10 to 12 changes only how many
 independent phase subprocesses can run at once on high-parallelism hosts.
+
+The cheap phase grouping pass also leaves this reference current:
+`src/runtime/cli-support.ts` still owns health task construction. Grouping
+`similar` with `extract-candidates` and Vue health phases with `suppressions`
+changes scheduler shape only; it does not change the graph-risk family result
+or the meaning of the coupling sample above.

@@ -127,6 +127,9 @@ reported zero `tree-sitter` parse calls.
 - Rejected for now: small cleanup phase grouping. The best small groups were
   `dead,isolated` at 1.968s and `isolated,wrapper-candidates` at 1.960s, but
   they serialize enough work to lose the current parallel health schedule.
+- Accepted below: group only cheap/non-critical health tasks that would otherwise
+  spill into a second scheduler wave on high-parallelism hosts. The target is
+  task-count shape, not sharing broad cleanup detector state.
 - Accepted: compute the `overview` health phase in the parent process while the
   parent already has the database open for phase applicability. The overview
   phase is cheap, but spawning a separate CLI process for it still pays process
@@ -175,6 +178,11 @@ reported zero `tree-sitter` parse calls.
   to 12. Vega has enough parallelism to run two more independent health phase
   subprocesses without changing output, and measured concurrency above 12 was
   flat/noisy rather than clearly faster.
+- Accepted: pack `similar` with `extract-candidates` and Vue health phases with
+  `suppressions`. On Vega this moves the runnable health task count from 14 to
+  12, so every task starts in the first default-concurrency wave. It preserves
+  phase payloads and aggregation order because each grouped subprocess still
+  returns the same per-phase JSON records.
 
 ## Post Health Drift Pattern-Deviation Skip
 
@@ -373,3 +381,52 @@ section of the aggregate health report, and the changed ceiling lets two more
 ready sections run concurrently on machines with enough CPU capacity. It does
 not alter individual phase logic, candidate limits, health scoring, or JSON
 projection.
+
+## Post Cheap Phase Grouping
+
+Focused rerun with the rebuilt local CLI after `healthPhaseTasks()` grouped
+only measured cheap tasks: `similar,extract-candidates` and
+`vue-component-duplicates,vue-composable-candidates,vue-large-view-pressure,suppressions`.
+The current health runner had 14 runnable Vega tasks under a default concurrency
+cap of 12, so two late tasks had to wait for a worker. These groups keep the
+slowest grouped task below the current 1.1s detector cluster while reducing the
+task count to 12.
+
+Source evidence: `scip-query plan-context healthPhaseTasks` shows the task
+packer is called only by `runIsolatedHealthReport()`, and
+`scip-query trace healthPhaseTasks` shows no downstream detector dependency.
+
+Pre-change focused phase refresh:
+
+| Case                                            | Median | Warm repeats         | stdout bytes | SHA-256                                                            |
+| ----------------------------------------------- | -----: | -------------------- | -----------: | ------------------------------------------------------------------ |
+| `scip-query health --json`                      | 1.833s | 1.833s-1.818s-1.844s |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query health --json --full`               | 1.862s | 2.000s-1.853s-1.862s |       15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
+| `scip-query __health-phase isolated`            | 1.133s | 1.133s-1.129s-1.157s |           63 | `483ba1fc03707fcb197b8eb48207444c446feda7e73732b3e45813b77c0da329` |
+| `scip-query __health-phase wrapper-candidates`  | 1.150s | 1.174s-1.150s-1.133s |        1,585 | `9c61a0f9565f11c9a1b04477549cacd330585a2b2ad0e9fc92dafafe26ea965b` |
+| `scip-query __health-phase stale-abstractions`  | 1.109s | 1.109s-1.150s-1.096s |        2,755 | `8827e8f0a99315a51d38b6604e096deab5b452421fcd6f984c835cdd879cf322` |
+| `scip-query __health-phase complexity-hotspots` | 1.082s | 1.098s-1.076s-1.082s |          670 | `38b928cf4b5e56ece26278a67c8bec1ad8b076629846392bbb91c8baac67741a` |
+| `scip-query __health-phase git-evidence`        | 0.837s | 0.835s-0.837s-0.844s |      413,963 | `7750461f2aeea01ef99261bc29cec088c9b8edeb06028bd24e4e5cb4392a96b4` |
+
+Grouping probes before the accepted edit:
+
+| Probe                                                                                                               | Median | Warm repeats                       | Decision                                                          |
+| ------------------------------------------------------------------------------------------------------------------- | -----: | ---------------------------------- | ----------------------------------------------------------------- |
+| `scip-query __health-phase similar,extract-candidates`                                                              | 0.707s | 0.723s-0.714s-0.701s-0.707s-0.695s | Accepted; below slow detector cluster                             |
+| `scip-query __health-phase vue-component-duplicates,vue-composable-candidates,vue-large-view-pressure,suppressions` | 0.263s | 0.263s-0.262s-0.266s-0.261s-0.269s | Accepted; turns a late tiny task into work already grouped by Vue |
+| `scip-query __health-phase cycles,suppressions`                                                                     | 0.510s | 0.526s-0.510s-0.517s-0.508s-0.498s | Rejected; useful, but Vue grouping was cheaper on Vega            |
+| `scip-query __health-phase cycles,similar,extract-candidates`                                                       | 0.961s | 0.978s-0.972s-0.957s-0.959s-0.961s | Rejected; less headroom against the 1.1s detector cluster         |
+| `scip-query __health-phase dead,similar`                                                                            | 1.126s | 1.145s-1.119s-1.126s-1.114s-1.160s | Rejected; sits on the critical path                               |
+
+Post-change focused rerun:
+
+| Case                                                   | Baseline median | Current median | Warm repeats                                     | stdout bytes | SHA-256                                                            |
+| ------------------------------------------------------ | --------------: | -------------: | ------------------------------------------------ | -----------: | ------------------------------------------------------------------ |
+| `scip-query health --json`                             |          1.833s |         1.766s | 1.965s-1.766s-1.879s-1.844s-1.762s-1.725s-1.756s |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query health --json --full`                      |          1.862s |         1.791s | 1.857s-1.836s-1.791s-1.790s-1.744s-1.750s-1.839s |       15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
+| `scip-query __health-phase similar,extract-candidates` |          0.707s |         0.758s | 0.758s-0.785s-0.740s                             |           87 | `8d475f2ccb1bd2153060aba3569526c49e0000faf2f5b8b8aceda84f0f7e329e` |
+| `scip-query __health-phase vue*,suppressions`          |          0.263s |         0.278s | 0.284s-0.275s-0.278s                             |          461 | `96a35252e19a9f115944f18f165e5a759ee5e3c55f9d7501978db8b51e034c37` |
+
+The accepted change is intentionally small: it reduces process scheduling waves
+without changing detector logic, phase result order, candidate budgets, or
+health report projection.
