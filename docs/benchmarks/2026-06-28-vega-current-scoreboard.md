@@ -32,6 +32,8 @@ and uses direct semantic caller evidence after non-semantic caller absence is
 already established.
 The newest health orchestration pass groups measured cheap phase tasks so the
 default 12-worker schedule no longer spills Vega health into a second wave.
+The newest health hot-path pass adds count-only similar-pair scoring for health
+and exact function-like definition loading for production-callable scans.
 The newest complexity-hotspots pass pushes callable-symbol filtering into the
 scoped definition SQL used by `requireCallableSymbol` candidate scans.
 The newest diff-gate echo pass sends zero-callee targets straight to the
@@ -88,6 +90,23 @@ measurements do not silently reshuffle the whole ranking.
 |   17 | `scip-query similar-files --json --full`          |               0.500s |    0 |      194,564 |
 
 `diff-gate` exits 1 because Vega_2.0 has findings; the timing is still valid.
+
+## Post Count-Only Health Refresh
+
+Focused paired cold-evidence rerun against copied Vega cache directories. Both
+runs cleared `file_evidence` and `semantic_callees` before execution; the
+baseline CLI was built from commit `8a6ba32`, and the current CLI was the local
+rebuilt worktree.
+
+| Command                      | Baseline | Current | stdout bytes | SHA-256                                                            |
+| ---------------------------- | -------: | ------: | -----------: | ------------------------------------------------------------------ |
+| `scip-query health --json`    |   3.69s  |  3.56s  |       14,434 | `9d17f0dc18f0b35a8063877dcd1e317af6bfcecf90118bbaf2f1733f0aa71973` |
+| `similar.all` health span     |  2.179s  | 1.048s  |            - | Same pair count: 7,804                                             |
+| similar health pair scan      |  1.217s  | 0.118s  |            - | Same candidate pairs: 130,972                                      |
+| `dead.candidates` health span |  0.368s  | 0.325s  |            - | Same candidate count: 9,523                                        |
+
+CPU time moved from 19.49s to 18.14s. The health JSON outputs were
+byte-identical.
 
 ## Post Bench Sub-Profiling Refresh
 

@@ -3,7 +3,7 @@ import type { IndexedDefinition } from '../domain/types.js';
 import type { ScipDatabase } from '../storage/db.js';
 import {
   getDefinitionsForFile,
-  getScopedDefinitions,
+  getScopedFunctionLikeDefinitions,
   getScopedDefinitionsMatchingSymbols,
 } from '../symbols/definition-catalog.js';
 import { definitionLoc } from '../symbols/definition-loc.js';
@@ -110,7 +110,7 @@ function candidateDefinitions(
         symbolMatches: isCallableSymbol,
         sqlPrefilter: 'callable',
       })
-    : getScopedDefinitions(db, opts.scope);
+    : getScopedFunctionLikeDefinitions(db, opts.scope);
 }
 
 function matchesCallableMode(

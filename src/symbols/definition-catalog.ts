@@ -53,6 +53,15 @@ export const FILE_DEFINITION_CACHE = createPerDbCache<string, IndexedDefinition[
   clearGroups: ['definition-catalog'],
 });
 
+type DefinitionSymbolSqlPrefilter = 'callable' | 'function-like';
+
+const FILE_FUNCTION_LIKE_DEFINITION_CACHE = createPerDbCache<string, IndexedDefinition[]>(
+  'file-function-like-definitions',
+  {
+    clearGroups: ['definition-catalog'],
+  },
+);
+
 export interface FileSymbolResult {
   startLine: number;
   endLine: number;
@@ -78,12 +87,7 @@ export function getDefinitionsForFile(db: ScipDatabase, relativePath: string): I
     const cached = readDefinitionEvidence(db, relativePath);
     if (cached) return cached;
 
-    const rows = mergeMixedSymbolQueryRows(
-      loadPrimaryDefinitionRows(db, relativePath),
-      loadFallbackDefinitionRows(db, relativePath),
-      { sort: true },
-    );
-    const definitions = correctDefinitionRangesFromSource(db, relativePath, rows.map(indexedDefinitionFromRow));
+    const definitions = computeDefinitionsForFile(db, relativePath);
     const projectFingerprint = projectEvidenceFingerprint(db);
     const source = getSourceText(db, relativePath);
     if (projectFingerprint && source) {
@@ -99,6 +103,14 @@ export function getDefinitionsForFile(db: ScipDatabase, relativePath: string): I
       );
     }
     return definitions;
+  });
+}
+
+export function getFunctionLikeDefinitionsForFile(db: ScipDatabase, relativePath: string): IndexedDefinition[] {
+  return FILE_FUNCTION_LIKE_DEFINITION_CACHE.get(db, relativePath, () => {
+    const cached = readDefinitionEvidence(db, relativePath);
+    if (cached) return cached.filter((definition) => definition.isFunctionLike);
+    return computeDefinitionsForFile(db, relativePath, (definition) => definition.isFunctionLike);
   });
 }
 
@@ -180,6 +192,20 @@ function parseCachedDefinition(value: unknown, relativePath: string): IndexedDef
   };
 }
 
+function computeDefinitionsForFile(
+  db: ScipDatabase,
+  relativePath: string,
+  filter?: (definition: IndexedDefinition) => boolean,
+): IndexedDefinition[] {
+  let definitions = mergeMixedSymbolQueryRows(
+    loadPrimaryDefinitionRows(db, relativePath),
+    loadFallbackDefinitionRows(db, relativePath),
+    { sort: true },
+  ).map(indexedDefinitionFromRow);
+  if (filter) definitions = definitions.filter(filter);
+  return correctDefinitionRangesFromSource(db, relativePath, definitions);
+}
+
 function loadPrimaryDefinitionRows(db: ScipDatabase, relativePath: string): SymbolQueryRow[] {
   return db.all<SymbolQueryRow>(
     `SELECT
@@ -259,9 +285,15 @@ export function getScopedDefinitions(db: ScipDatabase, scope?: string): IndexedD
     .filter((row) => !db.isIgnored(row.relativePath));
 }
 
+export function getScopedFunctionLikeDefinitions(db: ScipDatabase, scope?: string): IndexedDefinition[] {
+  return indexedDocumentPaths(db, { scope, includeIgnored: false })
+    .flatMap((relativePath) => getFunctionLikeDefinitionsForFile(db, relativePath))
+    .filter((row) => !db.isIgnored(row.relativePath));
+}
+
 export function getScopedDefinitionsMatchingSymbols(
   db: ScipDatabase,
-  opts: { scope?: string; symbolMatches: (symbol: string) => boolean; sqlPrefilter?: 'callable' },
+  opts: { scope?: string; symbolMatches: (symbol: string) => boolean; sqlPrefilter?: DefinitionSymbolSqlPrefilter },
 ): IndexedDefinition[] {
   const primaryByFile = groupRowsByFile(loadScopedPrimaryDefinitionRows(db, opts.scope, opts.sqlPrefilter));
   const fallbackByFile = groupRowsByFile(loadScopedFallbackDefinitionRows(db, opts.scope, opts.sqlPrefilter));
@@ -287,10 +319,10 @@ export function getScopedDefinitionsMatchingSymbols(
 function loadScopedPrimaryDefinitionRows(
   db: ScipDatabase,
   scope?: string,
-  sqlPrefilter?: 'callable',
+  sqlPrefilter?: DefinitionSymbolSqlPrefilter,
 ): SymbolQueryRow[] {
   const scopeFilter = scope ? 'AND d.relative_path LIKE ?' : '';
-  const symbolFilter = sqlPrefilter === 'callable' ? `AND ${callableSymbolSqlPredicate('gs')}` : '';
+  const symbolFilter = sqlPrefilter ? `AND ${symbolSqlPredicate('gs', sqlPrefilter)}` : '';
   const params = scope ? [`%${scope}%`] : [];
   return db.all<SymbolQueryRow>(
     `SELECT
@@ -320,10 +352,10 @@ function loadScopedPrimaryDefinitionRows(
 function loadScopedFallbackDefinitionRows(
   db: ScipDatabase,
   scope?: string,
-  sqlPrefilter?: 'callable',
+  sqlPrefilter?: DefinitionSymbolSqlPrefilter,
 ): SymbolQueryRow[] {
   const scopeFilter = scope ? 'AND d.relative_path LIKE ?' : '';
-  const symbolFilter = sqlPrefilter === 'callable' ? `AND ${callableSymbolSqlPredicate('gs')}` : '';
+  const symbolFilter = sqlPrefilter ? `AND ${symbolSqlPredicate('gs', sqlPrefilter)}` : '';
   const params = scope ? [`%${scope}%`] : [];
   return db.all<SymbolQueryRow>(
     `SELECT
@@ -354,6 +386,14 @@ function loadScopedFallbackDefinitionRows(
 
 function callableSymbolSqlPredicate(alias: string): string {
   return `(${alias}.symbol LIKE '%().' OR ${alias}.symbol LIKE '%()')`;
+}
+
+function symbolSqlPredicate(alias: string, prefilter: DefinitionSymbolSqlPrefilter): string {
+  return prefilter === 'callable' ? callableSymbolSqlPredicate(alias) : functionLikeSymbolSqlPredicate(alias);
+}
+
+function functionLikeSymbolSqlPredicate(alias: string): string {
+  return `${alias}.symbol LIKE '%.'`;
 }
 
 function groupRowsByFile(rows: SymbolQueryRow[]): Map<string, SymbolQueryRow[]> {

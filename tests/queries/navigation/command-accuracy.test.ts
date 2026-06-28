@@ -21,7 +21,7 @@ import { importedBy, imports, unusedImports } from '../../../src/queries/navigat
 import { members } from '../../../src/queries/navigation/members.js';
 import { outline } from '../../../src/queries/navigation/outline.js';
 import { refs } from '../../../src/queries/navigation/refs.js';
-import { similar, similarAll } from '../../../src/queries/cleanup/similar.js';
+import { similar, similarAll, similarAllCount } from '../../../src/queries/cleanup/similar.js';
 import { staleAbstractions } from '../../../src/queries/cleanup/stale-abstractions.js';
 import { symbols } from '../../../src/queries/navigation/symbols.js';
 import { system } from '../../../src/queries/navigation/system.js';
@@ -140,13 +140,16 @@ describe('command accuracy fixes', () => {
   });
 
   it('keeps similar/convergence focused on functions and accepts short names from similar output', () => {
-    const similarResults = similarAll(db, {
+    const similarOptions = {
       minSimilarity: 0.3,
       minCallees: 2,
-      limit: 10,
-    });
+      limit: Number.POSITIVE_INFINITY,
+    };
+    const similarResults = similarAll(db, similarOptions);
+    const similarCount = similarAllCount(db, similarOptions);
     const convergenceResult = convergence(db, 'src:flow:alpha()', 'src:flow:beta()');
 
+    expect(similarCount).toBe(similarResults.length);
     expect(similarResults.some((result) => result.shortNameA === 'src:flow' || result.shortNameB === 'src:flow')).toBe(
       false,
     );

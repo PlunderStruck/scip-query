@@ -390,7 +390,7 @@ function supplementDeadCodeOnlySourceReferences(
       resolveTargets: ({ sourceFile, name, kind }) => {
         const candidates = candidatesByLeaf.get(name);
         if (!candidates) return [];
-        return deadSourceTargets(sourceFile, name, candidates, importsForSource(sourceFile), {
+        return deadSourceTargets(sourceFile, name, candidates, () => importsForSource(sourceFile), {
           permissive: kind !== 'cross-language-dispatch',
         });
       },
@@ -435,7 +435,7 @@ function deadSourceTargets(
   sourceFile: string,
   name: string,
   candidates: readonly IndexedDefinition[],
-  importsByName: ReadonlyMap<string, ReadonlySet<string>>,
+  importsByName: () => ReadonlyMap<string, ReadonlySet<string>>,
   opts: { permissive: boolean },
 ): IndexedDefinition[] {
   const sameFile = candidates.filter((candidate) => candidate.relativePath === sourceFile);
@@ -444,7 +444,8 @@ function deadSourceTargets(
   // credit a unique project-wide target even when no import names it.
   if (!opts.permissive && candidates.length === 1) return [...candidates];
 
-  const directlyImportedFrom = importsByName.get(name);
+  const imports = importsByName();
+  const directlyImportedFrom = imports.get(name);
   if (directlyImportedFrom) {
     for (const sourcePath of directlyImportedFrom) {
       const matches = candidates.filter((candidate) => pathsResolveSame(sourcePath, candidate.relativePath));
@@ -453,7 +454,7 @@ function deadSourceTargets(
   }
 
   const allImportedSourcePaths = new Set<string>();
-  for (const sourcePaths of importsByName.values()) {
+  for (const sourcePaths of imports.values()) {
     for (const sourcePath of sourcePaths) allImportedSourcePaths.add(sourcePath);
   }
   for (const sourcePath of allImportedSourcePaths) {

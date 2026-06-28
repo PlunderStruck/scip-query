@@ -21,7 +21,7 @@ export { byKind, kindCounts } from './navigation/by-kind.js';
 export { deepChains } from './graph/deep-chains.js';
 export { hierarchy } from './navigation/hierarchy.js';
 export { callGraph } from './navigation/call-graph.js';
-export { similar, similarAll } from './cleanup/similar.js';
+export { similar, similarAll, similarAllCount } from './cleanup/similar.js';
 export { similarFiles } from './cleanup/similar-files.js';
 export { reactComponentDuplicates } from './frontend/react-component-duplicates.js';
 export { reactHookCandidates } from './frontend/react-hook-candidates.js';

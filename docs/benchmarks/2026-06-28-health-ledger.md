@@ -430,3 +430,53 @@ Post-change focused rerun:
 The accepted change is intentionally small: it reduces process scheduling waves
 without changing detector logic, phase result order, candidate budgets, or
 health report projection.
+
+## Post Count-Only Similar Health Path
+
+Focused paired cold-evidence rerun on Vega_2.0 after the health slowdown
+investigation. Both runs used the same copied Vega cache directory with
+`file_evidence` and `semantic_callees` cleared before each command. The baseline
+CLI was built from commit `8a6ba32`; the patched CLI was the local rebuilt
+worktree.
+
+Accepted changes:
+
+- `health` now calls `similarAllCount()` for the similar phase because health
+  needs the pair count, not every rendered pair object.
+- `similarAllCount()` uses the same callee fingerprint index, signature filter,
+  TF-IDF cosine threshold, and shared-callee requirements as `similarAll()`, but
+  skips result projection, sorting, shortening, and evidence classification.
+- Project-wide production-callable loading now uses an exact per-file
+  function-like definition helper. It preserves the original mixed
+  primary/fallback row policy, then filters before source range correction.
+- Dead-code-only source fallback now computes import maps lazily after
+  same-file and strict unique-target shortcuts.
+
+| Case                      | Baseline | Current | stdout bytes | SHA-256                                                            |
+| ------------------------- | -------: | ------: | -----------: | ------------------------------------------------------------------ |
+| `scip-query health --json` |   3.69s  |  3.56s  |       14,434 | `9d17f0dc18f0b35a8063877dcd1e317af6bfcecf90118bbaf2f1733f0aa71973` |
+
+CPU time moved from 19.49s to 18.14s. The output files were byte-identical.
+
+Top span deltas from the paired profiles:
+
+| Span                                  | Baseline | Current | Notes                                                    |
+| ------------------------------------- | -------: | ------: | -------------------------------------------------------- |
+| `similar.all` / `similar.all-count`   |  2.179s  | 1.048s  | Same inserted result count: 7,804                        |
+| similar pair scan                     |  1.217s  | 0.118s  | Skips result allocation and display evidence projection  |
+| `dead.source-fallback.dead-code-only` |  1.747s  | 1.763s  | Effectively unchanged; remains the next health bottleneck |
+| `dead.candidates`                    |  0.368s  | 0.325s  | Function-like filtered catalog avoids some range work     |
+| `similar.callee-fingerprints.candidates` | 0.339s | 0.302s | Same candidate count: 8,758                              |
+
+Post-change verification:
+
+- `npx vitest run tests/queries/cleanup/dead-output.test.ts tests/queries/navigation/command-accuracy.test.ts tests/queries/cleanup/unused-params.test.ts tests/symbols/definition-catalog.test.ts`
+- `npm run typecheck`
+- `npm run build`
+- `scip-query reindex`
+- `scip-query recent-duplicates --json --full` returned zero findings.
+- `scip-query diff-gate --json --skip doc-reference` returned zero findings.
+- Full `scip-query diff-gate --json` reported only doc-reference warnings for
+  historical ledgers and validation notes that cite the touched implementation
+  files. The behavioral update is recorded in this section; path-only
+  historical citations remain intentionally unchanged.

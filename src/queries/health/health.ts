@@ -3,7 +3,7 @@ import { isEntrySurface, isRootedSymbol } from '../../analysis/file-classifier.j
 import { dead } from '../cleanup/dead.js';
 import { isolated } from '../cleanup/isolated.js';
 import { cycles } from '../graph/cycles.js';
-import { similarAll } from '../cleanup/similar.js';
+import { similarAllCount } from '../cleanup/similar.js';
 import { reactComponentDuplicates } from '../frontend/react-component-duplicates.js';
 import { reactHookCandidates } from '../frontend/react-hook-candidates.js';
 import { reactLargeComponentPressure } from '../frontend/react-large-component-pressure.js';
@@ -358,12 +358,11 @@ function countSimilarHealthCandidates(db: ScipDatabase, scope: string | undefine
     budget,
     'similar',
     () =>
-      similarAll(db, {
+      similarAllCount(db, {
         scope,
         ...HEALTH_DETECTOR_PROFILES.similar,
-        limit: budget.candidateResultLimit,
         scanLimit: budget.candidateScanLimit,
-      }).length,
+      }),
   );
 }
 

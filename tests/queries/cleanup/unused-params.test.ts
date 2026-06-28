@@ -15,7 +15,12 @@ describe('unused params', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-query-unused-params-'));
     const projectRoot = join(tempDir, 'project');
     writeFixtureFiles(projectRoot, {
-      'src/changed.ts': ['export function changed(used: string, unused: string) {', '  return used;', '}'],
+      'src/changed.ts': [
+        'export function changed(used: string, unused: string) {',
+        '  return used;',
+        '}',
+        'export const changedHelper = () => "ok";',
+      ],
       'src/other.ts': ['export function other(used: string, unused: string) {', '  return used;', '}'],
     });
 
@@ -26,14 +31,17 @@ describe('unused params', () => {
       .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`changed.ts`/changed().', 'changed', 12)
       .symbol(2, 'scip-typescript npm fixture 1.0.0 src/`other.ts`/other().', 'other', 12)
       .symbol(3, 'scip-typescript npm fixture 1.0.0 src/`changed.ts`/ChangedType#', 'ChangedType', 5)
+      .symbol(4, 'scip-typescript npm fixture 1.0.0 src/`changed.ts`/changedHelper.', 'changedHelper', 13)
       .definition(1, 1, 1, 0, 0, 2, 1)
       .definition(2, 2, 2, 0, 0, 2, 1)
       .definition(3, 1, 3, 0, 0, 0, 1)
-      .chunk(1, 1, 0, 2)
+      .definition(4, 1, 4, 3, 0, 3, 1)
+      .chunk(1, 1, 0, 3)
       .chunk(2, 2, 0, 2)
       .mention(1, 1, 1)
       .mention(2, 2, 1)
       .mention(1, 3, 1)
+      .mention(1, 4, 1)
       .write();
 
     db = new ScipDatabase({ dbPath, projectRoot });
@@ -62,6 +70,18 @@ describe('unused params', () => {
 
     expect(callables.map((row) => row.symbol)).toEqual([
       'scip-typescript npm fixture 1.0.0 src/`changed.ts`/changed().',
+      'scip-typescript npm fixture 1.0.0 src/`other.ts`/other().',
+    ]);
+  });
+
+  it('loads default production candidates through the function-like symbol prefilter', () => {
+    const callables = productionCallableDefinitions(db, {
+      includeSuppressed: true,
+    });
+
+    expect(callables.map((row) => row.symbol)).toEqual([
+      'scip-typescript npm fixture 1.0.0 src/`changed.ts`/changed().',
+      'scip-typescript npm fixture 1.0.0 src/`changed.ts`/changedHelper.',
       'scip-typescript npm fixture 1.0.0 src/`other.ts`/other().',
     ]);
   });

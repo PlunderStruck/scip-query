@@ -166,28 +166,21 @@ interface ComparePairOptions {
   magnitudeB?: number;
 }
 
+interface PairCosine {
+  similarity: number;
+  significantShared: string[];
+  trivialShared: string[];
+}
+
 function comparePair(
   a: SymbolFingerprint,
   b: SymbolFingerprint,
   idfWeights: ReadonlyMap<string, number>,
   opts: ComparePairOptions,
 ): SimilarSymbolResult | null {
-  const cosine =
-    opts.magnitudeA === undefined || opts.magnitudeB === undefined
-      ? weightedCosine(a.callees, b.callees, idfWeights, {
-          medianIdf: opts.medianIdf,
-        })
-      : weightedCosineWithMagnitudes(a.callees, b.callees, idfWeights, {
-          medianIdf: opts.medianIdf,
-          magnitudeA: opts.magnitudeA,
-          magnitudeB: opts.magnitudeB,
-        });
+  const cosine = pairCosine(a, b, idfWeights, opts);
+  if (!cosinePasses(cosine, opts)) return null;
   const { similarity, significantShared, trivialShared } = cosine;
-  if (similarity < opts.minSimilarity) return null;
-  const sharedCount = significantShared.length + trivialShared.length;
-  if (significantShared.length < opts.requireSignificantShared && sharedCount < opts.requireSharedCount) {
-    return null;
-  }
 
   const displayShared = significantShared.length > 0 ? significantShared : trivialShared;
   const classification = classifySimilarityEvidence(displayShared, 'callees');
@@ -206,6 +199,57 @@ function comparePair(
     uniqueToB: [...difference(b.callees, a.callees)].map(shortenSymbol),
     ...classification,
   };
+}
+
+function pairPassesSimilarity(
+  a: SymbolFingerprint,
+  b: SymbolFingerprint,
+  idfWeights: ReadonlyMap<string, number>,
+  opts: ComparePairOptions,
+): boolean {
+  const magnitudeA = opts.magnitudeA ?? weightedMagnitude(a.callees, idfWeights);
+  const magnitudeB = opts.magnitudeB ?? weightedMagnitude(b.callees, idfWeights);
+  let dotProduct = 0;
+  let significantShared = 0;
+  let sharedCount = 0;
+  const median = opts.medianIdf ?? getMedianIdf(idfWeights);
+
+  for (const callee of a.callees) {
+    if (!b.callees.has(callee)) continue;
+    const weight = idfWeights.get(callee) ?? 0;
+    dotProduct += weight * weight;
+    sharedCount += 1;
+    if (weight >= median) significantShared += 1;
+  }
+  if (sharedCount === 0) return false;
+
+  const magnitude = magnitudeA * magnitudeB;
+  const similarity = magnitude > 0 ? dotProduct / magnitude : 0;
+  if (similarity < opts.minSimilarity) return false;
+  return significantShared >= opts.requireSignificantShared || sharedCount >= opts.requireSharedCount;
+}
+
+function pairCosine(
+  a: SymbolFingerprint,
+  b: SymbolFingerprint,
+  idfWeights: ReadonlyMap<string, number>,
+  opts: ComparePairOptions,
+): PairCosine {
+  return opts.magnitudeA === undefined || opts.magnitudeB === undefined
+    ? weightedCosine(a.callees, b.callees, idfWeights, {
+        medianIdf: opts.medianIdf,
+      })
+    : weightedCosineWithMagnitudes(a.callees, b.callees, idfWeights, {
+        medianIdf: opts.medianIdf,
+        magnitudeA: opts.magnitudeA,
+        magnitudeB: opts.magnitudeB,
+      });
+}
+
+function cosinePasses(cosine: PairCosine, opts: ComparePairOptions): boolean {
+  if (cosine.similarity < opts.minSimilarity) return false;
+  const sharedCount = cosine.significantShared.length + cosine.trivialShared.length;
+  return cosine.significantShared.length >= opts.requireSignificantShared || sharedCount >= opts.requireSharedCount;
 }
 
 /**
@@ -282,18 +326,9 @@ export function similarAll(
                 continue;
               }
 
-              // Signature filter: a 1-arg helper and a 7-arg orchestrator that share
-              // infrastructure callees aren't really "similar." If both sides have
-              // a known param count, skip pairs that differ by more than 2 OR by
-              // more than 50% (whichever is larger). Pairs without sig info pass
-              // through (non-AST languages, indirect AST resolution failure).
-              if (a.paramCount >= 0 && b.paramCount >= 0) {
-                const diff = Math.abs(a.paramCount - b.paramCount);
-                const maxAllowed = Math.max(2, Math.ceil(Math.max(a.paramCount, b.paramCount) * 0.5));
-                if (diff > maxAllowed) {
-                  if (profiling) signatureSkips += 1;
-                  continue;
-                }
+              if (signaturePairShouldSkip(a, b)) {
+                if (profiling) signatureSkips += 1;
+                continue;
               }
 
               if (profiling) comparedPairs += 1;
@@ -352,6 +387,124 @@ export function similarAll(
   );
 }
 
+export function similarAllCount(
+  db: ScipDatabase,
+  opts: {
+    minSimilarity?: number;
+    scope?: string;
+    minCallees?: number;
+    crossFileOnly?: boolean;
+    scanLimit?: number;
+    semantic?: boolean;
+    focusFiles?: ReadonlySet<string>;
+  } = {},
+): number {
+  const { minSimilarity = 0.5, scope, minCallees = 4, crossFileOnly = false, scanLimit } = opts;
+  const semantic = opts.semantic !== false;
+  const profiling = profileEnabled();
+  let corpusSize = 0;
+  let candidateSets = 0;
+  let candidatePairs = 0;
+  let comparedPairs = 0;
+  let crossFileSkips = 0;
+  let signatureSkips = 0;
+  let insertedResults = 0;
+
+  return profileSpan(
+    'similar.all-count',
+    () => {
+      const index = getCalleeFingerprintIndex(db, {
+        minCallees,
+        scope,
+        scanLimit,
+        semantic,
+      });
+      const all = index.corpus;
+      corpusSize = all.length;
+      const focusFiles = opts.focusFiles;
+
+      profileSpan(
+        'similar.all-count.pair-scan',
+        () => {
+          for (let i = 0; i < all.length; i += 1) {
+            const a = all[i]!;
+            const aFocused = focusFiles?.has(a.file) ?? false;
+            const magnitudeA = index.weightedMagnitudes[i]!;
+            const candidates = new Set<number>();
+            for (const callee of a.callees) {
+              const bucket = index.candidateIndexesByCallee.get(callee);
+              if (!bucket) continue;
+              for (const j of bucket) {
+                if (j <= i) continue;
+                if (focusFiles && !aFocused && !focusFiles.has(all[j]!.file)) continue;
+                candidates.add(j);
+              }
+            }
+            if (profiling) {
+              candidatePairs += candidates.size;
+              if (candidates.size > 0) candidateSets += 1;
+            }
+
+            for (const j of candidates) {
+              const b = all[j]!;
+
+              if (crossFileOnly && a.file === b.file) {
+                if (profiling) crossFileSkips += 1;
+                continue;
+              }
+              if (signaturePairShouldSkip(a, b)) {
+                if (profiling) signatureSkips += 1;
+                continue;
+              }
+
+              if (profiling) comparedPairs += 1;
+              if (
+                !pairPassesSimilarity(a, b, index.idfWeights, {
+                  minSimilarity,
+                  requireSignificantShared: 2,
+                  requireSharedCount: 4,
+                  medianIdf: index.medianIdf,
+                  magnitudeA,
+                  magnitudeB: index.weightedMagnitudes[j]!,
+                })
+              ) {
+                continue;
+              }
+              insertedResults += 1;
+            }
+          }
+        },
+        () => ({
+          corpusSize,
+          candidateSets,
+          candidatePairs,
+          comparedPairs,
+          crossFileSkips,
+          signatureSkips,
+          insertedResults,
+        }),
+      );
+
+      return insertedResults;
+    },
+    () => ({
+      minSimilarity,
+      scope,
+      minCallees,
+      crossFileOnly,
+      scanLimit,
+      semantic,
+      corpusSize,
+      candidateSets,
+      candidatePairs,
+      comparedPairs,
+      crossFileSkips,
+      signatureSkips,
+      insertedResults,
+    }),
+  );
+}
+
 // ── Internal helpers ───────────────────────────────────────
 
 export interface SymbolFingerprint {
@@ -359,6 +512,17 @@ export interface SymbolFingerprint {
   file: string;
   callees: Set<string>;
   paramCount: number;
+}
+
+function signaturePairShouldSkip(a: SymbolFingerprint, b: SymbolFingerprint): boolean {
+  // Signature filter: a 1-arg helper and a 7-arg orchestrator that share
+  // infrastructure callees aren't really "similar." If both sides have a
+  // known param count, skip pairs that differ by more than 2 OR by more than
+  // 50% (whichever is larger). Pairs without sig info pass through.
+  if (a.paramCount < 0 || b.paramCount < 0) return false;
+  const diff = Math.abs(a.paramCount - b.paramCount);
+  const maxAllowed = Math.max(2, Math.ceil(Math.max(a.paramCount, b.paramCount) * 0.5));
+  return diff > maxAllowed;
 }
 
 export interface CalleeFingerprintIndex {
