@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { buildFileExclusionPredicate } from './dead-exclusions.js';
 import { getInactiveBarrelPaths, isEntrySurface, isRootedSymbol } from '../../analysis/file-classifier.js';
-import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
+import { getScopedDefinitions } from '../../symbols/definition-catalog.js';
 import type { DeadOptions, IndexedDefinition } from '../../domain/types.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { callerRowsForSymbol } from '../../symbols/references/caller-evidence.js';
@@ -157,21 +157,15 @@ function deadCandidateDefinitions(db: ScipDatabase, opts: DeadCandidateOptions):
   const isExcluded = buildFileExclusionPredicate(db);
   const candidates: IndexedDefinition[] = [];
 
-  for (const relativePath of listIndexedDocumentPaths(db, { scope: opts.scope })) {
-    try {
-      for (const definition of getDefinitionsForFile(db, relativePath)) {
-        const decision = deadCandidateDecision(definition, {
-          minLoc: opts.minLoc,
-          includeTests: opts.includeTests,
-          includeMembers: opts.includeMembers,
-          isIgnoredPath: (path) => db.isIgnored(path),
-          isExcludedRegion: isExcluded,
-        });
-        if (decision.accepted) candidates.push(definition);
-      }
-    } finally {
-      clearSourceFileEvidenceCaches(db, relativePath, { definitions: true });
-    }
+  for (const definition of getScopedDefinitions(db, opts.scope)) {
+    const decision = deadCandidateDecision(definition, {
+      minLoc: opts.minLoc,
+      includeTests: opts.includeTests,
+      includeMembers: opts.includeMembers,
+      isIgnoredPath: (path) => db.isIgnored(path),
+      isExcludedRegion: isExcluded,
+    });
+    if (decision.accepted) candidates.push(definition);
   }
 
   return candidates;

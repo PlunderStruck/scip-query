@@ -3,10 +3,10 @@
 This scoreboard records the latest full warm command matrix for
 `/Users/aydansalois/Documents/GitHub/Vega_2.0` after the `similar --full`,
 React profile-cache, source identifier prefilter, diff-gate callee-index reuse,
-JS/TS framework-exclusion prefilter, doc path evidence cache, and SQLite
-statement-cache passes. Focused reruns after the full matrix are recorded
-separately below so partial measurements do not silently reshuffle the whole
-ranking.
+JS/TS framework-exclusion prefilter, doc path evidence cache, SQLite
+statement-cache, and dead scoped-cache reuse passes. Focused reruns after the
+full matrix are recorded separately below so partial measurements do not
+silently reshuffle the whole ranking.
 
 ## Corpus
 
@@ -21,21 +21,21 @@ ranking.
 
 | Rank | Command                                           | Latest warm duration | Exit | stdout bytes |
 | ---: | ------------------------------------------------- | -------------------: | ---: | -----------: |
-|    1 | `scip-query dead --json --full`                   |               2.940s |    0 |    3,803,655 |
-|    2 | `scip-query health --json`                        |               2.899s |    0 |       15,342 |
-|    3 | `scip-query diff-gate --json`                     |               2.844s |    1 |        3,089 |
-|    4 | `scip-query wrapper-candidates --json --full`     |               2.141s |    0 |       78,437 |
-|    5 | `scip-query stale-abstractions --json --full`     |               2.106s |    0 |       83,654 |
-|    6 | `scip-query cleanup-plan --verify --json`         |               1.994s |    0 |          237 |
-|    7 | `scip-query recent-duplicates --json --full`      |               1.863s |    0 |        3,618 |
-|    8 | `scip-query isolated --json --full`               |               1.796s |    0 |          130 |
-|    9 | `scip-query incomplete-migration --json --full`   |               1.599s |    0 |        1,101 |
-|   10 | `scip-query complexity-hotspots --json --full`    |               1.553s |    0 |    2,160,117 |
-|   11 | `scip-query similar --json --full`                |               1.373s |    0 |       88,859 |
-|   12 | `scip-query passthrough-candidates --json --full` |               1.296s |    0 |      146,739 |
-|   13 | `scip-query doc-drift --json --full`              |               1.136s |    0 |      963,953 |
-|   14 | `scip-query unused-params --json --full`          |               0.819s |    0 |          135 |
-|   15 | `scip-query similar-files --json --full`          |               0.490s |    0 |      194,564 |
+|    1 | `scip-query health --json`                        |               3.077s |    0 |       15,342 |
+|    2 | `scip-query diff-gate --json`                     |               2.857s |    1 |        3,089 |
+|    3 | `scip-query dead --json --full`                   |               2.746s |    0 |    3,803,655 |
+|    4 | `scip-query wrapper-candidates --json --full`     |               2.188s |    0 |       78,437 |
+|    5 | `scip-query stale-abstractions --json --full`     |               2.185s |    0 |       83,654 |
+|    6 | `scip-query cleanup-plan --verify --json`         |               2.055s |    0 |          237 |
+|    7 | `scip-query recent-duplicates --json --full`      |               1.921s |    0 |        3,618 |
+|    8 | `scip-query isolated --json --full`               |               1.844s |    0 |          130 |
+|    9 | `scip-query incomplete-migration --json --full`   |               1.619s |    0 |        1,101 |
+|   10 | `scip-query complexity-hotspots --json --full`    |               1.590s |    0 |    2,160,117 |
+|   11 | `scip-query similar --json --full`                |               1.412s |    0 |       88,859 |
+|   12 | `scip-query passthrough-candidates --json --full` |               1.319s |    0 |      146,739 |
+|   13 | `scip-query doc-drift --json --full`              |               1.112s |    0 |      963,953 |
+|   14 | `scip-query unused-params --json --full`          |               0.874s |    0 |          135 |
+|   15 | `scip-query similar-files --json --full`          |               0.493s |    0 |      194,564 |
 
 `diff-gate` exits 1 because Vega_2.0 has findings; the timing is still valid.
 
@@ -171,25 +171,43 @@ output. The profile's 225.0ms `prepare` self-time dropped to a 15.9ms
 `statement()` helper entry; remaining cost is actual SQLite execution plus
 source/AST work.
 
+## Post Dead Scoped-Cache Reuse Refresh
+
+Focused rerun with the local built CLI after routing `deadCandidateDefinitions`
+through the existing scoped definition catalog and preserving source-backed
+definition caches for the subsequent source fallback phase:
+
+| Command                                 | Current               | stdout bytes | SHA-256                                                            |
+| --------------------------------------- | --------------------- | -----------: | ------------------------------------------------------------------ |
+| `scip-query dead --json --full`         | 2.737s focused median |    3,803,655 | `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1` |
+| warm repeats                            | 2.935s-2.715s-2.737s  |    3,803,655 | same                                                               |
+| `scip-query __health-phase dead --full` | 2.035s focused median |          189 | `648c7b6d6251e1d8761b0000e7663ae5f9971554db6cd0acd771dc9bb36db4ab` |
+| `scip-query health --json`              | 2.971s focused median |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query diff-gate --json`           | 2.972s focused median |        3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
+
+The full Vega matrix after this pass put `dead --json --full` at 2.746s,
+down from the immediately previous full matrix's 3.453s, with the same output
+size and hash. `health --json` is now the slowest command in the matrix at
+3.077s.
+
 ## Biggest Confirmed Delta
 
-| Command                                       | Earlier heavy/focused baseline | Current warm | Notes                                                                                                                                                                                                                     |
-| --------------------------------------------- | -----------------------------: | -----------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `scip-query similar --json --full`            |  300.7s heavy / 315.3s focused |       2.169s | Same 88,859-byte output and SHA-256 `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf`; stable evidence-cache reads avoid post-version-bump semantic cache misses.                                        |
-| `scip-query recent-duplicates --json --full`  |                         6.439s |       1.936s | Same 3,618-byte output and SHA-256 `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`; full-mode scans skip old-old pairs and React profile rows now persist across CLI processes.                        |
-| `scip-query doc-drift --json --full`          |                         3.472s |       1.085s | Same 963,953-byte output and SHA-256 `7f8765a247b9e6a0ab2cbd0e99b38b51acf7ce689cd7b7b02165cdb80f97cc8c`; markdown path candidates and citation contexts now persist as content-hash evidence.                             |
-| `scip-query health --json`                    |                         6.864s |       3.913s | Same 15,342-byte output and SHA-256 `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d`; latest warm matrix is materially lower, but attribution is mixed with runtime/cache noise.                        |
-| `scip-query diff-gate --json`                 |                         4.193s |       3.053s | Same 3,089-byte output and SHA-256 `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`; targeted similarity and incomplete-migration now reuse existing callee-index work.                                 |
-| `scip-query dead --json --full`               |                         4.325s |       2.928s | Same 3,803,655-byte output and SHA-256 `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1`; JS/TS exclusion prefilter avoids ordinary React hook-call files, and SQL statements are cached per connection. |
-| `scip-query stale-abstractions --json --full` |      43.268s cold / 3.13s warm |       2.362s | Same 83,654-byte output and SHA-256 `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2`; source fallback now reuses per-file import local-name maps.                                                       |
+| Command                                       | Earlier heavy/focused baseline | Current warm | Notes                                                                                                                                                                                                                                                                                       |
+| --------------------------------------------- | -----------------------------: | -----------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scip-query similar --json --full`            |  300.7s heavy / 315.3s focused |       2.169s | Same 88,859-byte output and SHA-256 `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf`; stable evidence-cache reads avoid post-version-bump semantic cache misses.                                                                                                          |
+| `scip-query recent-duplicates --json --full`  |                         6.439s |       1.936s | Same 3,618-byte output and SHA-256 `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`; full-mode scans skip old-old pairs and React profile rows now persist across CLI processes.                                                                                          |
+| `scip-query doc-drift --json --full`          |                         3.472s |       1.085s | Same 963,953-byte output and SHA-256 `7f8765a247b9e6a0ab2cbd0e99b38b51acf7ce689cd7b7b02165cdb80f97cc8c`; markdown path candidates and citation contexts now persist as content-hash evidence.                                                                                               |
+| `scip-query health --json`                    |                         6.864s |       3.913s | Same 15,342-byte output and SHA-256 `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d`; latest warm matrix is materially lower, but attribution is mixed with runtime/cache noise.                                                                                          |
+| `scip-query diff-gate --json`                 |                         4.193s |       3.053s | Same 3,089-byte output and SHA-256 `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`; targeted similarity and incomplete-migration now reuse existing callee-index work.                                                                                                   |
+| `scip-query dead --json --full`               |                         4.325s |       2.737s | Same 3,803,655-byte output and SHA-256 `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1`; JS/TS exclusion prefilter avoids ordinary React hook-call files, SQL statements are cached per connection, and dead now reuses scoped definition caches through source fallback. |
+| `scip-query stale-abstractions --json --full` |      43.268s cold / 3.13s warm |       2.362s | Same 83,654-byte output and SHA-256 `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2`; source fallback now reuses per-file import local-name maps.                                                                                                                         |
 
 ## Current Next Targets
 
-1. `health --json`, `dead --json --full`, and `diff-gate --json` now cluster
-   around 2.9s-3.0s; run the next full heavy matrix before choosing the next
-   target.
-2. For dead-specific work, remaining cost is actual SQLite execution plus
-   source/AST work rather than statement preparation.
+1. `health --json` is the current slowest warm command at 3.077s; trace its
+   phase aggregation next.
+2. `diff-gate --json` and `dead --json --full` now sit just below health at
+   2.857s and 2.746s respectively.
 3. Re-run the full Vega warm matrix with the installed CLI after the next
    package install/publish so `health` captures the persistent React profile
    cache through the normal `scip-query` command.
