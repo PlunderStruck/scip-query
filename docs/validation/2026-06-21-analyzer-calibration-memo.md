@@ -393,3 +393,10 @@ change. Health still anchors the composite report in
 `src/queries/health/health.ts`; the change only avoids computing advisory
 `pattern-deviation` drift rows for health and baseline paths that already
 discard them.
+
+## 2026-06-28 Diff-Gate Co-Change Follow-Up
+
+The `diffGate()` calibration reference remains accurate. The latest diff-gate
+edit only lets co-change partner detection see raw git changed paths, so docs
+and config files already changed in the diff are not treated as missing
+partners.

@@ -57,6 +57,7 @@ The current maintainability sweep rechecked this result after private doc-refere
 ## 2026-06-27 Citation Refresh
 
 The persistent-refresh coordination slice rechecked the `diff-gate.ts` and `src/runtime/query-commands/impact.ts` citations. Commit-scope and recency evidence still flow through the same co-change surfaces; index freshness and watcher coordination do not change the analyzer behavior recorded here.
+
 ## 2026-06-28 Diff-Gate Echo Follow-Up
 
 The `diff-gate.ts` recency-sweep references remain accurate. The follow-up only
@@ -69,3 +70,9 @@ The `src/queries/health/health.ts` recency-sweep reference remains accurate.
 The health drift optimization does not change commit scope, recency, or
 hidden-coupling summaries; it only skips advisory drift pattern rows outside
 the co-change scoring path.
+
+## 2026-06-28 Raw Git Path Follow-Up
+
+The `diff-gate.ts` recency-sweep reference remains accurate. Co-change recency
+evidence is unchanged; diff-gate now only checks partner presence against raw
+git changed paths so non-indexed changed docs are counted.

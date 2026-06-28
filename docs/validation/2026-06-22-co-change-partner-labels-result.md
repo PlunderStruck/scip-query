@@ -54,8 +54,16 @@ The current maintainability sweep rechecked this result after private doc-refere
 ## 2026-06-27 Citation Refresh
 
 The persistent-refresh coordination slice rechecked the `diff-gate.ts` and `src/runtime/query-commands/impact.ts` citations. Co-change partner labels and command rendering still use the same implementation surfaces; the refresh coordination changes do not alter this validation result.
+
 ## 2026-06-28 Diff-Gate Echo Follow-Up
 
 The `diff-gate.ts` co-change partner references remain accurate. The latest
 change is limited to echo prefiltering for non-callable changed symbols, so
 co-change partner labels, suggestions, and rendering are unchanged.
+
+## 2026-06-28 Raw Git Path Follow-Up
+
+The co-change partner references remain accurate. Diff-gate now decides whether
+a partner is present from raw git changed paths as well as indexed code paths,
+which preserves the existing labels and suggestions while avoiding false
+missing-partner warnings for changed docs.

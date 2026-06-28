@@ -166,11 +166,11 @@ callable ranges recompute instead of reusing stale tokens. The first patched
 
 | Probe                                | Baseline | Current |   Delta | stdout bytes | SHA-256                                                            |
 | ------------------------------------ | -------: | ------: | ------: | -----------: | ------------------------------------------------------------------ |
-| `only echo`                          |   1.864s |  1.388s | -476ms  |        1,211 | `162f52479ad23d4e481f4fe0cea288a3f0dfbe568b056190bd01e5c766697a90` |
-| `diff-gate --json`                   |   2.672s |  2.152s | -520ms  |        3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
-| `similar ActiveNavIndicator --json`  |   1.899s |  1.443s | -456ms  |          226 | `3316707fbf6cbab3f4543fecbe5e65a223d06bd2e563db876965ff7fc9c93c6d` |
-| `similar ProjectHeroTintMenu --json` |   1.899s |  1.415s | -484ms  |       10,384 | `9544740bea6d4b7efa31d3033ddfedb36035776049b1ce5e0e2f4258c0d393e8` |
-| `similar --json --full`              |   1.401s |  1.372s |  -29ms  |       88,859 | `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf` |
+| `only echo`                          |   1.864s |  1.388s |  -476ms |        1,211 | `162f52479ad23d4e481f4fe0cea288a3f0dfbe568b056190bd01e5c766697a90` |
+| `diff-gate --json`                   |   2.672s |  2.152s |  -520ms |        3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
+| `similar ActiveNavIndicator --json`  |   1.899s |  1.443s |  -456ms |          226 | `3316707fbf6cbab3f4543fecbe5e65a223d06bd2e563db876965ff7fc9c93c6d` |
+| `similar ProjectHeroTintMenu --json` |   1.899s |  1.415s |  -484ms |       10,384 | `9544740bea6d4b7efa31d3033ddfedb36035776049b1ce5e0e2f4258c0d393e8` |
+| `similar --json --full`              |   1.401s |  1.372s |   -29ms |       88,859 | `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf` |
 | `health --json`                      |   2.537s |  2.569s | neutral |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
 
 The current `diff-gate` first repeat had a 3.371s process outlier; the next two
@@ -190,3 +190,10 @@ for targeted source-shape similarity, not the health `similarAll` path.
 - [x] `node dist/cli.js unused-params --json --full` returned no findings.
 - [x] `node dist/cli.js recent-duplicates --json --full` returned no findings.
 - [x] `node dist/cli.js diff-gate --json` passed after updating cited docs.
+
+## 2026-06-28 Co-Change Partner Follow-Up
+
+The `diffGate()` path still starts in `src/queries/impact/diff-gate.ts`. A
+later cleanup taught the co-change partner check to use raw git changed paths
+when checking whether a partner was already changed; echo output and timing
+claims in this ledger are unchanged.

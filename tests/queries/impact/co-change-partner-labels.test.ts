@@ -189,6 +189,24 @@ describe('co-change partner labels', () => {
     ]);
   });
 
+  it('does not report a co-change partner that is already changed in raw git diff paths', () => {
+    const { db, repoRoot } = createFixture();
+    writeFileSync(join(repoRoot, 'src/api.ts'), 'export const apiVersion = 99;\n');
+    writeFileSync(join(repoRoot, 'docs/api.md'), 'api docs v99\n');
+
+    const skippedChecks: DiffGateCheck[] = [
+      'echo',
+      'incomplete-migration',
+      'doc-reference',
+      'unused-params',
+      'new-dead',
+      'baseline',
+    ];
+    const result = diffGate(db, { base: 'HEAD', minTogether: 4, minConfidence: 0.75, skip: skippedChecks });
+
+    expect(result.findings).toHaveLength(0);
+  });
+
   it('treats symbols already present at the base revision as preexisting echo candidates', () => {
     const { repoRoot } = createFixture();
     writeFileSync(join(repoRoot, 'src/api.ts'), 'export const apiVersion = 99;\n');

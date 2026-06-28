@@ -35,6 +35,13 @@ import {
 import { createPerDbCache } from '../storage/per-db-cache.js';
 import { cleanSignature, extractSignature, type SymbolQueryRow } from '../storage/scip-rows.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
+import {
+  fileContentHash,
+  projectEvidenceFingerprint,
+  readCachedFileEvidence,
+  writeCachedFileEvidence,
+} from '../storage/evidence-cache.js';
+import { isRecord } from '../storage/evidence-payload.js';
 import type { IndexedDefinition, SymbolMatch } from '../domain/types.js';
 import { mergeMixedSymbolQueryRows } from './symbol-row-policy.js';
 
@@ -68,13 +75,109 @@ const ENCLOSING_DEFINITION_LINE_INDEX_CACHE = new WeakMap<
 // authoritative per-file definition set.
 export function getDefinitionsForFile(db: ScipDatabase, relativePath: string): IndexedDefinition[] {
   return FILE_DEFINITION_CACHE.get(db, relativePath, () => {
+    const cached = readDefinitionEvidence(db, relativePath);
+    if (cached) return cached;
+
     const rows = mergeMixedSymbolQueryRows(
       loadPrimaryDefinitionRows(db, relativePath),
       loadFallbackDefinitionRows(db, relativePath),
       { sort: true },
     );
-    return correctDefinitionRangesFromSource(db, relativePath, rows.map(indexedDefinitionFromRow));
+    const definitions = correctDefinitionRangesFromSource(db, relativePath, rows.map(indexedDefinitionFromRow));
+    const projectFingerprint = projectEvidenceFingerprint(db);
+    const source = getSourceText(db, relativePath);
+    if (projectFingerprint && source) {
+      writeCachedFileEvidence(
+        db,
+        'file-definitions',
+        relativePath,
+        fileContentHash(db, relativePath, source),
+        JSON.stringify({
+          projectFingerprint,
+          definitions: definitions.map((definition) => ({ ...definition })),
+        } satisfies SerializedDefinitionEvidence),
+      );
+    }
+    return definitions;
   });
+}
+
+interface SerializedDefinitionEvidence {
+  projectFingerprint: string;
+  definitions: IndexedDefinition[];
+}
+
+function readDefinitionEvidence(db: ScipDatabase, relativePath: string): IndexedDefinition[] | null {
+  const projectFingerprint = projectEvidenceFingerprint(db);
+  if (!projectFingerprint) return null;
+  const source = getSourceText(db, relativePath);
+  if (!source) return null;
+  const payload = readCachedFileEvidence(
+    db,
+    'file-definitions',
+    relativePath,
+    fileContentHash(db, relativePath, source),
+  );
+  return payload ? deserializeDefinitionEvidence(payload, projectFingerprint, relativePath) : null;
+}
+
+function deserializeDefinitionEvidence(
+  payload: string,
+  projectFingerprint: string,
+  relativePath: string,
+): IndexedDefinition[] | null {
+  try {
+    const raw = JSON.parse(payload) as unknown;
+    if (!isRecord(raw) || raw.projectFingerprint !== projectFingerprint || !Array.isArray(raw.definitions)) {
+      return null;
+    }
+    const definitions: IndexedDefinition[] = [];
+    for (const definition of raw.definitions) {
+      const parsed = parseCachedDefinition(definition, relativePath);
+      if (!parsed) return null;
+      definitions.push(parsed);
+    }
+    return definitions;
+  } catch {
+    return null;
+  }
+}
+
+function parseCachedDefinition(value: unknown, relativePath: string): IndexedDefinition | null {
+  if (!isRecord(value)) return null;
+  if (
+    typeof value.symbolId !== 'number' ||
+    typeof value.symbol !== 'string' ||
+    typeof value.documentId !== 'number' ||
+    typeof value.startLine !== 'number' ||
+    typeof value.endLine !== 'number' ||
+    value.relativePath !== relativePath ||
+    typeof value.leaf !== 'string' ||
+    (typeof value.parentTypeName !== 'string' && value.parentTypeName !== null) ||
+    typeof value.isFunctionLike !== 'boolean' ||
+    typeof value.isTypeLike !== 'boolean' ||
+    (typeof value.kind !== 'number' && value.kind !== null) ||
+    (typeof value.documentation !== 'string' && value.documentation !== null) ||
+    (typeof value.enclosingSymbol !== 'string' && value.enclosingSymbol !== null)
+  ) {
+    return null;
+  }
+
+  return {
+    symbolId: value.symbolId,
+    symbol: value.symbol,
+    documentId: value.documentId,
+    startLine: value.startLine,
+    endLine: value.endLine,
+    relativePath: value.relativePath,
+    leaf: value.leaf,
+    parentTypeName: value.parentTypeName,
+    isFunctionLike: value.isFunctionLike,
+    isTypeLike: value.isTypeLike,
+    kind: value.kind,
+    documentation: value.documentation,
+    enclosingSymbol: value.enclosingSymbol,
+  };
 }
 
 function loadPrimaryDefinitionRows(db: ScipDatabase, relativePath: string): SymbolQueryRow[] {
@@ -167,9 +270,13 @@ export function getScopedDefinitionsMatchingSymbols(
 
   for (const relativePath of [...files].sort()) {
     if (db.isIgnored(relativePath)) continue;
-    const rows = mergeMixedSymbolQueryRows(primaryByFile.get(relativePath) ?? [], fallbackByFile.get(relativePath) ?? [], {
-      sort: true,
-    }).filter((row) => opts.symbolMatches(row.symbol));
+    const rows = mergeMixedSymbolQueryRows(
+      primaryByFile.get(relativePath) ?? [],
+      fallbackByFile.get(relativePath) ?? [],
+      {
+        sort: true,
+      },
+    ).filter((row) => opts.symbolMatches(row.symbol));
     if (rows.length === 0) continue;
     definitions.push(...correctDefinitionRangesFromSource(db, relativePath, rows.map(indexedDefinitionFromRow)));
   }

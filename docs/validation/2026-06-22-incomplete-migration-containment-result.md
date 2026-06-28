@@ -81,3 +81,9 @@ source-token fingerprints became persistent evidence. Incomplete-migration uses
 callee fingerprints for containment; the new `similar.ts` cache only affects
 targeted lexical fallback for echo/similar probes and does not change
 containment semantics or output.
+
+## 2026-06-28 Diff-Gate Co-Change Follow-Up
+
+The incomplete-migration containment notes remain accurate. The latest
+`diff-gate.ts` change is limited to co-change partner presence checks and does
+not change incomplete-migration containment, scope, or output.

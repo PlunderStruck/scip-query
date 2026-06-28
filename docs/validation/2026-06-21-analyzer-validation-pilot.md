@@ -152,6 +152,7 @@ The current maintainability sweep rechecked the pilot's `diff-gate.ts` citation 
 ## 2026-06-27 Citation Refresh
 
 The persistent-refresh coordination slice rechecked the pilot's `diffGate()` and `DIFF_GATE_CHECKS` citations. They still identify the diff-gate entrypoint and check surface; the refresh-lock and hook auto-refresh work only changes how indexes are kept current before the gate runs.
+
 ## 2026-06-28 Diff-Gate Echo Follow-Up
 
 The `diffGate()` and `DIFF_GATE_CHECKS` references remain accurate. The
@@ -164,3 +165,9 @@ The `src/queries/health/health.ts` pilot reference remains accurate. The drift
 performance follow-up only skips advisory `pattern-deviation` rows in health
 and baseline paths; the historical pilot commands and analyzer conclusions are
 unchanged.
+
+## 2026-06-28 Diff-Gate Co-Change Follow-Up
+
+The `diff-gate.ts` pilot references remain accurate. The current change keeps
+the default check list intact and only fixes co-change partner presence checks
+for non-indexed raw git paths such as docs.

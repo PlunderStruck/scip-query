@@ -23,9 +23,10 @@ import { createPerDbCache } from './per-db-cache.js';
 
 export const EVIDENCE_DB_FILENAME = 'evidence.db';
 
-/** Per-file payload kinds. Each is a pure function of one file's content. */
+/** Per-file payload kinds keyed by content hash; payloads may add stricter guards. */
 export type FileEvidenceKind =
   | 'source-facts'
+  | 'file-definitions'
   | 'definition-exclusions'
   | 'doc-path-tokens'
   | 'doc-path-evidence'

@@ -190,6 +190,7 @@ export function diffGate(
   const changedFiles = impact.changedFiles;
   const changed = new Set(changedFiles);
   const changedGitFiles = new Set(impactPlan.changedFileLines);
+  const changedForCoordination = new Set([...changed, ...changedGitFiles]);
   const baseContentAt = createBaseContentReader(
     db.config.projectRoot,
     base,
@@ -232,7 +233,9 @@ export function diffGate(
   runUnlessSkipped('incomplete-migration', () =>
     runIncompleteMigrationCheck(db, base, impactPlan, maxHelpers, scanLimit, semantic, baseContentAt, result),
   );
-  runUnlessSkipped('co-change-partner', () => runCoChangePartnerCheck(db, changed, minTogether, minConfidence, result));
+  runUnlessSkipped('co-change-partner', () =>
+    runCoChangePartnerCheck(db, changedForCoordination, minTogether, minConfidence, result),
+  );
   runUnlessSkipped('doc-reference', () =>
     runDocReferenceCheck(db, changed, changedGitFiles, impactPlan.changedRanges, result),
   );

@@ -32,19 +32,19 @@ caller evidence is skipped for symbols that cheap evidence already rules out,
 and enclosing caller fallback is added only when that enclosing symbol was
 already in the original wrapper candidate set.
 
-| Case | Baseline | Current | stdout bytes | SHA-256 |
-| --- | ---: | ---: | ---: | --- |
-| `scip-query wrapper-candidates --json --full` | 2.165s | 2.147s | 78,437 | `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58` |
-| `scip-query __health-phase wrapper-candidates` | 2.079s | 2.081s | 1,585 | `9c61a0f9565f11c9a1b04477549cacd330585a2b2ad0e9fc92dafafe26ea965b` |
-| `scip-query health --json` | 2.991s | 2.890s | 15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| Case                                           | Baseline | Current | stdout bytes | SHA-256                                                            |
+| ---------------------------------------------- | -------: | ------: | -----------: | ------------------------------------------------------------------ |
+| `scip-query wrapper-candidates --json --full`  |   2.165s |  2.147s |       78,437 | `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58` |
+| `scip-query __health-phase wrapper-candidates` |   2.079s |  2.081s |        1,585 | `9c61a0f9565f11c9a1b04477549cacd330585a2b2ad0e9fc92dafafe26ea965b` |
+| `scip-query health --json`                     |   2.991s |  2.890s |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
 
 Current-only warm medians after the patch:
 
-| Case | Median | Warm repeats |
-| --- | ---: | --- |
-| `scip-query wrapper-candidates --json --full` | 2.150s | 2.169s, 2.124s, 2.150s |
+| Case                                           | Median | Warm repeats           |
+| ---------------------------------------------- | -----: | ---------------------- |
+| `scip-query wrapper-candidates --json --full`  | 2.150s | 2.169s, 2.124s, 2.150s |
 | `scip-query __health-phase wrapper-candidates` | 2.096s | 2.064s, 2.096s, 2.107s |
-| `scip-query health --json` | 2.879s | 2.871s, 2.879s, 2.932s |
+| `scip-query health --json`                     | 2.879s | 2.871s, 2.879s, 2.932s |
 
 ## Accepted Source-Reexports Cache Measurements
 
@@ -60,13 +60,13 @@ patched wrapper run populated the new cache in 2.916s and preserved the
 78,437-byte output hash. A follow-up parse hook on warm `wrapper-candidates`
 reported zero `tree-sitter` parse calls.
 
-| Case | Baseline median | Current median | Warm repeats | stdout bytes | SHA-256 |
-| --- | ---: | ---: | --- | ---: | --- |
-| `scip-query wrapper-candidates --json --full` | 2.236s | 1.608s | 1.608s, 1.598s, 1.616s | 78,437 | `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58` |
-| `scip-query stale-abstractions --json --full` | 2.202s | 1.527s | 1.542s, 1.527s, 1.520s | 83,654 | `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2` |
-| `scip-query health --json` | 2.903s | 2.512s | 2.597s, 2.500s, 2.512s | 15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
-| `scip-query health --json --full` | 2.959s | 2.530s | 2.512s, 2.586s, 2.530s | 15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
-| `scip-query diff-gate --json` | 2.711s | 2.763s | 3.676s, 2.763s, 2.718s | 3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
+| Case                                          | Baseline median | Current median | Warm repeats           | stdout bytes | SHA-256                                                            |
+| --------------------------------------------- | --------------: | -------------: | ---------------------- | -----------: | ------------------------------------------------------------------ |
+| `scip-query wrapper-candidates --json --full` |          2.236s |         1.608s | 1.608s, 1.598s, 1.616s |       78,437 | `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58` |
+| `scip-query stale-abstractions --json --full` |          2.202s |         1.527s | 1.542s, 1.527s, 1.520s |       83,654 | `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2` |
+| `scip-query health --json`                    |          2.903s |         2.512s | 2.597s, 2.500s, 2.512s |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query health --json --full`             |          2.959s |         2.530s | 2.512s, 2.586s, 2.530s |       15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
+| `scip-query diff-gate --json`                 |          2.711s |         2.763s | 3.676s, 2.763s, 2.718s |        3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
 
 ## Current Pipeline
 
@@ -166,6 +166,11 @@ reported zero `tree-sitter` parse calls.
   then source-scan files that still have possible unused-import findings. This
   preserves public drift output while avoiding a whole-project source-reference
   scan when cheaper evidence has already ruled out most edges.
+- Accepted: persist source-corrected per-file definition catalogs as
+  `file-definitions` evidence, guarded by source content hash and
+  `projectEvidenceFingerprint()`. Corrupt payloads, missing fingerprints, or
+  mismatched project fingerprints fall back to the authoritative SCIP row merge
+  and source range correction path.
 
 ## Post Health Drift Pattern-Deviation Skip
 
@@ -174,14 +179,14 @@ computing advisory drift rows that they immediately hide. Vega public
 `drift --json` still emits 725,970 bytes with SHA-256
 `a7754846099d3424020aa3a26764fec84698dc3f5cfdb1c861c30228d1366462`.
 
-| Case | Baseline median | Current median | Warm repeats | stdout bytes | SHA-256 |
-| --- | ---: | ---: | --- | ---: | --- |
-| `scip-query __health-phase drift` | 1.767s | 1.745s | 1.769s, 1.770s, 1.745s, 1.726s, 1.733s | 98 | `7409f1c8ad7c5ae6a6ac5ae17778707e1b03f9e990a521de4376357f4a48bacd` |
-| `scip-query health --json` | 2.733s | 2.530s | 2.552s, 2.533s, 2.530s, 2.521s, 2.518s | 15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
-| `scip-query health --json --full` | 2.512s | 2.550s | 2.522s, 3.056s, 2.550s, 2.559s, 2.536s | 15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
-| `scip-query __health-phase isolated` | 1.640s | 1.694s | 1.717s, 1.693s, 1.694s | 63 | `483ba1fc03707fcb197b8eb48207444c446feda7e73732b3e45813b77c0da329` |
-| `scip-query __health-phase wrapper-candidates` | 1.582s | 1.646s | 1.694s, 1.646s, 1.633s | 1,585 | `9c61a0f9565f11c9a1b04477549cacd330585a2b2ad0e9fc92dafafe26ea965b` |
-| `scip-query __health-phase stale-abstractions` | 1.549s | 1.598s | 1.581s, 1.598s, 1.599s | 2,755 | `8827e8f0a99315a51d38b6604e096deab5b452421fcd6f984c835cdd879cf322` |
+| Case                                           | Baseline median | Current median | Warm repeats                           | stdout bytes | SHA-256                                                            |
+| ---------------------------------------------- | --------------: | -------------: | -------------------------------------- | -----------: | ------------------------------------------------------------------ |
+| `scip-query __health-phase drift`              |          1.767s |         1.745s | 1.769s, 1.770s, 1.745s, 1.726s, 1.733s |           98 | `7409f1c8ad7c5ae6a6ac5ae17778707e1b03f9e990a521de4376357f4a48bacd` |
+| `scip-query health --json`                     |          2.733s |         2.530s | 2.552s, 2.533s, 2.530s, 2.521s, 2.518s |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query health --json --full`              |          2.512s |         2.550s | 2.522s, 3.056s, 2.550s, 2.559s, 2.536s |       15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
+| `scip-query __health-phase isolated`           |          1.640s |         1.694s | 1.717s, 1.693s, 1.694s                 |           63 | `483ba1fc03707fcb197b8eb48207444c446feda7e73732b3e45813b77c0da329` |
+| `scip-query __health-phase wrapper-candidates` |          1.582s |         1.646s | 1.694s, 1.646s, 1.633s                 |        1,585 | `9c61a0f9565f11c9a1b04477549cacd330585a2b2ad0e9fc92dafafe26ea965b` |
+| `scip-query __health-phase stale-abstractions` |          1.549s |         1.598s | 1.581s, 1.598s, 1.599s                 |        2,755 | `8827e8f0a99315a51d38b6604e096deab5b452421fcd6f984c835cdd879cf322` |
 
 The accepted change is intentionally small: it removes no public findings and
 keeps both health hashes unchanged. The next health pass should target the
@@ -196,10 +201,10 @@ computed `overview` in the parent process while it already had the database open
 for phase applicability. The change removes one health subprocess and preserves
 the byte-identical JSON contracts.
 
-| Case | Baseline median | Current median | Warm repeats | stdout bytes | SHA-256 |
-| --- | ---: | ---: | --- | ---: | --- |
-| `scip-query health --json` | 2.608s | 2.442s | 2.674s, 2.442s, 2.518s, 2.391s, 2.408s, 2.432s, 2.543s | 15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
-| `scip-query health --json --full` | 2.550s | 2.432s | 2.438s, 2.420s, 2.413s, 2.553s, 2.432s | 15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
+| Case                              | Baseline median | Current median | Warm repeats                                           | stdout bytes | SHA-256                                                            |
+| --------------------------------- | --------------: | -------------: | ------------------------------------------------------ | -----------: | ------------------------------------------------------------------ |
+| `scip-query health --json`        |          2.608s |         2.442s | 2.674s, 2.442s, 2.518s, 2.391s, 2.408s, 2.432s, 2.543s |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query health --json --full` |          2.550s |         2.432s | 2.438s, 2.420s, 2.413s, 2.553s, 2.432s                 |       15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
 
 The standard health path improved by 166ms versus the same-session pre-patch
 median and kept the exact same 15,342-byte payload hash. Full health also moved
@@ -213,12 +218,12 @@ flow builds SCIP reference edges first, filters dependency edges through the
 same conservative skip gates that already existed, and source-scans only files
 that can still become unused-import findings.
 
-| Case | Baseline median | Current median | Warm repeats | stdout bytes | SHA-256 |
-| --- | ---: | ---: | --- | ---: | --- |
-| `scip-query __health-phase drift --full` | 1.709s | 0.723s | 1.154s, 0.730s, 0.729s, 0.706s, 0.723s, 0.714s, 0.712s | 98 | `7409f1c8ad7c5ae6a6ac5ae17778707e1b03f9e990a521de4376357f4a48bacd` |
-| `scip-query drift --json` | 1.7s phase-family band | 0.723s | 0.726s, 0.728s, 0.723s, 0.715s, 0.719s | 725,970 | `a7754846099d3424020aa3a26764fec84698dc3f5cfdb1c861c30228d1366462` |
-| `scip-query health --json` | 2.487s | 2.384s | 2.375s, 2.384s, 2.428s, 2.377s, 2.368s, 2.423s, 2.392s | 15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
-| `scip-query health --json --full` | 2.445s | 2.455s | 2.455s, 2.378s, 2.576s, 2.466s, 2.403s | 15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
+| Case                                     |        Baseline median | Current median | Warm repeats                                           | stdout bytes | SHA-256                                                            |
+| ---------------------------------------- | ---------------------: | -------------: | ------------------------------------------------------ | -----------: | ------------------------------------------------------------------ |
+| `scip-query __health-phase drift --full` |                 1.709s |         0.723s | 1.154s, 0.730s, 0.729s, 0.706s, 0.723s, 0.714s, 0.712s |           98 | `7409f1c8ad7c5ae6a6ac5ae17778707e1b03f9e990a521de4376357f4a48bacd` |
+| `scip-query drift --json`                | 1.7s phase-family band |         0.723s | 0.726s, 0.728s, 0.723s, 0.715s, 0.719s                 |      725,970 | `a7754846099d3424020aa3a26764fec84698dc3f5cfdb1c861c30228d1366462` |
+| `scip-query health --json`               |                 2.487s |         2.384s | 2.375s, 2.384s, 2.428s, 2.377s, 2.368s, 2.423s, 2.392s |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query health --json --full`        |                 2.445s |         2.455s | 2.455s, 2.378s, 2.576s, 2.466s, 2.403s                 |       15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
 
 The standalone drift phase drops by 986ms with the exact same 98-byte health
 phase payload. Public `drift --json` keeps the same 725,970-byte result hash and
@@ -237,26 +242,53 @@ callers. The direct loader materializes the same source-corrected
 Vega_2.0: 6,442 candidates, identical ordered symbol IDs, and no range
 mismatches.
 
-| Case | Previous focused median | Current median | Warm repeats | stdout bytes | SHA-256 |
-| --- | ---: | ---: | --- | ---: | --- |
-| `scip-query __health-phase isolated --full` | 1.694s | 1.672s | 2.391s, 1.627s, 1.672s | 63 | `483ba1fc03707fcb197b8eb48207444c446feda7e73732b3e45813b77c0da329` |
-| `scip-query isolated --json --full` | 1.857s | 1.744s | 1.750s, 1.744s, 1.734s | 130 | `04e17adcb38811e37d69fc5abbaadb8b2d79cdf7a9992a30c27648e520acb702` |
-| `scip-query health --json --full` | 2.455s | 2.326s | 2.341s, 2.294s, 2.326s | 15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
-| `scip-query health --json` | 2.384s | 2.329s | 2.400s, 2.309s, 2.329s | 15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
-| `scip-query wrapper-candidates --json --full` | 1.608s | 1.689s | 1.744s, 1.689s, 1.684s | 78,437 | `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58` |
-| `scip-query stale-abstractions --json --full` | 1.527s | 1.672s | 1.672s, 1.610s, 1.677s | 83,654 | `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2` |
-| `scip-query complexity-hotspots --json --full` | 1.603s | 1.528s | 1.528s, 1.499s, 1.533s | 2,160,117 | `77edc0f3482e8ccd5520c5b178383d3ab3f1aef586888a4e2054551b6c14765f` |
+| Case                                           | Previous focused median | Current median | Warm repeats           | stdout bytes | SHA-256                                                            |
+| ---------------------------------------------- | ----------------------: | -------------: | ---------------------- | -----------: | ------------------------------------------------------------------ |
+| `scip-query __health-phase isolated --full`    |                  1.694s |         1.672s | 2.391s, 1.627s, 1.672s |           63 | `483ba1fc03707fcb197b8eb48207444c446feda7e73732b3e45813b77c0da329` |
+| `scip-query isolated --json --full`            |                  1.857s |         1.744s | 1.750s, 1.744s, 1.734s |          130 | `04e17adcb38811e37d69fc5abbaadb8b2d79cdf7a9992a30c27648e520acb702` |
+| `scip-query health --json --full`              |                  2.455s |         2.326s | 2.341s, 2.294s, 2.326s |       15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
+| `scip-query health --json`                     |                  2.384s |         2.329s | 2.400s, 2.309s, 2.329s |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query wrapper-candidates --json --full`  |                  1.608s |         1.689s | 1.744s, 1.689s, 1.684s |       78,437 | `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58` |
+| `scip-query stale-abstractions --json --full`  |                  1.527s |         1.672s | 1.672s, 1.610s, 1.677s |       83,654 | `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2` |
+| `scip-query complexity-hotspots --json --full` |                  1.603s |         1.528s | 1.528s, 1.499s, 1.533s |    2,160,117 | `77edc0f3482e8ccd5520c5b178383d3ab3f1aef586888a4e2054551b6c14765f` |
 
 Rejected variants from this pass:
 
-| Probe | Result | Decision |
-| --- | ---: | --- |
-| Preselect files with callable-shaped symbols, then load full per-file catalogs | `health --json --full` moved to 2.637s and `isolated --json --full` to 2.034s | Rejected; extra query cost did not repay the smaller file set |
-| Use direct merged row loading for every callable mode | `health --json --full` moved to 2.580s and `health --json` to 2.524s | Rejected for health slowdown despite a `complexity-hotspots` win |
-| Include `bottlenecks --json --full` in the same timed sweep | Still running after multiple minutes | Stopped; not used as evidence for this scoped production-callables change |
+| Probe                                                                          |                                                                        Result | Decision                                                                  |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------: | ------------------------------------------------------------------------- |
+| Preselect files with callable-shaped symbols, then load full per-file catalogs | `health --json --full` moved to 2.637s and `isolated --json --full` to 2.034s | Rejected; extra query cost did not repay the smaller file set             |
+| Use direct merged row loading for every callable mode                          |          `health --json --full` moved to 2.580s and `health --json` to 2.524s | Rejected for health slowdown despite a `complexity-hotspots` win          |
+| Include `bottlenecks --json --full` in the same timed sweep                    |                                          Still running after multiple minutes | Stopped; not used as evidence for this scoped production-callables change |
 
 The accepted scoped version preserves the target health hashes and improves the
 current focused health medians while keeping the `requireCallableSymbol` fast
 path available for complexity-style scans. The next pass should target the
 remaining isolated graph checks or the long-running `bottlenecks --json --full`
 path separately.
+
+## Post Persistent Definition Cache
+
+Focused rerun with the local built CLI after `getDefinitionsForFile()` started
+serving source-corrected definition catalogs from `file-definitions` evidence
+when the source hash and project evidence fingerprint match. Vega started with
+0 rows for this evidence kind; the first `isolated --json --full` run populated
+1,779 rows in 2.726s.
+
+| Case                                                      | Previous focused/current baseline |  Current warm | Warm repeats                          | stdout bytes | SHA-256                                                            |
+| --------------------------------------------------------- | --------------------------------: | ------------: | ------------------------------------- | -----------: | ------------------------------------------------------------------ |
+| `productionCallableDefinitions()` stage inside `isolated` |                            0.922s |        0.400s | stage probe                           |          n/a | n/a                                                                |
+| `scip-query isolated --json --full`                       |                            1.744s |        1.306s | 1.314s, 1.306s                        |          130 | `04e17adcb38811e37d69fc5abbaadb8b2d79cdf7a9992a30c27648e520acb702` |
+| `scip-query __health-phase isolated`                      |      1.580s same-session baseline |        1.162s | single phase rerun                    |           63 | `483ba1fc03707fcb197b8eb48207444c446feda7e73732b3e45813b77c0da329` |
+| `scip-query __health-phase wrapper-candidates`            |      1.570s same-session baseline |        1.178s | single phase rerun                    |        1,585 | `9c61a0f9565f11c9a1b04477549cacd330585a2b2ad0e9fc92dafafe26ea965b` |
+| `scip-query __health-phase stale-abstractions`            |      1.547s same-session baseline |        1.110s | single phase rerun                    |        2,755 | `8827e8f0a99315a51d38b6604e096deab5b452421fcd6f984c835cdd879cf322` |
+| `scip-query health --json`                                |           2.329s previous focused | 2.131s-2.251s | 2.184s, 2.131s, 2.186s, matrix 2.251s |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query health --json --full`                         |           2.326s previous focused | 2.145s-2.358s | 2.221s, matrix 2.145s, 2.358s         |       15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
+
+Cross-command warm matrix after the cache also moved definition-heavy commands:
+`dead --json --full` 1.513s, `recent-duplicates --json --full` 1.480s,
+`wrapper-candidates --json --full` 1.206s, `stale-abstractions --json --full`
+1.142s, and `similar --json --full` 0.939s. All hash probes listed above kept
+their previous byte-identical outputs. `diff-gate --json` had one matrix
+outlier at 2.644s, then repeated at 1.651s, 1.548s, and 1.503s with the same
+3,089-byte SHA-256
+`4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`.
