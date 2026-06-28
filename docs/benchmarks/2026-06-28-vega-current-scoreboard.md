@@ -283,6 +283,24 @@ The source tree was reverted after this probe. The next candidate should focus
 on reducing repeated source-facts/source-fallback work or health orchestration
 rather than changing caller-map staging or SQLite mention batch size.
 
+## Post Diff-Gate Echo Callable Prefilter Refresh
+
+Focused paired rerun with the local built CLI after skipping non-callable
+changed symbols before the diff-gate echo check calls `similar()`, plus an
+early non-function guard inside `similar()`'s callee lookup.
+
+| Command / probe                                  | Baseline median | Current median | Delta   | stdout bytes | SHA-256                                                            |
+| ------------------------------------------------ | --------------: | -------------: | ------: | -----------: | ------------------------------------------------------------------ |
+| `scip-query diff-gate --json`                    |          2.955s |         2.920s |   -34ms |        3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
+| `only echo`                                      |          2.147s |         2.118s |   -29ms |        1,211 | `162f52479ad23d4e481f4fe0cea288a3f0dfbe568b056190bd01e5c766697a90` |
+| `only echo --max-echo-checks 1`                  |          2.113s |         0.356s | -1.757s |        1,341 | `96a1a06be3e0b814fe881eacf5fd3d1399290df9535cbaf3c3727518465977d3` |
+| `scip-query similar DiffGateFinding --json --full` |       0.211s |         0.153s |   -58ms |          241 | `aad94553fb65ca62538c6974685bff36443869c09142c68bef04c06c35c00825` |
+
+The full Vega diff still contains callable changed symbols, so the aggregate
+gate improvement is small. Diffs whose echo window is dominated by constants,
+types, or other non-callable symbols avoid the expensive similarity index path
+entirely while keeping byte-identical output.
+
 ## Biggest Confirmed Delta
 
 | Command                                       | Earlier heavy/focused baseline | Current warm | Notes                                                                                                                                                                                                                                                                                                                                                     |
@@ -298,7 +316,9 @@ rather than changing caller-map staging or SQLite mention batch size.
 ## Current Next Targets
 
 1. `diff-gate --json` and `health --json` are effectively tied at the top of the
-   latest full warm matrix: 2.883s and 2.876s respectively.
+   latest full warm matrix. The latest focused diff-gate echo prefilter moves
+   the paired Vega `diff-gate --json` median from 2.955s to 2.920s, while
+   `health --json` remains around 2.9s.
 2. The latest focused dead probe drops `dead --json --full` to 1.968s, below
    `wrapper-candidates --json --full` and `stale-abstractions --json --full`
    from the last full matrix. The next likely standalone targets are wrapper

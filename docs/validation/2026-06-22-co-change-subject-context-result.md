@@ -65,3 +65,8 @@ The current maintainability sweep rechecked the `subjectContext` claim after doc
 ## 2026-06-27 Citation Refresh
 
 The persistent-refresh coordination slice rechecked the `subjectContext` claim in `diff-gate.ts` and the compact text rendering in `src/runtime/query-commands/impact.ts`. Both claims remain current; refresh metadata and watcher locking are outside this co-change output path.
+## 2026-06-28 Diff-Gate Echo Follow-Up
+
+The subject-context behavior documented for `diff-gate.ts` remains unchanged.
+The new diff-gate edit is limited to the echo check's callable prefilter and
+does not affect co-change finding context.

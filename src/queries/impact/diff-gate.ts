@@ -23,7 +23,7 @@ import { incompleteMigration } from './incomplete-migration.js';
 import { similar } from '../cleanup/similar.js';
 import { unusedParams } from '../cleanup/unused-params.js';
 import type { FindingSuppression } from '../../domain/types.js';
-import { leafName, leafSuffix } from '../../symbols/symbol-parser.js';
+import { isCallableSymbol, leafName, leafSuffix } from '../../symbols/symbol-parser.js';
 
 export type DiffGateCheck =
   | 'echo'
@@ -361,6 +361,7 @@ function runEchoCheck(
 ): void {
   result.checksRun.push('echo');
   for (const changedSymbol of changedSymbols.slice(0, maxEchoChecks)) {
+    if (!isCallableSymbol(changedSymbol.symbol)) continue;
     if (symbolPreexistedAtBase(changedSymbol)) continue;
     const matches = similar(db, changedSymbol.symbol, { minSimilarity, limit: 5, scanLimit, semantic });
     const eligibleMatches: EchoMatch[] = [];

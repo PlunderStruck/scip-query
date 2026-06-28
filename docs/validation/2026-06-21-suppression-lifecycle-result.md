@@ -109,3 +109,8 @@ The `src/analysis/framework-patterns.ts:224` suppression example remains valid a
 ## 2026-06-28 Definition-Exclusion Cache Reference Check
 
 The `src/analysis/framework-patterns.ts:224` suppression example remains valid after adding persistent definition-exclusion evidence. The cache stores the same Rust and TS/JS exclusion entries behind a content hash; it does not change the sampled suppression target, reason, or exclusion semantics.
+## 2026-06-28 Similar Target Follow-Up
+
+The accepted `similar.ts` suppression-lifecycle record remains intentional. The
+new change is a performance-only early return for non-function-like similarity
+targets and does not alter the documented suppression categories.

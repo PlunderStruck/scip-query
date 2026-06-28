@@ -66,3 +66,8 @@ The persistent-refresh coordination slice rechecked the doc-reference fallback c
 ## 2026-06-28 Path Evidence Cache Refresh
 
 The doc-drift path-evidence cache removed the old `docCitationContextWindows()` wrapper. The citation parser claim remains current because `docPathEvidence()` still calls `markdownCitationContext()` when it builds cached path candidates and citation contexts, and both `doc-drift` and `docsCitingFiles()` consume that shared evidence.
+## 2026-06-28 Diff-Gate Echo Follow-Up
+
+The doc-reference citation parser references to `diff-gate.ts` remain accurate.
+The latest edit does not touch doc-reference fallback parsing or citation
+context behavior; it only skips non-callable symbols in the echo check.

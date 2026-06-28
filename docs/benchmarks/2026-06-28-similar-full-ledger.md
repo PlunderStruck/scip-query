@@ -95,3 +95,9 @@
 - Deferred: persistent index-time fingerprint tables are promising but larger
   than the first optimization batch; first measure where the current 300s is
   spent.
+## 2026-06-28 Non-Function Target Follow-Up
+
+The callee fingerprint index contract above is unchanged. `similar()` now
+returns before constructing `ProjectIndex` or reading callee rows when the
+matched target is not function-like, preserving the same empty-result behavior
+for type/interface/module-like targets while avoiding wasted setup.

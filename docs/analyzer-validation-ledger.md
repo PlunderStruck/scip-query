@@ -268,3 +268,11 @@ The maintainability-register completion slice rechecked the ledger's command-sur
 ## 2026-06-23 Current Sweep Citation Refresh
 
 The current maintainability sweep rechecked the `diff-gate.ts` citation again after doc-reference and baseline policy helpers moved into private query modules. The ledger remains accurate because `diffGate()` and `DIFF_GATE_CHECKS` still live in `src/queries/impact/diff-gate.ts`; the baseline policy body remains behind the same entry point, but the repo-wide baseline ratchet is explicit rather than part of default diff-gate execution.
+## 2026-06-28 Diff-Gate Echo Follow-Up
+
+The `diffGate()` citation remains accurate: default diff-gate execution still
+runs echo, incomplete migration, co-change partner, doc-reference,
+unused-params, and new-dead checks through `src/queries/impact/diff-gate.ts`.
+The performance follow-up only skips non-callable changed symbols before echo
+similarity scoring; baseline ratchet behavior and check configuration remain
+unchanged.

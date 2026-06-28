@@ -57,3 +57,8 @@ The current maintainability sweep rechecked this result after private doc-refere
 ## 2026-06-27 Citation Refresh
 
 The persistent-refresh coordination slice rechecked the `diff-gate.ts` and `src/runtime/query-commands/impact.ts` citations. Commit-scope and recency evidence still flow through the same co-change surfaces; index freshness and watcher coordination do not change the analyzer behavior recorded here.
+## 2026-06-28 Diff-Gate Echo Follow-Up
+
+The `diff-gate.ts` recency-sweep references remain accurate. The follow-up only
+avoids echo similarity scoring for non-callable changed symbols and does not
+change co-change recency evidence or health integration.

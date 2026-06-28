@@ -364,3 +364,9 @@ The current maintainability sweep rechecked the diff-gate source references afte
 ## 2026-06-27 Citation Refresh
 
 The persistent-refresh coordination slice rechecked the `diffGate()` citation. The diff-gate entrypoint still owns the same check lifecycle and still delegates to the same check-family helpers before root-cause grouping. The current reindex/watch/config changes do not alter the analyzer-calibration conclusions in this memo.
+## 2026-06-28 Diff-Gate Echo Follow-Up
+
+The calibration references to `similar.ts` and `diff-gate.ts` remain accurate.
+This follow-up only adds a non-function early return to `similar()` callee
+lookup and a callable-symbol prefilter before diff-gate echo calls similarity;
+the listed diff-gate checks and analyzer calibration surfaces are unchanged.

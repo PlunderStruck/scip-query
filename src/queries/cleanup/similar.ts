@@ -351,10 +351,10 @@ const INFRASTRUCTURE_CALLEE_FRAGMENTS = [
 
 function findCallees(db: ScipDatabase, symbolPattern: string, opts: { semantic: boolean }): SymbolFingerprint | null {
   const target = findFirstSymbolMatch(db, symbolPattern);
-  const index = new ProjectIndex(db);
-
   if (!target) return null;
+  if (!isFunctionLikeSymbol(target.symbol)) return null;
 
+  const index = new ProjectIndex(db);
   const calleeRows = getCalleeRowsForSymbol(db, target, { semantic: opts.semantic });
 
   return {
