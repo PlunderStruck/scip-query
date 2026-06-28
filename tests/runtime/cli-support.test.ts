@@ -45,7 +45,7 @@ describe('commandAnalysisBudget', () => {
 
 describe('healthPhaseConcurrency', () => {
   it('uses an adaptive default capped below the full phase count', () => {
-    expect(healthPhaseConcurrency(20, {}, () => 14)).toBe(10);
+    expect(healthPhaseConcurrency(20, {}, () => 14)).toBe(12);
     expect(healthPhaseConcurrency(20, {}, () => 6)).toBe(5);
     expect(healthPhaseConcurrency(3, {}, () => 14)).toBe(3);
   });
@@ -53,7 +53,7 @@ describe('healthPhaseConcurrency', () => {
   it('honors explicit environment overrides', () => {
     expect(healthPhaseConcurrency(20, { SCIP_QUERY_HEALTH_CONCURRENCY: '6' }, () => 14)).toBe(6);
     expect(healthPhaseConcurrency(20, { SCIP_QUERY_HEALTH_CONCURRENCY: '100' }, () => 14)).toBe(20);
-    expect(healthPhaseConcurrency(20, { SCIP_QUERY_HEALTH_CONCURRENCY: 'nope' }, () => 14)).toBe(10);
+    expect(healthPhaseConcurrency(20, { SCIP_QUERY_HEALTH_CONCURRENCY: 'nope' }, () => 14)).toBe(12);
   });
 });
 

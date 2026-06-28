@@ -171,6 +171,10 @@ reported zero `tree-sitter` parse calls.
   `projectEvidenceFingerprint()`. Corrupt payloads, missing fingerprints, or
   mismatched project fingerprints fall back to the authoritative SCIP row merge
   and source range correction path.
+- Accepted: raise the adaptive default health phase concurrency ceiling from 10
+  to 12. Vega has enough parallelism to run two more independent health phase
+  subprocesses without changing output, and measured concurrency above 12 was
+  flat/noisy rather than clearly faster.
 
 ## Post Health Drift Pattern-Deviation Skip
 
@@ -344,3 +348,28 @@ Local `scip-query diff-gate` reported only eight support-tier
 documents cite `src/queries/cleanup/dead.ts` as a configuration-example path.
 The path target remains intentional; `scip-query diff-gate --skip
 doc-reference` passed with zero code or behavioral findings.
+
+## Post Health Concurrency Ceiling
+
+Focused rerun with the rebuilt local CLI after raising
+`MAX_DEFAULT_HEALTH_PHASE_CONCURRENCY` from 10 to 12. The health phase scheduler
+still keeps the CPU-aware default, item-count cap, and explicit
+`SCIP_QUERY_HEALTH_CONCURRENCY` override behavior; only high-parallelism hosts
+that were previously capped at 10 get the higher default.
+
+The pre-change focused warm band in this same Vega session was
+2.252s-2.325s for `health --json` and `health --json --full`. Explicit
+concurrency probes preserved the `health --json` output hash at every tested
+concurrency from 1 through 20. The clearest conservative win was cap 12:
+1.897s and 1.962s with the same 15,342-byte SHA-256 output.
+
+| Case                              | Previous warm band | Current warm repeats   | stdout bytes | SHA-256                                                            |
+| --------------------------------- | -----------------: | ---------------------- | -----------: | ------------------------------------------------------------------ |
+| `scip-query health --json`        |      2.252s-2.325s | 2.116s, 1.933s, 1.949s |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query health --json --full` |      2.256s-2.325s | 1.938s, 1.916s, 1.925s |       15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
+
+This is an orchestration speedup: a health phase is an independently computed
+section of the aggregate health report, and the changed ceiling lets two more
+ready sections run concurrently on machines with enough CPU capacity. It does
+not alter individual phase logic, candidate limits, health scoring, or JSON
+projection.

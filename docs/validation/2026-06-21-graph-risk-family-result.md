@@ -36,11 +36,11 @@ Raw output root:
 /tmp/scip-query-validation/2026-06-21-pilot
 ```
 
-| Repository | Revision | Raw output directory |
-| --- | --- | --- |
-| `scip-query` | current working tree | `/tmp/scip-query-validation/2026-06-21-pilot/scip-query/graph-risk-family` |
+| Repository          | Revision                                   | Raw output directory                                                              |
+| ------------------- | ------------------------------------------ | --------------------------------------------------------------------------------- |
+| `scip-query`        | current working tree                       | `/tmp/scip-query-validation/2026-06-21-pilot/scip-query/graph-risk-family`        |
 | `Stable_Management` | `2354b4e385088aa90559c20ea8b270f14bfa47f3` | `/tmp/scip-query-validation/2026-06-21-pilot/Stable_Management/graph-risk-family` |
-| `Vega_2.0` | `6288855333faf33ba395fa804eb9b03c0a04989e` | `/tmp/scip-query-validation/2026-06-21-pilot/Vega_2.0/graph-risk-family` |
+| `Vega_2.0`          | `6288855333faf33ba395fa804eb9b03c0a04989e` | `/tmp/scip-query-validation/2026-06-21-pilot/Vega_2.0/graph-risk-family`          |
 
 ### scip-query
 
@@ -112,3 +112,8 @@ latest change computes the cheap `overview` phase in the parent process before
 scheduling child phases, which reduces health command startup work without
 changing the graph-risk family result or the meaning of the coupling sample
 above.
+
+The later health concurrency-ceiling pass also leaves this reference current:
+`src/runtime/cli-support.ts` still owns the health subprocess scheduler, and
+raising the adaptive default phase cap from 10 to 12 changes only how many
+independent phase subprocesses can run at once on high-parallelism hosts.

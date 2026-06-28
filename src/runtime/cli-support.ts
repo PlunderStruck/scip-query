@@ -4,9 +4,7 @@ import { availableParallelism } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { ScipDatabase } from '../storage/db.js';
 import * as queries from '../queries/index.js';
-import {
-  sourceFrameworkApplicability,
-} from '../source/source-fileset.js';
+import { sourceFrameworkApplicability } from '../source/source-fileset.js';
 import { formatBytes, withDb } from './cli-context.js';
 import { chunked } from './isolated-analysis-runner.js';
 import { render } from './render.js';
@@ -22,7 +20,7 @@ const LARGE_COMMAND_SYMBOL_THRESHOLD = 75_000;
 const LARGE_COMMAND_DOCUMENT_THRESHOLD = 5_000;
 const DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT = 2_500;
 const DEFAULT_HEALTH_PHASE_CONCURRENCY = 4;
-const MAX_DEFAULT_HEALTH_PHASE_CONCURRENCY = 10;
+const MAX_DEFAULT_HEALTH_PHASE_CONCURRENCY = 12;
 const HEALTH_PHASE_MAX_BUFFER = 10 * 1024 * 1024;
 const REACT_HEALTH_PHASES = new Set<HealthPhaseName>([
   'react-component-duplicates',

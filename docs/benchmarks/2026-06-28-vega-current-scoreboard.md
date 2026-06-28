@@ -16,9 +16,10 @@ callable pass adds per-file role caches and a scoped direct row loader for
 `requireCallableSymbol` scans. The newest focused diff-gate pass adds
 file-scoped production-callable loading for changed-file-only unused-parameter
 checks. The latest shared-cache pass persists source-corrected per-file
-definition catalogs as project-fingerprint-guarded evidence. Focused reruns
-after the full matrix are recorded separately below so partial measurements do
-not silently reshuffle the whole ranking.
+definition catalogs as project-fingerprint-guarded evidence. The latest focused
+health pass raises the adaptive health phase concurrency ceiling from 10 to 12.
+Focused reruns after the full matrix are recorded separately below so partial
+measurements do not silently reshuffle the whole ranking.
 
 ## Corpus
 
@@ -496,6 +497,22 @@ that fill.
 | `scip-query stale-abstractions --json --full` |   1.527s |        1.142s | matrix run; direct hash probe 1.127s                     |       83,654 | `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2` |
 | `scip-query similar --json --full`            |   1.372s |        0.939s | matrix run; direct hash probe 0.966s                     |       88,859 | `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf` |
 
+## Post Health Concurrency Ceiling Refresh
+
+Focused rerun with the rebuilt local CLI after raising the adaptive default
+health phase concurrency ceiling from 10 to 12. This only affects hosts with
+enough available parallelism; explicit `SCIP_QUERY_HEALTH_CONCURRENCY` overrides
+and item-count caps still apply.
+
+| Command                           | Previous focused warm band | Current warm repeats | stdout bytes | SHA-256                                                            |
+| --------------------------------- | -------------------------: | -------------------- | -----------: | ------------------------------------------------------------------ |
+| `scip-query health --json`        |              2.252s-2.325s | 2.116s-1.933s-1.949s |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query health --json --full` |              2.256s-2.325s | 1.938s-1.916s-1.925s |       15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
+
+The pre-edit concurrency sweep kept the `health --json` hash unchanged from
+concurrency 1 through 20. Cap 12 was the conservative measured win at
+1.897s-1.962s; higher probes flattened into timing noise.
+
 ## Biggest Confirmed Delta
 
 | Command                                       | Earlier heavy/focused baseline | Current warm | Notes                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -503,7 +520,7 @@ that fill.
 | `scip-query similar --json --full`            |  300.7s heavy / 315.3s focused |       0.939s | Same 88,859-byte output and SHA-256 `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf`; stable semantic evidence and persistent source-corrected definition catalogs avoid fresh-process rebuilds.                                                                                                                                                                                                  |
 | `scip-query recent-duplicates --json --full`  |                         6.439s |       1.480s | Same 3,618-byte output and SHA-256 `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`; full-mode scans skip old-old pairs, React profile rows persist, and source-corrected definitions now persist across CLI processes.                                                                                                                                                                           |
 | `scip-query doc-drift --json --full`          |                         3.472s |       1.085s | Same 963,953-byte output and SHA-256 `7f8765a247b9e6a0ab2cbd0e99b38b51acf7ce689cd7b7b02165cdb80f97cc8c`; markdown path candidates and citation contexts now persist as content-hash evidence.                                                                                                                                                                                                                       |
-| `scip-query health --json`                    |                         6.864s |       2.131s | Same 15,342-byte output and SHA-256 `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d`; latest focused warm path benefits from source-reexports evidence, hidden drift-row skipping, parent-process overview scheduling, candidate-first drift source scanning, cached production-callable file-role checks, and persistent definitions.                                                            |
+| `scip-query health --json`                    |                         6.864s |       1.933s | Same 15,342-byte output and SHA-256 `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d`; latest focused warm path benefits from source-reexports evidence, hidden drift-row skipping, parent-process overview scheduling, candidate-first drift source scanning, cached production-callable file-role checks, persistent definitions, and a higher adaptive health phase concurrency ceiling.        |
 | `scip-query diff-gate --json`                 |                         4.193s |       1.503s | Same 3,089-byte output and SHA-256 `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`; targeted similarity reuses callee-index work, skips non-callable echo targets, bounds lexical source fallback, persists source-token fingerprints and definitions, and scopes the unused-params check to changed files.                                                                                      |
 | `scip-query dead --json --full`               |                         4.325s |       1.119s | Same 3,803,655-byte output and SHA-256 `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1`; JS/TS exclusion prefilter avoids ordinary React hook-call files, SQL statements are cached per connection, source fallback reuses scoped definition caches, framework/definition evidence persists, and large candidate sets now batch caller-file evidence instead of resolving per-symbol caller rows. |
 | `scip-query wrapper-candidates --json --full` |                         2.236s |       1.206s | Same 78,437-byte output and SHA-256 `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58`; re-export parsing and source-corrected definitions now persist across fresh CLI processes.                                                                                                                                                                                                                  |
@@ -512,15 +529,14 @@ that fill.
 
 ## Current Next Targets
 
-1. `health --json` remains the top warm target around the 2.12s-2.18s band.
-   A shared phase-cache probe preserved hashes but did not move timing, so the
-   next health pass needs a different algorithmic target rather than another
-   cache-retention variant.
-2. `diff-gate --json`, `complexity-hotspots --json --full`, and
-   `recent-duplicates --json --full` remain clustered around 1.46s-1.51s in
+1. `diff-gate --json`, `complexity-hotspots --json --full`, and
+   `recent-duplicates --json --full` remain clustered around 1.46s-1.60s in
    repeated warm local-CLI runs. The next implementation pass should choose the
-   clearest algorithmic bottleneck from that group instead of chasing health
-   orchestration noise.
+   clearest algorithmic bottleneck from that group.
+2. `health --json` and `health --json --full` now sit around 1.92s-1.95s after
+   the concurrency-ceiling pass, with one 2.116s standard-health first-run
+   outlier. The next health pass should target individual remaining phase
+   algorithms rather than another scheduler-only adjustment.
 3. Standalone `dead --json --full`, `wrapper-candidates --json --full`,
    `stale-abstractions --json --full`, and `similar --json --full` now sit
    between about 0.94s and 1.21s in focused warm local-CLI runs.
