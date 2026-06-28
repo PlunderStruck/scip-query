@@ -23,6 +23,7 @@
 | Vega_2.0 stable evidence cache version after `0.10.9` bump           |                                                       multi-minute semantic miss |        5.287s | restores warm path | Existing `0.10.8` semantic callee rows reused by content/digest-compatible reads; stdout 3,618 bytes; SHA-256 `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`. |
 | Vega_2.0 full focus-file pair pruning                                |                                                                           5.344s | 4.190s median |   -1.154s / -21.6% | Four post-change warm repeats: 4.242s, 4.182s, 4.194s, 4.186s; stdout 3,618 bytes; SHA-256 unchanged at `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`.       |
 | Vega_2.0 persistent React profile evidence cache                     |                                                                           4.590s | 1.936s median |   -2.654s / -57.8% | Local built CLI first run populated 689 `react-component-behavior-profiles` rows in 4.155s; warm repeats were 1.945s, 1.927s, 1.936s; stdout/hash unchanged.                      |
+| Vega_2.0 persistent git file-add evidence                            |                                                                           1.489s | 1.146s median |    -343ms / -23.0% | Local built CLI first run populated `git-file-adds` in 2.024s; warm repeats were 1.153s, 1.147s, 1.145s, 1.135s; stdout 3,618 bytes; SHA-256 unchanged.                           |
 
 ## Current Pipeline
 
@@ -59,6 +60,9 @@ reactHookCandidates -C 10`.
   `FileAddRecord.commitsAgo <= windowCommits` rule used by
   `orientRecentDuplicate()`, then passes that set to callable and frontend
   pairwise detectors only when `limit` is infinite.
+- Accepted: persist the `getFileAddRecords()` map in `evidence.db` under the
+  current Git HEAD. This removes a fresh `git log --diff-filter=A` pass from
+  warm CLI processes while preserving the existing in-process HEAD validation.
 - Rejected: making `intersection()` and `jaccard()` iterate the smaller set.
   The math stayed equivalent, but the Vega `recent-duplicates --json --full`
   workload got slower in repeated runs, so the code/test edit was reverted and
@@ -93,6 +97,12 @@ reactHookCandidates -C 10`.
   of reparsing every `.tsx`/`.jsx` file. Vega warm median moved from 4.590s to
   1.936s with the same 3,618-byte output and SHA-256
   `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`.
+- Accepted: HEAD-keyed persistent file-add evidence. A stage probe measured
+  `getFileAddRecords()` at 314ms on Vega before the persistent row existed.
+  Caching the parsed 18,821-row add map by HEAD moves fresh-process warm
+  `recent-duplicates --full` from the 1.476s-1.503s band to
+  1.135s-1.153s with the same output hash. Corrupt payloads and missing cache
+  rows fall back to Git and rewrite the cache.
 - Rejected: sharing one React profile array between React component and hook
   detectors. The output hash stayed unchanged, but Vega remained in the same
   4.18s-4.24s band while the change widened detector API surface, so it was

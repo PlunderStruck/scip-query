@@ -83,3 +83,10 @@ The `src/analysis/git-history.ts` and `diff-gate.ts` recency-sweep references
 remain accurate. The focused history path carries the newest non-bulk timestamp
 from the same global analysis window into the changed-file subset, so recency
 classification remains anchored to the original bounded history.
+
+## 2026-06-28 File-Add Cache Follow-Up
+
+The `src/analysis/git-history.ts` recency-sweep reference remains accurate.
+The new HEAD-keyed file-add evidence cache only persists `getFileAddRecords()`
+for recent-duplicate orientation; it does not change commit-scope, recency, or
+co-change pair construction.

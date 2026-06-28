@@ -11,6 +11,7 @@
 import { execFileSync } from 'node:child_process';
 import type { ScipDatabase } from '../storage/db.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
+import { readCachedFileEvidence, writeCachedFileEvidence } from '../storage/evidence-cache.js';
 
 export interface CommitRecord {
   hash: string;
@@ -210,6 +211,7 @@ interface FileAddRecord {
 }
 
 const fileAddCache = headKeyedGitValue<Map<string, FileAddRecord>>('git-file-adds');
+const FILE_ADD_CACHE_KEY = '__git__/file-adds';
 
 /**
  * When each file was first added, from `git log --diff-filter=A` over the
@@ -217,7 +219,46 @@ const fileAddCache = headKeyedGitValue<Map<string, FileAddRecord>>('git-file-add
  * treat absence as "established".
  */
 export function getFileAddRecords(db: ScipDatabase): Map<string, FileAddRecord> | null {
-  return fileAddCache(db, (projectRoot) => loadFileAddRecords(projectRoot));
+  return fileAddCache(db, (projectRoot, head) => cachedFileAddRecords(db, projectRoot, head));
+}
+
+function cachedFileAddRecords(db: ScipDatabase, projectRoot: string, head: string): Map<string, FileAddRecord> | null {
+  const cached = parseFileAddRecordsPayload(readCachedFileEvidence(db, 'git-file-adds', FILE_ADD_CACHE_KEY, head));
+  if (cached) return cached;
+
+  const adds = loadFileAddRecords(projectRoot);
+  if (adds) writeCachedFileEvidence(db, 'git-file-adds', FILE_ADD_CACHE_KEY, head, serializeFileAddRecords(adds));
+  return adds;
+}
+
+function serializeFileAddRecords(records: ReadonlyMap<string, FileAddRecord>): string {
+  return JSON.stringify([...records.entries()]);
+}
+
+function parseFileAddRecordsPayload(payload: string | null): Map<string, FileAddRecord> | null {
+  if (!payload) return null;
+  try {
+    const parsed = JSON.parse(payload) as unknown;
+    if (!Array.isArray(parsed)) return null;
+    const records = new Map<string, FileAddRecord>();
+    for (const entry of parsed) {
+      if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string') return null;
+      const record = entry[1] as Partial<FileAddRecord> | undefined;
+      if (
+        !record ||
+        typeof record.commitsAgo !== 'number' ||
+        !Number.isFinite(record.commitsAgo) ||
+        typeof record.addedAt !== 'number' ||
+        !Number.isFinite(record.addedAt)
+      ) {
+        return null;
+      }
+      records.set(entry[0], { commitsAgo: record.commitsAgo, addedAt: record.addedAt });
+    }
+    return records;
+  } catch {
+    return null;
+  }
 }
 
 function loadFileAddRecords(projectRoot: string): Map<string, FileAddRecord> | null {

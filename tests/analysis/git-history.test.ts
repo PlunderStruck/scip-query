@@ -10,6 +10,7 @@ import {
   getCoChangePairsForFiles,
   getCommitHistory,
   getDirectionalCoChangePairsForFiles,
+  getFileAddRecords,
   getFileChurn,
 } from '../../src/analysis/git-history.js';
 import { coChange } from '../../src/queries/impact/co-change.js';
@@ -96,6 +97,44 @@ describe('git history evidence', () => {
     const outside = mkdtempSync(join(tmpdir(), 'scip-no-git-'));
     expect(getCommitHistory(fakeDb(outside))).toBeNull();
     rmSync(outside, { recursive: true, force: true });
+  });
+
+  it('persists file add records by HEAD', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-file-add-cache-'));
+    try {
+      gitIn(root, 'init');
+      commitIn(root, 'initial files', {
+        'src/a.ts': 'export const a = 1;\n',
+        'src/b.ts': 'export const b = 1;\n',
+      });
+      const head = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf-8' }).trim();
+      const dbPath = join(root, 'index.db');
+      const config = {
+        projectRoot: root,
+        dbPath,
+        indexPath: join(root, 'index.scip'),
+      };
+      evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/a.ts').document(2, 'typescript', 'src/b.ts').write();
+
+      let first: ReturnType<typeof getFileAddRecords>;
+      const db = new ScipDatabase(config);
+      try {
+        first = getFileAddRecords(db);
+        expect(first?.get('src/a.ts')).toEqual(expect.objectContaining({ commitsAgo: 0 }));
+        expect(readCachedFileEvidence(db, 'git-file-adds', '__git__/file-adds', head)).not.toBeNull();
+      } finally {
+        db.close();
+      }
+
+      const reopened = new ScipDatabase(config);
+      try {
+        expect([...getFileAddRecords(reopened)!]).toEqual([...first!]);
+      } finally {
+        reopened.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('computes per-file churn with fix-commit counts', () => {

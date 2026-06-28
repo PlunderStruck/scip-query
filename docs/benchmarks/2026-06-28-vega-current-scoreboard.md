@@ -22,6 +22,8 @@ The newest diff-gate pass narrows the co-change partner check to directional
 history for changed files while preserving the same bounded git-history window.
 The newest complexity-hotspots pass applies the existing LOC threshold during
 candidate collection and reduces per-candidate callee scoring allocations.
+The newest recent-duplicates pass persists the parsed Git file-add map by HEAD
+so warm CLI processes avoid a repeated add-history scan.
 Focused reruns after the full matrix are recorded separately below so partial
 measurements do not silently reshuffle the whole ranking.
 
@@ -546,12 +548,25 @@ bulk caller/callee evidence preparation.
 | `scip-query __health-phase complexity-hotspots` |               not isolated | 1.081s-1.080s-1.084s-1.097s                      |          670 | `38b928cf4b5e56ece26278a67c8bec1ad8b076629846392bbb91c8baac67741a` |
 | `scip-query health --json`                      |              1.854s-1.914s | 1.969s-1.869s-1.871s-1.881s                      |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
 
+## Post Recent-Duplicates File-Add Cache Refresh
+
+Focused rerun with the rebuilt local CLI after persisting the parsed
+`git log --diff-filter=A` file-add map in `evidence.db`, keyed by the current
+Git HEAD. The first patched run filled the cache; subsequent fresh CLI
+processes reused the 18,821-row Vega add map.
+
+| Command                                      | Previous focused warm band | Current warm repeats                          | stdout bytes | SHA-256                                                            |
+| -------------------------------------------- | -------------------------: | --------------------------------------------- | -----------: | ------------------------------------------------------------------ |
+| `scip-query recent-duplicates --json --full` |              1.476s-1.503s | 2.024s fill, then 1.153s-1.147s-1.145s-1.135s |        3,618 | `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b` |
+| `scip-query health --json`                   |              1.908s-2.131s | 1.870s-1.839s-1.826s                          |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query __health-phase git-evidence`     |              0.897s-0.914s | 0.855s-0.878s-0.851s                          |      413,963 | `7750461f2aeea01ef99261bc29cec088c9b8edeb06028bd24e4e5cb4392a96b4` |
+
 ## Biggest Confirmed Delta
 
 | Command                                       | Earlier heavy/focused baseline | Current warm | Notes                                                                                                                                                                                                                                                                                                                                                                                                               |
 | --------------------------------------------- | -----------------------------: | -----------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `scip-query similar --json --full`            |  300.7s heavy / 315.3s focused |       0.939s | Same 88,859-byte output and SHA-256 `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf`; stable semantic evidence and persistent source-corrected definition catalogs avoid fresh-process rebuilds.                                                                                                                                                                                                  |
-| `scip-query recent-duplicates --json --full`  |                         6.439s |       1.480s | Same 3,618-byte output and SHA-256 `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`; full-mode scans skip old-old pairs, React profile rows persist, and source-corrected definitions now persist across CLI processes.                                                                                                                                                                           |
+| `scip-query recent-duplicates --json --full`  |                         6.439s |       1.135s | Same 3,618-byte output and SHA-256 `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`; full-mode scans skip old-old pairs, React profile rows persist, source-corrected definitions persist, and the Git file-add map now persists by HEAD across CLI processes.                                                                                                                                    |
 | `scip-query doc-drift --json --full`          |                         3.472s |       1.085s | Same 963,953-byte output and SHA-256 `7f8765a247b9e6a0ab2cbd0e99b38b51acf7ce689cd7b7b02165cdb80f97cc8c`; markdown path candidates and citation contexts now persist as content-hash evidence.                                                                                                                                                                                                                       |
 | `scip-query health --json`                    |                         6.864s |       1.933s | Same 15,342-byte output and SHA-256 `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d`; latest focused warm path benefits from source-reexports evidence, hidden drift-row skipping, parent-process overview scheduling, candidate-first drift source scanning, cached production-callable file-role checks, persistent definitions, and a higher adaptive health phase concurrency ceiling.        |
 | `scip-query diff-gate --json`                 |                         4.193s |       1.331s | Same 3,089-byte output and SHA-256 `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`; targeted similarity reuses callee-index work, skips non-callable echo targets, bounds lexical source fallback, persists source-token fingerprints and definitions, scopes the unused-params check to changed files, and narrows co-change partner history to changed-file commits.                           |
@@ -562,19 +577,18 @@ bulk caller/callee evidence preparation.
 
 ## Current Next Targets
 
-1. `recent-duplicates --json --full` is now the clearest non-health target
-   around 1.46s-1.49s. `complexity-hotspots --json --full` moved slightly lower
-   into the 1.39s-1.42s warm band after the LOC-prefilter pass.
-2. `health --json` and `health --json --full` now sit around 1.92s-1.95s after
-   the concurrency-ceiling pass, with one 2.116s standard-health first-run
-   outlier. The next health pass should target individual remaining phase
-   algorithms rather than another scheduler-only adjustment.
-3. `diff-gate --json` now sits around 1.33s warm after the focused co-change
-   pass, with one 2.791s first-run outlier.
-4. Standalone `dead --json --full`, `wrapper-candidates --json --full`,
-   `stale-abstractions --json --full`, and `similar --json --full` now sit
-   between about 0.94s and 1.21s in focused warm local-CLI runs.
-5. Re-run the full Vega warm matrix with the installed CLI after the next
+1. `health --json` and `health --json --full` still sit around 1.83s-1.93s.
+   A fresh concurrency sweep from 10 through 18 workers kept the same output
+   hash and did not beat the current scheduler, so the next health pass should
+   target individual phase algorithms or shared phase setup.
+2. `complexity-hotspots --json --full`, `isolated --json --full`, and
+   `diff-gate --json` are the next standalone cluster, roughly 1.33s-1.47s in
+   current focused warm local-CLI runs.
+3. `recent-duplicates --json --full`, `dead --json --full`,
+   `stale-abstractions --json --full`, `wrapper-candidates --json --full`, and
+   `similar --json --full` now sit between about 0.95s and 1.21s in focused
+   warm local-CLI runs.
+4. Re-run the full Vega warm matrix with the installed CLI after the next
    package install/publish so the scoreboard captures normal `scip-query`
    command behavior, not only local `dist/cli.js`.
 

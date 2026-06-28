@@ -34,7 +34,8 @@ export type FileEvidenceKind =
   | 'source-reexports'
   | 'source-fingerprints'
   | 'consumer-file-usage'
-  | 'react-component-behavior-profiles';
+  | 'react-component-behavior-profiles'
+  | 'git-file-adds';
 
 interface EvidenceConnection {
   evidence: Database.Database;

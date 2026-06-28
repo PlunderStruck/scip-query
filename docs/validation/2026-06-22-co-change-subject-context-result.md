@@ -92,3 +92,11 @@ The subject-context behavior documented for `src/analysis/git-history.ts` and
 context from commits that contributed to the directional co-change pair; it
 only avoids loading unrelated commits that cannot produce a partner finding for
 the current diff.
+
+## 2026-06-28 File-Add Cache Follow-Up
+
+The subject-context behavior documented for `src/analysis/git-history.ts`
+remains unchanged. The new HEAD-keyed file-add evidence cache only persists
+`getFileAddRecords()` for recent-duplicate orientation; it does not change
+subject collection, subject labels, issue refs, or sampled commit subjects for
+co-change pairs.
