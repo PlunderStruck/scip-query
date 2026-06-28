@@ -39,6 +39,7 @@ export function complexityHotspots(
     candidates: () =>
       index.productionCallableDefinitions({
         scope,
+        minLoc,
         requireCallableSymbol: true,
         includeSuppressed: true,
         sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
@@ -66,9 +67,15 @@ function complexityHotspotForDefinition(
   if (loc < minLoc) return null;
   const fanIn = maps.callerMap.get(definition.symbolId)?.size ?? 0;
   const callees = maps.calleeMap.get(definition.symbolId) ?? [];
-  const externalCallees = callees.filter((c) => c.file !== definition.relativePath);
-  const fanOut = new Set(externalCallees.map((c) => `${c.symbol}|${c.file}`)).size;
-  const calleeCount = new Set(callees.map((c) => `${c.symbol}|${c.file}`)).size;
+  const uniqueCallees = new Set<string>();
+  const uniqueExternalCallees = new Set<string>();
+  for (const callee of callees) {
+    const key = `${callee.symbol}|${callee.file}`;
+    uniqueCallees.add(key);
+    if (callee.file !== definition.relativePath) uniqueExternalCallees.add(key);
+  }
+  const fanOut = uniqueExternalCallees.size;
+  const calleeCount = uniqueCallees.size;
   return {
     symbol: definition.symbol,
     shortName: shortenSymbol(definition.symbol),

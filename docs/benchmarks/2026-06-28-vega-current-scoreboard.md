@@ -20,6 +20,8 @@ definition catalogs as project-fingerprint-guarded evidence. The latest focused
 health pass raises the adaptive health phase concurrency ceiling from 10 to 12.
 The newest diff-gate pass narrows the co-change partner check to directional
 history for changed files while preserving the same bounded git-history window.
+The newest complexity-hotspots pass applies the existing LOC threshold during
+candidate collection and reduces per-candidate callee scoring allocations.
 Focused reruns after the full matrix are recorded separately below so partial
 measurements do not silently reshuffle the whole ranking.
 
@@ -531,6 +533,19 @@ that touched those files.
 | `scip-query complexity-hotspots --json --full`                                                                                  |              1.480s-1.521s | 1.526s-1.465s-1.462s               |    2,160,117 | `77edc0f3482e8ccd5520c5b178383d3ab3f1aef586888a4e2054551b6c14765f` |
 | `scip-query recent-duplicates --json --full`                                                                                    |              1.471s-1.496s | 1.489s-1.461s-1.468s               |        3,618 | `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b` |
 
+## Post Complexity LOC-Prefilter Refresh
+
+Focused rerun with the rebuilt local CLI after passing `minLoc` into
+`productionCallableDefinitions()` and scoring unique callees in one loop. This
+skips 1,800 Vega callable definitions below the default 10 LOC threshold before
+bulk caller/callee evidence preparation.
+
+| Command                                         | Previous focused warm band | Current warm repeats                             | stdout bytes | SHA-256                                                            |
+| ----------------------------------------------- | -------------------------: | ------------------------------------------------ | -----------: | ------------------------------------------------------------------ |
+| `scip-query complexity-hotspots --json --full`  |              1.416s-1.437s | 2.019s outlier, then 1.417s-1.420s-1.392s-1.401s |    2,160,117 | `77edc0f3482e8ccd5520c5b178383d3ab3f1aef586888a4e2054551b6c14765f` |
+| `scip-query __health-phase complexity-hotspots` |               not isolated | 1.081s-1.080s-1.084s-1.097s                      |          670 | `38b928cf4b5e56ece26278a67c8bec1ad8b076629846392bbb91c8baac67741a` |
+| `scip-query health --json`                      |              1.854s-1.914s | 1.969s-1.869s-1.871s-1.881s                      |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+
 ## Biggest Confirmed Delta
 
 | Command                                       | Earlier heavy/focused baseline | Current warm | Notes                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -547,9 +562,9 @@ that touched those files.
 
 ## Current Next Targets
 
-1. `complexity-hotspots --json --full` and
-   `recent-duplicates --json --full` are now the clearest non-health cluster,
-   both around 1.46s-1.53s in repeated warm local-CLI runs.
+1. `recent-duplicates --json --full` is now the clearest non-health target
+   around 1.46s-1.49s. `complexity-hotspots --json --full` moved slightly lower
+   into the 1.39s-1.42s warm band after the LOC-prefilter pass.
 2. `health --json` and `health --json --full` now sit around 1.92s-1.95s after
    the concurrency-ceiling pass, with one 2.116s standard-health first-run
    outlier. The next health pass should target individual remaining phase
