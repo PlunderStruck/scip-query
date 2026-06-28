@@ -315,22 +315,35 @@ export function docsCitingFiles(
   db: ScipDatabase,
   targets: ReadonlySet<string>,
 ): Array<{ doc: string; cited: string[]; citations: DocFileCitation[]; citedClaims: string[] }> {
+  if (targets.size === 0) return [];
   const tracked = getTrackedFiles(db) ?? new Set<string>();
   const trackedBySuffix = buildSuffixIndex(tracked);
+  const targetCandidates = targetPathCandidates(targets, trackedBySuffix);
   const out: Array<{ doc: string; cited: string[]; citations: DocFileCitation[]; citedClaims: string[] }> = [];
   for (const docFile of tracked) {
     if (!isLivingDoc(db, docFile)) continue;
-    const { resolved, citations } = extractFileReferences(db, docFile, tracked, trackedBySuffix, new Set());
-    const cited = [...resolved].filter((file) => targets.has(file));
+    const candidates = docPathCandidates(db, docFile);
+    if (!candidates) continue;
+    const citedByCandidate = citedTargetsFromCandidates(candidates, targets, targetCandidates, tracked, trackedBySuffix);
+    if (citedByCandidate.size === 0) continue;
+
+    const contextCandidates = [...new Set([...citedByCandidate.values()].flatMap((cited) => [...cited]))];
+    const contextsByCandidate = docCitationContextWindows(db, docFile, contextCandidates);
+    const citations: DocFileCitation[] = [...citedByCandidate]
+      .map(([file, fileCandidates]) => ({
+        file,
+        contexts: uniqueCitationContexts([...fileCandidates].flatMap((candidate) => contextsByCandidate.get(candidate) ?? []))
+          .slice(0, 3),
+      }))
+      .filter((citation) => citation.contexts.length > 0);
+    const cited = [...citedByCandidate.keys()];
     if (cited.length > 0) {
       const sortedCited = cited.sort();
-      const citedSet = new Set(sortedCited);
-      const matchedCitations = citations.filter((citation) => citedSet.has(citation.file));
       out.push({
         doc: docFile,
         cited: sortedCited,
-        citations: matchedCitations,
-        citedClaims: uniqueCitationContexts(matchedCitations.flatMap((citation) => citation.contexts)).slice(0, 3),
+        citations,
+        citedClaims: uniqueCitationContexts(citations.flatMap((citation) => citation.contexts)).slice(0, 3),
       });
     }
   }
@@ -357,6 +370,48 @@ function buildSuffixIndex(tracked: ReadonlySet<string>): Map<string, string[]> {
     }
   }
   return index;
+}
+
+function targetPathCandidates(
+  targets: ReadonlySet<string>,
+  trackedBySuffix: ReadonlyMap<string, readonly string[]>,
+): Set<string> {
+  const candidates = new Set<string>(targets);
+  for (const target of targets) {
+    const segments = target.split('/');
+    for (const depth of [2, 3]) {
+      if (segments.length < depth) continue;
+      const suffix = segments.slice(-depth).join('/');
+      const resolved = trackedBySuffix.get(suffix);
+      if (resolved?.length === 1 && resolved[0] === target) candidates.add(suffix);
+    }
+  }
+  return candidates;
+}
+
+function citedTargetsFromCandidates(
+  candidates: readonly string[],
+  targets: ReadonlySet<string>,
+  targetCandidates: ReadonlySet<string>,
+  tracked: ReadonlySet<string>,
+  trackedBySuffix: ReadonlyMap<string, readonly string[]>,
+): Map<string, Set<string>> {
+  const citedByCandidate = new Map<string, Set<string>>();
+  for (const candidate of candidates) {
+    if (!targetCandidates.has(candidate)) continue;
+    let cited: string | undefined;
+    if (tracked.has(candidate)) {
+      cited = candidate;
+    } else {
+      const bySuffix = trackedBySuffix.get(candidate);
+      if (bySuffix?.length === 1) cited = bySuffix[0];
+    }
+    if (!cited || !targets.has(cited)) continue;
+    const bucket = citedByCandidate.get(cited) ?? new Set<string>();
+    bucket.add(candidate);
+    citedByCandidate.set(cited, bucket);
+  }
+  return citedByCandidate;
 }
 
 function extractFileReferences(

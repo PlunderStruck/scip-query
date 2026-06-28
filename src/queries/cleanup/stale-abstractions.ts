@@ -5,6 +5,8 @@ import { leafName, parseSymbol, shortenSymbol } from '../../symbols/symbol-parse
 import { getSourceText } from '../../source/source-text.js';
 import { getTypeContainerMap } from '../../source/ast.js';
 import { ProjectIndex } from '../../core/project-index.js';
+import { semanticCallerMap } from '../../semantic/shared-primitives.js';
+import { mergeSetMaps } from '../../symbols/references/caller-evidence.js';
 import { runCandidateAnalysis } from '../internal/candidate-scan.js';
 import {
   definitionConsumerFileMap,
@@ -121,13 +123,27 @@ export function staleAbstractions(
     // fallback for unique-named types. Without the fallback, a type used only in
     // string-templated contexts or via paths the indexer missed would falsely
     // appear unconsumed.
-    prepare: (typeCandidates) => ({
-      consumerFileMap: consumerMapForTypeCandidates(index, typeCandidates, { semantic: includeSemantic }),
-      singletonBackedClassIds: getSingletonBackedClassIds(db, index, scopedDefinitions, typeCandidates, {
+    prepare: (typeCandidates) => {
+      const candidateIndex = buildTypeCandidateIndex(typeCandidates);
+      const consumerFileMap = consumerMapForPossiblyStaleTypeCandidates(db, index, typeCandidates, candidateIndex, {
         semantic: includeSemantic,
-      }),
-      candidateIndex: buildTypeCandidateIndex(typeCandidates),
-    }),
+      });
+      const possiblyReportableTypes = typeCandidates.filter((definition) => {
+        const row = staleCandidateRow(db, definition, consumerFileMap, candidateIndex);
+        return (
+          row.realConsumers.length <= 1 &&
+          !row.transitivelyReachable &&
+          isTrueStaleAbstraction(definition, row.realConsumers.length, filesWithFunctions)
+        );
+      });
+      return {
+        consumerFileMap,
+        singletonBackedClassIds: getSingletonBackedClassIds(db, index, scopedDefinitions, possiblyReportableTypes, {
+          semantic: includeSemantic,
+        }),
+        candidateIndex,
+      };
+    },
     evaluate: (definition, evidence) => {
       if (evidence.singletonBackedClassIds.has(definition.symbolId)) return null;
       const row = staleCandidateRow(db, definition, evidence.consumerFileMap, evidence.candidateIndex);
@@ -186,9 +202,38 @@ function staleTypeCandidates(
 function consumerMapForTypeCandidates(
   index: ProjectIndex,
   typeCandidates: readonly IndexedDefinition[],
+  opts: { semantic: boolean; sourceFallback?: boolean },
+): Map<number, Set<string>> {
+  return definitionConsumerFileMap(index, typeCandidates, {
+    semantic: opts.semantic,
+    sourceFallback: opts.sourceFallback,
+  });
+}
+
+function consumerMapForPossiblyStaleTypeCandidates(
+  db: ScipDatabase,
+  index: ProjectIndex,
+  typeCandidates: readonly IndexedDefinition[],
+  candidateIndex: TypeCandidateIndex,
   opts: { semantic: boolean },
 ): Map<number, Set<string>> {
-  return definitionConsumerFileMap(index, typeCandidates, { semantic: opts.semantic });
+  const indexedConsumerFileMap = consumerMapForTypeCandidates(index, typeCandidates, {
+    semantic: false,
+    sourceFallback: false,
+  });
+  const semanticCandidates = typeCandidates.filter((definition) => {
+    const row = staleCandidateRow(db, definition, indexedConsumerFileMap, candidateIndex);
+    return row.realConsumers.length <= 1 && !(row.realConsumers.length > 0 && isTypeOnlyFile(definition.relativePath));
+  });
+  const semanticConsumerFileMap =
+    opts.semantic && semanticCandidates.length > 0
+      ? mergeSetMaps(indexedConsumerFileMap, semanticCallerMap(db, semanticCandidates))
+      : indexedConsumerFileMap;
+  const fallbackCandidates = semanticCandidates.filter(
+    (definition) =>
+      staleCandidateRow(db, definition, semanticConsumerFileMap, candidateIndex).realConsumers.length <= 1,
+  );
+  return mergeSetMaps(semanticConsumerFileMap, index.sourceFallbackCallerFiles(fallbackCandidates));
 }
 
 function buildTypeCandidateIndex(typeCandidates: readonly IndexedDefinition[]): TypeCandidateIndex {

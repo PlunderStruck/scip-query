@@ -1,0 +1,4 @@
+interface:
+  display_name: "SCIP AI Cleanup"
+  short_description: "Clean up AI-generated code rot"
+  default_prompt: "Use $scip-ai-cleanup to find and fix AI-generated duplication, partial migrations, and stale cleanup fallout."

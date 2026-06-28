@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { getFileAddRecords } from '../../analysis/git-history.js';
+import { sourceFrameworkApplicability } from '../../source/source-fileset.js';
 import { reactComponentDuplicates } from '../frontend/react-component-duplicates.js';
 import { reactHookCandidates } from '../frontend/react-hook-candidates.js';
 import { similarAll } from './similar.js';
@@ -88,6 +89,28 @@ interface RecentDuplicateCandidateOptions {
   semantic?: boolean;
 }
 
+interface FrontendDuplicatePair {
+  fileA: string;
+  fileB: string;
+  similarity: number;
+}
+
+interface FrontendDuplicateOptions {
+  limit: number;
+  minSimilarity: number;
+  scanLimit?: number;
+  scope?: string;
+}
+
+interface FrontendDuplicateCandidateSource<TPair extends FrontendDuplicatePair> {
+  domain: RecentDuplicateDomain;
+  basis: RecentDuplicateBasis;
+  query: (db: ScipDatabase, opts: FrontendDuplicateOptions) => TPair[];
+  symbolA: (pair: TPair) => string;
+  symbolB: (pair: TPair) => string;
+  evidenceBuckets: (pair: TPair) => Array<[string, readonly string[]]>;
+}
+
 const CALLABLE_MIN_SIMILARITY = 0.7;
 const FRONTEND_STRUCTURE_MIN_SIMILARITY = 0.62;
 const FRONTEND_BEHAVIOR_MIN_SIMILARITY = 0.45;
@@ -157,7 +180,7 @@ function collectRecentDuplicateCandidates(
   opts: RecentDuplicateCandidateOptions,
 ): RecentDuplicateCandidate[] {
   const candidateLimit = expandedCandidateLimit(opts.limit);
-  return [
+  const candidates: RecentDuplicateCandidate[] = [
     ...callableDuplicateCandidates(db, {
       scope: opts.scope,
       minSimilarity: opts.minSimilarity ?? CALLABLE_MIN_SIMILARITY,
@@ -165,31 +188,44 @@ function collectRecentDuplicateCandidates(
       scanLimit: opts.scanLimit,
       semantic: opts.semantic,
     }),
-    ...reactComponentDuplicateCandidates(db, {
-      scope: opts.scope,
-      minSimilarity: opts.minSimilarity ?? FRONTEND_STRUCTURE_MIN_SIMILARITY,
-      limit: candidateLimit,
-      scanLimit: opts.scanLimit,
-    }),
-    ...reactHookDuplicateCandidates(db, {
-      scope: opts.scope,
-      minSimilarity: opts.minSimilarity ?? FRONTEND_BEHAVIOR_MIN_SIMILARITY,
-      limit: candidateLimit,
-      scanLimit: opts.scanLimit,
-    }),
-    ...vueComponentDuplicateCandidates(db, {
-      scope: opts.scope,
-      minSimilarity: opts.minSimilarity ?? FRONTEND_STRUCTURE_MIN_SIMILARITY,
-      limit: candidateLimit,
-      scanLimit: opts.scanLimit,
-    }),
-    ...vueComposableDuplicateCandidates(db, {
-      scope: opts.scope,
-      minSimilarity: opts.minSimilarity ?? FRONTEND_BEHAVIOR_MIN_SIMILARITY,
-      limit: candidateLimit,
-      scanLimit: opts.scanLimit,
-    }),
   ];
+
+  const applicability = sourceFrameworkApplicability(db, { scope: opts.scope });
+  if (applicability.react) {
+    candidates.push(
+      ...reactComponentDuplicateCandidates(db, {
+        scope: opts.scope,
+        minSimilarity: opts.minSimilarity ?? FRONTEND_STRUCTURE_MIN_SIMILARITY,
+        limit: candidateLimit,
+        scanLimit: opts.scanLimit,
+      }),
+      ...reactHookDuplicateCandidates(db, {
+        scope: opts.scope,
+        minSimilarity: opts.minSimilarity ?? FRONTEND_BEHAVIOR_MIN_SIMILARITY,
+        limit: candidateLimit,
+        scanLimit: opts.scanLimit,
+      }),
+    );
+  }
+
+  if (applicability.vue) {
+    candidates.push(
+      ...vueComponentDuplicateCandidates(db, {
+        scope: opts.scope,
+        minSimilarity: opts.minSimilarity ?? FRONTEND_STRUCTURE_MIN_SIMILARITY,
+        limit: candidateLimit,
+        scanLimit: opts.scanLimit,
+      }),
+      ...vueComposableDuplicateCandidates(db, {
+        scope: opts.scope,
+        minSimilarity: opts.minSimilarity ?? FRONTEND_BEHAVIOR_MIN_SIMILARITY,
+        limit: candidateLimit,
+        scanLimit: opts.scanLimit,
+      }),
+    );
+  }
+
+  return candidates;
 }
 
 function callableDuplicateCandidates(
@@ -226,28 +262,39 @@ function reactComponentDuplicateCandidates(
   db: ScipDatabase,
   opts: { minSimilarity: number; limit: number; scope?: string; scanLimit?: number },
 ): RecentDuplicateCandidate[] {
-  return reactComponentDuplicates(db, {
-    scope: opts.scope,
-    minSimilarity: opts.minSimilarity,
-    limit: opts.limit,
-    scanLimit: opts.scanLimit,
-  })
+  return frontendDuplicateCandidates(db, opts, {
+    query: reactComponentDuplicates,
+    domain: 'react-component',
+    basis: 'jsx-structure',
+    symbolA: (pair) => pair.componentA,
+    symbolB: (pair) => pair.componentB,
+    evidenceBuckets: (pair) => [
+      ['component', pair.sharedComponents],
+      ['tag', pair.sharedNativeTags],
+      ['prop', pair.sharedProps],
+      ['event', pair.sharedEvents],
+      ['binding', pair.sharedBindings],
+    ],
+  });
+}
+
+function frontendDuplicateCandidates<TPair extends FrontendDuplicatePair>(
+  db: ScipDatabase,
+  opts: FrontendDuplicateOptions,
+  source: FrontendDuplicateCandidateSource<TPair>,
+): RecentDuplicateCandidate[] {
+  return source
+    .query(db, opts)
     .filter((pair) => pair.fileA !== pair.fileB)
     .map((pair) => ({
-      domain: 'react-component',
-      basis: 'jsx-structure',
-      symbolA: pair.componentA,
+      domain: source.domain,
+      basis: source.basis,
+      symbolA: source.symbolA(pair),
       fileA: pair.fileA,
-      symbolB: pair.componentB,
+      symbolB: source.symbolB(pair),
       fileB: pair.fileB,
       similarity: pair.similarity,
-      sharedEvidence: evidenceFromBuckets(
-        ['component', pair.sharedComponents],
-        ['tag', pair.sharedNativeTags],
-        ['prop', pair.sharedProps],
-        ['event', pair.sharedEvents],
-        ['binding', pair.sharedBindings],
-      ),
+      sharedEvidence: evidenceFromBuckets(...source.evidenceBuckets(pair)),
       sharedCallees: [],
     }));
 }
@@ -256,97 +303,67 @@ function reactHookDuplicateCandidates(
   db: ScipDatabase,
   opts: { minSimilarity: number; limit: number; scope?: string; scanLimit?: number },
 ): RecentDuplicateCandidate[] {
-  return reactHookCandidates(db, {
-    scope: opts.scope,
-    minSimilarity: opts.minSimilarity,
-    limit: opts.limit,
-    scanLimit: opts.scanLimit,
-  })
-    .filter((pair) => pair.fileA !== pair.fileB)
-    .map((pair) => ({
-      domain: 'react-hook',
-      basis: 'react-behavior',
-      symbolA: pair.componentA,
-      fileA: pair.fileA,
-      symbolB: pair.componentB,
-      fileB: pair.fileB,
-      similarity: pair.similarity,
-      sharedEvidence: evidenceFromBuckets(
-        ['hook', pair.sharedHooks],
-        ['react-hook', pair.sharedReactHooks],
-        ['effect', pair.sharedEffects],
-        ['state', pair.sharedState],
-        ['request', pair.sharedRequests],
-        ['handler', pair.sharedHandlers],
-        ['action', pair.sharedHandlerVerbs],
-      ),
-      sharedCallees: [],
-    }));
+  return frontendDuplicateCandidates(db, opts, {
+    query: reactHookCandidates,
+    domain: 'react-hook',
+    basis: 'react-behavior',
+    symbolA: (pair) => pair.componentA,
+    symbolB: (pair) => pair.componentB,
+    evidenceBuckets: (pair) => [
+      ['hook', pair.sharedHooks],
+      ['react-hook', pair.sharedReactHooks],
+      ['effect', pair.sharedEffects],
+      ['state', pair.sharedState],
+      ['request', pair.sharedRequests],
+      ['handler', pair.sharedHandlers],
+      ['action', pair.sharedHandlerVerbs],
+    ],
+  });
 }
 
 function vueComponentDuplicateCandidates(
   db: ScipDatabase,
   opts: { minSimilarity: number; limit: number; scope?: string; scanLimit?: number },
 ): RecentDuplicateCandidate[] {
-  return vueComponentDuplicates(db, {
-    scope: opts.scope,
-    minSimilarity: opts.minSimilarity,
-    limit: opts.limit,
-    scanLimit: opts.scanLimit,
-  })
-    .filter((pair) => pair.fileA !== pair.fileB)
-    .map((pair) => ({
-      domain: 'vue-component',
-      basis: 'vue-template',
-      symbolA: fileStem(pair.fileA),
-      fileA: pair.fileA,
-      symbolB: fileStem(pair.fileB),
-      fileB: pair.fileB,
-      similarity: pair.similarity,
-      sharedEvidence: evidenceFromBuckets(
-        ['component', pair.sharedComponents],
-        ['prop', pair.sharedProps],
-        ['event', pair.sharedEvents],
-        ['directive', pair.sharedDirectives],
-        ['slot', pair.sharedSlots],
-        ['identifier', pair.sharedIdentifiers],
-      ),
-      sharedCallees: [],
-    }));
+  return frontendDuplicateCandidates(db, opts, {
+    query: vueComponentDuplicates,
+    domain: 'vue-component',
+    basis: 'vue-template',
+    symbolA: (pair) => fileStem(pair.fileA),
+    symbolB: (pair) => fileStem(pair.fileB),
+    evidenceBuckets: (pair) => [
+      ['component', pair.sharedComponents],
+      ['prop', pair.sharedProps],
+      ['event', pair.sharedEvents],
+      ['directive', pair.sharedDirectives],
+      ['slot', pair.sharedSlots],
+      ['identifier', pair.sharedIdentifiers],
+    ],
+  });
 }
 
 function vueComposableDuplicateCandidates(
   db: ScipDatabase,
   opts: { minSimilarity: number; limit: number; scope?: string; scanLimit?: number },
 ): RecentDuplicateCandidate[] {
-  return vueComposableCandidates(db, {
-    scope: opts.scope,
-    minSimilarity: opts.minSimilarity,
-    limit: opts.limit,
-    scanLimit: opts.scanLimit,
-  })
-    .filter((pair) => pair.fileA !== pair.fileB)
-    .map((pair) => ({
-      domain: 'vue-composable',
-      basis: 'vue-behavior',
-      symbolA: fileStem(pair.fileA),
-      fileA: pair.fileA,
-      symbolB: fileStem(pair.fileB),
-      fileB: pair.fileB,
-      similarity: pair.similarity,
-      sharedEvidence: evidenceFromBuckets(
-        ['composable', pair.sharedComposables],
-        ['store', pair.sharedStores],
-        ['reactivity', pair.sharedReactivity],
-        ['lifecycle', pair.sharedLifecycle],
-        ['request', pair.sharedRequests],
-        ['function', pair.sharedFunctions],
-        ['action', pair.sharedFunctionVerbs],
-        ['binding', pair.sharedBindings],
-        ['template-event', pair.sharedTemplateEvents],
-      ),
-      sharedCallees: [],
-    }));
+  return frontendDuplicateCandidates(db, opts, {
+    query: vueComposableCandidates,
+    domain: 'vue-composable',
+    basis: 'vue-behavior',
+    symbolA: (pair) => fileStem(pair.fileA),
+    symbolB: (pair) => fileStem(pair.fileB),
+    evidenceBuckets: (pair) => [
+      ['composable', pair.sharedComposables],
+      ['store', pair.sharedStores],
+      ['reactivity', pair.sharedReactivity],
+      ['lifecycle', pair.sharedLifecycle],
+      ['request', pair.sharedRequests],
+      ['function', pair.sharedFunctions],
+      ['action', pair.sharedFunctionVerbs],
+      ['binding', pair.sharedBindings],
+      ['template-event', pair.sharedTemplateEvents],
+    ],
+  });
 }
 
 function orientRecentDuplicate(

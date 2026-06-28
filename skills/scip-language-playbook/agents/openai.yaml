@@ -1,0 +1,4 @@
+interface:
+  display_name: "SCIP Language Playbook"
+  short_description: "Pick high-signal SCIP commands by language"
+  default_prompt: "Use $scip-language-playbook to choose the best scip-query commands for this language and task."

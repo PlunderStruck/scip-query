@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -7,10 +7,13 @@ import { ScipDatabase } from '../../src/storage/db.js';
 import {
   EVIDENCE_DB_FILENAME,
   fileContentHash,
+  projectEvidenceFingerprint,
   readCachedSemanticCallees,
+  readCachedSemanticReferences,
   readCachedFileEvidence,
   sha256Hex,
   writeCachedSemanticCalleesBatch,
+  writeCachedSemanticReferencesBatch,
   writeCachedFileEvidence,
 } from '../../src/storage/evidence-cache.js';
 import { getSourceFacts } from '../../src/source/source-facts.js';
@@ -215,6 +218,73 @@ describe('evidence cache', () => {
       expect(readCachedSemanticCallees(db, FILE, 'sym#other', 'hash-b', 'digest-a')).toBe(payload);
     } finally {
       db.close();
+    }
+  });
+
+  it('round-trips semantic reference rows and invalidates on project fingerprint change', () => {
+    const dbWithoutMeta = openDb();
+    try {
+      expect(projectEvidenceFingerprint(dbWithoutMeta)).toBeNull();
+    } finally {
+      dbWithoutMeta.close();
+    }
+
+    writeFileSync(
+      join(tempDir, 'meta.json'),
+      JSON.stringify({
+        version: 3,
+        status: 'complete',
+        fingerprint: {
+          version: 1,
+          languages: ['typescript'],
+          pnpmWorkspaces: false,
+          files: [{ path: FILE, size: 123, hash: 'source-a' }],
+        },
+        indexedLanguages: ['typescript'],
+      }),
+    );
+
+    const db = openDb();
+    const projectFingerprint = projectEvidenceFingerprint(db);
+    try {
+      expect(projectFingerprint).not.toBeNull();
+      const payload = JSON.stringify([{ file: 'src/consumer.ts', line: 2, column: 4 }]);
+      writeCachedSemanticReferencesBatch(db, [
+        { relativePath: FILE, symbol: 'sym#greet', projectFingerprint: projectFingerprint!, payload },
+      ]);
+      expect(readCachedSemanticReferences(db, FILE, 'sym#greet', projectFingerprint!)).toBe(payload);
+      expect(readCachedSemanticReferences(db, FILE, 'sym#greet', 'different-project')).toBeNull();
+    } finally {
+      db.close();
+    }
+
+    writeFileSync(
+      join(tempDir, 'meta.json'),
+      JSON.stringify({
+        version: 3,
+        status: 'complete',
+        fingerprint: {
+          version: 1,
+          languages: ['typescript'],
+          pnpmWorkspaces: false,
+          files: [{ path: FILE, size: 456, hash: 'source-b' }],
+        },
+        indexedLanguages: ['typescript'],
+      }),
+    );
+
+    const dbAfterChange = openDb();
+    const nextProjectFingerprint = projectEvidenceFingerprint(dbAfterChange);
+    try {
+      expect(nextProjectFingerprint).not.toBe(projectFingerprint);
+      const nextPayload = JSON.stringify([{ file: 'src/next-consumer.ts', line: 5, column: 1 }]);
+      writeCachedSemanticReferencesBatch(dbAfterChange, [
+        { relativePath: FILE, symbol: 'sym#greet', projectFingerprint: nextProjectFingerprint!, payload: nextPayload },
+      ]);
+      expect(readCachedSemanticReferences(dbAfterChange, FILE, 'sym#greet', projectFingerprint!)).toBeNull();
+      expect(readCachedSemanticReferences(dbAfterChange, FILE, 'sym#greet', nextProjectFingerprint!)).toBe(nextPayload);
+    } finally {
+      dbAfterChange.close();
     }
   });
 

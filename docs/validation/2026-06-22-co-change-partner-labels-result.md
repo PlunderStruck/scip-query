@@ -50,3 +50,7 @@ The maintainability-register completion slice rechecked the `diff-gate.ts` citat
 ## 2026-06-23 Current Sweep Citation Refresh
 
 The current maintainability sweep rechecked this result after private doc-reference and baseline policy helpers moved out of `diff-gate.ts`. Co-change-partner label propagation remains in the same diff-gate workflow, so the historical result remains accurate.
+
+## 2026-06-27 Citation Refresh
+
+The persistent-refresh coordination slice rechecked the `diff-gate.ts` and `src/runtime/query-commands/impact.ts` citations. Co-change partner labels and command rendering still use the same implementation surfaces; the refresh coordination changes do not alter this validation result.

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { getSourceFiles } from '../../src/source/source-fileset.js';
+import { getSourceFiles, sourceFrameworkApplicability } from '../../src/source/source-fileset.js';
 import { ScipDatabase } from '../../src/storage/db.js';
 import { evidenceFixtureDb } from '../fixtures/evidence-fixture.js';
 
@@ -55,6 +55,25 @@ describe('source fileset', () => {
     const db = openFixtureDb(projectRoot, join(tempDir, 'index.db'));
     try {
       expect(getSourceFiles(db)).toEqual(['src/App.vue', 'src/index.ts']);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('reports framework applicability within the requested scope', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-query-source-fileset-'));
+    const projectRoot = join(tempDir, 'project');
+    mkdirSync(join(projectRoot, 'apps', 'web'), { recursive: true });
+    mkdirSync(join(projectRoot, 'apps', 'admin'), { recursive: true });
+    writeFileSync(join(projectRoot, 'apps', 'web', 'App.tsx'), 'export function App() { return null; }\n');
+    writeFileSync(join(projectRoot, 'apps', 'admin', 'Panel.vue'), '<template><main /></template>\n');
+
+    const db = openFixtureDb(projectRoot, join(tempDir, 'index.db'));
+    try {
+      expect(sourceFrameworkApplicability(db)).toEqual({ react: true, vue: true });
+      expect(sourceFrameworkApplicability(db, { scope: 'apps/web' })).toEqual({ react: true, vue: false });
+      expect(sourceFrameworkApplicability(db, { scope: 'apps/admin' })).toEqual({ react: false, vue: true });
+      expect(sourceFrameworkApplicability(db, { scope: 'packages/api' })).toEqual({ react: false, vue: false });
     } finally {
       db.close();
     }

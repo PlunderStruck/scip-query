@@ -74,15 +74,21 @@ export function computeIdf<T>(documents: ReadonlyArray<Set<T>>): Map<T, number> 
     }
   }
 
+  return computeIdfFromDocFreq(docFreq, n);
+}
+
+export function computeIdfFromDocFreq<T>(docFreq: ReadonlyMap<T, number>, documentCount: number): Map<T, number> {
+  if (documentCount <= 0) return new Map();
+
   const idf = new Map<T, number>();
   for (const [feature, df] of docFreq) {
-    idf.set(feature, Math.log(n / df));
+    if (df > 0) idf.set(feature, Math.log(documentCount / df));
   }
   return idf;
 }
 
 /** Median IDF weight in the index. Used as the trivial/significant split. */
-export function getMedianIdf<T>(idf: Map<T, number>): number {
+export function getMedianIdf<T>(idf: ReadonlyMap<T, number>): number {
   const values = [...idf.values()].sort((a, b) => a - b);
   if (values.length === 0) return 0;
   const mid = Math.floor(values.length / 2);
@@ -108,36 +114,39 @@ export interface WeightedCosineResult<T> {
  * "trivial" (< median IDF), so callers can show which shared features
  * actually distinguish the pair.
  */
-export function weightedCosine<T>(a: Set<T>, b: Set<T>, idf: Map<T, number>): WeightedCosineResult<T> {
-  const shared = intersection(a, b);
-  if (shared.size === 0) {
-    return { similarity: 0, significantShared: [], trivialShared: [] };
-  }
-
+export function weightedCosine<T>(
+  a: Set<T>,
+  b: Set<T>,
+  idf: ReadonlyMap<T, number>,
+  opts: { medianIdf?: number } = {},
+): WeightedCosineResult<T> {
   let dotProduct = 0;
   let magA = 0;
   let magB = 0;
-  const allFeatures = new Set([...a, ...b]);
-  for (const feature of allFeatures) {
+  const median = opts.medianIdf ?? getMedianIdf(idf);
+  const significantShared: T[] = [];
+  const trivialShared: T[] = [];
+
+  for (const feature of a) {
     const weight = idf.get(feature) ?? 0;
-    const inA = a.has(feature) ? weight : 0;
-    const inB = b.has(feature) ? weight : 0;
-    dotProduct += inA * inB;
-    magA += inA * inA;
-    magB += inB * inB;
+    magA += weight * weight;
+    if (b.has(feature)) {
+      dotProduct += weight * weight;
+      if (weight >= median) significantShared.push(feature);
+      else trivialShared.push(feature);
+    }
+  }
+  if (significantShared.length === 0 && trivialShared.length === 0) {
+    return { similarity: 0, significantShared: [], trivialShared: [] };
+  }
+  for (const feature of b) {
+    const weight = idf.get(feature) ?? 0;
+    magB += weight * weight;
   }
 
   const magnitude = Math.sqrt(magA) * Math.sqrt(magB);
   const similarity = magnitude > 0 ? dotProduct / magnitude : 0;
 
-  const median = getMedianIdf(idf);
-  const significantShared: T[] = [];
-  const trivialShared: T[] = [];
-  for (const feature of shared) {
-    const weight = idf.get(feature) ?? 0;
-    if (weight >= median) significantShared.push(feature);
-    else trivialShared.push(feature);
-  }
   significantShared.sort((x, y) => (idf.get(y) ?? 0) - (idf.get(x) ?? 0));
 
   return { similarity, significantShared, trivialShared };

@@ -1,9 +1,14 @@
+import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { availableParallelism } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { ScipDatabase } from '../storage/db.js';
 import * as queries from '../queries/index.js';
+import {
+  sourceFrameworkApplicability,
+} from '../source/source-fileset.js';
 import { formatBytes, withDb } from './cli-context.js';
-import { chunked, runIsolatedJsonProcess } from './isolated-analysis-runner.js';
+import { chunked } from './isolated-analysis-runner.js';
 import { render } from './render.js';
 
 const require = createRequire(import.meta.url);
@@ -11,9 +16,24 @@ export const { version: cliVersion } = loadCliPackageInfo();
 export const HEALTH_PHASE_COMMAND = '__health-phase';
 export const DIFF_IMPACT_BATCH_COMMAND = '__diff-impact-batch';
 const DIFF_IMPACT_BATCH_SIZE = 10;
+const DEFAULT_DIFF_IMPACT_BATCH_CONCURRENCY = 4;
+const MAX_DEFAULT_DIFF_IMPACT_BATCH_CONCURRENCY = 8;
 const LARGE_COMMAND_SYMBOL_THRESHOLD = 75_000;
 const LARGE_COMMAND_DOCUMENT_THRESHOLD = 5_000;
 const DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT = 2_500;
+const DEFAULT_HEALTH_PHASE_CONCURRENCY = 4;
+const MAX_DEFAULT_HEALTH_PHASE_CONCURRENCY = 10;
+const HEALTH_PHASE_MAX_BUFFER = 10 * 1024 * 1024;
+const REACT_HEALTH_PHASES = new Set<HealthPhaseName>([
+  'react-component-duplicates',
+  'react-hook-candidates',
+  'react-large-component-pressure',
+]);
+const VUE_HEALTH_PHASES = new Set<HealthPhaseName>([
+  'vue-component-duplicates',
+  'vue-composable-candidates',
+  'vue-large-view-pressure',
+]);
 
 function loadCliPackageInfo(): { version: string } {
   for (const path of ['../package.json', '../../package.json']) {
@@ -31,6 +51,9 @@ type HealthPhaseName = (typeof queries.HEALTH_PHASES)[number];
 type HealthPhaseResult = ReturnType<typeof queries.healthPhase>;
 type DiffImpactResult = ReturnType<typeof queries.diffImpact>;
 type DiffImpactPartial = ReturnType<typeof queries.diffImpactPartial>;
+type AvailableCpus = () => number;
+type ConcurrencyResolver = (itemCount: number, env?: NodeJS.ProcessEnv, availableCpus?: AvailableCpus) => number;
+type HealthPhaseTask = HealthPhaseName[];
 
 export interface HealthCliOptions {
   scope?: string;
@@ -84,24 +107,201 @@ export function commandAnalysisBudget(
   return { scanLimit: DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT, semantic: false };
 }
 
-export function runIsolatedHealthReport(opts: HealthCliOptions): HealthReport {
-  const phaseResults = queries.HEALTH_PHASES.map((phase) => runHealthPhaseProcess(phase, opts));
-  return queries.healthReportFromPhases(phaseResults);
+export async function runIsolatedHealthReport(opts: HealthCliOptions): Promise<HealthReport> {
+  const applicability = withDb((db) => healthPhaseApplicability(db, opts));
+  const resultByPhase = new Map<HealthPhaseName, HealthPhaseResult>();
+  const runnablePhases = queries.HEALTH_PHASES.filter((phase) => {
+    if (shouldRunHealthPhase(phase, applicability)) return true;
+    resultByPhase.set(phase, skippedHealthPhaseResult(phase));
+    return false;
+  });
+
+  const runnableTasks = healthPhaseTasks(runnablePhases);
+  const runnableResults = await mapWithConcurrency(
+    runnableTasks,
+    healthPhaseConcurrency(runnableTasks.length),
+    (task) => runHealthPhaseTaskProcess(task, opts),
+  );
+  runnableResults.flat().forEach((result) => resultByPhase.set(result.phase, result));
+
+  return queries.healthReportFromPhases(queries.HEALTH_PHASES.map((phase) => resultByPhase.get(phase)!));
 }
 
-function runHealthPhaseProcess(phase: HealthPhaseName, opts: HealthCliOptions): HealthPhaseResult {
+function healthPhaseApplicability(db: ScipDatabase, opts: HealthCliOptions) {
+  return sourceFrameworkApplicability(db, { scope: opts.scope });
+}
+
+export function shouldRunHealthPhase(
+  phase: HealthPhaseName,
+  applicability: ReturnType<typeof sourceFrameworkApplicability>,
+): boolean {
+  if (REACT_HEALTH_PHASES.has(phase)) return applicability.react;
+  if (VUE_HEALTH_PHASES.has(phase)) return applicability.vue;
+  return true;
+}
+
+export function healthPhaseTasks(phases: readonly HealthPhaseName[]): HealthPhaseTask[] {
+  const groupedPhaseSets = [REACT_HEALTH_PHASES, VUE_HEALTH_PHASES];
+  const handled = new Set<HealthPhaseName>();
+  const tasks: HealthPhaseTask[] = [];
+
+  for (const phase of phases) {
+    if (handled.has(phase)) continue;
+    const group = groupedPhaseSets.find((set) => set.has(phase));
+    if (!group) {
+      handled.add(phase);
+      tasks.push([phase]);
+      continue;
+    }
+
+    const groupedPhases = phases.filter((candidate) => group.has(candidate));
+    groupedPhases.forEach((candidate) => handled.add(candidate));
+    tasks.push(groupedPhases);
+  }
+
+  return tasks;
+}
+
+export function skippedHealthPhaseResult(phase: HealthPhaseName): HealthPhaseResult {
+  switch (phase) {
+    case 'react-component-duplicates':
+      return { phase, reactComponentDuplicates: { count: 0, loc: 0, files: [] } };
+    case 'react-hook-candidates':
+      return { phase, reactHookCandidates: { count: 0, loc: 0, files: [] } };
+    case 'react-large-component-pressure':
+      return { phase, reactLargeComponentPressure: { count: 0, loc: 0, files: [] } };
+    case 'vue-component-duplicates':
+      return { phase, vueComponentDuplicates: { count: 0, loc: 0, files: [] } };
+    case 'vue-composable-candidates':
+      return { phase, vueComposableCandidates: { count: 0, loc: 0, files: [] } };
+    case 'vue-large-view-pressure':
+      return { phase, vueLargeViewPressure: { count: 0, loc: 0, files: [] } };
+    default:
+      throw new Error(`Health phase "${phase}" cannot be synthesized.`);
+  }
+}
+
+function runHealthPhaseTaskProcess(phases: HealthPhaseTask, opts: HealthCliOptions): Promise<HealthPhaseResult[]> {
+  if (phases.length === 1) return runHealthPhaseProcess(phases[0]!, opts).then((result) => [result]);
+
+  const phaseArg = phases.join(',');
+  const cliPath = process.argv[1] ?? fileURLToPath(import.meta.url);
+  const args: string[] = [phaseArg];
+  if (opts.scope) args.push('--scope', opts.scope);
+  if (opts.full) args.push('--full');
+
+  return runIsolatedJsonProcessAsync<HealthPhaseResult[]>({
+    cliPath,
+    command: HEALTH_PHASE_COMMAND,
+    args,
+    label: `Health phases "${phaseArg}"`,
+  });
+}
+
+function runHealthPhaseProcess(phase: HealthPhaseName, opts: HealthCliOptions): Promise<HealthPhaseResult> {
   const cliPath = process.argv[1] ?? fileURLToPath(import.meta.url);
   const args: string[] = [phase];
   if (opts.scope) args.push('--scope', opts.scope);
   if (opts.full) args.push('--full');
 
-  return runIsolatedJsonProcess<HealthPhaseResult>({
+  return runIsolatedJsonProcessAsync<HealthPhaseResult>({
     cliPath,
     command: HEALTH_PHASE_COMMAND,
     args,
     label: `Health phase "${phase}"`,
   });
 }
+
+interface AsyncIsolatedJsonProcessOptions {
+  cliPath: string;
+  command: string;
+  args?: readonly string[];
+  env?: NodeJS.ProcessEnv;
+  label: string;
+  maxBuffer?: number;
+}
+
+function runIsolatedJsonProcessAsync<T>(opts: AsyncIsolatedJsonProcessOptions): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const maxBuffer = opts.maxBuffer ?? HEALTH_PHASE_MAX_BUFFER;
+    const child = spawn(process.execPath, [...process.execArgv, opts.cliPath, opts.command, ...(opts.args ?? [])], {
+      cwd: process.cwd(),
+      env: opts.env ?? process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
+    let settled = false;
+
+    const fail = (error: Error): void => {
+      if (settled) return;
+      settled = true;
+      child.kill();
+      reject(error);
+    };
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdoutBytes += chunk.length;
+      if (stdoutBytes > maxBuffer) {
+        fail(new Error(`${opts.label} exceeded stdout buffer limit (${maxBuffer} bytes).`));
+        return;
+      }
+      stdout.push(chunk);
+    });
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderrBytes += chunk.length;
+      if (stderrBytes > maxBuffer) {
+        fail(new Error(`${opts.label} exceeded stderr buffer limit (${maxBuffer} bytes).`));
+        return;
+      }
+      stderr.push(chunk);
+    });
+    child.on('error', fail);
+    child.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      const stderrText = Buffer.concat(stderr).toString('utf8').trim();
+      if (code !== 0) {
+        reject(new Error(`${opts.label} failed${stderrText ? `:\n${stderrText}` : ''}`));
+        return;
+      }
+      try {
+        resolve(JSON.parse(Buffer.concat(stdout).toString('utf8')) as T);
+      } catch (error) {
+        reject(new Error(`${opts.label} returned invalid JSON: ${error instanceof Error ? error.message : error}`));
+      }
+    });
+  });
+}
+
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  run: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      results[index] = await run(items[index]!);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
+  return results;
+}
+
+// scip-query: ignore-similar — public scheduler entrypoints intentionally share
+// the resolver factory; their env key and default cap are the product variation.
+export const healthPhaseConcurrency: ConcurrencyResolver = createAdaptiveConcurrencyResolver({
+  envKey: 'SCIP_QUERY_HEALTH_CONCURRENCY',
+  defaultMinimum: DEFAULT_HEALTH_PHASE_CONCURRENCY,
+  defaultMaximum: MAX_DEFAULT_HEALTH_PHASE_CONCURRENCY,
+});
 
 export function renderHealthReport(report: HealthReport, json: boolean | undefined): void {
   if (json) {
@@ -246,30 +446,72 @@ function renderHealthAxes(report: HealthReport): void {
   }
 }
 
-export function runIsolatedDiffImpactReport(opts: DiffImpactCliOptions): DiffImpactResult {
-  return withDb((db) => {
+export async function runIsolatedDiffImpactReport(opts: DiffImpactCliOptions): Promise<DiffImpactResult> {
+  const plan = withDb((db) => {
     const plan = queries.diffImpactPlan(db, { base: opts.base });
     if (plan.note) {
-      return queries.diffImpact(db, { base: opts.base });
+      return { kind: 'complete' as const, result: queries.diffImpact(db, { base: opts.base }) };
     }
     if (plan.changedFiles.length === 0) {
-      return queries.diffImpact(db, { base: opts.base });
+      return { kind: 'complete' as const, result: queries.diffImpact(db, { base: opts.base }) };
     }
-
-    const partials: DiffImpactPartial[] = [];
-    for (const batch of chunked(plan.changedFiles, DIFF_IMPACT_BATCH_SIZE)) {
-      partials.push(runDiffImpactBatchProcess(batch, opts));
-    }
-    return queries.mergeDiffImpactPartials(plan.changedFiles, partials);
+    return { kind: 'batched' as const, plan };
   });
+
+  if (plan.kind === 'complete') return plan.result;
+
+  const batches = chunked(plan.plan.changedFiles, DIFF_IMPACT_BATCH_SIZE);
+  const partials = await mapWithConcurrency(batches, diffImpactBatchConcurrency(batches.length), (batch) =>
+    runDiffImpactBatchProcess(batch, opts),
+  );
+  return queries.mergeDiffImpactPartials(plan.plan.changedFiles, partials);
 }
 
-function runDiffImpactBatchProcess(files: readonly string[], opts: DiffImpactCliOptions): DiffImpactPartial {
+// scip-query: ignore-similar — parallel to healthPhaseConcurrency by design:
+// same adaptive policy, different workload/env key/default cap.
+export const diffImpactBatchConcurrency: ConcurrencyResolver = createAdaptiveConcurrencyResolver({
+  envKey: 'SCIP_QUERY_DIFF_IMPACT_CONCURRENCY',
+  defaultMinimum: DEFAULT_DIFF_IMPACT_BATCH_CONCURRENCY,
+  defaultMaximum: MAX_DEFAULT_DIFF_IMPACT_BATCH_CONCURRENCY,
+});
+
+function createAdaptiveConcurrencyResolver(opts: {
+  envKey: string;
+  defaultMinimum: number;
+  defaultMaximum: number;
+}): ConcurrencyResolver {
+  return (itemCount, env = process.env, availableCpus = availableParallelism) =>
+    adaptiveConcurrency(itemCount, env, availableCpus, opts);
+}
+
+function adaptiveConcurrency(
+  itemCount: number,
+  env: NodeJS.ProcessEnv,
+  availableCpus: AvailableCpus,
+  opts: { envKey: string; defaultMinimum: number; defaultMaximum: number },
+): number {
+  const raw = env[opts.envKey];
+  const defaultConcurrency = defaultAdaptiveConcurrency(availableCpus, opts);
+  const parsed = raw ? parseInt(raw, 10) : defaultConcurrency;
+  if (!Number.isFinite(parsed) || parsed < 1) return Math.min(defaultConcurrency, itemCount);
+  return Math.min(parsed, itemCount);
+}
+
+function defaultAdaptiveConcurrency(
+  availableCpus: AvailableCpus,
+  opts: { defaultMinimum: number; defaultMaximum: number },
+): number {
+  const cpuCount = availableCpus();
+  const adaptive = Number.isFinite(cpuCount) ? Math.max(opts.defaultMinimum, cpuCount - 1) : 0;
+  return Math.min(opts.defaultMaximum, Math.max(opts.defaultMinimum, adaptive));
+}
+
+function runDiffImpactBatchProcess(files: readonly string[], opts: DiffImpactCliOptions): Promise<DiffImpactPartial> {
   const cliPath = process.argv[1] ?? fileURLToPath(import.meta.url);
   const args: string[] = [];
   if (opts.base) args.push('--base', opts.base);
 
-  return runIsolatedJsonProcess<DiffImpactPartial>({
+  return runIsolatedJsonProcessAsync<DiffImpactPartial>({
     cliPath,
     command: DIFF_IMPACT_BATCH_COMMAND,
     args,

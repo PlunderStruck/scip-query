@@ -57,3 +57,7 @@ The maintainability-register completion slice rechecked the behavioral claim tha
 ## 2026-06-23 Current Sweep Citation Refresh
 
 The current maintainability sweep rechecked the scope-hint claim after doc-reference and baseline policy helpers moved into private modules. Scope hints still come from the incomplete-migration check before the finding is recorded, so this validation result remains current.
+
+## 2026-06-27 Citation Refresh
+
+The persistent-refresh coordination slice rechecked the `incomplete-migration.ts`, `diff-gate.ts`, and `src/runtime/query-commands/impact.ts` citations. Scope labels and CLI rendering remain on those surfaces; the new freshness and watcher-lock behavior does not alter scope-hint semantics.

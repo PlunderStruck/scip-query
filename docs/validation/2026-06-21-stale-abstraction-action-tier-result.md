@@ -121,3 +121,7 @@ Confirmed. `stale-abstractions` now carries the direct-vs-signal distinction the
 ## Next Action
 
 Use the completed frontend behavior, extraction, and stale-abstraction classifications to update the score calibration memo before moving to graph-risk families.
+
+## 2026-06-27 Confirmation
+
+The declared-coupling configuration example still intentionally cites `src/queries/cleanup/dead.ts`. The dead-detector performance pass changed candidate pruning internals only; it does not change the stale-abstraction action-tier result or the configuration-example citation target.

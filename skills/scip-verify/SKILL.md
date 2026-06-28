@@ -1,307 +1,160 @@
 ---
 name: scip-verify
-description: Post-implementation verification using scip-query. Confirms changes are wired correctly — no broken references, no new cycles, no orphaned code, no structural regressions, no health regressions. Run after making changes and before committing.
-allowed-tools: [Bash, Write, Edit, Glob, Agent, TaskCreate, TaskUpdate, TaskGet, TaskList]
-keywords: [verify, check, validate, wire, confirm, post-implementation, review, regression, health]
+description: Post-implementation verification using scip-query's modern gate model. Use after making code, docs, config, refactor, cleanup, or setup changes; before committing; when the user asks whether a change is wired correctly, safe, verified, regression-free, or ready to ship.
 ---
 
 # Post-Implementation Verification with scip-query
 
-You are verifying that a code change was implemented correctly. Every check must use `scip-query` to confirm the change didn't break references, introduce cycles, orphan code, or widen structural risk unexpectedly. This is the "measure twice" step — run it after making changes, before committing.
-
----
-
-## When to Use This Skill
-
-- "Verify my changes"
-- "Check if everything is wired correctly"
-- "Did I break anything?"
-- "Is it safe to commit?"
-- "Run a post-implementation check"
-- After completing a `/concrete-plan` implementation
-- Before any commit of non-trivial changes
-
----
+Verify the actual diff, not your intention. A verification pass proves that the current workspace has a runnable scip-query environment, a current index, expected blast radius, no diff-gate findings, and no relevant health or config regression.
 
 ## Hard Rules
 
-1. **Reindex first.** Always run `scip-query reindex` before verification. You're checking the current code, not the old index.
+1. Run environment checks before trusting graph facts.
+2. Check index freshness before final verification. Reindex only when freshness is `stale`, `missing`, or `unknown`, unless a just-finished command already refreshed the index and no files changed afterward.
+3. Treat `scip-query diff-gate --json` as the primary blocker for diff-specific risk. Manual checks are drill-down evidence, not a replacement.
+4. Run the postchecks that match the actual change type.
+5. Prefer fixing findings. Use `scip-query suppress <id> --reason "<specific reason>"` only for intentional design, compatibility shims, framework entry points, or accepted false positives with durable evidence.
+6. If `.scipquery.json` or suppressions changed, run `scip-query config-validate`.
 
-2. **Every check must produce evidence.** Don't say "looks good." Say "scip-query cycles returned 0 cycles, scip-query diff-impact shows 3 changed symbols affecting 12 files, and change-surface shows the blast radius stayed within expectations."
+## Default Verification Flow
 
-3. **Fail loudly.** If any check fails, stop and report the exact failure with the scip-query command output. Do not proceed to "looks mostly fine."
-
-4. **Compare against baseline.** If a health score or finding count was recorded before the change, compare against it. A regression is a finding.
-
----
-
-## Symbol Lookup Tips
-
-`scip-query` accepts partial symbol names — you don't need the full SCIP symbol path. These all work:
+### 1. Prove the workspace can answer
 
 ```bash
-scip-query code processVegaMention              # just the function name
-scip-query call-graph ChatService               # just the class name
-scip-query trace getActiveInferenceConfig       # any unique substring
+scip-query doctor
+scip-query status --capabilities
 ```
 
-**Avoid parentheses** — `()` causes shell parse errors in zsh/bash:
+If either command reports missing indexers, stale indexes, invalid config, or unavailable capabilities relevant to the change, resolve that first or report it as a blocker. Unavailable is not clean; it means that signal class was not proven.
+
+### 2. Refresh and assess the diff
+
 ```bash
-# BAD — shell tries to execute a subshell
-scip-query code processVegaMention()
-
-# GOOD — no parens needed, scip-query strips them internally
-scip-query code processVegaMention
-
-# ALSO GOOD — single quotes protect special characters
-scip-query code 'processVegaMention'
+scip-query status --capabilities
+# If freshness is stale, missing, or unknown:
+# scip-query reindex
+scip-query diff-impact --json
 ```
 
-**Read source by file + line range** when the symbol name is ambiguous:
-```bash
-scip-query code 'src/modules/chat/chat.service.ts:100-200'
-```
+Use `diff-impact` to check whether the changed files, changed symbols, and downstream consumers match the work you intended to do. Unexpected symbols or a much wider blast radius are findings even if `diff-gate` later passes.
 
-**If "Symbol not found":**
-1. Try a shorter/simpler name — `login` instead of `AuthService:login`
-2. Try `scip-query outline <file>` to see what symbols exist in the file
-3. Try `scip-query trace <name>` which uses a different lookup path
-4. Use the `file:line-line` syntax for `code` if you know the location
+### 3. Run routed postchecks
 
----
+Run every row that applies to the work just performed.
 
-## The 7 Verification Checks
+| Change type | Required checks |
+|---|---|
+| Extracted a helper or created an abstraction | `scip-query incomplete-migration --json --full` |
+| Added a new helper, module, component, or adapter | `scip-query similar <symbol> --json --full` and `scip-query recent-duplicates --json --full` |
+| Added parameters, options, or config flags | `scip-query unused-params --json --full` |
+| Added a forwarding or wrapper layer | `scip-query wrapper-candidates --json --full` and `scip-query passthrough-candidates --json --full` |
+| Added an interface, base class, adapter contract, or type alias | `scip-query stale-abstractions --json --full` |
+| Changed schema, config, generated artifacts, or public contracts | `scip-query co-change <file> --json --full` |
+| Changed code described by docs or changed docs that cite code | `scip-query doc-drift --json --full` |
+| Deleted code | `scip-query cleanup-plan --verify --json` |
+| Changed React components or hooks | `scip-query react-component-duplicates --json --full`, `scip-query react-hook-candidates --json --full`, and `scip-query react-large-component-pressure --json --full` |
+| Changed Vue SFCs or composables | `scip-query vue-component-duplicates --json --full`, `scip-query vue-composable-candidates --json --full`, and `scip-query vue-large-view-pressure --json --full` |
 
-Run every one of these. Each catches a different class of implementation error.
-
-### Check 1: Diff Impact Assessment
-
-```bash
-scip-query reindex
-scip-query diff-impact
-```
-
-**What you're checking:** Which symbols changed and how many downstream consumers are affected.
-
-**Pass criteria:**
-- Every changed symbol is intentional (no accidental modifications)
-- The number of affected consumer files matches expectations
-
-**Fail if:** Unexpected symbols appear in the diff, or the affected file count is much larger than expected (blast radius exceeded plan).
-
-### Check 2: No New Cycles
+Use focused probes when a finding needs explanation:
 
 ```bash
-scip-query cycles
-```
-
-**What you're checking:** The change didn't introduce a circular dependency.
-
-**Pass criteria:** Zero cycles, OR the same cycles that existed before the change.
-
-**Fail if:** New cycle(s) appear. Report the full cycle path.
-
-### Check 3: No New Dead Code
-
-```bash
-scip-query dead --min-loc 5
-```
-
-**What you're checking:** The change didn't orphan existing code. If you renamed a function, did you update all callers? If you moved a module, did you update all imports?
-
-**Pass criteria:** No new dead symbols compared to before the change. Existing dead code doesn't count.
-
-**Fail if:** A symbol that was alive before the change is now dead. This means something was disconnected.
-
-### Check 4: No New Isolated Symbols
-
-```bash
-scip-query isolated --min-loc 3
-```
-
-**What you're checking:** The change didn't completely disconnect a symbol from the graph.
-
-**Pass criteria:** No new isolated symbols.
-
-**Fail if:** New isolated symbol(s) appear — something got orphaned.
-
-### Check 5: References Intact
-
-For each symbol that was modified (from diff-impact), verify it's still referenced by the expected consumers:
-
-```bash
-scip-query refs <changed-symbol>
-scip-query fan-in <changed-symbol>
-```
-
-**What you're checking:** Consumers of modified symbols still reference them. If you changed a function signature, callers should still compile and reference it.
-
-**Pass criteria:** Fan-in count for each changed symbol is the same or higher than before.
-
-**Fail if:** A changed symbol's fan-in dropped — a consumer was disconnected.
-
-### Check 6: Change Surface Risk Check
-
-For each modified file:
-
-```bash
-scip-query change-surface <modified-file>
-```
-
-**What you're checking:** High-risk symbols in modified files based on consumer count, blast radius, and structural exposure.
-
-**Pass criteria:** No unexpectedly high-risk surfaces, or all high-risk symbols were intentionally modified with the blast radius understood.
-
-**Fail if:** A HIGH RISK symbol was modified without acknowledging the blast radius or downstream consumers.
-
-### Check 7: Health Score
-
-```bash
-scip-query health
-```
-
-**What you're checking:** The overall codebase health didn't regress.
-
-**Pass criteria:** Health score is the same or higher than before the change. If it dropped, every finding that increased must be explained.
-
-**Fail if:** Health score dropped by more than 5 points without explanation.
-
----
-
-## Verification Workflow
-
-### Phase 1: Reindex and Assess Impact
-
-```bash
-scip-query reindex
-scip-query diff-impact
-```
-
-Record: changed files, changed symbols, affected consumers, and any unexpectedly large blast-radius surfaces.
-
-### Phase 2: Structural Checks (parallel)
-
-Run checks 2-4 simultaneously — they're independent:
-
-```bash
-scip-query cycles
-scip-query dead --min-loc 5
-scip-query isolated --min-loc 3
-```
-
-### Phase 3: Per-Symbol Checks
-
-For each changed symbol from diff-impact:
-
-```bash
+scip-query code <symbol-or-file>
 scip-query refs <symbol>
 scip-query fan-in <symbol>
+scip-query fan-out <symbol>
+scip-query affected <symbol> --json
+scip-query change-surface <file> --json --full
 ```
 
-### Phase 4: Per-File Checks
-
-For each modified file:
+### 4. Run the gate
 
 ```bash
-scip-query change-surface <file>
+scip-query diff-gate --json
 ```
 
-### Phase 5: Health Comparison
+On any finding, fix it or explicitly accept it with evidence. Do not ignore a nonzero gate. If a suppression is the right outcome, record the reason and validate config:
 
 ```bash
-scip-query health
+scip-query suppress <id> --reason "<specific reason>"
+scip-query config-validate
 ```
 
-Compare against the pre-change score.
+### 5. Check baseline health when present
 
----
+Run this when the repository has a committed scip-query baseline:
 
-## Output Format
+```bash
+scip-query health --baseline
+```
 
-The verification report is structured as:
+If no baseline exists and the user asked for broad health verification, run:
+
+```bash
+scip-query health --json --full
+```
+
+Health score changes are diagnostic, not the objective. A score drop matters when it corresponds to a real new signal; a score increase does not excuse unverified behavior.
+
+### 6. Validate config and docs when touched
+
+If `.scipquery.json`, AGENTS.md, CLAUDE.md, command docs, or skill instructions changed, run the relevant check:
+
+```bash
+scip-query config-validate
+scip-query doc-drift --json --full
+```
+
+For generated command docs, also run the repo's descriptor or docs test if one exists.
+
+If you are maintaining scip-query analyzers or command descriptors inside the scip-query repository itself, add:
+
+```bash
+scip-query self-audit
+```
+
+This is a maintainer check for analyzer consistency, not a general app-developer verification step.
+
+## Manual Drill-Down Checks
+
+Use these when `diff-impact`, routed postchecks, or `diff-gate` point to a structural risk:
+
+```bash
+scip-query cycles
+scip-query dead --json --full
+scip-query isolated --json --full
+scip-query coupling
+scip-query bottlenecks
+```
+
+These commands are not a substitute for `diff-gate`; they explain or bound the finding.
+
+## Verification Report
+
+End with a compact report:
 
 ```markdown
-# Verification Report
+Verification: PASS/FAIL
 
-**Date:** YYYY-MM-DD
-**Change:** [description]
-**Pre-change health:** N/100
-**Post-change health:** N/100
+Environment:
+- doctor: PASS/FAIL
+- status capabilities: PASS/FAIL or unavailable checks
 
-## Diff Impact
-- Changed files: N
-- Changed symbols: N
-- Affected consumer files: N
-- High-risk symbols touched: N
+Diff:
+- changed files/symbols from `scip-query diff-impact --json`
+- unexpected blast radius, if any
 
-## Check Results
+Postchecks:
+- <command>: PASS/FAIL and finding count
 
-| # | Check | Result | Evidence |
-|---|---|---|---|
-| 1 | Diff impact | PASS/FAIL | [summary] |
-| 2 | No new cycles | PASS/FAIL | [count] |
-| 3 | No new dead code | PASS/FAIL | [count] |
-| 4 | No new isolated | PASS/FAIL | [count] |
-| 5 | References intact | PASS/FAIL | [fan-in changes] |
-| 6 | Risk assessment | PASS/FAIL | [high-risk symbols] |
-| 7 | Health score | PASS/FAIL | [score delta] |
+Gate:
+- `scip-query diff-gate --json`: PASS/FAIL
 
-## Failures
-[Detailed explanation of any failures with scip-query output]
+Health/config:
+- baseline or health result
+- config validation result when applicable
 
-## Verdict
-PASS — safe to commit
-FAIL — [list what needs fixing before commit]
+Remaining risk:
+- accepted suppressions, blocked capabilities, or checks not run
 ```
 
----
-
-## Using with /concrete-plan
-
-The ideal workflow:
-
-1. **Before:** Run `/concrete-plan` to design the change with full scip-query evidence
-2. **During:** Implement the plan
-3. **After:** Run `/scip-verify` to confirm the implementation matches the plan
-
-The verification report should reference the original plan's blast radius predictions and confirm they were accurate.
-
----
-
-## Subagent Briefing Template
-
-When parallelizing verification checks:
-
-```
-## Task: Run verification check [N]
-
-You are verifying a code change using scip-query. First run `scip-query reindex`.
-
-Run the following command:
-[specific scip-query command]
-
-Report:
-1. The exact command output
-2. Whether it PASSES or FAILS the criteria: [specific criteria]
-3. If FAIL: exactly what went wrong and which symbols/files are affected
-
-Do NOT use grep, rg, or Read. Use only scip-query commands.
-```
-
----
-
-## scip-query Quick Reference
-
-| Check | Command |
-|---|---|
-| Reindex | `scip-query reindex` |
-| Diff impact | `scip-query diff-impact` |
-| Cycles | `scip-query cycles` |
-| Dead code | `scip-query dead --min-loc 5` |
-| Isolated | `scip-query isolated --min-loc 3` |
-| References | `scip-query refs <symbol>` |
-| Fan-in | `scip-query fan-in <symbol>` |
-| Change surface | `scip-query change-surface <file>` |
-| Health | `scip-query health` |
-| Full blast radius | `scip-query affected <symbol>` |
-| Read source | `scip-query code <symbol>` |
+Do not claim "safe to commit" unless freshness is `fresh` after the final file edit and `scip-query diff-gate --json` passed.

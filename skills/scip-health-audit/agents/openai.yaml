@@ -1,0 +1,4 @@
+interface:
+  display_name: "SCIP Health Audit"
+  short_description: "Confirm scip-query health signals before cleanup"
+  default_prompt: "Run a scip-query health audit, show the score and confirmed items first, then begin the safest cleanup batch."

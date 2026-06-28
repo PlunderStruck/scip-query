@@ -97,3 +97,7 @@ Repository verification passed. The full test suite reported 64 passing test fil
 Suppression inventory should remain a meta signal, not direct debt. A high count in one detector family means the detector has known false-positive or accepted-design pressure and should receive lower score weight until field validation improves. For this repo, the strongest trust penalty remains on `extract` and `wrapper`, because they account for 134 of 174 source suppressions.
 
 No codebase repair is recommended from the sampled source comments. The programmatic precision action is complete for structured suppression lifecycle: stale file-scoped entries now surface through `config-validate`.
+
+## 2026-06-27 Performance Pass Reference Check
+
+The `src/queries/navigation/by-kind.ts` suppression example remains valid after the `kind-counts` SQL fast path. The accepted suppression still describes the `byKind` filter pipeline near the cited area; this pass changed the histogram implementation without changing that suppression example's target or reason.

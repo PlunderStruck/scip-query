@@ -88,3 +88,7 @@ Confirmed. `doc-reference` now distinguishes a behavioral doc claim from a confi
 ## Follow-Up
 
 The later cited-claim metadata slice extends this work in `docs/validation/2026-06-22-doc-cited-claim-metadata-result.md` by adding the actual nearby doc text behind each `doc-reference` citation and path-reference `doc-drift` subject.
+
+## 2026-06-27 Confirmation
+
+The declared-coupling configuration example still intentionally points at `src/queries/cleanup/dead.ts`. The dead-detector performance pass changed candidate pruning internals, not the configuration-example citation target or citation-kind output contract.

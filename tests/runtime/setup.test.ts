@@ -7,13 +7,19 @@ type SetupModule = typeof Setup;
 
 async function loadSetup(): Promise<{
   module: SetupModule;
+  existsSync: ReturnType<typeof vi.fn>;
+  mkdirSync: ReturnType<typeof vi.fn>;
+  readFileSync: ReturnType<typeof vi.fn>;
   symlinkSync: ReturnType<typeof vi.fn>;
+  writeFileSync: ReturnType<typeof vi.fn>;
 }> {
   vi.resetModules();
 
   const symlinkSync = vi.fn();
   const mkdirSync = vi.fn();
   const unlinkSync = vi.fn();
+  const readFileSync = vi.fn(() => '{}');
+  const writeFileSync = vi.fn();
   const readlinkSync = vi.fn(() => {
     throw new Error('not-a-link');
   });
@@ -48,6 +54,8 @@ async function loadSetup(): Promise<{
     existsSync,
     mkdirSync,
     symlinkSync,
+    readFileSync,
+    writeFileSync,
     readlinkSync,
     unlinkSync,
   }));
@@ -60,7 +68,7 @@ async function loadSetup(): Promise<{
   }));
 
   const module = await import('../../src/runtime/setup.js');
-  return { module, symlinkSync };
+  return { module, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync };
 }
 
 afterEach(() => {
@@ -149,5 +157,84 @@ describe('skill installation', () => {
       '/home/test/.agents/skills/scip-vue-maintainability',
       'dir',
     );
+  });
+
+  it('installs reviewable project hooks into the current repository', async () => {
+    const { module, writeFileSync } = await loadSetup();
+
+    const result = module.installProjectAgentHooks('/repo', {
+      homeDir: '/home/test',
+      removeLegacyUserHooks: false,
+    });
+
+    expect(result.installed).toEqual(['.codex/hooks.json', '.claude/settings.json']);
+    expect(writeFileSync).toHaveBeenCalledWith(
+      '/repo/.codex/hooks.json',
+      expect.stringContaining('"command": "scip-query hook-context"'),
+    );
+    expect(writeFileSync).toHaveBeenCalledWith(
+      '/repo/.claude/settings.json',
+      expect.stringContaining('"command": "scip-query hook-stop"'),
+    );
+  });
+
+  it('keeps legacy user hook installation available for migration utilities', async () => {
+    const { module, writeFileSync } = await loadSetup();
+
+    const result = module.installUserAgentHooks({ homeDir: '/home/test' });
+
+    expect(result.installed).toEqual(['Codex/hooks.json', 'Claude/settings.json']);
+    expect(writeFileSync).toHaveBeenCalledWith(
+      '/home/test/.codex/hooks.json',
+      expect.stringContaining('"command": "scip-query hook-context"'),
+    );
+    expect(writeFileSync).toHaveBeenCalledWith(
+      '/home/test/.claude/settings.json',
+      expect.stringContaining('"command": "scip-query hook-stop"'),
+    );
+  });
+
+  it('respects hook installation opt-out', async () => {
+    const { module, writeFileSync } = await loadSetup();
+
+    const result = module.installUserAgentHooks({
+      homeDir: '/home/test',
+      env: { SCIP_QUERY_SKIP_HOOK_INSTALL: '1' },
+    });
+
+    expect(result.skipped).toEqual([{ target: 'user agent hooks', reason: 'SCIP_QUERY_SKIP_HOOK_INSTALL=1' }]);
+    expect(writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it('merges hook config without deleting user hooks', async () => {
+    const { module } = await loadSetup();
+
+    const merged = module.mergeScipHookConfig(
+      {
+        theme: 'dark',
+        hooks: {
+          Stop: [
+            {
+              hooks: [
+                { type: 'command', command: 'echo keep-me' },
+                { type: 'command', command: 'scip-query diff-gate --hook' },
+              ],
+            },
+          ],
+        },
+      },
+      'codex',
+    );
+
+    expect(merged.theme).toBe('dark');
+    expect(merged.hooks?.Stop?.[0]?.hooks).toEqual([{ type: 'command', command: 'echo keep-me' }]);
+    expect(merged.hooks?.Stop?.[1]?.hooks).toEqual([
+      {
+        type: 'command',
+        command: 'scip-query hook-stop',
+        timeout: 30,
+        statusMessage: 'Running scip-query diff gate',
+      },
+    ]);
   });
 });

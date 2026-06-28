@@ -7,8 +7,11 @@ import type { IndexerConfig, SupportedLanguage } from '../domain/types.js';
 // scip-query: ignore-stale — exported handoff record between reindex planning
 // and the runner; inlining would smear indexer execution state across modules.
 export interface PreparedIndexerRun {
+  id: string;
   language: SupportedLanguage;
+  label: string;
   scipPath: string;
+  outputScipPath: string;
   config: IndexerConfig;
   resolvedBinary: string;
   binary: string;
@@ -19,8 +22,11 @@ export interface PreparedIndexerRun {
 // scip-query: ignore-stale — exported runner result consumed by reindex
 // orchestration; the name keeps successful and skipped indexer outcomes explicit.
 export interface IndexerRunResult {
+  id: string;
   language: SupportedLanguage;
+  label: string;
   scipPath: string;
+  outputScipPath: string;
   skipped?: { language: SupportedLanguage; reason: string };
 }
 
@@ -74,7 +80,7 @@ function restoreDefaultOutputBackup(backup: DefaultOutputBackup | null): void {
   }
 }
 
-function resolveIndexerConcurrency(runCount: number, configured?: number): number {
+export function resolveIndexerConcurrency(runCount: number, configured?: number): number {
   if (runCount <= 1) {
     return 1;
   }
@@ -85,7 +91,7 @@ function resolveIndexerConcurrency(runCount: number, configured?: number): numbe
       ? configured
       : Number.isFinite(envValue) && envValue > 0
         ? envValue
-        : Math.min(2, Math.max(1, cpus().length - 1));
+        : Math.min(8, Math.max(1, cpus().length));
   return Math.max(1, Math.min(runCount, Math.floor(requested)));
 }
 
@@ -105,14 +111,14 @@ export async function runPreparedIndexers(
   );
 
   if (concurrency > 1) {
-    const retryResults = new Map<SupportedLanguage, IndexerRunResult>();
+    const retryResults = new Map<string, IndexerRunResult>();
     for (const failed of directResults.filter((result) => result.skipped)) {
-      const run = directOutputRuns.find((candidate) => candidate.language === failed.language);
+      const run = directOutputRuns.find((candidate) => candidate.id === failed.id);
       if (!run) continue;
-      onStatus(`Retrying ${run.language} indexer serially after parallel failure...`);
-      retryResults.set(run.language, await runPreparedIndexer(run, projectRoot, onStatus));
+      onStatus(`Retrying ${run.label} indexer serially after parallel failure...`);
+      retryResults.set(run.id, await runPreparedIndexer(run, projectRoot, onStatus));
     }
-    results.push(...directResults.map((result) => retryResults.get(result.language) ?? result));
+    results.push(...directResults.map((result) => retryResults.get(result.id) ?? result));
   } else {
     results.push(...directResults);
   }
@@ -121,10 +127,7 @@ export async function runPreparedIndexers(
     results.push(await runPreparedIndexer(run, projectRoot, onStatus));
   }
 
-  return results.sort(
-    (a, b) =>
-      runs.findIndex((run) => run.language === a.language) - runs.findIndex((run) => run.language === b.language),
-  );
+  return results.sort((a, b) => runs.findIndex((run) => run.id === a.id) - runs.findIndex((run) => run.id === b.id));
 }
 
 // scip-query: ignore-extract — this is the per-indexer backup/run/restore
@@ -135,7 +138,7 @@ async function runPreparedIndexer(
   projectRoot: string,
   onStatus: (message: string) => void,
 ): Promise<IndexerRunResult> {
-  onStatus(`Indexing ${run.language} with ${run.resolvedBinary}...`);
+  onStatus(`Indexing ${run.label} with ${run.resolvedBinary}...`);
   rmSync(run.scipPath, { force: true });
   const defaultOutputBackup = takeDefaultOutputBackup(run.config, projectRoot, run.scipPath);
 
@@ -149,11 +152,15 @@ async function runPreparedIndexer(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     const reason = `${run.resolvedBinary} indexer failed: ${msg.split('\n')[0]}`;
-    onStatus(`Skipping ${run.language}: ${reason}`);
+    const skippedReason = run.label === run.language ? reason : `${run.label}: ${reason}`;
+    onStatus(`Skipping ${run.label}: ${reason}`);
     return {
+      id: run.id,
       language: run.language,
+      label: run.label,
       scipPath: run.scipPath,
-      skipped: { language: run.language, reason },
+      outputScipPath: run.outputScipPath,
+      skipped: { language: run.language, reason: skippedReason },
     };
   } finally {
     restoreDefaultOutputBackup(defaultOutputBackup);
@@ -161,14 +168,24 @@ async function runPreparedIndexer(
 
   if (!existsSync(run.scipPath)) {
     const reason = `${run.resolvedBinary} indexer completed but did not produce ${run.scipPath}`;
-    onStatus(`Skipping ${run.language}: ${reason}`);
+    const skippedReason = run.label === run.language ? reason : `${run.label}: ${reason}`;
+    onStatus(`Skipping ${run.label}: ${reason}`);
     return {
+      id: run.id,
       language: run.language,
+      label: run.label,
       scipPath: run.scipPath,
-      skipped: { language: run.language, reason },
+      outputScipPath: run.outputScipPath,
+      skipped: { language: run.language, reason: skippedReason },
     };
   }
-  return { language: run.language, scipPath: run.scipPath };
+  return {
+    id: run.id,
+    language: run.language,
+    label: run.label,
+    scipPath: run.scipPath,
+    outputScipPath: run.outputScipPath,
+  };
 }
 
 function execFileBuffered(

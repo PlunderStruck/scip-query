@@ -8,9 +8,16 @@ const IS_WINDOWS = platform() === 'win32';
 export const BUILTIN_SKILLS = [
   'scip-query',
   'scip-query-setup',
+  'scip-adoption',
+  'scip-health-audit',
+  'scip-health-improve',
+  'scip-api-impact',
   'concrete-plan',
   'scip-ai-cleanup',
+  'scip-debug',
   'scip-explore',
+  'scip-triage-issue',
+  'scip-diagram',
   'scip-debloat',
   'scip-doc-reconcile',
   'scip-directory-architecture',
@@ -134,3 +141,10 @@ export function postinstall(): void {
 }
 
 export { isScipInstalled, getScipVersion, printScipInstallInstructions } from './scip-cli.js';
+export {
+  installProjectAgentHooks,
+  installUserAgentHooks,
+  mergeScipHookConfig,
+  removeUserAgentHooks,
+  shouldSkipUserHookInstall,
+} from './agent-hooks.js';

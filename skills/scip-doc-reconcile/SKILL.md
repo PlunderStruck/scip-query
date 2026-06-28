@@ -1,8 +1,6 @@
 ---
 name: scip-doc-reconcile
 description: Reconcile standards docs and living documentation with the current code using scip-query doc-drift evidence. Updates descriptive claims, repairs broken file references, and escalates normative violations instead of silently blessing them. Ends with staleness driven to zero.
-allowed-tools: [Bash, Read, Write, Edit, Glob, Agent, TaskCreate, TaskUpdate, TaskGet, TaskList]
-keywords: [docs, standards, reconcile, doc-drift, stale-docs, agent-os, spec, documentation, drift, sync]
 ---
 
 # Doc Reconciliation with scip-query
@@ -32,7 +30,9 @@ descriptive.
 ### 1. Build the evidence-backed worklist
 
 ```bash
-scip-query reindex
+scip-query status --capabilities
+# If freshness is stale, missing, or unknown:
+# scip-query reindex
 scip-query doc-drift                      # all living docs, ranked by staleness
 scip-query doc-drift agent-os/standards   # scoped to a standards tree
 ```
@@ -76,7 +76,7 @@ Then edit the doc:
 
 ```bash
 scip-query doc-drift <doc>     # staleness must drop to 0, broken refs to none
-scip-query diff-gate           # your own doc edits gate clean before commit
+scip-query diff-gate --json    # your own doc edits gate clean before commit
 ```
 
 A doc still showing staleness after your edit means a subject changed in

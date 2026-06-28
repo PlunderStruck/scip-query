@@ -8,6 +8,7 @@ import {
   withJsonOption,
 } from './command-spec-builders.js';
 import { DIFF_IMPACT_BATCH_COMMAND, HEALTH_PHASE_COMMAND } from '../cli-support.js';
+import { handleAgentHookContext, handleAgentHookStop } from '../agent-hooks.js';
 import { BUILTIN_SKILLS } from '../setup.js';
 import * as handlers from './command-handlers.js';
 import { orderedQueryCommandDescriptors } from './query-command-specs.js';
@@ -70,7 +71,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     id: 'diff-impact',
     command: 'diff-impact',
     description: 'Compute changed symbols and downstream consumers from current git diff',
-    options: [option('--base <ref>', 'Git ref to diff against (default: HEAD)')],
+    options: withJsonOption([option('--base <ref>', 'Git ref to diff against (default: HEAD)')]),
     renderShape: 'custom',
     docs: doc('Impact'),
     handler: handlers.handleDiffImpact,
@@ -104,6 +105,21 @@ export const commandDescriptors: CommandDescriptor[] = [
     docs: doc('Health', ['scip-query health --json', 'scip-query health --baseline']),
     handler: handlers.handleHealth,
   },
+  {
+    id: 'bench',
+    command: 'bench',
+    description: 'Benchmark indexing and command runtimes for this repository',
+    options: [
+      option('--json', 'Output as JSON for programmatic consumption'),
+      option('--cold-index', 'Temporarily clear this project index cache and measure a cold rebuild'),
+      option('--include-heavy', 'Include expensive full-detector commands in the command matrix'),
+      option('--command <cmd>', 'Benchmark a specific scip-query command (can be repeated)', collectValues, []),
+      option('--timeout-ms <n>', 'Per-command timeout in milliseconds', parsePositiveInteger, 180000),
+    ],
+    renderShape: 'custom',
+    docs: doc('Maintenance', ['scip-query bench', 'scip-query bench --json --cold-index']),
+    handler: handlers.handleBench,
+  },
   ...queryCommandsBeforeMaintenance,
   {
     id: 'install-skills',
@@ -112,6 +128,31 @@ export const commandDescriptors: CommandDescriptor[] = [
     renderShape: 'custom',
     docs: doc('Maintenance'),
     handler: handlers.handleInstallSkills,
+  },
+  {
+    id: 'setup-hooks',
+    command: 'setup-hooks',
+    description: 'Install or refresh project-local Codex and Claude Code lifecycle hooks',
+    options: [option('--json', 'Output as JSON for programmatic consumption')],
+    renderShape: 'custom',
+    docs: doc('Maintenance', ['scip-query setup-hooks', 'scip-query setup-hooks --json']),
+    handler: handlers.handleSetupHooks,
+  },
+  {
+    id: 'hook-context',
+    command: 'hook-context',
+    description: 'Internal agent lifecycle hook context renderer',
+    hidden: true,
+    renderShape: 'custom',
+    handler: handleAgentHookContext,
+  },
+  {
+    id: 'hook-stop',
+    command: 'hook-stop',
+    description: 'Internal agent Stop hook wrapper for diff-gate',
+    hidden: true,
+    renderShape: 'custom',
+    handler: handleAgentHookStop,
   },
   {
     id: 'check-deps',
@@ -181,6 +222,16 @@ export const commandDescriptors: CommandDescriptor[] = [
     handler: handlers.handleDoctor,
   },
   {
+    id: 'setup',
+    command: 'setup',
+    description:
+      'Bootstrap this project: install agent skills, refresh the index, verify capabilities, and report health',
+    options: withJsonOption([option('--git-hook', 'Also install a git pre-commit hook that runs diff-gate')]),
+    renderShape: 'custom',
+    docs: doc('Maintenance', ['scip-query setup', 'scip-query setup --json']),
+    handler: handlers.handleSetup,
+  },
+  {
     id: 'setup-agent',
     command: 'setup-agent',
     description:
@@ -209,6 +260,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     options: [
       option('--debounce <ms>', 'Ms to wait after last change (default: 30000)', parseIntegerLoose),
       option('--cooldown <ms>', 'Min ms between reindexes (default: 60000)', parseIntegerLoose),
+      option('--git-poll <ms>', 'Ms between Git HEAD/index checks (default: 2000)', parseIntegerLoose),
     ],
     renderShape: 'custom',
     docs: doc('Maintenance'),

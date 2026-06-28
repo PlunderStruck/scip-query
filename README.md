@@ -34,7 +34,7 @@ Agents are effective at editing the code in front of them. They are less reliabl
 | Plan | Externally consumed surfaces, change scope, blast radius, and historical partners | `surface`, `change-surface`, `co-change` |
 | Reuse | Whether the helper, component, hook, or composable already exists | `similar`, `recent-duplicates` |
 | Finish | Whether an extraction or migration reached every relevant site | `incomplete-migration`, `unused-params` |
-| Verify | What the diff affected and whether covered structural checks regressed | `diff-impact`, `doc-drift`, `diff-gate`, `health --baseline` |
+| Verify | What the diff affected and whether covered structural checks regressed | `diff-impact --json`, `doc-drift`, `diff-gate --json`, `health --baseline` |
 | Clean up | Candidate removals and newly exposed dead-code cascades | `cleanup-plan --verify` |
 
 React and Vue repositories get additional framework-aware checks for repeated component/template structure, hook/composable behavior, and large-component or large-view pressure. These extend the same reuse and completion workflow; the core graph, history, planning, cleanup, and diff-gate commands are not frontend-specific.
@@ -62,7 +62,7 @@ scip-query similar <closest-symbol>
 scip-query incomplete-migration
 
 # Before declaring the work complete: refresh the index and gate the diff
-scip-query reindex && scip-query diff-gate
+scip-query reindex && scip-query diff-gate --json
 ```
 
 For a repository-wide cleanup pass:
@@ -209,21 +209,22 @@ Heuristic detectors carry guardrails learned from real codebases: published `pac
 
 ## Agent Skills
 
-`scip-query install-skills` symlinks ready-made skills into Claude Code, Codex, and shared agent roots (`~/.agents/skills/`) — they update automatically with the package. The `scip-query` router skill triggers on any codebase work and dispatches to the right specialist: exploring (`scip-explore`), debloating (`scip-debloat`), directory architecture review (`scip-directory-architecture`), maintainability review (`scip-maintainability`), React frontend maintainability review (`scip-react-maintainability`), Vue frontend maintainability review (`scip-vue-maintainability`), post-change verification (`scip-verify`), doc reconciliation (`scip-doc-reconcile`), AI-rot cleanup (`scip-ai-cleanup`), per-language guidance (`scip-language-playbook`), and grounded planning (`concrete-plan`).
+`scip-query install-skills` symlinks bundled skills into Claude Code, Codex, and shared agent roots (`~/.agents/skills/`) so they update automatically with the package. The `scip-query` router skill dispatches codebase work to specialists for setup/adoption, health audit and autonomous health improvement, debugging, issue triage, HTML diagrams, API impact, exploration, planning, cleanup, doc reconciliation, maintainability review, React/Vue review, AI-rot cleanup, language playbooks, and post-change verification.
 
-Then, once per project, `scip-query setup-agent` seeds the `AGENTS.md` guidance block (plus a `CLAUDE.md` import shim, since Claude Code doesn't read AGENTS.md natively), and `--git-hook` adds a pre-commit diff gate that fires no matter which agent — or human — wrote the change.
+Project setup writes reviewable project-local lifecycle hooks for Codex and Claude Code (`.codex/hooks.json` and `.claude/settings.json`). These hooks add scip-query context at session start, route prompts toward the right skill, and run an advisory Stop-hook wrapper around the diff gate only for that repository. The Stop hook warns by default instead of blocking the agent; set `SCIP_QUERY_STOP_HOOK_MODE=feedback` to ask the agent to continue without a hook error, or `SCIP_QUERY_STOP_HOOK_MODE=block` to enforce the gate. Set `SCIP_QUERY_SKIP_HOOK_INSTALL=1` to skip hook installation during setup, or run `scip-query setup-hooks --json` later to repair the current repo's hooks.
+
+For a project, run `scip-query setup`. It installs/refreshes skills, configures project-local hooks, checks indexer readiness, attempts configured indexer remediation, refreshes the index, smoke-tests representative command families, writes `docs/scip-query/health-dossier.md` and `.json`, reports the health score and items needing attention, and seeds AGENTS.md/CLAUDE.md guidance. After setup, `scip-health-audit` confirms raw signals and `scip-health-improve` keeps fixing the worst confirmed items until the score is as high as reasonably possible. Use `scip-query setup --git-hook` when you also want a local pre-commit diff gate. CI setup is intentionally separate.
 
 ## Quick Start
 
 ```bash
-scip-query check-deps        # verify indexers are runnable
-scip-query install-skills    # optional: agent skills
-scip-query reindex
+scip-query setup --json      # bootstrap local skills, index, capabilities, guidance, and health dossier
 
 scip-query stats
 scip-query system src/auth
 scip-query plan-context login
-scip-query health
+scip-query diff-impact --json
+scip-query health --json --full
 scip-query cleanup-plan --verify
 scip-query health --write-baseline   # start the ratchet
 ```
@@ -261,6 +262,9 @@ Vue single-file components are handled through the JavaScript/TypeScript indexer
 
 By default, indexes live in `~/.cache/scip-query/projects/<hash>/`, keeping project directories clean. Override paths with `.scipquery.json` or `SCIP_QUERY_*` environment variables. Reindexing writes per-language SCIP shards next to the SQLite index, so a mixed-language repo can reuse unchanged language outputs and rerun only the languages whose source/config inputs changed.
 
+TypeScript monorepos can opt into project sharding with `indexer.typescript.projectMode: "workspace"`. In that mode, `scip-query` discovers repo-local TypeScript project roots, runs one `scip-typescript` process per project with bounded concurrency, merges the shard protobufs, and still publishes one TypeScript language index. Set `indexer.typescript.projects` to an explicit list of project directories or tsconfig paths when automatic discovery is too broad. Set `indexerConcurrency` when a repo needs a persistent worker cap; CLI `--indexer-concurrency` and `SCIP_QUERY_INDEXER_CONCURRENCY` still override ad hoc runs.
+Use `indexer.typescript.pnpmWorkspaces` only with the default single-project mode; workspace mode passes explicit projects instead.
+
 Most read-only commands accept `--json` and use the same envelope:
 
 ```json
@@ -280,6 +284,7 @@ It creates `.scipquery.json`:
 ```json
 {
   "languages": ["typescript"],
+  "indexerConcurrency": 6,
   "watch": {
     "enabled": false,
     "debounceMs": 30000,
@@ -287,7 +292,8 @@ It creates `.scipquery.json`:
   },
   "indexer": {
     "typescript": {
-      "pnpmWorkspaces": true
+      "projectMode": "workspace",
+      "projects": ["apps/api", "apps/web"]
     }
   }
 }

@@ -7,7 +7,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
 import { collectBaselineFindings } from '../../../src/queries/health/health-baseline.js';
 import { diffGate } from '../../../src/queries/impact/diff-gate.js';
-import { diffImpactPlan } from '../../../src/queries/impact/diff-impact.js';
+import {
+  baseContentPathsForDiffPlan,
+  createBaseContentReader,
+  diffImpactPlan,
+  fileContentsAtBase,
+} from '../../../src/queries/impact/diff-impact.js';
 import { incompleteMigration } from '../../../src/queries/impact/incomplete-migration.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { createEvidenceSchema } from '../../fixtures/evidence-fixture.js';
@@ -318,6 +323,20 @@ afterAll(() => {
 });
 
 describe('incomplete-migration', () => {
+  it('batch reads base file contents while preserving missing and non-blob paths', () => {
+    const contents = fileContentsAtBase(repoRoot, 'HEAD', [
+      'src',
+      'src/util.ts',
+      'src/does-not-exist.ts',
+      'src/util.ts',
+    ]);
+
+    expect(contents.size).toBe(3);
+    expect(contents.get('src')).toBeNull();
+    expect(contents.get('src/util.ts')).toContain('placeholder');
+    expect(contents.get('src/does-not-exist.ts')).toBeNull();
+  });
+
   it('reports un-migrated sites for a freshly wired helper', () => {
     const result = incompleteMigration(db, { base: 'HEAD', semantic: false });
 
@@ -374,6 +393,26 @@ describe('incomplete-migration', () => {
       helperShape: 'specific-callee-cluster',
       helperCalleeCount: 3,
       specificHelperCalleeCount: 3,
+      migratedFiles: expect.arrayContaining(['src/site-a.ts']),
+      leftovers: expect.arrayContaining([
+        expect.objectContaining({ file: 'src/site-b.ts', containment: 1, siteCoverage: 0.75 }),
+        expect.objectContaining({ file: 'src/site-c.ts', containment: 1, siteCoverage: 1 }),
+        expect.objectContaining({ file: 'src/billing.ts', migrationScope: 'possible-subtype' }),
+      ]),
+    });
+  });
+
+  it('reuses a supplied base-content reader without changing incomplete-migration findings', () => {
+    const diffPlan = diffImpactPlan(db, { base: 'HEAD' });
+    const baseContentAt = createBaseContentReader(repoRoot, 'HEAD', baseContentPathsForDiffPlan(diffPlan));
+    const result = incompleteMigration(db, { base: 'HEAD', semantic: false, diffPlan, baseContentAt });
+
+    expect(result.available).toBe(true);
+    expect(result.helpersChecked).toBe(1);
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0]).toMatchObject({
+      helperShortName: expect.stringContaining('formatThing'),
+      helperFile: 'src/util.ts',
       migratedFiles: expect.arrayContaining(['src/site-a.ts']),
       leftovers: expect.arrayContaining([
         expect.objectContaining({ file: 'src/site-b.ts', containment: 1, siteCoverage: 0.75 }),
@@ -916,8 +955,16 @@ describe('incomplete-migration', () => {
     const baselinePath = join(repoRoot, '.scipquery-baseline.json');
     writeFileSync(baselinePath, JSON.stringify({ version: 1, findings: current.slice(1) }, null, 2));
     try {
+      const defaultResult = diffGate(db, {
+        base: 'HEAD',
+        skip: ['echo', 'incomplete-migration', 'co-change-partner', 'doc-reference', 'unused-params', 'new-dead'],
+      });
+      expect(defaultResult.checksRun).not.toContain('baseline');
+      expect(defaultResult.findings.find((candidate) => candidate.check === 'baseline')).toBeUndefined();
+
       const result = diffGate(db, {
         base: 'HEAD',
+        includeBaseline: true,
         skip: ['echo', 'incomplete-migration', 'co-change-partner', 'doc-reference', 'unused-params', 'new-dead'],
       });
       const finding = result.findings.find((candidate) => candidate.check === 'baseline');

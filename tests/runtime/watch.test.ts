@@ -1,12 +1,88 @@
-import { describe, expect, it } from 'vitest';
-import { tempScipPath } from '../../src/runtime/watch.js';
+import { EventEmitter } from 'node:events';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-describe('tempScipPath', () => {
-  it('preserves the .scip suffix for temporary files', () => {
-    expect(tempScipPath('/tmp/index.scip')).toBe('/tmp/index.tmp.scip');
+const tempDirs: string[] = [];
+
+function createProject(): string {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-watch-'));
+  tempDirs.push(projectRoot);
+  mkdirSync(join(projectRoot, 'src'), { recursive: true });
+  writeFileSync(join(projectRoot, 'src', 'a.ts'), 'export const a = 1;\n');
+  return projectRoot;
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.resetModules();
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+describe('Watcher', () => {
+  it('passes canonical index paths and trigger metadata to the reindex worker', async () => {
+    const projectRoot = createProject();
+    const captured: { detached?: boolean; env?: NodeJS.ProcessEnv } = {};
+
+    vi.doMock('node:child_process', () => ({
+      execFileSync: vi.fn(() => ''),
+      fork: vi.fn((_path: string, _args: string[], options: { detached?: boolean; env?: NodeJS.ProcessEnv }) => {
+        captured.detached = options.detached;
+        captured.env = options.env;
+        const child = new EventEmitter();
+        process.nextTick(() => child.emit('exit', 0));
+        return child;
+      }),
+    }));
+
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const watcher = new Watcher({
+      projectRoot,
+      config: {
+        dbPath: '.cache/scip-query',
+        indexerConcurrency: 6,
+        watch: { gitPollMs: 60_000 },
+        indexer: { typescript: { projectMode: 'workspace', projects: ['packages/web'] } },
+      },
+      languages: ['typescript'],
+    });
+
+    await (watcher as unknown as { runReindex(trigger: unknown): Promise<number> }).runReindex({
+      kind: 'watch-source',
+      detail: 'src/a.ts',
+    });
+
+    expect(captured.detached).toBe(true);
+    expect(captured.env).toEqual(
+      expect.objectContaining({
+        SCIP_REINDEX_OUTPUT_SCIP: join(projectRoot, '.cache/scip-query/index.scip'),
+        SCIP_REINDEX_OUTPUT_DB: join(projectRoot, '.cache/scip-query/index.db'),
+        SCIP_REINDEX_INDEXER_CONCURRENCY: '6',
+        SCIP_REINDEX_TYPESCRIPT_CONFIG: JSON.stringify({
+          projectMode: 'workspace',
+          projects: ['packages/web'],
+        }),
+        SCIP_REINDEX_TRIGGER_KIND: 'watch-source',
+        SCIP_REINDEX_TRIGGER_DETAIL: 'src/a.ts',
+      }),
+    );
   });
 
-  it('adds a .tmp.scip suffix when the path has no .scip extension', () => {
-    expect(tempScipPath('/tmp/index')).toBe('/tmp/index.tmp.scip');
+  it('ignores Git bookkeeping events in the source watcher path', async () => {
+    const projectRoot = createProject();
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { gitPollMs: 60_000 } },
+      languages: ['typescript'],
+    });
+
+    (watcher as unknown as { handleFileChange(filename: string): void }).handleFileChange('.git/index');
+
+    expect((watcher as unknown as { changedFiles: number }).changedFiles).toBe(0);
+    expect((watcher as unknown as { pendingTrigger: unknown }).pendingTrigger).toBeNull();
   });
 });

@@ -30,6 +30,8 @@ export type SupportedLanguage =
   | 'dart'
   | 'php';
 
+export type TypeScriptProjectMode = 'single' | 'workspace';
+
 export interface IndexerConfig {
   language: SupportedLanguage;
   /** Preferred executable name for the indexer */
@@ -41,7 +43,13 @@ export interface IndexerConfig {
   /** Command to check if the indexer is installed */
   checkCommand: string;
   /** Returns the binary + args array for execFileSync (no shell injection) */
-  indexArgs: (opts: { projectRoot: string; outputPath: string; pnpmWorkspaces?: boolean; indexerBinary: string }) => {
+  indexArgs: (opts: {
+    projectRoot: string;
+    outputPath: string;
+    pnpmWorkspaces?: boolean;
+    indexerBinary: string;
+    projectPath?: string;
+  }) => {
     binary: string;
     args: string[];
   };
@@ -90,6 +98,8 @@ export interface ScipQueryConfig {
 export interface ProjectConfig {
   /** Override which languages to index (default: auto-detect) */
   languages?: SupportedLanguage[];
+  /** Number of indexer workers to run at once (default: adaptive, max 8) */
+  indexerConcurrency?: number;
   /** Watch mode settings */
   watch?: WatchConfig;
   /** Per-language indexer overrides */
@@ -163,6 +173,10 @@ export interface WatchConfig {
   debounceMs?: number;
   /** Minimum ms between reindex completions (default: 60000) */
   cooldownMs?: number;
+  /** Ms between Git HEAD/index state checks (default: 2000) */
+  gitPollMs?: number;
+  /** Let project agent hooks refresh stale indexes without a live watch process (default: true) */
+  autoRefresh?: boolean;
   /** Extra glob patterns to ignore beyond .gitignore */
   ignore?: string[];
 }
@@ -170,4 +184,8 @@ export interface WatchConfig {
 export interface IndexerOverrides {
   /** Enable pnpm workspace support (TypeScript) */
   pnpmWorkspaces?: boolean;
+  /** TypeScript indexing strategy: one inferred project, or parallel workspace project roots */
+  projectMode?: TypeScriptProjectMode;
+  /** Explicit TypeScript project roots or tsconfig paths, relative to project root unless absolute */
+  projects?: string[];
 }

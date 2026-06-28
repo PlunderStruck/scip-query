@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { create } from '@bufbuild/protobuf';
 import { deserializeSCIP, serializeSCIP, DocumentSchema, IndexSchema, SymbolInformationSchema } from '@c4312/scip';
-import type { Document, Index, Relationship, SymbolInformation } from '@c4312/scip';
+import type { Document, Index, Occurrence, Relationship, SymbolInformation } from '@c4312/scip';
 
 export interface MergeScipResult {
   documentCount: number;
@@ -87,7 +87,7 @@ function mergeDocuments(documents: readonly Document[]): Document[] {
       create(DocumentSchema, {
         language: existing.language || document.language,
         relativePath: existing.relativePath || document.relativePath,
-        occurrences: [...existing.occurrences, ...document.occurrences],
+        occurrences: mergeOccurrences([...existing.occurrences, ...document.occurrences]),
         symbols: mergeSymbolInfos([...existing.symbols, ...document.symbols]),
         text: chooseText(existing.text, document.text),
         positionEncoding: existing.positionEncoding || document.positionEncoding,
@@ -96,6 +96,22 @@ function mergeDocuments(documents: readonly Document[]): Document[] {
   }
 
   return [...byPath.values()];
+}
+
+function mergeOccurrences(occurrences: readonly Occurrence[]): Occurrence[] {
+  const seen = new Set<string>();
+  const merged: Occurrence[] = [];
+
+  for (const occurrence of occurrences) {
+    const key = JSON.stringify(occurrence);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    merged.push(occurrence);
+  }
+
+  return merged;
 }
 
 function mergeSymbolInfos(symbols: readonly SymbolInformation[]): SymbolInformation[] {

@@ -1,8 +1,6 @@
 ---
 name: concrete-plan
 description: Build concrete, checklist-driven implementation plans using scip-query for every code reference. Plans are stress-tested against 11 engineering principles before shipping.
-allowed-tools: [Bash, Write, Edit, Glob, Agent, TaskCreate, TaskUpdate, TaskGet, TaskList]
-keywords: [plan, design, architecture, implementation, checklist, blueprint, proposal, rfc, spec]
 ---
 
 # Concrete Implementation Planning
@@ -13,7 +11,7 @@ You are writing a production implementation plan as a markdown checklist. Every 
 
 ## Hard Rules
 
-1. **Every code reference must come from scip-query.** Run `scip-query reindex` before starting. Re-run if significant code has changed during the session. No reference from memory, grep, or file reads.
+1. **Every code reference must come from scip-query.** Run `scip-query status --capabilities` or `scip-query status --json` before starting. If freshness is `fresh`, keep going; if it is `stale`, `missing`, or `unknown`, run `scip-query reindex` before using graph facts. No reference from memory, grep, or file reads.
 
 2. **Every step must cite its source.** Each step in the plan includes a `Source` field naming the scip-query command that produced the file path, line number, and behavioral claim. A step without a Source is unverified and must not appear in the plan.
 
@@ -114,7 +112,7 @@ This skill deliberately excludes `Grep` and `Read` from its allowed tools. This 
 | Reverse dependencies | `scip-query rdeps <file>` |
 | **Full transitive blast radius** | `scip-query affected <symbol>` |
 | **Pre-change risk briefing** | `scip-query change-surface <file>` |
-| **Git diff impact analysis** | `scip-query diff-impact` |
+| **Git diff impact analysis** | `scip-query diff-impact --json` |
 | **Complexity analysis** | `scip-query complexity <symbol>` (branches, cyclomatic, fan-in/out) |
 | **Dataflow: what feeds in/out** | `scip-query dataflow <symbol>` (producers, consumers, usage sites) |
 | **Backward slice (what affects this)** | `scip-query slice <symbol>` |
@@ -291,12 +289,12 @@ Apply the 11 Principles against every step in the design. For each principle, as
 
 After stress-testing is complete:
 
-1. **Reindex**: Run `scip-query reindex`.
+1. **Freshness**: Run `scip-query status --capabilities`; reindex only if freshness is not `fresh`.
 2. **Verify references**: Spawn parallel subagents (one per phase) using the **Subagent Briefing Template**. Each agent confirms that every file path exists, every line number is within +-5 lines, and every described behavior matches reality. Reject output that doesn't cite scip-query commands.
 3. **Fix drift**: Update any stale references.
 4. **Check execution order**: No phase depends on a later phase. No step within a phase depends on a later step.
 5. **Check validation coverage**: Every behavior-changing step should have a corresponding validation step. Flag gaps in tests, manual checks, or runtime verification.
-6. **Run diff-impact**: `scip-query diff-impact` to verify the blast radius matches what the plan predicted.
+6. **Run diff-impact**: `scip-query diff-impact --json` to verify the blast radius matches what the plan predicted.
 
 ---
 
@@ -327,7 +325,7 @@ Dependencies & Impact:
 - `scip-query rdeps <file>` — files that depend on this file
 - `scip-query affected <symbol>` — transitive closure of breakage
 - `scip-query change-surface <file>` — pre-change risk briefing
-- `scip-query diff-impact` — git diff impact analysis
+- `scip-query diff-impact --json` — git diff impact analysis
 
 Analysis:
 - `scip-query complexity <symbol>` — branches, cyclomatic estimate, fan-in/out

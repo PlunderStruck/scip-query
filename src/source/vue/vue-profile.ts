@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
+import { createSourceFileCache } from '../../storage/per-db-cache.js';
 import { getSourceFiles } from '../source-fileset.js';
-import { getSourceLines } from '../source-text.js';
+import { getSourceText } from '../source-text.js';
 import type { VueTemplateFacts } from './vue-template.js';
 import { getVueTemplateFacts } from './vue-template.js';
 import type { VueScriptFacts } from './vue-script-facts.js';
@@ -45,6 +46,9 @@ const BEHAVIOR_FUNCTION_STOP_WORDS = new Set([
   'watch',
   'watchEffect',
 ]);
+const VUE_COMPONENT_BEHAVIOR_PROFILE_CACHE = createSourceFileCache<VueComponentBehaviorProfile>(
+  'vue-component-behavior-profiles',
+);
 
 export function buildVueComponentBehaviorProfiles(
   db: ScipDatabase,
@@ -67,6 +71,18 @@ export function buildVueComponentBehaviorProfiles(
 
 export function buildVueComponentBehaviorProfile(db: ScipDatabase, relativePath: string): VueComponentBehaviorProfile {
   const file = relativePath.replace(/\\/g, '/');
+  const source = getSourceText(db, file);
+  const cached = VUE_COMPONENT_BEHAVIOR_PROFILE_CACHE.get(db, file, source, () =>
+    buildVueComponentBehaviorProfileUncached(db, file, source),
+  );
+  return cloneVueComponentBehaviorProfile(cached);
+}
+
+function buildVueComponentBehaviorProfileUncached(
+  db: ScipDatabase,
+  file: string,
+  source: string,
+): VueComponentBehaviorProfile {
   const sfc = getVueSfcUnit(db, file);
   const templateFacts = getVueTemplateFacts(db, file);
   const scriptFacts = buildVueScriptFacts(sfc);
@@ -80,7 +96,7 @@ export function buildVueComponentBehaviorProfile(db: ScipDatabase, relativePath:
     .map((tag) => tag.normalized)
     .filter((name, index, arr) => arr.indexOf(name) === index)
     .sort();
-  const sfcLines = getSourceLines(db, file).length;
+  const sfcLines = source ? source.split('\n').length : 0;
   const templateLines = vueBlockLineCount(sfc.template);
   const scriptLines = scriptFacts.lineCount;
   const styleLines = sfc.styles.reduce((sum, block) => sum + vueBlockLineCount(block), 0);
@@ -104,6 +120,37 @@ export function buildVueComponentBehaviorProfile(db: ScipDatabase, relativePath:
     externalScriptLines: scriptFacts.externalLineCount,
     externalScriptPaths: scriptFacts.externalScriptPaths,
     customBlockLines,
+  };
+}
+
+function cloneVueComponentBehaviorProfile(profile: VueComponentBehaviorProfile): VueComponentBehaviorProfile {
+  const scriptFacts = cloneVueScriptFacts(profile.scriptFacts);
+  return {
+    ...profile,
+    scriptFacts,
+    templateTokens: new Set(profile.templateTokens),
+    behaviorTokens: new Set(profile.behaviorTokens),
+    templateBindingNames: [...profile.templateBindingNames],
+    templateLocalNames: [...profile.templateLocalNames],
+    componentNames: [...profile.componentNames],
+    externalScriptPaths: scriptFacts.externalScriptPaths,
+  };
+}
+
+function cloneVueScriptFacts(facts: VueScriptFacts): VueScriptFacts {
+  return {
+    ...facts,
+    imports: facts.imports.map((fact) => ({ ...fact })),
+    functions: facts.functions.map((fact) => ({ ...fact })),
+    calls: facts.calls.map((fact) => ({ ...fact, categories: [...fact.categories] })),
+    composables: [...facts.composables],
+    stores: [...facts.stores],
+    reactivity: [...facts.reactivity],
+    lifecycle: [...facts.lifecycle],
+    requests: [...facts.requests],
+    macros: [...facts.macros],
+    externalScriptPaths: [...facts.externalScriptPaths],
+    unresolvedScripts: facts.unresolvedScripts.map((fact) => ({ ...fact })),
   };
 }
 

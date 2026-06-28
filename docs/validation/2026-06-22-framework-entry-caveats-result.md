@@ -18,6 +18,8 @@ A framework-discovered entrypoint is a source-level export whose real caller is 
 - Preserved test-file and React custom-hook framework exclusions.
 - Added a dead-code fixture where `GET()` in a Next.js app route is not reported but `unusedRouteHelper()` in the same file is reported.
 
+2026-06-27 follow-up: `src/analysis/framework-patterns.ts` now uses a source-text prefilter before TS/JS exclusion AST parsing. Marker-positive test-file, React custom-hook, and `scip-query` suppression cases still take the AST path; `tests/analysis/framework-patterns.test.ts` covers those preserved exclusions.
+
 ## Verification
 
 - `npx vitest run tests/queries/cleanup/dead-output.test.ts` passed: 1 file, 1 test.

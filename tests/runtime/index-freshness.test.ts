@@ -15,14 +15,25 @@ function writeMeta(root: string, metaPath: string, languages: SupportedLanguage[
         status: 'complete',
         updatedAt: new Date().toISOString(),
         fingerprint: {
-          version: 1,
+          version: 2,
           languages: [...languages].sort(),
           pnpmWorkspaces: false,
+          typescriptProjectMode: 'single',
+          typescriptProjects: [],
           files: fingerprintProjectFiles(root),
         },
         requestedLanguages: languages,
         indexedLanguages: languages,
         skipped: [],
+        lastRefresh: {
+          trigger: { kind: 'manual-cli', detail: 'scip-query reindex' },
+          result: 'rebuilt',
+          startedAt: '2026-06-27T00:00:00.000Z',
+          completedAt: '2026-06-27T00:00:01.000Z',
+          durationMs: 1000,
+          indexedLanguages: languages,
+          skipped: [],
+        },
       },
       null,
       2,
@@ -66,6 +77,12 @@ describe('index freshness', () => {
       };
 
       expect(getIndexFreshness(root, config, { dbPath, metaPath }).state).toBe('fresh');
+      expect(getIndexFreshness(root, config, { dbPath, metaPath }).lastRefresh).toEqual(
+        expect.objectContaining({
+          trigger: { kind: 'manual-cli', detail: 'scip-query reindex' },
+          result: 'rebuilt',
+        }),
+      );
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -117,6 +134,31 @@ describe('index freshness', () => {
       const freshness = getIndexFreshness(root, config, { dbPath, metaPath });
       expect(freshness.state).toBe('stale');
       expect(freshness.remedy).toContain('reindex');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reports stale when TypeScript project indexing mode differs from metadata', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-freshness-ts-mode-'));
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(join(root, 'tsconfig.json'), '{}');
+      writeFileSync(join(root, 'src', 'a.ts'), 'export const a = 1;\n');
+      const dbPath = join(root, 'index.db');
+      mkdirSync(join(root, '.scipquery-cache'));
+      const metaPath = join(root, '.scipquery-cache', 'meta.json');
+      writeFileSync(dbPath, '');
+      writeMeta(root, metaPath, ['typescript']);
+      const config: ProjectConfig = {
+        dbPath,
+        indexPath: join(root, 'index.scip'),
+        projectRoot: root,
+        languages: ['typescript'],
+        indexer: { typescript: { projectMode: 'workspace', projects: ['src'] } },
+      };
+
+      expect(getIndexFreshness(root, config, { dbPath, metaPath }).state).toBe('stale');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

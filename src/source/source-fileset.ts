@@ -77,6 +77,11 @@ export const ALL_SOURCE_EXTENSIONS: readonly string[] = [
  * include. Walking these from disk supplements the `documents` table.
  */
 export const AUXILIARY_EXTENSIONS: readonly string[] = ['.vue'];
+const REACT_SOURCE_EXTENSIONS: readonly string[] = ['.tsx', '.jsx'];
+const VUE_SOURCE_EXTENSIONS: readonly string[] = ['.vue'];
+const FRAMEWORK_SOURCE_EXTENSIONS: readonly string[] = [...REACT_SOURCE_EXTENSIONS, ...VUE_SOURCE_EXTENSIONS];
+const REACT_SOURCE_EXTENSION_SET: ReadonlySet<string> = new Set(REACT_SOURCE_EXTENSIONS);
+const VUE_SOURCE_EXTENSION_SET: ReadonlySet<string> = new Set(VUE_SOURCE_EXTENSIONS);
 const DEFAULT_EXTENSION_SET: ReadonlySet<string> = new Set(ALL_SOURCE_EXTENSIONS.map((e) => e.toLowerCase()));
 const DEFAULT_EXTENSION_CACHE_KEY = [...DEFAULT_EXTENSION_SET].sort().join(',');
 
@@ -151,6 +156,22 @@ export function getSourceFiles(db: ScipDatabase, opts: SourceFilesetOptions = {}
     }
     return [...out].sort();
   });
+}
+
+export function sourceFrameworkApplicability(
+  db: ScipDatabase,
+  opts: { scope?: string } = {},
+) {
+  let react = false;
+  let vue = false;
+  for (const file of getSourceFiles(db, { extensions: FRAMEWORK_SOURCE_EXTENSIONS })) {
+    if (opts.scope && !file.includes(opts.scope)) continue;
+    const extension = extname(file).toLowerCase();
+    react ||= REACT_SOURCE_EXTENSION_SET.has(extension);
+    vue ||= VUE_SOURCE_EXTENSION_SET.has(extension);
+    if (react && vue) break;
+  }
+  return { react, vue };
 }
 
 // Derived from the read-only index — valid for the connection's lifetime.

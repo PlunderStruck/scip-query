@@ -21,7 +21,9 @@ Refresh the code intelligence before trusting graph facts:
 
 ```bash
 scip-query status
-scip-query reindex
+scip-query status --capabilities
+# If freshness is stale, missing, or unknown:
+# scip-query reindex
 ```
 
 Run the React review commands uncapped when doing a serious frontend pass. Do not combine `--full` with `--limit`.
@@ -73,7 +75,7 @@ After implementing a component reuse, hook extraction, or large-component split,
 Run the checks that match what changed:
 
 ```bash
-scip-query diff-impact
+scip-query diff-impact --json
 scip-query react-component-duplicates --scope <react-source-scope> --full --json
 scip-query react-hook-candidates --scope <react-source-scope> --full --json
 scip-query react-large-component-pressure --scope <react-source-scope> --full --json
@@ -83,7 +85,10 @@ scip-query unused-params
 scip-query wrapper-candidates --scope <react-source-scope> --full --json
 scip-query passthrough-candidates --scope <react-source-scope> --full --json
 scip-query stale-abstractions --scope <react-source-scope> --include-low-confidence --full --json
-scip-query reindex && scip-query diff-gate
+scip-query status --capabilities
+# If freshness is stale, missing, or unknown:
+# scip-query reindex
+scip-query diff-gate --json
 ```
 
 Use the results this way:

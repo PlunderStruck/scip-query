@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { cpus, tmpdir } from 'node:os';
 import type { SupportedLanguage } from '../../src/domain/types.js';
+import { resolveIndexerConcurrency } from '../../src/reindex/indexer-runner.js';
 
 const tempDirs: string[] = [];
+const originalIndexerConcurrencyEnv = process.env['SCIP_QUERY_INDEXER_CONCURRENCY'];
 
 function createProject(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
@@ -18,9 +20,35 @@ function createProject(prefix: string): string {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.resetModules();
+  if (originalIndexerConcurrencyEnv === undefined) {
+    delete process.env['SCIP_QUERY_INDEXER_CONCURRENCY'];
+  } else {
+    process.env['SCIP_QUERY_INDEXER_CONCURRENCY'] = originalIndexerConcurrencyEnv;
+  }
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+describe('resolveIndexerConcurrency', () => {
+  it('uses a higher adaptive default while clamping to the run count', () => {
+    expect(resolveIndexerConcurrency(20)).toBe(Math.min(20, 8, cpus().length));
+    expect(resolveIndexerConcurrency(3)).toBe(Math.min(3, 8, cpus().length));
+    expect(resolveIndexerConcurrency(1)).toBe(1);
+  });
+
+  it('prefers explicit config over env and clamps oversized values', () => {
+    process.env['SCIP_QUERY_INDEXER_CONCURRENCY'] = '7';
+
+    expect(resolveIndexerConcurrency(10, 3)).toBe(3);
+    expect(resolveIndexerConcurrency(2, 10)).toBe(2);
+  });
+
+  it('uses env when config is absent', () => {
+    process.env['SCIP_QUERY_INDEXER_CONCURRENCY'] = '5';
+
+    expect(resolveIndexerConcurrency(10)).toBe(5);
+  });
 });
 
 describe('reindex reliability', () => {
@@ -171,6 +199,224 @@ describe('reindex reliability', () => {
     expect(attempts.get('python')).toBe(1);
     expect(statuses.join('\n')).toContain('Reusing cached python SCIP shard');
   });
+
+  it('indexes TypeScript workspace project shards and publishes one language output', async () => {
+    const projectRoot = createProject('scip-query-reindex-ts-workspace-');
+    mkdirSync(join(projectRoot, 'packages/a/src'), { recursive: true });
+    mkdirSync(join(projectRoot, 'packages/b/src'), { recursive: true });
+    writeFileSync(join(projectRoot, 'packages/a/tsconfig.json'), '{"include":["src"]}\n');
+    writeFileSync(join(projectRoot, 'packages/b/tsconfig.json'), '{"include":["src"]}\n');
+    writeFileSync(join(projectRoot, 'packages/a/src/a.ts'), 'export const a = 1;\n');
+    writeFileSync(join(projectRoot, 'packages/b/src/b.ts'), 'export const b = 1;\n');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    const statuses: string[] = [];
+
+    const { reindex, attempts, commands } = await loadReindexFixture({
+      languages: ['typescript'],
+    });
+
+    const result = await reindex({
+      projectRoot,
+      outputScip: join(cacheDir, 'index.scip'),
+      outputDb: join(cacheDir, 'index.db'),
+      typescriptProjectMode: 'workspace',
+      onStatus: (message) => statuses.push(message),
+      indexerConcurrency: 2,
+    });
+
+    expect(result.languages).toEqual(['typescript']);
+    expect(result.skipped).toEqual([]);
+    expect(attempts.get('typescript')).toBe(2);
+    expect(commands.filter((command) => command.binary === 'typescript-indexer').map((command) => command.args.at(-1))).toEqual(
+      ['packages/a', 'packages/b'],
+    );
+    expect(statuses.join('\n')).toContain('Indexing TypeScript workspace as 2 project shard(s).');
+    expect(JSON.parse(readFileSync(join(cacheDir, 'meta.json'), 'utf-8'))).toEqual(
+      expect.objectContaining({
+        indexedLanguages: ['typescript'],
+        fingerprint: expect.objectContaining({ typescriptProjectMode: 'workspace' }),
+      }),
+    );
+  });
+
+  it('uses an explicit TypeScript project argument even when workspace mode has one project', async () => {
+    const projectRoot = createProject('scip-query-reindex-ts-one-project-');
+    mkdirSync(join(projectRoot, 'packages/a/src'), { recursive: true });
+    writeFileSync(join(projectRoot, 'packages/a/tsconfig.json'), '{"include":["src"]}\n');
+    writeFileSync(join(projectRoot, 'packages/a/src/a.ts'), 'export const a = 1;\n');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+
+    const { reindex, commands } = await loadReindexFixture({
+      languages: ['typescript'],
+    });
+
+    await reindex({
+      projectRoot,
+      outputScip: join(cacheDir, 'index.scip'),
+      outputDb: join(cacheDir, 'index.db'),
+      typescriptProjectMode: 'workspace',
+      typescriptProjects: ['packages/a'],
+      onStatus: () => undefined,
+    });
+
+    expect(commands.find((command) => command.binary === 'typescript-indexer')?.args.at(-1)).toBe('packages/a');
+  });
+
+  it('records rebuilt and reused refresh provenance without changing artifact updatedAt on reuse', async () => {
+    const projectRoot = createProject('scip-query-reindex-refresh-meta-');
+    const cacheDir = mkdtempSync(join(tmpdir(), 'scip-query-reindex-refresh-cache-'));
+    tempDirs.push(cacheDir);
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+    const metaPath = join(cacheDir, 'meta.json');
+
+    const { reindex } = await loadReindexFixture({
+      languages: ['typescript'],
+    });
+
+    const first = await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      onStatus: () => undefined,
+      trigger: { kind: 'manual-cli', detail: 'first' },
+    });
+    const firstMeta = JSON.parse(readFileSync(metaPath, 'utf-8'));
+
+    expect(first.lastRefresh).toEqual(expect.objectContaining({ result: 'rebuilt' }));
+    expect(firstMeta.lastRefresh).toEqual(
+      expect.objectContaining({
+        result: 'rebuilt',
+        trigger: { kind: 'manual-cli', detail: 'first' },
+      }),
+    );
+
+    const second = await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      onStatus: () => undefined,
+      trigger: { kind: 'watch-source', detail: 'src/main.ts' },
+    });
+    const secondMeta = JSON.parse(readFileSync(metaPath, 'utf-8'));
+
+    expect(second.reused).toBe(true);
+    expect(second.lastRefresh).toEqual(expect.objectContaining({ result: 'reused' }));
+    expect(secondMeta.updatedAt).toBe(firstMeta.updatedAt);
+    expect(secondMeta.lastRefresh).toEqual(
+      expect.objectContaining({
+        result: 'reused',
+        trigger: { kind: 'watch-source', detail: 'src/main.ts' },
+      }),
+    );
+  });
+
+  it('records failed refresh provenance without replacing the previous artifacts', async () => {
+    const projectRoot = createProject('scip-query-reindex-refresh-failed-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+    const metaPath = join(cacheDir, 'meta.json');
+
+    const firstFixture = await loadReindexFixture({ languages: ['typescript'] });
+    await firstFixture.reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      onStatus: () => undefined,
+      trigger: { kind: 'manual-cli', detail: 'first' },
+    });
+    const firstMeta = JSON.parse(readFileSync(metaPath, 'utf-8'));
+
+    const failingFixture = await loadReindexFixture({
+      languages: ['typescript'],
+      failConvert: true,
+    });
+
+    await expect(
+      failingFixture.reindex({
+        projectRoot,
+        outputScip,
+        outputDb,
+        skipIfUnchanged: false,
+        onStatus: () => undefined,
+        trigger: { kind: 'watch-git-head', detail: 'HEAD changed' },
+      }),
+    ).rejects.toThrow(/failed to convert scip index/i);
+
+    const failedMeta = JSON.parse(readFileSync(metaPath, 'utf-8'));
+    expect(readFileSync(outputDb, 'utf-8')).toBe('new-db');
+    expect(failedMeta.updatedAt).toBe(firstMeta.updatedAt);
+    expect(failedMeta.lastRefresh).toEqual(
+      expect.objectContaining({
+        result: 'failed',
+        trigger: { kind: 'watch-git-head', detail: 'HEAD changed' },
+      }),
+    );
+  });
+
+  it('lets manual refresh replace a stale watcher-owned lock', async () => {
+    const projectRoot = createProject('scip-query-reindex-preempt-watch-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+    writeFileSync(
+      join(cacheDir, 'index.lock'),
+      JSON.stringify({
+        version: 1,
+        pid: 99_999_999,
+        projectRoot,
+        startedAt: '2026-06-27T00:00:00.000Z',
+        trigger: { kind: 'watch-source', detail: 'src/main.ts' },
+      }) + '\n',
+    );
+
+    const statuses: string[] = [];
+    const { reindex } = await loadReindexFixture({ languages: ['typescript'] });
+
+    const result = await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      onStatus: (message) => statuses.push(message),
+      trigger: { kind: 'manual-cli', detail: 'manual test' },
+    });
+
+    expect(result.languages).toEqual(['typescript']);
+    expect(statuses.join('\n')).toContain('Manual reindex preempting watcher refresh');
+  });
+
+  it('does not preempt another manual refresh lock', async () => {
+    const projectRoot = createProject('scip-query-reindex-manual-lock-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    writeFileSync(
+      join(cacheDir, 'index.lock'),
+      JSON.stringify({
+        version: 1,
+        pid: process.pid,
+        projectRoot,
+        startedAt: '2026-06-27T00:00:00.000Z',
+        trigger: { kind: 'manual-cli', detail: 'first manual' },
+      }) + '\n',
+    );
+
+    const { reindex } = await loadReindexFixture({ languages: ['typescript'] });
+
+    await expect(
+      reindex({
+        projectRoot,
+        outputScip: join(cacheDir, 'index.scip'),
+        outputDb: join(cacheDir, 'index.db'),
+        onStatus: () => undefined,
+        trigger: { kind: 'manual-cli', detail: 'second manual' },
+      }),
+    ).rejects.toThrow(/another scip-query reindex is already running/i);
+  });
 });
 
 async function loadReindexFixture(opts: {
@@ -181,11 +427,13 @@ async function loadReindexFixture(opts: {
 }) {
   vi.resetModules();
   const attempts = new Map<SupportedLanguage, number>();
+  const commands: { binary: string; args: readonly string[] }[] = [];
 
   vi.doMock('node:child_process', async () => {
     const fs = await import('node:fs');
     const execFile = vi.fn(
       (binary: string, args: readonly string[], _options: unknown, callback: (error: Error | null) => void) => {
+        commands.push({ binary, args });
         const language = binaryToLanguage(binary);
         if (language) {
           attempts.set(language, (attempts.get(language) ?? 0) + 1);
@@ -259,7 +507,7 @@ async function loadReindexFixture(opts: {
     };
   });
 
-  return { ...(await import('../../src/reindex/index.js')), attempts };
+  return { ...(await import('../../src/reindex/index.js')), attempts, commands };
 }
 
 function configFor(language: SupportedLanguage) {
@@ -267,9 +515,9 @@ function configFor(language: SupportedLanguage) {
     language,
     indexerBinary: `${language}-indexer`,
     checkCommand: `${language}-indexer --version`,
-    indexArgs: ({ outputPath }: { outputPath: string }) => ({
+    indexArgs: ({ outputPath, projectPath }: { outputPath: string; projectPath?: string }) => ({
       binary: `${language}-indexer`,
-      args: ['--output', outputPath],
+      args: projectPath ? ['--output', outputPath, projectPath] : ['--output', outputPath],
     }),
     markerFiles: [],
   };

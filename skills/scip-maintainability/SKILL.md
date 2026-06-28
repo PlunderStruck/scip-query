@@ -1,7 +1,6 @@
 ---
 name: scip-maintainability
 description: Principled maintainability review using scip-query. Finds hidden policies, scattered concepts, accidental variation, weak boundaries, and system-compression opportunities, then proposes or executes structural improvements and verifies post-change wiring without chasing health scores.
-allowed-tools: [Bash, Write, Edit, Glob, Agent, TaskCreate, TaskUpdate, TaskGet, TaskList]
 ---
 
 # SCIP Maintainability Review
@@ -29,7 +28,7 @@ System compression belongs inside this review. A system compression is a maintai
 
 ## Hard Rules
 
-1. **Evidence first.** Use `scip-query` to ground claims in files, symbols, references, call graphs, dependencies, surfaces, and blast radius. If the SCIP index is missing or stale, run `scip-query reindex` before trusting graph facts.
+1. **Evidence first.** Use `scip-query` to ground claims in files, symbols, references, call graphs, dependencies, surfaces, and blast radius. Check `scip-query status --capabilities`; if freshness is `stale`, `missing`, or `unknown`, run `scip-query reindex` before trusting graph facts.
 
 2. **Do not chase health scores.** `scip-query health`, detector counts, and LOC estimates are diagnostic signals. They are not the objective. A change is valuable only when it reduces real maintenance burden while preserving behavior.
 
@@ -40,6 +39,11 @@ System compression belongs inside this review. A system compression is a maintai
 5. **Reject false abstractions.** A new abstraction is justified only when it removes a hidden policy, names a lifecycle, enforces a rule callers were hand-maintaining, or reduces the concept count required for safe change.
 
 6. **Prefer small named mechanisms.** Delete, inline, merge, generate, or enforce before adding broad frameworks.
+
+7. **Treat suppressions as accepted design records.** Prefer fixing findings.
+   Use `scip-query suppress <id> --reason "<specific reason>"` only for
+   intentional design, compatibility shims, framework entry points, or accepted
+   false positives. Run `scip-query config-validate` afterward.
 
 ---
 
@@ -79,7 +83,7 @@ Start from current code intelligence:
 
 ```bash
 scip-query status
-scip-query reindex                    # Run when missing, stale, uncertain, or after code changes
+scip-query status --capabilities      # Reindex only when freshness is stale, missing, or unknown
 scip-query stats
 scip-query system <scope>
 scip-query surface <scope>
@@ -259,8 +263,11 @@ Then run the post-change checks that match what the fix actually did:
 Always finish implemented maintainability work with:
 
 ```bash
-scip-query diff-impact
-scip-query reindex && scip-query diff-gate
+scip-query diff-impact --json
+scip-query status --capabilities
+# If freshness is stale, missing, or unknown:
+# scip-query reindex
+scip-query diff-gate --json
 ```
 
 Treat `diff-gate` findings as unfinished work. Fix them or state a concrete acceptance reason; do not silently report success.

@@ -58,3 +58,7 @@ The next precision candidate is passthrough package/export and public-facade cav
 ## 2026-06-23 Citation Refresh
 
 The maintainability-register completion slice rechecked the behavioral claim that `diff-gate.ts` uses the shared Markdown citation helper for doc-reference fallback contexts. That claim remains current; the slice only moved diff-gate finding emission behind `recordFinding()` after citation classification and remediation are selected.
+
+## 2026-06-27 Citation Refresh
+
+The persistent-refresh coordination slice rechecked the doc-reference fallback claim in `diff-gate.ts`. The fallback citation-context behavior remains aligned with doc-drift; the changed refresh and hook code does not alter doc-reference citation parsing.

@@ -204,9 +204,18 @@ export function healthPhase(
   phase: HealthPhaseName,
   opts: { scope?: string; full?: boolean } = {},
 ): HealthPhaseResult {
-  return withHealthRun(db, opts.full !== false, (statsResult, budget) =>
-    HEALTH_PHASE_RUNNERS[phase](db, opts.scope, budget, statsResult),
-  );
+  return healthPhases(db, [phase], opts)[0]!;
+}
+
+export function healthPhases(
+  db: ScipDatabase,
+  phases: readonly HealthPhaseName[],
+  opts: { scope?: string; full?: boolean } = {},
+): HealthPhaseResult[] {
+  return withHealthRun(db, opts.full !== false, (statsResult, budget) => {
+    const sharedCacheBudget = { ...budget, releaseCachesBetweenPhases: false };
+    return phases.map((phase) => HEALTH_PHASE_RUNNERS[phase](db, opts.scope, sharedCacheBudget, statsResult));
+  });
 }
 
 function withHealthRun<T>(

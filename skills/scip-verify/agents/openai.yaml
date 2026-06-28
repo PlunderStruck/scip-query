@@ -1,0 +1,4 @@
+interface:
+  display_name: "SCIP Verify"
+  short_description: "Verify changes with SCIP diff gates"
+  default_prompt: "Use $scip-verify to verify this change with reindexing, routed postchecks, and diff-gate."

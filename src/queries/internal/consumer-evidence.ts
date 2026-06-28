@@ -2,8 +2,9 @@ import type { ProjectIndex } from '../../core/project-index.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { getReExports } from '../../language-parsers/index.js';
 import { detectAstLanguage, getAst, type SyntaxNode } from '../../source/ast.js';
-import { getSourceLines } from '../../source/source-text.js';
+import { getSourceLines, getSourceText } from '../../source/source-text.js';
 import type { ScipDatabase } from '../../storage/db.js';
+import { fileContentHash, readCachedFileEvidence, writeCachedFileEvidence } from '../../storage/evidence-cache.js';
 import { createPerDbCache } from '../../storage/per-db-cache.js';
 import { leafName } from '../../symbols/symbol-parser.js';
 
@@ -18,12 +19,19 @@ export interface DefinitionConsumerPartition {
   importOnlyConsumers: number;
 }
 
-const FILE_USAGE_CACHE = createPerDbCache<string, { importedLeaves: Set<string>; usedLeaves: Set<string> }>(
-  'definition-consumer-file-usage',
-  {
-    clearGroups: ['whole-project', 'source-file'],
-  },
-);
+interface FileLeafUsage {
+  importedLeaves: Set<string>;
+  usedLeaves: Set<string>;
+}
+
+interface SerializedFileLeafUsage {
+  importedLeaves: string[];
+  usedLeaves: string[];
+}
+
+const FILE_USAGE_CACHE = createPerDbCache<string, FileLeafUsage>('definition-consumer-file-usage', {
+  clearGroups: ['whole-project', 'source-file'],
+});
 
 /**
  * Consumer evidence for detector queries: cross-file callers plus optional
@@ -82,7 +90,22 @@ function computeFileLeafUsage(
   db: ScipDatabase,
   file: string,
   lang: string,
-): { importedLeaves: Set<string>; usedLeaves: Set<string> } {
+): FileLeafUsage {
+  const source = getSourceText(db, file);
+  if (!source) return emptyFileLeafUsage();
+  const contentHash = fileContentHash(db, file, source);
+  const cached = readCachedFileEvidence(db, 'consumer-file-usage', file, contentHash);
+  if (cached) {
+    const usage = deserializeFileLeafUsage(cached);
+    if (usage) return usage;
+  }
+
+  const usage = computeFileLeafUsageFromAst(db, file, lang);
+  writeCachedFileEvidence(db, 'consumer-file-usage', file, contentHash, serializeFileLeafUsage(usage));
+  return usage;
+}
+
+function computeFileLeafUsageFromAst(db: ScipDatabase, file: string, lang: string): FileLeafUsage {
   const importedLeaves = new Set<string>();
   const usedLeaves = new Set<string>();
   const tree = getAst(db, file);
@@ -110,6 +133,30 @@ function computeFileLeafUsage(
   };
   walk(tree.rootNode, false);
   return { importedLeaves, usedLeaves };
+}
+
+function emptyFileLeafUsage(): FileLeafUsage {
+  return { importedLeaves: new Set(), usedLeaves: new Set() };
+}
+
+function serializeFileLeafUsage(usage: FileLeafUsage): string {
+  return JSON.stringify({
+    importedLeaves: [...usage.importedLeaves],
+    usedLeaves: [...usage.usedLeaves],
+  } satisfies SerializedFileLeafUsage);
+}
+
+function deserializeFileLeafUsage(payload: string): FileLeafUsage | null {
+  try {
+    const raw = JSON.parse(payload) as SerializedFileLeafUsage;
+    if (!Array.isArray(raw.importedLeaves) || !Array.isArray(raw.usedLeaves)) return null;
+    return {
+      importedLeaves: new Set(raw.importedLeaves.filter((value): value is string => typeof value === 'string')),
+      usedLeaves: new Set(raw.usedLeaves.filter((value): value is string => typeof value === 'string')),
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**

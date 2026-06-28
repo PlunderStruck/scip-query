@@ -1,8 +1,6 @@
 ---
 name: scip-ai-cleanup
 description: Clean up AI-generated code rot using scip-query's change-graph and verification tooling. Finds recent re-implementations of established code, drifting standards docs, speculative parameters, hidden coupling, and produces compiler-verified deletion plans. Sets up the CI ratchet so findings never regress.
-allowed-tools: [Bash, Write, Edit, Glob, Agent, TaskCreate, TaskUpdate, TaskGet, TaskList]
-keywords: [ai-slop, ai-generated, cleanup, duplicates, echo, doc-drift, standards, stale-docs, cleanup-plan, verify, co-change, ratchet, baseline, unused-params]
 ---
 
 # AI-Generated Code Cleanup with scip-query
@@ -27,7 +25,7 @@ plan and a CI ratchet.
 
 ## Hard Rules
 
-1. **Evidence first.** Run `scip-query status` and `scip-query reindex` before
+1. **Evidence first.** Run `scip-query status --capabilities`; reindex only when freshness is `stale`, `missing`, or `unknown` before
    trusting graph facts. All detectors print whether they're heuristic.
 2. **Verify before deleting.** Findings are candidates; only
    `cleanup-plan --verify` output stamped COMPILER-VERIFIED is proof.
@@ -92,7 +90,7 @@ or add a contract test that fails when one side changes without the other.
 ### Step 5: Compiler-verified deletion
 
 ```bash
-scip-query cleanup-plan --verify
+scip-query cleanup-plan --verify --json
 ```
 
 - Batches are ordered: batch 0 is graph-fact dead now; batch n is dead once
@@ -105,12 +103,22 @@ scip-query cleanup-plan --verify
 - The `blocked` list explains why candidates can't cascade (e.g. a spec file
   still references them).
 
+Apply only compiler-verified batches:
+
+```bash
+scip-query cleanup-apply --verified --batch 0
+```
+
+Use `--all` only after explicit human approval. Use `--force-dirty` only when
+you have inspected the touched files and know the existing edits are unrelated
+to the cleanup batch.
+
 ### Step 6: Ratchet it
 
 ```bash
 scip-query health --write-baseline   # commit .scipquery-baseline.json
 scip-query health --baseline         # exit 1 on any NEW finding — wire into CI
-scip-query diff-gate                 # per-diff gate: echoes, missing partners, uncited docs
+scip-query diff-gate --json          # per-diff gate: echoes, missing partners, uncited docs
 ```
 
 `diff-gate` is the leading indicator: run it on every agent commit / PR

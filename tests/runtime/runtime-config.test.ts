@@ -147,6 +147,91 @@ describe('validateProjectConfig', () => {
     ]);
   });
 
+  it('requires positive watch timing values', () => {
+    const diagnostics = validateProjectConfig({
+      watch: {
+        debounceMs: 0,
+        cooldownMs: -1,
+        gitPollMs: 0,
+        autoRefresh: 'yes' as unknown as boolean,
+      },
+    });
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({ level: 'error', path: 'watch.debounceMs' }),
+      expect.objectContaining({ level: 'error', path: 'watch.cooldownMs' }),
+      expect.objectContaining({ level: 'error', path: 'watch.gitPollMs' }),
+      expect.objectContaining({ level: 'error', path: 'watch.autoRefresh' }),
+    ]);
+  });
+
+  it('requires positive integer indexer concurrency', () => {
+    const diagnostics = validateProjectConfig({
+      indexerConcurrency: 1.5,
+    });
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        path: 'indexerConcurrency',
+        message: 'Must be a positive integer.',
+      }),
+    ]);
+  });
+
+  it('validates TypeScript project indexer settings', () => {
+    const projectRoot = createProject();
+    mkdirSync(join(projectRoot, 'packages/web'), { recursive: true });
+    writeFileSync(join(projectRoot, 'packages/web/tsconfig.json'), '{}\n');
+
+    const diagnostics = validateProjectConfig(
+      {
+        indexer: {
+          typescript: {
+            projectMode: 'many' as 'workspace',
+            projects: ['packages/web', '../outside', 'missing'],
+            pnpmWorkspaces: true,
+          },
+        },
+      },
+      { projectRoot },
+    );
+
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ level: 'error', path: 'indexer.typescript.projectMode' }),
+        expect.objectContaining({
+          level: 'error',
+          path: 'indexer.typescript.projects[1]',
+          message: 'Project path must stay inside the project root.',
+        }),
+        expect.objectContaining({
+          level: 'warning',
+          path: 'indexer.typescript.projects[2]',
+          message: 'TypeScript project path does not exist: missing',
+        }),
+      ]),
+    );
+  });
+
+  it('warns that pnpm workspace mode is ignored by explicit TypeScript project sharding', () => {
+    const diagnostics = validateProjectConfig({
+      indexer: {
+        typescript: {
+          projectMode: 'workspace',
+          pnpmWorkspaces: true,
+        },
+      },
+    });
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        level: 'warning',
+        path: 'indexer.typescript.pnpmWorkspaces',
+      }),
+    ]);
+  });
+
   it('warns when declared coupling file paths do not exist', () => {
     const projectRoot = createProject();
     mkdirSync(join(projectRoot, 'src'), { recursive: true });

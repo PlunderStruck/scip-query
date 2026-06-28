@@ -48,3 +48,7 @@ The maintainability-register completion slice rechecked the `diff-gate.ts` citat
 ## 2026-06-23 Current Sweep Citation Refresh
 
 The current maintainability sweep rechecked this result after doc-reference and baseline policy helpers moved out of `diff-gate.ts`. Incomplete-migration containment still runs through the same diff-gate check, and the private helper extraction does not alter the containment behavior recorded here.
+
+## 2026-06-27 Citation Refresh
+
+The persistent-refresh coordination slice rechecked the `diff-gate.ts`, `incomplete-migration.ts`, and `src/runtime/query-commands/impact.ts` citations. Incomplete-migration containment and CLI output remain on the same surfaces; refresh coordination does not change the containment behavior validated here.

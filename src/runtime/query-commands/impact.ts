@@ -20,9 +20,8 @@ import {
   stringArg,
   stringOptionValue,
 } from '../commands/command-execution.js';
-import { semanticCalleeRowCount } from '../../storage/evidence-cache.js';
 import { formatGateBlockReason, isStopHookReentry, readHookInput } from '../agent-setup.js';
-import { isLargeCommandIndex } from '../cli-support.js';
+import { commandAnalysisBudget } from '../cli-support.js';
 import { displayRange, displaySnippet, render } from '../render.js';
 
 const handleAffected = dbCommand(({ db, args, opts }) => {
@@ -130,12 +129,14 @@ const handleChangeSurface = budgetedDbCommand('change-surface', ({ db, args, opt
   });
 });
 
-const handleIncompleteMigration = dbCommand(({ db, args, opts }) => {
+const handleIncompleteMigration = budgetedDbCommand('incomplete-migration', ({ db, args, opts, budget }) => {
   const result = queries.incompleteMigration(db, {
     base: stringOptionValue(opts, 'base'),
     minContainment: definedNumberOption(opts, 'minContainment', 0.7),
     maxHelpers: numberOptionValue(opts, 'maxHelpers'),
     limit: definedLimitOption(opts, 'limit', 20),
+    scanLimit: budget.scanLimit,
+    semantic: budget.semantic,
   });
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('incomplete-migration', args, opts, result);
@@ -195,20 +196,17 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
   if (hookMode && isStopHookReentry(readHookInput())) {
     return; // this turn was already continued by a previous block — don't loop
   }
-  // Full coverage means a one-time semantic pass over every production
-  // callable; on a large index with no evidence cache yet, say so instead of
-  // looking hung. Re-runs only re-analyze changed files.
-  if (!hookMode && isLargeCommandIndex(db) && semanticCalleeRowCount(db) === 0) {
-    console.error(
-      'Large index with a cold evidence cache: this first run computes semantic callee evidence ' +
-        'for every production callable and can take minutes. Re-runs are incremental (evidence.db).',
-    );
-  }
+  const budget = commandAnalysisBudget(db, 'diff-gate', booleanOptionValue(opts, 'full'), {
+    quiet: hookMode || booleanOptionValue(opts, 'json'),
+  });
   const result = queries.diffGate(db, {
     base: stringOptionValue(opts, 'base'),
     minTogether: definedNumberOption(opts, 'minTogether', 6),
     maxEchoChecks: numberOptionValue(opts, 'maxEchoChecks'),
     maxHelpers: numberOptionValue(opts, 'maxHelpers'),
+    includeBaseline: booleanOptionValue(opts, 'baseline'),
+    scanLimit: budget.scanLimit,
+    semantic: budget.semantic,
     skip: parseSkipChecks(opts['skip']),
   });
   if (!hookMode && booleanOptionValue(opts, 'json')) {
@@ -325,6 +323,8 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
       option('--min-together <n>', 'Minimum historical co-changes for the partner check', parseInteger, 6),
       option('--max-echo-checks <n>', 'Maximum changed symbols to test for echoes (default: all)', parseInteger),
       option('--max-helpers <n>', 'Maximum new helpers to score for incomplete-migration (default: all)', parseInteger),
+      option('--baseline', 'Also run the full health-baseline ratchet'),
+      option('--full', 'Run unbounded semantic analysis on large indexes'),
       option(
         '--skip <check>',
         'Skip a check (repeatable): echo, incomplete-migration, co-change-partner, doc-reference, unused-params, new-dead, baseline',

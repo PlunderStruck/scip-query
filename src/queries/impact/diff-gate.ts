@@ -12,8 +12,8 @@ import {
   isCoChangeNoiseFile,
 } from './co-change.js';
 import type { CoChangePartnerClass, DeclaredCouplingSuggestion } from './co-change.js';
-import { diffImpact, diffImpactPlan, fileContentAtBase } from './diff-impact.js';
-import type { ChangedLineRange, DiffImpactPlan } from './diff-impact.js';
+import { baseContentPathsForDiffPlan, createBaseContentReader, diffImpact, diffImpactPlan } from './diff-impact.js';
+import type { BaseContentReader, ChangedLineRange, DiffImpactPlan } from './diff-impact.js';
 import { baselineFindingMetadata } from './diff-gate-baseline-policy.js';
 import { docReferencePolicy } from './diff-gate-doc-policy.js';
 import type { DiffGateActionTier, DocCitationKind } from './diff-gate-types.js';
@@ -155,7 +155,7 @@ type DiffGateFindingDraft = Omit<DiffGateFinding, 'suppressionHint'>;
  *                       uses — speculative generality landing fresh.
  * - new-dead:           changed symbols with zero indexed consumers — possibly
  *                       a half-wired feature.
- * - baseline:           the committed health baseline gained new findings.
+ * - baseline:           optional full health-baseline ratchet.
  */
 export function diffGate(
   db: ScipDatabase,
@@ -166,6 +166,9 @@ export function diffGate(
     maxEchoChecks?: number;
     maxHelpers?: number;
     minSimilarity?: number;
+    includeBaseline?: boolean;
+    scanLimit?: number;
+    semantic?: boolean;
     skip?: readonly DiffGateCheck[];
   } = {},
 ): DiffGateResult {
@@ -176,7 +179,10 @@ export function diffGate(
     maxEchoChecks = Number.POSITIVE_INFINITY,
     maxHelpers = Number.POSITIVE_INFINITY,
     minSimilarity = 0.8,
+    includeBaseline = false,
+    scanLimit,
   } = opts;
+  const semantic = opts.semantic !== false;
   const skip = new Set(opts.skip ?? []);
 
   const impactPlan = diffImpactPlan(db, { base });
@@ -184,7 +190,12 @@ export function diffGate(
   const changedFiles = impact.changedFiles;
   const changed = new Set(changedFiles);
   const changedGitFiles = new Set(impactPlan.changedFileLines);
-  const symbolPreexistedAtBase = symbolPreexistenceChecker(db.config.projectRoot, base, impactPlan);
+  const baseContentAt = createBaseContentReader(
+    db.config.projectRoot,
+    base,
+    baseContentPathsForDiffPlan(impactPlan, changedFiles),
+  );
+  const symbolPreexistedAtBase = symbolPreexistenceChecker(db.config.projectRoot, base, impactPlan, baseContentAt);
   const result: DiffGateResult = {
     base,
     changedFiles,
@@ -206,16 +217,28 @@ export function diffGate(
     run();
   };
   runUnlessSkipped('echo', () =>
-    runEchoCheck(db, impact.changedSymbols, changed, symbolPreexistedAtBase, maxEchoChecks, minSimilarity, result),
+    runEchoCheck(
+      db,
+      impact.changedSymbols,
+      changed,
+      symbolPreexistedAtBase,
+      maxEchoChecks,
+      minSimilarity,
+      scanLimit,
+      semantic,
+      result,
+    ),
   );
-  runUnlessSkipped('incomplete-migration', () => runIncompleteMigrationCheck(db, base, impactPlan, maxHelpers, result));
+  runUnlessSkipped('incomplete-migration', () =>
+    runIncompleteMigrationCheck(db, base, impactPlan, maxHelpers, scanLimit, semantic, baseContentAt, result),
+  );
   runUnlessSkipped('co-change-partner', () => runCoChangePartnerCheck(db, changed, minTogether, minConfidence, result));
   runUnlessSkipped('doc-reference', () =>
     runDocReferenceCheck(db, changed, changedGitFiles, impactPlan.changedRanges, result),
   );
   runUnlessSkipped('unused-params', () => runUnusedParamsCheck(db, changedFiles, result));
   runUnlessSkipped('new-dead', () => runNewDeadCheck(db, impact.changedSymbols, symbolPreexistedAtBase, result));
-  runUnlessSkipped('baseline', () => runBaselineCheck(db, result));
+  if (includeBaseline) runUnlessSkipped('baseline', () => runBaselineCheck(db, result));
   applyStructuredSuppressions(result, db.config.suppressions ?? []);
   result.rootCauseGroups = diffGateRootCauseGroups(result.findings);
 
@@ -332,12 +355,14 @@ function runEchoCheck(
   symbolPreexistedAtBase: (changedSymbol: { symbol: string; file: string }) => boolean,
   maxEchoChecks: number,
   minSimilarity: number,
+  scanLimit: number | undefined,
+  semantic: boolean,
   result: DiffGateResult,
 ): void {
   result.checksRun.push('echo');
   for (const changedSymbol of changedSymbols.slice(0, maxEchoChecks)) {
     if (symbolPreexistedAtBase(changedSymbol)) continue;
-    const matches = similar(db, changedSymbol.symbol, { minSimilarity, limit: 5 });
+    const matches = similar(db, changedSymbol.symbol, { minSimilarity, limit: 5, scanLimit, semantic });
     const eligibleMatches: EchoMatch[] = [];
     for (const match of matches) {
       const otherFile = match.fileA === changedSymbol.file ? match.fileB : match.fileA;
@@ -462,9 +487,12 @@ function runIncompleteMigrationCheck(
   base: string,
   diffPlan: DiffImpactPlan,
   maxHelpers: number,
+  scanLimit: number | undefined,
+  semantic: boolean,
+  baseContentAt: BaseContentReader,
   result: DiffGateResult,
 ): void {
-  const migration = incompleteMigration(db, { base, maxHelpers, diffPlan });
+  const migration = incompleteMigration(db, { base, maxHelpers, diffPlan, scanLimit, semantic, baseContentAt });
   if (!migration.available) {
     result.skipped.push({ check: 'incomplete-migration', reason: 'no git history' });
     return;
@@ -755,18 +783,16 @@ export function symbolPreexistenceChecker(
   projectRoot: string,
   base: string,
   diffPlan: DiffImpactPlan,
+  baseContentAt?: BaseContentReader,
 ): (changedSymbol: { symbol: string; file: string }) => boolean {
   const renamedFromByFile = new Map(diffPlan.renamedFiles.map((rename) => [rename.to, rename.from]));
-  const contentCache = new Map<string, string | null>();
+  const readBaseContent =
+    baseContentAt ?? createBaseContentReader(projectRoot, base, baseContentPathsForDiffPlan(diffPlan));
   return (changedSymbol) => {
     const oldPath = renamedFromByFile.get(changedSymbol.file) ?? changedSymbol.file;
     const leaf = leafName(changedSymbol.symbol);
     if (!leaf) return false;
-    let content = contentCache.get(oldPath);
-    if (content === undefined) {
-      content = fileContentAtBase(projectRoot, base, oldPath);
-      contentCache.set(oldPath, content);
-    }
+    const content = readBaseContent(oldPath);
     return content !== null && containsLeaf(content, leaf);
   };
 }

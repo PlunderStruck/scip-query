@@ -1,7 +1,6 @@
 ---
 name: scip-vue-maintainability
 description: Vue frontend maintainability review using scip-query's Vue SFC, template-duplicate, composable-candidate, large-view, and health commands. Use when reviewing Vue or Nuxt codebases, investigating duplicated components or composables, checking frontend health score pressure, or asking whether agents are reusing Vue code correctly.
-allowed-tools: [Bash, Read, Grep, Glob]
 ---
 
 # SCIP Vue Maintainability Review
@@ -22,7 +21,9 @@ Refresh the code intelligence before trusting graph facts:
 
 ```bash
 scip-query status
-scip-query reindex
+scip-query status --capabilities
+# If freshness is stale, missing, or unknown:
+# scip-query reindex
 ```
 
 If Vue files need rich internals, find the relevant TypeScript project and augment the index:
@@ -80,7 +81,7 @@ After implementing a component reuse, composable extraction, or large-view split
 Run the checks that match what changed:
 
 ```bash
-scip-query diff-impact
+scip-query diff-impact --json
 scip-query vue-component-duplicates --scope <vue-source-scope> --full --json
 scip-query vue-composable-candidates --scope <vue-source-scope> --full --json
 scip-query vue-large-view-pressure --scope <vue-source-scope> --full --json
@@ -90,7 +91,10 @@ scip-query unused-params
 scip-query wrapper-candidates --scope <vue-source-scope> --full --json
 scip-query passthrough-candidates --scope <vue-source-scope> --full --json
 scip-query stale-abstractions --scope <vue-source-scope> --include-low-confidence --full --json
-scip-query reindex && scip-query diff-gate
+scip-query status --capabilities
+# If freshness is stale, missing, or unknown:
+# scip-query reindex
+scip-query diff-gate --json
 ```
 
 Use the results this way:

@@ -14,9 +14,11 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     language: 'typescript',
     indexerBinary: 'scip-typescript',
     checkCommand: 'npx scip-typescript --version',
-    indexArgs: ({ outputPath, pnpmWorkspaces, indexerBinary }) => {
-      const args = ['index', '--infer-tsconfig', '--output', outputPath, '--no-progress-bar'];
-      if (pnpmWorkspaces) args.splice(1, 0, '--pnpm-workspaces');
+    indexArgs: ({ outputPath, pnpmWorkspaces, indexerBinary, projectPath }) => {
+      const args = projectPath
+        ? ['index', '--output', outputPath, '--no-progress-bar', projectPath]
+        : ['index', '--infer-tsconfig', '--output', outputPath, '--no-progress-bar'];
+      if (pnpmWorkspaces && !projectPath) args.splice(1, 0, '--pnpm-workspaces');
       return { binary: indexerBinary, args };
     },
     markerFiles: ['tsconfig.json'],

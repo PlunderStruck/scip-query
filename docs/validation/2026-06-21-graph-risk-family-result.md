@@ -99,3 +99,7 @@ Final gate:
 ## Next Action
 
 Continue with config and declared-coupling freshness, because the inventory found stale `.scipquery.json` paths for moved analyzer files.
+
+## 2026-06-27 Performance Pass Reference Check
+
+The `src/runtime/cli-support.ts` reference in this result remains current after the performance pass. The file still owns CLI-side health orchestration and command-budget support; the new bounded parallel health phase runner changes wall-clock behavior, not the graph-risk family judgment recorded here.

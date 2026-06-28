@@ -41,6 +41,22 @@ describe('indexer configs', () => {
     });
   });
 
+  it('passes an explicit TypeScript project without infer or workspace flags', () => {
+    const config = getIndexerConfig('typescript');
+    const command = config.indexArgs({
+      projectRoot: '/tmp/project',
+      outputPath: '/tmp/project/index.scip',
+      indexerBinary: '/tmp/scip-typescript',
+      pnpmWorkspaces: true,
+      projectPath: 'packages/web',
+    });
+
+    expect(command).toEqual({
+      binary: '/tmp/scip-typescript',
+      args: ['index', '--output', '/tmp/project/index.scip', '--no-progress-bar', 'packages/web'],
+    });
+  });
+
   it('uses scip-python-plus directly instead of npx scip-python', () => {
     const config = getIndexerConfig('python');
     const command = config.indexArgs({

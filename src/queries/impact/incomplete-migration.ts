@@ -2,10 +2,15 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { containment } from '../../analysis/similarity.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
-import { GIT_DIFF_UNAVAILABLE_NOTE, diffImpactPlan, fileContentAtBase } from './diff-impact.js';
-import type { DiffImpactPlan } from './diff-impact.js';
-import { getAllCalleeFingerprints, meaningfulCallees } from '../cleanup/similar.js';
-import type { SymbolFingerprint } from '../cleanup/similar.js';
+import {
+  GIT_DIFF_UNAVAILABLE_NOTE,
+  baseContentPathsForDiffPlan,
+  createBaseContentReader,
+  diffImpactPlan,
+} from './diff-impact.js';
+import type { BaseContentReader, DiffImpactPlan } from './diff-impact.js';
+import { buildCalleeFingerprintIndex, getAllCalleeFingerprints, meaningfulCallees } from '../cleanup/similar.js';
+import type { CalleeFingerprintIndex } from '../cleanup/similar.js';
 
 export interface IncompleteMigrationLeftover {
   symbol: string;
@@ -58,12 +63,6 @@ export interface IncompleteMigrationResult {
 
 const MAX_LEFTOVERS_PER_HELPER = 5;
 
-interface IncompleteMigrationCandidateIndex {
-  candidatesByCallee: Map<string, SymbolFingerprint[]>;
-  docFreq: Map<string, number>;
-  ubiquityThreshold: number;
-}
-
 /**
  * Incomplete extractions: an agent adds a helper, rewires a site or two into
  * it, and misses the remaining sites that still hold the same logic inline.
@@ -96,8 +95,10 @@ export function incompleteMigration(
     minSiteCoverage?: number;
     maxHelpers?: number;
     limit?: number;
+    scanLimit?: number;
     semantic?: boolean;
     diffPlan?: DiffImpactPlan;
+    baseContentAt?: BaseContentReader;
   } = {},
 ): IncompleteMigrationResult {
   const {
@@ -107,6 +108,7 @@ export function incompleteMigration(
     minSiteCoverage = 0.4,
     maxHelpers = Number.POSITIVE_INFINITY,
     limit = 20,
+    scanLimit,
   } = opts;
   const semantic = opts.semantic !== false;
 
@@ -124,16 +126,18 @@ export function incompleteMigration(
   const index = new ProjectIndex(db);
   const changed = new Set(plan.changedFiles);
   const renamedFromByFile = new Map(plan.renamedFiles.map((rename) => [rename.to, rename.from]));
+  const baseContentAt =
+    opts.baseContentAt ?? createBaseContentReader(db.config.projectRoot, base, baseContentPathsForDiffPlan(plan));
 
-  const newDefs = newCallablesInDiff(db, index, changed, base, renamedFromByFile);
+  const newDefs = newCallablesInDiff(index, changed, renamedFromByFile, baseContentAt);
   if (newDefs.length === 0) return result;
   const helpers = newDefs.slice(0, maxHelpers);
   if (newDefs.length > maxHelpers) {
     result.note = `helper scoring capped at ${maxHelpers} of ${newDefs.length} new symbols`;
   }
 
-  const candidates = getAllCalleeFingerprints(db, { minCallees: Math.min(3, minCallees), semantic });
-  const candidateIndex = buildCandidateIndex(candidates);
+  const candidates = getAllCalleeFingerprints(db, { minCallees: Math.min(3, minCallees), scanLimit, semantic });
+  const candidateIndex = buildCalleeFingerprintIndex(candidates);
   const helperCalleeRows = index.calleeMap(helpers, { semantic });
   const helperFingerprints = helpers.map((def) => ({
     def,
@@ -210,31 +214,8 @@ export function incompleteMigration(
   return result;
 }
 
-function buildCandidateIndex(candidates: SymbolFingerprint[]): IncompleteMigrationCandidateIndex {
-  // Same ubiquity rule as similarAll's candidate index: a callee in more than
-  // max(8, sqrt(N)) fingerprints is project infrastructure, not pattern signal.
-  const docFreq = new Map<string, number>();
-  const candidatesByCallee = new Map<string, SymbolFingerprint[]>();
-  for (const candidate of candidates) {
-    for (const callee of candidate.callees) {
-      docFreq.set(callee, (docFreq.get(callee) ?? 0) + 1);
-      let bucket = candidatesByCallee.get(callee);
-      if (!bucket) {
-        bucket = [];
-        candidatesByCallee.set(callee, bucket);
-      }
-      bucket.push(candidate);
-    }
-  }
-  return {
-    candidatesByCallee,
-    docFreq,
-    ubiquityThreshold: Math.max(8, Math.ceil(Math.sqrt(candidates.length))),
-  };
-}
-
 function collectLeftoversForHelper(opts: {
-  candidateIndex: IncompleteMigrationCandidateIndex;
+  candidateIndex: CalleeFingerprintIndex;
   changed: ReadonlySet<string>;
   helperCallees: Set<string>;
   helperFile: string;
@@ -245,11 +226,14 @@ function collectLeftoversForHelper(opts: {
 }): IncompleteMigrationLeftover[] {
   const leftovers: IncompleteMigrationLeftover[] = [];
   const migrationScopeTokens = migrationScopeTokensForHelper(opts.helperSymbol, opts.helperFile, opts.migratedFiles);
-  const candidateSet = new Set<SymbolFingerprint>();
+  const candidateSet = new Set<number>();
   for (const callee of opts.helperCallees) {
-    for (const candidate of opts.candidateIndex.candidatesByCallee.get(callee) ?? []) candidateSet.add(candidate);
+    for (const candidateIndex of opts.candidateIndex.candidateIndexesByCallee.get(callee) ?? []) {
+      candidateSet.add(candidateIndex);
+    }
   }
-  for (const candidate of candidateSet) {
+  for (const candidateIndex of candidateSet) {
+    const candidate = opts.candidateIndex.corpus[candidateIndex]!;
     if (candidate.symbol === opts.helperSymbol) continue;
     if (opts.changed.has(candidate.file)) continue; // touched files are the agent's active edit set
     if (candidate.callees.has(opts.helperSymbol)) continue; // already migrated
@@ -365,7 +349,7 @@ function scopeTokensFromText(value: string): string[] {
     .filter((token) => token.length > 1 && !MIGRATION_SCOPE_STOP_TOKENS.has(token));
 }
 
-function specificCalleeCount(callees: ReadonlySet<string>, candidateIndex: IncompleteMigrationCandidateIndex): number {
+function specificCalleeCount(callees: ReadonlySet<string>, candidateIndex: CalleeFingerprintIndex): number {
   let count = 0;
   for (const callee of callees) {
     if ((candidateIndex.docFreq.get(callee) ?? 0) <= candidateIndex.ubiquityThreshold) count += 1;
@@ -379,21 +363,15 @@ function specificCalleeCount(callees: ReadonlySet<string>, candidateIndex: Incom
  * that doesn't exist at base (untracked or added) makes all its callables new.
  */
 function newCallablesInDiff(
-  db: ScipDatabase,
   index: ProjectIndex,
   changed: ReadonlySet<string>,
-  base: string,
   renamedFromByFile: ReadonlyMap<string, string>,
+  baseContentAt: BaseContentReader,
 ) {
-  const baseContent = new Map<string, string | null>();
   return index.productionCallableDefinitions({ requireFunctionLikeSymbol: true }).filter((def) => {
     if (!changed.has(def.relativePath)) return false;
     const basePath = renamedFromByFile.get(def.relativePath) ?? def.relativePath;
-    let content = baseContent.get(basePath);
-    if (content === undefined) {
-      content = fileContentAtBase(db.config.projectRoot, base, basePath);
-      baseContent.set(basePath, content);
-    }
+    const content = baseContentAt(basePath);
     return content === null || !new RegExp(`\\b${escapeRegex(def.leaf)}\\b`).test(content);
   });
 }

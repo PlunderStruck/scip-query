@@ -83,3 +83,7 @@ Update after `Stable_Management` confirmation:
 - The dead output schema and `_Assert*` new-dead filter were confirmed.
 - Echo grouping was confirmed.
 - Echo `direct` tier is still too broad for generic token-generation scaffolding. See `docs/validation/2026-06-21-stable-management-second-confirmation.md`.
+
+Update after 2026-06-27 dead-detector performance pass:
+
+- The `.scipquery.json` declared-coupling example still intentionally cites `src/queries/cleanup/dead.ts`; the performance change only prunes already-cross-file-live candidates inside the detector and does not change the configuration example target.

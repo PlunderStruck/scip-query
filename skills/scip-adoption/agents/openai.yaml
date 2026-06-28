@@ -1,0 +1,4 @@
+interface:
+  display_name: "SCIP Adoption"
+  short_description: "Adopt scip-query in a repository"
+  default_prompt: "Set up scip-query in this repository, verify local capabilities, write the health dossier, and hand off confirmed cleanup work."

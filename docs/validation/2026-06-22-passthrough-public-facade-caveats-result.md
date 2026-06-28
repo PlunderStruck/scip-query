@@ -52,3 +52,7 @@ Completed:
 The export detector is intentionally source-line based. It catches direct `export function`, `export default function`, exported variables, and named export statements. It does not try to prove every exotic transpiler or runtime export convention. That is appropriate for a review signal because the row exposes the evidence reviewers need.
 
 The next precision candidate is co-change issue/PR label context and second-corpus score-weight confirmation.
+
+## 2026-06-27 Citation Refresh
+
+The persistent-refresh coordination slice rechecked the `src/queries/impact/incomplete-migration.ts` citation. The citation remains a verification-command record for the passthrough caveat slice; the current refresh coordination work does not change the passthrough public-facade conclusion.

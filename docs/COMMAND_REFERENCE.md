@@ -93,9 +93,9 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 | `affected <symbol>` | Transitive closure of symbols that could break if this symbol changes | `--max-depth <n>`<br>`-s, --scope <path>`<br>`--json` |
 | `change-surface <file>` | Pre-change briefing: exports, consumers, and blast-radius risk | `--full`<br>`--json` |
 | `co-change [file]` | Files that change together in git history without a dependency edge — hidden coupling candidates | `--min-together <n>`<br>`-n, --limit <n>`<br>`--all`<br>`--full`<br>`--json` |
-| `diff-gate` | Gate the current diff: echo candidates, incomplete migrations, missing co-change partners, uncited doc updates, unused params, new dead symbols; exit 1 on findings | `--base <ref>`<br>`--min-together <n>`<br>`--max-echo-checks <n>`<br>`--max-helpers <n>`<br>`--skip <check>`<br>`--hook`<br>`--json` |
+| `diff-gate` | Gate the current diff: echo candidates, incomplete migrations, missing co-change partners, uncited doc updates, unused params, new dead symbols; exit 1 on findings | `--base <ref>`<br>`--min-together <n>`<br>`--max-echo-checks <n>`<br>`--max-helpers <n>`<br>`--baseline`<br>`--full`<br>`--skip <check>`<br>`--hook`<br>`--json` |
 | `incomplete-migration` | Partially-completed extraction candidates: new helpers in the diff wired into some sites while similar un-migrated sites remain | `--base <ref>`<br>`--min-containment <n>`<br>`--max-helpers <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
-| `diff-impact` | Compute changed symbols and downstream consumers from current git diff | `--base <ref>` |
+| `diff-impact` | Compute changed symbols and downstream consumers from current git diff | `--base <ref>`<br>`--json` |
 
 ### Planning
 
@@ -115,7 +115,9 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 
 | Command | Description | Options |
 |---|---|---|
-| `install-skills` | Install skills (scip-query, scip-query-setup, concrete-plan, scip-ai-cleanup, scip-explore, scip-debloat, scip-doc-reconcile, scip-directory-architecture, scip-maintainability, scip-react-maintainability, scip-vue-maintainability, scip-verify, scip-language-playbook) into Claude Code, Codex, and shared agent roots | - |
+| `bench` | Benchmark indexing and command runtimes for this repository | `--json`<br>`--cold-index`<br>`--include-heavy`<br>`--command <cmd>`<br>`--timeout-ms <n>` |
+| `install-skills` | Install skills (scip-query, scip-query-setup, scip-adoption, scip-health-audit, scip-health-improve, scip-api-impact, concrete-plan, scip-ai-cleanup, scip-debug, scip-explore, scip-triage-issue, scip-diagram, scip-debloat, scip-doc-reconcile, scip-directory-architecture, scip-maintainability, scip-react-maintainability, scip-vue-maintainability, scip-verify, scip-language-playbook) into Claude Code, Codex, and shared agent roots | - |
+| `setup-hooks` | Install or refresh project-local Codex and Claude Code lifecycle hooks | `--json` |
 | `check-deps` | Check whether scip-query and the detected language indexers are actually runnable | - |
 | `capabilities` | Report which evidence and verification capabilities are available in this project | `--json` |
 | `capability-matrix` | Report the evidence and verification capability matrix by language | `--json` |
@@ -123,9 +125,10 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 | `config-validate` | Validate .scipquery.json, including structured suppressions and declared coupling groups | `--json` |
 | `suppress <id>` | Record an accepted finding in .scipquery.json with a required reason | `--reason <text>`<br>`--check <check>`<br>`--file <path>`<br>`--expires-at <iso>`<br>`--json` |
 | `doctor` | Diagnose config, index freshness, dependency readiness, and project capabilities | `--json` |
+| `setup` | Bootstrap this project: install agent skills, refresh the index, verify capabilities, and report health | `--git-hook`<br>`--json` |
 | `setup-agent` | Seed agent guidance for this project: AGENTS.md/CLAUDE.md block pointing agents at the scip-query skills and diff gate, plus an optional git pre-commit backstop | `--git-hook` |
 | `setup-ci` | Write a GitHub Actions workflow that runs scip-query reindex and diff-gate on pull requests | `--force`<br>`--dry-run` |
-| `watch` | Watch for file changes and reindex automatically | `--debounce <ms>`<br>`--cooldown <ms>` |
+| `watch` | Watch for file changes and reindex automatically | `--debounce <ms>`<br>`--cooldown <ms>`<br>`--git-poll <ms>` |
 | `status` | Show index status for this project | `--json`<br>`--capabilities` |
 
 <!-- END GENERATED COMMAND REFERENCE -->

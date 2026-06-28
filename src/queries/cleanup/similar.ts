@@ -2,7 +2,14 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { getCalleeRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
 import { getSourceLines } from '../../source/source-text.js';
-import { computeIdf, difference, intersection, weightedCosine } from '../../analysis/similarity.js';
+import {
+  computeIdf,
+  computeIdfFromDocFreq,
+  difference,
+  getMedianIdf,
+  intersection,
+  weightedCosine,
+} from '../../analysis/similarity.js';
 import { isFunctionLikeSymbol, leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { createPerDbValue } from '../../storage/per-db-cache.js';
@@ -93,6 +100,7 @@ function compareAgainstFingerprints(
   });
   const candidates = candidateFingerprintsForTarget(target, index);
   const idfWeights = computeIdf([target, ...index.corpus].map((fp) => fp.callees));
+  const medianIdf = getMedianIdf(idfWeights);
 
   const results: SimilarSymbolResult[] = [];
   for (const candidate of candidates) {
@@ -101,6 +109,7 @@ function compareAgainstFingerprints(
       minSimilarity,
       requireSignificantShared: 1,
       requireSharedCount: 0,
+      medianIdf,
     });
     if (result) results.push(result);
   }
@@ -113,22 +122,25 @@ interface ComparePairOptions {
   /** Pair is dropped when significantShared.length < this AND sharedCount < requireSharedCount. */
   requireSignificantShared: number;
   requireSharedCount: number;
+  medianIdf?: number;
 }
 
 function comparePair(
   a: SymbolFingerprint,
   b: SymbolFingerprint,
-  idfWeights: Map<string, number>,
+  idfWeights: ReadonlyMap<string, number>,
   opts: ComparePairOptions,
 ): SimilarSymbolResult | null {
-  const { similarity, significantShared } = weightedCosine(a.callees, b.callees, idfWeights);
+  const { similarity, significantShared, trivialShared } = weightedCosine(a.callees, b.callees, idfWeights, {
+    medianIdf: opts.medianIdf,
+  });
   if (similarity < opts.minSimilarity) return null;
-  const sharedCount = intersection(a.callees, b.callees).size;
+  const sharedCount = significantShared.length + trivialShared.length;
   if (significantShared.length < opts.requireSignificantShared && sharedCount < opts.requireSharedCount) {
     return null;
   }
 
-  const displayShared = significantShared.length > 0 ? significantShared : [...intersection(a.callees, b.callees)];
+  const displayShared = significantShared.length > 0 ? significantShared : trivialShared;
   const classification = classifySimilarityEvidence(displayShared, 'callees');
 
   return {
@@ -165,46 +177,26 @@ export function similarAll(
 ): SimilarSymbolResult[] {
   const { minSimilarity = 0.5, limit = 20, scope, minCallees = 4, crossFileOnly = false, scanLimit } = opts;
 
-  const all = getAllCalleeFingerprints(db, { minCallees, scope, scanLimit, semantic: opts.semantic !== false });
-  const idfWeights = computeIdf(all.map((fp) => fp.callees));
-
-  // Inverted index: callee → indexes of fingerprints that include it. Skipping
-  // ubiquitous callees (df > sqrt(N)) keeps the candidate set tight — pairs
-  // joined only by an everywhere-used callee aren't meaningful similarities.
-  // Without this index we'd compare every pair (N²); with it we only compare
-  // pairs that share at least one moderately-rare callee.
-  const docFreq = new Map<string, number>();
-  for (const fp of all) for (const c of fp.callees) docFreq.set(c, (docFreq.get(c) ?? 0) + 1);
-  const ubiquityThreshold = Math.max(8, Math.ceil(Math.sqrt(all.length)));
-  const calleeIndex = new Map<string, number[]>();
-  for (let i = 0; i < all.length; i += 1) {
-    for (const callee of all[i]!.callees) {
-      if ((docFreq.get(callee) ?? 0) > ubiquityThreshold) continue;
-      let bucket = calleeIndex.get(callee);
-      if (!bucket) {
-        bucket = [];
-        calleeIndex.set(callee, bucket);
-      }
-      bucket.push(i);
-    }
-  }
+  const index = getCalleeFingerprintIndex(db, {
+    minCallees,
+    scope,
+    scanLimit,
+    semantic: opts.semantic !== false,
+  });
+  const all = index.corpus;
 
   const topResults: RankedSimilarResult[] = [];
   let resultOrder = 0;
-  const seenPair = new Set<string>();
 
   for (let i = 0; i < all.length; i += 1) {
     const a = all[i]!;
     const candidates = new Set<number>();
     for (const callee of a.callees) {
-      const bucket = calleeIndex.get(callee);
+      const bucket = index.candidateIndexesByCallee.get(callee);
       if (!bucket) continue;
       for (const j of bucket) if (j > i) candidates.add(j);
     }
     for (const j of candidates) {
-      const pairKey = `${i}|${j}`;
-      if (seenPair.has(pairKey)) continue;
-      seenPair.add(pairKey);
       const b = all[j]!;
 
       if (crossFileOnly && a.file === b.file) continue;
@@ -220,10 +212,11 @@ export function similarAll(
         if (diff > maxAllowed) continue;
       }
 
-      const result = comparePair(a, b, idfWeights, {
+      const result = comparePair(a, b, index.idfWeights, {
         minSimilarity,
         requireSignificantShared: 2,
         requireSharedCount: 4,
+        medianIdf: index.medianIdf,
       });
       if (!result) continue;
       insertTopSimilarResult(topResults, result, limit, resultOrder);
@@ -246,8 +239,10 @@ export interface SymbolFingerprint {
 
 export interface CalleeFingerprintIndex {
   corpus: readonly SymbolFingerprint[];
-  candidateByCallee: ReadonlyMap<string, readonly SymbolFingerprint[]>;
+  candidateIndexesByCallee: ReadonlyMap<string, readonly number[]>;
   docFreq: ReadonlyMap<string, number>;
+  idfWeights: ReadonlyMap<string, number>;
+  medianIdf: number;
   ubiquityThreshold: number;
 }
 
@@ -394,20 +389,29 @@ export function buildCalleeFingerprintIndex(corpus: readonly SymbolFingerprint[]
   for (const fp of corpus) for (const callee of fp.callees) docFreq.set(callee, (docFreq.get(callee) ?? 0) + 1);
 
   const ubiquityThreshold = Math.max(8, Math.ceil(Math.sqrt(corpus.length)));
-  const candidateByCallee = new Map<string, SymbolFingerprint[]>();
-  for (const fp of corpus) {
+  const idfWeights = computeIdfFromDocFreq(docFreq, corpus.length);
+  const candidateIndexesByCallee = new Map<string, number[]>();
+  for (let index = 0; index < corpus.length; index += 1) {
+    const fp = corpus[index]!;
     for (const callee of fp.callees) {
       if ((docFreq.get(callee) ?? 0) > ubiquityThreshold) continue;
-      let bucket = candidateByCallee.get(callee);
+      let bucket = candidateIndexesByCallee.get(callee);
       if (!bucket) {
         bucket = [];
-        candidateByCallee.set(callee, bucket);
+        candidateIndexesByCallee.set(callee, bucket);
       }
-      bucket.push(fp);
+      bucket.push(index);
     }
   }
 
-  return { corpus, candidateByCallee, docFreq, ubiquityThreshold };
+  return {
+    corpus,
+    candidateIndexesByCallee,
+    docFreq,
+    idfWeights,
+    medianIdf: getMedianIdf(idfWeights),
+    ubiquityThreshold,
+  };
 }
 
 export function candidateFingerprintsForTarget(
@@ -416,7 +420,8 @@ export function candidateFingerprintsForTarget(
 ): SymbolFingerprint[] {
   const candidates = new Map<string, SymbolFingerprint>();
   for (const callee of target.callees) {
-    for (const candidate of index.candidateByCallee.get(callee) ?? []) {
+    for (const candidateIndex of index.candidateIndexesByCallee.get(callee) ?? []) {
+      const candidate = index.corpus[candidateIndex]!;
       if (candidate.symbol === target.symbol) continue;
       candidates.set(candidate.symbol, candidate);
     }

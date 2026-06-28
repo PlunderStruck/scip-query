@@ -24,7 +24,7 @@ A migration slice is the smallest set of file moves and import updates that can 
 3. Preserve working conventions. Existing boundaries are not wrong just because they are broad; central folders such as `errors`, `routes`, `workflows`, `schemas`, `contracts`, or `features` may be doing real work.
 4. Do not reward generic `shared`. A shared folder is justified only when the shared concept has a name, owner, and consumers across real boundaries.
 5. Treat messy repos honestly. If ownership concepts are not stable, produce a discovery map and decision list instead of pretending the repo has a clean target structure.
-6. Prefer small verified moves. Broad reorganizations need staged migration slices with import updates, tests, `scip-query reindex`, and `scip-query diff-gate`.
+6. Prefer small verified moves. Broad reorganizations need staged migration slices with import updates, tests, a fresh scip-query index, and `scip-query diff-gate --json`.
 
 ## Workflow
 
@@ -46,7 +46,9 @@ Run:
 
 ```bash
 scip-query status
-scip-query reindex
+scip-query status --capabilities
+# If freshness is stale, missing, or unknown:
+# scip-query reindex
 scip-query stats
 find . -maxdepth 3 -type d | sort
 ```
@@ -155,11 +157,13 @@ When the user asks to proceed, pick the smallest high-confidence slice. Before e
 Then move files with normal filesystem tools, update imports with project tooling where available, and run:
 
 ```bash
-scip-query reindex
+scip-query status --capabilities
+# If freshness is stale, missing, or unknown:
+# scip-query reindex
 scip-query incomplete-migration
 scip-query recent-duplicates
 scip-query co-change <moved-file-or-config>
-scip-query diff-gate
+scip-query diff-gate --json
 ```
 
 Also run the repo's normal tests or typecheck for the affected workspace. If the migration adds or changes `.scipquery.json` locality settings, run:

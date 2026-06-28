@@ -39,7 +39,7 @@ export function isolated(
     scanLimit,
   );
 
-  const scipCallerMap = index.crossFileCallerMap(candidates, { semantic: includeSemantic });
+  const scipCallerMap = index.crossFileCallerMap(candidates, { semantic: false });
   const symbolsWithCallers = new Set<number>(scipCallerMap.keys());
 
   for (const symbolId of index.frameworkReferencedSymbolIds(candidates)) {
@@ -48,11 +48,23 @@ export function isolated(
 
   const symbolsWithCallees = index.symbolsWithNonSelfCallees(candidates, {
     additive: false,
-    semantic: includeSemantic,
+    semantic: false,
   });
-  const possiblyIsolated = candidates
+  let possiblyIsolated = candidates
     .filter((definition) => !symbolsWithCallers.has(definition.symbolId))
     .filter((definition) => !symbolsWithCallees.has(definition.symbolId));
+
+  if (includeSemantic && possiblyIsolated.length > 0) {
+    for (const symbolId of index.crossFileCallerMap(possiblyIsolated, { semantic: true }).keys()) {
+      symbolsWithCallers.add(symbolId);
+    }
+    for (const symbolId of index.symbolsWithNonSelfCallees(possiblyIsolated, { additive: false, semantic: true })) {
+      symbolsWithCallees.add(symbolId);
+    }
+    possiblyIsolated = possiblyIsolated
+      .filter((definition) => !symbolsWithCallers.has(definition.symbolId))
+      .filter((definition) => !symbolsWithCallees.has(definition.symbolId));
+  }
 
   const fallbackCallerMap = index.sourceFallbackCallerFiles(possiblyIsolated);
   for (const symbolId of fallbackCallerMap.keys()) {

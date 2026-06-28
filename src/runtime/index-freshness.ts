@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import type { ProjectConfig, SupportedLanguage } from '../domain/types.js';
+import type { LastRefreshMetadata, ProjectConfig, SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
 import { detectLanguages } from '../reindex/detect.js';
 import { fingerprintProjectFiles } from '../reindex/project-files.js';
 
@@ -12,6 +12,7 @@ export interface IndexFreshness {
   reason: string;
   remedy?: string;
   updatedAt?: string;
+  lastRefresh?: LastRefreshMetadata;
 }
 
 interface ReindexMetadataLike {
@@ -20,12 +21,15 @@ interface ReindexMetadataLike {
   updatedAt?: string;
   fingerprint?: unknown;
   indexedLanguages?: unknown;
+  lastRefresh?: LastRefreshMetadata;
 }
 
 interface RuntimeFingerprint {
-  version: 1;
+  version: 2;
   languages: SupportedLanguage[];
   pnpmWorkspaces: boolean;
+  typescriptProjectMode: TypeScriptProjectMode;
+  typescriptProjects: string[];
   files: { path: string; size: number; hash: string }[];
 }
 
@@ -69,6 +73,7 @@ export function getIndexFreshness(
       checkedAt,
       metaPath: paths.metaPath,
       updatedAt: metadata.updatedAt,
+      lastRefresh: metadata.lastRefresh,
       reason: fresh
         ? 'Index metadata fingerprint matches current source files.'
         : 'Index metadata fingerprint differs from current source files.',
@@ -91,9 +96,18 @@ function runtimeFingerprint(
   config: ProjectConfig,
 ): RuntimeFingerprint {
   return {
-    version: 1,
+    version: 2,
     languages: [...languages].sort(),
-    pnpmWorkspaces: config.indexer?.typescript?.pnpmWorkspaces === true,
+    pnpmWorkspaces:
+      config.indexer?.typescript?.projectMode !== 'workspace' && config.indexer?.typescript?.pnpmWorkspaces === true,
+    typescriptProjectMode: config.indexer?.typescript?.projectMode ?? 'single',
+    typescriptProjects: normalizeTypeScriptProjects(config.indexer?.typescript?.projects),
     files: fingerprintProjectFiles(projectRoot),
   };
+}
+
+function normalizeTypeScriptProjects(projects: readonly string[] | undefined): string[] {
+  return [...new Set((projects ?? []).map((project) => project.trim()).filter(Boolean))].sort((left, right) =>
+    left.localeCompare(right),
+  );
 }

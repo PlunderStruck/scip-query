@@ -133,6 +133,24 @@ describe('SCIP merge support', () => {
     });
     expect(merged.documents.map((document) => document.relativePath)).toEqual(['src/a.ts', 'src/b.py']);
   });
+
+  it('deduplicates exact duplicate occurrences in overlapping documents', () => {
+    const duplicate = createDocument({
+      language: 'typescript',
+      relativePath: 'src/shared.ts',
+      symbol: 'scip-typescript npm fixture 1.0.0 src/`shared.ts`/shared().',
+      text: 'export const shared = 1;\n',
+    });
+
+    const merged = mergeScipIndexes([
+      createFixtureIndex({ documents: [duplicate] }),
+      createFixtureIndex({ documents: [duplicate] }),
+    ]);
+
+    const shared = merged.documents.find((document) => document.relativePath === 'src/shared.ts');
+    expect(shared?.occurrences).toHaveLength(1);
+    expect(shared?.symbols).toHaveLength(1);
+  });
 });
 
 function createFixtureIndex(opts: {

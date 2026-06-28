@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import type { FindingSuppression, ProjectConfig, SupportedLanguage, WatchConfig } from '../domain/types.js';
@@ -10,6 +10,8 @@ const DEFAULT_WATCH: Required<WatchConfig> = {
   enabled: false,
   debounceMs: 30_000,
   cooldownMs: 60_000,
+  gitPollMs: 2_000,
+  autoRefresh: true,
   ignore: [],
 };
 
@@ -75,11 +77,66 @@ export function validateProjectConfig(
       });
     }
   }
+  if (
+    config.indexerConcurrency !== undefined &&
+    (!Number.isInteger(config.indexerConcurrency) || config.indexerConcurrency <= 0)
+  ) {
+    diagnostics.push({
+      level: 'error',
+      path: 'indexerConcurrency',
+      message: 'Must be a positive integer.',
+    });
+  }
   if (config.watch?.debounceMs !== undefined && config.watch.debounceMs <= 0) {
     diagnostics.push({ level: 'error', path: 'watch.debounceMs', message: 'Must be greater than 0.' });
   }
   if (config.watch?.cooldownMs !== undefined && config.watch.cooldownMs <= 0) {
     diagnostics.push({ level: 'error', path: 'watch.cooldownMs', message: 'Must be greater than 0.' });
+  }
+  if (config.watch?.gitPollMs !== undefined && config.watch.gitPollMs <= 0) {
+    diagnostics.push({ level: 'error', path: 'watch.gitPollMs', message: 'Must be greater than 0.' });
+  }
+  if (config.watch?.autoRefresh !== undefined && typeof config.watch.autoRefresh !== 'boolean') {
+    diagnostics.push({ level: 'error', path: 'watch.autoRefresh', message: 'Must be a boolean.' });
+  }
+  const typescriptIndexer = config.indexer?.typescript;
+  if (
+    typescriptIndexer?.projectMode !== undefined &&
+    typescriptIndexer.projectMode !== 'single' &&
+    typescriptIndexer.projectMode !== 'workspace'
+  ) {
+    diagnostics.push({
+      level: 'error',
+      path: 'indexer.typescript.projectMode',
+      message: 'Must be "single" or "workspace".',
+    });
+  }
+  if (typescriptIndexer?.projects !== undefined) {
+    if (!Array.isArray(typescriptIndexer.projects)) {
+      diagnostics.push({ level: 'error', path: 'indexer.typescript.projects', message: 'Must be an array.' });
+    } else {
+      for (const [index, project] of typescriptIndexer.projects.entries()) {
+        const path = `indexer.typescript.projects[${index}]`;
+        if (typeof project !== 'string' || project.trim() === '') {
+          diagnostics.push({ level: 'error', path, message: 'Project path must be a non-empty string.' });
+        } else if (opts.projectRoot) {
+          const resolved = resolve(opts.projectRoot, project);
+          const relativePath = relative(opts.projectRoot, resolved);
+          if (relativePath.startsWith('..') || isAbsolute(relativePath)) {
+            diagnostics.push({ level: 'error', path, message: 'Project path must stay inside the project root.' });
+          } else if (!existsSync(resolved)) {
+            diagnostics.push({ level: 'warning', path, message: `TypeScript project path does not exist: ${project}` });
+          }
+        }
+      }
+    }
+  }
+  if (typescriptIndexer?.projectMode === 'workspace' && typescriptIndexer.pnpmWorkspaces === true) {
+    diagnostics.push({
+      level: 'warning',
+      path: 'indexer.typescript.pnpmWorkspaces',
+      message: 'Ignored when projectMode is "workspace"; explicit TypeScript projects are indexed directly.',
+    });
   }
   if (config.locality !== undefined) {
     if (!isConfigObject(config.locality)) {
@@ -254,11 +311,13 @@ export function initProjectConfig(projectRoot: string, languages: string[]): str
 
   const config: ProjectConfig = {
     languages: languages as ProjectConfig['languages'],
-    watch: {
-      enabled: false,
-      debounceMs: 30_000,
-      cooldownMs: 60_000,
-    },
+      watch: {
+        enabled: false,
+        debounceMs: 30_000,
+        cooldownMs: 60_000,
+        gitPollMs: 2_000,
+        autoRefresh: true,
+      },
   };
 
   writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');

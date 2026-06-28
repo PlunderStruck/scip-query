@@ -1,0 +1,4 @@
+interface:
+  display_name: "SCIP Debug"
+  short_description: "Root-cause bugs with scip-query evidence"
+  default_prompt: "Use scip-query to trace a bug from entry point to root cause, propose a minimal fix, and verify the blast radius."

@@ -47,7 +47,7 @@ export function callerFileEvidenceMap(
     : mergeSetMaps(callerMap, sourceFallbackCallerEvidenceMap(db, definitions));
 }
 
-function mergeSetMaps<K, V>(
+export function mergeSetMaps<K, V>(
   left: ReadonlyMap<K, ReadonlySet<V>>,
   right: ReadonlyMap<K, ReadonlySet<V>>,
 ): Map<K, Set<V>> {

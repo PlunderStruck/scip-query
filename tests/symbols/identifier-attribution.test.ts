@@ -17,8 +17,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../src/storage/db.js';
-import { attributeIdentifier } from '../../src/symbols/identifier-attribution.js';
-import type { ScipQueryConfig } from '../../src/domain/types.js';
+import { attributeIdentifier, findCallerFiles } from '../../src/symbols/identifier-attribution.js';
+import type { IndexedDefinition, ScipQueryConfig } from '../../src/domain/types.js';
 
 function createSchema(sqliteDb: Database.Database): void {
   sqliteDb.exec(`
@@ -296,5 +296,25 @@ describe('attributeIdentifier — tier pinning', () => {
   it('T5 — no signal returns empty (no over-attribution)', () => {
     const refs = attributeIdentifier(db, 'src/tier5-no-signal.ts', 'compute');
     expect(refs).toEqual([]);
+  });
+
+  it('bulk caller source fallback preserves cross-file callers after the text prefilter', () => {
+    const uniqueDefinition: IndexedDefinition = {
+      documentId: 8,
+      startLine: 0,
+      endLine: 0,
+      symbolId: 13,
+      symbol: `${SCIP_PREFIX}/lib-unique.ts/unique().`,
+      relativePath: 'src/lib-unique.ts',
+      leaf: 'unique',
+      parentTypeName: null,
+      isFunctionLike: true,
+      isTypeLike: false,
+      kind: 12,
+      documentation: null,
+      enclosingSymbol: null,
+    };
+
+    expect(findCallerFiles(db, [uniqueDefinition]).get(13)).toEqual(new Set(['src/unique-caller.ts']));
   });
 });

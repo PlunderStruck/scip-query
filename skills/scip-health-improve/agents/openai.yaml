@@ -1,0 +1,4 @@
+interface:
+  display_name: "SCIP Health Improve"
+  short_description: "Autonomous verified health cleanup"
+  default_prompt: "Use $scip-health-improve to raise this repo health score as high as reasonably possible with verified cleanup."

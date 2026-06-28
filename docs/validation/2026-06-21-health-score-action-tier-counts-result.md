@@ -101,3 +101,7 @@ Confirmed. Health scoring now follows the action-tier model for these families: 
 ## Next Action
 
 Continue contextual graph-risk review: bottlenecks, coupling, deep chains, and drift.
+
+## 2026-06-27 Confirmation
+
+The `.scipquery.json` configuration example still intentionally cites `src/queries/cleanup/dead.ts`. The dead-detector performance pass changed how already-cross-file-live candidates are skipped before fallback evidence, not the declared-coupling example or action-tier count contract.

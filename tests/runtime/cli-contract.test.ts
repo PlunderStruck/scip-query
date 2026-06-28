@@ -54,6 +54,9 @@ describe('CLI contract', () => {
       '--baseline',
       '--write-baseline',
     ]);
+    expect(docs.find((entry) => entry.id === 'setup')?.options).toEqual(['--git-hook', '--json']);
+    expect(docs.find((entry) => entry.id === 'setup-hooks')?.options).toEqual(['--json']);
+    expect(docs.find((entry) => entry.id === 'diff-impact')?.options).toEqual(['--base <ref>', '--json']);
     expect(docs.find((entry) => entry.id === 'diff-gate')?.options).toContain('--json');
     expect(docs.find((entry) => entry.id === 'plan-context')).toMatchObject({
       command: 'plan-context <target>',
@@ -76,6 +79,15 @@ describe('CLI contract', () => {
         true,
       );
     }
+  });
+
+  it('keeps public commands covered by bundled skills', () => {
+    const publicCommandIds = commandDescriptors
+      .filter((descriptor) => !descriptor.hidden)
+      .map((descriptor) => descriptor.id);
+    const skillMentionedCommands = readSkillMentionedCommands();
+
+    expect(publicCommandIds.filter((command) => !skillMentionedCommands.has(command))).toEqual([]);
   });
 
   it('keeps command reference syntax generated from descriptors', () => {
@@ -166,7 +178,7 @@ describe('CLI contract', () => {
   it('runs the visible health command in full mode by default', () => {
     const source = readFileSync(join(process.cwd(), 'src/runtime/commands/command-handlers.ts'), 'utf8');
 
-    expect(source).toContain('const report = runIsolatedHealthReport({');
+    expect(source).toContain('const report = await runIsolatedHealthReport({');
     expect(source).toMatch(/runIsolatedHealthReport\(\{\s*scope: stringOptionValue\(opts, 'scope'\),\s*full: true,/);
   });
 
@@ -252,6 +264,17 @@ function readDocumentedCommands(path: string): string[] {
   const content = readFileSync(join(process.cwd(), path), 'utf8');
   const matches = content.matchAll(/^\s*scip-query\s+([a-z][a-z0-9-]*)\b/gm);
   return [...matches].map((match) => match[1]!);
+}
+
+function readSkillMentionedCommands(): Set<string> {
+  const commands = new Set<string>();
+  for (const skill of readdirSync(join(process.cwd(), 'skills'))) {
+    const content = readFileSync(join(process.cwd(), 'skills', skill, 'SKILL.md'), 'utf8');
+    for (const match of content.matchAll(/\bscip-query\s+([a-z][a-z0-9-]*)\b/g)) {
+      commands.add(match[1]!);
+    }
+  }
+  return commands;
 }
 
 function querySourceFiles(relativeDir: string): string[] {

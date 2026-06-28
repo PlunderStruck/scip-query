@@ -12,10 +12,12 @@ import { getSourceImports } from '../../language-parsers/index.js';
 import { applyScanLimit } from '../query-utils.js';
 import { pathsResolveSame } from '../../resolution/path-normalization.js';
 import { sourceImportPathsByLocalName } from '../../language-parsers/import-index.js';
+import { semanticCallerMap } from '../../semantic/shared-primitives.js';
 import { indexedDocumentPaths as listIndexedDocumentPaths } from '../../storage/scip-documents.js';
 import {
   emptyReferenceCounts,
   hasAnyReference,
+  hasCrossFileReference,
   loadMentionReferencedSymbolIds,
   loadMentionReferenceCounts,
   referenceOccurrences,
@@ -72,6 +74,9 @@ interface DeadRow {
 
 type ReferenceCounts = ReturnType<typeof emptyReferenceCounts>;
 
+const BULK_SEMANTIC_CALLER_MIN_DEFINITIONS = 3000;
+const BULK_SEMANTIC_CALLER_MIN_INDEXED_FILES = 1000;
+
 /**
  * Find dead exports: symbols defined locally with no cross-file references.
  * Language-agnostic — works with any SCIP index.
@@ -119,7 +124,9 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
 
   const sourceCandidates = deadCodeOnly
     ? definitions.filter((definition) => !scipReferencedIds.has(definition.symbolId))
-    : definitions;
+    : definitions.filter(
+        (definition) => !hasCrossFileReference(referencesBySymbol, definition.symbolId, definition.relativePath),
+      );
   if (deadCodeOnly) {
     supplementDeadCodeOnlySourceReferences(db, sourceCandidates, referencesBySymbol, inactiveBarrelPaths);
   } else {
@@ -128,7 +135,9 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
 
   const callerCandidates = deadCodeOnly
     ? sourceCandidates.filter((definition) => !hasAnyReference(referencesBySymbol, definition.symbolId))
-    : definitions;
+    : sourceCandidates.filter(
+        (definition) => !hasCrossFileReference(referencesBySymbol, definition.symbolId, definition.relativePath),
+      );
   supplementReferencesFromCallerMap(db, callerCandidates, referencesBySymbol, {
     includeTests,
     inactiveBarrelPaths,
@@ -462,26 +471,36 @@ function isUnusedImportOnlyHit(
 
 function supplementReferencesFromCallerMap(
   db: ScipDatabase,
-  definitions: ReadonlyArray<{
-    documentId: number;
-    symbolId: number;
-    symbol: string;
-    relativePath: string;
-    startLine: number;
-    endLine: number;
-  }>,
+  definitions: readonly IndexedDefinition[],
   referencesBySymbol: ReferenceCounts,
   opts: { includeTests: boolean; inactiveBarrelPaths: ReadonlySet<string>; includeSemantic?: boolean },
 ): void {
+  const canUseSemantic = opts.includeSemantic !== false;
+  const useBulkSemanticCallers =
+    canUseSemantic &&
+    definitions.length >= BULK_SEMANTIC_CALLER_MIN_DEFINITIONS &&
+    listIndexedDocumentPaths(db).length >= BULK_SEMANTIC_CALLER_MIN_INDEXED_FILES;
+
+  const recordCallerFile = (definition: IndexedDefinition, callerFile: string): void => {
+    if (callerFile === definition.relativePath || db.isIgnored(callerFile)) return;
+    if (opts.inactiveBarrelPaths.has(callerFile)) return;
+    if (!opts.includeTests && !passesDeadTestFileFilter(callerFile)) return;
+    recordReferenceAtLeast(referencesBySymbol, definition.symbolId, callerFile, 1, 'caller-map');
+  };
+
   for (const definition of definitions) {
-    const callers = callerRowsForSymbol(db, definition, { semantic: opts.includeSemantic !== false });
+    const callers = callerRowsForSymbol(db, definition, { semantic: canUseSemantic && !useBulkSemanticCallers });
     if (callers.length === 0) continue;
     for (const caller of callers) {
-      const callerFile = caller.file;
-      if (callerFile === definition.relativePath || db.isIgnored(callerFile)) continue;
-      if (opts.inactiveBarrelPaths.has(callerFile)) continue;
-      if (!opts.includeTests && !passesDeadTestFileFilter(callerFile)) continue;
-      recordReferenceAtLeast(referencesBySymbol, definition.symbolId, callerFile, 1, 'caller-map');
+      recordCallerFile(definition, caller.file);
     }
+  }
+
+  if (!useBulkSemanticCallers) return;
+  const semanticCallersBySymbol = semanticCallerMap(db, definitions);
+  for (const definition of definitions) {
+    const callerFiles = semanticCallersBySymbol.get(definition.symbolId);
+    if (!callerFiles) continue;
+    for (const callerFile of callerFiles) recordCallerFile(definition, callerFile);
   }
 }

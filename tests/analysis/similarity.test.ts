@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeIdf,
+  computeIdfFromDocFreq,
   containment,
   difference,
   getMedianIdf,
@@ -77,6 +78,20 @@ describe('similarity kernel', () => {
       const idf = computeIdf([new Set(['a', 'unique']), new Set(['a']), new Set(['a'])]);
       expect(idf.get('unique')).toBeCloseTo(Math.log(3), 6);
     });
+
+    it('matches precomputed document frequencies', () => {
+      const documents = [new Set(['a', 'unique']), new Set(['a', 'b']), new Set(['a'])];
+      const idf = computeIdf(documents);
+      const fromDocFreq = computeIdfFromDocFreq(
+        new Map([
+          ['a', 3],
+          ['unique', 1],
+          ['b', 1],
+        ]),
+        documents.length,
+      );
+      expect(fromDocFreq).toEqual(idf);
+    });
   });
 
   describe('weightedCosine', () => {
@@ -120,6 +135,20 @@ describe('similarity kernel', () => {
       const r = weightedCosine(new Set(['shared', 'rare']), new Set(['shared', 'rare']), idf);
       expect(r.similarity).toBeCloseTo(1, 6);
       expect(r.significantShared).toEqual(['rare']);
+    });
+
+    it('matches the computed-median path when median IDF is precomputed', () => {
+      const idf = new Map([
+        ['a', 0.1],
+        ['b', 0.5],
+        ['c', 0.9],
+        ['d', 1.2],
+      ]);
+      const left = new Set(['a', 'b', 'd']);
+      const right = new Set(['b', 'c', 'd']);
+      expect(weightedCosine(left, right, idf, { medianIdf: getMedianIdf(idf) })).toEqual(
+        weightedCosine(left, right, idf),
+      );
     });
   });
 

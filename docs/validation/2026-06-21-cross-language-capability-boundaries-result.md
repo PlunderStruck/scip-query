@@ -72,6 +72,8 @@ The correction changes the explanation, not the similarity score. The analyzer s
 - `tests/queries/cleanup/similar-topk.test.ts`: adds a Rust-shaped callee-overlap regression test.
 - `docs/plans/2026-06-21-cross-language-capability-boundaries.md`: records the implementation plan and verification route.
 
+2026-06-28 follow-up: `src/queries/cleanup/similar.ts` now reuses a cached callee-fingerprint candidate index for performance, but the `structural-overlap` classification contract above is unchanged: uncategorized shared call/source structure remains a neutral signal rather than framework scaffolding.
+
 ## Verification
 
 Completed:

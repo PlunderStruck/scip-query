@@ -1,8 +1,6 @@
 ---
 name: scip-debloat
-description: Comprehensive codebase de-bloating using scip-query. Finds dead code, duplication, unnecessary abstractions, consolidation opportunities, pattern drift, and structural bloat from every possible angle. Produces a prioritized action list.
-allowed-tools: [Bash, Write, Edit, Glob, Agent, TaskCreate, TaskUpdate, TaskGet, TaskList]
-keywords: [debloat, clean, cleanup, refactor, dead-code, duplication, dry, consolidate, simplify, reduce, bloat, unused, stale, drift, health]
+description: Comprehensive codebase de-bloating using scip-query. Use when the user asks to clean up a codebase, find dead code, delete bloat, remove duplication, consolidate variants, shrink a module, or audit structural waste. Finds dead code, duplication, unnecessary abstractions, pattern drift, and consolidation opportunities, then produces a prioritized action list. Use scip-health-improve instead when the user wants an autonomous health-score campaign.
 ---
 
 # Codebase De-Bloating with scip-query
@@ -13,16 +11,11 @@ This is not a score-maxing workflow. Health scores, finding counts, and LOC tota
 
 ---
 
-## When to Use This Skill
+## Scope Boundary
 
-- "Clean up this codebase"
-- "Find dead code"
-- "What can we delete?"
-- "Find duplication"
-- "Make this codebase smaller"
-- "Are there things we can consolidate?"
-- "Run a health check"
-- "De-bloat this module"
+Use `scip-debloat` for bloat-specific discovery and action planning. Use
+`scip-health-improve` when the user wants the agent to keep applying confirmed
+fixes until the health score is as high as reasonably possible.
 
 ---
 
@@ -49,7 +42,7 @@ This is not a score-maxing workflow. Health scores, finding counts, and LOC tota
 Before working the angles below one by one, run the high-leverage trio:
 
 ```bash
-scip-query cleanup-plan --verify     # cascade dead-code plan, COMPILER-VERIFIED per batch
+scip-query cleanup-plan --verify --json  # cascade dead-code plan, COMPILER-VERIFIED per batch
 scip-query recent-duplicates         # recent code that re-implements established code
 scip-query doc-drift                 # docs whose referenced code moved on without them
 ```
@@ -60,6 +53,15 @@ in a throwaway worktree, and runs the project's own checker (tsc / cargo
 check) differentially. Only act on batches stamped COMPILER-VERIFIED; FAILED
 output names the references the static evidence missed. For AI-generated
 codebases specifically, prefer the dedicated scip-ai-cleanup skill.
+
+Apply one verified batch at a time:
+
+```bash
+scip-query cleanup-apply --verified --batch 0
+```
+
+Use `--all` only after explicit human approval. Use `--force-dirty` only after
+inspecting the touched files and confirming existing edits are unrelated.
 
 After cleanup, ratchet the result so it never regresses:
 
@@ -302,7 +304,7 @@ scip-query hotspots -n 10                  # Most-referenced symbols
 ### Phase 1: Health Check (5 minutes)
 
 ```bash
-scip-query reindex                         # Ensure index is fresh
+scip-query status --capabilities           # Ensure freshness; reindex only if stale, missing, or unknown
 scip-query health                          # Get the full report
 ```
 

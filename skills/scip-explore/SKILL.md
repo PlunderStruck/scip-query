@@ -1,8 +1,6 @@
 ---
 name: scip-explore
 description: Deep codebase exploration using scip-query. Trace how any system works end-to-end — call graphs, data flow, dependencies, blast radius — using compiler-resolved analysis. Use when you need to understand how something works before answering questions or making changes.
-allowed-tools: [Bash, Write, Edit, Glob, Agent, TaskCreate, TaskUpdate, TaskGet, TaskList]
-keywords: [explore, understand, trace, investigate, how-does, explain, architecture, flow, debug, navigate, codebase]
 ---
 
 # Codebase Exploration with scip-query
@@ -79,10 +77,10 @@ Start by making sure the SCIP facts are current enough to trust:
 
 ```bash
 scip-query status                    # Check index location, freshness, and project root
-scip-query reindex                   # Run when missing, stale, uncertain, or after code changes
+scip-query status --capabilities     # Reindex only when freshness is stale, missing, or unknown
 ```
 
-If `status` is unavailable or inconclusive, run `scip-query stats` and `scip-query reindex` when the repository has changed. Do not explore from an index you know is stale.
+If `status` is unavailable or inconclusive, run `scip-query stats` and then `scip-query reindex` only when the repository has changed or freshness cannot be proven. Do not explore from an index you know is stale.
 
 ### Step 1: Orient — What are we looking at?
 
@@ -90,8 +88,10 @@ Start with the high-level map. Run these first:
 
 ```bash
 scip-query stats                      # How big is this codebase?
+scip-query kind-counts                # What symbol kinds dominate?
 scip-query system <module>            # Full module map: files, symbols, deps
 scip-query outline <entry-file>       # What's in the entry point?
+scip-query by-kind function --scope <module>  # Inventory one kind in scope
 ```
 
 **Output:** List all files in the module, the key symbols, what it depends on, and what depends on it. This is your map.
@@ -115,6 +115,7 @@ Understand what the system depends on and who depends on it:
 ```bash
 scip-query deps <file>                # Forward: what does this file need?
 scip-query rdeps <file>               # Reverse: who breaks if this changes?
+scip-query fan-out <file>             # External symbols this file reaches for
 scip-query surface <module>           # True public API (what consumers use)
 scip-query affected <symbol>          # Full transitive blast radius
 ```
@@ -158,6 +159,7 @@ scip-query coupling <file1> <file2>   # How tightly coupled are two files?
 
 ```bash
 scip-query code X                     # Read the source
+scip-query hierarchy X                # Symbol ancestry: method -> class -> module
 scip-query call-graph X               # What it calls, who calls it
 scip-query dataflow X                 # What data flows through it
 scip-query complexity X               # How complex is it
@@ -222,13 +224,17 @@ Every file path, line number, and behavioral claim includes the scip-query comma
 | Read source code | `scip-query code <symbol> [-C N]` |
 | All symbols in a file | `scip-query outline <file>` |
 | Find files | `scip-query files <pattern>` |
+| Symbol kind histogram | `scip-query kind-counts` |
+| Symbols by kind | `scip-query by-kind <kind>` |
 | Full module map | `scip-query system <module>` |
 | True public API | `scip-query surface <module>` |
+| Symbol ancestry | `scip-query hierarchy <symbol>` |
 | Callers + callees | `scip-query call-graph <symbol>` |
 | Every reference | `scip-query refs <symbol>` |
 | Definition + references | `scip-query trace <symbol>` |
 | Forward dependencies | `scip-query deps <file>` |
 | Reverse dependencies | `scip-query rdeps <file>` |
+| External symbol reach | `scip-query fan-out [file]` |
 | Transitive blast radius | `scip-query affected <symbol>` |
 | Pre-change risk briefing | `scip-query change-surface <file>` |
 | Dataflow analysis | `scip-query dataflow <symbol>` |

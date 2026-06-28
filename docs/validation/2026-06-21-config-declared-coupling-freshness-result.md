@@ -25,6 +25,8 @@ Before the slice, a filesystem check of `.scipquery.json` found 18 stale declare
 
 2026-06-22 locality-config note: the later `locality.architecturalBoundarySegments` validation extends the same `validateProjectConfig()` path; this declared-coupling freshness example still points at the intended file.
 
+2026-06-23 setup-command note: `src/runtime/commands/command-handlers.ts` still passes `projectRoot` to `validateProjectConfig()` for `config-validate`; the new `setup` orchestration also validates project config with `projectRoot` before indexing.
+
 After the slice:
 
 - `.scipquery.json` has 0 stale declared-coupling paths.

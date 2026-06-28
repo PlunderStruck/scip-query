@@ -1,4 +1,6 @@
-import { existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, renameSync, rmSync } from 'node:fs';
+import { dirname, extname } from 'node:path';
 import type { SupportedLanguage } from '../../domain/types.js';
 import * as queries from '../../queries/index.js';
 import {
@@ -18,8 +20,12 @@ import { getIndexFreshness } from '../index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from '../project-readiness.js';
 import { Watcher } from '../watch.js';
 import { setupAgent } from '../agent-setup.js';
+import { installProjectAgentHooks } from '../agent-hooks.js';
+import { renderProjectSetupReport, runProjectSetup } from '../project-setup.js';
 import { setupCiWorkflow } from '../setup-ci.js';
 import { installSkills, isScipInstalled, printScipInstallInstructions } from '../setup.js';
+import { ALL_SOURCE_EXTENSIONS } from '../../source/source-fileset.js';
+import { healthPhases } from '../../queries/health/health.js';
 import {
   collect,
   formatBytes,
@@ -64,6 +70,35 @@ const SUPPORTED_LANGUAGES = new Set<SupportedLanguage>([
   'dart',
   'php',
 ]);
+const BENCH_TIMEOUT_MS = 180_000;
+const BENCH_MAX_BUFFER = 100 * 1024 * 1024;
+const SOURCE_EXTENSION_SET = new Set(ALL_SOURCE_EXTENSIONS);
+const DEFAULT_BENCH_COMMANDS: readonly (readonly string[])[] = [
+  ['status', '--json'],
+  ['status', '--capabilities'],
+  ['capabilities', '--json'],
+  ['capability-matrix', '--json'],
+  ['stats'],
+  ['kind-counts'],
+  ['diff-impact', '--json'],
+  ['diff-gate', '--json'],
+];
+const HEAVY_BENCH_COMMANDS: readonly (readonly string[])[] = [
+  ['health', '--json'],
+  ['dead', '--json', '--full'],
+  ['isolated', '--json', '--full'],
+  ['similar', '--json', '--full'],
+  ['similar-files', '--json', '--full'],
+  ['recent-duplicates', '--json', '--full'],
+  ['doc-drift', '--json', '--full'],
+  ['unused-params', '--json', '--full'],
+  ['wrapper-candidates', '--json', '--full'],
+  ['passthrough-candidates', '--json', '--full'],
+  ['stale-abstractions', '--json', '--full'],
+  ['incomplete-migration', '--json', '--full'],
+  ['cleanup-plan', '--verify', '--json'],
+  ['complexity-hotspots', '--json', '--full'],
+];
 
 function supportedLanguages(values: readonly string[]): SupportedLanguage[] {
   return values.filter((value): value is SupportedLanguage => SUPPORTED_LANGUAGES.has(value as SupportedLanguage));
@@ -85,9 +120,12 @@ export async function handleReindex(rawOpts: unknown): Promise<void> {
       outputScip: paths.indexPath,
       outputDb: paths.dbPath,
       pnpmWorkspaces: booleanOptionValue(opts, 'pnpmWorkspaces') || config.indexer?.typescript?.pnpmWorkspaces,
+      typescriptProjectMode: config.indexer?.typescript?.projectMode,
+      typescriptProjects: config.indexer?.typescript?.projects,
       skipIfUnchanged: !booleanOptionValue(opts, 'force'),
       allowPartial: booleanOptionValue(opts, 'allowPartial'),
-      indexerConcurrency: numberOptionValue(opts, 'indexerConcurrency'),
+      indexerConcurrency: numberOptionValue(opts, 'indexerConcurrency') ?? config.indexerConcurrency,
+      trigger: { kind: 'manual-cli', detail: 'scip-query reindex' },
     });
     console.log(
       `${result.reused ? 'Reused' : 'Indexed'} ${result.languages.join(', ')} in ${(result.durationMs / 1000).toFixed(1)}s`,
@@ -144,10 +182,15 @@ export function handleDiffImpactBatch(rawOpts: unknown): void {
   });
 }
 
-export function handleDiffImpact(rawOpts: unknown): void {
+export async function handleDiffImpact(rawOpts: unknown): Promise<void> {
   const opts = commandOptions(rawOpts);
   try {
-    renderDiffImpactReport(runIsolatedDiffImpactReport({ base: stringOptionValue(opts, 'base') }));
+    const result = await runIsolatedDiffImpactReport({ base: stringOptionValue(opts, 'base') });
+    if (booleanOptionValue(opts, 'json')) {
+      printJsonEnvelope('diff-impact', [], opts, result);
+      return;
+    }
+    renderDiffImpactReport(result);
   } catch (err) {
     console.error(`error: ${err instanceof Error ? err.message : err}`);
     process.exit(1);
@@ -156,27 +199,38 @@ export function handleDiffImpact(rawOpts: unknown): void {
 
 export function handleHealthPhase(phase: unknown, rawOpts: unknown): void {
   const opts = commandOptions(rawOpts);
+  const phases = String(phase)
+    .split(',')
+    .filter((entry) => entry.length > 0);
   withDb((db) => {
-    if (!queries.HEALTH_PHASES.includes(phase as (typeof queries.HEALTH_PHASES)[number])) {
-      console.error(`error: Unknown health phase: ${phase}`);
-      process.exit(1);
+    const validPhases: Array<(typeof queries.HEALTH_PHASES)[number]> = [];
+    for (const entry of phases) {
+      if (!queries.HEALTH_PHASES.includes(entry as (typeof queries.HEALTH_PHASES)[number])) {
+        console.error(`error: Unknown health phase: ${entry}`);
+        process.exit(1);
+      }
+      validPhases.push(entry as (typeof queries.HEALTH_PHASES)[number]);
     }
-    const result = queries.healthPhase(db, phase as (typeof queries.HEALTH_PHASES)[number], {
+    const phaseOpts = {
       scope: stringOptionValue(opts, 'scope'),
       full: booleanOptionValue(opts, 'full'),
-    });
+    };
+    const result =
+      validPhases.length === 1
+        ? queries.healthPhase(db, validPhases[0]!, phaseOpts)
+        : healthPhases(db, validPhases, phaseOpts);
     console.log(JSON.stringify(result));
   });
 }
 
-export function handleHealth(rawOpts: unknown): void {
+export async function handleHealth(rawOpts: unknown): Promise<void> {
   const opts = commandOptions(rawOpts);
   if (booleanOptionValue(opts, 'writeBaseline') || booleanOptionValue(opts, 'baseline')) {
     handleHealthBaseline(opts);
     return;
   }
   try {
-    const report = runIsolatedHealthReport({
+    const report = await runIsolatedHealthReport({
       scope: stringOptionValue(opts, 'scope'),
       full: true,
       json: booleanOptionValue(opts, 'json'),
@@ -190,6 +244,229 @@ export function handleHealth(rawOpts: unknown): void {
     console.error(`error: ${err instanceof Error ? err.message : err}`);
     process.exit(1);
   }
+}
+
+interface BenchIndexRun {
+  durationMs: number;
+  result: 'rebuilt' | 'reused';
+  languages: SupportedLanguage[];
+  files?: number;
+  symbols?: number;
+}
+
+interface BenchCommandRun {
+  command: string;
+  durationMs: number;
+  exitCode: number | null;
+  signal: NodeJS.Signals | null;
+  timedOut: boolean;
+  stdoutBytes: number;
+  stderrBytes: number;
+}
+
+interface BenchReport {
+  projectRoot: string;
+  repoFiles: number | null;
+  sourceFiles: number | null;
+  index: ReturnType<typeof statusStats>;
+  coldIndex?: BenchIndexRun;
+  warmIndex?: BenchIndexRun;
+  commands: BenchCommandRun[];
+}
+
+export async function handleBench(rawOpts: unknown): Promise<void> {
+  const opts = commandOptions(rawOpts);
+  const projectRoot = resolveProjectRoot();
+  const timeoutMs = numberOptionValue(opts, 'timeoutMs') ?? BENCH_TIMEOUT_MS;
+  const report: BenchReport = {
+    projectRoot,
+    ...repoFileCounts(projectRoot),
+    index: statusStats(existsSync(resolveActiveDbPath(projectRoot))),
+    commands: [],
+  };
+
+  if (booleanOptionValue(opts, 'coldIndex')) {
+    report.coldIndex = await measureColdIndex(projectRoot);
+    report.warmIndex = await measureWarmIndex(projectRoot);
+    report.index = statusStats(existsSync(resolveActiveDbPath(projectRoot)));
+  }
+
+  for (const command of benchCommandMatrix(opts)) {
+    report.commands.push(runBenchCommand(projectRoot, command, timeoutMs));
+  }
+
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('bench', [], opts, report);
+    return;
+  }
+  renderBenchReport(report);
+}
+
+async function measureColdIndex(projectRoot: string): Promise<BenchIndexRun> {
+  const config = loadProjectConfig(projectRoot);
+  const paths = resolveIndexPaths(projectRoot, config);
+  const cacheDir = dirname(paths.dbPath);
+  const backupDir = `${cacheDir}.bench-backup-${Date.now()}`;
+  let moved = false;
+
+  if (existsSync(cacheDir)) {
+    renameSync(cacheDir, backupDir);
+    moved = true;
+  }
+
+  try {
+    const result = await measureAsync(() =>
+      reindex({
+        projectRoot,
+        languages: config.languages,
+        outputScip: paths.indexPath,
+        outputDb: paths.dbPath,
+        pnpmWorkspaces: config.indexer?.typescript?.pnpmWorkspaces,
+          typescriptProjectMode: config.indexer?.typescript?.projectMode,
+          typescriptProjects: config.indexer?.typescript?.projects,
+          skipIfUnchanged: true,
+          allowPartial: true,
+          indexerConcurrency: config.indexerConcurrency,
+          trigger: { kind: 'manual-cli', detail: 'scip-query bench --cold-index' },
+          onStatus: () => {},
+        }),
+    );
+    if (moved) rmSync(backupDir, { recursive: true, force: true });
+    return {
+      durationMs: result.durationMs,
+      result: result.value.reused ? 'reused' : 'rebuilt',
+      languages: result.value.languages,
+      ...currentIndexCounts(projectRoot),
+    };
+  } catch (error) {
+    if (moved && !existsSync(cacheDir)) renameSync(backupDir, cacheDir);
+    throw error;
+  }
+}
+
+async function measureWarmIndex(projectRoot: string): Promise<BenchIndexRun> {
+  const config = loadProjectConfig(projectRoot);
+  const paths = resolveIndexPaths(projectRoot, config);
+  const result = await measureAsync(() =>
+    reindex({
+      projectRoot,
+      languages: config.languages,
+      outputScip: paths.indexPath,
+      outputDb: paths.dbPath,
+      pnpmWorkspaces: config.indexer?.typescript?.pnpmWorkspaces,
+        typescriptProjectMode: config.indexer?.typescript?.projectMode,
+        typescriptProjects: config.indexer?.typescript?.projects,
+        skipIfUnchanged: true,
+        allowPartial: true,
+        indexerConcurrency: config.indexerConcurrency,
+        trigger: { kind: 'manual-cli', detail: 'scip-query bench warm index' },
+        onStatus: () => {},
+      }),
+  );
+  return {
+    durationMs: result.durationMs,
+    result: result.value.reused ? 'reused' : 'rebuilt',
+    languages: result.value.languages,
+    ...currentIndexCounts(projectRoot),
+  };
+}
+
+async function measureAsync<T>(run: () => Promise<T>): Promise<{ durationMs: number; value: T }> {
+  const started = performance.now();
+  const value = await run();
+  return { durationMs: Math.round(performance.now() - started), value };
+}
+
+function currentIndexCounts(projectRoot: string): { files?: number; symbols?: number } {
+  if (!existsSync(resolveActiveDbPath(projectRoot))) return {};
+  return withDb((db) => {
+    const s = queries.stats(db);
+    return { files: s.documents, symbols: s.symbols };
+  });
+}
+
+function benchCommandMatrix(opts: Record<string, unknown>): string[][] {
+  const explicit = stringArrayOptionValue(opts, 'command');
+  if (explicit.length > 0) return explicit.map(splitBenchCommand).filter((command) => command.length > 0);
+  return [
+    ...DEFAULT_BENCH_COMMANDS.map((command) => [...command]),
+    ...(booleanOptionValue(opts, 'includeHeavy') ? HEAVY_BENCH_COMMANDS.map((command) => [...command]) : []),
+  ];
+}
+
+function splitBenchCommand(command: string): string[] {
+  return command
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((part, index) => !(index === 0 && part === 'scip-query'));
+}
+
+function runBenchCommand(projectRoot: string, command: readonly string[], timeoutMs: number): BenchCommandRun {
+  const started = performance.now();
+  const result = spawnSync(process.execPath, [...process.execArgv, process.argv[1] ?? '', ...command], {
+    cwd: projectRoot,
+    encoding: 'buffer',
+    maxBuffer: BENCH_MAX_BUFFER,
+    timeout: timeoutMs,
+  });
+  const durationMs = Math.round(performance.now() - started);
+  return {
+    command: `scip-query ${command.join(' ')}`,
+    durationMs,
+    exitCode: result.status,
+    signal: result.signal,
+    timedOut: result.error?.name === 'ETIMEDOUT',
+    stdoutBytes: result.stdout?.length ?? 0,
+    stderrBytes: result.stderr?.length ?? 0,
+  };
+}
+
+function repoFileCounts(projectRoot: string): { repoFiles: number | null; sourceFiles: number | null } {
+  const result = spawnSync('git', ['-C', projectRoot, 'ls-files', '-co', '--exclude-standard'], {
+    encoding: 'utf8',
+    maxBuffer: BENCH_MAX_BUFFER,
+  });
+  if (result.status !== 0) return { repoFiles: null, sourceFiles: null };
+  const files = result.stdout.split('\n').filter(Boolean);
+  return {
+    repoFiles: files.length,
+    sourceFiles: files.filter((file) => SOURCE_EXTENSION_SET.has(extname(file).toLowerCase())).length,
+  };
+}
+
+function renderBenchReport(report: BenchReport): void {
+  console.log('scip-query bench');
+  console.log(`Project: ${report.projectRoot}`);
+  console.log(`Repo files: ${report.repoFiles ?? 'unknown'}; source-like files: ${report.sourceFiles ?? 'unknown'}`);
+  if (report.index) {
+    console.log(
+      `Index: ${report.index.files} files, ${report.index.symbols} symbols, ${formatBytes(report.index.indexSizeBytes)}`,
+    );
+  }
+  if (report.coldIndex) {
+    renderBenchIndexRun('Cold index', report.coldIndex);
+  }
+  if (report.warmIndex) {
+    renderBenchIndexRun('Warm index', report.warmIndex);
+  }
+  console.log('\nCommands:');
+  for (const row of [...report.commands].sort((a, b) => b.durationMs - a.durationMs)) {
+    const status = row.timedOut
+      ? 'timeout'
+      : row.exitCode === 0
+        ? 'ok'
+        : `exit ${row.exitCode ?? row.signal ?? 'unknown'}`;
+    console.log(
+      `  ${String(row.durationMs).padStart(7)}ms  ${status.padEnd(10)}  ${String(row.stdoutBytes).padStart(8)}B out  ${row.command}`,
+    );
+  }
+}
+
+function renderBenchIndexRun(label: string, run: BenchIndexRun): void {
+  console.log(
+    `${label}: ${run.durationMs}ms, ${run.result}, ${run.languages.join(', ')}${run.files ? `, ${run.files} files` : ''}${run.symbols ? `, ${run.symbols} symbols` : ''}`,
+  );
 }
 
 // The ratchet: `--write-baseline` snapshots finding identities;
@@ -231,6 +508,30 @@ export function handleInstallSkills(): void {
   );
   if (total > 0) {
     console.log('Skills will be available in your next Claude Code / Codex session.');
+  }
+}
+
+export function handleSetupHooks(rawOpts: unknown): void {
+  const opts = commandOptions(rawOpts);
+  const projectRoot = resolveProjectRoot();
+  const result = installProjectAgentHooks(projectRoot);
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('setup-hooks', [], opts, result);
+    return;
+  }
+
+  for (const target of result.installed) console.log(`  done: ${target}`);
+  for (const target of result.updated) console.log(`  update: ${target}`);
+  for (const target of result.unchanged) console.log(`  ok:   ${target} (already configured)`);
+  for (const target of result.removed) console.log(`  remove: legacy user-level ${target}`);
+  for (const skip of result.skipped) console.log(`  skip: ${skip.target} — ${skip.reason}`);
+
+  const total = result.installed.length + result.updated.length + result.unchanged.length;
+  if (total > 0) {
+    console.log('\nProject-local scip-query hooks are configured for this repository.');
+    console.log('Review new or changed hooks in Codex/Claude Code with /hooks before they run.');
+  } else {
+    console.log('\nNo project-local hook config was written.');
   }
 }
 
@@ -309,6 +610,9 @@ export function handleInit(): void {
   console.log(`Detected languages: ${languages.join(', ') || '(none)'}`);
 }
 
+// scip-query: ignore-similar — shares CLI option/project/json scaffolding with
+// capability rendering, but validates config diagnostics instead of capability
+// evidence.
 export function handleConfigValidate(rawOpts: unknown): void {
   const opts = commandOptions(rawOpts);
   const projectRoot = resolveProjectRoot();
@@ -420,6 +724,22 @@ export function handleSetupAgent(rawOpts: unknown): void {
   console.log('Keep the index fresh (`scip-query reindex` or `scip-query watch`) so the gate sees current code.');
 }
 
+export async function handleSetup(rawOpts: unknown): Promise<void> {
+  const opts = commandOptions(rawOpts);
+  try {
+    const report = await runProjectSetup({ gitHook: booleanOptionValue(opts, 'gitHook') });
+    if (booleanOptionValue(opts, 'json')) {
+      printJsonEnvelope('setup', [], opts, report);
+    } else {
+      renderProjectSetupReport(report);
+    }
+    process.exitCode = report.verdict === 'blocked' ? 1 : 0;
+  } catch (err) {
+    console.error(`error: ${err instanceof Error ? err.message : err}`);
+    process.exit(1);
+  }
+}
+
 export function handleSetupCi(rawOpts: unknown): void {
   const opts = commandOptions(rawOpts);
   const projectRoot = resolveProjectRoot();
@@ -447,8 +767,10 @@ export function handleWatch(rawOpts: unknown): void {
   const config = loadProjectConfig(projectRoot);
   const debounce = numberOptionValue(opts, 'debounce');
   const cooldown = numberOptionValue(opts, 'cooldown');
+  const gitPoll = numberOptionValue(opts, 'gitPoll');
   if (debounce) (config.watch ??= {}).debounceMs = debounce;
   if (cooldown) (config.watch ??= {}).cooldownMs = cooldown;
+  if (gitPoll) (config.watch ??= {}).gitPollMs = gitPoll;
 
   const watcher = new Watcher({
     projectRoot,
@@ -466,7 +788,9 @@ export function handleWatch(rawOpts: unknown): void {
   });
 
   console.log(`Watching ${projectRoot}`);
-  console.log(`Debounce: ${config.watch?.debounceMs ?? 30000}ms | Cooldown: ${config.watch?.cooldownMs ?? 60000}ms`);
+  console.log(
+    `Debounce: ${config.watch?.debounceMs ?? 30000}ms | Cooldown: ${config.watch?.cooldownMs ?? 60000}ms | Git poll: ${config.watch?.gitPollMs ?? 2000}ms`,
+  );
   console.log('Press Ctrl+C to stop.\n');
   watcher.start();
 
@@ -528,12 +852,22 @@ function renderStatusReport(
   }
   console.log(`Exists:   ${report.exists ? 'yes' : 'no'}`);
   console.log(`Fresh:    ${report.freshness.state}${report.freshness.remedy ? ` (${report.freshness.remedy})` : ''}`);
+  if (report.freshness.lastRefresh) {
+    console.log(`Refresh:  ${formatLastRefresh(report.freshness.lastRefresh)}`);
+  }
 
   renderStatusStats(report.exists);
   if (opts.capabilities) {
     console.log('');
     renderCapabilityReport(report.capabilities);
   }
+}
+
+function formatLastRefresh(refresh: NonNullable<ReturnType<typeof getIndexFreshness>['lastRefresh']>): string {
+  const seconds = (refresh.durationMs / 1000).toFixed(1);
+  const detail = refresh.trigger.detail ? ` (${refresh.trigger.detail})` : '';
+  const error = refresh.error ? `: ${refresh.error}` : '';
+  return `${refresh.result} by ${refresh.trigger.kind}${detail} in ${seconds}s at ${refresh.completedAt}${error}`;
 }
 
 function statusStats(exists: boolean):

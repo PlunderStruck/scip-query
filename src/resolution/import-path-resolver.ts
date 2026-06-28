@@ -15,11 +15,13 @@
 import { existsSync } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
+import { sha256Hex } from '../storage/evidence-cache.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
 
 // Derived from the read-only index — valid for the connection's lifetime.
 const INDEXED_PATH_CACHE = createPerDbValue<Set<string>>('indexed-paths', { clearGroups: [] });
+const INDEXED_PATH_DIGEST_CACHE = createPerDbValue<string>('indexed-path-digest', { clearGroups: [] });
 
 // Source-extension families. The language-parser registry imports these
 // constants too, so adding an extension changes resolution and parser dispatch
@@ -368,6 +370,10 @@ function getIndexedPaths(db: ScipDatabase): Set<string> {
     db,
     () => new Set(indexedDocumentPaths(db, { includeIgnored: false }).map(normalizePath)),
   );
+}
+
+export function importResolutionFingerprint(db: ScipDatabase): string {
+  return INDEXED_PATH_DIGEST_CACHE.get(db, () => sha256Hex([...getIndexedPaths(db)].sort().join('\n')));
 }
 
 // scip-query: ignore-wrapper — single line but expresses the project-wide

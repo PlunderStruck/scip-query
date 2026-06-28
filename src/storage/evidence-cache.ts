@@ -15,6 +15,7 @@
  * process and every operation degrades to a miss/no-op.
  */
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -26,7 +27,7 @@ const require = createRequire(import.meta.url);
 export const EVIDENCE_DB_FILENAME = 'evidence.db';
 
 /** Per-file payload kinds. Each is a pure function of one file's content. */
-export type FileEvidenceKind = 'source-facts' | 'doc-path-tokens';
+export type FileEvidenceKind = 'source-facts' | 'doc-path-tokens' | 'source-imports' | 'consumer-file-usage';
 
 interface EvidenceConnection {
   evidence: Database.Database;
@@ -35,6 +36,9 @@ interface EvidenceConnection {
   readCallees: Database.Statement;
   writeCallees: Database.Statement;
   dropStaleCallees: Database.Statement;
+  readReferences: Database.Statement;
+  writeReferences: Database.Statement;
+  dropStaleReferences: Database.Statement;
 }
 
 export interface SemanticCalleeCacheEntry {
@@ -45,6 +49,20 @@ export interface SemanticCalleeCacheEntry {
   payload: string;
 }
 
+export interface SemanticReferenceCacheEntry {
+  relativePath: string;
+  symbol: string;
+  projectFingerprint: string;
+  payload: string;
+}
+
+interface ReindexEvidenceMetadata {
+  version?: number;
+  status?: string;
+  fingerprint?: unknown;
+  indexedLanguages?: unknown;
+}
+
 // Connection handle, not evidence: lives for the ScipDatabase's lifetime and
 // holds no per-file state, so it registers with no cache-clear groups.
 // `null` = permanently disabled for this process.
@@ -52,6 +70,10 @@ const CONNECTIONS = new WeakMap<ScipDatabase, EvidenceConnection | null>();
 
 const CONTENT_HASH_CACHE = createPerDbCache<string, string>('evidence-content-hash', {
   clearGroups: ['whole-project', 'source-file'],
+});
+
+const PROJECT_FINGERPRINT_CACHE = createPerDbCache<string, string | null>('evidence-project-fingerprint', {
+  clearGroups: ['whole-project'],
 });
 
 // Mirrors runtime/cli-support's package lookup; not imported because storage
@@ -78,6 +100,28 @@ export function sha256Hex(text: string): string {
 /** Per-file content hash, memoized per (db, path) like the source-text cache. */
 export function fileContentHash(db: ScipDatabase, relativePath: string, content: string): string {
   return CONTENT_HASH_CACHE.get(db, relativePath, () => sha256Hex(content));
+}
+
+export function projectEvidenceFingerprint(db: ScipDatabase): string | null {
+  return PROJECT_FINGERPRINT_CACHE.get(db, 'current', () => {
+    try {
+      const metadata = JSON.parse(
+        readFileSync(join(dirname(db.config.dbPath), 'meta.json'), 'utf-8'),
+      ) as ReindexEvidenceMetadata;
+      if ((metadata.version !== 2 && metadata.version !== 3) || metadata.status !== 'complete') return null;
+      if (metadata.fingerprint === undefined) return null;
+      const indexedLanguages = Array.isArray(metadata.indexedLanguages) ? [...metadata.indexedLanguages].sort() : [];
+      return sha256Hex(
+        JSON.stringify({
+          fingerprint: metadata.fingerprint,
+          indexedLanguages,
+        }),
+      );
+    } catch (error) {
+      debugLog('project fingerprint unavailable', error);
+      return null;
+    }
+  });
 }
 
 function debugLog(message: string, error: unknown): void {
@@ -114,6 +158,14 @@ function connectionFor(db: ScipDatabase): EvidenceConnection | null {
         payload TEXT NOT NULL,
         PRIMARY KEY (relative_path, symbol)
       );
+      CREATE TABLE IF NOT EXISTS semantic_references (
+        relative_path TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        project_fingerprint TEXT NOT NULL,
+        version TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        PRIMARY KEY (relative_path, symbol)
+      );
     `);
     connection = {
       evidence,
@@ -129,9 +181,18 @@ function connectionFor(db: ScipDatabase): EvidenceConnection | null {
       ),
       writeCallees: evidence.prepare(
         `INSERT OR REPLACE INTO semantic_callees
-         (relative_path, symbol, content_hash, deps_digest, version, payload) VALUES (?, ?, ?, ?, ?, ?)`,
+           (relative_path, symbol, content_hash, deps_digest, version, payload) VALUES (?, ?, ?, ?, ?, ?)`,
       ),
       dropStaleCallees: evidence.prepare('DELETE FROM semantic_callees WHERE relative_path = ? AND content_hash != ?'),
+      readReferences: evidence.prepare(
+        `SELECT payload FROM semantic_references
+           WHERE relative_path = ? AND symbol = ? AND project_fingerprint = ? AND version = ?`,
+      ),
+      writeReferences: evidence.prepare(
+        `INSERT OR REPLACE INTO semantic_references
+           (relative_path, symbol, project_fingerprint, version, payload) VALUES (?, ?, ?, ?, ?)`,
+      ),
+      dropStaleReferences: evidence.prepare('DELETE FROM semantic_references WHERE project_fingerprint != ?'),
     };
   } catch (error) {
     debugLog('disabled (open failed)', error);
@@ -219,6 +280,25 @@ export function readCachedSemanticCallees(
   }
 }
 
+export function readCachedSemanticReferences(
+  db: ScipDatabase,
+  relativePath: string,
+  symbol: string,
+  projectFingerprint: string,
+): string | null {
+  const connection = connectionFor(db);
+  if (!connection) return null;
+  try {
+    const row = connection.readReferences.get(relativePath, symbol, projectFingerprint, VERSION) as
+      | { payload: string }
+      | undefined;
+    return row?.payload ?? null;
+  } catch (error) {
+    disable(db, 'semantic_references read', error);
+    return null;
+  }
+}
+
 /**
  * Batched write — one transaction for the whole set. A cold run on a large
  * repo writes one row per production callable; per-row autocommit would pay
@@ -251,5 +331,34 @@ export function writeCachedSemanticCalleesBatch(db: ScipDatabase, entries: reado
     })();
   } catch (error) {
     disable(db, 'semantic_callees write', error);
+  }
+}
+
+export function writeCachedSemanticReferencesBatch(
+  db: ScipDatabase,
+  entries: readonly SemanticReferenceCacheEntry[],
+): void {
+  if (entries.length === 0) return;
+  const connection = connectionFor(db);
+  if (!connection) return;
+  try {
+    connection.evidence.transaction(() => {
+      const staleDeleteKeys = new Set<string>();
+      for (const entry of entries) {
+        if (!staleDeleteKeys.has(entry.projectFingerprint)) {
+          staleDeleteKeys.add(entry.projectFingerprint);
+          connection.dropStaleReferences.run(entry.projectFingerprint);
+        }
+        connection.writeReferences.run(
+          entry.relativePath,
+          entry.symbol,
+          entry.projectFingerprint,
+          VERSION,
+          entry.payload,
+        );
+      }
+    })();
+  } catch (error) {
+    disable(db, 'semantic_references write', error);
   }
 }

@@ -6,6 +6,43 @@ For command syntax and options reference, see [Command Reference](COMMAND_REFERE
 
 ---
 
+## Workflow 0: Bootstrap scip-query in a project
+
+**Goal:** Make a repository ready for scip-query-backed agent work before cleanup or implementation begins.
+
+### Steps
+
+1. **Run setup**
+   ```bash
+   scip-query setup-hooks --json
+   scip-query setup --json
+   ```
+   Returns: project-local hook install state, detected languages, indexer readiness, remediation attempts, index result, capability summary, smoke tests, health score, issue list, health dossier paths, and setup verdict.
+
+2. **Resolve blockers**
+   ```bash
+   scip-query check-deps
+   scip-query doctor
+   scip-query capability-matrix --json
+   ```
+   Missing indexers or toolchains are blockers, not clean results. Fix what setup can prove, then rerun setup or reindex.
+
+3. **Start health follow-through**
+   ```bash
+   scip-query health --json --full
+   scip-query diff-gate --json
+   ```
+   Before cleanup, tell the user the health score, confirmed items, unavailable checks, and recommended first cleanup batch. Use `scip-health-audit` for confirmation and `scip-health-improve` when the user wants autonomous score improvement.
+
+### What you should know after this workflow
+
+- Whether the index is current and usable
+- Which capabilities are available, partial, or unavailable
+- Where the health dossier was written
+- What needs to be fixed before the repo can be called ready
+
+---
+
 ## Workflow 1: Understand a system before making changes
 
 **Goal:** Build a complete mental model of a module or feature area so you can write a precise implementation plan with no ambiguity about what code exists, what it does, and what depends on it.
@@ -88,7 +125,7 @@ For command syntax and options reference, see [Command Reference](COMMAND_REFERE
 4. **Check blast radius before editing**
    ```bash
    scip-query change-surface <file>
-   scip-query diff-impact
+   scip-query diff-impact --json
    ```
    Identify which symbols in your change set have many external consumers and which downstream files will be affected.
 
@@ -101,7 +138,7 @@ For command syntax and options reference, see [Command Reference](COMMAND_REFERE
 
 6. **After making changes, verify impact**
    ```bash
-   scip-query diff-impact
+   scip-query diff-impact --json
    scip-query drift
    ```
    Shows every symbol affected by your git diff, every consumer file impacted, and whether the change introduced new structural drift.
@@ -297,7 +334,7 @@ For command syntax and options reference, see [Command Reference](COMMAND_REFERE
 
 1. **Compute diff impact**
    ```bash
-   scip-query diff-impact
+   scip-query diff-impact --json
    ```
    Shows: changed files, changed symbols with fan-in counts, and affected consumer files.
 
@@ -326,7 +363,7 @@ For command syntax and options reference, see [Command Reference](COMMAND_REFERE
 | See what a function calls and who calls it | `call-graph <symbol>` |
 | Check blast radius of a change | `affected <symbol>` |
 | Get a pre-change briefing | `change-surface <file>` |
-| See impact of my git changes | `diff-impact` |
+| See impact of my git changes | `diff-impact --json` |
 | Find dead code to delete | `dead --min-loc 10 --skip-barrels` |
 | Find duplicate functions | `similar --min-similarity 0.5` |
 | Find same-shape functions | `similar-signatures --min-loc 5` |
@@ -344,10 +381,10 @@ For command syntax and options reference, see [Command Reference](COMMAND_REFERE
 
 ## Tips for AI Agents
 
-- **Always reindex before analysis** if the codebase has changed significantly: `scip-query reindex`
+- **Check freshness before analysis**: run `scip-query status --capabilities`; if freshness is `stale`, `missing`, or `unknown`, run `scip-query reindex`.
 - **Use `--json` on `health`** for programmatic consumption — parse the JSON to make decisions
 - **Run `change-surface` before every file modification** — it takes <1 second and prevents surprises
-- **Run `diff-impact` before committing** — catches unexpected blast radius across downstream consumers
+- **Run `diff-impact --json` before committing** — catches unexpected blast radius across downstream consumers
 - **Use `convergence` after `similar`** — `similar` finds the problem, `convergence` gives the solution
 - **Start cleanup with `health`** — it prioritizes for you so you don't have to decide what to fix first
 - **Scope commands with `-s`** — most commands accept `--scope <path>` to limit analysis to a specific module. Use this on large codebases to keep results focused.

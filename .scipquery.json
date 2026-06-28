@@ -1,4 +1,32 @@
 {
+  "watch": {
+    "enabled": true,
+    "autoRefresh": true,
+    "debounceMs": 30000,
+    "cooldownMs": 60000,
+    "gitPollMs": 2000
+  },
+  "indexer": {
+    "typescript": {
+      "projectMode": "workspace"
+    }
+  },
+  "suppressions": [
+    {
+      "id": "SQD2F5BC7ACF44",
+      "check": "echo",
+      "file": "src/resolution/import-path-resolver.ts",
+      "reason": "Accepted cache-declaration echo: both caches already share the per-DB cache factory; this one fingerprints indexed import-resolution paths."
+    },
+    {
+      "id": "SQ1213565D9A4E",
+      "reason": "Accepted cache-declaration echo: both caches use the per-DB cache factory; this one memoizes project fingerprint metadata for semantic-reference evidence."
+    },
+    {
+      "id": "SQD75FF817FACB",
+      "reason": "Accepted cache-declaration echo: Vue behavior profiles intentionally use the same source-aware cache factory as Vue template facts; the cache name and value type are the product variation."
+    }
+  ],
   "declaredCouplings": [
     {
       "name": "cleanup detector family",
@@ -19,32 +47,51 @@
     {
       "name": "graph summary query family",
       "reason": "These query files report related fan-in, fan-out, hotspot, and bottleneck graph summaries.",
-      "files": ["src/queries/graph/bottlenecks.ts", "src/queries/graph/fan.ts", "src/queries/graph/hotspots.ts"]
+      "files": [
+        "src/queries/graph/bottlenecks.ts",
+        "src/queries/graph/fan.ts",
+        "src/queries/graph/hotspots.ts"
+      ]
     },
     {
       "name": "reference navigation query family",
       "reason": "These query files expose nearby views of definition and reference navigation.",
-      "files": ["src/queries/navigation/refs.ts", "src/queries/navigation/trace.ts"]
+      "files": [
+        "src/queries/navigation/refs.ts",
+        "src/queries/navigation/trace.ts"
+      ]
     },
     {
       "name": "package build surface",
       "reason": "Package metadata and bundle entrypoints intentionally move together when the published CLI surface changes.",
-      "files": ["package.json", "tsup.config.ts"]
+      "files": [
+        "package.json",
+        "tsup.config.ts"
+      ]
     },
     {
       "name": "command reference documentation",
       "reason": "The generated command reference and query implementations move together when public command behavior changes.",
-      "files": ["docs/COMMAND_REFERENCE.md", "src/queries/cleanup/doc-drift.ts"]
+      "files": [
+        "docs/COMMAND_REFERENCE.md",
+        "src/queries/cleanup/doc-drift.ts"
+      ]
     },
     {
       "name": "agent skill documentation family",
       "reason": "Bundled agent skills share guidance and examples when the agent workflow surface changes.",
-      "files": ["skills/concrete-plan/SKILL.md", "skills/scip-debloat/SKILL.md"]
+      "files": [
+        "skills/concrete-plan/SKILL.md",
+        "skills/scip-debloat/SKILL.md"
+      ]
     },
     {
       "name": "runtime command dispatch",
       "reason": "Command descriptors and command execution intentionally move together when CLI registration or dispatch behavior changes.",
-      "files": ["src/runtime/commands/command-descriptors.ts", "src/runtime/commands/command-execution.ts"]
+      "files": [
+        "src/runtime/commands/command-descriptors.ts",
+        "src/runtime/commands/command-execution.ts"
+      ]
     }
   ]
 }

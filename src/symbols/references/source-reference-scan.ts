@@ -1,6 +1,8 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { detectAstLanguage, frameworkSourceReferences, isVueSfcPath } from '../../source/ast.js';
 import type { FrameworkSourceReferenceKind } from '../../source/ast.js';
+import { sourceMayContainCandidateName } from '../../source/source-identifier-prefilter.js';
+import { getSourceText } from '../../source/source-text.js';
 import { attributeIdentifier, attributeIdentifierPermissive } from '../identifier-attribution.js';
 import { getIdentifierLineMap } from '../identifier-index.js';
 
@@ -54,6 +56,10 @@ export function scanSourceReferences(
     if (opts.skipPath?.(sourceFile)) continue;
 
     try {
+      if (opts.candidateNames && !sourceMayContainCandidateName(getSourceText(db, sourceFile), opts.candidateNames)) {
+        continue;
+      }
+
       const visitName = (
         name: string,
         kind: SourceReferenceKind,

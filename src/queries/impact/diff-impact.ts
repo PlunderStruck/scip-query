@@ -53,6 +53,8 @@ export interface RenamedFile {
   similarity: number;
 }
 
+export type BaseContentReader = (relativePath: string) => string | null;
+
 export interface DiffImpactPartial {
   changedSymbols: ChangedSymbol[];
   consumerEntries: Array<{ file: string; symbols: string[] }>;
@@ -270,6 +272,83 @@ export function fileContentAtBase(projectRoot: string, base: string, relativePat
   } catch {
     return null;
   }
+}
+
+export function createBaseContentReader(
+  projectRoot: string,
+  base: string,
+  preloadPaths: readonly string[] = [],
+): BaseContentReader {
+  const cache = fileContentsAtBase(projectRoot, base, preloadPaths);
+  return (relativePath) => {
+    if (!cache.has(relativePath)) {
+      cache.set(relativePath, fileContentAtBase(projectRoot, base, relativePath));
+    }
+    return cache.get(relativePath) ?? null;
+  };
+}
+
+export function baseContentPathsForDiffPlan(
+  diffPlan: DiffImpactPlan,
+  changedFiles: readonly string[] = diffPlan.changedFiles,
+): string[] {
+  const renamedFromByFile = new Map(diffPlan.renamedFiles.map((rename) => [rename.to, rename.from]));
+  return [...new Set(changedFiles.map((file) => renamedFromByFile.get(file) ?? file))];
+}
+
+export function fileContentsAtBase(
+  projectRoot: string,
+  base: string,
+  relativePaths: readonly string[],
+): Map<string, string | null> {
+  const uniquePaths = [...new Set(relativePaths)];
+  const out = new Map<string, string | null>();
+  if (uniquePaths.length === 0) return out;
+
+  try {
+    const input = uniquePaths.map((path) => `${base}:./${path}\n`).join('');
+    const output = execFileSync('git', ['cat-file', '--batch'], {
+      cwd: projectRoot,
+      input,
+      maxBuffer: 256 * 1024 * 1024,
+      timeout: 10_000,
+      stdio: ['pipe', 'pipe', 'ignore'],
+    }) as Buffer;
+    return parseCatFileBatchOutput(output, uniquePaths);
+  } catch {
+    for (const path of uniquePaths) {
+      out.set(path, fileContentAtBase(projectRoot, base, path));
+    }
+    return out;
+  }
+}
+
+function parseCatFileBatchOutput(output: Buffer, relativePaths: readonly string[]): Map<string, string | null> {
+  const out = new Map<string, string | null>();
+  let offset = 0;
+  for (const path of relativePaths) {
+    const newline = output.indexOf(10, offset);
+    if (newline < 0) throw new Error('git cat-file batch output ended before object header');
+    const header = output.subarray(offset, newline).toString('utf-8');
+    offset = newline + 1;
+    if (header.endsWith(' missing')) {
+      out.set(path, null);
+      continue;
+    }
+    const match = /^[0-9a-f]+ ([^ ]+) (\d+)$/.exec(header);
+    if (!match) throw new Error(`unexpected git cat-file batch header: ${header}`);
+    const [, objectType, rawSize] = match;
+    const size = Number(rawSize);
+    if (!Number.isFinite(size) || size < 0) throw new Error(`unexpected git cat-file batch size: ${header}`);
+    if (offset + size > output.length) {
+      throw new Error('git cat-file batch output ended before blob payload');
+    }
+    const payload = output.subarray(offset, offset + size);
+    out.set(path, objectType === 'blob' ? payload.toString('utf-8') : null);
+    offset += size;
+    if (output[offset] === 10) offset += 1;
+  }
+  return out;
 }
 
 function detectRenamedFiles(projectRoot: string, base: string, changedFiles: readonly string[]): RenamedFile[] {

@@ -15,6 +15,7 @@
  */
 import type { ScipDatabase } from '../storage/db.js';
 import { detectAstLanguage, getAst, type SyntaxNode, type Tree } from '../source/ast.js';
+import { getSourceText } from '../source/source-text.js';
 
 export interface ExclusionEntry {
   startLine: number;
@@ -60,8 +61,14 @@ const TEST_FRAMEWORK_NAMES = new Set([
   'bench',
   'benchmark',
 ]);
+const TEST_FRAMEWORK_CALL_RE =
+  /\b(?:describe|it|test|fdescribe|fit|xdescribe|xit|beforeEach|afterEach|beforeAll|afterAll|before|after|suite|bench|benchmark)\s*\(/;
+const REACT_HOOK_NAME_RE = /\buse[A-Z][A-Za-z0-9_$]*/;
 
 function getJsTestExclusions(db: ScipDatabase, relativePath: string): ExclusionEntry[] {
+  const source = getSourceText(db, relativePath);
+  if (!source || !mayContainJsExclusion(source)) return [];
+
   const tree = getAst(db, relativePath);
   if (!tree) return [];
   const cached = EXCLUSION_CACHE.get(tree);
@@ -149,6 +156,10 @@ function getJsTestExclusions(db: ScipDatabase, relativePath: string): ExclusionE
   );
   EXCLUSION_CACHE.set(tree, out);
   return out;
+}
+
+function mayContainJsExclusion(source: string): boolean {
+  return source.includes('scip-query') || TEST_FRAMEWORK_CALL_RE.test(source) || REACT_HOOK_NAME_RE.test(source);
 }
 
 /**

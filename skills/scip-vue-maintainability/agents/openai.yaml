@@ -1,0 +1,4 @@
+interface:
+  display_name: "SCIP Vue Maintainability"
+  short_description: "Review Vue reuse and view pressure"
+  default_prompt: "Use $scip-vue-maintainability to review Vue components, composables, views, and frontend health pressure."

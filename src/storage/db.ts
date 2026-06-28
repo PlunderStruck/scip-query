@@ -46,6 +46,10 @@ export class ScipDatabase {
     this.pathFilter = pathFilter ?? null;
     this.db = new Database(config.dbPath, { readonly: true });
     this.db.pragma('busy_timeout = 5000');
+    this.db.pragma('query_only = ON');
+    this.db.pragma('temp_store = MEMORY');
+    this.db.pragma('cache_size = -64000');
+    this.db.pragma('mmap_size = 268435456');
   }
 
   /** Check if a path should be excluded based on .gitignore rules */

@@ -347,3 +347,7 @@ The maintainability-register completion slice rechecked the diff-gate source ref
 ## 2026-06-23 Current Sweep Citation Refresh
 
 The current maintainability sweep rechecked the diff-gate source references after doc-reference and baseline policy helpers moved into private query modules. The memo remains accurate as a calibration record: `diffGate()` still owns the check lifecycle, and the moved helpers do not change the direct/signal/support conclusions recorded here.
+
+## 2026-06-27 Citation Refresh
+
+The persistent-refresh coordination slice rechecked the `diffGate()` citation. The diff-gate entrypoint still owns the same check lifecycle and still delegates to the same check-family helpers before root-cause grouping. The current reindex/watch/config changes do not alter the analyzer-calibration conclusions in this memo.

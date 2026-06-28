@@ -61,3 +61,7 @@ The maintainability-register completion slice rechecked the behavioral claim tha
 ## 2026-06-23 Current Sweep Citation Refresh
 
 The current maintainability sweep rechecked the `subjectContext` claim after doc-reference and baseline policy helpers moved into private modules. The co-change-partner finding assembly still carries `subjectContext` before the finding is recorded, so this result remains current.
+
+## 2026-06-27 Citation Refresh
+
+The persistent-refresh coordination slice rechecked the `subjectContext` claim in `diff-gate.ts` and the compact text rendering in `src/runtime/query-commands/impact.ts`. Both claims remain current; refresh metadata and watcher locking are outside this co-change output path.

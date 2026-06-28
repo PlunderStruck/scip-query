@@ -1,8 +1,6 @@
 ---
 name: scip-language-playbook
 description: Pick the highest-signal scip-query commands for the language in front of you so you can understand a system granularly and find DRY or de-bloat opportunities without wandering through low-signal queries first.
-allowed-tools: [Bash, Write, Edit, Glob, Agent, TaskCreate, TaskUpdate, TaskGet, TaskList]
-keywords: [language, playbook, commands, cheat-sheet, understand, granular, flow, dry, debloat, consolidate, similarity, ts, typescript, python, java, scala, kotlin, rust, cpp, c, ruby, csharp, vb, dart, php]
 ---
 
 # Best scip-query Commands by Language
@@ -26,9 +24,12 @@ Run these in almost every codebase, regardless of language:
 
 ```bash
 scip-query stats
+scip-query kind-counts
 scip-query files <feature-or-module-name>
 scip-query outline <file>
+scip-query by-kind function --scope <feature-or-module-name>
 scip-query trace <symbol>
+scip-query hierarchy <symbol>
 scip-query code <symbol>
 ```
 
@@ -69,7 +70,7 @@ Vue note: `.vue` single-file components are handled by the same path. scip-query
 Use first:
 ```bash
 scip-query outline <file>
-scip-query outline <file>
+scip-query kind-counts --scope <module-or-file>
 scip-query system <module-or-file>
 scip-query imports <file>
 scip-query imported-by <symbol>
@@ -210,7 +211,7 @@ scip-query trace <symbol>
 scip-query call-graph <symbol>
 scip-query refs <symbol>
 scip-query outline <file>
-scip-query outline <file>
+scip-query fan-out <file>
 ```
 
 Skip:
@@ -348,6 +349,8 @@ scip-query extract-candidates
 ```bash
 scip-query files <feature>
 scip-query outline <file>
+scip-query kind-counts --scope <feature>
+scip-query fan-out <file>
 scip-query trace <entry-symbol>
 scip-query call-graph <entry-symbol>
 scip-query code <entry-symbol>

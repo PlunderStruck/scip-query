@@ -47,3 +47,7 @@ Verdict: implemented. Co-change-only doc drift now says whether the document rea
 ## 2026-06-23 Current Sweep Citation Refresh
 
 The current maintainability sweep rechecked the `doc-drift.ts` citation after the generic doc-term matcher moved into `src/queries/cleanup/doc-terms.ts`. Historical-intent classification and action-tier behavior remain unchanged; only the shared term-matching helper location changed.
+
+## 2026-06-27 Diff-Gate Performance Refresh
+
+The `src/queries/cleanup/doc-drift.ts` change now narrows `docsCitingFiles()` so diff-gate resolves target path tokens before building citation contexts. Historical-intent classification is still owned by `classifyDocDriftIntent()`, and its behavior is unchanged. Verification reran `tests/queries/cleanup/drift-accuracy.test.ts`, `tests/queries/cleanup/drift-policy.test.ts`, the full `npm test` suite, and `scip-query doc-drift --json`.

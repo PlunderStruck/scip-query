@@ -207,13 +207,13 @@ breaks transitively, or which files historically move together with it — then
 
 **The detectors:** `plan-context` (one command bundling definitions,
 references, call graph, blast radius, churn, and co-change partners — the
-pre-edit briefing), `change-surface`, `affected`, `diff-impact`.
+pre-edit briefing), `change-surface`, `affected`, `diff-impact --json`.
 
 **Use it:**
 
 ```bash
 scip-query plan-context <symbol-or-file>   # before the edit
-scip-query diff-impact                     # after the edit
+scip-query diff-impact --json              # after the edit
 ```
 
 The `concrete-plan` skill enforces this end-to-end: every step in a plan must
@@ -244,35 +244,42 @@ scip-query health --baseline         # in CI
 
 The detectors only help if they run. Three layers, in increasing strength:
 
-**1. Skills (routing).** Installing scip-query symlinks nine skills into
-`~/.agents/skills/`, `~/.claude/skills/`, and `~/.codex/skills/` — they update
-automatically with the package. The `scip-query` router skill triggers on any
-codebase work and dispatches to the right specialist (explore → plan →
-implement → verify → clean up), carrying the non-negotiables: similarity check
-before new helpers, `incomplete-migration` after extractions, `diff-gate`
-before done.
+**1. Skills and lifecycle hooks (routing).** Installing scip-query symlinks the
+bundled skills into `~/.agents/skills/`, `~/.claude/skills/`, and
+`~/.codex/skills/` — they update automatically with the package. Project setup
+writes reviewable repo-local hooks to `.codex/hooks.json` and
+`.claude/settings.json`, unless `SCIP_QUERY_SKIP_HOOK_INSTALL=1` is set. The
+hooks add scip-query context at session start, route prompts toward the right
+specialist, and run a safe Stop hook wrapper around the diff gate only for that
+repository. The Stop hook warns by default instead of blocking the agent; set
+`SCIP_QUERY_STOP_HOOK_MODE=feedback` to ask the agent to continue without a
+hook error, or `SCIP_QUERY_STOP_HOOK_MODE=block` to enforce the gate. Run
+`scip-query setup-hooks --json` to repair the current repo's hooks.
 
-**2. Project guidance (instructions).** Run once per project:
+**2. Project setup and guidance.** Run once per project:
 
 ```bash
-scip-query setup-agent
+scip-query setup --json
 ```
 
-Seeds a managed block in `AGENTS.md` (the cross-tool standard Codex, Cursor,
-Gemini, and others read) pointing at the router skill and the gate — plus an
-`@AGENTS.md` import shim in `CLAUDE.md`, because Claude Code doesn't read
-AGENTS.md natively. Only the marked block is ever managed; your content is
-never touched, and an existing `@AGENTS.md` bridge is left alone.
+Setup installs or refreshes skills, configures project-local hooks, checks indexer readiness, attempts
+configured indexer remediation, refreshes the index, smoke-tests representative
+commands, writes `docs/scip-query/health-dossier.md` and `.json`, reports the
+health score and items needing attention, and seeds a managed block in
+`AGENTS.md` plus a `CLAUDE.md` import shim.
+
+After setup, use `scip-health-audit` to confirm raw signals and
+`scip-health-improve` when the user wants the agent to fix the worst confirmed
+items until the health score is as high as reasonably possible.
 
 **3. The gate (enforcement).**
 
 ```bash
-scip-query diff-gate                 # one command, every check above, scoped to the diff, exit 1 on findings
+scip-query diff-gate --json          # one command, every check above, scoped to the diff, exit 1 on findings
 scip-query setup-agent --git-hook    # pre-commit backstop: fires whoever wrote the diff
 ```
 
 Every finding ships with a remediation an agent can act on without human
-triage. For in-session enforcement, `diff-gate --hook` speaks the turn-end
-hook contract shared by Claude Code, Codex, and Gemini CLI (blocks the agent's
-"done" and feeds the findings back as its next prompt) — wire it into your
-tool's hook config if you want the gate to be unskippable.
+triage. The installed Codex/Claude Stop hook uses the same diff-gate evidence,
+warns by default, and no-ops outside indexed scip-query workspaces, so global
+hook install stays safe for ordinary projects.

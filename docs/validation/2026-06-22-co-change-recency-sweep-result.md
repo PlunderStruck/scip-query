@@ -53,3 +53,7 @@ The maintainability-register completion slice rechecked the `diff-gate.ts` citat
 ## 2026-06-23 Current Sweep Citation Refresh
 
 The current maintainability sweep rechecked this result after private doc-reference and baseline policy helpers moved out of `diff-gate.ts`. Commit-scope and recency evidence still flow through the same co-change-partner check before finding emission.
+
+## 2026-06-27 Citation Refresh
+
+The persistent-refresh coordination slice rechecked the `diff-gate.ts` and `src/runtime/query-commands/impact.ts` citations. Commit-scope and recency evidence still flow through the same co-change surfaces; index freshness and watcher coordination do not change the analyzer behavior recorded here.

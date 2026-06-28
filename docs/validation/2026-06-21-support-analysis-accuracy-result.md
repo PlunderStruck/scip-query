@@ -84,3 +84,7 @@ Repository verification passed. The full test suite reported 64 passing test fil
 
 - `SQ36D93309ABEA`, `echo`: changed `isCompileTimeContractAssertion()` shares symbol parsing helpers with established `indexedDefinitionFromRow()`, but the semantics are different.
 - `SQ30E6CF5F9B38`, `doc-reference`: README configuration examples cite changed cleanup query files; the example target remains intentional.
+
+## 2026-06-27 Citation Refresh
+
+The persistent-refresh coordination slice rechecked `validateProjectConfig()` and `src/runtime/config.ts`. The support-analysis target remains current: `validateProjectConfig()` still validates project config diagnostics, and the new `watch.autoRefresh` field is an additional watch-policy diagnostic rather than a change to the support-command accuracy conclusions here.
