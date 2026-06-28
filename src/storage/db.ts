@@ -38,6 +38,7 @@ export class ScipDatabase {
   readonly db: Database.Database;
   readonly config: ScipQueryConfig;
   private pathFilter: PathFilter | null;
+  private statementCache = new Map<string, Database.Statement>();
 
   // scip-query: ignore-wrapper — public storage boundary; callers construct
   // ScipDatabase, not better-sqlite3 connections plus pragma setup.
@@ -121,15 +122,25 @@ export class ScipDatabase {
 
   /** Run a raw SQL query and return all rows */
   all<T = Record<string, unknown>>(sql: string, ...params: unknown[]): T[] {
-    return this.db.prepare(sql).all(...params) as T[];
+    return this.statement(sql).all(...params) as T[];
   }
 
   /** Run a raw SQL query and return the first row */
   get<T = Record<string, unknown>>(sql: string, ...params: unknown[]): T | undefined {
-    return this.db.prepare(sql).get(...params) as T | undefined;
+    return this.statement(sql).get(...params) as T | undefined;
   }
 
   close(): void {
+    this.statementCache.clear();
     this.db.close();
+  }
+
+  private statement(sql: string): Database.Statement {
+    let statement = this.statementCache.get(sql);
+    if (!statement) {
+      statement = this.db.prepare(sql);
+      this.statementCache.set(sql, statement);
+    }
+    return statement;
   }
 }
