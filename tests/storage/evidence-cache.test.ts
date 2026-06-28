@@ -135,7 +135,7 @@ describe('evidence cache', () => {
     }
   });
 
-  it('ignores rows whose content hash or version no longer match', () => {
+  it('ignores content hash mismatches but reads legacy package-version drift', () => {
     const evidence = new Database(join(tempDir, EVIDENCE_DB_FILENAME));
     evidence
       .prepare("UPDATE file_evidence SET content_hash = ? WHERE kind = 'source-facts' AND relative_path = ?")
@@ -160,10 +160,24 @@ describe('evidence cache', () => {
     const db2 = openDb();
     try {
       const hash = fileContentHash(db2, FILE, getSourceText(db2, FILE));
-      expect(readCachedFileEvidence(db2, 'source-facts', FILE, hash)).toBeNull();
-      expect(getSourceFacts(db2, FILE)!.callables.map((callable) => callable.name)).toContain('greet');
+      expect(readCachedFileEvidence(db2, 'source-facts', FILE, hash)).not.toBeNull();
     } finally {
       db2.close();
+    }
+
+    const stableMismatch = new Database(join(tempDir, EVIDENCE_DB_FILENAME));
+    stableMismatch
+      .prepare("UPDATE file_evidence SET version = ? WHERE kind = 'source-facts' AND relative_path = ?")
+      .run('evidence-v0', FILE);
+    stableMismatch.close();
+
+    const db3 = openDb();
+    try {
+      const hash = fileContentHash(db3, FILE, getSourceText(db3, FILE));
+      expect(readCachedFileEvidence(db3, 'source-facts', FILE, hash)).toBeNull();
+      expect(getSourceFacts(db3, FILE)!.callables.map((callable) => callable.name)).toContain('greet');
+    } finally {
+      db3.close();
     }
   });
 

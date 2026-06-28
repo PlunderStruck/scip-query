@@ -10,16 +10,17 @@
 
 ## Measurements
 
-| Case                                                                 |                                                                           Before |         After |             Delta | Evidence                                                                          |
-| -------------------------------------------------------------------- | -------------------------------------------------------------------------------: | ------------: | ----------------: | --------------------------------------------------------------------------------- |
-| Vega_2.0 latest warm `recent-duplicates --json --full`               |                                                                           6.439s | 4.896s median |  -1.543s / -24.0% | Three post-change warm repeats: 4.924s, 4.896s, 4.896s; stdout 3,618 bytes.       |
-| Vega_2.0 output hash                                                 | 3,618 bytes / `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b` |          same |         unchanged | `node -e` hash check around `scip-query recent-duplicates --json --full`.         |
-| Vega_2.0 component timing `similar --json --full`                    |                                                                           1.504s |       pending |           pending | Callable candidate component.                                                     |
-| Vega_2.0 component timing `react-component-duplicates --json --full` |                                                                           3.203s |        3.204s | no standalone win | Cache helps aggregate commands that call multiple React detectors in one process. |
-| Vega_2.0 component timing `react-hook-candidates --json --full`      |                                                                           2.574s |        2.581s | no standalone win | Cache helps aggregate commands that call multiple React detectors in one process. |
-| Vega_2.0 component timing `vue-component-duplicates --json --full`   |                                                                           0.199s |       pending |           pending | Vue structure candidate component; negligible on Vega.                            |
-| Vega_2.0 component timing `vue-composable-candidates --json --full`  |                                                                           0.197s |       pending |           pending | Vue behavior candidate component; negligible on Vega.                             |
-| Vega_2.0 set-kernel smaller-set iteration trial                      |                                                                    4.897s-5.174s | 5.269s median |            slower | Output hash stayed unchanged, but repeats were 5.970s, 5.269s, 4.956s; reverted.  |
+| Case                                                                 |                                                                           Before |         After |              Delta | Evidence                                                                                                                                                                          |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------: | ------------: | -----------------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vega_2.0 latest warm `recent-duplicates --json --full`               |                                                                           6.439s | 4.896s median |   -1.543s / -24.0% | Three post-change warm repeats: 4.924s, 4.896s, 4.896s; stdout 3,618 bytes.                                                                                                       |
+| Vega_2.0 output hash                                                 | 3,618 bytes / `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b` |          same |          unchanged | `node -e` hash check around `scip-query recent-duplicates --json --full`.                                                                                                         |
+| Vega_2.0 component timing `similar --json --full`                    |                                                                           1.504s |       pending |            pending | Callable candidate component.                                                                                                                                                     |
+| Vega_2.0 component timing `react-component-duplicates --json --full` |                                                                           3.203s |        3.204s |  no standalone win | Cache helps aggregate commands that call multiple React detectors in one process.                                                                                                 |
+| Vega_2.0 component timing `react-hook-candidates --json --full`      |                                                                           2.574s |        2.581s |  no standalone win | Cache helps aggregate commands that call multiple React detectors in one process.                                                                                                 |
+| Vega_2.0 component timing `vue-component-duplicates --json --full`   |                                                                           0.199s |       pending |            pending | Vue structure candidate component; negligible on Vega.                                                                                                                            |
+| Vega_2.0 component timing `vue-composable-candidates --json --full`  |                                                                           0.197s |       pending |            pending | Vue behavior candidate component; negligible on Vega.                                                                                                                             |
+| Vega_2.0 set-kernel smaller-set iteration trial                      |                                                                    4.897s-5.174s | 5.269s median |             slower | Output hash stayed unchanged, but repeats were 5.970s, 5.269s, 4.956s; reverted.                                                                                                  |
+| Vega_2.0 stable evidence cache version after `0.10.9` bump           |                                                       multi-minute semantic miss |        5.287s | restores warm path | Existing `0.10.8` semantic callee rows reused by content/digest-compatible reads; stdout 3,618 bytes; SHA-256 `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`. |
 
 ## Current Pipeline
 
@@ -81,6 +82,9 @@ reactHookCandidates -C 10`.
   4.896s median.
 - Rejected: smaller-set iteration in the shared set kernel. Identical output
   hash, no real workload win.
+- Accepted: stable evidence-cache versioning with compatible legacy reads. This
+  avoids turning `recent-duplicates --full` into a cold semantic rebuild after a
+  package patch bump while keeping the same output hash.
 - Deferred: pair-level recent-file pruning in pairwise detectors. It may be a
   larger win, but must prove it does not change the command's ranked output
   contract unless the contract is explicitly widened.

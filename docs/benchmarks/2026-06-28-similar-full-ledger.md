@@ -38,12 +38,14 @@
 
 ## Measurements
 
-| Case | Before | After | Delta | Evidence |
-| --- | ---: | ---: | ---: | --- |
-| Vega_2.0 full-suite `similar --json --full` | 300.7s | pending | pending | `docs/validation/2026-06-28-vega-2-heavy-benchmark-result.md` |
-| Vega_2.0 focused warm `similar --json --full` | 315.3s | 2.160s | -313.2s / 146x faster | `scip-query bench --json --command "similar --json --full" --timeout-ms 600000`; stdout 88,859 bytes before and after |
-| Vega_2.0 focused warm `similar --json --full` confirmation | 315.3s | 1.503s | -313.8s / 210x faster | Same command rerun; stdout 88,859 bytes |
-| Vega_2.0 refreshed heavy matrix `similar --json --full` | 300.7s | 1.443s | -299.3s / 208x faster | `scip-query bench --json --include-heavy --timeout-ms 600000`; stdout 88,859 bytes |
+| Case                                                               |                           Before |            After |                 Delta | Evidence                                                                                                                                                           |
+| ------------------------------------------------------------------ | -------------------------------: | ---------------: | --------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Vega_2.0 full-suite `similar --json --full`                        |                           300.7s |          pending |               pending | `docs/validation/2026-06-28-vega-2-heavy-benchmark-result.md`                                                                                                      |
+| Vega_2.0 focused warm `similar --json --full`                      |                           315.3s |           2.160s | -313.2s / 146x faster | `scip-query bench --json --command "similar --json --full" --timeout-ms 600000`; stdout 88,859 bytes before and after                                              |
+| Vega_2.0 focused warm `similar --json --full` confirmation         |                           315.3s |           1.503s | -313.8s / 210x faster | Same command rerun; stdout 88,859 bytes                                                                                                                            |
+| Vega_2.0 refreshed heavy matrix `similar --json --full`            |                           300.7s |           1.443s | -299.3s / 208x faster | `scip-query bench --json --include-heavy --timeout-ms 600000`; stdout 88,859 bytes                                                                                 |
+| Vega_2.0 after `0.10.9` package bump, package-versioned cache miss |             1.5s warm-cache band | >30s before kill |            regression | Local `dist/cli.js` rebuilt at `0.10.9`; process reached multi-GB RSS because semantic rows existed under `0.10.8` only                                            |
+| Vega_2.0 stable evidence cache version                             | >30s miss / 1.5s warm-cache band |           2.169s |    restores warm path | `node dist/cli.js bench --json --command "similar --json --full"`; stdout 88,859 bytes; SHA-256 `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf` |
 
 ## Current-Pipeline Optimization Candidates
 
@@ -77,7 +79,14 @@
   cosine calculation during `similarAll` pair scoring. This preserves the
   existing candidate generation and scoring formula while avoiding repeated
   vector-length work per candidate pair.
-- Rejected: none yet.
+- Accepted: replace package-version evidence-cache reads with a stable payload
+  contract version plus compatible fallback reads keyed by content hash,
+  dependency digest, or project fingerprint. This restored Vega's existing
+  `0.10.8` semantic callee cache after the `0.10.9` package bump without
+  changing the `similar --json --full` output hash.
+- Rejected: a provider-local `definitionFromSymbol` cache. It passed focused
+  tests but did not make the Vega semantic callee-map phase complete within the
+  30s diagnostic window, so the source change was reverted.
 - Deferred: persistent index-time fingerprint tables are promising but larger
   than the first optimization batch; first measure where the current 300s is
   spent.

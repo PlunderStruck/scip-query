@@ -82,12 +82,31 @@ The 43.268s stale-abstractions run reproduced a cold/cache-fill outlier while
 the installed warmed command ran in 3.13s. The accepted cache keeps output
 byte-identical and drops the warmed focused bench to 2.362s.
 
+## Post Stable Evidence Cache Version Refresh
+
+Focused rerun after replacing package-version evidence-cache reads with stable
+payload-version reads plus content-compatible fallback to existing cache rows:
+
+| Command                                      | Current | stdout bytes | SHA-256                                                            |
+| -------------------------------------------- | ------: | -----------: | ------------------------------------------------------------------ |
+| `scip-query similar --json --full`           |  2.169s |       88,859 | `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf` |
+| `scip-query recent-duplicates --json --full` |  5.287s |        3,618 | `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b` |
+| `scip-query dead --json --full`              |  3.844s |    3,803,655 | not rehashed in this focused pass                                  |
+| `scip-query health --json`                   |  4.336s |       15,342 | not rehashed in this focused pass                                  |
+| `scip-query doc-drift --json --full`         |  4.885s |      963,953 | not rehashed in this focused pass                                  |
+
+The `0.10.9` package bump invalidated existing `0.10.8` semantic callee rows
+under the old package-version cache key, causing `similar --full` and
+`recent-duplicates --full` to fall into a multi-GB semantic rebuild. Stable
+evidence-cache versioning restores the warm semantic path while preserving the
+recorded output hashes.
+
 ## Biggest Confirmed Delta
 
 | Command                                       | Earlier heavy/focused baseline | Current warm | Notes                                                                                                                                                                                              |
 | --------------------------------------------- | -----------------------------: | -----------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `scip-query similar --json --full`            |  300.7s heavy / 315.3s focused |       1.507s | Same 88,859-byte output size; now about 209x faster than the focused baseline.                                                                                                                     |
-| `scip-query recent-duplicates --json --full`  |                         6.439s |       4.900s | Same 3,618-byte output and SHA-256 `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`; React profile cache avoids rebuilding per-file profiles inside the aggregate command.       |
+| `scip-query similar --json --full`            |  300.7s heavy / 315.3s focused |       2.169s | Same 88,859-byte output and SHA-256 `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf`; stable evidence-cache reads avoid post-version-bump semantic cache misses.                 |
+| `scip-query recent-duplicates --json --full`  |                         6.439s |       5.287s | Same 3,618-byte output and SHA-256 `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`; restored after the `0.10.9` package-version cache miss.                                     |
 | `scip-query health --json`                    |                         6.864s |       3.913s | Same 15,342-byte output and SHA-256 `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d`; latest warm matrix is materially lower, but attribution is mixed with runtime/cache noise. |
 | `scip-query diff-gate --json`                 |                         4.193s |       3.053s | Same 3,089-byte output and SHA-256 `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`; targeted similarity and incomplete-migration now reuse existing callee-index work.          |
 | `scip-query dead --json --full`               |                         4.325s |       3.312s | Same 3,803,655-byte output and SHA-256 `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1`; JS/TS exclusion prefilter now avoids ordinary React hook-call files.                    |
@@ -95,11 +114,10 @@ byte-identical and drops the warmed focused bench to 2.362s.
 
 ## Current Next Targets
 
-1. `recent-duplicates --json --full`: still the slowest full-matrix command at
-   4.900s, but the set-kernel trial was rejected because it did not improve the
-   real Vega workload.
-2. `health --json` and `doc-drift --json --full`: health is still around 4s and
-   doc-drift remains the next standalone full-matrix command above 3.5s.
+1. `recent-duplicates --json --full` and `doc-drift --json --full`: focused
+   post-cache-version runs are 5.287s and 4.885s respectively, making them the
+   current top standalone targets.
+2. `health --json`: latest focused run is 4.336s, still around the 4s band.
 3. `dead --json --full`: now around 3.31s in focused warm repeats; remaining
    work is likely caller-map, source-reference, or candidate definition
    correction rather than the JS/TS exclusion prefilter.

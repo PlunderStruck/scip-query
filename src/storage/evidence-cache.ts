@@ -6,8 +6,8 @@
  * evidence that is expensive to recompute (tree-sitter source facts, ts-morph
  * callee resolution) lives in a sibling `evidence.db`, keyed by sha256 of the
  * producing file's content (plus a direct-deps digest for cross-file-sensitive
- * evidence) and the CLI version. A key only matches while the bytes that
- * produced the value are unchanged, so stale reads are structurally
+ * evidence) and a stable payload version. A key only matches while the bytes
+ * that produced the value are unchanged, so stale reads are structurally
  * impossible at the single-file level.
  *
  * The cache must never fail a query: the first SQLite error (read-only
@@ -16,13 +16,10 @@
  */
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import type { ScipDatabase } from './db.js';
 import { createPerDbCache } from './per-db-cache.js';
-
-const require = createRequire(import.meta.url);
 
 export const EVIDENCE_DB_FILENAME = 'evidence.db';
 
@@ -32,11 +29,14 @@ export type FileEvidenceKind = 'source-facts' | 'doc-path-tokens' | 'source-impo
 interface EvidenceConnection {
   evidence: Database.Database;
   readFileEvidence: Database.Statement;
+  readLegacyFileEvidence: Database.Statement;
   writeFileEvidence: Database.Statement;
   readCallees: Database.Statement;
+  readLegacyCallees: Database.Statement;
   writeCallees: Database.Statement;
   dropStaleCallees: Database.Statement;
   readReferences: Database.Statement;
+  readLegacyReferences: Database.Statement;
   writeReferences: Database.Statement;
   dropStaleReferences: Database.Statement;
 }
@@ -76,20 +76,8 @@ const PROJECT_FINGERPRINT_CACHE = createPerDbCache<string, string | null>('evide
   clearGroups: ['whole-project'],
 });
 
-// Mirrors runtime/cli-support's package lookup; not imported because storage
-// must not depend on the runtime layer (runtime -> queries -> storage).
-function packageVersion(): string {
-  for (const path of ['../package.json', '../../package.json']) {
-    try {
-      return (require(path) as { version: string }).version;
-    } catch {
-      // Source runs from src/storage; bundled CLI runs from dist.
-    }
-  }
-  return '0.0.0';
-}
-
-const VERSION = packageVersion();
+const VERSION = 'evidence-v1';
+const LEGACY_VERSION_PREDICATE = "version NOT LIKE 'evidence-%'";
 
 // scip-query: ignore-wrapper — canonical hash helper; the cache key contract
 // (one algorithm, hex form) lives here instead of being repeated per caller.
@@ -172,12 +160,24 @@ function connectionFor(db: ScipDatabase): EvidenceConnection | null {
       readFileEvidence: evidence.prepare(
         'SELECT payload FROM file_evidence WHERE kind = ? AND relative_path = ? AND content_hash = ? AND version = ?',
       ),
+      readLegacyFileEvidence: evidence.prepare(
+        `SELECT payload FROM file_evidence
+         WHERE kind = ? AND relative_path = ? AND content_hash = ? AND ${LEGACY_VERSION_PREDICATE}
+         ORDER BY version DESC
+         LIMIT 1`,
+      ),
       writeFileEvidence: evidence.prepare(
         'INSERT OR REPLACE INTO file_evidence (kind, relative_path, content_hash, version, payload) VALUES (?, ?, ?, ?, ?)',
       ),
       readCallees: evidence.prepare(
         `SELECT payload FROM semantic_callees
          WHERE relative_path = ? AND symbol = ? AND content_hash = ? AND deps_digest = ? AND version = ?`,
+      ),
+      readLegacyCallees: evidence.prepare(
+        `SELECT payload FROM semantic_callees
+         WHERE relative_path = ? AND symbol = ? AND content_hash = ? AND deps_digest = ? AND ${LEGACY_VERSION_PREDICATE}
+         ORDER BY version DESC
+         LIMIT 1`,
       ),
       writeCallees: evidence.prepare(
         `INSERT OR REPLACE INTO semantic_callees
@@ -186,7 +186,13 @@ function connectionFor(db: ScipDatabase): EvidenceConnection | null {
       dropStaleCallees: evidence.prepare('DELETE FROM semantic_callees WHERE relative_path = ? AND content_hash != ?'),
       readReferences: evidence.prepare(
         `SELECT payload FROM semantic_references
-           WHERE relative_path = ? AND symbol = ? AND project_fingerprint = ? AND version = ?`,
+         WHERE relative_path = ? AND symbol = ? AND project_fingerprint = ? AND version = ?`,
+      ),
+      readLegacyReferences: evidence.prepare(
+        `SELECT payload FROM semantic_references
+         WHERE relative_path = ? AND symbol = ? AND project_fingerprint = ? AND ${LEGACY_VERSION_PREDICATE}
+         ORDER BY version DESC
+         LIMIT 1`,
       ),
       writeReferences: evidence.prepare(
         `INSERT OR REPLACE INTO semantic_references
@@ -217,9 +223,8 @@ export function readCachedFileEvidence(
   const connection = connectionFor(db);
   if (!connection) return null;
   try {
-    const row = connection.readFileEvidence.get(kind, relativePath, contentHash, VERSION) as
-      | { payload: string }
-      | undefined;
+    const row = (connection.readFileEvidence.get(kind, relativePath, contentHash, VERSION) ??
+      connection.readLegacyFileEvidence.get(kind, relativePath, contentHash)) as { payload: string } | undefined;
     return row?.payload ?? null;
   } catch (error) {
     disable(db, 'file_evidence read', error);
@@ -270,7 +275,8 @@ export function readCachedSemanticCallees(
   const connection = connectionFor(db);
   if (!connection) return null;
   try {
-    const row = connection.readCallees.get(relativePath, symbol, contentHash, depsDigest, VERSION) as
+    const row = (connection.readCallees.get(relativePath, symbol, contentHash, depsDigest, VERSION) ??
+      connection.readLegacyCallees.get(relativePath, symbol, contentHash, depsDigest)) as
       | { payload: string }
       | undefined;
     return row?.payload ?? null;
@@ -289,9 +295,8 @@ export function readCachedSemanticReferences(
   const connection = connectionFor(db);
   if (!connection) return null;
   try {
-    const row = connection.readReferences.get(relativePath, symbol, projectFingerprint, VERSION) as
-      | { payload: string }
-      | undefined;
+    const row = (connection.readReferences.get(relativePath, symbol, projectFingerprint, VERSION) ??
+      connection.readLegacyReferences.get(relativePath, symbol, projectFingerprint)) as { payload: string } | undefined;
     return row?.payload ?? null;
   } catch (error) {
     disable(db, 'semantic_references read', error);
