@@ -5,6 +5,7 @@ import { cached } from './cache.js';
 import { isTypeScriptLike, TYPESCRIPT_SEMANTIC_EXTENSIONS } from './source-kinds.js';
 import type { ProjectBundle } from './ts-morph-runtime.js';
 import type { Project, SourceFile } from 'ts-morph';
+import { profileSpan } from '../../runtime/profile.js';
 
 export interface SourceFileMatch {
   project: Project;
@@ -36,7 +37,11 @@ export function createTypeScriptSourceFiles(
   };
 
   const projectSourceFileIndexes = (): ProjectSourceFileIndex[] => {
-    sourceFileIndexes ??= buildProjectSourceFileIndexes(db.config.projectRoot, projects, indexedDocuments());
+    sourceFileIndexes ??= profileSpan(
+      'typescript.source-file-index',
+      () => buildProjectSourceFileIndexes(db.config.projectRoot, projects, indexedDocuments()),
+      () => ({ projects: projects.length, indexedDocuments: indexedDocuments().length }),
+    );
     return sourceFileIndexes;
   };
 

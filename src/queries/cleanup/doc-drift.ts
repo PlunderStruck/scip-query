@@ -6,6 +6,7 @@ import { fileContentHash, readCachedFileEvidence, writeCachedFileEvidence } from
 import { isRecord, stringArray } from '../../storage/evidence-payload.js';
 import { markdownCitationContext } from './doc-citation-context.js';
 import { matchingDocTerms } from './doc-terms.js';
+import { profileEnabled, profileSpan } from '../../runtime/profile.js';
 
 export type DocDriftIntent = 'current-guidance' | 'historical-note' | 'unknown';
 export type DocDriftActionTier = 'direct' | 'signal' | 'support';
@@ -327,45 +328,81 @@ export function docsCitingFiles(
   targets: ReadonlySet<string>,
 ): Array<{ doc: string; cited: string[]; citations: DocFileCitation[]; citedClaims: string[] }> {
   if (targets.size === 0) return [];
-  const tracked = getTrackedFiles(db) ?? new Set<string>();
-  const trackedBySuffix = buildSuffixIndex(tracked);
-  const targetCandidates = targetPathCandidates(targets, trackedBySuffix);
-  const out: Array<{ doc: string; cited: string[]; citations: DocFileCitation[]; citedClaims: string[] }> = [];
-  for (const docFile of tracked) {
-    if (!isLivingDoc(db, docFile)) continue;
-    const pathEvidence = docPathEvidence(db, docFile);
-    if (!pathEvidence) continue;
-    const citedByCandidate = citedTargetsFromCandidates(
-      pathEvidence.candidates,
-      targets,
-      targetCandidates,
-      tracked,
-      trackedBySuffix,
-    );
-    if (citedByCandidate.size === 0) continue;
+  const profiling = profileEnabled();
+  let trackedCount = 0;
+  let livingDocs = 0;
+  let unreadableDocs = 0;
+  let candidateMisses = 0;
+  let evidenceDocs = 0;
+  let citedDocs = 0;
+  return profileSpan(
+    'doc-reference.docs-citing-files',
+    () => {
+      const tracked = getTrackedFiles(db) ?? new Set<string>();
+      trackedCount = tracked.size;
+      const trackedBySuffix = buildSuffixIndex(tracked);
+      const targetCandidates = targetPathCandidates(targets, trackedBySuffix);
+      const out: Array<{ doc: string; cited: string[]; citations: DocFileCitation[]; citedClaims: string[] }> = [];
+      for (const docFile of tracked) {
+        if (!isLivingDoc(db, docFile)) continue;
+        if (profiling) livingDocs += 1;
+        let content: string;
+        try {
+          content = readFileSync(join(db.config.projectRoot, docFile), 'utf-8');
+        } catch {
+          if (profiling) unreadableDocs += 1;
+          continue;
+        }
+        if (!containsAnyPathCandidate(content, targetCandidates)) {
+          if (profiling) candidateMisses += 1;
+          continue;
+        }
+        const pathEvidence = docPathEvidence(db, docFile, content);
+        if (!pathEvidence) continue;
+        if (profiling) evidenceDocs += 1;
+        const citedByCandidate = citedTargetsFromCandidates(
+          pathEvidence.candidates,
+          targets,
+          targetCandidates,
+          tracked,
+          trackedBySuffix,
+        );
+        if (citedByCandidate.size === 0) continue;
 
-    const contextCandidates = [...new Set([...citedByCandidate.values()].flatMap((cited) => [...cited]))];
-    const contextsByCandidate = citationContextsForCandidates(pathEvidence.contextsByCandidate, contextCandidates);
-    const citations: DocFileCitation[] = [...citedByCandidate]
-      .map(([file, fileCandidates]) => ({
-        file,
-        contexts: uniqueCitationContexts(
-          [...fileCandidates].flatMap((candidate) => contextsByCandidate.get(candidate) ?? []),
-        ).slice(0, 3),
-      }))
-      .filter((citation) => citation.contexts.length > 0);
-    const cited = [...citedByCandidate.keys()];
-    if (cited.length > 0) {
-      const sortedCited = cited.sort();
-      out.push({
-        doc: docFile,
-        cited: sortedCited,
-        citations,
-        citedClaims: uniqueCitationContexts(citations.flatMap((citation) => citation.contexts)).slice(0, 3),
-      });
-    }
-  }
-  return out;
+        const contextCandidates = [...new Set([...citedByCandidate.values()].flatMap((cited) => [...cited]))];
+        const contextsByCandidate = citationContextsForCandidates(pathEvidence.contextsByCandidate, contextCandidates);
+        const citations: DocFileCitation[] = [...citedByCandidate]
+          .map(([file, fileCandidates]) => ({
+            file,
+            contexts: uniqueCitationContexts(
+              [...fileCandidates].flatMap((candidate) => contextsByCandidate.get(candidate) ?? []),
+            ).slice(0, 3),
+          }))
+          .filter((citation) => citation.contexts.length > 0);
+        const cited = [...citedByCandidate.keys()];
+        if (cited.length > 0) {
+          if (profiling) citedDocs += 1;
+          const sortedCited = cited.sort();
+          out.push({
+            doc: docFile,
+            cited: sortedCited,
+            citations,
+            citedClaims: uniqueCitationContexts(citations.flatMap((citation) => citation.contexts)).slice(0, 3),
+          });
+        }
+      }
+      return out;
+    },
+    () => ({
+      targets: targets.size,
+      trackedFiles: trackedCount,
+      livingDocs,
+      unreadableDocs,
+      candidateMisses,
+      evidenceDocs,
+      citedDocs,
+    }),
+  );
 }
 
 /** A doc that exists, isn't archival, and is eligible for drift tracking. */
@@ -491,12 +528,14 @@ function citationContextsForCandidates(
   return contexts;
 }
 
-function docPathEvidence(db: ScipDatabase, docFile: string): DocPathEvidence | null {
-  let content: string;
-  try {
-    content = readFileSync(join(db.config.projectRoot, docFile), 'utf-8');
-  } catch {
-    return null;
+function docPathEvidence(db: ScipDatabase, docFile: string, contentOverride?: string): DocPathEvidence | null {
+  let content = contentOverride;
+  if (content === undefined) {
+    try {
+      content = readFileSync(join(db.config.projectRoot, docFile), 'utf-8');
+    } catch {
+      return null;
+    }
   }
 
   const contentHash = fileContentHash(db, docFile, content);
@@ -509,6 +548,13 @@ function docPathEvidence(db: ScipDatabase, docFile: string): DocPathEvidence | n
   const evidence = extractDocPathEvidence(content);
   writeCachedFileEvidence(db, 'doc-path-evidence', docFile, contentHash, serializeDocPathEvidence(evidence));
   return evidence;
+}
+
+function containsAnyPathCandidate(content: string, candidates: ReadonlySet<string>): boolean {
+  for (const candidate of candidates) {
+    if (content.includes(candidate)) return true;
+  }
+  return false;
 }
 
 function extractDocPathEvidence(content: string): DocPathEvidence {

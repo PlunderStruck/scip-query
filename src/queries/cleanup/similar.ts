@@ -18,6 +18,7 @@ import { createPerDbValue } from '../../storage/per-db-cache.js';
 import { applyScanLimit } from '../query-utils.js';
 import { fileContentHash, readCachedFileEvidence, writeCachedFileEvidence } from '../../storage/evidence-cache.js';
 import { profileEnabled, profileSpan } from '../../runtime/profile.js';
+import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 
 export interface SimilarSymbolResult {
   symbolA: string;
@@ -75,7 +76,13 @@ export interface SimilarEvidenceClassification {
 export function similar(
   db: ScipDatabase,
   symbolPattern: string,
-  opts: { minSimilarity?: number; limit?: number; scanLimit?: number; semantic?: boolean } = {},
+  opts: {
+    minSimilarity?: number;
+    limit?: number;
+    scanLimit?: number;
+    semantic?: boolean;
+    sourceCandidateMode?: 'full' | 'target-pruned';
+  } = {},
 ): SimilarSymbolResult[] {
   const { minSimilarity = 0.4, limit = 20 } = opts;
 
@@ -87,6 +94,7 @@ export function similar(
       minSimilarity,
       limit,
       scanLimit: opts.scanLimit,
+      candidateMode: opts.sourceCandidateMode ?? 'full',
     });
   }
 
@@ -99,6 +107,7 @@ export function similar(
     minSimilarity,
     limit,
     scanLimit: opts.scanLimit,
+    candidateMode: opts.sourceCandidateMode ?? 'full',
   });
 }
 
@@ -729,7 +738,7 @@ function isInfrastructureCallee(callee: string): boolean {
 function similarBySourceShape(
   db: ScipDatabase,
   symbolPattern: string,
-  opts: { minSimilarity: number; limit: number; scanLimit?: number },
+  opts: { minSimilarity: number; limit: number; scanLimit?: number; candidateMode?: 'full' | 'target-pruned' },
 ): SimilarSymbolResult[] {
   const target = findSourceFingerprint(db, symbolPattern);
   if (!target || target.tokens.size < 3) {
@@ -738,36 +747,69 @@ function similarBySourceShape(
 
   const minSimilarity = opts.minSimilarity >= 0.5 ? opts.minSimilarity : 0.3;
   const results: SimilarSymbolResult[] = [];
-  const candidates = sourceCandidatesForTarget(target, getSourceFingerprintIndex(db, { scanLimit: opts.scanLimit }));
+  const candidateMode = opts.candidateMode ?? 'full';
+  let candidateCount = 0;
+  let comparedPairs = 0;
+  let sharedSkips = 0;
+  let similaritySkips = 0;
 
-  for (const candidate of candidates) {
-    if (candidate.symbol === target.symbol || candidate.tokens.size < 3) continue;
+  return profileSpan(
+    'similar.source-shape',
+    () => {
+      const candidates =
+        candidateMode === 'target-pruned'
+          ? targetPrunedSourceCandidatesForTarget(db, target, { minSimilarity, scanLimit: opts.scanLimit })
+          : sourceCandidatesFromIndex(target, getSourceFingerprintIndex(db, { scanLimit: opts.scanLimit }));
+      candidateCount = candidates.length;
 
-    const shared = intersection(target.tokens, candidate.tokens);
-    if (shared.size < 2) continue;
+      for (const candidate of candidates) {
+        if (candidate.symbol === target.symbol || candidate.tokens.size < 3) continue;
+        comparedPairs += 1;
 
-    const union = new Set([...target.tokens, ...candidate.tokens]);
-    const similarity = union.size > 0 ? shared.size / union.size : 0;
-    if (similarity < minSimilarity) continue;
+        const shared = intersection(target.tokens, candidate.tokens);
+        if (shared.size < 2) {
+          sharedSkips += 1;
+          continue;
+        }
 
-    results.push({
-      symbolA: target.symbol,
-      shortNameA: shortenSymbol(target.symbol),
-      fileA: target.file,
-      symbolB: candidate.symbol,
-      shortNameB: shortenSymbol(candidate.symbol),
-      fileB: candidate.file,
-      similarity,
-      similarityBasis: 'source-tokens',
-      sharedCallees: [...shared].sort(),
-      uniqueToA: [...difference(target.tokens, candidate.tokens)].sort(),
-      uniqueToB: [...difference(candidate.tokens, target.tokens)].sort(),
-      ...classifySimilarityEvidence([...shared], 'source-tokens'),
-    });
-  }
+        const union = new Set([...target.tokens, ...candidate.tokens]);
+        const similarity = union.size > 0 ? shared.size / union.size : 0;
+        if (similarity < minSimilarity) {
+          similaritySkips += 1;
+          continue;
+        }
 
-  results.sort((a, b) => b.similarity - a.similarity || a.shortNameB.localeCompare(b.shortNameB));
-  return results.slice(0, opts.limit);
+        results.push({
+          symbolA: target.symbol,
+          shortNameA: shortenSymbol(target.symbol),
+          fileA: target.file,
+          symbolB: candidate.symbol,
+          shortNameB: shortenSymbol(candidate.symbol),
+          fileB: candidate.file,
+          similarity,
+          similarityBasis: 'source-tokens',
+          sharedCallees: [...shared].sort(),
+          uniqueToA: [...difference(target.tokens, candidate.tokens)].sort(),
+          uniqueToB: [...difference(candidate.tokens, target.tokens)].sort(),
+          ...classifySimilarityEvidence([...shared], 'source-tokens'),
+        });
+      }
+
+      results.sort((a, b) => b.similarity - a.similarity || a.shortNameB.localeCompare(b.shortNameB));
+      return results.slice(0, opts.limit);
+    },
+    () => ({
+      symbol: target.symbol,
+      file: target.file,
+      targetTokens: target.tokens.size,
+      candidateMode,
+      candidates: candidateCount,
+      comparedPairs,
+      sharedSkips,
+      similaritySkips,
+      results: results.length,
+    }),
+  );
 }
 
 export function classifySimilarityEvidence(
@@ -1093,7 +1135,7 @@ function buildSourceFingerprintIndex(corpus: readonly SourceFingerprint[]): Sour
   return { corpus, candidateByToken, docFreq, ubiquityThreshold };
 }
 
-function sourceCandidatesForTarget(target: SourceFingerprint, index: SourceFingerprintIndex): SourceFingerprint[] {
+function sourceCandidatesFromIndex(target: SourceFingerprint, index: SourceFingerprintIndex): SourceFingerprint[] {
   const candidates = new Map<string, SourceFingerprint>();
   for (const token of target.tokens) {
     for (const candidate of index.candidateByToken.get(token) ?? []) {
@@ -1104,6 +1146,95 @@ function sourceCandidatesForTarget(target: SourceFingerprint, index: SourceFinge
 
   if (candidates.size > 0) return [...candidates.values()];
   return index.corpus.filter((fingerprint) => fingerprint.symbol !== target.symbol);
+}
+
+function targetPrunedSourceCandidatesForTarget(
+  db: ScipDatabase,
+  target: SourceFingerprint,
+  opts: { minSimilarity: number; scanLimit?: number },
+): SourceFingerprint[] {
+  const profiling = profileEnabled();
+  const index = new ProjectIndex(db);
+  const requiredSharedTokens = requiredSharedSourceTokens(target.tokens.size, opts.minSimilarity);
+  let scannedFiles = 0;
+  let readableFiles = 0;
+  let candidateFiles = 0;
+  const files = profileSpan(
+    'similar.source-shape.target-files',
+    () => {
+      const targetTokens = [...target.tokens];
+      const matches: string[] = [];
+      for (const relativePath of indexedDocumentPaths(db, { includeIgnored: false })) {
+        scannedFiles += 1;
+        const source = getSourceText(db, relativePath);
+        if (!source) continue;
+        readableFiles += 1;
+        if (sourceContainsAtLeastTokens(source, targetTokens, requiredSharedTokens)) matches.push(relativePath);
+      }
+      candidateFiles = matches.length;
+      return matches;
+    },
+    () => ({
+      symbol: target.symbol,
+      targetTokens: target.tokens.size,
+      requiredSharedTokens,
+      scannedFiles,
+      readableFiles,
+      candidateFiles,
+    }),
+  );
+
+  let definitionCount = 0;
+  const definitions = profileSpan(
+    'similar.source-shape.target-definitions',
+    () => {
+      const rows = applyScanLimit(
+        index.productionCallableDefinitions({
+          files,
+          sortByLocDesc: typeof opts.scanLimit === 'number' && opts.scanLimit > 0,
+        }),
+        opts.scanLimit,
+      );
+      definitionCount = rows.length;
+      return rows;
+    },
+    () => ({ symbol: target.symbol, candidateFiles, scanLimit: opts.scanLimit, definitionCount }),
+  );
+
+  let fingerprintCount = 0;
+  const fingerprints = profileSpan(
+    'similar.source-shape.target-fingerprints',
+    () => {
+      const rows = sourceFingerprintsForDefinitions(db, definitions);
+      if (profiling) fingerprintCount = rows.length;
+      return rows;
+    },
+    () => ({ symbol: target.symbol, definitionCount, fingerprintCount }),
+  );
+
+  return fingerprints.filter((fingerprint) => fingerprint.symbol !== target.symbol);
+}
+
+function requiredSharedSourceTokens(targetTokenCount: number, minSimilarity: number): number {
+  return Math.max(2, Math.ceil(targetTokenCount * minSimilarity));
+}
+
+function sourceContainsAtLeastTokens(source: string, tokens: readonly string[], minMatches: number): boolean {
+  if (tokens.length < minMatches) return false;
+  const normalized = source.toLowerCase();
+  let matches = 0;
+  for (const token of tokens) {
+    if (sourceContainsToken(normalized, token)) {
+      matches += 1;
+      if (matches >= minMatches) return true;
+    }
+  }
+  return false;
+}
+
+function sourceContainsToken(normalizedSource: string, token: string): boolean {
+  if (token === 'num') return /\b\d+\b/.test(normalizedSource);
+  return normalizedSource.includes(token);
 }
 
 // scip-query: ignore-extract — this builds source-token fingerprints; scoped

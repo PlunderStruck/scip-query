@@ -125,21 +125,16 @@ function unusedImportDrift(
   return results;
 }
 
-function hasConservativeImportUse(
-  db: ScipDatabase,
-  file: string,
-  dep: string,
-  opts: { semantic: boolean },
-): boolean {
+function hasConservativeImportUse(db: ScipDatabase, file: string, dep: string, opts: { semantic: boolean }): boolean {
   // This file "depends on" dep but the SCIP graph does not show symbol
   // references. That can happen for type-only imports, side-effect imports,
   // Vue templates, or source/semantic reference gaps.
-  if (opts.semantic && hasSemanticImportUse(db, file, dep)) return true;
   if (hasUsedSourceImport(db, file, dep)) return true;
   if (isTypeOnlyImport(db, file, dep)) return true;
   if (isLikelyTypeOnlyDep(dep)) return true;
   if (isSideEffectImport(db, file, dep)) return true;
-  return isVueSingleFileComponent(dep);
+  if (isVueSingleFileComponent(dep)) return true;
+  return opts.semantic && hasSemanticImportUse(db, file, dep);
 }
 
 function layerViolationDrift(depGraph: Map<string, Set<string>>): DriftResult[] {

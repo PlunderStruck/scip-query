@@ -24,6 +24,7 @@ import { similar } from '../cleanup/similar.js';
 import { unusedParams } from '../cleanup/unused-params.js';
 import type { FindingSuppression } from '../../domain/types.js';
 import { isCallableSymbol, leafName, leafSuffix } from '../../symbols/symbol-parser.js';
+import { profileSpan } from '../../runtime/profile.js';
 
 export type DiffGateCheck =
   | 'echo'
@@ -215,7 +216,17 @@ export function diffGate(
       result.skipped.push({ check, reason: 'skipped via --skip' });
       return;
     }
-    run();
+    const findingsBefore = result.findings.length;
+    const skippedBefore = result.skipped.length;
+    const checksRunBefore = result.checksRun.length;
+    profileSpan(`diff-gate.check.${check}`, run, () => ({
+      check,
+      changedFiles: changedFiles.length,
+      changedSymbols: impact.changedSymbols.length,
+      findingsAdded: result.findings.length - findingsBefore,
+      skippedAdded: result.skipped.length - skippedBefore,
+      checksRunAdded: result.checksRun.length - checksRunBefore,
+    }));
   };
   runUnlessSkipped('echo', () =>
     runEchoCheck(
@@ -366,7 +377,13 @@ function runEchoCheck(
   for (const changedSymbol of changedSymbols.slice(0, maxEchoChecks)) {
     if (!isCallableSymbol(changedSymbol.symbol)) continue;
     if (symbolPreexistedAtBase(changedSymbol)) continue;
-    const matches = similar(db, changedSymbol.symbol, { minSimilarity, limit: 5, scanLimit, semantic });
+    const matches = similar(db, changedSymbol.symbol, {
+      minSimilarity,
+      limit: 5,
+      scanLimit,
+      semantic,
+      sourceCandidateMode: 'target-pruned',
+    });
     const eligibleMatches: EchoMatch[] = [];
     for (const match of matches) {
       const otherFile = match.fileA === changedSymbol.file ? match.fileB : match.fileA;

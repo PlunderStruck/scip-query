@@ -31,6 +31,7 @@
 | Vega_2.0 definition-exclusion cache `dead --json --full`         |                            2.742s baseline median |                          1.968s current median |                                                             28.2% faster | Paired local CLI baseline/current repeats; stdout 3,803,655 bytes; SHA-256 `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1`                                                                               |
 | Vega_2.0 definition-exclusion cache `__health-phase dead --full` |                            2.053s baseline median |                          1.265s current median |                                                             38.4% faster | Paired local CLI baseline/current repeats; stdout 189 bytes; SHA-256 `648c7b6d6251e1d8761b0000e7663ae5f9971554db6cd0acd771dc9bb36db4ab`                                                                                     |
 | Vega_2.0 definition-exclusion cache `health --json`              |                            2.931s baseline median |                          2.961s current median |                                                          roughly neutral | Paired local CLI baseline/current repeats; stdout 15,342 bytes; SHA-256 `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d`                                                                                  |
+| Vega_2.0 cold semantic-reference fill `dead --json --full`       |                                    24.400s direct |                                 14.310s direct |                                                             41.4% faster | Compared temporary `0720bac` worktree to current local CLI after deleting `semantic_references`; stdout 3,804,419 bytes; SHA-256 `b7afa7e3cdd88c02ed31ffaf02da9547b6187591ef681dc67882dbfef76bc2e8`                         |
 
 ## Initial Hypotheses
 
@@ -89,6 +90,11 @@
   baseline median to 1.968s and the internal dead phase from 2.053s to 1.265s.
   Composite `health --json` stayed neutral because the dead phase is no longer
   the only critical path.
+- Accepted: batch semantic reference cache misses and use a filtered inverted
+  TypeScript symbol scan for large non-member batches. Member symbols still use
+  precise `findReferences()` so override/interface related-symbol accuracy is
+  preserved. Vega cold `dead --json --full` preserved the baseline output hash
+  while moving from 24.400s to 14.310s.
 
 ## Verification
 
@@ -114,6 +120,8 @@
 - Passed: paired Vega local CLI baseline/current hash probes after definition
   exclusion cache for `dead --json --full`, `__health-phase dead --full`, and
   `health --json`.
+- Passed: Vega legacy/current cold hash probe after semantic reference bulk
+  scan for `dead --json --full`.
 - Passed: `scip-query reindex`
 - Passed: `scip-query diff-impact --json`
 - Passed: `scip-query unused-params --json --full`

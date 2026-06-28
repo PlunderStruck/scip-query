@@ -44,6 +44,15 @@ The newest cold semantic-callee pass cuts the Vega `similar --json --full`
 cache-miss path from roughly five minutes to about twelve seconds by batching
 TypeScript callee extraction, preloading project source files, caching the raw
 TypeScript checker per project, and traversing compiler AST nodes directly.
+The newest cold semantic-reference pass cuts Vega `dead --json --full`
+semantic-reference cache-fill time by using a filtered inverted TypeScript
+symbol scan for large non-member batches while preserving precise
+`findReferences()` for member symbols.
+The newest remaining semantic pass extends the inverted scan to safe member
+symbols, lowers the bulk threshold for medium batches, trims wrapper semantic
+candidates before source fallback, reorders drift's conservative skip gates,
+and cuts ts-morph project-bundle startup by skipping eager dependency
+resolution.
 Focused reruns after the full matrix are recorded separately below so partial
 measurements do not silently reshuffle the whole ranking.
 
@@ -119,6 +128,105 @@ cache write are small by comparison at 318ms and 26ms.
 The attempted syntactic `minCallees` prefilter is intentionally excluded from
 the accepted scoreboard because it changed the result corpus from 922 to 912
 and output size from 88,859 to 88,858 bytes.
+
+## Post Cold Semantic-Reference Refresh
+
+Focused reruns with the local built CLI after deleting Vega's
+`semantic_references` evidence rows to force the cold semantic reference path.
+The comparison baseline used a temporary worktree at commit `0720bac`.
+
+| Command / cache state                  |  Before | Current | stdout bytes | SHA-256                                                            |
+| -------------------------------------- | ------: | ------: | -----------: | ------------------------------------------------------------------ |
+| `dead --json --full`, cold direct      | 24.400s | 14.310s |    3,804,419 | `b7afa7e3cdd88c02ed31ffaf02da9547b6187591ef681dc67882dbfef76bc2e8` |
+| `dead --json --full`, cold profiled    | 25.556s | 13.333s |    3,804,419 | same                                                               |
+| `dead --json --full`, warm after cache |       - |  1.064s |    3,804,419 | same output size                                                   |
+
+The accepted cold profile reports `semantic.references.compute-misses` at
+12.051s. Inside it, `typescript.references-map.inverted-scan` handles 3,623
+non-member definitions in 3.034s after reducing checker lookups to 103,232,
+while precise member fallback handles 572 definitions in 5.386s. The final
+output hash matches the legacy baseline.
+
+## Post Remaining Semantic Optimization Refresh
+
+Focused reruns with the local built CLI after extending the inverted reference
+scan to safe member symbols, lowering the bulk threshold to 32, trimming
+wrapper semantic candidates, reordering drift skip gates, profiling TypeScript
+provider startup, and setting `skipFileDependencyResolution` for ts-morph
+project bundles.
+
+| Command                                                                    | Before this pass | Final accepted cold | Warm after cache | stdout bytes | Output check   |
+| -------------------------------------------------------------------------- | ---------------: | ------------------: | ---------------: | -----------: | -------------- |
+| `scip-query stale-abstractions --json --full`                              |          34.863s |              7.729s |           0.966s |       83,654 | `f8e0a9c7...`  |
+| `scip-query isolated --json --full`                                        |           8.797s |              6.327s |           1.158s |          130 | `04e17adc...`  |
+| `scip-query wrapper-candidates --json --full`                              |          18.857s |              7.316s |           1.228s |       78,437 | `311a9254...`  |
+| `scip-query imports artifact-generation-run-store.ts --json --full`        |           7.146s |              3.946s |    not persisted |        4,723 | byte-identical |
+| `scip-query unused-imports artifact-generation-run-store.ts --json --full` |           7.138s |              3.947s |    not persisted |          203 | byte-identical |
+| `scip-query imports work-session.service.ts --json --full`                 |           7.776s |              4.024s |    not persisted |        3,148 | byte-identical |
+| `scip-query unused-imports work-session.service.ts --json --full`          |           7.770s |              4.211s |    not persisted |          196 | byte-identical |
+| `scip-query drift --json --full`                                           |           0.773s |              0.712s |              n/a |      725,988 | `4303db17...`  |
+
+The final accepted cold profile is
+`/tmp/scipq-remaining-bench/final-accepted-cold.jsonl`. The largest remaining
+cold spans are `typescript.references-map.inverted-scan` at 13.566s total
+across the three cleanup reports and `typescript.import-usage.file` at 9.866s
+total across four import reports. TypeScript project-bundle startup is now
+about 0.8s per CLI process instead of about 3.8s. Import usage is not persisted
+in `evidence.db`, so import commands still pay their per-file semantic scan on
+each process.
+
+## Full Heavy Cold Matrix Refresh
+
+Full `bench --json --cold-index --include-heavy --timeout-ms 600000 --profile`
+rerun from `/Users/aydansalois/Documents/GitHub/Vega_2.0` with the local built
+CLI after the remaining semantic optimization pass.
+
+- Total measured time: 141.903s.
+- Cold index rebuild: 41.045s for 1,779 indexed files and 104,090 symbols.
+- Warm index reuse check: 0.452s.
+- Command matrix total: 100.406s.
+- Profile JSONL: `/tmp/vega-heavy-cold-20260628-125130.jsonl`.
+- Result JSON: `/tmp/vega-heavy-cold-20260628-125130.json`.
+- No command timed out. `diff-gate` exited 1 because Vega has findings.
+
+| Command                                           | Duration | Exit | stdout bytes |
+| ------------------------------------------------- | -------: | ---: | -----------: |
+| `scip-query diff-gate --json`                     |  23.027s |    1 |       19,708 |
+| `scip-query health --json`                        |  11.461s |    0 |       15,342 |
+| `scip-query similar --json --full`                |  10.049s |    0 |       88,859 |
+| `scip-query complexity-hotspots --json --full`    |   8.032s |    0 |    2,160,083 |
+| `scip-query wrapper-candidates --json --full`     |   7.938s |    0 |       78,437 |
+| `scip-query stale-abstractions --json --full`     |   7.785s |    0 |       83,654 |
+| `scip-query dead --json --full`                   |   7.466s |    0 |    3,822,329 |
+| `scip-query isolated --json --full`               |   6.648s |    0 |          130 |
+| `scip-query passthrough-candidates --json --full` |   5.513s |    0 |      146,739 |
+| `scip-query incomplete-migration --json --full`   |   5.111s |    0 |        1,711 |
+| `scip-query doc-drift --json --full`              |   1.685s |    0 |      963,953 |
+| `scip-query recent-duplicates --json --full`      |   1.540s |    0 |        3,618 |
+| `scip-query cleanup-plan --verify --json`         |   0.801s |    0 |          237 |
+| `scip-query diff-impact --json`                   |   0.791s |    0 |        7,020 |
+| `scip-query similar-files --json --full`          |   0.535s |    0 |      194,564 |
+| `scip-query status --json`                        |   0.505s |    0 |        6,724 |
+| `scip-query status --capabilities`                |   0.496s |    0 |        2,223 |
+| `scip-query unused-params --json --full`          |   0.365s |    0 |          135 |
+| `scip-query kind-counts`                          |   0.207s |    0 |          201 |
+| `scip-query capabilities --json`                  |   0.154s |    0 |        4,106 |
+| `scip-query capability-matrix --json`             |   0.150s |    0 |        4,111 |
+| `scip-query stats`                                |   0.147s |    0 |          131 |
+
+The top cold profile spans show that remaining cold time is concentrated in
+semantic evidence fill rather than report rendering:
+
+| Span                                                               |  Total |
+| ------------------------------------------------------------------ | -----: |
+| `similar --full`: `semantic.callees.compute-misses`                | 8.994s |
+| `complexity-hotspots --full`: `semantic.references.compute-misses` | 6.774s |
+| `stale-abstractions --full`: `semantic.references.compute-misses`  | 6.677s |
+| `wrapper-candidates --full`: `semantic.references.compute-misses`  | 6.639s |
+| `dead --full`: `semantic.references.compute-misses`                | 5.944s |
+| `isolated --full`: `semantic.references.compute-misses`            | 5.317s |
+| `passthrough-candidates --full`: `semantic.callees.compute-misses` | 4.606s |
+| `incomplete-migration --full`: `semantic.callees.compute-misses`   | 4.112s |
 
 ## Latest Focused Refresh
 
@@ -691,6 +799,37 @@ cache-hit path.
 | `scip-query diff-gate --json`           |                  1.326s | 2.226s outlier, then 1.202s-1.156s-1.148s |        3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
 | `scip-query diff-gate --json` only echo |                  0.860s | 0.991s outlier, then 0.723s-0.688s-0.696s |        1,211 | `162f52479ad23d4e481f4fe0cea288a3f0dfbe568b056190bd01e5c766697a90` |
 | `scip-query similar --json --full`      |                  0.939s | 0.984s-0.955s-0.949s-0.966s               |       88,859 | `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf` |
+
+## Post Diff-Gate Hyper Optimization Refresh
+
+Focused cold-like rerun with the rebuilt local CLI after adding check-level
+diff-gate spans, scoping incomplete-migration helper discovery to changed
+files, adding a doc-reference target path prefilter, and bounding diff-gate
+echo source fallback by the exact minimum shared-token count implied by
+`minSimilarity`.
+
+This did not rerun the full heavy matrix. It cleared Vega's `file_evidence`,
+`semantic_callees`, and `semantic_references` rows to isolate command-time
+cache fill while preserving the existing SCIP index.
+
+| Command / cache state                      | Previous cold-like | Current cold-like | Exit | stdout bytes | SHA-256                                                            |
+| ------------------------------------------ | -----------------: | ----------------: | ---: | -----------: | ------------------------------------------------------------------ |
+| `scip-query diff-gate --json`, cache clear |            22.119s |            3.046s |    1 |       19,708 | `8cb44814e1c5ab700c1caef3b8c8667ee6cb11b939ac7d2d20315c41d9f64d5e` |
+
+Accepted profile:
+`/tmp/vega-diffgate-after-echo-threshold-20260628203105.jsonl`.
+
+The final run is byte-identical to the baseline output
+`/tmp/vega-diffgate-direct-profile-20260628-130927.json`. Evidence writes
+dropped from `doc-path-evidence:11290`, `file-definitions:1779`,
+`source-facts:1779`, and `source-fingerprints:864` to `doc-path-evidence:8`,
+`file-definitions:9`, `source-facts:9`, and `source-fingerprints:3`.
+
+The final top spans are `doc-reference` at 1.351s, `echo` at 0.762s, and
+`co-change-partner` at 0.341s. Echo's hot source fallback was
+`ActiveNavIndicator`: 30 target source tokens, 24 required shared tokens,
+1,779 files scanned, 3 candidate files, 34 candidate definitions, and 0
+findings.
 
 ## Biggest Confirmed Delta
 

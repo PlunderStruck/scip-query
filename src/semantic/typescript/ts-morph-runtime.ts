@@ -28,7 +28,7 @@ export function createTsMorphProjectBundles(tsMorph: TsMorphModule, tsconfigPath
     tsconfigPath,
     project: new tsMorph.Project({
       tsConfigFilePath: tsconfigPath,
-      skipFileDependencyResolution: false,
+      skipFileDependencyResolution: true,
     }),
   }));
 }

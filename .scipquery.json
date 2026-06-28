@@ -42,6 +42,12 @@
       "check": "new-dead",
       "file": "src/semantic/typescript/ts-morph-provider.ts",
       "reason": "Accepted interface-dispatch false positive: TsMorphSemanticProvider.calleesForDefinitions is called through the SemanticProvider bulk path in src/semantic/shared-primitives.ts; refs reports those interface call sites."
+    },
+    {
+      "id": "SQ485D60C5C638",
+      "check": "new-dead",
+      "file": "src/semantic/typescript/ts-morph-provider.ts",
+      "reason": "Accepted interface-dispatch false positive: TsMorphSemanticProvider.referencesForDefinitions is called through the SemanticProvider bulk path in src/semantic/shared-primitives.ts; refs reports those interface call sites."
     }
   ],
   "declaredCouplings": [

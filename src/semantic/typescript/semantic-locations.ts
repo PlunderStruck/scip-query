@@ -58,7 +58,7 @@ export function referenceLocationsWithoutDeclaration(
   return out;
 }
 
-function toSemanticLocation(node: Node, projectRoot: string): SemanticLocation {
+export function toSemanticLocation(node: Node, projectRoot: string): SemanticLocation {
   const sourceFile = node.getSourceFile();
   const pos = sourceFile.getLineAndColumnAtPos(node.getStart());
   return {

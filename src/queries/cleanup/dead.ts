@@ -25,6 +25,7 @@ import {
   recordReferenceAtLeast,
   recordReference,
 } from '../internal/reference-counts.js';
+import { profileSpan } from '../../runtime/profile.js';
 
 export interface DeadSymbolResult {
   relativePath: string;
@@ -97,29 +98,56 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     semantic = true,
   } = opts;
 
-  const definitions = applyScanLimit(
-    deadCandidateDefinitions(db, {
-      scope,
-      minLoc,
-      includeTests,
-      includeMembers,
-    }),
-    scanLimit,
+  let candidateDefinitionCount = 0;
+  const definitions = profileSpan(
+    'dead.candidates',
+    () => {
+      const candidates = applyScanLimit(
+        deadCandidateDefinitions(db, {
+          scope,
+          minLoc,
+          includeTests,
+          includeMembers,
+        }),
+        scanLimit,
+      );
+      candidateDefinitionCount = candidates.length;
+      return candidates;
+    },
+    () => ({ definitions: candidateDefinitionCount }),
   );
 
   const inactiveBarrelPaths = skipBarrels ? new Set(getInactiveBarrelPaths(db)) : new Set<string>();
+  let symbolsWithReferences = 0;
   const referencesBySymbol = deadCodeOnly
     ? emptyReferenceCounts()
-    : loadMentionReferenceCounts(
-        db,
-        inactiveBarrelPaths,
-        definitions.map((definition) => definition.symbolId),
+    : profileSpan(
+        'dead.mention-reference-counts',
+        () => {
+          const counts = loadMentionReferenceCounts(
+            db,
+            inactiveBarrelPaths,
+            definitions.map((definition) => definition.symbolId),
+          );
+          symbolsWithReferences = counts.size;
+          return counts;
+        },
+        () => ({ definitions: definitions.length, symbolsWithReferences }),
       );
+  let mentionedSymbolCount = 0;
   const scipReferencedIds = deadCodeOnly
-    ? loadMentionReferencedSymbolIds(
-        db,
-        definitions.map((definition) => definition.symbolId),
-        inactiveBarrelPaths,
+    ? profileSpan(
+        'dead.mentioned-symbol-ids',
+        () => {
+          const ids = loadMentionReferencedSymbolIds(
+            db,
+            definitions.map((definition) => definition.symbolId),
+            inactiveBarrelPaths,
+          );
+          mentionedSymbolCount = ids.size;
+          return ids;
+        },
+        () => ({ definitions: definitions.length, referencedSymbols: mentionedSymbolCount }),
       )
     : new Set<number>();
 
@@ -129,9 +157,17 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
         (definition) => !hasCrossFileReference(referencesBySymbol, definition.symbolId, definition.relativePath),
       );
   if (deadCodeOnly) {
-    supplementDeadCodeOnlySourceReferences(db, sourceCandidates, referencesBySymbol, inactiveBarrelPaths);
+    profileSpan(
+      'dead.source-fallback.dead-code-only',
+      () => supplementDeadCodeOnlySourceReferences(db, sourceCandidates, referencesBySymbol, inactiveBarrelPaths),
+      () => ({ definitions: sourceCandidates.length }),
+    );
   } else {
-    supplementReferencesFromAst(db, sourceCandidates, referencesBySymbol, inactiveBarrelPaths);
+    profileSpan(
+      'dead.source-fallback.ast',
+      () => supplementReferencesFromAst(db, sourceCandidates, referencesBySymbol, inactiveBarrelPaths),
+      () => ({ definitions: sourceCandidates.length }),
+    );
   }
 
   const callerCandidates = deadCodeOnly
@@ -139,11 +175,16 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     : sourceCandidates.filter(
         (definition) => !hasCrossFileReference(referencesBySymbol, definition.symbolId, definition.relativePath),
       );
-  supplementReferencesFromCallerMap(db, callerCandidates, referencesBySymbol, {
-    includeTests,
-    inactiveBarrelPaths,
-    includeSemantic: !deadCodeOnly && semantic,
-  });
+  profileSpan(
+    'dead.caller-map-supplement',
+    () =>
+      supplementReferencesFromCallerMap(db, callerCandidates, referencesBySymbol, {
+        includeTests,
+        inactiveBarrelPaths,
+        includeSemantic: !deadCodeOnly && semantic,
+      }),
+    () => ({ definitions: callerCandidates.length, semantic: !deadCodeOnly && semantic }),
+  );
 
   const reportedDefinitions = deadCodeOnly
     ? sourceCandidates.filter((definition) => !hasAnyReference(referencesBySymbol, definition.symbolId))
@@ -484,20 +525,43 @@ function supplementReferencesFromCallerMap(
   };
 
   if (useBulkSemanticCallers) {
-    supplementCallerFilesFromMentionChunks(db, definitions, recordCallerFile);
+    profileSpan(
+      'dead.caller-map.mention-chunks',
+      () => supplementCallerFilesFromMentionChunks(db, definitions, recordCallerFile),
+      () => ({ definitions: definitions.length }),
+    );
   } else {
-    for (const definition of definitions) {
-      const callers = callerRowsForSymbol(db, definition, { semantic: canUseSemantic });
-      if (callers.length === 0) continue;
-      for (const caller of callers) {
-        recordCallerFile(definition, caller.file);
-      }
-    }
+    profileSpan(
+      'dead.caller-map.per-symbol',
+      () => {
+        for (const definition of definitions) {
+          const callers = callerRowsForSymbol(db, definition, { semantic: canUseSemantic });
+          if (callers.length === 0) continue;
+          for (const caller of callers) {
+            recordCallerFile(definition, caller.file);
+          }
+        }
+      },
+      () => ({ definitions: definitions.length, semantic: canUseSemantic }),
+    );
   }
 
   if (!useBulkSemanticCallers) return;
-  const semanticCallersBySymbol = semanticCallerMap(db, definitions);
-  for (const definition of definitions) {
+  let semanticCandidateCount = 0;
+  const semanticCandidates = profileSpan(
+    'dead.caller-map.semantic-candidates',
+    () => {
+      const candidates = definitions.filter(
+        (definition) => !hasCrossFileReference(referencesBySymbol, definition.symbolId, definition.relativePath),
+      );
+      semanticCandidateCount = candidates.length;
+      return candidates;
+    },
+    () => ({ definitions: definitions.length, semanticCandidates: semanticCandidateCount }),
+  );
+  if (semanticCandidates.length === 0) return;
+  const semanticCallersBySymbol = semanticCallerMap(db, semanticCandidates);
+  for (const definition of semanticCandidates) {
     const callerFiles = semanticCallersBySymbol.get(definition.symbolId);
     if (!callerFiles) continue;
     for (const callerFile of callerFiles) recordCallerFile(definition, callerFile);

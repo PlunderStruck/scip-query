@@ -372,7 +372,7 @@ function newCallablesInDiff(
   renamedFromByFile: ReadonlyMap<string, string>,
   baseContentAt: BaseContentReader,
 ) {
-  return index.productionCallableDefinitions({ requireFunctionLikeSymbol: true }).filter((def) => {
+  return index.productionCallableDefinitions({ files: [...changed], requireFunctionLikeSymbol: true }).filter((def) => {
     if (!changed.has(def.relativePath)) return false;
     const basePath = renamedFromByFile.get(def.relativePath) ?? def.relativePath;
     const content = baseContentAt(basePath);

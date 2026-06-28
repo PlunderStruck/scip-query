@@ -11,6 +11,7 @@ import { runCandidateAnalysis } from '../internal/candidate-scan.js';
 import { definitionConsumerFileMap, partitionDefinitionConsumers } from '../internal/consumer-evidence.js';
 import { mergeSetMaps } from '../../symbols/references/caller-evidence.js';
 import { boundaryEvidenceForSurfaces } from './boundary-evidence.js';
+import { profileSpan } from '../../runtime/profile.js';
 
 export type WrapperActionTier = 'direct' | 'signal';
 
@@ -73,13 +74,36 @@ function consumerMapForWrapperCandidates(
   opts: { semantic: boolean },
 ): Map<number, Set<string>> {
   const indexedConsumerFileMap = definitionConsumerFileMap(index, symbols, {
-    semantic: opts.semantic,
+    semantic: false,
     sourceFallback: false,
   });
+  let semanticCandidates: IndexedDefinition[] = [];
+  if (opts.semantic) {
+    profileSpan(
+      'wrapper.semantic-candidates',
+      () => {
+        semanticCandidates = symbols.filter(
+          (symbol) => externalCallerFiles(db, index, symbol, indexedConsumerFileMap).length <= 1,
+        );
+      },
+      () => ({ symbols: symbols.length, semanticCandidates: semanticCandidates.length }),
+    );
+  }
+  const semanticConsumerFileMap =
+    semanticCandidates.length === 0
+      ? new Map<number, Set<string>>()
+      : definitionConsumerFileMap(index, semanticCandidates, {
+          semantic: true,
+          sourceFallback: false,
+        });
+  const consumerFileMap =
+    semanticConsumerFileMap.size === 0
+      ? indexedConsumerFileMap
+      : mergeSetMaps(indexedConsumerFileMap, semanticConsumerFileMap);
   const symbolById = new Map(symbols.map((symbol) => [symbol.symbolId, symbol]));
   const fallbackCandidatesById = new Map<number, IndexedDefinition>();
   for (const symbol of symbols) {
-    const externalFiles = externalCallerFiles(db, index, symbol, indexedConsumerFileMap);
+    const externalFiles = externalCallerFiles(db, index, symbol, consumerFileMap);
     if (externalFiles.length > 1) continue;
     fallbackCandidatesById.set(symbol.symbolId, symbol);
     if (externalFiles.length !== 1) continue;
@@ -94,8 +118,8 @@ function consumerMapForWrapperCandidates(
   }
   const fallbackCandidates = [...fallbackCandidatesById.values()];
   return fallbackCandidates.length === 0
-    ? indexedConsumerFileMap
-    : mergeSetMaps(indexedConsumerFileMap, index.sourceFallbackCallerFiles(fallbackCandidates));
+    ? consumerFileMap
+    : mergeSetMaps(consumerFileMap, index.sourceFallbackCallerFiles(fallbackCandidates));
 }
 
 // scip-query: ignore-extract — this is the single-symbol wrapper decision:
