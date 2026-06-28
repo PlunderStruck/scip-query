@@ -85,7 +85,11 @@ export function similar(
     semantic: opts.semantic !== false,
   });
   if (results.length > 0) return results.slice(0, limit);
-  return similarBySourceShape(db, symbolPattern, { minSimilarity, limit });
+  return similarBySourceShape(db, symbolPattern, {
+    minSimilarity,
+    limit,
+    scanLimit: opts.scanLimit,
+  });
 }
 
 function compareAgainstFingerprints(
@@ -511,7 +515,7 @@ function isInfrastructureCallee(callee: string): boolean {
 function similarBySourceShape(
   db: ScipDatabase,
   symbolPattern: string,
-  opts: { minSimilarity: number; limit: number },
+  opts: { minSimilarity: number; limit: number; scanLimit?: number },
 ): SimilarSymbolResult[] {
   const target = findSourceFingerprint(db, symbolPattern);
   if (!target || target.tokens.size < 3) {
@@ -520,7 +524,7 @@ function similarBySourceShape(
 
   const minSimilarity = opts.minSimilarity >= 0.5 ? opts.minSimilarity : 0.3;
   const results: SimilarSymbolResult[] = [];
-  const candidates = sourceCandidatesForTarget(target, getSourceFingerprintIndex(db));
+  const candidates = sourceCandidatesForTarget(target, getSourceFingerprintIndex(db, { scanLimit: opts.scanLimit }));
 
   for (const candidate of candidates) {
     if (candidate.symbol === target.symbol || candidate.tokens.size < 3) continue;
@@ -819,19 +823,37 @@ function buildSourceFingerprintTokens(
 
 // Same memo rationale (and group membership) as CALLEE_FINGERPRINT_CORPUS:
 // the lexical fallback corpus tokenizes every production callable's source.
-const SOURCE_FINGERPRINT_CORPUS = createPerDbValue<SourceFingerprint[]>('source-fingerprint-corpus', {
+const SOURCE_FINGERPRINT_CORPUS = createPerDbValue<Map<string, SourceFingerprint[]>>('source-fingerprint-corpus', {
   clearGroups: ['whole-project', 'definition-catalog'],
 });
-const SOURCE_FINGERPRINT_INDEX = createPerDbValue<SourceFingerprintIndex>('source-fingerprint-index', {
+const SOURCE_FINGERPRINT_INDEX = createPerDbValue<Map<string, SourceFingerprintIndex>>('source-fingerprint-index', {
   clearGroups: ['whole-project', 'definition-catalog'],
 });
 
-function getAllSourceFingerprints(db: ScipDatabase): SourceFingerprint[] {
-  return SOURCE_FINGERPRINT_CORPUS.get(db, () => buildSourceFingerprints(db));
+function sourceFingerprintCacheKey(opts: { scanLimit?: number }): string {
+  return `${opts.scanLimit ?? ''}`;
 }
 
-function getSourceFingerprintIndex(db: ScipDatabase): SourceFingerprintIndex {
-  return SOURCE_FINGERPRINT_INDEX.get(db, () => buildSourceFingerprintIndex(getAllSourceFingerprints(db)));
+function getAllSourceFingerprints(db: ScipDatabase, opts: { scanLimit?: number } = {}): SourceFingerprint[] {
+  const byOptions = SOURCE_FINGERPRINT_CORPUS.get(db, () => new Map());
+  const key = sourceFingerprintCacheKey(opts);
+  let corpus = byOptions.get(key);
+  if (!corpus) {
+    corpus = buildSourceFingerprints(db, opts);
+    byOptions.set(key, corpus);
+  }
+  return corpus;
+}
+
+function getSourceFingerprintIndex(db: ScipDatabase, opts: { scanLimit?: number } = {}): SourceFingerprintIndex {
+  const byOptions = SOURCE_FINGERPRINT_INDEX.get(db, () => new Map());
+  const key = sourceFingerprintCacheKey(opts);
+  let index = byOptions.get(key);
+  if (!index) {
+    index = buildSourceFingerprintIndex(getAllSourceFingerprints(db, opts));
+    byOptions.set(key, index);
+  }
+  return index;
 }
 
 function buildSourceFingerprintIndex(corpus: readonly SourceFingerprint[]): SourceFingerprintIndex {
@@ -873,12 +895,17 @@ function sourceCandidatesForTarget(target: SourceFingerprint, index: SourceFinge
 // scip-query: ignore-extract — this builds source-token fingerprints; scoped
 // definitions, file-kind filtering, snippets, and token extraction are one
 // text-similarity pass.
-function buildSourceFingerprints(db: ScipDatabase): SourceFingerprint[] {
+function buildSourceFingerprints(db: ScipDatabase, opts: { scanLimit?: number } = {}): SourceFingerprint[] {
   const index = new ProjectIndex(db);
+  const { scanLimit } = opts;
   // The shared production gate owns candidate policy (tests, rust test
   // modules, ignored paths, suppression comments) — no local re-filtering.
-  return index
-    .productionCallableDefinitions()
+  return applyScanLimit(
+    index.productionCallableDefinitions({
+      sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
+    }),
+    scanLimit,
+  )
     .map((definition) => ({
       symbol: definition.symbol,
       file: definition.relativePath,

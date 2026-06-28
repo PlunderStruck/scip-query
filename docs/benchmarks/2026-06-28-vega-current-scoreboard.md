@@ -6,9 +6,10 @@ React profile-cache, source identifier prefilter, diff-gate callee-index reuse,
 JS/TS framework-exclusion prefilter, doc path evidence cache, SQLite
 statement-cache, dead scoped-cache reuse, wrapper source-fallback prefilter, and
 incomplete-migration lazy-index passes. The focused dead refresh also includes
-the definition-exclusion persistent cache. Focused reruns after the full matrix
-are recorded separately below so partial measurements do not silently reshuffle
-the whole ranking.
+the definition-exclusion persistent cache, and the focused diff-gate refreshes
+include callable and bounded source-fallback prefilters. Focused reruns after
+the full matrix are recorded separately below so partial measurements do not
+silently reshuffle the whole ranking.
 
 ## Corpus
 
@@ -289,17 +290,36 @@ Focused paired rerun with the local built CLI after skipping non-callable
 changed symbols before the diff-gate echo check calls `similar()`, plus an
 early non-function guard inside `similar()`'s callee lookup.
 
-| Command / probe                                  | Baseline median | Current median | Delta   | stdout bytes | SHA-256                                                            |
-| ------------------------------------------------ | --------------: | -------------: | ------: | -----------: | ------------------------------------------------------------------ |
-| `scip-query diff-gate --json`                    |          2.955s |         2.920s |   -34ms |        3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
-| `only echo`                                      |          2.147s |         2.118s |   -29ms |        1,211 | `162f52479ad23d4e481f4fe0cea288a3f0dfbe568b056190bd01e5c766697a90` |
-| `only echo --max-echo-checks 1`                  |          2.113s |         0.356s | -1.757s |        1,341 | `96a1a06be3e0b814fe881eacf5fd3d1399290df9535cbaf3c3727518465977d3` |
-| `scip-query similar DiffGateFinding --json --full` |       0.211s |         0.153s |   -58ms |          241 | `aad94553fb65ca62538c6974685bff36443869c09142c68bef04c06c35c00825` |
+| Command / probe                                    | Baseline median | Current median |   Delta | stdout bytes | SHA-256                                                            |
+| -------------------------------------------------- | --------------: | -------------: | ------: | -----------: | ------------------------------------------------------------------ |
+| `scip-query diff-gate --json`                      |          2.955s |         2.920s |   -34ms |        3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
+| `only echo`                                        |          2.147s |         2.118s |   -29ms |        1,211 | `162f52479ad23d4e481f4fe0cea288a3f0dfbe568b056190bd01e5c766697a90` |
+| `only echo --max-echo-checks 1`                    |          2.113s |         0.356s | -1.757s |        1,341 | `96a1a06be3e0b814fe881eacf5fd3d1399290df9535cbaf3c3727518465977d3` |
+| `scip-query similar DiffGateFinding --json --full` |          0.211s |         0.153s |   -58ms |          241 | `aad94553fb65ca62538c6974685bff36443869c09142c68bef04c06c35c00825` |
 
 The full Vega diff still contains callable changed symbols, so the aggregate
 gate improvement is small. Diffs whose echo window is dominated by constants,
 types, or other non-callable symbols avoid the expensive similarity index path
 entirely while keeping byte-identical output.
+
+## Post Diff-Gate Source-Fallback Scan-Limit Refresh
+
+Focused paired rerun with the local built CLI after keying the lexical
+source-fingerprint fallback by scan limit and applying the same bounded
+candidate policy used by callee fingerprints. This preserves `--full` behavior
+while avoiding a complete source-token corpus for bounded large-index callers
+such as diff-gate echo.
+
+| Command / probe                      | Baseline median | Current median |  Delta | stdout bytes | SHA-256                                                            |
+| ------------------------------------ | --------------: | -------------: | -----: | -----------: | ------------------------------------------------------------------ |
+| `scip-query diff-gate --json`        |          2.913s |         2.620s | -294ms |        3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
+| `only echo`                          |          2.123s |         1.842s | -281ms |        1,211 | `162f52479ad23d4e481f4fe0cea288a3f0dfbe568b056190bd01e5c766697a90` |
+| `similar ActiveNavIndicator --json`  |          2.182s |         1.911s | -272ms |          226 | `3316707fbf6cbab3f4543fecbe5e65a223d06bd2e563db876965ff7fc9c93c6d` |
+| `similar ProjectHeroTintMenu --json` |          2.166s |         1.892s | -274ms |       10,384 | `9544740bea6d4b7efa31d3033ddfedb36035776049b1ce5e0e2f4258c0d393e8` |
+| `scip-query similar --json --full`   |          1.409s |         1.380s |  -28ms |       88,859 | `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf` |
+
+All probes remained byte-identical. The unbounded `similar --json --full`
+guardrail confirms the complete corpus path is unchanged.
 
 ## Biggest Confirmed Delta
 
@@ -309,16 +329,15 @@ entirely while keeping byte-identical output.
 | `scip-query recent-duplicates --json --full`  |                         6.439s |       1.936s | Same 3,618-byte output and SHA-256 `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`; full-mode scans skip old-old pairs and React profile rows now persist across CLI processes.                                                                                                                                                        |
 | `scip-query doc-drift --json --full`          |                         3.472s |       1.085s | Same 963,953-byte output and SHA-256 `7f8765a247b9e6a0ab2cbd0e99b38b51acf7ce689cd7b7b02165cdb80f97cc8c`; markdown path candidates and citation contexts now persist as content-hash evidence.                                                                                                                                                             |
 | `scip-query health --json`                    |                         6.864s |       3.913s | Same 15,342-byte output and SHA-256 `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d`; latest warm matrix is materially lower, but attribution is mixed with runtime/cache noise.                                                                                                                                                        |
-| `scip-query diff-gate --json`                 |                         4.193s |       3.053s | Same 3,089-byte output and SHA-256 `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`; targeted similarity and incomplete-migration now reuse existing callee-index work.                                                                                                                                                                 |
+| `scip-query diff-gate --json`                 |                         4.193s |       2.620s | Same 3,089-byte output and SHA-256 `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`; targeted similarity reuses callee-index work, skips non-callable echo targets, and bounds lexical source fallback for large-index callers.                                                                                                         |
 | `scip-query dead --json --full`               |                         4.325s |       1.968s | Same 3,803,655-byte output and SHA-256 `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1`; JS/TS exclusion prefilter avoids ordinary React hook-call files, SQL statements are cached per connection, dead reuses scoped definition caches through source fallback, and framework definition exclusions persist as content-hash evidence. |
 | `scip-query stale-abstractions --json --full` |      43.268s cold / 3.13s warm |       2.362s | Same 83,654-byte output and SHA-256 `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2`; source fallback now reuses per-file import local-name maps.                                                                                                                                                                                       |
 
 ## Current Next Targets
 
-1. `diff-gate --json` and `health --json` are effectively tied at the top of the
-   latest full warm matrix. The latest focused diff-gate echo prefilter moves
-   the paired Vega `diff-gate --json` median from 2.955s to 2.920s, while
-   `health --json` remains around 2.9s.
+1. `health --json` is now the likely top warm target, still hovering around
+   2.9s in focused runs. The latest focused diff-gate source-fallback pass moves
+   the paired Vega `diff-gate --json` median from 2.913s to 2.620s.
 2. The latest focused dead probe drops `dead --json --full` to 1.968s, below
    `wrapper-candidates --json --full` and `stale-abstractions --json --full`
    from the last full matrix. The next likely standalone targets are wrapper

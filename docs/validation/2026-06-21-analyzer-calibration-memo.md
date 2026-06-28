@@ -52,7 +52,7 @@ Implementation anchors:
 | Doc reference gate        | `scip-query code runDocReferenceCheck --json`             | `runDocReferenceCheck()` is at `src/queries/impact/diff-gate.ts:642` and now skips docs changed anywhere in the same git diff, including Markdown files outside the SCIP index. |
 | New dead gate             | `scip-query code runNewDeadCheck --json`                  | `runNewDeadCheck()` is at `src/queries/impact/diff-gate.ts:876`.                                                                                                                |
 | Baseline gate             | `scip-query code runBaselineCheck --json`                 | `runBaselineCheck()` is at `src/queries/impact/diff-gate.ts:947`.                                                                                                               |
-| Wrapper detector          | `scip-query code wrapperCandidates --json`                | `wrapperCandidates()` is at `src/queries/cleanup/wrapper-candidates.ts:46`; `consumerMapForWrapperCandidates()` is at `src/queries/cleanup/wrapper-candidates.ts:69`.             |
+| Wrapper detector          | `scip-query code wrapperCandidates --json`                | `wrapperCandidates()` is at `src/queries/cleanup/wrapper-candidates.ts:46`; `consumerMapForWrapperCandidates()` is at `src/queries/cleanup/wrapper-candidates.ts:69`.           |
 | Similar detector          | `scip-query code similarAll --json`                       | `similarAll()` is at `src/queries/cleanup/similar.ts:192` and now reuses cached weighted magnitudes from the callee fingerprint index during pair scoring.                      |
 | Co-change detector        | `scip-query code coChange --json`                         | `coChange()` is at `src/queries/impact/co-change.ts:47`.                                                                                                                        |
 | Vue pressure detector     | `scip-query code vueLargeViewPressure --json`             | `vueLargeViewPressure()` is at `src/queries/frontend/vue-large-view-pressure.ts:20`.                                                                                            |
@@ -364,9 +364,18 @@ The current maintainability sweep rechecked the diff-gate source references afte
 ## 2026-06-27 Citation Refresh
 
 The persistent-refresh coordination slice rechecked the `diffGate()` citation. The diff-gate entrypoint still owns the same check lifecycle and still delegates to the same check-family helpers before root-cause grouping. The current reindex/watch/config changes do not alter the analyzer-calibration conclusions in this memo.
+
 ## 2026-06-28 Diff-Gate Echo Follow-Up
 
 The calibration references to `similar.ts` and `diff-gate.ts` remain accurate.
 This follow-up only adds a non-function early return to `similar()` callee
 lookup and a callable-symbol prefilter before diff-gate echo calls similarity;
 the listed diff-gate checks and analyzer calibration surfaces are unchanged.
+
+## 2026-06-28 Source-Fallback Scan-Limit Follow-Up
+
+The `similar.ts` calibration reference remains accurate after the bounded
+source-fallback change. The new behavior only makes targeted similarity pass
+its existing scan-limit budget into lexical source-shape fallback for bounded
+callers; analyzer categories, score calibration, and unbounded `similar --full`
+behavior are unchanged.

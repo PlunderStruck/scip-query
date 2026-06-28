@@ -19,6 +19,7 @@
 | Vega_2.0 incomplete-migration-only probe                 |                                         1.548s |                                1.478s-1.485s |                                               about 4%-5% faster | `diff-gate --json --skip echo --skip co-change-partner --skip doc-reference --skip unused-params --skip new-dead`                             |
 | Vega_2.0 `incomplete-migration --json --full` lazy index |                           1.623s paired median |                         1.432s paired median |                                                     11.8% faster | stdout 1,101 bytes; SHA-256 `8c9573e427ee68a30e74bb1d27fbd9d4b49ec02b095c3d7fa7440d2317fd4c51`                                                |
 | Vega_2.0 `diff-gate --json` after lazy index             |                           2.860s paired median |                         2.872s paired median |                                                          neutral | stdout 3,089 bytes; SHA-256 `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`                                                |
+| Vega_2.0 `diff-gate --json` after source fallback limit  |                           2.913s paired median |                         2.620s paired median |                                                     10.1% faster | stdout 3,089 bytes; SHA-256 `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`                                                |
 
 ## Current Pipeline
 
@@ -49,6 +50,10 @@
   `incomplete-migration --json --full` avoids the global index while preserving
   output. Full `diff-gate --json` is neutral on this corpus because other checks
   dominate the combined command.
+- Accepted: apply the existing scan-limit budget to source-shape similarity
+  fallback for bounded callers. The unbounded `similar --json --full` path still
+  builds the complete source-fingerprint corpus, while diff-gate echo avoids
+  tokenizing the full corpus after callee similarity finds no result.
 - Deferred: parallelizing independent diff-gate checks. The current serial
   order lets incomplete-migration reuse the echo-built index after this change;
   parallel execution would need shared-cache and output-order care.

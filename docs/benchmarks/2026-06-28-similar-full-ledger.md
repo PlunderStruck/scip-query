@@ -32,11 +32,15 @@
 - `buildCalleeFingerprintIndex` computes callee document frequencies, IDF
   weights, a ubiquity threshold, a callee-to-fingerprint index, cached weighted
   magnitudes, and median IDF.
-  Source: `scip-query code 'src/queries/cleanup/similar.ts:424-454'`.
+  Source: `scip-query code 'src/queries/cleanup/similar.ts:428-457'`.
 - 2026-06-28 focus-pruning refresh: `similarAll()` can now accept an internal
   focus-file set so `recent-duplicates --full` skips old-old pairs that cannot
   become findings. Direct `similar --full` output remains unchanged because the
   public command does not pass that option.
+- 2026-06-28 bounded source-fallback refresh: targeted `similar()` now passes
+  its scan limit into the lexical source-shape fallback. Bounded callers such as
+  diff-gate echo use a bounded source-fingerprint corpus, while unbounded
+  `similar --json --full` still builds the complete corpus.
 - `comparePair` computes weighted cosine similarity, drops weak pairs, shortens
   symbols, computes unique callee sets, and classifies evidence.
   Source: `scip-query code comparePair -C 8`.
@@ -95,9 +99,17 @@
 - Deferred: persistent index-time fingerprint tables are promising but larger
   than the first optimization batch; first measure where the current 300s is
   spent.
+
 ## 2026-06-28 Non-Function Target Follow-Up
 
 The callee fingerprint index contract above is unchanged. `similar()` now
 returns before constructing `ProjectIndex` or reading callee rows when the
 matched target is not function-like, preserving the same empty-result behavior
 for type/interface/module-like targets while avoiding wasted setup.
+
+## 2026-06-28 Bounded Source-Fallback Follow-Up
+
+The `similar --full` contract remains unchanged. The source-shape fallback now
+uses the same scan-limit budget as callee fingerprints for bounded callers, but
+the public unbounded `similar --json --full` command still uses the complete
+source-fingerprint corpus.

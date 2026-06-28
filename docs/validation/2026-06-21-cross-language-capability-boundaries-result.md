@@ -104,9 +104,18 @@ Standard gates completed after the Rust smoke checks:
 ## Next Slice
 
 The next validation slice should be AVL-014, public command surface coverage. It will compare the command registry with the inventory, protocol, and ledger so no public analyzer is being silently omitted from the validation program.
+
 ## 2026-06-28 Similar Target Follow-Up
 
 The `similar.ts` capability-boundary notes remain accurate. The follow-up only
 short-circuits non-function-like targets before callee evidence setup; source
 token fallback, structural-overlap classification, and cross-language evidence
 boundaries are unchanged.
+
+## 2026-06-28 Source-Fallback Scan-Limit Follow-Up
+
+The capability-boundary notes remain accurate after bounded source-shape
+fallback. The change only lets bounded callers pass their scan-limit budget
+into the lexical source-fingerprint corpus; it does not change
+`structural-overlap`, source-token evidence classification, or cross-language
+support boundaries.

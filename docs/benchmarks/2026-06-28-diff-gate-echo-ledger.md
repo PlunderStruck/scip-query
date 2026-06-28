@@ -26,7 +26,7 @@ code outside the diff.
 - `runEchoCheck()` in `src/queries/impact/diff-gate.ts:351-412` loops over
   changed symbols up to `maxEchoChecks`, skips symbols that preexisted at the
   base ref, and calls `similar(db, changedSymbol.symbol, { minSimilarity,
-  limit: 5, scanLimit, semantic })`. Source:
+limit: 5, scanLimit, semantic })`. Source:
   `scip-query plan-context runEchoCheck`; `scip-query code runEchoCheck -C 60`.
 - `similar()` in `src/queries/cleanup/similar.ts:72-89` calls `findCallees()`,
   rejects non-function-like symbols, compares callee fingerprints, and falls
@@ -44,34 +44,34 @@ code outside the diff.
 
 Refreshed Vega_2.0 local CLI medians before source edits:
 
-| Command                                           | Median | Exit | stdout bytes | SHA-256                                                            |
-| ------------------------------------------------- | -----: | ---: | -----------: | ------------------------------------------------------------------ |
-| `health --json`                                   | 2.939s |    0 |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
-| `diff-gate --json`                                | 2.906s |    1 |        3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
-| `dead --json --full`                              | 1.989s |    0 |    3,803,655 | `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1` |
-| `wrapper-candidates --json --full`                | 2.192s |    0 |       78,437 | `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58` |
-| `stale-abstractions --json --full`                | 2.175s |    0 |       83,654 | `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2` |
+| Command                            | Median | Exit | stdout bytes | SHA-256                                                            |
+| ---------------------------------- | -----: | ---: | -----------: | ------------------------------------------------------------------ |
+| `health --json`                    | 2.939s |    0 |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `diff-gate --json`                 | 2.906s |    1 |        3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
+| `dead --json --full`               | 1.989s |    0 |    3,803,655 | `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1` |
+| `wrapper-candidates --json --full` | 2.192s |    0 |       78,437 | `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58` |
+| `stale-abstractions --json --full` | 2.175s |    0 |       83,654 | `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2` |
 
 Diff-gate check isolation on Vega_2.0:
 
-| Case              | Median |
-| ----------------- | -----: |
-| all checks        | 3.033s |
-| skip echo         | 1.980s |
-| only echo         | 2.182s |
-| only incomplete   | 1.243s |
-| only co-change    | 0.712s |
+| Case               | Median |
+| ------------------ | -----: |
+| all checks         | 3.033s |
+| skip echo          | 1.980s |
+| only echo          | 2.182s |
+| only incomplete    | 1.243s |
+| only co-change     | 0.712s |
 | only doc-reference | 0.697s |
-| only unused       | 1.069s |
-| only new-dead     | 0.373s |
+| only unused        | 1.069s |
+| only new-dead      | 0.373s |
 
 Echo cap probe:
 
-| `--max-echo-checks` | Time   |
+| `--max-echo-checks` |   Time |
 | ------------------: | -----: |
-| 0                   | 0.584s |
-| 1                   | 2.133s |
-| 8                   | 2.147s |
+|                   0 | 0.584s |
+|                   1 | 2.133s |
+|                   8 | 2.147s |
 
 Vega_2.0 `diff-impact --json` reports 8 changed symbols. The first changed
 symbol is `NAV_TRANSITION`, a constant, so any callee or callable-signature
@@ -96,27 +96,69 @@ work before the function-like check is wasted.
 Accepted both guards. Paired baseline/current runs against the previous source
 tree preserved output hashes:
 
-| Probe                                             | Baseline | Current | Delta  | Output |
-| ------------------------------------------------- | -------: | ------: | -----: | ------ |
-| `only-echo --max-echo-checks 1`                   |   2.113s |  0.356s | -1.757s | same   |
-| `only-echo`                                       |   2.147s |  2.118s |  -29ms | same   |
-| `diff-gate --json`                                |   2.955s |  2.920s |  -34ms | same   |
-| `similar DiffGateFinding --json --full`           |   0.211s |  0.153s |  -58ms | same   |
+| Probe                                   | Baseline | Current |   Delta | Output |
+| --------------------------------------- | -------: | ------: | ------: | ------ |
+| `only-echo --max-echo-checks 1`         |   2.113s |  0.356s | -1.757s | same   |
+| `only-echo`                             |   2.147s |  2.118s |   -29ms | same   |
+| `diff-gate --json`                      |   2.955s |  2.920s |   -34ms | same   |
+| `similar DiffGateFinding --json --full` |   0.211s |  0.153s |   -58ms | same   |
 
 The largest win appears when a diff's echo window is dominated by constants or
 type-like symbols. The full Vega_2.0 diff still contains callable symbols, so
 the aggregate `diff-gate` improvement is intentionally recorded as modest.
 
+## Follow-Up: Source Fallback Scan Limit
+
+After the callable prefilter, Vega_2.0 still spends most echo time in the first
+callable target that falls through to source-shape similarity:
+
+| Probe                                |   Time | Rows |
+| ------------------------------------ | -----: | ---: |
+| `similar ActiveNavIndicator --json`  | 2.384s |    0 |
+| `similar NavItems --json`            | 1.227s |    1 |
+| `similar ProjectHeroTintMenu --json` | 2.184s |    6 |
+
+`similarBySourceShape()` in `src/queries/cleanup/similar.ts:511-553` currently
+calls `getSourceFingerprintIndex(db)` without the `scanLimit` that the bounded
+large-index command path passes to callee similarity. Source:
+`scip-query plan-context similarBySourceShape`;
+`scip-query code similarBySourceShape -C 80`.
+
+`buildSourceFingerprints()` in `src/queries/cleanup/similar.ts:876-890`
+currently tokenizes every production callable source snippet. Source:
+`scip-query code getSourceFingerprintIndex -C 80`.
+
+Hypothesis: key the source-fingerprint corpus/index by scan limit and use the
+same `applyScanLimit()` policy as `buildCalleeFingerprints()` for bounded large
+commands. This should preserve `--full` behavior, align bounded source fallback
+with the documented bounded command budget, and reduce default diff-gate echo
+fallback cost if Vega's findings remain byte-identical.
+
+Accepted. Paired baseline/current runs against commit `522579f` preserved
+output hashes while reducing the bounded source fallback used by echo:
+
+| Probe                                | Baseline | Current |  Delta | stdout bytes | SHA-256                                                            |
+| ------------------------------------ | -------: | ------: | -----: | -----------: | ------------------------------------------------------------------ |
+| `similar ActiveNavIndicator --json`  |   2.182s |  1.911s | -272ms |          226 | `3316707fbf6cbab3f4543fecbe5e65a223d06bd2e563db876965ff7fc9c93c6d` |
+| `similar ProjectHeroTintMenu --json` |   2.166s |  1.892s | -274ms |       10,384 | `9544740bea6d4b7efa31d3033ddfedb36035776049b1ce5e0e2f4258c0d393e8` |
+| `only-echo`                          |   2.123s |  1.842s | -281ms |        1,211 | `162f52479ad23d4e481f4fe0cea288a3f0dfbe568b056190bd01e5c766697a90` |
+| `diff-gate --json`                   |   2.913s |  2.620s | -294ms |        3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
+| `similar --json --full`              |   1.409s |  1.380s |  -28ms |       88,859 | `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf` |
+
+The unbounded `similar --json --full` comparison confirms `--full` still uses
+the complete source-fingerprint corpus. The speedup applies to bounded
+large-index callers that already pass a scan limit, including diff-gate echo.
+
 ## Verification
 
 - [x] Compared Vega `diff-gate --json`, `only-echo`, and
-  `only-echo --max-echo-checks 1` output hashes before and after; all matched.
+      `only-echo --max-echo-checks 1` output hashes before and after; all matched.
 - [x] `npm run typecheck` passed.
 - [x] `npm run build` passed.
 - [x] `npm test` passed: 77 test files, 424 tests.
 - [x] `node dist/cli.js reindex` rebuilt the local index in 2.7s.
 - [x] `node dist/cli.js diff-impact --json` reported only
-  `findCallees()` and `runEchoCheck()` as changed symbols.
+      `findCallees()` and `runEchoCheck()` as changed symbols.
 - [x] `node dist/cli.js unused-params --json --full` returned no findings.
 - [x] `node dist/cli.js recent-duplicates --json --full` returned no findings.
 - [x] `node dist/cli.js diff-gate --json` passed after updating cited docs.

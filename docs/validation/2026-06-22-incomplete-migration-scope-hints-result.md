@@ -67,9 +67,18 @@ The persistent-refresh coordination slice rechecked the `incomplete-migration.ts
 The hyper-optimization slice rechecked the `src/queries/impact/incomplete-migration.ts` citation after incomplete-migration switched from rebuilding a local callee-fingerprint index to reusing the cached index accessor in `src/queries/cleanup/similar.ts`. Scope labels, scope reasons, ordering, CLI rendering, and diff-gate remediation text remain unchanged. The later `similarAll()` focus-file pruning option is scoped to `recent-duplicates --full` and does not change incomplete-migration scope hints.
 
 The lazy-index optimization rechecked the `src/queries/impact/incomplete-migration.ts` citation after moving global candidate-index creation behind the meaningful-callee threshold. Scope labels, scope reasons, ordering, CLI rendering, and diff-gate remediation text remain unchanged because helpers that are too small to score are skipped before any candidate-specific scope analysis.
+
 ## 2026-06-28 Echo/Similarity Follow-Up
 
 The incomplete-migration scope-hint notes remain accurate. The latest
 `similar.ts` and `diff-gate.ts` edits only avoid wasted echo/similarity work for
 non-callable or non-function-like symbols; scope labels, scope reasons,
 ordering, CLI rendering, and remediation text are unchanged.
+
+## 2026-06-28 Source-Fallback Scan-Limit Follow-Up
+
+The incomplete-migration scope-hint notes remain accurate after bounded
+source-shape fallback. The new `similar.ts` behavior only applies scan-limit
+budgeting to lexical fallback for bounded targeted similarity callers; scope
+labels, scope reasons, ordering, CLI rendering, and remediation text are
+unchanged.
