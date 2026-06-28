@@ -1,7 +1,11 @@
 import { classifyFile, isEntrySurface, isRootedSymbol } from '../analysis/file-classifier.js';
 import type { IndexedDefinition } from '../domain/types.js';
 import type { ScipDatabase } from '../storage/db.js';
-import { getScopedDefinitions, getScopedDefinitionsMatchingSymbols } from '../symbols/definition-catalog.js';
+import {
+  getDefinitionsForFile,
+  getScopedDefinitions,
+  getScopedDefinitionsMatchingSymbols,
+} from '../symbols/definition-catalog.js';
 import { definitionLoc } from '../symbols/definition-loc.js';
 import {
   isCallableSymbol,
@@ -15,6 +19,7 @@ export function productionCallableDefinitions(
   db: ScipDatabase,
   opts: {
     scope?: string;
+    files?: readonly string[];
     minLoc?: number;
     maxLoc?: number;
     excludeSymbol?: string;
@@ -35,6 +40,7 @@ export function productionCallableDefinitions(
 ): IndexedDefinition[] {
   const {
     scope,
+    files,
     minLoc = 1,
     maxLoc = Number.POSITIVE_INFINITY,
     excludeSymbol,
@@ -49,9 +55,7 @@ export function productionCallableDefinitions(
   } = opts;
 
   const definitions: IndexedDefinition[] = [];
-  const candidates = requireCallableSymbol
-    ? getScopedDefinitionsMatchingSymbols(db, { scope, symbolMatches: isCallableSymbol })
-    : getScopedDefinitions(db, scope);
+  const candidates = candidateDefinitions(db, { scope, files, requireCallableSymbol });
   const entrySurfaceByFile = new Map<string, boolean>();
   const fileKindByFile = new Map<string, ReturnType<typeof classifyFile>>();
   const getEntrySurface = (relativePath: string): boolean => {
@@ -87,6 +91,22 @@ export function productionCallableDefinitions(
   }
 
   return sortByLocDesc ? definitions.sort((left, right) => definitionLoc(right) - definitionLoc(left)) : definitions;
+}
+
+function candidateDefinitions(
+  db: ScipDatabase,
+  opts: { scope?: string; files?: readonly string[]; requireCallableSymbol: boolean },
+): IndexedDefinition[] {
+  if (opts.files !== undefined) {
+    const scopedFiles = [...new Set(opts.files.map((file) => file.replace(/\\/g, '/')))]
+      .sort()
+      .filter((file) => !opts.scope || file.includes(opts.scope));
+    return scopedFiles.flatMap((relativePath) => getDefinitionsForFile(db, relativePath));
+  }
+
+  return opts.requireCallableSymbol
+    ? getScopedDefinitionsMatchingSymbols(db, { scope: opts.scope, symbolMatches: isCallableSymbol })
+    : getScopedDefinitions(db, opts.scope);
 }
 
 function matchesCallableMode(

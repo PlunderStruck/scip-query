@@ -13,9 +13,10 @@ source-token fingerprint evidence. The latest focused health reruns also remove
 the separate overview subprocess from health scheduling and make drift's
 source-reference fallback candidate-first. The newest focused production
 callable pass adds per-file role caches and a scoped direct row loader for
-`requireCallableSymbol` scans. Focused reruns after the full matrix are recorded
-separately below so partial measurements do not silently reshuffle the whole
-ranking.
+`requireCallableSymbol` scans. The newest focused diff-gate pass adds
+file-scoped production-callable loading for changed-file-only unused-parameter
+checks. Focused reruns after the full matrix are recorded separately below so
+partial measurements do not silently reshuffle the whole ranking.
 
 ## Corpus
 
@@ -460,6 +461,19 @@ using the direct merged row loader for every callable mode slowed health full
 to 2.580s. The scoped version keeps the health win and limits the direct loader
 to the command family where the candidate-set shortcut is behavior-identical.
 
+## Post Diff-Gate Unused-Params File Scope Refresh
+
+Focused rerun with the local built CLI after `unusedParams()` passed its
+changed-file list into `productionCallableDefinitions()`. The public
+`unused-params --json --full` path is unchanged; the diff-gate check now avoids
+loading whole-repo callable candidates when it can only report changed files.
+
+| Command | Baseline | Current | Warm repeats | stdout bytes | SHA-256 |
+| --- | ---: | ---: | --- | ---: | --- |
+| `scip-query diff-gate --json --skip echo --skip incomplete-migration --skip co-change-partner --skip doc-reference --skip new-dead` | 0.991s | 0.364s | 0.356s-0.377s-0.364s | 1,202 | `e02b4859ace33f159476ebaeb8e67c377472d94bbc488ee69ccef0a93f028a41` |
+| `scip-query diff-gate --json` | 2.082s | 1.981s | 3.721s-1.986s-1.976s | 3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
+| `scip-query unused-params --json --full` | 0.863s | 0.812s | 0.835s-0.806s-0.812s | 135 | `db71d3c18134a2a61734cf0673380426ab2f1999a7f45b6535724b68024880cb` |
+
 ## Biggest Confirmed Delta
 
 | Command                                       | Earlier heavy/focused baseline | Current warm | Notes                                                                                                                                                                                                                                                                                                                                                     |
@@ -468,7 +482,7 @@ to the command family where the candidate-set shortcut is behavior-identical.
 | `scip-query recent-duplicates --json --full`  |                         6.439s |       1.936s | Same 3,618-byte output and SHA-256 `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`; full-mode scans skip old-old pairs and React profile rows now persist across CLI processes.                                                                                                                                                        |
 | `scip-query doc-drift --json --full`          |                         3.472s |       1.085s | Same 963,953-byte output and SHA-256 `7f8765a247b9e6a0ab2cbd0e99b38b51acf7ce689cd7b7b02165cdb80f97cc8c`; markdown path candidates and citation contexts now persist as content-hash evidence.                                                                                                                                                             |
 | `scip-query health --json`                    |                         6.864s |       2.329s | Same 15,342-byte output and SHA-256 `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d`; latest focused warm path benefits from source-reexports evidence, hidden drift-row skipping, parent-process overview scheduling, candidate-first drift source scanning, and cached production-callable file-role checks.                                |
-| `scip-query diff-gate --json`                 |                         4.193s |       2.152s | Same 3,089-byte output and SHA-256 `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`; targeted similarity reuses callee-index work, skips non-callable echo targets, bounds lexical source fallback for large-index callers, and persists source-token fingerprints.                                                                    |
+| `scip-query diff-gate --json`                 |                         4.193s |       1.981s | Same 3,089-byte output and SHA-256 `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`; targeted similarity reuses callee-index work, skips non-callable echo targets, bounds lexical source fallback for large-index callers, persists source-token fingerprints, and scopes the unused-params check to changed files.                                                                    |
 | `scip-query dead --json --full`               |                         4.325s |       1.968s | Same 3,803,655-byte output and SHA-256 `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1`; JS/TS exclusion prefilter avoids ordinary React hook-call files, SQL statements are cached per connection, dead reuses scoped definition caches through source fallback, and framework definition exclusions persist as content-hash evidence. |
 | `scip-query wrapper-candidates --json --full` |                         2.236s |       1.608s | Same 78,437-byte output and SHA-256 `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58`; re-export parsing now persists across fresh CLI processes.                                                                                                                                                                                        |
 | `scip-query stale-abstractions --json --full` |      43.268s cold / 3.13s warm |       1.527s | Same 83,654-byte output and SHA-256 `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2`; source fallback reuses per-file import local-name maps and re-export parsing now persists across fresh CLI processes.                                                                                                                               |
@@ -484,9 +498,9 @@ to the command family where the candidate-set shortcut is behavior-identical.
    next health attempt should target shared setup or one of those phase-local
    paths; the priority scheduler and higher-concurrency probes should stay
    rejected unless new evidence changes the tradeoff.
-2. `diff-gate --json` is the next public-command target after health, with the
-   latest focused warm median at 2.152s after source-fingerprint evidence is
-   warm.
+2. `diff-gate --json` remains the next public-command target after health, with
+   the latest focused warm median at 1.981s after source-fingerprint evidence
+   is warm and the unused-params check is file-scoped.
 3. Standalone `dead --json --full`, `wrapper-candidates --json --full`, and
    `stale-abstractions --json --full` are now below or near the 2s band in
    focused warm runs. Refresh the full Vega warm matrix before picking among
