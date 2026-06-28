@@ -53,10 +53,11 @@ export interface DriftSummary {
 // intentionally assembled in one place.
 export function drift(
   db: ScipDatabase,
-  opts?: { scope?: string; minDeviation?: number; semantic?: boolean },
+  opts?: { scope?: string; minDeviation?: number; semantic?: boolean; includePatternDeviations?: boolean },
 ): DriftSummary {
   const { scope, minDeviation = 5 } = opts ?? {};
   const includeSemantic = opts?.semantic !== false;
+  const includePatternDeviations = opts?.includePatternDeviations !== false;
   const index = new ProjectIndex(db);
 
   // Build file dep graph (which files depend on which)
@@ -69,7 +70,7 @@ export function drift(
   return summarizeDrift([
     ...unusedImportDrift(db, depGraph, symbolRefs, { semantic: includeSemantic }),
     ...layerViolationDrift(depGraph),
-    ...patternDeviationDrift(depGraph, minDeviation),
+    ...(includePatternDeviations ? patternDeviationDrift(depGraph, minDeviation) : []),
   ]);
 }
 

@@ -157,3 +157,10 @@ The persistent-refresh coordination slice rechecked the pilot's `diffGate()` and
 The `diffGate()` and `DIFF_GATE_CHECKS` references remain accurate. The
 follow-up keeps the same check list and output contract while avoiding echo
 similarity work for non-callable changed symbols.
+
+## 2026-06-28 Health Drift Performance Follow-Up
+
+The `src/queries/health/health.ts` pilot reference remains accurate. The drift
+performance follow-up only skips advisory `pattern-deviation` rows in health
+and baseline paths; the historical pilot commands and analyzer conclusions are
+unchanged.

@@ -103,8 +103,11 @@ export function collectBaselineFindings(db: ScipDatabase, opts: { scope?: string
     findings.push(`stale:${candidate.file}:${candidate.shortName}`);
   }
 
-  for (const result of drift(db, { scope, ...HEALTH_DETECTOR_PROFILES.drift }).results) {
-    if (result.kind === 'pattern-deviation') continue; // advisory, too noisy to ratchet
+  for (const result of drift(db, {
+    scope,
+    ...HEALTH_DETECTOR_PROFILES.drift,
+    includePatternDeviations: false,
+  }).results) {
     findings.push(`drift:${result.kind}:${result.file}:${result.dep}`);
   }
 

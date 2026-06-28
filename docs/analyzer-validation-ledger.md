@@ -276,3 +276,10 @@ unused-params, and new-dead checks through `src/queries/impact/diff-gate.ts`.
 The performance follow-up only skips non-callable changed symbols before echo
 similarity scoring; baseline ratchet behavior and check configuration remain
 unchanged.
+
+## 2026-06-28 Health Drift Performance Follow-Up
+
+The `src/queries/health/health.ts` reference remains accurate after the health
+drift optimization. Health and the baseline ratchet now ask `drift()` to skip
+advisory `pattern-deviation` rows they already exclude from visible output and
+stable finding identities; the repo-wide health score contract is unchanged.

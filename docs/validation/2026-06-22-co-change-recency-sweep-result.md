@@ -62,3 +62,10 @@ The persistent-refresh coordination slice rechecked the `diff-gate.ts` and `src/
 The `diff-gate.ts` recency-sweep references remain accurate. The follow-up only
 avoids echo similarity scoring for non-callable changed symbols and does not
 change co-change recency evidence or health integration.
+
+## 2026-06-28 Health Drift Performance Follow-Up
+
+The `src/queries/health/health.ts` recency-sweep reference remains accurate.
+The health drift optimization does not change commit scope, recency, or
+hidden-coupling summaries; it only skips advisory drift pattern rows outside
+the co-change scoring path.

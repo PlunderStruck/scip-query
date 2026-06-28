@@ -81,6 +81,23 @@ describe('advanced queries', () => {
     expect(summary.layerViolations).toBeGreaterThan(0);
   });
 
+  it('can skip pattern deviations for health-style drift summaries', () => {
+    const publicSummary = queries.drift(db);
+    const healthStyleSummary = queries.drift(db, { includePatternDeviations: false });
+
+    expect(publicSummary.patternDeviations).toBeGreaterThan(0);
+    expect(healthStyleSummary.patternDeviations).toBe(0);
+    expect(healthStyleSummary.results).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'pattern-deviation',
+        }),
+      ]),
+    );
+    expect(healthStyleSummary.layerViolations).toBe(publicSummary.layerViolations);
+    expect(healthStyleSummary.unusedImports).toBe(publicSummary.unusedImports);
+  });
+
   it('reports dataflow through definition, usage, producer, and consumer sites', () => {
     const result = queries.dataflow(db, 'process');
 

@@ -171,3 +171,10 @@ diff-scoped check family in `src/queries/impact/diff-gate.ts`. The
 hyper-optimization follow-up only adds a callable-symbol prefilter before the
 echo check invokes similarity, so the command surface and check inventory
 described above are unchanged.
+
+## 2026-06-28 Health Drift Performance Follow-Up
+
+The `src/queries/health/health.ts` citation remains accurate. The
+hyper-optimization follow-up only skips advisory drift `pattern-deviation` rows
+for health and baseline paths that already hide those rows; health scoring,
+phase inventory, and public `drift` output are unchanged.

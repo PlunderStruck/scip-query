@@ -385,3 +385,11 @@ source-fallback change. The new behavior only makes targeted similarity pass
 its existing scan-limit budget into lexical source-shape fallback for bounded
 callers; analyzer categories, score calibration, and unbounded `similar --full`
 behavior are unchanged.
+
+## 2026-06-28 Health Drift Performance Follow-Up
+
+The health calibration reference remains accurate after the drift performance
+change. Health still anchors the composite report in
+`src/queries/health/health.ts`; the change only avoids computing advisory
+`pattern-deviation` drift rows for health and baseline paths that already
+discard them.

@@ -116,6 +116,17 @@ reported zero `tree-sitter` parse calls.
 - Accepted: persist JavaScript/TypeScript re-export parse results. The output
   contract is unchanged because the payload is keyed by source content and
   import-resolution fingerprint; corrupt or stale rows fall back to the parser.
+- Accepted: let health and baseline skip advisory-only drift pattern deviations.
+  Public `drift` still emits those rows, but both health and the baseline ratchet
+  already discard them, so computing 903 Vega pattern-deviation rows in those
+  paths is avoidable work.
+- Rejected: bulk-load the definition catalog for `getScopedDefinitions()`.
+  A Vega stage profile for `isolated` showed `productionCallableDefinitions`
+  at 0.971s before the probe and 1.614s after the batched SQL candidate; the
+  source change was reverted.
+- Rejected for now: small cleanup phase grouping. The best small groups were
+  `dead,isolated` at 1.968s and `isolated,wrapper-candidates` at 1.960s, but
+  they serialize enough work to lose the current parallel health schedule.
 
 ## Decisions
 
@@ -130,3 +141,28 @@ reported zero `tree-sitter` parse calls.
   through it. This removes repeated warm tree-sitter re-export parsing across
   fresh CLI processes and materially improves wrapper, stale, and composite
   health timings with byte-identical Vega outputs.
+- Accepted: add `includePatternDeviations` to `drift()` and pass `false` from
+  health and health-baseline. This preserves the public `drift` default while
+  skipping rows that the health report and baseline identities never expose.
+
+## Post Health Drift Pattern-Deviation Skip
+
+Focused rerun with the local built CLI after health and baseline stopped
+computing advisory drift rows that they immediately hide. Vega public
+`drift --json` still emits 725,970 bytes with SHA-256
+`a7754846099d3424020aa3a26764fec84698dc3f5cfdb1c861c30228d1366462`.
+
+| Case | Baseline median | Current median | Warm repeats | stdout bytes | SHA-256 |
+| --- | ---: | ---: | --- | ---: | --- |
+| `scip-query __health-phase drift` | 1.767s | 1.745s | 1.769s, 1.770s, 1.745s, 1.726s, 1.733s | 98 | `7409f1c8ad7c5ae6a6ac5ae17778707e1b03f9e990a521de4376357f4a48bacd` |
+| `scip-query health --json` | 2.733s | 2.530s | 2.552s, 2.533s, 2.530s, 2.521s, 2.518s | 15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query health --json --full` | 2.512s | 2.550s | 2.522s, 3.056s, 2.550s, 2.559s, 2.536s | 15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
+| `scip-query __health-phase isolated` | 1.640s | 1.694s | 1.717s, 1.693s, 1.694s | 63 | `483ba1fc03707fcb197b8eb48207444c446feda7e73732b3e45813b77c0da329` |
+| `scip-query __health-phase wrapper-candidates` | 1.582s | 1.646s | 1.694s, 1.646s, 1.633s | 1,585 | `9c61a0f9565f11c9a1b04477549cacd330585a2b2ad0e9fc92dafafe26ea965b` |
+| `scip-query __health-phase stale-abstractions` | 1.549s | 1.598s | 1.581s, 1.598s, 1.599s | 2,755 | `8827e8f0a99315a51d38b6604e096deab5b452421fcd6f984c835cdd879cf322` |
+
+The accepted change is intentionally small: it removes no public findings and
+keeps both health hashes unchanged. The next health pass should target the
+shared definition/source-facts setup cost or a different orchestration model,
+but the measured bulk catalog and small phase-grouping variants above should
+stay rejected unless new evidence changes the tradeoff.

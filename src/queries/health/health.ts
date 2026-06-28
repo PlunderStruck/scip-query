@@ -569,7 +569,7 @@ function summarizeSuppressions(db: ScipDatabase, budget: HealthBudget): Suppress
 
 function summarizeHealthDrift(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): DriftSummary {
   return runHealthPhase(db, budget, 'drift', () => {
-    const driftResult = drift(db, { scope, ...HEALTH_DETECTOR_PROFILES.drift });
+    const driftResult = drift(db, { scope, ...HEALTH_DETECTOR_PROFILES.drift, includePatternDeviations: false });
     const healthVisible = driftResult.results.filter((result) => result.kind !== 'pattern-deviation');
     const direct = healthVisible.filter((result) => result.actionTier === 'direct').length;
     const signal = healthVisible.length - direct;

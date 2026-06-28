@@ -368,6 +368,34 @@ The aggregate gate's first measured repeat was a process outlier, but the next
 two warm repeats settled around 2.1s with byte-identical findings. Health is
 effectively neutral because it does not depend on targeted source-shape echo.
 
+## Post Health Drift Pattern-Deviation Skip
+
+Focused rerun with the local built CLI after `health` and `health-baseline`
+stopped computing drift `pattern-deviation` rows that neither path exposes.
+Public `drift --json` remains enabled and emitted 725,970 bytes with SHA-256
+`a7754846099d3424020aa3a26764fec84698dc3f5cfdb1c861c30228d1366462`.
+
+| Command | Current median | Warm repeats | stdout bytes | SHA-256 |
+| --- | ---: | --- | ---: | --- |
+| `scip-query health --json` | 2.530s | 2.552s-2.533s-2.530s-2.521s-2.518s | 15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query health --json --full` | 2.550s | 2.522s-3.056s-2.550s-2.559s-2.536s | 15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
+| `scip-query __health-phase drift` | 1.745s | 1.769s-1.770s-1.745s-1.726s-1.733s | 98 | `7409f1c8ad7c5ae6a6ac5ae17778707e1b03f9e990a521de4376357f4a48bacd` |
+| `scip-query __health-phase isolated` | 1.694s | 1.717s-1.693s-1.694s | 63 | `483ba1fc03707fcb197b8eb48207444c446feda7e73732b3e45813b77c0da329` |
+| `scip-query __health-phase wrapper-candidates` | 1.646s | 1.694s-1.646s-1.633s | 1,585 | `9c61a0f9565f11c9a1b04477549cacd330585a2b2ad0e9fc92dafafe26ea965b` |
+| `scip-query __health-phase stale-abstractions` | 1.598s | 1.581s-1.598s-1.599s | 2,755 | `8827e8f0a99315a51d38b6604e096deab5b452421fcd6f984c835cdd879cf322` |
+
+Rejected probes from this health pass:
+
+| Probe | Result | Decision |
+| --- | ---: | --- |
+| Bulk `getScopedDefinitions()` row load | `productionCallableDefinitions` stage moved from 0.971s to 1.614s | Reverted |
+| `__health-phase dead,isolated` | 1.968s median | Do not group; serializes too much work |
+| `__health-phase wrapper-candidates,stale-abstractions` | 2.021s median | Do not group |
+| `__health-phase isolated,drift` | 2.545s median | Do not group |
+| `__health-phase isolated,wrapper-candidates` | 1.960s median | Do not group |
+| `__health-phase drift,wrapper-candidates,stale-abstractions` | 2.920s median | Do not group |
+| `__health-phase dead,isolated,similar,extract-candidates` | 2.245s median | Do not group |
+
 ## Biggest Confirmed Delta
 
 | Command                                       | Earlier heavy/focused baseline | Current warm | Notes                                                                                                                                                                                                                                                                                                                                                     |
@@ -383,20 +411,21 @@ effectively neutral because it does not depend on targeted source-shape echo.
 
 ## Current Next Targets
 
-1. `health --json` is now the likely top warm target. The latest full matrix
-   has `health --json --full` at 2.560s and `health --json` at 2.537s, while
-   the latest focused `diff-gate --json` warm median is 2.152s after source
-   fingerprint evidence is warm.
-2. `wrapper-candidates --json --full` and
-   `stale-abstractions --json --full` moved below the 1.7s band in focused
-   warm runs. The next full matrix should confirm their new rank before another
-   wrapper/stale-specific change.
-3. The latest focused dead probe drops `dead --json --full` to 1.968s. After
-   health, the next standalone target is whichever of `diff-gate`, `dead`, or
-   `recent-duplicates` remains slowest in the next full Vega warm matrix.
+1. `health --json` remains the top warm target around 2.53s. The current slow
+   cluster is broad: drift 1.745s, isolated 1.694s, wrapper 1.646s, and stale
+   1.598s. The next health attempt should target shared definition/source-facts
+   setup or a new orchestration model, not the rejected bulk catalog or small
+   grouping probes above.
+2. `diff-gate --json` is the next public-command target after health, with the
+   latest focused warm median at 2.152s after source-fingerprint evidence is
+   warm.
+3. Standalone `dead --json --full`, `wrapper-candidates --json --full`, and
+   `stale-abstractions --json --full` are now below or near the 2s band in
+   focused warm runs. Refresh the full Vega warm matrix before picking among
+   them again.
 4. Re-run the full Vega warm matrix with the installed CLI after the next
-   package install/publish so `health` captures the persistent React profile
-   cache through the normal `scip-query` command.
+   package install/publish so the scoreboard captures normal `scip-query`
+   command behavior, not only local `dist/cli.js`.
 
 Cold/heavy-matrix spikes in `passthrough-candidates`, `complexity-hotspots`,
 `wrapper-candidates`, and `stale-abstractions` were largely source/evidence
