@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { computeIdf } from '../../../src/analysis/similarity.js';
 import {
   buildCalleeFingerprintIndex,
   candidateFingerprintsForTarget,
   classifySimilarityEvidence,
   insertTopSimilarResult,
+  targetSpecificIdfWeights,
   type RankedSimilarResult,
   type SymbolFingerprint,
   type SimilarSymbolResult,
@@ -74,6 +76,18 @@ describe('similarAll top-k collector', () => {
     const candidates = candidateFingerprintsForTarget(fingerprint('target', ['common']), index);
 
     expect(candidates.map((candidate) => candidate.symbol)).toEqual(commonOnly.map((candidate) => candidate.symbol));
+  });
+
+  it('derives target-specific IDF weights equal to the target-plus-corpus corpus walk', () => {
+    const target = fingerprint('target', ['rare', 'shared', 'target-only']);
+    const corpus = [
+      fingerprint('first', ['rare', 'shared']),
+      fingerprint('second', ['shared', 'common']),
+      fingerprint('third', ['common']),
+    ];
+    const index = buildCalleeFingerprintIndex(corpus);
+
+    expect(targetSpecificIdfWeights(target, index)).toEqual(computeIdf([target, ...corpus].map((fp) => fp.callees)));
   });
 
   it('classifies concrete domain behavior as direct evidence', () => {

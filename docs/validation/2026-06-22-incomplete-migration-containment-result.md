@@ -52,3 +52,7 @@ The current maintainability sweep rechecked this result after doc-reference and 
 ## 2026-06-27 Citation Refresh
 
 The persistent-refresh coordination slice rechecked the `diff-gate.ts`, `incomplete-migration.ts`, and `src/runtime/query-commands/impact.ts` citations. Incomplete-migration containment and CLI output remain on the same surfaces; refresh coordination does not change the containment behavior validated here.
+
+## 2026-06-28 Performance Citation Refresh
+
+The hyper-optimization slice rechecked the `src/queries/impact/incomplete-migration.ts` citation after incomplete-migration began reusing the cached callee-fingerprint index from `src/queries/cleanup/similar.ts`. Containment semantics, helper-shape metadata, skipped-helper reasons, and CLI/diff-gate output remain unchanged; the update only avoids rebuilding the same callee index during diff-gate.

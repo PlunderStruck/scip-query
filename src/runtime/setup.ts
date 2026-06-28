@@ -11,6 +11,7 @@ export const BUILTIN_SKILLS = [
   'scip-adoption',
   'scip-health-audit',
   'scip-health-improve',
+  'scip-hyper-optimization',
   'scip-api-impact',
   'concrete-plan',
   'scip-ai-cleanup',

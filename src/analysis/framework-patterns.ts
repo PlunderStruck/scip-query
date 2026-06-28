@@ -63,7 +63,8 @@ const TEST_FRAMEWORK_NAMES = new Set([
 ]);
 const TEST_FRAMEWORK_CALL_RE =
   /\b(?:describe|it|test|fdescribe|fit|xdescribe|xit|beforeEach|afterEach|beforeAll|afterAll|before|after|suite|bench|benchmark)\s*\(/;
-const REACT_HOOK_NAME_RE = /\buse[A-Z][A-Za-z0-9_$]*/;
+const REACT_HOOK_DECLARATION_RE =
+  /\b(?:export\s+)?(?:async\s+)?function\s+use[A-Z][A-Za-z0-9_$]*\b|\b(?:const|let|var)\s+use[A-Z][A-Za-z0-9_$]*\s*(?::[^=;]+)?=\s*(?:async\s*)?(?:function\b|(?:<[^=;{]+>\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)/;
 
 function getJsTestExclusions(db: ScipDatabase, relativePath: string): ExclusionEntry[] {
   const source = getSourceText(db, relativePath);
@@ -159,7 +160,7 @@ function getJsTestExclusions(db: ScipDatabase, relativePath: string): ExclusionE
 }
 
 function mayContainJsExclusion(source: string): boolean {
-  return source.includes('scip-query') || TEST_FRAMEWORK_CALL_RE.test(source) || REACT_HOOK_NAME_RE.test(source);
+  return source.includes('scip-query') || TEST_FRAMEWORK_CALL_RE.test(source) || REACT_HOOK_DECLARATION_RE.test(source);
 }
 
 /**

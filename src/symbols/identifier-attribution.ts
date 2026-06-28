@@ -21,7 +21,7 @@ import { getFullSymbolMatch } from './symbol-lookup.js';
 import { getGlobalLeafIndex } from './leaf-symbol-index.js';
 import type { IndexedDefinition, ReferenceSite, SymbolLocation } from '../domain/types.js';
 import { findIdentifierLines, getFileIdentifiers } from './identifier-index.js';
-import { sourceMayContainCandidateName } from '../source/source-identifier-prefilter.js';
+import { createCandidateNameMatcher, sourceMayContainCandidateName } from '../source/source-identifier-prefilter.js';
 import { getSourceText } from '../source/source-text.js';
 import { getSourceFiles } from '../source/source-fileset.js';
 import { semanticReferences } from '../semantic/shared-primitives.js';
@@ -218,10 +218,11 @@ export function findCallerFiles(
 
   const candidateIds = new Set(candidates.map((c) => c.symbolId));
   const candidateLeafNames = new Set(candidateLeaves.keys());
+  const candidateNameMatcher = createCandidateNameMatcher(candidateLeafNames);
   const result = new Map<number, Set<string>>();
 
   for (const file of getSourceFiles(db)) {
-    if (!sourceMayContainCandidateName(getSourceText(db, file), candidateLeafNames)) continue;
+    if (!sourceMayContainCandidateName(getSourceText(db, file), candidateNameMatcher)) continue;
     const fileIdents = getFileIdentifiers(db, file);
     if (fileIdents.size === 0) continue;
 

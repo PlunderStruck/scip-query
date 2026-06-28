@@ -1,0 +1,4 @@
+interface:
+  display_name: "SCIP Hyper Optimization"
+  short_description: "Scientific benchmark-driven optimization"
+  default_prompt: "Use $scip-hyper-optimization to set up objective benchmarks, trace the target end to end, and optimize it without changing output."

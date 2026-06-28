@@ -1,11 +1,12 @@
 import { extname } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
+import { createSourceFileCache } from '../storage/per-db-cache.js';
 import { getAst } from './ast/ast-core.js';
 import type { SyntaxNode } from './ast/ast-types.js';
 import { detectAstLanguage, type AstLanguage } from './ast/ast-language.js';
 import { callSiteForNode } from './source-calls.js';
 import { getSourceFiles } from './source-fileset.js';
-import { getSourceLines } from './source-text.js';
+import { getSourceLines, getSourceText } from './source-text.js';
 
 export interface ReactComponentBehaviorProfile {
   file: string;
@@ -113,6 +114,9 @@ const JSX_PROP_STOP_WORDS = new Set([
   'width',
   'xmlns',
 ]);
+const REACT_COMPONENT_BEHAVIOR_PROFILE_CACHE = createSourceFileCache<ReactComponentBehaviorProfile[]>(
+  'react-component-behavior-profiles',
+);
 
 export function buildReactComponentBehaviorProfiles(
   db: ScipDatabase,
@@ -138,6 +142,17 @@ export function buildReactComponentBehaviorProfilesForFile(
   relativePath: string,
 ): ReactComponentBehaviorProfile[] {
   const file = relativePath.replace(/\\/g, '/');
+  const source = getSourceText(db, file);
+  const cached = REACT_COMPONENT_BEHAVIOR_PROFILE_CACHE.get(db, file, source, () =>
+    buildReactComponentBehaviorProfilesForFileUncached(db, file),
+  );
+  return cached.map(cloneReactComponentBehaviorProfile);
+}
+
+function buildReactComponentBehaviorProfilesForFileUncached(
+  db: ScipDatabase,
+  file: string,
+): ReactComponentBehaviorProfile[] {
   const language = reactLanguage(file);
   if (!language) return [];
   const tree = getAst(db, file);
@@ -171,6 +186,23 @@ export function buildReactComponentBehaviorProfilesForFile(
       handlerNames: sorted(behaviorFacts.handlerNames),
     };
   });
+}
+
+function cloneReactComponentBehaviorProfile(profile: ReactComponentBehaviorProfile): ReactComponentBehaviorProfile {
+  return {
+    ...profile,
+    jsxTokens: new Set(profile.jsxTokens),
+    behaviorTokens: new Set(profile.behaviorTokens),
+    componentNames: [...profile.componentNames],
+    nativeTags: [...profile.nativeTags],
+    propNames: [...profile.propNames],
+    eventNames: [...profile.eventNames],
+    hookNames: [...profile.hookNames],
+    requestNames: [...profile.requestNames],
+    stateNames: [...profile.stateNames],
+    effectNames: [...profile.effectNames],
+    handlerNames: [...profile.handlerNames],
+  };
 }
 
 interface ReactCandidate {

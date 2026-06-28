@@ -3,12 +3,13 @@ import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { getCalleeRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
 import { getSourceLines } from '../../source/source-text.js';
 import {
-  computeIdf,
   computeIdfFromDocFreq,
   difference,
   getMedianIdf,
   intersection,
+  weightedCosineWithMagnitudes,
   weightedCosine,
+  weightedMagnitude,
 } from '../../analysis/similarity.js';
 import { isFunctionLikeSymbol, leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../../core/project-index.js';
@@ -99,22 +100,37 @@ function compareAgainstFingerprints(
     semantic: opts.semantic,
   });
   const candidates = candidateFingerprintsForTarget(target, index);
-  const idfWeights = computeIdf([target, ...index.corpus].map((fp) => fp.callees));
+  const idfWeights = targetSpecificIdfWeights(target, index);
   const medianIdf = getMedianIdf(idfWeights);
+  const targetMagnitude = weightedMagnitude(target.callees, idfWeights);
 
   const results: SimilarSymbolResult[] = [];
   for (const candidate of candidates) {
     if (candidate.callees.size < 3) continue;
+    const candidateMagnitude = weightedMagnitude(candidate.callees, idfWeights);
     const result = comparePair(target, candidate, idfWeights, {
       minSimilarity,
       requireSignificantShared: 1,
       requireSharedCount: 0,
       medianIdf,
+      magnitudeA: targetMagnitude,
+      magnitudeB: candidateMagnitude,
     });
     if (result) results.push(result);
   }
   results.sort((a, b) => b.similarity - a.similarity);
   return results;
+}
+
+export function targetSpecificIdfWeights(
+  target: SymbolFingerprint,
+  index: Pick<CalleeFingerprintIndex, 'corpus' | 'docFreq'>,
+): Map<string, number> {
+  const docFreq = new Map(index.docFreq);
+  for (const callee of target.callees) {
+    docFreq.set(callee, (docFreq.get(callee) ?? 0) + 1);
+  }
+  return computeIdfFromDocFreq(docFreq, index.corpus.length + 1);
 }
 
 interface ComparePairOptions {
@@ -123,6 +139,8 @@ interface ComparePairOptions {
   requireSignificantShared: number;
   requireSharedCount: number;
   medianIdf?: number;
+  magnitudeA?: number;
+  magnitudeB?: number;
 }
 
 function comparePair(
@@ -131,9 +149,17 @@ function comparePair(
   idfWeights: ReadonlyMap<string, number>,
   opts: ComparePairOptions,
 ): SimilarSymbolResult | null {
-  const { similarity, significantShared, trivialShared } = weightedCosine(a.callees, b.callees, idfWeights, {
-    medianIdf: opts.medianIdf,
-  });
+  const cosine =
+    opts.magnitudeA === undefined || opts.magnitudeB === undefined
+      ? weightedCosine(a.callees, b.callees, idfWeights, {
+          medianIdf: opts.medianIdf,
+        })
+      : weightedCosineWithMagnitudes(a.callees, b.callees, idfWeights, {
+          medianIdf: opts.medianIdf,
+          magnitudeA: opts.magnitudeA,
+          magnitudeB: opts.magnitudeB,
+        });
+  const { similarity, significantShared, trivialShared } = cosine;
   if (similarity < opts.minSimilarity) return null;
   const sharedCount = significantShared.length + trivialShared.length;
   if (significantShared.length < opts.requireSignificantShared && sharedCount < opts.requireSharedCount) {
@@ -190,6 +216,7 @@ export function similarAll(
 
   for (let i = 0; i < all.length; i += 1) {
     const a = all[i]!;
+    const magnitudeA = index.weightedMagnitudes[i]!;
     const candidates = new Set<number>();
     for (const callee of a.callees) {
       const bucket = index.candidateIndexesByCallee.get(callee);
@@ -217,6 +244,8 @@ export function similarAll(
         requireSignificantShared: 2,
         requireSharedCount: 4,
         medianIdf: index.medianIdf,
+        magnitudeA,
+        magnitudeB: index.weightedMagnitudes[j]!,
       });
       if (!result) continue;
       insertTopSimilarResult(topResults, result, limit, resultOrder);
@@ -242,6 +271,7 @@ export interface CalleeFingerprintIndex {
   candidateIndexesByCallee: ReadonlyMap<string, readonly number[]>;
   docFreq: ReadonlyMap<string, number>;
   idfWeights: ReadonlyMap<string, number>;
+  weightedMagnitudes: readonly number[];
   medianIdf: number;
   ubiquityThreshold: number;
 }
@@ -361,7 +391,7 @@ export function getAllCalleeFingerprints(
   return excludeSymbol === undefined ? corpus : corpus.filter((fp) => fp.symbol !== excludeSymbol);
 }
 
-function getCalleeFingerprintIndex(
+export function getCalleeFingerprintIndex(
   db: ScipDatabase,
   opts: { minCallees: number; scope?: string; scanLimit?: number; semantic?: boolean },
 ): CalleeFingerprintIndex {
@@ -390,6 +420,7 @@ export function buildCalleeFingerprintIndex(corpus: readonly SymbolFingerprint[]
 
   const ubiquityThreshold = Math.max(8, Math.ceil(Math.sqrt(corpus.length)));
   const idfWeights = computeIdfFromDocFreq(docFreq, corpus.length);
+  const weightedMagnitudes = corpus.map((fp) => weightedMagnitude(fp.callees, idfWeights));
   const candidateIndexesByCallee = new Map<string, number[]>();
   for (let index = 0; index < corpus.length; index += 1) {
     const fp = corpus[index]!;
@@ -409,6 +440,7 @@ export function buildCalleeFingerprintIndex(corpus: readonly SymbolFingerprint[]
     candidateIndexesByCallee,
     docFreq,
     idfWeights,
+    weightedMagnitudes,
     medianIdf: getMedianIdf(idfWeights),
     ubiquityThreshold,
   };

@@ -47,7 +47,7 @@ Reviewed source examples:
 | `wrapper` | `src/queries/internal/reference-counts.ts:68` | accepted design | Keeps count mutation and provenance paired. |
 | `extract` | `src/queries/navigation/by-kind.ts:130` | accepted design | The detected cluster is the tail of one filter pipeline, not an independent concept. |
 | `extract` | `src/analysis/framework-patterns.ts:224` | accepted design | Rust dead-code exclusions are one accuracy contract spanning generated files, AST exclusions, suppression comments, and serde modules. |
-| `extract` | `src/queries/cleanup/similar.ts:351` | accepted design | Calee-set fingerprinting is one evidence pass whose options interact. |
+| `extract` | `src/queries/cleanup/similar.ts:402` | accepted design | Callee-set fingerprint indexing is one evidence pass whose options interact; it now also owns per-fingerprint weighted magnitudes so repeated pair scoring can stay exact without recomputing vector lengths. |
 | `stale` | `src/source/gitignore-filter.ts:45` | accepted design | `PathFilter` is the canonical shape passed through `ScipDatabase`, even when local type consumers are low. |
 | `stale` | `src/source/vue/vue-template.ts:47` | accepted design | Vue template facts are a public analyzer envelope consumed by profile/reporting layers. |
 | `similar` | `src/language-parsers/languages/dotnet.ts:61` | accepted design | Per-language AST walkers share shape but differ in node and alias semantics. |

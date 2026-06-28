@@ -67,12 +67,47 @@ describe('framework pattern exclusions', () => {
     );
   });
 
+  it('preserves React custom hook variable exclusions', () => {
+    withFrameworkFixture(
+      {
+        'src/hook.ts': ['const useThing = () => {', '  return true;', '};', ''].join('\n'),
+      },
+      (db) => {
+        expect(getDefinitionExclusions(db, 'src/hook.ts')).toEqual([
+          expect.objectContaining({ reason: 'React custom hook (use*)' }),
+        ]);
+      },
+    );
+  });
+
+  it('does not treat ordinary React hook calls as custom hook exclusions', () => {
+    withFrameworkFixture(
+      {
+        'src/component.tsx': [
+          "import { useState } from 'react';",
+          'export function Panel() {',
+          '  const [count] = useState(0);',
+          '  return count;',
+          '}',
+          '',
+        ].join('\n'),
+      },
+      (db) => {
+        expect(getDefinitionExclusions(db, 'src/component.tsx')).toEqual([]);
+      },
+    );
+  });
+
   it('preserves scip-query suppression comment exclusions', () => {
     withFrameworkFixture(
       {
-        'src/suppressed.ts': ['// scip-query: ignore-dead', 'export function suppressed() {', '  return true;', '}', ''].join(
-          '\n',
-        ),
+        'src/suppressed.ts': [
+          '// scip-query: ignore-dead',
+          'export function suppressed() {',
+          '  return true;',
+          '}',
+          '',
+        ].join('\n'),
       },
       (db) => {
         expect(getDefinitionExclusions(db, 'src/suppressed.ts')).toEqual([

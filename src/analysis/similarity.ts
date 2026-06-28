@@ -104,6 +104,20 @@ export interface WeightedCosineResult<T> {
 }
 
 /**
+ * Length of one IDF-weighted feature vector. Callers that compare one item to
+ * many others can compute this once per item and reuse it for exact cosine
+ * scoring.
+ */
+export function weightedMagnitude<T>(features: Set<T>, idf: ReadonlyMap<T, number>): number {
+  let squared = 0;
+  for (const feature of features) {
+    const weight = idf.get(feature) ?? 0;
+    squared += weight * weight;
+  }
+  return Math.sqrt(squared);
+}
+
+/**
  * IDF-weighted cosine similarity between two feature sets.
  *
  * Each feature is a dimension; its weight is its IDF. Cosine of the two
@@ -145,6 +159,41 @@ export function weightedCosine<T>(
   }
 
   const magnitude = Math.sqrt(magA) * Math.sqrt(magB);
+  const similarity = magnitude > 0 ? dotProduct / magnitude : 0;
+
+  significantShared.sort((x, y) => (idf.get(y) ?? 0) - (idf.get(x) ?? 0));
+
+  return { similarity, significantShared, trivialShared };
+}
+
+/**
+ * IDF-weighted cosine similarity when the vector lengths are already known.
+ * This preserves `weightedCosine` semantics while avoiding repeated magnitude
+ * work in pairwise scans.
+ */
+export function weightedCosineWithMagnitudes<T>(
+  a: Set<T>,
+  b: Set<T>,
+  idf: ReadonlyMap<T, number>,
+  opts: { medianIdf?: number; magnitudeA: number; magnitudeB: number },
+): WeightedCosineResult<T> {
+  let dotProduct = 0;
+  const median = opts.medianIdf ?? getMedianIdf(idf);
+  const significantShared: T[] = [];
+  const trivialShared: T[] = [];
+
+  for (const feature of a) {
+    if (!b.has(feature)) continue;
+    const weight = idf.get(feature) ?? 0;
+    dotProduct += weight * weight;
+    if (weight >= median) significantShared.push(feature);
+    else trivialShared.push(feature);
+  }
+  if (significantShared.length === 0 && trivialShared.length === 0) {
+    return { similarity: 0, significantShared: [], trivialShared: [] };
+  }
+
+  const magnitude = opts.magnitudeA * opts.magnitudeB;
   const similarity = magnitude > 0 ? dotProduct / magnitude : 0;
 
   significantShared.sort((x, y) => (idf.get(y) ?? 0) - (idf.get(x) ?? 0));

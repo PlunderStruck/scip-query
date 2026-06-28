@@ -9,7 +9,7 @@ import {
   diffImpactPlan,
 } from './diff-impact.js';
 import type { BaseContentReader, DiffImpactPlan } from './diff-impact.js';
-import { buildCalleeFingerprintIndex, getAllCalleeFingerprints, meaningfulCallees } from '../cleanup/similar.js';
+import { getCalleeFingerprintIndex, meaningfulCallees } from '../cleanup/similar.js';
 import type { CalleeFingerprintIndex } from '../cleanup/similar.js';
 
 export interface IncompleteMigrationLeftover {
@@ -136,8 +136,7 @@ export function incompleteMigration(
     result.note = `helper scoring capped at ${maxHelpers} of ${newDefs.length} new symbols`;
   }
 
-  const candidates = getAllCalleeFingerprints(db, { minCallees: Math.min(3, minCallees), scanLimit, semantic });
-  const candidateIndex = buildCalleeFingerprintIndex(candidates);
+  const candidateIndex = getCalleeFingerprintIndex(db, { minCallees: Math.min(3, minCallees), scanLimit, semantic });
   const helperCalleeRows = index.calleeMap(helpers, { semantic });
   const helperFingerprints = helpers.map((def) => ({
     def,

@@ -56,3 +56,7 @@ The next precision candidate is co-change issue/PR label context and second-corp
 ## 2026-06-27 Citation Refresh
 
 The persistent-refresh coordination slice rechecked the `src/queries/impact/incomplete-migration.ts` citation. The citation remains a verification-command record for the passthrough caveat slice; the current refresh coordination work does not change the passthrough public-facade conclusion.
+
+## 2026-06-28 Performance Citation Refresh
+
+The hyper-optimization slice rechecked the `src/queries/impact/incomplete-migration.ts` citation after incomplete-migration began reusing the cached callee-fingerprint index. The citation is still only a verification-command record for this passthrough public-facade caveat, and the performance change does not alter the passthrough analyzer conclusion.

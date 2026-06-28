@@ -41,6 +41,7 @@ When the user asks you to build, change, or fix something non-trivial:
 | Assess a public API, route, CLI, config, schema, or boundary change                                                | `scip-api-impact`             | `scip-query surface <module>`, `scip-query affected <symbol>`, `scip-query co-change <file>`                |
 | Pick high-signal commands for an unfamiliar language                                                               | `scip-language-playbook`      | —                                                                                                           |
 | Benchmark indexing, command runtime, or detector performance                                                       | `scip-query`                  | `scip-query bench --json`, `scip-query bench --cold-index --include-heavy`                                  |
+| Hyper-optimize a command, workflow, indexer, detector, or app path with benchmark ledgers and alternative designs  | `scip-hyper-optimization`     | `scip-query bench --json`, `scip-query plan-context <target>`, command-specific correctness checks          |
 | Adopt or bootstrap scip-query in a repository                                                                      | `scip-adoption`               | `scip-query setup --json`, `scip-query check-deps`, `scip-query capability-matrix --json`                   |
 | Verify work you just finished (any implementation, refactor, or extraction)                                        | `scip-verify`                 | `scip-query status --capabilities`, `scip-query diff-gate --json`                                           |
 | Confirm post-setup health signals before cleanup                                                                   | `scip-health-audit`           | `scip-query health --json --full`, `scip-query diff-gate --json`                                            |
@@ -63,6 +64,9 @@ Use these boundaries before loading a specialist skill:
 - `scip-health-improve` is the autonomous campaign. Use it when the user asks
   to raise/maximize the health score, keep working with minimal interaction, or
   get the repo as clean as reasonably possible.
+- `scip-hyper-optimization` is the benchmark-led performance campaign. Use it
+  when the user asks to make a command, detector, indexer, workflow, or app path
+  as fast as possible while preserving output.
 - `scip-debloat` is a bloat audit and cleanup plan. Use it when the user wants
   dead code, duplication, unnecessary abstractions, wrappers, or structural
   waste found and prioritized, but has not asked for a score-maxing campaign.

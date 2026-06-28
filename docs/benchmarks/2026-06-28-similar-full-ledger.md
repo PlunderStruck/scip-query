@@ -1,0 +1,83 @@
+# similar --full Optimization Ledger
+
+## Output Contract
+
+- Target command: `scip-query similar --json --full`
+- Large benchmark corpus: `/Users/aydansalois/Documents/GitHub/Vega_2.0`
+- Required behavior: return the same JSON envelope shape for the `similar`
+  command and preserve the ranked `SimilarSymbolResult` contract:
+  `symbolA`, `shortNameA`, `fileA`, `symbolB`, `shortNameB`, `fileB`,
+  `similarity`, `similarityBasis`, `sharedCallees`, `uniqueToA`, `uniqueToB`,
+  and evidence classification fields.
+- Correctness checks: focused unit tests for similarity behavior, output
+  identity checks on representative repositories, and `scip-query diff-gate`.
+
+## Current Pipeline
+
+- Entry point: cleanup query command handlers call `queries.similar` or
+  `queries.similarAll` for the public `similar` command and health/detector
+  consumers.
+  Source: `scip-query code 'src/runtime/query-commands/cleanup/handlers.ts:1-220'`.
+- `similarAll` builds a callee fingerprint index with
+  `getCalleeFingerprintIndex`, iterates every fingerprint, gathers candidate
+  pairs from shared non-ubiquitous callees, filters parameter-count mismatches,
+  scores pairs with `comparePair`, and keeps the top results with
+  `insertTopSimilarResult`.
+  Source: `scip-query code similarAll -C 8`.
+- `buildCalleeFingerprints` creates a `ProjectIndex`, loads production callable
+  definitions, builds a callee map for those definitions, converts each
+  callable into a callee-set fingerprint, reads callable signature parameter
+  counts, and filters fingerprints below `minCallees`.
+  Source: `scip-query code buildCalleeFingerprints -C 8`.
+- `buildCalleeFingerprintIndex` computes callee document frequencies, IDF
+  weights, a ubiquity threshold, a callee-to-fingerprint index, and median IDF.
+  Source: `scip-query code 'src/queries/cleanup/similar.ts:387-470'`.
+- `comparePair` computes weighted cosine similarity, drops weak pairs, shortens
+  symbols, computes unique callee sets, and classifies evidence.
+  Source: `scip-query code comparePair -C 8`.
+
+## Measurements
+
+| Case | Before | After | Delta | Evidence |
+| --- | ---: | ---: | ---: | --- |
+| Vega_2.0 full-suite `similar --json --full` | 300.7s | pending | pending | `docs/validation/2026-06-28-vega-2-heavy-benchmark-result.md` |
+| Vega_2.0 focused warm `similar --json --full` | 315.3s | 2.160s | -313.2s / 146x faster | `scip-query bench --json --command "similar --json --full" --timeout-ms 600000`; stdout 88,859 bytes before and after |
+| Vega_2.0 focused warm `similar --json --full` confirmation | 315.3s | 1.503s | -313.8s / 210x faster | Same command rerun; stdout 88,859 bytes |
+| Vega_2.0 refreshed heavy matrix `similar --json --full` | 300.7s | 1.443s | -299.3s / 208x faster | `scip-query bench --json --include-heavy --timeout-ms 600000`; stdout 88,859 bytes |
+
+## Current-Pipeline Optimization Candidates
+
+- Separate corpus-build time from pair-scoring time before editing. The code
+  comment at `CALLEE_FINGERPRINT_CORPUS` says fingerprint construction is the
+  dominant cost, but the Vega runtime requires measurement before accepting
+  that as the current bottleneck.
+- Reduce repeated pair work inside `similarAll` by caching per-fingerprint
+  magnitudes, weighted feature data, or shared-candidate scores if profiling
+  shows pair scoring dominates.
+- Reduce corpus construction cost by batching signature lookup or avoiding
+  per-definition work that can be derived while building the callee map.
+- Preserve the existing candidate-index pruning semantics unless output
+  identity checks prove a stricter pruning rule is equivalent.
+
+## Alternative Designs
+
+- Precompute callee fingerprints during indexing or post-index augmentation so
+  `similar --full` reads a compact SQLite-backed feature table instead of
+  reconstructing fingerprints per process.
+- Push more candidate generation into SQLite using symbol/callee edge tables
+  and aggregate shared-callee counts before JS scoring.
+- Use a two-stage retrieval model: cheap shared-callee count or weighted upper
+  bound first, exact weighted cosine only for candidate pairs that can still
+  reach `minSimilarity`.
+
+## Decisions
+
+- Accepted: precompute each fingerprint's weighted magnitude once in the callee
+  fingerprint index, then pass those magnitudes into the exact same weighted
+  cosine calculation during `similarAll` pair scoring. This preserves the
+  existing candidate generation and scoring formula while avoiding repeated
+  vector-length work per candidate pair.
+- Rejected: none yet.
+- Deferred: persistent index-time fingerprint tables are promising but larger
+  than the first optimization batch; first measure where the current 300s is
+  spent.

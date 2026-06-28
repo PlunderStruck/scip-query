@@ -53,7 +53,7 @@ Implementation anchors:
 | New dead gate             | `scip-query code runNewDeadCheck --json`                  | `runNewDeadCheck()` is at `src/queries/impact/diff-gate.ts:876`.                                                                                                                |
 | Baseline gate             | `scip-query code runBaselineCheck --json`                 | `runBaselineCheck()` is at `src/queries/impact/diff-gate.ts:947`.                                                                                                               |
 | Wrapper detector          | `scip-query code wrapperCandidates --json`                | `wrapperCandidates()` is at `src/queries/cleanup/wrapper-candidates.ts:39`.                                                                                                     |
-| Similar detector          | `scip-query code similarAll --json`                       | `similarAll()` is at `src/queries/cleanup/similar.ts:132`.                                                                                                                      |
+| Similar detector          | `scip-query code similarAll --json`                       | `similarAll()` is at `src/queries/cleanup/similar.ts:177` and now reuses cached weighted magnitudes from the callee fingerprint index during pair scoring.                      |
 | Co-change detector        | `scip-query code coChange --json`                         | `coChange()` is at `src/queries/impact/co-change.ts:47`.                                                                                                                        |
 | Vue pressure detector     | `scip-query code vueLargeViewPressure --json`             | `vueLargeViewPressure()` is at `src/queries/frontend/vue-large-view-pressure.ts:20`.                                                                                            |
 | Dead output builder       | `scip-query code deadSummary --json`                      | `deadSummary()` is at `src/queries/cleanup/dead.ts:189`.                                                                                                                        |
@@ -180,6 +180,12 @@ Evidence:
 - In the 10 reviewed similarity rows, 3 were `tp`, 1 was `fp`, and 6 were `needs_judgment`.
 - `similarAll()` compares callee fingerprints, filters ubiquitous callees, and applies a parameter-count guard, but it does not yet separate framework scaffolding from domain-specific behavior.
 - The false-positive examples shared access, query, or random-token primitives while representing different domain operations.
+
+2026-06-28 follow-up: the current `similarAll()` implementation keeps the same
+contextual similarity contract, but `buildCalleeFingerprintIndex()` now computes
+per-fingerprint weighted magnitudes once so pair scoring does not recompute the
+same vector lengths for every candidate pair. The calibration judgment remains
+about evidence weight, not runtime.
 
 Next action:
 

@@ -8,6 +8,8 @@ import {
   intersection,
   jaccard,
   weightedCosine,
+  weightedCosineWithMagnitudes,
+  weightedMagnitude,
 } from '../../src/analysis/similarity.js';
 
 describe('similarity kernel', () => {
@@ -149,6 +151,27 @@ describe('similarity kernel', () => {
       expect(weightedCosine(left, right, idf, { medianIdf: getMedianIdf(idf) })).toEqual(
         weightedCosine(left, right, idf),
       );
+    });
+
+    it('matches the precomputed-magnitude path exactly', () => {
+      const idf = new Map([
+        ['a', 0.1],
+        ['b', 0.5],
+        ['c', 0.9],
+        ['d', 1.2],
+        ['e', 0],
+      ]);
+      const left = new Set(['a', 'b', 'd', 'e']);
+      const right = new Set(['b', 'c', 'd', 'e']);
+      const medianIdf = getMedianIdf(idf);
+
+      expect(
+        weightedCosineWithMagnitudes(left, right, idf, {
+          medianIdf,
+          magnitudeA: weightedMagnitude(left, idf),
+          magnitudeB: weightedMagnitude(right, idf),
+        }),
+      ).toEqual(weightedCosine(left, right, idf, { medianIdf }));
     });
   });
 

@@ -20,12 +20,15 @@ A framework-discovered entrypoint is a source-level export whose real caller is 
 
 2026-06-27 follow-up: `src/analysis/framework-patterns.ts` now uses a source-text prefilter before TS/JS exclusion AST parsing. Marker-positive test-file, React custom-hook, and `scip-query` suppression cases still take the AST path; `tests/analysis/framework-patterns.test.ts` covers those preserved exclusions.
 
+2026-06-28 follow-up: the same `src/analysis/framework-patterns.ts` prefilter now uses a declaration-shaped React custom-hook marker instead of treating every `use[A-Z]` identifier as AST-worthy. Ordinary React hook calls such as `useState` skip the framework-exclusion AST path, while top-level custom hook declarations, test framework files, and `scip-query` suppression comments still take it.
+
 ## Verification
 
 - `npx vitest run tests/queries/cleanup/dead-output.test.ts` passed: 1 file, 1 test.
 - `npx prettier --check src/analysis/file-classifier.ts src/analysis/framework-patterns.ts tests/queries/cleanup/dead-output.test.ts docs/plans/2026-06-22-framework-entry-caveats.md` passed.
 - `npm run typecheck` passed.
 - `npm run build` passed.
+- 2026-06-28 follow-up verification: `npx vitest run tests/analysis/framework-patterns.test.ts`, `npm run typecheck`, `npm test`, and `npm run build` passed after the declaration-shaped hook prefilter. Vega_2.0 output hashes stayed unchanged for `dead --json --full`, `__health-phase dead --full`, and `health --json`.
 - `node dist/cli.js similar isFrameworkDiscoveredEntrypointSymbol --json` returned no rows.
 - `node dist/cli.js recent-duplicates --json` returned no findings and no root-cause groups.
 - `node dist/cli.js unused-params --json`, `wrapper-candidates --json`, `passthrough-candidates --json`, `cycles --json`, and `isolated --json` returned no findings.

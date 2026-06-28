@@ -96,6 +96,9 @@ describe('skill installation', () => {
     expect(result.installed).toContain('Claude/scip-maintainability');
     expect(result.installed).toContain('Codex/scip-maintainability');
     expect(result.installed).toContain('Agents/scip-maintainability');
+    expect(result.installed).toContain('Claude/scip-hyper-optimization');
+    expect(result.installed).toContain('Codex/scip-hyper-optimization');
+    expect(result.installed).toContain('Agents/scip-hyper-optimization');
     expect(result.installed).toContain('Claude/scip-react-maintainability');
     expect(result.installed).toContain('Codex/scip-react-maintainability');
     expect(result.installed).toContain('Agents/scip-react-maintainability');

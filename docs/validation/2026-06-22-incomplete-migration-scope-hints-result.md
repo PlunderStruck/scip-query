@@ -61,3 +61,7 @@ The current maintainability sweep rechecked the scope-hint claim after doc-refer
 ## 2026-06-27 Citation Refresh
 
 The persistent-refresh coordination slice rechecked the `incomplete-migration.ts`, `diff-gate.ts`, and `src/runtime/query-commands/impact.ts` citations. Scope labels and CLI rendering remain on those surfaces; the new freshness and watcher-lock behavior does not alter scope-hint semantics.
+
+## 2026-06-28 Performance Citation Refresh
+
+The hyper-optimization slice rechecked the `src/queries/impact/incomplete-migration.ts` citation after incomplete-migration switched from rebuilding a local callee-fingerprint index to reusing the cached index accessor in `src/queries/cleanup/similar.ts`. Scope labels, scope reasons, ordering, CLI rendering, and diff-gate remediation text remain unchanged.
