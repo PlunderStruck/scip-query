@@ -180,6 +180,35 @@ The current `diff-gate` first repeat had a 3.371s process outlier; the next two
 warm repeats were 2.152s and 2.114s. Health is neutral because this cache is
 for targeted source-shape similarity, not the health `similarAll` path.
 
+## Follow-Up: Zero-Callee Source Fallback Fast Path
+
+The latest Vega_2.0 diff has one newly introduced callable checked by echo:
+`ActiveNavIndicator()`. Its meaningful callee set is empty, so callee cosine
+similarity cannot produce a match and the detector must fall through to source
+tokens. Before this pass, `similar()` still built the bounded callee fingerprint
+index before discovering that no callee match was possible.
+
+Accepted: `similar()` now routes zero-callee targets directly to
+`similarBySourceShape()`. This preserves callee-output semantics because the
+weighted callee comparison has no features to score. The source-fingerprint
+builder also now splits source text into lines only when a content-hash-valid
+cache entry is missing, preserving cache invalidation while trimming warm cached
+work.
+
+Focused Vega_2.0 local-CLI probes after rebuilding:
+
+| Probe                              | Previous focused | Current median | stdout bytes | SHA-256                                                            |
+| ---------------------------------- | ---------------: | -------------: | -----------: | ------------------------------------------------------------------ |
+| `only echo`                        |           0.860s |         0.710s |        1,211 | `162f52479ad23d4e481f4fe0cea288a3f0dfbe568b056190bd01e5c766697a90` |
+| `diff-gate --json`                 |           1.326s |         1.179s |        3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
+| `similar ActiveNavIndicator --json` |          0.743s |         0.761s |          226 | `3316707fbf6cbab3f4543fecbe5e65a223d06bd2e563db876965ff7fc9c93c6d` |
+| `similar --json --full`            |           0.939s |         0.961s |       88,859 | `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf` |
+
+`only echo` and full `diff-gate` improved because echo no longer builds a
+callee corpus for Vega's zero-callee new callable. Direct target `similar`
+remains source-fallback dominated, as expected, and the output hashes stayed
+byte-identical.
+
 ## Verification
 
 - [x] Compared Vega `diff-gate --json`, `only-echo`, and

@@ -94,3 +94,11 @@ The incomplete-migration containment notes remain accurate. The focused
 co-change history optimization only changes the git-history input used by
 diff-gate's co-change partner check; incomplete-migration containment, scope,
 and output are unchanged.
+
+## 2026-06-28 Zero-Callee Similarity Follow-Up
+
+The incomplete-migration containment notes remain accurate after the latest
+`similar.ts` optimization. Incomplete-migration still uses callee fingerprints
+for containment; the zero-callee shortcut only affects targeted echo/similar
+source fallback, and source-fingerprint cache-hit line splitting is skipped
+only when cached lexical tokens already exist.

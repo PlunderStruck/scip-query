@@ -129,3 +129,11 @@ The accepted `similar.ts` suppression-lifecycle record remains intentional after
 persisting source-token fingerprints. The cache is keyed by source bytes and
 callable identity and does not alter the sampled suppression category, reason,
 or lifecycle semantics.
+
+## 2026-06-28 Zero-Callee Similarity Follow-Up
+
+The accepted `similar.ts` suppression-lifecycle record remains intentional after
+the zero-callee targeted similarity fast path. The change avoids callee-index
+work when a target has no meaningful callees and keeps the same source-token
+fallback; it does not alter the sampled suppression category, reason, or
+lifecycle semantics.

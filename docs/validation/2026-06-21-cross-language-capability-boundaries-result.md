@@ -126,3 +126,11 @@ The capability-boundary notes remain accurate after persisting source-token
 fingerprints. The cache stores the same lexical evidence behind content and
 callable-range keys; it does not change `structural-overlap`, source-token
 classification, or cross-language support boundaries.
+
+## 2026-06-28 Zero-Callee Similarity Follow-Up
+
+The capability-boundary notes remain accurate after the zero-callee targeted
+similarity fast path. The change only avoids callee-index work when no callee
+features exist and then runs the existing source-token fallback; it does not
+change `structural-overlap`, source-token classification, or cross-language
+support boundaries.

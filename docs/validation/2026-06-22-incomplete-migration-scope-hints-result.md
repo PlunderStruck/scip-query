@@ -104,3 +104,11 @@ The incomplete-migration scope-hint notes remain accurate. The focused
 co-change history optimization only changes the git-history input used by
 diff-gate's co-change partner check; scope labels, ordering, CLI rendering, and
 remediation text are unchanged.
+
+## 2026-06-28 Zero-Callee Similarity Follow-Up
+
+The incomplete-migration scope-hint notes remain accurate after the latest
+`similar.ts` optimization. The zero-callee shortcut only affects targeted
+echo/similar source fallback, and the source-fingerprint cache-hit line-split
+avoidance does not change scope labels, ordering, CLI rendering, or remediation
+text.

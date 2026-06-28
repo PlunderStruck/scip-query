@@ -407,3 +407,11 @@ The `diffGate()` calibration reference remains accurate. The focused co-change
 history edit changes only how the co-change partner check reads git history for
 the current diff; analyzer categories, thresholds, and calibration surfaces are
 unchanged.
+
+## 2026-06-28 Zero-Callee Similarity Follow-Up
+
+The `similar.ts` calibration reference remains accurate. The latest similarity
+edit only routes zero-callee targeted symbols directly to the existing lexical
+source-shape fallback and avoids source line splitting on source-fingerprint
+cache hits; analyzer categories, score calibration, and unbounded
+`similar --full` behavior are unchanged.

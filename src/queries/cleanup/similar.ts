@@ -81,6 +81,13 @@ export function similar(
   const target = findCallees(db, symbolPattern, { semantic: opts.semantic !== false });
   if (!target) return [];
   if (!isFunctionLikeSymbol(target.symbol)) return [];
+  if (target.callees.size === 0) {
+    return similarBySourceShape(db, symbolPattern, {
+      minSimilarity,
+      limit,
+      scanLimit: opts.scanLimit,
+    });
+  }
 
   const results = compareAgainstFingerprints(db, target, minSimilarity, {
     scanLimit: opts.scanLimit,
@@ -939,16 +946,17 @@ function sourceFingerprintsForDefinitions(
   for (const [relativePath, fileDefinitions] of definitionsByFile) {
     const source = getSourceText(db, relativePath);
     if (!source) continue;
-    const lines = getSourceLines(db, relativePath);
     const contentHash = fileContentHash(db, relativePath, source);
     const cachedEntries = readSourceFingerprintCache(db, relativePath, contentHash);
     let changed = false;
+    let lines: readonly string[] | null = null;
 
     for (const definition of fileDefinitions) {
       const key = sourceFingerprintDefinitionKey(definition);
       const cached = cachedEntries.get(key);
       let tokens = cached ? new Set(cached.tokens) : null;
       if (!tokens) {
+        lines ??= getSourceLines(db, relativePath);
         tokens = sourceTokens(
           definitionSnippetFromLines(lines, definition.startLine, definition.endLine, definition.leaf),
           definition.leaf,
@@ -993,7 +1001,12 @@ function definitionSnippet(
   return definitionSnippetFromLines(lines, startLine, endLine, leaf);
 }
 
-function definitionSnippetFromLines(lines: readonly string[], startLine: number, endLine: number, leaf: string): string {
+function definitionSnippetFromLines(
+  lines: readonly string[],
+  startLine: number,
+  endLine: number,
+  leaf: string,
+): string {
   if (endLine >= startLine && endLine - startLine <= 12) {
     return lines.slice(startLine, endLine + 1).join('\n');
   }

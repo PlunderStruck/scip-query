@@ -31,6 +31,9 @@ The newest health orchestration pass groups measured cheap phase tasks so the
 default 12-worker schedule no longer spills Vega health into a second wave.
 The newest complexity-hotspots pass pushes callable-symbol filtering into the
 scoped definition SQL used by `requireCallableSymbol` candidate scans.
+The newest diff-gate echo pass sends zero-callee targets straight to the
+source-token fallback and avoids splitting source lines for cache-hit source
+fingerprints.
 Focused reruns after the full matrix are recorded separately below so partial
 measurements do not silently reshuffle the whole ranking.
 
@@ -612,6 +615,19 @@ range pipeline remain in place.
 | `scip-query complexity-hotspots --json --full`  |                  1.480s | 2.023s outlier, then 1.336s-1.395s-1.375s-1.413s-1.376s-1.369s |    2,160,117 | `77edc0f3482e8ccd5520c5b178383d3ab3f1aef586888a4e2054551b6c14765f` |
 | `scip-query __health-phase complexity-hotspots` |                  1.127s | 1.070s-1.007s-0.942s-0.938s-0.957s-0.957s-0.936s               |          670 | `38b928cf4b5e56ece26278a67c8bec1ad8b076629846392bbb91c8baac67741a` |
 
+## Post Diff-Gate Zero-Callee Echo Refresh
+
+Focused rerun with the rebuilt local CLI after routing target-mode `similar()`
+directly to source-token fallback when a target has zero meaningful callees.
+The same pass keeps source line splitting out of the warm source-fingerprint
+cache-hit path.
+
+| Command                                   | Previous focused median | Current warm repeats          | stdout bytes | SHA-256                                                            |
+| ----------------------------------------- | ----------------------: | ----------------------------- | -----------: | ------------------------------------------------------------------ |
+| `scip-query diff-gate --json`             |                  1.326s | 2.226s outlier, then 1.202s-1.156s-1.148s |        3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
+| `scip-query diff-gate --json` only echo   |                  0.860s | 0.991s outlier, then 0.723s-0.688s-0.696s |        1,211 | `162f52479ad23d4e481f4fe0cea288a3f0dfbe568b056190bd01e5c766697a90` |
+| `scip-query similar --json --full`        |                  0.939s | 0.984s-0.955s-0.949s-0.966s   |       88,859 | `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf` |
+
 ## Biggest Confirmed Delta
 
 | Command                                        | Earlier heavy/focused baseline | Current warm | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                   |
@@ -620,7 +636,7 @@ range pipeline remain in place.
 | `scip-query recent-duplicates --json --full`   |                         6.439s |       1.135s | Same 3,618-byte output and SHA-256 `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`; full-mode scans skip old-old pairs, React profile rows persist, source-corrected definitions persist, and the Git file-add map now persists by HEAD across CLI processes.                                                                                                                                                        |
 | `scip-query doc-drift --json --full`           |                         3.472s |       1.085s | Same 963,953-byte output and SHA-256 `7f8765a247b9e6a0ab2cbd0e99b38b51acf7ce689cd7b7b02165cdb80f97cc8c`; markdown path candidates and citation contexts now persist as content-hash evidence.                                                                                                                                                                                                                                           |
 | `scip-query health --json`                     |                         6.864s |       1.766s | Same 15,342-byte output and SHA-256 `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d`; latest focused warm path benefits from source-reexports evidence, hidden drift-row skipping, parent-process overview scheduling, candidate-first drift source scanning, cached production-callable file-role checks, persistent definitions, a higher adaptive health phase concurrency ceiling, and cheap phase task grouping. |
-| `scip-query diff-gate --json`                  |                         4.193s |       1.331s | Same 3,089-byte output and SHA-256 `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`; targeted similarity reuses callee-index work, skips non-callable echo targets, bounds lexical source fallback, persists source-token fingerprints and definitions, scopes the unused-params check to changed files, and narrows co-change partner history to changed-file commits.                                               |
+| `scip-query diff-gate --json`                  |                         4.193s |       1.179s | Same 3,089-byte output and SHA-256 `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`; targeted similarity reuses callee-index work, skips non-callable echo targets, routes zero-callee echo targets straight to source fallback, bounds lexical source fallback, persists source-token fingerprints and definitions, scopes the unused-params check to changed files, and narrows co-change partner history to changed-file commits. |
 | `scip-query dead --json --full`                |                         4.325s |       1.119s | Same 3,803,655-byte output and SHA-256 `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1`; JS/TS exclusion prefilter avoids ordinary React hook-call files, SQL statements are cached per connection, source fallback reuses scoped definition caches, framework/definition evidence persists, and large candidate sets now batch caller-file evidence instead of resolving per-symbol caller rows.                     |
 | `scip-query wrapper-candidates --json --full`  |                         2.236s |       1.206s | Same 78,437-byte output and SHA-256 `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58`; re-export parsing and source-corrected definitions now persist across fresh CLI processes.                                                                                                                                                                                                                                      |
 | `scip-query stale-abstractions --json --full`  |      43.268s cold / 3.13s warm |       1.142s | Same 83,654-byte output and SHA-256 `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2`; source fallback reuses per-file import local-name maps while re-export parsing and definitions persist across fresh CLI processes.                                                                                                                                                                                              |

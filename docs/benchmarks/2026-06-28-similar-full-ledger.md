@@ -130,3 +130,12 @@ The source-shape similarity contract remains unchanged. Targeted `similar()`
 now reads cached source-token fingerprints when the source bytes and
 symbol/start/end/leaf definition key match; stale or missing rows fall back to
 the same `definitionSnippet()` plus `sourceTokens()` path documented above.
+
+## 2026-06-28 Zero-Callee Target Follow-Up
+
+The `similar --json --full` contract remains unchanged. The latest
+`similar.ts` edit only skips callee-index construction for targeted symbols
+with zero meaningful callees, then uses the same source-shape fallback already
+documented above. Source-fingerprint cache hits also avoid splitting source
+lines until a token row is missing; stale or missing rows still rebuild through
+the same snippet and token pipeline.
