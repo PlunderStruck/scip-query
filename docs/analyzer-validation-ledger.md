@@ -291,3 +291,11 @@ The `diffGate()` citation remains accurate. Default diff-gate still runs the
 same check family; the co-change partner check now uses the raw git changed
 paths when deciding whether a historical partner is already present in the
 diff.
+
+## 2026-06-28 Focused Co-Change History Follow-Up
+
+The `diffGate()` citation remains accurate after the focused co-change history
+optimization. Default diff-gate still runs the same check family; the
+co-change partner check now reads only changed-file commits from the same
+bounded git-history window instead of parsing the whole name-only history
+payload.

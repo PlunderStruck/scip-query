@@ -87,3 +87,10 @@ containment semantics or output.
 The incomplete-migration containment notes remain accurate. The latest
 `diff-gate.ts` change is limited to co-change partner presence checks and does
 not change incomplete-migration containment, scope, or output.
+
+## 2026-06-28 Focused Co-Change History Follow-Up
+
+The incomplete-migration containment notes remain accurate. The focused
+co-change history optimization only changes the git-history input used by
+diff-gate's co-change partner check; incomplete-migration containment, scope,
+and output are unchanged.

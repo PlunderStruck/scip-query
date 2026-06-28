@@ -67,3 +67,10 @@ The co-change partner references remain accurate. Diff-gate now decides whether
 a partner is present from raw git changed paths as well as indexed code paths,
 which preserves the existing labels and suggestions while avoiding false
 missing-partner warnings for changed docs.
+
+## 2026-06-28 Focused Co-Change History Follow-Up
+
+The co-change partner references remain accurate. The focused history change
+preserves partner classification, labels, suggestions, and output fields; it
+only avoids parsing commits outside the changed-file portion of the same
+bounded git-history window for diff-gate's directional check.

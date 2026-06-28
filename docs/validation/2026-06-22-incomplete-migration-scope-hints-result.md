@@ -97,3 +97,10 @@ The incomplete-migration scope-hint notes remain accurate. The latest
 `diff-gate.ts` change only lets co-change partner detection see raw git changed
 paths and does not change scope labels, ordering, CLI rendering, or remediation
 text.
+
+## 2026-06-28 Focused Co-Change History Follow-Up
+
+The incomplete-migration scope-hint notes remain accurate. The focused
+co-change history optimization only changes the git-history input used by
+diff-gate's co-change partner check; scope labels, ordering, CLI rendering, and
+remediation text are unchanged.

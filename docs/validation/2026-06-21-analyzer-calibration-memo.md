@@ -400,3 +400,10 @@ The `diffGate()` calibration reference remains accurate. The latest diff-gate
 edit only lets co-change partner detection see raw git changed paths, so docs
 and config files already changed in the diff are not treated as missing
 partners.
+
+## 2026-06-28 Focused Co-Change History Follow-Up
+
+The `diffGate()` calibration reference remains accurate. The focused co-change
+history edit changes only how the co-change partner check reads git history for
+the current diff; analyzer categories, thresholds, and calibration surfaces are
+unchanged.

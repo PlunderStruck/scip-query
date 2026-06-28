@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import type { ScipDatabase } from '../../storage/db.js';
 import { isEntrySurface, isRootedSymbol } from '../../analysis/file-classifier.js';
-import { getCoChangePairsForFiles } from '../../analysis/git-history.js';
+import { getDirectionalCoChangePairsForFiles } from '../../analysis/git-history.js';
 import type { CoChangeCommitScope, CoChangeRecency, CoChangeSubjectContext } from '../../analysis/git-history.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import {
@@ -554,7 +554,11 @@ function runCoChangePartnerCheck(
   minConfidence: number,
   result: DiffGateResult,
 ): void {
-  const pairs = getCoChangePairsForFiles(db, changed, { minTogether, minConfidence: 0, maxFilesPerCommit: 20 });
+  const pairs = getDirectionalCoChangePairsForFiles(db, changed, {
+    minTogether,
+    minConfidence: 0,
+    maxFilesPerCommit: 20,
+  });
   if (!pairs) {
     result.skipped.push({ check: 'co-change-partner', reason: 'no git history' });
     return;

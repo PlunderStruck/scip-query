@@ -197,3 +197,10 @@ The `diffGate()` path still starts in `src/queries/impact/diff-gate.ts`. A
 later cleanup taught the co-change partner check to use raw git changed paths
 when checking whether a partner was already changed; echo output and timing
 claims in this ledger are unchanged.
+
+## 2026-06-28 Focused Co-Change History Follow-Up
+
+The `diffGate()` path still starts in `src/queries/impact/diff-gate.ts`. The
+focused co-change history pass affects only the co-change partner check's
+git-history input size; the echo prefilter measurements and output hashes in
+this ledger are unchanged.

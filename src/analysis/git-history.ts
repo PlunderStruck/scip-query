@@ -24,6 +24,8 @@ export interface CommitHistory {
   commits: CommitRecord[];
   /** Commits skipped as bulk operations (touched more than the file cap). */
   skippedBulkCommits: number;
+  /** Newest analyzed commit timestamp when `commits` is a focused subset. */
+  newestAnalyzedAt?: number;
 }
 
 export interface FileChurn {
@@ -71,6 +73,7 @@ export interface CoChangePair {
 
 const MAX_COMMITS = 2_000;
 const BULK_COMMIT_FILE_CAP = 50;
+const FOCUSED_HISTORY_FILE_CAP = 64;
 const BROAD_COCHANGE_FILE_THRESHOLD = 8;
 const BROAD_COCHANGE_AREA_THRESHOLD = 3;
 const RECENT_COCHANGE_WINDOW_SECONDS = 90 * 24 * 60 * 60;
@@ -135,35 +138,7 @@ function loadCommitHistory(projectRoot: string, head: string): CommitHistory | n
     return null;
   }
 
-  const commits: CommitRecord[] = [];
-  let skippedBulkCommits = 0;
-  for (const block of raw.split('\x01')) {
-    if (block.trim() === '') continue;
-    const newline = block.indexOf('\n');
-    const header = newline >= 0 ? block.slice(0, newline) : block;
-    const [hash, timestampRaw, subject] = header.split('\x00');
-    if (!hash || !timestampRaw) continue;
-    const files =
-      newline >= 0
-        ? block
-            .slice(newline + 1)
-            .split('\n')
-            .map((line) => line.trim())
-            .filter((line) => line !== '')
-        : [];
-    if (files.length > BULK_COMMIT_FILE_CAP) {
-      skippedBulkCommits += 1;
-      continue;
-    }
-    commits.push({
-      hash,
-      timestamp: Number(timestampRaw) || 0,
-      subject: subject ?? '',
-      files,
-    });
-  }
-
-  return { head, commits, skippedBulkCommits };
+  return { head, ...parseCommitHistoryBlocks(raw, BULK_COMMIT_FILE_CAP) };
 }
 
 // ── Derived facts ──────────────────────────────────────────────────
@@ -306,6 +281,21 @@ export function getCoChangePairsForFiles(
   return coChangePairsFromHistory(history, opts, files);
 }
 
+export function getDirectionalCoChangePairsForFiles(
+  db: ScipDatabase,
+  files: ReadonlySet<string>,
+  opts: { minTogether?: number; minConfidence?: number; maxFilesPerCommit?: number } = {},
+): CoChangePair[] | null {
+  if (files.size === 0) return [];
+  const head = resolveHead(db.config.projectRoot);
+  if (!head) return null;
+  const maxFilesPerCommit = opts.maxFilesPerCommit ?? BULK_COMMIT_FILE_CAP;
+  if (files.size > FOCUSED_HISTORY_FILE_CAP) return getCoChangePairsForFiles(db, files, opts);
+  const history = loadFocusedCommitHistory(db.config.projectRoot, head, files, maxFilesPerCommit);
+  if (!history) return null;
+  return coChangePairsFromHistory(history, opts, files);
+}
+
 function coChangePairsFromHistory(
   history: CommitHistory,
   opts: { minTogether?: number; minConfidence?: number; maxFilesPerCommit?: number },
@@ -324,11 +314,13 @@ function coChangePairsFromHistory(
       subjects: string[];
     }
   >();
-  let newestAnalyzedAt = 0;
+  let newestAnalyzedAt = history.newestAnalyzedAt ?? 0;
   for (const commit of history.commits) {
     const files = [...new Set(commit.files)].sort();
     if (files.length > maxFilesPerCommit) continue;
-    if (commit.timestamp > newestAnalyzedAt) newestAnalyzedAt = commit.timestamp;
+    if (history.newestAnalyzedAt === undefined && commit.timestamp > newestAnalyzedAt) {
+      newestAnalyzedAt = commit.timestamp;
+    }
     const broadCommit = isBroadCoChangeCommit(files);
     const hasFocusFile = focusFiles === undefined || files.some((file) => focusFiles.has(file));
     for (const file of files) {
@@ -396,6 +388,135 @@ function coChangePairsFromHistory(
       right.together - left.together || right.confidence - left.confidence || left.fileA.localeCompare(right.fileA),
   );
   return pairs;
+}
+
+function loadFocusedCommitHistory(
+  projectRoot: string,
+  head: string,
+  focusFiles: ReadonlySet<string>,
+  maxFilesPerCommit: number,
+): CommitHistory | null {
+  let globalHeaders: Array<{ hash: string; timestamp: number }>;
+  try {
+    globalHeaders = loadGlobalCommitHeaders(projectRoot);
+  } catch {
+    return null;
+  }
+  if (globalHeaders.length === 0) return { head, commits: [], skippedBulkCommits: 0, newestAnalyzedAt: 0 };
+
+  let focusedHashesRaw: string;
+  try {
+    focusedHashesRaw = runGit(projectRoot, [
+      'log',
+      '--no-merges',
+      '--format=%H',
+      '-n',
+      String(MAX_COMMITS),
+      '--',
+      ...[...focusFiles].sort(),
+    ]);
+  } catch {
+    return null;
+  }
+
+  const globalWindow = new Set(globalHeaders.map((entry) => entry.hash));
+  const focusedHashes = focusedHashesRaw
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((hash) => hash !== '' && globalWindow.has(hash));
+  const newestAnalyzedAt = newestAnalyzedTimestamp(projectRoot, globalHeaders, maxFilesPerCommit);
+  if (focusedHashes.length === 0) {
+    return { head, commits: [], skippedBulkCommits: 0, newestAnalyzedAt };
+  }
+
+  let raw: string;
+  try {
+    raw = runGit(projectRoot, [
+      'show',
+      '--no-walk=unsorted',
+      '--name-only',
+      '--pretty=format:%x01%H%x00%ct%x00%s',
+      ...focusedHashes,
+    ]);
+  } catch {
+    return null;
+  }
+
+  const parsed = parseCommitHistoryBlocks(raw, maxFilesPerCommit);
+  return { head, ...parsed, newestAnalyzedAt };
+}
+
+function loadGlobalCommitHeaders(projectRoot: string): Array<{ hash: string; timestamp: number }> {
+  const raw = runGit(projectRoot, ['log', '--no-merges', '--format=%H%x00%ct', '-n', String(MAX_COMMITS)]);
+  return raw
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '')
+    .map((line) => {
+      const [hash, timestampRaw] = line.split('\x00');
+      return { hash: hash ?? '', timestamp: Number(timestampRaw) || 0 };
+    })
+    .filter((entry) => entry.hash !== '');
+}
+
+function newestAnalyzedTimestamp(
+  projectRoot: string,
+  headers: readonly { hash: string; timestamp: number }[],
+  maxFilesPerCommit: number,
+): number {
+  const chunkSize = 20;
+  for (let start = 0; start < headers.length; start += chunkSize) {
+    const chunk = headers.slice(start, start + chunkSize);
+    let raw: string;
+    try {
+      raw = runGit(projectRoot, [
+        'show',
+        '--no-walk=unsorted',
+        '--name-only',
+        '--pretty=format:%x01%H%x00%ct%x00%s',
+        ...chunk.map((entry) => entry.hash),
+      ]);
+    } catch {
+      return headers[0]?.timestamp ?? 0;
+    }
+    const parsed = parseCommitHistoryBlocks(raw, maxFilesPerCommit);
+    if (parsed.commits.length > 0) return parsed.commits[0]!.timestamp;
+  }
+  return 0;
+}
+
+function parseCommitHistoryBlocks(
+  raw: string,
+  maxFilesPerCommit: number,
+): Pick<CommitHistory, 'commits' | 'skippedBulkCommits'> {
+  const commits: CommitRecord[] = [];
+  let skippedBulkCommits = 0;
+  for (const block of raw.split('\x01')) {
+    if (block.trim() === '') continue;
+    const newline = block.indexOf('\n');
+    const header = newline >= 0 ? block.slice(0, newline) : block;
+    const [hash, timestampRaw, subject] = header.split('\x00');
+    if (!hash || !timestampRaw) continue;
+    const files =
+      newline >= 0
+        ? block
+            .slice(newline + 1)
+            .split('\n')
+            .map((line) => line.trim())
+            .filter((line) => line !== '')
+        : [];
+    if (files.length > maxFilesPerCommit) {
+      skippedBulkCommits += 1;
+      continue;
+    }
+    commits.push({
+      hash,
+      timestamp: Number(timestampRaw) || 0,
+      subject: subject ?? '',
+      files,
+    });
+  }
+  return { commits, skippedBulkCommits };
 }
 
 function isBroadCoChangeCommit(files: readonly string[]): boolean {

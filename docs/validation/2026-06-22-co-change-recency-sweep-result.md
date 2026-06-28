@@ -76,3 +76,10 @@ the co-change scoring path.
 The `diff-gate.ts` recency-sweep reference remains accurate. Co-change recency
 evidence is unchanged; diff-gate now only checks partner presence against raw
 git changed paths so non-indexed changed docs are counted.
+
+## 2026-06-28 Focused Co-Change History Follow-Up
+
+The `src/analysis/git-history.ts` and `diff-gate.ts` recency-sweep references
+remain accurate. The focused history path carries the newest non-bulk timestamp
+from the same global analysis window into the changed-file subset, so recency
+classification remains anchored to the original bounded history.

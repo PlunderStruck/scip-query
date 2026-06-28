@@ -186,3 +186,10 @@ The `src/queries/impact/diff-gate.ts` citation remains accurate. Diff-gate
 still owns `DIFF_GATE_CHECKS`; the co-change partner check now compares against
 the raw git changed-path set so changed docs and config files count as present
 even when they are not indexed code files.
+
+## 2026-06-28 Focused Co-Change History Follow-Up
+
+The `src/queries/impact/diff-gate.ts` citation remains accurate after the
+focused co-change history optimization. Diff-gate still owns the check list and
+co-change partner gate; the latest change only narrows the git-history read for
+that gate to commits in the bounded analysis window that touched changed files.

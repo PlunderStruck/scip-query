@@ -9,6 +9,7 @@ import {
   getCoChangePairs,
   getCoChangePairsForFiles,
   getCommitHistory,
+  getDirectionalCoChangePairsForFiles,
   getFileChurn,
 } from '../../src/analysis/git-history.js';
 import { coChange } from '../../src/queries/impact/co-change.js';
@@ -267,6 +268,29 @@ describe('git history evidence', () => {
         changesA: 5,
         changesB: 4,
         confidence: 1,
+      }),
+    );
+  });
+
+  it('computes directional focused co-change pairs from narrowed git history', () => {
+    const pairs = getDirectionalCoChangePairsForFiles(fakeDb(repoRoot), new Set(['a.ts']), {
+      minTogether: 3,
+      minConfidence: 0,
+    })!;
+
+    expect(pairs.every((entry) => entry.fileA === 'a.ts' || entry.fileB === 'a.ts')).toBe(true);
+    const pair = pairs.find((entry) => entry.fileA === 'a.ts' && entry.fileB === 'b.ts');
+    expect(pair).toEqual(
+      expect.objectContaining({
+        together: 4,
+        changesA: 5,
+        focusedTogether: 4,
+        broadTogether: 0,
+        recentTogether: 4,
+        subjectContext: expect.objectContaining({
+          subjectLabels: ['feature', 'fix'],
+          issueRefs: ['#42'],
+        }),
       }),
     );
   });

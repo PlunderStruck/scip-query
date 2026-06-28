@@ -78,3 +78,10 @@ context behavior; it only skips non-callable symbols in the echo check.
 The doc-reference citation parser references to `diff-gate.ts` remain accurate.
 The co-change partner cleanup does not touch doc-reference parsing or citation
 contexts; it only counts raw git changed paths when testing partner presence.
+
+## 2026-06-28 Focused Co-Change History Follow-Up
+
+The doc-reference citation parser references to `diff-gate.ts` remain accurate.
+The focused co-change history optimization does not touch doc-reference parsing
+or citation contexts; it only changes how the separate co-change partner check
+loads git-history evidence.

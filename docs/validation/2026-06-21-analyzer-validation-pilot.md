@@ -171,3 +171,10 @@ unchanged.
 The `diff-gate.ts` pilot references remain accurate. The current change keeps
 the default check list intact and only fixes co-change partner presence checks
 for non-indexed raw git paths such as docs.
+
+## 2026-06-28 Focused Co-Change History Follow-Up
+
+The `diff-gate.ts` pilot references remain accurate. The current focused
+history change keeps `diffGate()` and `DIFF_GATE_CHECKS` intact while reducing
+the co-change partner check's git-history input to changed-file commits in the
+same bounded window.

@@ -84,3 +84,11 @@ reports.
 The subject-context behavior documented for `diff-gate.ts` remains unchanged.
 The new co-change edit only changes the set used to decide whether a historical
 partner is already in the current raw git diff.
+
+## 2026-06-28 Focused Co-Change History Follow-Up
+
+The subject-context behavior documented for `src/analysis/git-history.ts` and
+`diff-gate.ts` remains unchanged. The focused history path still builds subject
+context from commits that contributed to the directional co-change pair; it
+only avoids loading unrelated commits that cannot produce a partner finding for
+the current diff.
