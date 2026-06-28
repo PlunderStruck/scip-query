@@ -131,6 +131,15 @@ reported zero `tree-sitter` parse calls.
   parent already has the database open for phase applicability. The overview
   phase is cheap, but spawning a separate CLI process for it still pays process
   startup and database-open cost.
+- Rejected: priority-sort health subprocess tasks by broad-scan cost. On
+  Vega_2.0 it only moved `health --json` from 2.487s to 2.457s while moving
+  `health --json --full` from 2.445s to 2.464s. Explicit concurrency probes on
+  that shape were worse at 11, 12, and 14 workers, so the scheduler experiment
+  was reverted.
+- Candidate accepted below: make drift's source-reference fallback
+  candidate-first. SCIP reference edges and existing semantic/source import
+  gates can prove most dependency edges are not unused-import findings before
+  the expensive source reference scan runs.
 
 ## Decisions
 
@@ -152,6 +161,11 @@ reported zero `tree-sitter` parse calls.
   before scheduling subprocess phases. This keeps phase aggregation and skipped
   phase semantics unchanged while removing one child process from every health
   command.
+- Accepted: in `drift()`, build SCIP symbol-reference edges first, apply the
+  conservative semantic/source/type-only/side-effect/Vue skip gates, and only
+  then source-scan files that still have possible unused-import findings. This
+  preserves public drift output while avoiding a whole-project source-reference
+  scan when cheaper evidence has already ruled out most edges.
 
 ## Post Health Drift Pattern-Deviation Skip
 
@@ -190,3 +204,24 @@ the byte-identical JSON contracts.
 The standard health path improved by 166ms versus the same-session pre-patch
 median and kept the exact same 15,342-byte payload hash. Full health also moved
 below the previous focused 2.55s median while preserving its 15,360-byte hash.
+
+## Post Candidate-First Drift Source Scan
+
+Focused rerun with the local built CLI after `drift()` stopped building
+source-scanned symbol-reference edges for every indexed file up front. The new
+flow builds SCIP reference edges first, filters dependency edges through the
+same conservative skip gates that already existed, and source-scans only files
+that can still become unused-import findings.
+
+| Case | Baseline median | Current median | Warm repeats | stdout bytes | SHA-256 |
+| --- | ---: | ---: | --- | ---: | --- |
+| `scip-query __health-phase drift --full` | 1.709s | 0.723s | 1.154s, 0.730s, 0.729s, 0.706s, 0.723s, 0.714s, 0.712s | 98 | `7409f1c8ad7c5ae6a6ac5ae17778707e1b03f9e990a521de4376357f4a48bacd` |
+| `scip-query drift --json` | 1.7s phase-family band | 0.723s | 0.726s, 0.728s, 0.723s, 0.715s, 0.719s | 725,970 | `a7754846099d3424020aa3a26764fec84698dc3f5cfdb1c861c30228d1366462` |
+| `scip-query health --json` | 2.487s | 2.384s | 2.375s, 2.384s, 2.428s, 2.377s, 2.368s, 2.423s, 2.392s | 15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query health --json --full` | 2.445s | 2.455s | 2.455s, 2.378s, 2.576s, 2.466s, 2.403s | 15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
+
+The standalone drift phase drops by 986ms with the exact same 98-byte health
+phase payload. Public `drift --json` keeps the same 725,970-byte result hash and
+now runs in the same 0.72s band. Aggregate health is only modestly better
+because isolated, wrapper, stale, dead, complexity, and git-evidence phases now
+dominate the subprocess schedule.

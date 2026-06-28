@@ -63,12 +63,8 @@ export function drift(
   // Build file dep graph (which files depend on which)
   const depGraph = index.fileDependencyGraph(scope);
 
-  // Build symbol-level reference graph: for each file, which other files'
-  // symbols does it actually reference?
-  const symbolRefs = buildSymbolRefGraph(db, scope);
-
   return summarizeDrift([
-    ...unusedImportDrift(db, depGraph, symbolRefs, { semantic: includeSemantic }),
+    ...unusedImportDrift(db, depGraph, { scope, semantic: includeSemantic }),
     ...layerViolationDrift(depGraph),
     ...(includePatternDeviations ? patternDeviationDrift(depGraph, minDeviation) : []),
   ]);
@@ -82,10 +78,12 @@ export function drift(
 function unusedImportDrift(
   db: ScipDatabase,
   depGraph: Map<string, Set<string>>,
-  symbolRefs: Map<string, Set<string>>,
-  opts: { semantic: boolean },
+  opts: { scope?: string; semantic: boolean },
 ): DriftResult[] {
-  const results: DriftResult[] = [];
+  const symbolRefs = buildScipSymbolRefGraph(db, opts.scope);
+  const candidates: Array<{ file: string; dep: string }> = [];
+  const candidateFiles = new Set<string>();
+
   for (const [file, deps] of depGraph) {
     if (shouldSkipDriftFile(file)) continue;
 
@@ -93,38 +91,55 @@ function unusedImportDrift(
 
     for (const dep of deps) {
       if (shouldSkipDriftFile(dep)) continue;
-
-      if (!referencedFiles.has(dep)) {
-        // This file "depends on" dep but never references its symbols.
-        // This can happen when the dep is imported for types only
-        // (which don't appear in the mention graph). Skip type-heavy deps.
-        if (opts.semantic && hasSemanticImportUse(db, file, dep)) continue;
-        if (hasUsedSourceImport(db, file, dep)) continue;
-        if (isTypeOnlyImport(db, file, dep)) continue;
-        if (isLikelyTypeOnlyDep(dep)) continue;
-        // Side-effect-only imports (`import 'polyfill'`) intentionally
-        // reference nothing — flagging them as "unused" would be wrong.
-        if (isSideEffectImport(db, file, dep)) continue;
-        // Vue component imports are often consumed by SFC templates or
-        // component registration rather than a normal symbol reference.
-        if (isVueSingleFileComponent(dep)) continue;
-
-        results.push({
-          file,
-          kind: 'unused-import',
-          description: `Depends on ${dep} but references none of its symbols`,
-          dep,
-          actionTier: 'direct',
-          evidenceReasons: [
-            `dependency edge exists from ${file} to ${dep}`,
-            'no semantic, source, type-only, side-effect, or Vue-template usage survived the conservative skip gates',
-          ],
-          recommendation: 'Remove the unused import or dependency edge after running the project checks.',
-        });
-      }
+      if (referencedFiles.has(dep)) continue;
+      if (hasConservativeImportUse(db, file, dep, opts)) continue;
+      candidates.push({ file, dep });
+      candidateFiles.add(file);
     }
   }
+
+  if (candidateFiles.size > 0) {
+    addSourceScannedSymbolRefEdges(db, symbolRefs, {
+      paths: [...candidateFiles],
+    });
+  }
+
+  const results: DriftResult[] = [];
+  for (const { file, dep } of candidates) {
+    const referencedFiles = symbolRefs.get(file) ?? new Set<string>();
+    if (referencedFiles.has(dep)) continue;
+
+    results.push({
+      file,
+      kind: 'unused-import',
+      description: `Depends on ${dep} but references none of its symbols`,
+      dep,
+      actionTier: 'direct',
+      evidenceReasons: [
+        `dependency edge exists from ${file} to ${dep}`,
+        'no semantic, source, type-only, side-effect, or Vue-template usage survived the conservative skip gates',
+      ],
+      recommendation: 'Remove the unused import or dependency edge after running the project checks.',
+    });
+  }
   return results;
+}
+
+function hasConservativeImportUse(
+  db: ScipDatabase,
+  file: string,
+  dep: string,
+  opts: { semantic: boolean },
+): boolean {
+  // This file "depends on" dep but the SCIP graph does not show symbol
+  // references. That can happen for type-only imports, side-effect imports,
+  // Vue templates, or source/semantic reference gaps.
+  if (opts.semantic && hasSemanticImportUse(db, file, dep)) return true;
+  if (hasUsedSourceImport(db, file, dep)) return true;
+  if (isTypeOnlyImport(db, file, dep)) return true;
+  if (isLikelyTypeOnlyDep(dep)) return true;
+  if (isSideEffectImport(db, file, dep)) return true;
+  return isVueSingleFileComponent(dep);
 }
 
 function layerViolationDrift(depGraph: Map<string, Set<string>>): DriftResult[] {
@@ -256,10 +271,9 @@ function dependencyFrequency(depGraph: Map<string, Set<string>>, files: string[]
  * This is more precise than the dep graph because it uses actual
  * symbol mentions, not just import statements.
  */
-function buildSymbolRefGraph(db: ScipDatabase, scope?: string): Map<string, Set<string>> {
+function buildScipSymbolRefGraph(db: ScipDatabase, scope?: string): Map<string, Set<string>> {
   const graph = new Map<string, Set<string>>();
   addScipSymbolRefEdges(db, graph, scope);
-  addSourceScannedSymbolRefEdges(db, graph);
   return graph;
 }
 
@@ -295,7 +309,11 @@ function scipSymbolRefEdges(db: ScipDatabase, scope?: string): Array<{ from_file
 // scip-query: ignore-extract — this adds source-scanned symbol edges; document
 // loading, ignore filtering, source-reference scanning, and graph mutation are
 // one fallback evidence source.
-function addSourceScannedSymbolRefEdges(db: ScipDatabase, graph: Map<string, Set<string>>): void {
+function addSourceScannedSymbolRefEdges(
+  db: ScipDatabase,
+  graph: Map<string, Set<string>>,
+  opts: { paths?: readonly string[] } = {},
+): void {
   const index = new ProjectIndex(db);
   // SCIP mentions miss many cross-file references (rust-analyzer skips a lot
   // of inherent-method calls; tsc-batch can drop method receivers). Without
@@ -303,7 +321,7 @@ function addSourceScannedSymbolRefEdges(db: ScipDatabase, graph: Map<string, Set
   // dependency goes through one of those gaps.
   index.scanSourceReferences(
     {
-      paths: indexedDocumentPaths(db, { includeIgnored: false }),
+      paths: opts.paths ?? indexedDocumentPaths(db, { includeIgnored: false }),
       includeRustAttributeNames: true,
       identifierResolution: 'permissive',
     },
