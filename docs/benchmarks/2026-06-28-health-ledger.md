@@ -292,3 +292,24 @@ their previous byte-identical outputs. `diff-gate --json` had one matrix
 outlier at 2.644s, then repeated at 1.651s, 1.548s, and 1.503s with the same
 3,089-byte SHA-256
 `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`.
+
+## Rejected Shared Phase Cache Probe
+
+Focused rerun with the local built CLI after a temporary `runHealthAnalyses()`
+change mirrored `healthPhases()` by passing
+`releaseCachesBetweenPhases: false` to every phase runner. The hypothesis was
+that composite health was losing time by clearing pure per-DB evidence caches
+between phases. Output hashes stayed stable, but the warm timing band did not
+improve, so the code change was reverted.
+
+| Command                           | Baseline warm band | Probe warm band                                  | stdout bytes | SHA-256                                                            | Decision                       |
+| --------------------------------- | -----------------: | ------------------------------------------------ | -----------: | ------------------------------------------------------------------ | ------------------------------ |
+| `scip-query health --json`        |      2.120s-2.161s | 2.187s-2.139s-2.151s-2.165s after 2.510s outlier |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` | Rejected; no measurable win    |
+| `scip-query health --json --full` |      2.095s-2.198s | 2.115s-2.155s-2.184s-2.156s-2.128s               |       15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` | Rejected; neutral within noise |
+
+Current repeat matrix from the same session, after reverting the probe, keeps
+the next-target ordering: `diff-gate --json` 1.552s-1.594s after one 2.559s
+outlier, `dead --json --full` 1.556s-1.612s,
+`complexity-hotspots --json --full` 1.498s-1.543s, and
+`recent-duplicates --json --full` 1.495s-1.523s. All hashes matched their
+previous values.

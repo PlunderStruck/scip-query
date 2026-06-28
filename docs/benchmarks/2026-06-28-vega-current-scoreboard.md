@@ -487,11 +487,11 @@ that fill.
 | Command                                       | Baseline |       Current | Warm repeats                                     | stdout bytes | SHA-256                                                            |
 | --------------------------------------------- | -------: | ------------: | ------------------------------------------------ | -----------: | ------------------------------------------------------------------ |
 | `scip-query isolated --json --full`           |   1.744s |        1.306s | 2.726s fill, then 1.314s-1.306s                  |          130 | `04e17adcb38811e37d69fc5abbaadb8b2d79cdf7a9992a30c27648e520acb702` |
-| `scip-query health --json`                    |   2.329s | 2.131s-2.251s | 2.184s-2.131s-2.186s; matrix 2.251s              |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
-| `scip-query health --json --full`             |   2.326s | 2.145s-2.358s | 2.221s; matrix 2.145s; follow-up 2.358s          |       15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
+| `scip-query health --json`                    |   2.329s | 2.120s-2.178s | 2.120s-2.136s-2.161s; matrix 2.178s              |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query health --json --full`             |   2.326s | 2.095s-2.198s | 2.095s-2.198s-2.142s                             |       15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
 | `scip-query diff-gate --json`                 |   1.981s | 1.503s-1.651s | 2.644s matrix outlier, then 1.651s-1.548s-1.503s |        3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
-| `scip-query dead --json --full`               |   1.968s |        1.513s | matrix run                                       |    3,803,655 | `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1` |
-| `scip-query recent-duplicates --json --full`  |   1.936s |        1.480s | matrix run                                       |        3,618 | `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b` |
+| `scip-query dead --json --full`               |   1.968s | 1.515s-1.531s | 1.522s-1.525s-1.531s; matrix 1.515s              |    3,803,655 | `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1` |
+| `scip-query recent-duplicates --json --full`  |   1.936s | 1.442s-1.510s | 1.469s-1.510s-1.501s; matrix 1.442s              |        3,618 | `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b` |
 | `scip-query wrapper-candidates --json --full` |   1.608s |        1.206s | matrix run; direct hash probe 1.251s             |       78,437 | `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58` |
 | `scip-query stale-abstractions --json --full` |   1.527s |        1.142s | matrix run; direct hash probe 1.127s             |       83,654 | `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2` |
 | `scip-query similar --json --full`            |   1.372s |        0.939s | matrix run; direct hash probe 0.966s             |       88,859 | `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf` |
@@ -512,13 +512,15 @@ that fill.
 
 ## Current Next Targets
 
-1. `health --json` remains the top warm target around the 2.13s-2.25s band.
-   Definition persistence moved the slow cleanup phases down, leaving wrapper
-   around 1.18s, isolated around 1.16s, stale around 1.11s, complexity around
-   1.09s, and git-evidence around 0.84s.
-2. `diff-gate --json` is now in the 1.50s-1.65s focused warm band after one
-   matrix outlier. The next gate pass should inspect remaining echo/co-change
-   overhead before changing scheduling.
+1. `health --json` remains the top warm target around the 2.12s-2.18s band.
+   A shared phase-cache probe preserved hashes but did not move timing, so the
+   next health pass needs a different algorithmic target rather than another
+   cache-retention variant.
+2. `diff-gate --json`, `dead --json --full`, `complexity-hotspots --json
+--full`, and `recent-duplicates --json --full` are now clustered around
+   1.50s-1.60s in repeated warm local-CLI runs. The next implementation pass
+   should choose the clearest algorithmic bottleneck from that group instead of
+   chasing health orchestration noise.
 3. Standalone `dead --json --full`, `recent-duplicates --json --full`,
    `wrapper-candidates --json --full`, `stale-abstractions --json --full`, and
    `similar --json --full` now sit between about 0.94s and 1.51s in focused
