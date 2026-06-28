@@ -1,5 +1,6 @@
 import { extname } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
+import { fileContentHash, readCachedFileEvidence, writeCachedFileEvidence } from '../storage/evidence-cache.js';
 import { createSourceFileCache } from '../storage/per-db-cache.js';
 import { getAst } from './ast/ast-core.js';
 import type { SyntaxNode } from './ast/ast-types.js';
@@ -144,9 +145,32 @@ export function buildReactComponentBehaviorProfilesForFile(
   const file = relativePath.replace(/\\/g, '/');
   const source = getSourceText(db, file);
   const cached = REACT_COMPONENT_BEHAVIOR_PROFILE_CACHE.get(db, file, source, () =>
-    buildReactComponentBehaviorProfilesForFileUncached(db, file),
+    loadOrBuildReactComponentBehaviorProfiles(db, file, source),
   );
   return cached.map(cloneReactComponentBehaviorProfile);
+}
+
+function loadOrBuildReactComponentBehaviorProfiles(
+  db: ScipDatabase,
+  file: string,
+  source: string,
+): ReactComponentBehaviorProfile[] {
+  const contentHash = fileContentHash(db, file, source);
+  const cached = readCachedFileEvidence(db, 'react-component-behavior-profiles', file, contentHash);
+  if (cached) {
+    const profiles = deserializeReactComponentBehaviorProfiles(cached);
+    if (profiles) return profiles;
+  }
+
+  const profiles = buildReactComponentBehaviorProfilesForFileUncached(db, file);
+  writeCachedFileEvidence(
+    db,
+    'react-component-behavior-profiles',
+    file,
+    contentHash,
+    serializeReactComponentBehaviorProfiles(profiles),
+  );
+  return profiles;
 }
 
 function buildReactComponentBehaviorProfilesForFileUncached(
@@ -203,6 +227,114 @@ function cloneReactComponentBehaviorProfile(profile: ReactComponentBehaviorProfi
     effectNames: [...profile.effectNames],
     handlerNames: [...profile.handlerNames],
   };
+}
+
+type SerializedReactComponentBehaviorProfile = Omit<ReactComponentBehaviorProfile, 'jsxTokens' | 'behaviorTokens'> & {
+  jsxTokens: string[];
+  behaviorTokens: string[];
+};
+
+function serializeReactComponentBehaviorProfiles(profiles: readonly ReactComponentBehaviorProfile[]): string {
+  return JSON.stringify(
+    profiles.map(
+      (profile): SerializedReactComponentBehaviorProfile => ({
+        ...profile,
+        jsxTokens: [...profile.jsxTokens],
+        behaviorTokens: [...profile.behaviorTokens],
+      }),
+    ),
+  );
+}
+
+function deserializeReactComponentBehaviorProfiles(payload: string): ReactComponentBehaviorProfile[] | null {
+  try {
+    const raw = JSON.parse(payload) as unknown;
+    if (!Array.isArray(raw)) return null;
+    const profiles: ReactComponentBehaviorProfile[] = [];
+    for (const item of raw) {
+      const profile = deserializeReactComponentBehaviorProfile(item);
+      if (!profile) return null;
+      profiles.push(profile);
+    }
+    return profiles;
+  } catch {
+    return null;
+  }
+}
+
+function deserializeReactComponentBehaviorProfile(raw: unknown): ReactComponentBehaviorProfile | null {
+  if (!isRecord(raw)) return null;
+  const {
+    file,
+    name,
+    kind,
+    startLine,
+    endLine,
+    loc,
+    fileLines,
+    jsxTokens,
+    behaviorTokens,
+    componentNames,
+    nativeTags,
+    propNames,
+    eventNames,
+    hookNames,
+    requestNames,
+    stateNames,
+    effectNames,
+    handlerNames,
+  } = raw;
+  if (typeof file !== 'string' || typeof name !== 'string') return null;
+  if (kind !== 'component' && kind !== 'hook') return null;
+  if (!isFiniteNumber(startLine) || !isFiniteNumber(endLine) || !isFiniteNumber(loc) || !isFiniteNumber(fileLines)) {
+    return null;
+  }
+  const stringArrays = {
+    jsxTokens: stringArray(jsxTokens),
+    behaviorTokens: stringArray(behaviorTokens),
+    componentNames: stringArray(componentNames),
+    nativeTags: stringArray(nativeTags),
+    propNames: stringArray(propNames),
+    eventNames: stringArray(eventNames),
+    hookNames: stringArray(hookNames),
+    requestNames: stringArray(requestNames),
+    stateNames: stringArray(stateNames),
+    effectNames: stringArray(effectNames),
+    handlerNames: stringArray(handlerNames),
+  };
+  if (Object.values(stringArrays).some((value) => value === null)) return null;
+  return {
+    file,
+    name,
+    kind,
+    startLine,
+    endLine,
+    loc,
+    fileLines,
+    jsxTokens: new Set(stringArrays.jsxTokens!),
+    behaviorTokens: new Set(stringArrays.behaviorTokens!),
+    componentNames: stringArrays.componentNames!,
+    nativeTags: stringArrays.nativeTags!,
+    propNames: stringArrays.propNames!,
+    eventNames: stringArrays.eventNames!,
+    hookNames: stringArrays.hookNames!,
+    requestNames: stringArrays.requestNames!,
+    stateNames: stringArrays.stateNames!,
+    effectNames: stringArrays.effectNames!,
+    handlerNames: stringArrays.handlerNames!,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function stringArray(value: unknown): string[] | null {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : null;
 }
 
 interface ReactCandidate {

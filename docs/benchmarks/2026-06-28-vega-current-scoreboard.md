@@ -116,12 +116,27 @@ recent window. Pushing that existing recency rule into callable and frontend
 pairwise scans keeps the output byte-identical while avoiding comparison work
 that could not produce findings.
 
+## Post React Profile Persistent Cache Refresh
+
+Focused rerun with the local built CLI after adding content-hash-keyed
+`react-component-behavior-profiles` rows to `evidence.db`:
+
+| Command                                      | Current                    | stdout bytes | SHA-256                                                            |
+| -------------------------------------------- | -------------------------- | -----------: | ------------------------------------------------------------------ |
+| `scip-query recent-duplicates --json --full` | 1.936s median              |        3,618 | `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b` |
+| first patched run                            | 4.155s, populated 689 rows |        3,618 | same                                                               |
+| warm repeats                                 | 1.945s-1.927s-1.936s       |        3,618 | same                                                               |
+
+This measurement used `node /Users/aydansalois/Documents/GitHub/scip-query/dist/cli.js`
+from the checkout build; the shell `scip-query` command still points at the
+installed Hermes package until the package is installed or published.
+
 ## Biggest Confirmed Delta
 
 | Command                                       | Earlier heavy/focused baseline | Current warm | Notes                                                                                                                                                                                              |
 | --------------------------------------------- | -----------------------------: | -----------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `scip-query similar --json --full`            |  300.7s heavy / 315.3s focused |       2.169s | Same 88,859-byte output and SHA-256 `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf`; stable evidence-cache reads avoid post-version-bump semantic cache misses.                 |
-| `scip-query recent-duplicates --json --full`  |                         6.439s |       4.190s | Same 3,618-byte output and SHA-256 `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`; full-mode scans now skip old-old pairs before expensive comparisons.                        |
+| `scip-query recent-duplicates --json --full`  |                         6.439s |       1.936s | Same 3,618-byte output and SHA-256 `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`; full-mode scans skip old-old pairs and React profile rows now persist across CLI processes. |
 | `scip-query health --json`                    |                         6.864s |       3.913s | Same 15,342-byte output and SHA-256 `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d`; latest warm matrix is materially lower, but attribution is mixed with runtime/cache noise. |
 | `scip-query diff-gate --json`                 |                         4.193s |       3.053s | Same 3,089-byte output and SHA-256 `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`; targeted similarity and incomplete-migration now reuse existing callee-index work.          |
 | `scip-query dead --json --full`               |                         4.325s |       3.312s | Same 3,803,655-byte output and SHA-256 `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1`; JS/TS exclusion prefilter now avoids ordinary React hook-call files.                    |
@@ -129,13 +144,14 @@ that could not produce findings.
 
 ## Current Next Targets
 
-1. `recent-duplicates --json --full`: latest focused median is 4.190s, still
-   the top standalone target but now much closer to the rest of the pack.
-2. `health --json` and `doc-drift --json --full`: latest focused runs are
-   3.876s and 3.628s respectively.
-3. `dead --json --full`: now around 3.31s in focused warm repeats; remaining
+1. `health --json` and `doc-drift --json --full`: latest focused runs before
+   the React profile persistent-cache slice were 3.876s and 3.628s respectively.
+2. `dead --json --full`: now around 3.31s in focused warm repeats; remaining
    work is likely caller-map, source-reference, or candidate definition
    correction rather than the JS/TS exclusion prefilter.
+3. Re-run the full Vega warm matrix with the installed CLI after the next
+   package install/publish so `health` captures the persistent React profile
+   cache through the normal `scip-query` command.
 
 Cold/heavy-matrix spikes in `passthrough-candidates`, `complexity-hotspots`,
 `wrapper-candidates`, and `stale-abstractions` were largely source/evidence

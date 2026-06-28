@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import Database from 'better-sqlite3';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -106,7 +107,7 @@ describe('React frontend rich internals', () => {
   });
 
   it('extracts JSX structure and hook behavior from TSX components', () => {
-    const { db } = createReactFixture({
+    const { db, projectRoot } = createReactFixture({
       'src/components/IssuePanel.tsx': ISSUE_PANEL,
     });
     try {
@@ -136,6 +137,28 @@ describe('React frontend rich internals', () => {
       expect([...(profile?.behaviorTokens ?? [])]).toEqual(
         expect.arrayContaining(['hook:useResource', 'request:fetch', 'state:rows', 'handler-verb:refresh']),
       );
+
+      const evidenceDb = new Database(join(projectRoot, 'evidence.db'), { readonly: true });
+      try {
+        const row = evidenceDb
+          .prepare('SELECT COUNT(*) AS count FROM file_evidence WHERE kind = ?')
+          .get('react-component-behavior-profiles') as { count: number };
+        expect(row.count).toBe(1);
+      } finally {
+        evidenceDb.close();
+      }
+
+      const reopened = new ScipDatabase({
+        dbPath: join(projectRoot, 'index.db'),
+        indexPath: join(projectRoot, 'index.scip'),
+        projectRoot,
+      });
+      try {
+        const cachedProfiles = buildReactComponentBehaviorProfilesForFile(reopened, 'src/components/IssuePanel.tsx');
+        expect(cachedProfiles).toEqual(profiles);
+      } finally {
+        reopened.close();
+      }
     } finally {
       db.close();
     }

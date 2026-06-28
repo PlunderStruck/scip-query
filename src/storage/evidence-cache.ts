@@ -24,7 +24,12 @@ import { createPerDbCache } from './per-db-cache.js';
 export const EVIDENCE_DB_FILENAME = 'evidence.db';
 
 /** Per-file payload kinds. Each is a pure function of one file's content. */
-export type FileEvidenceKind = 'source-facts' | 'doc-path-tokens' | 'source-imports' | 'consumer-file-usage';
+export type FileEvidenceKind =
+  | 'source-facts'
+  | 'doc-path-tokens'
+  | 'source-imports'
+  | 'consumer-file-usage'
+  | 'react-component-behavior-profiles';
 
 interface EvidenceConnection {
   evidence: Database.Database;

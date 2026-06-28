@@ -22,6 +22,7 @@
 | Vega_2.0 set-kernel smaller-set iteration trial                      |                                                                    4.897s-5.174s | 5.269s median |             slower | Output hash stayed unchanged, but repeats were 5.970s, 5.269s, 4.956s; reverted.                                                                                                  |
 | Vega_2.0 stable evidence cache version after `0.10.9` bump           |                                                       multi-minute semantic miss |        5.287s | restores warm path | Existing `0.10.8` semantic callee rows reused by content/digest-compatible reads; stdout 3,618 bytes; SHA-256 `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`. |
 | Vega_2.0 full focus-file pair pruning                                |                                                                           5.344s | 4.190s median |   -1.154s / -21.6% | Four post-change warm repeats: 4.242s, 4.182s, 4.194s, 4.186s; stdout 3,618 bytes; SHA-256 unchanged at `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`.       |
+| Vega_2.0 persistent React profile evidence cache                     |                                                                           4.590s | 1.936s median |   -2.654s / -57.8% | Local built CLI first run populated 689 `react-component-behavior-profiles` rows in 4.155s; warm repeats were 1.945s, 1.927s, 1.936s; stdout/hash unchanged.                      |
 
 ## Current Pipeline
 
@@ -86,6 +87,12 @@ reactHookCandidates -C 10`.
 - Accepted: focus-file pair pruning for `recent-duplicates --full`. It skips
   candidate pairs where neither side can become a recent echo/twin, preserves
   the Vega output hash, and moves the latest warm median to 4.190s.
+- Accepted: persistent React component behavior profile evidence. The first
+  local built CLI run writes one content-hash-keyed evidence row per React
+  source file; later CLI processes deserialize the same profile shapes instead
+  of reparsing every `.tsx`/`.jsx` file. Vega warm median moved from 4.590s to
+  1.936s with the same 3,618-byte output and SHA-256
+  `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`.
 - Rejected: sharing one React profile array between React component and hook
   detectors. The output hash stayed unchanged, but Vega remained in the same
   4.18s-4.24s band while the change widened detector API surface, so it was
