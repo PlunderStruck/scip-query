@@ -301,7 +301,9 @@ It creates `.scipquery.json`:
 
 Use `declaredCouplings` for files that intentionally form one maintenance unit.
 These pairs are treated as structurally linked by `co-change` and health, while
-still appearing in file-specific exploration:
+still appearing in file-specific exploration. The cleanup detector example
+keeps dead-code, isolated-callable, and stale-abstraction detectors together
+because they share candidate and evidence policy changes:
 
 ```json
 {

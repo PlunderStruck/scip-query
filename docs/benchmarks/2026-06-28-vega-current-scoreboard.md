@@ -24,6 +24,9 @@ The newest complexity-hotspots pass applies the existing LOC threshold during
 candidate collection and reduces per-candidate callee scoring allocations.
 The newest recent-duplicates pass persists the parsed Git file-add map by HEAD
 so warm CLI processes avoid a repeated add-history scan.
+The newest isolated pass prunes strict non-self callees before caller evidence
+and uses direct semantic caller evidence after non-semantic caller absence is
+already established.
 Focused reruns after the full matrix are recorded separately below so partial
 measurements do not silently reshuffle the whole ranking.
 
@@ -561,6 +564,22 @@ processes reused the 18,821-row Vega add map.
 | `scip-query health --json`                   |              1.908s-2.131s | 1.870s-1.839s-1.826s                          |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
 | `scip-query __health-phase git-evidence`     |              0.897s-0.914s | 0.855s-0.878s-0.851s                          |      413,963 | `7750461f2aeea01ef99261bc29cec088c9b8edeb06028bd24e4e5cb4392a96b4` |
 
+## Post Isolated Pipeline Narrowing Refresh
+
+Focused rerun with the rebuilt local CLI after moving strict non-self callee
+evidence ahead of caller evidence in `isolated()` and replacing the repeated
+semantic caller pass with direct semantic caller evidence. The isolated command
+is faster with byte-identical output; composite health remains in the same
+timing band because its phases run in parallel.
+
+| Command                                     | Previous focused warm | Current warm repeats                                    | stdout bytes | SHA-256                                                            |
+| ------------------------------------------- | --------------------: | ------------------------------------------------------- | -----------: | ------------------------------------------------------------------ |
+| `scip-query isolated --json --full`         |                1.306s | 1.773s outlier, then 1.163s-1.139s-1.132s-1.140s median |          130 | `04e17adcb38811e37d69fc5abbaadb8b2d79cdf7a9992a30c27648e520acb702` |
+| `scip-query __health-phase isolated`        |                1.133s | 1.127s-1.099s-1.141s-1.134s-1.129s median               |           63 | `483ba1fc03707fcb197b8eb48207444c446feda7e73732b3e45813b77c0da329` |
+| `scip-query __health-phase isolated --full` |                1.672s | 1.180s-1.172s-1.173s-1.173s-1.198s median               |           63 | `483ba1fc03707fcb197b8eb48207444c446feda7e73732b3e45813b77c0da329` |
+| `scip-query health --json`                  |         1.826s-1.933s | 1.929s-1.956s-1.818s-1.840s-1.864s median               |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| `scip-query health --json --full`           |         1.916s-1.925s | 1.901s-1.956s-1.893s-1.854s-1.841s median               |       15,360 | `04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff` |
+
 ## Biggest Confirmed Delta
 
 | Command                                       | Earlier heavy/focused baseline | Current warm | Notes                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -573,17 +592,18 @@ processes reused the 18,821-row Vega add map.
 | `scip-query dead --json --full`               |                         4.325s |       1.119s | Same 3,803,655-byte output and SHA-256 `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1`; JS/TS exclusion prefilter avoids ordinary React hook-call files, SQL statements are cached per connection, source fallback reuses scoped definition caches, framework/definition evidence persists, and large candidate sets now batch caller-file evidence instead of resolving per-symbol caller rows. |
 | `scip-query wrapper-candidates --json --full` |                         2.236s |       1.206s | Same 78,437-byte output and SHA-256 `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58`; re-export parsing and source-corrected definitions now persist across fresh CLI processes.                                                                                                                                                                                                                  |
 | `scip-query stale-abstractions --json --full` |      43.268s cold / 3.13s warm |       1.142s | Same 83,654-byte output and SHA-256 `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2`; source fallback reuses per-file import local-name maps while re-export parsing and definitions persist across fresh CLI processes.                                                                                                                                                                          |
+| `scip-query isolated --json --full`           |                         1.822s |       1.140s | Same 130-byte output and SHA-256 `04e17adcb38811e37d69fc5abbaadb8b2d79cdf7a9992a30c27648e520acb702`; strict non-self callee evidence now prunes the candidate set before caller evidence, and the semantic phase only adds semantic caller evidence instead of rerunning the non-semantic caller passes.                                                                                                            |
 | `scip-query drift --json`                     |         1.7s phase-family band |       0.723s | Same 725,970-byte output and SHA-256 `a7754846099d3424020aa3a26764fec84698dc3f5cfdb1c861c30228d1366462`; source-reference fallback now runs only after SCIP refs and import skip gates leave possible unused-import findings.                                                                                                                                                                                       |
 
 ## Current Next Targets
 
-1. `health --json` and `health --json --full` still sit around 1.83s-1.93s.
+1. `health --json` and `health --json --full` still sit around 1.86s-1.89s.
    A fresh concurrency sweep from 10 through 18 workers kept the same output
    hash and did not beat the current scheduler, so the next health pass should
    target individual phase algorithms or shared phase setup.
-2. `complexity-hotspots --json --full`, `isolated --json --full`, and
-   `diff-gate --json` are the next standalone cluster, roughly 1.33s-1.47s in
-   current focused warm local-CLI runs.
+2. `complexity-hotspots --json --full` and `diff-gate --json` are the next
+   standalone cluster, roughly 1.33s-1.42s in current focused warm local-CLI
+   runs. `isolated --json --full` is now about 1.14s.
 3. `recent-duplicates --json --full`, `dead --json --full`,
    `stale-abstractions --json --full`, `wrapper-candidates --json --full`, and
    `similar --json --full` now sit between about 0.95s and 1.21s in focused

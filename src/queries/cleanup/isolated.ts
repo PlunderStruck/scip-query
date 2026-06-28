@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../../core/project-index.js';
+import { semanticCallerMap } from '../../semantic/shared-primitives.js';
 import { applyScanLimit, definitionLoc } from '../query-utils.js';
 
 export interface IsolatedResult {
@@ -39,23 +40,27 @@ export function isolated(
     scanLimit,
   );
 
-  const scipCallerMap = index.crossFileCallerMap(candidates, { semantic: false });
-  const symbolsWithCallers = new Set<number>(scipCallerMap.keys());
-
-  for (const symbolId of index.frameworkReferencedSymbolIds(candidates)) {
-    symbolsWithCallers.add(symbolId);
-  }
-
   const symbolsWithCallees = index.symbolsWithNonSelfCallees(candidates, {
     additive: false,
     semantic: false,
   });
-  let possiblyIsolated = candidates
-    .filter((definition) => !symbolsWithCallers.has(definition.symbolId))
-    .filter((definition) => !symbolsWithCallees.has(definition.symbolId));
+  const candidatesWithoutStrictCallees = candidates.filter(
+    (definition) => !symbolsWithCallees.has(definition.symbolId),
+  );
+
+  const scipCallerMap = index.crossFileCallerMap(candidatesWithoutStrictCallees, { semantic: false });
+  const symbolsWithCallers = new Set<number>(scipCallerMap.keys());
+
+  for (const symbolId of index.frameworkReferencedSymbolIds(candidatesWithoutStrictCallees)) {
+    symbolsWithCallers.add(symbolId);
+  }
+
+  let possiblyIsolated = candidatesWithoutStrictCallees.filter(
+    (definition) => !symbolsWithCallers.has(definition.symbolId),
+  );
 
   if (includeSemantic && possiblyIsolated.length > 0) {
-    for (const symbolId of index.crossFileCallerMap(possiblyIsolated, { semantic: true }).keys()) {
+    for (const symbolId of semanticCallerMap(db, possiblyIsolated).keys()) {
       symbolsWithCallers.add(symbolId);
     }
     for (const symbolId of index.symbolsWithNonSelfCallees(possiblyIsolated, { additive: false, semantic: true })) {
