@@ -313,3 +313,34 @@ outlier, `dead --json --full` 1.556s-1.612s,
 `complexity-hotspots --json --full` 1.498s-1.543s, and
 `recent-duplicates --json --full` 1.495s-1.523s. All hashes matched their
 previous values.
+
+## Post Dead Bulk Caller Files
+
+Focused rerun with the local built CLI after `dead()` stopped resolving
+per-symbol caller rows for the large-candidate path. The accepted change keeps
+the existing small-repo caller facade, but when the command is already using the
+bulk semantic caller condition it now reads caller files through the batched
+`mentionReferenceChunkRows()` storage primitive and records only the file-level
+cross-file liveness evidence that `DeadSummary` can observe.
+
+Direct Vega query timing before the change showed that `dead()` analysis took
+1.259s-1.335s while JSON projection and stringify took only 0ms-3ms, so
+serialization was not the bottleneck. The exact CLI output stayed stable after
+the change.
+
+| Command                         | Previous warm band | Current warm band                                 | stdout bytes | SHA-256                                                            | Decision |
+| ------------------------------- | -----------------: | ------------------------------------------------- | -----------: | ------------------------------------------------------------------ | -------- |
+| `scip-query dead --json --full` |      1.515s-1.531s | 1.119s-1.139s after 1.819s outlier; matrix 1.132s |    3,803,655 | `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1` | Accepted |
+
+Neighbor checks kept their hashes: `health --json` stayed at SHA-256
+`edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d`,
+`health --json --full` stayed at
+`04b21eddee3b52083217caa645599952fe9df998a917784516c43299c72b83ff`, and
+`diff-gate --json` stayed at
+`4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`.
+
+Local `scip-query diff-gate` reported only eight support-tier
+`doc-reference` findings where README, benchmark, and historical validation
+documents cite `src/queries/cleanup/dead.ts` as a configuration-example path.
+The path target remains intentional; `scip-query diff-gate --skip
+doc-reference` passed with zero code or behavioral findings.

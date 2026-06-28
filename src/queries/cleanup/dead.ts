@@ -14,6 +14,7 @@ import { pathsResolveSame } from '../../resolution/path-normalization.js';
 import { sourceImportPathsByLocalName } from '../../language-parsers/import-index.js';
 import { semanticCallerMap } from '../../semantic/shared-primitives.js';
 import { indexedDocumentPaths as listIndexedDocumentPaths } from '../../storage/scip-documents.js';
+import { mentionReferenceChunkRows } from '../../storage/scip-mentions.js';
 import {
   emptyReferenceCounts,
   hasAnyReference,
@@ -482,11 +483,15 @@ function supplementReferencesFromCallerMap(
     recordReferenceAtLeast(referencesBySymbol, definition.symbolId, callerFile, 1, 'caller-map');
   };
 
-  for (const definition of definitions) {
-    const callers = callerRowsForSymbol(db, definition, { semantic: canUseSemantic && !useBulkSemanticCallers });
-    if (callers.length === 0) continue;
-    for (const caller of callers) {
-      recordCallerFile(definition, caller.file);
+  if (useBulkSemanticCallers) {
+    supplementCallerFilesFromMentionChunks(db, definitions, recordCallerFile);
+  } else {
+    for (const definition of definitions) {
+      const callers = callerRowsForSymbol(db, definition, { semantic: canUseSemantic });
+      if (callers.length === 0) continue;
+      for (const caller of callers) {
+        recordCallerFile(definition, caller.file);
+      }
     }
   }
 
@@ -496,5 +501,18 @@ function supplementReferencesFromCallerMap(
     const callerFiles = semanticCallersBySymbol.get(definition.symbolId);
     if (!callerFiles) continue;
     for (const callerFile of callerFiles) recordCallerFile(definition, callerFile);
+  }
+}
+
+function supplementCallerFilesFromMentionChunks(
+  db: ScipDatabase,
+  definitions: readonly IndexedDefinition[],
+  recordCallerFile: (definition: IndexedDefinition, callerFile: string) => void,
+): void {
+  const definitionBySymbolId = new Map(definitions.map((definition) => [definition.symbolId, definition]));
+  for (const row of mentionReferenceChunkRows(db, [...definitionBySymbolId.keys()])) {
+    const definition = definitionBySymbolId.get(row.symbol_id);
+    if (!definition) continue;
+    recordCallerFile(definition, row.relative_path);
   }
 }
