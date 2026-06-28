@@ -30,6 +30,12 @@
       "check": "echo",
       "file": "src/source/react-profile.ts",
       "reason": "Accepted cache-declaration echo: React behavior profiles intentionally use the same source-aware cache factory as Vue profile/template facts; the cache name and value type are the product variation."
+    },
+    {
+      "id": "SQ21A3A1CABA2B",
+      "check": "echo",
+      "file": "src/language-parsers/import-index.ts",
+      "reason": "Accepted cache-declaration echo: the import local-name map intentionally uses the established per-DB source-file cache factory; the cache name, key, and value type are the product-specific variation."
     }
   ],
   "declaredCouplings": [

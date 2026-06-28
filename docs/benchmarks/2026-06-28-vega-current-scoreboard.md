@@ -43,11 +43,11 @@ reshuffle the whole ranking.
 Focused rerun after the diff-gate callee-index pass while starting the next
 dead/health source-fallback trace:
 
-| Command                                      | Hash probe | Warm repeats  | stdout bytes | SHA-256                                                            |
-| -------------------------------------------- | ---------: | ------------- | -----------: | ------------------------------------------------------------------ |
-| `scip-query dead --json --full`              |     4.325s | 4.070s, 4.580s |    3,803,655 | `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1` |
-| `scip-query __health-phase dead --full`      |     2.926s | 3.176s, 2.895s |          189 | `648c7b6d6251e1d8761b0000e7663ae5f9971554db6cd0acd771dc9bb36db4ab` |
-| `scip-query health --json`                   |     4.178s | 4.085s, 4.095s |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| Command                                 | Hash probe | Warm repeats   | stdout bytes | SHA-256                                                            |
+| --------------------------------------- | ---------: | -------------- | -----------: | ------------------------------------------------------------------ |
+| `scip-query dead --json --full`         |     4.325s | 4.070s, 4.580s |    3,803,655 | `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1` |
+| `scip-query __health-phase dead --full` |     2.926s | 3.176s, 2.895s |          189 | `648c7b6d6251e1d8761b0000e7663ae5f9971554db6cd0acd771dc9bb36db4ab` |
+| `scip-query health --json`              |     4.178s | 4.085s, 4.095s |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
 
 This confirms `dead --json --full`, the dead health phase, and `health --json`
 still preserve their output contracts while hovering around the 3s-4.6s band
@@ -59,25 +59,39 @@ and reference-evidence path behind dead/health.
 Focused rerun after tightening the JS/TS framework-exclusion prefilter so
 ordinary React hook calls no longer force an AST exclusion pass:
 
-| Command                                      | First probe | Warm repeats  | stdout bytes | SHA-256                                                            |
-| -------------------------------------------- | ----------: | ------------- | -----------: | ------------------------------------------------------------------ |
-| `scip-query dead --json --full`              |      4.274s | 3.330s, 3.312s |    3,803,655 | `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1` |
-| `scip-query __health-phase dead --full`      |      2.192s | 2.219s, 2.193s |          189 | `648c7b6d6251e1d8761b0000e7663ae5f9971554db6cd0acd771dc9bb36db4ab` |
-| `scip-query health --json`                   |      4.091s | 4.116s, 3.985s |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| Command                                 | First probe | Warm repeats   | stdout bytes | SHA-256                                                            |
+| --------------------------------------- | ----------: | -------------- | -----------: | ------------------------------------------------------------------ |
+| `scip-query dead --json --full`         |      4.274s | 3.330s, 3.312s |    3,803,655 | `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1` |
+| `scip-query __health-phase dead --full` |      2.192s | 2.219s, 2.193s |          189 | `648c7b6d6251e1d8761b0000e7663ae5f9971554db6cd0acd771dc9bb36db4ab` |
+| `scip-query health --json`              |      4.091s | 4.116s, 3.985s |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
 
 The dead command and dead health phase are materially faster with identical
 output hashes. `health --json` is roughly neutral because other health phases
 now dominate the aggregate command.
 
+## Post Import-Index Cache Refresh
+
+Focused rerun after caching the per-file import local-name map used by source
+fallback attribution:
+
+| Command                                       |                        Baseline | Current | stdout bytes | SHA-256                                                            |
+| --------------------------------------------- | ------------------------------: | ------: | -----------: | ------------------------------------------------------------------ |
+| `scip-query stale-abstractions --json --full` | 43.268s cache-fill / 3.13s warm |  2.362s |       83,654 | `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2` |
+
+The 43.268s stale-abstractions run reproduced a cold/cache-fill outlier while
+the installed warmed command ran in 3.13s. The accepted cache keeps output
+byte-identical and drops the warmed focused bench to 2.362s.
+
 ## Biggest Confirmed Delta
 
-| Command                                      | Earlier heavy/focused baseline | Current warm | Notes                                                                                                                                                                                              |
-| -------------------------------------------- | -----------------------------: | -----------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `scip-query similar --json --full`           |  300.7s heavy / 315.3s focused |       1.507s | Same 88,859-byte output size; now about 209x faster than the focused baseline.                                                                                                                     |
-| `scip-query recent-duplicates --json --full` |                         6.439s |       4.900s | Same 3,618-byte output and SHA-256 `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`; React profile cache avoids rebuilding per-file profiles inside the aggregate command.       |
-| `scip-query health --json`                   |                         6.864s |       3.913s | Same 15,342-byte output and SHA-256 `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d`; latest warm matrix is materially lower, but attribution is mixed with runtime/cache noise. |
-| `scip-query diff-gate --json`                |                         4.193s |       3.053s | Same 3,089-byte output and SHA-256 `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`; targeted similarity and incomplete-migration now reuse existing callee-index work.          |
-| `scip-query dead --json --full`              |                         4.325s |       3.312s | Same 3,803,655-byte output and SHA-256 `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1`; JS/TS exclusion prefilter now avoids ordinary React hook-call files.                    |
+| Command                                       | Earlier heavy/focused baseline | Current warm | Notes                                                                                                                                                                                              |
+| --------------------------------------------- | -----------------------------: | -----------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scip-query similar --json --full`            |  300.7s heavy / 315.3s focused |       1.507s | Same 88,859-byte output size; now about 209x faster than the focused baseline.                                                                                                                     |
+| `scip-query recent-duplicates --json --full`  |                         6.439s |       4.900s | Same 3,618-byte output and SHA-256 `abe43237e5380498d3a999ce4f1b7adee735b58b9c1abafc7fa3c1cef01ed89b`; React profile cache avoids rebuilding per-file profiles inside the aggregate command.       |
+| `scip-query health --json`                    |                         6.864s |       3.913s | Same 15,342-byte output and SHA-256 `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d`; latest warm matrix is materially lower, but attribution is mixed with runtime/cache noise. |
+| `scip-query diff-gate --json`                 |                         4.193s |       3.053s | Same 3,089-byte output and SHA-256 `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6`; targeted similarity and incomplete-migration now reuse existing callee-index work.          |
+| `scip-query dead --json --full`               |                         4.325s |       3.312s | Same 3,803,655-byte output and SHA-256 `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1`; JS/TS exclusion prefilter now avoids ordinary React hook-call files.                    |
+| `scip-query stale-abstractions --json --full` |      43.268s cold / 3.13s warm |       2.362s | Same 83,654-byte output and SHA-256 `f8e0a9c7c5a4e16cc445f75ee183d8baa474e90ac7c5a481a0fb170fd3802ee2`; source fallback now reuses per-file import local-name maps.                                |
 
 ## Current Next Targets
 

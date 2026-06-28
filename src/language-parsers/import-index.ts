@@ -1,5 +1,12 @@
 import type { ScipDatabase } from '../storage/db.js';
+import { normalizeRelativePath } from '../resolution/path-normalization.js';
+import { createPerDbCache } from '../storage/per-db-cache.js';
 import { getSourceImports } from './index.js';
+
+const SOURCE_IMPORT_PATHS_BY_LOCAL_NAME_CACHE = createPerDbCache<string, Map<string, Set<string>>>(
+  'source-import-paths-by-local-name',
+  { clearGroups: ['whole-project', 'source-file'] },
+);
 
 /**
  * Per-file imports indexed by local identifier to the source paths that
@@ -7,6 +14,13 @@ import { getSourceImports } from './index.js';
  * access can carry the same attribution signal as a direct named import.
  */
 export function sourceImportPathsByLocalName(db: ScipDatabase, file: string): Map<string, Set<string>> {
+  const normalized = normalizeRelativePath(file);
+  return SOURCE_IMPORT_PATHS_BY_LOCAL_NAME_CACHE.get(db, normalized, () =>
+    buildSourceImportPathsByLocalName(db, normalized),
+  );
+}
+
+function buildSourceImportPathsByLocalName(db: ScipDatabase, file: string): Map<string, Set<string>> {
   const map = new Map<string, Set<string>>();
   for (const entry of getSourceImports(db, file)) {
     if (!entry.sourcePath) continue;
