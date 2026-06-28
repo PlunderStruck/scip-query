@@ -134,3 +134,10 @@ similarity fast path. The change only avoids callee-index work when no callee
 features exist and then runs the existing source-token fallback; it does not
 change `structural-overlap`, source-token classification, or cross-language
 support boundaries.
+
+## 2026-06-28 Bench Profiling Follow-Up
+
+The capability-boundary notes remain accurate after adding `similar.ts` profile
+spans. The spans time callee-fingerprint and pair-scan phases when profiling is
+enabled; they do not change `structural-overlap`, source-token classification,
+or cross-language support boundaries.

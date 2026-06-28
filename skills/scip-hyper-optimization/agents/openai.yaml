@@ -1,4 +1,4 @@
 interface:
-  display_name: "SCIP Hyper Optimization"
-  short_description: "Scientific benchmark-driven optimization"
-  default_prompt: "Use $scip-hyper-optimization to set up objective benchmarks, trace the target end to end, and optimize it without changing output."
+  display_name: 'SCIP Hyper Optimization'
+  short_description: 'Hierarchical profiling-driven optimization'
+  default_prompt: 'Use $scip-hyper-optimization to choose an optimization target, capture output identity, measure cold and warm controls, profile the dominant span hierarchically, then optimize without changing behavior.'

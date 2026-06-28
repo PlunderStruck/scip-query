@@ -23,6 +23,7 @@ import type { SemanticCallee } from '../../semantic/types.js';
 import { getSemanticProvider } from '../../semantic/provider-cache.js';
 import { isTypeScriptLike } from '../../semantic/typescript/source-kinds.js';
 import { semanticCalleeMap, semanticReferences } from '../../semantic/shared-primitives.js';
+import { profileEnabled, profileSpan } from '../../runtime/profile.js';
 import { getGlobalLeafIndex, pickAstCallCandidate, sameLanguageCandidates } from '../leaf-symbol-index.js';
 import type { GlobalLeafCandidate } from '../leaf-symbol-index.js';
 
@@ -284,42 +285,98 @@ function cachedSemanticCalleeMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<IndexedDefinition | SymbolMatch>,
 ): Map<number, SemanticCallee[]> {
+  const profiling = profileEnabled();
   const result = new Map<number, SemanticCallee[]>();
   const misses: Array<{ def: IndexedDefinition | SymbolMatch; contentHash: string; depsDigest: string }> = [];
   const unkeyed: Array<IndexedDefinition | SymbolMatch> = [];
-  for (const def of definitions) {
-    if (!isTypeScriptLike(def.relativePath)) continue;
-    const source = getSourceText(db, def.relativePath);
-    if (!source) {
-      unkeyed.push(def);
-      continue;
-    }
-    const contentHash = fileContentHash(db, def.relativePath, source);
-    const depsDigest = depsDigestFor(db, def.relativePath);
-    const cached = readCachedSemanticCallees(db, def.relativePath, def.symbol, contentHash, depsDigest);
-    if (cached !== null) {
-      const callees = parseCachedCallees(cached);
-      if (callees) {
-        if (callees.length > 0) result.set(def.symbolId, callees);
-        continue;
+  let skippedNonTs = 0;
+  let sourceMissing = 0;
+  let cacheHits = 0;
+  let parseFailures = 0;
+
+  profileSpan(
+    'semantic.callees.cache-scan',
+    () => {
+      for (const def of definitions) {
+        if (!isTypeScriptLike(def.relativePath)) {
+          if (profiling) skippedNonTs += 1;
+          continue;
+        }
+        const source = getSourceText(db, def.relativePath);
+        if (!source) {
+          if (profiling) sourceMissing += 1;
+          unkeyed.push(def);
+          continue;
+        }
+        const contentHash = fileContentHash(db, def.relativePath, source);
+        const depsDigest = depsDigestFor(db, def.relativePath);
+        const cached = readCachedSemanticCallees(db, def.relativePath, def.symbol, contentHash, depsDigest);
+        if (cached !== null) {
+          const callees = parseCachedCallees(cached);
+          if (callees) {
+            if (profiling) cacheHits += 1;
+            if (callees.length > 0) result.set(def.symbolId, callees);
+            continue;
+          }
+          if (profiling) parseFailures += 1;
+        }
+        misses.push({ def, contentHash, depsDigest });
       }
-    }
-    misses.push({ def, contentHash, depsDigest });
-  }
+    },
+    () => ({
+      definitions: definitions.length,
+      skippedNonTs,
+      sourceMissing,
+      cacheHits,
+      parseFailures,
+      misses: misses.length,
+      unkeyed: unkeyed.length,
+      resultRows: result.size,
+    }),
+  );
   if (misses.length === 0 && unkeyed.length === 0) return result;
 
-  const computed = semanticCalleeMap(db, [...unkeyed, ...misses.map((miss) => miss.def)]);
+  const computeInput = [...unkeyed, ...misses.map((miss) => miss.def)];
+  let computedRows = 0;
+  const computed = profileSpan(
+    'semantic.callees.compute-misses',
+    () => {
+      const rows = semanticCalleeMap(db, computeInput);
+      computedRows = rows.size;
+      return rows;
+    },
+    () => ({
+      definitions: computeInput.length,
+      misses: misses.length,
+      unkeyed: unkeyed.length,
+      rows: computedRows,
+    }),
+  );
   for (const [symbolId, callees] of computed) result.set(symbolId, callees);
-  if (getSemanticProvider(db).availability().available) {
-    writeCachedSemanticCalleesBatch(
-      db,
-      misses.map((miss) => ({
-        relativePath: miss.def.relativePath,
-        symbol: miss.def.symbol,
-        contentHash: miss.contentHash,
-        depsDigest: miss.depsDigest,
-        payload: JSON.stringify(computed.get(miss.def.symbolId) ?? []),
-      })),
+  const providerAvailable = getSemanticProvider(db).availability().available;
+  if (providerAvailable) {
+    const entries = misses.map((miss) => ({
+      relativePath: miss.def.relativePath,
+      symbol: miss.def.symbol,
+      contentHash: miss.contentHash,
+      depsDigest: miss.depsDigest,
+      payload: JSON.stringify(computed.get(miss.def.symbolId) ?? []),
+    }));
+    profileSpan(
+      'semantic.callees.cache-write',
+      () => writeCachedSemanticCalleesBatch(db, entries),
+      () => ({
+        entries: entries.length,
+      }),
+    );
+  } else {
+    profileSpan(
+      'semantic.callees.cache-write-skip',
+      () => undefined,
+      () => ({
+        reason: 'provider-unavailable',
+        misses: misses.length,
+      }),
     );
   }
   return result;

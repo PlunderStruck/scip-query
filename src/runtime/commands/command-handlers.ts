@@ -26,6 +26,7 @@ import { setupCiWorkflow } from '../setup-ci.js';
 import { installSkills, isScipInstalled, printScipInstallInstructions } from '../setup.js';
 import { ALL_SOURCE_EXTENSIONS } from '../../source/source-fileset.js';
 import { healthPhases } from '../../queries/health/health.js';
+import { writeProfileEvent } from '../profile.js';
 import {
   collect,
   formatBytes,
@@ -262,6 +263,7 @@ interface BenchCommandRun {
   timedOut: boolean;
   stdoutBytes: number;
   stderrBytes: number;
+  profilePath?: string;
 }
 
 interface BenchReport {
@@ -278,6 +280,9 @@ export async function handleBench(rawOpts: unknown): Promise<void> {
   const opts = commandOptions(rawOpts);
   const projectRoot = resolveProjectRoot();
   const timeoutMs = numberOptionValue(opts, 'timeoutMs') ?? BENCH_TIMEOUT_MS;
+  const progress = booleanOptionValue(opts, 'progress');
+  const profile = booleanOptionValue(opts, 'profile');
+  const profileOut = stringOptionValue(opts, 'profileOut');
   const report: BenchReport = {
     projectRoot,
     ...repoFileCounts(projectRoot),
@@ -286,13 +291,41 @@ export async function handleBench(rawOpts: unknown): Promise<void> {
   };
 
   if (booleanOptionValue(opts, 'coldIndex')) {
+    reportBenchProgress(progress, 'cold index started');
     report.coldIndex = await measureColdIndex(projectRoot);
+    reportBenchProgress(progress, `cold index finished ${report.coldIndex.durationMs}ms`);
+    writeProfileEvent(
+      {
+        type: 'bench-index',
+        phase: 'cold-index',
+        projectRoot,
+        durationMs: report.coldIndex.durationMs,
+        result: report.coldIndex.result,
+        files: report.coldIndex.files,
+        symbols: report.coldIndex.symbols,
+      },
+      profileOut,
+    );
+    reportBenchProgress(progress, 'warm index started');
     report.warmIndex = await measureWarmIndex(projectRoot);
+    reportBenchProgress(progress, `warm index finished ${report.warmIndex.durationMs}ms`);
+    writeProfileEvent(
+      {
+        type: 'bench-index',
+        phase: 'warm-index',
+        projectRoot,
+        durationMs: report.warmIndex.durationMs,
+        result: report.warmIndex.result,
+        files: report.warmIndex.files,
+        symbols: report.warmIndex.symbols,
+      },
+      profileOut,
+    );
     report.index = statusStats(existsSync(resolveActiveDbPath(projectRoot)));
   }
 
   for (const command of benchCommandMatrix(opts)) {
-    report.commands.push(runBenchCommand(projectRoot, command, timeoutMs));
+    report.commands.push(runBenchCommand(projectRoot, command, timeoutMs, { progress, profile, profileOut }));
   }
 
   if (booleanOptionValue(opts, 'json')) {
@@ -322,14 +355,14 @@ async function measureColdIndex(projectRoot: string): Promise<BenchIndexRun> {
         outputScip: paths.indexPath,
         outputDb: paths.dbPath,
         pnpmWorkspaces: config.indexer?.typescript?.pnpmWorkspaces,
-          typescriptProjectMode: config.indexer?.typescript?.projectMode,
-          typescriptProjects: config.indexer?.typescript?.projects,
-          skipIfUnchanged: true,
-          allowPartial: true,
-          indexerConcurrency: config.indexerConcurrency,
-          trigger: { kind: 'manual-cli', detail: 'scip-query bench --cold-index' },
-          onStatus: () => {},
-        }),
+        typescriptProjectMode: config.indexer?.typescript?.projectMode,
+        typescriptProjects: config.indexer?.typescript?.projects,
+        skipIfUnchanged: true,
+        allowPartial: true,
+        indexerConcurrency: config.indexerConcurrency,
+        trigger: { kind: 'manual-cli', detail: 'scip-query bench --cold-index' },
+        onStatus: () => {},
+      }),
     );
     if (moved) rmSync(backupDir, { recursive: true, force: true });
     return {
@@ -354,14 +387,14 @@ async function measureWarmIndex(projectRoot: string): Promise<BenchIndexRun> {
       outputScip: paths.indexPath,
       outputDb: paths.dbPath,
       pnpmWorkspaces: config.indexer?.typescript?.pnpmWorkspaces,
-        typescriptProjectMode: config.indexer?.typescript?.projectMode,
-        typescriptProjects: config.indexer?.typescript?.projects,
-        skipIfUnchanged: true,
-        allowPartial: true,
-        indexerConcurrency: config.indexerConcurrency,
-        trigger: { kind: 'manual-cli', detail: 'scip-query bench warm index' },
-        onStatus: () => {},
-      }),
+      typescriptProjectMode: config.indexer?.typescript?.projectMode,
+      typescriptProjects: config.indexer?.typescript?.projects,
+      skipIfUnchanged: true,
+      allowPartial: true,
+      indexerConcurrency: config.indexerConcurrency,
+      trigger: { kind: 'manual-cli', detail: 'scip-query bench warm index' },
+      onStatus: () => {},
+    }),
   );
   return {
     durationMs: result.durationMs,
@@ -402,23 +435,79 @@ function splitBenchCommand(command: string): string[] {
     .filter((part, index) => !(index === 0 && part === 'scip-query'));
 }
 
-function runBenchCommand(projectRoot: string, command: readonly string[], timeoutMs: number): BenchCommandRun {
+interface BenchCommandOptions {
+  progress?: boolean;
+  profile?: boolean;
+  profileOut?: string;
+}
+
+function runBenchCommand(
+  projectRoot: string,
+  command: readonly string[],
+  timeoutMs: number,
+  opts: BenchCommandOptions = {},
+): BenchCommandRun {
+  const label = `scip-query ${command.join(' ')}`;
+  reportBenchProgress(opts.progress, `${label} started`);
+  writeProfileEvent(
+    {
+      type: 'bench-command-start',
+      command: label,
+      projectRoot,
+    },
+    opts.profileOut,
+  );
   const started = performance.now();
+  const env = opts.profile ? benchProfileEnv(label, opts.profileOut) : process.env;
   const result = spawnSync(process.execPath, [...process.execArgv, process.argv[1] ?? '', ...command], {
     cwd: projectRoot,
+    env,
     encoding: 'buffer',
     maxBuffer: BENCH_MAX_BUFFER,
     timeout: timeoutMs,
   });
   const durationMs = Math.round(performance.now() - started);
-  return {
-    command: `scip-query ${command.join(' ')}`,
+  const run = {
+    command: label,
     durationMs,
     exitCode: result.status,
     signal: result.signal,
     timedOut: result.error?.name === 'ETIMEDOUT',
     stdoutBytes: result.stdout?.length ?? 0,
     stderrBytes: result.stderr?.length ?? 0,
+    ...(opts.profileOut ? { profilePath: opts.profileOut } : {}),
+  };
+  reportBenchProgress(
+    opts.progress,
+    `${label} finished ${durationMs}ms exit=${run.exitCode ?? run.signal ?? 'unknown'}${run.timedOut ? ' timed-out' : ''}`,
+  );
+  writeProfileEvent(
+    {
+      type: 'bench-command-finish',
+      command: label,
+      projectRoot,
+      durationMs,
+      exitCode: run.exitCode,
+      signal: run.signal,
+      timedOut: run.timedOut,
+      stdoutBytes: run.stdoutBytes,
+      stderrBytes: run.stderrBytes,
+    },
+    opts.profileOut,
+  );
+  return run;
+}
+
+function reportBenchProgress(enabled: boolean | undefined, message: string): void {
+  if (enabled) process.stderr.write(`[bench] ${message}\n`);
+}
+
+function benchProfileEnv(command: string, profileOut: string | undefined): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    SCIP_QUERY_PROFILE: '1',
+    SCIP_QUERY_PROFILE_COMMAND: command,
+    ...(profileOut ? { SCIP_QUERY_PROFILE_OUT: profileOut } : {}),
   };
 }
 

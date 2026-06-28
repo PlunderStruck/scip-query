@@ -37,6 +37,13 @@ scoped definition SQL used by `requireCallableSymbol` candidate scans.
 The newest diff-gate echo pass sends zero-callee targets straight to the
 source-token fallback and avoids splitting source lines for cache-hit source
 fingerprints.
+The newest bench sub-profiling pass adds JSONL phase spans to focused benchmark
+runs and confirms that Vega `similar --full` now spends its time in callee
+fingerprint construction rather than pair scoring.
+The newest cold semantic-callee pass cuts the Vega `similar --json --full`
+cache-miss path from roughly five minutes to about twelve seconds by batching
+TypeScript callee extraction, preloading project source files, caching the raw
+TypeScript checker per project, and traversing compiler AST nodes directly.
 Focused reruns after the full matrix are recorded separately below so partial
 measurements do not silently reshuffle the whole ranking.
 
@@ -72,6 +79,46 @@ measurements do not silently reshuffle the whole ranking.
 |   17 | `scip-query similar-files --json --full`          |               0.500s |    0 |      194,564 |
 
 `diff-gate` exits 1 because Vega_2.0 has findings; the timing is still valid.
+
+## Post Bench Sub-Profiling Refresh
+
+Focused rerun with the local built CLI after adding `bench --profile`,
+`bench --profile-out`, and `bench --progress`, plus phase spans for
+`similarAll`:
+
+| Command                            | Profiled | Unprofiled control | stdout bytes | Profile finding                                               |
+| ---------------------------------- | -------: | -----------------: | -----------: | ------------------------------------------------------------- |
+| `scip-query similar --json --full` |   2.047s |             1.054s |       88,859 | Candidate loading 1.167s, callee map 0.668s, pair scan 0.006s |
+
+The active Vega index was marked stale during this focused run, but the command
+used the existing 104,090-symbol index and produced the same 88,859-byte output
+size as previous focused `similar --full` checks. The profiling overhead is
+diagnostic-only: normal commands do not set `SCIP_QUERY_PROFILE`, so the
+additional callee-edge and pair counters stay off.
+
+## Post Cold Semantic-Callee Refresh
+
+Focused reruns with the local built CLI after deleting Vega's
+`semantic_callees` evidence rows to force the cold semantic path. The SCIP index
+itself was kept present, isolating the command-time semantic rebuild from a
+full repository reindex.
+
+| Command / cache state                    |   Before | Current | stdout bytes | SHA-256                                                            |
+| ---------------------------------------- | -------: | ------: | -----------: | ------------------------------------------------------------------ |
+| `similar --json --full`, cold profiled   | 291.197s | 13.628s |       88,859 | `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf` |
+| `similar --json --full`, cold unprofiled | 298.781s | 12.047s |       88,859 | same                                                               |
+| `similar --json --full`, warm unprofiled |   1.658s |  1.037s |       88,859 | same                                                               |
+| `similar --json --full`, warm profiled   |   0.984s |  1.004s |       88,859 | same                                                               |
+
+The accepted cold profile reports `corpusSize: 922`, `candidateCount: 5920`,
+and `insertedResults: 42`, matching the previous output contract. The remaining
+cold cost is concentrated in `semantic.callees.provider-loop` at 11.977s,
+mostly raw TypeScript traversal and expression symbol lookup. Cache scan and
+cache write are small by comparison at 318ms and 26ms.
+
+The attempted syntactic `minCallees` prefilter is intentionally excluded from
+the accepted scoreboard because it changed the result corpus from 922 to 912
+and output size from 88,859 to 88,858 bytes.
 
 ## Latest Focused Refresh
 

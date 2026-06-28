@@ -415,3 +415,10 @@ edit only routes zero-callee targeted symbols directly to the existing lexical
 source-shape fallback and avoids source line splitting on source-fingerprint
 cache hits; analyzer categories, score calibration, and unbounded
 `similar --full` behavior are unchanged.
+
+## 2026-06-28 Bench Profiling Follow-Up
+
+The `similar.ts` calibration reference remains accurate after adding diagnostic
+profile spans. Profiling is opt-in through `bench --profile` or
+`SCIP_QUERY_PROFILE`; it records phase timings for optimization work and does
+not change analyzer categories, score calibration, or `similar --full` output.

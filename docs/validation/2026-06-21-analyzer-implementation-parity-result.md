@@ -71,3 +71,11 @@ The maintainability-register completion slice supersedes the earlier note that d
 ## 2026-06-23 Setup Command Addendum
 
 `src/runtime/commands/command-descriptors.ts` now also owns the public `setup` maintenance command. This does not change the analyzer parity judgment: descriptor-backed query commands still come from `orderedQueryCommandDescriptors`, while composite and maintenance commands such as `health`, `diff-impact`, `doctor`, and `setup` remain explicit descriptors.
+
+## 2026-06-28 Bench Profiling Command Addendum
+
+`src/runtime/commands/command-descriptors.ts` now also exposes
+`bench --progress`, `bench --profile`, and `bench --profile-out`. This extends
+the maintenance command surface for measurement only; descriptor-backed query
+commands still come from `orderedQueryCommandDescriptors`, and composite plus
+maintenance commands remain explicit descriptors.

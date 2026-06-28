@@ -1,3 +1,4 @@
+import { performance } from 'node:perf_hooks';
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { resolveImportPath } from '../../resolution/import-path-resolver.js';
@@ -21,7 +22,7 @@ import {
   toRelative,
 } from './semantic-locations.js';
 import type { WorkspacePackage } from './workspace-packages.js';
-import type { CallExpression, Identifier, ImportDeclaration, NewExpression, Node, SourceFile, Symbol } from 'ts-morph';
+import type { Identifier, ImportDeclaration, Node, Project, SourceFile, ts } from 'ts-morph';
 import type {
   SemanticAvailability,
   SemanticCallee,
@@ -38,8 +39,11 @@ import {
   type ProjectBundle,
   type TsMorphModule,
 } from './ts-morph-runtime.js';
+import { profileEnabled, profileSpan } from '../../runtime/profile.js';
 
 type PackageExportIndex = Map<string, Map<string, Set<number>>>;
+type TypeScriptSymbol = ts.Symbol;
+type TypeScriptTypeChecker = ts.TypeChecker;
 
 interface ImportIdentifierEntry {
   identifier: Identifier | null;
@@ -47,6 +51,29 @@ interface ImportIdentifierEntry {
   localName: string | null;
   kind: SemanticImportUsage['kind'];
   isTypeOnly: boolean;
+}
+
+interface ResolvedCalleeTarget {
+  symbol: string;
+  file: string;
+  line: number;
+}
+
+interface CalleeMapProfileStats {
+  callerLookupMs: number;
+  expressionSymbolMs: number;
+  typeSymbolMs: number;
+  targetLookupMs: number;
+  declarationsMs: number;
+  declarationLocationMs: number;
+  indexedLookupMs: number;
+  compilerSymbolCacheHits: number;
+  compilerSymbolCacheMisses: number;
+  targetSymbolHits: number;
+  targetMisses: number;
+  typeFallbacks: number;
+  declarationChecks: number;
+  skippedUnrequestedCallers: number;
 }
 
 // scip-query: ignore-extract — this is the provider bootstrap boundary:
@@ -81,6 +108,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
   private readonly definitionNodeCache = new Map<number, Node | null>();
   private readonly fileDefinitionNodeCache = new Map<string, Map<number, Node>>();
   private readonly indexedDefinitionLeafCache = new Map<string, Map<string, IndexedDefinition>>();
+  private readonly compilerCheckerCache = new WeakMap<Project, TypeScriptTypeChecker>();
   private packageImportReferenceIndex: Map<number, SemanticReference[]> | null = null;
   private packageExportIndex: PackageExportIndex | null = null;
   private readonly workspacePackages: WorkspacePackage[];
@@ -133,6 +161,29 @@ class TsMorphSemanticProvider implements SemanticProvider {
       );
       return fileMap.get(definition.symbolId) ?? [];
     });
+  }
+
+  calleesForDefinitions(definitions: readonly IndexedDefinition[]): Map<number, SemanticCallee[]> {
+    const result = new Map<number, SemanticCallee[]>();
+    const byFile = new Map<string, IndexedDefinition[]>();
+    for (const definition of definitions) {
+      const bucket = byFile.get(definition.relativePath);
+      if (bucket) bucket.push(definition);
+      else byFile.set(definition.relativePath, [definition]);
+    }
+
+    for (const [relativePath, fileDefinitions] of byFile) {
+      const fullFileMap = this.fileCalleesCache.get(relativePath);
+      const requestedSymbolIds = new Set(fileDefinitions.map((definition) => definition.symbolId));
+      const fileMap = fullFileMap ?? this.calleeMapForFile(relativePath, requestedSymbolIds);
+      for (const definition of fileDefinitions) {
+        const callees = fileMap.get(definition.symbolId) ?? [];
+        this.calleesCache.set(definition.symbolId, callees);
+        result.set(definition.symbolId, callees);
+      }
+    }
+
+    return result;
   }
 
   signatureFor(definition: IndexedDefinition): string | null {
@@ -339,14 +390,29 @@ class TsMorphSemanticProvider implements SemanticProvider {
     });
   }
 
-  private definitionFromSymbol(symbol: Symbol): { symbol: string; file: string; line: number } | null {
-    const declarations = symbol.getDeclarations();
+  private definitionFromCompilerSymbol(
+    symbol: TypeScriptSymbol,
+    stats?: CalleeMapProfileStats,
+  ): ResolvedCalleeTarget | null {
+    const symbolName = symbol.name;
+    const declarationsStart = stats ? performance.now() : 0;
+    const declarations = symbol.declarations ?? [];
+    if (stats) {
+      stats.declarationsMs += performance.now() - declarationsStart;
+      stats.declarationChecks += declarations.length;
+    }
+
     for (const declaration of declarations) {
+      const locationStart = stats ? performance.now() : 0;
       const sourceFile = declaration.getSourceFile();
-      const file = toRelative(this.db.config.projectRoot, sourceFile.getFilePath());
+      const file = toRelative(this.db.config.projectRoot, sourceFile.fileName);
+      const line = sourceFile.getLineAndCharacterOfPosition(declaration.getStart(sourceFile)).line;
+      if (stats) stats.declarationLocationMs += performance.now() - locationStart;
       if (!file || this.db.isIgnored(file)) continue;
-      const line = lineOf(sourceFile, declaration);
-      const match = findIndexedDefinitionNear(this.db, file, line, symbol.getName());
+
+      const lookupStart = stats ? performance.now() : 0;
+      const match = findIndexedDefinitionNear(this.db, file, line, symbolName);
+      if (stats) stats.indexedLookupMs += performance.now() - lookupStart;
       if (match) return { symbol: match.symbol, file: match.relativePath, line: match.startLine };
     }
     return null;
@@ -355,41 +421,153 @@ class TsMorphSemanticProvider implements SemanticProvider {
   // scip-query: ignore-extract — this builds the TypeScript semantic callee
   // map for one file; source-file lookup, indexed definitions, descendant
   // traversal, and dedupe are one adapter pass.
-  private calleeMapForFile(relativePath: string): Map<number, SemanticCallee[]> {
-    const sourceFile = this.sourceFiles.sourceFile(relativePath);
-    if (!sourceFile) return new Map();
+  private calleeMapForFile(
+    relativePath: string,
+    requestedSymbolIds?: ReadonlySet<number>,
+  ): Map<number, SemanticCallee[]> {
+    const profiling = profileEnabled();
+    let definitionsCount = 0;
+    let callNodes = 0;
+    let resolvedCallees = 0;
+    let outputRows = 0;
+    let sourceFileLookupMs = 0;
+    let definitionsLoadMs = 0;
+    let checkerLookupMs = 0;
+    let traversalMs = 0;
+    const stats = profiling ? createCalleeMapProfileStats() : undefined;
 
-    const definitions = getDefinitionsForFile(this.db, relativePath).sort(
-      (left, right) => left.startLine - right.startLine || right.endLine - left.endLine,
+    return profileSpan(
+      'typescript.callee-map.file',
+      () => {
+        const sourceLookupStart = profiling ? performance.now() : 0;
+        const sourceFile = this.sourceFiles.sourceFile(relativePath);
+        if (profiling) sourceFileLookupMs = Math.round(performance.now() - sourceLookupStart);
+        if (!sourceFile) return new Map();
+
+        const definitionsStart = profiling ? performance.now() : 0;
+        const definitions = getDefinitionsForFile(this.db, relativePath).sort(
+          (left, right) => left.startLine - right.startLine || right.endLine - left.endLine,
+        );
+        if (profiling) definitionsLoadMs = Math.round(performance.now() - definitionsStart);
+        definitionsCount = definitions.length;
+        if (definitions.length === 0) return new Map();
+
+        const out = new Map<number, SemanticCallee[]>();
+        const checkerStart = profiling ? performance.now() : 0;
+        const checker = this.compilerCheckerForSourceFile(sourceFile);
+        const compilerSourceFile = sourceFile.compilerNode;
+        if (profiling) checkerLookupMs = Math.round(performance.now() - checkerStart);
+        const symbolCache = new Map<TypeScriptSymbol, ResolvedCalleeTarget | null>();
+        const visit = (node: ts.Node): void => {
+          if (this.tsMorph.ts.isCallExpression(node) || this.tsMorph.ts.isNewExpression(node)) {
+            if (profiling) callNodes += 1;
+            const callee = this.semanticCalleeForCallNode(
+              checker,
+              compilerSourceFile,
+              definitions,
+              node,
+              symbolCache,
+              requestedSymbolIds,
+              stats,
+            );
+            if (callee) {
+              if (profiling) resolvedCallees += 1;
+              addSemanticCallee(out, callee.callerId, callee.target);
+            }
+          }
+          this.tsMorph.ts.forEachChild(node, visit);
+        };
+        const traversalStart = profiling ? performance.now() : 0;
+        visit(compilerSourceFile);
+        if (profiling) traversalMs = Math.round(performance.now() - traversalStart);
+
+        for (const [symbolId, callees] of out) {
+          out.set(symbolId, dedupeCallees(callees));
+        }
+        outputRows = out.size;
+        return out;
+      },
+      () => ({
+        relativePath,
+        definitions: definitionsCount,
+        callNodes,
+        resolvedCallees,
+        outputRows,
+        requestedDefinitions: requestedSymbolIds?.size ?? definitionsCount,
+        sourceFileLookupMs,
+        definitionsLoadMs,
+        checkerLookupMs,
+        traversalMs,
+        ...(stats ? roundCalleeMapProfileStats(stats) : {}),
+      }),
     );
-    if (definitions.length === 0) return new Map();
-
-    const out = new Map<number, SemanticCallee[]>();
-    sourceFile.forEachDescendant((node) => {
-      if (!this.tsMorph.Node.isCallExpression(node) && !this.tsMorph.Node.isNewExpression(node)) return;
-      const callee = this.semanticCalleeForCallNode(sourceFile, definitions, node);
-      if (callee) addSemanticCallee(out, callee.callerId, callee.target);
-    });
-
-    for (const [symbolId, callees] of out) {
-      out.set(symbolId, dedupeCallees(callees));
-    }
-    return out;
   }
 
   private semanticCalleeForCallNode(
-    sourceFile: SourceFile,
+    checker: TypeScriptTypeChecker,
+    sourceFile: ts.SourceFile,
     definitions: ReadonlyArray<IndexedDefinition>,
-    node: CallExpression | NewExpression,
+    node: ts.CallExpression | ts.NewExpression,
+    symbolCache: Map<TypeScriptSymbol, ResolvedCalleeTarget | null>,
+    requestedSymbolIds?: ReadonlySet<number>,
+    stats?: CalleeMapProfileStats,
   ): { callerId: number; target: SemanticCallee } | null {
-    const caller = findContainingDefinition(definitions, lineOf(sourceFile, node));
+    const callerStart = stats ? performance.now() : 0;
+    const caller = findContainingDefinition(definitions, lineOfCompilerNode(sourceFile, node));
+    if (stats) stats.callerLookupMs += performance.now() - callerStart;
     if (!caller) return null;
-    const expression = node.getExpression();
-    const symbol = expression.getSymbol() ?? expression.getType().getSymbol();
-    const target = symbol ? this.definitionFromSymbol(symbol) : null;
+    if (requestedSymbolIds && !requestedSymbolIds.has(caller.symbolId)) {
+      if (stats) stats.skippedUnrequestedCallers += 1;
+      return null;
+    }
+    const expression = node.expression;
+    const symbol = this.compilerSymbolForExpression(checker, expression, stats);
+    let target: ResolvedCalleeTarget | null = null;
+    if (symbol) {
+      if (stats) stats.targetSymbolHits += 1;
+      if (symbolCache.has(symbol)) {
+        if (stats) stats.compilerSymbolCacheHits += 1;
+        target = symbolCache.get(symbol) ?? null;
+      } else {
+        if (stats) stats.compilerSymbolCacheMisses += 1;
+        const targetStart = stats ? performance.now() : 0;
+        target = this.definitionFromCompilerSymbol(symbol, stats);
+        if (stats) stats.targetLookupMs += performance.now() - targetStart;
+        symbolCache.set(symbol, target);
+      }
+    } else if (stats) {
+      stats.targetMisses += 1;
+    }
     return target
       ? { callerId: caller.symbolId, target: { symbol: target.symbol, file: target.file, line: target.line } }
       : null;
+  }
+
+  private compilerSymbolForExpression(
+    checker: TypeScriptTypeChecker,
+    expression: ts.Expression,
+    stats?: CalleeMapProfileStats,
+  ): TypeScriptSymbol | undefined {
+    const symbolStart = stats ? performance.now() : 0;
+    const symbol = checker.getSymbolAtLocation(expression);
+    if (stats) stats.expressionSymbolMs += performance.now() - symbolStart;
+    if (symbol) return symbol;
+
+    if (stats) stats.typeFallbacks += 1;
+    const typeStart = stats ? performance.now() : 0;
+    const typeSymbol = checker.getTypeAtLocation(expression).getSymbol();
+    if (stats) stats.typeSymbolMs += performance.now() - typeStart;
+    return typeSymbol;
+  }
+
+  private compilerCheckerForSourceFile(sourceFile: SourceFile): TypeScriptTypeChecker {
+    const project = sourceFile.getProject();
+    let checker = this.compilerCheckerCache.get(project);
+    if (!checker) {
+      checker = project.getTypeChecker().compilerObject;
+      this.compilerCheckerCache.set(project, checker);
+    }
+    return checker;
   }
 }
 
@@ -479,6 +657,42 @@ function findContainingDefinition(
     }
   }
   return best;
+}
+
+function lineOfCompilerNode(sourceFile: ts.SourceFile, node: ts.Node): number {
+  return sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line;
+}
+
+function createCalleeMapProfileStats(): CalleeMapProfileStats {
+  return {
+    callerLookupMs: 0,
+    expressionSymbolMs: 0,
+    typeSymbolMs: 0,
+    targetLookupMs: 0,
+    declarationsMs: 0,
+    declarationLocationMs: 0,
+    indexedLookupMs: 0,
+    compilerSymbolCacheHits: 0,
+    compilerSymbolCacheMisses: 0,
+    targetSymbolHits: 0,
+    targetMisses: 0,
+    typeFallbacks: 0,
+    declarationChecks: 0,
+    skippedUnrequestedCallers: 0,
+  };
+}
+
+function roundCalleeMapProfileStats(stats: CalleeMapProfileStats): CalleeMapProfileStats {
+  return {
+    ...stats,
+    callerLookupMs: Math.round(stats.callerLookupMs),
+    expressionSymbolMs: Math.round(stats.expressionSymbolMs),
+    typeSymbolMs: Math.round(stats.typeSymbolMs),
+    targetLookupMs: Math.round(stats.targetLookupMs),
+    declarationsMs: Math.round(stats.declarationsMs),
+    declarationLocationMs: Math.round(stats.declarationLocationMs),
+    indexedLookupMs: Math.round(stats.indexedLookupMs),
+  };
 }
 
 function addReferencesForSymbols(

@@ -102,3 +102,10 @@ The incomplete-migration containment notes remain accurate after the latest
 for containment; the zero-callee shortcut only affects targeted echo/similar
 source fallback, and source-fingerprint cache-hit line splitting is skipped
 only when cached lexical tokens already exist.
+
+## 2026-06-28 Bench Profiling Follow-Up
+
+The incomplete-migration containment notes remain accurate after adding
+`similar.ts` profile spans. The spans measure callee-fingerprint construction
+and pair scanning for benchmark analysis; incomplete-migration containment,
+helper-shape metadata, skipped-helper reasons, and output are unchanged.

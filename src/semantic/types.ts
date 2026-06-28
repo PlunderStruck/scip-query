@@ -44,5 +44,6 @@ export interface SemanticProvider {
   importUsage(file: string): SemanticImportUsage[];
   referencesFor(definition: IndexedDefinition): SemanticReference[];
   calleesFor(definition: IndexedDefinition): SemanticCallee[];
+  calleesForDefinitions?(definitions: readonly IndexedDefinition[]): Map<number, SemanticCallee[]>;
   signatureFor(definition: IndexedDefinition): string | null;
 }

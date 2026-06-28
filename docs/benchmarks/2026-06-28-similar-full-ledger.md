@@ -46,27 +46,75 @@
   and callable-range keys. This preserves the same source-token comparison
   contract while avoiding repeated corpus tokenization across fresh CLI
   processes.
+- 2026-06-28 bench sub-profiling refresh: `bench --profile` can now run any
+  command with JSONL phase spans. `similarAll` reports callee fingerprint
+  resolution, corpus building, callee-index construction, pair scanning, and
+  sort/project phases.
+- 2026-06-28 cold semantic-callee refresh: TypeScript semantic callee
+  resolution now batches definitions by provider, preloads indexed TypeScript
+  source files into the ts-morph projects before checker creation, reuses the
+  TypeScript compiler checker per project, and traverses raw compiler AST nodes
+  instead of wrapping every descendant in ts-morph nodes.
 - `comparePair` computes weighted cosine similarity, drops weak pairs, shortens
   symbols, computes unique callee sets, and classifies evidence.
   Source: `scip-query code comparePair -C 8`.
 
 ## Measurements
 
-| Case                                                               |                           Before |            After |                 Delta | Evidence                                                                                                                                                           |
-| ------------------------------------------------------------------ | -------------------------------: | ---------------: | --------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Vega_2.0 full-suite `similar --json --full`                        |                           300.7s |          pending |               pending | `docs/validation/2026-06-28-vega-2-heavy-benchmark-result.md`                                                                                                      |
-| Vega_2.0 focused warm `similar --json --full`                      |                           315.3s |           2.160s | -313.2s / 146x faster | `scip-query bench --json --command "similar --json --full" --timeout-ms 600000`; stdout 88,859 bytes before and after                                              |
-| Vega_2.0 focused warm `similar --json --full` confirmation         |                           315.3s |           1.503s | -313.8s / 210x faster | Same command rerun; stdout 88,859 bytes                                                                                                                            |
-| Vega_2.0 refreshed heavy matrix `similar --json --full`            |                           300.7s |           1.443s | -299.3s / 208x faster | `scip-query bench --json --include-heavy --timeout-ms 600000`; stdout 88,859 bytes                                                                                 |
-| Vega_2.0 after `0.10.9` package bump, package-versioned cache miss |             1.5s warm-cache band | >30s before kill |            regression | Local `dist/cli.js` rebuilt at `0.10.9`; process reached multi-GB RSS because semantic rows existed under `0.10.8` only                                            |
-| Vega_2.0 stable evidence cache version                             | >30s miss / 1.5s warm-cache band |           2.169s |    restores warm path | `node dist/cli.js bench --json --command "similar --json --full"`; stdout 88,859 bytes; SHA-256 `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf` |
+| Case                                                               |                           Before |            After |                 Delta | Evidence                                                                                                                                                                                 |
+| ------------------------------------------------------------------ | -------------------------------: | ---------------: | --------------------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vega_2.0 full-suite `similar --json --full`                        |                           300.7s |          pending |               pending | `docs/validation/2026-06-28-vega-2-heavy-benchmark-result.md`                                                                                                                            |
+| Vega_2.0 focused warm `similar --json --full`                      |                           315.3s |           2.160s | -313.2s / 146x faster | `scip-query bench --json --command "similar --json --full" --timeout-ms 600000`; stdout 88,859 bytes before and after                                                                    |
+| Vega_2.0 focused warm `similar --json --full` confirmation         |                           315.3s |           1.503s | -313.8s / 210x faster | Same command rerun; stdout 88,859 bytes                                                                                                                                                  |
+| Vega_2.0 refreshed heavy matrix `similar --json --full`            |                           300.7s |           1.443s | -299.3s / 208x faster | `scip-query bench --json --include-heavy --timeout-ms 600000`; stdout 88,859 bytes                                                                                                       |
+| Vega_2.0 after `0.10.9` package bump, package-versioned cache miss |             1.5s warm-cache band | >30s before kill |            regression | Local `dist/cli.js` rebuilt at `0.10.9`; process reached multi-GB RSS because semantic rows existed under `0.10.8` only                                                                  |
+| Vega_2.0 stable evidence cache version                             | >30s miss / 1.5s warm-cache band |           2.169s |    restores warm path | `node dist/cli.js bench --json --command "similar --json --full"`; stdout 88,859 bytes; SHA-256 `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf`                       |
+| Vega_2.0 focused bench sub-profile                                 |                     300.7s heavy |           2.047s | -298.7s / 147x faster | `node dist/cli.js bench --json --command "similar --json --full" --profile --profile-out /tmp/scip-query-vega-similar-profile.jsonl --progress --timeout-ms 600000`; stdout 88,859 bytes |
+| Vega_2.0 focused unprofiled control                                |                     300.7s heavy |           1.054s | -299.6s / 285x faster | Same focused command without `--profile`; active Vega index was stale but present, 104,090 symbols, 1,779 indexed files                                                                  |
+
+### Cold Semantic-Callee Rebuild Control
+
+These runs delete only Vega's `semantic_callees` evidence rows before the cold
+case. The SCIP index itself stays present, so this isolates the slow path users
+hit when a command must derive missing semantic callee evidence before
+answering.
+
+| Case                                                      |   Before |   After | Delta                    | Evidence                                                                                                                                                               |
+| --------------------------------------------------------- | -------: | ------: | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vega_2.0 cold `similar --json --full`, profiled           | 291.197s | 13.628s | -277.569s / 21.4x faster | `/tmp/scip-query-vega-similar-cold-profile.jsonl` -> `/tmp/scip-query-vega-similar-cold-profile-after-checker-cache-no-prefilter.jsonl`; stdout 88,859 bytes both runs |
+| Vega_2.0 cold `similar --json --full`, unprofiled control | 298.781s | 12.047s | -286.734s / 24.8x faster | `/tmp/scip-query-vega-similar-cold-unprofiled-bench.json` -> `/tmp/scip-query-vega-similar-cold-unprofiled-after-checker-cache-no-prefilter-bench.json`                |
+| Vega_2.0 warm `similar --json --full`, unprofiled control |   1.658s |  1.037s | -0.621s / 1.6x faster    | `/tmp/scip-query-vega-similar-warm-unprofiled-bench.json` -> `/tmp/scip-query-vega-similar-warm-unprofiled-after-checker-cache-no-prefilter-bench.json`                |
+| Vega_2.0 warm `similar --json --full`, profiled           |   0.984s |  1.004s | neutral diagnostic cost  | `/tmp/scip-query-vega-similar-warm-profiled-bench.json` -> `/tmp/scip-query-vega-similar-warm-profiled-after-checker-cache-no-prefilter-bench.json`                    |
+
+Output contract evidence: the accepted cold/warm runs still emit 88,859 bytes,
+SHA-256
+`59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf`,
+`corpusSize: 922`, `insertedResults: 42`, and `candidateCount: 5920`.
+
+Cold profile after the accepted optimization:
+
+- `similar.all`: 13.373s.
+- `similar.callee-fingerprints.callee-map`: 12.888s.
+- `semantic.callees.provider-loop`: 11.977s for 5,915 definitions.
+- `semantic.callees.cache-scan`: 318ms; `semantic.callees.cache-write`: 26ms.
+- 1,111 TypeScript source files traversed in 7.319s total file span time:
+  source-file lookup 539ms, cached checker lookup 1.688s, raw traversal
+  5.082s, expression symbol lookup 4.700s, target lookup 45ms.
+
+The decisive pre-fix diagnostic was the path-indexed but uncached-checker run:
+`checkerLookupMs` alone consumed 188.862s of 197.840s total file span time.
+That proved the 300s cold wait was repeated TypeScript checker access during
+semantic callee extraction, not profile bookkeeping, SQLite cache writes, or
+the final pair scan.
 
 ## Current-Pipeline Optimization Candidates
 
-- Separate corpus-build time from pair-scoring time before editing. The code
-  comment at `CALLEE_FINGERPRINT_CORPUS` says fingerprint construction is the
-  dominant cost, but the Vega runtime requires measurement before accepting
-  that as the current bottleneck.
+- Continue reducing cold semantic callee construction. The accepted cold profile
+  now spends most remaining time in raw TypeScript traversal and expression
+  symbol lookup; the final `similar.all.pair-scan` is only 10ms.
+- Continue reducing warm cache-row shaping. The accepted warm profile measured
+  `semantic.callees.cache-scan` at 271ms and callee fingerprint map assembly at
+  674ms.
 - Reduce repeated pair work inside `similarAll` by caching per-fingerprint
   magnitudes, weighted feature data, or shared-candidate scores if profiling
   shows pair scoring dominates.
@@ -103,9 +151,24 @@
   symbol/start/end/leaf definition identity, so changed source bytes or changed
   callable ranges rebuild tokens. Vega targeted `similar` probes and
   `diff-gate` stayed byte-identical.
+- Accepted: batch semantic callee resolution by provider and let TypeScript
+  resolve all requested definitions file-by-file in one pass. This keeps the
+  exact semantic callee output while removing scalar provider dispatch overhead.
+- Accepted: preload indexed TypeScript source files into the ts-morph project
+  before creating a compiler checker, then cache the raw TypeScript checker per
+  project. This removed the repeated checker path that consumed 188.862s in the
+  cold profile.
+- Accepted: traverse raw TypeScript compiler AST nodes for callee extraction
+  instead of creating ts-morph wrapper nodes for every descendant. This keeps
+  the same checker-backed symbol resolution while cutting the remaining
+  traversal cost into the low-second range.
 - Rejected: a provider-local `definitionFromSymbol` cache. It passed focused
   tests but did not make the Vega semantic callee-map phase complete within the
   30s diagnostic window, so the source change was reverted.
+- Rejected: a syntactic `minCallees` prefilter before semantic callee
+  extraction. It reduced the cold run to roughly 12.5s but changed the
+  full-command corpus from 922 to 912 and changed the emitted JSON size from
+  88,859 to 88,858 bytes, so it violated the output contract.
 - Deferred: persistent index-time fingerprint tables are promising but larger
   than the first optimization batch; first measure where the current 300s is
   spent.

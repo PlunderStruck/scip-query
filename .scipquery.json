@@ -36,6 +36,12 @@
       "check": "echo",
       "file": "src/language-parsers/import-index.ts",
       "reason": "Accepted cache-declaration echo: the import local-name map intentionally uses the established per-DB source-file cache factory; the cache name, key, and value type are the product-specific variation."
+    },
+    {
+      "id": "SQ5075DD62A541",
+      "check": "new-dead",
+      "file": "src/semantic/typescript/ts-morph-provider.ts",
+      "reason": "Accepted interface-dispatch false positive: TsMorphSemanticProvider.calleesForDefinitions is called through the SemanticProvider bulk path in src/semantic/shared-primitives.ts; refs reports those interface call sites."
     }
   ],
   "declaredCouplings": [

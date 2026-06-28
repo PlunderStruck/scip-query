@@ -137,3 +137,10 @@ the zero-callee targeted similarity fast path. The change avoids callee-index
 work when a target has no meaningful callees and keeps the same source-token
 fallback; it does not alter the sampled suppression category, reason, or
 lifecycle semantics.
+
+## 2026-06-28 Bench Profiling Follow-Up
+
+The accepted `similar.ts` suppression-lifecycle record remains intentional after
+adding diagnostic profile spans. The spans measure the same callee-fingerprint
+and pair-scan evidence pass; they do not alter the sampled suppression
+category, reason, or lifecycle semantics.

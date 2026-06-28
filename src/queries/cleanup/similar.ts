@@ -17,6 +17,7 @@ import { ProjectIndex } from '../../core/project-index.js';
 import { createPerDbValue } from '../../storage/per-db-cache.js';
 import { applyScanLimit } from '../query-utils.js';
 import { fileContentHash, readCachedFileEvidence, writeCachedFileEvidence } from '../../storage/evidence-cache.js';
+import { profileEnabled, profileSpan } from '../../runtime/profile.js';
 
 export interface SimilarSymbolResult {
   symbolA: string;
@@ -216,65 +217,130 @@ export function similarAll(
   } = {},
 ): SimilarSymbolResult[] {
   const { minSimilarity = 0.5, limit = 20, scope, minCallees = 4, crossFileOnly = false, scanLimit } = opts;
+  const semantic = opts.semantic !== false;
+  const profiling = profileEnabled();
+  let corpusSize = 0;
+  let candidateSets = 0;
+  let candidatePairs = 0;
+  let comparedPairs = 0;
+  let crossFileSkips = 0;
+  let signatureSkips = 0;
+  let insertedResults = 0;
 
-  const index = getCalleeFingerprintIndex(db, {
-    minCallees,
-    scope,
-    scanLimit,
-    semantic: opts.semantic !== false,
-  });
-  const all = index.corpus;
-  const focusFiles = opts.focusFiles;
-
-  const topResults: RankedSimilarResult[] = [];
-  let resultOrder = 0;
-
-  for (let i = 0; i < all.length; i += 1) {
-    const a = all[i]!;
-    const aFocused = focusFiles?.has(a.file) ?? false;
-    const magnitudeA = index.weightedMagnitudes[i]!;
-    const candidates = new Set<number>();
-    for (const callee of a.callees) {
-      const bucket = index.candidateIndexesByCallee.get(callee);
-      if (!bucket) continue;
-      for (const j of bucket) {
-        if (j <= i) continue;
-        if (focusFiles && !aFocused && !focusFiles.has(all[j]!.file)) continue;
-        candidates.add(j);
-      }
-    }
-    for (const j of candidates) {
-      const b = all[j]!;
-
-      if (crossFileOnly && a.file === b.file) continue;
-
-      // Signature filter: a 1-arg helper and a 7-arg orchestrator that share
-      // infrastructure callees aren't really "similar." If both sides have
-      // a known param count, skip pairs that differ by more than 2 OR by
-      // more than 50% (whichever is larger). Pairs without sig info pass
-      // through (non-AST languages, indirect AST resolution failure).
-      if (a.paramCount >= 0 && b.paramCount >= 0) {
-        const diff = Math.abs(a.paramCount - b.paramCount);
-        const maxAllowed = Math.max(2, Math.ceil(Math.max(a.paramCount, b.paramCount) * 0.5));
-        if (diff > maxAllowed) continue;
-      }
-
-      const result = comparePair(a, b, index.idfWeights, {
-        minSimilarity,
-        requireSignificantShared: 2,
-        requireSharedCount: 4,
-        medianIdf: index.medianIdf,
-        magnitudeA,
-        magnitudeB: index.weightedMagnitudes[j]!,
+  return profileSpan(
+    'similar.all',
+    () => {
+      const index = getCalleeFingerprintIndex(db, {
+        minCallees,
+        scope,
+        scanLimit,
+        semantic,
       });
-      if (!result) continue;
-      insertTopSimilarResult(topResults, result, limit, resultOrder);
-      resultOrder += 1;
-    }
-  }
+      const all = index.corpus;
+      corpusSize = all.length;
+      const focusFiles = opts.focusFiles;
 
-  topResults.sort((a, b) => b.result.similarity - a.result.similarity || a.order - b.order);
-  return topResults.map((entry) => entry.result);
+      const topResults: RankedSimilarResult[] = [];
+      let resultOrder = 0;
+
+      profileSpan(
+        'similar.all.pair-scan',
+        () => {
+          for (let i = 0; i < all.length; i += 1) {
+            const a = all[i]!;
+            const aFocused = focusFiles?.has(a.file) ?? false;
+            const magnitudeA = index.weightedMagnitudes[i]!;
+            const candidates = new Set<number>();
+            for (const callee of a.callees) {
+              const bucket = index.candidateIndexesByCallee.get(callee);
+              if (!bucket) continue;
+              for (const j of bucket) {
+                if (j <= i) continue;
+                if (focusFiles && !aFocused && !focusFiles.has(all[j]!.file)) continue;
+                candidates.add(j);
+              }
+            }
+            if (profiling) {
+              candidatePairs += candidates.size;
+              if (candidates.size > 0) candidateSets += 1;
+            }
+
+            for (const j of candidates) {
+              const b = all[j]!;
+
+              if (crossFileOnly && a.file === b.file) {
+                if (profiling) crossFileSkips += 1;
+                continue;
+              }
+
+              // Signature filter: a 1-arg helper and a 7-arg orchestrator that share
+              // infrastructure callees aren't really "similar." If both sides have
+              // a known param count, skip pairs that differ by more than 2 OR by
+              // more than 50% (whichever is larger). Pairs without sig info pass
+              // through (non-AST languages, indirect AST resolution failure).
+              if (a.paramCount >= 0 && b.paramCount >= 0) {
+                const diff = Math.abs(a.paramCount - b.paramCount);
+                const maxAllowed = Math.max(2, Math.ceil(Math.max(a.paramCount, b.paramCount) * 0.5));
+                if (diff > maxAllowed) {
+                  if (profiling) signatureSkips += 1;
+                  continue;
+                }
+              }
+
+              if (profiling) comparedPairs += 1;
+              const result = comparePair(a, b, index.idfWeights, {
+                minSimilarity,
+                requireSignificantShared: 2,
+                requireSharedCount: 4,
+                medianIdf: index.medianIdf,
+                magnitudeA,
+                magnitudeB: index.weightedMagnitudes[j]!,
+              });
+              if (!result) continue;
+              insertTopSimilarResult(topResults, result, limit, resultOrder);
+              if (profiling) insertedResults += 1;
+              resultOrder += 1;
+            }
+          }
+        },
+        () => ({
+          corpusSize,
+          candidateSets,
+          candidatePairs,
+          comparedPairs,
+          crossFileSkips,
+          signatureSkips,
+          insertedResults,
+          topResults: topResults.length,
+        }),
+      );
+
+      return profileSpan(
+        'similar.all.sort-project',
+        () => {
+          topResults.sort((a, b) => b.result.similarity - a.result.similarity || a.order - b.order);
+          return topResults.map((entry) => entry.result);
+        },
+        () => ({ topResults: topResults.length }),
+      );
+    },
+    () => ({
+      minSimilarity,
+      limit,
+      scope,
+      minCallees,
+      crossFileOnly,
+      scanLimit,
+      semantic,
+      corpusSize,
+      candidateSets,
+      candidatePairs,
+      comparedPairs,
+      crossFileSkips,
+      signatureSkips,
+      insertedResults,
+    }),
+  );
 }
 
 // ── Internal helpers ───────────────────────────────────────
@@ -414,14 +480,38 @@ export function getAllCalleeFingerprints(
   const semantic = opts.semantic !== false;
   const byOptions = CALLEE_FINGERPRINT_CORPUS.get(db, () => new Map());
   const key = `${minCallees}|${scope ?? ''}|${scanLimit ?? ''}|${semantic}`;
-  let corpus = byOptions.get(key);
-  if (!corpus) {
-    corpus = buildCalleeFingerprints(db, { minCallees, scope, scanLimit, semantic });
-    byOptions.set(key, corpus);
-  }
-  // excludeSymbol stays out of the memo key: exclusion is a plain symbol skip,
-  // identical whether applied during the build or as a post-filter.
-  return excludeSymbol === undefined ? corpus : corpus.filter((fp) => fp.symbol !== excludeSymbol);
+  let cacheHit = true;
+  let corpusSize = 0;
+  let excludedSymbols = 0;
+
+  return profileSpan(
+    'similar.callee-fingerprints.resolve',
+    () => {
+      let corpus = byOptions.get(key);
+      cacheHit = corpus !== undefined;
+      if (!corpus) {
+        corpus = buildCalleeFingerprints(db, { minCallees, scope, scanLimit, semantic });
+        byOptions.set(key, corpus);
+      }
+      corpusSize = corpus.length;
+      // excludeSymbol stays out of the memo key: exclusion is a plain symbol skip,
+      // identical whether applied during the build or as a post-filter.
+      if (excludeSymbol === undefined) return corpus;
+      const filtered = corpus.filter((fp) => fp.symbol !== excludeSymbol);
+      excludedSymbols = corpus.length - filtered.length;
+      return filtered;
+    },
+    () => ({
+      minCallees,
+      scope,
+      scanLimit,
+      semantic,
+      cacheHit,
+      corpusSize,
+      excludeSymbol: excludeSymbol !== undefined,
+      excludedSymbols,
+    }),
+  );
 }
 
 export function getCalleeFingerprintIndex(
@@ -432,41 +522,111 @@ export function getCalleeFingerprintIndex(
   const semantic = opts.semantic !== false;
   const byOptions = CALLEE_FINGERPRINT_INDEX.get(db, () => new Map());
   const key = `${minCallees}|${scope ?? ''}|${scanLimit ?? ''}|${semantic}`;
-  let index = byOptions.get(key);
-  if (!index) {
-    index = buildCalleeFingerprintIndex(
-      getAllCalleeFingerprints(db, {
-        minCallees,
-        scope,
-        scanLimit,
-        semantic,
-      }),
-    );
-    byOptions.set(key, index);
-  }
-  return index;
+  let cacheHit = true;
+  let corpusSize = 0;
+  let indexedCallees = 0;
+  let candidateBuckets = 0;
+
+  return profileSpan(
+    'similar.callee-index.resolve',
+    () => {
+      let index = byOptions.get(key);
+      cacheHit = index !== undefined;
+      if (!index) {
+        index = buildCalleeFingerprintIndex(
+          getAllCalleeFingerprints(db, {
+            minCallees,
+            scope,
+            scanLimit,
+            semantic,
+          }),
+        );
+        byOptions.set(key, index);
+      }
+      corpusSize = index.corpus.length;
+      indexedCallees = index.docFreq.size;
+      candidateBuckets = index.candidateIndexesByCallee.size;
+      return index;
+    },
+    () => ({
+      minCallees,
+      scope,
+      scanLimit,
+      semantic,
+      cacheHit,
+      corpusSize,
+      indexedCallees,
+      candidateBuckets,
+    }),
+  );
 }
 
 export function buildCalleeFingerprintIndex(corpus: readonly SymbolFingerprint[]): CalleeFingerprintIndex {
-  const docFreq = new Map<string, number>();
-  for (const fp of corpus) for (const callee of fp.callees) docFreq.set(callee, (docFreq.get(callee) ?? 0) + 1);
+  const profiling = profileEnabled();
+  let uniqueCallees = 0;
+  const docFreq = profileSpan(
+    'similar.callee-index.doc-frequency',
+    () => {
+      const frequencies = new Map<string, number>();
+      for (const fp of corpus) {
+        for (const callee of fp.callees) frequencies.set(callee, (frequencies.get(callee) ?? 0) + 1);
+      }
+      uniqueCallees = frequencies.size;
+      return frequencies;
+    },
+    () => ({ corpusSize: corpus.length, uniqueCallees }),
+  );
 
   const ubiquityThreshold = Math.max(8, Math.ceil(Math.sqrt(corpus.length)));
-  const idfWeights = computeIdfFromDocFreq(docFreq, corpus.length);
-  const weightedMagnitudes = corpus.map((fp) => weightedMagnitude(fp.callees, idfWeights));
-  const candidateIndexesByCallee = new Map<string, number[]>();
-  for (let index = 0; index < corpus.length; index += 1) {
-    const fp = corpus[index]!;
-    for (const callee of fp.callees) {
-      if ((docFreq.get(callee) ?? 0) > ubiquityThreshold) continue;
-      let bucket = candidateIndexesByCallee.get(callee);
-      if (!bucket) {
-        bucket = [];
-        candidateIndexesByCallee.set(callee, bucket);
+  const idfWeights = profileSpan(
+    'similar.callee-index.idf-weights',
+    () => computeIdfFromDocFreq(docFreq, corpus.length),
+    () => ({ corpusSize: corpus.length, uniqueCallees: docFreq.size }),
+  );
+  const weightedMagnitudes = profileSpan(
+    'similar.callee-index.weighted-magnitudes',
+    () => corpus.map((fp) => weightedMagnitude(fp.callees, idfWeights)),
+    () => ({ corpusSize: corpus.length }),
+  );
+  let candidateRefs = 0;
+  let ubiquitousSkips = 0;
+  let candidateBuckets = 0;
+  const candidateIndexesByCallee = profileSpan(
+    'similar.callee-index.candidate-buckets',
+    () => {
+      const buckets = new Map<string, number[]>();
+      for (let index = 0; index < corpus.length; index += 1) {
+        const fp = corpus[index]!;
+        for (const callee of fp.callees) {
+          if ((docFreq.get(callee) ?? 0) > ubiquityThreshold) {
+            if (profiling) ubiquitousSkips += 1;
+            continue;
+          }
+          let bucket = buckets.get(callee);
+          if (!bucket) {
+            bucket = [];
+            buckets.set(callee, bucket);
+          }
+          bucket.push(index);
+          if (profiling) candidateRefs += 1;
+        }
       }
-      bucket.push(index);
-    }
-  }
+      if (profiling) candidateBuckets = buckets.size;
+      return buckets;
+    },
+    () => ({
+      corpusSize: corpus.length,
+      buckets: candidateBuckets,
+      candidateRefs,
+      ubiquitousSkips,
+      ubiquityThreshold,
+    }),
+  );
+  const medianIdf = profileSpan(
+    'similar.callee-index.median-idf',
+    () => getMedianIdf(idfWeights),
+    () => ({ uniqueCallees: idfWeights.size }),
+  );
 
   return {
     corpus,
@@ -474,7 +634,7 @@ export function buildCalleeFingerprintIndex(corpus: readonly SymbolFingerprint[]
     docFreq,
     idfWeights,
     weightedMagnitudes,
-    medianIdf: getMedianIdf(idfWeights),
+    medianIdf,
     ubiquityThreshold,
   };
 }
@@ -504,26 +664,58 @@ function buildCalleeFingerprints(
   opts: { minCallees: number; scope?: string; scanLimit?: number; semantic: boolean },
 ): SymbolFingerprint[] {
   const { minCallees, scope, scanLimit, semantic } = opts;
+  const profiling = profileEnabled();
   const index = new ProjectIndex(db);
 
-  const candidates = applyScanLimit(
-    index.productionCallableDefinitions({
-      scope,
-      minLoc: 5,
-      sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
-    }),
-    scanLimit,
+  let candidateCount = 0;
+  const candidates = profileSpan(
+    'similar.callee-fingerprints.candidates',
+    () => {
+      const rows = applyScanLimit(
+        index.productionCallableDefinitions({
+          scope,
+          minLoc: 5,
+          sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
+        }),
+        scanLimit,
+      );
+      candidateCount = rows.length;
+      return rows;
+    },
+    () => ({ scope, scanLimit, candidateCount }),
   );
-  const calleeMap = index.calleeMap(candidates, { semantic });
+  let calleeEdges = 0;
+  const calleeMap = profileSpan(
+    'similar.callee-fingerprints.callee-map',
+    () => {
+      const map = index.calleeMap(candidates, { semantic });
+      if (profiling) {
+        for (const callees of map.values()) calleeEdges += callees.length;
+      }
+      return map;
+    },
+    () => ({ candidateCount, semantic, calleeEdges }),
+  );
+  let fingerprintCount = 0;
+  let retainedCalleeCount = 0;
 
-  return candidates
-    .map((d) => ({
-      symbol: d.symbol,
-      file: d.relativePath,
-      callees: meaningfulCallees((calleeMap.get(d.symbolId) ?? []).map((c) => c.symbol)),
-      paramCount: index.callableSignature(d)?.paramCount ?? -1,
-    }))
-    .filter((fp) => fp.callees.size >= minCallees);
+  return profileSpan(
+    'similar.callee-fingerprints.shape',
+    () => {
+      const fingerprints = candidates
+        .map((d) => ({
+          symbol: d.symbol,
+          file: d.relativePath,
+          callees: meaningfulCallees((calleeMap.get(d.symbolId) ?? []).map((c) => c.symbol)),
+          paramCount: index.callableSignature(d)?.paramCount ?? -1,
+        }))
+        .filter((fp) => fp.callees.size >= minCallees);
+      fingerprintCount = fingerprints.length;
+      if (profiling) retainedCalleeCount = fingerprints.reduce((sum, fp) => sum + fp.callees.size, 0);
+      return fingerprints;
+    },
+    () => ({ candidateCount, fingerprintCount, retainedCalleeCount, minCallees }),
+  );
 }
 
 export function meaningfulCallees(callees: Iterable<string>): Set<string> {

@@ -71,3 +71,10 @@ Repository verification passed. The full test suite reported 64 passing test fil
 ## Judgment
 
 This was an output-trust and analyzer-context repair, not a detector algorithm change. Co-change and hidden-coupling analyzers use declared coupling paths literally, so stale paths remove intended context without producing an obvious error. Warning at config-validation time is the right behavior: it protects current analysis while still allowing historical configs or intentionally removed files to be reviewed by a maintainer.
+
+## 2026-06-28 Bench Profiling Handler Addendum
+
+`src/runtime/commands/command-handlers.ts` now also owns benchmark progress and
+profile-event wiring. The declared-coupling freshness claim above is unchanged:
+`config-validate` still passes `projectRoot` into `validateProjectConfig()`, and
+the profiling path does not affect project config validation.

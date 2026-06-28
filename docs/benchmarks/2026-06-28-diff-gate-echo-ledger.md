@@ -28,15 +28,15 @@ code outside the diff.
   base ref, and calls `similar(db, changedSymbol.symbol, { minSimilarity,
 limit: 5, scanLimit, semantic })`. Source:
   `scip-query plan-context runEchoCheck`; `scip-query code runEchoCheck -C 60`.
-- `similar()` in `src/queries/cleanup/similar.ts:72-89` calls `findCallees()`,
+- `similar()` in `src/queries/cleanup/similar.ts:75` calls `findCallees()`,
   rejects non-function-like symbols, compares callee fingerprints, and falls
   back to `similarBySourceShape()` when no callee result is found. Source:
   `scip-query plan-context similar`; `scip-query code similar -C 60`.
-- `findCallees()` in `src/queries/cleanup/similar.ts:352-366` currently finds
+- `findCallees()` in `src/queries/cleanup/similar.ts:444` currently finds
   the symbol, constructs a `ProjectIndex`, reads callee rows, and asks for the
   callable signature before `similar()` rejects non-function-like symbols.
-  Source: `scip-query code src/queries/cleanup/similar.ts:260-430`.
-- `getCalleeFingerprintIndex()` in `src/queries/cleanup/similar.ts:401-422`
+  Source: `scip-query code src/queries/cleanup/similar.ts:206-590`.
+- `getCalleeFingerprintIndex()` in `src/queries/cleanup/similar.ts:517`
   memoizes the expensive callee fingerprint index per database and option key.
   Source: `scip-query code getCalleeFingerprintIndex -C 40`.
 
@@ -121,13 +121,13 @@ callable target that falls through to source-shape similarity:
 | `similar NavItems --json`            | 1.227s |    1 |
 | `similar ProjectHeroTintMenu --json` | 2.184s |    6 |
 
-`similarBySourceShape()` in `src/queries/cleanup/similar.ts:511-553` currently
+`similarBySourceShape()` in `src/queries/cleanup/similar.ts:729` currently
 calls `getSourceFingerprintIndex(db)` without the `scanLimit` that the bounded
 large-index command path passes to callee similarity. Source:
 `scip-query plan-context similarBySourceShape`;
 `scip-query code similarBySourceShape -C 80`.
 
-`buildSourceFingerprints()` in `src/queries/cleanup/similar.ts:876-890`
+`buildSourceFingerprints()` in `src/queries/cleanup/similar.ts:1112`
 currently tokenizes every production callable source snippet. Source:
 `scip-query code getSourceFingerprintIndex -C 80`.
 
@@ -197,12 +197,12 @@ work.
 
 Focused Vega_2.0 local-CLI probes after rebuilding:
 
-| Probe                              | Previous focused | Current median | stdout bytes | SHA-256                                                            |
-| ---------------------------------- | ---------------: | -------------: | -----------: | ------------------------------------------------------------------ |
-| `only echo`                        |           0.860s |         0.710s |        1,211 | `162f52479ad23d4e481f4fe0cea288a3f0dfbe568b056190bd01e5c766697a90` |
-| `diff-gate --json`                 |           1.326s |         1.179s |        3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
-| `similar ActiveNavIndicator --json` |          0.743s |         0.761s |          226 | `3316707fbf6cbab3f4543fecbe5e65a223d06bd2e563db876965ff7fc9c93c6d` |
-| `similar --json --full`            |           0.939s |         0.961s |       88,859 | `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf` |
+| Probe                               | Previous focused | Current median | stdout bytes | SHA-256                                                            |
+| ----------------------------------- | ---------------: | -------------: | -----------: | ------------------------------------------------------------------ |
+| `only echo`                         |           0.860s |         0.710s |        1,211 | `162f52479ad23d4e481f4fe0cea288a3f0dfbe568b056190bd01e5c766697a90` |
+| `diff-gate --json`                  |           1.326s |         1.179s |        3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
+| `similar ActiveNavIndicator --json` |           0.743s |         0.761s |          226 | `3316707fbf6cbab3f4543fecbe5e65a223d06bd2e563db876965ff7fc9c93c6d` |
+| `similar --json --full`             |           0.939s |         0.961s |       88,859 | `59463f5501cf8870e8a8d02d55edf02f065bd42709c183d799b5e3ebd51241bf` |
 
 `only echo` and full `diff-gate` improved because echo no longer builds a
 callee corpus for Vega's zero-callee new callable. Direct target `similar`
@@ -236,3 +236,10 @@ The `diffGate()` path still starts in `src/queries/impact/diff-gate.ts`. The
 focused co-change history pass affects only the co-change partner check's
 git-history input size; the echo prefilter measurements and output hashes in
 this ledger are unchanged.
+
+## 2026-06-28 Bench Profiling Follow-Up
+
+The `similar.ts` echo-path notes remain accurate after adding diagnostic profile
+spans. The new spans report phase timings for `similarAll()` and callee
+fingerprint construction when `SCIP_QUERY_PROFILE=1`; they do not change the
+echo prefilter, zero-callee source fallback, or diff-gate output contract.

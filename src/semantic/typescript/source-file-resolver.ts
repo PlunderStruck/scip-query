@@ -11,6 +11,11 @@ export interface SourceFileMatch {
   sourceFile: SourceFile;
 }
 
+interface ProjectSourceFileIndex {
+  project: Project;
+  sourceFiles: Map<string, SourceFile>;
+}
+
 export function createTypeScriptSourceFiles(
   db: ScipDatabase,
   projects: readonly ProjectBundle[],
@@ -20,12 +25,31 @@ export function createTypeScriptSourceFiles(
   indexedTypeScriptLikeDocuments(): string[];
 } {
   const sourceFileCache = new Map<string, SourceFileMatch | null>();
+  let sourceFileIndexes: ProjectSourceFileIndex[] | null = null;
+  let indexedTypeScriptDocuments: string[] | null = null;
+
+  const indexedDocuments = (): string[] => {
+    indexedTypeScriptDocuments ??= indexedDocumentPaths(db, {
+      extensions: TYPESCRIPT_SEMANTIC_EXTENSIONS,
+    });
+    return indexedTypeScriptDocuments;
+  };
+
+  const projectSourceFileIndexes = (): ProjectSourceFileIndex[] => {
+    sourceFileIndexes ??= buildProjectSourceFileIndexes(db.config.projectRoot, projects, indexedDocuments());
+    return sourceFileIndexes;
+  };
+
   const sourceFileMatch = (relativePath: string): SourceFileMatch | null => {
     if (!isTypeScriptLike(relativePath)) return null;
     return cached(sourceFileCache, relativePath, () => {
-      const fullPath = path.join(db.config.projectRoot, relativePath);
-      for (const { project } of projects) {
-        const sourceFile = project.getSourceFile(fullPath) ?? project.addSourceFileAtPathIfExists(fullPath) ?? null;
+      const fullPath = normalizeSourcePath(path.resolve(db.config.projectRoot, relativePath));
+      for (const { project, sourceFiles } of projectSourceFileIndexes()) {
+        let sourceFile = sourceFiles.get(fullPath) ?? null;
+        if (!sourceFile) {
+          sourceFile = project.addSourceFileAtPathIfExists(fullPath) ?? null;
+          if (sourceFile) sourceFiles.set(normalizeSourcePath(sourceFile.getFilePath()), sourceFile);
+        }
         if (sourceFile) return { project, sourceFile };
       }
       return null;
@@ -35,9 +59,37 @@ export function createTypeScriptSourceFiles(
   return {
     sourceFile: (relativePath) => sourceFileMatch(relativePath)?.sourceFile ?? null,
     sourceFileMatch,
-    indexedTypeScriptLikeDocuments: () =>
-      indexedDocumentPaths(db, {
-        extensions: TYPESCRIPT_SEMANTIC_EXTENSIONS,
-      }),
+    indexedTypeScriptLikeDocuments: indexedDocuments,
   };
+}
+
+function buildProjectSourceFileIndexes(
+  projectRoot: string,
+  projects: readonly ProjectBundle[],
+  indexedDocuments: readonly string[],
+): ProjectSourceFileIndex[] {
+  const indexes = projects.map(({ project }) => ({
+    project,
+    sourceFiles: new Map(
+      project.getSourceFiles().map((sourceFile) => [normalizeSourcePath(sourceFile.getFilePath()), sourceFile]),
+    ),
+  }));
+
+  for (const relativePath of indexedDocuments) {
+    const fullPath = normalizeSourcePath(path.resolve(projectRoot, relativePath));
+    for (const index of indexes) {
+      if (index.sourceFiles.has(fullPath)) break;
+      const sourceFile = index.project.addSourceFileAtPathIfExists(fullPath) ?? null;
+      if (sourceFile) {
+        index.sourceFiles.set(normalizeSourcePath(sourceFile.getFilePath()), sourceFile);
+        break;
+      }
+    }
+  }
+
+  return indexes;
+}
+
+function normalizeSourcePath(filePath: string): string {
+  return path.resolve(filePath);
 }

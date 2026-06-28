@@ -112,3 +112,9 @@ The incomplete-migration scope-hint notes remain accurate after the latest
 echo/similar source fallback, and the source-fingerprint cache-hit line-split
 avoidance does not change scope labels, ordering, CLI rendering, or remediation
 text.
+
+## 2026-06-28 Bench Profiling Follow-Up
+
+The incomplete-migration scope-hint notes remain accurate after adding
+`similar.ts` profile spans. The spans are measurement-only and do not change
+scope labels, ordering, CLI rendering, or remediation text.

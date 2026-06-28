@@ -115,7 +115,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 
 | Command | Description | Options |
 |---|---|---|
-| `bench` | Benchmark indexing and command runtimes for this repository | `--json`<br>`--cold-index`<br>`--include-heavy`<br>`--command <cmd>`<br>`--timeout-ms <n>` |
+| `bench` | Benchmark indexing and command runtimes for this repository | `--json`<br>`--cold-index`<br>`--include-heavy`<br>`--command <cmd>`<br>`--timeout-ms <n>`<br>`--progress`<br>`--profile`<br>`--profile-out <path>` |
 | `install-skills` | Install skills (scip-query, scip-query-setup, scip-adoption, scip-health-audit, scip-health-improve, scip-hyper-optimization, scip-api-impact, concrete-plan, scip-ai-cleanup, scip-debug, scip-explore, scip-triage-issue, scip-diagram, scip-debloat, scip-doc-reconcile, scip-directory-architecture, scip-maintainability, scip-react-maintainability, scip-vue-maintainability, scip-verify, scip-language-playbook) into Claude Code, Codex, and shared agent roots | - |
 | `setup-hooks` | Install or refresh project-local Codex and Claude Code lifecycle hooks | `--json` |
 | `check-deps` | Check whether scip-query and the detected language indexers are actually runnable | - |
