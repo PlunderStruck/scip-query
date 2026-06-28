@@ -26,6 +26,8 @@
 | Vega_2.0 scoped dead-candidate cache reuse `dead --json --full` | 3.453s latest full matrix / 2.928s focused median |     2.746s full matrix / 2.737s focused median | 20.5% faster vs latest full matrix / 6.5% faster vs prior focused median | Focused repeats 2.935s, 2.715s, 2.737s; full matrix 2.746s; stdout 3,803,655 bytes; SHA-256 `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1`                                                              |
 | Vega_2.0 scoped cache reuse `__health-phase dead --full`        |                         2.193s prior focused warm |                          2.035s focused median |                                                              7.2% faster | Focused repeats 2.041s, 2.024s, 2.035s; stdout 189 bytes; SHA-256 `648c7b6d6251e1d8761b0000e7663ae5f9971554db6cd0acd771dc9bb36db4ab`                                                                                        |
 | Vega_2.0 rejected shared catalog batch trial                    |                                       hashes same | health 3.554s-3.721s / diff-gate 4.463s-5.509s |                                                                 rejected | The batch `getScopedDefinitions()` prototype preserved `dead`, `health`, and `diff-gate` output hashes but slowed shared commands, so it was removed before shipping.                                                       |
+| Vega_2.0 JS exclusion regex guard `dead --json --full`          |                            2.689s baseline median |                          2.674s current median |                                                0.6% faster, within noise | Paired local CLI baseline/current repeats; stdout 3,803,655 bytes; SHA-256 `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1`                                                                               |
+| Vega_2.0 JS exclusion regex guard `health --json`               |                            2.975s baseline median |                          2.932s current median |                                                1.4% faster, within noise | Paired local CLI baseline/current repeats; stdout 15,342 bytes; SHA-256 `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d`                                                                                  |
 
 ## Initial Hypotheses
 
@@ -72,6 +74,11 @@
   definition/source caches before the source fallback phase. This keeps the dead
   output hash unchanged, improves the standalone full command and dead health
   phase, and leaves `health` / `diff-gate` within their prior timing band.
+- Accepted: guard JS/TS framework-exclusion regexes with cheap substring checks
+  that prove when the regex cannot match. Vega source probing avoided 640 regex
+  evaluations across 2,277 JS/TS files with zero boolean mismatches. Runtime
+  impact is small, but output hashes for `dead --json --full` and
+  `health --json` stayed unchanged.
 
 ## Verification
 
@@ -87,6 +94,10 @@
   `diff-gate --json`.
 - Passed: latest Vega local CLI `bench --json --include-heavy --timeout-ms 600000`;
   `dead --json --full` recorded at 2.746s.
+- Passed: focused framework/dead tests after JS exclusion regex guard:
+  `npm test -- tests/analysis/framework-patterns.test.ts tests/queries/internal/dead-candidate-gate.test.ts tests/queries/cleanup/dead-output.test.ts`.
+- Passed: paired Vega local CLI hash probes after JS exclusion regex guard for
+  `dead --json --full`, `__health-phase dead`, and `health --json`.
 - Passed: `scip-query reindex`
 - Passed: `scip-query diff-impact --json`
 - Passed: `scip-query unused-params --json --full`

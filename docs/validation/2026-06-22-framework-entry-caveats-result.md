@@ -22,6 +22,8 @@ A framework-discovered entrypoint is a source-level export whose real caller is 
 
 2026-06-28 follow-up: the same `src/analysis/framework-patterns.ts` prefilter now uses a declaration-shaped React custom-hook marker instead of treating every `use[A-Z]` identifier as AST-worthy. Ordinary React hook calls such as `useState` skip the framework-exclusion AST path, while top-level custom hook declarations, test framework files, and `scip-query` suppression comments still take it.
 
+2026-06-28 regex-guard follow-up: `src/analysis/framework-patterns.ts` now checks for test-framework names and the literal `use` before running the exact TS/JS exclusion regexes. This keeps the same test-file, custom-hook, and suppression behavior while avoiding regex work when a match is impossible.
+
 ## Verification
 
 - `npx vitest run tests/queries/cleanup/dead-output.test.ts` passed: 1 file, 1 test.
@@ -29,6 +31,7 @@ A framework-discovered entrypoint is a source-level export whose real caller is 
 - `npm run typecheck` passed.
 - `npm run build` passed.
 - 2026-06-28 follow-up verification: `npx vitest run tests/analysis/framework-patterns.test.ts`, `npm run typecheck`, `npm test`, and `npm run build` passed after the declaration-shaped hook prefilter. Vega_2.0 output hashes stayed unchanged for `dead --json --full`, `__health-phase dead --full`, and `health --json`.
+- 2026-06-28 regex-guard verification: `npm test -- tests/analysis/framework-patterns.test.ts tests/queries/internal/dead-candidate-gate.test.ts tests/queries/cleanup/dead-output.test.ts`, `npm run typecheck`, `npm run build`, and `npm test` passed. Vega_2.0 output hashes stayed unchanged for `dead --json --full`, `__health-phase dead`, and `health --json`.
 - `node dist/cli.js similar isFrameworkDiscoveredEntrypointSymbol --json` returned no rows.
 - `node dist/cli.js recent-duplicates --json` returned no findings and no root-cause groups.
 - `node dist/cli.js unused-params --json`, `wrapper-candidates --json`, `passthrough-candidates --json`, `cycles --json`, and `isolated --json` returned no findings.

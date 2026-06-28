@@ -160,7 +160,15 @@ function getJsTestExclusions(db: ScipDatabase, relativePath: string): ExclusionE
 }
 
 function mayContainJsExclusion(source: string): boolean {
-  return source.includes('scip-query') || TEST_FRAMEWORK_CALL_RE.test(source) || REACT_HOOK_DECLARATION_RE.test(source);
+  if (source.includes('scip-query')) return true;
+  let mayContainTestFrameworkCall = false;
+  for (const name of TEST_FRAMEWORK_NAMES) {
+    if (!source.includes(name)) continue;
+    mayContainTestFrameworkCall = true;
+    break;
+  }
+  if (mayContainTestFrameworkCall && TEST_FRAMEWORK_CALL_RE.test(source)) return true;
+  return source.includes('use') && REACT_HOOK_DECLARATION_RE.test(source);
 }
 
 /**

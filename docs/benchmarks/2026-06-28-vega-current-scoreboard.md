@@ -4,9 +4,9 @@ This scoreboard records the latest full warm command matrix for
 `/Users/aydansalois/Documents/GitHub/Vega_2.0` after the `similar --full`,
 React profile-cache, source identifier prefilter, diff-gate callee-index reuse,
 JS/TS framework-exclusion prefilter, doc path evidence cache, SQLite
-statement-cache, and dead scoped-cache reuse passes. Focused reruns after the
-full matrix are recorded separately below so partial measurements do not
-silently reshuffle the whole ranking.
+statement-cache, dead scoped-cache reuse, and wrapper source-fallback prefilter
+passes. Focused reruns after the full matrix are recorded separately below so
+partial measurements do not silently reshuffle the whole ranking.
 
 ## Corpus
 
@@ -21,21 +21,22 @@ silently reshuffle the whole ranking.
 
 | Rank | Command                                           | Latest warm duration | Exit | stdout bytes |
 | ---: | ------------------------------------------------- | -------------------: | ---: | -----------: |
-|    1 | `scip-query health --json`                        |               3.077s |    0 |       15,342 |
-|    2 | `scip-query diff-gate --json`                     |               2.857s |    1 |        3,089 |
-|    3 | `scip-query dead --json --full`                   |               2.746s |    0 |    3,803,655 |
-|    4 | `scip-query wrapper-candidates --json --full`     |               2.188s |    0 |       78,437 |
-|    5 | `scip-query stale-abstractions --json --full`     |               2.185s |    0 |       83,654 |
-|    6 | `scip-query cleanup-plan --verify --json`         |               2.055s |    0 |          237 |
-|    7 | `scip-query recent-duplicates --json --full`      |               1.921s |    0 |        3,618 |
-|    8 | `scip-query isolated --json --full`               |               1.844s |    0 |          130 |
-|    9 | `scip-query incomplete-migration --json --full`   |               1.619s |    0 |        1,101 |
-|   10 | `scip-query complexity-hotspots --json --full`    |               1.590s |    0 |    2,160,117 |
-|   11 | `scip-query similar --json --full`                |               1.412s |    0 |       88,859 |
-|   12 | `scip-query passthrough-candidates --json --full` |               1.319s |    0 |      146,739 |
-|   13 | `scip-query doc-drift --json --full`              |               1.112s |    0 |      963,953 |
-|   14 | `scip-query unused-params --json --full`          |               0.874s |    0 |          135 |
-|   15 | `scip-query similar-files --json --full`          |               0.493s |    0 |      194,564 |
+|    1 | `scip-query health --json`                        |               2.845s |    0 |       15,342 |
+|    2 | `scip-query diff-gate --json`                     |               2.815s |    1 |        3,089 |
+|    3 | `scip-query dead --json --full`                   |               2.691s |    0 |    3,803,655 |
+|    4 | `scip-query wrapper-candidates --json --full`     |               2.199s |    0 |       78,437 |
+|    5 | `scip-query stale-abstractions --json --full`     |               2.076s |    0 |       83,654 |
+|    6 | `scip-query cleanup-plan --verify --json`         |               1.971s |    0 |          237 |
+|    7 | `scip-query recent-duplicates --json --full`      |               1.860s |    0 |        3,618 |
+|    8 | `scip-query isolated --json --full`               |               1.763s |    0 |          130 |
+|    9 | `scip-query incomplete-migration --json --full`   |               1.585s |    0 |        1,101 |
+|   10 | `scip-query complexity-hotspots --json --full`    |               1.532s |    0 |    2,160,117 |
+|   11 | `scip-query similar --json --full`                |               1.349s |    0 |       88,859 |
+|   12 | `scip-query passthrough-candidates --json --full` |               1.279s |    0 |      146,739 |
+|   13 | `scip-query doc-drift --json --full`              |               1.090s |    0 |      963,953 |
+|   14 | `scip-query unused-params --json --full`          |               0.818s |    0 |          135 |
+|   15 | `scip-query diff-impact --json`                   |               0.630s |    0 |        4,194 |
+|   16 | `scip-query similar-files --json --full`          |               0.496s |    0 |      194,564 |
 
 `diff-gate` exits 1 because Vega_2.0 has findings; the timing is still valid.
 
@@ -197,11 +198,11 @@ evidence through a viability prefilter. The accepted pass skips source fallback
 for wrapper scan symbols that cheap indexed/semantic caller evidence already
 rules out, while preserving the original fan-in evidence domain.
 
-| Command                                            | Current median | Warm repeats          | stdout bytes | SHA-256                                                            |
-| -------------------------------------------------- | -------------: | --------------------- | -----------: | ------------------------------------------------------------------ |
-| `scip-query wrapper-candidates --json --full`      |         2.150s | 2.169s-2.124s-2.150s  |       78,437 | `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58` |
-| `scip-query __health-phase wrapper-candidates`     |         2.096s | 2.064s-2.096s-2.107s  |        1,585 | `9c61a0f9565f11c9a1b04477549cacd330585a2b2ad0e9fc92dafafe26ea965b` |
-| `scip-query health --json`                         |         2.879s | 2.871s-2.879s-2.932s  |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| Command                                        | Current median | Warm repeats         | stdout bytes | SHA-256                                                            |
+| ---------------------------------------------- | -------------: | -------------------- | -----------: | ------------------------------------------------------------------ |
+| `scip-query wrapper-candidates --json --full`  |         2.150s | 2.169s-2.124s-2.150s |       78,437 | `311a92542c8370fc284d3f01e1d1cd8d6a6432c71dcc1cef639fea31496ccf58` |
+| `scip-query __health-phase wrapper-candidates` |         2.096s | 2.064s-2.096s-2.107s |        1,585 | `9c61a0f9565f11c9a1b04477549cacd330585a2b2ad0e9fc92dafafe26ea965b` |
+| `scip-query health --json`                     |         2.879s | 2.871s-2.879s-2.932s |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
 
 The baseline/current comparison preserved byte-identical output for all three
 commands. The standalone wrapper command moved from 2.165s to 2.147s in the
@@ -209,6 +210,23 @@ paired probe, while composite `health --json` moved from 2.991s to 2.890s in
 that same probe. The improvement is intentionally recorded as modest: Vega
 pruned 290 of 3,310 wrapper scan symbols from source fallback, so the next
 large win likely needs a deeper source-fallback or health-phase change.
+
+## Post Dead JS Regex Guard Refresh
+
+Focused rerun with the local built CLI after adding cheap substring guards
+before the JS/TS framework-exclusion regexes used by dead-code candidate
+filtering:
+
+| Command                          | Baseline median | Current median | stdout bytes | SHA-256                                                            |
+| -------------------------------- | --------------: | -------------: | -----------: | ------------------------------------------------------------------ |
+| `scip-query dead --json --full`  |          2.689s |         2.674s |    3,803,655 | `28a0c54730e98c9e7758278020eb72f4a4b8fb82c114c3bce05c293ead24b1b1` |
+| `scip-query __health-phase dead` |          1.985s |         2.008s |           55 | `decdc3187d74e82cb158362174e58a4de3f8a490dd798571e16794f90f7a65e5` |
+| `scip-query health --json`       |          2.975s |         2.932s |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+
+This pass avoided 640 impossible regex evaluations across 2,277 Vega JS/TS
+files with zero boolean mismatches in the source-text probe. The runtime change
+is small and within process noise, but the accepted change removes pure wasted
+work while preserving output hashes.
 
 ## Biggest Confirmed Delta
 
@@ -224,11 +242,11 @@ large win likely needs a deeper source-fallback or health-phase change.
 
 ## Current Next Targets
 
-1. `health --json` is the current slowest command in the latest full warm
-   matrix at 3.077s; focused wrapper work has it around 2.879s, so rerun the
-   full matrix before reshuffling the global ranking.
+1. `health --json` remains the current slowest command in the latest full warm
+   matrix at 2.845s. Health orchestration grouping variants were rejected in the
+   focused trace because they were slower than the current parallel phase model.
 2. `diff-gate --json` and `dead --json --full` now sit just below health at
-   2.857s and 2.746s respectively.
+   2.815s and 2.691s respectively.
 3. Re-run the full Vega warm matrix with the installed CLI after the next
    package install/publish so `health` captures the persistent React profile
    cache through the normal `scip-query` command.
