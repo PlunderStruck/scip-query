@@ -10,6 +10,7 @@ import { dataflow } from '../../src/queries/navigation/dataflow.js';
 import { symbols } from '../../src/queries/navigation/symbols.js';
 import { trace } from '../../src/queries/navigation/trace.js';
 import { buildAstCalleeMap, buildChunkCalleeMap } from '../../src/symbols/graph/call-graph-evidence.js';
+import { buildCrossFileCallerMap } from '../../src/symbols/references/reference-callers.js';
 import type { ScipQueryConfig } from '../../src/domain/types.js';
 
 function createSchema(sqliteDb: Database.Database): void {
@@ -242,6 +243,78 @@ describe('source-backed accuracy regressions', () => {
             source: 'scip-chunk',
           },
         ]);
+      },
+    );
+  });
+
+  it('keeps AST caller evidence for target symbol matches without cached leaf metadata', () => {
+    withFixture(
+      'caller-target-leaf',
+      {
+        'src/caller.ts': [
+          'import { target, noise } from "./target";',
+          '',
+          'export function run() {',
+          '  target();',
+          '  noise();',
+          '}',
+          '',
+        ].join('\n'),
+        'src/target.ts': [
+          'export function target() {',
+          '  return 1;',
+          '}',
+          '',
+          'export function noise() {',
+          '  return 2;',
+          '}',
+          '',
+        ].join('\n'),
+      },
+      (sqliteDb) => {
+        sqliteDb.exec(`
+          INSERT INTO documents (id, language, relative_path) VALUES
+            (1, 'typescript', 'src/caller.ts'),
+            (2, 'typescript', 'src/target.ts');
+
+          INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
+            (1, 'scip-typescript npm fixture 1.0.0 src/\`caller.ts\`/run().', 'run', 12, 'function run|function run(): void'),
+            (2, 'scip-typescript npm fixture 1.0.0 src/\`target.ts\`/target().', 'target', 12, 'function target|function target(): number'),
+            (3, 'scip-typescript npm fixture 1.0.0 src/\`target.ts\`/noise().', 'noise', 12, 'function noise|function noise(): number');
+
+          INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+            (1, 1, 1, 2, 0, 5, 1),
+            (2, 2, 2, 0, 0, 2, 1),
+            (3, 2, 3, 4, 0, 6, 1);
+
+          INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+            (1, 1, 0, 2, 5, X'00'),
+            (2, 2, 0, 0, 2, X'00'),
+            (3, 2, 1, 4, 6, X'00');
+
+          INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+            (1, 1, 1),
+            (2, 2, 1),
+            (3, 3, 1);
+        `);
+      },
+      (db) => {
+        const map = buildCrossFileCallerMap(
+          db,
+          [
+            {
+              symbolId: 2,
+              documentId: 2,
+              startLine: 0,
+              endLine: 2,
+              symbol: 'scip-typescript npm fixture 1.0.0 src/`target.ts`/target().',
+              relativePath: 'src/target.ts',
+            },
+          ],
+          { semantic: false },
+        );
+
+        expect(map.get(2)).toEqual(new Set(['src/caller.ts']));
       },
     );
   });

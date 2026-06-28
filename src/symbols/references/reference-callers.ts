@@ -7,6 +7,7 @@ import type { IndexedDefinition, SymbolLocation } from '../../domain/types.js';
 import { getAllDefinitions } from '../definition-catalog.js';
 import { getGlobalLeafIndex, pickAstCallCandidate, sameLanguageCandidates } from '../leaf-symbol-index.js';
 import type { GlobalLeafCandidate } from '../leaf-symbol-index.js';
+import { leafName } from '../symbol-parser.js';
 
 interface ChunkMentionCallerRow {
   symbol_id: number;
@@ -38,10 +39,11 @@ export function buildCrossFileCallerMap(
   const leafIndex = getGlobalLeafIndex(db);
   const effectiveDefinitions = definitions ?? getAllDefinitions(db);
   const targetSymbolIds = new Set(effectiveDefinitions.map((definition) => definition.symbolId));
+  const targetLeaves = targetLeafNames(effectiveDefinitions);
 
-  addAstCallsiteCallers(db, map, docs, leafIndex, targetSymbolIds);
+  addAstCallsiteCallers(db, map, docs, leafIndex, targetSymbolIds, targetLeaves);
   addChunkMentionCallers(db, map, effectiveDefinitions, targetSymbolIds);
-  addRustAttrCallers(db, map, docs, leafIndex, targetSymbolIds);
+  addRustAttrCallers(db, map, docs, leafIndex, targetSymbolIds, targetLeaves);
   if (opts.semantic !== false) {
     mergeCallerSets(map, semanticCallerMap(db, indexedDefinitions(effectiveDefinitions)));
   }
@@ -58,6 +60,7 @@ function addAstCallsiteCallers(
   docs: readonly string[],
   leafIndex: Map<string, GlobalLeafCandidate[]>,
   targetSymbolIds: ReadonlySet<number>,
+  targetLeaves: ReadonlySet<string> | null,
 ): void {
   // For supported files, walk callsites and attribute each call to the symbol
   // whose leaf it names. This is additive to the chunk path: call_expression
@@ -67,6 +70,7 @@ function addAstCallsiteCallers(
     const callsites = getCallSites(db, doc);
     if (!callsites) continue;
     for (const site of callsites) {
+      if (targetLeaves && !targetLeaves.has(site.calleeLeaf)) continue;
       const candidates = sameLanguageCandidates(doc, leafIndex.get(site.calleeLeaf) ?? []);
       if (!candidates || candidates.length === 0) continue;
       const pick = pickAstCallCandidate(db, doc, candidates, site.memberAccess);
@@ -124,6 +128,7 @@ function addRustAttrCallers(
   docs: readonly string[],
   leafIndex: Map<string, GlobalLeafCandidate[]>,
   targetSymbolIds: ReadonlySet<number>,
+  targetLeaves: ReadonlySet<string> | null,
 ): void {
   // String-attr helpers (`#[serde(default = "fn")]`, etc.) are framework
   // dispatches that SCIP does not connect back to the helper definition.
@@ -132,6 +137,7 @@ function addRustAttrCallers(
     const attrRefs = frameworkSourceReferences(db, doc, { includeRustAttributeNames: true });
     if (attrRefs.length === 0) continue;
     for (const { name } of attrRefs) {
+      if (targetLeaves && !targetLeaves.has(name)) continue;
       const candidates = leafIndex.get(name);
       if (!candidates) continue;
       for (const c of candidates) {
@@ -150,6 +156,20 @@ function addCallerFile(map: Map<number, Set<string>>, symbolId: number, file: st
     map.set(symbolId, bucket);
   }
   bucket.add(file);
+}
+
+function targetLeafNames(definitions: ReadonlyArray<SymbolLocation>): Set<string> | null {
+  const leaves = new Set<string>();
+  for (const definition of definitions) {
+    const leaf =
+      'leaf' in definition && typeof definition.leaf === 'string'
+        ? definition.leaf
+        : 'symbol' in definition && typeof definition.symbol === 'string'
+          ? leafName(definition.symbol)
+          : '';
+    if (leaf) leaves.add(leaf);
+  }
+  return leaves.size > 0 ? leaves : null;
 }
 
 function indexedDefinitions(definitions: ReadonlyArray<SymbolLocation>): IndexedDefinition[] {

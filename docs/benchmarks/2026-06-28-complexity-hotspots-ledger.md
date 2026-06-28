@@ -49,6 +49,11 @@ true })`. The JS `isCallableSymbol` filter remains authoritative, and loaded
   rows still pass through mixed-row merge and source range correction, so this
   only avoids loading obviously non-callable definition rows before the same
   filtering pipeline.
+- Accepted: prefilter AST caller-evidence callsites by the requested target
+  leaf names before running language matching and candidate picking. A callsite
+  whose parsed callee leaf is absent from the requested definition set cannot
+  resolve to one of those target symbol IDs, so the gate preserves caller maps
+  while skipping impossible resolution work.
 
 ## Post LOC-Prefilter Measurements
 
@@ -95,3 +100,38 @@ phase because those directly exercise the optimized catalog path. Aggregate
 health kept byte-identical output but did not produce a clean same-session
 runtime win in the short rerun; other parallel phases and machine noise
 dominated that composite measurement.
+
+## Post Caller Target-Leaf Prefilter Measurements
+
+Focused rerun with the rebuilt local CLI after `buildCrossFileCallerMap()`
+started deriving the target leaf set once and skipping AST callsites plus Rust
+attribute references whose names cannot match the requested definitions.
+
+Stage probe:
+
+| Case                                          | Before | Current | Evidence                                                                         |
+| --------------------------------------------- | -----: | ------: | -------------------------------------------------------------------------------- |
+| Vega AST callsites entering candidate picking | 107377 | 12872\* | `getCallSites()` pass counted callsites whose `calleeLeaf` is in the target set. |
+| Vega target definitions at `minLoc >= 10`     |   4642 |    4642 | Same callable candidate set.                                                     |
+| Vega target leaf names                        |   4293 |    4293 | Derived from the requested definition records.                                   |
+| Vega semantic-on caller map                   |  748ms |   627ms | Same 4,598 caller-map keys in the source-module stage probe.                     |
+| `complexityHotspots(... semantic: true)`      | 1046ms |   623ms | Same top result in the source-module stage probe after warm caches.              |
+
+`*` The source files are still parsed/read through the existing AST cache; the
+new gate skips expensive leaf-index candidate filtering and AST candidate
+selection for callsite leaves outside the target set.
+
+CLI rerun:
+
+| Case                                      | Previous focused median | Current median | Warm repeats                                            | stdout bytes | SHA-256                                                            |
+| ----------------------------------------- | ----------------------: | -------------: | ------------------------------------------------------- | -----------: | ------------------------------------------------------------------ |
+| Vega `complexity-hotspots --json --full`  |                  1.376s |         1.308s | 1.265s-1.274s-1.365s-1.265s-1.277s-1.308s-1.372s-1.388s |    2,160,117 | `77edc0f3482e8ccd5520c5b178383d3ab3f1aef586888a4e2054551b6c14765f` |
+| Vega `__health-phase complexity-hotspots` |                  0.957s |         0.915s | 0.956s-0.934s-0.915s-0.888s-0.896s-0.871s-0.864s-0.925s |          670 | `38b928cf4b5e56ece26278a67c8bec1ad8b076629846392bbb91c8baac67741a` |
+| Vega `health --json`                      |                  1.766s |   noisy 2.440s | 1.960s-2.825s-2.440s-2.163s-2.457s                      |       15,342 | `edfcf02c33ce82792cc728e748b1bda2a28a6b504bfe0df79985eae3eabfaa5d` |
+| Vega `diff-gate --json`                   |                  1.179s |         1.271s | 1.411s-1.591s-1.271s-1.253s-1.269s                      |        3,089 | `4b70b62e26f2398447decacbb0c51b4200b666b78534d2c4cf8ace33a5728cc6` |
+| Vega `isolated --json --full`             |                  1.140s |         1.246s | 1.241s-1.256s-1.322s-1.239s-1.246s                      |          130 | `04e17adcb38811e37d69fc5abbaadb8b2d79cdf7a9992a30c27648e520acb702` |
+
+The accepted change is judged primarily on `complexity-hotspots` and its
+isolated health phase, where target-scoped caller maps dominate. `diff-gate`,
+`isolated`, and aggregate health stayed byte-identical; their same-session
+runtime variation did not show a clean win because other phases dominate.
