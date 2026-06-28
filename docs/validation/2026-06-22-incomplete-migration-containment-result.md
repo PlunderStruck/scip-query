@@ -56,3 +56,5 @@ The persistent-refresh coordination slice rechecked the `diff-gate.ts`, `incompl
 ## 2026-06-28 Performance Citation Refresh
 
 The hyper-optimization slice rechecked the `src/queries/impact/incomplete-migration.ts` citation after incomplete-migration began reusing the cached callee-fingerprint index from `src/queries/cleanup/similar.ts`. Containment semantics, helper-shape metadata, skipped-helper reasons, and CLI/diff-gate output remain unchanged; the update only avoids rebuilding the same callee index during diff-gate. The later `similarAll()` focus-file pruning option is scoped to `recent-duplicates --full` and is not part of incomplete-migration containment.
+
+The lazy-index optimization rechecked the `src/queries/impact/incomplete-migration.ts` citation after deferring the global callee-fingerprint index until a changed helper has enough meaningful callees to score. Containment semantics, helper-shape metadata, skipped-helper reasons, ordering, and CLI/diff-gate output remain unchanged; tiny helpers still produce the same skip rows without consulting the global candidate index.

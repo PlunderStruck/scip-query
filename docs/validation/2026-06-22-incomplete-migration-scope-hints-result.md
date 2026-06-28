@@ -65,3 +65,5 @@ The persistent-refresh coordination slice rechecked the `incomplete-migration.ts
 ## 2026-06-28 Performance Citation Refresh
 
 The hyper-optimization slice rechecked the `src/queries/impact/incomplete-migration.ts` citation after incomplete-migration switched from rebuilding a local callee-fingerprint index to reusing the cached index accessor in `src/queries/cleanup/similar.ts`. Scope labels, scope reasons, ordering, CLI rendering, and diff-gate remediation text remain unchanged. The later `similarAll()` focus-file pruning option is scoped to `recent-duplicates --full` and does not change incomplete-migration scope hints.
+
+The lazy-index optimization rechecked the `src/queries/impact/incomplete-migration.ts` citation after moving global candidate-index creation behind the meaningful-callee threshold. Scope labels, scope reasons, ordering, CLI rendering, and diff-gate remediation text remain unchanged because helpers that are too small to score are skipped before any candidate-specific scope analysis.

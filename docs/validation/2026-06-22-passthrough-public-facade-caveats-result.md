@@ -60,3 +60,5 @@ The persistent-refresh coordination slice rechecked the `src/queries/impact/inco
 ## 2026-06-28 Performance Citation Refresh
 
 The hyper-optimization slice rechecked the `src/queries/impact/incomplete-migration.ts` citation after incomplete-migration began reusing the cached callee-fingerprint index. The citation is still only a verification-command record for this passthrough public-facade caveat, and the performance change does not alter the passthrough analyzer conclusion.
+
+The lazy-index optimization rechecked the `src/queries/impact/incomplete-migration.ts` citation after incomplete-migration deferred the global callee-fingerprint index until a helper reaches scoring. The citation remains only a verification-command record for this passthrough caveat slice, and the performance change does not alter the passthrough analyzer conclusion.

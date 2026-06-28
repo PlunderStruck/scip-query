@@ -136,12 +136,16 @@ export function incompleteMigration(
     result.note = `helper scoring capped at ${maxHelpers} of ${newDefs.length} new symbols`;
   }
 
-  const candidateIndex = getCalleeFingerprintIndex(db, { minCallees: Math.min(3, minCallees), scanLimit, semantic });
   const helperCalleeRows = index.calleeMap(helpers, { semantic });
   const helperFingerprints = helpers.map((def) => ({
     def,
     callees: meaningfulCallees((helperCalleeRows.get(def.symbolId) ?? []).map((c) => c.symbol)),
   }));
+  let candidateIndex: CalleeFingerprintIndex | undefined;
+  const getCandidateIndex = (): CalleeFingerprintIndex => {
+    candidateIndex ??= getCalleeFingerprintIndex(db, { minCallees: Math.min(3, minCallees), scanLimit, semantic });
+    return candidateIndex;
+  };
 
   for (const { def, callees } of helperFingerprints) {
     const shortName = shortenSymbol(def.symbol);
@@ -153,6 +157,7 @@ export function incompleteMigration(
       });
       continue;
     }
+    const candidateIndex = getCandidateIndex();
     const specificHelperCalleeCount = specificCalleeCount(callees, candidateIndex);
     if (specificHelperCalleeCount === 0) {
       result.skipped.push({
