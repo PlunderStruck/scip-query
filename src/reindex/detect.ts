@@ -46,6 +46,11 @@ const LANGUAGE_MARKERS: LanguageMarker[] = [
   { language: 'java', files: ['pom.xml', 'build.gradle', 'build.gradle.kts'], extensions: ['.java'] },
   { language: 'kotlin', files: ['build.gradle.kts'], extensions: ['.kt', '.kts'] },
   { language: 'scala', files: ['build.sbt'], extensions: ['.scala'] },
+  {
+    language: 'clojure',
+    files: ['deps.edn', 'project.clj', 'bb.edn', 'shadow-cljs.edn'],
+    extensions: ['.clj', '.cljs', '.cljc'],
+  },
   { language: 'python', files: ['pyproject.toml', 'setup.py', 'setup.cfg', 'Pipfile'], extensions: ['.py', '.pyi'] },
   { language: 'ruby', files: ['Gemfile'], extensions: ['.rb'] },
   {

@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../storage/db.js';
+import type { IndexedDefinition } from '../domain/types.js';
 import { fileContentHash, readCachedFileEvidence, writeCachedFileEvidence } from '../storage/evidence-cache.js';
 import { createPerDbSourceCache } from '../storage/per-db-cache.js';
 import { detectAstLanguage, isVueSfcPath, type AstLanguage } from './ast/ast-language.js';
@@ -16,6 +17,7 @@ import {
 } from './source-identifiers.js';
 import { collectCrossLanguageDispatchName, collectRustAttrHelperNames } from './source-reference-collectors.js';
 import { buildTypeContainerMap } from './source-type-containers.js';
+import { buildClojureSourceFacts } from './clojure-facts.js';
 
 export interface SourceFacts {
   language: AstLanguage;
@@ -27,11 +29,22 @@ export interface SourceFacts {
     params: Array<{ name: string; simple: boolean }>;
     paramsEndLine: number;
     isLiteralPassthrough: boolean;
+    clojureKind?: 'function' | 'macro' | 'method';
   }>;
   callSites: Array<{
     calleeLeaf: string;
+    calleeQualifier?: string;
+    calleeText?: string;
     memberAccess: boolean;
     line: number;
+  }>;
+  clojureMembers: Array<{
+    ownerName: string;
+    ownerKind: 'protocol' | 'record' | 'type' | 'extension';
+    memberName: string;
+    memberKind: 'protocol-method' | 'record-method' | 'type-method' | 'extension-method';
+    startLine: number;
+    endLine: number;
   }>;
   typeContainerMap: Map<string, Set<string>>;
   identifierLineMap: Map<string, number[]>;
@@ -77,6 +90,12 @@ function loadOrBuildSourceFacts(
     if (facts && facts.language === language) return facts;
   }
 
+  if (language === 'clojure') {
+    const facts = buildClojureSourceFacts(source);
+    writeCachedFileEvidence(db, 'source-facts', relativePath, contentHash, serializeSourceFacts(facts));
+    return facts;
+  }
+
   const tree = getAst(db, relativePath);
   if (!tree) return null;
   const facts = buildSourceFacts(tree, language);
@@ -93,6 +112,7 @@ interface SerializedSourceFacts {
   language: AstLanguage;
   callables: SourceFacts['callables'];
   callSites: SourceFacts['callSites'];
+  clojureMembers?: SourceFacts['clojureMembers'];
   typeContainerMap: Array<[string, string[]]>;
   identifierLineMap: Array<[string, number[]]>;
   rustAttrReferencedNames: string[];
@@ -104,6 +124,7 @@ function serializeSourceFacts(facts: SourceFacts): string {
     language: facts.language,
     callables: facts.callables,
     callSites: facts.callSites,
+    clojureMembers: facts.clojureMembers,
     typeContainerMap: [...facts.typeContainerMap.entries()].map(([key, value]) => [key, [...value]]),
     identifierLineMap: [...facts.identifierLineMap.entries()],
     rustAttrReferencedNames: [...facts.rustAttrReferencedNames],
@@ -115,11 +136,18 @@ function serializeSourceFacts(facts: SourceFacts): string {
 function deserializeSourceFacts(payload: string): SourceFacts | null {
   try {
     const raw = JSON.parse(payload) as SerializedSourceFacts;
+    if (
+      raw.language === 'clojure' &&
+      (raw.clojureMembers === undefined || raw.callSites.some((site) => site.calleeText === undefined))
+    ) {
+      return null;
+    }
     const identifierLineMap = new Map(raw.identifierLineMap);
     return {
       language: raw.language,
       callables: raw.callables,
       callSites: raw.callSites,
+      clojureMembers: raw.clojureMembers ?? [],
       typeContainerMap: new Map(raw.typeContainerMap.map(([key, value]) => [key, new Set(value)])),
       identifierLineMap,
       identifiersByLine: identifiersByLine(identifierLineMap),
@@ -149,6 +177,17 @@ export function getRustAttrReferencedNames(db: ScipDatabase, relativePath: strin
 
 export function getCrossLanguageDispatchNames(db: ScipDatabase, relativePath: string): Set<string> {
   return getSourceFacts(db, relativePath)?.crossLanguageDispatchNames ?? new Set();
+}
+
+export function isClojureMacroDefinition(
+  db: ScipDatabase,
+  definition: Pick<IndexedDefinition, 'relativePath' | 'startLine' | 'endLine'>,
+): boolean {
+  if (definition.relativePath.includes('.clj-kondo/hooks/')) return true;
+  const callable = getSourceFacts(db, definition.relativePath)?.callables.find(
+    (candidate) => candidate.startLine === definition.startLine && candidate.endLine === definition.endLine,
+  );
+  return callable?.clojureKind === 'macro';
 }
 
 function findCallableInFacts(
@@ -202,6 +241,7 @@ function buildSourceFacts(tree: Tree, language: AstLanguage): SourceFacts {
     language,
     callables,
     callSites,
+    clojureMembers: [],
     typeContainerMap: buildTypeContainerMap(tree, language),
     identifierLineMap,
     identifiersByLine: identifiersByLine(identifierLineMap),

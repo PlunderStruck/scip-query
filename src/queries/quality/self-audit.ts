@@ -5,8 +5,10 @@ import { getSemanticProvider } from '../../semantic/index.js';
 import { semanticCalleeMap, semanticReferences } from '../../semantic/shared-primitives.js';
 import { getResolvedReferenceSites } from '../../symbols/references/reference-sites.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
+import { detectAstLanguage, getSourceFacts } from '../../source/ast.js';
 
 export type AuditQuestion = 'references' | 'callees';
+export type AuditOracleKind = 'semantic' | 'source';
 
 export interface AuditDisagreement {
   symbol: string;
@@ -33,11 +35,13 @@ export interface AuditQuestionScore {
 }
 
 export interface SelfAuditResult {
-  /** False when no semantic provider is available — nothing to audit against. */
+  /** False when no semantic or source-backed oracle is available. */
   available: boolean;
   sampleSize: number;
   /** Fraction of sampled symbols the oracle could answer at all. */
   oracleCoverage: number;
+  /** Semantic means compiler-backed; source means language source-fact-backed. */
+  oracleKind?: AuditOracleKind;
   scores: AuditQuestionScore[];
   /** Largest divergences — the actionable debugging targets. */
   topDisagreements: AuditDisagreement[];
@@ -71,7 +75,8 @@ export function selfAudit(
     index.productionCallableDefinitions({ scope, minLoc: 2, requireFunctionLikeSymbol: true }),
     samples,
   );
-  if (sampled.length === 0 || !oracleAvailable(db, sampled)) {
+  const oracleKind = oracleKindForSample(db, sampled);
+  if (sampled.length === 0 || !oracleKind) {
     return { available: false, sampleSize: sampled.length, oracleCoverage: 0, scores: [], topDisagreements: [] };
   }
 
@@ -82,15 +87,21 @@ export function selfAudit(
   const disagreements: AuditDisagreement[] = [];
   let oracleAnswered = 0;
 
-  const oracleCallees = semanticCalleeMap(db, sampled);
+  const semanticOracleCallees: ReturnType<typeof semanticCalleeMap> =
+    oracleKind === 'semantic' ? semanticCalleeMap(db, sampled) : new Map();
+  const sourceOracle = oracleKind === 'source' ? buildClojureSourceOracle(db, index, sampled) : null;
   for (const definition of sampled) {
     const oracleRefs = crossFileSet(
       definition,
-      semanticReferences(db, definition).map((ref) => ref.file),
+      oracleKind === 'semantic'
+        ? semanticReferences(db, definition).map((ref) => ref.file)
+        : [...(sourceOracle?.referencesBySymbolId.get(definition.symbolId) ?? [])],
     );
     const oracleCals = crossFileSet(
       definition,
-      (oracleCallees.get(definition.symbolId) ?? []).map((callee) => callee.file),
+      oracleKind === 'semantic'
+        ? (semanticOracleCallees.get(definition.symbolId) ?? []).map((callee) => callee.file)
+        : [...(sourceOracle?.calleesBySymbolId.get(definition.symbolId) ?? [])],
     );
     if (oracleRefs.size === 0 && oracleCals.size === 0) continue; // oracle had nothing to say
     oracleAnswered += 1;
@@ -117,7 +128,10 @@ export function selfAudit(
     available: true,
     sampleSize: sampled.length,
     oracleCoverage: sampled.length > 0 ? round3(oracleAnswered / sampled.length) : 0,
-    scores: (['references', 'callees'] as const).map((question) => finalizeScore(question, tallies[question])),
+    oracleKind,
+    scores: (['references', 'callees'] as const).map((question) =>
+      finalizeScore(question, tallies[question], oracleKind),
+    ),
     topDisagreements: disagreements.slice(0, maxDisagreements),
   };
 }
@@ -145,14 +159,16 @@ function sampleDefinitions(definitions: IndexedDefinition[], samples: number): I
   return picked;
 }
 
-function oracleAvailable(db: ScipDatabase, sampled: readonly IndexedDefinition[]): boolean {
+function oracleKindForSample(db: ScipDatabase, sampled: readonly IndexedDefinition[]): AuditOracleKind | null {
   const probe = sampled[0];
-  if (!probe) return false;
+  if (!probe) return null;
+  if (canSourceAuditDefinition(db, probe)) return 'source';
   try {
-    return getSemanticProvider(db, probe.relativePath).availability().available;
+    if (getSemanticProvider(db, probe.relativePath).availability().available) return 'semantic';
   } catch {
-    return false;
+    // Fall through to source-backed oracles below.
   }
+  return sampled.some((definition) => canSourceAuditDefinition(db, definition)) ? 'source' : null;
 }
 
 function crossFileSet(definition: IndexedDefinition, files: readonly string[]): Set<string> {
@@ -193,21 +209,90 @@ function scoreQuestion(
 // complete oracle for `references` (precision + recall both valid). Its
 // calleesFor only reports confidently-resolved call shapes — a PARTIAL
 // oracle: cheap-only callees are unverified, not wrong, so only recall holds.
-const ORACLE_COMPLETE: Record<AuditQuestion, boolean> = {
+const SEMANTIC_ORACLE_COMPLETE: Record<AuditQuestion, boolean> = {
   references: true,
   callees: false,
 };
 
-function finalizeScore(question: AuditQuestion, tally: QuestionTally): AuditQuestionScore {
+function finalizeScore(question: AuditQuestion, tally: QuestionTally, oracleKind: AuditOracleKind): AuditQuestionScore {
   const recall = tally.oracleTotal > 0 ? tally.agreed / tally.oracleTotal : 1;
   const unverified = tally.cheapTotal - tally.agreed;
+  const oracleComplete = oracleKind === 'semantic' ? SEMANTIC_ORACLE_COMPLETE[question] : false;
   return {
     question,
     comparedSymbols: tally.comparedSymbols,
-    precision: ORACLE_COMPLETE[question] && tally.cheapTotal > 0 ? round3(tally.agreed / tally.cheapTotal) : null,
+    precision: oracleComplete && tally.cheapTotal > 0 ? round3(tally.agreed / tally.cheapTotal) : null,
     recall: round3(recall),
     unverified,
   };
+}
+
+interface SourceOracle {
+  referencesBySymbolId: Map<number, Set<string>>;
+  calleesBySymbolId: Map<number, Set<string>>;
+}
+
+function canSourceAuditDefinition(db: ScipDatabase, definition: IndexedDefinition): boolean {
+  return (
+    detectAstLanguage(definition.relativePath) === 'clojure' && getSourceFacts(db, definition.relativePath) !== null
+  );
+}
+
+function buildClojureSourceOracle(
+  db: ScipDatabase,
+  index: ProjectIndex,
+  sampled: readonly IndexedDefinition[],
+): SourceOracle {
+  const referencesBySymbolId = new Map<number, Set<string>>();
+  const calleesBySymbolId = new Map<number, Set<string>>();
+  const sampledClojure = sampled.filter((definition) => canSourceAuditDefinition(db, definition));
+  const sampledByLeaf = new Map<string, IndexedDefinition[]>();
+  for (const definition of sampledClojure) {
+    const bucket = sampledByLeaf.get(definition.leaf) ?? [];
+    bucket.push(definition);
+    sampledByLeaf.set(definition.leaf, bucket);
+  }
+
+  for (const sourceFile of index.sourceFiles()) {
+    if (detectAstLanguage(sourceFile) !== 'clojure') continue;
+    const facts = getSourceFacts(db, sourceFile);
+    if (!facts) continue;
+    for (const leaf of facts.fileIdentifiers) {
+      for (const definition of sampledByLeaf.get(leaf) ?? []) {
+        addSetValue(referencesBySymbolId, definition.symbolId, sourceFile);
+      }
+    }
+  }
+
+  const clojureDefinitionsByLeaf = new Map<string, IndexedDefinition[]>();
+  for (const definition of index.scopedDefinitions()) {
+    if (detectAstLanguage(definition.relativePath) !== 'clojure') continue;
+    const bucket = clojureDefinitionsByLeaf.get(definition.leaf) ?? [];
+    bucket.push(definition);
+    clojureDefinitionsByLeaf.set(definition.leaf, bucket);
+  }
+
+  for (const definition of sampledClojure) {
+    const facts = getSourceFacts(db, definition.relativePath);
+    if (!facts) continue;
+    for (const site of facts.callSites) {
+      if (site.line < definition.startLine || site.line > definition.endLine) continue;
+      for (const callee of clojureDefinitionsByLeaf.get(site.calleeLeaf) ?? []) {
+        addSetValue(calleesBySymbolId, definition.symbolId, callee.relativePath);
+      }
+    }
+  }
+
+  return { referencesBySymbolId, calleesBySymbolId };
+}
+
+function addSetValue(map: Map<number, Set<string>>, key: number, value: string): void {
+  const existing = map.get(key);
+  if (existing) {
+    existing.add(value);
+    return;
+  }
+  map.set(key, new Set([value]));
 }
 
 function round3(value: number): number {

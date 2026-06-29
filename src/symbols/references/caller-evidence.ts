@@ -30,8 +30,9 @@ export function crossFileCallerEvidenceMap(
 export function sourceFallbackCallerEvidenceMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<IndexedDefinition>,
+  opts: { skipPath?: (relativePath: string) => boolean } = {},
 ): Map<number, Set<string>> {
-  return findCallerFiles(db, definitions);
+  return findCallerFiles(db, definitions, opts);
 }
 
 // scip-query: ignore-wrapper — public caller evidence composition boundary:

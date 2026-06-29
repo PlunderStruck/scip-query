@@ -16,7 +16,8 @@ export type AstLanguage =
   | 'cpp'
   | 'csharp'
   | 'php'
-  | 'vb';
+  | 'vb'
+  | 'clojure';
 
 const LANGUAGE_BY_EXT: Readonly<Record<string, AstLanguage>> = {
   '.rs': 'rust',
@@ -47,6 +48,9 @@ const LANGUAGE_BY_EXT: Readonly<Record<string, AstLanguage>> = {
   '.cs': 'csharp',
   '.php': 'php',
   '.vb': 'vb',
+  '.clj': 'clojure',
+  '.cljs': 'clojure',
+  '.cljc': 'clojure',
 };
 
 export function detectAstLanguage(relativePath: string): AstLanguage | null {

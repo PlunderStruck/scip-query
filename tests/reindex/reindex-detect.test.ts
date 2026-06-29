@@ -63,4 +63,20 @@ describe('detectLanguages', () => {
     expect(languages).toContain('typescript');
     expect(languages).not.toContain('javascript');
   });
+
+  it('detects Clojure projects from common manifests and source extensions', () => {
+    const projectRoot = createProject('scip-query-detect-clojure-');
+    writeFileSync(join(projectRoot, 'deps.edn'), '{}\n');
+    mkdirSync(join(projectRoot, 'src'), { recursive: true });
+    writeFileSync(join(projectRoot, 'src', 'core.cljc'), '(ns example.core)\n');
+
+    expect(detectLanguages(projectRoot)).toContain('clojure');
+  });
+
+  it('does not treat arbitrary edn data files as Clojure projects', () => {
+    const projectRoot = createProject('scip-query-detect-edn-');
+    writeFileSync(join(projectRoot, 'data.edn'), '{:not :source}\n');
+
+    expect(detectLanguages(projectRoot)).not.toContain('clojure');
+  });
 });

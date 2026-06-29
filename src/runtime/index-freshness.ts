@@ -30,6 +30,7 @@ interface RuntimeFingerprint {
   pnpmWorkspaces: boolean;
   typescriptProjectMode: TypeScriptProjectMode;
   typescriptProjects: string[];
+  clojureConfigPath?: string;
   files: { path: string; size: number; hash: string }[];
 }
 
@@ -102,6 +103,7 @@ function runtimeFingerprint(
       config.indexer?.typescript?.projectMode !== 'workspace' && config.indexer?.typescript?.pnpmWorkspaces === true,
     typescriptProjectMode: config.indexer?.typescript?.projectMode ?? 'single',
     typescriptProjects: normalizeTypeScriptProjects(config.indexer?.typescript?.projects),
+    clojureConfigPath: normalizeOptionalPath(config.indexer?.clojure?.configPath),
     files: fingerprintProjectFiles(projectRoot),
   };
 }
@@ -110,4 +112,9 @@ function normalizeTypeScriptProjects(projects: readonly string[] | undefined): s
   return [...new Set((projects ?? []).map((project) => project.trim()).filter(Boolean))].sort((left, right) =>
     left.localeCompare(right),
   );
+}
+
+function normalizeOptionalPath(path: string | undefined): string | undefined {
+  const trimmed = path?.trim();
+  return trimmed || undefined;
 }

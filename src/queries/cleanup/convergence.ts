@@ -1,7 +1,10 @@
 import type { ScipDatabase } from '../../storage/db.js';
+import type { IndexedDefinition } from '../../domain/types.js';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { getCalleeRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
+import { isClojureMacroDefinition } from '../../source/ast.js';
+import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 
 export interface ConvergenceResult {
   symbolA: { symbol: string; shortName: string; file: string; loc: number };
@@ -29,8 +32,14 @@ export function convergence(
 
   if (!matchA || !matchB) return null;
 
-  const calleesA = new Set(getCalleeRowsForSymbol(db, matchA, { semantic: opts.semantic }).map((r) => r.symbol));
-  const calleesB = new Set(getCalleeRowsForSymbol(db, matchB, { semantic: opts.semantic }).map((r) => r.symbol));
+  const rawCalleesA = getCalleeRowsForSymbol(db, matchA, { semantic: opts.semantic });
+  const rawCalleesB = getCalleeRowsForSymbol(db, matchB, { semantic: opts.semantic });
+  const calleesAForComparison = rawCalleesA.filter((row) => !isClojureMacroCallee(db, row));
+  const calleesBForComparison = rawCalleesB.filter((row) => !isClojureMacroCallee(db, row));
+  const filteredMacroScaffolding =
+    calleesAForComparison.length !== rawCalleesA.length || calleesBForComparison.length !== rawCalleesB.length;
+  const calleesA = new Set(calleesAForComparison.map((r) => r.symbol));
+  const calleesB = new Set(calleesBForComparison.map((r) => r.symbol));
 
   const shared: string[] = [];
   for (const c of calleesA) {
@@ -69,6 +78,9 @@ export function convergence(
   } else {
     strategy = `Extract the ${shared.length} shared callees into a common helper. Each function calls the helper plus its own unique logic (${uniqueA.length} callees in A, ${uniqueB.length} in B).`;
   }
+  if (filteredMacroScaffolding) {
+    strategy = `Ignored Clojure macro scaffolding while comparing tracked callees. ${strategy}`;
+  }
 
   const locA = matchA.endLine - matchA.startLine + 1;
   const locB = matchB.endLine - matchB.startLine + 1;
@@ -92,4 +104,10 @@ export function convergence(
     uniqueToB: uniqueB.map(shortenSymbol),
     consolidationStrategy: strategy,
   };
+}
+
+function isClojureMacroCallee(db: ScipDatabase, callee: { symbol: string; file: string }): boolean {
+  return getDefinitionsForFile(db, callee.file).some(
+    (definition: IndexedDefinition) => definition.symbol === callee.symbol && isClojureMacroDefinition(db, definition),
+  );
 }

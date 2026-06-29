@@ -3,6 +3,7 @@ import type { IndexedDefinition } from '../../domain/types.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { runCandidateAnalysis } from '../internal/candidate-scan.js';
+import { getSourceFacts } from '../../source/ast.js';
 
 export interface ComplexityHotspot {
   symbol: string;
@@ -40,15 +41,20 @@ export function complexityHotspots(
       index.productionCallableDefinitions({
         scope,
         minLoc,
-        requireCallableSymbol: true,
+        requireFunctionLikeSymbol: true,
         includeSuppressed: true,
         sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
       }),
     scanLimit,
-    prepare: (definitions) => ({
-      callerMap: index.crossFileCallerMap(definitions, { semantic: opts?.semantic !== false }),
-      calleeMap: index.calleeMap(definitions, { semantic: opts?.semantic !== false }),
-    }),
+    prepare: (definitions) => {
+      const languages = languageByFile(db, definitions);
+      return {
+        callerMap: index.crossFileCallerMap(definitions, { semantic: opts?.semantic !== false }),
+        calleeMap: index.calleeMap(definitions, { semantic: opts?.semantic !== false }),
+        languageByFile: languages,
+        clojureCallableIds: clojureCallableDefinitionIds(db, definitions, languages),
+      };
+    },
     evaluate: (definition, maps) => complexityHotspotForDefinition(definition, maps, minLoc),
     orderResults: (left, right) => right.score - left.score || right.loc - left.loc,
     limit,
@@ -60,9 +66,17 @@ function complexityHotspotForDefinition(
   maps: {
     callerMap: ReturnType<ProjectIndex['crossFileCallerMap']>;
     calleeMap: ReturnType<ProjectIndex['calleeMap']>;
+    languageByFile: Map<string, string | null>;
+    clojureCallableIds: Set<number>;
   },
   minLoc: number,
 ): ComplexityHotspot | null {
+  if (
+    maps.languageByFile.get(definition.relativePath) === 'clojure' &&
+    !maps.clojureCallableIds.has(definition.symbolId)
+  ) {
+    return null;
+  }
   const loc = definition.endLine - definition.startLine + 1;
   if (loc < minLoc) return null;
   const fanIn = maps.callerMap.get(definition.symbolId)?.size ?? 0;
@@ -88,4 +102,45 @@ function complexityHotspotForDefinition(
     calleeCount,
     score: Math.round((loc / 50) * (fanIn / 5) * Math.max(fanOut / 5, 1) * 100) / 100,
   };
+}
+
+function languageByFile(db: ScipDatabase, definitions: ReadonlyArray<IndexedDefinition>): Map<string, string | null> {
+  const paths = [...new Set(definitions.map((definition) => definition.relativePath))];
+  if (paths.length === 0) return new Map();
+
+  const placeholders = paths.map(() => '?').join(', ');
+  const rows = db.all<{ relative_path: string; language: string | null }>(
+    `SELECT relative_path, language
+     FROM documents
+     WHERE relative_path IN (${placeholders})`,
+    ...paths,
+  );
+  return new Map(rows.map((row) => [row.relative_path, row.language?.toLowerCase() ?? null]));
+}
+
+function clojureCallableDefinitionIds(
+  db: ScipDatabase,
+  definitions: ReadonlyArray<IndexedDefinition>,
+  languages: Map<string, string | null>,
+): Set<number> {
+  const ids = new Set<number>();
+  const callableKeysByFile = new Map<string, Set<string>>();
+
+  for (const definition of definitions) {
+    if (languages.get(definition.relativePath) !== 'clojure') continue;
+    let keys = callableKeysByFile.get(definition.relativePath);
+    if (!keys) {
+      keys = new Set(
+        (getSourceFacts(db, definition.relativePath)?.callables ?? []).map(
+          (callable) => `${callable.name}:${callable.startLine}`,
+        ),
+      );
+      callableKeysByFile.set(definition.relativePath, keys);
+    }
+    if (keys.has(`${definition.leaf}:${definition.startLine}`)) {
+      ids.add(definition.symbolId);
+    }
+  }
+
+  return ids;
 }

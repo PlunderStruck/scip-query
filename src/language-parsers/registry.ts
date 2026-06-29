@@ -8,6 +8,7 @@
  * internals.
  */
 import { parseCLikeImports } from './languages/c-like.js';
+import { parseClojureImports } from './languages/clojure.js';
 import { parseDartExports, parseDartImports } from './languages/dart.js';
 import { parseDotNetImports } from './languages/dotnet.js';
 import { parseJavaScriptImports, parseReExports } from './languages/javascript.js';
@@ -18,6 +19,7 @@ import { parseRubyImports } from './languages/ruby.js';
 import { parseRustExports, parseRustImports } from './languages/rust.js';
 import {
   C_LIKE_EXTENSIONS,
+  CLOJURE_EXTENSIONS,
   DART_EXTENSIONS,
   DOTNET_EXTENSIONS,
   JS_EXTENSIONS,
@@ -105,7 +107,25 @@ const php = importOnlyLanguageParser({
   parseImports: parsePhpImports,
 });
 
-const REGISTRY: ReadonlyArray<LanguageParser> = [javascript, python, jvm, rust, ruby, cLike, dotnet, dart, php];
+const clojure = importOnlyLanguageParser({
+  language: 'clojure',
+  extensions: CLOJURE_EXTENSIONS,
+  imports: 'regex-only',
+  parseImports: parseClojureImports,
+});
+
+const REGISTRY: ReadonlyArray<LanguageParser> = [
+  javascript,
+  python,
+  jvm,
+  rust,
+  ruby,
+  cLike,
+  dotnet,
+  dart,
+  php,
+  clojure,
+];
 
 // scip-query: ignore-wrapper — public face of the registry; hides REGISTRY +
 // the selectParser function from index.ts so the barrel only knows the

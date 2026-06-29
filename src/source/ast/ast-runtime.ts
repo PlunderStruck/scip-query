@@ -85,6 +85,9 @@ function loadGrammar(lang: AstLanguage): unknown | null {
         grammar = module.language ?? module;
         break;
       }
+      case 'clojure':
+        failedLanguages.add(lang);
+        return null;
     }
   } catch {
     failedLanguages.add(lang);

@@ -1,6 +1,8 @@
 import type { ScipDatabase } from '../../storage/db.js';
+import { classifyFile } from '../../analysis/file-classifier.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../../core/project-index.js';
+import { profileSpan } from '../../runtime/profile.js';
 import { semanticCallerMap } from '../../semantic/shared-primitives.js';
 import { applyScanLimit, definitionLoc } from '../query-utils.js';
 
@@ -28,27 +30,55 @@ export function isolated(
   const index = new ProjectIndex(db);
   const includeSemantic = opts.semantic !== false;
 
-  const candidates = applyScanLimit(
-    index.productionCallableDefinitions({
-      scope,
-      minLoc,
-      excludeEntrySurfaces: true,
-      excludeRustTraitImplMembers: true,
-      includeSuppressed: true,
-      sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
-    }),
-    scanLimit,
+  let candidateCount = 0;
+  const candidates = profileSpan(
+    'isolated.candidates',
+    () => {
+      const result = applyScanLimit(
+        index.productionCallableDefinitions({
+          scope,
+          minLoc,
+          excludeEntrySurfaces: true,
+          excludeRustTraitImplMembers: true,
+          includeSuppressed: true,
+          requireFunctionLikeSymbol: true,
+          sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
+        }),
+        scanLimit,
+      );
+      candidateCount = result.length;
+      return result;
+    },
+    () => ({ definitions: candidateCount }),
   );
 
-  const symbolsWithCallees = index.symbolsWithNonSelfCallees(candidates, {
-    additive: false,
-    semantic: false,
-  });
+  let strictCalleeCount = 0;
+  const symbolsWithCallees = profileSpan(
+    'isolated.strict-callees',
+    () => {
+      const result = index.symbolsWithNonSelfCallees(candidates, {
+        additive: false,
+        semantic: false,
+      });
+      strictCalleeCount = result.size;
+      return result;
+    },
+    () => ({ definitions: candidates.length, symbols: strictCalleeCount }),
+  );
   const candidatesWithoutStrictCallees = candidates.filter(
     (definition) => !symbolsWithCallees.has(definition.symbolId),
   );
 
-  const scipCallerMap = index.crossFileCallerMap(candidatesWithoutStrictCallees, { semantic: false });
+  let scipCallerCount = 0;
+  const scipCallerMap = profileSpan(
+    'isolated.scip-callers',
+    () => {
+      const result = index.crossFileCallerMap(candidatesWithoutStrictCallees, { semantic: false });
+      scipCallerCount = result.size;
+      return result;
+    },
+    () => ({ definitions: candidatesWithoutStrictCallees.length, symbols: scipCallerCount }),
+  );
   const symbolsWithCallers = new Set<number>(scipCallerMap.keys());
 
   for (const symbolId of index.frameworkReferencedSymbolIds(candidatesWithoutStrictCallees)) {
@@ -71,7 +101,18 @@ export function isolated(
       .filter((definition) => !symbolsWithCallees.has(definition.symbolId));
   }
 
-  const fallbackCallerMap = index.sourceFallbackCallerFiles(possiblyIsolated);
+  let fallbackCallerCount = 0;
+  const fallbackCallerMap = profileSpan(
+    'isolated.source-fallback-callers',
+    () => {
+      const result = index.sourceFallbackCallerFiles(possiblyIsolated, {
+        skipPath: (relativePath) => classifyFile(relativePath) === 'test',
+      });
+      fallbackCallerCount = result.size;
+      return result;
+    },
+    () => ({ definitions: possiblyIsolated.length, symbols: fallbackCallerCount }),
+  );
   for (const symbolId of fallbackCallerMap.keys()) {
     symbolsWithCallers.add(symbolId);
   }
@@ -79,10 +120,19 @@ export function isolated(
   const candidatesNeedingAdditiveCallees = possiblyIsolated.filter(
     (definition) => !symbolsWithCallers.has(definition.symbolId),
   );
-  const additiveCalleeIds = index.symbolsWithNonSelfCallees(candidatesNeedingAdditiveCallees, {
-    additive: true,
-    semantic: includeSemantic,
-  });
+  let additiveCalleeCount = 0;
+  const additiveCalleeIds = profileSpan(
+    'isolated.additive-callees',
+    () => {
+      const result = index.symbolsWithNonSelfCallees(candidatesNeedingAdditiveCallees, {
+        additive: true,
+        semantic: includeSemantic,
+      });
+      additiveCalleeCount = result.size;
+      return result;
+    },
+    () => ({ definitions: candidatesNeedingAdditiveCallees.length, symbols: additiveCalleeCount }),
+  );
   for (const symbolId of additiveCalleeIds) {
     symbolsWithCallees.add(symbolId);
   }

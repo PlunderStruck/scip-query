@@ -2,6 +2,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { getSourceImports } from '../../language-parsers/index.js';
 import { createPerDbCache } from '../../storage/per-db-cache.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
+import { profileSpan } from '../../runtime/profile.js';
 
 // Keyed by scope (not path) — only whole-project clears apply; mixes SCIP
 // edges with source-import evidence, so it must drop when sources change.
@@ -19,17 +20,35 @@ export function buildFileDepGraph(db: ScipDatabase, scope?: string): Map<string,
     const addEdge = (fromFile: string, toFile: string): void =>
       addFileDepEdge(db, graph, indexedFiles, fromFile, toFile);
 
-    for (const edge of scipFileDepEdges(db, scope)) {
-      addEdge(edge.from_file, edge.to_file);
-    }
+    let scipEdgeCount = 0;
+    profileSpan(
+      'file-dep-graph.scip-edges',
+      () => {
+        for (const edge of scipFileDepEdges(db, scope)) {
+          scipEdgeCount += 1;
+          addEdge(edge.from_file, edge.to_file);
+        }
+      },
+      () => ({ scope: scope ?? null, edges: scipEdgeCount }),
+    );
 
-    for (const relativePath of indexedFiles) {
-      if (scope && !relativePath.includes(scope)) continue;
-      for (const entry of getSourceImports(db, relativePath)) {
-        if (!entry.sourcePath) continue;
-        addEdge(relativePath, entry.sourcePath);
-      }
-    }
+    let sourceFileCount = 0;
+    let sourceEdgeCount = 0;
+    profileSpan(
+      'file-dep-graph.source-imports',
+      () => {
+        for (const relativePath of indexedFiles) {
+          if (scope && !relativePath.includes(scope)) continue;
+          sourceFileCount += 1;
+          for (const entry of getSourceImports(db, relativePath)) {
+            if (!entry.sourcePath) continue;
+            sourceEdgeCount += 1;
+            addEdge(relativePath, entry.sourcePath);
+          }
+        }
+      },
+      () => ({ scope: scope ?? null, files: sourceFileCount, edges: sourceEdgeCount }),
+    );
 
     return graph;
   });

@@ -3,11 +3,15 @@ import type { AstLanguage } from './ast-language.js';
 import { extractCallLeaf } from '../source-calls.js';
 import { getSourceFacts } from '../source-facts.js';
 
-const CALLABLE_FACT_LANGUAGES = new Set<AstLanguage>(['rust', 'typescript', 'tsx', 'javascript', 'python']);
+const CALLABLE_FACT_LANGUAGES = new Set<AstLanguage>(['rust', 'typescript', 'tsx', 'javascript', 'python', 'clojure']);
 
 export interface CallSite {
   /** Leaf name of what is being called, for example "foo" for `obj.foo()`. */
   calleeLeaf: string;
+  /** Optional namespace/module qualifier, for example "conn" for `conn/transact!`. */
+  calleeQualifier?: string;
+  /** Optional original call target text, for example `conn/transact!`. */
+  calleeText?: string;
   /** True for member/dotted calls like `obj.foo()` where the receiver type is unknown. */
   memberAccess: boolean;
   line: number;

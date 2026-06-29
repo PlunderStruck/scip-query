@@ -5,6 +5,7 @@ import { createCandidateNameMatcher, sourceMayContainCandidateName } from '../..
 import { getSourceText } from '../../source/source-text.js';
 import { attributeIdentifier, attributeIdentifierPermissive } from '../identifier-attribution.js';
 import { getIdentifierLineMap } from '../identifier-index.js';
+import { profileSpan } from '../../runtime/profile.js';
 
 type SourceReferenceKind = 'identifier' | FrameworkSourceReferenceKind;
 type DefaultSourceReferenceTarget = ReturnType<typeof attributeIdentifier>[number];
@@ -49,8 +50,15 @@ export function scanSourceReferences(
   const resolveIdentifier =
     opts.identifierResolution === 'strict' ? attributeIdentifier : attributeIdentifierPermissive;
   const candidateNameMatcher = opts.candidateNames ? createCandidateNameMatcher(opts.candidateNames) : null;
+  let scannedPaths = 0;
+  let candidateMatchedPaths = 0;
+  let visitedNames = 0;
+  let visitedHits = 0;
+  let currentPath = '';
 
   for (const sourceFile of opts.paths) {
+    scannedPaths += 1;
+    currentPath = sourceFile;
     const astLanguage = detectAstLanguage(sourceFile);
     if (!astLanguage && !(opts.includeVueSfc && isVueSfcPath(sourceFile))) continue;
     if (db.isIgnored(sourceFile)) continue;
@@ -60,6 +68,7 @@ export function scanSourceReferences(
       if (candidateNameMatcher && !sourceMayContainCandidateName(getSourceText(db, sourceFile), candidateNameMatcher)) {
         continue;
       }
+      candidateMatchedPaths += 1;
 
       const visitName = (
         name: string,
@@ -68,10 +77,12 @@ export function scanSourceReferences(
         defaultTargets: () => readonly DefaultSourceReferenceTarget[],
       ): void => {
         if (opts.candidateNames && !opts.candidateNames.has(name)) return;
+        visitedNames += 1;
         const targets = opts.resolveTargets
           ? opts.resolveTargets({ sourceFile, name, kind, defaultTargets })
           : defaultTargets();
         for (const target of targets) {
+          visitedHits += 1;
           visit({ sourceFile, name, target, occurrences, kind });
         }
       };
@@ -93,6 +104,19 @@ export function scanSourceReferences(
       }
     } finally {
       opts.afterPath?.(sourceFile);
+      if (scannedPaths % 10 === 0) {
+        profileSpan(
+          'source-reference-scan.progress',
+          () => undefined,
+          () => ({
+            scannedPaths,
+            currentPath,
+            candidateMatchedPaths,
+            visitedNames,
+            visitedHits,
+          }),
+        );
+      }
     }
   }
 }

@@ -13,6 +13,7 @@ export {
   getCrossLanguageDispatchNames,
   getRustAttrReferencedNames,
   getSourceFacts,
+  isClojureMacroDefinition,
   isLiteralPassthrough,
 } from './source-facts.js';
 export { extractVueTemplateBlock, getVueTemplateFacts } from './vue/vue-template.js';

@@ -136,6 +136,8 @@ interface Checker {
 }
 
 const TS_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.vue'];
+const CLOJURE_EXTENSIONS = ['.clj', '.cljs', '.cljc'];
+const CLOJURE_MARKERS = ['deps.edn', 'project.clj', 'bb.edn', 'shadow-cljs.edn'];
 
 /** Detect every applicable checker — mixed-language repos need all of them. Exported for tests. */
 export function detectCheckers(projectRoot: string): Checker[] {
@@ -159,6 +161,10 @@ export function detectCheckers(projectRoot: string): Checker[] {
   if (['pyproject.toml', 'setup.py', 'requirements.txt'].some((marker) => existsSync(join(projectRoot, marker)))) {
     const pythonChecker = detectPythonChecker();
     if (pythonChecker) checkers.push(pythonChecker);
+  }
+  if (CLOJURE_MARKERS.some((marker) => existsSync(join(projectRoot, marker)))) {
+    const clojureChecker = detectClojureChecker(projectRoot);
+    if (clojureChecker) checkers.push(clojureChecker);
   }
   for (const manifest of findCargoManifests(projectRoot)) {
     checkers.push({
@@ -196,6 +202,35 @@ function detectPythonChecker(): Checker | null {
       binary: 'python3',
       args: ['-m', 'compileall', '-q', '.'],
       coversExtensions: ['.py'],
+    };
+  }
+  return null;
+}
+
+function detectClojureChecker(projectRoot: string): Checker | null {
+  const localKondo = join(projectRoot, 'node_modules', '.bin', 'clj-kondo');
+  if (existsSync(localKondo)) {
+    return {
+      label: 'clj-kondo --lint .',
+      binary: localKondo,
+      args: ['--lint', '.'],
+      coversExtensions: CLOJURE_EXTENSIONS,
+    };
+  }
+  if (binaryAvailable('clj-kondo')) {
+    return {
+      label: 'clj-kondo --lint .',
+      binary: 'clj-kondo',
+      args: ['--lint', '.'],
+      coversExtensions: CLOJURE_EXTENSIONS,
+    };
+  }
+  if (binaryAvailable('npx')) {
+    return {
+      label: 'npx clj-kondo --lint .',
+      binary: 'npx',
+      args: ['--yes', 'clj-kondo', '--lint', '.'],
+      coversExtensions: CLOJURE_EXTENSIONS,
     };
   }
   return null;

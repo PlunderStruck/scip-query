@@ -2,7 +2,7 @@ import { basename, extname } from 'node:path';
 import { isRootedSymbol } from '../../analysis/file-classifier.js';
 import { isPackageSurfaceFile } from '../../analysis/package-surface.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { isLiteralPassthrough } from '../../source/ast.js';
+import { isClojureMacroDefinition, isLiteralPassthrough } from '../../source/ast.js';
 import { getSourceLines } from '../../source/source-text.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { isFunctionLikeSymbol, leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
@@ -47,7 +47,7 @@ export function passthroughCandidates(
   const { scope, maxLoc = 15, limit = 30, scanLimit } = opts ?? {};
   const index = new ProjectIndex(db);
   return runCandidateAnalysis({
-    candidates: () => getPassthroughCandidateSymbols(index, scope, maxLoc),
+    candidates: () => getPassthroughCandidateSymbols(db, index, scope, maxLoc),
     orderCandidates: compareDefinitionsBySmallestLoc,
     scanLimit,
     prepare: (symbols) => index.calleeMap(symbols, { semantic: opts?.semantic !== false }),
@@ -176,19 +176,22 @@ function uniquePassthroughCallees(
 }
 
 function getPassthroughCandidateSymbols(
+  db: ScipDatabase,
   index: ProjectIndex,
   scope: string | undefined,
   maxLoc: number,
 ): IndexedDefinition[] {
-  return index.productionCallableDefinitions({
-    scope,
-    minLoc: 3,
-    maxLoc,
-    requireFunctionLikeSymbol: true,
-    // Rooted literal passthroughs still matter, but as public-facade signals
-    // rather than direct inline/delete advice.
-    excludeRustTraitImplMembers: true,
-  });
+  return index
+    .productionCallableDefinitions({
+      scope,
+      minLoc: 3,
+      maxLoc,
+      requireFunctionLikeSymbol: true,
+      // Rooted literal passthroughs still matter, but as public-facade signals
+      // rather than direct inline/delete advice.
+      excludeRustTraitImplMembers: true,
+    })
+    .filter((definition) => !isClojureMacroDefinition(db, definition));
 }
 
 const EXPORTED_DEFINITION_PATTERN = /^\s*export\s+(?:default\s+)?(?:(?:async\s+)?function\b|(?:const|let|var)\b)/m;

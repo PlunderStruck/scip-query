@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { RemovedRangeIndex, type CleanupBatch } from '../../../src/queries/cleanup/cleanup-plan.js';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -179,6 +179,30 @@ describe('checker detection', () => {
       const covered = detectCheckers(root).flatMap((checker) => checker.coversExtensions);
       expect(covered).toContain('.go');
       expect(covered).toContain('.rs');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('detects local clj-kondo for Clojure projects', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-clojure-checkers-'));
+    try {
+      writeFileSync(join(root, 'deps.edn'), '{}\n');
+      mkdirSync(join(root, 'node_modules', '.bin'), { recursive: true });
+      const localKondo = join(root, 'node_modules', '.bin', 'clj-kondo');
+      writeFileSync(localKondo, '#!/usr/bin/env sh\nexit 0\n');
+      chmodSync(localKondo, 0o755);
+
+      const checkers = detectCheckers(root);
+      const clojureChecker = checkers.find((checker) => checker.label === 'clj-kondo --lint .');
+
+      expect(clojureChecker).toEqual(
+        expect.objectContaining({
+          binary: localKondo,
+          args: ['--lint', '.'],
+          coversExtensions: ['.clj', '.cljs', '.cljc'],
+        }),
+      );
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

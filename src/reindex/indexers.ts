@@ -1,5 +1,5 @@
 import { existsSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 import type { SupportedLanguage, IndexerConfig } from '../domain/types.js';
 
 /**
@@ -112,6 +112,23 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     installMethods: [{ label: 'npm', prerequisite: 'npm', binary: 'npm', args: ['install', '-g', 'scip-python-plus'] }],
     installUrl: 'https://github.com/PlunderStruck/scip-python',
     bundledNpmPackage: 'scip-python-plus',
+  },
+
+  clojure: {
+    language: 'clojure',
+    indexerBinary: 'scip-clojure',
+    projectLocalBinaries: ['node_modules/.bin/scip-clojure'],
+    checkCommand: 'scip-clojure -h',
+    indexArgs: ({ projectRoot, outputPath, indexerBinary, configPath }) => {
+      const args = ['-root', projectRoot, '-output', outputPath];
+      if (configPath) {
+        args.push('-config', isAbsolute(configPath) ? configPath : resolve(projectRoot, configPath));
+      }
+      return { binary: indexerBinary, args };
+    },
+    markerFiles: ['deps.edn', 'project.clj', 'bb.edn', 'shadow-cljs.edn'],
+    installMethods: [{ label: 'npm', prerequisite: 'npm', binary: 'npm', args: ['install', '-g', 'scip-clojure'] }],
+    installUrl: 'https://github.com/PlunderStruck/scip-clojure',
   },
 
   ruby: {

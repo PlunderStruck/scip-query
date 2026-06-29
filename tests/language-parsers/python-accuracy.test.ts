@@ -467,9 +467,9 @@ describe('python repo accuracy regressions', () => {
     expect(byKind(db, 'function').map((result) => result.shortName)).toEqual(['simulation:helper()']);
 
     expect(kindCounts(db)).toEqual([
-      { kind: 9, kindName: 'Class', count: 1 },
-      { kind: 23, kindName: 'Function', count: 1 },
-      { kind: 39, kindName: 'Module', count: 1 },
+      { kind: 7, kindName: 'Class', count: 1 },
+      { kind: 17, kindName: 'Function', count: 1 },
+      { kind: 29, kindName: 'Module', count: 1 },
     ]);
   });
 

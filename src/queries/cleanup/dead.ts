@@ -1,13 +1,17 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { buildFileExclusionPredicate } from './dead-exclusions.js';
 import { getInactiveBarrelPaths, isEntrySurface, isRootedSymbol } from '../../analysis/file-classifier.js';
-import { getScopedDefinitions } from '../../symbols/definition-catalog.js';
+import { getScopedDefinitionsMatchingSymbols } from '../../symbols/definition-catalog.js';
 import type { DeadOptions, IndexedDefinition } from '../../domain/types.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { callerRowsForSymbol } from '../../symbols/references/caller-evidence.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { clearSourceFileEvidenceCaches } from '../internal/cache-invalidation.js';
-import { deadCandidateDecision, passesDeadTestFileFilter } from '../internal/dead-candidate-gate.js';
+import {
+  deadCandidateDecision,
+  looksValueLikeDefinition,
+  passesDeadTestFileFilter,
+} from '../internal/dead-candidate-gate.js';
 import { getSourceImports } from '../../language-parsers/index.js';
 import { applyScanLimit } from '../query-utils.js';
 import { pathsResolveSame } from '../../resolution/path-normalization.js';
@@ -117,7 +121,18 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     () => ({ definitions: candidateDefinitionCount }),
   );
 
-  const inactiveBarrelPaths = skipBarrels ? new Set(getInactiveBarrelPaths(db)) : new Set<string>();
+  let inactiveBarrelCount = 0;
+  const inactiveBarrelPaths = skipBarrels
+    ? profileSpan(
+        'dead.inactive-barrels',
+        () => {
+          const paths = new Set(getInactiveBarrelPaths(db));
+          inactiveBarrelCount = paths.size;
+          return paths;
+        },
+        () => ({ paths: inactiveBarrelCount }),
+      )
+    : new Set<string>();
   let symbolsWithReferences = 0;
   const referencesBySymbol = deadCodeOnly
     ? emptyReferenceCounts()
@@ -143,6 +158,7 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
             db,
             definitions.map((definition) => definition.symbolId),
             inactiveBarrelPaths,
+            { conservative: inactiveBarrelPaths.size === 0 },
           );
           mentionedSymbolCount = ids.size;
           return ids;
@@ -159,14 +175,22 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
   if (deadCodeOnly) {
     profileSpan(
       'dead.source-fallback.dead-code-only',
-      () => supplementDeadCodeOnlySourceReferences(db, sourceCandidates, referencesBySymbol, inactiveBarrelPaths),
-      () => ({ definitions: sourceCandidates.length }),
+      () =>
+        supplementDeadCodeOnlySourceReferences(db, sourceCandidates, referencesBySymbol, {
+          includeTests,
+          inactiveBarrelPaths,
+        }),
+      () => ({ definitions: sourceCandidates.length, includeTests }),
     );
   } else {
     profileSpan(
       'dead.source-fallback.ast',
-      () => supplementReferencesFromAst(db, sourceCandidates, referencesBySymbol, inactiveBarrelPaths),
-      () => ({ definitions: sourceCandidates.length }),
+      () =>
+        supplementReferencesFromAst(db, sourceCandidates, referencesBySymbol, {
+          includeTests,
+          inactiveBarrelPaths,
+        }),
+      () => ({ definitions: sourceCandidates.length, includeTests }),
     );
   }
 
@@ -199,7 +223,11 @@ function deadCandidateDefinitions(db: ScipDatabase, opts: DeadCandidateOptions):
   const isExcluded = buildFileExclusionPredicate(db);
   const candidates: IndexedDefinition[] = [];
 
-  for (const definition of getScopedDefinitions(db, opts.scope)) {
+  for (const definition of getScopedDefinitionsMatchingSymbols(db, {
+    scope: opts.scope,
+    symbolMatches: looksValueLikeDefinition,
+    sqlPrefilter: 'function-like',
+  })) {
     const decision = deadCandidateDecision(definition, {
       minLoc: opts.minLoc,
       includeTests: opts.includeTests,
@@ -311,7 +339,7 @@ function supplementReferencesFromAst(
   db: ScipDatabase,
   definitions: readonly IndexedDefinition[],
   referencesBySymbol: ReferenceCounts,
-  inactiveBarrelPaths: ReadonlySet<string>,
+  opts: { includeTests: boolean; inactiveBarrelPaths: ReadonlySet<string> },
 ): void {
   if (definitions.length === 0) return;
 
@@ -334,7 +362,8 @@ function supplementReferencesFromAst(
       includeRustAttributeNames: true,
       identifierResolution: 'permissive',
       candidateNames,
-      skipPath: (relativePath) => inactiveBarrelPaths.has(relativePath),
+      skipPath: (relativePath) =>
+        opts.inactiveBarrelPaths.has(relativePath) || (!opts.includeTests && !passesDeadTestFileFilter(relativePath)),
     },
     (hit) => {
       if (!targetIds.has(hit.target.symbolId)) return;
@@ -358,7 +387,7 @@ function supplementDeadCodeOnlySourceReferences(
   db: ScipDatabase,
   definitions: readonly IndexedDefinition[],
   referencesBySymbol: ReferenceCounts,
-  inactiveBarrelPaths: ReadonlySet<string>,
+  opts: { includeTests: boolean; inactiveBarrelPaths: ReadonlySet<string> },
 ): void {
   if (definitions.length === 0) return;
 
@@ -386,7 +415,8 @@ function supplementDeadCodeOnlySourceReferences(
       includeRustAttributeNames: true,
       identifierResolution: 'permissive',
       candidateNames,
-      skipPath: (sourceFile) => inactiveBarrelPaths.has(sourceFile),
+      skipPath: (sourceFile) =>
+        opts.inactiveBarrelPaths.has(sourceFile) || (!opts.includeTests && !passesDeadTestFileFilter(sourceFile)),
       resolveTargets: ({ sourceFile, name, kind }) => {
         const candidates = candidatesByLeaf.get(name);
         if (!candidates) return [];

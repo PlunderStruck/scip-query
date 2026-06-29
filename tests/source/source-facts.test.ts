@@ -5,10 +5,50 @@ import { describe, expect, it } from 'vitest';
 import { ScipDatabase } from '../../src/storage/db.js';
 import { dead } from '../../src/queries/cleanup/dead.js';
 import { symbols } from '../../src/queries/navigation/symbols.js';
-import { getCrossLanguageDispatchNames, getRustAttrReferencedNames } from '../../src/source/ast.js';
+import { getCrossLanguageDispatchNames, getRustAttrReferencedNames, getSourceFacts } from '../../src/source/ast.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
 describe('source facts', () => {
+  it('extracts Clojure callable and callsite facts for clj cljs and cljc files', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-source-facts-clojure-'));
+    try {
+      const projectRoot = join(tempDir, 'project');
+      const dbPath = join(tempDir, 'index.db');
+      writeFixtureFiles(projectRoot, {
+        'src/core.clj': ['(ns demo.core)', '(defn greet [name]', '  (helper name))'].join('\n'),
+        'src/view.cljs': ['(ns demo.view)', '(defn render-view [state]', '  (greet state))'].join('\n'),
+        'src/shared.cljc': ['(ns demo.shared)', '(defn normalize [value]', '  (str value))'].join('\n'),
+      });
+      evidenceFixtureDb(dbPath)
+        .document(1, 'clojure', 'src/core.clj')
+        .document(2, 'clojure', 'src/view.cljs')
+        .document(3, 'clojure', 'src/shared.cljc')
+        .write();
+
+      const db = new ScipDatabase({
+        projectRoot,
+        dbPath,
+        indexPath: join(tempDir, 'index.scip'),
+      });
+      try {
+        expect(getSourceFacts(db, 'src/core.clj')?.callables.map((callable) => callable.name)).toEqual(['greet']);
+        expect(getSourceFacts(db, 'src/core.clj')?.callSites.map((callSite) => callSite.calleeLeaf)).toEqual([
+          'helper',
+        ]);
+        expect(getSourceFacts(db, 'src/view.cljs')?.callables.map((callable) => callable.name)).toEqual([
+          'render-view',
+        ]);
+        expect(getSourceFacts(db, 'src/shared.cljc')?.callables.map((callable) => callable.name)).toEqual([
+          'normalize',
+        ]);
+      } finally {
+        db.close();
+      }
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('extracts Rust attribute helper references as source facts', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-source-facts-rust-'));
     try {

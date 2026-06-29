@@ -72,6 +72,40 @@ describe('indexer configs', () => {
     });
   });
 
+  it('runs scip-clojure with project root, output, and optional config path', () => {
+    const config = getIndexerConfig('clojure');
+
+    expect(
+      config.indexArgs({
+        projectRoot: '/tmp/project',
+        outputPath: '/tmp/project/index.scip',
+        indexerBinary: 'scip-clojure',
+      }),
+    ).toEqual({
+      binary: 'scip-clojure',
+      args: ['-root', '/tmp/project', '-output', '/tmp/project/index.scip'],
+    });
+
+    expect(
+      config.indexArgs({
+        projectRoot: '/tmp/project',
+        outputPath: '/tmp/project/index.scip',
+        indexerBinary: '/tmp/scip-clojure',
+        configPath: '.scip-clojure.json',
+      }),
+    ).toEqual({
+      binary: '/tmp/scip-clojure',
+      args: [
+        '-root',
+        '/tmp/project',
+        '-output',
+        '/tmp/project/index.scip',
+        '-config',
+        '/tmp/project/.scip-clojure.json',
+      ],
+    });
+  });
+
   it('uses the current scip-ruby invocation shape and default output path', () => {
     const config = getIndexerConfig('ruby');
     const command = config.indexArgs({

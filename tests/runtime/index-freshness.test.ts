@@ -6,7 +6,13 @@ import type { ProjectConfig, SupportedLanguage } from '../../src/domain/types.js
 import { fingerprintProjectFiles } from '../../src/reindex/project-files.js';
 import { getIndexFreshness } from '../../src/runtime/index-freshness.js';
 
-function writeMeta(root: string, metaPath: string, languages: SupportedLanguage[], version: 2 | 3 = 2): void {
+function writeMeta(
+  root: string,
+  metaPath: string,
+  languages: SupportedLanguage[],
+  version: 2 | 3 = 2,
+  fingerprintOverrides: Record<string, unknown> = {},
+): void {
   writeFileSync(
     metaPath,
     `${JSON.stringify(
@@ -21,6 +27,7 @@ function writeMeta(root: string, metaPath: string, languages: SupportedLanguage[
           typescriptProjectMode: 'single',
           typescriptProjects: [],
           files: fingerprintProjectFiles(root),
+          ...fingerprintOverrides,
         },
         requestedLanguages: languages,
         indexedLanguages: languages,
@@ -112,6 +119,29 @@ describe('index freshness', () => {
     }
   });
 
+  it('ignores root metadata when projects store scip-query outputs in the project root', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-freshness-root-meta-'));
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(join(root, 'deps.edn'), '{}');
+      writeFileSync(join(root, 'src', 'core.clj'), '(ns example.core)\n');
+      const dbPath = join(root, 'index.db');
+      const metaPath = join(root, 'meta.json');
+      writeFileSync(dbPath, '');
+      writeMeta(root, metaPath, ['clojure']);
+      const config: ProjectConfig = {
+        dbPath,
+        indexPath: join(root, 'index.scip'),
+        projectRoot: root,
+        languages: ['clojure'],
+      };
+
+      expect(getIndexFreshness(root, config, { dbPath, metaPath }).state).toBe('fresh');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('reports stale when current source files differ from metadata', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-freshness-stale-'));
     try {
@@ -156,6 +186,33 @@ describe('index freshness', () => {
         projectRoot: root,
         languages: ['typescript'],
         indexer: { typescript: { projectMode: 'workspace', projects: ['src'] } },
+      };
+
+      expect(getIndexFreshness(root, config, { dbPath, metaPath }).state).toBe('stale');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reports stale when the Clojure indexer config path changes', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-freshness-clojure-config-'));
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(join(root, 'deps.edn'), '{}');
+      writeFileSync(join(root, 'src', 'core.clj'), '(ns example.core)\n');
+      writeFileSync(join(root, '.scip-clojure-old.json'), '{}\n');
+      writeFileSync(join(root, '.scip-clojure-new.json'), '{}\n');
+      const dbPath = join(root, 'index.db');
+      mkdirSync(join(root, '.scipquery-cache'));
+      const metaPath = join(root, '.scipquery-cache', 'meta.json');
+      writeFileSync(dbPath, '');
+      writeMeta(root, metaPath, ['clojure'], 2, { clojureConfigPath: '.scip-clojure-old.json' });
+      const config: ProjectConfig = {
+        dbPath,
+        indexPath: join(root, 'index.scip'),
+        projectRoot: root,
+        languages: ['clojure'],
+        indexer: { clojure: { configPath: '.scip-clojure-new.json' } },
       };
 
       expect(getIndexFreshness(root, config, { dbPath, metaPath }).state).toBe('stale');

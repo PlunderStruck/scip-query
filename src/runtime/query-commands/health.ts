@@ -38,10 +38,13 @@ const handleSelfAudit = dbCommand(({ db, args, opts }) => {
     return;
   }
   if (!result.available) {
-    return render.empty('No semantic provider available to audit against (TypeScript projects only).');
+    return render.empty('No semantic or source-backed oracle available to audit against.');
   }
-  console.log(`Sampled ${result.sampleSize} symbols; oracle answered ${Math.round(result.oracleCoverage * 100)}%.\n`);
-  console.log('Agreement with compiler semantics (file-level):');
+  const oracleLabel = result.oracleKind === 'source' ? 'source facts' : 'compiler semantics';
+  console.log(
+    `Sampled ${result.sampleSize} symbols; ${oracleLabel} oracle answered ${Math.round(result.oracleCoverage * 100)}%.\n`,
+  );
+  console.log(`Agreement with ${oracleLabel} (file-level):`);
   for (const score of result.scores) {
     const precision =
       score.precision === null
@@ -65,7 +68,7 @@ export const healthQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'self-audit',
     command: 'self-audit',
-    description: 'Score the cheap evidence paths against the TypeScript compiler oracle on sampled symbols',
+    description: 'Score cheap evidence paths against the best available semantic/source oracle on sampled symbols',
     options: withJsonOption([
       option('--samples <n>', 'Number of symbols to sample', parseInteger, 50),
       option('-s, --scope <path>', 'Limit sampling to files matching path'),

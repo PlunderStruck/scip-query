@@ -55,7 +55,7 @@ export function productionCallableDefinitions(
   } = opts;
 
   const definitions: IndexedDefinition[] = [];
-  const candidates = candidateDefinitions(db, { scope, files, requireCallableSymbol });
+  const candidates = candidateDefinitions(db, { scope, files, requireFunctionLikeSymbol, requireCallableSymbol });
   const entrySurfaceByFile = new Map<string, boolean>();
   const fileKindByFile = new Map<string, ReturnType<typeof classifyFile>>();
   const getEntrySurface = (relativePath: string): boolean => {
@@ -95,7 +95,12 @@ export function productionCallableDefinitions(
 
 function candidateDefinitions(
   db: ScipDatabase,
-  opts: { scope?: string; files?: readonly string[]; requireCallableSymbol: boolean },
+  opts: {
+    scope?: string;
+    files?: readonly string[];
+    requireFunctionLikeSymbol: boolean;
+    requireCallableSymbol: boolean;
+  },
 ): IndexedDefinition[] {
   if (opts.files !== undefined) {
     const scopedFiles = [...new Set(opts.files.map((file) => file.replace(/\\/g, '/')))]
@@ -104,13 +109,21 @@ function candidateDefinitions(
     return scopedFiles.flatMap((relativePath) => getDefinitionsForFile(db, relativePath));
   }
 
-  return opts.requireCallableSymbol
-    ? getScopedDefinitionsMatchingSymbols(db, {
-        scope: opts.scope,
-        symbolMatches: isCallableSymbol,
-        sqlPrefilter: 'callable',
-      })
-    : getScopedFunctionLikeDefinitions(db, opts.scope);
+  if (opts.requireCallableSymbol) {
+    return getScopedDefinitionsMatchingSymbols(db, {
+      scope: opts.scope,
+      symbolMatches: isCallableSymbol,
+      sqlPrefilter: 'callable',
+    });
+  }
+  if (opts.requireFunctionLikeSymbol) {
+    return getScopedDefinitionsMatchingSymbols(db, {
+      scope: opts.scope,
+      symbolMatches: isFunctionLikeSymbol,
+      sqlPrefilter: 'function-like',
+    });
+  }
+  return getScopedFunctionLikeDefinitions(db, opts.scope);
 }
 
 function matchesCallableMode(

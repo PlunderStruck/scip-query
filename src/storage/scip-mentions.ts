@@ -13,6 +13,10 @@ export interface MentionReferenceSymbolRow {
   relative_path: string;
 }
 
+export interface MentionReferenceSymbolIdRow {
+  symbol_id: number;
+}
+
 export interface MentionReferenceChunkRow {
   symbol_id: number;
   relative_path: string;
@@ -55,6 +59,22 @@ export function mentionedReferenceSymbolRows(
        WHERE m.role != 1
          ${symbolFilter}
          ${db.pathExclusionsFor('d')}`,
+      ...(ids ?? []),
+    );
+    }).filter((row) => row.symbol_id !== null);
+}
+
+export function mentionedReferenceSymbolIdRows(
+  db: ScipDatabase,
+  symbolIds?: readonly number[],
+): MentionReferenceSymbolIdRow[] {
+  return batchedMentionRows(db, symbolIds, (ids) => {
+    const symbolFilter = ids ? `AND m.symbol_id IN (${ids.map(() => '?').join(',')})` : '';
+    return db.all<MentionReferenceSymbolIdRow>(
+      `SELECT DISTINCT m.symbol_id
+       FROM mentions m
+       WHERE m.role != 1
+         ${symbolFilter}`,
       ...(ids ?? []),
     );
   }).filter((row) => row.symbol_id !== null);

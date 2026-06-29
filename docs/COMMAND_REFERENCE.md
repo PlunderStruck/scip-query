@@ -107,7 +107,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 
 | Command | Description | Options |
 |---|---|---|
-| `self-audit` | Score the cheap evidence paths against the TypeScript compiler oracle on sampled symbols | `--samples <n>`<br>`-s, --scope <path>`<br>`--json` |
+| `self-audit` | Score cheap evidence paths against the best available semantic/source oracle on sampled symbols | `--samples <n>`<br>`-s, --scope <path>`<br>`--json` |
 | `health` | Composite codebase health report with prioritized action list | `-s, --scope <path>`<br>`--full`<br>`--json`<br>`--baseline`<br>`--write-baseline` |
 | `complexity <symbol>` | Per-symbol complexity: branches, cyclomatic estimate, fan-in/out, callees | `--full`<br>`--json` |
 

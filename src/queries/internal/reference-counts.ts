@@ -1,5 +1,9 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import { mentionedReferenceSymbolRows, mentionReferenceCountRows } from '../../storage/scip-mentions.js';
+import {
+  mentionedReferenceSymbolIdRows,
+  mentionedReferenceSymbolRows,
+  mentionReferenceCountRows,
+} from '../../storage/scip-mentions.js';
 
 export type ReferenceEvidenceSource = 'scip-mention' | 'source-fallback' | 'caller-map';
 
@@ -38,8 +42,16 @@ export function loadMentionReferencedSymbolIds(
   db: ScipDatabase,
   symbolIds: readonly number[],
   inactiveBarrelPaths: ReadonlySet<string>,
+  opts: { conservative?: boolean } = {},
 ): Set<number> {
   const result = new Set<number>();
+  if (opts.conservative || inactiveBarrelPaths.size === 0) {
+    for (const row of mentionedReferenceSymbolIdRows(db, symbolIds)) {
+      result.add(row.symbol_id);
+    }
+    return result;
+  }
+
   for (const row of mentionedReferenceSymbolRows(db, symbolIds)) {
     if (db.isIgnored(row.relative_path)) continue;
     if (inactiveBarrelPaths.has(row.relative_path)) continue;

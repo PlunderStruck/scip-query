@@ -206,6 +206,7 @@ export function findReferences(
 export function findCallerFiles(
   db: ScipDatabase,
   candidates: ReadonlyArray<IndexedDefinition>,
+  opts: { skipPath?: (relativePath: string) => boolean } = {},
 ): Map<number, Set<string>> {
   const candidateLeaves = new Map<string, IndexedDefinition[]>();
   for (const def of candidates) {
@@ -222,6 +223,7 @@ export function findCallerFiles(
   const result = new Map<number, Set<string>>();
 
   for (const file of getSourceFiles(db)) {
+    if (opts.skipPath?.(file)) continue;
     if (!sourceMayContainCandidateName(getSourceText(db, file), candidateNameMatcher)) continue;
     const fileIdents = getFileIdentifiers(db, file);
     if (fileIdents.size === 0) continue;

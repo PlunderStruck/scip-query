@@ -2,6 +2,7 @@ import { basename } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
+import { detectAstLanguage, getSourceFacts } from '../../source/ast.js';
 import { isCallableSymbol, leafName } from '../../symbols/symbol-parser.js';
 
 export interface MethodResult {
@@ -33,13 +34,36 @@ export function methods(db: ScipDatabase, className: string): MethodResult[] {
         ? definitions.filter((definition) => definition.symbol.includes('<invalid-global-code>'))
         : [];
 
-  return fileScopedMethods.map((definition) => ({
+  const graphMethods = fileScopedMethods.map((definition) => ({
     startLine: definition.startLine,
     endLine: definition.endLine,
     name: leafName(definition.symbol),
   }));
+  if (detectAstLanguage(classMatch.relativePath) !== 'clojure') return graphMethods;
+
+  return mergeMethods(graphMethods, clojureSourceMethods(db, classMatch));
 }
 
 function stripExtension(relativePath: string): string {
   return relativePath.replace(/\.[^.]+$/, '');
+}
+
+function clojureSourceMethods(db: ScipDatabase, owner: { symbol: string; relativePath: string }): MethodResult[] {
+  const ownerName = leafName(owner.symbol);
+  if (!ownerName) return [];
+  return (getSourceFacts(db, owner.relativePath)?.clojureMembers ?? [])
+    .filter((member) => member.ownerName === ownerName)
+    .map((member) => ({
+      startLine: member.startLine,
+      endLine: member.endLine,
+      name: member.memberName,
+    }));
+}
+
+function mergeMethods(graphMethods: MethodResult[], sourceMethods: MethodResult[]): MethodResult[] {
+  const byLocation = new Map<string, MethodResult>();
+  for (const method of [...graphMethods, ...sourceMethods]) {
+    byLocation.set(`${method.name}:${method.startLine}:${method.endLine}`, method);
+  }
+  return [...byLocation.values()].sort((a, b) => a.startLine - b.startLine || a.endLine - b.endLine);
 }

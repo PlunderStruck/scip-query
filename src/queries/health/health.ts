@@ -45,8 +45,8 @@ interface HealthBudget {
 }
 
 const EXTREME_COMPLEXITY_SCORE = 50;
-const LARGE_HEALTH_SYMBOL_THRESHOLD = 75_000;
-const LARGE_HEALTH_DOCUMENT_THRESHOLD = 5_000;
+const LARGE_HEALTH_SYMBOL_THRESHOLD = 25_000;
+const LARGE_HEALTH_DOCUMENT_THRESHOLD = 2_500;
 const DEFAULT_HEALTH_CANDIDATE_SCAN_LIMIT = 2_500;
 const DEFAULT_HEALTH_CANDIDATE_RESULT_LIMIT = 50;
 const DEFAULT_HEALTH_COMPLEXITY_RESULT_LIMIT = 10;
@@ -353,7 +353,7 @@ function countRealHealthCycles(db: ScipDatabase, scope: string | undefined, budg
 }
 
 function countSimilarHealthCandidates(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): number {
-  return runHealthPhase(
+  const count = runHealthPhase(
     db,
     budget,
     'similar',
@@ -364,6 +364,7 @@ function countSimilarHealthCandidates(db: ScipDatabase, scope: string | undefine
         scanLimit: budget.candidateScanLimit,
       }),
   );
+  return Math.min(count, budget.candidateResultLimit);
 }
 
 function countExtractionHealthCandidates(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): number {

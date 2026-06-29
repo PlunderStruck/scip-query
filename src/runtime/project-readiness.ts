@@ -78,6 +78,7 @@ const LANGUAGE_EXTENSIONS: Record<SupportedLanguage, string[]> = {
   vb: ['.vb'],
   dart: ['.dart'],
   php: ['.php'],
+  clojure: ['.clj', '.cljs', '.cljc'],
 };
 
 const SOURCE_FACT_SUPPORT: Record<SupportedLanguage, { status: CapabilityStatus; reason: string }> = {
@@ -99,6 +100,11 @@ const SOURCE_FACT_SUPPORT: Record<SupportedLanguage, { status: CapabilityStatus;
   vb: { status: 'available', reason: 'AST-dispatched source fallback covers Visual Basic imports.' },
   dart: { status: 'partial', reason: 'Dart source fallback is regex-only for imports and exports.' },
   php: { status: 'available', reason: 'AST/source fallback covers PHP imports.' },
+  clojure: {
+    status: 'available',
+    reason:
+      'Source fallback covers Clojure namespace imports plus callable, callsite, and protocol/record member evidence for .clj, .cljs, and .cljc files.',
+  },
 };
 
 export function getProjectReadiness(projectRoot: string, config: ProjectConfig): ProjectReadiness {
@@ -125,19 +131,25 @@ export function getProjectReadiness(projectRoot: string, config: ProjectConfig):
   return { languages, indexers, semantic, checkers, gitAvailable: gitAvailable(projectRoot) };
 }
 
-export function getProjectCapabilities(readiness: ProjectReadiness): ProjectCapabilityReport {
+export function getProjectCapabilities(
+  readiness: ProjectReadiness,
+  opts: { hasIndexedGraph?: boolean } = {},
+): ProjectCapabilityReport {
   const runnableIndexers = readiness.indexers.filter((indexer) => indexer.runnable).length;
   const graphStatus =
-    readiness.languages.length === 0 || runnableIndexers === 0
+    readiness.languages.length === 0 || (runnableIndexers === 0 && !opts.hasIndexedGraph)
       ? 'unavailable'
-      : runnableIndexers === readiness.indexers.length
+      : runnableIndexers === readiness.indexers.length && readiness.indexers.length > 0
         ? 'available'
         : 'partial';
+  const graphDataAvailable = graphStatus !== 'unavailable';
   const semanticStatus = readiness.semantic ? (readiness.semantic.available ? 'available' : 'partial') : 'unavailable';
 
   return {
     languages: readiness.languages,
-    matrix: readiness.languages.map((language) => languageCapability(readiness, language)),
+    matrix: readiness.languages.map((language) =>
+      languageCapability(readiness, language, { hasIndexedGraph: opts.hasIndexedGraph === true }),
+    ),
     capabilities: [
       {
         id: 'indexing',
@@ -147,7 +159,9 @@ export function getProjectCapabilities(readiness: ProjectReadiness): ProjectCapa
         reason:
           graphStatus === 'available'
             ? 'All detected/configured language indexers are runnable.'
-            : `${runnableIndexers}/${readiness.indexers.length} detected/configured language indexers are runnable.`,
+            : opts.hasIndexedGraph
+              ? `An indexed graph is present; ${runnableIndexers}/${readiness.indexers.length} detected/configured language indexers are runnable for refresh.`
+              : `${runnableIndexers}/${readiness.indexers.length} detected/configured language indexers are runnable.`,
       },
       {
         id: 'semantic-typescript',
@@ -163,12 +177,11 @@ export function getProjectCapabilities(readiness: ProjectReadiness): ProjectCapa
       {
         id: 'heuristic-detectors',
         label: 'Heuristic cleanup detectors',
-        status: graphStatus === 'unavailable' ? 'unavailable' : 'available',
+        status: graphDataAvailable ? 'available' : 'unavailable',
         evidence: 'heuristic',
-        reason:
-          graphStatus === 'unavailable'
-            ? 'Heuristic detectors need an indexed code graph.'
-            : 'Similarity, migration, wrapper, stale-abstraction, and doc-drift detectors can run over the index.',
+        reason: !graphDataAvailable
+          ? 'Heuristic detectors need an indexed code graph.'
+          : 'Similarity, migration, wrapper, stale-abstraction, and doc-drift detectors can run over the index.',
       },
       {
         id: 'cleanup-verification',
@@ -183,7 +196,7 @@ export function getProjectCapabilities(readiness: ProjectReadiness): ProjectCapa
       {
         id: 'diff-gate',
         label: 'Git diff gate',
-        status: readiness.gitAvailable && graphStatus !== 'unavailable' ? 'available' : 'unavailable',
+        status: readiness.gitAvailable && graphDataAvailable ? 'available' : 'unavailable',
         evidence: 'git',
         reason: readiness.gitAvailable
           ? 'Git diff data is available for changed-file gates.'
@@ -193,9 +206,18 @@ export function getProjectCapabilities(readiness: ProjectReadiness): ProjectCapa
   };
 }
 
-function languageCapability(readiness: ProjectReadiness, language: SupportedLanguage): LanguageCapability {
+function languageCapability(
+  readiness: ProjectReadiness,
+  language: SupportedLanguage,
+  opts: { hasIndexedGraph: boolean },
+): LanguageCapability {
   const indexer = readiness.indexers.find((entry) => entry.language === language);
-  const indexingStatus: CapabilityStatus = indexer?.runnable ? 'available' : 'unavailable';
+  const indexingStatus: CapabilityStatus = indexer?.runnable
+    ? 'available'
+    : opts.hasIndexedGraph
+      ? 'partial'
+      : 'unavailable';
+  const graphDataAvailable = indexingStatus !== 'unavailable';
   const sourceSupport = SOURCE_FACT_SUPPORT[language];
   const semantic =
     language === 'typescript'
@@ -216,30 +238,31 @@ function languageCapability(readiness: ProjectReadiness, language: SupportedLang
       label: 'SCIP indexing',
       status: indexingStatus,
       evidence: 'graph-fact',
-      reason: indexer?.runnable
-        ? `${indexer.binaryLabel} is runnable${indexer.resolvedBinary ? ` at ${indexer.resolvedBinary}` : ''}.`
-        : (indexer?.note ?? `${language} indexing is not runnable in this project.`),
+      reason:
+        indexingStatus === 'available'
+          ? `${indexer?.binaryLabel ?? language} is runnable${indexer?.resolvedBinary ? ` at ${indexer.resolvedBinary}` : ''}.`
+          : indexingStatus === 'partial'
+            ? `An indexed ${language} graph is present, but ${indexer?.binaryLabel ?? language} is not currently runnable for refresh.`
+            : (indexer?.note ?? `${language} indexing is not runnable in this project.`),
     },
     sourceFacts: {
       id: 'source-facts',
       label: 'Source fallback',
-      status: indexingStatus === 'unavailable' ? 'unavailable' : sourceSupport.status,
+      status: graphDataAvailable ? sourceSupport.status : 'unavailable',
       evidence: 'heuristic',
-      reason:
-        indexingStatus === 'unavailable'
-          ? 'Source fallback needs indexed documents before it can attach evidence.'
-          : sourceSupport.reason,
+      reason: !graphDataAvailable
+        ? 'Source fallback needs indexed documents before it can attach evidence.'
+        : sourceSupport.reason,
     },
     semantic,
     detectors: {
       id: 'detectors',
       label: 'Cleanup detectors',
-      status: indexingStatus === 'unavailable' ? 'unavailable' : 'available',
+      status: graphDataAvailable ? 'available' : 'unavailable',
       evidence: 'heuristic',
-      reason:
-        indexingStatus === 'unavailable'
-          ? 'Cleanup detectors need an indexed graph for this language.'
-          : 'Graph-backed cleanup detectors can analyze this language; source and semantic precision depends on the rows above.',
+      reason: !graphDataAvailable
+        ? 'Cleanup detectors need an indexed graph for this language.'
+        : 'Graph-backed cleanup detectors can analyze this language; source and semantic precision depends on the rows above.',
     },
     cleanupVerification: {
       id: 'cleanup-verification',

@@ -97,6 +97,7 @@ function listFilesystemProjectFiles(projectRoot: string): string[] {
 function isProjectArtifactPath(relativePath: string): boolean {
   const parts = relativePath.split('/');
   return (
+    relativePath === 'meta.json' ||
     parts.some((part) => PROJECT_ARTIFACT_DIRS.has(part)) ||
     relativePath.endsWith('.db') ||
     relativePath.endsWith('.db-wal') ||
@@ -146,6 +147,10 @@ const COMMON_INDEX_INPUTS = new Set([
   'composer.lock',
   'pubspec.yaml',
   'pubspec.lock',
+  'deps.edn',
+  'project.clj',
+  'bb.edn',
+  'shadow-cljs.edn',
 ]);
 
 const LANGUAGE_SOURCE_EXTENSIONS: Record<SupportedLanguage, readonly string[]> = {
@@ -164,4 +169,5 @@ const LANGUAGE_SOURCE_EXTENSIONS: Record<SupportedLanguage, readonly string[]> =
   vb: ['.vb'],
   dart: ['.dart'],
   php: ['.php'],
+  clojure: ['.clj', '.cljs', '.cljc'],
 };

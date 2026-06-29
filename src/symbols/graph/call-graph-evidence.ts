@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { detectAstLanguage, getCallSites } from '../../source/ast.js';
 import { getSourceText } from '../../source/source-text.js';
+import { getSourceImports } from '../../language-parsers/index.js';
 import {
   fileContentHash,
   readCachedSemanticCallees,
@@ -26,6 +27,8 @@ import { semanticCalleeMap, semanticReferences } from '../../semantic/shared-pri
 import { profileEnabled, profileSpan } from '../../runtime/profile.js';
 import { getGlobalLeafIndex, pickAstCallCandidate, sameLanguageCandidates } from '../leaf-symbol-index.js';
 import type { GlobalLeafCandidate } from '../leaf-symbol-index.js';
+import { scipFunctionLikeKindNumbers, scipTypeLikeKindNumbers } from '../symbol-kind.js';
+import { pathsResolveSame } from '../../resolution/path-normalization.js';
 
 export type CalleeEvidenceSource = 'ast-callsite' | 'semantic-callee' | 'scip-chunk';
 export type CallerEvidenceSource = 'caller-map-inversion' | 'resolved-reference' | 'semantic-reference';
@@ -57,7 +60,9 @@ export function getCalleeRowsForSymbol(
   // refinements that the bulk helper already handles.
   const map = buildCalleeMap(db, [symbol], { additive: opts.additive, semantic: opts.semantic });
   const callees = opts.callableOnly
-    ? (map.get(symbol.symbolId) ?? []).filter((callee) => isCallableSymbol(callee.symbol))
+    ? (map.get(symbol.symbolId) ?? []).filter(
+        (callee) => isCallableSymbol(callee.symbol) || callee.source === 'ast-callsite',
+      )
     : (map.get(symbol.symbolId) ?? []);
   return typeof opts.limit === 'number' ? callees.slice(0, opts.limit) : callees;
 }
@@ -168,6 +173,8 @@ function targetedCallerRowsForSymbol(db: ScipDatabase, symbol: SymbolMatch, opts
 }
 
 function indexedDefinitionForSymbol(db: ScipDatabase, symbol: SymbolMatch): IndexedDefinition | null {
+  const functionLikeKinds = scipFunctionLikeKindNumbers().join(', ');
+  const typeLikeKinds = scipTypeLikeKindNumbers().join(', ');
   return (
     db.get<IndexedDefinition>(
       `SELECT
@@ -179,8 +186,8 @@ function indexedDefinitionForSymbol(db: ScipDatabase, symbol: SymbolMatch): Inde
        COALESCE(der.end_line, c.end_line) AS endLine,
        COALESCE(gs.display_name, '') AS leaf,
        NULL AS parentTypeName,
-       CASE WHEN gs.kind IN (6, 12, 13) OR gs.symbol LIKE '%().' THEN 1 ELSE 0 END AS isFunctionLike,
-       CASE WHEN gs.kind IN (5, 8, 11) THEN 1 ELSE 0 END AS isTypeLike,
+       CASE WHEN gs.kind IN (${functionLikeKinds}) OR gs.symbol LIKE '%().' THEN 1 ELSE 0 END AS isFunctionLike,
+       CASE WHEN gs.kind IN (${typeLikeKinds}) THEN 1 ELSE 0 END AS isTypeLike,
        gs.kind AS kind,
        gs.documentation AS documentation,
        gs.enclosing_symbol AS enclosingSymbol
@@ -426,7 +433,7 @@ export function buildAstCalleeMap(db: ScipDatabase, definitions: ReadonlyArray<S
       const owner = ownerByLine.get(site.line);
       if (!owner) continue;
 
-      const pick = resolveAstCalleeCandidate(db, file, leafIndex, site.calleeLeaf, site.memberAccess);
+      const pick = resolveAstCalleeCandidate(db, file, leafIndex, site);
       if (!pick) continue;
       if (pick.symbol === owner.symbol) continue; // skip self-recursion
 
@@ -463,12 +470,33 @@ function resolveAstCalleeCandidate(
   db: ScipDatabase,
   file: string,
   leafIndex: Map<string, GlobalLeafCandidate[]>,
-  calleeLeaf: string,
-  memberAccess: boolean,
+  site: { calleeLeaf: string; calleeQualifier?: string; memberAccess: boolean },
 ): GlobalLeafCandidate | null {
-  const candidates = sameLanguageCandidates(file, leafIndex.get(calleeLeaf) ?? []);
+  const candidates = sameLanguageCandidates(file, leafIndex.get(site.calleeLeaf) ?? []);
   if (candidates.length === 0) return null;
-  return pickAstCallCandidate(db, file, candidates, memberAccess);
+  const clojurePick = pickClojureQualifiedCandidate(db, file, candidates, site.calleeQualifier);
+  if (clojurePick) return clojurePick;
+  return pickAstCallCandidate(db, file, candidates, site.memberAccess);
+}
+
+function pickClojureQualifiedCandidate<T extends { symbol: string; file: string }>(
+  db: ScipDatabase,
+  sourceFile: string,
+  candidates: T[],
+  qualifier: string | undefined,
+): T | null {
+  if (!qualifier || detectAstLanguage(sourceFile) !== 'clojure') return null;
+  const imports = getSourceImports(db, sourceFile);
+  const importedSourcePaths = imports
+    .filter((entry) => entry.kind === 'namespace' && entry.localName === qualifier && entry.sourcePath)
+    .map((entry) => entry.sourcePath!);
+
+  for (const sourcePath of importedSourcePaths) {
+    const imported = candidates.find((candidate) => pathsResolveSame(sourcePath, candidate.file));
+    if (imported) return imported;
+  }
+
+  return candidates.find((candidate) => /`([^`]+)`\//.exec(candidate.symbol)?.[1] === qualifier) ?? null;
 }
 
 export function buildChunkCalleeMap(
@@ -570,47 +598,67 @@ export function buildChunkCalleeMap(
   // every mention triggers the source-confirm path.
   const result = new Map<number, CalleeRow[]>();
   const filePathById = docPaths;
-  for (const def of definitions) {
-    const docMentions = byDoc.get(def.documentId) ?? [];
-    const seenKey = new Set<string>();
-    const callees: CalleeRow[] = [];
-    let identsInRange: Set<string> | null = null;
-    const computeIdentsInRange = (): Set<string> => {
-      if (identsInRange) return identsInRange;
-      const filePath = filePathById.get(def.documentId) ?? '';
-      const out = new Set<string>();
-      if (filePath) {
-        const byLine = getIdentifiersByLine(db, filePath);
-        const start = Math.max(0, def.startLine);
-        const end = Math.min(byLine.length - 1, def.endLine);
-        for (let i = start; i <= end; i += 1) {
-          for (const name of byLine[i]!) out.add(name);
+  const definitionsByDoc = symbolLocationsByDocument(definitions);
+  for (const [documentId, docDefinitions] of definitionsByDoc) {
+    const docMentions = byDoc.get(documentId) ?? [];
+    const orderedMentions = [...docMentions].sort(
+      (left, right) => left.start_line - right.start_line || left.end_line - right.end_line,
+    );
+    const orderedDefinitions = [...docDefinitions].sort(
+      (left, right) => left.startLine - right.startLine || left.endLine - right.endLine,
+    );
+    const activeMentions = new Set<ChunkMentionRow>();
+    let mentionCursor = 0;
+
+    for (const def of orderedDefinitions) {
+      while (mentionCursor < orderedMentions.length && orderedMentions[mentionCursor]!.start_line <= def.endLine) {
+        activeMentions.add(orderedMentions[mentionCursor]!);
+        mentionCursor += 1;
+      }
+      for (const mention of activeMentions) {
+        if (mention.end_line < def.startLine) activeMentions.delete(mention);
+      }
+
+      const seenKey = new Set<string>();
+      const callees: CalleeRow[] = [];
+      let identsInRange: Set<string> | null = null;
+      const computeIdentsInRange = (): Set<string> => {
+        if (identsInRange) return identsInRange;
+        const filePath = filePathById.get(def.documentId) ?? '';
+        const out = new Set<string>();
+        if (filePath) {
+          const byLine = getIdentifiersByLine(db, filePath);
+          const start = Math.max(0, def.startLine);
+          const end = Math.min(byLine.length - 1, def.endLine);
+          for (let i = start; i <= end; i += 1) {
+            for (const name of byLine[i]!) out.add(name);
+          }
         }
+        identsInRange = out;
+        return out;
+      };
+
+      for (const m of activeMentions) {
+        if (m.symbol_id === def.symbolId) continue;
+        const info = calleeInfo.get(m.symbol_id);
+        if (!info) continue;
+
+        const containedInRange = m.start_line >= def.startLine && m.end_line <= def.endLine;
+        if (!containedInRange) {
+          const overlapsRange = m.start_line <= def.endLine && m.end_line >= def.startLine;
+          if (!overlapsRange) continue;
+          const leaf = leafName(info.symbol);
+          if (!leaf) continue;
+          if (!computeIdentsInRange().has(leaf)) continue;
+        }
+
+        const key = `${info.symbol}|${m.chunk_id}`;
+        if (seenKey.has(key)) continue;
+        seenKey.add(key);
+        callees.push({ ...info, chunkId: m.chunk_id, source: 'scip-chunk' });
       }
-      identsInRange = out;
-      return out;
-    };
-
-    for (const m of docMentions) {
-      if (m.symbol_id === def.symbolId) continue;
-      const info = calleeInfo.get(m.symbol_id);
-      if (!info) continue;
-
-      const containedInRange = m.start_line >= def.startLine && m.end_line <= def.endLine;
-      if (!containedInRange) {
-        const overlapsRange = m.start_line <= def.endLine && m.end_line >= def.startLine;
-        if (!overlapsRange) continue;
-        const leaf = leafName(info.symbol);
-        if (!leaf) continue;
-        if (!computeIdentsInRange().has(leaf)) continue;
-      }
-
-      const key = `${info.symbol}|${m.chunk_id}`;
-      if (seenKey.has(key)) continue;
-      seenKey.add(key);
-      callees.push({ ...info, chunkId: m.chunk_id, source: 'scip-chunk' });
+      result.set(def.symbolId, callees);
     }
-    result.set(def.symbolId, callees);
   }
 
   return result;
@@ -625,6 +673,16 @@ function uniqueNumbers(values: Iterable<number>): number[][] {
     batches.push(unique.slice(i, i + SQLITE_IN_BATCH_SIZE));
   }
   return batches;
+}
+
+function symbolLocationsByDocument(definitions: ReadonlyArray<SymbolLocation>): Map<number, SymbolLocation[]> {
+  const byDocument = new Map<number, SymbolLocation[]>();
+  for (const definition of definitions) {
+    const bucket = byDocument.get(definition.documentId);
+    if (bucket) bucket.push(definition);
+    else byDocument.set(definition.documentId, [definition]);
+  }
+  return byDocument;
 }
 
 /**

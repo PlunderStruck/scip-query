@@ -12,6 +12,7 @@ import { definitionConsumerFileMap, partitionDefinitionConsumers } from '../inte
 import { mergeSetMaps } from '../../symbols/references/caller-evidence.js';
 import { boundaryEvidenceForSurfaces } from './boundary-evidence.js';
 import { profileSpan } from '../../runtime/profile.js';
+import { isClojureMacroDefinition } from '../../source/ast.js';
 
 export type WrapperActionTier = 'direct' | 'signal';
 
@@ -52,7 +53,7 @@ export function wrapperCandidates(
   const index = new ProjectIndex(db);
   const reverseFanIn = buildReverseFileFanIn(index.fileDependencyGraph(scope));
   return runCandidateAnalysis({
-    candidates: () => getWrapperCandidateSymbols(index, scope, maxLoc),
+    candidates: () => getWrapperCandidateSymbols(db, index, scope, maxLoc),
     orderCandidates: compareDefinitionsBySmallestLoc,
     scanLimit,
     prepare: (symbols) => ({
@@ -176,19 +177,22 @@ function wrapperCandidateForSymbol(
 }
 
 function getWrapperCandidateSymbols(
+  db: ScipDatabase,
   index: ProjectIndex,
   scope: string | undefined,
   maxLoc: number,
 ): IndexedDefinition[] {
-  return index.productionCallableDefinitions({
-    scope,
-    minLoc: 2,
-    maxLoc,
-    requireFunctionLikeSymbol: true,
-    // "Inline this wrapper" is wrong advice for published API — external
-    // consumers the index can't see depend on the wrapper staying put.
-    excludeRootedSymbols: true,
-  });
+  return index
+    .productionCallableDefinitions({
+      scope,
+      minLoc: 2,
+      maxLoc,
+      requireFunctionLikeSymbol: true,
+      // "Inline this wrapper" is wrong advice for published API — external
+      // consumers the index can't see depend on the wrapper staying put.
+      excludeRootedSymbols: true,
+    })
+    .filter((definition) => !isClojureMacroDefinition(db, definition));
 }
 
 function externalCallerFiles(

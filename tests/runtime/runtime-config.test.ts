@@ -214,6 +214,66 @@ describe('validateProjectConfig', () => {
     );
   });
 
+  it('accepts Clojure as a configured language and validates its indexer config path', () => {
+    const projectRoot = createProject();
+    writeFileSync(join(projectRoot, '.scip-clojure.json'), '{}\n');
+
+    expect(
+      validateProjectConfig(
+        {
+          languages: ['clojure'],
+          indexer: { clojure: { configPath: '.scip-clojure.json' } },
+        },
+        { projectRoot },
+      ),
+    ).toEqual([]);
+
+    expect(
+      validateProjectConfig(
+        {
+          indexer: { clojure: { configPath: '  ' } },
+        },
+        { projectRoot },
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        path: 'indexer.clojure.configPath',
+        message: 'Config path must be a non-empty string.',
+      }),
+    ]);
+
+    expect(
+      validateProjectConfig(
+        {
+          indexer: { clojure: { configPath: '../outside.json' } },
+        },
+        { projectRoot },
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        path: 'indexer.clojure.configPath',
+        message: 'Config path must stay inside the project root.',
+      }),
+    ]);
+
+    expect(
+      validateProjectConfig(
+        {
+          indexer: { clojure: { configPath: 'missing.json' } },
+        },
+        { projectRoot },
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        level: 'warning',
+        path: 'indexer.clojure.configPath',
+        message: 'Clojure indexer config path does not exist: missing.json',
+      }),
+    ]);
+  });
+
   it('warns that pnpm workspace mode is ignored by explicit TypeScript project sharding', () => {
     const diagnostics = validateProjectConfig({
       indexer: {

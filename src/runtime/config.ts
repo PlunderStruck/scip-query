@@ -31,6 +31,7 @@ const SUPPORTED_LANGUAGES: readonly SupportedLanguage[] = [
   'vb',
   'dart',
   'php',
+  'clojure',
 ];
 
 export interface ConfigDiagnostic {
@@ -137,6 +138,25 @@ export function validateProjectConfig(
       path: 'indexer.typescript.pnpmWorkspaces',
       message: 'Ignored when projectMode is "workspace"; explicit TypeScript projects are indexed directly.',
     });
+  }
+  const clojureIndexer = config.indexer?.clojure;
+  if (clojureIndexer?.configPath !== undefined) {
+    const path = 'indexer.clojure.configPath';
+    if (typeof clojureIndexer.configPath !== 'string' || clojureIndexer.configPath.trim() === '') {
+      diagnostics.push({ level: 'error', path, message: 'Config path must be a non-empty string.' });
+    } else if (opts.projectRoot) {
+      const resolved = resolve(opts.projectRoot, clojureIndexer.configPath);
+      const relativePath = relative(opts.projectRoot, resolved);
+      if (relativePath.startsWith('..') || isAbsolute(relativePath)) {
+        diagnostics.push({ level: 'error', path, message: 'Config path must stay inside the project root.' });
+      } else if (!existsSync(resolved)) {
+        diagnostics.push({
+          level: 'warning',
+          path,
+          message: `Clojure indexer config path does not exist: ${clojureIndexer.configPath}`,
+        });
+      }
+    }
   }
   if (config.locality !== undefined) {
     if (!isConfigObject(config.locality)) {

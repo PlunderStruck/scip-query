@@ -62,4 +62,57 @@ describe('getProjectCapabilities', () => {
     expect(report.matrix[0]?.indexing.status).toBe('unavailable');
     expect(report.matrix[0]?.sourceFacts.status).toBe('unavailable');
   });
+
+  it('reports Clojure as graph-backed with source callsite facts and clj-kondo cleanup verification', () => {
+    const readiness: ProjectReadiness = {
+      languages: ['clojure'],
+      indexers: [
+        {
+          language: 'clojure',
+          binaryLabel: 'scip-clojure',
+          installed: true,
+          runnable: true,
+        },
+      ],
+      checkers: [{ label: 'clj-kondo --lint .', coversExtensions: ['.clj', '.cljs', '.cljc'] }],
+      gitAvailable: true,
+    };
+
+    const report = getProjectCapabilities(readiness);
+    const clojure = report.matrix[0];
+
+    expect(clojure?.language).toBe('clojure');
+    expect(clojure?.indexing.status).toBe('available');
+    expect(clojure?.sourceFacts.status).toBe('available');
+    expect(clojure?.sourceFacts.reason).toContain('callable, callsite, and protocol/record member');
+    expect(clojure?.semantic.status).toBe('unavailable');
+    expect(clojure?.cleanupVerification.status).toBe('available');
+    expect(clojure?.cleanupVerification.reason).toBe('clj-kondo --lint .');
+  });
+
+  it('keeps source facts and detectors available when an indexed graph exists but the indexer cannot refresh', () => {
+    const readiness: ProjectReadiness = {
+      languages: ['clojure'],
+      indexers: [
+        {
+          language: 'clojure',
+          binaryLabel: 'scip-clojure',
+          installed: false,
+          runnable: false,
+          note: 'scip-clojure is not installed.',
+        },
+      ],
+      checkers: [{ label: 'clj-kondo --lint .', coversExtensions: ['.clj', '.cljs', '.cljc'] }],
+      gitAvailable: true,
+    };
+
+    const report = getProjectCapabilities(readiness, { hasIndexedGraph: true });
+    const clojure = report.matrix[0];
+
+    expect(report.capabilities.find((capability) => capability.id === 'indexing')?.status).toBe('partial');
+    expect(report.capabilities.find((capability) => capability.id === 'heuristic-detectors')?.status).toBe('available');
+    expect(clojure?.indexing.status).toBe('partial');
+    expect(clojure?.sourceFacts.status).toBe('available');
+    expect(clojure?.detectors.status).toBe('available');
+  });
 });

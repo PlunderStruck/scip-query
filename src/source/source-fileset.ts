@@ -53,6 +53,10 @@ export const ALL_SOURCE_EXTENSIONS: readonly string[] = [
   '.kts',
   '.scala',
   '.sc',
+  // Clojure
+  '.clj',
+  '.cljs',
+  '.cljc',
   // Ruby
   '.rb',
   // C/C++
@@ -99,6 +103,9 @@ export const SKIP_DIRS: ReadonlySet<string> = new Set([
   '.nuxt',
   '.cache',
   '.turbo',
+  '.nbb',
+  '.cpcache',
+  '.shadow-cljs',
   'out',
   'coverage',
   '.scipquery-cache',
@@ -193,6 +200,7 @@ function listGitSources(absRoot: string, extensions: ReadonlySet<string>): Set<s
     for (const line of output.split('\n')) {
       const file = line.trim();
       if (!file) continue;
+      if (hasSkippedSegment(file)) continue;
       if (!extensions.has(extname(file).toLowerCase())) continue;
       out.add(file);
     }
@@ -200,6 +208,10 @@ function listGitSources(absRoot: string, extensions: ReadonlySet<string>): Set<s
   } catch {
     return null;
   }
+}
+
+function hasSkippedSegment(relativePath: string): boolean {
+  return relativePath.split('/').some((segment) => SKIP_DIRS.has(segment));
 }
 
 function listOnDiskSources(absRoot: string, extensions: ReadonlySet<string>): Set<string> {

@@ -28,7 +28,8 @@ export type SupportedLanguage =
   | 'csharp'
   | 'vb'
   | 'dart'
-  | 'php';
+  | 'php'
+  | 'clojure';
 
 export type TypeScriptProjectMode = 'single' | 'workspace';
 
@@ -49,6 +50,7 @@ export interface IndexerConfig {
     pnpmWorkspaces?: boolean;
     indexerBinary: string;
     projectPath?: string;
+    configPath?: string;
   }) => {
     binary: string;
     args: string[];
@@ -188,4 +190,6 @@ export interface IndexerOverrides {
   projectMode?: TypeScriptProjectMode;
   /** Explicit TypeScript project roots or tsconfig paths, relative to project root unless absolute */
   projects?: string[];
+  /** Indexer-specific config file path, relative to project root */
+  configPath?: string;
 }

@@ -35,6 +35,7 @@ export const C_LIKE_EXTENSIONS = ['.c', '.h', '.cc', '.cpp', '.cxx', '.hpp', '.h
 export const DOTNET_EXTENSIONS = ['.cs', '.vb'] as const;
 export const DART_EXTENSIONS = ['.dart'] as const;
 export const PHP_EXTENSIONS = ['.php'] as const;
+export const CLOJURE_EXTENSIONS = ['.clj', '.cljs', '.cljc'] as const;
 
 const JS_EXTENSION_SET = new Set<string>(JS_EXTENSIONS);
 const PYTHON_EXTENSION_SET = new Set<string>(PYTHON_EXTENSIONS);
@@ -45,6 +46,7 @@ const C_LIKE_EXTENSION_SET = new Set<string>(C_LIKE_EXTENSIONS);
 const DOTNET_EXTENSION_SET = new Set<string>(DOTNET_EXTENSIONS);
 const DART_EXTENSION_SET = new Set<string>(DART_EXTENSIONS);
 const PHP_EXTENSION_SET = new Set<string>(PHP_EXTENSIONS);
+const CLOJURE_EXTENSION_SET = new Set<string>(CLOJURE_EXTENSIONS);
 
 const LANGUAGE_EXTENSION_FAMILIES: ReadonlyArray<{
   extensions: readonly string[];
@@ -59,6 +61,7 @@ const LANGUAGE_EXTENSION_FAMILIES: ReadonlyArray<{
   { extensions: DOTNET_EXTENSIONS, lookup: DOTNET_EXTENSION_SET },
   { extensions: DART_EXTENSIONS, lookup: DART_EXTENSION_SET },
   { extensions: PHP_EXTENSIONS, lookup: PHP_EXTENSION_SET },
+  { extensions: CLOJURE_EXTENSIONS, lookup: CLOJURE_EXTENSION_SET },
 ];
 
 function hasExtensionIn(relativePath: string, extensions: ReadonlySet<string>): boolean {
@@ -91,6 +94,9 @@ export function isDartSourcePath(relativePath: string): boolean {
 }
 export function isPhpSourcePath(relativePath: string): boolean {
   return hasExtensionIn(relativePath, PHP_EXTENSION_SET);
+}
+export function isClojureSourcePath(relativePath: string): boolean {
+  return hasExtensionIn(relativePath, CLOJURE_EXTENSION_SET);
 }
 
 // scip-query: ignore-wrapper — public predicate naming the family-for-extension
@@ -135,6 +141,10 @@ export function resolveImportPath(db: ScipDatabase, importerPath: string, specif
 
   if (isDartSourcePath(importerPath)) {
     return resolveDartImportPath(db, importerPath, specifier);
+  }
+
+  if (isClojureSourcePath(importerPath)) {
+    return resolveClojureImportPath(db, specifier);
   }
 
   return resolveJavaScriptImportPath(db, importerPath, specifier);
@@ -296,6 +306,24 @@ export function resolveDartImportPath(db: ScipDatabase, importerPath: string, sp
       return relativeCandidate;
     }
   }
+  return null;
+}
+
+export function resolveClojureImportPath(db: ScipDatabase, specifier: string): string | null {
+  const normalized = specifier.replace(/-/g, '_').replace(/\./g, '/');
+  const indexedPaths = getIndexedPaths(db);
+
+  for (const ext of CLOJURE_EXTENSIONS) {
+    const exactSuffix = `${normalized}${ext}`;
+    const exact = [...indexedPaths].find((relativePath) => relativePath.endsWith(exactSuffix));
+    if (exact) return exact;
+  }
+
+  for (const ext of CLOJURE_EXTENSIONS) {
+    const basenameMatch = [...indexedPaths].find((relativePath) => basename(relativePath) === `${normalized.split('/').pop()}${ext}`);
+    if (basenameMatch) return basenameMatch;
+  }
+
   return null;
 }
 

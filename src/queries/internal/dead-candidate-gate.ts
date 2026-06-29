@@ -84,7 +84,7 @@ function rejectDeadCandidate(rejectionReason: DeadCandidateRejectionReason): Dea
   return { accepted: false, rejectionReason };
 }
 
-function looksValueLikeDefinition(rawSymbol: string): boolean {
+export function looksValueLikeDefinition(rawSymbol: string): boolean {
   return isFunctionLikeSymbol(rawSymbol) || rawSymbol.endsWith('().') || rawSymbol.endsWith('.');
 }
 

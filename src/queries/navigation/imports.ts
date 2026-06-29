@@ -6,6 +6,7 @@ import { semanticImportUsage } from '../../semantic/shared-primitives.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import type { ParsedSourceImport } from '../../domain/types.js';
 import { isModuleLikeSymbol, leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
+import { detectAstLanguage } from '../../source/ast.js';
 
 export interface ImportResult {
   symbol: string;
@@ -37,8 +38,12 @@ export function imports(db: ScipDatabase, filePattern: string, opts: { semantic?
  * Which files import this symbol?
  */
 export function importedBy(db: ScipDatabase, symbolPattern: string): ImportResult[] {
+  const target = findFirstSymbolMatch(db, symbolPattern);
   const indexedResults = indexedImporters(db, symbolPattern);
-  return indexedResults.length > 0 ? indexedResults : sourceImportersForSymbol(db, symbolPattern);
+  if (indexedResults.length > 0 && !isClojureTarget(target)) return indexedResults;
+  const sourceResults = sourceImportersForSymbol(db, symbolPattern, target);
+  if (looksLikeNamespacePattern(symbolPattern) && sourceResults.length > 0) return sourceResults;
+  return dedupeImportResults([...indexedResults, ...sourceResults]);
 }
 
 /**
@@ -97,8 +102,11 @@ function indexedImporters(db: ScipDatabase, symbolPattern: string): ImportResult
 // scip-query: ignore-extract — this is the source-parser fallback importer
 // scan; document loading, ignore filtering, and import-target matching form one
 // conservative evidence path.
-function sourceImportersForSymbol(db: ScipDatabase, symbolPattern: string): ImportResult[] {
-  const target = findFirstSymbolMatch(db, symbolPattern);
+function sourceImportersForSymbol(
+  db: ScipDatabase,
+  symbolPattern: string,
+  target: ReturnType<typeof findFirstSymbolMatch> = findFirstSymbolMatch(db, symbolPattern),
+): ImportResult[] {
   const targetFile = target?.relativePath ?? null;
   const targetLeaf = target ? leafName(target.symbol) : symbolPattern.replace(/\(\)$/, '');
   const targetIsModule = target ? isModuleLikeSymbol(target.symbol) : false;
@@ -111,6 +119,7 @@ function sourceImportersForSymbol(db: ScipDatabase, symbolPattern: string): Impo
           targetFile,
           targetLeaf,
           targetIsModule,
+          targetPattern: symbolPattern,
         })
       ) {
         importers.add(relativePath);
@@ -118,17 +127,36 @@ function sourceImportersForSymbol(db: ScipDatabase, symbolPattern: string): Impo
     }
   }
 
+  const namespacePattern = looksLikeNamespacePattern(symbolPattern) ? symbolPattern.trim() : null;
   return [...importers].sort().map((importer) => ({
-    symbol: target?.symbol ?? targetLeaf,
-    shortName: target ? shortenSymbol(target.symbol) : targetLeaf,
+    symbol: namespacePattern ?? target?.symbol ?? targetLeaf,
+    shortName: namespacePattern ?? (target ? shortenSymbol(target.symbol) : targetLeaf),
     fromFile: importer,
   }));
+}
+
+function isClojureTarget(target: ReturnType<typeof findFirstSymbolMatch>): boolean {
+  return Boolean(
+    target && (target.symbol.startsWith('scip-clojure ') || detectAstLanguage(target.relativePath) === 'clojure'),
+  );
+}
+
+function dedupeImportResults(results: ImportResult[]): ImportResult[] {
+  const seen = new Set<string>();
+  const deduped: ImportResult[] = [];
+  for (const result of results) {
+    const key = `${result.symbol}|${result.fromFile}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(result);
+  }
+  return deduped.sort((a, b) => a.fromFile.localeCompare(b.fromFile) || a.shortName.localeCompare(b.shortName));
 }
 
 function sourceImportMatchesTarget(
   entry: ParsedSourceImport,
   importerPath: string,
-  target: { targetFile: string | null; targetLeaf: string; targetIsModule: boolean },
+  target: { targetFile: string | null; targetLeaf: string; targetIsModule: boolean; targetPattern: string },
 ): boolean {
   if (!entry.sourcePath) return false;
   if (target.targetFile && normalizePath(entry.sourcePath) !== normalizePath(target.targetFile)) {
@@ -136,9 +164,21 @@ function sourceImportMatchesTarget(
   }
   if (entry.kind === 'side-effect') return true;
   if (target.targetFile && isCLikeImporter(importerPath)) return true;
+  if (entry.kind === 'namespace' && namespaceImportMatchesPattern(entry, target.targetPattern)) return true;
   if (target.targetIsModule) return true;
   if (entry.kind === 'named' && entry.importedName === target.targetLeaf) return true;
   return entry.kind === 'namespace' && entry.usedMembers.includes(target.targetLeaf);
+}
+
+function namespaceImportMatchesPattern(entry: ParsedSourceImport, targetPattern: string): boolean {
+  const normalized = targetPattern.trim().replace(/\(\)$/, '');
+  if (!looksLikeNamespacePattern(normalized)) return false;
+  return entry.importedName === normalized || entry.localName === normalized;
+}
+
+function looksLikeNamespacePattern(pattern: string): boolean {
+  const normalized = pattern.trim().replace(/\(\)$/, '');
+  return normalized.includes('.') && !normalized.includes('/') && !normalized.includes(':');
 }
 
 function loadFileImportEntries(

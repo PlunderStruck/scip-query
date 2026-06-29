@@ -51,6 +51,8 @@ export interface ReindexOptions {
   typescriptProjectMode?: TypeScriptProjectMode;
   /** Explicit TypeScript project roots or tsconfig paths for workspace mode. */
   typescriptProjects?: string[];
+  /** Optional scip-clojure config path, relative to project root unless absolute. */
+  clojureConfigPath?: string;
   /** Skip auto-install prompts */
   skipAutoInstall?: boolean;
   /** Reuse an existing index when tracked source inputs are unchanged (default true). */
@@ -156,6 +158,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
     pnpmWorkspaces: opts.pnpmWorkspaces,
     typescriptProjectMode: opts.typescriptProjectMode,
     typescriptProjects: opts.typescriptProjects,
+    clojureConfigPath: opts.clojureConfigPath,
   });
   const releaseLock = await acquireReindexLock(join(dirname(paths.outputDb), 'index.lock'), {
     projectRoot,
@@ -338,12 +341,13 @@ async function runLanguageIndexersForFreshReindex(
     tempOutputScip: opts.tempPaths.tempOutputScip,
     projectRoot: opts.projectRoot,
     env,
-      skipAutoInstall: opts.skipAutoInstall,
-      pnpmWorkspaces: opts.opts.pnpmWorkspaces,
-      typescriptProjectMode: opts.opts.typescriptProjectMode,
-      typescriptProjects: opts.opts.typescriptProjects,
-      onStatus: opts.onStatus,
-    });
+    skipAutoInstall: opts.skipAutoInstall,
+    pnpmWorkspaces: opts.opts.pnpmWorkspaces,
+    typescriptProjectMode: opts.opts.typescriptProjectMode,
+    typescriptProjects: opts.opts.typescriptProjects,
+    clojureConfigPath: opts.opts.clojureConfigPath,
+    onStatus: opts.onStatus,
+  });
 
   const runResults = await runPreparedIndexers(
     preparedRuns,
@@ -392,6 +396,7 @@ function publishFreshReindexArtifacts(
       pnpmWorkspaces: opts.opts.pnpmWorkspaces,
       typescriptProjectMode: opts.opts.typescriptProjectMode,
       typescriptProjects: opts.opts.typescriptProjects,
+      clojureConfigPath: opts.opts.clojureConfigPath,
     }),
     requestedLanguages: opts.languages,
     indexedLanguages: indexedOutputs.map((o) => o.language),
@@ -422,6 +427,7 @@ function reusableLanguageOutputs(opts: Parameters<typeof runFreshReindex>[0]): I
     pnpmWorkspaces: opts.opts.pnpmWorkspaces,
     typescriptProjectMode: opts.opts.typescriptProjectMode,
     typescriptProjects: opts.opts.typescriptProjects,
+    clojureConfigPath: opts.opts.clojureConfigPath,
   });
   for (const language of opts.languages) {
     const scipPath = languageShardPath(opts.paths.outputDb, language);
@@ -472,6 +478,7 @@ function prepareIndexerRuns(opts: {
   pnpmWorkspaces?: boolean;
   typescriptProjectMode?: TypeScriptProjectMode;
   typescriptProjects?: readonly string[];
+  clojureConfigPath?: string;
   onStatus: (message: string) => void;
 }): PreparedIndexerPlan {
   const preparedRuns: PreparedIndexerRun[] = [];
@@ -505,6 +512,7 @@ function prepareIndexerRunsForLanguage(opts: {
   pnpmWorkspaces?: boolean;
   typescriptProjectMode?: TypeScriptProjectMode;
   typescriptProjects?: readonly string[];
+  clojureConfigPath?: string;
   onStatus: (message: string) => void;
 }): ({ prepared: PreparedIndexerRun } | { skipped: { language: SupportedLanguage; reason: string } })[] {
   if (opts.language !== 'typescript' || opts.typescriptProjectMode !== 'workspace') {
@@ -555,6 +563,7 @@ function prepareIndexerRun(opts: {
   skipAutoInstall: boolean;
   pnpmWorkspaces?: boolean;
   projectPath?: string;
+  clojureConfigPath?: string;
   onStatus: (message: string) => void;
 }): { prepared: PreparedIndexerRun } | { skipped: { language: SupportedLanguage; reason: string } } {
   const config = getIndexerConfig(opts.language);
@@ -588,6 +597,7 @@ function prepareIndexerRun(opts: {
     pnpmWorkspaces: opts.pnpmWorkspaces,
     indexerBinary: resolvedBinary,
     projectPath: opts.projectPath,
+    configPath: opts.language === 'clojure' ? opts.clojureConfigPath : undefined,
   });
 
   return {
@@ -895,13 +905,19 @@ interface ReindexFingerprint {
   pnpmWorkspaces: boolean;
   typescriptProjectMode: TypeScriptProjectMode;
   typescriptProjects: string[];
+  clojureConfigPath?: string;
   files: { path: string; size: number; hash: string }[];
 }
 
 function computeReindexFingerprint(
   projectRoot: string,
   languages: readonly SupportedLanguage[],
-  opts: { pnpmWorkspaces?: boolean; typescriptProjectMode?: TypeScriptProjectMode; typescriptProjects?: readonly string[] },
+  opts: {
+    pnpmWorkspaces?: boolean;
+    typescriptProjectMode?: TypeScriptProjectMode;
+    typescriptProjects?: readonly string[];
+    clojureConfigPath?: string;
+  },
 ): ReindexFingerprint {
   return {
     version: 2,
@@ -909,6 +925,7 @@ function computeReindexFingerprint(
     pnpmWorkspaces: effectivePnpmWorkspaces(opts),
     typescriptProjectMode: opts.typescriptProjectMode ?? 'single',
     typescriptProjects: normalizeTypeScriptProjects(opts.typescriptProjects),
+    clojureConfigPath: normalizeOptionalPath(opts.clojureConfigPath),
     files: fingerprintProjectFiles(projectRoot),
   };
 }
@@ -916,7 +933,12 @@ function computeReindexFingerprint(
 function computeLanguageFingerprints(
   projectRoot: string,
   languages: readonly SupportedLanguage[],
-  opts: { pnpmWorkspaces?: boolean; typescriptProjectMode?: TypeScriptProjectMode; typescriptProjects?: readonly string[] },
+  opts: {
+    pnpmWorkspaces?: boolean;
+    typescriptProjectMode?: TypeScriptProjectMode;
+    typescriptProjects?: readonly string[];
+    clojureConfigPath?: string;
+  },
 ): Partial<Record<SupportedLanguage, ReindexFingerprint>> {
   return Object.fromEntries(
     languages.map((language) => {
@@ -928,6 +950,7 @@ function computeLanguageFingerprints(
               typescriptProjects: normalizeTypeScriptProjects(opts.typescriptProjects),
             }
           : { typescriptProjectMode: 'single' as const, typescriptProjects: [] };
+      const clojureConfigPath = language === 'clojure' ? normalizeOptionalPath(opts.clojureConfigPath) : undefined;
       return [
         language,
         {
@@ -935,6 +958,7 @@ function computeLanguageFingerprints(
           languages: [language],
           pnpmWorkspaces: language === 'typescript' && effectivePnpmWorkspaces(opts),
           ...typeScriptOptions,
+          clojureConfigPath,
           files: fingerprintProjectFiles(projectRoot, { language, markerFiles }),
         },
       ];
@@ -946,6 +970,11 @@ function normalizeTypeScriptProjects(projects: readonly string[] | undefined): s
   return [...new Set((projects ?? []).map((project) => project.trim()).filter(Boolean))].sort((left, right) =>
     left.localeCompare(right),
   );
+}
+
+function normalizeOptionalPath(path: string | undefined): string | undefined {
+  const trimmed = path?.trim();
+  return trimmed || undefined;
 }
 
 function effectivePnpmWorkspaces(opts: {

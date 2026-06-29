@@ -28,8 +28,8 @@ import { stats } from '../navigation/stats.js';
 import { wrapperCandidates } from '../cleanup/wrapper-candidates.js';
 
 // Mirror health's large-index budget so baseline runs stay bounded.
-const LARGE_BASELINE_SYMBOL_THRESHOLD = 75_000;
-const LARGE_BASELINE_DOCUMENT_THRESHOLD = 5_000;
+const LARGE_BASELINE_SYMBOL_THRESHOLD = 25_000;
+const LARGE_BASELINE_DOCUMENT_THRESHOLD = 2_500;
 const LARGE_BASELINE_SCAN_LIMIT = 2_500;
 
 function baselineScanLimit(db: ScipDatabase): number | undefined {

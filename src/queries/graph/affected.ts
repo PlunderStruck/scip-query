@@ -4,6 +4,7 @@ import { findEnclosingDefinition, getDefinitionsForFile } from '../../symbols/de
 import { callerRowsForSymbol } from '../../symbols/references/caller-evidence.js';
 import type { SymbolMatch } from '../../domain/types.js';
 import { leafSuffix, shortenSymbol } from '../../symbols/symbol-parser.js';
+import { detectAstLanguage } from '../../source/ast.js';
 
 export interface AffectedResult {
   symbol: string;
@@ -136,7 +137,7 @@ function getDirectAffectedRows(
     if (match.symbolId === target.symbolId || db.isIgnored(match.relativePath)) {
       continue;
     }
-    if (!canPropagateImpact(match.symbol)) {
+    if (!canPropagateImpact(match)) {
       continue;
     }
 
@@ -179,7 +180,8 @@ function consumerFilesForSymbol(db: ScipDatabase, target: SymbolMatch, scope: st
   );
 }
 
-function canPropagateImpact(symbol: string): boolean {
-  const suffix = leafSuffix(symbol);
-  return suffix === 'method' || suffix === 'type' || symbol.endsWith('().');
+function canPropagateImpact(match: SymbolMatch): boolean {
+  if (match.symbol.startsWith('scip-clojure ') || detectAstLanguage(match.relativePath) === 'clojure') return true;
+  const suffix = leafSuffix(match.symbol);
+  return suffix === 'method' || suffix === 'type' || match.symbol.endsWith('().');
 }

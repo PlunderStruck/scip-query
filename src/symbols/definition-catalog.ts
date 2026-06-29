@@ -393,7 +393,7 @@ function symbolSqlPredicate(alias: string, prefilter: DefinitionSymbolSqlPrefilt
 }
 
 function functionLikeSymbolSqlPredicate(alias: string): string {
-  return `${alias}.symbol LIKE '%.'`;
+  return `(${alias}.symbol LIKE '%.' OR ${alias}.symbol LIKE '%()')`;
 }
 
 function groupRowsByFile(rows: SymbolQueryRow[]): Map<string, SymbolQueryRow[]> {

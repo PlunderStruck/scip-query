@@ -15,7 +15,7 @@ import type { ScipDatabase } from '../storage/db.js';
 import { buildFileDepGraph } from '../symbols/graph/file-dep-graph.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
 import { getSourceFacts } from '../source/ast.js';
-import { getSourceFiles } from '../source/source-fileset.js';
+import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import { leafName } from '../symbols/symbol-parser.js';
 import { isPackageSurfaceFile } from './package-surface.js';
 
@@ -54,11 +54,14 @@ export function isBarrel(file: string): boolean {
  */
 export function getLiveBarrelPaths(db: ScipDatabase): Set<string> {
   return liveBarrelCache.get(db, () => {
-    const graph = buildFileDepGraph(db);
-    const queue = getSourceFiles(db).filter((path) => {
+    const sourcePaths = indexedDocumentPaths(db, { includeIgnored: false });
+    const queue = sourcePaths.filter((path) => {
       const kind = classifyFile(path);
       return kind === 'entry' || kind === 'worker';
     });
+    if (queue.length === 0) return new Set<string>();
+
+    const graph = buildFileDepGraph(db);
     const visited = new Set<string>();
     const liveBarrels = new Set<string>();
 
@@ -98,7 +101,9 @@ export function isLiveBarrel(db: ScipDatabase, file: string): boolean {
 // dead.ts does not duplicate live-barrel and function-entry rules.
 export function getInactiveBarrelPaths(db: ScipDatabase): string[] {
   const live = getLiveBarrelPaths(db);
-  return getSourceFiles(db).filter((path) => isBarrel(path) && !live.has(path) && !definesFunctions(db, path));
+  return indexedDocumentPaths(db, { includeIgnored: false }).filter(
+    (path) => isBarrel(path) && !live.has(path) && !definesFunctions(db, path),
+  );
 }
 
 function definesFunctions(db: ScipDatabase, relativePath: string): boolean {

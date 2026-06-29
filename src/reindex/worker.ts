@@ -12,6 +12,7 @@ const languagesRaw = process.env['SCIP_REINDEX_LANGUAGES'];
 const indexerConcurrency = parsePositiveInteger(process.env['SCIP_REINDEX_INDEXER_CONCURRENCY']);
 const pnpmWorkspaces = process.env['SCIP_REINDEX_PNPM_WORKSPACES'] === '1';
 const typescriptConfig = parseTypeScriptWorkerConfig(process.env['SCIP_REINDEX_TYPESCRIPT_CONFIG']);
+const clojureConfigPath = process.env['SCIP_REINDEX_CLOJURE_CONFIG_PATH'] || undefined;
 const triggerKind = parseRefreshTriggerKind(process.env['SCIP_REINDEX_TRIGGER_KIND']);
 const triggerDetail = process.env['SCIP_REINDEX_TRIGGER_DETAIL'];
 
@@ -30,6 +31,7 @@ reindex({
   pnpmWorkspaces,
   typescriptProjectMode: typescriptConfig.projectMode,
   typescriptProjects: typescriptConfig.projects,
+  clojureConfigPath,
   indexerConcurrency,
   trigger: { kind: triggerKind, detail: triggerDetail || undefined },
   onStatus: (msg) => process.stderr.write(`[reindex] ${msg}\n`),

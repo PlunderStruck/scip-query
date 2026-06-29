@@ -70,6 +70,7 @@ const SUPPORTED_LANGUAGES = new Set<SupportedLanguage>([
   'vb',
   'dart',
   'php',
+  'clojure',
 ]);
 const BENCH_TIMEOUT_MS = 180_000;
 const BENCH_MAX_BUFFER = 100 * 1024 * 1024;
@@ -123,6 +124,7 @@ export async function handleReindex(rawOpts: unknown): Promise<void> {
       pnpmWorkspaces: booleanOptionValue(opts, 'pnpmWorkspaces') || config.indexer?.typescript?.pnpmWorkspaces,
       typescriptProjectMode: config.indexer?.typescript?.projectMode,
       typescriptProjects: config.indexer?.typescript?.projects,
+      clojureConfigPath: config.indexer?.clojure?.configPath,
       skipIfUnchanged: !booleanOptionValue(opts, 'force'),
       allowPartial: booleanOptionValue(opts, 'allowPartial'),
       indexerConcurrency: numberOptionValue(opts, 'indexerConcurrency') ?? config.indexerConcurrency,
@@ -357,6 +359,7 @@ async function measureColdIndex(projectRoot: string): Promise<BenchIndexRun> {
         pnpmWorkspaces: config.indexer?.typescript?.pnpmWorkspaces,
         typescriptProjectMode: config.indexer?.typescript?.projectMode,
         typescriptProjects: config.indexer?.typescript?.projects,
+        clojureConfigPath: config.indexer?.clojure?.configPath,
         skipIfUnchanged: true,
         allowPartial: true,
         indexerConcurrency: config.indexerConcurrency,
@@ -389,6 +392,7 @@ async function measureWarmIndex(projectRoot: string): Promise<BenchIndexRun> {
       pnpmWorkspaces: config.indexer?.typescript?.pnpmWorkspaces,
       typescriptProjectMode: config.indexer?.typescript?.projectMode,
       typescriptProjects: config.indexer?.typescript?.projects,
+      clojureConfigPath: config.indexer?.clojure?.configPath,
       skipIfUnchanged: true,
       allowPartial: true,
       indexerConcurrency: config.indexerConcurrency,
@@ -680,10 +684,12 @@ export function handleCapabilityMatrix(rawOpts: unknown): void {
 
 function renderCapabilities(rawOpts: unknown, command: 'capabilities' | 'capability-matrix'): void {
   const opts = commandOptions(rawOpts);
-  const projectRoot = resolveProjectRoot();
-  const config = loadProjectConfig(projectRoot);
+  const { projectRoot, config, paths, dbPath } = resolveCliProjectContext();
   const readiness = getProjectReadiness(projectRoot, config);
-  const report = getProjectCapabilities(readiness);
+  const freshness = getIndexFreshness(projectRoot, config, paths);
+  const report = getProjectCapabilities(readiness, {
+    hasIndexedGraph: existsSync(dbPath) && freshness.state !== 'missing',
+  });
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope(command, [], opts, report);
     return;
@@ -776,8 +782,11 @@ function buildProjectDiagnosticReport(command: 'doctor' | 'status'): {
   const { projectRoot, config, paths, dbPath } = resolveCliProjectContext();
   const configDiagnostics = validateProjectConfig(config, { projectRoot });
   const readiness = getProjectReadiness(projectRoot, config);
-  const capabilities = getProjectCapabilities(readiness);
   const freshness = getIndexFreshness(projectRoot, config, paths);
+  const exists = existsSync(dbPath);
+  const capabilities = getProjectCapabilities(readiness, {
+    hasIndexedGraph: exists && freshness.state !== 'missing',
+  });
   const hasIndexerProblems = readiness.indexers.some((indexer) => !indexer.runnable);
   const hasErrors =
     configDiagnostics.some((diagnostic) => diagnostic.level === 'error') ||
@@ -790,7 +799,7 @@ function buildProjectDiagnosticReport(command: 'doctor' | 'status'): {
       projectRoot,
       dbPath,
       configuredDbPath: paths.dbPath,
-      exists: existsSync(dbPath),
+      exists,
       configDiagnostics,
       readiness,
       freshness,

@@ -437,14 +437,15 @@ async function refreshIndexForHookIfNeeded(workspace: {
       outputScip: workspace.paths.indexPath,
       outputDb: workspace.paths.dbPath,
       pnpmWorkspaces: workspace.config.indexer?.typescript?.pnpmWorkspaces,
-        typescriptProjectMode: workspace.config.indexer?.typescript?.projectMode,
-        typescriptProjects: workspace.config.indexer?.typescript?.projects,
-        skipIfUnchanged: true,
-        allowPartial: true,
-        indexerConcurrency: workspace.config.indexerConcurrency,
-        trigger: { kind: 'manual-cli', detail: 'agent hook auto-refresh' },
-        onStatus: () => {},
-      });
+      typescriptProjectMode: workspace.config.indexer?.typescript?.projectMode,
+      typescriptProjects: workspace.config.indexer?.typescript?.projects,
+      clojureConfigPath: workspace.config.indexer?.clojure?.configPath,
+      skipIfUnchanged: true,
+      allowPartial: true,
+      indexerConcurrency: workspace.config.indexerConcurrency,
+      trigger: { kind: 'manual-cli', detail: 'agent hook auto-refresh' },
+      onStatus: () => {},
+    });
     return `scip-query auto-refresh: ${result.reused ? 'reused' : 'indexed'} ${result.languages.join(', ')} because the index was ${freshness.state}.`;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

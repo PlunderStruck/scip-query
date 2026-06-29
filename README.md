@@ -28,14 +28,14 @@ Agents are effective at editing the code in front of them. They are less reliabl
 
 ## The Agent Loop
 
-| Phase | What the agent needs to establish | Commands |
-|---|---|---|
-| Orient | What exists, where it is defined, and what depends on it | `system`, `trace`, `affected`, `plan-context` |
-| Plan | Externally consumed surfaces, change scope, blast radius, and historical partners | `surface`, `change-surface`, `co-change` |
-| Reuse | Whether the helper, component, hook, or composable already exists | `similar`, `recent-duplicates` |
-| Finish | Whether an extraction or migration reached every relevant site | `incomplete-migration`, `unused-params` |
-| Verify | What the diff affected and whether covered structural checks regressed | `diff-impact --json`, `doc-drift`, `diff-gate --json`, `health --baseline` |
-| Clean up | Candidate removals and newly exposed dead-code cascades | `cleanup-plan --verify` |
+| Phase    | What the agent needs to establish                                                 | Commands                                                                   |
+| -------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Orient   | What exists, where it is defined, and what depends on it                          | `system`, `trace`, `affected`, `plan-context`                              |
+| Plan     | Externally consumed surfaces, change scope, blast radius, and historical partners | `surface`, `change-surface`, `co-change`                                   |
+| Reuse    | Whether the helper, component, hook, or composable already exists                 | `similar`, `recent-duplicates`                                             |
+| Finish   | Whether an extraction or migration reached every relevant site                    | `incomplete-migration`, `unused-params`                                    |
+| Verify   | What the diff affected and whether covered structural checks regressed            | `diff-impact --json`, `doc-drift`, `diff-gate --json`, `health --baseline` |
+| Clean up | Candidate removals and newly exposed dead-code cascades                           | `cleanup-plan --verify`                                                    |
 
 React and Vue repositories get additional framework-aware checks for repeated component/template structure, hook/composable behavior, and large-component or large-view pressure. These extend the same reuse and completion workflow; the core graph, history, planning, cleanup, and diff-gate commands are not frontend-specific.
 
@@ -99,11 +99,13 @@ Heuristic findings are candidates for inspection, not proof of equivalence or ba
 
 Graph navigation works through supported [SCIP](https://github.com/sourcegraph/scip) indexers. Higher-confidence augmentation and verification vary by language and project toolchain. TypeScript currently has the richest semantic augmentation. React and Vue add built-in framework-aware maintainability checks on top of the core workflow.
 
+Clojure projects are indexed through `scip-clojure`. Source fallback adds namespace imports, callable/callsite evidence, and protocol/record member evidence for `.clj`, `.cljs`, and `.cljc` files. When the project has `clj-kondo` available, cleanup-plan verification can use `clj-kondo --lint .`. Clojure does not currently have a scip-query semantic provider equivalent to TypeScript's `ts-morph` layer; capability output reports that boundary explicitly.
+
 ## Cleaning Up AI-Generated Code
 
 These checks target specific ways AI-assisted development rots a codebase. The full catalog, with prevention wiring for each detector, is in [docs/AI_FAILURE_MODES.md](docs/AI_FAILURE_MODES.md):
 
-**1. Find the echoes.** Agents re-implement helpers, hooks, composables, and frontend components they didn't know existed. `recent-duplicates` makes similarity *directional* using git file ages - which side is the established original, which is the recent echo:
+**1. Find the echoes.** Agents re-implement helpers, hooks, composables, and frontend components they didn't know existed. `recent-duplicates` makes similarity _directional_ using git file ages - which side is the established original, which is the recent echo:
 
 ```
 91%  ECHO  react-component  src/components/ProjectCardVisual.tsx  ProjectCardVisual  (added 62 commits ago)
@@ -114,7 +116,7 @@ These checks target specific ways AI-assisted development rots a codebase. The f
      (both new - one agent session duplicated itself; consolidate before they diverge)
 ```
 
-**2. Finish the half-done extraction.** Agents extract a helper, rewire one or two call sites, and abandon the rest — the extracted logic survives inline at every site they missed. `incomplete-migration` finds helpers that are new in the diff, confirms they were wired in somewhere, and lists the established sites that still contain the helper's logic but never call it (containment scoring, because a missed site holds the helper's logic *plus* its own):
+**2. Finish the half-done extraction.** Agents extract a helper, rewire one or two call sites, and abandon the rest — the extracted logic survives inline at every site they missed. `incomplete-migration` finds helpers that are new in the diff, confirms they were wired in somewhere, and lists the established sites that still contain the helper's logic but never call it (containment scoring, because a missed site holds the helper's logic _plus_ its own):
 
 ```
 src/utils/priceLabel.ts  priceLabel()
@@ -123,7 +125,7 @@ src/utils/priceLabel.ts  priceLabel()
   un-migrated: 100%  buildReportC()  (src/cards/price-summary-c.ts)
 ```
 
-**3. Catch your standards docs lying.** If you keep in-repo standards for agents to read before implementing, a stale standard is worse than none. `doc-drift` reads every doc's file citations *and* its co-change history, then flags docs whose code moved on without them — including **broken references** to files that no longer exist:
+**3. Catch your standards docs lying.** If you keep in-repo standards for agents to read before implementing, a stale standard is worse than none. `doc-drift` reads every doc's file citations _and_ its co-change history, then flags docs whose code moved on without them — including **broken references** to files that no longer exist:
 
 ```
 staleness 94  product/domain-model.md
@@ -131,7 +133,7 @@ staleness 94  product/domain-model.md
   22 change(s) since doc update  src/workflows/serviceTasks.ts  (referenced by doc)
 ```
 
-**4. Delete with project checks.** `cleanup-plan` runs dead-code analysis to a *fixpoint* — deleting batch 0 makes batch 1 dead, and the plan shows the cascade. `--verify` applies each batch in a throwaway git worktree and runs the supported checker detected for your project (differentially, so pre-existing errors don't drown the signal):
+**4. Delete with project checks.** `cleanup-plan` runs dead-code analysis to a _fixpoint_ — deleting batch 0 makes batch 1 dead, and the plan shows the cascade. `--verify` applies each batch in a throwaway git worktree and runs the supported checker detected for your project (differentially, so pre-existing errors don't drown the signal):
 
 ```
 ── Batch 0: deletable now (graph-fact, 67 LOC) ──
@@ -139,22 +141,22 @@ staleness 94  product/domain-model.md
 Batch 0: COMPILER-VERIFIED
 ```
 
-When verification *fails*, the errors name the exact references the static evidence missed — that failure has caught real detector mistakes and stopped build-breaking deletions.
+When verification _fails_, the errors name the exact references the static evidence missed — that failure has caught real detector mistakes and stopped build-breaking deletions.
 
 **5. Trim speculative generality.** `unused-params` finds trailing parameters no body ever uses (the classic "options for later"), scoped to removals that are type-safe by construction.
 
 **6. Keep frontend reuse honest.** React and Vue have dedicated frontend hygiene checks: component-duplicate commands compare JSX/template structure, hook/composable commands compare state/effect/request behavior, and large-component/view commands flag files that concentrate too many reasons to change. `health` includes these as hygiene pressure, while `incomplete-migration` remains the direct check for a hook/composable/helper extraction that was wired into some sites but not all of them.
 
-**7. Surface hidden coupling.** `co-change` finds file pairs that repeatedly change in the same commits with *no* dependency edge — schema ↔ generated inventory ↔ doc triangles, backend schemas ↔ frontend stores, `.env.example` ↔ its parser. The reference graph cannot see these; the change graph can.
+**7. Surface hidden coupling.** `co-change` finds file pairs that repeatedly change in the same commits with _no_ dependency edge — schema ↔ generated inventory ↔ doc triangles, backend schemas ↔ frontend stores, `.env.example` ↔ its parser. The reference graph cannot see these; the change graph can.
 
-**8. Gate every diff.** `diff-gate` runs a defined set of checks scoped to what a change *introduces* — echoes of established code, incomplete migrations, missing co-change partners, docs that cite the changed files, fresh unused params, new dead symbols, baseline regressions — and exits nonzero with remediation text for each finding:
+**8. Gate every diff.** `diff-gate` runs a defined set of checks scoped to what a change _introduces_ — echoes of established code, incomplete migrations, missing co-change partners, docs that cite the changed files, fresh unused params, new dead symbols, baseline regressions — and exits nonzero with remediation text for each finding:
 
 ```
 [co-change-partner] schema.prisma changed, but scripts/scope-inventory.mjs did not — they change together 12x (86% of the time)
   -> Update scripts/scope-inventory.mjs alongside this change, or confirm the coupling no longer holds.
 ```
 
-**9. Ratchet it in CI.** `health --write-baseline` snapshots finding identities into a committable file; `health --baseline` exits 1 on any *new* finding. "Don't get worse" is an objective gate that no score arithmetic can game.
+**9. Ratchet it in CI.** `health --write-baseline` snapshots finding identities into a committable file; `health --baseline` exits 1 on any _new_ finding. "Don't get worse" is an objective gate that no score arithmetic can game.
 
 Accepted findings can be recorded without weakening the rest of the gate:
 
@@ -187,7 +189,7 @@ Axes:
 
 - **Risk vs. Hygiene** are separate claims: risk components are tied to graph facts and repository-history signals; hygiene components are tidiness. Blending them is how scores become meaningless.
 - **Every deduction is itemized** — the scalar is auditable, not vibes.
-- **The validation axis is a falsifiability loop**: it measures whether flagged files actually attract more fix commits than the rest *in your repo*, per detector. On some codebases a detector tracks repeated fixes; on others it is mostly noise — the tool reports which, instead of assuming.
+- **The validation axis is a falsifiability loop**: it measures whether flagged files actually attract more fix commits than the rest _in your repo_, per detector. On some codebases a detector tracks repeated fixes; on others it is mostly noise — the tool reports which, instead of assuming.
 - **Suppressions are data**: every `// scip-query: ignore-*` comment is a precision label, counted and reported.
 
 ## Accuracy Model
@@ -196,7 +198,7 @@ Evidence tiers are kept explicit, strongest first:
 
 1. **Compiler-backed facts** from the SCIP database (`trace`, `refs`, `deps`, `outline`, ...).
 2. **Semantic augmentation** via `ts-morph` for TypeScript — verified references, callers, callees when SCIP alone is incomplete.
-3. **Source-backed heuristics** (AST/text) for cleanup signals. Always labeled: *"these are candidates, not exact compiler facts."*
+3. **Source-backed heuristics** (AST/text) for cleanup signals. Always labeled: _"these are candidates, not exact compiler facts."_
 4. **Compiler verification** for deletions — the only tier that earns the word "safe."
 
 And because accuracy you don't measure is a feeling, `self-audit` samples symbols and scores the cheap paths against the TypeScript compiler:
@@ -235,18 +237,19 @@ scip-query health --write-baseline   # start the ratchet
 - `scip` CLI, from [Sourcegraph SCIP releases](https://github.com/sourcegraph/scip/releases)
 - A language-specific SCIP indexer for your project
 
-| Language | Indexer | Install |
-|---|---|---|
-| TypeScript / JavaScript / Vue | scip-typescript | `npm install -g @sourcegraph/scip-typescript` |
-| Java / Scala / Kotlin | scip-java | [releases](https://github.com/sourcegraph/scip-java/releases) |
-| Rust | rust-analyzer | Ships with rust-analyzer: `rust-analyzer scip` |
-| Python | scip-python-plus | `npm install -g scip-python-plus` |
-| Go | scip-go | `go install github.com/sourcegraph/scip-go@latest` |
-| Ruby | scip-ruby | [releases](https://github.com/sourcegraph/scip-ruby/releases) |
-| C / C++ | scip-clang | [releases](https://github.com/sourcegraph/scip-clang/releases) |
-| C# / VB | scip-dotnet | [releases](https://github.com/sourcegraph/scip-dotnet/releases) |
-| Dart | scip-dart | [releases](https://github.com/nicovince/scip-dart/releases) |
-| PHP | scip-php | [releases](https://github.com/nicovince/scip-php/releases) |
+| Language                      | Indexer          | Install                                                         |
+| ----------------------------- | ---------------- | --------------------------------------------------------------- |
+| TypeScript / JavaScript / Vue | scip-typescript  | `npm install -g @sourcegraph/scip-typescript`                   |
+| Java / Scala / Kotlin         | scip-java        | [releases](https://github.com/sourcegraph/scip-java/releases)   |
+| Rust                          | rust-analyzer    | Ships with rust-analyzer: `rust-analyzer scip`                  |
+| Python                        | scip-python-plus | `npm install -g scip-python-plus`                               |
+| Go                            | scip-go          | `go install github.com/sourcegraph/scip-go@latest`              |
+| Ruby                          | scip-ruby        | [releases](https://github.com/sourcegraph/scip-ruby/releases)   |
+| C / C++                       | scip-clang       | [releases](https://github.com/sourcegraph/scip-clang/releases)  |
+| C# / VB                       | scip-dotnet      | [releases](https://github.com/sourcegraph/scip-dotnet/releases) |
+| Dart                          | scip-dart        | [releases](https://github.com/nicovince/scip-dart/releases)     |
+| PHP                           | scip-php         | [releases](https://github.com/nicovince/scip-php/releases)      |
+| Clojure / ClojureScript       | scip-clojure     | `npm install -g scip-clojure`                                   |
 
 For Python, the executable may be `scip-python`, `scip-python-plus`, or both. `scip-query` accepts either name.
 
@@ -264,6 +267,19 @@ By default, indexes live in `~/.cache/scip-query/projects/<hash>/`, keeping proj
 
 TypeScript monorepos can opt into project sharding with `indexer.typescript.projectMode: "workspace"`. In that mode, `scip-query` discovers repo-local TypeScript project roots, runs one `scip-typescript` process per project with bounded concurrency, merges the shard protobufs, and still publishes one TypeScript language index. Set `indexer.typescript.projects` to an explicit list of project directories or tsconfig paths when automatic discovery is too broad. Set `indexerConcurrency` when a repo needs a persistent worker cap; CLI `--indexer-concurrency` and `SCIP_QUERY_INDEXER_CONCURRENCY` still override ad hoc runs.
 Use `indexer.typescript.pnpmWorkspaces` only with the default single-project mode; workspace mode passes explicit projects instead.
+
+Clojure projects can pass a project-local `scip-clojure` config file through `.scipquery.json`:
+
+```json
+{
+  "languages": ["clojure"],
+  "indexer": {
+    "clojure": {
+      "configPath": ".scip-clojure.json"
+    }
+  }
+}
+```
 
 Most read-only commands accept `--json` and use the same envelope:
 
@@ -323,12 +339,12 @@ because they share candidate and evidence policy changes:
 
 Useful environment variables:
 
-| Variable | Purpose |
-|---|---|
+| Variable                  | Purpose                             |
+| ------------------------- | ----------------------------------- |
 | `SCIP_QUERY_PROJECT_ROOT` | Override the project root directory |
-| `SCIP_QUERY_INDEX_DB` | Override the SQLite database path |
-| `SCIP_QUERY_INDEX_SCIP` | Override the SCIP protobuf path |
-| `SCIP_QUERY_CACHE_DIR` | Override the cache directory |
+| `SCIP_QUERY_INDEX_DB`     | Override the SQLite database path   |
+| `SCIP_QUERY_INDEX_SCIP`   | Override the SCIP protobuf path     |
+| `SCIP_QUERY_CACHE_DIR`    | Override the cache directory        |
 
 Query results are filtered through the project's `.gitignore`. If none exists, common generated directories such as `dist/`, `target/`, `node_modules/`, and `.venv/` are excluded by default.
 

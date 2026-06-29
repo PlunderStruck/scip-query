@@ -46,6 +46,7 @@ export class Watcher {
   private pnpmWorkspaces: boolean;
   private typescriptProjectMode?: TypeScriptProjectMode;
   private typescriptProjects?: string[];
+  private clojureConfigPath?: string;
   private indexerConcurrency?: number;
 
   private onStatus: (status: WatcherStatus) => void;
@@ -78,6 +79,7 @@ export class Watcher {
     this.pnpmWorkspaces = opts.config.indexer?.typescript?.pnpmWorkspaces ?? false;
     this.typescriptProjectMode = opts.config.indexer?.typescript?.projectMode;
     this.typescriptProjects = opts.config.indexer?.typescript?.projects;
+    this.clojureConfigPath = opts.config.indexer?.clojure?.configPath;
     this.indexerConcurrency = opts.config.indexerConcurrency;
 
     this.onStatus = opts.onStatus ?? (() => {});
@@ -262,6 +264,7 @@ export class Watcher {
       const latestConfig = Object.keys(loadedConfig).length > 0 ? loadedConfig : this.config;
       const latestIndexPaths = resolveIndexPaths(this.projectRoot, latestConfig);
       const latestTypeScript = latestConfig.indexer?.typescript;
+      const latestClojure = latestConfig.indexer?.clojure;
       const child = fork(new URL('./reindex-worker.js', import.meta.url).pathname, [], {
         detached: true,
         env: {
@@ -269,13 +272,14 @@ export class Watcher {
           SCIP_REINDEX_PROJECT_ROOT: this.projectRoot,
           SCIP_REINDEX_OUTPUT_SCIP: latestIndexPaths.indexPath,
           SCIP_REINDEX_OUTPUT_DB: latestIndexPaths.dbPath,
-            SCIP_REINDEX_LANGUAGES: (latestConfig.languages ?? this.languages)?.join(',') ?? '',
-            SCIP_REINDEX_INDEXER_CONCURRENCY: String(latestConfig.indexerConcurrency ?? this.indexerConcurrency ?? ''),
-            SCIP_REINDEX_PNPM_WORKSPACES: (latestTypeScript?.pnpmWorkspaces ?? this.pnpmWorkspaces) ? '1' : '',
-            SCIP_REINDEX_TYPESCRIPT_CONFIG: JSON.stringify({
-              projectMode: latestTypeScript?.projectMode ?? this.typescriptProjectMode,
+          SCIP_REINDEX_LANGUAGES: (latestConfig.languages ?? this.languages)?.join(',') ?? '',
+          SCIP_REINDEX_INDEXER_CONCURRENCY: String(latestConfig.indexerConcurrency ?? this.indexerConcurrency ?? ''),
+          SCIP_REINDEX_PNPM_WORKSPACES: (latestTypeScript?.pnpmWorkspaces ?? this.pnpmWorkspaces) ? '1' : '',
+          SCIP_REINDEX_TYPESCRIPT_CONFIG: JSON.stringify({
+            projectMode: latestTypeScript?.projectMode ?? this.typescriptProjectMode,
             projects: latestTypeScript?.projects ?? this.typescriptProjects ?? [],
           }),
+          SCIP_REINDEX_CLOJURE_CONFIG_PATH: latestClojure?.configPath ?? this.clojureConfigPath ?? '',
           SCIP_REINDEX_TRIGGER_KIND: trigger.kind,
           SCIP_REINDEX_TRIGGER_DETAIL: trigger.detail ?? '',
         },

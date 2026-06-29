@@ -51,8 +51,9 @@ export class ProjectIndex {
 
   sourceFallbackCallerFiles(
     definitions: ReadonlyArray<IndexedDefinition>,
+    opts: { skipPath?: (relativePath: string) => boolean } = {},
   ): ReturnType<typeof sourceFallbackCallerEvidenceMap> {
-    return sourceFallbackCallerEvidenceMap(this.db, definitions);
+    return sourceFallbackCallerEvidenceMap(this.db, definitions, opts);
   }
 
   callerFileMap(

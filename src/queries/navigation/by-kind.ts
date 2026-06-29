@@ -3,6 +3,8 @@ import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { getAllDefinitions } from '../../symbols/definition-catalog.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { leafSuffix, parseSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
+import { SymbolInformation_Kind } from '@c4312/scip';
+import { SCIP_KIND_BY_NAME, SCIP_KIND_NAMES, scipKindName } from '../../symbols/symbol-kind.js';
 
 export interface ByKindResult {
   symbol: string;
@@ -12,103 +14,6 @@ export interface ByKindResult {
   relativePath: string;
   startLine: number;
   endLine: number;
-}
-
-/**
- * SCIP SymbolInformation.Kind enum values.
- * From: https://github.com/sourcegraph/scip/blob/main/scip.proto
- */
-const KIND_NAMES: Record<number, string> = {
-  0: 'UnspecifiedKind',
-  1: 'AbstractMethod',
-  2: 'Accessor',
-  3: 'Array',
-  4: 'Assertion',
-  5: 'AssociatedType',
-  6: 'Attribute',
-  7: 'Axiom',
-  8: 'Boolean',
-  9: 'Class',
-  10: 'Constant',
-  11: 'Constructor',
-  12: 'Contract',
-  13: 'DataFamily',
-  14: 'DefinitionMacro',
-  15: 'Delegate',
-  16: 'Enum',
-  17: 'EnumMember',
-  18: 'Error',
-  19: 'Event',
-  20: 'Fact',
-  21: 'Field',
-  22: 'File',
-  23: 'Function',
-  24: 'Getter',
-  25: 'Grammar',
-  26: 'Instance',
-  27: 'Interface',
-  28: 'Key',
-  29: 'Lang',
-  30: 'Lemma',
-  31: 'Library',
-  32: 'Macro',
-  33: 'Method',
-  34: 'MethodAlias',
-  35: 'MethodReceiver',
-  36: 'MethodSpecification',
-  37: 'Message',
-  38: 'Modifier',
-  39: 'Module',
-  40: 'Namespace',
-  41: 'Null',
-  42: 'Number',
-  43: 'Object',
-  44: 'Operator',
-  45: 'Package',
-  46: 'PackageObject',
-  47: 'Parameter',
-  48: 'ParameterLabel',
-  49: 'Pattern',
-  50: 'Predicate',
-  51: 'Property',
-  52: 'Protocol',
-  53: 'ProtocolMethod',
-  54: 'PureVirtualMethod',
-  55: 'Quasiquoter',
-  56: 'SelfParameter',
-  57: 'Setter',
-  58: 'Signature',
-  59: 'SingletonClass',
-  60: 'SingletonMethod',
-  61: 'StaticDataMember',
-  62: 'StaticEvent',
-  63: 'StaticField',
-  64: 'StaticMethod',
-  65: 'StaticProperty',
-  66: 'StaticVariable',
-  67: 'String',
-  68: 'Struct',
-  69: 'Subscript',
-  70: 'Tactic',
-  71: 'Theorem',
-  72: 'ThisParameter',
-  73: 'Trait',
-  74: 'TraitMethod',
-  75: 'Type',
-  76: 'TypeAlias',
-  77: 'TypeClass',
-  78: 'TypeClassMethod',
-  79: 'TypeFamily',
-  80: 'TypeParameter',
-  81: 'Union',
-  82: 'Value',
-  83: 'Variable',
-};
-
-/** Reverse lookup: name -> kind number */
-const KIND_BY_NAME = new Map<string, number>();
-for (const [k, v] of Object.entries(KIND_NAMES)) {
-  KIND_BY_NAME.set(v.toLowerCase(), Number(k));
 }
 
 const KIND_COUNT_PATH_BATCH_SIZE = 500;
@@ -121,11 +26,11 @@ function resolveKindQuery(kindQuery: string): number | null {
   if (!isNaN(asNum)) return asNum;
 
   const lower = kindQuery.toLowerCase();
-  const exact = KIND_BY_NAME.get(lower);
+  const exact = SCIP_KIND_BY_NAME.get(lower);
   if (exact !== undefined) return exact;
 
-  for (const [name, num] of KIND_BY_NAME) {
-    if (name.includes(lower)) return num;
+  for (const [kind, name] of SCIP_KIND_NAMES) {
+    if (name.toLowerCase().includes(lower)) return kind;
   }
   return null;
 }
@@ -157,7 +62,7 @@ export function byKind(
     symbol: row.symbol,
     shortName: shortenSymbol(row.symbol),
     kind: resolvedKind!,
-    kindName: KIND_NAMES[resolvedKind!] ?? 'Unknown',
+    kindName: scipKindName(resolvedKind!),
     relativePath: row.relative_path,
     startLine: row.start_line,
     endLine: row.end_line,
@@ -181,7 +86,7 @@ export function kindCounts(
     .sort((a, b) => b[1] - a[1] || a[0] - b[0])
     .map(([kind, count]) => ({
       kind,
-      kindName: KIND_NAMES[kind] ?? 'Unknown',
+      kindName: scipKindName(kind),
       count,
     }));
 }
@@ -289,11 +194,11 @@ function normalizeIndexedKind(kind: number, symbol: string, documentation: strin
   const suffix = leafSuffix(symbol);
 
   if (suffix === 'type') {
-    if (signature.includes('type ')) return 76;
-    if (signature.includes('interface ')) return 27;
-    if (signature.includes('struct ')) return 68;
-    if (signature.includes('trait ')) return 73;
-    if (signature.includes('class ')) return 9;
+    if (signature.includes('type ')) return SymbolInformation_Kind.TypeAlias;
+    if (signature.includes('interface ')) return SymbolInformation_Kind.Interface;
+    if (signature.includes('struct ')) return SymbolInformation_Kind.Struct;
+    if (signature.includes('trait ')) return SymbolInformation_Kind.Trait;
+    if (signature.includes('class ')) return SymbolInformation_Kind.Class;
   }
 
   return kind;
@@ -310,27 +215,27 @@ function inferKindNumber(symbol: string, documentation: string | null, enclosing
   const suffix = leafSuffix(symbol);
   const signature = (documentation ?? '').toLowerCase();
   if (suffix === 'type') {
-    if (signature.includes('type ')) return 76;
-    if (signature.includes('interface ')) return 27;
-    if (signature.includes('struct ')) return 68;
-    if (signature.includes('trait ')) return 73;
-    if (signature.includes('class ')) return 9;
-    return 9; // Class fallback when the index does not expose richer type metadata
+    if (signature.includes('type ')) return SymbolInformation_Kind.TypeAlias;
+    if (signature.includes('interface ')) return SymbolInformation_Kind.Interface;
+    if (signature.includes('struct ')) return SymbolInformation_Kind.Struct;
+    if (signature.includes('trait ')) return SymbolInformation_Kind.Trait;
+    if (signature.includes('class ')) return SymbolInformation_Kind.Class;
+    return SymbolInformation_Kind.Class; // Class fallback when the index does not expose richer type metadata
   }
   if (suffix === 'method') {
-    return parent?.suffix === 'type' ? 33 : 23;
+    return parent?.suffix === 'type' ? SymbolInformation_Kind.Method : SymbolInformation_Kind.Function;
   }
-  if (suffix === 'namespace') return 39; // Module
+  if (suffix === 'namespace') return SymbolInformation_Kind.Module;
   if (suffix !== 'term') return null;
 
   if (signature.includes('async def ') || signature.includes('def ')) {
-    return 23; // Function
+    return SymbolInformation_Kind.Function;
   }
 
   const enclosingSuffix = enclosingSymbol ? leafSuffix(enclosingSymbol) : (parent?.suffix ?? null);
   if (enclosingSuffix === 'type') {
-    return 21; // Field
+    return SymbolInformation_Kind.Field;
   }
 
-  return 83; // Variable / term fallback
+  return SymbolInformation_Kind.Variable;
 }

@@ -195,14 +195,15 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
         outputScip: paths.indexPath,
         outputDb: paths.dbPath,
         pnpmWorkspaces: config.indexer?.typescript?.pnpmWorkspaces,
-          typescriptProjectMode: config.indexer?.typescript?.projectMode,
-          typescriptProjects: config.indexer?.typescript?.projects,
-          skipIfUnchanged: true,
-          allowPartial: true,
-          indexerConcurrency: config.indexerConcurrency,
-          trigger: { kind: 'setup', detail: 'scip-query setup' },
-          onStatus: (message) => reindexMessages.push(message),
-        });
+        typescriptProjectMode: config.indexer?.typescript?.projectMode,
+        typescriptProjects: config.indexer?.typescript?.projects,
+        clojureConfigPath: config.indexer?.clojure?.configPath,
+        skipIfUnchanged: true,
+        allowPartial: true,
+        indexerConcurrency: config.indexerConcurrency,
+        trigger: { kind: 'setup', detail: 'scip-query setup' },
+        onStatus: (message) => reindexMessages.push(message),
+      });
       addStep(steps, {
         id: 'reindex',
         label: 'Index refresh',
