@@ -9,7 +9,8 @@ import {
   crossFileCallerEvidenceMap,
   sourceFallbackCallerEvidenceMap,
 } from '../symbols/references/caller-evidence.js';
-import { detectAstLanguage, frameworkSourceReferences, getSourceFacts } from '../source/ast.js';
+import { detectAstLanguage, frameworkSourceReferences } from '../source/ast.js';
+import { sourceEvidence } from '../source/source-evidence.js';
 import { getSourceFiles } from '../source/source-fileset.js';
 import { hasSuppressionComment } from '../source/source-text.js';
 import { scanSourceReferences } from '../symbols/references/source-reference-scan.js';
@@ -139,7 +140,7 @@ export class ProjectIndex {
   callableSignature(
     definition: Pick<IndexedDefinition, 'relativePath' | 'startLine' | 'endLine'>,
   ): { paramCount: number } | null {
-    const callable = getSourceFacts(this.db, definition.relativePath)?.callables.find(
+    const callable = sourceEvidence(this.db).forFile(definition.relativePath, { facts: true }).facts?.callables.find(
       (candidate) => candidate.startLine === definition.startLine && candidate.endLine === definition.endLine,
     );
     return callable ? { paramCount: callable.paramCount } : null;

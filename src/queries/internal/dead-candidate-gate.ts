@@ -84,6 +84,8 @@ function rejectDeadCandidate(rejectionReason: DeadCandidateRejectionReason): Dea
   return { accepted: false, rejectionReason };
 }
 
+// scip-query: ignore-wrapper — dead.ts reads this as candidate-shape policy;
+// keep the symbol-shape rule named beside the other dead candidate gates.
 export function looksValueLikeDefinition(rawSymbol: string): boolean {
   return isFunctionLikeSymbol(rawSymbol) || rawSymbol.endsWith('().') || rawSymbol.endsWith('.');
 }

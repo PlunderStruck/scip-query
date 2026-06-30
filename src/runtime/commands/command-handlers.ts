@@ -26,7 +26,7 @@ import { setupCiWorkflow } from '../setup-ci.js';
 import { installSkills, isScipInstalled, printScipInstallInstructions } from '../setup.js';
 import { ALL_SOURCE_EXTENSIONS } from '../../source/source-fileset.js';
 import { healthPhases } from '../../queries/health/health.js';
-import { writeProfileEvent } from '../profile.js';
+import { writeProfileEvent } from '../../instrumentation/profile.js';
 import {
   collect,
   formatBytes,

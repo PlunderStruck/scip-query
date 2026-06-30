@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ScipDatabase } from '../../src/storage/db.js';
 import {
+  gitEvidenceProduct,
   getChangeAmplification,
   getCoChangePairs,
   getCoChangePairsForFiles,
@@ -93,9 +94,42 @@ describe('git history evidence', () => {
     expect(history!.commits[0]!.files).toContain('a.ts');
   });
 
+  it('exposes git history facts through the product contract', () => {
+    const git = gitEvidenceProduct(fakeDb(repoRoot));
+    const capability = git.capability('file-add-records');
+
+    expect(capability).toEqual(expect.objectContaining({ available: true, slot: 'file-add-records' }));
+    expect(capability.head).toMatch(/[a-f0-9]{40}/);
+    expect(git.commitHistory()?.commits).toHaveLength(6);
+    expect(git.trackedFiles()?.has('guide.md')).toBe(true);
+    expect(git.fileAddRecords()?.get('a.ts')).toEqual(expect.objectContaining({ addedAt: expect.any(Number) }));
+    expect(git.fileChurn()?.get('a.ts')).toEqual(expect.objectContaining({ changes: 5, fixChanges: 1 }));
+    expect(git.changeAmplification()).toEqual(expect.objectContaining({ commitsAnalyzed: 6 }));
+
+    const pairs = git.coChangePairs({ minTogether: 3, minConfidence: 0.6 })!;
+    expect(pairs).toEqual(expect.arrayContaining([expect.objectContaining({ fileA: 'a.ts', fileB: 'b.ts' })]));
+
+    const firstDirectional = git.directionalCoChangePairsForFiles(new Set(['a.ts']), {
+      minTogether: 3,
+      minConfidence: 0,
+    })!;
+    const secondDirectional = git.directionalCoChangePairsForFiles(new Set(['a.ts']), {
+      minTogether: 3,
+      minConfidence: 0,
+    })!;
+    expect(secondDirectional).toEqual(firstDirectional);
+    expect(secondDirectional).not.toBe(firstDirectional);
+  });
+
   it('returns null outside a git repository', () => {
     const outside = mkdtempSync(join(tmpdir(), 'scip-no-git-'));
     expect(getCommitHistory(fakeDb(outside))).toBeNull();
+    expect(gitEvidenceProduct(fakeDb(outside)).capability('commit-history')).toEqual({
+      available: false,
+      head: null,
+      reason: 'git history is unavailable for this project',
+      slot: 'commit-history',
+    });
     rmSync(outside, { recursive: true, force: true });
   });
 

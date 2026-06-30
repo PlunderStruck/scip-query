@@ -1,7 +1,11 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
 import { jaccard } from '../../analysis/similarity.js';
-import { rankedPairwiseProfileResults, type PairwiseFileProfile } from '../internal/pairwise-profiles.js';
+import {
+  pairwiseCandidateIndexFromKeys,
+  rankedPairwiseProfileResults,
+  type PairwiseFileProfile,
+} from '../internal/pairwise-profiles.js';
 
 export interface SimilarFileResult {
   fileA: string;
@@ -41,12 +45,15 @@ export function similarFiles(
 
   // Build dependency profile for each file
   const { profiles, distinctiveDeps } = buildFileProfiles(db, { scope, minDeps });
+  const candidateIndex = pairwiseCandidateIndexFromKeys(profiles, (profile) => profile.deps);
 
   return rankedPairwiseProfileResults({
     profiles,
     limit,
     filePattern,
     overrunFactor: 5,
+    candidateIndex,
+    profile: { name: 'similar-files' },
     compare: (a, b) => compareProfiles(a, b, minSimilarity, distinctiveDeps),
   });
 }

@@ -178,3 +178,10 @@ The `diff-gate.ts` pilot references remain accurate. The current focused
 history change keeps `diffGate()` and `DIFF_GATE_CHECKS` intact while reducing
 the co-change partner check's git-history input to changed-file commits in the
 same bounded window.
+
+## 2026-06-30 Git Evidence Product Follow-Up
+
+The `diff-gate.ts` and `health.ts` pilot references remain accurate after the
+Git evidence product migration. The validation conclusions still refer to the
+same diff-gate check surface and health summary; Git history access is now
+centralized behind `gitEvidenceProduct()`.

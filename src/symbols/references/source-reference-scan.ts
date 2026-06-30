@@ -5,7 +5,7 @@ import { createCandidateNameMatcher, sourceMayContainCandidateName } from '../..
 import { getSourceText } from '../../source/source-text.js';
 import { attributeIdentifier, attributeIdentifierPermissive } from '../identifier-attribution.js';
 import { getIdentifierLineMap } from '../identifier-index.js';
-import { profileSpan } from '../../runtime/profile.js';
+import { profileSpan } from '../../instrumentation/profile.js';
 
 type SourceReferenceKind = 'identifier' | FrameworkSourceReferenceKind;
 type DefaultSourceReferenceTarget = ReturnType<typeof attributeIdentifier>[number];

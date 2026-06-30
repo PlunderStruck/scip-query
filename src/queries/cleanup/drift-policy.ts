@@ -39,6 +39,7 @@ function srcLayerName(layer: string): string | null {
 }
 
 function isAllowedSrcLayerDependency(from: string, to: string): boolean {
+  if (to === 'instrumentation') return true;
   if (to === 'domain') return true;
   if (from === 'domain') return false;
 

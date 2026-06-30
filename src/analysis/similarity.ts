@@ -77,6 +77,8 @@ export function computeIdf<T>(documents: ReadonlyArray<Set<T>>): Map<T, number> 
   return computeIdfFromDocFreq(docFreq, n);
 }
 
+// scip-query: ignore-wrapper — similarity hot paths reuse precomputed doc
+// frequencies; keep the IDF formula named and testable.
 export function computeIdfFromDocFreq<T>(docFreq: ReadonlyMap<T, number>, documentCount: number): Map<T, number> {
   if (documentCount <= 0) return new Map();
 
@@ -88,6 +90,8 @@ export function computeIdfFromDocFreq<T>(docFreq: ReadonlyMap<T, number>, docume
 }
 
 /** Median IDF weight in the index. Used as the trivial/significant split. */
+// scip-query: ignore-wrapper — this names the significant/trivial split policy
+// used by similarity output and avoids burying it inside candidate scoring.
 export function getMedianIdf<T>(idf: ReadonlyMap<T, number>): number {
   const values = [...idf.values()].sort((a, b) => a - b);
   if (values.length === 0) return 0;
@@ -108,6 +112,8 @@ export interface WeightedCosineResult<T> {
  * many others can compute this once per item and reuse it for exact cosine
  * scoring.
  */
+// scip-query: ignore-wrapper — callers cache this vector length in hot loops;
+// keep the reusable weighted-cosine primitive explicit.
 export function weightedMagnitude<T>(features: Set<T>, idf: ReadonlyMap<T, number>): number {
   let squared = 0;
   for (const feature of features) {

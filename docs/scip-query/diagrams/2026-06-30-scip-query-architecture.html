@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>scip-query Architecture</title>
+  <style>
+    :root {
+      --ink: #18202a;
+      --muted: #586476;
+      --paper: #f7f4ed;
+      --panel: #ffffff;
+      --line: #c8d0d9;
+      --runtime: #276b7a;
+      --index: #7d4e24;
+      --store: #3e6b43;
+      --query: #6954a5;
+      --risk: #a64048;
+      --soft-runtime: #e4f1f3;
+      --soft-index: #f4eadf;
+      --soft-store: #e7f1e7;
+      --soft-query: #eeeaf8;
+      --soft-risk: #f7e6e8;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px 24px 48px;
+    }
+
+    header {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      margin-bottom: 0;
+      font-size: clamp(30px, 4vw, 50px);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin-bottom: 12px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin-bottom: 8px;
+      font-size: 16px;
+      letter-spacing: 0;
+    }
+
+    .lede {
+      max-width: 820px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin: 22px 0 30px;
+    }
+
+    .summary-card,
+    section {
+      background: var(--panel);
+      border: 1px solid rgba(24, 32, 42, 0.12);
+      border-radius: 8px;
+      box-shadow: 0 8px 22px rgba(24, 32, 42, 0.06);
+    }
+
+    .summary-card {
+      min-height: 126px;
+      padding: 16px;
+    }
+
+    .summary-card strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--ink);
+    }
+
+    .summary-card p {
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    section {
+      margin: 18px 0;
+      padding: 22px;
+    }
+
+    .diagram-wrap {
+      overflow-x: auto;
+      padding-bottom: 6px;
+    }
+
+    svg {
+      display: block;
+      min-width: 1040px;
+      width: 100%;
+      height: auto;
+    }
+
+    .box {
+      fill: #fff;
+      stroke-width: 1.5;
+      rx: 8;
+    }
+
+    .runtime { stroke: var(--runtime); fill: var(--soft-runtime); }
+    .index { stroke: var(--index); fill: var(--soft-index); }
+    .store { stroke: var(--store); fill: var(--soft-store); }
+    .query { stroke: var(--query); fill: var(--soft-query); }
+    .risk { stroke: var(--risk); fill: var(--soft-risk); }
+    .neutral { stroke: var(--line); fill: #fff; }
+
+    .label {
+      fill: var(--ink);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .small {
+      fill: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .lane-title {
+      fill: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    .flow {
+      fill: none;
+      stroke: #637083;
+      stroke-width: 2;
+      marker-end: url(#arrow);
+    }
+
+    .flow-soft {
+      fill: none;
+      stroke: #9aa5b5;
+      stroke-width: 1.5;
+      stroke-dasharray: 5 5;
+      marker-end: url(#arrow-soft);
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .swatch {
+      width: 15px;
+      height: 15px;
+      border-radius: 4px;
+      border: 1px solid rgba(24, 32, 42, 0.2);
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 18px;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    li + li {
+      margin-top: 8px;
+    }
+
+    code {
+      padding: 1px 5px;
+      background: rgba(24, 32, 42, 0.08);
+      border-radius: 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 8px;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(24, 32, 42, 0.1);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #eef0f2;
+      font-size: 13px;
+    }
+
+    td {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    @media (max-width: 820px) {
+      main {
+        padding: 24px 14px 36px;
+      }
+
+      .summary-grid,
+      .two-col {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>scip-query Architecture</h1>
+      <p class="lede">
+        This diagram explains scip-query as a code-intelligence tool: a program that turns real project files into a queryable body of compiler, source, semantic, and git evidence, then runs focused analyses over that evidence.
+      </p>
+    </header>
+
+    <div class="summary-grid" aria-label="architecture summary">
+      <div class="summary-card">
+        <strong>Runtime shell</strong>
+        <p>The command-line layer resolves project config, opens the active SQLite index, registers commands, and renders text or JSON.</p>
+      </div>
+      <div class="summary-card">
+        <strong>Indexing pipeline</strong>
+        <p>Reindexing detects language projects, runs SCIP indexers, merges their output, converts it to SQLite, and publishes fresh artifacts.</p>
+      </div>
+      <div class="summary-card">
+        <strong>Evidence model</strong>
+        <p>The central read model combines SQLite rows with source facts, AST facts, semantic provider facts, caches, and git/config policy.</p>
+      </div>
+      <div class="summary-card">
+        <strong>Query families</strong>
+        <p>Navigation, graph, cleanup, impact, frontend, quality, health, and diff-gate commands are different views over the same evidence.</p>
+      </div>
+    </div>
+
+    <section>
+      <h2>System Flow</h2>
+      <div class="diagram-wrap">
+        <svg viewBox="0 0 1120 720" role="img" aria-labelledby="diagram-title diagram-desc">
+          <title id="diagram-title">scip-query high-level architecture</title>
+          <desc id="diagram-desc">Two main flows: source files are indexed into SQLite evidence, and CLI commands query the evidence through the runtime and analysis layers.</desc>
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#637083"></path>
+            </marker>
+            <marker id="arrow-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#9aa5b5"></path>
+            </marker>
+          </defs>
+
+          <text x="40" y="34" class="lane-title">Project inputs</text>
+          <text x="310" y="34" class="lane-title">Runtime and indexing</text>
+          <text x="600" y="34" class="lane-title">Evidence store</text>
+          <text x="845" y="34" class="lane-title">Queries and outputs</text>
+
+          <rect x="40" y="64" width="205" height="94" class="box neutral"></rect>
+          <text x="60" y="96" class="label">Project files</text>
+          <text x="60" y="121" class="small">TypeScript, Vue, Rust, Clojure, docs</text>
+          <text x="60" y="143" class="small">plus git history and config</text>
+
+          <rect x="40" y="205" width="205" height="86" class="box neutral"></rect>
+          <text x="60" y="235" class="label">User command</text>
+          <text x="60" y="260" class="small">scip-query health, refs,</text>
+          <text x="60" y="280" class="small">diff-gate, cleanup-plan, etc.</text>
+
+          <rect x="305" y="64" width="235" height="94" class="box index"></rect>
+          <text x="327" y="96" class="label">Reindex pipeline</text>
+          <text x="327" y="121" class="small">detect projects, run indexers, merge</text>
+          <text x="327" y="143" class="small">SCIP output, convert to SQLite</text>
+
+          <rect x="305" y="205" width="235" height="86" class="box runtime"></rect>
+          <text x="327" y="235" class="label">CLI runtime</text>
+          <text x="327" y="260" class="small">register descriptors, parse args,</text>
+          <text x="327" y="280" class="small">open DB, render output</text>
+
+          <rect x="305" y="335" width="235" height="96" class="box runtime"></rect>
+          <text x="327" y="366" class="label">Command wrappers</text>
+          <text x="327" y="391" class="small">list/table/sectioned reports</text>
+          <text x="327" y="413" class="small">budgeted full vs fast analyses</text>
+
+          <rect x="600" y="64" width="220" height="86" class="box store"></rect>
+          <text x="622" y="96" class="label">SQLite SCIP index</text>
+          <text x="622" y="121" class="small">documents, symbols, definitions,</text>
+          <text x="622" y="141" class="small">occurrences, metadata</text>
+
+          <rect x="600" y="188" width="220" height="110" class="box store"></rect>
+          <text x="622" y="220" class="label">Evidence caches</text>
+          <text x="622" y="245" class="small">per-DB cache, source facts,</text>
+          <text x="622" y="265" class="small">semantic references, call maps,</text>
+          <text x="622" y="285" class="small">dependency digests</text>
+
+          <rect x="600" y="345" width="220" height="100" class="box store"></rect>
+          <text x="622" y="377" class="label">ProjectIndex read model</text>
+          <text x="622" y="402" class="small">production callables, callers,</text>
+          <text x="622" y="422" class="small">callees, file graph, references</text>
+
+          <rect x="865" y="64" width="215" height="108" class="box query"></rect>
+          <text x="887" y="96" class="label">Navigation and graph</text>
+          <text x="887" y="121" class="small">outline, deps, refs, trace,</text>
+          <text x="887" y="141" class="small">call-graph, coupling, cycles,</text>
+          <text x="887" y="161" class="small">affected, hotspots</text>
+
+          <rect x="865" y="214" width="215" height="122" class="box query"></rect>
+          <text x="887" y="246" class="label">Cleanup and quality</text>
+          <text x="887" y="271" class="small">dead, isolated, wrappers,</text>
+          <text x="887" y="291" class="small">duplicates, extraction candidates,</text>
+          <text x="887" y="311" class="small">complexity, self-audit</text>
+
+          <rect x="865" y="382" width="215" height="132" class="box risk"></rect>
+          <text x="887" y="414" class="label">Health and diff-gate</text>
+          <text x="887" y="439" class="small">health phases aggregate</text>
+          <text x="887" y="459" class="small">cleanup/quality/frontend signals;</text>
+          <text x="887" y="479" class="small">diff-gate scopes checks to</text>
+          <text x="887" y="499" class="small">changed files and co-change risk</text>
+
+          <rect x="600" y="525" width="220" height="86" class="box neutral"></rect>
+          <text x="622" y="557" class="label">Policy inputs</text>
+          <text x="622" y="582" class="small">.scipquery.json suppressions,</text>
+          <text x="622" y="602" class="small">declared couplings, git baseline</text>
+
+          <rect x="865" y="552" width="215" height="70" class="box neutral"></rect>
+          <text x="887" y="584" class="label">Rendered answers</text>
+          <text x="887" y="609" class="small">terminal reports, JSON, docs</text>
+
+          <path d="M 245 111 H 305" class="flow"></path>
+          <path d="M 540 111 H 600" class="flow"></path>
+          <path d="M 710 150 V 188" class="flow"></path>
+          <path d="M 245 248 H 305" class="flow"></path>
+          <path d="M 423 291 V 335" class="flow"></path>
+          <path d="M 540 383 H 600" class="flow"></path>
+          <path d="M 710 298 V 345" class="flow"></path>
+          <path d="M 820 390 C 850 372, 850 142, 865 118" class="flow"></path>
+          <path d="M 820 400 C 850 397, 850 292, 865 276" class="flow"></path>
+          <path d="M 820 412 C 850 418, 850 448, 865 448" class="flow"></path>
+          <path d="M 710 525 V 445" class="flow-soft"></path>
+          <path d="M 972 514 V 552" class="flow"></path>
+
+          <rect x="323" y="525" width="217" height="96" class="box neutral"></rect>
+          <text x="345" y="557" class="label">Language helpers</text>
+          <text x="345" y="582" class="small">AST parsers, TypeScript provider,</text>
+          <text x="345" y="602" class="small">Vue augmentation, source scanners</text>
+          <path d="M 540 573 C 570 558, 580 285, 600 256" class="flow-soft"></path>
+        </svg>
+      </div>
+
+      <div class="legend" aria-label="legend">
+        <span><i class="swatch" style="background: var(--soft-runtime); border-color: var(--runtime);"></i>Runtime orchestration</span>
+        <span><i class="swatch" style="background: var(--soft-index); border-color: var(--index);"></i>Index construction</span>
+        <span><i class="swatch" style="background: var(--soft-store); border-color: var(--store);"></i>Evidence and read models</span>
+        <span><i class="swatch" style="background: var(--soft-query); border-color: var(--query);"></i>Query families</span>
+        <span><i class="swatch" style="background: var(--soft-risk); border-color: var(--risk);"></i>Health/risk gates</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>What The Main Concepts Mean</h2>
+      <div class="two-col">
+        <div>
+          <h3>Architecture</h3>
+          <p>The architecture is the arrangement of this program's parts by which project files become reliable answers. In this repo, the important parts are the runtime shell, indexing pipeline, evidence store, read model, and query families.</p>
+
+          <h3>SCIP</h3>
+          <p>SCIP is a compiler-produced code-index format: a structured record of documents, symbols, definitions, and occurrences that lets tools identify code by compiler-resolved identity instead of by text search alone.</p>
+
+          <h3>Index</h3>
+          <p>An index is the stored representation of code facts created so later commands can search and analyze the project quickly without re-reading every file from scratch.</p>
+        </div>
+        <div>
+          <h3>Read Model</h3>
+          <p>A read model is an object shaped for answering questions rather than storing raw facts. <code>ProjectIndex</code> is the main read model here: it presents definitions, caller maps, callee maps, source references, and file dependencies to query code.</p>
+
+          <h3>Evidence Graph</h3>
+          <p>The evidence graph is the connected body of facts the queries use: SCIP rows, source facts, AST facts, semantic TypeScript facts, git/config policy, and cached relationships. Its essential role is to explain why a command's answer is justified.</p>
+
+          <h3>Health Score</h3>
+          <p>The health score is a summarized quality signal built from multiple query families. It is not a separate database; it is an aggregate report over dead code, isolation, duplication, wrappers, drift, complexity, frontend pressure, suppressions, and git evidence.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>How To Read It</h2>
+      <ul>
+        <li><strong>Indexing path:</strong> real project files enter <code>src/reindex/index.ts</code>; language indexers produce SCIP output; scip-query converts and publishes a fresh SQLite database.</li>
+        <li><strong>Command path:</strong> a user command enters runtime descriptors; execution wrappers open the active <code>ScipDatabase</code>; query functions run over the shared evidence; renderers return text or JSON.</li>
+        <li><strong>Optimization boundary:</strong> performance work mostly belongs in reindexing, database access, evidence caches, semantic providers, and query algorithms. The runtime descriptor layer should usually stay thin.</li>
+        <li><strong>Health boundary:</strong> health and diff-gate are consumers of the evidence system. They should improve when low-quality evidence or analyzer noise improves, but they should not become the only place where correctness is enforced.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Evidence Used</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Probe</th>
+            <th>What it established</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>node dist/cli.js reindex</code> and <code>node dist/cli.js status --capabilities</code></td>
+            <td>The local index is fresh, TypeScript semantic support is available, cleanup detectors are available, compiler cleanup verification is available, and diff-gate is available.</td>
+          </tr>
+          <tr>
+            <td><code>node dist/cli.js outline src/runtime/commands/command-handlers.ts</code></td>
+            <td>Runtime handlers include reindex, health, bench, setup, status, watch, capability, and config operations.</td>
+          </tr>
+          <tr>
+            <td><code>node dist/cli.js outline src/reindex/index.ts</code></td>
+            <td>Reindexing is a multi-stage pipeline: prepare runs, run language indexers, collect outputs, validate, materialize SCIP, convert to SQLite, and publish artifacts.</td>
+          </tr>
+          <tr>
+            <td><code>node dist/cli.js deps src/core/project-index.ts</code></td>
+            <td><code>ProjectIndex</code> composes storage, source facts, AST facts, symbol catalogs, caller/callee evidence, reference scans, and file dependency graphs.</td>
+          </tr>
+          <tr>
+            <td><code>node dist/cli.js deps src/queries/index.ts</code></td>
+            <td>The query surface is organized into navigation, cleanup, graph, impact, frontend, health, and quality modules.</td>
+          </tr>
+          <tr>
+            <td><code>node dist/cli.js outline src/queries/health/health.ts</code></td>
+            <td>Health aggregates phase runners and summarizers rather than owning a separate fact store.</td>
+          </tr>
+          <tr>
+            <td><code>node dist/cli.js outline src/queries/impact/diff-gate.ts</code></td>
+            <td>Diff-gate is a changed-code risk gate over echo, incomplete migration, co-change, doc-reference, unused-parameter, new-dead, and baseline checks.</td>
+          </tr>
+          <tr>
+            <td><code>node dist/cli.js outline src/source/source-facts.ts</code> and <code>node dist/cli.js outline src/semantic/shared-primitives.ts</code></td>
+            <td>Source facts and semantic facts supplement raw SCIP rows with callables, calls, references, signatures, import usage, caller maps, and callee maps.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Omissions And Compression</h2>
+      <p>This is a module-level architecture diagram, not a complete call graph. It collapses individual query implementations, all language-specific parser details, and renderer formatting code so the main causal path stays visible: files become evidence, evidence becomes query answers.</p>
+    </section>
+  </main>
+</body>
+</html>

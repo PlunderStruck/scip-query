@@ -14,7 +14,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { buildFileDepGraph } from '../symbols/graph/file-dep-graph.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
-import { getSourceFacts } from '../source/ast.js';
+import { sourceEvidence } from '../source/source-evidence.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import { leafName } from '../symbols/symbol-parser.js';
 import { isPackageSurfaceFile } from './package-surface.js';
@@ -110,7 +110,7 @@ function definesFunctions(db: ScipDatabase, relativePath: string): boolean {
   const normalized = normalizePath(relativePath);
   // AST callables catch arrow functions whose SCIP symbols carry no
   // function marker (`const shutdown = async () => {...}`).
-  const callables = getSourceFacts(db, normalized)?.callables;
+  const callables = sourceEvidence(db).forFile(normalized, { facts: true }).facts?.callables;
   if (callables && callables.length > 0) return true;
   // Fallback without an AST: any multi-line definition is real code,
   // not a re-export line.

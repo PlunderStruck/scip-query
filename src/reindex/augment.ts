@@ -4,6 +4,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { createGitignoreFilter } from '../source/gitignore-filter.js';
 import { AUXILIARY_EXTENSIONS, SKIP_DIRS } from '../source/source-fileset.js';
+import type { PostIndexAugmentationStage } from './post-index-augmentation.js';
 
 export interface AugmentAuxiliaryDocumentsOptions {
   projectRoot: string;
@@ -16,6 +17,24 @@ export interface AugmentAuxiliaryDocumentsResult {
   scanned: number;
   inserted: number;
   existing: number;
+}
+
+export function auxiliaryDocumentsAugmentationStage(
+  opts: {
+    extensions?: readonly string[];
+  } = {},
+): PostIndexAugmentationStage<AugmentAuxiliaryDocumentsResult> {
+  return {
+    id: 'auxiliary-documents',
+    facts: ['auxiliary-document'],
+    run: (context) =>
+      augmentAuxiliaryDocuments({
+        projectRoot: context.projectRoot,
+        dbPath: context.dbPath,
+        extensions: opts.extensions,
+        onStatus: context.onStatus,
+      }),
+  };
 }
 
 /**

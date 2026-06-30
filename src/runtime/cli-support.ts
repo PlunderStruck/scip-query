@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { availableParallelism } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -6,7 +5,12 @@ import type { ScipDatabase } from '../storage/db.js';
 import * as queries from '../queries/index.js';
 import { sourceFrameworkApplicability } from '../source/source-fileset.js';
 import { formatBytes, withDb } from './cli-context.js';
-import { chunked } from './isolated-analysis-runner.js';
+import {
+  chunked,
+  groupAnalysisTasks,
+  runAnalysisTasks,
+  runIsolatedJsonProcessAsync,
+} from './isolated-analysis-runner.js';
 import { render } from './render.js';
 
 const require = createRequire(import.meta.url);
@@ -21,7 +25,6 @@ const LARGE_COMMAND_DOCUMENT_THRESHOLD = 2_500;
 const DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT = 2_500;
 const DEFAULT_HEALTH_PHASE_CONCURRENCY = 4;
 const MAX_DEFAULT_HEALTH_PHASE_CONCURRENCY = 12;
-const HEALTH_PHASE_MAX_BUFFER = 10 * 1024 * 1024;
 const REACT_HEALTH_PHASES = new Set<HealthPhaseName>([
   'react-component-duplicates',
   'react-hook-candidates',
@@ -122,10 +125,8 @@ export async function runIsolatedHealthReport(opts: HealthCliOptions): Promise<H
   });
 
   const runnableTasks = healthPhaseTasks(runnablePhases);
-  const runnableResults = await mapWithConcurrency(
-    runnableTasks,
-    healthPhaseConcurrency(runnableTasks.length),
-    (task) => runHealthPhaseTaskProcess(task, opts),
+  const runnableResults = await runAnalysisTasks(runnableTasks, healthPhaseConcurrency(runnableTasks.length), (task) =>
+    runHealthPhaseTaskProcess(task, opts),
   );
   runnableResults.flat().forEach((result) => resultByPhase.set(result.phase, result));
 
@@ -146,25 +147,7 @@ export function shouldRunHealthPhase(
 }
 
 export function healthPhaseTasks(phases: readonly HealthPhaseName[]): HealthPhaseTask[] {
-  const groupedPhaseSets = [REACT_HEALTH_PHASES, VUE_HEALTH_TASK_PHASES, SIMILAR_EXTRACT_HEALTH_PHASES];
-  const handled = new Set<HealthPhaseName>();
-  const tasks: HealthPhaseTask[] = [];
-
-  for (const phase of phases) {
-    if (handled.has(phase)) continue;
-    const group = groupedPhaseSets.find((set) => set.has(phase));
-    if (!group) {
-      handled.add(phase);
-      tasks.push([phase]);
-      continue;
-    }
-
-    const groupedPhases = phases.filter((candidate) => group.has(candidate));
-    groupedPhases.forEach((candidate) => handled.add(candidate));
-    tasks.push(groupedPhases);
-  }
-
-  return tasks;
+  return groupAnalysisTasks(phases, [REACT_HEALTH_PHASES, VUE_HEALTH_TASK_PHASES, SIMILAR_EXTRACT_HEALTH_PHASES]);
 }
 
 export function skippedHealthPhaseResult(phase: HealthPhaseName): HealthPhaseResult {
@@ -217,92 +200,9 @@ function runHealthPhaseProcess(phase: HealthPhaseName, opts: HealthCliOptions): 
   });
 }
 
-interface AsyncIsolatedJsonProcessOptions {
-  cliPath: string;
-  command: string;
-  args?: readonly string[];
-  env?: NodeJS.ProcessEnv;
-  label: string;
-  maxBuffer?: number;
-}
-
-function runIsolatedJsonProcessAsync<T>(opts: AsyncIsolatedJsonProcessOptions): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const maxBuffer = opts.maxBuffer ?? HEALTH_PHASE_MAX_BUFFER;
-    const child = spawn(process.execPath, [...process.execArgv, opts.cliPath, opts.command, ...(opts.args ?? [])], {
-      cwd: process.cwd(),
-      env: opts.env ?? process.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
-    let stdoutBytes = 0;
-    let stderrBytes = 0;
-    let settled = false;
-
-    const fail = (error: Error): void => {
-      if (settled) return;
-      settled = true;
-      child.kill();
-      reject(error);
-    };
-
-    child.stdout.on('data', (chunk: Buffer) => {
-      stdoutBytes += chunk.length;
-      if (stdoutBytes > maxBuffer) {
-        fail(new Error(`${opts.label} exceeded stdout buffer limit (${maxBuffer} bytes).`));
-        return;
-      }
-      stdout.push(chunk);
-    });
-    child.stderr.on('data', (chunk: Buffer) => {
-      stderrBytes += chunk.length;
-      if (stderrBytes > maxBuffer) {
-        fail(new Error(`${opts.label} exceeded stderr buffer limit (${maxBuffer} bytes).`));
-        return;
-      }
-      stderr.push(chunk);
-    });
-    child.on('error', fail);
-    child.on('close', (code) => {
-      if (settled) return;
-      settled = true;
-      const stderrText = Buffer.concat(stderr).toString('utf8').trim();
-      if (code !== 0) {
-        reject(new Error(`${opts.label} failed${stderrText ? `:\n${stderrText}` : ''}`));
-        return;
-      }
-      try {
-        resolve(JSON.parse(Buffer.concat(stdout).toString('utf8')) as T);
-      } catch (error) {
-        reject(new Error(`${opts.label} returned invalid JSON: ${error instanceof Error ? error.message : error}`));
-      }
-    });
-  });
-}
-
-async function mapWithConcurrency<T, R>(
-  items: readonly T[],
-  concurrency: number,
-  run: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let nextIndex = 0;
-
-  async function worker(): Promise<void> {
-    while (nextIndex < items.length) {
-      const index = nextIndex++;
-      results[index] = await run(items[index]!);
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
-  return results;
-}
-
 // scip-query: ignore-similar — public scheduler entrypoints intentionally share
 // the resolver factory; their env key and default cap are the product variation.
-export const healthPhaseConcurrency: ConcurrencyResolver = createAdaptiveConcurrencyResolver({
+export const healthPhaseConcurrency = createAdaptiveConcurrencyResolver({
   envKey: 'SCIP_QUERY_HEALTH_CONCURRENCY',
   defaultMinimum: DEFAULT_HEALTH_PHASE_CONCURRENCY,
   defaultMaximum: MAX_DEFAULT_HEALTH_PHASE_CONCURRENCY,
@@ -466,7 +366,7 @@ export async function runIsolatedDiffImpactReport(opts: DiffImpactCliOptions): P
   if (plan.kind === 'complete') return plan.result;
 
   const batches = chunked(plan.plan.changedFiles, DIFF_IMPACT_BATCH_SIZE);
-  const partials = await mapWithConcurrency(batches, diffImpactBatchConcurrency(batches.length), (batch) =>
+  const partials = await runAnalysisTasks(batches, diffImpactBatchConcurrency(batches.length), (batch) =>
     runDiffImpactBatchProcess(batch, opts),
   );
   return queries.mergeDiffImpactPartials(plan.plan.changedFiles, partials);
@@ -474,7 +374,7 @@ export async function runIsolatedDiffImpactReport(opts: DiffImpactCliOptions): P
 
 // scip-query: ignore-similar — parallel to healthPhaseConcurrency by design:
 // same adaptive policy, different workload/env key/default cap.
-export const diffImpactBatchConcurrency: ConcurrencyResolver = createAdaptiveConcurrencyResolver({
+export const diffImpactBatchConcurrency = createAdaptiveConcurrencyResolver({
   envKey: 'SCIP_QUERY_DIFF_IMPACT_CONCURRENCY',
   defaultMinimum: DEFAULT_DIFF_IMPACT_BATCH_CONCURRENCY,
   defaultMaximum: MAX_DEFAULT_DIFF_IMPACT_BATCH_CONCURRENCY,

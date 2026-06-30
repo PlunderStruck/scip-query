@@ -11,7 +11,7 @@
 import { execFileSync } from 'node:child_process';
 import type { ScipDatabase } from '../storage/db.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
-import { readCachedFileEvidence, writeCachedFileEvidence } from '../storage/evidence-cache.js';
+import { createFileEvidenceProduct } from '../storage/evidence-products.js';
 
 export interface CommitRecord {
   hash: string;
@@ -72,6 +72,47 @@ export interface CoChangePair {
   subjectContext: CoChangeSubjectContext;
 }
 
+export interface FileAddRecord {
+  /** Commits ago (0 = newest) of the file's earliest known add in the window. */
+  commitsAgo: number;
+  addedAt: number;
+}
+
+export type GitEvidenceSlot =
+  | 'commit-history'
+  | 'file-churn'
+  | 'change-amplification'
+  | 'tracked-files'
+  | 'file-add-records'
+  | 'co-change-pairs'
+  | 'focused-co-change-pairs'
+  | 'directional-co-change-pairs';
+
+export interface GitEvidenceCapability {
+  slot: GitEvidenceSlot;
+  available: boolean;
+  head: string | null;
+  reason?: string;
+}
+
+export interface GitCoChangeOptions {
+  minTogether?: number;
+  minConfidence?: number;
+  maxFilesPerCommit?: number;
+}
+
+export interface GitEvidenceProduct {
+  capability(slot: GitEvidenceSlot): GitEvidenceCapability;
+  commitHistory(): CommitHistory | null;
+  fileChurn(): Map<string, FileChurn> | null;
+  changeAmplification(): ChangeAmplification | null;
+  trackedFiles(): Set<string> | null;
+  fileAddRecords(): Map<string, FileAddRecord> | null;
+  coChangePairs(opts?: GitCoChangeOptions): CoChangePair[] | null;
+  coChangePairsForFiles(files: ReadonlySet<string>, opts?: GitCoChangeOptions): CoChangePair[] | null;
+  directionalCoChangePairsForFiles(files: ReadonlySet<string>, opts?: GitCoChangeOptions): CoChangePair[] | null;
+}
+
 const MAX_COMMITS = 2_000;
 const BULK_COMMIT_FILE_CAP = 50;
 const FOCUSED_HISTORY_FILE_CAP = 64;
@@ -102,10 +143,63 @@ function headKeyedGitValue<T>(
   };
 }
 
+function headKeyedGitMap<T>(
+  name: string,
+): (db: ScipDatabase, key: string, load: (projectRoot: string, head: string) => T | null) => T | null {
+  const cache = createPerDbValue<{ head: string; values: Map<string, T | null> }>(name, {
+    clearGroups: ['whole-project'],
+  });
+  return (db, key, load) => {
+    const head = resolveHead(db.config.projectRoot);
+    if (!head) return null;
+    const cached = cache.has(db) ? cache.get(db, () => ({ head: '', values: new Map() })) : null;
+    if (!cached || cached.head !== head) {
+      cache.invalidate(db);
+    }
+    const current = cache.get(db, () => ({ head, values: new Map() }));
+    if (current.values.has(key)) return current.values.get(key) ?? null;
+    const value = load(db.config.projectRoot, head);
+    current.values.set(key, value);
+    return value;
+  };
+}
+
 const commitHistoryCache = headKeyedGitValue<CommitHistory>('git-commit-history');
 
+export function gitEvidenceProduct(db: ScipDatabase): GitEvidenceProduct {
+  return {
+    capability: (slot) => gitEvidenceCapability(db, slot),
+    commitHistory: () => readCommitHistory(db),
+    fileChurn: () => buildFileChurn(db),
+    changeAmplification: () => buildChangeAmplification(db),
+    trackedFiles: () => readTrackedFiles(db),
+    fileAddRecords: () => readFileAddRecords(db),
+    coChangePairs: (opts = {}) => buildCoChangePairs(db, opts),
+    coChangePairsForFiles: (files, opts = {}) => buildCoChangePairsForFiles(db, files, opts),
+    directionalCoChangePairsForFiles: (files, opts = {}) => buildDirectionalCoChangePairsForFiles(db, files, opts),
+  };
+}
+
+// scip-query: ignore-wrapper — legacy git helper kept for source-compatible callers; the product owns access.
 export function getCommitHistory(db: ScipDatabase): CommitHistory | null {
+  return gitEvidenceProduct(db).commitHistory();
+}
+
+function readCommitHistory(db: ScipDatabase): CommitHistory | null {
   return commitHistoryCache(db, loadCommitHistory);
+}
+
+function gitEvidenceCapability(db: ScipDatabase, slot: GitEvidenceSlot): GitEvidenceCapability {
+  const head = resolveHead(db.config.projectRoot);
+  if (!head) {
+    return {
+      slot,
+      available: false,
+      head: null,
+      reason: 'git history is unavailable for this project',
+    };
+  }
+  return { slot, available: true, head };
 }
 
 function resolveHead(projectRoot: string): string | null {
@@ -148,8 +242,13 @@ export function isFixCommit(commit: Pick<CommitRecord, 'subject'>): boolean {
   return FIX_SUBJECT_PATTERN.test(commit.subject);
 }
 
+// scip-query: ignore-wrapper — legacy git helper kept for source-compatible callers; the product owns access.
 export function getFileChurn(db: ScipDatabase): Map<string, FileChurn> | null {
-  const history = getCommitHistory(db);
+  return gitEvidenceProduct(db).fileChurn();
+}
+
+function buildFileChurn(db: ScipDatabase): Map<string, FileChurn> | null {
+  const history = readCommitHistory(db);
   if (!history) return null;
   const churn = new Map<string, FileChurn>();
   for (const commit of history.commits) {
@@ -165,8 +264,13 @@ export function getFileChurn(db: ScipDatabase): Map<string, FileChurn> | null {
   return churn;
 }
 
+// scip-query: ignore-wrapper — legacy git helper kept for source-compatible callers; the product owns access.
 export function getChangeAmplification(db: ScipDatabase): ChangeAmplification | null {
-  const history = getCommitHistory(db);
+  return gitEvidenceProduct(db).changeAmplification();
+}
+
+function buildChangeAmplification(db: ScipDatabase): ChangeAmplification | null {
+  const history = readCommitHistory(db);
   if (!history || history.commits.length === 0) return null;
   const sizes = history.commits
     .map((commit) => commit.files.length)
@@ -188,7 +292,12 @@ function percentile(sorted: readonly number[], fraction: number): number {
 const trackedFilesCache = headKeyedGitValue<Set<string>>('git-tracked-files');
 
 /** All git-tracked files (including docs, configs — not just indexed sources). */
+// scip-query: ignore-wrapper — legacy git helper kept for source-compatible callers; the product owns access.
 export function getTrackedFiles(db: ScipDatabase): Set<string> | null {
+  return gitEvidenceProduct(db).trackedFiles();
+}
+
+function readTrackedFiles(db: ScipDatabase): Set<string> | null {
   return trackedFilesCache(db, (projectRoot) => {
     try {
       const raw = runGit(projectRoot, ['ls-files']);
@@ -204,30 +313,34 @@ export function getTrackedFiles(db: ScipDatabase): Set<string> | null {
   });
 }
 
-interface FileAddRecord {
-  /** Commits ago (0 = newest) of the file's earliest known add in the window. */
-  commitsAgo: number;
-  addedAt: number;
-}
-
 const fileAddCache = headKeyedGitValue<Map<string, FileAddRecord>>('git-file-adds');
 const FILE_ADD_CACHE_KEY = '__git__/file-adds';
+const FILE_ADD_PRODUCT = createFileEvidenceProduct<Map<string, FileAddRecord>>({
+  kind: 'git-file-adds',
+  serialize: serializeFileAddRecords,
+  deserialize: parseFileAddRecordsPayload,
+});
 
 /**
  * When each file was first added, from `git log --diff-filter=A` over the
  * bounded window. Files older than the window are absent — callers should
  * treat absence as "established".
  */
+// scip-query: ignore-wrapper — legacy git helper kept for source-compatible callers; the product owns access.
 export function getFileAddRecords(db: ScipDatabase): Map<string, FileAddRecord> | null {
+  return gitEvidenceProduct(db).fileAddRecords();
+}
+
+function readFileAddRecords(db: ScipDatabase): Map<string, FileAddRecord> | null {
   return fileAddCache(db, (projectRoot, head) => cachedFileAddRecords(db, projectRoot, head));
 }
 
 function cachedFileAddRecords(db: ScipDatabase, projectRoot: string, head: string): Map<string, FileAddRecord> | null {
-  const cached = parseFileAddRecordsPayload(readCachedFileEvidence(db, 'git-file-adds', FILE_ADD_CACHE_KEY, head));
+  const cached = FILE_ADD_PRODUCT.read(db, FILE_ADD_CACHE_KEY, head);
   if (cached) return cached;
 
   const adds = loadFileAddRecords(projectRoot);
-  if (adds) writeCachedFileEvidence(db, 'git-file-adds', FILE_ADD_CACHE_KEY, head, serializeFileAddRecords(adds));
+  if (adds) FILE_ADD_PRODUCT.write(db, FILE_ADD_CACHE_KEY, head, adds);
   return adds;
 }
 
@@ -300,46 +413,91 @@ function loadFileAddRecords(projectRoot: string): Map<string, FileAddRecord> | n
  * Pairwise co-change counts across the bounded history. Pair generation is
  * O(k²) per commit but k is capped at BULK_COMMIT_FILE_CAP.
  */
+const coChangePairsCache = headKeyedGitMap<CoChangePair[]>('git-co-change-pairs');
+const directionalCoChangePairsCache = headKeyedGitMap<CoChangePair[]>('git-directional-co-change-pairs');
+
+// scip-query: ignore-wrapper — legacy git helper kept for source-compatible callers; the product owns access.
 export function getCoChangePairs(
   db: ScipDatabase,
-  opts: { minTogether?: number; minConfidence?: number; maxFilesPerCommit?: number } = {},
+  opts: GitCoChangeOptions = {},
 ): CoChangePair[] | null {
-  const history = getCommitHistory(db);
-  if (!history) return null;
-
-  return coChangePairsFromHistory(history, opts);
+  return gitEvidenceProduct(db).coChangePairs(opts);
 }
 
+function buildCoChangePairs(db: ScipDatabase, opts: GitCoChangeOptions): CoChangePair[] | null {
+  const key = `all\x00${coChangeOptionsKey(opts)}`;
+  const pairs = coChangePairsCache(db, key, () => {
+    const history = readCommitHistory(db);
+    if (!history) return null;
+    return coChangePairsFromHistory(history, opts);
+  });
+  return pairs ? [...pairs] : pairs;
+}
+
+// scip-query: ignore-wrapper — legacy git helper kept for source-compatible callers; the product owns access.
 export function getCoChangePairsForFiles(
   db: ScipDatabase,
   files: ReadonlySet<string>,
-  opts: { minTogether?: number; minConfidence?: number; maxFilesPerCommit?: number } = {},
+  opts: GitCoChangeOptions = {},
 ): CoChangePair[] | null {
-  const history = getCommitHistory(db);
-  if (!history) return null;
-  if (files.size === 0) return [];
-
-  return coChangePairsFromHistory(history, opts, files);
+  return gitEvidenceProduct(db).coChangePairsForFiles(files, opts);
 }
 
+function buildCoChangePairsForFiles(
+  db: ScipDatabase,
+  files: ReadonlySet<string>,
+  opts: GitCoChangeOptions,
+): CoChangePair[] | null {
+  if (files.size === 0) return [];
+  const key = `files\x00${filesKey(files)}\x00${coChangeOptionsKey(opts)}`;
+  const pairs = coChangePairsCache(db, key, () => {
+    const history = readCommitHistory(db);
+    if (!history) return null;
+    return coChangePairsFromHistory(history, opts, files);
+  });
+  return pairs ? [...pairs] : pairs;
+}
+
+// scip-query: ignore-wrapper — legacy git helper kept for source-compatible callers; the product owns access.
 export function getDirectionalCoChangePairsForFiles(
   db: ScipDatabase,
   files: ReadonlySet<string>,
-  opts: { minTogether?: number; minConfidence?: number; maxFilesPerCommit?: number } = {},
+  opts: GitCoChangeOptions = {},
+): CoChangePair[] | null {
+  return gitEvidenceProduct(db).directionalCoChangePairsForFiles(files, opts);
+}
+
+function buildDirectionalCoChangePairsForFiles(
+  db: ScipDatabase,
+  files: ReadonlySet<string>,
+  opts: GitCoChangeOptions,
 ): CoChangePair[] | null {
   if (files.size === 0) return [];
-  const head = resolveHead(db.config.projectRoot);
-  if (!head) return null;
   const maxFilesPerCommit = opts.maxFilesPerCommit ?? BULK_COMMIT_FILE_CAP;
-  if (files.size > FOCUSED_HISTORY_FILE_CAP) return getCoChangePairsForFiles(db, files, opts);
-  const history = loadFocusedCommitHistory(db.config.projectRoot, head, files, maxFilesPerCommit);
-  if (!history) return null;
-  return coChangePairsFromHistory(history, opts, files);
+  if (files.size > FOCUSED_HISTORY_FILE_CAP) return buildCoChangePairsForFiles(db, files, opts);
+  const key = `directional\x00${filesKey(files)}\x00${coChangeOptionsKey({ ...opts, maxFilesPerCommit })}`;
+  const pairs = directionalCoChangePairsCache(db, key, (projectRoot, head) => {
+    const history = loadFocusedCommitHistory(projectRoot, head, files, maxFilesPerCommit);
+    if (!history) return null;
+    return coChangePairsFromHistory(history, opts, files);
+  });
+  return pairs ? [...pairs] : pairs;
+}
+
+function coChangeOptionsKey(opts: GitCoChangeOptions): string {
+  const minTogether = opts.minTogether ?? 4;
+  const minConfidence = opts.minConfidence ?? 0.6;
+  const maxFilesPerCommit = opts.maxFilesPerCommit ?? BULK_COMMIT_FILE_CAP;
+  return `${minTogether}\x00${minConfidence}\x00${maxFilesPerCommit}`;
+}
+
+function filesKey(files: ReadonlySet<string>): string {
+  return [...files].sort().join('\x00');
 }
 
 function coChangePairsFromHistory(
   history: CommitHistory,
-  opts: { minTogether?: number; minConfidence?: number; maxFilesPerCommit?: number },
+  opts: GitCoChangeOptions,
   focusFiles?: ReadonlySet<string>,
 ): CoChangePair[] {
   const { minTogether = 4, minConfidence = 0.6, maxFilesPerCommit = BULK_COMMIT_FILE_CAP } = opts;

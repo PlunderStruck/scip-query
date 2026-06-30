@@ -1,7 +1,8 @@
 import { extname } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
-import { fileContentHash, readCachedFileEvidence, writeCachedFileEvidence } from '../storage/evidence-cache.js';
+import { fileContentHash } from '../storage/evidence-cache.js';
 import { isRecord, stringArray } from '../storage/evidence-payload.js';
+import { createFileEvidenceProduct } from '../storage/evidence-products.js';
 import { createSourceFileCache } from '../storage/per-db-cache.js';
 import { getAst } from './ast/ast-core.js';
 import type { SyntaxNode } from './ast/ast-types.js';
@@ -119,6 +120,11 @@ const JSX_PROP_STOP_WORDS = new Set([
 const REACT_COMPONENT_BEHAVIOR_PROFILE_CACHE = createSourceFileCache<ReactComponentBehaviorProfile[]>(
   'react-component-behavior-profiles',
 );
+const REACT_COMPONENT_BEHAVIOR_PROFILE_PRODUCT = createFileEvidenceProduct<ReactComponentBehaviorProfile[]>({
+  kind: 'react-component-behavior-profiles',
+  serialize: serializeReactComponentBehaviorProfiles,
+  deserialize: deserializeReactComponentBehaviorProfiles,
+});
 
 export function buildReactComponentBehaviorProfiles(
   db: ScipDatabase,
@@ -136,9 +142,11 @@ export function buildReactComponentBehaviorProfiles(
       (profile) =>
         (opts.minJsxTokens === undefined || profile.jsxTokens.size >= opts.minJsxTokens) &&
         (opts.minBehaviorTokens === undefined || profile.behaviorTokens.size >= opts.minBehaviorTokens),
-    );
+      );
 }
 
+// scip-query: ignore-wrapper — optimized per-file cache entry shared by broad
+// React scans and the frontend behavior product's file-scoped read method.
 export function buildReactComponentBehaviorProfilesForFile(
   db: ScipDatabase,
   relativePath: string,
@@ -157,20 +165,11 @@ function loadOrBuildReactComponentBehaviorProfiles(
   source: string,
 ): ReactComponentBehaviorProfile[] {
   const contentHash = fileContentHash(db, file, source);
-  const cached = readCachedFileEvidence(db, 'react-component-behavior-profiles', file, contentHash);
-  if (cached) {
-    const profiles = deserializeReactComponentBehaviorProfiles(cached);
-    if (profiles) return profiles;
-  }
+  const cached = REACT_COMPONENT_BEHAVIOR_PROFILE_PRODUCT.read(db, file, contentHash);
+  if (cached) return cached;
 
   const profiles = buildReactComponentBehaviorProfilesForFileUncached(db, file);
-  writeCachedFileEvidence(
-    db,
-    'react-component-behavior-profiles',
-    file,
-    contentHash,
-    serializeReactComponentBehaviorProfiles(profiles),
-  );
+  REACT_COMPONENT_BEHAVIOR_PROFILE_PRODUCT.write(db, file, contentHash, profiles);
   return profiles;
 }
 

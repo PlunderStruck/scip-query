@@ -20,6 +20,7 @@ export { extractVueTemplateBlock, getVueTemplateFacts } from './vue/vue-template
 export { getVueSfcUnit } from './vue/vue-sfc.js';
 export { buildVueComponentBehaviorProfile, buildVueComponentBehaviorProfiles } from './vue/vue-profile.js';
 export { buildReactComponentBehaviorProfiles, buildReactComponentBehaviorProfilesForFile } from './react-profile.js';
+export { frontendBehaviorProduct } from './frontend-behavior-products.js';
 export { frameworkSourceReferences } from './source-references.js';
 export { compileQuery } from './ast/ast-runtime.js';
 export type { AstLanguage } from './ast/ast-language.js';
@@ -36,6 +37,11 @@ export type {
 export type { VueSfcBlockKind, VueSfcResolvedBlock, VueSfcScriptBlock, VueSfcUnit } from './vue/vue-sfc.js';
 export type { VueComponentBehaviorProfile } from './vue/vue-profile.js';
 export type { ReactComponentBehaviorProfile } from './react-profile.js';
+export type {
+  FrontendBehaviorCapability,
+  FrontendBehaviorProduct,
+  FrontendBehaviorSlot,
+} from './frontend-behavior-products.js';
 export type {
   VueScriptCallFact,
   VueScriptFacts,

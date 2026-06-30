@@ -337,6 +337,11 @@ because they share candidate and evidence policy changes:
 }
 ```
 
+The consumer evidence product migration kept this declared-coupling example
+current: `src/queries/cleanup/stale-abstractions.ts` still belongs to the
+cleanup detector family and still shares candidate/evidence policy with the
+dead and isolated cleanup detectors.
+
 Useful environment variables:
 
 | Variable                  | Purpose                             |

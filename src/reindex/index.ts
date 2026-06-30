@@ -14,10 +14,11 @@ import {
 import { basename, dirname, extname, join } from 'node:path';
 import { resolveScipBinary, tryInstallScipCli } from '../runtime/scip-cli.js';
 import type { LastRefreshMetadata, RefreshTrigger, SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
-import { augmentAuxiliaryDocuments } from './augment.js';
+import { auxiliaryDocumentsAugmentationStage } from './augment.js';
 import { detectLanguages } from './detect.js';
 import { getIndexerConfig } from './indexers.js';
 import { mergeScipFiles } from './merge.js';
+import { runPostIndexAugmentation } from './post-index-augmentation.js';
 import { fingerprintProjectFiles } from './project-files.js';
 import { sanitizeScipFile } from './sanitize.js';
 import { discoverTypeScriptProjectRoots } from './typescript-projects.js';
@@ -214,8 +215,9 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
 }
 
 export { detectLanguages } from './detect.js';
-export { augmentAuxiliaryDocuments } from './augment.js';
-export { augmentVueResolvedReferences } from './vue/augment-vue.js';
+export { augmentAuxiliaryDocuments, auxiliaryDocumentsAugmentationStage } from './augment.js';
+export { runPostIndexAugmentation } from './post-index-augmentation.js';
+export { augmentVueResolvedReferences, vueResolvedReferencesAugmentationStage } from './vue/augment-vue.js';
 export { getIndexerConfig, INDEXER_CONFIGS } from './indexers.js';
 export { mergeScipFiles, mergeScipIndexes } from './merge.js';
 export {
@@ -256,7 +258,7 @@ function reuseExistingIndexIfPossible(opts: {
     return null;
   }
 
-  augmentAuxiliaryDocuments({
+  runPostIndexAugmentation(auxiliaryDocumentsAugmentationStage(), {
     projectRoot: opts.opts.projectRoot,
     dbPath: opts.paths.outputDb,
     onStatus: opts.onStatus,
@@ -374,7 +376,7 @@ function publishFreshReindexArtifacts(
   materializeScipOutput(indexedOutputs, opts.tempPaths.tempOutputScip, opts.onStatus);
   convertScipToSqlite(opts.tempPaths.tempOutputScip, opts.tempPaths.tempOutputDb, env, opts.onStatus);
 
-  augmentAuxiliaryDocuments({
+  runPostIndexAugmentation(auxiliaryDocumentsAugmentationStage(), {
     projectRoot: opts.projectRoot,
     dbPath: opts.tempPaths.tempOutputDb,
     onStatus: opts.onStatus,
@@ -626,7 +628,11 @@ function collectIndexerOutputs(
       appendSkippedLanguage(skippedLanguages, result.skipped);
     } else {
       const key = `${result.language}\0${result.outputScipPath}`;
-      const group = groups.get(key) ?? { language: result.language, outputScipPath: result.outputScipPath, scipPaths: [] };
+      const group = groups.get(key) ?? {
+        language: result.language,
+        outputScipPath: result.outputScipPath,
+        scipPaths: [],
+      };
       group.scipPaths.push(result.scipPath);
       groups.set(key, group);
     }
@@ -799,10 +805,7 @@ function tryAcquireReindexLock(
     startedAt: new Date().toISOString(),
     trigger: opts.trigger,
   };
-  writeFileSync(
-    fd,
-    JSON.stringify(metadata) + '\n',
-  );
+  writeFileSync(fd, JSON.stringify(metadata) + '\n');
 
   return () => {
     try {
@@ -831,12 +834,20 @@ function readReindexLock(lockPath: string): ReindexLockMetadata | null {
   }
 }
 
-function shouldPreemptReindexLock(requested: RefreshTrigger | undefined, existing: ReindexLockMetadata | null): boolean {
+function shouldPreemptReindexLock(
+  requested: RefreshTrigger | undefined,
+  existing: ReindexLockMetadata | null,
+): boolean {
   return requested?.kind === 'manual-cli' && isWatcherRefreshTrigger(existing?.trigger);
 }
 
 function isWatcherRefreshTrigger(trigger: RefreshTrigger | undefined): boolean {
-  return trigger?.kind === 'watch-source' || trigger?.kind === 'watch-git-head' || trigger?.kind === 'watch-git-index' || trigger?.kind === 'watch-git-state';
+  return (
+    trigger?.kind === 'watch-source' ||
+    trigger?.kind === 'watch-git-head' ||
+    trigger?.kind === 'watch-git-index' ||
+    trigger?.kind === 'watch-git-state'
+  );
 }
 
 async function terminateReindexLockOwner(pid: number): Promise<void> {

@@ -55,3 +55,10 @@ The `src/queries/cleanup/doc-drift.ts` change now narrows `docsCitingFiles()` so
 ## 2026-06-28 Path Evidence Cache Refresh
 
 The path-evidence cache changes `docsCitingFiles()` and `doc-drift` to reuse cached path candidates and citation contexts. Historical-intent classification is still owned by `classifyDocDriftIntent()`, and its behavior is unchanged.
+
+## 2026-06-30 Evidence Product Follow-Up
+
+The `src/queries/cleanup/doc-drift.ts` historical-intent reference remains
+accurate after the file evidence product registry migration. Path evidence
+still stores the same candidates and citation contexts behind the content hash;
+the persistent cache access now goes through `src/storage/evidence-products.ts`.

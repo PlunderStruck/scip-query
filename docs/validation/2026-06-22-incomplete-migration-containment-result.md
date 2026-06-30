@@ -109,3 +109,10 @@ The incomplete-migration containment notes remain accurate after adding
 `similar.ts` profile spans. The spans measure callee-fingerprint construction
 and pair scanning for benchmark analysis; incomplete-migration containment,
 helper-shape metadata, skipped-helper reasons, and output are unchanged.
+
+## 2026-06-30 Evidence Product Follow-Up
+
+The `src/queries/cleanup/similar.ts` incomplete-migration containment reference
+remains accurate after the file evidence product registry migration. The
+source-fingerprint cache still feeds the same similarity evidence; only its
+persistent cache adapter moved to `src/storage/evidence-products.ts`.

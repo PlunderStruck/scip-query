@@ -1,4 +1,5 @@
-import { buildVueComponentBehaviorProfiles, type VueComponentBehaviorProfile } from '../../source/vue/vue-profile.js';
+import { frontendBehaviorProduct } from '../../source/frontend-behavior-products.js';
+import type { VueComponentBehaviorProfile } from '../../source/vue/vue-profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
 
 export type VueLargeViewPressureAxis = 'template' | 'script' | 'style' | 'external-script' | 'custom-block' | 'total';
@@ -54,9 +55,9 @@ export function vueLargeViewPressure(
     scanLimit,
     filePattern,
   } = opts;
-  const profiles = buildVueComponentBehaviorProfiles(db, { scope, scanLimit }).filter(
-    (profile) => !filePattern || profile.file.includes(filePattern),
-  );
+  const profiles = frontendBehaviorProduct(db)
+    .vueProfiles({ scope, scanLimit })
+    .filter((profile) => !filePattern || profile.file.includes(filePattern));
   return profiles
     .map((profile) =>
       pressureResult(profile, {

@@ -202,3 +202,10 @@ with zero meaningful callees, then uses the same source-shape fallback already
 documented above. Source-fingerprint cache hits also avoid splitting source
 lines until a token row is missing; stale or missing rows still rebuild through
 the same snippet and token pipeline.
+
+## 2026-06-30 Evidence Product Follow-Up
+
+The `src/queries/cleanup/similar.ts` full-scan notes remain accurate after the
+file evidence product registry migration. The source-fingerprint cache still
+stores the same serialized token entries behind the file content hash; only the
+persistent read/write plumbing moved to `src/storage/evidence-products.ts`.

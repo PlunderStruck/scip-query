@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import { getFileChurn } from '../../analysis/git-history.js';
+import { gitEvidenceProduct } from '../../analysis/git-history.js';
 import type { CoChangeSubjectContext } from '../../analysis/git-history.js';
 import { getSuppressionInventory } from '../../analysis/suppressions.js';
 import { affected, type AffectedResult } from '../graph/affected.js';
@@ -148,7 +148,7 @@ function buildPlanContextHistory(db: ScipDatabase, file: string | null): PlanCon
     suppressionsInFile: 0,
   };
   if (!file) return unavailable;
-  const churn = getFileChurn(db);
+  const churn = gitEvidenceProduct(db).fileChurn();
   if (!churn) return unavailable;
 
   const partners = coChange(db, file, { limit: 5 });

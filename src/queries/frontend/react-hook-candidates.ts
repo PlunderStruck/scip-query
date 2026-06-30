@@ -1,7 +1,12 @@
 import { difference, intersection } from '../../analysis/similarity.js';
-import { buildReactComponentBehaviorProfiles, type ReactComponentBehaviorProfile } from '../../source/react-profile.js';
+import { frontendBehaviorProduct } from '../../source/frontend-behavior-products.js';
+import type { ReactComponentBehaviorProfile } from '../../source/react-profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { rankedPairwiseProfileResults, type PairwiseFileProfile } from '../internal/pairwise-profiles.js';
+import {
+  pairwiseCandidateIndexFromKeys,
+  rankedPairwiseProfileResults,
+  type PairwiseFileProfile,
+} from '../internal/pairwise-profiles.js';
 import {
   behaviorSimilarity,
   classifyFrontendBehaviorEvidence,
@@ -59,22 +64,27 @@ export function reactHookCandidates(
   } = {},
 ): ReactHookCandidateResult[] {
   const { minSimilarity = 0.45, minSharedBehaviors = 6, limit = 20, scope, scanLimit, filePattern, focusFiles } = opts;
-  const profiles = buildReactComponentBehaviorProfiles(db, {
-    scope,
-    minBehaviorTokens: Math.max(3, minSharedBehaviors),
-    scanLimit,
-  }).map((profile) => ({
-    file: profile.file,
-    component: profile.name,
-    tokens: profile.behaviorTokens,
-    profile,
-  }));
+  const profiles = frontendBehaviorProduct(db)
+    .reactProfiles({
+      scope,
+      minBehaviorTokens: Math.max(3, minSharedBehaviors),
+      scanLimit,
+    })
+    .map((profile) => ({
+      file: profile.file,
+      component: profile.name,
+      tokens: profile.behaviorTokens,
+      profile,
+    }));
+  const candidateIndex = pairwiseCandidateIndexFromKeys(profiles, (profile) => profile.tokens);
 
   return rankedPairwiseProfileResults({
     profiles,
     limit,
     filePattern,
     focusFiles,
+    candidateIndex,
+    profile: { name: 'react-hook-candidates' },
     compare: (a, b) => compareProfiles(a, b, minSimilarity, minSharedBehaviors),
     sort: (a, b) =>
       b.similarity - a.similarity ||

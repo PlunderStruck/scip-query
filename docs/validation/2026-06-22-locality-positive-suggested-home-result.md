@@ -48,6 +48,8 @@ Repositories:
 | `apps/web/src/components/issues/IssueHoverPreview.tsx` | `apps/web/src/components` | Remaining false exact | The component is issue-domain UI reused by board, notifications, relationships, and sprints. Moving it to the components root would hide the issue concept; Vega should likely configure `issues` as a locality boundary if this pattern repeats. |
 | `src/queries/internal/dead-candidate-gate.ts` | `src/queries/cleanup` | Low-action exact | Only one consumer exists. The destination is mechanically exact, but the counterevidence is right: this should stay a review signal, not an imperative. |
 
+2026-06-30 health cleanup note: `src/queries/internal/dead-candidate-gate.ts` still intentionally stays in the internal query-policy area; today's change only documents `looksValueLikeDefinition()` as named dead-candidate policy for wrapper scoring.
+
 ## Withheld After Tightening
 
 | Candidate | Previous emitted home | New result | Why it is better |

@@ -90,3 +90,10 @@ The `src/analysis/git-history.ts` recency-sweep reference remains accurate.
 The new HEAD-keyed file-add evidence cache only persists `getFileAddRecords()`
 for recent-duplicate orientation; it does not change commit-scope, recency, or
 co-change pair construction.
+
+## 2026-06-30 Evidence Product Follow-Up
+
+The `src/analysis/git-history.ts` recency-sweep reference remains accurate
+after the file evidence product registry migration. The HEAD-keyed file-add
+evidence keeps the same key and payload; its persistent cache access now goes
+through `src/storage/evidence-products.ts`.

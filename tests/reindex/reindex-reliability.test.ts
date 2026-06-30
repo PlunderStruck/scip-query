@@ -228,9 +228,9 @@ describe('reindex reliability', () => {
     expect(result.languages).toEqual(['typescript']);
     expect(result.skipped).toEqual([]);
     expect(attempts.get('typescript')).toBe(2);
-    expect(commands.filter((command) => command.binary === 'typescript-indexer').map((command) => command.args.at(-1))).toEqual(
-      ['packages/a', 'packages/b'],
-    );
+    expect(
+      commands.filter((command) => command.binary === 'typescript-indexer').map((command) => command.args.at(-1)),
+    ).toEqual(['packages/a', 'packages/b']);
     expect(statuses.join('\n')).toContain('Indexing TypeScript workspace as 2 project shard(s).');
     expect(JSON.parse(readFileSync(join(cacheDir, 'meta.json'), 'utf-8'))).toEqual(
       expect.objectContaining({
@@ -496,6 +496,11 @@ async function loadReindexFixture(opts: {
   }));
   vi.doMock('../../src/reindex/augment.js', () => ({
     augmentAuxiliaryDocuments: () => ({ scanned: 0, inserted: 0, existing: 0 }),
+    auxiliaryDocumentsAugmentationStage: () => ({
+      id: 'auxiliary-documents',
+      facts: ['auxiliary-document'],
+      run: () => ({ scanned: 0, inserted: 0, existing: 0 }),
+    }),
   }));
   vi.doMock('../../src/reindex/merge.js', async () => {
     const fs = await import('node:fs');

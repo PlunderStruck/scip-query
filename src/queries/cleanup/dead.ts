@@ -29,7 +29,7 @@ import {
   recordReferenceAtLeast,
   recordReference,
 } from '../internal/reference-counts.js';
-import { profileSpan } from '../../runtime/profile.js';
+import { profileSpan } from '../../instrumentation/profile.js';
 
 export interface DeadSymbolResult {
   relativePath: string;

@@ -6,24 +6,80 @@ import {
   writeCachedSemanticReferencesBatch,
   type SemanticReferenceCacheEntry,
 } from '../storage/evidence-cache.js';
-import type { SemanticCallee, SemanticImportUsage, SemanticProvider, SemanticReference } from './types.js';
+import type {
+  SemanticAvailability,
+  SemanticCallee,
+  SemanticImportUsage,
+  SemanticProvider,
+  SemanticReference,
+} from './types.js';
 import { getSemanticProvider } from './provider-cache.js';
 import { isTypeScriptLike } from './typescript/source-kinds.js';
-import { profileEnabled, profileSpan } from '../runtime/profile.js';
+import { profileEnabled, profileSpan } from '../instrumentation/profile.js';
 
+export type SemanticEvidenceSlot =
+  | 'semantic-references'
+  | 'semantic-callers'
+  | 'semantic-callees'
+  | 'semantic-import-usage'
+  | 'semantic-signatures';
+
+export interface SemanticEvidenceCapability extends SemanticAvailability {
+  slot: SemanticEvidenceSlot;
+  language: 'typescript';
+}
+
+export interface SemanticEvidenceProduct {
+  capability(slot: SemanticEvidenceSlot, relativePath?: string): SemanticEvidenceCapability;
+  importUsage(file: string): SemanticImportUsage[];
+  references(definition: IndexedDefinition): SemanticReference[];
+  callerMap(definitions: ReadonlyArray<IndexedDefinition>): Map<number, Set<string>>;
+  calleeMap(definitions: ReadonlyArray<IndexedDefinition | SymbolMatch>): Map<number, SemanticCallee[]>;
+  signature(definition: IndexedDefinition): string | null;
+}
+
+export function semanticEvidenceProduct(db: ScipDatabase): SemanticEvidenceProduct {
+  return {
+    capability: (slot, relativePath) => semanticEvidenceCapability(db, slot, relativePath),
+    importUsage: (file) => buildSemanticImportUsage(db, file),
+    references: (definition) => buildSemanticReferences(db, definition),
+    callerMap: (definitions) => buildSemanticCallerMap(db, definitions),
+    calleeMap: (definitions) => buildSemanticCalleeMap(db, definitions),
+    signature: (definition) => buildSemanticSignature(db, definition),
+  };
+}
+
+// scip-query: ignore-wrapper — legacy semantic helper kept for source-compatible callers; the product owns access.
 export function semanticImportUsage(db: ScipDatabase, file: string): SemanticImportUsage[] {
+  return semanticEvidenceProduct(db).importUsage(file);
+}
+
+function buildSemanticImportUsage(db: ScipDatabase, file: string): SemanticImportUsage[] {
   const provider = availableTypeScriptProvider(db, file);
   if (!provider) return [];
   return provider.importUsage(file);
 }
 
+// scip-query: ignore-wrapper — legacy semantic helper kept for source-compatible callers; the product owns access.
 export function semanticReferences(db: ScipDatabase, definition: IndexedDefinition): SemanticReference[] {
+  return semanticEvidenceProduct(db).references(definition);
+}
+
+function buildSemanticReferences(db: ScipDatabase, definition: IndexedDefinition): SemanticReference[] {
   const provider = availableTypeScriptProvider(db, definition.relativePath);
   if (!provider) return [];
   return provider.referencesFor(definition);
 }
 
+// scip-query: ignore-wrapper — legacy semantic helper kept for source-compatible callers; the product owns access.
 export function semanticCallerMap(
+  db: ScipDatabase,
+  definitions: ReadonlyArray<IndexedDefinition>,
+): Map<number, Set<string>> {
+  return semanticEvidenceProduct(db).callerMap(definitions);
+}
+
+function buildSemanticCallerMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<IndexedDefinition>,
 ): Map<number, Set<string>> {
@@ -105,7 +161,7 @@ export function semanticCallerMap(
   }
 
   if (cacheWrites.length > 0) {
-    const providerAvailable = getSemanticProvider(db).availability().available;
+    const providerAvailable = semanticEvidenceCapability(db, 'semantic-references').available;
     if (providerAvailable) {
       profileSpan(
         'semantic.references.cache-write',
@@ -233,6 +289,13 @@ export function semanticCalleeMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<IndexedDefinition | SymbolMatch>,
 ): Map<number, SemanticCallee[]> {
+  return semanticEvidenceProduct(db).calleeMap(definitions);
+}
+
+function buildSemanticCalleeMap(
+  db: ScipDatabase,
+  definitions: ReadonlyArray<IndexedDefinition | SymbolMatch>,
+): Map<number, SemanticCallee[]> {
   const profiling = profileEnabled();
   const result = new Map<number, SemanticCallee[]>();
   let providerHits = 0;
@@ -305,10 +368,44 @@ function recordSemanticCallees(
   }
 }
 
+// scip-query: ignore-wrapper — legacy semantic helper kept for source-compatible callers; the product owns access.
 export function semanticSignature(db: ScipDatabase, definition: IndexedDefinition): string | null {
+  return semanticEvidenceProduct(db).signature(definition);
+}
+
+function buildSemanticSignature(db: ScipDatabase, definition: IndexedDefinition): string | null {
   const provider = availableTypeScriptProvider(db, definition.relativePath);
   if (!provider) return null;
   return provider.signatureFor(definition);
+}
+
+function semanticEvidenceCapability(
+  db: ScipDatabase,
+  slot: SemanticEvidenceSlot,
+  relativePath?: string,
+): SemanticEvidenceCapability {
+  if (relativePath !== undefined && !isTypeScriptLike(relativePath)) {
+    return {
+      slot,
+      language: 'typescript',
+      available: false,
+      reason: 'semantic evidence is only available for TypeScript files',
+    };
+  }
+  try {
+    return {
+      slot,
+      language: 'typescript',
+      ...getSemanticProvider(db, relativePath).availability(),
+    };
+  } catch (error) {
+    return {
+      slot,
+      language: 'typescript',
+      available: false,
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 function availableTypeScriptProvider(db: ScipDatabase, relativePath: string): SemanticProvider | null {

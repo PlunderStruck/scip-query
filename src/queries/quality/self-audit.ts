@@ -1,8 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { ProjectIndex } from '../../core/project-index.js';
-import { getSemanticProvider } from '../../semantic/index.js';
-import { semanticCalleeMap, semanticReferences } from '../../semantic/shared-primitives.js';
+import { semanticCalleeMap, semanticEvidenceProduct, semanticReferences } from '../../semantic/shared-primitives.js';
 import { getResolvedReferenceSites } from '../../symbols/references/reference-sites.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { detectAstLanguage, getSourceFacts } from '../../source/ast.js';
@@ -164,7 +163,7 @@ function oracleKindForSample(db: ScipDatabase, sampled: readonly IndexedDefiniti
   if (!probe) return null;
   if (canSourceAuditDefinition(db, probe)) return 'source';
   try {
-    if (getSemanticProvider(db, probe.relativePath).availability().available) return 'semantic';
+    if (semanticEvidenceProduct(db).capability('semantic-references', probe.relativePath).available) return 'semantic';
   } catch {
     // Fall through to source-backed oracles below.
   }

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import type { ScipDatabase } from '../../storage/db.js';
 import { isEntrySurface, isRootedSymbol } from '../../analysis/file-classifier.js';
-import { getDirectionalCoChangePairsForFiles } from '../../analysis/git-history.js';
+import { gitEvidenceProduct } from '../../analysis/git-history.js';
 import type { CoChangeCommitScope, CoChangeRecency, CoChangeSubjectContext } from '../../analysis/git-history.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import {
@@ -24,7 +24,7 @@ import { similar } from '../cleanup/similar.js';
 import { unusedParams } from '../cleanup/unused-params.js';
 import type { FindingSuppression } from '../../domain/types.js';
 import { isCallableSymbol, leafName, leafSuffix } from '../../symbols/symbol-parser.js';
-import { profileSpan } from '../../runtime/profile.js';
+import { profileSpan } from '../../instrumentation/profile.js';
 
 export type DiffGateCheck =
   | 'echo'
@@ -571,7 +571,7 @@ function runCoChangePartnerCheck(
   minConfidence: number,
   result: DiffGateResult,
 ): void {
-  const pairs = getDirectionalCoChangePairsForFiles(db, changed, {
+  const pairs = gitEvidenceProduct(db).directionalCoChangePairsForFiles(changed, {
     minTogether,
     minConfidence: 0,
     maxFilesPerCommit: 20,

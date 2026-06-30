@@ -243,3 +243,10 @@ The `similar.ts` echo-path notes remain accurate after adding diagnostic profile
 spans. The new spans report phase timings for `similarAll()` and callee
 fingerprint construction when `SCIP_QUERY_PROFILE=1`; they do not change the
 echo prefilter, zero-callee source fallback, or diff-gate output contract.
+
+## 2026-06-30 Evidence Product Follow-Up
+
+The `src/queries/cleanup/similar.ts` echo-path notes remain accurate after the
+file evidence product registry migration. The source-fingerprint cache now
+reads and writes through `src/storage/evidence-products.ts`, but callee
+fingerprints, source-shape fallback, and diff-gate echo behavior are unchanged.

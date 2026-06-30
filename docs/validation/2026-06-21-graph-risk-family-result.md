@@ -123,3 +123,10 @@ The cheap phase grouping pass also leaves this reference current:
 `similar` with `extract-candidates` and Vue health phases with `suppressions`
 changes scheduler shape only; it does not change the graph-risk family result
 or the meaning of the coupling sample above.
+
+## 2026-06-30 Consumer Evidence Product Reference Check
+
+The `src/queries/cleanup/stale-abstractions.ts` reference remains current after
+the consumer evidence product migration. The file still belongs to the cleanup
+detector family; the change centralizes consumer evidence assembly and
+classification without changing the declared-coupling configuration example.

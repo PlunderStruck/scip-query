@@ -8,10 +8,14 @@ import { isInRustTestModule, shortenSymbol } from '../../symbols/symbol-parser.j
 import { ProjectIndex } from '../../core/project-index.js';
 import { compareDefinitionsBySmallestLoc, definitionLoc } from '../query-utils.js';
 import { runCandidateAnalysis } from '../internal/candidate-scan.js';
-import { definitionConsumerFileMap, partitionDefinitionConsumers } from '../internal/consumer-evidence.js';
+import {
+  consumerEvidenceProduct,
+  consumerFileMapFromEvidence,
+  partitionDefinitionConsumers,
+} from '../internal/consumer-evidence.js';
 import { mergeSetMaps } from '../../symbols/references/caller-evidence.js';
 import { boundaryEvidenceForSurfaces } from './boundary-evidence.js';
-import { profileSpan } from '../../runtime/profile.js';
+import { profileSpan } from '../../instrumentation/profile.js';
 import { isClojureMacroDefinition } from '../../source/ast.js';
 
 export type WrapperActionTier = 'direct' | 'signal';
@@ -53,11 +57,12 @@ export function wrapperCandidates(
   const index = new ProjectIndex(db);
   const reverseFanIn = buildReverseFileFanIn(index.fileDependencyGraph(scope));
   return runCandidateAnalysis({
-    candidates: () => getWrapperCandidateSymbols(db, index, scope, maxLoc),
-    orderCandidates: compareDefinitionsBySmallestLoc,
-    scanLimit,
-    prepare: (symbols) => ({
-      // Source-text fallback adds back references the indexer may miss; without
+      candidates: () => getWrapperCandidateSymbols(db, index, scope, maxLoc),
+      orderCandidates: compareDefinitionsBySmallestLoc,
+      scanLimit,
+      profile: { name: 'wrapper-candidates' },
+      prepare: (symbols) => ({
+        // Source-text fallback adds back references the indexer may miss; without
       // it, dynamic dispatch or macro-style calls can falsely look like wrappers.
       callerFileMap: consumerMapForWrapperCandidates(db, index, symbols, { semantic: opts?.semantic !== false }),
       reverseFanIn,
@@ -74,10 +79,13 @@ function consumerMapForWrapperCandidates(
   symbols: readonly IndexedDefinition[],
   opts: { semantic: boolean },
 ): Map<number, Set<string>> {
-  const indexedConsumerFileMap = definitionConsumerFileMap(index, symbols, {
-    semantic: false,
-    sourceFallback: false,
-  });
+  const product = consumerEvidenceProduct(db, index);
+  const indexedConsumerFileMap = consumerFileMapFromEvidence(
+    product.forDefinitions(symbols, {
+      semantic: false,
+      sourceFallback: false,
+    }),
+  );
   let semanticCandidates: IndexedDefinition[] = [];
   if (opts.semantic) {
     profileSpan(
@@ -93,10 +101,12 @@ function consumerMapForWrapperCandidates(
   const semanticConsumerFileMap =
     semanticCandidates.length === 0
       ? new Map<number, Set<string>>()
-      : definitionConsumerFileMap(index, semanticCandidates, {
-          semantic: true,
-          sourceFallback: false,
-        });
+      : consumerFileMapFromEvidence(
+          product.forDefinitions(semanticCandidates, {
+            semantic: true,
+            sourceFallback: false,
+          }),
+        );
   const consumerFileMap =
     semanticConsumerFileMap.size === 0
       ? indexedConsumerFileMap
@@ -120,7 +130,15 @@ function consumerMapForWrapperCandidates(
   const fallbackCandidates = [...fallbackCandidatesById.values()];
   return fallbackCandidates.length === 0
     ? consumerFileMap
-    : mergeSetMaps(consumerFileMap, index.sourceFallbackCallerFiles(fallbackCandidates));
+    : mergeSetMaps(
+        consumerFileMap,
+        consumerFileMapFromEvidence(
+          product.forDefinitions(fallbackCandidates, {
+            semantic: false,
+            sourceFallback: true,
+          }),
+        ),
+      );
 }
 
 // scip-query: ignore-extract — this is the single-symbol wrapper decision:

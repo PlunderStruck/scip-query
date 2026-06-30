@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
-import { buildReactComponentBehaviorProfilesForFile } from '../../../src/source/ast.js';
+import { buildReactComponentBehaviorProfilesForFile, frontendBehaviorProduct } from '../../../src/source/ast.js';
 import { reactComponentDuplicates } from '../../../src/queries/frontend/react-component-duplicates.js';
 import { reactHookCandidates } from '../../../src/queries/frontend/react-hook-candidates.js';
 import { reactLargeComponentPressure } from '../../../src/queries/frontend/react-large-component-pressure.js';
@@ -112,6 +112,14 @@ describe('React frontend rich internals', () => {
     });
     try {
       const profiles = buildReactComponentBehaviorProfilesForFile(db, 'src/components/IssuePanel.tsx');
+      const frontend = frontendBehaviorProduct(db);
+      expect(frontend.capability('react-component-behavior-profiles', 'src/components/IssuePanel.tsx')).toEqual(
+        expect.objectContaining({ available: true, framework: 'react' }),
+      );
+      expect(frontend.capability('react-component-behavior-profiles', 'src/components/IssuePanel.vue')).toEqual(
+        expect.objectContaining({ available: false, framework: 'react' }),
+      );
+      expect(frontend.reactProfilesForFile('src/components/IssuePanel.tsx')).toEqual(profiles);
       const profile = profiles.find((candidate) => candidate.name === 'IssuePanel');
 
       expect(profile).toEqual(

@@ -62,3 +62,7 @@ The persistent-refresh coordination slice rechecked the `src/queries/impact/inco
 The hyper-optimization slice rechecked the `src/queries/impact/incomplete-migration.ts` citation after incomplete-migration began reusing the cached callee-fingerprint index. The citation is still only a verification-command record for this passthrough public-facade caveat, and the performance change does not alter the passthrough analyzer conclusion.
 
 The lazy-index optimization rechecked the `src/queries/impact/incomplete-migration.ts` citation after incomplete-migration deferred the global callee-fingerprint index until a helper reaches scoring. The citation remains only a verification-command record for this passthrough caveat slice, and the performance change does not alter the passthrough analyzer conclusion.
+
+## 2026-06-30 Similarity Product Citation Refresh
+
+The similarity fingerprint product migration rechecked the `src/queries/impact/incomplete-migration.ts` citation after incomplete-migration switched from the low-level callee fingerprint index helper to the shared similarity fingerprint product. The citation is still only a verification-command record for this passthrough caveat slice, and the product-level optimization does not alter the passthrough public-facade conclusion.

@@ -141,3 +141,10 @@ The capability-boundary notes remain accurate after adding `similar.ts` profile
 spans. The spans time callee-fingerprint and pair-scan phases when profiling is
 enabled; they do not change `structural-overlap`, source-token classification,
 or cross-language support boundaries.
+
+## 2026-06-30 Evidence Product Follow-Up
+
+The `src/queries/cleanup/similar.ts` capability-boundary notes remain accurate
+after the file evidence product registry migration. The source-fingerprint
+cache still records the same source tokens and evidence classes; only the
+persistent cache adapter moved to `src/storage/evidence-products.ts`.

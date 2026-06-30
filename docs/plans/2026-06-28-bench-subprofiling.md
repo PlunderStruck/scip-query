@@ -49,9 +49,10 @@ src/runtime/commands/command-execution.ts:180-204`.
 
 ### 1. Add Runtime Profile Spans
 
-- [x] **File**: `src/runtime/profile.ts`
+- [x] **File**: `src/instrumentation/profile.ts`
 - **Source**: `scip-query files profile`; `scip-query code
-src/runtime/commands/command-handlers.ts:1-80`
+src/runtime/commands/command-handlers.ts:1-80`; moved from
+`src/runtime/profile.ts` during the 2026-06-30 health cleanup.
 - **What**: There is no general runtime span helper; command modules currently
   import Node APIs and local helpers directly.
 - **Change**: Add a small env-gated profiler with `profileEnabled()`,

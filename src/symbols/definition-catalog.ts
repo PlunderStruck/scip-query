@@ -23,7 +23,7 @@
  */
 import type { ScipDatabase } from '../storage/db.js';
 import { getCallableSites } from '../source/ast.js';
-import { getSourceText } from '../source/source-text.js';
+import { sourceEvidence } from '../source/source-evidence.js';
 import {
   isFunctionLikeSymbol,
   leafName,
@@ -35,13 +35,9 @@ import {
 import { createPerDbCache } from '../storage/per-db-cache.js';
 import { cleanSignature, extractSignature, type SymbolQueryRow } from '../storage/scip-rows.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
-import {
-  fileContentHash,
-  projectEvidenceFingerprint,
-  readCachedFileEvidence,
-  writeCachedFileEvidence,
-} from '../storage/evidence-cache.js';
+import { fileContentHash, projectEvidenceFingerprint } from '../storage/evidence-cache.js';
 import { isRecord } from '../storage/evidence-payload.js';
+import { createFileEvidenceProduct } from '../storage/evidence-products.js';
 import type { IndexedDefinition, SymbolMatch } from '../domain/types.js';
 import { mergeMixedSymbolQueryRows } from './symbol-row-policy.js';
 
@@ -89,17 +85,16 @@ export function getDefinitionsForFile(db: ScipDatabase, relativePath: string): I
 
     const definitions = computeDefinitionsForFile(db, relativePath);
     const projectFingerprint = projectEvidenceFingerprint(db);
-    const source = getSourceText(db, relativePath);
+    const source = sourceEvidence(db).forFile(relativePath, { text: true }).text;
     if (projectFingerprint && source) {
-      writeCachedFileEvidence(
+      FILE_DEFINITIONS_PRODUCT.write(
         db,
-        'file-definitions',
         relativePath,
         fileContentHash(db, relativePath, source),
-        JSON.stringify({
+        {
           projectFingerprint,
           definitions: definitions.map((definition) => ({ ...definition })),
-        } satisfies SerializedDefinitionEvidence),
+        },
       );
     }
     return definitions;
@@ -119,40 +114,53 @@ interface SerializedDefinitionEvidence {
   definitions: IndexedDefinition[];
 }
 
+const FILE_DEFINITIONS_PRODUCT = createFileEvidenceProduct<SerializedDefinitionEvidence>({
+  kind: 'file-definitions',
+  serialize: serializeDefinitionEvidence,
+  deserialize: deserializeDefinitionEvidencePayload,
+});
+
 function readDefinitionEvidence(db: ScipDatabase, relativePath: string): IndexedDefinition[] | null {
   const projectFingerprint = projectEvidenceFingerprint(db);
   if (!projectFingerprint) return null;
-  const source = getSourceText(db, relativePath);
+  const source = sourceEvidence(db).forFile(relativePath, { text: true }).text;
   if (!source) return null;
-  const payload = readCachedFileEvidence(
-    db,
-    'file-definitions',
-    relativePath,
-    fileContentHash(db, relativePath, source),
-  );
-  return payload ? deserializeDefinitionEvidence(payload, projectFingerprint, relativePath) : null;
+  const evidence = FILE_DEFINITIONS_PRODUCT.read(db, relativePath, fileContentHash(db, relativePath, source));
+  return evidence ? deserializeDefinitionEvidence(evidence, projectFingerprint, relativePath) : null;
 }
 
-function deserializeDefinitionEvidence(
-  payload: string,
-  projectFingerprint: string,
-  relativePath: string,
-): IndexedDefinition[] | null {
+function serializeDefinitionEvidence(evidence: SerializedDefinitionEvidence): string {
+  return JSON.stringify(evidence);
+}
+
+function deserializeDefinitionEvidencePayload(payload: string): SerializedDefinitionEvidence | null {
   try {
     const raw = JSON.parse(payload) as unknown;
-    if (!isRecord(raw) || raw.projectFingerprint !== projectFingerprint || !Array.isArray(raw.definitions)) {
+    if (!isRecord(raw) || typeof raw.projectFingerprint !== 'string' || !Array.isArray(raw.definitions)) {
       return null;
     }
-    const definitions: IndexedDefinition[] = [];
-    for (const definition of raw.definitions) {
-      const parsed = parseCachedDefinition(definition, relativePath);
-      if (!parsed) return null;
-      definitions.push(parsed);
-    }
-    return definitions;
+    return {
+      projectFingerprint: raw.projectFingerprint,
+      definitions: raw.definitions as IndexedDefinition[],
+    };
   } catch {
     return null;
   }
+}
+
+function deserializeDefinitionEvidence(
+  raw: SerializedDefinitionEvidence,
+  projectFingerprint: string,
+  relativePath: string,
+): IndexedDefinition[] | null {
+  if (raw.projectFingerprint !== projectFingerprint) return null;
+  const definitions: IndexedDefinition[] = [];
+  for (const definition of raw.definitions) {
+    const parsed = parseCachedDefinition(definition, relativePath);
+    if (!parsed) return null;
+    definitions.push(parsed);
+  }
+  return definitions;
 }
 
 function parseCachedDefinition(value: unknown, relativePath: string): IndexedDefinition | null {
@@ -523,7 +531,7 @@ export function correctDefinitionRangesFromSource(
   relativePath: string,
   definitions: IndexedDefinition[],
 ): IndexedDefinition[] {
-  const source = getSourceText(db, relativePath);
+  const source = sourceEvidence(db).forFile(relativePath, { text: true }).text;
 
   // Tree-sitter path: gives both startLine and endLine in one shot from the
   // parsed AST, so no brace-counting or regex sweeps are needed. This is the

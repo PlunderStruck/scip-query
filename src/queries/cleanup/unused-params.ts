@@ -40,16 +40,16 @@ export function unusedParams(
   const index = new ProjectIndex(db);
   return runCandidateAnalysis({
     candidates: () =>
-      index
-        .productionCallableDefinitions({
-          scope,
-          files: opts.files,
-          minLoc: 2,
-          excludeRootedSymbols: true,
-          requireFunctionLikeSymbol: true,
-        })
-        .filter((definition) => isTypeScriptFamily(definition.relativePath)),
+      index.productionCallableDefinitions({
+        scope,
+        files: opts.files,
+        minLoc: 2,
+        excludeRootedSymbols: true,
+        requireFunctionLikeSymbol: true,
+      }),
+    filterCandidate: (definition) => isTypeScriptFamily(definition.relativePath),
     scanLimit,
+    profile: { name: 'unused-params' },
     evaluate: (definition) => {
       const callable = getSourceFacts(db, definition.relativePath)?.callables.find(
         (candidate) => candidate.startLine === definition.startLine && candidate.endLine === definition.endLine,

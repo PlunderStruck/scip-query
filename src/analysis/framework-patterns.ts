@@ -14,7 +14,8 @@
  *  - Generic suppression-comment honoring (`// scip-query: ignore-dead`).
  */
 import type { ScipDatabase } from '../storage/db.js';
-import { fileContentHash, readCachedFileEvidence, writeCachedFileEvidence } from '../storage/evidence-cache.js';
+import { fileContentHash } from '../storage/evidence-cache.js';
+import { createFileEvidenceProduct } from '../storage/evidence-products.js';
 import { detectAstLanguage, getAst, type SyntaxNode, type Tree } from '../source/ast.js';
 import { getSourceText } from '../source/source-text.js';
 
@@ -26,6 +27,11 @@ export interface ExclusionEntry {
 }
 
 const EXCLUSION_CACHE = new WeakMap<Tree, ExclusionEntry[]>();
+const DEFINITION_EXCLUSIONS_PRODUCT = createFileEvidenceProduct<ExclusionEntry[]>({
+  kind: 'definition-exclusions',
+  serialize: (entries) => JSON.stringify(entries),
+  deserialize: parseCachedDefinitionExclusions,
+});
 
 /**
  * Find every definition the dead-code pass should skip because the symbol is
@@ -42,13 +48,10 @@ export function getDefinitionExclusions(db: ScipDatabase, relativePath: string):
   const source = getSourceText(db, relativePath);
   if (!source) return [];
   const contentHash = fileContentHash(db, relativePath, source);
-  const cached = readCachedFileEvidence(db, 'definition-exclusions', relativePath, contentHash);
-  if (cached) {
-    const entries = parseCachedDefinitionExclusions(cached);
-    if (entries) return entries;
-  }
+  const cached = DEFINITION_EXCLUSIONS_PRODUCT.read(db, relativePath, contentHash);
+  if (cached) return cached;
   const entries = lang === 'rust' ? getRustExclusions(db, relativePath) : getJsTestExclusions(db, relativePath);
-  writeCachedFileEvidence(db, 'definition-exclusions', relativePath, contentHash, JSON.stringify(entries));
+  DEFINITION_EXCLUSIONS_PRODUCT.write(db, relativePath, contentHash, entries);
   return entries;
 }
 

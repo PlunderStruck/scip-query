@@ -21,10 +21,9 @@ import { buildFileDepGraph } from './file-dep-graph.js';
 import { getResolvedReferenceSites } from '../references/reference-sites.js';
 import type { IndexedDefinition, SymbolLocation, SymbolMatch } from '../../domain/types.js';
 import type { SemanticCallee } from '../../semantic/types.js';
-import { getSemanticProvider } from '../../semantic/provider-cache.js';
 import { isTypeScriptLike } from '../../semantic/typescript/source-kinds.js';
-import { semanticCalleeMap, semanticReferences } from '../../semantic/shared-primitives.js';
-import { profileEnabled, profileSpan } from '../../runtime/profile.js';
+import { semanticCalleeMap, semanticEvidenceProduct, semanticReferences } from '../../semantic/shared-primitives.js';
+import { profileEnabled, profileSpan } from '../../instrumentation/profile.js';
 import { getGlobalLeafIndex, pickAstCallCandidate, sameLanguageCandidates } from '../leaf-symbol-index.js';
 import type { GlobalLeafCandidate } from '../leaf-symbol-index.js';
 import { scipFunctionLikeKindNumbers, scipTypeLikeKindNumbers } from '../symbol-kind.js';
@@ -360,7 +359,7 @@ function cachedSemanticCalleeMap(
     }),
   );
   for (const [symbolId, callees] of computed) result.set(symbolId, callees);
-  const providerAvailable = getSemanticProvider(db).availability().available;
+  const providerAvailable = semanticEvidenceProduct(db).capability('semantic-callees').available;
   if (providerAvailable) {
     const entries = misses.map((miss) => ({
       relativePath: miss.def.relativePath,

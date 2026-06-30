@@ -1,4 +1,4 @@
-import type { SourceFacts } from './source-facts.js';
+import type { SourceFacts } from './source-fact-types.js';
 
 const CALLABLE_DEF_KINDS = new Map<string, NonNullable<SourceFacts['callables'][number]['clojureKind']>>([
   ['defn', 'function'],

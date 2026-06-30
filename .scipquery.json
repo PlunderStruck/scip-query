@@ -88,6 +88,34 @@
       "files": ["docs/COMMAND_REFERENCE.md", "src/queries/cleanup/doc-drift.ts"]
     },
     {
+      "name": "2026-06-28 optimization evidence ledger",
+      "reason": "These benchmark, validation, and implementation files intentionally moved together during the June 28 performance campaign; future edits should preserve the scoreboard trail or explicitly confirm the optimization evidence is unaffected.",
+      "files": [
+        "docs/analyzer-inventory.md",
+        "docs/analyzer-validation-ledger.md",
+        "docs/benchmarks/2026-06-28-health-ledger.md",
+        "docs/benchmarks/2026-06-28-diff-gate-echo-ledger.md",
+        "docs/benchmarks/2026-06-28-similar-full-ledger.md",
+        "docs/benchmarks/2026-06-28-dead-full-ledger.md",
+        "docs/benchmarks/2026-06-28-diff-gate-ledger.md",
+        "docs/benchmarks/2026-06-28-recent-duplicates-ledger.md",
+        "docs/benchmarks/2026-06-28-semantic-reference-ledger.md",
+        "docs/benchmarks/2026-06-28-vega-current-scoreboard.md",
+        "docs/validation/2026-06-21-analyzer-calibration-memo.md",
+        "docs/validation/2026-06-21-analyzer-validation-pilot.md",
+        "docs/validation/2026-06-21-cross-language-capability-boundaries-result.md",
+        "docs/validation/2026-06-21-suppression-lifecycle-result.md",
+        "docs/validation/2026-06-22-incomplete-migration-containment-result.md",
+        "docs/validation/2026-06-22-incomplete-migration-scope-hints-result.md",
+        "docs/validation/2026-06-22-co-change-recency-sweep-result.md",
+        "docs/validation/2026-06-22-co-change-subject-context-result.md",
+        "docs/validation/2026-06-22-doc-reference-citation-parser-result.md",
+        "src/storage/evidence-cache.ts",
+        "src/queries/cleanup/similar.ts",
+        "src/core/production-callables.ts"
+      ]
+    },
+    {
       "name": "agent skill documentation family",
       "reason": "Bundled agent skills share guidance and examples when the agent workflow surface changes.",
       "files": ["skills/concrete-plan/SKILL.md", "skills/scip-debloat/SKILL.md"]

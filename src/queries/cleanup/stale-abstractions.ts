@@ -5,11 +5,11 @@ import { leafName, parseSymbol, shortenSymbol } from '../../symbols/symbol-parse
 import { getSourceText } from '../../source/source-text.js';
 import { getTypeContainerMap } from '../../source/ast.js';
 import { ProjectIndex } from '../../core/project-index.js';
-import { semanticCallerMap } from '../../semantic/shared-primitives.js';
 import { mergeSetMaps } from '../../symbols/references/caller-evidence.js';
 import { runCandidateAnalysis } from '../internal/candidate-scan.js';
 import {
-  definitionConsumerFileMap,
+  consumerEvidenceProduct,
+  consumerFileMapFromEvidence,
   isImportOnlyConsumer,
   partitionDefinitionConsumers,
 } from '../internal/consumer-evidence.js';
@@ -117,10 +117,11 @@ export function staleAbstractions(
   return runCandidateAnalysis({
     candidates: () => staleTypeCandidates(db, index, scopedDefinitions, { minLoc, maxLoc }),
     orderCandidates: (left, right) =>
-      definitionLoc(right) - definitionLoc(left) || left.relativePath.localeCompare(right.relativePath),
-    scanLimit,
-    // Consumer map = SCIP mentions (with self-references filtered) ∪ source-text
-    // fallback for unique-named types. Without the fallback, a type used only in
+        definitionLoc(right) - definitionLoc(left) || left.relativePath.localeCompare(right.relativePath),
+      scanLimit,
+      profile: { name: 'stale-abstractions' },
+      // Consumer map = SCIP mentions (with self-references filtered) ∪ source-text
+      // fallback for unique-named types. Without the fallback, a type used only in
     // string-templated contexts or via paths the indexer missed would falsely
     // appear unconsumed.
     prepare: (typeCandidates) => {
@@ -200,14 +201,15 @@ function staleTypeCandidates(
 }
 
 function consumerMapForTypeCandidates(
+  db: ScipDatabase,
   index: ProjectIndex,
   typeCandidates: readonly IndexedDefinition[],
   opts: { semantic: boolean; sourceFallback?: boolean },
 ): Map<number, Set<string>> {
-  return definitionConsumerFileMap(index, typeCandidates, {
+  return consumerFileMapFromEvidence(consumerEvidenceProduct(db, index).forDefinitions(typeCandidates, {
     semantic: opts.semantic,
     sourceFallback: opts.sourceFallback,
-  });
+  }));
 }
 
 function consumerMapForPossiblyStaleTypeCandidates(
@@ -217,7 +219,7 @@ function consumerMapForPossiblyStaleTypeCandidates(
   candidateIndex: TypeCandidateIndex,
   opts: { semantic: boolean },
 ): Map<number, Set<string>> {
-  const indexedConsumerFileMap = consumerMapForTypeCandidates(index, typeCandidates, {
+  const indexedConsumerFileMap = consumerMapForTypeCandidates(db, index, typeCandidates, {
     semantic: false,
     sourceFallback: false,
   });
@@ -227,13 +229,25 @@ function consumerMapForPossiblyStaleTypeCandidates(
   });
   const semanticConsumerFileMap =
     opts.semantic && semanticCandidates.length > 0
-      ? mergeSetMaps(indexedConsumerFileMap, semanticCallerMap(db, semanticCandidates))
+      ? mergeSetMaps(
+          indexedConsumerFileMap,
+          consumerMapForTypeCandidates(db, index, semanticCandidates, {
+            semantic: true,
+            sourceFallback: false,
+          }),
+        )
       : indexedConsumerFileMap;
   const fallbackCandidates = semanticCandidates.filter(
     (definition) =>
       staleCandidateRow(db, definition, semanticConsumerFileMap, candidateIndex).realConsumers.length <= 1,
   );
-  return mergeSetMaps(semanticConsumerFileMap, index.sourceFallbackCallerFiles(fallbackCandidates));
+  return mergeSetMaps(
+    semanticConsumerFileMap,
+    consumerMapForTypeCandidates(db, index, fallbackCandidates, {
+      semantic: false,
+      sourceFallback: true,
+    }),
+  );
 }
 
 function buildTypeCandidateIndex(typeCandidates: readonly IndexedDefinition[]): TypeCandidateIndex {
@@ -373,7 +387,12 @@ function getSingletonBackedClassIds(
   const singletonVars = singletonBackedClasses.map((entry) => entry.singleton);
   if (singletonBackedClasses.length === 0) return new Set();
 
-  const singletonConsumers = definitionConsumerFileMap(index, singletonVars, { semantic: opts.semantic });
+  const singletonConsumers = consumerFileMapFromEvidence(
+    consumerEvidenceProduct(db, index).forDefinitions(singletonVars, {
+      semantic: opts.semantic,
+      sourceFallback: true,
+    }),
+  );
   const liveClassIds = new Set<number>();
   for (const { singleton, classId } of singletonBackedClasses) {
     if (singletonHasRealConsumer(db, singleton, singletonConsumers)) {

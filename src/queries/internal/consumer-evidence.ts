@@ -1,10 +1,12 @@
 import type { ProjectIndex } from '../../core/project-index.js';
 import type { IndexedDefinition } from '../../domain/types.js';
-import { getReExports } from '../../language-parsers/index.js';
-import { detectAstLanguage, getAst, type SyntaxNode } from '../../source/ast.js';
-import { getSourceLines, getSourceText } from '../../source/source-text.js';
+import { profileSpan } from '../../instrumentation/profile.js';
+import { semanticCallerMap } from '../../semantic/shared-primitives.js';
+import { detectAstLanguage, type SyntaxNode, type Tree } from '../../source/ast.js';
+import { sourceEvidence } from '../../source/source-evidence.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { fileContentHash, readCachedFileEvidence, writeCachedFileEvidence } from '../../storage/evidence-cache.js';
+import { fileContentHash } from '../../storage/evidence-cache.js';
+import { createFileEvidenceProduct } from '../../storage/evidence-products.js';
 import { createPerDbCache } from '../../storage/per-db-cache.js';
 import { leafName } from '../../symbols/symbol-parser.js';
 
@@ -13,10 +15,33 @@ export interface DefinitionConsumerEvidenceOptions {
   sourceFallback?: boolean;
 }
 
+export type DefinitionConsumerSource = 'indexed' | 'semantic' | 'source-fallback';
+export type DefinitionConsumerClassification = 'real' | 'reexport-only' | 'import-only';
+
 export interface DefinitionConsumerPartition {
   realConsumers: string[];
   barrelConsumers: number;
   importOnlyConsumers: number;
+}
+
+export interface DefinitionConsumerFileEvidence {
+  file: string;
+  sources: DefinitionConsumerSource[];
+  classification: DefinitionConsumerClassification;
+}
+
+export interface DefinitionConsumerEvidence extends DefinitionConsumerPartition {
+  definition: IndexedDefinition;
+  files: DefinitionConsumerFileEvidence[];
+}
+
+export type DefinitionConsumerEvidenceMap = Map<number, DefinitionConsumerEvidence>;
+
+export interface ConsumerEvidenceProduct {
+  forDefinitions(
+    definitions: readonly IndexedDefinition[],
+    opts: DefinitionConsumerEvidenceOptions,
+  ): DefinitionConsumerEvidenceMap;
 }
 
 interface FileLeafUsage {
@@ -32,21 +57,29 @@ interface SerializedFileLeafUsage {
 const FILE_USAGE_CACHE = createPerDbCache<string, FileLeafUsage>('definition-consumer-file-usage', {
   clearGroups: ['whole-project', 'source-file'],
 });
+const FILE_USAGE_PRODUCT = createFileEvidenceProduct<FileLeafUsage>({
+  kind: 'consumer-file-usage',
+  serialize: serializeFileLeafUsage,
+  deserialize: deserializeFileLeafUsage,
+});
 
-/**
- * Consumer evidence for detector queries: cross-file callers plus optional
- * source fallback, keyed by definition symbol id. This names the policy that
- * "consumer" means more than raw SCIP caller rows.
- */
-export function definitionConsumerFileMap(
-  index: ProjectIndex,
-  definitions: readonly IndexedDefinition[],
-  opts: DefinitionConsumerEvidenceOptions,
-): Map<number, Set<string>> {
-  return index.callerFileMap(definitions, {
-    semantic: opts.semantic,
-    sourceFallback: opts.sourceFallback,
-  });
+export function consumerEvidenceProduct(db: ScipDatabase, index: ProjectIndex): ConsumerEvidenceProduct {
+  return {
+    forDefinitions(definitions, opts) {
+      return buildDefinitionConsumerEvidence(db, index, definitions, opts);
+    },
+  };
+}
+
+export function consumerFileMapFromEvidence(evidence: DefinitionConsumerEvidenceMap): Map<number, Set<string>> {
+  const result = new Map<number, Set<string>>();
+  for (const [symbolId, entry] of evidence) {
+    result.set(
+      symbolId,
+      new Set(entry.files.map((fileEvidence) => fileEvidence.file)),
+    );
+  }
+  return result;
 }
 
 /**
@@ -58,22 +91,148 @@ export function partitionDefinitionConsumers(
   definition: Pick<IndexedDefinition, 'relativePath' | 'symbol'>,
   consumerFiles: readonly string[],
 ): DefinitionConsumerPartition {
+  return classifyDefinitionConsumers(db, definition, consumerFiles).partition;
+}
+
+function buildDefinitionConsumerEvidence(
+  db: ScipDatabase,
+  index: ProjectIndex,
+  definitions: readonly IndexedDefinition[],
+  opts: DefinitionConsumerEvidenceOptions,
+): DefinitionConsumerEvidenceMap {
+  let counters = emptyConsumerEvidenceCounters(definitions.length);
+  return profileSpan(
+    'consumer-evidence.product',
+    () => {
+      const provenance = consumerProvenanceMap(db, index, definitions, opts);
+      const result: DefinitionConsumerEvidenceMap = new Map();
+      counters = { ...counters, ...provenance.counters };
+      for (const definition of definitions) {
+        const fileSources = provenance.sources.get(definition.symbolId) ?? new Map<string, Set<DefinitionConsumerSource>>();
+        const classified = classifyDefinitionConsumers(db, definition, [...fileSources.keys()], fileSources);
+        counters.realFiles += classified.partition.realConsumers.length;
+        counters.reexportOnlyFiles += classified.partition.barrelConsumers;
+        counters.importOnlyFiles += classified.partition.importOnlyConsumers;
+        result.set(definition.symbolId, {
+          definition,
+          files: classified.files,
+          ...classified.partition,
+        });
+      }
+      return result;
+    },
+    () => ({ ...counters }),
+  );
+}
+
+interface ConsumerProvenanceMap {
+  sources: Map<number, Map<string, Set<DefinitionConsumerSource>>>;
+  counters: ConsumerEvidenceCounters;
+}
+
+interface ConsumerEvidenceCounters {
+  definitions: number;
+  indexedFiles: number;
+  semanticFiles: number;
+  fallbackFiles: number;
+  totalFiles: number;
+  realFiles: number;
+  reexportOnlyFiles: number;
+  importOnlyFiles: number;
+}
+
+function emptyConsumerEvidenceCounters(definitions: number): ConsumerEvidenceCounters {
+  return {
+    definitions,
+    indexedFiles: 0,
+    semanticFiles: 0,
+    fallbackFiles: 0,
+    totalFiles: 0,
+    realFiles: 0,
+    reexportOnlyFiles: 0,
+    importOnlyFiles: 0,
+  };
+}
+
+function consumerProvenanceMap(
+  db: ScipDatabase,
+  index: ProjectIndex,
+  definitions: readonly IndexedDefinition[],
+  opts: DefinitionConsumerEvidenceOptions,
+): ConsumerProvenanceMap {
+  const counters = emptyConsumerEvidenceCounters(definitions.length);
+  const sources = new Map<number, Map<string, Set<DefinitionConsumerSource>>>();
+  recordConsumerSourceMap(sources, counters, 'indexed', index.crossFileCallerMap(definitions, { semantic: false }));
+  if (opts.semantic) {
+    recordConsumerSourceMap(sources, counters, 'semantic', semanticCallerMap(db, definitions));
+  }
+  if (opts.sourceFallback !== false) {
+    recordConsumerSourceMap(sources, counters, 'source-fallback', index.sourceFallbackCallerFiles(definitions));
+  }
+  counters.totalFiles = [...sources.values()].reduce((sum, files) => sum + files.size, 0);
+  return { sources, counters };
+}
+
+function recordConsumerSourceMap(
+  target: Map<number, Map<string, Set<DefinitionConsumerSource>>>,
+  counters: ConsumerEvidenceCounters,
+  source: DefinitionConsumerSource,
+  sourceMap: ReadonlyMap<number, ReadonlySet<string>>,
+): void {
+  let files = 0;
+  for (const [symbolId, consumerFiles] of sourceMap) {
+    let byFile = target.get(symbolId);
+    if (!byFile) {
+      byFile = new Map();
+      target.set(symbolId, byFile);
+    }
+    for (const file of consumerFiles) {
+      files++;
+      const sources = byFile.get(file) ?? new Set<DefinitionConsumerSource>();
+      sources.add(source);
+      byFile.set(file, sources);
+    }
+  }
+  if (source === 'indexed') counters.indexedFiles += files;
+  else if (source === 'semantic') counters.semanticFiles += files;
+  else counters.fallbackFiles += files;
+}
+
+function classifyDefinitionConsumers(
+  db: ScipDatabase,
+  definition: Pick<IndexedDefinition, 'relativePath' | 'symbol'>,
+  consumerFiles: readonly string[],
+  provenance: ReadonlyMap<string, ReadonlySet<DefinitionConsumerSource>> = new Map(),
+): { partition: DefinitionConsumerPartition; files: DefinitionConsumerFileEvidence[] } {
   const realConsumers: string[] = [];
   let barrelConsumers = 0;
   let importOnlyConsumers = 0;
   const leaf = leafName(definition.symbol);
+  const files: DefinitionConsumerFileEvidence[] = [];
 
   for (const consumer of consumerFiles) {
+    let classification: DefinitionConsumerClassification;
     if (isReExportOnlyConsumer(db, consumer, definition.relativePath, leaf)) {
       barrelConsumers++;
+      classification = 'reexport-only';
     } else if (isImportOnlyConsumer(db, consumer, leaf)) {
       importOnlyConsumers++;
+      classification = 'import-only';
     } else {
       realConsumers.push(consumer);
+      classification = 'real';
     }
+    files.push({
+      file: consumer,
+      sources: [...(provenance.get(consumer) ?? [])],
+      classification,
+    });
   }
 
-  return { realConsumers, barrelConsumers, importOnlyConsumers };
+  return {
+    partition: { realConsumers, barrelConsumers, importOnlyConsumers },
+    files,
+  };
 }
 
 export function isImportOnlyConsumer(db: ScipDatabase, consumerFile: string, leaf: string): boolean {
@@ -91,24 +250,21 @@ function computeFileLeafUsage(
   file: string,
   lang: string,
 ): FileLeafUsage {
-  const source = getSourceText(db, file);
+  const evidence = sourceEvidence(db).forFile(file, { text: true, ast: true });
+  const source = evidence.text;
   if (!source) return emptyFileLeafUsage();
   const contentHash = fileContentHash(db, file, source);
-  const cached = readCachedFileEvidence(db, 'consumer-file-usage', file, contentHash);
-  if (cached) {
-    const usage = deserializeFileLeafUsage(cached);
-    if (usage) return usage;
-  }
+  const cached = FILE_USAGE_PRODUCT.read(db, file, contentHash);
+  if (cached) return cached;
 
-  const usage = computeFileLeafUsageFromAst(db, file, lang);
-  writeCachedFileEvidence(db, 'consumer-file-usage', file, contentHash, serializeFileLeafUsage(usage));
+  const usage = computeFileLeafUsageFromAst(evidence.ast, lang);
+  FILE_USAGE_PRODUCT.write(db, file, contentHash, usage);
   return usage;
 }
 
-function computeFileLeafUsageFromAst(db: ScipDatabase, file: string, lang: string): FileLeafUsage {
+function computeFileLeafUsageFromAst(tree: Tree | null | undefined, lang: string): FileLeafUsage {
   const importedLeaves = new Set<string>();
   const usedLeaves = new Set<string>();
-  const tree = getAst(db, file);
   if (!tree) return { importedLeaves, usedLeaves };
 
   const importTypes =
@@ -170,10 +326,11 @@ function isReExportOnlyConsumer(
   leaf: string,
 ): boolean {
   if (!leaf) return false;
-  const lines = getSourceLines(db, consumerFile);
+  const evidence = sourceEvidence(db).forFile(consumerFile, { lines: true, reexports: true });
+  const lines = evidence.lines ?? [];
   if (lines.length === 0) return false;
 
-  const reExports = getReExports(db, consumerFile);
+  const reExports = evidence.reexports ?? [];
   if (reExports.length === 0) return false;
 
   const escaped = leaf.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

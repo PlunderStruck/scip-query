@@ -1,5 +1,6 @@
 export { getSemanticProvider } from './provider-cache.js';
 export {
+  semanticEvidenceProduct,
   semanticCalleeMap,
   semanticCallerMap,
   semanticImportUsage,
@@ -14,3 +15,4 @@ export type {
   SemanticProvider,
   SemanticReference,
 } from './types.js';
+export type { SemanticEvidenceCapability, SemanticEvidenceProduct, SemanticEvidenceSlot } from './shared-primitives.js';

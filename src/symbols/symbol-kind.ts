@@ -14,6 +14,8 @@ export function scipKindName(kind: number): string {
   return SCIP_KIND_NAMES.get(kind) ?? 'Unknown';
 }
 
+// scip-query: ignore-wrapper — central SCIP kind policy shared with graph logic;
+// keep enum membership named instead of inlining into SQL call-graph setup.
 export function scipFunctionLikeKindNumbers(): number[] {
   return [
     SymbolInformation_Kind.Function,
@@ -30,6 +32,8 @@ export function scipFunctionLikeKindNumbers(): number[] {
   ];
 }
 
+// scip-query: ignore-wrapper — central SCIP kind policy shared with graph logic;
+// keep enum membership named instead of inlining into SQL call-graph setup.
 export function scipTypeLikeKindNumbers(): number[] {
   return [
     SymbolInformation_Kind.Class,

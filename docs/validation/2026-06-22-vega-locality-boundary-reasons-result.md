@@ -70,3 +70,18 @@ Improved sample reasons:
 ## Judgment
 
 This is the right direction. The analyzer remains conservative: it still emits no exact homes for Vega because the observed rows are app-wide infrastructure, local ownership boundaries, schema/config surfaces, UI primitives, or package-root helpers. The improvement is that withheld reasons now better describe why no move should be suggested.
+
+## 2026-06-30 Consumer Evidence Product Reference Check
+
+The cited implementation and regression test remain current after the consumer
+evidence product migration:
+
+```text
+src/queries/cleanup/locality-candidates.ts
+tests/queries/cleanup/locality-candidates.test.ts
+```
+
+The locality command now gets symbol-level consumer files through the shared
+consumer evidence product, but the withheld-destination policy and boundary
+reason behavior described above are unchanged. The locality regression test
+still passes with the product-backed consumer path.

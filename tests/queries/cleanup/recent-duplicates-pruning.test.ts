@@ -30,9 +30,15 @@ describe('recent duplicate framework pruning', () => {
       throw new Error('frontend duplicate query should not run without matching source files');
     });
 
-    vi.doMock('../../../src/analysis/git-history.js', () => ({
-      getFileAddRecords: () => new Map([['src/echo.ts', { commitsAgo: 0, addedAt: 1 }]]),
-    }));
+    vi.doMock('../../../src/analysis/git-history.js', () => {
+      const fileAdds = new Map([['src/echo.ts', { commitsAgo: 0, addedAt: 1 }]]);
+      return {
+        getFileAddRecords: () => fileAdds,
+        gitEvidenceProduct: () => ({
+          fileAddRecords: () => fileAdds,
+        }),
+      };
+    });
     vi.doMock('../../../src/queries/cleanup/similar.js', () => ({
       similarAll: () => [
         {

@@ -41,7 +41,7 @@ import {
   type ProjectBundle,
   type TsMorphModule,
 } from './ts-morph-runtime.js';
-import { profileEnabled, profileSpan } from '../../runtime/profile.js';
+import { profileEnabled, profileSpan } from '../../instrumentation/profile.js';
 
 type PackageExportIndex = Map<string, Map<string, Set<number>>>;
 type TypeScriptSymbol = ts.Symbol;

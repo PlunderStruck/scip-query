@@ -47,11 +47,12 @@ export function passthroughCandidates(
   const { scope, maxLoc = 15, limit = 30, scanLimit } = opts ?? {};
   const index = new ProjectIndex(db);
   return runCandidateAnalysis({
-    candidates: () => getPassthroughCandidateSymbols(db, index, scope, maxLoc),
-    orderCandidates: compareDefinitionsBySmallestLoc,
-    scanLimit,
-    prepare: (symbols) => index.calleeMap(symbols, { semantic: opts?.semantic !== false }),
-    evaluate: (sym, calleeMap) => passthroughCandidateForSymbol(db, sym, calleeMap.get(sym.symbolId) ?? []),
+      candidates: () => getPassthroughCandidateSymbols(db, index, scope, maxLoc),
+      orderCandidates: compareDefinitionsBySmallestLoc,
+      scanLimit,
+      profile: { name: 'passthrough-candidates' },
+      prepare: (symbols) => index.calleeMap(symbols, { semantic: opts?.semantic !== false }),
+      evaluate: (sym, calleeMap) => passthroughCandidateForSymbol(db, sym, calleeMap.get(sym.symbolId) ?? []),
     orderResults: (a, b) => a.loc - b.loc || a.file.localeCompare(b.file),
     limit,
   });

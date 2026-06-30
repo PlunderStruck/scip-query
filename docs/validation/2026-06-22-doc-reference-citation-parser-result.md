@@ -85,3 +85,10 @@ The doc-reference citation parser references to `diff-gate.ts` remain accurate.
 The focused co-change history optimization does not touch doc-reference parsing
 or citation contexts; it only changes how the separate co-change partner check
 loads git-history evidence.
+
+## 2026-06-30 Evidence Product Follow-Up
+
+The `src/queries/cleanup/doc-drift.ts` citation-parser reference remains
+accurate after the file evidence product registry migration. Markdown citation
+context extraction still uses the same parser and path-evidence payload; only
+the persistent cache read/write path moved to `src/storage/evidence-products.ts`.

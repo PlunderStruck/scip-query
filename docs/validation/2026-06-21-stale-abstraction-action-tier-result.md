@@ -125,3 +125,11 @@ Use the completed frontend behavior, extraction, and stale-abstraction classific
 ## 2026-06-27 Confirmation
 
 The declared-coupling configuration example still intentionally cites `src/queries/cleanup/dead.ts`. The dead-detector performance pass changed candidate pruning internals only; it does not change the stale-abstraction action-tier result or the configuration-example citation target.
+
+## 2026-06-30 Consumer Evidence Product Reference Check
+
+The declared-coupling configuration example still intentionally cites
+`src/queries/cleanup/stale-abstractions.ts`. The consumer evidence product
+migration preserves the stale-abstraction direct-vs-signal action-tier result;
+it only centralizes the caller, semantic, source-fallback, import-only, and
+re-export-only consumer evidence behind a shared product.

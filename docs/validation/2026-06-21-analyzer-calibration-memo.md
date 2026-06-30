@@ -422,3 +422,10 @@ The `similar.ts` calibration reference remains accurate after adding diagnostic
 profile spans. Profiling is opt-in through `bench --profile` or
 `SCIP_QUERY_PROFILE`; it records phase timings for optimization work and does
 not change analyzer categories, score calibration, or `similar --full` output.
+
+## 2026-06-30 Evidence Product Follow-Up
+
+The `src/queries/cleanup/similar.ts` calibration reference remains accurate
+after the file evidence product registry migration. Source-fingerprint evidence
+uses the same tokens, IDF inputs, and scoring path; the persistent cache access
+is now centralized in `src/storage/evidence-products.ts`.

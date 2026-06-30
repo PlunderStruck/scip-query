@@ -37,11 +37,16 @@ export type FileEvidenceKind =
   | 'react-component-behavior-profiles'
   | 'git-file-adds';
 
+export type ProjectEvidenceKind = 'file-dependency-graph';
+
 interface EvidenceConnection {
   evidence: Database.Database;
   readFileEvidence: Database.Statement;
   readLegacyFileEvidence: Database.Statement;
   writeFileEvidence: Database.Statement;
+  readProjectEvidence: Database.Statement;
+  readLegacyProjectEvidence: Database.Statement;
+  writeProjectEvidence: Database.Statement;
   readCallees: Database.Statement;
   readLegacyCallees: Database.Statement;
   writeCallees: Database.Statement;
@@ -148,6 +153,14 @@ function connectionFor(db: ScipDatabase): EvidenceConnection | null {
         payload TEXT NOT NULL,
         PRIMARY KEY (kind, relative_path)
       );
+      CREATE TABLE IF NOT EXISTS project_evidence (
+        kind TEXT NOT NULL,
+        cache_key TEXT NOT NULL,
+        project_fingerprint TEXT NOT NULL,
+        version TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        PRIMARY KEY (kind, cache_key)
+      );
       CREATE TABLE IF NOT EXISTS semantic_callees (
         relative_path TEXT NOT NULL,
         symbol TEXT NOT NULL,
@@ -179,6 +192,18 @@ function connectionFor(db: ScipDatabase): EvidenceConnection | null {
       ),
       writeFileEvidence: evidence.prepare(
         'INSERT OR REPLACE INTO file_evidence (kind, relative_path, content_hash, version, payload) VALUES (?, ?, ?, ?, ?)',
+      ),
+      readProjectEvidence: evidence.prepare(
+        'SELECT payload FROM project_evidence WHERE kind = ? AND cache_key = ? AND project_fingerprint = ? AND version = ?',
+      ),
+      readLegacyProjectEvidence: evidence.prepare(
+        `SELECT payload FROM project_evidence
+         WHERE kind = ? AND cache_key = ? AND project_fingerprint = ? AND ${LEGACY_VERSION_PREDICATE}
+         ORDER BY version DESC
+         LIMIT 1`,
+      ),
+      writeProjectEvidence: evidence.prepare(
+        'INSERT OR REPLACE INTO project_evidence (kind, cache_key, project_fingerprint, version, payload) VALUES (?, ?, ?, ?, ?)',
       ),
       readCallees: evidence.prepare(
         `SELECT payload FROM semantic_callees
@@ -261,18 +286,41 @@ export function writeCachedFileEvidence(
   }
 }
 
-/** Rows currently cached — lets callers warn before a cold full-corpus pass. */
-export function semanticCalleeRowCount(db: ScipDatabase): number {
+// scip-query: ignore-wrapper — public project-storage boundary; callers get a
+// disable-on-error read, never a raw statement.
+export function readCachedProjectEvidence(
+  db: ScipDatabase,
+  kind: ProjectEvidenceKind,
+  cacheKey: string,
+  projectFingerprint: string,
+): string | null {
   const connection = connectionFor(db);
-  if (!connection) return 0;
+  if (!connection) return null;
   try {
-    const row = connection.evidence.prepare('SELECT COUNT(*) AS count FROM semantic_callees').get() as
-      | { count: number }
-      | undefined;
-    return row?.count ?? 0;
+    const row = (connection.readProjectEvidence.get(kind, cacheKey, projectFingerprint, VERSION) ??
+      connection.readLegacyProjectEvidence.get(kind, cacheKey, projectFingerprint)) as { payload: string } | undefined;
+    return row?.payload ?? null;
   } catch (error) {
-    disable(db, 'semantic_callees count', error);
-    return 0;
+    disable(db, 'project_evidence read', error);
+    return null;
+  }
+}
+
+// scip-query: ignore-wrapper — public project-storage boundary; callers get a
+// disable-on-error write, never a raw statement.
+export function writeCachedProjectEvidence(
+  db: ScipDatabase,
+  kind: ProjectEvidenceKind,
+  cacheKey: string,
+  projectFingerprint: string,
+  payload: string,
+): void {
+  const connection = connectionFor(db);
+  if (!connection) return;
+  try {
+    connection.writeProjectEvidence.run(kind, cacheKey, projectFingerprint, VERSION, payload);
+  } catch (error) {
+    disable(db, 'project_evidence write', error);
   }
 }
 

@@ -123,3 +123,10 @@ reactHookCandidates -C 10`.
 - `scip-query diff-gate --json`: passed with zero findings after structured
   suppression `SQ58DA50428777`, an accepted cache-declaration echo matching the
   existing Vue source-file cache pattern.
+
+## 2026-06-30 Evidence Product Follow-Up
+
+The accepted `src/source/react-profile.ts` cache record still names the intended
+optimization. The persistent React behavior-profile payload now goes through
+`src/storage/evidence-products.ts`; the source-file cache, cloning of mutable
+sets and arrays, and returned profile behavior are unchanged.

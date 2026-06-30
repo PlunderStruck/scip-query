@@ -4,8 +4,12 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../src/storage/db.js';
-import { augmentAuxiliaryDocuments } from '../../src/reindex/augment.js';
-import { augmentVueResolvedReferences } from '../../src/reindex/vue/augment-vue.js';
+import { augmentAuxiliaryDocuments, auxiliaryDocumentsAugmentationStage } from '../../src/reindex/augment.js';
+import {
+  augmentVueResolvedReferences,
+  vueResolvedReferencesAugmentationStage,
+} from '../../src/reindex/vue/augment-vue.js';
+import { runPostIndexAugmentation } from '../../src/reindex/post-index-augmentation.js';
 import * as queries from '../../src/queries/index.js';
 
 function createDocumentsOnlyDb(dbPath: string): void {
@@ -98,6 +102,35 @@ describe('auxiliary source augmentation', () => {
 
     const result = augmentAuxiliaryDocuments({ projectRoot, dbPath });
     expect(result).toEqual({ scanned: 1_100, inserted: 1_100, existing: 0 });
+  });
+
+  it('runs auxiliary source augmentation as a post-index stage', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-augment-stage-'));
+    const dbPath = join(projectRoot, 'index.db');
+    mkdirSync(join(projectRoot, 'src/components'), { recursive: true });
+    writeFileSync(join(projectRoot, 'src/main.ts'), 'export const main = 1;\n');
+    writeFileSync(join(projectRoot, 'src/components/UserList.vue'), '<template>{{ count }}</template>\n');
+    createDocumentsOnlyDb(dbPath);
+
+    const run = runPostIndexAugmentation(auxiliaryDocumentsAugmentationStage(), { projectRoot, dbPath });
+
+    expect(run.stageId).toBe('auxiliary-documents');
+    expect(run.facts).toEqual(['auxiliary-document']);
+    expect(run.durationMs).toBeGreaterThanOrEqual(0);
+    expect(run.result).toEqual({ scanned: 1, inserted: 1, existing: 0 });
+  });
+
+  it('names Vue resolved references as post-index augmentation facts', () => {
+    const stage = vueResolvedReferencesAugmentationStage({ tsconfig: 'tsconfig.json' });
+
+    expect(stage.id).toBe('vue-resolved-references');
+    expect(stage.facts).toEqual([
+      'synthetic-symbol',
+      'source-mapped-occurrence',
+      'definition-mention',
+      'replacement-chunk',
+      'fingerprint-cache',
+    ]);
   });
 
   it('explains missing Volar dependencies for Vue reference augmentation', () => {

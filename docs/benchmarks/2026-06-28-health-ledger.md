@@ -480,3 +480,10 @@ Post-change verification:
   historical ledgers and validation notes that cite the touched implementation
   files. The behavioral update is recorded in this section; path-only
   historical citations remain intentionally unchanged.
+
+## 2026-06-30 Git Evidence Product Follow-Up
+
+The `src/queries/health/health.ts` benchmark citation remains accurate after
+the Git evidence product migration. Health still owns the same score phases and
+Git summary shape; the latest change only routes churn and amplification reads
+through `gitEvidenceProduct()`.

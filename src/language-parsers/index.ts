@@ -11,7 +11,9 @@
  */
 import type { ScipDatabase } from '../storage/db.js';
 import { importResolutionFingerprint, normalizePath } from '../resolution/import-path-resolver.js';
-import { fileContentHash, readCachedFileEvidence, writeCachedFileEvidence } from '../storage/evidence-cache.js';
+import { fileContentHash } from '../storage/evidence-cache.js';
+import { isRecord } from '../storage/evidence-payload.js';
+import { createFileEvidenceProduct } from '../storage/evidence-products.js';
 import { createPerDbCache } from '../storage/per-db-cache.js';
 import type { ParsedReExport, ParsedSourceExport, ParsedSourceImport } from '../domain/types.js';
 import { getSourceText } from '../source/source-text.js';
@@ -32,6 +34,17 @@ interface SerializedReExports {
   reExports: ParsedReExport[];
 }
 
+const SOURCE_IMPORTS_PRODUCT = createFileEvidenceProduct<SerializedSourceImports>({
+  kind: 'source-imports',
+  serialize: serializeSourceImports,
+  deserialize: deserializeSourceImports,
+});
+const SOURCE_REEXPORTS_PRODUCT = createFileEvidenceProduct<SerializedReExports>({
+  kind: 'source-reexports',
+  serialize: serializeReExports,
+  deserialize: deserializeReExports,
+});
+
 export function getReExports(db: ScipDatabase, relativePath: string): ParsedReExport[] {
   const normalized = normalizePath(relativePath);
   return SOURCE_REEXPORT_CACHE.get(db, normalized, () => {
@@ -41,25 +54,12 @@ export function getReExports(db: ScipDatabase, relativePath: string): ParsedReEx
     if (!source) return [];
     const contentHash = fileContentHash(db, normalized, source);
     const resolutionFingerprint = importResolutionFingerprint(db);
-    const cached = readCachedFileEvidence(db, 'source-reexports', normalized, contentHash);
-    if (cached !== null) {
-      try {
-        const payload = JSON.parse(cached) as SerializedReExports;
-        if (payload.resolutionFingerprint === resolutionFingerprint && Array.isArray(payload.reExports)) {
-          return payload.reExports;
-        }
-      } catch {
-        // corrupt payload — fall through and rebuild
-      }
+    const cached = SOURCE_REEXPORTS_PRODUCT.read(db, normalized, contentHash);
+    if (cached?.resolutionFingerprint === resolutionFingerprint) {
+      return cached.reExports;
     }
     const reExports = parser.parseReExports(db, normalized, source);
-    writeCachedFileEvidence(
-      db,
-      'source-reexports',
-      normalized,
-      contentHash,
-      JSON.stringify({ resolutionFingerprint, reExports } satisfies SerializedReExports),
-    );
+    SOURCE_REEXPORTS_PRODUCT.write(db, normalized, contentHash, { resolutionFingerprint, reExports });
     return reExports;
   });
 }
@@ -73,25 +73,12 @@ export function getSourceImports(db: ScipDatabase, relativePath: string): Parsed
     if (!source) return [];
     const contentHash = fileContentHash(db, normalized, source);
     const resolutionFingerprint = importResolutionFingerprint(db);
-    const cached = readCachedFileEvidence(db, 'source-imports', normalized, contentHash);
-    if (cached !== null) {
-      try {
-        const payload = JSON.parse(cached) as SerializedSourceImports;
-        if (payload.resolutionFingerprint === resolutionFingerprint && Array.isArray(payload.imports)) {
-          return payload.imports;
-        }
-      } catch {
-        // corrupt payload — fall through and rebuild
-      }
+    const cached = SOURCE_IMPORTS_PRODUCT.read(db, normalized, contentHash);
+    if (cached?.resolutionFingerprint === resolutionFingerprint) {
+      return cached.imports;
     }
     const imports = parser.parseImports(db, normalized, source);
-    writeCachedFileEvidence(
-      db,
-      'source-imports',
-      normalized,
-      contentHash,
-      JSON.stringify({ resolutionFingerprint, imports } satisfies SerializedSourceImports),
-    );
+    SOURCE_IMPORTS_PRODUCT.write(db, normalized, contentHash, { resolutionFingerprint, imports });
     return imports;
   });
 }
@@ -105,4 +92,36 @@ export function getSourceExports(db: ScipDatabase, relativePath: string): Parsed
     if (!source) return [];
     return parser.parseExports(db, normalized, source);
   });
+}
+
+function serializeSourceImports(payload: SerializedSourceImports): string {
+  return JSON.stringify(payload);
+}
+
+function deserializeSourceImports(payload: string): SerializedSourceImports | null {
+  try {
+    const raw = JSON.parse(payload) as unknown;
+    if (!isRecord(raw) || typeof raw.resolutionFingerprint !== 'string' || !Array.isArray(raw.imports)) {
+      return null;
+    }
+    return { resolutionFingerprint: raw.resolutionFingerprint, imports: raw.imports as ParsedSourceImport[] };
+  } catch {
+    return null;
+  }
+}
+
+function serializeReExports(payload: SerializedReExports): string {
+  return JSON.stringify(payload);
+}
+
+function deserializeReExports(payload: string): SerializedReExports | null {
+  try {
+    const raw = JSON.parse(payload) as unknown;
+    if (!isRecord(raw) || typeof raw.resolutionFingerprint !== 'string' || !Array.isArray(raw.reExports)) {
+      return null;
+    }
+    return { resolutionFingerprint: raw.resolutionFingerprint, reExports: raw.reExports as ParsedReExport[] };
+  } catch {
+    return null;
+  }
 }

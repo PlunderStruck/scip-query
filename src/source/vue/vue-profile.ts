@@ -66,9 +66,11 @@ export function buildVueComponentBehaviorProfiles(
       (profile) =>
         (opts.minTemplateTokens === undefined || profile.templateTokens.size >= opts.minTemplateTokens) &&
         (opts.minBehaviorTokens === undefined || profile.behaviorTokens.size >= opts.minBehaviorTokens),
-    );
+      );
 }
 
+// scip-query: ignore-wrapper — optimized per-file cache entry shared by broad
+// Vue scans and the frontend behavior product's file-scoped read method.
 export function buildVueComponentBehaviorProfile(db: ScipDatabase, relativePath: string): VueComponentBehaviorProfile {
   const file = relativePath.replace(/\\/g, '/');
   const source = getSourceText(db, file);

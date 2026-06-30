@@ -1,8 +1,13 @@
 import { difference, intersection, jaccard } from '../../analysis/similarity.js';
-import { buildVueComponentBehaviorProfiles, type VueComponentBehaviorProfile } from '../../source/vue/vue-profile.js';
+import { frontendBehaviorProduct } from '../../source/frontend-behavior-products.js';
+import type { VueComponentBehaviorProfile } from '../../source/vue/vue-profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { sortedTokens, tokenValues } from '../internal/frontend-behavior-evidence.js';
-import { rankedPairwiseProfileResults, type PairwiseFileProfile } from '../internal/pairwise-profiles.js';
+import {
+  pairwiseCandidateIndexFromKeys,
+  rankedPairwiseProfileResults,
+  type PairwiseFileProfile,
+} from '../internal/pairwise-profiles.js';
 
 export interface VueComponentDuplicateResult {
   fileA: string;
@@ -46,11 +51,14 @@ export function vueComponentDuplicates(
 ): VueComponentDuplicateResult[] {
   const { minSimilarity = 0.62, minTokens = 8, limit = 20, scope, scanLimit, filePattern, focusFiles } = opts;
   const profiles = buildVueComponentProfiles(db, { scope, minTokens, scanLimit });
+  const candidateIndex = pairwiseCandidateIndexFromKeys(profiles, (profile) => profile.tokens);
   return rankedPairwiseProfileResults({
     profiles,
     limit,
     filePattern,
     focusFiles,
+    candidateIndex,
+    profile: { name: 'vue-component-duplicates' },
     compare: (a, b) => compareProfiles(a, b, minSimilarity),
     sort: (a, b) => b.similarity - a.similarity || a.fileA.localeCompare(b.fileA) || a.fileB.localeCompare(b.fileB),
   });
@@ -60,15 +68,17 @@ function buildVueComponentProfiles(
   db: ScipDatabase,
   opts: { scope?: string; minTokens: number; scanLimit?: number },
 ): VueComponentProfile[] {
-  return buildVueComponentBehaviorProfiles(db, {
-    scope: opts.scope,
-    minTemplateTokens: opts.minTokens,
-    scanLimit: opts.scanLimit,
-  }).map((profile) => ({
-    file: profile.file,
-    tokens: profile.templateTokens,
-    loc: vueProfileLoc(profile),
-  }));
+  return frontendBehaviorProduct(db)
+    .vueProfiles({
+      scope: opts.scope,
+      minTemplateTokens: opts.minTokens,
+      scanLimit: opts.scanLimit,
+    })
+    .map((profile) => ({
+      file: profile.file,
+      tokens: profile.templateTokens,
+      loc: vueProfileLoc(profile),
+    }));
 }
 
 function vueProfileLoc(profile: VueComponentBehaviorProfile): number {

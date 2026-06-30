@@ -6,7 +6,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
-import { definitionConsumerFileMap } from '../internal/consumer-evidence.js';
+import { consumerEvidenceProduct, consumerFileMapFromEvidence } from '../internal/consumer-evidence.js';
 
 export type LocalityActionTier = 'signal';
 
@@ -179,7 +179,7 @@ export function localityCandidates(db: ScipDatabase, options: LocalityCandidates
 
   const candidates = sourceUnits
     .map((source) =>
-      buildLocalityCandidate(index, graph, source, options, indexedDirectories, architecturalBoundarySegments),
+      buildLocalityCandidate(db, index, graph, source, options, indexedDirectories, architecturalBoundarySegments),
     )
     .filter((candidate) => candidate.consumerFiles.length >= minConsumers || options.target)
     .sort(compareLocalityCandidates);
@@ -232,6 +232,7 @@ function scanFileSourceUnits(
 }
 
 function buildLocalityCandidate(
+  db: ScipDatabase,
   index: ProjectIndex,
   graph: Map<string, Set<string>>,
   source: SourceUnitWithDefinition,
@@ -240,7 +241,7 @@ function buildLocalityCandidate(
   architecturalBoundarySegments: ReadonlySet<string>,
 ): LocalityCandidate {
   const consumerFiles = source.definition
-    ? symbolConsumerFiles(index, source.definition, options.semantic)
+    ? symbolConsumerFiles(db, index, source.definition, options.semantic)
     : fileConsumerFiles(graph, source.unit.file);
   const consumerCoverage = source.definition
     ? consumerFiles.length > 0
@@ -305,14 +306,17 @@ function buildLocalityCandidate(
 }
 
 function symbolConsumerFiles(
+  db: ScipDatabase,
   index: ProjectIndex,
   definition: IndexedDefinition,
   semantic: boolean | undefined,
 ): string[] {
-  const consumers = definitionConsumerFileMap(index, [definition], {
-    semantic: semantic !== false,
-    sourceFallback: true,
-  });
+  const consumers = consumerFileMapFromEvidence(
+    consumerEvidenceProduct(db, index).forDefinitions([definition], {
+      semantic: semantic !== false,
+      sourceFallback: true,
+    }),
+  );
   return sortedUnique(consumers.get(definition.symbolId) ?? []);
 }
 

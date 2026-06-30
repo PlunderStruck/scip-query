@@ -18,7 +18,7 @@ import { drift } from '../cleanup/drift.js';
 import { complexityHotspots } from '../quality/complexity-hotspots.js';
 import { stats } from '../navigation/stats.js';
 import { coChange, type CoChangeFinding } from '../impact/co-change.js';
-import { getChangeAmplification, getFileChurn } from '../../analysis/git-history.js';
+import { gitEvidenceProduct } from '../../analysis/git-history.js';
 import { getSuppressionInventory } from '../../analysis/suppressions.js';
 import { buildHealthReport } from './health-report.js';
 import { HEALTH_DETECTOR_PROFILES } from '../internal/health-detector-profiles.js';
@@ -525,7 +525,8 @@ function summarizeHealthStaleAbstractions(
 
 function summarizeGitEvidence(db: ScipDatabase, budget: HealthBudget): GitEvidenceSummary | null {
   return runHealthPhase(db, budget, 'git-evidence', () => {
-    const churn = getFileChurn(db);
+    const git = gitEvidenceProduct(db);
+    const churn = git.fileChurn();
     if (!churn) return null;
     const coChangeResult = coChange(db, undefined, { limit: budget.candidateResultLimit });
     const fileStats: Record<string, { changes: number; fixChanges: number }> = {};
@@ -533,7 +534,7 @@ function summarizeGitEvidence(db: ScipDatabase, budget: HealthBudget): GitEviden
       fileStats[file] = { changes: entry.changes, fixChanges: entry.fixChanges };
     }
     return {
-      amplification: getChangeAmplification(db),
+        amplification: git.changeAmplification(),
       hiddenCoupling: {
         pairCount: coChangeResult.findings.length,
         scoreCount: roundHealthScoreCount(

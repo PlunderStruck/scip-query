@@ -118,3 +118,10 @@ text.
 The incomplete-migration scope-hint notes remain accurate after adding
 `similar.ts` profile spans. The spans are measurement-only and do not change
 scope labels, ordering, CLI rendering, or remediation text.
+
+## 2026-06-30 Evidence Product Follow-Up
+
+The `src/queries/cleanup/similar.ts` incomplete-migration scope-hint reference
+remains accurate after the file evidence product registry migration. Similarity
+scope labels and remediation text are unchanged; source-fingerprint persistence
+now goes through `src/storage/evidence-products.ts`.

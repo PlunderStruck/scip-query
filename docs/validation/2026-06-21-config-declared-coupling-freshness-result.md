@@ -78,3 +78,10 @@ This was an output-trust and analyzer-context repair, not a detector algorithm c
 profile-event wiring. The declared-coupling freshness claim above is unchanged:
 `config-validate` still passes `projectRoot` into `validateProjectConfig()`, and
 the profiling path does not affect project config validation.
+
+## 2026-06-30 Evidence Product Follow-Up
+
+The `src/queries/cleanup/doc-drift.ts` freshness references remain accurate
+after the file evidence product registry migration. Doc path evidence still
+uses the same content-hash guard and citation extraction; only the persistent
+cache read/write path moved to `src/storage/evidence-products.ts`.

@@ -4,7 +4,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
-import { semanticCallerMap, semanticImportUsage, semanticSignature } from '../../../src/semantic/shared-primitives.js';
+import {
+  semanticCallerMap,
+  semanticEvidenceProduct,
+  semanticImportUsage,
+  semanticSignature,
+} from '../../../src/semantic/shared-primitives.js';
 import { getAllDefinitions } from '../../../src/symbols/definition-catalog.js';
 import { dead, refs, staleAbstractions } from '../../../src/queries/index.js';
 import { createEvidenceSchema } from '../../fixtures/evidence-fixture.js';
@@ -260,7 +265,24 @@ function withMonorepoSemanticFixture(run: (db: ScipDatabase) => void): void {
 describe('TypeScript semantic provider', () => {
   it('uses ts-morph import usage and references as shared liveness evidence', () => {
     withSemanticFixture((db) => {
+      const semantic = semanticEvidenceProduct(db);
       const imports = semanticImportUsage(db, 'src/consumer.ts');
+      expect(semantic.capability('semantic-import-usage', 'src/consumer.ts')).toEqual(
+        expect.objectContaining({
+          available: true,
+          language: 'typescript',
+          slot: 'semantic-import-usage',
+        }),
+      );
+      expect(semantic.capability('semantic-references', 'README.md')).toEqual(
+        expect.objectContaining({
+          available: false,
+          language: 'typescript',
+          reason: expect.stringContaining('TypeScript'),
+          slot: 'semantic-references',
+        }),
+      );
+      expect(semantic.importUsage('src/consumer.ts')).toEqual(imports);
       expect(
         imports.map((entry) => ({
           localName: entry.localName,
@@ -282,12 +304,14 @@ describe('TypeScript semantic provider', () => {
       const definitions = getAllDefinitions(db);
       const callerMap = semanticCallerMap(db, definitions);
       const byName = new Map(definitions.map((definition) => [definition.leaf, definition]));
+      expect(semantic.callerMap(definitions)).toEqual(callerMap);
       expect(callerMap.get(byName.get('usedHelper')!.symbolId)).toEqual(new Set(['src/consumer.ts']));
       expect(callerMap.get(byName.get('semanticOnly')!.symbolId)).toEqual(new Set(['src/consumer.ts']));
       expect(callerMap.get(byName.get('defaultHelper')!.symbolId)).toEqual(new Set(['src/consumer.ts']));
       expect(callerMap.get(byName.get('namespaceHelper')!.symbolId)).toEqual(new Set(['src/consumer.ts']));
 
       expect(semanticSignature(db, byName.get('usedHelper')!)).toBe('()=>string');
+      expect(semantic.signature(byName.get('usedHelper')!)).toBe('()=>string');
       expect(dead(db, { minLoc: 1 }).symbols.map((symbol) => symbol.shortName)).not.toContain('api:usedHelper()');
       expect(dead(db, { minLoc: 1 }).symbols.map((symbol) => symbol.shortName)).not.toContain('api:semanticOnly()');
       expect(dead(db, { minLoc: 1 }).symbols.map((symbol) => symbol.shortName)).not.toContain('api:defaultHelper()');

@@ -1,4 +1,5 @@
-import { buildReactComponentBehaviorProfiles, type ReactComponentBehaviorProfile } from '../../source/react-profile.js';
+import { frontendBehaviorProduct } from '../../source/frontend-behavior-products.js';
+import type { ReactComponentBehaviorProfile } from '../../source/react-profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
 
 export type ReactLargeComponentPressureAxis = 'component' | 'file' | 'jsx-structure' | 'hook-behavior';
@@ -49,7 +50,8 @@ export function reactLargeComponentPressure(
     scanLimit,
     filePattern,
   } = opts;
-  const profiles = buildReactComponentBehaviorProfiles(db, { scope, scanLimit })
+  const profiles = frontendBehaviorProduct(db)
+    .reactProfiles({ scope, scanLimit })
     .filter((profile) => profile.kind === 'component')
     .filter((profile) => !filePattern || profile.file.includes(filePattern) || profile.name.includes(filePattern));
   return profiles

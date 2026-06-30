@@ -105,3 +105,11 @@ Continue contextual graph-risk review: bottlenecks, coupling, deep chains, and d
 ## 2026-06-27 Confirmation
 
 The `.scipquery.json` configuration example still intentionally cites `src/queries/cleanup/dead.ts`. The dead-detector performance pass changed how already-cross-file-live candidates are skipped before fallback evidence, not the declared-coupling example or action-tier count contract.
+
+## 2026-06-30 Consumer Evidence Product Reference Check
+
+The `.scipquery.json` configuration example still intentionally cites
+`src/queries/cleanup/stale-abstractions.ts`. The consumer evidence product
+migration changed where consumer maps and classifications are assembled, not
+the stale-abstraction health action-tier contract or the declared-coupling
+example.

@@ -2,7 +2,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { classifyFile } from '../../analysis/file-classifier.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../../core/project-index.js';
-import { profileSpan } from '../../runtime/profile.js';
+import { profileSpan } from '../../instrumentation/profile.js';
 import { semanticCallerMap } from '../../semantic/shared-primitives.js';
 import { applyScanLimit, definitionLoc } from '../query-utils.js';
 

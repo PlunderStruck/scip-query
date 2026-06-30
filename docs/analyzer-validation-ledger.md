@@ -299,3 +299,10 @@ optimization. Default diff-gate still runs the same check family; the
 co-change partner check now reads only changed-file commits from the same
 bounded git-history window instead of parsing the whole name-only history
 payload.
+
+## 2026-06-30 Git Evidence Product Follow-Up
+
+The `diffGate()` and health citations remain accurate after the Git evidence
+product migration. Default diff-gate still runs the same check family, and
+health still reports the same Git evidence summary; both paths now read Git
+history through `gitEvidenceProduct()`.

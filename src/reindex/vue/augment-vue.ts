@@ -1,7 +1,12 @@
 import Database from 'better-sqlite3';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { augmentAuxiliaryDocuments } from '../augment.js';
+import { auxiliaryDocumentsAugmentationStage } from '../augment.js';
+import {
+  runFingerprintCachedPostIndexAugmentation,
+  runPostIndexAugmentation,
+  type PostIndexAugmentationStage,
+} from '../post-index-augmentation.js';
 import { fingerprintProjectFiles } from '../project-files.js';
 import { awaitVueReferenceWorkers, shouldUseVueWorkers } from './augment-vue-workers.js';
 import {
@@ -62,11 +67,6 @@ interface VueReferenceComputationContext {
   sourceReader: VueSourceReader;
 }
 
-interface AugmentVueCache {
-  fingerprint: AugmentVueFingerprint;
-  result: AugmentVueResolvedResult;
-}
-
 interface AugmentVueFingerprint {
   version: 2;
   tsconfig: string;
@@ -92,12 +92,41 @@ interface VueAugmentationTransactionContext {
   onStatus?: (message: string) => void;
 }
 
+export function vueResolvedReferencesAugmentationStage(opts: {
+  tsconfig: string;
+}): PostIndexAugmentationStage<AugmentVueResolvedResult> {
+  return {
+    id: 'vue-resolved-references',
+    facts: [
+      'synthetic-symbol',
+      'source-mapped-occurrence',
+      'definition-mention',
+      'replacement-chunk',
+      'fingerprint-cache',
+    ],
+    run: (context) =>
+      augmentVueResolvedReferencesFromIndexedDocuments({
+        projectRoot: context.projectRoot,
+        dbPath: context.dbPath,
+        tsconfig: opts.tsconfig,
+        onStatus: context.onStatus,
+      }),
+  };
+}
+
 export function augmentVueResolvedReferences(opts: AugmentVueResolvedOptions): AugmentVueResolvedResult {
-  augmentAuxiliaryDocuments({
+  runPostIndexAugmentation(auxiliaryDocumentsAugmentationStage(), {
     projectRoot: opts.projectRoot,
     dbPath: opts.dbPath,
   });
+  return runPostIndexAugmentation(vueResolvedReferencesAugmentationStage({ tsconfig: opts.tsconfig }), {
+    projectRoot: opts.projectRoot,
+    dbPath: opts.dbPath,
+    onStatus: opts.onStatus,
+  }).result;
+}
 
+function augmentVueResolvedReferencesFromIndexedDocuments(opts: AugmentVueResolvedOptions): AugmentVueResolvedResult {
   const configPath = resolve(opts.projectRoot, opts.tsconfig);
   if (!existsSync(configPath)) {
     throw new Error(`Vue tsconfig not found at ${configPath}`);
@@ -108,36 +137,27 @@ export function augmentVueResolvedReferences(opts: AugmentVueResolvedOptions): A
   try {
     const vueFiles = listVueDocumentFiles(db, opts.projectRoot);
     const cachePath = join(dirname(opts.dbPath), 'augment-vue-meta.json');
-    const cacheFingerprint = computeAugmentVueFingerprint(db, opts.projectRoot, opts.tsconfig);
-    const cachedResult = reuseCachedVueAugmentation(cachePath, cacheFingerprint, opts.onStatus);
-    if (cachedResult) return cachedResult;
-
-    const result = runVueAugmentationTransaction({
-      db,
-      projectRoot: opts.projectRoot,
-      dbPath: opts.dbPath,
-      tsconfig: opts.tsconfig,
-      configPath,
-      vueFiles,
-      onStatus: opts.onStatus,
+    return runFingerprintCachedPostIndexAugmentation({
+      cachePath,
+      readFingerprint: () => computeAugmentVueFingerprint(db, opts.projectRoot, opts.tsconfig),
+      compute: () =>
+        runVueAugmentationTransaction({
+          db,
+          projectRoot: opts.projectRoot,
+          dbPath: opts.dbPath,
+          tsconfig: opts.tsconfig,
+          configPath,
+          vueFiles,
+          onStatus: opts.onStatus,
+        }),
+      onCacheHit: (cachedResult) =>
+        opts.onStatus?.(
+          `Vue references unchanged; reused ${cachedResult.resolvedReferences} cached resolved references.`,
+        ),
     });
-    writeAugmentVueCache(cachePath, computeAugmentVueFingerprint(db, opts.projectRoot, opts.tsconfig), result);
-    return result;
   } finally {
     db.close();
   }
-}
-
-function reuseCachedVueAugmentation(
-  cachePath: string,
-  cacheFingerprint: AugmentVueFingerprint,
-  onStatus?: (message: string) => void,
-): AugmentVueResolvedResult | null {
-  const cachedResult = readAugmentVueCache(cachePath, cacheFingerprint);
-  if (cachedResult) {
-    onStatus?.(`Vue references unchanged; reused ${cachedResult.resolvedReferences} cached resolved references.`);
-  }
-  return cachedResult;
 }
 
 // scip-query: ignore-extract — Vue augmentation is a transaction: create the
@@ -191,34 +211,6 @@ function computeVueReferenceComputation(
     ...computationContext,
     vueFiles: computationContext.context.fileNames.filter((file) => file.endsWith('.vue')),
   });
-}
-
-function readAugmentVueCache(cachePath: string, fingerprint: AugmentVueFingerprint): AugmentVueResolvedResult | null {
-  try {
-    const cache = JSON.parse(readFileSync(cachePath, 'utf-8')) as AugmentVueCache;
-    return JSON.stringify(cache.fingerprint) === JSON.stringify(fingerprint) ? cache.result : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeAugmentVueCache(
-  cachePath: string,
-  fingerprint: AugmentVueFingerprint,
-  result: AugmentVueResolvedResult,
-): void {
-  writeFileSync(
-    cachePath,
-    JSON.stringify(
-      {
-        updatedAt: new Date().toISOString(),
-        fingerprint,
-        result,
-      },
-      null,
-      2,
-    ) + '\n',
-  );
 }
 
 function computeAugmentVueFingerprint(

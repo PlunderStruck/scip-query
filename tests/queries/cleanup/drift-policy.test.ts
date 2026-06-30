@@ -16,6 +16,8 @@ describe('drift layer policy', () => {
     expect(layerPolicyForEdge('src/language-parsers', 'src/resolution')).toBe('ok');
     expect(layerPolicyForEdge('src/reindex', 'src/semantic')).toBe('ok');
     expect(layerPolicyForEdge('src/runtime', 'src/semantic')).toBe('ok');
+    expect(layerPolicyForEdge('src/semantic', 'src/instrumentation')).toBe('ok');
+    expect(layerPolicyForEdge('src/symbols', 'src/instrumentation')).toBe('ok');
     expect(layerPolicyForEdge('src/domain', 'src/storage')).toBe('violation');
   });
 

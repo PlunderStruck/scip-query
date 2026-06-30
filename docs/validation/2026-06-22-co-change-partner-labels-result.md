@@ -74,3 +74,10 @@ The co-change partner references remain accurate. The focused history change
 preserves partner classification, labels, suggestions, and output fields; it
 only avoids parsing commits outside the changed-file portion of the same
 bounded git-history window for diff-gate's directional check.
+
+## 2026-06-30 Git Evidence Product Follow-Up
+
+The `co-change.ts` and `diff-gate.ts` references remain accurate after the Git
+evidence product migration. Partner classification, labels, suggestions, and
+rendered output fields are unchanged; both command paths now receive Git facts
+from `gitEvidenceProduct()`.

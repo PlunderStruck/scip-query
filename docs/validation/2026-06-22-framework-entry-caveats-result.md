@@ -50,3 +50,10 @@ A framework-discovered entrypoint is a source-level export whose real caller is 
 ## Judgment
 
 Verdict: implemented. Framework-discovered exports now receive the same external-live treatment as package/public roots without hiding ordinary same-file helpers. This turns the previous whole-file route skip into a narrower rooted-symbol policy.
+
+## 2026-06-30 Evidence Product Follow-Up
+
+The `src/analysis/framework-patterns.ts` framework-entry caveats remain
+accurate after the file evidence product registry migration. Definition
+exclusions still use the same Rust and TS/JS detection semantics; only the
+persistent evidence read/write adapter moved to `src/storage/evidence-products.ts`.

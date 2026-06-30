@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import {
   buildVueComponentBehaviorProfile,
+  frontendBehaviorProduct,
   getCallSites,
   getVueSfcUnit,
   getVueTemplateFacts,
@@ -138,6 +139,14 @@ describe('Vue template rich internals', () => {
     });
     try {
       const facts = getVueTemplateFacts(db, 'src/components/IssuePanel.vue');
+      const frontend = frontendBehaviorProduct(db);
+      expect(frontend.capability('vue-template-facts', 'src/components/IssuePanel.vue')).toEqual(
+        expect.objectContaining({ available: true, framework: 'vue' }),
+      );
+      expect(frontend.capability('vue-template-facts', 'src/components/IssuePanel.tsx')).toEqual(
+        expect.objectContaining({ available: false, framework: 'vue' }),
+      );
+      expect(frontend.vueTemplateFacts('src/components/IssuePanel.vue')).toEqual(facts);
 
       expect(facts.template).toEqual(expect.objectContaining({ startLine: 0 }));
       expect(facts.componentTags.map((tag) => tag.normalized)).toEqual([
@@ -195,7 +204,10 @@ describe('Vue template rich internals', () => {
         }),
       );
 
+      const frontend = frontendBehaviorProduct(db);
       const profile = buildVueComponentBehaviorProfile(db, 'src/components/SharedBehaviorExternal.vue');
+      expect(frontend.vueProfileForFile('src/components/SharedBehaviorExternal.vue')).toEqual(profile);
+      expect(frontend.vueScriptFacts('src/components/SharedBehaviorExternal.vue')).toEqual(profile.scriptFacts);
       expect(profile.scriptFacts.composables).toEqual(expect.arrayContaining(['useResource', 'useToast']));
       expect(profile.scriptFacts.requests).toEqual(expect.arrayContaining(['fetch', 'runRequest', 'useResource']));
       expect(profile.scriptFacts.lifecycle).toContain('onMounted');

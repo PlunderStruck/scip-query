@@ -25,6 +25,13 @@ candidate collection and reduces per-candidate callee scoring allocations.
 The newest caller-evidence pass prefilters AST callsites by target leaf names
 before expensive candidate matching, improving target-scoped caller maps used
 by complexity scoring.
+The 2026-06-30 health cleanup moved profiling helpers to
+`src/instrumentation/profile.ts`, declared this optimization ledger as an
+intentional coupling group, removed a dead evidence-cache row-count helper, and
+extracted the source-facts type to break the Clojure/source-facts cycle. It did
+not change the optimized similarity, evidence-cache read/write, or benchmarked
+Vega command algorithms; targeted tests and local built-CLI health checks cover
+that cleanup.
 The newest recent-duplicates pass persists the parsed Git file-add map by HEAD
 so warm CLI processes avoid a repeated add-history scan.
 The newest isolated pass prunes strict non-self callees before caller evidence

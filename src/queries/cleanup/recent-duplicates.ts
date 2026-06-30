@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import { getFileAddRecords } from '../../analysis/git-history.js';
+import { gitEvidenceProduct, type FileAddRecord } from '../../analysis/git-history.js';
 import { sourceFrameworkApplicability } from '../../source/source-fileset.js';
 import { reactComponentDuplicates } from '../frontend/react-component-duplicates.js';
 import { reactHookCandidates } from '../frontend/react-hook-candidates.js';
@@ -79,7 +79,7 @@ interface RecentDuplicateCandidate {
   sharedCallees: string[];
 }
 
-type FileAddRecords = NonNullable<ReturnType<typeof getFileAddRecords>>;
+type FileAddRecords = Map<string, FileAddRecord>;
 
 interface RecentDuplicateCandidateOptions {
   limit: number;
@@ -143,7 +143,7 @@ export function recentDuplicates(
   } = {},
 ): RecentDuplicatesResult {
   const { windowCommits = 100, limit = 30, scope, scanLimit } = opts;
-  const adds = getFileAddRecords(db);
+  const adds = gitEvidenceProduct(db).fileAddRecords();
   if (!adds) return { available: false, windowCommits, findings: [] };
   if (limit <= 0) return { available: true, windowCommits, findings: [] };
   const focusFiles = recentDuplicateFocusFiles(adds, windowCommits);

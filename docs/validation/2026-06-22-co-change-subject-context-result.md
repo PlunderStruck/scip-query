@@ -100,3 +100,10 @@ remains unchanged. The new HEAD-keyed file-add evidence cache only persists
 `getFileAddRecords()` for recent-duplicate orientation; it does not change
 subject collection, subject labels, issue refs, or sampled commit subjects for
 co-change pairs.
+
+## 2026-06-30 Evidence Product Follow-Up
+
+The `src/analysis/git-history.ts` subject-context reference remains accurate
+after the file evidence product registry migration. The HEAD-keyed file-add
+cache keeps the same payload and key; only the persistent cache adapter moved to
+`src/storage/evidence-products.ts`.

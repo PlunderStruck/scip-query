@@ -1,12 +1,13 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
-import { getCommitHistory, getTrackedFiles } from '../../analysis/git-history.js';
-import { fileContentHash, readCachedFileEvidence, writeCachedFileEvidence } from '../../storage/evidence-cache.js';
+import { gitEvidenceProduct } from '../../analysis/git-history.js';
+import { fileContentHash } from '../../storage/evidence-cache.js';
 import { isRecord, stringArray } from '../../storage/evidence-payload.js';
+import { createFileEvidenceProduct } from '../../storage/evidence-products.js';
 import { markdownCitationContext } from './doc-citation-context.js';
 import { matchingDocTerms } from './doc-terms.js';
-import { profileEnabled, profileSpan } from '../../runtime/profile.js';
+import { profileEnabled, profileSpan } from '../../instrumentation/profile.js';
 
 export type DocDriftIntent = 'current-guidance' | 'historical-note' | 'unknown';
 export type DocDriftActionTier = 'direct' | 'signal' | 'support';
@@ -78,6 +79,12 @@ interface SerializedDocPathEvidence {
   candidates: string[];
   contextsByCandidate: Array<[string, string[]]>;
 }
+
+const DOC_PATH_EVIDENCE_PRODUCT = createFileEvidenceProduct<DocPathEvidence>({
+  kind: 'doc-path-evidence',
+  serialize: serializeDocPathEvidence,
+  deserialize: deserializeDocPathEvidence,
+});
 
 const DOC_FILE_PATTERN = /\.(?:md|mdx|rst|txt)$/i;
 /**
@@ -274,9 +281,10 @@ function docDriftActionTier(evidence: DocDriftSubject['evidence'], intent: DocDr
 }
 
 function buildDocDriftScanIndex(db: ScipDatabase): DocDriftScanIndex | null {
-  const history = getCommitHistory(db);
+  const git = gitEvidenceProduct(db);
+  const history = git.commitHistory();
   if (!history) return null;
-  const tracked = getTrackedFiles(db) ?? new Set<string>();
+  const tracked = git.trackedFiles() ?? new Set<string>();
 
   // One history pass: per-file change timestamps + doc↔code co-change counts.
   const changeTimes = new Map<string, number[]>();
@@ -336,9 +344,9 @@ export function docsCitingFiles(
   let evidenceDocs = 0;
   let citedDocs = 0;
   return profileSpan(
-    'doc-reference.docs-citing-files',
-    () => {
-      const tracked = getTrackedFiles(db) ?? new Set<string>();
+      'doc-reference.docs-citing-files',
+      () => {
+        const tracked = gitEvidenceProduct(db).trackedFiles() ?? new Set<string>();
       trackedCount = tracked.size;
       const trackedBySuffix = buildSuffixIndex(tracked);
       const targetCandidates = targetPathCandidates(targets, trackedBySuffix);
@@ -539,14 +547,11 @@ function docPathEvidence(db: ScipDatabase, docFile: string, contentOverride?: st
   }
 
   const contentHash = fileContentHash(db, docFile, content);
-  const cached = readCachedFileEvidence(db, 'doc-path-evidence', docFile, contentHash);
-  if (cached !== null) {
-    const evidence = deserializeDocPathEvidence(cached);
-    if (evidence) return evidence;
-  }
+  const cached = DOC_PATH_EVIDENCE_PRODUCT.read(db, docFile, contentHash);
+  if (cached) return cached;
 
   const evidence = extractDocPathEvidence(content);
-  writeCachedFileEvidence(db, 'doc-path-evidence', docFile, contentHash, serializeDocPathEvidence(evidence));
+  DOC_PATH_EVIDENCE_PRODUCT.write(db, docFile, contentHash, evidence);
   return evidence;
 }
 

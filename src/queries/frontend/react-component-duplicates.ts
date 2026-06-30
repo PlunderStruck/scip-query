@@ -1,8 +1,13 @@
 import { difference, intersection, jaccard } from '../../analysis/similarity.js';
-import { buildReactComponentBehaviorProfiles, type ReactComponentBehaviorProfile } from '../../source/react-profile.js';
+import { frontendBehaviorProduct } from '../../source/frontend-behavior-products.js';
+import type { ReactComponentBehaviorProfile } from '../../source/react-profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { sortedTokens, tokenValues } from '../internal/frontend-behavior-evidence.js';
-import { rankedPairwiseProfileResults, type PairwiseFileProfile } from '../internal/pairwise-profiles.js';
+import {
+  pairwiseCandidateIndexFromKeys,
+  rankedPairwiseProfileResults,
+  type PairwiseFileProfile,
+} from '../internal/pairwise-profiles.js';
 
 export interface ReactComponentDuplicateResult {
   fileA: string;
@@ -42,11 +47,12 @@ export function reactComponentDuplicates(
   } = {},
 ): ReactComponentDuplicateResult[] {
   const { minSimilarity = 0.62, minTokens = 8, limit = 20, scope, scanLimit, filePattern, focusFiles } = opts;
-  const profiles = buildReactComponentBehaviorProfiles(db, {
-    scope,
-    minJsxTokens: minTokens,
-    scanLimit,
-  })
+  const profiles = frontendBehaviorProduct(db)
+    .reactProfiles({
+      scope,
+      minJsxTokens: minTokens,
+      scanLimit,
+    })
     .filter((profile) => profile.kind === 'component')
     .map((profile) => ({
       file: profile.file,
@@ -54,12 +60,15 @@ export function reactComponentDuplicates(
       tokens: profile.jsxTokens,
       profile,
     }));
+  const candidateIndex = pairwiseCandidateIndexFromKeys(profiles, (profile) => profile.tokens);
 
   return rankedPairwiseProfileResults({
     profiles,
     limit,
     filePattern,
     focusFiles,
+    candidateIndex,
+    profile: { name: 'react-component-duplicates' },
     compare: (a, b) => compareProfiles(a, b, minSimilarity),
     sort: (a, b) =>
       b.similarity - a.similarity ||

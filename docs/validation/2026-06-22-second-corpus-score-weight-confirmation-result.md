@@ -131,3 +131,8 @@ Completed so far:
 - Final `node dist/cli.js diff-gate --json` exited 1 with the same two accepted warning-level findings:
   - `SQ36D93309ABEA`: accepted signal-tier echo because `isCompileTimeContractAssertion()` and `indexedDefinitionFromRow()` both use symbol leaf helpers but make different product decisions.
   - `SQ30E6CF5F9B38`: accepted support-tier doc-reference because the README citation is a fenced declared-coupling configuration example that still points at the intended files.
+
+2026-06-30 note: the later Git evidence product migration in
+`src/queries/health/health.ts` does not alter hidden-coupling score weighting,
+broad-sweep discounts, or the historical second-corpus judgment above. Health
+now reads churn and amplification through `gitEvidenceProduct()`.

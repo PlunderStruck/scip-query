@@ -193,3 +193,11 @@ The `src/queries/impact/diff-gate.ts` citation remains accurate after the
 focused co-change history optimization. Diff-gate still owns the check list and
 co-change partner gate; the latest change only narrows the git-history read for
 that gate to commits in the bounded analysis window that touched changed files.
+
+## 2026-06-30 Git Evidence Product Follow-Up
+
+The `src/queries/health/health.ts` and `src/queries/impact/diff-gate.ts`
+citations remain accurate after the Git evidence product migration. Health
+still owns the composite phase inventory, and diff-gate still owns
+`DIFF_GATE_CHECKS`; both now obtain Git history facts through
+`gitEvidenceProduct()` instead of direct helper reads.

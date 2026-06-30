@@ -5,7 +5,7 @@ import { cached } from './cache.js';
 import { isTypeScriptLike, TYPESCRIPT_SEMANTIC_EXTENSIONS } from './source-kinds.js';
 import type { ProjectBundle } from './ts-morph-runtime.js';
 import type { Project, SourceFile } from 'ts-morph';
-import { profileSpan } from '../../runtime/profile.js';
+import { profileSpan } from '../../instrumentation/profile.js';
 
 export interface SourceFileMatch {
   project: Project;

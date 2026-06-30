@@ -16,8 +16,9 @@ import { isFunctionLikeSymbol, leafName, shortenSymbol } from '../../symbols/sym
 import { ProjectIndex } from '../../core/project-index.js';
 import { createPerDbValue } from '../../storage/per-db-cache.js';
 import { applyScanLimit } from '../query-utils.js';
-import { fileContentHash, readCachedFileEvidence, writeCachedFileEvidence } from '../../storage/evidence-cache.js';
-import { profileEnabled, profileSpan } from '../../runtime/profile.js';
+import { fileContentHash } from '../../storage/evidence-cache.js';
+import { createFileEvidenceProduct } from '../../storage/evidence-products.js';
+import { profileEnabled, profileSpan } from '../../instrumentation/profile.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 
 export interface SimilarSymbolResult {
@@ -81,7 +82,7 @@ export function similar(
     limit?: number;
     scanLimit?: number;
     semantic?: boolean;
-    sourceCandidateMode?: 'full' | 'target-pruned';
+    sourceCandidateMode?: SourceCandidateMode;
   } = {},
 ): SimilarSymbolResult[] {
   const { minSimilarity = 0.4, limit = 20 } = opts;
@@ -117,7 +118,7 @@ function compareAgainstFingerprints(
   minSimilarity: number,
   opts: { scanLimit?: number; semantic: boolean },
 ): SimilarSymbolResult[] {
-  const index = getCalleeFingerprintIndex(db, {
+  const index = similarityFingerprintProduct(db).calleeIndex({
     minCallees: 3,
     scanLimit: opts.scanLimit,
     semantic: opts.semantic,
@@ -283,7 +284,8 @@ export function similarAll(
   return profileSpan(
     'similar.all',
     () => {
-      const index = getCalleeFingerprintIndex(db, {
+      const fingerprints = similarityFingerprintProduct(db);
+      const index = fingerprints.calleeIndex({
         minCallees,
         scope,
         scanLimit,
@@ -413,7 +415,8 @@ export function similarAllCount(
   return profileSpan(
     'similar.all-count',
     () => {
-      const index = getCalleeFingerprintIndex(db, {
+      const fingerprints = similarityFingerprintProduct(db);
+      const index = fingerprints.calleeIndex({
         minCallees,
         scope,
         scanLimit,
@@ -514,6 +517,40 @@ export interface SymbolFingerprint {
   paramCount: number;
 }
 
+export type SourceCandidateMode = 'full' | 'target-pruned';
+
+export interface CalleeFingerprintCorpusOptions {
+  minCallees: number;
+  scope?: string;
+  excludeSymbol?: string;
+  scanLimit?: number;
+  semantic?: boolean;
+}
+
+export interface CalleeFingerprintIndexOptions {
+  minCallees: number;
+  scope?: string;
+  scanLimit?: number;
+  semantic?: boolean;
+}
+
+export interface SourceFingerprintOptions {
+  scanLimit?: number;
+}
+
+export interface SourceFingerprintCandidateOptions extends SourceFingerprintOptions {
+  minSimilarity: number;
+  candidateMode?: SourceCandidateMode;
+}
+
+export interface SimilarityFingerprintProduct {
+  calleeCorpus(opts: CalleeFingerprintCorpusOptions): SymbolFingerprint[];
+  calleeIndex(opts: CalleeFingerprintIndexOptions): CalleeFingerprintIndex;
+  sourceCorpus(opts?: SourceFingerprintOptions): SourceFingerprint[];
+  sourceIndex(opts?: SourceFingerprintOptions): SourceFingerprintIndex;
+  sourceCandidates(target: SourceFingerprint, opts: SourceFingerprintCandidateOptions): SourceFingerprint[];
+}
+
 function signaturePairShouldSkip(a: SymbolFingerprint, b: SymbolFingerprint): boolean {
   // Signature filter: a 1-arg helper and a 7-arg orchestrator that share
   // infrastructure callees aren't really "similar." If both sides have a
@@ -535,7 +572,7 @@ export interface CalleeFingerprintIndex {
   ubiquityThreshold: number;
 }
 
-interface SourceFingerprint {
+export interface SourceFingerprint {
   symbol: string;
   file: string;
   tokens: Set<string>;
@@ -554,7 +591,13 @@ interface SerializedSourceFingerprintFile {
   entries: SerializedSourceFingerprintEntry[];
 }
 
-interface SourceFingerprintIndex {
+const SOURCE_FINGERPRINT_PRODUCT = createFileEvidenceProduct<Map<string, SerializedSourceFingerprintEntry>>({
+  kind: 'source-fingerprints',
+  serialize: serializeSourceFingerprintCache,
+  deserialize: deserializeSourceFingerprintCache,
+});
+
+export interface SourceFingerprintIndex {
   corpus: readonly SourceFingerprint[];
   candidateByToken: ReadonlyMap<string, readonly SourceFingerprint[]>;
   docFreq: ReadonlyMap<string, number>;
@@ -647,7 +690,7 @@ const CALLEE_FINGERPRINT_INDEX = createPerDbValue<Map<string, CalleeFingerprintI
 
 export function getAllCalleeFingerprints(
   db: ScipDatabase,
-  opts: { minCallees: number; scope?: string; excludeSymbol?: string; scanLimit?: number; semantic?: boolean },
+  opts: CalleeFingerprintCorpusOptions,
 ): SymbolFingerprint[] {
   const { minCallees, scope, excludeSymbol, scanLimit } = opts;
   const semantic = opts.semantic !== false;
@@ -689,7 +732,7 @@ export function getAllCalleeFingerprints(
 
 export function getCalleeFingerprintIndex(
   db: ScipDatabase,
-  opts: { minCallees: number; scope?: string; scanLimit?: number; semantic?: boolean },
+  opts: CalleeFingerprintIndexOptions,
 ): CalleeFingerprintIndex {
   const { minCallees, scope, scanLimit } = opts;
   const semantic = opts.semantic !== false;
@@ -732,6 +775,22 @@ export function getCalleeFingerprintIndex(
       candidateBuckets,
     }),
   );
+}
+
+export function similarityFingerprintProduct(db: ScipDatabase): SimilarityFingerprintProduct {
+  return {
+    calleeCorpus: (opts) => getAllCalleeFingerprints(db, opts),
+    calleeIndex: (opts) => getCalleeFingerprintIndex(db, opts),
+    sourceCorpus: (opts = {}) => getAllSourceFingerprints(db, opts),
+    sourceIndex: (opts = {}) => getSourceFingerprintIndex(db, opts),
+    sourceCandidates: (target, opts) =>
+      (opts.candidateMode ?? 'full') === 'target-pruned'
+        ? targetPrunedSourceCandidatesForTarget(db, target, {
+            minSimilarity: opts.minSimilarity,
+            scanLimit: opts.scanLimit,
+          })
+        : sourceCandidatesFromIndex(target, getSourceFingerprintIndex(db, { scanLimit: opts.scanLimit })),
+  };
 }
 
 export function buildCalleeFingerprintIndex(corpus: readonly SymbolFingerprint[]): CalleeFingerprintIndex {
@@ -902,7 +961,7 @@ function isInfrastructureCallee(callee: string): boolean {
 function similarBySourceShape(
   db: ScipDatabase,
   symbolPattern: string,
-  opts: { minSimilarity: number; limit: number; scanLimit?: number; candidateMode?: 'full' | 'target-pruned' },
+  opts: { minSimilarity: number; limit: number; scanLimit?: number; candidateMode?: SourceCandidateMode },
 ): SimilarSymbolResult[] {
   const target = findSourceFingerprint(db, symbolPattern);
   if (!target || target.tokens.size < 3) {
@@ -920,10 +979,12 @@ function similarBySourceShape(
   return profileSpan(
     'similar.source-shape',
     () => {
-      const candidates =
-        candidateMode === 'target-pruned'
-          ? targetPrunedSourceCandidatesForTarget(db, target, { minSimilarity, scanLimit: opts.scanLimit })
-          : sourceCandidatesFromIndex(target, getSourceFingerprintIndex(db, { scanLimit: opts.scanLimit }));
+      const fingerprints = similarityFingerprintProduct(db);
+      const candidates = fingerprints.sourceCandidates(target, {
+        minSimilarity,
+        scanLimit: opts.scanLimit,
+        candidateMode,
+      });
       candidateCount = candidates.length;
 
       for (const candidate of candidates) {
@@ -1533,13 +1594,15 @@ function readSourceFingerprintCache(
   relativePath: string,
   contentHash: string,
 ): Map<string, SerializedSourceFingerprintEntry> {
-  const cached = readCachedFileEvidence(db, 'source-fingerprints', relativePath, contentHash);
-  if (!cached) return new Map();
+  return SOURCE_FINGERPRINT_PRODUCT.read(db, relativePath, contentHash) ?? new Map();
+}
+
+function deserializeSourceFingerprintCache(payload: string): Map<string, SerializedSourceFingerprintEntry> | null {
   try {
-    const payload = JSON.parse(cached) as SerializedSourceFingerprintFile;
-    if (!Array.isArray(payload.entries)) return new Map();
+    const parsed = JSON.parse(payload) as SerializedSourceFingerprintFile;
+    if (!Array.isArray(parsed.entries)) return null;
     const entries = new Map<string, SerializedSourceFingerprintEntry>();
-    for (const entry of payload.entries) {
+    for (const entry of parsed.entries) {
       if (
         !entry ||
         typeof entry.key !== 'string' ||
@@ -1550,14 +1613,21 @@ function readSourceFingerprintCache(
         !Array.isArray(entry.tokens) ||
         !entry.tokens.every((token) => typeof token === 'string')
       ) {
-        return new Map();
+        return null;
       }
       entries.set(entry.key, entry);
     }
     return entries;
   } catch {
-    return new Map();
+    return null;
   }
+}
+
+function serializeSourceFingerprintCache(entries: ReadonlyMap<string, SerializedSourceFingerprintEntry>): string {
+  const payload: SerializedSourceFingerprintFile = {
+    entries: [...entries.values()].sort((a, b) => a.key.localeCompare(b.key)),
+  };
+  return JSON.stringify(payload);
 }
 
 function writeSourceFingerprintCache(
@@ -1566,10 +1636,7 @@ function writeSourceFingerprintCache(
   contentHash: string,
   entries: ReadonlyMap<string, SerializedSourceFingerprintEntry>,
 ): void {
-  const payload: SerializedSourceFingerprintFile = {
-    entries: [...entries.values()].sort((a, b) => a.key.localeCompare(b.key)),
-  };
-  writeCachedFileEvidence(db, 'source-fingerprints', relativePath, contentHash, JSON.stringify(payload));
+  SOURCE_FINGERPRINT_PRODUCT.write(db, relativePath, contentHash, new Map(entries));
 }
 
 function sourceTokens(snippet: string, leaf: string): Set<string> {

@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import type { IndexedDefinition } from '../domain/types.js';
-import { fileContentHash, readCachedFileEvidence, writeCachedFileEvidence } from '../storage/evidence-cache.js';
+import { fileContentHash } from '../storage/evidence-cache.js';
+import { createFileEvidenceProduct } from '../storage/evidence-products.js';
 import { createPerDbSourceCache } from '../storage/per-db-cache.js';
 import { detectAstLanguage, isVueSfcPath, type AstLanguage } from './ast/ast-language.js';
 import { getAst } from './ast/ast-core.js';
@@ -18,46 +19,19 @@ import {
 import { collectCrossLanguageDispatchName, collectRustAttrHelperNames } from './source-reference-collectors.js';
 import { buildTypeContainerMap } from './source-type-containers.js';
 import { buildClojureSourceFacts } from './clojure-facts.js';
+import type { SourceFacts } from './source-fact-types.js';
 
-export interface SourceFacts {
-  language: AstLanguage;
-  callables: Array<{
-    name: string;
-    startLine: number;
-    endLine: number;
-    paramCount: number;
-    params: Array<{ name: string; simple: boolean }>;
-    paramsEndLine: number;
-    isLiteralPassthrough: boolean;
-    clojureKind?: 'function' | 'macro' | 'method';
-  }>;
-  callSites: Array<{
-    calleeLeaf: string;
-    calleeQualifier?: string;
-    calleeText?: string;
-    memberAccess: boolean;
-    line: number;
-  }>;
-  clojureMembers: Array<{
-    ownerName: string;
-    ownerKind: 'protocol' | 'record' | 'type' | 'extension';
-    memberName: string;
-    memberKind: 'protocol-method' | 'record-method' | 'type-method' | 'extension-method';
-    startLine: number;
-    endLine: number;
-  }>;
-  typeContainerMap: Map<string, Set<string>>;
-  identifierLineMap: Map<string, number[]>;
-  identifiersByLine: Array<Set<string>>;
-  fileIdentifiers: Set<string>;
-  rustAttrReferencedNames: Set<string>;
-  crossLanguageDispatchNames: Set<string>;
-}
+export type { SourceFacts } from './source-fact-types.js';
 
 // In-process layer keyed by (db, path, source) — previously a WeakMap on the
 // parsed Tree, but a persistent-cache hit never parses a Tree at all.
 const SOURCE_FACTS_CACHE = createPerDbSourceCache<SourceFacts | null>('source-facts', {
   clearGroups: ['whole-project', 'source-file'],
+});
+const SOURCE_FACTS_PRODUCT = createFileEvidenceProduct<SourceFacts>({
+  kind: 'source-facts',
+  serialize: serializeSourceFacts,
+  deserialize: deserializeSourceFacts,
 });
 
 export function getSourceFacts(db: ScipDatabase, relativePath: string): SourceFacts | null {
@@ -84,22 +58,19 @@ function loadOrBuildSourceFacts(
   source: string,
 ): SourceFacts | null {
   const contentHash = fileContentHash(db, relativePath, source);
-  const cached = readCachedFileEvidence(db, 'source-facts', relativePath, contentHash);
-  if (cached) {
-    const facts = deserializeSourceFacts(cached);
-    if (facts && facts.language === language) return facts;
-  }
+  const cached = SOURCE_FACTS_PRODUCT.read(db, relativePath, contentHash);
+  if (cached && cached.language === language) return cached;
 
   if (language === 'clojure') {
     const facts = buildClojureSourceFacts(source);
-    writeCachedFileEvidence(db, 'source-facts', relativePath, contentHash, serializeSourceFacts(facts));
+    SOURCE_FACTS_PRODUCT.write(db, relativePath, contentHash, facts);
     return facts;
   }
 
   const tree = getAst(db, relativePath);
   if (!tree) return null;
   const facts = buildSourceFacts(tree, language);
-  writeCachedFileEvidence(db, 'source-facts', relativePath, contentHash, serializeSourceFacts(facts));
+  SOURCE_FACTS_PRODUCT.write(db, relativePath, contentHash, facts);
   return facts;
 }
 

@@ -8,10 +8,12 @@ import {
   EVIDENCE_DB_FILENAME,
   fileContentHash,
   projectEvidenceFingerprint,
+  readCachedProjectEvidence,
   readCachedSemanticCallees,
   readCachedSemanticReferences,
   readCachedFileEvidence,
   sha256Hex,
+  writeCachedProjectEvidence,
   writeCachedSemanticCalleesBatch,
   writeCachedSemanticReferencesBatch,
   writeCachedFileEvidence,
@@ -19,6 +21,7 @@ import {
 import { getSourceFacts } from '../../src/source/source-facts.js';
 import { getSourceLines, getSourceText } from '../../src/source/source-text.js';
 import { getReExports } from '../../src/language-parsers/index.js';
+import { createFileEvidenceProduct, createProjectEvidenceProduct } from '../../src/storage/evidence-products.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
 const FILE = 'src/sample.ts';
@@ -30,6 +33,24 @@ const SOURCE_LINES = [
   '  return message.toUpperCase();',
   '}',
 ];
+const PRODUCT_TEST = createFileEvidenceProduct<{ marker: string }>({
+  kind: 'doc-path-tokens',
+  serialize: (value) => JSON.stringify(value),
+  deserialize: (payload) => {
+    const raw = JSON.parse(payload) as unknown;
+    if (!raw || typeof raw !== 'object' || typeof (raw as { marker?: unknown }).marker !== 'string') return null;
+    return { marker: (raw as { marker: string }).marker };
+  },
+});
+const PROJECT_PRODUCT_TEST = createProjectEvidenceProduct<{ marker: string }>({
+  kind: 'file-dependency-graph',
+  serialize: (value) => JSON.stringify(value),
+  deserialize: (payload) => {
+    const raw = JSON.parse(payload) as unknown;
+    if (!raw || typeof raw !== 'object' || typeof (raw as { marker?: unknown }).marker !== 'string') return null;
+    return { marker: (raw as { marker: string }).marker };
+  },
+});
 
 describe('evidence cache', () => {
   let tempDir: string;
@@ -102,6 +123,53 @@ describe('evidence cache', () => {
       expect(facts!.identifiersByLine[1]?.has('message')).toBe(true);
     } finally {
       db2.close();
+    }
+  });
+
+  it('round-trips typed file evidence products', () => {
+    const db = openDb();
+    try {
+      PRODUCT_TEST.write(db, 'docs/product.md', 'hash-a', { marker: 'cached' });
+
+      expect(PRODUCT_TEST.read(db, 'docs/product.md', 'hash-a')).toEqual({ marker: 'cached' });
+      expect(PRODUCT_TEST.read(db, 'docs/product.md', 'hash-b')).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  it('treats invalid file evidence product payloads as misses', () => {
+    const db = openDb();
+    try {
+      writeCachedFileEvidence(db, 'doc-path-tokens', 'docs/product.md', 'hash-corrupt', '{not json');
+
+      expect(PRODUCT_TEST.read(db, 'docs/product.md', 'hash-corrupt')).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  it('round-trips typed project evidence products', () => {
+    const db = openDb();
+    try {
+      PROJECT_PRODUCT_TEST.write(db, 'scope:all', 'project-a', { marker: 'cached' });
+
+      expect(PROJECT_PRODUCT_TEST.read(db, 'scope:all', 'project-a')).toEqual({ marker: 'cached' });
+      expect(readCachedProjectEvidence(db, 'file-dependency-graph', 'scope:all', 'project-a')).not.toBeNull();
+      expect(PROJECT_PRODUCT_TEST.read(db, 'scope:all', 'project-b')).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  it('treats invalid project evidence product payloads as misses', () => {
+    const db = openDb();
+    try {
+      writeCachedProjectEvidence(db, 'file-dependency-graph', 'scope:corrupt', 'project-a', '{not json');
+
+      expect(PROJECT_PRODUCT_TEST.read(db, 'scope:corrupt', 'project-a')).toBeNull();
+    } finally {
+      db.close();
     }
   });
 

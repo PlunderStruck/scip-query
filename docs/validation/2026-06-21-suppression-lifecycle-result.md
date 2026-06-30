@@ -144,3 +144,11 @@ The accepted `similar.ts` suppression-lifecycle record remains intentional after
 adding diagnostic profile spans. The spans measure the same callee-fingerprint
 and pair-scan evidence pass; they do not alter the sampled suppression
 category, reason, or lifecycle semantics.
+
+## 2026-06-30 Evidence Product Follow-Up
+
+The accepted `src/analysis/framework-patterns.ts` and
+`src/queries/cleanup/similar.ts` suppression-lifecycle records remain
+intentional after the file evidence product registry migration. Framework
+exclusions and source fingerprints still use the same payload semantics; their
+persistent cache access now goes through `src/storage/evidence-products.ts`.
