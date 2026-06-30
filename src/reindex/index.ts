@@ -941,6 +941,7 @@ function computeReindexFingerprint(
   };
 }
 
+// scip-query: ignore-similar - per-language fingerprints intentionally reuse the project fingerprint inputs by language.
 function computeLanguageFingerprints(
   projectRoot: string,
   languages: readonly SupportedLanguage[],

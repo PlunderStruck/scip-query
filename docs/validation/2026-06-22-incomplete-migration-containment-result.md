@@ -116,3 +116,10 @@ The `src/queries/cleanup/similar.ts` incomplete-migration containment reference
 remains accurate after the file evidence product registry migration. The
 source-fingerprint cache still feeds the same similarity evidence; only its
 persistent cache adapter moved to `src/storage/evidence-products.ts`.
+
+## 2026-06-30 Health Cleanup Follow-Up
+
+The `src/queries/cleanup/similar.ts` incomplete-migration containment reference
+remains accurate after the health cleanup. Accepted comments only remove known
+signal-tier similarity scaffolding from health; incomplete-migration callee
+index reuse and containment semantics are unchanged.

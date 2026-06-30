@@ -380,6 +380,7 @@ async function measureColdIndex(projectRoot: string): Promise<BenchIndexRun> {
   }
 }
 
+// scip-query: ignore-similar - warm and cold benchmark paths stay parallel so timing comparisons stay honest.
 async function measureWarmIndex(projectRoot: string): Promise<BenchIndexRun> {
   const config = loadProjectConfig(projectRoot);
   const paths = resolveIndexPaths(projectRoot, config);
@@ -763,6 +764,7 @@ export function handleDoctor(rawOpts: unknown): void {
   process.exitCode = hasErrors ? 1 : 0;
 }
 
+// scip-query: ignore-similar - doctor/status share readiness collection while rendering different command surfaces.
 function buildProjectDiagnosticReport(command: 'doctor' | 'status'): {
   report: {
     command: 'doctor' | 'status';

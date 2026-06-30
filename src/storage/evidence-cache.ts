@@ -24,6 +24,7 @@ import { createPerDbCache } from './per-db-cache.js';
 export const EVIDENCE_DB_FILENAME = 'evidence.db';
 
 /** Per-file payload kinds keyed by content hash; payloads may add stricter guards. */
+// scip-query: ignore-stale - cache kind names are the storage contract shared by evidence products.
 export type FileEvidenceKind =
   | 'source-facts'
   | 'file-definitions'
@@ -65,6 +66,7 @@ export interface SemanticCalleeCacheEntry {
   payload: string;
 }
 
+// scip-query: ignore-stale - semantic reference batches need a named cache row shape across storage and semantic code.
 export interface SemanticReferenceCacheEntry {
   relativePath: string;
   symbol: string;

@@ -85,6 +85,7 @@ function vueProfileLoc(profile: VueComponentBehaviorProfile): number {
   return profile.totalLines;
 }
 
+// scip-query: ignore-similar - Vue comparison mirrors React comparison while preserving framework-specific overlap rules.
 function compareProfiles(
   a: VueComponentProfile,
   b: VueComponentProfile,

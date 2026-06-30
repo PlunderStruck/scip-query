@@ -5,11 +5,48 @@ import { program, renderHeuristicNotice } from '../../src/runtime/cli.js';
 import { commandDescriptors } from '../../src/runtime/commands/command-descriptors.js';
 import { commandDocEntries, renderCommandReferenceMarkdown } from '../../src/runtime/commands/command-docs.js';
 import { commandOptions, definedLimitOption, printJsonEnvelope } from '../../src/runtime/commands/command-execution.js';
-import {
-  PRIVATE_QUERY_MODULES,
-  PUBLIC_QUERY_ENTRIES,
-  QUERY_SOURCE_PATHS,
-} from '../../src/queries/public-query-entries.js';
+import { PUBLIC_QUERY_ENTRIES, PUBLIC_QUERY_SOURCE_PATHS } from '../../src/queries/public-query-entries.js';
+
+const PRIVATE_QUERY_MODULES = [
+  'boundary-evidence',
+  'dead-exclusions',
+  'diff-gate-baseline-policy',
+  'diff-gate-doc-policy',
+  'diff-gate-types',
+  'diff-ranges',
+  'doc-citation-context',
+  'doc-terms',
+  'drift-policy',
+  'health-baseline',
+  'health-cache-control',
+  'health-report',
+  'health-types',
+  'public-query-entries',
+  'query-utils',
+] as const;
+
+const PRIVATE_QUERY_SOURCE_PATHS = {
+  'boundary-evidence': 'src/queries/cleanup/boundary-evidence.ts',
+  'dead-exclusions': 'src/queries/cleanup/dead-exclusions.ts',
+  'diff-gate-baseline-policy': 'src/queries/impact/diff-gate-baseline-policy.ts',
+  'diff-gate-doc-policy': 'src/queries/impact/diff-gate-doc-policy.ts',
+  'diff-gate-types': 'src/queries/impact/diff-gate-types.ts',
+  'diff-ranges': 'src/queries/impact/diff-ranges.ts',
+  'doc-citation-context': 'src/queries/cleanup/doc-citation-context.ts',
+  'doc-terms': 'src/queries/cleanup/doc-terms.ts',
+  'drift-policy': 'src/queries/cleanup/drift-policy.ts',
+  'health-baseline': 'src/queries/health/health-baseline.ts',
+  'health-cache-control': 'src/queries/health/health-cache-control.ts',
+  'health-report': 'src/queries/health/health-report.ts',
+  'health-types': 'src/queries/health/health-types.ts',
+  'public-query-entries': 'src/queries/public-query-entries.ts',
+  'query-utils': 'src/queries/query-utils.ts',
+} as const satisfies Record<(typeof PRIVATE_QUERY_MODULES)[number], string>;
+
+const QUERY_SOURCE_PATHS = {
+  ...PUBLIC_QUERY_SOURCE_PATHS,
+  ...PRIVATE_QUERY_SOURCE_PATHS,
+} as const;
 
 function command(name: string) {
   const cmd = program.commands.find((entry) => entry.name() === name);

@@ -55,28 +55,6 @@ export function containment<T>(a: Set<T>, b: Set<T>): number {
   return shared / a.size;
 }
 
-/**
- * Compute IDF (inverse document frequency) weights across a corpus.
- *
- * `documents` is a list of feature sets (one per "document"). Returns a
- * weight per feature equal to log(N/df), where df is the number of
- * documents containing the feature. Features in every document get weight
- * 0; features in one document get the maximum weight log(N).
- */
-export function computeIdf<T>(documents: ReadonlyArray<Set<T>>): Map<T, number> {
-  const n = documents.length;
-  if (n === 0) return new Map();
-
-  const docFreq = new Map<T, number>();
-  for (const doc of documents) {
-    for (const feature of doc) {
-      docFreq.set(feature, (docFreq.get(feature) ?? 0) + 1);
-    }
-  }
-
-  return computeIdfFromDocFreq(docFreq, n);
-}
-
 // scip-query: ignore-wrapper — similarity hot paths reuse precomputed doc
 // frequencies; keep the IDF formula named and testable.
 export function computeIdfFromDocFreq<T>(docFreq: ReadonlyMap<T, number>, documentCount: number): Map<T, number> {

@@ -154,6 +154,7 @@ function emptyConsumerEvidenceCounters(definitions: number): ConsumerEvidenceCou
   };
 }
 
+// scip-query: ignore-extract - provenance counters and source maps are one evidence aggregation pass.
 function consumerProvenanceMap(
   db: ScipDatabase,
   index: ProjectIndex,

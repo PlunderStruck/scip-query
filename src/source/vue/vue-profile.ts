@@ -29,6 +29,7 @@ export interface VueComponentBehaviorProfile {
   customBlockLines: number;
 }
 
+// scip-query: ignore-stale - Vue profile options mirror the evidence-product boundary used by callers.
 export interface VueComponentProfileOptions {
   scope?: string;
   minTemplateTokens?: number;

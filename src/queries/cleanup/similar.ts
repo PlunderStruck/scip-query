@@ -389,6 +389,7 @@ export function similarAll(
   );
 }
 
+// scip-query: ignore-similar - the count-only path mirrors similarAll without retaining ranked result objects.
 export function similarAllCount(
   db: ScipDatabase,
   opts: {

@@ -498,6 +498,7 @@ function pickClojureQualifiedCandidate<T extends { symbol: string; file: string 
   return candidates.find((candidate) => /`([^`]+)`\//.exec(candidate.symbol)?.[1] === qualifier) ?? null;
 }
 
+// scip-query: ignore-extract - this pass keeps SQL fetches, range matching, and source confirmation together.
 export function buildChunkCalleeMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<SymbolLocation>,

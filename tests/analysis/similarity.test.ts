@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import {
-  computeIdf,
   computeIdfFromDocFreq,
   containment,
   difference,
@@ -66,25 +65,37 @@ describe('similarity kernel', () => {
     });
   });
 
-  describe('computeIdf', () => {
+  describe('computeIdfFromDocFreq', () => {
     it('returns empty map for empty corpus', () => {
-      expect(computeIdf([])).toEqual(new Map());
+      expect(computeIdfFromDocFreq(new Map(), 0)).toEqual(new Map());
     });
 
     it('a feature in every document gets weight log(1) = 0', () => {
-      const idf = computeIdf([new Set(['a']), new Set(['a']), new Set(['a'])]);
+      const idf = computeIdfFromDocFreq(new Map([['a', 3]]), 3);
       expect(idf.get('a')).toBeCloseTo(0, 6);
     });
 
     it('a unique feature gets the maximum weight log(N)', () => {
-      const idf = computeIdf([new Set(['a', 'unique']), new Set(['a']), new Set(['a'])]);
+      const idf = computeIdfFromDocFreq(
+        new Map([
+          ['a', 3],
+          ['unique', 1],
+        ]),
+        3,
+      );
       expect(idf.get('unique')).toBeCloseTo(Math.log(3), 6);
     });
 
-    it('matches precomputed document frequencies', () => {
+    it('matches document frequencies from a corpus walk', () => {
       const documents = [new Set(['a', 'unique']), new Set(['a', 'b']), new Set(['a'])];
-      const idf = computeIdf(documents);
-      const fromDocFreq = computeIdfFromDocFreq(
+      const docFreq = new Map<string, number>();
+      for (const document of documents) {
+        for (const feature of document) {
+          docFreq.set(feature, (docFreq.get(feature) ?? 0) + 1);
+        }
+      }
+
+      const idf = computeIdfFromDocFreq(
         new Map([
           ['a', 3],
           ['unique', 1],
@@ -92,7 +103,7 @@ describe('similarity kernel', () => {
         ]),
         documents.length,
       );
-      expect(fromDocFreq).toEqual(idf);
+      expect(idf).toEqual(computeIdfFromDocFreq(docFreq, documents.length));
     });
   });
 

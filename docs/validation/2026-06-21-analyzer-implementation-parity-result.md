@@ -79,3 +79,11 @@ The maintainability-register completion slice supersedes the earlier note that d
 the maintenance command surface for measurement only; descriptor-backed query
 commands still come from `orderedQueryCommandDescriptors`, and composite plus
 maintenance commands remain explicit descriptors.
+
+## 2026-06-30 Health Cleanup Follow-Up
+
+`src/queries/public-query-entries.ts` now keeps only the public query manifest
+used by packaging. The private helper files are still checked for "not
+published" parity, but that private list now lives in
+`tests/runtime/cli-contract.test.ts` as a contract fixture instead of a
+production export.

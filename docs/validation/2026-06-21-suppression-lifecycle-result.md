@@ -152,3 +152,10 @@ The accepted `src/analysis/framework-patterns.ts` and
 intentional after the file evidence product registry migration. Framework
 exclusions and source fingerprints still use the same payload semantics; their
 persistent cache access now goes through `src/storage/evidence-products.ts`.
+
+## 2026-06-30 Health Cleanup Follow-Up
+
+The new source suppressions are intentional health-signal calibration records:
+they mark named cache/profile contracts, workflow orchestration, and parallel
+query scaffolding that reviewers accepted after checking the health inventory.
+They do not suppress direct dead-code findings.

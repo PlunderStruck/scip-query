@@ -85,3 +85,10 @@ The `src/queries/cleanup/doc-drift.ts` freshness references remain accurate
 after the file evidence product registry migration. Doc path evidence still
 uses the same content-hash guard and citation extraction; only the persistent
 cache read/write path moved to `src/storage/evidence-products.ts`.
+
+## 2026-06-30 Health Cleanup Follow-Up
+
+The `src/runtime/commands/command-handlers.ts` config-validation references
+remain accurate after the health cleanup. The new comment documents accepted
+doctor/status parallelism; command option parsing, config validation, and
+readiness/freshness collection are unchanged.

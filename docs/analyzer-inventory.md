@@ -201,3 +201,11 @@ citations remain accurate after the Git evidence product migration. Health
 still owns the composite phase inventory, and diff-gate still owns
 `DIFF_GATE_CHECKS`; both now obtain Git history facts through
 `gitEvidenceProduct()` instead of direct helper reads.
+
+## 2026-06-30 Health Cleanup Follow-Up
+
+The `src/queries/public-query-entries.ts` reference remains the public query
+manifest reference. Private query-helper coverage is now asserted as a
+CLI-contract test fixture in `tests/runtime/cli-contract.test.ts`, so the
+production manifest only exports the public entries and source paths used by
+packaging.

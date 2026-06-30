@@ -97,3 +97,10 @@ The `src/analysis/git-history.ts` recency-sweep reference remains accurate
 after the file evidence product registry migration. The HEAD-keyed file-add
 evidence keeps the same key and payload; its persistent cache access now goes
 through `src/storage/evidence-products.ts`.
+
+## 2026-06-30 Health Cleanup Follow-Up
+
+The `src/analysis/git-history.ts` recency-sweep reference remains accurate
+after the health cleanup. The added comments document accepted cache and
+co-change helper shapes; commit history loading, recency counters, and
+subject-context inputs are unchanged.

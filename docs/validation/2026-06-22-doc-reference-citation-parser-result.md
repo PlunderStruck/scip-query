@@ -92,3 +92,11 @@ The `src/queries/cleanup/doc-drift.ts` citation-parser reference remains
 accurate after the file evidence product registry migration. Markdown citation
 context extraction still uses the same parser and path-evidence payload; only
 the persistent cache read/write path moved to `src/storage/evidence-products.ts`.
+
+## 2026-06-30 Health Cleanup Follow-Up
+
+The private-helper classification claim has moved: `src/queries/public-query-entries.ts`
+now exports only the public query manifest used by packaging, while
+`tests/runtime/cli-contract.test.ts` owns the private helper source-path fixture
+that verifies those helpers are not published. The public command manifest
+contract remains explicit.

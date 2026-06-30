@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeIdf } from '../../../src/analysis/similarity.js';
+import { computeIdfFromDocFreq } from '../../../src/analysis/similarity.js';
 import {
   buildCalleeFingerprintIndex,
   candidateFingerprintsForTarget,
@@ -87,7 +87,17 @@ describe('similarAll top-k collector', () => {
     ];
     const index = buildCalleeFingerprintIndex(corpus);
 
-    expect(targetSpecificIdfWeights(target, index)).toEqual(computeIdf([target, ...corpus].map((fp) => fp.callees)));
+    expect(targetSpecificIdfWeights(target, index)).toEqual(
+      computeIdfFromDocFreq(
+        new Map([
+          ['rare', 2],
+          ['shared', 3],
+          ['target-only', 1],
+          ['common', 2],
+        ]),
+        4,
+      ),
+    );
   });
 
   it('classifies concrete domain behavior as direct evidence', () => {

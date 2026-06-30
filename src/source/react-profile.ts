@@ -32,6 +32,7 @@ export interface ReactComponentBehaviorProfile {
   handlerNames: string[];
 }
 
+// scip-query: ignore-stale - React profile options are the evidence-product boundary for callers.
 export interface ReactComponentProfileOptions {
   scope?: string;
   minJsxTokens?: number;

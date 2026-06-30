@@ -894,3 +894,11 @@ findings.
 Cold/heavy-matrix spikes in `passthrough-candidates`, `complexity-hotspots`,
 `wrapper-candidates`, and `stale-abstractions` were largely source/evidence
 cache fill effects; their warm runs are now 1.4s-2.6s.
+
+## 2026-06-30 Health Cleanup Follow-Up
+
+The `src/storage/evidence-cache.ts` and `src/queries/cleanup/similar.ts`
+optimization notes remain current after the health cleanup. The change removes
+test-only manifest exports and records accepted detector signals in source
+comments; evidence cache semantics, source-fingerprint persistence, and the
+measured optimization paths are unchanged.

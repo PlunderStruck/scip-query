@@ -299,6 +299,7 @@ export function getScopedFunctionLikeDefinitions(db: ScipDatabase, scope?: strin
     .filter((row) => !db.isIgnored(row.relativePath));
 }
 
+// scip-query: ignore-extract - primary/fallback definition rows must stay merged before symbol predicates run.
 export function getScopedDefinitionsMatchingSymbols(
   db: ScipDatabase,
   opts: { scope?: string; symbolMatches: (symbol: string) => boolean; sqlPrefilter?: DefinitionSymbolSqlPrefilter },

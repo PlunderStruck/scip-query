@@ -125,3 +125,10 @@ The `src/queries/cleanup/similar.ts` incomplete-migration scope-hint reference
 remains accurate after the file evidence product registry migration. Similarity
 scope labels and remediation text are unchanged; source-fingerprint persistence
 now goes through `src/storage/evidence-products.ts`.
+
+## 2026-06-30 Health Cleanup Follow-Up
+
+The `src/queries/cleanup/similar.ts` incomplete-migration scope-hint reference
+remains accurate after the health cleanup. Similarity scope labels,
+remediation text, and callee-index reuse are unchanged; the added source
+comments only classify accepted health signals.

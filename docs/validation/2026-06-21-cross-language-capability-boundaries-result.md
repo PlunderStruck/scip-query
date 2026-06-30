@@ -148,3 +148,10 @@ The `src/queries/cleanup/similar.ts` capability-boundary notes remain accurate
 after the file evidence product registry migration. The source-fingerprint
 cache still records the same source tokens and evidence classes; only the
 persistent cache adapter moved to `src/storage/evidence-products.ts`.
+
+## 2026-06-30 Health Cleanup Follow-Up
+
+The `src/queries/cleanup/similar.ts` capability-boundary notes remain accurate
+after the health cleanup. Accepted source comments only remove known
+signal-tier scaffolding from health; language capability behavior and
+source-fingerprint evidence are unchanged.

@@ -51,6 +51,7 @@ interface ReactBehaviorPairwiseProfile extends PairwiseFileProfile {
   profile: ReactComponentBehaviorProfile;
 }
 
+// scip-query: ignore-similar - hook and component queries share profile ranking but report different React concepts.
 export function reactHookCandidates(
   db: ScipDatabase,
   opts: {

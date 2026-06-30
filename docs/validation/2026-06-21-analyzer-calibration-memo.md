@@ -429,3 +429,10 @@ The `src/queries/cleanup/similar.ts` calibration reference remains accurate
 after the file evidence product registry migration. Source-fingerprint evidence
 uses the same tokens, IDF inputs, and scoring path; the persistent cache access
 is now centralized in `src/storage/evidence-products.ts`.
+
+## 2026-06-30 Health Cleanup Follow-Up
+
+The `src/queries/cleanup/similar.ts` calibration reference remains accurate
+after the health cleanup. Accepted source comments reduce known signal-tier
+noise without changing similarity evidence classes, IDF scoring, source
+fingerprints, or cleanup detector thresholds.

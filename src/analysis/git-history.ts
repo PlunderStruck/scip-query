@@ -72,6 +72,7 @@ export interface CoChangePair {
   subjectContext: CoChangeSubjectContext;
 }
 
+// scip-query: ignore-stale - file-add cache records are a persisted git evidence payload, not an inline-only type.
 export interface FileAddRecord {
   /** Commits ago (0 = newest) of the file's earliest known add in the window. */
   commitsAgo: number;
@@ -143,6 +144,7 @@ function headKeyedGitValue<T>(
   };
 }
 
+// scip-query: ignore-similar - keyed git maps intentionally mirror scalar HEAD cache lifecycle with per-key values.
 function headKeyedGitMap<T>(
   name: string,
 ): (db: ScipDatabase, key: string, load: (projectRoot: string, head: string) => T | null) => T | null {
@@ -443,6 +445,7 @@ export function getCoChangePairsForFiles(
   return gitEvidenceProduct(db).coChangePairsForFiles(files, opts);
 }
 
+// scip-query: ignore-similar - focused co-change uses the same history path with a file-set cache key.
 function buildCoChangePairsForFiles(
   db: ScipDatabase,
   files: ReadonlySet<string>,

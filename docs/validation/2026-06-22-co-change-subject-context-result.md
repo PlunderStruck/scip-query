@@ -107,3 +107,10 @@ The `src/analysis/git-history.ts` subject-context reference remains accurate
 after the file evidence product registry migration. The HEAD-keyed file-add
 cache keeps the same payload and key; only the persistent cache adapter moved to
 `src/storage/evidence-products.ts`.
+
+## 2026-06-30 Health Cleanup Follow-Up
+
+The `src/analysis/git-history.ts` subject-context reference remains accurate
+after the health cleanup. The new source comments document accepted
+health-signal shapes only; co-change subject labels, issue refs, and sample
+subject extraction are unchanged.

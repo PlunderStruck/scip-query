@@ -105,6 +105,7 @@ export interface ProjectSetupOptions {
   gitHook?: boolean;
 }
 
+// scip-query: ignore-extract - setup is a user-facing workflow transcript; the sequence is the behavior.
 export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<ProjectSetupReport> {
   const steps: ProjectSetupStep[] = [];
   const { projectRoot, config, paths, dbPath } = resolveCliProjectContext();

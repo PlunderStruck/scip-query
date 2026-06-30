@@ -130,3 +130,10 @@ The accepted `src/source/react-profile.ts` cache record still names the intended
 optimization. The persistent React behavior-profile payload now goes through
 `src/storage/evidence-products.ts`; the source-file cache, cloning of mutable
 sets and arrays, and returned profile behavior are unchanged.
+
+## 2026-06-30 Health Cleanup Follow-Up
+
+The `src/source/react-profile.ts` optimization note remains accurate after the
+health cleanup. The added `ignore-stale` comment documents the profile-options
+boundary; React profile cache reads, cloning behavior, and returned payloads are
+unchanged.

@@ -64,6 +64,7 @@ export function getReExports(db: ScipDatabase, relativePath: string): ParsedReEx
   });
 }
 
+// scip-query: ignore-similar - imports and re-exports share parser/cache plumbing but produce different source facts.
 export function getSourceImports(db: ScipDatabase, relativePath: string): ParsedSourceImport[] {
   const normalized = normalizePath(relativePath);
   return SOURCE_IMPORT_CACHE.get(db, normalized, () => {

@@ -250,3 +250,10 @@ The `src/queries/cleanup/similar.ts` echo-path notes remain accurate after the
 file evidence product registry migration. The source-fingerprint cache now
 reads and writes through `src/storage/evidence-products.ts`, but callee
 fingerprints, source-shape fallback, and diff-gate echo behavior are unchanged.
+
+## 2026-06-30 Health Cleanup Follow-Up
+
+The `src/queries/cleanup/similar.ts` citations remain accurate after the health
+cleanup. This pass only adds accepted health-signal comments around
+intentionally parallel similarity paths; callee fingerprints, source-shape
+fallback, and diff-gate echo behavior are unchanged.

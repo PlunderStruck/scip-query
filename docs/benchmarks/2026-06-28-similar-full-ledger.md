@@ -209,3 +209,10 @@ The `src/queries/cleanup/similar.ts` full-scan notes remain accurate after the
 file evidence product registry migration. The source-fingerprint cache still
 stores the same serialized token entries behind the file content hash; only the
 persistent read/write plumbing moved to `src/storage/evidence-products.ts`.
+
+## 2026-06-30 Health Cleanup Follow-Up
+
+The `src/queries/cleanup/similar.ts` full-scan notes remain accurate after the
+health cleanup. The new suppression comments classify accepted signal-tier
+parallelism; tokenization, IDF inputs, pair scoring, and persistent
+source-fingerprint payloads are unchanged.
