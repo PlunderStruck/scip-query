@@ -92,6 +92,21 @@ Round 1+2 findings, taxonomized — each class maps to a mechanical detector or 
 - **Testability**: ledger math pure over injected event sequences; clock injected. No behavior change to which findings are *emitted* — this phase only reports; downranking stays a human/config decision (deliberate: auto-suppression would hide real findings behind past neglect).
 - **Validation**: replay this session's scenario in a fixture (same 30 doc-reference findings across 3 runs) → hook output carries the unresolved-streak line.
 
+### 18.2 - Snapshot-doc policy (kills the recurring ledger wall)
+- [ ] **File**: `src/runtime/config.ts` (new `docs.snapshotPaths` key, validated), `src/queries/impact/diff-gate-doc-policy.ts` + `src/queries/cleanup/doc-drift.ts` (consume it), `.scipquery.json` (seed), docs
+- **What (evidence)**: dated snapshot documents (docs/benchmarks/, docs/validation/, docs/reviews/, docs/plans/) cite code they intentionally describe *as of a date*; every subsequent change to that code re-generates doc-reference/co-change findings that can only ever be "accepted" — the 30-finding Stop-hook wall observed live on 2026-07-01. The changelog-by-policy guardrail is the established precedent.
+- **Change**: config `docs: { snapshotPaths: ["docs/benchmarks/**", "docs/validation/**", "docs/reviews/**", "docs/plans/**"] }` (also honored: a `<!-- scip-query: snapshot -->` marker in the doc). Matching docs are excluded from diff-gate's doc-reference check and doc-drift findings; they appear in `doc-drift --full` under a distinct `snapshot (excluded by policy)` label so the exemption is visible, never silent. Seed this repo's config with the four globs and remove the standing acceptance boilerplate from future commit messages.
+- **Testability**: policy matcher pure (globs + marker sniff); fixture doc in a snapshot path citing a changed file → no gate finding, labeled row in `--full`.
+- **Validation**: on this repo, `diff-gate --json` over a diff touching `src/queries/cleanup/similar.ts` produces zero ledger doc-reference findings; `doc-drift --full` lists the ledgers as policy-excluded.
+- **Why**: alert fatigue is the product's existential risk; 18.1 measures it, this step removes its largest recurring source.
+
+### 18.3 - Carry-over: watch single-instance guard (Plan 1, 8.2)
+- [ ] **File**: `src/runtime/watch.ts`
+- **What**: two `scip-query watch` processes in one repo both poll git and race for the reindex lock; Plan 1 deferred the guard and it was never folded into Plan 2.
+- **Change**: pid-file guard in the cache dir (`watch.pid`): on start, if the pid exists and is alive, refuse with the running pid; stale pid → replace; remove on clean exit. Document foreground-only operation in the command help.
+- **Testability**: guard logic pure over injected `{readPid, processAlive}`; tests for fresh/live/stale cases.
+- **Validation**: second `watch` in a fixture repo exits with the refusal message.
+
 ## Phase 19 — Lens skills
 
 ### 19.1 - Allowlist frontmatter + generated rendering for ALL bundled skills
