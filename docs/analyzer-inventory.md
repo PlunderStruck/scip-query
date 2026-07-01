@@ -20,7 +20,7 @@ The action tiers are:
 
 ## Current Surfaces
 
-The published query surface and private query-helper manifest live in `src/queries/public-query-entries.ts`. The CLI command order and families live in `src/runtime/commands/query-command-specs.ts`. The composite health score runs the phases listed in `HEALTH_PHASES` in `src/queries/health/health.ts`. The diff gate runs the default diff-scoped checks listed in `DIFF_GATE_CHECKS` in `src/queries/impact/diff-gate.ts`; the baseline policy helper remains private to the query tree and runs only for the explicit full health-baseline ratchet.
+The published query surface and private query-helper manifest live in `src/queries/public-query-entries.ts`. The CLI command order and families live in `src/runtime/commands/query-command-specs.ts`. The composite health score runs the phases listed in `HEALTH_PHASES` in `src/queries/health/health.ts`. The diff gate runs the default diff-scoped checks listed in `DIFF_GATE_CHECKS` in `src/queries/impact/diff-gate.ts`; the baseline policy helper remains private to the query tree and runs only for the explicit full health-baseline ratchet. The `tla` command is also ordered in that command registry as an on-demand formal-model verifier, not as a health-scored analyzer.
 
 `health --json` on this repository currently reports:
 
@@ -103,6 +103,8 @@ The declared-coupling config has been refreshed after the inventory surfaced old
 These commands analyze the index, but they are not finding detectors and should not affect health score directly: `stats`, `files`, `methods`, `refs`, `trace`, `deps`, `rdeps`, `system`, `surface`, `imports`, `imported-by`, `outline`, `members`, `by-kind`, `kind-counts`, `hierarchy`, `call-graph`, `code`, `dataflow`, and `slice`.
 
 They are essential because other analyzers and agents use them to ground claims. Their defining characteristic is retrieval or explanation, not smell detection.
+
+`tla` is a formal-model verification command: it checks a TLA+ module, an explicit model-to-TypeScript mapping contract, and compiler-indexed code evidence in one on-demand run. Its defining role is to make model/code discrepancies reviewable before a user or agent treats the TLA+ model as an accurate description of the implementation.
 
 The support-analysis accuracy review confirmed that `refs`, `affected`, `change-surface`, `plan-context`, `imports`, `deps`, `rdeps`, `fan-in`, `fan-out`, `hotspots`, `status`, and `self-audit` return useful source-grounded evidence for a TypeScript target. It also fixed diagnostic parity so `status` and `doctor` use the same root-aware config validation as `config-validate`.
 

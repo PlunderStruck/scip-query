@@ -6,6 +6,7 @@ import { healthQueryCommandDescriptors } from '../query-commands/health.js';
 import { impactQueryCommandDescriptors } from '../query-commands/impact.js';
 import { navigationQueryCommandDescriptors } from '../query-commands/navigation.js';
 import { planningQueryCommandDescriptors } from '../query-commands/planning.js';
+import { tlaQueryCommandDescriptors } from '../query-commands/tla.js';
 
 const queryCommandOrder = [
   'stats',
@@ -56,6 +57,7 @@ const queryCommandOrder = [
   'unused-params',
   'diff-gate',
   'incomplete-migration',
+  'tla',
   'plan-context',
   'drift',
   'wrapper-candidates',
@@ -79,6 +81,7 @@ const queryCommandFamilies = [
   cleanupQueryCommandDescriptors,
   impactQueryCommandDescriptors,
   planningQueryCommandDescriptors,
+  tlaQueryCommandDescriptors,
   healthQueryCommandDescriptors,
 ];
 

@@ -4,11 +4,11 @@ Date: 2026-06-21
 
 ## Verdict
 
-AVL-014 is complete. As of the 2026-06-22 locality implementation addendum, the public query command registry exposes 62 commands, and the validation docs now name all of them either as analyzers, support/evidence providers, composite reports, or action commands.
+AVL-014 is complete. As of the 2026-06-22 locality implementation addendum, the public query command registry exposed 62 commands, and the validation docs named all of them either as analyzers, support/evidence providers, composite reports, or action commands. As of the 2026-07-01 TLA addendum, the registry exposes 63 commands and adds `tla` as a formal-model verification command.
 
 ## Source of Truth
 
-`scip-query code src/runtime/commands/query-command-specs.ts:10-73` reports the complete `queryCommandOrder` list. `scip-query code queryCommandDescriptor -C 8` showed that descriptor lookup throws for unknown command ids, and that the registry checks every descriptor id is present in the order list.
+`scip-query code src/runtime/commands/query-command-specs.ts:11-75` reports the complete `queryCommandOrder` list. `scip-query code queryCommandDescriptor -C 8` showed that descriptor lookup throws for unknown command ids, and that the registry checks every descriptor id is present in the order list.
 
 ## Coverage Findings
 
@@ -34,6 +34,7 @@ The pre-patch mechanical coverage check found:
 - Graph/risk analyzers: `hotspots`, `fan-in`, `fan-out`, `coupling`, `cycles`, `bottlenecks`, `deep-chains`, `complexity-hotspots`, `complexity`
 - Diff/impact analyzers and composites: `affected`, `change-surface`, `co-change`, `diff-gate`, `incomplete-migration`, `plan-context`
 - Support/evidence providers: `stats`, `files`, `methods`, `refs`, `trace`, `deps`, `rdeps`, `system`, `surface`, `imports`, `imported-by`, `outline`, `members`, `by-kind`, `kind-counts`, `hierarchy`, `call-graph`, `code`, `dataflow`, `slice`, `self-audit`
+- Formal model verification: `tla`
 - Action command: `cleanup-apply`
 
 ## Verification
@@ -58,3 +59,7 @@ The next validation slice should be AVL-005, analyzer implementation parity. It 
 ## 2026-06-23 Citation Refresh
 
 The maintainability-register completion slice rechecked the public command surface after changing CLI registration. `queryCommandOrder` remains the complete public query order, and `orderedQueryCommandDescriptors` is now the derived descriptor list consumed by `commandDescriptors`; this removes the older duplicate hand-written query registration list without changing the command groups above.
+
+## 2026-07-01 TLA Addendum
+
+`tla` is now ordered in `queryCommandOrder`, documented under the generated Formal Models command group, and registered through `tlaQueryCommandDescriptors`. It is not a health analyzer. Its role is on-demand verification of a TLA+ module, a mapping contract, checker output, and compiler-indexed TypeScript evidence.

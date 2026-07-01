@@ -97,6 +97,12 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 | `incomplete-migration` | Partially-completed extraction candidates: new helpers in the diff wired into some sites while similar un-migrated sites remain | `--base <ref>`<br>`--min-containment <n>`<br>`--max-helpers <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
 | `diff-impact` | Compute changed symbols and downstream consumers from current git diff | `--base <ref>`<br>`--json` |
 
+### Formal Models
+
+| Command | Description | Options |
+|---|---|---|
+| `tla <operation> <spec>` | Verify a TLA+ model and its TypeScript mapping contract | `--map <file>`<br>`--config <file>`<br>`--checker <mode>`<br>`--tla-tools <jar>`<br>`--apalache <binary>`<br>`--length <n>`<br>`--trace <file>`<br>`--allow-unknown`<br>`--json` |
+
 ### Planning
 
 | Command | Description | Options |
@@ -116,7 +122,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 | Command | Description | Options |
 |---|---|---|
 | `bench` | Benchmark indexing and command runtimes for this repository | `--json`<br>`--cold-index`<br>`--include-heavy`<br>`--command <cmd>`<br>`--timeout-ms <n>`<br>`--progress`<br>`--profile`<br>`--profile-out <path>` |
-| `install-skills` | Install skills (scip-query, scip-query-setup, scip-adoption, scip-health-audit, scip-health-improve, scip-hyper-optimization, scip-api-impact, concrete-plan, scip-ai-cleanup, scip-debug, scip-explore, scip-triage-issue, scip-diagram, scip-debloat, scip-doc-reconcile, scip-directory-architecture, scip-maintainability, scip-react-maintainability, scip-vue-maintainability, scip-verify, scip-language-playbook) into Claude Code, Codex, and shared agent roots | - |
+| `install-skills` | Install skills (scip-query, scip-query-setup, scip-adoption, scip-health-audit, scip-health-improve, scip-hyper-optimization, scip-api-impact, concrete-plan, scip-ai-cleanup, scip-debug, scip-explore, scip-triage-issue, scip-diagram, scip-debloat, scip-doc-reconcile, scip-directory-architecture, scip-maintainability, scip-react-maintainability, scip-vue-maintainability, scip-verify, scip-language-playbook, tla-model-system) into Claude Code, Codex, and shared agent roots | - |
 | `setup-hooks` | Install or refresh project-local Codex and Claude Code lifecycle hooks | `--json` |
 | `check-deps` | Check whether scip-query and the detected language indexers are actually runnable | - |
 | `capabilities` | Report which evidence and verification capabilities are available in this project | `--json` |

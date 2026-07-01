@@ -1,0 +1,37 @@
+{
+  "module": "specs/tla-feature/TlaVerifierRegression.tla",
+  "config": "specs/tla-feature/TlaVerifierRegression.cfg",
+  "scope": ["src/runtime/query-commands/tla.ts", "src/tla"],
+  "variables": {
+    "conformanceState": {
+      "code": ["src/tla/conformance.ts/TlaConformanceResult"]
+    },
+    "toolState": {
+      "code": ["src/tla/tool-runner.ts/TlaToolResult"]
+    },
+    "exitState": {
+      "code": ["src/runtime/query-commands/tla.ts/TlaVerifyResult"]
+    }
+  },
+  "actions": {
+    "CheckConformance": {
+      "code": ["src/tla/conformance.ts/verifyTlaConformance"],
+      "writes": ["conformanceState"],
+      "allowUnknown": true
+    },
+    "RunChecker": {
+      "code": ["src/tla/tool-runner.ts/runTlaTool"],
+      "reads": ["conformanceState"],
+      "writes": ["toolState"],
+      "allowUnknown": true
+    },
+    "DecideExit": {
+      "code": ["src/runtime/query-commands/tla.ts/exitCodeFor"],
+      "reads": ["conformanceState", "toolState"],
+      "writes": ["exitState"],
+      "allowUnknown": true
+    }
+  },
+  "invariants": ["TypeOK", "ExitAfterEvidence"],
+  "traces": ["specs/tla-feature/TlaVerifierRegression.trace.json"]
+}

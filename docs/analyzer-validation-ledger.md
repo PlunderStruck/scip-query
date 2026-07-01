@@ -16,7 +16,7 @@ The ledger is anchored to the current tool surface, not memory.
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
 | Repo-wide health analysis | `scip-query code health --json` reported `src/queries/health/health.ts:194`, where `health()` runs `runHealthAnalyses()` and `buildHealthReport()`.                                                                                                                                                          | Every repo-wide analyzer validation must eventually reconcile with health output and scoring. |
 | Change-time gate analysis | `scip-query code diffGate --json` reported `src/queries/impact/diff-gate.ts:94`, where `diffGate()` runs the default diff-scoped checks: `echo`, `incomplete-migration`, `co-change-partner`, `doc-reference`, `unused-params`, and `new-dead`. The baseline ratchet is explicit because it is repo-wide.    | Every diff-only analyzer needs a separate validation path from repo-wide health.              |
-| Public command registry   | `scip-query trace queryCommandOrder --json` reported `src/runtime/commands/query-command-specs.ts:10`, where the public query command order starts. `scip-query code queryCommandDescriptor --json` reported `src/runtime/commands/query-command-specs.ts:94`, where command descriptors are resolved by id. | The ledger must not silently miss a public analyzer command.                                  |
+| Public command registry   | `scip-query trace queryCommandOrder --json` reported `src/runtime/commands/query-command-specs.ts:11`, where the public query command order starts. `scip-query code queryCommandDescriptor --json` reported `src/runtime/commands/query-command-specs.ts:101`, where command descriptors are resolved by id. | The ledger must not silently miss a public analyzer command.                                 |
 | Diff-gate check list      | `scip-query trace DIFF_GATE_CHECKS --json` reported `src/queries/impact/diff-gate.ts:27`, where the canonical diff-gate check list is exported.                                                                                                                                                              | The ledger must cover every change-time check that can block a diff.                          |
 
 ## Core Concepts
@@ -64,7 +64,7 @@ Closeout status: all active ledger rows are complete as of 2026-06-22. Remaining
 
 ## Public Command Coverage Checklist
 
-The canonical source is `src/runtime/commands/query-command-specs.ts:10-73`, where `queryCommandOrder` lists the public query command surface.
+The canonical source is `src/runtime/commands/query-command-specs.ts:11-75`, where `queryCommandOrder` lists the public query command surface.
 
 - Core and navigation support: `stats`, `files`, `methods`, `refs`, `trace`, `deps`, `rdeps`, `system`, `surface`, `imports`, `imported-by`, `outline`, `members`, `by-kind`, `kind-counts`, `hierarchy`, `call-graph`, `code`, `dataflow`, `slice`
 - Direct cleanup and deletion analyzers: `dead`, `isolated`, `unused-imports`, `cleanup-plan`, `unused-params`, `passthrough-candidates`, `redundant-reexports`
@@ -72,6 +72,7 @@ The canonical source is `src/runtime/commands/query-command-specs.ts:10-73`, whe
 - Frontend analyzers: `react-component-duplicates`, `react-hook-candidates`, `react-large-component-pressure`, `vue-component-duplicates`, `vue-composable-candidates`, `vue-large-view-pressure`
 - Graph, risk, and complexity analyzers: `hotspots`, `fan-in`, `fan-out`, `coupling`, `cycles`, `bottlenecks`, `deep-chains`, `complexity-hotspots`, `complexity`
 - Diff, impact, and planning analyzers: `affected`, `change-surface`, `co-change`, `diff-gate`, `incomplete-migration`, `plan-context`
+- Formal model verification: `tla`
 - Meta and action commands: `self-audit`, `cleanup-apply`
 
 ## Completed Run Batches

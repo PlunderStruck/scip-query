@@ -87,3 +87,11 @@ used by packaging. The private helper files are still checked for "not
 published" parity, but that private list now lives in
 `tests/runtime/cli-contract.test.ts` as a contract fixture instead of a
 production export.
+
+## 2026-07-01 TLA Model Command Addendum
+
+`tla` is now ordered in `queryCommandOrder` and registered through
+`tlaQueryCommandDescriptors`. It is a custom formal-model command rather than a
+public package query entry or health analyzer. Its purpose is on-demand
+verification of a TLA+ module, a model-to-TypeScript mapping contract, checker
+output, and compiler-indexed implementation evidence.

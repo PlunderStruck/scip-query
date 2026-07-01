@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CleanupBatch, CleanupPlanResult } from '../queries/cleanup/cleanup-plan.js';
 import { stripCommentsAndStrings } from '../source/source-stripper.js';
+import { binaryAvailable } from './command-availability.js';
 
 export interface BatchVerification {
   depth: number;
@@ -234,14 +235,6 @@ function detectClojureChecker(projectRoot: string): Checker | null {
     };
   }
   return null;
-}
-
-function binaryAvailable(binary: string): boolean {
-  try {
-    return spawnSync(binary, ['--version'], { stdio: 'ignore', timeout: 10_000 }).status === 0;
-  } catch {
-    return false;
-  }
 }
 
 /** Cargo.toml at the root or one level down (src-tauri/, backend/, ...). */

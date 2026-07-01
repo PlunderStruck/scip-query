@@ -1,0 +1,55 @@
+{
+  "module": "specs/tla-feature/TlaVerifier.tla",
+  "config": "specs/tla-feature/TlaVerifier.cfg",
+  "scope": ["src/runtime/query-commands/tla.ts", "src/tla"],
+  "variables": {
+    "contractState": {
+      "code": ["src/tla/model-contract.ts/TlaModelContract"]
+    },
+    "moduleState": {
+      "code": ["src/tla/model-contract.ts/TlaModuleFacts"]
+    },
+    "conformanceState": {
+      "code": ["src/tla/conformance.ts/TlaConformanceResult"]
+    },
+    "toolState": {
+      "code": ["src/tla/tool-runner.ts/TlaToolResult"]
+    },
+    "exitState": {
+      "code": ["src/runtime/query-commands/tla.ts/TlaVerifyResult"]
+    }
+  },
+  "actions": {
+    "LoadContract": {
+      "code": ["src/tla/model-contract.ts/loadTlaModelContract"],
+      "writes": ["contractState"],
+      "allowUnknown": true
+    },
+    "ReadModule": {
+      "code": ["src/tla/model-contract.ts/readTlaModuleFacts"],
+      "reads": ["contractState"],
+      "writes": ["moduleState"],
+      "allowUnknown": true
+    },
+    "CheckConformance": {
+      "code": ["src/tla/conformance.ts/verifyTlaConformance"],
+      "reads": ["moduleState"],
+      "writes": ["conformanceState"],
+      "allowUnknown": true
+    },
+    "RunChecker": {
+      "code": ["src/tla/tool-runner.ts/runTlaTool"],
+      "reads": ["conformanceState"],
+      "writes": ["toolState"],
+      "allowUnknown": true
+    },
+    "DecideExit": {
+      "code": ["src/runtime/query-commands/tla.ts/exitCodeFor"],
+      "reads": ["conformanceState", "toolState"],
+      "writes": ["exitState"],
+      "allowUnknown": true
+    }
+  },
+  "invariants": ["TypeOK", "ModuleAfterContract", "CheckerAfterConformance", "ExitAfterEvidence"],
+  "traces": ["specs/tla-feature/TlaVerifier.trace.json"]
+}

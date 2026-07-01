@@ -31,12 +31,17 @@ Source anchors:
 
 - `scip-query code health --json` -> `src/queries/health/health.ts:194`
 - `scip-query code diffGate --json` -> `src/queries/impact/diff-gate.ts:94`
-- `scip-query trace queryCommandOrder --json` -> `src/runtime/commands/query-command-specs.ts:9`
+- `scip-query trace queryCommandOrder --json` -> `src/runtime/commands/query-command-specs.ts:11`
 - `scip-query trace DIFF_GATE_CHECKS --json` -> `src/queries/impact/diff-gate.ts:27`
 
 2026-06-22 note: `queryCommandOrder` remains the correct public-command anchor after the `locality-candidates` implementation; the command list now includes that contextual analyzer.
 
 2026-06-22 note: `src/queries/health/health.ts` remains the composite health implementation anchor after health became full-by-default. This pilot's historical raw commands are unchanged.
+
+2026-07-01 note: `queryCommandOrder` remains the public-command anchor after the
+`tla` command was added. `tla` is a formal-model verification command, not one
+of this pilot's selected analyzer families, so the historical pilot command set
+is unchanged.
 
 ## Command Status
 

@@ -1,0 +1,32 @@
+[
+  {
+    "action": "LoadContract",
+    "before": { "contractState": "missing" },
+    "after": { "contractState": "loaded" },
+    "code": "src/tla/model-contract.ts/loadTlaModelContract"
+  },
+  {
+    "action": "ReadModule",
+    "before": { "moduleState": "unread" },
+    "after": { "moduleState": "read" },
+    "code": "src/tla/model-contract.ts/readTlaModuleFacts"
+  },
+  {
+    "action": "CheckConformance",
+    "before": { "conformanceState": "pending" },
+    "after": { "conformanceState": "checked" },
+    "code": "src/tla/conformance.ts/verifyTlaConformance"
+  },
+  {
+    "action": "RunChecker",
+    "before": { "toolState": "notRun" },
+    "after": { "toolState": "passed" },
+    "code": "src/tla/tool-runner.ts/runTlaTool"
+  },
+  {
+    "action": "DecideExit",
+    "before": { "exitState": "unset" },
+    "after": { "exitState": "success" },
+    "code": "src/runtime/query-commands/tla.ts/exitCodeFor"
+  }
+]

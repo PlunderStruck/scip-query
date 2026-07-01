@@ -27,6 +27,7 @@ export const BUILTIN_SKILLS = [
   'scip-vue-maintainability',
   'scip-verify',
   'scip-language-playbook',
+  'tla-model-system',
 ] as const;
 // ── Skills Installation ────────────────────────────────────
 
