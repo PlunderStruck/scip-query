@@ -39,6 +39,7 @@ export { DIFF_GATE_CHECKS, diffGate } from './impact/diff-gate.js';
 export { incompleteMigration } from './impact/incomplete-migration.js';
 export { coChange } from './impact/co-change.js';
 export { docDrift } from './cleanup/doc-drift.js';
+export { duplicateBodies, exactDuplicateBodyMatches, normalizeBody, groupByHash } from './cleanup/duplicate-bodies.js';
 export { recentDuplicates } from './cleanup/recent-duplicates.js';
 export { planContext } from './impact/plan-context.js';
 export { checkHealthBaseline, collectBaselineFindings, writeHealthBaseline } from './health/health-baseline.js';
@@ -145,6 +146,7 @@ export type {
 } from './impact/diff-gate.js';
 export type { CoChangeFinding, CoChangeResult } from './impact/co-change.js';
 export type { DocDriftFinding, DocDriftResult, DocDriftSubject, DocFileCitation } from './cleanup/doc-drift.js';
+export type { DuplicateBodyEntry, DuplicateBodyGroup } from './cleanup/duplicate-bodies.js';
 export type {
   RecentDuplicateBasis,
   RecentDuplicateDomain,

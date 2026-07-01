@@ -8,6 +8,7 @@ import {
   renderStopHookOutput,
   renderUserPromptContext,
   resolveStopHookMode,
+  routesForPrompt,
 } from '../../src/runtime/agent-hooks.js';
 
 describe('agent hook context', () => {
@@ -24,29 +25,50 @@ describe('agent hook context', () => {
     expect(output).toBeUndefined();
   });
 
-  it('routes user prompts toward relevant scip skills', () => {
+  it('routes user prompts toward one prioritized scip skill', () => {
     const context = renderUserPromptContext('Please debug this failing setup and then draw a diagram of the flow');
 
-    expect(context).toContain('scip-debug');
-    expect(context).toContain('scip-diagram');
-    expect(context).toContain('scip-adoption');
+    expect(context).toContain('scip-setup');
+    expect(context).not.toContain('scip-debug');
+    expect(context).not.toContain('scip-diagram');
   });
 
-  it('routes health score prompts toward autonomous improvement', () => {
+  it('skips drive-by single-keyword prompts unless a skill is explicit', () => {
+    expect(renderUserPromptContext('Please review this')).toBe('');
+    expect(routesForPrompt('Please use scip-debug on this')).toMatchObject({ id: 'debug' });
+  });
+
+  it('can disable prompt routing through config or env', () => {
+    expect(
+      renderUserPromptContext('Raise the health score as high as reasonably possible', { hooks: { router: 'off' } }),
+    ).toBe('');
+    expect(
+      renderUserPromptContext(
+        'Raise the health score as high as reasonably possible',
+        {},
+        { SCIP_QUERY_ROUTER: 'off' },
+      ),
+    ).toBe('');
+  });
+
+  it('routes health score prompts toward autonomous improvement when enough evidence is present', () => {
     const context = renderUserPromptContext('Raise the health score as high as reasonably possible');
 
-    expect(context).toContain('scip-health-audit');
-    expect(context).toContain('scip-health-improve');
+    expect(context).toContain('scip-cleanup-audit');
+    expect(context).toContain('scip-cleanup-improve');
   });
 
-  it('warns without blocking stop hooks by default', () => {
+  it('provides non-error stop feedback by default', () => {
     const output = renderStopHookOutput(diffGateResult(), resolveStopHookMode({}));
 
     expect(output).toMatchObject({
-      systemMessage: expect.stringContaining('Stop hook allowed this turn to finish'),
+      hookSpecificOutput: {
+        hookEventName: 'Stop',
+        additionalContext: expect.stringContaining('non-error Stop hook feedback'),
+      },
     });
     expect(output).not.toHaveProperty('decision');
-    expect(output).not.toHaveProperty('hookSpecificOutput');
+    expect(output).not.toHaveProperty('systemMessage');
   });
 
   it('can provide non-error stop feedback when explicitly configured', () => {
@@ -71,6 +93,10 @@ describe('agent hook context', () => {
       decision: 'block',
       reason: expect.stringContaining('fix or knowingly accept them before finishing'),
     });
+  });
+
+  it('treats unknown truthy stop mode values as feedback, not block', () => {
+    expect(resolveStopHookMode({ SCIP_QUERY_STOP_HOOK_MODE: 'true' })).toBe('feedback');
   });
 });
 

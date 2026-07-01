@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { homedir } from 'node:os';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 // scip-query: ignore-stale — exported setup report attachment shared by setup
 // orchestration, dossier writing, and tests; it is a named product contract.
@@ -42,23 +43,31 @@ interface HealthDossierReport {
     recovery?: string;
   }>;
   healthDossier: ProjectSetupHealthDossier | null;
+  generatedAt?: string;
 }
 
 export function writeProjectHealthDossier<Report extends HealthDossierReport>(
   report: Report,
+  opts: { dossierDir?: string } = {},
 ): ProjectSetupHealthDossier {
+  const dossierDir = opts.dossierDir
+    ? resolve(report.projectRoot, opts.dossierDir)
+    : join(report.projectRoot, 'docs', 'scip-query');
   const pending: ProjectSetupHealthDossier = {
-    markdownPath: join(report.projectRoot, 'docs', 'scip-query', 'health-dossier.md'),
-    jsonPath: join(report.projectRoot, 'docs', 'scip-query', 'health-dossier.json'),
+    markdownPath: join(dossierDir, 'health-dossier.md'),
+    jsonPath: join(dossierDir, 'health-dossier.json'),
     status: 'written',
     written: [],
     unchanged: [],
   };
-  const reportWithDossier = { ...report, healthDossier: pending };
+  const reportWithDossier = relativizeReport(
+    { ...report, generatedAt: new Date().toISOString(), healthDossier: pending },
+    report.projectRoot,
+  );
 
   try {
     writeIfChanged(pending.markdownPath, renderHealthDossierMarkdown(reportWithDossier), pending);
-    writeIfChanged(pending.jsonPath, `${JSON.stringify(reportWithDossier, null, 2)}\n`, pending);
+    writeJsonIfChanged(pending.jsonPath, reportWithDossier, pending);
     return pending;
   } catch (error) {
     return {
@@ -73,7 +82,6 @@ function renderHealthDossierMarkdown(report: HealthDossierReport): string {
   const lines = [
     '# scip-query Health Dossier',
     '',
-    `Generated: ${new Date().toISOString()}`,
     `Project: ${report.projectRoot}`,
     `Setup verdict: ${report.verdict}`,
     `Health score: ${formatHealthScore(report)}`,
@@ -159,4 +167,54 @@ function writeIfChanged(path: string, content: string, result: ProjectSetupHealt
   }
   writeFileSync(path, content);
   result.written.push(path);
+}
+
+function writeJsonIfChanged(path: string, payload: HealthDossierReport, result: ProjectSetupHealthDossier): void {
+  mkdirSync(dirname(path), { recursive: true });
+  const content = `${JSON.stringify(payload, null, 2)}\n`;
+  const current = existsSync(path) ? readFileSync(path, 'utf-8') : null;
+  if (current && jsonEqualIgnoringGeneratedAt(current, content)) {
+    result.unchanged.push(path);
+    return;
+  }
+  writeFileSync(path, content);
+  result.written.push(path);
+}
+
+function jsonEqualIgnoringGeneratedAt(left: string, right: string): boolean {
+  try {
+    const leftParsed = JSON.parse(left) as Record<string, unknown>;
+    const rightParsed = JSON.parse(right) as Record<string, unknown>;
+    delete leftParsed['generatedAt'];
+    delete rightParsed['generatedAt'];
+    return JSON.stringify(leftParsed) === JSON.stringify(rightParsed);
+  } catch {
+    return left === right;
+  }
+}
+
+function relativizeReport<Report extends HealthDossierReport>(report: Report, projectRoot: string): Report {
+  return relativizeValue(report, projectRoot) as Report;
+}
+
+function relativizeValue(value: unknown, projectRoot: string): unknown {
+  if (typeof value === 'string') return relativizeString(value, projectRoot);
+  if (Array.isArray(value)) return value.map((entry) => relativizeValue(entry, projectRoot));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, relativizeValue(entry, projectRoot)]));
+  }
+  return value;
+}
+
+function relativizeString(value: string, projectRoot: string): string {
+  if (value === projectRoot) return '.';
+  if (!isAbsolute(value)) return value;
+  const relativePath = relative(projectRoot, value).replace(/\\/g, '/');
+  if (!relativePath) return '.';
+  if (relativePath.startsWith('..')) {
+    const homeRelativePath = relative(homedir(), value).replace(/\\/g, '/');
+    if (homeRelativePath && !homeRelativePath.startsWith('..')) return `~/${homeRelativePath}`;
+    return value;
+  }
+  return relativePath;
 }

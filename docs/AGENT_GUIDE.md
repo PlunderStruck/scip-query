@@ -14,25 +14,24 @@ For command syntax and options reference, see [Command Reference](COMMAND_REFERE
 
 1. **Run setup**
    ```bash
-   scip-query setup-hooks --json
    scip-query setup --json
    ```
-   Returns: project-local hook install state, detected languages, indexer readiness, remediation attempts, index result, capability summary, smoke tests, health score, issue list, health dossier paths, and setup verdict.
+   Returns: detected languages, indexer readiness, remediation attempts, index result, capability summary, project-local hook install state, smoke tests, health score, issue list, health dossier paths, and setup verdict. Use `scip-query setup --no-hooks --json` when the repo should not write Codex or Claude Code lifecycle hooks.
 
 2. **Resolve blockers**
    ```bash
-   scip-query check-deps
    scip-query doctor
-   scip-query capability-matrix --json
+   scip-query status --json
+   scip-query capabilities --matrix
    ```
-   Missing indexers or toolchains are blockers, not clean results. Fix what setup can prove, then rerun setup or reindex.
+   `doctor` is the human diagnostic. `status --json` is the machine-readable freshness/config surface. `check-deps` and `capability-matrix` remain compatibility aliases, but new workflows should prefer `doctor`, `status`, and `capabilities --matrix`.
 
 3. **Start health follow-through**
    ```bash
-   scip-query health --json --full
+   scip-query health --json
    scip-query diff-gate --json
    ```
-   Before cleanup, tell the user the health score, confirmed items, unavailable checks, and recommended first cleanup batch. Use `scip-health-audit` for confirmation and `scip-health-improve` when the user wants autonomous score improvement.
+   Before cleanup, tell the user the health score, confirmed items, unavailable checks, and recommended first cleanup batch. Use `scip-cleanup-audit` for confirmation and `scip-cleanup-improve` when the user wants autonomous score improvement.
 
 ### What you should know after this workflow
 
@@ -178,17 +177,19 @@ For command syntax and options reference, see [Command Reference](COMMAND_REFERE
 
 ### Steps
 
+Numeric thresholds below are recommended starting points for review sessions; command defaults may differ.
+
 1. **Get the full health report**
    ```bash
    scip-query health
    ```
    This runs every analysis and produces a prioritized action list. Start here. The actions are sorted by impact/effort ratio — do the top ones first.
 
-2. **Delete dead code (safest, highest impact)**
+2. **Review dead-code candidates**
    ```bash
    scip-query dead --min-loc 10 --skip-barrels
    ```
-   These symbols have zero cross-file references. They can be safely deleted. `--skip-barrels` ignores references from inactive barrel files, which helps surface exports kept alive only by unused re-export layers without hiding live package entry surfaces.
+   These symbols have zero cross-file references. Treat them as deletion candidates and confirm with `cleanup-plan --verify` before deleting. `--skip-barrels` ignores references from inactive barrel files, which helps surface exports kept alive only by unused re-export layers without hiding live package entry surfaces.
 
 3. **Delete isolated symbols**
    ```bash
@@ -253,8 +254,8 @@ For command syntax and options reference, see [Command Reference](COMMAND_REFERE
 
 | Priority | What | Why |
 |---|---|---|
-| 1 | Dead code | Zero risk, immediate LOC reduction |
-| 2 | Isolated symbols | Zero risk, zero consumers |
+| 1 | Dead code | High-confidence deletion candidates; verify before deleting |
+| 2 | Isolated symbols | Zero indexed consumers; verify before deleting |
 | 3 | Circular deps | Structural fix, prevents future problems |
 | 4 | Similar functions | Reduces duplication, use `convergence` for prescription |
 | 5 | Extraction candidates | Reduces function complexity |
@@ -387,4 +388,4 @@ For command syntax and options reference, see [Command Reference](COMMAND_REFERE
 - **Run `diff-impact --json` before committing** — catches unexpected blast radius across downstream consumers
 - **Use `convergence` after `similar`** — `similar` finds the problem, `convergence` gives the solution
 - **Start cleanup with `health`** — it prioritizes for you so you don't have to decide what to fix first
-- **Scope commands with `-s`** — most commands accept `--scope <path>` to limit analysis to a specific module. Use this on large codebases to keep results focused.
+- **Scope where supported** — many cleanup and health commands accept `-s, --scope <path>`; navigation commands usually take a file, symbol, or module argument instead. Use the narrowest supported target on large codebases.

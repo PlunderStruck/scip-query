@@ -104,6 +104,8 @@ export interface ProjectConfig {
   indexerConcurrency?: number;
   /** Watch mode settings */
   watch?: WatchConfig;
+  /** Agent hook behavior. */
+  hooks?: HookRuntimeConfig;
   /** Per-language indexer overrides */
   indexer?: Partial<Record<SupportedLanguage, IndexerOverrides>>;
   /** Override the database storage path (default: ~/.cache/scip-query/<hash>/) */
@@ -181,6 +183,11 @@ export interface WatchConfig {
   autoRefresh?: boolean;
   /** Extra glob patterns to ignore beyond .gitignore */
   ignore?: string[];
+}
+
+export interface HookRuntimeConfig {
+  /** Prompt router mode for project-local hooks (default: single). */
+  router?: 'off' | 'single';
 }
 
 export interface IndexerOverrides {

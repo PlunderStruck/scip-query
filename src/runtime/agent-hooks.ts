@@ -1,12 +1,12 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { ProjectConfig, ScipQueryConfig } from '../domain/types.js';
 import { diffGate } from '../queries/impact/diff-gate.js';
 import type { DiffGateResult } from '../queries/impact/diff-gate.js';
-import { reindex } from '../reindex/index.js';
 import { createGitignoreFilter } from '../source/gitignore-filter.js';
+import { escapeRegex } from '../source/source-stripper.js';
 import { ScipDatabase } from '../storage/db.js';
 import { loadProjectConfig, resolveIndexPaths, resolveWatchConfig } from './config.js';
 import { getIndexFreshness } from './index-freshness.js';
@@ -68,6 +68,16 @@ interface HookPayload {
   source?: unknown;
 }
 
+interface ProjectHookOptions {
+  homeDir?: string;
+  env?: Record<string, string | undefined>;
+  removeLegacyUserHooks?: boolean;
+  shared?: boolean;
+  remove?: boolean;
+  force?: boolean;
+  dryRun?: boolean;
+}
+
 export function installUserAgentHooks(
   opts: {
     homeDir?: string;
@@ -103,11 +113,7 @@ export function installUserAgentHooks(
 
 export function installProjectAgentHooks(
   projectRoot: string,
-  opts: {
-    homeDir?: string;
-    env?: Record<string, string | undefined>;
-    removeLegacyUserHooks?: boolean;
-  } = {},
+  opts: ProjectHookOptions = {},
 ): InstallUserAgentHooksResult {
   const result = emptyHookInstallResult();
   const env = opts.env ?? process.env;
@@ -117,20 +123,44 @@ export function installProjectAgentHooks(
     return result;
   }
 
+  const commandPrefix = projectHookCommandPrefix(projectRoot);
+  const claudeConfigName = opts.shared ? 'settings.json' : 'settings.local.json';
+
+  if (opts.remove) {
+    removeProjectProviderHooks({
+      configPath: join(projectRoot, '.codex', 'hooks.json'),
+      label: '.codex/hooks.json',
+      result,
+      dryRun: opts.dryRun,
+    });
+    removeProjectProviderHooks({
+      configPath: join(projectRoot, '.claude', claudeConfigName),
+      label: `.claude/${claudeConfigName}`,
+      result,
+      writeDeclinedTombstone: true,
+      dryRun: opts.dryRun,
+    });
+    return result;
+  }
+
   installProviderHooks({
     provider: 'codex',
     rootDir: join(projectRoot, '.codex'),
     configPath: join(projectRoot, '.codex', 'hooks.json'),
     label: '.codex/hooks.json',
     createRoot: true,
+    commandPrefix,
+    force: opts.force,
     result,
   });
   installProviderHooks({
     provider: 'claude',
     rootDir: join(projectRoot, '.claude'),
-    configPath: join(projectRoot, '.claude', 'settings.json'),
-    label: '.claude/settings.json',
+    configPath: join(projectRoot, '.claude', claudeConfigName),
+    label: `.claude/${claudeConfigName}`,
     createRoot: true,
+    commandPrefix,
+    force: opts.force,
     result,
   });
 
@@ -175,13 +205,16 @@ export function shouldSkipUserHookInstall(env: Record<string, string | undefined
 
 export function resolveStopHookMode(env: Record<string, string | undefined> = process.env): StopHookMode {
   const value = env[STOP_HOOK_MODE_ENV]?.toLowerCase();
-  if (value === 'block' || value === 'blocking' || value === '1' || value === 'true' || value === 'yes') {
+  if (value === 'block' || value === 'blocking') {
     return 'block';
   }
-  if (value === 'feedback' || value === 'continue') {
+  if (value === 'warn') {
+    return 'warn';
+  }
+  if (value === 'feedback' || value === 'continue' || value === '1' || value === 'true' || value === 'yes') {
     return 'feedback';
   }
-  return 'warn';
+  return 'feedback';
 }
 
 function installProviderHooks(opts: {
@@ -190,6 +223,8 @@ function installProviderHooks(opts: {
   configPath: string;
   label: string;
   createRoot?: boolean;
+  commandPrefix?: string;
+  force?: boolean;
   result: InstallUserAgentHooksResult;
 }): void {
   if (!opts.createRoot && !existsSync(opts.rootDir)) {
@@ -198,8 +233,15 @@ function installProviderHooks(opts: {
 
   const current = readJsonConfig(opts.configPath, opts.label, opts.result);
   if (!current) return;
+  if (current['scipQueryHooks'] === 'declined' && !opts.force) {
+    opts.result.skipped.push({
+      target: opts.label,
+      reason: 'scip-query hooks were previously removed; rerun with --force',
+    });
+    return;
+  }
 
-  const next = mergeScipHookConfig(current, opts.provider);
+  const next = mergeScipHookConfig(current, opts.provider, opts.commandPrefix);
   if (JSON.stringify(next) === JSON.stringify(current)) {
     opts.result.unchanged.push(opts.label);
     return;
@@ -211,7 +253,12 @@ function installProviderHooks(opts: {
   opts.result[existed ? 'updated' : 'installed'].push(opts.label);
 }
 
-function removeProviderHooks(opts: { configPath: string; label: string; result: InstallUserAgentHooksResult }): void {
+function removeProviderHooks(opts: {
+  configPath: string;
+  label: string;
+  result: InstallUserAgentHooksResult;
+  dryRun?: boolean;
+}): void {
   if (!existsSync(opts.configPath)) return;
 
   const current = readJsonConfig(opts.configPath, opts.label, opts.result);
@@ -243,8 +290,33 @@ function removeProviderHooks(opts: { configPath: string; label: string; result: 
   } else {
     delete next.hooks;
   }
-  writeFileSync(opts.configPath, `${JSON.stringify(next, null, 2)}\n`);
+  if (!opts.dryRun) {
+    writeFileSync(opts.configPath, `${JSON.stringify(next, null, 2)}\n`);
+  }
   opts.result.removed.push(opts.label);
+}
+
+function removeProjectProviderHooks(opts: {
+  configPath: string;
+  label: string;
+  result: InstallUserAgentHooksResult;
+  writeDeclinedTombstone?: boolean;
+  dryRun?: boolean;
+}): void {
+  const before = opts.result.removed.length;
+  removeProviderHooks(opts);
+  if (!opts.writeDeclinedTombstone) return;
+
+  const current = readJsonConfig(opts.configPath, opts.label, opts.result);
+  if (!current) return;
+  const next: HookConfig = { ...current, scipQueryHooks: 'declined' };
+  if (!opts.dryRun) {
+    mkdirSync(dirname(opts.configPath), { recursive: true });
+    writeFileSync(opts.configPath, `${JSON.stringify(next, null, 2)}\n`);
+  }
+  if (opts.result.removed.length === before) {
+    opts.result.removed.push(`${opts.label} (declined)`);
+  }
 }
 
 function readJsonConfig(path: string, label: string, result: InstallUserAgentHooksResult): HookConfig | undefined {
@@ -267,13 +339,20 @@ function readJsonConfig(path: string, label: string, result: InstallUserAgentHoo
   }
 }
 
-export function mergeScipHookConfig(config: HookConfig, provider: HookProvider): HookConfig {
+export function mergeScipHookConfig(
+  config: HookConfig,
+  provider: HookProvider,
+  commandPrefix = 'scip-query',
+): HookConfig {
   const hooks = config.hooks && typeof config.hooks === 'object' && !Array.isArray(config.hooks) ? config.hooks : {};
   const next: HookConfig = { ...config, hooks: { ...hooks } };
+  if (next['scipQueryHooks'] === 'declined') {
+    delete next['scipQueryHooks'];
+  }
 
   for (const event of ['SessionStart', 'UserPromptSubmit', 'Stop'] as const) {
     const groups = Array.isArray(hooks[event]) ? hooks[event] : [];
-    next.hooks![event] = [...pruneScipHookGroups(groups), scipHookGroup(provider, event)];
+    next.hooks![event] = [...pruneScipHookGroups(groups), scipHookGroup(provider, event, commandPrefix)];
   }
 
   return next;
@@ -297,17 +376,16 @@ function isScipHook(hook: unknown): hook is CommandHook {
   );
 }
 
-function scipHookGroup(_provider: HookProvider, event: HookEventName): HookGroup {
+function scipHookGroup(_provider: HookProvider, event: HookEventName, commandPrefix: string): HookGroup {
   if (event === 'SessionStart') {
     return {
-      matcher: 'startup|resume|clear|compact',
       hooks: [
-          {
-            type: 'command',
-            command: 'scip-query hook-context',
-            timeout: 60,
-            statusMessage: 'Refreshing scip-query context',
-          },
+        {
+          type: 'command',
+          command: `${commandPrefix} hook-context`,
+          timeout: 60,
+          statusMessage: 'Refreshing scip-query context',
+        },
       ],
     };
   }
@@ -315,12 +393,12 @@ function scipHookGroup(_provider: HookProvider, event: HookEventName): HookGroup
   if (event === 'UserPromptSubmit') {
     return {
       hooks: [
-          {
-            type: 'command',
-            command: 'scip-query hook-context',
-            timeout: 60,
-            statusMessage: 'Checking scip-query freshness',
-          },
+        {
+          type: 'command',
+          command: `${commandPrefix} hook-context`,
+          timeout: 60,
+          statusMessage: 'Checking scip-query freshness',
+        },
       ],
     };
   }
@@ -329,12 +407,17 @@ function scipHookGroup(_provider: HookProvider, event: HookEventName): HookGroup
     hooks: [
       {
         type: 'command',
-        command: 'scip-query hook-stop',
+        command: `${commandPrefix} hook-stop`,
         timeout: 30,
         statusMessage: 'Running scip-query diff gate',
       },
     ],
   };
+}
+
+function projectHookCommandPrefix(projectRoot: string): string {
+  const localBin = join(projectRoot, 'node_modules', '.bin', 'scip-query');
+  return existsSync(localBin) ? localBin : 'scip-query';
 }
 
 export async function handleAgentHookContext(): Promise<void> {
@@ -364,7 +447,7 @@ export function handleAgentHookStop(): void {
   });
 }
 
-export function renderStopHookOutput(result: DiffGateResult, mode: StopHookMode = 'warn'): ClaudeHookJsonOutput {
+export function renderStopHookOutput(result: DiffGateResult, mode: StopHookMode = 'feedback'): ClaudeHookJsonOutput {
   const blockMessage = formatGateBlockReason(result);
   const advisoryMessage = formatGateAdvisoryReason(result);
   if (mode === 'block') {
@@ -403,11 +486,11 @@ export async function renderAgentHookContext(hookInput: string): Promise<unknown
   const workspace = resolveHookWorkspace(payload);
   if (!workspace) return undefined;
 
-  const refreshNote = await refreshIndexForHookIfNeeded(workspace);
+  const refreshNote = await refreshIndexForHookIfNeeded(workspace, event);
   const context =
     event === 'SessionStart'
       ? renderSessionStartContext(workspace.projectRoot, workspace.config, workspace.paths)
-      : renderUserPromptContext(String(payload.prompt ?? ''));
+      : renderUserPromptContext(String(payload.prompt ?? ''), workspace.config);
   const additionalContext = [refreshNote, context].filter((line): line is string => Boolean(line?.trim())).join('\n');
   if (!additionalContext.trim()) return undefined;
 
@@ -419,37 +502,35 @@ export async function renderAgentHookContext(hookInput: string): Promise<unknown
   };
 }
 
-async function refreshIndexForHookIfNeeded(workspace: {
-  projectRoot: string;
-  config: ProjectConfig;
-  paths: ReturnType<typeof resolveIndexPaths>;
-}): Promise<string | undefined> {
+async function refreshIndexForHookIfNeeded(
+  workspace: {
+    projectRoot: string;
+    config: ProjectConfig;
+    paths: ReturnType<typeof resolveIndexPaths>;
+  },
+  event: string,
+): Promise<string | undefined> {
   const watch = resolveWatchConfig(workspace.config);
   if (watch.autoRefresh === false) return undefined;
 
   const freshness = getIndexFreshness(workspace.projectRoot, workspace.config, workspace.paths);
   if (freshness.state === 'fresh') return undefined;
+  if (event === 'UserPromptSubmit') {
+    return `scip-query index is ${freshness.state}; evidence commands will note staleness. Run 'scip-query reindex' to refresh.`;
+  }
 
   try {
-    const result = await reindex({
-      projectRoot: workspace.projectRoot,
-      languages: workspace.config.languages,
-      outputScip: workspace.paths.indexPath,
-      outputDb: workspace.paths.dbPath,
-      pnpmWorkspaces: workspace.config.indexer?.typescript?.pnpmWorkspaces,
-      typescriptProjectMode: workspace.config.indexer?.typescript?.projectMode,
-      typescriptProjects: workspace.config.indexer?.typescript?.projects,
-      clojureConfigPath: workspace.config.indexer?.clojure?.configPath,
-      skipIfUnchanged: true,
-      allowPartial: true,
-      indexerConcurrency: workspace.config.indexerConcurrency,
-      trigger: { kind: 'manual-cli', detail: 'agent hook auto-refresh' },
-      onStatus: () => {},
+    const child = spawn('scip-query', ['reindex', '--allow-partial'], {
+      cwd: workspace.projectRoot,
+      detached: true,
+      stdio: 'ignore',
+      env: { ...process.env, SCIP_QUERY_SKIP_AUTO_INSTALL: '1' },
     });
-    return `scip-query auto-refresh: ${result.reused ? 'reused' : 'indexed'} ${result.languages.join(', ')} because the index was ${freshness.state}.`;
+    child.unref();
+    return `scip-query index is ${freshness.state}; started background refresh with auto-install disabled.`;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return `scip-query auto-refresh skipped: index is ${freshness.state}, but refresh failed: ${message}`;
+    return `scip-query auto-refresh skipped: index is ${freshness.state}, but background refresh failed to start: ${message}`;
   }
 }
 
@@ -482,34 +563,68 @@ function renderSessionStartContext(
     .join('\n');
 }
 
-export function renderUserPromptContext(prompt: string): string {
-  const lower = prompt.toLowerCase();
-  const reminders: string[] = [];
+export function renderUserPromptContext(
+  prompt: string,
+  config: ProjectConfig = {},
+  env: Record<string, string | undefined> = process.env,
+): string {
+  if (routerMode(config, env) === 'off') return '';
+  const route = routesForPrompt(prompt);
+  return route ? `scip-query routing reminder:\n${route.message}` : '';
+}
 
-  if (matchesAny(lower, ['debug', 'bug', 'regression', 'failing', 'fails', 'error', 'wrong'])) {
-    reminders.push('Debug or bug request: use scip-debug. For issue-quality triage, use scip-triage-issue.');
-  }
-  if (matchesAny(lower, ['explain', 'how does', 'walk me through', 'trace', 'understand'])) {
-    reminders.push('Exploration request: use scip-explore before answering behavioral questions.');
-  }
-  if (matchesAny(lower, ['diagram', 'visualize', 'visualise', 'flow map', 'architecture map'])) {
-    reminders.push('Diagram request: use scip-diagram and back every node and edge with scip-query evidence.');
-  }
-  if (matchesAny(lower, ['implement', 'build', 'change', 'refactor', 'fix', 'add ', 'update '])) {
-    reminders.push(
-      'Implementation request: plan first with concrete-plan and `scip-query plan-context <target>`, then verify with scip-verify.',
-    );
-  }
-  if (matchesAny(lower, ['review', 'maintainability', 'architecture', 'boundary'])) {
-    reminders.push(
+type PromptRouteId = 'setup' | 'debug' | 'review' | 'implementation' | 'exploration' | 'diagram' | 'health';
+
+interface PromptRoute {
+  id: PromptRouteId;
+  skillNames: string[];
+  keywords: string[];
+  message: string;
+}
+
+const PROMPT_ROUTES: PromptRoute[] = [
+  {
+    id: 'setup',
+    skillNames: ['scip-setup'],
+    keywords: ['setup', 'adopt', 'install', 'bootstrap'],
+    message: 'Setup request: use scip-setup; keep CI setup out of the default path.',
+  },
+  {
+    id: 'debug',
+    skillNames: ['scip-debug', 'scip-triage-issue'],
+    keywords: ['debug', 'bug', 'regression', 'failing', 'fails', 'error', 'wrong'],
+    message: 'Debug or bug request: use scip-debug. For issue-quality triage, use scip-triage-issue.',
+  },
+  {
+    id: 'review',
+    skillNames: ['scip-maintainability', 'scip-api-impact', 'scip-verify'],
+    keywords: ['review', 'maintainability', 'architecture', 'boundary'],
+    message:
       'Review request: use scip-maintainability, scip-api-impact, or scip-verify depending on whether this is architecture, API impact, or post-change verification.',
-    );
-  }
-  if (matchesAny(lower, ['setup', 'adopt', 'install', 'bootstrap'])) {
-    reminders.push('Setup request: use scip-adoption or scip-query-setup; keep CI setup out of the default path.');
-  }
-  if (
-    matchesAny(lower, [
+  },
+  {
+    id: 'implementation',
+    skillNames: ['concrete-plan', 'scip-verify'],
+    keywords: ['implement', 'build', 'change', 'refactor', 'fix', 'add', 'update'],
+    message:
+      'Implementation request: plan first with concrete-plan and `scip-query plan-context <target>`, then verify with scip-verify.',
+  },
+  {
+    id: 'exploration',
+    skillNames: ['scip-explore'],
+    keywords: ['explain', 'how does', 'walk me through', 'trace', 'understand'],
+    message: 'Exploration request: use scip-explore before answering behavioral questions.',
+  },
+  {
+    id: 'diagram',
+    skillNames: ['scip-diagram'],
+    keywords: ['diagram', 'visualize', 'visualise', 'flow map', 'architecture map'],
+    message: 'Diagram request: use scip-diagram and back every node and edge with scip-query evidence.',
+  },
+  {
+    id: 'health',
+    skillNames: ['scip-cleanup-audit', 'scip-cleanup-improve'],
+    keywords: [
       'health',
       'score',
       'dossier',
@@ -517,26 +632,41 @@ export function renderUserPromptContext(prompt: string): string {
       'dead code',
       'duplicate',
       'debloat',
-      'perfect code',
       'as high as',
       'maximize',
       'maximise',
-    ])
-  ) {
-    reminders.push(
-      'Health or cleanup request: use scip-health-audit before editing; use scip-health-improve when the user wants the score raised as high as reasonably possible.',
-    );
-  }
+    ],
+    message:
+      'Health or cleanup request: use scip-cleanup-audit before editing; use scip-cleanup-improve when the user wants confirmed issues fixed autonomously.',
+  },
+];
 
-  if (reminders.length === 0) {
-    return '';
-  }
+export function routesForPrompt(prompt: string): PromptRoute | null {
+  const explicit = PROMPT_ROUTES.find((route) => route.skillNames.some((skill) => wordBoundaryMatch(prompt, skill)));
+  if (explicit) return explicit;
 
-  return [`scip-query routing reminder:`, ...reminders].join('\n');
+  let hitCount = 0;
+  const matches: PromptRoute[] = [];
+  for (const route of PROMPT_ROUTES) {
+    const routeHits = route.keywords.filter((keyword) => wordBoundaryMatch(prompt, keyword)).length;
+    hitCount += routeHits;
+    if (routeHits > 0) matches.push(route);
+  }
+  if (hitCount < 2 || matches.length === 0) return null;
+  return matches[0]!;
 }
 
-function matchesAny(value: string, needles: string[]): boolean {
-  return needles.some((needle) => value.includes(needle));
+function routerMode(config: ProjectConfig, env: Record<string, string | undefined>): 'off' | 'single' {
+  return env['SCIP_QUERY_ROUTER'] === 'off' ? 'off' : (config.hooks?.router ?? 'single');
+}
+
+function wordBoundaryMatch(value: string, needle: string): boolean {
+  const pattern = needle
+    .trim()
+    .split(/\s+/)
+    .map((part) => escapeRegex(part))
+    .join('\\s+');
+  return new RegExp(`(?<![A-Za-z0-9_-])${pattern}(?![A-Za-z0-9_-])`, 'i').test(value);
 }
 
 function parseHookPayload(hookInput: string): HookPayload {

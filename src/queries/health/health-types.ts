@@ -18,6 +18,7 @@ export interface HealthAnalyses {
   isolated: CountLocSummary;
   realCycleCount: number;
   similarCount: number;
+  duplicateBodies: CountLocSummary;
   reactComponentDuplicates: CountLocSummary;
   reactHookCandidates: CountLocSummary;
   reactLargeComponentPressure: CountLocSummary;

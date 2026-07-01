@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { containment } from '../../analysis/similarity.js';
 import { ProjectIndex } from '../../core/project-index.js';
+import { escapeRegex } from '../../source/source-stripper.js';
 import { leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
 import {
   GIT_DIFF_UNAVAILABLE_NOTE,
@@ -394,8 +395,4 @@ function referencingFiles(db: ScipDatabase, symbolId: number): string[] {
     symbolId,
   );
   return rows.map((row) => row.relative_path);
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

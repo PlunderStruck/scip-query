@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { ScipDatabase } from '../storage/db.js';
 import { createGitignoreFilter } from '../source/gitignore-filter.js';
@@ -14,14 +14,26 @@ interface CliProjectContext {
   config: ProjectConfig;
   paths: ReturnType<typeof resolveIndexPaths>;
   dbPath: string;
+  dbPathSource: 'env' | 'configured' | 'root-fallback';
+  rootFallbackWarning?: string;
 }
 
 export function resolveCliProjectContext(projectRoot = resolveProjectRoot()): CliProjectContext {
   const config = loadProjectConfig(projectRoot);
   const paths = resolveIndexPaths(projectRoot, config);
-  const dbPath =
-    process.env['SCIP_QUERY_INDEX_DB'] ?? (existsSync(paths.dbPath) ? paths.dbPath : join(projectRoot, 'index.db'));
-  return { projectRoot, config, paths, dbPath };
+  const envDbPath = process.env['SCIP_QUERY_INDEX_DB'];
+  if (envDbPath) return { projectRoot, config, paths, dbPath: envDbPath, dbPathSource: 'env' };
+  if (existsSync(paths.dbPath)) return { projectRoot, config, paths, dbPath: paths.dbPath, dbPathSource: 'configured' };
+
+  const dbPath = join(projectRoot, 'index.db');
+  return {
+    projectRoot,
+    config,
+    paths,
+    dbPath,
+    dbPathSource: 'root-fallback',
+    rootFallbackWarning: rootIndexFallbackWarning(dbPath, paths.dbPath),
+  };
 }
 
 export function resolveActiveDbPath(projectRoot: string): string {
@@ -29,11 +41,14 @@ export function resolveActiveDbPath(projectRoot: string): string {
 }
 
 export function openDb(): ScipDatabase {
-  const { projectRoot, config, paths, dbPath } = resolveCliProjectContext();
+  const { projectRoot, config, paths, dbPath, dbPathSource, rootFallbackWarning } = resolveCliProjectContext();
 
   if (!existsSync(dbPath)) {
     console.error(`error: No index.db found. Run: scip-query reindex`);
     process.exit(1);
+  }
+  if (dbPathSource === 'root-fallback' && rootFallbackWarning) {
+    console.error(rootFallbackWarning);
   }
 
   const dbConfig: ScipQueryConfig = {
@@ -49,6 +64,16 @@ export function openDb(): ScipDatabase {
 
   const filter = createGitignoreFilter(projectRoot);
   return new ScipDatabase(dbConfig, filter);
+}
+
+export function rootIndexFallbackWarning(dbPath: string, configuredDbPath: string): string {
+  let builtAt = 'unknown time';
+  try {
+    builtAt = statSync(dbPath).mtime.toISOString();
+  } catch {
+    // The caller may be about to emit the missing-index error; keep this best-effort.
+  }
+  return `warning: using legacy project-root index.db (${dbPath}, modified ${builtAt}) because the configured index was not found at ${configuredDbPath}. This fallback may be stale; run 'scip-query reindex' to refresh the configured index.`;
 }
 
 export function withDb<T>(run: (db: ScipDatabase) => T): T {

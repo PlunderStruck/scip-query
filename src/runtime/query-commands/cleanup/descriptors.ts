@@ -31,6 +31,7 @@ import {
   handleComplexityHotspots,
   handleConvergence,
   handleSimilarSignatures,
+  handleDuplicateBodies,
 } from './handlers.js';
 import {
   handleReactComponentDuplicates,
@@ -499,12 +500,33 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     after: (rows) => console.log(`\n${rows.length} redundant re-export(s).`),
   }),
   cleanupCommand({
+    id: 'duplicate-bodies',
+    command: 'duplicate-bodies',
+    description: 'Find exact duplicate small-body candidates across files',
+    options: withJsonOption([
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option('--max-loc <n>', 'Maximum LOC per function body', parseInteger, 15),
+      option('-n, --limit <n>', 'Number of groups', parseInteger, 20),
+      option('--full', 'Run unbounded semantic analysis on large indexes'),
+    ]),
+    budget: 'candidate-scan',
+    heuristic: { label: 'duplicate body candidates' },
+    renderShape: 'list',
+    handler: handleDuplicateBodies,
+  }),
+  cleanupCommand({
     id: 'similar-signatures',
     command: 'similar-signatures',
     description: 'Find functions with near-identical type signatures (same shape)',
     options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--min-loc <n>', 'Minimum LOC per function', parseInteger, 3),
+      option(
+        '--max-shape-frequency <n>',
+        'Suppress noisy signature shapes above this frequency unless bodies match exactly',
+        parseInteger,
+        12,
+      ),
       option('-n, --limit <n>', 'Number of groups', parseInteger, 20),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
     ]),

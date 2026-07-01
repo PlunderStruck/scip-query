@@ -67,7 +67,7 @@ export function buildVueComponentBehaviorProfiles(
       (profile) =>
         (opts.minTemplateTokens === undefined || profile.templateTokens.size >= opts.minTemplateTokens) &&
         (opts.minBehaviorTokens === undefined || profile.behaviorTokens.size >= opts.minBehaviorTokens),
-      );
+    );
 }
 
 // scip-query: ignore-wrapper — optimized per-file cache entry shared by broad

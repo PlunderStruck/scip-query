@@ -2,8 +2,9 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { handleStatus } from '../../src/runtime/commands/command-handlers.js';
+import { handleDoctor, handleStatus, handleWatch } from '../../src/runtime/commands/command-handlers.js';
 import { addFindingSuppression, loadProjectConfig, validateProjectConfig } from '../../src/runtime/config.js';
+import type { ProjectConfig } from '../../src/domain/types.js';
 
 const tempDirs: string[] = [];
 
@@ -55,14 +56,78 @@ describe('loadProjectConfig', () => {
 describe('validateProjectConfig', () => {
   it('requires structured suppressions to include an identity and reason', () => {
     const diagnostics = validateProjectConfig({
-      suppressions: [{ reason: '' }, { check: 'echo', reason: 'accepted duplicate', expiresAt: 'not-a-date' }],
+      suppressions: [
+        { reason: '' },
+        { check: 'echo', reason: 'accepted duplicate', expiresAt: 'not-a-date' },
+        { check: 'echo', file: 'src/example.ts', reason: 'accepted duplicate class' },
+      ],
     });
 
     expect(diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ level: 'error', path: 'suppressions[0].reason' }),
         expect.objectContaining({ level: 'error', path: 'suppressions[0]' }),
+        expect.objectContaining({
+          level: 'error',
+          path: 'suppressions[1]',
+          message: 'Suppression must include id or both check and file.',
+        }),
         expect.objectContaining({ level: 'error', path: 'suppressions[1].expiresAt' }),
+        expect.objectContaining({
+          level: 'warning',
+          path: 'suppressions[2]',
+          message:
+            'Check+file suppressions waive every matching finding in that file; prefer a stable id when available.',
+        }),
+      ]),
+    );
+  });
+
+  it('warns about unknown config keys at every level', () => {
+    const diagnostics = validateProjectConfig({
+      autoRefres: true,
+      watch: { enabled: false, autoRefres: true },
+      hooks: { router: 'single', routers: true },
+      indexer: { typescript: { projectMode: 'single', packageManager: 'pnpm' } },
+      entryRoots: { files: [], extra: [] },
+      semantic: { typescript: { tsconfigs: [], project: 'tsconfig.json' }, ruby: {} },
+      locality: { architecturalBoundarySegments: [], boundarySegments: [] },
+      declaredCouplings: [{ name: 'pair', files: ['a.ts', 'b.ts'], owner: 'runtime' }],
+      suppressions: [{ id: 'SQABC123DEF456', reason: 'accepted', owner: 'runtime' }],
+    } as unknown as ProjectConfig);
+
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ level: 'warning', path: 'autoRefres', message: 'Unknown config key.' }),
+        expect.objectContaining({ level: 'warning', path: 'watch.autoRefres', message: 'Unknown config key.' }),
+        expect.objectContaining({ level: 'warning', path: 'hooks.routers', message: 'Unknown config key.' }),
+        expect.objectContaining({
+          level: 'warning',
+          path: 'indexer.typescript.packageManager',
+          message: 'Unknown config key.',
+        }),
+        expect.objectContaining({ level: 'warning', path: 'entryRoots.extra', message: 'Unknown config key.' }),
+        expect.objectContaining({ level: 'warning', path: 'semantic.ruby', message: 'Unknown config key.' }),
+        expect.objectContaining({
+          level: 'warning',
+          path: 'semantic.typescript.project',
+          message: 'Unknown config key.',
+        }),
+        expect.objectContaining({
+          level: 'warning',
+          path: 'locality.boundarySegments',
+          message: 'Unknown config key.',
+        }),
+        expect.objectContaining({
+          level: 'warning',
+          path: 'declaredCouplings[0].owner',
+          message: 'Unknown config key.',
+        }),
+        expect.objectContaining({
+          level: 'warning',
+          path: 'suppressions[0].owner',
+          message: 'Unknown config key.',
+        }),
       ]),
     );
   });
@@ -384,6 +449,76 @@ describe('status config diagnostics', () => {
       ]);
     } finally {
       log.mockRestore();
+      if (previousProjectRoot === undefined) {
+        delete process.env['SCIP_QUERY_PROJECT_ROOT'];
+      } else {
+        process.env['SCIP_QUERY_PROJECT_ROOT'] = previousProjectRoot;
+      }
+    }
+  });
+});
+
+describe('doctor diagnostics', () => {
+  it('exits 0 when the only problem is a stale index', () => {
+    const projectRoot = createProject();
+    const cacheDir = join(projectRoot, '.scipquery-cache');
+    mkdirSync(cacheDir, { recursive: true });
+    writeFileSync(join(projectRoot, '.scipquery.json'), '{ "languages": [], "dbPath": ".scipquery-cache" }\n');
+    writeFileSync(join(cacheDir, 'index.db'), '');
+    writeFileSync(
+      join(cacheDir, 'meta.json'),
+      `${JSON.stringify({
+        version: 2,
+        status: 'complete',
+        indexedLanguages: [],
+        fingerprint: { version: 2, languages: [], files: [{ path: 'old.ts', size: 1, hash: 'old' }] },
+      })}\n`,
+    );
+
+    const previousProjectRoot = process.env['SCIP_QUERY_PROJECT_ROOT'];
+    const previousExitCode = process.exitCode;
+    process.env['SCIP_QUERY_PROJECT_ROOT'] = projectRoot;
+    process.exitCode = undefined;
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    try {
+      handleDoctor({});
+
+      expect(process.exitCode).toBe(0);
+      expect(log.mock.calls.map((call) => String(call[0])).join('\n')).toContain('Freshness: stale');
+    } finally {
+      log.mockRestore();
+      process.exitCode = previousExitCode;
+      if (previousProjectRoot === undefined) {
+        delete process.env['SCIP_QUERY_PROJECT_ROOT'];
+      } else {
+        process.env['SCIP_QUERY_PROJECT_ROOT'] = previousProjectRoot;
+      }
+    }
+  });
+});
+
+describe('watch command config gate', () => {
+  it('refuses to start unless watch.enabled is true', () => {
+    const projectRoot = createProject();
+    writeFileSync(join(projectRoot, '.scipquery.json'), '{ "languages": [], "watch": { "enabled": false } }\n');
+
+    const previousProjectRoot = process.env['SCIP_QUERY_PROJECT_ROOT'];
+    const previousExitCode = process.exitCode;
+    process.env['SCIP_QUERY_PROJECT_ROOT'] = projectRoot;
+    process.exitCode = undefined;
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    try {
+      handleWatch({});
+
+      expect(process.exitCode).toBe(1);
+      expect(error).toHaveBeenCalledWith(
+        'error: watch mode is disabled. Set "watch.enabled": true in .scipquery.json to start it.',
+      );
+    } finally {
+      error.mockRestore();
+      process.exitCode = previousExitCode;
       if (previousProjectRoot === undefined) {
         delete process.env['SCIP_QUERY_PROJECT_ROOT'];
       } else {

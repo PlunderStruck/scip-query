@@ -97,7 +97,7 @@ export function coChange(
     includeLinked?: boolean;
     maxFilesPerCommit?: number;
   } = {},
-  ): CoChangeResult {
+): CoChangeResult {
   const { minTogether = 4, minConfidence = 0.6, limit = 30, maxFilesPerCommit = 20 } = opts;
   const git = gitEvidenceProduct(db);
   const history = git.commitHistory();

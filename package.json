@@ -13,9 +13,10 @@
     "dist/**/*.d.ts",
     "docs/assets/**/*",
     "docs/*.md",
+    "docs/plans/*.md",
     "scripts/build-scip-windows.mjs",
     "scripts/evidence-product-contract.mjs",
-    "skills/**/SKILL.md",
+    "skills/**/*.md",
     "skills/**/agents/*.yaml",
     "vendor/scip/**/*"
   ],
@@ -108,6 +109,10 @@
     "./queries/doc-drift": {
       "import": "./dist/queries/doc-drift.js",
       "types": "./dist/queries/doc-drift.d.ts"
+    },
+    "./queries/duplicate-bodies": {
+      "import": "./dist/queries/duplicate-bodies.js",
+      "types": "./dist/queries/duplicate-bodies.d.ts"
     },
     "./queries/drift": {
       "import": "./dist/queries/drift.js",
@@ -290,7 +295,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "lint": "npm run format:check && eslint src tests tsup.config.ts",
+    "lint": "npm run format:check && eslint src tests tsup.config.ts && node scripts/check-skill-links.mjs",
     "build:scip-windows": "node scripts/build-scip-windows.mjs",
     "bench:evidence-products": "node scripts/evidence-product-contract.mjs",
     "calibrate": "node scripts/accuracy-calibration.mjs",

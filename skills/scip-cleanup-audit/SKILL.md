@@ -1,0 +1,89 @@
+---
+name: scip-cleanup-audit
+description: Audit and rank scip-query cleanup signals without editing code. Use for health reports, de-bloat reports, recent AI residue audits, score-framed cleanup queues, confirming raw findings, or preparing a cleanup plan.
+---
+
+# scip-cleanup-audit
+
+Use this skill to turn raw scip-query signals into a confirmed cleanup queue. Do not edit application code in this skill.
+
+Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
+
+## Modes
+
+- Whole-repo audit: rank all cleanup signals.
+- Recent AI residue: focus on echoes, twins, incomplete migrations, speculative params, stale agent-facing docs, and hidden couplings.
+- Score-framed audit: explain health score deductions and the safest first batch.
+
+## Workflow
+
+### 1. Establish evidence
+
+```bash
+scip-query doctor
+scip-query status --capabilities
+scip-query health --json
+scip-query capabilities --json
+scip-query config-validate --json
+```
+
+This step is complete only when unavailable capabilities are recorded as unavailable.
+
+### 2. Sweep signals
+
+Run every relevant class, or record why it is unavailable:
+
+```bash
+scip-query cleanup-plan --verify --json
+scip-query duplicate-bodies --json --full
+scip-query recent-duplicates --json --full
+scip-query incomplete-migration --json --full
+scip-query unused-params --json --full
+scip-query stale-abstractions --json --full
+scip-query wrapper-candidates --json --full
+scip-query passthrough-candidates --json --full
+scip-query dead --json --full
+scip-query isolated --json --full
+scip-query cycles
+scip-query co-change --json --full
+scip-query doc-drift --json --full
+```
+
+For frontend repos, add the React or Vue duplicate, hook/composable, and large-component/view commands.
+
+### 3. Confirm candidates
+
+For each high-priority candidate, inspect source and graph evidence:
+
+```bash
+scip-query code <symbol-or-file>
+scip-query refs <symbol>
+scip-query fan-in <symbol>
+scip-query fan-out <symbol-or-file>
+scip-query affected <symbol> --json
+scip-query change-surface <file> --json --full
+scip-query convergence <symbolA> <symbolB>
+scip-query co-change <file> --json --full
+```
+
+Classify every candidate as `confirmed fix target`, `intentional design`, `false positive`, or `blocked`.
+
+### 4. Report
+
+```markdown
+Health score: N/100
+
+Confirmed items:
+- [priority] finding - evidence - first safe action
+
+Unconfirmed signals:
+- signal - evidence still needed
+
+Unavailable or blocked checks:
+- check - reason
+
+Recommended first cleanup batch:
+- batch - why safe now
+```
+
+The audit is complete only when each collected signal is classified and the next action is visible.

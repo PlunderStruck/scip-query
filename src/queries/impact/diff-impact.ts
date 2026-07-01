@@ -6,6 +6,7 @@ import type { IndexedDefinition } from '../../domain/types.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { semanticCallerMap } from '../../semantic/shared-primitives.js';
 import { isCallableSymbol, isModuleLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
+import { getAst, type SyntaxNode } from '../../source/ast.js';
 import { rangesByFile } from './diff-ranges.js';
 
 export interface DiffImpactResult {
@@ -19,6 +20,7 @@ export interface DiffImpactResult {
     fanIn: number;
   }>;
   affectedConsumers: Array<{ file: string; consumedSymbols: number }>;
+  attributionNotes: AttributionNote[];
   summary: {
     totalChangedFiles: number;
     totalChangedSymbols: number;
@@ -58,6 +60,20 @@ export type BaseContentReader = (relativePath: string) => string | null;
 export interface DiffImpactPartial {
   changedSymbols: ChangedSymbol[];
   consumerEntries: Array<{ file: string; symbols: string[] }>;
+  attributionNotes: AttributionNote[];
+}
+
+export interface AttributionNote {
+  file: string;
+  startLine: number;
+  endLine: number;
+  method: 'ast-widened' | 'nearest-preceding' | 'unattributed';
+}
+
+export interface DeclarationSpan {
+  file: string;
+  startLine: number;
+  endLine: number;
 }
 
 /**
@@ -118,11 +134,12 @@ export function diffImpactPartial(
   const changedSymbols: ChangedSymbol[] = [];
   const consumerMap: ConsumerMap = new Map();
 
-  const defs = filesToAnalyze
-    .flatMap((file) => index.definitionsForFile(file))
-    .filter(isDiffImpactCandidate)
-    .filter((def) => definitionTouchesChangedRange(def, changedRangeMap))
-    .sort((a, b) => a.relativePath.localeCompare(b.relativePath) || a.startLine - b.startLine);
+  const candidates = filesToAnalyze.flatMap((file) => index.definitionsForFile(file)).filter(isDiffImpactCandidate);
+  const touchedDefs = candidates.filter((def) => definitionTouchesChangedRange(def, changedRangeMap));
+  const residueAttribution = attributeChangedRangeResidue(db, candidates, touchedDefs, changedRangeMap);
+  const defs = uniqueDefinitionsBySymbolId([...touchedDefs, ...residueAttribution.definitions]).sort(
+    (a, b) => a.relativePath.localeCompare(b.relativePath) || a.startLine - b.startLine,
+  );
   const symbolIds = defs.map((def) => def.symbolId);
   // Semantic caller evidence costs a whole-project findReferences per
   // definition — spend it only where it can change an outcome: defs the SCIP
@@ -153,6 +170,7 @@ export function diffImpactPartial(
       file,
       symbols: [...symbols].sort(),
     })),
+    attributionNotes: residueAttribution.notes,
   };
 }
 
@@ -162,6 +180,7 @@ export function mergeDiffImpactPartials(
 ): DiffImpactResult {
   const consumerMap: ConsumerMap = new Map();
   const changedSymbols = partials.flatMap((partial) => partial.changedSymbols);
+  const attributionNotes = partials.flatMap((partial) => partial.attributionNotes ?? []);
 
   for (const partial of partials) {
     for (const entry of partial.consumerEntries) {
@@ -179,6 +198,7 @@ export function mergeDiffImpactPartials(
     changedFiles: [...changedFiles],
     changedSymbols,
     affectedConsumers,
+    attributionNotes,
     summary: {
       totalChangedFiles: changedFiles.length,
       totalChangedSymbols: changedSymbols.length,
@@ -192,6 +212,7 @@ function emptyDiffImpact(note: string, changedFiles: string[] = []): DiffImpactR
     changedFiles,
     changedSymbols: [],
     affectedConsumers: [],
+    attributionNotes: [],
     summary: {
       totalChangedFiles: changedFiles.length,
       totalChangedSymbols: 0,
@@ -206,6 +227,7 @@ function unindexedChangedFilesResult(changedFiles: string[]): DiffImpactResult {
     changedFiles,
     changedSymbols: [],
     affectedConsumers: [],
+    attributionNotes: [],
     summary: {
       totalChangedFiles: changedFiles.length,
       totalChangedSymbols: 0,
@@ -541,6 +563,151 @@ function definitionTouchesChangedRange(
   return ranges.some((range) =>
     rangesOverlap(definition.startLine, definition.endLine, range.startLine, range.endLine),
   );
+}
+
+export function attributeResidue(
+  definitions: readonly IndexedDefinition[],
+  changedRanges: readonly ChangedLineRange[],
+  declarationSpans: readonly DeclarationSpan[],
+): { definitions: IndexedDefinition[]; notes: AttributionNote[] } {
+  const out = new Map<number, IndexedDefinition>();
+  const notes: AttributionNote[] = [];
+  const definitionsByFile = groupDefinitionsByFile(definitions);
+  const spansByFile = groupDeclarationSpansByFile(declarationSpans);
+
+  for (const range of changedRanges) {
+    const fileDefinitions = definitionsByFile.get(range.file) ?? [];
+    if (
+      fileDefinitions.some((definition) =>
+        rangesOverlap(definition.startLine, definition.endLine, range.startLine, range.endLine),
+      )
+    ) {
+      continue;
+    }
+
+    const spans = spansByFile.get(range.file) ?? [];
+    const containingSpan = smallestContainingSpan(spans, range);
+    if (containingSpan) {
+      const definition = fileDefinitions.find(
+        (candidate) => candidate.startLine >= containingSpan.startLine && candidate.startLine <= containingSpan.endLine,
+      );
+      if (definition) {
+        out.set(definition.symbolId, definition);
+        notes.push(noteForRange(range, 'ast-widened'));
+        continue;
+      }
+    }
+
+    if (spans.length === 0) {
+      const nearest = [...fileDefinitions]
+        .filter((definition) => definition.startLine <= range.startLine)
+        .sort((left, right) => right.startLine - left.startLine || left.endLine - right.endLine)[0];
+      if (nearest) {
+        out.set(nearest.symbolId, nearest);
+        notes.push(noteForRange(range, 'nearest-preceding'));
+        continue;
+      }
+    }
+
+    notes.push(noteForRange(range, 'unattributed'));
+  }
+
+  return { definitions: [...out.values()], notes };
+}
+
+function attributeChangedRangeResidue(
+  db: ScipDatabase,
+  definitions: readonly IndexedDefinition[],
+  touchedDefinitions: readonly IndexedDefinition[],
+  changedRangeMap: ReadonlyMap<string, readonly ChangedLineRange[]>,
+): { definitions: IndexedDefinition[]; notes: AttributionNote[] } {
+  const touchedByFile = groupDefinitionsByFile(touchedDefinitions);
+  const residueRanges: ChangedLineRange[] = [];
+  const declarationSpans: DeclarationSpan[] = [];
+  const files = [...new Set(definitions.map((definition) => definition.relativePath))];
+
+  for (const file of files) {
+    const ranges = changedRangeMap.get(file) ?? [];
+    if (ranges.length === 0) continue;
+    const touched = touchedByFile.get(file) ?? [];
+    for (const range of ranges) {
+      if (
+        touched.some((definition) =>
+          rangesOverlap(definition.startLine, definition.endLine, range.startLine, range.endLine),
+        )
+      ) {
+        continue;
+      }
+      residueRanges.push(range);
+    }
+    if (residueRanges.some((range) => range.file === file)) {
+      declarationSpans.push(...topLevelDeclarationSpans(db, file));
+    }
+  }
+
+  return attributeResidue(definitions, residueRanges, declarationSpans);
+}
+
+function topLevelDeclarationSpans(db: ScipDatabase, file: string): DeclarationSpan[] {
+  const tree = getAst(db, file);
+  if (!tree) return [];
+  return tree.rootNode.namedChildren
+    .filter(isTopLevelDeclarationNode)
+    .map((node) => ({
+      file,
+      startLine: node.startPosition.row,
+      endLine: node.endPosition.row,
+    }))
+    .filter((span) => span.endLine >= span.startLine);
+}
+
+function isTopLevelDeclarationNode(node: SyntaxNode): boolean {
+  if (node.endPosition.row < node.startPosition.row) return false;
+  return !new Set(['import_statement', 'comment']).has(node.type);
+}
+
+function uniqueDefinitionsBySymbolId(definitions: readonly IndexedDefinition[]): IndexedDefinition[] {
+  const byId = new Map<number, IndexedDefinition>();
+  for (const definition of definitions) byId.set(definition.symbolId, definition);
+  return [...byId.values()];
+}
+
+function groupDefinitionsByFile(definitions: readonly IndexedDefinition[]): Map<string, IndexedDefinition[]> {
+  const grouped = new Map<string, IndexedDefinition[]>();
+  for (const definition of definitions) {
+    const bucket = grouped.get(definition.relativePath) ?? [];
+    bucket.push(definition);
+    grouped.set(definition.relativePath, bucket);
+  }
+  return grouped;
+}
+
+function groupDeclarationSpansByFile(spans: readonly DeclarationSpan[]): Map<string, DeclarationSpan[]> {
+  const grouped = new Map<string, DeclarationSpan[]>();
+  for (const span of spans) {
+    const bucket = grouped.get(span.file) ?? [];
+    bucket.push(span);
+    grouped.set(span.file, bucket);
+  }
+  return grouped;
+}
+
+function smallestContainingSpan(
+  spans: readonly DeclarationSpan[],
+  range: ChangedLineRange,
+): DeclarationSpan | undefined {
+  return spans
+    .filter((span) => span.startLine <= range.startLine && span.endLine >= range.endLine)
+    .sort((left, right) => left.endLine - left.startLine - (right.endLine - right.startLine))[0];
+}
+
+function noteForRange(range: ChangedLineRange, method: AttributionNote['method']): AttributionNote {
+  return {
+    file: range.file,
+    startLine: range.startLine,
+    endLine: range.endLine,
+    method,
+  };
 }
 
 function rangesOverlap(startA: number, endA: number, startB: number, endB: number): boolean {

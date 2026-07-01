@@ -117,11 +117,11 @@ export function staleAbstractions(
   return runCandidateAnalysis({
     candidates: () => staleTypeCandidates(db, index, scopedDefinitions, { minLoc, maxLoc }),
     orderCandidates: (left, right) =>
-        definitionLoc(right) - definitionLoc(left) || left.relativePath.localeCompare(right.relativePath),
-      scanLimit,
-      profile: { name: 'stale-abstractions' },
-      // Consumer map = SCIP mentions (with self-references filtered) ∪ source-text
-      // fallback for unique-named types. Without the fallback, a type used only in
+      definitionLoc(right) - definitionLoc(left) || left.relativePath.localeCompare(right.relativePath),
+    scanLimit,
+    profile: { name: 'stale-abstractions' },
+    // Consumer map = SCIP mentions (with self-references filtered) ∪ source-text
+    // fallback for unique-named types. Without the fallback, a type used only in
     // string-templated contexts or via paths the indexer missed would falsely
     // appear unconsumed.
     prepare: (typeCandidates) => {
@@ -206,10 +206,12 @@ function consumerMapForTypeCandidates(
   typeCandidates: readonly IndexedDefinition[],
   opts: { semantic: boolean; sourceFallback?: boolean },
 ): Map<number, Set<string>> {
-  return consumerFileMapFromEvidence(consumerEvidenceProduct(db, index).forDefinitions(typeCandidates, {
-    semantic: opts.semantic,
-    sourceFallback: opts.sourceFallback,
-  }));
+  return consumerFileMapFromEvidence(
+    consumerEvidenceProduct(db, index).forDefinitions(typeCandidates, {
+      semantic: opts.semantic,
+      sourceFallback: opts.sourceFallback,
+    }),
+  );
 }
 
 function consumerMapForPossiblyStaleTypeCandidates(

@@ -1,26 +1,22 @@
 ---
 name: scip-language-playbook
-description: Pick the highest-signal scip-query commands for the language in front of you so you can understand a system granularly and find DRY or de-bloat opportunities without wandering through low-signal queries first.
+description: Choose language-specific scip-query commands. Use when entering an unfamiliar TypeScript, Python, Java, Scala, Kotlin, Rust, Go, C, C++, Ruby, C#, Visual Basic, Dart, PHP, Clojure, ClojureScript, or Vue codebase and you need high-signal exploration or de-bloat commands first.
 ---
 
-# Best scip-query Commands by Language
+# scip-language-playbook
 
-Use this skill when you want the shortest path from "what is this system doing?" to verified answers, or when you want the fastest way to spot duplication, indirection, and stale structure in a language-specific codebase.
+Use this reference to pick the shortest command path from "what is this system doing?" to verified language-specific answers.
 
-This playbook is grounded in verified fixtures:
-- TypeScript and Python are backed by the dedicated regression fixtures in `scip-query/tests`.
-- Java, Scala, Kotlin, Rust, C++, C, Ruby, C#, Visual Basic, Dart, and PHP are backed by the cross-language fixture lab in `scip_repos`.
+Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 
-## Hard Rules
+## Rules
 
-1. Start with the commands listed for the active language before reaching for broader or noisier commands.
-2. For behavior claims, pair graph commands with source commands: `trace`, `call-graph`, and `refs` tell you the relationships; `code` confirms the actual implementation.
-3. For de-bloat work, do not rely on a single command. Cross-check `dead`, `similar*`, `wrapper-candidates`, `passthrough-candidates`, `stale-abstractions`, `unused-imports`, and `drift`.
-4. When a command is weaker in a language, the table below tells you the safer fallback.
+1. Start with the active language row before broader or noisier commands.
+2. Pair relationship commands with `code` for behavior claims.
+3. For de-bloat, cross-check multiple detector families.
+4. When a command is weaker in a language, use the listed fallback.
 
 ## Universal First Pass
-
-Run these in almost every codebase, regardless of language:
 
 ```bash
 scip-query stats
@@ -33,318 +29,29 @@ scip-query hierarchy <symbol>
 scip-query code <symbol>
 ```
 
-Then switch to the language row below.
+## Language Rows
 
-## Language Playbook
-
-### TypeScript
-
-Use first:
-```bash
-scip-query system <module>
-scip-query surface <module>
-scip-query call-graph <symbol>
-scip-query dataflow <symbol>
-scip-query change-surface <file>
-```
-
-Best de-bloat set:
-```bash
-scip-query health
-scip-query dead
-scip-query similar <symbol>
-scip-query convergence <symbol1> <symbol2>
-scip-query wrapper-candidates
-scip-query passthrough-candidates
-scip-query stale-abstractions
-scip-query unused-imports <file>
-scip-query redundant-reexports
-```
-
-Why this row is strong: TypeScript has the broadest verified command surface in the current suite, especially for imports, members, call flow, change risk, and DRY analysis.
-
-Vue note: `.vue` single-file components are handled by the same path. scip-query extracts the `<script>` (or `<script setup>`) block and parses it as TS/JS, so the TypeScript commands above also work on the Vue file's `<script>` symbols. Identifiers used only in `<template>`/`<style>` are tracked through a separate identifier scan so they don't show up as unused imports.
-
-### Python
-
-Use first:
-```bash
-scip-query outline <file>
-scip-query kind-counts --scope <module-or-file>
-scip-query system <module-or-file>
-scip-query imports <file>
-scip-query imported-by <symbol>
-scip-query call-graph <symbol>
-```
-
-Best de-bloat set:
-```bash
-scip-query dead
-scip-query unused-imports <file>
-scip-query drift
-scip-query similar-signatures
-scip-query complexity <symbol>
-scip-query complexity-hotspots
-```
-
-Fallback note: Python indexes can omit some kind and call metadata, so `symbols`, `outline`, `imports`, and `call-graph` are especially important because the tool already compensates for those gaps with source-backed fallbacks.
-
-### Java
-
-Use first:
-```bash
-scip-query system <module>
-scip-query surface <module>
-scip-query call-graph <symbol>
-scip-query deps <file>
-scip-query rdeps <file>
-scip-query slice <symbol>
-```
-
-Best de-bloat set:
-```bash
-scip-query health
-scip-query dead
-scip-query similar-files
-scip-query similar-chains
-scip-query wrapper-candidates
-scip-query stale-abstractions
-scip-query extract-candidates
-```
-
-### Scala
-
-Use first:
-```bash
-scip-query surface <module>
-scip-query trace <symbol>
-scip-query call-graph <symbol>
-scip-query imports <file>
-scip-query imported-by <symbol>
-```
-
-Best de-bloat set:
-```bash
-scip-query dead
-scip-query similar-files
-scip-query similar-chains
-scip-query extract-candidates
-scip-query stale-abstractions
-scip-query unused-imports <file>
-```
-
-### Kotlin
-
-Use first:
-```bash
-scip-query surface <module>
-scip-query trace <symbol>
-scip-query call-graph <symbol>
-scip-query imports <file>
-scip-query imported-by <symbol>
-```
-
-Best de-bloat set:
-```bash
-scip-query dead
-scip-query similar-files
-scip-query similar-chains
-scip-query extract-candidates
-scip-query stale-abstractions
-scip-query unused-imports <file>
-```
-
-### Rust
-
-Use first:
-```bash
-scip-query trace <symbol>
-scip-query call-graph <symbol>
-scip-query refs <symbol>
-scip-query methods <type>
-scip-query surface <module>
-```
-
-Best de-bloat set:
-```bash
-scip-query dead
-scip-query wrapper-candidates
-scip-query passthrough-candidates
-scip-query stale-abstractions
-scip-query similar-signatures
-scip-query redundant-reexports
-```
-
-### C++
-
-Use first:
-```bash
-scip-query trace <symbol>
-scip-query refs <symbol>
-scip-query methods <class>
-scip-query surface <module>
-scip-query code <symbol>
-```
-
-Then try:
-```bash
-scip-query call-graph <symbol>
-```
-
-Fallback note: `call-graph` is useful here, but `trace`, `refs`, and `code` are the safer first-line tools when you need to be absolutely precise.
-
-Best de-bloat set:
-```bash
-scip-query dead
-scip-query wrapper-candidates
-scip-query similar-files
-scip-query similar-chains
-scip-query extract-candidates
-scip-query unused-imports <file>
-```
-
-### C
-
-Use first:
-```bash
-scip-query trace <symbol>
-scip-query call-graph <symbol>
-scip-query refs <symbol>
-scip-query outline <file>
-scip-query fan-out <file>
-```
-
-Skip:
-```bash
-scip-query methods <class>
-scip-query members <symbol>
-```
-
-Best de-bloat set:
-```bash
-scip-query dead
-scip-query wrapper-candidates
-scip-query similar-files
-scip-query similar-chains
-scip-query extract-candidates
-scip-query unused-imports <file>
-```
-
-### Ruby
-
-Use first:
-```bash
-scip-query trace <symbol>
-scip-query call-graph <symbol>
-scip-query refs <symbol>
-scip-query imports <file>
-scip-query imported-by <symbol>
-```
-
-Best de-bloat set:
-```bash
-scip-query dead
-scip-query wrapper-candidates
-scip-query passthrough-candidates
-scip-query stale-abstractions
-scip-query similar-files
-scip-query similar-signatures
-```
-
-### C#
-
-Use first:
-```bash
-scip-query surface <module>
-scip-query call-graph <symbol>
-scip-query trace <symbol>
-scip-query methods <class>
-scip-query refs <symbol>
-```
-
-Best de-bloat set:
-```bash
-scip-query dead
-scip-query wrapper-candidates
-scip-query passthrough-candidates
-scip-query stale-abstractions
-scip-query similar-files
-scip-query extract-candidates
-```
-
-### Visual Basic
-
-Use first:
-```bash
-scip-query surface <module>
-scip-query call-graph <symbol>
-scip-query trace <symbol>
-scip-query methods <class>
-scip-query refs <symbol>
-```
-
-Best de-bloat set:
-```bash
-scip-query dead
-scip-query wrapper-candidates
-scip-query passthrough-candidates
-scip-query stale-abstractions
-scip-query similar-files
-scip-query extract-candidates
-```
-
-### Dart
-
-Use first:
-```bash
-scip-query surface <module>
-scip-query call-graph <symbol>
-scip-query trace <symbol>
-scip-query imports <file>
-scip-query imported-by <symbol>
-```
-
-Best de-bloat set:
-```bash
-scip-query dead
-scip-query wrapper-candidates
-scip-query stale-abstractions
-scip-query similar-files
-scip-query similar-signatures
-scip-query redundant-reexports
-```
-
-### PHP
-
-Use first:
-```bash
-scip-query trace <symbol>
-scip-query refs <symbol>
-scip-query methods <class>
-scip-query surface <module>
-scip-query code <symbol>
-```
-
-Then try:
-```bash
-scip-query call-graph <symbol>
-```
-
-Fallback note: as with C++, the graph is useful, but `trace`, `refs`, and `code` are the more reliable first pass when you need a crisp explanation.
-
-Best de-bloat set:
-```bash
-scip-query dead
-scip-query wrapper-candidates
-scip-query stale-abstractions
-scip-query similar-files
-scip-query similar-signatures
-scip-query extract-candidates
-```
+| Language | Use first | De-bloat set | Fallback note |
+| --- | --- | --- | --- |
+| TypeScript | `system`, `surface`, `call-graph`, `dataflow`, `change-surface` | `health`, `dead`, `similar`, `convergence`, `wrapper-candidates`, `passthrough-candidates`, `stale-abstractions`, `unused-imports`, `redundant-reexports` | Strongest verified surface. Vue script blocks use this path too. |
+| Python | `outline`, `kind-counts --scope`, `system`, `imports`, `imported-by`, `call-graph` | `dead`, `unused-imports`, `drift`, `similar-signatures`, `complexity`, `complexity-hotspots` | Prefer source-backed fallbacks when call/kind metadata is sparse. |
+| Java | `system`, `surface`, `call-graph`, `deps`, `rdeps`, `slice` | `health`, `dead`, `similar-files`, `similar-chains`, `wrapper-candidates`, `stale-abstractions`, `extract-candidates` | Use module/package surfaces to avoid class-only tunnel vision. |
+| Scala | `surface`, `trace`, `call-graph`, `imports`, `imported-by` | `dead`, `similar-files`, `similar-chains`, `extract-candidates`, `stale-abstractions`, `unused-imports` | Confirm behavior with `code`. |
+| Kotlin | `surface`, `trace`, `call-graph`, `imports`, `imported-by` | `dead`, `similar-files`, `similar-chains`, `extract-candidates`, `stale-abstractions`, `unused-imports` | Confirm behavior with `code`. |
+| Rust | `trace`, `call-graph`, `refs`, `methods`, `surface` | `dead`, `wrapper-candidates`, `passthrough-candidates`, `stale-abstractions`, `similar-signatures`, `redundant-reexports` | Methods and surface are usually high signal. |
+| Go | `surface`, `trace`, `call-graph`, `refs`, `fan-in` | `dead`, `wrapper-candidates`, `passthrough-candidates`, `similar-files`, `similar-signatures`, `complexity` | Use package-level surfaces and confirm exported APIs before cleanup. |
+| C++ | `trace`, `refs`, `methods`, `surface`, `code` | `dead`, `wrapper-candidates`, `similar-files`, `similar-chains`, `extract-candidates`, `unused-imports` | Try `call-graph` after trace/refs/code. |
+| C | `trace`, `call-graph`, `refs`, `outline`, `fan-out` | `dead`, `wrapper-candidates`, `similar-files`, `similar-chains`, `extract-candidates`, `unused-imports` | Skip class/member commands. |
+| Ruby | `trace`, `call-graph`, `refs`, `imports`, `imported-by` | `dead`, `wrapper-candidates`, `passthrough-candidates`, `stale-abstractions`, `similar-files`, `similar-signatures` | Confirm dynamic-looking paths with source. |
+| C# | `surface`, `call-graph`, `trace`, `methods`, `refs` | `dead`, `wrapper-candidates`, `passthrough-candidates`, `stale-abstractions`, `similar-files`, `extract-candidates` | Use surfaces and methods together. |
+| Visual Basic | `surface`, `call-graph`, `trace`, `methods`, `refs` | `dead`, `wrapper-candidates`, `passthrough-candidates`, `stale-abstractions`, `similar-files`, `extract-candidates` | Use surfaces and methods together. |
+| Dart | `surface`, `call-graph`, `trace`, `imports`, `imported-by` | `dead`, `wrapper-candidates`, `stale-abstractions`, `similar-files`, `similar-signatures`, `redundant-reexports` | Confirm exported API shape with `surface`. |
+| PHP | `trace`, `refs`, `methods`, `surface`, `code` | `dead`, `wrapper-candidates`, `stale-abstractions`, `similar-files`, `similar-signatures`, `extract-candidates` | Try `call-graph` after trace/refs/code. |
+| Clojure / ClojureScript | `files`, `outline`, `trace`, `refs`, `call-graph` | `dead`, `similar-files`, `similar-signatures`, `complexity`, `complexity-hotspots` | SCIP indexing comes from `scip-clojure`; no TypeScript-style semantic provider is available. |
 
 ## Minimal Workflows
 
-### Understand a feature quickly
+Understand a feature:
 
 ```bash
 scip-query files <feature>
@@ -357,7 +64,7 @@ scip-query code <entry-symbol>
 scip-query surface <module>
 ```
 
-### Find DRY and de-bloat wins quickly
+Find DRY and de-bloat wins:
 
 ```bash
 scip-query health
@@ -371,6 +78,4 @@ scip-query similar-signatures
 scip-query extract-candidates
 ```
 
-## Reporting Rule
-
-When you recommend a command sequence, name the language and explain why those commands are the highest-signal ones for that language. If a command is only sweep-proven rather than strictly source-truth-graded, say so when the distinction matters.
+When recommending a command sequence, name the language and why these commands are highest-signal for it.

@@ -25,6 +25,19 @@ export interface SymbolMatch extends SymbolLocation {
   relativePath: string;
 }
 
+export interface SymbolResolutionCandidate {
+  symbol: string;
+  shortName: string;
+  relativePath: string;
+  startLine: number;
+}
+
+export interface SymbolResolution {
+  match: SymbolMatch | null;
+  candidates: SymbolResolutionCandidate[];
+  total: number;
+}
+
 /**
  * Reference-site of a symbol — where (file + line) the symbol is used,
  * and the smallest enclosing definition at that line (for credit

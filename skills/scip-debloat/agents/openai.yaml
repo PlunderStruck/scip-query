@@ -1,4 +1,0 @@
-interface:
-  display_name: "SCIP Debloat"
-  short_description: "Find and remove structural bloat"
-  default_prompt: "Use $scip-debloat to find dead code, duplication, wrappers, stale abstractions, and other structural bloat."

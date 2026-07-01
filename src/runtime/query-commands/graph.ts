@@ -14,6 +14,7 @@ import {
 } from '../commands/command-execution.js';
 import { budgetedSectionedQueryCommand, tableQueryCommand } from '../commands/query-command-builders.js';
 import { render } from '../render.js';
+import { symbolResolutionBefore, symbolResolutionEmptyMessage, withSymbolResolutionJson } from './symbol-resolution.js';
 
 const handleBottlenecks = budgetedTableCommand('bottlenecks', {
   headers: ['tier', 'risk', 'score', 'fan-in', 'fan-out', 'symbol'],
@@ -265,10 +266,15 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     budget: 'semantic',
     docs: doc('Graph'),
     query: ({ db, args, budget }) => queries.callGraph(db, String(args[0]), { semantic: budget.semantic }),
-    emptyMessage: (result) => (result ? undefined : 'Symbol not found.'),
-    before: (result) => {
-      if (result) console.log(`Symbol: ${result.shortName}\n`);
+    emptyMessage: (result, { db, args }) =>
+      result ? undefined : symbolResolutionEmptyMessage(db, String(args[0]), 'Symbol not found.'),
+    before: (result, { db, args }) => {
+      if (result) {
+        symbolResolutionBefore(db, String(args[0]));
+        console.log(`Symbol: ${result.shortName}\n`);
+      }
     },
+    toJson: (result, { db, args }) => withSymbolResolutionJson(db, String(args[0]), result, 'callGraph'),
     sections: (result) =>
       result
         ? [

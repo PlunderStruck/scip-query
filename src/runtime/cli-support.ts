@@ -72,9 +72,16 @@ export function renderHeuristicNotice(label: string): void {
   console.log(`Heuristic ${label}: review before acting; these are candidates, not exact compiler facts.\n`);
 }
 
+export interface AnalysisBudgetDisclosure {
+  scanLimit: number;
+  semanticEnrichment: boolean;
+  reason: string;
+}
+
 interface CommandAnalysisBudget {
   scanLimit?: number;
   semantic: boolean;
+  analysisBudget?: AnalysisBudgetDisclosure;
 }
 
 export function isLargeCommandIndex(db: ScipDatabase): boolean {
@@ -107,7 +114,20 @@ export function commandAnalysisBudget(
         `Run "scip-query ${commandName} --full" for the unbounded semantic pass.`,
     );
   }
-  return { scanLimit: DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT, semantic: false };
+  return {
+    scanLimit: DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT,
+    semantic: false,
+    analysisBudget: {
+      scanLimit: DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT,
+      semanticEnrichment: false,
+      reason: 'large index default budget; pass --full for unbounded semantic analysis',
+    },
+  };
+}
+
+export function formatAnalysisBudgetDisclosure(disclosure: AnalysisBudgetDisclosure | undefined): string | null {
+  if (!disclosure) return null;
+  return `analysis budget: scanning up to ${disclosure.scanLimit} candidate(s); semantic enrichment=${disclosure.semanticEnrichment}; ${disclosure.reason}`;
 }
 
 export async function runIsolatedHealthReport(opts: HealthCliOptions): Promise<HealthReport> {
@@ -434,6 +454,14 @@ export function renderDiffImpactReport(result: DiffImpactResult): void {
   console.log(`Affected consumer files: ${result.summary.totalAffectedFiles}`);
   if (result.summary.note) {
     console.log(`Note: ${result.summary.note}`);
+  }
+  const unattributed = result.attributionNotes.filter((note) => note.method === 'unattributed');
+  if (unattributed.length > 0) {
+    const files = [...new Set(unattributed.map((note) => note.file))];
+    for (const file of files) {
+      const count = unattributed.filter((note) => note.file === file).length;
+      console.log(`note: ${count} changed line-range(s) in ${file} belong to no indexed symbol`);
+    }
   }
   console.log('');
   if (result.changedSymbols.length > 0) {

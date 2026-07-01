@@ -21,6 +21,7 @@ import { binaryAvailable } from './command-availability.js';
 export interface BatchVerification {
   depth: number;
   status: 'verified' | 'failed';
+  reason?: string;
   /** NEW checker errors caused by this batch — they name the missed references. */
   errors?: string[];
 }
@@ -37,6 +38,8 @@ export interface CleanupVerification {
   baselineErrors: number;
   /** Plan files that are dirty in the working tree — verification runs at HEAD. */
   dirtyOverlap: string[];
+  /** Any dirty/untracked working-tree paths hidden by the HEAD worktree verification. */
+  dirtyWorkingTree: string[];
   batches: BatchVerification[];
 }
 
@@ -54,17 +57,25 @@ export function verifyCleanupPlan(
 ): CleanupVerification {
   const checkers = detectCheckers(projectRoot);
   if (checkers.length === 0) {
-    return { checkers: [], uncoveredFiles: [], baselineErrors: 0, dirtyOverlap: [], batches: [] };
+    return {
+      checkers: [],
+      uncoveredFiles: [],
+      baselineErrors: 0,
+      dirtyOverlap: [],
+      dirtyWorkingTree: dirtyWorkingTreeFiles(projectRoot),
+      batches: [],
+    };
   }
   const uncoveredFiles = planFilesWithoutChecker(plan, checkers);
 
   const timeoutMs = opts.timeoutMs ?? CHECK_TIMEOUT_MS;
   const dirtyOverlap = dirtyPlanFiles(projectRoot, plan);
+  const dirtyWorkingTree = dirtyWorkingTreeFiles(projectRoot);
   const worktree = mkdtempSync(join(tmpdir(), 'scip-cleanup-verify-'));
   const batches: BatchVerification[] = [];
   // Differential baseline: many projects don't check clean at the root
   // (workspace tsconfigs, pre-existing errors). Pass = no NEW errors.
-  const baselineKeys = new Set<string>();
+  const baselineErrorsByChecker = new Map<string, string[]>();
   try {
     execFileSync('git', ['-C', projectRoot, 'worktree', 'add', '--detach', '--force', worktree, 'HEAD'], {
       stdio: 'ignore',
@@ -72,22 +83,30 @@ export function verifyCleanupPlan(
     linkUntrackedDeps(projectRoot, worktree);
 
     for (const checker of checkers) {
-      for (const key of runChecker(checker, worktree, timeoutMs).errorKeys) {
-        baselineKeys.add(key);
-      }
+      baselineErrorsByChecker.set(checker.label, runChecker(checker, worktree, timeoutMs).rawErrors);
     }
 
     for (const batch of plan.batches) {
       applyBatchDeletions(worktree, batch);
-      const newErrors: string[] = [];
+      let failure: BatchVerification | null = null;
       for (const checker of checkers) {
         const result = runChecker(checker, worktree, timeoutMs);
-        newErrors.push(...result.rawErrors.filter((error) => !baselineKeys.has(errorKey(error))));
+        const decision = decideBatchStatus(result, baselineErrorsByChecker.get(checker.label) ?? [], result.rawErrors);
+        if (decision.status === 'failed') {
+          const errors = decision.errors.length > 0 ? decision.errors : result.outputTail;
+          failure = {
+            depth: batch.depth,
+            status: 'failed',
+            reason: `${checker.label}: ${decision.reason}`,
+            errors: errors.slice(0, MAX_ERROR_LINES),
+          };
+          break;
+        }
       }
-      if (newErrors.length === 0) {
+      if (!failure) {
         batches.push({ depth: batch.depth, status: 'verified' });
       } else {
-        batches.push({ depth: batch.depth, status: 'failed', errors: newErrors.slice(0, MAX_ERROR_LINES) });
+        batches.push(failure);
         break; // later batches depend on this one landing
       }
     }
@@ -102,10 +121,68 @@ export function verifyCleanupPlan(
   return {
     checkers: checkers.map((checker) => checker.label),
     uncoveredFiles,
-    baselineErrors: baselineKeys.size,
+    baselineErrors: [...baselineErrorsByChecker.values()].reduce((sum, errors) => sum + errors.length, 0),
     dirtyOverlap,
+    dirtyWorkingTree,
     batches,
   };
+}
+
+export interface CheckerRunResult {
+  ok: boolean;
+  exitCode: number | null;
+  rawErrors: string[];
+  outputTail: string[];
+}
+
+export interface BatchStatusDecision {
+  status: 'verified' | 'failed';
+  reason: string;
+  errors: string[];
+}
+
+export function decideBatchStatus(
+  checker: { ok: boolean; exitCode: number | null; outputTail?: readonly string[] },
+  baselineErrors: readonly string[],
+  batchErrors: readonly string[],
+): BatchStatusDecision {
+  const newErrors = newErrorLines(baselineErrors, batchErrors);
+  if (newErrors.length > 0) {
+    return { status: 'failed', reason: 'checker reported new errors', errors: newErrors };
+  }
+  if (!checker.ok) {
+    const exit = checker.exitCode === null ? 'unknown' : String(checker.exitCode);
+    return {
+      status: 'failed',
+      reason: `checker exited ${exit} with unparsed output`,
+      errors: [...(checker.outputTail ?? [])],
+    };
+  }
+  return { status: 'verified', reason: 'checker passed', errors: [] };
+}
+
+function newErrorLines(baselineErrors: readonly string[], batchErrors: readonly string[]): string[] {
+  const baselineCounts = countErrorKeys(baselineErrors);
+  const seenCounts = new Map<string, number>();
+  const out: string[] = [];
+  for (const error of batchErrors) {
+    const key = errorKey(error);
+    const seen = (seenCounts.get(key) ?? 0) + 1;
+    seenCounts.set(key, seen);
+    if (seen > (baselineCounts.get(key) ?? 0)) {
+      out.push(error);
+    }
+  }
+  return out;
+}
+
+function countErrorKeys(errors: readonly string[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const error of errors) {
+    const key = errorKey(error);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
 }
 
 /** Plan files whose extension no detected checker examines. */
@@ -260,20 +337,23 @@ function findCargoManifests(projectRoot: string): string[] {
 }
 
 function dirtyPlanFiles(projectRoot: string, plan: CleanupPlanResult): string[] {
+  const dirty = new Set(dirtyWorkingTreeFiles(projectRoot));
+  const planFiles = new Set(plan.batches.flatMap((batch) => batch.entries.map((entry) => entry.file)));
+  return [...planFiles].filter((file) => dirty.has(file)).sort();
+}
+
+function dirtyWorkingTreeFiles(projectRoot: string): string[] {
   let status: string;
   try {
     status = execFileSync('git', ['-C', projectRoot, 'status', '--porcelain'], { encoding: 'utf-8' });
   } catch {
     return [];
   }
-  const dirty = new Set(
-    status
-      .split('\n')
-      .map((line) => line.slice(3).trim())
-      .filter((line) => line !== ''),
-  );
-  const planFiles = new Set(plan.batches.flatMap((batch) => batch.entries.map((entry) => entry.file)));
-  return [...planFiles].filter((file) => dirty.has(file)).sort();
+  return status
+    .split('\n')
+    .map((line) => line.slice(3).trim())
+    .filter((line) => line !== '')
+    .sort();
 }
 
 /** Worktrees only contain tracked files — link the dependency dirs in. */
@@ -362,7 +442,7 @@ export function cleanupVerificationFailures(
   );
   for (const batch of selectedBatches) {
     if (!verifiedDepths.has(batch.depth)) {
-      failures.push(`Batch ${batch.depth} is not compiler-verified.`);
+      failures.push(`Batch ${batch.depth} is not verified by the detected checker(s).`);
     }
   }
   return failures;
@@ -438,11 +518,7 @@ function extendToBalanced(strippedLines: readonly string[], start: number, end: 
   return end;
 }
 
-function runChecker(
-  checker: Checker,
-  worktree: string,
-  timeoutMs: number,
-): { ok: boolean; rawErrors: string[]; errorKeys: Set<string> } {
+function runChecker(checker: Checker, worktree: string, timeoutMs: number): CheckerRunResult {
   const result = spawnSync(checker.binary, checker.args, {
     cwd: worktree,
     encoding: 'utf-8',
@@ -450,12 +526,20 @@ function runChecker(
     env: checker.env ?? process.env,
     maxBuffer: 32 * 1024 * 1024,
   });
-  if (result.status === 0) return { ok: true, rawErrors: [], errorKeys: new Set() };
   const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+  if (result.status === 0) return { ok: true, exitCode: 0, rawErrors: [], outputTail: outputTail(output) };
   const rawErrors = output
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => /\berror\b/i.test(line));
   if (result.error && rawErrors.length === 0) rawErrors.push(String(result.error));
-  return { ok: false, rawErrors, errorKeys: new Set(rawErrors.map(errorKey)) };
+  return { ok: false, exitCode: result.status, rawErrors, outputTail: outputTail(output) };
+}
+
+function outputTail(output: string, limit = 10): string[] {
+  return output
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .slice(-limit);
 }

@@ -4,6 +4,7 @@ import { isPackageSurfaceFile } from '../../analysis/package-surface.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { isClojureMacroDefinition, isLiteralPassthrough } from '../../source/ast.js';
 import { getSourceLines } from '../../source/source-text.js';
+import { escapeRegex as escapeRegExp } from '../../source/source-stripper.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { isFunctionLikeSymbol, leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../../core/project-index.js';
@@ -47,12 +48,12 @@ export function passthroughCandidates(
   const { scope, maxLoc = 15, limit = 30, scanLimit } = opts ?? {};
   const index = new ProjectIndex(db);
   return runCandidateAnalysis({
-      candidates: () => getPassthroughCandidateSymbols(db, index, scope, maxLoc),
-      orderCandidates: compareDefinitionsBySmallestLoc,
-      scanLimit,
-      profile: { name: 'passthrough-candidates' },
-      prepare: (symbols) => index.calleeMap(symbols, { semantic: opts?.semantic !== false }),
-      evaluate: (sym, calleeMap) => passthroughCandidateForSymbol(db, sym, calleeMap.get(sym.symbolId) ?? []),
+    candidates: () => getPassthroughCandidateSymbols(db, index, scope, maxLoc),
+    orderCandidates: compareDefinitionsBySmallestLoc,
+    scanLimit,
+    profile: { name: 'passthrough-candidates' },
+    prepare: (symbols) => index.calleeMap(symbols, { semantic: opts?.semantic !== false }),
+    evaluate: (sym, calleeMap) => passthroughCandidateForSymbol(db, sym, calleeMap.get(sym.symbolId) ?? []),
     orderResults: (a, b) => a.loc - b.loc || a.file.localeCompare(b.file),
     limit,
   });
@@ -157,10 +158,6 @@ function hasNamedExport(lines: readonly string[], name: string): boolean {
 
 function isPublicSurfaceEvidence(evidence: string): boolean {
   return evidence.includes('public surface');
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function uniquePassthroughCallees(

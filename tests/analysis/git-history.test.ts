@@ -171,6 +171,42 @@ describe('git history evidence', () => {
     }
   });
 
+  it('keeps the original add age when a file is renamed', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-file-rename-age-'));
+    try {
+      gitIn(root, 'init');
+      commitIn(root, 'initial file', {
+        'src/original.ts': 'export const value = 1;\n',
+      });
+      commitIn(root, 'unrelated one', { 'src/other.ts': 'export const other = 1;\n' });
+      commitIn(root, 'unrelated two', { 'src/other.ts': 'export const other = 2;\n' });
+      mkdirSync(join(root, 'src'), { recursive: true });
+      gitIn(root, 'mv', 'src/original.ts', 'src/renamed.ts');
+      commitIn(root, 'rename original', {
+        'src/renamed.ts': 'export const value = 1;\n',
+      });
+
+      const dbPath = join(root, 'index.db');
+      const config = {
+        projectRoot: root,
+        dbPath,
+        indexPath: join(root, 'index.scip'),
+      };
+      evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/renamed.ts').write();
+
+      const db = new ScipDatabase(config);
+      try {
+        const records = getFileAddRecords(db);
+
+        expect(records?.get('src/renamed.ts')).toEqual(expect.objectContaining({ commitsAgo: 3 }));
+      } finally {
+        db.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('computes per-file churn with fix-commit counts', () => {
     const churn = getFileChurn(fakeDb(repoRoot))!;
     expect(churn.get('a.ts')!.changes).toBe(5);

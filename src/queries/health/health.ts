@@ -4,6 +4,7 @@ import { dead } from '../cleanup/dead.js';
 import { isolated } from '../cleanup/isolated.js';
 import { cycles } from '../graph/cycles.js';
 import { similarAllCount } from '../cleanup/similar.js';
+import { duplicateBodies } from '../cleanup/duplicate-bodies.js';
 import { reactComponentDuplicates } from '../frontend/react-component-duplicates.js';
 import { reactHookCandidates } from '../frontend/react-hook-candidates.js';
 import { reactLargeComponentPressure } from '../frontend/react-large-component-pressure.js';
@@ -56,6 +57,7 @@ export const HEALTH_PHASES = [
   'isolated',
   'cycles',
   'similar',
+  'duplicate-bodies',
   'react-component-duplicates',
   'react-hook-candidates',
   'react-large-component-pressure',
@@ -80,6 +82,7 @@ type HealthPhaseResult =
   | { phase: 'isolated'; isolated: CountLocSummary }
   | { phase: 'cycles'; realCycleCount: number }
   | { phase: 'similar'; similarCount: number }
+  | { phase: 'duplicate-bodies'; duplicateBodies: CountLocSummary }
   | { phase: 'react-component-duplicates'; reactComponentDuplicates: CountLocSummary }
   | { phase: 'react-hook-candidates'; reactHookCandidates: CountLocSummary }
   | { phase: 'react-large-component-pressure'; reactLargeComponentPressure: CountLocSummary }
@@ -123,6 +126,10 @@ const HEALTH_PHASE_RUNNERS: Record<HealthPhaseName, HealthPhaseRunner> = {
   similar: (db, scope, budget) => ({
     phase: 'similar',
     similarCount: countSimilarHealthCandidates(db, scope, budget),
+  }),
+  'duplicate-bodies': (db, scope, budget) => ({
+    phase: 'duplicate-bodies',
+    duplicateBodies: summarizeDuplicateBodies(db, scope, budget),
   }),
   'react-component-duplicates': (db, scope, budget) => ({
     phase: 'react-component-duplicates',
@@ -248,6 +255,10 @@ function healthAnalysesFromPhases(phaseResults: readonly HealthPhaseResult[]): H
       .realCycleCount,
     similarCount: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'similar' }>>(phaseResults, 'similar')
       .similarCount,
+    duplicateBodies: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'duplicate-bodies' }>>(
+      phaseResults,
+      'duplicate-bodies',
+    ).duplicateBodies,
     reactComponentDuplicates: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'react-component-duplicates' }>>(
       phaseResults,
       'react-component-duplicates',
@@ -353,16 +364,12 @@ function countRealHealthCycles(db: ScipDatabase, scope: string | undefined, budg
 }
 
 function countSimilarHealthCandidates(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): number {
-  const count = runHealthPhase(
-    db,
-    budget,
-    'similar',
-    () =>
-      similarAllCount(db, {
-        scope,
-        ...HEALTH_DETECTOR_PROFILES.similar,
-        scanLimit: budget.candidateScanLimit,
-      }),
+  const count = runHealthPhase(db, budget, 'similar', () =>
+    similarAllCount(db, {
+      scope,
+      ...HEALTH_DETECTOR_PROFILES.similar,
+      scanLimit: budget.candidateScanLimit,
+    }),
   );
   return Math.min(count, budget.candidateResultLimit);
 }
@@ -380,6 +387,26 @@ function countExtractionHealthCandidates(db: ScipDatabase, scope: string | undef
         scanLimit: budget.candidateScanLimit,
       }).length,
   );
+}
+
+function summarizeDuplicateBodies(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): CountLocSummary {
+  return runHealthPhase(db, budget, 'duplicate-bodies', () => {
+    const groups = duplicateBodies(db, {
+      scope,
+      ...HEALTH_DETECTOR_PROFILES.duplicateBodies,
+      limit: budget.candidateResultLimit,
+      scanLimit: budget.candidateScanLimit,
+    });
+    const files = new Set<string>();
+    let duplicateLoc = 0;
+    for (const group of groups) {
+      for (const entry of group.functions.slice(1)) {
+        files.add(entry.file);
+        duplicateLoc += entry.loc;
+      }
+    }
+    return { count: groups.length, loc: duplicateLoc, files: [...files] };
+  });
 }
 
 function summarizeReactComponentDuplicates(
@@ -534,7 +561,7 @@ function summarizeGitEvidence(db: ScipDatabase, budget: HealthBudget): GitEviden
       fileStats[file] = { changes: entry.changes, fixChanges: entry.fixChanges };
     }
     return {
-        amplification: git.changeAmplification(),
+      amplification: git.changeAmplification(),
       hiddenCoupling: {
         pairCount: coChangeResult.findings.length,
         scoreCount: roundHealthScoreCount(

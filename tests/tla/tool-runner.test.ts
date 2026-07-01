@@ -1,8 +1,9 @@
-import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { runTlaTool } from '../../src/tla/tool-runner.js';
+import { fetchTlaToolsJar, runTlaTool } from '../../src/tla/tool-runner.js';
 
 describe('TLA tool runner', () => {
   it('runs Apalache through a normalized command result', () => {
@@ -93,5 +94,59 @@ describe('TLA tool runner', () => {
       { binary: 'java', args: result.command.slice(1) },
     ]);
     expect(existsSync(metaDir)).toBe(false);
+  });
+
+  it('reports the fetch-tools remediation when tla2tools.jar is missing', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-tool-'));
+    const specPath = join(root, 'Spec.tla');
+    writeFileSync(specPath, '---- MODULE Spec ----\n====\n');
+    const spawn = ((binary: string) =>
+      binary === 'java'
+        ? { status: 0, signal: null, stdout: '', stderr: '' }
+        : { status: 1, signal: null, stdout: '', stderr: '' }) as never;
+
+    const result = runTlaTool({
+      projectRoot: root,
+      specPath,
+      checker: 'tlc',
+      spawn,
+    });
+
+    expect(result.status).toBe('skipped');
+    expect(result.diagnostics[0]?.message).toContain("run 'scip-query tla fetch-tools'");
+  });
+
+  it('downloads tla2tools.jar into the cache with checksum verification', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-tool-'));
+    const jarPath = join(root, 'cache', 'tla2tools.jar');
+    const bytes = Buffer.from('tiny jar fixture');
+    const expectedSha256 = createHash('sha256').update(bytes).digest('hex');
+    const fetchImpl = (async () =>
+      ({
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+      }) as Response) as typeof fetch;
+
+    const result = await fetchTlaToolsJar({
+      cachePath: jarPath,
+      fetchImpl,
+      url: 'https://example.test/tla2tools.jar',
+      version: 'test',
+      expectedSha256,
+    });
+
+    expect(result.status).toBe('downloaded');
+    expect(result.path).toBe(jarPath);
+    expect(readFileSync(jarPath)).toEqual(bytes);
+
+    const cached = await fetchTlaToolsJar({
+      cachePath: jarPath,
+      fetchImpl,
+      url: 'https://example.test/tla2tools.jar',
+      version: 'test',
+      expectedSha256,
+    });
+    expect(cached.status).toBe('cached');
   });
 });

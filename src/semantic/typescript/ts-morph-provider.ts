@@ -16,7 +16,6 @@ import { leafSuffix } from '../../symbols/symbol-parser.js';
 import {
   dedupeLocations,
   isTypeOnlyLocation,
-  lineOf,
   referenceLocationsWithoutDeclaration,
   semanticReferencesForNode,
   textualIdentifierLocations,

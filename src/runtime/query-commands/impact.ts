@@ -21,19 +21,24 @@ import {
   stringOptionValue,
 } from '../commands/command-execution.js';
 import { formatGateBlockReason, isStopHookReentry, readHookInput } from '../agent-setup.js';
-import { commandAnalysisBudget } from '../cli-support.js';
+import { commandAnalysisBudget, formatAnalysisBudgetDisclosure, renderHeuristicNotice } from '../cli-support.js';
 import { displayRange, displaySnippet, render } from '../render.js';
+import { symbolResolutionBefore, symbolResolutionEmptyMessage, withSymbolResolutionJson } from './symbol-resolution.js';
 
 const handleAffected = dbCommand(({ db, args, opts }) => {
-  const results = queries.affected(db, stringArg(args, 0), {
+  const query = stringArg(args, 0);
+  const results = queries.affected(db, query, {
     maxDepth: definedNumberOption(opts, 'maxDepth', 5),
     scope: stringOptionValue(opts, 'scope'),
   });
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('affected', args, opts, results);
+    printJsonEnvelope('affected', args, opts, withSymbolResolutionJson(db, query, results, 'affected'));
     return;
   }
-  if (results.length === 0) return render.empty('No affected symbols found.');
+  if (results.length === 0) {
+    return render.empty(symbolResolutionEmptyMessage(db, query, 'No affected symbols found.'));
+  }
+  symbolResolutionBefore(db, query);
   let prevDepth = -1;
   for (const r of results) {
     if (r.depth !== prevDepth) {
@@ -64,11 +69,17 @@ const handleCoChange = dbCommand(({ db, args, opts }) => {
         : `No hidden coupling found in ${result.commitsAnalyzed} commits.`,
     );
   }
+  renderHeuristicNotice('co-change candidates');
   console.log(
     file
       ? `Co-change partners (${result.commitsAnalyzed} commits analyzed):\n`
       : `Hidden coupling — pairs that co-change with no dependency edge (${result.commitsAnalyzed} commits analyzed):\n`,
   );
+  if (file && result.findings.some((finding) => finding.structurallyLinked || finding.declaredCouplingSuggestion)) {
+    console.log(
+      'note: file mode lists all historical partners; [dep edge]/[declared] pairs are excluded from hidden-coupling findings.\n',
+    );
+  }
   for (const finding of result.findings) {
     const linked = finding.structurallyLinked ? '  [dep edge]' : '';
     const partnerClass = `  [${finding.partnerClass}]`;
@@ -156,6 +167,7 @@ const handleIncompleteMigration = budgetedDbCommand('incomplete-migration', ({ d
     console.log('\nNo incomplete migrations detected.');
     return;
   }
+  renderHeuristicNotice('incomplete migration candidates');
   for (const finding of result.findings) {
     console.log(`\n  ${finding.helperShortName}  (${finding.helperFile})`);
     console.log(
@@ -212,6 +224,7 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
   if (!hookMode && booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('diff-gate', [], opts, {
       exitCode: result.findings.length > 0 ? 1 : 0,
+      ...(budget.analysisBudget ? { analysisBudget: budget.analysisBudget } : {}),
       ...result,
     });
     if (result.findings.length > 0) process.exitCode = 1;
@@ -221,7 +234,8 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
     // Hook contract (Claude Code and Codex): silent exit 0 = allow stop,
     // exit 2 with stderr = block and feed the reason back to the agent.
     if (result.findings.length === 0) return;
-    console.error(formatGateBlockReason(result));
+    const budgetLine = formatAnalysisBudgetDisclosure(budget.analysisBudget);
+    console.error(budgetLine ? `${formatGateBlockReason(result)}\n${budgetLine}` : formatGateBlockReason(result));
     process.exitCode = 2;
     return;
   }
@@ -231,6 +245,13 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
   console.log(
     `Diff gate vs ${result.base}: ${result.changedFiles.length} file(s), ${result.changedSymbols} symbol(s) changed.`,
   );
+  const unattributed = result.attributionNotes.filter((note) => note.method === 'unattributed');
+  if (unattributed.length > 0) {
+    for (const file of [...new Set(unattributed.map((note) => note.file))]) {
+      const count = unattributed.filter((note) => note.file === file).length;
+      console.log(`note: ${count} changed line-range(s) in ${file} belong to no indexed symbol`);
+    }
+  }
   console.log(`Checks: ${result.checksRun.join(', ')}\n`);
   for (const skip of result.skipped) {
     console.log(`  skipped ${skip.check}: ${skip.reason}`);
@@ -239,6 +260,7 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
     console.log('PASS: this change introduces no gate findings.');
     return;
   }
+  renderHeuristicNotice('diff gate candidates');
   const multiFindingGroups = result.rootCauseGroups?.filter((group) => group.count > 1) ?? [];
   if (multiFindingGroups.length > 0) {
     console.log(`Root-cause groups (${multiFindingGroups.length}):`);

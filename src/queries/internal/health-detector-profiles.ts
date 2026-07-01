@@ -8,6 +8,7 @@ export const HEALTH_DETECTOR_PROFILES = {
   dead: { minLoc: 3, skipBarrels: true, deadCodeOnly: true, semantic: false },
   isolated: { minLoc: 3, semantic: false },
   similar: { minSimilarity: 0.6, limit: 50, minCallees: 4, semantic: false },
+  duplicateBodies: { maxLoc: 15, limit: 50 },
   extract: { minLoc: 15, minCallees: 5, limit: 50, semantic: false },
   wrappers: { maxLoc: 15, limit: 50, semantic: false },
   passthroughs: { maxLoc: 15, limit: 50, semantic: false },

@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -84,5 +84,53 @@ describe('Watcher', () => {
 
     expect((watcher as unknown as { changedFiles: number }).changedFiles).toBe(0);
     expect((watcher as unknown as { pendingTrigger: unknown }).pendingTrigger).toBeNull();
+  });
+
+  it('refuses a second foreground watcher when the watch lock is live', async () => {
+    const projectRoot = createProject();
+    const lockPath = join(projectRoot, '.cache', 'watch.lock');
+    mkdirSync(join(projectRoot, '.cache'));
+    writeFileSync(
+      lockPath,
+      `${JSON.stringify({
+        version: 1,
+        pid: process.pid,
+        projectRoot,
+        startedAt: '2026-07-01T00:00:00.000Z',
+      })}\n`,
+    );
+
+    const { acquireWatchProcessLock } = await import('../../src/runtime/commands/command-handlers.js');
+    const result = acquireWatchProcessLock(lockPath, projectRoot);
+
+    expect(result.acquired).toBe(false);
+    expect(result.message).toContain('watch is already running');
+    expect(result.message).toContain(lockPath);
+  });
+
+  it('replaces a stale watch lock', async () => {
+    const projectRoot = createProject();
+    const lockPath = join(projectRoot, '.cache', 'watch.lock');
+    mkdirSync(join(projectRoot, '.cache'));
+    writeFileSync(
+      lockPath,
+      `${JSON.stringify({
+        version: 1,
+        pid: 99_999_999,
+        projectRoot,
+        startedAt: '2026-07-01T00:00:00.000Z',
+      })}\n`,
+    );
+
+    const { acquireWatchProcessLock } = await import('../../src/runtime/commands/command-handlers.js');
+    const result = acquireWatchProcessLock(lockPath, projectRoot);
+
+    try {
+      expect(result.acquired).toBe(true);
+      expect(existsSync(lockPath)).toBe(true);
+    } finally {
+      result.release();
+    }
+    expect(existsSync(lockPath)).toBe(false);
   });
 });

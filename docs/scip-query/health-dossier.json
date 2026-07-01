@@ -1,7 +1,7 @@
 {
-  "projectRoot": "/Users/aydansalois/Documents/GitHub/scip-query",
-  "dbPath": "/Users/aydansalois/.cache/scip-query/projects/178a22f2ce58/index.db",
-  "configuredDbPath": "/Users/aydansalois/.cache/scip-query/projects/178a22f2ce58/index.db",
+  "projectRoot": ".",
+  "dbPath": "~/.cache/scip-query/projects/178a22f2ce58/index.db",
+  "configuredDbPath": "~/.cache/scip-query/projects/178a22f2ce58/index.db",
   "scipCliInstalled": true,
   "languages": [
     "typescript"
@@ -17,15 +17,36 @@
       "id": "skills",
       "label": "Agent skills",
       "status": "ok",
-      "message": "0 installed, 60 already linked, 0 skipped.",
-      "details": []
+      "message": "9 installed, 51 already linked, 18 pruned, 0 skipped.",
+      "details": [
+        "Pruned Claude/scip-adoption",
+        "Pruned Claude/scip-ai-cleanup",
+        "Pruned Claude/scip-debloat",
+        "Pruned Claude/scip-health-audit",
+        "Pruned Claude/scip-health-improve",
+        "Pruned Claude/scip-query-setup",
+        "Pruned Codex/scip-adoption",
+        "Pruned Codex/scip-ai-cleanup",
+        "Pruned Codex/scip-debloat",
+        "Pruned Codex/scip-health-audit",
+        "Pruned Codex/scip-health-improve",
+        "Pruned Codex/scip-query-setup",
+        "Pruned Agents/scip-adoption",
+        "Pruned Agents/scip-ai-cleanup",
+        "Pruned Agents/scip-debloat",
+        "Pruned Agents/scip-health-audit",
+        "Pruned Agents/scip-health-improve",
+        "Pruned Agents/scip-query-setup"
+      ]
     },
     {
       "id": "config",
       "label": "Project config",
-      "status": "ok",
-      "message": "Config OK.",
-      "details": []
+      "status": "warn",
+      "message": "1 diagnostic(s), 0 error(s).",
+      "details": [
+        "WARNING suppressions[3]: Check+file suppressions waive every matching finding in that file; prefer a stable id when available."
+      ]
     },
     {
       "id": "watch-refresh",
@@ -52,13 +73,11 @@
       "id": "reindex",
       "label": "Index refresh",
       "status": "ok",
-      "message": "Indexed typescript in 2.8s.",
+      "message": "Reused typescript in 0.1s.",
       "details": [
         "Detected languages: typescript",
-        "Indexing typescript with scip-typescript...",
-        "Converting to SQLite...",
         "Augmented SQLite documents with 0 auxiliary source files (0 already present).",
-        "Done in 2.8s"
+        "Index unchanged; reused existing SQLite index in 0.1s"
       ]
     },
     {
@@ -71,14 +90,13 @@
       "id": "health",
       "label": "Health audit",
       "status": "ok",
-      "message": "Health score 100. 2 prioritized action(s)."
+      "message": "Health score 94. 6 prioritized action(s)."
     },
     {
       "id": "project-hooks",
       "label": "Project agent hooks",
-      "status": "ok",
-      "message": "0 installed, 0 updated, 2 already configured, 0 legacy user hook config(s) cleaned up, 0 skipped.",
-      "details": []
+      "status": "skipped",
+      "message": "Skipped by --no-hooks."
     },
     {
       "id": "agent-guidance",
@@ -90,41 +108,47 @@
     {
       "id": "smoke-tests",
       "label": "Setup smoke tests",
-      "status": "ok",
-      "message": "12 passed, 0 unavailable, 0 failed.",
+      "status": "warn",
+      "message": "11 passed, 1 unavailable, 0 failed.",
       "details": [
-        "scip-query reindex: pass - typescript indexed.",
+        "scip-query reindex: pass - typescript indexed from cache.",
         "scip-query status: pass - Index freshness is fresh: Index metadata fingerprint matches current source files.",
-        "scip-query config-validate: pass - Config OK.",
+        "scip-query config-validate: pass - 1 diagnostic(s), 0 error(s).",
         "scip-query capabilities: pass - 1 language capability row(s) available.",
         "scip-query capability-matrix --json: pass - 1 language row(s), 0 with unavailable capability cells.",
-        "scip-query health: pass - Health score 100.",
-        "scip-query diff-impact --json: pass - Git is available and index freshness is fresh: Index metadata fingerprint matches current source files. Last refresh: rebuilt by setup at 2026-06-27T18:01:52.208Z.",
-        "scip-query diff-gate --json: pass - Git is available and index freshness is fresh: Index metadata fingerprint matches current source files. Last refresh: rebuilt by setup at 2026-06-27T18:01:52.208Z.",
+        "scip-query health: pass - Health score 94.",
+        "scip-query diff-impact --json: pass - Git is available and index freshness is fresh: Index metadata fingerprint matches current source files. Last refresh: reused by setup at 2026-07-01T22:26:28.455Z.",
+        "scip-query diff-gate --json: pass - Git is available and index freshness is fresh: Index metadata fingerprint matches current source files. Last refresh: reused by setup at 2026-07-01T22:26:28.455Z.",
         "scip-query cleanup-plan --verify: pass - 1 available, 0 partial, 0 unavailable cleanup-verification row(s).",
-        "scip-query setup-hooks: pass - 0 installed, 0 updated, 2 already configured.",
+        "scip-query setup-hooks: unavailable - Skipped by --no-hooks.",
         "printf %s '{\"hook_event_name\":\"SessionStart\"}' | scip-query hook-context: pass - Project hooks auto-refresh stale indexes; live watch defaults are 30000ms debounce, 60000ms cooldown, and 2000ms Git polling.",
         "scip-query setup-agent: pass - 0 written, 2 already wired, 0 skipped."
       ]
     }
   ],
   "skills": {
-    "installed": [],
+    "installed": [
+      "Claude/scip-setup",
+      "Claude/scip-cleanup-audit",
+      "Claude/scip-cleanup-improve",
+      "Codex/scip-setup",
+      "Codex/scip-cleanup-audit",
+      "Codex/scip-cleanup-improve",
+      "Agents/scip-setup",
+      "Agents/scip-cleanup-audit",
+      "Agents/scip-cleanup-improve"
+    ],
     "skipped": [],
     "alreadyLinked": [
+      "Claude/_shared",
       "Claude/scip-query",
-      "Claude/scip-query-setup",
-      "Claude/scip-adoption",
-      "Claude/scip-health-audit",
-      "Claude/scip-health-improve",
+      "Claude/scip-hyper-optimization",
       "Claude/scip-api-impact",
       "Claude/concrete-plan",
-      "Claude/scip-ai-cleanup",
       "Claude/scip-debug",
       "Claude/scip-explore",
       "Claude/scip-triage-issue",
       "Claude/scip-diagram",
-      "Claude/scip-debloat",
       "Claude/scip-doc-reconcile",
       "Claude/scip-directory-architecture",
       "Claude/scip-maintainability",
@@ -132,19 +156,16 @@
       "Claude/scip-vue-maintainability",
       "Claude/scip-verify",
       "Claude/scip-language-playbook",
+      "Claude/tla-model-system",
+      "Codex/_shared",
       "Codex/scip-query",
-      "Codex/scip-query-setup",
-      "Codex/scip-adoption",
-      "Codex/scip-health-audit",
-      "Codex/scip-health-improve",
+      "Codex/scip-hyper-optimization",
       "Codex/scip-api-impact",
       "Codex/concrete-plan",
-      "Codex/scip-ai-cleanup",
       "Codex/scip-debug",
       "Codex/scip-explore",
       "Codex/scip-triage-issue",
       "Codex/scip-diagram",
-      "Codex/scip-debloat",
       "Codex/scip-doc-reconcile",
       "Codex/scip-directory-architecture",
       "Codex/scip-maintainability",
@@ -152,26 +173,44 @@
       "Codex/scip-vue-maintainability",
       "Codex/scip-verify",
       "Codex/scip-language-playbook",
+      "Codex/tla-model-system",
+      "Agents/_shared",
       "Agents/scip-query",
-      "Agents/scip-query-setup",
-      "Agents/scip-adoption",
-      "Agents/scip-health-audit",
-      "Agents/scip-health-improve",
+      "Agents/scip-hyper-optimization",
       "Agents/scip-api-impact",
       "Agents/concrete-plan",
-      "Agents/scip-ai-cleanup",
       "Agents/scip-debug",
       "Agents/scip-explore",
       "Agents/scip-triage-issue",
       "Agents/scip-diagram",
-      "Agents/scip-debloat",
       "Agents/scip-doc-reconcile",
       "Agents/scip-directory-architecture",
       "Agents/scip-maintainability",
       "Agents/scip-react-maintainability",
       "Agents/scip-vue-maintainability",
       "Agents/scip-verify",
-      "Agents/scip-language-playbook"
+      "Agents/scip-language-playbook",
+      "Agents/tla-model-system"
+    ],
+    "pruned": [
+      "Claude/scip-adoption",
+      "Claude/scip-ai-cleanup",
+      "Claude/scip-debloat",
+      "Claude/scip-health-audit",
+      "Claude/scip-health-improve",
+      "Claude/scip-query-setup",
+      "Codex/scip-adoption",
+      "Codex/scip-ai-cleanup",
+      "Codex/scip-debloat",
+      "Codex/scip-health-audit",
+      "Codex/scip-health-improve",
+      "Codex/scip-query-setup",
+      "Agents/scip-adoption",
+      "Agents/scip-ai-cleanup",
+      "Agents/scip-debloat",
+      "Agents/scip-health-audit",
+      "Agents/scip-health-improve",
+      "Agents/scip-query-setup"
     ]
   },
   "initialReadiness": {
@@ -191,9 +230,9 @@
       "language": "typescript",
       "available": true,
       "dependencyAvailable": true,
-      "tsconfigPath": "/Users/aydansalois/Documents/GitHub/scip-query/tsconfig.json",
+      "tsconfigPath": "tsconfig.json",
       "tsconfigPaths": [
-        "/Users/aydansalois/Documents/GitHub/scip-query/tsconfig.json"
+        "tsconfig.json"
       ]
     },
     "checkers": [
@@ -230,9 +269,9 @@
       "language": "typescript",
       "available": true,
       "dependencyAvailable": true,
-      "tsconfigPath": "/Users/aydansalois/Documents/GitHub/scip-query/tsconfig.json",
+      "tsconfigPath": "tsconfig.json",
       "tsconfigPaths": [
-        "/Users/aydansalois/Documents/GitHub/scip-query/tsconfig.json"
+        "tsconfig.json"
       ]
     },
     "checkers": [
@@ -335,18 +374,18 @@
   },
   "freshness": {
     "state": "fresh",
-    "checkedAt": "2026-06-27T18:01:52.255Z",
-    "metaPath": "/Users/aydansalois/.cache/scip-query/projects/178a22f2ce58/meta.json",
-    "updatedAt": "2026-06-27T18:01:52.208Z",
+    "checkedAt": "2026-07-01T22:26:28.478Z",
+    "metaPath": "~/.cache/scip-query/projects/178a22f2ce58/meta.json",
+    "updatedAt": "2026-07-01T22:23:44.856Z",
     "lastRefresh": {
       "trigger": {
         "kind": "setup",
         "detail": "scip-query setup"
       },
-      "result": "rebuilt",
-      "startedAt": "2026-06-27T18:01:49.447Z",
-      "completedAt": "2026-06-27T18:01:52.208Z",
-      "durationMs": 2761,
+      "result": "reused",
+      "startedAt": "2026-07-01T22:26:28.391Z",
+      "completedAt": "2026-07-01T22:26:28.455Z",
+      "durationMs": 64,
       "indexedLanguages": [
         "typescript"
       ],
@@ -358,20 +397,20 @@
     "languages": [
       "typescript"
     ],
-    "indexPath": "/Users/aydansalois/.cache/scip-query/projects/178a22f2ce58/index.scip",
-    "dbPath": "/Users/aydansalois/.cache/scip-query/projects/178a22f2ce58/index.db",
-    "durationMs": 2761,
-    "reused": false,
+    "indexPath": "~/.cache/scip-query/projects/178a22f2ce58/index.scip",
+    "dbPath": "~/.cache/scip-query/projects/178a22f2ce58/index.db",
+    "durationMs": 64,
+    "reused": true,
     "skipped": [],
     "lastRefresh": {
       "trigger": {
         "kind": "setup",
         "detail": "scip-query setup"
       },
-      "result": "rebuilt",
-      "startedAt": "2026-06-27T18:01:49.447Z",
-      "completedAt": "2026-06-27T18:01:52.208Z",
-      "durationMs": 2761,
+      "result": "reused",
+      "startedAt": "2026-07-01T22:26:28.391Z",
+      "completedAt": "2026-07-01T22:26:28.455Z",
+      "durationMs": 64,
       "indexedLanguages": [
         "typescript"
       ],
@@ -379,21 +418,45 @@
     }
   },
   "health": {
-    "score": 100,
+    "score": 94,
     "riskScore": 100,
-    "hygieneScore": 100,
+    "hygieneScore": 94,
     "issuesNeedAttention": [
       {
         "category": "Dead code",
-        "description": "1 symbols with zero references anywhere — safe to delete",
+        "description": "1 symbols with zero references anywhere -- deletion candidates; confirm with cleanup-plan --verify before deleting",
         "count": 1,
         "impact": "high",
         "effort": "low",
         "evidence": "graph-fact",
-        "locRecoverable": 13,
+        "locRecoverable": 7,
         "confirmationStatus": "unconfirmed",
         "safeForAgentToStart": false,
-        "recommendedNextStep": "Run scip-health-audit to confirm this signal; use scip-health-improve when the user wants confirmed issues fixed autonomously."
+        "recommendedNextStep": "Run scip-cleanup-audit to confirm this signal; use scip-cleanup-improve when the user wants confirmed issues fixed autonomously."
+      },
+      {
+        "category": "Duplicate function bodies",
+        "description": "25 exact small-body group(s) across files — consolidate only when the domain concept matches",
+        "count": 25,
+        "impact": "medium",
+        "effort": "low",
+        "evidence": "heuristic",
+        "locRecoverable": 122,
+        "confirmationStatus": "unconfirmed",
+        "safeForAgentToStart": false,
+        "recommendedNextStep": "Run scip-cleanup-audit to confirm this signal; use scip-cleanup-improve when the user wants confirmed issues fixed autonomously."
+      },
+      {
+        "category": "Stale abstractions",
+        "description": "7 single-consumer (not in types file) — remove unused abstractions; review single-consumer ownership before moving or inlining",
+        "count": 7,
+        "impact": "medium",
+        "effort": "low",
+        "evidence": "heuristic",
+        "locRecoverable": 54,
+        "confirmationStatus": "unconfirmed",
+        "safeForAgentToStart": false,
+        "recommendedNextStep": "Run scip-cleanup-audit to confirm this signal; use scip-cleanup-improve when the user wants confirmed issues fixed autonomously."
       },
       {
         "category": "Similar functions",
@@ -405,7 +468,31 @@
         "locRecoverable": 0,
         "confirmationStatus": "unconfirmed",
         "safeForAgentToStart": false,
-        "recommendedNextStep": "Run scip-health-audit to confirm this signal; use scip-health-improve when the user wants confirmed issues fixed autonomously."
+        "recommendedNextStep": "Run scip-cleanup-audit to confirm this signal; use scip-cleanup-improve when the user wants confirmed issues fixed autonomously."
+      },
+      {
+        "category": "Extraction candidates",
+        "description": "1 large functions with isolated callee clusters — review same-file or feature-local extraction seams",
+        "count": 1,
+        "impact": "medium",
+        "effort": "medium",
+        "evidence": "heuristic",
+        "locRecoverable": 0,
+        "confirmationStatus": "unconfirmed",
+        "safeForAgentToStart": false,
+        "recommendedNextStep": "Run scip-cleanup-audit to confirm this signal; use scip-cleanup-improve when the user wants confirmed issues fixed autonomously."
+      },
+      {
+        "category": "Structural drift",
+        "description": "16 layer violations — remove direct drift; review signal drift against layer ownership",
+        "count": 16,
+        "impact": "medium",
+        "effort": "medium",
+        "evidence": "heuristic",
+        "locRecoverable": 0,
+        "confirmationStatus": "unconfirmed",
+        "safeForAgentToStart": false,
+        "recommendedNextStep": "Run scip-cleanup-audit to confirm this signal; use scip-cleanup-improve when the user wants confirmed issues fixed autonomously."
       }
     ],
     "warnings": []
@@ -415,7 +502,7 @@
       "id": "reindex",
       "command": "scip-query reindex",
       "status": "pass",
-      "evidence": "typescript indexed."
+      "evidence": "typescript indexed from cache."
     },
     {
       "id": "status",
@@ -427,7 +514,7 @@
       "id": "config-validate",
       "command": "scip-query config-validate",
       "status": "pass",
-      "evidence": "Config OK."
+      "evidence": "1 diagnostic(s), 0 error(s)."
     },
     {
       "id": "capabilities",
@@ -445,19 +532,19 @@
       "id": "health",
       "command": "scip-query health",
       "status": "pass",
-      "evidence": "Health score 100."
+      "evidence": "Health score 94."
     },
     {
       "id": "diff-impact",
       "command": "scip-query diff-impact --json",
       "status": "pass",
-      "evidence": "Git is available and index freshness is fresh: Index metadata fingerprint matches current source files. Last refresh: rebuilt by setup at 2026-06-27T18:01:52.208Z."
+      "evidence": "Git is available and index freshness is fresh: Index metadata fingerprint matches current source files. Last refresh: reused by setup at 2026-07-01T22:26:28.455Z."
     },
     {
       "id": "diff-gate",
       "command": "scip-query diff-gate --json",
       "status": "pass",
-      "evidence": "Git is available and index freshness is fresh: Index metadata fingerprint matches current source files. Last refresh: rebuilt by setup at 2026-06-27T18:01:52.208Z."
+      "evidence": "Git is available and index freshness is fresh: Index metadata fingerprint matches current source files. Last refresh: reused by setup at 2026-07-01T22:26:28.455Z."
     },
     {
       "id": "cleanup-verification",
@@ -468,8 +555,8 @@
     {
       "id": "setup-hooks",
       "command": "scip-query setup-hooks",
-      "status": "pass",
-      "evidence": "0 installed, 0 updated, 2 already configured."
+      "status": "unavailable",
+      "evidence": "Skipped by --no-hooks."
     },
     {
       "id": "watch-refresh",
@@ -485,24 +572,13 @@
     }
   ],
   "healthDossier": {
-    "markdownPath": "/Users/aydansalois/Documents/GitHub/scip-query/docs/scip-query/health-dossier.md",
-    "jsonPath": "/Users/aydansalois/Documents/GitHub/scip-query/docs/scip-query/health-dossier.json",
+    "markdownPath": "docs/scip-query/health-dossier.md",
+    "jsonPath": "docs/scip-query/health-dossier.json",
     "status": "written",
-    "written": [
-      "/Users/aydansalois/Documents/GitHub/scip-query/docs/scip-query/health-dossier.md"
-    ],
+    "written": [],
     "unchanged": []
   },
-  "hooks": {
-    "installed": [],
-    "updated": [],
-    "unchanged": [
-      ".codex/hooks.json",
-      ".claude/settings.json"
-    ],
-    "removed": [],
-    "skipped": []
-  },
+  "hooks": null,
   "setupAgent": {
     "written": [],
     "unchanged": [
@@ -512,5 +588,6 @@
     "skipped": []
   },
   "filesWritten": [],
-  "verdict": "ready"
+  "verdict": "partial",
+  "generatedAt": "2026-07-01T22:26:29.414Z"
 }

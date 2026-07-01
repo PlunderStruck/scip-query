@@ -43,12 +43,12 @@ export function complexityHotspots(
         minLoc,
         requireFunctionLikeSymbol: true,
         includeSuppressed: true,
-          sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
-        }),
-      scanLimit,
-      profile: { name: 'complexity-hotspots' },
-      prepare: (definitions) => {
-        const languages = languageByFile(db, definitions);
+        sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
+      }),
+    scanLimit,
+    profile: { name: 'complexity-hotspots' },
+    prepare: (definitions) => {
+      const languages = languageByFile(db, definitions);
       return {
         callerMap: index.crossFileCallerMap(definitions, { semantic: opts?.semantic !== false }),
         calleeMap: index.calleeMap(definitions, { semantic: opts?.semantic !== false }),

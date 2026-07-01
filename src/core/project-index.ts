@@ -140,9 +140,11 @@ export class ProjectIndex {
   callableSignature(
     definition: Pick<IndexedDefinition, 'relativePath' | 'startLine' | 'endLine'>,
   ): { paramCount: number } | null {
-    const callable = sourceEvidence(this.db).forFile(definition.relativePath, { facts: true }).facts?.callables.find(
-      (candidate) => candidate.startLine === definition.startLine && candidate.endLine === definition.endLine,
-    );
+    const callable = sourceEvidence(this.db)
+      .forFile(definition.relativePath, { facts: true })
+      .facts?.callables.find(
+        (candidate) => candidate.startLine === definition.startLine && candidate.endLine === definition.endLine,
+      );
     return callable ? { paramCount: callable.paramCount } : null;
   }
 }

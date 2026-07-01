@@ -127,7 +127,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       return { binary: indexerBinary, args };
     },
     markerFiles: ['deps.edn', 'project.clj', 'bb.edn', 'shadow-cljs.edn'],
-    installMethods: [{ label: 'npm', prerequisite: 'npm', binary: 'npm', args: ['install', '-g', 'scip-clojure'] }],
+    installMethods: [],
     installUrl: 'https://github.com/PlunderStruck/scip-clojure',
   },
 

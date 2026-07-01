@@ -3,7 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { DiffGateResult } from '../../src/queries/impact/diff-gate.js';
-import { formatGateBlockReason, isStopHookReentry, setupAgent } from '../../src/runtime/agent-setup.js';
+import {
+  formatGateBlockReason,
+  isStopHookReentry,
+  removeAgentSetup,
+  setupAgent,
+} from '../../src/runtime/agent-setup.js';
 
 let projectRoot: string;
 
@@ -90,6 +95,19 @@ describe('setupAgent', () => {
 
     expect(result.skipped.some((skip) => skip.target === '.git/hooks/pre-commit')).toBe(true);
     expect(result.written).toEqual(['AGENTS.md', 'CLAUDE.md']);
+  });
+
+  it('removes only managed setup artifacts', () => {
+    mkdirSync(join(projectRoot, '.git', 'hooks'), { recursive: true });
+    writeFileSync(join(projectRoot, 'AGENTS.md'), '# Existing notes\n\n');
+    setupAgent(projectRoot, { gitHook: true });
+
+    const result = removeAgentSetup(projectRoot);
+
+    expect(result.removed).toEqual(['AGENTS.md', 'CLAUDE.md', '.git/hooks/pre-commit']);
+    expect(readFileSync(join(projectRoot, 'AGENTS.md'), 'utf-8')).toBe('# Existing notes\n');
+    expect(() => readFileSync(join(projectRoot, 'CLAUDE.md'), 'utf-8')).toThrow();
+    expect(() => readFileSync(join(projectRoot, '.git', 'hooks', 'pre-commit'), 'utf-8')).toThrow();
   });
 });
 

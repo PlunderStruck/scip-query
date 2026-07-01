@@ -1,18 +1,20 @@
 ---
 name: scip-api-impact
-description: Assess and plan public API, module boundary, schema, route, CLI, config, or exported-surface changes with scip-query evidence. Use when the user asks what will break, who consumes an API, how to migrate a boundary, whether a signature change is safe, or how to coordinate docs/tests/generated artifacts.
+description: Assess API impact with scip-query evidence. Use before changing public exports, module boundaries, schemas, routes, CLI commands, config fields, generated artifacts, signatures, docs-backed behavior, or consumer migrations.
 ---
 
-# SCIP API Impact
+# scip-api-impact
 
-Use this skill before changing a public surface. A public surface is a callable, export, route, schema, config field, CLI command, generated artifact, or documented behavior that other code or users can depend on. Its defining trait is that a local edit can require coordinated consumer, docs, test, or migration changes outside the implementation file.
+Use this skill before changing a public surface. A public surface is a callable, export, route, schema, config field, CLI command, generated artifact, or documented behavior that other code or users can depend on. Its defining trait is that a local edit can require coordinated consumer, docs, tests, or migration changes outside the implementation file.
+
+Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 
 ## Rules
 
-1. Identify the actual surface before planning the change.
-2. Use scip-query to find direct consumers, reverse dependencies, transitive blast radius, and historical co-change partners.
+1. Identify the actual surface before planning.
+2. Find direct consumers, reverse dependencies, transitive blast radius, and historical co-change partners.
 3. Treat docs, generated files, tests, and config as part of the API when they describe or enforce the surface.
-4. Prefer backward-compatible migration plans when consumers are broad or external.
+4. Prefer backward-compatible migrations when consumers are broad or external.
 5. Run `scip-verify` after implementation.
 
 ## Workflow
@@ -20,19 +22,16 @@ Use this skill before changing a public surface. A public surface is a callable,
 ### 1. Identify the surface
 
 ```bash
-scip-query status --capabilities
-scip-query status --capabilities
-# If freshness is stale, missing, or unknown:
-# scip-query reindex
 scip-query surface <module-or-package>
 scip-query outline <file>
 scip-query trace <symbol-or-command>
 scip-query code <symbol-or-command>
+scip-query hierarchy <symbol> --json
 ```
 
-Use `scip-query hierarchy <symbol> --json` for class members or nested methods so you know whether the real surface is the member, class, module, or package.
+This step is complete only when the real surface is named: member, class, module, package, route, schema, command, or config field.
 
-### 2. Find consumers and ownership
+### 2. Find consumers
 
 ```bash
 scip-query refs <symbol>
@@ -42,7 +41,9 @@ scip-query affected <symbol> --json
 scip-query change-surface <file> --json --full
 ```
 
-Record direct consumers separately from transitive consumers. Direct consumers must compile or adapt immediately; transitive consumers define blast radius and regression risk.
+Record direct consumers separately from transitive consumers.
+
+This step is complete only when direct breakage and regression blast radius are known.
 
 ### 3. Find hidden partners
 
@@ -53,18 +54,18 @@ scip-query similar <symbol> --json --full
 scip-query similar-files <file> --json --full
 ```
 
-Use co-change for schema/docs/generator/test partners that do not import each other. Use doc drift when docs mention the surface. Use similarity to find sibling APIs that should remain consistent.
+This step is complete only when docs, generated files, fixtures, sibling APIs, and hand-synchronized partners are accounted for or ruled out.
 
-### 4. Choose the migration shape
+### 4. Choose migration shape
 
 Pick one:
 
-- Compatible extension: add optional behavior without breaking existing callers.
-- Two-step migration: add the new surface, migrate callers, then remove the old surface.
-- Breaking change: update all consumers and docs in one coordinated change.
-- Adapter shim: keep a wrapper only when external consumers or compatibility windows require it.
+- Compatible extension.
+- Two-step migration.
+- Breaking coordinated change.
+- Adapter shim for external consumers or compatibility windows.
 
-Reject speculative parameters or wrappers by running:
+Reject speculative inputs and empty wrappers with:
 
 ```bash
 scip-query unused-params --json --full
@@ -72,80 +73,35 @@ scip-query wrapper-candidates --json --full
 scip-query passthrough-candidates --json --full
 ```
 
-### 5. Build the impact plan
+This step is complete only when the migration shape explains deploy order, rollback, and compatibility risk.
 
-Before editing, write:
+### 5. Build and verify the plan
 
 ```markdown
 Surface:
-- <symbol/file/command/schema>
-
 Consumers:
-- direct: <count and important files>
-- transitive: <count or affected clusters>
-
 Required co-changes:
-- code
-- tests
-- docs
-- generated files
-- config or schema partners
-
 Migration:
-- compatible extension / two-step / breaking / shim
-
 Verification:
 - targeted tests
 - `scip-query diff-impact --json`
-- `scip-query diff-gate --json`
+- invoke `scip-verify`
 - `scip-query doc-drift --json --full` when docs changed
 - `scip-query config-validate` when config changed
 ```
 
-### 6. Verify after editing
+After editing, run routed checks from the shared reference and invoke `scip-verify`.
 
-```bash
-scip-query status --capabilities
-# If freshness is stale, missing, or unknown:
-# scip-query reindex
-scip-query diff-impact --json
-scip-query diff-gate --json
-```
+The work is complete only when direct consumers, docs/config partners, and `scip-verify` have been checked.
 
-Then run routed checks:
-
-```bash
-scip-query unused-params --json --full
-scip-query incomplete-migration --json --full
-scip-query co-change <changed-file> --json --full
-scip-query doc-drift --json --full
-```
-
-Invoke `scip-verify` before declaring the API change ready.
-
-## Report Format
+## Report
 
 ```markdown
 API impact: low/medium/high
-
 Surface changed:
-- <surface>
-
 Consumers:
-- <direct consumers>
-- <transitive blast radius>
-
 Migration plan:
-- <chosen shape and why>
-
 Co-changes:
-- <docs/tests/generated/config partners>
-
 Verification:
-- <commands run and results>
-
 Remaining risk:
-- <external consumers, unavailable capabilities, or accepted compatibility shims>
 ```
-
-Do not call a public-surface change safe until direct consumers, docs/config partners, and `scip-query diff-gate --json` have been checked.

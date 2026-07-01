@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * npm postinstall hook. Runs automatically after `npm install -g scip-query`.
- * Installs skills into Claude Code and Codex, checks for scip binary.
+ * Prints a one-line pointer at `scip-query setup`; deliberately performs no
+ * home-directory writes, skill installs, or toolchain checks at install time.
  */
 import { postinstall } from './setup.js';
 

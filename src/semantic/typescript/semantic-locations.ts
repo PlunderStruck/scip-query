@@ -1,6 +1,7 @@
 import path from 'node:path';
 import type { Identifier, Node, ReferencedSymbol, SourceFile } from 'ts-morph';
 import type { IndexedDefinition } from '../../domain/types.js';
+import { escapeRegex as escapeRegExp } from '../../source/source-stripper.js';
 import type { SemanticLocation, SemanticReference } from '../types.js';
 
 function referenceLocations(ref: ReferencedSymbol, projectRoot: string): SemanticReference[] {
@@ -128,8 +129,4 @@ export function toRelative(root: string, fullPath: string): string | null {
   const relative = path.relative(root || process.cwd(), fullPath).replace(/\\/g, '/');
   if (!relative || relative.startsWith('..')) return null;
   return relative;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

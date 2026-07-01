@@ -143,7 +143,7 @@ export function buildReactComponentBehaviorProfiles(
       (profile) =>
         (opts.minJsxTokens === undefined || profile.jsxTokens.size >= opts.minJsxTokens) &&
         (opts.minBehaviorTokens === undefined || profile.behaviorTokens.size >= opts.minBehaviorTokens),
-      );
+    );
 }
 
 // scip-query: ignore-wrapper — optimized per-file cache entry shared by broad

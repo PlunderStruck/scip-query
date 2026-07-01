@@ -57,12 +57,12 @@ export function wrapperCandidates(
   const index = new ProjectIndex(db);
   const reverseFanIn = buildReverseFileFanIn(index.fileDependencyGraph(scope));
   return runCandidateAnalysis({
-      candidates: () => getWrapperCandidateSymbols(db, index, scope, maxLoc),
-      orderCandidates: compareDefinitionsBySmallestLoc,
-      scanLimit,
-      profile: { name: 'wrapper-candidates' },
-      prepare: (symbols) => ({
-        // Source-text fallback adds back references the indexer may miss; without
+    candidates: () => getWrapperCandidateSymbols(db, index, scope, maxLoc),
+    orderCandidates: compareDefinitionsBySmallestLoc,
+    scanLimit,
+    profile: { name: 'wrapper-candidates' },
+    prepare: (symbols) => ({
+      // Source-text fallback adds back references the indexer may miss; without
       // it, dynamic dispatch or macro-style calls can falsely look like wrappers.
       callerFileMap: consumerMapForWrapperCandidates(db, index, symbols, { semantic: opts?.semantic !== false }),
       reverseFanIn,

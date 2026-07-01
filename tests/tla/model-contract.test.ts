@@ -25,7 +25,12 @@ Enqueue(job) == queue' = Append(queue, job)
             queue: { code: ['src/queue.ts/queue'], aliases: ['jobs'] },
           },
           actions: {
-            Enqueue: { code: ['src/queue.ts/enqueue'], writes: ['queue'] },
+            Enqueue: {
+              code: ['src/queue.ts/enqueue'],
+              reads: ['queue'],
+              writes: ['queue'],
+              waive: { reads: ['queue'], reason: 'read through queue helper in fixture' },
+            },
           },
         },
         null,
@@ -38,8 +43,34 @@ Enqueue(job) == queue' = Append(queue, job)
 
     expect(loaded.errors).toEqual([]);
     expect(loaded.loaded?.contract.variables.queue?.aliases).toEqual(['queue', 'jobs']);
+    expect(loaded.loaded?.contract.actions.Enqueue?.waive).toEqual({
+      reads: ['queue'],
+      writes: [],
+      reason: 'read through queue helper in fixture',
+    });
     expect(facts?.variables).toEqual(['queue']);
     expect(facts?.operators).toEqual(['Enqueue', 'Init']);
+  });
+
+  it('parses legacy allowUnknown as per-fact waivers', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Legacy.scip-tla.json'),
+      JSON.stringify({
+        variables: { queue: { code: ['queue'] } },
+        actions: { Enqueue: { code: ['enqueue'], reads: ['queue'], writes: ['queue'], allowUnknown: true } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Legacy.scip-tla.json');
+
+    expect(loaded.errors).toEqual([]);
+    expect(loaded.loaded?.contract.actions.Enqueue?.waive).toEqual({
+      reads: ['queue'],
+      writes: ['queue'],
+      reason: 'legacy allowUnknown',
+      legacy: true,
+    });
   });
 
   it('rejects variables without concrete code referents', () => {

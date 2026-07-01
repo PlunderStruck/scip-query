@@ -1,5 +1,6 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
@@ -40,6 +41,23 @@ export interface TlaToolRunOptions {
   spawn?: CommandAvailabilitySpawn;
 }
 
+export interface TlaToolsFetchResult {
+  status: 'cached' | 'downloaded';
+  path: string;
+  version: string;
+  sha256: string;
+  url: string;
+}
+
+export interface TlaToolsFetchOptions {
+  cachePath?: string;
+  fetchImpl?: typeof fetch;
+  env?: NodeJS.ProcessEnv;
+  url?: string;
+  version?: string;
+  expectedSha256?: string;
+}
+
 interface ResolvedCommand {
   checker: TlaResolvedChecker;
   command: string[];
@@ -49,6 +67,9 @@ interface ResolvedCommand {
 }
 
 const DEFAULT_TIMEOUT_MS = 120_000;
+export const TLA_TOOLS_VERSION = 'v1.8.0';
+export const TLA_TOOLS_URL = `https://github.com/tlaplus/tlaplus/releases/download/${TLA_TOOLS_VERSION}/tla2tools.jar`;
+export const TLA_TOOLS_SHA256 = '237332bdcc79a35c7d26efa7b82c77c85c2744591c5598673a8a45085ff2a4fb';
 
 export function runTlaTool(opts: TlaToolRunOptions): TlaToolResult {
   const spawn = opts.spawn ?? spawnSync;
@@ -132,7 +153,7 @@ function resolveTlaCommand(opts: TlaToolRunOptions, spawn: CommandAvailabilitySp
   if (requested === 'sany' || requested === 'tlc' || requested === 'auto') {
     if (!jar) {
       const checker = requested === 'sany' ? 'sany' : 'tlc';
-      return missing(checker, 'tla2tools.jar was not found; set --tla-tools or TLA_TOOLS_JAR');
+      return missing(checker, "tla2tools.jar was not found; run 'scip-query tla fetch-tools' or set TLA_TOOLS_JAR");
     }
     if (!javaAvailable) {
       const checker = requested === 'sany' ? 'sany' : 'tlc';
@@ -175,10 +196,53 @@ function resolveTlaToolsJar(opts: TlaToolRunOptions): string | null {
   const candidates = [
     opts.tlaToolsJar,
     process.env['TLA_TOOLS_JAR'],
+    resolveTlaToolsJarCachePath(),
     join(opts.projectRoot, 'tla2tools.jar'),
     join(opts.projectRoot, 'tools', 'tla2tools.jar'),
   ].filter((candidate): candidate is string => typeof candidate === 'string' && candidate.length > 0);
   return candidates.find((candidate) => existsSync(candidate)) ?? null;
+}
+
+export function resolveTlaToolsJarCachePath(env: NodeJS.ProcessEnv = process.env): string {
+  const cacheRoot =
+    env['SCIP_QUERY_CACHE_DIR'] ??
+    (env['XDG_CACHE_HOME'] ? join(env['XDG_CACHE_HOME'], 'scip-query') : join(homedir(), '.cache', 'scip-query'));
+  return join(cacheRoot, 'tla2tools.jar');
+}
+
+export async function fetchTlaToolsJar(opts: TlaToolsFetchOptions = {}): Promise<TlaToolsFetchResult> {
+  const path = opts.cachePath ?? resolveTlaToolsJarCachePath(opts.env);
+  const expectedSha256 = opts.expectedSha256 ?? TLA_TOOLS_SHA256;
+  const version = opts.version ?? TLA_TOOLS_VERSION;
+  const url = opts.url ?? TLA_TOOLS_URL;
+  if (existsSync(path)) {
+    const existing = readFileSync(path);
+    const existingHash = sha256(existing);
+    if (existingHash === expectedSha256) {
+      return { status: 'cached', path, version, sha256: existingHash, url };
+    }
+  }
+
+  const fetchImpl = opts.fetchImpl ?? fetch;
+  const response = await fetchImpl(url);
+  if (!response.ok) {
+    throw new Error(`failed to download tla2tools.jar: HTTP ${response.status}`);
+  }
+  const bytes = Buffer.from(await response.arrayBuffer());
+  const digest = sha256(bytes);
+  if (digest !== expectedSha256) {
+    throw new Error(`downloaded tla2tools.jar checksum mismatch: expected ${expectedSha256}, got ${digest}`);
+  }
+
+  mkdirSync(dirname(path), { recursive: true });
+  const tmpPath = `${path}.tmp-${process.pid}`;
+  writeFileSync(tmpPath, bytes);
+  renameSync(tmpPath, path);
+  return { status: 'downloaded', path, version, sha256: digest, url };
+}
+
+function sha256(bytes: Buffer): string {
+  return createHash('sha256').update(bytes).digest('hex');
 }
 
 function diagnosticsForRun(status: TlaToolStatus, stdout: string, stderr: string): TlaToolDiagnostic[] {

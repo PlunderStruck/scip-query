@@ -344,9 +344,9 @@ export function docsCitingFiles(
   let evidenceDocs = 0;
   let citedDocs = 0;
   return profileSpan(
-      'doc-reference.docs-citing-files',
-      () => {
-        const tracked = gitEvidenceProduct(db).trackedFiles() ?? new Set<string>();
+    'doc-reference.docs-citing-files',
+    () => {
+      const tracked = gitEvidenceProduct(db).trackedFiles() ?? new Set<string>();
       trackedCount = tracked.size;
       const trackedBySuffix = buildSuffixIndex(tracked);
       const targetCandidates = targetPathCandidates(targets, trackedBySuffix);

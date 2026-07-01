@@ -27,7 +27,6 @@ import type { PreparedIndexerRun, IndexerRunResult } from './indexer-runner.js';
 import {
   describeIndexerBinary,
   getIndexerExecutionEnv,
-  isBinaryAvailable,
   isIndexerInstalled,
   resolveIndexerBinary,
   resolveProjectLocalIndexerBinary,

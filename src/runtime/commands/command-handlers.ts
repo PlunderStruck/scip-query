@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, renameSync, rmSync } from 'node:fs';
-import { dirname, extname } from 'node:path';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, extname, join } from 'node:path';
 import type { SupportedLanguage } from '../../domain/types.js';
 import * as queries from '../../queries/index.js';
 import {
@@ -13,6 +13,7 @@ import {
   addFindingSuppression,
   loadProjectConfig,
   resolveIndexPaths,
+  resolveWatchConfig,
   initProjectConfig,
   validateProjectConfig,
 } from '../config.js';
@@ -24,6 +25,7 @@ import { installProjectAgentHooks } from '../agent-hooks.js';
 import { renderProjectSetupReport, runProjectSetup } from '../project-setup.js';
 import { setupCiWorkflow } from '../setup-ci.js';
 import { installSkills, isScipInstalled, printScipInstallInstructions } from '../setup.js';
+import { runUninstall } from '../uninstall.js';
 import { ALL_SOURCE_EXTENSIONS } from '../../source/source-fileset.js';
 import { healthPhases } from '../../queries/health/health.js';
 import { writeProfileEvent } from '../../instrumentation/profile.js';
@@ -75,6 +77,7 @@ const SUPPORTED_LANGUAGES = new Set<SupportedLanguage>([
 const BENCH_TIMEOUT_MS = 180_000;
 const BENCH_MAX_BUFFER = 100 * 1024 * 1024;
 const SOURCE_EXTENSION_SET = new Set(ALL_SOURCE_EXTENSIONS);
+const WATCH_LOCK_FILE = 'watch.lock';
 const DEFAULT_BENCH_COMMANDS: readonly (readonly string[])[] = [
   ['status', '--json'],
   ['status', '--capabilities'],
@@ -127,6 +130,7 @@ export async function handleReindex(rawOpts: unknown): Promise<void> {
       clojureConfigPath: config.indexer?.clojure?.configPath,
       skipIfUnchanged: !booleanOptionValue(opts, 'force'),
       allowPartial: booleanOptionValue(opts, 'allowPartial'),
+      skipAutoInstall: process.env['SCIP_QUERY_SKIP_AUTO_INSTALL'] === '1',
       indexerConcurrency: numberOptionValue(opts, 'indexerConcurrency') ?? config.indexerConcurrency,
       trigger: { kind: 'manual-cli', detail: 'scip-query reindex' },
     });
@@ -598,7 +602,7 @@ export function handleInstallSkills(): void {
   const result = installSkills();
   const total = result.installed.length + result.alreadyLinked.length;
   console.log(
-    `\n${result.installed.length} installed, ${result.alreadyLinked.length} already linked, ${result.skipped.length} skipped.`,
+    `\n${result.installed.length} installed, ${result.alreadyLinked.length} already linked, ${result.pruned.length} pruned, ${result.skipped.length} skipped.`,
   );
   if (total > 0) {
     console.log('Skills will be available in your next Claude Code / Codex session.');
@@ -608,7 +612,11 @@ export function handleInstallSkills(): void {
 export function handleSetupHooks(rawOpts: unknown): void {
   const opts = commandOptions(rawOpts);
   const projectRoot = resolveProjectRoot();
-  const result = installProjectAgentHooks(projectRoot);
+  const result = installProjectAgentHooks(projectRoot, {
+    shared: booleanOptionValue(opts, 'shared'),
+    remove: booleanOptionValue(opts, 'remove'),
+    force: booleanOptionValue(opts, 'force'),
+  });
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('setup-hooks', [], opts, result);
     return;
@@ -617,7 +625,7 @@ export function handleSetupHooks(rawOpts: unknown): void {
   for (const target of result.installed) console.log(`  done: ${target}`);
   for (const target of result.updated) console.log(`  update: ${target}`);
   for (const target of result.unchanged) console.log(`  ok:   ${target} (already configured)`);
-  for (const target of result.removed) console.log(`  remove: legacy user-level ${target}`);
+  for (const target of result.removed) console.log(`  remove: ${target}`);
   for (const skip of result.skipped) console.log(`  skip: ${skip.target} — ${skip.reason}`);
 
   const total = result.installed.length + result.updated.length + result.unchanged.length;
@@ -680,6 +688,9 @@ export function handleCapabilities(rawOpts: unknown): void {
 }
 
 export function handleCapabilityMatrix(rawOpts: unknown): void {
+  if (!booleanOptionValue(commandOptions(rawOpts), 'json')) {
+    console.error('note: capability-matrix is deprecated; use "scip-query capabilities --matrix".');
+  }
   renderCapabilities(rawOpts, 'capability-matrix');
 }
 
@@ -790,11 +801,15 @@ function buildProjectDiagnosticReport(command: 'doctor' | 'status'): {
     hasIndexedGraph: exists && freshness.state !== 'missing',
   });
   const hasIndexerProblems = readiness.indexers.some((indexer) => !indexer.runnable);
-  const hasErrors =
+  const hasAttention =
     configDiagnostics.some((diagnostic) => diagnostic.level === 'error') ||
     hasIndexerProblems ||
     freshness.state === 'missing' ||
     freshness.state === 'stale';
+  const hasErrors =
+    configDiagnostics.some((diagnostic) => diagnostic.level === 'error') ||
+    hasIndexerProblems ||
+    freshness.state === 'missing';
   return {
     report: {
       command,
@@ -806,7 +821,7 @@ function buildProjectDiagnosticReport(command: 'doctor' | 'status'): {
       readiness,
       freshness,
       capabilities,
-      ok: !hasErrors,
+      ok: !hasAttention,
     },
     hasIndexerProblems,
     hasErrors,
@@ -827,7 +842,11 @@ export function handleSetupAgent(rawOpts: unknown): void {
 export async function handleSetup(rawOpts: unknown): Promise<void> {
   const opts = commandOptions(rawOpts);
   try {
-    const report = await runProjectSetup({ gitHook: booleanOptionValue(opts, 'gitHook') });
+    const report = await runProjectSetup({
+      gitHook: booleanOptionValue(opts, 'gitHook'),
+      noHooks: booleanOptionValue(opts, 'noHooks') || opts['hooks'] === false,
+      dossierDir: stringOptionValue(opts, 'dossierDir'),
+    });
     if (booleanOptionValue(opts, 'json')) {
       printJsonEnvelope('setup', [], opts, report);
     } else {
@@ -858,6 +877,49 @@ export function handleSetupCi(rawOpts: unknown): void {
   console.log(`done: ${result.path}`);
 }
 
+export function handleUninstall(rawOpts: unknown): void {
+  const opts = commandOptions(rawOpts);
+  if (booleanOptionValue(opts, 'global') && booleanOptionValue(opts, 'project')) {
+    console.error('error: choose either --global or --project, not both.');
+    process.exitCode = 1;
+    return;
+  }
+  const report = runUninstall({
+    projectRoot: resolveProjectRoot(),
+    global: booleanOptionValue(opts, 'global'),
+    project: booleanOptionValue(opts, 'project'),
+    dryRun: booleanOptionValue(opts, 'dryRun'),
+  });
+
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('uninstall', [], opts, report);
+    return;
+  }
+
+  const prefix = report.dryRun ? 'would ' : '';
+  if (report.global) {
+    for (const target of report.global.removed) console.log(`  ${prefix}remove: ${target}`);
+    for (const target of report.global.left) console.log(`  left: ${target}`);
+    for (const skip of report.global.skipped) console.log(`  skip: ${skip}`);
+  }
+  if (report.project) {
+    for (const target of report.project.hooks.removed) console.log(`  ${prefix}remove: ${target}`);
+    for (const target of report.project.agentSetup.removed) console.log(`  ${prefix}remove: ${target}`);
+    for (const target of report.project.agentSetup.unchanged) console.log(`  ok: ${target} (no managed block)`);
+    for (const skip of report.project.hooks.skipped) console.log(`  skip: ${skip.target} — ${skip.reason}`);
+    for (const skip of report.project.agentSetup.skipped) console.log(`  skip: ${skip.target} — ${skip.reason}`);
+    for (const target of report.project.left) console.log(`  left: ${target}`);
+  }
+
+  const removed =
+    (report.global?.removed.length ?? 0) +
+    (report.project?.hooks.removed.length ?? 0) +
+    (report.project?.agentSetup.removed.length ?? 0);
+  if (removed === 0) {
+    console.log(report.dryRun ? 'No scip-query-owned files would be removed.' : 'No scip-query-owned files removed.');
+  }
+}
+
 // scip-query: ignore-extract — long-running watch command lifecycle: option
 // overrides, watcher callbacks, start/stop behavior, and SIGINT handling are
 // one process action.
@@ -871,6 +933,20 @@ export function handleWatch(rawOpts: unknown): void {
   if (debounce) (config.watch ??= {}).debounceMs = debounce;
   if (cooldown) (config.watch ??= {}).cooldownMs = cooldown;
   if (gitPoll) (config.watch ??= {}).gitPollMs = gitPoll;
+  const watchConfig = resolveWatchConfig(config);
+  if (!watchConfig.enabled) {
+    console.error('error: watch mode is disabled. Set "watch.enabled": true in .scipquery.json to start it.');
+    process.exitCode = 1;
+    return;
+  }
+  config.watch = watchConfig;
+  const paths = resolveIndexPaths(projectRoot, config);
+  const watchLock = acquireWatchProcessLock(join(dirname(paths.dbPath), WATCH_LOCK_FILE), projectRoot);
+  if (!watchLock.acquired) {
+    console.error(watchLock.message);
+    process.exitCode = 1;
+    return;
+  }
 
   const watcher = new Watcher({
     projectRoot,
@@ -889,16 +965,115 @@ export function handleWatch(rawOpts: unknown): void {
 
   console.log(`Watching ${projectRoot}`);
   console.log(
-    `Debounce: ${config.watch?.debounceMs ?? 30000}ms | Cooldown: ${config.watch?.cooldownMs ?? 60000}ms | Git poll: ${config.watch?.gitPollMs ?? 2000}ms`,
+    `Debounce: ${watchConfig.debounceMs}ms | Cooldown: ${watchConfig.cooldownMs}ms | Git poll: ${watchConfig.gitPollMs}ms`,
   );
   console.log('Press Ctrl+C to stop.\n');
   watcher.start();
 
   process.on('SIGINT', () => {
     watcher.stop();
+    watchLock.release();
     console.log('\nStopped.');
     process.exit(0);
   });
+  process.once('exit', watchLock.release);
+}
+
+interface WatchProcessLockResult {
+  acquired: boolean;
+  lockPath: string;
+  message: string;
+  release: () => void;
+}
+
+interface WatchProcessLockMetadata {
+  version: 1;
+  pid: number;
+  projectRoot: string;
+  startedAt: string;
+}
+
+export function acquireWatchProcessLock(lockPath: string, projectRoot: string): WatchProcessLockResult {
+  const release = (): void => undefined;
+  const existing = readWatchProcessLock(lockPath);
+  if (existing && isProcessAlive(existing.pid)) {
+    return {
+      acquired: false,
+      lockPath,
+      message: `error: scip-query watch is already running for ${projectRoot} (pid ${existing.pid}, started ${existing.startedAt}; lock: ${lockPath}). Stop that foreground watcher before starting another.`,
+      release,
+    };
+  }
+  if (existing) rmSync(lockPath, { force: true });
+  mkdirSync(dirname(lockPath), { recursive: true });
+
+  let fd: number;
+  try {
+    fd = openSync(lockPath, 'wx');
+  } catch (error) {
+    const code = typeof error === 'object' && error && 'code' in error ? (error as { code?: string }).code : undefined;
+    if (code === 'EEXIST') {
+      const lock = readWatchProcessLock(lockPath);
+      return {
+        acquired: false,
+        lockPath,
+        message: `error: scip-query watch is already running for ${projectRoot}${
+          lock ? ` (pid ${lock.pid}, started ${lock.startedAt}; lock: ${lockPath})` : ` (lock: ${lockPath})`
+        }. Stop that foreground watcher before starting another.`,
+        release,
+      };
+    }
+    throw error;
+  }
+
+  const metadata: WatchProcessLockMetadata = {
+    version: 1,
+    pid: process.pid,
+    projectRoot,
+    startedAt: new Date().toISOString(),
+  };
+  writeFileSync(fd, `${JSON.stringify(metadata)}\n`);
+
+  let released = false;
+  return {
+    acquired: true,
+    lockPath,
+    message: '',
+    release: () => {
+      if (released) return;
+      released = true;
+      try {
+        closeSync(fd);
+      } finally {
+        rmSync(lockPath, { force: true });
+      }
+    },
+  };
+}
+
+function readWatchProcessLock(lockPath: string): WatchProcessLockMetadata | null {
+  try {
+    const parsed = JSON.parse(readFileSync(lockPath, 'utf-8')) as Partial<WatchProcessLockMetadata>;
+    if (typeof parsed.pid !== 'number' || !Number.isInteger(parsed.pid) || parsed.pid <= 0) return null;
+    return {
+      version: 1,
+      pid: parsed.pid,
+      projectRoot: typeof parsed.projectRoot === 'string' ? parsed.projectRoot : dirname(lockPath),
+      startedAt: typeof parsed.startedAt === 'string' ? parsed.startedAt : 'unknown',
+    };
+  } catch {
+    return null;
+  }
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    const code = typeof error === 'object' && error && 'code' in error ? (error as { code?: string }).code : undefined;
+    return code === 'EPERM';
+  }
 }
 
 export function handleStatus(rawOpts: unknown): void {

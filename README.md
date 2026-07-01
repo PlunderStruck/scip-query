@@ -105,7 +105,9 @@ Clojure projects are indexed through `scip-clojure`. Source fallback adds namesp
 
 These checks target specific ways AI-assisted development rots a codebase. The full catalog, with prevention wiring for each detector, is in [docs/AI_FAILURE_MODES.md](docs/AI_FAILURE_MODES.md):
 
-**1. Find the echoes.** Agents re-implement helpers, hooks, composables, and frontend components they didn't know existed. `recent-duplicates` makes similarity _directional_ using git file ages - which side is the established original, which is the recent echo:
+**1. Find the echoes.** Agents re-implement helpers, hooks, composables, and frontend components they didn't know existed. `recent-duplicates` makes similarity _directional_ using git file ages - which side is the established original, which is the recent echo.
+
+Illustrative output:
 
 ```
 91%  ECHO  react-component  src/components/ProjectCardVisual.tsx  ProjectCardVisual  (added 62 commits ago)
@@ -116,7 +118,9 @@ These checks target specific ways AI-assisted development rots a codebase. The f
      (both new - one agent session duplicated itself; consolidate before they diverge)
 ```
 
-**2. Finish the half-done extraction.** Agents extract a helper, rewire one or two call sites, and abandon the rest — the extracted logic survives inline at every site they missed. `incomplete-migration` finds helpers that are new in the diff, confirms they were wired in somewhere, and lists the established sites that still contain the helper's logic but never call it (containment scoring, because a missed site holds the helper's logic _plus_ its own):
+**2. Finish the half-done extraction.** Agents extract a helper, rewire one or two call sites, and abandon the rest — the extracted logic survives inline at every site they missed. `incomplete-migration` finds helpers that are new in the diff, confirms they were wired in somewhere, and lists the established sites that still contain the helper's logic but never call it (containment scoring, because a missed site holds the helper's logic _plus_ its own).
+
+Illustrative output:
 
 ```
 src/utils/priceLabel.ts  priceLabel()
@@ -149,7 +153,21 @@ When verification _fails_, the errors name the exact references the static evide
 
 **7. Surface hidden coupling.** `co-change` finds file pairs that repeatedly change in the same commits with _no_ dependency edge — schema ↔ generated inventory ↔ doc triangles, backend schemas ↔ frontend stores, `.env.example` ↔ its parser. The reference graph cannot see these; the change graph can.
 
-**8. Gate every diff.** `diff-gate` runs a defined set of checks scoped to what a change _introduces_ — echoes of established code, incomplete migrations, missing co-change partners, docs that cite the changed files, fresh unused params, new dead symbols, baseline regressions — and exits nonzero with remediation text for each finding:
+**8. Gate every diff.** `diff-gate` runs a defined set of checks scoped to what a change _introduces_ and exits nonzero with remediation text for each finding. Baseline regressions are included when you pass `--baseline`.
+
+<!-- BEGIN GENERATED DIFF-GATE CHECKS -->
+| Check | What it catches | When it runs |
+| --- | --- | --- |
+| `echo` | Changed symbols that newly echo established code elsewhere. | Default diff gate. |
+| `incomplete-migration` | New helpers or abstractions wired into some sites while older inline sites remain. | Default diff gate. |
+| `co-change-partner` | Historically coupled files that usually change together but are missing from this diff. | Default diff gate. |
+| `doc-reference` | Docs that cite changed files and may need a matching update. | Default diff gate. |
+| `unused-params` | Fresh trailing parameters or options that no changed body uses. | Default diff gate. |
+| `new-dead` | Changed production symbols with zero indexed consumers. | Default diff gate. |
+| `baseline` | New health finding identities compared with the committed health baseline. | Only with `diff-gate --baseline`. |
+<!-- END GENERATED DIFF-GATE CHECKS -->
+
+Illustrative output:
 
 ```
 [co-change-partner] schema.prisma changed, but scripts/scope-inventory.mjs did not — they change together 12x (86% of the time)
@@ -158,19 +176,23 @@ When verification _fails_, the errors name the exact references the static evide
 
 **9. Ratchet it in CI.** `health --write-baseline` snapshots finding identities into a committable file; `health --baseline` exits 1 on any _new_ finding. "Don't get worse" is an objective gate that no score arithmetic can game.
 
+Baseline finding identities are keyed as `detector:file:shortName`. A rename can therefore appear as one fixed identity plus one new identity; refresh the baseline after intentional renames once the changed code has been reviewed.
+
 Accepted findings can be recorded without weakening the rest of the gate:
 
 ```bash
 scip-query suppress SQABC123DEF456 --check echo --reason "intentional compatibility shim"
 ```
 
-This appends a reasoned entry to `.scipquery.json`; `config-validate` rejects suppressions without an identity and reason, and `diff-gate --json` reports both active and suppressed findings.
+This appends a reasoned entry to `.scipquery.json`; `config-validate` requires every suppression to include a reason plus either a stable finding id or both `check` and `file`. Check+file suppressions are allowed but warn because they waive every matching finding in that file. `diff-gate --json` reports both active and suppressed findings.
 
 Before any edit, `plan-context <target>` bundles the structural picture — definitions, references, call graph, blast radius — plus a HISTORY section: churn, fix-commit density, and the files that usually change together with the target ("editing this usually means editing these").
 
 ## A Health Score You Can Argue With
 
-`scip-query health` refuses to be a vanity number:
+`scip-query health` refuses to be a vanity number.
+
+Illustrative output:
 
 ```
 Codebase Health Score: 95/100
@@ -201,7 +223,9 @@ Evidence tiers are kept explicit, strongest first:
 3. **Source-backed heuristics** (AST/text) for cleanup signals. Always labeled: _"these are candidates, not exact compiler facts."_
 4. **Compiler verification** for deletions — the only tier that earns the word "safe."
 
-And because accuracy you don't measure is a feeling, `self-audit` samples symbols and scores the cheap paths against the TypeScript compiler:
+And because accuracy you don't measure is a feeling, `self-audit` samples symbols and scores the cheap paths against the TypeScript compiler.
+
+Illustrative output:
 
 ```
 references  precision 1.0  recall 0.9   (the cheap path doesn't fabricate; it occasionally misses)
@@ -211,11 +235,11 @@ Heuristic detectors carry guardrails learned from real codebases: published `pac
 
 ## Agent Skills
 
-`scip-query install-skills` symlinks bundled skills into Claude Code, Codex, and shared agent roots (`~/.agents/skills/`) so they update automatically with the package. The `scip-query` router skill dispatches codebase work to specialists for setup/adoption, health audit and autonomous health improvement, hyper optimization, debugging, issue triage, HTML diagrams, API impact, exploration, planning, cleanup, doc reconciliation, maintainability review, React/Vue review, AI-rot cleanup, language playbooks, and post-change verification.
+`scip-query install-skills` symlinks bundled skills into Claude Code, Codex, and shared agent roots (`~/.agents/skills/`) so they update automatically with the package. The `scip-query` router skill dispatches codebase work to specialists for setup/adoption, health audit and autonomous health improvement, hyper optimization, debugging, issue triage, HTML diagrams, API impact, exploration, planning, cleanup, doc reconciliation, directory-architecture review, maintainability review, React/Vue review, AI-rot cleanup, language playbooks, TLA model checks, and post-change verification.
 
-Project setup writes reviewable project-local lifecycle hooks for Codex and Claude Code (`.codex/hooks.json` and `.claude/settings.json`). These hooks add scip-query context at session start, route prompts toward the right skill, and run an advisory Stop-hook wrapper around the diff gate only for that repository. The Stop hook warns by default instead of blocking the agent; set `SCIP_QUERY_STOP_HOOK_MODE=feedback` to ask the agent to continue without a hook error, or `SCIP_QUERY_STOP_HOOK_MODE=block` to enforce the gate. Set `SCIP_QUERY_SKIP_HOOK_INSTALL=1` to skip hook installation during setup, or run `scip-query setup-hooks --json` later to repair the current repo's hooks.
+Project setup writes reviewable project-local lifecycle hooks for Codex and Claude Code (`.codex/hooks.json` and `.claude/settings.local.json` by default; `setup-hooks --shared` opts into `.claude/settings.json`). These hooks add scip-query context at session start, route prompts toward the right skill, and run an advisory Stop-hook wrapper around the diff gate only for that repository. The Stop hook sends feedback to the agent by default instead of blocking; set `SCIP_QUERY_STOP_HOOK_MODE=warn` for a warning-only hook response, or `SCIP_QUERY_STOP_HOOK_MODE=block` to enforce the gate. Set `SCIP_QUERY_SKIP_HOOK_INSTALL=1` or run `scip-query setup --no-hooks` to skip hook installation during setup, and run `scip-query setup-hooks --json` later to repair the current repo's hooks.
 
-For a project, run `scip-query setup`. It installs/refreshes skills, configures project-local hooks, checks indexer readiness, attempts configured indexer remediation, refreshes the index, smoke-tests representative command families, writes `docs/scip-query/health-dossier.md` and `.json`, reports the health score and items needing attention, and seeds AGENTS.md/CLAUDE.md guidance. After setup, `scip-health-audit` confirms raw signals and `scip-health-improve` keeps fixing the worst confirmed items until the score is as high as reasonably possible. Use `scip-query setup --git-hook` when you also want a local pre-commit diff gate. CI setup is intentionally separate.
+For a project, run `scip-query setup`. It installs/refreshes skills, configures project-local hooks unless skipped, checks indexer readiness, attempts configured indexer remediation, refreshes the index, smoke-tests representative command families, writes `docs/scip-query/health-dossier.md` and `.json`, reports the health score and items needing attention, and seeds AGENTS.md/CLAUDE.md guidance. After setup, `scip-cleanup-audit` confirms raw signals and `scip-cleanup-improve` keeps fixing the worst confirmed items until no safe confirmed cleanup remains. Use `scip-query setup --git-hook` when you also want a local pre-commit diff gate. CI setup is intentionally separate.
 
 ## Quick Start
 
@@ -226,7 +250,7 @@ scip-query stats
 scip-query system src/auth
 scip-query plan-context login
 scip-query diff-impact --json
-scip-query health --json --full
+scip-query health --json
 scip-query cleanup-plan --verify
 scip-query health --write-baseline   # start the ratchet
 ```
@@ -247,9 +271,9 @@ scip-query health --write-baseline   # start the ratchet
 | Ruby                          | scip-ruby        | [releases](https://github.com/sourcegraph/scip-ruby/releases)   |
 | C / C++                       | scip-clang       | [releases](https://github.com/sourcegraph/scip-clang/releases)  |
 | C# / VB                       | scip-dotnet      | [releases](https://github.com/sourcegraph/scip-dotnet/releases) |
-| Dart                          | scip-dart        | [releases](https://github.com/nicovince/scip-dart/releases)     |
-| PHP                           | scip-php         | [releases](https://github.com/nicovince/scip-php/releases)      |
-| Clojure / ClojureScript       | scip-clojure     | `npm install -g scip-clojure`                                   |
+| Dart                          | scip-dart        | [releases](https://github.com/Workiva/scip-dart/releases) or `dart pub global activate scip_dart` |
+| PHP                           | scip-php         | [releases](https://github.com/davidrjenni/scip-php/releases) or Composer package `davidrjenni/scip-php` |
+| Clojure / ClojureScript       | scip-clojure     | Requires a `scip-clojure` binary on PATH; source: [PlunderStruck/scip-clojure](https://github.com/PlunderStruck/scip-clojure) |
 
 For Python, the executable may be `scip-python`, `scip-python-plus`, or both. `scip-query` accepts either name.
 
@@ -295,25 +319,25 @@ Run this in a project root:
 scip-query init
 ```
 
-It creates `.scipquery.json`:
+It creates a minimal `.scipquery.json`:
 
 ```json
 {
   "languages": ["typescript"],
-  "indexerConcurrency": 6,
   "watch": {
     "enabled": false,
     "debounceMs": 30000,
-    "cooldownMs": 60000
-  },
-  "indexer": {
-    "typescript": {
-      "projectMode": "workspace",
-      "projects": ["apps/api", "apps/web"]
-    }
+    "cooldownMs": 60000,
+    "gitPollMs": 2000,
+    "autoRefresh": true
   }
 }
 ```
+
+Add optional fields such as `indexerConcurrency`, `indexer`, `entryRoots`,
+`declaredCouplings`, and `suppressions` only when the project needs them.
+
+`scip-query watch` is a foreground process. It writes a project-local watcher lock and refuses a second watcher for the same index cache; keep one terminal running it, or stop it with Ctrl+C before starting another.
 
 Use `declaredCouplings` for files that intentionally form one maintenance unit.
 These pairs are treated as structurally linked by `co-change` and health, while

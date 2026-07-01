@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import type { CommandHandler } from './command-descriptor-types.js';
+import type { CommandEvidenceTier } from './command-descriptor-types.js';
 import { withDb } from '../cli-context.js';
 import { commandAnalysisBudget, renderHeuristicNotice } from '../cli-support.js';
 import { render } from '../render.js';
@@ -10,6 +11,12 @@ const OPTION_VALUE_SOURCE = Symbol('option-value-source');
 type CommandOptionsWithSources = CommandOptions & {
   [OPTION_VALUE_SOURCE]?: (key: string) => string | undefined;
 };
+
+let commandEvidenceById = new Map<string, CommandEvidenceTier>();
+
+export function setCommandEvidenceMap(entries: ReadonlyMap<string, CommandEvidenceTier>): void {
+  commandEvidenceById = new Map(entries);
+}
 
 export interface DbCommandContext {
   db: ScipDatabase;
@@ -27,6 +34,7 @@ interface RowCommandSpec<Row, Ctx extends DbCommandContext> {
   format: (row: Row, ctx: Ctx) => string;
   emptyMessage?: (ctx: Ctx) => string;
   heuristicLabel?: string;
+  before?: (rows: readonly Row[], ctx: Ctx) => void;
   toJson?: (rows: readonly Row[], ctx: Ctx) => unknown;
   after?: (rows: readonly Row[], ctx: Ctx) => void;
 }
@@ -258,6 +266,7 @@ function renderRows<Row, Ctx extends DbCommandContext>(
       }
     },
     toJson: spec.toJson,
+    before: spec.before,
     after: spec.after,
   });
 }
@@ -285,14 +294,30 @@ export function printJsonEnvelope(
   options: CommandOptions,
   result: unknown,
 ): void {
-  console.log(JSON.stringify({ command, args: jsonPositionals(args), options, result }, null, 2));
+  const evidence = command ? commandEvidenceById.get(command) : undefined;
+  console.log(
+    JSON.stringify(
+      {
+        command,
+        ...(evidence ? { evidence } : {}),
+        args: jsonPositionals(args),
+        options,
+        result,
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 function jsonPositionals(args: readonly unknown[]): readonly unknown[] {
   return args.filter((arg) => typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean');
 }
 
-function splitCommanderActionArgs(rawArgs: readonly unknown[]): { args: readonly unknown[]; opts: CommandOptions } {
+export function splitCommanderActionArgs(rawArgs: readonly unknown[]): {
+  args: readonly unknown[];
+  opts: CommandOptions;
+} {
   if (rawArgs.length === 0) return { args: [], opts: {} };
   const tail = rawArgs[rawArgs.length - 1];
   return {

@@ -19,6 +19,7 @@ import { HEALTH_DETECTOR_PROFILES } from '../internal/health-detector-profiles.j
 import { cycles } from '../graph/cycles.js';
 import { dead } from '../cleanup/dead.js';
 import { drift } from '../cleanup/drift.js';
+import { duplicateBodies } from '../cleanup/duplicate-bodies.js';
 import { extractCandidates } from '../cleanup/extract-candidates.js';
 import { isolated } from '../cleanup/isolated.js';
 import { passthroughCandidates } from '../cleanup/passthrough-candidates.js';
@@ -85,6 +86,19 @@ export function collectBaselineFindings(db: ScipDatabase, opts: { scope?: string
 
   for (const pair of similarAll(db, { scope, ...HEALTH_DETECTOR_PROFILES.similar, scanLimit })) {
     findings.push(`similar:${[pair.symbolA, pair.symbolB].sort().join('|')}`);
+  }
+
+  for (const group of duplicateBodies(db, {
+    scope,
+    ...HEALTH_DETECTOR_PROFILES.duplicateBodies,
+    scanLimit,
+  })) {
+    findings.push(
+      `duplicate-bodies:${group.hash}:${group.functions
+        .map((entry) => entry.symbol)
+        .sort()
+        .join('|')}`,
+    );
   }
 
   for (const candidate of extractCandidates(db, { scope, ...HEALTH_DETECTOR_PROFILES.extract, scanLimit })) {

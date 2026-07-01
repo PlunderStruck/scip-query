@@ -13,15 +13,17 @@ import {
 } from './co-change.js';
 import type { CoChangePartnerClass, DeclaredCouplingSuggestion } from './co-change.js';
 import { baseContentPathsForDiffPlan, createBaseContentReader, diffImpact, diffImpactPlan } from './diff-impact.js';
-import type { BaseContentReader, ChangedLineRange, DiffImpactPlan } from './diff-impact.js';
+import type { AttributionNote, BaseContentReader, ChangedLineRange, DiffImpactPlan } from './diff-impact.js';
 import { baselineFindingMetadata } from './diff-gate-baseline-policy.js';
 import { docReferencePolicy } from './diff-gate-doc-policy.js';
 import type { DiffGateActionTier, DocCitationKind } from './diff-gate-types.js';
 import { docsCitingFiles } from '../cleanup/doc-drift.js';
+import { exactDuplicateBodyMatches } from '../cleanup/duplicate-bodies.js';
 import { checkHealthBaseline, resolveBaselinePath } from '../health/health-baseline.js';
 import { incompleteMigration } from './incomplete-migration.js';
 import { similar } from '../cleanup/similar.js';
 import { unusedParams } from '../cleanup/unused-params.js';
+import { escapeRegex } from '../../source/source-stripper.js';
 import type { FindingSuppression } from '../../domain/types.js';
 import { isCallableSymbol, leafName, leafSuffix } from '../../symbols/symbol-parser.js';
 import { profileSpan } from '../../instrumentation/profile.js';
@@ -93,6 +95,7 @@ export interface DiffGateFinding {
   /** Concrete remediation an agent can act on without human triage. */
   remediation: string;
   suppressionHint?: string;
+  legacySuppressionIds?: string[];
 }
 
 export interface DiffGateRootCauseGroup {
@@ -115,7 +118,7 @@ interface EchoMatch {
   otherShort: string;
   otherSymbol: string;
   similarity: number;
-  similarityBasis: 'callees' | 'source-tokens';
+  similarityBasis: 'callees' | 'source-tokens' | 'exact-body';
   sharedEvidence: string[];
 }
 
@@ -129,6 +132,7 @@ export interface DiffGateResult {
   /** Findings accepted by structured .scipquery.json suppressions. */
   suppressed: Array<{ finding: DiffGateFinding; suppression: FindingSuppression }>;
   findings: DiffGateFinding[];
+  attributionNotes: AttributionNote[];
   /** Root-cause review items derived from unsuppressed findings. */
   rootCauseGroups?: DiffGateRootCauseGroup[];
   note?: string;
@@ -206,6 +210,7 @@ export function diffGate(
     skipped: [],
     suppressed: [],
     findings: [],
+    attributionNotes: impact.attributionNotes,
     rootCauseGroups: [],
     note: impact.summary.note,
   };
@@ -349,7 +354,9 @@ function applyStructuredSuppressions(result: DiffGateResult, suppressions: reado
 function suppressionMatches(suppression: FindingSuppression, finding: DiffGateFinding): boolean {
   if (!suppression.reason || suppression.reason.trim() === '') return false;
   if (suppression.expiresAt && Date.parse(suppression.expiresAt) <= Date.now()) return false;
-  if (suppression.id && suppression.id !== finding.id) return false;
+  if (suppression.id && suppression.id !== finding.id && !finding.legacySuppressionIds?.includes(suppression.id)) {
+    return false;
+  }
   if (suppression.check && suppression.check !== finding.check) return false;
   if (suppression.file && suppression.file !== finding.file) return false;
   return Boolean(suppression.id || suppression.check);
@@ -377,6 +384,51 @@ function runEchoCheck(
   for (const changedSymbol of changedSymbols.slice(0, maxEchoChecks)) {
     if (!isCallableSymbol(changedSymbol.symbol)) continue;
     if (symbolPreexistedAtBase(changedSymbol)) continue;
+    const exactMatches = exactDuplicateBodyMatches(db, changedSymbol.symbol, {
+      maxLoc: 15,
+      scanLimit,
+    })
+      .filter((match) => !changed.has(match.file))
+      .slice(0, 5)
+      .map(
+        (match): EchoMatch => ({
+          otherFile: match.file,
+          otherShort: match.shortName,
+          otherSymbol: match.symbol,
+          similarity: 1,
+          similarityBasis: 'exact-body',
+          sharedEvidence: [`exact normalized body (${match.loc} LOC)`],
+        }),
+      );
+    if (exactMatches.length > 0) {
+      const id = findingId('echo', changedSymbol.symbol, changedSymbol.file);
+      const legacyId = findingId(
+        'echo',
+        changedSymbol.symbol,
+        changedSymbol.file,
+        ...exactMatches.map((match) => `${match.otherSymbol}|${match.otherFile}`).sort(),
+      );
+      const topMatch = exactMatches[0]!;
+      recordFinding(result, {
+        id,
+        legacySuppressionIds: legacyId === id ? undefined : [legacyId],
+        groupKey: id,
+        actionTier: 'direct',
+        check: 'echo',
+        severity: 'warning',
+        evidence: 'heuristic',
+        confidence: 1,
+        file: changedSymbol.file,
+        symbol: changedSymbol.symbol,
+        relatedFiles: [...new Set(exactMatches.map((match) => match.otherFile))].sort(),
+        sourceAnalyzer: 'duplicate-bodies',
+        rootCauseKey: `${changedSymbol.symbol}:${topMatch.otherSymbol}`,
+        message: echoMessage(changedSymbol, exactMatches),
+        why: echoWhy(changedSymbol, exactMatches),
+        remediation: echoRemediation('direct', changedSymbol.shortName, topMatch.otherShort),
+      });
+      continue;
+    }
     const matches = similar(db, changedSymbol.symbol, {
       minSimilarity,
       limit: 5,
@@ -401,15 +453,17 @@ function runEchoCheck(
     }
     if (eligibleMatches.length === 0) continue;
     const topMatch = eligibleMatches[0]!;
-    const id = findingId(
+    const legacyId = findingId(
       'echo',
       changedSymbol.symbol,
       changedSymbol.file,
       ...eligibleMatches.map((match) => `${match.otherSymbol}|${match.otherFile}`).sort(),
     );
+    const id = findingId('echo', changedSymbol.symbol, changedSymbol.file);
     const actionTier = echoActionTier(changedSymbol, eligibleMatches);
     recordFinding(result, {
       id,
+      legacySuppressionIds: legacyId === id ? undefined : [legacyId],
       groupKey: id,
       actionTier,
       check: 'echo',
@@ -438,6 +492,7 @@ function echoActionTier(changedSymbol: { symbol: string }, matches: readonly Ech
 }
 
 function isDirectSourceEcho(changedSymbol: string, match: EchoMatch): boolean {
+  if (match.similarityBasis === 'exact-body') return true;
   if (match.similarityBasis !== 'source-tokens') return false;
   if (match.similarity < 0.98 || match.sharedEvidence.length > 8) return false;
 
@@ -540,9 +595,16 @@ function runIncompleteMigrationCheck(
         ? undefined
         : Math.max(...finding.leftovers.map((leftover) => Math.min(leftover.containment, leftover.siteCoverage)));
     const hasPossibleSubtype = finding.leftovers.some((leftover) => leftover.migrationScope === 'possible-subtype');
-    const id = findingId('incomplete-migration', finding.helperSymbol, finding.helperFile, relatedFiles.join('|'));
+    const legacyId = findingId(
+      'incomplete-migration',
+      finding.helperSymbol,
+      finding.helperFile,
+      relatedFiles.join('|'),
+    );
+    const id = findingId('incomplete-migration', finding.helperSymbol, finding.helperFile);
     recordFinding(result, {
       id,
+      legacySuppressionIds: legacyId === id ? undefined : [legacyId],
       check: 'incomplete-migration',
       severity: 'warning',
       evidence: 'heuristic',
@@ -598,7 +660,8 @@ function runCoChangePartnerCheck(
     const key = `${changedSide}|${partner}`;
     if (reported.has(key)) continue;
     reported.add(key);
-    const id = findingId('co-change-partner', changedSide, partner, String(pair.together));
+    const legacyId = findingId('co-change-partner', changedSide, partner, String(pair.together));
+    const id = findingId('co-change-partner', changedSide, partner);
     const classification = classifyCoChangePartner(changedSide, partner);
     const declaredCouplingSuggestion = declaredCouplingSuggestionForPair(
       {
@@ -616,6 +679,7 @@ function runCoChangePartnerCheck(
     const rootCauseKey = [changedSide, partner].sort().join('|');
     result.findings.push({
       id,
+      legacySuppressionIds: legacyId === id ? undefined : [legacyId],
       check: 'co-change-partner',
       severity: 'warning',
       evidence: 'change-graph',
@@ -715,9 +779,11 @@ function runDocReferenceCheck(
         ? citation.citedClaims
         : docReferencePolicy.citationContexts(db, citation.doc, citation.cited);
     const classification = docReferencePolicy.classifyCitation(citedClaims);
-    const id = findingId('doc-reference', citation.doc, citation.cited.join('|'));
+    const legacyId = findingId('doc-reference', citation.doc, citation.cited.join('|'));
+    const id = findingId('doc-reference', citation.doc, citation.cited[0] ?? '');
     recordFinding(result, {
       id,
+      legacySuppressionIds: legacyId === id ? undefined : [legacyId],
       check: 'doc-reference',
       severity: 'warning',
       evidence: 'change-graph',
@@ -742,9 +808,11 @@ function runDocReferenceCheck(
 function runUnusedParamsCheck(db: ScipDatabase, changedFiles: readonly string[], result: DiffGateResult): void {
   result.checksRun.push('unused-params');
   for (const finding of unusedParams(db, { files: changedFiles, limit: 50 })) {
-    const id = findingId('unused-params', finding.symbol, finding.file, finding.unusedTrailing.join('|'));
+    const legacyId = findingId('unused-params', finding.symbol, finding.file, finding.unusedTrailing.join('|'));
+    const id = findingId('unused-params', finding.symbol, finding.file);
     recordFinding(result, {
       id,
+      legacySuppressionIds: legacyId === id ? undefined : [legacyId],
       check: 'unused-params',
       severity: 'warning',
       evidence: 'heuristic',
@@ -824,10 +892,6 @@ export function symbolPreexistenceChecker(
 
 function containsLeaf(content: string, leaf: string): boolean {
   return new RegExp(`\\b${escapeRegex(leaf)}\\b`).test(content);
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function runBaselineCheck(db: ScipDatabase, result: DiffGateResult): void {

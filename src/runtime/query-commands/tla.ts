@@ -1,26 +1,32 @@
 import { existsSync } from 'node:fs';
+import type { ScipDatabase } from '../../storage/db.js';
 import type { CommandDescriptor } from '../commands/command-descriptor-types.js';
+import type { CommandHandler } from '../commands/command-descriptor-types.js';
 import { doc, option, parseInteger, withJsonOption } from '../commands/command-spec-builders.js';
 import {
   booleanOptionValue,
-  dbCommand,
   definedNumberOption,
+  optionalStringArg,
   printJsonEnvelope,
+  splitCommanderActionArgs,
   stringArg,
   stringOptionValue,
+  type CommandOptions,
 } from '../commands/command-execution.js';
-import { displayPathRange, render } from '../render.js';
+import { withDb } from '../cli-context.js';
+import { displayPathRange } from '../render.js';
 import {
   defaultMapPathForSpec,
   isTlaCheckerMode,
   loadTlaModelContract,
   loadTraceSteps,
+  readTlaConfigInvariants,
   readTlaModuleFacts,
   resolveContractPath,
   resolveProjectPath,
   type TlaCheckerMode,
 } from '../../tla/model-contract.js';
-import { runTlaTool, type TlaToolResult } from '../../tla/tool-runner.js';
+import { fetchTlaToolsJar, runTlaTool, type TlaToolResult } from '../../tla/tool-runner.js';
 import { verifyTlaConformance, type TlaConformanceFinding, type TlaConformanceResult } from '../../tla/conformance.js';
 
 interface TlaVerifyResult {
@@ -33,12 +39,31 @@ interface TlaVerifyResult {
   exitCode: number;
 }
 
-const handleTla = dbCommand(({ db, args, opts }) => {
+const handleTla: CommandHandler = async (...rawArgs: unknown[]) => {
+  const { args, opts } = splitCommanderActionArgs(rawArgs);
   const operation = stringArg(args, 0);
-  if (operation !== 'verify') {
-    throw new Error(`unknown tla operation: ${operation}. Supported operation: verify`);
+  if (operation === 'fetch-tools') {
+    const result = await fetchTlaToolsJar();
+    if (booleanOptionValue(opts, 'json')) {
+      printJsonEnvelope('tla', args, opts, result);
+      return;
+    }
+    console.log(`tla2tools.jar ${result.status}: ${result.path}`);
+    console.log(`Version: ${result.version}`);
+    console.log(`SHA-256: ${result.sha256}`);
+    return;
   }
-  const specArg = stringArg(args, 1);
+  if (operation !== 'verify') {
+    throw new Error(`unknown tla operation: ${operation}. Supported operations: verify, fetch-tools`);
+  }
+
+  const specArg = optionalStringArg(args, 1);
+  if (!specArg) throw new Error('tla verify requires a spec path');
+
+  withDb((db) => runTlaVerify(db, args, opts, specArg));
+};
+
+function runTlaVerify(db: ScipDatabase, args: readonly unknown[], opts: CommandOptions, specArg: string): void {
   const projectRoot = db.config.projectRoot;
   const specPath = resolveProjectPath(projectRoot, specArg);
   if (!specPath || !existsSync(specPath)) throw new Error(`TLA+ spec not found: ${specArg}`);
@@ -51,14 +76,18 @@ const handleTla = dbCommand(({ db, args, opts }) => {
   const configPath = resolveContractPath(projectRoot, mapDir, configArg);
   const checker = parseChecker(stringOptionValue(opts, 'checker') ?? 'auto');
   const moduleFacts = readTlaModuleFacts(projectRoot, specArg);
+  const checkedInvariants = readTlaConfigInvariants(configPath);
   const traceArg = stringOptionValue(opts, 'trace');
   const configuredTraceSteps = contract.traces.flatMap((tracePath) => loadTraceSteps(projectRoot, tracePath).steps);
   const requestedTrace = traceArg ? loadTraceSteps(projectRoot, traceArg) : { steps: [], errors: [] };
   const traceErrors = traceArg ? requestedTrace.errors : [];
-  const conformance = verifyTlaConformance(db, contract, moduleFacts, [
-    ...configuredTraceSteps,
-    ...requestedTrace.steps,
-  ]);
+  const conformance = verifyTlaConformance(
+    db,
+    contract,
+    moduleFacts,
+    [...configuredTraceSteps, ...requestedTrace.steps],
+    checkedInvariants,
+  );
   for (const error of [...loaded.errors, ...traceErrors]) {
     conformance.findings.push({
       id: `TLA-CONTRACT-${conformance.findings.length + 1}`,
@@ -89,7 +118,7 @@ const handleTla = dbCommand(({ db, args, opts }) => {
       message: toolResult.diagnostics.map((diagnostic) => diagnostic.message).join('; '),
       why: ['The TLA+ model was not checked by SANY, TLC, or Apalache in this run.'],
       remediation:
-        'Install the requested checker, pass --tla-tools or --apalache, or rerun with --checker none intentionally.',
+        "Install the requested checker, run 'scip-query tla fetch-tools', set TLA_TOOLS_JAR, pass --apalache, or rerun with --checker none intentionally.",
     });
   }
 
@@ -111,12 +140,12 @@ const handleTla = dbCommand(({ db, args, opts }) => {
 
   renderTlaVerify(result);
   process.exitCode = result.exitCode;
-});
+}
 
 export const tlaQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'tla',
-    command: 'tla <operation> <spec>',
+    command: 'tla <operation> [spec]',
     description: 'Verify a TLA+ model and its TypeScript mapping contract',
     options: withJsonOption([
       option('--map <file>', 'scip-query TLA mapping JSON file'),
@@ -129,7 +158,10 @@ export const tlaQueryCommandDescriptors: CommandDescriptor[] = [
       option('--allow-unknown', 'Exit zero when only unknown findings remain'),
     ]),
     renderShape: 'custom',
-    docs: doc('Formal Models', ['scip-query tla verify specs/Queue.tla --map specs/Queue.scip-tla.json']),
+    docs: doc('Formal Models', [
+      'scip-query tla verify specs/Queue.tla --map specs/Queue.scip-tla.json',
+      'scip-query tla fetch-tools',
+    ]),
     handler: handleTla,
   },
 ];
@@ -159,11 +191,25 @@ function renderTlaVerify(result: TlaVerifyResult): void {
 
   const errors = result.conformance.findings.filter((finding) => finding.severity === 'error');
   const unknowns = result.conformance.findings.filter((finding) => finding.evidence === 'unknown');
+  const proof = proofSummary(result);
   console.log(
-    `\nConformance: ${result.conformance.mappedVariables} variable(s), ${result.conformance.mappedActions} action(s), ${result.conformance.resolvedReferents} resolved referent(s), ${result.conformance.staticWrites.length} modeled write(s), ${result.conformance.traceStepsChecked} trace step(s).`,
+    `\nConformance: ${result.conformance.mappedVariables} variable(s), ${result.conformance.mappedActions} action(s), ${result.conformance.resolvedReferents} resolved referent(s).`,
   );
+  console.log(`Proof: ${proof}`);
+  for (const warning of proofWarnings(result)) console.log(`WARNING: ${warning}`);
+  if (result.conformance.waivers.length > 0) {
+    console.log('Waivers:');
+    for (const waiver of result.conformance.waivers) {
+      const legacy = waiver.legacy ? ' legacy' : '';
+      console.log(`  - ${waiver.action} ${waiver.kind} ${waiver.variable}:${legacy} ${waiver.reason}`);
+    }
+  }
   if (result.conformance.findings.length === 0) {
-    console.log('PASS: model, mapping, and checked code evidence agree.');
+    console.log(
+      result.conformance.waivers.length === 0
+        ? 'PASS: model, mapping, and checked code evidence agree.'
+        : 'PASS: model checker and unwaived conformance checks passed; see waived facts above.',
+    );
     return;
   }
 
@@ -173,6 +219,33 @@ function renderTlaVerify(result: TlaVerifyResult): void {
   for (const finding of result.conformance.findings) {
     renderFinding(finding);
   }
+}
+
+function proofSummary(result: TlaVerifyResult): string {
+  const checker = `${result.checker.checker} ${result.checker.status === 'passed' ? 'PASS' : result.checker.status.toUpperCase()}`;
+  const writeWaivers = result.conformance.waivers.filter((waiver) => waiver.kind === 'write').length;
+  const readWaivers = result.conformance.waivers.filter((waiver) => waiver.kind === 'read').length;
+  const callChecks = result.conformance.findings.filter((finding) => finding.category === 'missing-call').length;
+  return [
+    `checker: ${checker}`,
+    `writes: ${result.conformance.staticWrites.length} verified, ${writeWaivers} waived`,
+    `reads: ${result.conformance.staticReads.length} verified, ${readWaivers} waived`,
+    `calls: ${callChecks === 0 ? 'checked' : `${callChecks} missing`}`,
+    `traces: ${result.conformance.traceStepsChecked} steps`,
+  ].join(' | ');
+}
+
+function proofWarnings(result: TlaVerifyResult): string[] {
+  const warnings: string[] = [];
+  const writeWaivers = result.conformance.waivers.filter((waiver) => waiver.kind === 'write').length;
+  const readWaivers = result.conformance.waivers.filter((waiver) => waiver.kind === 'read').length;
+  if (writeWaivers > 0 && result.conformance.staticWrites.length === 0) {
+    warnings.push('NOTHING PROVEN ABOUT WRITES: every write fact found in this run was waived or unobserved.');
+  }
+  if (readWaivers > 0 && result.conformance.staticReads.length === 0) {
+    warnings.push('NOTHING PROVEN ABOUT READS: every read fact found in this run was waived or unobserved.');
+  }
+  return warnings;
 }
 
 function renderFinding(finding: TlaConformanceFinding): void {

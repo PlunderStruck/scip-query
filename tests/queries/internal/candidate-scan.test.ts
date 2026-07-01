@@ -2,10 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  runCandidateAnalysis,
-  type CandidatePipelineCounters,
-} from '../../../src/queries/internal/candidate-scan.js';
+import { runCandidateAnalysis, type CandidatePipelineCounters } from '../../../src/queries/internal/candidate-scan.js';
 
 const PROFILE_ENV_KEYS = ['SCIP_QUERY_PROFILE', 'SCIP_QUERY_PROFILE_OUT', 'SCIP_QUERY_PROFILE_COMMAND'] as const;
 

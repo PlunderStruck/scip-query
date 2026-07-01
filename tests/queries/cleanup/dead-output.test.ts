@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
 import { dead } from '../../../src/queries/cleanup/dead.js';
+import { renderDeadGroup } from '../../../src/runtime/query-commands/cleanup/renderers.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { createEvidenceSchema } from '../../fixtures/evidence-fixture.js';
 
@@ -152,5 +153,37 @@ describe('dead output contract', () => {
         ]),
       );
     });
+  });
+});
+
+describe('dead human renderer', () => {
+  it('shows section totals separately from capped display rows', () => {
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = (message = '') => logs.push(String(message));
+    try {
+      renderDeadGroup(
+        [
+          {
+            relativePath: 'src/a.ts',
+            startLine: 0,
+            endLine: 9,
+            loc: 10,
+            symbol: 'sym/a',
+            shortName: 'a',
+            sameFileRefs: 0,
+            kind: 'dead-code',
+          },
+        ],
+        'DEAD CODE',
+        'explanation',
+        10,
+        { count: 25, loc: 250 },
+      );
+    } finally {
+      console.log = originalLog;
+    }
+
+    expect(logs[0]).toBe('═══ DEAD CODE (1 of 25, 10 of 250 LOC) ═══');
   });
 });

@@ -71,7 +71,8 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 | `complexity-hotspots` | Find heuristic complexity hotspot candidates from LOC x fan-in x fan-out | `-s, --scope <path>`<br>`--min-loc <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
 | `convergence <symbol1> <symbol2>` | Show what a consolidated version of two similar functions would look like | `--full`<br>`--json` |
 | `redundant-reexports` | Find barrel re-exports that nobody imports through | `-s, --scope <path>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
-| `similar-signatures` | Find functions with near-identical type signatures (same shape) | `-s, --scope <path>`<br>`--min-loc <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
+| `duplicate-bodies` | Find exact duplicate small-body candidates across files | `-s, --scope <path>`<br>`--max-loc <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
+| `similar-signatures` | Find functions with near-identical type signatures (same shape) | `-s, --scope <path>`<br>`--min-loc <n>`<br>`--max-shape-frequency <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
 
 ### Graph
 
@@ -101,7 +102,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 
 | Command | Description | Options |
 |---|---|---|
-| `tla <operation> <spec>` | Verify a TLA+ model and its TypeScript mapping contract | `--map <file>`<br>`--config <file>`<br>`--checker <mode>`<br>`--tla-tools <jar>`<br>`--apalache <binary>`<br>`--length <n>`<br>`--trace <file>`<br>`--allow-unknown`<br>`--json` |
+| `tla <operation> [spec]` | Verify a TLA+ model and its TypeScript mapping contract | `--map <file>`<br>`--config <file>`<br>`--checker <mode>`<br>`--tla-tools <jar>`<br>`--apalache <binary>`<br>`--length <n>`<br>`--trace <file>`<br>`--allow-unknown`<br>`--json` |
 
 ### Planning
 
@@ -122,19 +123,20 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 | Command | Description | Options |
 |---|---|---|
 | `bench` | Benchmark indexing and command runtimes for this repository | `--json`<br>`--cold-index`<br>`--include-heavy`<br>`--command <cmd>`<br>`--timeout-ms <n>`<br>`--progress`<br>`--profile`<br>`--profile-out <path>` |
-| `install-skills` | Install skills (scip-query, scip-query-setup, scip-adoption, scip-health-audit, scip-health-improve, scip-hyper-optimization, scip-api-impact, concrete-plan, scip-ai-cleanup, scip-debug, scip-explore, scip-triage-issue, scip-diagram, scip-debloat, scip-doc-reconcile, scip-directory-architecture, scip-maintainability, scip-react-maintainability, scip-vue-maintainability, scip-verify, scip-language-playbook, tla-model-system) into Claude Code, Codex, and shared agent roots | - |
-| `setup-hooks` | Install or refresh project-local Codex and Claude Code lifecycle hooks | `--json` |
+| `install-skills` | Install skills (_shared, scip-query, scip-setup, scip-cleanup-audit, scip-cleanup-improve, scip-hyper-optimization, scip-api-impact, concrete-plan, scip-debug, scip-explore, scip-triage-issue, scip-diagram, scip-doc-reconcile, scip-directory-architecture, scip-maintainability, scip-react-maintainability, scip-vue-maintainability, scip-verify, scip-language-playbook, tla-model-system) into Claude Code, Codex, and shared agent roots | - |
+| `setup-hooks` | Install or refresh project-local Codex and Claude Code lifecycle hooks | `--shared`<br>`--remove`<br>`--force`<br>`--json` |
 | `check-deps` | Check whether scip-query and the detected language indexers are actually runnable | - |
-| `capabilities` | Report which evidence and verification capabilities are available in this project | `--json` |
-| `capability-matrix` | Report the evidence and verification capability matrix by language | `--json` |
+| `capabilities` | Report which evidence and verification capabilities are available in this project | `--matrix`<br>`--json` |
+| `capability-matrix` | Deprecated alias for capabilities --matrix | `--json` |
 | `init` | Create a .scipquery.json config file for this project | - |
 | `config-validate` | Validate .scipquery.json, including structured suppressions and declared coupling groups | `--json` |
 | `suppress <id>` | Record an accepted finding in .scipquery.json with a required reason | `--reason <text>`<br>`--check <check>`<br>`--file <path>`<br>`--expires-at <iso>`<br>`--json` |
 | `doctor` | Diagnose config, index freshness, dependency readiness, and project capabilities | `--json` |
-| `setup` | Bootstrap this project: install agent skills, refresh the index, verify capabilities, and report health | `--git-hook`<br>`--json` |
+| `setup` | Bootstrap this project: install agent skills, refresh the index, verify capabilities, and report health | `--git-hook`<br>`--no-hooks`<br>`--dossier-dir <path>`<br>`--json` |
 | `setup-agent` | Seed agent guidance for this project: AGENTS.md/CLAUDE.md block pointing agents at the scip-query skills and diff gate, plus an optional git pre-commit backstop | `--git-hook` |
 | `setup-ci` | Write a GitHub Actions workflow that runs scip-query reindex and diff-gate on pull requests | `--force`<br>`--dry-run` |
-| `watch` | Watch for file changes and reindex automatically | `--debounce <ms>`<br>`--cooldown <ms>`<br>`--git-poll <ms>` |
+| `uninstall` | Remove scip-query-owned skill links, project hooks, and managed agent setup blocks | `--global`<br>`--project`<br>`--dry-run`<br>`--json` |
+| `watch` | Watch for file changes in the foreground and reindex automatically | `--debounce <ms>`<br>`--cooldown <ms>`<br>`--git-poll <ms>` |
 | `status` | Show index status for this project | `--json`<br>`--capabilities` |
 
 <!-- END GENERATED COMMAND REFERENCE -->

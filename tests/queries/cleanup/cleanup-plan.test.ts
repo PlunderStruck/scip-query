@@ -8,6 +8,7 @@ import {
   applyCleanupBatches,
   cleanupVerificationFailures,
   createCleanupPatch,
+  decideBatchStatus,
   deleteLineRanges,
   detectCheckers,
   errorKey,
@@ -72,6 +73,34 @@ describe('verification error identity', () => {
     expect(errorKey("a.ts(1,1): error TS2304: Cannot find name 'x'")).not.toBe(
       errorKey("a.ts(1,1): error TS2304: Cannot find name 'y'"),
     );
+  });
+
+  it('treats increased same-text errors and unparsed checker failures as batch failures', () => {
+    expect(decideBatchStatus({ ok: false, exitCode: 1, outputTail: ['undefined: foo'] }, [], [])).toEqual({
+      status: 'failed',
+      reason: 'checker exited 1 with unparsed output',
+      errors: ['undefined: foo'],
+    });
+
+    expect(
+      decideBatchStatus(
+        { ok: false, exitCode: 1 },
+        ["a.ts(1,1): error TS2304: Cannot find name 'x'"],
+        ["a.ts(2,1): error TS2304: Cannot find name 'x'", "b.ts(3,1): error TS2304: Cannot find name 'x'"],
+      ),
+    ).toEqual({
+      status: 'failed',
+      reason: 'checker reported new errors',
+      errors: ["b.ts(3,1): error TS2304: Cannot find name 'x'"],
+    });
+
+    expect(
+      decideBatchStatus(
+        { ok: true, exitCode: 0 },
+        ["a.ts(1,1): error TS2304: Cannot find name 'x'"],
+        ["a.ts(2,1): error TS2304: Cannot find name 'x'"],
+      ),
+    ).toEqual({ status: 'verified', reason: 'checker passed', errors: [] });
   });
 });
 
@@ -143,6 +172,7 @@ describe('cleanup patch and apply helpers', () => {
           uncoveredFiles: [],
           baselineErrors: 0,
           dirtyOverlap: ['src/a.ts'],
+          dirtyWorkingTree: ['src/a.ts'],
           batches: [{ depth: 0, status: 'verified' }],
         },
         [batch],
@@ -155,6 +185,7 @@ describe('cleanup patch and apply helpers', () => {
           uncoveredFiles: [],
           baselineErrors: 0,
           dirtyOverlap: ['src/a.ts'],
+          dirtyWorkingTree: ['src/a.ts'],
           batches: [{ depth: 0, status: 'verified' }],
         },
         [batch],

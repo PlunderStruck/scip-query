@@ -15,7 +15,7 @@
  * hook config: those schemas are three independent implementations, and
  * silently-drifting config is worse than asking users to wire one line.
  */
-import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DiffGateResult } from '../queries/impact/diff-gate.js';
 
@@ -75,6 +75,12 @@ export interface SetupAgentResult {
   skipped: Array<{ target: string; reason: string }>;
 }
 
+export interface RemoveAgentSetupResult {
+  removed: string[];
+  unchanged: string[];
+  skipped: Array<{ target: string; reason: string }>;
+}
+
 export function setupAgent(projectRoot: string, opts: { gitHook?: boolean } = {}): SetupAgentResult {
   const result: SetupAgentResult = { written: [], unchanged: [], skipped: [] };
 
@@ -84,6 +90,14 @@ export function setupAgent(projectRoot: string, opts: { gitHook?: boolean } = {}
     writeGitPreCommitHook(projectRoot, result);
   }
 
+  return result;
+}
+
+export function removeAgentSetup(projectRoot: string, opts: { dryRun?: boolean } = {}): RemoveAgentSetupResult {
+  const result: RemoveAgentSetupResult = { removed: [], unchanged: [], skipped: [] };
+  removeManagedBlock(projectRoot, 'AGENTS.md', opts, result);
+  removeManagedBlock(projectRoot, 'CLAUDE.md', opts, result);
+  removeGitPreCommitHook(projectRoot, opts, result);
   return result;
 }
 
@@ -142,6 +156,36 @@ function upsertManagedBlock(projectRoot: string, name: string, block: string, re
   }
 }
 
+function removeManagedBlock(
+  projectRoot: string,
+  name: string,
+  opts: { dryRun?: boolean },
+  result: RemoveAgentSetupResult,
+): void {
+  const path = join(projectRoot, name);
+  if (!existsSync(path)) {
+    result.unchanged.push(name);
+    return;
+  }
+  const current = readFileSync(path, 'utf-8');
+  if (!current.includes(MD_BLOCK_BEGIN)) {
+    result.unchanged.push(name);
+    return;
+  }
+  const pattern = new RegExp(`${MD_BLOCK_BEGIN}[\\s\\S]*?${MD_BLOCK_END}`);
+  const next = current
+    .replace(pattern, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  result.removed.push(name);
+  if (opts.dryRun) return;
+  if (next.length === 0) {
+    rmSync(path, { force: true });
+  } else {
+    writeFileSync(path, `${next}\n`);
+  }
+}
+
 /** Agent-agnostic backstop: gate the diff at commit time, whoever wrote it. */
 function writeGitPreCommitHook(projectRoot: string, result: SetupAgentResult): void {
   const hooksDir = join(projectRoot, '.git', 'hooks');
@@ -179,4 +223,22 @@ function writeGitPreCommitHook(projectRoot: string, result: SetupAgentResult): v
   writeFileSync(path, script);
   chmodSync(path, 0o755);
   result.written.push('.git/hooks/pre-commit');
+}
+
+function removeGitPreCommitHook(projectRoot: string, opts: { dryRun?: boolean }, result: RemoveAgentSetupResult): void {
+  const path = join(projectRoot, '.git', 'hooks', 'pre-commit');
+  if (!existsSync(path)) {
+    result.unchanged.push('.git/hooks/pre-commit');
+    return;
+  }
+  const current = readFileSync(path, 'utf-8');
+  if (!current.includes(PRE_COMMIT_MARKER)) {
+    result.skipped.push({
+      target: '.git/hooks/pre-commit',
+      reason: 'pre-commit hook is not managed by scip-query',
+    });
+    return;
+  }
+  result.removed.push('.git/hooks/pre-commit');
+  if (!opts.dryRun) rmSync(path, { force: true });
 }

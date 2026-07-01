@@ -3,7 +3,11 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { similar } from '../../../src/queries/cleanup/similar.js';
-import { fileContentHash, readCachedFileEvidence, writeCachedFileEvidence } from '../../../src/storage/evidence-cache.js';
+import {
+  fileContentHash,
+  readCachedFileEvidence,
+  writeCachedFileEvidence,
+} from '../../../src/storage/evidence-cache.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { getSourceText } from '../../../src/source/source-text.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../../fixtures/evidence-fixture.js';

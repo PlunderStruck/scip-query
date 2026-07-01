@@ -1,5 +1,6 @@
 import type { ParsedSourceImport } from '../../domain/types.js';
 import { resolveClojureImportPath } from '../../resolution/import-path-resolver.js';
+import { escapeRegex } from '../../source/source-stripper.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { buildUsedImport } from '../utils.js';
 
@@ -31,11 +32,7 @@ interface NamespaceImportSpec {
 const REQUIRE_CLAUSES = new Set([':require', ':require-macros', ':use']);
 const IDENTIFIER_CHARS = String.raw`A-Za-z0-9_$*+!?.<>=-`;
 
-export function parseClojureImports(
-  db: ScipDatabase,
-  _importerPath: string,
-  source: string,
-): ParsedSourceImport[] {
+export function parseClojureImports(db: ScipDatabase, _importerPath: string, source: string): ParsedSourceImport[] {
   const nsForm = parseNamespaceForm(source);
   if (!nsForm) return [];
 
@@ -78,7 +75,11 @@ function namespaceImports(db: ScipDatabase, spec: NamespaceImportSpec, body: str
       localName: usagePrefix,
       sourcePath,
       kind: 'namespace',
-      used: spec.refers.length > 0 || spec.referAll || usedMembers.length > 0 || hasQualifiedNamespaceUsage(body, spec.namespace),
+      used:
+        spec.refers.length > 0 ||
+        spec.referAll ||
+        usedMembers.length > 0 ||
+        hasQualifiedNamespaceUsage(body, spec.namespace),
       usedMembers,
     },
   ];
@@ -221,10 +222,6 @@ function symbolBoundary(): string {
   return `(?<![${IDENTIFIER_CHARS}])`;
 }
 
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 function buildClojureUsageBody(source: string, start: number, end: number): string {
   let out = '';
   let index = 0;
@@ -273,7 +270,9 @@ function parseForm(source: string, start: number): { form: ClojureForm; index: n
   let index = skipWhitespace(source, start);
   if (source.startsWith('#_', index)) {
     const discarded = parseForm(source, index + 2);
-    return discarded ? { form: { type: 'atom', text: '', start: index, end: discarded.index }, index: discarded.index } : null;
+    return discarded
+      ? { form: { type: 'atom', text: '', start: index, end: discarded.index }, index: discarded.index }
+      : null;
   }
 
   while (isReaderMacroPrefix(source[index]!)) index += 1;
@@ -283,7 +282,11 @@ function parseForm(source: string, start: number): { form: ClojureForm; index: n
   if (char === '(') return parseCollection(source, index, 'list', ')');
   if (char === '[') return parseCollection(source, index, 'vector', ']');
   if (char === '{') return parseCollection(source, index, 'map', '}');
-  if (char === '"') return { form: { type: 'atom', text: '', start: index, end: skipString(source, index) }, index: skipString(source, index) };
+  if (char === '"')
+    return {
+      form: { type: 'atom', text: '', start: index, end: skipString(source, index) },
+      index: skipString(source, index),
+    };
   return parseAtom(source, index);
 }
 

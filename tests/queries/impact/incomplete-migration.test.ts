@@ -642,12 +642,13 @@ describe('incomplete-migration', () => {
     expect(formatEcho).toBeDefined();
     expect(echoFindings.filter((finding) => finding.symbol === formatEcho!.symbol)).toHaveLength(1);
     expect(formatEcho).toMatchObject({
-      actionTier: 'signal',
+      actionTier: 'direct',
       groupKey: formatEcho!.id,
-      relatedFiles: expect.arrayContaining(['src/site-b.ts', 'src/site-c.ts']),
+      sourceAnalyzer: 'duplicate-bodies',
+      relatedFiles: expect.arrayContaining(['src/billing.ts', 'src/site-c.ts']),
     });
     expect(formatEcho!.message).toContain('established symbol');
-    expect(formatEcho!.remediation).toContain('Review whether');
+    expect(formatEcho!.remediation).toContain('Extract or reuse');
   });
 
   it('keeps exact same-name helper echoes in the direct tier', () => {
@@ -855,6 +856,28 @@ describe('incomplete-migration', () => {
       ]);
     } finally {
       suppressedDb.close();
+    }
+
+    const legacyId = finding!.legacySuppressionIds?.[0];
+    expect(legacyId).toBeDefined();
+    const legacySuppressedDb = new ScipDatabase({
+      dbPath: join(repoRoot, 'index.db'),
+      indexPath: join(repoRoot, 'index.scip'),
+      projectRoot: repoRoot,
+      suppressions: [{ id: legacyId!, reason: 'accepted legacy fixture finding' }],
+    });
+    try {
+      const result = diffGate(legacySuppressedDb, { base: 'HEAD' });
+
+      expect(result.findings.some((candidate) => candidate.id === finding!.id)).toBe(false);
+      expect(result.suppressed).toEqual([
+        expect.objectContaining({
+          finding: expect.objectContaining({ id: finding!.id }),
+          suppression: expect.objectContaining({ id: legacyId, reason: 'accepted legacy fixture finding' }),
+        }),
+      ]);
+    } finally {
+      legacySuppressedDb.close();
     }
   });
 

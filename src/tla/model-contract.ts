@@ -15,7 +15,14 @@ export interface TlaActionMapping {
   reads: string[];
   writes: string[];
   calls: string[];
-  allowUnknown: boolean;
+  waive?: TlaFactWaiver;
+}
+
+export interface TlaFactWaiver {
+  reads: string[];
+  writes: string[];
+  reason: string;
+  legacy?: boolean;
 }
 
 export interface TlaTraceStep {
@@ -244,15 +251,80 @@ function parseActions(
     for (const variable of [...reads, ...writes]) {
       if (!variableNames.has(variable)) errors.push(`actions.${name} references unknown variable: ${variable}`);
     }
+    const waive = parseActionWaiver(
+      value.waive,
+      value.allowUnknown === true,
+      reads,
+      writes,
+      variableNames,
+      name,
+      errors,
+    );
     out[name] = {
       code,
       reads,
       writes,
       calls,
-      allowUnknown: value.allowUnknown === true,
+      ...(waive ? { waive } : {}),
     };
   }
   return out;
+}
+
+function parseActionWaiver(
+  raw: unknown,
+  allowUnknown: boolean,
+  reads: readonly string[],
+  writes: readonly string[],
+  variableNames: ReadonlySet<string>,
+  actionName: string,
+  errors: string[],
+): TlaFactWaiver | undefined {
+  if (isRecord(raw)) {
+    const reason = typeof raw.reason === 'string' ? raw.reason.trim() : '';
+    if (!reason) errors.push(`actions.${actionName}.waive.reason must be a non-empty string`);
+    const waivedReads = stringArray(raw.reads) ?? [];
+    const waivedWrites = stringArray(raw.writes) ?? [];
+    if (waivedReads.length === 0 && waivedWrites.length === 0) {
+      errors.push(`actions.${actionName}.waive must list reads or writes`);
+    }
+    validateWaivedVariables(actionName, 'reads', waivedReads, variableNames, errors);
+    validateWaivedVariables(actionName, 'writes', waivedWrites, variableNames, errors);
+    return {
+      reads: [...new Set(waivedReads)],
+      writes: [...new Set(waivedWrites)],
+      reason,
+    };
+  }
+
+  if (raw !== undefined) {
+    errors.push(`actions.${actionName}.waive must be an object when present`);
+  }
+
+  if (allowUnknown) {
+    return {
+      reads: [...new Set(reads)],
+      writes: [...new Set(writes)],
+      reason: 'legacy allowUnknown',
+      legacy: true,
+    };
+  }
+
+  return undefined;
+}
+
+function validateWaivedVariables(
+  actionName: string,
+  field: 'reads' | 'writes',
+  variables: readonly string[],
+  variableNames: ReadonlySet<string>,
+  errors: string[],
+): void {
+  for (const variable of variables) {
+    if (!variableNames.has(variable)) {
+      errors.push(`actions.${actionName}.waive.${field} references unknown variable: ${variable}`);
+    }
+  }
 }
 
 function parseTlaVariables(text: string): string[] {
@@ -270,6 +342,16 @@ function parseTlaVariables(text: string): string[] {
 function parseTlaOperators(text: string): string[] {
   const names = new Set<string>();
   for (const match of text.matchAll(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:\([^)]*\))?\s*==/gm)) {
+    names.add(match[1]!);
+  }
+  return [...names].sort();
+}
+
+export function readTlaConfigInvariants(configPath: string | null | undefined): string[] {
+  if (!configPath || !existsSync(configPath)) return [];
+  const text = readFileSync(configPath, 'utf8');
+  const names = new Set<string>();
+  for (const match of text.matchAll(/^\s*INVARIANT\s+([A-Za-z_][A-Za-z0-9_]*)/gm)) {
     names.add(match[1]!);
   }
   return [...names].sort();

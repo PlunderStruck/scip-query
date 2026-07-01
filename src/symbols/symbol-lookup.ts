@@ -29,7 +29,7 @@ import {
 } from './symbol-parser.js';
 import { hydrateSymbolMatch, parentTypeName } from './definition-catalog.js';
 import { definitionMentionRows, definitionRangeRows, type SymbolQueryRow } from '../storage/scip-rows.js';
-import type { SymbolLocation, SymbolMatch } from '../domain/types.js';
+import type { SymbolLocation, SymbolMatch, SymbolResolution, SymbolResolutionCandidate } from '../domain/types.js';
 import { mergeMixedSymbolQueryRows } from './symbol-row-policy.js';
 
 // `cleanSignature`, `extractSignature`, and `SymbolQueryRow` live in
@@ -39,34 +39,36 @@ import { mergeMixedSymbolQueryRows } from './symbol-row-policy.js';
 export { cleanSignature, extractSignature, type SymbolQueryRow } from '../storage/scip-rows.js';
 
 export function findFirstSymbolMatch(db: ScipDatabase, symbolPattern: string): SymbolMatch | null {
-  const exact = findExactSymbolMatch(db, symbolPattern.trim());
-  if (exact) {
-    return exact;
-  }
-
-  const fileLine = findFileLineSymbolMatch(db, symbolPattern);
-  if (fileLine) {
-    return fileLine;
-  }
-
-  const pathQualified = findPathQualifiedSymbolMatch(db, symbolPattern);
-  if (pathQualified) {
-    return pathQualified;
-  }
-
-  return findBestFuzzySymbolMatch(db, symbolPattern);
+  return resolveSymbol(db, symbolPattern).match;
 }
 
-function findPathQualifiedSymbolMatch(db: ScipDatabase, symbolPattern: string): SymbolMatch | null {
+export function resolveSymbol(db: ScipDatabase, symbolPattern: string): SymbolResolution {
+  const exactRows = exactSymbolRows(db, symbolPattern.trim()).filter((row) => !db.isIgnored(row.relative_path));
+  if (exactRows.length > 0) {
+    return resolutionFromRows(db, exactRows);
+  }
+
+  const fileLineRow = findFileLineSymbolRow(db, symbolPattern);
+  if (fileLineRow && !db.isIgnored(fileLineRow.relative_path)) {
+    return resolutionFromRows(db, [fileLineRow]);
+  }
+
+  const pathQualifiedRows = pathQualifiedSymbolRows(db, symbolPattern);
+  if (pathQualifiedRows.length > 0) {
+    return resolutionFromRows(db, pathQualifiedRows);
+  }
+
+  return fuzzySymbolResolution(db, symbolPattern);
+}
+
+function pathQualifiedSymbolRows(db: ScipDatabase, symbolPattern: string): SymbolQueryRow[] {
   const cleaned = normalizeLookupPattern(symbolPattern);
   const pathLeaf = pathQualifiedLookup(cleaned);
-  if (!pathLeaf) return null;
+  if (!pathLeaf) return [];
 
   const pathLike = `%${pathLeaf.path}%`;
   const leaf = pathLeaf.leaf;
-  const candidates = pathQualifiedCandidates(db, pathLike, leaf, cleaned);
-  const best = candidates[0];
-  return best ? hydrateSymbolMatch(db, best) : null;
+  return pathQualifiedCandidates(db, pathLike, leaf, cleaned);
 }
 
 function pathQualifiedCandidates(
@@ -106,54 +108,85 @@ function pathQualifiedFallbackRows(db: ScipDatabase, pathLike: string, leaf: str
   });
 }
 
-// scip-query: ignore-extract — this is the fuzzy symbol lookup policy:
-// direct lookup, token scoring, ignore filtering, and deterministic tie-breaks
-// are one ranked search operation.
-function findBestFuzzySymbolMatch(db: ScipDatabase, symbolPattern: string): SymbolMatch | null {
+function fuzzySymbolResolution(db: ScipDatabase, symbolPattern: string): SymbolResolution {
   const cleaned = normalizeLookupPattern(symbolPattern);
   const tokens = lookupTokens(symbolPattern);
   const candidates = getSymbolLookupCandidates(db, tokens);
-  const direct = findDirectSymbolCandidate(candidates, symbolPattern, cleaned);
-  if (direct && !db.isIgnored(direct.relative_path)) {
-    return hydrateSymbolMatch(db, direct);
+  const directRows = findDirectSymbolCandidates(candidates, symbolPattern, cleaned).filter(
+    (row) => !db.isIgnored(row.relative_path),
+  );
+  if (directRows.length > 0) {
+    return resolutionFromRows(db, directRows);
   }
 
-  let best: {
+  const scored: Array<{
     row: SymbolQueryRow;
     score: number;
-  } | null = null;
+  }> = [];
 
   for (const row of candidates) {
     if (db.isIgnored(row.relative_path)) continue;
 
     const score = scoreSymbolCandidate(row, symbolPattern, cleaned, tokens);
     if (score <= 0) continue;
-
-    if (!best || score > best.score) {
-      best = { row, score };
-    }
+    scored.push({ row, score });
   }
 
-  if (best) {
-    return hydrateSymbolMatch(db, best.row);
-  }
+  scored.sort(
+    (left, right) =>
+      right.score - left.score ||
+      left.row.end_line - left.row.start_line - (right.row.end_line - right.row.start_line) ||
+      left.row.relative_path.localeCompare(right.row.relative_path) ||
+      left.row.symbol.localeCompare(right.row.symbol),
+  );
 
-  return null;
+  return resolutionFromRows(
+    db,
+    scored.map((entry) => entry.row),
+  );
 }
 
-function findFileLineSymbolMatch(db: ScipDatabase, symbolPattern: string): SymbolMatch | null {
+function resolutionFromRows(db: ScipDatabase, rows: SymbolQueryRow[]): SymbolResolution {
+  const hydrated = rows.map((row) => hydrateSymbolMatch(db, row));
+  const match = hydrated[0] ?? null;
+  return {
+    match,
+    candidates: match ? alternateCandidates(hydrated, match) : [],
+    total: hydrated.length,
+  };
+}
+
+function alternateCandidates(hydrated: SymbolMatch[], match: SymbolMatch): SymbolResolutionCandidate[] {
+  const seen = new Set<string>([`${match.symbolId}:${match.relativePath}:${match.startLine}`]);
+  const candidates: SymbolResolutionCandidate[] = [];
+  for (const candidate of hydrated) {
+    const key = `${candidate.symbolId}:${candidate.relativePath}:${candidate.startLine}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    candidates.push({
+      symbol: candidate.symbol,
+      shortName: shortenSymbol(candidate.symbol),
+      relativePath: candidate.relativePath,
+      startLine: candidate.startLine,
+    });
+    if (candidates.length >= 5) break;
+  }
+  return candidates;
+}
+
+function findFileLineSymbolRow(db: ScipDatabase, symbolPattern: string): SymbolQueryRow | undefined {
   const fileLineMatch = symbolPattern.match(/^(.+):(\d+)-(\d+)$/);
   if (!fileLineMatch) {
-    return null;
+    return undefined;
   }
 
   const [, filePath, startStr, endStr] = fileLineMatch;
   const userStart0 = Math.max(0, parseInt(startStr!, 10) - 1);
   const userEnd0 = Math.max(userStart0, parseInt(endStr!, 10) - 1);
-  const row =
+  return (
     findDefinitionRangeRow(db, filePath!, userStart0, userEnd0) ??
-    findDefinitionChunkRow(db, filePath!, userStart0, userEnd0);
-  return row && !db.isIgnored(row.relative_path) ? hydrateSymbolMatch(db, row) : null;
+    findDefinitionChunkRow(db, filePath!, userStart0, userEnd0)
+  );
 }
 
 function findDefinitionRangeRow(
@@ -185,27 +218,27 @@ function findDefinitionChunkRow(
 }
 
 export function findExactSymbolMatch(db: ScipDatabase, symbol: string): SymbolMatch | null {
+  const row = exactSymbolRows(db, symbol).find((candidate) => !db.isIgnored(candidate.relative_path));
+
+  return row ? hydrateSymbolMatch(db, row) : null;
+}
+
+function exactSymbolRows(db: ScipDatabase, symbol: string): SymbolQueryRow[] {
   const primary = definitionRangeRows(db, {
     where: 'gs.symbol = ?',
     params: [symbol],
     orderBy: 'd.relative_path, der.start_line',
-    limit: 1,
-  })[0];
+  });
 
-  const row =
-    primary ??
-    definitionMentionRows(db, {
-      where: 'gs.symbol = ?',
-      params: [symbol],
-      orderBy: 'd.relative_path, start_line',
-      limit: 1,
-    })[0];
-
-  if (!row || db.isIgnored(row.relative_path)) {
-    return null;
-  }
-
-  return hydrateSymbolMatch(db, row);
+  const fallback =
+    primary.length > 0
+      ? []
+      : definitionMentionRows(db, {
+          where: 'gs.symbol = ?',
+          params: [symbol],
+          orderBy: 'd.relative_path, start_line',
+        });
+  return mergeMixedSymbolQueryRows(primary, fallback);
 }
 
 export function getFullSymbolMatch(db: ScipDatabase, symbol: SymbolLocation): SymbolMatch | null {
@@ -362,6 +395,14 @@ export function findDirectSymbolCandidate(
   symbolPattern: string,
   cleanedPattern: string,
 ): SymbolQueryRow | null {
+  return findDirectSymbolCandidates(candidates, symbolPattern, cleanedPattern)[0] ?? null;
+}
+
+function findDirectSymbolCandidates(
+  candidates: SymbolQueryRow[],
+  symbolPattern: string,
+  cleanedPattern: string,
+): SymbolQueryRow[] {
   const trimmed = symbolPattern.trim();
   const directMatches = candidates.filter((row) => {
     const short = shortenSymbol(row.symbol);
@@ -379,7 +420,7 @@ export function findDirectSymbolCandidate(
   });
 
   if (directMatches.length === 0) {
-    return null;
+    return [];
   }
 
   directMatches.sort(
@@ -389,7 +430,7 @@ export function findDirectSymbolCandidate(
       left.relative_path.localeCompare(right.relative_path) ||
       left.symbol.localeCompare(right.symbol),
   );
-  return directMatches[0] ?? null;
+  return directMatches;
 }
 
 function pathQualifiedDirectScore(row: SymbolQueryRow, cleanedPattern: string): number {
@@ -403,6 +444,59 @@ function pathQualifiedDirectScore(row: SymbolQueryRow, cleanedPattern: string): 
   if (leaf !== requestedLeaf) return 1;
   if (isCallableSymbol(row.symbol)) return parentTypeName(row.symbol) === null ? 5 : 4;
   return parentTypeName(row.symbol) === null ? 3 : 2;
+}
+
+export function nearestSymbolNames(db: ScipDatabase, symbolPattern: string, limit = 5): string[] {
+  const normalized = normalizeNameForDistance(symbolPattern);
+  if (!normalized) return [];
+
+  const rows = definitionRangeRows(db, {
+    where: '1 = 1',
+    orderBy: 'd.relative_path, der.start_line',
+    limit: 5000,
+  });
+
+  const byName = new Map<string, { shortName: string; distance: number }>();
+  for (const row of rows) {
+    if (db.isIgnored(row.relative_path)) continue;
+    const shortName = shortenSymbol(row.symbol);
+    const leaf = leafName(row.symbol);
+    const display = row.display_name ?? leaf;
+    const candidateNames = [shortName, leaf, display].filter((value) => value.trim().length > 0);
+    const distance = Math.min(...candidateNames.map((name) => levenshtein(normalizeNameForDistance(name), normalized)));
+    const existing = byName.get(shortName);
+    if (!existing || distance < existing.distance) {
+      byName.set(shortName, { shortName, distance });
+    }
+  }
+
+  return [...byName.values()]
+    .sort((left, right) => left.distance - right.distance || left.shortName.localeCompare(right.shortName))
+    .slice(0, limit)
+    .map((entry) => entry.shortName);
+}
+
+function normalizeNameForDistance(value: string): string {
+  return normalizeLookupPattern(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '');
+}
+
+function levenshtein(left: string, right: string): number {
+  if (left === right) return 0;
+  if (left.length === 0) return right.length;
+  if (right.length === 0) return left.length;
+
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let i = 0; i < left.length; i++) {
+    const current = [i + 1];
+    for (let j = 0; j < right.length; j++) {
+      const cost = left[i] === right[j] ? 0 : 1;
+      current[j + 1] = Math.min(current[j]! + 1, previous[j + 1]! + 1, previous[j]! + cost);
+    }
+    previous = current;
+  }
+  return previous[right.length]!;
 }
 
 // `hydrateSymbolMatch` lives in definition-catalog.ts (it's catalog work

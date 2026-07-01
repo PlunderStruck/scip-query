@@ -118,7 +118,11 @@
     {
       "name": "agent skill documentation family",
       "reason": "Bundled agent skills share guidance and examples when the agent workflow surface changes.",
-      "files": ["skills/concrete-plan/SKILL.md", "skills/scip-debloat/SKILL.md"]
+      "files": [
+        "skills/concrete-plan/SKILL.md",
+        "skills/scip-cleanup-audit/SKILL.md",
+        "skills/scip-cleanup-improve/SKILL.md"
+      ]
     },
     {
       "name": "runtime command dispatch",

@@ -87,15 +87,10 @@ export function getDefinitionsForFile(db: ScipDatabase, relativePath: string): I
     const projectFingerprint = projectEvidenceFingerprint(db);
     const source = sourceEvidence(db).forFile(relativePath, { text: true }).text;
     if (projectFingerprint && source) {
-      FILE_DEFINITIONS_PRODUCT.write(
-        db,
-        relativePath,
-        fileContentHash(db, relativePath, source),
-        {
-          projectFingerprint,
-          definitions: definitions.map((definition) => ({ ...definition })),
-        },
-      );
+      FILE_DEFINITIONS_PRODUCT.write(db, relativePath, fileContentHash(db, relativePath, source), {
+        projectFingerprint,
+        definitions: definitions.map((definition) => ({ ...definition })),
+      });
     }
     return definitions;
   });

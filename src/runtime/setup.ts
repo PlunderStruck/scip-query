@@ -1,25 +1,22 @@
-import { existsSync, mkdirSync, symlinkSync, readlinkSync, unlinkSync } from 'node:fs';
-import { join, dirname, resolve } from 'node:path';
+import { existsSync, mkdirSync, symlinkSync, readlinkSync, unlinkSync, readdirSync } from 'node:fs';
+import { join, dirname, resolve, relative, isAbsolute } from 'node:path';
 import { homedir, platform } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { getScipVersion, isScipInstalled, printScipInstallInstructions, tryInstallScipCli } from './scip-cli.js';
 
 const IS_WINDOWS = platform() === 'win32';
 export const BUILTIN_SKILLS = [
+  '_shared',
   'scip-query',
-  'scip-query-setup',
-  'scip-adoption',
-  'scip-health-audit',
-  'scip-health-improve',
+  'scip-setup',
+  'scip-cleanup-audit',
+  'scip-cleanup-improve',
   'scip-hyper-optimization',
   'scip-api-impact',
   'concrete-plan',
-  'scip-ai-cleanup',
   'scip-debug',
   'scip-explore',
   'scip-triage-issue',
   'scip-diagram',
-  'scip-debloat',
   'scip-doc-reconcile',
   'scip-directory-architecture',
   'scip-maintainability',
@@ -35,6 +32,13 @@ export interface InstallSkillsResult {
   installed: string[];
   skipped: string[];
   alreadyLinked: string[];
+  pruned: string[];
+}
+
+export interface UninstallSkillsResult {
+  removed: string[];
+  left: string[];
+  skipped: string[];
 }
 
 /**
@@ -58,6 +62,7 @@ export function installSkills(opts: { quiet?: boolean } = {}): InstallSkillsResu
     installed: [],
     skipped: [],
     alreadyLinked: [],
+    pruned: [],
   };
 
   for (const targetDir of targets) {
@@ -69,6 +74,7 @@ export function installSkills(opts: { quiet?: boolean } = {}): InstallSkillsResu
 
     mkdirSync(targetDir, { recursive: true });
     const toolName = toolNameForTarget(targetDir);
+    pruneStaleOwnedSkillLinks(targetDir, skillsSource, toolName, result, log);
 
     for (const skill of BUILTIN_SKILLS) {
       const source = join(skillsSource, skill);
@@ -106,6 +112,73 @@ export function installSkills(opts: { quiet?: boolean } = {}): InstallSkillsResu
   return result;
 }
 
+function pruneStaleOwnedSkillLinks(
+  targetDir: string,
+  skillsSource: string,
+  toolName: string,
+  result: InstallSkillsResult,
+  log: (message: string) => void,
+): void {
+  const shipped = new Set<string>(BUILTIN_SKILLS);
+  for (const entry of readdirSync(targetDir)) {
+    if (shipped.has(entry)) continue;
+    const target = join(targetDir, entry);
+    let resolvedTarget: string;
+    try {
+      resolvedTarget = resolve(dirname(target), readlinkSync(target));
+    } catch {
+      continue;
+    }
+    if (!isPathInside(resolvedTarget, skillsSource)) continue;
+    unlinkSync(target);
+    result.pruned.push(`${toolName}/${entry}`);
+    log(`  prune: ${entry} → ${toolName} (removed stale scip-query skill link)`);
+  }
+}
+
+export function uninstallSkills(opts: { dryRun?: boolean; homeDir?: string } = {}): UninstallSkillsResult {
+  const thisFile = fileURLToPath(import.meta.url);
+  const skillsSource = resolve(dirname(thisFile), '..', 'skills');
+  const home = opts.homeDir ?? homedir();
+  const targets = [join(home, '.claude', 'skills'), join(home, '.codex', 'skills'), join(home, '.agents', 'skills')];
+  const result: UninstallSkillsResult = { removed: [], left: [], skipped: [] };
+
+  for (const targetDir of targets) {
+    if (!existsSync(targetDir)) continue;
+    const toolName = toolNameForTarget(targetDir);
+    for (const entry of readdirSync(targetDir)) {
+      const target = join(targetDir, entry);
+      let resolvedTarget: string;
+      try {
+        const linkTarget = readlinkSync(target);
+        resolvedTarget = resolve(dirname(target), linkTarget);
+      } catch {
+        result.left.push(`${toolName}/${entry} (not a symlink)`);
+        continue;
+      }
+      if (!isPathInside(resolvedTarget, skillsSource)) {
+        result.left.push(`${toolName}/${entry} (symlink outside scip-query package)`);
+        continue;
+      }
+      result.removed.push(`${toolName}/${entry}`);
+      if (!opts.dryRun) {
+        try {
+          unlinkSync(target);
+        } catch (error) {
+          result.skipped.push(`${toolName}/${entry} (${error instanceof Error ? error.message : String(error)})`);
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+function isPathInside(path: string, parent: string): boolean {
+  const rel = relative(resolve(parent), resolve(path));
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
+
 function toolNameForTarget(targetDir: string): string {
   if (targetDir.includes('.codex')) return 'Codex';
   if (targetDir.includes('.agents')) return 'Agents';
@@ -115,31 +188,11 @@ function toolNameForTarget(targetDir: string): string {
 // ── First-Run Setup ────────────────────────────────────────
 
 /**
- * Run first-time setup: install skills and check for scip binary.
+ * Print first-time setup guidance.
  * Called from the postinstall script.
  */
 export function postinstall(): void {
-  console.log('scip-query: installing skills...');
-  const result = installSkills({ quiet: false });
-
-  const total = result.installed.length + result.alreadyLinked.length;
-  if (total > 0) {
-    console.log(`\n${result.installed.length} skill(s) installed, ${result.alreadyLinked.length} already linked.`);
-  }
-
-  // Check for scip binary — auto-install if missing
-  if (!isScipInstalled()) {
-    console.log('\nscip CLI not found on PATH. Attempting auto-install...');
-    const installed = tryInstallScipCli(console.log);
-    if (!installed) {
-      printScipInstallInstructions();
-    }
-  } else {
-    const version = getScipVersion();
-    console.log(`\nscip CLI: ${version ?? 'installed'}`);
-  }
-
-  console.log('');
+  console.log("scip-query installed -- run 'scip-query setup' in a repo to enable skills, hooks, and the index.");
 }
 
 export { isScipInstalled, getScipVersion, printScipInstallInstructions } from './scip-cli.js';

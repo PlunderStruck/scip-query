@@ -1,4 +1,5 @@
 import type { CommandDescriptor } from './command-descriptor-types.js';
+import type { CommandEvidenceTier } from './command-descriptor-types.js';
 
 export interface CommandDocEntry {
   id: string;
@@ -8,6 +9,7 @@ export interface CommandDocEntry {
   options: readonly string[];
   hidden: boolean;
   heuristic: boolean;
+  evidence: CommandEvidenceTier;
 }
 
 export function commandDocEntries(descriptors: readonly CommandDescriptor[]): CommandDocEntry[] {
@@ -21,8 +23,17 @@ export function commandDocEntries(descriptors: readonly CommandDescriptor[]): Co
       options: (descriptor.options ?? []).map((option) => option.flags),
       hidden: Boolean(descriptor.hidden),
       heuristic: Boolean(descriptor.heuristic),
+      evidence: descriptorEvidenceTier(descriptor),
     }));
 }
+
+function descriptorEvidenceTier(descriptor: CommandDescriptor): CommandEvidenceTier {
+  if (descriptor.evidence) return descriptor.evidence;
+  if (MIXED_EVIDENCE_COMMANDS.has(descriptor.id)) return 'mixed';
+  return descriptor.heuristic ? 'heuristic' : 'graph-fact';
+}
+
+const MIXED_EVIDENCE_COMMANDS = new Set(['diff-gate', 'health', 'plan-context', 'co-change']);
 
 // scip-query: ignore-extract — the generated-reference renderer is one
 // formatting pipeline; its sections have no other consumers.

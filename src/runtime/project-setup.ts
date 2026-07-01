@@ -103,6 +103,8 @@ export interface ProjectSetupReport {
 
 export interface ProjectSetupOptions {
   gitHook?: boolean;
+  noHooks?: boolean;
+  dossierDir?: string;
 }
 
 // scip-query: ignore-extract - setup is a user-facing workflow transcript; the sequence is the behavior.
@@ -123,8 +125,8 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     id: 'skills',
     label: 'Agent skills',
     status: skills.skipped.length > 0 ? 'warn' : 'ok',
-    message: `${skills.installed.length} installed, ${skills.alreadyLinked.length} already linked, ${skills.skipped.length} skipped.`,
-    details: skills.skipped.map((entry) => `Skipped ${entry}`),
+    message: `${skills.installed.length} installed, ${skills.alreadyLinked.length} already linked, ${skills.pruned.length} pruned, ${skills.skipped.length} skipped.`,
+    details: [...skills.pruned.map((entry) => `Pruned ${entry}`), ...skills.skipped.map((entry) => `Skipped ${entry}`)],
   });
 
   const configDiagnostics = validateProjectConfig(config, { projectRoot });
@@ -242,17 +244,26 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
 
   let hooksResult: SetupHooksResult | null = null;
   try {
-    hooksResult = installProjectAgentHooks(projectRoot);
-    addStep(steps, {
-      id: 'project-hooks',
-      label: 'Project agent hooks',
-      status: hooksResult.skipped.length > 0 ? 'warn' : 'ok',
-      message: `${hooksResult.installed.length} installed, ${hooksResult.updated.length} updated, ${hooksResult.unchanged.length} already configured, ${hooksResult.removed.length} legacy user hook config(s) cleaned up, ${hooksResult.skipped.length} skipped.`,
-      details: [
-        ...hooksResult.removed.map((entry) => `Removed legacy user-level ${entry}`),
-        ...hooksResult.skipped.map((entry) => `Skipped ${entry.target}: ${entry.reason}`),
-      ],
-    });
+    if (opts.noHooks) {
+      addStep(steps, {
+        id: 'project-hooks',
+        label: 'Project agent hooks',
+        status: 'skipped',
+        message: 'Skipped by --no-hooks.',
+      });
+    } else {
+      hooksResult = installProjectAgentHooks(projectRoot);
+      addStep(steps, {
+        id: 'project-hooks',
+        label: 'Project agent hooks',
+        status: hooksResult.skipped.length > 0 ? 'warn' : 'ok',
+        message: `${hooksResult.installed.length} installed, ${hooksResult.updated.length} updated, ${hooksResult.unchanged.length} already configured, ${hooksResult.removed.length} hook config(s) cleaned up, ${hooksResult.skipped.length} skipped.`,
+        details: [
+          ...hooksResult.removed.map((entry) => `Removed ${entry}`),
+          ...hooksResult.skipped.map((entry) => `Skipped ${entry.target}: ${entry.reason}`),
+        ],
+      });
+    }
   } catch (error) {
     addStep(steps, {
       id: 'project-hooks',
@@ -322,7 +333,7 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     verdict: setupVerdict(steps, readiness),
   };
 
-  const healthDossier = writeProjectHealthDossier(report);
+  const healthDossier = writeProjectHealthDossier(report, { dossierDir: opts.dossierDir });
   report.healthDossier = healthDossier;
   report.filesWritten = [...report.filesWritten, ...healthDossier.written];
   addStep(steps, {
@@ -695,7 +706,7 @@ function projectSetupIssue(action: HealthAction): ProjectSetupIssue {
     confirmationStatus: 'unconfirmed',
     safeForAgentToStart: false,
     recommendedNextStep:
-      'Run scip-health-audit to confirm this signal; use scip-health-improve when the user wants confirmed issues fixed autonomously.',
+      'Run scip-cleanup-audit to confirm this signal; use scip-cleanup-improve when the user wants confirmed issues fixed autonomously.',
   };
 }
 

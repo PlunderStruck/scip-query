@@ -21,7 +21,9 @@ contradict each other.
 
 **The detector:** `recent-duplicates` makes similarity *directional* using git
 file ages - which side is the established original, which is the freshly-added
-echo:
+echo.
+
+Illustrative output:
 
 ```
 91%  ECHO  react-component  src/components/ProjectCardVisual.tsx  ProjectCardVisual  (added 62 commits ago)
@@ -135,7 +137,9 @@ is worse than none.
 
 **The detector:** `doc-drift` reads every doc's file citations *and* its
 co-change history, and flags docs whose referenced code kept changing after
-the doc stopped — including broken references to files that no longer exist:
+the doc stopped — including broken references to files that no longer exist.
+
+Illustrative output:
 
 ```
 staleness 94  product/domain-model.md
@@ -183,7 +187,9 @@ safe to remove.
 deleting batch 0 makes batch 1 dead, and the plan shows the cascade. Then
 `--verify` applies each batch in a throwaway git worktree and runs **your own
 compiler** (tsc, cargo, go, python oracles — differentially, so pre-existing
-errors don't drown the signal):
+errors don't drown the signal).
+
+Illustrative output:
 
 ```
 ── Batch 0: deletable now (graph-fact, 67 LOC) ──
@@ -248,12 +254,14 @@ The detectors only help if they run. Three layers, in increasing strength:
 bundled skills into `~/.agents/skills/`, `~/.claude/skills/`, and
 `~/.codex/skills/` — they update automatically with the package. Project setup
 writes reviewable repo-local hooks to `.codex/hooks.json` and
-`.claude/settings.json`, unless `SCIP_QUERY_SKIP_HOOK_INSTALL=1` is set. The
-hooks add scip-query context at session start, route prompts toward the right
-specialist, and run a safe Stop hook wrapper around the diff gate only for that
-repository. The Stop hook warns by default instead of blocking the agent; set
-`SCIP_QUERY_STOP_HOOK_MODE=feedback` to ask the agent to continue without a
-hook error, or `SCIP_QUERY_STOP_HOOK_MODE=block` to enforce the gate. Run
+`.claude/settings.local.json` by default; `setup-hooks --shared` opts into the
+tracked `.claude/settings.json`. Set `SCIP_QUERY_SKIP_HOOK_INSTALL=1` or run
+`scip-query setup --no-hooks` to skip lifecycle hook setup. The hooks add
+scip-query context at session start, route prompts toward the right specialist,
+and run a safe Stop hook wrapper around the diff gate only for that repository.
+The Stop hook sends feedback to the agent by default; set
+`SCIP_QUERY_STOP_HOOK_MODE=warn` for warning-only output or
+`SCIP_QUERY_STOP_HOOK_MODE=block` to enforce the gate. Run
 `scip-query setup-hooks --json` to repair the current repo's hooks.
 
 **2. Project setup and guidance.** Run once per project:
@@ -268,16 +276,29 @@ commands, writes `docs/scip-query/health-dossier.md` and `.json`, reports the
 health score and items needing attention, and seeds a managed block in
 `AGENTS.md` plus a `CLAUDE.md` import shim.
 
-After setup, use `scip-health-audit` to confirm raw signals and
-`scip-health-improve` when the user wants the agent to fix the worst confirmed
+After setup, use `scip-cleanup-audit` to confirm raw signals and
+`scip-cleanup-improve` when the user wants the agent to fix the worst confirmed
 items until the health score is as high as reasonably possible.
 
 **3. The gate (enforcement).**
 
 ```bash
-scip-query diff-gate --json          # one command, every check above, scoped to the diff, exit 1 on findings
+scip-query diff-gate --json          # default diff-scoped checks, exit 1 on findings
+scip-query diff-gate --json --baseline  # include the health-baseline ratchet
 scip-query setup-agent --git-hook    # pre-commit backstop: fires whoever wrote the diff
 ```
+
+<!-- BEGIN GENERATED DIFF-GATE CHECKS -->
+| Check | What it catches | When it runs |
+| --- | --- | --- |
+| `echo` | Changed symbols that newly echo established code elsewhere. | Default diff gate. |
+| `incomplete-migration` | New helpers or abstractions wired into some sites while older inline sites remain. | Default diff gate. |
+| `co-change-partner` | Historically coupled files that usually change together but are missing from this diff. | Default diff gate. |
+| `doc-reference` | Docs that cite changed files and may need a matching update. | Default diff gate. |
+| `unused-params` | Fresh trailing parameters or options that no changed body uses. | Default diff gate. |
+| `new-dead` | Changed production symbols with zero indexed consumers. | Default diff gate. |
+| `baseline` | New health finding identities compared with the committed health baseline. | Only with `diff-gate --baseline`. |
+<!-- END GENERATED DIFF-GATE CHECKS -->
 
 Every finding ships with a remediation an agent can act on without human
 triage. The installed Codex/Claude Stop hook uses the same diff-gate evidence,

@@ -19,6 +19,8 @@ export function listQueryCommand<Row>({
   format,
   emptyMessage,
   heuristicLabel,
+  before,
+  toJson,
   after,
   ...metadata
 }: QueryCommandMetadata & Parameters<typeof listCommand<Row>>[0]): CommandDescriptor {
@@ -26,7 +28,16 @@ export function listQueryCommand<Row>({
   return {
     ...commandMetadata,
     renderShape: 'list',
-    handler: listCommand({ commandName: commandMetadata.id, query, format, emptyMessage, heuristicLabel, after }),
+    handler: listCommand({
+      commandName: commandMetadata.id,
+      query,
+      format,
+      emptyMessage,
+      heuristicLabel,
+      before,
+      toJson,
+      after,
+    }),
   };
 }
 
@@ -35,6 +46,8 @@ export function tableQueryCommand<Row>({
   format,
   emptyMessage,
   heuristicLabel,
+  before,
+  toJson,
   after,
   headers,
   dashWidths,
@@ -50,6 +63,8 @@ export function tableQueryCommand<Row>({
       format,
       emptyMessage,
       heuristicLabel,
+      before,
+      toJson,
       after,
       headers,
       dashWidths,
@@ -62,6 +77,8 @@ export function groupedQueryCommand<Row>({
   format,
   emptyMessage,
   heuristicLabel,
+  before,
+  toJson,
   after,
   key,
   ...metadata
@@ -76,6 +93,8 @@ export function groupedQueryCommand<Row>({
       format,
       emptyMessage,
       heuristicLabel,
+      before,
+      toJson,
       after,
       key,
     }),
@@ -88,6 +107,7 @@ export function sectionedQueryCommand<Result>({
   heuristicLabel,
   sections,
   before,
+  toJson,
   after,
   ...metadata
 }: QueryCommandMetadata & Parameters<typeof sectionedReportCommand<Result>>[0]): CommandDescriptor {
@@ -102,6 +122,7 @@ export function sectionedQueryCommand<Result>({
       heuristicLabel,
       before,
       sections,
+      toJson,
       after,
     }),
   };
@@ -113,6 +134,7 @@ export function budgetedSectionedQueryCommand<Result>({
   heuristicLabel,
   sections,
   before,
+  toJson,
   after,
   ...metadata
 }: QueryCommandMetadata & Parameters<typeof budgetedSectionedReportCommand<Result>>[1]): CommandDescriptor {
@@ -128,6 +150,7 @@ export function budgetedSectionedQueryCommand<Result>({
       heuristicLabel,
       before,
       sections,
+      toJson,
       after,
     }),
   };

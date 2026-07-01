@@ -74,10 +74,7 @@ export function consumerEvidenceProduct(db: ScipDatabase, index: ProjectIndex): 
 export function consumerFileMapFromEvidence(evidence: DefinitionConsumerEvidenceMap): Map<number, Set<string>> {
   const result = new Map<number, Set<string>>();
   for (const [symbolId, entry] of evidence) {
-    result.set(
-      symbolId,
-      new Set(entry.files.map((fileEvidence) => fileEvidence.file)),
-    );
+    result.set(symbolId, new Set(entry.files.map((fileEvidence) => fileEvidence.file)));
   }
   return result;
 }
@@ -108,7 +105,8 @@ function buildDefinitionConsumerEvidence(
       const result: DefinitionConsumerEvidenceMap = new Map();
       counters = { ...counters, ...provenance.counters };
       for (const definition of definitions) {
-        const fileSources = provenance.sources.get(definition.symbolId) ?? new Map<string, Set<DefinitionConsumerSource>>();
+        const fileSources =
+          provenance.sources.get(definition.symbolId) ?? new Map<string, Set<DefinitionConsumerSource>>();
         const classified = classifyDefinitionConsumers(db, definition, [...fileSources.keys()], fileSources);
         counters.realFiles += classified.partition.realConsumers.length;
         counters.reexportOnlyFiles += classified.partition.barrelConsumers;
@@ -246,11 +244,7 @@ export function isImportOnlyConsumer(db: ScipDatabase, consumerFile: string, lea
 
 // scip-query: ignore-passthrough — cache lifecycle hook for consumer
 // classification; callers should not know the FILE_USAGE_CACHE key or shape.
-function computeFileLeafUsage(
-  db: ScipDatabase,
-  file: string,
-  lang: string,
-): FileLeafUsage {
+function computeFileLeafUsage(db: ScipDatabase, file: string, lang: string): FileLeafUsage {
   const evidence = sourceEvidence(db).forFile(file, { text: true, ast: true });
   const source = evidence.text;
   if (!source) return emptyFileLeafUsage();

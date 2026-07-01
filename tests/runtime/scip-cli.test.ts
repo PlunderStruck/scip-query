@@ -100,7 +100,7 @@ describe('scip CLI helpers', () => {
 
     expect(log.mock.calls.flat().join('\n')).toContain('brew install sourcegraph/scip/scip');
     expect(log.mock.calls.flat().join('\n')).toContain('scip-darwin-arm64.tar.gz');
-    expect(log.mock.calls.flat().join('\n')).toContain('https://github.com/scip-code/scip/releases/download/v0.8.1/');
+    expect(log.mock.calls.flat().join('\n')).toContain('https://github.com/sourcegraph/scip/releases/download/v0.8.1/');
   });
 
   it('uses the managed Windows scip binary when scip is not on PATH', async () => {
@@ -145,7 +145,7 @@ describe('scip CLI helpers', () => {
     const output = log.mock.calls.flat().join('\n');
     expect(output).toContain('Windows installs should include a managed scip.exe');
     expect(output).toContain('npm run build:scip-windows');
-    expect(output).toContain('https://github.com/scip-code/scip/releases/tag/v0.8.1');
+    expect(output).toContain('https://github.com/sourcegraph/scip/releases/tag/v0.8.1');
     expect(output).not.toContain('scip-windows-amd64.zip');
   });
 
@@ -194,10 +194,10 @@ describe('scip CLI helpers', () => {
     const status: string[] = [];
     expect(tryInstallScipCli((message) => status.push(message))).toBe(false);
     expect(status).toContain('Could not auto-install scip CLI.');
-    expect(status).toContain('Install manually from: https://github.com/scip-code/scip/releases');
+    expect(status).toContain('Install manually from: https://github.com/sourcegraph/scip/releases');
   });
 
-  it('keeps postinstall as orchestration around the shared scip helpers', async () => {
+  it('keeps postinstall side-effect free', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const scipHelpers = {
       isScipInstalled: vi.fn(() => false),
@@ -224,9 +224,11 @@ describe('scip CLI helpers', () => {
     const { postinstall } = await import('../../src/runtime/setup.js');
     postinstall();
 
-    expect(scipHelpers.isScipInstalled).toHaveBeenCalled();
-    expect(scipHelpers.tryInstallScipCli).toHaveBeenCalledWith(expect.any(Function));
-    expect(scipHelpers.printScipInstallInstructions).toHaveBeenCalled();
-    expect(log.mock.calls.flat().join('\n')).toContain('scip CLI not found on PATH. Attempting auto-install...');
+    expect(scipHelpers.isScipInstalled).not.toHaveBeenCalled();
+    expect(scipHelpers.tryInstallScipCli).not.toHaveBeenCalled();
+    expect(scipHelpers.printScipInstallInstructions).not.toHaveBeenCalled();
+    expect(log.mock.calls.flat().join('\n')).toContain(
+      "scip-query installed -- run 'scip-query setup' in a repo to enable skills, hooks, and the index.",
+    );
   });
 });

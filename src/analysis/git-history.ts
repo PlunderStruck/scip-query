@@ -382,8 +382,8 @@ function loadFileAddRecords(projectRoot: string): Map<string, FileAddRecord> | n
     raw = runGit(projectRoot, [
       'log',
       '--no-merges',
-      '--diff-filter=A',
-      '--name-only',
+      '--find-renames',
+      '--name-status',
       '-n',
       String(MAX_COMMITS),
       '--pretty=format:%x01%H%x00%ct%x00%s',
@@ -392,6 +392,7 @@ function loadFileAddRecords(projectRoot: string): Map<string, FileAddRecord> | n
     return null;
   }
   const adds = new Map<string, FileAddRecord>();
+  const currentAliasesByHistoricPath = new Map<string, Set<string>>();
   let commitsAgo = -1;
   for (const block of raw.split('\x01')) {
     if (block.trim() === '') continue;
@@ -402,13 +403,37 @@ function loadFileAddRecords(projectRoot: string): Map<string, FileAddRecord> | n
     const addedAt = Number(timestampRaw) || 0;
     if (newline < 0) continue;
     for (const line of block.slice(newline + 1).split('\n')) {
-      const file = line.trim();
-      if (file === '') continue;
+      const record = parseNameStatusRecord(line);
+      if (!record) continue;
+      if (record.status === 'R' && record.from && record.to) {
+        const currentAliases = currentAliasesByHistoricPath.get(record.to) ?? new Set([record.to]);
+        currentAliasesByHistoricPath.set(record.from, currentAliases);
+        continue;
+      }
+      if (record.status !== 'A' || !record.to) continue;
       // Newest-first walk: keep the OLDEST add we see (re-adds overwrite).
-      adds.set(file, { commitsAgo, addedAt });
+      const addRecord = { commitsAgo, addedAt };
+      adds.set(record.to, addRecord);
+      for (const alias of currentAliasesByHistoricPath.get(record.to) ?? []) {
+        adds.set(alias, addRecord);
+      }
     }
   }
   return adds;
+}
+
+function parseNameStatusRecord(line: string): { status: string; from?: string; to?: string } | null {
+  const parts = line.trim().split('\t');
+  const rawStatus = parts[0] ?? '';
+  if (!rawStatus) return null;
+  const status = rawStatus[0] ?? '';
+  if (status === 'R') {
+    const from = parts[1];
+    const to = parts[2];
+    return from && to ? { status, from, to } : null;
+  }
+  const to = parts[1];
+  return to ? { status, to } : null;
 }
 
 /**
@@ -419,10 +444,7 @@ const coChangePairsCache = headKeyedGitMap<CoChangePair[]>('git-co-change-pairs'
 const directionalCoChangePairsCache = headKeyedGitMap<CoChangePair[]>('git-directional-co-change-pairs');
 
 // scip-query: ignore-wrapper — legacy git helper kept for source-compatible callers; the product owns access.
-export function getCoChangePairs(
-  db: ScipDatabase,
-  opts: GitCoChangeOptions = {},
-): CoChangePair[] | null {
+export function getCoChangePairs(db: ScipDatabase, opts: GitCoChangeOptions = {}): CoChangePair[] | null {
   return gitEvidenceProduct(db).coChangePairs(opts);
 }
 

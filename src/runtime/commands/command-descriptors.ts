@@ -136,7 +136,12 @@ export const commandDescriptors: CommandDescriptor[] = [
     id: 'setup-hooks',
     command: 'setup-hooks',
     description: 'Install or refresh project-local Codex and Claude Code lifecycle hooks',
-    options: [option('--json', 'Output as JSON for programmatic consumption')],
+    options: [
+      option('--shared', 'Write Claude hooks to tracked .claude/settings.json instead of settings.local.json'),
+      option('--remove', 'Remove managed project hooks and remember the opt-out'),
+      option('--force', 'Reinstall hooks even after a previous --remove opt-out'),
+      option('--json', 'Output as JSON for programmatic consumption'),
+    ],
     renderShape: 'custom',
     docs: doc('Maintenance', ['scip-query setup-hooks', 'scip-query setup-hooks --json']),
     handler: handlers.handleSetupHooks,
@@ -169,7 +174,10 @@ export const commandDescriptors: CommandDescriptor[] = [
     id: 'capabilities',
     command: 'capabilities',
     description: 'Report which evidence and verification capabilities are available in this project',
-    options: [option('--json', 'Output as JSON for programmatic consumption')],
+    options: [
+      option('--matrix', 'Render the project capability matrix (default output)'),
+      option('--json', 'Output as JSON for programmatic consumption'),
+    ],
     renderShape: 'custom',
     docs: doc('Maintenance'),
     handler: handlers.handleCapabilities,
@@ -177,7 +185,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'capability-matrix',
     command: 'capability-matrix',
-    description: 'Report the evidence and verification capability matrix by language',
+    description: 'Deprecated alias for capabilities --matrix',
     options: [option('--json', 'Output as JSON for programmatic consumption')],
     renderShape: 'custom',
     docs: doc('Maintenance'),
@@ -229,7 +237,11 @@ export const commandDescriptors: CommandDescriptor[] = [
     command: 'setup',
     description:
       'Bootstrap this project: install agent skills, refresh the index, verify capabilities, and report health',
-    options: withJsonOption([option('--git-hook', 'Also install a git pre-commit hook that runs diff-gate')]),
+    options: withJsonOption([
+      option('--git-hook', 'Also install a git pre-commit hook that runs diff-gate'),
+      option('--no-hooks', 'Skip Codex and Claude Code lifecycle hook installation'),
+      option('--dossier-dir <path>', 'Directory for generated setup health dossier files'),
+    ]),
     renderShape: 'custom',
     docs: doc('Maintenance', ['scip-query setup', 'scip-query setup --json']),
     handler: handlers.handleSetup,
@@ -257,9 +269,22 @@ export const commandDescriptors: CommandDescriptor[] = [
     handler: handlers.handleSetupCi,
   },
   {
+    id: 'uninstall',
+    command: 'uninstall',
+    description: 'Remove scip-query-owned skill links, project hooks, and managed agent setup blocks',
+    options: withJsonOption([
+      option('--global', 'Remove scip-query-owned skill symlinks from user-level agent skill roots'),
+      option('--project', 'Remove project-local hooks and managed AGENTS.md/CLAUDE.md blocks'),
+      option('--dry-run', 'List what would be removed without changing files'),
+    ]),
+    renderShape: 'custom',
+    docs: doc('Maintenance', ['scip-query uninstall --dry-run', 'scip-query uninstall --project']),
+    handler: handlers.handleUninstall,
+  },
+  {
     id: 'watch',
     command: 'watch',
-    description: 'Watch for file changes and reindex automatically',
+    description: 'Watch for file changes in the foreground and reindex automatically',
     options: [
       option('--debounce <ms>', 'Ms to wait after last change (default: 30000)', parseIntegerLoose),
       option('--cooldown <ms>', 'Min ms between reindexes (default: 60000)', parseIntegerLoose),

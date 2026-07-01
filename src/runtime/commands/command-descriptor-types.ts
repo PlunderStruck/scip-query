@@ -23,6 +23,7 @@ export interface CommandHeuristicNotice {
 
 export type CommandBudgetPolicy = 'none' | 'semantic' | 'candidate-scan';
 export type CommandRenderShape = 'custom' | 'empty' | 'list' | 'grouped-by-file' | 'sectioned-report' | 'table';
+export type CommandEvidenceTier = 'graph-fact' | 'heuristic' | 'mixed';
 
 export interface CommandDescriptor {
   id: string;
@@ -31,6 +32,7 @@ export interface CommandDescriptor {
   hidden?: boolean;
   arguments?: readonly CommandArgumentDescriptor[];
   options?: readonly CommandOptionDescriptor[];
+  evidence?: CommandEvidenceTier;
   heuristic?: CommandHeuristicNotice;
   budget?: CommandBudgetPolicy;
   renderShape: CommandRenderShape;

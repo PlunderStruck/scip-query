@@ -1,35 +1,43 @@
 {
   "module": "specs/tla-feature/TlaVerifierRegression.tla",
   "config": "specs/tla-feature/TlaVerifierRegression.cfg",
-  "scope": ["src/runtime/query-commands/tla.ts", "src/tla"],
   "variables": {
     "conformanceState": {
-      "code": ["src/tla/conformance.ts/TlaConformanceResult"]
+      "code": ["src/tla/conformance.ts/TlaConformanceResult#findings"],
+      "aliases": ["conformance", "findings"]
     },
     "toolState": {
-      "code": ["src/tla/tool-runner.ts/TlaToolResult"]
+      "code": ["src/tla/tool-runner.ts/TlaToolResult#status"],
+      "aliases": ["checker", "status"]
     },
     "exitState": {
-      "code": ["src/runtime/query-commands/tla.ts/TlaVerifyResult"]
+      "code": ["src/runtime/query-commands/tla.ts/TlaVerifyResult#exitCode"],
+      "aliases": ["process.exitCode"]
     }
   },
   "actions": {
     "CheckConformance": {
       "code": ["src/tla/conformance.ts/verifyTlaConformance"],
-      "writes": ["conformanceState"],
-      "allowUnknown": true
+      "reads": ["conformanceState"],
+      "writes": ["conformanceState"]
     },
     "RunChecker": {
       "code": ["src/tla/tool-runner.ts/runTlaTool"],
-      "reads": ["conformanceState"],
+      "reads": ["conformanceState", "toolState"],
       "writes": ["toolState"],
-      "allowUnknown": true
+      "waive": {
+        "reads": ["conformanceState"],
+        "reason": "runTlaVerify gates runTlaTool after conformance rather than runTlaTool reading the result"
+      }
     },
     "DecideExit": {
       "code": ["src/runtime/query-commands/tla.ts/exitCodeFor"],
       "reads": ["conformanceState", "toolState"],
       "writes": ["exitState"],
-      "allowUnknown": true
+      "waive": {
+        "writes": ["exitState"],
+        "reason": "exitCodeFor returns a code; runTlaVerify writes process.exitCode"
+      }
     }
   },
   "invariants": ["TypeOK", "ExitAfterEvidence"],

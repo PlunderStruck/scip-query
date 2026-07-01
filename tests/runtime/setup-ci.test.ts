@@ -11,7 +11,8 @@ describe('setupCiWorkflow', () => {
       const first = setupCiWorkflow(root);
       expect(first.written).toBe(true);
       expect(existsSync(first.path)).toBe(true);
-      expect(readFileSync(first.path, 'utf-8')).toContain('npx scip-query diff-gate');
+      expect(readFileSync(first.path, 'utf-8')).toContain('actions/cache@v4');
+      expect(readFileSync(first.path, 'utf-8')).toContain('npx scip-query@0.10.12 diff-gate');
 
       const skipped = setupCiWorkflow(root);
       expect(skipped.skipped).toBe(true);
@@ -20,7 +21,7 @@ describe('setupCiWorkflow', () => {
       writeFileSync(first.path, 'custom\n');
       const forced = setupCiWorkflow(root, { force: true });
       expect(forced.written).toBe(true);
-      expect(readFileSync(first.path, 'utf-8')).toContain('npx scip-query reindex');
+      expect(readFileSync(first.path, 'utf-8')).toContain('npx scip-query@0.10.12 reindex');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -33,6 +34,8 @@ describe('setupCiWorkflow', () => {
 
       expect(result.written).toBe(false);
       expect(result.content).toContain('actions/checkout@v4');
+      expect(result.content).toContain('TODO: install this repository');
+      expect(result.content).not.toContain('npm ci');
       expect(existsSync(result.path)).toBe(false);
     } finally {
       rmSync(root, { recursive: true, force: true });

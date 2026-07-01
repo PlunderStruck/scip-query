@@ -40,6 +40,31 @@ export interface ConfigDiagnostic {
   message: string;
 }
 
+const ROOT_CONFIG_KEYS = new Set([
+  'languages',
+  'indexerConcurrency',
+  'watch',
+  'hooks',
+  'indexer',
+  'dbPath',
+  'entryRoots',
+  'semantic',
+  'suppressions',
+  'declaredCouplings',
+  'locality',
+]);
+
+const WATCH_CONFIG_KEYS = new Set(['enabled', 'debounceMs', 'cooldownMs', 'gitPollMs', 'autoRefresh', 'ignore']);
+const HOOK_CONFIG_KEYS = new Set(['router']);
+const ENTRY_ROOTS_CONFIG_KEYS = new Set(['pathPrefixes', 'files', 'symbolPatterns', 'qualifiedVars']);
+const SEMANTIC_CONFIG_KEYS = new Set(['typescript']);
+const TYPESCRIPT_SEMANTIC_CONFIG_KEYS = new Set(['tsconfigs']);
+const INDEXER_CONFIG_KEYS = new Set(SUPPORTED_LANGUAGES);
+const INDEXER_OVERRIDE_CONFIG_KEYS = new Set(['pnpmWorkspaces', 'projectMode', 'projects', 'configPath']);
+const LOCALITY_CONFIG_KEYS = new Set(['architecturalBoundarySegments']);
+const DECLARED_COUPLING_CONFIG_KEYS = new Set(['name', 'files', 'reason']);
+const SUPPRESSION_CONFIG_KEYS = new Set(['id', 'check', 'file', 'reason', 'expiresAt']);
+
 /**
  * Load project config from .scipquery.json in the project root.
  * Returns defaults for anything not specified.
@@ -68,6 +93,7 @@ export function validateProjectConfig(
   opts: { now?: Date; projectRoot?: string } = {},
 ): ConfigDiagnostic[] {
   const diagnostics: ConfigDiagnostic[] = [];
+  reportUnknownConfigKeys(config, diagnostics);
   const supported = new Set(SUPPORTED_LANGUAGES);
   for (const [index, language] of (config.languages ?? []).entries()) {
     if (!supported.has(language)) {
@@ -99,6 +125,9 @@ export function validateProjectConfig(
   }
   if (config.watch?.autoRefresh !== undefined && typeof config.watch.autoRefresh !== 'boolean') {
     diagnostics.push({ level: 'error', path: 'watch.autoRefresh', message: 'Must be a boolean.' });
+  }
+  if (config.hooks?.router !== undefined && config.hooks.router !== 'off' && config.hooks.router !== 'single') {
+    diagnostics.push({ level: 'error', path: 'hooks.router', message: 'Must be "off" or "single".' });
   }
   const typescriptIndexer = config.indexer?.typescript;
   if (
@@ -232,13 +261,33 @@ export function validateProjectConfig(
     }
   }
   const now = opts.now ?? new Date();
-  for (const [index, suppression] of (config.suppressions ?? []).entries()) {
+  if (config.suppressions !== undefined && !Array.isArray(config.suppressions)) {
+    diagnostics.push({ level: 'error', path: 'suppressions', message: 'Must be an array.' });
+  }
+  for (const [index, suppression] of (Array.isArray(config.suppressions) ? config.suppressions : []).entries()) {
     const path = `suppressions[${index}]`;
+    if (!isConfigObject(suppression)) {
+      diagnostics.push({ level: 'error', path, message: 'Suppression must be an object.' });
+      continue;
+    }
     if (!suppression.reason || suppression.reason.trim() === '') {
       diagnostics.push({ level: 'error', path: `${path}.reason`, message: 'Suppression reason is required.' });
     }
-    if (!suppression.id && !suppression.check) {
-      diagnostics.push({ level: 'error', path, message: 'Suppression must include id or check.' });
+    if (suppression.id !== undefined && suppression.id.trim() === '') {
+      diagnostics.push({ level: 'error', path: `${path}.id`, message: 'Suppression id cannot be blank.' });
+    }
+    if (suppression.check !== undefined && suppression.check.trim() === '') {
+      diagnostics.push({ level: 'error', path: `${path}.check`, message: 'Suppression check cannot be blank.' });
+    }
+    if (!suppression.id && (!suppression.check || !suppression.file)) {
+      diagnostics.push({ level: 'error', path, message: 'Suppression must include id or both check and file.' });
+    } else if (!suppression.id && suppression.check && suppression.file) {
+      diagnostics.push({
+        level: 'warning',
+        path,
+        message:
+          'Check+file suppressions waive every matching finding in that file; prefer a stable id when available.',
+      });
     }
     if (suppression.file !== undefined) {
       if (suppression.file.trim() === '') {
@@ -331,13 +380,13 @@ export function initProjectConfig(projectRoot: string, languages: string[]): str
 
   const config: ProjectConfig = {
     languages: languages as ProjectConfig['languages'],
-      watch: {
-        enabled: false,
-        debounceMs: 30_000,
-        cooldownMs: 60_000,
-        gitPollMs: 2_000,
-        autoRefresh: true,
-      },
+    watch: {
+      enabled: false,
+      debounceMs: 30_000,
+      cooldownMs: 60_000,
+      gitPollMs: 2_000,
+      autoRefresh: true,
+    },
   };
 
   writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
@@ -366,6 +415,61 @@ export function addFindingSuppression(
 function ensureDir(dir: string): string {
   mkdirSync(dir, { recursive: true });
   return dir;
+}
+
+function reportUnknownConfigKeys(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {
+  if (!isConfigObject(config as unknown)) return;
+  const typedConfig = config as ProjectConfig;
+  reportUnknownObjectKeys(diagnostics, typedConfig, '', ROOT_CONFIG_KEYS);
+  reportUnknownObjectKeys(diagnostics, typedConfig.watch, 'watch', WATCH_CONFIG_KEYS);
+  reportUnknownObjectKeys(diagnostics, typedConfig.hooks, 'hooks', HOOK_CONFIG_KEYS);
+  reportUnknownObjectKeys(diagnostics, typedConfig.entryRoots, 'entryRoots', ENTRY_ROOTS_CONFIG_KEYS);
+  reportUnknownObjectKeys(diagnostics, typedConfig.semantic, 'semantic', SEMANTIC_CONFIG_KEYS);
+  reportUnknownObjectKeys(
+    diagnostics,
+    typedConfig.semantic?.typescript,
+    'semantic.typescript',
+    TYPESCRIPT_SEMANTIC_CONFIG_KEYS,
+  );
+  reportUnknownObjectKeys(diagnostics, typedConfig.locality, 'locality', LOCALITY_CONFIG_KEYS);
+
+  if (isConfigObject(typedConfig.indexer)) {
+    reportUnknownObjectKeys(diagnostics, typedConfig.indexer, 'indexer', INDEXER_CONFIG_KEYS);
+    for (const [language, override] of Object.entries(typedConfig.indexer)) {
+      if (INDEXER_CONFIG_KEYS.has(language as SupportedLanguage)) {
+        reportUnknownObjectKeys(diagnostics, override, `indexer.${language}`, INDEXER_OVERRIDE_CONFIG_KEYS);
+      }
+    }
+  }
+
+  if (Array.isArray(typedConfig.declaredCouplings)) {
+    for (const [index, coupling] of typedConfig.declaredCouplings.entries()) {
+      reportUnknownObjectKeys(diagnostics, coupling, `declaredCouplings[${index}]`, DECLARED_COUPLING_CONFIG_KEYS);
+    }
+  }
+
+  if (Array.isArray(typedConfig.suppressions)) {
+    for (const [index, suppression] of typedConfig.suppressions.entries()) {
+      reportUnknownObjectKeys(diagnostics, suppression, `suppressions[${index}]`, SUPPRESSION_CONFIG_KEYS);
+    }
+  }
+}
+
+function reportUnknownObjectKeys(
+  diagnostics: ConfigDiagnostic[],
+  value: unknown,
+  path: string,
+  allowedKeys: ReadonlySet<string>,
+): void {
+  if (!isConfigObject(value)) return;
+  for (const key of Object.keys(value)) {
+    if (allowedKeys.has(key)) continue;
+    diagnostics.push({
+      level: 'warning',
+      path: path ? `${path}.${key}` : key,
+      message: 'Unknown config key.',
+    });
+  }
 }
 
 function isConfigObject(value: unknown): value is Record<string, unknown> {

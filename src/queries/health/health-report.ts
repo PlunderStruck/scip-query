@@ -89,6 +89,8 @@ export interface HealthReport {
     isolatedLoc: number;
     cycles: number;
     similarPairs: number;
+    duplicateBodyGroups: number;
+    duplicateBodyLoc: number;
     reactComponentDuplicatePairs: number;
     reactHookCandidatePairs: number;
     reactHookCandidateScoreCount: number;
@@ -143,6 +145,8 @@ export function buildHealthReport(analyses: HealthAnalyses): HealthReport {
       isolatedLoc: analyses.isolated.loc,
       cycles: analyses.realCycleCount,
       similarPairs: analyses.similarCount,
+      duplicateBodyGroups: analyses.duplicateBodies.count,
+      duplicateBodyLoc: analyses.duplicateBodies.loc,
       reactComponentDuplicatePairs: analyses.reactComponentDuplicates.count,
       reactHookCandidatePairs: analyses.reactHookCandidates.count,
       reactHookCandidateScoreCount: healthScoreCount(analyses.reactHookCandidates),
@@ -188,6 +192,7 @@ function buildHealthAxes(analyses: HealthAnalyses): HealthAxes {
       // Heuristics: every "candidate"-style detector.
       heuristicFindings:
         analyses.similarCount +
+        analyses.duplicateBodies.count +
         analyses.reactComponentDuplicates.count +
         analyses.reactHookCandidates.count +
         analyses.reactLargeComponentPressure.count +
@@ -307,7 +312,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Dead code',
       evidence: 'graph-fact',
-      description: `${analyses.dead.count} symbols with zero references anywhere — safe to delete`,
+      description: `${analyses.dead.count} symbols with zero references anywhere -- deletion candidates; confirm with cleanup-plan --verify before deleting`,
       effort: 'low',
       impact: 'high',
       count: analyses.dead.count,
@@ -348,6 +353,18 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
       impact: 'medium',
       count: analyses.similarCount,
       locRecoverable: 0,
+    });
+  }
+
+  if (analyses.duplicateBodies.count > 0) {
+    actions.push({
+      category: 'Duplicate function bodies',
+      evidence: 'heuristic',
+      description: `${analyses.duplicateBodies.count} exact small-body group(s) across files — consolidate only when the domain concept matches`,
+      effort: 'low',
+      impact: 'medium',
+      count: analyses.duplicateBodies.count,
+      locRecoverable: analyses.duplicateBodies.loc,
     });
   }
 
@@ -535,6 +552,7 @@ const DEDUCTION_KIND: Record<string, ScoreDeduction['kind']> = {
   'complexity-pressure': 'risk',
   'hidden-coupling-pressure': 'risk',
   similar: 'hygiene',
+  'duplicate-bodies': 'hygiene',
   'react-component-duplicates': 'hygiene',
   'react-hook-candidates': 'hygiene',
   'react-large-component-pressure': 'hygiene',
@@ -547,6 +565,7 @@ const DEDUCTION_KIND: Record<string, ScoreDeduction['kind']> = {
   'stale-abstractions': 'hygiene',
   drift: 'hygiene',
   'similar-pressure': 'hygiene',
+  'duplicate-bodies-pressure': 'hygiene',
   'react-component-duplicates-pressure': 'hygiene',
   'react-hook-candidates-pressure': 'hygiene',
   'react-large-component-pressure-pressure': 'hygiene',
@@ -622,6 +641,13 @@ function computeHealthScore(analyses: HealthAnalyses): { breakdown: ScoreDeducti
 
   const similarPerMille = (analyses.similarCount / symbolCount) * 1000;
   deduct('similar', Math.min(10, Math.round(similarPerMille)), `${analyses.similarCount} similar function pair(s)`);
+
+  const duplicateBodyPerMille = (analyses.duplicateBodies.count / symbolCount) * 1000;
+  deduct(
+    'duplicate-bodies',
+    Math.min(10, Math.round(duplicateBodyPerMille * 2)),
+    `${analyses.duplicateBodies.count} exact duplicate small-body group(s) (${analyses.duplicateBodies.loc} duplicate LOC)`,
+  );
 
   const reactDuplicatePerMille = (analyses.reactComponentDuplicates.count / fileCount) * 1000;
   deduct(
@@ -738,6 +764,15 @@ function computeHealthScore(analyses: HealthAnalyses): { breakdown: ScoreDeducti
     8,
     4,
     'similar function pair(s)',
+  );
+  pressureDeduct(
+    'duplicate-bodies-pressure',
+    'Duplicate function bodies',
+    analyses.duplicateBodies.count,
+    Math.max(20, symbolCount * 0.005),
+    8,
+    4,
+    'exact duplicate small-body group(s)',
   );
   pressureDeduct(
     'react-component-duplicates-pressure',

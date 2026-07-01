@@ -12,8 +12,8 @@ program
   .version(cliVersion);
 
 registerCommandDescriptors(program, commandDescriptors);
-program.hook('preAction', async () => {
-  await maybePrintUpdateNotice();
+program.hook('preAction', async (_thisCommand, actionCommand) => {
+  await maybePrintUpdateNotice({ commandName: actionCommand.name() });
 });
 
 export { program, renderHeuristicNotice };

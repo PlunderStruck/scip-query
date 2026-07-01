@@ -2,7 +2,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { semanticCalleeMap, semanticEvidenceProduct, semanticReferences } from '../../semantic/shared-primitives.js';
-import { getResolvedReferenceSites } from '../../symbols/references/reference-sites.js';
+import { referenceSitesForSymbol } from '../../symbols/references/reference-sites.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { detectAstLanguage, getSourceFacts } from '../../source/ast.js';
 
@@ -31,6 +31,8 @@ export interface AuditQuestionScore {
   recall: number;
   /** Cheap-path answers the oracle could not confirm (only meaningful when precision is null). */
   unverified: number;
+  /** Samples skipped because the oracle is partial and produced no comparable answer. */
+  skippedOraclePartial: number;
 }
 
 export interface SelfAuditResult {
@@ -102,20 +104,29 @@ export function selfAudit(
         ? (semanticOracleCallees.get(definition.symbolId) ?? []).map((callee) => callee.file)
         : [...(sourceOracle?.calleesBySymbolId.get(definition.symbolId) ?? [])],
     );
-    if (oracleRefs.size === 0 && oracleCals.size === 0) continue; // oracle had nothing to say
     oracleAnswered += 1;
 
     const cheapRefs = crossFileSet(
       definition,
-      getResolvedReferenceSites(db, definition).map((site) => site.file),
+      referenceSitesForSymbol(db, definition).map((site) => site.file),
     );
     const cheapCals = crossFileSet(
       definition,
       (index.calleeMap([definition], { semantic: false }).get(definition.symbolId) ?? []).map((callee) => callee.file),
     );
 
-    scoreQuestion(tallies.references, definition, 'references', cheapRefs, oracleRefs, disagreements);
-    scoreQuestion(tallies.callees, definition, 'callees', cheapCals, oracleCals, disagreements);
+    const referencesComplete = oracleComplete(oracleKind, 'references');
+    const calleesComplete = oracleComplete(oracleKind, 'callees');
+    scoreQuestion(
+      tallies.references,
+      definition,
+      'references',
+      cheapRefs,
+      oracleRefs,
+      referencesComplete,
+      disagreements,
+    );
+    scoreQuestion(tallies.callees, definition, 'callees', cheapCals, oracleCals, calleesComplete, disagreements);
   }
 
   disagreements.sort(
@@ -140,10 +151,11 @@ interface QuestionTally {
   agreed: number;
   cheapTotal: number;
   oracleTotal: number;
+  skippedOraclePartial: number;
 }
 
 function emptyTally(): QuestionTally {
-  return { comparedSymbols: 0, agreed: 0, cheapTotal: 0, oracleTotal: 0 };
+  return { comparedSymbols: 0, agreed: 0, cheapTotal: 0, oracleTotal: 0, skippedOraclePartial: 0 };
 }
 
 /** Deterministic stride sample — reproducible runs without randomness. */
@@ -184,9 +196,13 @@ function scoreQuestion(
   question: AuditQuestion,
   cheap: Set<string>,
   oracle: Set<string>,
+  oracleComplete: boolean,
   disagreements: AuditDisagreement[],
 ): void {
-  if (cheap.size === 0 && oracle.size === 0) return;
+  if (!oracleComplete && oracle.size === 0) {
+    tally.skippedOraclePartial += 1;
+    return;
+  }
   tally.comparedSymbols += 1;
   tally.cheapTotal += cheap.size;
   tally.oracleTotal += oracle.size;
@@ -216,14 +232,19 @@ const SEMANTIC_ORACLE_COMPLETE: Record<AuditQuestion, boolean> = {
 function finalizeScore(question: AuditQuestion, tally: QuestionTally, oracleKind: AuditOracleKind): AuditQuestionScore {
   const recall = tally.oracleTotal > 0 ? tally.agreed / tally.oracleTotal : 1;
   const unverified = tally.cheapTotal - tally.agreed;
-  const oracleComplete = oracleKind === 'semantic' ? SEMANTIC_ORACLE_COMPLETE[question] : false;
+  const complete = oracleComplete(oracleKind, question);
   return {
     question,
     comparedSymbols: tally.comparedSymbols,
-    precision: oracleComplete && tally.cheapTotal > 0 ? round3(tally.agreed / tally.cheapTotal) : null,
+    precision: complete && tally.cheapTotal > 0 ? round3(tally.agreed / tally.cheapTotal) : null,
     recall: round3(recall),
     unverified,
+    skippedOraclePartial: tally.skippedOraclePartial,
   };
+}
+
+function oracleComplete(oracleKind: AuditOracleKind, question: AuditQuestion): boolean {
+  return oracleKind === 'semantic' ? SEMANTIC_ORACLE_COMPLETE[question] : false;
 }
 
 interface SourceOracle {

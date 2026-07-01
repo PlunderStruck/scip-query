@@ -71,6 +71,7 @@ const queryCommandOrder = [
   'dataflow',
   'slice',
   'redundant-reexports',
+  'duplicate-bodies',
   'similar-signatures',
 ] as const;
 

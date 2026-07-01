@@ -47,3 +47,21 @@ export function scipTypeLikeKindNumbers(): number[] {
     SymbolInformation_Kind.Protocol,
   ];
 }
+
+// scip-query: ignore-wrapper — TLA conformance needs to distinguish runtime
+// state referents from type- or action-level referents without inlining enum
+// policy at every call site.
+export function scipValueLikeKindNumbers(): number[] {
+  return [
+    SymbolInformation_Kind.Constant,
+    SymbolInformation_Kind.Variable,
+    SymbolInformation_Kind.Value,
+    SymbolInformation_Kind.Field,
+    SymbolInformation_Kind.Property,
+    SymbolInformation_Kind.StaticDataMember,
+    SymbolInformation_Kind.StaticField,
+    SymbolInformation_Kind.StaticProperty,
+    SymbolInformation_Kind.StaticVariable,
+    SymbolInformation_Kind.EnumMember,
+  ];
+}

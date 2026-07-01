@@ -2,7 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type * as NodeFs from 'node:fs';
 
 async function loadProjectSetup(
-  overrides: { dbExists?: boolean; languages?: string[]; healthThrows?: boolean; config?: Record<string, unknown> } = {},
+  overrides: {
+    dbExists?: boolean;
+    languages?: string[];
+    healthThrows?: boolean;
+    config?: Record<string, unknown>;
+  } = {},
 ) {
   vi.resetModules();
 
@@ -154,7 +159,7 @@ async function loadProjectSetup(
     getProjectCapabilities: vi.fn(() => capabilities),
   }));
   vi.doMock('../../src/runtime/setup.js', () => ({
-    installSkills: vi.fn(() => ({ installed: ['Codex/scip-query'], alreadyLinked: [], skipped: [] })),
+    installSkills: vi.fn(() => ({ installed: ['Codex/scip-query'], alreadyLinked: [], pruned: [], skipped: [] })),
     isScipInstalled: vi.fn(() => true),
   }));
 
@@ -186,7 +191,7 @@ describe('runProjectSetup', () => {
         confirmationStatus: 'unconfirmed',
         safeForAgentToStart: false,
         recommendedNextStep:
-          'Run scip-health-audit to confirm this signal; use scip-health-improve when the user wants confirmed issues fixed autonomously.',
+          'Run scip-cleanup-audit to confirm this signal; use scip-cleanup-improve when the user wants confirmed issues fixed autonomously.',
       },
     ]);
     expect(report.healthDossier).toMatchObject({
@@ -457,7 +462,7 @@ describe('runProjectSetup', () => {
       })),
     }));
     vi.doMock('../../src/runtime/setup.js', () => ({
-      installSkills: vi.fn(() => ({ installed: [], alreadyLinked: ['Codex/scip-query'], skipped: [] })),
+      installSkills: vi.fn(() => ({ installed: [], alreadyLinked: ['Codex/scip-query'], pruned: [], skipped: [] })),
       isScipInstalled: vi.fn(() => true),
     }));
 

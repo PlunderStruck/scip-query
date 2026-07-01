@@ -21,6 +21,12 @@ import {
 } from '../commands/query-command-builders.js';
 import { displayLine, displayPathRange, displayRange, render } from '../render.js';
 import type { ReportSection } from '../render.js';
+import {
+  symbolResolutionJson,
+  symbolResolutionBefore,
+  symbolResolutionEmptyMessage,
+  withSymbolResolutionJson,
+} from './symbol-resolution.js';
 
 function traceSections(result: ReturnType<typeof queries.trace>): ReportSection[] {
   const definitionRows: string[] = [];
@@ -91,15 +97,20 @@ const handleImports = budgetedListCommand('imports', {
 const handleRefs = budgetedGroupedByFileCommand('refs', {
   query: ({ db, args, budget }) => queries.refs(db, stringArg(args, 0), { semantic: budget.semantic }),
   format: (r) => `  line ${displayLine(r.line)}`,
+  before: (_rows, { db, args }) => symbolResolutionBefore(db, stringArg(args, 0)),
+  emptyMessage: ({ db, args }) => symbolResolutionEmptyMessage(db, stringArg(args, 0), 'No references found.'),
+  toJson: (rows, { db, args }) => withSymbolResolutionJson(db, stringArg(args, 0), rows, 'references'),
 });
 
 const handleCode = dbCommand(({ db, args, opts }) => {
-  const result = queries.code(db, stringArg(args, 0), { context: definedNumberOption(opts, 'context', 0) });
+  const query = stringArg(args, 0);
+  const result = queries.code(db, query, { context: definedNumberOption(opts, 'context', 0) });
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('code', args, opts, result);
+    printJsonEnvelope('code', args, opts, withSymbolResolutionJson(db, query, result, 'code'));
     return;
   }
-  if (!result) return render.empty('Symbol not found or file unreadable.');
+  if (!result) return render.empty(symbolResolutionEmptyMessage(db, query, 'Symbol found, but source was unreadable.'));
+  symbolResolutionBefore(db, query);
   console.log(
     `${displayPathRange(result.relativePath, result.startLine, result.endLine)}  ${result.shortName}  [${result.language ?? 'unknown'}]\n`,
   );
@@ -110,12 +121,14 @@ const handleCode = dbCommand(({ db, args, opts }) => {
 });
 
 const handleDataflow = budgetedDbCommand('dataflow', ({ db, args, opts, budget }) => {
-  const result = queries.dataflow(db, stringArg(args, 0), { semantic: budget.semantic });
+  const query = stringArg(args, 0);
+  const result = queries.dataflow(db, query, { semantic: budget.semantic });
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('dataflow', args, opts, result);
+    printJsonEnvelope('dataflow', args, opts, withSymbolResolutionJson(db, query, result, 'dataflow'));
     return;
   }
-  if (!result) return render.empty('Symbol not found.');
+  if (!result) return render.empty(symbolResolutionEmptyMessage(db, query, 'No dataflow found.'));
+  symbolResolutionBefore(db, query);
   console.log(`${result.shortName}  (${result.relativePath})\n`);
   if (result.definitionSites.length > 0) {
     console.log('  ═══ DEFINED AT ═══');
@@ -136,17 +149,19 @@ const handleDataflow = budgetedDbCommand('dataflow', ({ db, args, opts, budget }
 });
 
 const handleSlice = budgetedDbCommand('slice', ({ db, args, opts, budget }) => {
+  const query = stringArg(args, 0);
   const direction = booleanOptionValue(opts, 'forward') ? 'forward' : 'backward';
-  const result = queries.slice(db, stringArg(args, 0), {
+  const result = queries.slice(db, query, {
     direction,
     maxDepth: definedNumberOption(opts, 'depth', 3),
     semantic: budget.semantic,
   });
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('slice', args, opts, result);
+    printJsonEnvelope('slice', args, opts, withSymbolResolutionJson(db, query, result, 'slice'));
     return;
   }
-  if (!result) return render.empty('Symbol not found.');
+  if (!result) return render.empty(symbolResolutionEmptyMessage(db, query, 'No slice found.'));
+  symbolResolutionBefore(db, query);
   console.log(`${result.direction} slice of ${result.shortName}\n`);
   if (result.connectedSymbols.length === 0) {
     console.log('  No connected symbols found.');
@@ -194,6 +209,12 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     budget: 'semantic',
     docs: doc('Navigation', ['scip-query trace parseSymbol']),
     query: ({ db, args, budget }) => queries.trace(db, stringArg(args, 0), { semantic: budget.semantic }),
+    emptyMessage: (result, { db, args }) =>
+      result.definitions.length === 0 && result.referencedBy.length === 0
+        ? symbolResolutionEmptyMessage(db, stringArg(args, 0), 'No trace rows found.')
+        : undefined,
+    before: (_result, { db, args }) => symbolResolutionBefore(db, stringArg(args, 0)),
+    toJson: (result, { db, args }) => ({ ...symbolResolutionJson(db, stringArg(args, 0)), ...result }),
     sections: traceSections,
   }),
   listQueryCommand({
@@ -273,6 +294,9 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     docs: doc('Navigation'),
     query: ({ db, args }) => queries.members(db, stringArg(args, 0)),
     format: (r) => `  ${displayRange(r.startLine, r.endLine)}  [${r.kind}]  ${r.shortName}`,
+    before: (_rows, { db, args }) => symbolResolutionBefore(db, stringArg(args, 0)),
+    emptyMessage: ({ db, args }) => symbolResolutionEmptyMessage(db, stringArg(args, 0), 'No child symbols found.'),
+    toJson: (rows, { db, args }) => withSymbolResolutionJson(db, stringArg(args, 0), rows, 'members'),
   }),
   listQueryCommand({
     id: 'by-kind',
@@ -311,7 +335,9 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     docs: doc('Navigation'),
     query: ({ db, args }) => queries.hierarchy(db, stringArg(args, 0)),
     format: (node) => `${'  '.repeat(node.depth)}${node.shortName}`,
-    emptyMessage: () => 'Symbol not found.',
+    before: (_rows, { db, args }) => symbolResolutionBefore(db, stringArg(args, 0)),
+    emptyMessage: ({ db, args }) => symbolResolutionEmptyMessage(db, stringArg(args, 0), 'Symbol not found.'),
+    toJson: (rows, { db, args }) => withSymbolResolutionJson(db, stringArg(args, 0), rows, 'hierarchy'),
   }),
   {
     id: 'code',

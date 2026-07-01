@@ -1,6 +1,7 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { SymbolInformation_Kind } from '@c4312/scip';
 import { describe, expect, it } from 'vitest';
 import { ScipDatabase } from '../../src/storage/db.js';
 import type { ScipQueryConfig } from '../../src/domain/types.js';
@@ -12,12 +13,18 @@ function fixtureDb(root: string): ScipDatabase {
   const dbPath = join(root, 'index.db');
   evidenceFixtureDb(dbPath)
     .document(1, 'typescript', 'src/queue.ts')
-    .symbol(1, 'scip-typescript npm test 1.0.0 src/`queue.ts`/queue.', 'queue')
-    .symbol(2, 'scip-typescript npm test 1.0.0 src/`queue.ts`/enqueue().', 'enqueue')
-    .symbol(3, 'scip-typescript npm test 1.0.0 src/`queue.ts`/cancel().', 'cancel')
+    .symbol(1, 'scip-typescript npm test 1.0.0 src/`queue.ts`/queue.', 'queue', SymbolInformation_Kind.Constant)
+    .symbol(2, 'scip-typescript npm test 1.0.0 src/`queue.ts`/enqueue().', 'enqueue', SymbolInformation_Kind.Function)
+    .symbol(3, 'scip-typescript npm test 1.0.0 src/`queue.ts`/cancel().', 'cancel', SymbolInformation_Kind.Function)
+    .symbol(4, 'scip-typescript npm test 1.0.0 src/`queue.ts`/peek().', 'peek', SymbolInformation_Kind.Function)
+    .symbol(5, 'scip-typescript npm test 1.0.0 src/`queue.ts`/noop().', 'noop', SymbolInformation_Kind.Function)
+    .symbol(6, 'scip-typescript npm test 1.0.0 src/`queue.ts`/State#', 'State', SymbolInformation_Kind.Interface)
     .definition(1, 1, 1, 0, 0, 0, 28)
     .definition(2, 1, 2, 2, 0, 4, 1)
     .definition(3, 1, 3, 6, 0, 8, 1)
+    .definition(4, 1, 4, 2, 0, 4, 1)
+    .definition(5, 1, 5, 2, 0, 4, 1)
+    .definition(6, 1, 6, 0, 0, 0, 20)
     .chunk(1, 1, 0, 8)
     .write();
   const config: ScipQueryConfig = {
@@ -61,7 +68,7 @@ Enqueue(job) == queue' = Append(queue, job)
         queue: { code: ['queue'], aliases: ['queue'] },
       },
       actions: {
-        Enqueue: { code: ['enqueue'], reads: [], writes: ['queue'], calls: [], allowUnknown: false },
+        Enqueue: { code: ['enqueue'], reads: [], writes: ['queue'], calls: [] },
       },
       invariants: [],
       traces: [],
@@ -92,6 +99,58 @@ Enqueue(job) == queue' = Append(queue, job)
     }
   });
 
+  it('only runs the unmapped write sweep when scope is explicit', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    writeFixtureFiles(root, {
+      'src/queue.ts': [
+        'export const queue: string[] = [];',
+        '',
+        'export function enqueue(job: string) {',
+        '  queue.push(job);',
+        '}',
+        '',
+        'export function cancel(job: string) {',
+        '  queue.splice(queue.indexOf(job), 1);',
+        '}',
+      ],
+    });
+    writeFileSync(
+      join(root, 'Queue.tla'),
+      `---- MODULE Queue ----
+VARIABLES queue
+Enqueue(job) == queue' = Append(queue, job)
+====
+`,
+    );
+    const db = fixtureDb(root);
+    const contract: TlaModelContract = {
+      module: 'Queue.tla',
+      variables: {
+        queue: { code: ['queue'], aliases: ['queue'] },
+      },
+      actions: {
+        Enqueue: { code: ['enqueue'], reads: ['queue'], writes: ['queue'], calls: [] },
+      },
+      invariants: [],
+      traces: [],
+    };
+
+    try {
+      const result = verifyTlaConformance(db, contract, readTlaModuleFacts(root, 'Queue.tla'));
+
+      expect(result.findings).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            category: 'unmapped-write',
+            modelElement: 'queue',
+          }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   it('flags trace steps that mutate variables outside the action write set', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
     writeFixtureFiles(root, {
@@ -112,7 +171,13 @@ Peek == UNCHANGED queue
         queue: { code: ['queue'], aliases: ['queue'] },
       },
       actions: {
-        Peek: { code: ['enqueue'], reads: ['queue'], writes: [], calls: [], allowUnknown: true },
+        Peek: {
+          code: ['enqueue'],
+          reads: ['queue'],
+          writes: [],
+          calls: [],
+          waive: { reads: ['queue'], writes: [], reason: 'trace fixture exercises trace handling only' },
+        },
       },
       invariants: [],
       traces: [],
@@ -129,6 +194,257 @@ Peek == UNCHANGED queue
             category: 'trace',
             evidence: 'trace',
             message: expect.stringContaining('changed queue'),
+          }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('flags undeclared reads of modeled variables inside mapped actions', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    writeFixtureFiles(root, {
+      'src/queue.ts': ['export const queue: string[] = [];', 'export function peek() {', '  return queue[0];', '}'],
+    });
+    writeFileSync(
+      join(root, 'Queue.tla'),
+      `---- MODULE Queue ----
+VARIABLES queue
+Peek == UNCHANGED queue
+====
+`,
+    );
+    const db = fixtureDb(root);
+    const contract: TlaModelContract = {
+      scope: ['src/queue.ts'],
+      variables: {
+        queue: { code: ['queue'], aliases: ['queue'] },
+      },
+      actions: {
+        Peek: { code: ['peek'], reads: [], writes: [], calls: [] },
+      },
+      invariants: [],
+      traces: [],
+    };
+
+    try {
+      const result = verifyTlaConformance(db, contract, readTlaModuleFacts(root, 'Queue.tla'));
+
+      expect(result.staticReads).toEqual(
+        expect.arrayContaining([expect.objectContaining({ variable: 'queue', target: 'queue' })]),
+      );
+      expect(result.findings).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            category: 'undeclared-read',
+            severity: 'warning',
+            modelElement: 'Peek',
+          }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('honors per-fact read waivers and records the waiver', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    writeFixtureFiles(root, {
+      'src/queue.ts': ['export const queue: string[] = [];', 'export function noop() {', '  return 1;', '}'],
+    });
+    writeFileSync(
+      join(root, 'Queue.tla'),
+      `---- MODULE Queue ----
+VARIABLES queue
+Noop == UNCHANGED queue
+====
+`,
+    );
+    const db = fixtureDb(root);
+    const contract: TlaModelContract = {
+      scope: ['src/queue.ts'],
+      variables: {
+        queue: { code: ['queue'], aliases: ['queue'] },
+      },
+      actions: {
+        Noop: {
+          code: ['noop'],
+          reads: ['queue'],
+          writes: [],
+          calls: [],
+          waive: { reads: ['queue'], writes: [], reason: 'noop receives queue through a higher-order test fixture' },
+        },
+      },
+      invariants: [],
+      traces: [],
+    };
+
+    try {
+      const result = verifyTlaConformance(db, contract, readTlaModuleFacts(root, 'Queue.tla'));
+
+      expect(result.waivers).toContainEqual({
+        action: 'Noop',
+        kind: 'read',
+        variable: 'queue',
+        reason: 'noop receives queue through a higher-order test fixture',
+        legacy: false,
+      });
+      expect(result.findings).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ category: 'missing-read-evidence' })]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('rejects type-like variable referents', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    writeFixtureFiles(root, {
+      'src/queue.ts': ['export interface State { queue: string[] }', 'export function noop() {', '  return 1;', '}'],
+    });
+    writeFileSync(
+      join(root, 'Queue.tla'),
+      `---- MODULE Queue ----
+VARIABLES queue
+Noop == UNCHANGED queue
+====
+`,
+    );
+    const db = fixtureDb(root);
+    const contract: TlaModelContract = {
+      scope: ['src/queue.ts'],
+      variables: {
+        queue: { code: ['State'], aliases: ['queue'] },
+      },
+      actions: {
+        Noop: { code: ['noop'], reads: [], writes: [], calls: [] },
+      },
+      invariants: [],
+      traces: [],
+    };
+
+    try {
+      const result = verifyTlaConformance(db, contract, readTlaModuleFacts(root, 'Queue.tla'));
+
+      expect(result.findings).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            category: 'invalid-referent-kind',
+            severity: 'error',
+            message: expect.stringContaining('referent is a type'),
+          }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('warns when mapped invariants are absent from the checked config', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    writeFixtureFiles(root, {
+      'src/queue.ts': ['export const queue: string[] = [];', 'export function noop() {', '  return 1;', '}'],
+    });
+    writeFileSync(
+      join(root, 'Queue.tla'),
+      `---- MODULE Queue ----
+VARIABLES queue
+Noop == UNCHANGED queue
+TypeOK == TRUE
+====
+`,
+    );
+    const db = fixtureDb(root);
+    const contract: TlaModelContract = {
+      scope: ['src/queue.ts'],
+      variables: {
+        queue: { code: ['queue'], aliases: ['queue'] },
+      },
+      actions: {
+        Noop: { code: ['noop'], reads: [], writes: [], calls: [] },
+      },
+      invariants: ['TypeOK'],
+      traces: [],
+    };
+
+    try {
+      const result = verifyTlaConformance(db, contract, readTlaModuleFacts(root, 'Queue.tla'), [], []);
+
+      expect(result.findings).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            category: 'missing-invariant',
+            modelElement: 'TypeOK',
+          }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('rejects a swapped action-to-code binding (mutation regression: nonsense mappings cannot verify cleanly)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    writeFixtureFiles(root, {
+      'src/queue.ts': [
+        'export const queue: string[] = [];',
+        '',
+        'export function enqueue(job: string) {',
+        '  queue.push(job);',
+        '}',
+        '',
+        'export function peek(): string | undefined {',
+        '  return queue[0];',
+        '}',
+      ],
+    });
+    writeFileSync(
+      join(root, 'Queue.tla'),
+      `---- MODULE Queue ----
+VARIABLES queue
+Init == queue = <<>>
+Enqueue(job) == queue' = Append(queue, job)
+Peek == UNCHANGED queue
+====
+`,
+    );
+    const db = fixtureDb(root);
+    const correct: TlaModelContract = {
+      module: 'Queue.tla',
+      scope: ['src/queue.ts'],
+      variables: {
+        queue: { code: ['queue'], aliases: ['queue'] },
+      },
+      actions: {
+        Enqueue: { code: ['enqueue'], reads: ['queue'], writes: ['queue'], calls: [] },
+        Peek: { code: ['peek'], reads: ['queue'], writes: [], calls: [] },
+      },
+      invariants: [],
+      traces: [],
+    };
+    const swapped: TlaModelContract = {
+      ...correct,
+      actions: {
+        Enqueue: { ...correct.actions.Enqueue!, code: ['peek'] },
+        Peek: { ...correct.actions.Peek!, code: ['enqueue'] },
+      },
+    };
+
+    try {
+      const moduleFacts = readTlaModuleFacts(root, 'Queue.tla');
+
+      const honest = verifyTlaConformance(db, correct, moduleFacts);
+      expect(honest.findings.filter((finding) => finding.severity === 'error')).toEqual([]);
+
+      const nonsense = verifyTlaConformance(db, swapped, moduleFacts);
+      expect(nonsense.findings.length).toBeGreaterThan(0);
+      expect(nonsense.findings).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            category: 'undeclared-write',
+            severity: 'error',
+            modelElement: 'Peek',
           }),
         ]),
       );

@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ScipQueryConfig } from '../../../src/domain/types.js';
-import { diffImpact, diffImpactPartial } from '../../../src/queries/impact/diff-impact.js';
+import type { IndexedDefinition, ScipQueryConfig } from '../../../src/domain/types.js';
+import { attributeResidue, diffImpact, diffImpactPartial } from '../../../src/queries/impact/diff-impact.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 
 function createSchema(sqliteDb: Database.Database): void {
@@ -241,4 +241,67 @@ describe('diff-impact accuracy', () => {
       db.close();
     }
   });
+
+  it('attributes changed initializer residue to the enclosing declaration span', () => {
+    const definition = indexedDefinition({
+      symbolId: 10,
+      symbol: 'scip-typescript npm pkg 1.0.0 src/`config.ts`/BUILTIN_SKILLS.',
+      startLine: 0,
+      endLine: 0,
+    });
+
+    const result = attributeResidue(
+      [definition],
+      [{ file: 'src/config.ts', startLine: 4, endLine: 4 }],
+      [{ file: 'src/config.ts', startLine: 0, endLine: 8 }],
+    );
+
+    expect(result.definitions).toEqual([definition]);
+    expect(result.notes).toEqual([{ file: 'src/config.ts', startLine: 4, endLine: 4, method: 'ast-widened' }]);
+  });
+
+  it('keeps edits between AST declaration spans unattributed', () => {
+    const result = attributeResidue(
+      [
+        indexedDefinition({
+          symbolId: 1,
+          symbol: 'scip-typescript npm pkg 1.0.0 src/`a.ts`/first().',
+          relativePath: 'src/a.ts',
+          startLine: 0,
+        }),
+        indexedDefinition({
+          symbolId: 2,
+          symbol: 'scip-typescript npm pkg 1.0.0 src/`a.ts`/second().',
+          relativePath: 'src/a.ts',
+          startLine: 6,
+        }),
+      ],
+      [{ file: 'src/a.ts', startLine: 3, endLine: 3 }],
+      [
+        { file: 'src/a.ts', startLine: 0, endLine: 1 },
+        { file: 'src/a.ts', startLine: 6, endLine: 7 },
+      ],
+    );
+
+    expect(result.definitions).toEqual([]);
+    expect(result.notes).toEqual([{ file: 'src/a.ts', startLine: 3, endLine: 3, method: 'unattributed' }]);
+  });
 });
+
+function indexedDefinition(
+  overrides: Partial<IndexedDefinition> & Pick<IndexedDefinition, 'symbolId' | 'symbol' | 'startLine'>,
+): IndexedDefinition {
+  return {
+    documentId: 1,
+    endLine: overrides.endLine ?? overrides.startLine,
+    relativePath: overrides.relativePath ?? 'src/config.ts',
+    leaf: 'leaf',
+    parentTypeName: null,
+    isFunctionLike: true,
+    isTypeLike: false,
+    kind: 3,
+    documentation: null,
+    enclosingSymbol: null,
+    ...overrides,
+  };
+}

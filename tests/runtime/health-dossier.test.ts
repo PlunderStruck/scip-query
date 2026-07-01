@@ -1,5 +1,5 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { writeProjectHealthDossier } from '../../src/runtime/health-dossier.js';
@@ -19,12 +19,12 @@ describe('writeProjectHealthDossier', () => {
 
     const report = {
       projectRoot,
-      dbPath: join(projectRoot, '.scip', 'index.db'),
-      configuredDbPath: join(projectRoot, '.scip', 'index.db'),
+      dbPath: join(homedir(), '.cache', 'scip-query', 'projects', 'example', 'index.db'),
+      configuredDbPath: join(homedir(), '.cache', 'scip-query', 'projects', 'example', 'index.db'),
       scipCliInstalled: true,
       languages: ['typescript'],
       steps: [{ id: 'health', label: 'Health audit', status: 'ok', message: 'Health score 82.' }],
-      skills: { installed: [], alreadyLinked: ['Codex/scip-query'], skipped: [] },
+      skills: { installed: [], alreadyLinked: ['Codex/scip-query'], pruned: [], skipped: [] },
       initialReadiness: {
         languages: ['typescript'],
         indexers: [{ language: 'typescript', binaryLabel: 'scip-typescript', installed: true, runnable: true }],
@@ -73,7 +73,7 @@ describe('writeProjectHealthDossier', () => {
             confirmationStatus: 'unconfirmed',
             safeForAgentToStart: false,
             recommendedNextStep:
-              'Run scip-health-audit to confirm this signal; use scip-health-improve when the user wants confirmed issues fixed autonomously.',
+              'Run scip-cleanup-audit to confirm this signal; use scip-cleanup-improve when the user wants confirmed issues fixed autonomously.',
           },
         ],
         warnings: [],
@@ -99,6 +99,8 @@ describe('writeProjectHealthDossier', () => {
     expect(result.written).toEqual([result.markdownPath, result.jsonPath]);
 
     const markdown = readFileSync(result.markdownPath, 'utf-8');
+    expect(markdown).not.toContain('Generated:');
+    expect(markdown).not.toContain(projectRoot);
     expect(markdown).toContain('Health score: 82 (risk 90, hygiene 82)');
     expect(markdown).toContain('## Items That Need Attention');
     expect(markdown).toContain('Duplication: Merge repeated setup logic');
@@ -108,6 +110,14 @@ describe('writeProjectHealthDossier', () => {
 
     const json = JSON.parse(readFileSync(result.jsonPath, 'utf-8')) as ProjectSetupReport;
     expect(json.health.score).toBe(82);
-    expect(json.healthDossier?.markdownPath).toBe(result.markdownPath);
+    expect(json.projectRoot).toBe('.');
+    expect(json.dbPath).toBe('~/.cache/scip-query/projects/example/index.db');
+    expect(json.healthDossier?.markdownPath).toBe('docs/scip-query/health-dossier.md');
+    expect(JSON.stringify(json)).not.toContain(projectRoot);
+    expect(JSON.stringify(json)).not.toContain(homedir());
+
+    const second = writeProjectHealthDossier(report);
+    expect(second.written).toEqual([]);
+    expect(second.unchanged).toEqual([second.markdownPath, second.jsonPath]);
   });
 });

@@ -29,6 +29,8 @@ import {
 import { displayPathRange, displayRange, displaySnippet, render } from '../../render.js';
 import { renderDeadGroup } from './renderers.js';
 
+const DEAD_HUMAN_SECTION_LIMIT = 20;
+
 export const handleDead = budgetedDbCommand('dead', ({ db, args, opts, budget }) => {
   const deadOpts: DeadOptions = {
     scope: optionalStringArg(args, 0) || undefined,
@@ -49,6 +51,11 @@ export const handleDead = budgetedDbCommand('dead', ({ db, args, opts, budget })
   const shownFileInternal = showInternal ? fileInternal : [];
   const deadLoc = shownDeadCode.reduce((sum, s) => sum + s.loc, 0);
   const fiLoc = shownFileInternal.reduce((sum, s) => sum + s.loc, 0);
+  const full = booleanOptionValue(opts, 'full');
+  const displayDeadCode = full ? shownDeadCode : shownDeadCode.slice(0, DEAD_HUMAN_SECTION_LIMIT);
+  const displayFileInternal = full ? shownFileInternal : shownFileInternal.slice(0, DEAD_HUMAN_SECTION_LIMIT);
+  const displayDeadLoc = displayDeadCode.reduce((sum, s) => sum + s.loc, 0);
+  const displayFileInternalLoc = displayFileInternal.reduce((sum, s) => sum + s.loc, 0);
   const shownCounts = {
     total: shownDeadCode.length + shownFileInternal.length,
     deadCode: shownDeadCode.length,
@@ -80,20 +87,32 @@ export const handleDead = budgetedDbCommand('dead', ({ db, args, opts, budget })
 
   if (shownDeadCode.length > 0) {
     renderDeadGroup(
-      shownDeadCode,
+      displayDeadCode,
       'DEAD CODE',
-      '  Zero references anywhere — no cross-file callers AND no same-file uses.\n  Safe to delete.',
-      deadLoc,
+      '  Zero references anywhere -- no cross-file callers AND no same-file uses.\n  Deletion candidates -- confirm with cleanup-plan --verify before deleting.',
+      displayDeadLoc,
+      { count: shownDeadCode.length, loc: deadLoc },
     );
+    if (!full && shownDeadCode.length > displayDeadCode.length) {
+      console.log(
+        `\n  Showing top ${displayDeadCode.length} by LOC. Re-run with --full for the remaining ${shownDeadCode.length - displayDeadCode.length}.`,
+      );
+    }
   }
   if (shownFileInternal.length > 0) {
     if (shownDeadCode.length > 0) console.log('');
     renderDeadGroup(
-      shownFileInternal,
+      displayFileInternal,
       'FILE-INTERNAL ONLY',
       '  Used only within the same file (no cross-file callers). Could be a\n  single-use helper, an abstraction-in-progress, or a callback registered\n  through a framework path that static analysis cannot trace (signal\n  handlers, event listeners, dependency injection). NOT necessarily dead —\n  review case by case.',
-      fiLoc,
+      displayFileInternalLoc,
+      { count: shownFileInternal.length, loc: fiLoc },
     );
+    if (!full && shownFileInternal.length > displayFileInternal.length) {
+      console.log(
+        `\n  Showing top ${displayFileInternal.length} by LOC. Re-run with --full for the remaining ${shownFileInternal.length - displayFileInternal.length}.`,
+      );
+    }
   }
 
   const totalParts: string[] = [];
@@ -462,18 +481,43 @@ export const handleSimilarSignatures = budgetedListCommand('similar-signatures',
     queries.similarSignatures(db, {
       scope: stringOptionValue(opts, 'scope'),
       minLoc: definedNumberOption(opts, 'minLoc', 3),
+      maxShapeFrequency: definedNumberOption(opts, 'maxShapeFrequency', 12),
       limit: definedLimitOption(opts, 'limit', 20),
       scanLimit: budget.scanLimit,
       semantic: budget.semantic,
     }),
   format: (g) => {
-    const head = `\nSignature: ${g.signature}  (${g.functions.length} functions)`;
+    const exact = g.exactBody ? ', exact bodies' : '';
+    const head = `\nSignature: ${g.signature}  (${g.functions.length} functions, ${g.locBand} LOC${exact})`;
     const body = g.functions
       .map((f) => `  ${displayPathRange(f.file, f.startLine, f.endLine)}  ${f.shortName}  (${f.loc} LOC)`)
       .join('\n');
     return `${head}\n${body}`;
   },
   emptyMessage: () => 'No same-shape function groups found.',
+  after: (groups) => console.log(`\n${groups.length} group(s) found.`),
+});
+
+export const handleDuplicateBodies = budgetedListCommand('duplicate-bodies', {
+  query: ({ db, opts, budget }) =>
+    queries.duplicateBodies(db, {
+      scope: stringOptionValue(opts, 'scope'),
+      maxLoc: definedNumberOption(opts, 'maxLoc', 15),
+      limit: definedLimitOption(opts, 'limit', 20),
+      scanLimit: budget.scanLimit,
+    }),
+  format: (group) => {
+    const head = `\nBody hash: ${group.hash}  (${group.functions.length} functions)`;
+    const body = group.functions
+      .map((entry, index) => {
+        const role = index === 0 ? 'canonical' : 'duplicate';
+        return `  ${role.padEnd(9)} ${displayPathRange(entry.file, entry.startLine, entry.endLine)}  ${entry.shortName}  (${entry.loc} LOC)`;
+      })
+      .join('\n');
+    return `${head}\n${body}`;
+  },
+  emptyMessage: () => 'No exact duplicate function bodies found.',
+  heuristicLabel: 'duplicate body candidates',
   after: (groups) => console.log(`\n${groups.length} group(s) found.`),
 });
 
@@ -521,9 +565,7 @@ export const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, args, 
       process.exitCode = 1;
       return;
     }
-    console.error(
-      `cleanup-plan --patch: ${selectedBatches.length} compiler-verified batch(es), ${result.totalLoc} LOC.`,
-    );
+    console.error(`cleanup-plan --patch: ${selectedBatches.length} verified batch(es), ${result.totalLoc} LOC.`);
     console.log(patch);
     return;
   }
@@ -558,7 +600,9 @@ export const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, args, 
   if (verification) {
     console.log('\nVerifying batches against the project checker (throwaway worktree at HEAD)...');
     if (verification.checkers.length === 0) {
-      console.log('  No checker detected (need tsconfig.json or a Cargo.toml) — skipped.');
+      console.log(
+        '  No checker detected (need tsconfig.json, go.mod, Python project markers, Clojure project markers, or Cargo.toml) -- skipped.',
+      );
       return;
     }
     for (const checker of verification.checkers) {
@@ -579,11 +623,22 @@ export const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, args, 
         `  WARNING: plan files dirty in working tree (verification runs at HEAD): ${verification.dirtyOverlap.join(', ')}`,
       );
     }
+    if (verification.dirtyWorkingTree.length > 0) {
+      const shown = verification.dirtyWorkingTree.slice(0, 5);
+      const omitted = verification.dirtyWorkingTree.length - shown.length;
+      console.log(
+        `  WARNING: verification ran at HEAD; ${verification.dirtyWorkingTree.length} working-tree change(s) were not compiled: ${shown.join(', ')}${omitted > 0 ? `, ... ${omitted} more` : ''}`,
+      );
+    }
+    const oracleSummary = verificationOracleSummary(verification.checkers);
+    const caveat = verificationLintCaveat(verification.checkers);
     for (const batch of verification.batches) {
       if (batch.status === 'verified') {
-        console.log(`  Batch ${batch.depth}: COMPILER-VERIFIED`);
+        console.log(`  Batch ${batch.depth}: VERIFIED (${oracleSummary})${caveat}`);
       } else {
-        console.log(`  Batch ${batch.depth}: FAILED — the errors below name references the static evidence missed:`);
+        console.log(
+          `  Batch ${batch.depth}: FAILED${batch.reason ? ` (${batch.reason})` : ''} -- the output below names references the static evidence missed or unparsed checker output:`,
+        );
         for (const error of batch.errors ?? []) {
           console.log(`    ${error}`);
         }
@@ -636,10 +691,18 @@ export const handleCleanupApply = budgetedDbCommand('cleanup-apply', ({ db, opts
   applyCleanupBatches(projectRoot, selectedBatches);
   const symbols = selectedBatches.reduce((sum, cleanupBatch) => sum + cleanupBatch.entries.length, 0);
   const loc = selectedBatches.reduce((sum, cleanupBatch) => sum + cleanupBatch.loc, 0);
-  console.log(
-    `Applied ${selectedBatches.length} compiler-verified cleanup batch(es): ${symbols} symbol(s), ${loc} LOC.`,
-  );
+  console.log(`Applied ${selectedBatches.length} verified cleanup batch(es): ${symbols} symbol(s), ${loc} LOC.`);
 });
+
+function verificationOracleSummary(checkers: readonly string[]): string {
+  return checkers.join(', ');
+}
+
+function verificationLintCaveat(checkers: readonly string[]): string {
+  return checkers.some((checker) => /clj-kondo|ruff|compileall/i.test(checker))
+    ? ' -- lint-level or syntax-level check, not a type proof'
+    : '';
+}
 
 export const handleRecentDuplicates = budgetedDbCommand('recent-duplicates', ({ db, args, opts, budget }) => {
   const result = queries.recentDuplicates(db, {
@@ -658,6 +721,7 @@ export const handleRecentDuplicates = budgetedDbCommand('recent-duplicates', ({ 
   if (result.findings.length === 0) {
     return render.empty(`No recent re-implementations found (window: last ${result.windowCommits} commits).`);
   }
+  renderHeuristicNotice('recent re-implementation candidates');
   console.log(`Recent re-implementations (window: last ${result.windowCommits} commits):\n`);
   const multiFindingGroups = result.rootCauseGroups?.filter((group) => group.count > 1) ?? [];
   if (multiFindingGroups.length > 0) {
@@ -715,6 +779,7 @@ export const handleDocDrift = dbCommand(({ db, args, opts }) => {
       `No drifting docs found across ${result.docsScanned} doc(s) — referenced and co-changed code has not moved since each doc last changed.`,
     );
   }
+  renderHeuristicNotice('doc drift candidates');
   console.log(
     `Docs whose referenced or co-changed code moved on without them (${result.docsScanned} docs scanned, ${result.commitsAnalyzed} commits analyzed):\n`,
   );
@@ -751,7 +816,7 @@ export const handleUnusedParams = budgetedListCommand('unused-params', {
     }),
   format: (r) =>
     `  ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}\n` +
-    `    trailing unused: ${r.unusedTrailing.join(', ')}  (${r.unusedTrailing.length} of ${r.paramCount} params — safe to drop)`,
+    `    trailing unused: ${r.unusedTrailing.join(', ')}  (${r.unusedTrailing.length} of ${r.paramCount} params -- type-safe to remove at the signature; check call sites for side-effectful arguments)`,
   emptyMessage: () => 'No trailing unused parameters found.',
   heuristicLabel: 'unused trailing parameter candidates',
   after: (rows) => console.log(`\n${rows.length} function(s) with trailing unused parameters.`),

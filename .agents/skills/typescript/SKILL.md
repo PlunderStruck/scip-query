@@ -1,111 +1,91 @@
 ---
 name: typescript
-description: This skill should be used when the user asks to "optimize TypeScript performance", "speed up tsc compilation", "configure tsconfig.json", "fix type errors", "improve async patterns", or encounters TS errors (TS2322, TS2339, "is not assignable to"). Also triggers on .ts, .tsx, .d.ts file work involving type definitions, module organization, or memory management. Does NOT cover TypeScript basics, framework-specific patterns, or testing.
+description: Apply TypeScript performance and safety rules. Use for tsc speed, tsconfig, type errors, async patterns, module organization, import hygiene, type definitions, memory issues, or .ts/.tsx/.d.ts work. Not for TypeScript basics or framework-specific testing.
 ---
 
 # TypeScript Best Practices
 
-Comprehensive performance optimization guide for TypeScript applications. Contains 42 rules across 8 categories, prioritized by impact to guide automated refactoring and code generation.
+Use this skill as a compact router to the TypeScript rule pack. A TypeScript rule is a narrow, evidence-backed coding guideline whose purpose is to improve compile speed, runtime behavior, type safety, or maintainability for TypeScript projects.
 
-## When to Apply
+The full compiled document is [`AGENTS.md`](AGENTS.md). Individual detailed rules live under [`references/`](references/).
 
-Reference these guidelines when:
-- Configuring tsconfig.json for a new or existing project
-- Writing complex type definitions or generics
-- Optimizing async/await patterns and data fetching
-- Organizing modules and managing imports
-- Reviewing code for compilation or runtime performance
+## Rules
 
-## Rule Categories by Priority
+1. Start with the highest-impact category that matches the work.
+2. Read the specific reference file before applying a non-obvious rule.
+3. Prefer project conventions when a rule conflicts with established local architecture.
+4. Verify with the project typecheck, test, or build command after edits.
 
-| Priority | Category | Impact | Prefix |
-|----------|----------|--------|--------|
-| 1 | Type System Performance | CRITICAL | `type-` |
-| 2 | Compiler Configuration | CRITICAL | `tscfg-` |
-| 3 | Async Patterns | HIGH | `async-` |
-| 4 | Module Organization | HIGH | `module-` |
-| 5 | Type Safety Patterns | MEDIUM-HIGH | `safety-` |
-| 6 | Memory Management | MEDIUM | `mem-` |
-| 7 | Runtime Optimization | LOW-MEDIUM | `runtime-` |
-| 8 | Advanced Patterns | LOW | `advanced-` |
+## Categories
 
-## Quick Reference
+| Priority | Category | Use for | Prefix |
+| --- | --- | --- | --- |
+| 1 | Type system performance | slow type checking, complex types, exported APIs | `type-` |
+| 2 | Compiler configuration | tsconfig, project references, included files | `tscfg-` |
+| 3 | Async patterns | Promise concurrency, async wrappers, return types | `async-` |
+| 4 | Module organization | imports, barrels, dynamic imports, @types scope | `module-` |
+| 5 | Type safety | unknown, guards, exhaustive checks, nullability | `safety-` |
+| 6 | Memory management | timers, listeners, closures, global caches | `mem-` |
+| 7 | Runtime optimization | hot loops, lookups, object spread, string methods | `runtime-` |
+| 8 | Advanced patterns | branded types, satisfies, template literal types | `advanced-` |
 
-### 1. Type System Performance (CRITICAL)
+## Quick Map
 
-- `type-interfaces-over-intersections` - Prefer interfaces over type intersections for faster resolution
-- `type-avoid-large-unions` - Avoid unions with 12+ members (O(n²) checking)
-- `type-extract-conditional-types` - Extract conditional types to enable caching
-- `type-limit-recursion-depth` - Add depth limits to recursive types
-- `type-explicit-return-types` - Add explicit return types to exported functions
-- `type-avoid-deep-generics` - Flatten deeply nested generic hierarchies
-- `type-simplify-mapped-types` - Break complex mapped types into smaller utilities
+Type system:
 
-### 2. Compiler Configuration (CRITICAL)
+- `type-interfaces-over-intersections`
+- `type-avoid-large-unions`
+- `type-extract-conditional-types`
+- `type-limit-recursion-depth`
+- `type-explicit-return-types`
+- `type-avoid-deep-generics`
+- `type-simplify-mapped-types`
 
-- `tscfg-enable-incremental` - Enable incremental compilation for 50-90% faster rebuilds
-- `tscfg-skip-lib-check` - Skip declaration file checking for 20-40% faster builds
-- `tscfg-isolate-modules` - Enable single-file transpilation for bundler integration
-- `tscfg-project-references` - Split large codebases into independent projects
-- `tscfg-exclude-properly` - Configure include/exclude to avoid scanning unnecessary files
-- `tscfg-strict-function-types` - Enable strict mode for optimized variance checks
+Compiler:
 
-### 3. Async Patterns (HIGH)
+- `tscfg-enable-incremental`
+- `tscfg-skip-lib-check`
+- `tscfg-isolate-modules`
+- `tscfg-project-references`
+- `tscfg-exclude-properly`
+- `tscfg-strict-function-types`
 
-- `async-parallel-promises` - Use Promise.all() for independent operations
-- `async-defer-await` - Defer await until value is actually needed
-- `async-avoid-loop-await` - Avoid await inside loops, use Promise.all with map
-- `async-explicit-return-types` - Annotate async function return types
-- `async-avoid-unnecessary-async` - Skip async wrapper when just returning a Promise
+Async and modules:
 
-### 4. Module Organization (HIGH)
+- `async-parallel-promises`
+- `async-defer-await`
+- `async-avoid-loop-await`
+- `async-explicit-return-types`
+- `async-avoid-unnecessary-async`
+- `module-avoid-barrel-imports`
+- `module-avoid-circular-dependencies`
+- `module-use-type-imports`
+- `module-dynamic-imports`
+- `module-control-types-inclusion`
 
-- `module-avoid-barrel-imports` - Import directly from source, not barrel files
-- `module-avoid-circular-dependencies` - Extract shared types to break cycles
-- `module-use-type-imports` - Use type-only imports for types
-- `module-dynamic-imports` - Use dynamic import() for large modules
-- `module-control-types-inclusion` - Explicitly list @types packages
+Safety, memory, runtime, advanced:
 
-### 5. Type Safety Patterns (MEDIUM-HIGH)
+- `safety-prefer-unknown-over-any`
+- `safety-use-type-guards`
+- `safety-exhaustive-checks`
+- `safety-strict-null-checks`
+- `safety-const-assertions`
+- `safety-assertion-functions`
+- `mem-use-weakmap-for-metadata`
+- `mem-avoid-closure-leaks`
+- `mem-cleanup-event-listeners`
+- `mem-avoid-global-state`
+- `mem-clear-timers`
+- `runtime-use-set-for-lookups`
+- `runtime-cache-property-access`
+- `runtime-avoid-object-spread-in-loops`
+- `runtime-use-for-of-for-iteration`
+- `runtime-prefer-array-methods`
+- `runtime-use-string-methods`
+- `advanced-branded-types`
+- `advanced-template-literal-types`
+- `advanced-satisfies-operator`
 
-- `safety-prefer-unknown-over-any` - Use unknown instead of any for safer handling
-- `safety-use-type-guards` - Use type guards for runtime type checking
-- `safety-exhaustive-checks` - Use never for exhaustive union handling
-- `safety-strict-null-checks` - Enable strictNullChecks for null safety
-- `safety-const-assertions` - Use as const for literal type preservation
-- `safety-assertion-functions` - Use assertion functions for validation
+## Use
 
-### 6. Memory Management (MEDIUM)
-
-- `mem-use-weakmap-for-metadata` - Use WeakMap for object metadata
-- `mem-avoid-closure-leaks` - Extract only needed data in closures
-- `mem-cleanup-event-listeners` - Remove event listeners on cleanup
-- `mem-avoid-global-state` - Use bounded caches, avoid unbounded globals
-- `mem-clear-timers` - Clear intervals and timeouts when done
-
-### 7. Runtime Optimization (LOW-MEDIUM)
-
-- `runtime-use-set-for-lookups` - Use Set/Map for O(1) lookups
-- `runtime-cache-property-access` - Cache property access in loops
-- `runtime-avoid-object-spread-in-loops` - Avoid spreading objects in hot loops
-- `runtime-use-for-of-for-iteration` - Use for-of for clean array iteration
-- `runtime-prefer-array-methods` - Prefer native array methods over lodash
-- `runtime-use-string-methods` - Use modern string methods (startsWith, includes)
-
-### 8. Advanced Patterns (LOW)
-
-- `advanced-branded-types` - Use branded types for type-safe IDs
-- `advanced-template-literal-types` - Use template literals for string patterns
-- `advanced-satisfies-operator` - Use satisfies for validation with inference
-
-## How to Use
-
-Read individual reference files for detailed explanations and code examples:
-
-- [Section definitions](references/_sections.md) - Category structure and impact levels
-- [Rule template](assets/templates/_template.md) - Template for adding new rules
-- Example: [type-interfaces-over-intersections](references/type-interfaces-over-intersections.md)
-
-## Full Compiled Document
-
-For the complete guide with all rules expanded: `AGENTS.md`
+Open the specific reference file for detailed examples, apply the smallest relevant rule, and verify with the local TypeScript check. The skill is complete only when the chosen rule, changed files, and verification command are reported.

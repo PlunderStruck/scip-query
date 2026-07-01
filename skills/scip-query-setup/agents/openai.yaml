@@ -1,3 +1,0 @@
-interface:
-  display_name: "scip-query setup"
-  short_description: "Adopt or refresh scip-query indexing, agent guidance, capability checks, and project config"

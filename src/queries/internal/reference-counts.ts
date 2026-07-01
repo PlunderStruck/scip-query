@@ -73,11 +73,7 @@ export function hasAnyReference(referencesBySymbol: ReferenceCounts, symbolId: n
 
 // scip-query: ignore-wrapper — dead-code reporting is gated by cross-file
 // references, so candidate pruning should share the same evidence semantics.
-export function hasCrossFileReference(
-  referencesBySymbol: ReferenceCounts,
-  symbolId: number,
-  ownFile: string,
-): boolean {
+export function hasCrossFileReference(referencesBySymbol: ReferenceCounts, symbolId: number, ownFile: string): boolean {
   const refs = referencesBySymbol.get(symbolId);
   if (!refs) return false;
   for (const [file, evidence] of refs) {

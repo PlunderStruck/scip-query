@@ -3,6 +3,7 @@ import type { IndexedDefinition } from '../../domain/types.js';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { getCalleeRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
 import { getSourceLines, getSourceText } from '../../source/source-text.js';
+import { escapeRegex } from '../../source/source-stripper.js';
 import {
   computeIdfFromDocFreq,
   difference,
@@ -689,10 +690,7 @@ const CALLEE_FINGERPRINT_INDEX = createPerDbValue<Map<string, CalleeFingerprintI
   clearGroups: ['whole-project', 'definition-catalog'],
 });
 
-export function getAllCalleeFingerprints(
-  db: ScipDatabase,
-  opts: CalleeFingerprintCorpusOptions,
-): SymbolFingerprint[] {
+export function getAllCalleeFingerprints(db: ScipDatabase, opts: CalleeFingerprintCorpusOptions): SymbolFingerprint[] {
   const { minCallees, scope, excludeSymbol, scanLimit } = opts;
   const semantic = opts.semantic !== false;
   const byOptions = CALLEE_FINGERPRINT_CORPUS.get(db, () => new Map());
@@ -1702,8 +1700,4 @@ function splitIdentifier(value: string): Set<string> {
 
 function looksLikeDefinitionBoundary(line: string): boolean {
   return /^\s*(?:def|fun|fn|function|class|trait|module|object|enum|interface|public|private|protected)\b/.test(line);
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

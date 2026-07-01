@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { isBinaryAvailable } from './binary.js';
 
 const SCIP_VERSION = 'v0.8.1';
-const SCIP_RELEASE_URL = 'https://github.com/scip-code/scip';
+const SCIP_RELEASE_URL = 'https://github.com/sourcegraph/scip';
 const MANAGED_SCIP_BINARY: Partial<Record<NodeJS.Platform, Partial<Record<string, string>>>> = {
   win32: {
     x64: join('vendor', 'scip', 'win32-x64', 'scip.exe'),

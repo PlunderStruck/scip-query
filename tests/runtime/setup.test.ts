@@ -10,7 +10,10 @@ async function loadSetup(): Promise<{
   existsSync: ReturnType<typeof vi.fn>;
   mkdirSync: ReturnType<typeof vi.fn>;
   readFileSync: ReturnType<typeof vi.fn>;
+  readlinkSync: ReturnType<typeof vi.fn>;
+  readdirSync: ReturnType<typeof vi.fn>;
   symlinkSync: ReturnType<typeof vi.fn>;
+  unlinkSync: ReturnType<typeof vi.fn>;
   writeFileSync: ReturnType<typeof vi.fn>;
 }> {
   vi.resetModules();
@@ -18,6 +21,7 @@ async function loadSetup(): Promise<{
   const symlinkSync = vi.fn();
   const mkdirSync = vi.fn();
   const unlinkSync = vi.fn();
+  const readdirSync = vi.fn(() => []);
   const readFileSync = vi.fn(() => '{}');
   const writeFileSync = vi.fn();
   const readlinkSync = vi.fn(() => {
@@ -54,6 +58,7 @@ async function loadSetup(): Promise<{
     existsSync,
     mkdirSync,
     symlinkSync,
+    readdirSync,
     readFileSync,
     writeFileSync,
     readlinkSync,
@@ -68,7 +73,17 @@ async function loadSetup(): Promise<{
   }));
 
   const module = await import('../../src/runtime/setup.js');
-  return { module, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync };
+  return {
+    module,
+    existsSync,
+    mkdirSync,
+    readFileSync,
+    readlinkSync,
+    readdirSync,
+    symlinkSync,
+    unlinkSync,
+    writeFileSync,
+  };
 }
 
 afterEach(() => {
@@ -162,6 +177,20 @@ describe('skill installation', () => {
     );
   });
 
+  it('prunes stale scip-query-owned skill links during installation', async () => {
+    const { module, readlinkSync, readdirSync, unlinkSync } = await loadSetup();
+    readdirSync.mockImplementation((target: string) => (target === '/home/test/.codex/skills' ? ['scip-debloat'] : []));
+    readlinkSync.mockImplementation((target: string) => {
+      if (target === '/home/test/.codex/skills/scip-debloat') return '/pkg/skills/scip-debloat';
+      throw new Error('not-a-link');
+    });
+
+    const result = module.installSkills({ quiet: true });
+
+    expect(result.pruned).toContain('Codex/scip-debloat');
+    expect(unlinkSync).toHaveBeenCalledWith('/home/test/.codex/skills/scip-debloat');
+  });
+
   it('installs reviewable project hooks into the current repository', async () => {
     const { module, writeFileSync } = await loadSetup();
 
@@ -170,14 +199,45 @@ describe('skill installation', () => {
       removeLegacyUserHooks: false,
     });
 
-    expect(result.installed).toEqual(['.codex/hooks.json', '.claude/settings.json']);
+    expect(result.installed).toEqual(['.codex/hooks.json', '.claude/settings.local.json']);
     expect(writeFileSync).toHaveBeenCalledWith(
       '/repo/.codex/hooks.json',
       expect.stringContaining('"command": "scip-query hook-context"'),
     );
     expect(writeFileSync).toHaveBeenCalledWith(
+      '/repo/.claude/settings.local.json',
+      expect.stringContaining('"command": "scip-query hook-stop"'),
+    );
+  });
+
+  it('can opt Claude hooks into the shared tracked settings file', async () => {
+    const { module, writeFileSync } = await loadSetup();
+
+    const result = module.installProjectAgentHooks('/repo', {
+      homeDir: '/home/test',
+      removeLegacyUserHooks: false,
+      shared: true,
+    });
+
+    expect(result.installed).toEqual(['.codex/hooks.json', '.claude/settings.json']);
+    expect(writeFileSync).toHaveBeenCalledWith(
       '/repo/.claude/settings.json',
       expect.stringContaining('"command": "scip-query hook-stop"'),
+    );
+  });
+
+  it('remembers project hook removal with a Claude local tombstone', async () => {
+    const { module, writeFileSync } = await loadSetup();
+
+    const result = module.installProjectAgentHooks('/repo', {
+      homeDir: '/home/test',
+      remove: true,
+    });
+
+    expect(result.removed).toContain('.claude/settings.local.json (declined)');
+    expect(writeFileSync).toHaveBeenCalledWith(
+      '/repo/.claude/settings.local.json',
+      expect.stringContaining('"scipQueryHooks": "declined"'),
     );
   });
 
@@ -207,6 +267,36 @@ describe('skill installation', () => {
 
     expect(result.skipped).toEqual([{ target: 'user agent hooks', reason: 'SCIP_QUERY_SKIP_HOOK_INSTALL=1' }]);
     expect(writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it('uninstalls only owned skill symlinks', async () => {
+    const { module, existsSync, readlinkSync, readdirSync, unlinkSync } = await loadSetup();
+    existsSync.mockImplementation((target: string) => {
+      if (
+        target === '/home/test/.claude/skills' ||
+        target === '/home/test/.codex/skills' ||
+        target === '/home/test/.agents/skills'
+      ) {
+        return true;
+      }
+      return false;
+    });
+    readdirSync.mockImplementation((target: string) => {
+      if (target === '/home/test/.claude/skills') return ['scip-query', 'custom'];
+      return [];
+    });
+    readlinkSync.mockImplementation((target: string) => {
+      if (target.endsWith('/scip-query')) return '/pkg/skills/scip-query';
+      if (target.endsWith('/custom')) return '/elsewhere/custom';
+      throw new Error('not-a-link');
+    });
+
+    const result = module.uninstallSkills({ homeDir: '/home/test' });
+
+    expect(result.removed).toEqual(['Claude/scip-query']);
+    expect(result.left).toEqual(['Claude/custom (symlink outside scip-query package)']);
+    expect(unlinkSync).toHaveBeenCalledWith('/home/test/.claude/skills/scip-query');
+    expect(unlinkSync).not.toHaveBeenCalledWith('/home/test/.claude/skills/custom');
   });
 
   it('merges hook config without deleting user hooks', async () => {

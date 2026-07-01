@@ -11,14 +11,17 @@ import {
   stringOptionValue,
 } from '../commands/command-execution.js';
 import { displayPathRange, render } from '../render.js';
+import { symbolResolutionBefore, symbolResolutionEmptyMessage, withSymbolResolutionJson } from './symbol-resolution.js';
 
 const handleComplexity = budgetedDbCommand('complexity', ({ db, args, opts, budget }) => {
-  const result = queries.complexity(db, stringArg(args, 0), { semantic: budget.semantic });
+  const query = stringArg(args, 0);
+  const result = queries.complexity(db, query, { semantic: budget.semantic });
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('complexity', args, opts, result);
+    printJsonEnvelope('complexity', args, opts, withSymbolResolutionJson(db, query, result, 'complexity'));
     return;
   }
-  if (!result) return render.empty('Symbol not found.');
+  if (!result) return render.empty(symbolResolutionEmptyMessage(db, query, 'Symbol not found.'));
+  symbolResolutionBefore(db, query);
   console.log(`${displayPathRange(result.relativePath, result.startLine, result.endLine)}  ${result.shortName}\n`);
   console.log(`  LOC:                  ${result.loc}`);
   console.log(`  Branches:             ${result.branches}`);
@@ -51,7 +54,7 @@ const handleSelfAudit = dbCommand(({ db, args, opts }) => {
         ? `unverified ${score.unverified} (oracle partial — no precision claim)`
         : `precision ${score.precision}`;
     console.log(
-      `  ${score.question.padEnd(11)} ${precision}  recall ${score.recall}  (${score.comparedSymbols} symbols)`,
+      `  ${score.question.padEnd(11)} ${precision}  recall ${score.recall}  (${score.comparedSymbols} compared, ${score.skippedOraclePartial} skipped: oracle-partial)`,
     );
   }
   if (result.topDisagreements.length > 0) {

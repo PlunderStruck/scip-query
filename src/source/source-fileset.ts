@@ -165,10 +165,7 @@ export function getSourceFiles(db: ScipDatabase, opts: SourceFilesetOptions = {}
   });
 }
 
-export function sourceFrameworkApplicability(
-  db: ScipDatabase,
-  opts: { scope?: string } = {},
-) {
+export function sourceFrameworkApplicability(db: ScipDatabase, opts: { scope?: string } = {}) {
   let react = false;
   let vue = false;
   for (const file of getSourceFiles(db, { extensions: FRAMEWORK_SOURCE_EXTENSIONS })) {

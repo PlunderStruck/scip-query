@@ -53,7 +53,7 @@ interface ClojureToken {
   line: number;
 }
 
-interface ClojureForm extends FormFrame {}
+type ClojureForm = FormFrame;
 
 export function buildClojureSourceFacts(source: string): SourceFacts {
   const callables: SourceFacts['callables'] = [];

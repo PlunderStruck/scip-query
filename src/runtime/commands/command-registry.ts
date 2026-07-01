@@ -1,5 +1,7 @@
 import type { Command } from 'commander';
 import type { CommandDescriptor } from './command-descriptor-types.js';
+import type { CommandEvidenceTier } from './command-descriptor-types.js';
+import { setCommandEvidenceMap } from './command-execution.js';
 
 type PlainCommanderDefault = string | boolean | string[] | undefined;
 
@@ -12,6 +14,7 @@ export function registerCommandDescriptors(
   program: Command,
   descriptors: readonly CommandDescriptor[],
 ): RegisteredCommandDescriptor[] {
+  setCommandEvidenceMap(new Map(descriptors.map((descriptor) => [descriptor.id, descriptorEvidenceTier(descriptor)])));
   return descriptors.map((descriptor) => {
     const command = descriptor.hidden
       ? program.command(descriptor.command, { hidden: true })
@@ -44,6 +47,14 @@ export function registerCommandDescriptors(
     return { descriptor, command };
   });
 }
+
+function descriptorEvidenceTier(descriptor: CommandDescriptor): CommandEvidenceTier {
+  if (descriptor.evidence) return descriptor.evidence;
+  if (MIXED_EVIDENCE_COMMANDS.has(descriptor.id)) return 'mixed';
+  return descriptor.heuristic ? 'heuristic' : 'graph-fact';
+}
+
+const MIXED_EVIDENCE_COMMANDS = new Set(['diff-gate', 'health', 'plan-context', 'co-change']);
 
 function handleCommandError(err: unknown): void {
   const message = err instanceof Error ? err.message : String(err);

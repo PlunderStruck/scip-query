@@ -17,6 +17,7 @@ function emptyAnalyses(overrides: Partial<HealthAnalyses> = {}): HealthAnalyses 
     isolated: { count: 0, loc: 0 },
     realCycleCount: 0,
     similarCount: 0,
+    duplicateBodies: { count: 0, loc: 0 },
     reactComponentDuplicates: { count: 0, loc: 0 },
     reactHookCandidates: { count: 0, loc: 0 },
     reactLargeComponentPressure: { count: 0, loc: 0 },

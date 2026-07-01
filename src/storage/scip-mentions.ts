@@ -61,7 +61,7 @@ export function mentionedReferenceSymbolRows(
          ${db.pathExclusionsFor('d')}`,
       ...(ids ?? []),
     );
-    }).filter((row) => row.symbol_id !== null);
+  }).filter((row) => row.symbol_id !== null);
 }
 
 export function mentionedReferenceSymbolIdRows(

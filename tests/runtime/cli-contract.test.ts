@@ -91,8 +91,18 @@ describe('CLI contract', () => {
       '--baseline',
       '--write-baseline',
     ]);
-    expect(docs.find((entry) => entry.id === 'setup')?.options).toEqual(['--git-hook', '--json']);
-    expect(docs.find((entry) => entry.id === 'setup-hooks')?.options).toEqual(['--json']);
+    expect(docs.find((entry) => entry.id === 'setup')?.options).toEqual([
+      '--git-hook',
+      '--no-hooks',
+      '--dossier-dir <path>',
+      '--json',
+    ]);
+    expect(docs.find((entry) => entry.id === 'setup-hooks')?.options).toEqual([
+      '--shared',
+      '--remove',
+      '--force',
+      '--json',
+    ]);
     expect(docs.find((entry) => entry.id === 'diff-impact')?.options).toEqual(['--base <ref>', '--json']);
     expect(docs.find((entry) => entry.id === 'diff-gate')?.options).toContain('--json');
     expect(docs.find((entry) => entry.id === 'plan-context')).toMatchObject({
@@ -166,10 +176,21 @@ describe('CLI contract', () => {
     };
     expect(payload).toEqual({
       command: 'fan-in',
+      evidence: 'graph-fact',
       args: ['symbolName'],
       options: { json: true },
       result: { rows: [] },
     });
+  });
+
+  it('stamps descriptor evidence tiers into JSON envelopes', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    printJsonEnvelope('recent-duplicates', [], { json: true }, { rows: [] });
+    printJsonEnvelope('diff-gate', [], { json: true }, { rows: [] });
+
+    expect(JSON.parse(log.mock.calls[0]![0] as string)).toMatchObject({ evidence: 'heuristic' });
+    expect(JSON.parse(log.mock.calls[1]![0] as string)).toMatchObject({ evidence: 'mixed' });
   });
 
   it('treats --full as an unbounded result limit unless --limit is explicit', () => {

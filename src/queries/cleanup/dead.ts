@@ -53,7 +53,7 @@ export interface DeadSummary {
   symbols: DeadSymbolResult[];
   counts: DeadCounts;
   totalCount: number;
-  /** Symbols with zero references anywhere — safe to delete */
+  /** Symbols with zero references anywhere; verify before deleting */
   deadCodeCount: number;
   /** Symbols referenced only within their own file — no cross-file consumers.
    *  May be private helpers (fine) or forgotten exports (needs review). */
@@ -279,7 +279,7 @@ function deadSummary(db: ScipDatabase, rows: readonly DeadRow[]): DeadSummary {
     if (isEntrySurface(db, row.relative_path)) continue;
     if (isRootedSymbol(db, row.symbol, row.relative_path)) continue;
 
-    // dead-code: zero references anywhere (not even in same file) — safe to delete
+    // dead-code: zero references anywhere (not even in same file); verify before deleting
     // file-internal: referenced within same file but never cross-file —
     //   may be a private helper (fine) or a forgotten export (needs review)
     const kind = row.same_file_refs === 0 ? 'dead-code' : 'file-internal';

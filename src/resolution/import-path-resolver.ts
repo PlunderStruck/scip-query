@@ -320,7 +320,9 @@ export function resolveClojureImportPath(db: ScipDatabase, specifier: string): s
   }
 
   for (const ext of CLOJURE_EXTENSIONS) {
-    const basenameMatch = [...indexedPaths].find((relativePath) => basename(relativePath) === `${normalized.split('/').pop()}${ext}`);
+    const basenameMatch = [...indexedPaths].find(
+      (relativePath) => basename(relativePath) === `${normalized.split('/').pop()}${ext}`,
+    );
     if (basenameMatch) return basenameMatch;
   }
 

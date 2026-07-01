@@ -1,25 +1,34 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { getAllDefinitions } from '../../symbols/definition-catalog.js';
 import { getSourceText } from '../../source/source-text.js';
-import { parenBalance } from '../../source/source-stripper.js';
+import { escapeRegex, parenBalance } from '../../source/source-stripper.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { semanticSignature } from '../../semantic/shared-primitives.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { cleanSignature, extractSignature } from '../../storage/scip-rows.js';
 import { applyScanLimit, definitionLoc } from '../query-utils.js';
+import { normalizedBodyForDefinition } from './duplicate-bodies.js';
+
+type SignatureLocBand = '<=5' | '6-20' | '>20';
+
+type SimilarSignatureFunction = {
+  symbol: string;
+  shortName: string;
+  file: string;
+  startLine: number;
+  endLine: number;
+  loc: number;
+};
 
 export interface SimilarSignatureGroup {
   /** The normalized signature shared by all functions in the group */
   signature: string;
+  /** Size band used to avoid mixing tiny helpers with larger implementations. */
+  locBand: SignatureLocBand;
+  /** True when an over-common shape was kept because the bodies match exactly. */
+  exactBody: boolean;
   /** Functions that share this signature */
-  functions: Array<{
-    symbol: string;
-    shortName: string;
-    file: string;
-    startLine: number;
-    endLine: number;
-    loc: number;
-  }>;
+  functions: SimilarSignatureFunction[];
 }
 
 /**
@@ -37,12 +46,20 @@ export interface SimilarSignatureGroup {
  */
 export function similarSignatures(
   db: ScipDatabase,
-  opts: { scope?: string; minLoc?: number; limit?: number; scanLimit?: number; semantic?: boolean } = {},
+  opts: {
+    scope?: string;
+    minLoc?: number;
+    limit?: number;
+    scanLimit?: number;
+    semantic?: boolean;
+    maxShapeFrequency?: number;
+  } = {},
 ): SimilarSignatureGroup[] {
-  const { scope, minLoc = 1, limit, scanLimit } = opts;
+  const { scope, minLoc = 1, limit, scanLimit, maxShapeFrequency = 12 } = opts;
   const includeSemantic = opts.semantic !== false;
   const groups = groupDefinitionsBySignature(db, similarSignatureCandidates(db, { scope, minLoc, scanLimit }), {
     semantic: includeSemantic,
+    maxShapeFrequency,
   });
   const results = sortedSimilarSignatureGroups(groups);
   return limit ? results.slice(0, limit) : results;
@@ -69,20 +86,45 @@ function similarSignatureCandidates(
 function groupDefinitionsBySignature(
   db: ScipDatabase,
   definitions: readonly IndexedDefinition[],
-  opts: { semantic: boolean },
-): Map<string, SimilarSignatureGroup['functions']> {
-  const groups = new Map<string, SimilarSignatureGroup['functions']>();
+  opts: { semantic: boolean; maxShapeFrequency: number },
+): SimilarSignatureGroup[] {
+  const candidates: Array<{ signature: string; definition: IndexedDefinition; fn: SimilarSignatureFunction }> = [];
   for (const definition of definitions) {
     const normalized = resolveNormalizedSignature(db, definition, opts);
     if (!normalized) continue;
-    const bucket = groups.get(normalized) ?? [];
-    bucket.push(similarSignatureEntry(definition));
-    groups.set(normalized, bucket);
+    candidates.push({ signature: normalized, definition, fn: similarSignatureEntry(definition) });
   }
-  return groups;
+
+  const shapeFrequency = new Map<string, number>();
+  for (const candidate of candidates) {
+    shapeFrequency.set(candidate.signature, (shapeFrequency.get(candidate.signature) ?? 0) + 1);
+  }
+
+  const groups = new Map<string, SimilarSignatureGroup>();
+  for (const candidate of candidates) {
+    const locBand = locBandForLoc(candidate.fn.loc);
+    const isOverCommonShape = (shapeFrequency.get(candidate.signature) ?? 0) > opts.maxShapeFrequency;
+    const normalizedBody = isOverCommonShape ? normalizedBodyForDefinition(db, candidate.definition) : null;
+    if (isOverCommonShape && !normalizedBody) continue;
+    const key = isOverCommonShape
+      ? `${candidate.signature}\0body\0${normalizedBody}`
+      : `${candidate.signature}\0band\0${locBand}`;
+    const bucket =
+      groups.get(key) ??
+      ({
+        signature: candidate.signature,
+        locBand,
+        exactBody: isOverCommonShape,
+        functions: [],
+      } satisfies SimilarSignatureGroup);
+    bucket.functions.push(candidate.fn);
+    groups.set(key, bucket);
+  }
+
+  return [...groups.values()];
 }
 
-function similarSignatureEntry(definition: IndexedDefinition): SimilarSignatureGroup['functions'][number] {
+function similarSignatureEntry(definition: IndexedDefinition): SimilarSignatureFunction {
   return {
     symbol: definition.symbol,
     shortName: shortenSymbol(definition.symbol),
@@ -93,12 +135,10 @@ function similarSignatureEntry(definition: IndexedDefinition): SimilarSignatureG
   };
 }
 
-function sortedSimilarSignatureGroups(
-  groups: ReadonlyMap<string, SimilarSignatureGroup['functions']>,
-): SimilarSignatureGroup[] {
+function sortedSimilarSignatureGroups(groups: Iterable<SimilarSignatureGroup>): SimilarSignatureGroup[] {
   const results: SimilarSignatureGroup[] = [];
-  for (const [signature, functions] of groups) {
-    if (functions.length >= 2) results.push({ signature, functions });
+  for (const group of groups) {
+    if (group.functions.length >= 2) results.push(group);
   }
 
   results.sort((a, b) => {
@@ -109,6 +149,12 @@ function sortedSimilarSignatureGroups(
     return locB - locA;
   });
   return results;
+}
+
+function locBandForLoc(loc: number): SignatureLocBand {
+  if (loc <= 5) return '<=5';
+  if (loc <= 20) return '6-20';
+  return '>20';
 }
 
 // scip-query: ignore-extract — this resolves one normalized signature:
@@ -345,8 +391,4 @@ function declarationStartLines(lines: string[], startLine: number, endLine: numb
   }
 
   return candidates;
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

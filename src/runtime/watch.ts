@@ -143,11 +143,7 @@ export class Watcher {
     if (this.extraIgnore.ignores(rel)) return;
 
     // Skip the index files themselves
-    if (
-      filename.endsWith('index.db') ||
-      filename.endsWith('index.scip') ||
-      filename.endsWith('index.db.tmp')
-    ) {
+    if (filename.endsWith('index.db') || filename.endsWith('index.scip') || filename.endsWith('index.db.tmp')) {
       return;
     }
 

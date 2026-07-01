@@ -6,8 +6,13 @@ export function renderDeadGroup(
   title: string,
   explanation: string,
   loc: number,
+  totals: { count: number; loc: number } = { count: rows.length, loc },
 ): void {
-  console.log(`═══ ${title} (${rows.length}, ${loc} LOC) ═══`);
+  const countLabel =
+    totals.count === rows.length && totals.loc === loc
+      ? `${rows.length}, ${loc} LOC`
+      : `${rows.length} of ${totals.count}, ${loc} of ${totals.loc} LOC`;
+  console.log(`═══ ${title} (${countLabel}) ═══`);
   console.log(explanation);
   console.log('');
   const byFile = new Map<string, typeof rows>();

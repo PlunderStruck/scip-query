@@ -1,3 +1,5 @@
+import { escapeRegex } from './source-stripper.js';
+
 const SOURCE_IDENTIFIER_RE = /[A-Za-z_$][A-Za-z0-9_$]*/g;
 const SIMPLE_IDENTIFIER_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 const DIRECT_INCLUDES_CANDIDATE_LIMIT = 512;
@@ -57,8 +59,4 @@ function isCandidateNameMatcher(value: ReadonlySet<string> | CandidateNameMatche
 
 function exactIdentifierRegex(identifier: string): RegExp {
   return new RegExp(`(?<![A-Za-z_$0-9])${escapeRegex(identifier)}(?![A-Za-z_$0-9])`);
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

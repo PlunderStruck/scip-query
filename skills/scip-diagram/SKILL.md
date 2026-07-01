@@ -1,43 +1,40 @@
 ---
 name: scip-diagram
-description: Create evidence-backed HTML diagrams of how code works using scip-query. Use when the user asks for a code flow diagram, architecture diagram, data-flow diagram, dependency map, blast-radius visualization, module map, or an HTML artifact that explains a system.
+description: Diagram code with scip-query evidence. Use for code flow diagrams, architecture diagrams, data-flow maps, dependency maps, blast-radius visuals, module maps, or HTML artifacts explaining a system.
 ---
 
-# SCIP Diagram
+# scip-diagram
 
-Use this skill to build a visual explanation from compiler-resolved code facts. A code diagram is an HTML artifact that turns source units, calls, dependencies, data flow, or blast radius into a visual map. Its defining trait is that every node and edge comes from scip-query evidence, not from guessed folder structure.
+Use this skill to build a visual explanation from compiler-resolved facts. A code diagram is an HTML artifact that turns source units, calls, dependencies, data flow, or blast radius into a visual map; every node and edge must trace to scip-query evidence.
+
+Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 
 ## Rules
 
-1. Run scip-query evidence first, then draw. Do not invent nodes or arrows.
-2. Make a self-contained HTML file unless the user asks for another format.
-3. Include command provenance in the HTML so readers can see which scip-query commands produced the diagram.
-4. Keep diagrams scoped. If the graph is huge, summarize clusters and link to detailed evidence rather than rendering a hairball.
-5. Verify the HTML opens cleanly and contains the expected diagram content.
+1. Run evidence before drawing.
+2. Default to a self-contained HTML file.
+3. Include command provenance in the artifact.
+4. Scope large graphs into clusters instead of rendering a hairball.
+5. Verify the HTML opens and the diagram is nonblank.
 
-## Pick the Diagram Type
+## Workflow
 
-| User wants | Use |
-|---|---|
-| "How does this feature work?" | Call-flow diagram |
-| "Where does this value come from?" | Data-flow diagram |
-| "What depends on this?" | Blast-radius diagram |
-| "What is this module's architecture?" | Module/dependency diagram |
-| "Why is this hard to change?" | Change-surface or bottleneck diagram |
-| "Show classes or ownership" | Hierarchy and surface diagram |
+### 1. Pick diagram type
 
-## Evidence Commands
+| User wants | Diagram |
+| --- | --- |
+| Feature flow | Call flow |
+| Value origin or mutation | Data flow |
+| Dependents | Blast radius |
+| Module architecture | Dependency map |
+| Hard-to-change explanation | Change surface or bottleneck map |
+| Classes or ownership | Hierarchy and surface map |
 
-Start with current graph facts:
+This step is complete only when the diagram's node and edge types are chosen.
 
-```bash
-scip-query status --capabilities
-scip-query status --capabilities
-# If freshness is stale, missing, or unknown:
-# scip-query reindex
-```
+### 2. Collect evidence
 
-Collect only the commands needed for the diagram:
+Use only commands needed for the chosen diagram:
 
 ```bash
 scip-query system <module>
@@ -55,86 +52,31 @@ scip-query affected <symbol> --json
 scip-query change-surface <file> --json --full
 scip-query hierarchy <symbol> --json
 scip-query fan-out <file> --json
-scip-query bottlenecks
-scip-query cycles
 ```
 
-Use `scip-query kind-counts --scope <scope>` and `scip-query by-kind <kind> --scope <scope>` when the diagram needs an inventory of symbols.
+This step is complete only when every planned node and edge has a source command.
 
-## Build the HTML
+### 3. Build the artifact
 
-Write the artifact under:
+Write to:
 
 ```text
 docs/scip-query/diagrams/YYYY-MM-DD-<scope>.html
 ```
 
-If the repo has a different reports convention, follow it. The file should include:
+Include title, scope, summary, visual diagram, legend, evidence table, omitted/collapsed nodes, and unavailable capabilities.
 
-- title and scope;
-- short textual summary;
-- the visual diagram;
-- legend for node colors, edge styles, and risk labels;
-- evidence table listing every scip-query command used;
-- notes for omitted nodes, collapsed clusters, or unavailable capabilities.
+Use inline CSS and semantic HTML or inline SVG. Give stable dimensions, wrapping labels, accessible colors, and distinct edge styles for calls, data, dependencies, and risk.
 
-Implementation guidance:
+This step is complete only when the HTML contains the visual and provenance table.
 
-- Use inline CSS and either semantic HTML layout or inline SVG.
-- Use stable dimensions and labels that wrap cleanly.
-- Use one visual encoding per meaning: call edges, data edges, dependency edges, and risk edges should look different.
-- Keep colors accessible and avoid relying on color alone; include labels or edge styles.
-- For large graphs, group by module, ownership, lifecycle phase, or public surface.
+### 4. Verify
 
-## Diagram Recipes
+Open the file locally or use a browser/screenshot tool when available. Confirm:
 
-### Call Flow
+- diagram is nonblank;
+- labels do not overlap badly;
+- major nodes and edges trace to evidence;
+- `scip-verify` has been invoked when this is part of a docs/code change.
 
-```bash
-scip-query trace <entry-symbol>
-scip-query call-graph <entry-symbol>
-scip-query code <entry-symbol>
-```
-
-Render entry point -> major callees -> side effects or terminal outputs. Label each edge with the call or branch reason when `code` proves it.
-
-### Data Flow
-
-```bash
-scip-query dataflow <value-symbol>
-scip-query slice <value-symbol>
-scip-query slice <value-symbol> --forward
-```
-
-Render producers, transformations, validators, storage, and consumers. Mark inferred or unavailable parts explicitly.
-
-### Dependency or Module Map
-
-```bash
-scip-query system <module>
-scip-query deps <file>
-scip-query rdeps <file>
-scip-query surface <module>
-```
-
-Render internal files, imported modules, reverse consumers, and public surfaces. Distinguish internal dependencies from external consumers.
-
-### Blast Radius
-
-```bash
-scip-query affected <symbol> --json
-scip-query change-surface <file> --json --full
-```
-
-Render the changed symbol, direct consumers, transitive consumers, and high-risk surfaces. Show depth so the user can see how far the change travels.
-
-## Verification
-
-After writing the HTML:
-
-1. Open it locally or use a browser/screenshot tool when available.
-2. Confirm the diagram is nonblank and labels do not overlap badly.
-3. Confirm every major node and edge is traceable to the evidence table.
-4. Run `scip-query diff-gate --json` if the diagram is part of a code or docs change.
-
-End by giving the file path and a short summary of what the diagram proves.
+End with the file path and what the diagram proves.
