@@ -28,6 +28,11 @@ import {
 } from '../../tla/model-contract.js';
 import { fetchTlaToolsJar, runTlaTool, type TlaToolResult } from '../../tla/tool-runner.js';
 import { verifyTlaConformance, type TlaConformanceFinding, type TlaConformanceResult } from '../../tla/conformance.js';
+import { scaffoldTlaModel } from '../../tla/scaffold.js';
+import { buildInstrumentation } from '../../tla/instrument.js';
+import { runTraceCheck, traceHarnessBaseName } from '../../tla/trace-spec.js';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 
 interface TlaVerifyResult {
   operation: 'verify';
@@ -53,8 +58,27 @@ const handleTla: CommandHandler = async (...rawArgs: unknown[]) => {
     console.log(`SHA-256: ${result.sha256}`);
     return;
   }
+  if (operation === 'scaffold') {
+    const target = optionalStringArg(args, 1);
+    if (!target) throw new Error('tla scaffold requires a target source file');
+    withDb((db) => runTlaScaffold(db, args, opts, target));
+    return;
+  }
+  if (operation === 'instrument') {
+    const specArg = optionalStringArg(args, 1);
+    withDb((db) => runTlaInstrument(db, args, opts, specArg));
+    return;
+  }
+  if (operation === 'trace-check') {
+    const specArg = optionalStringArg(args, 1);
+    if (!specArg) throw new Error('tla trace-check requires a spec path');
+    withDb((db) => runTlaTraceCheck(db, args, opts, specArg));
+    return;
+  }
   if (operation !== 'verify') {
-    throw new Error(`unknown tla operation: ${operation}. Supported operations: verify, fetch-tools`);
+    throw new Error(
+      `unknown tla operation: ${operation}. Supported operations: verify, scaffold, instrument, trace-check, fetch-tools`,
+    );
   }
 
   const specArg = optionalStringArg(args, 1);
@@ -62,6 +86,154 @@ const handleTla: CommandHandler = async (...rawArgs: unknown[]) => {
 
   withDb((db) => runTlaVerify(db, args, opts, specArg));
 };
+
+function runTlaScaffold(db: ScipDatabase, args: readonly unknown[], opts: CommandOptions, target: string): void {
+  const projectRoot = db.config.projectRoot;
+  const result = scaffoldTlaModel(db, target, {
+    moduleName: stringOptionValue(opts, 'moduleName'),
+    specDir: stringOptionValue(opts, 'out'),
+  });
+  const outDirArg = stringOptionValue(opts, 'out') ?? join('specs', result.moduleName);
+  const outDir = resolveProjectPath(projectRoot, outDirArg);
+  if (!outDir) throw new Error(`scaffold output dir escapes the project root: ${outDirArg}`);
+
+  const force = booleanOptionValue(opts, 'force');
+  const files = [
+    { path: join(outDir, `${result.moduleName}.tla`), body: result.spec },
+    { path: join(outDir, `${result.moduleName}.cfg`), body: result.cfg },
+    { path: join(outDir, `${result.moduleName}.scip-tla.json`), body: result.map },
+  ];
+  for (const file of files) {
+    if (!force && existsSync(file.path)) {
+      throw new Error(`refusing to overwrite ${file.path} (pass --force to replace scaffold output)`);
+    }
+  }
+  mkdirSync(outDir, { recursive: true });
+  for (const file of files) writeFileSync(file.path, file.body);
+
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('tla', args, opts, {
+      operation: 'scaffold',
+      moduleName: result.moduleName,
+      target,
+      written: files.map((file) => file.path),
+      variables: result.variables,
+      actions: result.actions,
+      warnings: result.warnings,
+    });
+    return;
+  }
+
+  console.log(`Scaffolded ${result.moduleName} from ${target} (draft — review every TODO):`);
+  for (const file of files) console.log(`  wrote ${file.path}`);
+  console.log(
+    `Variables (${result.variables.length}): ${result.variables
+      .map((variable) => `${variable.name}${variable.domainTla ? '' : ' [TODO domain]'}`)
+      .join(', ')}`,
+  );
+  console.log(
+    `Actions (${result.actions.length}): ${result.actions
+      .map((action) => `${action.name}(writes: ${action.writes.join(',') || '-'})`)
+      .join('; ')}`,
+  );
+  for (const warning of result.warnings) console.log(`WARNING: ${warning}`);
+  console.log(
+    `Next: fill the TODO guards/domains, then run 'scip-query tla verify ${join(outDirArg, `${result.moduleName}.tla`)}'.`,
+  );
+}
+
+function runTlaInstrument(
+  db: ScipDatabase,
+  args: readonly unknown[],
+  opts: CommandOptions,
+  specArg: string | undefined,
+): void {
+  const projectRoot = db.config.projectRoot;
+  const mapArg = stringOptionValue(opts, 'map') ?? (specArg ? defaultMapPathForSpec(specArg) : undefined);
+  if (!mapArg) throw new Error('tla instrument requires --map <mapping.json> (or a spec path to derive it from)');
+  const loaded = loadTlaModelContract(projectRoot, mapArg);
+  if (!loaded.loaded) throw new Error(loaded.errors.join('\n'));
+  const { contract, mapDir } = loaded.loaded;
+
+  const instrumentation = buildInstrumentation(db, contract);
+  const outArg = stringOptionValue(opts, 'out') ?? join(mapDir, 'scip-tla-recorder.ts');
+  const outPath = resolveProjectPath(projectRoot, outArg);
+  if (!outPath) throw new Error(`instrument output escapes the project root: ${outArg}`);
+  if (!booleanOptionValue(opts, 'force') && existsSync(outPath)) {
+    throw new Error(`refusing to overwrite ${outPath} (pass --force to replace the recorder)`);
+  }
+  mkdirSync(dirname(outPath), { recursive: true });
+  writeFileSync(outPath, instrumentation.recorderSource);
+
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('tla', args, opts, {
+      operation: 'instrument',
+      recorder: outPath,
+      variables: instrumentation.variables,
+      wiring: instrumentation.wiring,
+    });
+    return;
+  }
+
+  console.log(`Wrote trace recorder: ${outPath}`);
+  console.log('Wire tlaRecord(...) into each mapped action (1 line per action), then run your tests with');
+  console.log("SCIP_TLA_TRACE=<trace.json> set, and check the result with 'scip-query tla trace-check'.");
+  console.log('Wiring sites:');
+  for (const site of instrumentation.wiring) {
+    const where = site.file ? `${site.file}:${site.line}` : `UNRESOLVED (${site.codeRef})`;
+    console.log(`  - ${site.action} -> ${where}  writes: ${site.writes.join(', ') || '-'}`);
+  }
+}
+
+function runTlaTraceCheck(db: ScipDatabase, args: readonly unknown[], opts: CommandOptions, specArg: string): void {
+  const projectRoot = db.config.projectRoot;
+  const specPath = resolveProjectPath(projectRoot, specArg);
+  if (!specPath || !existsSync(specPath)) throw new Error(`TLA+ spec not found: ${specArg}`);
+  const mapArg = stringOptionValue(opts, 'map') ?? defaultMapPathForSpec(specArg);
+  const loaded = loadTlaModelContract(projectRoot, mapArg);
+  if (!loaded.loaded) throw new Error(loaded.errors.join('\n'));
+  const { contract } = loaded.loaded;
+
+  const traceArg = stringOptionValue(opts, 'trace');
+  const tracePaths = [...contract.traces, ...(traceArg ? [traceArg] : [])];
+  const steps = tracePaths.flatMap((tracePath) => loadTraceSteps(projectRoot, tracePath).steps);
+  if (steps.length === 0) {
+    throw new Error('no trace steps found: pass --trace <file> or list traces in the mapping contract');
+  }
+
+  const verdict = runTraceCheck({
+    specPath,
+    baseModuleName: traceHarnessBaseName(specPath),
+    mappedVariables: Object.keys(contract.variables),
+    steps,
+    toolOptions: {
+      projectRoot,
+      tlaToolsJar: stringOptionValue(opts, 'tlaTools'),
+    },
+  });
+
+  const exitCode =
+    verdict.status === 'accepted'
+      ? 0
+      : verdict.status === 'unavailable' && booleanOptionValue(opts, 'allowUnknown')
+        ? 0
+        : 1;
+
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('tla', args, opts, { operation: 'trace-check', ...verdict, exitCode });
+    process.exitCode = exitCode;
+    return;
+  }
+
+  console.log(`TLA+ trace-check: ${specPath}`);
+  console.log(`Trace: ${steps.length} step(s) -> ${verdict.states} pinned state(s)`);
+  if (verdict.generation) {
+    console.log(`Pinned variables: ${verdict.generation.variables.join(', ')}`);
+    for (const warning of verdict.generation.warnings) console.log(`WARNING: ${warning}`);
+  }
+  console.log(`${verdict.status.toUpperCase()}: ${verdict.detail}`);
+  process.exitCode = exitCode;
+}
 
 function runTlaVerify(db: ScipDatabase, args: readonly unknown[], opts: CommandOptions, specArg: string): void {
   const projectRoot = db.config.projectRoot;
@@ -146,7 +318,8 @@ export const tlaQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'tla',
     command: 'tla <operation> [spec]',
-    description: 'Verify a TLA+ model and its TypeScript mapping contract',
+    description:
+      'TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation',
     options: withJsonOption([
       option('--map <file>', 'scip-query TLA mapping JSON file'),
       option('--config <file>', 'TLA+ checker config file'),
@@ -156,10 +329,15 @@ export const tlaQueryCommandDescriptors: CommandDescriptor[] = [
       option('--length <n>', 'Bounded checker length for Apalache', parseInteger, 10),
       option('--trace <file>', 'Runtime trace JSON file to check against the mapping'),
       option('--allow-unknown', 'Exit zero when only unknown findings remain'),
+      option('--out <path>', 'Output directory (scaffold) or file (instrument)'),
+      option('--module-name <name>', 'Module name for scaffolded specs'),
+      option('--force', 'Overwrite existing scaffold/instrument output'),
     ]),
     renderShape: 'custom',
     docs: doc('Formal Models', [
       'scip-query tla verify specs/Queue.tla --map specs/Queue.scip-tla.json',
+      'scip-query tla scaffold src/queue/store.ts',
+      'scip-query tla trace-check specs/Queue.tla --trace traces/run1.json',
       'scip-query tla fetch-tools',
     ]),
     handler: handleTla,
@@ -231,7 +409,7 @@ function proofSummary(result: TlaVerifyResult): string {
     `writes: ${result.conformance.staticWrites.length} verified, ${writeWaivers} waived`,
     `reads: ${result.conformance.staticReads.length} verified, ${readWaivers} waived`,
     `calls: ${callChecks === 0 ? 'checked' : `${callChecks} missing`}`,
-    `traces: ${result.conformance.traceStepsChecked} steps`,
+    `traces: ${result.conformance.traceStepsChecked} steps (key-diff; 'tla trace-check' proves acceptance)`,
   ].join(' | ');
 }
 

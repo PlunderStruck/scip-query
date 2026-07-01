@@ -148,7 +148,7 @@ scip-query diff-impact # Compute changed symbols and downstream consumers from c
 ### Formal Models
 
 ```bash
-scip-query tla <operation> [spec] # Verify a TLA+ model and its TypeScript mapping contract
+scip-query tla <operation> [spec] # TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation
 ```
 
 ### Planning

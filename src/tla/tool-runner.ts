@@ -39,6 +39,8 @@ export interface TlaToolRunOptions {
   timeoutMs?: number;
   metaDir?: string;
   spawn?: CommandAvailabilitySpawn;
+  /** Environment for jar/binary resolution; defaults to process.env. Injectable for hermetic tests. */
+  env?: NodeJS.ProcessEnv;
 }
 
 export interface TlaToolsFetchResult {
@@ -193,10 +195,11 @@ function resolveApalacheBin(opts: TlaToolRunOptions): string {
 }
 
 function resolveTlaToolsJar(opts: TlaToolRunOptions): string | null {
+  const env = opts.env ?? process.env;
   const candidates = [
     opts.tlaToolsJar,
-    process.env['TLA_TOOLS_JAR'],
-    resolveTlaToolsJarCachePath(),
+    env['TLA_TOOLS_JAR'],
+    resolveTlaToolsJarCachePath(env),
     join(opts.projectRoot, 'tla2tools.jar'),
     join(opts.projectRoot, 'tools', 'tla2tools.jar'),
   ].filter((candidate): candidate is string => typeof candidate === 'string' && candidate.length > 0);

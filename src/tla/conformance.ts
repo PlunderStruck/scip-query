@@ -80,12 +80,12 @@ interface ResolvedReferent {
   match: SymbolMatch | null;
 }
 
-interface VariableAlias {
+export interface VariableAlias {
   variable: string;
   alias: string;
 }
 
-interface TlaStaticWrite {
+export interface TlaStaticWrite {
   variable: string;
   alias: string;
   file: string;
@@ -96,7 +96,7 @@ interface TlaStaticWrite {
   enclosingShort?: string;
 }
 
-interface TlaStaticRead {
+export interface TlaStaticRead {
   variable: string;
   alias: string;
   file: string;
@@ -524,7 +524,7 @@ function verifyTraces(
   }
 }
 
-function collectWritesForRange(
+export function collectWritesForRange(
   db: ScipDatabase,
   file: string,
   startLine: number,
@@ -536,7 +536,7 @@ function collectWritesForRange(
   return collectSourceScanWrites(db, file, startLine, endLine, aliases);
 }
 
-function collectReadsForRange(
+export function collectReadsForRange(
   db: ScipDatabase,
   file: string,
   startLine: number,

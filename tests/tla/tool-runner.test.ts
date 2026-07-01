@@ -110,6 +110,9 @@ describe('TLA tool runner', () => {
       specPath,
       checker: 'tlc',
       spawn,
+      // Hermetic: without this, a jar cached by a previous `tla fetch-tools`
+      // run in the developer's real cache dir makes this test flip.
+      env: { SCIP_QUERY_CACHE_DIR: join(root, 'empty-cache') },
     });
 
     expect(result.status).toBe('skipped');
