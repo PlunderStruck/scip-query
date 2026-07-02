@@ -1,8 +1,8 @@
 import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
 import { platform, arch } from 'node:os';
 import { isBinaryAvailable } from './binary.js';
-import { SCIP_WINDOWS_ASSETS, type ScipWindowsArch, type ScipWindowsAsset } from './scip-windows-assets.js';
 import { fetchVerifiedBinary, resolveScipQueryCachePath } from '../core/verified-binary-fetch.js';
 
 const SCIP_VERSION = 'v0.8.1';
@@ -11,7 +11,7 @@ const SCIP_RELEASE_URL = 'https://github.com/sourcegraph/scip';
 /** Env var that lets a user point directly at a local `scip` binary, bypassing PATH and the download cache. */
 export const SCIP_BIN_ENV_VAR = 'SCIP_QUERY_SCIP_BIN';
 
-export type ScipBinarySource = 'path' | 'env' | 'cache';
+export type ScipBinarySource = 'path' | 'env' | 'sidecar';
 
 export interface ScipBinaryResolution {
   source: ScipBinarySource;
@@ -24,13 +24,14 @@ export interface ScipBinaryResolutionDeps {
   env: NodeJS.ProcessEnv;
   isOnPath: (name: string) => boolean;
   fileExists: (path: string) => boolean;
-  cachePath: (arch: string, env: NodeJS.ProcessEnv) => string;
+  resolveSidecar: (arch: string) => string | null;
 }
 
 /**
  * Pure resolution matrix for the `scip` CLI binary. Four outcomes:
- * found on PATH, found via `SCIP_QUERY_SCIP_BIN`, found in the download
- * cache (Windows only — see `fetchScipWindowsBinary`), or not found.
+ * found on PATH, found via `SCIP_QUERY_SCIP_BIN`, resolved from the
+ * npm sidecar package (Windows only — `scip-query-scip-windows`, installed
+ * automatically as an os-gated optionalDependency), or not found.
  * All I/O is injected so this is unit-testable without touching the disk.
  */
 export function resolveScipBinaryPure(deps: ScipBinaryResolutionDeps): ScipBinaryResolution | null {
@@ -44,18 +45,30 @@ export function resolveScipBinaryPure(deps: ScipBinaryResolutionDeps): ScipBinar
   }
 
   if (deps.platform === 'win32') {
-    const cached = deps.cachePath(deps.arch, deps.env);
-    if (deps.fileExists(cached)) {
-      return { source: 'cache', path: cached };
+    const sidecar = deps.resolveSidecar(deps.arch);
+    if (sidecar && deps.fileExists(sidecar)) {
+      return { source: 'sidecar', path: sidecar };
     }
   }
 
   return null;
 }
 
-/** Resolve the cache path for a downloaded Windows `scip.exe`. */
-export function resolveScipBinaryCachePath(archName: string, env: NodeJS.ProcessEnv = process.env): string {
-  return resolveScipQueryCachePath(`scip-win32-${archName}.exe`, env);
+/**
+ * Resolve the Windows scip.exe shipped by the `scip-query-scip-windows`
+ * npm sidecar (universal package: both arches; os-gated so only Windows
+ * installs pay for it). Falls back to the x64 binary on arm64 (emulation).
+ */
+export function resolveScipSidecarBinary(archName: string): string | null {
+  const require = createRequire(import.meta.url);
+  for (const candidate of archName === 'arm64' ? ['arm64', 'x64'] : [archName]) {
+    try {
+      return require.resolve(`scip-query-scip-windows/scip-win32-${candidate}.exe`);
+    } catch {
+      // Sidecar not installed (or this arch missing): try the next candidate.
+    }
+  }
+  return null;
 }
 
 export function resolveScipBinary(env: NodeJS.ProcessEnv = process.env): string | null {
@@ -65,7 +78,7 @@ export function resolveScipBinary(env: NodeJS.ProcessEnv = process.env): string 
     env,
     isOnPath: isBinaryAvailable,
     fileExists: existsSync,
-    cachePath: resolveScipBinaryCachePath,
+    resolveSidecar: resolveScipSidecarBinary,
   });
   return resolution?.path ?? null;
 }
@@ -149,15 +162,11 @@ export function printScipInstallInstructions(): void {
     console.log('  brew install sourcegraph/scip/scip\n');
     console.log('Or download manually:');
   } else if (platform() === 'win32') {
-    const asset = SCIP_WINDOWS_ASSETS[arch() as ScipWindowsArch];
-    console.log('`scip-query reindex` downloads a checksum-verified scip.exe automatically.');
-    console.log(`If that fails, set ${SCIP_BIN_ENV_VAR} to a local scip.exe path, or install scip on PATH.`);
-    if (asset) {
-      console.log(`Managed download: ${asset.url}\n`);
-    } else {
-      console.log(`No prebuilt scip binary is published for win32-${arch()}; build one with:`);
-      console.log('  npm run build:scip-windows\n');
-    }
+    console.log('On Windows the scip binary ships via the npm sidecar package scip-query-scip-windows,');
+    console.log('installed automatically with scip-query. If it is missing:');
+    console.log('  npm install -g scip-query-scip-windows');
+    console.log(`Or set ${SCIP_BIN_ENV_VAR} to a local scip.exe path.
+`);
     console.log('Upstream release page:');
   } else {
     console.log('Download from:');
@@ -226,7 +235,6 @@ export interface ScipWindowsBinaryFetchOptions {
   cachePath?: string;
   fetchImpl?: typeof fetch;
   env?: NodeJS.ProcessEnv;
-  assets?: Partial<Record<ScipWindowsArch, ScipWindowsAsset>>;
 }
 
 export interface ScipWindowsBinaryFetchResult {
@@ -242,26 +250,3 @@ export interface ScipWindowsBinaryFetchResult {
  * primitive (src/core/verified-binary-fetch.ts) — the same one
  * `fetchTlaToolsJar` (src/tla/tool-runner.ts) uses.
  */
-export async function fetchScipWindowsBinary(
-  opts: ScipWindowsBinaryFetchOptions = {},
-): Promise<ScipWindowsBinaryFetchResult> {
-  const env = opts.env ?? process.env;
-  const archName = opts.archName ?? arch();
-  const assets = opts.assets ?? SCIP_WINDOWS_ASSETS;
-  const asset = assets[archName as ScipWindowsArch];
-  if (!asset || !asset.sha256) {
-    throw new Error(
-      `No published scip binary for win32-${archName}. ` +
-        `Install scip on PATH, or build one locally with \`npm run build:scip-windows\` and set ${SCIP_BIN_ENV_VAR}.`,
-    );
-  }
-
-  const path = opts.cachePath ?? resolveScipBinaryCachePath(archName, env);
-  const result = await fetchVerifiedBinary({
-    cachePath: path,
-    url: asset.url,
-    expectedSha256: asset.sha256,
-    fetchImpl: opts.fetchImpl,
-  });
-  return { ...result, url: asset.url };
-}

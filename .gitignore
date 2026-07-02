@@ -13,3 +13,5 @@ reports/
 # npm run build:scip-windows output — release assets uploaded to GitHub
 # Releases before publish, never committed or bundled into the npm package.
 vendor/
+packages/scip-windows/*.exe
+packages/scip-windows/LICENSE.scip

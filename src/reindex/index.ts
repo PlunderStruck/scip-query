@@ -13,7 +13,7 @@ import {
 } from 'node:fs';
 import { basename, dirname, extname, join } from 'node:path';
 import { platform } from 'node:os';
-import { fetchScipWindowsBinary, resolveScipBinary, tryInstallScipCli } from '../runtime/scip-cli.js';
+import { resolveScipBinary, tryInstallScipCli } from '../runtime/scip-cli.js';
 import type { LastRefreshMetadata, RefreshTrigger, SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
 import { auxiliaryDocumentsAugmentationStage } from './augment.js';
 import { detectLanguages } from './detect.js';
@@ -463,18 +463,12 @@ async function ensureScipCliAvailable(skipAutoInstall: boolean, onStatus: (messa
   }
 
   if (platform() === 'win32') {
-    onStatus('scip CLI not found; downloading the checksum-verified Windows scip.exe...');
-    try {
-      await fetchScipWindowsBinary();
-      return;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(
-        `The scip CLI is required but the automatic Windows download failed: ${message}\n` +
-          'Install manually and set SCIP_QUERY_SCIP_BIN, or place scip.exe on PATH.',
-        { cause: error },
-      );
-    }
+    throw new Error(
+      'The scip CLI was not found. On Windows it ships via the npm sidecar package ' +
+        'scip-query-scip-windows (installed automatically with scip-query). ' +
+        "Reinstall with optional dependencies enabled, run 'npm install -g scip-query-scip-windows', " +
+        'or set SCIP_QUERY_SCIP_BIN to a local scip.exe path.',
+    );
   }
 
   onStatus('scip CLI not found on PATH. Attempting auto-install...');

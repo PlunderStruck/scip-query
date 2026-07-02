@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const SCIP_VERSION = process.env.SCIP_VERSION ?? 'v0.8.1';
 const SCIP_REPO_URL = process.env.SCIP_REPO_URL ?? 'https://github.com/scip-code/scip.git';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const VENDOR_DIR = join(ROOT, 'vendor', 'scip');
+const VENDOR_DIR = join(ROOT, 'packages', 'scip-windows');
 
 const TARGETS = [
   { goarch: 'amd64', packageArch: 'x64' },
@@ -60,9 +60,8 @@ try {
   );
 
   for (const target of TARGETS) {
-    const outputDir = join(VENDOR_DIR, `win32-${target.packageArch}`);
-    const outputPath = join(outputDir, 'scip.exe');
-    mkdirSync(outputDir, { recursive: true });
+    const outputPath = join(VENDOR_DIR, `scip-win32-${target.packageArch}.exe`);
+    mkdirSync(VENDOR_DIR, { recursive: true });
 
     run('go', ['build', '-trimpath', '-ldflags=-s -w', '-o', outputPath, './cmd/scip'], {
       cwd: checkoutDir,

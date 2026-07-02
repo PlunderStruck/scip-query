@@ -304,9 +304,9 @@
     "bench:evidence-products": "node scripts/evidence-product-contract.mjs",
     "calibrate": "node scripts/accuracy-calibration.mjs",
     "docs:commands": "vite-node scripts/render-command-reference.ts --write",
-    "check:scip-windows-assets": "vite-node scripts/check-scip-windows-assets.ts",
-    "prepublishOnly": "npm run check:scip-windows-assets && npm run build",
-    "postinstall": "node dist/postinstall.js || true"
+    "prepublishOnly": "npm run publish:scip-windows && npm run build",
+    "postinstall": "node dist/postinstall.js || true",
+    "publish:scip-windows": "vite-node scripts/publish-scip-windows.ts"
   },
   "keywords": [
     "scip",
@@ -339,10 +339,11 @@
     "ignore": "^7.0.3",
     "ts-morph": "^28.0.0"
   },
-  "//optionalDependencies": "Native parsers and bundled SCIP indexers go in optionalDependencies so a failed install (missing build tools, restricted registry, incompatible platform) downgrades scip-query gracefully — the affected language falls back to regex parsing or asks the user to install its indexer manually — instead of blocking npm install.",
+  "//optionalDependencies": "Native parsers and bundled SCIP indexers go in optionalDependencies so a failed install (missing build tools, restricted registry, incompatible platform) downgrades scip-query gracefully \u2014 the affected language falls back to regex parsing or asks the user to install its indexer manually \u2014 instead of blocking npm install.",
   "optionalDependencies": {
     "@sourcegraph/scip-typescript": "^0.4.0",
     "scip-python-plus": "^0.7.4",
+    "scip-query-scip-windows": "0.11.0",
     "tree-sitter": "0.21.1",
     "tree-sitter-c": "0.23.2",
     "tree-sitter-c-sharp": "0.23.1",

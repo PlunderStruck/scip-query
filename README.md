@@ -286,7 +286,7 @@ scip-query health --write-baseline   # start the ratchet
 - `scip` CLI, from [Sourcegraph SCIP releases](https://github.com/sourcegraph/scip/releases)
 - A language-specific SCIP indexer for your project
 
-On Windows, `scip-query reindex` looks for `scip` on PATH, then `SCIP_QUERY_SCIP_BIN`, then downloads a checksum-verified `scip.exe` from this project's GitHub releases into the cache directory automatically on first run. Set `SCIP_QUERY_SCIP_BIN` to a local `scip.exe` path to skip the download, or run `scip-query check-deps` for platform-specific install instructions.
+On Windows, the `scip` binary is installed automatically from npm: `scip-query-scip-windows` is an os-gated optional dependency (universal package, x64 + arm64) that only Windows installs fetch. Resolution order: `scip` on PATH, then `SCIP_QUERY_SCIP_BIN`, then the sidecar package. Run `scip-query check-deps` for platform-specific install instructions.
 
 | Language                      | Indexer          | Install                                                                                                                       |
 | ----------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -401,7 +401,7 @@ Useful environment variables:
 | `SCIP_QUERY_INDEX_DB`     | Override the SQLite database path                                     |
 | `SCIP_QUERY_INDEX_SCIP`   | Override the SCIP protobuf path                                       |
 | `SCIP_QUERY_CACHE_DIR`    | Override the cache directory                                          |
-| `SCIP_QUERY_SCIP_BIN`     | Path to a local `scip` binary (Windows: skips the automatic download) |
+| `SCIP_QUERY_SCIP_BIN`     | Path to a local `scip` binary (overrides PATH and the Windows sidecar) |
 
 Query results are filtered through the project's `.gitignore`. If none exists, common generated directories such as `dist/`, `target/`, `node_modules/`, and `.venv/` are excluded by default.
 
