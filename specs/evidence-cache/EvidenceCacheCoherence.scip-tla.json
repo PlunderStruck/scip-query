@@ -1,0 +1,243 @@
+{
+  "module": "specs/evidence-cache/EvidenceCacheCoherence.tla",
+  "config": "specs/evidence-cache/EvidenceCacheCoherence.cfg",
+  "scope": [
+    "src/storage/evidence-cache.ts"
+  ],
+  "variables": {
+    "fileContent": {
+      "code": [
+        "src/storage/evidence-cache.ts/CONTENT_HASH_CACHE"
+      ],
+      "aliases": [
+        "content"
+      ],
+      "waive": {
+        "reason": "Models arbitrary workspace file content, an external actor's state; the nearest observable is the per-db content-hash cache, but no single stored field holds working-tree content."
+      }
+    },
+    "indexView": {
+      "code": [
+        "src/storage/evidence-cache.ts/PROJECT_FINGERPRINT_CACHE"
+      ],
+      "aliases": [
+        "fingerprint"
+      ],
+      "resource": {
+        "path": "metaPath"
+      }
+    },
+    "evidence": {
+      "code": [
+        "src/storage/evidence-cache.ts/CONNECTIONS"
+      ],
+      "aliases": [
+        "evidenceRowsModelOnly"
+      ],
+      "waive": {
+        "reason": "Evidence rows live behind prepared SQL statements on the connection; neither identifier assignment nor an fs call exists for the static scan or resource aliasing to attribute. Known residual class (SQL-backed state) recorded in the TLA skill-loop introspection log."
+      }
+    },
+    "projEvidence": {
+      "code": [
+        "src/storage/evidence-cache.ts/PROJECT_EVIDENCE_KINDS"
+      ],
+      "aliases": [
+        "projectEvidenceRowsModelOnly"
+      ],
+      "waive": {
+        "reason": "Same SQL-backed residual class as evidence; keyed by projectEvidenceFingerprint rather than file content hash."
+      }
+    },
+    "conn": {
+      "code": [
+        "src/storage/evidence-cache.ts/CONNECTIONS"
+      ],
+      "aliases": [
+        "CONNECTIONS"
+      ]
+    },
+    "servedStale": {
+      "code": [
+        "src/storage/evidence-cache.ts/VERSION"
+      ],
+      "aliases": [
+        "servedStale"
+      ],
+      "waive": {
+        "reason": "Observer flag existing only in the model to make NoStaleServe checkable; staleness is impossible by key construction in code, so nothing materializes it."
+      }
+    },
+    "servedDisabled": {
+      "code": [
+        "src/storage/evidence-cache.ts/VERSION"
+      ],
+      "aliases": [
+        "servedDisabled"
+      ],
+      "waive": {
+        "reason": "Observer flag for FailClosed; the disabled path returns null before any serve, so no code state records an attempted serve."
+      }
+    }
+  },
+  "actions": {
+    "EditFile": {
+      "code": [
+        "src/storage/evidence-cache.ts/fileContentHash"
+      ],
+      "reads": [
+        "fileContent"
+      ],
+      "writes": [
+        "fileContent"
+      ],
+      "calls": [],
+      "waive": {
+        "reads": [
+          "fileContent"
+        ],
+        "writes": [
+          "fileContent"
+        ],
+        "reason": "External editor/agent mutates the working tree; the mapped referent is where changed content first becomes visible to this module."
+      }
+    },
+    "Publish": {
+      "code": [
+        "src/reindex/index.ts/promoteReindexArtifacts"
+      ],
+      "reads": [
+        "fileContent"
+      ],
+      "writes": [
+        "indexView"
+      ],
+      "calls": [],
+      "waive": {
+        "reads": [
+          "fileContent"
+        ],
+        "reason": "The publish step snapshots indexer output derived from working-tree content; content is read by the indexer subprocess, not by this function's body."
+      }
+    },
+    "ComputeAndStore": {
+      "code": [
+        "src/storage/evidence-cache.ts/writeCachedFileEvidence"
+      ],
+      "reads": [
+        "conn",
+        "indexView"
+      ],
+      "writes": [
+        "evidence"
+      ],
+      "calls": [],
+      "waive": {
+        "writes": [
+          "evidence"
+        ],
+        "reads": [
+          "indexView"
+        ],
+        "reason": "Row insertion is a prepared SQL statement (SQL-backed residual class); the index view is read via the content-hash key argument computed by the caller."
+      }
+    },
+    "ComputeProjectProduct": {
+      "code": [
+        "src/storage/evidence-cache.ts/writeCachedProjectEvidence"
+      ],
+      "reads": [
+        "conn",
+        "indexView"
+      ],
+      "writes": [
+        "projEvidence"
+      ],
+      "calls": [],
+      "waive": {
+        "writes": [
+          "projEvidence"
+        ],
+        "reason": "SQL-backed residual class."
+      }
+    },
+    "CurrentServe": {
+      "code": [
+        "src/storage/evidence-cache.ts/readCachedFileEvidence"
+      ],
+      "reads": [
+        "conn",
+        "evidence",
+        "indexView"
+      ],
+      "writes": [
+        "servedStale"
+      ],
+      "calls": [],
+      "waive": {
+        "reads": [
+          "evidence",
+          "indexView"
+        ],
+        "writes": [
+          "servedStale"
+        ],
+        "reason": "Row lookup is a prepared SQL SELECT keyed by content hash; servedStale is a model observer with no code twin."
+      }
+    },
+    "CurrentServeProject": {
+      "code": [
+        "src/storage/evidence-cache.ts/readCachedProjectEvidence"
+      ],
+      "reads": [
+        "conn",
+        "projEvidence",
+        "indexView"
+      ],
+      "writes": [],
+      "calls": [],
+      "waive": {
+        "reads": [
+          "projEvidence",
+          "indexView"
+        ],
+        "reason": "SQL-backed residual class; fingerprint compared inside the SELECT key."
+      }
+    },
+    "CacheError": {
+      "code": [
+        "src/storage/evidence-cache.ts/disable"
+      ],
+      "reads": [
+        "conn"
+      ],
+      "writes": [
+        "conn"
+      ],
+      "calls": []
+    },
+    "DisabledServeAttempt": {
+      "code": [
+        "src/storage/evidence-cache.ts/readCachedFileEvidence"
+      ],
+      "reads": [
+        "conn"
+      ],
+      "writes": [],
+      "calls": [],
+      "waive": {
+        "reads": [
+          "conn"
+        ],
+        "reason": "The disabled-serve guard is the null-connection early return inside the read path; connection state is consulted via connectionFor, whose lazy initialization corresponds to the model's Init and is deliberately not a mapped action (introspection entry #4: mappings cannot bind Init to referents)."
+      }
+    }
+  },
+  "invariants": [
+    "TypeOK",
+    "NoStaleServe",
+    "FailClosed"
+  ],
+  "traces": [],
+  "unmappedWriteScope": "actions"
+}
