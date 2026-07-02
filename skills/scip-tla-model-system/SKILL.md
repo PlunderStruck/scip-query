@@ -119,6 +119,7 @@ Top-level `"unmappedWriteScope": "actions" | "scope-files"` (default `"scope-fil
 - **Know the three state backings.** Program variables: normal aliases. Filesystem-backed state (locks, published artifacts): `resource: { "path": ... }` bindings make fs calls provable. Database/SQL-backed state: statically invisible — unmatchable alias plus a waiver naming the residual class; never fake attribution.
 - **Lazy initialization is Init, not an action.** A factory that lazily builds state corresponds to the model's `Init`; mappings cannot bind Init to referents, so do not map the factory as an action — waive with that reason, and use `unmappedWriteScope: "actions"` when whole-file sweeps only re-find Init writes.
 - **Design for traces early.** The trace encoder pins scalar (and scalar-array) variables only; a model whose state is all functions and tuple-sets cannot be trace-validated. If trace-check matters for the slice, add scalar projection variables (counts, last outcomes, a phase) alongside the structured state.
+- **Trace until covered.** One accepted trace proves one path, not the mapping. Record traces until every Current action with a code twin is exercised by at least one accepted trace, or is explicitly classified with why it cannot be (unreachable without fault injection, environment-gated, model-only). An action no trace ever exercises is a conformance claim resting on static mapping alone.
 
 ## Accuracy Rules
 

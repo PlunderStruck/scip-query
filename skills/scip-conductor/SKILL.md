@@ -104,6 +104,13 @@ Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only
   If source is lost, check `dist/*.map` sourcesContent before panicking.
 - **Commit working states early and surgically** (explicit paths, never
   `add -A` on a shared tree); an unbisectable pile of work is a liability.
+- **Make the commit cadence mechanical, not aspirational.** At every step
+  boundary run the arithmetic check: steps completed == commits made. If
+  they differ, stop and commit before touching anything new. "I'll commit
+  when it's all done" is the signature decay of a long or low-effort run —
+  two real executions finished an entire plan with zero or one commit, and
+  both times the deviation was rationalized mid-run, not decided. A
+  self-check that is a count cannot be rationalized.
 - **Watch for your own gate holes**: after any "all green," ask what that
   check does NOT cover (eslint vs prettier; unit vs integration; clean-tree
   vacuity).
