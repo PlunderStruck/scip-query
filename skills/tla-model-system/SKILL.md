@@ -84,6 +84,11 @@ A regression model is a small TLA+ module or checker config derived from a count
       "code": ["src/queue/lock.ts/LockMetadata#pid"],
       "aliases": ["pid"],
       "resource": { "path": "lockPath" }
+    },
+    "phase": {
+      "code": ["src/queue/lock.ts/__phase_no_stored_field__"],
+      "aliases": ["__phase_unmatchable__"],
+      "waive": { "reason": "phase is a pure control-flow position; no code field stores it" }
     }
   },
   "actions": {
@@ -102,6 +107,8 @@ A regression model is a small TLA+ module or checker config derived from a count
 `code` entries must resolve through `scip-query trace`; variables must map to value-like symbols (a const, let, field, or property holding runtime state — never a type). Waivers are per-fact and require a reason; blanket `allowUnknown` is legacy.
 
 `resource` binds a variable to filesystem state — a lock file, a published artifact — anything the model treats as owned state but that code only touches through path-taking calls, never a plain assignment. The conformance scanner classifies `writeFileSync`/`rmSync`/`renameSync`/`mkdirSync`/`unlinkSync` calls whose first argument's text contains the declared `path` as writes of the variable, and `readFileSync`/`existsSync`/`statSync` calls the same way as reads. The match is textual containment, not a resolved value — evidence tier stays `static-action`, and a resource-bound variable still needs a value-like `code` referent for the kind check.
+
+`variables.<v>.waive: {reason}` exempts that one variable's `missing-referent`/`invalid-referent-kind` findings — for state that genuinely has no code twin (a pure control-flow position, a derived decision, a value observable only through `process.exitCode`). It does not exempt read/write facts; those stay on the action's own `waive`. Prefer this over the old workaround of citing an unrelated real symbol just to satisfy the value-like-kind check — name a referent that plainly does not resolve (or does resolve but to the wrong kind) and waive it honestly; a reader should never have to guess that a `code[]` entry is a decoy.
 
 ## Accuracy Rules
 

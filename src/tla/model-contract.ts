@@ -15,12 +15,24 @@ export interface TlaResourceBinding {
   path: string;
 }
 
+/**
+ * Exempts a variable's `missing-referent`/`invalid-referent-kind` findings
+ * (P5.2 / followup #17) — for state materialized only via a process exit
+ * code, a literal, or another concept with no direct stored-field twin.
+ * Distinct from `TlaActionMapping.waive`, which exempts read/write facts,
+ * not referent resolution.
+ */
+export interface TlaVariableWaiver {
+  reason: string;
+}
+
 export interface TlaVariableMapping {
   code: string[];
   aliases: string[];
   projection?: string;
   /** Binds this variable to filesystem state (lock files, published artifacts). */
   resource?: TlaResourceBinding;
+  waive?: TlaVariableWaiver;
 }
 
 export interface TlaActionMapping {
@@ -247,11 +259,13 @@ function parseVariables(raw: unknown, errors: string[]): Record<string, TlaVaria
     }
     const aliases = stringArray(value.aliases) ?? [];
     const resource = parseResourceBinding(value.resource, name, errors);
+    const waive = parseVariableWaiver(value.waive, name, errors);
     out[name] = {
       code,
       aliases: [...new Set([name, ...aliases])],
       projection: typeof value.projection === 'string' ? value.projection : undefined,
       ...(resource ? { resource } : {}),
+      ...(waive ? { waive } : {}),
     };
   }
   return out;
@@ -269,6 +283,20 @@ function parseResourceBinding(raw: unknown, variableName: string, errors: string
     return undefined;
   }
   return { path };
+}
+
+function parseVariableWaiver(raw: unknown, variableName: string, errors: string[]): TlaVariableWaiver | undefined {
+  if (raw === undefined) return undefined;
+  if (!isRecord(raw)) {
+    errors.push(`variables.${variableName}.waive must be an object when present`);
+    return undefined;
+  }
+  const reason = typeof raw.reason === 'string' ? raw.reason.trim() : '';
+  if (!reason) {
+    errors.push(`variables.${variableName}.waive.reason must be a non-empty string`);
+    return undefined;
+  }
+  return { reason };
 }
 
 function parseActions(

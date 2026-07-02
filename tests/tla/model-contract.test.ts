@@ -124,6 +124,45 @@ Enqueue(job) == queue' = Append(queue, job)
     expect(loaded.errors).toContain('variables.lockOwner.resource.path must be a non-empty string');
   });
 
+  it('parses a variable-referent waiver', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Lock.scip-tla.json'),
+      JSON.stringify({
+        variables: {
+          stage: {
+            code: ['src/lock.ts/__no_stored_field__'],
+            waive: { reason: 'stage has no stored field in code at all' },
+          },
+        },
+        actions: { Release: { code: ['src/lock.ts/release'], writes: ['stage'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Lock.scip-tla.json');
+
+    expect(loaded.errors).toEqual([]);
+    expect(loaded.loaded?.contract.variables.stage?.waive).toEqual({
+      reason: 'stage has no stored field in code at all',
+    });
+  });
+
+  it('rejects a variable waiver with no reason', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Broken.scip-tla.json'),
+      JSON.stringify({
+        variables: { stage: { code: ['src/lock.ts/pid'], waive: {} } },
+        actions: { Release: { code: ['src/lock.ts/release'], writes: ['stage'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Broken.scip-tla.json');
+
+    expect(loaded.loaded).toBeUndefined();
+    expect(loaded.errors).toContain('variables.stage.waive.reason must be a non-empty string');
+  });
+
   it('resolves contract-adjacent and project-relative config paths', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
     const specDir = join(root, 'specs');

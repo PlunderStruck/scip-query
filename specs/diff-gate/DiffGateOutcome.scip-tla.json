@@ -1,62 +1,39 @@
 {
   "module": "specs/diff-gate/DiffGateOutcome.tla",
   "config": "specs/diff-gate/DiffGateOutcomeCurrent.cfg",
-  "scope": [
-    "src/queries/impact/diff-gate.ts",
-    "src/runtime/query-commands/impact.ts"
-  ],
+  "scope": ["src/queries/impact/diff-gate.ts", "src/runtime/query-commands/impact.ts"],
   "variables": {
     "stage": {
-      "code": [
-        "src/queries/impact/diff-gate.ts/DiffGateResult#base"
-      ],
-      "aliases": [
-        "__diffGateStage_control_flow_no_stored_field__"
-      ],
-      "projection": "pure model control-flow position (start/computed/decided) splitting diffGate()'s single synchronous call from handleDiffGate()'s subsequent decision into two TLA steps; no code stores this position anywhere. code[] cites an arbitrary real DiffGateResult field only to satisfy the value-like-kind check; the alias is deliberately unmatchable so no real write/read is ever (mis)attributed to it \u2014 see report."
+      "code": ["src/queries/impact/diff-gate.ts/__stage_no_stored_field__"],
+      "aliases": ["__diffGateStage_control_flow_no_stored_field__"],
+      "projection": "pure model control-flow position (start/computed/decided) splitting diffGate()'s single synchronous call from handleDiffGate()'s subsequent decision into two TLA steps; no code stores this position anywhere.",
+      "waive": {
+        "reason": "stage has no stored field in code at all (P5.2 variable-referent waiver, followup #17). code[] deliberately names a non-existent symbol so the resulting missing-referent finding is explicit and honestly waived, instead of the prior workaround of citing an unrelated real DiffGateResult field (#base) as a decoy just to pass the value-like-kind check. The unmatchable alias still guards against any real write/read being (mis)attributed to this variable \u2014 see report."
+      }
     },
     "planState": {
-      "code": [
-        "DiffGateResult#note"
-      ],
-      "aliases": [
-        "note"
-      ]
+      "code": ["DiffGateResult#note"],
+      "aliases": ["note"]
     },
     "checksRan": {
-      "code": [
-        "src/queries/impact/diff-gate.ts/DiffGateResult#checksRun"
-      ],
-      "aliases": [
-        "checksRun"
-      ]
+      "code": ["src/queries/impact/diff-gate.ts/DiffGateResult#checksRun"],
+      "aliases": ["checksRun"]
     },
     "findingsState": {
-      "code": [
-        "src/queries/impact/diff-gate.ts/DiffGateResult#findings"
-      ],
-      "aliases": [
-        "findings"
-      ]
+      "code": ["src/queries/impact/diff-gate.ts/DiffGateResult#findings"],
+      "aliases": ["findings"]
     },
     "allSkipped": {
-      "code": [
-        "src/queries/impact/diff-gate.ts/DiffGateResult#skipped"
-      ],
-      "aliases": [
-        "skipped",
-        "skip"
-      ]
+      "code": ["src/queries/impact/diff-gate.ts/DiffGateResult#skipped"],
+      "aliases": ["skipped", "skip"]
     },
     "exitState": {
-      "code": [
-        "src/queries/impact/diff-gate.ts/DiffGateResult#findings",
-        "src/queries/impact/diff-gate.ts/DiffGateResult#checksRun"
-      ],
-      "aliases": [
-        "__diffGateExitOutcome_no_stored_field__"
-      ],
-      "projection": "derived: blockingFindings(result.findings).length > 0 || diffGateFailedClosed(result) \u2014 no dedicated stored field exists for the exit code itself (process.exitCode is a Node.js global, not project-indexed; JSON mode writes an inline object-literal `exitCode` property with no named type). code[] cites the two real fields the decision actually reads (for kind validation only); the deliberately unmatchable alias avoids false write/read attribution collisions with findingsState/checksRan, which share those same fields under their own aliases. True correctness evidence for this variable is the trace-check run, not this static mapping \u2014 see report."
+      "code": ["src/queries/impact/diff-gate.ts/__exitState_no_stored_field__"],
+      "aliases": ["__diffGateExitOutcome_no_stored_field__"],
+      "projection": "derived: blockingFindings(result.findings).length > 0 || diffGateFailedClosed(result) \u2014 no dedicated stored field exists for the exit code itself (process.exitCode is a Node.js global, not project-indexed; JSON mode writes an inline object-literal `exitCode` property with no named type).",
+      "waive": {
+        "reason": "exitState has no stored field in code at all (P5.2 variable-referent waiver, followup #17) \u2014 it is a derived decision, not stored state. code[] deliberately names a non-existent symbol instead of the prior workaround of citing the two real fields the decision reads (#findings, #checksRun) purely to pass the value-like-kind check; those reads are genuinely evidenced under findingsState/checksRan's own aliases. The unmatchable alias still guards against any real write/read being (mis)attributed to this variable. True correctness evidence for this variable is the trace-check run, not this static mapping \u2014 see report."
+      }
     }
   },
   "actions": {
@@ -75,94 +52,35 @@
         "src/queries/impact/diff-gate.ts/runNewDeadCheck",
         "src/queries/impact/diff-gate.ts/runBaselineCheck"
       ],
-      "reads": [
-        "planState",
-        "checksRan",
-        "findingsState",
-        "allSkipped",
-        "stage"
-      ],
-      "writes": [
-        "planState",
-        "checksRan",
-        "findingsState",
-        "allSkipped",
-        "stage"
-      ],
+      "reads": ["planState", "checksRan", "findingsState", "allSkipped", "stage"],
+      "writes": ["planState", "checksRan", "findingsState", "allSkipped", "stage"],
       "waive": {
-        "reads": [
-          "planState",
-          "checksRan",
-          "findingsState",
-          "allSkipped",
-          "stage"
-        ],
-        "writes": [
-          "checksRan",
-          "findingsState",
-          "stage"
-        ],
+        "reads": ["planState", "checksRan", "findingsState", "allSkipped", "stage"],
+        "writes": ["checksRan", "findingsState", "stage"],
         "reason": "diffGate's own body only initializes checksRun:[] and findings:[] in the result object literal; the actual pushes (result.checksRun.push(...) x8, recordFinding -> result.findings.push) happen inside the eight separate runXCheck functions it calls (runEchoCheck, runIncompleteMigrationCheck, etc., each its own top-level definition), not textually within diffGate's own line range \u2014 waived writes. stage has no stored field at all (see its variable note) \u2014 waived write/read. The model's RunDiffGate computes a fresh result from scratch each call (a write-only, memory-less action); the code's incidental re-reads of its own just-built fields (skip.has(check), result.findings passed to diffGateRootCauseGroups, etc.) are not guard conditions the TLA action depends on \u2014 waived reads. planState (note:) and allSkipped (result.skipped.push inside the runUnlessSkipped closure defined in diffGate's own body) have real write evidence; the read waiver still applies since RunDiffGate does not branch on their prior values."
       }
     },
     "DecideExitCurrent": {
-      "code": [
-        "src/runtime/query-commands/impact.ts/handleDiffGate"
-      ],
-      "reads": [
-        "findingsState",
-        "checksRan",
-        "planState",
-        "stage"
-      ],
-      "writes": [
-        "exitState",
-        "stage"
-      ],
+      "code": ["src/runtime/query-commands/impact.ts/handleDiffGate"],
+      "reads": ["findingsState", "checksRan", "planState", "stage"],
+      "writes": ["exitState", "stage"],
       "waive": {
-        "reads": [
-          "checksRan",
-          "planState",
-          "stage",
-          "findingsState"
-        ],
-        "writes": [
-          "exitState",
-          "stage"
-        ],
+        "reads": ["checksRan", "planState", "stage", "findingsState"],
+        "writes": ["exitState", "stage"],
         "reason": "handleDiffGate calls `queries.blockingFindings(result.findings)` (a literal `result.findings` access, real evidence for findingsState) and `queries.diffGateFailedClosed(result)` (passes the whole result object; the field reads of checksRun/note happen inside diffGateFailedClosed, a separate function, not textually in handleDiffGate). exitState's write is `process.exitCode = ...` (a Node.js global, not a project-indexed symbol) or an inline JSON `exitCode:` object-literal property with no named type \u2014 see the exitState projection note. stage has no stored field at all \u2014 see its variable note."
       }
     },
     "DecideExitVulnerable": {
-      "code": [
-        "src/runtime/query-commands/impact.ts/handleDiffGate"
-      ],
-      "reads": [
-        "findingsState",
-        "stage"
-      ],
-      "writes": [
-        "exitState",
-        "stage"
-      ],
+      "code": ["src/runtime/query-commands/impact.ts/handleDiffGate"],
+      "reads": ["findingsState", "stage"],
+      "writes": ["exitState", "stage"],
       "waive": {
-        "reads": [
-          "stage",
-          "findingsState"
-        ],
-        "writes": [
-          "exitState",
-          "stage"
-        ],
+        "reads": ["stage", "findingsState"],
+        "writes": ["exitState", "stage"],
         "reason": "same exitState write gap as DecideExitCurrent, plus the same stateless stage gap. DecideExitVulnerable models the pre-fix decision (blocking.length > 0 alone, no gateFailed check) \u2014 it does not correspond to any code currently in the repository; it is a regression model of the fixed defect (see report). Its `code` referent (handleDiffGate) is the closest real anchor for where this logic used to live."
       }
     }
   },
-  "invariants": [
-    "TypeOK",
-    "NoUnintendedSilentPass"
-  ],
-  "traces": [
-    "specs/diff-gate/diff-gate-decision.trace.json"
-  ]
+  "invariants": ["TypeOK", "NoUnintendedSilentPass"],
+  "traces": ["specs/diff-gate/diff-gate-decision.trace.json"]
 }

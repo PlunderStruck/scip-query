@@ -146,9 +146,10 @@ export interface VariableResource {
   path: string;
 }
 
-interface TlaWaiverUse {
-  action: string;
-  kind: 'read' | 'write';
+export interface TlaWaiverUse {
+  /** Absent for variable-referent waivers (P5.2), which are not action-scoped. */
+  action?: string;
+  kind: 'read' | 'write' | 'referent';
   variable: string;
   reason: string;
   legacy: boolean;
@@ -274,23 +275,26 @@ function aliasesForVariables(
   const referents: ResolvedReferent[] = [];
   for (const [name, variable] of Object.entries(contract.variables)) {
     const variableAliases = new Set(variable.aliases);
+    const waived = Boolean(variable.waive);
     for (const ref of variable.code) {
       const referent = resolveReferent(db, ref, findings, name);
       referents.push(referent);
       const match = referent.match;
       if (!match) {
-        findings.push(
-          finding('missing-referent', 'error', 'compiler-symbol', {
-            modelElement: name,
-            codeRef: ref,
-            message: `TLA+ variable ${name} maps to missing TypeScript referent ${ref}.`,
-            why: ['The mapping contract must point at live compiler-indexed code before conformance can be checked.'],
-            remediation: `Update variables.${name}.code to a live symbol, or remove the variable from the model mapping.`,
-          }),
-        );
+        if (!waived) {
+          findings.push(
+            finding('missing-referent', 'error', 'compiler-symbol', {
+              modelElement: name,
+              codeRef: ref,
+              message: `TLA+ variable ${name} maps to missing TypeScript referent ${ref}.`,
+              why: ['The mapping contract must point at live compiler-indexed code before conformance can be checked.'],
+              remediation: `Update variables.${name}.code to a live symbol, or remove the variable from the model mapping.`,
+            }),
+          );
+        }
         continue;
       }
-      validateVariableReferentKind(db, name, ref, match, findings);
+      validateVariableReferentKind(db, name, ref, match, findings, waived);
       if (variable.aliases.length === 0) variableAliases.add(leafName(match.symbol));
     }
     for (const alias of variableAliases) aliases.push({ variable: name, alias });
@@ -1166,9 +1170,11 @@ function validateVariableReferentKind(
   ref: string,
   match: SymbolMatch,
   findings: TlaConformanceFinding[],
+  waived = false,
 ): void {
   const kind = symbolKind(db, match);
   if (kind === null || VALUE_LIKE_KINDS.has(kind)) return;
+  if (waived) return;
   const isType = TYPE_LIKE_KINDS.has(kind);
   findings.push(
     finding('invalid-referent-kind', 'error', 'compiler-symbol', {
@@ -1276,7 +1282,7 @@ function isFactWaived(action: ResolvedAction, kind: 'read' | 'write', variable: 
 }
 
 function waiverUses(contract: TlaModelContract): TlaWaiverUse[] {
-  return Object.entries(contract.actions).flatMap(([action, mapping]) => {
+  const actionWaivers = Object.entries(contract.actions).flatMap(([action, mapping]) => {
     const waive = mapping.waive;
     if (!waive) return [];
     return [
@@ -1296,6 +1302,12 @@ function waiverUses(contract: TlaModelContract): TlaWaiverUse[] {
       })),
     ];
   });
+  const variableWaivers = Object.entries(contract.variables).flatMap(([variable, mapping]) => {
+    const waive = mapping.waive;
+    if (!waive) return [];
+    return [{ kind: 'referent' as const, variable, reason: waive.reason, legacy: false }];
+  });
+  return [...actionWaivers, ...variableWaivers];
 }
 
 const TYPE_LIKE_KINDS = new Set(scipTypeLikeKindNumbers());

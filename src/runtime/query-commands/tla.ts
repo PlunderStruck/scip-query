@@ -412,7 +412,8 @@ function renderTlaVerify(result: TlaVerifyResult, full: boolean): void {
     console.log('Waivers:');
     for (const waiver of result.conformance.waivers) {
       const legacy = waiver.legacy ? ' legacy' : '';
-      console.log(`  - ${waiver.action} ${waiver.kind} ${waiver.variable}:${legacy} ${waiver.reason}`);
+      const scope = waiver.action ? `${waiver.action} ${waiver.kind}` : `variable ${waiver.kind}`;
+      console.log(`  - ${scope} ${waiver.variable}:${legacy} ${waiver.reason}`);
     }
   }
   if (result.conformance.findings.length === 0) {
@@ -456,6 +457,7 @@ function proofSummary(result: TlaVerifyResult): string {
   const checker = `${result.checker.checker} ${result.checker.status === 'passed' ? 'PASS' : result.checker.status.toUpperCase()}`;
   const writeWaivers = result.conformance.waivers.filter((waiver) => waiver.kind === 'write').length;
   const readWaivers = result.conformance.waivers.filter((waiver) => waiver.kind === 'read').length;
+  const referentWaivers = result.conformance.waivers.filter((waiver) => waiver.kind === 'referent').length;
   const callChecks = result.conformance.findings.filter((finding) => finding.category === 'missing-call').length;
   return [
     `checker: ${checker}`,
@@ -464,6 +466,7 @@ function proofSummary(result: TlaVerifyResult): string {
     `reads: ${result.conformance.staticReads.length} verified, ${readWaivers} waived`,
     `calls: ${callChecks === 0 ? 'checked' : `${callChecks} missing`}`,
     `traces: ${result.conformance.traceStepsChecked} steps (key-diff; 'tla trace-check' proves acceptance)`,
+    ...(referentWaivers > 0 ? [`referents: ${referentWaivers} waived`] : []),
   ].join(' | ');
 }
 

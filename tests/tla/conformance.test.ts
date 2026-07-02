@@ -428,6 +428,94 @@ Noop == UNCHANGED queue
     }
   });
 
+  it('waives missing-referent on a variable with no stored field', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    writeFixtureFiles(root, {
+      'src/queue.ts': ['export const queue: string[] = [];', 'export function noop() {', '  return 1;', '}'],
+    });
+    writeFileSync(
+      join(root, 'Queue.tla'),
+      `---- MODULE Queue ----
+VARIABLES stage
+Noop == UNCHANGED stage
+====
+`,
+    );
+    const db = fixtureDb(root);
+    const contract: TlaModelContract = {
+      scope: ['src/queue.ts'],
+      variables: {
+        stage: {
+          code: ['__no_stored_field__'],
+          aliases: ['__stage_unmatchable__'],
+          waive: { reason: 'stage is a pure control-flow abstraction with no stored field' },
+        },
+      },
+      actions: {
+        Noop: { code: ['noop'], reads: [], writes: [], calls: [] },
+      },
+      invariants: [],
+      traces: [],
+    };
+
+    try {
+      const result = verifyTlaConformance(db, contract, readTlaModuleFacts(root, 'Queue.tla'));
+
+      expect(result.findings).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ category: 'missing-referent', modelElement: 'stage' })]),
+      );
+      expect(result.waivers).toContainEqual({
+        kind: 'referent',
+        variable: 'stage',
+        reason: 'stage is a pure control-flow abstraction with no stored field',
+        legacy: false,
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  it('waives invalid-referent-kind on a variable pointed at a type', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    writeFixtureFiles(root, {
+      'src/queue.ts': ['export interface State { queue: string[] }', 'export function noop() {', '  return 1;', '}'],
+    });
+    writeFileSync(
+      join(root, 'Queue.tla'),
+      `---- MODULE Queue ----
+VARIABLES queue
+Noop == UNCHANGED queue
+====
+`,
+    );
+    const db = fixtureDb(root);
+    const contract: TlaModelContract = {
+      scope: ['src/queue.ts'],
+      variables: {
+        queue: {
+          code: ['State'],
+          aliases: ['__queue_unmatchable__'],
+          waive: { reason: 'closest real anchor is a type; no runtime state symbol exists' },
+        },
+      },
+      actions: {
+        Noop: { code: ['noop'], reads: [], writes: [], calls: [] },
+      },
+      invariants: [],
+      traces: [],
+    };
+
+    try {
+      const result = verifyTlaConformance(db, contract, readTlaModuleFacts(root, 'Queue.tla'));
+
+      expect(result.findings).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ category: 'invalid-referent-kind' })]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   it('rejects type-like variable referents', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
     writeFixtureFiles(root, {

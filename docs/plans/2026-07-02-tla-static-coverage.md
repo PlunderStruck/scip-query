@@ -26,7 +26,7 @@ in the 694-test suite, and every item 13-21 either shipped or BLOCKED-noted.
   config-load like aliases. Update specs/reindex-lock mapping to use resources
   for lock/artifact state; delete the now-provable waivers. Tests: fixture +
   the benchmark. Update tla-model-system skill's mapping contract example.
-- [ ] **P5.2 (#17) Variable-referent waivers.** `variables.<v>.waive: {reason}`
+- [x] **P5.2 (#17) Variable-referent waivers.** `variables.<v>.waive: {reason}`
   exempts `invalid-referent-kind`/`missing-referent` for that variable,
   counted in the Waivers output like action waivers. Replace the
   specs/diff-gate proxy-ref workaround with an honest variable waiver.
