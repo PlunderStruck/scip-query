@@ -193,16 +193,21 @@ function compareAgainstFingerprints(
     scanLimit: opts.scanLimit,
     semantic: opts.semantic,
   });
-  const candidates = candidateFingerprintsForTarget(target, index);
-  const idfWeights = targetSpecificIdfWeights(target, index);
+  // `target` comes from an ad hoc single-symbol lookup (findCallees), not the
+  // corpus `buildCalleeFingerprints` already trimmed — trim it against the
+  // same same-file-sibling-saturation rule so a direct `similar <symbol>`
+  // lookup can't be fooled by generic same-file helpers either.
+  const trimmedTarget = trimTargetSameFileSiblingSaturatedCallees(target, index.corpus);
+  const candidates = candidateFingerprintsForTarget(trimmedTarget, index);
+  const idfWeights = targetSpecificIdfWeights(trimmedTarget, index);
   const medianIdf = getMedianIdf(idfWeights);
-  const targetMagnitude = weightedMagnitude(target.callees, idfWeights);
+  const targetMagnitude = weightedMagnitude(trimmedTarget.callees, idfWeights);
 
   const results: SimilarSymbolResult[] = [];
   for (const candidate of candidates) {
     if (candidate.callees.size < 3) continue;
     const candidateMagnitude = weightedMagnitude(candidate.callees, idfWeights);
-    const result = comparePair(target, candidate, idfWeights, {
+    const result = comparePair(trimmedTarget, candidate, idfWeights, {
       minSimilarity,
       requireSignificantShared: 1,
       requireSharedCount: 0,
@@ -243,7 +248,9 @@ interface PairCosine {
   trivialShared: string[];
 }
 
-function comparePair(
+// Exported for direct pure-pipeline testing (trim -> index -> compare)
+// without needing a database fixture.
+export function comparePair(
   a: SymbolFingerprint,
   b: SymbolFingerprint,
   idfWeights: ReadonlyMap<string, number>,
@@ -999,24 +1006,96 @@ function buildCalleeFingerprints(
   );
   let fingerprintCount = 0;
   let retainedCalleeCount = 0;
+  let siblingSaturatedFingerprints = 0;
 
   return profileSpan(
     'similar.callee-fingerprints.shape',
     () => {
-      const fingerprints = candidates
-        .map((d) => ({
-          symbol: d.symbol,
-          file: d.relativePath,
-          callees: meaningfulCallees((calleeMap.get(d.symbolId) ?? []).map((c) => c.symbol)),
-          paramCount: index.callableSignature(d)?.paramCount ?? -1,
-        }))
-        .filter((fp) => fp.callees.size >= minCallees);
+      const rawFingerprints = candidates.map((d) => ({
+        symbol: d.symbol,
+        file: d.relativePath,
+        callees: meaningfulCallees((calleeMap.get(d.symbolId) ?? []).map((c) => c.symbol)),
+        paramCount: index.callableSignature(d)?.paramCount ?? -1,
+      }));
+      const trimmed = trimSameFileSiblingSaturatedCallees(rawFingerprints);
+      if (profiling) {
+        siblingSaturatedFingerprints = trimmed.filter(
+          (fp, i) => fp.callees.size !== rawFingerprints[i]!.callees.size,
+        ).length;
+      }
+      const fingerprints = trimmed.filter((fp) => fp.callees.size >= minCallees);
       fingerprintCount = fingerprints.length;
       if (profiling) retainedCalleeCount = fingerprints.reduce((sum, fp) => sum + fp.callees.size, 0);
       return fingerprints;
     },
-    () => ({ candidateCount, fingerprintCount, retainedCalleeCount, minCallees }),
+    () => ({ candidateCount, fingerprintCount, retainedCalleeCount, minCallees, siblingSaturatedFingerprints }),
   );
+}
+
+// A callee shared by many *same-file siblings* is a generic same-file helper
+// vocabulary (e.g. a shared test-fixture builder every scenario in the file
+// calls), not evidence that two specific siblings are conceptually related —
+// unlike ubiquity across the whole corpus (handled by IDF weighting below),
+// same-file ubiquity isn't visible to a corpus-wide document-frequency
+// weight when the helper is only ever called from within that one file
+// (external calibration: Vega, `similar` — fuzzMultipartRawAndSse vs.
+// fuzzSecondaryApi scored 1.0 on 4 shared generic same-file helpers).
+// Constraint: a callee called by >= this many distinct same-file siblings is
+// dropped from every fingerprint in that file before corpus IDF weighting
+// ever sees it, so it cannot contribute to any pair's similarity score
+// regardless of how rare it looks globally.
+export const SAME_FILE_SIBLING_SATURATION_THRESHOLD = 5;
+
+// Exported for direct, DB-free unit testing of the trimming rule itself —
+// buildCalleeFingerprintIndex takes an already-built corpus and has no
+// reason to re-derive same-file sibling counts from it.
+export function trimSameFileSiblingSaturatedCallees(fingerprints: readonly SymbolFingerprint[]): SymbolFingerprint[] {
+  const calleeCountsByFile = new Map<string, Map<string, number>>();
+  for (const fp of fingerprints) {
+    let calleeCounts = calleeCountsByFile.get(fp.file);
+    if (!calleeCounts) {
+      calleeCounts = new Map();
+      calleeCountsByFile.set(fp.file, calleeCounts);
+    }
+    for (const callee of fp.callees) calleeCounts.set(callee, (calleeCounts.get(callee) ?? 0) + 1);
+  }
+
+  return fingerprints.map((fp) => {
+    const calleeCounts = calleeCountsByFile.get(fp.file);
+    if (!calleeCounts) return fp;
+    const saturated = [...fp.callees].filter(
+      (callee) => (calleeCounts.get(callee) ?? 0) >= SAME_FILE_SIBLING_SATURATION_THRESHOLD,
+    );
+    if (saturated.length === 0) return fp;
+    const trimmedCallees = new Set(fp.callees);
+    for (const callee of saturated) trimmedCallees.delete(callee);
+    return { ...fp, callees: trimmedCallees };
+  });
+}
+
+/**
+ * Same rule as `trimSameFileSiblingSaturatedCallees`, applied to a single
+ * ad hoc target fingerprint (the `similar <symbol>` single-lookup path)
+ * against the already-built corpus, instead of rebuilding a whole extra
+ * corpus just to trim one fingerprint.
+ */
+function trimTargetSameFileSiblingSaturatedCallees(
+  target: SymbolFingerprint,
+  corpus: readonly SymbolFingerprint[],
+): SymbolFingerprint {
+  const calleeCounts = new Map<string, number>();
+  for (const fp of corpus) {
+    if (fp.file !== target.file || fp.symbol === target.symbol) continue;
+    for (const callee of fp.callees) calleeCounts.set(callee, (calleeCounts.get(callee) ?? 0) + 1);
+  }
+  // +1 counts the target itself as one of the same-file callers of its own callees.
+  const saturated = [...target.callees].filter(
+    (callee) => (calleeCounts.get(callee) ?? 0) + 1 >= SAME_FILE_SIBLING_SATURATION_THRESHOLD,
+  );
+  if (saturated.length === 0) return target;
+  const callees = new Set(target.callees);
+  for (const callee of saturated) callees.delete(callee);
+  return { ...target, callees };
 }
 
 export function meaningfulCallees(callees: Iterable<string>): Set<string> {

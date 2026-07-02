@@ -59,10 +59,19 @@ function createHealthFullFixtureDb(dbPath: string): void {
     CREATE INDEX idx_global_symbols_symbol ON global_symbols(symbol);
   `);
 
-  run(`
-    INSERT INTO documents (id, language, relative_path) VALUES
-      (1, 'typescript', 'src/similar-burst.ts');
-  `);
+  // Every caller gets its own document (file). followup #5 taught the
+  // fingerprint corpus to discount/drop callees shared by many *same-file*
+  // sibling callers (a generic same-file helper vocabulary isn't a real
+  // similarity signal) — this fixture's whole point is 8 callers per group
+  // genuinely sharing the same 4 helpers, so co-locating all of them in one
+  // document would trip that new rule and collapse every pair to zero
+  // shared callees, which is not what this test is about (it exercises
+  // health's scanLimit capping, not similarity correctness). One document
+  // per caller keeps every caller a same-file sibling group of one, so the
+  // new rule never engages here.
+  const insertDocument = sqliteDb.prepare(`INSERT INTO documents (id, language, relative_path) VALUES (?, 'typescript', ?)`);
+  insertDocument.run(1, 'src/similar-burst-helpers.ts');
+  let nextDocumentId = 2;
 
   const insertSymbol = sqliteDb.prepare(
     `INSERT INTO global_symbols (id, symbol, display_name, kind, documentation)
@@ -71,17 +80,18 @@ function createHealthFullFixtureDb(dbPath: string): void {
   const insertDefinition = sqliteDb.prepare(
     `INSERT INTO defn_enclosing_ranges
       (id, document_id, symbol_id, start_line, start_char, end_line, end_char)
-     VALUES (?, 1, ?, ?, 0, ?, 0)`,
+     VALUES (?, ?, ?, ?, 0, ?, 0)`,
   );
   const insertChunk = sqliteDb.prepare(
     `INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences)
-     VALUES (?, 1, 0, ?, ?, X'00')`,
+     VALUES (?, ?, 0, ?, ?, X'00')`,
   );
   const insertMention = sqliteDb.prepare('INSERT INTO mentions (chunk_id, symbol_id, role) VALUES (?, ?, ?)');
 
   const callerIdsByGroup: number[][] = [[], []];
   const helperIdsByGroup: number[][] = [[], []];
   const chunkIdBySymbolId = new Map<number, number>();
+  const documentIdBySymbolId = new Map<number, number>();
   let symbolId = 1;
   let rangeId = 1;
   let chunkId = 1;
@@ -91,9 +101,13 @@ function createHealthFullFixtureDb(dbPath: string): void {
       const id = symbolId;
       const name = `group${group}Caller${i}`;
       callerIdsByGroup[group]!.push(id);
+      const documentId = nextDocumentId;
+      nextDocumentId += 1;
+      insertDocument.run(documentId, `src/group${group}/caller${i}.ts`);
+      documentIdBySymbolId.set(id, documentId);
       insertSymbol.run(
         id,
-        `scip-typescript npm fixture 1.0.0 src/\`similar-burst.ts\`/${name}().`,
+        `scip-typescript npm fixture 1.0.0 src/group${group}/\`caller${i}.ts\`/${name}().`,
         name,
         'fixture caller',
       );
@@ -103,9 +117,10 @@ function createHealthFullFixtureDb(dbPath: string): void {
       const id = symbolId;
       const name = `group${group}Helper${i}`;
       helperIdsByGroup[group]!.push(id);
+      documentIdBySymbolId.set(id, 1);
       insertSymbol.run(
         id,
-        `scip-typescript npm fixture 1.0.0 src/\`similar-burst.ts\`/${name}().`,
+        `scip-typescript npm fixture 1.0.0 src/\`similar-burst-helpers.ts\`/${name}().`,
         name,
         'fixture helper',
       );
@@ -115,10 +130,11 @@ function createHealthFullFixtureDb(dbPath: string): void {
 
   const allSymbols = [...callerIdsByGroup.flat(), ...helperIdsByGroup.flat()];
   for (const id of allSymbols) {
+    const documentId = documentIdBySymbolId.get(id)!;
     const startLine = id * 10;
     const endLine = startLine + 6;
-    insertDefinition.run(rangeId, id, startLine, endLine);
-    insertChunk.run(chunkId, startLine, endLine);
+    insertDefinition.run(rangeId, documentId, id, startLine, endLine);
+    insertChunk.run(chunkId, documentId, startLine, endLine);
     insertMention.run(chunkId, id, 1);
     chunkIdBySymbolId.set(id, chunkId);
     rangeId += 1;

@@ -78,13 +78,36 @@ up, write a real plan section (`concrete-plan`), and implement independently.
    `{lines:0,paths:[]}`); the same view without delegation stays at 0 findings; a view that
    imports but never calls the composable also stays at 0 findings.
 
-5. **`similar`: sibling-helper fingerprint saturation (Vega).** Callee-fingerprint similarity
-   saturates to 1.0 when a file has a small shared-helper vocabulary — the top-scored Vega pair
-   (`fuzzMultipartRawAndSse` vs `fuzzSecondaryApi`) was unrelated fuzz scenarios that merely
-   shared 4 generic helpers. Needs a cap/discount on similarity contributed by callees shared with
-   many same-file siblings.
+5. **RESOLVED (2026-07-02, followup-batch). `similar`: sibling-helper fingerprint saturation
+   (Vega).** Callee-fingerprint similarity saturates to 1.0 when a file has a small shared-helper
+   vocabulary — the top-scored Vega pair (`fuzzMultipartRawAndSse` vs `fuzzSecondaryApi`) was
+   unrelated fuzz scenarios that merely shared 4 generic helpers. Needs a cap/discount on
+   similarity contributed by callees shared with many same-file siblings.
    Source: `docs/validation/2026-07-01-external-calibration-vega.md` §3 ("Failure modes
    observed", `similar` bullet).
+   Fix (chosen formula: exclude, not discount — see constraint comment at
+   `src/queries/cleanup/similar.ts:1000` next to `SAME_FILE_SIBLING_SATURATION_THRESHOLD`):
+   a callee called by >= 5 distinct same-file siblings is dropped from every fingerprint in that
+   file (`trimSameFileSiblingSaturatedCallees`) *before* corpus-wide IDF weighting or the
+   `minCallees` floor ever sees it — global IDF already discounts callees common across the whole
+   corpus, but can't see same-file-only ubiquity (a helper only ever called from within one file
+   can have a low, positive global document frequency while still being 100% of that file's
+   internal vocabulary). Applied at both entry points: the bulk `similarAll` corpus build
+   (`buildCalleeFingerprints`) and the single-symbol `similar <symbol>` lookup's ad hoc target
+   fingerprint (`trimTargetSameFileSiblingSaturatedCallees` in `compareAgainstFingerprints`, since
+   `findCallees`'s target isn't part of the trimmed corpus). Test:
+   `tests/queries/cleanup/similar-sibling-saturation.test.ts` — a pure test on
+   `trimSameFileSiblingSaturatedCallees` proving the exact drop/keep boundary; a pure
+   trim-\>index-\>compare pipeline test (padded corpus so IDF isn't degenerately zero) showing the
+   saturated fuzz-scenario pair drops out of candidacy entirely while a genuine
+   4-shared-helper near-duplicate pair (only 2 same-file callers) still scores >= 0.9; a db-backed
+   `similarAll` test reproducing the exact calibration shape (5 same-file fuzz scenarios sharing 4
+   helpers), verified to score 1.0 and get reported without the fix, and correctly suppressed with
+   it. Fixing this also exposed and required repairing an unrelated pre-existing test
+   (`tests/queries/health/health-full.test.ts`) that had (unintentionally) been relying on the
+   exact same-file-saturation bug as its fixture mechanism for an unrelated scanLimit-capping
+   assertion — moved its 16 caller symbols to one document each so the new rule doesn't engage,
+   preserving the original 50/56 pair-count assertions.
 
 6. **RESOLVED (2026-07-02, followup-batch). `analysisBudget` disclosure only wired into
    `diff-gate` (Vega).** `commandAnalysisBudget` is only consumed by
