@@ -45,12 +45,16 @@ try {
   writeFileSync(
     join(VENDOR_DIR, 'README.md'),
     [
-      '# Managed scip binaries',
+      '# scip.exe release assets',
       '',
       `These binaries are built from ${SCIP_REPO_URL} at ${SCIP_VERSION}.`,
-      'They are included so Windows installs can run `scip-query reindex` without requiring Go or WSL.',
+      'They are NOT bundled into the npm package. Upload each as a GitHub release',
+      'asset (scip-win32-<arch>.exe) and pin url + sha256 in',
+      'src/runtime/scip-windows-assets.ts before publishing — scip-query downloads',
+      'and checksum-verifies them on demand so Windows `reindex` works without',
+      'requiring Go or WSL.',
       '',
-      'Run `npm run build:scip-windows` before publishing to refresh them.',
+      'Run `npm run build:scip-windows` to (re)build these before publishing.',
       '',
     ].join('\n'),
   );

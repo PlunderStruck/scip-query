@@ -13,6 +13,24 @@
   },
   "suppressions": [
     {
+      "id": "SQ90611099482C",
+      "check": "echo",
+      "file": "src/runtime/scip-cli.ts",
+      "reason": "Accepted mirror per plan 4 Phase 22.1: resolveScipBinaryCachePath() intentionally duplicates src/tla/tool-runner.ts's resolveTlaToolsJarCachePath() (same $SCIP_QUERY_CACHE_DIR/$XDG_CACHE_HOME/~/.cache/scip-query resolution, different filename). Both call sites are well under 30 lines, so the plan's reuse audit considered extracting a shared fetchVerifiedBinary/cache-dir helper -- but the only shared location either side could import from (src/core/) is not reachable from either layer: layerPolicyForEdge in src/queries/cleanup/drift-policy.ts allows neither runtime->core nor tla->core today, and adding a runtime<->tla edge is explicitly Phase 24.4's job, not 22.1's. Mirroring is the plan's stated fallback when extraction isn't reachable."
+    },
+    {
+      "id": "SQB959866D7736",
+      "check": "echo",
+      "file": "src/runtime/scip-cli.ts",
+      "reason": "Accepted mirror per plan 4 Phase 22.1: scip-cli.ts's sha256() intentionally duplicates src/tla/tool-runner.ts's sha256() (same createHash('sha256').update(bytes).digest('hex') one-liner). Same layer-policy blocker as SQ90611099482C -- see that entry for the full reuse-audit reasoning."
+    },
+    {
+      "id": "SQC47EF17D5097",
+      "check": "twin-partner",
+      "file": "src/runtime/scip-cli.ts",
+      "reason": "Accepted mirror per plan 4 Phase 22.1: same sha256() duplication as SQB959866D7736, flagged again as a twin pair because both copies are new-ish. See SQ90611099482C for the layer-policy reasoning that rules out extraction this phase."
+    },
+    {
       "id": "SQ1B9176E44C22",
       "check": "echo",
       "file": "src/queries/health/finding-outcome-ledger.ts",

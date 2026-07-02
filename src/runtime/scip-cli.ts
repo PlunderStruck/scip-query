@@ -1,63 +1,80 @@
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { platform, arch } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { homedir, platform, arch } from 'node:os';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { isBinaryAvailable } from './binary.js';
+import { SCIP_WINDOWS_ASSETS, type ScipWindowsArch, type ScipWindowsAsset } from './scip-windows-assets.js';
 
 const SCIP_VERSION = 'v0.8.1';
 const SCIP_RELEASE_URL = 'https://github.com/sourcegraph/scip';
-const MANAGED_SCIP_BINARY: Partial<Record<NodeJS.Platform, Partial<Record<string, string>>>> = {
-  win32: {
-    x64: join('vendor', 'scip', 'win32-x64', 'scip.exe'),
-    arm64: join('vendor', 'scip', 'win32-arm64', 'scip.exe'),
-  },
-};
 
-function resolvePackageRoot(): string | null {
-  let current = dirname(fileURLToPath(import.meta.url));
+/** Env var that lets a user point directly at a local `scip` binary, bypassing PATH and the download cache. */
+export const SCIP_BIN_ENV_VAR = 'SCIP_QUERY_SCIP_BIN';
 
-  while (true) {
-    const packageJsonPath = join(current, 'package.json');
-    if (existsSync(packageJsonPath)) {
-      try {
-        const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf-8')) as { name?: string };
-        if (pkg.name === 'scip-query') {
-          return current;
-        }
-      } catch {
-        // Keep walking upward; a malformed parent package should not break setup.
-      }
-    }
+export type ScipBinarySource = 'path' | 'env' | 'cache';
 
-    const parent = dirname(current);
-    if (parent === current) {
-      return null;
-    }
-    current = parent;
-  }
+export interface ScipBinaryResolution {
+  source: ScipBinarySource;
+  path: string;
 }
 
-export function resolveManagedScipBinary(): string | null {
-  const relativePath = MANAGED_SCIP_BINARY[platform()]?.[arch()];
-  if (!relativePath) {
-    return null;
-  }
-
-  const packageRoot = resolvePackageRoot();
-  if (!packageRoot) {
-    return null;
-  }
-
-  const candidate = join(packageRoot, relativePath);
-  return existsSync(candidate) ? candidate : null;
+export interface ScipBinaryResolutionDeps {
+  platform: NodeJS.Platform;
+  arch: string;
+  env: NodeJS.ProcessEnv;
+  isOnPath: (name: string) => boolean;
+  fileExists: (path: string) => boolean;
+  cachePath: (arch: string, env: NodeJS.ProcessEnv) => string;
 }
 
-export function resolveScipBinary(): string | null {
-  if (isBinaryAvailable('scip')) {
-    return 'scip';
+/**
+ * Pure resolution matrix for the `scip` CLI binary. Four outcomes:
+ * found on PATH, found via `SCIP_QUERY_SCIP_BIN`, found in the download
+ * cache (Windows only — see `fetchScipWindowsBinary`), or not found.
+ * All I/O is injected so this is unit-testable without touching the disk.
+ */
+export function resolveScipBinaryPure(deps: ScipBinaryResolutionDeps): ScipBinaryResolution | null {
+  if (deps.isOnPath('scip')) {
+    return { source: 'path', path: 'scip' };
   }
-  return resolveManagedScipBinary();
+
+  const envPath = deps.env[SCIP_BIN_ENV_VAR];
+  if (envPath && deps.fileExists(envPath)) {
+    return { source: 'env', path: envPath };
+  }
+
+  if (deps.platform === 'win32') {
+    const cached = deps.cachePath(deps.arch, deps.env);
+    if (deps.fileExists(cached)) {
+      return { source: 'cache', path: cached };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Resolve the cache path for a downloaded Windows `scip.exe`, mirroring
+ * `resolveTlaToolsJarCachePath` in `src/tla/tool-runner.ts`.
+ */
+export function resolveScipBinaryCachePath(archName: string, env: NodeJS.ProcessEnv = process.env): string {
+  const cacheRoot =
+    env['SCIP_QUERY_CACHE_DIR'] ??
+    (env['XDG_CACHE_HOME'] ? join(env['XDG_CACHE_HOME'], 'scip-query') : join(homedir(), '.cache', 'scip-query'));
+  return join(cacheRoot, `scip-win32-${archName}.exe`);
+}
+
+export function resolveScipBinary(env: NodeJS.ProcessEnv = process.env): string | null {
+  const resolution = resolveScipBinaryPure({
+    platform: platform(),
+    arch: arch(),
+    env,
+    isOnPath: isBinaryAvailable,
+    fileExists: existsSync,
+    cachePath: resolveScipBinaryCachePath,
+  });
+  return resolution?.path ?? null;
 }
 
 /**
@@ -139,9 +156,15 @@ export function printScipInstallInstructions(): void {
     console.log('  brew install sourcegraph/scip/scip\n');
     console.log('Or download manually:');
   } else if (platform() === 'win32') {
-    console.log('Windows npm installs do not bundle scip.exe.');
-    console.log('Install scip on PATH, or build a local managed binary from source with:');
-    console.log('  npm run build:scip-windows\n');
+    const asset = SCIP_WINDOWS_ASSETS[arch() as ScipWindowsArch];
+    console.log('`scip-query reindex` downloads a checksum-verified scip.exe automatically.');
+    console.log(`If that fails, set ${SCIP_BIN_ENV_VAR} to a local scip.exe path, or install scip on PATH.`);
+    if (asset) {
+      console.log(`Managed download: ${asset.url}\n`);
+    } else {
+      console.log(`No prebuilt scip binary is published for win32-${arch()}; build one with:`);
+      console.log('  npm run build:scip-windows\n');
+    }
     console.log('Upstream release page:');
   } else {
     console.log('Download from:');
@@ -162,12 +185,6 @@ export function printScipInstallInstructions(): void {
  * Returns true if installation succeeded.
  */
 export function tryInstallScipCli(onStatus: (msg: string) => void): boolean {
-  const managedBinary = resolveManagedScipBinary();
-  if (managedBinary) {
-    onStatus(`Using bundled scip CLI at ${managedBinary}`);
-    return true;
-  }
-
   // macOS: try Homebrew first
   if (platform() === 'darwin' && isBinaryAvailable('brew')) {
     onStatus('Installing scip CLI via Homebrew...');
@@ -209,4 +226,69 @@ export function tryInstallScipCli(onStatus: (msg: string) => void): boolean {
   onStatus('Could not auto-install scip CLI.');
   onStatus(`Install manually from: ${SCIP_RELEASE_URL}/releases`);
   return false;
+}
+
+export interface ScipWindowsBinaryFetchOptions {
+  archName?: string;
+  cachePath?: string;
+  fetchImpl?: typeof fetch;
+  env?: NodeJS.ProcessEnv;
+  assets?: Partial<Record<ScipWindowsArch, ScipWindowsAsset>>;
+}
+
+export interface ScipWindowsBinaryFetchResult {
+  status: 'cached' | 'downloaded';
+  path: string;
+  sha256: string;
+  url: string;
+}
+
+/**
+ * Download and checksum-verify the pinned Windows `scip.exe`, caching it
+ * under the scip-query cache dir. Mirrors `fetchTlaToolsJar` in
+ * `src/tla/tool-runner.ts` (cache reuse when the sha256 still matches,
+ * tmp-file-then-rename on write, thrown error on mismatch).
+ */
+export async function fetchScipWindowsBinary(
+  opts: ScipWindowsBinaryFetchOptions = {},
+): Promise<ScipWindowsBinaryFetchResult> {
+  const env = opts.env ?? process.env;
+  const archName = opts.archName ?? arch();
+  const assets = opts.assets ?? SCIP_WINDOWS_ASSETS;
+  const asset = assets[archName as ScipWindowsArch];
+  if (!asset || !asset.sha256) {
+    throw new Error(
+      `No published scip binary for win32-${archName}. ` +
+        `Install scip on PATH, or build one locally with \`npm run build:scip-windows\` and set ${SCIP_BIN_ENV_VAR}.`,
+    );
+  }
+
+  const path = opts.cachePath ?? resolveScipBinaryCachePath(archName, env);
+  if (existsSync(path)) {
+    const existingHash = sha256(readFileSync(path));
+    if (existingHash === asset.sha256) {
+      return { status: 'cached', path, sha256: existingHash, url: asset.url };
+    }
+  }
+
+  const fetchImpl = opts.fetchImpl ?? fetch;
+  const response = await fetchImpl(asset.url);
+  if (!response.ok) {
+    throw new Error(`failed to download scip.exe: HTTP ${response.status}`);
+  }
+  const bytes = Buffer.from(await response.arrayBuffer());
+  const digest = sha256(bytes);
+  if (digest !== asset.sha256) {
+    throw new Error(`downloaded scip.exe checksum mismatch: expected ${asset.sha256}, got ${digest}`);
+  }
+
+  mkdirSync(dirname(path), { recursive: true });
+  const tmpPath = `${path}.tmp-${process.pid}`;
+  writeFileSync(tmpPath, bytes);
+  renameSync(tmpPath, path);
+  return { status: 'downloaded', path, sha256: digest, url: asset.url };
+}
+
+function sha256(bytes: Buffer): string {
+  return createHash('sha256').update(bytes).digest('hex');
 }

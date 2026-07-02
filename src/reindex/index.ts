@@ -12,7 +12,8 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, extname, join } from 'node:path';
-import { resolveScipBinary, tryInstallScipCli } from '../runtime/scip-cli.js';
+import { platform } from 'node:os';
+import { fetchScipWindowsBinary, resolveScipBinary, tryInstallScipCli } from '../runtime/scip-cli.js';
 import type { LastRefreshMetadata, RefreshTrigger, SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
 import { auxiliaryDocumentsAugmentationStage } from './augment.js';
 import { detectLanguages } from './detect.js';
@@ -178,7 +179,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
     });
     if (reused) return reused;
 
-    ensureScipCliAvailable(skipAutoInstall, onStatus);
+    await ensureScipCliAvailable(skipAutoInstall, onStatus);
 
     const tempPaths = createTempReindexPaths(paths);
     runDir = tempPaths.runDir;
@@ -449,7 +450,7 @@ function cacheLanguageShards(outputDb: string, indexedOutputs: readonly IndexedO
   }
 }
 
-function ensureScipCliAvailable(skipAutoInstall: boolean, onStatus: (message: string) => void): void {
+async function ensureScipCliAvailable(skipAutoInstall: boolean, onStatus: (message: string) => void): Promise<void> {
   if (resolveScipBinary()) {
     return;
   }
@@ -459,6 +460,21 @@ function ensureScipCliAvailable(skipAutoInstall: boolean, onStatus: (message: st
       'The scip CLI is required but not found on PATH.\n' +
         'Install from: https://github.com/sourcegraph/scip/releases',
     );
+  }
+
+  if (platform() === 'win32') {
+    onStatus('scip CLI not found; downloading the checksum-verified Windows scip.exe...');
+    try {
+      await fetchScipWindowsBinary();
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `The scip CLI is required but the automatic Windows download failed: ${message}\n` +
+          'Install manually and set SCIP_QUERY_SCIP_BIN, or place scip.exe on PATH.',
+        { cause: error },
+      );
+    }
   }
 
   onStatus('scip CLI not found on PATH. Attempting auto-install...');

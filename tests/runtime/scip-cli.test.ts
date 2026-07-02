@@ -1,4 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type * as NodeFs from 'node:fs';
 import type * as ScipCli from '../../src/runtime/scip-cli.js';
 
@@ -35,6 +39,7 @@ async function loadScipCli(opts: {
   vi.doMock('node:os', () => ({
     platform: () => opts.platform,
     arch: () => opts.arch,
+    homedir: () => '/tmp/scip-cli-test-home',
   }));
   vi.doMock('node:child_process', () => ({
     execFileSync,
@@ -103,12 +108,12 @@ describe('scip CLI helpers', () => {
     expect(log.mock.calls.flat().join('\n')).toContain('https://github.com/sourcegraph/scip/releases/download/v0.8.1/');
   });
 
-  it('uses the managed Windows scip binary when scip is not on PATH', async () => {
+  it('uses SCIP_QUERY_SCIP_BIN when scip is not on PATH', async () => {
     const execFileSync = vi.fn((cmd: string, args: readonly string[]) => {
       if (cmd === 'where') {
         throw new Error('missing');
       }
-      if (cmd.endsWith('/vendor/scip/win32-x64/scip.exe') && args[0] === '--version') {
+      if (cmd === 'C:\\tools\\scip.exe' && args[0] === '--version') {
         return Buffer.from('v0.8.1\n');
       }
       throw new Error(`unexpected command: ${cmd} ${args.join(' ')}`);
@@ -118,18 +123,44 @@ describe('scip CLI helpers', () => {
       platform: 'win32',
       arch: 'x64',
       execFileSync,
-      existsSync: (path) => path.endsWith('/package.json') || path.endsWith('/vendor/scip/win32-x64/scip.exe'),
+      existsSync: (path) => path === 'C:\\tools\\scip.exe',
     });
 
-    const resolved = resolveScipBinary();
-    expect(resolved).toMatch(/vendor\/scip\/win32-x64\/scip\.exe$/);
-    expect(isScipInstalled()).toBe(true);
-    expect(getScipVersion()).toBe('v0.8.1');
-    expect(execFileSync).toHaveBeenCalledWith(
-      expect.stringMatching(/vendor\/scip\/win32-x64\/scip\.exe$/),
-      ['--version'],
-      expect.objectContaining({ stdio: 'pipe' }),
-    );
+    const env = { SCIP_QUERY_SCIP_BIN: 'C:\\tools\\scip.exe' };
+    expect(resolveScipBinary(env)).toBe('C:\\tools\\scip.exe');
+    // isScipInstalled/getScipVersion read process.env directly (matching the
+    // real CLI entry point); prove the env var also works through that path.
+    const originalEnvVar = process.env['SCIP_QUERY_SCIP_BIN'];
+    process.env['SCIP_QUERY_SCIP_BIN'] = 'C:\\tools\\scip.exe';
+    try {
+      expect(isScipInstalled()).toBe(true);
+      expect(getScipVersion()).toBe('v0.8.1');
+    } finally {
+      if (originalEnvVar === undefined) delete process.env['SCIP_QUERY_SCIP_BIN'];
+      else process.env['SCIP_QUERY_SCIP_BIN'] = originalEnvVar;
+    }
+  });
+
+  it('falls back to nothing when scip is nowhere to be found', async () => {
+    const { resolveScipBinary } = await loadScipCli({
+      platform: 'win32',
+      arch: 'x64',
+      isBinaryAvailable: () => false,
+      existsSync: () => false,
+    });
+
+    expect(resolveScipBinary({ SCIP_QUERY_SCIP_BIN: 'C:\\missing\\scip.exe' })).toBeNull();
+  });
+
+  it('resolves the cached Windows download when scip.exe was fetched by a previous reindex', async () => {
+    const { resolveScipBinary } = await loadScipCli({
+      platform: 'win32',
+      arch: 'x64',
+      isBinaryAvailable: () => false,
+      existsSync: (path) => path === '/tmp/scip-cli-test-home/.cache/scip-query/scip-win32-x64.exe',
+    });
+
+    expect(resolveScipBinary({})).toBe('/tmp/scip-cli-test-home/.cache/scip-query/scip-win32-x64.exe');
   });
 
   it('does not print nonexistent upstream Windows download assets', async () => {
@@ -143,8 +174,8 @@ describe('scip CLI helpers', () => {
     printScipInstallInstructions();
 
     const output = log.mock.calls.flat().join('\n');
-    expect(output).toContain('Windows npm installs do not bundle scip.exe');
-    expect(output).toContain('npm run build:scip-windows');
+    expect(output).toContain('checksum-verified scip.exe automatically');
+    expect(output).toContain('SCIP_QUERY_SCIP_BIN');
     expect(output).toContain('https://github.com/sourcegraph/scip/releases/tag/v0.8.1');
     expect(output).not.toContain('scip-windows-amd64.zip');
   });
@@ -230,5 +261,151 @@ describe('scip CLI helpers', () => {
     expect(log.mock.calls.flat().join('\n')).toContain(
       "scip-query installed -- run 'scip-query setup' in a repo to enable skills, hooks, and the index.",
     );
+  });
+});
+
+describe('resolveScipBinaryPure (resolution matrix)', () => {
+  // Unmock any node builtins a previous test in this file registered via
+  // vi.doMock, so this suite exercises the real, unmocked module — the
+  // function under test takes every dependency as a parameter anyway.
+  async function loadReal(): Promise<ScipCliModule> {
+    vi.doUnmock('node:os');
+    vi.doUnmock('node:fs');
+    vi.doUnmock('node:child_process');
+    vi.doUnmock('../../src/runtime/scip-cli.js');
+    vi.resetModules();
+    return (await import('../../src/runtime/scip-cli.js')) as ScipCliModule;
+  }
+
+  it('outcome 1: found on PATH', async () => {
+    const { resolveScipBinaryPure } = await loadReal();
+    const resolution = resolveScipBinaryPure({
+      platform: 'win32',
+      arch: 'x64',
+      env: {},
+      isOnPath: () => true,
+      fileExists: () => true,
+      cachePath: () => '/cache/scip-win32-x64.exe',
+    });
+    expect(resolution).toEqual({ source: 'path', path: 'scip' });
+  });
+
+  it('outcome 2: found via SCIP_QUERY_SCIP_BIN', async () => {
+    const { resolveScipBinaryPure } = await loadReal();
+    const resolution = resolveScipBinaryPure({
+      platform: 'linux',
+      arch: 'x64',
+      env: { SCIP_QUERY_SCIP_BIN: '/opt/scip' },
+      isOnPath: () => false,
+      fileExists: (path) => path === '/opt/scip',
+      cachePath: () => '/cache/scip-win32-x64.exe',
+    });
+    expect(resolution).toEqual({ source: 'env', path: '/opt/scip' });
+  });
+
+  it('outcome 3: found in the Windows download cache', async () => {
+    const { resolveScipBinaryPure } = await loadReal();
+    const resolution = resolveScipBinaryPure({
+      platform: 'win32',
+      arch: 'arm64',
+      env: {},
+      isOnPath: () => false,
+      fileExists: (path) => path === '/cache/scip-win32-arm64.exe',
+      cachePath: (archName) => `/cache/scip-win32-${archName}.exe`,
+    });
+    expect(resolution).toEqual({ source: 'cache', path: '/cache/scip-win32-arm64.exe' });
+  });
+
+  it('outcome 4: not found anywhere', async () => {
+    const { resolveScipBinaryPure } = await loadReal();
+    const resolution = resolveScipBinaryPure({
+      platform: 'win32',
+      arch: 'x64',
+      env: {},
+      isOnPath: () => false,
+      fileExists: () => false,
+      cachePath: () => '/cache/scip-win32-x64.exe',
+    });
+    expect(resolution).toBeNull();
+  });
+
+  it('does not consult the download cache on non-Windows platforms', async () => {
+    const { resolveScipBinaryPure } = await loadReal();
+    const cachePath = vi.fn(() => '/cache/scip-win32-x64.exe');
+    const resolution = resolveScipBinaryPure({
+      platform: 'darwin',
+      arch: 'x64',
+      env: {},
+      isOnPath: () => false,
+      fileExists: () => true,
+      cachePath,
+    });
+    expect(resolution).toBeNull();
+    expect(cachePath).not.toHaveBeenCalled();
+  });
+});
+
+describe('fetchScipWindowsBinary', () => {
+  async function loadReal(): Promise<ScipCliModule> {
+    vi.doUnmock('node:os');
+    vi.doUnmock('node:fs');
+    vi.doUnmock('node:child_process');
+    vi.doUnmock('../../src/runtime/scip-cli.js');
+    vi.resetModules();
+    return (await import('../../src/runtime/scip-cli.js')) as ScipCliModule;
+  }
+
+  it('downloads scip.exe into the cache with checksum verification, then reuses the cache', async () => {
+    const { fetchScipWindowsBinary } = await loadReal();
+    const { readFileSync } = await vi.importActual<typeof NodeFs>('node:fs');
+    const root = mkdtempSync(join(tmpdir(), 'scip-query-scip-cli-'));
+    const cachePath = join(root, 'cache', 'scip-win32-x64.exe');
+    const bytes = Buffer.from('tiny scip.exe fixture');
+    const sha256 = createHash('sha256').update(bytes).digest('hex');
+    const fetchImpl = (async () =>
+      ({
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+      }) as Response) as typeof fetch;
+    const assets = { x64: { url: 'https://example.test/scip-win32-x64.exe', sha256 } };
+
+    const downloaded = await fetchScipWindowsBinary({ archName: 'x64', cachePath, fetchImpl, assets });
+    expect(downloaded.status).toBe('downloaded');
+    expect(downloaded.path).toBe(cachePath);
+    expect(readFileSync(cachePath)).toEqual(bytes);
+
+    const cached = await fetchScipWindowsBinary({ archName: 'x64', cachePath, fetchImpl, assets });
+    expect(cached.status).toBe('cached');
+  });
+
+  it('throws on a checksum mismatch instead of caching a corrupt binary', async () => {
+    const { fetchScipWindowsBinary } = await loadReal();
+    const root = mkdtempSync(join(tmpdir(), 'scip-query-scip-cli-'));
+    const cachePath = join(root, 'cache', 'scip-win32-x64.exe');
+    const bytes = Buffer.from('tampered fixture');
+    const fetchImpl = (async () =>
+      ({
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+      }) as Response) as typeof fetch;
+    const assets = { x64: { url: 'https://example.test/scip-win32-x64.exe', sha256: 'a'.repeat(64) } };
+
+    await expect(fetchScipWindowsBinary({ archName: 'x64', cachePath, fetchImpl, assets })).rejects.toThrow(
+      /checksum mismatch/,
+    );
+  });
+
+  it('throws a directed error when no asset is published for the arch', async () => {
+    const { fetchScipWindowsBinary } = await loadReal();
+
+    await expect(
+      fetchScipWindowsBinary({
+        archName: 'ia32',
+        assets: {},
+        fetchImpl: (async () => ({}) as Response) as typeof fetch,
+      }),
+    ).rejects.toThrow(/No published scip binary for win32-ia32/);
   });
 });

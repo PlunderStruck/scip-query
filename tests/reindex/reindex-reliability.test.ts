@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { cpus, tmpdir } from 'node:os';
+import type * as NodeOs from 'node:os';
 import type { SupportedLanguage } from '../../src/domain/types.js';
 import { resolveIndexerConcurrency } from '../../src/reindex/indexer-runner.js';
 
@@ -417,6 +418,78 @@ describe('reindex reliability', () => {
       }),
     ).rejects.toThrow(/another scip-query reindex is already running/i);
   });
+
+  it('downloads the Windows scip binary automatically, with exactly one status line, when scip is missing', async () => {
+    const projectRoot = createProject('scip-query-reindex-win-download-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+
+    // Mirrors the real resolveScipBinary/fetchScipWindowsBinary relationship:
+    // nothing is found until the download completes, then subsequent
+    // resolveScipBinary() calls (e.g. from convertScipToSqlite) see it.
+    let downloaded = false;
+    const fetchScipWindowsBinary = vi.fn(async () => {
+      downloaded = true;
+      return {
+        status: 'downloaded',
+        path: 'C:\\cache\\scip-win32-x64.exe',
+        sha256: 'abc',
+        url: 'https://example.test/scip-win32-x64.exe',
+      };
+    });
+
+    const { reindex } = await loadReindexFixture({
+      languages: ['typescript'],
+      platform: 'win32',
+      scipCli: {
+        // Any resolved path works for the harness's `execFileSync` matcher
+        // (it only branches on the literal 'scip' command name).
+        resolveScipBinary: () => (downloaded ? 'scip' : null),
+        fetchScipWindowsBinary,
+      },
+    });
+
+    const statuses: string[] = [];
+    const result = await reindex({
+      projectRoot,
+      outputScip: join(cacheDir, 'index.scip'),
+      outputDb: join(cacheDir, 'index.db'),
+      onStatus: (message) => statuses.push(message),
+      trigger: { kind: 'manual-cli', detail: 'manual test' },
+    });
+
+    expect(result.languages).toEqual(['typescript']);
+    expect(fetchScipWindowsBinary).toHaveBeenCalledTimes(1);
+    const downloadStatuses = statuses.filter((message) => /scip.*exe|scip CLI not found/i.test(message));
+    expect(downloadStatuses).toEqual(['scip CLI not found; downloading the checksum-verified Windows scip.exe...']);
+  });
+
+  it('fails with an actionable message when the Windows scip download fails', async () => {
+    const projectRoot = createProject('scip-query-reindex-win-download-fail-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+
+    const { reindex } = await loadReindexFixture({
+      languages: ['typescript'],
+      platform: 'win32',
+      scipCli: {
+        resolveScipBinary: () => null,
+        fetchScipWindowsBinary: async () => {
+          throw new Error('HTTP 404');
+        },
+      },
+    });
+
+    await expect(
+      reindex({
+        projectRoot,
+        outputScip: join(cacheDir, 'index.scip'),
+        outputDb: join(cacheDir, 'index.db'),
+        onStatus: () => undefined,
+        trigger: { kind: 'manual-cli', detail: 'manual test' },
+      }),
+    ).rejects.toThrow(/automatic Windows download failed: HTTP 404/);
+  });
 });
 
 async function loadReindexFixture(opts: {
@@ -424,10 +497,23 @@ async function loadReindexFixture(opts: {
   failIndexers?: ReadonlySet<SupportedLanguage>;
   failFirstIndexers?: ReadonlySet<SupportedLanguage>;
   failConvert?: boolean;
+  platform?: NodeJS.Platform;
+  scipCli?: {
+    resolveScipBinary?: () => string | null;
+    tryInstallScipCli?: (onStatus: (message: string) => void) => boolean;
+    fetchScipWindowsBinary?: () => Promise<{ status: string; path: string; sha256: string; url: string }>;
+  };
 }) {
   vi.resetModules();
   const attempts = new Map<SupportedLanguage, number>();
   const commands: { binary: string; args: readonly string[] }[] = [];
+
+  if (opts.platform) {
+    vi.doMock('node:os', async () => {
+      const actual = await vi.importActual<typeof NodeOs>('node:os');
+      return { ...actual, platform: () => opts.platform };
+    });
+  }
 
   vi.doMock('node:child_process', async () => {
     const fs = await import('node:fs');
@@ -491,8 +577,13 @@ async function loadReindexFixture(opts: {
     tryInstallIndexer: () => true,
   }));
   vi.doMock('../../src/runtime/scip-cli.js', () => ({
-    resolveScipBinary: () => 'scip',
-    tryInstallScipCli: () => true,
+    resolveScipBinary: opts.scipCli?.resolveScipBinary ?? (() => 'scip'),
+    tryInstallScipCli: opts.scipCli?.tryInstallScipCli ?? (() => true),
+    fetchScipWindowsBinary:
+      opts.scipCli?.fetchScipWindowsBinary ??
+      (async () => {
+        throw new Error('fetchScipWindowsBinary should not be called when resolveScipBinary already found scip');
+      }),
   }));
   vi.doMock('../../src/reindex/augment.js', () => ({
     augmentAuxiliaryDocuments: () => ({ scanned: 0, inserted: 0, existing: 0 }),

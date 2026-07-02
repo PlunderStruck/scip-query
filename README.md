@@ -263,18 +263,20 @@ scip-query health --write-baseline   # start the ratchet
 - `scip` CLI, from [Sourcegraph SCIP releases](https://github.com/sourcegraph/scip/releases)
 - A language-specific SCIP indexer for your project
 
-| Language                      | Indexer          | Install                                                         |
-| ----------------------------- | ---------------- | --------------------------------------------------------------- |
-| TypeScript / JavaScript / Vue | scip-typescript  | `npm install -g @sourcegraph/scip-typescript`                   |
-| Java / Scala / Kotlin         | scip-java        | [releases](https://github.com/sourcegraph/scip-java/releases)   |
-| Rust                          | rust-analyzer    | Ships with rust-analyzer: `rust-analyzer scip`                  |
-| Python                        | scip-python-plus | `npm install -g scip-python-plus`                               |
-| Go                            | scip-go          | `go install github.com/sourcegraph/scip-go@latest`              |
-| Ruby                          | scip-ruby        | [releases](https://github.com/sourcegraph/scip-ruby/releases)   |
-| C / C++                       | scip-clang       | [releases](https://github.com/sourcegraph/scip-clang/releases)  |
-| C# / VB                       | scip-dotnet      | [releases](https://github.com/sourcegraph/scip-dotnet/releases) |
-| Dart                          | scip-dart        | [releases](https://github.com/Workiva/scip-dart/releases) or `dart pub global activate scip_dart` |
-| PHP                           | scip-php         | [releases](https://github.com/davidrjenni/scip-php/releases) or Composer package `davidrjenni/scip-php` |
+On Windows, `scip-query reindex` looks for `scip` on PATH, then `SCIP_QUERY_SCIP_BIN`, then downloads a checksum-verified `scip.exe` from this project's GitHub releases into the cache directory automatically on first run. Set `SCIP_QUERY_SCIP_BIN` to a local `scip.exe` path to skip the download, or run `scip-query check-deps` for platform-specific install instructions.
+
+| Language                      | Indexer          | Install                                                                                                                       |
+| ----------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| TypeScript / JavaScript / Vue | scip-typescript  | `npm install -g @sourcegraph/scip-typescript`                                                                                 |
+| Java / Scala / Kotlin         | scip-java        | [releases](https://github.com/sourcegraph/scip-java/releases)                                                                 |
+| Rust                          | rust-analyzer    | Ships with rust-analyzer: `rust-analyzer scip`                                                                                |
+| Python                        | scip-python-plus | `npm install -g scip-python-plus`                                                                                             |
+| Go                            | scip-go          | `go install github.com/sourcegraph/scip-go@latest`                                                                            |
+| Ruby                          | scip-ruby        | [releases](https://github.com/sourcegraph/scip-ruby/releases)                                                                 |
+| C / C++                       | scip-clang       | [releases](https://github.com/sourcegraph/scip-clang/releases)                                                                |
+| C# / VB                       | scip-dotnet      | [releases](https://github.com/sourcegraph/scip-dotnet/releases)                                                               |
+| Dart                          | scip-dart        | [releases](https://github.com/Workiva/scip-dart/releases) or `dart pub global activate scip_dart`                             |
+| PHP                           | scip-php         | [releases](https://github.com/davidrjenni/scip-php/releases) or Composer package `davidrjenni/scip-php`                       |
 | Clojure / ClojureScript       | scip-clojure     | Requires a `scip-clojure` binary on PATH; source: [PlunderStruck/scip-clojure](https://github.com/PlunderStruck/scip-clojure) |
 
 For Python, the executable may be `scip-python`, `scip-python-plus`, or both. `scip-query` accepts either name.
@@ -370,12 +372,13 @@ dead and isolated cleanup detectors.
 
 Useful environment variables:
 
-| Variable                  | Purpose                             |
-| ------------------------- | ----------------------------------- |
-| `SCIP_QUERY_PROJECT_ROOT` | Override the project root directory |
-| `SCIP_QUERY_INDEX_DB`     | Override the SQLite database path   |
-| `SCIP_QUERY_INDEX_SCIP`   | Override the SCIP protobuf path     |
-| `SCIP_QUERY_CACHE_DIR`    | Override the cache directory        |
+| Variable                  | Purpose                                                               |
+| ------------------------- | --------------------------------------------------------------------- |
+| `SCIP_QUERY_PROJECT_ROOT` | Override the project root directory                                   |
+| `SCIP_QUERY_INDEX_DB`     | Override the SQLite database path                                     |
+| `SCIP_QUERY_INDEX_SCIP`   | Override the SCIP protobuf path                                       |
+| `SCIP_QUERY_CACHE_DIR`    | Override the cache directory                                          |
+| `SCIP_QUERY_SCIP_BIN`     | Path to a local `scip` binary (Windows: skips the automatic download) |
 
 Query results are filtered through the project's `.gitignore`. If none exists, common generated directories such as `dist/`, `target/`, `node_modules/`, and `.venv/` are excluded by default.
 
