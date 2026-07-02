@@ -2,7 +2,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { getAllDefinitions } from '../../symbols/definition-catalog.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
-import { isBarrel } from '../../analysis/file-classifier.js';
+import { classifyFile, isBarrel } from '../../analysis/file-classifier.js';
 import { stripCommentsAndStrings } from '../../source/source-stripper.js';
 import { applyScanLimit, definitionLoc } from '../query-utils.js';
 import { definitionSourceSnippet, extractImplementationBody, normalizeBody } from './duplicate-bodies.js';
@@ -99,14 +99,28 @@ export function allTwinGroups(
  */
 export function groupTwins(records: readonly TwinDriftRecord[], opts: { minSimilarity?: number } = {}): TwinGroup[] {
   const minSimilarity = opts.minSimilarity ?? 0.3;
-  const leaves = [...new Set(records.map((record) => record.leaf))];
+  // 21.2 calibration retune (external calibration: Stable_Management §6.4,
+  // Vega_2.0 §3 — the single worst twin-drift false-positive class on both
+  // repos): every class in a TS/JS codebase has a member literally named
+  // `<constructor>` (and other synthetic scip-generated names follow the
+  // same `<...>` shape); grouping on that name matches unrelated classes by
+  // convention alone, not by concept. Drop synthetic leaves before
+  // clustering so they can never form a group.
+  const realRecords = records.filter((record) => !isSyntheticLeaf(record.leaf));
+  const leaves = [...new Set(realRecords.map((record) => record.leaf))];
   const clusters = clusterLeafNames(leaves);
 
   const groups: TwinGroup[] = [];
   for (const cluster of clusters) {
-    const members = records.filter((record) => cluster.has(record.leaf));
+    const members = realRecords.filter((record) => cluster.has(record.leaf));
     if (members.length < 2) continue;
     if (new Set(members.map((member) => member.file)).size < 2) continue;
+    // 21.2 calibration retune: a same-name pair that only exists inside
+    // test files (mocks, fixtures, parallel test suites) is not the "two
+    // production implementations drifted apart" shape twin-drift targets —
+    // reuse the shared test-file classification (the same one dead.ts and
+    // co-change use) instead of re-deriving a test-path heuristic here.
+    if (members.every((member) => classifyFile(member.file) === 'test')) continue;
 
     let bestNonIdentical: { a: TwinDriftRecord; b: TwinDriftRecord; similarity: number } | null = null;
     let hasCrossFilePair = false;
@@ -326,6 +340,16 @@ function levenshteinAtMost(a: string, b: string, max: number): boolean {
     previous = current;
   }
   return previous[b.length]! <= max;
+}
+
+/**
+ * scip-generated synthetic names (`<constructor>`, `<computed>`, and
+ * friends) are wrapped in angle brackets by convention — every class in a
+ * TS/JS codebase has a `<constructor>` member, so matching on the literal
+ * name produces same-name pairs with no conceptual relationship at all.
+ */
+function isSyntheticLeaf(leaf: string): boolean {
+  return leaf.startsWith('<') && leaf.endsWith('>');
 }
 
 function representativeLeaf(cluster: Set<string>): string {

@@ -98,6 +98,72 @@ describe('groupTwins (pure)', () => {
 
     expect(groups).toHaveLength(0);
   });
+
+  // 21.2 calibration retune (external calibration: Stable_Management §6.4,
+  // Vega_2.0 §3): every class has a `<constructor>` member — grouping on
+  // that literal name matches unrelated classes by naming convention alone.
+  it('excludes synthetic `<constructor>`-shaped leaves from grouping', () => {
+    const groups = groupTwins([
+      record({
+        leaf: '<constructor>',
+        file: 'src/app-error.ts',
+        tokens: ['this', '.', 'message', '=', 'msg', ';'],
+      }),
+      record({
+        leaf: '<constructor>',
+        file: 'src/record-builder.ts',
+        tokens: ['this', '.', 'items', '=', 'items', ';'],
+      }),
+    ]);
+
+    expect(groups).toHaveLength(0);
+  });
+
+  it('excludes other angle-bracket-wrapped synthetic names the same way', () => {
+    const groups = groupTwins([
+      record({ leaf: '<computed>', file: 'src/a.ts', tokens: ['return', '1', ';'] }),
+      record({ leaf: '<computed>', file: 'src/b.ts', tokens: ['return', '2', ';'] }),
+    ]);
+
+    expect(groups).toHaveLength(0);
+  });
+
+  // 21.2 calibration retune: a same-name pair that only exists inside test
+  // files (mocks, parallel suites) is not a drifted-production-twin.
+  it('excludes groups where every member lives in a test file', () => {
+    const groups = groupTwins([
+      record({
+        leaf: 'compareProfiles',
+        file: 'src/react/__tests__/a.test.ts',
+        tokens: ['if', '(', 'x', '>', '5', ')', 'return', 'true', ';'],
+      }),
+      record({
+        leaf: 'compareProfiles',
+        file: 'src/vue/__tests__/b.test.ts',
+        tokens: ['if', '(', 'x', '>', '9', ')', 'return', 'true', ';'],
+      }),
+    ]);
+
+    expect(groups).toHaveLength(0);
+  });
+
+  it('still flags a divergent pair when only one side is a test file', () => {
+    const groups = groupTwins([
+      record({
+        leaf: 'compareProfiles',
+        file: 'src/react/a.ts',
+        tokens: ['if', '(', 'x', '>', '5', ')', 'return', 'true', ';'],
+      }),
+      record({
+        leaf: 'compareProfiles',
+        file: 'src/react/__tests__/a.test.ts',
+        tokens: ['if', '(', 'x', '>', '9', ')', 'return', 'true', ';'],
+      }),
+    ]);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.relationship).toBe('divergent');
+  });
 });
 
 describe('twinDrift (db-backed)', () => {
