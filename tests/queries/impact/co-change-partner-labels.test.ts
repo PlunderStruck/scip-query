@@ -138,6 +138,19 @@ describe('co-change partner labels', () => {
     );
   });
 
+  it('honors scanLimit by keeping only the highest-priority pairs (followup #6)', () => {
+    const { db } = createFixture();
+
+    const unbounded = coChange(db, undefined, { minTogether: 4, minConfidence: 0.75, limit: 10 });
+    expect(unbounded.findings.length).toBeGreaterThan(1);
+
+    const bounded = coChange(db, undefined, { minTogether: 4, minConfidence: 0.75, limit: 10, scanLimit: 1 });
+    expect(bounded.findings).toHaveLength(1);
+    expect(bounded.findings[0]?.together).toBe(
+      Math.max(...unbounded.findings.map((finding) => finding.together)),
+    );
+  });
+
   it('carries partner class and declared-coupling suggestions into diff-gate findings', () => {
     const { db, repoRoot } = createFixture();
     writeFileSync(join(repoRoot, 'src/api.ts'), 'export const apiVersion = 99;\n');

@@ -96,18 +96,29 @@ export function coChange(
     limit?: number;
     includeLinked?: boolean;
     maxFilesPerCommit?: number;
+    /**
+     * Caps how many of the (already together-count-sorted) candidate pairs
+     * get classified — the per-pair loop below does filesystem/graph lookups
+     * so its cost scales with candidate count on a large repo history. Set
+     * by the CLI's analysis-budget disclosure on large indexes; honoring it
+     * for real (rather than only disclosing it) keeps the disclosed budget
+     * truthful. Highest-`together` pairs are kept first since `coChangePairs`
+     * returns them pre-sorted by priority.
+     */
+    scanLimit?: number;
   } = {},
 ): CoChangeResult {
   const { minTogether = 4, minConfidence = 0.6, limit = 30, maxFilesPerCommit = 20 } = opts;
   const git = gitEvidenceProduct(db);
   const history = git.commitHistory();
   const partnersMode = file !== undefined;
-  const pairs = git.coChangePairs({
+  const allPairs = git.coChangePairs({
     minTogether: partnersMode ? Math.min(minTogether, 2) : minTogether,
     minConfidence: partnersMode ? 0 : minConfidence,
     maxFilesPerCommit,
   });
-  if (!history || !pairs) return { available: false, commitsAnalyzed: 0, findings: [] };
+  if (!history || !allPairs) return { available: false, commitsAnalyzed: 0, findings: [] };
+  const pairs = typeof opts.scanLimit === 'number' ? allPairs.slice(0, opts.scanLimit) : allPairs;
 
   const graph = buildFileDepGraph(db);
   const declaredCouplings = declaredCouplingSets(db);

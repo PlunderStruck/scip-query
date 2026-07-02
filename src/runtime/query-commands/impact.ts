@@ -56,15 +56,16 @@ const handleAffected = dbCommand(({ db, args, opts }) => {
   console.log(`\n${results.length} affected symbol(s) across ${new Set(results.map((r) => r.file)).size} files.`);
 });
 
-const handleCoChange = dbCommand(({ db, args, opts }) => {
+const handleCoChange = budgetedDbCommand('co-change', ({ db, args, opts, budget }) => {
   const file = args[0] === undefined ? undefined : stringArg(args, 0);
   const result = queries.coChange(db, file, {
     minTogether: definedNumberOption(opts, 'minTogether', 4),
     limit: definedLimitOption(opts, 'limit', 30),
     includeLinked: opts['all'] === true,
+    scanLimit: budget.scanLimit,
   });
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('co-change', args, opts, result);
+    printJsonEnvelope('co-change', args, opts, result, { analysisBudget: budget.analysisBudget });
     return;
   }
   if (!result.available) return render.empty('No git history available (not a repository, or git missing).');

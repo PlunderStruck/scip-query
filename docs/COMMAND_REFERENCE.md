@@ -141,3 +141,36 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 | `status` | Show index status for this project | `--json`<br>`--capabilities` |
 
 <!-- END GENERATED COMMAND REFERENCE -->
+
+## `analysisBudget` disclosure contract
+
+On a large index (`stats.symbols >= 25,000` or `stats.documents >= 2,500`), commands built on the
+shared `budgetedDbCommand`/`budgetedListCommand`/`budgetedTableCommand`/`budgetedReportCommand`/
+`budgetedGroupedByFileCommand`/`budgetedSectionedReportCommand` helpers (`src/runtime/commands/
+command-execution.ts`) automatically cap their candidate scan and disable semantic (ts-morph)
+enrichment, and — unless `--full` is passed — disclose the cap two ways: a stderr notice in human
+mode, and an `analysisBudget: { scanLimit, semanticEnrichment, reason }` key at the top level of
+the `--json` envelope (`printJsonEnvelope`, same file). This is a general-purpose seam, not
+diff-gate-specific: as of this writing it already covers `dead`, `unused-imports`, `isolated`,
+`extract-candidates`, `locality-candidates`, `similar`, `similar-signatures`, `drift`,
+`convergence`, `duplicate-bodies`, `twin-drift`, `cleanup-plan`, `cleanup-apply`,
+`recent-duplicates`, `unused-params`, `complexity-hotspots`, `complexity`, `bottlenecks`,
+`imports`, `refs`, `dataflow`, `slice`, `plan-context`, `change-surface`, `incomplete-migration`,
+`co-change`, `diff-gate`, and the React/Vue battery commands.
+
+Commands stay on the plain (unbudgeted) `dbCommand`/`listCommand`/`tableCommand`/`reportCommand`
+family — and so never emit `analysisBudget` — when their cost model has no candidate-count or
+semantic-enrichment knob for the budget to honestly describe: single-symbol/single-file lookups
+(`code`, `outline`, `fan-in`, `fan-out`, `coupling`), or whole-graph structural queries with their
+own independent bound (`cycles`, `deep-chains`). Adding the `analysisBudget` key to one of those
+without also making the underlying query respect `scanLimit`/`semantic` would disclose a cap that
+isn't real — forbidden by the same "no silent/false disclosure" rule this contract exists to
+enforce (see `docs/plans/2026-07-02-followups.md` items 6 and 9).
+
+Followup #6 closed the one confirmed gap in an otherwise-wired battery command: `co-change`
+(`src/runtime/query-commands/impact.ts`) used the plain `dbCommand` and never disclosed a budget,
+even though its per-pair classification loop in `queries.coChange`
+(`src/queries/impact/co-change.ts`) does real filesystem/graph work whose cost scales with
+candidate-pair count on a large repository. It now flows through `budgetedDbCommand` and
+`coChange` accepts a `scanLimit` option that truncates the (already priority-sorted) candidate
+pairs before classification, so the disclosed budget is truthful rather than cosmetic.

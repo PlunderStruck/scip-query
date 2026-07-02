@@ -68,13 +68,37 @@ up, write a real plan section (`concrete-plan`), and implement independently.
    Source: `docs/validation/2026-07-01-external-calibration-vega.md` §3 ("Failure modes
    observed", `similar` bullet).
 
-6. **`analysisBudget` disclosure only wired into `diff-gate` (Vega).** `commandAnalysisBudget` is
-   only consumed by `src/runtime/query-commands/impact.ts` (diff-gate); every standalone battery
-   command (`drift`, `duplicate-bodies`, `co-change`, etc.) ran uncapped on a 188k-symbol index
-   with no budget-disclosure key in its JSON. Either wire the disclosure into every large-index
-   command or document that the contract is diff-gate-only.
+6. **RESOLVED (2026-07-02, followup-batch). `analysisBudget` disclosure only wired into
+   `diff-gate` (Vega).** `commandAnalysisBudget` is only consumed by
+   `src/runtime/query-commands/impact.ts` (diff-gate); every standalone battery command (`drift`,
+   `duplicate-bodies`, `co-change`, etc.) ran uncapped on a 188k-symbol index with no
+   budget-disclosure key in its JSON. Either wire the disclosure into every large-index command or
+   document that the contract is diff-gate-only.
    Source: `docs/validation/2026-07-01-external-calibration-vega.md` §1 ("Analysis-budget
    disclosure at this index size").
+   Decision + evidence: the premise was stale. `commandAnalysisBudget` already flows through a
+   shared JSON-envelope seam — the `budgeted*Command` family in
+   `src/runtime/commands/command-execution.ts` (`budgetedDbCommand`, `budgetedListCommand`,
+   `budgetedTableCommand`, `budgetedReportCommand`, `budgetedGroupedByFileCommand`,
+   `budgetedSectionedReportCommand`), all piping `budget.analysisBudget` into `printJsonEnvelope`'s
+   `extra.analysisBudget` key — and at HEAD it already covers ~30 commands including `drift`
+   (`handleDrift`, `cleanup/handlers.ts:469`) and `duplicate-bodies`
+   (`handleDuplicateBodies`, `cleanup/handlers.ts:553`); grep evidence:
+   `grep -n "= budgeted" src/runtime/query-commands/**/*.ts`. The one genuinely open gap among the
+   item's own named examples was `co-change`, still on the plain `dbCommand`. Fixed by wiring
+   `co-change` into the existing seam (not a bespoke mechanism) — `handleCoChange` now uses
+   `budgetedDbCommand('co-change', ...)` (`src/runtime/query-commands/impact.ts:59-69`) — and, to
+   keep the disclosure truthful rather than cosmetic, `queries.coChange` gained a real `scanLimit`
+   option (`src/queries/impact/co-change.ts:90-118`) that truncates the already
+   `together`-count-sorted candidate pairs before the per-pair filesystem/graph classification
+   loop, since that loop (not `queries.coChange` as a whole) is what scales with index/history
+   size. Commands with no candidate-count/semantic-enrichment knob (`code`, `outline`, `fan-in`,
+   `fan-out`, `coupling`, `cycles`, `deep-chains`) intentionally stay off the seam — attaching
+   `analysisBudget` there would disclose a cap that isn't real. Full reasoning and the up-to-date
+   list of covered/excluded commands recorded in `docs/COMMAND_REFERENCE.md` ("`analysisBudget`
+   disclosure contract" section, hand-authored, after the generated block).
+   Test: `tests/queries/impact/co-change-partner-labels.test.ts` — "honors scanLimit by keeping
+   only the highest-priority pairs (followup #6)".
 
 7. **`twin-drift` delegation-chain exclusion (Vega; explicitly deferred by 21.2b).** Beyond the
    `<constructor>` and test-file exclusions already shipped in 21.2b, `twin-drift` still
