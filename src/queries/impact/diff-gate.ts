@@ -19,7 +19,13 @@ import {
   diffImpact,
   diffImpactPlan,
 } from './diff-impact.js';
-import type { AttributionNote, BaseContentReader, ChangedLineRange, DiffImpactPlan } from './diff-impact.js';
+import type {
+  AttributionNote,
+  BaseContentReader,
+  ChangedLineRange,
+  DiffImpactPlan,
+  RenamedFile,
+} from './diff-impact.js';
 import { baselineFindingMetadata } from './diff-gate-baseline-policy.js';
 import { docReferencePolicy, isSnapshotDoc } from './diff-gate-doc-policy.js';
 import type { DiffGateActionTier, DocCitationKind } from './diff-gate-types.js';
@@ -90,7 +96,8 @@ export interface DiffGateFinding {
    * Advisory findings surface useful signal but must never be the sole
    * cause of a nonzero diff-gate exit code (see `blockingFindings`). Used
    * by twin-partner until calibration (remediation plan phase 21) says the
-   * check's precision earns a hard gate.
+   * check's precision earns a hard gate; also used by doc-reference (21.2)
+   * for bare file-mention citations — see `runDocReferenceCheck`.
    */
   advisory?: boolean;
   /** Underlying analyzer family when one gate finding wraps another analyzer. */
@@ -286,7 +293,7 @@ export function diffGate(
   runUnlessSkipped('twin-partner', () => runTwinPartnerCheck(db, impact.changedSymbols, changed, scanLimit, result));
   runUnlessSkipped('coverage-contract', () => runCoverageContractCheck(db, changedForCoordination, result));
   runUnlessSkipped('doc-reference', () =>
-    runDocReferenceCheck(db, changed, changedGitFiles, impactPlan.changedRanges, result),
+    runDocReferenceCheck(db, changed, changedGitFiles, impactPlan.changedRanges, impactPlan.renamedFiles, result),
   );
   runUnlessSkipped('unused-params', () => runUnusedParamsCheck(db, changedFiles, result));
   runUnlessSkipped('new-dead', () => runNewDeadCheck(db, impact.changedSymbols, symbolPreexistedAtBase, result));
@@ -933,11 +940,13 @@ function runDocReferenceCheck(
   changed: ReadonlySet<string>,
   changedGitFiles: ReadonlySet<string>,
   changedRanges: readonly ChangedLineRange[],
+  renamedFiles: readonly RenamedFile[],
   result: DiffGateResult,
 ): void {
   result.checksRun.push('doc-reference');
   const targets = docReferencePolicy.referenceTargets(db, changed, changedRanges);
   if (targets.size === 0) return;
+  const renamedFrom = new Set(renamedFiles.map((rename) => rename.from));
   for (const citation of docsCitingFiles(db, targets)) {
     if (changedGitFiles.has(citation.doc)) continue; // doc updated in the same diff
     if (isSnapshotDoc(db, citation.doc)) continue; // dated snapshot doc — excluded by docs.snapshotPaths policy
@@ -946,6 +955,18 @@ function runDocReferenceCheck(
         ? citation.citedClaims
         : docReferencePolicy.citationContexts(db, citation.doc, citation.cited);
     const classification = docReferencePolicy.classifyCitation(citedClaims);
+    // 21.2 calibration retune (external calibration: Stable_Management §4 —
+    // doc-reference was 91% of gate volume at ~13% actionable; Vega_2.0 §4.4
+    // — 70% of volume, 1/7 sampled actionable, and the one real hit was
+    // line-anchored). Line-anchored citations and citations to a file that
+    // was deleted or renamed in this diff are the actionable core and stay
+    // blocking; a bare file-mention citation is advisory — it still prints
+    // and is still suppressible, it just can't fail the gate by itself.
+    const lineAnchored = docReferencePolicy.hasLineAnchoredCitation(citation.citations);
+    const citedFileRemoved = citation.cited.some(
+      (file) => renamedFrom.has(file) || !existsSync(`${db.config.projectRoot}/${file}`),
+    );
+    const advisory = !(lineAnchored || citedFileRemoved);
     const legacyId = findingId('doc-reference', citation.doc, citation.cited.join('|'));
     const id = findingId('doc-reference', citation.doc, citation.cited[0] ?? '');
     recordFinding(result, {
@@ -961,11 +982,17 @@ function runDocReferenceCheck(
       citationKind: classification.citationKind,
       citationKindReasons: classification.reasons,
       citedClaims,
+      ...(advisory ? { advisory: true } : {}),
       message: `${citation.doc} cites ${citation.cited.join(', ')} as ${docReferencePolicy.citationKindLabel(classification.citationKind)} — changed in this diff, doc untouched`,
       why: [
         `${citation.cited.join(', ')} changed in this diff.`,
         `${citation.doc} cites the changed file(s) but was not updated in the same diff.`,
         ...classification.reasons.map((reason) => `Citation kind evidence: ${reason}`),
+        advisory
+          ? 'Advisory: bare file-mention citation (no line anchor, cited file still present under the same path) — 21.2 calibration found this citation shape low-precision; verify at your leisure.'
+          : lineAnchored
+            ? 'Blocking: citation includes a line anchor that may now point at the wrong lines.'
+            : 'Blocking: the cited file was deleted or renamed in this diff — the citation almost certainly needs an update.',
       ],
       remediation: docReferencePolicy.citationRemediation(classification.citationKind, citation.doc),
     });

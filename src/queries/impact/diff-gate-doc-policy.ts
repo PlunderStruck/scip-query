@@ -36,7 +36,25 @@ export const docReferencePolicy = {
   citationKindLabel,
   citationRemediation,
   referenceTargets,
+  hasLineAnchoredCitation,
 } as const;
+
+/**
+ * Citation granularity (21.2 calibration retune — external calibration:
+ * Stable_Management §4 "91% of gate volume", Vega_2.0 §4.4 "the volume, not
+ * the check, is the problem"): a citation with an explicit line anchor
+ * (`file.ts:123`) points at a specific claim that goes stale the moment
+ * those lines move — that's the actionable core both reports measured. A
+ * bare file-mention citation ("see file.ts") is a much weaker signal (the
+ * file merely came up in prose) and dominates raw volume without matching
+ * actionability — see `runDocReferenceCheck` in diff-gate.ts for where this
+ * combines with "cited file deleted/renamed" to decide blocking vs advisory.
+ */
+export function hasLineAnchoredCitation(
+  citations: readonly { lineReferences?: readonly number[] | undefined }[],
+): boolean {
+  return citations.some((citation) => (citation.lineReferences?.length ?? 0) > 0);
+}
 
 function classifyCitation(contexts: readonly string[]): DocCitationClassification {
   const haystack = contexts.join('\n').toLowerCase();
@@ -147,10 +165,17 @@ function referenceTargets(
 }
 
 function hasDocRelevantChange(db: ScipDatabase, file: string, ranges: readonly ChangedLineRange[]): boolean {
-  if (ranges.length === 0) return false;
   if (!SOURCE_FILE_PATTERN.test(file)) return true;
   const absolutePath = `${db.config.projectRoot}/${file}`;
+  // Deleted (or renamed-away) files never produce a `+++`-anchored diff
+  // hunk (git emits `+++ /dev/null`, which `parseChangedLineRanges` can't
+  // attribute to a path) — so `ranges` is always empty for a deletion. A
+  // citation to a file that's gone is relevant regardless of line ranges;
+  // check existence BEFORE the ranges-empty bail-out below (21.2: this is
+  // what makes "cited file deleted/renamed" reachable as a doc-reference
+  // finding at all — see runDocReferenceCheck's severity split).
   if (!existsSync(absolutePath)) return true;
+  if (ranges.length === 0) return false;
   const lines = readFileSync(absolutePath, 'utf-8').split(/\r?\n/);
   const importLines = staticImportExportLines(lines);
   for (const range of ranges) {

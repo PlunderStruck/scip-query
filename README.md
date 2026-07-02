@@ -163,7 +163,7 @@ When verification _fails_, the errors name the exact references the static evide
 | `co-change-partner` | Historically coupled files that usually change together but are missing from this diff. | Default diff gate. |
 | `twin-partner` | A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched. | Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves. |
 | `coverage-contract` | A configured `coverageContracts` entry (.scipquery.json) drifted: its declared key set no longer matches its ground-truth source. | Default diff gate, only when either side of a configured contract changed. |
-| `doc-reference` | Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy. | Default diff gate. |
+| `doc-reference` | Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy. | Default diff gate. Advisory (21.2) for bare file-mention citations; blocking when the citation has a line anchor or the cited file was deleted/renamed. |
 | `unused-params` | Fresh trailing parameters or options that no changed body uses. | Default diff gate. |
 | `new-dead` | Changed production symbols with zero indexed consumers. | Default diff gate. |
 | `baseline` | New health finding identities compared with the committed health baseline. | Only with `diff-gate --baseline`. |

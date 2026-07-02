@@ -33,7 +33,7 @@ const DIFF_GATE_CHECK_DESCRIPTIONS: Record<DiffGateCheck, { description: string;
   'doc-reference': {
     description:
       'Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy.',
-    when: 'Default diff gate.',
+    when: 'Default diff gate. Advisory (21.2) for bare file-mention citations; blocking when the citation has a line anchor or the cited file was deleted/renamed.',
   },
   'unused-params': {
     description: 'Fresh trailing parameters or options that no changed body uses.',

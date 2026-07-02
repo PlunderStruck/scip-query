@@ -230,6 +230,37 @@ export function docDrift(
   };
 }
 
+interface DocLastChangedResult {
+  value: number;
+  estimated: boolean;
+}
+
+/**
+ * `changeTimes` comes from a git-log scan capped at MAX_COMMITS and, per
+ * commit, at BULK_COMMIT_FILE_CAP files (bulk commits are dropped wholesale
+ * — see git-history.ts). A doc with zero entries there isn't necessarily
+ * unchanged: it may be staged-but-uncommitted, or its only commit may have
+ * been a bulk sweep that got dropped. Epoch 0 in that case reads as "doc
+ * never changed" and inflates staleness for a doc that in fact just
+ * changed (2026-07-01 Vega calibration finding). Filesystem mtime is always
+ * a better estimate than epoch 0 when the doc file still exists on disk.
+ */
+function docLastChangedAtFor(
+  db: ScipDatabase,
+  docFile: string,
+  timestamps: readonly number[] | undefined,
+): DocLastChangedResult {
+  if (timestamps && timestamps.length > 0) {
+    return { value: Math.max(...timestamps), estimated: false };
+  }
+  try {
+    const mtimeSeconds = Math.floor(statSync(join(db.config.projectRoot, docFile)).mtimeMs / 1000);
+    return { value: mtimeSeconds, estimated: true };
+  } catch {
+    return { value: 0, estimated: false };
+  }
+}
+
 interface DocDriftIntentClassification {
   docIntent: DocDriftIntent;
   reasons: string[];
