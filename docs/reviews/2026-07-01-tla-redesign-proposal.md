@@ -98,3 +98,10 @@ The current skill explains the loop and the JSON schema but says nothing about w
 | Research | ts-morph → PlusCal translation for pure reducer-style modules | open-ended | True auto-translation for the subset where it's decidable |
 
 P2 is the "revolutionary" piece, and it is buildable: every ingredient (SCIP symbols, ts-morph effects, projection hooks in the schema, TLC) already exists in or alongside this codebase. What should *not* be built is a general "TypeScript → verified TLA model" button — that promise would recreate, at higher stakes, exactly the decorative verification this proposal removes.
+
+2026-07-01 remediation confirmation: the `src/tla/conformance.ts` and
+`src/tla/tool-runner.ts` guide references remain current after the first SANY
+bridge landed. The verifier now prefers SANY XML facts when the tools jar is
+available, falls back with an explicit parse basis when it is not, and compares
+model action reads/writes against both mapping declarations and indexed code
+evidence.

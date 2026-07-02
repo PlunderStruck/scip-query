@@ -137,3 +137,9 @@ The `src/source/react-profile.ts` optimization note remains accurate after the
 health cleanup. The added `ignore-stale` comment documents the profile-options
 boundary; React profile cache reads, cloning behavior, and returned payloads are
 unchanged.
+
+2026-07-01 round-2 remediation note: the `src/source/react-profile.ts`
+intentional citation remains current after React profiling gained class,
+nested-component, fragment, spread, conditional, and shared identifier-stoplist
+handling. The optimization record still names the React profile implementation
+whose cached behavior profile feeds recent duplicate evidence.

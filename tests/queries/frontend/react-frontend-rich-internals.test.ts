@@ -172,6 +172,58 @@ describe('React frontend rich internals', () => {
     }
   });
 
+  it('profiles class components, nested components, fragments, spread names, and AST conditionals', () => {
+    const { db } = createReactFixture({
+      'src/components/LegacyPanel.tsx': `import React from 'react';
+
+class LegacyPanel extends React.Component<{ ready?: boolean; panelProps: Record<string, unknown> }> {
+  render() {
+    const maybe = this.props.ready?.valueOf() ?? false;
+    return (
+      <React.Fragment key="legacy">
+        <Card {...this.props.panelProps} status={maybe ? 'ready' : 'idle'} />
+      </React.Fragment>
+    );
+  }
+}
+
+export function HostPanel({ panelProps, user }: { panelProps: Record<string, unknown>; user?: { name?: string } }) {
+  function NestedCard() {
+    return (
+      <>
+        <Card {...panelProps}>{user?.name ?? 'Guest'}</Card>
+      </>
+    );
+  }
+  return <NestedCard />;
+}
+`,
+    });
+    try {
+      const profiles = buildReactComponentBehaviorProfilesForFile(db, 'src/components/LegacyPanel.tsx');
+      const legacy = profiles.find((profile) => profile.name === 'LegacyPanel');
+      const nested = profiles.find((profile) => profile.name === 'NestedCard');
+
+      expect(legacy).toBeDefined();
+      expect(nested).toBeDefined();
+      expect([...(legacy?.jsxTokens ?? [])]).toEqual(
+        expect.arrayContaining([
+          'jsx:fragment',
+          'component:Card',
+          'prop:spread:this.props.panelProps',
+          'jsx:conditional',
+        ]),
+      );
+      expect([...(nested?.jsxTokens ?? [])]).toEqual(
+        expect.arrayContaining(['jsx:fragment', 'component:Card', 'prop:spread:panelProps', 'binding:user']),
+      );
+      expect([...(nested?.jsxTokens ?? [])]).not.toContain('jsx:conditional');
+      expect([...(nested?.jsxTokens ?? [])]).not.toContain('binding:id');
+    } finally {
+      db.close();
+    }
+  });
+
   it('finds duplicated React component structure, hook candidates, and health pressure', () => {
     const { db } = createReactFixture({
       'src/components/CalendarPanel.tsx': CALENDAR_PANEL,
@@ -194,6 +246,9 @@ describe('React frontend rich internals', () => {
           componentA: 'IncidentPanel',
           fileB: 'src/components/IssuePanel.tsx',
           componentB: 'IssuePanel',
+          evidenceClass: expect.stringMatching(/domain-behavior|mixed|shared-abstraction/),
+          actionTier: expect.any(String),
+          recommendation: expect.any(String),
           sharedComponents: expect.arrayContaining(['PageShell', 'RecordTable', 'ToolbarPanel', 'UiButton']),
           sharedEvents: expect.arrayContaining(['click', 'reset', 'select']),
         }),
@@ -283,6 +338,45 @@ describe('React frontend rich internals', () => {
           }),
         ]),
       );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('marks native-only React component overlap as support evidence', () => {
+    const FORM_A = `export function BillingForm() {
+  return (
+    <form aria-label="billing">
+      <div className="stack">
+        <label htmlFor="field-a"><span>Name</span><input id="field-a" name="name" type="text" /></label>
+        <button type="button">Save</button>
+      </div>
+    </form>
+  );
+}
+`;
+    const FORM_B = FORM_A.replace('BillingForm', 'ShippingForm')
+      .replace('billing', 'shipping')
+      .replace('field-a', 'field-b');
+    const { db } = createReactFixture({
+      'src/components/BillingForm.tsx': FORM_A,
+      'src/components/ShippingForm.tsx': FORM_B,
+    });
+    try {
+      const duplicates = reactComponentDuplicates(db, {
+        limit: 10,
+        minSimilarity: 0.5,
+        minTokens: 6,
+      });
+
+      expect(duplicates).toEqual([
+        expect.objectContaining({
+          evidenceClass: 'generic-workflow-scaffolding',
+          actionTier: 'support',
+          recommendation: expect.stringContaining('Generic structural overlap'),
+          sharedNativeTags: expect.arrayContaining(['button', 'div', 'form', 'input', 'label', 'span']),
+        }),
+      ]);
     } finally {
       db.close();
     }

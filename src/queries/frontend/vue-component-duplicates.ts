@@ -2,7 +2,14 @@ import { difference, intersection, jaccard } from '../../analysis/similarity.js'
 import { frontendBehaviorProduct } from '../../source/frontend-behavior-products.js';
 import type { VueComponentBehaviorProfile } from '../../source/vue/vue-profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { sortedTokens, tokenValues } from '../internal/frontend-behavior-evidence.js';
+import {
+  classifyFrontendBehaviorEvidence,
+  overlapGate,
+  sortedTokens,
+  tokenValues,
+  type FrontendBehaviorActionTier,
+  type FrontendBehaviorEvidenceClass,
+} from '../internal/frontend-behavior-evidence.js';
 import {
   pairwiseCandidateIndexFromKeys,
   rankedPairwiseProfileResults,
@@ -20,6 +27,10 @@ export interface VueComponentDuplicateResult {
   sharedDirectives: string[];
   sharedSlots: string[];
   sharedIdentifiers: string[];
+  evidenceClass: FrontendBehaviorEvidenceClass;
+  actionTier: FrontendBehaviorActionTier;
+  evidenceClassReasons: string[];
+  recommendation: string;
   uniqueToA: string[];
   uniqueToB: string[];
   locA: number;
@@ -96,18 +107,36 @@ function compareProfiles(
   if (!hasMeaningfulVueOverlap(shared)) return null;
   const similarity = jaccard(a.tokens, b.tokens);
   if (similarity < minSimilarity) return null;
+  const sharedComponents = tokenValues(shared, 'component:');
+  const sharedProps = tokenValues(shared, 'prop:');
+  const sharedEvents = tokenValues(shared, 'event:');
+  const sharedDirectives = tokenValues(shared, 'directive:');
+  const sharedSlots = tokenValues(shared, 'slot:');
+  const sharedIdentifiers = tokenValues(shared, 'id:');
+  const evidence = classifyVueComponentEvidence({
+    sharedComponents,
+    sharedProps,
+    sharedEvents,
+    sharedDirectives,
+    sharedSlots,
+    sharedIdentifiers,
+  });
 
   return {
     fileA: a.file,
     fileB: b.file,
     similarity,
     sharedTokens: sortedTokens(shared),
-    sharedComponents: tokenValues(shared, 'component:'),
-    sharedProps: tokenValues(shared, 'prop:'),
-    sharedEvents: tokenValues(shared, 'event:'),
-    sharedDirectives: tokenValues(shared, 'directive:'),
-    sharedSlots: tokenValues(shared, 'slot:'),
-    sharedIdentifiers: tokenValues(shared, 'id:'),
+    sharedComponents,
+    sharedProps,
+    sharedEvents,
+    sharedDirectives,
+    sharedSlots,
+    sharedIdentifiers,
+    evidenceClass: evidence.evidenceClass,
+    actionTier: evidence.actionTier,
+    evidenceClassReasons: evidence.reasons,
+    recommendation: evidence.recommendation,
     uniqueToA: sortedTokens(difference(a.tokens, b.tokens)).slice(0, 25),
     uniqueToB: sortedTokens(difference(b.tokens, a.tokens)).slice(0, 25),
     locA: a.loc,
@@ -129,5 +158,81 @@ function hasMeaningfulVueOverlap(shared: ReadonlySet<string>): boolean {
       behaviorLike += 1;
     }
   }
-  return componentLike >= 1 || behaviorLike >= 3;
+  return overlapGate(
+    [
+      { name: 'component', count: componentLike },
+      { name: 'behavior', count: behaviorLike },
+    ],
+    [
+      { min: { component: 1 }, reason: 'shared custom component' },
+      { min: { behavior: 3 }, reason: 'shared Vue template structure' },
+    ],
+  ).pass;
 }
+
+function classifyVueComponentEvidence(parts: {
+  sharedComponents: readonly string[];
+  sharedProps: readonly string[];
+  sharedEvents: readonly string[];
+  sharedDirectives: readonly string[];
+  sharedSlots: readonly string[];
+  sharedIdentifiers: readonly string[];
+}) {
+  return classifyFrontendBehaviorEvidence({
+    genericWords: GENERIC_VUE_STRUCTURE_WORDS,
+    primitiveGroups: [
+      { values: parts.sharedProps, reasonPrefix: 'shared props', bucket: 'generic' },
+      { values: parts.sharedEvents, reasonPrefix: 'shared events', bucket: 'generic' },
+      { values: parts.sharedDirectives, reasonPrefix: 'shared directives', bucket: 'generic' },
+      { values: parts.sharedSlots, reasonPrefix: 'shared slots', bucket: 'generic' },
+    ],
+    nameGroups: [
+      { names: parts.sharedComponents, label: 'shared component', fallbackBucket: 'generic' },
+      { names: parts.sharedIdentifiers, label: 'shared identifier', fallbackBucket: 'generic' },
+    ],
+    recommendation: vueComponentRecommendation,
+  });
+}
+
+function vueComponentRecommendation(evidenceClass: FrontendBehaviorEvidenceClass): string {
+  switch (evidenceClass) {
+    case 'domain-behavior':
+    case 'mixed':
+      return 'Review for a shared component or feature-specific Vue primitive around the named domain structure.';
+    case 'shared-abstraction':
+      return 'Review the existing shared component usage first; extract only if duplicated structure remains outside it.';
+    case 'generic-workflow-scaffolding':
+      return 'Generic structural overlap — verify intent before consolidating.';
+  }
+}
+
+const GENERIC_VUE_STRUCTURE_WORDS = new Set([
+  'actions',
+  'app',
+  'button',
+  'card',
+  'content',
+  'container',
+  'dialog',
+  'field',
+  'form',
+  'header',
+  'input',
+  'item',
+  'label',
+  'layout',
+  'list',
+  'modal',
+  'page',
+  'panel',
+  'row',
+  'section',
+  'shell',
+  'table',
+  'text',
+  'toolbar',
+  'ui',
+  'value',
+  'view',
+  'wrapper',
+]);

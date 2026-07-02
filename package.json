@@ -17,8 +17,7 @@
     "scripts/build-scip-windows.mjs",
     "scripts/evidence-product-contract.mjs",
     "skills/**/*.md",
-    "skills/**/agents/*.yaml",
-    "vendor/scip/**/*"
+    "skills/**/agents/*.yaml"
   ],
   "sideEffects": false,
   "exports": {
@@ -300,7 +299,7 @@
     "bench:evidence-products": "node scripts/evidence-product-contract.mjs",
     "calibrate": "node scripts/accuracy-calibration.mjs",
     "docs:commands": "vite-node scripts/render-command-reference.ts --write",
-    "prepublishOnly": "npm run build && npm run build:scip-windows",
+    "prepublishOnly": "npm run build",
     "postinstall": "node dist/postinstall.js || true"
   },
   "keywords": [

@@ -1,5 +1,32 @@
 export type LayerPolicyVerdict = 'ok' | 'violation';
 
+const SRC_LAYER_DEPENDENCIES: Record<string, ReadonlySet<string>> = {
+  analysis: new Set(['domain', 'source', 'storage', 'symbols']),
+  core: new Set(['analysis', 'domain', 'resolution', 'source', 'storage', 'symbols']),
+  domain: new Set([]),
+  instrumentation: new Set([]),
+  'language-parsers': new Set(['domain', 'resolution', 'source', 'storage']),
+  queries: new Set([
+    'analysis',
+    'core',
+    'domain',
+    'language-parsers',
+    'resolution',
+    'semantic',
+    'source',
+    'storage',
+    'symbols',
+  ]),
+  reindex: new Set(['domain', 'language-parsers', 'resolution', 'runtime', 'semantic', 'source', 'storage', 'symbols']),
+  resolution: new Set(['domain', 'source', 'storage', 'symbols']),
+  runtime: new Set(['domain', 'queries', 'reindex', 'resolution', 'semantic', 'source', 'storage', 'symbols']),
+  semantic: new Set(['domain', 'resolution', 'storage', 'symbols']),
+  source: new Set(['domain', 'storage']),
+  storage: new Set(['domain', 'source']),
+  symbols: new Set(['analysis', 'domain', 'language-parsers', 'resolution', 'semantic', 'source', 'storage']),
+  tla: new Set(['domain', 'queries', 'source', 'storage', 'symbols']),
+};
+
 export function getArchitecturalLayer(filePath: string): string {
   const normalized = filePath.replace(/\\/g, '/');
   const parts = normalized.split('/').filter(Boolean);
@@ -21,6 +48,7 @@ export function layerPolicyForEdge(fromLayer: string, toLayer: string): LayerPol
   const fromSrc = srcLayerName(fromLayer);
   const toSrc = srcLayerName(toLayer);
   if (fromSrc && toSrc) {
+    if (!isKnownSrcLayer(fromSrc) || !isKnownSrcLayer(toSrc)) return null;
     return isAllowedSrcLayerDependency(fromSrc, toSrc) ? 'ok' : 'violation';
   }
 
@@ -30,7 +58,13 @@ export function layerPolicyForEdge(fromLayer: string, toLayer: string): LayerPol
 export function isKnownProjectLayerDependency(filePath: string, depPath: string): boolean {
   const fromSrc = srcLayerName(getArchitecturalLayer(filePath));
   const toSrc = srcLayerName(getArchitecturalLayer(depPath));
-  return !!fromSrc && !!toSrc;
+  return !!fromSrc && !!toSrc && isKnownSrcLayer(fromSrc) && isKnownSrcLayer(toSrc);
+}
+
+export function isUnknownSrcLayerEdge(fromLayer: string, toLayer: string): boolean {
+  const fromSrc = srcLayerName(fromLayer);
+  const toSrc = srcLayerName(toLayer);
+  return !!fromSrc && !!toSrc && (!isKnownSrcLayer(fromSrc) || !isKnownSrcLayer(toSrc));
 }
 
 function srcLayerName(layer: string): string | null {
@@ -42,41 +76,18 @@ function isAllowedSrcLayerDependency(from: string, to: string): boolean {
   if (to === 'instrumentation') return true;
   if (to === 'domain') return true;
   if (from === 'domain') return false;
+  return SRC_LAYER_DEPENDENCIES[from]?.has(to) ?? false;
+}
 
-  const allowed: Record<string, ReadonlySet<string>> = {
-    analysis: new Set(['domain', 'source', 'storage', 'symbols']),
-    core: new Set(['analysis', 'domain', 'resolution', 'source', 'storage', 'symbols']),
-    'language-parsers': new Set(['domain', 'resolution', 'source', 'storage']),
-    queries: new Set([
-      'analysis',
-      'core',
-      'domain',
-      'language-parsers',
-      'resolution',
-      'semantic',
-      'source',
-      'storage',
-      'symbols',
-    ]),
-    reindex: new Set([
-      'domain',
-      'language-parsers',
-      'resolution',
-      'runtime',
-      'semantic',
-      'source',
-      'storage',
-      'symbols',
-    ]),
-    resolution: new Set(['domain', 'source', 'storage', 'symbols']),
-    runtime: new Set(['domain', 'queries', 'reindex', 'resolution', 'semantic', 'source', 'storage', 'symbols']),
-    semantic: new Set(['domain', 'resolution', 'storage', 'symbols']),
-    source: new Set(['domain', 'storage']),
-    storage: new Set(['domain', 'source']),
-    symbols: new Set(['analysis', 'domain', 'language-parsers', 'resolution', 'semantic', 'source', 'storage']),
-  };
+function isKnownSrcLayer(layer: string): boolean {
+  return Object.hasOwn(SRC_LAYER_DEPENDENCIES, layer);
+}
 
-  return allowed[from]?.has(to) ?? false;
+/** Sorted layer names with an explicit policy row — the coverage regression
+ *  test compares this against the actual src/ directory listing so a new
+ *  top-level directory can never silently default to "violation" again. */
+export function knownSrcLayers(): string[] {
+  return Object.keys(SRC_LAYER_DEPENDENCIES).sort();
 }
 
 function genericLayerPolicy(fromLayer: string, toLayer: string): LayerPolicyVerdict | null {

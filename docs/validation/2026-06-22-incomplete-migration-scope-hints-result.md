@@ -132,3 +132,8 @@ The `src/queries/cleanup/similar.ts` incomplete-migration scope-hint reference
 remains accurate after the health cleanup. Similarity scope labels,
 remediation text, and callee-index reuse are unchanged; the added source
 comments only classify accepted health signals.
+
+2026-07-01 round-2 remediation note: the `src/queries/cleanup/similar.ts`
+intentional citation remains current after convergence was folded into the
+similarity command. Scope hints still describe incomplete-migration evidence,
+not a separate similarity metric.

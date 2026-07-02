@@ -120,11 +120,15 @@ function parseRequireEntry(entry: ClojureForm, prefix: string | null): Namespace
   }
 
   if (entry.type === 'vector') {
+    if (entry.children.length > 0 && atomText(entry.children[0]) === null) {
+      return entry.children.flatMap((child) => parseRequireEntry(child, prefix));
+    }
     return parseRequireVector(entry, prefix);
   }
 
   if (entry.type === 'list' && entry.children.length > 0) {
     const head = atomText(entry.children[0]);
+    if (!head) return entry.children.flatMap((child) => parseRequireEntry(child, prefix));
     if (!head || head.startsWith(':')) return [];
     return entry.children.slice(1).flatMap((child) => parseRequireEntry(child, qualifyNamespace(prefix, head)));
   }
@@ -268,6 +272,9 @@ function parseNamespaceForm(source: string): CollectionForm | null {
 
 function parseForm(source: string, start: number): { form: ClojureForm; index: number } | null {
   let index = skipWhitespace(source, start);
+  if (source.startsWith('#?@', index) || source.startsWith('#?', index)) {
+    return parseReaderConditional(source, index);
+  }
   if (source.startsWith('#_', index)) {
     const discarded = parseForm(source, index + 2);
     return discarded
@@ -288,6 +295,30 @@ function parseForm(source: string, start: number): { form: ClojureForm; index: n
       index: skipString(source, index),
     };
   return parseAtom(source, index);
+}
+
+function parseReaderConditional(source: string, start: number): { form: ClojureForm; index: number } | null {
+  const prefixLength = source.startsWith('#?@', start) ? 3 : 2;
+  const parsed = parseForm(source, start + prefixLength);
+  if (!parsed) return null;
+  const branchValues =
+    parsed.form.type === 'list' || parsed.form.type === 'vector' || parsed.form.type === 'map'
+      ? readerConditionalBranchValues(parsed.form.children)
+      : [];
+  return {
+    form: { type: 'list', children: branchValues, start, end: parsed.index },
+    index: parsed.index,
+  };
+}
+
+function readerConditionalBranchValues(children: ClojureForm[]): ClojureForm[] {
+  const values: ClojureForm[] = [];
+  for (let index = 0; index < children.length; index += 2) {
+    const platform = atomText(children[index]);
+    const value = children[index + 1];
+    if (platform?.startsWith(':') && value) values.push(value);
+  }
+  return values;
 }
 
 function parseCollection(

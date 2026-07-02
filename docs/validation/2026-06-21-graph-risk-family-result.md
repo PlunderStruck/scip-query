@@ -130,3 +130,8 @@ The `src/queries/cleanup/stale-abstractions.ts` reference remains current after
 the consumer evidence product migration. The file still belongs to the cleanup
 detector family; the change centralizes consumer evidence assembly and
 classification without changing the declared-coupling configuration example.
+
+2026-07-01 round-2 remediation note: the health-report and CLI-support guide
+references remain current after graph-risk and health output changes. The graph
+risk family still reports through the same command rendering path, now with
+corrected fan-in self-file policy and scoped SQL parameters.

@@ -113,14 +113,20 @@ const handleCoupling = dbCommand(({ db, args, opts }) => {
 const handleCycles = reportCommand({
   commandName: 'cycles',
   query: ({ db, opts }) =>
-    queries.cycles(db, {
+    queries.cycleSummary(db, {
       scope: stringOptionValue(opts, 'scope'),
       maxDepth: definedNumberOption(opts, 'maxDepth', 10),
     }),
-  emptyMessage: (results) => (results.length === 0 ? 'No circular dependencies found.' : undefined),
-  render: (results) => {
-    const real = results.filter((r) => r.kind === 'real');
-    const moduleHierarchy = results.filter((r) => r.kind === 'module-hierarchy');
+  emptyMessage: (result) =>
+    result.cycles.length === 0
+      ? result.truncated
+        ? `No circular dependencies found. Search truncated at depth ${result.maxDepth}; deeper cycles may exist.`
+        : 'No circular dependencies found.'
+      : undefined,
+  toJson: (result) => result,
+  render: (result) => {
+    const real = result.cycles.filter((r) => r.kind === 'real');
+    const moduleHierarchy = result.cycles.filter((r) => r.kind === 'module-hierarchy');
     for (let i = 0; i < real.length; i++) {
       console.log(`\nCycle ${i + 1} (${real[i]!.path.length - 1} files):`);
       for (let j = 0; j < real[i]!.path.length; j++) {
@@ -130,6 +136,9 @@ const handleCycles = reportCommand({
     }
     if (real.length === 0) console.log('No real circular dependencies found.');
     else console.log(`\n${real.length} real cycle(s) found.`);
+    if (result.truncated) {
+      console.log(`(search truncated at depth ${result.maxDepth} — deeper cycles may exist)`);
+    }
     if (moduleHierarchy.length > 0) {
       console.log(
         `(${moduleHierarchy.length} module-hierarchy cycle(s) hidden — barrel files participating in normal parent/child re-export patterns. Pass --include-module-hierarchy to see them.)`,
@@ -222,7 +231,7 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     description: 'Detect circular dependency chains between files',
     options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
-      option('--max-depth <n>', 'Maximum cycle depth', parseInteger, 10),
+      option('--max-depth <n>', 'Bound DFS search depth', parseInteger, 10),
     ]),
     renderShape: 'custom',
     docs: doc('Graph'),

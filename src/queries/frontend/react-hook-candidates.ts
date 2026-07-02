@@ -10,6 +10,7 @@ import {
 import {
   behaviorSimilarity,
   classifyFrontendBehaviorEvidence,
+  overlapGate,
   sortedTokens,
   tokenValues,
   type FrontendBehaviorActionTier,
@@ -223,11 +224,28 @@ function hasMeaningfulBehaviorOverlap(shared: ReadonlySet<string>): boolean {
   }
   const states = namedStates + stateHooks;
   const namedBehavior = customHooks + reactHooks + effects + requests + handlers + states;
-  return (
-    (requests >= 1 && namedBehavior >= 4) ||
-    (customHooks >= 1 && (requests >= 1 || namedStates >= 1 || handlers >= 2) && namedBehavior >= 5) ||
-    (namedStates >= 1 && handlers >= 2 && (effects >= 1 || reactHooks >= 2) && namedBehavior >= 5)
-  );
+  return overlapGate(
+    [
+      { name: 'requests', count: requests },
+      { name: 'customHooks', count: customHooks },
+      { name: 'namedStates', count: namedStates },
+      { name: 'handlers', count: handlers },
+      { name: 'effects', count: effects },
+      { name: 'reactHooks', count: reactHooks },
+      { name: 'namedBehavior', count: namedBehavior },
+    ],
+    [
+      { min: { requests: 1, namedBehavior: 4 }, reason: 'shared request workflow' },
+      { min: { customHooks: 1, requests: 1, namedBehavior: 5 }, reason: 'shared custom hook and request workflow' },
+      { min: { customHooks: 1, namedStates: 1, namedBehavior: 5 }, reason: 'shared custom hook and state' },
+      { min: { customHooks: 1, handlers: 2, namedBehavior: 5 }, reason: 'shared custom hook and handlers' },
+      { min: { namedStates: 1, handlers: 2, effects: 1, namedBehavior: 5 }, reason: 'shared stateful effects' },
+      {
+        min: { namedStates: 1, handlers: 2, reactHooks: 2, namedBehavior: 5 },
+        reason: 'shared stateful React primitives',
+      },
+    ],
+  ).pass;
 }
 
 function behaviorReason(parts: {

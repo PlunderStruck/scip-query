@@ -23,7 +23,50 @@ function globToLike(pattern: string): string {
 
 export function files(db: ScipDatabase, pattern: string): FileResult[] {
   const likePattern = globToLike(pattern);
-  return indexedDocumentPaths(db, { like: likePattern, includeIgnored: false }).map((relativePath) => ({
-    relativePath,
-  }));
+  return indexedDocumentPaths(db, { like: likePattern, includeIgnored: false })
+    .filter((relativePath) => pathMatchesGlob(pattern, relativePath))
+    .map((relativePath) => ({
+      relativePath,
+    }));
+}
+
+export function pathMatchesGlob(pattern: string, relativePath: string): boolean {
+  if (!/[*?]/.test(pattern)) {
+    return relativePath.includes(pattern);
+  }
+  const normalizedPattern = pattern.includes('/') ? pattern : `**/${pattern}`;
+  return globSegmentsMatch(normalizedPattern.split('/'), relativePath.split('/'));
+}
+
+function globSegmentsMatch(patternSegments: string[], pathSegments: string[]): boolean {
+  if (patternSegments.length === 0) return pathSegments.length === 0;
+  const [head, ...rest] = patternSegments;
+  if (head === '**') {
+    return (
+      globSegmentsMatch(rest, pathSegments) ||
+      (pathSegments.length > 0 && globSegmentsMatch(patternSegments, pathSegments.slice(1)))
+    );
+  }
+  if (pathSegments.length === 0) return false;
+  if (!segmentMatches(head ?? '', pathSegments[0] ?? '')) return false;
+  return globSegmentsMatch(rest, pathSegments.slice(1));
+}
+
+function segmentMatches(pattern: string, segment: string): boolean {
+  let expression = '^';
+  for (const char of pattern) {
+    if (char === '*') {
+      expression += '[^/]*';
+    } else if (char === '?') {
+      expression += '[^/]';
+    } else {
+      expression += escapeRegexChar(char);
+    }
+  }
+  expression += '$';
+  return new RegExp(expression).test(segment);
+}
+
+function escapeRegexChar(char: string): string {
+  return /[\\^$.*+?()[\]{}|]/.test(char) ? `\\${char}` : char;
 }

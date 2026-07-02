@@ -85,3 +85,9 @@ The locality command now gets symbol-level consumer files through the shared
 consumer evidence product, but the withheld-destination policy and boundary
 reason behavior described above are unchanged. The locality regression test
 still passes with the product-backed consumer path.
+
+2026-07-01 round-2 remediation note: the
+`src/queries/cleanup/locality-candidates.ts` behavioral citation was rechecked
+after locality ranking gained a multiplicative action-tier penalty. Boundary
+reason extraction and withheld-destination policy remain the behavior recorded
+in this validation result.

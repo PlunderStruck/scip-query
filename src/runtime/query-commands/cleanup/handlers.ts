@@ -296,6 +296,20 @@ export const handleComplexityHotspots = budgetedTableCommand('complexity-hotspot
 
 export const handleSimilar = budgetedReportCommand('similar', {
   query: ({ db, args, opts, budget }) => {
+    if (booleanOptionValue(opts, 'plan')) {
+      const symbolA = optionalStringArg(args, 0);
+      const symbolB = optionalStringArg(args, 1);
+      if (!symbolA || !symbolB) {
+        throw new Error('similar --plan requires two symbols: similar <symbol1> <symbol2> --plan');
+      }
+      return {
+        mode: 'plan' as const,
+        result: queries.similarConsolidationPlan(db, symbolA, symbolB, {
+          scanLimit: budget.scanLimit,
+          semantic: budget.semantic,
+        }),
+      };
+    }
     const symbol = optionalStringArg(args, 0);
     if (symbol) {
       return {
@@ -322,11 +336,37 @@ export const handleSimilar = budgetedReportCommand('similar', {
     };
   },
   emptyMessage: (result) => {
+    if (result.mode === 'plan') {
+      return result.result ? undefined : 'No similarity evidence found for that pair.';
+    }
     if (result.rows.length > 0) return undefined;
     return result.mode === 'target' ? 'No similar symbols found.' : 'No similar symbol pairs found.';
   },
   heuristicLabel: 'similarity candidates',
   render: (result) => {
+    if (result.mode === 'plan') {
+      const plan = result.result;
+      if (!plan) return;
+      const evidenceLabel =
+        plan.similarityBasis === 'source-tokens' ? 'source-token overlap' : 'weighted callee overlap';
+      console.log(`\n${Math.round(plan.similarity * 100)}% ${evidenceLabel}\n`);
+      console.log(`  A: ${plan.symbolA.shortName}  (${plan.symbolA.file}, ${plan.symbolA.loc} LOC)`);
+      console.log(`  B: ${plan.symbolB.shortName}  (${plan.symbolB.file}, ${plan.symbolB.loc} LOC)`);
+      console.log(`  Evidence class: ${plan.evidenceClass}  (tier: ${plan.actionTier})`);
+      console.log(`  Recommendation: ${plan.recommendation}\n`);
+      console.log(`  Shared evidence (${plan.sharedEvidence.length}):`);
+      for (const item of plan.sharedEvidence) console.log(`    ${item}`);
+      if (plan.uniqueToA.length > 0) {
+        console.log(`\n  Unique to A (${plan.uniqueToA.length}):`);
+        for (const item of plan.uniqueToA) console.log(`    ${item}`);
+      }
+      if (plan.uniqueToB.length > 0) {
+        console.log(`\n  Unique to B (${plan.uniqueToB.length}):`);
+        for (const item of plan.uniqueToB) console.log(`    ${item}`);
+      }
+      console.log(`\n  Strategy: ${plan.consolidationStrategy}`);
+      return;
+    }
     if (result.mode === 'target') {
       render.list(result.rows, (r) => {
         const basis = r.similarityBasis ?? 'callees';
@@ -459,6 +499,7 @@ export const handleConvergence = budgetedReportCommand('convergence', {
   emptyMessage: (result) => (result ? undefined : 'One or both symbols not found.'),
   render: (result) => {
     if (!result) return;
+    console.log('\nDeprecated: use `similar <symbol1> <symbol2> --plan` for the same weighted similarity basis.');
     console.log(`\n${Math.round(result.similarity * 100)}% callee overlap\n`);
     console.log(`  A: ${result.symbolA.shortName}  (${result.symbolA.file}, ${result.symbolA.loc} LOC)`);
     console.log(`  B: ${result.symbolB.shortName}  (${result.symbolB.file}, ${result.symbolB.loc} LOC)\n`);

@@ -216,3 +216,8 @@ The `src/queries/cleanup/similar.ts` full-scan notes remain accurate after the
 health cleanup. The new suppression comments classify accepted signal-tier
 parallelism; tokenization, IDF inputs, pair scoring, and persistent
 source-fingerprint payloads are unchanged.
+
+2026-07-01 round-2 remediation note: the `src/queries/cleanup/similar.ts` and
+cleanup handler guide references remain current after `similar --plan` folded
+the convergence preview into the weighted-cosine path. This ledger still
+describes the same full-scan implementation family and command surface.

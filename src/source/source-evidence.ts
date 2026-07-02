@@ -4,7 +4,7 @@ import type { ScipDatabase } from '../storage/db.js';
 import { getAst } from './ast/ast-core.js';
 import type { Tree } from './ast/ast-types.js';
 import type { SourceFacts } from './source-fact-types.js';
-import { getSourceFacts } from './source-facts.js';
+import { getSourceFactsResult, type SourceFactsUnavailable } from './source-facts.js';
 import { getSourceLines, getSourceText } from './source-text.js';
 
 export interface SourceEvidenceRequest {
@@ -25,6 +25,7 @@ export interface SourceFileEvidence {
   imports?: ParsedSourceImport[];
   reexports?: ParsedReExport[];
   facts?: SourceFacts | null;
+  sourceFactsUnavailable?: SourceFactsUnavailable;
   identifiers?: Set<string>;
   identifierLineMap?: Map<string, number[]>;
 }
@@ -57,8 +58,10 @@ function sourceEvidenceForFile(db: ScipDatabase, file: string, request: SourceEv
   if (request.imports) evidence.imports = getSourceImports(db, file);
   if (request.reexports) evidence.reexports = getReExports(db, file);
   if (needsFacts) {
-    const facts = getSourceFacts(db, file);
+    const result = getSourceFactsResult(db, file);
+    const facts = result.facts;
     if (request.facts) evidence.facts = facts;
+    if (result.unavailable) evidence.sourceFactsUnavailable = result.unavailable;
     if (request.identifiers && facts) {
       evidence.identifiers = facts.fileIdentifiers;
       evidence.identifierLineMap = facts.identifierLineMap;

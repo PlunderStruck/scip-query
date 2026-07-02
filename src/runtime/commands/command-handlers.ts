@@ -1,5 +1,15 @@
 import { spawnSync } from 'node:child_process';
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, extname, join } from 'node:path';
 import type { SupportedLanguage } from '../../domain/types.js';
 import * as queries from '../../queries/index.js';
@@ -346,12 +356,8 @@ async function measureColdIndex(projectRoot: string): Promise<BenchIndexRun> {
   const paths = resolveIndexPaths(projectRoot, config);
   const cacheDir = dirname(paths.dbPath);
   const backupDir = `${cacheDir}.bench-backup-${Date.now()}`;
-  let moved = false;
-
-  if (existsSync(cacheDir)) {
-    renameSync(cacheDir, backupDir);
-    moved = true;
-  }
+  restoreBenchIndexCache(cacheDir);
+  const moved = moveBenchIndexCacheAside(cacheDir, backupDir);
 
   try {
     const result = await measureAsync(() =>
@@ -371,7 +377,7 @@ async function measureColdIndex(projectRoot: string): Promise<BenchIndexRun> {
         onStatus: () => {},
       }),
     );
-    if (moved) rmSync(backupDir, { recursive: true, force: true });
+    finishBenchIndexCacheRestore(cacheDir, backupDir, moved, 'discard-backup');
     return {
       durationMs: result.durationMs,
       result: result.value.reused ? 'reused' : 'rebuilt',
@@ -379,8 +385,84 @@ async function measureColdIndex(projectRoot: string): Promise<BenchIndexRun> {
       ...currentIndexCounts(projectRoot),
     };
   } catch (error) {
-    if (moved && !existsSync(cacheDir)) renameSync(backupDir, cacheDir);
+    finishBenchIndexCacheRestore(cacheDir, backupDir, moved, 'restore-backup');
     throw error;
+  }
+}
+
+interface BenchRestoreFs {
+  existsSync(path: string): boolean;
+  readFileSync(path: string, encoding: 'utf8'): string;
+  writeFileSync(path: string, data: string): void;
+  renameSync(oldPath: string, newPath: string): void;
+  rmSync(path: string, opts: { recursive?: boolean; force?: boolean }): void;
+  unlinkSync(path: string): void;
+}
+
+const NODE_BENCH_RESTORE_FS: BenchRestoreFs = {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  renameSync,
+  rmSync,
+  unlinkSync,
+};
+
+interface BenchRestoreMarker {
+  originalPath: string;
+  backupPath: string;
+}
+
+export function benchRestoreMarkerPath(cacheDir: string): string {
+  return join(dirname(cacheDir), 'bench-restore.json');
+}
+
+export function restoreBenchIndexCache(cacheDir: string, fs: BenchRestoreFs = NODE_BENCH_RESTORE_FS): boolean {
+  const markerPath = benchRestoreMarkerPath(cacheDir);
+  if (!fs.existsSync(markerPath)) return false;
+  const marker = parseBenchRestoreMarker(fs.readFileSync(markerPath, 'utf8'));
+  if (marker && !fs.existsSync(marker.originalPath) && fs.existsSync(marker.backupPath)) {
+    fs.renameSync(marker.backupPath, marker.originalPath);
+  }
+  fs.unlinkSync(markerPath);
+  return true;
+}
+
+export function moveBenchIndexCacheAside(
+  cacheDir: string,
+  backupDir: string,
+  fs: BenchRestoreFs = NODE_BENCH_RESTORE_FS,
+): boolean {
+  if (!fs.existsSync(cacheDir)) return false;
+  fs.writeFileSync(benchRestoreMarkerPath(cacheDir), JSON.stringify({ originalPath: cacheDir, backupPath: backupDir }));
+  fs.renameSync(cacheDir, backupDir);
+  return true;
+}
+
+export function finishBenchIndexCacheRestore(
+  cacheDir: string,
+  backupDir: string,
+  moved: boolean,
+  mode: 'discard-backup' | 'restore-backup',
+  fs: BenchRestoreFs = NODE_BENCH_RESTORE_FS,
+): void {
+  if (moved && mode === 'restore-backup' && !fs.existsSync(cacheDir) && fs.existsSync(backupDir)) {
+    fs.renameSync(backupDir, cacheDir);
+  } else if (moved && mode === 'discard-backup') {
+    fs.rmSync(backupDir, { recursive: true, force: true });
+  }
+  const markerPath = benchRestoreMarkerPath(cacheDir);
+  if (fs.existsSync(markerPath)) fs.unlinkSync(markerPath);
+}
+
+function parseBenchRestoreMarker(payload: string): BenchRestoreMarker | null {
+  try {
+    const raw = JSON.parse(payload) as Partial<BenchRestoreMarker>;
+    return typeof raw.originalPath === 'string' && typeof raw.backupPath === 'string'
+      ? { originalPath: raw.originalPath, backupPath: raw.backupPath }
+      : null;
+  } catch {
+    return null;
   }
 }
 

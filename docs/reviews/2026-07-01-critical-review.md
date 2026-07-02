@@ -161,3 +161,9 @@ False or broken claims (each verified):
 | 10 | Merge adoption/setup skills; collapse the cleanup family; single closeout via scip-verify | M |
 | 11 | TLA P0: verify `reads`, reject type-referents, per-fact waivers, honest PASS text, bundle tla2tools (see proposal) | M |
 | 12 | Surface analysis-budget degradation in JSON/hook payloads | S |
+
+2026-07-01 remediation confirmation: the cited runtime examples still point at
+the intended command and setup surfaces after round-2 work. Cleanup
+verification now uses structured diagnostic parsing, CLI support and command
+dispatch still own the runtime disclosure paths, and `scip-cli` now resolves
+the platform binary without shipping Windows executables to every install.

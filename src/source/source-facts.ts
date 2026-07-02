@@ -23,9 +23,21 @@ import type { SourceFacts } from './source-fact-types.js';
 
 export type { SourceFacts } from './source-fact-types.js';
 
+export type SourceFactsUnavailableReason = 'parser-unavailable';
+
+export interface SourceFactsUnavailable {
+  language: AstLanguage;
+  reason: SourceFactsUnavailableReason;
+}
+
+export interface SourceFactsResult {
+  facts: SourceFacts | null;
+  unavailable?: SourceFactsUnavailable;
+}
+
 // In-process layer keyed by (db, path, source) — previously a WeakMap on the
 // parsed Tree, but a persistent-cache hit never parses a Tree at all.
-const SOURCE_FACTS_CACHE = createPerDbSourceCache<SourceFacts | null>('source-facts', {
+const SOURCE_FACTS_CACHE = createPerDbSourceCache<SourceFactsResult>('source-facts', {
   clearGroups: ['whole-project', 'source-file'],
 });
 const SOURCE_FACTS_PRODUCT = createFileEvidenceProduct<SourceFacts>({
@@ -35,18 +47,22 @@ const SOURCE_FACTS_PRODUCT = createFileEvidenceProduct<SourceFacts>({
 });
 
 export function getSourceFacts(db: ScipDatabase, relativePath: string): SourceFacts | null {
+  return getSourceFactsResult(db, relativePath).facts;
+}
+
+export function getSourceFactsResult(db: ScipDatabase, relativePath: string): SourceFactsResult {
   const source = getSourceText(db, relativePath);
-  if (!source) return null;
-  const language = sourceFactsLanguage(relativePath, source);
-  if (!language) return null;
+  if (!source) return { facts: null };
+  const language = sourceFactsLanguage(db, relativePath, source);
+  if (!language) return { facts: null };
   return SOURCE_FACTS_CACHE.get(db, relativePath, source, () =>
     loadOrBuildSourceFacts(db, relativePath, language, source),
   );
 }
 
-function sourceFactsLanguage(relativePath: string, source: string): AstLanguage | null {
+function sourceFactsLanguage(db: ScipDatabase, relativePath: string, source: string): AstLanguage | null {
   if (isVueSfcPath(relativePath)) {
-    return extractVueScriptBlock(source)?.language ?? null;
+    return extractVueScriptBlock(db, relativePath, source)?.language ?? null;
   }
   return detectAstLanguage(relativePath);
 }
@@ -56,22 +72,22 @@ function loadOrBuildSourceFacts(
   relativePath: string,
   language: AstLanguage,
   source: string,
-): SourceFacts | null {
+): SourceFactsResult {
   const contentHash = fileContentHash(db, relativePath, source);
   const cached = SOURCE_FACTS_PRODUCT.read(db, relativePath, contentHash);
-  if (cached && cached.language === language) return cached;
+  if (cached && cached.language === language) return { facts: cached };
 
   if (language === 'clojure') {
     const facts = buildClojureSourceFacts(source);
     SOURCE_FACTS_PRODUCT.write(db, relativePath, contentHash, facts);
-    return facts;
+    return { facts };
   }
 
   const tree = getAst(db, relativePath);
-  if (!tree) return null;
+  if (!tree) return { facts: null, unavailable: { language, reason: 'parser-unavailable' } };
   const facts = buildSourceFacts(tree, language);
   SOURCE_FACTS_PRODUCT.write(db, relativePath, contentHash, facts);
-  return facts;
+  return { facts };
 }
 
 /**

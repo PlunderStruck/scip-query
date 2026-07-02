@@ -23,8 +23,16 @@ export function fanIn(db: ScipDatabase, symbolPattern: string): FanResult[] {
     `SELECT COUNT(DISTINCT c.document_id) AS file_count
      FROM mentions m
      JOIN chunks c ON m.chunk_id = c.id
+     JOIN (
+       SELECT m2.symbol_id, c2.document_id
+       FROM mentions m2
+       JOIN chunks c2 ON m2.chunk_id = c2.id
+       WHERE m2.role = 1
+       GROUP BY m2.symbol_id
+     ) sym_def ON sym_def.symbol_id = m.symbol_id
      WHERE m.symbol_id = ?
-       AND m.role != 1`,
+       AND m.role != 1
+       AND sym_def.document_id != c.document_id`,
     match.symbolId,
   );
 
@@ -111,7 +119,8 @@ function fetchTopFanInRows(
   opts: { limit?: number; scope?: string },
 ): Array<{ symbol: string; file_count: number }> {
   const { limit = 30, scope } = opts;
-  const scopeFilter = scope ? `AND def_d.relative_path LIKE '%${scope}%'` : '';
+  const scopeFilter = scope ? `AND def_d.relative_path LIKE ?` : '';
+  const scopeParams = scope ? [`%${scope}%`] : [];
 
   return db.all<{ symbol: string; file_count: number }>(
     `SELECT gs.symbol, COUNT(DISTINCT c.document_id) AS file_count
@@ -127,6 +136,7 @@ function fetchTopFanInRows(
     ) sym_def ON sym_def.symbol_id = gs.id
     JOIN documents def_d ON sym_def.document_id = def_d.id
     WHERE m.role != 1
+      AND def_d.id != c.document_id
       ${db.pathExclusionsFor('def_d')}
       ${db.symbolNoiseFor('gs')}
       ${scopeFilter}
@@ -134,6 +144,7 @@ function fetchTopFanInRows(
     HAVING file_count > 1
     ORDER BY file_count DESC
     LIMIT ?`,
+    ...scopeParams,
     limit,
   );
 }
@@ -146,7 +157,8 @@ function fetchTopFanInRows(
 // different question of the same SCIP graph.
 export function topFanOut(db: ScipDatabase, opts: { limit?: number; scope?: string } = {}): FanResult[] {
   const { limit = 30, scope } = opts;
-  const scopeFilter = scope ? `AND d.relative_path LIKE '%${scope}%'` : '';
+  const scopeFilter = scope ? `AND d.relative_path LIKE ?` : '';
+  const scopeParams = scope ? [`%${scope}%`] : [];
 
   const rows = db.all<{
     relative_path: string;
@@ -173,6 +185,7 @@ export function topFanOut(db: ScipDatabase, opts: { limit?: number; scope?: stri
     GROUP BY d.id
     ORDER BY symbol_count DESC
     LIMIT ?`,
+    ...scopeParams,
     limit,
   );
 

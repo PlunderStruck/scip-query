@@ -17,6 +17,7 @@ import {
 } from '../symbols/symbol-kind.js';
 import { callGraph } from '../queries/navigation/call-graph.js';
 import type { TlaModelContract, TlaModuleFacts, TlaTraceStep } from './model-contract.js';
+import type { SanyActionFacts } from './sany-facts.js';
 
 export type TlaFindingSeverity = 'info' | 'warning' | 'error';
 export type TlaFindingEvidence = 'model-text' | 'compiler-symbol' | 'static-action' | 'trace' | 'unknown' | 'contract';
@@ -38,6 +39,10 @@ export interface TlaConformanceFinding {
     | 'missing-read-evidence'
     | 'missing-call'
     | 'missing-invariant'
+    | 'model-mapping-read'
+    | 'model-mapping-write'
+    | 'model-code-read'
+    | 'model-code-write'
     | 'trace';
   modelElement?: string;
   codeRef?: string;
@@ -51,8 +56,10 @@ export interface TlaConformanceFinding {
 }
 
 export interface TlaConformanceResult {
+  modelParse: TlaModuleFacts['modelParse'] | 'unavailable';
   modelVariables: string[];
   modelOperators: string[];
+  modelActionFacts: SanyActionFacts[];
   mappedVariables: number;
   mappedActions: number;
   resolvedReferents: number;
@@ -141,18 +148,29 @@ export function verifyTlaConformance(
   const variableAliases = variableResolution.aliases;
   const actions = resolveActions(db, contract, findings);
   if (moduleFacts) verifyModelText(contract, moduleFacts, checkedInvariants, findings);
+  const modelActions = new Map((moduleFacts?.actions ?? []).map((action) => [action.name, action]));
 
   const actionSymbols = new Set(
     actions.flatMap((action) => action.referents.map((referent) => referent.match?.symbol).filter(Boolean) as string[]),
   );
-  const staticWrites = collectAllStaticWrites(db, contract, actions, variableAliases, actionSymbols, findings);
-  const staticReads = collectAllStaticReads(db, actions, variableAliases, findings);
+  const staticWrites = collectAllStaticWrites(
+    db,
+    contract,
+    actions,
+    variableAliases,
+    actionSymbols,
+    findings,
+    modelActions,
+  );
+  const staticReads = collectAllStaticReads(db, actions, variableAliases, findings, modelActions);
   verifyDeclaredCalls(db, actions, findings);
   verifyTraces(contract, traceSteps, findings);
 
   return {
+    modelParse: moduleFacts?.modelParse ?? 'unavailable',
     modelVariables: moduleFacts?.variables ?? [],
     modelOperators: moduleFacts?.operators ?? [],
+    modelActionFacts: moduleFacts?.actions ?? [],
     mappedVariables: Object.keys(contract.variables).length,
     mappedActions: Object.keys(contract.actions).length,
     resolvedReferents:
@@ -262,6 +280,30 @@ function verifyModelText(
       );
     }
   }
+  for (const action of moduleFacts.actions) {
+    const mapping = contract.actions[action.name];
+    if (!mapping) continue;
+    verifySetAgreement({
+      action: action.name,
+      field: 'writes',
+      modelValues: action.writes,
+      mappingValues: mapping.writes,
+      missingInMappingCategory: 'model-mapping-write',
+      missingInModelCategory: 'model-mapping-write',
+      findings,
+      file: moduleFacts.path,
+    });
+    verifySetAgreement({
+      action: action.name,
+      field: 'reads',
+      modelValues: action.reads,
+      mappingValues: mapping.reads,
+      missingInMappingCategory: 'model-mapping-read',
+      missingInModelCategory: 'model-mapping-read',
+      findings,
+      file: moduleFacts.path,
+    });
+  }
   for (const invariant of contract.invariants) {
     if (!invariants.has(invariant)) {
       findings.push(
@@ -277,6 +319,46 @@ function verifyModelText(
   }
 }
 
+function verifySetAgreement(opts: {
+  action: string;
+  field: 'reads' | 'writes';
+  modelValues: readonly string[];
+  mappingValues: readonly string[];
+  missingInMappingCategory: TlaConformanceFinding['category'];
+  missingInModelCategory: TlaConformanceFinding['category'];
+  findings: TlaConformanceFinding[];
+  file: string;
+}): void {
+  const model = new Set(opts.modelValues);
+  const mapping = new Set(opts.mappingValues);
+  for (const variable of model) {
+    if (mapping.has(variable)) continue;
+    opts.findings.push(
+      finding(opts.missingInMappingCategory, opts.field === 'writes' ? 'error' : 'warning', 'model-text', {
+        modelElement: opts.action,
+        file: opts.file,
+        message: `TLA+ action ${opts.action} ${opts.field === 'writes' ? 'writes' : 'reads'} ${variable}, but the mapping does not declare that ${opts.field.slice(0, -1)}.`,
+        why: [`SANY-derived model facts list ${variable} in ${opts.action}.${opts.field}, while the mapping omits it.`],
+        remediation: `Add ${variable} to actions.${opts.action}.${opts.field}, or update the TLA+ model if the ${opts.field.slice(0, -1)} is unintended.`,
+      }),
+    );
+  }
+  for (const variable of mapping) {
+    if (model.has(variable)) continue;
+    opts.findings.push(
+      finding(opts.missingInModelCategory, opts.field === 'writes' ? 'error' : 'warning', 'model-text', {
+        modelElement: opts.action,
+        file: opts.file,
+        message: `Mapping declares ${opts.action}.${opts.field} includes ${variable}, but the SANY model facts do not.`,
+        why: [
+          `The mapping says ${opts.action} ${opts.field === 'writes' ? 'writes' : 'reads'} ${variable}, but the parsed TLA+ action does not show that model-side fact.`,
+        ],
+        remediation: `Update the TLA+ action to ${opts.field === 'writes' ? 'prime' : 'reference'} ${variable}, remove the mapping declaration, or add a waiver if static evidence cannot represent the model boundary.`,
+      }),
+    );
+  }
+}
+
 function collectAllStaticWrites(
   db: ScipDatabase,
   contract: TlaModelContract,
@@ -284,6 +366,7 @@ function collectAllStaticWrites(
   aliases: readonly VariableAlias[],
   actionSymbols: ReadonlySet<string>,
   findings: TlaConformanceFinding[],
+  modelActions: ReadonlyMap<string, SanyActionFacts>,
 ): TlaStaticWrite[] {
   const writes: TlaStaticWrite[] = [];
   for (const action of actions) {
@@ -300,7 +383,7 @@ function collectAllStaticWrites(
       actionWrites.push(...found);
       writes.push(...found);
     }
-    verifyActionWrites(action, actionWrites, findings);
+    verifyActionWrites(action, actionWrites, findings, modelActions.get(action.name));
   }
 
   for (const file of scopedFiles(db, contract)) {
@@ -339,10 +422,29 @@ function verifyActionWrites(
   action: ResolvedAction,
   writes: readonly TlaStaticWrite[],
   findings: TlaConformanceFinding[],
+  modelAction: SanyActionFacts | undefined,
 ): void {
   const declared = new Set(action.mapping.writes);
   const observed = new Set(writes.map((write) => write.variable));
+  const modeled = new Set(modelAction?.writes ?? []);
   for (const write of writes) {
+    if (modelAction && !modeled.has(write.variable)) {
+      findings.push(
+        finding('model-code-write', 'error', 'static-action', {
+          modelElement: action.name,
+          codeRef: write.enclosingSymbol ?? `${write.file}:${write.line + 1}`,
+          file: write.file,
+          startLine: write.line,
+          endLine: write.line,
+          message: `Code for TLA+ action ${action.name} writes ${write.variable}, but the SANY model action does not prime it.`,
+          why: [
+            `The code writes ${write.target} at ${write.file}:${write.line + 1}.`,
+            `SANY-derived model facts for ${action.name} list writes: ${modelAction.writes.join(', ') || 'none'}.`,
+          ],
+          remediation: `Prime ${write.variable} in the TLA+ action, remove the code write from this action, or remap the code to the correct action.`,
+        }),
+      );
+    }
     if (!declared.has(write.variable)) {
       findings.push(
         finding('undeclared-write', 'error', 'static-action', {
@@ -379,6 +481,7 @@ function collectAllStaticReads(
   actions: readonly ResolvedAction[],
   aliases: readonly VariableAlias[],
   findings: TlaConformanceFinding[],
+  modelActions: ReadonlyMap<string, SanyActionFacts>,
 ): TlaStaticRead[] {
   const reads: TlaStaticRead[] = [];
   for (const action of actions) {
@@ -395,7 +498,7 @@ function collectAllStaticReads(
       actionReads.push(...found);
       reads.push(...found);
     }
-    verifyActionReads(action, actionReads, findings);
+    verifyActionReads(action, actionReads, findings, modelActions.get(action.name));
   }
   return uniqueReads(reads);
 }
@@ -404,10 +507,29 @@ function verifyActionReads(
   action: ResolvedAction,
   reads: readonly TlaStaticRead[],
   findings: TlaConformanceFinding[],
+  modelAction: SanyActionFacts | undefined,
 ): void {
   const declared = new Set(action.mapping.reads);
   const observed = new Set(reads.map((read) => read.variable));
+  const modeled = new Set(modelAction?.reads ?? []);
   for (const read of reads) {
+    if (modelAction && !modeled.has(read.variable)) {
+      findings.push(
+        finding('model-code-read', 'warning', 'static-action', {
+          modelElement: action.name,
+          codeRef: read.enclosingSymbol ?? `${read.file}:${read.line + 1}`,
+          file: read.file,
+          startLine: read.line,
+          endLine: read.line,
+          message: `Code for TLA+ action ${action.name} reads ${read.variable}, but the SANY model action does not reference it.`,
+          why: [
+            `The code reads ${read.target} at ${read.file}:${read.line + 1}.`,
+            `SANY-derived model facts for ${action.name} list reads: ${modelAction.reads.join(', ') || 'none'}.`,
+          ],
+          remediation: `Reference ${read.variable} in the TLA+ action, remove the code read from this action, or remap the code to the correct action.`,
+        }),
+      );
+    }
     if (!declared.has(read.variable) && !isFactWaived(action, 'read', read.variable)) {
       findings.push(
         finding('undeclared-read', 'warning', 'static-action', {

@@ -104,3 +104,8 @@ The `src/analysis/git-history.ts` recency-sweep reference remains accurate
 after the health cleanup. The added comments document accepted cache and
 co-change helper shapes; commit history loading, recency counters, and
 subject-context inputs are unchanged.
+
+2026-07-01 round-2 remediation note: the health-types and health guide
+references remain current after validation-basis disclosure was added. The
+recency sweep still cites the same health output family and co-change recency
+calculation.

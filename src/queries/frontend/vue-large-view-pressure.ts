@@ -1,6 +1,7 @@
 import { frontendBehaviorProduct } from '../../source/frontend-behavior-products.js';
 import type { VueComponentBehaviorProfile } from '../../source/vue/vue-profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
+import { evaluatePressure, type PressureAxis } from '../internal/frontend-behavior-evidence.js';
 
 export type VueLargeViewPressureAxis = 'template' | 'script' | 'style' | 'external-script' | 'custom-block' | 'total';
 export type VueLargeViewContextKind = 'component' | 'route-page';
@@ -81,23 +82,14 @@ function pressureResult(
     minStyleLines: number;
   },
 ): VueLargeViewPressureResult | null {
-  const reasons: string[] = [];
-  if (profile.totalLines >= thresholds.minTotalLines) {
-    reasons.push(`${profile.totalLines} total component line(s)`);
-  }
-  if (profile.templateLines >= thresholds.minTemplateLines) {
-    reasons.push(`${profile.templateLines} template line(s)`);
-  }
-  if (profile.scriptLines >= thresholds.minScriptLines) {
-    reasons.push(`${profile.scriptLines} script line(s)`);
-  }
-  if (profile.styleLines >= thresholds.minStyleLines) {
-    reasons.push(`${profile.styleLines} style line(s)`);
-  }
+  const pressure = evaluatePressure(profile, vuePressureAxes(thresholds), 'total');
+  const { reasons } = pressure;
   if (reasons.length === 0) return null;
 
-  const dominant = dominantPressure(profile);
-  const pressureKinds = pressureKindsFor(profile, thresholds, dominant);
+  const dominant = pressure.dominantPressure;
+  const pressureKinds = pressure.pressureKinds.includes('total')
+    ? [...new Set([...pressure.pressureKinds, dominant])]
+    : pressure.pressureKinds;
   const contextKind = vueContextKind(profile.file);
   const recommendationKind = recommendationKindFor(dominant, contextKind);
   return {
@@ -120,43 +112,49 @@ function pressureResult(
   };
 }
 
-function dominantPressure(profile: VueComponentBehaviorProfile): VueLargeViewPressureAxis {
-  const entries: Array<{ axis: VueLargeViewPressureAxis; lines: number }> = [
-    { axis: 'template', lines: profile.templateLines },
-    { axis: 'script', lines: profile.scriptLines - profile.externalScriptLines },
-    { axis: 'style', lines: profile.styleLines },
-    { axis: 'external-script', lines: profile.externalScriptLines },
-    { axis: 'custom-block', lines: profile.customBlockLines },
+function vuePressureAxes(thresholds: {
+  minTotalLines: number;
+  minTemplateLines: number;
+  minScriptLines: number;
+  minStyleLines: number;
+}): PressureAxis<VueComponentBehaviorProfile, VueLargeViewPressureAxis>[] {
+  return [
+    {
+      axis: 'total',
+      value: (profile) => profile.totalLines,
+      qualifies: (_profile, value) => value >= thresholds.minTotalLines,
+      reason: (_profile, value) => `${value} total component line(s)`,
+      dominantEligible: false,
+    },
+    {
+      axis: 'template',
+      value: (profile) => profile.templateLines,
+      qualifies: (_profile, value) => value >= thresholds.minTemplateLines,
+      reason: (_profile, value) => `${value} template line(s)`,
+    },
+    {
+      axis: 'script',
+      value: (profile) => profile.scriptLines - profile.externalScriptLines,
+      qualifies: (profile) => profile.scriptLines >= thresholds.minScriptLines,
+      reason: (profile) => `${profile.scriptLines} script line(s)`,
+    },
+    {
+      axis: 'style',
+      value: (profile) => profile.styleLines,
+      qualifies: (_profile, value) => value >= thresholds.minStyleLines,
+      reason: (_profile, value) => `${value} style line(s)`,
+    },
+    {
+      axis: 'external-script',
+      value: (profile) => profile.externalScriptLines,
+      qualifies: (_profile, value) => value >= thresholds.minScriptLines,
+    },
+    {
+      axis: 'custom-block',
+      value: (profile) => profile.customBlockLines,
+      qualifies: () => false,
+    },
   ];
-  entries.sort((a, b) => b.lines - a.lines);
-  return entries[0]?.lines ? entries[0].axis : 'total';
-}
-
-function pressureKindsFor(
-  profile: VueComponentBehaviorProfile,
-  thresholds: {
-    minTotalLines: number;
-    minTemplateLines: number;
-    minScriptLines: number;
-    minStyleLines: number;
-  },
-  dominant: VueLargeViewPressureAxis,
-): VueLargeViewPressureAxis[] {
-  const kinds: VueLargeViewPressureAxis[] = [];
-  if (profile.totalLines >= thresholds.minTotalLines) {
-    kinds.push('total');
-    if (dominant !== 'total') kinds.push(dominant);
-  }
-  if (profile.templateLines >= thresholds.minTemplateLines) kinds.push('template');
-  if (profile.scriptLines >= thresholds.minScriptLines) kinds.push('script');
-  if (profile.styleLines >= thresholds.minStyleLines) kinds.push('style');
-  if (profile.externalScriptLines >= thresholds.minScriptLines || dominant === 'external-script') {
-    kinds.push('external-script');
-  }
-  if (profile.customBlockLines > 0 && dominant === 'custom-block') {
-    kinds.push('custom-block');
-  }
-  return [...new Set(kinds.length > 0 ? kinds : [dominant])];
 }
 
 function vueContextKind(file: string): VueLargeViewContextKind {

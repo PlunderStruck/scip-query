@@ -100,3 +100,9 @@ now exports only the public query manifest used by packaging, while
 `tests/runtime/cli-contract.test.ts` owns the private helper source-path fixture
 that verifies those helpers are not published. The public command manifest
 contract remains explicit.
+
+2026-07-01 round-2 remediation note: the `src/queries/cleanup/doc-drift.ts`
+behavioral citation was rechecked after line-suffix capture and shared
+citation-kind tiering landed. Path references are still resolved before
+citation contexts are scored; line references are recorded for evidence and are
+not yet treated as line-drift failures.

@@ -136,3 +136,8 @@ Completed so far:
 `src/queries/health/health.ts` does not alter hidden-coupling score weighting,
 broad-sweep discounts, or the historical second-corpus judgment above. Health
 now reads churn and amplification through `gitEvidenceProduct()`.
+
+2026-07-01 round-2 remediation note: the health-report, health-types, and
+health configuration examples remain current after validation-basis disclosure
+was added. The score-weight confirmation still covers the same health scoring
+family and broad-sweep treatment.

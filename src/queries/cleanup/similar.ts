@@ -45,6 +45,20 @@ export interface SimilarSymbolResult {
   recommendation: string;
 }
 
+export interface SimilarConsolidationPlan {
+  symbolA: { symbol: string; shortName: string; file: string; loc: number };
+  symbolB: { symbol: string; shortName: string; file: string; loc: number };
+  similarity: number;
+  similarityBasis: NonNullable<SimilarSymbolResult['similarityBasis']>;
+  sharedEvidence: string[];
+  uniqueToA: string[];
+  uniqueToB: string[];
+  evidenceClass: SimilarEvidenceClass;
+  actionTier: SimilarActionTier;
+  recommendation: string;
+  consolidationStrategy: string;
+}
+
 export type SimilarEvidenceClass =
   | 'access-query-scaffolding'
   | 'domain-behavior'
@@ -111,6 +125,61 @@ export function similar(
     scanLimit: opts.scanLimit,
     candidateMode: opts.sourceCandidateMode ?? 'full',
   });
+}
+
+export function similarConsolidationPlan(
+  db: ScipDatabase,
+  symbolPatternA: string,
+  symbolPatternB: string,
+  opts: { semantic?: boolean; scanLimit?: number } = {},
+): SimilarConsolidationPlan | null {
+  const matchA = findFirstSymbolMatch(db, symbolPatternA);
+  const matchB = findFirstSymbolMatch(db, symbolPatternB);
+  if (!matchA || !matchB) return null;
+
+  const row = similar(db, matchA.symbol, {
+    minSimilarity: 0,
+    limit: Number.POSITIVE_INFINITY,
+    semantic: opts.semantic,
+    scanLimit: opts.scanLimit,
+  }).find((candidate) => candidate.symbolB === matchB.symbol || candidate.symbolA === matchB.symbol);
+  if (!row) return null;
+
+  const locA = matchA.endLine - matchA.startLine + 1;
+  const locB = matchB.endLine - matchB.startLine + 1;
+  return {
+    symbolA: { symbol: matchA.symbol, shortName: shortenSymbol(matchA.symbol), file: matchA.relativePath, loc: locA },
+    symbolB: { symbol: matchB.symbol, shortName: shortenSymbol(matchB.symbol), file: matchB.relativePath, loc: locB },
+    similarity: row.similarity,
+    similarityBasis: row.similarityBasis ?? 'callees',
+    sharedEvidence: row.sharedCallees,
+    uniqueToA: row.uniqueToA,
+    uniqueToB: row.uniqueToB,
+    evidenceClass: row.evidenceClass,
+    actionTier: row.actionTier,
+    recommendation: row.recommendation,
+    consolidationStrategy: consolidationStrategyForSimilarRow(row),
+  };
+}
+
+function consolidationStrategyForSimilarRow(row: SimilarSymbolResult): string {
+  const evidenceNoun = row.similarityBasis === 'source-tokens' ? 'source-token' : 'tracked callee';
+  if (row.sharedCallees.length === 0) {
+    return `No shared ${evidenceNoun} evidence survived similar's weighting. Inspect the source before attempting consolidation.`;
+  }
+  if (row.uniqueToA.length === 0 && row.uniqueToB.length === 0) {
+    return `The functions have identical ${evidenceNoun} evidence under similar's weighting. Verify signatures, guards, and return values before consolidating.`;
+  }
+  if (row.uniqueToA.length === 0) {
+    return `A's ${evidenceNoun} evidence is a subset of B's. B may subsume part of A's structure, but verify signatures, guards, and non-call logic first.`;
+  }
+  if (row.uniqueToB.length === 0) {
+    return `B's ${evidenceNoun} evidence is a subset of A's. A may subsume part of B's structure, but verify signatures, guards, and non-call logic first.`;
+  }
+  if (row.uniqueToA.length <= 2 && row.uniqueToB.length <= 2) {
+    return `Create a shared helper around the ${row.sharedCallees.length} shared ${evidenceNoun}(s). Pass the ${row.uniqueToA.length + row.uniqueToB.length} divergent point(s) as parameters or callbacks.`;
+  }
+  return `Extract the ${row.sharedCallees.length} shared ${evidenceNoun}(s) into a common helper. Keep each function's unique logic outside that helper (${row.uniqueToA.length} item(s) in A, ${row.uniqueToB.length} in B).`;
 }
 
 function compareAgainstFingerprints(

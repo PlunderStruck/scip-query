@@ -92,3 +92,9 @@ The `src/runtime/commands/command-handlers.ts` config-validation references
 remain accurate after the health cleanup. The new comment documents accepted
 doctor/status parallelism; command option parsing, config validation, and
 readiness/freshness collection are unchanged.
+
+2026-07-01 round-2 remediation note: the `doc-drift` and command-handler
+behavioral citations were rechecked after doc-drift adopted the shared
+citation-kind classifier and recorded optional line references. Declared
+coupling freshness still uses the same configuration and command dispatch
+surface; only the citation tiering became more precise.

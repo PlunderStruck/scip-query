@@ -46,6 +46,20 @@ describe('createGitignoreFilter', () => {
     expect(filtered).toEqual(['src/app.ts', 'lib/utils.ts']);
   });
 
+  it('applies nested .gitignore files relative to their directory', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'scip-query-test-'));
+    mkdirSync(join(dir, 'packages', 'foo'), { recursive: true });
+    writeFileSync(join(dir, '.gitignore'), 'node_modules/\n');
+    writeFileSync(join(dir, 'packages', 'foo', '.gitignore'), 'dist/*\n!dist/keep.ts\n');
+
+    const filter = createGitignoreFilter(dir);
+
+    expect(filter.isIgnored('node_modules/foo/index.js')).toBe(true);
+    expect(filter.isIgnored('packages/foo/dist/generated.ts')).toBe(true);
+    expect(filter.isIgnored('packages/foo/dist/keep.ts')).toBe(false);
+    expect(filter.isIgnored('packages/bar/dist/generated.ts')).toBe(false);
+  });
+
   it('does not throw when a query path resolves outside the project root', () => {
     const dir = mkdtempSync(join(tmpdir(), 'scip-query-test-'));
     mkdirSync(join(dir, 'apps', 'web'), { recursive: true });

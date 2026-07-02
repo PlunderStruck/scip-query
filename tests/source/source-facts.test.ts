@@ -111,6 +111,57 @@ describe('source facts', () => {
     }
   });
 
+  it('extracts Vue source facts from both inline script blocks and relative src scripts', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-source-facts-vue-'));
+    try {
+      const projectRoot = join(tempDir, 'project');
+      const dbPath = join(tempDir, 'index.db');
+      writeFixtureFiles(projectRoot, {
+        'src/Panel.vue': [
+          '<script lang="ts">',
+          'export function legacyHelper() {',
+          "  return 'legacy';",
+          '}',
+          '</script>',
+          '<script setup lang="ts">',
+          'function setupHelper() {',
+          '  return legacyHelper();',
+          '}',
+          '</script>',
+          '<template><main /></template>',
+        ],
+        'src/ExternalPanel.vue':
+          '<script src="./external-panel.ts" lang="ts"></script>\n<template><main /></template>\n',
+        'src/external-panel.ts': ['export function externalHelper() {', "  return 'external';", '}'],
+      });
+      evidenceFixtureDb(dbPath)
+        .document(1, 'vue', 'src/Panel.vue')
+        .document(2, 'vue', 'src/ExternalPanel.vue')
+        .document(3, 'typescript', 'src/external-panel.ts')
+        .write();
+
+      const db = new ScipDatabase({
+        projectRoot,
+        dbPath,
+        indexPath: join(tempDir, 'index.scip'),
+      });
+      try {
+        expect(
+          getSourceFacts(db, 'src/Panel.vue')
+            ?.callables.map((callable) => callable.name)
+            .sort(),
+        ).toEqual(['legacyHelper', 'setupHelper']);
+        expect(getSourceFacts(db, 'src/ExternalPanel.vue')?.callables.map((callable) => callable.name)).toEqual([
+          'externalHelper',
+        ]);
+      } finally {
+        db.close();
+      }
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('keeps Rust attribute helper references out of dead-code results', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-source-facts-rust-dead-'));
     try {

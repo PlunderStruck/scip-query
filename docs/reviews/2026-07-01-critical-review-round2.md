@@ -124,3 +124,11 @@ Test gaps: most pressure kinds and the `domain-behavior` evidence class (the "ye
 | 11 | Extract shared `PressureAxis`/`overlapGate` across the React/Vue pairs | M |
 | 12 | Platform-scoped packages or on-demand fetch for `vendor/scip` (−39 MB for non-Windows) | M |
 | 13 | Real glob for `files`; `truncated` flag for `cycles`; locality tier penalty | S |
+
+2026-07-01 remediation confirmation: the guide references in this review were
+rechecked after the implementation pass. The changed files still correspond to
+the same findings: drift policy now has explicit source-layer handling, graph
+and quality queries now use the corrected counting and scope behavior,
+React/Vue profiling now covers the missing frontend evidence, source facts now
+report unavailable parsers, and TLA conformance now compares SANY-derived model
+facts against mapping and code evidence.

@@ -16,6 +16,12 @@ export interface CycleResult {
   kind: 'real' | 'module-hierarchy';
 }
 
+export interface CycleSummary {
+  cycles: CycleResult[];
+  truncated: boolean;
+  maxDepth: number;
+}
+
 /**
  * Detect circular dependency chains between files.
  * A cycle exists when file A depends on B, B depends on C, and C depends on A.
@@ -24,6 +30,10 @@ export interface CycleResult {
  * referenced across files), then runs DFS cycle detection.
  */
 export function cycles(db: ScipDatabase, opts: { scope?: string; maxDepth?: number } = {}): CycleResult[] {
+  return cycleSummary(db, opts).cycles;
+}
+
+export function cycleSummary(db: ScipDatabase, opts: { scope?: string; maxDepth?: number } = {}): CycleSummary {
   const { scope, maxDepth = 10 } = opts;
   const graph = buildFileDepGraph(db, scope);
 
@@ -32,9 +42,13 @@ export function cycles(db: ScipDatabase, opts: { scope?: string; maxDepth?: numb
   const visited = new Set<string>();
   const inStack = new Set<string>();
   const stack: string[] = [];
+  let truncated = false;
 
   function dfs(node: string, depth: number): void {
-    if (depth > maxDepth) return;
+    if (depth > maxDepth) {
+      truncated = true;
+      return;
+    }
     if (inStack.has(node)) {
       // Found a cycle — extract it from the stack
       const cycleStart = stack.indexOf(node);
@@ -82,7 +96,11 @@ export function cycles(db: ScipDatabase, opts: { scope?: string; maxDepth?: numb
     return a.path.length - b.path.length;
   });
 
-  return allCycles;
+  return {
+    cycles: allCycles,
+    truncated,
+    maxDepth,
+  };
 }
 
 /**

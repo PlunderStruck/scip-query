@@ -155,3 +155,8 @@ The `src/queries/cleanup/similar.ts` capability-boundary notes remain accurate
 after the health cleanup. Accepted source comments only remove known
 signal-tier scaffolding from health; language capability behavior and
 source-fingerprint evidence are unchanged.
+
+2026-07-01 round-2 remediation note: the `src/queries/cleanup/similar.ts`
+guide reference remains current after convergence was folded into
+`similar --plan`. The capability-boundary conclusion still depends on language
+support disclosure, not on a separate similarity metric.

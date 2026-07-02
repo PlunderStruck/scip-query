@@ -139,8 +139,8 @@ export function printScipInstallInstructions(): void {
     console.log('  brew install sourcegraph/scip/scip\n');
     console.log('Or download manually:');
   } else if (platform() === 'win32') {
-    console.log('Windows installs should include a managed scip.exe in the scip-query package.');
-    console.log('Reinstall scip-query, or build the managed binary from source with:');
+    console.log('Windows npm installs do not bundle scip.exe.');
+    console.log('Install scip on PATH, or build a local managed binary from source with:');
     console.log('  npm run build:scip-windows\n');
     console.log('Upstream release page:');
   } else {

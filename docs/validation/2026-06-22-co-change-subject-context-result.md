@@ -114,3 +114,7 @@ The `src/analysis/git-history.ts` subject-context reference remains accurate
 after the health cleanup. The new source comments document accepted
 health-signal shapes only; co-change subject labels, issue refs, and sample
 subject extraction are unchanged.
+
+2026-07-01 round-2 remediation note: the health-types and health configuration
+examples remain current after the round-2 health disclosure fields landed. The
+subject-context behavior still comes from the same co-change evidence surface.

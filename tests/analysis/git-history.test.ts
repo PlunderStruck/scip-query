@@ -239,7 +239,7 @@ describe('git history evidence', () => {
     try {
       gitIn(referencedRepo, 'init');
       commitIn(referencedRepo, 'initial docs', {
-        'docs/guide.md': 'Cleanup detector behavior lives in src/a.ts.\n',
+        'docs/guide.md': 'Cleanup detector behavior lives in src/a.ts:7.\n',
         'src/a.ts': 'export const version = 1;\n',
       });
       commitIn(referencedRepo, 'code moves on', {
@@ -268,6 +268,9 @@ describe('git history evidence', () => {
             evidence: 'reference',
             changesSinceDocUpdate: 1,
             citationContexts: expect.arrayContaining([expect.stringContaining('Cleanup detector behavior')]),
+            citedLines: [7],
+            citationKind: 'behavioral-claim',
+            actionTier: 'direct',
           }),
         ]);
         expect(readCachedFileEvidence(db, 'doc-path-evidence', 'docs/guide.md', docHash)).not.toBeNull();
@@ -282,6 +285,42 @@ describe('git history evidence', () => {
       } finally {
         reopened.close();
       }
+    } finally {
+      rmSync(referencedRepo, { recursive: true, force: true });
+    }
+  });
+
+  it('classifies referenced configuration examples through the shared doc-reference policy', () => {
+    const referencedRepo = mkdtempSync(join(tmpdir(), 'scip-doc-drift-config-reference-'));
+    try {
+      gitIn(referencedRepo, 'init');
+      commitIn(referencedRepo, 'initial docs', {
+        'README.md': [
+          'Use `.scipquery.json` for declaredCouplings configuration:',
+          '',
+          '```json',
+          '{ "declaredCouplings": [{ "files": ["src/a.ts"] }] }',
+          '```',
+          '',
+        ].join('\n'),
+        'src/a.ts': 'export const version = 1;\n',
+      });
+      commitIn(referencedRepo, 'code moves on', {
+        'src/a.ts': 'export const version = 2;\n',
+      });
+
+      const result = docDrift(fakeDb(referencedRepo));
+      const readme = result.findings.find((finding) => finding.doc === 'README.md');
+
+      expect(readme?.subjects[0]).toEqual(
+        expect.objectContaining({
+          file: 'src/a.ts',
+          evidence: 'reference',
+          actionTier: 'support',
+          citationKind: 'configuration-example',
+          citationKindReasons: expect.arrayContaining([expect.stringContaining('declaredcouplings')]),
+        }),
+      );
     } finally {
       rmSync(referencedRepo, { recursive: true, force: true });
     }

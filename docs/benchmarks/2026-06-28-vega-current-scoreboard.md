@@ -902,3 +902,9 @@ optimization notes remain current after the health cleanup. The change removes
 test-only manifest exports and records accepted detector signals in source
 comments; evidence cache semantics, source-fingerprint persistence, and the
 measured optimization paths are unchanged.
+
+2026-07-01 round-2 remediation note: the `src/queries/cleanup/similar.ts`
+scoreboard citation remains intentional after the round-2 similarity changes.
+The current command still uses the same weighted-cosine evidence family; the
+new consolidation preview removes the old convergence-specific metric rather
+than changing this scoreboard's historical optimization claim.

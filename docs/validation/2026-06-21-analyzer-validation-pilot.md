@@ -190,3 +190,8 @@ The `diff-gate.ts` and `health.ts` pilot references remain accurate after the
 Git evidence product migration. The validation conclusions still refer to the
 same diff-gate check surface and health summary; Git history access is now
 centralized behind `gitEvidenceProduct()`.
+
+2026-07-01 round-2 remediation note: the `src/queries/health/health.ts`
+configuration example remains current after health output added
+validation-basis and source-facts-unavailable fields. The pilot still cites the
+same command family for analyzer validation evidence.

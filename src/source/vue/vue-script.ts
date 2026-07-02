@@ -1,6 +1,6 @@
 import type { AstLanguage } from '../ast/ast-language.js';
-import { parse as parseSfc } from '@vue/compiler-sfc';
-import { astLanguageFromVueScriptLang } from './vue-sfc.js';
+import type { ScipDatabase } from '../../storage/db.js';
+import { buildVueSfcUnit } from './vue-sfc.js';
 
 export interface VueScriptBlock {
   body: string;
@@ -8,16 +8,23 @@ export interface VueScriptBlock {
   language: AstLanguage;
 }
 
-export function extractVueScriptBlock(source: string): VueScriptBlock | null {
-  const parsed = parseSfc(source);
-  const preferred = parsed.descriptor.scriptSetup ?? parsed.descriptor.script;
-  if (!preferred || preferred.src) return null;
-  const language = astLanguageFromVueScriptLang(preferred.lang ?? null);
+/**
+ * Adapter for the generic AST pipeline. Vue-specific profiling consumes the
+ * full SFC unit directly; this path flattens all JS/TS script blocks into one
+ * parseable source string while preserving SFC-relative line numbers with
+ * newline padding. Relative `src=` blocks are resolved by `buildVueSfcUnit`;
+ * absolute paths and URLs stay unsupported there so every Vue path shares the
+ * same envelope.
+ */
+export function extractVueScriptBlock(db: ScipDatabase, relativePath: string, source: string): VueScriptBlock | null {
+  const unit = buildVueSfcUnit(db, relativePath, source);
+  const scripts = unit.scripts.filter((script) => script.astLanguage && script.body.length > 0);
+  const language = scripts[0]?.astLanguage;
   if (!language) return null;
 
   return {
-    body: preferred.content,
-    startLine: Math.max(0, preferred.loc.start.line - 1),
+    body: scripts.map((script) => `${'\n'.repeat(script.startLine)}${script.body}`).join('\n'),
+    startLine: 0,
     language,
   };
 }

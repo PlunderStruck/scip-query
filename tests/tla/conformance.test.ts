@@ -5,7 +5,11 @@ import { SymbolInformation_Kind } from '@c4312/scip';
 import { describe, expect, it } from 'vitest';
 import { ScipDatabase } from '../../src/storage/db.js';
 import type { ScipQueryConfig } from '../../src/domain/types.js';
-import { readTlaModuleFacts, type TlaModelContract } from '../../src/tla/model-contract.js';
+import {
+  readTlaModuleFacts,
+  readTlaModuleFactsFromSanyXml,
+  type TlaModelContract,
+} from '../../src/tla/model-contract.js';
 import { verifyTlaConformance } from '../../src/tla/conformance.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
@@ -240,6 +244,132 @@ Peek == UNCHANGED queue
             category: 'undeclared-read',
             severity: 'warning',
             modelElement: 'Peek',
+          }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('flags SANY model writes that the mapping omits', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    writeFixtureFiles(root, {
+      'src/queue.ts': [
+        'export const queue: string[] = [];',
+        'export function enqueue(job: string) {',
+        '  return job;',
+        '}',
+      ],
+    });
+    writeFileSync(
+      join(root, 'Queue.tla'),
+      `---- MODULE Queue ----
+VARIABLES queue
+Enqueue(job) == queue' = Append(queue, job)
+====
+`,
+    );
+    const db = fixtureDb(root);
+    const contract: TlaModelContract = {
+      scope: ['src/queue.ts'],
+      variables: {
+        queue: { code: ['queue'], aliases: ['queue'] },
+      },
+      actions: {
+        Enqueue: { code: ['enqueue'], reads: [], writes: [], calls: [] },
+      },
+      invariants: [],
+      traces: [],
+    };
+    const moduleFacts = readTlaModuleFactsFromSanyXml(
+      root,
+      'Queue.tla',
+      `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<modules><context>
+  <entry><UID>10</UID><BuiltInKind><uniquename>'</uniquename></BuiltInKind></entry>
+  <entry><UID>20</UID><OpDeclNode><uniquename>queue</uniquename><kind>3</kind></OpDeclNode></entry>
+  <entry><UID>30</UID><UserDefinedOpKind><uniquename>Enqueue</uniquename><body>
+    <OpApplNode><BuiltInKindRef><UID>10</UID></BuiltInKindRef>
+      <OpDeclNodeRef><UID>20</UID></OpDeclNodeRef></OpApplNode>
+  </body></UserDefinedOpKind></entry>
+</context></modules>`,
+    );
+
+    try {
+      const result = verifyTlaConformance(db, contract, moduleFacts);
+
+      expect(result.modelParse).toBe('sany');
+      expect(result.modelActionFacts).toEqual([{ name: 'Enqueue', reads: [], writes: ['queue'] }]);
+      expect(result.findings).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            category: 'model-mapping-write',
+            evidence: 'model-text',
+            severity: 'error',
+            message: expect.stringContaining('mapping does not declare that write'),
+          }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('flags code writes that the SANY model action does not prime', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    writeFixtureFiles(root, {
+      'src/queue.ts': [
+        'export const queue: string[] = [];',
+        'export function enqueue(job: string) {',
+        '  queue.push(job);',
+        '}',
+      ],
+    });
+    writeFileSync(
+      join(root, 'Queue.tla'),
+      `---- MODULE Queue ----
+VARIABLES queue
+Enqueue(job) == UNCHANGED queue
+====
+`,
+    );
+    const db = fixtureDb(root);
+    const contract: TlaModelContract = {
+      scope: ['src/queue.ts'],
+      variables: {
+        queue: { code: ['queue'], aliases: ['queue'] },
+      },
+      actions: {
+        Enqueue: { code: ['enqueue'], reads: [], writes: ['queue'], calls: [] },
+      },
+      invariants: [],
+      traces: [],
+    };
+    const moduleFacts = readTlaModuleFactsFromSanyXml(
+      root,
+      'Queue.tla',
+      `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<modules><context>
+  <entry><UID>11</UID><BuiltInKind><uniquename>UNCHANGED</uniquename></BuiltInKind></entry>
+  <entry><UID>20</UID><OpDeclNode><uniquename>queue</uniquename><kind>3</kind></OpDeclNode></entry>
+  <entry><UID>30</UID><UserDefinedOpKind><uniquename>Enqueue</uniquename><body>
+    <OpApplNode><BuiltInKindRef><UID>11</UID></BuiltInKindRef>
+      <OpDeclNodeRef><UID>20</UID></OpDeclNodeRef></OpApplNode>
+  </body></UserDefinedOpKind></entry>
+</context></modules>`,
+    );
+
+    try {
+      const result = verifyTlaConformance(db, contract, moduleFacts);
+
+      expect(result.findings).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            category: 'model-code-write',
+            evidence: 'static-action',
+            severity: 'error',
+            message: expect.stringContaining('does not prime it'),
           }),
         ]),
       );

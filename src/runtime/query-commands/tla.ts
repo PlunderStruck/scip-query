@@ -22,11 +22,13 @@ import {
   loadTraceSteps,
   readTlaConfigInvariants,
   readTlaModuleFacts,
+  readTlaModuleFactsFromSanyXml,
   resolveContractPath,
   resolveProjectPath,
   type TlaCheckerMode,
 } from '../../tla/model-contract.js';
-import { fetchTlaToolsJar, runTlaTool, type TlaToolResult } from '../../tla/tool-runner.js';
+import { exportSanyXml } from '../../tla/sany-facts.js';
+import { fetchTlaToolsJar, resolveTlaToolsJar, runTlaTool, type TlaToolResult } from '../../tla/tool-runner.js';
 import { verifyTlaConformance, type TlaConformanceFinding, type TlaConformanceResult } from '../../tla/conformance.js';
 import { scaffoldTlaModel } from '../../tla/scaffold.js';
 import { buildInstrumentation } from '../../tla/instrument.js';
@@ -247,7 +249,10 @@ function runTlaVerify(db: ScipDatabase, args: readonly unknown[], opts: CommandO
   const configArg = stringOptionValue(opts, 'config') ?? contract.config;
   const configPath = resolveContractPath(projectRoot, mapDir, configArg);
   const checker = parseChecker(stringOptionValue(opts, 'checker') ?? 'auto');
-  const moduleFacts = readTlaModuleFacts(projectRoot, specArg);
+  const tlaToolsJar = stringOptionValue(opts, 'tlaTools');
+  const moduleFacts =
+    readSanyModuleFactsForVerify(projectRoot, specArg, specPath, tlaToolsJar) ??
+    readTlaModuleFacts(projectRoot, specArg);
   const checkedInvariants = readTlaConfigInvariants(configPath);
   const traceArg = stringOptionValue(opts, 'trace');
   const configuredTraceSteps = contract.traces.flatMap((tracePath) => loadTraceSteps(projectRoot, tracePath).steps);
@@ -277,7 +282,7 @@ function runTlaVerify(db: ScipDatabase, args: readonly unknown[], opts: CommandO
     specPath,
     configPath: configPath ?? undefined,
     checker,
-    tlaToolsJar: stringOptionValue(opts, 'tlaTools'),
+    tlaToolsJar,
     apalacheBin: stringOptionValue(opts, 'apalache'),
     length: definedNumberOption(opts, 'length', 10),
   });
@@ -312,6 +317,18 @@ function runTlaVerify(db: ScipDatabase, args: readonly unknown[], opts: CommandO
 
   renderTlaVerify(result);
   process.exitCode = result.exitCode;
+}
+
+function readSanyModuleFactsForVerify(
+  projectRoot: string,
+  specArg: string,
+  specPath: string,
+  tlaToolsJar: string | undefined,
+) {
+  const jar = resolveTlaToolsJar({ projectRoot, specPath, tlaToolsJar, checker: 'sany' });
+  if (!jar) return null;
+  const xml = exportSanyXml({ specPath, jarPath: jar });
+  return xml ? readTlaModuleFactsFromSanyXml(projectRoot, specArg, xml) : null;
 }
 
 export const tlaQueryCommandDescriptors: CommandDescriptor[] = [
@@ -385,8 +402,8 @@ function renderTlaVerify(result: TlaVerifyResult): void {
   if (result.conformance.findings.length === 0) {
     console.log(
       result.conformance.waivers.length === 0
-        ? 'PASS: model, mapping, and checked code evidence agree.'
-        : 'PASS: model checker and unwaived conformance checks passed; see waived facts above.',
+        ? `PASS: model, mapping, and checked code evidence agree (model parsed by: ${result.conformance.modelParse}).`
+        : `PASS: model checker and unwaived conformance checks passed (model parsed by: ${result.conformance.modelParse}); see waived facts above.`,
     );
     return;
   }
@@ -406,6 +423,7 @@ function proofSummary(result: TlaVerifyResult): string {
   const callChecks = result.conformance.findings.filter((finding) => finding.category === 'missing-call').length;
   return [
     `checker: ${checker}`,
+    `model parsed by: ${result.conformance.modelParse}`,
     `writes: ${result.conformance.staticWrites.length} verified, ${writeWaivers} waived`,
     `reads: ${result.conformance.staticReads.length} verified, ${readWaivers} waived`,
     `calls: ${callChecks === 0 ? 'checked' : `${callChecks} missing`}`,

@@ -5,6 +5,10 @@ import { getIndexerConfig } from '../reindex/indexers.js';
 import { getIndexerDependencyStatus } from '../reindex/install.js';
 import { getTypeScriptSemanticStatus } from '../semantic/typescript/status.js';
 import { detectCheckers } from './cleanup-verify.js';
+import { probeAstLanguageRuntime, type LanguageRuntimeProbe } from '../source/ast/ast-runtime.js';
+import type { AstLanguage } from '../source/ast/ast-language.js';
+import { registeredParserCapabilities } from '../language-parsers/registry.js';
+import type { ParserFallbackMode } from '../language-parsers/types.js';
 
 export interface LanguageReadiness {
   language: SupportedLanguage;
@@ -81,30 +85,38 @@ const LANGUAGE_EXTENSIONS: Record<SupportedLanguage, string[]> = {
   clojure: ['.clj', '.cljs', '.cljc'],
 };
 
-const SOURCE_FACT_SUPPORT: Record<SupportedLanguage, { status: CapabilityStatus; reason: string }> = {
-  typescript: {
-    status: 'available',
-    reason: 'AST/source fallback covers TypeScript imports, references, and source-backed evidence.',
-  },
-  javascript: { status: 'available', reason: 'AST/source fallback covers JavaScript, JSX, and Vue script evidence.' },
-  java: { status: 'available', reason: 'AST-dispatched source fallback covers Java imports.' },
-  scala: { status: 'available', reason: 'AST-dispatched source fallback covers Scala imports.' },
-  kotlin: { status: 'available', reason: 'AST-dispatched source fallback covers Kotlin imports.' },
-  rust: { status: 'available', reason: 'AST/source fallback covers Rust imports and exports.' },
-  python: { status: 'available', reason: 'AST/source fallback covers Python imports.' },
-  ruby: { status: 'available', reason: 'AST/source fallback covers Ruby imports.' },
-  go: { status: 'unavailable', reason: 'No Go source-fallback adapter is registered; Go relies on SCIP graph facts.' },
-  cpp: { status: 'available', reason: 'AST/source fallback covers C++ includes.' },
-  c: { status: 'available', reason: 'AST/source fallback covers C includes.' },
-  csharp: { status: 'available', reason: 'AST-dispatched source fallback covers C# imports.' },
-  vb: { status: 'available', reason: 'AST-dispatched source fallback covers Visual Basic imports.' },
-  dart: { status: 'partial', reason: 'Dart source fallback is regex-only for imports and exports.' },
-  php: { status: 'available', reason: 'AST/source fallback covers PHP imports.' },
-  clojure: {
-    status: 'available',
-    reason:
-      'Source fallback covers Clojure namespace imports plus callable, callsite, and protocol/record member evidence for .clj, .cljs, and .cljc files.',
-  },
+const AST_LANGUAGE_BY_SUPPORTED_LANGUAGE: Partial<Record<SupportedLanguage, AstLanguage>> = {
+  typescript: 'typescript',
+  javascript: 'javascript',
+  java: 'java',
+  scala: 'scala',
+  kotlin: 'kotlin',
+  rust: 'rust',
+  python: 'python',
+  ruby: 'ruby',
+  cpp: 'cpp',
+  c: 'c',
+  csharp: 'csharp',
+  vb: 'vb',
+  php: 'php',
+};
+
+const REGISTRY_LANGUAGE_BY_SUPPORTED_LANGUAGE: Partial<Record<SupportedLanguage, string>> = {
+  typescript: 'javascript',
+  javascript: 'javascript',
+  java: 'jvm',
+  scala: 'jvm',
+  kotlin: 'jvm',
+  rust: 'rust',
+  python: 'python',
+  ruby: 'ruby',
+  cpp: 'c/cpp',
+  c: 'c/cpp',
+  csharp: 'dotnet',
+  vb: 'dotnet',
+  dart: 'dart',
+  php: 'php',
+  clojure: 'clojure',
 };
 
 export function getProjectReadiness(projectRoot: string, config: ProjectConfig): ProjectReadiness {
@@ -133,7 +145,11 @@ export function getProjectReadiness(projectRoot: string, config: ProjectConfig):
 
 export function getProjectCapabilities(
   readiness: ProjectReadiness,
-  opts: { hasIndexedGraph?: boolean } = {},
+  opts: {
+    hasIndexedGraph?: boolean;
+    indexedLanguages?: readonly SupportedLanguage[];
+    runtimeProbe?: (language: SupportedLanguage) => LanguageRuntimeProbe;
+  } = {},
 ): ProjectCapabilityReport {
   const runnableIndexers = readiness.indexers.filter((indexer) => indexer.runnable).length;
   const graphStatus =
@@ -148,7 +164,10 @@ export function getProjectCapabilities(
   return {
     languages: readiness.languages,
     matrix: readiness.languages.map((language) =>
-      languageCapability(readiness, language, { hasIndexedGraph: opts.hasIndexedGraph === true }),
+      languageCapability(readiness, language, {
+        hasIndexedGraph: languageHasIndexedGraph(language, opts),
+        runtimeProbe: opts.runtimeProbe,
+      }),
     ),
     capabilities: [
       {
@@ -209,7 +228,7 @@ export function getProjectCapabilities(
 function languageCapability(
   readiness: ProjectReadiness,
   language: SupportedLanguage,
-  opts: { hasIndexedGraph: boolean },
+  opts: { hasIndexedGraph: boolean; runtimeProbe?: (language: SupportedLanguage) => LanguageRuntimeProbe },
 ): LanguageCapability {
   const indexer = readiness.indexers.find((entry) => entry.language === language);
   const indexingStatus: CapabilityStatus = indexer?.runnable
@@ -218,7 +237,7 @@ function languageCapability(
       ? 'partial'
       : 'unavailable';
   const graphDataAvailable = indexingStatus !== 'unavailable';
-  const sourceSupport = SOURCE_FACT_SUPPORT[language];
+  const sourceSupport = sourceFactCapability(language, opts.runtimeProbe);
   const semantic =
     language === 'typescript'
       ? typescriptSemanticCapability(readiness)
@@ -275,6 +294,74 @@ function languageCapability(
           : `No detected checker covers ${LANGUAGE_EXTENSIONS[language].join(', ')} files.`,
     },
   };
+}
+
+function languageHasIndexedGraph(
+  language: SupportedLanguage,
+  opts: { hasIndexedGraph?: boolean; indexedLanguages?: readonly SupportedLanguage[] },
+): boolean {
+  if (opts.indexedLanguages) return opts.indexedLanguages.includes(language);
+  return opts.hasIndexedGraph === true;
+}
+
+function sourceFactCapability(
+  language: SupportedLanguage,
+  runtimeProbe: ((language: SupportedLanguage) => LanguageRuntimeProbe) | undefined,
+): { status: CapabilityStatus; reason: string } {
+  if (language === 'go') {
+    return {
+      status: 'unavailable',
+      reason: 'No Go source-fallback adapter is registered; Go relies on SCIP graph facts.',
+    };
+  }
+  if (language === 'clojure') {
+    return {
+      status: 'available',
+      reason:
+        'Clojure source fallback uses the built-in reader for namespace imports plus callable, callsite, and protocol/record member evidence for .clj, .cljs, and .cljc files.',
+    };
+  }
+
+  const mode = primaryParserFallbackMode(language);
+  if (mode === 'regex-only') {
+    return { status: 'partial', reason: `${language} source fallback is regex-only for imports and exports.` };
+  }
+  if (!mode) {
+    return { status: 'unavailable', reason: `No source-fallback adapter is registered for ${language}.` };
+  }
+
+  const probe = runtimeProbe?.(language) ?? defaultRuntimeProbe(language);
+  if (probe === 'unavailable') {
+    return {
+      status: 'partial',
+      reason: 'tree-sitter native module not loadable — regex/import-only evidence remains available where registered.',
+    };
+  }
+  if (probe === 'regex') {
+    return { status: 'partial', reason: `${language} source fallback is regex-only for imports and exports.` };
+  }
+  if (probe === 'reader') {
+    return { status: 'available', reason: `${language} source fallback is reader-backed.` };
+  }
+  return {
+    status: 'available',
+    reason:
+      mode === 'ast-dispatch-with-regex-fallback'
+        ? `AST-dispatched source fallback covers ${language} imports.`
+        : `AST/source fallback covers ${language} imports and source-backed evidence.`,
+  };
+}
+
+function defaultRuntimeProbe(language: SupportedLanguage): LanguageRuntimeProbe {
+  const astLanguage = AST_LANGUAGE_BY_SUPPORTED_LANGUAGE[language];
+  if (!astLanguage) return primaryParserFallbackMode(language) === 'regex-only' ? 'regex' : 'unavailable';
+  return probeAstLanguageRuntime(astLanguage);
+}
+
+function primaryParserFallbackMode(language: SupportedLanguage): ParserFallbackMode | null {
+  const registryLanguage = REGISTRY_LANGUAGE_BY_SUPPORTED_LANGUAGE[language];
+  const capabilities = registryLanguage ? registeredParserCapabilities(registryLanguage) : null;
+  return capabilities?.imports ?? capabilities?.exports ?? capabilities?.reExports ?? null;
 }
 
 function typescriptSemanticCapability(readiness: ProjectReadiness): ProjectCapability {

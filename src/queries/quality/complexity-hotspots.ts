@@ -4,6 +4,7 @@ import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { runCandidateAnalysis } from '../internal/candidate-scan.js';
 import { getSourceFacts } from '../../source/ast.js';
+import { branchEstimateForDefinition, type BranchEstimateBasis } from './complexity.js';
 
 export interface ComplexityHotspot {
   symbol: string;
@@ -15,6 +16,8 @@ export interface ComplexityHotspot {
   fanIn: number;
   fanOut: number;
   calleeCount: number;
+  branches: number;
+  estimateBasis: BranchEstimateBasis;
   score: number;
 }
 
@@ -22,7 +25,7 @@ export interface ComplexityHotspot {
  * Find complexity hotspots: symbols with a composite score based on
  * LOC, fan-in, fan-out, and callee count.
  *
- * Score = (loc / 50) * (fanIn / 5) * max(fanOut / 5, 1)
+ * Score = (loc / 50) * (fanIn / 5) * max(fanOut / 5, 1) * max(cyclomatic / 5, 1)
  *
  * Bulk fan-in/out via caller evidence + buildCalleeMap so we pay
  * one SQL pass per kind regardless of how many definitions we score —
@@ -54,6 +57,7 @@ export function complexityHotspots(
         calleeMap: index.calleeMap(definitions, { semantic: opts?.semantic !== false }),
         languageByFile: languages,
         clojureCallableIds: clojureCallableDefinitionIds(db, definitions, languages),
+        branchEstimates: branchEstimatesByDefinition(db, definitions),
       };
     },
     evaluate: (definition, maps) => complexityHotspotForDefinition(definition, maps, minLoc),
@@ -69,6 +73,7 @@ function complexityHotspotForDefinition(
     calleeMap: ReturnType<ProjectIndex['calleeMap']>;
     languageByFile: Map<string, string | null>;
     clojureCallableIds: Set<number>;
+    branchEstimates: Map<number, { branches: number; estimateBasis: BranchEstimateBasis }>;
   },
   minLoc: number,
 ): ComplexityHotspot | null {
@@ -91,6 +96,11 @@ function complexityHotspotForDefinition(
   }
   const fanOut = uniqueExternalCallees.size;
   const calleeCount = uniqueCallees.size;
+  const branchEstimate = maps.branchEstimates.get(definition.symbolId) ?? {
+    branches: 0,
+    estimateBasis: 'regex-fallback',
+  };
+  const cyclomatic = branchEstimate.branches + 1;
   return {
     symbol: definition.symbol,
     shortName: shortenSymbol(definition.symbol),
@@ -101,8 +111,17 @@ function complexityHotspotForDefinition(
     fanIn,
     fanOut,
     calleeCount,
-    score: Math.round((loc / 50) * (fanIn / 5) * Math.max(fanOut / 5, 1) * 100) / 100,
+    branches: branchEstimate.branches,
+    estimateBasis: branchEstimate.estimateBasis,
+    score: Math.round((loc / 50) * (fanIn / 5) * Math.max(fanOut / 5, 1) * Math.max(cyclomatic / 5, 1) * 100) / 100,
   };
+}
+
+function branchEstimatesByDefinition(
+  db: ScipDatabase,
+  definitions: ReadonlyArray<IndexedDefinition>,
+): Map<number, { branches: number; estimateBasis: BranchEstimateBasis }> {
+  return new Map(definitions.map((definition) => [definition.symbolId, branchEstimateForDefinition(db, definition)]));
 }
 
 function languageByFile(db: ScipDatabase, definitions: ReadonlyArray<IndexedDefinition>): Map<string, string | null> {

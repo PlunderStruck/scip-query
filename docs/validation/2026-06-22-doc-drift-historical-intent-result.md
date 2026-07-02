@@ -62,3 +62,8 @@ The `src/queries/cleanup/doc-drift.ts` historical-intent reference remains
 accurate after the file evidence product registry migration. Path evidence
 still stores the same candidates and citation contexts behind the content hash;
 the persistent cache access now goes through `src/storage/evidence-products.ts`.
+
+2026-07-01 round-2 remediation note: the `src/queries/cleanup/doc-drift.ts`
+configuration example remains current after doc-drift started using the shared
+citation-kind classifier. Historical-intent classification remains the policy
+layer; citation contexts are now tiered with the same vocabulary diff-gate uses.

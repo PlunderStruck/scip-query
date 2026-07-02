@@ -1,10 +1,5 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import type { IndexedDefinition } from '../../domain/types.js';
-import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
-import { getCalleeRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
-import { shortenSymbol } from '../../symbols/symbol-parser.js';
-import { isClojureMacroDefinition } from '../../source/ast.js';
-import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
+import { similarConsolidationPlan } from './similar.js';
 
 export interface ConvergenceResult {
   symbolA: { symbol: string; shortName: string; file: string; loc: number };
@@ -27,87 +22,15 @@ export function convergence(
   symbolPatternB: string,
   opts: { semantic?: boolean } = {},
 ): ConvergenceResult | null {
-  const matchA = findFirstSymbolMatch(db, symbolPatternA);
-  const matchB = findFirstSymbolMatch(db, symbolPatternB);
-
-  if (!matchA || !matchB) return null;
-
-  const rawCalleesA = getCalleeRowsForSymbol(db, matchA, { semantic: opts.semantic });
-  const rawCalleesB = getCalleeRowsForSymbol(db, matchB, { semantic: opts.semantic });
-  const calleesAForComparison = rawCalleesA.filter((row) => !isClojureMacroCallee(db, row));
-  const calleesBForComparison = rawCalleesB.filter((row) => !isClojureMacroCallee(db, row));
-  const filteredMacroScaffolding =
-    calleesAForComparison.length !== rawCalleesA.length || calleesBForComparison.length !== rawCalleesB.length;
-  const calleesA = new Set(calleesAForComparison.map((r) => r.symbol));
-  const calleesB = new Set(calleesBForComparison.map((r) => r.symbol));
-
-  const shared: string[] = [];
-  for (const c of calleesA) {
-    if (calleesB.has(c)) shared.push(c);
-  }
-
-  const uniqueA: string[] = [];
-  for (const c of calleesA) {
-    if (!calleesB.has(c)) uniqueA.push(c);
-  }
-
-  const uniqueB: string[] = [];
-  for (const c of calleesB) {
-    if (!calleesA.has(c)) uniqueB.push(c);
-  }
-
-  const union = new Set([...calleesA, ...calleesB]);
-  const similarity = union.size > 0 ? shared.length / union.size : 0;
-
-  // Generate a consolidation strategy description
-  let strategy: string;
-  if (union.size === 0) {
-    strategy =
-      'Neither function calls other tracked symbols. There is no callee-pattern evidence for consolidation; inspect the source bodies directly.';
-  } else if (shared.length === 0) {
-    strategy = 'These functions do not share any callees. They are not a callee-based consolidation candidate.';
-  } else if (uniqueA.length === 0 && uniqueB.length === 0) {
-    strategy =
-      'These functions have identical tracked callee sets. They are a strong structural match, but identical callees do not prove interchangeable semantics; inspect signatures, control flow, and return values before consolidating.';
-  } else if (uniqueA.length === 0) {
-    strategy = `A's tracked callees are a subset of B's. B may subsume part of A's structure, but verify signatures, guards, and non-call logic before replacing A with B.`;
-  } else if (uniqueB.length === 0) {
-    strategy = `B's tracked callees are a subset of A's. A may subsume part of B's structure, but verify signatures, guards, and non-call logic before replacing B with A.`;
-  } else if (uniqueA.length <= 2 && uniqueB.length <= 2) {
-    strategy = `Create a shared function with the ${shared.length} common callees. Pass the ${uniqueA.length + uniqueB.length} divergent callees as parameters or strategy callbacks.`;
-  } else {
-    strategy = `Extract the ${shared.length} shared callees into a common helper. Each function calls the helper plus its own unique logic (${uniqueA.length} callees in A, ${uniqueB.length} in B).`;
-  }
-  if (filteredMacroScaffolding) {
-    strategy = `Ignored Clojure macro scaffolding while comparing tracked callees. ${strategy}`;
-  }
-
-  const locA = matchA.endLine - matchA.startLine + 1;
-  const locB = matchB.endLine - matchB.startLine + 1;
-
+  const plan = similarConsolidationPlan(db, symbolPatternA, symbolPatternB, opts);
+  if (!plan) return null;
   return {
-    symbolA: {
-      symbol: matchA.symbol,
-      shortName: shortenSymbol(matchA.symbol),
-      file: matchA.relativePath,
-      loc: locA,
-    },
-    symbolB: {
-      symbol: matchB.symbol,
-      shortName: shortenSymbol(matchB.symbol),
-      file: matchB.relativePath,
-      loc: locB,
-    },
-    similarity,
-    sharedCallees: shared.map(shortenSymbol),
-    uniqueToA: uniqueA.map(shortenSymbol),
-    uniqueToB: uniqueB.map(shortenSymbol),
-    consolidationStrategy: strategy,
+    symbolA: plan.symbolA,
+    symbolB: plan.symbolB,
+    similarity: plan.similarity,
+    sharedCallees: plan.sharedEvidence,
+    uniqueToA: plan.uniqueToA,
+    uniqueToB: plan.uniqueToB,
+    consolidationStrategy: plan.consolidationStrategy,
   };
-}
-
-function isClojureMacroCallee(db: ScipDatabase, callee: { symbol: string; file: string }): boolean {
-  return getDefinitionsForFile(db, callee.file).some(
-    (definition: IndexedDefinition) => definition.symbol === callee.symbol && isClojureMacroDefinition(db, definition),
-  );
 }

@@ -69,7 +69,8 @@ export function coupling(db: ScipDatabase, file1: string, file2: string): Coupli
  */
 export function topCoupling(db: ScipDatabase, opts: { limit?: number; scope?: string } = {}): CouplingResult[] {
   const { limit = 20, scope } = opts;
-  const scopeFilter = scope ? `AND d1.relative_path LIKE '%${scope}%' AND d2.relative_path LIKE '%${scope}%'` : '';
+  const scopeFilter = scope ? `AND def_d.relative_path LIKE ? AND ref_d.relative_path LIKE ?` : '';
+  const scopeParams = scope ? [`%${scope}%`, `%${scope}%`] : [];
 
   // Find file pairs that share the most symbols (one defines, other references)
   const rows = db.all<{
@@ -100,6 +101,7 @@ export function topCoupling(db: ScipDatabase, opts: { limit?: number; scope?: st
     GROUP BY def_d.id, ref_d.id
     ORDER BY shared DESC
     LIMIT ?`,
+    ...scopeParams,
     limit,
   );
 

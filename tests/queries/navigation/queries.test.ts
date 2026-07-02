@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import * as queries from '../../../src/queries/index.js';
+import { pathMatchesGlob } from '../../../src/queries/navigation/files.js';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
 
 /**
@@ -233,6 +234,12 @@ describe('query engine', () => {
     it('finds Rust files', () => {
       const results = queries.files(db, 'main.rs');
       expect(results).toHaveLength(1);
+    });
+
+    it('keeps slash-qualified globs segment-aware', () => {
+      expect(pathMatchesGlob('src/queries/*.ts', 'src/queries/index.ts')).toBe(true);
+      expect(pathMatchesGlob('src/queries/*.ts', 'src/queries/cleanup/dead.ts')).toBe(false);
+      expect(pathMatchesGlob('*.vue', 'src/components/UserList.vue')).toBe(true);
     });
   });
 

@@ -194,14 +194,15 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   }),
   heuristicCleanupCommand({
     id: 'similar',
-    command: 'similar [symbol]',
+    command: 'similar [symbol] [other]',
     description: 'Find heuristic function similarity candidates from callee fingerprints',
     options: withJsonOption([
-      option('--min-similarity <n>', 'Minimum Jaccard similarity (0-1)', parseNumber, 0.4),
+      option('--min-similarity <n>', 'Minimum weighted-cosine similarity (0-1)', parseNumber, 0.4),
       option('-n, --limit <n>', 'Number of results', parseInteger, 20),
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--min-callees <n>', 'Minimum callees to consider', parseInteger, 4),
       option('--cross-file-only', 'Only show cross-file pairs (skip same-file matches)'),
+      option('--plan', 'Render a consolidation preview for two symbols'),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
     ]),
     heuristicLabel: 'similarity candidates',
@@ -469,7 +470,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'convergence',
     command: 'convergence <symbol1> <symbol2>',
-    description: 'Show what a consolidated version of two similar functions would look like',
+    description: 'Deprecated alias for similar <symbol1> <symbol2> --plan',
     options: withJsonOption([option('--full', 'Run unbounded semantic analysis on large indexes')]),
     budget: 'semantic',
     renderShape: 'custom',

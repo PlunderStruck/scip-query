@@ -12,6 +12,7 @@ import {
 import { parse as parseSfc } from '@vue/compiler-sfc';
 import type { ScipDatabase } from '../../storage/db.js';
 import { createSourceFileCache } from '../../storage/per-db-cache.js';
+import { isFrontendIdentifierStopWord } from '../frontend-identifier-stoplist.js';
 import { pascalCaseSeparated } from '../name-normalization.js';
 import { getSourceText } from '../source-text.js';
 import { getVueSfcUnit, type VueSfcResolvedBlock } from './vue-sfc.js';
@@ -300,9 +301,14 @@ function walkTemplateChildren(
   addToken: (token: string) => void,
 ): void {
   for (const child of children) {
-    if (child.type !== NodeTypes.ELEMENT) continue;
-    recordElement(child, lineOffset, facts, addToken);
-    walkTemplateChildren(child.children, lineOffset, facts, addToken);
+    if (child.type === NodeTypes.ELEMENT) {
+      recordElement(child, lineOffset, facts, addToken);
+      walkTemplateChildren(child.children, lineOffset, facts, addToken);
+    } else if (child.type === NodeTypes.INTERPOLATION) {
+      addToken('interpolation');
+      const value = expressionSource(child.content);
+      if (value) recordExpressionIdentifiers(value, lineOffset, child.loc.start.line, facts, addToken);
+    }
   }
 }
 
@@ -445,7 +451,7 @@ function expressionIdentifiers(expression: string): string[] {
   let match: RegExpExecArray | null;
   while ((match = re.exec(searchable))) {
     const name = match[0]!;
-    if (EXPRESSION_STOP_WORDS.has(name)) continue;
+    if (EXPRESSION_STOP_WORDS.has(name) || isFrontendIdentifierStopWord(name)) continue;
     if (/^[A-Z_]+$/.test(name)) continue;
     out.add(name);
   }

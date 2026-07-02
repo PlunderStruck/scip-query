@@ -159,3 +159,9 @@ The new source suppressions are intentional health-signal calibration records:
 they mark named cache/profile contracts, workflow orchestration, and parallel
 query scaffolding that reviewers accepted after checking the health inventory.
 They do not suppress direct dead-code findings.
+
+2026-07-01 round-2 remediation note: the cited registry, similarity,
+gitignore-filter, and Vue template examples remain intentional after the
+parser, nested-ignore, and frontend-token changes. The suppression lifecycle
+claim is unchanged: structured suppressions record accepted detector context,
+not evidence that a finding was automatically false.

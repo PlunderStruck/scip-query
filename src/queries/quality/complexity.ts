@@ -5,6 +5,8 @@ import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { stripCommentsAndStrings } from '../../source/source-stripper.js';
+import { getAst, type SyntaxNode } from '../../source/ast.js';
+import type { SymbolMatch } from '../../domain/symbol-types.js';
 
 export interface ComplexityResult {
   symbol: string;
@@ -13,14 +15,22 @@ export interface ComplexityResult {
   startLine: number;
   endLine: number;
   loc: number;
-  /** Branch count from source-level regex (if, else, for, while, switch, catch, ternary, &&, ||) */
+  /** Branch count from AST when available, otherwise source-level regex fallback. */
   branches: number;
+  estimateBasis: BranchEstimateBasis;
   /** Cyclomatic complexity estimate: branches + 1 */
   cyclomaticEstimate: number;
   /** Number of distinct callees within the definition */
   calleeCount: number;
   fanIn: number;
   fanOut: number;
+}
+
+export type BranchEstimateBasis = 'ast' | 'regex-fallback';
+
+interface BranchEstimate {
+  branches: number;
+  estimateBasis: BranchEstimateBasis;
 }
 
 /**
@@ -42,10 +52,7 @@ export function complexity(
   if (!match) return null;
   const index = new ProjectIndex(db);
 
-  const branches = countBranches(
-    readSymbolSource(db, match.relativePath, match.startLine, match.endLine),
-    languageForFile(db, match.relativePath),
-  );
+  const branchEstimate = branchEstimateForDefinition(db, match);
   const loc = match.endLine - match.startLine + 1;
 
   const calleeMap = index.calleeMap([match], { additive: true, semantic: opts.semantic });
@@ -59,11 +66,33 @@ export function complexity(
     startLine: match.startLine,
     endLine: match.endLine,
     loc,
-    branches,
-    cyclomaticEstimate: branches + 1,
+    branches: branchEstimate.branches,
+    estimateBasis: branchEstimate.estimateBasis,
+    cyclomaticEstimate: branchEstimate.branches + 1,
     calleeCount: uniqueCallees.size,
     fanIn: fanInForSymbol(db, match.symbolId),
     fanOut: fanOutForCallees(callees, match.relativePath),
+  };
+}
+
+export function branchEstimateForDefinition(db: ScipDatabase, definition: SymbolMatch): BranchEstimate {
+  const ast = getAst(db, definition.relativePath);
+  if (ast) {
+    const node = smallestNodeCoveringLines(ast.rootNode, definition.startLine, definition.endLine);
+    if (node) {
+      return {
+        branches: countBranchesFromAst(node),
+        estimateBasis: 'ast',
+      };
+    }
+  }
+
+  return {
+    branches: countBranchesFromRegex(
+      readSymbolSource(db, definition.relativePath, definition.startLine, definition.endLine),
+      languageForFile(db, definition.relativePath),
+    ),
+    estimateBasis: 'regex-fallback',
   };
 }
 
@@ -90,7 +119,16 @@ function fanInForSymbol(db: ScipDatabase, symbolId: number): number {
       `SELECT COUNT(DISTINCT c.document_id) AS c
     FROM mentions m
     JOIN chunks c ON m.chunk_id = c.id
-    WHERE m.symbol_id = ? AND m.role != 1`,
+    JOIN (
+      SELECT m2.symbol_id, c2.document_id
+      FROM mentions m2
+      JOIN chunks c2 ON m2.chunk_id = c2.id
+      WHERE m2.role = 1
+      GROUP BY m2.symbol_id
+    ) sym_def ON sym_def.symbol_id = m.symbol_id
+    WHERE m.symbol_id = ?
+      AND m.role != 1
+      AND sym_def.document_id != c.document_id`,
       symbolId,
     )?.c ?? 0
   );
@@ -101,10 +139,69 @@ function fanOutForCallees(callees: ReadonlyArray<{ symbol: string; file: string 
 }
 
 /**
- * Count branch points in source code using language-aware regex.
- * Works across all SCIP-supported languages.
+ * Count branch points in a parsed AST. The count follows the same practical
+ * McCabe approximation as the command output: decision nodes plus boolean
+ * decision operators.
  */
-function countBranches(source: string, language: string): number {
+export function countBranchesFromAst(node: SyntaxNode): number {
+  let count = 0;
+  walkAst(node, (current) => {
+    if (AST_BRANCH_NODE_TYPES.has(current.type)) {
+      count += 1;
+      return;
+    }
+
+    if (
+      current.type === 'binary_expression' &&
+      current.parent?.type !== 'binary_expression' &&
+      (current.text.includes('&&') || current.text.includes('||'))
+    ) {
+      count += countBooleanOperators(current.text);
+    }
+  });
+  return count;
+}
+
+function walkAst(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {
+  visit(node);
+  for (const child of node.namedChildren) walkAst(child, visit);
+}
+
+function smallestNodeCoveringLines(node: SyntaxNode, startLine: number, endLine: number): SyntaxNode | null {
+  if (node.startPosition.row > startLine || node.endPosition.row < endLine) return null;
+  for (const child of node.namedChildren) {
+    const match = smallestNodeCoveringLines(child, startLine, endLine);
+    if (match) return match;
+  }
+  return node;
+}
+
+const AST_BRANCH_NODE_TYPES = new Set([
+  'if_statement',
+  'conditional_expression',
+  'ternary_expression',
+  'for_statement',
+  'for_in_statement',
+  'for_of_statement',
+  'while_statement',
+  'do_statement',
+  'switch_case',
+  'case_statement',
+  'catch_clause',
+  'except_clause',
+  'elif_clause',
+  'match_arm',
+]);
+
+function countBooleanOperators(text: string): number {
+  return (text.match(/&&|\|\|/g) ?? []).length;
+}
+
+/**
+ * Count branch points in source code using language-aware regex.
+ * Works across all SCIP-supported languages when AST parsing is unavailable.
+ */
+function countBranchesFromRegex(source: string, language: string): number {
   // Strip comments and strings to avoid false positives
   const stripped = stripCommentsAndStrings(source);
   let count = 0;

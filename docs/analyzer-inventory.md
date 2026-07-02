@@ -211,3 +211,9 @@ manifest reference. Private query-helper coverage is now asserted as a
 CLI-contract test fixture in `tests/runtime/cli-contract.test.ts`, so the
 production manifest only exports the public entries and source paths used by
 packaging.
+
+2026-07-01 round-2 remediation note: the `src/queries/health/health.ts`
+guide reference remains current after the health output gained explicit
+validation-basis and source-facts disclosure fields. The analyzer inventory
+still points readers at the health command implementation that owns score
+phases, suppressions, and validation reporting.

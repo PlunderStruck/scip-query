@@ -28,7 +28,10 @@ export const handleReactComponentDuplicates = budgetedReportCommand('react-compo
         `\n${Math.round(r.similarity * 100)}% similar React structure:`,
         `  ${r.componentA}  (${r.fileA})`,
         `  ${r.componentB}  (${r.fileB})`,
+        `  Evidence class: ${r.evidenceClass}  (tier: ${r.actionTier})`,
+        `  Recommendation: ${r.recommendation}`,
       ];
+      if (r.evidenceClassReasons.length) lines.push(`  Evidence reasons: ${r.evidenceClassReasons.join('; ')}`);
       if (r.sharedComponents.length) lines.push(`  Shared components: ${r.sharedComponents.join(', ')}`);
       if (r.sharedNativeTags.length) lines.push(`  Shared native tags: ${r.sharedNativeTags.join(', ')}`);
       if (r.sharedProps.length) lines.push(`  Shared props: ${r.sharedProps.join(', ')}`);
@@ -121,7 +124,14 @@ export const handleVueComponentDuplicates = budgetedReportCommand('vue-component
   heuristicLabel: 'Vue component duplicate candidates',
   render: (results) => {
     render.list(results, (r) => {
-      const lines = [`\n${Math.round(r.similarity * 100)}% similar Vue structure:`, `  ${r.fileA}`, `  ${r.fileB}`];
+      const lines = [
+        `\n${Math.round(r.similarity * 100)}% similar Vue structure:`,
+        `  ${r.fileA}`,
+        `  ${r.fileB}`,
+        `  Evidence class: ${r.evidenceClass}  (tier: ${r.actionTier})`,
+        `  Recommendation: ${r.recommendation}`,
+      ];
+      if (r.evidenceClassReasons.length) lines.push(`  Evidence reasons: ${r.evidenceClassReasons.join('; ')}`);
       if (r.sharedComponents.length) lines.push(`  Shared components: ${r.sharedComponents.join(', ')}`);
       if (r.sharedProps.length) lines.push(`  Shared props: ${r.sharedProps.join(', ')}`);
       if (r.sharedEvents.length) lines.push(`  Shared events: ${r.sharedEvents.join(', ')}`);

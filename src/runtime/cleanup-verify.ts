@@ -132,7 +132,27 @@ export interface CheckerRunResult {
   ok: boolean;
   exitCode: number | null;
   rawErrors: string[];
+  diagnostics: CheckerDiagnostic[];
+  parseBasis: DiagnosticParseBasis;
   outputTail: string[];
+}
+
+export type DiagnosticParseBasis =
+  | 'tsc'
+  | 'go'
+  | 'ruff-json'
+  | 'ruff-text'
+  | 'cargo-json'
+  | 'clj-kondo-json'
+  | 'heuristic';
+
+export interface CheckerDiagnostic {
+  file: string;
+  line?: number;
+  column?: number;
+  code?: string;
+  message: string;
+  parseBasis: DiagnosticParseBasis;
 }
 
 export interface BatchStatusDecision {
@@ -248,7 +268,7 @@ export function detectCheckers(projectRoot: string): Checker[] {
     checkers.push({
       label: `cargo check --quiet --manifest-path ${manifest}`,
       binary: 'cargo',
-      args: ['check', '--quiet', '--manifest-path', manifest],
+      args: ['check', '--quiet', '--message-format', 'json', '--manifest-path', manifest],
       coversExtensions: ['.rs'],
       // Reuse the project's build cache — a cold target dir takes minutes.
       env: {
@@ -270,7 +290,7 @@ function detectPythonChecker(): Checker | null {
     return {
       label: 'ruff check --select E9,F821,F822',
       binary: 'ruff',
-      args: ['check', '--quiet', '--select', 'E9,F821,F822', '.'],
+      args: ['check', '--quiet', '--output-format', 'json', '--select', 'E9,F821,F822', '.'],
       coversExtensions: ['.py'],
     };
   }
@@ -291,7 +311,7 @@ function detectClojureChecker(projectRoot: string): Checker | null {
     return {
       label: 'clj-kondo --lint .',
       binary: localKondo,
-      args: ['--lint', '.'],
+      args: ['--lint', '.', '--config', '{:output {:format :json}}'],
       coversExtensions: CLOJURE_EXTENSIONS,
     };
   }
@@ -299,7 +319,7 @@ function detectClojureChecker(projectRoot: string): Checker | null {
     return {
       label: 'clj-kondo --lint .',
       binary: 'clj-kondo',
-      args: ['--lint', '.'],
+      args: ['--lint', '.', '--config', '{:output {:format :json}}'],
       coversExtensions: CLOJURE_EXTENSIONS,
     };
   }
@@ -307,7 +327,7 @@ function detectClojureChecker(projectRoot: string): Checker | null {
     return {
       label: 'npx clj-kondo --lint .',
       binary: 'npx',
-      args: ['--yes', 'clj-kondo', '--lint', '.'],
+      args: ['--yes', 'clj-kondo', '--lint', '.', '--config', '{:output {:format :json}}'],
       coversExtensions: CLOJURE_EXTENSIONS,
     };
   }
@@ -527,13 +547,218 @@ function runChecker(checker: Checker, worktree: string, timeoutMs: number): Chec
     maxBuffer: 32 * 1024 * 1024,
   });
   const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
-  if (result.status === 0) return { ok: true, exitCode: 0, rawErrors: [], outputTail: outputTail(output) };
-  const rawErrors = output
+  if (result.status === 0) {
+    return {
+      ok: true,
+      exitCode: 0,
+      rawErrors: [],
+      diagnostics: [],
+      parseBasis: 'heuristic',
+      outputTail: outputTail(output),
+    };
+  }
+  const parsed = parseCheckerDiagnostics(checker.label, output);
+  const diagnostics =
+    parsed.diagnostics.length > 0
+      ? parsed.diagnostics
+      : result.error
+        ? [{ file: '', message: String(result.error), parseBasis: 'heuristic' as const }]
+        : [];
+  return {
+    ok: false,
+    exitCode: result.status,
+    rawErrors: diagnostics.map(formatDiagnostic),
+    diagnostics,
+    parseBasis: parsed.parseBasis,
+    outputTail: outputTail(output),
+  };
+}
+
+export function parseCheckerDiagnostics(
+  checkerLabel: string,
+  output: string,
+): { diagnostics: CheckerDiagnostic[]; parseBasis: DiagnosticParseBasis } {
+  if (checkerLabel.startsWith('tsc') || checkerLabel.startsWith('npx tsc')) {
+    return { diagnostics: parseTscDiagnostics(output), parseBasis: 'tsc' };
+  }
+  if (checkerLabel.startsWith('go build')) {
+    return { diagnostics: parseGoDiagnostics(output), parseBasis: 'go' };
+  }
+  if (checkerLabel.startsWith('ruff')) {
+    const jsonDiagnostics = parseRuffJsonDiagnostics(output);
+    if (jsonDiagnostics.length > 0) return { diagnostics: jsonDiagnostics, parseBasis: 'ruff-json' };
+    return { diagnostics: parseRuffTextDiagnostics(output), parseBasis: 'ruff-text' };
+  }
+  if (checkerLabel.startsWith('cargo check')) {
+    return { diagnostics: parseCargoJsonDiagnostics(output), parseBasis: 'cargo-json' };
+  }
+  if (checkerLabel.includes('clj-kondo')) {
+    return { diagnostics: parseCljKondoJsonDiagnostics(output), parseBasis: 'clj-kondo-json' };
+  }
+  return { diagnostics: parseHeuristicDiagnostics(output), parseBasis: 'heuristic' };
+}
+
+function parseTscDiagnostics(output: string): CheckerDiagnostic[] {
+  const diagnostics: CheckerDiagnostic[] = [];
+  const pattern = /^(.+?)\((\d+),(\d+)\):\s+error\s+(TS\d+):\s+(.+)$/gm;
+  for (const match of output.matchAll(pattern)) {
+    diagnostics.push({
+      file: match[1] ?? '',
+      line: Number(match[2]),
+      column: Number(match[3]),
+      code: match[4],
+      message: match[5] ?? '',
+      parseBasis: 'tsc',
+    });
+  }
+  return diagnostics;
+}
+
+function parseGoDiagnostics(output: string): CheckerDiagnostic[] {
+  const diagnostics: CheckerDiagnostic[] = [];
+  const pattern = /^(.+?):(\d+):(\d+):\s+(.+)$/gm;
+  for (const match of output.matchAll(pattern)) {
+    diagnostics.push({
+      file: match[1] ?? '',
+      line: Number(match[2]),
+      column: Number(match[3]),
+      message: match[4] ?? '',
+      parseBasis: 'go',
+    });
+  }
+  return diagnostics;
+}
+
+function parseRuffJsonDiagnostics(output: string): CheckerDiagnostic[] {
+  const raw = parseFirstJsonValue(output);
+  if (!Array.isArray(raw)) return [];
+  const diagnostics: CheckerDiagnostic[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const record = item as Record<string, unknown>;
+    const location = record['location'];
+    const locationRecord = location && typeof location === 'object' ? (location as Record<string, unknown>) : {};
+    const filename = typeof record['filename'] === 'string' ? record['filename'] : '';
+    const message = typeof record['message'] === 'string' ? record['message'] : '';
+    if (!filename && !message) continue;
+    diagnostics.push({
+      file: filename,
+      line: typeof locationRecord['row'] === 'number' ? locationRecord['row'] : undefined,
+      column: typeof locationRecord['column'] === 'number' ? locationRecord['column'] : undefined,
+      code: typeof record['code'] === 'string' ? record['code'] : undefined,
+      message,
+      parseBasis: 'ruff-json',
+    });
+  }
+  return diagnostics;
+}
+
+function parseRuffTextDiagnostics(output: string): CheckerDiagnostic[] {
+  const diagnostics: CheckerDiagnostic[] = [];
+  const pattern = /^(.+?):(\d+):(\d+):\s+([A-Z]\d{3})\s+(.+)$/gm;
+  for (const match of output.matchAll(pattern)) {
+    diagnostics.push({
+      file: match[1] ?? '',
+      line: Number(match[2]),
+      column: Number(match[3]),
+      code: match[4],
+      message: match[5] ?? '',
+      parseBasis: 'ruff-text',
+    });
+  }
+  return diagnostics;
+}
+
+function parseCargoJsonDiagnostics(output: string): CheckerDiagnostic[] {
+  const diagnostics: CheckerDiagnostic[] = [];
+  for (const line of output.split('\n')) {
+    if (!line.trim().startsWith('{')) continue;
+    const raw = parseJson(line);
+    if (!raw || typeof raw !== 'object') continue;
+    const record = raw as Record<string, unknown>;
+    if (record['reason'] !== 'compiler-message') continue;
+    const messageRecord = record['message'];
+    if (!messageRecord || typeof messageRecord !== 'object') continue;
+    const message = messageRecord as Record<string, unknown>;
+    const level = message['level'];
+    if (level !== 'error') continue;
+    const spans = Array.isArray(message['spans']) ? message['spans'] : [];
+    const primarySpan = spans.find(
+      (span): span is Record<string, unknown> =>
+        !!span && typeof span === 'object' && (span as Record<string, unknown>)['is_primary'] === true,
+    );
+    const codeRecord = message['code'];
+    diagnostics.push({
+      file: typeof primarySpan?.['file_name'] === 'string' ? primarySpan['file_name'] : '',
+      line: typeof primarySpan?.['line_start'] === 'number' ? primarySpan['line_start'] : undefined,
+      column: typeof primarySpan?.['column_start'] === 'number' ? primarySpan['column_start'] : undefined,
+      code:
+        codeRecord &&
+        typeof codeRecord === 'object' &&
+        typeof (codeRecord as Record<string, unknown>)['code'] === 'string'
+          ? String((codeRecord as Record<string, unknown>)['code'])
+          : undefined,
+      message: typeof message['message'] === 'string' ? message['message'] : '',
+      parseBasis: 'cargo-json',
+    });
+  }
+  return diagnostics;
+}
+
+function parseCljKondoJsonDiagnostics(output: string): CheckerDiagnostic[] {
+  const raw = parseFirstJsonValue(output);
+  if (!raw || typeof raw !== 'object') return [];
+  const findings = (raw as Record<string, unknown>)['findings'];
+  if (!Array.isArray(findings)) return [];
+  const diagnostics: CheckerDiagnostic[] = [];
+  for (const finding of findings) {
+    if (!finding || typeof finding !== 'object') continue;
+    const record = finding as Record<string, unknown>;
+    const level = record['level'];
+    if (level !== 'error') continue;
+    diagnostics.push({
+      file: typeof record['filename'] === 'string' ? record['filename'] : '',
+      line: typeof record['row'] === 'number' ? record['row'] : undefined,
+      column: typeof record['col'] === 'number' ? record['col'] : undefined,
+      code: typeof record['type'] === 'string' ? record['type'] : undefined,
+      message: typeof record['message'] === 'string' ? record['message'] : '',
+      parseBasis: 'clj-kondo-json',
+    });
+  }
+  return diagnostics;
+}
+
+function parseHeuristicDiagnostics(output: string): CheckerDiagnostic[] {
+  return output
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => /\berror\b/i.test(line));
-  if (result.error && rawErrors.length === 0) rawErrors.push(String(result.error));
-  return { ok: false, exitCode: result.status, rawErrors, outputTail: outputTail(output) };
+    .filter((line) => /\berror\b/i.test(line))
+    .map((line) => ({ file: '', message: line, parseBasis: 'heuristic' as const }));
+}
+
+function formatDiagnostic(diagnostic: CheckerDiagnostic): string {
+  const location =
+    diagnostic.file.length > 0
+      ? `${diagnostic.file}${diagnostic.line ? `:${diagnostic.line}` : ''}${diagnostic.column ? `:${diagnostic.column}` : ''}: `
+      : '';
+  const code = diagnostic.code ? `${diagnostic.code} ` : '';
+  return `${location}${code}${diagnostic.message}`.trim();
+}
+
+function parseFirstJsonValue(output: string): unknown {
+  const trimmed = output.trim();
+  if (trimmed.length === 0) return null;
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) return parseJson(trimmed);
+  const jsonStart = Math.min(...[trimmed.indexOf('{'), trimmed.indexOf('[')].filter((index) => index >= 0));
+  return Number.isFinite(jsonStart) ? parseJson(trimmed.slice(jsonStart)) : null;
+}
+
+function parseJson(input: string): unknown {
+  try {
+    return JSON.parse(input) as unknown;
+  } catch {
+    return null;
+  }
 }
 
 function outputTail(output: string, limit = 10): string[] {

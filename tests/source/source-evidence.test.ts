@@ -1,12 +1,17 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { sourceEvidence } from '../../src/source/source-evidence.js';
 import { ScipDatabase } from '../../src/storage/db.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
 describe('source evidence facade', () => {
+  afterEach(() => {
+    vi.doUnmock('../../src/source/ast/ast-runtime.js');
+    vi.resetModules();
+  });
+
   it('collects requested source evidence for one file or a batch', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-source-evidence-'));
     try {
@@ -66,6 +71,44 @@ describe('source evidence facade', () => {
         const batch = evidence.forFiles(['src/sample.ts', 'src/barrel.ts'], { text: true });
         expect([...batch.keys()]).toEqual(['src/sample.ts', 'src/barrel.ts']);
         expect(batch.get('src/barrel.ts')?.text).toContain('targetValue');
+      } finally {
+        db.close();
+      }
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('discloses when requested source facts are unavailable because the parser cannot load', async () => {
+    vi.resetModules();
+    vi.doMock('../../src/source/ast/ast-runtime.js', () => ({
+      parseAstSource: () => null,
+    }));
+    const { sourceEvidence: mockedSourceEvidence } = await import('../../src/source/source-evidence.js');
+
+    const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-source-evidence-unavailable-'));
+    try {
+      const projectRoot = join(tempDir, 'project');
+      const dbPath = join(tempDir, 'index.db');
+      writeFixtureFiles(projectRoot, {
+        'src/sample.ts': 'export function greet(name: string) { return name; }\n',
+      });
+      evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/sample.ts').write();
+
+      const db = new ScipDatabase({
+        projectRoot,
+        dbPath,
+        indexPath: join(tempDir, 'index.scip'),
+      });
+      try {
+        const sample = mockedSourceEvidence(db).forFile('src/sample.ts', { facts: true, identifiers: true });
+
+        expect(sample.facts).toBeNull();
+        expect(sample.identifiers).toBeUndefined();
+        expect(sample.sourceFactsUnavailable).toEqual({
+          language: 'typescript',
+          reason: 'parser-unavailable',
+        });
       } finally {
         db.close();
       }

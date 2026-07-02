@@ -368,6 +368,7 @@ function renderHealthAxes(report: HealthReport): void {
     console.log(
       `    Validation:           flagged files fix-density ${v.flaggedFixDensity} vs baseline ${v.baselineFixDensity} (${ratio})`,
     );
+    console.log(`      fix-commit signal: subject-keyword heuristic over ${v.validationBasis.commitsScanned} commits`);
   }
 }
 

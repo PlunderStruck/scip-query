@@ -19,7 +19,7 @@ interface QueryConstructor {
 let parserCtor: (ParserCtor & { Query: QueryConstructor }) | null = null;
 let parserUnavailable = false;
 
-function getParserCtor(): (ParserCtor & { Query: QueryConstructor }) | null {
+export function getParserCtor(): (ParserCtor & { Query: QueryConstructor }) | null {
   if (parserUnavailable) return null;
   if (parserCtor) return parserCtor;
   try {
@@ -28,6 +28,24 @@ function getParserCtor(): (ParserCtor & { Query: QueryConstructor }) | null {
   } catch {
     parserUnavailable = true;
     return null;
+  }
+}
+
+export type LanguageRuntimeProbe = 'ast' | 'reader' | 'regex' | 'unavailable';
+
+export function probeAstLanguageRuntime(lang: AstLanguage): LanguageRuntimeProbe {
+  if (lang === 'clojure') return 'unavailable';
+  const Ctor = getParserCtor();
+  if (!Ctor) return 'unavailable';
+  const grammar = loadGrammar(lang);
+  if (!grammar) return 'unavailable';
+  try {
+    const parser = new Ctor();
+    parser.setLanguage(grammar);
+    return 'ast';
+  } catch {
+    failedLanguages.add(lang);
+    return 'unavailable';
   }
 }
 

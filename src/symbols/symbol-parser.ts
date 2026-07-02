@@ -308,7 +308,15 @@ export function isCallableSymbol(raw: string): boolean {
 /** True when the symbol represents a callable/function-like definition. */
 export function isFunctionLikeSymbol(raw: string): boolean {
   const suffix = leafSuffix(raw);
-  return suffix === 'method' || suffix === 'term';
+  if (suffix === 'method') return true;
+  if (suffix !== 'term') return false;
+  if (raw.endsWith('().')) return true;
+  if (!raw.startsWith('scip-typescript ')) return true;
+  // scip-typescript plain terms split two ways: members of a type
+  // (`Parent#leaf.`) are properties/fields and never callable, while
+  // file-level terms include arrow-function consts, which detectors like
+  // unused-params must treat as callable.
+  return !/#[A-Za-z0-9_$]+\.$/.test(raw);
 }
 
 /** True when the symbol is a namespace/module/file surface rather than a callable or type. */

@@ -8,6 +8,8 @@ import { createFileEvidenceProduct } from '../../storage/evidence-products.js';
 import { markdownCitationContext } from './doc-citation-context.js';
 import { matchingDocTerms } from './doc-terms.js';
 import { profileEnabled, profileSpan } from '../../instrumentation/profile.js';
+import { docReferencePolicy } from '../impact/diff-gate-doc-policy.js';
+import type { DocCitationKind } from '../impact/diff-gate-types.js';
 
 export type DocDriftIntent = 'current-guidance' | 'historical-note' | 'unknown';
 export type DocDriftActionTier = 'direct' | 'signal' | 'support';
@@ -32,12 +34,19 @@ export interface DocDriftSubject {
   docIntentReasons: string[];
   /** Nearby doc text that gives the file citation its meaning, when available. */
   citationContexts?: string[];
+  /** Citation kind from the shared doc-reference policy, when text cites the file. */
+  citationKind?: DocCitationKind;
+  citationKindReasons?: string[];
+  /** Line suffixes from citations like `src/file.ts:42`; recorded, not drift-checked yet. */
+  citedLines?: number[];
 }
 
 export interface DocFileCitation {
   file: string;
   /** Bounded nearby doc text for each citation of this file. */
   contexts: string[];
+  /** Optional line suffixes cited for this file; recorded, not drift-checked yet. */
+  lineReferences?: number[];
 }
 
 export interface DocDriftFinding {
@@ -73,11 +82,13 @@ interface DocDriftScanIndex {
 interface DocPathEvidence {
   candidates: string[];
   contextsByCandidate: Map<string, string[]>;
+  lineReferencesByCandidate: Map<string, number[]>;
 }
 
 interface SerializedDocPathEvidence {
   candidates: string[];
   contextsByCandidate: Array<[string, string[]]>;
+  lineReferencesByCandidate?: Array<[string, number[]]>;
 }
 
 const DOC_PATH_EVIDENCE_PRODUCT = createFileEvidenceProduct<DocPathEvidence>({
@@ -99,7 +110,7 @@ export function isArchivalDoc(path: string): boolean {
 }
 const MIN_COUPLING = 3;
 /** Path-shaped tokens with a code-ish extension — what docs use to cite files. */
-const PATH_REFERENCE_PATTERN = /[A-Za-z0-9_@-]+(?:\/[A-Za-z0-9_.@-]+)+\.[A-Za-z0-9]{1,6}\b/g;
+const PATH_REFERENCE_PATTERN = /([A-Za-z0-9_@-]+(?:\/[A-Za-z0-9_.@-]+)+\.[A-Za-z0-9]{1,6})(?::([1-9][0-9]*))?\b/g;
 
 /**
  * Standards/docs drift, from two evidence sources:
@@ -142,20 +153,22 @@ export function docDrift(
       scan.trackedBySuffix,
       scan.everSeenInHistory,
     );
-    const citationsByFile = new Map(citations.map((citation) => [citation.file, citation.contexts]));
+    const citationsByFile = new Map(citations.map((citation) => [citation.file, citation]));
     for (const referenced of resolved) {
       if (referenced === docFile || DOC_FILE_PATTERN.test(referenced)) continue;
       const changesSince = (scan.changeTimes.get(referenced) ?? []).filter(
         (timestamp) => timestamp > docLastChangedAt,
       ).length;
       if (changesSince === 0) continue;
+      const citation = citationsByFile.get(referenced);
       subjects.set(referenced, {
         file: referenced,
         evidence: 'reference',
         coChanges: 0,
         changesSinceDocUpdate: changesSince,
-        ...docDriftSubjectMetadata('reference', docIntent),
-        citationContexts: citationsByFile.get(referenced),
+        ...docDriftSubjectMetadata('reference', docIntent, citation?.contexts),
+        citationContexts: citation?.contexts,
+        citedLines: citation?.lineReferences,
       });
     }
 
@@ -171,7 +184,7 @@ export function docDrift(
       if (existing) {
         existing.evidence = 'both';
         existing.coChanges = together;
-        Object.assign(existing, docDriftSubjectMetadata('both', docIntent));
+        Object.assign(existing, docDriftSubjectMetadata('both', docIntent, existing.citationContexts));
       } else {
         subjects.set(codeFile, {
           file: codeFile,
@@ -267,16 +280,32 @@ function classifyDocDriftIntent(db: ScipDatabase, docFile: string): DocDriftInte
 function docDriftSubjectMetadata(
   evidence: DocDriftSubject['evidence'],
   intent: DocDriftIntentClassification,
-): Pick<DocDriftSubject, 'actionTier' | 'docIntent' | 'docIntentReasons'> {
+  citationContexts: readonly string[] = [],
+): Pick<DocDriftSubject, 'actionTier' | 'docIntent' | 'docIntentReasons' | 'citationKind' | 'citationKindReasons'> {
+  const citationClassification =
+    evidence === 'co-change' || citationContexts.length === 0
+      ? null
+      : docReferencePolicy.classifyCitation(citationContexts);
   return {
-    actionTier: docDriftActionTier(evidence, intent.docIntent),
+    actionTier: docDriftActionTier(evidence, intent.docIntent, citationClassification?.actionTier),
     docIntent: intent.docIntent,
     docIntentReasons: intent.reasons,
+    ...(citationClassification
+      ? {
+          citationKind: citationClassification.citationKind,
+          citationKindReasons: citationClassification.reasons,
+        }
+      : {}),
   };
 }
 
-function docDriftActionTier(evidence: DocDriftSubject['evidence'], intent: DocDriftIntent): DocDriftActionTier {
+function docDriftActionTier(
+  evidence: DocDriftSubject['evidence'],
+  intent: DocDriftIntent,
+  citationTier?: DocDriftActionTier,
+): DocDriftActionTier {
   if (intent === 'historical-note') return 'support';
+  if (citationTier) return citationTier;
   return evidence === 'co-change' ? 'signal' : 'direct';
 }
 
@@ -385,6 +414,9 @@ export function docsCitingFiles(
             contexts: uniqueCitationContexts(
               [...fileCandidates].flatMap((candidate) => contextsByCandidate.get(candidate) ?? []),
             ).slice(0, 3),
+            lineReferences: uniqueLineReferences(
+              [...fileCandidates].flatMap((candidate) => pathEvidence.lineReferencesByCandidate.get(candidate) ?? []),
+            ),
           }))
           .filter((citation) => citation.contexts.length > 0);
         const cited = [...citedByCandidate.keys()];
@@ -490,14 +522,24 @@ function extractFileReferences(
   if (!pathEvidence) return { resolved, broken: [], citations: [] };
   const candidates = pathEvidence.candidates;
   const contextsByCandidate = pathEvidence.contextsByCandidate;
+  const lineReferencesByCandidate = pathEvidence.lineReferencesByCandidate;
   const contextsByFile = new Map<string, string[]>();
+  const lineReferencesByFile = new Map<string, number[]>();
 
   const recordCitation = (file: string, candidate: string): void => {
     const contexts = contextsByCandidate.get(candidate);
-    if (!contexts || contexts.length === 0) return;
-    const bucket = contextsByFile.get(file) ?? [];
-    bucket.push(...contexts);
-    contextsByFile.set(file, uniqueCitationContexts(bucket).slice(0, 3));
+    if (contexts && contexts.length > 0) {
+      const bucket = contextsByFile.get(file) ?? [];
+      bucket.push(...contexts);
+      contextsByFile.set(file, uniqueCitationContexts(bucket).slice(0, 3));
+    }
+    const lineReferences = lineReferencesByCandidate.get(candidate);
+    if (lineReferences && lineReferences.length > 0) {
+      lineReferencesByFile.set(
+        file,
+        uniqueLineReferences([...(lineReferencesByFile.get(file) ?? []), ...lineReferences]),
+      );
+    }
   };
 
   for (const candidate of candidates) {
@@ -520,7 +562,11 @@ function extractFileReferences(
   return {
     resolved,
     broken: [...broken],
-    citations: [...contextsByFile].map(([file, contexts]) => ({ file, contexts })),
+    citations: [...contextsByFile].map(([file, contexts]) => ({
+      file,
+      contexts,
+      lineReferences: lineReferencesByFile.get(file),
+    })),
   };
 }
 
@@ -566,11 +612,17 @@ function extractDocPathEvidence(content: string): DocPathEvidence {
   const lines = content.split(/\r?\n/);
   const candidateSet = new Set<string>();
   const contexts = new Map<string, string[]>();
+  const lineReferences = new Map<string, number[]>();
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
     const line = lines[lineIndex] ?? '';
     for (const match of line.matchAll(PATH_REFERENCE_PATTERN)) {
-      const candidate = match[0].replace(/^\.?\//, '');
+      const candidate = (match[1] ?? '').replace(/^\.?\//, '');
+      if (candidate.length === 0) continue;
       candidateSet.add(candidate);
+      const citedLine = match[2] ? Number(match[2]) : null;
+      if (citedLine !== null && Number.isSafeInteger(citedLine)) {
+        lineReferences.set(candidate, uniqueLineReferences([...(lineReferences.get(candidate) ?? []), citedLine]));
+      }
       const context = markdownCitationContext(lines, lineIndex);
       if (context.length === 0) continue;
       const bucket = contexts.get(candidate) ?? [];
@@ -578,13 +630,14 @@ function extractDocPathEvidence(content: string): DocPathEvidence {
       contexts.set(candidate, uniqueCitationContexts(bucket).slice(0, 3));
     }
   }
-  return { candidates: [...candidateSet], contextsByCandidate: contexts };
+  return { candidates: [...candidateSet], contextsByCandidate: contexts, lineReferencesByCandidate: lineReferences };
 }
 
 function serializeDocPathEvidence(evidence: DocPathEvidence): string {
   const serialized: SerializedDocPathEvidence = {
     candidates: evidence.candidates,
     contextsByCandidate: [...evidence.contextsByCandidate.entries()],
+    lineReferencesByCandidate: [...evidence.lineReferencesByCandidate.entries()],
   };
   return JSON.stringify(serialized);
 }
@@ -595,11 +648,34 @@ function deserializeDocPathEvidence(payload: string): DocPathEvidence | null {
     if (!isRecord(raw)) return null;
     const candidates = stringArray(raw['candidates']);
     const contextsByCandidate = stringTuples(raw['contextsByCandidate']);
+    const lineReferencesByCandidate = numberTuples(raw['lineReferencesByCandidate']);
     if (!candidates || !contextsByCandidate) return null;
-    return { candidates, contextsByCandidate: new Map(contextsByCandidate) };
+    return {
+      candidates,
+      contextsByCandidate: new Map(contextsByCandidate),
+      lineReferencesByCandidate: new Map(lineReferencesByCandidate ?? []),
+    };
   } catch {
     return null;
   }
+}
+
+function numberTuples(value: unknown): Array<[string, number[]]> | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+  const tuples: Array<[string, number[]]> = [];
+  for (const item of value) {
+    if (!Array.isArray(item) || item.length !== 2 || typeof item[0] !== 'string' || !Array.isArray(item[1])) {
+      return null;
+    }
+    const numbers: number[] = [];
+    for (const raw of item[1]) {
+      if (typeof raw !== 'number' || !Number.isSafeInteger(raw)) return null;
+      numbers.push(raw);
+    }
+    tuples.push([item[0], uniqueLineReferences(numbers)]);
+  }
+  return tuples;
 }
 
 function stringTuples(value: unknown): Array<[string, string[]]> | null {
@@ -621,6 +697,10 @@ function uniqueCitationContexts(values: readonly string[]): string[] {
     contexts.push(value);
   }
   return contexts;
+}
+
+function uniqueLineReferences(values: readonly number[]): number[] {
+  return [...new Set(values)].sort((left, right) => left - right);
 }
 
 function citationContextsOverlap(left: string, right: string): boolean {

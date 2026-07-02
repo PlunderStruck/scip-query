@@ -1,5 +1,5 @@
 import ignore from 'ignore';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 /**
@@ -15,21 +15,7 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 // relative paths are one boundary policy.
 export function createGitignoreFilter(projectRoot: string): PathFilter {
   const ig = ignore();
-  let loaded = false;
-
-  // Walk up from project root looking for .gitignore files
-  // (nested .gitignore files apply to their subdirectory)
-  const gitignorePaths = findGitignoreFiles(projectRoot);
-
-  for (const gitignorePath of gitignorePaths) {
-    try {
-      const content = readFileSync(gitignorePath, 'utf-8');
-      ig.add(content);
-      loaded = true;
-    } catch {
-      // Skip unreadable files
-    }
-  }
+  const loaded = loadGitignoreFiles(projectRoot, ig);
 
   // If no .gitignore found, use universal defaults
   if (!loaded) {
@@ -53,35 +39,86 @@ export interface PathFilter {
 }
 
 /**
- * Find all .gitignore files from project root (including nested ones).
- * We look at the root .gitignore and any in immediate subdirectories
- * but don't recursively walk the entire tree (too expensive for large repos).
+ * Load .gitignore files above and below the project root. Ancestor ignore
+ * files are added as-is; nested ignore files are prefixed so their rules apply
+ * relative to the directory that owns the file, matching git's interpretation.
  */
-function findGitignoreFiles(projectRoot: string): string[] {
-  const files: string[] = [];
+function loadGitignoreFiles(projectRoot: string, ig: ReturnType<typeof ignore>): boolean {
+  const loaded = new Set<string>();
 
-  // Root .gitignore
-  const rootGitignore = join(projectRoot, '.gitignore');
-  if (existsSync(rootGitignore)) {
-    files.push(rootGitignore);
-  }
+  const addGitignore = (gitignorePath: string, relativeDir: string): void => {
+    if (loaded.has(gitignorePath) || !existsSync(gitignorePath)) return;
+    try {
+      const content = readFileSync(gitignorePath, 'utf-8');
+      ig.add(relativeDir ? prefixGitignorePatterns(content, relativeDir) : content);
+      loaded.add(gitignorePath);
+    } catch {
+      // Skip unreadable files.
+    }
+  };
 
   // Also check parent directories (for monorepo setups where .gitignore
   // is at the repo root but the project is in a subdirectory)
   let dir = dirname(projectRoot);
   let depth = 0;
   while (dir !== dirname(dir) && depth < 5) {
-    const parentGitignore = join(dir, '.gitignore');
-    if (existsSync(parentGitignore)) {
-      files.push(parentGitignore);
-    }
+    addGitignore(join(dir, '.gitignore'), '');
     // Stop if we find a .git directory — that's the repo root
     if (existsSync(join(dir, '.git'))) break;
     dir = dirname(dir);
     depth++;
   }
 
-  return files;
+  walkProjectGitignores(projectRoot, '', ig, addGitignore);
+  return loaded.size > 0;
+}
+
+function walkProjectGitignores(
+  projectRoot: string,
+  relativeDir: string,
+  ig: ReturnType<typeof ignore>,
+  addGitignore: (gitignorePath: string, relativeDir: string) => void,
+): void {
+  const absoluteDir = relativeDir ? join(projectRoot, relativeDir) : projectRoot;
+  addGitignore(join(absoluteDir, '.gitignore'), relativeDir);
+
+  let entries;
+  try {
+    entries = readdirSync(absoluteDir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name === '.git') continue;
+    const childRelative = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+    if (safeIgnores(ig, projectRoot, `${childRelative}/`)) continue;
+    walkProjectGitignores(projectRoot, childRelative, ig, addGitignore);
+  }
+}
+
+function prefixGitignorePatterns(content: string, relativeDir: string): string {
+  const prefix = relativeDir.replaceAll('\\', '/').replace(/\/+$/, '');
+  return content
+    .split(/\r?\n/)
+    .map((line) => prefixGitignorePattern(line, prefix))
+    .join('\n');
+}
+
+function prefixGitignorePattern(line: string, prefix: string): string {
+  const trimmedLeft = line.trimStart();
+  if (!trimmedLeft || trimmedLeft.startsWith('#')) return line;
+  const indent = line.slice(0, line.length - trimmedLeft.length);
+  const negated = trimmedLeft.startsWith('!');
+  const pattern = negated ? trimmedLeft.slice(1) : trimmedLeft;
+  if (!pattern || pattern.startsWith('#')) return line;
+
+  const anchored = pattern.startsWith('/');
+  const body = anchored ? pattern.slice(1) : pattern;
+  const directoryOnly = body.endsWith('/');
+  const significantBody = directoryOnly ? body.slice(0, -1) : body;
+  const prefixed = significantBody.includes('/') || anchored ? `${prefix}/${body}` : `${prefix}/**/${body}`;
+  return `${indent}${negated ? '!' : ''}${prefixed}`;
 }
 
 /**

@@ -10,6 +10,7 @@ import {
 import {
   behaviorSimilarity,
   classifyFrontendBehaviorEvidence,
+  overlapGate,
   sortedTokens,
   tokenValues,
   type FrontendBehaviorActionTier,
@@ -235,12 +236,23 @@ function hasMeaningfulBehaviorOverlap(shared: ReadonlySet<string>): boolean {
   const reusableHookBehavior = composableBehavior + storeBehavior;
   const namedBehavior =
     reusableHookBehavior + requestBehavior + lifecycleBehavior + functionBehavior + supportingBehavior;
-  return (
-    (requestBehavior >= 1 && namedBehavior >= 4) ||
-    (lifecycleBehavior >= 1 && functionBehavior >= 2 && namedBehavior >= 4) ||
-    (reusableHookBehavior >= 2 && (requestBehavior >= 1 || functionBehavior >= 2) && namedBehavior >= 5) ||
-    (functionBehavior >= 2 && reactivityBehavior >= 1 && namedBehavior >= 4)
-  );
+  return overlapGate(
+    [
+      { name: 'requests', count: requestBehavior },
+      { name: 'lifecycle', count: lifecycleBehavior },
+      { name: 'functions', count: functionBehavior },
+      { name: 'reusableHooks', count: reusableHookBehavior },
+      { name: 'reactivity', count: reactivityBehavior },
+      { name: 'namedBehavior', count: namedBehavior },
+    ],
+    [
+      { min: { requests: 1, namedBehavior: 4 }, reason: 'shared request workflow' },
+      { min: { lifecycle: 1, functions: 2, namedBehavior: 4 }, reason: 'shared lifecycle workflow' },
+      { min: { reusableHooks: 2, requests: 1, namedBehavior: 5 }, reason: 'shared reusable Vue hooks and requests' },
+      { min: { reusableHooks: 2, functions: 2, namedBehavior: 5 }, reason: 'shared reusable Vue hooks and functions' },
+      { min: { functions: 2, reactivity: 1, namedBehavior: 4 }, reason: 'shared reactive functions' },
+    ],
+  ).pass;
 }
 
 function behaviorReason(parts: {

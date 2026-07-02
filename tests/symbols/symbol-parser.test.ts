@@ -101,6 +101,11 @@ describe('parseSymbol', () => {
         suffix: 'term',
       });
     }
+    expect(isFunctionLikeSymbol(raw)).toBe(false);
+  });
+
+  it('keeps non-TypeScript term symbols function-like for source-backed languages', () => {
+    expect(isFunctionLikeSymbol('scip-clojure deps.edn demo . `demo.core`/greet.')).toBe(true);
   });
 
   it('handles parameter descriptors', () => {

@@ -21,7 +21,12 @@ import { importedBy, imports, unusedImports } from '../../../src/queries/navigat
 import { members } from '../../../src/queries/navigation/members.js';
 import { outline } from '../../../src/queries/navigation/outline.js';
 import { refs } from '../../../src/queries/navigation/refs.js';
-import { similar, similarAll, similarAllCount } from '../../../src/queries/cleanup/similar.js';
+import {
+  similar,
+  similarAll,
+  similarAllCount,
+  similarConsolidationPlan,
+} from '../../../src/queries/cleanup/similar.js';
 import { staleAbstractions } from '../../../src/queries/cleanup/stale-abstractions.js';
 import { symbols } from '../../../src/queries/navigation/symbols.js';
 import { system } from '../../../src/queries/navigation/system.js';
@@ -147,6 +152,7 @@ describe('command accuracy fixes', () => {
     };
     const similarResults = similarAll(db, similarOptions);
     const similarCount = similarAllCount(db, similarOptions);
+    const plan = similarConsolidationPlan(db, 'src:flow:alpha()', 'src:flow:beta()');
     const convergenceResult = convergence(db, 'src:flow:alpha()', 'src:flow:beta()');
 
     expect(similarCount).toBe(similarResults.length);
@@ -154,9 +160,10 @@ describe('command accuracy fixes', () => {
       false,
     );
     expect(convergenceResult).not.toBeNull();
-    expect(convergenceResult!.sharedCallees).toEqual(
-      expect.arrayContaining(['src:flow:sharedOne()', 'src:flow:sharedTwo()']),
-    );
+    expect(plan).not.toBeNull();
+    expect(convergenceResult!.similarity).toBe(plan!.similarity);
+    expect(convergenceResult!.sharedCallees).toEqual(plan!.sharedEvidence);
+    expect(plan!.similarityBasis).toMatch(/^(callees|source-tokens)$/);
   });
 
   it('labels source-token similarity separately from callee similarity', () => {
@@ -386,22 +393,21 @@ describe('command accuracy fixes', () => {
     }
   });
 
-  it('does not overstate consolidation when both symbols have no tracked callees', () => {
-    const convergenceResult = convergence(db, 'reindex', 'getIndexerConfig');
+  it('does not manufacture a consolidation score when similar has no pair evidence', () => {
+    const plan = similarConsolidationPlan(db, 'reindex', 'getIndexerConfig');
 
-    expect(convergenceResult).not.toBeNull();
-    expect(convergenceResult!.similarity).toBe(0);
-    expect(convergenceResult!.consolidationStrategy).toContain('no callee-pattern evidence');
-    expect(convergenceResult!.consolidationStrategy).not.toContain('replace the other directly');
+    expect(plan).toBeNull();
   });
 
-  it('keeps convergence conservative when identical callees do not prove equivalence', () => {
+  it('keeps the similar plan conservative when identical evidence does not prove equivalence', () => {
     const convergenceResult = convergence(db, 'isWorkerEntrySurface', 'isBarrelFile');
+    const plan = similarConsolidationPlan(db, 'isWorkerEntrySurface', 'isBarrelFile');
 
     expect(convergenceResult).not.toBeNull();
-    expect(convergenceResult!.similarity).toBe(1);
-    expect(convergenceResult!.sharedCallees).toEqual(['src:predicates:normalizePath()']);
-    expect(convergenceResult!.consolidationStrategy).toContain('do not prove interchangeable semantics');
+    expect(plan).not.toBeNull();
+    expect(convergenceResult!.similarity).toBe(plan!.similarity);
+    expect(convergenceResult!.sharedCallees).toEqual(plan!.sharedEvidence);
+    expect(convergenceResult!.consolidationStrategy).toContain('verify signatures');
     expect(convergenceResult!.consolidationStrategy).not.toContain('replace the other directly');
   });
 

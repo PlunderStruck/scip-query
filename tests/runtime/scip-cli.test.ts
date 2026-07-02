@@ -143,7 +143,7 @@ describe('scip CLI helpers', () => {
     printScipInstallInstructions();
 
     const output = log.mock.calls.flat().join('\n');
-    expect(output).toContain('Windows installs should include a managed scip.exe');
+    expect(output).toContain('Windows npm installs do not bundle scip.exe');
     expect(output).toContain('npm run build:scip-windows');
     expect(output).toContain('https://github.com/sourcegraph/scip/releases/tag/v0.8.1');
     expect(output).not.toContain('scip-windows-amd64.zip');

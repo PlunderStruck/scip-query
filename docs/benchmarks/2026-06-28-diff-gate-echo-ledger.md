@@ -257,3 +257,9 @@ The `src/queries/cleanup/similar.ts` citations remain accurate after the health
 cleanup. This pass only adds accepted health-signal comments around
 intentionally parallel similarity paths; callee fingerprints, source-shape
 fallback, and diff-gate echo behavior are unchanged.
+
+2026-07-01 round-2 remediation note: the `src/queries/cleanup/similar.ts`
+behavioral citation remains accurate after `similar --plan` became the
+consolidation-preview path. Echo still compares the same implementation
+evidence and this benchmark remains a historical record of the diff-gate echo
+behavior measured here.

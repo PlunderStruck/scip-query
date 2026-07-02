@@ -69,6 +69,7 @@ describe('health report scoring', () => {
             ],
           },
           fileStats: {},
+          commitsScanned: 42,
         },
       }),
     );
@@ -95,5 +96,27 @@ describe('health report scoring', () => {
         }),
       ]),
     );
+  });
+
+  it('discloses fix-commit validation as a subject regex heuristic', () => {
+    const report = buildHealthReport(
+      emptyAnalyses({
+        dead: { count: 1, loc: 3, files: ['src/dead.ts'] },
+        gitEvidence: {
+          amplification: null,
+          hiddenCoupling: { pairCount: 0, scoreCount: 0, top: [] },
+          fileStats: {
+            'src/dead.ts': { changes: 2, fixChanges: 1 },
+            'src/live.ts': { changes: 3, fixChanges: 1 },
+          },
+          commitsScanned: 17,
+        },
+      }),
+    );
+
+    expect(report.validation?.validationBasis).toEqual({
+      method: 'subject-regex',
+      commitsScanned: 17,
+    });
   });
 });

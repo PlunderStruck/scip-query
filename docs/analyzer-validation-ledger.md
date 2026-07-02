@@ -307,3 +307,9 @@ The `diffGate()` and health citations remain accurate after the Git evidence
 product migration. Default diff-gate still runs the same check family, and
 health still reports the same Git evidence summary; both paths now read Git
 history through `gitEvidenceProduct()`.
+
+2026-07-01 round-2 remediation note: the `src/queries/health/health.ts`
+configuration example remains current after the health command added
+validation-basis disclosure and parser-unavailable reporting. The validation
+ledger's health examples still cite the command surface that computes and
+renders those analyzer signals.

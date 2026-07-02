@@ -69,6 +69,7 @@ export interface HealthValidation {
   ratio: number | null;
   /** Per-detector lift — which detectors actually predict fixes, auditable. */
   byCategory: Record<string, { flaggedFiles: number; fixDensity: number; lift: number | null }>;
+  validationBasis: { method: 'subject-regex'; commitsScanned: number };
 }
 
 // scip-query: ignore-stale — public report envelope returned by health() and
@@ -278,6 +279,10 @@ function buildHealthValidation(analyses: HealthAnalyses): HealthValidation | nul
     baselineFixDensity,
     ratio: flagged.size > 0 && baselineFixDensity > 0 ? round2(flaggedFixDensity / baselineFixDensity) : null,
     byCategory,
+    validationBasis: {
+      method: 'subject-regex',
+      commitsScanned: analyses.gitEvidence?.commitsScanned ?? 0,
+    },
   };
 }
 

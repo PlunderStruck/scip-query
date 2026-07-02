@@ -14,14 +14,14 @@ export { outline } from './navigation/outline.js';
 export { members } from './navigation/members.js';
 export { fanIn, fanOut, topFanIn, topFanOut } from './graph/fan.js';
 export { coupling, topCoupling } from './graph/coupling.js';
-export { cycles } from './graph/cycles.js';
+export { cycles, cycleSummary } from './graph/cycles.js';
 export { bottlenecks } from './graph/bottlenecks.js';
 export { isolated } from './cleanup/isolated.js';
 export { byKind, kindCounts } from './navigation/by-kind.js';
 export { deepChains } from './graph/deep-chains.js';
 export { hierarchy } from './navigation/hierarchy.js';
 export { callGraph } from './navigation/call-graph.js';
-export { similar, similarAll, similarAllCount } from './cleanup/similar.js';
+export { similar, similarAll, similarAllCount, similarConsolidationPlan } from './cleanup/similar.js';
 export { similarFiles } from './cleanup/similar-files.js';
 export { reactComponentDuplicates } from './frontend/react-component-duplicates.js';
 export { reactHookCandidates } from './frontend/react-hook-candidates.js';
@@ -76,7 +76,7 @@ export type { OutlineNode } from './navigation/outline.js';
 export type { MemberResult } from './navigation/members.js';
 export type { FanResult } from './graph/fan.js';
 export type { CouplingResult } from './graph/coupling.js';
-export type { CycleResult } from './graph/cycles.js';
+export type { CycleResult, CycleSummary } from './graph/cycles.js';
 export type { BottleneckResult } from './graph/bottlenecks.js';
 export type { IsolatedResult } from './cleanup/isolated.js';
 export type { ByKindResult } from './navigation/by-kind.js';
@@ -89,7 +89,12 @@ export type { PassthroughCandidate } from './cleanup/passthrough-candidates.js';
 export type { StaleAbstraction, StaleAbstractionActionTier, StalenessKind } from './cleanup/stale-abstractions.js';
 export type { UnusedParamsFinding } from './cleanup/unused-params.js';
 export type { ComplexityHotspot } from './quality/complexity-hotspots.js';
-export type { SimilarActionTier, SimilarEvidenceClass, SimilarSymbolResult } from './cleanup/similar.js';
+export type {
+  SimilarActionTier,
+  SimilarConsolidationPlan,
+  SimilarEvidenceClass,
+  SimilarSymbolResult,
+} from './cleanup/similar.js';
 export type { SimilarFileResult } from './cleanup/similar-files.js';
 export type { ReactComponentDuplicateResult } from './frontend/react-component-duplicates.js';
 export type {

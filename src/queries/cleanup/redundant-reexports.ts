@@ -105,7 +105,8 @@ function findScipRedundantReexports(db: ScipDatabase, scope?: string): Redundant
 }
 
 function loadScipReexportRows(db: ScipDatabase, scope?: string): ScipReexportRow[] {
-  const scopeFilter = scope ? `AND barrel_d.relative_path LIKE '%${scope}%'` : '';
+  const scopeFilter = scope ? `AND barrel_d.relative_path LIKE ?` : '';
+  const scopeParams = scope ? [`%${scope}%`] : [];
 
   // Step 1 + 2: Find all barrel files and symbols they re-export.
   // A re-export is a symbol that:
@@ -143,6 +144,7 @@ function loadScipReexportRows(db: ScipDatabase, scope?: string): ScipReexportRow
       AND gs.symbol LIKE '%().'
       ${scopeFilter}
     ORDER BY barrel_d.relative_path, gs.symbol`,
+    ...scopeParams,
   );
 }
 

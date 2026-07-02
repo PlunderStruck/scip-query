@@ -8,4 +8,5 @@ dist/
 *.db-journal
 .DS_Store
 coverage/
+reports/
 .env

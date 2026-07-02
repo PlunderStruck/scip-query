@@ -69,7 +69,7 @@ export function vueBlockLineCount(block: VueSfcResolvedBlock | null | undefined)
   return block.body.split('\n').length;
 }
 
-function buildVueSfcUnit(db: ScipDatabase, relativePath: string, source: string): VueSfcUnit {
+export function buildVueSfcUnit(db: ScipDatabase, relativePath: string, source: string): VueSfcUnit {
   const unit: VueSfcUnit = {
     relativePath,
     template: null,

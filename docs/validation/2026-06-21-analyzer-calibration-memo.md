@@ -436,3 +436,9 @@ The `src/queries/cleanup/similar.ts` calibration reference remains accurate
 after the health cleanup. Accepted source comments reduce known signal-tier
 noise without changing similarity evidence classes, IDF scoring, source
 fingerprints, or cleanup detector thresholds.
+
+2026-07-01 round-2 remediation note: the cited cleanup, frontend, and health
+configuration examples remain valid after the shared citation classifier,
+frontend overlap gates, and health disclosure fields landed. The calibration
+memo still describes analyzer trust weighting; the implementation now exposes
+more of that evidence directly in command output.

@@ -48,6 +48,7 @@ Enqueue(job) == queue' = Append(queue, job)
       writes: [],
       reason: 'read through queue helper in fixture',
     });
+    expect(facts?.modelParse).toBe('regex-fallback');
     expect(facts?.variables).toEqual(['queue']);
     expect(facts?.operators).toEqual(['Enqueue', 'Init']);
   });

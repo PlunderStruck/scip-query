@@ -1,6 +1,7 @@
 import { frontendBehaviorProduct } from '../../source/frontend-behavior-products.js';
 import type { ReactComponentBehaviorProfile } from '../../source/react-profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
+import { evaluatePressure, type PressureAxis } from '../internal/frontend-behavior-evidence.js';
 
 export type ReactLargeComponentPressureAxis = 'component' | 'file' | 'jsx-structure' | 'hook-behavior';
 export type ReactLargeComponentContextKind = 'component' | 'route-page';
@@ -77,24 +78,23 @@ function pressureResult(
     minBehaviorTokens: number;
   },
 ): ReactLargeComponentPressureResult | null {
-  const reasons: string[] = [];
-  if (profile.loc >= thresholds.minComponentLines) {
-    reasons.push(`${profile.loc} component line(s)`);
-  }
   const substantialComponentLines = Math.max(80, Math.floor(thresholds.minComponentLines / 2));
-  if (profile.fileLines >= thresholds.minFileLines && profile.loc >= substantialComponentLines) {
-    reasons.push(`${profile.fileLines} file line(s)`);
-  }
-  if (profile.jsxTokens.size >= thresholds.minJsxTokens) {
-    reasons.push(`${profile.jsxTokens.size} JSX structure token(s)`);
-  }
-  if (profile.behaviorTokens.size >= thresholds.minBehaviorTokens) {
-    reasons.push(`${profile.behaviorTokens.size} behavior token(s)`);
-  }
+  const pressure = evaluatePressure(
+    profile,
+    reactPressureAxes({
+      minComponentLines: thresholds.minComponentLines,
+      minFileLines: thresholds.minFileLines,
+      minJsxTokens: thresholds.minJsxTokens,
+      minBehaviorTokens: thresholds.minBehaviorTokens,
+      substantialComponentLines,
+    }),
+    'component',
+  );
+  const { reasons } = pressure;
   if (reasons.length === 0) return null;
 
-  const dominant = dominantPressure(profile);
-  const pressureKinds = pressureKindsFor(profile, thresholds, dominant);
+  const dominant = pressure.dominantPressure;
+  const pressureKinds = pressure.pressureKinds;
   const contextKind = reactContextKind(profile);
   const recommendationKind = recommendationKindFor(dominant, pressureKinds, contextKind);
   return {
@@ -114,34 +114,42 @@ function pressureResult(
   };
 }
 
-function dominantPressure(profile: ReactComponentBehaviorProfile): ReactLargeComponentPressureAxis {
-  const entries: Array<{ axis: ReactLargeComponentPressureAxis; value: number }> = [
-    { axis: 'component', value: profile.loc },
-    { axis: 'file', value: profile.fileLines },
-    { axis: 'jsx-structure', value: profile.jsxTokens.size * 3 },
-    { axis: 'hook-behavior', value: profile.behaviorTokens.size * 4 },
+function reactPressureAxes(thresholds: {
+  minComponentLines: number;
+  minFileLines: number;
+  minJsxTokens: number;
+  minBehaviorTokens: number;
+  substantialComponentLines: number;
+}): PressureAxis<ReactComponentBehaviorProfile, ReactLargeComponentPressureAxis>[] {
+  return [
+    {
+      axis: 'component',
+      value: (profile) => profile.loc,
+      qualifies: (_profile, value) => value >= thresholds.minComponentLines,
+      reason: (_profile, value) => `${value} component line(s)`,
+    },
+    {
+      axis: 'file',
+      value: (profile) => profile.fileLines,
+      qualifies: (profile, value) =>
+        value >= thresholds.minFileLines && profile.loc >= thresholds.substantialComponentLines,
+      reason: (_profile, value) => `${value} file line(s)`,
+    },
+    {
+      axis: 'jsx-structure',
+      value: (profile) => profile.jsxTokens.size,
+      weightedValue: (_profile, value) => value * 3,
+      qualifies: (_profile, value) => value >= thresholds.minJsxTokens,
+      reason: (_profile, value) => `${value} JSX structure token(s)`,
+    },
+    {
+      axis: 'hook-behavior',
+      value: (profile) => profile.behaviorTokens.size,
+      weightedValue: (_profile, value) => value * 4,
+      qualifies: (_profile, value) => value >= thresholds.minBehaviorTokens,
+      reason: (_profile, value) => `${value} behavior token(s)`,
+    },
   ];
-  entries.sort((a, b) => b.value - a.value);
-  return entries[0]?.axis ?? 'component';
-}
-
-function pressureKindsFor(
-  profile: ReactComponentBehaviorProfile,
-  thresholds: {
-    minComponentLines: number;
-    minFileLines: number;
-    minJsxTokens: number;
-    minBehaviorTokens: number;
-  },
-  dominant: ReactLargeComponentPressureAxis,
-): ReactLargeComponentPressureAxis[] {
-  const kinds: ReactLargeComponentPressureAxis[] = [];
-  if (profile.loc >= thresholds.minComponentLines) kinds.push('component');
-  const substantialComponentLines = Math.max(80, Math.floor(thresholds.minComponentLines / 2));
-  if (profile.fileLines >= thresholds.minFileLines && profile.loc >= substantialComponentLines) kinds.push('file');
-  if (profile.jsxTokens.size >= thresholds.minJsxTokens) kinds.push('jsx-structure');
-  if (profile.behaviorTokens.size >= thresholds.minBehaviorTokens) kinds.push('hook-behavior');
-  return [...new Set(kinds.length > 0 ? kinds : [dominant])];
 }
 
 function reactContextKind(profile: ReactComponentBehaviorProfile): ReactLargeComponentContextKind {

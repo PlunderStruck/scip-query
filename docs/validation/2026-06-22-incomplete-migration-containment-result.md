@@ -123,3 +123,8 @@ The `src/queries/cleanup/similar.ts` incomplete-migration containment reference
 remains accurate after the health cleanup. Accepted comments only remove known
 signal-tier similarity scaffolding from health; incomplete-migration callee
 index reuse and containment semantics are unchanged.
+
+2026-07-01 round-2 remediation note: the `src/queries/cleanup/similar.ts`
+intentional citation remains current after `similar --plan` replaced the
+separate convergence preview. Incomplete-migration containment still uses the
+same callable and migration-scope evidence.

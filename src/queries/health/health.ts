@@ -555,6 +555,7 @@ function summarizeGitEvidence(db: ScipDatabase, budget: HealthBudget): GitEviden
     const git = gitEvidenceProduct(db);
     const churn = git.fileChurn();
     if (!churn) return null;
+    const history = git.commitHistory();
     const coChangeResult = coChange(db, undefined, { limit: budget.candidateResultLimit });
     const fileStats: Record<string, { changes: number; fixChanges: number }> = {};
     for (const [file, entry] of churn) {
@@ -584,6 +585,7 @@ function summarizeGitEvidence(db: ScipDatabase, budget: HealthBudget): GitEviden
         })),
       },
       fileStats,
+      commitsScanned: history?.commits.length ?? 0,
     };
   });
 }

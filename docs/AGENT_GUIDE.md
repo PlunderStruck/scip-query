@@ -3,6 +3,7 @@
 Goal-oriented workflows for AI agents and developers. Each section starts with a goal and walks through the exact commands to run, what to expect back, and how to use the results.
 
 For command syntax and options reference, see [Command Reference](COMMAND_REFERENCE.md).
+For analyzer implementation work, follow [Regex Policy](REGEX_POLICY.md): regex is kept for flat machine-generated strings, while structured inputs should use available parsers and disclose fallback paths.
 
 ---
 

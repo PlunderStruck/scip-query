@@ -95,3 +95,8 @@ production export.
 public package query entry or health analyzer. Its purpose is on-demand
 verification of a TLA+ module, a model-to-TypeScript mapping contract, checker
 output, and compiler-indexed implementation evidence.
+
+2026-07-01 round-2 remediation note: the
+`src/runtime/query-commands/cleanup/descriptors.ts` configuration example
+remains current after command descriptors were regenerated. The parity result
+still distinguishes public query entries from command-descriptor metadata.

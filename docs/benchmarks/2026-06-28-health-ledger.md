@@ -487,3 +487,9 @@ The `src/queries/health/health.ts` benchmark citation remains accurate after
 the Git evidence product migration. Health still owns the same score phases and
 Git summary shape; the latest change only routes churn and amplification reads
 through `gitEvidenceProduct()`.
+
+2026-07-01 round-2 remediation note: the `src/queries/health/health.ts`
+configuration citation remains accurate after health output gained
+validation-basis and source-facts-unavailable disclosures. Those additions
+make the existing health surface more explicit; they do not change this
+benchmark's measured score phases.

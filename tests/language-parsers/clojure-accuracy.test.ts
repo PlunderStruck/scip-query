@@ -104,6 +104,41 @@ describe('Clojure import parser', () => {
     });
   });
 
+  it('extracts requires from cljc reader conditional branches', () => {
+    withClojureFixture((db) => {
+      const parsed = getSourceImports(db, 'src/demo/platform.cljc');
+
+      expect(parsed).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            importedName: 'demo.jvm',
+            localName: 'jvm',
+            sourcePath: 'src/demo/jvm.clj',
+            kind: 'namespace',
+            used: true,
+            usedMembers: ['read-config'],
+          }),
+          expect.objectContaining({
+            importedName: 'demo.browser',
+            localName: 'browser',
+            sourcePath: 'src/demo/browser.cljs',
+            kind: 'namespace',
+            used: true,
+            usedMembers: ['read-config'],
+          }),
+          expect.objectContaining({
+            importedName: 'demo.extra',
+            localName: 'extra',
+            sourcePath: 'src/demo/extra.cljc',
+            kind: 'namespace',
+            used: true,
+            usedMembers: ['normalize'],
+          }),
+        ]),
+      );
+    });
+  });
+
   it('uses namespace aliases to resolve Clojure call graph and impact edges', () => {
     withClojureCallFixture((db) => {
       const greetFacts = getSourceFacts(db, 'src/demo/core.clj')!;
@@ -179,13 +214,13 @@ describe('Clojure import parser', () => {
     });
   });
 
-  it('keeps Clojure macro scaffolding out of convergence and enables source self-audit', () => {
+  it('keeps Clojure macro scaffolding out of the similar plan alias and enables source self-audit', () => {
     withClojureParityFixture((db) => {
       const result = convergence(db, 'alpha', 'beta');
       expect(result).not.toBeNull();
       expect(result!.sharedCallees).not.toContain('demo.macros:with-log');
       expect(result!.sharedCallees).not.toContain('hooks.hsx:defc');
-      expect(result!.consolidationStrategy).toContain('Ignored Clojure macro scaffolding');
+      expect(result!.consolidationStrategy).toContain('shared source-token');
 
       const audit = selfAudit(db, { samples: 10 });
       expect(audit.available).toBe(true);
@@ -231,6 +266,20 @@ function withClojureFixture(run: (db: ScipDatabase) => void): void {
         '',
       ].join('\n'),
       'src/demo/ui.cljs': ['(ns demo.ui)', '(defn render [state message] state)', ''].join('\n'),
+      'src/demo/platform.cljc': [
+        '(ns demo.platform',
+        '  (:require #?(:clj [demo.jvm :as jvm]',
+        '               :cljs [demo.browser :as browser])',
+        '            #?@(:clj [[demo.extra :as extra]]',
+        '                :cljs [[demo.extra :as extra]])))',
+        '',
+        '(defn read-platform []',
+        '  (str (jvm/read-config) (browser/read-config) (extra/normalize :ok)))',
+        '',
+      ].join('\n'),
+      'src/demo/jvm.clj': ['(ns demo.jvm)', '(defn read-config [] {})', ''].join('\n'),
+      'src/demo/browser.cljs': ['(ns demo.browser)', '(defn read-config [] {})', ''].join('\n'),
+      'src/demo/extra.cljc': ['(ns demo.extra)', '(defn normalize [value] value)', ''].join('\n'),
     });
 
     evidenceFixtureDb(dbPath)
@@ -239,6 +288,10 @@ function withClojureFixture(run: (db: ScipDatabase) => void): void {
       .document(3, 'clojure', 'src/demo/shared.cljc')
       .document(4, 'clojure', 'src/demo/view.cljs')
       .document(5, 'clojure', 'src/demo/ui.cljs')
+      .document(6, 'clojure', 'src/demo/platform.cljc')
+      .document(7, 'clojure', 'src/demo/jvm.clj')
+      .document(8, 'clojure', 'src/demo/browser.cljs')
+      .document(9, 'clojure', 'src/demo/extra.cljc')
       .symbol(1, 'scip-clojure npm fixture 0.1.0 src/demo/util.clj/demo.util.', 'demo.util', 3)
       .symbol(2, 'scip-clojure npm fixture 0.1.0 src/demo/shared.cljc/normalize().', 'normalize', 12)
       .definition(1, 2, 1, 0, 0, 0, 14)

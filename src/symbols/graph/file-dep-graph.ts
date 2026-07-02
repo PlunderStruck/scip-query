@@ -196,7 +196,8 @@ function isGraphPayloadEntry(value: unknown): value is [string, string[]] {
 }
 
 function scipFileDepEdges(db: ScipDatabase, scope?: string): Array<{ from_file: string; to_file: string }> {
-  const scopeFilter = scope ? `AND d1.relative_path LIKE '%${scope}%'` : '';
+  const scopeFilter = scope ? `AND d1.relative_path LIKE ?` : '';
+  const scopeParams = scope ? [`%${scope}%`] : [];
   return db.all<{ from_file: string; to_file: string }>(
     `SELECT DISTINCT
       d1.relative_path AS from_file,
@@ -214,9 +215,10 @@ function scipFileDepEdges(db: ScipDatabase, scope?: string): Array<{ from_file: 
     ) sym_def ON sym_def.symbol_id = gs.id
     JOIN documents d2 ON sym_def.document_id = d2.id
     WHERE d1.id != d2.id
-      AND m.role != 1
-      ${db.pathExclusionsFor('d1', 'd2')}
-      ${scopeFilter}`,
+	      AND m.role != 1
+	      ${db.pathExclusionsFor('d1', 'd2')}
+	      ${scopeFilter}`,
+    ...scopeParams,
   );
 }
 

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { isRecord, stringArray } from '../storage/evidence-payload.js';
+import { parseSanyXmlFacts, type SanyActionFacts } from './sany-facts.js';
 
 export type TlaCheckerMode = 'auto' | 'sany' | 'tlc' | 'apalache' | 'none';
 
@@ -55,8 +56,10 @@ export interface TlaContractLoadResult {
 
 export interface TlaModuleFacts {
   path: string;
+  modelParse: 'sany' | 'regex-fallback';
   variables: string[];
   operators: string[];
+  actions: SanyActionFacts[];
   text: string;
 }
 
@@ -131,9 +134,30 @@ export function readTlaModuleFacts(projectRoot: string, modulePath: string): Tla
   const text = readFileSync(absolutePath, 'utf8');
   return {
     path: absolutePath,
+    modelParse: 'regex-fallback',
     text,
     variables: parseTlaVariables(text),
     operators: parseTlaOperators(text),
+    actions: [],
+  };
+}
+
+export function readTlaModuleFactsFromSanyXml(
+  projectRoot: string,
+  modulePath: string,
+  xml: string,
+): TlaModuleFacts | null {
+  const absolutePath = resolveProjectPath(projectRoot, modulePath);
+  if (!absolutePath || !existsSync(absolutePath)) return null;
+  const text = readFileSync(absolutePath, 'utf8');
+  const facts = parseSanyXmlFacts(xml);
+  return {
+    path: absolutePath,
+    modelParse: 'sany',
+    text,
+    variables: facts.variables,
+    operators: facts.operators,
+    actions: facts.actions,
   };
 }
 

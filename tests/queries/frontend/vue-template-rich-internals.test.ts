@@ -187,6 +187,39 @@ describe('Vue template rich internals', () => {
     }
   });
 
+  it('tokenizes Vue interpolation identifiers without generic loop idioms', () => {
+    const { db } = createVueFixture({
+      'src/components/InterpolationPanel.vue': [
+        '<template>',
+        '  <section>',
+        '    <p>{{ customerName }}</p>',
+        '    <p>{{ account.balance }}</p>',
+        '    <p>{{ item.id ?? index }}</p>',
+        '  </section>',
+        '</template>',
+        '<script setup lang="ts">',
+        'const customerName = "Ada";',
+        'const account = { balance: 1 };',
+        'const item = { id: 1 };',
+        'const index = 0;',
+        '</script>',
+      ].join('\n'),
+    });
+    try {
+      const facts = getVueTemplateFacts(db, 'src/components/InterpolationPanel.vue');
+
+      expect(facts.structuralTokens).toEqual(
+        expect.arrayContaining(['interpolation', 'id:customerName', 'id:account', 'id:balance']),
+      );
+      expect(facts.structuralTokens).not.toEqual(expect.arrayContaining(['id:item', 'id:id', 'id:index']));
+      expect(facts.expressionIdentifiers.map((identifier) => identifier.name)).toEqual(
+        expect.arrayContaining(['customerName', 'account', 'balance']),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   it('resolves external Vue scripts into component behavior profiles', () => {
     const { db } = createVueFixture({
       'src/components/SharedBehaviorPanel.vue': SHARED_BEHAVIOR_PANEL,
@@ -334,6 +367,9 @@ describe('Vue template rich internals', () => {
         expect.objectContaining({
           fileA: 'src/components/IncidentPanel.vue',
           fileB: 'src/components/IssuePanel.vue',
+          evidenceClass: expect.stringMatching(/domain-behavior|mixed|shared-abstraction/),
+          actionTier: expect.any(String),
+          recommendation: expect.any(String),
         }),
       );
       expect(duplicates[0]?.sharedComponents).toEqual(
@@ -352,6 +388,45 @@ describe('Vue template rich internals', () => {
           }),
         ]),
       );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('marks generic Vue template overlap as support evidence', () => {
+    const GENERIC_FORM = `<template>
+  <PageShell>
+    <ToolbarPanel>
+      <FieldRow>
+        <TextInput name="name" />
+        <UiButton tone="primary" />
+      </FieldRow>
+    </ToolbarPanel>
+  </PageShell>
+</template>
+<script setup lang="ts">
+const ready = true;
+</script>
+`;
+    const { db } = createVueFixture({
+      'src/components/BillingForm.vue': GENERIC_FORM,
+      'src/components/ShippingForm.vue': GENERIC_FORM.replace('ready', 'active'),
+    });
+    try {
+      const duplicates = vueComponentDuplicates(db, {
+        limit: 10,
+        minSimilarity: 0.5,
+        minTokens: 6,
+      });
+
+      expect(duplicates).toEqual([
+        expect.objectContaining({
+          evidenceClass: 'generic-workflow-scaffolding',
+          actionTier: 'support',
+          recommendation: expect.stringContaining('Generic structural overlap'),
+          sharedComponents: expect.arrayContaining(['FieldRow', 'PageShell', 'TextInput', 'ToolbarPanel', 'UiButton']),
+        }),
+      ]);
     } finally {
       db.close();
     }

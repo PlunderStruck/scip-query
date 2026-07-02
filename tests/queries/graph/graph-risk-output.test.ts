@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import { bottlenecks } from '../../../src/queries/graph/bottlenecks.js';
-import { coupling } from '../../../src/queries/graph/coupling.js';
+import { coupling, topCoupling } from '../../../src/queries/graph/coupling.js';
 import { deepChains } from '../../../src/queries/graph/deep-chains.js';
 import { drift } from '../../../src/queries/cleanup/drift.js';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
@@ -233,6 +233,13 @@ describe('graph-risk output classification', () => {
         policyBasis: 'inferred',
       });
       expect(inferred?.recommendation).toContain('intentional exception');
+    });
+  });
+
+  it('parameterizes quoted top-coupling scopes', () => {
+    withGraphFixture((db) => {
+      expect(() => topCoupling(db, { scope: "o'brien" })).not.toThrow();
+      expect(topCoupling(db, { scope: "o'brien" })).toEqual([]);
     });
   });
 });

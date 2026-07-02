@@ -93,6 +93,7 @@ export interface GitEvidenceSummary {
   };
   /** Per-file change counts over the analyzed window (tracked files only). */
   fileStats: Record<string, { changes: number; fixChanges: number }>;
+  commitsScanned: number;
 }
 
 export interface SuppressionSummary {

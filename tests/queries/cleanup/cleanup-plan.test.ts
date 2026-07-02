@@ -12,6 +12,7 @@ import {
   deleteLineRanges,
   detectCheckers,
   errorKey,
+  parseCheckerDiagnostics,
   selectCleanupBatches,
 } from '../../../src/runtime/cleanup-verify.js';
 
@@ -101,6 +102,95 @@ describe('verification error identity', () => {
         ["a.ts(2,1): error TS2304: Cannot find name 'x'"],
       ),
     ).toEqual({ status: 'verified', reason: 'checker passed', errors: [] });
+  });
+});
+
+describe('checker diagnostic parsing', () => {
+  it('parses tsc, go, and ruff diagnostics into stable structured errors', () => {
+    expect(
+      parseCheckerDiagnostics('tsc --noEmit', "src/app.ts(12,8): error TS2304: Cannot find name 'missing'.\n")
+        .diagnostics[0],
+    ).toMatchObject({
+      file: 'src/app.ts',
+      line: 12,
+      column: 8,
+      code: 'TS2304',
+      parseBasis: 'tsc',
+    });
+
+    expect(
+      parseCheckerDiagnostics('go build ./...', 'main.go:10:2: undefined: missing\n').diagnostics[0],
+    ).toMatchObject({
+      file: 'main.go',
+      line: 10,
+      column: 2,
+      message: 'undefined: missing',
+      parseBasis: 'go',
+    });
+
+    const ruff = parseCheckerDiagnostics(
+      'ruff check --select E9,F821,F822',
+      JSON.stringify([
+        { filename: 'pkg/app.py', location: { row: 4, column: 9 }, code: 'F821', message: 'Undefined name `x`' },
+      ]),
+    );
+    expect(ruff.diagnostics[0]).toMatchObject({
+      file: 'pkg/app.py',
+      line: 4,
+      column: 9,
+      code: 'F821',
+      parseBasis: 'ruff-json',
+    });
+  });
+
+  it('parses cargo and clj-kondo JSON diagnostics and labels heuristic fallback', () => {
+    const cargoLine = JSON.stringify({
+      reason: 'compiler-message',
+      message: {
+        level: 'error',
+        message: 'unresolved import `crate::missing`',
+        code: { code: 'E0432' },
+        spans: [{ is_primary: true, file_name: 'src/lib.rs', line_start: 3, column_start: 5 }],
+      },
+    });
+    expect(
+      parseCheckerDiagnostics('cargo check --quiet --manifest-path Cargo.toml', cargoLine).diagnostics[0],
+    ).toMatchObject({
+      file: 'src/lib.rs',
+      line: 3,
+      column: 5,
+      code: 'E0432',
+      parseBasis: 'cargo-json',
+    });
+
+    const kondo = parseCheckerDiagnostics(
+      'clj-kondo --lint .',
+      JSON.stringify({
+        findings: [
+          {
+            level: 'error',
+            filename: 'src/core.clj',
+            row: 7,
+            col: 3,
+            type: 'unresolved-symbol',
+            message: 'Unresolved symbol: x',
+          },
+        ],
+      }),
+    );
+    expect(kondo.diagnostics[0]).toMatchObject({
+      file: 'src/core.clj',
+      line: 7,
+      column: 3,
+      code: 'unresolved-symbol',
+      parseBasis: 'clj-kondo-json',
+    });
+
+    const heuristic = parseCheckerDiagnostics('custom checker', 'fatal error: nope\n');
+    expect(heuristic).toEqual({
+      parseBasis: 'heuristic',
+      diagnostics: [{ file: '', message: 'fatal error: nope', parseBasis: 'heuristic' }],
+    });
   });
 });
 
@@ -230,7 +320,7 @@ describe('checker detection', () => {
       expect(clojureChecker).toEqual(
         expect.objectContaining({
           binary: localKondo,
-          args: ['--lint', '.'],
+          args: ['--lint', '.', '--config', '{:output {:format :json}}'],
           coversExtensions: ['.clj', '.cljs', '.cljc'],
         }),
       );

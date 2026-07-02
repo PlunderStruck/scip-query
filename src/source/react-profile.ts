@@ -8,6 +8,7 @@ import { getAst } from './ast/ast-core.js';
 import type { SyntaxNode } from './ast/ast-types.js';
 import { detectAstLanguage, type AstLanguage } from './ast/ast-language.js';
 import { callSiteForNode } from './source-calls.js';
+import { isFrontendIdentifierStopWord } from './frontend-identifier-stoplist.js';
 import { getSourceFiles } from './source-fileset.js';
 import { getSourceLines, getSourceText } from './source-text.js';
 
@@ -99,7 +100,6 @@ const HANDLER_VERBS = new Set([
   'toggle',
   'update',
 ]);
-const JSX_TOKEN_STOP_WORDS = new Set(['children', 'className', 'false', 'key', 'null', 'style', 'true', 'undefined']);
 const JSX_PROP_STOP_WORDS = new Set([
   'aria-hidden',
   'className',
@@ -348,13 +348,12 @@ function collectReactCandidates(root: SyntaxNode, language: AstLanguage): ReactC
   const seen = new Set<string>();
   const walk = (node: SyntaxNode): void => {
     const candidate = reactCandidateForNode(node);
-    if (candidate && !hasFunctionAncestor(node)) {
+    if (candidate && (!hasFunctionAncestor(node) || candidate.kind === 'component')) {
       const key = `${candidate.name}:${candidate.node.startIndex}:${candidate.node.endIndex}`;
       if (!seen.has(key)) {
         seen.add(key);
         out.push(candidate);
       }
-      return;
     }
     for (const child of node.namedChildren) walk(child);
   };
@@ -363,6 +362,15 @@ function collectReactCandidates(root: SyntaxNode, language: AstLanguage): ReactC
 }
 
 function reactCandidateForNode(node: SyntaxNode): ReactCandidate | null {
+  if (node.type === 'class_declaration') {
+    const name = callableName(node);
+    if (!name || !/^[A-Z]/.test(name)) return null;
+    const renderMethod = reactRenderMethod(node);
+    if (!renderMethod) return null;
+    if (!extendsReactComponent(node) && !containsJsx(renderMethod)) return null;
+    return { name, kind: 'component', node, bodyNode: renderMethod };
+  }
+
   if (node.type === 'function_declaration') {
     const name = callableName(node);
     if (!name || !isReactUnitName(name)) return null;
@@ -377,6 +385,22 @@ function reactCandidateForNode(node: SyntaxNode): ReactCandidate | null {
   const bodyNode = unwrapReactCallable(valueNode);
   if (!bodyNode) return null;
   return { name, kind: reactUnitKind(name), node, bodyNode };
+}
+
+function reactRenderMethod(node: SyntaxNode): SyntaxNode | null {
+  for (const child of node.namedChildren) {
+    if (child.type !== 'class_body') continue;
+    for (const member of child.namedChildren) {
+      if (member.type !== 'method_definition') continue;
+      const name = member.childForFieldName('name') ?? member.namedChild(0);
+      if (name?.text === 'render') return member;
+    }
+  }
+  return null;
+}
+
+function extendsReactComponent(node: SyntaxNode): boolean {
+  return /\b(?:React\.)?(?:Pure)?Component\b/.test(node.text);
 }
 
 function isReactUnitName(name: string): boolean {
@@ -449,12 +473,14 @@ function collectJsxFacts(root: SyntaxNode): JsxFacts {
   const visit = (node: SyntaxNode): void => {
     if (node.type === 'jsx_opening_element' || node.type === 'jsx_self_closing_element') {
       recordJsxElement(node, facts);
+    } else if (node.type === 'jsx_element' && node.text.trimStart().startsWith('<>')) {
+      facts.tokens.add('jsx:fragment');
     } else if (node.type === 'jsx_expression') {
       recordJsxExpression(node, facts);
     } else if (node.type === 'jsx_fragment') {
       facts.tokens.add('jsx:fragment');
     }
-    for (const child of node.namedChildren) visit(child);
+    for (const child of node.children) visit(child);
   };
   visit(root);
   return facts;
@@ -465,8 +491,11 @@ function recordJsxElement(node: SyntaxNode, facts: JsxFacts): void {
   let componentTag = false;
   if (tag) {
     const normalizedTag = normalizeJsxName(tag);
-    componentTag = isComponentTag(normalizedTag);
-    if (componentTag) {
+    const fragmentTag = normalizedTag === 'Fragment' || normalizedTag === 'React.Fragment';
+    componentTag = isComponentTag(normalizedTag) && !fragmentTag;
+    if (fragmentTag) {
+      facts.tokens.add('jsx:fragment');
+    } else if (componentTag) {
       facts.componentNames.add(normalizedTag);
       facts.tokens.add(`component:${normalizedTag}`);
     } else {
@@ -489,19 +518,33 @@ function recordJsxElement(node: SyntaxNode, facts: JsxFacts): void {
         facts.tokens.add(`${componentTag ? 'prop' : 'native-prop'}:${normalized}`);
       }
     } else if (child.type === 'jsx_spread_attribute') {
-      facts.tokens.add('prop:spread');
+      facts.tokens.add(spreadToken(child));
     }
   }
 }
 
 function recordJsxExpression(node: SyntaxNode, facts: JsxFacts): void {
   const text = node.text;
-  if (text.includes('&&') || text.includes('?')) facts.tokens.add('jsx:conditional');
+  if (/^\{\s*\.\.\./.test(text)) facts.tokens.add(spreadToken(node));
+  if (containsTernaryExpression(node)) facts.tokens.add('jsx:conditional');
   if (text.includes('.map(') || text.includes('.flatMap(')) facts.tokens.add('jsx:list');
   for (const name of identifiersInText(text)) {
-    if (JSX_TOKEN_STOP_WORDS.has(name)) continue;
+    if (isFrontendIdentifierStopWord(name)) continue;
     facts.tokens.add(`binding:${name}`);
   }
+}
+
+function spreadToken(node: SyntaxNode): string {
+  const rawSpread = /^\{\s*\.\.\.\s*([^}]+)\s*\}$/.exec(node.text)?.[1];
+  const expression = node.namedChildren.find((child) => child.type !== 'comment');
+  const text = rawSpread ?? expression?.text ?? '';
+  const simple = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.exec(text.trim())?.[0];
+  return simple ? `prop:spread:${simple}` : 'prop:spread';
+}
+
+function containsTernaryExpression(node: SyntaxNode): boolean {
+  if (node.type === 'ternary_expression' || node.type === 'conditional_expression') return true;
+  return node.namedChildren.some(containsTernaryExpression);
 }
 
 function jsxTagName(node: SyntaxNode): string | null {

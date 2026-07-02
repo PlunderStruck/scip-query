@@ -706,10 +706,10 @@ function scoreLocalityCandidate(candidate: LocalityCandidate): number {
     score += 3;
   }
   if (candidate.recommendedTier === 'repository-level-review') {
-    score -= 8;
+    score *= 0.1;
   }
   if (candidate.recommendedTier === 'no-exact-consumers') {
-    score -= 12;
+    score *= 0.05;
   }
   return score;
 }

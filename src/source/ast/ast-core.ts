@@ -54,7 +54,7 @@ function getVueScriptAst(db: ScipDatabase, relativePath: string): Tree | null {
   if (!source) return null;
 
   return TREE_CACHE.get(db, relativePath, source, () => {
-    const block = extractVueScriptBlock(source);
+    const block = extractVueScriptBlock(db, relativePath, source);
     if (!block) return null;
     const padded = '\n'.repeat(block.startLine) + block.body;
     return parseAstSource(block.language, padded);

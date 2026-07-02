@@ -26,6 +26,37 @@ export interface FrontendNamedEvidenceGroup {
   fallbackBucket: 'generic' | 'shared-abstraction';
 }
 
+export interface OverlapBucket {
+  name: string;
+  count: number;
+}
+
+export interface OverlapGateClause {
+  min: Record<string, number>;
+  reason: string;
+}
+
+export interface OverlapGateResult {
+  pass: boolean;
+  reason: string;
+  counts: Record<string, number>;
+}
+
+export interface PressureAxis<Profile, Axis extends string> {
+  axis: Axis;
+  value: (profile: Profile) => number;
+  weightedValue?: (profile: Profile, value: number) => number;
+  qualifies?: (profile: Profile, value: number) => boolean;
+  reason?: (profile: Profile, value: number) => string;
+  dominantEligible?: boolean;
+}
+
+export interface PressureEvaluation<Axis extends string> {
+  dominantPressure: Axis;
+  pressureKinds: Axis[];
+  reasons: string[];
+}
+
 export function classifyFrontendBehaviorEvidence(opts: {
   genericWords: ReadonlySet<string>;
   nameGroups: readonly FrontendNamedEvidenceGroup[];
@@ -80,7 +111,57 @@ export function behaviorSimilarity(a: Set<string>, b: Set<string>): number {
   if (a.size === 0 || b.size === 0) return 0;
   const shared = intersection(a, b).size;
   const overlap = shared / Math.min(a.size, b.size);
-  return Math.max(jaccard(a, b), overlap);
+  // Overlap coefficient alone reports 1.0 when a tiny profile is a subset of
+  // a large one. Damp it by size ratio so subset matches stay supportive.
+  const dampedOverlap = overlap * Math.min(1, Math.min(a.size, b.size) / (0.35 * Math.max(a.size, b.size)));
+  return Math.max(jaccard(a, b), dampedOverlap);
+}
+
+export function overlapGate(
+  buckets: readonly OverlapBucket[],
+  clauses: readonly OverlapGateClause[],
+): OverlapGateResult {
+  const counts = Object.fromEntries(buckets.map((bucket) => [bucket.name, bucket.count]));
+  for (const clause of clauses) {
+    const pass = Object.entries(clause.min).every(([name, min]) => (counts[name] ?? 0) >= min);
+    if (pass) {
+      return { pass: true, reason: clause.reason, counts };
+    }
+  }
+  return { pass: false, reason: 'shared tokens did not meet calibrated overlap thresholds', counts };
+}
+
+export function evaluatePressure<Profile, Axis extends string>(
+  profile: Profile,
+  axes: readonly PressureAxis<Profile, Axis>[],
+  fallbackAxis: Axis,
+): PressureEvaluation<Axis> {
+  const measured = axes.map((axis) => {
+    const value = axis.value(profile);
+    const weighted = axis.weightedValue ? axis.weightedValue(profile, value) : value;
+    return {
+      axis,
+      value,
+      weighted,
+      qualifies: axis.qualifies ? axis.qualifies(profile, value) : value > 0,
+    };
+  });
+  const reasons = measured
+    .filter((entry) => entry.qualifies && entry.axis.reason)
+    .map((entry) => entry.axis.reason!(profile, entry.value));
+  const dominant = measured
+    .filter((entry) => entry.axis.dominantEligible !== false)
+    .sort((a, b) => b.weighted - a.weighted)[0];
+  const dominantPressure = dominant && dominant.weighted > 0 ? dominant.axis.axis : fallbackAxis;
+  const pressureKinds = [
+    ...new Set(
+      measured
+        .filter((entry) => entry.qualifies)
+        .map((entry) => entry.axis.axis)
+        .concat(reasons.length > 0 ? [] : [dominantPressure]),
+    ),
+  ];
+  return { dominantPressure, pressureKinds, reasons };
 }
 
 export function tokenValues(tokens: ReadonlySet<string>, prefix: string): string[] {

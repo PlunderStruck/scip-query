@@ -194,7 +194,7 @@ function resolveApalacheBin(opts: TlaToolRunOptions): string {
   return opts.apalacheBin ?? process.env['APALACHE_BIN'] ?? 'apalache-mc';
 }
 
-function resolveTlaToolsJar(opts: TlaToolRunOptions): string | null {
+export function resolveTlaToolsJar(opts: TlaToolRunOptions): string | null {
   const env = opts.env ?? process.env;
   const candidates = [
     opts.tlaToolsJar,

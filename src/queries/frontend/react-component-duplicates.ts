@@ -2,7 +2,14 @@ import { difference, intersection, jaccard } from '../../analysis/similarity.js'
 import { frontendBehaviorProduct } from '../../source/frontend-behavior-products.js';
 import type { ReactComponentBehaviorProfile } from '../../source/react-profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { sortedTokens, tokenValues } from '../internal/frontend-behavior-evidence.js';
+import {
+  classifyFrontendBehaviorEvidence,
+  overlapGate,
+  sortedTokens,
+  tokenValues,
+  type FrontendBehaviorActionTier,
+  type FrontendBehaviorEvidenceClass,
+} from '../internal/frontend-behavior-evidence.js';
 import {
   pairwiseCandidateIndexFromKeys,
   rankedPairwiseProfileResults,
@@ -21,6 +28,10 @@ export interface ReactComponentDuplicateResult {
   sharedProps: string[];
   sharedEvents: string[];
   sharedBindings: string[];
+  evidenceClass: FrontendBehaviorEvidenceClass;
+  actionTier: FrontendBehaviorActionTier;
+  evidenceClassReasons: string[];
+  recommendation: string;
   uniqueToA: string[];
   uniqueToB: string[];
   locA: number;
@@ -89,6 +100,18 @@ function compareProfiles(
   if (!hasMeaningfulReactStructureOverlap(shared)) return null;
   const similarity = jaccard(a.tokens, b.tokens);
   if (similarity < minSimilarity) return null;
+  const sharedComponents = tokenValues(shared, 'component:');
+  const sharedNativeTags = tokenValues(shared, 'native:');
+  const sharedProps = tokenValues(shared, 'prop:');
+  const sharedEvents = tokenValues(shared, 'event:');
+  const sharedBindings = tokenValues(shared, 'binding:');
+  const evidence = classifyReactComponentEvidence({
+    sharedComponents,
+    sharedNativeTags,
+    sharedProps,
+    sharedEvents,
+    sharedBindings,
+  });
 
   return {
     fileA: a.file,
@@ -97,11 +120,15 @@ function compareProfiles(
     componentB: b.component,
     similarity,
     sharedTokens: sortedTokens(shared),
-    sharedComponents: tokenValues(shared, 'component:'),
-    sharedNativeTags: tokenValues(shared, 'native:'),
-    sharedProps: tokenValues(shared, 'prop:'),
-    sharedEvents: tokenValues(shared, 'event:'),
-    sharedBindings: tokenValues(shared, 'binding:'),
+    sharedComponents,
+    sharedNativeTags,
+    sharedProps,
+    sharedEvents,
+    sharedBindings,
+    evidenceClass: evidence.evidenceClass,
+    actionTier: evidence.actionTier,
+    evidenceClassReasons: evidence.reasons,
+    recommendation: evidence.recommendation,
     uniqueToA: sortedTokens(difference(a.tokens, b.tokens)).slice(0, 25),
     uniqueToB: sortedTokens(difference(b.tokens, a.tokens)).slice(0, 25),
     locA: a.profile.loc,
@@ -123,5 +150,80 @@ function hasMeaningfulReactStructureOverlap(shared: ReadonlySet<string>): boolea
       shapeLike += 1;
     }
   }
-  return componentLike >= 1 || shapeLike >= 4;
+  return overlapGate(
+    [
+      { name: 'component', count: componentLike },
+      { name: 'shape', count: shapeLike },
+    ],
+    [
+      { min: { component: 1 }, reason: 'shared custom component' },
+      { min: { shape: 4 }, reason: 'shared JSX structure' },
+    ],
+  ).pass;
 }
+
+function classifyReactComponentEvidence(parts: {
+  sharedComponents: readonly string[];
+  sharedNativeTags: readonly string[];
+  sharedProps: readonly string[];
+  sharedEvents: readonly string[];
+  sharedBindings: readonly string[];
+}) {
+  return classifyFrontendBehaviorEvidence({
+    genericWords: GENERIC_REACT_STRUCTURE_WORDS,
+    primitiveGroups: [
+      { values: parts.sharedNativeTags, reasonPrefix: 'shared native tags', bucket: 'generic' },
+      { values: parts.sharedProps, reasonPrefix: 'shared props', bucket: 'generic' },
+      { values: parts.sharedEvents, reasonPrefix: 'shared events', bucket: 'generic' },
+    ],
+    nameGroups: [
+      { names: parts.sharedComponents, label: 'shared component', fallbackBucket: 'generic' },
+      { names: parts.sharedBindings, label: 'shared binding', fallbackBucket: 'generic' },
+    ],
+    recommendation: reactComponentRecommendation,
+  });
+}
+
+function reactComponentRecommendation(evidenceClass: FrontendBehaviorEvidenceClass): string {
+  switch (evidenceClass) {
+    case 'domain-behavior':
+    case 'mixed':
+      return 'Review for a shared component or feature-specific UI primitive around the named domain structure.';
+    case 'shared-abstraction':
+      return 'Review the existing shared component usage first; extract only if duplicated structure remains outside it.';
+    case 'generic-workflow-scaffolding':
+      return 'Generic structural overlap — verify intent before consolidating.';
+  }
+}
+
+const GENERIC_REACT_STRUCTURE_WORDS = new Set([
+  'actions',
+  'app',
+  'button',
+  'card',
+  'children',
+  'content',
+  'container',
+  'dialog',
+  'field',
+  'form',
+  'header',
+  'input',
+  'item',
+  'label',
+  'layout',
+  'list',
+  'modal',
+  'page',
+  'panel',
+  'row',
+  'section',
+  'shell',
+  'table',
+  'text',
+  'toolbar',
+  'ui',
+  'value',
+  'view',
+  'wrapper',
+]);

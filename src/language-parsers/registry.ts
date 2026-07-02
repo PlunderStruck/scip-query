@@ -29,7 +29,7 @@ import {
   RUBY_EXTENSIONS,
   RUST_EXTENSIONS,
 } from '../resolution/import-path-resolver.js';
-import { importOnlyLanguageParser, type LanguageParser } from './types.js';
+import { importOnlyLanguageParser, type LanguageParser, type LanguageParserCapabilities } from './types.js';
 import { selectParser } from './types.js';
 
 const javascript = {
@@ -132,4 +132,9 @@ const REGISTRY: ReadonlyArray<LanguageParser> = [
 // "given a path, get a parser" abstraction.
 export function getParserForPath(relativePath: string): LanguageParser | null {
   return selectParser(REGISTRY, relativePath);
+}
+
+export function registeredParserCapabilities(language: string): LanguageParserCapabilities | null {
+  const parser = REGISTRY.find((entry) => entry.language === language);
+  return parser?.capabilities ?? null;
 }

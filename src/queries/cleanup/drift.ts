@@ -5,10 +5,15 @@ import { getSourceImports } from '../../language-parsers/index.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { semanticImportUsage } from '../../semantic/shared-primitives.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
-import { getArchitecturalLayer, isKnownProjectLayerDependency, layerPolicyForEdge } from './drift-policy.js';
+import {
+  getArchitecturalLayer,
+  isKnownProjectLayerDependency,
+  isUnknownSrcLayerEdge,
+  layerPolicyForEdge,
+} from './drift-policy.js';
 
 export type DriftActionTier = 'direct' | 'signal';
-export type DriftPolicyBasis = 'explicit' | 'inferred';
+export type DriftPolicyBasis = 'explicit' | 'inferred' | 'unknown-layer';
 
 export interface DriftResult {
   file: string;
@@ -152,8 +157,13 @@ function layerViolationDrift(depGraph: Map<string, Set<string>>): DriftResult[] 
       if (fileLayer === depLayer) continue; // same layer, fine
 
       const explicitPolicy = layerPolicyForEdge(fileLayer, depLayer);
-      const policyBasis: DriftPolicyBasis = explicitPolicy ? 'explicit' : 'inferred';
-      const violation = explicitPolicy ?? layerRules.get(`${fileLayer}->${depLayer}`);
+      const unknownSrcLayer = explicitPolicy === null && isUnknownSrcLayerEdge(fileLayer, depLayer);
+      const policyBasis: DriftPolicyBasis = explicitPolicy
+        ? 'explicit'
+        : unknownSrcLayer
+          ? 'unknown-layer'
+          : 'inferred';
+      const violation = unknownSrcLayer ? 'violation' : (explicitPolicy ?? layerRules.get(`${fileLayer}->${depLayer}`));
       if (violation === 'violation') {
         const actionTier: DriftActionTier = policyBasis === 'explicit' ? 'direct' : 'signal';
         results.push({
@@ -166,19 +176,29 @@ function layerViolationDrift(depGraph: Map<string, Set<string>>): DriftResult[] 
           policyBasis,
           evidenceReasons: [
             `dependency edge exists from ${file} to ${dep}`,
-            policyBasis === 'explicit'
-              ? `explicit layer policy rejects ${fileLayer}/ -> ${depLayer}/`
-              : `rare cross-layer edge ${fileLayer}/ -> ${depLayer}/ is inferred as a violation`,
+            layerEvidenceReason(policyBasis, fileLayer, depLayer),
           ],
           recommendation:
             policyBasis === 'explicit'
               ? 'Move the dependency behind an allowed layer boundary or document a policy change.'
-              : 'Review whether this is a real boundary break or an intentional exception before moving code.',
+              : policyBasis === 'unknown-layer'
+                ? 'Add a layer policy entry before treating this as a boundary violation.'
+                : 'Review whether this is a real boundary break or an intentional exception before moving code.',
         });
       }
     }
   }
   return results;
+}
+
+function layerEvidenceReason(policyBasis: DriftPolicyBasis, fileLayer: string, depLayer: string): string {
+  if (policyBasis === 'explicit') {
+    return `explicit layer policy rejects ${fileLayer}/ -> ${depLayer}/`;
+  }
+  if (policyBasis === 'unknown-layer') {
+    return `source layer policy has no entry for ${fileLayer}/ -> ${depLayer}/`;
+  }
+  return `rare cross-layer edge ${fileLayer}/ -> ${depLayer}/ is inferred as a violation`;
 }
 
 // scip-query: ignore-extract — this is the sibling-pattern scoring pass; the
@@ -279,7 +299,8 @@ function addScipSymbolRefEdges(db: ScipDatabase, graph: Map<string, Set<string>>
 }
 
 function scipSymbolRefEdges(db: ScipDatabase, scope?: string): Array<{ from_file: string; to_file: string }> {
-  const scopeFilter = scope ? `AND d1.relative_path LIKE '%${scope}%'` : '';
+  const scopeFilter = scope ? `AND d1.relative_path LIKE ?` : '';
+  const scopeParams = scope ? [`%${scope}%`] : [];
   return db.all<{ from_file: string; to_file: string }>(
     `SELECT DISTINCT d1.relative_path AS from_file, d2.relative_path AS to_file
      FROM mentions m
@@ -295,9 +316,10 @@ function scipSymbolRefEdges(db: ScipDatabase, scope?: string): Array<{ from_file
      ) sym_def ON sym_def.symbol_id = gs.id
      JOIN documents d2 ON sym_def.document_id = d2.id
      WHERE d1.id != d2.id
-       AND m.role != 1
-       ${db.pathExclusionsFor('d1', 'd2')}
-       ${scopeFilter}`,
+	       AND m.role != 1
+	       ${db.pathExclusionsFor('d1', 'd2')}
+	       ${scopeFilter}`,
+    ...scopeParams,
   );
 }
 

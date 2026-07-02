@@ -21,7 +21,8 @@ export interface HotspotResult {
 export function hotspots(db: ScipDatabase, opts: { limit?: number; scope?: string } = {}): HotspotResult[] {
   const { limit = 30, scope } = opts;
 
-  const scopeFilter = scope ? `AND def_d.relative_path LIKE '%${scope}%'` : '';
+  const scopeFilter = scope ? `AND def_d.relative_path LIKE ?` : '';
+  const scopeParams = scope ? [`%${scope}%`] : [];
 
   const rows = db.all<{
     symbol: string;
@@ -47,12 +48,14 @@ export function hotspots(db: ScipDatabase, opts: { limit?: number; scope?: strin
     ) sym_def ON sym_def.symbol_id = gs.id
     JOIN documents def_d ON sym_def.document_id = def_d.id
     WHERE m.role != 1
+      AND def_d.id != ref_d.id
       ${db.pathExclusionsFor('def_d')}
       ${db.symbolNoiseFor('gs')}
       ${scopeFilter}
     GROUP BY gs.id
     ORDER BY ref_count DESC
     LIMIT ?`,
+    ...scopeParams,
     limit,
   );
 
@@ -84,11 +87,12 @@ function hotspotsByDefinitionFallback(db: ScipDatabase, scope: string | undefine
 
 function hotspotRowFor(db: ScipDatabase, definition: IndexedDefinition): HotspotResult {
   const callerRows = callerRowsForSymbol(db, definition, { limit: 500 });
+  const crossFileCallers = callerRows.filter((row) => row.file !== definition.relativePath);
   return {
     symbol: definition.symbol,
     shortName: shortenSymbol(definition.symbol),
-    refCount: callerRows.length,
-    fileCount: new Set(callerRows.map((row) => row.file)).size,
+    refCount: crossFileCallers.length,
+    fileCount: new Set(crossFileCallers.map((row) => row.file)).size,
     definedIn: definition.relativePath,
   };
 }
