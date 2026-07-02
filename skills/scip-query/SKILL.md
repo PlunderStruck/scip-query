@@ -55,6 +55,7 @@ The loop is complete only when `scip-verify` passes or each remaining finding ha
 | Audit, rank, or confirm cleanup findings | `scip-cleanup-audit` | `health`, `cleanup-plan`, cleanup detectors |
 | Autonomously fix confirmed cleanup findings | `scip-cleanup-improve` | `health`, `cleanup-plan`, verified batches |
 | Find or resolve same-name twins that have diverged | `scip-twin-drift` | `twin-drift`, `duplicate-bodies`, `refs` |
+| Faked or half-implemented features, checkers that never fail, dead paths behind fallbacks, lying metrics | `scip-integrity-audit` |
 | Audit whether a status claim is derived, hedged, or merely asserted | `scip-claim-audit` | `refs`, `code`, `trace` |
 | Prove whether a parser/AST branch is actually reachable | `scip-probe-reachability` | `outline --signatures`, `code`, scratch probes |
 | Reconcile living docs with code | `scip-doc-reconcile` | `doc-drift` |
@@ -67,6 +68,8 @@ The loop is complete only when `scip-verify` passes or each remaining finding ha
 Routing is complete only when one owning skill is selected or the task is small enough for the default loop alone.
 
 ## Tie-Breaks
+
+- "Is this implementation real / does it actually work" → `scip-integrity-audit`; "is this well-organized" → `scip-maintainability`; same-name drifted twins specifically → `scip-twin-drift`.
 
 - Use `scip-cleanup-audit` for reports, ranking, confirmation, or recent AI-residue triage without edits.
 - Use `scip-cleanup-improve` when the user asks to fix, improve, continue cleaning, or raise health autonomously.

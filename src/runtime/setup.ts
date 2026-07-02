@@ -10,6 +10,7 @@ export const BUILTIN_SKILLS = [
   'scip-setup',
   'scip-cleanup-audit',
   'scip-cleanup-improve',
+  'scip-integrity-audit',
   'scip-twin-drift',
   'scip-claim-audit',
   'scip-probe-reachability',
