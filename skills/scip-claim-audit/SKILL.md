@@ -29,7 +29,7 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 | `scip-query refs <symbol>` | Find all files referencing a symbol | Classify: find every producer and consumer of a status-bearing function. |
 | `scip-query code <symbol>` | Read the source code for a symbol (bounded to its definition range) | Classify: read the producing function to see whether it computes or asserts. |
 | `scip-query trace <symbol>` | Trace a symbol: definition + all references | Classify: definition plus every reference for a status field or constant. |
-| `scip-query capability-matrix --json` | Deprecated alias for capabilities --matrix | Spot-check: an already-known example of a fixed derived-status surface. |
+| `scip-query capabilities --matrix --json` | Report which evidence and verification capabilities are available in this project | Spot-check: an already-known example of a fixed derived-status surface. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->
