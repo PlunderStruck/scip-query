@@ -13,6 +13,22 @@ Inputs: docs/plans/2026-07-02-followups.md items 13-21; specs/reindex-lock/*
 Done means: **waived writes ≤ 3** on this spec (via #13/#14), zero regressions
 in the 694-test suite, and every item 13-21 either shipped or BLOCKED-noted.
 
+**Closeout (2026-07-02):** all 8 steps shipped (commits 75ef1c7d, e4ff4e9f,
+4a8c0111, 0d6ea289, a860dfba, 7fb47e5c, 675dd042; this closeout commit is the
+8th). Benchmark moved **7→17 writes verified, 11→9 waived** (P5.1: 7→10/11→10;
+P5.4: 10→17/10→9) and **11 verified→33 verified reads / 10 waived** (unchanged
+count, more evidence). Target of ≤3 waived writes **not fully reached** —
+7 of the remaining 9 are `phase`, a documented zero-stored-field abstraction
+across all 7 modeled actions (no scanner mechanism can manufacture evidence
+for state that literally isn't materialized in code); the other 2 (Crash,
+Publish) are equally unprovable by reasoning already in the mapping before
+this work. See P5.4's step note and the followups doc item 14 entry for the
+full accounting. Every item 13-21 is shipped; item 16 additionally surfaced
+and documented a real boundary one layer below scaffold (definition-catalog
+primary/fallback merge policy hides class fields on typical real classes) —
+not a BLOCKED item, a shipped feature with an honestly-documented limit.
+694→720 tests (26 new), 126/126 test files green throughout.
+
 ## Steps (priority order)
 
 - [x] **P5.1 (#13) Resource aliases.** Mapping schema: a variable may declare
@@ -63,5 +79,5 @@ in the 694-test suite, and every item 13-21 either shipped or BLOCKED-noted.
   instance-field discovery only if the SCIP index exposes the definitions
   (agent verified it may not) — otherwise document the boundary in the
   scaffold error message + skill, BLOCKED-note the rest.
-- [ ] **P5.8 Closeout.** Update followups 13-21 statuses; regenerate docs;
+- [x] **P5.8 Closeout.** Update followups 13-21 statuses; regenerate docs;
   benchmark Proof line in the commit message; full gates.

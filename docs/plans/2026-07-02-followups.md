@@ -108,14 +108,81 @@ up, write a real plan section (`concrete-plan`), and implement independently.
 11. `tla verify` lacks a `--timeout-ms` flag though TlaToolRunOptions.timeoutMs exists — big models cannot raise the 120s TLC budget (Vega TLA audit).
 12. tla verify output needs root-cause grouping/caps at avalanche scale — 10,724 findings on one model is unconsumable (Vega TLA audit, AuthRefreshCompanionAuthorization).
 
-13. **TLA resource aliases** — model variables can only bind to program symbols, so state that lives in the filesystem (lock files, published index artifacts) is invisible to the static write-scan: `rmSync(lockPath)` is semantically a write to the model's `lockOwner` but textually a call. Extend the mapping schema so a variable can declare a *resource* binding (a path expression); the conformance scanner then classifies `writeFileSync`/`rmSync`/`renameSync`/`mkdirSync`/`readFileSync` on that resource as writes/reads of the variable. Evidence: specs/reindex-lock's Proof line — 7 writes verified, 11 waived, most waivers being exactly this fs-backed class (2026-07-02 dogfood modeling run).
-14. **TLA one-hop callee effect derivation** — writes that happen one function away from the mapped action (e.g. the preemption path's pid assignment on the next `tryAcquireReindexLock` iteration) are statically invisible per-range; derive effects through one level of the call graph before falling back to waivers. Same evidence as #13.
-15. **TLA per-action trace coverage reporting** — `tla trace-check` should report which model actions the recorded traces exercised vs never observed, so pure modeling abstractions (e.g. `phase` variables with no code twin) get execution-proven and the permanently-waived set shrinks to genuine abstractions only. Target state: every mapping fact is statically verified, trace-verified, or waived-with-reason — with waivers reserved for abstraction, not reachability.
+13. **RESOLVED (2026-07-02, remediation P5.1).** `variables.<v>.resource: {path}` binds a variable to
+    filesystem state. The conformance scanner (AST + source-scan fallback, both write and read paths)
+    classifies `writeFileSync`/`rmSync`/`renameSync`/`mkdirSync`/`unlinkSync` and `readFileSync`/
+    `existsSync`/`statSync` calls as writes/reads of the variable when the call's first argument text
+    contains the declared path — evidence tier stays `static-action`. Applied to specs/reindex-lock's
+    `lockOwner` (bound to `lockPath`); one now-provable waiver deleted at this step alone (writes: 7→10
+    verified). See #14 for the rest of the benchmark movement and the residual-gap accounting.
+    Source: docs/plans/2026-07-02-tla-static-coverage.md P5.1.
+14. **RESOLVED (2026-07-02, remediation P5.4), target partially met.** `collectAllStaticWrites`/`Reads`
+    now also scan each action referent's direct callees (`callGraph(db, symbol, {semantic:false})` —
+    precise call edges only, one level, no recursion) for effects on a variable the action already
+    declares (the declared-fact filter is load-bearing: an unfiltered version misattributed a shared
+    callee's write across actions that don't own it — undeclared-write false positives, caught by a
+    regression fixture). Findings/staticWrites gain `via: <callee>`. specs/reindex-lock benchmark:
+    writes 7→17 verified, 11→9 waived (target was ≤3, not fully reached). Root cause of the remaining
+    gap: 7 of the 9 write waivers are `phase`, a documented pure control-flow abstraction with no
+    stored field in code at all across all 7 modeled actions — no resource binding or call-hop can
+    manufacture evidence for state that isn't materialized; the other 2 (Crash: external process-death
+    event; Publish: released via an anonymous closure with no callable symbol) are equally unprovable
+    by the same reasoning already in the mapping before this work. Reaching ≤3 would require either
+    dishonestly stretching evidence or a model redesign reducing `phase`'s per-action granularity —
+    out of scope for a scanner-capability step. Source: docs/plans/2026-07-02-tla-static-coverage.md
+    P5.4 (commit message has the full per-waiver rationale).
+15. **RESOLVED (2026-07-02, remediation P5.6).** `tla trace-check` verdicts (JSON and human) gain
+    `actionCoverage`: steps-observed per mapped action, including zero-count entries for actions never
+    exercised. Human mode lists unexercised actions with a classify-it pointer (pure modeling
+    abstraction vs. real gap). Live-validated on specs/diff-gate's existing trace: `RunDiffGate`/
+    `DecideExitCurrent` show 1 step each, `DecideExitVulnerable` (the pre-fix regression-model action
+    with no real code path) correctly reports 0 — exactly the abstraction-not-reachability distinction
+    this item asked for. Source: docs/plans/2026-07-02-tla-static-coverage.md P5.6.
 
-16. **tla scaffold: class-field and cross-process state discovery** — scaffold only finds top-level module `let`s; class instance fields and fs-backed state are invisible, making it inapplicable to concurrency systems (2026-07-02 dogfood modeling, Model A).
-17. **TLA variable referents need a waiver escape** — `invalid-referent-kind`/`missing-referent` have no waive path, forcing proxy-ref workarounds for state materialized only via `process.exitCode` or literals (Model B).
-18. **TLA alias collisions across variables** — two variables sharing an alias (e.g. "findings") misattribute every matching write to both; detect and error on duplicate aliases at contract load.
-19. **TLA unmapped-write sweep granularity** — the sweep covers whole scope files rather than action ranges, forcing every touching function to be mapped; consider per-action scoping or a documented rationale.
-20. **tla trace inputs not deduplicated** — `--trace` + `contract.traces` naming the same file double-counts steps.
-21. **tla trace-check hardcodes `Next`** — incompatible with dual CurrentSpec/VulnerableSpec models; support `--next <operator>` (workaround: `Next == NextCurrent` alias).
+16. **PARTIALLY RESOLVED (2026-07-02, remediation P5.7) — implemented, deeper boundary found and
+    documented.** scaffold.ts now falls back to class instance-field discovery when no top-level
+    module state exists, scoped per class (a fixture proves same-named fields on unrelated classes
+    never cross-contaminate) with qualified `file/Class#member` codeRefs. The original "may not
+    [expose the definitions]" uncertainty is resolved in the RAW-data sense — SCIP does emit
+    `ClassName#field.` symbols with real definition mentions (verified live: `ScipDatabase#pathFilter`/
+    `#config` in this repo's own index) — but `getDefinitionsForFile` (the catalog nearly every command
+    depends on) never surfaces them on a typical class: `symbol-row-policy.ts`'s
+    `isPreciseMixedFallbackRow` drops every class-member fallback row whenever the file has any
+    primary-indexed definition, true for any class with a constructor or named method. Verified live:
+    `Watcher` (src/runtime/watch.ts, 14 methods, 20+ written fields) surfaces zero fields to scaffold.
+    The discovery algorithm itself is correct and tested against the shape the catalog would produce
+    absent that filter; fixing the catalog is a separate, repo-wide-blast-radius change (members, refs,
+    trace, health all depend on it), out of scope here — documented precisely in scaffold's thrown
+    error and the skill's Choose the Slice section, per this item's own "otherwise document the
+    boundary" escape hatch. Cross-process state (the other half of this item, e.g. lock-file-owner
+    identity as distinct from filesystem *content* already covered by #13) was not separately pursued
+    — no dogfood case in this session needed it beyond what #13's resource binding already covers.
+    Source: docs/plans/2026-07-02-tla-static-coverage.md P5.7.
+17. **RESOLVED (2026-07-02, remediation P5.2).** `variables.<v>.waive: {reason}` exempts that
+    variable's `missing-referent`/`invalid-referent-kind` findings (distinct from an action's `waive`,
+    which exempts read/write facts only), counted in the Waivers output and Proof line
+    ("referents: N waived") like action waivers. specs/diff-gate's `stage`/`exitState` proxy-ref
+    workaround (citing an unrelated real `DiffGateResult` field as a decoy just to pass the
+    value-like-kind check) replaced with an honest missing-referent + variable waiver naming a plainly
+    non-existent symbol. Source: docs/plans/2026-07-02-tla-static-coverage.md P5.2.
+18. **RESOLVED (2026-07-02, remediation P5.3).** `loadTlaModelContract` now rejects a mapping where
+    two variables share an alias or the same resource path suffix, at contract-load time (before any
+    scanning), instead of silently misattributing every matching write/read to both. Source:
+    docs/plans/2026-07-02-tla-static-coverage.md P5.3.
+19. **RESOLVED (2026-07-02, remediation P5.7).** `unmappedWriteScope: 'actions' | 'scope-files'`
+    (default `'scope-files'`, identical to prior behavior) added to the mapping schema. `'actions'`
+    opts out of the whole-scope-file unmapped-write sweep entirely, relying only on the per-action
+    write/read checks, for models whose `scope` legitimately contains code the mapping was never meant
+    to cover in full. Source: docs/plans/2026-07-02-tla-static-coverage.md P5.7.
+20. **RESOLVED (2026-07-02, remediation P5.5).** `dedupeTracePaths(projectRoot, paths)` resolves each
+    trace path and keeps only the first occurrence; `contract.traces` and `--trace` naming the same
+    file (relative vs. absolute, or literally repeated) no longer double-counts that file's steps in
+    either `tla verify` or `tla trace-check`. Source: docs/plans/2026-07-02-tla-static-coverage.md P5.5.
+21. **RESOLVED (2026-07-02, remediation P5.5).** `generateTraceSpec`/`runTraceCheck` take an optional
+    `nextOperator` (default `Next`); new `tla trace-check --next <operator>` CLI flag. Proven live with
+    a real-TLC e2e test: the same trace accepts under one named relation and diverges under another on
+    the same spec. specs/diff-gate/DiffGateOutcome.tla drops the `Next == NextCurrent` alias workaround
+    (trace-check now runs with `--next NextCurrent`); both `tla verify` configs (which SPECIFY
+    CurrentSpec/VulnerableSpec directly, never a bare `Next`) are unaffected. Source:
+    docs/plans/2026-07-02-tla-static-coverage.md P5.5.
 
