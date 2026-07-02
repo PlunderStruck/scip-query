@@ -54,6 +54,7 @@ The loop is complete only when `scip-verify` passes or each remaining finding ha
 | Verify any finished change | `scip-verify` | `status`, `diff-impact`, final gate |
 | Audit, rank, or confirm cleanup findings | `scip-cleanup-audit` | `health`, `cleanup-plan`, cleanup detectors |
 | Autonomously fix confirmed cleanup findings | `scip-cleanup-improve` | `health`, `cleanup-plan`, verified batches |
+| Find or resolve same-name twins that have diverged | `scip-twin-drift` | `twin-drift`, `duplicate-bodies`, `refs` |
 | Reconcile living docs with code | `scip-doc-reconcile` | `doc-drift` |
 | Review or migrate folder ownership | `scip-directory-architecture` | `locality-candidates`, `similar-files` |
 | Review deeper maintainability and system compression | `scip-maintainability` | `bottlenecks`, `similar-chains`, `change-surface` |
@@ -68,6 +69,7 @@ Routing is complete only when one owning skill is selected or the task is small 
 - Use `scip-cleanup-audit` for reports, ranking, confirmation, or recent AI-residue triage without edits.
 - Use `scip-cleanup-improve` when the user asks to fix, improve, continue cleaning, or raise health autonomously.
 - Use `scip-maintainability`, `scip-directory-architecture`, or `scip-hyper-optimization` only when the target is architecture, file ownership, or measured speed/cost rather than cleanup.
+- Use `scip-twin-drift` for same-name/near-name consolidation questions (a specific concept copied and drifted); use `scip-cleanup-audit`/`scip-cleanup-improve` for general bloat, echoes, and duplication sweeps that are not centered on one drifted twin family.
 
 ## Setup
 
@@ -95,6 +97,7 @@ Top commands per routed skill, generated from each skill's own `commands:` front
 | `scip-react-maintainability` | `scip-query react-component-duplicates --scope <scope> --full --json`, `scip-query react-hook-candidates --scope <scope> --full --json`, `scip-query react-large-component-pressure --scope <scope> --full --json` |
 | `scip-setup` | `scip-query setup --json`, `scip-query doctor`, `scip-query status --json` |
 | `scip-triage-issue` | `scip-query files <issue-term>`, `scip-query trace <entry-or-error-symbol>`, `scip-query code <entry-or-error-symbol>` |
+| `scip-twin-drift` | `scip-query twin-drift --json --full`, `scip-query duplicate-bodies --json --full`, `scip-query code <symbol>` |
 | `scip-verify` | `scip-query doctor`, `scip-query status --capabilities`, `scip-query diff-impact --json` |
 | `scip-vue-maintainability` | `scip-query augment-vue --project <path-to-tsconfig>`, `scip-query vue-component-duplicates --scope <scope> --full --json`, `scip-query vue-composable-candidates --scope <scope> --full --json` |
 | `tla-model-system` | `scip-query tla scaffold <file>`, `scip-query tla verify <spec>`, `scip-query tla instrument <spec>` |

@@ -1,0 +1,4 @@
+interface:
+  display_name: "SCIP Twin Drift"
+  short_description: "Find and resolve same-name twins that have silently diverged"
+  default_prompt: "Use scip-query twin-drift to find same-name or near-name functions that have diverged across files, classify each divergence, and consolidate or record the intent gap."
