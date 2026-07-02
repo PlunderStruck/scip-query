@@ -68,13 +68,11 @@ up, write a real plan section (`concrete-plan`), and implement independently.
    Source: `docs/validation/2026-07-01-external-calibration-vega.md` §3 ("Failure modes
    observed", `similar` bullet).
 
-6. **RESOLVED (2026-07-02, remediation 24.5). `analysisBudget` disclosure only wired into
-   `diff-gate` (Vega).** `commandAnalysisBudget` was only consumed by
-   `src/runtime/query-commands/impact.ts` (diff-gate); every standalone battery command (`drift`,
-   `duplicate-bodies`, `co-change`, etc.) ran uncapped on a 188k-symbol index with no
-   budget-disclosure key in its JSON. Fixed by commit `8fcac514`: the `analysisBudget` disclosure
-   is now emitted in the JSON of every budgeted command (health, navigation, planning, and impact
-   surfaces — `src/runtime/query-commands/{health,navigation,planning,impact}.ts`).
+6. **`analysisBudget` disclosure only wired into `diff-gate` (Vega).** `commandAnalysisBudget` is
+   only consumed by `src/runtime/query-commands/impact.ts` (diff-gate); every standalone battery
+   command (`drift`, `duplicate-bodies`, `co-change`, etc.) ran uncapped on a 188k-symbol index
+   with no budget-disclosure key in its JSON. Either wire the disclosure into every large-index
+   command or document that the contract is diff-gate-only.
    Source: `docs/validation/2026-07-01-external-calibration-vega.md` §1 ("Analysis-budget
    disclosure at this index size").
 
@@ -106,17 +104,7 @@ up, write a real plan section (`concrete-plan`), and implement independently.
    Source: `docs/plans/2026-07-01-remediation-3-detection-primitives-and-lens-skills.md`,
    "Deviations from plan anchors" note for step 19.3.
 
-10. **RESOLVED (2026-07-02, remediation 24.1, commit `bfbe67fa`).** tla tool-runner classified
-    SIGTERM-at-timeout TLC runs (exit 143, timedOut false) as `failed` instead of `timed-out`
-    (Vega TLA audit, GitHubWebhookIndexingPipeline). `src/tla/tool-runner.ts` now classifies
-    `SIGTERM && durationMs >= timeoutMs` as `timed-out`.
-11. **RESOLVED (2026-07-02, remediation 24.2, commit `affe02b7`).** `tla verify` lacked a
-    `--timeout-ms` flag though TlaToolRunOptions.timeoutMs existed — big models could not raise
-    the 120s TLC budget (Vega TLA audit). Flag registered in
-    `src/runtime/query-commands/tla.ts`.
-12. **RESOLVED (2026-07-02, remediation 24.3, commit `75a5c60b`).** tla verify output needed
-    root-cause grouping/caps at avalanche scale — 10,724 findings on one model was unconsumable
-    (Vega TLA audit, AuthRefreshCompanionAuthorization). Findings are now grouped by
-    (category, modelElement) with capped-by-default output and `--full` to uncap
-    (`src/tla/conformance.ts` `findingGroups`, `src/runtime/query-commands/tla.ts`).
+10. tla tool-runner classifies SIGTERM-at-timeout TLC runs (exit 143, timedOut false) as `failed` instead of `timed-out` (Vega TLA audit, GitHubWebhookIndexingPipeline).
+11. `tla verify` lacks a `--timeout-ms` flag though TlaToolRunOptions.timeoutMs exists — big models cannot raise the 120s TLC budget (Vega TLA audit).
+12. tla verify output needs root-cause grouping/caps at avalanche scale — 10,724 findings on one model is unconsumable (Vega TLA audit, AuthRefreshCompanionAuthorization).
 

@@ -1,12 +1,5 @@
 # TLA+ Model Conformance Plan
 
-> **STATUS (2026-07-02): IMPLEMENTED — checkboxes below were never ticked.** The
-> full workflow shipped via commits `56865c7c` (P0: contract types, tool-runner,
-> conformance, `tla verify`, skill) and `9449e08c` (P1/P2: scaffold, instrument,
-> trace-check), with follow-on polish in remediation 24.1–24.3 (timeout
-> classification, `--timeout-ms`, finding groups). See "Implementation Result"
-> below; treat the unchecked boxes as done. Kept as a historical record.
-
 ## Goal
 
 Build an on-demand workflow where an agent can explore a TypeScript system,

@@ -1,14 +1,5 @@
 # Review Remediation Plan — full program
 
-> **STATUS (2026-07-02): IMPLEMENTED — checkboxes below were never ticked.** All
-> phases landed, squashed into commit `56865c7c` ("Implement remediation plan 1:
-> evidence integrity, honesty, consent, skills, TLA P0"). Spot-verified:
-> `SymbolResolution` type, `decideBatchStatus`, the `uninstall` command,
-> hooks defaulting to `settings.local.json`, and the skill consolidation
-> (scip-setup / scip-cleanup-audit / scip-cleanup-improve replacing the six
-> retired skills) all exist at HEAD. Kept as a historical record; treat the
-> unchecked boxes as done.
-
 Date: 2026-07-01
 Executor: Codex (implementation) → Claude (review pass per phase)
 Inputs: [Critical review](../reviews/2026-07-01-critical-review.md) · [TLA redesign proposal](../reviews/2026-07-01-tla-redesign-proposal.md)
