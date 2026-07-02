@@ -70,12 +70,14 @@ which leaves the native modules unbuilt. Every script on that list is expected:
 - `better-sqlite3` — builds/downloads the native SQLite binding that backs the index
 - `tree-sitter` + the per-language grammars — native parsers behind multi-language source facts
 
-Approve them and re-run the builds:
+Approve them and re-run the builds (`--allow-scripts-pending` only *lists* — the approving forms
+are `npm approve-scripts <pkg> ...` or `--all`):
 
 ```bash
-npm approve-scripts --allow-scripts-pending   # review and approve the list above
-npm rebuild                                   # run the now-approved build scripts
-scip-query status --capabilities              # verify: languages should show as available
+npm approve-scripts --all        # approve every pending install script (review the list first
+                                 # with: npm approve-scripts --allow-scripts-pending)
+npm rebuild                      # run the now-approved build scripts
+scip-query status --capabilities # verify: languages should show as available
 ```
 
 This approval is deliberately yours to make — a package cannot approve its own install scripts,
