@@ -138,3 +138,5 @@ Remaining risk:
 ```
 
 Do not claim ready-to-ship unless freshness is `fresh` after the final edit and diff-gate is passed or fully explained.
+
+- On pnpm-workspace repos, or where consumers use `import type` or Vue `<script setup>`, treat `dead`/`new-dead` findings as unconfirmed until `refs` agrees — these consumer shapes are known reference-tracking gaps (docs/plans/2026-07-02-followups.md).

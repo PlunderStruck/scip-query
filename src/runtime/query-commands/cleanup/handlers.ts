@@ -498,7 +498,10 @@ export const handleDrift = budgetedReportCommand('drift', {
 export const handleConvergence = budgetedReportCommand('convergence', {
   query: ({ db, args, budget }) =>
     queries.convergence(db, stringArg(args, 0), stringArg(args, 1), { semantic: budget.semantic }),
-  emptyMessage: (result) => (result ? undefined : 'One or both symbols not found.'),
+  emptyMessage: (result) =>
+    result
+      ? undefined
+      : 'One or both symbols did not resolve, or the pair has no fingerprint evidence (small helpers with few callees fall below the similarity threshold; try --min-callees 1).',
   render: (result) => {
     if (!result) return;
     console.log('\nDeprecated: use `similar <symbol1> <symbol2> --plan` for the same weighted similarity basis.');

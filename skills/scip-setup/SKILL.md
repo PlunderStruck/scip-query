@@ -37,6 +37,19 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->
 
+## Per-Repo Triage (once, after setup)
+
+New repos surface standing findings that are intentional. Encode them once so
+every later gate run is precise:
+
+1. Sweep initial findings (`health --json`, `diff-gate --json`) and, for each accepted one, `suppress <id> --reason <why>` — reasons are required and audited.
+2. Declare files that legitimately change together in `.scipquery.json` `declaredCouplings`.
+3. List dated snapshot docs (benchmarks, validation ledgers, historical plans/reviews) in `docs.snapshotPaths` so doc checks skip them with a labeled exclusion instead of recurring findings.
+4. Seed `coverageContracts` for every hand-maintained enumeration (policy maps, capability tables, registry lists) so enumeration rot fails the gate the day it happens.
+5. Set a hygiene cadence: run `scip-twin-drift` and `scip-claim-audit` after large refactor campaigns or quarterly — the gate only sees diffs; these lenses see accumulated state.
+
+This step is complete only when a clean working tree produces a finding-free `diff-gate` and every suppression carries a reason a reviewer would accept.
+
 ## Rules
 
 1. Prefer the single setup command over hand-running its internals.

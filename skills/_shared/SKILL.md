@@ -189,6 +189,19 @@ scip-query status # Show index status for this project
 
 <!-- END GENERATED COMMAND FAMILIES -->
 
+## Detector Reliability
+
+Calibrated against two external production repos on 2026-07-01
+(docs/validation/2026-07-01-external-calibration-*.md). Weight findings by
+measured precision, not by volume:
+
+- **Strong signal** — `complexity-hotspots` (~90%), `recent-duplicates` (~75%), graph facts (`refs`, `trace`, `deps`), compiler-verified `cleanup-plan --verify`.
+- **Good with review** — `duplicate-bodies`, `similar`, `co-change`, `doc-drift`, `twin-drift` (post-retune defaults).
+- **Exploration only** — `wrapper-candidates`, `stale-abstractions`, `drift --patterns`: near-zero precision on codebases with intentional layering or ambient types. Never file their findings without reading the cited code.
+- **Advisory gate findings** (marked `(advisory)`) never block; they are context, not obligations.
+- **Known false-dead archetypes**: `dead`/`new-dead` currently over-report on symbols consumed only via `import type`, pnpm-workspace cross-package consumers, and Vue `<script setup>` composables (docs/plans/2026-07-02-followups.md items 1-3). On repos with those shapes, confirm with `refs` and trust `cleanup-plan --verify` over raw `dead` output.
+- **Ledger nudges**: when `diff-gate --hook` reports "this check is rarely acted on in this repo", either tune that check's config, suppress the standing findings with reasons, or consciously accept the noise — do not let unresolved findings accumulate as wallpaper.
+
 ## Postchecks
 
 Run the rows that match the actual edit:
