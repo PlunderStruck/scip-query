@@ -8,9 +8,9 @@ import type { ScipDatabase } from '../../../src/storage/db.js';
 
 let commitClock = 2_000_000_000;
 
-function fakeDb(projectRoot: string): ScipDatabase {
+function fakeDb(projectRoot: string, snapshotPaths?: string[]): ScipDatabase {
   return {
-    config: { projectRoot },
+    config: { projectRoot, docs: snapshotPaths ? { snapshotPaths } : undefined },
     all: () => [],
     pathExclusionsFor: () => '',
     isIgnored: () => false,
@@ -103,6 +103,50 @@ describe('doc-drift', () => {
         ]),
       );
       expect(result.findings.map((finding) => finding.doc)).not.toContain('CHANGELOG.md');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('excludes a docs.snapshotPaths glob match from default findings, but labels it under --full', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-doc-drift-snapshot-'));
+    try {
+      gitIn(root, 'init');
+      commitIn(root, 'initial', {
+        'docs/benchmarks/2026-06-28-ledger.md': 'Snapshot of src/a.ts as of this date.\n',
+        'src/a.ts': 'export const version = 1;\n',
+      });
+      commitIn(root, 'code moves on', { 'src/a.ts': 'export const version = 2;\n' });
+
+      const db = fakeDb(root, ['docs/benchmarks/**']);
+
+      const defaultResult = docDrift(db, { limit: 10 });
+      expect(defaultResult.findings.map((finding) => finding.doc)).not.toContain(
+        'docs/benchmarks/2026-06-28-ledger.md',
+      );
+
+      const fullResult = docDrift(db, { limit: 10, includeSnapshotExcluded: true });
+      const snapshotFinding = fullResult.findings.find(
+        (finding) => finding.doc === 'docs/benchmarks/2026-06-28-ledger.md',
+      );
+      expect(snapshotFinding?.snapshotExcluded).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('treats an inline <!-- scip-query: snapshot --> marker the same as a configured glob', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-doc-drift-snapshot-marker-'));
+    try {
+      gitIn(root, 'init');
+      commitIn(root, 'initial', {
+        'docs/one-off-note.md': '<!-- scip-query: snapshot -->\nSnapshot of src/a.ts as of this date.\n',
+        'src/a.ts': 'export const version = 1;\n',
+      });
+      commitIn(root, 'code moves on', { 'src/a.ts': 'export const version = 2;\n' });
+
+      const result = docDrift(fakeDb(root), { limit: 10 });
+      expect(result.findings.map((finding) => finding.doc)).not.toContain('docs/one-off-note.md');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

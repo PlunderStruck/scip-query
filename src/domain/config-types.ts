@@ -95,6 +95,8 @@ export interface ScipQueryConfig {
   locality?: LocalityConfig;
   /** Enumeration-rot contracts: a declared key set that must track a ground-truth source. */
   coverageContracts?: CoverageContractConfig[];
+  /** Documentation policy (snapshot-doc exemptions, ...). */
+  docs?: DocsConfig;
 }
 
 // ── Project Config (.scipquery.json) ───────────────────────
@@ -124,6 +126,8 @@ export interface ProjectConfig {
   locality?: LocalityConfig;
   /** Enumeration-rot contracts: a declared key set that must track a ground-truth source. */
   coverageContracts?: CoverageContractConfig[];
+  /** Documentation policy (snapshot-doc exemptions, ...). */
+  docs?: DocsConfig;
 }
 
 // ── Coverage Contracts ─────────────────────────────────────
@@ -161,6 +165,17 @@ export interface CoverageContractConfig {
 export interface LocalityConfig {
   /** Folder names that should be treated as architectural ownership boundaries. */
   architecturalBoundarySegments?: string[];
+}
+
+export interface DocsConfig {
+  /**
+   * Glob patterns (see src/analysis/glob-match.ts for supported syntax) for
+   * dated snapshot docs that intentionally cite code "as of" a moment in
+   * time — excluded from diff-gate's doc-reference check and doc-drift's
+   * default findings. A `<!-- scip-query: snapshot -->` marker inside a doc
+   * has the same effect regardless of its path.
+   */
+  snapshotPaths?: string[];
 }
 
 export interface DeclaredCouplingConfig {

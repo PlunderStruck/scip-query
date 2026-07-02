@@ -15,7 +15,7 @@ import type { CoChangePartnerClass, DeclaredCouplingSuggestion } from './co-chan
 import { baseContentPathsForDiffPlan, createBaseContentReader, diffImpact, diffImpactPlan } from './diff-impact.js';
 import type { AttributionNote, BaseContentReader, ChangedLineRange, DiffImpactPlan } from './diff-impact.js';
 import { baselineFindingMetadata } from './diff-gate-baseline-policy.js';
-import { docReferencePolicy } from './diff-gate-doc-policy.js';
+import { docReferencePolicy, isSnapshotDoc } from './diff-gate-doc-policy.js';
 import type { DiffGateActionTier, DocCitationKind } from './diff-gate-types.js';
 import { docsCitingFiles } from '../cleanup/doc-drift.js';
 import { exactDuplicateBodyMatches } from '../cleanup/duplicate-bodies.js';
@@ -923,6 +923,7 @@ function runDocReferenceCheck(
   if (targets.size === 0) return;
   for (const citation of docsCitingFiles(db, targets)) {
     if (changedGitFiles.has(citation.doc)) continue; // doc updated in the same diff
+    if (isSnapshotDoc(db, citation.doc)) continue; // dated snapshot doc — excluded by docs.snapshotPaths policy
     const citedClaims =
       citation.citedClaims.length > 0
         ? citation.citedClaims

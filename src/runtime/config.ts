@@ -53,6 +53,7 @@ const ROOT_CONFIG_KEYS = new Set([
   'declaredCouplings',
   'locality',
   'coverageContracts',
+  'docs',
 ]);
 
 const WATCH_CONFIG_KEYS = new Set(['enabled', 'debounceMs', 'cooldownMs', 'gitPollMs', 'autoRefresh', 'ignore']);
@@ -63,6 +64,7 @@ const TYPESCRIPT_SEMANTIC_CONFIG_KEYS = new Set(['tsconfigs']);
 const INDEXER_CONFIG_KEYS = new Set(SUPPORTED_LANGUAGES);
 const INDEXER_OVERRIDE_CONFIG_KEYS = new Set(['pnpmWorkspaces', 'projectMode', 'projects', 'configPath']);
 const LOCALITY_CONFIG_KEYS = new Set(['architecturalBoundarySegments']);
+const DOCS_CONFIG_KEYS = new Set(['snapshotPaths']);
 const DECLARED_COUPLING_CONFIG_KEYS = new Set(['name', 'files', 'reason']);
 const SUPPRESSION_CONFIG_KEYS = new Set(['id', 'check', 'file', 'reason', 'expiresAt']);
 const COVERAGE_CONTRACT_CONFIG_KEYS = new Set(['name', 'file', 'keys', 'mustEqual', 'allowExtra']);
@@ -321,7 +323,26 @@ export function validateProjectConfig(
     }
   }
   validateCoverageContracts(config, diagnostics, opts);
+  validateDocsConfig(config, diagnostics);
   return diagnostics;
+}
+
+function validateDocsConfig(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {
+  const snapshotPaths = config.docs?.snapshotPaths;
+  if (snapshotPaths === undefined) return;
+  if (!Array.isArray(snapshotPaths)) {
+    diagnostics.push({ level: 'error', path: 'docs.snapshotPaths', message: 'Must be an array.' });
+    return;
+  }
+  for (const [index, pattern] of snapshotPaths.entries()) {
+    if (typeof pattern !== 'string' || pattern.trim() === '') {
+      diagnostics.push({
+        level: 'error',
+        path: `docs.snapshotPaths[${index}]`,
+        message: 'Snapshot path glob must be a non-empty string.',
+      });
+    }
+  }
 }
 
 function validateCoverageContracts(
@@ -512,6 +533,7 @@ function reportUnknownConfigKeys(config: ProjectConfig, diagnostics: ConfigDiagn
     TYPESCRIPT_SEMANTIC_CONFIG_KEYS,
   );
   reportUnknownObjectKeys(diagnostics, typedConfig.locality, 'locality', LOCALITY_CONFIG_KEYS);
+  reportUnknownObjectKeys(diagnostics, typedConfig.docs, 'docs', DOCS_CONFIG_KEYS);
 
   if (isConfigObject(typedConfig.indexer)) {
     reportUnknownObjectKeys(diagnostics, typedConfig.indexer, 'indexer', INDEXER_CONFIG_KEYS);

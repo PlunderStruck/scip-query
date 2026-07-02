@@ -830,10 +830,12 @@ export const handleRecentDuplicates = budgetedDbCommand('recent-duplicates', ({ 
 });
 
 export const handleDocDrift = dbCommand(({ db, args, opts }) => {
+  const full = booleanOptionValue(opts, 'full');
   const result = queries.docDrift(db, {
     doc: args[0] === undefined ? undefined : stringArg(args, 0),
     limit: definedLimitOption(opts, 'limit', 20),
     minCoupling: definedNumberOption(opts, 'minCoupling', 3),
+    includeSnapshotExcluded: full,
   });
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('doc-drift', args, opts, result);
@@ -850,7 +852,8 @@ export const handleDocDrift = dbCommand(({ db, args, opts }) => {
     `Docs whose referenced or co-changed code moved on without them (${result.docsScanned} docs scanned, ${result.commitsAnalyzed} commits analyzed):\n`,
   );
   for (const finding of result.findings) {
-    console.log(`  staleness ${finding.staleness}  ${finding.doc}`);
+    const snapshotLabel = finding.snapshotExcluded ? '  [snapshot (excluded by policy)]' : '';
+    console.log(`  staleness ${finding.staleness}  ${finding.doc}${snapshotLabel}`);
     for (const broken of finding.brokenReferences.slice(0, 4)) {
       console.log(`    BROKEN REFERENCE: cites ${broken} — that file no longer exists`);
     }

@@ -247,6 +247,37 @@ describe('validateProjectConfig', () => {
     );
   });
 
+  it('validates docs.snapshotPaths entries are non-empty strings', () => {
+    const diagnostics = validateProjectConfig({
+      docs: { snapshotPaths: ['docs/plans/**', '', 42 as unknown as string] },
+    });
+
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ level: 'error', path: 'docs.snapshotPaths[1]' }),
+        expect.objectContaining({ level: 'error', path: 'docs.snapshotPaths[2]' }),
+      ]),
+    );
+  });
+
+  it('accepts well-formed docs.snapshotPaths', () => {
+    const diagnostics = validateProjectConfig({
+      docs: { snapshotPaths: ['docs/benchmarks/**', 'docs/validation/**'] },
+    });
+
+    expect(diagnostics.filter((diagnostic) => diagnostic.level === 'error')).toEqual([]);
+  });
+
+  it('warns about unknown docs config keys', () => {
+    const diagnostics = validateProjectConfig({
+      docs: { snapshotPaths: [], extra: true } as never,
+    });
+
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([expect.objectContaining({ level: 'warning', path: 'docs.extra' })]),
+    );
+  });
+
   it('validates locality architectural boundary segments', () => {
     const diagnostics = validateProjectConfig({
       locality: {

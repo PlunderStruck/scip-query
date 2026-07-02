@@ -151,5 +151,8 @@
       "mustEqual": { "type": "top-level-dirs", "path": "skills" },
       "allowExtra": false
     }
-  ]
+  ],
+  "docs": {
+    "snapshotPaths": ["docs/benchmarks/**", "docs/validation/**", "docs/reviews/**", "docs/plans/**"]
+  }
 }

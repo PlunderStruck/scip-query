@@ -30,7 +30,8 @@ const DIFF_GATE_CHECK_DESCRIPTIONS: Record<DiffGateCheck, { description: string;
     when: 'Default diff gate, only when either side of a configured contract changed.',
   },
   'doc-reference': {
-    description: 'Docs that cite changed files and may need a matching update.',
+    description:
+      'Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy.',
     when: 'Default diff gate.',
   },
   'unused-params': {

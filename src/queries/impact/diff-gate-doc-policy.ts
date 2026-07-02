@@ -5,6 +5,24 @@ import { matchingDocTerms } from '../cleanup/doc-terms.js';
 import type { ChangedLineRange } from './diff-impact.js';
 import { rangesByFile } from './diff-ranges.js';
 import type { DiffGateActionTier, DocCitationKind } from './diff-gate-types.js';
+import { matchesGlob } from '../../analysis/glob-match.js';
+import { getSourceText } from '../../source/source-text.js';
+
+const SNAPSHOT_MARKER_PATTERN = /<!--\s*scip-query:\s*snapshot\s*-->/i;
+
+/**
+ * Snapshot docs (docs/benchmarks/**, docs/validation/**, docs/reviews/**,
+ * docs/plans/** by default, or any doc carrying a
+ * `<!-- scip-query: snapshot -->` marker) intentionally cite code "as of" a
+ * moment in time. They are excluded from diff-gate's doc-reference check and
+ * doc-drift's default findings — see docs.snapshotPaths in .scipquery.json.
+ */
+export function isSnapshotDoc(db: ScipDatabase, docFile: string): boolean {
+  const globs = db.config.docs?.snapshotPaths ?? [];
+  if (globs.some((pattern) => matchesGlob(pattern, docFile))) return true;
+  const source = getSourceText(db, docFile);
+  return source.length > 0 && SNAPSHOT_MARKER_PATTERN.test(source);
+}
 
 export interface DocCitationClassification {
   citationKind: DocCitationKind;

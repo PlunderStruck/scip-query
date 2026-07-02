@@ -8,7 +8,7 @@ import { createFileEvidenceProduct } from '../../storage/evidence-products.js';
 import { markdownCitationContext } from './doc-citation-context.js';
 import { matchingDocTerms } from './doc-terms.js';
 import { profileEnabled, profileSpan } from '../../instrumentation/profile.js';
-import { docReferencePolicy } from '../impact/diff-gate-doc-policy.js';
+import { docReferencePolicy, isSnapshotDoc } from '../impact/diff-gate-doc-policy.js';
 import type { DocCitationKind } from '../impact/diff-gate-types.js';
 
 export type DocDriftIntent = 'current-guidance' | 'historical-note' | 'unknown';
@@ -58,6 +58,13 @@ export interface DocDriftFinding {
   subjects: DocDriftSubject[];
   /** File paths the doc mentions that no longer exist (spec points at deleted code). */
   brokenReferences: string[];
+  /**
+   * True when this doc matched the docs.snapshotPaths policy (or carries a
+   * `<!-- scip-query: snapshot -->` marker). Snapshot docs are excluded from
+   * default findings; only present when `includeSnapshotExcluded` requested
+   * them explicitly — never silently dropped, always labeled.
+   */
+  snapshotExcluded?: boolean;
 }
 
 export interface DocDriftResult {
@@ -128,9 +135,9 @@ const PATH_REFERENCE_PATTERN = /([A-Za-z0-9_@-]+(?:\/[A-Za-z0-9_.@-]+)+\.[A-Za-z
  */
 export function docDrift(
   db: ScipDatabase,
-  opts: { doc?: string; limit?: number; minCoupling?: number } = {},
+  opts: { doc?: string; limit?: number; minCoupling?: number; includeSnapshotExcluded?: boolean } = {},
 ): DocDriftResult {
-  const { doc, limit = 20, minCoupling = MIN_COUPLING } = opts;
+  const { doc, limit = 20, minCoupling = MIN_COUPLING, includeSnapshotExcluded = false } = opts;
   const scan = buildDocDriftScanIndex(db);
   if (!scan) return { available: false, commitsAnalyzed: 0, docsScanned: 0, findings: [] };
 
@@ -140,6 +147,8 @@ export function docDrift(
     // Explicitly requested docs bypass the archival filter (detail mode).
     if (doc === undefined && !isLivingDoc(db, docFile)) continue;
     if (doc !== undefined && !existsSync(join(db.config.projectRoot, docFile))) continue;
+    const snapshot = isSnapshotDoc(db, docFile);
+    if (snapshot && !includeSnapshotExcluded) continue;
     const docLastChangedAt = Math.max(0, ...(scan.changeTimes.get(docFile) ?? []));
     const docIntent = classifyDocDriftIntent(db, docFile);
 
@@ -208,6 +217,7 @@ export function docDrift(
       staleness: ordered.reduce((sum, subject) => sum + subject.changesSinceDocUpdate, 0) + broken.length * 10,
       subjects: ordered.slice(0, 8),
       brokenReferences: broken,
+      ...(snapshot ? { snapshotExcluded: true } : {}),
     });
   }
 
