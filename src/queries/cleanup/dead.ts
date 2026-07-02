@@ -14,7 +14,7 @@ import {
 } from '../internal/dead-candidate-gate.js';
 import { getSourceImports } from '../../language-parsers/index.js';
 import { applyScanLimit } from '../query-utils.js';
-import { pathsResolveSame } from '../../resolution/path-normalization.js';
+import { pathsResolveSame } from '../../source/path-normalization.js';
 import { sourceImportPathsByLocalName } from '../../language-parsers/import-index.js';
 import { semanticCallerMap } from '../../semantic/shared-primitives.js';
 import { indexedDocumentPaths as listIndexedDocumentPaths } from '../../storage/scip-documents.js';

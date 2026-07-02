@@ -4,7 +4,7 @@ import { getAllDefinitions } from '../../symbols/definition-catalog.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { getCallSites } from '../../source/ast/ast-facts.js';
 import { getSourceImports } from '../../language-parsers/index.js';
-import { pathsResolveSame } from '../../resolution/path-normalization.js';
+import { pathsResolveSame } from '../../source/path-normalization.js';
 import { classifyFile, isBarrel } from '../../analysis/file-classifier.js';
 import { stripCommentsAndStrings } from '../../source/source-stripper.js';
 import { applyScanLimit, definitionLoc } from '../query-utils.js';

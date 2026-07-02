@@ -26,7 +26,7 @@ import { getSourceText } from '../source/source-text.js';
 import { getSourceFiles } from '../source/source-fileset.js';
 import { semanticReferences } from '../semantic/shared-primitives.js';
 import { leafName } from './symbol-parser.js';
-import { pathsResolveSame } from '../resolution/path-normalization.js';
+import { pathsResolveSame } from '../source/path-normalization.js';
 import { sourceImportPathsByLocalName } from '../language-parsers/import-index.js';
 
 // ── Public types ─────────────────────────────────────────────────

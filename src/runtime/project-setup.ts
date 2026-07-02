@@ -9,7 +9,11 @@ import { installProjectAgentHooks } from './agent-hooks.js';
 import { runIsolatedHealthReport } from './cli-support.js';
 import { resolveWatchConfig, validateProjectConfig } from './config.js';
 import { resolveCliProjectContext } from './cli-context.js';
-import { writeProjectHealthDossier, type ProjectSetupHealthDossier } from './health-dossier.js';
+import {
+  writeProjectHealthDossier,
+  formatHealthScoreSummary as formatHealthScore,
+  type ProjectSetupHealthDossier,
+} from './health-dossier.js';
 import { getIndexFreshness } from './index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from './project-readiness.js';
 import { installSkills, isScipInstalled } from './setup.js';
@@ -744,11 +748,6 @@ function capabilitySummary(capabilities: ProjectCapabilityReport): string {
   if (capabilities.matrix.length === 0) return 'No language capability rows.';
   const available = capabilities.matrix.filter((row) => row.indexing.status === 'available').length;
   return `${available}/${capabilities.matrix.length} language(s) have available indexing.`;
-}
-
-function formatHealthScore(health: ProjectSetupHealthSummary): string {
-  if (health.score === null) return `unavailable (${health.unavailableReason ?? 'not checked'})`;
-  return `${health.score} (risk ${health.riskScore}, hygiene ${health.hygieneScore})`;
 }
 
 function addStep(steps: ProjectSetupStep[], step: ProjectSetupStep): void {

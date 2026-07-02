@@ -7,6 +7,7 @@ import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { consumerEvidenceProduct, consumerFileMapFromEvidence } from '../internal/consumer-evidence.js';
+import { normalizeRelativePath as normalizePath } from '../../source/path-normalization.js';
 
 export type LocalityActionTier = 'signal';
 
@@ -811,10 +812,6 @@ function endsWithSharedHomeSegment(path: string): boolean {
   const segments = path.split('/').filter(Boolean);
   const last = segments[segments.length - 1];
   return last ? SHARED_HOME_SEGMENTS.has(last) : false;
-}
-
-function normalizePath(path: string): string {
-  return path.replaceAll('\\', '/').replace(/^\.\//, '');
 }
 
 function normalizeDirectory(directory: string): string {

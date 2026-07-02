@@ -15,7 +15,7 @@ const DEFAULT_WATCH: Required<WatchConfig> = {
   ignore: [],
 };
 
-const SUPPORTED_LANGUAGES: readonly SupportedLanguage[] = [
+export const SUPPORTED_LANGUAGES: readonly SupportedLanguage[] = [
   'typescript',
   'javascript',
   'java',

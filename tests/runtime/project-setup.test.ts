@@ -153,6 +153,15 @@ async function loadProjectSetup(
       written: ['/repo/docs/scip-query/health-dossier.md', '/repo/docs/scip-query/health-dossier.json'],
       unchanged: [],
     })),
+    formatHealthScoreSummary: (health: {
+      score: number | null;
+      riskScore: number | null;
+      hygieneScore: number | null;
+      unavailableReason?: string;
+    }) =>
+      health.score === null
+        ? `unavailable (${health.unavailableReason ?? 'not checked'})`
+        : `${health.score} (risk ${health.riskScore}, hygiene ${health.hygieneScore})`,
   }));
   vi.doMock('../../src/runtime/project-readiness.js', () => ({
     getProjectReadiness: vi.fn(() => readiness),
@@ -435,6 +444,15 @@ describe('runProjectSetup', () => {
         written: ['/repo/docs/scip-query/health-dossier.md'],
         unchanged: ['/repo/docs/scip-query/health-dossier.json'],
       })),
+      formatHealthScoreSummary: (health: {
+        score: number | null;
+        riskScore: number | null;
+        hygieneScore: number | null;
+        unavailableReason?: string;
+      }) =>
+        health.score === null
+          ? `unavailable (${health.unavailableReason ?? 'not checked'})`
+          : `${health.score} (risk ${health.riskScore}, hygiene ${health.hygieneScore})`,
     }));
     vi.doMock('../../src/runtime/project-readiness.js', () => ({
       getProjectReadiness,

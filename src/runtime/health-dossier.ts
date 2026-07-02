@@ -84,7 +84,7 @@ function renderHealthDossierMarkdown(report: HealthDossierReport): string {
     '',
     `Project: ${report.projectRoot}`,
     `Setup verdict: ${report.verdict}`,
-    `Health score: ${formatHealthScore(report)}`,
+    `Health score: ${formatHealthScoreSummary(report.health)}`,
     '',
     '## Items That Need Attention',
     '',
@@ -149,9 +149,16 @@ function indexerLines(report: HealthDossierReport): string[] {
   });
 }
 
-function formatHealthScore(report: HealthDossierReport): string {
-  if (report.health.score === null) return `unavailable (${report.health.unavailableReason ?? 'not checked'})`;
-  return `${report.health.score} (risk ${report.health.riskScore}, hygiene ${report.health.hygieneScore})`;
+export interface HealthScoreSummary {
+  score: number | null;
+  riskScore: number | null;
+  hygieneScore: number | null;
+  unavailableReason?: string;
+}
+
+export function formatHealthScoreSummary(health: HealthScoreSummary): string {
+  if (health.score === null) return `unavailable (${health.unavailableReason ?? 'not checked'})`;
+  return `${health.score} (risk ${health.riskScore}, hygiene ${health.hygieneScore})`;
 }
 
 function relativeDossierJsonPath(report: HealthDossierReport): string {

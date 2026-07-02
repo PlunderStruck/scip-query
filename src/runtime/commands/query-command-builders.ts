@@ -10,7 +10,7 @@ import {
 
 type QueryCommandMetadata = Omit<CommandDescriptor, 'handler' | 'renderShape'>;
 
-function withJsonOption(metadata: QueryCommandMetadata): QueryCommandMetadata {
+function withMetadataJsonOption(metadata: QueryCommandMetadata): QueryCommandMetadata {
   return { ...metadata, options: appendJsonOption(metadata.options) };
 }
 
@@ -24,7 +24,7 @@ export function listQueryCommand<Row>({
   after,
   ...metadata
 }: QueryCommandMetadata & Parameters<typeof listCommand<Row>>[0]): CommandDescriptor {
-  const commandMetadata = withJsonOption(metadata);
+  const commandMetadata = withMetadataJsonOption(metadata);
   return {
     ...commandMetadata,
     renderShape: 'list',
@@ -53,7 +53,7 @@ export function tableQueryCommand<Row>({
   dashWidths,
   ...metadata
 }: QueryCommandMetadata & Parameters<typeof tableCommand<Row>>[0]): CommandDescriptor {
-  const commandMetadata = withJsonOption(metadata);
+  const commandMetadata = withMetadataJsonOption(metadata);
   return {
     ...commandMetadata,
     renderShape: 'table',
@@ -83,7 +83,7 @@ export function groupedQueryCommand<Row>({
   key,
   ...metadata
 }: QueryCommandMetadata & Parameters<typeof groupedByFileCommand<Row>>[0]): CommandDescriptor {
-  const commandMetadata = withJsonOption(metadata);
+  const commandMetadata = withMetadataJsonOption(metadata);
   return {
     ...commandMetadata,
     renderShape: 'grouped-by-file',
@@ -111,7 +111,7 @@ export function sectionedQueryCommand<Result>({
   after,
   ...metadata
 }: QueryCommandMetadata & Parameters<typeof sectionedReportCommand<Result>>[0]): CommandDescriptor {
-  const commandMetadata = withJsonOption(metadata);
+  const commandMetadata = withMetadataJsonOption(metadata);
   return {
     ...commandMetadata,
     renderShape: 'sectioned-report',
@@ -138,7 +138,7 @@ export function budgetedSectionedQueryCommand<Result>({
   after,
   ...metadata
 }: QueryCommandMetadata & Parameters<typeof budgetedSectionedReportCommand<Result>>[1]): CommandDescriptor {
-  const commandMetadata = withJsonOption(metadata);
+  const commandMetadata = withMetadataJsonOption(metadata);
   return {
     ...commandMetadata,
     budget: commandMetadata.budget ?? 'semantic',

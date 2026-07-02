@@ -17,6 +17,7 @@ import { join } from 'node:path';
 import type { CleanupBatch, CleanupPlanResult } from '../queries/cleanup/cleanup-plan.js';
 import { stripCommentsAndStrings } from '../source/source-stripper.js';
 import { binaryAvailable } from '../core/command-availability.js';
+import { CLOJURE_EXTENSIONS } from '../resolution/import-path-resolver.js';
 
 export interface BatchVerification {
   depth: number;
@@ -234,7 +235,6 @@ interface Checker {
 }
 
 const TS_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.vue'];
-const CLOJURE_EXTENSIONS = ['.clj', '.cljs', '.cljc'];
 const CLOJURE_MARKERS = ['deps.edn', 'project.clj', 'bb.edn', 'shadow-cljs.edn'];
 
 /** Detect every applicable checker — mixed-language repos need all of them. Exported for tests. */
@@ -312,7 +312,7 @@ function detectClojureChecker(projectRoot: string): Checker | null {
       label: 'clj-kondo --lint .',
       binary: localKondo,
       args: ['--lint', '.', '--config', '{:output {:format :json}}'],
-      coversExtensions: CLOJURE_EXTENSIONS,
+      coversExtensions: [...CLOJURE_EXTENSIONS],
     };
   }
   if (binaryAvailable('clj-kondo')) {
@@ -320,7 +320,7 @@ function detectClojureChecker(projectRoot: string): Checker | null {
       label: 'clj-kondo --lint .',
       binary: 'clj-kondo',
       args: ['--lint', '.', '--config', '{:output {:format :json}}'],
-      coversExtensions: CLOJURE_EXTENSIONS,
+      coversExtensions: [...CLOJURE_EXTENSIONS],
     };
   }
   if (binaryAvailable('npx')) {
@@ -328,7 +328,7 @@ function detectClojureChecker(projectRoot: string): Checker | null {
       label: 'npx clj-kondo --lint .',
       binary: 'npx',
       args: ['--yes', 'clj-kondo', '--lint', '.', '--config', '{:output {:format :json}}'],
-      coversExtensions: CLOJURE_EXTENSIONS,
+      coversExtensions: [...CLOJURE_EXTENSIONS],
     };
   }
   return null;

@@ -20,7 +20,10 @@ import type { ScipDatabase } from '../storage/db.js';
 import { sha256Hex } from '../storage/evidence-cache.js';
 import { createPerDbCache, createPerDbValue } from '../storage/per-db-cache.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
+import { normalizePathSeparators as normalizePath } from '../source/path-normalization.js';
 import { discoverWorkspacePackages, type WorkspacePackage } from './workspace-packages.js';
+
+export { normalizePath };
 
 // Derived from the read-only index — valid for the connection's lifetime.
 const INDEXED_PATH_CACHE = createPerDbValue<Set<string>>('indexed-paths', { clearGroups: [] });
@@ -646,11 +649,4 @@ function getIndexedPaths(db: ScipDatabase): Set<string> {
 
 export function importResolutionFingerprint(db: ScipDatabase): string {
   return INDEXED_PATH_DIGEST_CACHE.get(db, () => sha256Hex([...getIndexedPaths(db)].sort().join('\n')));
-}
-
-// scip-query: ignore-wrapper — single line but expresses the project-wide
-// "always forward-slash paths" contract; replacing call sites would scatter
-// the convention.
-export function normalizePath(path: string): string {
-  return path.replace(/\\/g, '/');
 }

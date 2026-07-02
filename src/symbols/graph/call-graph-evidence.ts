@@ -27,7 +27,7 @@ import { profileEnabled, profileSpan } from '../../instrumentation/profile.js';
 import { getGlobalLeafIndex, pickAstCallCandidate, sameLanguageCandidates } from '../leaf-symbol-index.js';
 import type { GlobalLeafCandidate } from '../leaf-symbol-index.js';
 import { scipFunctionLikeKindNumbers, scipTypeLikeKindNumbers } from '../symbol-kind.js';
-import { pathsResolveSame } from '../../resolution/path-normalization.js';
+import { pathsResolveSame } from '../../source/path-normalization.js';
 
 export type CalleeEvidenceSource = 'ast-callsite' | 'semantic-callee' | 'scip-chunk';
 export type CallerEvidenceSource = 'caller-map-inversion' | 'resolved-reference' | 'semantic-reference';

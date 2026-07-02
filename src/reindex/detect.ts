@@ -86,7 +86,7 @@ export function detectLanguages(projectRoot: string): SupportedLanguage[] {
       continue;
     }
 
-    if (hasExtension(extensionSet, marker.extensions)) {
+    if (extensionSetOverlaps(extensionSet, marker.extensions)) {
       detected.push(marker.language);
     }
   }
@@ -207,7 +207,10 @@ function collectGitTrackedExtensions(projectRoot: string): Set<string> | null {
   }
 }
 
-function hasExtension(extensionSet: Set<string>, extensions: readonly string[] | undefined): boolean {
+// Distinct from resolution/import-path-resolver.ts's hasExtensionIn: that
+// checks one path's extension against a set; this checks whether a
+// discovered extension-set overlaps any of a language marker's extensions.
+function extensionSetOverlaps(extensionSet: Set<string>, extensions: readonly string[] | undefined): boolean {
   if (!extensions?.length) {
     return false;
   }

@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { isPathInsideProject as isInsideProject } from '../source/path-normalization.js';
 
 const SKIP_DIR_NAMES = new Set([
   '.cache',
@@ -138,9 +139,4 @@ function relativeProjectPath(projectRoot: string, projectDir: string): string {
 function isAncestor(candidate: string, other: string): boolean {
   const relative = path.relative(candidate, other);
   return Boolean(relative) && !relative.startsWith('..') && !path.isAbsolute(relative);
-}
-
-function isInsideProject(projectRoot: string, candidate: string): boolean {
-  const relative = path.relative(projectRoot, candidate);
-  return !relative.startsWith('..') && !path.isAbsolute(relative);
 }

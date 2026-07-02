@@ -16,6 +16,7 @@ import { buildFileDepGraph } from '../symbols/graph/file-dep-graph.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
 import { sourceEvidence } from '../source/source-evidence.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
+import { normalizePathSeparators as normalizePath } from '../source/path-normalization.js';
 import { leafName } from '../symbols/symbol-parser.js';
 import { isPackageSurfaceFile } from './package-surface.js';
 
@@ -296,10 +297,6 @@ function isBarrelPath(normalized: string): boolean {
     normalized.endsWith('/mod.rs') ||
     normalized.endsWith('/__init__.py')
   );
-}
-
-function normalizePath(path: string): string {
-  return path.replace(/\\/g, '/');
 }
 
 function symbolMatchesQualifiedVar(symbol: string, qualified: string): boolean {

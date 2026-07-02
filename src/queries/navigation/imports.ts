@@ -7,6 +7,7 @@ import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import type { ParsedSourceImport } from '../../domain/types.js';
 import { isModuleLikeSymbol, leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { detectAstLanguage } from '../../source/ast.js';
+import { normalizePathSeparators as normalizePath } from '../../source/path-normalization.js';
 
 export interface ImportResult {
   symbol: string;
@@ -308,10 +309,6 @@ function renderImportSymbol(
   }
 
   return importedName;
-}
-
-function normalizePath(path: string): string {
-  return path.replace(/\\/g, '/');
 }
 
 function isCLikeImporter(relativePath: string): boolean {

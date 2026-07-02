@@ -320,7 +320,11 @@ interface CoChangePathFacts {
   tokens: string[];
 }
 
-const DOC_FILE_PATTERN = /(?:^|\/)(?:readme|docs?|guides?|adr|architecture|design)(?:\/|$)|\.(?:md|mdx|rst|adoc|txt)$/i;
+// Broad co-change tagging heuristic (directory hints + extension), distinct
+// from doc-drift.ts's DOC_FILE_PATTERN which tests "is this literally a doc
+// file" for drift tracking. Different jobs, same name would be misleading.
+const DOC_TAG_PATH_PATTERN =
+  /(?:^|\/)(?:readme|docs?|guides?|adr|architecture|design)(?:\/|$)|\.(?:md|mdx|rst|adoc|txt)$/i;
 const CONFIG_FILE_PATTERN =
   /(?:^|\/)(?:\.[a-z0-9-]+rc|config|configs|settings|\.github)(?:\/|$)|(?:^|\/)(?:package\.json|tsconfig(?:\.[^.]+)?\.json|vite\.config\.[cm]?[jt]s|rollup\.config\.[cm]?[jt]s|eslint\.config\.[cm]?[jt]s)$|\.(?:json|ya?ml|toml|ini|env)$/i;
 const SCHEMA_FILE_PATTERN =
@@ -361,7 +365,7 @@ const GENERIC_PATH_TOKENS = new Set([
 function coChangePathFacts(file: string): CoChangePathFacts {
   const normalized = file.replace(/\\/g, '/');
   const tags = new Set<CoChangePathTag>();
-  if (DOC_FILE_PATTERN.test(normalized)) tags.add('doc');
+  if (DOC_TAG_PATH_PATTERN.test(normalized)) tags.add('doc');
   if (CONFIG_FILE_PATTERN.test(normalized)) tags.add('config');
   if (SCHEMA_FILE_PATTERN.test(normalized)) tags.add('schema');
   if (SCRIPT_FILE_PATTERN.test(normalized)) tags.add('script');

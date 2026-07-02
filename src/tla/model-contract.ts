@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, isAbsolute, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { isRecord, stringArray } from '../storage/evidence-payload.js';
+import { isPathInsideProject as isInsideProject } from '../source/path-normalization.js';
 import { parseSanyXmlFacts, type SanyActionFacts } from './sany-facts.js';
 
 export type TlaCheckerMode = 'auto' | 'sany' | 'tlc' | 'apalache' | 'none';
@@ -187,11 +188,6 @@ export function resolveContractPath(projectRoot: string, mapDir: string, path: s
 
   const fallback = isInsideProject(projectRoot, projectRelative) ? projectRelative : mapRelative;
   return isInsideProject(projectRoot, fallback) ? fallback : null;
-}
-
-function isInsideProject(projectRoot: string, resolved: string): boolean {
-  const rel = relative(projectRoot, resolved);
-  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
 }
 
 export function readTlaModuleFacts(projectRoot: string, modulePath: string): TlaModuleFacts | null {

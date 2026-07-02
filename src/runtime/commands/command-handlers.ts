@@ -26,6 +26,7 @@ import {
   resolveWatchConfig,
   initProjectConfig,
   validateProjectConfig,
+  SUPPORTED_LANGUAGES,
 } from '../config.js';
 import { getIndexFreshness } from '../index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from '../project-readiness.js';
@@ -66,24 +67,7 @@ import {
 // Descriptor-backed query commands live under runtime/query-commands/*.
 // This file owns side-effect lifecycles such as reindex, setup, watch, and
 // install commands.
-const SUPPORTED_LANGUAGES = new Set<SupportedLanguage>([
-  'typescript',
-  'javascript',
-  'java',
-  'scala',
-  'kotlin',
-  'rust',
-  'python',
-  'ruby',
-  'go',
-  'cpp',
-  'c',
-  'csharp',
-  'vb',
-  'dart',
-  'php',
-  'clojure',
-]);
+const SUPPORTED_LANGUAGE_SET = new Set<SupportedLanguage>(SUPPORTED_LANGUAGES);
 const BENCH_TIMEOUT_MS = 180_000;
 const BENCH_MAX_BUFFER = 100 * 1024 * 1024;
 const SOURCE_EXTENSION_SET = new Set(ALL_SOURCE_EXTENSIONS);
@@ -116,7 +100,7 @@ const HEAVY_BENCH_COMMANDS: readonly (readonly string[])[] = [
 ];
 
 function supportedLanguages(values: readonly string[]): SupportedLanguage[] {
-  return values.filter((value): value is SupportedLanguage => SUPPORTED_LANGUAGES.has(value as SupportedLanguage));
+  return values.filter((value): value is SupportedLanguage => SUPPORTED_LANGUAGE_SET.has(value as SupportedLanguage));
 }
 
 // scip-query: ignore-extract — side-effect command lifecycle: option decoding,
