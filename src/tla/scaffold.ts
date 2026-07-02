@@ -79,24 +79,71 @@ export function scaffoldTlaModel(db: ScipDatabase, file: string, opts: TlaScaffo
   const fileWrites = aliases.length > 0 ? collectWritesForRange(db, file, 0, Number.POSITIVE_INFINITY, aliases) : [];
   const writtenLeafs = new Set(fileWrites.map((write) => write.variable));
 
-  const stateDefs = topLevelVars.filter((def) => {
+  let stateDefs = topLevelVars.filter((def) => {
     if (writtenLeafs.has(def.leaf)) return true;
     return isLetDeclaration(lines, def);
   });
-  if (stateDefs.length === 0) {
-    throw new Error(
-      `no mutable module state discovered in ${file} — the static write scan found no writes to top-level variables, ` +
-        'and no top-level let declarations exist. Pick a file that owns runtime state.',
+
+  // P5.7 / followup #16: no top-level module state — fall back to class
+  // instance-field discovery. `this.field = ...` writes are found by the
+  // existing alias scanner already (a member-expression target still
+  // contains the field's leaf name), scoped to one class at a time (only
+  // that class's own methods are scanned, never a repo-wide sweep, to
+  // avoid conflating same-named fields on unrelated classes in the file).
+  //
+  // Known boundary (verified live against this repo, not hypothetical):
+  // the raw SCIP data DOES expose class fields (`ClassName#field.` symbols
+  // with a role=1 definition mention — confirmed for e.g. `ScipDatabase#
+  // pathFilter.`), but `getDefinitionsForFile` (definition-catalog.ts,
+  // policy in symbol-row-policy.ts's `isPreciseMixedFallbackRow`)
+  // deliberately drops class-member fallback rows whenever the file has
+  // ANY primary-indexed (enclosing-range) definition — which any class
+  // with a constructor or a named method always has. So this discovery
+  // fires correctly when the catalog does surface fields (this file's own
+  // tests construct that condition directly), but on a typical real class
+  // file `definitions` never contains a single field row to begin with —
+  // not a write-scan miss, a catalog-level gap one layer below this
+  // module. Fixing that policy is out of scope here: it is a shared
+  // primitive nearly every other command depends on (members, refs,
+  // trace, health, ...), and loosening it to also keep class-member
+  // fallback rows needs its own blast-radius review, not a TLA-scoped fix.
+  let classFieldState: ClassFieldState | null = null;
+  let callables: IndexedDefinition[];
+  if (stateDefs.length > 0) {
+    callables = definitions.filter((def) => isCallable(def) && def.parentTypeName === null);
+  } else {
+    classFieldState = discoverClassFieldState(db, file, definitions, isCallable);
+    if (!classFieldState) {
+      const anyClassFieldSurfaced = definitions.some(
+        (def) => !isCallable(def) && !def.isTypeLike && def.parentTypeName !== null && TLA_NAME.test(def.leaf),
+      );
+      throw new Error(
+        `no mutable state discovered in ${file} — the static write scan found no writes to top-level variables, ` +
+          'no top-level let declarations exist, and ' +
+          (anyClassFieldSurfaced
+            ? 'no class in this file has an instance field the write scan can confirm is mutated by one of its own methods.'
+            : 'no class instance-field definitions were exposed for this file at all. This is a known catalog boundary, ' +
+              'not necessarily an absence of state: getDefinitionsForFile only surfaces class-member fallback rows when ' +
+              'the file has no other primary-indexed definition (see scaffold.ts for the exact mechanism) — a file with ' +
+              'any method already indexed hides its own fields from this scan. Pick a file with a class that owns no ' +
+              'other indexed callables, or wait for the catalog fix tracked in the P5 closeout report.') +
+          ' Pick a file that owns runtime state.',
+      );
+    }
+    stateDefs = classFieldState.fields;
+    callables = classFieldState.methods;
+    warnings.push(
+      `state scoped to class ${classFieldState.className} (${file}): scaffolded actions are drawn only from its own ` +
+        'methods — other classes or top-level functions in this file are not considered.',
     );
   }
 
-  const variables = stateDefs.map((def) => inferVariable(def, lines, file, warnings));
+  const variables = stateDefs.map((def) => inferVariable(def, lines, file, warnings, classFieldState?.className));
 
   const stateAliases: VariableAlias[] = variables.map((variable) => ({
     variable: variable.name,
     alias: variable.leaf,
   }));
-  const callables = definitions.filter((def) => isCallable(def) && def.parentTypeName === null);
   const actions: ScaffoldAction[] = [];
   const seenActionNames = new Set<string>();
   for (const callable of callables) {
@@ -107,7 +154,7 @@ export function scaffoldTlaModel(db: ScipDatabase, file: string, opts: TlaScaffo
     actions.push({
       name,
       leaf: callable.leaf,
-      codeRef: `${file}/${callable.leaf}`,
+      codeRef: actionCodeRef(file, callable, classFieldState?.className),
       startLine: callable.startLine,
       writes: [...new Set(writes.map((write) => write.variable))].sort(),
       reads: [...new Set(reads.map((read) => read.variable))].sort(),
@@ -128,6 +175,54 @@ export function scaffoldTlaModel(db: ScipDatabase, file: string, opts: TlaScaffo
   return { moduleName, file, variables, actions, warnings, spec, cfg, map };
 }
 
+interface ClassFieldState {
+  className: string;
+  fields: IndexedDefinition[];
+  methods: IndexedDefinition[];
+}
+
+/**
+ * Finds the class in `file` whose own methods write the most of its own
+ * instance fields (mirrors the top-level `writtenLeafs` filter, scoped per
+ * class so a write scan never crosses class boundaries). Returns null when
+ * no class has any field a method of that same class can be shown to write.
+ */
+function discoverClassFieldState(
+  db: ScipDatabase,
+  file: string,
+  definitions: readonly IndexedDefinition[],
+  isCallable: (def: IndexedDefinition) => boolean,
+): ClassFieldState | null {
+  const fieldsByClass = new Map<string, IndexedDefinition[]>();
+  for (const def of definitions) {
+    if (isCallable(def) || def.isTypeLike || def.parentTypeName === null || !TLA_NAME.test(def.leaf)) continue;
+    const list = fieldsByClass.get(def.parentTypeName);
+    if (list) list.push(def);
+    else fieldsByClass.set(def.parentTypeName, [def]);
+  }
+
+  let best: ClassFieldState | null = null;
+  for (const [className, fields] of fieldsByClass) {
+    const methods = definitions.filter((def) => isCallable(def) && def.parentTypeName === className);
+    const candidateAliases: VariableAlias[] = fields.map((def) => ({ variable: def.leaf, alias: def.leaf }));
+    const writtenLeafs = new Set<string>();
+    for (const method of methods) {
+      for (const write of collectWritesForRange(db, file, method.startLine, method.endLine, candidateAliases)) {
+        writtenLeafs.add(write.variable);
+      }
+    }
+    const writtenFields = fields.filter((def) => writtenLeafs.has(def.leaf));
+    if (writtenFields.length === 0) continue;
+    if (!best || writtenFields.length > best.fields.length) best = { className, fields: writtenFields, methods };
+  }
+  return best;
+}
+
+/** `file/Class#member` — qualified enough that resolveReferent never treats it as ambiguous. */
+function actionCodeRef(file: string, callable: IndexedDefinition, className: string | undefined): string {
+  return className ? `${file}/${className}#${callable.leaf}` : `${file}/${callable.leaf}`;
+}
+
 function isLetDeclaration(lines: readonly string[], def: IndexedDefinition): boolean {
   const text = lines[def.startLine] ?? '';
   return /^\s*(export\s+)?let\s/.test(text);
@@ -138,6 +233,7 @@ function inferVariable(
   lines: readonly string[],
   file: string,
   warnings: string[],
+  className?: string,
 ): ScaffoldVariable {
   const declaration = declarationText(lines, def);
   const name = def.leaf.replace(/[^A-Za-z0-9_]/g, '_');
@@ -156,7 +252,7 @@ function inferVariable(
   return {
     name,
     leaf: def.leaf,
-    codeRef: `${file}/${def.leaf}`,
+    codeRef: className ? `${file}/${className}#${def.leaf}` : `${file}/${def.leaf}`,
     declarationLine: def.startLine,
     initTla,
     domainTla,

@@ -129,7 +129,156 @@ describe('tla scaffold', () => {
       .write();
     const db = new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') });
     try {
-      expect(() => scaffoldTlaModel(db, 'src/pure.ts')).toThrow(/no mutable module state discovered/);
+      expect(() => scaffoldTlaModel(db, 'src/pure.ts')).toThrow(/no mutable state discovered/);
+    } finally {
+      db.close();
+    }
+  });
+
+  // P5.7 / followup #16: class instance fields are the state ownership
+  // shape for concurrency-flavored systems (locks, connection pools) that
+  // scaffold previously rejected outright — no top-level module state, only
+  // `this.field` mutated inside class methods.
+  it('falls back to class instance-field discovery when no top-level module state exists', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-scaffold-'));
+    writeFixtureFiles(root, {
+      'src/store.ts': [
+        'export class Store {',
+        "  state: 'idle' | 'busy' = 'idle';",
+        '',
+        '  acquire() {',
+        "    this.state = 'busy';",
+        '  }',
+        '',
+        '  release() {',
+        "    this.state = 'idle';",
+        '  }',
+        '',
+        '  current(): string {',
+        '    return this.state;',
+        '  }',
+        '}',
+      ],
+    });
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/store.ts')
+      .symbol(1, 'scip-typescript npm test 1.0.0 src/`store.ts`/Store#state.', 'state', SymbolInformation_Kind.Field)
+      .symbol(
+        2,
+        'scip-typescript npm test 1.0.0 src/`store.ts`/Store#acquire().',
+        'acquire',
+        SymbolInformation_Kind.Method,
+      )
+      .symbol(
+        3,
+        'scip-typescript npm test 1.0.0 src/`store.ts`/Store#release().',
+        'release',
+        SymbolInformation_Kind.Method,
+      )
+      .symbol(
+        4,
+        'scip-typescript npm test 1.0.0 src/`store.ts`/Store#current().',
+        'current',
+        SymbolInformation_Kind.Method,
+      )
+      .definition(1, 1, 1, 1, 2, 1, 35)
+      .definition(2, 1, 2, 3, 0, 5, 3)
+      .definition(3, 1, 3, 7, 0, 9, 3)
+      .definition(4, 1, 4, 11, 0, 13, 3)
+      .chunk(1, 1, 0, 14)
+      .write();
+    const db = new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') });
+    try {
+      const result = scaffoldTlaModel(db, 'src/store.ts');
+
+      expect(result.variables.map((variable) => variable.name)).toEqual(['state']);
+      const state = result.variables.find((variable) => variable.name === 'state')!;
+      expect(state.codeRef).toBe('src/store.ts/Store#state');
+      expect(state.domainTla).toBe('{"idle", "busy"}');
+
+      const actionNames = result.actions.map((action) => action.name).sort();
+      expect(actionNames).toEqual(['Acquire', 'Release']);
+      const acquire = result.actions.find((action) => action.name === 'Acquire')!;
+      expect(acquire.codeRef).toBe('src/store.ts/Store#acquire');
+      expect(acquire.writes).toEqual(['state']);
+      // current() only reads state: not an action, mirroring the top-level rule.
+      expect(result.actions.some((action) => action.leaf === 'current')).toBe(false);
+
+      expect(result.warnings).toEqual(expect.arrayContaining([expect.stringContaining('state scoped to class Store')]));
+
+      const map = JSON.parse(result.map) as Record<string, unknown>;
+      const variables = map['variables'] as Record<string, { code: string[] }>;
+      expect(variables['state']!.code).toEqual(['src/store.ts/Store#state']);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('does not conflate same-named fields on unrelated classes when picking scope', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-scaffold-'));
+    writeFixtureFiles(root, {
+      'src/two-classes.ts': [
+        'export class Idle {',
+        '  state = 0;',
+        '',
+        '  noop() {',
+        '    return this.state;',
+        '  }',
+        '}',
+        '',
+        'export class Active {',
+        '  state = 0;',
+        '',
+        '  bump() {',
+        '    this.state = this.state + 1;',
+        '  }',
+        '}',
+      ],
+    });
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/two-classes.ts')
+      .symbol(
+        1,
+        'scip-typescript npm test 1.0.0 src/`two-classes.ts`/Idle#state.',
+        'state',
+        SymbolInformation_Kind.Field,
+      )
+      .symbol(
+        2,
+        'scip-typescript npm test 1.0.0 src/`two-classes.ts`/Idle#noop().',
+        'noop',
+        SymbolInformation_Kind.Method,
+      )
+      .symbol(
+        3,
+        'scip-typescript npm test 1.0.0 src/`two-classes.ts`/Active#state.',
+        'state',
+        SymbolInformation_Kind.Field,
+      )
+      .symbol(
+        4,
+        'scip-typescript npm test 1.0.0 src/`two-classes.ts`/Active#bump().',
+        'bump',
+        SymbolInformation_Kind.Method,
+      )
+      .definition(1, 1, 1, 1, 2, 1, 12)
+      .definition(2, 1, 2, 3, 0, 5, 3)
+      .definition(3, 1, 3, 9, 2, 9, 12)
+      .definition(4, 1, 4, 11, 0, 13, 3)
+      .chunk(1, 1, 0, 14)
+      .write();
+    const db = new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') });
+    try {
+      const result = scaffoldTlaModel(db, 'src/two-classes.ts');
+
+      // Only Active#state is ever written by one of Active's own methods —
+      // Idle's same-named field is never mutated by Idle's own methods, so
+      // Idle must not be picked (and its field must not leak into Active's
+      // action write set via the leaf-name-only alias match).
+      expect(result.variables.map((variable) => variable.codeRef)).toEqual(['src/two-classes.ts/Active#state']);
+      expect(result.actions.map((action) => action.codeRef)).toEqual(['src/two-classes.ts/Active#bump']);
     } finally {
       db.close();
     }

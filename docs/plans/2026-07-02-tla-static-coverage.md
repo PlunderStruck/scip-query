@@ -47,7 +47,16 @@ in the 694-test suite, and every item 13-21 either shipped or BLOCKED-noted.
 - [x] **P5.6 (#15) Per-action trace coverage.** trace-check output gains
   `actionCoverage`: for each mapped action, steps observed; human render
   lists unexercised actions. Test with the existing diff-gate trace.
-- [ ] **P5.7 (#19 + #16) Document-or-implement.** #19: add a mapping-level
+- [x] **P5.7 (#19 + #16) Document-or-implement.** #19 implemented cleanly.
+  #16 implemented AND a deeper boundary discovered/documented — see
+  closeout report: the write scanner + class-field discovery algorithm
+  are correct and tested, but `getDefinitionsForFile`'s primary/fallback
+  merge policy (symbol-row-policy.ts) hides class-member fallback rows
+  whenever the file has any primary-indexed definition, so on typical
+  real classes (any with a constructor or named method) the discovery
+  never sees a single field. Fixing that shared catalog primitive is out
+  of scope here (repo-wide blast radius); documented in scaffold's error
+  message and the skill. #19: add a mapping-level
   `unmappedWriteScope: "actions" | "scope-files"` (default current behavior)
   so per-action-range sweeps are opt-in-able; if that's >1 day, BLOCKED-note
   with rationale instead. #16 (scaffold class fields): implement class

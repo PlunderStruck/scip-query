@@ -556,7 +556,12 @@ function collectAllStaticWrites(
     verifyActionWrites(action, actionWrites, findings, modelActions.get(action.name));
   }
 
-  for (const file of scopedFiles(db, contract)) {
+  // P5.7 / followup #19: 'actions' opts out of the whole-scope-file sweep —
+  // only the per-action write/read checks above run. 'scope-files' (default)
+  // preserves the original behavior: every touching function anywhere in
+  // `scope` must be mapped as an action or its write is flagged.
+  const sweepFiles = contract.unmappedWriteScope === 'actions' ? [] : scopedFiles(db, contract);
+  for (const file of sweepFiles) {
     for (const write of collectWritesForRange(db, file, 0, Number.POSITIVE_INFINITY, aliases, resources)) {
       writes.push(write);
       if (!isUnmappedWriteCandidate(write)) continue;

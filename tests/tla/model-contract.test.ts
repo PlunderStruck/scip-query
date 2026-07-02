@@ -210,6 +210,45 @@ Enqueue(job) == queue' = Append(queue, job)
     );
   });
 
+  it('defaults unmappedWriteScope to "scope-files" and accepts an explicit "actions" (P5.7 / followup #19)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Default.scip-tla.json'),
+      JSON.stringify({
+        variables: { queue: { code: ['src/queue.ts/queue'] } },
+        actions: { Enqueue: { code: ['src/queue.ts/enqueue'], writes: ['queue'] } },
+      }),
+    );
+    writeFileSync(
+      join(root, 'Actions.scip-tla.json'),
+      JSON.stringify({
+        variables: { queue: { code: ['src/queue.ts/queue'] } },
+        actions: { Enqueue: { code: ['src/queue.ts/enqueue'], writes: ['queue'] } },
+        unmappedWriteScope: 'actions',
+      }),
+    );
+
+    expect(loadTlaModelContract(root, 'Default.scip-tla.json').loaded?.contract.unmappedWriteScope).toBe('scope-files');
+    expect(loadTlaModelContract(root, 'Actions.scip-tla.json').loaded?.contract.unmappedWriteScope).toBe('actions');
+  });
+
+  it('rejects an invalid unmappedWriteScope value', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Broken.scip-tla.json'),
+      JSON.stringify({
+        variables: { queue: { code: ['src/queue.ts/queue'] } },
+        actions: { Enqueue: { code: ['src/queue.ts/enqueue'], writes: ['queue'] } },
+        unmappedWriteScope: 'everything',
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Broken.scip-tla.json');
+
+    expect(loaded.loaded).toBeUndefined();
+    expect(loaded.errors).toContain('unmappedWriteScope must be "actions" or "scope-files" when present');
+  });
+
   it('dedupes trace paths naming the same file (P5.5 / followup #20)', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
     writeFileSync(join(root, 'run1.trace.json'), '[]');

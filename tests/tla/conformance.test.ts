@@ -155,6 +155,71 @@ Enqueue(job) == queue' = Append(queue, job)
     }
   });
 
+  it('unmappedWriteScope: "actions" opts out of the whole-scope-file sweep (P5.7 / followup #19)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    writeFixtureFiles(root, {
+      'src/queue.ts': [
+        'export const queue: string[] = [];',
+        '',
+        'export function enqueue(job: string) {',
+        '  queue.push(job);',
+        '}',
+        '',
+        'export function cancel(job: string) {',
+        '  queue.splice(queue.indexOf(job), 1);',
+        '}',
+      ],
+    });
+    writeFileSync(
+      join(root, 'Queue.tla'),
+      `---- MODULE Queue ----
+VARIABLES queue
+Init == queue = <<>>
+Enqueue(job) == queue' = Append(queue, job)
+====
+`,
+    );
+    const db = fixtureDb(root);
+    const baseContract: TlaModelContract = {
+      module: 'Queue.tla',
+      scope: ['src/queue.ts'],
+      variables: {
+        queue: { code: ['queue'], aliases: ['queue'] },
+      },
+      actions: {
+        Enqueue: { code: ['enqueue'], reads: [], writes: ['queue'], calls: [] },
+      },
+      invariants: [],
+      traces: [],
+      unmappedWriteScope: 'scope-files',
+    };
+
+    try {
+      const moduleFacts = readTlaModuleFacts(root, 'Queue.tla');
+
+      // Default ('scope-files'): cancel()'s write is outside the mapped
+      // Enqueue action and this repo's own scope covers the whole file —
+      // still flagged, matching pre-P5.7 behavior exactly.
+      const defaultResult = verifyTlaConformance(db, baseContract, moduleFacts);
+      expect(defaultResult.findings).toEqual(
+        expect.arrayContaining([expect.objectContaining({ category: 'unmapped-write', modelElement: 'queue' })]),
+      );
+
+      // Opt-in narrower sweep: the SAME cancel() write is no longer flagged
+      // — only Enqueue's own declared/observed facts are checked.
+      const actionsScopedResult = verifyTlaConformance(
+        db,
+        { ...baseContract, unmappedWriteScope: 'actions' },
+        moduleFacts,
+      );
+      expect(actionsScopedResult.findings).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ category: 'unmapped-write' })]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   it('flags trace steps that mutate variables outside the action write set', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
     writeFixtureFiles(root, {

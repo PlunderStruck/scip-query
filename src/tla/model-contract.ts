@@ -57,6 +57,17 @@ export interface TlaTraceStep {
   code?: string;
 }
 
+/**
+ * P5.7 / followup #19: controls the unmapped-write sweep's granularity.
+ * `'scope-files'` (default, current behavior) scans every `scope` file's
+ * full range — every function touching a modeled variable anywhere in
+ * scope must be mapped as an action. `'actions'` opts out of that sweep
+ * entirely, relying only on the per-action write/read checks — for models
+ * whose scope files legitimately contain unrelated code the mapping was
+ * never meant to cover in full.
+ */
+export type TlaUnmappedWriteScope = 'actions' | 'scope-files';
+
 export interface TlaModelContract {
   module?: string;
   config?: string;
@@ -65,6 +76,7 @@ export interface TlaModelContract {
   actions: Record<string, TlaActionMapping>;
   invariants: string[];
   traces: string[];
+  unmappedWriteScope: TlaUnmappedWriteScope;
 }
 
 export interface LoadedTlaContract {
@@ -251,9 +263,17 @@ function parseContract(raw: unknown, errors: string[]): TlaModelContract | null 
     actions,
     invariants: stringArray(raw.invariants) ?? [],
     traces: stringArray(raw.traces) ?? [],
+    unmappedWriteScope: parseUnmappedWriteScope(raw.unmappedWriteScope, errors),
   };
   validateScope(raw.scope, errors);
   return errors.length === 0 ? contract : null;
+}
+
+function parseUnmappedWriteScope(raw: unknown, errors: string[]): TlaUnmappedWriteScope {
+  if (raw === undefined) return 'scope-files';
+  if (raw === 'actions' || raw === 'scope-files') return raw;
+  errors.push(`unmappedWriteScope must be "actions" or "scope-files" when present`);
+  return 'scope-files';
 }
 
 /**
