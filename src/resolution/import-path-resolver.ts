@@ -12,16 +12,61 @@
  * specifier we fall back to checking disk so the import-graph for
  * un-indexable types is still populated.
  */
+import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
-import { basename, dirname, extname, join, relative, resolve } from 'node:path';
+import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
+import type * as TypeScriptModule from 'typescript';
 import type { ScipDatabase } from '../storage/db.js';
 import { sha256Hex } from '../storage/evidence-cache.js';
-import { createPerDbValue } from '../storage/per-db-cache.js';
+import { createPerDbCache, createPerDbValue } from '../storage/per-db-cache.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
 
 // Derived from the read-only index — valid for the connection's lifetime.
 const INDEXED_PATH_CACHE = createPerDbValue<Set<string>>('indexed-paths', { clearGroups: [] });
 const INDEXED_PATH_DIGEST_CACHE = createPerDbValue<string>('indexed-path-digest', { clearGroups: [] });
+
+// tsconfig `compilerOptions.paths` alias resolution for bare-specifier JS/TS
+// imports (e.g. `@/features/x` -> `./src/features/x`). Keyed by the
+// importer's directory so repeated imports from the same directory reuse one
+// upward tsconfig walk. Filesystem-derived, stable for the db connection's
+// lifetime — same invalidation posture as INDEXED_PATH_CACHE above.
+const TSCONFIG_ALIAS_CONFIG_CACHE = createPerDbCache<string, TsconfigAliasConfig | null>('tsconfig-alias-config', {
+  clearGroups: ['whole-project'],
+});
+const TSCONFIG_ALIAS_DIR_CACHE = createPerDbCache<string, TsconfigAliasConfig | null>('tsconfig-alias-config-for-dir', {
+  clearGroups: ['whole-project'],
+});
+
+// tsconfig.json files routinely use comments/trailing commas (JSONC) and
+// `extends` chains; the `typescript` package is the one parser that already
+// handles both correctly, so it's used here instead of a hand-rolled parser.
+// `typescript` is an optional runtime capability elsewhere in this codebase
+// (see semantic/typescript) — load it the same defensive way so a project
+// without it installed still resolves relative imports normally.
+const require = createRequire(import.meta.url);
+let typeScriptModule: typeof TypeScriptModule | null | undefined;
+
+function loadTypeScriptForPathAliases(): typeof TypeScriptModule | null {
+  if (typeScriptModule !== undefined) return typeScriptModule;
+  try {
+    typeScriptModule = require('typescript') as typeof TypeScriptModule;
+  } catch {
+    typeScriptModule = null;
+  }
+  return typeScriptModule;
+}
+
+interface TsconfigAliasConfig {
+  baseUrl: string;
+  paths: Readonly<Record<string, readonly string[]>>;
+}
+
+const TSCONFIG_ALIAS_CANDIDATE_NAMES = [
+  'tsconfig.json',
+  'tsconfig.app.json',
+  'tsconfig.node.json',
+  'tsconfig.base.json',
+];
 
 // Source-extension families. The language-parser registry imports these
 // constants too, so adding an extension changes resolution and parser dispatch
@@ -155,7 +200,7 @@ export function resolveImportPath(db: ScipDatabase, importerPath: string, specif
 // disk fallback are tried in priority order.
 export function resolveJavaScriptImportPath(db: ScipDatabase, importerPath: string, specifier: string): string | null {
   if (!specifier.startsWith('.') && !specifier.startsWith('/')) {
-    return null;
+    return resolveTsconfigPathAliasImport(db, importerPath, specifier);
   }
 
   const importerDir = dirname(join(db.config.projectRoot, importerPath));
@@ -170,6 +215,108 @@ export function resolveJavaScriptImportPath(db: ScipDatabase, importerPath: stri
   }
 
   return normalizePath(relative(db.config.projectRoot, absolute));
+}
+
+/**
+ * Bare-specifier imports (`@/foo`, `~/bar`) aren't relative and aren't npm
+ * package names either when a tsconfig `paths` alias maps them onto the
+ * project's own source tree. Without this, every consumer that only reaches
+ * a symbol through a path-aliased `import` (type-only or not) resolves to no
+ * import edge at all, which starves the source-fallback reference-counting
+ * layer (dead/isolated/new-dead/production-callables/stale-abstractions all
+ * go through `sourceImportPathsByLocalName` -> `resolveImportPath`) of the
+ * only evidence it has left when scip-typescript itself emits zero
+ * occurrences for a whole-statement `import type { ... }` clause.
+ */
+function resolveTsconfigPathAliasImport(db: ScipDatabase, importerPath: string, specifier: string): string | null {
+  const config = tsconfigAliasConfigForImporter(db, importerPath);
+  if (!config) return null;
+
+  const indexedPaths = getIndexedPaths(db);
+  for (const target of matchTsconfigPathAlias(config, specifier)) {
+    const absolute = resolve(config.baseUrl, target);
+    for (const candidate of candidateImportPaths(absolute)) {
+      const relativeCandidate = normalizePath(relative(db.config.projectRoot, candidate));
+      if (indexedPaths.has(relativeCandidate) || existsSync(candidate)) {
+        return relativeCandidate;
+      }
+    }
+  }
+
+  return null;
+}
+
+function matchTsconfigPathAlias(config: TsconfigAliasConfig, specifier: string): string[] {
+  const targets: string[] = [];
+  for (const [pattern, patternTargets] of Object.entries(config.paths)) {
+    const starIndex = pattern.indexOf('*');
+    if (starIndex === -1) {
+      if (specifier !== pattern) continue;
+      targets.push(...patternTargets);
+      continue;
+    }
+
+    const prefix = pattern.slice(0, starIndex);
+    const suffix = pattern.slice(starIndex + 1);
+    if (!specifier.startsWith(prefix) || !specifier.endsWith(suffix)) continue;
+    if (specifier.length < prefix.length + suffix.length) continue;
+    const wildcard = specifier.slice(prefix.length, specifier.length - suffix.length);
+    for (const patternTarget of patternTargets) {
+      targets.push(patternTarget.includes('*') ? patternTarget.replace('*', wildcard) : patternTarget);
+    }
+  }
+  return targets;
+}
+
+// scip-query: ignore-wrapper — importer-directory cache key layer sits on
+// top of the tsconfig-content cache so re-parsing the same tsconfig once per
+// directory it governs doesn't repeat the upward filesystem walk.
+function tsconfigAliasConfigForImporter(db: ScipDatabase, importerPath: string): TsconfigAliasConfig | null {
+  const importerDir = normalizePath(dirname(importerPath));
+  return TSCONFIG_ALIAS_DIR_CACHE.get(db, importerDir, () => findTsconfigAliasConfig(db, importerDir));
+}
+
+function findTsconfigAliasConfig(db: ScipDatabase, importerDir: string): TsconfigAliasConfig | null {
+  const ts = loadTypeScriptForPathAliases();
+  if (!ts) return null;
+
+  const root = resolve(db.config.projectRoot);
+  let current = resolve(root, importerDir);
+
+  while (current === root || current.startsWith(root + sep)) {
+    for (const name of TSCONFIG_ALIAS_CANDIDATE_NAMES) {
+      const candidate = join(current, name);
+      if (!existsSync(candidate)) continue;
+      const config = TSCONFIG_ALIAS_CONFIG_CACHE.get(db, candidate, () => parseTsconfigAliasConfig(ts, candidate));
+      // A tsconfig with no `paths` (e.g. a solution-style shell that only
+      // `references` other configs) can't answer this alias — keep checking
+      // the other candidate names at this same directory level before
+      // walking up, so a shell `tsconfig.json` doesn't shadow the sibling
+      // `tsconfig.app.json` that actually declares the alias.
+      if (config) return config;
+    }
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+
+  return null;
+}
+
+function parseTsconfigAliasConfig(ts: typeof TypeScriptModule, tsconfigPath: string): TsconfigAliasConfig | null {
+  try {
+    const read = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
+    if (read.error || !read.config) return null;
+    const parsed = ts.parseJsonConfigFileContent(read.config, ts.sys, dirname(tsconfigPath));
+    const paths = parsed.options.paths;
+    if (!paths || Object.keys(paths).length === 0) return null;
+    const baseUrl = parsed.options.baseUrl
+      ? resolve(dirname(tsconfigPath), parsed.options.baseUrl)
+      : dirname(tsconfigPath);
+    return { baseUrl, paths };
+  } catch {
+    return null;
+  }
 }
 
 // scip-query: ignore-extract — this is the Python import-path decision table:

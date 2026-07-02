@@ -424,4 +424,100 @@ describe('staleAbstractions accuracy', () => {
       },
     );
   });
+
+  // Reproduces the archetype from docs/plans/2026-07-02-followups.md item 1 /
+  // the 2026-07-01 Stable_Management calibration (OrgMember/OrgInvite/
+  // OrgAssignment falsely "unused"): scip-typescript emits zero mention rows
+  // for a symbol consumed only through a whole-statement `import type { X }
+  // from '@alias/...'` clause when the alias is unresolvable to it (root
+  // cause confirmed live: raw `mentions` table has 0 cross-file rows for
+  // this shape on the real repo). The only remaining evidence is the
+  // source-fallback layer (`sourceImportPathsByLocalName` ->
+  // `resolveImportPath`), which used to return `sourcePath: null` for any
+  // non-relative specifier — including tsconfig `paths` aliases — so the
+  // fallback also came up empty and the type was reported "unused".
+  it('does not report a type-only tsconfig-path-aliased consumer as unused when SCIP has no mention for it', () => {
+    withFixture(
+      'aliased-type-only-import',
+      {
+        'tsconfig.json': JSON.stringify({
+          compilerOptions: { baseUrl: '.', paths: { '@/*': ['./src/*'] } },
+          include: ['src/**/*.ts'],
+        }),
+        'src/lib.ts': ['export interface AliasedShape {', '  id: string;', '  label: string;', '}', ''].join('\n'),
+        'src/consumer.ts': [
+          "import type { AliasedShape } from '@/lib';",
+          'export function useShape(value: AliasedShape): string {',
+          '  return value.label;',
+          '}',
+          '',
+        ].join('\n'),
+        // A second, unrelated same-leaf-name type elsewhere in the project.
+        // Without this, `attributeIdentifier`'s global-leaf-index shortcut
+        // (bucket.length === 1 -> resolve immediately, no import lookup
+        // needed) would make this fixture pass even with the resolver bug
+        // still in place, since "AliasedShape" would already be unambiguous
+        // project-wide. The real Stable_Management repro (OrgMember) had
+        // two same-named candidates — one per package — which is exactly
+        // what forces attribution through the broken import-path-resolution
+        // branch this fix targets.
+        'src/other/unrelated.ts': [
+          'export interface AliasedShape {',
+          '  different: true;',
+          '}',
+          'export function noop(x: AliasedShape): boolean {',
+          '  return x.different;',
+          '}',
+          '',
+        ].join('\n'),
+      },
+      (sqliteDb) => {
+        sqliteDb.exec(`
+          INSERT INTO documents (id, language, relative_path) VALUES
+            (1, 'typescript', 'src/lib.ts'),
+            (2, 'typescript', 'src/consumer.ts'),
+            (3, 'typescript', 'src/other/unrelated.ts');
+
+          INSERT INTO global_symbols (id, symbol, display_name, kind) VALUES
+            (1, 'scip-typescript npm fixture 1.0.0 src/\`lib.ts\`/AliasedShape#', 'AliasedShape', 11),
+            (2, 'scip-typescript npm fixture 1.0.0 src/\`consumer.ts\`/useShape().', 'useShape', 12),
+            (3, 'scip-typescript npm fixture 1.0.0 src/other/\`unrelated.ts\`/AliasedShape#', 'AliasedShape', 11),
+            (4, 'scip-typescript npm fixture 1.0.0 src/other/\`unrelated.ts\`/noop().', 'noop', 12);
+
+          INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+            (1, 1, 1, 0, 0, 3, 1),
+            (2, 2, 2, 1, 0, 3, 1),
+            (3, 3, 3, 0, 0, 2, 1),
+            (4, 3, 4, 3, 0, 5, 1);
+
+          INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+            (1, 1, 0, 0, 3, X'00'),
+            (2, 2, 0, 0, 3, X'00'),
+            (3, 3, 0, 0, 5, X'00');
+
+          -- Definition-site rows only. No row at all for consumer.ts's
+          -- chunk (2, ...) referencing symbol 1 — this is the real indexer
+          -- gap being reproduced, not an omission. unrelated.ts's own
+          -- self-file usage of its own (different) AliasedShape is real
+          -- SCIP evidence, same as any ordinary same-file type usage.
+          INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+            (1, 1, 1),
+            (3, 3, 1),
+            (3, 3, 0),
+            (3, 4, 1);
+        `);
+      },
+      (db) => {
+        // semantic: false isolates this test to the source-fallback layer
+        // this fix targets; the fixture's tiny tsconfig also has no real
+        // ts-morph project wiring to lean on.
+        const results = staleAbstractions(db, { minLoc: 3, semantic: false });
+        const hit = results.find((r) => r.shortName.endsWith('AliasedShape') && r.file === 'src/lib.ts');
+        expect(hit).toBeDefined();
+        expect(hit!.consumers).toBe(1);
+        expect(hit!.reason).not.toContain('unused');
+        expect(hit!.stalenessKind).not.toBe('unused-abstraction');
+      },
+    );
+  });
 });
