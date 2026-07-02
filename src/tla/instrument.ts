@@ -54,8 +54,9 @@ function renderRecorder(variables: readonly string[]): string {
  *     tlaRecord('Enqueue', before, snapshot());
  *   }
  *
- * where snapshot() projects the mapped variables to JSON scalars, e.g.
- *   const snapshot = () => ({ ${variables.map((name) => `${name}: /* project */ undefined`).join(', ')} });
+ * where snapshot() projects the mapped variables to JSON scalars — fill in
+ * each field with the real runtime value, e.g.
+ *   const snapshot = () => ({ ${variables.map((name) => `${name}: undefined`).join(', ')} }); // fill in each field
  *
  * Recording is enabled only when SCIP_TLA_TRACE names an output path, so the
  * wiring is safe to leave in place. The output is a JSON array compatible
