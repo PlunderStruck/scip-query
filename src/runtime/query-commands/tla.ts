@@ -34,7 +34,7 @@ import { scaffoldTlaModel } from '../../tla/scaffold.js';
 import { buildInstrumentation } from '../../tla/instrument.js';
 import { runTraceCheck, traceHarnessBaseName } from '../../tla/trace-spec.js';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 interface TlaVerifyResult {
   operation: 'verify';
