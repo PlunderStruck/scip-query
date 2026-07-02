@@ -55,6 +55,7 @@ The loop is complete only when `scip-verify` passes or each remaining finding ha
 | Audit, rank, or confirm cleanup findings | `scip-cleanup-audit` | `health`, `cleanup-plan`, cleanup detectors |
 | Autonomously fix confirmed cleanup findings | `scip-cleanup-improve` | `health`, `cleanup-plan`, verified batches |
 | Find or resolve same-name twins that have diverged | `scip-twin-drift` | `twin-drift`, `duplicate-bodies`, `refs` |
+| Audit whether a status claim is derived, hedged, or merely asserted | `scip-claim-audit` | `refs`, `code`, `trace` |
 | Reconcile living docs with code | `scip-doc-reconcile` | `doc-drift` |
 | Review or migrate folder ownership | `scip-directory-architecture` | `locality-candidates`, `similar-files` |
 | Review deeper maintainability and system compression | `scip-maintainability` | `bottlenecks`, `similar-chains`, `change-surface` |
@@ -84,6 +85,7 @@ Top commands per routed skill, generated from each skill's own `commands:` front
 | --- | --- |
 | `concrete-plan` | `scip-query status --capabilities`, `scip-query plan-context <target>`, `scip-query refs <symbol>` |
 | `scip-api-impact` | `scip-query surface <module-or-package>`, `scip-query refs <symbol>`, `scip-query affected <symbol> --json` |
+| `scip-claim-audit` | `scip-query files <pattern>`, `scip-query refs <symbol>`, `scip-query code <symbol>` |
 | `scip-cleanup-audit` | `scip-query health --json`, `scip-query cleanup-plan --verify --json`, `scip-query duplicate-bodies --json --full` |
 | `scip-cleanup-improve` | `scip-query health --json`, `scip-query cleanup-plan --verify --json`, `scip-query cleanup-apply --verified --batch <n>` |
 | `scip-debug` | `scip-query files <feature-or-error-term>`, `scip-query trace <candidate-symbol>`, `scip-query call-graph <entry-symbol>` |
