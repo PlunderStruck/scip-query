@@ -20,7 +20,18 @@ commands:
 
 Use this skill to make a command, workflow, service, page, or tool faster without changing its observable result. Hyper optimization is a bounded campaign that improves runtime, memory, or computational cost against repeatable measurements.
 
+Campaign-level conduct — delegation, handoff verification, benchmark pre-registration across multiple phases — is `scip-conductor`; this skill is the performance-domain method that runs inside it (or standalone for a single target).
+
 Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
+
+## Scale Gate
+
+Choose the mode before starting:
+
+- **QUICK** — a single command/function target with an obvious hot path: capture one `docs/benchmarks/runs/YYYY-MM-DD-<target>.jsonl` baseline, skip the ledger and the rest of the campaign artifact set, fix the hypothesis, measure after, done.
+- **CAMPAIGN** — multiple targets, an unclear bottleneck, or a decision between competing designs: run the full machinery below (baseline doc, ledger, profiling, alternative-design track).
+
+One sentence to decide: if you can already name the one function you expect to fix and a single before/after number will settle it, use QUICK; if naming that function requires investigation or the fix might be architectural, use CAMPAIGN.
 
 <!-- BEGIN GENERATED SKILL COMMANDS -->
 ## Commands for this skill
@@ -68,8 +79,8 @@ If the repo is not a reliable scip-query workspace, invoke `scip-setup` first. C
 
 Create or update:
 
-- `docs/benchmarks/YYYY-MM-DD-<target>-baseline.md`
-- `docs/benchmarks/runs/YYYY-MM-DD-<target>.jsonl`
+- `docs/benchmarks/YYYY-MM-DD-<target>-baseline.md` (CAMPAIGN only — QUICK skips this)
+- `docs/benchmarks/runs/YYYY-MM-DD-<target>.jsonl` (both modes — the one required artifact)
 
 For scip-query command targets, start with:
 
@@ -81,6 +92,8 @@ scip-query bench --json --cold-index --include-heavy --timeout-ms 600000
 This step is complete only when baseline timings, output identity evidence, corpus, environment, and run-history location exist.
 
 ### 2. Create the ledger
+
+CAMPAIGN only — QUICK mode skips this step and goes straight to tracing behavior with the single run-history file as its record.
 
 Write `docs/benchmarks/YYYY-MM-DD-<target>-ledger.md` with Output Contract, Target Selection, Current Pipeline, Run History Location, Profile Spans, Bottleneck Candidates, Measurements, Current-Pipeline Optimizations, Alternative Designs, and Decisions.
 
@@ -104,6 +117,7 @@ This step is complete only when each major pipeline step can be timed as a profi
 
 ### 4. Profile the chain
 
+0. Check whether the target app already has an instrumentation layer before adding spans — a bespoke profiling harness competes with the one the codebase already trusts. When the target is scip-query itself, its instrumentation is `src/instrumentation/profile.ts` (`profileSpan`, env-gated by `SCIP_QUERY_PROFILE`/`SCIP_QUERY_PROFILE_OUT`) — use it, don't add a parallel one.
 1. Measure the target unprofiled.
 2. Measure profiled once and compare overhead.
 3. Measure distinct states: cold index, cold evidence/cache fill, warm cache hit, repeated focused run, production-like mixed state.
