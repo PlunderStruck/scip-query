@@ -413,7 +413,8 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'wrapper-candidates',
     command: 'wrapper-candidates',
-    description: 'Find heuristic wrapper candidates only called by one consumer',
+    description:
+      'Find heuristic wrapper candidates only called by one consumer (high false-positive rate on codebases with intentional layering/ambient types — treat as exploration, not findings)',
     options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--max-loc <n>', 'Maximum LOC for candidates', parseInteger, 15),
@@ -443,7 +444,8 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'stale-abstractions',
     command: 'stale-abstractions',
-    description: 'Find heuristic stale abstraction candidates with 0-1 consumers',
+    description:
+      'Find heuristic stale abstraction candidates with 0-1 consumers (high false-positive rate on codebases with intentional layering/ambient types — treat as exploration, not findings)',
     options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--min-loc <n>', 'Minimum LOC', parseInteger, 3),
