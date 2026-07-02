@@ -13,6 +13,12 @@
   },
   "suppressions": [
     {
+      "id": "SQB3D28507126F",
+      "check": "echo",
+      "file": "src/analysis/glob-match.ts",
+      "reason": "False-positive echo: normalizeBody's stripCommentsAndStrings treats the escaped-slash-then-regex-close sequence in /^\\.\\// as a // line comment, so everything after it on the line (including this function's extra trailing-slash strip) is masked away before hashing. This function is not actually identical to normalizeRelativePath/normalizeProjectPath (already a pre-existing echo pair before this diff) — it additionally strips trailing slashes. Fixing the underlying comment-vs-regex-literal ambiguity in stripCommentsAndStrings is out of scope for this change (shared by many detectors, high blast radius)."
+    },
+    {
       "id": "SQD2F5BC7ACF44",
       "check": "echo",
       "file": "src/resolution/import-path-resolver.ts",
