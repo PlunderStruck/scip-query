@@ -161,6 +161,7 @@ When verification _fails_, the errors name the exact references the static evide
 | `echo` | Changed symbols that newly echo established code elsewhere. | Default diff gate. |
 | `incomplete-migration` | New helpers or abstractions wired into some sites while older inline sites remain. | Default diff gate. |
 | `co-change-partner` | Historically coupled files that usually change together but are missing from this diff. | Default diff gate. |
+| `twin-partner` | A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched. | Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves. |
 | `doc-reference` | Docs that cite changed files and may need a matching update. | Default diff gate. |
 | `unused-params` | Fresh trailing parameters or options that no changed body uses. | Default diff gate. |
 | `new-dead` | Changed production symbols with zero indexed consumers. | Default diff gate. |

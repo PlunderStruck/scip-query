@@ -221,19 +221,23 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
     semantic: budget.semantic,
     skip: parseSkipChecks(opts['skip']),
   });
+  const blocking = queries.blockingFindings(result.findings);
   if (!hookMode && booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('diff-gate', [], opts, {
-      exitCode: result.findings.length > 0 ? 1 : 0,
+      exitCode: blocking.length > 0 ? 1 : 0,
+      advisoryFindingCount: result.findings.length - blocking.length,
       ...(budget.analysisBudget ? { analysisBudget: budget.analysisBudget } : {}),
       ...result,
     });
-    if (result.findings.length > 0) process.exitCode = 1;
+    if (blocking.length > 0) process.exitCode = 1;
     return;
   }
   if (hookMode) {
     // Hook contract (Claude Code and Codex): silent exit 0 = allow stop,
     // exit 2 with stderr = block and feed the reason back to the agent.
-    if (result.findings.length === 0) return;
+    // Advisory-only findings (e.g. twin-partner) never block the stop —
+    // see the `advisory` field doc comment on DiffGateFinding.
+    if (blocking.length === 0) return;
     const budgetLine = formatAnalysisBudgetDisclosure(budget.analysisBudget);
     console.error(budgetLine ? `${formatGateBlockReason(result)}\n${budgetLine}` : formatGateBlockReason(result));
     process.exitCode = 2;
@@ -284,7 +288,7 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
     console.log('');
   }
   for (const finding of result.findings) {
-    console.log(`  [${finding.check}] ${finding.message}`);
+    console.log(`  [${finding.check}]${finding.advisory ? ' (advisory)' : ''} ${finding.message}`);
     if (finding.partnerClass) {
       console.log(`    partner class: ${finding.partnerClass}`);
       for (const reason of finding.partnerClassReasons ?? []) console.log(`      reason: ${reason}`);
@@ -304,8 +308,15 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
     }
     console.log(`    -> ${finding.remediation}`);
   }
+  if (blocking.length === 0) {
+    console.log(
+      `\nPASS (advisory only): ${result.findings.length} advisory finding(s) recorded — none block this diff.`,
+    );
+    return;
+  }
+  const advisoryCount = result.findings.length - blocking.length;
   console.log(
-    `\nFAIL: ${result.findings.length} finding(s), ${
+    `\nFAIL: ${blocking.length} finding(s)${advisoryCount > 0 ? ` (+${advisoryCount} advisory)` : ''}, ${
       result.rootCauseGroups?.length ?? result.findings.length
     } root-cause group(s). Fix or knowingly accept before merging.`,
   );
@@ -339,7 +350,7 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'diff-gate',
     command: 'diff-gate',
     description:
-      'Gate the current diff: echo candidates, incomplete migrations, missing co-change partners, uncited doc updates, unused params, new dead symbols; exit 1 on findings',
+      'Gate the current diff: echo candidates, incomplete migrations, missing co-change partners, unedited twin partners (advisory), uncited doc updates, unused params, new dead symbols; exit 1 on blocking findings',
     options: [
       option('--base <ref>', 'Git ref to diff against (default: HEAD)'),
       option('--min-together <n>', 'Minimum historical co-changes for the partner check', parseInteger, 6),
@@ -349,7 +360,7 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
       option('--full', 'Run unbounded semantic analysis on large indexes'),
       option(
         '--skip <check>',
-        'Skip a check (repeatable): echo, incomplete-migration, co-change-partner, doc-reference, unused-params, new-dead, baseline',
+        'Skip a check (repeatable): echo, incomplete-migration, co-change-partner, twin-partner, doc-reference, unused-params, new-dead, baseline',
         collectValues,
         [],
       ),

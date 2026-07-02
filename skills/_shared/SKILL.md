@@ -141,7 +141,7 @@ scip-query call-graph <symbol> # Show incoming callers and outgoing callees for 
 scip-query affected <symbol> # Transitive closure of symbols that could break if this symbol changes
 scip-query change-surface <file> # Pre-change briefing: exports, consumers, and blast-radius risk
 scip-query co-change [file] # Files that change together in git history without a dependency edge — hidden coupling candidates
-scip-query diff-gate # Gate the current diff: echo candidates, incomplete migrations, missing co-change partners, uncited doc updates, unused params, new dead symbols; exit 1 on findings
+scip-query diff-gate # Gate the current diff: echo candidates, incomplete migrations, missing co-change partners, unedited twin partners (advisory), uncited doc updates, unused params, new dead symbols; exit 1 on blocking findings
 scip-query incomplete-migration # Partially-completed extraction candidates: new helpers in the diff wired into some sites while similar un-migrated sites remain
 scip-query diff-impact # Compute changed symbols and downstream consumers from current git diff
 ```

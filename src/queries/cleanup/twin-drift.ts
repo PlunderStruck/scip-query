@@ -67,12 +67,27 @@ export function twinDrift(
     scanLimit?: number;
   } = {},
 ): TwinGroup[] {
-  const { scope, minSimilarity = 0.3, includeHomonyms = false, limit, scanLimit } = opts;
-  const records = twinDriftRecords(db, { scope, scanLimit });
-  const groups = groupTwins(records, { minSimilarity }).filter(
+  const { includeHomonyms = false, limit } = opts;
+  const groups = allTwinGroups(db, opts).filter(
     (group) => group.relationship === 'divergent' || (includeHomonyms && group.relationship === 'homonym'),
   );
   return limit ? groups.slice(0, limit) : groups;
+}
+
+/**
+ * Every classified twin group (identical, divergent, homonym) — including
+ * the 'identical' groups `twinDrift` always defers to duplicate-bodies.
+ * Internal consumers like diff-gate's twin-partner check need 'identical'
+ * groups too (a same-name pair that WAS byte-identical is exactly the kind
+ * of pair a one-sided edit should alarm on).
+ */
+export function allTwinGroups(
+  db: ScipDatabase,
+  opts: { scope?: string; minSimilarity?: number; scanLimit?: number } = {},
+): TwinGroup[] {
+  const { scope, minSimilarity = 0.3, scanLimit } = opts;
+  const records = twinDriftRecords(db, { scope, scanLimit });
+  return groupTwins(records, { minSimilarity });
 }
 
 /**

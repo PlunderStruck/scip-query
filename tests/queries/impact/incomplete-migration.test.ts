@@ -1074,7 +1074,15 @@ describe('incomplete-migration', () => {
       try {
         const result = diffGate(importOnlyDb, {
           base: 'HEAD',
-          skip: ['echo', 'incomplete-migration', 'co-change-partner', 'unused-params', 'new-dead', 'baseline'],
+          skip: [
+            'echo',
+            'incomplete-migration',
+            'co-change-partner',
+            'twin-partner',
+            'unused-params',
+            'new-dead',
+            'baseline',
+          ],
         });
         expect(result.checksRun).toEqual(['doc-reference']);
         expect(result.findings).toHaveLength(0);
@@ -1132,7 +1140,15 @@ describe('incomplete-migration', () => {
       try {
         const result = diffGate(configExampleDb, {
           base: 'HEAD',
-          skip: ['echo', 'incomplete-migration', 'co-change-partner', 'unused-params', 'new-dead', 'baseline'],
+          skip: [
+            'echo',
+            'incomplete-migration',
+            'co-change-partner',
+            'twin-partner',
+            'unused-params',
+            'new-dead',
+            'baseline',
+          ],
         });
         const finding = result.findings.find((candidate) => candidate.check === 'doc-reference');
 
@@ -1181,7 +1197,15 @@ describe('incomplete-migration', () => {
       try {
         const result = diffGate(updatedDocDb, {
           base: 'HEAD',
-          skip: ['echo', 'incomplete-migration', 'co-change-partner', 'unused-params', 'new-dead', 'baseline'],
+          skip: [
+            'echo',
+            'incomplete-migration',
+            'co-change-partner',
+            'twin-partner',
+            'unused-params',
+            'new-dead',
+            'baseline',
+          ],
         });
 
         expect(result.checksRun).toEqual(['doc-reference']);
@@ -1229,7 +1253,15 @@ describe('incomplete-migration', () => {
       try {
         const result = diffGate(behavioralDb, {
           base: 'HEAD',
-          skip: ['echo', 'incomplete-migration', 'co-change-partner', 'unused-params', 'new-dead', 'baseline'],
+          skip: [
+            'echo',
+            'incomplete-migration',
+            'co-change-partner',
+            'twin-partner',
+            'unused-params',
+            'new-dead',
+            'baseline',
+          ],
         });
         const finding = result.findings.find((candidate) => candidate.check === 'doc-reference');
 
@@ -1287,7 +1319,15 @@ describe('incomplete-migration', () => {
       try {
         const result = diffGate(behavioralDb, {
           base: 'HEAD',
-          skip: ['echo', 'incomplete-migration', 'co-change-partner', 'unused-params', 'new-dead', 'baseline'],
+          skip: [
+            'echo',
+            'incomplete-migration',
+            'co-change-partner',
+            'twin-partner',
+            'unused-params',
+            'new-dead',
+            'baseline',
+          ],
         });
         const finding = result.findings.find((candidate) => candidate.check === 'doc-reference');
 

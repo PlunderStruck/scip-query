@@ -19,6 +19,8 @@ import { docReferencePolicy } from './diff-gate-doc-policy.js';
 import type { DiffGateActionTier, DocCitationKind } from './diff-gate-types.js';
 import { docsCitingFiles } from '../cleanup/doc-drift.js';
 import { exactDuplicateBodyMatches } from '../cleanup/duplicate-bodies.js';
+import { allTwinGroups } from '../cleanup/twin-drift.js';
+import type { TwinGroup } from '../cleanup/twin-drift.js';
 import { checkHealthBaseline, resolveBaselinePath } from '../health/health-baseline.js';
 import { incompleteMigration } from './incomplete-migration.js';
 import { similar } from '../cleanup/similar.js';
@@ -32,6 +34,7 @@ export type DiffGateCheck =
   | 'echo'
   | 'incomplete-migration'
   | 'co-change-partner'
+  | 'twin-partner'
   | 'doc-reference'
   | 'unused-params'
   | 'new-dead'
@@ -42,6 +45,7 @@ export const DIFF_GATE_CHECKS: readonly DiffGateCheck[] = [
   'echo',
   'incomplete-migration',
   'co-change-partner',
+  'twin-partner',
   'doc-reference',
   'unused-params',
   'new-dead',
@@ -69,6 +73,13 @@ export interface DiffGateFinding {
   endLine?: number;
   symbol?: string;
   relatedFiles?: string[];
+  /**
+   * Advisory findings surface useful signal but must never be the sole
+   * cause of a nonzero diff-gate exit code (see `blockingFindings`). Used
+   * by twin-partner until calibration (remediation plan phase 21) says the
+   * check's precision earns a hard gate.
+   */
+  advisory?: boolean;
   /** Underlying analyzer family when one gate finding wraps another analyzer. */
   sourceAnalyzer?: string;
   /** Stable root-cause grouping key inside the source analyzer. */
@@ -154,6 +165,10 @@ type DiffGateFindingDraft = Omit<DiffGateFinding, 'suppressionHint'>;
  * - co-change-partner:  a changed file's strong historical partner is NOT in
  *                       the diff — the change-graph contract says they move
  *                       together (auto-derived sync enforcement).
+ * - twin-partner:       (advisory, never fails the gate alone) a changed
+ *                       symbol has a same-(near-)name twin elsewhere that
+ *                       was identical or already-divergent and is NOT in
+ *                       the diff — a one-sided fix candidate.
  * - doc-reference:      a doc cites a changed file but isn't updated in the
  *                       diff — the drift starts here.
  * - unused-params:      changed files now contain trailing parameters no body
@@ -252,6 +267,7 @@ export function diffGate(
   runUnlessSkipped('co-change-partner', () =>
     runCoChangePartnerCheck(db, changedForCoordination, minTogether, minConfidence, result),
   );
+  runUnlessSkipped('twin-partner', () => runTwinPartnerCheck(db, impact.changedSymbols, changed, scanLimit, result));
   runUnlessSkipped('doc-reference', () =>
     runDocReferenceCheck(db, changed, changedGitFiles, impactPlan.changedRanges, result),
   );
@@ -262,6 +278,16 @@ export function diffGate(
   result.rootCauseGroups = diffGateRootCauseGroups(result.findings);
 
   return result;
+}
+
+/**
+ * Findings that count toward the pass/fail decision. Advisory findings
+ * (currently: twin-partner) still print and are still suppressible, but a
+ * diff with only advisory findings must exit 0 — see the `advisory` field
+ * doc comment on `DiffGateFinding`.
+ */
+export function blockingFindings(findings: readonly DiffGateFinding[]): DiffGateFinding[] {
+  return findings.filter((finding) => !finding.advisory);
 }
 
 function diffGateRootCauseGroups(findings: readonly DiffGateFinding[]): DiffGateRootCauseGroup[] {
@@ -713,6 +739,76 @@ function runCoChangePartnerCheck(
       remediation: declaredCouplingSuggestion
         ? `Update ${partner} alongside this change, declare the coupling "${declaredCouplingSuggestion.name}", or confirm the coupling no longer holds.`
         : `Update ${partner} alongside this change, or confirm the coupling no longer holds.`,
+    });
+  }
+}
+
+/**
+ * twin-partner (advisory): symbol-level companion to co-change-partner.
+ * File-level co-change history can't see a same-name symbol pair whose
+ * files never happened to co-change historically; twin-drift's grouping
+ * gives us that symbol-level identity instead. Ships advisory — see the
+ * `advisory` field doc comment on `DiffGateFinding` — until phase 21
+ * calibration measures its precision on real repos.
+ */
+function runTwinPartnerCheck(
+  db: ScipDatabase,
+  changedSymbols: ReadonlyArray<{ symbol: string; shortName: string; file: string }>,
+  changed: ReadonlySet<string>,
+  scanLimit: number | undefined,
+  result: DiffGateResult,
+): void {
+  result.checksRun.push('twin-partner');
+  const groups = allTwinGroups(db, { scanLimit }).filter(
+    (group) => group.relationship === 'divergent' || group.relationship === 'identical',
+  );
+  if (groups.length === 0) return;
+
+  const groupBySymbol = new Map<string, TwinGroup>();
+  for (const group of groups) {
+    for (const member of group.members) groupBySymbol.set(member.symbol, group);
+  }
+
+  const reported = new Set<string>();
+  for (const changedSymbol of changedSymbols) {
+    if (!isCallableSymbol(changedSymbol.symbol)) continue;
+    const group = groupBySymbol.get(changedSymbol.symbol);
+    if (!group) continue;
+    const unchangedPartners = group.members.filter(
+      (member) => member.symbol !== changedSymbol.symbol && !changed.has(member.file),
+    );
+    if (unchangedPartners.length === 0) continue;
+
+    const rootCauseKey = [changedSymbol.symbol, ...unchangedPartners.map((partner) => partner.symbol)].sort().join('|');
+    if (reported.has(rootCauseKey)) continue;
+    reported.add(rootCauseKey);
+
+    const partner = unchangedPartners[0]!;
+    const id = findingId('twin-partner', changedSymbol.symbol, changedSymbol.file, partner.symbol);
+    recordFinding(result, {
+      id,
+      groupKey: `twin-partner:${rootCauseKey}`,
+      check: 'twin-partner',
+      severity: 'warning',
+      evidence: 'heuristic',
+      actionTier: 'signal',
+      advisory: true,
+      confidence: group.relationship === 'identical' ? 1 : Math.max(0, 1 - group.maxDivergence),
+      file: changedSymbol.file,
+      symbol: changedSymbol.symbol,
+      relatedFiles: unchangedPartners.map((entry) => entry.file).sort(),
+      sourceAnalyzer: 'twin-drift',
+      rootCauseKey,
+      message: `${changedSymbol.shortName} (${changedSymbol.file}) changed but its same-name twin ${partner.shortName} (${partner.file}) did not — verify the change shouldn't apply to both, or consolidate them.`,
+      why: [
+        `${changedSymbol.symbol} is in this diff.`,
+        `${partner.symbol} shares its (near-)name and is classified '${group.relationship}' with it, but ${partner.file} is not in this diff.`,
+        group.relationship === 'divergent'
+          ? `The two bodies already diverge (~${Math.round(group.maxDivergence * 100)}% token difference) — this diff may widen or narrow that drift.`
+          : 'The two bodies were byte-identical before this diff.',
+        'Advisory: twin-partner never fails the gate by itself — see the twin-partner entry in the diff-gate checks table.',
+      ],
+      remediation: `Update ${partner.file} alongside this change, consolidate ${changedSymbol.shortName}/${partner.shortName} into one helper, or confirm the twin should diverge on purpose.`,
     });
   }
 }

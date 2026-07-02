@@ -54,7 +54,7 @@ Round 1+2 findings, taxonomized — each class maps to a mechanical detector or 
 - **Why**: this is the single highest-yield detector for the defect class both review rounds ranked most corrosive.
 
 ### 17.2 - diff-gate `twin-partner` check
-- [ ] **File**: `src/queries/impact/diff-gate.ts` (`DIFF_GATE_CHECKS` + a new check module beside the co-change-partner check)
+- [x] **File**: `src/queries/impact/diff-gate.ts` (`DIFF_GATE_CHECKS` + a new check module beside the co-change-partner check)
 - **What**: one-sided fixes are the live failure mode (citation classifier fixed in diff-gate, not doc-drift). File-level co-change can't see symbol-level twins.
 - **Change**: for each changed symbol in the diff (Plan-1's attribution now includes initializer edits), look up its twin group (17.1's grouping, cached in evidence.db); if a DIVERGENT-or-IDENTICAL twin exists in an *unchanged* file, emit `[twin-partner] <symbol> changed but its same-name twin <file:symbol> did not — verify the change shouldn't apply to both, or consolidate them.` Severity/remediation shaped like co-change-partner; suppressible with the standard identity (check, symbol, file — Plan-1 1.6 scheme). Register in `DIFF_GATE_CHECKS` so the generated doc lists update via `npm run docs:commands`.
 - **Testability**: fixture repo with a twin pair; edit one → finding; edit both → no finding; suppression respected.

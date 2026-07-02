@@ -19,6 +19,11 @@ const DIFF_GATE_CHECK_DESCRIPTIONS: Record<DiffGateCheck, { description: string;
     description: 'Historically coupled files that usually change together but are missing from this diff.',
     when: 'Default diff gate.',
   },
+  'twin-partner': {
+    description:
+      'A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched.',
+    when: 'Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves.',
+  },
   'doc-reference': {
     description: 'Docs that cite changed files and may need a matching update.',
     when: 'Default diff gate.',
