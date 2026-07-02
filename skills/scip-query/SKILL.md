@@ -56,6 +56,7 @@ The loop is complete only when `scip-verify` passes or each remaining finding ha
 | Autonomously fix confirmed cleanup findings | `scip-cleanup-improve` | `health`, `cleanup-plan`, verified batches |
 | Find or resolve same-name twins that have diverged | `scip-twin-drift` | `twin-drift`, `duplicate-bodies`, `refs` |
 | Audit whether a status claim is derived, hedged, or merely asserted | `scip-claim-audit` | `refs`, `code`, `trace` |
+| Prove whether a parser/AST branch is actually reachable | `scip-probe-reachability` | `outline --signatures`, `code`, scratch probes |
 | Reconcile living docs with code | `scip-doc-reconcile` | `doc-drift` |
 | Review or migrate folder ownership | `scip-directory-architecture` | `locality-candidates`, `similar-files` |
 | Review deeper maintainability and system compression | `scip-maintainability` | `bottlenecks`, `similar-chains`, `change-surface` |
@@ -96,6 +97,7 @@ Top commands per routed skill, generated from each skill's own `commands:` front
 | `scip-hyper-optimization` | `scip-query bench --json`, `scip-query bench --json --cold-index --include-heavy --timeout-ms 600000`, `scip-query plan-context <entry-symbol-or-file>` |
 | `scip-language-playbook` | `scip-query stats`, `scip-query files <feature-or-module-name>`, `scip-query outline <file>` |
 | `scip-maintainability` | `scip-query stats`, `scip-query system <scope>`, `scip-query surface <scope>` |
+| `scip-probe-reachability` | `scip-query outline <file> --signatures`, `scip-query code <symbol>`, `scip-query trace <symbol>` |
 | `scip-react-maintainability` | `scip-query react-component-duplicates --scope <scope> --full --json`, `scip-query react-hook-candidates --scope <scope> --full --json`, `scip-query react-large-component-pressure --scope <scope> --full --json` |
 | `scip-setup` | `scip-query setup --json`, `scip-query doctor`, `scip-query status --json` |
 | `scip-triage-issue` | `scip-query files <issue-term>`, `scip-query trace <entry-or-error-symbol>`, `scip-query code <entry-or-error-symbol>` |

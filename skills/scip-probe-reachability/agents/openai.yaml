@@ -1,0 +1,4 @@
+interface:
+  display_name: "SCIP Probe Reachability"
+  short_description: "Prove parser/AST branches are reachable by running the real parser"
+  default_prompt: "Enumerate the node-type/shape branches in the target parser or AST-consuming function, construct a minimal input per branch, run the real parser on each in a scratch script, and file findings for every unreached branch."

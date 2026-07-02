@@ -170,7 +170,7 @@ scip-query complexity <symbol> # Per-symbol complexity: branches, cyclomatic est
 
 ```bash
 scip-query bench # Benchmark indexing and command runtimes for this repository
-scip-query install-skills # Install skills (_shared, scip-query, scip-setup, scip-cleanup-audit, scip-cleanup-improve, scip-twin-drift, scip-claim-audit, scip-hyper-optimization, scip-api-impact, concrete-plan, scip-debug, scip-explore, scip-triage-issue, scip-diagram, scip-doc-reconcile, scip-directory-architecture, scip-maintainability, scip-react-maintainability, scip-vue-maintainability, scip-verify, scip-language-playbook, tla-model-system) into Claude Code, Codex, and shared agent roots
+scip-query install-skills # Install skills (_shared, scip-query, scip-setup, scip-cleanup-audit, scip-cleanup-improve, scip-twin-drift, scip-claim-audit, scip-probe-reachability, scip-hyper-optimization, scip-api-impact, concrete-plan, scip-debug, scip-explore, scip-triage-issue, scip-diagram, scip-doc-reconcile, scip-directory-architecture, scip-maintainability, scip-react-maintainability, scip-vue-maintainability, scip-verify, scip-language-playbook, tla-model-system) into Claude Code, Codex, and shared agent roots
 scip-query setup-hooks # Install or refresh project-local Codex and Claude Code lifecycle hooks
 scip-query check-deps # Check whether scip-query and the detected language indexers are actually runnable
 scip-query capabilities # Report which evidence and verification capabilities are available in this project
