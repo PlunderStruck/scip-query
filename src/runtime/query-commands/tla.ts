@@ -2,10 +2,11 @@ import { existsSync } from 'node:fs';
 import type { ScipDatabase } from '../../storage/db.js';
 import type { CommandDescriptor } from '../commands/command-descriptor-types.js';
 import type { CommandHandler } from '../commands/command-descriptor-types.js';
-import { doc, option, parseInteger, withJsonOption } from '../commands/command-spec-builders.js';
+import { doc, option, parseInteger, parsePositiveInteger, withJsonOption } from '../commands/command-spec-builders.js';
 import {
   booleanOptionValue,
   definedNumberOption,
+  numberOptionValue,
   optionalStringArg,
   printJsonEnvelope,
   splitCommanderActionArgs,
@@ -211,6 +212,7 @@ function runTlaTraceCheck(db: ScipDatabase, args: readonly unknown[], opts: Comm
     toolOptions: {
       projectRoot,
       tlaToolsJar: stringOptionValue(opts, 'tlaTools'),
+      timeoutMs: numberOptionValue(opts, 'timeoutMs'),
     },
   });
 
@@ -285,6 +287,7 @@ function runTlaVerify(db: ScipDatabase, args: readonly unknown[], opts: CommandO
     tlaToolsJar,
     apalacheBin: stringOptionValue(opts, 'apalache'),
     length: definedNumberOption(opts, 'length', 10),
+    timeoutMs: numberOptionValue(opts, 'timeoutMs'),
   });
   if (toolResult.status === 'skipped' && checker !== 'none') {
     conformance.findings.push({
@@ -344,6 +347,11 @@ export const tlaQueryCommandDescriptors: CommandDescriptor[] = [
       option('--tla-tools <jar>', 'Path to tla2tools.jar'),
       option('--apalache <binary>', 'Path to apalache-mc binary'),
       option('--length <n>', 'Bounded checker length for Apalache', parseInteger, 10),
+      option(
+        '--timeout-ms <n>',
+        'Model checker subprocess timeout in milliseconds (verify and trace-check; default 120000)',
+        parsePositiveInteger,
+      ),
       option('--trace <file>', 'Runtime trace JSON file to check against the mapping'),
       option('--allow-unknown', 'Exit zero when only unknown findings remain'),
       option('--out <path>', 'Output directory (scaffold) or file (instrument)'),
@@ -355,6 +363,7 @@ export const tlaQueryCommandDescriptors: CommandDescriptor[] = [
       'scip-query tla verify specs/Queue.tla --map specs/Queue.scip-tla.json',
       'scip-query tla scaffold src/queue/store.ts',
       'scip-query tla trace-check specs/Queue.tla --trace traces/run1.json',
+      'scip-query tla verify specs/Queue.tla --timeout-ms 300000',
       'scip-query tla fetch-tools',
     ]),
     handler: handleTla,
