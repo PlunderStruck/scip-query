@@ -11,7 +11,7 @@
 import { execFileSync } from 'node:child_process';
 import type { ScipDatabase } from '../storage/db.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
-import { createFileEvidenceProduct } from '../storage/evidence-products.js';
+import { createFileEvidenceProduct, evidenceProductInvalidation } from '../storage/evidence-products.js';
 
 export interface CommitRecord {
   hash: string;
@@ -319,6 +319,7 @@ const fileAddCache = headKeyedGitValue<Map<string, FileAddRecord>>('git-file-add
 const FILE_ADD_CACHE_KEY = '__git__/file-adds';
 const FILE_ADD_PRODUCT = createFileEvidenceProduct<Map<string, FileAddRecord>>({
   kind: 'git-file-adds',
+  invalidation: evidenceProductInvalidation('git-file-adds'),
   serialize: serializeFileAddRecords,
   deserialize: parseFileAddRecordsPayload,
 });

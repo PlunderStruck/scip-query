@@ -1,5 +1,7 @@
 import type { ScipDatabase } from './db.js';
 import {
+  FILE_EVIDENCE_KINDS,
+  PROJECT_EVIDENCE_KINDS,
   readCachedFileEvidence,
   readCachedProjectEvidence,
   writeCachedFileEvidence,
@@ -7,6 +9,45 @@ import {
   type FileEvidenceKind,
   type ProjectEvidenceKind,
 } from './evidence-cache.js';
+
+export type EvidenceProductScope = 'file' | 'project';
+
+export type EvidenceProductDependency =
+  | 'content-hash'
+  | 'direct-deps-digest'
+  | 'project-fingerprint'
+  | 'import-resolution-fingerprint'
+  | 'git-head'
+  | 'git-history'
+  | 'config'
+  | 'tool-version'
+  | 'indexed-language-set';
+
+export interface EvidenceProductInvalidation {
+  scope: EvidenceProductScope;
+  dependsOn: readonly EvidenceProductDependency[];
+  keyParts: readonly string[];
+  stalenessTest: string;
+  owner: string;
+}
+
+export type EvidenceProductManifestEntry =
+  | {
+      scope: 'file';
+      kind: FileEvidenceKind;
+      invalidation: EvidenceProductInvalidation;
+    }
+  | {
+      scope: 'project';
+      kind: ProjectEvidenceKind;
+      invalidation: EvidenceProductInvalidation;
+    };
+
+export interface EvidenceProductManifestValidation {
+  missing: string[];
+  duplicate: string[];
+  unknown: string[];
+}
 
 export interface FileEvidenceProduct<T> {
   kind: FileEvidenceKind;
@@ -16,6 +57,7 @@ export interface FileEvidenceProduct<T> {
 
 export interface FileEvidenceProductOptions<T> {
   kind: FileEvidenceKind;
+  invalidation: EvidenceProductInvalidation;
   serialize(value: T): string;
   deserialize(payload: string): T | null;
 }
@@ -28,9 +70,85 @@ export interface ProjectEvidenceProduct<T> {
 
 export interface ProjectEvidenceProductOptions<T> {
   kind: ProjectEvidenceKind;
+  invalidation: EvidenceProductInvalidation;
   serialize(value: T): string;
   deserialize(payload: string): T | null;
 }
+
+export const EVIDENCE_PRODUCT_MANIFEST: readonly EvidenceProductManifestEntry[] = [
+  fileManifest('source-facts', {
+    dependsOn: ['content-hash', 'tool-version'],
+    keyParts: ['kind', 'relativePath', 'contentHash', 'payloadVersion'],
+    stalenessTest: 'tests/storage/evidence-cache.test.ts',
+    owner: 'src/source/source-facts.ts',
+  }),
+  fileManifest('file-definitions', {
+    dependsOn: ['content-hash', 'project-fingerprint', 'indexed-language-set', 'tool-version'],
+    keyParts: ['kind', 'relativePath', 'contentHash', 'projectFingerprint', 'payloadVersion'],
+    stalenessTest: 'tests/storage/evidence-cache.test.ts',
+    owner: 'src/symbols/definition-catalog.ts',
+  }),
+  fileManifest('definition-exclusions', {
+    dependsOn: ['content-hash', 'tool-version'],
+    keyParts: ['kind', 'relativePath', 'contentHash', 'payloadVersion'],
+    stalenessTest: 'tests/storage/evidence-cache.test.ts',
+    owner: 'src/analysis/framework-patterns.ts',
+  }),
+  fileManifest('doc-path-tokens', {
+    dependsOn: ['content-hash', 'tool-version'],
+    keyParts: ['kind', 'relativePath', 'contentHash', 'payloadVersion'],
+    stalenessTest: 'tests/storage/evidence-products.test.ts',
+    owner: 'tests/storage/evidence-cache.test.ts',
+  }),
+  fileManifest('doc-path-evidence', {
+    dependsOn: ['content-hash', 'git-history', 'git-head', 'tool-version'],
+    keyParts: ['kind', 'relativePath', 'contentHash', 'trackedFiles', 'historyWindow', 'payloadVersion'],
+    stalenessTest: 'tests/storage/evidence-cache.test.ts',
+    owner: 'src/queries/cleanup/doc-drift.ts',
+  }),
+  fileManifest('source-imports', {
+    dependsOn: ['content-hash', 'import-resolution-fingerprint', 'config', 'tool-version'],
+    keyParts: ['kind', 'relativePath', 'contentHash', 'importResolutionFingerprint', 'payloadVersion'],
+    stalenessTest: 'tests/storage/evidence-cache.test.ts',
+    owner: 'src/language-parsers/index.ts',
+  }),
+  fileManifest('source-reexports', {
+    dependsOn: ['content-hash', 'import-resolution-fingerprint', 'config', 'tool-version'],
+    keyParts: ['kind', 'relativePath', 'contentHash', 'importResolutionFingerprint', 'payloadVersion'],
+    stalenessTest: 'tests/storage/evidence-cache.test.ts',
+    owner: 'src/language-parsers/index.ts',
+  }),
+  fileManifest('source-fingerprints', {
+    dependsOn: ['content-hash', 'project-fingerprint', 'indexed-language-set', 'tool-version'],
+    keyParts: ['kind', 'relativePath', 'contentHash', 'projectFingerprint', 'payloadVersion'],
+    stalenessTest: 'tests/symbols/definition-catalog.test.ts',
+    owner: 'src/queries/cleanup/similar.ts',
+  }),
+  fileManifest('consumer-file-usage', {
+    dependsOn: ['content-hash', 'project-fingerprint', 'indexed-language-set', 'tool-version'],
+    keyParts: ['kind', 'relativePath', 'contentHash', 'projectFingerprint', 'payloadVersion'],
+    stalenessTest: 'tests/storage/evidence-cache.test.ts',
+    owner: 'src/queries/internal/consumer-evidence.ts',
+  }),
+  fileManifest('react-component-behavior-profiles', {
+    dependsOn: ['content-hash', 'tool-version'],
+    keyParts: ['kind', 'relativePath', 'contentHash', 'payloadVersion'],
+    stalenessTest: 'tests/storage/evidence-cache.test.ts',
+    owner: 'src/source/react-profile.ts',
+  }),
+  fileManifest('git-file-adds', {
+    dependsOn: ['git-head', 'git-history', 'tool-version'],
+    keyParts: ['kind', 'cacheKey', 'head', 'historyWindow', 'payloadVersion'],
+    stalenessTest: 'tests/storage/evidence-cache.test.ts',
+    owner: 'src/analysis/git-history.ts',
+  }),
+  projectManifest('file-dependency-graph', {
+    dependsOn: ['project-fingerprint', 'indexed-language-set', 'import-resolution-fingerprint', 'tool-version'],
+    keyParts: ['kind', 'scope', 'projectFingerprint', 'sourceImportFingerprint', 'payloadVersion'],
+    stalenessTest: 'tests/symbols/file-dep-graph.test.ts',
+    owner: 'src/symbols/graph/file-dep-graph.ts',
+  }),
+];
 
 export function createFileEvidenceProduct<T>(opts: FileEvidenceProductOptions<T>): FileEvidenceProduct<T> {
   return {
@@ -66,4 +184,49 @@ export function createProjectEvidenceProduct<T>(opts: ProjectEvidenceProductOpti
       writeCachedProjectEvidence(db, opts.kind, cacheKey, projectFingerprint, opts.serialize(value));
     },
   };
+}
+
+export function validateEvidenceProductManifest(
+  manifest: readonly EvidenceProductManifestEntry[] = EVIDENCE_PRODUCT_MANIFEST,
+): EvidenceProductManifestValidation {
+  const expected = new Set([
+    ...FILE_EVIDENCE_KINDS.map((kind) => `file:${kind}`),
+    ...PROJECT_EVIDENCE_KINDS.map((kind) => `project:${kind}`),
+  ]);
+  const seen = new Map<string, number>();
+  for (const entry of manifest) {
+    const key = `${entry.scope}:${entry.kind}`;
+    seen.set(key, (seen.get(key) ?? 0) + 1);
+  }
+  return {
+    missing: [...expected].filter((key) => !seen.has(key)).sort(),
+    duplicate: [...seen]
+      .filter(([, count]) => count > 1)
+      .map(([key]) => key)
+      .sort(),
+    unknown: [...seen]
+      .filter(([key]) => !expected.has(key))
+      .map(([key]) => key)
+      .sort(),
+  };
+}
+
+export function evidenceProductInvalidation(kind: FileEvidenceKind | ProjectEvidenceKind): EvidenceProductInvalidation {
+  const entry = EVIDENCE_PRODUCT_MANIFEST.find((candidate) => candidate.kind === kind);
+  if (!entry) throw new Error(`missing evidence product manifest entry for ${kind}`);
+  return entry.invalidation;
+}
+
+function fileManifest(
+  kind: FileEvidenceKind,
+  invalidation: Omit<EvidenceProductInvalidation, 'scope'>,
+): EvidenceProductManifestEntry {
+  return { scope: 'file', kind, invalidation: { scope: 'file', ...invalidation } };
+}
+
+function projectManifest(
+  kind: ProjectEvidenceKind,
+  invalidation: Omit<EvidenceProductInvalidation, 'scope'>,
+): EvidenceProductManifestEntry {
+  return { scope: 'project', kind, invalidation: { scope: 'project', ...invalidation } };
 }

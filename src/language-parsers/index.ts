@@ -13,7 +13,7 @@ import type { ScipDatabase } from '../storage/db.js';
 import { importResolutionFingerprint, normalizePath } from '../resolution/import-path-resolver.js';
 import { fileContentHash } from '../storage/evidence-cache.js';
 import { isRecord } from '../storage/evidence-payload.js';
-import { createFileEvidenceProduct } from '../storage/evidence-products.js';
+import { createFileEvidenceProduct, evidenceProductInvalidation } from '../storage/evidence-products.js';
 import { createPerDbCache } from '../storage/per-db-cache.js';
 import type { ParsedReExport, ParsedSourceExport, ParsedSourceImport } from '../domain/types.js';
 import { getSourceText } from '../source/source-text.js';
@@ -36,11 +36,13 @@ interface SerializedReExports {
 
 const SOURCE_IMPORTS_PRODUCT = createFileEvidenceProduct<SerializedSourceImports>({
   kind: 'source-imports',
+  invalidation: evidenceProductInvalidation('source-imports'),
   serialize: serializeSourceImports,
   deserialize: deserializeSourceImports,
 });
 const SOURCE_REEXPORTS_PRODUCT = createFileEvidenceProduct<SerializedReExports>({
   kind: 'source-reexports',
+  invalidation: evidenceProductInvalidation('source-reexports'),
   serialize: serializeReExports,
   deserialize: deserializeReExports,
 });

@@ -37,7 +37,7 @@ import { cleanSignature, extractSignature, type SymbolQueryRow } from '../storag
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import { fileContentHash, projectEvidenceFingerprint } from '../storage/evidence-cache.js';
 import { isRecord } from '../storage/evidence-payload.js';
-import { createFileEvidenceProduct } from '../storage/evidence-products.js';
+import { createFileEvidenceProduct, evidenceProductInvalidation } from '../storage/evidence-products.js';
 import type { IndexedDefinition, SymbolMatch } from '../domain/types.js';
 import { mergeMixedSymbolQueryRows } from './symbol-row-policy.js';
 
@@ -111,6 +111,7 @@ interface SerializedDefinitionEvidence {
 
 const FILE_DEFINITIONS_PRODUCT = createFileEvidenceProduct<SerializedDefinitionEvidence>({
   kind: 'file-definitions',
+  invalidation: evidenceProductInvalidation('file-definitions'),
   serialize: serializeDefinitionEvidence,
   deserialize: deserializeDefinitionEvidencePayload,
 });

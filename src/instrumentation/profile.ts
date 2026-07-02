@@ -7,6 +7,7 @@ type ProfileMetadata = Record<string, unknown>;
 const PROFILE_ENV = 'SCIP_QUERY_PROFILE';
 const PROFILE_OUT_ENV = 'SCIP_QUERY_PROFILE_OUT';
 const PROFILE_COMMAND_ENV = 'SCIP_QUERY_PROFILE_COMMAND';
+const PROFILE_CACHE_STATE_ENV = 'SCIP_QUERY_PROFILE_CACHE_STATE';
 const ensuredDirs = new Set<string>();
 let warnedProfileWriteFailure = false;
 
@@ -21,6 +22,10 @@ export function profileOutputPath(): string | undefined {
 
 export function profileCommand(): string | undefined {
   return process.env[PROFILE_COMMAND_ENV];
+}
+
+export function profileCacheState(): string | undefined {
+  return process.env[PROFILE_CACHE_STATE_ENV];
 }
 
 export function profileSpan<T>(name: string, run: () => T, metadata?: ProfileMetadata | (() => ProfileMetadata)): T {
@@ -54,6 +59,7 @@ export function writeProfileEvent(event: ProfileMetadata, outputPath = profileOu
     timestamp: new Date().toISOString(),
     pid: process.pid,
     command: profileCommand(),
+    cacheState: profileCacheState(),
     ...event,
   };
   const line = `${JSON.stringify(record)}\n`;

@@ -24,7 +24,11 @@ import {
 import { getSourceFacts } from '../../src/source/source-facts.js';
 import { getSourceLines, getSourceText } from '../../src/source/source-text.js';
 import { getReExports } from '../../src/language-parsers/index.js';
-import { createFileEvidenceProduct, createProjectEvidenceProduct } from '../../src/storage/evidence-products.js';
+import {
+  createFileEvidenceProduct,
+  createProjectEvidenceProduct,
+  evidenceProductInvalidation,
+} from '../../src/storage/evidence-products.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
 const FILE = 'src/sample.ts';
@@ -38,6 +42,7 @@ const SOURCE_LINES = [
 ];
 const PRODUCT_TEST = createFileEvidenceProduct<{ marker: string }>({
   kind: 'doc-path-tokens',
+  invalidation: evidenceProductInvalidation('doc-path-tokens'),
   serialize: (value) => JSON.stringify(value),
   deserialize: (payload) => {
     const raw = JSON.parse(payload) as unknown;
@@ -47,6 +52,7 @@ const PRODUCT_TEST = createFileEvidenceProduct<{ marker: string }>({
 });
 const PROJECT_PRODUCT_TEST = createProjectEvidenceProduct<{ marker: string }>({
   kind: 'file-dependency-graph',
+  invalidation: evidenceProductInvalidation('file-dependency-graph'),
   serialize: (value) => JSON.stringify(value),
   deserialize: (payload) => {
     const raw = JSON.parse(payload) as unknown;

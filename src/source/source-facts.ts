@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import type { IndexedDefinition } from '../domain/types.js';
 import { fileContentHash } from '../storage/evidence-cache.js';
-import { createFileEvidenceProduct } from '../storage/evidence-products.js';
+import { createFileEvidenceProduct, evidenceProductInvalidation } from '../storage/evidence-products.js';
 import { createPerDbSourceCache } from '../storage/per-db-cache.js';
 import { detectAstLanguage, isVueSfcPath, type AstLanguage } from './ast/ast-language.js';
 import { getAst } from './ast/ast-core.js';
@@ -42,6 +42,7 @@ const SOURCE_FACTS_CACHE = createPerDbSourceCache<SourceFactsResult>('source-fac
 });
 const SOURCE_FACTS_PRODUCT = createFileEvidenceProduct<SourceFacts>({
   kind: 'source-facts',
+  invalidation: evidenceProductInvalidation('source-facts'),
   serialize: serializeSourceFacts,
   deserialize: deserializeSourceFacts,
 });

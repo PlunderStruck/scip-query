@@ -15,7 +15,7 @@
  */
 import type { ScipDatabase } from '../storage/db.js';
 import { fileContentHash } from '../storage/evidence-cache.js';
-import { createFileEvidenceProduct } from '../storage/evidence-products.js';
+import { createFileEvidenceProduct, evidenceProductInvalidation } from '../storage/evidence-products.js';
 import { detectAstLanguage, getAst, type SyntaxNode, type Tree } from '../source/ast.js';
 import { getSourceText } from '../source/source-text.js';
 
@@ -29,6 +29,7 @@ export interface ExclusionEntry {
 const EXCLUSION_CACHE = new WeakMap<Tree, ExclusionEntry[]>();
 const DEFINITION_EXCLUSIONS_PRODUCT = createFileEvidenceProduct<ExclusionEntry[]>({
   kind: 'definition-exclusions',
+  invalidation: evidenceProductInvalidation('definition-exclusions'),
   serialize: (entries) => JSON.stringify(entries),
   deserialize: parseCachedDefinitionExclusions,
 });

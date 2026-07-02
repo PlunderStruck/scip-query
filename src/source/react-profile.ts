@@ -2,7 +2,7 @@ import { extname } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
 import { fileContentHash } from '../storage/evidence-cache.js';
 import { isRecord, stringArray } from '../storage/evidence-payload.js';
-import { createFileEvidenceProduct } from '../storage/evidence-products.js';
+import { createFileEvidenceProduct, evidenceProductInvalidation } from '../storage/evidence-products.js';
 import { createSourceFileCache } from '../storage/per-db-cache.js';
 import { getAst } from './ast/ast-core.js';
 import type { SyntaxNode } from './ast/ast-types.js';
@@ -123,6 +123,7 @@ const REACT_COMPONENT_BEHAVIOR_PROFILE_CACHE = createSourceFileCache<ReactCompon
 );
 const REACT_COMPONENT_BEHAVIOR_PROFILE_PRODUCT = createFileEvidenceProduct<ReactComponentBehaviorProfile[]>({
   kind: 'react-component-behavior-profiles',
+  invalidation: evidenceProductInvalidation('react-component-behavior-profiles'),
   serialize: serializeReactComponentBehaviorProfiles,
   deserialize: deserializeReactComponentBehaviorProfiles,
 });

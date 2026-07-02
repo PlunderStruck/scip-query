@@ -908,3 +908,10 @@ scoreboard citation remains intentional after the round-2 similarity changes.
 The current command still uses the same weighted-cosine evidence family; the
 new consolidation preview removes the old convergence-specific metric rather
 than changing this scoreboard's historical optimization claim.
+
+2026-07-02 Plan 6 note: `src/queries/cleanup/similar.ts` now declares its
+`source-fingerprints` evidence-product invalidation contract through
+`src/storage/evidence-products.ts`. The runtime similarity algorithm and this
+historical Vega scoreboard's output-identity claims are unchanged; the current
+performance-architecture evidence lives in
+`docs/benchmarks/2026-07-02-performance-architecture-ledger.md`.

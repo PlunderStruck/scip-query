@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { getSourceImports } from '../../language-parsers/index.js';
 import { projectEvidenceFingerprint, sha256Hex } from '../../storage/evidence-cache.js';
-import { createProjectEvidenceProduct } from '../../storage/evidence-products.js';
+import { createProjectEvidenceProduct, evidenceProductInvalidation } from '../../storage/evidence-products.js';
 import { createPerDbCache } from '../../storage/per-db-cache.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { profileSpan } from '../../instrumentation/profile.js';
@@ -27,6 +27,7 @@ interface SourceImportEdgeSet {
 
 const FILE_DEPENDENCY_GRAPH_PRODUCT = createProjectEvidenceProduct<FileDependencyGraphPayload>({
   kind: 'file-dependency-graph',
+  invalidation: evidenceProductInvalidation('file-dependency-graph'),
   serialize: (value) => JSON.stringify(value),
   deserialize: deserializeFileDependencyGraphPayload,
 });

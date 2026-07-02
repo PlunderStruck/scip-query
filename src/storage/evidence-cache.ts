@@ -25,20 +25,25 @@ export const EVIDENCE_DB_FILENAME = 'evidence.db';
 
 /** Per-file payload kinds keyed by content hash; payloads may add stricter guards. */
 // scip-query: ignore-stale - cache kind names are the storage contract shared by evidence products.
-export type FileEvidenceKind =
-  | 'source-facts'
-  | 'file-definitions'
-  | 'definition-exclusions'
-  | 'doc-path-tokens'
-  | 'doc-path-evidence'
-  | 'source-imports'
-  | 'source-reexports'
-  | 'source-fingerprints'
-  | 'consumer-file-usage'
-  | 'react-component-behavior-profiles'
-  | 'git-file-adds';
+export const FILE_EVIDENCE_KINDS = [
+  'source-facts',
+  'file-definitions',
+  'definition-exclusions',
+  'doc-path-tokens',
+  'doc-path-evidence',
+  'source-imports',
+  'source-reexports',
+  'source-fingerprints',
+  'consumer-file-usage',
+  'react-component-behavior-profiles',
+  'git-file-adds',
+] as const;
 
-export type ProjectEvidenceKind = 'file-dependency-graph';
+export type FileEvidenceKind = (typeof FILE_EVIDENCE_KINDS)[number];
+
+export const PROJECT_EVIDENCE_KINDS = ['file-dependency-graph'] as const;
+
+export type ProjectEvidenceKind = (typeof PROJECT_EVIDENCE_KINDS)[number];
 
 interface EvidenceConnection {
   evidence: Database.Database;

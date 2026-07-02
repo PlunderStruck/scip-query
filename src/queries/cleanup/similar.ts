@@ -18,7 +18,7 @@ import { ProjectIndex } from '../../core/project-index.js';
 import { createPerDbValue } from '../../storage/per-db-cache.js';
 import { applyScanLimit } from '../query-utils.js';
 import { fileContentHash } from '../../storage/evidence-cache.js';
-import { createFileEvidenceProduct } from '../../storage/evidence-products.js';
+import { createFileEvidenceProduct, evidenceProductInvalidation } from '../../storage/evidence-products.js';
 import { profileEnabled, profileSpan } from '../../instrumentation/profile.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 
@@ -664,6 +664,7 @@ interface SerializedSourceFingerprintFile {
 
 const SOURCE_FINGERPRINT_PRODUCT = createFileEvidenceProduct<Map<string, SerializedSourceFingerprintEntry>>({
   kind: 'source-fingerprints',
+  invalidation: evidenceProductInvalidation('source-fingerprints'),
   serialize: serializeSourceFingerprintCache,
   deserialize: deserializeSourceFingerprintCache,
 });

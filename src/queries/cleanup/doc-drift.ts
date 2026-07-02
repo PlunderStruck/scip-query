@@ -4,7 +4,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { gitEvidenceProduct } from '../../analysis/git-history.js';
 import { fileContentHash } from '../../storage/evidence-cache.js';
 import { isRecord, stringArray } from '../../storage/evidence-payload.js';
-import { createFileEvidenceProduct } from '../../storage/evidence-products.js';
+import { createFileEvidenceProduct, evidenceProductInvalidation } from '../../storage/evidence-products.js';
 import { markdownCitationContext } from './doc-citation-context.js';
 import { matchingDocTerms } from './doc-terms.js';
 import { profileEnabled, profileSpan } from '../../instrumentation/profile.js';
@@ -111,6 +111,7 @@ interface SerializedDocPathEvidence {
 
 const DOC_PATH_EVIDENCE_PRODUCT = createFileEvidenceProduct<DocPathEvidence>({
   kind: 'doc-path-evidence',
+  invalidation: evidenceProductInvalidation('doc-path-evidence'),
   serialize: serializeDocPathEvidence,
   deserialize: deserializeDocPathEvidence,
 });

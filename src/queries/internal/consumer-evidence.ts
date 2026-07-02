@@ -6,7 +6,7 @@ import { detectAstLanguage, type SyntaxNode, type Tree } from '../../source/ast.
 import { sourceEvidence } from '../../source/source-evidence.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { fileContentHash } from '../../storage/evidence-cache.js';
-import { createFileEvidenceProduct } from '../../storage/evidence-products.js';
+import { createFileEvidenceProduct, evidenceProductInvalidation } from '../../storage/evidence-products.js';
 import { createPerDbCache } from '../../storage/per-db-cache.js';
 import { leafName } from '../../symbols/symbol-parser.js';
 
@@ -59,6 +59,7 @@ const FILE_USAGE_CACHE = createPerDbCache<string, FileLeafUsage>('definition-con
 });
 const FILE_USAGE_PRODUCT = createFileEvidenceProduct<FileLeafUsage>({
   kind: 'consumer-file-usage',
+  invalidation: evidenceProductInvalidation('consumer-file-usage'),
   serialize: serializeFileLeafUsage,
   deserialize: deserializeFileLeafUsage,
 });
