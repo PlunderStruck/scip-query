@@ -508,6 +508,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--max-loc <n>', 'Maximum LOC per function body', parseInteger, 15),
+      option('--min-loc <n>', 'Minimum body LOC (excludes single-statement forwarding boilerplate)', parseInteger, 3),
       option('-n, --limit <n>', 'Number of groups', parseInteger, 20),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
     ]),

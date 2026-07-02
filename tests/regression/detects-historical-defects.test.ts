@@ -211,17 +211,16 @@ describe('detects historical defects (round-1/round-2 review corpus)', () => {
     expect(blockingFindings(result.findings)).toHaveLength(0);
   });
 
-  // Round-1 §1.4 precision-decay finding: duplicate-bodies flags this
+  // Round-1 §1.4 precision-decay finding: duplicate-bodies used to flag this
   // repo's own 11 intentional 1-LOC command-handler stubs (e.g.
   // `handleComplexity`, `handleChangeSurface` — each just forwards to a
   // shared implementation) as an echo group. Plan 3's own stress-test
-  // section names this as a known calibration gap: 21.2 is expected to
-  // raise `duplicate-bodies`' default `--min-loc` (or add a registration-
-  // boilerplate exemption) so this stops being noise. That calibration is
-  // step 21.2, which is out of scope for this assignment (phases 19-20
-  // only) and has not run yet, so this test is skipped with the intended
-  // post-calibration assertion encoded — flip to `it` once 21.2 lands.
-  it.skip('does NOT flag 1-LOC command-handler boilerplate as duplicate-bodies noise (blocked on plan step 21.2)', async () => {
+  // section named this as a known calibration gap: 21.2 raised
+  // `duplicate-bodies`' default `--min-loc` from 1 to 3, measured on the
+  // isolated implementation body (not the surrounding signature/brace
+  // lines), so single-statement forwarding stubs like these no longer
+  // qualify as "duplicate" candidates by default.
+  it('does NOT flag 1-LOC command-handler boilerplate as duplicate-bodies noise (post-21.2 calibration)', async () => {
     const { duplicateBodies } = await import('../../src/queries/cleanup/duplicate-bodies.js');
     const tempDir = mkdtempSync(join(tmpdir(), 'scip-regression-duplicate-bodies-'));
     tempRoots.push(tempDir);

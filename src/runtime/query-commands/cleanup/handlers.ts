@@ -544,6 +544,7 @@ export const handleDuplicateBodies = budgetedListCommand('duplicate-bodies', {
     queries.duplicateBodies(db, {
       scope: stringOptionValue(opts, 'scope'),
       maxLoc: definedNumberOption(opts, 'maxLoc', 15),
+      minLoc: definedNumberOption(opts, 'minLoc', 3),
       limit: definedLimitOption(opts, 'limit', 20),
       scanLimit: budget.scanLimit,
     }),

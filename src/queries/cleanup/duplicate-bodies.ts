@@ -26,14 +26,25 @@ export interface DuplicateBodyGroup {
 
 type DuplicateBodyEntryWithBody = DuplicateBodyEntry & { normalizedBody: string };
 
+/**
+ * Default minimum body LOC (21.2 calibration retune). Below this, a
+ * "duplicate" is usually a single-statement forwarding stub (command
+ * handlers, thin API wrappers) — structurally identical by convention, not
+ * an echo worth reviewing. Raised from 1 (external calibration: Stable_Management
+ * §3/§5, Vega_2.0 §3 — both flagged this exact shape as the dominant noise
+ * source). Callers that need the old behavior (e.g. tests asserting exact
+ * normalization on tiny fixtures) can still pass `minLoc: 1` explicitly.
+ */
+const DEFAULT_MIN_BODY_LOC = 3;
+
 export function duplicateBodies(
   db: ScipDatabase,
-  opts: { scope?: string; maxLoc?: number; limit?: number; scanLimit?: number } = {},
+  opts: { scope?: string; maxLoc?: number; minLoc?: number; limit?: number; scanLimit?: number } = {},
 ): DuplicateBodyGroup[] {
-  const { scope, maxLoc = 15, limit, scanLimit } = opts;
+  const { scope, maxLoc = 15, minLoc = DEFAULT_MIN_BODY_LOC, limit, scanLimit } = opts;
   const ages = getFileAddRecords(db);
   const entries = duplicateBodyCandidates(db, { scope, maxLoc, scanLimit })
-    .map((definition) => duplicateBodyEntry(db, definition, ages))
+    .map((definition) => duplicateBodyEntry(db, definition, ages, minLoc))
     .filter((entry): entry is DuplicateBodyEntryWithBody => entry !== null);
   const groups = groupByHash(entries);
   return limit ? groups.slice(0, limit) : groups;
@@ -42,12 +53,12 @@ export function duplicateBodies(
 export function exactDuplicateBodyMatches(
   db: ScipDatabase,
   symbol: string,
-  opts: { scope?: string; maxLoc?: number; scanLimit?: number } = {},
+  opts: { scope?: string; maxLoc?: number; minLoc?: number; scanLimit?: number } = {},
 ): DuplicateBodyEntry[] {
-  const { scope, maxLoc = 15, scanLimit } = opts;
+  const { scope, maxLoc = 15, minLoc = DEFAULT_MIN_BODY_LOC, scanLimit } = opts;
   const ages = getFileAddRecords(db);
   const entries = duplicateBodyCandidates(db, { scope, maxLoc, scanLimit })
-    .map((definition) => duplicateBodyEntry(db, definition, ages))
+    .map((definition) => duplicateBodyEntry(db, definition, ages, minLoc))
     .filter((entry): entry is DuplicateBodyEntryWithBody => entry !== null);
   const target = entries.find((entry) => entry.symbol === symbol);
   if (!target) return [];
@@ -111,7 +122,11 @@ function duplicateBodyEntry(
   db: ScipDatabase,
   definition: IndexedDefinition,
   ages: ReturnType<typeof getFileAddRecords>,
+  minLoc: number,
 ): DuplicateBodyEntryWithBody | null {
+  const snippet = definitionSourceSnippet(db, definition);
+  if (!snippet) return null;
+  if (bodyLineCount(snippet) < minLoc) return null;
   const normalizedBody = normalizedBodyForDefinition(db, definition);
   if (!normalizedBody) return null;
   return {
@@ -164,6 +179,22 @@ export function extractImplementationBody(source: string): string {
     return source.slice(arrow + 2).replace(/;+\s*$/, '');
   }
   return source;
+}
+
+/**
+ * Number of non-blank statement lines in a callable's implementation body
+ * (post-brace-extraction, pre-normalization — normalization collapses all
+ * whitespace including newlines, so it can't answer "how many lines" by
+ * itself). Used to exempt short forwarding-boilerplate bodies (single
+ * `return foo(...)` stubs) from duplicate-bodies noise regardless of the
+ * surrounding signature/brace lines counted by `definitionLoc`.
+ */
+function bodyLineCount(source: string): number {
+  const body = extractImplementationBody(source);
+  return body
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0).length;
 }
 
 function bodyHash(normalizedBody: string): string {

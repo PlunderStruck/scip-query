@@ -76,15 +76,25 @@ describe('duplicate bodies', () => {
   });
 
   it('reports exact small-body groups but excludes renamed-identifier near misses', () => {
-    const groups = duplicateBodies(db, { maxLoc: 10 });
+    // minLoc: 1 preserves this fixture's 1-line bodies — the 21.2 default of
+    // 3 (registration-boilerplate exemption) is covered separately by
+    // tests/regression/detects-historical-defects.test.ts.
+    const groups = duplicateBodies(db, { maxLoc: 10, minLoc: 1 });
 
     expect(groups).toHaveLength(1);
     expect(groups[0]?.functions.map((fn) => fn.file)).toEqual(['src/a.ts', 'src/b.ts']);
   });
 
+  it('excludes 1-line bodies once they fall below the default min-loc', () => {
+    const groups = duplicateBodies(db, { maxLoc: 10 });
+
+    expect(groups).toHaveLength(0);
+  });
+
   it('finds established exact-body matches for a target symbol', () => {
     const matches = exactDuplicateBodyMatches(db, 'scip-typescript npm fixture 1.0.0 src/`a.ts`/escapeRegex().', {
       maxLoc: 10,
+      minLoc: 1,
     });
 
     expect(matches.map((match) => match.file)).toEqual(['src/b.ts']);
