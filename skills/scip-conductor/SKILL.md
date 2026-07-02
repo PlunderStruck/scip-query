@@ -65,8 +65,10 @@ Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only
   DEFER list so cut scope is visible instead of forgotten.
 - **Include the working agreement**: ONE COMMIT PER STEP (bisectability is
   non-negotiable; phase-level commits hide which step broke), the exact
-  gate commands — the FULL suite per phase, not just focused tests (focused
-  tests hide cross-phase regressions until the end), regeneration duties,
+  gate commands — the FULL gate set the repo defines per phase: tests,
+  typecheck, lint/format, and build, not just focused tests (focused tests
+  hide cross-phase regressions; omitting the linter is how red mains ship),
+  regeneration duties,
   and the deviation protocol —
   "if source contradicts an anchor, BLOCKED-note it and continue; never
   improvise silently."
