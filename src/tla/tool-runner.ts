@@ -91,13 +91,14 @@ export function runTlaTool(opts: TlaToolRunOptions): TlaToolResult {
     };
   }
 
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const started = performance.now();
   let result: SpawnSyncReturns<string>;
   try {
     result = spawn(resolved.command[0]!, resolved.command.slice(1), {
       cwd: resolved.cwd,
       encoding: 'utf8',
-      timeout: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      timeout: timeoutMs,
       maxBuffer: 1024 * 1024 * 10,
     }) as SpawnSyncReturns<string>;
   } finally {
@@ -106,7 +107,12 @@ export function runTlaTool(opts: TlaToolRunOptions): TlaToolResult {
     }
   }
   const durationMs = Math.round(performance.now() - started);
-  const timedOut = result.error?.name === 'ETIMEDOUT';
+  // spawnSync's `timeout` option kills the child with SIGTERM on expiry but
+  // surfaces that as signal=SIGTERM with error=undefined (not the ETIMEDOUT
+  // error shape) — only a real ENOENT/EACCES-style failure sets `error`.
+  // Treat a SIGTERM that lands at or after the requested boundary as a
+  // timeout rather than an ordinary signal kill.
+  const timedOut = result.error?.name === 'ETIMEDOUT' || (result.signal === 'SIGTERM' && durationMs >= timeoutMs);
   const status: TlaToolStatus = timedOut ? 'timed-out' : result.status === 0 ? 'passed' : 'failed';
   return {
     checker: resolved.checker,

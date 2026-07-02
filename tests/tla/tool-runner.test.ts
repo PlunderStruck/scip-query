@@ -96,6 +96,53 @@ describe('TLA tool runner', () => {
     expect(existsSync(metaDir)).toBe(false);
   });
 
+  it('classifies a SIGTERM at the timeout boundary as timed-out, not failed', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-tool-'));
+    const specPath = join(root, 'Spec.tla');
+    writeFileSync(specPath, '---- MODULE Spec ----\n====\n');
+    // spawnSync's own `timeout` kill surfaces as signal=SIGTERM with no
+    // `error` (not the ETIMEDOUT shape) — reproduce that here.
+    const spawn = ((binary: string, args: string[]) => {
+      if (args[0] === '--version') return { status: 0, signal: null, stdout: '', stderr: '' };
+      return { status: null, signal: 'SIGTERM', stdout: '', stderr: '' };
+    }) as never;
+
+    const result = runTlaTool({
+      projectRoot: root,
+      specPath,
+      checker: 'apalache',
+      spawn,
+      // timeoutMs: 0 means any measured duration satisfies `>= timeoutMs`,
+      // making the boundary condition deterministic in a fast unit test.
+      timeoutMs: 0,
+    });
+
+    expect(result.status).toBe('timed-out');
+    expect(result.timedOut).toBe(true);
+    expect(result.signal).toBe('SIGTERM');
+  });
+
+  it('does not classify an ordinary SIGTERM well before the timeout as timed-out', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-tool-'));
+    const specPath = join(root, 'Spec.tla');
+    writeFileSync(specPath, '---- MODULE Spec ----\n====\n');
+    const spawn = ((binary: string, args: string[]) => {
+      if (args[0] === '--version') return { status: 0, signal: null, stdout: '', stderr: '' };
+      return { status: null, signal: 'SIGTERM', stdout: '', stderr: '' };
+    }) as never;
+
+    const result = runTlaTool({
+      projectRoot: root,
+      specPath,
+      checker: 'apalache',
+      spawn,
+      timeoutMs: 120_000,
+    });
+
+    expect(result.status).toBe('failed');
+    expect(result.timedOut).toBe(false);
+  });
+
   it('reports the fetch-tools remediation when tla2tools.jar is missing', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-tool-'));
     const specPath = join(root, 'Spec.tla');
