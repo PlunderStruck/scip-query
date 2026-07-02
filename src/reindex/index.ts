@@ -776,7 +776,16 @@ async function acquireReindexLock(
     const existing = readReindexLock(lockPath);
     if (existing && shouldPreemptReindexLock(opts.trigger, existing)) {
       opts.onStatus(`Manual reindex preempting watcher refresh started at ${existing.startedAt}.`);
-      await terminateReindexLockOwner(existing.pid);
+      const terminated = await terminateReindexLockOwner(existing.pid);
+      if (!terminated) {
+        // The owner survived SIGTERM and SIGKILL (or PID liveness cannot be
+        // confirmed dead, e.g. a stuck/uninterruptible process, a permission
+        // failure on kill(2), or PID reuse). Stealing the lock here would let
+        // two reindexes publish concurrently — fail closed instead.
+        throw new Error(
+          `Could not confirm the watcher's in-progress reindex (pid ${existing.pid}) terminated for ${dirname(lockPath)}; refusing to steal an active lock.`,
+        );
+      }
       rmSync(lockPath, { force: true });
       continue;
     }
@@ -859,11 +868,12 @@ function isWatcherRefreshTrigger(trigger: RefreshTrigger | undefined): boolean {
   );
 }
 
-async function terminateReindexLockOwner(pid: number): Promise<void> {
+/** Returns true only once the owner's PID is confirmed dead. */
+async function terminateReindexLockOwner(pid: number): Promise<boolean> {
   sendSignal(pid, 'SIGTERM');
-  if (await waitForProcessExit(pid, 2_000)) return;
+  if (await waitForProcessExit(pid, 2_000)) return true;
   sendSignal(pid, 'SIGKILL');
-  await waitForProcessExit(pid, 1_000);
+  return waitForProcessExit(pid, 1_000);
 }
 
 function sendSignal(pid: number, signal: NodeJS.Signals): void {

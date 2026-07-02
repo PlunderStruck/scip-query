@@ -419,6 +419,52 @@ describe('reindex reliability', () => {
     ).rejects.toThrow(/another scip-query reindex is already running/i);
   });
 
+  it('refuses to steal a watcher lock when termination cannot be confirmed', async () => {
+    // Regression for TLA modeling of specs/reindex-lock/ReindexLock.tla: the
+    // preemption path used to discard terminateReindexLockOwner's outcome
+    // and force-remove the lock unconditionally (src/reindex/index.ts),
+    // which could let a still-alive owner keep running (or a reused PID
+    // masquerade as it) while a second reindex publishes concurrently.
+    const projectRoot = createProject('scip-query-reindex-preempt-stuck-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    writeFileSync(
+      join(cacheDir, 'index.lock'),
+      JSON.stringify({
+        version: 1,
+        pid: 4_242_424,
+        projectRoot,
+        startedAt: '2026-06-27T00:00:00.000Z',
+        trigger: { kind: 'watch-source', detail: 'src/main.ts' },
+      }) + '\n',
+    );
+
+    const { reindex } = await loadReindexFixture({ languages: ['typescript'] });
+    // Simulate a PID that never confirms death: process.kill(pid, 0) never
+    // throws, so isProcessAlive keeps reporting it alive through both the
+    // SIGTERM and SIGKILL waits.
+    const killSpy = vi.spyOn(process, 'kill').mockReturnValue(true);
+    vi.useFakeTimers();
+    try {
+      const pending = reindex({
+        projectRoot,
+        outputScip: join(cacheDir, 'index.scip'),
+        outputDb: join(cacheDir, 'index.db'),
+        onStatus: () => undefined,
+        trigger: { kind: 'manual-cli', detail: 'manual test' },
+      });
+      const assertion = expect(pending).rejects.toThrow(/refusing to steal an active lock/i);
+      await vi.advanceTimersByTimeAsync(3_100);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+      killSpy.mockRestore();
+    }
+    // The stale-looking lock must survive an unconfirmed termination — a
+    // second reindex must still see it as held.
+    expect(existsSync(join(cacheDir, 'index.lock'))).toBe(true);
+  });
+
   it('fails with the sidecar-package guidance when scip is missing on Windows', async () => {
     const projectRoot = createProject('scip-query-reindex-sidecar-');
     const cacheDir = join(projectRoot, '.cache');
