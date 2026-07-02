@@ -171,15 +171,37 @@ up, write a real plan section (`concrete-plan`), and implement independently.
    "genuinely divergent, no delegation" side. Verified both new tests fail without the skip
    (temporarily disabled the guard, confirmed 2 failures, restored).
 
-8. **Hub-file `doc-reference` cascade damping (Stable).** One heavily-cited file
-   (`shared/src/contracts/endpoints.ts`) accounts for 36 of 107 `doc-reference` findings across
-   Stable's 15-commit retro-gate sample (4 separate commits, ~9-13 near-identical findings each),
-   almost all against generic policy-statement citations. 21.2d's line-anchor/deletion severity
-   split reduces this class's blocking weight but does not deduplicate repeated hub-file citations
-   across commits or within one gate run — a per-hub-file finding cap or citation-cluster collapse
-   is still open.
+8. **RESOLVED (2026-07-02, followup-batch). Hub-file `doc-reference` cascade damping (Stable).**
+   One heavily-cited file (`shared/src/contracts/endpoints.ts`) accounts for 36 of 107
+   `doc-reference` findings across Stable's 15-commit retro-gate sample (4 separate commits, ~9-13
+   near-identical findings each), almost all against generic policy-statement citations. 21.2d's
+   line-anchor/deletion severity split reduces this class's blocking weight but does not
+   deduplicate repeated hub-file citations across commits or within one gate run — a per-hub-file
+   finding cap or citation-cluster collapse is still open.
    Source: `docs/validation/2026-07-01-external-calibration-stable-management.md` §4 ("Hub-file
    cascade") and §6, item 5.
+   Fix: `src/queries/impact/diff-gate.ts`. `runDocReferenceCheck` now builds all per-doc citation
+   drafts first (`buildDocReferenceFindingDraft`), then `clusterDocReferenceFindings` groups them
+   by the cited hub file (`rootCauseKey`). A group at or under
+   `DOC_REFERENCE_HUB_FILE_EXEMPLAR_LIMIT` (3) passes through untouched — matches "distinct-file
+   citations must be untouched." A group over the limit collapses into one clustered finding
+   (`clusterDocReferenceCitations`) carrying `citationCount` (total citing docs), up to 3
+   `citationExemplars` (sorted deterministically), and an explicit `suppressedCount` — never silent
+   (the suppressed docs' original finding ids stay reachable via `legacySuppressionIds`). Chosen
+   formula: the ledger's brief gave two illustrative numbers ("up to 3 exemplar citations" /
+   "cap at a sane number, e.g. 5") for what reads as one constraint; 3 (the unambiguous, literal
+   one) is used as both the exemplar limit and the clustering trigger threshold, documented at the
+   constant's declaration. A blocking (non-advisory) citation anywhere in a cluster keeps the whole
+   clustered finding blocking — damping never silently downgrades an actionable citation. Every
+   doc-reference finding (clustered or not) also gets `groupKey`/`rootCauseKey` set to the hub
+   file, reusing the existing `diffGateRootCauseGroups` root-cause-rollup mechanism the codebase
+   already has for twin-partner/co-change-partner/coverage-contract findings — the same shared
+   pattern `src/tla/conformance.ts:59` mirrors from the diff-gate side, so no cross-boundary import
+   was needed. Test: `tests/queries/impact/doc-reference-hub-cascade.test.ts` — 12 docs citing one
+   hub file collapse to exactly 1 finding with `citationCount:12`, 3 exemplars,
+   `suppressedCount:9` (verified the assertion fails without the fix, temporarily short-circuiting
+   `clusterDocReferenceFindings` to identity); a second test with 2 docs citing 2 distinct files
+   confirms both stay individual, unclustered.
 
 9. **RESOLVED (2026-07-02, followup-batch). Clojure capability status asserted-though-true
    (claim-audit dry-run).**

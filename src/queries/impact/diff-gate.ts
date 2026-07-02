@@ -123,6 +123,20 @@ export interface DiffGateFinding {
   citationKindReasons?: string[];
   /** Bounded nearby doc text that contains the changed-file citation. */
   citedClaims?: string[];
+  /**
+   * Set only on a hub-file-cascade-damped doc-reference finding (21.2's
+   * successor damping step — see `clusterDocReferenceCitations`): total
+   * distinct docs citing the same hub file in this diff, before damping.
+   */
+  citationCount?: number;
+  /** Up to `DOC_REFERENCE_HUB_FILE_EXEMPLAR_LIMIT` sample citations shown for a damped hub-file finding. */
+  citationExemplars?: Array<{ doc: string; citedClaims: string[] }>;
+  /**
+   * Docs counted in `citationCount` but not individually reported —
+   * disclosed explicitly rather than silently dropped (still counted, just
+   * not each surfaced as its own finding).
+   */
+  suppressedCount?: number;
   message: string;
   why: string[];
   /** Concrete remediation an agent can act on without human triage. */
@@ -937,6 +951,21 @@ function formatUnixDate(timestampSeconds: number): string {
   return new Date(timestampSeconds * 1000).toISOString().slice(0, 10);
 }
 
+/**
+ * followup #8 (hub-file doc-reference cascade damping): one heavily-cited
+ * file (e.g. a shared contracts module) can be cited by many living docs at
+ * once, so changing it produces one near-identical finding per citing doc —
+ * measured at 4 commits x 9-13 findings each on a real repo, 91% of that
+ * gate's finding volume. A hub file cited by more than this many docs in one
+ * gate run gets damped into a single clustered finding (see
+ * `clusterDocReferenceCitations`) instead of one finding per doc. Reused as
+ * both the clustering trigger and the exemplar-citation limit — the ledger's
+ * two numbers ("up to 3 exemplar citations" / "cap at a sane number, e.g. 5")
+ * described the same constraint with two illustrative figures; 3 is the
+ * literal, unambiguous one so it wins as the single source of truth here.
+ */
+const DOC_REFERENCE_HUB_FILE_EXEMPLAR_LIMIT = 3;
+
 function runDocReferenceCheck(
   db: ScipDatabase,
   changed: ReadonlySet<string>,
@@ -949,56 +978,157 @@ function runDocReferenceCheck(
   const targets = docReferencePolicy.referenceTargets(db, changed, changedRanges);
   if (targets.size === 0) return;
   const renamedFrom = new Set(renamedFiles.map((rename) => rename.from));
+
+  const candidates: DiffGateFindingDraft[] = [];
   for (const citation of docsCitingFiles(db, targets)) {
     if (changedGitFiles.has(citation.doc)) continue; // doc updated in the same diff
     if (isSnapshotDoc(db, citation.doc)) continue; // dated snapshot doc — excluded by docs.snapshotPaths policy
-    const citedClaims =
-      citation.citedClaims.length > 0
-        ? citation.citedClaims
-        : docReferencePolicy.citationContexts(db, citation.doc, citation.cited);
-    const classification = docReferencePolicy.classifyCitation(citedClaims);
-    // 21.2 calibration retune (external calibration: Stable_Management §4 —
-    // doc-reference was 91% of gate volume at ~13% actionable; Vega_2.0 §4.4
-    // — 70% of volume, 1/7 sampled actionable, and the one real hit was
-    // line-anchored). Line-anchored citations and citations to a file that
-    // was deleted or renamed in this diff are the actionable core and stay
-    // blocking; a bare file-mention citation is advisory — it still prints
-    // and is still suppressible, it just can't fail the gate by itself.
-    const lineAnchored = docReferencePolicy.hasLineAnchoredCitation(citation.citations);
-    const citedFileRemoved = citation.cited.some(
-      (file) => renamedFrom.has(file) || !existsSync(`${db.config.projectRoot}/${file}`),
-    );
-    const advisory = !(lineAnchored || citedFileRemoved);
-    const legacyId = findingId('doc-reference', citation.doc, citation.cited.join('|'));
-    const id = findingId('doc-reference', citation.doc, citation.cited[0] ?? '');
-    recordFinding(result, {
-      id,
-      legacySuppressionIds: legacyId === id ? undefined : [legacyId],
-      check: 'doc-reference',
-      severity: 'warning',
-      evidence: 'change-graph',
-      actionTier: classification.actionTier,
-      confidence: 1,
-      file: citation.doc,
-      relatedFiles: citation.cited,
-      citationKind: classification.citationKind,
-      citationKindReasons: classification.reasons,
-      citedClaims,
-      ...(advisory ? { advisory: true } : {}),
-      message: `${citation.doc} cites ${citation.cited.join(', ')} as ${docReferencePolicy.citationKindLabel(classification.citationKind)} — changed in this diff, doc untouched`,
-      why: [
-        `${citation.cited.join(', ')} changed in this diff.`,
-        `${citation.doc} cites the changed file(s) but was not updated in the same diff.`,
-        ...classification.reasons.map((reason) => `Citation kind evidence: ${reason}`),
-        advisory
-          ? 'Advisory: bare file-mention citation (no line anchor, cited file still present under the same path) — 21.2 calibration found this citation shape low-precision; verify at your leisure.'
-          : lineAnchored
-            ? 'Blocking: citation includes a line anchor that may now point at the wrong lines.'
-            : 'Blocking: the cited file was deleted or renamed in this diff — the citation almost certainly needs an update.',
-      ],
-      remediation: docReferencePolicy.citationRemediation(classification.citationKind, citation.doc),
-    });
+    candidates.push(buildDocReferenceFindingDraft(db, citation, renamedFrom));
   }
+
+  for (const finding of clusterDocReferenceFindings(candidates)) {
+    recordFinding(result, finding);
+  }
+}
+
+function buildDocReferenceFindingDraft(
+  db: ScipDatabase,
+  citation: ReturnType<typeof docsCitingFiles>[number],
+  renamedFrom: ReadonlySet<string>,
+): DiffGateFindingDraft {
+  const citedClaims =
+    citation.citedClaims.length > 0
+      ? citation.citedClaims
+      : docReferencePolicy.citationContexts(db, citation.doc, citation.cited);
+  const classification = docReferencePolicy.classifyCitation(citedClaims);
+  // 21.2 calibration retune (external calibration: Stable_Management §4 —
+  // doc-reference was 91% of gate volume at ~13% actionable; Vega_2.0 §4.4
+  // — 70% of volume, 1/7 sampled actionable, and the one real hit was
+  // line-anchored). Line-anchored citations and citations to a file that
+  // was deleted or renamed in this diff are the actionable core and stay
+  // blocking; a bare file-mention citation is advisory — it still prints
+  // and is still suppressible, it just can't fail the gate by itself.
+  const lineAnchored = docReferencePolicy.hasLineAnchoredCitation(citation.citations);
+  const citedFileRemoved = citation.cited.some(
+    (file) => renamedFrom.has(file) || !existsSync(`${db.config.projectRoot}/${file}`),
+  );
+  const advisory = !(lineAnchored || citedFileRemoved);
+  const hubFile = citation.cited[0] ?? '';
+  const legacyId = findingId('doc-reference', citation.doc, citation.cited.join('|'));
+  const id = findingId('doc-reference', citation.doc, hubFile);
+  return {
+    id,
+    legacySuppressionIds: legacyId === id ? undefined : [legacyId],
+    check: 'doc-reference',
+    severity: 'warning',
+    evidence: 'change-graph',
+    actionTier: classification.actionTier,
+    // Hub-file cascade grouping (followup #8): every citing doc's finding
+    // for the same changed file shares one groupKey/rootCauseKey, so
+    // diffGateRootCauseGroups (the same summary mechanism twin-partner and
+    // co-change-partner already use) rolls them up with a real count even
+    // when the group stays under the clustering threshold.
+    groupKey: `doc-reference:${hubFile}`,
+    rootCauseKey: hubFile,
+    confidence: 1,
+    file: citation.doc,
+    relatedFiles: citation.cited,
+    citationKind: classification.citationKind,
+    citationKindReasons: classification.reasons,
+    citedClaims,
+    ...(advisory ? { advisory: true } : {}),
+    message: `${citation.doc} cites ${citation.cited.join(', ')} as ${docReferencePolicy.citationKindLabel(classification.citationKind)} — changed in this diff, doc untouched`,
+    why: [
+      `${citation.cited.join(', ')} changed in this diff.`,
+      `${citation.doc} cites the changed file(s) but was not updated in the same diff.`,
+      ...classification.reasons.map((reason) => `Citation kind evidence: ${reason}`),
+      advisory
+        ? 'Advisory: bare file-mention citation (no line anchor, cited file still present under the same path) — 21.2 calibration found this citation shape low-precision; verify at your leisure.'
+        : lineAnchored
+          ? 'Blocking: citation includes a line anchor that may now point at the wrong lines.'
+          : 'Blocking: the cited file was deleted or renamed in this diff — the citation almost certainly needs an update.',
+    ],
+    remediation: docReferencePolicy.citationRemediation(classification.citationKind, citation.doc),
+  };
+}
+
+/**
+ * Groups doc-reference candidate findings by hub file (rootCauseKey) and
+ * damps any group larger than `DOC_REFERENCE_HUB_FILE_EXEMPLAR_LIMIT` into
+ * one clustered finding. Distinct-file citations (a group of its own size)
+ * and small groups pass through untouched.
+ */
+function clusterDocReferenceFindings(candidates: readonly DiffGateFindingDraft[]): DiffGateFindingDraft[] {
+  const byHubFile = new Map<string, DiffGateFindingDraft[]>();
+  for (const draft of candidates) {
+    const hubFile = draft.rootCauseKey ?? '';
+    const bucket = byHubFile.get(hubFile);
+    if (bucket) bucket.push(draft);
+    else byHubFile.set(hubFile, [draft]);
+  }
+
+  const out: DiffGateFindingDraft[] = [];
+  for (const [hubFile, group] of byHubFile) {
+    if (group.length <= DOC_REFERENCE_HUB_FILE_EXEMPLAR_LIMIT) {
+      out.push(...group);
+    } else {
+      out.push(clusterDocReferenceCitations(hubFile, group));
+    }
+  }
+  return out;
+}
+
+function clusterDocReferenceCitations(hubFile: string, group: readonly DiffGateFindingDraft[]): DiffGateFindingDraft {
+  const sorted = [...group].sort((left, right) => (left.file ?? '').localeCompare(right.file ?? ''));
+  const exemplars = sorted.slice(0, DOC_REFERENCE_HUB_FILE_EXEMPLAR_LIMIT).map((draft) => ({
+    doc: draft.file ?? '',
+    citedClaims: draft.citedClaims ?? [],
+  }));
+  const suppressedCount = sorted.length - exemplars.length;
+  // A blocking (non-advisory) citation anywhere in the cluster must keep the
+  // clustered finding blocking too — damping must never silently downgrade
+  // an actionable citation into an advisory-only summary.
+  const advisory = sorted.every((draft) => draft.advisory === true);
+  const severity = sorted.reduce<DiffGateSeverity>((best, draft) => strongerSeverity(best, draft.severity), 'info');
+  const actionTier = sorted.reduce<DiffGateActionTier | undefined>(
+    (best, draft) => strongerActionTier(best, draft.actionTier),
+    undefined,
+  );
+  const allDocs = sorted.map((draft) => draft.file ?? '').filter((doc) => doc.length > 0);
+  const legacySuppressionIds = [
+    ...new Set(sorted.flatMap((draft) => [draft.id, ...(draft.legacySuppressionIds ?? [])])),
+  ];
+
+  return {
+    id: findingId('doc-reference', 'hub-cluster', hubFile),
+    legacySuppressionIds,
+    check: 'doc-reference',
+    severity,
+    evidence: 'change-graph',
+    actionTier,
+    groupKey: `doc-reference:${hubFile}`,
+    rootCauseKey: hubFile,
+    confidence: 1,
+    file: exemplars[0]?.doc,
+    relatedFiles: [hubFile],
+    citationCount: sorted.length,
+    citationExemplars: exemplars,
+    suppressedCount,
+    ...(advisory ? { advisory: true } : {}),
+    message: `${hubFile} is cited by ${sorted.length} doc(s) changed in this diff, doc(s) untouched — showing ${exemplars.length} example(s), ${suppressedCount} more damped`,
+    why: [
+      `${hubFile} changed in this diff.`,
+      `${sorted.length} doc(s) cite it but were not updated in the same diff: ${allDocs.join(', ')}.`,
+      ...exemplars.map(
+        (exemplar) => `Example — ${exemplar.doc}: ${exemplar.citedClaims[0] ?? '(no captured citation text)'}`,
+      ),
+      `${suppressedCount} additional doc(s) also cite this file, past the per-hub-file cascade cap (${DOC_REFERENCE_HUB_FILE_EXEMPLAR_LIMIT}) — not silently dropped: counted in citationCount/suppressedCount and individually addressable via legacySuppressionIds.`,
+      advisory
+        ? 'Advisory: every citation in this cluster is a bare file-mention (no line anchor, cited file still present).'
+        : 'Blocking: at least one citation in this cluster is line-anchored or cites a deleted/renamed file.',
+    ],
+    remediation: `Review the ${exemplars.length} example doc(s) above; ${sorted.length} total doc(s) cite ${hubFile} the same way — see citationExemplars and legacySuppressionIds in --json for the complete list.`,
+  };
 }
 
 function runUnusedParamsCheck(db: ScipDatabase, changedFiles: readonly string[], result: DiffGateResult): void {
