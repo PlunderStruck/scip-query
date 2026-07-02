@@ -10,7 +10,7 @@ commands:
     when: "Classify: read the producing function to see whether it computes or asserts."
   - template: "scip-query trace <symbol>"
     when: "Classify: definition plus every reference for a status field or constant."
-  - template: "scip-query capability-matrix --json"
+  - template: "scip-query capabilities --matrix --json"
     when: "Spot-check: an already-known example of a fixed derived-status surface."
 ---
 
@@ -88,7 +88,7 @@ This step is complete only when every asserted status in scope has a filed findi
 
 ### 4. Report
 
-Write the report under `docs/scip-query/` (the Plan-1 standard root) unless the user asked only for a conversational answer.
+Write the report under `docs/scip-query/` unless the user asked only for a conversational answer.
 
 ```markdown
 Scope:

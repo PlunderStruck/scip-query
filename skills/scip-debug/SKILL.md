@@ -88,7 +88,7 @@ This step is complete only when the path explains the symptom or the missing evi
 
 ```bash
 scip-query similar <suspect-symbol> --json --full
-scip-query convergence <suspect-symbol> <similar-symbol>
+scip-query similar <suspect-symbol> <similar-symbol> --plan
 scip-query similar-files <suspect-file> --json --full
 ```
 

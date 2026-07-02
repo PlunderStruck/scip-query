@@ -58,7 +58,7 @@ scip-query code <symbol>
 
 | Language | Use first | De-bloat set | Fallback note |
 | --- | --- | --- | --- |
-| TypeScript | `system`, `surface`, `call-graph`, `dataflow`, `change-surface` | `health`, `dead`, `similar`, `convergence`, `wrapper-candidates`, `passthrough-candidates`, `stale-abstractions`, `unused-imports`, `redundant-reexports` | Strongest verified surface. Vue script blocks use this path too. |
+| TypeScript | `system`, `surface`, `call-graph`, `dataflow`, `change-surface` | `health`, `dead`, `similar`, `similar --plan`, `wrapper-candidates`, `passthrough-candidates`, `stale-abstractions`, `unused-imports`, `redundant-reexports` | Strongest verified surface. Vue script blocks use this path too. |
 | Python | `outline`, `kind-counts --scope`, `system`, `imports`, `imported-by`, `call-graph` | `dead`, `unused-imports`, `drift`, `similar-signatures`, `complexity`, `complexity-hotspots` | Prefer source-backed fallbacks when call/kind metadata is sparse. |
 | Java | `system`, `surface`, `call-graph`, `deps`, `rdeps`, `slice` | `health`, `dead`, `similar-files`, `similar-chains`, `wrapper-candidates`, `stale-abstractions`, `extract-candidates` | Use module/package surfaces to avoid class-only tunnel vision. |
 | Scala | `surface`, `trace`, `call-graph`, `imports`, `imported-by` | `dead`, `similar-files`, `similar-chains`, `extract-candidates`, `stale-abstractions`, `unused-imports` | Confirm behavior with `code`. |

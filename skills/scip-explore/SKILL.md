@@ -113,7 +113,7 @@ This step is complete only when the explanation includes the risky symbols or st
 - User action flow: `files` or `outline` for the handler, then `code` and `call-graph` down the path.
 - Safety to change: `change-surface`, `affected`, `similar`.
 - Module architecture: `system`, `surface`, `deep-chains`, `bottlenecks`, `cycles`, `hotspots`.
-- Relationship between units: `coupling`, `convergence`, `similar-chains`.
+- Relationship between units: `coupling`, `similar --plan`, `similar-chains`.
 
 ## Report
 

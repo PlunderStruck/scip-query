@@ -40,7 +40,7 @@ Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only
 2. Report current health and the first confirmed batch before editing.
 3. Prioritize high-confidence, low-blast-radius, clearly verifiable fixes.
 4. Apply one small batch at a time.
-5. Write or update the health baseline after a cleanup pass, then compare at the start of the next pass.
+5. After a cleanup pass, run `scip-query health --write-baseline` to snapshot finding identities, then compare with `scip-query health --baseline` at the start of the next pass.
 
 ## Priority
 
@@ -70,7 +70,7 @@ Then repeat:
 2. Run the narrow project check for touched behavior.
 3. Run `scip-query health --json`.
 4. Invoke `scip-verify`.
-5. Update health dossiers when present.
+5. If `docs/scip-query/health-dossier.md` exists (or a custom `--dossier-dir` was used), refresh it by rerunning `scip-query setup --json` (add the same `--dossier-dir` if one was used).
 6. Pick the next highest-priority confirmed item.
 
 Use `scip-query cleanup-apply --verified --batch <n>` for verified deletion batches. Use `--all` only with explicit user approval.

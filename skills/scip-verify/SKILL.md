@@ -139,4 +139,4 @@ Remaining risk:
 
 Do not claim ready-to-ship unless freshness is `fresh` after the final edit and diff-gate is passed or fully explained.
 
-- On pnpm-workspace repos, or where consumers use `import type` or Vue `<script setup>`, treat `dead`/`new-dead` findings as unconfirmed until `refs` agrees — these consumer shapes are known reference-tracking gaps (docs/plans/2026-07-02-followups.md).
+- `dead`/`new-dead` correctly resolve `import type` consumers, tsconfig `paths` aliases, pnpm/npm/yarn workspace cross-package imports, and Vue `<script setup>` composables. The one residual gap is a same-named symbol reached only through a re-exporting barrel file in a workspace package; that shape self-labels `unconfirmed (cross-package ambiguous-name resolution gap)` in the finding — treat only that label as unconfirmed until `refs` agrees. See the Detector Reliability section in `../_shared/SKILL.md`.

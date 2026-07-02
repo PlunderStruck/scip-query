@@ -77,7 +77,7 @@ scip-query doc-drift --json --full
 
 For frontend repos, add the React or Vue duplicate, hook/composable, and large-component/view commands.
 
-Optional deep-dive (21.2 calibration: high false-positive rate on codebases with intentional layering/ambient types — run only when the sweep above is exhausted, and treat every hit as a lead to confirm, not a finding):
+Optional deep-dive (near-zero precision on codebases with intentional layering/ambient types — run only when the sweep above is exhausted, and treat every hit as a lead to confirm, not a finding):
 
 ```bash
 scip-query stale-abstractions --json --full
@@ -95,7 +95,7 @@ scip-query fan-in <symbol>
 scip-query fan-out <symbol-or-file>
 scip-query affected <symbol> --json
 scip-query change-surface <file> --json --full
-scip-query convergence <symbolA> <symbolB>
+scip-query similar <symbolA> <symbolB> --plan
 scip-query co-change <file> --json --full
 ```
 

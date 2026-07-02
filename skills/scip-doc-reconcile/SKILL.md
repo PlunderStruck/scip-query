@@ -52,7 +52,7 @@ scip-query doc-drift --json --full
 scip-query doc-drift <doc-or-tree>
 ```
 
-Prioritize broken references, highest staleness, then docs agents read most. Do not reconcile archival records such as dated plans, ADRs, or reports.
+Prioritize broken references, highest staleness, then docs agents read most. Do not reconcile archival records such as dated plans, ADRs, or reports — list them in `.scipquery.json` `docs.snapshotPaths` so `doc-drift` excludes them with a labeled exclusion instead of resurfacing them every sweep.
 
 This step is complete only when each target doc is selected for a current-use reason.
 

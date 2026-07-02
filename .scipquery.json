@@ -72,6 +72,10 @@
       "check": "new-dead",
       "file": "src/semantic/typescript/ts-morph-provider.ts",
       "reason": "Accepted interface-dispatch false positive: TsMorphSemanticProvider.referencesForDefinitions is called through the SemanticProvider bulk path in src/semantic/shared-primitives.ts; refs reports those interface call sites."
+    },
+    {
+      "id": "SQ3505D2915291",
+      "reason": "Prose-only edit to _shared/SKILL.md's Detector Reliability/Diff Gate Checks sections; ran npm run docs:commands and confirmed docs/COMMAND_REFERENCE.md is unchanged (no generated command content touched)."
     }
   ],
   "declaredCouplings": [
@@ -100,7 +104,10 @@
     {
       "name": "diff-gate validation ledger",
       "reason": "docs/analyzer-validation-ledger.md is explicitly anchored to src/queries/impact/diff-gate.ts (its own 'Source Anchors' table cites diffGate() and DIFF_GATE_CHECKS by file:line) -- it exists specifically to track diff-gate's check validation status, so the two changing together is the ledger doing its job, not a hidden coupling.",
-      "files": ["docs/analyzer-validation-ledger.md", "src/queries/impact/diff-gate.ts"]
+      "files": [
+        "docs/analyzer-validation-ledger.md",
+        "src/queries/impact/diff-gate.ts"
+      ]
     },
     {
       "name": "cleanup detector family",
@@ -121,22 +128,35 @@
     {
       "name": "graph summary query family",
       "reason": "These query files report related fan-in, fan-out, hotspot, and bottleneck graph summaries.",
-      "files": ["src/queries/graph/bottlenecks.ts", "src/queries/graph/fan.ts", "src/queries/graph/hotspots.ts"]
+      "files": [
+        "src/queries/graph/bottlenecks.ts",
+        "src/queries/graph/fan.ts",
+        "src/queries/graph/hotspots.ts"
+      ]
     },
     {
       "name": "reference navigation query family",
       "reason": "These query files expose nearby views of definition and reference navigation.",
-      "files": ["src/queries/navigation/refs.ts", "src/queries/navigation/trace.ts"]
+      "files": [
+        "src/queries/navigation/refs.ts",
+        "src/queries/navigation/trace.ts"
+      ]
     },
     {
       "name": "package build surface",
       "reason": "Package metadata and bundle entrypoints intentionally move together when the published CLI surface changes.",
-      "files": ["package.json", "tsup.config.ts"]
+      "files": [
+        "package.json",
+        "tsup.config.ts"
+      ]
     },
     {
       "name": "command reference documentation",
       "reason": "The generated command reference and query implementations move together when public command behavior changes.",
-      "files": ["docs/COMMAND_REFERENCE.md", "src/queries/cleanup/doc-drift.ts"]
+      "files": [
+        "docs/COMMAND_REFERENCE.md",
+        "src/queries/cleanup/doc-drift.ts"
+      ]
     },
     {
       "name": "2026-06-28 optimization evidence ledger",
@@ -178,26 +198,46 @@
     {
       "name": "runtime command dispatch",
       "reason": "Command descriptors and command execution intentionally move together when CLI registration or dispatch behavior changes.",
-      "files": ["src/runtime/commands/command-descriptors.ts", "src/runtime/commands/command-execution.ts"]
+      "files": [
+        "src/runtime/commands/command-descriptors.ts",
+        "src/runtime/commands/command-execution.ts"
+      ]
     }
   ],
   "coverageContracts": [
     {
       "name": "drift layer policy covers src dirs",
       "file": "src/queries/cleanup/drift-policy.ts",
-      "keys": { "type": "object-literal-keys", "identifier": "SRC_LAYER_DEPENDENCIES" },
-      "mustEqual": { "type": "top-level-dirs", "path": "src" },
+      "keys": {
+        "type": "object-literal-keys",
+        "identifier": "SRC_LAYER_DEPENDENCIES"
+      },
+      "mustEqual": {
+        "type": "top-level-dirs",
+        "path": "src"
+      },
       "allowExtra": false
     },
     {
       "name": "BUILTIN_SKILLS covers skills dirs",
       "file": "src/runtime/setup.ts",
-      "keys": { "type": "string-array", "identifier": "BUILTIN_SKILLS" },
-      "mustEqual": { "type": "top-level-dirs", "path": "skills" },
+      "keys": {
+        "type": "string-array",
+        "identifier": "BUILTIN_SKILLS"
+      },
+      "mustEqual": {
+        "type": "top-level-dirs",
+        "path": "skills"
+      },
       "allowExtra": false
     }
   ],
   "docs": {
-    "snapshotPaths": ["docs/benchmarks/**", "docs/validation/**", "docs/reviews/**", "docs/plans/**"]
+    "snapshotPaths": [
+      "docs/benchmarks/**",
+      "docs/validation/**",
+      "docs/reviews/**",
+      "docs/plans/**"
+    ]
   }
 }

@@ -85,7 +85,7 @@ This step is complete only when a suspected root cause is tied to source evidenc
 
 ```bash
 scip-query similar <suspect-symbol> --json --full
-scip-query convergence <suspect-symbol> <comparison-symbol>
+scip-query similar <suspect-symbol> <comparison-symbol> --plan
 scip-query similar-files <suspect-file> --json --full
 scip-query co-change <suspect-file> --json --full
 scip-query change-surface <suspect-file> --json --full

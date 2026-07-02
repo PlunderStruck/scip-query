@@ -36,12 +36,12 @@ Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only
 
 ## Choose the Slice
 
-Model the part with the most dangerous interleavings — retries, concurrency, partial failure, money, state machines with guards. Never model a linear happy path: a model that cannot meaningfully fail verifies nothing. If the state space would exceed roughly a million states, the model is too concrete; collapse data you never branch on and replace unbounded values with small symbolic sets.
+Model the part with the most dangerous interleavings — retries, concurrency, partial failure, money, state machines with guards. Never model a linear happy path: a model that cannot meaningfully fail verifies nothing. If the state space would exceed roughly a million states, the model is too concrete; collapse data you never branch on and replace unbounded values with small symbolic sets. `scaffold` requires the target file to own mutable module-level state (a `let`/field plus a writer function); a file of pure functions or constants is rejected — pick the file that holds the state, not the file that only computes over it.
 
 ## Loop
 
 1. Explore the target with `scip-query plan-context <target>`, `system`, `trace`, `call-graph`, and `dataflow` until state and transitions are concrete.
-2. Run `scip-query tla scaffold <file>` to generate the draft spec, config, and mapping. Resolve every `TODO` it emits: guards, domains, initial values. The scaffold derives *what* changes; you supply *when* it may.
+2. Run `scip-query tla scaffold <file>` to generate the draft spec, config, and mapping (`--out` must stay inside the project root). Resolve every `TODO` it emits: guards, domains, initial values. The scaffold derives *what* changes; you supply *when* it may. `tla verify` does not detect unfilled `TODO`s and will report PASS on a placeholder model — grep the spec for `TODO` before trusting a green run.
 3. Strengthen the model per the quality rules below.
 4. Run `scip-query tla verify <spec> --map <map> --config <cfg>`. Read the Proof line: every waiver must carry a reason you would defend in review.
 5. Wire the recorder from `scip-query tla instrument`, run the existing tests with `SCIP_TLA_TRACE=<path>`, then run `scip-query tla trace-check <spec> --trace <path>`. Acceptance means the code's observed behavior is a behavior of the model; divergence names the step to investigate.
@@ -98,6 +98,7 @@ A regression model is a small TLA+ module or checker config derived from a count
 
 - `tla verify` is the mechanical checker; `tla trace-check` is the semantic one. Only the pair justifies the word "conforms".
 - A PASS with waivers is a conditional claim — the Proof line says exactly what was and was not proven. Never summarize it as unconditional.
+- A PASS on a scaffold with unresolved `TODO`s is meaningless, not conditional: the checker has no TODO detector and will pass a placeholder model. Never report a PASS without confirming step 2 of the Loop is actually done.
 - If code changed but the model did not, inspect whether the mapped transition changed meaning; `diff-gate` flags the changed referents.
 - If the model checker fails, fix the TLA+ model before relying on conformance output.
 - Use `--checker none` only when intentionally checking the mapping without SANY, TLC, or Apalache.
