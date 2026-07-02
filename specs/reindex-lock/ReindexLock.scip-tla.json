@@ -55,7 +55,7 @@
       "waive": {
         "reads": ["lockOwner", "phase"],
         "writes": ["lockOwner", "phase"],
-        "reason": "Crash models an external event (the owning process is killed and never runs reindex()'s finally-release), not code this system calls on itself. isProcessAlive is the detection function a later Acquire invokes to observe the crash (process.kill(pid,0), src/reindex/index.ts) — there is no stored variable for 'a process just died'; it is a spawn-boundary fact per the tla-model-system skill's waiver convention."
+        "reason": "Crash models an external event (the owning process is killed and never runs reindex()'s finally-release), not code this system calls on itself. isProcessAlive is the detection function a later Acquire invokes to observe the crash (process.kill(pid,0), src/reindex/index.ts) — there is no stored variable for 'a process just died'; it is a spawn-boundary fact per the scip-tla-model-system skill's waiver convention."
       }
     },
     "Fail": {

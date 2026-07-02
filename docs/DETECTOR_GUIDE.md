@@ -132,5 +132,5 @@ broad sweep on every diff; these are the targeted follow-ups.
 | Anything at all, before saying "done" | `scip-query reindex && scip-query diff-gate` |
 
 And before any non-trivial change: plan with `scip-query plan-context
-<target>` (or the `concrete-plan` skill, which requires a scip-query citation
+<target>` (or the `scip-concrete-plan` skill, which requires a scip-query citation
 for every claim in the plan).

@@ -14,7 +14,7 @@ commands:
 
 This skill is how to run a *program* of work — planning, delegation, review,
 and closure — not how to write one change plan (use a dedicated planning
-skill such as `concrete-plan` for individual changes when one is available).
+skill such as `scip-concrete-plan` for individual changes when one is available).
 
 Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 

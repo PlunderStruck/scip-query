@@ -1,5 +1,5 @@
 ---
-name: concrete-plan
+name: scip-concrete-plan
 description: Plan code changes with scip-query evidence and testable design. Use for non-trivial implementation, refactor, migration, API, or bug-fix plans before editing code; require source citations, reuse audit, test seams, side-effect boundaries, contracts, and verification.
 commands:
   - template: "scip-query status --capabilities"

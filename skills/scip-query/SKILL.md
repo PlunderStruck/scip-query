@@ -32,7 +32,7 @@ Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only
 
 For non-trivial code changes:
 
-1. Invoke `concrete-plan`; the plan starts from `scip-query plan-context <target>` and designs for testability.
+1. Invoke `scip-concrete-plan`; the plan starts from `scip-query plan-context <target>` and designs for testability.
 2. Implement the plan in the smallest coherent slice.
 3. Invoke `scip-verify`.
 
@@ -46,7 +46,7 @@ The loop is complete only when `scip-verify` passes or each remaining finding ha
 | Root-cause a bug or regression | `scip-debug` | `trace`, `dataflow`, `change-surface` |
 | Turn a report into a fix packet | `scip-triage-issue` | `files`, `trace`, `affected` |
 | Create a code flow, dependency, or blast-radius diagram | `scip-diagram` | `call-graph`, `dataflow`, `affected` |
-| Plan a feature, fix, or refactor | `concrete-plan` | `plan-context` |
+| Plan a feature, fix, or refactor | `scip-concrete-plan` | `plan-context` |
 | Run a multi-phase program: plan, delegate, verify handoffs, close | `scip-conductor` | `plan-context`, `diff-gate`, `health` |
 | Assess public API, route, config, schema, CLI, or export changes | `scip-api-impact` | `surface`, `affected`, `co-change` |
 | Pick language-specific high-signal commands | `scip-language-playbook` | language row |
@@ -64,14 +64,14 @@ The loop is complete only when `scip-verify` passes or each remaining finding ha
 | Review deeper maintainability and system compression | `scip-maintainability` | `bottlenecks`, `similar-chains`, `change-surface` |
 | Review React reuse and component/hook pressure | `scip-react-maintainability` | React duplicate and pressure commands |
 | Review Vue reuse and SFC/composable pressure | `scip-vue-maintainability` | Vue duplicate and pressure commands |
-| Model a TypeScript system with TLA+ | `tla-model-system` | `plan-context`, `tla verify` |
+| Model a TypeScript system with TLA+ | `scip-tla-model-system` | `plan-context`, `tla verify` |
 
 Routing is complete only when one owning skill is selected or the task is small enough for the default loop alone.
 
 ## Tie-Breaks
 
 - "Is this implementation real / does it actually work" → `scip-integrity-audit`; "is this well-organized" → `scip-maintainability`; same-name drifted twins specifically → `scip-twin-drift`.
-- One change → `concrete-plan`; a program of changes with delegation → `scip-conductor`.
+- One change → `scip-concrete-plan`; a program of changes with delegation → `scip-conductor`.
 
 - Use `scip-cleanup-audit` for reports, ranking, confirmation, or recent AI-residue triage without edits.
 - Use `scip-cleanup-improve` when the user asks to fix, improve, continue cleaning, or raise health autonomously.
@@ -89,11 +89,11 @@ Top commands per routed skill, generated from each skill's own `commands:` front
 
 | Skill | Top commands |
 | --- | --- |
-| `concrete-plan` | `scip-query status --capabilities`, `scip-query plan-context <target>`, `scip-query refs <symbol>` |
 | `scip-api-impact` | `scip-query surface <module-or-package>`, `scip-query refs <symbol>`, `scip-query affected <symbol> --json` |
 | `scip-claim-audit` | `scip-query files <pattern>`, `scip-query refs <symbol>`, `scip-query code <symbol>` |
 | `scip-cleanup-audit` | `scip-query health --json`, `scip-query cleanup-plan --verify --json`, `scip-query duplicate-bodies --json --full` |
 | `scip-cleanup-improve` | `scip-query health --json`, `scip-query cleanup-plan --verify --json`, `scip-query cleanup-apply --verified --batch <n>` |
+| `scip-concrete-plan` | `scip-query status --capabilities`, `scip-query plan-context <target>`, `scip-query refs <symbol>` |
 | `scip-conductor` | `scip-query plan-context <target>`, `scip-query diff-gate --json`, `scip-query health --json` |
 | `scip-debug` | `scip-query files <feature-or-error-term>`, `scip-query trace <candidate-symbol>`, `scip-query call-graph <entry-symbol>` |
 | `scip-diagram` | `scip-query system <module>`, `scip-query trace <symbol>`, `scip-query call-graph <symbol>` |
@@ -106,9 +106,9 @@ Top commands per routed skill, generated from each skill's own `commands:` front
 | `scip-probe-reachability` | `scip-query outline <file> --signatures`, `scip-query code <symbol>`, `scip-query trace <symbol>` |
 | `scip-react-maintainability` | `scip-query react-component-duplicates --scope <scope> --full --json`, `scip-query react-hook-candidates --scope <scope> --full --json`, `scip-query react-large-component-pressure --scope <scope> --full --json` |
 | `scip-setup` | `scip-query setup --json`, `scip-query doctor`, `scip-query status --json` |
+| `scip-tla-model-system` | `scip-query tla scaffold <file>`, `scip-query tla verify <spec>`, `scip-query tla instrument <spec>` |
 | `scip-triage-issue` | `scip-query files <issue-term>`, `scip-query trace <entry-or-error-symbol>`, `scip-query code <entry-or-error-symbol>` |
 | `scip-twin-drift` | `scip-query twin-drift --json --full`, `scip-query duplicate-bodies --json --full`, `scip-query code <symbol>` |
 | `scip-verify` | `scip-query doctor`, `scip-query status --capabilities`, `scip-query diff-impact --json` |
 | `scip-vue-maintainability` | `scip-query augment-vue --project <path-to-tsconfig>`, `scip-query vue-component-duplicates --scope <scope> --full --json`, `scip-query vue-composable-candidates --scope <scope> --full --json` |
-| `tla-model-system` | `scip-query tla scaffold <file>`, `scip-query tla verify <spec>`, `scip-query tla instrument <spec>` |
 <!-- END GENERATED ROUTER COMMAND PREVIEW -->

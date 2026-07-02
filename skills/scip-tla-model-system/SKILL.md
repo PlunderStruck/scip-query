@@ -1,5 +1,5 @@
 ---
-name: tla-model-system
+name: scip-tla-model-system
 description: Model TypeScript systems with TLA+ and scip-query evidence. Use to scaffold, verify, instrument, or trace-check TLA+ specs, mapping files, configs, regression models, counterexample loops, or code/model conformance for an existing system.
 commands:
   - template: 'scip-query tla scaffold <file>'
@@ -14,7 +14,7 @@ commands:
     when: 'Download the pinned tla2tools.jar into the cache when the checker is unavailable.'
 ---
 
-# tla-model-system
+# scip-tla-model-system
 
 Use this skill when a TypeScript system needs a TLA+ model tied to code evidence. A modeled slice is the bounded part of the real system represented by the model: state, transitions, inputs, outputs, and failure modes.
 

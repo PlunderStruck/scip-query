@@ -37,7 +37,7 @@ description: A skill with no commands frontmatter.
 // Regression fixture: prettier's YAML formatter rewrites frontmatter string
 // quoting to single quotes by default, double only when the value itself
 // contains an apostrophe (mixed quoting in one file, as seen live in
-// skills/tla-model-system/SKILL.md after `npm run format`). A `--write` run
+// skills/scip-tla-model-system/SKILL.md after `npm run format`). A `--write` run
 // must not silently empty a skill's parsed commands list.
 const SKILL_MD_WITH_MIXED_QUOTES = `---
 name: mixed-quote-skill

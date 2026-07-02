@@ -16,7 +16,7 @@ export const BUILTIN_SKILLS = [
   'scip-probe-reachability',
   'scip-hyper-optimization',
   'scip-api-impact',
-  'concrete-plan',
+  'scip-concrete-plan',
   'scip-conductor',
   'scip-debug',
   'scip-explore',
@@ -29,7 +29,7 @@ export const BUILTIN_SKILLS = [
   'scip-vue-maintainability',
   'scip-verify',
   'scip-language-playbook',
-  'tla-model-system',
+  'scip-tla-model-system',
 ] as const;
 // ── Skills Installation ────────────────────────────────────
 

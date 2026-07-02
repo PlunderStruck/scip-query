@@ -1,4 +1,0 @@
-interface:
-  display_name: "TLA Model System"
-  short_description: "Model TypeScript systems with TLA+"
-  default_prompt: "Use $tla-model-system to model or verify a TypeScript system with TLA+ and scip-query evidence."

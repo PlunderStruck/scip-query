@@ -557,7 +557,7 @@ function renderSessionStartContext(
       ? `Unavailable or partial capabilities: ${unavailable.join(', ')}.`
       : 'Core capabilities are available.',
     'Use the scip-query router skill when exploring, planning, verifying, debugging, diagramming, or cleaning up code.',
-    'For non-trivial edits, plan with concrete-plan anchored by `scip-query plan-context <target>`, then verify with scip-verify.',
+    'For non-trivial edits, plan with scip-concrete-plan anchored by `scip-query plan-context <target>`, then verify with scip-verify.',
   ]
     .filter((line): line is string => line !== undefined)
     .join('\n');
@@ -604,10 +604,10 @@ const PROMPT_ROUTES: PromptRoute[] = [
   },
   {
     id: 'implementation',
-    skillNames: ['concrete-plan', 'scip-verify'],
+    skillNames: ['scip-concrete-plan', 'scip-verify'],
     keywords: ['implement', 'build', 'change', 'refactor', 'fix', 'add', 'update'],
     message:
-      'Implementation request: plan first with concrete-plan and `scip-query plan-context <target>`, then verify with scip-verify.',
+      'Implementation request: plan first with scip-concrete-plan and `scip-query plan-context <target>`, then verify with scip-verify.',
   },
   {
     id: 'exploration',

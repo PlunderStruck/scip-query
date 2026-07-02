@@ -129,7 +129,7 @@ export function parseSkillCommands(raw: string, sourceLabel: string): SkillComma
     // quotes by default, double only when the value itself contains an
     // apostrophe (e.g. "the model's Next relation"). Both quote styles must
     // parse, or a plain `prettier --write` silently empties a skill's
-    // commands list (this broke tla-model-system's router preview row).
+    // commands list (this broke scip-tla-model-system's router preview row).
     const templateMatch = line.match(/^\s*-\s*template:\s*(?:"(.*)"|'(.*)')\s*$/);
     const whenMatch = line.match(/^\s*when:\s*(?:"(.*)"|'(.*)')\s*$/);
     if (templateMatch) {

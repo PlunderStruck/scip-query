@@ -222,7 +222,7 @@ scip-query plan-context <symbol-or-file>   # before the edit
 scip-query diff-impact --json              # after the edit
 ```
 
-The `concrete-plan` skill enforces this end-to-end: every step in a plan must
+The `scip-concrete-plan` skill enforces this end-to-end: every step in a plan must
 cite the scip-query command that verified it.
 
 ## 10. Slow quality decay nobody notices
