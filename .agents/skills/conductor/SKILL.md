@@ -42,8 +42,11 @@ which this skill uses for individual changes).
   lands before the features that need it.
 - **Flag one-way doors** with their migration path, and keep an explicit
   DEFER list so cut scope is visible instead of forgotten.
-- **Include the working agreement**: commit protocol per step, the exact
-  gate commands, regeneration duties, and the deviation protocol —
+- **Include the working agreement**: ONE COMMIT PER STEP (bisectability is
+  non-negotiable; phase-level commits hide which step broke), the exact
+  gate commands — the FULL suite per phase, not just focused tests (focused
+  tests hide cross-phase regressions until the end), regeneration duties,
+  and the deviation protocol —
   "if source contradicts an anchor, BLOCKED-note it and continue; never
   improvise silently."
 
@@ -87,7 +90,8 @@ which this skill uses for individual changes).
 End every conducted program — and every plan written under this skill —
 with a checklist mapping each section above to concrete evidence:
 the pre-registered benchmarks and their before/after values; each handoff's
-discriminating probe and result; the deviation ledger; the DEFER list;
+discriminating probe and its OBSERVED result (a probe listed but not run
+counts as not run); the deviation ledger; the DEFER list;
 which learnings were folded back and where. A reviewer must be able to
 audit the *conduct*, not just the artifact.
 
