@@ -2,6 +2,9 @@ import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { getAllDefinitions } from '../../symbols/definition-catalog.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
+import { getCallSites } from '../../source/ast/ast-facts.js';
+import { getSourceImports } from '../../language-parsers/index.js';
+import { pathsResolveSame } from '../../resolution/path-normalization.js';
 import { classifyFile, isBarrel } from '../../analysis/file-classifier.js';
 import { stripCommentsAndStrings } from '../../source/source-stripper.js';
 import { applyScanLimit, definitionLoc } from '../query-utils.js';
@@ -55,6 +58,14 @@ export interface TwinDriftRecord {
   loc: number;
   normalizedBody: string;
   tokens: readonly string[];
+  /**
+   * True when the body is (up to a short guard) nothing more than a single
+   * call expression, optionally `return`ed/`await`ed — the shape a thin
+   * controller/service/storage delegate has. Purely structural (source-text
+   * based); doesn't by itself mean the call target is the other twin — see
+   * `isDelegatePair`/`buildDelegationChecker` for that.
+   */
+  isThinForwarder: boolean;
 }
 
 export function twinDrift(
@@ -87,7 +98,7 @@ export function allTwinGroups(
 ): TwinGroup[] {
   const { scope, minSimilarity = 0.3, scanLimit } = opts;
   const records = twinDriftRecords(db, { scope, scanLimit });
-  return groupTwins(records, { minSimilarity });
+  return groupTwins(records, { minSimilarity, isDelegatePair: buildDelegationChecker(db) });
 }
 
 /**
@@ -97,8 +108,23 @@ export function allTwinGroups(
  *   - closest pair similarity in [minSimilarity, 1)                -> 'divergent' (the finding)
  *   - closest pair similarity < minSimilarity                      -> 'homonym' (coincidental name reuse)
  */
-export function groupTwins(records: readonly TwinDriftRecord[], opts: { minSimilarity?: number } = {}): TwinGroup[] {
+export function groupTwins(
+  records: readonly TwinDriftRecord[],
+  opts: {
+    minSimilarity?: number;
+    /**
+     * Injected so this stays a pure/DB-free function for `groupTwins`'s unit
+     * tests: `isDelegatePair(from, to, clusterMembers)` answers "is `from` a
+     * thin forwarder whose call target resolves to `to` (directly, or by
+     * chaining through same-leaf-name delegates found in `clusterMembers`)?"
+     * `allTwinGroups` wires the real, source/import-backed implementation
+     * via `buildDelegationChecker`.
+     */
+    isDelegatePair?: (from: TwinDriftRecord, to: TwinDriftRecord, clusterMembers: readonly TwinDriftRecord[]) => boolean;
+  } = {},
+): TwinGroup[] {
   const minSimilarity = opts.minSimilarity ?? 0.3;
+  const isDelegatePair = opts.isDelegatePair;
   // 21.2 calibration retune (external calibration: Stable_Management §6.4,
   // Vega_2.0 §3 — the single worst twin-drift false-positive class on both
   // repos): every class in a TS/JS codebase has a member literally named
@@ -131,6 +157,14 @@ export function groupTwins(records: readonly TwinDriftRecord[], opts: { minSimil
         const a = members[i]!;
         const b = members[j]!;
         if (a.file === b.file) continue;
+        // A thin controller/service/storage-style delegate calling its
+        // same-name implementation (directly, or through a chain of
+        // same-name forwarders) is not a drifted twin — it's the intended
+        // architecture. Skip the pair entirely (as if it didn't exist for
+        // grouping purposes) rather than merely excluding it from
+        // similarity scoring, so a cluster whose *only* cross-file pair is a
+        // delegation chain produces no group at all.
+        if (isDelegatePair?.(a, b, members) || isDelegatePair?.(b, a, members)) continue;
         hasCrossFilePair = true;
         if (a.normalizedBody === b.normalizedBody) {
           hasIdenticalPair = true;
@@ -215,6 +249,7 @@ function twinDriftRecord(db: ScipDatabase, definition: IndexedDefinition): TwinD
     loc: definitionLoc(definition),
     normalizedBody,
     tokens,
+    isThinForwarder: isThinForwarderBody(snippet),
   };
 }
 
@@ -340,6 +375,120 @@ function levenshteinAtMost(a: string, b: string, max: number): boolean {
     previous = current;
   }
   return previous[b.length]! <= max;
+}
+
+/**
+ * Structural (source-text-only) check for a thin forwarding body: at most
+ * two top-level statements, no branching/looping, and the last statement is
+ * nothing more than a single call expression (optionally `return`ed and/or
+ * `await`ed). This is the shape a controller/service/storage delegate has —
+ * `return this.service.jsonHandler(req, res);` — as opposed to a body that
+ * actually implements the behavior. Purely structural; whether the call
+ * target is actually the other twin is a separate, DB-backed check (see
+ * `buildDelegationChecker`).
+ */
+function isThinForwarderBody(rawSnippet: string): boolean {
+  const body = stripCommentsAndStrings(extractImplementationBody(rawSnippet)).trim();
+  if (!body) return false;
+  if (CONTROL_FLOW_PATTERN.test(body)) return false;
+  const statements = splitTopLevelStatements(body);
+  if (statements.length === 0 || statements.length > 2) return false;
+  return isForwardingCallStatement(statements[statements.length - 1]!);
+}
+
+const CONTROL_FLOW_PATTERN = /\b(?:if|else|for|while|switch|try|catch|do)\b/;
+const FORWARDING_CALL_PATTERN =
+  /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*|\[[^[\]]*\])*\((?:[^()]|\([^()]*\))*\)$/;
+
+function isForwardingCallStatement(statement: string): boolean {
+  const trimmed = statement
+    .trim()
+    .replace(/^return\s+/, '')
+    .replace(/^await\s+/, '')
+    .replace(/;\s*$/, '')
+    .trim();
+  return FORWARDING_CALL_PATTERN.test(trimmed);
+}
+
+/** Split a statement block on top-level `;` (ignoring `;` nested inside `()`/`[]`/`{}`). */
+function splitTopLevelStatements(body: string): string[] {
+  const statements: string[] = [];
+  let depth = 0;
+  let current = '';
+  for (const char of body) {
+    if (char === '(' || char === '[' || char === '{') depth += 1;
+    else if (char === ')' || char === ']' || char === '}') depth = Math.max(0, depth - 1);
+    if (char === ';' && depth === 0) {
+      statements.push(current);
+      current = '';
+      continue;
+    }
+    current += char;
+  }
+  if (current.trim()) statements.push(current);
+  return statements.map((statement) => statement.trim()).filter((statement) => statement.length > 0);
+}
+
+const MAX_DELEGATION_CHAIN_HOPS = 3;
+
+/**
+ * Builds the real `isDelegatePair` predicate for `groupTwins`, backed by
+ * source facts rather than the general call graph: the general call-graph
+ * attribution path (`getCalleeRowsForSymbol`/`pickAstCallCandidate`) prefers
+ * a same-file, same-leaf-name candidate over an imported one and treats that
+ * as self-recursion — which is *always* true for this exact shape (every
+ * member of a twin cluster has the same leaf name as its own file's
+ * definition), so it silently reports zero callees for exactly the calls
+ * this check needs to see. Instead, resolve directly: does `from`'s body
+ * contain a call site whose leaf matches `to`'s leaf, and does `from`'s file
+ * import (and, for namespace imports, actually use) a module that resolves
+ * to `to`'s file (directly, or by chaining through other thin-forwarder
+ * members of the same cluster)?
+ */
+function buildDelegationChecker(
+  db: ScipDatabase,
+): (from: TwinDriftRecord, to: TwinDriftRecord, clusterMembers: readonly TwinDriftRecord[]) => boolean {
+  const cache = new Map<string, boolean>();
+  return (from, to, clusterMembers) => {
+    if (!from.isThinForwarder) return false;
+    const key = `${from.symbol}\x00${to.symbol}`;
+    const cached = cache.get(key);
+    if (cached !== undefined) return cached;
+    const result = reachesSameNameTarget(db, from, to, clusterMembers, MAX_DELEGATION_CHAIN_HOPS, new Set());
+    cache.set(key, result);
+    return result;
+  };
+}
+
+function reachesSameNameTarget(
+  db: ScipDatabase,
+  from: TwinDriftRecord,
+  to: TwinDriftRecord,
+  clusterMembers: readonly TwinDriftRecord[],
+  hopsLeft: number,
+  visited: Set<string>,
+): boolean {
+  if (hopsLeft <= 0 || visited.has(from.symbol)) return false;
+  visited.add(from.symbol);
+
+  const sites = (getCallSites(db, from.file) ?? []).filter(
+    (site) => site.line >= from.startLine && site.line <= from.endLine && site.calleeLeaf === to.leaf,
+  );
+  if (sites.length === 0) return false;
+
+  const importedFiles = new Set(
+    getSourceImports(db, from.file)
+      .filter((entry) => entry.sourcePath && (entry.kind !== 'namespace' || entry.usedMembers.includes(to.leaf)))
+      .map((entry) => entry.sourcePath!),
+  );
+  if ([...importedFiles].some((file) => pathsResolveSame(file, to.file))) return true;
+
+  for (const mid of clusterMembers) {
+    if (mid.symbol === from.symbol || mid.symbol === to.symbol || !mid.isThinForwarder) continue;
+    if (![...importedFiles].some((file) => pathsResolveSame(file, mid.file))) continue;
+    if (reachesSameNameTarget(db, mid, to, clusterMembers, hopsLeft - 1, visited)) return true;
+  }
+  return false;
 }
 
 /**

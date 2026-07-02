@@ -100,12 +100,35 @@ up, write a real plan section (`concrete-plan`), and implement independently.
    Test: `tests/queries/impact/co-change-partner-labels.test.ts` — "honors scanLimit by keeping
    only the highest-priority pairs (followup #6)".
 
-7. **`twin-drift` delegation-chain exclusion (Vega; explicitly deferred by 21.2b).** Beyond the
-   `<constructor>` and test-file exclusions already shipped in 21.2b, `twin-drift` still
-   systematically flags controller→service→storage delegation chains (thin `jsonHandler`
-   delegates vs. their implementation) as same-name twins — not a real drifted-concept pair.
+7. **RESOLVED (2026-07-02, followup-batch). `twin-drift` delegation-chain exclusion (Vega;
+   explicitly deferred by 21.2b).** Beyond the `<constructor>` and test-file exclusions already
+   shipped in 21.2b, `twin-drift` still systematically flags controller→service→storage delegation
+   chains (thin `jsonHandler` delegates vs. their implementation) as same-name twins — not a real
+   drifted-concept pair.
    Source: `docs/validation/2026-07-01-external-calibration-vega.md` §3 (`twin-drift` bullet) and
    §5 (verdict, item 2); this assignment's brief explicitly named it out of scope for 21.2.
+   Fix: `src/queries/cleanup/twin-drift.ts`. Each `TwinDriftRecord` now carries a structural
+   `isThinForwarder` flag (`isThinForwarderBody`, source-text-only: at most two top-level
+   statements, no branching/looping, last statement is a single optionally
+   `return`ed/`await`ed call expression). `groupTwins` takes an injected `isDelegatePair(from, to,
+   clusterMembers)` predicate and skips a cross-file pair entirely (not merely excludes it from
+   similarity scoring) when either side delegates to the other — so a cluster whose only cross-file
+   pair is a delegation chain produces no group at all. `allTwinGroups` wires the real
+   `buildDelegationChecker`, which resolves the call target from source facts
+   (`getCallSites`/`getSourceImports`) rather than the general call graph
+   (`getCalleeRowsForSymbol`): the general call-graph attribution path
+   (`pickAstCallCandidate` in `src/symbols/leaf-symbol-index.ts`) prefers a same-file
+   same-leaf-name candidate and treats that as self-recursion, which is *always* true for this
+   exact shape (every twin-cluster member shares its own file's leaf name), so it silently reports
+   zero callees for exactly the calls this check needs — confirmed live with a debug script before
+   switching approaches. Chains up to 3 hops through other `isThinForwarder` cluster members.
+   Test: `tests/queries/cleanup/twin-drift.test.ts` — two pure `groupTwins` tests with an injected
+   `isDelegatePair` fake, plus a real db-backed integration test (`twinDrift (db-backed) —
+   delegation-chain exclusion`) using real TypeScript source files and an actual namespace-import
+   delegate call, asserting zero findings; the pre-existing `escapeRegex`/`escapeRegExp` db-backed
+   test (no call relationship) continues to assert a `divergent` finding, covering the
+   "genuinely divergent, no delegation" side. Verified both new tests fail without the skip
+   (temporarily disabled the guard, confirmed 2 failures, restored).
 
 8. **Hub-file `doc-reference` cascade damping (Stable).** One heavily-cited file
    (`shared/src/contracts/endpoints.ts`) accounts for 36 of 107 `doc-reference` findings across

@@ -16,6 +16,7 @@ function record(
     endLine: 1,
     loc: 2,
     normalizedBody: overrides.tokens.join(''),
+    isThinForwarder: false,
     ...overrides,
   };
 }
@@ -164,6 +165,52 @@ describe('groupTwins (pure)', () => {
     expect(groups).toHaveLength(1);
     expect(groups[0]?.relationship).toBe('divergent');
   });
+
+  // followup #7: controller -> service -> storage style delegation chains
+  // (a thin forwarder and its same-name implementation) are not drifted
+  // twins -- they're the intended architecture. `isDelegatePair` is injected
+  // so this stays exercisable without a real call graph.
+  it('drops a pair entirely when isDelegatePair reports a delegation relationship', () => {
+    const a = record({
+      leaf: 'jsonHandler',
+      file: 'src/controller.ts',
+      tokens: ['return', 'service', '.', 'jsonHandler', '(', 'req', ')', ';'],
+      isThinForwarder: true,
+    });
+    const b = record({
+      leaf: 'jsonHandler',
+      file: 'src/service.ts',
+      tokens: ['const', 'parsed', '=', 'JSON', '.', 'stringify', '(', 'req', ')', ';', 'return', 'parsed', ';'],
+    });
+
+    const groups = groupTwins([a, b], {
+      isDelegatePair: (from, to) => from.file === a.file && to.file === b.file,
+    });
+
+    expect(groups).toHaveLength(0);
+  });
+
+  it('still reports a same-name pair when isDelegatePair says it is not a delegate', () => {
+    const groups = groupTwins(
+      [
+        record({
+          leaf: 'jsonHandler',
+          file: 'src/controller.ts',
+          tokens: ['return', 'service', '.', 'jsonHandler', '(', 'req', ')', ';'],
+          isThinForwarder: true,
+        }),
+        record({
+          leaf: 'jsonHandler',
+          file: 'src/other.ts',
+          tokens: ['const', 'parsed', '=', 'JSON', '.', 'stringify', '(', 'req', ')', ';', 'return', 'parsed', ';'],
+        }),
+      ],
+      { isDelegatePair: () => false },
+    );
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.relationship).toBe('divergent');
+  });
 });
 
 describe('twinDrift (db-backed)', () => {
@@ -220,5 +267,57 @@ describe('twinDrift (db-backed)', () => {
     const groups = twinDrift(db);
 
     expect(groups.every((group) => group.members.every((member) => member.file !== 'src/c.ts'))).toBe(true);
+  });
+});
+
+// followup #7: real call-graph-backed delegation-chain exclusion. A
+// jsonHandler-style thin controller delegate calling its same-name service
+// implementation must not be reported as a drifted twin; two same-name
+// functions with genuinely divergent bodies and no call relationship must
+// still be reported (covered by the escapeRegex/escapeRegExp suite above).
+describe('twinDrift (db-backed) — delegation-chain exclusion', () => {
+  let tempDir: string;
+  let db: ScipDatabase;
+
+  beforeAll(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-query-twin-drift-delegation-'));
+    const projectRoot = join(tempDir, 'project');
+    writeFixtureFiles(projectRoot, {
+      'src/controller.ts': [
+        "import * as service from './service.js';",
+        'export function jsonHandler(req: unknown) {',
+        '  return service.jsonHandler(req);',
+        '}',
+      ],
+      'src/service.ts': [
+        'export function jsonHandler(req: unknown) {',
+        '  const parsed = JSON.stringify(req);',
+        '  return { ok: true, body: parsed, extra: parsed.length };',
+        '}',
+      ],
+    });
+
+    const dbPath = join(tempDir, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/controller.ts')
+      .document(2, 'typescript', 'src/service.ts')
+      .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`controller.ts`/jsonHandler().', 'jsonHandler', 12)
+      .symbol(2, 'scip-typescript npm fixture 1.0.0 src/`service.ts`/jsonHandler().', 'jsonHandler', 12)
+      .definition(1, 1, 1, 1, 0, 3, 1)
+      .definition(2, 2, 2, 0, 0, 3, 1)
+      .write();
+
+    db = new ScipDatabase({ dbPath, projectRoot });
+  });
+
+  afterAll(() => {
+    db.close();
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('does not report a thin delegate calling its same-name implementation as a drifted twin', () => {
+    const groups = twinDrift(db, { includeHomonyms: true });
+
+    expect(groups).toHaveLength(0);
   });
 });
