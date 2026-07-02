@@ -1,7 +1,7 @@
 import type { ParsedSourceImport } from '../../domain/types.js';
 import { resolveClojureImportPath } from '../../resolution/import-path-resolver.js';
 import { escapeRegex } from '../../core/regex-utils.js';
-import { skipLineComment } from '../../source/clojure-facts.js';
+import { isReaderMacroPrefix, isTokenDelimiter, skipLineComment, skipString } from '../../source/clojure-facts.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { buildUsedImport } from '../utils.js';
 
@@ -244,7 +244,7 @@ function buildClojureUsageBody(source: string, start: number, end: number): stri
       continue;
     }
     if (char === '"') {
-      const next = skipString(source, index);
+      const next = skipString(source, index, 0).index;
       out += maskPreservingLines(source.slice(index, next));
       index = next;
       continue;
@@ -292,8 +292,8 @@ function parseForm(source: string, start: number): { form: ClojureForm; index: n
   if (char === '{') return parseCollection(source, index, 'map', '}');
   if (char === '"')
     return {
-      form: { type: 'atom', text: '', start: index, end: skipString(source, index) },
-      index: skipString(source, index),
+      form: { type: 'atom', text: '', start: index, end: skipString(source, index, 0).index },
+      index: skipString(source, index, 0).index,
     };
   return parseAtom(source, index);
 }
@@ -369,38 +369,6 @@ function skipWhitespace(source: string, start: number): number {
     break;
   }
   return index;
-}
-
-function skipString(source: string, index: number): number {
-  let cursor = index + 1;
-  while (cursor < source.length) {
-    const char = source[cursor]!;
-    if (char === '\\') {
-      cursor += 2;
-      continue;
-    }
-    cursor += 1;
-    if (char === '"') break;
-  }
-  return cursor;
-}
-
-function isReaderMacroPrefix(char: string): boolean {
-  return char === "'" || char === '`' || char === '~' || char === '@' || char === '^';
-}
-
-function isTokenDelimiter(char: string): boolean {
-  return (
-    /\s|,/.test(char) ||
-    char === '(' ||
-    char === ')' ||
-    char === '[' ||
-    char === ']' ||
-    char === '{' ||
-    char === '}' ||
-    char === '"' ||
-    char === ';'
-  );
 }
 
 function maskPreservingLines(segment: string): string {

@@ -294,17 +294,33 @@ function clojureCallParts(symbol: string): { leaf: string; qualifier?: string; t
   return { leaf, qualifier, text };
 }
 
-// scip-query: ignore-wrapper — shared with src/language-parsers/languages/clojure.ts
-// (both scan Clojure/Lisp `;` line comments); source/ is the one side both can
-// legally import, per the layer policy (language-parsers -> source is allowed,
-// the reverse is not).
+// scip-query: ignore-wrapper — reader primitives shared with
+// src/language-parsers/languages/clojure.ts (one hand-rolled Clojure
+// reader, two consumers: this file's identifier/source-fact extraction and
+// the parser's namespace/import extraction); source/ is the one side both
+// can legally import, per the layer policy (language-parsers -> source is
+// allowed, the reverse is not).
+//
+// twin-consolidation T2: these three functions used to be duplicated in
+// both files and had drifted (verified with `scip-query twin-ab`):
+//   - isReaderMacroPrefix was missing '#' in the parser's copy. '#' starts
+//     Clojure's dispatch macros (`#{...}` sets, `#(...)` anonymous fns,
+//     `#'sym` var quotes, `#"..."` regexes) — without it, the parser's
+//     prefix-skip loop left '#' unconsumed and those forms fell through to
+//     parseAtom, producing a bogus one-character "#" atom.
+//   - isTokenDelimiter was missing '"' and ';' in this file's copy. A bare
+//     token must terminate at a string or line-comment boundary even with
+//     no whitespace before it (e.g. `sym;comment` or `#_;x`).
+// This file's definitions below are the ones kept (already had the correct
+// isReaderMacroPrefix and skipString; isTokenDelimiter's missing '"'/';'
+// are added here to match the parser's correct behavior).
 export function skipLineComment(source: string, index: number): number {
   let cursor = index;
   while (cursor < source.length && source[cursor] !== '\n') cursor += 1;
   return cursor;
 }
 
-function skipString(source: string, index: number, line: number): { index: number; line: number } {
+export function skipString(source: string, index: number, line: number): { index: number; line: number } {
   let cursor = index + 1;
   let row = line;
   while (cursor < source.length) {
@@ -320,13 +336,21 @@ function skipString(source: string, index: number, line: number): { index: numbe
   return { index: cursor, line: row };
 }
 
-function isReaderMacroPrefix(char: string): boolean {
+export function isReaderMacroPrefix(char: string): boolean {
   return char === "'" || char === '`' || char === '~' || char === '@' || char === '^' || char === '#';
 }
 
-function isTokenDelimiter(char: string): boolean {
+export function isTokenDelimiter(char: string): boolean {
   return (
-    /\s|,/.test(char) || char === '(' || char === ')' || char === '[' || char === ']' || char === '{' || char === '}'
+    /\s|,/.test(char) ||
+    char === '(' ||
+    char === ')' ||
+    char === '[' ||
+    char === ']' ||
+    char === '{' ||
+    char === '}' ||
+    char === '"' ||
+    char === ';'
   );
 }
 
