@@ -894,6 +894,171 @@ Start == UNCHANGED lockOwner
     }
   });
 
+  it('classifies a prepared INSERT statement as a write and a SELECT as a read of the statement-bound variable', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/ledger.ts')
+      .symbol(
+        1,
+        'scip-typescript npm test 1.0.0 src/`ledger.ts`/CONNECTIONS.',
+        'CONNECTIONS',
+        SymbolInformation_Kind.Constant,
+      )
+      .symbol(
+        2,
+        'scip-typescript npm test 1.0.0 src/`ledger.ts`/writeLedger().',
+        'writeLedger',
+        SymbolInformation_Kind.Function,
+      )
+      .symbol(
+        3,
+        'scip-typescript npm test 1.0.0 src/`ledger.ts`/readLedger().',
+        'readLedger',
+        SymbolInformation_Kind.Function,
+      )
+      .definition(1, 1, 1, 0, 0, 0, 40)
+      .definition(2, 1, 2, 2, 0, 9, 1)
+      .definition(3, 1, 3, 11, 0, 15, 1)
+      .chunk(1, 1, 0, 15)
+      .write();
+    const config: ScipQueryConfig = { projectRoot: root, dbPath, indexPath: join(root, 'index.scip') };
+    writeFixtureFiles(root, {
+      'src/ledger.ts': [
+        'export const CONNECTIONS: number = 0;',
+        '',
+        'export function writeLedger(db: Db) {',
+        '  db.prepare(',
+        '    `INSERT INTO finding_outcome_ledger',
+        '       (check_name, finding_id) VALUES (?, ?)`,',
+        '  ).run();',
+        '}',
+        '',
+        'export function readLedger(db: Db) {',
+        '  db.prepare(',
+        '    `SELECT check_name, finding_id FROM finding_outcome_ledger`,',
+        '  ).all();',
+        '}',
+      ],
+    });
+    writeFileSync(
+      join(root, 'Ledger.tla'),
+      `---- MODULE Ledger ----
+VARIABLES ledger
+Write == ledger' = "written"
+Read == UNCHANGED ledger
+====
+`,
+    );
+    const db = new ScipDatabase(config);
+    const contract: TlaModelContract = {
+      module: 'Ledger.tla',
+      scope: ['src/ledger.ts'],
+      variables: {
+        ledger: {
+          code: ['CONNECTIONS'],
+          aliases: ['CONNECTIONS'],
+          statements: [{ pattern: 'finding_outcome_ledger' }],
+        },
+      },
+      actions: {
+        Write: { code: ['writeLedger'], reads: [], writes: ['ledger'], calls: [] },
+        Read: { code: ['readLedger'], reads: ['ledger'], writes: [], calls: [] },
+      },
+      invariants: [],
+      traces: [],
+    };
+
+    try {
+      const result = verifyTlaConformance(db, contract, readTlaModuleFacts(root, 'Ledger.tla'));
+
+      expect(result.staticWrites).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            variable: 'ledger',
+            kind: 'statement',
+            target: expect.stringContaining('INSERT INTO finding_outcome_ledger'),
+          }),
+        ]),
+      );
+      expect(result.staticReads).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            variable: 'ledger',
+            kind: 'statement',
+            target: expect.stringContaining('SELECT check_name'),
+          }),
+        ]),
+      );
+      expect(result.findings.filter((finding) => finding.severity === 'error')).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('does not attribute a statement match whose text does not contain the pattern, and falls through dynamic concat', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/ledger.ts')
+      .symbol(
+        1,
+        'scip-typescript npm test 1.0.0 src/`ledger.ts`/CONNECTIONS.',
+        'CONNECTIONS',
+        SymbolInformation_Kind.Constant,
+      )
+      .symbol(2, 'scip-typescript npm test 1.0.0 src/`ledger.ts`/other().', 'other', SymbolInformation_Kind.Function)
+      .definition(1, 1, 1, 0, 0, 0, 40)
+      .definition(2, 1, 2, 2, 0, 6, 1)
+      .chunk(1, 1, 0, 6)
+      .write();
+    const config: ScipQueryConfig = { projectRoot: root, dbPath, indexPath: join(root, 'index.scip') };
+    writeFixtureFiles(root, {
+      'src/ledger.ts': [
+        'export const CONNECTIONS: number = 0;',
+        '',
+        'export function other(db: Db, table: string) {',
+        '  db.prepare("SELECT * FROM other_table").all();',
+        '  db.prepare("INSERT INTO " + table + " VALUES (?)").run();',
+        '}',
+      ],
+    });
+    writeFileSync(
+      join(root, 'Ledger.tla'),
+      `---- MODULE Ledger ----
+VARIABLES ledger
+Other == UNCHANGED ledger
+====
+`,
+    );
+    const db = new ScipDatabase(config);
+    const contract: TlaModelContract = {
+      module: 'Ledger.tla',
+      scope: ['src/ledger.ts'],
+      variables: {
+        ledger: {
+          code: ['CONNECTIONS'],
+          aliases: ['CONNECTIONS'],
+          statements: [{ pattern: 'finding_outcome_ledger' }],
+        },
+      },
+      actions: {
+        Other: { code: ['other'], reads: [], writes: [], calls: [] },
+      },
+      invariants: [],
+      traces: [],
+    };
+
+    try {
+      const result = verifyTlaConformance(db, contract, readTlaModuleFacts(root, 'Ledger.tla'));
+
+      expect(result.staticWrites.filter((write) => write.kind === 'statement')).toEqual([]);
+      expect(result.staticReads.filter((read) => read.kind === 'statement')).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
   it('warns when mapped invariants are absent from the checked config', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
     writeFixtureFiles(root, {

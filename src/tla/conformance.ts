@@ -124,7 +124,8 @@ export interface TlaStaticWrite {
     | 'update'
     | 'delete'
     | 'source-scan'
-    | 'resource';
+    | 'resource'
+    | 'statement';
   enclosingSymbol?: string;
   enclosingShort?: string;
   /**
@@ -141,7 +142,7 @@ export interface TlaStaticRead {
   file: string;
   line: number;
   target: string;
-  kind: 'identifier' | 'source-scan' | 'resource';
+  kind: 'identifier' | 'source-scan' | 'resource' | 'statement';
   enclosingSymbol?: string;
   enclosingShort?: string;
   /** See `TlaStaticWrite.via`. */
@@ -152,6 +153,17 @@ export interface TlaStaticRead {
 export interface VariableResource {
   variable: string;
   path: string;
+}
+
+/**
+ * A variable bound to SQL-backed state via `variables.<v>.statements`
+ * (Q2 / statement-alias tier). `regex` is `pattern` compiled once per
+ * conformance run — `loadTlaModelContract` already validated it compiles.
+ */
+export interface VariableStatement {
+  variable: string;
+  pattern: string;
+  regex: RegExp;
 }
 
 export interface TlaWaiverUse {
@@ -187,6 +199,21 @@ const MUTATING_METHODS = new Set([
 const FS_WRITE_CALLS = new Set(['writeFileSync', 'rmSync', 'renameSync', 'mkdirSync', 'unlinkSync']);
 const FS_READ_CALLS = new Set(['readFileSync', 'existsSync', 'statSync']);
 
+/**
+ * Q2 / statement-alias tier: leading-verb classification of a matched SQL
+ * statement's static text. Checked against the start of the text (after
+ * whitespace) so `'INSERT OR REPLACE INTO ...'` classifies as a write from
+ * its leading INSERT, not ambiguously from the later REPLACE keyword.
+ */
+const SQL_WRITE_VERB = /^\s*(?:INSERT|UPDATE|DELETE|REPLACE)\b/i;
+const SQL_READ_VERB = /^\s*SELECT\b/i;
+
+function classifySqlVerb(text: string): 'write' | 'read' | null {
+  if (SQL_WRITE_VERB.test(text)) return 'write';
+  if (SQL_READ_VERB.test(text)) return 'read';
+  return null;
+}
+
 export function verifyTlaConformance(
   db: ScipDatabase,
   contract: TlaModelContract,
@@ -198,6 +225,7 @@ export function verifyTlaConformance(
   const variableResolution = aliasesForVariables(db, contract, findings);
   const variableAliases = variableResolution.aliases;
   const variableResources = resourcesForVariables(contract);
+  const variableStatements = statementsForVariables(contract);
   const actions = resolveActions(db, contract, findings);
   if (moduleFacts) verifyModelText(contract, moduleFacts, checkedInvariants, findings);
   const modelActions = new Map((moduleFacts?.actions ?? []).map((action) => [action.name, action]));
@@ -211,11 +239,20 @@ export function verifyTlaConformance(
     actions,
     variableAliases,
     variableResources,
+    variableStatements,
     actionSymbols,
     findings,
     modelActions,
   );
-  const staticReads = collectAllStaticReads(db, actions, variableAliases, variableResources, findings, modelActions);
+  const staticReads = collectAllStaticReads(
+    db,
+    actions,
+    variableAliases,
+    variableResources,
+    variableStatements,
+    findings,
+    modelActions,
+  );
   verifyDeclaredCalls(db, actions, findings);
   verifyTraces(contract, traceSteps, findings);
 
@@ -318,6 +355,16 @@ function resourcesForVariables(contract: TlaModelContract): VariableResource[] {
   return resources;
 }
 
+function statementsForVariables(contract: TlaModelContract): VariableStatement[] {
+  const statements: VariableStatement[] = [];
+  for (const [name, variable] of Object.entries(contract.variables)) {
+    for (const statement of variable.statements ?? []) {
+      statements.push({ variable: name, pattern: statement.pattern, regex: new RegExp(statement.pattern) });
+    }
+  }
+  return statements;
+}
+
 /**
  * P5.4 / followup #14: writes/reads one call hop away from a mapped
  * action's referent are statically invisible per-range (e.g. the
@@ -331,9 +378,10 @@ function oneHopCalleeWrites(
   referentSymbol: string,
   aliases: readonly VariableAlias[],
   resources: readonly VariableResource[],
+  statements: readonly VariableStatement[],
 ): TlaStaticWrite[] {
   return oneHopCalleeEffects(db, referentSymbol, (file, startLine, endLine) =>
-    collectWritesForRange(db, file, startLine, endLine, aliases, resources),
+    collectWritesForRange(db, file, startLine, endLine, aliases, resources, statements),
   );
 }
 
@@ -342,9 +390,10 @@ function oneHopCalleeReads(
   referentSymbol: string,
   aliases: readonly VariableAlias[],
   resources: readonly VariableResource[],
+  statements: readonly VariableStatement[],
 ): TlaStaticRead[] {
   return oneHopCalleeEffects(db, referentSymbol, (file, startLine, endLine) =>
-    collectReadsForRange(db, file, startLine, endLine, aliases, resources),
+    collectReadsForRange(db, file, startLine, endLine, aliases, resources, statements),
   );
 }
 
@@ -522,6 +571,7 @@ function collectAllStaticWrites(
   actions: readonly ResolvedAction[],
   aliases: readonly VariableAlias[],
   resources: readonly VariableResource[],
+  statements: readonly VariableStatement[],
   actionSymbols: ReadonlySet<string>,
   findings: TlaConformanceFinding[],
   modelActions: ReadonlyMap<string, SanyActionFacts>,
@@ -538,6 +588,7 @@ function collectAllStaticWrites(
         referent.match.endLine,
         aliases,
         resources,
+        statements,
       );
       actionWrites.push(...found);
       writes.push(...found);
@@ -547,7 +598,7 @@ function collectAllStaticWrites(
       // for an action that doesn't own it; it may only strengthen evidence
       // for a fact the mapping already claims.
       const declaredWrites = new Set(action.mapping.writes);
-      const oneHop = oneHopCalleeWrites(db, referent.match.symbol, aliases, resources).filter((write) =>
+      const oneHop = oneHopCalleeWrites(db, referent.match.symbol, aliases, resources, statements).filter((write) =>
         declaredWrites.has(write.variable),
       );
       actionWrites.push(...oneHop);
@@ -562,7 +613,7 @@ function collectAllStaticWrites(
   // `scope` must be mapped as an action or its write is flagged.
   const sweepFiles = contract.unmappedWriteScope === 'actions' ? [] : scopedFiles(db, contract);
   for (const file of sweepFiles) {
-    for (const write of collectWritesForRange(db, file, 0, Number.POSITIVE_INFINITY, aliases, resources)) {
+    for (const write of collectWritesForRange(db, file, 0, Number.POSITIVE_INFINITY, aliases, resources, statements)) {
       writes.push(write);
       if (!isUnmappedWriteCandidate(write)) continue;
       if (write.enclosingSymbol && actionSymbols.has(write.enclosingSymbol)) continue;
@@ -656,6 +707,7 @@ function collectAllStaticReads(
   actions: readonly ResolvedAction[],
   aliases: readonly VariableAlias[],
   resources: readonly VariableResource[],
+  statements: readonly VariableStatement[],
   findings: TlaConformanceFinding[],
   modelActions: ReadonlyMap<string, SanyActionFacts>,
 ): TlaStaticRead[] {
@@ -671,13 +723,14 @@ function collectAllStaticReads(
         referent.match.endLine,
         aliases,
         resources,
+        statements,
       );
       actionReads.push(...found);
       reads.push(...found);
       // Same declared-fact constraint as the write path — see the comment
       // in collectAllStaticWrites.
       const declaredReads = new Set(action.mapping.reads);
-      const oneHop = oneHopCalleeReads(db, referent.match.symbol, aliases, resources).filter((read) =>
+      const oneHop = oneHopCalleeReads(db, referent.match.symbol, aliases, resources, statements).filter((read) =>
         declaredReads.has(read.variable),
       );
       actionReads.push(...oneHop);
@@ -838,10 +891,11 @@ export function collectWritesForRange(
   endLine: number,
   aliases: readonly VariableAlias[],
   resources: readonly VariableResource[] = [],
+  statements: readonly VariableStatement[] = [],
 ): TlaStaticWrite[] {
-  const astWrites = collectAstWrites(db, file, startLine, endLine, aliases, resources);
+  const astWrites = collectAstWrites(db, file, startLine, endLine, aliases, resources, statements);
   if (astWrites) return astWrites;
-  return collectSourceScanWrites(db, file, startLine, endLine, aliases, resources);
+  return collectSourceScanWrites(db, file, startLine, endLine, aliases, resources, statements);
 }
 
 export function collectReadsForRange(
@@ -851,10 +905,11 @@ export function collectReadsForRange(
   endLine: number,
   aliases: readonly VariableAlias[],
   resources: readonly VariableResource[] = [],
+  statements: readonly VariableStatement[] = [],
 ): TlaStaticRead[] {
-  const astReads = collectAstReads(db, file, startLine, endLine, aliases, resources);
+  const astReads = collectAstReads(db, file, startLine, endLine, aliases, resources, statements);
   if (astReads) return astReads;
-  return collectSourceScanReads(db, file, startLine, endLine, aliases, resources);
+  return collectSourceScanReads(db, file, startLine, endLine, aliases, resources, statements);
 }
 
 export function collectAstWrites(
@@ -864,6 +919,7 @@ export function collectAstWrites(
   endLine: number,
   aliases: readonly VariableAlias[],
   resources: readonly VariableResource[] = [],
+  statements: readonly VariableStatement[] = [],
 ): TlaStaticWrite[] | null {
   const tree = getAst(db, file);
   if (!tree) return null;
@@ -872,6 +928,7 @@ export function collectAstWrites(
     if (node.startPosition.row > endLine || node.endPosition.row < startLine) return;
     recordWriteNode(db, file, node, aliases, writes);
     recordResourceCallNode(db, file, node, resources, 'write', writes);
+    recordStatementCallNode(db, file, node, statements, 'write', writes);
     for (const child of node.children) visit(child);
   };
   visit(tree.rootNode);
@@ -885,6 +942,7 @@ function collectAstReads(
   endLine: number,
   aliases: readonly VariableAlias[],
   resources: readonly VariableResource[] = [],
+  statements: readonly VariableStatement[] = [],
 ): TlaStaticRead[] | null {
   const tree = getAst(db, file);
   if (!tree) return null;
@@ -893,6 +951,7 @@ function collectAstReads(
     if (node.startPosition.row > endLine || node.endPosition.row < startLine) return;
     recordReadNode(db, file, node, aliases, reads);
     recordResourceCallNode(db, file, node, resources, 'read', reads);
+    recordStatementCallNode(db, file, node, statements, 'read', reads);
     for (const child of node.children) visit(child);
   };
   visit(tree.rootNode);
@@ -1003,6 +1062,84 @@ function fsCallName(target: SyntaxNode): string | null {
   return null;
 }
 
+/**
+ * Q2 / statement-alias tier: classifies a call expression's string-literal
+ * or template-literal arguments as a write or read of a statement-bound
+ * variable (`variables.<v>.statements`). Unlike `recordResourceCallNode`,
+ * this is not restricted to a callee allowlist — SQL execution APIs vary
+ * (`.prepare`, `.exec`, `.run`, tagged templates) — so every argument of
+ * every call is a candidate; classification comes from the matched text's
+ * leading SQL verb, not the callee name.
+ */
+function recordStatementCallNode(
+  db: ScipDatabase,
+  file: string,
+  node: SyntaxNode,
+  statements: readonly VariableStatement[],
+  mode: 'write',
+  out: TlaStaticWrite[],
+): void;
+function recordStatementCallNode(
+  db: ScipDatabase,
+  file: string,
+  node: SyntaxNode,
+  statements: readonly VariableStatement[],
+  mode: 'read',
+  out: TlaStaticRead[],
+): void;
+function recordStatementCallNode(
+  db: ScipDatabase,
+  file: string,
+  node: SyntaxNode,
+  statements: readonly VariableStatement[],
+  mode: 'read' | 'write',
+  out: (TlaStaticWrite | TlaStaticRead)[],
+): void {
+  if (statements.length === 0 || node.type !== 'call_expression') return;
+  const args = node.childForFieldName('arguments');
+  if (!args) return;
+  for (const arg of args.namedChildren) {
+    const text = staticStringText(arg);
+    if (text === null) continue;
+    if (classifySqlVerb(text) !== mode) continue;
+    for (const statement of statements) {
+      if (!statement.regex.test(text)) continue;
+      const enclosing = enclosingSymbolForLine(db, file, node.startPosition.row);
+      const target = node.childForFieldName('function') ?? node.namedChild(0);
+      const callLabel = (target && fsCallName(target)) ?? 'call';
+      out.push({
+        variable: statement.variable,
+        alias: statement.pattern,
+        file,
+        line: node.startPosition.row,
+        target: `${callLabel}(${truncateStatementText(text)})`,
+        kind: 'statement',
+        enclosingSymbol: enclosing?.symbol,
+        enclosingShort: enclosing ? shortenSymbol(enclosing.symbol) : undefined,
+      });
+    }
+  }
+}
+
+/**
+ * Static text of a string literal (`string`) or template literal
+ * (`template_string`) node — the concatenated `string_fragment` children,
+ * dropping `${...}` interpolations entirely. Returns null for any other
+ * node type (most call arguments are not string-shaped at all).
+ */
+function staticStringText(node: SyntaxNode): string | null {
+  if (node.type !== 'string' && node.type !== 'template_string') return null;
+  return node.namedChildren
+    .filter((child) => child.type === 'string_fragment')
+    .map((child) => child.text)
+    .join('');
+}
+
+function truncateStatementText(text: string): string {
+  const collapsed = text.replace(/\s+/g, ' ').trim();
+  return collapsed.length > 80 ? `${collapsed.slice(0, 80)}…` : collapsed;
+}
+
 function recordReadNode(
   db: ScipDatabase,
   file: string,
@@ -1103,6 +1240,7 @@ function collectSourceScanWrites(
   endLine: number,
   aliases: readonly VariableAlias[],
   resources: readonly VariableResource[] = [],
+  statements: readonly VariableStatement[] = [],
 ): TlaStaticWrite[] {
   const source = readFileSync(join(db.config.projectRoot, file), 'utf8');
   const lines = source.split(/\r?\n/);
@@ -1129,6 +1267,7 @@ function collectSourceScanWrites(
       });
     }
     recordSourceScanResourceCall(db, file, line, text, resources, FS_WRITE_CALLS, writes);
+    recordSourceScanStatementCall(db, file, line, text, statements, 'write', writes);
   }
   return uniqueWrites(writes);
 }
@@ -1140,6 +1279,7 @@ function collectSourceScanReads(
   endLine: number,
   aliases: readonly VariableAlias[],
   resources: readonly VariableResource[] = [],
+  statements: readonly VariableStatement[] = [],
 ): TlaStaticRead[] {
   const source = readFileSync(join(db.config.projectRoot, file), 'utf8');
   const lines = source.split(/\r?\n/);
@@ -1164,6 +1304,7 @@ function collectSourceScanReads(
       });
     }
     recordSourceScanResourceCall(db, file, line, text, resources, FS_READ_CALLS, reads);
+    recordSourceScanStatementCall(db, file, line, text, statements, 'read', reads);
   }
   return uniqueReads(reads);
 }
@@ -1202,6 +1343,40 @@ function recordSourceScanResourceCall(
         enclosingShort: enclosing ? shortenSymbol(enclosing.symbol) : undefined,
       });
     }
+  }
+}
+
+/**
+ * Regex-fallback counterpart of `recordStatementCallNode` for files without
+ * an AST. Cruder than the AST path — no call-argument boundary parsing, and
+ * a multi-line template-literal SQL statement whose leading verb is on an
+ * earlier line will not classify — but keeps the same evidence tier and
+ * pattern-match contract.
+ */
+function recordSourceScanStatementCall(
+  db: ScipDatabase,
+  file: string,
+  line: number,
+  text: string,
+  statements: readonly VariableStatement[],
+  mode: 'read' | 'write',
+  out: (TlaStaticWrite | TlaStaticRead)[],
+): void {
+  if (statements.length === 0) return;
+  if (classifySqlVerb(text) !== mode) return;
+  for (const statement of statements) {
+    if (!statement.regex.test(text)) continue;
+    const enclosing = enclosingSymbolForLine(db, file, line);
+    out.push({
+      variable: statement.variable,
+      alias: statement.pattern,
+      file,
+      line,
+      target: text.trim(),
+      kind: 'statement',
+      enclosingSymbol: enclosing?.symbol,
+      enclosingShort: enclosing ? shortenSymbol(enclosing.symbol) : undefined,
+    });
   }
 }
 

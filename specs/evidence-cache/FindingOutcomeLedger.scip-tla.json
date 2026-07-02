@@ -10,10 +10,7 @@
   "variables": {
     "ledger": {
       "code": ["src/storage/evidence-cache.ts/CONNECTIONS"],
-      "aliases": ["findingOutcomeLedgerRowsModelOnly"],
-      "waive": {
-        "reason": "The ledger rows live in the SQL table finding_outcome_ledger behind prepared statements; no TypeScript assignment stores the row set as a value-like symbol."
-      }
+      "statements": [{ "pattern": "finding_outcome_ledger" }]
     },
     "outcome": {
       "code": ["src/queries/health/finding-outcome-ledger.ts/FindingOutcome"],
@@ -91,18 +88,9 @@
         "resurrectionSeen"
       ],
       "waive": {
-        "reads": ["ledger", "resolvedEver", "resurrectionSeen"],
-        "writes": [
-          "ledger",
-          "resolvedEver",
-          "now",
-          "phase",
-          "storedRows",
-          "maxRowsForCheck",
-          "resolvedRows",
-          "resurrectionSeen"
-        ],
-        "reason": "This TLA action composes pure transition and SQL persistence. recordFindingOutcomes reads previous rows and observed findings, while writeFindingOutcomeLedger persists SQL rows and applies the cap. ledger is SQL-backed; resolvedEver and scalar projections are model-only."
+        "reads": ["resolvedEver", "resurrectionSeen"],
+        "writes": ["resolvedEver", "now", "phase", "storedRows", "maxRowsForCheck", "resolvedRows", "resurrectionSeen"],
+        "reason": "This TLA action composes pure transition and SQL persistence. recordFindingOutcomes reads previous rows and observed findings, while writeFindingOutcomeLedger persists SQL rows and applies the cap. ledger is SQL-backed and proven via the statements binding (Q2); resolvedEver and scalar projections are model-only."
       }
     },
     "ObserveSuppressedCurrent": {
@@ -125,17 +113,8 @@
         "resurrectionSeen"
       ],
       "waive": {
-        "reads": ["ledger", "resolvedEver", "resurrectionSeen"],
-        "writes": [
-          "ledger",
-          "resolvedEver",
-          "now",
-          "phase",
-          "storedRows",
-          "maxRowsForCheck",
-          "resolvedRows",
-          "resurrectionSeen"
-        ],
+        "reads": ["resolvedEver", "resurrectionSeen"],
+        "writes": ["resolvedEver", "now", "phase", "storedRows", "maxRowsForCheck", "resolvedRows", "resurrectionSeen"],
         "reason": "Same transition/persistence composition as ObserveOpenCurrent; the only semantic difference is suppressed observed input selecting outcome 'suppressed'."
       }
     },
@@ -159,9 +138,8 @@
         "resurrectionSeen"
       ],
       "waive": {
-        "reads": ["ledger", "lastSeen", "resolvedEver", "resurrectionSeen"],
+        "reads": ["lastSeen", "resolvedEver", "resurrectionSeen"],
         "writes": [
-          "ledger",
           "lastSeen",
           "resolvedEver",
           "now",
@@ -203,17 +181,8 @@
         "resurrectionSeen"
       ],
       "waive": {
-        "reads": ["ledger", "resolvedEver"],
-        "writes": [
-          "ledger",
-          "resolvedEver",
-          "now",
-          "phase",
-          "storedRows",
-          "maxRowsForCheck",
-          "resolvedRows",
-          "resurrectionSeen"
-        ],
+        "reads": ["resolvedEver"],
+        "writes": ["resolvedEver", "now", "phase", "storedRows", "maxRowsForCheck", "resolvedRows", "resurrectionSeen"],
         "reason": "Regression action: widens the modeled environment by re-observing an identity after it reached resolved. This is not an accepted CurrentSpec behavior; it exists so NoResurrectedResolutions is falsifiable."
       }
     },
@@ -236,17 +205,8 @@
         "resurrectionSeen"
       ],
       "waive": {
-        "reads": ["ledger", "resolvedEver"],
-        "writes": [
-          "ledger",
-          "resolvedEver",
-          "now",
-          "phase",
-          "storedRows",
-          "maxRowsForCheck",
-          "resolvedRows",
-          "resurrectionSeen"
-        ],
+        "reads": ["resolvedEver"],
+        "writes": ["resolvedEver", "now", "phase", "storedRows", "maxRowsForCheck", "resolvedRows", "resurrectionSeen"],
         "reason": "Regression action mirroring ObserveResolvedOpenVulnerable for suppressed observations."
       }
     },
@@ -269,17 +229,8 @@
         "resurrectionSeen"
       ],
       "waive": {
-        "reads": ["ledger", "resolvedEver", "resurrectionSeen"],
-        "writes": [
-          "ledger",
-          "resolvedEver",
-          "now",
-          "phase",
-          "storedRows",
-          "maxRowsForCheck",
-          "resolvedRows",
-          "resurrectionSeen"
-        ],
+        "reads": ["resolvedEver", "resurrectionSeen"],
+        "writes": ["resolvedEver", "now", "phase", "storedRows", "maxRowsForCheck", "resolvedRows", "resurrectionSeen"],
         "reason": "Regression action: models deleting/reinserting rows without the sort(...).slice(FINDING_OUTCOME_LEDGER_CAP_PER_CHECK) cap. The current code's line 520 slice is the protection this action removes."
       }
     }

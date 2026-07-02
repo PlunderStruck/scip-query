@@ -210,6 +210,77 @@ Enqueue(job) == queue' = Append(queue, job)
     );
   });
 
+  it('parses a statement binding on a variable', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Ledger.scip-tla.json'),
+      JSON.stringify({
+        variables: {
+          ledger: { code: ['src/db.ts/CONNECTIONS'], statements: [{ pattern: 'finding_outcome_ledger' }] },
+        },
+        actions: { Write: { code: ['src/db.ts/write'], writes: ['ledger'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Ledger.scip-tla.json');
+
+    expect(loaded.errors).toEqual([]);
+    expect(loaded.loaded?.contract.variables.ledger?.statements).toEqual([{ pattern: 'finding_outcome_ledger' }]);
+  });
+
+  it('rejects a statement binding with no pattern', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Broken.scip-tla.json'),
+      JSON.stringify({
+        variables: { ledger: { code: ['src/db.ts/CONNECTIONS'], statements: [{ pattern: '' }] } },
+        actions: { Write: { code: ['src/db.ts/write'], writes: ['ledger'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Broken.scip-tla.json');
+
+    expect(loaded.loaded).toBeUndefined();
+    expect(loaded.errors).toContain('variables.ledger.statements[0].pattern must be a non-empty string');
+  });
+
+  it('rejects a statement binding with an invalid regular expression pattern', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Broken.scip-tla.json'),
+      JSON.stringify({
+        variables: { ledger: { code: ['src/db.ts/CONNECTIONS'], statements: [{ pattern: '[unterminated' }] } },
+        actions: { Write: { code: ['src/db.ts/write'], writes: ['ledger'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Broken.scip-tla.json');
+
+    expect(loaded.loaded).toBeUndefined();
+    expect(loaded.errors[0]).toContain('variables.ledger.statements[0].pattern is not a valid regular expression');
+  });
+
+  it('rejects two variables sharing a statement pattern', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Broken.scip-tla.json'),
+      JSON.stringify({
+        variables: {
+          ledger: { code: ['src/db.ts/CONNECTIONS'], statements: [{ pattern: 'finding_outcome_ledger' }] },
+          other: { code: ['src/db.ts/OTHER'], statements: [{ pattern: 'finding_outcome_ledger' }] },
+        },
+        actions: { Write: { code: ['src/db.ts/write'], writes: ['ledger'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Broken.scip-tla.json');
+
+    expect(loaded.loaded).toBeUndefined();
+    expect(loaded.errors).toContain(
+      'variables ledger, other share statement pattern "finding_outcome_ledger" — conformance scanning cannot attribute a matching write/read to one variable unambiguously',
+    );
+  });
+
   it('defaults unmappedWriteScope to "scope-files" and accepts an explicit "actions" (P5.7 / followup #19)', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
     writeFileSync(

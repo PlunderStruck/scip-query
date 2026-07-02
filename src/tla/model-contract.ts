@@ -16,6 +16,19 @@ export interface TlaResourceBinding {
 }
 
 /**
+ * Q2 / statement-alias tier: binds a variable to SQL-backed state. A call
+ * expression argument whose static string text (a string literal, or the
+ * static fragments of a template literal — interpolations excluded) matches
+ * `pattern` is classified by leading SQL verb: INSERT/UPDATE/DELETE/REPLACE
+ * is a write, SELECT is a read. `pattern` is compiled as a RegExp, so a
+ * plain substring (e.g. a table name) works unescaped. Evidence tier stays
+ * `static-action`, mirroring `TlaResourceBinding`.
+ */
+export interface TlaStatementBinding {
+  pattern: string;
+}
+
+/**
  * Exempts a variable's `missing-referent`/`invalid-referent-kind` findings
  * (P5.2 / followup #17) — for state materialized only via a process exit
  * code, a literal, or another concept with no direct stored-field twin.
@@ -32,6 +45,8 @@ export interface TlaVariableMapping {
   projection?: string;
   /** Binds this variable to filesystem state (lock files, published artifacts). */
   resource?: TlaResourceBinding;
+  /** Binds this variable to SQL-backed state (prepared statements). */
+  statements?: TlaStatementBinding[];
   waive?: TlaVariableWaiver;
 }
 
@@ -285,6 +300,9 @@ function parseUnmappedWriteScope(raw: unknown, errors: string[]): TlaUnmappedWri
 function validateNoVariableCollisions(variables: Record<string, TlaVariableMapping>, errors: string[]): void {
   reportCollisions(variables, errors, 'alias', (mapping) => mapping.aliases);
   reportCollisions(variables, errors, 'resource path', (mapping) => (mapping.resource ? [mapping.resource.path] : []));
+  reportCollisions(variables, errors, 'statement pattern', (mapping) =>
+    mapping.statements ? mapping.statements.map((statement) => statement.pattern) : [],
+  );
 }
 
 function reportCollisions(
@@ -332,12 +350,14 @@ function parseVariables(raw: unknown, errors: string[]): Record<string, TlaVaria
     }
     const aliases = stringArray(value.aliases) ?? [];
     const resource = parseResourceBinding(value.resource, name, errors);
+    const statements = parseStatementBindings(value.statements, name, errors);
     const waive = parseVariableWaiver(value.waive, name, errors);
     out[name] = {
       code,
       aliases: [...new Set([name, ...aliases])],
       projection: typeof value.projection === 'string' ? value.projection : undefined,
       ...(resource ? { resource } : {}),
+      ...(statements ? { statements } : {}),
       ...(waive ? { waive } : {}),
     };
   }
@@ -356,6 +376,41 @@ function parseResourceBinding(raw: unknown, variableName: string, errors: string
     return undefined;
   }
   return { path };
+}
+
+function parseStatementBindings(
+  raw: unknown,
+  variableName: string,
+  errors: string[],
+): TlaStatementBinding[] | undefined {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) {
+    errors.push(`variables.${variableName}.statements must be an array when present`);
+    return undefined;
+  }
+  const out: TlaStatementBinding[] = [];
+  raw.forEach((entry, index) => {
+    if (!isRecord(entry)) {
+      errors.push(`variables.${variableName}.statements[${index}] must be an object`);
+      return;
+    }
+    const pattern = typeof entry.pattern === 'string' ? entry.pattern.trim() : '';
+    if (!pattern) {
+      errors.push(`variables.${variableName}.statements[${index}].pattern must be a non-empty string`);
+      return;
+    }
+    try {
+      new RegExp(pattern);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(
+        `variables.${variableName}.statements[${index}].pattern is not a valid regular expression: ${message}`,
+      );
+      return;
+    }
+    out.push({ pattern });
+  });
+  return out.length > 0 ? out : undefined;
 }
 
 function parseVariableWaiver(raw: unknown, variableName: string, errors: string[]): TlaVariableWaiver | undefined {
