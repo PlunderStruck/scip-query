@@ -12,7 +12,7 @@ import {
   isCoChangeNoiseFile,
 } from './co-change.js';
 import type { CoChangePartnerClass, DeclaredCouplingSuggestion } from './co-change.js';
-import { baseContentPathsForDiffPlan, createBaseContentReader, diffImpact, diffImpactPlan } from './diff-impact.js';
+import { GIT_DIFF_UNAVAILABLE_NOTE, baseContentPathsForDiffPlan, createBaseContentReader, diffImpact, diffImpactPlan } from './diff-impact.js';
 import type { AttributionNote, BaseContentReader, ChangedLineRange, DiffImpactPlan } from './diff-impact.js';
 import { baselineFindingMetadata } from './diff-gate-baseline-policy.js';
 import { docReferencePolicy, isSnapshotDoc } from './diff-gate-doc-policy.js';
@@ -297,6 +297,17 @@ export function diffGate(
  * diff with only advisory findings must exit 0 — see the `advisory` field
  * doc comment on `DiffGateFinding`.
  */
+/**
+ * True when the gate could not run at all (git diff unavailable — e.g. a
+ * diff larger than the exec buffer, a bad --base ref, or git missing) and
+ * therefore ran zero checks. Consumers MUST fail closed on this: a gate
+ * that silently passes because it could not look is not a gate.
+ * Discovered on the 2026-07-01 Vega calibration run (8,099-file commit).
+ */
+export function diffGateFailedClosed(result: DiffGateResult): boolean {
+  return result.checksRun.length === 0 && result.note === GIT_DIFF_UNAVAILABLE_NOTE;
+}
+
 export function blockingFindings(findings: readonly DiffGateFinding[]): DiffGateFinding[] {
   return findings.filter((finding) => !finding.advisory);
 }

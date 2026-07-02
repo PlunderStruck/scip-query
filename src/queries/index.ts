@@ -35,7 +35,7 @@ export { localityCandidates } from './cleanup/locality-candidates.js';
 export { affected } from './graph/affected.js';
 export { changeSurface } from './impact/change-surface.js';
 export { cleanupPlan } from './cleanup/cleanup-plan.js';
-export { DIFF_GATE_CHECKS, diffGate, blockingFindings } from './impact/diff-gate.js';
+export { DIFF_GATE_CHECKS, diffGate, blockingFindings, diffGateFailedClosed } from './impact/diff-gate.js';
 export { incompleteMigration } from './impact/incomplete-migration.js';
 export { coChange } from './impact/co-change.js';
 export { docDrift } from './cleanup/doc-drift.js';

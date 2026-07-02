@@ -241,17 +241,20 @@ function getChangedFiles(projectRoot: string, base: string): string[] {
   const diff = execFileSync('git', ['diff', '--name-only', base], {
     encoding: 'utf-8',
     cwd: projectRoot,
-    timeout: 10_000,
+    timeout: 30_000,
+    maxBuffer: 64 * 1024 * 1024,
   });
   const staged = execFileSync('git', ['diff', '--name-only', '--cached', base], {
     encoding: 'utf-8',
     cwd: projectRoot,
-    timeout: 10_000,
+    timeout: 30_000,
+    maxBuffer: 64 * 1024 * 1024,
   });
   const untracked = execFileSync('git', ['ls-files', '--others', '--exclude-standard'], {
     encoding: 'utf-8',
     cwd: projectRoot,
-    timeout: 10_000,
+    timeout: 30_000,
+    maxBuffer: 64 * 1024 * 1024,
   });
 
   return [
@@ -268,12 +271,14 @@ function getChangedLineRanges(projectRoot: string, base: string): ChangedLineRan
   const diff = execFileSync('git', ['diff', '--unified=0', base], {
     encoding: 'utf-8',
     cwd: projectRoot,
-    timeout: 10_000,
+    timeout: 30_000,
+    maxBuffer: 64 * 1024 * 1024,
   });
   const staged = execFileSync('git', ['diff', '--unified=0', '--cached', base], {
     encoding: 'utf-8',
     cwd: projectRoot,
-    timeout: 10_000,
+    timeout: 30_000,
+    maxBuffer: 64 * 1024 * 1024,
   });
 
   return dedupeRanges([...parseChangedLineRanges(diff), ...parseChangedLineRanges(staged)]);
@@ -418,12 +423,14 @@ function getDeletedFiles(projectRoot: string, base: string): string[] {
   const diff = execFileSync('git', ['diff', '--name-only', '--diff-filter=D', base], {
     encoding: 'utf-8',
     cwd: projectRoot,
-    timeout: 10_000,
+    timeout: 30_000,
+    maxBuffer: 64 * 1024 * 1024,
   });
   const staged = execFileSync('git', ['diff', '--name-only', '--diff-filter=D', '--cached', base], {
     encoding: 'utf-8',
     cwd: projectRoot,
-    timeout: 10_000,
+    timeout: 30_000,
+    maxBuffer: 64 * 1024 * 1024,
   });
   return [...new Set([...lines(diff), ...lines(staged)])];
 }
@@ -432,12 +439,14 @@ function gitReportedRenames(projectRoot: string, base: string): RenamedFile[] {
   const unstaged = execFileSync('git', ['diff', '--name-status', '--find-renames', base], {
     encoding: 'utf-8',
     cwd: projectRoot,
-    timeout: 10_000,
+    timeout: 30_000,
+    maxBuffer: 64 * 1024 * 1024,
   });
   const staged = execFileSync('git', ['diff', '--name-status', '--find-renames', '--cached', base], {
     encoding: 'utf-8',
     cwd: projectRoot,
-    timeout: 10_000,
+    timeout: 30_000,
+    maxBuffer: 64 * 1024 * 1024,
   });
   return [...unstaged.split('\n'), ...staged.split('\n')]
     .map((line) => line.trim())

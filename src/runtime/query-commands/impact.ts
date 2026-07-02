@@ -228,14 +228,16 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
     skip: parseSkipChecks(opts['skip']),
   });
   const blocking = queries.blockingFindings(result.findings);
+  const gateFailed = queries.diffGateFailedClosed(result);
   if (!hookMode && booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('diff-gate', [], opts, {
-      exitCode: blocking.length > 0 ? 1 : 0,
+      exitCode: blocking.length > 0 || gateFailed ? 1 : 0,
+      ...(gateFailed ? { gateError: 'git diff unavailable - zero checks ran; the gate fails closed' } : {}),
       advisoryFindingCount: result.findings.length - blocking.length,
       ...(budget.analysisBudget ? { analysisBudget: budget.analysisBudget } : {}),
       ...result,
     });
-    if (blocking.length > 0) process.exitCode = 1;
+    if (blocking.length > 0 || gateFailed) process.exitCode = 1;
     return;
   }
   if (hookMode) {
@@ -257,6 +259,13 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
     // exit 2 with stderr = block and feed the reason back to the agent.
     // Advisory-only findings (e.g. twin-partner) never block the stop —
     // see the `advisory` field doc comment on DiffGateFinding.
+    if (gateFailed) {
+      console.error(
+        'diff gate FAILED CLOSED: could not compute the git diff (diff too large, bad --base, or git error) - zero checks ran. Investigate with: scip-query diff-gate',
+      );
+      process.exitCode = 2;
+      return;
+    }
     if (blocking.length === 0) return;
     const streakLine = formatUnresolvedStreakLine(ledger, observed, now);
     const nudgeLines = formatLowResolutionNudges(ledger, result.checksRun);
@@ -269,6 +278,13 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
     ];
     console.error(lines.join('\n'));
     process.exitCode = 2;
+    return;
+  }
+  if (gateFailed) {
+    console.error(
+      'FAIL (gate error): could not compute the git diff - zero checks ran; the gate fails closed. Check --base and repository state.',
+    );
+    process.exitCode = 1;
     return;
   }
   if (result.changedFiles.length === 0) {
