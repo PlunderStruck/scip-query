@@ -43,7 +43,7 @@ Model the part with the most dangerous interleavings — retries, concurrency, p
 ## Loop
 
 1. Explore the target with `scip-query plan-context <target>`, `system`, `trace`, `call-graph`, and `dataflow` until state and transitions are concrete.
-2. Run `scip-query tla scaffold <file>` to generate the draft spec, config, and mapping (`--out` must stay inside the project root). Resolve every `TODO` it emits: guards, domains, initial values. The scaffold derives _what_ changes; you supply _when_ it may. `tla verify` does not detect unfilled `TODO`s and will report PASS on a placeholder model — grep the spec for `TODO` before trusting a green run.
+2. Run `scip-query tla scaffold <file>` to generate the draft spec, config, and mapping (`--out` must stay inside the project root). Resolve every `TODO` it emits: guards, domains, initial values. The scaffold derives _what_ changes; you supply _when_ it may. TRIAGE the output first: if the discovered variables are mostly constants and the system's real state lives in files or a database (locks, caches, published artifacts), keep the mapping referents but discard the scaffolded variable set — hand-model the protocol's conceptual state and bind it with `resource` aliases instead. `tla verify` does not detect unfilled `TODO`s and will report PASS on a placeholder model — grep the spec for `TODO` before trusting a green run.
 3. Strengthen the model per the quality rules below.
 4. Run `scip-query tla verify <spec> --map <map> --config <cfg>`. Read the Proof line: every waiver must carry a reason you would defend in review.
 5. Wire the recorder from `scip-query tla instrument`, run the existing tests with `SCIP_TLA_TRACE=<path>`, then run `scip-query tla trace-check <spec> --trace <path>`. Acceptance means the code's observed behavior is a behavior of the model; divergence names the step to investigate. Modeling a fix-vs-regression pair as two named `Next` relations in one spec (e.g. `NextCurrent`/`NextVulnerable`)? Pass `--next <operator>` to pick which one the trace must satisfy — the harness defaults to a bare `Next`, which such specs deliberately don't define.
@@ -56,6 +56,7 @@ The loop is complete only when `tla verify` passes with reasoned waivers, at lea
 
 - **TypeOK first.** Write the type invariant before any property; it catches most modeling mistakes at the lowest checking cost.
 - **Every invariant needs a failure story.** Before running TLC, write down the concrete scenario that would violate it. If no scenario exists, the invariant is decorative — delete or replace it.
+- **Falsify every invariant individually.** One break-test is not enough: for EACH invariant there must be a documented variant or mutation under which TLC refutes it (the CurrentSpec/VulnerableSpec pattern makes this permanent instead of a throwaway edit). An invariant no variant can violate is decorative — delete or redesign it.
 - **Break the model on purpose.** After the first green run, remove one guard or widen one domain and confirm TLC catches it. A spec that cannot fail proves nothing. Restore it afterward.
 - **Safety before liveness.** Add fairness only when a liveness property demands it; check deadlock unless termination is intended.
 - **Bound the space deliberately.** Small symbolic constant sets, symmetry where sound, sequences kept short. Nondeterministic `\in` transitions from the scaffold are permissive placeholders — tighten them to concrete transitions as you learn the code.
@@ -111,6 +112,13 @@ A regression model is a small TLA+ module or checker config derived from a count
 `variables.<v>.waive: {reason}` exempts that one variable's `missing-referent`/`invalid-referent-kind` findings — for state that genuinely has no code twin (a pure control-flow position, a derived decision, a value observable only through `process.exitCode`). It does not exempt read/write facts; those stay on the action's own `waive`. Prefer this over the old workaround of citing an unrelated real symbol just to satisfy the value-like-kind check — name a referent that plainly does not resolve (or does resolve but to the wrong kind) and waive it honestly; a reader should never have to guess that a `code[]` entry is a decoy.
 
 Top-level `"unmappedWriteScope": "actions" | "scope-files"` (default `"scope-files"`) controls how strictly `scope` is enforced: the default requires every function anywhere in `scope` that touches a modeled variable to be mapped as an action, or its write is a hard `unmapped-write` error. Set `"actions"` to opt out of that whole-file sweep when `scope` legitimately contains code the mapping was never meant to cover in full — only the per-action write/read checks still run.
+
+## Mapping Discipline
+
+- **Alias selection is the sharpest knife.** Never alias a variable to a ubiquitous local identifier (`connection`, `result`, `data`) — every function touching that local gets misattributed across actions. For state with no code twin, use a deliberately unmatchable alias (e.g. `evidenceRowsModelOnly`) so the static layer neither proves nor pollutes, and let the reasoned waiver carry the fact.
+- **Know the three state backings.** Program variables: normal aliases. Filesystem-backed state (locks, published artifacts): `resource: { "path": ... }` bindings make fs calls provable. Database/SQL-backed state: statically invisible — unmatchable alias plus a waiver naming the residual class; never fake attribution.
+- **Lazy initialization is Init, not an action.** A factory that lazily builds state corresponds to the model's `Init`; mappings cannot bind Init to referents, so do not map the factory as an action — waive with that reason, and use `unmappedWriteScope: "actions"` when whole-file sweeps only re-find Init writes.
+- **Design for traces early.** The trace encoder pins scalar (and scalar-array) variables only; a model whose state is all functions and tuple-sets cannot be trace-validated. If trace-check matters for the slice, add scalar projection variables (counts, last outcomes, a phase) alongside the structured state.
 
 ## Accuracy Rules
 
