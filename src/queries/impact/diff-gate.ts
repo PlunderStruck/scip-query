@@ -12,7 +12,13 @@ import {
   isCoChangeNoiseFile,
 } from './co-change.js';
 import type { CoChangePartnerClass, DeclaredCouplingSuggestion } from './co-change.js';
-import { GIT_DIFF_UNAVAILABLE_NOTE, baseContentPathsForDiffPlan, createBaseContentReader, diffImpact, diffImpactPlan } from './diff-impact.js';
+import {
+  GIT_DIFF_UNAVAILABLE_NOTE,
+  baseContentPathsForDiffPlan,
+  createBaseContentReader,
+  diffImpact,
+  diffImpactPlan,
+} from './diff-impact.js';
 import type { AttributionNote, BaseContentReader, ChangedLineRange, DiffImpactPlan } from './diff-impact.js';
 import { baselineFindingMetadata } from './diff-gate-baseline-policy.js';
 import { docReferencePolicy, isSnapshotDoc } from './diff-gate-doc-policy.js';
