@@ -80,3 +80,8 @@ up, write a real plan section (`concrete-plan`), and implement independently.
    source-fallback evidence).
    Source: `docs/plans/2026-07-01-remediation-3-detection-primitives-and-lens-skills.md`,
    "Deviations from plan anchors" note for step 19.3.
+
+10. tla tool-runner classifies SIGTERM-at-timeout TLC runs (exit 143, timedOut false) as `failed` instead of `timed-out` (Vega TLA audit, GitHubWebhookIndexingPipeline).
+11. `tla verify` lacks a `--timeout-ms` flag though TlaToolRunOptions.timeoutMs exists — big models cannot raise the 120s TLC budget (Vega TLA audit).
+12. tla verify output needs root-cause grouping/caps at avalanche scale — 10,724 findings on one model is unconsumable (Vega TLA audit, AuthRefreshCompanionAuthorization).
+
