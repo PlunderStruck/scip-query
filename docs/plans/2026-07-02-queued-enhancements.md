@@ -13,6 +13,13 @@ steps here.
 
 ## Q1 — twin-drift → health integration
 
+**DONE (commit d4f0aea4)** — new `twin-drift` health phase counts divergent+identical twin
+groups via `allTwinGroups` under the shared `candidateScanLimit` budget (no bespoke cached
+product needed: the sidecar whole-report cache already makes the warm path
+detector-cost-independent); `HEALTH_REPORT_CACHE_VERSION` bumped 1→2. This repo: score 99→95
+(31 groups now visible), warm path unchanged (~0.17s median before and after),
+`health --json` byte-identical across repeated runs.
+
 - **What**: `health` has no dimension for drifted same-name twins even though `twin-drift`
   (post-delegation-exclusion, post-`<constructor>` retune) is now high-precision. Health consumers
   never see concept drift.
@@ -34,6 +41,12 @@ steps here.
   anywhere (check coverage contracts — enumeration rot is a gate check).
 
 ## Q2 — TLA statement-alias tier for SQL-backed state
+
+**DONE (commit 975b5739)** — `variables.<v>.statements: [{ "pattern": ... }]` classifies a call
+argument's static string/template text by leading SQL verb (INSERT/UPDATE/DELETE/REPLACE=write,
+SELECT=read); same collision rule as resource paths. FindingOutcomeLedger remapped from
+unmatchable-alias+waiver to a statements binding: waivers 78→65, writes verified 6→8, reads
+verified 15→16, referent waivers 7→6, `tla verify` PASS retained.
 
 - **What**: SQL/prepared-statement-backed state is statically invisible today; the skill mandates
   unmatchable alias + waiver (Mapping Discipline, "three state backings"). The finding-outcome
@@ -57,6 +70,14 @@ steps here.
 
 ## Q3 — TLA Init-binding support
 
+**DONE (commit 46daeb63)** — top-level `init: { codeRefs: [...], waive? }` parsed like an action
+mapping; writes inside an Init referent are excluded from the unmapped-write sweep; init/action
+codeRef overlap rejected at load. EvidenceCacheCoherence remapped: `connectionFor` bound to init,
+DisabledServeAttempt's lazy-init waiver removed, and `unmappedWriteScope: "actions"` dropped
+entirely (it existed solely for the lazy-init workaround — the full scope-files sweep now stays
+clean). Waivers 17→16, PASS retained. Skill bullet updated: map the factory to `init`, never to
+an action.
+
 - **What**: mappings cannot bind the model's `Init` to code referents, so lazy-init factories are
   waived and whole-file sweeps need `unmappedWriteScope: "actions"` as a workaround (skill Mapping
   Discipline, "Lazy initialization is Init"; exemplar's `DisabledServeAttempt` misattribution came
@@ -76,6 +97,14 @@ steps here.
   now bind Init; the rule becomes "map the factory to init, never to an action."
 
 ## Q4 — behavioral A/B scaffold (`twin-ab`)
+
+**DONE (commit aaeb5cbe)** — `scip-query twin-ab <symbolA> <symbolB> [--out] [--force]` with the
+full registration ripple (descriptor, handler, queryCommandOrder, queries/index export,
+docs:commands regeneration, integrity-audit skill shortlist + drill-5 sentence). Deviation from
+plan assumption, found by validating against this repo's real index: `global_symbols.kind` is
+null on all 16,370 rows of the real scip-typescript output, so callability now falls back to
+`isFunctionLikeSymbol` when kind is null (locked in by null-kind fixtures). Generated scaffold
+for a real exported pair passes `tsc --noEmit --strict` against the real project types.
 
 - **What**: scip-integrity-audit drill 5 ("cross-examine same-concept twins: feed both the same
   input and require the same answer") has no mechanical support — deferred as "behavioral A/B" in
@@ -97,6 +126,20 @@ steps here.
   `tla instrument` TS-compile regression test — that bug shipped uncompilable generated code once
   already); non-exported symbol refused with actionable message; docs/commands regenerated.
 - **Docs**: scip-integrity-audit drill 5 gains one sentence pointing at `twin-ab`.
+
+## Batch close-out (2026-07-02)
+
+`scip-query diff-gate --base 5ca354e4` after the four commits: fixed the one true finding
+(stale line-number citations in `docs/analyzer-validation-ledger.md`: `health()` 210→217,
+`queryCommandDescriptor` 101→104, `queryCommandOrder` 11-75→11-78; also added
+`duplicate-bodies`/`twin-drift`/`twin-ab` to its coverage checklist) and appended the
+conventional follow-up note to `docs/analyzer-inventory.md`. Two residual findings accepted
+with reasons: (1) co-change-partner ledger↔diff-gate.ts — the ledger edit touched only the
+health/command-registry anchor rows; diff-gate.ts was not changed in this batch and its
+citations (`diffGate` at 228, `DIFF_GATE_CHECKS` at 64) verified byte-accurate; (2) advisory
+doc-reference on `docs/architecture/evidence-cache-invalidation.md` — its sidecar-matrix row
+already documents "cache payload version change" as the invalidation trigger generically; the
+version bump 1→2 is that documented trigger firing, not a contract change.
 
 ## Explicitly out of batch
 

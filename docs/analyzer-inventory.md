@@ -227,3 +227,14 @@ left behind by a one-sided edit) and `coverage-contract` (enumeration-rot:
 a configured `coverageContracts` key set drifted from its ground-truth
 source). `HEALTH_PHASES` gained `coverage-contracts`. Both files still own
 their respective canonical lists; only the list contents grew.
+
+## 2026-07-02 Queued Enhancements Follow-Up
+
+The `src/queries/health/health.ts`, `src/queries/public-query-entries.ts`,
+and `src/runtime/commands/query-command-specs.ts` citations remain accurate
+after the queued-enhancements batch (Q1/Q4). `HEALTH_PHASES` gained
+`twin-drift` (divergent/identical same-name twin groups as a hygiene
+dimension), and the public command surface gained `twin-ab` (behavioral A/B
+scaffold generator for scip-integrity-audit drill 5) in `queryCommandOrder`
+and `PUBLIC_QUERY_ENTRIES`. All three files still own their respective
+canonical lists; only the list contents grew.
