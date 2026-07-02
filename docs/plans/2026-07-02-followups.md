@@ -104,9 +104,14 @@ up, write a real plan section (`concrete-plan`), and implement independently.
    Source: `docs/plans/2026-07-01-remediation-3-detection-primitives-and-lens-skills.md`,
    "Deviations from plan anchors" note for step 19.3.
 
-10. tla tool-runner classifies SIGTERM-at-timeout TLC runs (exit 143, timedOut false) as `failed` instead of `timed-out` (Vega TLA audit, GitHubWebhookIndexingPipeline).
-11. `tla verify` lacks a `--timeout-ms` flag though TlaToolRunOptions.timeoutMs exists — big models cannot raise the 120s TLC budget (Vega TLA audit).
-12. tla verify output needs root-cause grouping/caps at avalanche scale — 10,724 findings on one model is unconsumable (Vega TLA audit, AuthRefreshCompanionAuthorization).
+10. **RESOLVED (2026-07-02, remediation 24.1).** tla tool-runner classified SIGTERM-at-timeout TLC
+    runs (exit 143, timedOut false) as `failed` instead of `timed-out`. Fixed: `src/tla/tool-runner.ts:115`
+    treats SIGTERM at/after the requested boundary as timed-out.
+11. **RESOLVED (2026-07-02, remediation 24.x).** `tla verify` now accepts `--timeout-ms <n>`
+    (`src/runtime/query-commands/tla.ts:369`), threaded to TlaToolRunOptions.timeoutMs.
+12. **RESOLVED (2026-07-02, remediation P5).** verify output now emits root-cause finding groups by
+    (category, modelElement) with 3 exemplars each (`src/tla/conformance.ts:59`); `--full` prints
+    every finding ungrouped.
 
 13. **RESOLVED (2026-07-02, remediation P5.1).** `variables.<v>.resource: {path}` binds a variable to
     filesystem state. The conformance scanner (AST + source-scan fallback, both write and read paths)
