@@ -101,14 +101,150 @@ for parallel-by-design.
 
 ## T5 — ACCEPT ledger (remaining groups, each with a defendable reason)
 
-Create/extend a short section in this file listing every group still reported after T1–T4 with
-its acceptance reason. Known entries:
+Verified against source (`scip-query code` / direct reads) after T1–T4 landed. Every group the
+`twin-drift` command still reports (`-s src --limit 50 --include-homonyms`) is below, with the
+disposition and why merging or renaming would be wrong or pointless.
 
-- **parseRubyImportsAst / parseRustImportsAst / parseRustExportsAst** — near-name (edit distance 2) grouping of correctly-named parallel per-language parsers; not a concept twin. Accepted.
-- Anything BLOCKED-noted above.
+- **parseRubyImports / parseRustImports / parseRustExports** (`language-parsers/languages/ruby.ts`,
+  `rust.ts` x2) — near-name (edit-distance) grouping of correctly-named, per-language dispatcher
+  entry points. Each just calls its own language's `*ImportsAst` implementation; nothing to merge.
+  Accepted.
+- **parseRubyImportsAst / parseRustImportsAst / parseRustExportsAst** — near-name (edit distance 2)
+  grouping of correctly-named parallel per-language parsers; not a concept twin. Accepted (plan's
+  original entry, reconfirmed).
+- **handleStats / handleStatus** (`runtime/query-commands/core.ts` vs
+  `runtime/commands/command-handlers.ts`) — coincidental near-name match. `handleStatus` is the
+  real `scip-query status` CLI handler (9L); `handleStats` is an unrelated 1L `dbCommand(...)`
+  descriptor binding for a different command. No shared concept. Accepted.
+- **SOURCE_FILES_CACHE / SOURCE_LINES_CACHE** (`source/source-fileset.ts` vs `source/source-text.ts`)
+  — both are `createPerDbCache` instances following this codebase's `<THING>_CACHE` naming
+  convention (see also `SOURCE_TEXT_CACHE` in the same file), but cache different things: the file
+  list matching an extension/inclusion filter vs. one file's text split into lines. Accepted.
+- **SUPPORTED_LANGUAGES / supportedLanguages** (`runtime/config.ts` constant vs
+  `runtime/commands/command-handlers.ts` filter function) — expected leftover of the T1
+  consolidation: the array is now the single source of truth, and this near-name function is a
+  genuinely different thing (a `(values) => SupportedLanguage[]` filter helper) that happens to
+  share a name stem with it. Accepted.
+- **ensureDir / ensuredDirs** (`runtime/config.ts` function vs `instrumentation/profile.ts` Set
+  variable) — a function that `mkdirSync`s and returns a path, vs. a memoization Set tracking which
+  directories a completely different module has already ensured. Different kind of thing, different
+  file, coincidental name closeness. Accepted.
+- **productionCallableDefinitions** (`core/production-callables.ts` free function vs
+  `core/project-index.ts`'s `ProjectIndex` method) — already an explicitly-annotated
+  `scip-query: ignore-passthrough` facade: the method is a deliberate 1:1 delegating wrapper so
+  `ProjectIndex` stays the stable consumer-facing facade while `production-callables.ts` owns the
+  actual detector policy. Not an accidental duplicate. Accepted.
+- **lineOf** (`language-parsers/languages/javascript-reexports.ts` vs
+  `semantic/typescript/semantic-locations.ts`) — same concept ("what line is this at"), deliberately
+  different mechanisms: the language-parsers copy manually counts `\n` bytes in a raw source string
+  (tree-sitter layer, no other option), the semantic copy calls ts-morph's
+  `SourceFile.getLineAndColumnAtPos` on a real `Node` (only available where a ts-morph `SourceFile`
+  exists). Merging would mean either importing ts-morph into language-parsers (wrong layer, wrong
+  dependency) or losing the ts-morph-native precision. Accepted.
+- **getSourceFiles / getSourceLines** (both `source/source-fileset.ts` / `source/source-text.ts`)
+  — different jobs: the project-wide list of source file paths vs. one file's content split into
+  lines. Accepted.
+- **fileStem / filesKey** (`analysis/git-history.ts`'s `filesKey` vs
+  `queries/cleanup/recent-duplicates.ts`'s `fileStem`) — different jobs: a cache-key builder that
+  joins a sorted file set, vs. a single file's basename-without-extension. Accepted.
+
+Renamed during T4 verification (not left as accepted near-name pairs, since a precise rename was
+cheap and available): `language-parsers/languages/clojure.ts`'s `parseImportClause` ->
+`clojureParseImportClause` (JS/TS sibling parses a raw import-clause string, unrelated), and
+`analysis/framework-patterns.ts`'s `SUPPRESS_COMMENT_RE` -> `DEAD_STALE_SUPPRESS_COMMENT_RE`
+(scoped subset of `source/source-text.ts`'s same-named, broader-category regex).
+
+No BLOCKED-notes were needed — every disposition in T1-T4 was verifiable against source, though
+several corrected the plan's own initial guess (see T6 deviations).
 
 ## T6 — closeout
 
 `scip-query reindex && scip-query diff-gate` (fix or justify), full suite, then record in this
 file: health score before/after, twin-drift group count before/after, and the final ACCEPT
 ledger. Update `docs/benchmarks` only via addendum if any dated scoreboard cites twin counts.
+
+### Closeout results (2026-07-02)
+
+**Health score**: 95/100 -> 98/100 (risk 99 unchanged; hygiene 95 -> 98). Twin-drift score
+penalty: -4 -> -1.
+
+**Twin-drift group count** (`scip-query health` breakdown, the count health scores against):
+32 -> 9 groups. (`twin-drift -s src --limit 50` default divergent-only view: 24 -> 0 groups, all
+consolidated or renamed away. `--include-homonyms` full view, including coincidental near-name
+pairs that were never real twins: not measured at the true start, 22 -> 10 after T1 landed the
+first pass, final 10; the 9 health counts are the subset of those 10 groups health's scorer
+weights, all in the ACCEPT ledger above.)
+
+**Consolidated vs renamed vs accepted**:
+- Consolidated into one canonical implementation (real duplicate code removed): 9 groups --
+  normalizePath (x4->1), isInsideProject (x2->1), CLOJURE_EXTENSIONS (x2->1), formatHealthScore
+  (x2->1), SUPPORTED_LANGUAGES (x2->1), the Clojure reader trio (skipString,
+  isReaderMacroPrefix, isTokenDelimiter; x2->1 each, 3 groups), discoverWorkspacePackages (x2->1).
+- Renamed to domain-qualified/precise names (verified genuinely parallel-by-design or genuinely
+  distinct concepts, not merged): 16 groups -- hasExtension/extensionSetOverlaps, DOC_FILE_PATTERN
+  vs DOC_TAG_PATH_PATTERN, withJsonOption/withMetadataJsonOption, languageForPath trio (x3),
+  compareProfiles (x5), pressureResult, recommendationFor (x3), recommendationKindFor,
+  hasMeaningfulBehaviorOverlap, behaviorReason, REQUEST_CALLS, ROUTE_NAME_TOKENS/ROUTE_PAGE_TOKENS,
+  resolveIndexPaths, namespaceImport/namespaceImports, parseImportClause (Clojure side),
+  SUPPRESS_COMMENT_RE (framework-patterns.ts side).
+- Accepted with a written reason (T5 ledger): 10 groups -- see T5 above.
+
+**Clojure reader trio twin-ab verdicts** (T2, `scip-query twin-ab`, dogfooded):
+- `isReaderMacroPrefix`: disagreed on `'#'`. **source/clojure-facts.ts's side was right** (should
+  include `#`, Clojure's dispatch-macro prefix for `#{}`/`#()`/`#'`/`#"`); the parser's copy was
+  missing it and silently mis-parsed those forms as a bogus one-character `"#"` atom.
+- `isTokenDelimiter`: disagreed on `'"'` and `';'`. **language-parsers/languages/clojure.ts's side
+  was right** (a bare token must terminate at a string or comment boundary with no whitespace);
+  source/clojure-facts.ts's copy was missing both.
+- `skipString`: no disagreement on the shared "end index" semantics across escaped quotes, escaped
+  backslashes, embedded newlines, unicode, and unterminated strings -- source/clojure-facts.ts's
+  extra line-tracking is additive, not diverging.
+- Merged into source/clojure-facts.ts (the pre-existing shared home for `skipLineComment`, per an
+  existing layer-policy comment) with both corrections applied, and locked with
+  `tests/source/clojure-reader-primitives.test.ts` (direct primitive assertions + one end-to-end
+  regression through the real parser for the `#` fix).
+
+**Deviations from the plan's initial dispositions** (all verified against source before acting,
+per the working rules -- none improvised silently):
+- `normalizePath`/`isInsideProject`'s planned canonical home (`src/resolution/path-normalization.ts`)
+  violates the explicit layer policy for two of its callers (`analysis/` and `tla/` may not depend
+  on `resolution/`). Moved the whole module (including the pre-existing `pathsResolveSame`) down to
+  a new `src/source/path-normalization.ts` instead -- the one layer every caller (analysis, tla,
+  reindex, queries, resolution) is already allowed to import.
+- `DOC_FILE_PATTERN` (T1) was planned as a straight merge; source showed the two regexes serve
+  different jobs (doc-drift.ts's is a literal doc-extension test, co-change.ts's is a much broader
+  directory+extension tagging heuristic used alongside sibling `*_FILE_PATTERN` constants). Renamed
+  co-change.ts's copy to `DOC_TAG_PATH_PATTERN` instead of merging.
+- `languageForPath` (T2) was flagged as three maps that "will rot apart," implying eventual merge
+  to the superset; source showed they already serve three incompatible vocabularies (canonical
+  SupportedLanguage enum, a best-effort documents-table tag, and LSP languageId strings). All three
+  renamed, none merged.
+- `resolveIndexPaths` is part of the published `scip-query/runtime` package export -- renaming it
+  (to `resolveIndexStoragePaths`) is a public-API-surface change, accepted here since this pass is
+  explicitly pre-0.11.0-publish prep per the plan header.
+- Two additional near-name pairs were found and resolved while verifying the T5 ledger (not
+  originally enumerated in the plan): `clojure.ts`'s `parseImportClause` ->
+  `clojureParseImportClause`, and `framework-patterns.ts`'s `SUPPRESS_COMMENT_RE` ->
+  `DEAD_STALE_SUPPRESS_COMMENT_RE`.
+- No BLOCKED-notes were required anywhere in T1-T4.
+
+**diff-gate vs 7922f1fd**: 1 blocking finding + 2 advisory, all accepted (not fixed) with reasons:
+- `[co-change-partner]` `src/tla/model-contract.ts` changed without its 100%-coupled test file.
+  The only change to this file was extracting its local `isInsideProject` to the shared
+  `isPathInsideProject` (byte-for-byte identical logic, confirmed by the full suite passing before
+  and after) -- a pure refactor with no observable behavior change, so no test update was needed.
+  Accepted.
+- `[doc-reference]` (advisory) `docs/COMMAND_REFERENCE.md` cites `co-change.ts` for its battery-
+  command disclosure behavior; the only change to that file was the internal `DOC_FILE_PATTERN` ->
+  `DOC_TAG_PATH_PATTERN` rename plus a clarifying comment, which doesn't touch the cited claim.
+  Accepted.
+- `[doc-reference]` (advisory) `docs/architecture/evidence-cache-invalidation.md` cites
+  `framework-patterns.ts` and `react-profile.ts`'s cache-invalidation contract as "source bytes ...
+  change" -- both files' only edits here were identifier renames (`SUPPRESS_COMMENT_RE` ->
+  `DEAD_STALE_SUPPRESS_COMMENT_RE`; `REQUEST_CALLS` -> `REACT_REQUEST_CALLS`), which DO change
+  source bytes, exactly the documented trigger. The doc's claim remains true. Accepted.
+
+**Final gates**: `npx tsc --noEmit` clean, `eslint src tests tsup.config.ts` 0 errors, `npm run
+build` clean, `npm test` 780/780 passing, `npm run lint` clean (prettier + eslint + skill-link
+check), `scip-query drift` unchanged at the pre-existing 3 layer violations throughout (none
+introduced), `scip-query incomplete-migration` / `recent-duplicates` clean after every commit.
