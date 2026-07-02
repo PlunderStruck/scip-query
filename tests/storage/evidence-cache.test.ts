@@ -12,11 +12,14 @@ import {
   readCachedSemanticCallees,
   readCachedSemanticReferences,
   readCachedFileEvidence,
+  readFindingOutcomeLedger,
   sha256Hex,
   writeCachedProjectEvidence,
   writeCachedSemanticCalleesBatch,
   writeCachedSemanticReferencesBatch,
   writeCachedFileEvidence,
+  writeFindingOutcomeLedger,
+  FINDING_OUTCOME_LEDGER_CAP_PER_CHECK,
 } from '../../src/storage/evidence-cache.js';
 import { getSourceFacts } from '../../src/source/source-facts.js';
 import { getSourceLines, getSourceText } from '../../src/source/source-text.js';
@@ -418,6 +421,47 @@ describe('evidence cache', () => {
       expect(readCachedSemanticReferences(dbAfterChange, FILE, 'sym#greet', nextProjectFingerprint!)).toBe(nextPayload);
     } finally {
       dbAfterChange.close();
+    }
+  });
+
+  it('round-trips the finding-outcome ledger and caps rows per check (FIFO)', () => {
+    const db = openDb();
+    try {
+      expect(readFindingOutcomeLedger(db)).toEqual([]);
+
+      writeFindingOutcomeLedger(db, [
+        { check: 'echo', findingId: 'A', firstSeen: 1, lastSeen: 1, timesShown: 1, outcome: 'still-open' },
+        { check: 'echo', findingId: 'B', firstSeen: 2, lastSeen: 2, timesShown: 1, outcome: 'resolved' },
+      ]);
+      const rows = readFindingOutcomeLedger(db).sort((left, right) => left.findingId.localeCompare(right.findingId));
+      expect(rows).toEqual([
+        { check: 'echo', findingId: 'A', firstSeen: 1, lastSeen: 1, timesShown: 1, outcome: 'still-open' },
+        { check: 'echo', findingId: 'B', firstSeen: 2, lastSeen: 2, timesShown: 1, outcome: 'resolved' },
+      ]);
+
+      // A second write for the same check fully replaces its rows (the
+      // caller always supplies the complete next-state ledger).
+      writeFindingOutcomeLedger(db, [
+        { check: 'echo', findingId: 'C', firstSeen: 3, lastSeen: 3, timesShown: 1, outcome: 'still-open' },
+      ]);
+      expect(readFindingOutcomeLedger(db).map((row) => row.findingId)).toEqual(['C']);
+
+      // FIFO cap: only the most-recently-seen N rows survive per check.
+      const overflow = Array.from({ length: FINDING_OUTCOME_LEDGER_CAP_PER_CHECK + 10 }, (_, index) => ({
+        check: 'doc-reference',
+        findingId: `SQ${index}`,
+        firstSeen: index,
+        lastSeen: index,
+        timesShown: 1,
+        outcome: 'still-open',
+      }));
+      writeFindingOutcomeLedger(db, overflow);
+      const capped = readFindingOutcomeLedger(db).filter((row) => row.check === 'doc-reference');
+      expect(capped).toHaveLength(FINDING_OUTCOME_LEDGER_CAP_PER_CHECK);
+      expect(capped.map((row) => row.findingId)).not.toContain('SQ0'); // oldest evicted
+      expect(capped.map((row) => row.findingId)).toContain(`SQ${FINDING_OUTCOME_LEDGER_CAP_PER_CHECK + 9}`);
+    } finally {
+      db.close();
     }
   });
 

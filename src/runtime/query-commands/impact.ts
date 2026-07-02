@@ -21,6 +21,12 @@ import {
   stringOptionValue,
 } from '../commands/command-execution.js';
 import { formatGateBlockReason, isStopHookReentry, readHookInput } from '../agent-setup.js';
+import {
+  formatLowResolutionNudges,
+  formatUnresolvedStreakLine,
+  updateFindingOutcomeLedger,
+} from '../../queries/health/finding-outcome-ledger.js';
+import type { ObservedFinding } from '../../queries/health/finding-outcome-ledger.js';
 import { commandAnalysisBudget, formatAnalysisBudgetDisclosure, renderHeuristicNotice } from '../cli-support.js';
 import { displayRange, displaySnippet, render } from '../render.js';
 import { symbolResolutionBefore, symbolResolutionEmptyMessage, withSymbolResolutionJson } from './symbol-resolution.js';
@@ -233,13 +239,35 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
     return;
   }
   if (hookMode) {
+    // Track every finding this run produced (shown + structurally
+    // suppressed) so the ledger's precision stats and the streak/nudge
+    // lines below reflect reality even on turns that don't block.
+    const observed: ObservedFinding[] = [
+      ...result.findings.map((finding) => ({ check: finding.check, findingId: finding.id, suppressed: false })),
+      ...result.suppressed.map((entry) => ({
+        check: entry.finding.check,
+        findingId: entry.finding.id,
+        suppressed: true,
+      })),
+    ];
+    const now = Date.now();
+    const ledger = updateFindingOutcomeLedger(db, observed, result.checksRun, now);
+
     // Hook contract (Claude Code and Codex): silent exit 0 = allow stop,
     // exit 2 with stderr = block and feed the reason back to the agent.
     // Advisory-only findings (e.g. twin-partner) never block the stop —
     // see the `advisory` field doc comment on DiffGateFinding.
     if (blocking.length === 0) return;
+    const streakLine = formatUnresolvedStreakLine(ledger, observed, now);
+    const nudgeLines = formatLowResolutionNudges(ledger, result.checksRun);
     const budgetLine = formatAnalysisBudgetDisclosure(budget.analysisBudget);
-    console.error(budgetLine ? `${formatGateBlockReason(result)}\n${budgetLine}` : formatGateBlockReason(result));
+    const lines = [
+      ...(streakLine ? [streakLine] : []),
+      formatGateBlockReason(result),
+      ...nudgeLines,
+      ...(budgetLine ? [budgetLine] : []),
+    ];
+    console.error(lines.join('\n'));
     process.exitCode = 2;
     return;
   }

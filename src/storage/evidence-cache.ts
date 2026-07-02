@@ -56,7 +56,24 @@ interface EvidenceConnection {
   readLegacyReferences: Database.Statement;
   writeReferences: Database.Statement;
   dropStaleReferences: Database.Statement;
+  readFindingOutcomeLedger: Database.Statement;
+  deleteFindingOutcomeLedgerForCheck: Database.Statement;
+  writeFindingOutcomeLedgerRow: Database.Statement;
 }
+
+/** Ledger rows are ids + timestamps only — no finding content, no prompt text. */
+export interface FindingOutcomeRow {
+  check: string;
+  findingId: string;
+  firstSeen: number;
+  lastSeen: number;
+  timesShown: number;
+  outcome: string;
+}
+
+/** Per-check FIFO cap — the ledger stores ids/timestamps only, but a repo with
+ * many checks and long history should not grow without bound. */
+export const FINDING_OUTCOME_LEDGER_CAP_PER_CHECK = 5_000;
 
 export interface SemanticCalleeCacheEntry {
   relativePath: string;
@@ -180,6 +197,15 @@ function connectionFor(db: ScipDatabase): EvidenceConnection | null {
         payload TEXT NOT NULL,
         PRIMARY KEY (relative_path, symbol)
       );
+      CREATE TABLE IF NOT EXISTS finding_outcome_ledger (
+        check_name TEXT NOT NULL,
+        finding_id TEXT NOT NULL,
+        first_seen INTEGER NOT NULL,
+        last_seen INTEGER NOT NULL,
+        times_shown INTEGER NOT NULL,
+        outcome TEXT NOT NULL,
+        PRIMARY KEY (check_name, finding_id)
+      );
     `);
     connection = {
       evidence,
@@ -237,6 +263,14 @@ function connectionFor(db: ScipDatabase): EvidenceConnection | null {
            (relative_path, symbol, project_fingerprint, version, payload) VALUES (?, ?, ?, ?, ?)`,
       ),
       dropStaleReferences: evidence.prepare('DELETE FROM semantic_references WHERE project_fingerprint != ?'),
+      readFindingOutcomeLedger: evidence.prepare(
+        'SELECT check_name, finding_id, first_seen, last_seen, times_shown, outcome FROM finding_outcome_ledger',
+      ),
+      deleteFindingOutcomeLedgerForCheck: evidence.prepare('DELETE FROM finding_outcome_ledger WHERE check_name = ?'),
+      writeFindingOutcomeLedgerRow: evidence.prepare(
+        `INSERT INTO finding_outcome_ledger
+           (check_name, finding_id, first_seen, last_seen, times_shown, outcome) VALUES (?, ?, ?, ?, ?, ?)`,
+      ),
     };
   } catch (error) {
     debugLog('disabled (open failed)', error);
@@ -426,5 +460,72 @@ export function writeCachedSemanticReferencesBatch(
     })();
   } catch (error) {
     disable(db, 'semantic_references write', error);
+  }
+}
+
+// scip-query: ignore-wrapper — public storage boundary; callers get a
+// disable-on-error read, never a raw statement.
+export function readFindingOutcomeLedger(db: ScipDatabase): FindingOutcomeRow[] {
+  const connection = connectionFor(db);
+  if (!connection) return [];
+  try {
+    const rows = connection.readFindingOutcomeLedger.all() as Array<{
+      check_name: string;
+      finding_id: string;
+      first_seen: number;
+      last_seen: number;
+      times_shown: number;
+      outcome: string;
+    }>;
+    return rows.map((row) => ({
+      check: row.check_name,
+      findingId: row.finding_id,
+      firstSeen: row.first_seen,
+      lastSeen: row.last_seen,
+      timesShown: row.times_shown,
+      outcome: row.outcome,
+    }));
+  } catch (error) {
+    disable(db, 'finding_outcome_ledger read', error);
+    return [];
+  }
+}
+
+/**
+ * Replace-all write: the caller computes the full next-state ledger (a pure
+ * transition — see queries/health/finding-outcome-ledger.ts) and this
+ * persists it. Applies the per-check FIFO cap here (keep the most-recently-
+ * seen rows) so a caller never has to reason about eviction.
+ */
+export function writeFindingOutcomeLedger(db: ScipDatabase, rows: readonly FindingOutcomeRow[]): void {
+  const connection = connectionFor(db);
+  if (!connection) return;
+  try {
+    const byCheck = new Map<string, FindingOutcomeRow[]>();
+    for (const row of rows) {
+      const bucket = byCheck.get(row.check) ?? [];
+      bucket.push(row);
+      byCheck.set(row.check, bucket);
+    }
+    connection.evidence.transaction(() => {
+      for (const [check, checkRows] of byCheck) {
+        connection.deleteFindingOutcomeLedgerForCheck.run(check);
+        const capped = [...checkRows]
+          .sort((left, right) => right.lastSeen - left.lastSeen)
+          .slice(0, FINDING_OUTCOME_LEDGER_CAP_PER_CHECK);
+        for (const row of capped) {
+          connection.writeFindingOutcomeLedgerRow.run(
+            row.check,
+            row.findingId,
+            row.firstSeen,
+            row.lastSeen,
+            row.timesShown,
+            row.outcome,
+          );
+        }
+      }
+    })();
+  } catch (error) {
+    disable(db, 'finding_outcome_ledger write', error);
   }
 }

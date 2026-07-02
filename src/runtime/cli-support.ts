@@ -12,6 +12,7 @@ import {
   runIsolatedJsonProcessAsync,
 } from './isolated-analysis-runner.js';
 import { render } from './render.js';
+import { detectorPrecision, readLedgerRecords } from '../queries/health/finding-outcome-ledger.js';
 
 const require = createRequire(import.meta.url);
 export const { version: cliVersion } = loadCliPackageInfo();
@@ -150,7 +151,11 @@ export async function runIsolatedHealthReport(opts: HealthCliOptions): Promise<H
   );
   runnableResults.flat().forEach((result) => resultByPhase.set(result.phase, result));
 
-  return queries.healthReportFromPhases(queries.HEALTH_PHASES.map((phase) => resultByPhase.get(phase)!));
+  const report = queries.healthReportFromPhases(queries.HEALTH_PHASES.map((phase) => resultByPhase.get(phase)!));
+  // Phase results come back from worker processes with no live db handle —
+  // the finding-outcome ledger is read here, once, back on the main process.
+  report.detectorPrecision = withDb((db) => detectorPrecision(readLedgerRecords(db), Date.now()));
+  return report;
 }
 
 function healthPhaseApplicability(db: ScipDatabase, opts: HealthCliOptions) {

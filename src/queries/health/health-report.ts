@@ -1,4 +1,5 @@
 import type { ChangeAmplificationSummary, HealthAnalyses } from './health-types.js';
+import type { DetectorPrecisionStats } from './finding-outcome-ledger.js';
 
 export type FindingEvidence = 'graph-fact' | 'heuristic' | 'change-graph';
 
@@ -118,6 +119,13 @@ export interface HealthReport {
   pressure: HealthPressure[];
   topComplexity: Array<{ symbol: string; score: number; file?: string }>;
   warnings?: string[];
+  /**
+   * Per-check finding-outcome stats from the finding_outcome_ledger
+   * (populated by `diff-gate --hook` runs) — resolution/suppression rate
+   * and open-finding age. Reports, never affects the score above. Empty
+   * until the ledger has data.
+   */
+  detectorPrecision: DetectorPrecisionStats[];
 }
 
 function healthScoreCount(summary: { count: number; scoreCount?: number }): number {
@@ -175,6 +183,7 @@ export function buildHealthReport(analyses: HealthAnalyses): HealthReport {
     pressure,
     topComplexity: analyses.complexity.top,
     warnings: analyses.warnings.length > 0 ? analyses.warnings : undefined,
+    detectorPrecision: [],
   };
 }
 

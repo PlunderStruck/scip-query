@@ -86,7 +86,7 @@ Round 1+2 findings, taxonomized — each class maps to a mechanical detector or 
 ## Phase 18 — Close the precision feedback loop
 
 ### 18.1 - Finding-outcome ledger
-- [ ] **File**: `src/storage/evidence-cache.ts` (new table, same versioning discipline), diff-gate + health finding pipelines
+- [x] **File**: `src/storage/evidence-cache.ts` (new table, same versioning discipline), diff-gate + health finding pipelines
 - **What**: the gate showed the same 31 findings at every Stop for hours this session; nothing tracks that its findings are being ignored. The validation axis computes per-detector lift and (round-1 finding) feeds nothing.
 - **Change**: persist per finding identity (Plan-1 1.6 ids): first-seen, last-seen, times-shown, outcome (`resolved` — id stops matching because the underlying code changed; `suppressed`; `still-open`). Derive per-check stats: open-finding age distribution, resolution rate, suppression rate. Two consumers: (a) diff-gate `--hook` mode prepends `N findings, M shown before and unresolved (oldest: X days)` and, when a check's resolution rate over the trailing 50 findings is < 10%, appends `(the <check> check's findings are rarely acted on in this repo — consider suppressing with reasons or tuning its config)`; (b) `health --json` gains `detectorPrecision` per check alongside the existing validation lift.
 - **Testability**: ledger math pure over injected event sequences; clock injected. No behavior change to which findings are *emitted* — this phase only reports; downranking stays a human/config decision (deliberate: auto-suppression would hide real findings behind past neglect).
