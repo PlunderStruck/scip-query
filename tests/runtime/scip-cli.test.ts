@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { join } from 'node:path';
 import type * as NodeFs from 'node:fs';
 import type * as ScipCli from '../../src/runtime/scip-cli.js';
 
