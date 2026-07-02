@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { setupCiWorkflow } from '../../src/runtime/setup-ci.js';
+import { cliVersion } from '../../src/runtime/cli-support.js';
 
 describe('setupCiWorkflow', () => {
   it('writes the scip-query GitHub Actions workflow and refuses accidental overwrite', () => {
@@ -12,7 +13,7 @@ describe('setupCiWorkflow', () => {
       expect(first.written).toBe(true);
       expect(existsSync(first.path)).toBe(true);
       expect(readFileSync(first.path, 'utf-8')).toContain('actions/cache@v4');
-      expect(readFileSync(first.path, 'utf-8')).toContain('npx scip-query@0.10.12 diff-gate');
+      expect(readFileSync(first.path, 'utf-8')).toContain(`npx scip-query@${cliVersion} diff-gate`);
 
       const skipped = setupCiWorkflow(root);
       expect(skipped.skipped).toBe(true);
@@ -21,7 +22,7 @@ describe('setupCiWorkflow', () => {
       writeFileSync(first.path, 'custom\n');
       const forced = setupCiWorkflow(root, { force: true });
       expect(forced.written).toBe(true);
-      expect(readFileSync(first.path, 'utf-8')).toContain('npx scip-query@0.10.12 reindex');
+      expect(readFileSync(first.path, 'utf-8')).toContain(`npx scip-query@${cliVersion} reindex`);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
