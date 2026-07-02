@@ -390,14 +390,6 @@ export function lookupTokens(symbolPattern: string): string[] {
   return tokens.length > 0 ? [...new Set(tokens)] : [cleaned];
 }
 
-export function findDirectSymbolCandidate(
-  candidates: SymbolQueryRow[],
-  symbolPattern: string,
-  cleanedPattern: string,
-): SymbolQueryRow | null {
-  return findDirectSymbolCandidates(candidates, symbolPattern, cleanedPattern)[0] ?? null;
-}
-
 function findDirectSymbolCandidates(
   candidates: SymbolQueryRow[],
   symbolPattern: string,
