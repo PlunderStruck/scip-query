@@ -281,6 +281,76 @@ Enqueue(job) == queue' = Append(queue, job)
     );
   });
 
+  it('parses a top-level init mapping', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Pool.scip-tla.json'),
+      JSON.stringify({
+        variables: { connection: { code: ['src/pool.ts/connectionFor'] } },
+        actions: { Query: { code: ['src/pool.ts/query'], reads: ['connection'], writes: [] } },
+        init: { codeRefs: ['src/pool.ts/connectionFor'] },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Pool.scip-tla.json');
+
+    expect(loaded.errors).toEqual([]);
+    expect(loaded.loaded?.contract.init).toEqual({ codeRefs: ['src/pool.ts/connectionFor'] });
+  });
+
+  it('rejects init with no codeRefs', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Broken.scip-tla.json'),
+      JSON.stringify({
+        variables: { connection: { code: ['src/pool.ts/connectionFor'] } },
+        actions: { Query: { code: ['src/pool.ts/query'], reads: ['connection'], writes: [] } },
+        init: { codeRefs: [] },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Broken.scip-tla.json');
+
+    expect(loaded.loaded).toBeUndefined();
+    expect(loaded.errors).toContain('init.codeRefs must name at least one TypeScript referent');
+  });
+
+  it('rejects an init codeRef that also appears as an action code referent', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Broken.scip-tla.json'),
+      JSON.stringify({
+        variables: { connection: { code: ['src/pool.ts/connectionFor'] } },
+        actions: { Query: { code: ['src/pool.ts/connectionFor'], reads: ['connection'], writes: [] } },
+        init: { codeRefs: ['src/pool.ts/connectionFor'] },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Broken.scip-tla.json');
+
+    expect(loaded.loaded).toBeUndefined();
+    expect(loaded.errors).toContain(
+      'init.codeRefs overlaps action code referents: src/pool.ts/connectionFor — a referent cannot be both Init and an action',
+    );
+  });
+
+  it('parses an init waiver', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Pool.scip-tla.json'),
+      JSON.stringify({
+        variables: { connection: { code: ['src/pool.ts/connectionFor'] } },
+        actions: { Query: { code: ['src/pool.ts/query'], reads: ['connection'], writes: [] } },
+        init: { codeRefs: ['src/pool.ts/connectionFor'], waive: { reason: 'factory referent kind is approximate' } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Pool.scip-tla.json');
+
+    expect(loaded.errors).toEqual([]);
+    expect(loaded.loaded?.contract.init?.waive).toEqual({ reason: 'factory referent kind is approximate' });
+  });
+
   it('defaults unmappedWriteScope to "scope-files" and accepts an explicit "actions" (P5.7 / followup #19)', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
     writeFileSync(

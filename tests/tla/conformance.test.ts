@@ -1059,6 +1059,150 @@ Other == UNCHANGED ledger
     }
   });
 
+  it('excludes writes inside a mapped Init referent from unmapped-write findings (Q3)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/pool.ts')
+      .symbol(1, 'scip-typescript npm test 1.0.0 src/`pool.ts`/pool.', 'pool', SymbolInformation_Kind.Variable)
+      .symbol(
+        2,
+        'scip-typescript npm test 1.0.0 src/`pool.ts`/connectionFor().',
+        'connectionFor',
+        SymbolInformation_Kind.Function,
+      )
+      .symbol(3, 'scip-typescript npm test 1.0.0 src/`pool.ts`/query().', 'query', SymbolInformation_Kind.Function)
+      .definition(1, 1, 1, 0, 0, 0, 40)
+      .definition(2, 1, 2, 2, 0, 7, 1)
+      .definition(3, 1, 3, 9, 0, 11, 1)
+      .chunk(1, 1, 0, 11)
+      .write();
+    const config: ScipQueryConfig = { projectRoot: root, dbPath, indexPath: join(root, 'index.scip') };
+    writeFixtureFiles(root, {
+      'src/pool.ts': [
+        'export let pool: string | null = null;',
+        '',
+        'export function connectionFor(): string {',
+        '  if (!pool) {',
+        "    pool = 'connection';",
+        '  }',
+        '  return pool;',
+        '}',
+        '',
+        'export function query(): string {',
+        '  return connectionFor();',
+        '}',
+      ],
+    });
+    writeFileSync(
+      join(root, 'Pool.tla'),
+      `---- MODULE Pool ----
+VARIABLES poolVar
+Init == poolVar = "None"
+Query == UNCHANGED poolVar
+====
+`,
+    );
+    const db = new ScipDatabase(config);
+    const contract: TlaModelContract = {
+      module: 'Pool.tla',
+      scope: ['src/pool.ts'],
+      variables: {
+        poolVar: { code: ['pool'], aliases: ['pool'] },
+      },
+      actions: {
+        Query: { code: ['query'], reads: [], writes: [], calls: [] },
+      },
+      init: { codeRefs: ['connectionFor'] },
+      invariants: [],
+      traces: [],
+    };
+
+    try {
+      const result = verifyTlaConformance(db, contract, readTlaModuleFacts(root, 'Pool.tla'));
+
+      expect(result.findings).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ category: 'unmapped-write' })]),
+      );
+      expect(result.staticWrites).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ variable: 'poolVar', enclosingShort: expect.stringContaining('connectionFor') }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('still flags a write outside both mapped actions and the Init referent (Q3)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/pool.ts')
+      .symbol(1, 'scip-typescript npm test 1.0.0 src/`pool.ts`/pool.', 'pool', SymbolInformation_Kind.Variable)
+      .symbol(
+        2,
+        'scip-typescript npm test 1.0.0 src/`pool.ts`/connectionFor().',
+        'connectionFor',
+        SymbolInformation_Kind.Function,
+      )
+      .symbol(3, 'scip-typescript npm test 1.0.0 src/`pool.ts`/reset().', 'reset', SymbolInformation_Kind.Function)
+      .definition(1, 1, 1, 0, 0, 0, 40)
+      .definition(2, 1, 2, 2, 0, 7, 1)
+      .definition(3, 1, 3, 9, 0, 11, 1)
+      .chunk(1, 1, 0, 11)
+      .write();
+    const config: ScipQueryConfig = { projectRoot: root, dbPath, indexPath: join(root, 'index.scip') };
+    writeFixtureFiles(root, {
+      'src/pool.ts': [
+        'export let pool: string | null = null;',
+        '',
+        'export function connectionFor(): string {',
+        '  if (!pool) {',
+        "    pool = 'connection';",
+        '  }',
+        '  return pool;',
+        '}',
+        '',
+        'export function reset(): void {',
+        '  pool = null;',
+        '}',
+      ],
+    });
+    writeFileSync(
+      join(root, 'Pool.tla'),
+      `---- MODULE Pool ----
+VARIABLES poolVar
+Init == poolVar = "None"
+====
+`,
+    );
+    const db = new ScipDatabase(config);
+    const contract: TlaModelContract = {
+      module: 'Pool.tla',
+      scope: ['src/pool.ts'],
+      variables: {
+        poolVar: { code: ['pool'], aliases: ['pool'] },
+      },
+      actions: {},
+      init: { codeRefs: ['connectionFor'] },
+      invariants: [],
+      traces: [],
+    };
+
+    try {
+      const result = verifyTlaConformance(db, contract, readTlaModuleFacts(root, 'Pool.tla'));
+
+      expect(result.findings).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ category: 'unmapped-write', codeRef: expect.stringContaining('reset') }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   it('warns when mapped invariants are absent from the checked config', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
     writeFixtureFiles(root, {

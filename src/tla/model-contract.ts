@@ -83,12 +83,27 @@ export interface TlaTraceStep {
  */
 export type TlaUnmappedWriteScope = 'actions' | 'scope-files';
 
+/**
+ * Q3 / Init-binding: binds the model's `Init` to the code referent(s) that
+ * materialize initial state (a lazy-init factory, a module-level default).
+ * Writes statically found inside an Init referent are Init-attributed —
+ * they are excluded from unmapped-write findings without needing
+ * `unmappedWriteScope: "actions"` as a whole-file workaround. `codeRefs`
+ * must not overlap any action's `code` referents (validated at load time):
+ * a referent cannot be both the model's initialization and a transition.
+ */
+export interface TlaInitMapping {
+  codeRefs: string[];
+  waive?: TlaVariableWaiver;
+}
+
 export interface TlaModelContract {
   module?: string;
   config?: string;
   scope: string[];
   variables: Record<string, TlaVariableMapping>;
   actions: Record<string, TlaActionMapping>;
+  init?: TlaInitMapping;
   invariants: string[];
   traces: string[];
   unmappedWriteScope: TlaUnmappedWriteScope;
@@ -270,18 +285,76 @@ function parseContract(raw: unknown, errors: string[]): TlaModelContract | null 
   const variables = parseVariables(raw.variables, errors);
   validateNoVariableCollisions(variables, errors);
   const actions = parseActions(raw.actions, variables, errors);
+  const init = parseInitMapping(raw.init, errors);
+  validateInitDoesNotOverlapActions(init, actions, errors);
   const contract: TlaModelContract = {
     module: optionalString(raw.module, 'module', errors),
     config: optionalString(raw.config, 'config', errors),
     scope: stringArray(raw.scope) ?? [],
     variables,
     actions,
+    ...(init ? { init } : {}),
     invariants: stringArray(raw.invariants) ?? [],
     traces: stringArray(raw.traces) ?? [],
     unmappedWriteScope: parseUnmappedWriteScope(raw.unmappedWriteScope, errors),
   };
   validateScope(raw.scope, errors);
   return errors.length === 0 ? contract : null;
+}
+
+function parseInitMapping(raw: unknown, errors: string[]): TlaInitMapping | undefined {
+  if (raw === undefined) return undefined;
+  if (!isRecord(raw)) {
+    errors.push('init must be an object when present');
+    return undefined;
+  }
+  const codeRefs = stringArray(raw.codeRefs);
+  if (!codeRefs || codeRefs.length === 0) {
+    errors.push('init.codeRefs must name at least one TypeScript referent');
+    return undefined;
+  }
+  const waive = parseInitWaiver(raw.waive, errors);
+  return { codeRefs, ...(waive ? { waive } : {}) };
+}
+
+function parseInitWaiver(raw: unknown, errors: string[]): TlaVariableWaiver | undefined {
+  if (raw === undefined) return undefined;
+  if (!isRecord(raw)) {
+    errors.push('init.waive must be an object when present');
+    return undefined;
+  }
+  const reason = typeof raw.reason === 'string' ? raw.reason.trim() : '';
+  if (!reason) {
+    errors.push('init.waive.reason must be a non-empty string');
+    return undefined;
+  }
+  return { reason };
+}
+
+/**
+ * Q3: a referent cannot be both Init (initialization) and an action
+ * (transition) — that would let the same code satisfy two contradictory
+ * roles in the conformance model. Reject at load time, mirroring the
+ * variable-collision checks.
+ */
+function validateInitDoesNotOverlapActions(
+  init: TlaInitMapping | undefined,
+  actions: Record<string, TlaActionMapping>,
+  errors: string[],
+): void {
+  if (!init) return;
+  const initRefs = new Set(init.codeRefs);
+  const overlaps = new Set<string>();
+  for (const mapping of Object.values(actions)) {
+    for (const ref of mapping.code) {
+      if (initRefs.has(ref)) overlaps.add(ref);
+    }
+  }
+  if (overlaps.size > 0) {
+    errors.push(
+      `init.codeRefs overlaps action code referents: ${[...overlaps].sort().join(', ')} — a referent cannot be both Init and an action`,
+    );
+  }
 }
 
 function parseUnmappedWriteScope(raw: unknown, errors: string[]): TlaUnmappedWriteScope {

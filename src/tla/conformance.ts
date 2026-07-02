@@ -16,7 +16,7 @@ import {
   scipValueLikeKindNumbers,
 } from '../symbols/symbol-kind.js';
 import { callGraph } from '../queries/navigation/call-graph.js';
-import type { TlaModelContract, TlaModuleFacts, TlaTraceStep } from './model-contract.js';
+import type { TlaInitMapping, TlaModelContract, TlaModuleFacts, TlaTraceStep } from './model-contract.js';
 import type { SanyActionFacts } from './sany-facts.js';
 
 export type TlaFindingSeverity = 'info' | 'warning' | 'error';
@@ -97,6 +97,12 @@ interface VariableResolution {
 interface ResolvedAction {
   name: string;
   mapping: TlaModelContract['actions'][string];
+  referents: ResolvedReferent[];
+}
+
+/** Q3 / Init-binding: resolved `contract.init` referents. */
+interface ResolvedInit {
+  mapping: TlaInitMapping;
   referents: ResolvedReferent[];
 }
 
@@ -227,11 +233,19 @@ export function verifyTlaConformance(
   const variableResources = resourcesForVariables(contract);
   const variableStatements = statementsForVariables(contract);
   const actions = resolveActions(db, contract, findings);
+  const init = resolveInit(db, contract, findings);
   if (moduleFacts) verifyModelText(contract, moduleFacts, checkedInvariants, findings);
   const modelActions = new Map((moduleFacts?.actions ?? []).map((action) => [action.name, action]));
 
   const actionSymbols = new Set(
     actions.flatMap((action) => action.referents.map((referent) => referent.match?.symbol).filter(Boolean) as string[]),
+  );
+  // Q3: writes found inside an Init referent are Init-attributed, not
+  // unmapped — excluded from the sweep the same way a mapped action's own
+  // referent is, without needing unmappedWriteScope: "actions" as a
+  // whole-file workaround.
+  const initSymbols = new Set(
+    (init?.referents ?? []).map((referent) => referent.match?.symbol).filter(Boolean) as string[],
   );
   const staticWrites = collectAllStaticWrites(
     db,
@@ -241,6 +255,7 @@ export function verifyTlaConformance(
     variableResources,
     variableStatements,
     actionSymbols,
+    initSymbols,
     findings,
     modelActions,
   );
@@ -264,7 +279,9 @@ export function verifyTlaConformance(
     mappedVariables: Object.keys(contract.variables).length,
     mappedActions: Object.keys(contract.actions).length,
     resolvedReferents:
-      resolvedCount(actions.flatMap((action) => action.referents)) + resolvedCount(variableResolution.referents),
+      resolvedCount(actions.flatMap((action) => action.referents)) +
+      resolvedCount(variableResolution.referents) +
+      resolvedCount(init?.referents ?? []),
     staticWrites,
     staticReads,
     waivers: waiverUses(contract),
@@ -451,6 +468,43 @@ function resolveActions(
   });
 }
 
+/**
+ * Q3 / Init-binding: resolves `contract.init.codeRefs` the same way an
+ * action's `code` referents resolve — missing-referent and invalid-
+ * referent-kind findings apply, honoring `init.waive` for both, exactly
+ * like a variable's `waive` exempts referent-resolution findings.
+ */
+function resolveInit(
+  db: ScipDatabase,
+  contract: TlaModelContract,
+  findings: TlaConformanceFinding[],
+): ResolvedInit | undefined {
+  const mapping = contract.init;
+  if (!mapping) return undefined;
+  const waived = Boolean(mapping.waive);
+  const referents = mapping.codeRefs.map((ref) => {
+    const referent = resolveReferent(db, ref, findings, 'Init');
+    const match = referent.match;
+    if (!match) {
+      if (!waived) {
+        findings.push(
+          finding('missing-referent', 'error', 'compiler-symbol', {
+            modelElement: 'Init',
+            codeRef: ref,
+            message: `TLA+ Init maps to missing TypeScript referent ${ref}.`,
+            why: ['The Init mapping must point at live compiler-indexed code before conformance can be checked.'],
+            remediation: `Update init.codeRefs to a live function or method symbol, or remove the stale entry.`,
+          }),
+        );
+      }
+    } else {
+      validateInitReferentKind(db, ref, match, findings, waived);
+    }
+    return referent;
+  });
+  return { mapping, referents };
+}
+
 function verifyModelText(
   contract: TlaModelContract,
   moduleFacts: TlaModuleFacts,
@@ -573,6 +627,7 @@ function collectAllStaticWrites(
   resources: readonly VariableResource[],
   statements: readonly VariableStatement[],
   actionSymbols: ReadonlySet<string>,
+  initSymbols: ReadonlySet<string>,
   findings: TlaConformanceFinding[],
   modelActions: ReadonlyMap<string, SanyActionFacts>,
 ): TlaStaticWrite[] {
@@ -616,7 +671,10 @@ function collectAllStaticWrites(
     for (const write of collectWritesForRange(db, file, 0, Number.POSITIVE_INFINITY, aliases, resources, statements)) {
       writes.push(write);
       if (!isUnmappedWriteCandidate(write)) continue;
-      if (write.enclosingSymbol && actionSymbols.has(write.enclosingSymbol)) continue;
+      // Q3: a write inside a mapped Init referent is Init-attributed, not
+      // unmapped — same exclusion as a mapped action's own referent.
+      if (write.enclosingSymbol && (actionSymbols.has(write.enclosingSymbol) || initSymbols.has(write.enclosingSymbol)))
+        continue;
       findings.push(
         finding('unmapped-write', 'error', 'static-action', {
           modelElement: write.variable,
@@ -1479,6 +1537,31 @@ function validateActionReferentKind(
   );
 }
 
+function validateInitReferentKind(
+  db: ScipDatabase,
+  ref: string,
+  match: SymbolMatch,
+  findings: TlaConformanceFinding[],
+  waived: boolean,
+): void {
+  const kind = symbolKind(db, match);
+  if (kind === null || FUNCTION_LIKE_KINDS.has(kind)) return;
+  if (waived) return;
+  if (!TYPE_LIKE_KINDS.has(kind)) return;
+  findings.push(
+    finding('invalid-referent-kind', 'error', 'compiler-symbol', {
+      modelElement: 'Init',
+      codeRef: ref,
+      file: match.relativePath,
+      startLine: match.startLine,
+      endLine: match.endLine,
+      message: `TLA+ Init referent is a type; map the runtime initialization code it describes.`,
+      why: [`${ref} resolves to ${shortenSymbol(match.symbol)} with SCIP kind ${scipKindName(kind)}.`],
+      remediation: `Map init.codeRefs to a function or method that performs the initialization.`,
+    }),
+  );
+}
+
 function symbolKind(db: ScipDatabase, match: SymbolMatch): number | null {
   const row = db.get<{ kind: number | null }>('SELECT kind FROM global_symbols WHERE id = ?', match.symbolId);
   return row?.kind ?? null;
@@ -1574,7 +1657,11 @@ function waiverUses(contract: TlaModelContract): TlaWaiverUse[] {
     if (!waive) return [];
     return [{ kind: 'referent' as const, variable, reason: waive.reason, legacy: false }];
   });
-  return [...actionWaivers, ...variableWaivers];
+  const initWaive = contract.init?.waive;
+  const initWaivers: TlaWaiverUse[] = initWaive
+    ? [{ kind: 'referent' as const, variable: 'Init', reason: initWaive.reason, legacy: false }]
+    : [];
+  return [...actionWaivers, ...variableWaivers, ...initWaivers];
 }
 
 const TYPE_LIKE_KINDS = new Set(scipTypeLikeKindNumbers());
