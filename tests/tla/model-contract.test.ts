@@ -90,6 +90,40 @@ Enqueue(job) == queue' = Append(queue, job)
     expect(loaded.errors).toContain('variables.queue.code must name at least one TypeScript referent');
   });
 
+  it('parses a resource binding on a variable', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Lock.scip-tla.json'),
+      JSON.stringify({
+        variables: {
+          lockOwner: { code: ['src/lock.ts/pid'], resource: { path: 'lockPath' } },
+        },
+        actions: { Release: { code: ['src/lock.ts/release'], writes: ['lockOwner'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Lock.scip-tla.json');
+
+    expect(loaded.errors).toEqual([]);
+    expect(loaded.loaded?.contract.variables.lockOwner?.resource).toEqual({ path: 'lockPath' });
+  });
+
+  it('rejects a resource binding with no path', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Broken.scip-tla.json'),
+      JSON.stringify({
+        variables: { lockOwner: { code: ['src/lock.ts/pid'], resource: { path: '' } } },
+        actions: { Release: { code: ['src/lock.ts/release'], writes: ['lockOwner'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Broken.scip-tla.json');
+
+    expect(loaded.loaded).toBeUndefined();
+    expect(loaded.errors).toContain('variables.lockOwner.resource.path must be a non-empty string');
+  });
+
   it('resolves contract-adjacent and project-relative config paths', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
     const specDir = join(root, 'specs');

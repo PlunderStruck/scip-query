@@ -5,10 +5,22 @@ import { parseSanyXmlFacts, type SanyActionFacts } from './sany-facts.js';
 
 export type TlaCheckerMode = 'auto' | 'sany' | 'tlc' | 'apalache' | 'none';
 
+export interface TlaResourceBinding {
+  /**
+   * Expression or suffix matched textually against a filesystem call's first
+   * argument (e.g. `"lockPath"` matches `rmSync(lockPath, ...)`). Evidence
+   * tier for a resulting write/read stays `static-action` — this is a
+   * textual containment check, not a resolved value.
+   */
+  path: string;
+}
+
 export interface TlaVariableMapping {
   code: string[];
   aliases: string[];
   projection?: string;
+  /** Binds this variable to filesystem state (lock files, published artifacts). */
+  resource?: TlaResourceBinding;
 }
 
 export interface TlaActionMapping {
@@ -234,13 +246,29 @@ function parseVariables(raw: unknown, errors: string[]): Record<string, TlaVaria
       continue;
     }
     const aliases = stringArray(value.aliases) ?? [];
+    const resource = parseResourceBinding(value.resource, name, errors);
     out[name] = {
       code,
       aliases: [...new Set([name, ...aliases])],
       projection: typeof value.projection === 'string' ? value.projection : undefined,
+      ...(resource ? { resource } : {}),
     };
   }
   return out;
+}
+
+function parseResourceBinding(raw: unknown, variableName: string, errors: string[]): TlaResourceBinding | undefined {
+  if (raw === undefined) return undefined;
+  if (!isRecord(raw)) {
+    errors.push(`variables.${variableName}.resource must be an object when present`);
+    return undefined;
+  }
+  const path = typeof raw.path === 'string' ? raw.path.trim() : '';
+  if (!path) {
+    errors.push(`variables.${variableName}.resource.path must be a non-empty string`);
+    return undefined;
+  }
+  return { path };
 }
 
 function parseActions(

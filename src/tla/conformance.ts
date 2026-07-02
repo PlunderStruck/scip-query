@@ -116,7 +116,15 @@ export interface TlaStaticWrite {
   file: string;
   line: number;
   target: string;
-  kind: 'assignment' | 'declaration' | 'object-field' | 'mutation-call' | 'update' | 'delete' | 'source-scan';
+  kind:
+    | 'assignment'
+    | 'declaration'
+    | 'object-field'
+    | 'mutation-call'
+    | 'update'
+    | 'delete'
+    | 'source-scan'
+    | 'resource';
   enclosingSymbol?: string;
   enclosingShort?: string;
 }
@@ -127,9 +135,15 @@ export interface TlaStaticRead {
   file: string;
   line: number;
   target: string;
-  kind: 'identifier' | 'source-scan';
+  kind: 'identifier' | 'source-scan' | 'resource';
   enclosingSymbol?: string;
   enclosingShort?: string;
+}
+
+/** A variable bound to filesystem state via `variables.<v>.resource`. */
+export interface VariableResource {
+  variable: string;
+  path: string;
 }
 
 interface TlaWaiverUse {
@@ -154,6 +168,16 @@ const MUTATING_METHODS = new Set([
   'unshift',
 ]);
 
+/**
+ * Filesystem calls classified as writes/reads of a `resource`-bound
+ * variable (P5.1 / followup #13). Matching is textual: the call's first
+ * argument text must contain the resource's declared path expression or
+ * suffix — evidence tier stays `static-action`, never a stronger tier,
+ * because this is not a resolved value comparison.
+ */
+const FS_WRITE_CALLS = new Set(['writeFileSync', 'rmSync', 'renameSync', 'mkdirSync', 'unlinkSync']);
+const FS_READ_CALLS = new Set(['readFileSync', 'existsSync', 'statSync']);
+
 export function verifyTlaConformance(
   db: ScipDatabase,
   contract: TlaModelContract,
@@ -164,6 +188,7 @@ export function verifyTlaConformance(
   const findings: TlaConformanceFinding[] = [];
   const variableResolution = aliasesForVariables(db, contract, findings);
   const variableAliases = variableResolution.aliases;
+  const variableResources = resourcesForVariables(contract);
   const actions = resolveActions(db, contract, findings);
   if (moduleFacts) verifyModelText(contract, moduleFacts, checkedInvariants, findings);
   const modelActions = new Map((moduleFacts?.actions ?? []).map((action) => [action.name, action]));
@@ -176,11 +201,12 @@ export function verifyTlaConformance(
     contract,
     actions,
     variableAliases,
+    variableResources,
     actionSymbols,
     findings,
     modelActions,
   );
-  const staticReads = collectAllStaticReads(db, actions, variableAliases, findings, modelActions);
+  const staticReads = collectAllStaticReads(db, actions, variableAliases, variableResources, findings, modelActions);
   verifyDeclaredCalls(db, actions, findings);
   verifyTraces(contract, traceSteps, findings);
 
@@ -270,6 +296,14 @@ function aliasesForVariables(
     for (const alias of variableAliases) aliases.push({ variable: name, alias });
   }
   return { aliases: dedupeAliases(aliases), referents };
+}
+
+function resourcesForVariables(contract: TlaModelContract): VariableResource[] {
+  const resources: VariableResource[] = [];
+  for (const [name, variable] of Object.entries(contract.variables)) {
+    if (variable.resource) resources.push({ variable: name, path: variable.resource.path });
+  }
+  return resources;
 }
 
 function resolveActions(
@@ -419,6 +453,7 @@ function collectAllStaticWrites(
   contract: TlaModelContract,
   actions: readonly ResolvedAction[],
   aliases: readonly VariableAlias[],
+  resources: readonly VariableResource[],
   actionSymbols: ReadonlySet<string>,
   findings: TlaConformanceFinding[],
   modelActions: ReadonlyMap<string, SanyActionFacts>,
@@ -434,6 +469,7 @@ function collectAllStaticWrites(
         referent.match.startLine,
         referent.match.endLine,
         aliases,
+        resources,
       );
       actionWrites.push(...found);
       writes.push(...found);
@@ -442,7 +478,7 @@ function collectAllStaticWrites(
   }
 
   for (const file of scopedFiles(db, contract)) {
-    for (const write of collectWritesForRange(db, file, 0, Number.POSITIVE_INFINITY, aliases)) {
+    for (const write of collectWritesForRange(db, file, 0, Number.POSITIVE_INFINITY, aliases, resources)) {
       writes.push(write);
       if (!isUnmappedWriteCandidate(write)) continue;
       if (write.enclosingSymbol && actionSymbols.has(write.enclosingSymbol)) continue;
@@ -535,6 +571,7 @@ function collectAllStaticReads(
   db: ScipDatabase,
   actions: readonly ResolvedAction[],
   aliases: readonly VariableAlias[],
+  resources: readonly VariableResource[],
   findings: TlaConformanceFinding[],
   modelActions: ReadonlyMap<string, SanyActionFacts>,
 ): TlaStaticRead[] {
@@ -549,6 +586,7 @@ function collectAllStaticReads(
         referent.match.startLine,
         referent.match.endLine,
         aliases,
+        resources,
       );
       actionReads.push(...found);
       reads.push(...found);
@@ -707,10 +745,11 @@ export function collectWritesForRange(
   startLine: number,
   endLine: number,
   aliases: readonly VariableAlias[],
+  resources: readonly VariableResource[] = [],
 ): TlaStaticWrite[] {
-  const astWrites = collectAstWrites(db, file, startLine, endLine, aliases);
+  const astWrites = collectAstWrites(db, file, startLine, endLine, aliases, resources);
   if (astWrites) return astWrites;
-  return collectSourceScanWrites(db, file, startLine, endLine, aliases);
+  return collectSourceScanWrites(db, file, startLine, endLine, aliases, resources);
 }
 
 export function collectReadsForRange(
@@ -719,18 +758,20 @@ export function collectReadsForRange(
   startLine: number,
   endLine: number,
   aliases: readonly VariableAlias[],
+  resources: readonly VariableResource[] = [],
 ): TlaStaticRead[] {
-  const astReads = collectAstReads(db, file, startLine, endLine, aliases);
+  const astReads = collectAstReads(db, file, startLine, endLine, aliases, resources);
   if (astReads) return astReads;
-  return collectSourceScanReads(db, file, startLine, endLine, aliases);
+  return collectSourceScanReads(db, file, startLine, endLine, aliases, resources);
 }
 
-function collectAstWrites(
+export function collectAstWrites(
   db: ScipDatabase,
   file: string,
   startLine: number,
   endLine: number,
   aliases: readonly VariableAlias[],
+  resources: readonly VariableResource[] = [],
 ): TlaStaticWrite[] | null {
   const tree = getAst(db, file);
   if (!tree) return null;
@@ -738,6 +779,7 @@ function collectAstWrites(
   const visit = (node: SyntaxNode): void => {
     if (node.startPosition.row > endLine || node.endPosition.row < startLine) return;
     recordWriteNode(db, file, node, aliases, writes);
+    recordResourceCallNode(db, file, node, resources, 'write', writes);
     for (const child of node.children) visit(child);
   };
   visit(tree.rootNode);
@@ -750,6 +792,7 @@ function collectAstReads(
   startLine: number,
   endLine: number,
   aliases: readonly VariableAlias[],
+  resources: readonly VariableResource[] = [],
 ): TlaStaticRead[] | null {
   const tree = getAst(db, file);
   if (!tree) return null;
@@ -757,6 +800,7 @@ function collectAstReads(
   const visit = (node: SyntaxNode): void => {
     if (node.startPosition.row > endLine || node.endPosition.row < startLine) return;
     recordReadNode(db, file, node, aliases, reads);
+    recordResourceCallNode(db, file, node, resources, 'read', reads);
     for (const child of node.children) visit(child);
   };
   visit(tree.rootNode);
@@ -800,6 +844,71 @@ function recordWriteNode(
     if (!target || !isMutatingCallTarget(target)) return;
     recordTargetMatches(db, file, target, 'mutation-call', aliases, writes);
   }
+}
+
+/**
+ * Classifies filesystem calls whose first argument textually names a
+ * `resource`-bound variable's path as a write or read of that variable
+ * (P5.1 / followup #13). Shared by the AST write and read visitors — `out`
+ * is typed per call site via overloads so callers keep precise array types.
+ */
+function recordResourceCallNode(
+  db: ScipDatabase,
+  file: string,
+  node: SyntaxNode,
+  resources: readonly VariableResource[],
+  mode: 'write',
+  out: TlaStaticWrite[],
+): void;
+function recordResourceCallNode(
+  db: ScipDatabase,
+  file: string,
+  node: SyntaxNode,
+  resources: readonly VariableResource[],
+  mode: 'read',
+  out: TlaStaticRead[],
+): void;
+function recordResourceCallNode(
+  db: ScipDatabase,
+  file: string,
+  node: SyntaxNode,
+  resources: readonly VariableResource[],
+  mode: 'read' | 'write',
+  out: (TlaStaticWrite | TlaStaticRead)[],
+): void {
+  if (resources.length === 0 || node.type !== 'call_expression') return;
+  const target = node.childForFieldName('function') ?? node.namedChild(0);
+  const callName = target ? fsCallName(target) : null;
+  if (!callName) return;
+  const relevantCalls = mode === 'write' ? FS_WRITE_CALLS : FS_READ_CALLS;
+  if (!relevantCalls.has(callName)) return;
+  const args = node.childForFieldName('arguments');
+  const firstArg = args?.namedChild(0);
+  if (!firstArg) return;
+  const argText = firstArg.text;
+  for (const resource of resources) {
+    if (!argText.includes(resource.path)) continue;
+    const enclosing = enclosingSymbolForLine(db, file, node.startPosition.row);
+    out.push({
+      variable: resource.variable,
+      alias: resource.path,
+      file,
+      line: node.startPosition.row,
+      target: `${callName}(${argText})`,
+      kind: 'resource',
+      enclosingSymbol: enclosing?.symbol,
+      enclosingShort: enclosing ? shortenSymbol(enclosing.symbol) : undefined,
+    });
+  }
+}
+
+function fsCallName(target: SyntaxNode): string | null {
+  if (target.type === 'identifier') return target.text;
+  if (target.type === 'member_expression') {
+    const member = target.namedChild(target.namedChildCount - 1);
+    return member ? member.text : null;
+  }
+  return null;
 }
 
 function recordReadNode(
@@ -901,6 +1010,7 @@ function collectSourceScanWrites(
   startLine: number,
   endLine: number,
   aliases: readonly VariableAlias[],
+  resources: readonly VariableResource[] = [],
 ): TlaStaticWrite[] {
   const source = readFileSync(join(db.config.projectRoot, file), 'utf8');
   const lines = source.split(/\r?\n/);
@@ -926,6 +1036,7 @@ function collectSourceScanWrites(
         enclosingShort: enclosing ? shortenSymbol(enclosing.symbol) : undefined,
       });
     }
+    recordSourceScanResourceCall(db, file, line, text, resources, FS_WRITE_CALLS, writes);
   }
   return uniqueWrites(writes);
 }
@@ -936,6 +1047,7 @@ function collectSourceScanReads(
   startLine: number,
   endLine: number,
   aliases: readonly VariableAlias[],
+  resources: readonly VariableResource[] = [],
 ): TlaStaticRead[] {
   const source = readFileSync(join(db.config.projectRoot, file), 'utf8');
   const lines = source.split(/\r?\n/);
@@ -959,8 +1071,46 @@ function collectSourceScanReads(
         enclosingShort: enclosing ? shortenSymbol(enclosing.symbol) : undefined,
       });
     }
+    recordSourceScanResourceCall(db, file, line, text, resources, FS_READ_CALLS, reads);
   }
   return uniqueReads(reads);
+}
+
+/**
+ * Regex-fallback counterpart of `recordResourceCallNode` for files without
+ * an AST (P5.1). Matches `<call>(<argsContainingResourcePath>` anywhere on
+ * the line — cruder than the AST path (no argument-boundary parsing) but
+ * keeps the same evidence tier and textual-containment contract.
+ */
+function recordSourceScanResourceCall(
+  db: ScipDatabase,
+  file: string,
+  line: number,
+  text: string,
+  resources: readonly VariableResource[],
+  calls: ReadonlySet<string>,
+  out: (TlaStaticWrite | TlaStaticRead)[],
+): void {
+  if (resources.length === 0) return;
+  for (const callName of calls) {
+    const callIndex = text.indexOf(`${callName}(`);
+    if (callIndex === -1) continue;
+    const afterCall = text.slice(callIndex + callName.length);
+    for (const resource of resources) {
+      if (!afterCall.includes(resource.path)) continue;
+      const enclosing = enclosingSymbolForLine(db, file, line);
+      out.push({
+        variable: resource.variable,
+        alias: resource.path,
+        file,
+        line,
+        target: text.trim(),
+        kind: 'resource',
+        enclosingSymbol: enclosing?.symbol,
+        enclosingShort: enclosing ? shortenSymbol(enclosing.symbol) : undefined,
+      });
+    }
+  }
 }
 
 function scopedFiles(db: ScipDatabase, contract: TlaModelContract): string[] {

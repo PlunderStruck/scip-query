@@ -5,7 +5,8 @@
   "variables": {
     "lockOwner": {
       "code": ["src/reindex/index.ts/ReindexLockMetadata#pid"],
-      "aliases": ["pid", "existing.pid", "metadata.pid"]
+      "aliases": ["pid", "existing.pid", "metadata.pid"],
+      "resource": { "path": "lockPath" }
     },
     "phase": {
       "code": ["src/domain/maintenance-types.ts/LastRefreshMetadata#result"],
@@ -33,18 +34,18 @@
       "writes": ["lockOwner", "phase"],
       "waive": {
         "reads": ["phase"],
-        "writes": ["phase", "lockOwner"],
-        "reason": "same phase-abstraction gap as Acquire for phase. lockOwner's write on this path is rmSync(lockPath) followed by a retry through tryAcquireReindexLock's own pid assignment on the NEXT loop iteration (a different, already-covered line range) — acquireReindexLock's preemption branch itself only deletes the file, it does not textually assign `pid`, so static scanning cannot see this specific write."
+        "writes": ["phase"],
+        "reason": "same phase-abstraction gap as Acquire for phase. lockOwner's write is now provable via the lockPath resource binding (P5.1): acquireReindexLock's preemption branch calls rmSync(lockPath) once termination is confirmed."
       }
     },
     "PreemptFails": {
-      "code": ["src/reindex/index.ts/acquireReindexLock", "src/reindex/index.ts/terminateReindexLockOwner"],
+      "code": ["src/reindex/index.ts/terminateReindexLockOwner"],
       "reads": ["lockOwner", "phase"],
       "writes": ["phase"],
       "waive": {
         "reads": ["phase"],
         "writes": ["phase"],
-        "reason": "the fixed code throws instead of writing anything when termination is unconfirmed (src/reindex/index.ts, acquireReindexLock preemption branch); the model's phase['m'] := 'Failed' represents the caller's reindex() promise rejecting, which has no stored field — the thrown Error is the only evidence, observed only at the process boundary."
+        "reason": "the fixed code throws instead of writing anything when termination is unconfirmed (src/reindex/index.ts, acquireReindexLock preemption branch); the model's phase['m'] := 'Failed' represents the caller's reindex() promise rejecting, which has no stored field — the thrown Error is the only evidence, observed only at the process boundary. code[] deliberately excludes acquireReindexLock: its body's rmSync(lockPath) resource write (now provable, see PreemptSucceeds) sits in the sibling terminated=true branch that PreemptFails' own guard (terminated=false) never reaches, and range-based static scanning cannot distinguish the two branches within one shared function body — citing the narrower terminateReindexLockOwner keeps the read evidence for lockOwner/phase (the pid parameter's read sites) without misattributing that write."
       }
     },
     "Crash": {

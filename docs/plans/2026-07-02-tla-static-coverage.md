@@ -15,7 +15,7 @@ in the 694-test suite, and every item 13-21 either shipped or BLOCKED-noted.
 
 ## Steps (priority order)
 
-- [ ] **P5.1 (#13) Resource aliases.** Mapping schema: a variable may declare
+- [x] **P5.1 (#13) Resource aliases.** Mapping schema: a variable may declare
   `"resource": { "path": "<expression or suffix>" }` binding it to a
   filesystem resource. Conformance write/read scans classify fs calls on a
   matching path argument (`writeFileSync`, `rmSync`, `renameSync`,

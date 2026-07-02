@@ -471,6 +471,136 @@ Noop == UNCHANGED queue
     }
   });
 
+  it('classifies resource-bound fs calls as writes/reads of the mapped variable', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/lock.ts')
+      .symbol(1, 'scip-typescript npm test 1.0.0 src/`lock.ts`/pid.', 'pid', SymbolInformation_Kind.Constant)
+      .symbol(2, 'scip-typescript npm test 1.0.0 src/`lock.ts`/release().', 'release', SymbolInformation_Kind.Function)
+      .symbol(3, 'scip-typescript npm test 1.0.0 src/`lock.ts`/check().', 'check', SymbolInformation_Kind.Function)
+      .definition(1, 1, 1, 0, 0, 0, 30)
+      .definition(2, 1, 2, 2, 0, 4, 1)
+      .definition(3, 1, 3, 6, 0, 8, 1)
+      .chunk(1, 1, 0, 8)
+      .write();
+    const config: ScipQueryConfig = { projectRoot: root, dbPath, indexPath: join(root, 'index.scip') };
+    writeFixtureFiles(root, {
+      'src/lock.ts': [
+        'export const pid: number = 0;',
+        '',
+        'export function release(lockPath: string) {',
+        '  rmSync(lockPath, { force: true });',
+        '}',
+        '',
+        'export function check(lockPath: string) {',
+        '  return existsSync(lockPath);',
+        '}',
+      ],
+    });
+    writeFileSync(
+      join(root, 'Lock.tla'),
+      `---- MODULE Lock ----
+VARIABLES lockOwner
+Release == lockOwner' = "None"
+Check == UNCHANGED lockOwner
+====
+`,
+    );
+    const db = new ScipDatabase(config);
+    const contract: TlaModelContract = {
+      module: 'Lock.tla',
+      scope: ['src/lock.ts'],
+      variables: {
+        lockOwner: { code: ['pid'], aliases: ['pid'], resource: { path: 'lockPath' } },
+      },
+      actions: {
+        Release: { code: ['release'], reads: [], writes: ['lockOwner'], calls: [] },
+        Check: { code: ['check'], reads: ['lockOwner'], writes: [], calls: [] },
+      },
+      invariants: [],
+      traces: [],
+    };
+
+    try {
+      const result = verifyTlaConformance(db, contract, readTlaModuleFacts(root, 'Lock.tla'));
+
+      expect(result.staticWrites).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            variable: 'lockOwner',
+            kind: 'resource',
+            target: expect.stringContaining('rmSync'),
+          }),
+        ]),
+      );
+      expect(result.staticReads).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            variable: 'lockOwner',
+            kind: 'resource',
+            target: expect.stringContaining('existsSync'),
+          }),
+        ]),
+      );
+      expect(result.findings.filter((finding) => finding.severity === 'error')).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('does not misclassify an fs call whose argument does not name the resource path', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/lock.ts')
+      .symbol(1, 'scip-typescript npm test 1.0.0 src/`lock.ts`/pid.', 'pid', SymbolInformation_Kind.Constant)
+      .symbol(2, 'scip-typescript npm test 1.0.0 src/`lock.ts`/cleanup().', 'cleanup', SymbolInformation_Kind.Function)
+      .definition(1, 1, 1, 0, 0, 0, 30)
+      .definition(2, 1, 2, 2, 0, 4, 1)
+      .chunk(1, 1, 0, 4)
+      .write();
+    const config: ScipQueryConfig = { projectRoot: root, dbPath, indexPath: join(root, 'index.scip') };
+    writeFixtureFiles(root, {
+      'src/lock.ts': [
+        'export const pid: number = 0;',
+        '',
+        'export function cleanup(otherPath: string) {',
+        '  rmSync(otherPath, { force: true });',
+        '}',
+      ],
+    });
+    writeFileSync(
+      join(root, 'Lock.tla'),
+      `---- MODULE Lock ----
+VARIABLES lockOwner
+Cleanup == UNCHANGED lockOwner
+====
+`,
+    );
+    const db = new ScipDatabase(config);
+    const contract: TlaModelContract = {
+      module: 'Lock.tla',
+      scope: ['src/lock.ts'],
+      variables: {
+        lockOwner: { code: ['pid'], aliases: ['pid'], resource: { path: 'lockPath' } },
+      },
+      actions: {
+        Cleanup: { code: ['cleanup'], reads: [], writes: [], calls: [] },
+      },
+      invariants: [],
+      traces: [],
+    };
+
+    try {
+      const result = verifyTlaConformance(db, contract, readTlaModuleFacts(root, 'Lock.tla'));
+
+      expect(result.staticWrites.filter((write) => write.kind === 'resource')).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
   it('warns when mapped invariants are absent from the checked config', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
     writeFixtureFiles(root, {
