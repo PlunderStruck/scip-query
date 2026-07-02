@@ -10,7 +10,7 @@ import {
   readTlaModuleFactsFromSanyXml,
   type TlaModelContract,
 } from '../../src/tla/model-contract.js';
-import { verifyTlaConformance } from '../../src/tla/conformance.js';
+import { tlaFindingGroups, verifyTlaConformance, type TlaConformanceFinding } from '../../src/tla/conformance.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
 function fixtureDb(root: string): ScipDatabase {
@@ -581,5 +581,54 @@ Peek == UNCHANGED queue
     } finally {
       db.close();
     }
+  });
+});
+
+describe('tlaFindingGroups', () => {
+  function syntheticFinding(overrides: Partial<TlaConformanceFinding> & { id: string }): TlaConformanceFinding {
+    return {
+      severity: 'warning',
+      evidence: 'static-action',
+      category: 'undeclared-read',
+      message: 'synthetic finding',
+      why: [],
+      remediation: 'n/a',
+      ...overrides,
+    };
+  }
+
+  it('groups by (category, modelElement), escalates severity, and orders by count desc', () => {
+    const findings: TlaConformanceFinding[] = [
+      syntheticFinding({ id: 'A', category: 'undeclared-read', modelElement: 'Enqueue', severity: 'warning' }),
+      syntheticFinding({ id: 'B', category: 'undeclared-read', modelElement: 'Enqueue', severity: 'error' }),
+      syntheticFinding({ id: 'C', category: 'missing-invariant', modelElement: 'TypeOK', severity: 'warning' }),
+    ];
+
+    const groups = tlaFindingGroups(findings);
+
+    expect(groups).toHaveLength(2);
+    const enqueueGroup = groups.find((group) => group.modelElement === 'Enqueue');
+    expect(enqueueGroup).toMatchObject({
+      groupKey: 'undeclared-read:Enqueue',
+      category: 'undeclared-read',
+      count: 2,
+      severity: 'error', // stronger of the two member findings
+    });
+    expect(enqueueGroup?.findingIds).toEqual(['A', 'B']);
+    // Larger group (count 2) sorts before the single-member group.
+    expect(groups[0]?.modelElement).toBe('Enqueue');
+  });
+
+  it('groups findings with no modelElement under a shared key instead of dropping them', () => {
+    const findings: TlaConformanceFinding[] = [
+      syntheticFinding({ id: 'X', category: 'contract', modelElement: undefined }),
+      syntheticFinding({ id: 'Y', category: 'contract', modelElement: undefined }),
+    ];
+
+    const groups = tlaFindingGroups(findings);
+
+    expect(groups).toEqual([
+      expect.objectContaining({ groupKey: 'contract:-', count: 2, findingIds: ['X', 'Y'] }),
+    ]);
   });
 });

@@ -318,7 +318,7 @@ function runTlaVerify(db: ScipDatabase, args: readonly unknown[], opts: CommandO
     return;
   }
 
-  renderTlaVerify(result);
+  renderTlaVerify(result, booleanOptionValue(opts, 'full'));
   process.exitCode = result.exitCode;
 }
 
@@ -357,6 +357,10 @@ export const tlaQueryCommandDescriptors: CommandDescriptor[] = [
       option('--out <path>', 'Output directory (scaffold) or file (instrument)'),
       option('--module-name <name>', 'Module name for scaffolded specs'),
       option('--force', 'Overwrite existing scaffold/instrument output'),
+      option(
+        '--full',
+        'verify: print every finding ungrouped instead of (category, modelElement) groups with 3 exemplars each',
+      ),
     ]),
     renderShape: 'custom',
     docs: doc('Formal Models', [
@@ -364,6 +368,7 @@ export const tlaQueryCommandDescriptors: CommandDescriptor[] = [
       'scip-query tla scaffold src/queue/store.ts',
       'scip-query tla trace-check specs/Queue.tla --trace traces/run1.json',
       'scip-query tla verify specs/Queue.tla --timeout-ms 300000',
+      'scip-query tla verify specs/Queue.tla --full',
       'scip-query tla fetch-tools',
     ]),
     handler: handleTla,
@@ -382,7 +387,9 @@ function exitCodeFor(checker: TlaToolResult, conformance: TlaConformanceResult, 
   return 0;
 }
 
-function renderTlaVerify(result: TlaVerifyResult): void {
+const MAX_GROUP_EXEMPLARS = 3;
+
+function renderTlaVerify(result: TlaVerifyResult, full: boolean): void {
   console.log(`TLA+ verify: ${result.specPath}`);
   console.log(`Mapping: ${result.mapPath}`);
   if (result.configPath) console.log(`Config:  ${result.configPath}`);
@@ -420,8 +427,28 @@ function renderTlaVerify(result: TlaVerifyResult): void {
   console.log(
     `Findings: ${errors.length} error(s), ${unknowns.length} unknown(s), ${result.conformance.findings.length} total.`,
   );
-  for (const finding of result.conformance.findings) {
-    renderFinding(finding);
+  if (full) {
+    for (const finding of result.conformance.findings) {
+      renderFinding(finding);
+    }
+    return;
+  }
+  renderTlaFindingGroups(result.conformance);
+}
+
+function renderTlaFindingGroups(conformance: TlaConformanceResult): void {
+  const findingsById = new Map(conformance.findings.map((finding) => [finding.id, finding]));
+  console.log(`\nFinding groups (${conformance.findingGroups.length}) — pass --full for every finding ungrouped:`);
+  for (const group of conformance.findingGroups) {
+    console.log(
+      `\n[${group.severity}] ${group.category}${group.modelElement ? ` (${group.modelElement})` : ''} — ${group.count} finding(s)`,
+    );
+    for (const findingId of group.findingIds.slice(0, MAX_GROUP_EXEMPLARS)) {
+      const exemplar = findingsById.get(findingId);
+      if (exemplar) renderFinding(exemplar);
+    }
+    const remaining = group.count - MAX_GROUP_EXEMPLARS;
+    if (remaining > 0) console.log(`  ... and ${remaining} more in this group (use --full to show all)`);
   }
 }
 

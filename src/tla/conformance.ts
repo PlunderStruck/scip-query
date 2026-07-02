@@ -55,6 +55,22 @@ export interface TlaConformanceFinding {
   remediation: string;
 }
 
+/**
+ * Root-cause rollup of `findings`, grouped by (category, modelElement) —
+ * the shape mirrors DiffGateRootCauseGroup (src/queries/impact/diff-gate.ts)
+ * so agents reading both surfaces see the same grouping contract. At Vega
+ * scale a single model produced 10,724 raw findings from a handful of root
+ * causes; this is the summary a human/agent should read first.
+ */
+export interface TlaFindingGroup {
+  groupKey: string;
+  category: TlaConformanceFinding['category'];
+  modelElement?: string;
+  severity: TlaFindingSeverity;
+  count: number;
+  findingIds: string[];
+}
+
 export interface TlaConformanceResult {
   modelParse: TlaModuleFacts['modelParse'] | 'unavailable';
   modelVariables: string[];
@@ -69,6 +85,8 @@ export interface TlaConformanceResult {
   checkedInvariants: string[];
   traceStepsChecked: number;
   findings: TlaConformanceFinding[];
+  /** Summary rollup of `findings`; JSON keeps `findings` uncapped too. */
+  findingGroups: TlaFindingGroup[];
 }
 
 interface VariableResolution {
@@ -181,7 +199,44 @@ export function verifyTlaConformance(
     checkedInvariants: [...checkedInvariants],
     traceStepsChecked: traceSteps.length,
     findings,
+    findingGroups: tlaFindingGroups(findings),
   };
+}
+
+export function tlaFindingGroups(findings: readonly TlaConformanceFinding[]): TlaFindingGroup[] {
+  const groups = new Map<string, TlaFindingGroup>();
+  for (const finding of findings) {
+    const groupKey = `${finding.category}:${finding.modelElement ?? '-'}`;
+    let group = groups.get(groupKey);
+    if (!group) {
+      group = {
+        groupKey,
+        category: finding.category,
+        modelElement: finding.modelElement,
+        severity: finding.severity,
+        count: 0,
+        findingIds: [],
+      };
+      groups.set(groupKey, group);
+    }
+    group.count += 1;
+    group.findingIds.push(finding.id);
+    group.severity = strongerTlaSeverity(group.severity, finding.severity);
+  }
+  return [...groups.values()].sort(
+    (left, right) =>
+      right.count - left.count ||
+      tlaSeverityRank(right.severity) - tlaSeverityRank(left.severity) ||
+      left.groupKey.localeCompare(right.groupKey),
+  );
+}
+
+function strongerTlaSeverity(left: TlaFindingSeverity, right: TlaFindingSeverity): TlaFindingSeverity {
+  return tlaSeverityRank(right) > tlaSeverityRank(left) ? right : left;
+}
+
+function tlaSeverityRank(severity: TlaFindingSeverity): number {
+  return severity === 'error' ? 2 : severity === 'warning' ? 1 : 0;
 }
 
 function aliasesForVariables(
