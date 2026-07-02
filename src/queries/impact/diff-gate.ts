@@ -21,6 +21,11 @@ import { docsCitingFiles } from '../cleanup/doc-drift.js';
 import { exactDuplicateBodyMatches } from '../cleanup/duplicate-bodies.js';
 import { allTwinGroups } from '../cleanup/twin-drift.js';
 import type { TwinGroup } from '../cleanup/twin-drift.js';
+import {
+  coverageContractFindingMessage,
+  coverageContractTouchedByDiff,
+  evaluateCoverageContract,
+} from '../cleanup/coverage-contracts.js';
 import { checkHealthBaseline, resolveBaselinePath } from '../health/health-baseline.js';
 import { incompleteMigration } from './incomplete-migration.js';
 import { similar } from '../cleanup/similar.js';
@@ -35,6 +40,7 @@ export type DiffGateCheck =
   | 'incomplete-migration'
   | 'co-change-partner'
   | 'twin-partner'
+  | 'coverage-contract'
   | 'doc-reference'
   | 'unused-params'
   | 'new-dead'
@@ -46,6 +52,7 @@ export const DIFF_GATE_CHECKS: readonly DiffGateCheck[] = [
   'incomplete-migration',
   'co-change-partner',
   'twin-partner',
+  'coverage-contract',
   'doc-reference',
   'unused-params',
   'new-dead',
@@ -169,6 +176,9 @@ type DiffGateFindingDraft = Omit<DiffGateFinding, 'suppressionHint'>;
  *                       symbol has a same-(near-)name twin elsewhere that
  *                       was identical or already-divergent and is NOT in
  *                       the diff — a one-sided fix candidate.
+ * - coverage-contract:  a configured `coverageContracts` entry drifted —
+ *                       its declared key set no longer matches its
+ *                       ground-truth source (enumeration rot).
  * - doc-reference:      a doc cites a changed file but isn't updated in the
  *                       diff — the drift starts here.
  * - unused-params:      changed files now contain trailing parameters no body
@@ -268,6 +278,7 @@ export function diffGate(
     runCoChangePartnerCheck(db, changedForCoordination, minTogether, minConfidence, result),
   );
   runUnlessSkipped('twin-partner', () => runTwinPartnerCheck(db, impact.changedSymbols, changed, scanLimit, result));
+  runUnlessSkipped('coverage-contract', () => runCoverageContractCheck(db, changedForCoordination, result));
   runUnlessSkipped('doc-reference', () =>
     runDocReferenceCheck(db, changed, changedGitFiles, impactPlan.changedRanges, result),
   );
@@ -809,6 +820,48 @@ function runTwinPartnerCheck(
         'Advisory: twin-partner never fails the gate by itself — see the twin-partner entry in the diff-gate checks table.',
       ],
       remediation: `Update ${partner.file} alongside this change, consolidate ${changedSymbol.shortName}/${partner.shortName} into one helper, or confirm the twin should diverge on purpose.`,
+    });
+  }
+}
+
+/**
+ * coverage-contract: closes the "enumeration rot" defect class (drift-policy
+ * missing a src dir for a day, BUILTIN_SKILLS/skills/* drift, ...) — a
+ * declared key set (config-declared) checked against a ground-truth source
+ * every time either side of the contract changes. Never silently green: an
+ * unresolvable contract (e.g. tree-sitter unavailable) is its own finding.
+ */
+function runCoverageContractCheck(db: ScipDatabase, changed: ReadonlySet<string>, result: DiffGateResult): void {
+  result.checksRun.push('coverage-contract');
+  const contracts = db.config.coverageContracts ?? [];
+  for (const contract of contracts) {
+    if (!coverageContractTouchedByDiff(contract, changed)) continue;
+    const evaluation = evaluateCoverageContract(db, contract);
+    if (evaluation.status === 'ok') continue;
+
+    const id = findingId('coverage-contract', contract.name, contract.file);
+    recordFinding(result, {
+      id,
+      groupKey: `coverage-contract:${contract.name}`,
+      check: 'coverage-contract',
+      severity: evaluation.status === 'unavailable' ? 'warning' : 'error',
+      evidence: 'graph-fact',
+      actionTier: 'direct',
+      file: contract.file,
+      sourceAnalyzer: 'coverage-contracts',
+      rootCauseKey: contract.name,
+      message: coverageContractFindingMessage(evaluation),
+      why: [
+        `Contract "${contract.name}" declares that ${contract.file} (${contract.keys.type}) must track ${contract.mustEqual.type}.`,
+        evaluation.status === 'unavailable'
+          ? `The declared side could not be evaluated: ${evaluation.unavailableReason}.`
+          : `Missing: ${evaluation.missing.join(', ') || 'none'}. Extra: ${evaluation.extra.join(', ') || 'none'}.`,
+        'Either side of this contract changed in this diff.',
+      ],
+      remediation:
+        evaluation.status === 'unavailable'
+          ? 'Investigate why the declared key set could not be parsed (see the reason above) — do not treat this as a pass.'
+          : `Update ${contract.file} so its ${contract.keys.type === 'object-literal-keys' || contract.keys.type === 'string-array' ? contract.keys.identifier : contract.keys.marker} matches ${contract.mustEqual.type}, or fix the ground-truth source if the declared set is right.`,
     });
   }
 }

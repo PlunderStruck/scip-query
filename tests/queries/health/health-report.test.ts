@@ -32,6 +32,7 @@ function emptyAnalyses(overrides: Partial<HealthAnalyses> = {}): HealthAnalyses 
     complexity: { top: [], extremeCount: 0 },
     gitEvidence: null,
     suppressions: null,
+    coverageContracts: { count: 0, loc: 0 },
     ...overrides,
   };
 }

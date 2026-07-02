@@ -93,6 +93,8 @@ export interface ScipQueryConfig {
   declaredCouplings?: DeclaredCouplingConfig[];
   /** Optional analyzer configuration. */
   locality?: LocalityConfig;
+  /** Enumeration-rot contracts: a declared key set that must track a ground-truth source. */
+  coverageContracts?: CoverageContractConfig[];
 }
 
 // ── Project Config (.scipquery.json) ───────────────────────
@@ -120,6 +122,40 @@ export interface ProjectConfig {
   declaredCouplings?: DeclaredCouplingConfig[];
   /** Optional locality analyzer configuration. */
   locality?: LocalityConfig;
+  /** Enumeration-rot contracts: a declared key set that must track a ground-truth source. */
+  coverageContracts?: CoverageContractConfig[];
+}
+
+// ── Coverage Contracts ─────────────────────────────────────
+// "Enumeration rot": a hand-written key set (an object literal, a string
+// array, a markdown list) that is supposed to enumerate the same things as
+// some ground-truth source (a directory listing, the registered-command
+// list, ...) but drifts because nothing enforces it. A coverage contract
+// declares that relationship so diff-gate/health can catch the drift the
+// day it happens instead of via a human audit months later.
+
+export type CoverageContractKeySpec =
+  | { type: 'object-literal-keys'; identifier: string }
+  | { type: 'string-array'; identifier: string }
+  | { type: 'markdown-list'; marker: string };
+
+export type CoverageContractSourceSpec =
+  | { type: 'top-level-dirs'; path: string }
+  | { type: 'file-glob'; pattern: string }
+  | { type: 'registered-commands' }
+  | { type: 'builtin-skills' };
+
+export interface CoverageContractConfig {
+  /** Human-readable name for the contract, used in finding messages. */
+  name: string;
+  /** File the declared key set is extracted from. */
+  file: string;
+  /** How to extract the declared key set from `file`. */
+  keys: CoverageContractKeySpec;
+  /** The ground-truth source the declared key set must track. */
+  mustEqual: CoverageContractSourceSpec;
+  /** When false (the default), declared keys with no ground-truth match are also flagged. */
+  allowExtra?: boolean;
 }
 
 export interface LocalityConfig {

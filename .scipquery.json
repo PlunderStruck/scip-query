@@ -129,5 +129,21 @@
       "reason": "Command descriptors and command execution intentionally move together when CLI registration or dispatch behavior changes.",
       "files": ["src/runtime/commands/command-descriptors.ts", "src/runtime/commands/command-execution.ts"]
     }
+  ],
+  "coverageContracts": [
+    {
+      "name": "drift layer policy covers src dirs",
+      "file": "src/queries/cleanup/drift-policy.ts",
+      "keys": { "type": "object-literal-keys", "identifier": "SRC_LAYER_DEPENDENCIES" },
+      "mustEqual": { "type": "top-level-dirs", "path": "src" },
+      "allowExtra": false
+    },
+    {
+      "name": "BUILTIN_SKILLS covers skills dirs",
+      "file": "src/runtime/setup.ts",
+      "keys": { "type": "string-array", "identifier": "BUILTIN_SKILLS" },
+      "mustEqual": { "type": "top-level-dirs", "path": "skills" },
+      "allowExtra": false
+    }
   ]
 }

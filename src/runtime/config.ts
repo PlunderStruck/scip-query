@@ -52,6 +52,7 @@ const ROOT_CONFIG_KEYS = new Set([
   'suppressions',
   'declaredCouplings',
   'locality',
+  'coverageContracts',
 ]);
 
 const WATCH_CONFIG_KEYS = new Set(['enabled', 'debounceMs', 'cooldownMs', 'gitPollMs', 'autoRefresh', 'ignore']);
@@ -64,6 +65,16 @@ const INDEXER_OVERRIDE_CONFIG_KEYS = new Set(['pnpmWorkspaces', 'projectMode', '
 const LOCALITY_CONFIG_KEYS = new Set(['architecturalBoundarySegments']);
 const DECLARED_COUPLING_CONFIG_KEYS = new Set(['name', 'files', 'reason']);
 const SUPPRESSION_CONFIG_KEYS = new Set(['id', 'check', 'file', 'reason', 'expiresAt']);
+const COVERAGE_CONTRACT_CONFIG_KEYS = new Set(['name', 'file', 'keys', 'mustEqual', 'allowExtra']);
+const COVERAGE_CONTRACT_KEY_SPEC_KEYS = new Set(['type', 'identifier', 'marker']);
+const COVERAGE_CONTRACT_SOURCE_SPEC_KEYS = new Set(['type', 'path', 'pattern']);
+const COVERAGE_CONTRACT_KEY_SPEC_TYPES = new Set(['object-literal-keys', 'string-array', 'markdown-list']);
+const COVERAGE_CONTRACT_SOURCE_SPEC_TYPES = new Set([
+  'top-level-dirs',
+  'file-glob',
+  'registered-commands',
+  'builtin-skills',
+]);
 
 /**
  * Load project config from .scipquery.json in the project root.
@@ -309,7 +320,76 @@ export function validateProjectConfig(
       }
     }
   }
+  validateCoverageContracts(config, diagnostics, opts);
   return diagnostics;
+}
+
+function validateCoverageContracts(
+  config: ProjectConfig,
+  diagnostics: ConfigDiagnostic[],
+  opts: { projectRoot?: string },
+): void {
+  if (config.coverageContracts === undefined) return;
+  if (!Array.isArray(config.coverageContracts)) {
+    diagnostics.push({ level: 'error', path: 'coverageContracts', message: 'Must be an array.' });
+    return;
+  }
+  for (const [index, contract] of config.coverageContracts.entries()) {
+    const path = `coverageContracts[${index}]`;
+    if (!isConfigObject(contract)) {
+      diagnostics.push({ level: 'error', path, message: 'Coverage contract must be an object.' });
+      continue;
+    }
+    if (typeof contract.name !== 'string' || contract.name.trim() === '') {
+      diagnostics.push({ level: 'error', path: `${path}.name`, message: 'Coverage contract name is required.' });
+    }
+    if (typeof contract.file !== 'string' || contract.file.trim() === '') {
+      diagnostics.push({ level: 'error', path: `${path}.file`, message: 'Coverage contract file is required.' });
+    } else if (opts.projectRoot && !existsSync(join(opts.projectRoot, contract.file))) {
+      diagnostics.push({
+        level: 'warning',
+        path: `${path}.file`,
+        message: `Coverage contract file does not exist: ${contract.file}`,
+      });
+    }
+    validateCoverageContractSpec(
+      diagnostics,
+      contract.keys,
+      `${path}.keys`,
+      COVERAGE_CONTRACT_KEY_SPEC_TYPES,
+      'Unknown coverage-contract key extractor type.',
+    );
+    validateCoverageContractSpec(
+      diagnostics,
+      contract.mustEqual,
+      `${path}.mustEqual`,
+      COVERAGE_CONTRACT_SOURCE_SPEC_TYPES,
+      'Unknown coverage-contract ground-truth source type.',
+    );
+    if (contract.allowExtra !== undefined && typeof contract.allowExtra !== 'boolean') {
+      diagnostics.push({ level: 'error', path: `${path}.allowExtra`, message: 'Must be a boolean.' });
+    }
+  }
+}
+
+function validateCoverageContractSpec(
+  diagnostics: ConfigDiagnostic[],
+  spec: unknown,
+  path: string,
+  knownTypes: ReadonlySet<string>,
+  unknownTypeMessage: string,
+): void {
+  if (!isConfigObject(spec)) {
+    diagnostics.push({ level: 'error', path, message: 'Must be an object with a "type" field.' });
+    return;
+  }
+  if (typeof spec.type !== 'string' || !knownTypes.has(spec.type)) {
+    diagnostics.push({
+      level: 'error',
+      path: `${path}.type`,
+      message: `${unknownTypeMessage} Got: ${String(spec.type)}`,
+    });
+  }
 }
 
 /** Resolve watch config with defaults applied */
@@ -451,6 +531,22 @@ function reportUnknownConfigKeys(config: ProjectConfig, diagnostics: ConfigDiagn
   if (Array.isArray(typedConfig.suppressions)) {
     for (const [index, suppression] of typedConfig.suppressions.entries()) {
       reportUnknownObjectKeys(diagnostics, suppression, `suppressions[${index}]`, SUPPRESSION_CONFIG_KEYS);
+    }
+  }
+
+  if (Array.isArray(typedConfig.coverageContracts)) {
+    for (const [index, contract] of typedConfig.coverageContracts.entries()) {
+      const path = `coverageContracts[${index}]`;
+      reportUnknownObjectKeys(diagnostics, contract, path, COVERAGE_CONTRACT_CONFIG_KEYS);
+      if (isConfigObject(contract)) {
+        reportUnknownObjectKeys(diagnostics, contract.keys, `${path}.keys`, COVERAGE_CONTRACT_KEY_SPEC_KEYS);
+        reportUnknownObjectKeys(
+          diagnostics,
+          contract.mustEqual,
+          `${path}.mustEqual`,
+          COVERAGE_CONTRACT_SOURCE_SPEC_KEYS,
+        );
+      }
     }
   }
 }

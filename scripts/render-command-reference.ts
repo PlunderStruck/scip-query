@@ -24,6 +24,11 @@ const DIFF_GATE_CHECK_DESCRIPTIONS: Record<DiffGateCheck, { description: string;
       'A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched.',
     when: 'Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves.',
   },
+  'coverage-contract': {
+    description:
+      'A configured `coverageContracts` entry (.scipquery.json) drifted: its declared key set no longer matches its ground-truth source.',
+    when: 'Default diff gate, only when either side of a configured contract changed.',
+  },
   'doc-reference': {
     description: 'Docs that cite changed files and may need a matching update.',
     when: 'Default diff gate.',

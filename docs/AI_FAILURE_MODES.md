@@ -295,6 +295,7 @@ scip-query setup-agent --git-hook    # pre-commit backstop: fires whoever wrote 
 | `incomplete-migration` | New helpers or abstractions wired into some sites while older inline sites remain. | Default diff gate. |
 | `co-change-partner` | Historically coupled files that usually change together but are missing from this diff. | Default diff gate. |
 | `twin-partner` | A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched. | Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves. |
+| `coverage-contract` | A configured `coverageContracts` entry (.scipquery.json) drifted: its declared key set no longer matches its ground-truth source. | Default diff gate, only when either side of a configured contract changed. |
 | `doc-reference` | Docs that cite changed files and may need a matching update. | Default diff gate. |
 | `unused-params` | Fresh trailing parameters or options that no changed body uses. | Default diff gate. |
 | `new-dead` | Changed production symbols with zero indexed consumers. | Default diff gate. |

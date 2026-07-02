@@ -35,6 +35,8 @@ export interface HealthAnalyses {
   gitEvidence: GitEvidenceSummary | null;
   /** User-suppression inventory; null when the phase didn't run. */
   suppressions: SuppressionSummary | null;
+  /** Configured coverage-contract violations (enumeration rot); count 0 when none are configured. */
+  coverageContracts: CountLocSummary;
 }
 
 export interface CountLocSummary {

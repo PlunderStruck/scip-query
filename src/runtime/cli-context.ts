@@ -60,6 +60,7 @@ export function openDb(): ScipDatabase {
     suppressions: config.suppressions,
     declaredCouplings: config.declaredCouplings,
     locality: config.locality,
+    coverageContracts: config.coverageContracts,
   };
 
   const filter = createGitignoreFilter(projectRoot);

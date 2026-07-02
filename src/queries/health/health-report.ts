@@ -109,6 +109,7 @@ export interface HealthReport {
     complexityHotspotCount: number;
     hiddenCouplingPairs: number | null;
     hiddenCouplingScoreCount: number | null;
+    coverageContractViolations: number;
   };
   axes: HealthAxes;
   validation: HealthValidation | null;
@@ -165,6 +166,7 @@ export function buildHealthReport(analyses: HealthAnalyses): HealthReport {
       complexityHotspotCount: analyses.complexity.extremeCount,
       hiddenCouplingPairs: analyses.gitEvidence?.hiddenCoupling.pairCount ?? null,
       hiddenCouplingScoreCount: analyses.gitEvidence?.hiddenCoupling.scoreCount ?? null,
+      coverageContractViolations: analyses.coverageContracts.count,
     },
     axes: buildHealthAxes(analyses),
     validation: buildHealthValidation(analyses),
@@ -507,6 +509,18 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
       effort: analyses.drift.layerViolations > 0 ? 'medium' : 'low',
       impact: analyses.drift.layerViolations > 0 ? 'medium' : 'low',
       count: analyses.drift.count,
+      locRecoverable: 0,
+    });
+  }
+
+  if (analyses.coverageContracts.count > 0) {
+    actions.push({
+      category: 'Coverage contract drift',
+      evidence: 'graph-fact',
+      description: `${analyses.coverageContracts.count} configured coverage contract(s) drifted from their ground-truth source (enumeration rot) — run \`scip-query diff-gate\` or \`scip-query health --json\` for the missing/extra keys`,
+      effort: 'low',
+      impact: 'medium',
+      count: analyses.coverageContracts.count,
       locRecoverable: 0,
     });
   }

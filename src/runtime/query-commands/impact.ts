@@ -360,7 +360,7 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
       option('--full', 'Run unbounded semantic analysis on large indexes'),
       option(
         '--skip <check>',
-        'Skip a check (repeatable): echo, incomplete-migration, co-change-partner, twin-partner, doc-reference, unused-params, new-dead, baseline',
+        'Skip a check (repeatable): echo, incomplete-migration, co-change-partner, twin-partner, coverage-contract, doc-reference, unused-params, new-dead, baseline',
         collectValues,
         [],
       ),

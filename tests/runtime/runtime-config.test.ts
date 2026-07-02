@@ -191,6 +191,62 @@ describe('validateProjectConfig', () => {
     );
   });
 
+  it('rejects unknown coverage-contract key extractor and ground-truth source types', () => {
+    const diagnostics = validateProjectConfig({
+      coverageContracts: [
+        {
+          name: 'bad contract',
+          file: 'src/queries/cleanup/drift-policy.ts',
+          keys: { type: 'regex-scan', identifier: 'x' } as never,
+          mustEqual: { type: 'live-registry-lookup' } as never,
+        },
+      ],
+    });
+
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ level: 'error', path: 'coverageContracts[0].keys.type' }),
+        expect.objectContaining({ level: 'error', path: 'coverageContracts[0].mustEqual.type' }),
+      ]),
+    );
+  });
+
+  it('accepts a well-formed coverage contract', () => {
+    const diagnostics = validateProjectConfig({
+      coverageContracts: [
+        {
+          name: 'drift layer policy covers src dirs',
+          file: 'src/queries/cleanup/drift-policy.ts',
+          keys: { type: 'object-literal-keys', identifier: 'SRC_LAYER_DEPENDENCIES' },
+          mustEqual: { type: 'top-level-dirs', path: 'src' },
+          allowExtra: false,
+        },
+      ],
+    });
+
+    expect(diagnostics.filter((diagnostic) => diagnostic.level === 'error')).toEqual([]);
+  });
+
+  it('requires coverage contract name and file', () => {
+    const diagnostics = validateProjectConfig({
+      coverageContracts: [
+        {
+          name: '',
+          file: '',
+          keys: { type: 'string-array', identifier: 'X' },
+          mustEqual: { type: 'builtin-skills' },
+        } as never,
+      ],
+    });
+
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ level: 'error', path: 'coverageContracts[0].name' }),
+        expect.objectContaining({ level: 'error', path: 'coverageContracts[0].file' }),
+      ]),
+    );
+  });
+
   it('validates locality architectural boundary segments', () => {
     const diagnostics = validateProjectConfig({
       locality: {

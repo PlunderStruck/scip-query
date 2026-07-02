@@ -21,6 +21,7 @@ import { stats } from '../navigation/stats.js';
 import { coChange, type CoChangeFinding } from '../impact/co-change.js';
 import { gitEvidenceProduct } from '../../analysis/git-history.js';
 import { getSuppressionInventory } from '../../analysis/suppressions.js';
+import { evaluateCoverageContracts } from '../cleanup/coverage-contracts.js';
 import { buildHealthReport } from './health-report.js';
 import { HEALTH_DETECTOR_PROFILES } from '../internal/health-detector-profiles.js';
 import { clearWholeProjectEvidenceCaches } from '../internal/cache-invalidation.js';
@@ -72,6 +73,7 @@ export const HEALTH_PHASES = [
   'complexity-hotspots',
   'git-evidence',
   'suppressions',
+  'coverage-contracts',
 ] as const;
 
 export type HealthPhaseName = (typeof HEALTH_PHASES)[number];
@@ -96,7 +98,8 @@ type HealthPhaseResult =
   | { phase: 'drift'; drift: DriftSummary }
   | { phase: 'complexity-hotspots'; complexity: ComplexitySummary }
   | { phase: 'git-evidence'; gitEvidence: GitEvidenceSummary | null }
-  | { phase: 'suppressions'; suppressions: SuppressionSummary };
+  | { phase: 'suppressions'; suppressions: SuppressionSummary }
+  | { phase: 'coverage-contracts'; coverageContracts: CountLocSummary };
 
 type HealthPhaseRunner = (
   db: ScipDatabase,
@@ -186,6 +189,10 @@ const HEALTH_PHASE_RUNNERS: Record<HealthPhaseName, HealthPhaseRunner> = {
   suppressions: (db, _scope, budget) => ({
     phase: 'suppressions',
     suppressions: summarizeSuppressions(db, budget),
+  }),
+  'coverage-contracts': (db, _scope, budget) => ({
+    phase: 'coverage-contracts',
+    coverageContracts: summarizeCoverageContracts(db, budget),
   }),
 };
 
@@ -310,6 +317,10 @@ function healthAnalysesFromPhases(phaseResults: readonly HealthPhaseResult[]): H
     suppressions:
       optionalHealthPhase<Extract<HealthPhaseResult, { phase: 'suppressions' }>>(phaseResults, 'suppressions')
         ?.suppressions ?? null,
+    coverageContracts: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'coverage-contracts' }>>(
+      phaseResults,
+      'coverage-contracts',
+    ).coverageContracts,
   };
   return analyses;
 }
@@ -594,6 +605,19 @@ function summarizeSuppressions(db: ScipDatabase, budget: HealthBudget): Suppress
   return runHealthPhase(db, budget, 'suppressions', () => {
     const inventory = getSuppressionInventory(db);
     return { total: inventory.total, byCategory: { ...inventory.byCategory } };
+  });
+}
+
+function summarizeCoverageContracts(db: ScipDatabase, budget: HealthBudget): CountLocSummary {
+  return runHealthPhase(db, budget, 'coverage-contracts', () => {
+    const contracts = db.config.coverageContracts ?? [];
+    const results = evaluateCoverageContracts(db, contracts);
+    const violations = results.filter((result) => result.status !== 'ok');
+    return {
+      count: violations.length,
+      loc: 0,
+      files: [...new Set(violations.map((result) => result.file))].sort(),
+    };
   });
 }
 
