@@ -122,6 +122,7 @@ function writeInstructionsBlock(projectRoot: string, result: SetupAgentResult): 
     'This repo is indexed by scip-query (compiler-resolved code intelligence).',
     '',
     '- Unsure how to explore, plan, verify, or clean up here: invoke the `scip-query` skill — it routes to the right specialist skill.',
+    '- Each specialist skill carries its own command shortlist — prefer it over the full `_shared` catalog.',
     '- For non-trivial implementation requests: plan first (`concrete-plan` skill, anchored by `scip-query plan-context <target>`), then implement.',
     '- After the change, run the check matching what you did: extracted a helper -> `scip-query incomplete-migration`; new helper -> `scip-query recent-duplicates`; new params -> `scip-query unused-params`; new wrapper -> `scip-query wrapper-candidates`; schema/config change -> `scip-query co-change <file>`; deleted code -> `scip-query cleanup-plan --verify`.',
     '- Before declaring the work done: `scip-query reindex && scip-query diff-gate` — fix findings or state why each is accepted.',

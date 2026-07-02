@@ -132,7 +132,7 @@ Round 1+2 findings, taxonomized — each class maps to a mechanical detector or 
 - **Validation**: dry-run against the pre-fix react-profile.ts (worktree at ec66963) — must rediscover the `jsx_fragment` dead branch.
 
 ### 19.5 - Router + AGENTS.md alignment
-- [ ] **File**: `skills/scip-query/SKILL.md` (router), `src/runtime/agent-setup.ts` seeded block
+- [x] **File**: `skills/scip-query/SKILL.md` (router), `src/runtime/agent-setup.ts` seeded block
 - **Change**: router table adds the three new lenses with one-line triggers; tie-breaks updated (twin-drift vs cleanup-audit: "same-name/consolidation questions → twin-drift; general bloat → cleanup-audit"). Seeded AGENTS.md block mentions the lens principle in one sentence ("skills carry their own command shortlist — prefer it over the full catalog").
 - **Validation**: lockstep test green; router has no two-owner rows.
 
