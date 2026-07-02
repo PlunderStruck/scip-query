@@ -1,6 +1,7 @@
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
+import { expandWorkspacePattern } from '../../resolution/workspace-packages.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { TYPESCRIPT_SEMANTIC_EXTENSIONS } from './source-kinds.js';
 
@@ -94,32 +95,6 @@ function discoverWorkspaceDirs(projectRoot: string): string[] {
   const patterns = Array.isArray(parsed.workspaces) ? parsed.workspaces : (parsed.workspaces?.packages ?? []);
 
   return patterns.flatMap((pattern) => expandWorkspacePattern(projectRoot, pattern));
-}
-
-function expandWorkspacePattern(projectRoot: string, pattern: string): string[] {
-  if (!pattern || pattern.startsWith('!') || pattern.includes('node_modules')) return [];
-  if (!pattern.includes('*')) {
-    const candidate = path.join(projectRoot, pattern);
-    return isDirectory(candidate) ? [candidate] : [];
-  }
-
-  const starIndex = pattern.indexOf('*');
-  const basePrefix = pattern.slice(0, starIndex).replace(/\/$/, '');
-  const suffix = pattern.slice(starIndex + 1).replace(/^\//, '');
-  const baseDir = path.join(projectRoot, basePrefix || '.');
-  if (!isDirectory(baseDir)) return [];
-
-  return readdirSync(baseDir)
-    .map((entry) => path.join(baseDir, entry, suffix))
-    .filter(isDirectory);
-}
-
-function isDirectory(candidate: string): boolean {
-  try {
-    return statSync(candidate).isDirectory();
-  } catch {
-    return false;
-  }
 }
 
 function isIgnoredTsconfig(projectRoot: string, tsconfigPath: string): boolean {

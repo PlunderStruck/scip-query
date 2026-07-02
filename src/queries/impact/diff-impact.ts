@@ -5,6 +5,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { semanticCallerMap } from '../../semantic/shared-primitives.js';
+import { sourceFallbackCallerEvidenceMap } from '../../symbols/references/caller-evidence.js';
 import { isCallableSymbol, isModuleLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { getAst, type SyntaxNode } from '../../source/ast.js';
 import { rangesByFile } from './diff-ranges.js';
@@ -147,10 +148,27 @@ export function diffImpactPartial(
   // for the rest.
   const fanInBySymbolId = scipFanInBySymbolId(db, symbolIds);
   const consumerFilesBySymbolId = scipConsumerFilesBySymbolId(db, symbolIds, allChangedFiles);
-  const semanticConsumers = semanticCallerMap(
-    db,
-    defs.filter((def) => fanInBySymbolId.get(def.symbolId) === 0),
+  const stillZeroAfterScip = defs.filter((def) => (fanInBySymbolId.get(def.symbolId) ?? 0) === 0);
+  // ts-morph's checker can throw on pathological files (observed: an
+  // internal `resolveErrorCall`/`getTypeOfSymbol` crash in a large
+  // generated-contract file) — an enrichment tier failing must degrade to
+  // "found nothing from this tier", never take the whole gate down.
+  const semanticConsumers = safeConsumerMap(() => semanticCallerMap(db, stillZeroAfterScip));
+  // Semantic (ts-morph) resolves most cross-file gaps the raw SCIP index
+  // misses, but shares the same tsconfig-alias/workspace-package resolution
+  // surface as everything else in this tool — when it also comes up empty,
+  // fall through to the same source-fallback layer `dead`/`isolated`/
+  // `stale-abstractions`/`production-callables` already lean on
+  // (sourceImportPathsByLocalName -> resolveImportPath), instead of letting
+  // `new-dead` report a symbol whose only real gap is index/resolution
+  // coverage, not liveness. Scoped to the same shrinking candidate set for
+  // the same reason semantic already is: this is a per-definition
+  // whole-project scan, worth paying only where the cheaper tiers found
+  // nothing.
+  const stillZeroAfterSemantic = stillZeroAfterScip.filter(
+    (def) => (semanticConsumers.get(def.symbolId)?.size ?? 0) === 0,
   );
+  const sourceFallbackConsumers = safeConsumerMap(() => sourceFallbackCallerEvidenceMap(db, stillZeroAfterSemantic));
   for (const def of defs) {
     addChangedDefinitionImpact(
       db,
@@ -159,6 +177,7 @@ export function diffImpactPartial(
       changedSymbols,
       consumerMap,
       semanticConsumers.get(def.symbolId) ?? new Set<string>(),
+      sourceFallbackConsumers.get(def.symbolId) ?? new Set<string>(),
       fanInBySymbolId.get(def.symbolId) ?? 0,
       consumerFilesBySymbolId.get(def.symbolId) ?? new Set<string>(),
     );
@@ -733,10 +752,11 @@ function addChangedDefinitionImpact(
   changedSymbols: ChangedSymbol[],
   consumerMap: ConsumerMap,
   semanticConsumers: ReadonlySet<string>,
+  sourceFallbackConsumers: ReadonlySet<string>,
   indexedFanIn: number,
   indexedConsumers: ReadonlySet<string>,
 ): void {
-  const fanIn = Math.max(indexedFanIn, semanticConsumers.size);
+  const fanIn = Math.max(indexedFanIn, semanticConsumers.size, sourceFallbackConsumers.size);
   if (!shouldReportChangedDefinition(definition, fanIn)) return;
 
   const shortName = shortenSymbol(definition.symbol);
@@ -754,6 +774,24 @@ function addChangedDefinitionImpact(
   }
   for (const file of semanticConsumers) {
     addConsumerFile(db, changedFileSet, consumerMap, file, shortName);
+  }
+  for (const file of sourceFallbackConsumers) {
+    addConsumerFile(db, changedFileSet, consumerMap, file, shortName);
+  }
+}
+
+// scip-query: ignore-wrapper — one place to convert "an evidence tier
+// threw" into "this tier found nothing" for the two whole-project
+// enrichment scans (semantic, source-fallback) that changed-symbol impact
+// leans on; callers must not crash the gate over a best-effort tier.
+function safeConsumerMap<T>(compute: () => Map<number, T>): Map<number, T> {
+  try {
+    return compute();
+  } catch (err) {
+    console.error(
+      `warning: diff-impact enrichment scan failed, continuing without it: ${err instanceof Error ? err.message : err}`,
+    );
+    return new Map();
   }
 }
 

@@ -20,6 +20,7 @@ import type { ScipDatabase } from '../storage/db.js';
 import { sha256Hex } from '../storage/evidence-cache.js';
 import { createPerDbCache, createPerDbValue } from '../storage/per-db-cache.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
+import { discoverWorkspacePackages, type WorkspacePackage } from './workspace-packages.js';
 
 // Derived from the read-only index — valid for the connection's lifetime.
 const INDEXED_PATH_CACHE = createPerDbValue<Set<string>>('indexed-paths', { clearGroups: [] });
@@ -67,6 +68,14 @@ const TSCONFIG_ALIAS_CANDIDATE_NAMES = [
   'tsconfig.node.json',
   'tsconfig.base.json',
 ];
+
+// Workspace-package (`@scope/pkg`, `@scope/pkg/subpath`) specifier
+// resolution for pnpm/npm/yarn monorepos. Project-wide (unlike the tsconfig
+// alias cache above, package names are unique across the whole workspace,
+// not per-directory), so one discovery pass per db connection is enough.
+const WORKSPACE_PACKAGES_CACHE = createPerDbValue<readonly WorkspacePackage[]>('workspace-packages', {
+  clearGroups: ['whole-project'],
+});
 
 // Source-extension families. The language-parser registry imports these
 // constants too, so adding an extension changes resolution and parser dispatch
@@ -200,7 +209,7 @@ export function resolveImportPath(db: ScipDatabase, importerPath: string, specif
 // disk fallback are tried in priority order.
 export function resolveJavaScriptImportPath(db: ScipDatabase, importerPath: string, specifier: string): string | null {
   if (!specifier.startsWith('.') && !specifier.startsWith('/')) {
-    return resolveTsconfigPathAliasImport(db, importerPath, specifier);
+    return resolveTsconfigPathAliasImport(db, importerPath, specifier) ?? resolveWorkspacePackageImport(db, specifier);
   }
 
   const importerDir = dirname(join(db.config.projectRoot, importerPath));
@@ -266,6 +275,92 @@ function matchTsconfigPathAlias(config: TsconfigAliasConfig, specifier: string):
     }
   }
   return targets;
+}
+
+/**
+ * `@scope/pkg` / `@scope/pkg/subpath` specifiers in a pnpm/npm/yarn
+ * workspace resolve at runtime through `node_modules` symlinks into a
+ * built `dist/` the package's own `package.json` `exports` map points at —
+ * which not only isn't indexed (dist output is conventionally excluded)
+ * but frequently doesn't exist yet in a freshly cloned, unbuilt repo. The
+ * source-level answer this resolver needs is the *source* file the built
+ * output was compiled from, so an `exports` target under `dist/` is
+ * remapped onto the equivalent `src/` path (the universal 1:1 build-output
+ * convention); when a package declares no matching `exports` entry at all,
+ * `src/<subpath>` / `src/<subpath>/index` are tried directly as a
+ * best-effort fallback.
+ */
+function resolveWorkspacePackageImport(db: ScipDatabase, specifier: string): string | null {
+  const match = matchWorkspacePackage(workspacePackagesFor(db), specifier);
+  if (!match) return null;
+
+  const indexedPaths = getIndexedPaths(db);
+  for (const target of workspacePackageImportCandidates(match)) {
+    const absolute = resolve(db.config.projectRoot, match.pkg.relativeDir, target);
+    for (const candidate of candidateImportPaths(absolute)) {
+      const relativeCandidate = normalizePath(relative(db.config.projectRoot, candidate));
+      if (indexedPaths.has(relativeCandidate) || existsSync(candidate)) {
+        return relativeCandidate;
+      }
+    }
+  }
+
+  return null;
+}
+
+function workspacePackagesFor(db: ScipDatabase): readonly WorkspacePackage[] {
+  return WORKSPACE_PACKAGES_CACHE.get(db, () => discoverWorkspacePackages(db.config.projectRoot));
+}
+
+interface WorkspacePackageMatch {
+  pkg: WorkspacePackage;
+  /** Specifier text after `<package name>/`, or '' for the package root. */
+  subpath: string;
+}
+
+function matchWorkspacePackage(packages: readonly WorkspacePackage[], specifier: string): WorkspacePackageMatch | null {
+  let best: WorkspacePackageMatch | null = null;
+  for (const pkg of packages) {
+    let subpath: string | null = null;
+    if (specifier === pkg.name) subpath = '';
+    else if (specifier.startsWith(`${pkg.name}/`)) subpath = specifier.slice(pkg.name.length + 1);
+    if (subpath === null) continue;
+    if (!best || pkg.name.length > best.pkg.name.length) best = { pkg, subpath };
+  }
+  return best;
+}
+
+function workspacePackageImportCandidates(match: WorkspacePackageMatch): string[] {
+  const candidates: string[] = [];
+  const exportsTarget = exportsTargetForSubpath(match.pkg.exports, match.subpath);
+  if (exportsTarget) {
+    const srcCandidate = distTargetToSrcCandidate(exportsTarget);
+    if (srcCandidate) candidates.push(srcCandidate);
+  }
+  candidates.push(match.subpath ? `src/${match.subpath}` : 'src/index');
+  return candidates;
+}
+
+function exportsTargetForSubpath(exportsField: unknown, subpath: string): string | null {
+  if (!exportsField || typeof exportsField !== 'object') return null;
+  const key = subpath === '' ? '.' : `./${subpath}`;
+  return firstStringConditionTarget((exportsField as Record<string, unknown>)[key]);
+}
+
+function firstStringConditionTarget(value: unknown): string | null {
+  if (typeof value === 'string') return value;
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  for (const condition of ['types', 'import', 'default', 'require', 'node']) {
+    const target = firstStringConditionTarget(record[condition]);
+    if (target) return target;
+  }
+  return null;
+}
+
+function distTargetToSrcCandidate(target: string): string | null {
+  const normalized = target.replace(/^\.\//, '');
+  return normalized.startsWith('dist/') ? `src/${normalized.slice('dist/'.length)}` : null;
 }
 
 // scip-query: ignore-wrapper — importer-directory cache key layer sits on

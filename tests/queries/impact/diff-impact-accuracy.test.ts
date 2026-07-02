@@ -242,6 +242,96 @@ describe('diff-impact accuracy', () => {
     }
   });
 
+  // Reproduces docs/plans/2026-07-02-followups.md item 2 / the 2026-07-01
+  // Vega calibration's `new-dead` false positives (`AISettingsAuthType` and
+  // siblings): a type newly added to a pnpm workspace package, consumed
+  // only through a workspace-package specifier (`@fixture/shared/contracts`)
+  // from another app in the same monorepo. scip-typescript emits zero
+  // mention rows for the consumer on this shape (confirmed live against the
+  // real Vega repo — see the accompanying commit message); before this fix
+  // `diffImpactPartial` had no fallback tier at all wired for the
+  // changed-symbol fan-in computation, so `new-dead` reported it as
+  // "changed but has zero indexed consumers" even though a real consumer
+  // exists on disk.
+  it('does not report zero fan-in for a new type consumed only through a workspace-package specifier', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-query-diff-impact-workspace-'));
+    mkdirSync(join(tempDir, 'packages/shared/src'), { recursive: true });
+    mkdirSync(join(tempDir, 'apps/web/src'), { recursive: true });
+
+    writeFileSync(
+      join(tempDir, 'pnpm-workspace.yaml'),
+      ['packages:', '  - "apps/*"', '  - "packages/*"', ''].join('\n'),
+    );
+    writeFileSync(join(tempDir, 'package.json'), JSON.stringify({ name: 'fixture-root', private: true }));
+    writeFileSync(
+      join(tempDir, 'packages/shared/package.json'),
+      JSON.stringify({
+        name: '@fixture/shared',
+        exports: { './contracts': { types: './dist/contracts.d.ts', import: './dist/contracts.js' } },
+      }),
+    );
+    // No dist/ exists — mirrors an unbuilt, freshly cloned monorepo.
+    writeFileSync(
+      join(tempDir, 'packages/shared/src/contracts.ts'),
+      ['export interface NewType {', '  id: string;', '}', ''].join('\n'),
+    );
+    writeFileSync(
+      join(tempDir, 'apps/web/src/consumer.ts'),
+      [
+        "import type { NewType } from '@fixture/shared/contracts';",
+        'export function describe(value: NewType): string {',
+        '  return value.id;',
+        '}',
+        '',
+      ].join('\n'),
+    );
+
+    const dbPath = join(tempDir, 'index.db');
+    const sqliteDb = new Database(dbPath);
+    createSchema(sqliteDb);
+    sqliteDb.exec(`
+      INSERT INTO documents (id, language, relative_path) VALUES
+        (1, 'typescript', 'packages/shared/src/contracts.ts'),
+        (2, 'typescript', 'apps/web/src/consumer.ts');
+
+      INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
+        (1, 'scip-typescript npm @fixture/shared 1.0.0 src/\`contracts.ts\`/NewType#', 'NewType', 11, 'interface NewType');
+
+      INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+        (1, 1, 1, 0, 0, 2, 1);
+
+      INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+        (1, 1, 0, 0, 3, X'00');
+
+      -- Definition-site row only. Zero mention rows anywhere for
+      -- apps/web/src/consumer.ts referencing NewType — the real
+      -- scip-typescript gap this fixture reproduces.
+      INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+        (1, 1, 1);
+    `);
+    sqliteDb.close();
+
+    const config: ScipQueryConfig = { dbPath, indexPath: join(tempDir, 'index.scip'), projectRoot: tempDir };
+    const db = new ScipDatabase(config);
+    try {
+      const result = diffImpactPartial(
+        db,
+        ['packages/shared/src/contracts.ts'],
+        ['packages/shared/src/contracts.ts'],
+        [{ file: 'packages/shared/src/contracts.ts', startLine: 0, endLine: 2 }],
+      );
+
+      const newType = result.changedSymbols.find((symbol) => symbol.shortName.endsWith('NewType'));
+      expect(newType).toBeDefined();
+      expect(newType!.fanIn).toBeGreaterThan(0);
+      expect(result.consumerEntries).toEqual([
+        { file: 'apps/web/src/consumer.ts', symbols: ['src:contracts:NewType'] },
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
   it('attributes changed initializer residue to the enclosing declaration span', () => {
     const definition = indexedDefinition({
       symbolId: 10,
