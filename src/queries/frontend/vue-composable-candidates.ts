@@ -84,12 +84,12 @@ export function vueComposableCandidates(
     focusFiles,
     candidateIndex,
     profile: { name: 'vue-composable-candidates' },
-    compare: (a, b) => compareProfiles(a, b, minSimilarity, minSharedBehaviors),
+    compare: (a, b) => compareVueComposableProfiles(a, b, minSimilarity, minSharedBehaviors),
     sort: (a, b) => b.similarity - a.similarity || a.fileA.localeCompare(b.fileA) || a.fileB.localeCompare(b.fileB),
   });
 }
 
-function compareProfiles(
+function compareVueComposableProfiles(
   a: VueBehaviorPairwiseProfile,
   b: VueBehaviorPairwiseProfile,
   minSimilarity: number,
@@ -97,7 +97,7 @@ function compareProfiles(
 ): VueComposableCandidateResult | null {
   const shared = intersection(a.tokens, b.tokens);
   if (shared.size < minSharedBehaviors) return null;
-  if (!hasMeaningfulBehaviorOverlap(shared)) return null;
+  if (!hasMeaningfulVueBehaviorOverlap(shared)) return null;
   const similarity = behaviorSimilarity(a.tokens, b.tokens);
   if (similarity < minSimilarity) return null;
 
@@ -142,7 +142,7 @@ function compareProfiles(
     recommendation: evidence.recommendation,
     uniqueToA: sortedTokens(difference(a.tokens, b.tokens)).slice(0, 25),
     uniqueToB: sortedTokens(difference(b.tokens, a.tokens)).slice(0, 25),
-    reason: behaviorReason({
+    reason: vueBehaviorReason({
       sharedComposables,
       sharedStores,
       sharedRequests,
@@ -204,7 +204,7 @@ function vueComposableRecommendation(evidenceClass: VueComposableEvidenceClass):
   }
 }
 
-function hasMeaningfulBehaviorOverlap(shared: ReadonlySet<string>): boolean {
+function hasMeaningfulVueBehaviorOverlap(shared: ReadonlySet<string>): boolean {
   let composableBehavior = 0;
   let storeBehavior = 0;
   let requestBehavior = 0;
@@ -255,7 +255,7 @@ function hasMeaningfulBehaviorOverlap(shared: ReadonlySet<string>): boolean {
   ).pass;
 }
 
-function behaviorReason(parts: {
+function vueBehaviorReason(parts: {
   sharedComposables: readonly string[];
   sharedStores: readonly string[];
   sharedRequests: readonly string[];

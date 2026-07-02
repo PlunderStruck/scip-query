@@ -63,7 +63,7 @@ const LIFECYCLE_CALLS = new Set([
   'onErrorCaptured',
 ]);
 
-const REQUEST_CALLS = new Set(['axios', 'fetch', 'runRequest', 'useAsyncData', 'useFetch', 'useResource']);
+const VUE_REQUEST_CALLS = new Set(['axios', 'fetch', 'runRequest', 'useAsyncData', 'useFetch', 'useResource']);
 
 const MACRO_CALLS = new Set([
   'defineEmits',
@@ -265,7 +265,7 @@ function categoriesForCall(name: string): VueScriptCallCategory[] {
   if (/^use[A-Z0-9_].*Store$/.test(name)) categories.push('store');
   if (REACTIVITY_CALLS.has(name)) categories.push('reactivity');
   if (LIFECYCLE_CALLS.has(name)) categories.push('lifecycle');
-  if (REQUEST_CALLS.has(name)) categories.push('request');
+  if (VUE_REQUEST_CALLS.has(name)) categories.push('request');
   if (MACRO_CALLS.has(name)) categories.push('macro');
   return categories;
 }

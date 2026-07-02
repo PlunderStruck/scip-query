@@ -65,7 +65,7 @@ export function vueLargeViewPressure(
     .filter((profile) => !filePattern || profile.file.includes(filePattern));
   return profiles
     .map((profile) =>
-      pressureResult(profile, {
+      vuePressureResult(profile, {
         minTotalLines,
         minTemplateLines,
         minScriptLines,
@@ -77,7 +77,7 @@ export function vueLargeViewPressure(
     .slice(0, limit);
 }
 
-function pressureResult(
+function vuePressureResult(
   profile: VueComponentBehaviorProfile,
   thresholds: {
     minTotalLines: number;
@@ -95,7 +95,7 @@ function pressureResult(
     ? [...new Set([...pressure.pressureKinds, dominant])]
     : pressure.pressureKinds;
   const contextKind = vueContextKind(profile.file);
-  const recommendationKind = recommendationKindFor(dominant, contextKind);
+  const recommendationKind = vueRecommendationKindFor(dominant, contextKind);
   const totalLines = profile.totalLines + profile.delegatedComposableLines;
   return {
     file: profile.file,
@@ -113,7 +113,7 @@ function pressureResult(
     pressureKinds,
     contextKind,
     recommendationKind,
-    recommendation: recommendationFor(recommendationKind, contextKind),
+    recommendation: vueRecommendationFor(recommendationKind, contextKind),
     reasons,
     loc: totalLines,
   };
@@ -171,7 +171,7 @@ function vueContextKind(file: string): VueLargeViewContextKind {
   const lower = file.toLowerCase();
   const tokens = lower.split(/[^a-z0-9]+/).filter(Boolean);
   if (
-    tokens.some((token) => ROUTE_PAGE_TOKENS.has(token)) ||
+    tokens.some((token) => VUE_ROUTE_PAGE_TOKENS.has(token)) ||
     /(?:view|page|route)\.vue$/i.test(file) ||
     /(?:^|\/)(views|pages|routes)\//i.test(file)
   ) {
@@ -180,7 +180,7 @@ function vueContextKind(file: string): VueLargeViewContextKind {
   return 'component';
 }
 
-function recommendationKindFor(
+function vueRecommendationKindFor(
   dominant: VueLargeViewPressureAxis,
   contextKind: VueLargeViewContextKind,
 ): VueLargeViewRecommendationKind {
@@ -193,7 +193,7 @@ function recommendationKindFor(
   return 'total-size-review';
 }
 
-function recommendationFor(
+function vueRecommendationFor(
   recommendationKind: VueLargeViewRecommendationKind,
   contextKind: VueLargeViewContextKind,
 ): string {
@@ -217,4 +217,4 @@ function recommendationFor(
   }
 }
 
-const ROUTE_PAGE_TOKENS = new Set(['landing', 'page', 'pages', 'route', 'routes', 'view', 'views']);
+const VUE_ROUTE_PAGE_TOKENS = new Set(['landing', 'page', 'pages', 'route', 'routes', 'view', 'views']);

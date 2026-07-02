@@ -57,7 +57,7 @@ export function reactLargeComponentPressure(
     .filter((profile) => !filePattern || profile.file.includes(filePattern) || profile.name.includes(filePattern));
   return profiles
     .map((profile) =>
-      pressureResult(profile, {
+      reactPressureResult(profile, {
         minComponentLines,
         minFileLines,
         minJsxTokens,
@@ -69,7 +69,7 @@ export function reactLargeComponentPressure(
     .slice(0, limit);
 }
 
-function pressureResult(
+function reactPressureResult(
   profile: ReactComponentBehaviorProfile,
   thresholds: {
     minComponentLines: number;
@@ -96,7 +96,7 @@ function pressureResult(
   const dominant = pressure.dominantPressure;
   const pressureKinds = pressure.pressureKinds;
   const contextKind = reactContextKind(profile);
-  const recommendationKind = recommendationKindFor(dominant, pressureKinds, contextKind);
+  const recommendationKind = reactRecommendationKindFor(dominant, pressureKinds, contextKind);
   return {
     file: profile.file,
     component: profile.name,
@@ -108,7 +108,7 @@ function pressureResult(
     pressureKinds,
     contextKind,
     recommendationKind,
-    recommendation: recommendationFor(recommendationKind, contextKind),
+    recommendation: reactRecommendationFor(recommendationKind, contextKind),
     reasons,
     loc: profile.loc,
   };
@@ -168,7 +168,7 @@ function reactContextKind(profile: ReactComponentBehaviorProfile): ReactLargeCom
   const routeNamed =
     /(?:Page|Route|Screen|View)$/.test(baseName) ||
     /(?:Page|Route|Screen|View)$/.test(profile.name) ||
-    lowerNameTokens.some((token) => ROUTE_NAME_TOKENS.has(token));
+    lowerNameTokens.some((token) => REACT_ROUTE_NAME_TOKENS.has(token));
   if (routeNamed || (routeRootIndex >= 0 && !nestedLocalComponent && !componentNamed)) {
     return 'route-page';
   }
@@ -184,7 +184,7 @@ function componentNameLooksLocal(name: string): boolean {
   return [...LOCAL_COMPONENT_NAME_SUFFIX_TOKENS].some((token) => name.endsWith(titleCaseToken(token)));
 }
 
-function recommendationKindFor(
+function reactRecommendationKindFor(
   dominant: ReactLargeComponentPressureAxis,
   pressureKinds: ReactLargeComponentPressureAxis[],
   contextKind: ReactLargeComponentContextKind,
@@ -199,7 +199,7 @@ function recommendationKindFor(
   return 'component-decomposition';
 }
 
-function recommendationFor(
+function reactRecommendationFor(
   recommendationKind: ReactLargeComponentRecommendationKind,
   contextKind: ReactLargeComponentContextKind,
 ): string {
@@ -257,7 +257,7 @@ const ROUTE_DIRECTORY_TOKENS = new Set([
   'view',
   'views',
 ]);
-const ROUTE_NAME_TOKENS = new Set(['landing', 'page', 'route', 'screen', 'view']);
+const REACT_ROUTE_NAME_TOKENS = new Set(['landing', 'page', 'route', 'screen', 'view']);
 
 function titleCaseToken(token: string): string {
   return token.charAt(0).toUpperCase() + token.slice(1);

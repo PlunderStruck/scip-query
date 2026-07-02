@@ -87,7 +87,7 @@ export function reactHookCandidates(
     focusFiles,
     candidateIndex,
     profile: { name: 'react-hook-candidates' },
-    compare: (a, b) => compareProfiles(a, b, minSimilarity, minSharedBehaviors),
+    compare: (a, b) => compareReactHookProfiles(a, b, minSimilarity, minSharedBehaviors),
     sort: (a, b) =>
       b.similarity - a.similarity ||
       a.fileA.localeCompare(b.fileA) ||
@@ -97,7 +97,7 @@ export function reactHookCandidates(
   });
 }
 
-function compareProfiles(
+function compareReactHookProfiles(
   a: ReactBehaviorPairwiseProfile,
   b: ReactBehaviorPairwiseProfile,
   minSimilarity: number,
@@ -105,7 +105,7 @@ function compareProfiles(
 ): ReactHookCandidateResult | null {
   const shared = intersection(a.tokens, b.tokens);
   if (shared.size < minSharedBehaviors) return null;
-  if (!hasMeaningfulBehaviorOverlap(shared)) return null;
+  if (!hasMeaningfulReactBehaviorOverlap(shared)) return null;
   const similarity = behaviorSimilarity(a.tokens, b.tokens);
   if (similarity < minSimilarity) return null;
 
@@ -146,7 +146,7 @@ function compareProfiles(
     recommendation: evidence.recommendation,
     uniqueToA: sortedTokens(difference(a.tokens, b.tokens)).slice(0, 25),
     uniqueToB: sortedTokens(difference(b.tokens, a.tokens)).slice(0, 25),
-    reason: behaviorReason({
+    reason: reactBehaviorReason({
       sharedHooks,
       sharedReactHooks,
       sharedEffects,
@@ -205,7 +205,7 @@ function reactHookRecommendation(evidenceClass: ReactHookEvidenceClass): string 
   }
 }
 
-function hasMeaningfulBehaviorOverlap(shared: ReadonlySet<string>): boolean {
+function hasMeaningfulReactBehaviorOverlap(shared: ReadonlySet<string>): boolean {
   let customHooks = 0;
   let reactHooks = 0;
   let effects = 0;
@@ -248,7 +248,7 @@ function hasMeaningfulBehaviorOverlap(shared: ReadonlySet<string>): boolean {
   ).pass;
 }
 
-function behaviorReason(parts: {
+function reactBehaviorReason(parts: {
   sharedHooks: readonly string[];
   sharedReactHooks: readonly string[];
   sharedEffects: readonly string[];

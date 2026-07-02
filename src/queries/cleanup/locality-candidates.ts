@@ -302,7 +302,7 @@ function buildLocalityCandidate(
     whyNoSuggestedHome: destination.whyNoSuggestedHome,
     counterevidence,
     reasons,
-    recommendation: recommendationFor(tier, destination.suggestedHome, consumerCoverage),
+    recommendation: localityRecommendationFor(tier, destination.suggestedHome, consumerCoverage),
   };
 }
 
@@ -676,7 +676,7 @@ function reasonsFor(
   return reasons;
 }
 
-function recommendationFor(
+function localityRecommendationFor(
   tier: LocalityRecommendedTier,
   suggestedHome: string | null,
   consumerCoverage: LocalityConsumerCoverage,

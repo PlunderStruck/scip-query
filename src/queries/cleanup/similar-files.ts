@@ -54,7 +54,7 @@ export function similarFiles(
     overrunFactor: 5,
     candidateIndex,
     profile: { name: 'similar-files' },
-    compare: (a, b) => compareProfiles(a, b, minSimilarity, distinctiveDeps),
+    compare: (a, b) => compareFileProfiles(a, b, minSimilarity, distinctiveDeps),
   });
 }
 
@@ -124,7 +124,7 @@ function classifyDependencyPopularity(depMap: Map<string, Set<string>>): {
   return { universalDeps, distinctiveDeps };
 }
 
-function compareProfiles(
+function compareFileProfiles(
   a: FileProfile,
   b: FileProfile,
   minSimilarity: number,

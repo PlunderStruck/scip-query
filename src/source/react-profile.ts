@@ -64,7 +64,7 @@ const BUILTIN_HOOKS = new Set([
 const EFFECT_HOOKS = new Set(['useEffect', 'useInsertionEffect', 'useLayoutEffect']);
 const STATE_HOOKS = new Set(['useActionState', 'useOptimistic', 'useReducer', 'useRef', 'useState']);
 const GENERIC_HOOKS = new Set(['useLocation', 'useNavigate', 'useParams', 'useSearchParams', 'useTranslation']);
-const REQUEST_CALLS = new Set([
+const REACT_REQUEST_CALLS = new Set([
   'axios',
   'fetch',
   'gql',
@@ -627,7 +627,7 @@ function recordCall(name: string, facts: BehaviorFacts): void {
 }
 
 function isRequestCall(name: string): boolean {
-  if (REQUEST_CALLS.has(name)) return true;
+  if (REACT_REQUEST_CALLS.has(name)) return true;
   const hookName = /^use([A-Z0-9_].*)$/.exec(name)?.[1];
   return hookName ? /(Query|Mutation|Fetch|Resource)$/.test(hookName) : false;
 }

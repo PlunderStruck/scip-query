@@ -80,7 +80,7 @@ export function reactComponentDuplicates(
     focusFiles,
     candidateIndex,
     profile: { name: 'react-component-duplicates' },
-    compare: (a, b) => compareProfiles(a, b, minSimilarity),
+    compare: (a, b) => compareReactComponentProfiles(a, b, minSimilarity),
     sort: (a, b) =>
       b.similarity - a.similarity ||
       a.fileA.localeCompare(b.fileA) ||
@@ -90,7 +90,7 @@ export function reactComponentDuplicates(
   });
 }
 
-function compareProfiles(
+function compareReactComponentProfiles(
   a: ReactComponentPairwiseProfile,
   b: ReactComponentPairwiseProfile,
   minSimilarity: number,

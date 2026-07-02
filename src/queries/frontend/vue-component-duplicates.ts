@@ -70,7 +70,7 @@ export function vueComponentDuplicates(
     focusFiles,
     candidateIndex,
     profile: { name: 'vue-component-duplicates' },
-    compare: (a, b) => compareProfiles(a, b, minSimilarity),
+    compare: (a, b) => compareVueComponentProfiles(a, b, minSimilarity),
     sort: (a, b) => b.similarity - a.similarity || a.fileA.localeCompare(b.fileA) || a.fileB.localeCompare(b.fileB),
   });
 }
@@ -97,7 +97,7 @@ function vueProfileLoc(profile: VueComponentBehaviorProfile): number {
 }
 
 // scip-query: ignore-similar - Vue comparison mirrors React comparison while preserving framework-specific overlap rules.
-function compareProfiles(
+function compareVueComponentProfiles(
   a: VueComponentProfile,
   b: VueComponentProfile,
   minSimilarity: number,
