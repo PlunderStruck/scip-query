@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { appendFileSync, existsSync, mkdirSync, rmSync, statSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +27,11 @@ export function main(argv, deps = defaultDeps()) {
   deps.mkdirSync(dirname(runHistoryPath), { recursive: true });
   deps.mkdirSync(dirname(profilePath), { recursive: true });
 
+  if (args.cacheState === 'retro-gate') {
+    runRetroGate(args, deps, cliPath, runHistoryPath, profilePath);
+    return;
+  }
+
   const status = runCli(deps, cliPath, repoPath, ['status', '--json'], profilePath, false, args.cacheState);
   if (status.exitCode !== 0) {
     process.stderr.write(status.stderr.toString());
@@ -35,7 +41,12 @@ export function main(argv, deps = defaultDeps()) {
   const dbPath = statusJson.result?.dbPath;
   if (typeof dbPath !== 'string') throw new Error('status --json did not include result.dbPath');
 
-  const evidencePath = join(dirname(dbPath), 'evidence.db');
+  const cacheDir = dirname(dbPath);
+  const evidencePath = join(cacheDir, 'evidence.db');
+  const metaPath = join(cacheDir, 'meta.json');
+  const beforeIndexBytes = fileSize(dbPath);
+  const beforeEvidenceBytes = fileSize(evidencePath);
+  if (!args.noClear && args.cacheState === 'cold-index') clearIndex(deps, dbPath, metaPath);
   if (!args.noClear && args.cacheState === 'evidence-cold') clearEvidence(deps, evidencePath);
 
   const command = splitCommand(args.command);
@@ -49,10 +60,13 @@ export function main(argv, deps = defaultDeps()) {
       dirty: gitOutput(deps, repoPath, ['status', '--short']) !== '',
       command,
       cacheState: args.cacheState,
+      label: args.label,
       runId,
       iteration,
       dbPath,
       evidencePath,
+      beforeIndexBytes,
+      beforeEvidenceBytes,
       profilePath,
       result,
       evidenceRows: collectEvidenceRows(evidencePath),
@@ -68,15 +82,20 @@ export function main(argv, deps = defaultDeps()) {
 }
 
 export function parseArgs(argv) {
+  let cacheStateExplicit = false;
   const parsed = {
     repo: '.',
     command: 'health --json',
     warmIterations: 1,
     noClear: false,
     cacheState: 'evidence-cold',
+    label: 'measurement',
     out: undefined,
     profileOut: undefined,
     cli: undefined,
+    retroCount: 5,
+    retroDryRun: false,
+    retroWorktreeRoot: undefined,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -85,14 +104,183 @@ export function parseArgs(argv) {
     else if (arg === '--warm-iterations') parsed.warmIterations = nonNegativeInteger(argv[++index], arg);
     else if (arg === '--no-clear') {
       parsed.noClear = true;
-      parsed.cacheState = 'evidence-warm';
-    } else if (arg === '--cache-state') parsed.cacheState = requiredValue(argv[++index], arg);
+    } else if (arg === '--cache-state') {
+      parsed.cacheState = requiredValue(argv[++index], arg);
+      cacheStateExplicit = true;
+    } else if (arg === '--label') parsed.label = requiredValue(argv[++index], arg);
     else if (arg === '--out') parsed.out = requiredValue(argv[++index], arg);
     else if (arg === '--profile-out') parsed.profileOut = requiredValue(argv[++index], arg);
     else if (arg === '--cli') parsed.cli = requiredValue(argv[++index], arg);
+    else if (arg === '--retro-count') parsed.retroCount = nonNegativeInteger(argv[++index], arg);
+    else if (arg === '--retro-dry-run') parsed.retroDryRun = true;
+    else if (arg === '--retro-worktree-root') parsed.retroWorktreeRoot = requiredValue(argv[++index], arg);
     else throw new Error(`unknown option: ${arg}`);
   }
+  if (parsed.noClear && !cacheStateExplicit) parsed.cacheState = 'evidence-warm';
   return parsed;
+}
+
+function runRetroGate(args, deps, cliPath, runHistoryPath, profilePath) {
+  const repoPath = resolve(args.repo);
+  const commitOutput = gitOutput(deps, repoPath, ['rev-list', '--reverse', `--max-count=${args.retroCount}`, 'HEAD']);
+  const commits = commitOutput ? commitOutput.split(/\r?\n/).filter(Boolean) : [];
+  if (commits.length === 0) throw new Error('retro-gate replay found no commits');
+
+  const createdWorktreeRoot = !args.retroWorktreeRoot && !args.retroDryRun;
+  const worktreeRoot = resolve(
+    args.retroWorktreeRoot ??
+      (args.retroDryRun
+        ? join(tmpdir(), 'scip-query-retro-gate-dry-run')
+        : deps.mkdtempSync(join(tmpdir(), 'scip-query-retro-gate-'))),
+  );
+  const plan = buildRetroGatePlan({
+    repoPath,
+    commits,
+    command: splitCommand(args.command),
+    worktreeRoot,
+  });
+
+  if (args.retroDryRun) {
+    process.stdout.write(`${JSON.stringify({ runHistoryPath, profilePath, dryRun: true, plan }, null, 2)}\n`);
+    return;
+  }
+
+  deps.mkdirSync(worktreeRoot, { recursive: true });
+  const runId = new Date().toISOString();
+  const records = [];
+  for (let iteration = 0; iteration < plan.length; iteration += 1) {
+    const item = plan[iteration];
+    const add = deps.spawnSync(
+      'git',
+      ['-c', 'core.hooksPath=/dev/null', 'worktree', 'add', '--detach', item.worktreePath, item.commit],
+      {
+        cwd: repoPath,
+        env: { ...process.env, HUSKY: '0' },
+        encoding: 'buffer',
+      },
+    );
+    if (add.status !== 0) {
+      throw new Error(`git worktree add failed for ${item.commit}: ${(add.stderr ?? Buffer.alloc(0)).toString()}`);
+    }
+
+    try {
+      const status = runCli(
+        deps,
+        cliPath,
+        item.worktreePath,
+        ['status', '--json'],
+        profilePath,
+        false,
+        args.cacheState,
+      );
+      if (status.exitCode !== 0) {
+        throw new Error(`status --json failed for ${item.commit}: ${status.stderr.toString()}`);
+      }
+      const statusJson = JSON.parse(status.stdout.toString());
+      let dbPath = statusJson.result?.dbPath;
+      if (typeof dbPath !== 'string') throw new Error('status --json did not include result.dbPath');
+
+      let cacheDir = dirname(dbPath);
+      let evidencePath = join(cacheDir, 'evidence.db');
+      const beforeIndexBytes = fileSize(dbPath);
+      const beforeEvidenceBytes = fileSize(evidencePath);
+      const started = performance.now();
+      const indexResult = runCli(deps, cliPath, item.worktreePath, ['reindex'], profilePath, true, args.cacheState);
+      if (indexResult.exitCode === 0) {
+        const postStatus = runCli(
+          deps,
+          cliPath,
+          item.worktreePath,
+          ['status', '--json'],
+          profilePath,
+          false,
+          args.cacheState,
+        );
+        if (postStatus.exitCode === 0) {
+          const postStatusJson = JSON.parse(postStatus.stdout.toString());
+          if (typeof postStatusJson.result?.dbPath === 'string') {
+            dbPath = postStatusJson.result.dbPath;
+            cacheDir = dirname(dbPath);
+            evidencePath = join(cacheDir, 'evidence.db');
+          }
+        }
+      }
+      const gateResult =
+        indexResult.exitCode === 0
+          ? runCli(deps, cliPath, item.worktreePath, item.command, profilePath, true, args.cacheState)
+          : {
+              durationMs: 0,
+              exitCode: indexResult.exitCode,
+              signal: indexResult.signal,
+              error: indexResult.error,
+              stdout: Buffer.alloc(0),
+              stderr: Buffer.alloc(0),
+            };
+      const durationMs = Math.round(performance.now() - started);
+      const record = {
+        ...buildRunRecord({
+          repoPath: item.worktreePath,
+          gitHead: item.commit,
+          dirty: false,
+          command: item.command,
+          cacheState: args.cacheState,
+          label: args.label,
+          runId,
+          iteration: iteration + 1,
+          dbPath,
+          evidencePath,
+          beforeIndexBytes,
+          beforeEvidenceBytes,
+          profilePath,
+          result: {
+            durationMs,
+            exitCode: indexResult.exitCode === 0 ? gateResult.exitCode : indexResult.exitCode,
+            signal: gateResult.signal ?? indexResult.signal,
+            error: gateResult.error ?? indexResult.error,
+            stdout: gateResult.stdout,
+            stderr: Buffer.concat([indexResult.stderr, gateResult.stderr]),
+          },
+          evidenceRows: collectEvidenceRows(evidencePath),
+          nowIso: new Date().toISOString(),
+        }),
+        retroCommit: item.commit,
+        retroParent: item.parent,
+        retroWorktreePath: item.worktreePath,
+        indexDurationMs: indexResult.durationMs,
+        gateDurationMs: gateResult.durationMs,
+        indexExitCode: indexResult.exitCode,
+        gateExitCode: gateResult.exitCode,
+        indexStdoutSha256: sha256(indexResult.stdout),
+        gateStdoutSha256: sha256(gateResult.stdout),
+      };
+      deps.appendFileSync(runHistoryPath, `${JSON.stringify(record)}\n`);
+      records.push(record);
+    } finally {
+      deps.spawnSync('git', ['-c', 'core.hooksPath=/dev/null', 'worktree', 'remove', '--force', item.worktreePath], {
+        cwd: repoPath,
+        env: { ...process.env, HUSKY: '0' },
+        encoding: 'buffer',
+      });
+    }
+  }
+
+  if (createdWorktreeRoot) deps.rmSync(worktreeRoot, { recursive: true, force: true });
+  process.stdout.write(`${JSON.stringify({ runId, runHistoryPath, profilePath, records }, null, 2)}\n`);
+  if (records.some((record) => record.exitCode !== 0)) process.exit(1);
+}
+
+export function buildRetroGatePlan({ repoPath, commits, command, worktreeRoot }) {
+  return commits.map((commit) => {
+    const worktreePath = join(worktreeRoot, `retro-${commit.slice(0, 12)}`);
+    const parent = `${commit}^`;
+    return {
+      repoPath,
+      commit,
+      parent,
+      worktreePath,
+      command: command.includes('--base') ? command : [...command, '--base', parent],
+    };
+  });
 }
 
 export function buildRunRecord(input) {
@@ -104,6 +292,7 @@ export function buildRunRecord(input) {
     dirty: input.dirty,
     command: `scip-query ${input.command.join(' ')}`,
     cacheState: input.cacheState,
+    label: input.label,
     iteration: input.iteration,
     durationMs: input.result.durationMs,
     exitCode: input.result.exitCode,
@@ -112,6 +301,8 @@ export function buildRunRecord(input) {
     stdoutBytes: input.result.stdout.length,
     stderrBytes: input.result.stderr.length,
     stdoutSha256: sha256(input.result.stdout),
+    beforeIndexBytes: input.beforeIndexBytes,
+    beforeEvidenceBytes: input.beforeEvidenceBytes,
     indexBytes: fileSize(input.dbPath),
     evidenceBytes: fileSize(input.evidencePath),
     evidenceRows: input.evidenceRows,
@@ -198,6 +389,12 @@ function clearEvidence(deps, evidencePath) {
   }
 }
 
+function clearIndex(deps, dbPath, metaPath) {
+  for (const path of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`, metaPath]) {
+    if (deps.existsSync(path)) deps.rmSync(path, { force: true });
+  }
+}
+
 function splitCommand(value) {
   return value
     .trim()
@@ -230,5 +427,5 @@ function requiredValue(value, flag) {
 }
 
 function defaultDeps() {
-  return { appendFileSync, existsSync, mkdirSync, rmSync, spawnSync };
+  return { appendFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, spawnSync };
 }

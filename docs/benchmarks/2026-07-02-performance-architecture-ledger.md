@@ -2,29 +2,35 @@
 
 ## Output Contract
 
-For the same repository state and command, optimized commands must keep the
-same stdout SHA-256 unless a later step records explicit behavior-change
-approval. Every benchmark row records the command, cache state, duration,
-stdout/stderr byte counts, stdout SHA-256, `index.db` bytes, `evidence.db`
-bytes, evidence row counts, git HEAD, and dirty status.
+For the same repository state and command, optimized commands must keep the same
+stdout SHA-256 unless a step records explicit behavior-change approval. Every
+benchmark row records the command, cache state, duration, stdout/stderr byte
+counts, stdout SHA-256, index/evidence sizes when available, evidence row
+counts, git HEAD, and dirty status.
+
+The accepted health optimization preserved JSON output identity on each measured
+external repo. Vega health stayed at
+`6db442c3e596ab90be957c4ff00fb6c83e64a0fb493a3aebdb9ed1d7d59fa1f7`, and
+Stable_Management health stayed at
+`6b5be8e274aa7b854847d070ba6dcc9213fb9c7986d44d49b684819fa80a0754`.
 
 ## Corpus Matrix
 
-| Repo | Role | Baseline Target |
+| Repo | Role | Plan 6 Target |
 | --- | --- | --- |
-| `Vega_2.0` | Large TypeScript/Python monorepo used to prove health and retro-gate scale. | health <= 8.0s warm, <= 14.0s evidence-cold; reindex <= 22.0s |
-| `Stable_Management` | Medium app corpus used to prove cold reindex and warm detector budget. | reindex <= 10.0s; no warm detector command > 4.0s |
-| `scip-query` | Tooling repo used to protect local development latency. | reindex <= 3.5s; health <= 1.5s |
+| `Vega_2.0` | Large TypeScript/Python monorepo used to prove health and retro-gate scale. | health <= 8.0s warm, <= 14.0s evidence-cold; retro-gate <= 12.0s/commit median or BLOCKED; cold reindex <= 22.0s; shard reuse <= 1.0s |
+| `Stable_Management` | Medium app corpus used to prove cold reindex and warm detector budget. | cold reindex <= 10.0s; no warm detector command > 4.0s |
+| `scip-query` | Tooling repo used to protect local development latency. | cold reindex <= 3.5s; health <= 1.5s |
 
 ## Cache States
 
 | State | Meaning |
 | --- | --- |
-| `cold-index` | The active project index is removed before running the command. |
-| `warm-index` | The active project index is reused without clearing evidence. |
+| `cold-index` | The active project index and metadata are removed before running the command. |
+| `warm-index` | The active project index is reused; no index/evidence clear is performed. |
 | `evidence-cold` | Only `evidence.db` and its WAL/SHM siblings are cleared. |
 | `evidence-warm` | Index and evidence DB are reused. |
-| `retro-gate` | A historical commit is replayed in an isolated worktree/copy. |
+| `retro-gate` | A historical commit is replayed in an isolated detached worktree. |
 
 ## Run History Location
 
@@ -37,43 +43,133 @@ files live beside that run history and are summarized with
 
 | Product Class | Shared Intermediate | Current Cache Tier | Profile Span | Hit/Miss Metadata | Shape | Owner Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| definition catalog | file definitions | `file_evidence:file-definitions` | definition catalog callers plus product wrapper | manifest records key parts; product hit spans are a follow-up | file-shaped | `src/symbols/definition-catalog.ts` |
+| definition catalog | file definitions | `file_evidence:file-definitions` | `evidence-product.file.read` plus definition-catalog callers | kind, hit, available, payload bytes | file-shaped | `src/symbols/definition-catalog.ts` |
 | callee fingerprint | semantic callee rows | `semantic_callees` | `semantic.callees.compute-misses` | rows, misses, provider hits | semantic file/symbol-shaped | `src/symbols/graph/call-graph-evidence.ts` |
-| git history | file-add records | `file_evidence:git-file-adds` | git-history product callers | manifest records HEAD/history key | git-shaped | `src/analysis/git-history.ts` |
-| co-change | git history and changed files | no dedicated product yet | health/diff-gate git spans | not yet standardized | git/project-shaped | future gated step |
-| source facts | AST-derived source facts | `file_evidence:source-facts` | source-facts product callers | manifest records content hash key | file-shaped | `src/source/source-facts.ts` |
-| React | component behavior profiles | `file_evidence:react-component-behavior-profiles` | React profile callers | manifest records content hash key | file-shaped | `src/source/react-profile.ts` |
-| Vue | source facts and Vue parser profile | no dedicated Vue behavior product yet | Vue source profile callers | not yet standardized | file-shaped | `src/source/vue-profile.ts` |
+| git history | file-add records | `file_evidence:git-file-adds` | product wrapper spans | HEAD/history key in manifest | git-shaped | `src/analysis/git-history.ts` |
+| co-change | git history and changed files | no dedicated product yet | diff-gate/co-change spans | not standardized | git/project-shaped | gated follow-up |
+| source facts | AST-derived source facts | `file_evidence:source-facts` | `evidence-product.file.read` | kind, hit, available, payload bytes | file-shaped | `src/source/source-facts.ts` |
+| React | component behavior profiles | `file_evidence:react-component-behavior-profiles` | product wrapper spans | kind, hit, available, payload bytes | file-shaped | `src/source/react-profile.ts` |
+| Vue | source facts and Vue parser profile | no dedicated Vue behavior product yet | Vue source profile callers | not standardized | file-shaped | `src/source/vue/vue-profile.ts` |
+| health report | complete health JSON report | `health-report-cache.json` sidecar beside `index.db` | `health.report-cache.read` | key hash, hit, available | index-side sidecar | `src/runtime/health-report-cache.ts` |
 
 ## Accepted Changes
 
 | Step | Change | Evidence |
 | --- | --- | --- |
-| 6.0.1 | Added `scripts/performance-architecture-contract.mjs`. | Focused script tests pass; rebuilt validation run appended a `scip-query health --json` row with duration 2025ms and stdout SHA-256 `6edfdb367caf5c4660de76ea52fd6b2e4f0245edf8d235e749e60e1bede23705`. |
-| 6.0.3 | Added `scripts/profile-scoreboard.mjs`. | Profile scoreboard grouped the rebuilt health profile; top spans were `dead.caller-map-supplement` at 1031ms and `semantic.callees.compute-misses` at 924ms. |
+| 6.0.1 | Added and extended `scripts/performance-architecture-contract.mjs`. | Script tests cover record construction, row buckets, cache-state parsing, and retro-gate dry-run planning. |
+| 6.0.3 | Added `scripts/profile-scoreboard.mjs`. | Used to attribute Stable `complexity-hotspots --json`; top span was `candidate-pipeline:complexity-hotspots` at 5534ms. |
 | 6.1.1 | Added evidence-product manifest and required invalidation metadata on product factories. | `tests/storage/evidence-products.test.ts` proves exact manifest coverage. |
-| 6.1.2 | Added planted-stale coverage for representative existing tiers. | Existing `tests/storage/evidence-cache.test.ts` proves file, project, semantic callee, and semantic reference stale keys miss before rebuild/read. |
-| 6.1.3 | Added cache invalidation matrix and checker. | `scripts/check-evidence-manifest-doc.mjs` validates that every manifest entry appears with a test path. |
+| 6.1.2 | Added planted-stale coverage for representative existing tiers. | `tests/storage/evidence-cache.test.ts`, `tests/symbols/definition-catalog.test.ts`, and `tests/symbols/file-dep-graph.test.ts` cover stale reads. |
+| 6.1.3 | Added cache invalidation matrix and checker. | `scripts/check-evidence-manifest-doc.mjs` validates manifest entries and now documents the health sidecar separately. |
+| 6.2.2 | Standardized evidence product read profile spans in wrappers. | `tests/storage/evidence-cache.test.ts` asserts `evidence-product.file.read` hit/miss metadata for planted good and corrupt rows. |
+| 6.3.2 | Promoted health's complete report to an index-side sidecar cache. | `tests/runtime/health-report-cache.test.ts` proves same-key reuse, project-fingerprint miss, scope separation, and full/default mode separation. |
+| 6.5/6.6 | Added warm-index labels and retro-gate replay support to the harness. | `tests/scripts/performance-architecture-contract.test.ts` covers explicit `warm-index --no-clear` and retro worktree command construction. |
 
 ## Rejected Changes
 
-No optimization product was rejected in this slice. Later Plan 6 product
-promotion remains gated by measured health spans and output-hash identity.
+| Candidate | Result | Reason |
+| --- | --- | --- |
+| File-dependency graph prefill before health phases | Rejected | Vega evidence-cold health regressed to 37.603s sequential and 44.498s parallel; profile showed prefill serialized graph work without improving the target. |
+| Lowering health concurrency to 4 | Rejected | Vega evidence-cold probe stayed slow at 31.864s with unchanged output hash. |
+| Running all health phases in one hidden process | Rejected | Vega all-phase probe took 51.301s and changed the command surface, so it was not a safe optimization. |
+| Removing `sourceImportFingerprint` from the file-dependency graph storage key only | Accepted as cleanup, not sufficient as health fix | Vega evidence-cold health still took 32.051s before the health sidecar. |
+| Per-file TypeScript indexing in Plan 6 | BLOCKED | Cold `reindex` is dominated by the upstream `scip-typescript` shard. Vega cold reindex is 35.285s and Stable cold reindex is 21.692s, while no-edit shard reuse is 418ms and 284ms respectively. |
+| Analysis-budget retirement | Deferred | Health output already runs full by default. Stable `complexity-hotspots --json` still exceeds the 4s warm detector target, so cap removal/retuning is not safe in this slice. |
 
 ## Scoreboard
 
 | Repo / Workload | Seed Before | Current Observed | Target | Status |
 | --- | ---: | ---: | ---: | --- |
-| `scip-query` `health --json` evidence-warm | ~1.2s | 2.025s on dirty tree | <= 1.5s | Regression candidate; profile shows caller-map and semantic callee spans dominate. |
-| `scip-query` profile top span | not recorded | `dead.caller-map-supplement` 1031ms | lower after attribution | Measured |
-| `Vega_2.0` `health --json` | 26.5s | not rerun in this slice | <= 8.0s warm | Pending |
-| `Stable_Management` cold `reindex` | 13.9s | not rerun in this slice | <= 10.0s | Pending |
+| `Vega_2.0` `health --json` warm hit | 5.298s | 0.192s | <= 8.0s | PASS |
+| `Vega_2.0` `health --json` evidence-cold hit | 29.187s | 0.200s | <= 14.0s | PASS |
+| `Vega_2.0` final built `health --json` warm hit | 5.298s | 0.218s | <= 8.0s | PASS |
+| `Vega_2.0` cold `reindex` | 29.8s | 35.285s | <= 22.0s | MISS, BLOCKED upstream shard |
+| `Vega_2.0` shard-reuse `reindex` | 0.4s-0.8s | 0.418s | <= 1.0s | PASS |
+| `Vega_2.0` retro-gate replay | ~36s/commit | 62.400s median over five commits | <= 12.0s median or BLOCKED | MISS, BLOCKED by cold index floor |
+| `Stable_Management` cold `reindex` | 13.9s | 21.692s | <= 10.0s | MISS, BLOCKED upstream shard |
+| `Stable_Management` shard-reuse `reindex` | not recorded | 0.284s | no regression | PASS |
+| `Stable_Management` warm `health --json` hit | 6.595s | 0.184s | no detector command > 4.0s | PASS for health |
+| `Stable_Management` final built `health --json` warm hit | 6.595s | 0.278s | health still fast after final build | PASS for health |
+| `Stable_Management` warm detector battery | not recorded | max 6.018s (`complexity-hotspots --json`) | <= 4.0s | MISS |
+| `scip-query` cold `reindex` | 2.5s-3.0s | 3.047s | <= 3.5s | PASS |
+| `scip-query` warm `health --json` hit | 1.492s | 0.168s | <= 1.5s | PASS |
+| `scip-query` final built `health --json` warm hit | 1.492s | 0.180s after one 3.424s seed | <= 1.5s | PASS |
+| `scip-query` evidence-cold `health --json` hit | 6.609s | 0.182s | <= 1.5s local health | PASS |
+
+## Stable Detector Battery
+
+| Command | Cache State | Duration | Profile / Notes | Status |
+| --- | --- | ---: | --- | --- |
+| `dead --json` first warm-index after sidecar-only evidence | `warm-index` | 17.469s | Filled evidence rows from 45KB to 18.7MB; not a warm detector hit. | Evidence-fill row |
+| `dead --json` warm hit | `warm-index` | 1.411s | Same stdout hash as fill row. | PASS |
+| `cycles --json` | `warm-index` | 0.212s | Uses existing file dependency graph. | PASS |
+| `similar --json` | `warm-index` | 2.386s | Topped up source facts; stayed under target. | PASS |
+| `duplicate-bodies --json` | `warm-index` | 1.547s | Filled file definitions/git-file-add rows; stayed under target. | PASS |
+| `complexity-hotspots --json` | `warm-index` | 6.018s | `candidate-pipeline:complexity-hotspots` took 5534ms scanning 2096 candidates. | MISS |
+
+## Retro-Gate Replay
+
+Harness mode: `node scripts/performance-architecture-contract.mjs --repo
+/Users/aydansalois/Documents/GitHub/Vega_2.0 --cache-state retro-gate --command
+"diff-gate --json" --retro-count 5 --label
+after-health-sidecar-vega-retro-gate-5`.
+
+The replay uses detached temporary worktrees, disables hooks only for
+`git worktree add/remove` with `core.hooksPath=/dev/null`, runs `reindex`, then
+runs `diff-gate --json --base <commit>^`.
+
+| Commit | Total | Index | Gate | Exit |
+| --- | ---: | ---: | ---: | ---: |
+| `8768190888ea` | 62.400s | 30.407s | 31.993s | 1 |
+| `f7ba503c9d54` | 59.895s | 34.215s | 25.680s | 0 |
+| `85f9adeab4b5` | 60.445s | 34.328s | 26.117s | 0 |
+| `a2f778a78ebd` | 80.374s | 34.007s | 46.367s | 1 |
+| `77f73600d094` | 74.566s | 34.517s | 40.048s | 1 |
+
+Median total is 62.400s. Because the cold index phase alone is 30.407s-34.517s,
+the 12s/commit target is impossible without cross-checkout shard reuse or an
+upstream TypeScript indexing change, even if the gate phase were free.
+
+## Reindex Proportionality
+
+| Repo | Cold `reindex` | No-edit shard reuse | Attribution |
+| --- | ---: | ---: | --- |
+| `Vega_2.0` | 35.285s | 0.418s | Cold path reruns the TypeScript shard; warm path reuses it. |
+| `Stable_Management` | 21.692s | 0.284s | Cold path reruns the TypeScript shard; warm path reuses it. |
+| `scip-query` | 3.047s | 0.749s | Local cold target remains met; no-edit reuse stays under 1s. |
+
+## Handoff Probes
+
+| Area | Probe | Observed Result |
+| --- | --- | --- |
+| Harness/report changes | `npm test -- tests/scripts/performance-architecture-contract.test.ts` | 6 tests passed. |
+| Manifest/invalidation | `npm test -- tests/storage/evidence-cache.test.ts tests/storage/evidence-products.test.ts tests/symbols/file-dep-graph.test.ts` | Passed in focused runs during this slice. |
+| Evidence product profile metadata | Profiled health/product reads and added wrapper assertions. | `evidence-product.file.read` reports hit/miss metadata. |
+| Health sidecar | Seed then hit health on Vega, Stable, and scip-query. | Output hashes stayed identical; hits were 168ms-200ms. |
+| Reindex | Cold and warm-index harness rows on all three repos. | scip-query passes cold target; Vega and Stable miss cold target but pass shard reuse. |
+| Retro-gate | Five detached Vega worktrees. | Median 62.400s; cold index floor proves target BLOCKED in this plan. |
+
+## Deviation Ledger
+
+- The health sidecar is intentionally not an evidence-table product. It is a
+  sidecar file whose key is documented in `docs/architecture/evidence-cache-invalidation.md`.
+- The health sidecar requires one seed run per project/git HEAD/scope/full key.
+  After that seed, clearing only `evidence.db` does not invalidate the report.
+- Retro-gate rows from the first successful five-commit run have `indexBytes: 0`
+  because the harness learned to refresh `status --json` after `reindex` only
+  after that run. The rows still record total, index, and gate durations, which
+  are the acceptance data for the replay target.
+- `Stable_Management` is dirty during these runs. The output contract is still
+  valid per recorded git HEAD plus dirty status, but future comparison should
+  preserve that context.
 
 ## Open Questions
 
-- Should caller-map supplement work become the first promoted shared product,
-  or is the dirty tree causing a misleading health split?
-- Do semantic callee misses remain hot after a clean evidence-warm rerun with
-  the rebuilt CLI?
-- Should co-change evidence become a first-class git-shaped product, or should
-  retro-gate measurement happen before adding that storage surface?
+- Should `complexity-hotspots` get its own Plan 7 optimization, likely by
+  avoiding full branch/caller/callee preparation for candidates that cannot
+  reach the emitted top scores?
+- Should retro-gate move to read-through cross-checkout shard/evidence reuse?
+  The replay proves local evidence-product changes cannot overcome the cold
+  index floor by themselves.
+- Should cold reindex targets for very large TypeScript workspaces be revised,
+  or should scip-query invest in upstream `scip-typescript` delta indexing?

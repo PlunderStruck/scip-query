@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -40,6 +40,7 @@ const SOURCE_LINES = [
   '  return message.toUpperCase();',
   '}',
 ];
+const PROFILE_ENV_KEYS = ['SCIP_QUERY_PROFILE', 'SCIP_QUERY_PROFILE_OUT', 'SCIP_QUERY_PROFILE_COMMAND'] as const;
 const PRODUCT_TEST = createFileEvidenceProduct<{ marker: string }>({
   kind: 'doc-path-tokens',
   invalidation: evidenceProductInvalidation('doc-path-tokens'),
@@ -60,6 +61,14 @@ const PROJECT_PRODUCT_TEST = createProjectEvidenceProduct<{ marker: string }>({
     return { marker: (raw as { marker: string }).marker };
   },
 });
+
+function restoreProfileEnv(snapshot: Record<(typeof PROFILE_ENV_KEYS)[number], string | undefined>): void {
+  for (const key of PROFILE_ENV_KEYS) {
+    const value = snapshot[key];
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+}
 
 describe('evidence cache', () => {
   let tempDir: string;
@@ -156,6 +165,50 @@ describe('evidence cache', () => {
     } finally {
       db.close();
     }
+  });
+
+  it('profiles typed file evidence product hits and corrupt misses', () => {
+    const envSnapshot = Object.fromEntries(PROFILE_ENV_KEYS.map((key) => [key, process.env[key]])) as Record<
+      (typeof PROFILE_ENV_KEYS)[number],
+      string | undefined
+    >;
+    const profilePath = join(tempDir, 'product-profile.jsonl');
+    process.env.SCIP_QUERY_PROFILE = '1';
+    process.env.SCIP_QUERY_PROFILE_OUT = profilePath;
+    process.env.SCIP_QUERY_PROFILE_COMMAND = 'scip-query test';
+
+    const db = openDb();
+    try {
+      PRODUCT_TEST.write(db, 'docs/profiled.md', 'hash-hit', { marker: 'cached' });
+      expect(PRODUCT_TEST.read(db, 'docs/profiled.md', 'hash-hit')).toEqual({ marker: 'cached' });
+
+      writeCachedFileEvidence(db, 'doc-path-tokens', 'docs/profiled.md', 'hash-corrupt', '{not json');
+      expect(PRODUCT_TEST.read(db, 'docs/profiled.md', 'hash-corrupt')).toBeNull();
+    } finally {
+      db.close();
+      restoreProfileEnv(envSnapshot);
+    }
+
+    const events = readFileSync(profilePath, 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(events).toEqual([
+      expect.objectContaining({
+        type: 'span',
+        name: 'evidence-product.file.read',
+        kind: 'doc-path-tokens',
+        available: true,
+        hit: true,
+      }),
+      expect.objectContaining({
+        type: 'span',
+        name: 'evidence-product.file.read',
+        kind: 'doc-path-tokens',
+        available: true,
+        hit: false,
+      }),
+    ]);
   });
 
   it('round-trips typed project evidence products', () => {

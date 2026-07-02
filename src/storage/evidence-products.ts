@@ -1,4 +1,5 @@
 import type { ScipDatabase } from './db.js';
+import { profileSpan } from '../instrumentation/profile.js';
 import {
   FILE_EVIDENCE_KINDS,
   PROJECT_EVIDENCE_KINDS,
@@ -144,7 +145,7 @@ export const EVIDENCE_PRODUCT_MANIFEST: readonly EvidenceProductManifestEntry[] 
   }),
   projectManifest('file-dependency-graph', {
     dependsOn: ['project-fingerprint', 'indexed-language-set', 'import-resolution-fingerprint', 'tool-version'],
-    keyParts: ['kind', 'scope', 'projectFingerprint', 'sourceImportFingerprint', 'payloadVersion'],
+    keyParts: ['kind', 'scope', 'projectFingerprint', 'payloadVersion'],
     stalenessTest: 'tests/symbols/file-dep-graph.test.ts',
     owner: 'src/symbols/graph/file-dep-graph.ts',
   }),
@@ -154,13 +155,24 @@ export function createFileEvidenceProduct<T>(opts: FileEvidenceProductOptions<T>
   return {
     kind: opts.kind,
     read(db, relativePath, contentHash) {
-      const payload = readCachedFileEvidence(db, opts.kind, relativePath, contentHash);
-      if (payload === null) return null;
-      try {
-        return opts.deserialize(payload);
-      } catch {
-        return null;
-      }
+      let hit = false;
+      let payloadBytes = 0;
+      return profileSpan(
+        'evidence-product.file.read',
+        () => {
+          const payload = readCachedFileEvidence(db, opts.kind, relativePath, contentHash);
+          if (payload === null) return null;
+          payloadBytes = payload.length;
+          try {
+            const value = opts.deserialize(payload);
+            hit = value !== null;
+            return value;
+          } catch {
+            return null;
+          }
+        },
+        () => ({ scope: 'file', kind: opts.kind, available: true, hit, payloadBytes }),
+      );
     },
     write(db, relativePath, contentHash, value) {
       writeCachedFileEvidence(db, opts.kind, relativePath, contentHash, opts.serialize(value));
@@ -172,13 +184,24 @@ export function createProjectEvidenceProduct<T>(opts: ProjectEvidenceProductOpti
   return {
     kind: opts.kind,
     read(db, cacheKey, projectFingerprint) {
-      const payload = readCachedProjectEvidence(db, opts.kind, cacheKey, projectFingerprint);
-      if (payload === null) return null;
-      try {
-        return opts.deserialize(payload);
-      } catch {
-        return null;
-      }
+      let hit = false;
+      let payloadBytes = 0;
+      return profileSpan(
+        'evidence-product.project.read',
+        () => {
+          const payload = readCachedProjectEvidence(db, opts.kind, cacheKey, projectFingerprint);
+          if (payload === null) return null;
+          payloadBytes = payload.length;
+          try {
+            const value = opts.deserialize(payload);
+            hit = value !== null;
+            return value;
+          } catch {
+            return null;
+          }
+        },
+        () => ({ scope: 'project', kind: opts.kind, available: true, hit, payloadBytes }),
+      );
     },
     write(db, cacheKey, projectFingerprint, value) {
       writeCachedProjectEvidence(db, opts.kind, cacheKey, projectFingerprint, opts.serialize(value));

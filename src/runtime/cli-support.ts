@@ -13,6 +13,7 @@ import {
 } from './isolated-analysis-runner.js';
 import { render } from './render.js';
 import { detectorPrecision, readLedgerRecords } from '../queries/health/finding-outcome-ledger.js';
+import { healthReportCacheKey, readHealthReportCache, writeHealthReportCache } from './health-report-cache.js';
 
 const require = createRequire(import.meta.url);
 export const { version: cliVersion } = loadCliPackageInfo();
@@ -132,6 +133,16 @@ export function formatAnalysisBudgetDisclosure(disclosure: AnalysisBudgetDisclos
 }
 
 export async function runIsolatedHealthReport(opts: HealthCliOptions): Promise<HealthReport> {
+  const cachedReport = withDb((db) => {
+    const key = healthReportCacheKey(db, opts, cliVersion);
+    if (!key) return null;
+    const report = readHealthReportCache(db, key);
+    if (!report) return null;
+    report.detectorPrecision = detectorPrecision(readLedgerRecords(db), Date.now());
+    return report;
+  });
+  if (cachedReport) return cachedReport;
+
   const { applicability, overview } = withDb((db) => ({
     applicability: healthPhaseApplicability(db, opts),
     overview: queries.healthPhase(db, 'overview', opts),
@@ -155,6 +166,10 @@ export async function runIsolatedHealthReport(opts: HealthCliOptions): Promise<H
   // Phase results come back from worker processes with no live db handle —
   // the finding-outcome ledger is read here, once, back on the main process.
   report.detectorPrecision = withDb((db) => detectorPrecision(readLedgerRecords(db), Date.now()));
+  withDb((db) => {
+    const key = healthReportCacheKey(db, opts, cliVersion);
+    if (key) writeHealthReportCache(db, key, report);
+  });
   return report;
 }
 

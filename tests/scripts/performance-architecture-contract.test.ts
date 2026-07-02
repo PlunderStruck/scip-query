@@ -2,7 +2,12 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildRunRecord, collectEvidenceRows, parseArgs } from '../../scripts/performance-architecture-contract.mjs';
+import {
+  buildRetroGatePlan,
+  buildRunRecord,
+  collectEvidenceRows,
+  parseArgs,
+} from '../../scripts/performance-architecture-contract.mjs';
 
 describe('performance architecture contract script', () => {
   let tempDir: string | undefined;
@@ -14,14 +19,77 @@ describe('performance architecture contract script', () => {
 
   it('parses the validation command shape', () => {
     expect(
-      parseArgs(['--repo', '.', '--command', 'health --json', '--warm-iterations', '1', '--no-clear']),
+      parseArgs([
+        '--repo',
+        '.',
+        '--command',
+        'health --json',
+        '--warm-iterations',
+        '1',
+        '--no-clear',
+        '--label',
+        'baseline',
+      ]),
     ).toMatchObject({
       repo: '.',
       command: 'health --json',
       warmIterations: 1,
       noClear: true,
       cacheState: 'evidence-warm',
+      label: 'baseline',
     });
+  });
+
+  it('preserves an explicit cache state when --no-clear is also used', () => {
+    expect(parseArgs(['--cache-state', 'warm-index', '--no-clear'])).toMatchObject({
+      noClear: true,
+      cacheState: 'warm-index',
+    });
+  });
+
+  it('parses retro-gate replay options', () => {
+    expect(
+      parseArgs([
+        '--cache-state',
+        'retro-gate',
+        '--command',
+        'diff-gate --json',
+        '--retro-count',
+        '5',
+        '--retro-dry-run',
+      ]),
+    ).toMatchObject({
+      cacheState: 'retro-gate',
+      command: 'diff-gate --json',
+      retroCount: 5,
+      retroDryRun: true,
+    });
+  });
+
+  it('builds retro-gate replay worktrees with parent bases', () => {
+    expect(
+      buildRetroGatePlan({
+        repoPath: '/repo',
+        commits: ['abc1234567890', 'def1234567890'],
+        command: ['diff-gate', '--json'],
+        worktreeRoot: '/tmp/retro',
+      }),
+    ).toEqual([
+      {
+        repoPath: '/repo',
+        commit: 'abc1234567890',
+        parent: 'abc1234567890^',
+        worktreePath: '/tmp/retro/retro-abc123456789',
+        command: ['diff-gate', '--json', '--base', 'abc1234567890^'],
+      },
+      {
+        repoPath: '/repo',
+        commit: 'def1234567890',
+        parent: 'def1234567890^',
+        worktreePath: '/tmp/retro/retro-def123456789',
+        command: ['diff-gate', '--json', '--base', 'def1234567890^'],
+      },
+    ]);
   });
 
   it('constructs benchmark records with output hash and byte counts', () => {
@@ -35,6 +103,8 @@ describe('performance architecture contract script', () => {
       iteration: 1,
       dbPath: '/missing/index.db',
       evidencePath: '/missing/evidence.db',
+      beforeIndexBytes: 100,
+      beforeEvidenceBytes: 20,
       profilePath: '/tmp/profile.jsonl',
       evidenceRows: { file_evidence: {}, project_evidence: {} },
       nowIso: '2026-07-02T00:00:00.000Z',
@@ -49,9 +119,12 @@ describe('performance architecture contract script', () => {
 
     expect(record).toMatchObject({
       command: 'scip-query health --json',
+      label: undefined,
       durationMs: 12,
       stdoutBytes: 12,
       stderrBytes: 0,
+      beforeIndexBytes: 100,
+      beforeEvidenceBytes: 20,
       indexBytes: 0,
       evidenceBytes: 0,
     });

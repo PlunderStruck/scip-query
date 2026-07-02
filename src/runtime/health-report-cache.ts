@@ -1,0 +1,179 @@
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { profileSpan } from '../instrumentation/profile.js';
+import type { HealthReport } from '../queries/health/health-report.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { projectEvidenceFingerprint, sha256Hex } from '../storage/evidence-cache.js';
+
+const HEALTH_REPORT_CACHE_VERSION = 1;
+const HEALTH_REPORT_CACHE_FILE = 'health-report-cache.json';
+
+export interface HealthReportCacheOptions {
+  scope?: string;
+  full?: boolean;
+}
+
+export interface HealthReportCacheKey {
+  version: typeof HEALTH_REPORT_CACHE_VERSION;
+  projectFingerprint: string;
+  cliVersion: string;
+  scope: string | null;
+  full: boolean;
+  gitHead: string | null;
+}
+
+interface HealthReportCacheFile {
+  version: typeof HEALTH_REPORT_CACHE_VERSION;
+  keyHash: string;
+  key: HealthReportCacheKey;
+  writtenAt: string;
+  report: HealthReport;
+}
+
+interface HealthReportCacheKeyDeps {
+  gitHead(cwd: string): string | null;
+}
+
+interface HealthReportCacheFileDeps {
+  existsSync(path: string): boolean;
+  mkdirSync(path: string, opts: { recursive: true }): void;
+  readFileSync(path: string, encoding: 'utf8'): string;
+  renameSync(oldPath: string, newPath: string): void;
+  writeFileSync(path: string, data: string): void;
+  nowIso(): string;
+}
+
+export function healthReportCacheKey(
+  db: ScipDatabase,
+  opts: HealthReportCacheOptions,
+  cliVersion: string,
+  deps: HealthReportCacheKeyDeps = defaultKeyDeps(),
+): HealthReportCacheKey | null {
+  const projectFingerprint = projectEvidenceFingerprint(db);
+  if (!projectFingerprint) return null;
+  return {
+    version: HEALTH_REPORT_CACHE_VERSION,
+    projectFingerprint,
+    cliVersion,
+    scope: opts.scope ?? null,
+    full: opts.full === true,
+    gitHead: deps.gitHead(db.config.projectRoot),
+  };
+}
+
+export function readHealthReportCache(
+  db: ScipDatabase,
+  key: HealthReportCacheKey,
+  deps: HealthReportCacheFileDeps = defaultFileDeps(),
+): HealthReport | null {
+  const cachePath = healthReportCachePath(db);
+  const expectedHash = healthReportCacheKeyHash(key);
+  let hit = false;
+  return profileSpan(
+    'health.report-cache.read',
+    () => {
+      if (!deps.existsSync(cachePath)) return null;
+      try {
+        const parsed = JSON.parse(deps.readFileSync(cachePath, 'utf8')) as unknown;
+        if (!isHealthReportCacheFile(parsed)) return null;
+        if (parsed.keyHash !== expectedHash) return null;
+        hit = true;
+        return parsed.report;
+      } catch {
+        return null;
+      }
+    },
+    () => ({ available: true, hit, keyHash: expectedHash }),
+  );
+}
+
+export function writeHealthReportCache(
+  db: ScipDatabase,
+  key: HealthReportCacheKey,
+  report: HealthReport,
+  deps: HealthReportCacheFileDeps = defaultFileDeps(),
+): void {
+  const cachePath = healthReportCachePath(db);
+  const payload: HealthReportCacheFile = {
+    version: HEALTH_REPORT_CACHE_VERSION,
+    keyHash: healthReportCacheKeyHash(key),
+    key,
+    writtenAt: deps.nowIso(),
+    report,
+  };
+  deps.mkdirSync(dirname(cachePath), { recursive: true });
+  const tempPath = `${cachePath}.${process.pid}.${Date.now()}.tmp`;
+  deps.writeFileSync(tempPath, JSON.stringify(payload));
+  deps.renameSync(tempPath, cachePath);
+}
+
+export function healthReportCachePath(db: ScipDatabase): string {
+  return join(dirname(db.config.dbPath), HEALTH_REPORT_CACHE_FILE);
+}
+
+export function healthReportCacheKeyHash(key: HealthReportCacheKey): string {
+  return sha256Hex(JSON.stringify(key));
+}
+
+function isHealthReportCacheFile(value: unknown): value is HealthReportCacheFile {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<HealthReportCacheFile>;
+  return (
+    candidate.version === HEALTH_REPORT_CACHE_VERSION &&
+    typeof candidate.keyHash === 'string' &&
+    isHealthReportCacheKey(candidate.key) &&
+    typeof candidate.writtenAt === 'string' &&
+    isHealthReport(candidate.report)
+  );
+}
+
+function isHealthReportCacheKey(value: unknown): value is HealthReportCacheKey {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<HealthReportCacheKey>;
+  return (
+    candidate.version === HEALTH_REPORT_CACHE_VERSION &&
+    typeof candidate.projectFingerprint === 'string' &&
+    typeof candidate.cliVersion === 'string' &&
+    (candidate.scope === null || typeof candidate.scope === 'string') &&
+    typeof candidate.full === 'boolean' &&
+    (candidate.gitHead === null || typeof candidate.gitHead === 'string')
+  );
+}
+
+function isHealthReport(value: unknown): value is HealthReport {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<HealthReport>;
+  return (
+    typeof candidate.score === 'number' &&
+    typeof candidate.riskScore === 'number' &&
+    typeof candidate.hygieneScore === 'number' &&
+    typeof candidate.overview === 'object' &&
+    typeof candidate.findings === 'object' &&
+    Array.isArray(candidate.scoreBreakdown) &&
+    Array.isArray(candidate.actions) &&
+    Array.isArray(candidate.pressure) &&
+    Array.isArray(candidate.topComplexity) &&
+    Array.isArray(candidate.detectorPrecision)
+  );
+}
+
+function defaultKeyDeps(): HealthReportCacheKeyDeps {
+  return {
+    gitHead(cwd) {
+      const result = spawnSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' });
+      return result.status === 0 ? result.stdout.trim() : null;
+    },
+  };
+}
+
+function defaultFileDeps(): HealthReportCacheFileDeps {
+  return {
+    existsSync,
+    mkdirSync,
+    readFileSync,
+    renameSync,
+    writeFileSync,
+    nowIso: () => new Date().toISOString(),
+  };
+}

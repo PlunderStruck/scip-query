@@ -23,7 +23,16 @@ from current evidence.
 | `file:consumer-file-usage` | Imported and used leaf names for one consumer file. | `file_evidence` | `src/queries/internal/consumer-evidence.ts` | kind, relative path, content hash, project fingerprint, payload version | Source bytes, project fingerprint, indexed languages, or payload version change. | `tests/storage/evidence-cache.test.ts` | Safe when source and project identity match; workspace dependency changes must alter project identity when they affect usage evidence. |
 | `file:react-component-behavior-profiles` | JSX and behavior-token profile for one React component file. | `file_evidence` | `src/source/react-profile.ts` | kind, relative path, content hash, payload version | Source bytes or React profile parser version change. | `tests/storage/evidence-cache.test.ts` | Safe when content hash matches; workspace identity is not otherwise part of the payload. |
 | `file:git-file-adds` | File-first-added records derived from bounded git history. | `file_evidence` | `src/analysis/git-history.ts` | kind, cache key, HEAD, history window, payload version | Git HEAD/history window or payload version change. | `tests/storage/evidence-cache.test.ts` | Not safe across branch/worktree/clone unless HEAD and history key match exactly. |
-| `project:file-dependency-graph` | Whole-project file dependency graph combining SCIP edges and source imports. | `project_evidence` | `src/symbols/graph/file-dep-graph.ts` | kind, scope, project fingerprint, source-import fingerprint, payload version | Project fingerprint, source-import fingerprint, indexed language set, or payload version change. | `tests/symbols/file-dep-graph.test.ts` | Safe across branch/worktree/clone when project and import fingerprints match; workspace and multi-language changes are included through those fingerprints. |
+| `project:file-dependency-graph` | Whole-project file dependency graph combining SCIP edges and source imports. | `project_evidence` | `src/symbols/graph/file-dep-graph.ts` | kind, scope, project fingerprint, payload version | Project fingerprint, indexed language set, import-resolution identity, or payload version change. | `tests/symbols/file-dep-graph.test.ts` | Safe across branch/worktree/clone when the project fingerprint matches; source-import metadata is retained in the payload for observability. |
+
+## Sidecar Product Matrix
+
+Sidecar products are stored cache files that do not live in an evidence table.
+They still need an explicit identity key because they can affect command output.
+
+| Product | Referent | Storage | Payload Owner | Key Parts | Invalidation Trigger | Staleness Test | Branch / Worktree / Clone / Workspace / Multi-Language |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `index-side:health-report-cache` | Full rendered health report for one indexed project and health option set. | `health-report-cache.json` beside `index.db` | `src/runtime/health-report-cache.ts` | cache version, project evidence fingerprint, CLI version, `scope`, `full`, git HEAD | Project/index metadata, indexed language set, CLI version, health scope/full mode, git HEAD, or cache payload version change. Detector precision is refreshed from the live finding-outcome ledger on every read. | `tests/runtime/health-report-cache.test.ts` | Safe after clearing only `evidence.db`; not shared across branch/worktree/clone unless git HEAD and project fingerprint match exactly. Workspace and multi-language identity flow through the project evidence fingerprint. |
 
 ## Benchmark Commands
 

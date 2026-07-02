@@ -130,6 +130,7 @@ describe('file dependency graph evidence', () => {
       expect(productEvents).toHaveLength(2);
       expect(productEvents[0]).toMatchObject({ hit: false, available: true, graphFiles: 2 });
       expect(productEvents[1]).toMatchObject({ hit: true, available: true, graphFiles: 2 });
+      expect(events.filter((event) => event.name === 'file-dep-graph.source-imports')).toHaveLength(1);
       expect(events.filter((event) => event.name === 'file-dep-graph.scip-edges')).toHaveLength(1);
     });
   });

@@ -44,23 +44,11 @@ const FILE_DEP_GRAPH_CACHE = createPerDbCache<string, Map<string, Set<string>>>(
 export function buildFileDepGraph(db: ScipDatabase, scope?: string): Map<string, Set<string>> {
   return FILE_DEP_GRAPH_CACHE.get(db, scope ?? '', () => {
     const indexedFiles = new Set(indexedDocumentPaths(db, { includeIgnored: false }));
+    const projectFingerprint = projectEvidenceFingerprint(db);
+    const cacheKey = fileDependencyGraphCacheKey(scope);
     let sourceFileCount = 0;
     let sourceEdgeCount = 0;
-    const sourceImports = profileSpan(
-      'file-dep-graph.source-imports',
-      () => {
-        const collected = collectSourceImportEdges(db, indexedFiles, scope);
-        sourceFileCount = collected.files.length;
-        sourceEdgeCount = collected.edges.length;
-        return collected;
-      },
-      () => ({ scope: scope ?? null, files: sourceFileCount, edges: sourceEdgeCount }),
-    );
-
-    const projectFingerprint = projectEvidenceFingerprint(db);
-    const graphFingerprint = projectFingerprint
-      ? fileDependencyGraphFingerprint(projectFingerprint, sourceImports.fingerprint)
-      : null;
+    let sourceImportFingerprintValue: string | null = null;
     let hit = false;
     let scipEdgeCount = 0;
     let graphFileCount = 0;
@@ -68,16 +56,31 @@ export function buildFileDepGraph(db: ScipDatabase, scope?: string): Map<string,
     return profileSpan(
       'file-dep-graph.product',
       () => {
-        const cacheKey = fileDependencyGraphCacheKey(scope);
-        if (graphFingerprint) {
-          const cached = FILE_DEPENDENCY_GRAPH_PRODUCT.read(db, cacheKey, graphFingerprint);
-          if (cached?.sourceImportFingerprint === sourceImports.fingerprint) {
+        if (projectFingerprint) {
+          const cached = FILE_DEPENDENCY_GRAPH_PRODUCT.read(db, cacheKey, projectFingerprint);
+          if (cached) {
             hit = true;
             const graph = graphFromPayload(cached);
+            sourceFileCount = cached.sourceFileCount;
+            sourceEdgeCount = cached.sourceEdgeCount;
+            scipEdgeCount = cached.scipEdgeCount;
             graphFileCount = graph.size;
+            sourceImportFingerprintValue = cached.sourceImportFingerprint;
             return graph;
           }
         }
+
+        const sourceImports = profileSpan(
+          'file-dep-graph.source-imports',
+          () => {
+            const collected = collectSourceImportEdges(db, indexedFiles, scope);
+            sourceFileCount = collected.files.length;
+            sourceEdgeCount = collected.edges.length;
+            sourceImportFingerprintValue = collected.fingerprint;
+            return collected;
+          },
+          () => ({ scope: scope ?? null, files: sourceFileCount, edges: sourceEdgeCount }),
+        );
 
         const graph = new Map<string, Set<string>>();
         const addEdge = (fromFile: string, toFile: string): void =>
@@ -97,8 +100,8 @@ export function buildFileDepGraph(db: ScipDatabase, scope?: string): Map<string,
         for (const edge of sourceImports.edges) addEdge(edge.fromFile, edge.toFile);
         graphFileCount = graph.size;
 
-        if (graphFingerprint) {
-          FILE_DEPENDENCY_GRAPH_PRODUCT.write(db, cacheKey, graphFingerprint, {
+        if (projectFingerprint) {
+          FILE_DEPENDENCY_GRAPH_PRODUCT.write(db, cacheKey, projectFingerprint, {
             sourceImportFingerprint: sourceImports.fingerprint,
             sourceFileCount: sourceImports.files.length,
             sourceEdgeCount: sourceImports.edges.length,
@@ -111,13 +114,13 @@ export function buildFileDepGraph(db: ScipDatabase, scope?: string): Map<string,
       },
       () => ({
         scope: scope ?? null,
-        available: graphFingerprint !== null,
+        available: projectFingerprint !== null,
         hit,
-        files: sourceImports.files.length,
-        sourceEdges: sourceImports.edges.length,
+        files: sourceFileCount,
+        sourceEdges: sourceEdgeCount,
         scipEdges: scipEdgeCount,
         graphFiles: graphFileCount,
-        sourceImportFingerprint: sourceImports.fingerprint,
+        sourceImportFingerprint: sourceImportFingerprintValue,
       }),
     );
   });
@@ -153,10 +156,6 @@ function sourceImportFingerprint(files: readonly string[], edges: readonly Sourc
 
 function fileDependencyGraphCacheKey(scope: string | undefined): string {
   return scope ?? '<all>';
-}
-
-function fileDependencyGraphFingerprint(projectFingerprint: string, sourceImportFingerprint: string): string {
-  return sha256Hex(JSON.stringify({ projectFingerprint, sourceImportFingerprint }));
 }
 
 function graphPayloadFromGraph(graph: Map<string, Set<string>>): Array<[string, string[]]> {
