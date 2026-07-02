@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
 import { gitEvidenceProduct } from '../../analysis/git-history.js';
@@ -65,6 +65,17 @@ export interface DocDriftFinding {
    * them explicitly — never silently dropped, always labeled.
    */
   snapshotExcluded?: boolean;
+  /**
+   * True when `docLastChangedAt` came from filesystem mtime, not git
+   * history — the doc had zero entries in the (capped) commit-history scan,
+   * most commonly a staged-but-uncommitted addition or one whose only
+   * appearance was in a bulk commit dropped wholesale by the shared
+   * git-history file cap (see BULK_COMMIT_FILE_CAP in git-history.ts).
+   * Fixes the 2026-07-01 Vega calibration finding: every sampled finding
+   * reported `docLastChangedAt: 0` (epoch) even for docs committed the same
+   * day, which read as "doc never changed" and inflated staleness.
+   */
+  docLastChangedAtEstimated?: boolean;
 }
 
 export interface DocDriftResult {
@@ -149,7 +160,11 @@ export function docDrift(
     if (doc !== undefined && !existsSync(join(db.config.projectRoot, docFile))) continue;
     const snapshot = isSnapshotDoc(db, docFile);
     if (snapshot && !includeSnapshotExcluded) continue;
-    const docLastChangedAt = Math.max(0, ...(scan.changeTimes.get(docFile) ?? []));
+    const { value: docLastChangedAt, estimated: docLastChangedAtEstimated } = docLastChangedAtFor(
+      db,
+      docFile,
+      scan.changeTimes.get(docFile),
+    );
     const docIntent = classifyDocDriftIntent(db, docFile);
 
     const subjects = new Map<string, DocDriftSubject>();
@@ -218,6 +233,7 @@ export function docDrift(
       subjects: ordered.slice(0, 8),
       brokenReferences: broken,
       ...(snapshot ? { snapshotExcluded: true } : {}),
+      ...(docLastChangedAtEstimated ? { docLastChangedAtEstimated: true } : {}),
     });
   }
 
@@ -536,7 +552,15 @@ function citedTargetsFromCandidates(
   for (const candidate of candidates) {
     if (!targetCandidates.has(candidate)) continue;
     let cited: string | undefined;
-    if (tracked.has(candidate)) {
+    if (targets.has(candidate)) {
+      // Exact target-path match — resolve even when the target is no longer
+      // in the currently-tracked set (deleted or renamed away in this diff).
+      // `targets` is already the authoritative "diff changed this file and
+      // it's cite-worthy" set (21.2: doc-reference must be able to see a
+      // citation to a file the diff deleted, so it can classify it blocking
+      // — see runDocReferenceCheck's severity split).
+      cited = candidate;
+    } else if (tracked.has(candidate)) {
       cited = candidate;
     } else {
       const bySuffix = trackedBySuffix.get(candidate);

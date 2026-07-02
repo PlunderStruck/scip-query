@@ -856,7 +856,8 @@ export const handleDocDrift = dbCommand(({ db, args, opts }) => {
   );
   for (const finding of result.findings) {
     const snapshotLabel = finding.snapshotExcluded ? '  [snapshot (excluded by policy)]' : '';
-    console.log(`  staleness ${finding.staleness}  ${finding.doc}${snapshotLabel}`);
+    const estimatedLabel = finding.docLastChangedAtEstimated ? '  [docLastChangedAt estimated from file mtime]' : '';
+    console.log(`  staleness ${finding.staleness}  ${finding.doc}${snapshotLabel}${estimatedLabel}`);
     for (const broken of finding.brokenReferences.slice(0, 4)) {
       console.log(`    BROKEN REFERENCE: cites ${broken} — that file no longer exists`);
     }

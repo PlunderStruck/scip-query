@@ -135,6 +135,44 @@ describe('doc-drift', () => {
     }
   });
 
+  // 21.2 calibration retune (2026-07-01 Vega calibration: every sampled
+  // finding reported `docLastChangedAt: 0` even for docs committed the same
+  // day). A doc that's staged but never committed has zero entries in the
+  // git-log-derived changeTimes map — falls back to filesystem mtime
+  // instead of epoch 0.
+  it('falls back to filesystem mtime instead of epoch 0 for a doc with no commit-history entry', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-doc-drift-mtime-fallback-'));
+    try {
+      gitIn(root, 'init');
+      commitIn(root, 'initial', { 'src/subject.ts': 'export const version = 1;\n' });
+
+      // commitClock starts far in the future relative to wall-clock "now",
+      // so this commit's timestamp is guaranteed to be after the doc's
+      // mtime-based fallback (created and staged below) — the subject
+      // change registers as "since".
+      commitIn(root, 'subject changes before the doc exists', {
+        'src/subject.ts': 'export const version = 2;\n',
+      });
+
+      // Staged (tracked by `git ls-files`) but never committed — no entry
+      // in the commit-history scan `docDrift` relies on for docLastChangedAt.
+      // `git add -A` was already run for the commits above; staging this
+      // file alone here, with no further commit, keeps it uncommitted.
+      mkdirSync(join(root, 'docs'), { recursive: true });
+      writeFileSync(join(root, 'docs', 'new-note.md'), 'See src/subject.ts for details.\n');
+      gitIn(root, 'add', 'docs/new-note.md');
+
+      const result = docDrift(fakeDb(root), { doc: 'docs/new-note.md' });
+      const finding = result.findings.find((f) => f.doc === 'docs/new-note.md');
+
+      expect(finding).toBeDefined();
+      expect(finding?.docLastChangedAt).toBeGreaterThan(0);
+      expect(finding?.docLastChangedAtEstimated).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('treats an inline <!-- scip-query: snapshot --> marker the same as a configured glob', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-doc-drift-snapshot-marker-'));
     try {
