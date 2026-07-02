@@ -1,6 +1,19 @@
 ---
 name: scip-hyper-optimization
 description: Optimize performance scientifically with scip-query evidence. Use for benchmarking, profiling, speeding up commands, workflows, indexers, detectors, app paths, cold/warm regressions, memory/cost reduction, or comparing current-pipeline tuning with alternative designs.
+commands:
+  - template: "scip-query bench --json"
+    when: "Target and harness: baseline timings for a scip-query command target."
+  - template: "scip-query bench --json --cold-index --include-heavy --timeout-ms 600000"
+    when: "Target and harness: cold-path and heavy-detector timings."
+  - template: "scip-query plan-context <entry-symbol-or-file>"
+    when: "Trace behavior: pre-edit context for the profiled entry point."
+  - template: "scip-query call-graph <entry-symbol>"
+    when: "Trace behavior: callers/callees for the pipeline under test."
+  - template: "scip-query complexity <hot-symbol>"
+    when: "Diagnose: branches, cyclomatic estimate, fan-in/out for a hot symbol."
+  - template: "scip-query change-surface <touched-file> --json --full"
+    when: "Verify and report: blast radius of the optimization change."
 ---
 
 # scip-hyper-optimization
@@ -8,6 +21,21 @@ description: Optimize performance scientifically with scip-query evidence. Use f
 Use this skill to make a command, workflow, service, page, or tool faster without changing its observable result. Hyper optimization is a bounded campaign that improves runtime, memory, or computational cost against repeatable measurements.
 
 Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
+
+<!-- BEGIN GENERATED SKILL COMMANDS -->
+## Commands for this skill
+
+| Command | Purpose | When |
+| --- | --- | --- |
+| `scip-query bench --json` | Benchmark indexing and command runtimes for this repository | Target and harness: baseline timings for a scip-query command target. |
+| `scip-query bench --json --cold-index --include-heavy --timeout-ms 600000` | Benchmark indexing and command runtimes for this repository | Target and harness: cold-path and heavy-detector timings. |
+| `scip-query plan-context <entry-symbol-or-file>` | Pre-edit planning context for a symbol, file, or module | Trace behavior: pre-edit context for the profiled entry point. |
+| `scip-query call-graph <entry-symbol>` | Show incoming callers and outgoing callees for a symbol | Trace behavior: callers/callees for the pipeline under test. |
+| `scip-query complexity <hot-symbol>` | Per-symbol complexity: branches, cyclomatic estimate, fan-in/out, callees | Diagnose: branches, cyclomatic estimate, fan-in/out for a hot symbol. |
+| `scip-query change-surface <touched-file> --json --full` | Pre-change briefing: exports, consumers, and blast-radius risk | Verify and report: blast radius of the optimization change. |
+
+Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
+<!-- END GENERATED SKILL COMMANDS -->
 
 ## Terms
 

@@ -1,6 +1,19 @@
 ---
 name: scip-maintainability
 description: Review maintainability with scip-query evidence. Use for hidden policies, scattered concepts, accidental variation, weak boundaries, system compression, architecture smells, structural refactors, or maintainability improvements beyond health scores.
+commands:
+  - template: "scip-query stats"
+    when: "Map evidence: repo-wide size before bounding the review."
+  - template: "scip-query system <scope>"
+    when: "Map evidence: files, symbols, deps in/out for the scope."
+  - template: "scip-query surface <scope>"
+    when: "Map evidence: what consumers actually use from the scope."
+  - template: "scip-query change-surface <file>"
+    when: "Map evidence: exports, consumers, and blast-radius risk."
+  - template: "scip-query affected <symbol>"
+    when: "Map evidence: transitive consumers of a candidate symbol."
+  - template: "scip-query drift"
+    when: "Map evidence: layer violations and pattern deviations as probes."
 ---
 
 # scip-maintainability
@@ -8,6 +21,21 @@ description: Review maintainability with scip-query evidence. Use for hidden pol
 Use this skill to review a codebase as a maintainer who must make future changes safely. Maintainability is the degree to which real code units let a maintainer understand, verify, and change behavior without rediscovering hidden knowledge.
 
 Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
+
+<!-- BEGIN GENERATED SKILL COMMANDS -->
+## Commands for this skill
+
+| Command | Purpose | When |
+| --- | --- | --- |
+| `scip-query stats` | Show index statistics | Map evidence: repo-wide size before bounding the review. |
+| `scip-query system <scope>` | Full module map: files, symbols, deps in/out | Map evidence: files, symbols, deps in/out for the scope. |
+| `scip-query surface <scope>` | What symbols consumers actually use from this module | Map evidence: what consumers actually use from the scope. |
+| `scip-query change-surface <file>` | Pre-change briefing: exports, consumers, and blast-radius risk | Map evidence: exports, consumers, and blast-radius risk. |
+| `scip-query affected <symbol>` | Transitive closure of symbols that could break if this symbol changes | Map evidence: transitive consumers of a candidate symbol. |
+| `scip-query drift` | Detect heuristic drift candidates: unused imports, layer violations, and pattern deviations | Map evidence: layer violations and pattern deviations as probes. |
+
+Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
+<!-- END GENERATED SKILL COMMANDS -->
 
 ## Terms
 

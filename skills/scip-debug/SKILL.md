@@ -1,6 +1,19 @@
 ---
 name: scip-debug
 description: Debug bugs and regressions with scip-query evidence. Use for failing behavior, wrong data flow, confusing runtime paths, broken tests, root-cause analysis, reproduction, tracing, or minimal fixes.
+commands:
+  - template: "scip-query files <feature-or-error-term>"
+    when: "Find the entry point from a feature name or error term."
+  - template: "scip-query trace <candidate-symbol>"
+    when: "Find the entry point: definition plus every reference."
+  - template: "scip-query call-graph <entry-symbol>"
+    when: "Follow execution: callers and callees along the failing path."
+  - template: "scip-query dataflow <symbol-or-variable>"
+    when: "Follow data: producers, consumers, and usage sites."
+  - template: "scip-query similar <suspect-symbol> --json --full"
+    when: "Compare nearby implementations for missing guards or handling."
+  - template: "scip-query change-surface <suspect-file> --json --full"
+    when: "Bound the fix: exports, consumers, and blast-radius risk."
 ---
 
 # scip-debug
@@ -8,6 +21,21 @@ description: Debug bugs and regressions with scip-query evidence. Use for failin
 Use this skill to move from a reported failure to a minimal verified fix. A bug is a mismatch between expected behavior and observed behavior in a concrete execution path. A root cause is the earliest code fact in that path that explains the mismatch.
 
 Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
+
+<!-- BEGIN GENERATED SKILL COMMANDS -->
+## Commands for this skill
+
+| Command | Purpose | When |
+| --- | --- | --- |
+| `scip-query files <feature-or-error-term>` | Find files matching a pattern | Find the entry point from a feature name or error term. |
+| `scip-query trace <candidate-symbol>` | Trace a symbol: definition + all references | Find the entry point: definition plus every reference. |
+| `scip-query call-graph <entry-symbol>` | Show incoming callers and outgoing callees for a symbol | Follow execution: callers and callees along the failing path. |
+| `scip-query dataflow <symbol-or-variable>` | Reference-level dataflow: definition sites, usage sites, producers, consumers | Follow data: producers, consumers, and usage sites. |
+| `scip-query similar <suspect-symbol> --json --full` | Find heuristic function similarity candidates from callee fingerprints | Compare nearby implementations for missing guards or handling. |
+| `scip-query change-surface <suspect-file> --json --full` | Pre-change briefing: exports, consumers, and blast-radius risk | Bound the fix: exports, consumers, and blast-radius risk. |
+
+Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
+<!-- END GENERATED SKILL COMMANDS -->
 
 ## Rules
 

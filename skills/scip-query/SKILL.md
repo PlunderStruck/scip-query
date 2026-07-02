@@ -1,6 +1,13 @@
 ---
 name: scip-query
 description: Route codebase work in scip-query-indexed projects. Use when exploring, planning, implementing, refactoring, debugging, verifying, cleaning up, reconciling docs, improving health, or when unsure which scip-* skill should own the workflow.
+commands:
+  - template: "scip-query status --capabilities"
+    when: "Before routing: confirm the index is fresh."
+  - template: "scip-query plan-context <target>"
+    when: "Default loop: anchor a plan for the routed skill."
+  - template: "scip-query diff-gate --json"
+    when: "Default loop: the loop is complete only when this passes or is explained."
 ---
 
 # scip-query Router
@@ -8,6 +15,18 @@ description: Route codebase work in scip-query-indexed projects. Use when explor
 Use this skill only to route. A scip-query workflow is a codebase task whose claims should be grounded in the SCIP index: the compiler-derived map of files, symbols, references, calls, dependencies, and consumers.
 
 Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md) when you need freshness, lookup, postcheck, or subagent rules.
+
+<!-- BEGIN GENERATED SKILL COMMANDS -->
+## Commands for this skill
+
+| Command | Purpose | When |
+| --- | --- | --- |
+| `scip-query status --capabilities` | Show index status for this project | Before routing: confirm the index is fresh. |
+| `scip-query plan-context <target>` | Pre-edit planning context for a symbol, file, or module | Default loop: anchor a plan for the routed skill. |
+| `scip-query diff-gate --json` | Gate the current diff: echo candidates, incomplete migrations, missing co-change partners, unedited twin partners (advisory), uncited doc updates, unused params, new dead symbols; exit 1 on blocking findings | Default loop: the loop is complete only when this passes or is explained. |
+
+Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
+<!-- END GENERATED SKILL COMMANDS -->
 
 ## Default Loop
 
@@ -53,3 +72,30 @@ Routing is complete only when one owning skill is selected or the task is small 
 ## Setup
 
 If a repository has not been bootstrapped, invoke `scip-setup`. Use `scip-query setup-agent` only to refresh agent guidance, `scip-query setup-hooks --json` only to repair project-local hooks, and `scip-query setup-ci` only when the user explicitly asks for CI setup.
+
+<!-- BEGIN GENERATED ROUTER COMMAND PREVIEW -->
+## Command Preview
+
+Top commands per routed skill, generated from each skill's own `commands:` frontmatter.
+
+| Skill | Top commands |
+| --- | --- |
+| `concrete-plan` | `scip-query status --capabilities`, `scip-query plan-context <target>`, `scip-query refs <symbol>` |
+| `scip-api-impact` | `scip-query surface <module-or-package>`, `scip-query refs <symbol>`, `scip-query affected <symbol> --json` |
+| `scip-cleanup-audit` | `scip-query health --json`, `scip-query cleanup-plan --verify --json`, `scip-query duplicate-bodies --json --full` |
+| `scip-cleanup-improve` | `scip-query health --json`, `scip-query cleanup-plan --verify --json`, `scip-query cleanup-apply --verified --batch <n>` |
+| `scip-debug` | `scip-query files <feature-or-error-term>`, `scip-query trace <candidate-symbol>`, `scip-query call-graph <entry-symbol>` |
+| `scip-diagram` | `scip-query system <module>`, `scip-query trace <symbol>`, `scip-query call-graph <symbol>` |
+| `scip-directory-architecture` | `scip-query system <scope>`, `scip-query locality-candidates --json --full`, `scip-query similar-files --full --json` |
+| `scip-doc-reconcile` | `scip-query doc-drift --json --full`, `scip-query doc-drift <doc>`, `scip-query outline <subject-file>` |
+| `scip-explore` | `scip-query stats`, `scip-query system <module-or-scope>`, `scip-query trace <entry-symbol>` |
+| `scip-hyper-optimization` | `scip-query bench --json`, `scip-query bench --json --cold-index --include-heavy --timeout-ms 600000`, `scip-query plan-context <entry-symbol-or-file>` |
+| `scip-language-playbook` | `scip-query stats`, `scip-query files <feature-or-module-name>`, `scip-query outline <file>` |
+| `scip-maintainability` | `scip-query stats`, `scip-query system <scope>`, `scip-query surface <scope>` |
+| `scip-react-maintainability` | `scip-query react-component-duplicates --scope <scope> --full --json`, `scip-query react-hook-candidates --scope <scope> --full --json`, `scip-query react-large-component-pressure --scope <scope> --full --json` |
+| `scip-setup` | `scip-query setup --json`, `scip-query doctor`, `scip-query status --json` |
+| `scip-triage-issue` | `scip-query files <issue-term>`, `scip-query trace <entry-or-error-symbol>`, `scip-query code <entry-or-error-symbol>` |
+| `scip-verify` | `scip-query doctor`, `scip-query status --capabilities`, `scip-query diff-impact --json` |
+| `scip-vue-maintainability` | `scip-query augment-vue --project <path-to-tsconfig>`, `scip-query vue-component-duplicates --scope <scope> --full --json`, `scip-query vue-composable-candidates --scope <scope> --full --json` |
+| `tla-model-system` | `scip-query tla scaffold <file>`, `scip-query tla verify <spec>`, `scip-query tla instrument <spec>` |
+<!-- END GENERATED ROUTER COMMAND PREVIEW -->

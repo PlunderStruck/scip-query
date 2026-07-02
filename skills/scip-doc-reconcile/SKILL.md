@@ -1,6 +1,17 @@
 ---
 name: scip-doc-reconcile
 description: Reconcile living docs with current code using scip-query doc-drift. Use for stale standards, broken file references, docs that cite moved code, agent guidance, or normative contradictions between documentation and implementation.
+commands:
+  - template: "scip-query doc-drift --json --full"
+    when: "Build the worklist: every stale-doc candidate, ranked."
+  - template: "scip-query doc-drift <doc>"
+    when: "Reconcile one doc: staleness detail for a single target."
+  - template: "scip-query outline <subject-file>"
+    when: "Reconcile one doc: current shape of the code the doc describes."
+  - template: "scip-query trace <symbol>"
+    when: "Reconcile one doc: verify a symbol the doc mentions still exists as described."
+  - template: "scip-query code <symbol>"
+    when: "Reconcile one doc: re-derive a snippet from current source."
 ---
 
 # scip-doc-reconcile
@@ -8,6 +19,20 @@ description: Reconcile living docs with current code using scip-query doc-drift.
 Use this skill to make living documentation true again. A living doc is documentation agents or maintainers use to make present-day changes, such as AGENTS.md, CLAUDE.md, standards, command docs, or workflow docs.
 
 Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
+
+<!-- BEGIN GENERATED SKILL COMMANDS -->
+## Commands for this skill
+
+| Command | Purpose | When |
+| --- | --- | --- |
+| `scip-query doc-drift --json --full` | Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped | Build the worklist: every stale-doc candidate, ranked. |
+| `scip-query doc-drift <doc>` | Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped | Reconcile one doc: staleness detail for a single target. |
+| `scip-query outline <subject-file>` | Tree view of symbols in a file, with line ranges | Reconcile one doc: current shape of the code the doc describes. |
+| `scip-query trace <symbol>` | Trace a symbol: definition + all references | Reconcile one doc: verify a symbol the doc mentions still exists as described. |
+| `scip-query code <symbol>` | Read the source code for a symbol (bounded to its definition range) | Reconcile one doc: re-derive a snippet from current source. |
+
+Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
+<!-- END GENERATED SKILL COMMANDS -->
 
 ## Rule
 

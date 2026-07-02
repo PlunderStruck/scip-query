@@ -1,6 +1,17 @@
 ---
 name: tla-model-system
 description: Model TypeScript systems with TLA+ and scip-query evidence. Use to scaffold, verify, instrument, or trace-check TLA+ specs, mapping files, configs, regression models, counterexample loops, or code/model conformance for an existing system.
+commands:
+  - template: "scip-query tla scaffold <file>"
+    when: "Start here for a new model: derive a draft spec, config, and mapping from indexed code."
+  - template: "scip-query tla verify <spec>"
+    when: "Mechanical conformance: referents, reads/writes, calls, and the model checker."
+  - template: "scip-query tla instrument <spec>"
+    when: "Generate a trace recorder plus wiring sites for each mapped action."
+  - template: "scip-query tla trace-check <spec> --trace <file>"
+    when: "Semantic conformance: check a recorded execution against the model's Next relation."
+  - template: "scip-query tla fetch-tools"
+    when: "Download the pinned tla2tools.jar into the cache when the checker is unavailable."
 ---
 
 # tla-model-system
@@ -9,13 +20,19 @@ Use this skill when a TypeScript system needs a TLA+ model tied to code evidence
 
 Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 
+<!-- BEGIN GENERATED SKILL COMMANDS -->
 ## Commands for this skill
 
-- `scip-query tla scaffold <file>` — derive a draft model, config, and mapping from indexed code (state from the write scan, domains from union types, actions from mutators). Start here for a new model.
-- `scip-query tla verify <spec>` — mechanical conformance: referents resolve, reads/writes match the static scan, calls match the graph, model checker runs. The Proof line itemizes what was verified vs waived.
-- `scip-query tla instrument <spec>` — generate a trace recorder plus wiring sites for each mapped action.
-- `scip-query tla trace-check <spec> --trace <file>` — semantic conformance: TLC checks that a recorded execution is a behavior of the model's `Next` relation, and names the exact divergent step when it is not.
-- `scip-query tla fetch-tools` — download the pinned tla2tools.jar into the cache.
+| Command | Purpose | When |
+| --- | --- | --- |
+| `scip-query tla scaffold <file>` | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Start here for a new model: derive a draft spec, config, and mapping from indexed code. |
+| `scip-query tla verify <spec>` | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Mechanical conformance: referents, reads/writes, calls, and the model checker. |
+| `scip-query tla instrument <spec>` | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Generate a trace recorder plus wiring sites for each mapped action. |
+| `scip-query tla trace-check <spec> --trace <file>` | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Semantic conformance: check a recorded execution against the model's Next relation. |
+| `scip-query tla fetch-tools` | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Download the pinned tla2tools.jar into the cache when the checker is unavailable. |
+
+Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
+<!-- END GENERATED SKILL COMMANDS -->
 
 ## Choose the Slice
 

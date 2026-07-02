@@ -1,6 +1,17 @@
 ---
 name: scip-language-playbook
 description: Choose language-specific scip-query commands. Use when entering an unfamiliar TypeScript, Python, Java, Scala, Kotlin, Rust, Go, C, C++, Ruby, C#, Visual Basic, Dart, PHP, Clojure, ClojureScript, or Vue codebase and you need high-signal exploration or de-bloat commands first.
+commands:
+  - template: "scip-query stats"
+    when: "Universal first pass: repo-wide size and shape."
+  - template: "scip-query files <feature-or-module-name>"
+    when: "Universal first pass: locate the files for a feature or module."
+  - template: "scip-query outline <file>"
+    when: "Universal first pass: symbol tree for a candidate file."
+  - template: "scip-query trace <symbol>"
+    when: "Universal first pass: definition plus every reference."
+  - template: "scip-query code <symbol>"
+    when: "Universal first pass: confirm behavior claims with source."
 ---
 
 # scip-language-playbook
@@ -8,6 +19,20 @@ description: Choose language-specific scip-query commands. Use when entering an 
 Use this reference to pick the shortest command path from "what is this system doing?" to verified language-specific answers.
 
 Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
+
+<!-- BEGIN GENERATED SKILL COMMANDS -->
+## Commands for this skill
+
+| Command | Purpose | When |
+| --- | --- | --- |
+| `scip-query stats` | Show index statistics | Universal first pass: repo-wide size and shape. |
+| `scip-query files <feature-or-module-name>` | Find files matching a pattern | Universal first pass: locate the files for a feature or module. |
+| `scip-query outline <file>` | Tree view of symbols in a file, with line ranges | Universal first pass: symbol tree for a candidate file. |
+| `scip-query trace <symbol>` | Trace a symbol: definition + all references | Universal first pass: definition plus every reference. |
+| `scip-query code <symbol>` | Read the source code for a symbol (bounded to its definition range) | Universal first pass: confirm behavior claims with source. |
+
+Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
+<!-- END GENERATED SKILL COMMANDS -->
 
 ## Rules
 

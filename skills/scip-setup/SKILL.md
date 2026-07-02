@@ -1,6 +1,19 @@
 ---
 name: scip-setup
 description: Set up or repair scip-query in a repository. Use for bootstrapping, onboarding, refreshing indexes, project-local hooks, agent guidance, capability diagnostics, health dossiers, .scipquery.json, or setup cleanup handoff.
+commands:
+  - template: "scip-query setup --json"
+    when: "Run setup: install skills, refresh the index, report health."
+  - template: "scip-query doctor"
+    when: "Resolve blockers: human diagnostic for config, index, and dependencies."
+  - template: "scip-query status --json"
+    when: "Resolve blockers: machine surface for freshness and config."
+  - template: "scip-query capabilities --matrix"
+    when: "Resolve blockers: which evidence/verification capabilities are available."
+  - template: "scip-query config-validate --json"
+    when: "Resolve blockers: validate .scipquery.json."
+  - template: "scip-query init"
+    when: "Calibrate config: create .scipquery.json only when absent and needed."
 ---
 
 # scip-setup
@@ -8,6 +21,21 @@ description: Set up or repair scip-query in a repository. Use for bootstrapping,
 Use this skill to make a repository a reliable scip-query workspace: indexed, diagnosed, documented for agents, and honest about unavailable capabilities.
 
 Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
+
+<!-- BEGIN GENERATED SKILL COMMANDS -->
+## Commands for this skill
+
+| Command | Purpose | When |
+| --- | --- | --- |
+| `scip-query setup --json` | Bootstrap this project: install agent skills, refresh the index, verify capabilities, and report health | Run setup: install skills, refresh the index, report health. |
+| `scip-query doctor` | Diagnose config, index freshness, dependency readiness, and project capabilities | Resolve blockers: human diagnostic for config, index, and dependencies. |
+| `scip-query status --json` | Show index status for this project | Resolve blockers: machine surface for freshness and config. |
+| `scip-query capabilities --matrix` | Report which evidence and verification capabilities are available in this project | Resolve blockers: which evidence/verification capabilities are available. |
+| `scip-query config-validate --json` | Validate .scipquery.json, including structured suppressions and declared coupling groups | Resolve blockers: validate .scipquery.json. |
+| `scip-query init` | Create a .scipquery.json config file for this project | Calibrate config: create .scipquery.json only when absent and needed. |
+
+Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
+<!-- END GENERATED SKILL COMMANDS -->
 
 ## Rules
 

@@ -1,6 +1,19 @@
 ---
 name: scip-api-impact
 description: Assess API impact with scip-query evidence. Use before changing public exports, module boundaries, schemas, routes, CLI commands, config fields, generated artifacts, signatures, docs-backed behavior, or consumer migrations.
+commands:
+  - template: "scip-query surface <module-or-package>"
+    when: "Identify the surface: what consumers actually use from the module."
+  - template: "scip-query refs <symbol>"
+    when: "Find consumers: every direct reference to the surface symbol."
+  - template: "scip-query affected <symbol> --json"
+    when: "Find consumers: transitive blast radius of the change."
+  - template: "scip-query co-change <file> --json --full"
+    when: "Find hidden partners: historically coupled files without a dependency edge."
+  - template: "scip-query doc-drift --json --full"
+    when: "Find hidden partners: docs that describe the surface and may need an update."
+  - template: "scip-query unused-params --json --full"
+    when: "Choose migration shape: reject speculative new parameters."
 ---
 
 # scip-api-impact
@@ -8,6 +21,21 @@ description: Assess API impact with scip-query evidence. Use before changing pub
 Use this skill before changing a public surface. A public surface is a callable, export, route, schema, config field, CLI command, generated artifact, or documented behavior that other code or users can depend on. Its defining trait is that a local edit can require coordinated consumer, docs, tests, or migration changes outside the implementation file.
 
 Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
+
+<!-- BEGIN GENERATED SKILL COMMANDS -->
+## Commands for this skill
+
+| Command | Purpose | When |
+| --- | --- | --- |
+| `scip-query surface <module-or-package>` | What symbols consumers actually use from this module | Identify the surface: what consumers actually use from the module. |
+| `scip-query refs <symbol>` | Find all files referencing a symbol | Find consumers: every direct reference to the surface symbol. |
+| `scip-query affected <symbol> --json` | Transitive closure of symbols that could break if this symbol changes | Find consumers: transitive blast radius of the change. |
+| `scip-query co-change <file> --json --full` | Files that change together in git history without a dependency edge — hidden coupling candidates | Find hidden partners: historically coupled files without a dependency edge. |
+| `scip-query doc-drift --json --full` | Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped | Find hidden partners: docs that describe the surface and may need an update. |
+| `scip-query unused-params --json --full` | Speculative-generality candidates: trailing parameters no body ever uses (TS/JS) | Choose migration shape: reject speculative new parameters. |
+
+Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
+<!-- END GENERATED SKILL COMMANDS -->
 
 ## Rules
 

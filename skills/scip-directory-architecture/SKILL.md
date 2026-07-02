@@ -1,6 +1,19 @@
 ---
 name: scip-directory-architecture
 description: Review directory architecture with scip-query evidence. Use to evaluate, design, reorganize, or migrate folder structure, ownership boundaries, locality config, messy repos, AI-generated layout, or safe file-move slices.
+commands:
+  - template: "scip-query system <scope>"
+    when: "Inventory evidence: files, symbols, deps in/out for the scope."
+  - template: "scip-query locality-candidates --json --full"
+    when: "Inventory evidence: directory-locality candidates from consumer ownership."
+  - template: "scip-query similar-files --full --json"
+    when: "Inventory evidence: files with overlapping dependency profiles."
+  - template: "scip-query cycles"
+    when: "Inventory evidence: circular dependency chains between files."
+  - template: "scip-query co-change --json --full"
+    when: "Inventory evidence: hidden file-level coupling from git history."
+  - template: "scip-query config-validate --json"
+    when: "Implement a slice: validate locality config after a move."
 ---
 
 # scip-directory-architecture
@@ -8,6 +21,21 @@ description: Review directory architecture with scip-query evidence. Use to eval
 Use this skill to answer where code should live. Directory architecture is the filesystem arrangement of source files by their main reason to change; what distinguishes a good structure is that a maintainer can predict where a concept belongs before reading every import.
 
 Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
+
+<!-- BEGIN GENERATED SKILL COMMANDS -->
+## Commands for this skill
+
+| Command | Purpose | When |
+| --- | --- | --- |
+| `scip-query system <scope>` | Full module map: files, symbols, deps in/out | Inventory evidence: files, symbols, deps in/out for the scope. |
+| `scip-query locality-candidates --json --full` | Find directory-locality and ancestry candidates from consumer ownership | Inventory evidence: directory-locality candidates from consumer ownership. |
+| `scip-query similar-files --full --json` | Find heuristic similar-file candidates from dependency profiles | Inventory evidence: files with overlapping dependency profiles. |
+| `scip-query cycles` | Detect circular dependency chains between files | Inventory evidence: circular dependency chains between files. |
+| `scip-query co-change --json --full` | Files that change together in git history without a dependency edge — hidden coupling candidates | Inventory evidence: hidden file-level coupling from git history. |
+| `scip-query config-validate --json` | Validate .scipquery.json, including structured suppressions and declared coupling groups | Implement a slice: validate locality config after a move. |
+
+Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
+<!-- END GENERATED SKILL COMMANDS -->
 
 ## Terms
 

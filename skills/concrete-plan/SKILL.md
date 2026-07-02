@@ -1,6 +1,17 @@
 ---
 name: concrete-plan
 description: Plan code changes with scip-query evidence and testable design. Use for non-trivial implementation, refactor, migration, API, or bug-fix plans before editing code; require source citations, reuse audit, test seams, side-effect boundaries, contracts, and verification.
+commands:
+  - template: "scip-query status --capabilities"
+    when: "Discover: confirm the index is fresh before citing graph facts."
+  - template: "scip-query plan-context <target>"
+    when: "Discover: anchor the plan with pre-edit context for the target."
+  - template: "scip-query refs <symbol>"
+    when: "Reuse audit: find existing consumers before proposing a new unit."
+  - template: "scip-query code <symbol>"
+    when: "Reuse audit: read source before citing a behavior claim."
+  - template: "scip-query trace <symbol>"
+    when: "Verify the plan: rerun source-producing context for cited targets."
 ---
 
 # Concrete Plan
@@ -8,6 +19,20 @@ description: Plan code changes with scip-query evidence and testable design. Use
 Use this skill to write an implementation plan that another agent can execute without guessing. A concrete plan is a dated Markdown checklist whose code claims come from scip-query evidence and whose design makes the intended behavior easy to test before it is easy to ship.
 
 Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md) when you need lookup tips, command families, postchecks, or subagent rules.
+
+<!-- BEGIN GENERATED SKILL COMMANDS -->
+## Commands for this skill
+
+| Command | Purpose | When |
+| --- | --- | --- |
+| `scip-query status --capabilities` | Show index status for this project | Discover: confirm the index is fresh before citing graph facts. |
+| `scip-query plan-context <target>` | Pre-edit planning context for a symbol, file, or module | Discover: anchor the plan with pre-edit context for the target. |
+| `scip-query refs <symbol>` | Find all files referencing a symbol | Reuse audit: find existing consumers before proposing a new unit. |
+| `scip-query code <symbol>` | Read the source code for a symbol (bounded to its definition range) | Reuse audit: read source before citing a behavior claim. |
+| `scip-query trace <symbol>` | Trace a symbol: definition + all references | Verify the plan: rerun source-producing context for cited targets. |
+
+Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
+<!-- END GENERATED SKILL COMMANDS -->
 
 ## Rules
 

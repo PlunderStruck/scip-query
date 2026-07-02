@@ -1,6 +1,19 @@
 ---
 name: scip-vue-maintainability
 description: Review Vue maintainability with scip-query. Use for Vue, Nuxt, SFCs, duplicated templates, composable candidates, large views, frontend health pressure, or verifying Vue reuse after refactors.
+commands:
+  - template: "scip-query augment-vue --project <path-to-tsconfig>"
+    when: "Bound and augment: add compiler-resolved Vue SFC references first."
+  - template: "scip-query vue-component-duplicates --scope <scope> --full --json"
+    when: "Scan: duplicated template structure candidates."
+  - template: "scip-query vue-composable-candidates --scope <scope> --full --json"
+    when: "Scan: shared state/lifecycle extraction candidates."
+  - template: "scip-query vue-large-view-pressure --scope <scope> --full --json"
+    when: "Scan: SFCs carrying several reasons to change."
+  - template: "scip-query recent-duplicates --scope <scope> --full --json"
+    when: "Scan: recent code re-implementing established components."
+  - template: "scip-query health --json"
+    when: "Scan: frontend health pressure baseline."
 ---
 
 # scip-vue-maintainability
@@ -8,6 +21,21 @@ description: Review Vue maintainability with scip-query. Use for Vue, Nuxt, SFCs
 Use this skill to review Vue frontends as maintainable systems of single-file components, templates, scripts, styles, external scripts, components, and composables.
 
 Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
+
+<!-- BEGIN GENERATED SKILL COMMANDS -->
+## Commands for this skill
+
+| Command | Purpose | When |
+| --- | --- | --- |
+| `scip-query augment-vue --project <path-to-tsconfig>` | Add compiler-resolved Vue SFC references to the SQLite index using Volar | Bound and augment: add compiler-resolved Vue SFC references first. |
+| `scip-query vue-component-duplicates --scope <scope> --full --json` | Find heuristic duplicated Vue component structure candidates from template tags, bindings, slots, and directives | Scan: duplicated template structure candidates. |
+| `scip-query vue-composable-candidates --scope <scope> --full --json` | Find heuristic Vue composable extraction candidates from shared state, effects, requests, and template bindings | Scan: shared state/lifecycle extraction candidates. |
+| `scip-query vue-large-view-pressure --scope <scope> --full --json` | Find heuristic large Vue view pressure candidates from template, script, style, and external script line counts | Scan: SFCs carrying several reasons to change. |
+| `scip-query recent-duplicates --scope <scope> --full --json` | Directional duplicate candidates: recent code that re-implements established callable, React, or Vue code | Scan: recent code re-implementing established components. |
+| `scip-query health --json` | Composite codebase health report with prioritized action list | Scan: frontend health pressure baseline. |
+
+Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
+<!-- END GENERATED SKILL COMMANDS -->
 
 ## Terms
 

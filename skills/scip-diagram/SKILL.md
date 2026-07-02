@@ -1,6 +1,19 @@
 ---
 name: scip-diagram
 description: Diagram code with scip-query evidence. Use for code flow diagrams, architecture diagrams, data-flow maps, dependency maps, blast-radius visuals, module maps, or HTML artifacts explaining a system.
+commands:
+  - template: "scip-query system <module>"
+    when: "Collect evidence: module map for a dependency or architecture diagram."
+  - template: "scip-query trace <symbol>"
+    when: "Collect evidence: definition plus references for a call-flow diagram."
+  - template: "scip-query call-graph <symbol>"
+    when: "Collect evidence: callers/callees for a call-flow diagram."
+  - template: "scip-query dataflow <symbol>"
+    when: "Collect evidence: producers/consumers for a data-flow diagram."
+  - template: "scip-query affected <symbol> --json"
+    when: "Collect evidence: blast-radius nodes and edges."
+  - template: "scip-query change-surface <file> --json --full"
+    when: "Collect evidence: exports and consumers for a change-surface map."
 ---
 
 # scip-diagram
@@ -8,6 +21,21 @@ description: Diagram code with scip-query evidence. Use for code flow diagrams, 
 Use this skill to build a visual explanation from compiler-resolved facts. A code diagram is an HTML artifact that turns source units, calls, dependencies, data flow, or blast radius into a visual map; every node and edge must trace to scip-query evidence.
 
 Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
+
+<!-- BEGIN GENERATED SKILL COMMANDS -->
+## Commands for this skill
+
+| Command | Purpose | When |
+| --- | --- | --- |
+| `scip-query system <module>` | Full module map: files, symbols, deps in/out | Collect evidence: module map for a dependency or architecture diagram. |
+| `scip-query trace <symbol>` | Trace a symbol: definition + all references | Collect evidence: definition plus references for a call-flow diagram. |
+| `scip-query call-graph <symbol>` | Show incoming callers and outgoing callees for a symbol | Collect evidence: callers/callees for a call-flow diagram. |
+| `scip-query dataflow <symbol>` | Reference-level dataflow: definition sites, usage sites, producers, consumers | Collect evidence: producers/consumers for a data-flow diagram. |
+| `scip-query affected <symbol> --json` | Transitive closure of symbols that could break if this symbol changes | Collect evidence: blast-radius nodes and edges. |
+| `scip-query change-surface <file> --json --full` | Pre-change briefing: exports, consumers, and blast-radius risk | Collect evidence: exports and consumers for a change-surface map. |
+
+Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
+<!-- END GENERATED SKILL COMMANDS -->
 
 ## Rules
 

@@ -1,6 +1,19 @@
 ---
 name: scip-explore
 description: Explore codebases with scip-query evidence. Use to explain how a system, feature, module, call path, dependency graph, data flow, architecture, or change risk works before answering or editing.
+commands:
+  - template: "scip-query stats"
+    when: "Orient: repo-wide size and shape before naming a scope."
+  - template: "scip-query system <module-or-scope>"
+    when: "Orient: map files, symbols, deps in/out for the scope."
+  - template: "scip-query trace <entry-symbol>"
+    when: "Trace entry points: definition plus every reference."
+  - template: "scip-query call-graph <entry-symbol>"
+    when: "Trace entry points: callers and callees for the path."
+  - template: "scip-query dataflow <symbol-or-variable>"
+    when: "Follow data and state through producers and consumers."
+  - template: "scip-query affected <symbol> --json"
+    when: "Map dependencies and consumers: downstream blast radius."
 ---
 
 # scip-explore
@@ -8,6 +21,21 @@ description: Explore codebases with scip-query evidence. Use to explain how a sy
 Use this skill to produce verified understanding. Exploration is the evidence pass that traces code from entry points to effects using the SCIP index rather than memory or folder guesses.
 
 Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
+
+<!-- BEGIN GENERATED SKILL COMMANDS -->
+## Commands for this skill
+
+| Command | Purpose | When |
+| --- | --- | --- |
+| `scip-query stats` | Show index statistics | Orient: repo-wide size and shape before naming a scope. |
+| `scip-query system <module-or-scope>` | Full module map: files, symbols, deps in/out | Orient: map files, symbols, deps in/out for the scope. |
+| `scip-query trace <entry-symbol>` | Trace a symbol: definition + all references | Trace entry points: definition plus every reference. |
+| `scip-query call-graph <entry-symbol>` | Show incoming callers and outgoing callees for a symbol | Trace entry points: callers and callees for the path. |
+| `scip-query dataflow <symbol-or-variable>` | Reference-level dataflow: definition sites, usage sites, producers, consumers | Follow data and state through producers and consumers. |
+| `scip-query affected <symbol> --json` | Transitive closure of symbols that could break if this symbol changes | Map dependencies and consumers: downstream blast radius. |
+
+Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
+<!-- END GENERATED SKILL COMMANDS -->
 
 ## Rules
 
