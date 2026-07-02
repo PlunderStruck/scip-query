@@ -63,9 +63,9 @@
       "reads": ["lockOwner", "phase"],
       "writes": ["lockOwner", "phase"],
       "waive": {
-        "reads": ["phase", "lockOwner"],
-        "writes": ["phase", "lockOwner"],
-        "reason": "reindex()'s catch block writes LastRefreshMetadata#result='failed' (real evidence for the terminal write), but reading phase to decide the transition has no stored-field backing (phase-abstraction gap, as Acquire). lockOwner's release is releaseLock() in the finally block, a closure invocation with no textual assignment to `pid` in reindex()'s own body — the actual pid clearing happens inside tryAcquireReindexLock's returned closure (rmSync), a different code region."
+        "reads": ["phase"],
+        "writes": ["phase"],
+        "reason": "phase-abstraction gap as Acquire (reading/deciding the transition has no stored-field backing; only the terminal LastRefreshMetadata#result write is real). lockOwner's read/write are now provable one call hop away (P5.4): reindex() unconditionally calls acquireReindexLock() (line 164) before its try/catch/finally, whose own body reads existing.pid and writes the lockPath resource (rmSync) during stale-lock reclamation — the same code family the model's Fail action represents releasing through. This is static-action evidence, not a proof that this specific rmSync call is the one that runs on any given Fail transition; releaseLock() itself (the actual per-run release closure, called in reindex()'s finally block) remains textually unresolvable as a call target because it is a returned closure, not a named symbol."
       }
     },
     "Publish": {

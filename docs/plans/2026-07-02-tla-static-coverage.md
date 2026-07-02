@@ -32,7 +32,9 @@ in the 694-test suite, and every item 13-21 either shipped or BLOCKED-noted.
   specs/diff-gate proxy-ref workaround with an honest variable waiver.
 - [x] **P5.3 (#18) Alias collision detection.** Contract load errors when two
   variables share an alias (or a resource suffix). Test.
-- [ ] **P5.4 (#14) One-hop callee effects.** When an action's referent body
+- [x] **P5.4 (#14) One-hop callee effects.** (waived-writes target partially met —
+  see closeout report: 11→9 on the benchmark, floor is `phase`'s structural
+  no-stored-field gap across all 7 actions, not a scanner limitation.) When an action's referent body
   calls another indexed function in scope, include that callee's
   write/read effects (one level only, no recursion) attributed to the
   action, marked `via: <callee>` in the finding/verified accounting. Should

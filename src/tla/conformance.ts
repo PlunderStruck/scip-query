@@ -127,6 +127,12 @@ export interface TlaStaticWrite {
     | 'resource';
   enclosingSymbol?: string;
   enclosingShort?: string;
+  /**
+   * Set when this write was found not in the mapped action's own referent
+   * range but one call hop away (P5.4 / followup #14) — the callee's
+   * shortName the write was attributed through. Absent for direct evidence.
+   */
+  via?: string;
 }
 
 export interface TlaStaticRead {
@@ -138,6 +144,8 @@ export interface TlaStaticRead {
   kind: 'identifier' | 'source-scan' | 'resource';
   enclosingSymbol?: string;
   enclosingShort?: string;
+  /** See `TlaStaticWrite.via`. */
+  via?: string;
 }
 
 /** A variable bound to filesystem state via `variables.<v>.resource`. */
@@ -310,6 +318,62 @@ function resourcesForVariables(contract: TlaModelContract): VariableResource[] {
   return resources;
 }
 
+/**
+ * P5.4 / followup #14: writes/reads one call hop away from a mapped
+ * action's referent are statically invisible per-range (e.g. the
+ * preemption path's lock-release write happens inside a callee, not
+ * textually inside the mapped function). Include a callee's own effects —
+ * one level only, no recursion into the callee's own callees — attributed
+ * to the action via the `via` marker. Evidence tier stays `static-action`.
+ */
+function oneHopCalleeWrites(
+  db: ScipDatabase,
+  referentSymbol: string,
+  aliases: readonly VariableAlias[],
+  resources: readonly VariableResource[],
+): TlaStaticWrite[] {
+  return oneHopCalleeEffects(db, referentSymbol, (file, startLine, endLine) =>
+    collectWritesForRange(db, file, startLine, endLine, aliases, resources),
+  );
+}
+
+function oneHopCalleeReads(
+  db: ScipDatabase,
+  referentSymbol: string,
+  aliases: readonly VariableAlias[],
+  resources: readonly VariableResource[],
+): TlaStaticRead[] {
+  return oneHopCalleeEffects(db, referentSymbol, (file, startLine, endLine) =>
+    collectReadsForRange(db, file, startLine, endLine, aliases, resources),
+  );
+}
+
+function oneHopCalleeEffects<T extends { via?: string }>(
+  db: ScipDatabase,
+  referentSymbol: string,
+  collect: (file: string, startLine: number, endLine: number) => T[],
+): T[] {
+  // semantic: false — restrict to precise AST-callsite/SCIP-mention call
+  // edges. The heuristic semantic-callee tier (dataflow/type-inference
+  // based) is too broad for a one-hop rule meant to stay "static-action"
+  // evidence: it pulled in unrelated same-shaped-alias writes from files
+  // the referent never actually calls into.
+  const graph = callGraph(db, referentSymbol, { semantic: false });
+  if (!graph) return [];
+  const effects: T[] = [];
+  const seenCallees = new Set<string>();
+  for (const callee of graph.callees) {
+    if (seenCallees.has(callee.symbol)) continue;
+    seenCallees.add(callee.symbol);
+    const match = resolveSymbol(db, callee.symbol).match;
+    if (!match) continue;
+    for (const effect of collect(match.relativePath, match.startLine, match.endLine)) {
+      effects.push({ ...effect, via: callee.shortName });
+    }
+  }
+  return effects;
+}
+
 function resolveActions(
   db: ScipDatabase,
   contract: TlaModelContract,
@@ -477,6 +541,17 @@ function collectAllStaticWrites(
       );
       actionWrites.push(...found);
       writes.push(...found);
+      // Only credit a one-hop callee write toward a variable this action
+      // already declares — a callee shared by several actions (e.g. an
+      // unconditional setup call) must never assert a NEW, undeclared fact
+      // for an action that doesn't own it; it may only strengthen evidence
+      // for a fact the mapping already claims.
+      const declaredWrites = new Set(action.mapping.writes);
+      const oneHop = oneHopCalleeWrites(db, referent.match.symbol, aliases, resources).filter((write) =>
+        declaredWrites.has(write.variable),
+      );
+      actionWrites.push(...oneHop);
+      writes.push(...oneHop);
     }
     verifyActionWrites(action, actionWrites, findings, modelActions.get(action.name));
   }
@@ -533,7 +608,7 @@ function verifyActionWrites(
           endLine: write.line,
           message: `Code for TLA+ action ${action.name} writes ${write.variable}, but the SANY model action does not prime it.`,
           why: [
-            `The code writes ${write.target} at ${write.file}:${write.line + 1}.`,
+            `The code writes ${write.target} at ${write.file}:${write.line + 1}${viaSuffix(write.via)}.`,
             `SANY-derived model facts for ${action.name} list writes: ${modelAction.writes.join(', ') || 'none'}.`,
           ],
           remediation: `Prime ${write.variable} in the TLA+ action, remove the code write from this action, or remap the code to the correct action.`,
@@ -549,7 +624,7 @@ function verifyActionWrites(
           startLine: write.line,
           endLine: write.line,
           message: `TLA+ action ${action.name} writes modeled variable ${write.variable}, but the mapping does not declare that write.`,
-          why: [`The code writes ${write.target} at ${write.file}:${write.line + 1}.`],
+          why: [`The code writes ${write.target} at ${write.file}:${write.line + 1}${viaSuffix(write.via)}.`],
           remediation: `Add ${write.variable} to actions.${action.name}.writes, update the model action, or change the code so it no longer mutates that modeled variable.`,
         }),
       );
@@ -594,6 +669,14 @@ function collectAllStaticReads(
       );
       actionReads.push(...found);
       reads.push(...found);
+      // Same declared-fact constraint as the write path — see the comment
+      // in collectAllStaticWrites.
+      const declaredReads = new Set(action.mapping.reads);
+      const oneHop = oneHopCalleeReads(db, referent.match.symbol, aliases, resources).filter((read) =>
+        declaredReads.has(read.variable),
+      );
+      actionReads.push(...oneHop);
+      reads.push(...oneHop);
     }
     verifyActionReads(action, actionReads, findings, modelActions.get(action.name));
   }
@@ -620,7 +703,7 @@ function verifyActionReads(
           endLine: read.line,
           message: `Code for TLA+ action ${action.name} reads ${read.variable}, but the SANY model action does not reference it.`,
           why: [
-            `The code reads ${read.target} at ${read.file}:${read.line + 1}.`,
+            `The code reads ${read.target} at ${read.file}:${read.line + 1}${viaSuffix(read.via)}.`,
             `SANY-derived model facts for ${action.name} list reads: ${modelAction.reads.join(', ') || 'none'}.`,
           ],
           remediation: `Reference ${read.variable} in the TLA+ action, remove the code read from this action, or remap the code to the correct action.`,
@@ -636,7 +719,7 @@ function verifyActionReads(
           startLine: read.line,
           endLine: read.line,
           message: `TLA+ action ${action.name} reads modeled variable ${read.variable}, but the mapping does not declare that read.`,
-          why: [`The code reads ${read.target} at ${read.file}:${read.line + 1}.`],
+          why: [`The code reads ${read.target} at ${read.file}:${read.line + 1}${viaSuffix(read.via)}.`],
           remediation: `Add ${read.variable} to actions.${action.name}.reads, update the model action, or waive the read with a specific reason if it is intentionally outside the model step.`,
         }),
       );
@@ -1274,6 +1357,10 @@ function dedupeAliases(aliases: readonly VariableAlias[]): VariableAlias[] {
 
 function resolvedCount(referents: readonly ResolvedReferent[]): number {
   return referents.filter((referent) => referent.match).length;
+}
+
+function viaSuffix(via: string | undefined): string {
+  return via ? ` (via ${via}, one call hop from the mapped referent)` : '';
 }
 
 function isFactWaived(action: ResolvedAction, kind: 'read' | 'write', variable: string): boolean {

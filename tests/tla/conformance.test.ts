@@ -689,6 +689,146 @@ Cleanup == UNCHANGED lockOwner
     }
   });
 
+  it('attributes a one-hop callee write to the calling action, marked via', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/lock.ts')
+      .symbol(1, 'scip-typescript npm test 1.0.0 src/`lock.ts`/pid.', 'pid', SymbolInformation_Kind.Constant)
+      .symbol(2, 'scip-typescript npm test 1.0.0 src/`lock.ts`/release().', 'release', SymbolInformation_Kind.Function)
+      .symbol(3, 'scip-typescript npm test 1.0.0 src/`lock.ts`/cleanup().', 'cleanup', SymbolInformation_Kind.Function)
+      .definition(1, 1, 1, 0, 0, 0, 30)
+      .definition(2, 1, 2, 2, 0, 4, 1)
+      .definition(3, 1, 3, 6, 0, 8, 1)
+      .chunk(1, 1, 0, 8)
+      .write();
+    const config: ScipQueryConfig = { projectRoot: root, dbPath, indexPath: join(root, 'index.scip') };
+    writeFixtureFiles(root, {
+      'src/lock.ts': [
+        'export const pid: number = 0;',
+        '',
+        'export function release(lockPath: string) {',
+        '  cleanup(lockPath);',
+        '}',
+        '',
+        'function cleanup(lockPath: string) {',
+        '  rmSync(lockPath, { force: true });',
+        '}',
+      ],
+    });
+    writeFileSync(
+      join(root, 'Lock.tla'),
+      `---- MODULE Lock ----
+VARIABLES lockOwner
+Release == lockOwner' = "None"
+====
+`,
+    );
+    const db = new ScipDatabase(config);
+    const contract: TlaModelContract = {
+      module: 'Lock.tla',
+      scope: ['src/lock.ts'],
+      variables: {
+        lockOwner: { code: ['pid'], aliases: ['pid'], resource: { path: 'lockPath' } },
+      },
+      actions: {
+        Release: { code: ['release'], reads: [], writes: ['lockOwner'], calls: [] },
+      },
+      invariants: [],
+      traces: [],
+    };
+
+    try {
+      const result = verifyTlaConformance(db, contract, readTlaModuleFacts(root, 'Lock.tla'));
+
+      // release() itself never touches lockPath — only its callee cleanup()
+      // does. Without the one-hop rule this would be a missing-write-evidence
+      // warning; with it, the write is found and attributed via cleanup().
+      expect(result.staticWrites).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            variable: 'lockOwner',
+            kind: 'resource',
+            via: expect.stringContaining('cleanup'),
+          }),
+        ]),
+      );
+      expect(result.findings).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ category: 'missing-write-evidence' })]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('does not attribute a one-hop callee write to an action that does not declare it', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/lock.ts')
+      .symbol(1, 'scip-typescript npm test 1.0.0 src/`lock.ts`/pid.', 'pid', SymbolInformation_Kind.Constant)
+      .symbol(2, 'scip-typescript npm test 1.0.0 src/`lock.ts`/start().', 'start', SymbolInformation_Kind.Function)
+      .symbol(3, 'scip-typescript npm test 1.0.0 src/`lock.ts`/cleanup().', 'cleanup', SymbolInformation_Kind.Function)
+      .definition(1, 1, 1, 0, 0, 0, 30)
+      .definition(2, 1, 2, 2, 0, 4, 1)
+      .definition(3, 1, 3, 6, 0, 8, 1)
+      .chunk(1, 1, 0, 8)
+      .write();
+    const config: ScipQueryConfig = { projectRoot: root, dbPath, indexPath: join(root, 'index.scip') };
+    writeFixtureFiles(root, {
+      'src/lock.ts': [
+        'export const pid: number = 0;',
+        '',
+        'export function start(lockPath: string) {',
+        '  cleanup(lockPath);',
+        '}',
+        '',
+        'function cleanup(lockPath: string) {',
+        '  rmSync(lockPath, { force: true });',
+        '}',
+      ],
+    });
+    writeFileSync(
+      join(root, 'Lock.tla'),
+      `---- MODULE Lock ----
+VARIABLES lockOwner
+Start == UNCHANGED lockOwner
+====
+`,
+    );
+    const db = new ScipDatabase(config);
+    const contract: TlaModelContract = {
+      module: 'Lock.tla',
+      // No `scope` — isolates the per-action one-hop attribution behavior
+      // under test from the separate unmapped-write sweep (which would
+      // otherwise flag cleanup()'s write for being outside any mapped
+      // action, a correct but unrelated finding covered elsewhere).
+      variables: {
+        lockOwner: { code: ['pid'], aliases: ['pid'], resource: { path: 'lockPath' } },
+      },
+      actions: {
+        // Start does NOT declare a lockOwner write, even though its
+        // one-hop callee (cleanup) touches the resource — the one-hop rule
+        // must only strengthen evidence for a declared fact, never assert
+        // an undeclared one for an action sharing a callee.
+        Start: { code: ['start'], reads: [], writes: [], calls: [] },
+      },
+      invariants: [],
+      traces: [],
+    };
+
+    try {
+      const result = verifyTlaConformance(db, contract, readTlaModuleFacts(root, 'Lock.tla'));
+
+      expect(result.findings.filter((finding) => finding.severity === 'error')).toEqual([]);
+      expect(result.findings).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ category: 'undeclared-write' })]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   it('warns when mapped invariants are absent from the checked config', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
     writeFixtureFiles(root, {
