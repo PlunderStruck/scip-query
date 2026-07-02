@@ -427,24 +427,38 @@ export async function handleAgentHookContext(): Promise<void> {
   }
 }
 
-export function handleAgentHookStop(): void {
-  const hookInput = readHookInput();
+/**
+ * Runs diff-gate for the Stop hook and returns its result, or `undefined`
+ * when the hook has nothing to do (re-entrant stop, no workspace, no
+ * index). Split out from `handleAgentHookStop` so tests can drive the exact
+ * config-load path the live hook uses (`resolveHookWorkspace` +
+ * `withWorkspaceDb`) with a synthetic hook payload instead of stdin —
+ * this is the path that regressed docs.snapshotPaths (18.2/21.2d): unlike
+ * `openDb()` in cli-context.ts, `withWorkspaceDb` built its `ScipQueryConfig`
+ * without `docs`, so `isSnapshotDoc` saw an empty `snapshotPaths` list and
+ * every snapshot-doc citation surfaced as a live doc-reference finding.
+ */
+export function runStopHookDiffGate(hookInput: string): DiffGateResult | undefined {
   if (isStopHookReentry(hookInput)) {
-    return;
+    return undefined;
   }
 
   const payload = parseHookPayload(hookInput);
   const workspace = resolveHookWorkspace(payload);
-  if (!workspace || !existsSync(workspace.paths.dbPath)) return;
+  if (!workspace || !existsSync(workspace.paths.dbPath)) return undefined;
 
-  withWorkspaceDb(workspace, (db) => {
-    const result = diffGate(db, {
+  return withWorkspaceDb(workspace, (db) =>
+    diffGate(db, {
       minTogether: 6,
       skip: [],
-    });
-    if (result.findings.length === 0) return;
-    console.log(JSON.stringify(renderStopHookOutput(result, resolveStopHookMode())));
-  });
+    }),
+  );
+}
+
+export function handleAgentHookStop(): void {
+  const result = runStopHookDiffGate(readHookInput());
+  if (!result || result.findings.length === 0) return;
+  console.log(JSON.stringify(renderStopHookOutput(result, resolveStopHookMode())));
 }
 
 export function renderStopHookOutput(result: DiffGateResult, mode: StopHookMode = 'feedback'): ClaudeHookJsonOutput {
@@ -728,6 +742,8 @@ function withWorkspaceDb<T>(
     suppressions: workspace.config.suppressions,
     declaredCouplings: workspace.config.declaredCouplings,
     locality: workspace.config.locality,
+    coverageContracts: workspace.config.coverageContracts,
+    docs: workspace.config.docs,
   };
   const db = new ScipDatabase(dbConfig, createGitignoreFilter(workspace.projectRoot));
   try {
