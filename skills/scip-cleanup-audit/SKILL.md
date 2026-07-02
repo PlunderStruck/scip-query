@@ -67,8 +67,6 @@ scip-query duplicate-bodies --json --full
 scip-query recent-duplicates --json --full
 scip-query incomplete-migration --json --full
 scip-query unused-params --json --full
-scip-query stale-abstractions --json --full
-scip-query wrapper-candidates --json --full
 scip-query passthrough-candidates --json --full
 scip-query dead --json --full
 scip-query isolated --json --full
@@ -78,6 +76,13 @@ scip-query doc-drift --json --full
 ```
 
 For frontend repos, add the React or Vue duplicate, hook/composable, and large-component/view commands.
+
+Optional deep-dive (21.2 calibration: high false-positive rate on codebases with intentional layering/ambient types — run only when the sweep above is exhausted, and treat every hit as a lead to confirm, not a finding):
+
+```bash
+scip-query stale-abstractions --json --full
+scip-query wrapper-candidates --json --full
+```
 
 ### 3. Confirm candidates
 
