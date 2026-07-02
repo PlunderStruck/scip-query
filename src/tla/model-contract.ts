@@ -222,6 +222,7 @@ function parseContract(raw: unknown, errors: string[]): TlaModelContract | null 
   }
 
   const variables = parseVariables(raw.variables, errors);
+  validateNoVariableCollisions(variables, errors);
   const actions = parseActions(raw.actions, variables, errors);
   const contract: TlaModelContract = {
     module: optionalString(raw.module, 'module', errors),
@@ -234,6 +235,39 @@ function parseContract(raw: unknown, errors: string[]): TlaModelContract | null 
   };
   validateScope(raw.scope, errors);
   return errors.length === 0 ? contract : null;
+}
+
+/**
+ * P5.3 / followup #18: two variables sharing an alias (or the same
+ * resource path suffix) makes every matching write/read ambiguous — the
+ * conformance scanner would attribute it to both. Fail the load instead of
+ * silently misattributing.
+ */
+function validateNoVariableCollisions(variables: Record<string, TlaVariableMapping>, errors: string[]): void {
+  reportCollisions(variables, errors, 'alias', (mapping) => mapping.aliases);
+  reportCollisions(variables, errors, 'resource path', (mapping) => (mapping.resource ? [mapping.resource.path] : []));
+}
+
+function reportCollisions(
+  variables: Record<string, TlaVariableMapping>,
+  errors: string[],
+  label: string,
+  keysFor: (mapping: TlaVariableMapping) => readonly string[],
+): void {
+  const owners = new Map<string, string[]>();
+  for (const [name, mapping] of Object.entries(variables)) {
+    for (const key of keysFor(mapping)) {
+      const existing = owners.get(key);
+      if (existing) existing.push(name);
+      else owners.set(key, [name]);
+    }
+  }
+  for (const [key, names] of owners) {
+    if (names.length < 2) continue;
+    errors.push(
+      `variables ${[...new Set(names)].sort().join(', ')} share ${label} "${key}" — conformance scanning cannot attribute a matching write/read to one variable unambiguously`,
+    );
+  }
 }
 
 function parseVariables(raw: unknown, errors: string[]): Record<string, TlaVariableMapping> {

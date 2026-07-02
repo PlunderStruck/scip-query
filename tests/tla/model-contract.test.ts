@@ -163,6 +163,48 @@ Enqueue(job) == queue' = Append(queue, job)
     expect(loaded.errors).toContain('variables.stage.waive.reason must be a non-empty string');
   });
 
+  it('rejects two variables sharing an alias', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Broken.scip-tla.json'),
+      JSON.stringify({
+        variables: {
+          findingsCount: { code: ['src/gate.ts/count'], aliases: ['findings'] },
+          findingsList: { code: ['src/gate.ts/list'], aliases: ['findings'] },
+        },
+        actions: { Run: { code: ['src/gate.ts/run'], writes: ['findingsCount'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Broken.scip-tla.json');
+
+    expect(loaded.loaded).toBeUndefined();
+    expect(loaded.errors).toContain(
+      'variables findingsCount, findingsList share alias "findings" — conformance scanning cannot attribute a matching write/read to one variable unambiguously',
+    );
+  });
+
+  it('rejects two variables sharing a resource path suffix', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Broken.scip-tla.json'),
+      JSON.stringify({
+        variables: {
+          lockOwner: { code: ['src/lock.ts/pid'], resource: { path: 'lockPath' } },
+          published: { code: ['src/lock.ts/updatedAt'], resource: { path: 'lockPath' } },
+        },
+        actions: { Run: { code: ['src/lock.ts/run'], writes: ['lockOwner'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Broken.scip-tla.json');
+
+    expect(loaded.loaded).toBeUndefined();
+    expect(loaded.errors).toContain(
+      'variables lockOwner, published share resource path "lockPath" — conformance scanning cannot attribute a matching write/read to one variable unambiguously',
+    );
+  });
+
   it('resolves contract-adjacent and project-relative config paths', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
     const specDir = join(root, 'specs');
