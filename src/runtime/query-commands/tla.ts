@@ -34,7 +34,7 @@ import { fetchTlaToolsJar, resolveTlaToolsJar, runTlaTool, type TlaToolResult } 
 import { verifyTlaConformance, type TlaConformanceFinding, type TlaConformanceResult } from '../../tla/conformance.js';
 import { scaffoldTlaModel } from '../../tla/scaffold.js';
 import { buildInstrumentation } from '../../tla/instrument.js';
-import { runTraceCheck, traceHarnessBaseName } from '../../tla/trace-spec.js';
+import { runTraceCheck, traceHarnessBaseName, type TraceActionCoverage } from '../../tla/trace-spec.js';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
@@ -209,6 +209,7 @@ function runTlaTraceCheck(db: ScipDatabase, args: readonly unknown[], opts: Comm
     specPath,
     baseModuleName: traceHarnessBaseName(specPath),
     mappedVariables: Object.keys(contract.variables),
+    mappedActions: Object.keys(contract.actions),
     steps,
     nextOperator: stringOptionValue(opts, 'next'),
     toolOptions: {
@@ -238,7 +239,21 @@ function runTlaTraceCheck(db: ScipDatabase, args: readonly unknown[], opts: Comm
     for (const warning of verdict.generation.warnings) console.log(`WARNING: ${warning}`);
   }
   console.log(`${verdict.status.toUpperCase()}: ${verdict.detail}`);
+  renderTraceActionCoverage(verdict.actionCoverage);
   process.exitCode = exitCode;
+}
+
+function renderTraceActionCoverage(coverage: readonly TraceActionCoverage[]): void {
+  if (coverage.length === 0) return;
+  const exercised = coverage.filter((entry) => entry.stepsObserved > 0);
+  const unexercised = coverage.filter((entry) => entry.stepsObserved === 0);
+  console.log(`Action coverage: ${exercised.length}/${coverage.length} mapped action(s) exercised by this trace.`);
+  for (const entry of exercised) console.log(`  - ${entry.action}: ${entry.stepsObserved} step(s)`);
+  if (unexercised.length > 0) {
+    console.log(
+      `  Unexercised: ${unexercised.map((entry) => entry.action).join(', ')} — classify each as a pure modeling abstraction (no code twin, expected) or a real coverage gap (record another trace).`,
+    );
+  }
 }
 
 function runTlaVerify(db: ScipDatabase, args: readonly unknown[], opts: CommandOptions, specArg: string): void {

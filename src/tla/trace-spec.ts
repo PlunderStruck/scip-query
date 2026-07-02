@@ -29,6 +29,12 @@ export interface TraceSpecGeneration {
   warnings: string[];
 }
 
+/** Per-mapped-action step count for a trace (P5.6 / followup #15). */
+export interface TraceActionCoverage {
+  action: string;
+  stepsObserved: number;
+}
+
 export interface TraceCheckVerdict {
   status: 'accepted' | 'diverged' | 'unavailable' | 'invalid-trace';
   states: number;
@@ -39,6 +45,23 @@ export interface TraceCheckVerdict {
   detail: string;
   checker?: TlaToolResult;
   generation?: TraceSpecGeneration;
+  /**
+   * Steps observed per mapped action, in mapping order. An action with
+   * `stepsObserved: 0` was never exercised by this trace — it is either a
+   * pure modeling abstraction (expected, no code twin) or a real coverage
+   * gap; the caller must classify which.
+   */
+  actionCoverage: TraceActionCoverage[];
+}
+
+/** Counts trace steps per mapped action; unexercised actions still appear with 0. */
+export function computeTraceActionCoverage(
+  mappedActions: readonly string[],
+  steps: readonly TlaTraceStep[],
+): TraceActionCoverage[] {
+  const counts = new Map<string, number>();
+  for (const step of steps) counts.set(step.action, (counts.get(step.action) ?? 0) + 1);
+  return mappedActions.map((action) => ({ action, stepsObserved: counts.get(action) ?? 0 }));
 }
 
 type TlaScalar = string | number | boolean | readonly (string | number | boolean)[];
@@ -143,14 +166,17 @@ export function runTraceCheck(opts: {
   specPath: string;
   baseModuleName: string;
   mappedVariables: readonly string[];
+  /** All mapped action names, for per-action coverage reporting (P5.6). */
+  mappedActions?: readonly string[];
   steps: readonly TlaTraceStep[];
   /** Next-state operator the harness requires between states (default `Next`). */
   nextOperator?: string;
   toolOptions: Omit<TlaToolRunOptions, 'specPath' | 'configPath' | 'checker'>;
 }): TraceCheckVerdict {
+  const actionCoverage = computeTraceActionCoverage(opts.mappedActions ?? [], opts.steps);
   const generation = generateTraceSpec(opts.baseModuleName, opts.mappedVariables, opts.steps, opts.nextOperator);
   if ('error' in generation) {
-    return { status: 'invalid-trace', states: 0, detail: generation.error };
+    return { status: 'invalid-trace', states: 0, detail: generation.error, actionCoverage };
   }
 
   // TLC resolves EXTENDS from the working directory: copy the spec's sibling
@@ -180,6 +206,7 @@ export function runTraceCheck(opts: {
         detail: checker.diagnostics[0]?.message ?? 'model checker unavailable',
         checker,
         generation,
+        actionCoverage,
       };
     }
     if (checker.status === 'passed') {
@@ -189,6 +216,7 @@ export function runTraceCheck(opts: {
         detail: `TLC accepted all ${generation.states} pinned states under ${opts.baseModuleName}!${opts.nextOperator ?? 'Next'}.`,
         checker,
         generation,
+        actionCoverage,
       };
     }
 
@@ -203,6 +231,7 @@ export function runTraceCheck(opts: {
         : 'TLC rejected the trace but the divergent step could not be parsed from its output; see checker stdout.',
       checker,
       generation,
+      actionCoverage,
     };
   } finally {
     rmSync(workDir, { recursive: true, force: true });

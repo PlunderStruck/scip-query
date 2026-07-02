@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
-import { generateTraceSpec, runTraceCheck } from '../../src/tla/trace-spec.js';
+import { computeTraceActionCoverage, generateTraceSpec, runTraceCheck } from '../../src/tla/trace-spec.js';
 import { resolveTlaToolsJarCachePath } from '../../src/tla/tool-runner.js';
 import type { TlaTraceStep } from '../../src/tla/model-contract.js';
 
@@ -58,6 +58,27 @@ describe('TLA trace-spec generation', () => {
     expect(generation.moduleText).toContain('/\\ Next\n');
   });
 
+  it('reports zero-count coverage for a mapped action the trace never exercises (P5.6 / followup #15)', () => {
+    const coverage = computeTraceActionCoverage(['Start', 'Finish', 'Recycle'], ACCEPTED_STEPS);
+    expect(coverage).toEqual([
+      { action: 'Start', stepsObserved: 1 },
+      { action: 'Finish', stepsObserved: 1 },
+      { action: 'Recycle', stepsObserved: 0 },
+    ]);
+  });
+
+  it('counts repeated steps for the same action', () => {
+    const steps: TlaTraceStep[] = [
+      { action: 'Start', before: { status: 'idle' }, after: { status: 'busy' } },
+      { action: 'Finish', after: { status: 'idle' } },
+      { action: 'Start', after: { status: 'busy' } },
+    ];
+    expect(computeTraceActionCoverage(['Start', 'Finish'], steps)).toEqual([
+      { action: 'Start', stepsObserved: 2 },
+      { action: 'Finish', stepsObserved: 1 },
+    ]);
+  });
+
   it('drops non-scalar variables with a disclosed warning', () => {
     const steps: TlaTraceStep[] = [
       { action: 'Start', before: { status: 'idle', blob: { nested: true } }, after: { status: 'busy' } },
@@ -102,6 +123,23 @@ describe('TLA trace-check verdicts (faked checker)', () => {
     });
     expect(verdict.status).toBe('accepted');
     expect(verdict.states).toBe(3);
+  });
+
+  it('includes actionCoverage in the verdict, naming unexercised mapped actions', () => {
+    const { specPath, jarPath, projectRoot } = fixture();
+    const verdict = runTraceCheck({
+      specPath,
+      baseModuleName: 'Machine',
+      mappedVariables: ['status'],
+      mappedActions: ['Start', 'Finish', 'Recycle'],
+      steps: ACCEPTED_STEPS,
+      toolOptions: { projectRoot, tlaToolsJar: jarPath, spawn: fakeSpawn({ status: 0, stdout: 'ok' }) },
+    });
+    expect(verdict.actionCoverage).toEqual([
+      { action: 'Start', stepsObserved: 1 },
+      { action: 'Finish', stepsObserved: 1 },
+      { action: 'Recycle', stepsObserved: 0 },
+    ]);
   });
 
   it('reports the configured next-state operator in the acceptance detail', () => {

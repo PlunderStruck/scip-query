@@ -44,7 +44,7 @@ in the 694-test suite, and every item 13-21 either shipped or BLOCKED-noted.
   trace-check for dual-spec models (default `Next`). Update specs/diff-gate
   to drop the `Next == NextCurrent` alias workaround and use the flag in its
   docs example.
-- [ ] **P5.6 (#15) Per-action trace coverage.** trace-check output gains
+- [x] **P5.6 (#15) Per-action trace coverage.** trace-check output gains
   `actionCoverage`: for each mapped action, steps observed; human render
   lists unexercised actions. Test with the existing diff-gate trace.
 - [ ] **P5.7 (#19 + #16) Document-or-implement.** #19: add a mapping-level
