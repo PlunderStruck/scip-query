@@ -41,11 +41,11 @@ Vega clone is part of 23.2's protocol.
 
 ## Phase 24 — Small fixes + dogfood polish (S each)
 
-- [ ] 24.1 tla tool-runner: SIGTERM/exit-143 at the timeout boundary classifies `timed-out`, not `failed` (followup #10) + test.
-- [ ] 24.2 `tla verify`/`trace-check` gain `--timeout-ms` (plumb existing TlaToolRunOptions.timeoutMs; descriptor + docs) (followup #11).
-- [ ] 24.3 tla verify output: group findings by (category, action) with per-group caps + `--full` uncap, mirroring diff-gate's root-cause grouping (followup #12; AuthRefresh produced 10,724 findings).
-- [ ] 24.4 Health 97→100 dogfood: add `runtime → tla` to the layer policy; move `escapeRegex` from source/source-stripper to `src/core/` (restores the documented semantic↛source invariant); move `binaryAvailable` (runtime/command-availability) usage out of src/tla (invert: tla takes an availability fn param or the helper moves to core); consolidate the 7 duplicate-body pairs; `cleanup-plan --verify` then delete the 3 dead symbols; add declaredCouplings for the generated-docs triangle. Health must land at 100 with zero suppression additions.
-- [ ] 24.5 analysisBudget disclosure on the other budgeted commands (followup #6) — same JSON field diff-gate uses.
+- [x] 24.1 tla tool-runner: SIGTERM/exit-143 at the timeout boundary classifies `timed-out`, not `failed` (followup #10) + test.
+- [x] 24.2 `tla verify`/`trace-check` gain `--timeout-ms` (plumb existing TlaToolRunOptions.timeoutMs; descriptor + docs) (followup #11).
+- [x] 24.3 tla verify output: group findings by (category, action) with per-group caps + `--full` uncap, mirroring diff-gate's root-cause grouping (followup #12; AuthRefresh produced 10,724 findings).
+- [x] 24.4 Health 97→100 dogfood: add `runtime → tla` to the layer policy; move `escapeRegex` from source/source-stripper to `src/core/` (restores the documented semantic↛source invariant); move `binaryAvailable` (runtime/command-availability) usage out of src/tla (invert: tla takes an availability fn param or the helper moves to core); consolidate the 7 duplicate-body pairs; `cleanup-plan --verify` then delete the 3 dead symbols; add declaredCouplings for the generated-docs triangle. Health must land at 100 with zero suppression additions. (Landed at 100/100; only 1 of the 3 flagged dead symbols was genuinely dead — the other 2 are pre-existing, deliberately-kept test-only exports, see commit c8a1e3e4. 4 of 7 duplicate-body pairs consolidated; 3 documented as intentional variation. declaredCouplings extended by 2 files + 2 additional well-evidenced groups beyond the plan's literal 4-file list — see commit 8ae9b244.)
+- [x] 24.5 analysisBudget disclosure on the other budgeted commands (followup #6) — same JSON field diff-gate uses.
 - [ ] 24.6 Explicitly DEFERRED (stay in followups): hub-file doc-reference damping, similar sibling saturation, twin-drift delegation exclusion, twin-drift→health integration, Clojure capability derivation, behavioral A/B.
 
 ## Phase 25 — Release artifacts (S)
