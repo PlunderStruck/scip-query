@@ -84,7 +84,7 @@ function readSymbolRange(
     // double-conversion in the CLI and printed labels off by +1.
     startLine,
     endLine,
-    language: doc?.language ?? languageFromPath(match.relativePath),
+    language: doc?.language ?? supportedLanguageFromPath(match.relativePath),
     source,
   };
 }
@@ -126,12 +126,19 @@ function readFileRange(
     relativePath: doc.relative_path,
     startLine: start,
     endLine: end,
-    language: doc.language ?? languageFromPath(doc.relative_path),
+    language: doc.language ?? supportedLanguageFromPath(doc.relative_path),
     source,
   };
 }
 
-function languageFromPath(relativePath: string): string | null {
+// Maps a file extension to the project's canonical SupportedLanguage name
+// (used for display/reporting). Distinct from reindex/augment.ts's
+// auxiliaryDocumentLanguageTag (a best-effort tag for otherwise-unindexed
+// files, not a canonical language) and augment-vue-runtime.ts's
+// volarLanguageIdForPath (LSP languageId vocabulary for a TS language
+// service, e.g. 'typescriptreact') -- three different jobs that happened
+// to share a name.
+function supportedLanguageFromPath(relativePath: string): string | null {
   switch (extname(relativePath).toLowerCase()) {
     case '.ts':
     case '.tsx':

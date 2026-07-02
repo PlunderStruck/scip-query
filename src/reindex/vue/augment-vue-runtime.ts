@@ -295,7 +295,7 @@ function createVolarLanguage(
     languageRef.current?.scripts.set(
       id,
       ts.ScriptSnapshot.fromString(text),
-      vuePlugin.getLanguageId(id) ?? languageIdForPath(id),
+      vuePlugin.getLanguageId(id) ?? volarLanguageIdForPath(id),
     );
   });
   languageRef.current = language;
@@ -703,7 +703,11 @@ export function toRelativePath(projectRoot: string, fileName: string): string {
   return relative(projectRoot, fileName).replaceAll('\\', '/');
 }
 
-function languageIdForPath(fileName: string): string {
+// LSP languageId for a TS/Vue language service request (Volar's
+// getLanguageId fallback) -- 'typescriptreact', 'javascriptreact', etc.
+// Distinct vocabulary from the project's SupportedLanguage enum; not the
+// same concept as queries/navigation/code.ts's supportedLanguageFromPath.
+function volarLanguageIdForPath(fileName: string): string {
   switch (extname(fileName)) {
     case '.vue':
       return 'vue';

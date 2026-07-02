@@ -71,7 +71,7 @@ export function augmentAuxiliaryDocuments(opts: AugmentAuxiliaryDocumentsOptions
       for (const relativePath of paths) {
         if (existing.has(relativePath)) continue;
         const text = readFileSync(join(opts.projectRoot, relativePath), 'utf-8');
-        const info = insert.run(languageForPath(relativePath), relativePath, text);
+        const info = insert.run(auxiliaryDocumentLanguageTag(relativePath), relativePath, text);
         inserted += Number(info.changes);
       }
       return inserted;
@@ -156,7 +156,12 @@ function selectExistingDocuments(db: Database.Database, files: readonly string[]
   return existing;
 }
 
-function languageForPath(relativePath: string): string {
+// Best-effort language TAG for a documents-table row that no scip indexer
+// produced (auxiliary/unindexed source files) -- not the canonical
+// SupportedLanguage enum (see queries/navigation/code.ts's
+// supportedLanguageFromPath for that); every row needs *some* string here,
+// even for extensions the project doesn't otherwise recognize.
+function auxiliaryDocumentLanguageTag(relativePath: string): string {
   switch (extname(relativePath).toLowerCase()) {
     case '.vue':
       return 'vue';
