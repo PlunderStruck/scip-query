@@ -45,6 +45,8 @@ import { unusedParams } from '../cleanup/unused-params.js';
 import { escapeRegex } from '../../source/source-stripper.js';
 import type { FindingSuppression } from '../../domain/types.js';
 import { isCallableSymbol, leafName, leafSuffix } from '../../symbols/symbol-parser.js';
+import { getGlobalLeafIndex } from '../../symbols/leaf-symbol-index.js';
+import { discoverWorkspacePackages } from '../../resolution/workspace-packages.js';
 import { profileSpan } from '../../instrumentation/profile.js';
 
 export type DiffGateCheck =
@@ -1033,6 +1035,18 @@ function runNewDeadCheck(
 ): void {
   result.checksRun.push('new-dead');
   const index = new ProjectIndex(db);
+  // Workspace-package monorepos have one known, uncloseable resolution gap
+  // (docs/plans/2026-07-02-followups.md item 2, closed for the common case
+  // in remediation 23.2): a symbol whose leaf name is ambiguous
+  // project-wide (a same-named definition exists elsewhere) AND whose only
+  // path to a cross-package consumer runs through a re-exporting barrel
+  // file isn't attributable by the strict same-file import match this
+  // tool's fallback layers use. A symbol matching both conditions that
+  // still shows zero fan-in after SCIP + semantic + source-fallback isn't
+  // confidently dead — it may just be unresolvable by design. Honesty
+  // valve: label those `unconfirmed` instead of asserting `dead`.
+  const workspacePackages = discoverWorkspacePackages(db.config.projectRoot);
+  const isMultiPackageWorkspace = workspacePackages.length > 1;
   for (const changedSymbol of changedSymbols) {
     if (symbolPreexistedAtBase(changedSymbol)) continue;
     if (changedSymbol.fanIn > 0) continue;
@@ -1041,23 +1055,48 @@ function runNewDeadCheck(
     if (isRootedSymbol(db, changedSymbol.symbol, changedSymbol.file)) continue;
     if (isCompileTimeContractAssertion(changedSymbol.symbol)) continue;
     const id = findingId('new-dead', changedSymbol.symbol, changedSymbol.file);
+    const unconfirmed =
+      isMultiPackageWorkspace &&
+      isInWorkspacePackage(workspacePackages, changedSymbol.file) &&
+      hasAmbiguousLeafName(db, changedSymbol.symbol);
     recordFinding(result, {
       id,
       check: 'new-dead',
       severity: 'warning',
-      evidence: 'graph-fact',
-      confidence: 0.9,
+      evidence: unconfirmed ? 'heuristic' : 'graph-fact',
+      confidence: unconfirmed ? 0.4 : 0.9,
       file: changedSymbol.file,
       symbol: changedSymbol.symbol,
-      message: `${changedSymbol.shortName} (${changedSymbol.file}) was changed but has zero indexed consumers`,
-      why: [
-        `${changedSymbol.shortName} is a changed production symbol.`,
-        'The index reports zero consumers for this symbol.',
-        'The symbol is not in a detected entry surface or configured live root.',
-      ],
-      remediation: 'Wire it up, or remove it before it becomes permanent dead code.',
+      message: unconfirmed
+        ? `${changedSymbol.shortName} (${changedSymbol.file}) unconfirmed (cross-package ambiguous-name resolution gap): zero indexed consumers found, but this name is ambiguous project-wide and lives in a workspace package — verify manually before treating as dead`
+        : `${changedSymbol.shortName} (${changedSymbol.file}) was changed but has zero indexed consumers`,
+      why: unconfirmed
+        ? [
+            `${changedSymbol.shortName} is a changed production symbol in a workspace package.`,
+            'The index, semantic, and source-fallback layers all report zero consumers for this symbol.',
+            'Its leaf name is ambiguous project-wide (a same-named definition exists elsewhere), and cross-package consumers reached only through a re-exporting barrel are a known unresolvable shape for this tool — see docs/plans/2026-07-02-followups.md item 2.',
+          ]
+        : [
+            `${changedSymbol.shortName} is a changed production symbol.`,
+            'The index reports zero consumers for this symbol.',
+            'The symbol is not in a detected entry surface or configured live root.',
+          ],
+      remediation: unconfirmed
+        ? 'Verify with a direct code search before deleting; this tool cannot confidently resolve this symbol.'
+        : 'Wire it up, or remove it before it becomes permanent dead code.',
     });
   }
+}
+
+function isInWorkspacePackage(workspacePackages: ReadonlyArray<{ relativeDir: string }>, file: string): boolean {
+  return workspacePackages.some((pkg) => file === pkg.relativeDir || file.startsWith(`${pkg.relativeDir}/`));
+}
+
+function hasAmbiguousLeafName(db: ScipDatabase, symbol: string): boolean {
+  const leaf = leafName(symbol);
+  if (!leaf) return false;
+  const bucket = getGlobalLeafIndex(db).get(leaf);
+  return (bucket?.length ?? 0) > 1;
 }
 
 function isCompileTimeContractAssertion(symbol: string): boolean {

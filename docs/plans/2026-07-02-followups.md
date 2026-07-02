@@ -4,29 +4,52 @@ Compact list of everything the two calibration reports flagged that is NOT cover
 remediation 21.2a-g. Each item: problem statement + report citation. Not a full plan — pick one
 up, write a real plan section (`concrete-plan`), and implement independently.
 
-1. **Import-type-only consumers falsely flagged dead/unused (Stable, HIGH).** Symbols consumed
-   exclusively through `import type { ... }` don't register as referenced — `stale-abstractions`
-   flagged `OrgMember`/`OrgInvite`/`OrgAssignment` `[high]` "unused" despite 10+ real usages.
-   Reliability issue, not a heuristic miscalibration: undermines every "unused"/"dead"/
-   "single-consumer" claim for type-primarily-consumed symbols.
+1. **RESOLVED (2026-07-02, remediation 23.1). Import-type-only consumers falsely flagged
+   dead/unused (Stable, HIGH).** Root cause was NOT a general "type-only imports are invisible"
+   gap: raw SCIP evidence showed scip-typescript emits real cross-file mention rows for type-only
+   imports when the specifier is *relative*; it emits none when the specifier is an unresolved
+   tsconfig `paths` alias (`@/...`, this codebase's actual shape) — confirmed on the live
+   Stable_Management clone. The compensating source-fallback layer
+   (`sourceImportPathsByLocalName` -> `resolveImportPath`) had never implemented alias resolution
+   at all, so it couldn't cover the gap either. Fixed `resolveJavaScriptImportPath` to resolve
+   tsconfig `paths` aliases (handling the common Vite/vue-tsc solution-style-tsconfig-shell
+   shadowing case too), shared by `dead`/`isolated`/`new-dead`/`stale-abstractions`/
+   `production-callables`/`refs`. Live: `OrgMember`/`OrgInvite`/`OrgAssignment` no longer appear
+   in `stale-abstractions` output at all; `refs OrgMember` went from 2 (self-file only) to 49
+   references across its real consumers.
    Source: `docs/validation/2026-07-01-external-calibration-stable-management.md` §6 ("Worst
    false positives", item 1).
 
-2. **pnpm-workspace cross-package consumers falsely flagged dead (Vega, HIGH — needs a
-   pnpm-install rerun to separate causes).** All 4 sampled `new-dead` gate findings on Vega were
-   `packages/shared/src/contracts/*` types consumed across the `@vega/shared` package boundary by
-   `apps/web`/`apps/api`, which the index doesn't resolve; `npm ci` failed on this pnpm-only repo
-   so the run proceeded without `node_modules`, which may compound (not solely cause) the gap.
-   21% of Vega's total gate findings came from this one artifact.
+2. **MOSTLY RESOLVED (2026-07-02, remediation 23.2). pnpm-workspace cross-package consumers
+   falsely flagged dead (Vega, HIGH).** Re-ran with `pnpm install` per this item's own protocol:
+   the raw-index gap is genuinely indexer-shaped, identical with and without `node_modules`
+   present (not solely — or even mainly — an artifact of the missing install the original
+   calibration ran without). Fixed at the same source-fallback layer: `resolveJavaScriptImportPath`
+   now resolves workspace-package specifiers (`@vega/shared/contracts`) via `pnpm-workspace.yaml`
+   discovery and the package's `exports` map, rewriting an unbuilt `dist/` target to the indexed
+   `src/` equivalent. Also found and fixed a latent bug this exposed: `diffImpactPartial`'s
+   zero-fan-in filter treated "no SCIP mention row at all" as ineligible for semantic/fallback
+   enrichment (`undefined !== 0`), silently starving both tiers for exactly this archetype; fixed,
+   and wired a third source-fallback tier into `new-dead`'s fan-in computation (it previously had
+   none). Live on the exact cited commits: 40->0 and 15->4 `new-dead` findings. **Residual gap**:
+   a symbol with an ambiguous leaf name (same name defined elsewhere) reached only through a
+   re-exporting barrel file still misattributes — `attributeIdentifier`'s strict same-file import
+   match doesn't bridge the barrel hop. `new-dead` now labels that specific shape
+   `unconfirmed (cross-package ambiguous-name resolution gap)` (`evidence: "heuristic"`, lowered
+   confidence) instead of asserting `dead` (remediation 23.4). Re-export-chain-aware
+   disambiguation is a real follow-up, not required to close this item further this release.
    Source: `docs/validation/2026-07-01-external-calibration-vega.md` §4 (gate precision table,
    `new-dead` row) and §7 ("Caps and deviations").
 
-3. **Vue `<script setup>` composable consumer linkage gaps (Stable, HIGH).** A composable
-   imported and called directly inside a `.vue` SFC's `<script setup>` block isn't always linked
-   back to the composable definition — `new-dead` flagged `useHorseReportPrintView` and
-   `usePublicInvoicePrintView` as "zero indexed consumers" though both are called from their
-   sibling `.vue` files. 2/2 sampled `new-dead` retro-gate findings on Stable were this exact
-   false positive.
+3. **RESOLVED, already fixed pre-session (2026-07-02, remediation 23.3 — verification only, no
+   code change). Vue `<script setup>` composable consumer linkage gaps (Stable, HIGH).** Live
+   re-check against the exact cited commit (`5eeacef38`) found `useHorseReportPrintView` and
+   `usePublicInvoicePrintView` both correctly resolved (`refs` finds their `.vue` consumer;
+   `diff-gate` on that commit now reports 0 `new-dead`, was 2). Neither composable uses a
+   tsconfig-aliased import, so this predates and is independent of remediation 23.1 — most likely
+   landed via prior Vue-SFC-scanning work between the 2026-07-01 calibration and this session
+   (`git log --oneline --all | grep -i vue`: `df7f77c2`, `480278f2`, `a2bf44ac`). Locked in with a
+   regression fixture (`tests/queries/cleanup/dead-vue-script-setup.test.ts`).
    Source: `docs/validation/2026-07-01-external-calibration-stable-management.md` §6, item 2.
 
 4. **`vue-large-view-pressure` blind to delegated-composable architecture (Stable).** The
