@@ -48,6 +48,8 @@ function minimalReport(overrides: Partial<HealthReport> = {}): HealthReport {
       similarPairs: 0,
       duplicateBodyGroups: 0,
       duplicateBodyLoc: 0,
+      twinDriftGroups: 0,
+      twinDriftLoc: 0,
       reactComponentDuplicatePairs: 0,
       reactHookCandidatePairs: 0,
       reactHookCandidateScoreCount: 0,

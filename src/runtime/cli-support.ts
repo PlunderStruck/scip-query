@@ -274,6 +274,7 @@ export function renderHealthReport(report: HealthReport, json: boolean | undefin
   if (f.isolatedSymbols > 0) console.log(`    Isolated symbols:     ${f.isolatedSymbols} (${f.isolatedLoc} LOC)`);
   if (f.cycles > 0) console.log(`    Circular deps:        ${f.cycles}`);
   if (f.similarPairs > 0) console.log(`    Similar pairs:        ${f.similarPairs}`);
+  if (f.twinDriftGroups > 0) console.log(`    Drifted twins:        ${f.twinDriftGroups} group(s)`);
   if (f.reactComponentDuplicatePairs > 0)
     console.log(`    React components:     ${f.reactComponentDuplicatePairs} duplicate pair(s)`);
   if (f.reactHookCandidatePairs > 0) {

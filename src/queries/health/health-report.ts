@@ -93,6 +93,8 @@ export interface HealthReport {
     similarPairs: number;
     duplicateBodyGroups: number;
     duplicateBodyLoc: number;
+    twinDriftGroups: number;
+    twinDriftLoc: number;
     reactComponentDuplicatePairs: number;
     reactHookCandidatePairs: number;
     reactHookCandidateScoreCount: number;
@@ -157,6 +159,8 @@ export function buildHealthReport(analyses: HealthAnalyses): HealthReport {
       similarPairs: analyses.similarCount,
       duplicateBodyGroups: analyses.duplicateBodies.count,
       duplicateBodyLoc: analyses.duplicateBodies.loc,
+      twinDriftGroups: analyses.twinDrift.count,
+      twinDriftLoc: analyses.twinDrift.loc,
       reactComponentDuplicatePairs: analyses.reactComponentDuplicates.count,
       reactHookCandidatePairs: analyses.reactHookCandidates.count,
       reactHookCandidateScoreCount: healthScoreCount(analyses.reactHookCandidates),
@@ -205,6 +209,7 @@ function buildHealthAxes(analyses: HealthAnalyses): HealthAxes {
       heuristicFindings:
         analyses.similarCount +
         analyses.duplicateBodies.count +
+        analyses.twinDrift.count +
         analyses.reactComponentDuplicates.count +
         analyses.reactHookCandidates.count +
         analyses.reactLargeComponentPressure.count +
@@ -243,6 +248,7 @@ function buildHealthValidation(analyses: HealthAnalyses): HealthValidation | nul
   const categories: Record<string, string[]> = {
     dead: analyses.dead.files ?? [],
     isolated: analyses.isolated.files ?? [],
+    twinDrift: analyses.twinDrift.files ?? [],
     wrappers: analyses.wrappers.files ?? [],
     passthroughs: analyses.passthroughs.files ?? [],
     stale: analyses.stale.files ?? [],
@@ -381,6 +387,18 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
       impact: 'medium',
       count: analyses.duplicateBodies.count,
       locRecoverable: analyses.duplicateBodies.loc,
+    });
+  }
+
+  if (analyses.twinDrift.count > 0) {
+    actions.push({
+      category: 'Drifted twin implementations',
+      evidence: 'heuristic',
+      description: `${analyses.twinDrift.count} same-name (or near-name) function group(s) across files with diverged or identical bodies — the same concept implemented twice; consolidate or verify the drift is intentional`,
+      effort: 'medium',
+      impact: 'medium',
+      count: analyses.twinDrift.count,
+      locRecoverable: 0,
     });
   }
 
@@ -581,6 +599,7 @@ const DEDUCTION_KIND: Record<string, ScoreDeduction['kind']> = {
   'hidden-coupling-pressure': 'risk',
   similar: 'hygiene',
   'duplicate-bodies': 'hygiene',
+  'twin-drift': 'hygiene',
   'react-component-duplicates': 'hygiene',
   'react-hook-candidates': 'hygiene',
   'react-large-component-pressure': 'hygiene',
@@ -594,6 +613,7 @@ const DEDUCTION_KIND: Record<string, ScoreDeduction['kind']> = {
   drift: 'hygiene',
   'similar-pressure': 'hygiene',
   'duplicate-bodies-pressure': 'hygiene',
+  'twin-drift-pressure': 'hygiene',
   'react-component-duplicates-pressure': 'hygiene',
   'react-hook-candidates-pressure': 'hygiene',
   'react-large-component-pressure-pressure': 'hygiene',
@@ -675,6 +695,13 @@ function computeHealthScore(analyses: HealthAnalyses): { breakdown: ScoreDeducti
     'duplicate-bodies',
     Math.min(10, Math.round(duplicateBodyPerMille * 2)),
     `${analyses.duplicateBodies.count} exact duplicate small-body group(s) (${analyses.duplicateBodies.loc} duplicate LOC)`,
+  );
+
+  const twinDriftPerMille = (analyses.twinDrift.count / symbolCount) * 1000;
+  deduct(
+    'twin-drift',
+    Math.min(10, Math.round(twinDriftPerMille * 2)),
+    `${analyses.twinDrift.count} drifted twin implementation group(s) (same or near-same name, diverged or identical bodies)`,
   );
 
   const reactDuplicatePerMille = (analyses.reactComponentDuplicates.count / fileCount) * 1000;
@@ -801,6 +828,15 @@ function computeHealthScore(analyses: HealthAnalyses): { breakdown: ScoreDeducti
     8,
     4,
     'exact duplicate small-body group(s)',
+  );
+  pressureDeduct(
+    'twin-drift-pressure',
+    'Drifted twin implementations',
+    analyses.twinDrift.count,
+    Math.max(20, symbolCount * 0.005),
+    8,
+    4,
+    'drifted twin implementation group(s)',
   );
   pressureDeduct(
     'react-component-duplicates-pressure',

@@ -19,6 +19,8 @@ export interface HealthAnalyses {
   realCycleCount: number;
   similarCount: number;
   duplicateBodies: CountLocSummary;
+  /** Same-name-family (or near-name) twins with divergent or identical bodies (Q1). */
+  twinDrift: CountLocSummary;
   reactComponentDuplicates: CountLocSummary;
   reactHookCandidates: CountLocSummary;
   reactLargeComponentPressure: CountLocSummary;

@@ -14,4 +14,5 @@ export const HEALTH_DETECTOR_PROFILES = {
   passthroughs: { maxLoc: 15, limit: 50, semantic: false },
   stale: { minLoc: 3, limit: 50, semantic: false },
   drift: { semantic: false },
+  twinDrift: { minSimilarity: 0.3 },
 } as const;

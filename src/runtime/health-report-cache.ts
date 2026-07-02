@@ -6,7 +6,11 @@ import type { HealthReport } from '../queries/health/health-report.js';
 import type { ScipDatabase } from '../storage/db.js';
 import { projectEvidenceFingerprint, sha256Hex } from '../storage/evidence-cache.js';
 
-const HEALTH_REPORT_CACHE_VERSION = 1;
+// Q1: bumped 1 -> 2 for the twin-drift dimension (health.ts HEALTH_PHASES,
+// health-report.ts findings/axes/actions/scoreBreakdown) — an old-shaped
+// cached report would otherwise pass isHealthReport()'s shallow check and
+// silently miss the new dimension until the next git-HEAD-driven miss.
+const HEALTH_REPORT_CACHE_VERSION = 2;
 const HEALTH_REPORT_CACHE_FILE = 'health-report-cache.json';
 
 export interface HealthReportCacheOptions {

@@ -5,6 +5,7 @@ import { isolated } from '../cleanup/isolated.js';
 import { cycles } from '../graph/cycles.js';
 import { similarAllCount } from '../cleanup/similar.js';
 import { duplicateBodies } from '../cleanup/duplicate-bodies.js';
+import { allTwinGroups } from '../cleanup/twin-drift.js';
 import { reactComponentDuplicates } from '../frontend/react-component-duplicates.js';
 import { reactHookCandidates } from '../frontend/react-hook-candidates.js';
 import { reactLargeComponentPressure } from '../frontend/react-large-component-pressure.js';
@@ -60,6 +61,7 @@ export const HEALTH_PHASES = [
   'cycles',
   'similar',
   'duplicate-bodies',
+  'twin-drift',
   'react-component-duplicates',
   'react-hook-candidates',
   'react-large-component-pressure',
@@ -86,6 +88,7 @@ type HealthPhaseResult =
   | { phase: 'cycles'; realCycleCount: number }
   | { phase: 'similar'; similarCount: number }
   | { phase: 'duplicate-bodies'; duplicateBodies: CountLocSummary }
+  | { phase: 'twin-drift'; twinDrift: CountLocSummary }
   | { phase: 'react-component-duplicates'; reactComponentDuplicates: CountLocSummary }
   | { phase: 'react-hook-candidates'; reactHookCandidates: CountLocSummary }
   | { phase: 'react-large-component-pressure'; reactLargeComponentPressure: CountLocSummary }
@@ -134,6 +137,10 @@ const HEALTH_PHASE_RUNNERS: Record<HealthPhaseName, HealthPhaseRunner> = {
   'duplicate-bodies': (db, scope, budget) => ({
     phase: 'duplicate-bodies',
     duplicateBodies: summarizeDuplicateBodies(db, scope, budget),
+  }),
+  'twin-drift': (db, scope, budget) => ({
+    phase: 'twin-drift',
+    twinDrift: summarizeHealthTwinDrift(db, scope, budget),
   }),
   'react-component-duplicates': (db, scope, budget) => ({
     phase: 'react-component-duplicates',
@@ -269,6 +276,8 @@ function healthAnalysesFromPhases(phaseResults: readonly HealthPhaseResult[]): H
       phaseResults,
       'duplicate-bodies',
     ).duplicateBodies,
+    twinDrift: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'twin-drift' }>>(phaseResults, 'twin-drift')
+      .twinDrift,
     reactComponentDuplicates: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'react-component-duplicates' }>>(
       phaseResults,
       'react-component-duplicates',
@@ -420,6 +429,35 @@ function summarizeDuplicateBodies(db: ScipDatabase, scope: string | undefined, b
       }
     }
     return { count: groups.length, loc: duplicateLoc, files: [...files] };
+  });
+}
+
+/**
+ * Q1: same-name-family (or near-name) twins with divergent or identical
+ * bodies, post all twin-drift exclusions (delegation pairs, synthetic
+ * `<...>` leaves, test-only clusters). 'homonym' groups are intentionally
+ * excluded — a coincidental name reuse below the similarity floor is not a
+ * drifted-concept signal. Scan-limited via `budget.candidateScanLimit`, the
+ * same shared analysis-budget cap every other candidate-style detector uses
+ * on large indexes — twin-drift's own clustering has no separate per-file
+ * evidence cache today, matching duplicate-bodies/similar at this layer.
+ */
+function summarizeHealthTwinDrift(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): CountLocSummary {
+  return runHealthPhase(db, budget, 'twin-drift', () => {
+    const groups = allTwinGroups(db, {
+      scope,
+      ...HEALTH_DETECTOR_PROFILES.twinDrift,
+      scanLimit: budget.candidateScanLimit,
+    }).filter((group) => group.relationship === 'divergent' || group.relationship === 'identical');
+    const files = new Set<string>();
+    let loc = 0;
+    for (const group of groups) {
+      for (const member of group.members) {
+        files.add(member.file);
+        loc += member.loc;
+      }
+    }
+    return { count: groups.length, loc, files: [...files].sort() };
   });
 }
 
