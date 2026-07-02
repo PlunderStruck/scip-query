@@ -89,9 +89,12 @@ describe('diff-gate doc-reference hub-file cascade damping', () => {
     expect(clustered.citationExemplars).toHaveLength(3);
     expect(clustered.suppressedCount).toBe(9);
     expect(clustered.relatedFiles).toEqual(['src/shared/endpoints.ts']);
-    // Not silently dropped: every original per-doc finding id is still addressable.
-    expect(clustered.legacySuppressionIds).toBeDefined();
-    expect(clustered.legacySuppressionIds!.length).toBeGreaterThanOrEqual(12);
+    // Not silently dropped: every original per-doc finding id is still addressable —
+    // but via memberFindingIds, NOT legacySuppressionIds, so a pre-clustering
+    // suppression of one doc's finding cannot suppress the whole cluster.
+    expect(clustered.legacySuppressionIds).toBeUndefined();
+    expect(clustered.memberFindingIds).toBeDefined();
+    expect(clustered.memberFindingIds!.length).toBeGreaterThanOrEqual(12);
     // Exemplars are the first 3 docs in deterministic (sorted) order.
     expect(clustered.citationExemplars?.map((exemplar) => exemplar.doc)).toEqual(docNames.slice(0, 3).sort());
     // Not silently dropped: every citing doc is named somewhere in `why`.
@@ -103,6 +106,53 @@ describe('diff-gate doc-reference hub-file cascade damping', () => {
     const rootCauseGroup = result.rootCauseGroups?.find((group) => group.rootCauseKey === 'src/shared/endpoints.ts');
     expect(rootCauseGroup).toBeDefined();
     expect(rootCauseGroup?.count).toBe(1);
+  });
+
+  it('is not suppressed by a pre-clustering per-doc suppression, but is by its own cluster id', () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), 'scip-doc-reference-hub-cascade-suppression-'));
+    tempRoots.push(repoRoot);
+    gitIn(repoRoot, 'init');
+    writeFile(join(repoRoot, 'src', 'shared', 'endpoints.ts'), 'export const endpoints = { users: "/users" };\n');
+    for (let i = 0; i < 12; i += 1) {
+      writeFile(
+        join(repoRoot, `docs/policy-${String(i).padStart(2, '0')}.md`),
+        `Policy ${i} relies on the endpoint contract at src/shared/endpoints.ts for its API surface.\n`,
+      );
+    }
+    gitIn(repoRoot, 'add', '-A');
+    gitIn(repoRoot, 'commit', '-m', 'base', '--no-gpg-sign');
+
+    const dbPath = join(repoRoot, 'index.db');
+    evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/shared/endpoints.ts').write();
+    writeFile(join(repoRoot, 'src', 'shared', 'endpoints.ts'), 'export const endpoints = { users: "/v2/users" };\n');
+
+    const openGate = (suppressionId?: string) => {
+      const config: ScipQueryConfig = {
+        dbPath,
+        indexPath: join(repoRoot, 'index.scip'),
+        projectRoot: repoRoot,
+        ...(suppressionId === undefined
+          ? {}
+          : { suppressions: [{ id: suppressionId, check: 'doc-reference', reason: 'test suppression' }] }),
+      };
+      const db = new ScipDatabase(config);
+      openDbs.push(db);
+      return diffGate(db, { base: 'HEAD', skip: SKIP_UNRELATED });
+    };
+
+    const unsuppressed = openGate();
+    const clustered = unsuppressed.findings.find((finding) => finding.check === 'doc-reference')!;
+    expect(clustered.memberFindingIds!.length).toBeGreaterThanOrEqual(12);
+
+    // Suppressing ONE member's pre-clustering id must NOT hide the cluster:
+    // one acknowledged citation cannot vouch for eleven unacknowledged ones.
+    const memberSuppressed = openGate(clustered.memberFindingIds![0]!);
+    expect(memberSuppressed.findings.filter((finding) => finding.check === 'doc-reference')).toHaveLength(1);
+
+    // Suppressing the cluster's OWN id suppresses it, with the suppression recorded.
+    const clusterSuppressed = openGate(clustered.id);
+    expect(clusterSuppressed.findings.filter((finding) => finding.check === 'doc-reference')).toHaveLength(0);
+    expect(clusterSuppressed.suppressed.some((entry) => entry.finding.id === clustered.id)).toBe(true);
   });
 
   it('leaves citations of distinct files untouched (no clustering below the threshold)', () => {

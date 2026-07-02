@@ -137,6 +137,15 @@ export interface DiffGateFinding {
    * not each surfaced as its own finding).
    */
   suppressedCount?: number;
+  /**
+   * The per-doc finding ids a hub-file cluster replaced, kept for JSON
+   * addressability only. Deliberately NOT `legacySuppressionIds`: suppression
+   * matching honors that field, and a cluster carries N member ids — reusing
+   * it would let one pre-clustering per-doc suppression silently suppress the
+   * entire cluster (one acknowledged citation hiding eleven unacknowledged
+   * ones). To suppress the cluster, target the cluster's own `id`.
+   */
+  memberFindingIds?: string[];
   message: string;
   why: string[];
   /** Concrete remediation an agent can act on without human triage. */
@@ -1095,13 +1104,11 @@ function clusterDocReferenceCitations(hubFile: string, group: readonly DiffGateF
     undefined,
   );
   const allDocs = sorted.map((draft) => draft.file ?? '').filter((doc) => doc.length > 0);
-  const legacySuppressionIds = [
-    ...new Set(sorted.flatMap((draft) => [draft.id, ...(draft.legacySuppressionIds ?? [])])),
-  ];
+  const memberFindingIds = [...new Set(sorted.flatMap((draft) => [draft.id, ...(draft.legacySuppressionIds ?? [])]))];
 
   return {
     id: findingId('doc-reference', 'hub-cluster', hubFile),
-    legacySuppressionIds,
+    memberFindingIds,
     check: 'doc-reference',
     severity,
     evidence: 'change-graph',
@@ -1122,12 +1129,12 @@ function clusterDocReferenceCitations(hubFile: string, group: readonly DiffGateF
       ...exemplars.map(
         (exemplar) => `Example — ${exemplar.doc}: ${exemplar.citedClaims[0] ?? '(no captured citation text)'}`,
       ),
-      `${suppressedCount} additional doc(s) also cite this file, past the per-hub-file cascade cap (${DOC_REFERENCE_HUB_FILE_EXEMPLAR_LIMIT}) — not silently dropped: counted in citationCount/suppressedCount and individually addressable via legacySuppressionIds.`,
+      `${suppressedCount} additional doc(s) also cite this file, past the per-hub-file cascade cap (${DOC_REFERENCE_HUB_FILE_EXEMPLAR_LIMIT}) — not silently dropped: counted in citationCount/suppressedCount and individually addressable via memberFindingIds.`,
       advisory
         ? 'Advisory: every citation in this cluster is a bare file-mention (no line anchor, cited file still present).'
         : 'Blocking: at least one citation in this cluster is line-anchored or cites a deleted/renamed file.',
     ],
-    remediation: `Review the ${exemplars.length} example doc(s) above; ${sorted.length} total doc(s) cite ${hubFile} the same way — see citationExemplars and legacySuppressionIds in --json for the complete list.`,
+    remediation: `Review the ${exemplars.length} example doc(s) above; ${sorted.length} total doc(s) cite ${hubFile} the same way — see citationExemplars and memberFindingIds in --json for the complete list.`,
   };
 }
 

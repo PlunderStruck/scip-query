@@ -187,7 +187,9 @@ up, write a real plan section (`concrete-plan`), and implement independently.
    citations must be untouched." A group over the limit collapses into one clustered finding
    (`clusterDocReferenceCitations`) carrying `citationCount` (total citing docs), up to 3
    `citationExemplars` (sorted deterministically), and an explicit `suppressedCount` — never silent
-   (the suppressed docs' original finding ids stay reachable via `legacySuppressionIds`). Chosen
+   (the suppressed docs' original finding ids stay reachable via `memberFindingIds`; review pass
+   moved them off `legacySuppressionIds`, which suppression matching honors — reusing it would have
+   let one pre-clustering per-doc suppression silently suppress the entire cluster). Chosen
    formula: the ledger's brief gave two illustrative numbers ("up to 3 exemplar citations" /
    "cap at a sane number, e.g. 5") for what reads as one constraint; 3 (the unambiguous, literal
    one) is used as both the exemplar limit and the clustering trigger threshold, documented at the
