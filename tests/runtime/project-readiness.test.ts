@@ -115,4 +115,26 @@ describe('getProjectCapabilities', () => {
     expect(clojure?.sourceFacts.status).toBe('available');
     expect(clojure?.detectors.status).toBe('available');
   });
+
+  it('derives Clojure source-fact status from the runtime probe instead of asserting it (followup #9)', () => {
+    const readiness: ProjectReadiness = {
+      languages: ['clojure'],
+      indexers: [
+        {
+          language: 'clojure',
+          binaryLabel: 'scip-clojure',
+          installed: true,
+          runnable: true,
+        },
+      ],
+      checkers: [{ label: 'clj-kondo --lint .', coversExtensions: ['.clj', '.cljs', '.cljc'] }],
+      gitAvailable: true,
+    };
+
+    const available = getProjectCapabilities(readiness, { runtimeProbe: () => 'reader' });
+    expect(available.matrix[0]?.sourceFacts.status).toBe('available');
+
+    const unavailable = getProjectCapabilities(readiness, { runtimeProbe: () => 'unavailable' });
+    expect(unavailable.matrix[0]?.sourceFacts.status).toBe('unavailable');
+  });
 });

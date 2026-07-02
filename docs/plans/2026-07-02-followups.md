@@ -93,7 +93,8 @@ up, write a real plan section (`concrete-plan`), and implement independently.
    Source: `docs/validation/2026-07-01-external-calibration-stable-management.md` §4 ("Hub-file
    cascade") and §6, item 5.
 
-9. **Clojure capability status asserted-though-true (claim-audit dry-run).**
+9. **RESOLVED (2026-07-02, followup-batch). Clojure capability status asserted-though-true
+   (claim-audit dry-run).**
    `sourceFactCapability` (`src/runtime/project-readiness.ts:307-353`) probes every language
    branch via `runtimeProbe?.(language) ?? defaultRuntimeProbe(language)` except the Clojure
    branch (lines 317-322), which hardcodes `status: 'available'` without ever calling
@@ -103,6 +104,21 @@ up, write a real plan section (`concrete-plan`), and implement independently.
    source-fallback evidence).
    Source: `docs/plans/2026-07-01-remediation-3-detection-primitives-and-lens-skills.md`,
    "Deviations from plan anchors" note for step 19.3.
+   Fix: the Clojure branch (`src/runtime/project-readiness.ts:317-329`) now calls
+   `runtimeProbe?.(language) ?? defaultRuntimeProbe(language)` like every other branch and derives
+   `status` from the result (`'unavailable'` probe -> `'unavailable'` status) instead of hardcoding
+   `'available'`. Root cause of the always-false probe: `probeAstLanguageRuntime`
+   (`src/source/ast/ast-runtime.ts:36-37`) hardcoded `'unavailable'` for Clojure even though
+   Clojure's source facts come from a hand-rolled reader (`src/source/clojure-facts.ts`,
+   `src/language-parsers/languages/clojure.ts`) with no tree-sitter/native dependency to probe for
+   — fixed to return `'reader'` (truthful: always present, matches the existing but previously
+   unreachable `probe === 'reader'` branch in `sourceFactCapability`). Also added
+   `clojure: 'clojure'` to `AST_LANGUAGE_BY_SUPPORTED_LANGUAGE`
+   (`src/runtime/project-readiness.ts:88-102`) so `defaultRuntimeProbe` actually dispatches to
+   `probeAstLanguageRuntime('clojure')` instead of short-circuiting through the regex-only branch.
+   Test: `tests/runtime/project-readiness.test.ts` — "derives Clojure source-fact status from the
+   runtime probe instead of asserting it (followup #9)", witnessed both ways via a stubbed
+   `runtimeProbe`.
 
 10. **RESOLVED (2026-07-02, remediation 24.1).** tla tool-runner classified SIGTERM-at-timeout TLC
     runs (exit 143, timedOut false) as `failed` instead of `timed-out`. Fixed: `src/tla/tool-runner.ts:115`

@@ -34,7 +34,13 @@ export function getParserCtor(): (ParserCtor & { Query: QueryConstructor }) | nu
 export type LanguageRuntimeProbe = 'ast' | 'reader' | 'regex' | 'unavailable';
 
 export function probeAstLanguageRuntime(lang: AstLanguage): LanguageRuntimeProbe {
-  if (lang === 'clojure') return 'unavailable';
+  // Clojure has no tree-sitter grammar wired up (see loadGrammar below); its source
+  // facts come from a hand-rolled reader (src/source/clojure-facts.ts,
+  // src/language-parsers/languages/clojure.ts) that ships as plain TS/JS with no
+  // optional native binding, so it has nothing to probe for — it is always
+  // present. Report 'reader' truthfully rather than asserting 'unavailable' for a
+  // dependency this language never has.
+  if (lang === 'clojure') return 'reader';
   const Ctor = getParserCtor();
   if (!Ctor) return 'unavailable';
   const grammar = loadGrammar(lang);

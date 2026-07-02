@@ -99,6 +99,7 @@ const AST_LANGUAGE_BY_SUPPORTED_LANGUAGE: Partial<Record<SupportedLanguage, AstL
   csharp: 'csharp',
   vb: 'vb',
   php: 'php',
+  clojure: 'clojure',
 };
 
 const REGISTRY_LANGUAGE_BY_SUPPORTED_LANGUAGE: Partial<Record<SupportedLanguage, string>> = {
@@ -315,6 +316,13 @@ function sourceFactCapability(
     };
   }
   if (language === 'clojure') {
+    const probe = runtimeProbe?.(language) ?? defaultRuntimeProbe(language);
+    if (probe === 'unavailable') {
+      return {
+        status: 'unavailable',
+        reason: 'Clojure built-in reader is not available in this environment; no source-fallback evidence can be produced.',
+      };
+    }
     return {
       status: 'available',
       reason:
