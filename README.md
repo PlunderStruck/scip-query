@@ -41,8 +41,11 @@ React and Vue repositories get additional framework-aware checks for repeated co
 
 ## Install
 
+`npm install` only installs the package — it does not touch your home directory, your shell config, or any agent's skill/hook setup. Every write happens explicitly, when you ask for it:
+
 ```bash
 npm install -g scip-query@latest
+scip-query setup           # opt-in: skills, project hooks, first index, health dossier
 scip-query check-deps
 scip-query reindex
 ```
@@ -178,6 +181,10 @@ Illustrative output:
 
 **9. Ratchet it in CI.** `health --write-baseline` snapshots finding identities into a committable file; `health --baseline` exits 1 on any _new_ finding. "Don't get worse" is an objective gate that no score arithmetic can game.
 
+**10. Catch byte-identical tiny helpers `similar`'s fingerprints miss.** `duplicate-bodies` normalizes and hashes small callable bodies (comments/whitespace stripped, default `--min-loc 3`) and reports exact matches spanning multiple files — the "escapeRegex copy-pasted into seven files" shape that shape-based similarity scoring is too coarse to flag.
+
+**11. Catch a same-name function that drifted apart.** `twin-drift` finds functions with the same (or near-same) name in different files whose bodies have diverged — a strong signal one side got a bug fix, edge case, or feature the other never received. Synthetic leaves and test-only groups are excluded by default.
+
 Baseline finding identities are keyed as `detector:file:shortName`. A rename can therefore appear as one fixed identity plus one new identity; refresh the baseline after intentional renames once the changed code has been reviewed.
 
 Accepted findings can be recorded without weakening the rest of the gate:
@@ -239,9 +246,25 @@ Heuristic detectors carry guardrails learned from real codebases: published `pac
 
 `scip-query install-skills` symlinks bundled skills into Claude Code, Codex, and shared agent roots (`~/.agents/skills/`) so they update automatically with the package. The `scip-query` router skill dispatches codebase work to specialists for setup/adoption, health audit and autonomous health improvement, hyper optimization, debugging, issue triage, HTML diagrams, API impact, exploration, planning, cleanup, doc reconciliation, directory-architecture review, maintainability review, React/Vue review, AI-rot cleanup, language playbooks, TLA model checks, and post-change verification.
 
+Three narrower lens skills cover specific evidence gaps: `scip-twin-drift` (find and resolve same-name functions across files whose bodies diverged), `scip-claim-audit` (classify whether an "available"/"verified"/"safe"/"PASS" claim in output is derived from a real check or merely asserted), and `scip-probe-reachability` (prove whether a parser/AST branch is actually reachable by running the real parser on minimal inputs).
+
 Project setup writes reviewable project-local lifecycle hooks for Codex and Claude Code (`.codex/hooks.json` and `.claude/settings.local.json` by default; `setup-hooks --shared` opts into `.claude/settings.json`). These hooks add scip-query context at session start, route prompts toward the right skill, and run an advisory Stop-hook wrapper around the diff gate only for that repository. The Stop hook sends feedback to the agent by default instead of blocking; set `SCIP_QUERY_STOP_HOOK_MODE=warn` for a warning-only hook response, or `SCIP_QUERY_STOP_HOOK_MODE=block` to enforce the gate. Set `SCIP_QUERY_SKIP_HOOK_INSTALL=1` or run `scip-query setup --no-hooks` to skip hook installation during setup, and run `scip-query setup-hooks --json` later to repair the current repo's hooks.
 
 For a project, run `scip-query setup`. It installs/refreshes skills, configures project-local hooks unless skipped, checks indexer readiness, attempts configured indexer remediation, refreshes the index, smoke-tests representative command families, writes `docs/scip-query/health-dossier.md` and `.json`, reports the health score and items needing attention, and seeds AGENTS.md/CLAUDE.md guidance. After setup, `scip-cleanup-audit` confirms raw signals and `scip-cleanup-improve` keeps fixing the worst confirmed items until no safe confirmed cleanup remains. Use `scip-query setup --git-hook` when you also want a local pre-commit diff gate. CI setup is intentionally separate.
+
+## Formal Models (TLA+)
+
+For the parts of a system where the risk lives in interleaving — retries, concurrency, partial failure, money, a state machine with guards — `scip-query` scaffolds a TLA+ model tied to indexed code and keeps it honest against that code:
+
+```bash
+scip-query tla scaffold src/queue/store.ts          # draft spec + config + mapping from indexed code
+scip-query tla verify specs/queue/Queue.tla          # mechanical conformance: referents, reads/writes, calls, model checker
+scip-query tla instrument specs/queue/Queue.tla      # generate a trace recorder + wiring sites for each mapped action
+scip-query tla trace-check specs/queue/Queue.tla --trace traces/run1.json   # check a recorded execution against Next
+scip-query tla fetch-tools                           # download the pinned tla2tools.jar into the cache
+```
+
+`tla verify` checks the mapping contract against the model text and the indexed code: variable and action referents must resolve to value-like symbols (not types), declared reads/writes are checked against a static scan, and every waiver requires a reason and is counted in the output. At scale, findings are grouped by `(category, modelElement)` with up to 3 exemplars per group by default — pass `--full` to print every finding ungrouped. The `tla-model-system` skill (`scip-query install-skills`) walks the scaffold → verify → instrument → trace-check loop end to end.
 
 ## Quick Start
 
