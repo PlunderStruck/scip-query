@@ -15,9 +15,9 @@ The ledger is anchored to the current tool surface, not memory.
 | Surface                   | Source                                                                                                                                                                                                                                                                                                       | Why it anchors the ledger                                                                     |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
 | Repo-wide health analysis | `scip-query code health --json` reported `src/queries/health/health.ts:210`, where `health()` runs `runHealthAnalyses()` and `buildHealthReport()`.                                                                                                                                                          | Every repo-wide analyzer validation must eventually reconcile with health output and scoring. |
-| Change-time gate analysis | `scip-query code diffGate --json` reported `src/queries/impact/diff-gate.ts:205`, where `diffGate()` runs the default diff-scoped checks: `echo`, `incomplete-migration`, `co-change-partner`, `doc-reference`, `unused-params`, and `new-dead`. The baseline ratchet is explicit because it is repo-wide.    | Every diff-only analyzer needs a separate validation path from repo-wide health.              |
+| Change-time gate analysis | `scip-query code diffGate --json` reported `src/queries/impact/diff-gate.ts:219`, where `diffGate()` runs the default diff-scoped checks: `echo`, `incomplete-migration`, `co-change-partner`, `doc-reference`, `unused-params`, and `new-dead`. The baseline ratchet is explicit because it is repo-wide.    | Every diff-only analyzer needs a separate validation path from repo-wide health.              |
 | Public command registry   | `scip-query trace queryCommandOrder --json` reported `src/runtime/commands/query-command-specs.ts:11`, where the public query command order starts. `scip-query code queryCommandDescriptor --json` reported `src/runtime/commands/query-command-specs.ts:101`, where command descriptors are resolved by id. | The ledger must not silently miss a public analyzer command.                                 |
-| Diff-gate check list      | `scip-query trace DIFF_GATE_CHECKS --json` reported `src/queries/impact/diff-gate.ts:62`, where the canonical diff-gate check list is exported.                                                                                                                                                              | The ledger must cover every change-time check that can block a diff.                          |
+| Diff-gate check list      | `scip-query trace DIFF_GATE_CHECKS --json` reported `src/queries/impact/diff-gate.ts:64`, where the canonical diff-gate check list is exported.                                                                                                                                                              | The ledger must cover every change-time check that can block a diff.                          |
 
 ## Core Concepts
 
@@ -323,3 +323,14 @@ still owns the public query order. Health gained a `coverage-contracts` phase
 and a `detectorPrecision` field (per-check finding-outcome stats from the new
 finding-outcome ledger) — both paths still compute and render through the same
 command surfaces cited above.
+
+## 2026-07-02 Doc-Reference Hub-Cascade Follow-Up
+
+The `diffGate()` and `DIFF_GATE_CHECKS` citations were refreshed (line anchors
+`diff-gate.ts:205` -> `:219` and `:62` -> `:64`) after followup #8 added
+hub-file cascade damping to the doc-reference check: when more than 3 docs
+cite the same changed hub file in one gate run, their findings collapse into
+one clustered finding carrying `citationCount`, up to 3 `citationExemplars`,
+and an explicit `suppressedCount`. Default diff-gate still runs the same
+check family through the same entry point; per-doc findings under the
+threshold are unchanged.

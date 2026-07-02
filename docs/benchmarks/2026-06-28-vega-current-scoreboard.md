@@ -915,3 +915,11 @@ than changing this scoreboard's historical optimization claim.
 historical Vega scoreboard's output-identity claims are unchanged; the current
 performance-architecture evidence lives in
 `docs/benchmarks/2026-07-02-performance-architecture-ledger.md`.
+
+2026-07-02 followup #5 note: the `src/queries/cleanup/similar.ts` citation
+remains current after the sibling-saturation retune. Callees called by 5+
+same-file siblings are now trimmed from callee fingerprints before IDF
+weighting (a precision fix for this scoreboard's own top false-positive pair,
+`fuzzMultipartRawAndSse` vs `fuzzSecondaryApi`); the weighted-cosine evidence
+family, cache/evidence-product contracts, and this scoreboard's historical
+timing claims are unchanged.
