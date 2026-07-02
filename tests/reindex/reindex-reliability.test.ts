@@ -420,6 +420,11 @@ describe('reindex reliability', () => {
   });
 
   it('fails with the sidecar-package guidance when scip is missing on Windows', async () => {
+    const projectRoot = createProject('scip-query-reindex-sidecar-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
     const { reindex } = await loadReindexFixture({
       languages: ['typescript'],
       platform: 'win32',
