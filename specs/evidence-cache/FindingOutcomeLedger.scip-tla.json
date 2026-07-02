@@ -1,0 +1,289 @@
+{
+  "module": "specs/evidence-cache/FindingOutcomeLedger.tla",
+  "config": "specs/evidence-cache/FindingOutcomeLedgerCurrent.cfg",
+  "scope": [
+    "src/storage/evidence-cache.ts",
+    "src/queries/health/finding-outcome-ledger.ts",
+    "src/runtime/query-commands/impact.ts"
+  ],
+  "unmappedWriteScope": "actions",
+  "variables": {
+    "ledger": {
+      "code": ["src/storage/evidence-cache.ts/CONNECTIONS"],
+      "aliases": ["findingOutcomeLedgerRowsModelOnly"],
+      "waive": {
+        "reason": "The ledger rows live in the SQL table finding_outcome_ledger behind prepared statements; no TypeScript assignment stores the row set as a value-like symbol."
+      }
+    },
+    "outcome": {
+      "code": ["src/queries/health/finding-outcome-ledger.ts/FindingOutcome"],
+      "aliases": ["outcome"]
+    },
+    "lastSeen": {
+      "code": ["src/queries/health/finding-outcome-ledger.ts/FindingOutcomeRecord#lastSeen"],
+      "aliases": ["lastSeen", "last_seen"]
+    },
+    "resolvedEver": {
+      "code": ["src/queries/health/finding-outcome-ledger.ts/__resolvedEver_model_history__"],
+      "aliases": ["__findingOutcomeResolvedEver_model_history__"],
+      "waive": {
+        "reason": "Model-only history used to state terminal resolution; code stores only the current row outcome, not a separate ever-resolved set."
+      }
+    },
+    "now": {
+      "code": ["src/queries/health/finding-outcome-ledger.ts/recordFindingOutcomes"],
+      "aliases": ["now"]
+    },
+    "phase": {
+      "code": ["src/queries/health/finding-outcome-ledger.ts/__phase_no_stored_field__"],
+      "aliases": ["__findingOutcomePhase_no_stored_field__"],
+      "waive": {
+        "reason": "Trace-check projection for control-flow position; no runtime field stores this phase."
+      }
+    },
+    "storedRows": {
+      "code": ["src/storage/evidence-cache.ts/__storedRows_projection__"],
+      "aliases": ["__findingOutcomeStoredRows_projection__"],
+      "waive": {
+        "reason": "Trace-check scalar projection of Cardinality(ledger); the code stores individual SQL rows, not a materialized count variable."
+      }
+    },
+    "maxRowsForCheck": {
+      "code": ["src/storage/evidence-cache.ts/FINDING_OUTCOME_LEDGER_CAP_PER_CHECK"],
+      "aliases": ["__findingOutcomeMaxRowsForCheck_projection__"],
+      "waive": {
+        "reason": "The production constant is 5,000; the model checker uses a smaller symbolic Cap so overflow is reachable. maxRowsForCheck itself is a model projection, not a code field."
+      }
+    },
+    "resolvedRows": {
+      "code": ["src/queries/health/finding-outcome-ledger.ts/__resolvedRows_projection__"],
+      "aliases": ["__findingOutcomeResolvedRows_projection__"],
+      "waive": {
+        "reason": "Trace-check scalar projection of Cardinality(resolvedEver); code derives counts later in detectorPrecision rather than storing this lifecycle counter."
+      }
+    },
+    "resurrectionSeen": {
+      "code": ["src/queries/health/finding-outcome-ledger.ts/__resurrectionSeen_observer__"],
+      "aliases": ["__findingOutcomeResurrectionSeen_observer__"],
+      "waive": {
+        "reason": "Observer flag used only to make the forbidden transition checkable; current code has no field recording that a terminal resolution was violated."
+      }
+    }
+  },
+  "actions": {
+    "ObserveOpenCurrent": {
+      "code": [
+        "src/queries/health/finding-outcome-ledger.ts/recordFindingOutcomes",
+        "src/storage/evidence-cache.ts/writeFindingOutcomeLedger",
+        "src/queries/health/finding-outcome-ledger.ts/updateFindingOutcomeLedger"
+      ],
+      "reads": ["ledger", "outcome", "lastSeen", "resolvedEver", "now", "resurrectionSeen"],
+      "writes": [
+        "ledger",
+        "outcome",
+        "lastSeen",
+        "resolvedEver",
+        "now",
+        "phase",
+        "storedRows",
+        "maxRowsForCheck",
+        "resolvedRows",
+        "resurrectionSeen"
+      ],
+      "waive": {
+        "reads": ["ledger", "resolvedEver", "resurrectionSeen"],
+        "writes": [
+          "ledger",
+          "resolvedEver",
+          "now",
+          "phase",
+          "storedRows",
+          "maxRowsForCheck",
+          "resolvedRows",
+          "resurrectionSeen"
+        ],
+        "reason": "This TLA action composes pure transition and SQL persistence. recordFindingOutcomes reads previous rows and observed findings, while writeFindingOutcomeLedger persists SQL rows and applies the cap. ledger is SQL-backed; resolvedEver and scalar projections are model-only."
+      }
+    },
+    "ObserveSuppressedCurrent": {
+      "code": [
+        "src/queries/health/finding-outcome-ledger.ts/recordFindingOutcomes",
+        "src/storage/evidence-cache.ts/writeFindingOutcomeLedger",
+        "src/queries/health/finding-outcome-ledger.ts/updateFindingOutcomeLedger"
+      ],
+      "reads": ["ledger", "outcome", "lastSeen", "resolvedEver", "now", "resurrectionSeen"],
+      "writes": [
+        "ledger",
+        "outcome",
+        "lastSeen",
+        "resolvedEver",
+        "now",
+        "phase",
+        "storedRows",
+        "maxRowsForCheck",
+        "resolvedRows",
+        "resurrectionSeen"
+      ],
+      "waive": {
+        "reads": ["ledger", "resolvedEver", "resurrectionSeen"],
+        "writes": [
+          "ledger",
+          "resolvedEver",
+          "now",
+          "phase",
+          "storedRows",
+          "maxRowsForCheck",
+          "resolvedRows",
+          "resurrectionSeen"
+        ],
+        "reason": "Same transition/persistence composition as ObserveOpenCurrent; the only semantic difference is suppressed observed input selecting outcome 'suppressed'."
+      }
+    },
+    "ResolveMissingCurrent": {
+      "code": [
+        "src/queries/health/finding-outcome-ledger.ts/recordFindingOutcomes",
+        "src/storage/evidence-cache.ts/writeFindingOutcomeLedger",
+        "src/queries/health/finding-outcome-ledger.ts/updateFindingOutcomeLedger"
+      ],
+      "reads": ["ledger", "outcome", "lastSeen", "resolvedEver", "now", "resurrectionSeen"],
+      "writes": [
+        "ledger",
+        "outcome",
+        "lastSeen",
+        "resolvedEver",
+        "now",
+        "phase",
+        "storedRows",
+        "maxRowsForCheck",
+        "resolvedRows",
+        "resurrectionSeen"
+      ],
+      "waive": {
+        "reads": ["ledger", "lastSeen", "resolvedEver", "resurrectionSeen"],
+        "writes": [
+          "ledger",
+          "lastSeen",
+          "resolvedEver",
+          "now",
+          "phase",
+          "storedRows",
+          "maxRowsForCheck",
+          "resolvedRows",
+          "resurrectionSeen"
+        ],
+        "reason": "The code represents resolution by writing row.outcome = 'resolved'; resolvedEver is the model-only history that lets the invariant say the transition is terminal. Projection writes are not stored in code."
+      }
+    },
+    "SkipCheckCurrent": {
+      "code": ["src/queries/health/finding-outcome-ledger.ts/recordFindingOutcomes"],
+      "reads": ["outcome", "lastSeen", "now"],
+      "writes": ["outcome", "lastSeen", "now", "phase"],
+      "waive": {
+        "reads": ["lastSeen"],
+        "writes": ["outcome", "lastSeen", "now", "phase"],
+        "reason": "A check-not-run step is the branch where recordFindingOutcomes leaves records untouched because runChecks lacks the check. outcome/lastSeen are primed unchanged to align with broad static writes in other branches of the same function; now and phase are model projections."
+      }
+    },
+    "ObserveResolvedOpenVulnerable": {
+      "code": [
+        "src/queries/health/finding-outcome-ledger.ts/recordFindingOutcomes",
+        "src/storage/evidence-cache.ts/writeFindingOutcomeLedger"
+      ],
+      "reads": ["ledger", "outcome", "lastSeen", "resolvedEver", "now"],
+      "writes": [
+        "ledger",
+        "outcome",
+        "lastSeen",
+        "resolvedEver",
+        "now",
+        "phase",
+        "storedRows",
+        "maxRowsForCheck",
+        "resolvedRows",
+        "resurrectionSeen"
+      ],
+      "waive": {
+        "reads": ["ledger", "resolvedEver"],
+        "writes": [
+          "ledger",
+          "resolvedEver",
+          "now",
+          "phase",
+          "storedRows",
+          "maxRowsForCheck",
+          "resolvedRows",
+          "resurrectionSeen"
+        ],
+        "reason": "Regression action: widens the modeled environment by re-observing an identity after it reached resolved. This is not an accepted CurrentSpec behavior; it exists so NoResurrectedResolutions is falsifiable."
+      }
+    },
+    "ObserveResolvedSuppressedVulnerable": {
+      "code": [
+        "src/queries/health/finding-outcome-ledger.ts/recordFindingOutcomes",
+        "src/storage/evidence-cache.ts/writeFindingOutcomeLedger"
+      ],
+      "reads": ["ledger", "outcome", "lastSeen", "resolvedEver", "now"],
+      "writes": [
+        "ledger",
+        "outcome",
+        "lastSeen",
+        "resolvedEver",
+        "now",
+        "phase",
+        "storedRows",
+        "maxRowsForCheck",
+        "resolvedRows",
+        "resurrectionSeen"
+      ],
+      "waive": {
+        "reads": ["ledger", "resolvedEver"],
+        "writes": [
+          "ledger",
+          "resolvedEver",
+          "now",
+          "phase",
+          "storedRows",
+          "maxRowsForCheck",
+          "resolvedRows",
+          "resurrectionSeen"
+        ],
+        "reason": "Regression action mirroring ObserveResolvedOpenVulnerable for suppressed observations."
+      }
+    },
+    "ObserveWithoutCapVulnerable": {
+      "code": [
+        "src/queries/health/finding-outcome-ledger.ts/recordFindingOutcomes",
+        "src/storage/evidence-cache.ts/writeFindingOutcomeLedger"
+      ],
+      "reads": ["ledger", "outcome", "lastSeen", "resolvedEver", "now", "resurrectionSeen"],
+      "writes": [
+        "ledger",
+        "outcome",
+        "lastSeen",
+        "resolvedEver",
+        "now",
+        "phase",
+        "storedRows",
+        "maxRowsForCheck",
+        "resolvedRows",
+        "resurrectionSeen"
+      ],
+      "waive": {
+        "reads": ["ledger", "resolvedEver", "resurrectionSeen"],
+        "writes": [
+          "ledger",
+          "resolvedEver",
+          "now",
+          "phase",
+          "storedRows",
+          "maxRowsForCheck",
+          "resolvedRows",
+          "resurrectionSeen"
+        ],
+        "reason": "Regression action: models deleting/reinserting rows without the sort(...).slice(FINDING_OUTCOME_LEDGER_CAP_PER_CHECK) cap. The current code's line 520 slice is the protection this action removes."
+      }
+    }
+  },
+  "invariants": ["TypeOK", "NoResurrectedResolutions", "CapNeverExceeded"],
+  "traces": ["specs/evidence-cache/finding-outcome-ledger-current.trace.json"]
+}
