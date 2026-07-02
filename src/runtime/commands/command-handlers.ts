@@ -563,7 +563,8 @@ function runBenchCommand(
     durationMs,
     exitCode: result.status,
     signal: result.signal,
-    timedOut: result.error?.name === 'ETIMEDOUT',
+    timedOut:
+      (result.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT' || result.error?.name === 'ETIMEDOUT',
     stdoutBytes: result.stdout?.length ?? 0,
     stderrBytes: result.stderr?.length ?? 0,
     ...(opts.profileOut ? { profilePath: opts.profileOut } : {}),

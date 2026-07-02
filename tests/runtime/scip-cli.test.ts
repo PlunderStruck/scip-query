@@ -1,7 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createHash } from 'node:crypto';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type * as NodeFs from 'node:fs';
 import type * as ScipCli from '../../src/runtime/scip-cli.js';

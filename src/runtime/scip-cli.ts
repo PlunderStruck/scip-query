@@ -3,7 +3,6 @@ import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
 import { platform, arch } from 'node:os';
 import { isBinaryAvailable } from './binary.js';
-import { fetchVerifiedBinary, resolveScipQueryCachePath } from '../core/verified-binary-fetch.js';
 
 const SCIP_VERSION = 'v0.8.1';
 const SCIP_RELEASE_URL = 'https://github.com/sourcegraph/scip';
@@ -229,24 +228,3 @@ export function tryInstallScipCli(onStatus: (msg: string) => void): boolean {
   onStatus(`Install manually from: ${SCIP_RELEASE_URL}/releases`);
   return false;
 }
-
-export interface ScipWindowsBinaryFetchOptions {
-  archName?: string;
-  cachePath?: string;
-  fetchImpl?: typeof fetch;
-  env?: NodeJS.ProcessEnv;
-}
-
-export interface ScipWindowsBinaryFetchResult {
-  status: 'cached' | 'downloaded';
-  path: string;
-  sha256: string;
-  url: string;
-}
-
-/**
- * Download and checksum-verify the pinned Windows `scip.exe`, caching it
- * under the scip-query cache dir via the shared `fetchVerifiedBinary`
- * primitive (src/core/verified-binary-fetch.ts) — the same one
- * `fetchTlaToolsJar` (src/tla/tool-runner.ts) uses.
- */
