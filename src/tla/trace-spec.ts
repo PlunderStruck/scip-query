@@ -11,9 +11,10 @@ import { runTlaTool, type TlaToolResult, type TlaToolRunOptions } from './tool-r
  *
  * Encoding (standard TLA+ trace-validation shape): a generated module
  * extends the base spec, pins the state sequence observed at runtime, and
- * requires the base `Next` to hold between consecutive states. TLC deadlocks
- * exactly at the first divergent step, which we parse back into a
- * step-indexed verdict.
+ * requires the base next-state operator (default `Next`, overridable via
+ * `--next` for dual-spec models with e.g. `NextCurrent`/`NextVulnerable`)
+ * to hold between consecutive states. TLC deadlocks exactly at the first
+ * divergent step, which we parse back into a step-indexed verdict.
  */
 
 export interface TraceSpecGeneration {
@@ -46,6 +47,7 @@ export function generateTraceSpec(
   baseModuleName: string,
   mappedVariables: readonly string[],
   steps: readonly TlaTraceStep[],
+  nextOperator = 'Next',
 ): TraceSpecGeneration | { error: string } {
   if (steps.length === 0) return { error: 'trace has no steps' };
   const warnings: string[] = [];
@@ -98,7 +100,7 @@ export function generateTraceSpec(
   const moduleText = [
     `---- MODULE ${moduleName} ----`,
     `\\* Generated trace-validation harness. Checks that the recorded execution`,
-    `\\* is a behavior of ${baseModuleName}!Next. TLC deadlocks at the first`,
+    `\\* is a behavior of ${baseModuleName}!${nextOperator}. TLC deadlocks at the first`,
     `\\* divergent step; a clean run means the model accepts the trace.`,
     `EXTENDS ${baseModuleName}, Naturals, Sequences`,
     '',
@@ -116,7 +118,7 @@ export function generateTraceSpec(
     'TraceStep ==',
     '  /\\ traceIdx < Len(TraceStates)',
     "  /\\ traceIdx' = traceIdx + 1",
-    '  /\\ Next',
+    `  /\\ ${nextOperator}`,
     ...variables.map((name) => `  /\\ ${name}' = TraceStates[traceIdx + 1].${name}`),
     '',
     'TraceDone ==',
@@ -142,9 +144,11 @@ export function runTraceCheck(opts: {
   baseModuleName: string;
   mappedVariables: readonly string[];
   steps: readonly TlaTraceStep[];
+  /** Next-state operator the harness requires between states (default `Next`). */
+  nextOperator?: string;
   toolOptions: Omit<TlaToolRunOptions, 'specPath' | 'configPath' | 'checker'>;
 }): TraceCheckVerdict {
-  const generation = generateTraceSpec(opts.baseModuleName, opts.mappedVariables, opts.steps);
+  const generation = generateTraceSpec(opts.baseModuleName, opts.mappedVariables, opts.steps, opts.nextOperator);
   if ('error' in generation) {
     return { status: 'invalid-trace', states: 0, detail: generation.error };
   }
@@ -182,7 +186,7 @@ export function runTraceCheck(opts: {
       return {
         status: 'accepted',
         states: generation.states,
-        detail: `TLC accepted all ${generation.states} pinned states under ${opts.baseModuleName}!Next.`,
+        detail: `TLC accepted all ${generation.states} pinned states under ${opts.baseModuleName}!${opts.nextOperator ?? 'Next'}.`,
         checker,
         generation,
       };
@@ -195,7 +199,7 @@ export function runTraceCheck(opts: {
       ...(divergence ?? {}),
       detail: divergence
         ? `trace diverges entering state ${divergence.divergedAtState! + 1} (step ${divergence.divergedStep!.index}: ` +
-          `${divergence.divergedStep!.action}) — the model's Next relation does not accept the recorded transition.`
+          `${divergence.divergedStep!.action}) — the model's ${opts.nextOperator ?? 'Next'} relation does not accept the recorded transition.`
         : 'TLC rejected the trace but the divergent step could not be parsed from its output; see checker stdout.',
       checker,
       generation,

@@ -124,13 +124,19 @@ export function parseSkillCommands(raw: string, sourceLabel: string): SkillComma
   let current: Partial<SkillCommandEntry> | null = null;
   for (const line of lines.slice(startIndex + 1)) {
     if (/^\S/.test(line)) break; // dedent — next top-level frontmatter key
-    const templateMatch = line.match(/^\s*-\s*template:\s*"(.*)"\s*$/);
-    const whenMatch = line.match(/^\s*when:\s*"(.*)"\s*$/);
+    // Quote style is not ours to control here: `npm run format` (prettier's
+    // YAML formatter) rewrites frontmatter string quoting per-line — single
+    // quotes by default, double only when the value itself contains an
+    // apostrophe (e.g. "the model's Next relation"). Both quote styles must
+    // parse, or a plain `prettier --write` silently empties a skill's
+    // commands list (this broke tla-model-system's router preview row).
+    const templateMatch = line.match(/^\s*-\s*template:\s*(?:"(.*)"|'(.*)')\s*$/);
+    const whenMatch = line.match(/^\s*when:\s*(?:"(.*)"|'(.*)')\s*$/);
     if (templateMatch) {
       if (current?.template) entries.push(finishSkillCommandEntry(current, sourceLabel));
-      current = { template: templateMatch[1] };
+      current = { template: templateMatch[1] ?? templateMatch[2] };
     } else if (whenMatch && current) {
-      current.when = whenMatch[1];
+      current.when = whenMatch[1] ?? whenMatch[2];
     }
   }
   if (current?.template) entries.push(finishSkillCommandEntry(current, sourceLabel));

@@ -34,6 +34,24 @@ description: A skill with no commands frontmatter.
 # no-commands-skill
 `;
 
+// Regression fixture: prettier's YAML formatter rewrites frontmatter string
+// quoting to single quotes by default, double only when the value itself
+// contains an apostrophe (mixed quoting in one file, as seen live in
+// skills/tla-model-system/SKILL.md after `npm run format`). A `--write` run
+// must not silently empty a skill's parsed commands list.
+const SKILL_MD_WITH_MIXED_QUOTES = `---
+name: mixed-quote-skill
+description: A skill whose frontmatter prettier reformatted to single quotes.
+commands:
+  - template: 'scip-query refs <symbol>'
+    when: 'Find consumers before editing.'
+  - template: 'scip-query tla verify <spec>'
+    when: "Checks the model's Next relation."
+---
+
+# mixed-quote-skill
+`;
+
 describe('parseSkillCommands', () => {
   it('parses template/when pairs from frontmatter', () => {
     const entries = parseSkillCommands(SKILL_MD_WITH_COMMANDS, 'skills/example-skill/SKILL.md');
@@ -45,6 +63,14 @@ describe('parseSkillCommands', () => {
 
   it('returns an empty list when the skill declares no commands', () => {
     expect(parseSkillCommands(SKILL_MD_WITHOUT_COMMANDS, 'skills/no-commands-skill/SKILL.md')).toEqual([]);
+  });
+
+  it('parses single-quoted and mixed-quote frontmatter (prettier YAML reformat regression)', () => {
+    const entries = parseSkillCommands(SKILL_MD_WITH_MIXED_QUOTES, 'skills/mixed-quote-skill/SKILL.md');
+    expect(entries).toEqual([
+      { template: 'scip-query refs <symbol>', when: 'Find consumers before editing.' },
+      { template: 'scip-query tla verify <spec>', when: "Checks the model's Next relation." },
+    ]);
   });
 
   it('throws when a commands entry is missing a when clause', () => {

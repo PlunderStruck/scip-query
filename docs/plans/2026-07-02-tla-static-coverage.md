@@ -39,7 +39,7 @@ in the 694-test suite, and every item 13-21 either shipped or BLOCKED-noted.
   write/read effects (one level only, no recursion) attributed to the
   action, marked `via: <callee>` in the finding/verified accounting. Should
   convert the preemption-path waivers on the benchmark.
-- [ ] **P5.5 (#20) Trace input dedup** (same path via --trace and
+- [x] **P5.5 (#20) Trace input dedup** (same path via --trace and
   contract.traces counted once) and **(#21) `--next <operator>`** on
   trace-check for dual-spec models (default `Next`). Update specs/diff-gate
   to drop the `Next == NextCurrent` alias workaround and use the flag in its

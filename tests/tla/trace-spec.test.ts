@@ -42,6 +42,22 @@ describe('TLA trace-spec generation', () => {
     expect(generation).toEqual({ error: 'trace step 0 must include a full `before` state' });
   });
 
+  it('parameterizes the next-state operator for dual-spec models (P5.5 / followup #21)', () => {
+    const generation = generateTraceSpec('DualMachine', ['status'], ACCEPTED_STEPS, 'NextCurrent');
+    if ('error' in generation) throw new Error(generation.error);
+
+    expect(generation.moduleText).toContain('/\\ NextCurrent');
+    expect(generation.moduleText).not.toContain('/\\ Next\n');
+    expect(generation.moduleText).toContain('a behavior of DualMachine!NextCurrent');
+  });
+
+  it('defaults the next-state operator to Next when unspecified', () => {
+    const generation = generateTraceSpec('Machine', ['status'], ACCEPTED_STEPS);
+    if ('error' in generation) throw new Error(generation.error);
+
+    expect(generation.moduleText).toContain('/\\ Next\n');
+  });
+
   it('drops non-scalar variables with a disclosed warning', () => {
     const steps: TlaTraceStep[] = [
       { action: 'Start', before: { status: 'idle', blob: { nested: true } }, after: { status: 'busy' } },
@@ -86,6 +102,20 @@ describe('TLA trace-check verdicts (faked checker)', () => {
     });
     expect(verdict.status).toBe('accepted');
     expect(verdict.states).toBe(3);
+  });
+
+  it('reports the configured next-state operator in the acceptance detail', () => {
+    const { specPath, jarPath, projectRoot } = fixture();
+    const verdict = runTraceCheck({
+      specPath,
+      baseModuleName: 'Machine',
+      mappedVariables: ['status'],
+      steps: ACCEPTED_STEPS,
+      nextOperator: 'NextCurrent',
+      toolOptions: { projectRoot, tlaToolsJar: jarPath, spawn: fakeSpawn({ status: 0, stdout: 'ok' }) },
+    });
+    expect(verdict.status).toBe('accepted');
+    expect(verdict.detail).toContain('Machine!NextCurrent');
   });
 
   it('parses the divergent step out of a TLC deadlock', () => {
@@ -151,5 +181,48 @@ describe.skipIf(!canRunTlc)('TLA trace-check end-to-end (real TLC)', () => {
     expect(diverging.status).toBe('diverged');
     expect(diverging.divergedAtState).toBe(2);
     expect(diverging.divergedStep?.index).toBe(1);
+  }, 60_000);
+
+  it('selects among named next-state relations in a dual-spec model (P5.5 / followup #21)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-trace-e2e-'));
+    const specPath = join(root, 'DualMachine.tla');
+    writeFileSync(
+      specPath,
+      `---- MODULE DualMachine ----
+EXTENDS Naturals, Sequences, TLC
+VARIABLES status
+vars == <<status>>
+Init == status = "idle"
+Start == status = "idle" /\\ status' = "busy"
+Finish == status = "busy" /\\ status' = "idle"
+NextFull == Start \\/ Finish
+NextStartOnly == Start
+====
+`,
+    );
+
+    // Same trace (idle -> busy -> idle) accepted under the full policy but
+    // rejected under the restricted one that never permits Finish — proof
+    // that --next actually selects between named relations, not just that
+    // the flag is parsed.
+    const acceptedUnderFull = runTraceCheck({
+      specPath,
+      baseModuleName: 'DualMachine',
+      mappedVariables: ['status'],
+      steps: ACCEPTED_STEPS,
+      nextOperator: 'NextFull',
+      toolOptions: { projectRoot: root, tlaToolsJar: cachedJar },
+    });
+    expect(acceptedUnderFull.status).toBe('accepted');
+
+    const divergedUnderStartOnly = runTraceCheck({
+      specPath,
+      baseModuleName: 'DualMachine',
+      mappedVariables: ['status'],
+      steps: ACCEPTED_STEPS,
+      nextOperator: 'NextStartOnly',
+      toolOptions: { projectRoot: root, tlaToolsJar: cachedJar },
+    });
+    expect(divergedUnderStartOnly.status).toBe('diverged');
   }, 60_000);
 });

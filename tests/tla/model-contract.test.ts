@@ -2,7 +2,12 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { loadTlaModelContract, readTlaModuleFacts, resolveContractPath } from '../../src/tla/model-contract.js';
+import {
+  dedupeTracePaths,
+  loadTlaModelContract,
+  readTlaModuleFacts,
+  resolveContractPath,
+} from '../../src/tla/model-contract.js';
 
 describe('TLA model contract', () => {
   it('loads a strict mapping contract and TLA module facts', () => {
@@ -203,6 +208,18 @@ Enqueue(job) == queue' = Append(queue, job)
     expect(loaded.errors).toContain(
       'variables lockOwner, published share resource path "lockPath" — conformance scanning cannot attribute a matching write/read to one variable unambiguously',
     );
+  });
+
+  it('dedupes trace paths naming the same file (P5.5 / followup #20)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(join(root, 'run1.trace.json'), '[]');
+
+    expect(dedupeTracePaths(root, ['run1.trace.json', 'run1.trace.json'])).toEqual(['run1.trace.json']);
+    expect(dedupeTracePaths(root, ['run1.trace.json', join(root, 'run1.trace.json')])).toEqual(['run1.trace.json']);
+    expect(dedupeTracePaths(root, ['run1.trace.json', 'run2.trace.json'])).toEqual([
+      'run1.trace.json',
+      'run2.trace.json',
+    ]);
   });
 
   it('resolves contract-adjacent and project-relative config paths', () => {

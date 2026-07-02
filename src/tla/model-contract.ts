@@ -215,6 +215,25 @@ export function loadTraceSteps(projectRoot: string, tracePath: string): { steps:
   }
 }
 
+/**
+ * Dedupes trace input paths by resolved absolute location (P5.5 / followup
+ * #20) — `contract.traces` and `--trace` naming the same file (relative vs.
+ * absolute, or simply repeated) must not double-count that file's steps.
+ * Preserves the first-seen original string (so relative-path resolution
+ * behavior at load time is unchanged) and drops later duplicates.
+ */
+export function dedupeTracePaths(projectRoot: string, paths: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const path of paths) {
+    const resolved = resolveProjectPath(projectRoot, path) ?? path;
+    if (seen.has(resolved)) continue;
+    seen.add(resolved);
+    out.push(path);
+  }
+  return out;
+}
+
 function parseContract(raw: unknown, errors: string[]): TlaModelContract | null {
   if (!isRecord(raw)) {
     errors.push('map file must contain a JSON object');

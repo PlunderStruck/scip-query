@@ -17,6 +17,7 @@ import {
 import { withDb } from '../cli-context.js';
 import { displayPathRange } from '../render.js';
 import {
+  dedupeTracePaths,
   defaultMapPathForSpec,
   isTlaCheckerMode,
   loadTlaModelContract,
@@ -198,7 +199,7 @@ function runTlaTraceCheck(db: ScipDatabase, args: readonly unknown[], opts: Comm
   const { contract } = loaded.loaded;
 
   const traceArg = stringOptionValue(opts, 'trace');
-  const tracePaths = [...contract.traces, ...(traceArg ? [traceArg] : [])];
+  const tracePaths = dedupeTracePaths(projectRoot, [...contract.traces, ...(traceArg ? [traceArg] : [])]);
   const steps = tracePaths.flatMap((tracePath) => loadTraceSteps(projectRoot, tracePath).steps);
   if (steps.length === 0) {
     throw new Error('no trace steps found: pass --trace <file> or list traces in the mapping contract');
@@ -209,6 +210,7 @@ function runTlaTraceCheck(db: ScipDatabase, args: readonly unknown[], opts: Comm
     baseModuleName: traceHarnessBaseName(specPath),
     mappedVariables: Object.keys(contract.variables),
     steps,
+    nextOperator: stringOptionValue(opts, 'next'),
     toolOptions: {
       projectRoot,
       tlaToolsJar: stringOptionValue(opts, 'tlaTools'),
@@ -257,16 +259,17 @@ function runTlaVerify(db: ScipDatabase, args: readonly unknown[], opts: CommandO
     readTlaModuleFacts(projectRoot, specArg);
   const checkedInvariants = readTlaConfigInvariants(configPath);
   const traceArg = stringOptionValue(opts, 'trace');
-  const configuredTraceSteps = contract.traces.flatMap((tracePath) => loadTraceSteps(projectRoot, tracePath).steps);
-  const requestedTrace = traceArg ? loadTraceSteps(projectRoot, traceArg) : { steps: [], errors: [] };
-  const traceErrors = traceArg ? requestedTrace.errors : [];
-  const conformance = verifyTlaConformance(
-    db,
-    contract,
-    moduleFacts,
-    [...configuredTraceSteps, ...requestedTrace.steps],
-    checkedInvariants,
-  );
+  // Dedupe by resolved path first (P5.5 / followup #20): --trace naming the
+  // same file as an entry already in contract.traces must not double-count
+  // that file's steps.
+  const tracePaths = dedupeTracePaths(projectRoot, [...contract.traces, ...(traceArg ? [traceArg] : [])]);
+  const traceLoads = tracePaths.map((tracePath) => ({ tracePath, ...loadTraceSteps(projectRoot, tracePath) }));
+  const traceSteps = traceLoads.flatMap((load) => load.steps);
+  // Preserve pre-existing behavior: only the explicitly requested --trace
+  // file's load errors surface here (contract.traces load errors are a
+  // pre-existing silent gap, unrelated to this step).
+  const traceErrors = traceArg ? (traceLoads.find((load) => load.tracePath === traceArg)?.errors ?? []) : [];
+  const conformance = verifyTlaConformance(db, contract, moduleFacts, traceSteps, checkedInvariants);
   for (const error of [...loaded.errors, ...traceErrors]) {
     conformance.findings.push({
       id: `TLA-CONTRACT-${conformance.findings.length + 1}`,
@@ -353,6 +356,12 @@ export const tlaQueryCommandDescriptors: CommandDescriptor[] = [
         parsePositiveInteger,
       ),
       option('--trace <file>', 'Runtime trace JSON file to check against the mapping'),
+      option(
+        '--next <operator>',
+        'trace-check: next-state operator the harness requires between states (default Next; use for dual-spec models, e.g. NextCurrent)',
+        undefined,
+        'Next',
+      ),
       option('--allow-unknown', 'Exit zero when only unknown findings remain'),
       option('--out <path>', 'Output directory (scaffold) or file (instrument)'),
       option('--module-name <name>', 'Module name for scaffolded specs'),
@@ -367,6 +376,7 @@ export const tlaQueryCommandDescriptors: CommandDescriptor[] = [
       'scip-query tla verify specs/Queue.tla --map specs/Queue.scip-tla.json',
       'scip-query tla scaffold src/queue/store.ts',
       'scip-query tla trace-check specs/Queue.tla --trace traces/run1.json',
+      'scip-query tla trace-check specs/DualSpec.tla --trace traces/run1.json --next NextCurrent',
       'scip-query tla verify specs/Queue.tla --timeout-ms 300000',
       'scip-query tla verify specs/Queue.tla --full',
       'scip-query tla fetch-tools',
