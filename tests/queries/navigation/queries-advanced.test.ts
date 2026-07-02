@@ -50,7 +50,9 @@ describe('advanced queries', () => {
   });
 
   it('finds structural drift across layers and unique deps', () => {
-    const summary = queries.drift(db);
+    // includePatternDeviations: true — 21.2 flipped the default to opt-in
+    // (low precision at scale); this test asserts the opted-in behavior.
+    const summary = queries.drift(db, { includePatternDeviations: true });
 
     expect(summary.results.length).toBeGreaterThan(0);
     expect(summary.layerViolations).toBeGreaterThan(0);
@@ -75,14 +77,23 @@ describe('advanced queries', () => {
   });
 
   it('honors the minimum sibling threshold for pattern deviations', () => {
-    const summary = queries.drift(db, { minDeviation: 6 });
+    const summary = queries.drift(db, { minDeviation: 6, includePatternDeviations: true });
 
     expect(summary.patternDeviations).toBe(0);
     expect(summary.layerViolations).toBeGreaterThan(0);
   });
 
+  it('does not include pattern deviations by default (21.2: opt-in via --patterns)', () => {
+    const summary = queries.drift(db);
+
+    expect(summary.patternDeviations).toBe(0);
+    expect(summary.results).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: 'pattern-deviation' })]),
+    );
+  });
+
   it('can skip pattern deviations for health-style drift summaries', () => {
-    const publicSummary = queries.drift(db);
+    const publicSummary = queries.drift(db, { includePatternDeviations: true });
     const healthStyleSummary = queries.drift(db, { includePatternDeviations: false });
 
     expect(publicSummary.patternDeviations).toBeGreaterThan(0);
@@ -96,6 +107,18 @@ describe('advanced queries', () => {
     );
     expect(healthStyleSummary.layerViolations).toBe(publicSummary.layerViolations);
     expect(healthStyleSummary.unusedImports).toBe(publicSummary.unusedImports);
+  });
+
+  it('caps results with -n/--limit and reports totalResults when truncated (21.2)', () => {
+    const full = queries.drift(db, { includePatternDeviations: true });
+    const capped = queries.drift(db, { includePatternDeviations: true, limit: 1 });
+
+    expect(full.results.length).toBeGreaterThan(1);
+    expect(capped.results).toHaveLength(1);
+    expect(capped.totalResults).toBe(full.results.length);
+    // Counts describe the full population, not just the shown slice.
+    expect(capped.layerViolations).toBe(full.layerViolations);
+    expect(capped.patternDeviations).toBe(full.patternDeviations);
   });
 
   it('reports dataflow through definition, usage, producer, and consumer sites', () => {

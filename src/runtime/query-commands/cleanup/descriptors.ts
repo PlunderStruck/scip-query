@@ -387,7 +387,8 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'drift',
     command: 'drift [module]',
-    description: 'Detect heuristic drift candidates: unused imports, layer violations, and pattern deviations',
+    description:
+      'Detect heuristic drift candidates: unused imports and layer violations by default; pass --patterns for pattern deviations too',
     options: withJsonOption([
       option(
         '--min-deviation <n>',
@@ -395,6 +396,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
         parsePositiveInteger,
         5,
       ),
+      option(
+        '--patterns',
+        'Also include pattern-deviation findings ("only sibling importing X") — off by default: low precision at scale (21.2 calibration)',
+        undefined,
+        false,
+      ),
+      option('-n, --limit <n>', 'Number of results', parseInteger, 50),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
     ]),
     heuristicLabel: 'drift candidates',

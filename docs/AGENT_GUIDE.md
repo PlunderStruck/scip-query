@@ -235,9 +235,9 @@ Numeric thresholds below are recommended starting points for review sessions; co
 
 9. **Fix pattern drift**
    ```bash
-   scip-query drift
+   scip-query drift --patterns
    ```
-   Files that deviate from their directory's typical dependency pattern. Bring them into line with their neighbors.
+   Files that deviate from their directory's typical dependency pattern. Bring them into line with their neighbors. `--patterns` is opt-in (off by default since 21.2 calibration found this channel low-precision at scale) — treat hits as leads to confirm, not findings.
 
 10. **Remove redundant re-exports**
     ```bash
@@ -298,9 +298,9 @@ Numeric thresholds below are recommended starting points for review sessions; co
 
 5. **Structural drift**
    ```bash
-   scip-query drift
+   scip-query drift --patterns
    ```
-   Files with unused imports, layer violations, or dependency profiles that deviate from their neighbors.
+   Files with unused imports, layer violations, or dependency profiles that deviate from their neighbors. `--patterns` opts into the deviation channel (off by default since 21.2 calibration); layer violations and unused imports print either way.
 
 ### Quality report template
 
@@ -348,10 +348,10 @@ Numeric thresholds below are recommended starting points for review sessions; co
 
 3. **Re-check structural drift around the changed area**
    ```bash
-   scip-query drift
+   scip-query drift --patterns
    scip-query change-surface <changed-file>
    ```
-   Verify the change did not introduce new dependency-pattern outliers and understand the remaining blast radius.
+   Verify the change did not introduce new dependency-pattern outliers and understand the remaining blast radius. `--patterns` opts into the deviation channel (off by default since 21.2 calibration).
 
 ---
 

@@ -35,6 +35,8 @@ export interface DriftSummary {
   unusedImports: number;
   layerViolations: number;
   patternDeviations: number;
+  /** Total results before `limit` was applied — set only when truncated. */
+  totalResults?: number;
 }
 
 /**
@@ -58,21 +60,38 @@ export interface DriftSummary {
 // intentionally assembled in one place.
 export function drift(
   db: ScipDatabase,
-  opts?: { scope?: string; minDeviation?: number; semantic?: boolean; includePatternDeviations?: boolean },
+  opts?: {
+    scope?: string;
+    minDeviation?: number;
+    semantic?: boolean;
+    /**
+     * Pattern-deviation ("only sibling importing X") is opt-in as of the
+     * 21.2 calibration retune — external calibration measured 0/10 and 1/8
+     * actionable on Vega_2.0/Stable_Management respectively (894 and 233
+     * same-shaped findings drowning the accurate layer-violation channel).
+     * Default false. `includePatternDeviations: true` restores the old
+     * always-on behavior for exploration/opt-in callers.
+     */
+    includePatternDeviations?: boolean;
+    /** Cap on `results` after all three families are combined. Default 50. */
+    limit?: number;
+  },
 ): DriftSummary {
-  const { scope, minDeviation = 5 } = opts ?? {};
+  const { scope, minDeviation = 5, limit = 50 } = opts ?? {};
   const includeSemantic = opts?.semantic !== false;
-  const includePatternDeviations = opts?.includePatternDeviations !== false;
+  const includePatternDeviations = opts?.includePatternDeviations === true;
   const index = new ProjectIndex(db);
 
   // Build file dep graph (which files depend on which)
   const depGraph = index.fileDependencyGraph(scope);
 
-  return summarizeDrift([
+  const summary = summarizeDrift([
     ...unusedImportDrift(db, depGraph, { scope, semantic: includeSemantic }),
     ...layerViolationDrift(depGraph),
     ...(includePatternDeviations ? patternDeviationDrift(depGraph, minDeviation) : []),
   ]);
+  if (limit <= 0 || summary.results.length <= limit) return summary;
+  return { ...summary, results: summary.results.slice(0, limit), totalResults: summary.results.length };
 }
 
 // ── Helpers ────────────────────────────────────────────────

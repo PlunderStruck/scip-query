@@ -466,6 +466,8 @@ export const handleDrift = budgetedReportCommand('drift', {
       scope: optionalStringArg(args, 0),
       minDeviation: definedNumberOption(opts, 'minDeviation', 5),
       semantic: budget.semantic,
+      includePatternDeviations: booleanOptionValue(opts, 'patterns'),
+      limit: definedLimitOption(opts, 'limit', 50),
     }),
   emptyMessage: (summary) => (summary.results.length === 0 ? 'No drift detected.' : undefined),
   heuristicLabel: 'drift candidates',
@@ -488,7 +490,7 @@ export const handleDrift = budgetedReportCommand('drift', {
       (r) => r.file,
     );
     console.log(
-      `\n${summary.unusedImports} unused import(s), ${summary.layerViolations} layer violation(s), ${summary.patternDeviations} pattern deviation(s)`,
+      `\n${summary.unusedImports} unused import(s), ${summary.layerViolations} layer violation(s), ${summary.patternDeviations} pattern deviation(s)${summary.totalResults ? ` — showing ${summary.results.length} of ${summary.totalResults} (use -n to change)` : ''}`,
     );
   },
 });

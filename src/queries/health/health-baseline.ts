@@ -117,10 +117,14 @@ export function collectBaselineFindings(db: ScipDatabase, opts: { scope?: string
     findings.push(`stale:${candidate.file}:${candidate.shortName}`);
   }
 
+  // Baseline finding identities must cover every result, not just the CLI's
+  // 21.2 default display cap, or findings beyond the cap would silently
+  // vanish from the baseline and re-appear as "new" on the next diff-gate run.
   for (const result of drift(db, {
     scope,
     ...HEALTH_DETECTOR_PROFILES.drift,
     includePatternDeviations: false,
+    limit: Number.POSITIVE_INFINITY,
   }).results) {
     findings.push(`drift:${result.kind}:${result.file}:${result.dep}`);
   }
