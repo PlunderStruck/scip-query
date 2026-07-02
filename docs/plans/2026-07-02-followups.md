@@ -52,13 +52,31 @@ up, write a real plan section (`concrete-plan`), and implement independently.
    regression fixture (`tests/queries/cleanup/dead-vue-script-setup.test.ts`).
    Source: `docs/validation/2026-07-01-external-calibration-stable-management.md` §6, item 2.
 
-4. **`vue-large-view-pressure` blind to delegated-composable architecture (Stable).** The
-   detector counts template + inline/external `<script>` LOC but stops at the immediate
-   `src="..."` file; it never follows a second hop into a composable the script delegates
-   `setup:` to. 0/0 findings on Stable despite `complexity-hotspots` independently surfacing five
-   500-1,300 LOC `useXViewController` composables backing exactly the views this detector should
-   have caught.
+4. **RESOLVED (2026-07-02, followup-batch). `vue-large-view-pressure` blind to
+   delegated-composable architecture (Stable).** The detector counts template + inline/external
+   `<script>` LOC but stops at the immediate `src="..."` file; it never follows a second hop into
+   a composable the script delegates `setup:` to. 0/0 findings on Stable despite
+   `complexity-hotspots` independently surfacing five 500-1,300 LOC `useXViewController`
+   composables backing exactly the views this detector should have caught.
    Source: `docs/validation/2026-07-01-external-calibration-stable-management.md` §6, item 3.
+   Fix: `src/source/vue/vue-profile.ts` — `VueComponentBehaviorProfile` gained
+   `delegatedComposableLines`/`delegatedComposablePaths`, computed by
+   `resolveDelegatedComposables` (`vue-profile.ts:161-177`): for each `use*` name the setup script
+   actually *invokes* (`scriptFacts.composables`, already invocation-filtered — an imported-but-
+   unused composable doesn't count), find its matching import and resolve the specifier via the
+   shared `resolveImportPath` (handles both inline `<script setup>` and external `<script src>`,
+   since `VueScriptImportFact.sourcePath` already points at whichever one the import statement
+   lives in), then sum the resolved file's LOC. One hop only by construction — the composable
+   file's own imports are never inspected. Kept as new fields rather than folded into the existing
+   shared `totalLines` (used by `vue-composable-candidates`/`vue-component-duplicates` for a
+   different purpose) to avoid changing those detectors' behavior; only
+   `src/queries/frontend/vue-large-view-pressure.ts` opts in, folding
+   `delegatedComposableLines` into its `total` pressure axis and reported `totalLines`.
+   Test: `tests/queries/frontend/vue-large-view-pressure-delegation.test.ts` — a small view
+   delegating to a 900-line `useHorseReportViewController.ts` now fires (verified the assertion
+   fails without the fix, by temporarily short-circuiting `resolveDelegatedComposables` to
+   `{lines:0,paths:[]}`); the same view without delegation stays at 0 findings; a view that
+   imports but never calls the composable also stays at 0 findings.
 
 5. **`similar`: sibling-helper fingerprint saturation (Vega).** Callee-fingerprint similarity
    saturates to 1.0 when a file has a small shared-helper vocabulary — the top-scored Vega pair

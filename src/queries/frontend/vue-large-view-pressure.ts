@@ -16,6 +16,7 @@ export type VueLargeViewRecommendationKind =
 
 export interface VueLargeViewPressureResult {
   file: string;
+  /** Component/SFC + external-script lines, plus one hop of delegated `use*` composable LOC. */
   totalLines: number;
   sfcLines: number;
   templateLines: number;
@@ -24,6 +25,9 @@ export interface VueLargeViewPressureResult {
   externalScriptLines: number;
   externalScriptPaths: string[];
   customBlockLines: number;
+  /** LOC of imported `use*` composables this view's script actually invokes (one hop, not recursed). */
+  delegatedComposableLines: number;
+  delegatedComposablePaths: string[];
   dominantPressure: VueLargeViewPressureAxis;
   pressureKinds: VueLargeViewPressureAxis[];
   contextKind: VueLargeViewContextKind;
@@ -92,9 +96,10 @@ function pressureResult(
     : pressure.pressureKinds;
   const contextKind = vueContextKind(profile.file);
   const recommendationKind = recommendationKindFor(dominant, contextKind);
+  const totalLines = profile.totalLines + profile.delegatedComposableLines;
   return {
     file: profile.file,
-    totalLines: profile.totalLines,
+    totalLines,
     sfcLines: profile.sfcLines,
     templateLines: profile.templateLines,
     scriptLines: profile.scriptLines,
@@ -102,13 +107,15 @@ function pressureResult(
     externalScriptLines: profile.externalScriptLines,
     externalScriptPaths: profile.externalScriptPaths,
     customBlockLines: profile.customBlockLines,
+    delegatedComposableLines: profile.delegatedComposableLines,
+    delegatedComposablePaths: profile.delegatedComposablePaths,
     dominantPressure: dominant,
     pressureKinds,
     contextKind,
     recommendationKind,
     recommendation: recommendationFor(recommendationKind, contextKind),
     reasons,
-    loc: profile.totalLines,
+    loc: totalLines,
   };
 }
 
@@ -121,9 +128,12 @@ function vuePressureAxes(thresholds: {
   return [
     {
       axis: 'total',
-      value: (profile) => profile.totalLines,
+      value: (profile) => profile.totalLines + profile.delegatedComposableLines,
       qualifies: (_profile, value) => value >= thresholds.minTotalLines,
-      reason: (_profile, value) => `${value} total component line(s)`,
+      reason: (profile, value) =>
+        profile.delegatedComposableLines > 0
+          ? `${value} total line(s) (${profile.totalLines} component + ${profile.delegatedComposableLines} delegated composable line(s) across ${profile.delegatedComposablePaths.length} file(s))`
+          : `${value} total component line(s)`,
       dominantEligible: false,
     },
     {

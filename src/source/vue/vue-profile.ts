@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { createSourceFileCache } from '../../storage/per-db-cache.js';
+import { resolveImportPath } from '../../resolution/import-path-resolver.js';
 import { getSourceFiles } from '../source-fileset.js';
 import { getSourceText } from '../source-text.js';
 import type { VueTemplateFacts } from './vue-template.js';
@@ -27,6 +28,17 @@ export interface VueComponentBehaviorProfile {
   externalScriptLines: number;
   externalScriptPaths: string[];
   customBlockLines: number;
+  /**
+   * LOC of `use*` composables the component's setup script imports *and
+   * actually invokes*, resolved one hop from the (inline or external)
+   * script that delegates to them — never recursed into the composables'
+   * own imports. Kept separate from `totalLines` (used by other
+   * detectors — vue-composable-candidates, vue-component-duplicates — for
+   * a different purpose: this component's own size) so only
+   * vue-large-view-pressure opts into folding it into its pressure total.
+   */
+  delegatedComposableLines: number;
+  delegatedComposablePaths: string[];
 }
 
 // scip-query: ignore-stale - Vue profile options mirror the evidence-product boundary used by callers.
@@ -104,6 +116,11 @@ function buildVueComponentBehaviorProfileUncached(
   const scriptLines = scriptFacts.lineCount;
   const styleLines = sfc.styles.reduce((sum, block) => sum + vueBlockLineCount(block), 0);
   const customBlockLines = sfc.customBlocks.reduce((sum, block) => sum + vueBlockLineCount(block), 0);
+  const { lines: delegatedComposableLines, paths: delegatedComposablePaths } = resolveDelegatedComposables(
+    db,
+    file,
+    scriptFacts,
+  );
 
   return {
     file,
@@ -123,7 +140,43 @@ function buildVueComponentBehaviorProfileUncached(
     externalScriptLines: scriptFacts.externalLineCount,
     externalScriptPaths: scriptFacts.externalScriptPaths,
     customBlockLines,
+    delegatedComposableLines,
+    delegatedComposablePaths,
   };
+}
+
+/**
+ * Resolves each `use*` composable the setup script actually invokes
+ * (`scriptFacts.composables`) back to the file its matching import
+ * statement points at, and sums that file's line count. One hop only: the
+ * composable file's own imports/composables are never inspected — a
+ * composable delegating to a further composable is out of scope for this
+ * detector (`vue-large-view-pressure`'s job is to catch a *component*
+ * hiding size behind a delegate, not to walk an arbitrary composable
+ * dependency graph). Composables with no resolvable local import (globals,
+ * `node_modules` packages, unresolved specifiers) are silently skipped —
+ * only project-local delegation is counted, since there is no LOC to
+ * charge for anything else.
+ */
+function resolveDelegatedComposables(
+  db: ScipDatabase,
+  file: string,
+  scriptFacts: VueScriptFacts,
+): { lines: number; paths: string[] } {
+  const resolvedPaths = new Set<string>();
+  for (const composableName of scriptFacts.composables) {
+    const importFact = scriptFacts.imports.find((entry) => entry.local === composableName);
+    if (!importFact) continue;
+    const resolved = resolveImportPath(db, importFact.sourcePath, importFact.source);
+    if (!resolved || resolved === file) continue;
+    resolvedPaths.add(resolved);
+  }
+  const paths = [...resolvedPaths].sort();
+  const lines = paths.reduce((sum, path) => {
+    const source = getSourceText(db, path);
+    return sum + (source ? source.split('\n').length : 0);
+  }, 0);
+  return { lines, paths };
 }
 
 function cloneVueComponentBehaviorProfile(profile: VueComponentBehaviorProfile): VueComponentBehaviorProfile {
@@ -137,6 +190,7 @@ function cloneVueComponentBehaviorProfile(profile: VueComponentBehaviorProfile):
     templateLocalNames: [...profile.templateLocalNames],
     componentNames: [...profile.componentNames],
     externalScriptPaths: scriptFacts.externalScriptPaths,
+    delegatedComposablePaths: [...profile.delegatedComposablePaths],
   };
 }
 
