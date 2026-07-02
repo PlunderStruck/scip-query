@@ -104,10 +104,7 @@
     {
       "name": "diff-gate validation ledger",
       "reason": "docs/analyzer-validation-ledger.md is explicitly anchored to src/queries/impact/diff-gate.ts (its own 'Source Anchors' table cites diffGate() and DIFF_GATE_CHECKS by file:line) -- it exists specifically to track diff-gate's check validation status, so the two changing together is the ledger doing its job, not a hidden coupling.",
-      "files": [
-        "docs/analyzer-validation-ledger.md",
-        "src/queries/impact/diff-gate.ts"
-      ]
+      "files": ["docs/analyzer-validation-ledger.md", "src/queries/impact/diff-gate.ts"]
     },
     {
       "name": "cleanup detector family",
@@ -128,35 +125,22 @@
     {
       "name": "graph summary query family",
       "reason": "These query files report related fan-in, fan-out, hotspot, and bottleneck graph summaries.",
-      "files": [
-        "src/queries/graph/bottlenecks.ts",
-        "src/queries/graph/fan.ts",
-        "src/queries/graph/hotspots.ts"
-      ]
+      "files": ["src/queries/graph/bottlenecks.ts", "src/queries/graph/fan.ts", "src/queries/graph/hotspots.ts"]
     },
     {
       "name": "reference navigation query family",
       "reason": "These query files expose nearby views of definition and reference navigation.",
-      "files": [
-        "src/queries/navigation/refs.ts",
-        "src/queries/navigation/trace.ts"
-      ]
+      "files": ["src/queries/navigation/refs.ts", "src/queries/navigation/trace.ts"]
     },
     {
       "name": "package build surface",
       "reason": "Package metadata and bundle entrypoints intentionally move together when the published CLI surface changes.",
-      "files": [
-        "package.json",
-        "tsup.config.ts"
-      ]
+      "files": ["package.json", "tsup.config.ts"]
     },
     {
       "name": "command reference documentation",
       "reason": "The generated command reference and query implementations move together when public command behavior changes.",
-      "files": [
-        "docs/COMMAND_REFERENCE.md",
-        "src/queries/cleanup/doc-drift.ts"
-      ]
+      "files": ["docs/COMMAND_REFERENCE.md", "src/queries/cleanup/doc-drift.ts"]
     },
     {
       "name": "2026-06-28 optimization evidence ledger",
@@ -198,10 +182,7 @@
     {
       "name": "runtime command dispatch",
       "reason": "Command descriptors and command execution intentionally move together when CLI registration or dispatch behavior changes.",
-      "files": [
-        "src/runtime/commands/command-descriptors.ts",
-        "src/runtime/commands/command-execution.ts"
-      ]
+      "files": ["src/runtime/commands/command-descriptors.ts", "src/runtime/commands/command-execution.ts"]
     }
   ],
   "coverageContracts": [
@@ -233,11 +214,6 @@
     }
   ],
   "docs": {
-    "snapshotPaths": [
-      "docs/benchmarks/**",
-      "docs/validation/**",
-      "docs/reviews/**",
-      "docs/plans/**"
-    ]
+    "snapshotPaths": ["docs/benchmarks/**", "docs/validation/**", "docs/reviews/**", "docs/plans/**"]
   }
 }
