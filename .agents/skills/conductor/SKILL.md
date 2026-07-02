@@ -6,14 +6,14 @@ description: Plan and conduct multi-step engineering programs like a skeptical p
 # conductor
 
 This skill is how to run a *program* of work — planning, delegation, review,
-and closure — not how to write one change plan (that is `concrete-plan`,
-which this skill uses for individual changes).
+and closure — not how to write one change plan (use a dedicated planning
+skill such as `concrete-plan` for individual changes when one is available).
 
 ## The Three Laws
 
 1. **A green result you have never seen fail is unverified.** Applies to
-   tests, gates, reports from other agents, and your own checks. (See
-   `scip-integrity-audit` — the same law aimed at code.)
+   tests, gates, reports from other agents, and your own checks. (Where
+   available, `scip-integrity-audit` is the same law aimed at code.)
 2. **A plan is a contract for a less-capable executor, not a note to self.**
    If a competent-but-uninspired agent could not execute a step without
    guessing, the step is not finished being written.
