@@ -13,6 +13,24 @@
   },
   "suppressions": [
     {
+      "id": "SQ1B9176E44C22",
+      "check": "echo",
+      "file": "src/queries/health/finding-outcome-ledger.ts",
+      "reason": "Accepted trivial-helper echo: ledgerKey() is a 1-line \"join two strings with a NUL separator into a map key\" helper. The repo already has 5+ independent versions of this exact pattern per-domain (symbolNoiseFor, sourceFingerprintDefinitionKey, fileLeafKey, ...); extracting one shared helper across unrelated modules is a separate cross-cutting refactor out of scope for remediation plan 3."
+    },
+    {
+      "id": "SQ95FA9596A6D2",
+      "check": "co-change-partner",
+      "file": "src/storage/evidence-cache.ts",
+      "reason": "Accepted: evidence-cache.ts and docs/benchmarks/2026-06-28-vega-current-scoreboard.md are both members of the pre-existing \"2026-06-28 optimization evidence ledger\" declaredCoupling group. The scoreboard doc is a dated snapshot (matches docs.snapshotPaths); co-change-partner does not yet apply the snapshot-doc policy the way doc-reference/doc-drift do (18.2 scoped that exemption to those two checks only) — extending it to co-change-partner is a reasonable follow-up but out of scope here."
+    },
+    {
+      "id": "SQ15F514D7AF85",
+      "check": "new-dead",
+      "file": "src/queries/health/finding-outcome-ledger.ts",
+      "reason": "trailingResolutionRate() is exported pure API consumed by tests/queries/health/finding-outcome-ledger.test.ts; tests are not SCIP-indexed so exported test-only helpers always trip new-dead (same precedent as knownSrcLayers in cc71f38). Kept exported and separately testable per the Testability Design table in the remediation plan."
+    },
+    {
       "id": "SQB3D28507126F",
       "check": "echo",
       "file": "src/analysis/glob-match.ts",

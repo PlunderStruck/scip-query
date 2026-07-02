@@ -217,3 +217,13 @@ guide reference remains current after the health output gained explicit
 validation-basis and source-facts disclosure fields. The analyzer inventory
 still points readers at the health command implementation that owns score
 phases, suppressions, and validation reporting.
+
+## 2026-07-01 Remediation Plan 3 Follow-Up
+
+The `src/queries/impact/diff-gate.ts` and `src/queries/health/health.ts`
+citations remain accurate after remediation plan 3 (detection primitives).
+`DIFF_GATE_CHECKS` gained `twin-partner` (advisory — a same-(near-)name twin
+left behind by a one-sided edit) and `coverage-contract` (enumeration-rot:
+a configured `coverageContracts` key set drifted from its ground-truth
+source). `HEALTH_PHASES` gained `coverage-contracts`. Both files still own
+their respective canonical lists; only the list contents grew.

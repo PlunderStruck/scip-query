@@ -313,3 +313,13 @@ configuration example remains current after the health command added
 validation-basis disclosure and parser-unavailable reporting. The validation
 ledger's health examples still cite the command surface that computes and
 renders those analyzer signals.
+
+## 2026-07-01 Remediation Plan 3 Follow-Up
+
+The `diffGate()` and health citations remain accurate after remediation plan 3
+(detection primitives). Default diff-gate now also runs `twin-partner`
+(advisory) and `coverage-contract`; `src/runtime/commands/query-command-specs.ts`
+still owns the public query order. Health gained a `coverage-contracts` phase
+and a `detectorPrecision` field (per-check finding-outcome stats from the new
+finding-outcome ledger) — both paths still compute and render through the same
+command surfaces cited above.
