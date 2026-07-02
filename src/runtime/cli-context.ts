@@ -2,7 +2,7 @@ import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { ScipDatabase } from '../storage/db.js';
 import { createGitignoreFilter } from '../source/gitignore-filter.js';
-import { loadProjectConfig, resolveIndexPaths } from './config.js';
+import { loadProjectConfig, resolveIndexStoragePaths } from './config.js';
 import type { ProjectConfig, ScipQueryConfig, WatcherStatus } from '../domain/types.js';
 
 export function resolveProjectRoot(): string {
@@ -12,7 +12,7 @@ export function resolveProjectRoot(): string {
 interface CliProjectContext {
   projectRoot: string;
   config: ProjectConfig;
-  paths: ReturnType<typeof resolveIndexPaths>;
+  paths: ReturnType<typeof resolveIndexStoragePaths>;
   dbPath: string;
   dbPathSource: 'env' | 'configured' | 'root-fallback';
   rootFallbackWarning?: string;
@@ -20,7 +20,7 @@ interface CliProjectContext {
 
 export function resolveCliProjectContext(projectRoot = resolveProjectRoot()): CliProjectContext {
   const config = loadProjectConfig(projectRoot);
-  const paths = resolveIndexPaths(projectRoot, config);
+  const paths = resolveIndexStoragePaths(projectRoot, config);
   const envDbPath = process.env['SCIP_QUERY_INDEX_DB'];
   if (envDbPath) return { projectRoot, config, paths, dbPath: envDbPath, dbPathSource: 'env' };
   if (existsSync(paths.dbPath)) return { projectRoot, config, paths, dbPath: paths.dbPath, dbPathSource: 'configured' };

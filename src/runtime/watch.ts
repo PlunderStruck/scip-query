@@ -9,7 +9,7 @@ import type {
   SupportedLanguage,
   TypeScriptProjectMode,
 } from '../domain/types.js';
-import { loadProjectConfig, resolveWatchConfig, resolveIndexPaths } from './config.js';
+import { loadProjectConfig, resolveWatchConfig, resolveIndexStoragePaths } from './config.js';
 import { createGitignoreFilter } from '../source/gitignore-filter.js';
 
 export interface WatcherOptions {
@@ -258,7 +258,7 @@ export class Watcher {
 
       const loadedConfig = loadProjectConfig(this.projectRoot);
       const latestConfig = Object.keys(loadedConfig).length > 0 ? loadedConfig : this.config;
-      const latestIndexPaths = resolveIndexPaths(this.projectRoot, latestConfig);
+      const latestIndexPaths = resolveIndexStoragePaths(this.projectRoot, latestConfig);
       const latestTypeScript = latestConfig.indexer?.typescript;
       const latestClojure = latestConfig.indexer?.clojure;
       const child = fork(new URL('./reindex-worker.js', import.meta.url).pathname, [], {

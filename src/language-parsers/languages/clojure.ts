@@ -47,13 +47,13 @@ export function parseClojureImports(db: ScipDatabase, _importerPath: string, sou
 
     if (REQUIRE_CLAUSES.has(clauseHead)) {
       for (const spec of parseRequireClause(clause.children.slice(1))) {
-        imports.push(...namespaceImports(db, spec, body));
+        imports.push(...clojureNamespaceImports(db, spec, body));
       }
       continue;
     }
 
     if (clauseHead === ':import') {
-      for (const imported of parseImportClause(clause.children.slice(1))) {
+      for (const imported of clojureParseImportClause(clause.children.slice(1))) {
         imports.push(imported);
       }
     }
@@ -66,7 +66,7 @@ function isNamespaceForm(form: ClojureForm): form is CollectionForm {
   return form.type === 'list' && atomText(form.children[0]) === 'ns';
 }
 
-function namespaceImports(db: ScipDatabase, spec: NamespaceImportSpec, body: string): ParsedSourceImport[] {
+function clojureNamespaceImports(db: ScipDatabase, spec: NamespaceImportSpec, body: string): ParsedSourceImport[] {
   const sourcePath = resolveClojureImportPath(db, spec.namespace);
   const usagePrefix = spec.alias ?? spec.namespace;
   const usedMembers = collectQualifiedMembers(body, usagePrefix);
@@ -172,7 +172,7 @@ function parseRequireVector(vector: CollectionForm, prefix: string | null): Name
   return [spec];
 }
 
-function parseImportClause(entries: ClojureForm[]): ParsedSourceImport[] {
+function clojureParseImportClause(entries: ClojureForm[]): ParsedSourceImport[] {
   const imports: ParsedSourceImport[] = [];
   for (const entry of entries) {
     if (entry.type === 'atom') {

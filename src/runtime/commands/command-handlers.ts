@@ -22,7 +22,7 @@ import {
 import {
   addFindingSuppression,
   loadProjectConfig,
-  resolveIndexPaths,
+  resolveIndexStoragePaths,
   resolveWatchConfig,
   initProjectConfig,
   validateProjectConfig,
@@ -110,7 +110,7 @@ export async function handleReindex(rawOpts: unknown): Promise<void> {
   const opts = commandOptions(rawOpts);
   const projectRoot = resolveProjectRoot();
   const config = loadProjectConfig(projectRoot);
-  const paths = resolveIndexPaths(projectRoot, config);
+  const paths = resolveIndexStoragePaths(projectRoot, config);
   try {
     const languages = supportedLanguages(stringArrayOptionValue(opts, 'language'));
     const result = await reindex({
@@ -337,7 +337,7 @@ export async function handleBench(rawOpts: unknown): Promise<void> {
 
 async function measureColdIndex(projectRoot: string): Promise<BenchIndexRun> {
   const config = loadProjectConfig(projectRoot);
-  const paths = resolveIndexPaths(projectRoot, config);
+  const paths = resolveIndexStoragePaths(projectRoot, config);
   const cacheDir = dirname(paths.dbPath);
   const backupDir = `${cacheDir}.bench-backup-${Date.now()}`;
   restoreBenchIndexCache(cacheDir);
@@ -453,7 +453,7 @@ function parseBenchRestoreMarker(payload: string): BenchRestoreMarker | null {
 // scip-query: ignore-similar - warm and cold benchmark paths stay parallel so timing comparisons stay honest.
 async function measureWarmIndex(projectRoot: string): Promise<BenchIndexRun> {
   const config = loadProjectConfig(projectRoot);
-  const paths = resolveIndexPaths(projectRoot, config);
+  const paths = resolveIndexStoragePaths(projectRoot, config);
   const result = await measureAsync(() =>
     reindex({
       projectRoot,
@@ -1007,7 +1007,7 @@ export function handleWatch(rawOpts: unknown): void {
     return;
   }
   config.watch = watchConfig;
-  const paths = resolveIndexPaths(projectRoot, config);
+  const paths = resolveIndexStoragePaths(projectRoot, config);
   const watchLock = acquireWatchProcessLock(join(dirname(paths.dbPath), WATCH_LOCK_FILE), projectRoot);
   if (!watchLock.acquired) {
     console.error(watchLock.message);

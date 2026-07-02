@@ -471,9 +471,13 @@ export function resolveCacheDir(projectRoot: string, config?: ProjectConfig): st
 }
 
 /**
- * Resolve all paths for a project's index files.
+ * Resolve all storage paths for a project's index files (cache dir, SQLite
+ * db, .scip index, meta.json). Distinct from resolution/path-resolver.ts's
+ * resolveIndexedPaths, which resolves a file-pattern query against the
+ * already-indexed documents table -- a different job that happens to share
+ * "resolve" + "index" + "paths" vocabulary.
  */
-export function resolveIndexPaths(
+export function resolveIndexStoragePaths(
   projectRoot: string,
   config?: ProjectConfig,
 ): {

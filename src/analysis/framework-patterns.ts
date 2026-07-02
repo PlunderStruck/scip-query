@@ -208,10 +208,17 @@ function mayContainJsExclusion(source: string): boolean {
  * Honor `// scip-query: ignore-dead` (or `// scip-query-ignore: dead-code`)
  * comments immediately before a definition. Lets users suppress known
  * false positives without modifying the detector's heuristics.
+ *
+ * Scoped to this file's own detector categories (dead/stale) only --
+ * distinct from source/source-text.ts's SUPPRESS_COMMENT_RE, which
+ * recognizes the full category list (wrapper, passthrough, drift, extract,
+ * similar, ...) and is anchored to a comment-marker line prefix because it
+ * scans raw text lines. This one runs against AST comment-node text the
+ * caller has already isolated, so no line-prefix anchor is needed.
  */
-const SUPPRESS_COMMENT_RE = /scip-query[\s:-]*ignore[\s:-]*(?:dead(?:-code)?|stale)?/i;
+const DEAD_STALE_SUPPRESS_COMMENT_RE = /scip-query[\s:-]*ignore[\s:-]*(?:dead(?:-code)?|stale)?/i;
 function isSuppressionComment(text: string): boolean {
-  return SUPPRESS_COMMENT_RE.test(text);
+  return DEAD_STALE_SUPPRESS_COMMENT_RE.test(text);
 }
 
 function collectSuppressionExclusions(

@@ -8,7 +8,7 @@ import type { DiffGateResult } from '../queries/impact/diff-gate.js';
 import { createGitignoreFilter } from '../source/gitignore-filter.js';
 import { escapeRegex } from '../core/regex-utils.js';
 import { ScipDatabase } from '../storage/db.js';
-import { loadProjectConfig, resolveIndexPaths, resolveWatchConfig } from './config.js';
+import { loadProjectConfig, resolveIndexStoragePaths, resolveWatchConfig } from './config.js';
 import { getIndexFreshness } from './index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from './project-readiness.js';
 import { formatGateBlockReason, isStopHookReentry, readHookInput } from './agent-setup.js';
@@ -520,7 +520,7 @@ async function refreshIndexForHookIfNeeded(
   workspace: {
     projectRoot: string;
     config: ProjectConfig;
-    paths: ReturnType<typeof resolveIndexPaths>;
+    paths: ReturnType<typeof resolveIndexStoragePaths>;
   },
   event: string,
 ): Promise<string | undefined> {
@@ -551,7 +551,7 @@ async function refreshIndexForHookIfNeeded(
 function renderSessionStartContext(
   projectRoot: string,
   config: ProjectConfig,
-  paths: ReturnType<typeof resolveIndexPaths>,
+  paths: ReturnType<typeof resolveIndexStoragePaths>,
 ): string {
   const freshness = getIndexFreshness(projectRoot, config, paths);
   const readiness = getProjectReadiness(projectRoot, config);
@@ -702,7 +702,7 @@ function resolveHookWorkspace(payload: HookPayload):
   | {
       projectRoot: string;
       config: ProjectConfig;
-      paths: ReturnType<typeof resolveIndexPaths>;
+      paths: ReturnType<typeof resolveIndexStoragePaths>;
     }
   | undefined {
   const cwd = typeof payload.cwd === 'string' ? payload.cwd : process.cwd();
@@ -711,7 +711,7 @@ function resolveHookWorkspace(payload: HookPayload):
 
   try {
     const config = loadProjectConfig(projectRoot);
-    const paths = resolveIndexPaths(projectRoot, config);
+    const paths = resolveIndexStoragePaths(projectRoot, config);
     return { projectRoot, config, paths };
   } catch {
     return undefined;
@@ -730,7 +730,7 @@ function findGitRoot(cwd: string): string | undefined {
 }
 
 function withWorkspaceDb<T>(
-  workspace: { projectRoot: string; config: ProjectConfig; paths: ReturnType<typeof resolveIndexPaths> },
+  workspace: { projectRoot: string; config: ProjectConfig; paths: ReturnType<typeof resolveIndexStoragePaths> },
   run: (db: ScipDatabase) => T,
 ): T {
   const dbConfig: ScipQueryConfig = {
