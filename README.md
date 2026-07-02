@@ -20,22 +20,30 @@
   <a href="https://www.apache.org/licenses/LICENSE-2.0"><img alt="License" src="https://img.shields.io/npm/l/scip-query.svg"></a>
 </p>
 
-`scip-query` is a TypeScript CLI and npm package that turns SCIP indexes, git history, language-aware source analysis, and your repository's own checks into commands AI coding agents can use before, during, and after a change.
+`scip-query` gives AI coding agents compiler-grade evidence about your repository and mechanical gates on what they produce. Under the hood it is a TypeScript CLI and npm package built on SCIP indexes, git history, language-aware source analysis, and your repository's own checks.
 
 Agents are effective at editing the code in front of them. They are less reliable at preserving a whole-repository model across a long task: they miss existing helpers, plan from partial context, migrate only some call sites, overlook files coupled only by history, and declare a diff finished while it still adds duplication, dead code, or stale documentation.
 
 `scip-query` gives them a repeatable operating loop: map the target and its blast radius, build a concrete plan from repository evidence, check for reuse before adding a concept, detect unfinished migrations and hidden coupling, and gate the final diff. It does not replace the compiler, tests, or review; it makes structural evidence and repository checks easy for agents to invoke and report.
 
-## The Agent Loop
+## How Agents Use It
 
-| Phase    | What the agent needs to establish                                                 | Commands                                                                   |
-| -------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Orient   | What exists, where it is defined, and what depends on it                          | `system`, `trace`, `affected`, `plan-context`                              |
-| Plan     | Externally consumed surfaces, change scope, blast radius, and historical partners | `surface`, `change-surface`, `co-change`                                   |
-| Reuse    | Whether the helper, component, hook, or composable already exists                 | `similar`, `recent-duplicates`                                             |
-| Finish   | Whether an extraction or migration reached every relevant site                    | `incomplete-migration`, `unused-params`                                    |
-| Verify   | What the diff affected and whether covered structural checks regressed            | `diff-impact --json`, `doc-drift`, `diff-gate --json`, `health --baseline` |
-| Clean up | Candidate removals and newly exposed dead-code cascades                           | `cleanup-plan --verify`                                                    |
+Two layers, wired by `scip-query setup`:
+
+**Ambient** — no invocation required. Session-start hooks supply index state and routing context; the Stop-hook / pre-commit **diff gate** checks every finished diff for echoes of existing code, unfinished migrations, missing co-change partners, stale doc citations, and new dead code — and feeds findings back to the agent.
+
+**Invoked** — the agent routes work through skills, each carrying its own short command list so it never navigates the full CLI:
+
+| Phase     | Skill                                                    | Commands underneath (also usable directly)      |
+| --------- | -------------------------------------------------------- | ----------------------------------------------- |
+| Orient    | `scip-explore`                                            | `system`, `trace`, `plan-context`, `call-graph` |
+| Plan      | `scip-concrete-plan` (one change) · `scip-conductor` (a program) | `plan-context`, `change-surface`, `co-change`   |
+| Reuse     | (taught in-loop by the planning skills)                   | `similar`, `duplicate-bodies`, `recent-duplicates` |
+| Implement | your agent + the post-change check for the change type    | `incomplete-migration`, `unused-params`, `co-change` |
+| Verify    | `scip-verify` (closeout) + the ambient diff gate          | `diff-impact`, `diff-gate`, `health --baseline` |
+| Clean up  | `scip-cleanup-audit` → `scip-cleanup-improve`             | `cleanup-plan --verify`, `dead`, `twin-drift`   |
+
+Interrogation lenses go deeper on demand: `scip-integrity-audit` ("is this implementation real?"), `scip-twin-drift`, `scip-claim-audit`, `scip-probe-reachability`, and `scip-maintainability`. The full map with essential differences is in [Bundled skills](#bundled-skills); every command remains directly invocable for humans and scripts.
 
 React and Vue repositories get additional framework-aware checks for repeated component/template structure, hook/composable behavior, and large-component or large-view pressure. These extend the same reuse and completion workflow; the core graph, history, planning, cleanup, and diff-gate commands are not frontend-specific.
 
