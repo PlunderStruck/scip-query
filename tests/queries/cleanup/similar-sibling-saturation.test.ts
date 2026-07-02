@@ -220,13 +220,7 @@ describe('similarAll sibling-helper fingerprint saturation (db-backed)', () => {
       const file = `src/padding${index}.ts`;
       builder.document(documentId, 'typescript', file);
       const paddingBuilder = paddingBuilders[index]!;
-      const names = [
-        `paddingScenario${index}`,
-        `pad${index}A`,
-        `pad${index}B`,
-        `pad${index}C`,
-        `pad${index}D`,
-      ];
+      const names = [`paddingScenario${index}`, `pad${index}A`, `pad${index}B`, `pad${index}C`, `pad${index}D`];
       for (const name of names) {
         builder.symbol(symbolId, `scip-typescript npm fixture 1.0.0 ${file}/\`${name}\`().`, name, 12);
         const range = paddingBuilder.ranges.get(name)!;

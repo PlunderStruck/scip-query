@@ -320,7 +320,8 @@ function sourceFactCapability(
     if (probe === 'unavailable') {
       return {
         status: 'unavailable',
-        reason: 'Clojure built-in reader is not available in this environment; no source-fallback evidence can be produced.',
+        reason:
+          'Clojure built-in reader is not available in this environment; no source-fallback evidence can be produced.',
       };
     }
     return {

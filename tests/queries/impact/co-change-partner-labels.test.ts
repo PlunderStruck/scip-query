@@ -146,9 +146,7 @@ describe('co-change partner labels', () => {
 
     const bounded = coChange(db, undefined, { minTogether: 4, minConfidence: 0.75, limit: 10, scanLimit: 1 });
     expect(bounded.findings).toHaveLength(1);
-    expect(bounded.findings[0]?.together).toBe(
-      Math.max(...unbounded.findings.map((finding) => finding.together)),
-    );
+    expect(bounded.findings[0]?.together).toBe(Math.max(...unbounded.findings.map((finding) => finding.together)));
   });
 
   it('carries partner class and declared-coupling suggestions into diff-gate findings', () => {

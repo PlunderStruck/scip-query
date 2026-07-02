@@ -120,7 +120,11 @@ export function groupTwins(
      * `allTwinGroups` wires the real, source/import-backed implementation
      * via `buildDelegationChecker`.
      */
-    isDelegatePair?: (from: TwinDriftRecord, to: TwinDriftRecord, clusterMembers: readonly TwinDriftRecord[]) => boolean;
+    isDelegatePair?: (
+      from: TwinDriftRecord,
+      to: TwinDriftRecord,
+      clusterMembers: readonly TwinDriftRecord[],
+    ) => boolean;
   } = {},
 ): TwinGroup[] {
   const minSimilarity = opts.minSimilarity ?? 0.3;
@@ -397,8 +401,7 @@ function isThinForwarderBody(rawSnippet: string): boolean {
 }
 
 const CONTROL_FLOW_PATTERN = /\b(?:if|else|for|while|switch|try|catch|do)\b/;
-const FORWARDING_CALL_PATTERN =
-  /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*|\[[^[\]]*\])*\((?:[^()]|\([^()]*\))*\)$/;
+const FORWARDING_CALL_PATTERN = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*|\[[^[\]]*\])*\((?:[^()]|\([^()]*\))*\)$/;
 
 function isForwardingCallStatement(statement: string): boolean {
   const trimmed = statement

@@ -69,7 +69,9 @@ function createHealthFullFixtureDb(dbPath: string): void {
   // health's scanLimit capping, not similarity correctness). One document
   // per caller keeps every caller a same-file sibling group of one, so the
   // new rule never engages here.
-  const insertDocument = sqliteDb.prepare(`INSERT INTO documents (id, language, relative_path) VALUES (?, 'typescript', ?)`);
+  const insertDocument = sqliteDb.prepare(
+    `INSERT INTO documents (id, language, relative_path) VALUES (?, 'typescript', ?)`,
+  );
   insertDocument.run(1, 'src/similar-burst-helpers.ts');
   let nextDocumentId = 2;
 
