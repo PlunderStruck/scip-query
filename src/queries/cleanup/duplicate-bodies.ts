@@ -127,15 +127,33 @@ function duplicateBodyEntry(
 }
 
 export function normalizedBodyForDefinition(db: ScipDatabase, definition: IndexedDefinition): string | null {
-  const source = getSourceText(db, definition.relativePath);
-  if (!source) return null;
-  const lines = source.split(/\r?\n/);
-  const snippet = lines.slice(definition.startLine, definition.endLine + 1).join('\n');
+  const snippet = definitionSourceSnippet(db, definition);
+  if (!snippet) return null;
   const normalizedBody = normalizeBody(snippet);
   return normalizedBody || null;
 }
 
-function extractImplementationBody(source: string): string {
+/**
+ * Raw source snippet spanning a definition's line range, before any
+ * normalization. Shared by every detector that needs the definition's text
+ * for its own comparison logic (e.g. twin-drift's token-level diffing) —
+ * reuse this instead of re-deriving "read file, slice lines" per detector.
+ */
+export function definitionSourceSnippet(db: ScipDatabase, definition: IndexedDefinition): string | null {
+  const source = getSourceText(db, definition.relativePath);
+  if (!source) return null;
+  const lines = source.split(/\r?\n/);
+  return lines.slice(definition.startLine, definition.endLine + 1).join('\n');
+}
+
+/**
+ * Isolate a callable's implementation body (brace-delimited block, or the
+ * expression after `=>`) from its raw source snippet. Exported so other
+ * detectors comparing bodies (twin-drift) reuse this instead of
+ * re-implementing body extraction — that duplication is exactly the "twin
+ * drift" defect class this file's sibling detector hunts.
+ */
+export function extractImplementationBody(source: string): string {
   const firstBrace = source.indexOf('{');
   const lastBrace = source.lastIndexOf('}');
   if (firstBrace >= 0 && lastBrace > firstBrace) {

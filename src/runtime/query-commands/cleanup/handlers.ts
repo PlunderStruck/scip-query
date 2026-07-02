@@ -562,6 +562,31 @@ export const handleDuplicateBodies = budgetedListCommand('duplicate-bodies', {
   after: (groups) => console.log(`\n${groups.length} group(s) found.`),
 });
 
+export const handleTwinDrift = budgetedListCommand('twin-drift', {
+  query: ({ db, opts, budget }) =>
+    queries.twinDrift(db, {
+      scope: stringOptionValue(opts, 'scope'),
+      minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.3),
+      includeHomonyms: booleanOptionValue(opts, 'includeHomonyms'),
+      limit: definedLimitOption(opts, 'limit', 20),
+      scanLimit: budget.scanLimit,
+    }),
+  format: (group) => {
+    const head = `\n${group.leaf}  (${group.relationship}, ${group.members.length} functions, ${Math.round(group.maxDivergence * 100)}% divergence)`;
+    const body = group.members
+      .map(
+        (entry) =>
+          `  ${displayPathRange(entry.file, entry.startLine, entry.endLine)}  ${entry.shortName}  (${entry.loc} LOC)`,
+      )
+      .join('\n');
+    const divergence = group.firstDivergentTokens ? `\n  first divergent tokens: ${group.firstDivergentTokens}` : '';
+    return `${head}\n${body}${divergence}`;
+  },
+  emptyMessage: () => 'No divergent twin groups found.',
+  heuristicLabel: 'twin drift candidates',
+  after: (groups) => console.log(`\n${groups.length} group(s) found.`),
+});
+
 export const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, args, opts, budget }) => {
   const result = queries.cleanupPlan(db, {
     scope: stringOptionValue(opts, 'scope'),

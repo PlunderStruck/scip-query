@@ -265,6 +265,10 @@
       "import": "./dist/queries/trace.js",
       "types": "./dist/queries/trace.d.ts"
     },
+    "./queries/twin-drift": {
+      "import": "./dist/queries/twin-drift.js",
+      "types": "./dist/queries/twin-drift.d.ts"
+    },
     "./queries/unused-params": {
       "import": "./dist/queries/unused-params.js",
       "types": "./dist/queries/unused-params.d.ts"

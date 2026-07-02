@@ -118,6 +118,7 @@ scip-query complexity-hotspots # Find heuristic complexity hotspot candidates fr
 scip-query convergence <symbol1> <symbol2> # Deprecated alias for similar <symbol1> <symbol2> --plan
 scip-query redundant-reexports # Find barrel re-exports that nobody imports through
 scip-query duplicate-bodies # Find exact duplicate small-body candidates across files
+scip-query twin-drift # Twin drift candidates: same-name (or near-name) functions across files with diverged bodies
 scip-query similar-signatures # Find functions with near-identical type signatures (same shape)
 ```
 

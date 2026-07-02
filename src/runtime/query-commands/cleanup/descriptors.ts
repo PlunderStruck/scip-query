@@ -32,6 +32,7 @@ import {
   handleConvergence,
   handleSimilarSignatures,
   handleDuplicateBodies,
+  handleTwinDrift,
 } from './handlers.js';
 import {
   handleReactComponentDuplicates,
@@ -514,6 +515,28 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     heuristic: { label: 'duplicate body candidates' },
     renderShape: 'list',
     handler: handleDuplicateBodies,
+  }),
+  cleanupCommand({
+    id: 'twin-drift',
+    command: 'twin-drift',
+    description: 'Twin drift candidates: same-name (or near-name) functions across files with diverged bodies',
+    options: withJsonOption([
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option(
+        '--min-similarity <n>',
+        'Minimum normalized-token Jaccard similarity to report as divergent (0-1)',
+        parseNumber,
+        0.3,
+      ),
+      option('--include-homonyms', 'Also report same-name pairs below the similarity threshold (likely coincidental)'),
+      option('-n, --limit <n>', 'Number of groups', parseInteger, 20),
+      option('--full', 'Run unbounded semantic analysis on large indexes'),
+    ]),
+    budget: 'candidate-scan',
+    heuristic: { label: 'twin drift candidates' },
+    evidence: 'heuristic',
+    renderShape: 'list',
+    handler: handleTwinDrift,
   }),
   cleanupCommand({
     id: 'similar-signatures',

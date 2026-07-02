@@ -72,6 +72,7 @@ const queryCommandOrder = [
   'slice',
   'redundant-reexports',
   'duplicate-bodies',
+  'twin-drift',
   'similar-signatures',
 ] as const;
 
