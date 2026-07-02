@@ -94,6 +94,16 @@ NextVulnerable == RunDiffGate \/ DecideExitVulnerable \/ Terminal
 CurrentSpec == Init /\ [][NextCurrent]_vars
 VulnerableSpec == Init /\ [][NextVulnerable]_vars
 
+\* `scip-query tla trace-check`'s generated harness hardcodes `EXTENDS
+\* <spec>` + a bare `Next` operator (src/tla/trace-spec.ts generateTraceSpec)
+\* — it has no way to select among several named Next relations, which is
+\* exactly what the Current/Vulnerable pairing above needs. This alias
+\* exists solely so trace-check can validate a recorded trace against the
+\* real, currently-shipped policy; it does not change CurrentSpec/
+\* VulnerableSpec themselves. See report: real trace-check gap for
+\* dual-spec (Vega SubscriptionLifecycle-style) models.
+Next == NextCurrent
+
 TypeOK ==
   /\ stage \in {"start", "computed", "decided"}
   /\ planState \in {"pending", "ok-empty", "ok-changes", "git-failed"}
