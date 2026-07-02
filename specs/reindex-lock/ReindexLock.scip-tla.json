@@ -1,0 +1,93 @@
+{
+  "module": "specs/reindex-lock/ReindexLock.tla",
+  "config": "specs/reindex-lock/ReindexLock.cfg",
+  "scope": ["src/reindex/index.ts", "src/runtime/watch.ts"],
+  "variables": {
+    "lockOwner": {
+      "code": ["src/reindex/index.ts/ReindexLockMetadata#pid"],
+      "aliases": ["pid", "existing.pid", "metadata.pid"]
+    },
+    "phase": {
+      "code": ["src/domain/maintenance-types.ts/LastRefreshMetadata#result"],
+      "aliases": ["result"]
+    },
+    "published": {
+      "code": ["src/reindex/index.ts/ReindexMetadata#updatedAt"],
+      "aliases": ["updatedAt"]
+    }
+  },
+  "actions": {
+    "Acquire": {
+      "code": ["src/reindex/index.ts/acquireReindexLock", "src/reindex/index.ts/tryAcquireReindexLock"],
+      "reads": ["lockOwner", "phase"],
+      "writes": ["lockOwner", "phase"],
+      "waive": {
+        "reads": ["phase"],
+        "writes": ["phase"],
+        "reason": "phase is a modeling abstraction over the acquire/run/publish pipeline; LastRefreshMetadata#result only records the terminal outcome of a completed run (written by buildLastRefresh inside reindex()'s success/catch paths), not the transition into 'Running' that acquireReindexLock/tryAcquireReindexLock perform. No stored field observes mid-flight phase."
+      }
+    },
+    "PreemptSucceeds": {
+      "code": ["src/reindex/index.ts/acquireReindexLock", "src/reindex/index.ts/terminateReindexLockOwner"],
+      "reads": ["lockOwner", "phase"],
+      "writes": ["lockOwner", "phase"],
+      "waive": {
+        "reads": ["phase"],
+        "writes": ["phase", "lockOwner"],
+        "reason": "same phase-abstraction gap as Acquire for phase. lockOwner's write on this path is rmSync(lockPath) followed by a retry through tryAcquireReindexLock's own pid assignment on the NEXT loop iteration (a different, already-covered line range) — acquireReindexLock's preemption branch itself only deletes the file, it does not textually assign `pid`, so static scanning cannot see this specific write."
+      }
+    },
+    "PreemptFails": {
+      "code": ["src/reindex/index.ts/acquireReindexLock", "src/reindex/index.ts/terminateReindexLockOwner"],
+      "reads": ["lockOwner", "phase"],
+      "writes": ["phase"],
+      "waive": {
+        "reads": ["phase"],
+        "writes": ["phase"],
+        "reason": "the fixed code throws instead of writing anything when termination is unconfirmed (src/reindex/index.ts, acquireReindexLock preemption branch); the model's phase['m'] := 'Failed' represents the caller's reindex() promise rejecting, which has no stored field — the thrown Error is the only evidence, observed only at the process boundary."
+      }
+    },
+    "Crash": {
+      "code": ["src/reindex/index.ts/isProcessAlive"],
+      "reads": ["lockOwner", "phase"],
+      "writes": ["lockOwner", "phase"],
+      "waive": {
+        "reads": ["lockOwner", "phase"],
+        "writes": ["lockOwner", "phase"],
+        "reason": "Crash models an external event (the owning process is killed and never runs reindex()'s finally-release), not code this system calls on itself. isProcessAlive is the detection function a later Acquire invokes to observe the crash (process.kill(pid,0), src/reindex/index.ts) — there is no stored variable for 'a process just died'; it is a spawn-boundary fact per the tla-model-system skill's waiver convention."
+      }
+    },
+    "Fail": {
+      "code": ["src/reindex/index.ts/reindex"],
+      "reads": ["lockOwner", "phase"],
+      "writes": ["lockOwner", "phase"],
+      "waive": {
+        "reads": ["phase", "lockOwner"],
+        "writes": ["phase", "lockOwner"],
+        "reason": "reindex()'s catch block writes LastRefreshMetadata#result='failed' (real evidence for the terminal write), but reading phase to decide the transition has no stored-field backing (phase-abstraction gap, as Acquire). lockOwner's release is releaseLock() in the finally block, a closure invocation with no textual assignment to `pid` in reindex()'s own body — the actual pid clearing happens inside tryAcquireReindexLock's returned closure (rmSync), a different code region."
+      }
+    },
+    "Publish": {
+      "code": ["src/reindex/index.ts/publishFreshReindexArtifacts"],
+      "reads": ["lockOwner", "phase"],
+      "writes": ["lockOwner", "phase", "published"],
+      "waive": {
+        "reads": ["lockOwner", "phase"],
+        "writes": ["phase", "lockOwner"],
+        "reason": "publishFreshReindexArtifacts writes ReindexMetadata#updatedAt (published) directly, but lockOwner release (releaseLock() inside reindex()'s finally block) and phase have no stored-field backing in this cited function's own range, per the phase-abstraction note above."
+      }
+    },
+    "Recycle": {
+      "code": ["src/reindex/index.ts/reindex"],
+      "reads": ["phase"],
+      "writes": ["phase"],
+      "waive": {
+        "reads": ["phase"],
+        "writes": ["phase"],
+        "reason": "Recycle represents a brand-new process invocation of reindex() starting up and becoming ready to acquire — there is no stored 'Idle' field; the model's phase is a pipeline-position abstraction, not literal code state, for every transition except the terminal LastRefreshMetadata#result write."
+      }
+    }
+  },
+  "invariants": ["TypeOK", "AtMostOneOwner", "NoTornPublish", "NoPublishWhileContended", "NoRunnerBlockedByStaleLock"],
+  "traces": []
+}
