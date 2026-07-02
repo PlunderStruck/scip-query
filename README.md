@@ -244,9 +244,41 @@ Heuristic detectors carry guardrails learned from real codebases: published `pac
 
 ## Agent Skills
 
-`scip-query install-skills` symlinks bundled skills into Claude Code, Codex, and shared agent roots (`~/.agents/skills/`) so they update automatically with the package. The `scip-query` router skill dispatches codebase work to specialists for setup/adoption, health audit and autonomous health improvement, hyper optimization, debugging, issue triage, HTML diagrams, API impact, exploration, planning, cleanup, doc reconciliation, directory-architecture review, maintainability review, React/Vue review, AI-rot cleanup, language playbooks, TLA model checks, and post-change verification.
+`scip-query install-skills` symlinks bundled skills into Claude Code, Codex, and shared agent roots (`~/.agents/skills/`) so they update automatically with the package. The `scip-query` router skill dispatches codebase work to the specialist below; when unsure which owns a task, start there.
 
-Three narrower lens skills cover specific evidence gaps: `scip-twin-drift` (find and resolve same-name functions across files whose bodies diverged), `scip-claim-audit` (classify whether an "available"/"verified"/"safe"/"PASS" claim in output is derived from a real check or merely asserted), and `scip-probe-reachability` (prove whether a parser/AST branch is actually reachable by running the real parser on minimal inputs).
+### Bundled skills
+
+One-line "essential difference" per skill — read this table before the Routes table in `skills/scip-query/SKILL.md` if two names sound alike.
+
+| Skill | Essential difference |
+| --- | --- |
+| `scip-query` | Router: dispatches codebase work to the specialist skill below. |
+| `scip-explore` | Understand before touching. |
+| `scip-concrete-plan` | Specify ONE change so an executor can't guess. |
+| `scip-conductor` | Run a multi-phase program (delegate, verify handoffs, pre-registered benchmarks). |
+| `scip-debug` | Root-cause a failure. |
+| `scip-triage-issue` | Package a report into an actionable issue+fix plan. |
+| `scip-verify` | Post-change closeout gate. |
+| `scip-cleanup-audit` | Rank findings, no edits. |
+| `scip-cleanup-improve` | Autonomously fix confirmed findings. |
+| `scip-maintainability` | Is this well-organized (scattered concepts, accidental variation)? |
+| `scip-integrity-audit` | Is this real (decorative checkers, faked implementations, dead fallback-hidden paths)? |
+| `scip-twin-drift` | Same-name implementations that drifted apart. |
+| `scip-claim-audit` | Status words derived vs asserted. |
+| `scip-probe-reachability` | Prove parser/AST branches actually fire. |
+| `scip-api-impact` | Blast radius before changing public surfaces. |
+| `scip-directory-architecture` | Folder/ownership layout. |
+| `scip-doc-reconcile` | Docs vs code drift. |
+| `scip-diagram` | Visual artifacts. |
+| `scip-react-maintainability` | Framework-specific reuse lens (React). |
+| `scip-vue-maintainability` | Framework-specific reuse lens (Vue). |
+| `scip-language-playbook` | Which commands per language. |
+| `scip-hyper-optimization` | Performance campaigns without output changes. |
+| `scip-tla-model-system` | Formal models tied to code evidence. |
+| `scip-setup` | Adopt or repair scip-query in a repo. |
+| `_shared` | Reference loaded by other skills, not user-invoked. |
+
+The confusable clusters, disambiguated: `scip-concrete-plan` (one change) vs `scip-conductor` (a program of changes with delegation); `scip-cleanup-audit` (report only) vs `scip-cleanup-improve` (autonomous fixing loop); `scip-verify` (did this specific change land safely) vs `scip-integrity-audit` (does this code actually work at all) vs `scip-maintainability` (is this well organized) vs `scip-twin-drift` (one drifted same-name pair specifically); `scip-directory-architecture` (folder ownership) vs `scip-maintainability` (deeper structural compression). `skills/scip-query/SKILL.md`'s Tie-Breaks section has the full routing logic.
 
 Project setup writes reviewable project-local lifecycle hooks for Codex and Claude Code (`.codex/hooks.json` and `.claude/settings.local.json` by default; `setup-hooks --shared` opts into `.claude/settings.json`). These hooks add scip-query context at session start, route prompts toward the right skill, and run an advisory Stop-hook wrapper around the diff gate only for that repository. The Stop hook sends feedback to the agent by default instead of blocking; set `SCIP_QUERY_STOP_HOOK_MODE=warn` for a warning-only hook response, or `SCIP_QUERY_STOP_HOOK_MODE=block` to enforce the gate. Set `SCIP_QUERY_SKIP_HOOK_INSTALL=1` or run `scip-query setup --no-hooks` to skip hook installation during setup, and run `scip-query setup-hooks --json` later to repair the current repo's hooks.
 
