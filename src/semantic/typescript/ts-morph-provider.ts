@@ -2,16 +2,13 @@ import { performance } from 'node:perf_hooks';
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { resolveImportPath } from '../../resolution/import-path-resolver.js';
+import { discoverWorkspacePackages, type WorkspacePackage } from '../../resolution/workspace-packages.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { cached } from './cache.js';
 import { definitionNodesForSourceFile } from './definition-node-matcher.js';
 import { findIndexedDefinitionNear, indexedDefinitionLeafMap } from './indexed-definitions.js';
 import { createTypeScriptSourceFiles } from './source-file-resolver.js';
-import {
-  discoverWorkspacePackages,
-  packageEntryCandidates,
-  workspacePackageNameForSpecifier,
-} from './workspace-packages.js';
+import { packageEntryCandidates, workspacePackageNameForSpecifier } from './workspace-packages.js';
 import { leafSuffix } from '../../symbols/symbol-parser.js';
 import {
   dedupeLocations,
@@ -22,7 +19,6 @@ import {
   toRelative,
   toSemanticLocation,
 } from './semantic-locations.js';
-import type { WorkspacePackage } from './workspace-packages.js';
 import type { Identifier, ImportDeclaration, Node, Project, SourceFile, ts } from 'ts-morph';
 import type {
   SemanticAvailability,
@@ -674,7 +670,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
     for (const declaration of sourceFile.getExportDeclarations()) {
       const moduleSpecifier = declaration.getModuleSpecifierValue();
       const sourcePath = moduleSpecifier ? resolveImportPath(this.db, entryFile, moduleSpecifier) : entryFile;
-      if (!sourcePath || !sourcePath.startsWith(`${pkg.sourceRootRelative}/`)) continue;
+      if (!sourcePath || !sourcePath.startsWith(`${pkg.relativeDir}/src/`)) continue;
 
       const namedExports = declaration.getNamedExports();
       if (namedExports.length === 0) {
