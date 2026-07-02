@@ -110,10 +110,10 @@ scip-query cleanup-apply # Apply a compiler-verified cleanup-plan batch to the w
 scip-query recent-duplicates # Directional duplicate candidates: recent code that re-implements established callable, React, or Vue code
 scip-query doc-drift [doc] # Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped
 scip-query unused-params # Speculative-generality candidates: trailing parameters no body ever uses (TS/JS)
-scip-query drift [module] # Detect heuristic drift candidates: unused imports, layer violations, and pattern deviations
-scip-query wrapper-candidates # Find heuristic wrapper candidates only called by one consumer
+scip-query drift [module] # Detect heuristic drift candidates: unused imports and layer violations by default; pass --patterns for pattern deviations too
+scip-query wrapper-candidates # Find heuristic wrapper candidates only called by one consumer (high false-positive rate on codebases with intentional layering/ambient types — treat as exploration, not findings)
 scip-query passthrough-candidates # Find heuristic passthrough candidates that forward to one callee
-scip-query stale-abstractions # Find heuristic stale abstraction candidates with 0-1 consumers
+scip-query stale-abstractions # Find heuristic stale abstraction candidates with 0-1 consumers (high false-positive rate on codebases with intentional layering/ambient types — treat as exploration, not findings)
 scip-query complexity-hotspots # Find heuristic complexity hotspot candidates from LOC x fan-in x fan-out
 scip-query convergence <symbol1> <symbol2> # Deprecated alias for similar <symbol1> <symbol2> --plan
 scip-query redundant-reexports # Find barrel re-exports that nobody imports through

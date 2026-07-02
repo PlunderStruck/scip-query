@@ -64,14 +64,14 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 | `recent-duplicates` | Directional duplicate candidates: recent code that re-implements established callable, React, or Vue code | `--window <n>`<br>`--min-similarity <n>`<br>`-n, --limit <n>`<br>`-s, --scope <path>`<br>`--full`<br>`--json` |
 | `doc-drift [doc]` | Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped | `-n, --limit <n>`<br>`--min-coupling <n>`<br>`--full`<br>`--json` |
 | `unused-params` | Speculative-generality candidates: trailing parameters no body ever uses (TS/JS) | `-s, --scope <path>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
-| `drift [module]` | Detect heuristic drift candidates: unused imports, layer violations, and pattern deviations | `--min-deviation <n>`<br>`--full`<br>`--json` |
-| `wrapper-candidates` | Find heuristic wrapper candidates only called by one consumer | `-s, --scope <path>`<br>`--max-loc <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
+| `drift [module]` | Detect heuristic drift candidates: unused imports and layer violations by default; pass --patterns for pattern deviations too | `--min-deviation <n>`<br>`--patterns`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
+| `wrapper-candidates` | Find heuristic wrapper candidates only called by one consumer (high false-positive rate on codebases with intentional layering/ambient types — treat as exploration, not findings) | `-s, --scope <path>`<br>`--max-loc <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
 | `passthrough-candidates` | Find heuristic passthrough candidates that forward to one callee | `-s, --scope <path>`<br>`--max-loc <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
-| `stale-abstractions` | Find heuristic stale abstraction candidates with 0-1 consumers | `-s, --scope <path>`<br>`--min-loc <n>`<br>`-n, --limit <n>`<br>`--include-low-confidence`<br>`--full`<br>`--json` |
+| `stale-abstractions` | Find heuristic stale abstraction candidates with 0-1 consumers (high false-positive rate on codebases with intentional layering/ambient types — treat as exploration, not findings) | `-s, --scope <path>`<br>`--min-loc <n>`<br>`-n, --limit <n>`<br>`--include-low-confidence`<br>`--full`<br>`--json` |
 | `complexity-hotspots` | Find heuristic complexity hotspot candidates from LOC x fan-in x fan-out | `-s, --scope <path>`<br>`--min-loc <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
 | `convergence <symbol1> <symbol2>` | Deprecated alias for similar <symbol1> <symbol2> --plan | `--full`<br>`--json` |
 | `redundant-reexports` | Find barrel re-exports that nobody imports through | `-s, --scope <path>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
-| `duplicate-bodies` | Find exact duplicate small-body candidates across files | `-s, --scope <path>`<br>`--max-loc <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
+| `duplicate-bodies` | Find exact duplicate small-body candidates across files | `-s, --scope <path>`<br>`--max-loc <n>`<br>`--min-loc <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
 | `twin-drift` | Twin drift candidates: same-name (or near-name) functions across files with diverged bodies | `-s, --scope <path>`<br>`--min-similarity <n>`<br>`--include-homonyms`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
 | `similar-signatures` | Find functions with near-identical type signatures (same shape) | `-s, --scope <path>`<br>`--min-loc <n>`<br>`--max-shape-frequency <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
 
