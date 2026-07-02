@@ -33,6 +33,7 @@ import {
   handleSimilarSignatures,
   handleDuplicateBodies,
   handleTwinDrift,
+  handleTwinAb,
 } from './handlers.js';
 import {
   handleReactComponentDuplicates,
@@ -548,6 +549,23 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     evidence: 'heuristic',
     renderShape: 'list',
     handler: handleTwinDrift,
+  }),
+  cleanupCommand({
+    id: 'twin-ab',
+    command: 'twin-ab <symbolA> <symbolB>',
+    description:
+      'Generate a behavioral A/B scaffold comparing two same-concept twins (scip-integrity-audit drill 5) — a ready-to-fill vitest file, not an auto-executor',
+    options: withJsonOption([
+      option(
+        '--out <path>',
+        'Output path for the generated vitest file (default: tests/generated/twin-ab/<a>-vs-<b>.test.ts)',
+      ),
+      option('--force', 'Overwrite an existing scaffold file at the output path'),
+    ]),
+    evidence: 'heuristic',
+    renderShape: 'custom',
+    docs: doc('Cleanup', ['scip-query twin-ab src/a.ts/escapeRegex src/b.ts/escapeRegExp']),
+    handler: handleTwinAb,
   }),
   cleanupCommand({
     id: 'similar-signatures',

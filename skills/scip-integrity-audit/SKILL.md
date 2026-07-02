@@ -7,6 +7,7 @@ commands:
   - scip-query trace <symbol>
   - scip-query call-graph <symbol>
   - scip-query twin-drift -s <scope> --json
+  - scip-query twin-ab <symbolA> <symbolB>
   - scip-query outline <file> --signatures
 ---
 
@@ -77,9 +78,11 @@ Complete only when every reported metric has two hand-verified samples.
 Where one concept is computed in more than one place, feed both the same
 input and require the same answer. `twin-drift` finds the same-name cases
 mechanically; for same-concept-different-name pairs, trace the concept's
-consumers with `refs` and compare implementations with `code`. Disagreement
-between twins means at least one is wrong — determine which before
-consolidating.
+consumers with `refs` and compare implementations with `code`. Once a pair
+is identified, `scip-query twin-ab <symbolA> <symbolB>` scaffolds a
+table-driven vitest file that imports both and asserts equal output —
+fill in the input table and run it. Disagreement between twins means at
+least one is wrong — determine which before consolidating.
 Complete only when every discovered twin pair has been compared on a shared
 input.
 

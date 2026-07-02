@@ -73,6 +73,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 | `redundant-reexports` | Find barrel re-exports that nobody imports through | `-s, --scope <path>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
 | `duplicate-bodies` | Find exact duplicate small-body candidates across files | `-s, --scope <path>`<br>`--max-loc <n>`<br>`--min-loc <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
 | `twin-drift` | Twin drift candidates: same-name (or near-name) functions across files with diverged bodies | `-s, --scope <path>`<br>`--min-similarity <n>`<br>`--include-homonyms`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
+| `twin-ab <symbolA> <symbolB>` | Generate a behavioral A/B scaffold comparing two same-concept twins (scip-integrity-audit drill 5) — a ready-to-fill vitest file, not an auto-executor | `--out <path>`<br>`--force`<br>`--json` |
 | `similar-signatures` | Find functions with near-identical type signatures (same shape) | `-s, --scope <path>`<br>`--min-loc <n>`<br>`--max-shape-frequency <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
 
 ### Graph
@@ -161,8 +162,8 @@ diff-gate-specific: as of this writing it already covers `dead`, `unused-imports
 Commands stay on the plain (unbudgeted) `dbCommand`/`listCommand`/`tableCommand`/`reportCommand`
 family — and so never emit `analysisBudget` — when their cost model has no candidate-count or
 semantic-enrichment knob for the budget to honestly describe: single-symbol/single-file lookups
-(`code`, `outline`, `fan-in`, `fan-out`, `coupling`), or whole-graph structural queries with their
-own independent bound (`cycles`, `deep-chains`). Adding the `analysisBudget` key to one of those
+(`code`, `outline`, `fan-in`, `fan-out`, `coupling`, `twin-ab`), or whole-graph structural queries
+with their own independent bound (`cycles`, `deep-chains`). Adding the `analysisBudget` key to one of those
 without also making the underlying query respect `scanLimit`/`semantic` would disclose a cap that
 isn't real — forbidden by the same "no silent/false disclosure" rule this contract exists to
 enforce (see `docs/plans/2026-07-02-followups.md` items 6 and 9).

@@ -5,7 +5,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { isClojureMacroDefinition, isLiteralPassthrough } from '../../source/ast.js';
 import { getSourceLines } from '../../source/source-text.js';
 import { escapeRegex as escapeRegExp } from '../../core/regex-utils.js';
-import type { IndexedDefinition } from '../../domain/types.js';
+import type { IndexedDefinition, SymbolMatch } from '../../domain/types.js';
 import { isFunctionLikeSymbol, leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { compareDefinitionsBySmallestLoc, definitionLoc } from '../query-utils.js';
@@ -142,7 +142,13 @@ function publicFacadeEvidence(db: ScipDatabase, sym: IndexedDefinition): string[
   return [];
 }
 
-function isExportedDefinition(db: ScipDatabase, sym: IndexedDefinition): boolean {
+/**
+ * Textual export check: does `sym`'s declaration line carry an `export`
+ * keyword, or does the file re-export its leaf name via `export { name }`?
+ * Reused by `twin-ab` to refuse scaffolding a test against a symbol that
+ * cannot actually be imported.
+ */
+export function isExportedDefinition(db: ScipDatabase, sym: SymbolMatch): boolean {
   const lines = getSourceLines(db, sym.relativePath);
   if (lines.length === 0) return false;
   const declarationWindow = lines.slice(Math.max(0, sym.startLine - 2), sym.startLine + 1).join('\n');

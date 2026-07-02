@@ -73,6 +73,7 @@ const queryCommandOrder = [
   'redundant-reexports',
   'duplicate-bodies',
   'twin-drift',
+  'twin-ab',
   'similar-signatures',
 ] as const;
 

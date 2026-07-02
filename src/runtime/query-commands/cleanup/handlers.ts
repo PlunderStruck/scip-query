@@ -1,5 +1,8 @@
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, relative } from 'node:path';
 import type { DeadOptions } from '../../../domain/types.js';
 import * as queries from '../../../queries/index.js';
+import { resolveProjectPath } from '../../../tla/model-contract.js';
 import { resolveProjectRoot } from '../../cli-context.js';
 import {
   applyCleanupBatches,
@@ -597,6 +600,42 @@ export const handleTwinDrift = budgetedListCommand('twin-drift', {
   emptyMessage: () => 'No divergent twin groups found.',
   heuristicLabel: 'twin drift candidates',
   after: (groups) => console.log(`\n${groups.length} group(s) found.`),
+});
+
+export const handleTwinAb = reportCommand<queries.TwinAbSuccess & { outPath: string }>({
+  commandName: 'twin-ab',
+  query: ({ db, args, opts }) => {
+    const refA = stringArg(args, 0);
+    const refB = stringArg(args, 1);
+    const outArg = stringOptionValue(opts, 'out') ?? queries.defaultTwinAbOutPath(refA, refB);
+    const outPath = resolveProjectPath(db.config.projectRoot, outArg);
+    if (!outPath) throw new Error(`twin-ab output path escapes the project root: ${outArg}`);
+
+    const outcome = queries.twinAb(db, refA, refB, outPath);
+    if (!outcome.ok) throw new Error(`twin-ab refused: ${outcome.reason}`);
+
+    const displayPath = relative(db.config.projectRoot, outPath);
+    if (!booleanOptionValue(opts, 'force') && existsSync(outPath)) {
+      throw new Error(`refusing to overwrite ${displayPath} (pass --force to replace twin-ab output)`);
+    }
+    mkdirSync(dirname(outPath), { recursive: true });
+    writeFileSync(outPath, outcome.testSource);
+    return { ...outcome, outPath: displayPath };
+  },
+  render: (result) => {
+    console.log(`\nWrote behavioral A/B scaffold: ${result.outPath}`);
+    console.log(
+      `  A: ${result.a.shortName}  (${displayPathRange(result.a.file, result.a.startLine, result.a.startLine)})`,
+    );
+    console.log(
+      `  B: ${result.b.shortName}  (${displayPathRange(result.b.file, result.b.startLine, result.b.startLine)})`,
+    );
+    const compatLabel =
+      result.signatureCompatible === null ? 'unknown' : result.signatureCompatible ? 'compatible' : 'MISMATCH';
+    console.log(`  Signature compatibility: ${compatLabel}`);
+    console.log(`\nFill in the TODO input table, then run: npx vitest run ${result.outPath}`);
+  },
+  toJson: (result) => result,
 });
 
 export const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, args, opts, budget }) => {

@@ -41,6 +41,7 @@ export { coChange } from './impact/co-change.js';
 export { docDrift } from './cleanup/doc-drift.js';
 export { duplicateBodies, exactDuplicateBodyMatches, normalizeBody, groupByHash } from './cleanup/duplicate-bodies.js';
 export { twinDrift, groupTwins, allTwinGroups } from './cleanup/twin-drift.js';
+export { twinAb, defaultTwinAbOutPath } from './cleanup/twin-ab.js';
 export { recentDuplicates } from './cleanup/recent-duplicates.js';
 export { planContext } from './impact/plan-context.js';
 export { checkHealthBaseline, collectBaselineFindings, writeHealthBaseline } from './health/health-baseline.js';
@@ -154,6 +155,7 @@ export type { CoChangeFinding, CoChangeResult } from './impact/co-change.js';
 export type { DocDriftFinding, DocDriftResult, DocDriftSubject, DocFileCitation } from './cleanup/doc-drift.js';
 export type { DuplicateBodyEntry, DuplicateBodyGroup } from './cleanup/duplicate-bodies.js';
 export type { TwinGroup, TwinMember, TwinRelationship, TwinDriftRecord } from './cleanup/twin-drift.js';
+export type { TwinAbOutcome, TwinAbSuccess, TwinAbRefusal, TwinAbSymbol } from './cleanup/twin-ab.js';
 export type {
   RecentDuplicateBasis,
   RecentDuplicateDomain,

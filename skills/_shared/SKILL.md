@@ -119,6 +119,7 @@ scip-query convergence <symbol1> <symbol2> # Deprecated alias for similar <symbo
 scip-query redundant-reexports # Find barrel re-exports that nobody imports through
 scip-query duplicate-bodies # Find exact duplicate small-body candidates across files
 scip-query twin-drift # Twin drift candidates: same-name (or near-name) functions across files with diverged bodies
+scip-query twin-ab <symbolA> <symbolB> # Generate a behavioral A/B scaffold comparing two same-concept twins (scip-integrity-audit drill 5) — a ready-to-fill vitest file, not an auto-executor
 scip-query similar-signatures # Find functions with near-identical type signatures (same shape)
 ```
 
