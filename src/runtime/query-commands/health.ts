@@ -17,7 +17,9 @@ const handleComplexity = budgetedDbCommand('complexity', ({ db, args, opts, budg
   const query = stringArg(args, 0);
   const result = queries.complexity(db, query, { semantic: budget.semantic });
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('complexity', args, opts, withSymbolResolutionJson(db, query, result, 'complexity'));
+    printJsonEnvelope('complexity', args, opts, withSymbolResolutionJson(db, query, result, 'complexity'), {
+      analysisBudget: budget.analysisBudget,
+    });
     return;
   }
   if (!result) return render.empty(symbolResolutionEmptyMessage(db, query, 'Symbol not found.'));

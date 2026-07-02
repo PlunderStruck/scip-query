@@ -29,7 +29,13 @@ const handlePlanContext = budgetedDbCommand('plan-context', ({ db, args, opts, b
 
   if (result.warnings.length === 1 && result.warnings[0] === 'No symbol, file, or module matched target.') {
     if (booleanOptionValue(opts, 'json')) {
-      printJsonEnvelope('plan-context', args, opts, { ...symbolResolutionJson(db, stringArg(args, 0)), ...result });
+      printJsonEnvelope(
+        'plan-context',
+        args,
+        opts,
+        { ...symbolResolutionJson(db, stringArg(args, 0)), ...result },
+        { analysisBudget: budget.analysisBudget },
+      );
       return;
     }
     return render.empty(symbolResolutionEmptyMessage(db, stringArg(args, 0)));
@@ -41,6 +47,7 @@ const handlePlanContext = budgetedDbCommand('plan-context', ({ db, args, opts, b
       args,
       opts,
       result.matched.symbol ? { ...symbolResolutionJson(db, stringArg(args, 0)), ...result } : result,
+      { analysisBudget: budget.analysisBudget },
     );
     return;
   }

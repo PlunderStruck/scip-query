@@ -2,7 +2,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import type { CommandHandler } from './command-descriptor-types.js';
 import type { CommandEvidenceTier } from './command-descriptor-types.js';
 import { withDb } from '../cli-context.js';
-import { commandAnalysisBudget, renderHeuristicNotice } from '../cli-support.js';
+import { commandAnalysisBudget, renderHeuristicNotice, type AnalysisBudgetDisclosure } from '../cli-support.js';
 import { render } from '../render.js';
 import type { ReportSection } from '../render.js';
 
@@ -274,7 +274,9 @@ function renderRows<Row, Ctx extends DbCommandContext>(
 function runCommandOutput<Output, Ctx extends DbCommandContext>(ctx: Ctx, spec: CommandOutputSpec<Output, Ctx>): void {
   const output = spec.query(ctx);
   if (booleanOptionValue(ctx.opts, 'json')) {
-    printJsonEnvelope(spec.commandName, ctx.args, ctx.opts, spec.toJson ? spec.toJson(output, ctx) : output);
+    printJsonEnvelope(spec.commandName, ctx.args, ctx.opts, spec.toJson ? spec.toJson(output, ctx) : output, {
+      analysisBudget: budgetedContextAnalysisBudget(ctx),
+    });
     return;
   }
   const emptyMessage = spec.emptyMessage?.(output, ctx);
@@ -288,11 +290,24 @@ function runCommandOutput<Output, Ctx extends DbCommandContext>(ctx: Ctx, spec: 
   spec.after?.(output, ctx);
 }
 
+/**
+ * Reads `ctx.budget.analysisBudget` when present (BudgetedCommandContext) —
+ * `undefined` on a plain DbCommandContext, or when the index is small enough
+ * that no cap engaged. Kept next to printJsonEnvelope so every JSON-emitting
+ * command that goes through the shared `runCommandOutput`/`renderRows`
+ * pipeline gets the disclosure "for free," the same way `evidence` does.
+ */
+function budgetedContextAnalysisBudget(ctx: DbCommandContext): AnalysisBudgetDisclosure | undefined {
+  const budget = (ctx as Partial<BudgetedCommandContext>).budget;
+  return budget?.analysisBudget;
+}
+
 export function printJsonEnvelope(
   command: string | undefined,
   args: readonly unknown[],
   options: CommandOptions,
   result: unknown,
+  extra: { analysisBudget?: AnalysisBudgetDisclosure } = {},
 ): void {
   const evidence = command ? commandEvidenceById.get(command) : undefined;
   console.log(
@@ -300,6 +315,7 @@ export function printJsonEnvelope(
       {
         command,
         ...(evidence ? { evidence } : {}),
+        ...(extra.analysisBudget ? { analysisBudget: extra.analysisBudget } : {}),
         args: jsonPositionals(args),
         options,
         result,

@@ -134,7 +134,7 @@ function formatCoChangeSubjectContext(context: {
 const handleChangeSurface = budgetedDbCommand('change-surface', ({ db, args, opts, budget }) => {
   const result = queries.changeSurface(db, stringArg(args, 0), { semantic: budget.semantic });
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('change-surface', args, opts, result);
+    printJsonEnvelope('change-surface', args, opts, result, { analysisBudget: budget.analysisBudget });
     return;
   }
   if (!result) return render.empty('File not found in index.');
@@ -156,7 +156,7 @@ const handleIncompleteMigration = budgetedDbCommand('incomplete-migration', ({ d
     semantic: budget.semantic,
   });
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('incomplete-migration', args, opts, result);
+    printJsonEnvelope('incomplete-migration', args, opts, result, { analysisBudget: budget.analysisBudget });
     if (result.available && result.findings.length > 0) process.exitCode = 1;
     return;
   }

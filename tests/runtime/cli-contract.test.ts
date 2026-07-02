@@ -197,6 +197,32 @@ describe('CLI contract', () => {
     expect(JSON.parse(log.mock.calls[1]![0] as string)).toMatchObject({ evidence: 'mixed' });
   });
 
+  it('omits analysisBudget when uncapped, and stamps it at the envelope top level when supplied', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    printJsonEnvelope('recent-duplicates', [], { json: true }, { rows: [] });
+    printJsonEnvelope(
+      'recent-duplicates',
+      [],
+      { json: true },
+      { rows: [] },
+      { analysisBudget: { scanLimit: 2500, semanticEnrichment: false, reason: 'large index default budget' } },
+    );
+
+    const uncapped = JSON.parse(log.mock.calls[0]![0] as string) as Record<string, unknown>;
+    expect(Object.hasOwn(uncapped, 'analysisBudget')).toBe(false);
+
+    const capped = JSON.parse(log.mock.calls[1]![0] as string) as Record<string, unknown>;
+    expect(capped['analysisBudget']).toEqual({
+      scanLimit: 2500,
+      semanticEnrichment: false,
+      reason: 'large index default budget',
+    });
+    // Same field the sibling `result` key sits at — not nested inside result,
+    // so it survives regardless of whether `result` is an array or object.
+    expect(Object.keys(capped)).toEqual(['command', 'evidence', 'analysisBudget', 'args', 'options', 'result']);
+  });
+
   it('treats --full as an unbounded result limit unless --limit is explicit', () => {
     expect(definedLimitOption({}, 'limit', 30)).toBe(30);
     expect(definedLimitOption({ full: true }, 'limit', 30)).toBe(Number.POSITIVE_INFINITY);

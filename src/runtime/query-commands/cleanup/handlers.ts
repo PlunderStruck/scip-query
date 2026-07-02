@@ -63,20 +63,26 @@ export const handleDead = budgetedDbCommand('dead', ({ db, args, opts, budget })
     loc: deadLoc + fiLoc,
   };
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('dead', args, opts, {
-      ...result,
-      shown: {
-        deadCode: shownDeadCode,
-        fileInternal: shownFileInternal,
+    printJsonEnvelope(
+      'dead',
+      args,
+      opts,
+      {
+        ...result,
+        shown: {
+          deadCode: shownDeadCode,
+          fileInternal: shownFileInternal,
+        },
+        shownCounts,
+        totals: {
+          total: result.counts.total,
+          deadCode: result.counts.deadCode,
+          fileInternal: result.counts.fileInternal,
+          loc: result.counts.loc,
+        },
       },
-      shownCounts,
-      totals: {
-        total: result.counts.total,
-        deadCode: result.counts.deadCode,
-        fileInternal: result.counts.fileInternal,
-        loc: result.counts.loc,
-      },
-    });
+      { analysisBudget: budget.analysisBudget },
+    );
     return;
   }
 
@@ -152,7 +158,7 @@ export const handleExtractCandidates = budgetedDbCommand('extract-candidates', (
     semantic: budget.semantic,
   });
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('extract-candidates', args, opts, results);
+    printJsonEnvelope('extract-candidates', args, opts, results, { analysisBudget: budget.analysisBudget });
     return;
   }
   if (results.length === 0) return render.empty('No extraction candidates found.');
@@ -184,7 +190,7 @@ export const handleLocalityCandidates = budgetedDbCommand('locality-candidates',
     architecturalBoundarySegments: db.config.locality?.architecturalBoundarySegments,
   });
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('locality-candidates', args, opts, results);
+    printJsonEnvelope('locality-candidates', args, opts, results, { analysisBudget: budget.analysisBudget });
     return;
   }
   if (results.length === 0) return render.empty('No locality candidates found.');
@@ -611,7 +617,7 @@ export const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, args, 
   }
   if (result.batches.length === 0) {
     if (wantsJson) {
-      printJsonEnvelope('cleanup-plan', args, opts, result);
+      printJsonEnvelope('cleanup-plan', args, opts, result, { analysisBudget: budget.analysisBudget });
       return;
     }
     return render.empty('Nothing deletable found — no graph-fact dead code to seed a cascade.');
@@ -620,7 +626,7 @@ export const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, args, 
   const verification = wantsVerify ? verifyCleanupPlan(projectRoot, result) : undefined;
 
   if (wantsJson) {
-    printJsonEnvelope('cleanup-plan', args, opts, { result, verification });
+    printJsonEnvelope('cleanup-plan', args, opts, { result, verification }, { analysisBudget: budget.analysisBudget });
     return;
   }
 
@@ -786,7 +792,7 @@ export const handleRecentDuplicates = budgetedDbCommand('recent-duplicates', ({ 
     semantic: budget.semantic,
   });
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('recent-duplicates', args, opts, result);
+    printJsonEnvelope('recent-duplicates', args, opts, result, { analysisBudget: budget.analysisBudget });
     return;
   }
   if (!result.available) return render.empty('No git history available (not a repository, or git missing).');

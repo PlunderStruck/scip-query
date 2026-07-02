@@ -124,7 +124,9 @@ const handleDataflow = budgetedDbCommand('dataflow', ({ db, args, opts, budget }
   const query = stringArg(args, 0);
   const result = queries.dataflow(db, query, { semantic: budget.semantic });
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('dataflow', args, opts, withSymbolResolutionJson(db, query, result, 'dataflow'));
+    printJsonEnvelope('dataflow', args, opts, withSymbolResolutionJson(db, query, result, 'dataflow'), {
+      analysisBudget: budget.analysisBudget,
+    });
     return;
   }
   if (!result) return render.empty(symbolResolutionEmptyMessage(db, query, 'No dataflow found.'));
@@ -157,7 +159,9 @@ const handleSlice = budgetedDbCommand('slice', ({ db, args, opts, budget }) => {
     semantic: budget.semantic,
   });
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('slice', args, opts, withSymbolResolutionJson(db, query, result, 'slice'));
+    printJsonEnvelope('slice', args, opts, withSymbolResolutionJson(db, query, result, 'slice'), {
+      analysisBudget: budget.analysisBudget,
+    });
     return;
   }
   if (!result) return render.empty(symbolResolutionEmptyMessage(db, query, 'No slice found.'));
