@@ -410,6 +410,29 @@ function validateCoverageContractSpec(
       path: `${path}.type`,
       message: `${unknownTypeMessage} Got: ${String(spec.type)}`,
     });
+    return;
+  }
+  // Per-type required fields: a spec that validates here must never crash
+  // the checker downstream (round-3: a contract missing mustEqual.path
+  // passed config-validate, then threw a raw TypeError in
+  // resolveContractSource).
+  const required: Record<string, string[]> = {
+    'object-literal-keys': ['identifier'],
+    'string-array': ['identifier'],
+    'markdown-list': ['marker'],
+    'top-level-dirs': ['path'],
+    'file-glob': ['pattern'],
+    'registered-commands': [],
+    'builtin-skills': [],
+  };
+  for (const field of required[spec.type] ?? []) {
+    if (typeof spec[field] !== 'string' || spec[field].length === 0) {
+      diagnostics.push({
+        level: 'error',
+        path: `${path}.${field}`,
+        message: `"${spec.type}" requires a non-empty string "${field}".`,
+      });
+    }
   }
 }
 

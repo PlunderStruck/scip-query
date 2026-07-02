@@ -112,3 +112,10 @@ up, write a real plan section (`concrete-plan`), and implement independently.
 14. **TLA one-hop callee effect derivation** — writes that happen one function away from the mapped action (e.g. the preemption path's pid assignment on the next `tryAcquireReindexLock` iteration) are statically invisible per-range; derive effects through one level of the call graph before falling back to waivers. Same evidence as #13.
 15. **TLA per-action trace coverage reporting** — `tla trace-check` should report which model actions the recorded traces exercised vs never observed, so pure modeling abstractions (e.g. `phase` variables with no code twin) get execution-proven and the permanently-waived set shrinks to genuine abstractions only. Target state: every mapping fact is statically verified, trace-verified, or waived-with-reason — with waivers reserved for abstraction, not reachability.
 
+16. **tla scaffold: class-field and cross-process state discovery** — scaffold only finds top-level module `let`s; class instance fields and fs-backed state are invisible, making it inapplicable to concurrency systems (2026-07-02 dogfood modeling, Model A).
+17. **TLA variable referents need a waiver escape** — `invalid-referent-kind`/`missing-referent` have no waive path, forcing proxy-ref workarounds for state materialized only via `process.exitCode` or literals (Model B).
+18. **TLA alias collisions across variables** — two variables sharing an alias (e.g. "findings") misattribute every matching write to both; detect and error on duplicate aliases at contract load.
+19. **TLA unmapped-write sweep granularity** — the sweep covers whole scope files rather than action ranges, forcing every touching function to be mapped; consider per-action scoping or a documented rationale.
+20. **tla trace inputs not deduplicated** — `--trace` + `contract.traces` naming the same file double-counts steps.
+21. **tla trace-check hardcodes `Next`** — incompatible with dual CurrentSpec/VulnerableSpec models; support `--next <operator>` (workaround: `Next == NextCurrent` alias).
+

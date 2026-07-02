@@ -14,7 +14,6 @@
     "dist/**/*.d.ts",
     "docs/assets/**/*",
     "docs/*.md",
-    "docs/plans/*.md",
     "scripts/build-scip-windows.mjs",
     "scripts/evidence-product-contract.mjs",
     "skills/**/*.md",

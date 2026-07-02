@@ -412,7 +412,7 @@ Query results are filtered through the project's `.gitignore`. If none exists, c
 - [Agent Guide](docs/AGENT_GUIDE.md): goal-oriented workflows for tracing, planning, cleanup, quality checks, and change verification.
 - [Command Reference](docs/COMMAND_REFERENCE.md): generated command syntax, descriptions, and options.
 - [Programmatic API](docs/API.md): using the query functions from TypeScript.
-- [Historical plans](docs/plans/): implementation notes and completed cleanup plans.
+- [Historical plans](https://github.com/PlunderStruck/scip-query/tree/main/docs/plans): implementation notes and completed cleanup plans.
 
 ## License
 
