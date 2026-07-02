@@ -128,6 +128,14 @@ export function coChange(
       // Same-stem siblings (Component.vue / .script.ts / .css) are one unit
       // split across files — expected coupling, not a hidden concept.
       if (isSameStemSibling(pair.fileA, pair.fileB)) continue;
+      // 21.2 calibration retune (external calibration: Vega_2.0 §5 —
+      // "suppress ... locale-sibling (locales/*.json) pairs by default — the
+      // 'hidden' premise fails when colocation already signals the
+      // coupling"). Per-locale resource files (locales/en/x.json vs
+      // locales/fr/x.json) are the same content in every language by
+      // design — the coupling is obvious from the directory structure, not
+      // a hidden concept worth surfacing.
+      if (isLocaleSiblingPair(pair.fileA, pair.fileB)) continue;
     }
     const structurallyLinked = structurallyLinkedPair(pair.fileA, pair.fileB);
     if (!includeLinked && structurallyLinked) continue;
@@ -229,6 +237,42 @@ export function coChangeStructuralLinkChecker(
   declaredCouplings = declaredCouplingSets(db),
 ): (fileA: string, fileB: string) => boolean {
   return (fileA, fileB) => hasStructuralLink(graph, declaredCouplings, fileA, fileB);
+}
+
+const LOCALE_RESOURCE_DIR_PATTERN = /(?:^|\/)(?:locales|i18n)\//i;
+
+function isLocaleResourceFile(file: string): boolean {
+  return LOCALE_RESOURCE_DIR_PATTERN.test(file);
+}
+
+/**
+ * Both files are locale/i18n resources — either both live under a
+ * `locales/` or `i18n/` directory, or they're same-basename `.json` files
+ * in sibling per-locale directories (`translations/en/common.json` vs
+ * `translations/fr/common.json`) even when the parent isn't literally named
+ * `locales`/`i18n`.
+ */
+function isLocaleSiblingPair(fileA: string, fileB: string): boolean {
+  if (isLocaleResourceFile(fileA) && isLocaleResourceFile(fileB)) return true;
+  return isSiblingLocaleDirJsonPair(fileA, fileB);
+}
+
+function isSiblingLocaleDirJsonPair(fileA: string, fileB: string): boolean {
+  if (!fileA.endsWith('.json') || !fileB.endsWith('.json')) return false;
+  const lastSlashA = fileA.lastIndexOf('/');
+  const lastSlashB = fileB.lastIndexOf('/');
+  if (lastSlashA < 0 || lastSlashB < 0) return false;
+  const dirA = fileA.slice(0, lastSlashA);
+  const dirB = fileB.slice(0, lastSlashB);
+  if (dirA === dirB) return false; // same directory — not a "sibling locale dir" pair
+  const baseA = fileA.slice(lastSlashA + 1);
+  const baseB = fileB.slice(lastSlashB + 1);
+  if (baseA !== baseB) return false;
+  const parentSlashA = dirA.lastIndexOf('/');
+  const parentSlashB = dirB.lastIndexOf('/');
+  const parentA = parentSlashA >= 0 ? dirA.slice(0, parentSlashA) : '';
+  const parentB = parentSlashB >= 0 ? dirB.slice(0, parentSlashB) : '';
+  return parentA === parentB;
 }
 
 function isSameStemSibling(fileA: string, fileB: string): boolean {
