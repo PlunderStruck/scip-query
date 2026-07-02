@@ -60,6 +60,27 @@ scip-query reindex
 
 Or without a global install: `npx scip-query@latest reindex`.
 
+### If npm warns about install scripts
+
+On npm setups with script approval enabled (`allow-scripts`), the install prints warnings like
+`15 packages have install scripts not yet covered by allowScripts` — and **skips those scripts**,
+which leaves the native modules unbuilt. Every script on that list is expected:
+
+- `scip-query` — its own postinstall (non-fatal by construction: `... || true`)
+- `better-sqlite3` — builds/downloads the native SQLite binding that backs the index
+- `tree-sitter` + the per-language grammars — native parsers behind multi-language source facts
+
+Approve them and re-run the builds:
+
+```bash
+npm approve-scripts --allow-scripts-pending   # review and approve the list above
+npm rebuild                                   # run the now-approved build scripts
+scip-query status --capabilities              # verify: languages should show as available
+```
+
+This approval is deliberately yours to make — a package cannot approve its own install scripts,
+and one that tried would be exactly the kind of supply-chain behavior to distrust.
+
 ## Start with One Change
 
 ```bash
