@@ -56,11 +56,11 @@ Vega clone is part of 23.2's protocol.
 
 ## Phase 26 — Final pass (Claude, not agents)
 
-- [ ] 26.1 Full gates + the complete command smoke sweep (the session's smoke.sh) + regression suite + detect-the-past suite.
-- [ ] 26.2 Fresh-install rehearsal: `npm pack`, install the tarball into a scratch prefix, run `postinstall` output check, `setup` in a scratch repo, `install-skills`, one query battery, `uninstall` round-trip.
-- [ ] 26.3 Re-run the Stable_Management retro-gate on 5 commits with the final build — confirm gate precision didn't regress from the retunes.
-- [ ] 26.4 Verify 23's fixture claims against both calibration clones live.
-- [ ] 26.5 Commit, push to origin. Publisher then: build Windows assets → create GitHub release v0.11.0 with them → `npm publish`.
+- [x] 26.1 Full gates + the complete command smoke sweep (the session's smoke.sh) + regression suite + detect-the-past suite.
+- [x] 26.2 Fresh-install rehearsal: `npm pack`, install the tarball into a scratch prefix, run `postinstall` output check, `setup` in a scratch repo, `install-skills`, one query battery, `uninstall` round-trip.
+- [x] 26.3 Re-run the Stable_Management retro-gate on 5 commits with the final build — confirm gate precision didn't regress from the retunes.
+- [x] 26.4 Verify 23's fixture claims against both calibration clones live.
+- [x] 26.5 Commit, push to origin. Publisher then: build Windows assets → create GitHub release v0.11.0 with them → `npm publish`.
 
 ## Stress notes
 
