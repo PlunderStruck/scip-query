@@ -1,6 +1,7 @@
 import type { ParsedSourceImport } from '../../domain/types.js';
 import { resolveClojureImportPath } from '../../resolution/import-path-resolver.js';
-import { escapeRegex } from '../../source/source-stripper.js';
+import { escapeRegex } from '../../core/regex-utils.js';
+import { skipLineComment } from '../../source/clojure-facts.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { buildUsedImport } from '../utils.js';
 
@@ -368,12 +369,6 @@ function skipWhitespace(source: string, start: number): number {
     break;
   }
   return index;
-}
-
-function skipLineComment(source: string, index: number): number {
-  let cursor = index;
-  while (cursor < source.length && source[cursor] !== '\n') cursor += 1;
-  return cursor;
 }
 
 function skipString(source: string, index: number): number {

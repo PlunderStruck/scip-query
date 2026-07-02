@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CleanupBatch, CleanupPlanResult } from '../queries/cleanup/cleanup-plan.js';
 import { stripCommentsAndStrings } from '../source/source-stripper.js';
-import { binaryAvailable } from './command-availability.js';
+import { binaryAvailable } from '../core/command-availability.js';
 
 export interface BatchVerification {
   depth: number;

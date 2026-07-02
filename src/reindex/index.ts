@@ -20,7 +20,7 @@ import { detectLanguages } from './detect.js';
 import { getIndexerConfig } from './indexers.js';
 import { mergeScipFiles } from './merge.js';
 import { runPostIndexAugmentation } from './post-index-augmentation.js';
-import { fingerprintProjectFiles } from './project-files.js';
+import { fingerprintProjectFiles, normalizeTypeScriptProjects } from './project-files.js';
 import { sanitizeScipFile } from './sanitize.js';
 import { discoverTypeScriptProjectRoots } from './typescript-projects.js';
 import { runPreparedIndexers } from './indexer-runner.js';
@@ -991,12 +991,6 @@ function computeLanguageFingerprints(
       ];
     }),
   ) as Partial<Record<SupportedLanguage, ReindexFingerprint>>;
-}
-
-function normalizeTypeScriptProjects(projects: readonly string[] | undefined): string[] {
-  return [...new Set((projects ?? []).map((project) => project.trim()).filter(Boolean))].sort((left, right) =>
-    left.localeCompare(right),
-  );
 }
 
 function normalizeOptionalPath(path: string | undefined): string | undefined {

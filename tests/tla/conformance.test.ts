@@ -627,8 +627,6 @@ describe('tlaFindingGroups', () => {
 
     const groups = tlaFindingGroups(findings);
 
-    expect(groups).toEqual([
-      expect.objectContaining({ groupKey: 'contract:-', count: 2, findingIds: ['X', 'Y'] }),
-    ]);
+    expect(groups).toEqual([expect.objectContaining({ groupKey: 'contract:-', count: 2, findingIds: ['X', 'Y'] })]);
   });
 });

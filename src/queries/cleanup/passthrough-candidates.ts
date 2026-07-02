@@ -4,7 +4,7 @@ import { isPackageSurfaceFile } from '../../analysis/package-surface.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { isClojureMacroDefinition, isLiteralPassthrough } from '../../source/ast.js';
 import { getSourceLines } from '../../source/source-text.js';
-import { escapeRegex as escapeRegExp } from '../../source/source-stripper.js';
+import { escapeRegex as escapeRegExp } from '../../core/regex-utils.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { isFunctionLikeSymbol, leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../../core/project-index.js';

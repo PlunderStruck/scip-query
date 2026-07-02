@@ -3,7 +3,7 @@ import type { IndexedDefinition } from '../../domain/types.js';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { getCalleeRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
 import { getSourceLines, getSourceText } from '../../source/source-text.js';
-import { escapeRegex } from '../../source/source-stripper.js';
+import { escapeRegex } from '../../core/regex-utils.js';
 import {
   computeIdfFromDocFreq,
   difference,

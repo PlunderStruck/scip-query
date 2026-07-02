@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import type { LastRefreshMetadata, ProjectConfig, SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
 import { detectLanguages } from '../reindex/detect.js';
-import { fingerprintProjectFiles } from '../reindex/project-files.js';
+import { fingerprintProjectFiles, normalizeTypeScriptProjects } from '../reindex/project-files.js';
 
 export type IndexFreshnessState = 'fresh' | 'stale' | 'missing' | 'unknown';
 
@@ -106,12 +106,6 @@ function runtimeFingerprint(
     clojureConfigPath: normalizeOptionalPath(config.indexer?.clojure?.configPath),
     files: fingerprintProjectFiles(projectRoot),
   };
-}
-
-function normalizeTypeScriptProjects(projects: readonly string[] | undefined): string[] {
-  return [...new Set((projects ?? []).map((project) => project.trim()).filter(Boolean))].sort((left, right) =>
-    left.localeCompare(right),
-  );
 }
 
 function normalizeOptionalPath(path: string | undefined): string | undefined {

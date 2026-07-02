@@ -9,7 +9,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { detectAstLanguage, getAst } from '../../source/ast.js';
 import type { AstLanguage, SyntaxNode, Tree } from '../../source/ast.js';
 import { getSourceText } from '../../source/source-text.js';
-import { escapeRegex } from '../../source/source-stripper.js';
+import { escapeRegex } from '../../core/regex-utils.js';
 import { listGlobMatches, matchesGlob } from '../../analysis/glob-match.js';
 
 /**

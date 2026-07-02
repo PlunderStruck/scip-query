@@ -1,7 +1,8 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { getAllDefinitions } from '../../symbols/definition-catalog.js';
 import { getSourceText } from '../../source/source-text.js';
-import { escapeRegex, parenBalance } from '../../source/source-stripper.js';
+import { escapeRegex } from '../../core/regex-utils.js';
+import { parenBalance } from '../../source/source-stripper.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { semanticSignature } from '../../semantic/shared-primitives.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';

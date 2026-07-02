@@ -5,7 +5,7 @@ const SRC_LAYER_DEPENDENCIES: Record<string, ReadonlySet<string>> = {
   core: new Set(['analysis', 'domain', 'resolution', 'source', 'storage', 'symbols']),
   domain: new Set([]),
   instrumentation: new Set([]),
-  'language-parsers': new Set(['domain', 'resolution', 'source', 'storage']),
+  'language-parsers': new Set(['core', 'domain', 'resolution', 'source', 'storage']),
   queries: new Set([
     'analysis',
     'core',
@@ -19,12 +19,27 @@ const SRC_LAYER_DEPENDENCIES: Record<string, ReadonlySet<string>> = {
   ]),
   reindex: new Set(['domain', 'language-parsers', 'resolution', 'runtime', 'semantic', 'source', 'storage', 'symbols']),
   resolution: new Set(['domain', 'source', 'storage', 'symbols']),
-  runtime: new Set(['domain', 'queries', 'reindex', 'resolution', 'semantic', 'source', 'storage', 'symbols']),
-  semantic: new Set(['domain', 'resolution', 'storage', 'symbols']),
-  source: new Set(['domain', 'storage']),
+  runtime: new Set([
+    'core',
+    'domain',
+    'queries',
+    'reindex',
+    'resolution',
+    'semantic',
+    'source',
+    'storage',
+    'symbols',
+    'tla',
+  ]),
+  semantic: new Set(['core', 'domain', 'resolution', 'storage', 'symbols']),
+  // `core` depends on `source` (production-callables.ts reads source-text.js), so this
+  // is a deliberate two-way edge for one zero-dependency primitive (escapeRegex,
+  // src/core/regex-utils.ts) that source-stripper.ts itself needs — not a real cycle
+  // at the file-import level, only at the coarse layer-policy level.
+  source: new Set(['core', 'domain', 'storage']),
   storage: new Set(['domain', 'source']),
   symbols: new Set(['analysis', 'domain', 'language-parsers', 'resolution', 'semantic', 'source', 'storage']),
-  tla: new Set(['domain', 'queries', 'source', 'storage', 'symbols']),
+  tla: new Set(['core', 'domain', 'queries', 'source', 'storage', 'symbols']),
 };
 
 export function getArchitecturalLayer(filePath: string): string {

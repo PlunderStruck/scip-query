@@ -1,10 +1,9 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { findIdentifierLines } from '../identifier-index.js';
-import { findEnclosingDefinition, getDefinitionsForFile } from '../definition-catalog.js';
 import { getFullSymbolMatch } from '../symbol-lookup.js';
 import { leafName } from '../symbol-parser.js';
 import { mentionReferenceChunkRows } from '../../storage/scip-mentions.js';
-import { findReferences } from '../identifier-attribution.js';
+import { findReferences, materializeReferenceSites } from '../identifier-attribution.js';
 import type { ReferenceSite, SymbolLocation } from '../../domain/types.js';
 
 interface ReferenceChunk {
@@ -44,7 +43,7 @@ export interface ReferenceEvidenceSite extends ReferenceSite {
 export function getResolvedReferenceSites(db: ScipDatabase, symbol: SymbolLocation): ReferenceSite[] {
   const prelude = resolveReferencePrelude(db, symbol);
   if (!prelude) return [];
-  return buildReferenceSites(db, resolvedCandidateLines(db, prelude.match, prelude.identifier));
+  return materializeReferenceSites(db, resolvedCandidateLines(db, prelude.match, prelude.identifier));
 }
 
 export function referenceSitesForSymbol(
@@ -136,22 +135,4 @@ export function resolveReferencePrelude(db: ScipDatabase, symbol: SymbolLocation
   const match = getFullSymbolMatch(db, symbol);
   if (!match) return null;
   return { match, identifier: leafName(match.symbol) || null };
-}
-
-// scip-query: ignore-wrapper — named attribution stage used by reference
-// reporting; keeps line candidates separate from enclosing-symbol lookup.
-export function buildReferenceSites(db: ScipDatabase, perFileLines: Map<string, number[]>): ReferenceSite[] {
-  const sites: ReferenceSite[] = [];
-  const seen = new Set<string>();
-  for (const [file, lines] of perFileLines) {
-    const definitions = getDefinitionsForFile(db, file);
-    for (const line of lines) {
-      const enclosing = findEnclosingDefinition(definitions, line);
-      const key = `${file}|${line}|${enclosing?.symbol ?? ''}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      sites.push({ file, line, enclosingSymbol: enclosing?.symbol ?? null });
-    }
-  }
-  return sites;
 }

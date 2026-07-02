@@ -10,6 +10,18 @@ interface ProjectFileFingerprint {
   hash: string;
 }
 
+/**
+ * Dedupe, trim, and sort a `typescript.projects` config list — shared by the
+ * fingerprint builder (this module's caller in src/reindex/index.ts) and the
+ * freshness check (src/runtime/index-freshness.ts) so a re-ordered or
+ * whitespace-padded config never registers as a fingerprint change.
+ */
+export function normalizeTypeScriptProjects(projects: readonly string[] | undefined): string[] {
+  return [...new Set((projects ?? []).map((project) => project.trim()).filter(Boolean))].sort((left, right) =>
+    left.localeCompare(right),
+  );
+}
+
 export function listProjectFiles(projectRoot: string): string[] {
   return (listGitProjectFiles(projectRoot) ?? listFilesystemProjectFiles(projectRoot))
     .filter((file) => file && !isProjectArtifactPath(file))

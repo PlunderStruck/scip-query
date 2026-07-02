@@ -294,7 +294,11 @@ function clojureCallParts(symbol: string): { leaf: string; qualifier?: string; t
   return { leaf, qualifier, text };
 }
 
-function skipLineComment(source: string, index: number): number {
+// scip-query: ignore-wrapper — shared with src/language-parsers/languages/clojure.ts
+// (both scan Clojure/Lisp `;` line comments); source/ is the one side both can
+// legally import, per the layer policy (language-parsers -> source is allowed,
+// the reverse is not).
+export function skipLineComment(source: string, index: number): number {
   let cursor = index;
   while (cursor < source.length && source[cursor] !== '\n') cursor += 1;
   return cursor;

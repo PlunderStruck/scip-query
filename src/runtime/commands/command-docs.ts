@@ -27,7 +27,10 @@ export function commandDocEntries(descriptors: readonly CommandDescriptor[]): Co
     }));
 }
 
-function descriptorEvidenceTier(descriptor: CommandDescriptor): CommandEvidenceTier {
+// scip-query: ignore-wrapper — shared evidence-tier policy consumed by both
+// this renderer and command-registry.ts's setCommandEvidenceMap seed; one
+// definition of "what tier is this command's evidence" for the whole CLI.
+export function descriptorEvidenceTier(descriptor: CommandDescriptor): CommandEvidenceTier {
   if (descriptor.evidence) return descriptor.evidence;
   if (MIXED_EVIDENCE_COMMANDS.has(descriptor.id)) return 'mixed';
   return descriptor.heuristic ? 'heuristic' : 'graph-fact';

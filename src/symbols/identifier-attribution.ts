@@ -252,7 +252,10 @@ function toSymbolRef(entry: { symbol: string; symbolId: number; file: string }):
   return { symbolId: entry.symbolId, symbol: entry.symbol, relativePath: entry.file };
 }
 
-function materializeReferenceSites(db: ScipDatabase, perFileLines: Map<string, number[]>): ReferenceSite[] {
+// scip-query: ignore-wrapper — named attribution stage shared by findReferences
+// (this file) and getResolvedReferenceSites (references/reference-sites.ts);
+// callers should not repeat line-dedup plus enclosing-symbol lookup.
+export function materializeReferenceSites(db: ScipDatabase, perFileLines: Map<string, number[]>): ReferenceSite[] {
   const sites: ReferenceSite[] = [];
   const seen = new Set<string>();
   for (const [file, lines] of perFileLines) {

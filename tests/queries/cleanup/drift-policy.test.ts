@@ -27,6 +27,18 @@ describe('drift layer policy', () => {
     expect(layerPolicyForEdge('src/domain', 'src/storage')).toBe('violation');
   });
 
+  it('allows the runtime -> tla edge (the CLI layer importing its query module)', () => {
+    expect(layerPolicyForEdge('src/runtime', 'src/tla')).toBe('ok');
+  });
+
+  it('allows src/core from every layer that hosts a src/core/regex-utils.ts or command-availability.ts consumer', () => {
+    expect(layerPolicyForEdge('src/source', 'src/core')).toBe('ok');
+    expect(layerPolicyForEdge('src/semantic', 'src/core')).toBe('ok');
+    expect(layerPolicyForEdge('src/runtime', 'src/core')).toBe('ok');
+    expect(layerPolicyForEdge('src/tla', 'src/core')).toBe('ok');
+    expect(layerPolicyForEdge('src/language-parsers', 'src/core')).toBe('ok');
+  });
+
   it('marks unlisted source layers as unknown policy instead of explicit violations', () => {
     expect(layerPolicyForEdge('src/future', 'src/storage')).toBeNull();
     expect(isUnknownSrcLayerEdge('src/future', 'src/storage')).toBe(true);

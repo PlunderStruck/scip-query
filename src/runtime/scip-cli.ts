@@ -1,10 +1,9 @@
-import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { homedir, platform, arch } from 'node:os';
-import { dirname, join } from 'node:path';
+import { existsSync } from 'node:fs';
+import { platform, arch } from 'node:os';
 import { isBinaryAvailable } from './binary.js';
 import { SCIP_WINDOWS_ASSETS, type ScipWindowsArch, type ScipWindowsAsset } from './scip-windows-assets.js';
+import { fetchVerifiedBinary, resolveScipQueryCachePath } from '../core/verified-binary-fetch.js';
 
 const SCIP_VERSION = 'v0.8.1';
 const SCIP_RELEASE_URL = 'https://github.com/sourcegraph/scip';
@@ -54,15 +53,9 @@ export function resolveScipBinaryPure(deps: ScipBinaryResolutionDeps): ScipBinar
   return null;
 }
 
-/**
- * Resolve the cache path for a downloaded Windows `scip.exe`, mirroring
- * `resolveTlaToolsJarCachePath` in `src/tla/tool-runner.ts`.
- */
+/** Resolve the cache path for a downloaded Windows `scip.exe`. */
 export function resolveScipBinaryCachePath(archName: string, env: NodeJS.ProcessEnv = process.env): string {
-  const cacheRoot =
-    env['SCIP_QUERY_CACHE_DIR'] ??
-    (env['XDG_CACHE_HOME'] ? join(env['XDG_CACHE_HOME'], 'scip-query') : join(homedir(), '.cache', 'scip-query'));
-  return join(cacheRoot, `scip-win32-${archName}.exe`);
+  return resolveScipQueryCachePath(`scip-win32-${archName}.exe`, env);
 }
 
 export function resolveScipBinary(env: NodeJS.ProcessEnv = process.env): string | null {
@@ -245,9 +238,9 @@ export interface ScipWindowsBinaryFetchResult {
 
 /**
  * Download and checksum-verify the pinned Windows `scip.exe`, caching it
- * under the scip-query cache dir. Mirrors `fetchTlaToolsJar` in
- * `src/tla/tool-runner.ts` (cache reuse when the sha256 still matches,
- * tmp-file-then-rename on write, thrown error on mismatch).
+ * under the scip-query cache dir via the shared `fetchVerifiedBinary`
+ * primitive (src/core/verified-binary-fetch.ts) — the same one
+ * `fetchTlaToolsJar` (src/tla/tool-runner.ts) uses.
  */
 export async function fetchScipWindowsBinary(
   opts: ScipWindowsBinaryFetchOptions = {},
@@ -264,31 +257,11 @@ export async function fetchScipWindowsBinary(
   }
 
   const path = opts.cachePath ?? resolveScipBinaryCachePath(archName, env);
-  if (existsSync(path)) {
-    const existingHash = sha256(readFileSync(path));
-    if (existingHash === asset.sha256) {
-      return { status: 'cached', path, sha256: existingHash, url: asset.url };
-    }
-  }
-
-  const fetchImpl = opts.fetchImpl ?? fetch;
-  const response = await fetchImpl(asset.url);
-  if (!response.ok) {
-    throw new Error(`failed to download scip.exe: HTTP ${response.status}`);
-  }
-  const bytes = Buffer.from(await response.arrayBuffer());
-  const digest = sha256(bytes);
-  if (digest !== asset.sha256) {
-    throw new Error(`downloaded scip.exe checksum mismatch: expected ${asset.sha256}, got ${digest}`);
-  }
-
-  mkdirSync(dirname(path), { recursive: true });
-  const tmpPath = `${path}.tmp-${process.pid}`;
-  writeFileSync(tmpPath, bytes);
-  renameSync(tmpPath, path);
-  return { status: 'downloaded', path, sha256: digest, url: asset.url };
-}
-
-function sha256(bytes: Buffer): string {
-  return createHash('sha256').update(bytes).digest('hex');
+  const result = await fetchVerifiedBinary({
+    cachePath: path,
+    url: asset.url,
+    expectedSha256: asset.sha256,
+    fetchImpl: opts.fetchImpl,
+  });
+  return { ...result, url: asset.url };
 }

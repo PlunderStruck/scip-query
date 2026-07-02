@@ -42,7 +42,7 @@ import { checkHealthBaseline, resolveBaselinePath } from '../health/health-basel
 import { incompleteMigration } from './incomplete-migration.js';
 import { similar } from '../cleanup/similar.js';
 import { unusedParams } from '../cleanup/unused-params.js';
-import { escapeRegex } from '../../source/source-stripper.js';
+import { escapeRegex } from '../../core/regex-utils.js';
 import type { FindingSuppression } from '../../domain/types.js';
 import { isCallableSymbol, leafName, leafSuffix } from '../../symbols/symbol-parser.js';
 import { getGlobalLeafIndex } from '../../symbols/leaf-symbol-index.js';

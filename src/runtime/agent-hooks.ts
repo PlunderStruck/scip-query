@@ -6,7 +6,7 @@ import type { ProjectConfig, ScipQueryConfig } from '../domain/types.js';
 import { diffGate } from '../queries/impact/diff-gate.js';
 import type { DiffGateResult } from '../queries/impact/diff-gate.js';
 import { createGitignoreFilter } from '../source/gitignore-filter.js';
-import { escapeRegex } from '../source/source-stripper.js';
+import { escapeRegex } from '../core/regex-utils.js';
 import { ScipDatabase } from '../storage/db.js';
 import { loadProjectConfig, resolveIndexPaths, resolveWatchConfig } from './config.js';
 import { getIndexFreshness } from './index-freshness.js';

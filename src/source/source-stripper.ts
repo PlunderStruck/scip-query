@@ -11,6 +11,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { registerCacheClear } from '../storage/cache-registry.js';
 import { createPerDbSourceCache } from '../storage/per-db-cache.js';
+import { escapeRegex } from '../core/regex-utils.js';
 
 /**
  * Replace every comment and string literal with spaces (preserving newlines)
@@ -117,13 +118,6 @@ export function collectNamespaceMembers(body: string, namespaceName: string): st
     }
   }
   return [...members];
-}
-
-/** Escape regex meta-characters so a user-supplied identifier matches literally. */
-// scip-query: ignore-wrapper — used internally (hasIdentifierUsage, collectNamespaceMembers)
-// AND exported for identifier-index.ts; the external-caller count of 1 understates real fan-in.
-export function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export function parenBalance(value: string): number {

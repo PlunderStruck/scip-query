@@ -5,7 +5,7 @@ import type { ScipDatabase } from '../storage/db.js';
 import type { SymbolMatch } from '../domain/types.js';
 import { getAst } from '../source/ast.js';
 import type { SyntaxNode } from '../source/ast.js';
-import { escapeRegex as escapeRegExp } from '../source/source-stripper.js';
+import { escapeRegex as escapeRegExp } from '../core/regex-utils.js';
 import { resolveSymbol } from '../symbols/symbol-lookup.js';
 import { getDefinitionsForFile } from '../symbols/definition-catalog.js';
 import { leafName, shortenSymbol } from '../symbols/symbol-parser.js';

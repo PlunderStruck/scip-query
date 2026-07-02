@@ -1,11 +1,11 @@
-import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import type { TlaCheckerMode } from './model-contract.js';
-import { binaryAvailable, type CommandAvailabilitySpawn } from '../runtime/command-availability.js';
+import { binaryAvailable, type CommandAvailabilitySpawn } from '../core/command-availability.js';
+import { fetchVerifiedBinary, resolveScipQueryCachePath } from '../core/verified-binary-fetch.js';
 
 export type TlaToolStatus = 'passed' | 'failed' | 'skipped' | 'timed-out';
 export type TlaResolvedChecker = Exclude<TlaCheckerMode, 'auto'>;
@@ -213,10 +213,7 @@ export function resolveTlaToolsJar(opts: TlaToolRunOptions): string | null {
 }
 
 export function resolveTlaToolsJarCachePath(env: NodeJS.ProcessEnv = process.env): string {
-  const cacheRoot =
-    env['SCIP_QUERY_CACHE_DIR'] ??
-    (env['XDG_CACHE_HOME'] ? join(env['XDG_CACHE_HOME'], 'scip-query') : join(homedir(), '.cache', 'scip-query'));
-  return join(cacheRoot, 'tla2tools.jar');
+  return resolveScipQueryCachePath('tla2tools.jar', env);
 }
 
 export async function fetchTlaToolsJar(opts: TlaToolsFetchOptions = {}): Promise<TlaToolsFetchResult> {
@@ -224,34 +221,8 @@ export async function fetchTlaToolsJar(opts: TlaToolsFetchOptions = {}): Promise
   const expectedSha256 = opts.expectedSha256 ?? TLA_TOOLS_SHA256;
   const version = opts.version ?? TLA_TOOLS_VERSION;
   const url = opts.url ?? TLA_TOOLS_URL;
-  if (existsSync(path)) {
-    const existing = readFileSync(path);
-    const existingHash = sha256(existing);
-    if (existingHash === expectedSha256) {
-      return { status: 'cached', path, version, sha256: existingHash, url };
-    }
-  }
-
-  const fetchImpl = opts.fetchImpl ?? fetch;
-  const response = await fetchImpl(url);
-  if (!response.ok) {
-    throw new Error(`failed to download tla2tools.jar: HTTP ${response.status}`);
-  }
-  const bytes = Buffer.from(await response.arrayBuffer());
-  const digest = sha256(bytes);
-  if (digest !== expectedSha256) {
-    throw new Error(`downloaded tla2tools.jar checksum mismatch: expected ${expectedSha256}, got ${digest}`);
-  }
-
-  mkdirSync(dirname(path), { recursive: true });
-  const tmpPath = `${path}.tmp-${process.pid}`;
-  writeFileSync(tmpPath, bytes);
-  renameSync(tmpPath, path);
-  return { status: 'downloaded', path, version, sha256: digest, url };
-}
-
-function sha256(bytes: Buffer): string {
-  return createHash('sha256').update(bytes).digest('hex');
+  const result = await fetchVerifiedBinary({ cachePath: path, url, expectedSha256, fetchImpl: opts.fetchImpl });
+  return { ...result, version, url };
 }
 
 function diagnosticsForRun(status: TlaToolStatus, stdout: string, stderr: string): TlaToolDiagnostic[] {
