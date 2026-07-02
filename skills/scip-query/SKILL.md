@@ -47,6 +47,7 @@ The loop is complete only when `scip-verify` passes or each remaining finding ha
 | Turn a report into a fix packet | `scip-triage-issue` | `files`, `trace`, `affected` |
 | Create a code flow, dependency, or blast-radius diagram | `scip-diagram` | `call-graph`, `dataflow`, `affected` |
 | Plan a feature, fix, or refactor | `concrete-plan` | `plan-context` |
+| Run a multi-phase program: plan, delegate, verify handoffs, close | `scip-conductor` | `plan-context`, `diff-gate`, `health` |
 | Assess public API, route, config, schema, CLI, or export changes | `scip-api-impact` | `surface`, `affected`, `co-change` |
 | Pick language-specific high-signal commands | `scip-language-playbook` | language row |
 | Benchmark and optimize a command, workflow, or hot path | `scip-hyper-optimization` | `bench`, `plan-context`, profiles |
@@ -70,6 +71,7 @@ Routing is complete only when one owning skill is selected or the task is small 
 ## Tie-Breaks
 
 - "Is this implementation real / does it actually work" → `scip-integrity-audit`; "is this well-organized" → `scip-maintainability`; same-name drifted twins specifically → `scip-twin-drift`.
+- One change → `concrete-plan`; a program of changes with delegation → `scip-conductor`.
 
 - Use `scip-cleanup-audit` for reports, ranking, confirmation, or recent AI-residue triage without edits.
 - Use `scip-cleanup-improve` when the user asks to fix, improve, continue cleaning, or raise health autonomously.
@@ -92,6 +94,7 @@ Top commands per routed skill, generated from each skill's own `commands:` front
 | `scip-claim-audit` | `scip-query files <pattern>`, `scip-query refs <symbol>`, `scip-query code <symbol>` |
 | `scip-cleanup-audit` | `scip-query health --json`, `scip-query cleanup-plan --verify --json`, `scip-query duplicate-bodies --json --full` |
 | `scip-cleanup-improve` | `scip-query health --json`, `scip-query cleanup-plan --verify --json`, `scip-query cleanup-apply --verified --batch <n>` |
+| `scip-conductor` | `scip-query plan-context <target>`, `scip-query diff-gate --json`, `scip-query health --json` |
 | `scip-debug` | `scip-query files <feature-or-error-term>`, `scip-query trace <candidate-symbol>`, `scip-query call-graph <entry-symbol>` |
 | `scip-diagram` | `scip-query system <module>`, `scip-query trace <symbol>`, `scip-query call-graph <symbol>` |
 | `scip-directory-architecture` | `scip-query system <scope>`, `scip-query locality-candidates --json --full`, `scip-query similar-files --full --json` |

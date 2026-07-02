@@ -17,6 +17,7 @@ export const BUILTIN_SKILLS = [
   'scip-hyper-optimization',
   'scip-api-impact',
   'concrete-plan',
+  'scip-conductor',
   'scip-debug',
   'scip-explore',
   'scip-triage-issue',

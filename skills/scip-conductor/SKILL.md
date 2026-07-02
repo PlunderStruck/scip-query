@@ -1,13 +1,34 @@
 ---
-name: conductor
+name: scip-conductor
 description: Plan and conduct multi-step engineering programs like a skeptical principal engineer. Use for writing executable multi-phase plans, delegating implementation, reviewing another agent's work, or carrying a large change end to end with verification at every handoff.
+commands:
+  - template: "scip-query plan-context <target>"
+    when: "Anchor each phase's step before delegating it."
+  - template: "scip-query diff-gate --json"
+    when: "Verify a handoff before accepting it and before closing the program."
+  - template: "scip-query health --json"
+    when: "Pre-register or check a program-level health benchmark."
 ---
 
-# conductor
+# scip-conductor
 
 This skill is how to run a *program* of work — planning, delegation, review,
 and closure — not how to write one change plan (use a dedicated planning
 skill such as `concrete-plan` for individual changes when one is available).
+
+Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
+
+<!-- BEGIN GENERATED SKILL COMMANDS -->
+## Commands for this skill
+
+| Command | Purpose | When |
+| --- | --- | --- |
+| `scip-query plan-context <target>` | Pre-edit planning context for a symbol, file, or module | Anchor each phase's step before delegating it. |
+| `scip-query diff-gate --json` | Gate the current diff: echo candidates, incomplete migrations, missing co-change partners, unedited twin partners (advisory), uncited doc updates, unused params, new dead symbols; exit 1 on blocking findings | Verify a handoff before accepting it and before closing the program. |
+| `scip-query health --json` | Composite codebase health report with prioritized action list | Pre-register or check a program-level health benchmark. |
+
+Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
+<!-- END GENERATED SKILL COMMANDS -->
 
 ## The Three Laws
 

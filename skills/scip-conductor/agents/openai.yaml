@@ -1,0 +1,4 @@
+interface:
+  display_name: "SCIP Conductor"
+  short_description: "Conduct multi-phase engineering programs"
+  default_prompt: "Use $scip-conductor to plan and conduct this multi-phase program end to end with verified handoffs."
