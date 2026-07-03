@@ -272,25 +272,36 @@ delegation-chain exclusion`) using real TypeScript source files and an actual na
     with no real code path) correctly reports 0 — exactly the abstraction-not-reachability distinction
     this item asked for. Source: docs/plans/2026-07-02-tla-static-coverage.md P5.6.
 
-16. **PARTIALLY RESOLVED (2026-07-02, remediation P5.7) — implemented, deeper boundary found and
-    documented.** scaffold.ts now falls back to class instance-field discovery when no top-level
-    module state exists, scoped per class (a fixture proves same-named fields on unrelated classes
-    never cross-contaminate) with qualified `file/Class#member` codeRefs. The original "may not
-    [expose the definitions]" uncertainty is resolved in the RAW-data sense — SCIP does emit
-    `ClassName#field.` symbols with real definition mentions (verified live: `ScipDatabase#pathFilter`/
-    `#config` in this repo's own index) — but `getDefinitionsForFile` (the catalog nearly every command
-    depends on) never surfaces them on a typical class: `symbol-row-policy.ts`'s
-    `isPreciseMixedFallbackRow` drops every class-member fallback row whenever the file has any
-    primary-indexed definition, true for any class with a constructor or named method. Verified live:
-    `Watcher` (src/runtime/watch.ts, 14 methods, 20+ written fields) surfaces zero fields to scaffold.
-    The discovery algorithm itself is correct and tested against the shape the catalog would produce
-    absent that filter; fixing the catalog is a separate, repo-wide-blast-radius change (members, refs,
-    trace, health all depend on it), out of scope here — documented precisely in scaffold's thrown
-    error and the skill's Choose the Slice section, per this item's own "otherwise document the
-    boundary" escape hatch. Cross-process state (the other half of this item, e.g. lock-file-owner
-    identity as distinct from filesystem _content_ already covered by #13) was not separately pursued
-    — no dogfood case in this session needed it beyond what #13's resource binding already covers.
-    Source: docs/plans/2026-07-02-tla-static-coverage.md P5.7.
+16. **RESOLVED-for-scaffold (2026-07-02, remediation P5.7 + catalog-members K1/K2) — the catalog
+    boundary this item flagged is now closed for scaffold's own consumer.** scaffold.ts falls back
+    to class instance-field discovery when no top-level module state exists, scoped per class (a
+    fixture proves same-named fields on unrelated classes never cross-contaminate) with qualified
+    `file/Class#member` codeRefs. The original "may not [expose the definitions]" uncertainty was
+    resolved in the RAW-data sense first — SCIP does emit `ClassName#field.` symbols with real
+    definition mentions (verified live: `ScipDatabase#pathFilter`/`#config` in this repo's own
+    index) — and the remaining catalog-level gap (`getDefinitionsForFile` dropping every
+    class-member fallback row whenever the file has any primary-indexed definition, true for any
+    class with a constructor or named method; verified live at the time: `Watcher`,
+    src/runtime/watch.ts, 14 methods, 20+ written fields, zero surfaced) is now fixed via an
+    additive, default-safe opt-in: `getDefinitionsForFile(db, file, {
+includeClassMemberFallbacks: true })` (`src/symbols/symbol-row-policy.ts`,
+    `src/symbols/definition-catalog.ts`; default absent/false stays byte-for-byte identical,
+    proven by a `health --json` before/after `cmp`). scaffold now calls it unconditionally and
+    discovers `Watcher`'s state correctly: `scip-query tla scaffold src/runtime/watch.ts` goes from
+    throwing "no mutable state discovered" to discovering all 26 instance fields and 10
+    state-writing actions. The remaining boundary shrinks to files where the indexer emitted no
+    member row for a class at all (neither primary nor fallback) — documented in scaffold's thrown
+    error and the skill's Known-boundary paragraph. Whether `members`/`refs`/`trace`/`health`/
+    `dead`-cleanup should also opt in is a **separate, not-yet-decided** question — see the K3
+    survey in docs/plans/2026-07-02-catalog-class-members.md for a per-consumer improve/degrade/
+    neutral assessment with live examples (short version: `members` would clearly improve;
+    `refs`/`trace` are already unaffected by this specific boundary through independent lookup
+    paths; `health`/`dead` are neutral today with one identified misattribution risk and one
+    identified two-part gap, both documented there, not fixed). Cross-process state (the other half
+    of this item, e.g. lock-file-owner identity as distinct from filesystem _content_ already
+    covered by #13) was not separately pursued — no dogfood case in this session needed it beyond
+    what #13's resource binding already covers. Source: docs/plans/2026-07-02-tla-static-coverage.md
+    P5.7; docs/plans/2026-07-02-catalog-class-members.md K1/K2/K3.
 17. **RESOLVED (2026-07-02, remediation P5.2).** `variables.<v>.waive: {reason}` exempts that
     variable's `missing-referent`/`invalid-referent-kind` findings (distinct from an action's `waive`,
     which exempts read/write facts only), counted in the Waivers output and Proof line
