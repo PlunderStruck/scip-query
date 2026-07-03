@@ -75,7 +75,7 @@ files live beside that run history and are summarized with
 | Lowering health concurrency to 4 | Rejected | Vega evidence-cold probe stayed slow at 31.864s with unchanged output hash. |
 | Running all health phases in one hidden process | Rejected | Vega all-phase probe took 51.301s and changed the command surface, so it was not a safe optimization. |
 | Removing `sourceImportFingerprint` from the file-dependency graph storage key only | Accepted as cleanup, not sufficient as health fix | Vega evidence-cold health still took 32.051s before the health sidecar. |
-| Per-file TypeScript indexing in Plan 6 | BLOCKED | Cold `reindex` is dominated by the upstream `scip-typescript` shard. Vega cold reindex is 35.285s and Stable cold reindex is 21.692s, while no-edit shard reuse is 418ms and 284ms respectively. |
+| Per-file TypeScript indexing in Plan 6 (6.5.3 feasibility gate; re-verified with the exact commands below, see "6.5.3 feasibility gate" section) | BLOCKED | `scip-typescript`'s CLI has no per-file/incremental mode at all (proven by `--help` and a literal single-file invocation that fails); a `tsconfig include`-scoping workaround runs but produces a SCIP document set covering only the edited file, with zero occurrences for the other 269 project files, so a safe merge would require either accepting stale cross-file type information or computing the full transitive dependent-file closure, which converges back to a full reindex. |
 | Analysis-budget retirement | Deferred | Health output already runs full by default. Stable `complexity-hotspots --json` still exceeds the 4s warm detector target, so cap removal/retuning is not safe in this slice. |
 
 ## Scoreboard
@@ -208,6 +208,105 @@ Findings:
   used as this repo's "config edit" scenario instead, since it exercises the
   same class of question (does a config-file touch cost a shard rerun) without
   hitting the indexer bug.
+
+## 6.5.3 feasibility gate: per-file TypeScript indexing
+
+**Verdict: BLOCKED.** This is a success outcome per the phase spec — no
+partial implementation was shipped. Method: a throwaway detached `git
+worktree` of this repo (`git worktree add <tmp> HEAD --detach`, `node_modules`
+symlinked from the real checkout, removed with `git worktree remove --force`
+afterward; never run against the tracked working tree). Indexer under test:
+the exact bundled/pinned upstream, `@sourcegraph/scip-typescript@0.4.0`
+(`npx scip-typescript --version`), which is the same binary `src/reindex/
+indexers.ts` resolves for both the `typescript` and `vue` indexer configs.
+
+**1. The CLI has no per-file or incremental mode.**
+
+```
+$ npx scip-typescript index --help
+Usage: scip-typescript index [options] [projects...]
+Options:
+  --cwd <path>
+  --pnpm-workspaces
+  --yarn-workspaces
+  --yarn-berry-workspaces
+  --infer-tsconfig
+  --output <path>
+  --progress-bar / --no-progress-bar
+  --no-global-caches
+  --max-file-byte-size <value>
+  -h, --help
+```
+
+No flag restricts analysis to a changed-file subset, and
+`node_modules/@sourcegraph/scip-typescript/README.md` contains no mention of
+"incremental", "watch", "delta", "single file", or "per file" (`grep -in
+"incremental\|single.file\|per.file\|watch\|delta" README.md` returns
+nothing).
+
+**2. A literal single-file invocation fails outright** because the
+`[projects...]` positional argument is a project-root/tsconfig path, not a
+source file:
+
+```
+$ npx scip-typescript index src/reindex/index.ts --output /tmp/x.scip --infer-tsconfig --no-progress-bar
+error: no files got indexed. To fix this problem, make sure that the TypeScript
+projects ["src/reindex/index.ts"] contain input files or reference other projects.
+Error: src/reindex/index.ts(1,1): error TS1005: '{' expected.
+    at loadConfigFile (.../scip-typescript/dist/src/main.js:166:15)
+```
+
+It tries to JSON-parse the source file as a tsconfig and throws.
+
+**3. The only working workaround (`tsconfig` `include` scoping) proves the
+merge-correctness gap, not a fix.** A synthetic tsconfig extending the real
+one but with `"include": ["src/reindex/index.ts"]` does run successfully:
+
+```
+$ npx scip-typescript index --output /tmp/single-file.scip tsconfig.single-file.json --no-progress-bar
++ tsconfig.single-file.json (95ms)
+done /tmp/single-file.scip
+$ scip stats --from /tmp/single-file.scip
+{ "documents": 1, "occurrences": 2403, ... }
+```
+
+Compared against the full-project shard (`scip stats` reports 270
+documents), the scoped run's SCIP output contains exactly **one** document
+(`src/reindex/index.ts`) and **zero** occurrences for the other 269 project
+files, including every file that imports and calls `reindex()`. A follow-up
+check (`scip print --json`, filtering documents to `src/reindex/index.ts` and
+comparing the `reindex()` export's symbol string between the full-project
+shard and the scoped shard) found the symbol string is byte-identical
+(`scip-typescript npm scip-query 0.11.0 src/reindex/\`index.ts\`/reindex().`)
+in both runs — scip-typescript's symbol naming is deterministic and
+path/declaration-based, not dependent on which other files are compiled
+together. That is the one genuinely reusable finding here: same-file symbol
+identity is stable across differently-scoped compiles.
+
+That finding does not unlock a safe merge, though. Because the scoped run
+never re-type-checks any other file, a document-level merge (keep every
+other file's cached document, splice in the freshly produced document for
+the edited file) can only stay correct when the edit does not change the
+edited file's exported surface in a way that would alter type-checking at
+any call site. Detecting that condition requires either (a) trusting stale
+caller-side occurrences whenever an exported signature changes — which
+directly risks a wrong `dead`/`diff-gate` verdict on an edit that broke a
+downstream caller's contract — or (b) computing the full transitive set of
+files that import the edited file (through re-exports, type-only imports,
+barrel files, and workspace project references) and including all of them in
+the scoped tsconfig, which for realistic edits converges back to indexing
+most or all of the project — the exact cost this phase is trying to remove.
+Building (b) correctly would mean re-deriving TypeScript's own incremental
+dependency-invalidation graph outside the compiler, which is squarely the
+kind of upstream-indexer rework the DEFER list rules out ("do not replace
+scip-typescript or fork upstream indexers in this plan"; per-file indexing is
+called out as a one-way door requiring proven output identity before
+shipping even behind an opt-in flag).
+
+**Conclusion:** the upstream boundary is real and load-bearing, not a
+scip-query cache/invalidation bug. Plan 6 keeps shard-level (whole-language,
+or whole-TypeScript-workspace-project) reindex granularity as documented in
+6.5.1/6.5.2 and moves the retro-gate cost question to 6.6.1/6.6.2 instead.
 
 ## Handoff Probes
 
