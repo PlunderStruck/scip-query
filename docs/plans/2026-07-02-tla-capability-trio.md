@@ -84,3 +84,39 @@ the state-backings bullet, the trace-coverage command in the "Trace until covere
 line-windows in a new granularity sentence. `docs/COMMAND_REFERENCE.md` regenerate if descriptors
 changed. `scip-query reindex && scip-query diff-gate` — fix or justify. Record here: the C1 Vega
 scratch-mapping delta, and confirmation the two dogfood specs still verify unchanged.
+
+### Closeout record
+
+- **Skill**: `skills/scip-tla-model-system/SKILL.md` updated — a new `ormCalls` explanatory
+  paragraph (mirroring the existing `resource`/`statements` paragraphs) plus the "Know the three
+  state backings" bullet retitled "Know the four state backings" and extended with the ORM tier;
+  a new sentence on the `code` entries paragraph documenting the `@L<start>-L<end>` line-window
+  syntax and its load/verify-time containment error; the "Trace until covered" bullet extended
+  with the `--coverage` command, the accepted-steps-only counting rule, and repeatable `--trace`.
+- **`docs/COMMAND_REFERENCE.md`**: regenerated via `npm run docs:commands` after C2 (the only item
+  that changed a CLI descriptor — the new `--coverage` option and updated `--trace` description);
+  net diff was exactly the one `tla` row. Regenerating again after the C1/C3/Closeout skill edits
+  produced no further diff (idempotent — those items touched no descriptors).
+- **C1 Vega scratch-mapping delta** (full detail under the C1 item above): baseline 56
+  staticWrites/66 staticReads/115 findings vs. 66/68/128 with one `ormCalls` binding added to the
+  scratch copy — +10 writes / +2 reads previously invisible to the field-name alias tier. Vega
+  `git status --porcelain | wc -l` was 0 before and 0 after (checked twice at the start of C1 and
+  again immediately after both validation runs); the mapping copy used to invoke the CLI lived
+  only in the scratchpad and a transient dotfile inside Vega deleted immediately after each run.
+- **Dogfood specs unchanged**: compared `tla verify specs/evidence-cache/EvidenceCacheCoherence.tla
+  --checker none --json` and `tla verify specs/evidence-cache/FindingOutcomeLedger.tla --checker
+  none --json` at HEAD (b9e65e14, after C1+C2+C3) against a `git worktree add` checkout of the
+  pre-work baseline (25a4f327, freshly reindexed, then removed after comparison). Identical on
+  both specs: EvidenceCacheCoherence — exitCode 1, 0 error findings, 16 total findings, 3
+  staticWrites, 26 staticReads; FindingOutcomeLedger — exitCode 0, 0 error findings, 0 total
+  findings, 7 staticWrites, 16 staticReads. Neither spec's mapping uses `ormCalls`, `--coverage`,
+  or line windows, so this is the expected backward-compatibility result.
+- **`diff-gate` outcome**: `scip-query reindex && scip-query diff-gate --base 25a4f327` → "Diff
+  gate vs 25a4f327: 4 file(s), 40 symbol(s) changed... PASS: this change introduces no gate
+  findings." (two informational notes about changed line-ranges belonging to no indexed symbol in
+  `tla.ts`/`conformance.ts` — CLI option wiring and comments, not symbols — no findings to fix).
+- **Deviations**: none — no source contradicted the plan text in any of C1/C2/C3. (Note for
+  context, not a deviation: C2's starting point was not a blank slate — a P5.6 per-action step
+  count already existed, counting raw steps unconditionally with always-on human output and a
+  single `--trace`. The plan's own text fully accounted for this ("trace-check already knows
+  step→action matching") and was implemented as written.)
