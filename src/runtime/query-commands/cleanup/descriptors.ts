@@ -34,6 +34,7 @@ import {
   handleDuplicateBodies,
   handleTwinDrift,
   handleTwinAb,
+  handleNotImplemented,
 } from './handlers.js';
 import {
   handleReactComponentDuplicates,
@@ -549,6 +550,22 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     evidence: 'heuristic',
     renderShape: 'list',
     handler: handleTwinDrift,
+  }),
+  heuristicCleanupCommand({
+    id: 'not-implemented',
+    command: 'not-implemented',
+    description:
+      "Reachable placeholder stub candidates (throw-stub, TODO+return-default, empty body) — production callers can actually reach these; an unreachable stub is dead's job, not this one's",
+    options: withJsonOption([
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option('-n, --limit <n>', 'Number of results', parseInteger, 30),
+      option('--full', 'Run unbounded semantic analysis on large indexes'),
+    ]),
+    heuristicLabel: 'reachable placeholder stubs',
+    budget: 'candidate-scan',
+    renderShape: 'list',
+    docs: doc('Cleanup', ['scip-query not-implemented -s src/services']),
+    handler: handleNotImplemented,
   }),
   cleanupCommand({
     id: 'twin-ab',

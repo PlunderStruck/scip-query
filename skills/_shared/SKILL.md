@@ -120,6 +120,7 @@ scip-query redundant-reexports # Find barrel re-exports that nobody imports thro
 scip-query duplicate-bodies # Find exact duplicate small-body candidates across files
 scip-query twin-drift # Twin drift candidates: same-name (or near-name) functions across files with diverged bodies
 scip-query twin-ab <symbolA> <symbolB> # Generate a behavioral A/B scaffold comparing two same-concept twins (scip-integrity-audit drill 5) — a ready-to-fill vitest file, not an auto-executor
+scip-query not-implemented # Reachable placeholder stub candidates (throw-stub, TODO+return-default, empty body) — production callers can actually reach these; an unreachable stub is dead's job, not this one's
 scip-query similar-signatures # Find functions with near-identical type signatures (same shape)
 ```
 

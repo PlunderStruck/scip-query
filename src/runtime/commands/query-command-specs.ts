@@ -74,6 +74,7 @@ const queryCommandOrder = [
   'duplicate-bodies',
   'twin-drift',
   'twin-ab',
+  'not-implemented',
   'similar-signatures',
 ] as const;
 

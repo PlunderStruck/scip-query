@@ -169,6 +169,10 @@
       "import": "./dist/queries/methods.js",
       "types": "./dist/queries/methods.d.ts"
     },
+    "./queries/not-implemented": {
+      "import": "./dist/queries/not-implemented.js",
+      "types": "./dist/queries/not-implemented.d.ts"
+    },
     "./queries/outline": {
       "import": "./dist/queries/outline.js",
       "types": "./dist/queries/outline.d.ts"

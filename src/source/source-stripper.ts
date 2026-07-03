@@ -33,6 +33,21 @@ export function stripCommentsAndStrings(source: string): string {
     .replace(/"(?:\\.|[^"\\\r\n])*"/g, maskPreservingLines);
 }
 
+/**
+ * Comments-only variant of `stripCommentsAndStrings`: masks `//` and `/* *‍/`
+ * comments but leaves string literals intact. Detectors that need to read a
+ * string literal's *content* (a throw message, an error-result field) while
+ * still splitting on statement boundaries safely need this — the full
+ * comments-and-strings strip would blank the very text they're matching
+ * against. Deliberately narrower than `stripCommentsAndStrings` (no `#`
+ * line comments, no triple-quoted strings): today's only caller targets
+ * brace-delimited languages (TS/JS), and extending the ordering-sensitive
+ * regex chain above for those risks changing its existing callers' output.
+ */
+export function stripComments(source: string): string {
+  return source.replace(/\/\/.*$/gm, maskPreservingLines).replace(/\/\*[\s\S]*?\*\//g, maskPreservingLines);
+}
+
 function maskPreservingLines(segment: string): string {
   return segment.replace(/[^\r\n]/g, ' ');
 }

@@ -602,6 +602,22 @@ export const handleTwinDrift = budgetedListCommand('twin-drift', {
   after: (groups) => console.log(`\n${groups.length} group(s) found.`),
 });
 
+export const handleNotImplemented = budgetedListCommand('not-implemented', {
+  query: ({ db, opts, budget }) =>
+    queries.notImplemented(db, {
+      scope: stringOptionValue(opts, 'scope'),
+      limit: definedLimitOption(opts, 'limit', 30),
+      scanLimit: budget.scanLimit,
+      semantic: budget.semantic,
+    }),
+  format: (r) =>
+    `  ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  (${r.stubKind}, reachability: ${r.reachability}${r.callerFanIn > 0 ? `, callers: ${r.callerFanIn}` : ''})\n` +
+    `    ${r.stubText}`,
+  emptyMessage: () => 'No reachable placeholder stubs found.',
+  heuristicLabel: 'reachable placeholder stubs',
+  after: (rows) => console.log(`\n${rows.length} reachable placeholder stub(s).`),
+});
+
 export const handleTwinAb = reportCommand<queries.TwinAbSuccess & { outPath: string }>({
   commandName: 'twin-ab',
   query: ({ db, args, opts }) => {

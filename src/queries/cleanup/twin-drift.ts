@@ -413,8 +413,14 @@ function isForwardingCallStatement(statement: string): boolean {
   return FORWARDING_CALL_PATTERN.test(trimmed);
 }
 
-/** Split a statement block on top-level `;` (ignoring `;` nested inside `()`/`[]`/`{}`). */
-function splitTopLevelStatements(body: string): string[] {
+/**
+ * Split a statement block on top-level `;` (ignoring `;` nested inside
+ * `()`/`[]`/`{}`). Exported so other detectors that need a body's top-level
+ * statement shape (not-implemented's throw-stub check, decorative-checkers'
+ * single-statement body check) reuse this instead of re-deriving the same
+ * depth-tracked splitter.
+ */
+export function splitTopLevelStatements(body: string): string[] {
   const statements: string[] = [];
   let depth = 0;
   let current = '';
