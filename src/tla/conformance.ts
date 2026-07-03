@@ -16,7 +16,13 @@ import {
   scipValueLikeKindNumbers,
 } from '../symbols/symbol-kind.js';
 import { callGraph } from '../queries/navigation/call-graph.js';
-import type { TlaInitMapping, TlaModelContract, TlaModuleFacts, TlaTraceStep } from './model-contract.js';
+import {
+  ormCallEffectiveMethods,
+  type TlaInitMapping,
+  type TlaModelContract,
+  type TlaModuleFacts,
+  type TlaTraceStep,
+} from './model-contract.js';
 import type { SanyActionFacts } from './sany-facts.js';
 
 export type TlaFindingSeverity = 'info' | 'warning' | 'error';
@@ -131,7 +137,8 @@ export interface TlaStaticWrite {
     | 'delete'
     | 'source-scan'
     | 'resource'
-    | 'statement';
+    | 'statement'
+    | 'orm-call';
   enclosingSymbol?: string;
   enclosingShort?: string;
   /**
@@ -148,7 +155,7 @@ export interface TlaStaticRead {
   file: string;
   line: number;
   target: string;
-  kind: 'identifier' | 'source-scan' | 'resource' | 'statement';
+  kind: 'identifier' | 'source-scan' | 'resource' | 'statement' | 'orm-call';
   enclosingSymbol?: string;
   enclosingShort?: string;
   /** See `TlaStaticWrite.via`. */
@@ -170,6 +177,18 @@ export interface VariableStatement {
   variable: string;
   pattern: string;
   regex: RegExp;
+}
+
+/**
+ * C1 / ORM-call tier: a resolved `variables.<v>.ormCalls` entry — method
+ * names already split into their effective write/read buckets (defaults or
+ * the entry's `methods` override) by `ormCallEffectiveMethods`.
+ */
+export interface VariableOrmCall {
+  variable: string;
+  table: string;
+  writeMethods: ReadonlySet<string>;
+  readMethods: ReadonlySet<string>;
 }
 
 export interface TlaWaiverUse {
@@ -256,6 +275,7 @@ export function verifyTlaConformance(
   const variableAliases = variableResolution.aliases;
   const variableResources = resourcesForVariables(contract);
   const variableStatements = statementsForVariables(contract);
+  const variableOrms = ormCallsForVariables(contract);
   const actions = resolveActions(db, contract, findings);
   const init = resolveInit(db, contract, findings);
   if (moduleFacts) verifyModelText(contract, moduleFacts, checkedInvariants, findings);
@@ -278,6 +298,7 @@ export function verifyTlaConformance(
     variableAliases,
     variableResources,
     variableStatements,
+    variableOrms,
     actionSymbols,
     initSymbols,
     findings,
@@ -289,6 +310,7 @@ export function verifyTlaConformance(
     variableAliases,
     variableResources,
     variableStatements,
+    variableOrms,
     findings,
     modelActions,
   );
@@ -406,6 +428,17 @@ function statementsForVariables(contract: TlaModelContract): VariableStatement[]
   return statements;
 }
 
+function ormCallsForVariables(contract: TlaModelContract): VariableOrmCall[] {
+  const orms: VariableOrmCall[] = [];
+  for (const [name, variable] of Object.entries(contract.variables)) {
+    for (const binding of variable.ormCalls ?? []) {
+      const { write, read } = ormCallEffectiveMethods(binding);
+      orms.push({ variable: name, table: binding.table, writeMethods: new Set(write), readMethods: new Set(read) });
+    }
+  }
+  return orms;
+}
+
 /**
  * P5.4 / followup #14: writes/reads one call hop away from a mapped
  * action's referent are statically invisible per-range (e.g. the
@@ -420,9 +453,10 @@ function oneHopCalleeWrites(
   aliases: readonly VariableAlias[],
   resources: readonly VariableResource[],
   statements: readonly VariableStatement[],
+  orms: readonly VariableOrmCall[],
 ): TlaStaticWrite[] {
   return oneHopCalleeEffects(db, referentSymbol, (file, startLine, endLine) =>
-    collectWritesForRange(db, file, startLine, endLine, aliases, resources, statements),
+    collectWritesForRange(db, file, startLine, endLine, aliases, resources, statements, orms),
   );
 }
 
@@ -432,9 +466,10 @@ function oneHopCalleeReads(
   aliases: readonly VariableAlias[],
   resources: readonly VariableResource[],
   statements: readonly VariableStatement[],
+  orms: readonly VariableOrmCall[],
 ): TlaStaticRead[] {
   return oneHopCalleeEffects(db, referentSymbol, (file, startLine, endLine) =>
-    collectReadsForRange(db, file, startLine, endLine, aliases, resources, statements),
+    collectReadsForRange(db, file, startLine, endLine, aliases, resources, statements, orms),
   );
 }
 
@@ -659,6 +694,7 @@ function collectAllStaticWrites(
   aliases: readonly VariableAlias[],
   resources: readonly VariableResource[],
   statements: readonly VariableStatement[],
+  orms: readonly VariableOrmCall[],
   actionSymbols: ReadonlySet<string>,
   initSymbols: ReadonlySet<string>,
   findings: TlaConformanceFinding[],
@@ -677,6 +713,7 @@ function collectAllStaticWrites(
         aliases,
         resources,
         statements,
+        orms,
       );
       actionWrites.push(...found);
       writes.push(...found);
@@ -686,8 +723,8 @@ function collectAllStaticWrites(
       // for an action that doesn't own it; it may only strengthen evidence
       // for a fact the mapping already claims.
       const declaredWrites = new Set(action.mapping.writes);
-      const oneHop = oneHopCalleeWrites(db, referent.match.symbol, aliases, resources, statements).filter((write) =>
-        declaredWrites.has(write.variable),
+      const oneHop = oneHopCalleeWrites(db, referent.match.symbol, aliases, resources, statements, orms).filter(
+        (write) => declaredWrites.has(write.variable),
       );
       actionWrites.push(...oneHop);
       writes.push(...oneHop);
@@ -701,7 +738,16 @@ function collectAllStaticWrites(
   // `scope` must be mapped as an action or its write is flagged.
   const sweepFiles = contract.unmappedWriteScope === 'actions' ? [] : scopedFiles(db, contract);
   for (const file of sweepFiles) {
-    for (const write of collectWritesForRange(db, file, 0, Number.POSITIVE_INFINITY, aliases, resources, statements)) {
+    for (const write of collectWritesForRange(
+      db,
+      file,
+      0,
+      Number.POSITIVE_INFINITY,
+      aliases,
+      resources,
+      statements,
+      orms,
+    )) {
       writes.push(write);
       if (!isUnmappedWriteCandidate(write)) continue;
       // Q3: a write inside a mapped Init referent is Init-attributed, not
@@ -799,6 +845,7 @@ function collectAllStaticReads(
   aliases: readonly VariableAlias[],
   resources: readonly VariableResource[],
   statements: readonly VariableStatement[],
+  orms: readonly VariableOrmCall[],
   findings: TlaConformanceFinding[],
   modelActions: ReadonlyMap<string, SanyActionFacts>,
 ): TlaStaticRead[] {
@@ -815,13 +862,14 @@ function collectAllStaticReads(
         aliases,
         resources,
         statements,
+        orms,
       );
       actionReads.push(...found);
       reads.push(...found);
       // Same declared-fact constraint as the write path — see the comment
       // in collectAllStaticWrites.
       const declaredReads = new Set(action.mapping.reads);
-      const oneHop = oneHopCalleeReads(db, referent.match.symbol, aliases, resources, statements).filter((read) =>
+      const oneHop = oneHopCalleeReads(db, referent.match.symbol, aliases, resources, statements, orms).filter((read) =>
         declaredReads.has(read.variable),
       );
       actionReads.push(...oneHop);
@@ -983,10 +1031,11 @@ export function collectWritesForRange(
   aliases: readonly VariableAlias[],
   resources: readonly VariableResource[] = [],
   statements: readonly VariableStatement[] = [],
+  orms: readonly VariableOrmCall[] = [],
 ): TlaStaticWrite[] {
-  const astWrites = collectAstWrites(db, file, startLine, endLine, aliases, resources, statements);
+  const astWrites = collectAstWrites(db, file, startLine, endLine, aliases, resources, statements, orms);
   if (astWrites) return astWrites;
-  return collectSourceScanWrites(db, file, startLine, endLine, aliases, resources, statements);
+  return collectSourceScanWrites(db, file, startLine, endLine, aliases, resources, statements, orms);
 }
 
 export function collectReadsForRange(
@@ -997,10 +1046,11 @@ export function collectReadsForRange(
   aliases: readonly VariableAlias[],
   resources: readonly VariableResource[] = [],
   statements: readonly VariableStatement[] = [],
+  orms: readonly VariableOrmCall[] = [],
 ): TlaStaticRead[] {
-  const astReads = collectAstReads(db, file, startLine, endLine, aliases, resources, statements);
+  const astReads = collectAstReads(db, file, startLine, endLine, aliases, resources, statements, orms);
   if (astReads) return astReads;
-  return collectSourceScanReads(db, file, startLine, endLine, aliases, resources, statements);
+  return collectSourceScanReads(db, file, startLine, endLine, aliases, resources, statements, orms);
 }
 
 export function collectAstWrites(
@@ -1011,6 +1061,7 @@ export function collectAstWrites(
   aliases: readonly VariableAlias[],
   resources: readonly VariableResource[] = [],
   statements: readonly VariableStatement[] = [],
+  orms: readonly VariableOrmCall[] = [],
 ): TlaStaticWrite[] | null {
   const tree = getAst(db, file);
   if (!tree) return null;
@@ -1020,6 +1071,7 @@ export function collectAstWrites(
     recordWriteNode(db, file, node, aliases, writes);
     recordResourceCallNode(db, file, node, resources, 'write', writes);
     recordStatementCallNode(db, file, node, statements, 'write', writes);
+    recordOrmCallNode(db, file, node, orms, 'write', writes);
     for (const child of node.children) visit(child);
   };
   visit(tree.rootNode);
@@ -1034,6 +1086,7 @@ function collectAstReads(
   aliases: readonly VariableAlias[],
   resources: readonly VariableResource[] = [],
   statements: readonly VariableStatement[] = [],
+  orms: readonly VariableOrmCall[] = [],
 ): TlaStaticRead[] | null {
   const tree = getAst(db, file);
   if (!tree) return null;
@@ -1043,6 +1096,7 @@ function collectAstReads(
     recordReadNode(db, file, node, aliases, reads);
     recordResourceCallNode(db, file, node, resources, 'read', reads);
     recordStatementCallNode(db, file, node, statements, 'read', reads);
+    recordOrmCallNode(db, file, node, orms, 'read', reads);
     for (const child of node.children) visit(child);
   };
   visit(tree.rootNode);
@@ -1234,6 +1288,72 @@ function truncateStatementText(text: string): string {
   return collapsed.length > 80 ? `${collapsed.slice(0, 80)}…` : collapsed;
 }
 
+/**
+ * C1 / ORM-call attribution tier: classifies a call expression as a
+ * write/read of an ORM-call-bound variable (`variables.<v>.ormCalls`).
+ * Matches on the call's own method name (never the receiver — `db`, `tx`,
+ * ... are all equally eligible) plus its own first argument's text: a
+ * write-classified method (`update`/`insert`/`delete` by default) matches
+ * when its own argument names `table` (`db.update(t)`, `tx.insert(t)`); a
+ * read-classified method matches the same way, PLUS the special case of a
+ * `.from(table)` chain segment standing in for `select` — `.select()`
+ * itself carries no table argument, so `db.select().from(t)` attributes on
+ * `.from(t)`, not on `.select()`.
+ */
+function recordOrmCallNode(
+  db: ScipDatabase,
+  file: string,
+  node: SyntaxNode,
+  orms: readonly VariableOrmCall[],
+  mode: 'write',
+  out: TlaStaticWrite[],
+): void;
+function recordOrmCallNode(
+  db: ScipDatabase,
+  file: string,
+  node: SyntaxNode,
+  orms: readonly VariableOrmCall[],
+  mode: 'read',
+  out: TlaStaticRead[],
+): void;
+function recordOrmCallNode(
+  db: ScipDatabase,
+  file: string,
+  node: SyntaxNode,
+  orms: readonly VariableOrmCall[],
+  mode: 'read' | 'write',
+  out: (TlaStaticWrite | TlaStaticRead)[],
+): void {
+  if (orms.length === 0 || node.type !== 'call_expression') return;
+  const target = node.childForFieldName('function') ?? node.namedChild(0);
+  const method = target ? fsCallName(target) : null;
+  if (!method) return;
+  const args = node.childForFieldName('arguments');
+  const firstArg = args?.namedChild(0);
+  if (!firstArg) return;
+  const argText = firstArg.text.trim();
+  for (const orm of orms) {
+    if (!ormCallMatches(orm, method, argText, mode)) continue;
+    const enclosing = enclosingSymbolForLine(db, file, node.startPosition.row);
+    out.push({
+      variable: orm.variable,
+      alias: orm.table,
+      file,
+      line: node.startPosition.row,
+      target: `${method}(${argText})`,
+      kind: 'orm-call',
+      enclosingSymbol: enclosing?.symbol,
+      enclosingShort: enclosing ? shortenSymbol(enclosing.symbol) : undefined,
+    });
+  }
+}
+
+function ormCallMatches(orm: VariableOrmCall, method: string, argText: string, mode: 'read' | 'write'): boolean {
+  if (argText !== orm.table) return false;
+  if (mode === 'write') return orm.writeMethods.has(method);
+  return orm.readMethods.has(method) || (method === 'from' && orm.readMethods.has('select'));
+}
+
 function recordReadNode(
   db: ScipDatabase,
   file: string,
@@ -1335,6 +1455,7 @@ function collectSourceScanWrites(
   aliases: readonly VariableAlias[],
   resources: readonly VariableResource[] = [],
   statements: readonly VariableStatement[] = [],
+  orms: readonly VariableOrmCall[] = [],
 ): TlaStaticWrite[] {
   const source = readFileSync(join(db.config.projectRoot, file), 'utf8');
   const lines = source.split(/\r?\n/);
@@ -1368,6 +1489,7 @@ function collectSourceScanWrites(
     }
     recordSourceScanResourceCall(db, file, line, text, resources, FS_WRITE_CALLS, writes);
     recordSourceScanStatementCall(db, file, line, text, statements, 'write', writes);
+    recordSourceScanOrmCall(db, file, line, text, orms, 'write', writes);
   }
   return uniqueWrites(writes);
 }
@@ -1380,6 +1502,7 @@ function collectSourceScanReads(
   aliases: readonly VariableAlias[],
   resources: readonly VariableResource[] = [],
   statements: readonly VariableStatement[] = [],
+  orms: readonly VariableOrmCall[] = [],
 ): TlaStaticRead[] {
   const source = readFileSync(join(db.config.projectRoot, file), 'utf8');
   const lines = source.split(/\r?\n/);
@@ -1405,6 +1528,7 @@ function collectSourceScanReads(
     }
     recordSourceScanResourceCall(db, file, line, text, resources, FS_READ_CALLS, reads);
     recordSourceScanStatementCall(db, file, line, text, statements, 'read', reads);
+    recordSourceScanOrmCall(db, file, line, text, orms, 'read', reads);
   }
   return uniqueReads(reads);
 }
@@ -1477,6 +1601,46 @@ function recordSourceScanStatementCall(
       enclosingSymbol: enclosing?.symbol,
       enclosingShort: enclosing ? shortenSymbol(enclosing.symbol) : undefined,
     });
+  }
+}
+
+/**
+ * Regex-fallback counterpart of `recordOrmCallNode` for files without an
+ * AST. Cruder than the AST path — no call-argument boundary parsing, so a
+ * table argument spanning past the line's first matched close-paren, or a
+ * `.from(t)` chained on a later line than its `.select()`, will not
+ * classify (the special case only needs `.from(t)` on its own line, which
+ * covers the common single-line shapes this fallback targets) — but keeps
+ * the same evidence tier and method+table-arg matching contract as the AST
+ * path.
+ */
+function recordSourceScanOrmCall(
+  db: ScipDatabase,
+  file: string,
+  line: number,
+  text: string,
+  orms: readonly VariableOrmCall[],
+  mode: 'read' | 'write',
+  out: (TlaStaticWrite | TlaStaticRead)[],
+): void {
+  if (orms.length === 0) return;
+  for (const match of text.matchAll(/\.([A-Za-z_$][\w$]*)\s*\(\s*([^,)\s][^,)]*?)\s*\)/g)) {
+    const method = match[1]!;
+    const argText = match[2]!.trim();
+    for (const orm of orms) {
+      if (!ormCallMatches(orm, method, argText, mode)) continue;
+      const enclosing = enclosingSymbolForLine(db, file, line);
+      out.push({
+        variable: orm.variable,
+        alias: orm.table,
+        file,
+        line,
+        target: text.trim(),
+        kind: 'orm-call',
+        enclosingSymbol: enclosing?.symbol,
+        enclosingShort: enclosing ? shortenSymbol(enclosing.symbol) : undefined,
+      });
+    }
   }
 }
 

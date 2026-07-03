@@ -33,6 +33,17 @@ real mappings/specs to sanity-check designs against; never edit them.
 - **Validation extra**: run `tla verify` READ-ONLY against Vega's BillingAccessLifecycle with a
   scratch copy of its mapping (in the scratchpad, NOT in Vega) extended with one ormCalls
   binding, and record the verified-writes delta in this file.
+  - **Result**: added `"ormCalls": [{"table": "orgSubscriptions"}]` to the `status` variable
+    (scratch copy only; real Vega mapping untouched). Baseline (unmodified mapping, `--checker
+    none`): 56 staticWrites, 66 staticReads, 115 findings. Extended: 66 staticWrites (+10), 68
+    staticReads (+2), 128 findings (+13). The 10 new writes are `db.update(orgSubscriptions)` /
+    `db.insert(orgSubscriptions)` calls in stripe.service.ts and subscription.service.ts whose
+    `.set()`/`.values()` payload is built indirectly (a separately-assigned `updateData` object,
+    spreads) so the existing `status` field-name alias never saw them — exactly the "fragile
+    alias" gap the tier targets. The 2 new reads are `db.select().from(orgSubscriptions)` call
+    sites with no literal `status` text nearby. The mapping copy used to run this lived only in
+    the scratchpad and a transient dotfile inside Vega deleted immediately after each run; Vega
+    `git status --porcelain | wc -l` was 0 before and 0 after both runs.
 
 ## C2 — trace coverage report
 

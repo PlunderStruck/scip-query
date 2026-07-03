@@ -208,7 +208,7 @@ Enqueue(job) == queue' = Append(queue, job)
     expect(loaded.loaded?.contract.variables.status?.selfAlias).toBeUndefined();
   });
 
-  it('rejects selfAlias: false with no other attribution tier (no alias, resource, statements, or waive)', () => {
+  it('rejects selfAlias: false with no other attribution tier (no alias, resource, statements, ormCalls, or waive)', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
     writeFileSync(
       join(root, 'Broken.scip-tla.json'),
@@ -224,7 +224,7 @@ Enqueue(job) == queue' = Append(queue, job)
 
     expect(loaded.loaded).toBeUndefined();
     expect(loaded.errors).toContain(
-      'variables.status.selfAlias is false but no aliases, resource, statements, or waive are set — status would be unattributable; add an explicit alias, bind resource/statements, or add variables.status.waive with a reason',
+      'variables.status.selfAlias is false but no aliases, resource, statements, ormCalls, or waive are set — status would be unattributable; add an explicit alias, bind resource/statements/ormCalls, or add variables.status.waive with a reason',
     );
   });
 
@@ -375,6 +375,104 @@ Enqueue(job) == queue' = Append(queue, job)
     expect(loaded.errors).toContain(
       'variables ledger, other share statement pattern "finding_outcome_ledger" — conformance scanning cannot attribute a matching write/read to one variable unambiguously',
     );
+  });
+
+  it('parses an ORM-call binding on a variable (C1)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Billing.scip-tla.json'),
+      JSON.stringify({
+        variables: {
+          subscription: { code: ['src/db.ts/orgSubscriptions'], ormCalls: [{ table: 'orgSubscriptions' }] },
+        },
+        actions: { Update: { code: ['src/db.ts/update'], writes: ['subscription'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Billing.scip-tla.json');
+
+    expect(loaded.errors).toEqual([]);
+    expect(loaded.loaded?.contract.variables.subscription?.ormCalls).toEqual([{ table: 'orgSubscriptions' }]);
+  });
+
+  it('rejects an ORM-call binding with no table', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Broken.scip-tla.json'),
+      JSON.stringify({
+        variables: { subscription: { code: ['src/db.ts/orgSubscriptions'], ormCalls: [{ table: '' }] } },
+        actions: { Update: { code: ['src/db.ts/update'], writes: ['subscription'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Broken.scip-tla.json');
+
+    expect(loaded.loaded).toBeUndefined();
+    expect(loaded.errors).toContain('variables.subscription.ormCalls[0].table must be a non-empty string');
+  });
+
+  it('rejects an ORM-call binding whose methods override names an unrecognized method', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Broken.scip-tla.json'),
+      JSON.stringify({
+        variables: {
+          subscription: {
+            code: ['src/db.ts/orgSubscriptions'],
+            ormCalls: [{ table: 'orgSubscriptions', methods: ['upsert'] }],
+          },
+        },
+        actions: { Update: { code: ['src/db.ts/update'], writes: ['subscription'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Broken.scip-tla.json');
+
+    expect(loaded.loaded).toBeUndefined();
+    expect(loaded.errors[0]).toContain('variables.subscription.ormCalls[0].methods contains unrecognized name(s)');
+  });
+
+  it('rejects two variables sharing a table and overlapping method class via ormCalls', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Broken.scip-tla.json'),
+      JSON.stringify({
+        variables: {
+          subscription: { code: ['src/db.ts/orgSubscriptions'], ormCalls: [{ table: 'orgSubscriptions' }] },
+          otherSub: { code: ['src/db.ts/OTHER'], ormCalls: [{ table: 'orgSubscriptions' }] },
+        },
+        actions: { Update: { code: ['src/db.ts/update'], writes: ['subscription'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Broken.scip-tla.json');
+
+    expect(loaded.loaded).toBeUndefined();
+    expect(loaded.errors.some((error) => error.includes('share ORM table/method'))).toBe(true);
+  });
+
+  it('does not collide when two variables bind the same table with disjoint method classes via ormCalls', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Ok.scip-tla.json'),
+      JSON.stringify({
+        variables: {
+          subscriptionWrites: {
+            code: ['src/db.ts/orgSubscriptions'],
+            ormCalls: [{ table: 'orgSubscriptions', methods: ['update', 'insert', 'delete'] }],
+          },
+          subscriptionReads: {
+            code: ['src/db.ts/orgSubscriptionsView'],
+            ormCalls: [{ table: 'orgSubscriptions', methods: ['select'] }],
+          },
+        },
+        actions: { Update: { code: ['src/db.ts/update'], writes: ['subscriptionWrites'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Ok.scip-tla.json');
+
+    expect(loaded.errors).toEqual([]);
   });
 
   it('parses a top-level init mapping', () => {

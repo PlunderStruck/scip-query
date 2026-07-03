@@ -40,6 +40,48 @@ export interface TlaVariableWaiver {
   reason: string;
 }
 
+/**
+ * C1 / ORM-call attribution tier: binds a variable to ORM-backed state when
+ * no literal SQL text exists to match against `statements` (Drizzle-style
+ * query builders). A call chain whose own method name is in the effective
+ * write set ({@link ORM_WRITE_METHOD_NAMES} by default) or read set
+ * ({@link ORM_READ_METHOD_NAMES} by default) AND whose own first argument's
+ * text equals `table` attributes a write/read to this variable —
+ * `db.update(t).set(...)` and `db.insert(t).values(...)` match on their own
+ * argument; `db.select().from(t)` matches on the `.from(t)` chain segment
+ * (the special case, since `.select()` itself carries no table argument).
+ * `methods`, when given, narrows the effective set to a subset of the
+ * canonical write+read vocabulary — every name must already be one of the
+ * seven defaults, or the mapping fails to load (mirrors the `statements`
+ * tier's strict pattern-compile validation). Matching never looks at the
+ * receiver identifier (`db`, `tx`, ...), only the method + table-arg shape.
+ */
+export interface TlaOrmCallBinding {
+  table: string;
+  methods?: string[];
+}
+
+/** C1: default write-classified ORM method names. */
+export const ORM_WRITE_METHOD_NAMES = ['update', 'insert', 'delete'] as const;
+/** C1: default read-classified ORM method names. */
+export const ORM_READ_METHOD_NAMES = ['select', 'query', 'findFirst', 'findMany'] as const;
+const ORM_METHOD_NAMES = new Set<string>([...ORM_WRITE_METHOD_NAMES, ...ORM_READ_METHOD_NAMES]);
+
+/**
+ * The method names actually in play for one `ormCalls` entry — `methods`
+ * when given (validated at parse time to be a subset of the canonical
+ * vocabulary), otherwise every default write+read name.
+ */
+export function ormCallEffectiveMethods(binding: TlaOrmCallBinding): { write: string[]; read: string[] } {
+  const names = binding.methods && binding.methods.length > 0 ? binding.methods : [...ORM_METHOD_NAMES];
+  const writeSet = new Set<string>(ORM_WRITE_METHOD_NAMES);
+  const readSet = new Set<string>(ORM_READ_METHOD_NAMES);
+  return {
+    write: names.filter((name) => writeSet.has(name)),
+    read: names.filter((name) => readSet.has(name)),
+  };
+}
+
 export interface TlaVariableMapping {
   code: string[];
   aliases: string[];
@@ -48,6 +90,8 @@ export interface TlaVariableMapping {
   resource?: TlaResourceBinding;
   /** Binds this variable to SQL-backed state (prepared statements). */
   statements?: TlaStatementBinding[];
+  /** C1: binds this variable to ORM-call-backed state (Drizzle-style query builders). */
+  ormCalls?: TlaOrmCallBinding[];
   waive?: TlaVariableWaiver;
   /**
    * I3 / followup #25: when `false`, the variable's own name is NOT
@@ -381,6 +425,17 @@ function validateNoVariableCollisions(variables: Record<string, TlaVariableMappi
   reportCollisions(variables, errors, 'statement pattern', (mapping) =>
     mapping.statements ? mapping.statements.map((statement) => statement.pattern) : [],
   );
+  // C1: two variables binding the same table are only ambiguous if their
+  // effective method classes overlap — a write-only binding and a
+  // read-only binding on the same table legitimately attribute to
+  // different variables, so the collision key is (table, method), not
+  // just table.
+  reportCollisions(variables, errors, 'ORM table/method', (mapping) =>
+    (mapping.ormCalls ?? []).flatMap((binding) => {
+      const { write, read } = ormCallEffectiveMethods(binding);
+      return [...write, ...read].map((method) => `${binding.table}:${method}`);
+    }),
+  );
 }
 
 function reportCollisions(
@@ -429,12 +484,13 @@ function parseVariables(raw: unknown, errors: string[]): Record<string, TlaVaria
     const aliases = stringArray(value.aliases) ?? [];
     const resource = parseResourceBinding(value.resource, name, errors);
     const statements = parseStatementBindings(value.statements, name, errors);
+    const ormCalls = parseOrmCallBindings(value.ormCalls, name, errors);
     const waive = parseVariableWaiver(value.waive, name, errors);
     const selfAlias = parseSelfAlias(value.selfAlias, name, errors);
     const effectiveAliases = selfAlias ? [...new Set([name, ...aliases])] : [...new Set(aliases)];
-    if (selfAlias === false && effectiveAliases.length === 0 && !resource && !statements && !waive) {
+    if (selfAlias === false && effectiveAliases.length === 0 && !resource && !statements && !ormCalls && !waive) {
       errors.push(
-        `variables.${name}.selfAlias is false but no aliases, resource, statements, or waive are set — ${name} would be unattributable; add an explicit alias, bind resource/statements, or add variables.${name}.waive with a reason`,
+        `variables.${name}.selfAlias is false but no aliases, resource, statements, ormCalls, or waive are set — ${name} would be unattributable; add an explicit alias, bind resource/statements/ormCalls, or add variables.${name}.waive with a reason`,
       );
     }
     out[name] = {
@@ -443,6 +499,7 @@ function parseVariables(raw: unknown, errors: string[]): Record<string, TlaVaria
       projection: typeof value.projection === 'string' ? value.projection : undefined,
       ...(resource ? { resource } : {}),
       ...(statements ? { statements } : {}),
+      ...(ormCalls ? { ormCalls } : {}),
       ...(waive ? { waive } : {}),
       ...(selfAlias === false ? { selfAlias: false } : {}),
     };
@@ -503,6 +560,44 @@ function parseStatementBindings(
       return;
     }
     out.push({ pattern });
+  });
+  return out.length > 0 ? out : undefined;
+}
+
+function parseOrmCallBindings(raw: unknown, variableName: string, errors: string[]): TlaOrmCallBinding[] | undefined {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) {
+    errors.push(`variables.${variableName}.ormCalls must be an array when present`);
+    return undefined;
+  }
+  const out: TlaOrmCallBinding[] = [];
+  raw.forEach((entry, index) => {
+    if (!isRecord(entry)) {
+      errors.push(`variables.${variableName}.ormCalls[${index}] must be an object`);
+      return;
+    }
+    const table = typeof entry.table === 'string' ? entry.table.trim() : '';
+    if (!table) {
+      errors.push(`variables.${variableName}.ormCalls[${index}].table must be a non-empty string`);
+      return;
+    }
+    if (entry.methods === undefined) {
+      out.push({ table });
+      return;
+    }
+    const methods = stringArray(entry.methods);
+    if (!methods) {
+      errors.push(`variables.${variableName}.ormCalls[${index}].methods must be an array of strings when present`);
+      return;
+    }
+    const unrecognized = methods.filter((method) => !ORM_METHOD_NAMES.has(method));
+    if (unrecognized.length > 0) {
+      errors.push(
+        `variables.${variableName}.ormCalls[${index}].methods contains unrecognized name(s): ${unrecognized.join(', ')} — must be one of ${[...ORM_METHOD_NAMES].join(', ')}`,
+      );
+      return;
+    }
+    out.push(methods.length > 0 ? { table, methods } : { table });
   });
   return out.length > 0 ? out : undefined;
 }

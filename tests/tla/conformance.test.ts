@@ -1266,6 +1266,119 @@ Other == UNCHANGED ledger
     }
   });
 
+  it('classifies Drizzle-style ORM calls: update as write, select().from() as read, unmatched table as no attribution (C1)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/billing.ts')
+      .symbol(
+        1,
+        'scip-typescript npm test 1.0.0 src/`billing.ts`/CONNECTIONS.',
+        'CONNECTIONS',
+        SymbolInformation_Kind.Constant,
+      )
+      .symbol(
+        2,
+        'scip-typescript npm test 1.0.0 src/`billing.ts`/updateSub().',
+        'updateSub',
+        SymbolInformation_Kind.Function,
+      )
+      .symbol(
+        3,
+        'scip-typescript npm test 1.0.0 src/`billing.ts`/readSub().',
+        'readSub',
+        SymbolInformation_Kind.Function,
+      )
+      .symbol(
+        4,
+        'scip-typescript npm test 1.0.0 src/`billing.ts`/updateOther().',
+        'updateOther',
+        SymbolInformation_Kind.Function,
+      )
+      .definition(1, 1, 1, 0, 0, 0, 40)
+      .definition(2, 1, 2, 2, 0, 9, 1)
+      .definition(3, 1, 3, 11, 0, 15, 1)
+      .definition(4, 1, 4, 15, 0, 19, 1)
+      .chunk(1, 1, 0, 19)
+      .write();
+    const config: ScipQueryConfig = { projectRoot: root, dbPath, indexPath: join(root, 'index.scip') };
+    writeFixtureFiles(root, {
+      'src/billing.ts': [
+        'export const CONNECTIONS: number = 0;',
+        '',
+        'export function updateSub(db: Db) {',
+        '  db.update(orgSubscriptions).set({ status: "active" });',
+        '}',
+        '',
+        'export function readSub(db: Db) {',
+        '  db.select().from(orgSubscriptions);',
+        '}',
+        '',
+        'export function updateOther(db: Db) {',
+        '  db.update(otherTable).set({ status: "x" });',
+        '}',
+      ],
+    });
+    writeFileSync(
+      join(root, 'Billing.tla'),
+      `---- MODULE Billing ----
+VARIABLES subscription
+Update == subscription' = "written"
+Read == UNCHANGED subscription
+UpdateOther == UNCHANGED subscription
+====
+`,
+    );
+    const db = new ScipDatabase(config);
+    const contract: TlaModelContract = {
+      module: 'Billing.tla',
+      scope: ['src/billing.ts'],
+      variables: {
+        subscription: {
+          code: ['CONNECTIONS'],
+          aliases: ['CONNECTIONS'],
+          ormCalls: [{ table: 'orgSubscriptions' }],
+        },
+      },
+      actions: {
+        Update: { code: ['updateSub'], reads: [], writes: ['subscription'], calls: [] },
+        Read: { code: ['readSub'], reads: ['subscription'], writes: [], calls: [] },
+        UpdateOther: { code: ['updateOther'], reads: [], writes: [], calls: [] },
+      },
+      invariants: [],
+      traces: [],
+    };
+
+    try {
+      const result = verifyTlaConformance(db, contract, readTlaModuleFacts(root, 'Billing.tla'));
+
+      expect(result.staticWrites).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            variable: 'subscription',
+            kind: 'orm-call',
+            target: expect.stringContaining('update(orgSubscriptions)'),
+          }),
+        ]),
+      );
+      expect(result.staticReads).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            variable: 'subscription',
+            kind: 'orm-call',
+            target: expect.stringContaining('from(orgSubscriptions)'),
+          }),
+        ]),
+      );
+      // db.update(otherTable) must not attribute to `subscription` — no
+      // orm-call fact anywhere names otherTable.
+      expect(result.staticWrites.filter((write) => write.kind === 'orm-call')).toHaveLength(1);
+      expect(result.findings.filter((finding) => finding.severity === 'error')).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
   it('excludes writes inside a mapped Init referent from unmapped-write findings (Q3)', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
     const dbPath = join(root, 'index.db');
