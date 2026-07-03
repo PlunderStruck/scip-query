@@ -624,12 +624,45 @@ function parseTlaOperators(text: string): string[] {
   return [...names].sort();
 }
 
+/** TLC config keywords that terminate a preceding INVARIANT(S) section. */
+const TLC_CONFIG_KEYWORDS = new Set([
+  'ACTION_CONSTRAINT',
+  'ACTION_CONSTRAINTS',
+  'ALIAS',
+  'CHECK_DEADLOCK',
+  'CONSTANT',
+  'CONSTANTS',
+  'CONSTRAINT',
+  'CONSTRAINTS',
+  'INIT',
+  'INVARIANT',
+  'INVARIANTS',
+  'NEXT',
+  'POSTCONDITION',
+  'PROPERTIES',
+  'PROPERTY',
+  'SPECIFICATION',
+  'SYMMETRY',
+  'VIEW',
+]);
+
 export function readTlaConfigInvariants(configPath: string | null | undefined): string[] {
   if (!configPath || !existsSync(configPath)) return [];
-  const text = readFileSync(configPath, 'utf8');
+  // TLC treats INVARIANT and INVARIANTS as synonyms, and invariant names may
+  // appear on the keyword line or on any following lines until the next
+  // config keyword (the standard block form). Strip comments, then tokenize.
+  const text = readFileSync(configPath, 'utf8')
+    .replace(/\(\*[\s\S]*?\*\)/g, ' ')
+    .replace(/\\\*[^\n]*/g, ' ');
   const names = new Set<string>();
-  for (const match of text.matchAll(/^\s*INVARIANT\s+([A-Za-z_][A-Za-z0-9_]*)/gm)) {
-    names.add(match[1]!);
+  let inInvariantSection = false;
+  for (const token of text.split(/[\s,]+/)) {
+    if (!token) continue;
+    if (TLC_CONFIG_KEYWORDS.has(token)) {
+      inInvariantSection = token === 'INVARIANT' || token === 'INVARIANTS';
+      continue;
+    }
+    if (inInvariantSection && TLA_NAME_PATTERN.test(token)) names.add(token);
   }
   return [...names].sort();
 }

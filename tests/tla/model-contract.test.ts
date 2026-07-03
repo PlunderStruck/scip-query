@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   dedupeTracePaths,
   loadTlaModelContract,
+  readTlaConfigInvariants,
   readTlaModuleFacts,
   resolveContractPath,
 } from '../../src/tla/model-contract.js';
@@ -412,5 +413,54 @@ Enqueue(job) == queue' = Append(queue, job)
     expect(resolveContractPath(root, specDir, 'Spec.cfg')).toBe(join(specDir, 'Spec.cfg'));
     expect(resolveContractPath(root, specDir, 'Root.cfg')).toBe(join(root, 'Root.cfg'));
     expect(resolveContractPath(root, specDir, 'specs/Spec.cfg')).toBe(join(specDir, 'Spec.cfg'));
+  });
+
+  it('reads invariants from the single-line INVARIANT form', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-cfg-'));
+    const cfg = join(root, 'Spec.cfg');
+    writeFileSync(cfg, 'INIT Init\nNEXT Next\nINVARIANT TypeInvariant\nINVARIANT Safety\n');
+
+    expect(readTlaConfigInvariants(cfg)).toEqual(['Safety', 'TypeInvariant']);
+  });
+
+  it('reads invariants from the standard TLC INVARIANTS block form', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-cfg-'));
+    const cfg = join(root, 'Spec.cfg');
+    writeFileSync(
+      cfg,
+      `SPECIFICATION Spec
+CONSTANTS
+  MaxTurns = 3
+INVARIANTS
+  TypeInvariant
+  Safety, NoOrphanedRuns
+PROPERTY Liveness
+`,
+    );
+
+    expect(readTlaConfigInvariants(cfg)).toEqual(['NoOrphanedRuns', 'Safety', 'TypeInvariant']);
+  });
+
+  it('ignores commented-out invariants and non-invariant sections', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-cfg-'));
+    const cfg = join(root, 'Spec.cfg');
+    writeFileSync(
+      cfg,
+      `INIT Init
+NEXT Next
+INVARIANTS
+  TypeInvariant \\* trailing comment DisabledOne
+  \\* DisabledTwo
+(* block comment
+  DisabledThree
+*)
+  Safety
+CONSTRAINT StateBound
+`,
+    );
+
+    expect(readTlaConfigInvariants(cfg)).toEqual(['Safety', 'TypeInvariant']);
+    expect(readTlaConfigInvariants(join(root, 'missing.cfg'))).toEqual([]);
+    expect(readTlaConfigInvariants(null)).toEqual([]);
   });
 });
