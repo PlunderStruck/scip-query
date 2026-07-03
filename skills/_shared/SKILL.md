@@ -122,6 +122,7 @@ scip-query twin-drift # Twin drift candidates: same-name (or near-name) function
 scip-query twin-ab <symbolA> <symbolB> # Generate a behavioral A/B scaffold comparing two same-concept twins (scip-integrity-audit drill 5) — a ready-to-fill vitest file, not an auto-executor
 scip-query not-implemented # Reachable placeholder stub candidates (throw-stub, TODO+return-default, empty body) — production callers can actually reach these; an unreachable stub is dead's job, not this one's
 scip-query decorative-checkers # Decorative checker candidates: validate*/verify*/check*/assert*/is*/has* callables with no reachable failure exit anywhere in their body
+scip-query test-quality # Test-quality candidates: assertion-free it/test bodies, a skipped-test ledger with git-blame age, and mock-echo tests that assert the same literal they stubbed into a mock
 scip-query similar-signatures # Find functions with near-identical type signatures (same shape)
 ```
 

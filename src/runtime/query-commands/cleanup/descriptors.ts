@@ -36,6 +36,7 @@ import {
   handleTwinAb,
   handleNotImplemented,
   handleDecorativeCheckers,
+  handleTestQuality,
 } from './handlers.js';
 import {
   handleReactComponentDuplicates,
@@ -583,6 +584,23 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     renderShape: 'list',
     docs: doc('Cleanup', ['scip-query decorative-checkers -s src/services']),
     handler: handleDecorativeCheckers,
+  }),
+  cleanupCommand({
+    id: 'test-quality',
+    command: 'test-quality',
+    description:
+      'Test-quality candidates: assertion-free it/test bodies, a skipped-test ledger with git-blame age, and mock-echo tests that assert the same literal they stubbed into a mock',
+    options: withJsonOption([
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option('-n, --limit <n>', 'Maximum findings per sub-check', parseInteger, 30),
+      option('--rot-days <n>', 'Skips older than this many days are reported as rot', parseInteger, 60),
+      option('--full', 'Run unbounded analysis on large indexes'),
+    ]),
+    budget: 'candidate-scan',
+    heuristic: { label: 'test-quality findings' },
+    renderShape: 'custom',
+    docs: doc('Cleanup', ['scip-query test-quality -s tests/queries']),
+    handler: handleTestQuality,
   }),
   cleanupCommand({
     id: 'twin-ab',

@@ -44,6 +44,7 @@ export { twinDrift, groupTwins, allTwinGroups } from './cleanup/twin-drift.js';
 export { twinAb, defaultTwinAbOutPath } from './cleanup/twin-ab.js';
 export { notImplemented } from './cleanup/not-implemented.js';
 export { decorativeCheckers } from './cleanup/decorative-checkers.js';
+export { testQuality } from './cleanup/test-quality.js';
 export { recentDuplicates } from './cleanup/recent-duplicates.js';
 export { planContext } from './impact/plan-context.js';
 export { checkHealthBaseline, collectBaselineFindings, writeHealthBaseline } from './health/health-baseline.js';
@@ -168,6 +169,16 @@ export type {
   DecorativeCheckerNameKind,
   DecorativeCheckerResolution,
 } from './cleanup/decorative-checkers.js';
+export type {
+  TestQualityReport,
+  TestQualityOptions,
+  AssertionFreeFinding,
+  AssertionFreeSeverity,
+  SkippedTestFinding,
+  SkippedTestKind,
+  SkipRot,
+  MockEchoFinding,
+} from './cleanup/test-quality.js';
 export type {
   RecentDuplicateBasis,
   RecentDuplicateDomain,

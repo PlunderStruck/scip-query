@@ -76,6 +76,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 | `twin-ab <symbolA> <symbolB>` | Generate a behavioral A/B scaffold comparing two same-concept twins (scip-integrity-audit drill 5) — a ready-to-fill vitest file, not an auto-executor | `--out <path>`<br>`--force`<br>`--json` |
 | `not-implemented` | Reachable placeholder stub candidates (throw-stub, TODO+return-default, empty body) — production callers can actually reach these; an unreachable stub is dead's job, not this one's | `-s, --scope <path>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
 | `decorative-checkers` | Decorative checker candidates: validate*/verify*/check*/assert*/is*/has* callables with no reachable failure exit anywhere in their body | `-s, --scope <path>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
+| `test-quality` | Test-quality candidates: assertion-free it/test bodies, a skipped-test ledger with git-blame age, and mock-echo tests that assert the same literal they stubbed into a mock | `-s, --scope <path>`<br>`-n, --limit <n>`<br>`--rot-days <n>`<br>`--full`<br>`--json` |
 | `similar-signatures` | Find functions with near-identical type signatures (same shape) | `-s, --scope <path>`<br>`--min-loc <n>`<br>`--max-shape-frequency <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
 
 ### Graph

@@ -212,7 +212,13 @@ function resolveHead(projectRoot: string): string | null {
   }
 }
 
-function runGit(projectRoot: string, args: string[]): string {
+/**
+ * Exported so other git-evidence consumers that need an arbitrary porcelain
+ * command (test-quality's per-line `git blame` for skip-ledger age) reuse
+ * this project-root-scoped, buffer-capped `execFileSync` wrapper instead of
+ * re-deriving the same subprocess invocation.
+ */
+export function runGit(projectRoot: string, args: string[]): string {
   return execFileSync('git', ['-C', projectRoot, ...args], {
     encoding: 'utf-8',
     maxBuffer: 64 * 1024 * 1024,

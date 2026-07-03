@@ -76,6 +76,7 @@ const queryCommandOrder = [
   'twin-ab',
   'not-implemented',
   'decorative-checkers',
+  'test-quality',
   'similar-signatures',
 ] as const;
 

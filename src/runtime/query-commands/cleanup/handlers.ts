@@ -632,6 +632,53 @@ export const handleDecorativeCheckers = budgetedListCommand('decorative-checkers
   after: (rows) => console.log(`\n${rows.length} decorative checker candidate(s).`),
 });
 
+export const handleTestQuality = budgetedDbCommand('test-quality', ({ db, args, opts, budget }) => {
+  const report = queries.testQuality(db, {
+    scope: stringOptionValue(opts, 'scope'),
+    limit: definedLimitOption(opts, 'limit', 30),
+    scanLimit: budget.scanLimit,
+    rotDays: numberOptionValue(opts, 'rotDays'),
+  });
+
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('test-quality', args, opts, report, { analysisBudget: budget.analysisBudget });
+    return;
+  }
+
+  renderHeuristicNotice('test-quality findings');
+  const total = report.assertionFree.length + report.skipped.length + report.mockEcho.length;
+  if (total === 0) {
+    render.empty('No test-quality findings.');
+    return;
+  }
+
+  if (report.assertionFree.length > 0) {
+    console.log(`\nASSERTION-FREE (${report.assertionFree.length})`);
+    render.list(
+      report.assertionFree,
+      (r) => `  ${displayPathRange(r.file, r.startLine, r.endLine)}  "${r.title}"  (severity: ${r.severity})`,
+    );
+  }
+  if (report.skipped.length > 0) {
+    console.log(`\nSKIPPED (${report.skipped.length})`);
+    render.list(
+      report.skipped,
+      (r) =>
+        `  ${r.file}:${r.startLine + 1}  "${r.title}"  (${r.blockKind}.${r.skipKind}, age: ${r.ageDays ?? 'unknown'}d, ${r.rot})`,
+    );
+  }
+  if (report.mockEcho.length > 0) {
+    console.log(`\nMOCK-ECHO (${report.mockEcho.length})`);
+    render.list(
+      report.mockEcho,
+      (r) => `  ${displayPathRange(r.file, r.startLine, r.endLine)}  "${r.title}"  (echoed: ${r.echoedValue})`,
+    );
+  }
+  console.log(
+    `\n${report.assertionFree.length} assertion-free, ${report.skipped.length} skipped, ${report.mockEcho.length} mock-echo.`,
+  );
+});
+
 export const handleTwinAb = reportCommand<queries.TwinAbSuccess & { outPath: string }>({
   commandName: 'twin-ab',
   query: ({ db, args, opts }) => {

@@ -269,6 +269,10 @@
       "import": "./dist/queries/system.js",
       "types": "./dist/queries/system.d.ts"
     },
+    "./queries/test-quality": {
+      "import": "./dist/queries/test-quality.js",
+      "types": "./dist/queries/test-quality.d.ts"
+    },
     "./queries/trace": {
       "import": "./dist/queries/trace.js",
       "types": "./dist/queries/trace.d.ts"
