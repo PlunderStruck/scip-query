@@ -51,6 +51,7 @@ export function parseSanyXmlFacts(xml: string): SanyModuleFacts {
   const variableByUid = new Map<string, string>();
   const builtinByUid = new Map<string, string>();
   const operatorEntries: ContextEntry[] = [];
+  const operatorByUid = new Map<string, ContextEntry>();
 
   for (const entry of entries) {
     if (entry.type === 'OpDeclNode' && entry.kind === 3 && entry.uniquename) {
@@ -59,12 +60,21 @@ export function parseSanyXmlFacts(xml: string): SanyModuleFacts {
       builtinByUid.set(entry.uid, entry.uniquename);
     } else if (entry.type === 'UserDefinedOpKind' && entry.uniquename) {
       operatorEntries.push(entry);
+      operatorByUid.set(entry.uid, entry);
     }
   }
 
   const actions: SanyActionFacts[] = [];
   for (const operator of operatorEntries) {
-    const facts = deriveActionFacts(operator.block, variableByUid, builtinByUid);
+    const facts = deriveActionFacts(
+      operator.block,
+      variableByUid,
+      builtinByUid,
+      operatorByUid,
+      operator.filename,
+      new Set([operator.uid]),
+      0,
+    );
     actions.push({ name: operator.uniquename!, reads: facts.reads, writes: facts.writes });
   }
 
@@ -81,9 +91,25 @@ interface ContextEntry {
   type: string;
   uniquename: string | null;
   kind: number | null;
+  /**
+   * The module the entry's own declaration/definition lives in (its first
+   * `<filename>` — SANY XML nests body-node locations after it, so the
+   * first occurrence in `block` is always the entry's own declaration
+   * site). Null when the entry carries no `<location>` at all (e.g. the
+   * trimmed synthetic fixtures used elsewhere in this test file).
+   */
+  filename: string | null;
   /** Raw text of the whole entry block, for body reference walking. */
   block: string;
 }
+
+/**
+ * I2 / followup #24: user-defined-operator-reference expansion is bounded
+ * to avoid pathological or accidentally-cyclic TLA+ definitions blowing up
+ * a single verify run. 8 hops comfortably covers real Vega-shape helper
+ * delegation (one or two levels) with headroom.
+ */
+const MAX_OPERATOR_EXPANSION_DEPTH = 8;
 
 function parseContextEntries(xml: string): ContextEntry[] {
   const entries: ContextEntry[] = [];
@@ -94,21 +120,42 @@ function parseContextEntries(xml: string): ContextEntry[] {
     const block = xml.slice(start, end < 0 ? xml.length : end);
     const uniquename = firstElementText(block, 'uniquename');
     const kindText = firstElementText(block, 'kind');
+    const filename = firstElementText(block, 'filename');
     entries.push({
       uid: match[1]!,
       type: match[2]!,
       uniquename: uniquename === null ? null : decodeXmlEntity(uniquename),
       kind: kindText === null ? null : Number.parseInt(kindText, 10),
+      filename: filename === null ? null : decodeXmlEntity(filename),
       block,
     });
   }
   return entries;
 }
 
+/**
+ * I2 / followup #24: an action defined by delegating entirely to a helper
+ * operator (`Act == Helper`, or `Act == Helper1 /\ Helper2`) reports
+ * `writes: none` unless the helper's own primed-variable/UNCHANGED facts
+ * are expanded into the referencing action. A reference to a user-defined
+ * operator appears as `UserDefinedOpKindRef` (distinct from `OpDeclNodeRef`,
+ * which only ever names a VARIABLE/CONSTANT declaration) — when one is
+ * found, recursively derive the referenced operator's own facts and merge
+ * them in, bounded by depth and a same-expansion-path visited set so a
+ * cyclic or deeply nested definition cannot hang or recurse unboundedly.
+ * Expansion never crosses a module boundary: a candidate whose own
+ * declaration `<filename>` differs from the top-level action's is left
+ * unexpanded (its reference simply contributes nothing, exactly as before
+ * this change), matching "same-module only".
+ */
 function deriveActionFacts(
   block: string,
   variableByUid: ReadonlyMap<string, string>,
   builtinByUid: ReadonlyMap<string, string>,
+  operatorByUid: ReadonlyMap<string, ContextEntry>,
+  moduleFilename: string | null,
+  visited: ReadonlySet<string>,
+  depth: number,
 ): { reads: string[]; writes: string[] } {
   const reads = new Set<string>();
   const writes = new Set<string>();
@@ -135,6 +182,29 @@ function deriveActionFacts(
         // Explicitly unchanged: neither a read nor a write.
       } else {
         reads.add(variable);
+      }
+      continue;
+    }
+    if (refType === 'UserDefinedOpKindRef') {
+      if (mode === 'unchanged-run') mode = 'read';
+      const target = operatorByUid.get(uid!);
+      if (
+        target &&
+        depth < MAX_OPERATOR_EXPANSION_DEPTH &&
+        !visited.has(target.uid) &&
+        target.filename === moduleFilename
+      ) {
+        const nested = deriveActionFacts(
+          target.block,
+          variableByUid,
+          builtinByUid,
+          operatorByUid,
+          moduleFilename,
+          new Set([...visited, target.uid]),
+          depth + 1,
+        );
+        for (const read of nested.reads) reads.add(read);
+        for (const write of nested.writes) writes.add(write);
       }
       continue;
     }

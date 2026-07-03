@@ -37,6 +37,15 @@ deviation protocol = BLOCKED-note here and continue.
 - **Fixture**: module where `Act == Helper` and `Helper == x' = 1 /\ UNCHANGED y`; facts for
   `Act` must include the write of `x` and the read/unchanged of `y`.
 
+Deviations: applying this repo's own `specs/evidence-cache/EvidenceCacheCoherence.tla` +
+mapping through the fixed expansion raises its finding count from 6 to 16 (all new findings are
+`model-mapping-read` warnings on `CurrentServeProject`/`DisabledServeAttempt`/etc — actions whose
+TLA+ definitions delegate reads through a shared helper operator that expansion now correctly
+attributes). 0 errors before and after; exit code unchanged (1 without `--allow-unknown`, 0 with
+it) — this is the intended effect of I2 (previously-hidden SANY facts becoming visible), not a
+regression. Not fixed here: updating this repo's own mapping to declare the newly-visible reads
+is out of scope for I2's unit-level fix; left as a follow-up if desired.
+
 ## I3 — opt-out of the forced self-alias (followup #25)
 
 - **Where**: `src/tla/model-contract.ts:426` — `[...new Set([name, ...aliases])]` force-includes
