@@ -49,6 +49,15 @@ export interface TlaVariableMapping {
   /** Binds this variable to SQL-backed state (prepared statements). */
   statements?: TlaStatementBinding[];
   waive?: TlaVariableWaiver;
+  /**
+   * I3 / followup #25: when `false`, the variable's own name is NOT
+   * force-included in `aliases` — an object-literal key or identifier that
+   * merely echoes the variable name (but means something unrelated
+   * elsewhere in scope) no longer attributes a write/read. Defaults to
+   * `true` (unset here; only stored when explicitly `false`), matching the
+   * pre-I3 behavior exactly for every existing mapping.
+   */
+  selfAlias?: boolean;
 }
 
 export interface TlaActionMapping {
@@ -421,16 +430,32 @@ function parseVariables(raw: unknown, errors: string[]): Record<string, TlaVaria
     const resource = parseResourceBinding(value.resource, name, errors);
     const statements = parseStatementBindings(value.statements, name, errors);
     const waive = parseVariableWaiver(value.waive, name, errors);
+    const selfAlias = parseSelfAlias(value.selfAlias, name, errors);
+    const effectiveAliases = selfAlias ? [...new Set([name, ...aliases])] : [...new Set(aliases)];
+    if (selfAlias === false && effectiveAliases.length === 0 && !resource && !statements && !waive) {
+      errors.push(
+        `variables.${name}.selfAlias is false but no aliases, resource, statements, or waive are set — ${name} would be unattributable; add an explicit alias, bind resource/statements, or add variables.${name}.waive with a reason`,
+      );
+    }
     out[name] = {
       code,
-      aliases: [...new Set([name, ...aliases])],
+      aliases: effectiveAliases,
       projection: typeof value.projection === 'string' ? value.projection : undefined,
       ...(resource ? { resource } : {}),
       ...(statements ? { statements } : {}),
       ...(waive ? { waive } : {}),
+      ...(selfAlias === false ? { selfAlias: false } : {}),
     };
   }
   return out;
+}
+
+/** I3 / followup #25: `variables.<v>.selfAlias`, defaulting to `true`. */
+function parseSelfAlias(raw: unknown, variableName: string, errors: string[]): boolean {
+  if (raw === undefined) return true;
+  if (typeof raw === 'boolean') return raw;
+  errors.push(`variables.${variableName}.selfAlias must be a boolean when present`);
+  return true;
 }
 
 function parseResourceBinding(raw: unknown, variableName: string, errors: string[]): TlaResourceBinding | undefined {

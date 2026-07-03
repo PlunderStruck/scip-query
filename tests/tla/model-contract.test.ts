@@ -169,6 +169,100 @@ Enqueue(job) == queue' = Append(queue, job)
     expect(loaded.errors).toContain('variables.stage.waive.reason must be a non-empty string');
   });
 
+  it('parses selfAlias: false with an explicit alias, excluding the variable name (I3 / followup #25)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Status.scip-tla.json'),
+      JSON.stringify({
+        variables: {
+          status: { code: ['src/status.ts/lifecycleStage'], aliases: ['lifecycleStage'], selfAlias: false },
+        },
+        actions: { Transition: { code: ['src/status.ts/transition'], writes: ['status'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Status.scip-tla.json');
+
+    expect(loaded.errors).toEqual([]);
+    expect(loaded.loaded?.contract.variables.status?.aliases).toEqual(['lifecycleStage']);
+    expect(loaded.loaded?.contract.variables.status?.selfAlias).toBe(false);
+  });
+
+  it('defaults selfAlias to true, keeping the variable name in aliases', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Status.scip-tla.json'),
+      JSON.stringify({
+        variables: {
+          status: { code: ['src/status.ts/lifecycleStage'], aliases: ['lifecycleStage'] },
+        },
+        actions: { Transition: { code: ['src/status.ts/transition'], writes: ['status'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Status.scip-tla.json');
+
+    expect(loaded.errors).toEqual([]);
+    expect(loaded.loaded?.contract.variables.status?.aliases).toEqual(['status', 'lifecycleStage']);
+    expect(loaded.loaded?.contract.variables.status?.selfAlias).toBeUndefined();
+  });
+
+  it('rejects selfAlias: false with no other attribution tier (no alias, resource, statements, or waive)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Broken.scip-tla.json'),
+      JSON.stringify({
+        variables: {
+          status: { code: ['src/status.ts/lifecycleStage'], selfAlias: false },
+        },
+        actions: { Transition: { code: ['src/status.ts/transition'], writes: ['status'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Broken.scip-tla.json');
+
+    expect(loaded.loaded).toBeUndefined();
+    expect(loaded.errors).toContain(
+      'variables.status.selfAlias is false but no aliases, resource, statements, or waive are set — status would be unattributable; add an explicit alias, bind resource/statements, or add variables.status.waive with a reason',
+    );
+  });
+
+  it('accepts selfAlias: false with no alias when a resource binding provides attribution', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Lock.scip-tla.json'),
+      JSON.stringify({
+        variables: {
+          lockOwner: { code: ['src/lock.ts/pid'], selfAlias: false, resource: { path: 'lockPath' } },
+        },
+        actions: { Release: { code: ['src/lock.ts/release'], writes: ['lockOwner'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Lock.scip-tla.json');
+
+    expect(loaded.errors).toEqual([]);
+    expect(loaded.loaded?.contract.variables.lockOwner?.aliases).toEqual([]);
+  });
+
+  it('rejects a non-boolean selfAlias', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Broken.scip-tla.json'),
+      JSON.stringify({
+        variables: {
+          status: { code: ['src/status.ts/lifecycleStage'], aliases: ['lifecycleStage'], selfAlias: 'no' },
+        },
+        actions: { Transition: { code: ['src/status.ts/transition'], writes: ['status'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Broken.scip-tla.json');
+
+    expect(loaded.loaded).toBeUndefined();
+    expect(loaded.errors).toContain('variables.status.selfAlias must be a boolean when present');
+  });
+
   it('rejects two variables sharing an alias', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
     writeFileSync(

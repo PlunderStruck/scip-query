@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { ScipDatabase } from '../../src/storage/db.js';
 import type { ScipQueryConfig } from '../../src/domain/types.js';
 import {
+  loadTlaModelContract,
   readTlaModuleFacts,
   readTlaModuleFactsFromSanyXml,
   type TlaModelContract,
@@ -752,6 +753,151 @@ Check == UNCHANGED lockOwner
         ]),
       );
       expect(result.findings.filter((finding) => finding.severity === 'error')).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('honors selfAlias: false so an object literal key sharing the variable name does not attribute (I3 / followup #25)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/status.ts')
+      .symbol(
+        1,
+        'scip-typescript npm test 1.0.0 src/`status.ts`/lifecycleStage.',
+        'lifecycleStage',
+        SymbolInformation_Kind.Variable,
+      )
+      .symbol(
+        2,
+        'scip-typescript npm test 1.0.0 src/`status.ts`/transition().',
+        'transition',
+        SymbolInformation_Kind.Function,
+      )
+      .definition(1, 1, 1, 0, 0, 0, 30)
+      .definition(2, 1, 2, 2, 0, 6, 1)
+      .chunk(1, 1, 0, 8)
+      .write();
+    const config: ScipQueryConfig = { projectRoot: root, dbPath, indexPath: join(root, 'index.scip') };
+    writeFixtureFiles(root, {
+      'src/status.ts': [
+        'export let lifecycleStage: string = "idle";',
+        '',
+        'export function transition() {',
+        '  lifecycleStage = "active";',
+        '  const unrelated = { status: "ok" };',
+        '  return unrelated;',
+        '}',
+      ],
+    });
+    writeFileSync(
+      join(root, 'Status.scip-tla.json'),
+      JSON.stringify({
+        variables: {
+          status: { code: ['lifecycleStage'], aliases: ['lifecycleStage'], selfAlias: false },
+        },
+        actions: {
+          Transition: { code: ['transition'], reads: [], writes: ['status'] },
+        },
+      }),
+    );
+    writeFileSync(
+      join(root, 'Status.tla'),
+      `---- MODULE Status ----
+VARIABLES status
+Transition == status' = "active"
+====
+`,
+    );
+    const db = new ScipDatabase(config);
+    try {
+      const loaded = loadTlaModelContract(root, 'Status.scip-tla.json');
+      expect(loaded.errors).toEqual([]);
+      const contract = loaded.loaded!.contract;
+      // selfAlias: false — the variable's own name ("status") is not
+      // force-included; only the explicit, precise alias remains.
+      expect(contract.variables.status?.aliases).toEqual(['lifecycleStage']);
+
+      const result = verifyTlaConformance(db, contract, readTlaModuleFacts(root, 'Status.tla'));
+
+      expect(result.staticWrites).toEqual(
+        expect.arrayContaining([expect.objectContaining({ variable: 'status', kind: 'assignment' })]),
+      );
+      // The unrelated object literal `{ status: "ok" }` must not attribute —
+      // "status" is no longer an alias of this variable.
+      expect(result.staticWrites).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ variable: 'status', kind: 'object-field' })]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('with default selfAlias, an object literal key sharing the variable name attributes a false-positive write (I3 baseline)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/status.ts')
+      .symbol(
+        1,
+        'scip-typescript npm test 1.0.0 src/`status.ts`/lifecycleStage.',
+        'lifecycleStage',
+        SymbolInformation_Kind.Variable,
+      )
+      .symbol(
+        2,
+        'scip-typescript npm test 1.0.0 src/`status.ts`/transition().',
+        'transition',
+        SymbolInformation_Kind.Function,
+      )
+      .definition(1, 1, 1, 0, 0, 0, 30)
+      .definition(2, 1, 2, 2, 0, 6, 1)
+      .chunk(1, 1, 0, 8)
+      .write();
+    const config: ScipQueryConfig = { projectRoot: root, dbPath, indexPath: join(root, 'index.scip') };
+    writeFixtureFiles(root, {
+      'src/status.ts': [
+        'export let lifecycleStage: string = "idle";',
+        '',
+        'export function transition() {',
+        '  lifecycleStage = "active";',
+        '  const unrelated = { status: "ok" };',
+        '  return unrelated;',
+        '}',
+      ],
+    });
+    writeFileSync(
+      join(root, 'Status.scip-tla.json'),
+      JSON.stringify({
+        variables: {
+          status: { code: ['lifecycleStage'], aliases: ['lifecycleStage'] },
+        },
+        actions: {
+          Transition: { code: ['transition'], reads: [], writes: ['status'] },
+        },
+      }),
+    );
+    writeFileSync(
+      join(root, 'Status.tla'),
+      `---- MODULE Status ----
+VARIABLES status
+Transition == status' = "active"
+====
+`,
+    );
+    const db = new ScipDatabase(config);
+    try {
+      const loaded = loadTlaModelContract(root, 'Status.scip-tla.json');
+      expect(loaded.errors).toEqual([]);
+      const contract = loaded.loaded!.contract;
+      expect(contract.variables.status?.aliases).toEqual(['status', 'lifecycleStage']);
+
+      const result = verifyTlaConformance(db, contract, readTlaModuleFacts(root, 'Status.tla'));
+
+      expect(result.staticWrites).toEqual(
+        expect.arrayContaining([expect.objectContaining({ variable: 'status', kind: 'object-field' })]),
+      );
     } finally {
       db.close();
     }
