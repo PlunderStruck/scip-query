@@ -238,3 +238,19 @@ dimension), and the public command surface gained `twin-ab` (behavioral A/B
 scaffold generator for scip-integrity-audit drill 5) in `queryCommandOrder`
 and `PUBLIC_QUERY_ENTRIES`. All three files still own their respective
 canonical lists; only the list contents grew.
+
+## 2026-07-03 Integrity Detectors
+
+The public command surface gained three integrity detectors (calibrated
+against Vega_2.0 and Stable_Management before wiring — see
+`docs/validation/2026-07-03-integrity-detector-calibration.md`):
+`not-implemented` (placeholder stubs reachable from production entry
+surfaces; mechanizes scip-integrity-audit drill 3's fallback autopsy),
+`decorative-checkers` (checker-named callables with no reachable failure
+exit; mechanizes drill 1), and `test-quality` (assertion-free tests,
+aged skips, mock-echo). All three are standalone commands only — none are
+wired into `HEALTH_PHASES` or `DIFF_GATE_CHECKS` per the calibration's
+wiring decisions (test-quality's health eligibility is ledgered as a
+followup). Registration files (`queryCommandOrder`,
+`PUBLIC_QUERY_ENTRIES`, `query-command-specs.ts`) still own their
+canonical lists; only the list contents grew.
