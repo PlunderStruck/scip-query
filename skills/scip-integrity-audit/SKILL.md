@@ -9,6 +9,9 @@ commands:
   - scip-query twin-drift -s <scope> --json
   - scip-query twin-ab <symbolA> <symbolB>
   - scip-query outline <file> --signatures
+  - scip-query decorative-checkers -s <scope> --json
+  - scip-query not-implemented -s <scope> --json
+  - scip-query test-quality -s <scope> --json
 ---
 
 # scip-integrity-audit
@@ -43,6 +46,13 @@ decorative: file it as a defect, not a note.
 Complete only when every checker in scope has been witnessed rejecting a
 constructed should-fail input, or is listed with a reason it cannot be.
 
+Mechanized by: `scip-query decorative-checkers` finds `validate*`/`verify*`/
+`check*`/`assert*`/`is*`/`has*` callables with no reachable failure exit
+anywhere in their body (calibrated 2026-07-03 against two external repos —
+standalone-only; noise archetypes past one-hop delegation in
+`docs/validation/2026-07-03-integrity-detector-calibration.md`). Run it first
+to shortlist candidates before hand-constructing should-fail inputs.
+
 ### 2. Diff every adapter against captured reality
 
 For each parser/adapter of an external format (tool output, XML/JSON
@@ -64,6 +74,15 @@ for parser/AST branch reachability. A fallback that always fires means the
 feature above it is dead — date of death: birth.
 Complete only when every fallback's primary path has a witness or a filed
 defect.
+
+Mechanized by: `scip-query not-implemented` finds reachable placeholder
+stubs (`throw new Error('not implemented')`, TODO-comment + return-default,
+empty bodies) that a real caller, entry surface, or package-surface export
+can actually reach — the graph fact that separates "primary path never
+built" from `dead`'s "primary path built but unreferenced." Standalone-only
+(calibrated 2026-07-03; 0 live findings on two external repos post-fix, see
+the calibration report) — treat a clean run as "nothing this shape found,"
+not as "every fallback's primary path is proven live."
 
 ### 4. Hand-compute every metric twice
 
@@ -101,3 +120,16 @@ the drill that exposed it, the should-fail input or real sample used, and
 the fix. The audit is complete only when every drill's exit criterion is
 met for the scope, and every defect found has a regression artifact — a
 test, fixture, or model that fails on the pre-fix behavior.
+
+A regression artifact that doesn't actually assert anything, or asserts the
+same literal it stubbed into its own mock, is a fake witness — the same
+"reports success without doing the work" failure mode this skill hunts in
+production code, just relocated to the test suite. Run `scip-query
+test-quality -s <scope>` over the audit's own regression artifacts (and,
+periodically, over the suite at large) to catch this: assertion-free test
+bodies, a skipped-test ledger with git-blame age (a skip with no fix date
+attached is a claim nobody is checking), and mock-echo (a test that only
+proves its own stub). Standalone-only, mixed precision by sub-check
+(calibrated 2026-07-03): assertion-free and skipped are high-precision;
+mock-echo is intentionally low-precision (syntactic same-literal matching,
+not dataflow) — treat its output as a reviewed candidate list, not a verdict.

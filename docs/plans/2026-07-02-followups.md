@@ -372,3 +372,46 @@ includeClassMemberFallbacks: true })` (`src/symbols/symbol-row-policy.ts`,
     `const`/`let`/`var` declaration line for the matching alias before the mutation regex runs.
     Only the declaration statement itself is excluded — a later assignment to the same binding
     (including a module-level `let` reassigned inside an action) keeps attributing.
+
+## From the 2026-07-03 integrity-detector calibration
+
+Noise archetypes found calibrating `not-implemented`/`decorative-checkers`/`test-quality` against
+Vega_2.0 and Stable_Management (read-only) that were deliberately documented rather than chased
+further — each would require expanding the detector's stated scope, not fixing a bug in it. Source
+for all five: `docs/validation/2026-07-03-integrity-detector-calibration.md`.
+
+27. **`decorative-checkers`: multi-hop delegation through a wrapping/memoizing utility.** A checker
+    whose real failure path is reached through more than one call hop (e.g. an `await
+    someWrapper(req, () => realAssertion(...))` shape) reads as decorative — `isThinForwarderBody`'s
+    ≤2-statement, single-call shape requirement never engages one-hop resolution for it. Example:
+    `assertRequestCompanionOrganizationScope`,
+    `apps/api/src/middleware/access-policy-request-gateway.ts:62` (Vega_2.0).
+28. **`decorative-checkers`: guard-clauses-then-delegate tail call.** 2-3 early-return guard
+    statements followed by a delegating call as the LAST statement is not a single-statement
+    thin-forwarder, so one-hop resolution never triggers even though the delegate is exactly one hop
+    away. Examples: `assertUserLimitAllowsUserId`/`assertCanAddUser`/`assertCanAddUserByEmail`
+    (`apps/api/src/services/instance-settings.service.ts:219,233,245`),
+    `validateModelProfileTuning` (`apps/api/src/modules/ai-provider/ai-provider.manager.ts:1010`),
+    both Vega_2.0. Fixing either 27 or 28 well means widening the delegate-target-resolution shape
+    beyond `isThinForwarderBody` without also matching arbitrary multi-statement bodies that merely
+    happen to end in a call — needs its own design pass, not a drive-by regex tweak.
+29. **`decorative-checkers`: indirect diagnostics helper, one hop past the sink pattern.** The
+    `DIAGNOSTIC_SINK_PATTERN` fix (`.addIssue(`/`.push(`) only sees the sink call in the checker's
+    OWN body text; `validateCompanionClient`/`validateCompanionRedirectUri`
+    (`apps/api/src/modules/auth/auth.routes.ts:67,76`, Vega_2.0) call a named helper
+    (`addUnknownCompanionClientIssue(ctx)`) that itself calls `ctx.addIssue` — one more hop than the
+    literal-pattern fix reaches. Same underlying shape as #27/#28; likely worth solving together.
+30. **`decorative-checkers`: Effect-TS (or similar effect-system) generator bodies.** A checker
+    wrapped in `Effect.gen(function* () { ... })` has its real control flow inside generator
+    `yield*`/`Effect.fail` sequencing, invisible to plain throw/return pattern matching. Example:
+    `assertVetFacilityBelongsToStable`
+    (`backend/src/workflows/incidents.ts:262`, Stable_Management). Framework-specific; would need a
+    dedicated Effect-TS-aware pass, not a general fix.
+31. **`test-quality` mock-echo: designed recall ceiling, not a bug.** Every sampled Vega_2.0/
+    Stable_Management mock-echo finding was a test where a stubbed value genuinely flows through
+    real application logic to a derived assertion (`mockResolvedValueOnce('x')` → `expect(exposed
+    .data.value).toBe('x')`), not a test asserting its own mock's literal directly. This is the
+    exact trade-off the sub-check's own design named up front ("syntactic same-literal, high
+    precision, low recall — do not chase dataflow"); recorded here only so the expected steady-state
+    noise rate is visible to whoever next tunes `--limit` or decides whether to review mock-echo
+    output routinely — not something to "fix."

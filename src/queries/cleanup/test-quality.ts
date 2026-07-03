@@ -110,8 +110,8 @@ export function testQuality(db: ScipDatabase, opts: TestQualityOptions = {}): Te
       if (!hasAssertionCall(bodyMasked, vocabulary)) {
         assertionFree.push({
           file,
-          startLine: lineOf(source, block.callStart),
-          endLine: lineOf(source, block.callEnd),
+          startLine: lineNumberAt(source, block.callStart),
+          endLine: lineNumberAt(source, block.callEnd),
           title,
           severity: /\bawait\b/.test(bodyMasked) ? 'low' : 'high',
         });
@@ -121,8 +121,8 @@ export function testQuality(db: ScipDatabase, opts: TestQualityOptions = {}): Te
       if (echo) {
         mockEcho.push({
           file,
-          startLine: lineOf(source, block.callStart),
-          endLine: lineOf(source, block.callEnd),
+          startLine: lineNumberAt(source, block.callStart),
+          endLine: lineNumberAt(source, block.callEnd),
           title,
           echoedValue: echo,
         });
@@ -201,7 +201,7 @@ function findMatchingParenEnd(masked: string, openParenIndex: number): number {
   return masked.length - 1;
 }
 
-function lineOf(source: string, offset: number): number {
+function lineNumberAt(source: string, offset: number): number {
   let line = 0;
   for (let i = 0; i < offset && i < source.length; i += 1) {
     if (source[i] === '\n') line += 1;
@@ -403,7 +403,7 @@ function equalityAssertedValues(maskedBody: string, rawBody: string): string[] {
 function skippedFinding(db: ScipDatabase, file: string, block: TestBlock, rotDays: number): SkippedTestFinding {
   const source = getSourceText(db, file);
   const title = extractTitle(source, block.argsStart);
-  const line = lineOf(source, block.callStart);
+  const line = lineNumberAt(source, block.callStart);
   const ageDays = blameAgeDays(db.config.projectRoot, file, line);
   const rot: SkipRot = ageDays === null ? 'unknown' : ageDays >= rotDays ? 'rot' : 'workflow';
   return {
