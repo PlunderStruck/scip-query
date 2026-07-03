@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   closeSync,
   copyFileSync,
@@ -9,6 +10,7 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, extname, join } from 'node:path';
@@ -66,6 +68,27 @@ export interface ReindexOptions {
   trigger?: RefreshTrigger;
 }
 
+// Plan 6 6.5.2 — shard-reuse diagnostics: one entry per cached indexing unit
+// (a language shard, or one TypeScript workspace project shard within a
+// language) explaining whether it was reused and, if not, why.
+export interface ReindexShardDiagnostic {
+  /** Unique id for this shard: the language, or `<language>:<projectPath>` for a TS workspace sub-project. */
+  id: string;
+  language: SupportedLanguage;
+  /** True when the cached shard was reused without rerunning its indexer. */
+  reused: boolean;
+  /** Present only when `reused` is false: why the cached shard could not be used. */
+  missReason?: string;
+  /** Short hash of this shard's fingerprint inputs (source content + indexer options). */
+  fingerprint: string;
+  /** Size in bytes of the shard's cached SCIP output, or null when unavailable. */
+  outputBytes: number | null;
+  /** Wall time spent producing this shard; 0 when reused. */
+  durationMs: number;
+  /** Indexer command invoked to produce this shard; absent when reused. */
+  command?: string;
+}
+
 export interface ReindexResult {
   /** Languages that were successfully indexed. */
   languages: SupportedLanguage[];
@@ -81,6 +104,8 @@ export interface ReindexResult {
   skipped: { language: SupportedLanguage; reason: string }[];
   /** Persisted description of this refresh attempt. */
   lastRefresh?: LastRefreshMetadata;
+  /** Per-shard reuse diagnostics (plan6 6.5.2); one entry per language/workspace shard. */
+  shards?: ReindexShardDiagnostic[];
 }
 
 interface PreparedIndexerPlan {
@@ -119,6 +144,7 @@ interface FreshIndexRun {
   indexedOutputs: IndexedOutput[];
   skippedLanguages: { language: SupportedLanguage; reason: string }[];
   reusedLanguages: SupportedLanguage[];
+  shards: ReindexShardDiagnostic[];
 }
 
 interface ReindexLockMetadata {
@@ -281,7 +307,34 @@ function reuseExistingIndexIfPossible(opts: {
     reused: true,
     skipped: [],
     lastRefresh,
+    shards: buildFullyReusedShardDiagnostics(opts.paths, opts.opts.projectRoot, opts.languages, opts.opts),
   };
+}
+
+// Plan 6 6.5.2: every language is reused together on the whole-project reuse
+// path (the project fingerprint check above already proved every tracked
+// input is unchanged), so each shard's diagnostic is `reused: true` with no
+// indexer command or miss reason.
+function buildFullyReusedShardDiagnostics(
+  paths: ReindexOutputPaths,
+  projectRoot: string,
+  languages: readonly SupportedLanguage[],
+  opts: {
+    pnpmWorkspaces?: boolean;
+    typescriptProjectMode?: TypeScriptProjectMode;
+    typescriptProjects?: readonly string[];
+    clojureConfigPath?: string;
+  },
+): ReindexShardDiagnostic[] {
+  const fingerprints = computeLanguageFingerprints(projectRoot, languages, opts);
+  return languages.map((language) => ({
+    id: language,
+    language,
+    reused: true,
+    fingerprint: hashFingerprint(fingerprints[language]),
+    outputBytes: fileSizeOrNull(languageShardPath(paths.outputDb, language)),
+    durationMs: 0,
+  }));
 }
 
 function createTempReindexPaths(paths: ReindexOutputPaths): TempReindexPaths {
@@ -311,7 +364,10 @@ async function runFreshReindex(opts: {
     NODE_OPTIONS: `--max-old-space-size=${opts.maxHeapMb}`,
   };
 
-  const { indexedOutputs, skippedLanguages, reusedLanguages } = await runLanguageIndexersForFreshReindex(opts, env);
+  const { indexedOutputs, skippedLanguages, reusedLanguages, shards } = await runLanguageIndexersForFreshReindex(
+    opts,
+    env,
+  );
   if (reusedLanguages.length > 0) {
     opts.onStatus(`Reused ${reusedLanguages.length} cached language shard(s): ${reusedLanguages.join(', ')}`);
   }
@@ -326,6 +382,7 @@ async function runFreshReindex(opts: {
     reused: false,
     skipped: skippedLanguages,
     lastRefresh,
+    shards,
   };
 }
 
@@ -333,8 +390,23 @@ async function runLanguageIndexersForFreshReindex(
   opts: Parameters<typeof runFreshReindex>[0],
   env: NodeJS.ProcessEnv,
 ): Promise<FreshIndexRun> {
-  const reusableOutputs = reusableLanguageOutputs(opts);
-  const reused = new Set(reusableOutputs.map((output) => output.language));
+  const classification = classifyLanguageShardReuse({
+    paths: opts.paths,
+    projectRoot: opts.projectRoot,
+    languages: opts.languages,
+    pnpmWorkspaces: opts.opts.pnpmWorkspaces,
+    typescriptProjectMode: opts.opts.typescriptProjectMode,
+    typescriptProjects: opts.opts.typescriptProjects,
+    clojureConfigPath: opts.opts.clojureConfigPath,
+  });
+  const reusableOutputs: IndexedOutput[] = [];
+  const reused = new Set<SupportedLanguage>();
+  for (const [language, info] of classification) {
+    if (info.reused) {
+      reusableOutputs.push({ language, scipPath: info.scipPath });
+      reused.add(language);
+    }
+  }
   for (const language of reused) {
     opts.onStatus(`Reusing cached ${language} SCIP shard (language inputs unchanged).`);
   }
@@ -360,7 +432,136 @@ async function runLanguageIndexersForFreshReindex(
   const { indexedOutputs } = collectIndexerOutputs(runResults, skippedLanguages);
   const allIndexedOutputs = [...reusableOutputs, ...indexedOutputs];
   validateIndexingOutcome(allIndexedOutputs, skippedLanguages, opts.languages, opts.opts.allowPartial, opts.onStatus);
-  return { indexedOutputs: allIndexedOutputs, skippedLanguages, reusedLanguages: [...reused] };
+  const shards = buildFreshReindexShardDiagnostics(classification, runResults);
+  return { indexedOutputs: allIndexedOutputs, skippedLanguages, reusedLanguages: [...reused], shards };
+}
+
+interface LanguageShardClassification {
+  reused: boolean;
+  reason?: string;
+  fingerprint: ReindexFingerprint;
+  scipPath: string;
+}
+
+// Plan 6 6.5.2: decides, per requested language, whether its cached SCIP
+// shard can be reused, and — when it cannot — records a specific reason so
+// `reindex --json` can explain the miss instead of only reporting the
+// binary rerun/reuse outcome. Reuse acceptance criteria are unchanged from
+// the pre-6.5.2 `reusableLanguageOutputs` behavior: a v3 meta.json with a
+// per-language fingerprint that matches the current one and a shard file
+// still present on disk.
+function classifyLanguageShardReuse(opts: {
+  paths: ReindexOutputPaths;
+  projectRoot: string;
+  languages: readonly SupportedLanguage[];
+  pnpmWorkspaces?: boolean;
+  typescriptProjectMode?: TypeScriptProjectMode;
+  typescriptProjects?: readonly string[];
+  clojureConfigPath?: string;
+}): Map<SupportedLanguage, LanguageShardClassification> {
+  let meta: Partial<ReindexMetadata> | null;
+  try {
+    meta = JSON.parse(readFileSync(opts.paths.metaPath, 'utf-8')) as Partial<ReindexMetadata>;
+  } catch {
+    meta = null;
+  }
+  const current = computeLanguageFingerprints(opts.projectRoot, opts.languages, opts);
+  const result = new Map<SupportedLanguage, LanguageShardClassification>();
+  for (const language of opts.languages) {
+    const scipPath = languageShardPath(opts.paths.outputDb, language);
+    const fingerprint = current[language]!;
+    if (!meta) {
+      result.set(language, { reused: false, reason: 'no reindex metadata found', fingerprint, scipPath });
+      continue;
+    }
+    if (meta.version !== 3) {
+      result.set(language, {
+        reused: false,
+        reason: `metadata version ${String(meta.version ?? 'unknown')} predates per-language shard caching`,
+        fingerprint,
+        scipPath,
+      });
+      continue;
+    }
+    if (!meta.languageFingerprints) {
+      result.set(language, {
+        reused: false,
+        reason: 'no per-language fingerprints recorded in metadata',
+        fingerprint,
+        scipPath,
+      });
+      continue;
+    }
+    const cached = meta.languageFingerprints[language];
+    if (!cached) {
+      result.set(language, {
+        reused: false,
+        reason: 'no cached fingerprint for this language',
+        fingerprint,
+        scipPath,
+      });
+      continue;
+    }
+    if (!existsSync(scipPath)) {
+      result.set(language, { reused: false, reason: 'cached shard file missing on disk', fingerprint, scipPath });
+      continue;
+    }
+    if (stableJson(cached) !== stableJson(fingerprint)) {
+      result.set(language, {
+        reused: false,
+        reason: 'language inputs changed since last index',
+        fingerprint,
+        scipPath,
+      });
+      continue;
+    }
+    result.set(language, { reused: true, fingerprint, scipPath });
+  }
+  return result;
+}
+
+function buildFreshReindexShardDiagnostics(
+  classification: ReadonlyMap<SupportedLanguage, LanguageShardClassification>,
+  runResults: readonly IndexerRunResult[],
+): ReindexShardDiagnostic[] {
+  const diagnostics: ReindexShardDiagnostic[] = [];
+  for (const [language, info] of classification) {
+    if (!info.reused) continue;
+    diagnostics.push({
+      id: language,
+      language,
+      reused: true,
+      fingerprint: hashFingerprint(info.fingerprint),
+      outputBytes: fileSizeOrNull(info.scipPath),
+      durationMs: 0,
+    });
+  }
+  for (const run of runResults) {
+    const info = classification.get(run.language);
+    diagnostics.push({
+      id: run.id,
+      language: run.language,
+      reused: false,
+      missReason: info?.reason ?? run.skipped?.reason,
+      fingerprint: info ? hashFingerprint(info.fingerprint) : 'unknown',
+      outputBytes: run.outputBytes ?? null,
+      durationMs: run.durationMs,
+      command: run.command,
+    });
+  }
+  return diagnostics;
+}
+
+function hashFingerprint(fingerprint: ReindexFingerprint | undefined): string {
+  return createHash('sha256').update(stableJson(fingerprint)).digest('hex').slice(0, 16);
+}
+
+function fileSizeOrNull(path: string): number | null {
+  try {
+    return statSync(path).size;
+  } catch {
+    return null;
+  }
 }
 
 // scip-query: ignore-extract — this is the publish phase for a fresh index:
@@ -414,30 +615,6 @@ function publishFreshReindexArtifacts(
     metaPath: opts.paths.metaPath,
   });
   return lastRefresh;
-}
-
-function reusableLanguageOutputs(opts: Parameters<typeof runFreshReindex>[0]): IndexedOutput[] {
-  let meta: Partial<ReindexMetadata>;
-  try {
-    meta = JSON.parse(readFileSync(opts.paths.metaPath, 'utf-8')) as Partial<ReindexMetadata>;
-  } catch {
-    return [];
-  }
-  if (meta.version !== 3 || !meta.languageFingerprints) return [];
-  const outputs: IndexedOutput[] = [];
-  const current = computeLanguageFingerprints(opts.projectRoot, opts.languages, {
-    pnpmWorkspaces: opts.opts.pnpmWorkspaces,
-    typescriptProjectMode: opts.opts.typescriptProjectMode,
-    typescriptProjects: opts.opts.typescriptProjects,
-    clojureConfigPath: opts.opts.clojureConfigPath,
-  });
-  for (const language of opts.languages) {
-    const scipPath = languageShardPath(opts.paths.outputDb, language);
-    if (existsSync(scipPath) && stableJson(meta.languageFingerprints[language]) === stableJson(current[language])) {
-      outputs.push({ language, scipPath });
-    }
-  }
-  return outputs;
 }
 
 function cacheLanguageShards(outputDb: string, indexedOutputs: readonly IndexedOutput[]): void {

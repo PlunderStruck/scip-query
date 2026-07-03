@@ -201,6 +201,97 @@ describe('reindex reliability', () => {
     expect(statuses.join('\n')).toContain('Reusing cached python SCIP shard');
   });
 
+  it('reports shard diagnostics distinguishing reused and rerun languages (plan6 6.5.2)', async () => {
+    const projectRoot = createProject('scip-query-reindex-shard-diagnostics-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+
+    const { reindex } = await loadReindexFixture({
+      languages: ['typescript', 'python'],
+    });
+
+    await reindex({
+      projectRoot,
+      outputScip: join(cacheDir, 'index.scip'),
+      outputDb: join(cacheDir, 'index.db'),
+      onStatus: () => undefined,
+      indexerConcurrency: 1,
+    });
+    writeFileSync(join(projectRoot, 'src', 'main.ts'), 'export const answer = 43;\n');
+    const second = await reindex({
+      projectRoot,
+      outputScip: join(cacheDir, 'index.scip'),
+      outputDb: join(cacheDir, 'index.db'),
+      onStatus: () => undefined,
+      indexerConcurrency: 1,
+    });
+
+    expect(second.shards).toBeDefined();
+    const shards = second.shards ?? [];
+    const python = shards.find((shard) => shard.language === 'python');
+    const typescript = shards.find((shard) => shard.language === 'typescript');
+
+    expect(python).toEqual(
+      expect.objectContaining({
+        id: 'python',
+        reused: true,
+        durationMs: 0,
+      }),
+    );
+    expect(python?.missReason).toBeUndefined();
+    expect(python?.command).toBeUndefined();
+    expect(python?.fingerprint).toEqual(expect.any(String));
+    expect(python?.outputBytes).toEqual(expect.any(Number));
+
+    expect(typescript).toEqual(
+      expect.objectContaining({
+        id: 'typescript',
+        reused: false,
+        missReason: expect.stringMatching(/inputs changed/i),
+      }),
+    );
+    expect(typescript?.command).toContain('typescript-indexer');
+    expect(typescript?.durationMs).toBeGreaterThanOrEqual(0);
+    expect(typescript?.outputBytes).toEqual(expect.any(Number));
+  });
+
+  it('reports every shard as reused when the whole project index is unchanged (plan6 6.5.2)', async () => {
+    const projectRoot = createProject('scip-query-reindex-shard-full-reuse-');
+    // Use the real project-local cache directory name (matches
+    // PROJECT_ARTIFACT_DIRS in src/reindex/project-files.ts) so meta.json
+    // and the language shard cache are excluded from the project
+    // fingerprint, the same as a real `.scipquery-cache`-configured project.
+    // A plain `.cache` dir (as most other fixtures in this file use) is not
+    // in that exclusion list, so its nested meta.json would count toward the
+    // fingerprint and this reuse path would never trigger.
+    const cacheDir = join(projectRoot, '.scipquery-cache');
+    mkdirSync(cacheDir);
+
+    const { reindex } = await loadReindexFixture({
+      languages: ['typescript', 'python'],
+    });
+
+    await reindex({
+      projectRoot,
+      outputScip: join(cacheDir, 'index.scip'),
+      outputDb: join(cacheDir, 'index.db'),
+      onStatus: () => undefined,
+      indexerConcurrency: 1,
+    });
+    const second = await reindex({
+      projectRoot,
+      outputScip: join(cacheDir, 'index.scip'),
+      outputDb: join(cacheDir, 'index.db'),
+      onStatus: () => undefined,
+      indexerConcurrency: 1,
+    });
+
+    expect(second.reused).toBe(true);
+    expect(second.shards?.length).toBe(2);
+    expect(second.shards?.every((shard) => shard.reused)).toBe(true);
+    expect(second.shards?.map((shard) => shard.language).sort()).toEqual(['python', 'typescript']);
+  });
+
   it('indexes TypeScript workspace project shards and publishes one language output', async () => {
     const projectRoot = createProject('scip-query-reindex-ts-workspace-');
     mkdirSync(join(projectRoot, 'packages/a/src'), { recursive: true });

@@ -111,6 +111,7 @@ export async function handleReindex(rawOpts: unknown): Promise<void> {
   const projectRoot = resolveProjectRoot();
   const config = loadProjectConfig(projectRoot);
   const paths = resolveIndexStoragePaths(projectRoot, config);
+  const json = booleanOptionValue(opts, 'json');
   try {
     const languages = supportedLanguages(stringArrayOptionValue(opts, 'language'));
     const result = await reindex({
@@ -127,7 +128,17 @@ export async function handleReindex(rawOpts: unknown): Promise<void> {
       skipAutoInstall: process.env['SCIP_QUERY_SKIP_AUTO_INSTALL'] === '1',
       indexerConcurrency: numberOptionValue(opts, 'indexerConcurrency') ?? config.indexerConcurrency,
       trigger: { kind: 'manual-cli', detail: 'scip-query reindex' },
+      // --json output must be pure JSON on stdout, matching every other
+      // --json command; the same "onStatus: () => {}" silencing is already
+      // used for reindex() calls from `bench` (see measureColdIndex /
+      // measureWarmIndex below), which has the same "reindex has progress
+      // logging but this caller needs machine-readable stdout" shape.
+      ...(json ? { onStatus: () => {} } : {}),
     });
+    if (json) {
+      printJsonEnvelope('reindex', [], opts, result);
+      return;
+    }
     console.log(
       `${result.reused ? 'Reused' : 'Indexed'} ${result.languages.join(', ')} in ${(result.durationMs / 1000).toFixed(1)}s`,
     );

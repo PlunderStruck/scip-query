@@ -35,6 +35,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       option('--force', 'Rebuild even if source inputs are unchanged'),
       option('--allow-partial', 'Write an incomplete index when one or more detected languages fail'),
       option('--indexer-concurrency <n>', 'Number of language indexers to run at once', parsePositiveInteger),
+      option('--json', 'Output as JSON, including per-shard reuse diagnostics'),
     ],
     renderShape: 'custom',
     docs: doc('Indexing', ['scip-query reindex']),

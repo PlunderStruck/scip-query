@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { existsSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, renameSync, rmSync, statSync } from 'node:fs';
 import { cpus } from 'node:os';
 import { join } from 'node:path';
 import type { IndexerConfig, SupportedLanguage } from '../domain/types.js';
@@ -27,6 +27,12 @@ export interface IndexerRunResult {
   label: string;
   scipPath: string;
   outputScipPath: string;
+  /** Wall time spent invoking this indexer, including a failed attempt. */
+  durationMs: number;
+  /** The resolved binary and args this shard's indexer was invoked with. */
+  command: string;
+  /** Size in bytes of the produced SCIP shard; absent when the run failed. */
+  outputBytes?: number;
   skipped?: { language: SupportedLanguage; reason: string };
 }
 
@@ -141,6 +147,8 @@ async function runPreparedIndexer(
   onStatus(`Indexing ${run.label} with ${run.resolvedBinary}...`);
   rmSync(run.scipPath, { force: true });
   const defaultOutputBackup = takeDefaultOutputBackup(run.config, projectRoot, run.scipPath);
+  const command = [run.binary, ...run.args].join(' ');
+  const startedAt = Date.now();
 
   try {
     await execFileBuffered(run.binary, run.args, {
@@ -160,6 +168,8 @@ async function runPreparedIndexer(
       label: run.label,
       scipPath: run.scipPath,
       outputScipPath: run.outputScipPath,
+      durationMs: Date.now() - startedAt,
+      command,
       skipped: { language: run.language, reason: skippedReason },
     };
   } finally {
@@ -176,8 +186,16 @@ async function runPreparedIndexer(
       label: run.label,
       scipPath: run.scipPath,
       outputScipPath: run.outputScipPath,
+      durationMs: Date.now() - startedAt,
+      command,
       skipped: { language: run.language, reason: skippedReason },
     };
+  }
+  let outputBytes: number | undefined;
+  try {
+    outputBytes = statSync(run.scipPath).size;
+  } catch {
+    outputBytes = undefined;
   }
   return {
     id: run.id,
@@ -185,6 +203,9 @@ async function runPreparedIndexer(
     label: run.label,
     scipPath: run.scipPath,
     outputScipPath: run.outputScipPath,
+    durationMs: Date.now() - startedAt,
+    command,
+    outputBytes,
   };
 }
 
