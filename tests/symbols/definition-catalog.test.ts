@@ -168,3 +168,103 @@ describe('definition catalog evidence cache', () => {
     );
   }
 });
+
+describe('getDefinitionsForFile includeClassMemberFallbacks (catalog-members K1)', () => {
+  // Mixed fixture: a class with a constructor + method (primary rows, so the
+  // file has "any primary-indexed definition") plus a written instance field
+  // that the indexer only emitted as a mention (fallback row, no
+  // defn_enclosing_ranges entry) — the exact shape verified live on Watcher
+  // (src/runtime/watch.ts).
+  function widgetFixture(): { db: ScipDatabase; tempDir: string } {
+    const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-class-member-fallback-'));
+    const projectRoot = join(tempDir, 'project');
+    const dbPath = join(tempDir, 'index.db');
+    writeFixtureFiles(projectRoot, {
+      'src/widget.ts': [
+        'export class Widget {',
+        '  count = 0;',
+        '',
+        '  constructor() {',
+        '    this.count = 0;',
+        '  }',
+        '',
+        '  bump() {',
+        '    this.count += 1;',
+        '  }',
+        '}',
+      ],
+    });
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/widget.ts')
+      .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`widget.ts`/Widget#count.', 'count', 7)
+      .symbol(2, 'scip-typescript npm fixture 1.0.0 src/`widget.ts`/Widget#constructor().', 'constructor', 6)
+      .symbol(3, 'scip-typescript npm fixture 1.0.0 src/`widget.ts`/Widget#bump().', 'bump', 6)
+      // Primary rows: constructor + method are indexed with real enclosing ranges.
+      .definition(1, 1, 2, 3, 2, 5, 3)
+      .definition(2, 1, 3, 7, 2, 9, 3)
+      // Fallback-only: the field has no defn_enclosing_ranges row, only a
+      // definition mention (role=1) whose chunk is scoped to its declaration
+      // line (indexers chunk by span, not whole-file, so MIN/MAX(chunk) is
+      // the field's own line here).
+      .chunk(1, 1, 1, 1)
+      .mention(1, 1, 1)
+      .write();
+    const db = new ScipDatabase({
+      projectRoot,
+      dbPath,
+      indexPath: join(tempDir, 'index.scip'),
+    });
+    return { db, tempDir };
+  }
+
+  it('default call (opt-in absent) returns byte-for-byte the same rows as before the opt-in existed', () => {
+    const { db } = widgetFixture();
+    try {
+      const definitions = getDefinitionsForFile(db, 'src/widget.ts');
+      const symbols = definitions.map((d) => d.symbol).sort();
+      expect(symbols).toEqual([
+        'scip-typescript npm fixture 1.0.0 src/`widget.ts`/Widget#bump().',
+        'scip-typescript npm fixture 1.0.0 src/`widget.ts`/Widget#constructor().',
+      ]);
+      // Snapshot equality: this exact shape is the default-path invariant —
+      // no field row, no reordering, no shape drift.
+      expect(definitions).toEqual([
+        expect.objectContaining({ symbol: 'scip-typescript npm fixture 1.0.0 src/`widget.ts`/Widget#constructor().' }),
+        expect.objectContaining({ symbol: 'scip-typescript npm fixture 1.0.0 src/`widget.ts`/Widget#bump().' }),
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('default call with includeClassMemberFallbacks: false matches the opt-in-absent call exactly', () => {
+    const { db } = widgetFixture();
+    try {
+      const absent = getDefinitionsForFile(db, 'src/widget.ts');
+      const explicitFalse = getDefinitionsForFile(db, 'src/widget.ts', { includeClassMemberFallbacks: false });
+      expect(explicitFalse).toEqual(absent);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('opted-in call additionally returns the class-member fallback row with its mention-derived range', () => {
+    const { db } = widgetFixture();
+    try {
+      const definitions = getDefinitionsForFile(db, 'src/widget.ts', { includeClassMemberFallbacks: true });
+      const symbols = definitions.map((d) => d.symbol).sort();
+      expect(symbols).toEqual([
+        'scip-typescript npm fixture 1.0.0 src/`widget.ts`/Widget#bump().',
+        'scip-typescript npm fixture 1.0.0 src/`widget.ts`/Widget#constructor().',
+        'scip-typescript npm fixture 1.0.0 src/`widget.ts`/Widget#count.',
+      ]);
+      const count = definitions.find((d) => d.symbol.endsWith('Widget#count.'))!;
+      expect(count.parentTypeName).toBe('Widget');
+      // Mention-derived range from the chunk/mention rows (line 1, 0-indexed).
+      expect(count.startLine).toBe(1);
+      expect(count.endLine).toBe(1);
+    } finally {
+      db.close();
+    }
+  });
+});

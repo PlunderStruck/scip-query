@@ -3,9 +3,13 @@
  * AST-corrected ranges.
  *
  * Where to get what:
- *   - `getDefinitionsForFile(db, relativePath)` — every definition in a
- *     file, ranges corrected via tree-sitter when supported (Rust, TS/JS,
- *     Python) or via regex fallback otherwise.
+ *   - `getDefinitionsForFile(db, relativePath, opts?)` — every definition in
+ *     a file, ranges corrected via tree-sitter when supported (Rust, TS/JS,
+ *     Python) or via regex fallback otherwise. `opts.includeClassMemberFallbacks`
+ *     (default false) additionally retains class-member fallback rows
+ *     (`ClassName#field.`) that the default path drops whenever the file has
+ *     any primary-indexed definition — opt-in only, bypasses both catalog
+ *     caches; see `GetDefinitionsForFileOptions`.
  *   - `getAllDefinitions(db)` / `getScopedDefinitions(db, scope)` — every
  *     definition across the project (or matching a scope substring).
  *   - `loadFileSymbols(db, pathOrPattern, opts)` — projection helper used
@@ -75,10 +79,31 @@ const ENCLOSING_DEFINITION_LINE_INDEX_CACHE = new WeakMap<
   DefinitionLineIndex<IndexedDefinition>
 >();
 
+export interface GetDefinitionsForFileOptions {
+  /**
+   * Opt-in (default false): also retain class-member fallback rows
+   * (`ClassName#field.` symbols with a real definition mention) alongside
+   * primary rows, deduplicated by symbol. Default (absent/false) is
+   * byte-for-byte today's behavior — the in-memory and persisted evidence
+   * caches are keyed by relativePath only, so an opted-in call bypasses both
+   * caches entirely rather than risk either polluting the default result or
+   * itself being served a stale default. See
+   * docs/plans/2026-07-02-catalog-class-members.md (K1).
+   */
+  includeClassMemberFallbacks?: boolean;
+}
+
 // scip-query: ignore-extract — this is the definition-catalog read path:
 // primary rows, fallback rows, merging, and source-corrected ranges define the
 // authoritative per-file definition set.
-export function getDefinitionsForFile(db: ScipDatabase, relativePath: string): IndexedDefinition[] {
+export function getDefinitionsForFile(
+  db: ScipDatabase,
+  relativePath: string,
+  opts: GetDefinitionsForFileOptions = {},
+): IndexedDefinition[] {
+  if (opts.includeClassMemberFallbacks) {
+    return computeDefinitionsForFile(db, relativePath, undefined, { includeClassMemberFallbacks: true });
+  }
   return FILE_DEFINITION_CACHE.get(db, relativePath, () => {
     const cached = readDefinitionEvidence(db, relativePath);
     if (cached) return cached;
@@ -200,11 +225,12 @@ function computeDefinitionsForFile(
   db: ScipDatabase,
   relativePath: string,
   filter?: (definition: IndexedDefinition) => boolean,
+  mergeOpts: GetDefinitionsForFileOptions = {},
 ): IndexedDefinition[] {
   let definitions = mergeMixedSymbolQueryRows(
     loadPrimaryDefinitionRows(db, relativePath),
     loadFallbackDefinitionRows(db, relativePath),
-    { sort: true },
+    { sort: true, includeClassMemberFallbacks: mergeOpts.includeClassMemberFallbacks },
   ).map(indexedDefinitionFromRow);
   if (filter) definitions = definitions.filter(filter);
   return correctDefinitionRangesFromSource(db, relativePath, definitions);
