@@ -2,7 +2,14 @@ import { existsSync } from 'node:fs';
 import type { ScipDatabase } from '../../storage/db.js';
 import type { CommandDescriptor } from '../commands/command-descriptor-types.js';
 import type { CommandHandler } from '../commands/command-descriptor-types.js';
-import { doc, option, parseInteger, parsePositiveInteger, withJsonOption } from '../commands/command-spec-builders.js';
+import {
+  collectValues,
+  doc,
+  option,
+  parseInteger,
+  parsePositiveInteger,
+  withJsonOption,
+} from '../commands/command-spec-builders.js';
 import {
   booleanOptionValue,
   definedNumberOption,
@@ -11,6 +18,7 @@ import {
   printJsonEnvelope,
   splitCommanderActionArgs,
   stringArg,
+  stringArrayOptionValue,
   stringOptionValue,
   type CommandOptions,
 } from '../commands/command-execution.js';
@@ -205,11 +213,11 @@ function runTlaTraceCheck(db: ScipDatabase, args: readonly unknown[], opts: Comm
   if (!loaded.loaded) throw new Error(loaded.errors.join('\n'));
   const { contract } = loaded.loaded;
 
-  const traceArg = stringOptionValue(opts, 'trace');
-  const tracePaths = dedupeTracePaths(projectRoot, [...contract.traces, ...(traceArg ? [traceArg] : [])]);
+  const traceArgs = stringArrayOptionValue(opts, 'trace');
+  const tracePaths = dedupeTracePaths(projectRoot, [...contract.traces, ...traceArgs]);
   const steps = tracePaths.flatMap((tracePath) => loadTraceSteps(projectRoot, tracePath).steps);
   if (steps.length === 0) {
-    throw new Error('no trace steps found: pass --trace <file> or list traces in the mapping contract');
+    throw new Error('no trace steps found: pass --trace <file> (repeatable) or list traces in the mapping contract');
   }
 
   const verdict = runTraceCheck({
@@ -246,7 +254,7 @@ function runTlaTraceCheck(db: ScipDatabase, args: readonly unknown[], opts: Comm
     for (const warning of verdict.generation.warnings) console.log(`WARNING: ${warning}`);
   }
   console.log(`${verdict.status.toUpperCase()}: ${verdict.detail}`);
-  renderTraceActionCoverage(verdict.actionCoverage);
+  if (booleanOptionValue(opts, 'coverage')) renderTraceActionCoverage(verdict.actionCoverage);
   process.exitCode = exitCode;
 }
 
@@ -315,17 +323,18 @@ function runTlaVerify(db: ScipDatabase, args: readonly unknown[], opts: CommandO
     readSanyModuleFactsForVerify(projectRoot, specArg, specPath, tlaToolsJar) ??
     readTlaModuleFacts(projectRoot, specArg);
   const checkedInvariants = readTlaConfigInvariants(configPath);
-  const traceArg = stringOptionValue(opts, 'trace');
+  const traceArgs = stringArrayOptionValue(opts, 'trace');
   // Dedupe by resolved path first (P5.5 / followup #20): --trace naming the
-  // same file as an entry already in contract.traces must not double-count
-  // that file's steps.
-  const tracePaths = dedupeTracePaths(projectRoot, [...contract.traces, ...(traceArg ? [traceArg] : [])]);
+  // same file as an entry already in contract.traces (or repeated across
+  // multiple --trace flags, C2) must not double-count that file's steps.
+  const tracePaths = dedupeTracePaths(projectRoot, [...contract.traces, ...traceArgs]);
   const traceLoads = tracePaths.map((tracePath) => ({ tracePath, ...loadTraceSteps(projectRoot, tracePath) }));
   const traceSteps = traceLoads.flatMap((load) => load.steps);
   // Preserve pre-existing behavior: only the explicitly requested --trace
-  // file's load errors surface here (contract.traces load errors are a
+  // file(s)' load errors surface here (contract.traces load errors are a
   // pre-existing silent gap, unrelated to this step).
-  const traceErrors = traceArg ? (traceLoads.find((load) => load.tracePath === traceArg)?.errors ?? []) : [];
+  const explicitTraceArgs = new Set(traceArgs);
+  const traceErrors = traceLoads.filter((load) => explicitTraceArgs.has(load.tracePath)).flatMap((load) => load.errors);
   const conformance = verifyTlaConformance(db, contract, moduleFacts, traceSteps, checkedInvariants);
   for (const error of [...loaded.errors, ...traceErrors]) {
     conformance.findings.push({
@@ -413,12 +422,21 @@ export const tlaQueryCommandDescriptors: CommandDescriptor[] = [
         'Model checker subprocess timeout in milliseconds (verify and trace-check; default 120000)',
         parsePositiveInteger,
       ),
-      option('--trace <file>', 'Runtime trace JSON file to check against the mapping'),
+      option(
+        '--trace <file>',
+        'Runtime trace JSON file to check against the mapping (repeatable; verify and trace-check both merge and dedupe with contract.traces)',
+        collectValues,
+        [],
+      ),
       option(
         '--next <operator>',
         'trace-check: next-state operator the harness requires between states (default Next; use for dual-spec models, e.g. NextCurrent)',
         undefined,
         'Next',
+      ),
+      option(
+        '--coverage',
+        'trace-check: print the per-action coverage table (steps exercised per mapped action, counted from accepted trace steps only); --json always includes it',
       ),
       option('--allow-unknown', 'Exit zero when only unknown findings remain'),
       option('--out <path>', 'Output directory (scaffold) or file (instrument)'),
@@ -433,7 +451,8 @@ export const tlaQueryCommandDescriptors: CommandDescriptor[] = [
     docs: doc('Formal Models', [
       'scip-query tla verify specs/Queue.tla --map specs/Queue.scip-tla.json',
       'scip-query tla scaffold src/queue/store.ts',
-      'scip-query tla trace-check specs/Queue.tla --trace traces/run1.json',
+      'scip-query tla trace-check specs/Queue.tla --trace traces/run1.json --coverage',
+      'scip-query tla trace-check specs/Queue.tla --trace traces/run1.json --trace traces/run2.json --coverage',
       'scip-query tla trace-check specs/DualSpec.tla --trace traces/run1.json --next NextCurrent',
       'scip-query tla verify specs/Queue.tla --timeout-ms 300000',
       'scip-query tla verify specs/Queue.tla --full',

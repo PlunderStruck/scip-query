@@ -173,10 +173,19 @@ export function runTraceCheck(opts: {
   nextOperator?: string;
   toolOptions: Omit<TlaToolRunOptions, 'specPath' | 'configPath' | 'checker'>;
 }): TraceCheckVerdict {
-  const actionCoverage = computeTraceActionCoverage(opts.mappedActions ?? [], opts.steps);
+  const mappedActions = opts.mappedActions ?? [];
+  // C2: coverage counts only steps TLC actually proved were legal
+  // transitions — an unchecked or rejected trace step is not evidence that
+  // its action's code twin was exercised correctly, so it must not inflate
+  // coverage. `acceptedSteps` is computed per branch below.
   const generation = generateTraceSpec(opts.baseModuleName, opts.mappedVariables, opts.steps, opts.nextOperator);
   if ('error' in generation) {
-    return { status: 'invalid-trace', states: 0, detail: generation.error, actionCoverage };
+    return {
+      status: 'invalid-trace',
+      states: 0,
+      detail: generation.error,
+      actionCoverage: computeTraceActionCoverage(mappedActions, []),
+    };
   }
 
   // TLC resolves EXTENDS from the working directory: copy the spec's sibling
@@ -206,7 +215,7 @@ export function runTraceCheck(opts: {
         detail: checker.diagnostics[0]?.message ?? 'model checker unavailable',
         checker,
         generation,
-        actionCoverage,
+        actionCoverage: computeTraceActionCoverage(mappedActions, []),
       };
     }
     if (checker.status === 'passed') {
@@ -216,11 +225,16 @@ export function runTraceCheck(opts: {
         detail: `TLC accepted all ${generation.states} pinned states under ${opts.baseModuleName}!${opts.nextOperator ?? 'Next'}.`,
         checker,
         generation,
-        actionCoverage,
+        actionCoverage: computeTraceActionCoverage(mappedActions, opts.steps),
       };
     }
 
     const divergence = parseDivergence(checker.stdout, opts.steps);
+    // Steps before the divergent one transitioned legally (TLC reached
+    // that state); the divergent step's own attempted transition was
+    // rejected, so it is excluded from coverage along with everything
+    // after it.
+    const acceptedSteps = divergence ? opts.steps.slice(0, divergence.divergedStep!.index) : [];
     return {
       status: 'diverged',
       states: generation.states,
@@ -231,7 +245,7 @@ export function runTraceCheck(opts: {
         : 'TLC rejected the trace but the divergent step could not be parsed from its output; see checker stdout.',
       checker,
       generation,
-      actionCoverage,
+      actionCoverage: computeTraceActionCoverage(mappedActions, acceptedSteps),
     };
   } finally {
     rmSync(workDir, { recursive: true, force: true });

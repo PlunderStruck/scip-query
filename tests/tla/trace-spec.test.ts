@@ -142,6 +142,66 @@ describe('TLA trace-check verdicts (faked checker)', () => {
     ]);
   });
 
+  it('counts coverage only from steps accepted before divergence (C2)', () => {
+    const { specPath, jarPath, projectRoot } = fixture();
+    const stdout = [
+      'Error: Deadlock reached.',
+      'The behavior up to this point is:',
+      'State 1: <Initial predicate>',
+      '/\\ traceIdx = 1',
+      '/\\ status = "idle"',
+      '',
+      'State 2: <TraceStep>',
+      '/\\ traceIdx = 2',
+      '/\\ status = "busy"',
+    ].join('\n');
+    const verdict = runTraceCheck({
+      specPath,
+      baseModuleName: 'Machine',
+      mappedVariables: ['status'],
+      mappedActions: ['Start', 'Finish'],
+      // Step 0 (Start) is the accepted transition into state 2; step 1
+      // (a second Start attempted from "busy") is where TLC deadlocks —
+      // that attempt was never proven a legal transition, so it must not
+      // count toward Start's coverage.
+      steps: [
+        { action: 'Start', before: { status: 'idle' }, after: { status: 'busy' } },
+        { action: 'Start', before: { status: 'busy' }, after: { status: 'busy' } },
+      ],
+      toolOptions: { projectRoot, tlaToolsJar: jarPath, spawn: fakeSpawn({ status: 1, stdout }) },
+    });
+    expect(verdict.status).toBe('diverged');
+    expect(verdict.actionCoverage).toEqual([
+      { action: 'Start', stepsObserved: 1 },
+      { action: 'Finish', stepsObserved: 0 },
+    ]);
+  });
+
+  it('reports zero coverage when the checker is unavailable, even though raw steps exercise every action', () => {
+    const { specPath, jarPath, projectRoot } = fixture();
+    const verdict = runTraceCheck({
+      specPath,
+      baseModuleName: 'Machine',
+      mappedVariables: ['status'],
+      mappedActions: ['Start', 'Finish'],
+      steps: ACCEPTED_STEPS,
+      toolOptions: {
+        projectRoot,
+        tlaToolsJar: jarPath,
+        // Every availability probe (`--version`/`-version`) fails, so
+        // resolveTlaCommand reports java unavailable and the checker run is
+        // skipped entirely — no trace step was ever proven a legal
+        // transition.
+        spawn: (() => ({ status: 1, signal: null, stdout: '', stderr: '' })) as never,
+      },
+    });
+    expect(verdict.status).toBe('unavailable');
+    expect(verdict.actionCoverage).toEqual([
+      { action: 'Start', stepsObserved: 0 },
+      { action: 'Finish', stepsObserved: 0 },
+    ]);
+  });
+
   it('reports the configured next-state operator in the acceptance detail', () => {
     const { specPath, jarPath, projectRoot } = fixture();
     const verdict = runTraceCheck({
