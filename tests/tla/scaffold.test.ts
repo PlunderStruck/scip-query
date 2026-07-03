@@ -215,6 +215,69 @@ describe('tla scaffold', () => {
     }
   });
 
+  // catalog-members K2: the realistic SCIP shape (verified live on
+  // src/runtime/watch.ts's Watcher) is methods indexed as PRIMARY rows
+  // (defn_enclosing_ranges) but fields indexed only as a fallback mention
+  // (role=1, no defn_enclosing_ranges row of their own) — unlike the fixture
+  // above, which gave the field its own primary row directly. Before K1/K2,
+  // getDefinitionsForFile dropped the field's fallback row outright because
+  // the file already had primary rows (the methods), so this shape threw
+  // "no mutable state discovered". With includeClassMemberFallbacks: true,
+  // the field survives and discovery succeeds.
+  it('discovers instance fields that are indexed only as fallback mentions (real Watcher-class shape)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-scaffold-'));
+    writeFixtureFiles(root, {
+      'src/lock.ts': [
+        'export class Lock {',
+        '  locked = false;',
+        '',
+        '  acquire() {',
+        '    this.locked = true;',
+        '  }',
+        '',
+        '  release() {',
+        '    this.locked = false;',
+        '  }',
+        '}',
+      ],
+    });
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/lock.ts')
+      .symbol(1, 'scip-typescript npm test 1.0.0 src/`lock.ts`/Lock#locked.', 'locked', SymbolInformation_Kind.Field)
+      .symbol(
+        2,
+        'scip-typescript npm test 1.0.0 src/`lock.ts`/Lock#acquire().',
+        'acquire',
+        SymbolInformation_Kind.Method,
+      )
+      .symbol(
+        3,
+        'scip-typescript npm test 1.0.0 src/`lock.ts`/Lock#release().',
+        'release',
+        SymbolInformation_Kind.Method,
+      )
+      // Methods: primary rows (as any real indexed class produces).
+      .definition(1, 1, 2, 3, 0, 5, 3)
+      .definition(2, 1, 3, 7, 0, 9, 3)
+      // Field: NO defn_enclosing_ranges row — only a fallback mention, the
+      // same shape a typical un-corrected class field gets from the indexer.
+      .chunk(1, 1, 1, 1)
+      .mention(1, 1, 1)
+      .write();
+    const db = new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') });
+    try {
+      const result = scaffoldTlaModel(db, 'src/lock.ts');
+
+      expect(result.variables.map((variable) => variable.name)).toEqual(['locked']);
+      expect(result.variables[0]!.codeRef).toBe('src/lock.ts/Lock#locked');
+      const actionNames = result.actions.map((action) => action.name).sort();
+      expect(actionNames).toEqual(['Acquire', 'Release']);
+    } finally {
+      db.close();
+    }
+  });
+
   it('does not conflate same-named fields on unrelated classes when picking scope', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-scaffold-'));
     writeFixtureFiles(root, {

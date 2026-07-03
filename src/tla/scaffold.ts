@@ -61,7 +61,14 @@ const TLA_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 export function scaffoldTlaModel(db: ScipDatabase, file: string, opts: TlaScaffoldOptions = {}): TlaScaffoldResult {
   const warnings: string[] = [];
-  const definitions = getDefinitionsForFile(db, file);
+  // K1 opt-in (docs/plans/2026-07-02-catalog-class-members.md): retain
+  // class-member fallback rows (`ClassName#field.`) alongside primary rows so
+  // the class instance-field discovery fallback below can see them. Safe to
+  // request unconditionally here — every other consumer of `definitions` in
+  // this module (topLevelVars, top-level callables) already filters on
+  // `parentTypeName === null`, so the added class-member rows are inert
+  // outside the class-field branch.
+  const definitions = getDefinitionsForFile(db, file, { includeClassMemberFallbacks: true });
   if (definitions.length === 0) {
     throw new Error(`no indexed definitions found for ${file}; run 'scip-query reindex' or check the path`);
   }
@@ -91,22 +98,17 @@ export function scaffoldTlaModel(db: ScipDatabase, file: string, opts: TlaScaffo
   // that class's own methods are scanned, never a repo-wide sweep, to
   // avoid conflating same-named fields on unrelated classes in the file).
   //
-  // Known boundary (verified live against this repo, not hypothetical):
+  // Catalog boundary (docs/plans/2026-07-02-catalog-class-members.md, K1/K2):
   // the raw SCIP data DOES expose class fields (`ClassName#field.` symbols
   // with a role=1 definition mention — confirmed for e.g. `ScipDatabase#
-  // pathFilter.`), but `getDefinitionsForFile` (definition-catalog.ts,
-  // policy in symbol-row-policy.ts's `isPreciseMixedFallbackRow`)
-  // deliberately drops class-member fallback rows whenever the file has
-  // ANY primary-indexed (enclosing-range) definition — which any class
-  // with a constructor or a named method always has. So this discovery
-  // fires correctly when the catalog does surface fields (this file's own
-  // tests construct that condition directly), but on a typical real class
-  // file `definitions` never contains a single field row to begin with —
-  // not a write-scan miss, a catalog-level gap one layer below this
-  // module. Fixing that policy is out of scope here: it is a shared
-  // primitive nearly every other command depends on (members, refs,
-  // trace, health, ...), and loosening it to also keep class-member
-  // fallback rows needs its own blast-radius review, not a TLA-scoped fix.
+  // pathFilter.`), and `getDefinitionsForFile(db, file, {
+  // includeClassMemberFallbacks: true })` above now surfaces them alongside
+  // primary rows, deduplicated by symbol. The boundary that remains is
+  // narrower: a file where the indexer emitted NO member rows for a class at
+  // all (no `defn_enclosing_ranges` row and no role=1 mention) has nothing
+  // for either the primary or the fallback query to return — the discovery
+  // below then correctly reports no state, because there genuinely is none
+  // to find in the index.
   let classFieldState: ClassFieldState | null = null;
   let callables: IndexedDefinition[];
   if (stateDefs.length > 0) {
@@ -122,11 +124,10 @@ export function scaffoldTlaModel(db: ScipDatabase, file: string, opts: TlaScaffo
           'no top-level let declarations exist, and ' +
           (anyClassFieldSurfaced
             ? 'no class in this file has an instance field the write scan can confirm is mutated by one of its own methods.'
-            : 'no class instance-field definitions were exposed for this file at all. This is a known catalog boundary, ' +
-              'not necessarily an absence of state: getDefinitionsForFile only surfaces class-member fallback rows when ' +
-              'the file has no other primary-indexed definition (see scaffold.ts for the exact mechanism) — a file with ' +
-              'any method already indexed hides its own fields from this scan. Pick a file with a class that owns no ' +
-              'other indexed callables, or wait for the catalog fix tracked in the P5 closeout report.') +
+            : 'no class instance-field definitions were exposed for this file at all — the indexer emitted no member ' +
+              'rows (neither a primary defn_enclosing_ranges row nor a role=1 mention) for any class in this file, so ' +
+              'there is nothing for getDefinitionsForFile to surface even with class-member fallbacks included ' +
+              '(docs/plans/2026-07-02-catalog-class-members.md).') +
           ' Pick a file that owns runtime state.',
       );
     }
