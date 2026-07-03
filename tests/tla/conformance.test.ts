@@ -11,7 +11,13 @@ import {
   readTlaModuleFactsFromSanyXml,
   type TlaModelContract,
 } from '../../src/tla/model-contract.js';
-import { tlaFindingGroups, verifyTlaConformance, type TlaConformanceFinding } from '../../src/tla/conformance.js';
+import {
+  collectWritesForRange,
+  tlaFindingGroups,
+  verifyTlaConformance,
+  type TlaConformanceFinding,
+  type VariableAlias,
+} from '../../src/tla/conformance.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
 function fixtureDb(root: string): ScipDatabase {
@@ -1510,6 +1516,112 @@ Peek == UNCHANGED queue
             modelElement: 'Peek',
           }),
         ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('excludes a const declaration from write attribution but keeps a later assignment (I4 / followup #26, AST path)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/counter.ts')
+      .symbol(1, 'scip-typescript npm test 1.0.0 src/`counter.ts`/count.', 'count', SymbolInformation_Kind.Variable)
+      .symbol(
+        2,
+        'scip-typescript npm test 1.0.0 src/`counter.ts`/unrelated().',
+        'unrelated',
+        SymbolInformation_Kind.Function,
+      )
+      .symbol(
+        3,
+        'scip-typescript npm test 1.0.0 src/`counter.ts`/increment().',
+        'increment',
+        SymbolInformation_Kind.Function,
+      )
+      .definition(1, 1, 1, 0, 0, 0, 25)
+      .definition(2, 1, 2, 2, 0, 5, 1)
+      .definition(3, 1, 3, 7, 0, 9, 1)
+      .chunk(1, 1, 0, 10)
+      .write();
+    const config: ScipQueryConfig = { projectRoot: root, dbPath, indexPath: join(root, 'index.scip') };
+    writeFixtureFiles(root, {
+      'src/counter.ts': [
+        'export let count: number = 0;',
+        '',
+        'export function unrelated(rows: unknown[]) {',
+        '  const count = rows.length;',
+        '  return count;',
+        '}',
+        '',
+        'export function increment() {',
+        '  count += 1;',
+        '}',
+      ],
+    });
+    const db = new ScipDatabase(config);
+    const aliases: VariableAlias[] = [{ variable: 'count', alias: 'count' }];
+    try {
+      // The declaration statement itself — a fresh local binding that
+      // merely shares the alias's name — is not a write to modeled state.
+      expect(collectWritesForRange(db, 'src/counter.ts', 2, 5, aliases)).toEqual([]);
+
+      // A later assignment to the same name (here, module-level `count`
+      // via `+=`) keeps attributing exactly as before.
+      expect(collectWritesForRange(db, 'src/counter.ts', 7, 9, aliases)).toEqual(
+        expect.arrayContaining([expect.objectContaining({ variable: 'count', kind: 'assignment' })]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('excludes a const declaration from write attribution in the source-scan fallback path (I4 / followup #26)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    const dbPath = join(root, 'index.db');
+    // `.txt` has no AST parser configured — collectWritesForRange falls
+    // through to the regex-based source-scan path, which is the "source-scan
+    // fallback write classifier" this item targets.
+    evidenceFixtureDb(dbPath)
+      .document(1, null, 'src/counter.txt')
+      .symbol(1, 'scip-generic npm test 1.0.0 src/`counter.txt`/count.', 'count', SymbolInformation_Kind.Variable)
+      .definition(1, 1, 1, 0, 0, 0, 25)
+      .chunk(1, 1, 0, 10)
+      .write();
+    const config: ScipQueryConfig = { projectRoot: root, dbPath, indexPath: join(root, 'index.scip') };
+    writeFixtureFiles(root, {
+      'src/counter.txt': ['function unrelated(rows) {', '  const count = rows.length;', '  return count;', '}'],
+    });
+    const db = new ScipDatabase(config);
+    const aliases: VariableAlias[] = [{ variable: 'count', alias: 'count' }];
+    try {
+      const writes = collectWritesForRange(db, 'src/counter.txt', 0, 3, aliases);
+      expect(writes).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('still attributes a source-scan assignment (not a declaration) to the alias (I4 baseline)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, null, 'src/counter.txt')
+      .symbol(1, 'scip-generic npm test 1.0.0 src/`counter.txt`/count.', 'count', SymbolInformation_Kind.Variable)
+      .definition(1, 1, 1, 0, 0, 0, 25)
+      .chunk(1, 1, 0, 10)
+      .write();
+    const config: ScipQueryConfig = { projectRoot: root, dbPath, indexPath: join(root, 'index.scip') };
+    writeFixtureFiles(root, {
+      'src/counter.txt': ['function increment() {', '  count += 1;', '}'],
+    });
+    const db = new ScipDatabase(config);
+    const aliases: VariableAlias[] = [{ variable: 'count', alias: 'count' }];
+    try {
+      const writes = collectWritesForRange(db, 'src/counter.txt', 0, 2, aliases);
+      expect(writes).toEqual(
+        expect.arrayContaining([expect.objectContaining({ variable: 'count', kind: 'source-scan' })]),
       );
     } finally {
       db.close();

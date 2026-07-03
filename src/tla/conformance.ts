@@ -220,6 +220,30 @@ function classifySqlVerb(text: string): 'write' | 'read' | null {
   return null;
 }
 
+/**
+ * I4 / followup #26: matches a `const`/`let`/`var` declaration keyword at
+ * the start of a line (module scope or indented), used by the source-scan
+ * fallback to mirror the AST path's variable_declarator exclusion — see
+ * `isDeclarationLine`.
+ */
+const DECLARATION_KEYWORD = /^\s*(?:export\s+)?(?:const|let|var)\s+/;
+
+/**
+ * True when `text` declares a fresh local binding named `alias` (a
+ * `const`/`let`/`var` declaration whose declared identifier is `alias`,
+ * with or without an initializer) — mirrors the AST path's
+ * `variable_declarator` exclusion for the source-scan fallback, which has
+ * no node-level declarator of its own to inspect. Only the declaration's
+ * own line is excluded this way; a later plain assignment to the same name
+ * is untouched by this check.
+ */
+function isDeclarationLine(text: string, alias: string): boolean {
+  const keywordMatch = text.match(DECLARATION_KEYWORD);
+  if (!keywordMatch) return false;
+  const afterKeyword = text.slice(keywordMatch[0].length);
+  return new RegExp(`^${escapeRegExp(alias)}\\b`).test(afterKeyword);
+}
+
 export function verifyTlaConformance(
   db: ScipDatabase,
   contract: TlaModelContract,
@@ -1038,8 +1062,11 @@ function recordWriteNode(
     return;
   }
   if (node.type === 'variable_declarator') {
-    const target = node.childForFieldName('name') ?? node.namedChild(0);
-    if (target) recordTargetMatches(db, file, target, 'declaration', aliases, writes);
+    // I4 / followup #26: a `const`/`let`/`var` declarator introduces a new
+    // local binding, not a write to modeled state — even when the declared
+    // identifier's text happens to equal a variable's alias. Only a later
+    // assignment to that binding (a separate assignment_expression node)
+    // attributes; the declaration statement itself never does.
     return;
   }
   if (node.type === 'pair') {
@@ -1316,6 +1343,12 @@ function collectSourceScanWrites(
   for (let line = Math.max(0, startLine); line <= boundedEnd; line += 1) {
     const text = lines[line] ?? '';
     for (const alias of aliases) {
+      // I4 / followup #26: mirrors the AST path's variable_declarator
+      // exclusion — a `const`/`let`/`var` declaration line introducing a
+      // fresh local binding named after the alias is not a write, even
+      // though its `<alias> =` text would otherwise match the mutation
+      // pattern below identically to a real reassignment.
+      if (isDeclarationLine(text, alias.alias)) continue;
       const escaped = escapeRegExp(alias.alias);
       const pattern = new RegExp(
         `(?:\\b${escaped}\\b\\s*(?:=|\\+=|-=|\\*=|/=|%=)|\\b${escaped}\\b\\s*\\.\\s*(?:${[...MUTATING_METHODS].join('|')})\\s*\\(|\\b${escaped}\\b\\s*\\[[^\\]]+\\]\\s*=)`,
