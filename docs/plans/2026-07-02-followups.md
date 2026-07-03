@@ -7,7 +7,7 @@ up, write a real plan section (`concrete-plan`), and implement independently.
 1. **RESOLVED (2026-07-02, remediation 23.1). Import-type-only consumers falsely flagged
    dead/unused (Stable, HIGH).** Root cause was NOT a general "type-only imports are invisible"
    gap: raw SCIP evidence showed scip-typescript emits real cross-file mention rows for type-only
-   imports when the specifier is *relative*; it emits none when the specifier is an unresolved
+   imports when the specifier is _relative_; it emits none when the specifier is an unresolved
    tsconfig `paths` alias (`@/...`, this codebase's actual shape) — confirmed on the live
    Stable_Management clone. The compensating source-fallback layer
    (`sourceImportPathsByLocalName` -> `resolveImportPath`) had never implemented alias resolution
@@ -62,7 +62,7 @@ up, write a real plan section (`concrete-plan`), and implement independently.
    Fix: `src/source/vue/vue-profile.ts` — `VueComponentBehaviorProfile` gained
    `delegatedComposableLines`/`delegatedComposablePaths`, computed by
    `resolveDelegatedComposables` (`vue-profile.ts:161-177`): for each `use*` name the setup script
-   actually *invokes* (`scriptFacts.composables`, already invocation-filtered — an imported-but-
+   actually _invokes_ (`scriptFacts.composables`, already invocation-filtered — an imported-but-
    unused composable doesn't count), find its matching import and resolve the specifier via the
    shared `resolveImportPath` (handles both inline `<script setup>` and external `<script src>`,
    since `VueScriptImportFact.sourcePath` already points at whichever one the import statement
@@ -88,7 +88,7 @@ up, write a real plan section (`concrete-plan`), and implement independently.
    Fix (chosen formula: exclude, not discount — see constraint comment at
    `src/queries/cleanup/similar.ts:1000` next to `SAME_FILE_SIBLING_SATURATION_THRESHOLD`):
    a callee called by >= 5 distinct same-file siblings is dropped from every fingerprint in that
-   file (`trimSameFileSiblingSaturatedCallees`) *before* corpus-wide IDF weighting or the
+   file (`trimSameFileSiblingSaturatedCallees`) _before_ corpus-wide IDF weighting or the
    `minCallees` floor ever sees it — global IDF already discounts callees common across the whole
    corpus, but can't see same-file-only ubiquity (a helper only ever called from within one file
    can have a low, positive global document frequency while still being 100% of that file's
@@ -152,20 +152,20 @@ up, write a real plan section (`concrete-plan`), and implement independently.
    `isThinForwarder` flag (`isThinForwarderBody`, source-text-only: at most two top-level
    statements, no branching/looping, last statement is a single optionally
    `return`ed/`await`ed call expression). `groupTwins` takes an injected `isDelegatePair(from, to,
-   clusterMembers)` predicate and skips a cross-file pair entirely (not merely excludes it from
+clusterMembers)` predicate and skips a cross-file pair entirely (not merely excludes it from
    similarity scoring) when either side delegates to the other — so a cluster whose only cross-file
    pair is a delegation chain produces no group at all. `allTwinGroups` wires the real
    `buildDelegationChecker`, which resolves the call target from source facts
    (`getCallSites`/`getSourceImports`) rather than the general call graph
    (`getCalleeRowsForSymbol`): the general call-graph attribution path
    (`pickAstCallCandidate` in `src/symbols/leaf-symbol-index.ts`) prefers a same-file
-   same-leaf-name candidate and treats that as self-recursion, which is *always* true for this
+   same-leaf-name candidate and treats that as self-recursion, which is _always_ true for this
    exact shape (every twin-cluster member shares its own file's leaf name), so it silently reports
    zero callees for exactly the calls this check needs — confirmed live with a debug script before
    switching approaches. Chains up to 3 hops through other `isThinForwarder` cluster members.
    Test: `tests/queries/cleanup/twin-drift.test.ts` — two pure `groupTwins` tests with an injected
    `isDelegatePair` fake, plus a real db-backed integration test (`twinDrift (db-backed) —
-   delegation-chain exclusion`) using real TypeScript source files and an actual namespace-import
+delegation-chain exclusion`) using real TypeScript source files and an actual namespace-import
    delegate call, asserting zero findings; the pre-existing `escapeRegex`/`escapeRegExp` db-backed
    test (no call relationship) continues to assert a `divergent` finding, covering the
    "genuinely divergent, no delegation" side. Verified both new tests fail without the skip
@@ -288,7 +288,7 @@ up, write a real plan section (`concrete-plan`), and implement independently.
     trace, health all depend on it), out of scope here — documented precisely in scaffold's thrown
     error and the skill's Choose the Slice section, per this item's own "otherwise document the
     boundary" escape hatch. Cross-process state (the other half of this item, e.g. lock-file-owner
-    identity as distinct from filesystem *content* already covered by #13) was not separately pursued
+    identity as distinct from filesystem _content_ already covered by #13) was not separately pursued
     — no dogfood case in this session needed it beyond what #13's resource binding already covers.
     Source: docs/plans/2026-07-02-tla-static-coverage.md P5.7.
 17. **RESOLVED (2026-07-02, remediation P5.2).** `variables.<v>.waive: {reason}` exempts that
@@ -319,3 +319,21 @@ up, write a real plan section (`concrete-plan`), and implement independently.
     CurrentSpec/VulnerableSpec directly, never a bare `Next`) are unaffected. Source:
     docs/plans/2026-07-02-tla-static-coverage.md P5.5.
 
+## From the Vega mapping modernization (2026-07-02, post-0.11.0)
+
+22. tla cfg `INVARIANTS` block form not parsed — **RESOLVED same day** (`81159d92`):
+    `readTlaConfigInvariants` now strips cfg comments, tokenizes, and treats
+    INVARIANT/INVARIANTS as synonyms with keyword-terminated sections.
+23. Write-error conformance categories are unwaivable: `isFactWaived` is consulted for
+    `undeclared-read`/`missing-*-evidence` only, never `model-code-write`/`undeclared-write`/
+    `model-mapping-write` (src/tla/conformance.ts ~715-748). Read/write waiver asymmetry left
+    ~470 residual noise findings across 5 Vega models that could not be waived with reasons.
+24. SANY fact extractor does not expand user-defined operator references (`deriveActionFacts`
+    in src/tla/sany-facts.ts): an action delegating its primes to a helper operator reports
+    `writes: none`, forcing mappings to target helpers directly (worked around in Vega's
+    GitHubWebhookIndexingPipeline mapping).
+25. A variable's own name is force-included as an alias (`model-contract.ts:426`,
+    `[...new Set([name, ...aliases])]`) — object-literal keys echoing a variable name become
+    unavoidable false write attributions; there is no way to opt out.
+26. Minor: `const x = ...` declarations are scored as writes of same-named aliases by the
+    source-scan fallback.
