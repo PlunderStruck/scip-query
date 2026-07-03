@@ -40,6 +40,32 @@ const IMPERATIVE_CHECKER_PATTERN = /^(?:validate|verify|check|assert)(?:[A-Z].*)
 const PREDICATE_CHECKER_PATTERN = /^(?:is|has)(?:[A-Z].*)?$/;
 const ERROR_RESULT_PATTERN = /[{,]\s*(?:ok|success|valid|isValid)\s*:\s*false\b/;
 const RETURN_KEYWORD_PATTERN = /\breturn\b/g;
+// A checker-named CANDIDATE that isn't actually a function at all: a
+// boolean-expression const (`const isRender = process.env.RENDER ===
+// 'true' || ...;`) or a schema-builder value (`const validateXSchema =
+// z.object({...})`). Both match the null-kind function-like fallback
+// heuristic `productionCallableDefinitions` uses (same convention as every
+// other arrow-const detector in this codebase), and both have neither a
+// `throw` nor a `return` anywhere in their "body" text, so they read as
+// trivially decorative. Requiring the snippet to actually look callable
+// (a `function` keyword, an arrow `=>`, or a parameter-list-close directly
+// followed by a brace body) rules both out.
+const CALLABLE_SHAPE_PATTERN = /\bfunction\b|=>|\)\s*(?::\s*[^{;=]+)?\s*\{/;
+// Diagnostic-sink failure signal: reports failure by appending to a
+// caller-supplied collector rather than throwing or returning false/an
+// error-result object. `.addIssue(` is Zod's `RefinementCtx` idiom
+// specifically (unambiguous — nothing else in common use is named this);
+// `.push(` is broader (any diagnostics/errors/findings array-accumulation
+// style) and deliberately biased toward precision over recall — a stray,
+// unrelated `.push(` call inside a checker just makes this detector miss a
+// real decorative checker, never flag a real one. External calibration
+// (2026-07-03, against Vega_2.0 and Stable_Management) found this was the
+// single dominant false-positive shape once the other archetypes were
+// fixed — Zod `.superRefine()`/`.refine()` validators reporting failure via
+// `ctx.addIssue({...})`, and hand-rolled validators pushing onto an
+// `errors`/`diagnostics`/`findings` array parameter (this repo's own
+// src/runtime/config.ts and src/tla/conformance.ts do exactly this).
+const DIAGNOSTIC_SINK_PATTERN = /\.(?:addIssue|push)\s*\(/;
 
 export function decorativeCheckers(
   db: ScipDatabase,
@@ -93,6 +119,7 @@ function classifyChecker(
 
   const snippet = definitionSourceSnippet(db, def);
   if (!snippet) return null;
+  if (!CALLABLE_SHAPE_PATTERN.test(snippet)) return null;
 
   // Delegating checkers (`validateX = () => validateY(x)`) inherit their
   // delegate's failure exits — a wrapper whose only statement is a forwarded
@@ -103,13 +130,32 @@ function classifyChecker(
   if (isThinForwarderBody(snippet)) {
     const delegate = resolveOneHopDelegate(db, def);
     if (!delegate) return null;
-    if (bodyHasFailureExit(delegate.body)) return null;
+    if (bodyHasFailureExit(delegate.body, isConciseArrowBody(delegate.snippet))) return null;
     return { nameKind, resolvedVia: 'one-hop-delegate', delegateTarget: delegate.shortName };
   }
 
   const rawBody = extractImplementationBody(snippet);
-  if (bodyHasFailureExit(rawBody)) return null;
+  if (bodyHasFailureExit(rawBody, isConciseArrowBody(snippet))) return null;
   return { nameKind, resolvedVia: 'direct' };
+}
+
+/**
+ * True when `snippet` is an arrow function with a concise (braceless) body —
+ * `(x) => x > 0`, not `(x) => { return x > 0; }`. Concise bodies can't
+ * contain an explicit `return` keyword (it would be a syntax error), so
+ * `bodyHasFailureExit` needs to know to treat the whole extracted body as
+ * one implicit return expression instead of finding zero `return`
+ * statements and concluding there's no failure exit (found calibrating
+ * against an external repo: `isTimeoutLikeAbortError = (error) =>
+ * isAbortError(error) || (...)` — a genuinely dynamic predicate — and
+ * `checkIssueDuplicates = (id, input) => apiClient.postData(...)` — an API
+ * client call that just happens to be named like a checker — both looked
+ * decorative because neither has a `return` keyword to find).
+ */
+function isConciseArrowBody(snippet: string): boolean {
+  const arrowIndex = snippet.indexOf('=>');
+  if (arrowIndex === -1) return false;
+  return !/^\s*\{/.test(snippet.slice(arrowIndex + 2));
 }
 
 /**
@@ -133,11 +179,22 @@ function classifyChecker(
  * `;` (nothing in this codebase's TS scans this detector needs to see is a
  * Python-style `#` comment, so that stripper pass is pure risk here).
  */
-function bodyHasFailureExit(rawBody: string): boolean {
+function bodyHasFailureExit(rawBody: string, isConciseArrow: boolean): boolean {
   const masked = stripComments(rawBody);
   if (/\bthrow\b/.test(masked)) return true;
   if (/\.reject\s*\(/.test(masked)) return true;
   if (ERROR_RESULT_PATTERN.test(masked)) return true;
+  if (DIAGNOSTIC_SINK_PATTERN.test(masked)) return true;
+
+  const returns = returnExpressions(masked);
+  // A concise-arrow body has no `return` keyword to find (see
+  // `isConciseArrowBody`'s doc comment) — its one expression is an implicit
+  // return, judged the same literal-true-vs-anything-else way explicit
+  // returns are below.
+  if (isConciseArrow && returns.length === 0) {
+    const implicitReturn = masked.trim();
+    return implicitReturn !== '' && implicitReturn !== 'true';
+  }
 
   // Applies uniformly to imperative (validate/verify/check/assert) and
   // predicate (is/has) names alike: any return whose expression isn't the
@@ -145,7 +202,7 @@ function bodyHasFailureExit(rawBody: string): boolean {
   // like `a && b` — is evidence the checker CAN fail, so it counts as a
   // failure exit even though the check itself is not the throw/reject/
   // error-result shape above. A bare `return;` isn't a signal either way.
-  for (const expr of returnExpressions(masked)) {
+  for (const expr of returns) {
     if (expr === '') continue;
     if (expr !== 'true') return true;
   }
@@ -192,7 +249,10 @@ function returnExpressions(masked: string): string[] {
   return exprs;
 }
 
-function resolveOneHopDelegate(db: ScipDatabase, def: IndexedDefinition): { body: string; shortName: string } | null {
+function resolveOneHopDelegate(
+  db: ScipDatabase,
+  def: IndexedDefinition,
+): { body: string; snippet: string; shortName: string } | null {
   const callees = getCalleeRowsForSymbol(db, def, { callableOnly: true, limit: 3 });
   const uniqueTargets = [...new Set(callees.map((callee) => callee.symbol))].filter((symbol) => symbol !== def.symbol);
   if (uniqueTargets.length !== 1) return null;
@@ -208,5 +268,9 @@ function resolveOneHopDelegate(db: ScipDatabase, def: IndexedDefinition): { body
 
   const targetSnippet = definitionSourceSnippet(db, targetDef);
   if (!targetSnippet) return null;
-  return { body: extractImplementationBody(targetSnippet), shortName: shortenSymbol(targetDef.symbol) };
+  return {
+    body: extractImplementationBody(targetSnippet),
+    snippet: targetSnippet,
+    shortName: shortenSymbol(targetDef.symbol),
+  };
 }

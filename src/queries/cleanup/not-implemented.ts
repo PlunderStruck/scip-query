@@ -46,6 +46,13 @@ const STUB_MESSAGE_PATTERN =
 const THROW_STUB_PATTERN = /^throw\s+new\s+[\w.]*Error\s*\(([\s\S]*)\)\s*;?$/;
 const DEFAULT_RETURN_PATTERN = /^return(\s+(null|undefined|false|0|''|""|``|\[\]|\{\}))?\s*;?$/;
 const TODO_COMMENT_PATTERN = /\/\/\s*TODO\b|\/\*\s*TODO\b/i;
+// Empty braces are only a genuine empty function body when they are the
+// snippet's own trailing construct, directly preceded by `=>` (arrow) or
+// `)` (a `function` declaration's own parameter-list close, optionally with
+// a return-type annotation in between). An empty-object-literal call
+// argument (`Schema.Struct({})`) always has a further `)` after its `}`, so
+// it can never match this "empty braces at the very end" shape.
+const EMPTY_FUNCTION_BODY_SUFFIX_PATTERN = /(?:=>|\))\s*(?::\s*[^{;=]+)?\s*\{\s*\}\s*;?\s*$/;
 
 interface StubCandidate {
   def: IndexedDefinition;
@@ -138,15 +145,24 @@ function classifyStub(db: ScipDatabase, def: IndexedDefinition): StubCandidate |
   const trimmedRaw = rawBody.trim();
 
   if (trimmedRaw === '') {
-    // extractImplementationBody falls back to slicing after `=>` when it
-    // finds no brace pair — for a value initializer whose snippet happens
-    // to be cut off right after an arrow (e.g. a multi-line `.map((id) =>`
-    // call chain), that fallback also yields an empty string, but that is a
-    // truncated/unrelated snippet, not a genuine `function foo() {}`. Only
-    // trust "empty body" when the snippet actually had a brace pair to
-    // extract from.
-    const hasBracePair = snippet.indexOf('{') >= 0 && snippet.lastIndexOf('}') > snippet.indexOf('{');
-    if (!hasBracePair) return null;
+    // extractImplementationBody's naive `indexOf('{')`/`lastIndexOf('}')`
+    // slice (shared with duplicate-bodies/twin-drift, not touched here) is
+    // too permissive for THIS check specifically: it finds *any* brace pair
+    // in the whole snippet, not necessarily the function's own body. An
+    // external-calibration false-positive archetype (8/8 sampled findings
+    // on one repo, all this shape): a value declaration whose only braces
+    // are an empty-object-literal CALL ARGUMENT (`Schema.Struct({})`,
+    // `z.object({})`) or an empty-object DEFAULT PARAMETER on a concise-body
+    // arrow (`(opts = {}) => apiClient.getData(...)`) — neither is a
+    // function body at all, but naive brace-pairing finds the `{}` and (for
+    // the default-param case, since it's the *only* brace pair in the whole
+    // snippet) slices between them, yielding "" either way. Requiring the
+    // ORIGINAL SNIPPET's true trailing shape to be `=> {}` or `) {}`
+    // (optionally with a return-type annotation in between) rules out both:
+    // an object-literal call argument is always followed by a closing `)`
+    // after its `}`, and a default-param `{}` is never the snippet's own
+    // trailing construct.
+    if (!isGenuineEmptyFunctionBody(snippet)) return null;
     if (!isExportedDefinition(db, def)) return null;
     return { def, stubKind: 'empty-body', stubText: '(empty body)' };
   }
@@ -206,6 +222,10 @@ function isNotImplementedThrow(statement: string): boolean {
   const match = THROW_STUB_PATTERN.exec(statement.trim());
   if (!match) return false;
   return STUB_MESSAGE_PATTERN.test(match[1] ?? '');
+}
+
+function isGenuineEmptyFunctionBody(snippet: string): boolean {
+  return EMPTY_FUNCTION_BODY_SUFFIX_PATTERN.test(snippet.trimEnd());
 }
 
 /**

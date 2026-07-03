@@ -70,6 +70,107 @@ describe('test-quality — assertion-free', () => {
   });
 });
 
+// External calibration regression (2026-07-03, against Vega_2.0): a
+// RegExp/string `.test(...)` METHOD call (`/pattern/i.test(sql)`) was
+// matched as if it were a vitest `test(...)` BLOCK declaration, fabricating
+// a bogus block whose "body" was just the call's own argument — reported as
+// assertion-free with an "(anonymous)" title, drowning out real findings and
+// hiding the real `it(...)` block's genuine assertions (which sit right next
+// to the `.test(` calls in the same body and were never even inspected,
+// since the fake block hijacked the scan).
+describe('test-quality — regexp/string .test(...) method calls are not test blocks', () => {
+  let tempDir: string;
+  let db: ScipDatabase;
+
+  beforeAll(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-query-test-quality-dot-test-'));
+    const projectRoot = join(tempDir, 'project');
+    writeFixtureFiles(projectRoot, {
+      'tests/regex-assertions.test.ts': [
+        "import { describe, expect, it } from 'vitest';",
+        '',
+        "describe('migration guardrails', () => {",
+        "  it('keeps RLS migrations present', () => {",
+        '    const migrations = [readFile()];',
+        '    expect(migrations.some((sql) => /enable row level security/i.test(sql))).toBe(true);',
+        '    expect(migrations.some((sql) => /create policy/i.test(sql))).toBe(true);',
+        '  });',
+        '});',
+      ],
+    });
+    const dbPath = join(tempDir, 'index.db');
+    db = emptyFixtureDb(projectRoot, dbPath);
+  });
+
+  afterAll(() => {
+    db.close();
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('does not fabricate an assertion-free block from a .test( method call', () => {
+    const report = testQuality(db);
+    expect(report.assertionFree.some((f) => f.title === '(anonymous)')).toBe(false);
+  });
+
+  it('still correctly resolves the real it block as having a real assertion', () => {
+    const report = testQuality(db);
+    expect(report.assertionFree.some((f) => f.title === 'keeps RLS migrations present')).toBe(false);
+  });
+});
+
+// External calibration regressions (2026-07-03, against Vega_2.0): two more
+// real assertion mechanisms the vocabulary-only check couldn't see.
+describe('test-quality — throw-based assertions and generic-typed vocabulary calls', () => {
+  let tempDir: string;
+  let db: ScipDatabase;
+
+  beforeAll(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-query-test-quality-throw-generic-'));
+    const projectRoot = join(tempDir, 'project');
+    writeFixtureFiles(projectRoot, {
+      'tests/coverage-sweep.test.ts': [
+        "import { describe, it } from 'vitest';",
+        '',
+        "it('every endpoint returns a consumer-safe value', () => {",
+        '  const failures: string[] = [];',
+        '  for (const endpoint of endpoints) {',
+        '    if (!isSafe(endpoint)) failures.push(endpoint.url);',
+        '  }',
+        '  if (failures.length > 0) {',
+        "    throw new Error(failures.join(', '));",
+        '  }',
+        '});',
+      ],
+      'tests/type-assertion.test.ts': [
+        "import { expectTypeOf, it } from 'vitest';",
+        '',
+        "it('keeps API type aliases assignable to shared contract types', () => {",
+        '  expectTypeOf<LocalType>().toEqualTypeOf<SharedType>();',
+        '});',
+      ],
+    });
+    const dbPath = join(tempDir, 'index.db');
+    db = emptyFixtureDb(projectRoot, dbPath);
+  });
+
+  afterAll(() => {
+    db.close();
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('does not flag a test that collects failures and throws a descriptive error', () => {
+    const report = testQuality(db);
+    expect(report.assertionFree.some((f) => f.title === 'every endpoint returns a consumer-safe value')).toBe(false);
+  });
+
+  it('does not flag a vitest expectTypeOf<T>() call with a generic type argument', () => {
+    const report = testQuality(db);
+    expect(
+      report.assertionFree.some((f) => f.title === 'keeps API type aliases assignable to shared contract types'),
+    ).toBe(false);
+  });
+});
+
 // Dogfood regression: a test whose only assertion lives inside a local
 // helper function (`expectValidTypeScript(x)`, wrapping a real
 // `expect(...).toEqual(...)`) looked assertion-free before the one-hop,

@@ -229,3 +229,164 @@ describe('decorative-checkers — dogfood regressions', () => {
     expect(findings.some((f) => f.shortName.includes('hasIdentifierUsage'))).toBe(false);
   });
 });
+
+// External calibration regressions (2026-07-03 integrity-detector
+// calibration against Vega_2.0 and Stable_Management): most sampled
+// findings on both repos were one of two archetypes, both fixed here.
+describe('decorative-checkers — external calibration regressions', () => {
+  let tempDir: string;
+  let db: ScipDatabase;
+
+  beforeAll(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-query-decorative-checkers-calibration-'));
+    const projectRoot = join(tempDir, 'project');
+    writeFixtureFiles(projectRoot, {
+      // Archetype 1: not actually a function at all — a boolean-expression
+      // const (matches the null-kind arrow-const fallback heuristic) and a
+      // schema-builder value both have neither throw nor return anywhere in
+      // their "body" text, so they read as trivially decorative.
+      'src/not-a-function.ts': [
+        'export const isRender =',
+        "  process.env.RENDER === 'true' || Boolean(process.env.RENDER_SERVICE_ID);",
+        'export const validateInvitationSchema = z.object({',
+        "  token: z.string().min(1, 'Token is required'),",
+        '});',
+      ],
+      // Archetype 2: a concise-arrow (braceless) body has no `return`
+      // keyword to find — a genuinely dynamic predicate and an API-client
+      // call that just happens to be named like a checker both looked
+      // decorative because neither has one.
+      'src/concise-arrow.ts': [
+        'export const isTimeoutLikeAbortError = (error: unknown): boolean =>',
+        '  isAbortError(error) || (error instanceof Error && error.name === "TimeoutError");',
+        'export const checkIssueDuplicates = (projectId: string, input: unknown) =>',
+        '  apiClient.postData(issuesClientPaths.duplicateCheck(projectId), input);',
+      ],
+    });
+
+    const dbPath = join(tempDir, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/not-a-function.ts')
+      .document(2, 'typescript', 'src/concise-arrow.ts')
+      .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`not-a-function.ts`/isRender.', 'isRender', null)
+      .symbol(
+        2,
+        'scip-typescript npm fixture 1.0.0 src/`not-a-function.ts`/validateInvitationSchema.',
+        'validateInvitationSchema',
+        null,
+      )
+      .symbol(
+        3,
+        'scip-typescript npm fixture 1.0.0 src/`concise-arrow.ts`/isTimeoutLikeAbortError.',
+        'isTimeoutLikeAbortError',
+        null,
+      )
+      .symbol(
+        4,
+        'scip-typescript npm fixture 1.0.0 src/`concise-arrow.ts`/checkIssueDuplicates.',
+        'checkIssueDuplicates',
+        null,
+      )
+      .definition(1, 1, 1, 0, 0, 1, 60)
+      .definition(2, 1, 2, 2, 0, 4, 3)
+      .definition(3, 2, 3, 0, 0, 1, 60)
+      .definition(4, 2, 4, 2, 0, 3, 60)
+      .write();
+
+    db = new ScipDatabase({ dbPath, projectRoot, indexPath: join(tempDir, 'index.scip') });
+  });
+
+  afterAll(() => {
+    db.close();
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('does not flag a boolean-expression const with no function shape', () => {
+    const findings = decorativeCheckers(db);
+    expect(findings.some((f) => f.shortName.includes('isRender'))).toBe(false);
+  });
+
+  it('does not flag a schema-builder value with no function shape', () => {
+    const findings = decorativeCheckers(db);
+    expect(findings.some((f) => f.shortName.includes('validateInvitationSchema'))).toBe(false);
+  });
+
+  it('does not flag a concise-arrow predicate with a dynamic implicit return', () => {
+    const findings = decorativeCheckers(db);
+    expect(findings.some((f) => f.shortName.includes('isTimeoutLikeAbortError'))).toBe(false);
+  });
+
+  it('does not flag a concise-arrow API-client call named like a checker', () => {
+    const findings = decorativeCheckers(db);
+    expect(findings.some((f) => f.shortName.includes('checkIssueDuplicates'))).toBe(false);
+  });
+});
+
+// External calibration: once the archetypes above were fixed, this was the
+// single dominant remaining false-positive shape on BOTH external repos (and
+// this repo's own src/runtime/config.ts / src/tla/conformance.ts) — a
+// validator reporting failure via a diagnostic-sink call (Zod's
+// `ctx.addIssue(...)`, or pushing onto a caller-supplied errors array)
+// instead of throw/return false/an error-result literal.
+describe('decorative-checkers — diagnostic-sink failure signal (ctx.addIssue / errors.push)', () => {
+  let tempDir: string;
+  let db: ScipDatabase;
+
+  beforeAll(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-query-decorative-checkers-diagnostic-sink-'));
+    const projectRoot = join(tempDir, 'project');
+    writeFixtureFiles(projectRoot, {
+      'src/zod-refinement.ts': [
+        'const validateSlotWindow = (payload: { startTime?: string }, ctx: z.RefinementCtx) => {',
+        '  if (!payload.startTime) {',
+        "    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'startTime is required' });",
+        '  }',
+        '};',
+      ],
+      'src/errors-array.ts': [
+        'function validateDocsConfig(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {',
+        '  if (!Array.isArray(config.docs?.snapshotPaths)) {',
+        "    diagnostics.push({ level: 'error', message: 'Must be an array.' });",
+        '  }',
+        '}',
+      ],
+    });
+
+    const dbPath = join(tempDir, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/zod-refinement.ts')
+      .document(2, 'typescript', 'src/errors-array.ts')
+      .symbol(
+        1,
+        'scip-typescript npm fixture 1.0.0 src/`zod-refinement.ts`/validateSlotWindow.',
+        'validateSlotWindow',
+        null,
+      )
+      .symbol(
+        2,
+        'scip-typescript npm fixture 1.0.0 src/`errors-array.ts`/validateDocsConfig().',
+        'validateDocsConfig',
+        12,
+      )
+      .definition(1, 1, 1, 0, 0, 4, 1)
+      .definition(2, 2, 2, 0, 0, 4, 1)
+      .write();
+
+    db = new ScipDatabase({ dbPath, projectRoot, indexPath: join(tempDir, 'index.scip') });
+  });
+
+  afterAll(() => {
+    db.close();
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('does not flag a Zod RefinementCtx validator that reports failure via ctx.addIssue', () => {
+    const findings = decorativeCheckers(db);
+    expect(findings.some((f) => f.shortName.includes('validateSlotWindow'))).toBe(false);
+  });
+
+  it('does not flag a validator that reports failure by pushing onto an errors array parameter', () => {
+    const findings = decorativeCheckers(db);
+    expect(findings.some((f) => f.shortName.includes('validateDocsConfig'))).toBe(false);
+  });
+});

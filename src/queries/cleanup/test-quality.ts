@@ -152,7 +152,15 @@ interface TestBlock {
 }
 
 // `it(`/`test(`, `it.skip(`/`test.only(`/`describe.skip(`, `xit(`/`xdescribe(`, `it.todo(`.
-const BLOCK_PATTERN = /\b(?:x(it|test|describe)|(it|test|describe)(?:\.\s*(skip|only|todo|each\s*\([^)]*\)))?)\s*\(/g;
+// Excludes a preceding `.` (negative lookbehind): external calibration
+// (2026-07-03, against Vega_2.0) found this matching `.test(` on a REGEXP
+// or STRING method call (`/pattern/i.test(sql)`, extremely common in test
+// files that assert against regex-matched content) as if it were a vitest
+// `test(...)` block declaration — vitest/jest test-block globals are always
+// called bare (`it(...)`, `test(...)`) or as `it.skip(...)`-style chains off
+// the BARE name, never as a method on some other value.
+const BLOCK_PATTERN =
+  /(?<!\.)\b(?:x(it|test|describe)|(it|test|describe)(?:\.\s*(skip|only|todo|each\s*\([^)]*\)))?)\s*\(/g;
 
 function findTestBlocks(masked: string): TestBlock[] {
   const blocks: TestBlock[] = [];
@@ -254,8 +262,18 @@ function assertionVocabulary(source: string): Set<string> {
 
 function hasAssertionCall(maskedBody: string, vocabulary: ReadonlySet<string>): boolean {
   if (/\.should\b/.test(maskedBody)) return true; // chai's should-style, not name-gated
+  // A test that manually collects failures and `throw`s a descriptive error
+  // (rather than calling expect/assert) is a legitimate, common assertion
+  // mechanism — expect() failures throw internally too. External
+  // calibration (2026-07-03, against Vega_2.0) found this pattern in a
+  // coverage-sweep test that iterates every API endpoint and throws with
+  // the full failure list; the vocabulary-only check couldn't see it.
+  if (/\bthrow\b/.test(maskedBody)) return true;
   for (const name of vocabulary) {
-    const pattern = new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[.(]`);
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Optional TS generic type argument between the name and the call, e.g.
+    // vitest's `expectTypeOf<T>()` — also found in the same calibration pass.
+    const pattern = new RegExp(`\\b${escaped}\\s*(?:<[^<>]*>)?\\s*[.(]`);
     if (pattern.test(maskedBody)) return true;
   }
   return false;

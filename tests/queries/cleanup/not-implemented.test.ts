@@ -209,3 +209,53 @@ describe('not-implemented — arrow-fallback truncated snippet is not an empty-b
     expect(findings.some((f) => f.file === 'main.ts')).toBe(false);
   });
 });
+
+// External calibration regression (2026-07-03 integrity-detector calibration
+// against Vega_2.0): 8/8 sampled empty-body findings on that repo were this
+// exact shape — an empty-object-literal CALL ARGUMENT (a schema builder) or
+// an empty-object DEFAULT PARAMETER on a concise-body arrow, neither of
+// which is a function body at all. 0% precision on that repo before the fix.
+describe('not-implemented — empty-object-literal call argument and default param are not empty-body stubs', () => {
+  let tempDir: string;
+  let db: ScipDatabase;
+
+  beforeAll(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-query-not-implemented-empty-object-arg-'));
+    const projectRoot = join(tempDir, 'project');
+    // main.ts is a structural entry surface, isolating this check from
+    // reachability the same way the truncated-snippet fixture above does.
+    writeFixtureFiles(projectRoot, {
+      'main.ts': [
+        'export const completeDraftInput = Schema.Struct({});',
+        'export const getRepos = (projectId: string, options: RequestOptions = {}) =>',
+        '  apiClient.getData(githubPaths.repos(projectId), options);',
+      ],
+    });
+
+    const dbPath = join(tempDir, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'main.ts')
+      .symbol(1, 'scip-typescript npm fixture 1.0.0 main.ts/completeDraftInput.', 'completeDraftInput', null)
+      .symbol(2, 'scip-typescript npm fixture 1.0.0 main.ts/getRepos.', 'getRepos', null)
+      .definition(1, 1, 1, 0, 0, 0, 53)
+      .definition(2, 1, 2, 1, 0, 2, 60)
+      .write();
+
+    db = new ScipDatabase({ dbPath, projectRoot, indexPath: join(tempDir, 'index.scip') });
+  });
+
+  afterAll(() => {
+    db.close();
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('does not report a schema-builder call with an empty-object argument as an empty-body stub', () => {
+    const findings = notImplemented(db, { semantic: false });
+    expect(findings.some((f) => f.shortName.includes('completeDraftInput'))).toBe(false);
+  });
+
+  it('does not report a concise-body arrow with an empty-object default parameter as an empty-body stub', () => {
+    const findings = notImplemented(db, { semantic: false });
+    expect(findings.some((f) => f.shortName.includes('getRepos'))).toBe(false);
+  });
+});
