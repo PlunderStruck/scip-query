@@ -1379,6 +1379,159 @@ UpdateOther == UNCHANGED subscription
     }
   });
 
+  it('scopes fact collection to a codeRef line window so sibling branch actions sharing one function each claim only their own write (C3)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/machine.ts')
+      .symbol(1, 'scip-typescript npm test 1.0.0 src/`machine.ts`/FLAG_A.', 'FLAG_A', SymbolInformation_Kind.Constant)
+      .symbol(2, 'scip-typescript npm test 1.0.0 src/`machine.ts`/FLAG_B.', 'FLAG_B', SymbolInformation_Kind.Constant)
+      .symbol(
+        3,
+        'scip-typescript npm test 1.0.0 src/`machine.ts`/transition().',
+        'transition',
+        SymbolInformation_Kind.Function,
+      )
+      .definition(1, 1, 1, 0, 0, 0, 19)
+      .definition(2, 1, 2, 1, 0, 1, 19)
+      .definition(3, 1, 3, 3, 0, 9, 1)
+      .chunk(1, 1, 0, 9)
+      .write();
+    const config: ScipQueryConfig = { projectRoot: root, dbPath, indexPath: join(root, 'index.scip') };
+    writeFixtureFiles(root, {
+      'src/machine.ts': [
+        'let flagA = false;',
+        'let flagB = false;',
+        '',
+        'export function transition(input: Input) {',
+        "  if (input.kind === 'a') {",
+        '    flagA = true;',
+        '  } else {',
+        '    flagB = true;',
+        '  }',
+        '}',
+      ],
+    });
+    writeFileSync(
+      join(root, 'Machine2.tla'),
+      `---- MODULE Machine2 ----
+VARIABLES flagA, flagB
+WriteA == flagA' = TRUE /\\ UNCHANGED flagB
+WriteB == flagB' = TRUE /\\ UNCHANGED flagA
+====
+`,
+    );
+    const db = new ScipDatabase(config);
+    const contract: TlaModelContract = {
+      module: 'Machine2.tla',
+      scope: ['src/machine.ts'],
+      variables: {
+        flagA: { code: ['FLAG_A'], aliases: ['flagA'] },
+        flagB: { code: ['FLAG_B'], aliases: ['flagB'] },
+      },
+      actions: {
+        // Both branches live inside the SAME function — without a window,
+        // each action's full-function fact collection would see BOTH
+        // writes and fire undeclared-write/model-code-write cross-talk.
+        WriteA: { code: ['transition@L6-L6'], reads: [], writes: ['flagA'], calls: [] },
+        WriteB: { code: ['transition@L8-L8'], reads: [], writes: ['flagB'], calls: [] },
+      },
+      invariants: [],
+      traces: [],
+    };
+
+    try {
+      const result = verifyTlaConformance(db, contract, readTlaModuleFacts(root, 'Machine2.tla'));
+
+      const writesByVariable = (variable: string) => result.staticWrites.filter((write) => write.variable === variable);
+      expect(writesByVariable('flagA')).toHaveLength(1);
+      expect(writesByVariable('flagA')[0]?.line).toBe(5);
+      expect(writesByVariable('flagB')).toHaveLength(1);
+      expect(writesByVariable('flagB')[0]?.line).toBe(7);
+      expect(result.findings.filter((finding) => finding.severity === 'error')).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('reports a verify-time error naming file, function, and actual span when a codeRef line window falls outside it (C3)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/machine.ts')
+      .symbol(1, 'scip-typescript npm test 1.0.0 src/`machine.ts`/FLAG_A.', 'FLAG_A', SymbolInformation_Kind.Constant)
+      .symbol(
+        2,
+        'scip-typescript npm test 1.0.0 src/`machine.ts`/transition().',
+        'transition',
+        SymbolInformation_Kind.Function,
+      )
+      .definition(1, 1, 1, 0, 0, 0, 19)
+      .definition(2, 1, 2, 3, 0, 9, 1)
+      .chunk(1, 1, 0, 9)
+      .write();
+    const config: ScipQueryConfig = { projectRoot: root, dbPath, indexPath: join(root, 'index.scip') };
+    writeFixtureFiles(root, {
+      'src/machine.ts': [
+        'let flagA = false;',
+        '',
+        '',
+        'export function transition(input: Input) {',
+        "  if (input.kind === 'a') {",
+        '    flagA = true;',
+        '  }',
+        '}',
+        '',
+        '',
+      ],
+    });
+    writeFileSync(
+      join(root, 'Machine3.tla'),
+      `---- MODULE Machine3 ----
+VARIABLES flagA
+WriteA == flagA' = TRUE
+====
+`,
+    );
+    const db = new ScipDatabase(config);
+    const contract: TlaModelContract = {
+      module: 'Machine3.tla',
+      // No scope: this test only checks per-action fact collection
+      // precision, not the separate unmapped-write scope-file sweep (which
+      // unconditionally reports every scanned write regardless of action
+      // mapping success).
+      scope: [],
+      variables: {
+        flagA: { code: ['FLAG_A'], aliases: ['flagA'] },
+      },
+      actions: {
+        // transition spans rows 3-7 (0-based) == display lines 4-8; this
+        // window (L20-L25) falls entirely outside that span.
+        WriteA: { code: ['transition@L20-L25'], reads: [], writes: ['flagA'], calls: [] },
+      },
+      invariants: [],
+      traces: [],
+    };
+
+    try {
+      const result = verifyTlaConformance(db, contract, readTlaModuleFacts(root, 'Machine3.tla'));
+
+      const windowFinding = result.findings.find((finding) => finding.category === 'invalid-line-window');
+      expect(windowFinding).toBeDefined();
+      expect(windowFinding?.severity).toBe('error');
+      expect(windowFinding?.file).toBe('src/machine.ts');
+      expect(windowFinding?.message).toContain('transition');
+      expect(windowFinding?.message).toContain('L20-L25');
+      // The actual resolved span (display lines 4-8) must be named too.
+      expect(windowFinding?.message).toContain('L4-L8');
+      // A window that fails containment must never silently fall back to
+      // scanning the whole function — no flagA write fact at all.
+      expect(result.staticWrites.filter((write) => write.variable === 'flagA')).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
   it('excludes writes inside a mapped Init referent from unmapped-write findings (Q3)', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
     const dbPath = join(root, 'index.db');

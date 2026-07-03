@@ -18,6 +18,7 @@ import {
 import { callGraph } from '../queries/navigation/call-graph.js';
 import {
   ormCallEffectiveMethods,
+  parseCodeRefWindow,
   type TlaInitMapping,
   type TlaModelContract,
   type TlaModuleFacts,
@@ -38,6 +39,7 @@ export interface TlaConformanceFinding {
     | 'missing-referent'
     | 'ambiguous-referent'
     | 'invalid-referent-kind'
+    | 'invalid-line-window'
     | 'unmapped-write'
     | 'undeclared-write'
     | 'missing-write-evidence'
@@ -115,6 +117,16 @@ interface ResolvedInit {
 interface ResolvedReferent {
   ref: string;
   match: SymbolMatch | null;
+  /**
+   * C3 / line-range codeRefs: the resolved sub-range (0-based, matching
+   * `SymbolMatch.startLine`/`endLine`) when this referent's codeRef named
+   * an `@L<start>-L<end>` window AND it validated inside `match`'s span.
+   * Absent when no window was requested, OR when one was requested but
+   * failed containment (in that case `match` is nulled out too — see
+   * `resolveActions` — so the referent contributes no facts at all rather
+   * than silently falling back to the whole function).
+   */
+  window?: { startLine: number; endLine: number };
 }
 
 export interface VariableAlias {
@@ -505,26 +517,66 @@ function resolveActions(
   findings: TlaConformanceFinding[],
 ): ResolvedAction[] {
   return Object.entries(contract.actions).map(([name, mapping]) => {
-    const referents = mapping.code.map((ref) => {
-      const referent = resolveReferent(db, ref, findings, name);
+    const referents = mapping.code.map((raw): ResolvedReferent => {
+      // C3: strip an optional `@L<start>-L<end>` window before symbol
+      // lookup — `loadTlaModelContract` already rejected malformed window
+      // syntax, so `parsed` only carries `{ error }` here in the
+      // (unreachable in practice) case of a contract built by hand rather
+      // than loaded, in which case the raw text is used as-is and will
+      // simply fail to resolve as a symbol.
+      const parsed = parseCodeRefWindow(raw);
+      const baseRef = 'error' in parsed ? raw : parsed.ref;
+      const referent = resolveReferent(db, baseRef, findings, name);
       const match = referent.match;
       if (!match) {
         findings.push(
           finding('missing-referent', 'error', 'compiler-symbol', {
             modelElement: name,
-            codeRef: ref,
-            message: `TLA+ action ${name} maps to missing TypeScript referent ${ref}.`,
+            codeRef: raw,
+            message: `TLA+ action ${name} maps to missing TypeScript referent ${raw}.`,
             why: ['The action cannot be compared to code because the mapped symbol did not resolve in the SCIP index.'],
             remediation: `Update actions.${name}.code to a live function or method symbol.`,
           }),
         );
-      } else {
-        validateActionReferentKind(db, name, ref, match, findings);
+        return { ref: raw, match: null };
       }
-      return referent;
+      validateActionReferentKind(db, name, raw, match, findings);
+      if ('error' in parsed || !parsed.window) return { ref: raw, match };
+
+      // Containment can only be checked now that the referent's actual
+      // span is known — a window outside it is a loud verify-time error,
+      // never a silent clamp back to the whole function.
+      if (windowOutsideSpan(parsed.window, match)) {
+        findings.push(
+          finding('invalid-line-window', 'error', 'compiler-symbol', {
+            modelElement: name,
+            codeRef: raw,
+            file: match.relativePath,
+            startLine: match.startLine,
+            endLine: match.endLine,
+            message: `TLA+ action ${name} codeRef line window L${parsed.window.startLine}-L${parsed.window.endLine} falls outside ${shortenSymbol(match.symbol)}'s actual span L${match.startLine + 1}-L${match.endLine + 1} in ${match.relativePath}.`,
+            why: [
+              `${raw} resolves to ${shortenSymbol(match.symbol)} at ${match.relativePath}:${match.startLine + 1}-${match.endLine + 1}.`,
+              `The requested window does not fall entirely inside that span.`,
+            ],
+            remediation: `Update the @L${parsed.window.startLine}-L${parsed.window.endLine} window in actions.${name}.code to fall within L${match.startLine + 1}-L${match.endLine + 1}, or drop the window to cover the whole function.`,
+          }),
+        );
+        return { ref: raw, match: null };
+      }
+
+      return {
+        ref: raw,
+        match,
+        window: { startLine: parsed.window.startLine - 1, endLine: parsed.window.endLine - 1 },
+      };
     });
     return { name, mapping, referents };
   });
+}
+
+function windowOutsideSpan(window: { startLine: number; endLine: number }, match: SymbolMatch): boolean {
+  return window.startLine - 1 < match.startLine || window.endLine - 1 > match.endLine;
 }
 
 /**
@@ -705,11 +757,16 @@ function collectAllStaticWrites(
     const actionWrites: TlaStaticWrite[] = [];
     for (const referent of action.referents) {
       if (!referent.match) continue;
+      // C3: a codeRef line window scopes fact collection to the
+      // sub-range instead of the referent's whole resolved span, so
+      // sibling guard/branch actions sharing one function each claim
+      // only their own branch's writes.
+      const range = referent.window ?? { startLine: referent.match.startLine, endLine: referent.match.endLine };
       const found = collectWritesForRange(
         db,
         referent.match.relativePath,
-        referent.match.startLine,
-        referent.match.endLine,
+        range.startLine,
+        range.endLine,
         aliases,
         resources,
         statements,
@@ -854,11 +911,13 @@ function collectAllStaticReads(
     const actionReads: TlaStaticRead[] = [];
     for (const referent of action.referents) {
       if (!referent.match) continue;
+      // C3: see the matching comment in collectAllStaticWrites.
+      const range = referent.window ?? { startLine: referent.match.startLine, endLine: referent.match.endLine };
       const found = collectReadsForRange(
         db,
         referent.match.relativePath,
-        referent.match.startLine,
-        referent.match.endLine,
+        range.startLine,
+        range.endLine,
         aliases,
         resources,
         statements,

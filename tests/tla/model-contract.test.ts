@@ -475,6 +475,54 @@ Enqueue(job) == queue' = Append(queue, job)
     expect(loaded.errors).toEqual([]);
   });
 
+  it('accepts an action codeRef with a valid line window (C3), keeping the raw ref text', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Branches.scip-tla.json'),
+      JSON.stringify({
+        variables: { flag: { code: ['src/machine.ts/flag'] } },
+        actions: { WriteA: { code: ['src/machine.ts/transition@L6-L8'], writes: ['flag'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Branches.scip-tla.json');
+
+    expect(loaded.errors).toEqual([]);
+    expect(loaded.loaded?.contract.actions.WriteA?.code).toEqual(['src/machine.ts/transition@L6-L8']);
+  });
+
+  it('rejects an action codeRef whose line window end is before its start', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Broken.scip-tla.json'),
+      JSON.stringify({
+        variables: { flag: { code: ['src/machine.ts/flag'] } },
+        actions: { WriteA: { code: ['src/machine.ts/transition@L20-L10'], writes: ['flag'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Broken.scip-tla.json');
+
+    expect(loaded.loaded).toBeUndefined();
+    expect(loaded.errors[0]).toContain('line window end (L10) is before its start (L20)');
+  });
+
+  it('rejects an action codeRef with a zero line window start', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Broken.scip-tla.json'),
+      JSON.stringify({
+        variables: { flag: { code: ['src/machine.ts/flag'] } },
+        actions: { WriteA: { code: ['src/machine.ts/transition@L0-L5'], writes: ['flag'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Broken.scip-tla.json');
+
+    expect(loaded.loaded).toBeUndefined();
+    expect(loaded.errors[0]).toContain('line window must start at line 1 or later');
+  });
+
   it('parses a top-level init mapping', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
     writeFileSync(

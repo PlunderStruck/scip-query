@@ -82,6 +82,53 @@ export function ormCallEffectiveMethods(binding: TlaOrmCallBinding): { write: st
   };
 }
 
+/**
+ * C3 / line-range codeRefs: a 1-based, inclusive line window suffixed onto
+ * an action codeRef as `<ref>@L<startLine>-L<endLine>` — scopes fact
+ * collection for that referent to the sub-range instead of the whole
+ * resolved function, so sibling guard/branch actions sharing one function
+ * each claim only their own branch's writes/reads. Containment against the
+ * referent's actual resolved span can only be checked once the symbol
+ * resolves (needs the compiler index), so that check happens at
+ * conformance/verify time, not here — this parse step only validates the
+ * window's own syntax (a positive, non-inverted range).
+ */
+export interface TlaCodeRefWindow {
+  startLine: number;
+  endLine: number;
+}
+
+export interface ParsedCodeRef {
+  ref: string;
+  window?: TlaCodeRefWindow;
+}
+
+const CODE_REF_WINDOW_PATTERN = /^(.*)@L(\d+)-L(\d+)$/;
+
+/**
+ * Splits an optional `@L<start>-L<end>` line-window suffix off a raw
+ * codeRef string. Returns the ref unchanged (no `window`) when the suffix
+ * is absent; returns `{ error }` when the suffix is present but malformed
+ * (inverted range, non-positive start, or no referent text before it).
+ */
+export function parseCodeRefWindow(raw: string): ParsedCodeRef | { error: string } {
+  const match = raw.match(CODE_REF_WINDOW_PATTERN);
+  if (!match) return { ref: raw };
+  const ref = match[1]!;
+  const startLine = Number.parseInt(match[2]!, 10);
+  const endLine = Number.parseInt(match[3]!, 10);
+  if (!ref) {
+    return { error: `codeRef "${raw}" has a line window but no referent before @L${match[2]}-L${match[3]}` };
+  }
+  if (startLine < 1) {
+    return { error: `codeRef "${raw}" line window must start at line 1 or later` };
+  }
+  if (endLine < startLine) {
+    return { error: `codeRef "${raw}" line window end (L${endLine}) is before its start (L${startLine})` };
+  }
+  return { ref, window: { startLine, endLine } };
+}
+
 export interface TlaVariableMapping {
   code: string[];
   aliases: string[];
@@ -641,6 +688,13 @@ function parseActions(
     if (!code || code.length === 0) {
       errors.push(`actions.${name}.code must name at least one TypeScript referent`);
       continue;
+    }
+    // C3: validate line-window syntax now (a pure string check); span
+    // containment against the resolved referent is a verify-time check
+    // (src/tla/conformance.ts), since it needs the compiler index.
+    for (const ref of code) {
+      const parsed = parseCodeRefWindow(ref);
+      if ('error' in parsed) errors.push(`actions.${name}.code: ${parsed.error}`);
     }
     const reads = stringArray(value.reads) ?? [];
     const writes = stringArray(value.writes) ?? [];
