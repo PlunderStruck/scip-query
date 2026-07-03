@@ -63,6 +63,7 @@ files live beside that run history and are summarized with
 | 6.1.3 | Added cache invalidation matrix and checker. | `scripts/check-evidence-manifest-doc.mjs` validates manifest entries and now documents the health sidecar separately. |
 | 6.2.2 | Standardized evidence product read profile spans in wrappers. | `tests/storage/evidence-cache.test.ts` asserts `evidence-product.file.read` hit/miss metadata for planted good and corrupt rows. |
 | 6.3.2 | Promoted health's complete report to an index-side sidecar cache. | `tests/runtime/health-report-cache.test.ts` proves same-key reuse, project-fingerprint miss, scope separation, and full/default mode separation. |
+| 6.5.1 | Measured reindex proportionality across 5 scenarios (no-edit, single-file TS, shared-package TS, non-TS, config) on temporary copies of all 3 repos. No code change; pure measurement. | Scenario matrix and findings above; raw stdout under scratchpad `6.5.1-results/`; 14 JSONL rows with `"phase":"6.5.1"`. |
 | 6.5/6.6 | Added warm-index labels and retro-gate replay support to the harness. | `tests/scripts/performance-architecture-contract.test.ts` covers explicit `warm-index --no-clear` and retro worktree command construction. |
 
 ## Rejected Changes
@@ -137,6 +138,75 @@ upstream TypeScript indexing change, even if the gate phase were free.
 | `Vega_2.0` | 35.285s | 0.418s | Cold path reruns the TypeScript shard; warm path reuses it. |
 | `Stable_Management` | 21.692s | 0.284s | Cold path reruns the TypeScript shard; warm path reuses it. |
 | `scip-query` | 3.047s | 0.749s | Local cold target remains met; no-edit reuse stays under 1s. |
+
+### Scenario matrix (6.5.1)
+
+Method: temporary clonefile (`cp -Rc`) copies of `Vega_2.0` and `Stable_Management`
+in the scratchpad, and a throwaway `git worktree` of `scip-query` (symlinked
+`node_modules`, never the tracked working tree). Each copy was cold-indexed
+once, then each scenario appended one marker line to a target file, ran
+`reindex`, recorded the human status lines and wall time, then restored the
+original file bytes and re-synced the index before the next scenario so each
+scenario measures one isolated change. Copies were never derived from a `git
+checkout`/`restore`/`stash` on the read-only originals; edits and reverts used
+plain file copies. Full stdout for every scenario is saved under
+`/private/tmp/claude-501/.../scratchpad/6.5.1-results/*.txt` (session
+scratchpad, not committed) and summarized rows are appended to
+`docs/benchmarks/runs/2026-07-02-performance-architecture.jsonl` with
+`"phase":"6.5.1"`.
+
+| Repo | Scenario | Duration | Shard label | Notes |
+| --- | --- | ---: | --- | --- |
+| `Vega_2.0` | no edit | 0.447s | reused | `Reused typescript, python in 0.3s` |
+| `Vega_2.0` | single TS file edit (`apps/api/src/middleware/beta-enforcement.middleware.ts`) | 56.983s | rerun (TS only) | `Reusing cached python SCIP shard`; TypeScript shard fully rebuilt |
+| `Vega_2.0` | shared-package TS edit (`packages/shared/src/types/project.ts`) | 56.822s | rerun (TS only) | Same shape as single-file edit: whole TS shard rebuilds, Python reused |
+| `Vega_2.0` | non-TS edit (`scripts/generate_checklist.py`) | 7.545s | rerun (Python only) | `Reusing cached typescript SCIP shard`; only Python shard reruns |
+| `Vega_2.0` | config edit (`tsconfig.base.json`, added unknown `compilerOptions` field) | 49.255s | rerun (both languages) | No `Reusing cached` lines at all -- both TS and Python shards rebuilt |
+| `Stable_Management` | no edit | 0.308s | reused | `Reused typescript in 0.1s` |
+| `Stable_Management` | single TS file edit (`backend/src/app.ts`) | 21.551s | rerun | Single-language repo: any TS edit rebuilds the one shard |
+| `Stable_Management` | shared-package TS edit (`shared/src/stableTime.ts`) | 21.295s | rerun | Same shape as single-file edit; no separate per-package shard exists |
+| `Stable_Management` | non-TS edit (`README.md`) | 2.709s | reused | `Reusing cached typescript SCIP shard`; fast path is SQLite re-augment only |
+| `Stable_Management` | config edit (`.scipquery.json`, `watch.debounceMs`) | 2.512s | reused | Tool config (non-language) does not perturb the shard fingerprint |
+| `scip-query` | no edit | 0.310s | reused | `Reused typescript in 0.2s` |
+| `scip-query` | single TS file edit (`src/storage/evidence-cache.ts`) | 3.282s | rerun | Single-project shard: any TS edit rebuilds the whole (small) shard |
+| `scip-query` | non-TS edit (`README.md`) | 0.840s | reused | `Reusing cached typescript SCIP shard` |
+| `scip-query` | config edit (`.scipquery.json`, `watch.debounceMs`) | 0.812s | reused | Tool config does not perturb the shard fingerprint |
+
+Findings:
+
+- The TypeScript shard is invalidated at whole-shard granularity: a one-line
+  edit anywhere inside a TS-indexed tree (including a single leaf file in one
+  workspace package) costs the same wall time as editing every file in that
+  language, because `reindex` reruns `scip-typescript` over the whole shard
+  rather than a per-file delta. This is the direct motivation for the 6.5.3
+  feasibility gate.
+  - `Vega_2.0` workspace-package and shared-package edits are indistinguishable
+    in cost (56.8s-57.0s) because scip-typescript indexes the whole TypeScript
+    workspace as project shard(s), not per-package.
+- Cross-language proportionality already works correctly: editing a Python
+  file in Vega reuses the TypeScript shard, and editing a non-indexed file
+  (markdown) reuses every language shard in both Vega and Stable_Management.
+- scip-query's own tool config (`.scipquery.json`) is correctly excluded from
+  the shard fingerprint in all three repos -- editing it never triggers a
+  shard rerun.
+- Vega's `tsconfig.base.json` is the one config file that is part of the
+  TypeScript shard's fingerprint, and editing it invalidated **both** the
+  TypeScript and Python shards simultaneously (no `Reusing cached` line for
+  either language). This is broader than expected for a TS-only config file
+  and is worth a follow-up question (see Open Questions) but is out of scope
+  to fix in Plan 6 since DEFER/one-way-door rules restrict indexer-boundary
+  changes.
+- A companion probe on `Stable_Management/tsconfig.json` (initially `{}`)
+  found that adding an unrecognized `compilerOptions` key made
+  `scip-typescript index --infer-tsconfig` fail outright (`Skipping
+  typescript: scip-typescript indexer failed`), rather than degrading
+  gracefully. This is an upstream `scip-typescript`/`--infer-tsconfig`
+  fragility, not a scip-query cache bug, and is recorded here rather than
+  fixed, per the DEFER list ("do not replace scip-typescript or fork upstream
+  indexers in this plan"). The `.scipquery.json` tool-config edit above was
+  used as this repo's "config edit" scenario instead, since it exercises the
+  same class of question (does a config-file touch cost a shard rerun) without
+  hitting the indexer bug.
 
 ## Handoff Probes
 
