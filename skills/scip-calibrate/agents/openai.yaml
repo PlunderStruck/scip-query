@@ -1,0 +1,4 @@
+interface:
+  display_name: "scip calibrate"
+  short_description: "Measure scip-query's detector precision on a repo before trusting scores or gating anyone."
+  default_prompt: "Run the scip-calibrate protocol against this repository: battery sweep, retro-gate replay, sample-and-classify each detector from the code, then tune repo knobs and file detector bugs."

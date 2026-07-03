@@ -294,6 +294,7 @@ One-line "essential difference" per skill — read this table before the Routes 
 | `scip-cleanup-improve` | Autonomously fix confirmed findings. |
 | `scip-maintainability` | Is this well-organized (scattered concepts, accidental variation)? |
 | `scip-integrity-audit` | Is this real (decorative checkers, faked implementations, dead fallback-hidden paths)? |
+| `scip-calibrate` | Measure detector precision on a repo before trusting scores or gating anyone. |
 | `scip-twin-drift` | Same-name implementations that drifted apart. |
 | `scip-claim-audit` | Status words derived vs asserted. |
 | `scip-probe-reachability` | Prove parser/AST branches actually fire. |

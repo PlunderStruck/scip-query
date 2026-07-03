@@ -8,6 +8,7 @@ export const BUILTIN_SKILLS = [
   '_shared',
   'scip-query',
   'scip-setup',
+  'scip-calibrate',
   'scip-cleanup-audit',
   'scip-cleanup-improve',
   'scip-integrity-audit',

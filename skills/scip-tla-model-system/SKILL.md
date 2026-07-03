@@ -21,19 +21,17 @@ Use this skill when a TypeScript system needs a TLA+ model tied to code evidence
 Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 
 <!-- BEGIN GENERATED SKILL COMMANDS -->
-
 ## Commands for this skill
 
-| Command                                            | Purpose                                                                                                                                                                                  | When                                                                                    |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `scip-query tla scaffold <file>`                   | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Start here for a new model: derive a draft spec, config, and mapping from indexed code. |
-| `scip-query tla verify <spec>`                     | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Mechanical conformance: referents, reads/writes, calls, and the model checker.          |
-| `scip-query tla instrument <spec>`                 | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Generate a trace recorder plus wiring sites for each mapped action.                     |
-| `scip-query tla trace-check <spec> --trace <file>` | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Semantic conformance: check a recorded execution against the model's Next relation.     |
-| `scip-query tla fetch-tools`                       | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Download the pinned tla2tools.jar into the cache when the checker is unavailable.       |
+| Command | Purpose | When |
+| --- | --- | --- |
+| `scip-query tla scaffold <file>` | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Start here for a new model: derive a draft spec, config, and mapping from indexed code. |
+| `scip-query tla verify <spec>` | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Mechanical conformance: referents, reads/writes, calls, and the model checker. |
+| `scip-query tla instrument <spec>` | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Generate a trace recorder plus wiring sites for each mapped action. |
+| `scip-query tla trace-check <spec> --trace <file>` | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Semantic conformance: check a recorded execution against the model's Next relation. |
+| `scip-query tla fetch-tools` | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Download the pinned tla2tools.jar into the cache when the checker is unavailable. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
-
 <!-- END GENERATED SKILL COMMANDS -->
 
 ## Choose the Slice
