@@ -493,6 +493,61 @@ Noop == UNCHANGED queue
     }
   });
 
+  it('honors per-fact write waivers and records the waiver (I1 / followup #23 waiver symmetry)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
+    writeFixtureFiles(root, {
+      'src/queue.ts': [
+        'export const queue: string[] = [];',
+        'export function enqueue(job: string) {',
+        '  queue.push(job);',
+        '}',
+      ],
+    });
+    writeFileSync(
+      join(root, 'Queue.tla'),
+      `---- MODULE Queue ----
+VARIABLES queue
+Enqueue(job) == queue' = Append(queue, job)
+====
+`,
+    );
+    const db = fixtureDb(root);
+    const contract: TlaModelContract = {
+      scope: [],
+      variables: {
+        queue: { code: ['queue'], aliases: ['queue'] },
+      },
+      actions: {
+        Enqueue: {
+          code: ['enqueue'],
+          reads: [],
+          writes: [],
+          calls: [],
+          waive: { reads: [], writes: ['queue'], reason: 'enqueue writes queue through a fixture the waiver accepts' },
+        },
+      },
+      invariants: [],
+      traces: [],
+    };
+
+    try {
+      const result = verifyTlaConformance(db, contract, readTlaModuleFacts(root, 'Queue.tla'));
+
+      expect(result.waivers).toContainEqual({
+        action: 'Enqueue',
+        kind: 'write',
+        variable: 'queue',
+        reason: 'enqueue writes queue through a fixture the waiver accepts',
+        legacy: false,
+      });
+      expect(result.findings).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ category: 'undeclared-write' })]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   it('waives missing-referent on a variable with no stored field', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-conformance-'));
     writeFixtureFiles(root, {

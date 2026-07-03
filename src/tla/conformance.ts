@@ -552,6 +552,7 @@ function verifyModelText(
       missingInModelCategory: 'model-mapping-write',
       findings,
       file: moduleFacts.path,
+      isWaived: (variable) => Boolean(mapping.waive?.writes.includes(variable)),
     });
     verifySetAgreement({
       action: action.name,
@@ -588,11 +589,19 @@ function verifySetAgreement(opts: {
   missingInModelCategory: TlaConformanceFinding['category'];
   findings: TlaConformanceFinding[];
   file: string;
+  /**
+   * I1 / followup #23: symmetric with the per-fact action/variable waivers
+   * consulted for undeclared-write and missing-write-evidence — a waived
+   * write fact must not surface as a model-mapping-write mismatch either.
+   * Absent (reads) preserves pre-fix behavior exactly.
+   */
+  isWaived?: (variable: string) => boolean;
 }): void {
   const model = new Set(opts.modelValues);
   const mapping = new Set(opts.mappingValues);
+  const isWaived = opts.isWaived ?? (() => false);
   for (const variable of model) {
-    if (mapping.has(variable)) continue;
+    if (mapping.has(variable) || isWaived(variable)) continue;
     opts.findings.push(
       finding(opts.missingInMappingCategory, opts.field === 'writes' ? 'error' : 'warning', 'model-text', {
         modelElement: opts.action,
@@ -604,7 +613,7 @@ function verifySetAgreement(opts: {
     );
   }
   for (const variable of mapping) {
-    if (model.has(variable)) continue;
+    if (model.has(variable) || isWaived(variable)) continue;
     opts.findings.push(
       finding(opts.missingInModelCategory, opts.field === 'writes' ? 'error' : 'warning', 'model-text', {
         modelElement: opts.action,
@@ -712,7 +721,7 @@ function verifyActionWrites(
   const observed = new Set(writes.map((write) => write.variable));
   const modeled = new Set(modelAction?.writes ?? []);
   for (const write of writes) {
-    if (modelAction && !modeled.has(write.variable)) {
+    if (modelAction && !modeled.has(write.variable) && !isFactWaived(action, 'write', write.variable)) {
       findings.push(
         finding('model-code-write', 'error', 'static-action', {
           modelElement: action.name,
@@ -729,7 +738,7 @@ function verifyActionWrites(
         }),
       );
     }
-    if (!declared.has(write.variable)) {
+    if (!declared.has(write.variable) && !isFactWaived(action, 'write', write.variable)) {
       findings.push(
         finding('undeclared-write', 'error', 'static-action', {
           modelElement: action.name,
