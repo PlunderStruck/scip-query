@@ -324,16 +324,40 @@ delegation-chain exclusion`) using real TypeScript source files and an actual na
 22. tla cfg `INVARIANTS` block form not parsed — **RESOLVED same day** (`81159d92`):
     `readTlaConfigInvariants` now strips cfg comments, tokenizes, and treats
     INVARIANT/INVARIANTS as synonyms with keyword-terminated sections.
-23. Write-error conformance categories are unwaivable: `isFactWaived` is consulted for
-    `undeclared-read`/`missing-*-evidence` only, never `model-code-write`/`undeclared-write`/
-    `model-mapping-write` (src/tla/conformance.ts ~715-748). Read/write waiver asymmetry left
-    ~470 residual noise findings across 5 Vega models that could not be waived with reasons.
-24. SANY fact extractor does not expand user-defined operator references (`deriveActionFacts`
-    in src/tla/sany-facts.ts): an action delegating its primes to a helper operator reports
-    `writes: none`, forcing mappings to target helpers directly (worked around in Vega's
-    GitHubWebhookIndexingPipeline mapping).
-25. A variable's own name is force-included as an alias (`model-contract.ts:426`,
-    `[...new Set([name, ...aliases])]`) — object-literal keys echoing a variable name become
-    unavoidable false write attributions; there is no way to opt out.
-26. Minor: `const x = ...` declarations are scored as writes of same-named aliases by the
-    source-scan fallback.
+23. **RESOLVED (2026-07-02, `f50e3b29`, tla-improvements I1).** Write-error conformance
+    categories are unwaivable: `isFactWaived` is consulted for `undeclared-read`/
+    `missing-*-evidence` only, never `model-code-write`/`undeclared-write`/`model-mapping-write`
+    (src/tla/conformance.ts ~715-748). Read/write waiver asymmetry left ~470 residual noise
+    findings across 5 Vega models that could not be waived with reasons. Fixed: `model-code-write`
+    (src/tla/conformance.ts:748) and `undeclared-write` (src/tla/conformance.ts:765) now consult
+    `isFactWaived(action, 'write', ...)`, symmetric with `missing-write-evidence`
+    (src/tla/conformance.ts:781); `verifySetAgreement`'s `model-mapping-write` direction
+    (src/tla/conformance.ts, `verifyModelText`'s `writes` call site) now takes an `isWaived`
+    predicate backed by `mapping.waive?.writes`. A waived write still lands in the Proof line's
+    waiver ledger with its reason.
+24. **RESOLVED (2026-07-02, `4fda66e7`, tla-improvements I2).** SANY fact extractor does not
+    expand user-defined operator references (`deriveActionFacts` in src/tla/sany-facts.ts): an
+    action delegating its primes to a helper operator reports `writes: none`, forcing mappings to
+    target helpers directly (worked around in Vega's GitHubWebhookIndexingPipeline mapping).
+    Fixed: `deriveActionFacts` (src/tla/sany-facts.ts:151) now recursively expands
+    `UserDefinedOpKindRef` references (src/tla/sany-facts.ts:188) into the referenced operator's
+    own facts — bounded to `MAX_OPERATOR_EXPANSION_DEPTH` (src/tla/sany-facts.ts:112) hops,
+    cycle-safe via a visited-UID set, and restricted to same-module references (matching each
+    entry's own `<filename>`, src/tla/sany-facts.ts:101).
+25. **RESOLVED (2026-07-02, `a164f813`, tla-improvements I3).** A variable's own name is
+    force-included as an alias (`model-contract.ts:426`, `[...new Set([name, ...aliases])]`) —
+    object-literal keys echoing a variable name become unavoidable false write attributions;
+    there is no way to opt out. Fixed: `variables.<v>.selfAlias: false`
+    (src/tla/model-contract.ts:60, parsed at src/tla/model-contract.ts:433-434) opts out of the
+    force-include (default stays `true`, fully backward compatible); a `selfAlias: false` variable
+    with no other alias, resource, statements, or waive is a load error naming the fix
+    (src/tla/model-contract.ts:435-438).
+26. **RESOLVED (2026-07-02, `0c4e8d62`, tla-improvements I4).** Minor: `const x = ...`
+    declarations are scored as writes of same-named aliases by the source-scan fallback. Fixed in
+    both write classifiers: the AST path's `variable_declarator` branch
+    (src/tla/conformance.ts:1064) no longer records any write at all (previously tagged kind
+    `'declaration'` but still counted toward action-level write facts), and the source-scan
+    fallback's `isDeclarationLine` helper (src/tla/conformance.ts:240) excludes a
+    `const`/`let`/`var` declaration line for the matching alias before the mutation regex runs.
+    Only the declaration statement itself is excluded — a later assignment to the same binding
+    (including a module-level `let` reassigned inside an action) keeps attributing.

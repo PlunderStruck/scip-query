@@ -103,3 +103,73 @@ for the Hardened-named four unless I5 makes it unnecessary) and record the per-m
 finding counts here — the ~470-finding noise floor should collapse; Vega files must not be
 modified (mappings may newly benefit from waivers/selfAlias, but that is a report line for the
 user, not an edit).
+
+Deviations: `docs/COMMAND_REFERENCE.md` has no mapping-schema section to update — it is fully
+generated (`<!-- BEGIN/END GENERATED COMMAND REFERENCE -->`) from CLI command descriptors, plus
+one hand-authored `analysisBudget` section unrelated to TLA. The `.scip-tla.json` mapping schema
+has only ever been documented in `skills/scip-tla-model-system/SKILL.md` (already updated above)
+— confirmed via `npm run docs:commands` (no diff to COMMAND_REFERENCE.md; I1–I5 added no new CLI
+flags, so the generated table needed no regeneration either). Running that command did reformat
+the skill file's own `<!-- BEGIN/END GENERATED SKILL COMMANDS -->` table (pre-existing drift
+between the checked-in padded-column format and the generator's current unpadded output,
+unrelated to this plan — kept as a drive-by consistency fix since it changes no content).
+
+### `scip-query reindex && scip-query diff-gate`
+
+Both run clean against `--base 5978acf0` (the commit this plan's diff starts from): `4 file(s),
+22 symbol(s) changed`, all 8 gate checks run, `PASS: this change introduces no gate findings.`
+
+### Vega validation sweep (READ-ONLY, 2026-07-02)
+
+Method: built this repo at HEAD, `npm install -g .`, then ran
+`scip-query tla verify docs/formal/<Spec>.tla --checker none --timeout-ms 300000 --json` from
+`/Users/aydansalois/Documents/GitHub/Vega_2.0` for all nine models, bare (no `--map`) to exercise
+I5's auto-discovery for the four Hardened-named mappings. `--checker none` is intentional: this
+sweep measures static-conformance findings (the thing I1–I5 change), which come from the SANY
+XML export + static source scan regardless of checker mode — `modelParse: "sany"` confirms SANY
+ran for every model; TLC/Apalache property-checking is a separate concern this sweep doesn't
+touch. For a true before/after diff, "before" was measured the same way against this repo's own
+commit `5978acf0` (via a throwaway `git worktree`, built and installed globally, reverted
+afterward) with explicit `--map` for every spec (pre-I5 had no fallback).
+
+The "before" numbers quoted in this plan's opening paragraph and in the orchestrating task
+(Checkout 58, SeatChange 58, StripeLedger 16, Proposals 171, WorkSession 174, Billing 14, Auth 0,
+Subscription 0, GitHubWebhook 0) turn out to be **error-severity finding counts specifically**,
+confirmed by reproducing them exactly at `5978acf0`:
+
+| Model | Mapping used | Auto-discovered? | Errors before → after | Total findings before → after |
+|---|---|---|---|---|
+| Checkout | CheckoutActivationLifecycle.scip-tla.json | no (filename match) | 58 → 32 | 327 → 273 |
+| SeatChange | SeatChangeLifecycle.scip-tla.json | no (filename match) | 58 → 40 | 234 → 198 |
+| StripeLedger | StripeWebhookLedger.scip-tla.json | no (filename match) | 16 → 8 | 111 → 93 |
+| Proposals | ProposalsAgentPipelineHardened.scip-tla.json | **yes**, `module-field` | 171 → 110 | 554 → 623 |
+| WorkSession | WorkSessionLifecycleHardened.scip-tla.json | **yes**, `module-field` | 174 → 88 | 271 → 224 |
+| Billing | BillingAccessLifecycle.scip-tla.json | no (filename match) | 14 → 8 | 162 → 115 |
+| Auth | AuthRefreshCompanionAuthorizationHardened.scip-tla.json | **yes**, `module-field` | 0 → 4 | 0 → 48 |
+| Subscription | SubscriptionLifecycleHardened.scip-tla.json | **yes**, `module-field` | 0 → 0 | 95 → 10 |
+| GitHubWebhook | GitHubWebhookIndexingPipeline.scip-tla.json | no (filename match) | 0 → 45 | 74 → 148 |
+
+Across the five models this plan's opening paragraph cites as the ~470-error noise floor
+(Checkout, SeatChange, StripeLedger, Proposals, WorkSession): **477 → 278 error-severity findings
+(42% reduction)**. Across all nine: 491 → 327 errors (33% reduction), 1828 → 1732 total findings.
+
+**Not a uniform collapse — three models gained new errors, and this is expected, not a
+regression.** Auth (0→4) and GitHubWebhook (0→45) both gained `model-mapping-write` errors
+exclusively (confirmed via the JSON `conformance.findings` category breakdown) — I2's operator
+expansion now derives more-complete SANY writes for these two models' actions, and each
+mapping's own declared `writes` list was tuned against the *old, incomplete* SANY output (this is
+literally the GitHubWebhookIndexingPipeline workaround the plan's I2 section names by name: its
+mapping targets `FinishActiveJobFields`/`AttemptOwnFollowUpRestartOrTerminal` helpers directly
+specifically to route around this exact bug). Fixing SANY completeness necessarily surfaces this
+mismatch — it was always there, just invisible. Proposals' total findings also rose (554 → 623)
+for the same reason on the read side even as its errors fell, and Subscription's total collapsed
+95 → 10. These are real, newly-honest findings for a mapping author to address with an updated
+declaration or a reasoned waiver (I1 now makes waiving a write finding possible) — not something
+this read-only sweep can or should fix; Vega's mapping files were not modified.
+
+`git -C Vega_2.0 status --porcelain | wc -l`: **0 before, 0 after** (`git status` itself needed
+`--git-dir`/`--work-tree`/`-c core.bare=false` overrides — Vega_2.0's `.git/config` has
+`core.bare = true` despite being a normal working checkout, a pre-existing quirk unrelated to
+this session; `git rev-parse HEAD` alone works fine and confirmed the repo untouched:
+`3dc4f92c834bdd028e66425169e2dccad5c7daad` before and after). `scip-query reindex` wrote only to
+Vega's gitignored `.cache/`; no tracked file changed.

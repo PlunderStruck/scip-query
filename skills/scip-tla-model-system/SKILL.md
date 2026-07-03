@@ -21,19 +21,17 @@ Use this skill when a TypeScript system needs a TLA+ model tied to code evidence
 Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 
 <!-- BEGIN GENERATED SKILL COMMANDS -->
-
 ## Commands for this skill
 
-| Command                                            | Purpose                                                                                                                                                                                  | When                                                                                    |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `scip-query tla scaffold <file>`                   | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Start here for a new model: derive a draft spec, config, and mapping from indexed code. |
-| `scip-query tla verify <spec>`                     | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Mechanical conformance: referents, reads/writes, calls, and the model checker.          |
-| `scip-query tla instrument <spec>`                 | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Generate a trace recorder plus wiring sites for each mapped action.                     |
-| `scip-query tla trace-check <spec> --trace <file>` | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Semantic conformance: check a recorded execution against the model's Next relation.     |
-| `scip-query tla fetch-tools`                       | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Download the pinned tla2tools.jar into the cache when the checker is unavailable.       |
+| Command | Purpose | When |
+| --- | --- | --- |
+| `scip-query tla scaffold <file>` | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Start here for a new model: derive a draft spec, config, and mapping from indexed code. |
+| `scip-query tla verify <spec>` | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Mechanical conformance: referents, reads/writes, calls, and the model checker. |
+| `scip-query tla instrument <spec>` | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Generate a trace recorder plus wiring sites for each mapped action. |
+| `scip-query tla trace-check <spec> --trace <file>` | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Semantic conformance: check a recorded execution against the model's Next relation. |
+| `scip-query tla fetch-tools` | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | Download the pinned tla2tools.jar into the cache when the checker is unavailable. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
-
 <!-- END GENERATED SKILL COMMANDS -->
 
 ## Choose the Slice
@@ -47,7 +45,7 @@ Model the part with the most dangerous interleavings — retries, concurrency, p
 1. Explore the target with `scip-query plan-context <target>`, `system`, `trace`, `call-graph`, and `dataflow` until state and transitions are concrete.
 2. Run `scip-query tla scaffold <file>` to generate the draft spec, config, and mapping (`--out` must stay inside the project root). Resolve every `TODO` it emits: guards, domains, initial values. The scaffold derives _what_ changes; you supply _when_ it may. TRIAGE the output first: if the discovered variables are mostly constants and the system's real state lives in files or a database (locks, caches, published artifacts), keep the mapping referents but discard the scaffolded variable set — hand-model the protocol's conceptual state and bind it with `resource` aliases instead. `tla verify` does not detect unfilled `TODO`s and will report PASS on a placeholder model — grep the spec for `TODO` before trusting a green run.
 3. Strengthen the model per the quality rules below.
-4. Run `scip-query tla verify <spec> --map <map> --config <cfg>`. Read the Proof line: every waiver must carry a reason you would defend in review.
+4. Run `scip-query tla verify <spec> --map <map> --config <cfg>`. Read the Proof line: every waiver must carry a reason you would defend in review. `--map` is usually unnecessary: if no `Spec.scip-tla.json` sits next to `Spec.tla`, `tla verify` scans sibling `*.scip-tla.json` files for one whose `module` field names this spec (the project-relative `.tla` path, bare filename, or the TLA `MODULE` identifier are all accepted) and uses it automatically, printing `(matched by module field)` — this is what makes bare `tla verify Foo.tla` work even when the only mapping on disk is named `FooHardened.scip-tla.json`. Two or more mappings naming the same module is a hard error listing every candidate; pass `--map` explicitly to disambiguate.
 5. Wire the recorder from `scip-query tla instrument`, run the existing tests with `SCIP_TLA_TRACE=<path>`, then run `scip-query tla trace-check <spec> --trace <path>`. Acceptance means the code's observed behavior is a behavior of the model; divergence names the step to investigate. Modeling a fix-vs-regression pair as two named `Next` relations in one spec (e.g. `NextCurrent`/`NextVulnerable`)? Pass `--next <operator>` to pick which one the trace must satisfy — the harness defaults to a bare `Next`, which such specs deliberately don't define.
 6. Classify every finding as code bug, model bug, mapping bug, insufficient trace/alias evidence, or accepted non-modeled behavior.
 7. Patch code, model, or mapping and rerun until only explicitly waived uncertainty remains.
@@ -88,6 +86,11 @@ A regression model is a small TLA+ module or checker config derived from a count
       "aliases": ["pid"],
       "resource": { "path": "lockPath" }
     },
+    "status": {
+      "code": ["src/queue/lock.ts/LockMetadata#lifecycleStage"],
+      "aliases": ["lifecycleStage"],
+      "selfAlias": false
+    },
     "phase": {
       "code": ["src/queue/lock.ts/__phase_no_stored_field__"],
       "aliases": ["__phase_unmatchable__"],
@@ -107,11 +110,13 @@ A regression model is a small TLA+ module or checker config derived from a count
 }
 ```
 
-`code` entries must resolve through `scip-query trace`; variables must map to value-like symbols (a const, let, field, or property holding runtime state — never a type). Waivers are per-fact and require a reason; blanket `allowUnknown` is legacy.
+`code` entries must resolve through `scip-query trace`; variables must map to value-like symbols (a const, let, field, or property holding runtime state — never a type). Waivers are per-fact and require a reason; blanket `allowUnknown` is legacy. Waivers cover write facts symmetrically with reads: `actions.<name>.waive.writes` exempts `model-code-write`, `undeclared-write`, and `missing-write-evidence` findings the same way `waive.reads` exempts the read-side equivalents, and a variable-level `waive` on `actions.<name>.writes` also exempts the corresponding `model-mapping-write` mismatch against the SANY-derived model text. A waived write still shows up in the Proof line's waiver ledger with its reason — it never silently vanishes.
 
 `resource` binds a variable to filesystem state — a lock file, a published artifact — anything the model treats as owned state but that code only touches through path-taking calls, never a plain assignment. The conformance scanner classifies `writeFileSync`/`rmSync`/`renameSync`/`mkdirSync`/`unlinkSync` calls whose first argument's text contains the declared `path` as writes of the variable, and `readFileSync`/`existsSync`/`statSync` calls the same way as reads. The match is textual containment, not a resolved value — evidence tier stays `static-action`, and a resource-bound variable still needs a value-like `code` referent for the kind check.
 
 `statements` (Q2) binds a variable to SQL-backed state — prepared statements, table rows behind `db.prepare(...)`/`.exec(...)`/tagged templates. Each entry is `{ "pattern": "<substring or regex>" }`, compiled as a RegExp. Any call expression argument whose static string text (a string literal, or the static fragments of a template literal — `${...}` interpolations excluded) matches `pattern` is classified by its leading SQL verb: `INSERT`/`UPDATE`/`DELETE`/`REPLACE` is a write, `SELECT` is a read. Matching is not restricted to a callee allowlist (SQL APIs vary too much) — classification comes entirely from the matched text's leading verb. Two variables sharing a `statements` pattern is a mapping-load error, same as a shared `resource` path. Evidence tier stays `static-action`. Dynamic SQL built by string concatenation has no static text to match and still falls through to a waiver.
+
+`variables.<v>.selfAlias: false` opts out of the automatic self-name alias (default `true`, fully backward compatible): normally a variable's own TLA+ name is always added to its alias list, which means an object-literal key or identifier that merely echoes the variable's name — but means something unrelated elsewhere in scope — becomes an unavoidable false write/read attribution. Set it `false` and give a precise, unambiguous alias instead (as `status` does above, aliased only to `lifecycleStage`); a `selfAlias: false` variable with no other alias, no `resource`, no `statements`, and no `waive` is a load error, since it would otherwise be silently unattributable.
 
 `variables.<v>.waive: {reason}` exempts that one variable's `missing-referent`/`invalid-referent-kind` findings — for state that genuinely has no code twin (a pure control-flow position, a derived decision, a value observable only through `process.exitCode`). It does not exempt read/write facts; those stay on the action's own `waive`. Prefer this over the old workaround of citing an unrelated real symbol just to satisfy the value-like-kind check — name a referent that plainly does not resolve (or does resolve but to the wrong kind) and waive it honestly; a reader should never have to guess that a `code[]` entry is a decoy.
 
@@ -122,6 +127,7 @@ Top-level `"init": { "codeRefs": ["file#function", ...], "waive"?: {"reason": ..
 ## Mapping Discipline
 
 - **Alias selection is the sharpest knife.** Never alias a variable to a ubiquitous local identifier (`connection`, `result`, `data`) — every function touching that local gets misattributed across actions. For state with no code twin, use a deliberately unmatchable alias (e.g. `evidenceRowsModelOnly`) so the static layer neither proves nor pollutes, and let the reasoned waiver carry the fact.
+- **Turn off the forced self-alias when the variable's own name is a common word.** A TLA+ variable named `status`, `phase`, or `state` gets its own name auto-included as an alias by default — and object literals elsewhere in scope (`{ status: 'ok' }` in an unrelated response shape) will match it. If the variable's own name is common enough to collide, set `selfAlias: false` and give a precise alias that names the actual stored field instead.
 - **Know the three state backings.** Program variables: normal aliases. Filesystem-backed state (locks, published artifacts): `resource: { "path": ... }` bindings make fs calls provable. Database/SQL-backed state (prepared statements, table rows): `statements: [{ "pattern": ... }]` bindings make it provable too (Q2) — a call argument's static SQL text matching `pattern` is classified as a write or read by its leading verb. Only genuinely dynamic SQL (built by string concatenation, no static text to match) still needs a waiver naming the residual class; never fake attribution.
 - **Lazy initialization is Init, not an action.** A factory that lazily builds state corresponds to the model's `Init`. Top-level `"init": { "codeRefs": ["file#function", ...] }` (Q3) binds it: writes statically found inside an Init referent are Init-attributed and excluded from `unmapped-write` findings without needing `unmappedWriteScope: "actions"` as a whole-file workaround. `init.codeRefs` must not overlap any action's `code` referents — map the factory to `init`, never to an action.
 - **Design for traces early.** The trace encoder pins scalar (and scalar-array) variables only; a model whose state is all functions and tuple-sets cannot be trace-validated. If trace-check matters for the slice, add scalar projection variables (counts, last outcomes, a phase) alongside the structured state.
