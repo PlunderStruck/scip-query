@@ -1,9 +1,20 @@
 {
   "name": "scip-query-scip-windows",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Windows scip CLI binaries (x64 + arm64) for scip-query. Installed automatically on Windows as an optional dependency; not useful standalone.",
-  "os": ["win32"],
-  "files": ["scip-win32-x64.exe", "scip-win32-arm64.exe", "LICENSE.scip", "README.md"],
+  "os": [
+    "win32"
+  ],
+  "files": [
+    "scip-win32-x64.exe",
+    "scip-win32-arm64.exe",
+    "LICENSE.scip",
+    "README.md"
+  ],
   "license": "Apache-2.0",
-  "repository": { "type": "git", "url": "https://github.com/PlunderStruck/scip-query.git", "directory": "packages/scip-windows" }
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PlunderStruck/scip-query.git",
+    "directory": "packages/scip-windows"
+  }
 }
