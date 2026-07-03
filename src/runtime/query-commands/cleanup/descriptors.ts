@@ -35,6 +35,7 @@ import {
   handleTwinDrift,
   handleTwinAb,
   handleNotImplemented,
+  handleDecorativeCheckers,
 } from './handlers.js';
 import {
   handleReactComponentDuplicates,
@@ -566,6 +567,22 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     renderShape: 'list',
     docs: doc('Cleanup', ['scip-query not-implemented -s src/services']),
     handler: handleNotImplemented,
+  }),
+  heuristicCleanupCommand({
+    id: 'decorative-checkers',
+    command: 'decorative-checkers',
+    description:
+      'Decorative checker candidates: validate*/verify*/check*/assert*/is*/has* callables with no reachable failure exit anywhere in their body',
+    options: withJsonOption([
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option('-n, --limit <n>', 'Number of results', parseInteger, 30),
+      option('--full', 'Run unbounded analysis on large indexes'),
+    ]),
+    heuristicLabel: 'decorative checker candidates',
+    budget: 'candidate-scan',
+    renderShape: 'list',
+    docs: doc('Cleanup', ['scip-query decorative-checkers -s src/services']),
+    handler: handleDecorativeCheckers,
   }),
   cleanupCommand({
     id: 'twin-ab',

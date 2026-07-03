@@ -89,6 +89,10 @@
       "import": "./dist/queries/dead.js",
       "types": "./dist/queries/dead.d.ts"
     },
+    "./queries/decorative-checkers": {
+      "import": "./dist/queries/decorative-checkers.js",
+      "types": "./dist/queries/decorative-checkers.d.ts"
+    },
     "./queries/deep-chains": {
       "import": "./dist/queries/deep-chains.js",
       "types": "./dist/queries/deep-chains.d.ts"

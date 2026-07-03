@@ -43,6 +43,7 @@ export { duplicateBodies, exactDuplicateBodyMatches, normalizeBody, groupByHash 
 export { twinDrift, groupTwins, allTwinGroups } from './cleanup/twin-drift.js';
 export { twinAb, defaultTwinAbOutPath } from './cleanup/twin-ab.js';
 export { notImplemented } from './cleanup/not-implemented.js';
+export { decorativeCheckers } from './cleanup/decorative-checkers.js';
 export { recentDuplicates } from './cleanup/recent-duplicates.js';
 export { planContext } from './impact/plan-context.js';
 export { checkHealthBaseline, collectBaselineFindings, writeHealthBaseline } from './health/health-baseline.js';
@@ -162,6 +163,11 @@ export type {
   NotImplementedStubKind,
   NotImplementedReachability,
 } from './cleanup/not-implemented.js';
+export type {
+  DecorativeCheckerFinding,
+  DecorativeCheckerNameKind,
+  DecorativeCheckerResolution,
+} from './cleanup/decorative-checkers.js';
 export type {
   RecentDuplicateBasis,
   RecentDuplicateDomain,

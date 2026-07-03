@@ -389,9 +389,12 @@ function levenshteinAtMost(a: string, b: string, max: number): boolean {
  * `return this.service.jsonHandler(req, res);` — as opposed to a body that
  * actually implements the behavior. Purely structural; whether the call
  * target is actually the other twin is a separate, DB-backed check (see
- * `buildDelegationChecker`).
+ * `buildDelegationChecker`). Exported so other detectors that need the same
+ * "is this body just a forwarding call?" shape (decorative-checkers'
+ * one-hop delegate resolution) reuse it instead of re-deriving the same
+ * statement-count/control-flow/call-shape check.
  */
-function isThinForwarderBody(rawSnippet: string): boolean {
+export function isThinForwarderBody(rawSnippet: string): boolean {
   const body = stripCommentsAndStrings(extractImplementationBody(rawSnippet)).trim();
   if (!body) return false;
   if (CONTROL_FLOW_PATTERN.test(body)) return false;

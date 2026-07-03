@@ -618,6 +618,20 @@ export const handleNotImplemented = budgetedListCommand('not-implemented', {
   after: (rows) => console.log(`\n${rows.length} reachable placeholder stub(s).`),
 });
 
+export const handleDecorativeCheckers = budgetedListCommand('decorative-checkers', {
+  query: ({ db, opts, budget }) =>
+    queries.decorativeCheckers(db, {
+      scope: stringOptionValue(opts, 'scope'),
+      limit: definedLimitOption(opts, 'limit', 30),
+      scanLimit: budget.scanLimit,
+    }),
+  format: (r) =>
+    `  ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  (${r.nameKind}, resolved: ${r.resolvedVia}${r.delegateTarget ? ` -> ${r.delegateTarget}` : ''})`,
+  emptyMessage: () => 'No decorative checker candidates found.',
+  heuristicLabel: 'decorative checker candidates',
+  after: (rows) => console.log(`\n${rows.length} decorative checker candidate(s).`),
+});
+
 export const handleTwinAb = reportCommand<queries.TwinAbSuccess & { outPath: string }>({
   commandName: 'twin-ab',
   query: ({ db, args, opts }) => {
