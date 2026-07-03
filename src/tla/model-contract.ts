@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, isAbsolute, resolve } from 'node:path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { isRecord, stringArray } from '../storage/evidence-payload.js';
 import { isPathInsideProject as isInsideProject } from '../source/path-normalization.js';
 import { parseSanyXmlFacts, type SanyActionFacts } from './sany-facts.js';
@@ -712,4 +712,64 @@ function validateScope(value: unknown, errors: string[]): void {
 export function defaultMapPathForSpec(specPath: string): string {
   const base = specPath.replace(/\.tla$/i, '');
   return `${base}.scip-tla.json`;
+}
+
+/**
+ * I5 / usability: `tla verify <spec>` resolving a sibling mapping purely by
+ * filename fails for a mapping named after a variant (e.g. `FooHardened.
+ * scip-tla.json`) that targets the plain `Foo.tla` spec — 4 of 9 real Vega
+ * mappings hit this exact shape. Called only as a fallback, after the
+ * default filename-matched mapping was checked and found absent.
+ */
+export type TlaMapAutoDiscoveryResult =
+  | { status: 'found'; mapPath: string; moduleName: string }
+  | { status: 'ambiguous'; candidates: string[]; moduleName: string }
+  | { status: 'none' };
+
+const TLA_MODULE_HEADER = /^-{4,}\s*MODULE\s+([A-Za-z_][A-Za-z0-9_]*)\s*-{4,}/m;
+
+/**
+ * Scans `specPath`'s own directory for sibling `*.scip-tla.json` files
+ * whose top-level `module` field names the spec — the project-relative
+ * `.tla` path (this repo's own `specs/**\/*.scip-tla.json` and every real
+ * Vega mapping use that full-path convention), the bare filename with or
+ * without its `.tla` extension, or the spec's own `---- MODULE <name> ----`
+ * identifier are all accepted so a hand-written mapping using any of those
+ * natural spellings is found. Never picks silently: zero matches is
+ * `'none'` (caller falls through to the ordinary "map file not found"
+ * error), exactly one is `'found'`, two or more is `'ambiguous'` naming
+ * every candidate so the caller can report them instead of guessing.
+ */
+export function discoverMapPathByModule(projectRoot: string, specPath: string): TlaMapAutoDiscoveryResult {
+  if (!existsSync(specPath)) return { status: 'none' };
+  const moduleMatch = readFileSync(specPath, 'utf8').match(TLA_MODULE_HEADER);
+  const moduleName = moduleMatch?.[1];
+  const relativeSpecPath = relative(projectRoot, specPath).split(sep).join('/');
+  const specBasename = basename(specPath);
+  const acceptable = new Set(
+    [moduleName, relativeSpecPath, specBasename, specBasename.replace(/\.tla$/i, '')].filter((value): value is string =>
+      Boolean(value),
+    ),
+  );
+
+  const dir = dirname(specPath);
+  if (!existsSync(dir)) return { status: 'none' };
+  const candidates: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    if (!entry.endsWith('.scip-tla.json')) continue;
+    const candidatePath = join(dir, entry);
+    let raw: unknown;
+    try {
+      raw = JSON.parse(readFileSync(candidatePath, 'utf8')) as unknown;
+    } catch {
+      continue;
+    }
+    if (isRecord(raw) && typeof raw.module === 'string' && acceptable.has(raw.module)) candidates.push(candidatePath);
+  }
+  candidates.sort();
+
+  const resolvedModuleName = moduleName ?? relativeSpecPath;
+  if (candidates.length === 0) return { status: 'none' };
+  if (candidates.length > 1) return { status: 'ambiguous', candidates, moduleName: resolvedModuleName };
+  return { status: 'found', mapPath: candidates[0]!, moduleName: resolvedModuleName };
 }

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   dedupeTracePaths,
+  discoverMapPathByModule,
   loadTlaModelContract,
   readTlaConfigInvariants,
   readTlaModuleFacts,
@@ -556,5 +557,66 @@ CONSTRAINT StateBound
     expect(readTlaConfigInvariants(cfg)).toEqual(['Safety', 'TypeInvariant']);
     expect(readTlaConfigInvariants(join(root, 'missing.cfg'))).toEqual([]);
     expect(readTlaConfigInvariants(null)).toEqual([]);
+  });
+
+  it('auto-discovers a sibling mapping by bare module name (I5 / auto-discovery)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-discover-'));
+    writeFileSync(join(root, 'Foo.tla'), `---- MODULE Foo ----\nVARIABLES x\n====\n`);
+    // No Foo.scip-tla.json — only a variant-named mapping exists.
+    writeFileSync(
+      join(root, 'FooHardened.scip-tla.json'),
+      JSON.stringify({ module: 'Foo', variables: {}, actions: {} }),
+    );
+
+    const result = discoverMapPathByModule(root, join(root, 'Foo.tla'));
+
+    expect(result).toEqual({ status: 'found', mapPath: join(root, 'FooHardened.scip-tla.json'), moduleName: 'Foo' });
+  });
+
+  it('auto-discovers a sibling mapping by project-relative spec path (real Vega/repo convention)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-discover-'));
+    const specDir = join(root, 'docs', 'formal');
+    mkdirSync(specDir, { recursive: true });
+    writeFileSync(join(specDir, 'Foo.tla'), `---- MODULE Foo ----\nVARIABLES x\n====\n`);
+    writeFileSync(
+      join(specDir, 'FooHardened.scip-tla.json'),
+      JSON.stringify({ module: 'docs/formal/Foo.tla', variables: {}, actions: {} }),
+    );
+
+    const result = discoverMapPathByModule(root, join(specDir, 'Foo.tla'));
+
+    expect(result).toEqual({
+      status: 'found',
+      mapPath: join(specDir, 'FooHardened.scip-tla.json'),
+      moduleName: 'Foo',
+    });
+  });
+
+  it('reports ambiguous when two sibling mappings name the same module', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-discover-'));
+    writeFileSync(join(root, 'Foo.tla'), `---- MODULE Foo ----\nVARIABLES x\n====\n`);
+    writeFileSync(
+      join(root, 'FooHardened.scip-tla.json'),
+      JSON.stringify({ module: 'Foo', variables: {}, actions: {} }),
+    );
+    writeFileSync(join(root, 'FooLegacy.scip-tla.json'), JSON.stringify({ module: 'Foo', variables: {}, actions: {} }));
+
+    const result = discoverMapPathByModule(root, join(root, 'Foo.tla'));
+
+    expect(result).toEqual({
+      status: 'ambiguous',
+      candidates: [join(root, 'FooHardened.scip-tla.json'), join(root, 'FooLegacy.scip-tla.json')],
+      moduleName: 'Foo',
+    });
+  });
+
+  it('returns none when no sibling mapping declares the module', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-discover-'));
+    writeFileSync(join(root, 'Foo.tla'), `---- MODULE Foo ----\nVARIABLES x\n====\n`);
+    writeFileSync(join(root, 'Bar.scip-tla.json'), JSON.stringify({ module: 'Bar', variables: {}, actions: {} }));
+
+    const result = discoverMapPathByModule(root, join(root, 'Foo.tla'));
+
+    expect(result).toEqual({ status: 'none' });
   });
 });

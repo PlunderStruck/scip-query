@@ -83,6 +83,13 @@ is out of scope for I2's unit-level fix; left as a follow-up if desired.
 - **Fixture**: spec `Foo.tla` + `FooHardened.scip-tla.json` with `"module": "Foo"` — bare verify
   finds it; two module-matching mappings — error names both.
 
+Deviations: checked real data before implementing the match rule — every mapping in this repo's
+own `specs/**/*.scip-tla.json` AND every one of the 9 real Vega mappings stores `module` as the
+project-relative `.tla` path (e.g. `"docs/formal/ProposalsAgentPipeline.tla"`), not the bare
+identifier `"Foo"` the plan's fixture literally shows. `discoverMapPathByModule` accepts both
+(plus the bare filename with/without `.tla`) so it matches the plan's literal fixture, this
+repo's own convention, and the real Vega mappings without narrowing to only one spelling.
+
 ## I6 — closeout
 
 Update the skill (`skills/scip-tla-model-system/SKILL.md`) where behavior changed: waiver

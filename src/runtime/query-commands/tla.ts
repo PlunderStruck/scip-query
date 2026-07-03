@@ -19,6 +19,7 @@ import { displayPathRange } from '../render.js';
 import {
   dedupeTracePaths,
   defaultMapPathForSpec,
+  discoverMapPathByModule,
   isTlaCheckerMode,
   loadTlaModelContract,
   loadTraceSteps,
@@ -42,6 +43,12 @@ interface TlaVerifyResult {
   operation: 'verify';
   specPath: string;
   mapPath: string;
+  /**
+   * I5 / auto-discovery: set when `mapPath` was not the default
+   * filename-matched mapping but was instead found by scanning sibling
+   * `*.scip-tla.json` files for one whose `module` field names this spec.
+   */
+  mappingDiscoveredBy?: 'module-field';
   configPath?: string;
   checker: TlaToolResult;
   conformance: TlaConformanceResult;
@@ -256,12 +263,47 @@ function renderTraceActionCoverage(coverage: readonly TraceActionCoverage[]): vo
   }
 }
 
+/**
+ * I5 / usability: `--map` wins outright when passed. Otherwise, the
+ * default filename-matched mapping (`Spec.scip-tla.json`) wins when it
+ * exists — auto-discovery-by-module only runs as a fallback when that
+ * default is absent, and only picks a mapping when exactly one sibling
+ * `*.scip-tla.json` names this spec's module; an ambiguous match is a hard
+ * error (never a silent pick), and no match at all falls through to
+ * `loadTlaModelContract`'s ordinary "map file not found" error against the
+ * default path, unchanged from before this fallback existed.
+ */
+function resolveMapArgForVerify(
+  projectRoot: string,
+  specArg: string,
+  specPath: string,
+  opts: CommandOptions,
+): { mapArg: string; mappingDiscoveredBy?: 'module-field' } {
+  const explicitMap = stringOptionValue(opts, 'map');
+  if (explicitMap) return { mapArg: explicitMap };
+
+  const defaultMapArg = defaultMapPathForSpec(specArg);
+  const defaultMapPath = resolveProjectPath(projectRoot, defaultMapArg);
+  if (defaultMapPath && existsSync(defaultMapPath)) return { mapArg: defaultMapArg };
+
+  const discovered = discoverMapPathByModule(projectRoot, specPath);
+  if (discovered.status === 'ambiguous') {
+    throw new Error(
+      `multiple *.scip-tla.json files declare module "${discovered.moduleName}": ${discovered.candidates.join(', ')} — pass --map to disambiguate`,
+    );
+  }
+  if (discovered.status === 'found') {
+    return { mapArg: discovered.mapPath, mappingDiscoveredBy: 'module-field' };
+  }
+  return { mapArg: defaultMapArg };
+}
+
 function runTlaVerify(db: ScipDatabase, args: readonly unknown[], opts: CommandOptions, specArg: string): void {
   const projectRoot = db.config.projectRoot;
   const specPath = resolveProjectPath(projectRoot, specArg);
   if (!specPath || !existsSync(specPath)) throw new Error(`TLA+ spec not found: ${specArg}`);
 
-  const mapArg = stringOptionValue(opts, 'map') ?? defaultMapPathForSpec(specArg);
+  const { mapArg, mappingDiscoveredBy } = resolveMapArgForVerify(projectRoot, specArg, specPath, opts);
   const loaded = loadTlaModelContract(projectRoot, mapArg);
   if (!loaded.loaded) throw new Error(loaded.errors.join('\n'));
   const { contract, mapPath, mapDir } = loaded.loaded;
@@ -324,6 +366,7 @@ function runTlaVerify(db: ScipDatabase, args: readonly unknown[], opts: CommandO
     operation: 'verify',
     specPath,
     mapPath,
+    ...(mappingDiscoveredBy ? { mappingDiscoveredBy } : {}),
     ...(configPath ? { configPath } : {}),
     checker: toolResult,
     conformance,
@@ -416,7 +459,9 @@ const MAX_GROUP_EXEMPLARS = 3;
 
 function renderTlaVerify(result: TlaVerifyResult, full: boolean): void {
   console.log(`TLA+ verify: ${result.specPath}`);
-  console.log(`Mapping: ${result.mapPath}`);
+  console.log(
+    `Mapping: ${result.mapPath}${result.mappingDiscoveredBy === 'module-field' ? ' (matched by module field)' : ''}`,
+  );
   if (result.configPath) console.log(`Config:  ${result.configPath}`);
   console.log(
     `Checker: ${result.checker.checker} ${result.checker.status} (${result.checker.durationMs}ms, exit ${result.checker.exitCode ?? result.checker.signal ?? 'n/a'})`,
