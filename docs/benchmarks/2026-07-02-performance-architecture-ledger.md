@@ -66,6 +66,8 @@ files live beside that run history and are summarized with
 | 6.5.1 | Measured reindex proportionality across 5 scenarios (no-edit, single-file TS, shared-package TS, non-TS, config) on temporary copies of all 3 repos. No code change; pure measurement. | Scenario matrix and findings above; raw stdout under scratchpad `6.5.1-results/`; 14 JSONL rows with `"phase":"6.5.1"`. |
 | 6.5.2 | `reindex --json` now emits a `shards` array (per language, or per TS workspace project run): `reused`, `missReason`, a short `fingerprint` hash, `outputBytes`, `durationMs`, and the indexer `command`. Human `reindex` output is byte-identical to before. `--json` mode also silences `reindex()`'s progress `onStatus` callback (matching the existing `bench` pattern) so stdout stays pure JSON. | Failing-test-first: `tests/reindex/reindex-reliability.test.ts` gained 2 new tests (mixed reuse/rerun shard diagnostics; full-project-reuse shard diagnostics) and `tests/runtime/reindex-json.test.ts` (new file) proves CLI wiring, including a regression test that fails if progress lines leak into `--json` stdout. All pre-existing `reindex-reliability.test.ts` assertions (including the pinned `Reusing cached python SCIP shard` / `Indexing TypeScript workspace as 2 project shard(s).` message strings) stay green. |
 | 6.5/6.6 | Added warm-index labels and retro-gate replay support to the harness. | `tests/scripts/performance-architecture-contract.test.ts` covers explicit `warm-index --no-clear` and retro worktree command construction. |
+| 6.6.1 | Measured retro-gate cache identity on a temp copy of Vega (5-commit replay): median 44.880s/commit, index 52.8% of combined time vs gate 47.2%, and every commit's `file_evidence` fill is a 100% cache miss purely from unique-per-commit worktree paths. No code change; pure measurement. | Retro-Gate Replay section above; 5 JSONL rows with `"label":"plan6-6.6.1-vega-copy-retro-gate-5"`. |
+| 6.6.2 | Design-only per the 6.5.3-BLOCKED + reindex-dominates gate: added a "Cross-checkout content-addressed sharing" design section to `docs/architecture/evidence-cache-invalidation.md` scoping a future read-through shared evidence store to the content-hash-only-keyed product kinds. No implementation shipped. | `docs/architecture/evidence-cache-invalidation.md` design section; `node scripts/check-evidence-manifest-doc.mjs` still exits 0. |
 
 ## Rejected Changes
 
@@ -87,7 +89,7 @@ files live beside that run history and are summarized with
 | `Vega_2.0` final built `health --json` warm hit | 5.298s | 0.218s | <= 8.0s | PASS |
 | `Vega_2.0` cold `reindex` | 29.8s | 35.285s | <= 22.0s | MISS, BLOCKED upstream shard |
 | `Vega_2.0` shard-reuse `reindex` | 0.4s-0.8s | 0.418s | <= 1.0s | PASS |
-| `Vega_2.0` retro-gate replay | ~36s/commit | 62.400s median over five commits | <= 12.0s median or BLOCKED | MISS, BLOCKED by cold index floor |
+| `Vega_2.0` retro-gate replay | ~36s/commit | 44.880s median over five commits (authoritative temp-copy run, 6.6.1) | <= 12.0s median or BLOCKED | MISS, BLOCKED by upstream indexer boundary (6.5.3) for the index half; evidence half is root-path-identity-bound and scoped to design-only (6.6.2) |
 | `Stable_Management` cold `reindex` | 13.9s | 21.692s | <= 10.0s | MISS, BLOCKED upstream shard |
 | `Stable_Management` shard-reuse `reindex` | not recorded | 0.284s | no regression | PASS |
 | `Stable_Management` warm `health --json` hit | 6.595s | 0.184s | no detector command > 4.0s | PASS for health |
@@ -109,16 +111,27 @@ files live beside that run history and are summarized with
 | `duplicate-bodies --json` | `warm-index` | 1.547s | Filled file definitions/git-file-add rows; stayed under target. | PASS |
 | `complexity-hotspots --json` | `warm-index` | 6.018s | `candidate-pipeline:complexity-hotspots` took 5534ms scanning 2096 candidates. | MISS |
 
-## Retro-Gate Replay
+## Retro-Gate Replay (6.6.1 cache identity measurement)
 
-Harness mode: `node scripts/performance-architecture-contract.mjs --repo
+**Deviation note:** the first replay below (labeled
+`after-health-sidecar-vega-retro-gate-5`) pointed `--repo` directly at
+`/Users/aydansalois/Documents/GitHub/Vega_2.0` — the harness's retro-gate
+mode runs `git worktree add`/`remove` against whatever `--repo` path it is
+given, so that run created and removed transient worktrees against the real
+Vega_2.0 `.git` metadata (cleaned up in a `finally` block; `git worktree
+list` confirms no leftover worktrees and Vega_2.0's working tree files were
+never touched). Plan 6 6.6.1 requires replaying against a temp COPY of Vega,
+never the user's tree, so it is superseded below by a second replay pointed
+at a `cp -Rc` clonefile copy in the scratchpad
+(`/private/tmp/.../scratchpad/vega-651`, the same copy built for 6.5.1). Both
+tables are kept for the record; the copy-based run is the authoritative 6.6.1
+answer.
+
+Harness mode (superseded, real-tree, kept for comparison only): `node
+scripts/performance-architecture-contract.mjs --repo
 /Users/aydansalois/Documents/GitHub/Vega_2.0 --cache-state retro-gate --command
 "diff-gate --json" --retro-count 5 --label
 after-health-sidecar-vega-retro-gate-5`.
-
-The replay uses detached temporary worktrees, disables hooks only for
-`git worktree add/remove` with `core.hooksPath=/dev/null`, runs `reindex`, then
-runs `diff-gate --json --base <commit>^`.
 
 | Commit | Total | Index | Gate | Exit |
 | --- | ---: | ---: | ---: | ---: |
@@ -128,9 +141,61 @@ runs `diff-gate --json --base <commit>^`.
 | `a2f778a78ebd` | 80.374s | 34.007s | 46.367s | 1 |
 | `77f73600d094` | 74.566s | 34.517s | 40.048s | 1 |
 
-Median total is 62.400s. Because the cold index phase alone is 30.407s-34.517s,
-the 12s/commit target is impossible without cross-checkout shard reuse or an
-upstream TypeScript indexing change, even if the gate phase were free.
+Median total (real-tree run) is 62.400s.
+
+**Authoritative run** (temp copy, `--repo <scratchpad>/vega-651`, label
+`plan6-6.6.1-vega-copy-retro-gate-5`; the copy's own `dev` branch head at
+copy time, oldest 5 commits reachable from it via `git rev-list --reverse
+--max-count=5 HEAD`, matching the harness's existing commit-selection
+default):
+
+| Commit | Total | Index | Gate | Exit | Worktree path (unique per commit) | Index bytes | Evidence bytes | Index SHA256 (12) | Gate SHA256 (12) |
+| --- | ---: | ---: | ---: | ---: | --- | ---: | ---: | --- | --- |
+| `3dc4f92c834b` | 58.951s | 29.688s | 28.767s | 0 | `.../scip-query-retro-gate-bxqVzQ/retro-3dc4f92c834b` | 117,686,272 | 41,328,640 | `00dceb795ee8` | `060b5ef8e024` |
+| `a442a3940211` | 40.141s | 22.753s | 16.942s | 0 | `.../retro-a442a3940211` | 78,905,344 | 27,115,520 | `eb395558af47` | `d4f42da7a180` |
+| `e069e140e11a` | 44.880s | 22.336s | 22.091s | 0 | `.../retro-e069e140e11a` | 78,905,344 | 32,055,296 | `0cdf3e465c6f` | `dbea6bc68f43` |
+| `ca53f92a53b5` | 38.577s | 22.106s | 16.019s | 0 | `.../retro-ca53f92a53b5` | 78,827,520 | 26,750,976 | `6f2d97620417` | `871a7bc212ab` |
+| `eae7042381bc` | 47.226s | 23.247s | 23.503s | 0 | `.../retro-eae7042381bc` | 78,925,824 | 34,304,000 | `1762c76349` | `4154b4d413ca` |
+
+Median total is **44.880s** (sorted: 38.577, 40.141, 44.880, 47.226, 58.951s).
+Sum of index durations across the 5 commits is 120.13s; sum of gate
+(command) durations is 107.32s — **index is 52.8% of the combined time, gate
+is 47.2%**: the two phases are comparable in magnitude, with index the
+slightly larger single component.
+
+**Cache-directory identity (evidence rows reused):** every commit gets a
+brand-new `mkdtempSync` worktree path (`retroWorktreePath` above), so
+`status --json`'s resolved `dbPath`/cache directory is unique per commit —
+nothing is ever reused across commits by construction. The JSONL rows'
+`evidenceRows.file_evidence` counts make the cost of that concrete: every
+single commit recomputes roughly the same ~1,835-1,837
+`file-definitions`/`source-facts` rows from zero, even though adjacent
+commits in this window are ordinary incremental commits that each touch a
+handful of files, not the whole 1,835-file tree:
+
+| Commit | `file-definitions` | `source-facts` | `source-imports` |
+| --- | ---: | ---: | ---: |
+| `3dc4f92c834b` | 2330 | 2330 | 512 |
+| `a442a3940211` | 1837 | 1834 | 10 |
+| `e069e140e11a` | 1835 | 1835 | 1835 |
+| `ca53f92a53b5` | 1835 | 1835 | 10 |
+| `eae7042381bc` | 1835 | 1835 | 1835 |
+
+**Attribution:** root-path (worktree-path) identity is proven the dominant
+cause of *evidence-layer* recomputation (the file-evidence rows above are
+100% cache misses purely because the cache directory is new every commit,
+independent of how much file content actually changed). It is **not** the
+dominant cause of the *index-layer* (reindex/SCIP-shard) cost: per 6.5.3,
+`scip-typescript` has no per-file or content-addressed shard mode, and
+consecutive commits in a real history genuinely differ in file content, so
+even a content-addressed shard cache keyed on the whole-project fingerprint
+would only help when the exact same fingerprint recurs (unlikely across 5
+distinct, non-repeated commits). Given 6.5.3 was BLOCKED and the index-layer
+is the (slightly) larger of the two roughly-comparable halves, this run
+satisfies the seed doc's "reindex dominates and 6.5.3 was BLOCKED -> scope
+6.6.2 to the design-doc section only" condition — see the 6.6.2 section
+below. The 12s/commit target is not reachable from either half alone at
+current per-commit SCIP-shard and evidence-fill costs.
 
 ## Reindex Proportionality
 
@@ -317,7 +382,7 @@ or whole-TypeScript-workspace-project) reindex granularity as documented in
 | Evidence product profile metadata | Profiled health/product reads and added wrapper assertions. | `evidence-product.file.read` reports hit/miss metadata. |
 | Health sidecar | Seed then hit health on Vega, Stable, and scip-query. | Output hashes stayed identical; hits were 168ms-200ms. |
 | Reindex | Cold and warm-index harness rows on all three repos. | scip-query passes cold target; Vega and Stable miss cold target but pass shard reuse. |
-| Retro-gate | Five detached Vega worktrees. | Median 62.400s; cold index floor proves target BLOCKED in this plan. |
+| Retro-gate | Five detached worktrees of a temp copy of Vega. | Median 44.880s; index 52.8%/gate 47.2% of combined time; every commit's evidence fill is a 100% root-path-identity cache miss; target BLOCKED in this plan by the 6.5.3 upstream boundary. |
 
 ## Deviation Ledger
 
@@ -343,3 +408,13 @@ or whole-TypeScript-workspace-project) reindex granularity as documented in
   index floor by themselves.
 - Should cold reindex targets for very large TypeScript workspaces be revised,
   or should scip-query invest in upstream `scip-typescript` delta indexing?
+- 6.6.2 (design-only per the 6.5.3 BLOCKED + reindex-dominates gate; see
+  `docs/architecture/evidence-cache-invalidation.md`'s "Cross-checkout
+  content-addressed sharing" section): a content-addressed shared evidence
+  store could eliminate the `source-facts`/`definition-exclusions`/
+  `react-component-behavior-profiles`/`doc-path-evidence` half of the
+  per-commit evidence fill seen in 6.6.1 (content-hash-only keys, safe across
+  checkouts), but not the `file-definitions`/`source-fingerprints`/
+  `consumer-file-usage`/`file-dependency-graph` half (project-fingerprint-keyed,
+  legitimately differs per commit). Should a future gated plan implement the
+  read-through-only step scoped to just the content-hash-only product kinds?
