@@ -1,6 +1,6 @@
 {
   "name": "scip-query",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Evidence and verification for AI coding agents: map code, reuse concepts, finish migrations, and gate diffs.",
   "type": "module",
   "main": "dist/index.js",
@@ -358,7 +358,7 @@
   "optionalDependencies": {
     "@sourcegraph/scip-typescript": "^0.4.0",
     "scip-python-plus": "^0.7.4",
-    "scip-query-scip-windows": "0.12.0",
+    "scip-query-scip-windows": "0.13.0",
     "tree-sitter": "0.21.1",
     "tree-sitter-c": "0.23.2",
     "tree-sitter-c-sharp": "0.23.1",

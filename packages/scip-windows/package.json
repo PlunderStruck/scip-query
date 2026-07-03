@@ -1,6 +1,6 @@
 {
   "name": "scip-query-scip-windows",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Windows scip CLI binaries (x64 + arm64) for scip-query. Installed automatically on Windows as an optional dependency; not useful standalone.",
   "os": [
     "win32"
