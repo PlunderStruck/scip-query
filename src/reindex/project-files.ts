@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { SupportedLanguage } from '../domain/types.js';
 
-interface ProjectFileFingerprint {
+export interface ProjectFileFingerprint {
   path: string;
   size: number;
   hash: string;

@@ -5,6 +5,7 @@ import { cpus, tmpdir } from 'node:os';
 import type * as NodeOs from 'node:os';
 import type { SupportedLanguage } from '../../src/domain/types.js';
 import { resolveIndexerConcurrency } from '../../src/reindex/indexer-runner.js';
+import { projectShardSlug } from '../../src/reindex/project-shards.js';
 
 const tempDirs: string[] = [];
 const originalIndexerConcurrencyEnv = process.env['SCIP_QUERY_INDEXER_CONCURRENCY'];
@@ -356,6 +357,248 @@ describe('reindex reliability', () => {
     expect(commands.find((command) => command.binary === 'typescript-indexer')?.args.at(-1)).toBe('packages/a');
   });
 
+  // Per-project TypeScript shard caching (2026-07-05 plan): an edit inside one
+  // tsconfig project re-runs only that project's shard (plus dependents);
+  // unchanged project shards come from the `language-indexes/typescript-projects/`
+  // cache instead of re-running the indexer.
+  function createTwoProjectWorkspace(prefix: string, opts: { bDependsOnA?: boolean } = {}) {
+    const projectRoot = createProject(prefix);
+    mkdirSync(join(projectRoot, 'packages/a/src'), { recursive: true });
+    mkdirSync(join(projectRoot, 'packages/b/src'), { recursive: true });
+    writeFileSync(join(projectRoot, 'packages/a/tsconfig.json'), '{"include":["src"]}\n');
+    writeFileSync(join(projectRoot, 'packages/b/tsconfig.json'), '{"include":["src"]}\n');
+    writeFileSync(join(projectRoot, 'packages/a/package.json'), JSON.stringify({ name: 'pkg-a' }));
+    writeFileSync(
+      join(projectRoot, 'packages/b/package.json'),
+      JSON.stringify(
+        opts.bDependsOnA ? { name: 'pkg-b', dependencies: { 'pkg-a': '1.0.0' } } : { name: 'pkg-b' },
+      ),
+    );
+    writeFileSync(join(projectRoot, 'packages/a/src/a.ts'), 'export const a = 1;\n');
+    writeFileSync(join(projectRoot, 'packages/b/src/b.ts'), 'export const b = 1;\n');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    return { projectRoot, cacheDir };
+  }
+
+  it('serves an unchanged TypeScript workspace project shard from cache while re-running only the edited project', async () => {
+    const { projectRoot, cacheDir } = createTwoProjectWorkspace('scip-query-reindex-ts-project-cache-');
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+
+    const { reindex, commands, mergeCalls } = await loadReindexFixture({ languages: ['typescript'] });
+
+    await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      typescriptProjectMode: 'workspace',
+      onStatus: () => undefined,
+      indexerConcurrency: 2,
+    });
+    const commandsAfterFirst = commands.length;
+    const cachedAPath = join(cacheDir, 'language-indexes', 'typescript-projects', `${projectShardSlug('packages/a')}.scip`);
+    expect(existsSync(cachedAPath)).toBe(true);
+    const cachedAContent = readFileSync(cachedAPath, 'utf-8');
+
+    writeFileSync(join(projectRoot, 'packages/b/src/b.ts'), 'export const b = 2;\n');
+    const second = await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      typescriptProjectMode: 'workspace',
+      onStatus: () => undefined,
+      indexerConcurrency: 2,
+    });
+
+    const rerunProjects = commands
+      .slice(commandsAfterFirst)
+      .filter((command) => command.binary === 'typescript-indexer')
+      .map((command) => command.args.at(-1));
+    expect(rerunProjects).toEqual(['packages/b']);
+
+    const shards = second.shards ?? [];
+    expect(shards).toContainEqual(
+      expect.objectContaining({ id: 'typescript:packages/a', language: 'typescript', reused: true }),
+    );
+    expect(shards).toContainEqual(
+      expect.objectContaining({
+        id: 'typescript:packages/b',
+        language: 'typescript',
+        reused: false,
+        missReason: 'project inputs changed since last index',
+      }),
+    );
+    expect(second.languages).toEqual(['typescript']);
+
+    // Merged output still contains a's documents: the merge that produced
+    // the final typescript shard combined both projects' outputs, and one
+    // of those inputs is byte-identical to a's cached shard.
+    const lastMerge = mergeCalls.at(-1);
+    expect(lastMerge?.inputPaths.length).toBe(2);
+    expect(lastMerge?.inputContents).toContain(cachedAContent);
+  });
+
+  it('reruns a dependent project when its cross-project dependency changes', async () => {
+    const { projectRoot, cacheDir } = createTwoProjectWorkspace('scip-query-reindex-ts-project-dep-', {
+      bDependsOnA: true,
+    });
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+
+    const { reindex, commands } = await loadReindexFixture({ languages: ['typescript'] });
+
+    await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      typescriptProjectMode: 'workspace',
+      onStatus: () => undefined,
+      indexerConcurrency: 2,
+    });
+    const commandsAfterFirst = commands.length;
+
+    writeFileSync(join(projectRoot, 'packages/a/src/a.ts'), 'export const a = 2;\n');
+    const second = await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      typescriptProjectMode: 'workspace',
+      onStatus: () => undefined,
+      indexerConcurrency: 2,
+    });
+
+    const rerunProjects = commands
+      .slice(commandsAfterFirst)
+      .filter((command) => command.binary === 'typescript-indexer')
+      .map((command) => command.args.at(-1))
+      .sort();
+    expect(rerunProjects).toEqual(['packages/a', 'packages/b']);
+    expect(second.languages).toEqual(['typescript']);
+  });
+
+  it('reruns a project when its cached shard file is missing despite matching metadata', async () => {
+    const { projectRoot, cacheDir } = createTwoProjectWorkspace('scip-query-reindex-ts-project-missing-shard-');
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+
+    const { reindex, commands } = await loadReindexFixture({ languages: ['typescript'] });
+
+    await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      typescriptProjectMode: 'workspace',
+      onStatus: () => undefined,
+      indexerConcurrency: 2,
+    });
+
+    const cachedAPath = join(cacheDir, 'language-indexes', 'typescript-projects', `${projectShardSlug('packages/a')}.scip`);
+    expect(existsSync(cachedAPath)).toBe(true);
+    rmSync(cachedAPath);
+
+    // Force a language-level miss (untouched, a whole-language hit would
+    // skip project classification entirely) without changing a's own files.
+    writeFileSync(join(projectRoot, 'packages/b/src/b.ts'), 'export const b = 2;\n');
+    const commandsAfterFirst = commands.length;
+    const second = await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      typescriptProjectMode: 'workspace',
+      onStatus: () => undefined,
+      indexerConcurrency: 2,
+    });
+
+    const rerunProjects = commands
+      .slice(commandsAfterFirst)
+      .filter((command) => command.binary === 'typescript-indexer')
+      .map((command) => command.args.at(-1))
+      .sort();
+    expect(rerunProjects).toEqual(['packages/a', 'packages/b']);
+
+    const shardA = (second.shards ?? []).find((shard) => shard.id === 'typescript:packages/a');
+    expect(shardA).toEqual(
+      expect.objectContaining({ reused: false, missReason: 'cached shard file missing on disk' }),
+    );
+  });
+
+  it('re-runs every project when metadata predates per-project shard caching, without crashing', async () => {
+    const { projectRoot, cacheDir } = createTwoProjectWorkspace('scip-query-reindex-ts-project-old-meta-');
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+    const metaPath = join(cacheDir, 'meta.json');
+
+    const { reindex, commands } = await loadReindexFixture({ languages: ['typescript'] });
+
+    await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      typescriptProjectMode: 'workspace',
+      onStatus: () => undefined,
+      indexerConcurrency: 2,
+    });
+
+    const meta = JSON.parse(readFileSync(metaPath, 'utf-8'));
+    delete meta.typescriptProjectShards;
+    writeFileSync(metaPath, JSON.stringify(meta));
+
+    // Force a language-level miss so project classification actually runs.
+    writeFileSync(join(projectRoot, 'packages/a/src/a.ts'), 'export const a = 2;\n');
+    const commandsAfterFirst = commands.length;
+    const second = await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      typescriptProjectMode: 'workspace',
+      onStatus: () => undefined,
+      indexerConcurrency: 2,
+    });
+
+    const rerunProjects = commands
+      .slice(commandsAfterFirst)
+      .filter((command) => command.binary === 'typescript-indexer')
+      .map((command) => command.args.at(-1))
+      .sort();
+    expect(rerunProjects).toEqual(['packages/a', 'packages/b']);
+    expect(second.languages).toEqual(['typescript']);
+  });
+
+  it('removes the TypeScript project shard cache directory when switching from workspace to single mode', async () => {
+    const projectRoot = createProject('scip-query-reindex-ts-project-mode-switch-');
+    mkdirSync(join(projectRoot, 'packages/a/src'), { recursive: true });
+    writeFileSync(join(projectRoot, 'packages/a/tsconfig.json'), '{"include":["src"]}\n');
+    writeFileSync(join(projectRoot, 'packages/a/src/a.ts'), 'export const a = 1;\n');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+
+    const { reindex } = await loadReindexFixture({ languages: ['typescript'] });
+
+    await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      typescriptProjectMode: 'workspace',
+      onStatus: () => undefined,
+    });
+
+    const shardDir = join(cacheDir, 'language-indexes', 'typescript-projects');
+    expect(existsSync(shardDir)).toBe(true);
+
+    await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      typescriptProjectMode: 'single',
+      onStatus: () => undefined,
+    });
+
+    expect(existsSync(shardDir)).toBe(false);
+  });
+
   it('records rebuilt and reused refresh provenance without changing artifact updatedAt on reuse', async () => {
     const projectRoot = createProject('scip-query-reindex-refresh-meta-');
     const cacheDir = mkdtempSync(join(tmpdir(), 'scip-query-reindex-refresh-cache-'));
@@ -675,17 +918,30 @@ async function loadReindexFixture(opts: {
       run: () => ({ scanned: 0, inserted: 0, existing: 0 }),
     }),
   }));
+  // `inputContents` is snapshotted synchronously at call time (not just
+  // `inputPaths`) because the temp run dir those paths live in is deleted
+  // once `reindex()` resolves — a test asserting on merge inputs after the
+  // fact can't re-read them from disk.
+  const mergeCalls: { inputPaths: string[]; inputContents: (string | null)[]; outputPath: string }[] = [];
   vi.doMock('../../src/reindex/merge.js', async () => {
     const fs = await import('node:fs');
     return {
       mergeScipFiles: (_inputPaths: readonly string[], outputPath: string) => {
+        const inputContents = _inputPaths.map((path) => {
+          try {
+            return fs.readFileSync(path, 'utf-8');
+          } catch {
+            return null;
+          }
+        });
+        mergeCalls.push({ inputPaths: [..._inputPaths], inputContents, outputPath });
         fs.writeFileSync(outputPath, 'merged-scip');
         return { documentCount: 0, externalSymbolCount: 0, inputCount: _inputPaths.length };
       },
     };
   });
 
-  return { ...(await import('../../src/reindex/index.js')), attempts, commands };
+  return { ...(await import('../../src/reindex/index.js')), attempts, commands, mergeCalls };
 }
 
 function configFor(language: SupportedLanguage) {

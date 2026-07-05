@@ -45,4 +45,22 @@ describe('discoverTypeScriptProjectRoots', () => {
       'tools',
     ]);
   });
+
+  it('treats a non-empty configured project list as authoritative, skipping discovery and root-alongside', () => {
+    const projectRoot = createProject();
+    writeJson(join(projectRoot, 'tsconfig.json'), { include: ['apps/*/src'] });
+    writeJson(join(projectRoot, 'apps/web/tsconfig.json'), { include: ['src'] });
+    writeJson(join(projectRoot, 'apps/api/tsconfig.json'), { include: ['src'] });
+    writeJson(join(projectRoot, 'packages/lib/tsconfig.json'), { include: ['src'] });
+
+    expect(discoverTypeScriptProjectRoots(projectRoot, ['apps/web', 'apps/api'])).toEqual(['apps/api', 'apps/web']);
+  });
+
+  it('falls back to discovery when every configured entry normalizes away', () => {
+    const projectRoot = createProject();
+    writeJson(join(projectRoot, 'tsconfig.json'), { include: ['apps/*/src'] });
+    writeJson(join(projectRoot, 'apps/web/tsconfig.json'), { include: ['src'] });
+
+    expect(discoverTypeScriptProjectRoots(projectRoot, ['does/not/exist', '../outside'])).toEqual(['.', 'apps/web']);
+  });
 });

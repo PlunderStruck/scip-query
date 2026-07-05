@@ -7,6 +7,7 @@ import {
   mkdirSync,
   mkdtempSync,
   openSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -23,6 +24,14 @@ import { getIndexerConfig } from './indexers.js';
 import { mergeScipFiles } from './merge.js';
 import { runPostIndexAugmentation } from './post-index-augmentation.js';
 import { fingerprintProjectFiles, normalizeTypeScriptProjects } from './project-files.js';
+import type { ProjectFileFingerprint } from './project-files.js';
+import {
+  assignFilesToProjects,
+  computeProjectShardFingerprints,
+  deriveProjectDependencies,
+  projectShardSlug,
+  readProjectManifestInputs,
+} from './project-shards.js';
 import { sanitizeScipFile } from './sanitize.js';
 import { discoverTypeScriptProjectRoots } from './typescript-projects.js';
 import { runPreparedIndexers } from './indexer-runner.js';
@@ -111,6 +120,7 @@ export interface ReindexResult {
 interface PreparedIndexerPlan {
   preparedRuns: PreparedIndexerRun[];
   skippedLanguages: { language: SupportedLanguage; reason: string }[];
+  languageOutputScipPaths: Partial<Record<SupportedLanguage, string>>;
 }
 
 interface ReindexMetadata {
@@ -119,6 +129,13 @@ interface ReindexMetadata {
   updatedAt: string;
   fingerprint: ReindexFingerprint;
   languageFingerprints?: Partial<Record<SupportedLanguage, ReindexFingerprint>>;
+  /**
+   * Per-TypeScript-project shard fingerprints (workspace mode only), keyed by
+   * relative project path ('.', 'apps/web'). Additive on meta v3: absent on
+   * older metadata or non-workspace runs, in which case every project shard
+   * classifies as a miss (today's behavior).
+   */
+  typescriptProjectShards?: Record<string, { files: ProjectFileFingerprint[] }>;
   requestedLanguages: SupportedLanguage[];
   indexedLanguages: SupportedLanguage[];
   skipped: { language: SupportedLanguage; reason: string }[];
@@ -145,6 +162,27 @@ interface FreshIndexRun {
   skippedLanguages: { language: SupportedLanguage; reason: string }[];
   reusedLanguages: SupportedLanguage[];
   shards: ReindexShardDiagnostic[];
+  /** Present only when the TypeScript language shard missed in workspace mode. */
+  typescriptProjectShardContext?: TypeScriptProjectShardContext;
+}
+
+/**
+ * Carries the per-project fingerprints computed while classifying TypeScript
+ * project-shard reuse (2.2) forward to publish (2.3), so `writeReindexMeta`
+ * records the exact same fingerprints without a second hashing pass.
+ */
+interface TypeScriptProjectShardContext {
+  /** All discovered/configured project paths, not just the missed ones. */
+  projects: readonly string[];
+  fingerprints: Record<string, ProjectShardFingerprint>;
+}
+
+type ProjectShardFingerprint = { files: ProjectFileFingerprint[] };
+
+interface TypeScriptProjectShardClassification {
+  reused: boolean;
+  reason?: string;
+  fingerprint: ProjectShardFingerprint;
 }
 
 interface ReindexLockMetadata {
@@ -364,14 +402,19 @@ async function runFreshReindex(opts: {
     NODE_OPTIONS: `--max-old-space-size=${opts.maxHeapMb}`,
   };
 
-  const { indexedOutputs, skippedLanguages, reusedLanguages, shards } = await runLanguageIndexersForFreshReindex(
-    opts,
-    env,
-  );
+  const { indexedOutputs, skippedLanguages, reusedLanguages, shards, typescriptProjectShardContext } =
+    await runLanguageIndexersForFreshReindex(opts, env);
   if (reusedLanguages.length > 0) {
     opts.onStatus(`Reused ${reusedLanguages.length} cached language shard(s): ${reusedLanguages.join(', ')}`);
   }
-  const lastRefresh = publishFreshReindexArtifacts(opts, env, indexedOutputs, skippedLanguages);
+  const lastRefresh = publishFreshReindexArtifacts(
+    opts,
+    env,
+    indexedOutputs,
+    skippedLanguages,
+    reusedLanguages,
+    typescriptProjectShardContext,
+  );
   const durationMs = lastRefresh.durationMs;
   opts.onStatus(`Done in ${(durationMs / 1000).toFixed(1)}s`);
   return {
@@ -410,7 +453,20 @@ async function runLanguageIndexersForFreshReindex(
   for (const language of reused) {
     opts.onStatus(`Reusing cached ${language} SCIP shard (language inputs unchanged).`);
   }
-  const { preparedRuns, skippedLanguages } = prepareIndexerRuns({
+
+  // Plan6 per-project TS shard caching (2.2): only relevant when the whole
+  // typescript language shard missed in workspace mode — an untouched
+  // typescript language shard already proves every project unchanged
+  // (invariant: the language fingerprint covers the same files every
+  // project's fingerprint is built from), so the classification below is
+  // skipped entirely on that path (today's behavior, untouched).
+  const tsProjectShards = planTypeScriptProjectShardReuse(opts, classification);
+
+  const {
+    preparedRuns: preparedRunsAll,
+    skippedLanguages,
+    languageOutputScipPaths,
+  } = prepareIndexerRuns({
     languages: opts.languages.filter((language) => !reused.has(language)),
     tempOutputScip: opts.tempPaths.tempOutputScip,
     projectRoot: opts.projectRoot,
@@ -419,9 +475,17 @@ async function runLanguageIndexersForFreshReindex(
     pnpmWorkspaces: opts.opts.pnpmWorkspaces,
     typescriptProjectMode: opts.opts.typescriptProjectMode,
     typescriptProjects: opts.opts.typescriptProjects,
+    preDiscoveredTypeScriptProjects: tsProjectShards?.allProjects,
     clojureConfigPath: opts.opts.clojureConfigPath,
     onStatus: opts.onStatus,
   });
+
+  // Filter typescript runs down to the projects that actually missed;
+  // reused projects are served from cache via the synthetic results below
+  // instead of being re-indexed.
+  const preparedRuns = tsProjectShards
+    ? preparedRunsAll.filter((run) => run.language !== 'typescript' || tsProjectShards.missedProjectIds.has(run.id))
+    : preparedRunsAll;
 
   const runResults = await runPreparedIndexers(
     preparedRuns,
@@ -429,11 +493,164 @@ async function runLanguageIndexersForFreshReindex(
     opts.onStatus,
     opts.opts.indexerConcurrency,
   );
-  const { indexedOutputs } = collectIndexerOutputs(runResults, skippedLanguages);
+
+  // Cache freshly produced project shards BEFORE collectIndexerOutputs runs
+  // — a single-run group gets renameSync'd into its outputScipPath, which
+  // would otherwise destroy the only copy of a freshly-indexed shard before
+  // it could be cached.
+  let syntheticResults: IndexerRunResult[] = [];
+  if (tsProjectShards) {
+    cacheFreshTypeScriptProjectShards(opts.paths.outputDb, runResults);
+    const typescriptOutputScipPath = languageOutputScipPaths['typescript'] ?? opts.tempPaths.tempOutputScip;
+    syntheticResults = buildCachedTypeScriptProjectRunResults({
+      outputDb: opts.paths.outputDb,
+      tempOutputScip: opts.tempPaths.tempOutputScip,
+      outputScipPath: typescriptOutputScipPath,
+      reusedProjects: tsProjectShards.reusedProjects,
+    });
+  }
+
+  const combinedResults = [...runResults, ...syntheticResults];
+  const { indexedOutputs } = collectIndexerOutputs(combinedResults, skippedLanguages);
   const allIndexedOutputs = [...reusableOutputs, ...indexedOutputs];
   validateIndexingOutcome(allIndexedOutputs, skippedLanguages, opts.languages, opts.opts.allowPartial, opts.onStatus);
-  const shards = buildFreshReindexShardDiagnostics(classification, runResults);
-  return { indexedOutputs: allIndexedOutputs, skippedLanguages, reusedLanguages: [...reused], shards };
+  const shards = buildFreshReindexShardDiagnostics(
+    classification,
+    runResults,
+    tsProjectShards ? { outputDb: opts.paths.outputDb, classification: tsProjectShards.classification } : undefined,
+  );
+  return {
+    indexedOutputs: allIndexedOutputs,
+    skippedLanguages,
+    reusedLanguages: [...reused],
+    shards,
+    typescriptProjectShardContext: tsProjectShards
+      ? { projects: tsProjectShards.allProjects, fingerprints: tsProjectShards.fingerprints }
+      : undefined,
+  };
+}
+
+interface TypeScriptProjectShardPlan {
+  allProjects: readonly string[];
+  fingerprints: Record<string, ProjectShardFingerprint>;
+  classification: ReadonlyMap<string, TypeScriptProjectShardClassification>;
+  reusedProjects: readonly string[];
+  missedProjectIds: ReadonlySet<string>;
+}
+
+/**
+ * Builds the per-project reuse plan for a workspace-mode TypeScript language
+ * shard miss: discovers projects once, derives each project's fingerprint
+ * from the already-hashed language fingerprint's file list (no re-hashing),
+ * and classifies each project as reused or missed against `meta.json`.
+ * Returns undefined when there is nothing to do: typescript wasn't
+ * requested, its language shard was reused (today's behavior, untouched),
+ * mode isn't workspace, or discovery finds no projects.
+ */
+function planTypeScriptProjectShardReuse(
+  runOpts: Parameters<typeof runFreshReindex>[0],
+  classification: ReadonlyMap<SupportedLanguage, LanguageShardClassification>,
+): TypeScriptProjectShardPlan | undefined {
+  const tsClassification = classification.get('typescript');
+  if (!tsClassification || tsClassification.reused) return undefined;
+  if (runOpts.opts.typescriptProjectMode !== 'workspace') return undefined;
+
+  const allProjects = discoverTypeScriptProjectRoots(runOpts.projectRoot, runOpts.opts.typescriptProjects);
+  if (allProjects.length === 0) return undefined;
+
+  const manifestInputs = readProjectManifestInputs(runOpts.projectRoot, allProjects);
+  const assignment = assignFilesToProjects(tsClassification.fingerprint.files, allProjects);
+  const dependencies = deriveProjectDependencies(allProjects, manifestInputs);
+  const fingerprints = computeProjectShardFingerprints(allProjects, assignment, dependencies);
+
+  const meta = readReindexMetaOrNull(runOpts.paths.metaPath);
+  const shardExists = (project: string) => existsSync(typescriptProjectShardPath(runOpts.paths.outputDb, project));
+  const projectClassification = classifyTypeScriptProjectShardReuse(meta, fingerprints, shardExists);
+
+  const reusedProjects = [...projectClassification.entries()]
+    .filter(([, info]) => info.reused)
+    .map(([project]) => project);
+  const reusedSet = new Set(reusedProjects);
+  const missedProjectIds = new Set(
+    allProjects.filter((project) => !reusedSet.has(project)).map((project) => `typescript:${project}`),
+  );
+
+  return { allProjects, fingerprints, classification: projectClassification, reusedProjects, missedProjectIds };
+}
+
+// Plan6 per-project TS shard caching (2.2): per-project mirror of
+// classifyLanguageShardReuse's miss reasons, decided purely over
+// (meta.typescriptProjectShards, current per-project fingerprints,
+// shardExists) — no filesystem access beyond the injected callback.
+function classifyTypeScriptProjectShardReuse(
+  meta: Partial<ReindexMetadata> | null,
+  current: Record<string, ProjectShardFingerprint>,
+  shardExists: (project: string) => boolean,
+): Map<string, TypeScriptProjectShardClassification> {
+  const result = new Map<string, TypeScriptProjectShardClassification>();
+  for (const project of Object.keys(current)) {
+    const fingerprint = current[project]!;
+    if (!meta) {
+      result.set(project, { reused: false, reason: 'no reindex metadata found', fingerprint });
+      continue;
+    }
+    const cached = meta.typescriptProjectShards?.[project];
+    if (!cached) {
+      result.set(project, { reused: false, reason: 'no cached fingerprint for this project', fingerprint });
+      continue;
+    }
+    if (!shardExists(project)) {
+      result.set(project, { reused: false, reason: 'cached shard file missing on disk', fingerprint });
+      continue;
+    }
+    if (stableJson(cached) !== stableJson(fingerprint)) {
+      result.set(project, { reused: false, reason: 'project inputs changed since last index', fingerprint });
+      continue;
+    }
+    result.set(project, { reused: true, fingerprint });
+  }
+  return result;
+}
+
+/** Copies each freshly-indexed project shard into the real cache directory, before `collectIndexerOutputs` can rename the source away. Skips failed runs. */
+function cacheFreshTypeScriptProjectShards(outputDb: string, runResults: readonly IndexerRunResult[]): void {
+  for (const run of runResults) {
+    if (run.skipped || !run.id.startsWith('typescript:')) continue;
+    const project = run.id.slice('typescript:'.length);
+    const shardPath = typescriptProjectShardPath(outputDb, project);
+    mkdirSync(dirname(shardPath), { recursive: true });
+    copyFileSync(run.scipPath, shardPath);
+  }
+}
+
+/**
+ * Copies each reused project's cached `.scip` into the temp run dir (never
+ * the original — invariant 2: cached shard files must never be
+ * `renameSync`'d into outputs) and synthesizes a successful
+ * `IndexerRunResult` for it so `collectIndexerOutputs` merges reused and
+ * freshly-indexed project shards identically.
+ */
+function buildCachedTypeScriptProjectRunResults(opts: {
+  outputDb: string;
+  tempOutputScip: string;
+  outputScipPath: string;
+  reusedProjects: readonly string[];
+}): IndexerRunResult[] {
+  return opts.reusedProjects.map((project, index) => {
+    const cachedPath = typescriptProjectShardPath(opts.outputDb, project);
+    const tempCopyPath = tempScipPath(opts.tempOutputScip, 'typescript-project-cached', index);
+    copyFileSync(cachedPath, tempCopyPath);
+    return {
+      id: `typescript:${project}`,
+      language: 'typescript' as const,
+      label: `typescript (${project})`,
+      scipPath: tempCopyPath,
+      outputScipPath: opts.outputScipPath,
+      durationMs: 0,
+      command: 'cached',
+      outputBytes: fileSizeOrNull(tempCopyPath) ?? undefined,
+    };
+  });
 }
 
 interface LanguageShardClassification {
@@ -459,12 +676,7 @@ function classifyLanguageShardReuse(opts: {
   typescriptProjects?: readonly string[];
   clojureConfigPath?: string;
 }): Map<SupportedLanguage, LanguageShardClassification> {
-  let meta: Partial<ReindexMetadata> | null;
-  try {
-    meta = JSON.parse(readFileSync(opts.paths.metaPath, 'utf-8')) as Partial<ReindexMetadata>;
-  } catch {
-    meta = null;
-  }
+  const meta = readReindexMetaOrNull(opts.paths.metaPath);
   const current = computeLanguageFingerprints(opts.projectRoot, opts.languages, opts);
   const result = new Map<SupportedLanguage, LanguageShardClassification>();
   for (const language of opts.languages) {
@@ -520,9 +732,16 @@ function classifyLanguageShardReuse(opts: {
   return result;
 }
 
+/** Diagnostics context for reused/rerun TypeScript workspace project shards (2.4); undefined on every other path (single mode, non-workspace, or a whole-language hit/miss with no project classification). */
+interface TypeScriptProjectShardDiagnosticsContext {
+  outputDb: string;
+  classification: ReadonlyMap<string, TypeScriptProjectShardClassification>;
+}
+
 function buildFreshReindexShardDiagnostics(
   classification: ReadonlyMap<SupportedLanguage, LanguageShardClassification>,
   runResults: readonly IndexerRunResult[],
+  typescriptProjects?: TypeScriptProjectShardDiagnosticsContext,
 ): ReindexShardDiagnostic[] {
   const diagnostics: ReindexShardDiagnostic[] = [];
   for (const [language, info] of classification) {
@@ -538,21 +757,40 @@ function buildFreshReindexShardDiagnostics(
   }
   for (const run of runResults) {
     const info = classification.get(run.language);
+    const project = typescriptProjects && run.id.startsWith('typescript:') ? run.id.slice('typescript:'.length) : null;
+    const projectInfo = project ? typescriptProjects!.classification.get(project) : undefined;
     diagnostics.push({
       id: run.id,
       language: run.language,
       reused: false,
-      missReason: info?.reason ?? run.skipped?.reason,
-      fingerprint: info ? hashFingerprint(info.fingerprint) : 'unknown',
+      missReason: projectInfo?.reason ?? info?.reason ?? run.skipped?.reason,
+      fingerprint: projectInfo
+        ? hashFingerprint(projectInfo.fingerprint)
+        : info
+          ? hashFingerprint(info.fingerprint)
+          : 'unknown',
       outputBytes: run.outputBytes ?? null,
       durationMs: run.durationMs,
       command: run.command,
     });
   }
+  if (typescriptProjects) {
+    for (const [project, info] of typescriptProjects.classification) {
+      if (!info.reused) continue;
+      diagnostics.push({
+        id: `typescript:${project}`,
+        language: 'typescript',
+        reused: true,
+        fingerprint: hashFingerprint(info.fingerprint),
+        outputBytes: fileSizeOrNull(typescriptProjectShardPath(typescriptProjects.outputDb, project)),
+        durationMs: 0,
+      });
+    }
+  }
   return diagnostics;
 }
 
-function hashFingerprint(fingerprint: ReindexFingerprint | undefined): string {
+function hashFingerprint(fingerprint: unknown): string {
   return createHash('sha256').update(stableJson(fingerprint)).digest('hex').slice(0, 16);
 }
 
@@ -572,6 +810,8 @@ function publishFreshReindexArtifacts(
   env: NodeJS.ProcessEnv,
   indexedOutputs: readonly IndexedOutput[],
   skippedLanguages: readonly { language: SupportedLanguage; reason: string }[],
+  reusedLanguages: readonly SupportedLanguage[],
+  typescriptProjectShardContext: TypeScriptProjectShardContext | undefined,
 ): LastRefreshMetadata {
   cacheLanguageShards(opts.paths.outputDb, indexedOutputs);
   materializeScipOutput(indexedOutputs, opts.tempPaths.tempOutputScip, opts.onStatus);
@@ -582,6 +822,15 @@ function publishFreshReindexArtifacts(
     dbPath: opts.tempPaths.tempOutputDb,
     onStatus: opts.onStatus,
   });
+
+  const typescriptProjectShards = resolveTypeScriptProjectShardsField({
+    mode: opts.opts.typescriptProjectMode,
+    skippedLanguages,
+    reusedLanguages,
+    context: typescriptProjectShardContext,
+    metaPath: opts.paths.metaPath,
+  });
+  pruneTypeScriptProjectShardCache(opts.paths.outputDb, typescriptProjectShards.pruneProjects);
 
   const lastRefresh = buildLastRefresh({
     trigger: opts.opts.trigger,
@@ -601,6 +850,7 @@ function publishFreshReindexArtifacts(
       typescriptProjects: opts.opts.typescriptProjects,
       clojureConfigPath: opts.opts.clojureConfigPath,
     }),
+    typescriptProjectShards: typescriptProjectShards.field,
     requestedLanguages: opts.languages,
     indexedLanguages: indexedOutputs.map((o) => o.language),
     skipped: [...skippedLanguages],
@@ -615,6 +865,75 @@ function publishFreshReindexArtifacts(
     metaPath: opts.paths.metaPath,
   });
   return lastRefresh;
+}
+
+/**
+ * Decides what `typescriptProjectShards` value publish should write and
+ * which project slugs the cache directory should retain (2.3). Three
+ * outcomes:
+ *  - mode isn't workspace, or typescript was skipped this run: omit the
+ *    field and prune the whole cache directory (`pruneProjects: null`).
+ *  - typescript's whole-language shard was reused: nothing about TS files
+ *    changed, so carry the existing meta's field forward unchanged rather
+ *    than recomputing it.
+ *  - typescript's language shard missed and workspace classification ran
+ *    (`context` present): write the freshly-computed per-project
+ *    fingerprints and prune to exactly that project set.
+ */
+function resolveTypeScriptProjectShardsField(opts: {
+  mode: TypeScriptProjectMode | undefined;
+  skippedLanguages: readonly { language: SupportedLanguage; reason: string }[];
+  reusedLanguages: readonly SupportedLanguage[];
+  context: TypeScriptProjectShardContext | undefined;
+  metaPath: string;
+}): { field: Record<string, ProjectShardFingerprint> | undefined; pruneProjects: readonly string[] | null } {
+  if (opts.mode !== 'workspace') {
+    return { field: undefined, pruneProjects: null };
+  }
+  if (opts.skippedLanguages.some((s) => s.language === 'typescript')) {
+    return { field: undefined, pruneProjects: null };
+  }
+  if (opts.reusedLanguages.includes('typescript')) {
+    const existing = readReindexMetaOrNull(opts.metaPath)?.typescriptProjectShards;
+    return { field: existing, pruneProjects: existing ? Object.keys(existing) : [] };
+  }
+  if (opts.context) {
+    return { field: opts.context.fingerprints, pruneProjects: opts.context.projects };
+  }
+  return { field: undefined, pruneProjects: [] };
+}
+
+/**
+ * `pruneProjects: null` deletes the whole cache directory (mode switched to
+ * single, or typescript was skipped this run — fail-closed rather than risk
+ * serving a shard from an inconsistent set). Otherwise deletes any cached
+ * `.scip` whose slug doesn't belong to a current project (renamed/removed
+ * tsconfig projects, or the pre-Phase-3 project list changing shape).
+ */
+function pruneTypeScriptProjectShardCache(outputDb: string, currentProjects: readonly string[] | null): void {
+  const dir = typescriptProjectShardCacheDir(outputDb);
+  if (currentProjects === null) {
+    rmSync(dir, { recursive: true, force: true });
+    return;
+  }
+  let existingFiles: string[];
+  try {
+    existingFiles = readdirSync(dir);
+  } catch {
+    return;
+  }
+  for (const file of typescriptProjectShardFilesToDelete(existingFiles, currentProjects)) {
+    rmSync(join(dir, file), { force: true });
+  }
+}
+
+/** Pure: which cached shard filenames are no longer claimed by any current project. */
+function typescriptProjectShardFilesToDelete(
+  existingFiles: readonly string[],
+  currentProjects: readonly string[],
+): string[] {
+  const keep = new Set(currentProjects.map((project) => `${projectShardSlug(project)}.scip`));
+  return existingFiles.filter((file) => !keep.has(file));
 }
 
 function cacheLanguageShards(outputDb: string, indexedOutputs: readonly IndexedOutput[]): void {
@@ -666,6 +985,8 @@ function prepareIndexerRuns(opts: {
   pnpmWorkspaces?: boolean;
   typescriptProjectMode?: TypeScriptProjectMode;
   typescriptProjects?: readonly string[];
+  /** Skips re-discovery for the typescript language entry when provided (plan6 2.2 — discover projects once per fresh reindex). */
+  preDiscoveredTypeScriptProjects?: readonly string[];
   clojureConfigPath?: string;
   onStatus: (message: string) => void;
 }): PreparedIndexerPlan {
@@ -675,6 +996,9 @@ function prepareIndexerRuns(opts: {
     language,
     scipPath: opts.languages.length > 1 ? tempScipPath(opts.tempOutputScip, language, index) : opts.tempOutputScip,
   }));
+  const languageOutputScipPaths = Object.fromEntries(
+    languageOutputs.map(({ language, scipPath }) => [language, scipPath]),
+  ) as Partial<Record<SupportedLanguage, string>>;
 
   for (const { language, scipPath } of languageOutputs) {
     const runs = prepareIndexerRunsForLanguage({ ...opts, language, scipPath });
@@ -687,7 +1011,7 @@ function prepareIndexerRuns(opts: {
     }
   }
 
-  return { preparedRuns, skippedLanguages };
+  return { preparedRuns, skippedLanguages, languageOutputScipPaths };
 }
 
 function prepareIndexerRunsForLanguage(opts: {
@@ -700,6 +1024,7 @@ function prepareIndexerRunsForLanguage(opts: {
   pnpmWorkspaces?: boolean;
   typescriptProjectMode?: TypeScriptProjectMode;
   typescriptProjects?: readonly string[];
+  preDiscoveredTypeScriptProjects?: readonly string[];
   clojureConfigPath?: string;
   onStatus: (message: string) => void;
 }): ({ prepared: PreparedIndexerRun } | { skipped: { language: SupportedLanguage; reason: string } })[] {
@@ -714,7 +1039,8 @@ function prepareIndexerRunsForLanguage(opts: {
     ];
   }
 
-  const projects = discoverTypeScriptProjectRoots(opts.projectRoot, opts.typescriptProjects);
+  const projects =
+    opts.preDiscoveredTypeScriptProjects ?? discoverTypeScriptProjectRoots(opts.projectRoot, opts.typescriptProjects);
   if (projects.length === 0) {
     return [
       prepareIndexerRun({
@@ -1188,6 +1514,22 @@ function effectivePnpmWorkspaces(opts: {
 
 function languageShardPath(outputDb: string, language: SupportedLanguage): string {
   return join(dirname(outputDb), 'language-indexes', `${language}.scip`);
+}
+
+function typescriptProjectShardCacheDir(outputDb: string): string {
+  return join(dirname(outputDb), 'language-indexes', 'typescript-projects');
+}
+
+function typescriptProjectShardPath(outputDb: string, project: string): string {
+  return join(typescriptProjectShardCacheDir(outputDb), `${projectShardSlug(project)}.scip`);
+}
+
+function readReindexMetaOrNull(metaPath: string): Partial<ReindexMetadata> | null {
+  try {
+    return JSON.parse(readFileSync(metaPath, 'utf-8')) as Partial<ReindexMetadata>;
+  } catch {
+    return null;
+  }
 }
 
 function isUnchangedReindex(metaPath: string, fingerprint: ReindexFingerprint): boolean {

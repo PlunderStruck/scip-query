@@ -107,7 +107,10 @@ content-addressed shared store would only ever be able to eliminate the
    fingerprint reuse across worktrees (i.e. "have we ever produced this exact
    TypeScript shard before, under any path") is a materially different,
    larger change to `src/reindex/index.ts`'s shard-caching key (today keyed
-   by project root + per-language fingerprint, see
+   by project root + per-language fingerprint, plus per-tsconfig-project
+   fingerprints for TypeScript workspace mode as of
+   `docs/plans/2026-07-05-per-project-ts-shard-caching.md` — still always
+   path-bound, never cross-worktree, see
    `docs/benchmarks/2026-07-02-performance-architecture-ledger.md`'s Reindex
    Proportionality section) and is out of scope for this design note; it
    would need its own gated plan and feasibility check, separate from this

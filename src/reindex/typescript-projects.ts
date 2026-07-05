@@ -17,17 +17,35 @@ const SKIP_DIR_NAMES = new Set([
   'vendor',
 ]);
 
+/**
+ * Discovers the tsconfig project roots to index for a repo.
+ *
+ * Contract: explicit config is authoritative. When `configuredProjects` normalizes to a
+ * non-empty list (after dropping entries that don't exist or fall outside the project root),
+ * that set is returned exactly as configured — deduped and sorted, with no discovery walk and
+ * no re-adding the repo root alongside the configured projects. Discovery (plus the
+ * root-alongside heuristic) only runs when no usable configured projects remain.
+ */
 export function discoverTypeScriptProjectRoots(
   projectRoot: string,
   configuredProjects: readonly string[] = [],
 ): string[] {
   const root = path.resolve(projectRoot);
-  const discovered = discoverTsconfigProjectDirs(root);
   const configured = configuredProjects.flatMap((project) => normalizeConfiguredProject(root, project));
-  const deduped = dedupeNestedProjects([...discovered, ...configured]);
+
+  if (configured.length > 0) {
+    return sortRelativeProjectPaths(root, dedupeNestedProjects(configured));
+  }
+
+  const discovered = discoverTsconfigProjectDirs(root);
+  const deduped = dedupeNestedProjects(discovered);
   const withRoot = shouldIndexRootAlongsideProjects(root, deduped) ? [root, ...deduped] : deduped;
   const projects = withRoot.length > 0 ? withRoot : [root];
 
+  return sortRelativeProjectPaths(root, projects);
+}
+
+function sortRelativeProjectPaths(root: string, projects: readonly string[]): string[] {
   return [...new Set(projects.map((project) => relativeProjectPath(root, project)))].sort((left, right) =>
     left.localeCompare(right),
   );

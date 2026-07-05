@@ -2,6 +2,16 @@
 
 All notable changes to `scip-query` are documented here. This file starts at 0.11.0; everything below covers behavior changes made since the 0.10.12 release.
 
+## [0.14.0]
+
+### Breaking (behavior change for one config key)
+
+- **A non-empty `indexer.typescript.projects` list is now authoritative.** When set, exactly the listed projects are indexed: automatic tsconfig discovery does not run and the repo root is no longer re-added alongside the list (even when the root tsconfig covers subdirectories). Files covered only by an excluded root tsconfig (e.g. shared ambient `.d.ts` files) drop out of the index — pick the list deliberately. An empty or absent list falls back to full discovery, unchanged. Previously the configured list was merged additively with discovery, which made it impossible to exclude a whole-repo root shard.
+
+### Notable (new capabilities)
+
+- **Per-project TypeScript shard caching in workspace mode.** With `indexer.typescript.projectMode: "workspace"`, each tsconfig project shard now has its own fingerprint and cached SCIP artifact (`language-indexes/typescript-projects/`); a reindex after an edit reruns only the changed projects and their dependents instead of every shard. Dependency edges come from workspace `package.json` dependencies and tsconfig `paths`/`references` targets (resolved through `extends` chains); unparseable manifests fail toward depend-on-everything, so the cache can over-invalidate but never serve a stale shard. Every per-project reuse decision appears in `reindex --json` shard diagnostics with an explicit miss reason (`typescript:<project>` entries). Metadata stays v3-additive: older binaries ignore the new field, and older metadata simply classifies every project as a miss. Measured on a 2,438-file four-package monorepo: full rebuild 57s (single mode) → 27s; reindex after an edit in a leaf package 35s → 9.5s.
+
 ## [0.11.0]
 
 ### Breaking (one-way doors — read before upgrading)
