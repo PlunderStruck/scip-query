@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { handleDoctor, handleStatus, handleWatch } from '../../src/runtime/commands/command-handlers.js';
-import { addFindingSuppression, loadProjectConfig, validateProjectConfig } from '../../src/runtime/config.js';
+import { loadProjectConfig, validateProjectConfig } from '../../src/runtime/config.js';
 import type { ProjectConfig } from '../../src/domain/types.js';
 
 const tempDirs: string[] = [];
@@ -463,44 +463,6 @@ describe('validateProjectConfig', () => {
         message: 'Declared coupling file does not exist: src/missing.ts',
       }),
     ]);
-  });
-});
-
-describe('addFindingSuppression', () => {
-  it('appends a reasoned suppression to project config', () => {
-    const projectRoot = createProject();
-    writeFileSync(join(projectRoot, '.scipquery.json'), '{ "languages": ["typescript"] }\n');
-
-    const result = addFindingSuppression(projectRoot, {
-      id: 'SQABC123DEF456',
-      check: 'echo',
-      file: 'src/example.ts',
-      reason: 'intentional fixture overlap',
-    });
-
-    expect(result).toEqual({
-      path: join(projectRoot, '.scipquery.json'),
-      suppressionCount: 1,
-    });
-    expect(loadProjectConfig(projectRoot).suppressions).toEqual([
-      {
-        id: 'SQABC123DEF456',
-        check: 'echo',
-        file: 'src/example.ts',
-        reason: 'intentional fixture overlap',
-      },
-    ]);
-  });
-
-  it('rejects suppressions without a reason', () => {
-    const projectRoot = createProject();
-
-    expect(() =>
-      addFindingSuppression(projectRoot, {
-        id: 'SQABC123DEF456',
-        reason: '',
-      }),
-    ).toThrow(/reason is required/);
   });
 });
 

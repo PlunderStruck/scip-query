@@ -213,7 +213,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'suppress',
     command: 'suppress <id>',
-    description: 'Record an accepted finding in .scipquery.json with a required reason',
+    description: 'Record an accepted finding as a file under .scipquery/suppressions/ with a required reason',
     options: withJsonOption([
       option('--reason <text>', 'Required human reason for accepting the finding'),
       option('--check <check>', 'Optional detector/check name to narrow the suppression'),
@@ -223,6 +223,19 @@ export const commandDescriptors: CommandDescriptor[] = [
     renderShape: 'custom',
     docs: doc('Maintenance', ['scip-query suppress SQABC123DEF456 --reason "intentional boundary"']),
     handler: handlers.handleSuppress,
+  },
+  {
+    id: 'effectiveness',
+    command: 'effectiveness',
+    description:
+      'Per-check effectiveness from the committed outcome ledger: findings caught, fixed by code changes, suppressed, precision, median time-to-fix',
+    options: withJsonOption([
+      option('--since <window>', 'Only count findings first caught in this window (30d, 12w, or an ISO date)'),
+      option('--check <check>', 'Restrict to one diff-gate check'),
+    ]),
+    renderShape: 'custom',
+    docs: doc('Maintenance', ['scip-query effectiveness --since 30d', 'scip-query effectiveness --check echo --json']),
+    handler: handlers.handleEffectiveness,
   },
   {
     id: 'doctor',

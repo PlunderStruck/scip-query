@@ -195,7 +195,8 @@ export function formatLowResolutionNudges(
   return lines;
 }
 
-function ledgerKey(check: string, findingId: string): string {
+/** Composite ledger identity — shared with the committed event ledger (src/storage/outcome-events.ts). */
+export function ledgerKey(check: string, findingId: string): string {
   return `${check}\0${findingId}`;
 }
 

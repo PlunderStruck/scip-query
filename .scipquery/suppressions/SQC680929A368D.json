@@ -1,0 +1,6 @@
+{
+  "id": "SQC680929A368D",
+  "reason": "formatting-only prettier catch-up in reindex-reliability.test.ts; no behavior change, reindex/index.ts coupling not implicated",
+  "expiresAt": "2026-07-21",
+  "createdAt": "2026-07-08T00:17:34.376Z"
+}

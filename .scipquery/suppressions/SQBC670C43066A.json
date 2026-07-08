@@ -1,0 +1,6 @@
+{
+  "id": "SQBC670C43066A",
+  "reason": "verified: analyzer-validation-ledger's diff-gate.ts citation still points at the intended surfaces; this diff only widened the suppression source list",
+  "expiresAt": "2026-07-21",
+  "createdAt": "2026-07-08T00:17:34.525Z"
+}

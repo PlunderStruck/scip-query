@@ -82,8 +82,13 @@ If it reports findings, fix them or record the acceptance reason. If a suppressi
 
 ```bash
 scip-query suppress <id> --reason "<specific reason>"
-scip-query config-validate
 ```
+
+`suppress` writes one file per suppression under `.scipquery/suppressions/` —
+commit that file with your change. Suppressing is a real decision, not a
+bypass: every suppression counts against that detector's precision in
+`scip-query effectiveness`, while fixing the finding counts for it. Prefer the
+fix whenever the finding is real.
 
 This step is complete only when `diff-gate` passes or every finding has a durable explanation.
 

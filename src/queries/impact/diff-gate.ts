@@ -44,6 +44,7 @@ import { similar } from '../cleanup/similar.js';
 import { unusedParams } from '../cleanup/unused-params.js';
 import { escapeRegex } from '../../core/regex-utils.js';
 import type { FindingSuppression } from '../../domain/types.js';
+import { readSuppressionDir } from '../../storage/suppression-store.js';
 import { isCallableSymbol, leafName, leafSuffix } from '../../symbols/symbol-parser.js';
 import { getGlobalLeafIndex } from '../../symbols/leaf-symbol-index.js';
 import { discoverWorkspacePackages } from '../../resolution/workspace-packages.js';
@@ -323,7 +324,13 @@ export function diffGate(
   runUnlessSkipped('unused-params', () => runUnusedParamsCheck(db, changedFiles, result));
   runUnlessSkipped('new-dead', () => runNewDeadCheck(db, impact.changedSymbols, symbolPreexistedAtBase, result));
   if (includeBaseline) runUnlessSkipped('baseline', () => runBaselineCheck(db, result));
-  applyStructuredSuppressions(result, db.config.suppressions ?? []);
+  // Suppressions come from two stores: the legacy .scipquery.json array
+  // (read-only since 0.15.0) and the conflict-free per-file directory the
+  // `suppress` command writes. Matching semantics are identical.
+  applyStructuredSuppressions(result, [
+    ...(db.config.suppressions ?? []),
+    ...readSuppressionDir(db.config.projectRoot).suppressions,
+  ]);
   result.rootCauseGroups = diffGateRootCauseGroups(result.findings);
 
   return result;

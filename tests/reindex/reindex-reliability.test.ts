@@ -370,9 +370,7 @@ describe('reindex reliability', () => {
     writeFileSync(join(projectRoot, 'packages/a/package.json'), JSON.stringify({ name: 'pkg-a' }));
     writeFileSync(
       join(projectRoot, 'packages/b/package.json'),
-      JSON.stringify(
-        opts.bDependsOnA ? { name: 'pkg-b', dependencies: { 'pkg-a': '1.0.0' } } : { name: 'pkg-b' },
-      ),
+      JSON.stringify(opts.bDependsOnA ? { name: 'pkg-b', dependencies: { 'pkg-a': '1.0.0' } } : { name: 'pkg-b' }),
     );
     writeFileSync(join(projectRoot, 'packages/a/src/a.ts'), 'export const a = 1;\n');
     writeFileSync(join(projectRoot, 'packages/b/src/b.ts'), 'export const b = 1;\n');
@@ -397,7 +395,12 @@ describe('reindex reliability', () => {
       indexerConcurrency: 2,
     });
     const commandsAfterFirst = commands.length;
-    const cachedAPath = join(cacheDir, 'language-indexes', 'typescript-projects', `${projectShardSlug('packages/a')}.scip`);
+    const cachedAPath = join(
+      cacheDir,
+      'language-indexes',
+      'typescript-projects',
+      `${projectShardSlug('packages/a')}.scip`,
+    );
     expect(existsSync(cachedAPath)).toBe(true);
     const cachedAContent = readFileSync(cachedAPath, 'utf-8');
 
@@ -493,7 +496,12 @@ describe('reindex reliability', () => {
       indexerConcurrency: 2,
     });
 
-    const cachedAPath = join(cacheDir, 'language-indexes', 'typescript-projects', `${projectShardSlug('packages/a')}.scip`);
+    const cachedAPath = join(
+      cacheDir,
+      'language-indexes',
+      'typescript-projects',
+      `${projectShardSlug('packages/a')}.scip`,
+    );
     expect(existsSync(cachedAPath)).toBe(true);
     rmSync(cachedAPath);
 
@@ -518,9 +526,7 @@ describe('reindex reliability', () => {
     expect(rerunProjects).toEqual(['packages/a', 'packages/b']);
 
     const shardA = (second.shards ?? []).find((shard) => shard.id === 'typescript:packages/a');
-    expect(shardA).toEqual(
-      expect.objectContaining({ reused: false, missReason: 'cached shard file missing on disk' }),
-    );
+    expect(shardA).toEqual(expect.objectContaining({ reused: false, missReason: 'cached shard file missing on disk' }));
   });
 
   it('re-runs every project when metadata predates per-project shard caching, without crashing', async () => {

@@ -20,7 +20,6 @@ import {
   reindex,
 } from '../../reindex/index.js';
 import {
-  addFindingSuppression,
   loadProjectConfig,
   resolveIndexStoragePaths,
   resolveWatchConfig,
@@ -28,6 +27,9 @@ import {
   validateProjectConfig,
   SUPPORTED_LANGUAGES,
 } from '../config.js';
+import { writeSuppressionFile } from '../../storage/suppression-store.js';
+import { LEDGER_DIR, LEDGER_FILENAME, readOutcomeEvents } from '../../storage/outcome-events.js';
+import { computeEffectiveness, parseSinceMs } from '../../queries/health/effectiveness.js';
 import { getIndexFreshness } from '../index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from '../project-readiness.js';
 import { Watcher } from '../watch.js';
@@ -824,7 +826,7 @@ export function handleSuppress(id: unknown, rawOpts: unknown): void {
     return;
   }
   try {
-    const result = addFindingSuppression(resolveProjectRoot(), {
+    const result = writeSuppressionFile(resolveProjectRoot(), {
       id: String(id),
       check: stringOptionValue(opts, 'check'),
       file: stringOptionValue(opts, 'file'),
@@ -835,10 +837,71 @@ export function handleSuppress(id: unknown, rawOpts: unknown): void {
       printJsonEnvelope('suppress', [String(id)], opts, result);
       return;
     }
-    console.log(`Suppression added to ${result.path} (${result.suppressionCount} total).`);
+    console.log(`Suppression written to ${result.path}.`);
   } catch (err) {
     console.error(`error: ${err instanceof Error ? err.message : err}`);
     process.exitCode = 1;
+  }
+}
+
+export function handleEffectiveness(rawOpts: unknown): void {
+  const opts = commandOptions(rawOpts);
+  const now = Date.now();
+  const sinceRaw = stringOptionValue(opts, 'since');
+  let sinceMs: number | undefined;
+  if (sinceRaw) {
+    const parsed = parseSinceMs(sinceRaw, now);
+    if (parsed === null) {
+      console.error(`error: could not parse --since "${sinceRaw}" (use 30d, 12w, or an ISO date).`);
+      process.exitCode = 1;
+      return;
+    }
+    sinceMs = parsed;
+  }
+
+  const projectRoot = resolveProjectRoot();
+  const events = readOutcomeEvents(projectRoot);
+  const report = computeEffectiveness(events, { sinceMs, check: stringOptionValue(opts, 'check') });
+
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('effectiveness', [], opts, report);
+    return;
+  }
+
+  if (report.checks.length === 0) {
+    console.log(
+      events.length === 0
+        ? `No outcome events recorded yet (${join(LEDGER_DIR, LEDGER_FILENAME)} is missing or empty). Events accrue as the diff-gate stop hook runs; commit the ledger so history is shared.`
+        : 'No findings match the requested window/check.',
+    );
+    return;
+  }
+
+  const header = ['check', 'caught', 'fixed', 'suppressed', 'open', 'moved', 'precision', 'median-days-to-fix'];
+  const rows = report.checks.map((entry) => [
+    entry.check,
+    String(entry.caught),
+    String(entry.fixed),
+    String(entry.suppressed),
+    String(entry.open),
+    String(entry.moved),
+    entry.precision === null ? '-' : `${Math.round(entry.precision * 100)}%`,
+    entry.medianDaysToFix === null ? '-' : entry.medianDaysToFix.toFixed(1),
+  ]);
+  const widths = header.map((label, column) => Math.max(label.length, ...rows.map((row) => row[column].length)));
+  const formatRow = (row: string[]) => row.map((cell, column) => cell.padEnd(widths[column])).join('  ');
+  console.log(formatRow(header));
+  for (const row of rows) console.log(formatRow(row));
+
+  const totalFixed = report.checks.reduce((sum, entry) => sum + entry.fixed, 0);
+  const totalSuppressed = report.checks.reduce((sum, entry) => sum + entry.suppressed, 0);
+  const concluded = totalFixed + totalSuppressed;
+  if (concluded > 0) {
+    console.log(
+      `\n${totalFixed} finding(s) fixed by code changes, ${totalSuppressed} suppressed — overall precision ${Math.round(
+        (totalFixed / concluded) * 100,
+      )}%.`,
+    );
   }
 }
 

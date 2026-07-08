@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
-import type { FindingSuppression, ProjectConfig, SupportedLanguage, WatchConfig } from '../domain/types.js';
+import type { ProjectConfig, SupportedLanguage, WatchConfig } from '../domain/types.js';
 
 const CONFIG_FILENAME = '.scipquery.json';
 
@@ -66,7 +66,7 @@ const INDEXER_OVERRIDE_CONFIG_KEYS = new Set(['pnpmWorkspaces', 'projectMode', '
 const LOCALITY_CONFIG_KEYS = new Set(['architecturalBoundarySegments']);
 const DOCS_CONFIG_KEYS = new Set(['snapshotPaths']);
 const DECLARED_COUPLING_CONFIG_KEYS = new Set(['name', 'files', 'reason']);
-const SUPPRESSION_CONFIG_KEYS = new Set(['id', 'check', 'file', 'reason', 'expiresAt']);
+const SUPPRESSION_CONFIG_KEYS = new Set(['id', 'check', 'file', 'reason', 'expiresAt', 'createdAt']);
 const COVERAGE_CONTRACT_CONFIG_KEYS = new Set(['name', 'file', 'keys', 'mustEqual', 'allowExtra']);
 const COVERAGE_CONTRACT_KEY_SPEC_KEYS = new Set(['type', 'identifier', 'marker']);
 const COVERAGE_CONTRACT_SOURCE_SPEC_KEYS = new Set(['type', 'path', 'pattern']);
@@ -519,25 +519,6 @@ export function initProjectConfig(projectRoot: string, languages: string[]): str
 
   writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
   return configPath;
-}
-
-export function addFindingSuppression(
-  projectRoot: string,
-  suppression: FindingSuppression,
-): { path: string; suppressionCount: number } {
-  const configPath = join(projectRoot, CONFIG_FILENAME);
-  const config = loadProjectConfig(projectRoot);
-  const next: ProjectConfig = {
-    ...config,
-    suppressions: [...(config.suppressions ?? []), suppression],
-  };
-  const errors = validateProjectConfig(next, { projectRoot }).filter((diagnostic) => diagnostic.level === 'error');
-  if (errors.length > 0) {
-    const detail = errors.map((diagnostic) => `${diagnostic.path}: ${diagnostic.message}`).join('; ');
-    throw new Error(`invalid suppression: ${detail}`);
-  }
-  writeFileSync(configPath, JSON.stringify(next, null, 2) + '\n');
-  return { path: configPath, suppressionCount: next.suppressions?.length ?? 0 };
 }
 
 function ensureDir(dir: string): string {

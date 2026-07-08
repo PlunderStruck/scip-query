@@ -2,7 +2,16 @@
 
 All notable changes to `scip-query` are documented here. This file starts at 0.11.0; everything below covers behavior changes made since the 0.10.12 release.
 
-## [0.14.0]
+## [0.15.0]
+
+### Breaking (behavior change for one command)
+
+- **`suppress` writes one file per suppression instead of appending to `.scipquery.json`.** New suppressions land in `.scipquery/suppressions/<finding-id>.json` (check-level suppressions get a stable `CHECK-<hash>.json` name), stamped with `createdAt`. One-file-per-suppression makes concurrent branches merge without conflict and stops the config file from churning on every acceptance. Existing `suppressions[]` entries in `.scipquery.json` keep working (the gate reads both stores, identical matching semantics) — they are just no longer written. Commit the suppression files with your change.
+
+### Notable (new capabilities)
+
+- **Committed outcome-event ledger.** Hook-mode `diff-gate` runs now mirror finding transitions (caught / resolved / suppressed / reopened) into `.scipquery/ledger/events.jsonl` — an append-only, one-event-per-line log stamped with the HEAD commit and, when known, the finding's SCIP symbol. A scoped `.gitattributes` (`merge=union`) is written alongside it, so concurrent appends from different branches merge without conflict; read-side dedupe by `(check, findingId, event, commit)` absorbs replays. Unlike the per-machine `evidence.db` ledger, this file is meant to be committed: outcome history survives re-clones and aggregates across every machine and agent working the repo. Ledger writes never block the hook — failures degrade to a stderr note.
+- **New command: `effectiveness`.** Reads the committed event ledger and reports, per diff-gate check: findings caught, fixed by code changes (disappeared without a suppression), suppressed, still open, reopened, `moved` (rename noise — a resolved id whose symbol was re-caught under a new id at the same commit), precision (fixed ÷ concluded), and median days-to-fix. `--since 30d|12w|<ISO date>` windows by when the finding was caught, `--check <name>` filters, `--json` emits the standard envelope. This is the tool keeping score on itself: suppressions count against a detector's precision, fixes count for it.
 
 ### Breaking (behavior change for one config key)
 

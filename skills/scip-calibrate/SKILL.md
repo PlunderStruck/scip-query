@@ -8,6 +8,7 @@ commands:
   - scip-query dead --json
   - scip-query similar <symbol>
   - scip-query config-validate
+  - scip-query effectiveness --since 30d --json
 ---
 
 # scip-calibrate
@@ -116,9 +117,12 @@ filed upstream.
 
 The finding-outcome ledger keeps calibrating for you: once the repo uses
 diff-gate, per-detector precision is recomputed from real outcomes
-(`detectorPrecision` in `health --json`). Re-run this protocol only after
-major detector upgrades or when the ledger's precision numbers drift from
-what you measured. Write the calibration report to
+(`detectorPrecision` in `health --json`), and the committed event ledger
+makes those outcomes durable and queryable — `scip-query effectiveness
+--since 30d --json` reports per-check caught/fixed/suppressed counts,
+precision, and median days-to-fix from `.scipquery/ledger/events.jsonl`.
+Re-run this protocol only after major detector upgrades or when the
+ledger's precision numbers drift from what you measured. Write the calibration report to
 `docs/validation/YYYY-MM-DD-external-calibration-<repo>.md` in the shape of
 the exemplars this skill was distilled from — battery table, retro-gate
 walls, per-detector verdicts, noise archetypes, caps and deviations.

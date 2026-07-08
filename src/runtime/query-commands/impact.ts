@@ -24,9 +24,11 @@ import { formatGateBlockReason, isStopHookReentry, readHookInput } from '../agen
 import {
   formatLowResolutionNudges,
   formatUnresolvedStreakLine,
+  readLedgerRecords,
   updateFindingOutcomeLedger,
 } from '../../queries/health/finding-outcome-ledger.js';
 import type { ObservedFinding } from '../../queries/health/finding-outcome-ledger.js';
+import { appendOutcomeEvents, deriveOutcomeEvents, headCommit } from '../../storage/outcome-events.js';
 import { commandAnalysisBudget, formatAnalysisBudgetDisclosure, renderHeuristicNotice } from '../cli-support.js';
 import { displayRange, displaySnippet, render } from '../render.js';
 import { symbolResolutionBefore, symbolResolutionEmptyMessage, withSymbolResolutionJson } from './symbol-resolution.js';
@@ -254,7 +256,32 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
       })),
     ];
     const now = Date.now();
+    const previousLedger = readLedgerRecords(db);
     const ledger = updateFindingOutcomeLedger(db, observed, result.checksRun, now);
+
+    // Mirror this run's ledger transitions into the committed event log
+    // (.scipquery/ledger/events.jsonl) so effectiveness stats survive
+    // re-clones and merge across branches. Never let ledger I/O break the
+    // hook contract below.
+    try {
+      const symbolByFindingId = new Map<string, string>();
+      for (const finding of result.findings) {
+        if (finding.symbol) symbolByFindingId.set(finding.id, finding.symbol);
+      }
+      for (const entry of result.suppressed) {
+        if (entry.finding.symbol) symbolByFindingId.set(entry.finding.id, entry.finding.symbol);
+      }
+      const events = deriveOutcomeEvents(
+        previousLedger,
+        ledger,
+        symbolByFindingId,
+        headCommit(db.config.projectRoot),
+        now,
+      );
+      appendOutcomeEvents(db.config.projectRoot, events);
+    } catch (err) {
+      console.error(`note: outcome event ledger not updated: ${err instanceof Error ? err.message : err}`);
+    }
 
     // Hook contract (Claude Code and Codex): silent exit 0 = allow stop,
     // exit 2 with stderr = block and feed the reason back to the agent.

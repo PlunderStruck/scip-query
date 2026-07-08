@@ -198,6 +198,8 @@ export interface FindingSuppression {
   reason: string;
   /** ISO date after which the suppression no longer applies. */
   expiresAt?: string;
+  /** ISO timestamp stamped when the suppression file was written. */
+  createdAt?: string;
 }
 
 export interface SemanticConfig {

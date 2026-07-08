@@ -224,7 +224,21 @@ Accepted findings can be recorded without weakening the rest of the gate:
 scip-query suppress SQABC123DEF456 --check echo --reason "intentional compatibility shim"
 ```
 
-This appends a reasoned entry to `.scipquery.json`; `config-validate` requires every suppression to include a reason plus either a stable finding id or both `check` and `file`. Check+file suppressions are allowed but warn because they waive every matching finding in that file. `diff-gate --json` reports both active and suppressed findings.
+This writes one file per suppression under `.scipquery/suppressions/` — commit it with your change. One-file-per-suppression means two branches suppressing different findings merge without conflict; the legacy `suppressions[]` array in `.scipquery.json` is still honored (read-only). Every suppression requires a reason plus either a stable finding id or a `check` (optionally narrowed by `file`). Check+file suppressions are allowed but warn because they waive every matching finding in that file. `diff-gate --json` reports both active and suppressed findings.
+
+**12. Measure whether the gate is earning its keep.** Every hook-mode `diff-gate` run appends finding transitions to a committed, merge-conflict-free ledger (`.scipquery/ledger/events.jsonl`, one JSON event per line under a scoped `merge=union` gitattribute). A finding that disappears without a suppression was fixed; a suppressed finding was noise or an accepted trade-off — the tool keeps score on itself:
+
+```bash
+scip-query effectiveness --since 30d
+```
+
+```
+check       caught  fixed  suppressed  open  moved  precision  median-days-to-fix
+echo        14      11     2           1     0      85%        0.8
+new-dead    6       5      0           1     0      100%       0.3
+```
+
+`precision` is fixed ÷ (fixed + suppressed) — how often acting on the check was the right call. `moved` separates rename churn from real fixes. Filter with `--check <name>`, window with `--since 30d|12w|<ISO date>`, and get machine-readable output with `--json`. Because the ledger is committed, the numbers survive re-clones and aggregate across every machine and agent working the repo.
 
 Before any edit, `plan-context <target>` bundles the structural picture — definitions, references, call graph, blast radius — plus a HISTORY section: churn, fix-commit density, and the files that usually change together with the target ("editing this usually means editing these").
 
