@@ -90,7 +90,11 @@ describe('validateProjectConfig', () => {
       hooks: { router: 'single', routers: true },
       indexer: { typescript: { projectMode: 'single', packageManager: 'pnpm' } },
       entryRoots: { files: [], extra: [] },
-      semantic: { typescript: { tsconfigs: [], project: 'tsconfig.json' }, ruby: {} },
+      semantic: {
+        typescript: { tsconfigs: [], project: 'tsconfig.json' },
+        rust: { rustAnalyzerPath: 'rust-analyzer', extra: true },
+        ruby: {},
+      },
       locality: { architecturalBoundarySegments: [], boundarySegments: [] },
       declaredCouplings: [{ name: 'pair', files: ['a.ts', 'b.ts'], owner: 'runtime' }],
       suppressions: [{ id: 'SQABC123DEF456', reason: 'accepted', owner: 'runtime' }],
@@ -115,6 +119,11 @@ describe('validateProjectConfig', () => {
         }),
         expect.objectContaining({
           level: 'warning',
+          path: 'semantic.rust.extra',
+          message: 'Unknown config key.',
+        }),
+        expect.objectContaining({
+          level: 'warning',
           path: 'locality.boundarySegments',
           message: 'Unknown config key.',
         }),
@@ -130,6 +139,20 @@ describe('validateProjectConfig', () => {
         }),
       ]),
     );
+  });
+
+  it('validates Rust semantic config shape', () => {
+    const diagnostics = validateProjectConfig({
+      semantic: { rust: { rustAnalyzerPath: '  ' } },
+    });
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        path: 'semantic.rust.rustAnalyzerPath',
+        message: 'Rust analyzer path must be a non-empty string.',
+      }),
+    ]);
   });
 
   it('warns when a structured suppression has expired', () => {

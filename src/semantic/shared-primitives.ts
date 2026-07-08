@@ -3,19 +3,22 @@ import type { ScipDatabase } from '../storage/db.js';
 import {
   projectEvidenceFingerprint,
   readCachedSemanticReferences,
+  sha256Hex,
   writeCachedSemanticReferencesBatch,
   type SemanticReferenceCacheEntry,
 } from '../storage/evidence-cache.js';
+import { createProjectEvidenceProduct, evidenceProductInvalidation } from '../storage/evidence-products.js';
 import type {
   SemanticAvailability,
   SemanticCallee,
   SemanticImportUsage,
   SemanticProvider,
+  SemanticProviderLanguage,
   SemanticReference,
 } from './types.js';
-import { getSemanticProvider } from './provider-cache.js';
-import { isTypeScriptLike } from './typescript/source-kinds.js';
+import { getSemanticProvider, semanticProviderLanguageForPath } from './provider-cache.js';
 import { profileEnabled, profileSpan } from '../instrumentation/profile.js';
+import { rustSemanticEngineIdentity } from './rust/engine-identity.js';
 
 export type SemanticEvidenceSlot =
   | 'semantic-references'
@@ -26,24 +29,57 @@ export type SemanticEvidenceSlot =
 
 export interface SemanticEvidenceCapability extends SemanticAvailability {
   slot: SemanticEvidenceSlot;
-  language: 'typescript';
+  language: SemanticProviderLanguage;
+}
+
+export interface SemanticReferenceMaterializationResult {
+  definitions: number;
+  inMemoryHits: number;
+  cacheHits: number;
+  misses: number;
+  unkeyed: number;
+  skippedUnsupportedLanguage: number;
+  parseFailures: number;
+  computed: number;
+  cacheWrites: number;
 }
 
 export interface SemanticEvidenceProduct {
   capability(slot: SemanticEvidenceSlot, relativePath?: string): SemanticEvidenceCapability;
   importUsage(file: string): SemanticImportUsage[];
   references(definition: IndexedDefinition): SemanticReference[];
+  materializeReferences(definitions: ReadonlyArray<IndexedDefinition>): SemanticReferenceMaterializationResult;
   callerMap(definitions: ReadonlyArray<IndexedDefinition>): Map<number, Set<string>>;
   calleeMap(definitions: ReadonlyArray<IndexedDefinition | SymbolMatch>): Map<number, SemanticCallee[]>;
   signature(definition: IndexedDefinition): string | null;
 }
 
+interface CachedSemanticSignature {
+  signature: string | null;
+}
+
+const RUST_SEMANTIC_IMPORT_USAGE_CACHE = createProjectEvidenceProduct<SemanticImportUsage[]>({
+  kind: 'semantic-import-usage',
+  invalidation: evidenceProductInvalidation('semantic-import-usage'),
+  serialize: (value) => JSON.stringify(value),
+  deserialize: parseCachedImportUsage,
+});
+
+const RUST_SEMANTIC_SIGNATURE_CACHE = createProjectEvidenceProduct<CachedSemanticSignature>({
+  kind: 'semantic-signatures',
+  invalidation: evidenceProductInvalidation('semantic-signatures'),
+  serialize: (value) => JSON.stringify(value),
+  deserialize: parseCachedSignature,
+});
+
 export function semanticEvidenceProduct(db: ScipDatabase): SemanticEvidenceProduct {
+  const materializedReferences = new Map<number, SemanticReference[]>();
   return {
     capability: (slot, relativePath) => semanticEvidenceCapability(db, slot, relativePath),
     importUsage: (file) => buildSemanticImportUsage(db, file),
     references: (definition) => buildSemanticReferences(db, definition),
-    callerMap: (definitions) => buildSemanticCallerMap(db, definitions),
+    materializeReferences: (definitions) => materializeSemanticReferenceBatch(db, definitions, materializedReferences),
+    callerMap: (definitions) => buildSemanticCallerMap(db, definitions, materializedReferences),
     calleeMap: (definitions) => buildSemanticCalleeMap(db, definitions),
     signature: (definition) => buildSemanticSignature(db, definition),
   };
@@ -55,9 +91,16 @@ export function semanticImportUsage(db: ScipDatabase, file: string): SemanticImp
 }
 
 function buildSemanticImportUsage(db: ScipDatabase, file: string): SemanticImportUsage[] {
-  const provider = availableTypeScriptProvider(db, file);
+  const cacheFingerprint = semanticProjectSlotCacheFingerprint(db, 'semantic-import-usage', file);
+  if (cacheFingerprint) {
+    const cached = RUST_SEMANTIC_IMPORT_USAGE_CACHE.read(db, file, cacheFingerprint);
+    if (cached) return cached;
+  }
+  const provider = availableSemanticProvider(db, file);
   if (!provider) return [];
-  return provider.importUsage(file);
+  const usage = provider.importUsage(file);
+  if (cacheFingerprint) RUST_SEMANTIC_IMPORT_USAGE_CACHE.write(db, file, cacheFingerprint, usage);
+  return usage;
 }
 
 // scip-query: ignore-wrapper — legacy semantic helper kept for source-compatible callers; the product owns access.
@@ -66,7 +109,7 @@ export function semanticReferences(db: ScipDatabase, definition: IndexedDefiniti
 }
 
 function buildSemanticReferences(db: ScipDatabase, definition: IndexedDefinition): SemanticReference[] {
-  const provider = availableTypeScriptProvider(db, definition.relativePath);
+  const provider = availableSemanticProvider(db, definition.relativePath);
   if (!provider) return [];
   return provider.referencesFor(definition);
 }
@@ -82,55 +125,89 @@ export function semanticCallerMap(
 function buildSemanticCallerMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<IndexedDefinition>,
+  materializedReferences = new Map<number, SemanticReference[]>(),
 ): Map<number, Set<string>> {
-  const profiling = profileEnabled();
   const result = new Map<number, Set<string>>();
+  const materialization = materializeSemanticReferenceBatch(db, definitions, materializedReferences);
+  let callerFiles = 0;
+  profileSpan(
+    'semantic.callers.from-references',
+    () => {
+      for (const definition of definitions) {
+        callerFiles += recordCallerFilesFromReferences(
+          db,
+          result,
+          definition,
+          materializedReferences.get(definition.symbolId) ?? [],
+        );
+      }
+    },
+    () => ({
+      definitions: definitions.length,
+      materialized: materialization.definitions,
+      inMemoryHits: materialization.inMemoryHits,
+      resultRows: result.size,
+      callerFiles,
+    }),
+  );
+  return result;
+}
+
+function materializeSemanticReferenceBatch(
+  db: ScipDatabase,
+  definitions: ReadonlyArray<IndexedDefinition>,
+  materializedReferences: Map<number, SemanticReference[]>,
+): SemanticReferenceMaterializationResult {
   const projectFingerprint = projectEvidenceFingerprint(db);
   const cacheWrites: SemanticReferenceCacheEntry[] = [];
-  const misses: IndexedDefinition[] = [];
+  const misses: Array<{ definition: IndexedDefinition; cacheFingerprint: string }> = [];
   const unkeyed: IndexedDefinition[] = [];
-  let skippedNonTs = 0;
+  let skippedUnsupportedLanguage = 0;
+  let inMemoryHits = 0;
   let cacheHits = 0;
   let parseFailures = 0;
-  let callerFiles = 0;
+  let computedRows = 0;
 
   profileSpan(
     'semantic.references.cache-scan',
     () => {
       for (const definition of definitions) {
-        if (!projectFingerprint || !isTypeScriptLike(definition.relativePath)) {
-          if (profiling && !isTypeScriptLike(definition.relativePath)) skippedNonTs += 1;
+        if (materializedReferences.has(definition.symbolId)) {
+          inMemoryHits += 1;
+          continue;
+        }
+        const cacheFingerprint = semanticReferenceCacheFingerprint(db, projectFingerprint, definition.relativePath);
+        if (!cacheFingerprint) {
+          if (!semanticProviderLanguageForPath(definition.relativePath)) skippedUnsupportedLanguage += 1;
           unkeyed.push(definition);
           continue;
         }
-        const cached = readCachedSemanticReferences(db, definition.relativePath, definition.symbol, projectFingerprint);
+        const cached = readCachedSemanticReferences(db, definition.relativePath, definition.symbol, cacheFingerprint);
         if (cached !== null) {
           const references = parseCachedReferences(cached);
           if (references) {
-            if (profiling) cacheHits += 1;
-            callerFiles += recordCallerFilesFromReferences(db, result, definition, references);
+            cacheHits += 1;
+            materializedReferences.set(definition.symbolId, references);
             continue;
           }
-          if (profiling) parseFailures += 1;
+          parseFailures += 1;
         }
-        misses.push(definition);
+        misses.push({ definition, cacheFingerprint });
       }
     },
     () => ({
       definitions: definitions.length,
-      skippedNonTs,
+      skippedUnsupportedLanguage,
       cacheHits,
       parseFailures,
       misses: misses.length,
       unkeyed: unkeyed.length,
-      resultRows: result.size,
-      callerFiles,
+      inMemoryHits,
     }),
   );
 
   if (misses.length > 0 || unkeyed.length > 0) {
-    const computeInput = [...unkeyed, ...misses];
-    let computedRows = 0;
+    const computeInput = [...unkeyed, ...misses.map((miss) => miss.definition)];
     const computed = profileSpan(
       'semantic.references.compute-misses',
       () => {
@@ -146,14 +223,19 @@ function buildSemanticCallerMap(
       }),
     );
     for (const definition of computeInput) {
-      callerFiles += recordCallerFilesFromReferences(db, result, definition, computed.get(definition.symbolId) ?? []);
+      if (computed.has(definition.symbolId)) {
+        materializedReferences.set(definition.symbolId, computed.get(definition.symbolId) ?? []);
+      }
     }
-    if (projectFingerprint) {
-      for (const definition of misses) {
+    for (const { definition, cacheFingerprint } of misses) {
+      if (
+        computed.has(definition.symbolId) &&
+        semanticEvidenceCapability(db, 'semantic-references', definition.relativePath).available
+      ) {
         cacheWrites.push({
           relativePath: definition.relativePath,
           symbol: definition.symbol,
-          projectFingerprint,
+          projectFingerprint: cacheFingerprint,
           payload: JSON.stringify(computed.get(definition.symbolId) ?? []),
         });
       }
@@ -161,22 +243,44 @@ function buildSemanticCallerMap(
   }
 
   if (cacheWrites.length > 0) {
-    const providerAvailable = semanticEvidenceCapability(db, 'semantic-references').available;
-    if (providerAvailable) {
-      profileSpan(
-        'semantic.references.cache-write',
-        () => writeCachedSemanticReferencesBatch(db, cacheWrites),
-        () => ({ entries: cacheWrites.length }),
-      );
-    } else {
-      profileSpan(
-        'semantic.references.cache-write-skip',
-        () => undefined,
-        () => ({ reason: 'provider-unavailable', entries: cacheWrites.length }),
-      );
-    }
+    profileSpan(
+      'semantic.references.cache-write',
+      () => writeCachedSemanticReferencesBatch(db, cacheWrites),
+      () => ({ entries: cacheWrites.length }),
+    );
   }
-  return result;
+  return {
+    definitions: definitions.length,
+    inMemoryHits,
+    cacheHits,
+    misses: misses.length,
+    unkeyed: unkeyed.length,
+    skippedUnsupportedLanguage,
+    parseFailures,
+    computed: computedRows,
+    cacheWrites: cacheWrites.length,
+  };
+}
+
+function semanticReferenceCacheFingerprint(
+  db: ScipDatabase,
+  projectFingerprint: string | null,
+  relativePath: string,
+): string | null {
+  if (!projectFingerprint) return null;
+  const language = semanticProviderLanguageForPath(relativePath);
+  if (language === 'typescript') return projectFingerprint;
+  if (language === 'rust') {
+    return sha256Hex(
+      JSON.stringify({
+        kind: 'semantic-references',
+        language,
+        engine: rustSemanticEngineIdentity(db.config.projectRoot),
+        projectFingerprint,
+      }),
+    );
+  }
+  return null;
 }
 
 function semanticReferenceMap(
@@ -195,7 +299,7 @@ function semanticReferenceMap(
       const bulkGroups = new Map<SemanticProvider, IndexedDefinition[]>();
       const scalarDefinitions: Array<{ provider: SemanticProvider; definition: IndexedDefinition }> = [];
       for (const definition of definitions) {
-        const provider = availableTypeScriptProvider(db, definition.relativePath);
+        const provider = availableSemanticProvider(db, definition.relativePath);
         if (!provider) {
           if (profiling) providerMisses += 1;
           continue;
@@ -308,7 +412,7 @@ function buildSemanticCalleeMap(
       const bulkGroups = new Map<SemanticProvider, IndexedDefinition[]>();
       const scalarDefinitions: Array<{ provider: SemanticProvider; definition: IndexedDefinition }> = [];
       for (const definition of definitions) {
-        const provider = availableTypeScriptProvider(db, definition.relativePath);
+        const provider = availableSemanticProvider(db, definition.relativePath);
         if (!provider) {
           if (profiling) providerMisses += 1;
           continue;
@@ -374,9 +478,61 @@ export function semanticSignature(db: ScipDatabase, definition: IndexedDefinitio
 }
 
 function buildSemanticSignature(db: ScipDatabase, definition: IndexedDefinition): string | null {
-  const provider = availableTypeScriptProvider(db, definition.relativePath);
+  const cacheFingerprint = semanticProjectSlotCacheFingerprint(db, 'semantic-signatures', definition.relativePath);
+  const cacheKey = semanticSignatureCacheKey(definition);
+  if (cacheFingerprint) {
+    const cached = RUST_SEMANTIC_SIGNATURE_CACHE.read(db, cacheKey, cacheFingerprint);
+    if (cached) return cached.signature;
+  }
+  const provider = availableSemanticProvider(db, definition.relativePath);
   if (!provider) return null;
-  return provider.signatureFor(definition);
+  const signature = provider.signatureFor(definition);
+  if (cacheFingerprint) RUST_SEMANTIC_SIGNATURE_CACHE.write(db, cacheKey, cacheFingerprint, { signature });
+  return signature;
+}
+
+function semanticProjectSlotCacheFingerprint(
+  db: ScipDatabase,
+  slot: 'semantic-import-usage' | 'semantic-signatures',
+  relativePath: string,
+): string | null {
+  const projectFingerprint = projectEvidenceFingerprint(db);
+  if (!projectFingerprint) return null;
+  const language = semanticProviderLanguageForPath(relativePath);
+  if (language !== 'rust') return null;
+  return sha256Hex(
+    JSON.stringify({
+      kind: slot,
+      language,
+      engine: rustSemanticEngineIdentity(db.config.projectRoot),
+      projectFingerprint,
+    }),
+  );
+}
+
+function semanticSignatureCacheKey(definition: IndexedDefinition): string {
+  return `${definition.relativePath}\0${definition.symbol}`;
+}
+
+function parseCachedImportUsage(payload: string): SemanticImportUsage[] | null {
+  try {
+    const parsed = JSON.parse(payload) as unknown;
+    return Array.isArray(parsed) ? (parsed as SemanticImportUsage[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseCachedSignature(payload: string): CachedSemanticSignature | null {
+  try {
+    const parsed = JSON.parse(payload) as unknown;
+    if (!parsed || typeof parsed !== 'object') return null;
+    const signature = (parsed as { signature?: unknown }).signature;
+    if (signature !== null && typeof signature !== 'string') return null;
+    return { signature };
+  } catch {
+    return null;
+  }
 }
 
 function semanticEvidenceCapability(
@@ -384,32 +540,33 @@ function semanticEvidenceCapability(
   slot: SemanticEvidenceSlot,
   relativePath?: string,
 ): SemanticEvidenceCapability {
-  if (relativePath !== undefined && !isTypeScriptLike(relativePath)) {
+  const language = semanticProviderLanguageForPath(relativePath);
+  if (!language) {
     return {
       slot,
       language: 'typescript',
       available: false,
-      reason: 'semantic evidence is only available for TypeScript files',
+      reason: 'semantic evidence is only available for TypeScript or Rust files',
     };
   }
   try {
     return {
       slot,
-      language: 'typescript',
+      language,
       ...getSemanticProvider(db, relativePath).availability(),
     };
   } catch (error) {
     return {
       slot,
-      language: 'typescript',
+      language,
       available: false,
       reason: error instanceof Error ? error.message : String(error),
     };
   }
 }
 
-function availableTypeScriptProvider(db: ScipDatabase, relativePath: string): SemanticProvider | null {
-  if (!isTypeScriptLike(relativePath)) return null;
+function availableSemanticProvider(db: ScipDatabase, relativePath: string): SemanticProvider | null {
+  if (!semanticProviderLanguageForPath(relativePath)) return null;
   const provider = getSemanticProvider(db, relativePath);
   return provider.availability().available ? provider : null;
 }

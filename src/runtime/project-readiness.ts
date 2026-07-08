@@ -3,6 +3,8 @@ import type { ProjectConfig, SupportedLanguage } from '../domain/types.js';
 import { detectLanguages } from '../reindex/detect.js';
 import { getIndexerConfig } from '../reindex/indexers.js';
 import { getIndexerDependencyStatus } from '../reindex/install.js';
+import type { SemanticProviderLanguage } from '../semantic/types.js';
+import { getRustSemanticStatus } from '../semantic/rust/status.js';
 import { getTypeScriptSemanticStatus } from '../semantic/typescript/status.js';
 import { detectCheckers } from './cleanup-verify.js';
 import { probeAstLanguageRuntime, type LanguageRuntimeProbe } from '../source/ast/ast-runtime.js';
@@ -21,11 +23,12 @@ export interface LanguageReadiness {
 }
 
 export interface SemanticReadiness {
-  language: 'typescript';
+  language: SemanticProviderLanguage;
   available: boolean;
   dependencyAvailable: boolean;
   tsconfigPath?: string;
   tsconfigPaths?: string[];
+  resolvedBinary?: string;
   reason?: string;
 }
 
@@ -35,6 +38,7 @@ export interface SemanticReadiness {
 export interface ProjectReadiness {
   languages: SupportedLanguage[];
   indexers: LanguageReadiness[];
+  semantics?: SemanticReadiness[];
   semantic?: SemanticReadiness;
   checkers: Array<{ label: string; coversExtensions: string[] }>;
   gitAvailable: boolean;
@@ -130,18 +134,14 @@ export function getProjectReadiness(projectRoot: string, config: ProjectConfig):
       resolvedBinary: status.resolvedBinary ?? undefined,
     };
   });
-  const semantic = languages.includes('typescript')
-    ? {
-        language: 'typescript' as const,
-        ...getTypeScriptSemanticStatus(projectRoot, config.semantic?.typescript?.tsconfigs),
-      }
-    : undefined;
+  const semantics = semanticReadinessForLanguages(projectRoot, languages, config);
+  const semantic = semanticReadinessForLanguage({ semantics }, 'typescript');
   const checkers = detectCheckers(projectRoot).map((checker) => ({
     label: checker.label,
     coversExtensions: checker.coversExtensions,
   }));
 
-  return { languages, indexers, semantic, checkers, gitAvailable: gitAvailable(projectRoot) };
+  return { languages, indexers, semantics, semantic, checkers, gitAvailable: gitAvailable(projectRoot) };
 }
 
 export function getProjectCapabilities(
@@ -160,7 +160,8 @@ export function getProjectCapabilities(
         ? 'available'
         : 'partial';
   const graphDataAvailable = graphStatus !== 'unavailable';
-  const semanticStatus = readiness.semantic ? (readiness.semantic.available ? 'available' : 'partial') : 'unavailable';
+  const typeScriptSemantic = semanticReadinessForLanguage(readiness, 'typescript');
+  const semanticStatus = typeScriptSemantic ? (typeScriptSemantic.available ? 'available' : 'partial') : 'unavailable';
 
   return {
     languages: readiness.languages,
@@ -188,10 +189,10 @@ export function getProjectCapabilities(
         label: 'TypeScript semantic provider',
         status: semanticStatus,
         evidence: 'semantic',
-        reason: readiness.semantic
-          ? readiness.semantic.available
+        reason: typeScriptSemantic
+          ? typeScriptSemantic.available
             ? 'ts-morph can load the configured TypeScript project.'
-            : (readiness.semantic.reason ?? 'TypeScript semantic checks will fall back to SCIP/source evidence.')
+            : (typeScriptSemantic.reason ?? 'TypeScript semantic checks will fall back to SCIP/source evidence.')
           : 'TypeScript is not detected/configured for this project.',
       },
       {
@@ -239,16 +240,7 @@ function languageCapability(
       : 'unavailable';
   const graphDataAvailable = indexingStatus !== 'unavailable';
   const sourceSupport = sourceFactCapability(language, opts.runtimeProbe);
-  const semantic =
-    language === 'typescript'
-      ? typescriptSemanticCapability(readiness)
-      : {
-          id: 'semantic',
-          label: 'Semantic provider',
-          status: 'unavailable' as const,
-          evidence: 'semantic' as const,
-          reason: `No semantic provider is registered for ${language}; commands use graph and source evidence instead.`,
-        };
+  const semantic = languageSemanticCapability(readiness, language);
   const coveredByCheckers = checkersForLanguage(readiness, language);
 
   return {
@@ -373,25 +365,74 @@ function primaryParserFallbackMode(language: SupportedLanguage): ParserFallbackM
   return capabilities?.imports ?? capabilities?.exports ?? capabilities?.reExports ?? null;
 }
 
-function typescriptSemanticCapability(readiness: ProjectReadiness): ProjectCapability {
-  if (!readiness.semantic) {
+function semanticReadinessForLanguages(
+  projectRoot: string,
+  languages: readonly SupportedLanguage[],
+  config: ProjectConfig,
+): SemanticReadiness[] {
+  const semantics: SemanticReadiness[] = [];
+  if (languages.includes('typescript')) {
+    semantics.push({
+      language: 'typescript',
+      ...getTypeScriptSemanticStatus(projectRoot, config.semantic?.typescript?.tsconfigs),
+    });
+  }
+  if (languages.includes('rust')) {
+    semantics.push({
+      language: 'rust',
+      ...getRustSemanticStatus(projectRoot),
+    });
+  }
+  return semantics;
+}
+
+function semanticReadinessEntries(readiness: Pick<ProjectReadiness, 'semantic' | 'semantics'>): SemanticReadiness[] {
+  if (readiness.semantics) return readiness.semantics;
+  return readiness.semantic ? [readiness.semantic] : [];
+}
+
+function semanticReadinessForLanguage(
+  readiness: Pick<ProjectReadiness, 'semantic' | 'semantics'>,
+  language: SemanticProviderLanguage,
+): SemanticReadiness | undefined {
+  return semanticReadinessEntries(readiness).find((entry) => entry.language === language);
+}
+
+function languageSemanticCapability(readiness: ProjectReadiness, language: SupportedLanguage): ProjectCapability {
+  if (language !== 'typescript' && language !== 'rust') {
     return {
       id: 'semantic',
       label: 'Semantic provider',
       status: 'unavailable',
       evidence: 'semantic',
-      reason: 'TypeScript is not detected/configured for this project.',
+      reason: `No semantic provider is registered for ${language}; commands use graph and source evidence instead.`,
+    };
+  }
+
+  const semantic = semanticReadinessForLanguage(readiness, language);
+  if (!semantic) {
+    return {
+      id: 'semantic',
+      label: 'Semantic provider',
+      status: 'unavailable',
+      evidence: 'semantic',
+      reason:
+        language === 'typescript'
+          ? 'TypeScript is not detected/configured for this project.'
+          : 'Rust is not detected/configured for this project.',
     };
   }
 
   return {
     id: 'semantic',
     label: 'Semantic provider',
-    status: readiness.semantic.available ? 'available' : 'partial',
+    status: semantic.available ? 'available' : semantic.dependencyAvailable ? 'partial' : 'unavailable',
     evidence: 'semantic',
-    reason: readiness.semantic.available
-      ? 'ts-morph can load the configured TypeScript project.'
-      : (readiness.semantic.reason ?? 'TypeScript semantic checks fall back to SCIP/source evidence.'),
+    reason: semantic.available
+      ? language === 'typescript'
+        ? 'ts-morph can load the configured TypeScript project.'
+        : 'rust-analyzer semantic queries are available.'
+      : (semantic.reason ?? `${language} semantic checks fall back to SCIP/source evidence.`),
   };
 }
 

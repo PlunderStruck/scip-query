@@ -36,7 +36,8 @@ export function renderDeadGroup(
     console.log(`  ${file}`);
     bucket.sort((a, b) => a.startLine - b.startLine);
     for (const s of bucket) {
-      console.log(`    ${displayRange(s.startLine, s.endLine)}  (${s.loc} LOC)  ${s.shortName}`);
+      const implicitUsage = s.implicitUsageReason ? `  [implicit usage: ${s.implicitUsageReason}]` : '';
+      console.log(`    ${displayRange(s.startLine, s.endLine)}  (${s.loc} LOC)  ${s.shortName}${implicitUsage}`);
     }
   }
 }

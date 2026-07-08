@@ -1,0 +1,7 @@
+{
+  "id": "SQ66D5E3B3BB5D",
+  "check": "new-dead",
+  "file": "src/semantic/typescript/tsserver-provider.ts",
+  "reason": "Accepted interface/factory false positive: TsServerSemanticProvider is constructed by createTsServerProvider and exercised through dynamic compare-mode imports in tests. The class is the candidate provider implementation, not an unreferenced public surface.",
+  "createdAt": "2026-07-08T00:00:00.000Z"
+}

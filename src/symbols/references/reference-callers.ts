@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { detectAstLanguage, frameworkSourceReferences, getCallSites } from '../../source/ast.js';
-import { semanticCallerMap } from '../../semantic/shared-primitives.js';
+import { semanticEvidenceProduct } from '../../semantic/shared-primitives.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { mentionReferenceChunkRows } from '../../storage/scip-mentions.js';
 import type { IndexedDefinition, SymbolLocation } from '../../domain/types.js';
@@ -45,7 +45,8 @@ export function buildCrossFileCallerMap(
   addChunkMentionCallers(db, map, effectiveDefinitions, targetSymbolIds);
   addRustAttrCallers(db, map, docs, leafIndex, targetSymbolIds, targetLeaves);
   if (opts.semantic !== false) {
-    mergeCallerSets(map, semanticCallerMap(db, indexedDefinitions(effectiveDefinitions)));
+    const semantic = semanticEvidenceProduct(db);
+    mergeCallerSets(map, semantic.callerMap(indexedDefinitions(effectiveDefinitions)));
   }
 
   return map;

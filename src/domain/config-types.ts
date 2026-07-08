@@ -204,6 +204,10 @@ export interface FindingSuppression {
 
 export interface SemanticConfig {
   typescript?: TypeScriptSemanticConfig;
+  rust?: {
+    /** Optional rust-analyzer executable path/name for future semantic backend use. */
+    rustAnalyzerPath?: string;
+  };
 }
 
 // scip-query: ignore-stale — exported config surface even when only referenced structurally.

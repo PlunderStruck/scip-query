@@ -36,6 +36,8 @@ export default defineConfig([
     entry: {
       'reindex-worker': 'src/reindex/worker.ts',
       'augment-vue-worker': 'src/reindex/vue/augment-vue-worker.ts',
+      'rust-semantic-worker': 'src/semantic/rust/lsp-batch-worker.ts',
+      'rust-semantic-session-worker': 'src/semantic/rust/lsp-session-worker.ts',
       postinstall: 'src/runtime/postinstall.ts',
     },
     format: ['esm'],

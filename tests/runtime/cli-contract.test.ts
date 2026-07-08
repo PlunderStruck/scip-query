@@ -98,6 +98,7 @@ describe('CLI contract', () => {
       '--write-baseline',
     ]);
     expect(docs.find((entry) => entry.id === 'setup')?.options).toEqual([
+      '--guided',
       '--git-hook',
       '--no-hooks',
       '--dossier-dir <path>',

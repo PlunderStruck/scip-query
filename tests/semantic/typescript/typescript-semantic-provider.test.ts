@@ -114,6 +114,67 @@ function withSemanticFixture(run: (db: ScipDatabase) => void): void {
   }
 }
 
+async function withSemanticFixtureAsync(run: (db: ScipDatabase) => Promise<void>): Promise<void> {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-ts-semantic-'));
+  const dbPath = join(projectRoot, 'index.db');
+  mkdirSync(join(projectRoot, 'src'), { recursive: true });
+  writeFileSync(
+    join(projectRoot, 'tsconfig.json'),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          target: 'ES2022',
+          module: 'ESNext',
+          moduleResolution: 'Node',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    join(projectRoot, 'src/api.ts'),
+    [
+      'export interface ApiShape { id: string }',
+      'export type AliasShape = { id: string }',
+      "export function usedHelper(): string { return 'used'; }",
+      "export function semanticOnly(): string { return 'semantic'; }",
+      "export default function defaultHelper(): string { return 'default'; }",
+      "export function namespaceHelper(): string { return 'namespace'; }",
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(
+    join(projectRoot, 'src/consumer.ts'),
+    [
+      "import defaultHelper, { type ApiShape, usedHelper, semanticOnly as renamed } from './api';",
+      "import type { AliasShape } from './api';",
+      "import * as api from './api';",
+      'const value: ApiShape & AliasShape = { id: usedHelper() };',
+      'renamed();',
+      'defaultHelper();',
+      'api.namespaceHelper();',
+      'void value;',
+      '',
+    ].join('\n'),
+  );
+  createSemanticFixtureDb(dbPath);
+
+  const db = new ScipDatabase({
+    dbPath,
+    indexPath: join(projectRoot, 'index.scip'),
+    projectRoot,
+  });
+  try {
+    await run(db);
+  } finally {
+    db.close();
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+}
+
 function createMonorepoSemanticFixtureDb(dbPath: string): void {
   const db = new Database(dbPath);
   createEvidenceSchema(db);
@@ -263,6 +324,29 @@ function withMonorepoSemanticFixture(run: (db: ScipDatabase) => void): void {
 }
 
 describe('TypeScript semantic provider', () => {
+  it('compares tsserver-style reference answers against the ts-morph baseline without changing defaults', async () => {
+    await withSemanticFixtureAsync(async (db) => {
+      const { createTsMorphProvider } = await import('../../../src/semantic/typescript/ts-morph-provider.js');
+      const { compareTypeScriptReferenceProviders, createTsServerProvider } =
+        await import('../../../src/semantic/typescript/tsserver-provider.js');
+      const definitions = getAllDefinitions(db).filter((definition) =>
+        ['usedHelper', 'semanticOnly', 'defaultHelper', 'namespaceHelper'].includes(definition.leaf),
+      );
+
+      const baseline = createTsMorphProvider(db);
+      const candidate = createTsServerProvider(db);
+      const comparison = compareTypeScriptReferenceProviders(definitions, baseline, candidate);
+
+      expect(candidate.availability().available).toBe(true);
+      expect(comparison).toMatchObject({
+        slot: 'semantic-references',
+        definitions: 4,
+        matches: 4,
+        mismatches: [],
+      });
+    });
+  });
+
   it('uses ts-morph import usage and references as shared liveness evidence', () => {
     withSemanticFixture((db) => {
       const semantic = semanticEvidenceProduct(db);

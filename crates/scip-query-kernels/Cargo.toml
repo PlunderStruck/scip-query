@@ -1,0 +1,13 @@
+[package]
+name = "scip-query-kernels"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "scip_query_kernels"
+path = "src/lib.rs"
+
+[[bin]]
+name = "scip-query-kernels"
+path = "src/main.rs"

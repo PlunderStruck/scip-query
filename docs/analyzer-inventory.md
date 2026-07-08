@@ -20,7 +20,7 @@ The action tiers are:
 
 ## Current Surfaces
 
-The published query surface and private query-helper manifest live in `src/queries/public-query-entries.ts`. The CLI command order and families live in `src/runtime/commands/query-command-specs.ts`. The composite health score runs the phases listed in `HEALTH_PHASES` in `src/queries/health/health.ts`. The diff gate runs the default diff-scoped checks listed in `DIFF_GATE_CHECKS` in `src/queries/impact/diff-gate.ts`; the baseline policy helper remains private to the query tree and runs only for the explicit full health-baseline ratchet. The `tla` command is also ordered in that command registry as an on-demand formal-model verifier, not as a health-scored analyzer.
+The published query surface and private query-helper manifest live in `src/queries/public-query-entries.ts`. The CLI command order and families live in `src/runtime/commands/query-command-specs.ts`. The composite health score runs the phases listed in `HEALTH_PHASES` in `src/queries/health/health.ts`; that health path also carries the full-vs-bounded semantic enrichment budget used by semantic-capable detectors. The diff gate runs the default diff-scoped checks listed in `DIFF_GATE_CHECKS` in `src/queries/impact/diff-gate.ts`; the baseline policy helper remains private to the query tree and runs only for the explicit full health-baseline ratchet. The `tla` command is also ordered in that command registry as an on-demand formal-model verifier, not as a health-scored analyzer.
 
 An earlier `health --json` run on this repository reported:
 
@@ -254,3 +254,11 @@ wiring decisions (test-quality's health eligibility is ledgered as a
 followup). Registration files (`queryCommandOrder`,
 `PUBLIC_QUERY_ENTRIES`, `query-command-specs.ts`) still own their
 canonical lists; only the list contents grew.
+
+## 2026-07-08 Rust Semantic Parity Follow-Up
+
+The `src/queries/health/health.ts` citation remains accurate after the Rust
+semantic parity slice. Health still owns the composite phase inventory and
+score model, and it now threads semantic enrichment through the health budget:
+full/default health enables semantic facts, while bounded large-index health
+can explicitly disable them.

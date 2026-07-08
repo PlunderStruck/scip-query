@@ -5,14 +5,14 @@
  * views of "current findings" must come from identical detector runs.
  */
 export const HEALTH_DETECTOR_PROFILES = {
-  dead: { minLoc: 3, skipBarrels: true, deadCodeOnly: true, semantic: false },
-  isolated: { minLoc: 3, semantic: false },
-  similar: { minSimilarity: 0.6, limit: 50, minCallees: 4, semantic: false },
+  dead: { minLoc: 3, skipBarrels: true, deadCodeOnly: true },
+  isolated: { minLoc: 3 },
+  similar: { minSimilarity: 0.6, limit: 50, minCallees: 4 },
   duplicateBodies: { maxLoc: 15, limit: 50 },
-  extract: { minLoc: 15, minCallees: 5, limit: 50, semantic: false },
-  wrappers: { maxLoc: 15, limit: 50, semantic: false },
-  passthroughs: { maxLoc: 15, limit: 50, semantic: false },
-  stale: { minLoc: 3, limit: 50, semantic: false },
-  drift: { semantic: false },
+  extract: { minLoc: 15, minCallees: 5, limit: 50 },
+  wrappers: { maxLoc: 15, limit: 50 },
+  passthroughs: { maxLoc: 15, limit: 50 },
+  stale: { minLoc: 3, limit: 50 },
+  drift: {},
   twinDrift: { minSimilarity: 0.3 },
 } as const;

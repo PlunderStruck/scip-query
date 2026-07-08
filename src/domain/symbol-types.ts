@@ -10,7 +10,9 @@
 export interface SymbolLocation {
   documentId: number;
   startLine: number;
+  startChar?: number;
   endLine: number;
+  endChar?: number;
   symbolId: number;
 }
 

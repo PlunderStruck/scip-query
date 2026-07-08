@@ -14,7 +14,7 @@ The ledger is anchored to the current tool surface, not memory.
 
 | Surface                   | Source                                                                                                                                                                                                                                                                                                       | Why it anchors the ledger                                                                     |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
-| Repo-wide health analysis | `scip-query code health --json` reported `src/queries/health/health.ts:217`, where `health()` runs `runHealthAnalyses()` and `buildHealthReport()`.                                                                                                                                                          | Every repo-wide analyzer validation must eventually reconcile with health output and scoring. |
+| Repo-wide health analysis | `scip-query code health --json` reported `src/queries/health/health.ts:218`, where `health()` runs `runHealthAnalyses()` and `buildHealthReport()` through the health budget that carries full-vs-bounded semantic enrichment.                                                                                  | Every repo-wide analyzer validation must eventually reconcile with health output and scoring. |
 | Change-time gate analysis | `scip-query code diffGate --json` reported `src/queries/impact/diff-gate.ts:228`, where `diffGate()` runs the default diff-scoped checks: `echo`, `incomplete-migration`, `co-change-partner`, `doc-reference`, `unused-params`, and `new-dead`. The baseline ratchet is explicit because it is repo-wide.    | Every diff-only analyzer needs a separate validation path from repo-wide health.              |
 | Public command registry   | `scip-query trace queryCommandOrder --json` reported `src/runtime/commands/query-command-specs.ts:11`, where the public query command order starts. `scip-query code queryCommandDescriptor --json` reported `src/runtime/commands/query-command-specs.ts:104`, where command descriptors are resolved by id. | The ledger must not silently miss a public analyzer command.                                 |
 | Diff-gate check list      | `scip-query trace DIFF_GATE_CHECKS --json` reported `src/queries/impact/diff-gate.ts:64`, where the canonical diff-gate check list is exported.                                                                                                                                                              | The ledger must cover every change-time check that can block a diff.                          |
@@ -323,6 +323,15 @@ still owns the public query order. Health gained a `coverage-contracts` phase
 and a `detectorPrecision` field (per-check finding-outcome stats from the new
 finding-outcome ledger) — both paths still compute and render through the same
 command surfaces cited above.
+
+## 2026-07-08 Rust Semantic Parity Follow-Up
+
+The `src/queries/health/health.ts` citation remains accurate after the Rust
+semantic parity slice. Health still owns the composite phase inventory and
+score assembly; the health budget now also carries whether a run should enrich
+detectors with semantic facts. Full/default health keeps semantic enrichment
+enabled, while bounded large-index health records the explicit semantic-off
+budget choice.
 
 ## 2026-07-02 Doc-Reference Hub-Cascade Follow-Up
 

@@ -4,6 +4,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { isEntrySurface, isRootedSymbol } from '../../analysis/file-classifier.js';
 import { gitEvidenceProduct } from '../../analysis/git-history.js';
 import type { CoChangeCommitScope, CoChangeRecency, CoChangeSubjectContext } from '../../analysis/git-history.js';
+import type { GitHistoryMode } from '../../analysis/git-history.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import {
   classifyCoChangePartner,
@@ -238,6 +239,7 @@ export function diffGate(
     includeBaseline?: boolean;
     scanLimit?: number;
     semantic?: boolean;
+    historyMode?: GitHistoryMode;
     skip?: readonly DiffGateCheck[];
   } = {},
 ): DiffGateResult {
@@ -252,6 +254,7 @@ export function diffGate(
     scanLimit,
   } = opts;
   const semantic = opts.semantic !== false;
+  const historyMode = opts.historyMode ?? 'bounded';
   const skip = new Set(opts.skip ?? []);
 
   const impactPlan = diffImpactPlan(db, { base });
@@ -314,7 +317,7 @@ export function diffGate(
     runIncompleteMigrationCheck(db, base, impactPlan, maxHelpers, scanLimit, semantic, baseContentAt, result),
   );
   runUnlessSkipped('co-change-partner', () =>
-    runCoChangePartnerCheck(db, changedForCoordination, minTogether, minConfidence, result),
+    runCoChangePartnerCheck(db, changedForCoordination, minTogether, minConfidence, historyMode, result),
   );
   runUnlessSkipped('twin-partner', () => runTwinPartnerCheck(db, impact.changedSymbols, changed, scanLimit, result));
   runUnlessSkipped('coverage-contract', () => runCoverageContractCheck(db, changedForCoordination, result));
@@ -724,9 +727,10 @@ function runCoChangePartnerCheck(
   changed: ReadonlySet<string>,
   minTogether: number,
   minConfidence: number,
+  historyMode: GitHistoryMode,
   result: DiffGateResult,
 ): void {
-  const pairs = gitEvidenceProduct(db).directionalCoChangePairsForFiles(changed, {
+  const pairs = gitEvidenceProduct(db, { historyMode }).directionalCoChangePairsForFiles(changed, {
     minTogether,
     minConfidence: 0,
     maxFilesPerCommit: 20,

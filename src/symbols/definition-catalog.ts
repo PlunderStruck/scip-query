@@ -191,7 +191,9 @@ function parseCachedDefinition(value: unknown, relativePath: string): IndexedDef
     typeof value.symbol !== 'string' ||
     typeof value.documentId !== 'number' ||
     typeof value.startLine !== 'number' ||
+    (typeof value.startChar !== 'number' && value.startChar !== undefined) ||
     typeof value.endLine !== 'number' ||
+    (typeof value.endChar !== 'number' && value.endChar !== undefined) ||
     value.relativePath !== relativePath ||
     typeof value.leaf !== 'string' ||
     (typeof value.parentTypeName !== 'string' && value.parentTypeName !== null) ||
@@ -209,7 +211,9 @@ function parseCachedDefinition(value: unknown, relativePath: string): IndexedDef
     symbol: value.symbol,
     documentId: value.documentId,
     startLine: value.startLine,
+    startChar: value.startChar,
     endLine: value.endLine,
+    endChar: value.endChar,
     relativePath: value.relativePath,
     leaf: value.leaf,
     parentTypeName: value.parentTypeName,
@@ -243,7 +247,9 @@ function loadPrimaryDefinitionRows(db: ScipDatabase, relativePath: string): Symb
       gs.symbol,
       der.document_id,
       der.start_line,
+      der.start_char,
       der.end_line,
+      der.end_char,
       d.relative_path,
       gs.display_name,
       gs.kind,
@@ -266,7 +272,9 @@ function loadFallbackDefinitionRows(db: ScipDatabase, relativePath: string): Sym
       gs.symbol,
       c.document_id,
       MIN(c.start_line) AS start_line,
+      0 AS start_char,
       MAX(c.end_line) AS end_line,
+      0 AS end_char,
       d.relative_path,
       gs.display_name,
       gs.kind,
@@ -291,7 +299,9 @@ function indexedDefinitionFromRow(row: SymbolQueryRow): IndexedDefinition {
     symbol: row.symbol,
     documentId: row.document_id,
     startLine: row.start_line,
+    startChar: row.start_char ?? 0,
     endLine: row.end_line,
+    endChar: row.end_char ?? 0,
     relativePath: row.relative_path,
     leaf: leafName(row.symbol),
     parentTypeName: parentTypeName(row.symbol),
@@ -361,7 +371,9 @@ function loadScopedPrimaryDefinitionRows(
       gs.symbol,
       der.document_id,
       der.start_line,
+      der.start_char,
       der.end_line,
+      der.end_char,
       d.relative_path,
       gs.display_name,
       gs.kind,
@@ -394,7 +406,9 @@ function loadScopedFallbackDefinitionRows(
       gs.symbol,
       c.document_id,
       MIN(c.start_line) AS start_line,
+      0 AS start_char,
       MAX(c.end_line) AS end_line,
+      0 AS end_char,
       d.relative_path,
       gs.display_name,
       gs.kind,
@@ -532,7 +546,9 @@ export function hydrateSymbolMatch(db: ScipDatabase, row: SymbolQueryRow): Symbo
       symbol: corrected.symbol,
       documentId: corrected.documentId,
       startLine: corrected.startLine,
+      startChar: corrected.startChar,
       endLine: corrected.endLine,
+      endChar: corrected.endChar,
       relativePath: corrected.relativePath,
     };
   }
@@ -542,7 +558,9 @@ export function hydrateSymbolMatch(db: ScipDatabase, row: SymbolQueryRow): Symbo
     symbol: row.symbol,
     documentId: row.document_id,
     startLine: row.start_line,
+    startChar: row.start_char ?? 0,
     endLine: row.end_line,
+    endChar: row.end_char ?? 0,
     relativePath: row.relative_path,
   };
 }

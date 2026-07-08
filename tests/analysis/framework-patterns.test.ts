@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { getDefinitionExclusions } from '../../src/analysis/framework-patterns.js';
+import { buildFileExclusionPredicate } from '../../src/queries/cleanup/dead-exclusions.js';
 import { ScipDatabase } from '../../src/storage/db.js';
 
 function withFrameworkFixture(files: Record<string, string>, run: (db: ScipDatabase) => void): void {
@@ -113,6 +114,88 @@ describe('framework pattern exclusions', () => {
         expect(getDefinitionExclusions(db, 'src/suppressed.ts')).toEqual([
           expect.objectContaining({ reason: 'scip-query suppression comment' }),
         ]);
+      },
+    );
+  });
+
+  it('marks generated Rust files as hard exclusions', () => {
+    withFrameworkFixture(
+      {
+        'src/generated.rs': ['// @generated', 'pub fn generated_entry() {', '}', ''].join('\n'),
+      },
+      (db) => {
+        expect(getDefinitionExclusions(db, 'src/generated.rs')).toEqual([
+          expect.objectContaining({
+            reason: 'generated file (@generated header)',
+            disposition: 'exclude',
+          }),
+        ]);
+        expect(
+          buildFileExclusionPredicate(db)(
+            'src/generated.rs',
+            1,
+            'rust crate src/generated.rs/generated_entry().',
+            null,
+          ),
+        ).toBe(true);
+      },
+    );
+  });
+
+  it('keeps Rust test functions as hard exclusions', () => {
+    withFrameworkFixture(
+      {
+        'src/lib.rs': ['#[test]', 'fn parses_input() {', '}', ''].join('\n'),
+      },
+      (db) => {
+        expect(getDefinitionExclusions(db, 'src/lib.rs')).toEqual([
+          expect.objectContaining({
+            reason: '#[test]',
+            disposition: 'exclude',
+          }),
+        ]);
+        expect(buildFileExclusionPredicate(db)('src/lib.rs', 1, 'rust crate src/lib.rs/parses_input().', null)).toBe(
+          true,
+        );
+      },
+    );
+  });
+
+  it('classifies Rust framework attributes as implicit usage instead of hard exclusions', () => {
+    withFrameworkFixture(
+      {
+        'src/lib.rs': ['#[tauri::command]', 'pub fn launch() {', '}', ''].join('\n'),
+      },
+      (db) => {
+        expect(getDefinitionExclusions(db, 'src/lib.rs')).toEqual([
+          expect.objectContaining({
+            reason: 'Rust attribute macro #[tauri::command]',
+            disposition: 'implicit-usage',
+          }),
+        ]);
+        expect(buildFileExclusionPredicate(db)('src/lib.rs', 1, 'rust crate src/lib.rs/launch().', null)).toBe(false);
+      },
+    );
+  });
+
+  it('classifies Rust reflective derives as implicit usage instead of hard exclusions', () => {
+    withFrameworkFixture(
+      {
+        'src/model.rs': ['#[derive(Serialize, Deserialize)]', 'pub struct Payload {', '  value: String,', '}', ''].join(
+          '\n',
+        ),
+      },
+      (db) => {
+        expect(getDefinitionExclusions(db, 'src/model.rs')).toEqual([
+          expect.objectContaining({
+            reason: '#[derive(...)] - generated impl may access fields',
+            disposition: 'implicit-usage',
+            containerName: 'Payload',
+          }),
+        ]);
+        expect(
+          buildFileExclusionPredicate(db)('src/model.rs', 2, 'rust crate src/model.rs/Payload#value.', 'Payload'),
+        ).toBe(false);
       },
     );
   });

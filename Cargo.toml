@@ -1,0 +1,3 @@
+[workspace]
+members = ["crates/scip-query-kernels"]
+resolver = "2"

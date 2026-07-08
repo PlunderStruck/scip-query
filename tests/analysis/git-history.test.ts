@@ -121,6 +121,38 @@ describe('git history evidence', () => {
     expect(secondDirectional).not.toBe(firstDirectional);
   });
 
+  it('lets full history bypass the bounded commit cap', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-git-history-full-'));
+    const previousLimit = process.env['SCIP_QUERY_GIT_HISTORY_MAX_COMMITS'];
+    try {
+      gitIn(root, 'init');
+      commitIn(root, 'add oldest', { 'oldest.ts': 'export const oldest = 1;\n' });
+      commitIn(root, 'add second', { 'second.ts': 'export const second = 1;\n' });
+      commitIn(root, 'add third', { 'third.ts': 'export const third = 1;\n' });
+      commitIn(root, 'add fourth', { 'fourth.ts': 'export const fourth = 1;\n' });
+      commitIn(root, 'add newest', { 'newest.ts': 'export const newest = 1;\n' });
+      process.env['SCIP_QUERY_GIT_HISTORY_MAX_COMMITS'] = '3';
+
+      const db = fakeDb(root);
+      const bounded = gitEvidenceProduct(db);
+      const full = gitEvidenceProduct(db, { historyMode: 'full' });
+
+      expect(bounded.commitHistory()?.commits).toHaveLength(3);
+      expect(full.commitHistory()?.commits).toHaveLength(5);
+      expect(bounded.fileAddRecords()?.has('oldest.ts')).toBe(false);
+      expect(full.fileAddRecords()?.get('oldest.ts')).toEqual(
+        expect.objectContaining({
+          commitsAgo: 4,
+          addedAt: expect.any(Number),
+        }),
+      );
+    } finally {
+      if (previousLimit === undefined) delete process.env['SCIP_QUERY_GIT_HISTORY_MAX_COMMITS'];
+      else process.env['SCIP_QUERY_GIT_HISTORY_MAX_COMMITS'] = previousLimit;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('returns null outside a git repository', () => {
     const outside = mkdtempSync(join(tmpdir(), 'scip-no-git-'));
     expect(getCommitHistory(fakeDb(outside))).toBeNull();

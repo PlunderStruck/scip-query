@@ -182,6 +182,100 @@ afterEach(() => {
 });
 
 describe('runProjectSetup', () => {
+  it('plans guided setup choices without creating agent docs by default', async () => {
+    const { module } = await loadProjectSetup();
+
+    const plan = module.planGuidedProjectSetup({
+      files: {
+        agentsMd: false,
+        claudeMd: false,
+        codexHooks: false,
+        claudeSettings: false,
+      },
+      readiness: {
+        languages: ['rust'],
+        indexers: [{ language: 'rust', binaryLabel: 'rust-analyzer', installed: true, runnable: true }],
+        semantics: [],
+        checkers: [],
+        gitAvailable: true,
+      },
+      capabilities: {
+        languages: ['rust'],
+        capabilities: [],
+        matrix: [
+          {
+            language: 'rust',
+            indexing: { status: 'available' },
+            sourceFacts: { status: 'unavailable', reason: 'tree-sitter native module not loadable' },
+            semantic: { status: 'available' },
+            cleanupVerification: { status: 'unavailable' },
+          },
+        ],
+      },
+    });
+
+    expect(plan.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'create-agent-guidance',
+          recommended: false,
+          requiresConsent: true,
+        }),
+        expect.objectContaining({
+          id: 'install-project-hooks',
+          recommended: true,
+          requiresConsent: true,
+        }),
+        expect.objectContaining({
+          id: 'install-parser-runtimes',
+          recommended: true,
+          requiresConsent: true,
+        }),
+      ]),
+    );
+  });
+
+  it('plans agent guidance updates when a project already has agent docs', async () => {
+    const { module } = await loadProjectSetup();
+
+    const plan = module.planGuidedProjectSetup({
+      files: {
+        agentsMd: true,
+        claudeMd: false,
+        codexHooks: true,
+        claudeSettings: true,
+      },
+      readiness: {
+        languages: ['typescript'],
+        indexers: [{ language: 'typescript', binaryLabel: 'scip-typescript', installed: true, runnable: true }],
+        semantics: [],
+        checkers: [],
+        gitAvailable: true,
+      },
+      capabilities: {
+        languages: ['typescript'],
+        capabilities: [],
+        matrix: [
+          {
+            language: 'typescript',
+            indexing: { status: 'available' },
+            sourceFacts: { status: 'available' },
+            semantic: { status: 'available' },
+            cleanupVerification: { status: 'available' },
+          },
+        ],
+      },
+    });
+
+    expect(plan.actions).toEqual([
+      expect.objectContaining({
+        id: 'update-agent-guidance',
+        recommended: true,
+        requiresConsent: true,
+      }),
+    ]);
+  });
+
   it('reports health score and issue list before any cleanup work could begin', async () => {
     const { module, runIsolatedHealthReport, setupAgent, installProjectAgentHooks } = await loadProjectSetup();
 

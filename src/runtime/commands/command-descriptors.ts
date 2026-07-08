@@ -252,6 +252,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     description:
       'Bootstrap this project: install agent skills, refresh the index, verify capabilities, and report health',
     options: withJsonOption([
+      option('--guided', 'Ask before project-local hooks and agent guidance changes'),
       option('--git-hook', 'Also install a git pre-commit hook that runs diff-gate'),
       option('--no-hooks', 'Skip Codex and Claude Code lifecycle hook installation'),
       option('--dossier-dir <path>', 'Directory for generated setup health dossier files'),

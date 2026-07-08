@@ -149,6 +149,18 @@ export const EVIDENCE_PRODUCT_MANIFEST: readonly EvidenceProductManifestEntry[] 
     stalenessTest: 'tests/symbols/file-dep-graph.test.ts',
     owner: 'src/symbols/graph/file-dep-graph.ts',
   }),
+  projectManifest('semantic-import-usage', {
+    dependsOn: ['project-fingerprint', 'indexed-language-set', 'import-resolution-fingerprint', 'tool-version'],
+    keyParts: ['kind', 'relativePath', 'projectFingerprint', 'language', 'semanticEngine', 'payloadVersion'],
+    stalenessTest: 'tests/semantic/rust/rust-semantic-cache-gate.test.ts',
+    owner: 'src/semantic/shared-primitives.ts',
+  }),
+  projectManifest('semantic-signatures', {
+    dependsOn: ['project-fingerprint', 'indexed-language-set', 'tool-version'],
+    keyParts: ['kind', 'relativePath', 'symbol', 'projectFingerprint', 'language', 'semanticEngine', 'payloadVersion'],
+    stalenessTest: 'tests/semantic/rust/rust-semantic-cache-gate.test.ts',
+    owner: 'src/semantic/shared-primitives.ts',
+  }),
 ];
 
 export function createFileEvidenceProduct<T>(opts: FileEvidenceProductOptions<T>): FileEvidenceProduct<T> {

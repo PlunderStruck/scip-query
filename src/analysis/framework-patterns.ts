@@ -5,8 +5,8 @@
  * Pulled out of ast.ts because:
  *  - Per-language patterns grow independently of the AST runtime.
  *  - Mixing them with parser plumbing made ast.ts the answer to two
- *    different questions ("how do I parse?" + "what does Rust's tauri
- *    macro look like?").
+ *    different questions ("how do I parse?" + "what Rust source shape may
+ *    imply external or generated use?").
  *
  * Owned here today:
  *  - getDefinitionExclusions: the dead-code "skip this, it's framework-
@@ -19,10 +19,13 @@ import { createFileEvidenceProduct, evidenceProductInvalidation } from '../stora
 import { detectAstLanguage, getAst, type SyntaxNode, type Tree } from '../source/ast.js';
 import { getSourceText } from '../source/source-text.js';
 
+export type ExclusionDisposition = 'exclude' | 'implicit-usage';
+
 export interface ExclusionEntry {
   startLine: number;
   endLine: number;
   reason: string;
+  disposition: ExclusionDisposition;
   containerName?: string;
 }
 
@@ -35,12 +38,10 @@ const DEFINITION_EXCLUSIONS_PRODUCT = createFileEvidenceProduct<ExclusionEntry[]
 });
 
 /**
- * Find every definition the dead-code pass should skip because the symbol is
- * framework-invoked: Rust `#[tauri::command]`, `#[test]`, `#[bench]`, anything
- * inside `#[cfg(test)] mod`, and `#[derive(Serialize/Deserialize)]` struct
- * fields (touched by serde reflection); TS/JS test files (any file containing
- * top-level `describe()`, `it()`, `test()`, `beforeEach()`, etc. calls), plus
- * explicit suppressions and React custom hooks.
+ * Find definitions whose dead-code classification needs source-level policy
+ * context. Hard exclusions are removed from the candidate set; implicit-usage
+ * entries are evidence that a compiler/framework surface may call the symbol
+ * even when the raw graph does not show that edge.
  */
 export function getDefinitionExclusions(db: ScipDatabase, relativePath: string): ExclusionEntry[] {
   const lang = detectAstLanguage(relativePath);
@@ -60,20 +61,30 @@ function parseCachedDefinitionExclusions(payload: string): ExclusionEntry[] | nu
   try {
     const value = JSON.parse(payload) as unknown;
     if (!Array.isArray(value)) return null;
-    if (!value.every(isExclusionEntry)) return null;
-    return value;
+    const entries = value.map(normalizeExclusionEntry);
+    if (entries.some((entry) => entry === null)) return null;
+    return entries as ExclusionEntry[];
   } catch {
     return null;
   }
 }
 
-function isExclusionEntry(value: unknown): value is ExclusionEntry {
-  if (!value || typeof value !== 'object') return false;
+function normalizeExclusionEntry(value: unknown): ExclusionEntry | null {
+  if (!value || typeof value !== 'object') return null;
   const entry = value as Partial<ExclusionEntry>;
-  if (typeof entry.startLine !== 'number' || !Number.isFinite(entry.startLine)) return false;
-  if (typeof entry.endLine !== 'number' || !Number.isFinite(entry.endLine)) return false;
-  if (typeof entry.reason !== 'string') return false;
-  return entry.containerName === undefined || typeof entry.containerName === 'string';
+  if (typeof entry.startLine !== 'number' || !Number.isFinite(entry.startLine)) return null;
+  if (typeof entry.endLine !== 'number' || !Number.isFinite(entry.endLine)) return null;
+  if (typeof entry.reason !== 'string') return null;
+  if (entry.containerName !== undefined && typeof entry.containerName !== 'string') return null;
+  const disposition = entry.disposition === undefined ? legacyDispositionForReason(entry.reason) : entry.disposition;
+  if (disposition !== 'exclude' && disposition !== 'implicit-usage') return null;
+  return {
+    startLine: entry.startLine,
+    endLine: entry.endLine,
+    reason: entry.reason,
+    disposition,
+    ...(entry.containerName ? { containerName: entry.containerName } : {}),
+  };
 }
 
 const TEST_FRAMEWORK_NAMES = new Set([
@@ -133,6 +144,7 @@ function getJsTestExclusions(db: ScipDatabase, relativePath: string): ExclusionE
       startLine: 0,
       endLine: program.endPosition.row,
       reason: 'TS/JS test file (describe/it/test at top level)',
+      disposition: 'exclude',
     });
   }
 
@@ -168,6 +180,7 @@ function getJsTestExclusions(db: ScipDatabase, relativePath: string): ExclusionE
         startLine: funcNode.startPosition.row,
         endLine: funcNode.endPosition.row,
         reason: 'React custom hook (use*)',
+        disposition: 'exclude',
       });
     }
   }
@@ -247,6 +260,7 @@ function collectSuppressionExclusions(
                 startLine: node.startPosition.row,
                 endLine: node.endPosition.row,
                 reason: 'scip-query suppression comment',
+                disposition: 'exclude',
               });
               break;
             }
@@ -265,7 +279,7 @@ function collectSuppressionExclusions(
 }
 
 // scip-query: ignore-extract — this is the Rust exclusion policy aggregator:
-// generated-file shortcut, AST exclusions, suppression comments, and serde
+// generated-file shortcut, AST exclusions, suppression comments, and attribute
 // module handling are one accuracy contract for dead-code filtering.
 function getRustExclusions(db: ScipDatabase, relativePath: string): ExclusionEntry[] {
   const tree = getAst(db, relativePath);
@@ -303,7 +317,7 @@ function getRustExclusions(db: ScipDatabase, relativePath: string): ExclusionEnt
     ),
   );
 
-  out.push(...serdeWithModuleExclusions(tree.rootNode));
+  out.push(...attributeWithModuleExclusions(tree.rootNode));
 
   EXCLUSION_CACHE.set(tree, out);
   return out;
@@ -321,6 +335,7 @@ function generatedRustFileExclusion(tree: Tree): ExclusionEntry[] | null {
       startLine: 0,
       endLine: tree.rootNode.endPosition.row,
       reason: 'generated file (@generated header)',
+      disposition: 'exclude',
     },
   ];
 }
@@ -342,6 +357,7 @@ function collectRustAstExclusions(
       startLine: node.startPosition.row,
       endLine: node.endPosition.row,
       reason: 'trait declaration body (dynamic dispatch)',
+      disposition: 'implicit-usage',
     });
   }
 
@@ -351,6 +367,7 @@ function collectRustAstExclusions(
       startLine: node.startPosition.row,
       endLine: node.endPosition.row,
       reason: 'trait impl block (dynamic dispatch)',
+      disposition: 'implicit-usage',
     });
   }
 
@@ -361,6 +378,7 @@ function collectRustAstExclusions(
       startLine: node.startPosition.row,
       endLine: node.endPosition.row,
       reason: 'trait impl associated item (dynamic dispatch)',
+      disposition: 'implicit-usage',
     });
   } else if (node.type === 'struct_item' || node.type === 'enum_item' || node.type === 'union_item') {
     collectRustTypeExclusions(node, out, inTestMod);
@@ -382,22 +400,27 @@ function collectRustFunctionExclusion(
   inTraitImpl: boolean,
 ): void {
   const attrs = rustAttributeTexts(node);
-  let reason: string | null = null;
-  if (inTraitImpl) reason = 'trait impl method (dynamic dispatch)';
-  else if (inTestMod) reason = 'inside #[cfg(test)] mod';
+  let classification: RustAttributeClassification | null = null;
+  if (inTraitImpl) classification = { reason: 'trait impl method (dynamic dispatch)', disposition: 'implicit-usage' };
+  else if (inTestMod) classification = { reason: 'inside #[cfg(test)] mod', disposition: 'exclude' };
   for (const attr of attrs) {
-    const frameworkReason = rustFrameworkAttrReason(attr);
-    if (frameworkReason) {
-      reason = frameworkReason;
+    if (isRustAllowDeadCodeAttr(attr)) {
+      classification = { reason: '#[allow(dead_code)]', disposition: 'exclude' };
       break;
     }
-    if (isRustAllowDeadCodeAttr(attr)) {
-      reason = '#[allow(dead_code)]';
+    const attrClassification = rustAttributeClassification(attr);
+    if (attrClassification) {
+      classification = attrClassification;
       break;
     }
   }
-  if (reason) {
-    out.push({ startLine: node.startPosition.row, endLine: node.endPosition.row, reason });
+  if (classification) {
+    out.push({
+      startLine: node.startPosition.row,
+      endLine: node.endPosition.row,
+      reason: classification.reason,
+      disposition: classification.disposition,
+    });
   }
 }
 
@@ -405,11 +428,12 @@ function collectRustTypeExclusions(node: SyntaxNode, out: ExclusionEntry[], inTe
   const attrs = rustAttributeTexts(node);
   const typeName = node.namedChildren.find((c) => c.type === 'type_identifier')?.text;
 
-  if (attrs.some(isRustReflectiveDeriveAttr)) {
+  if (attrs.some(isRustDeriveAttr)) {
     out.push({
       startLine: node.startPosition.row,
       endLine: node.endPosition.row,
-      reason: '#[derive(<reflective>)] — fields accessed via macro/reflection',
+      reason: '#[derive(...)] - generated impl may access fields',
+      disposition: 'implicit-usage',
       containerName: typeName,
     });
   }
@@ -418,6 +442,7 @@ function collectRustTypeExclusions(node: SyntaxNode, out: ExclusionEntry[], inTe
       startLine: node.startPosition.row,
       endLine: node.endPosition.row,
       reason: '#[allow(dead_code)]',
+      disposition: 'exclude',
       containerName: typeName,
     });
   }
@@ -426,6 +451,7 @@ function collectRustTypeExclusions(node: SyntaxNode, out: ExclusionEntry[], inTe
       startLine: node.startPosition.row,
       endLine: node.endPosition.row,
       reason: 'inside #[cfg(test)] mod',
+      disposition: 'exclude',
       containerName: typeName,
     });
   }
@@ -461,46 +487,61 @@ function rustAttributeTexts(item: SyntaxNode): string[] {
   return attrs;
 }
 
-const RUST_FRAMEWORK_ATTR_REASONS: ReadonlyArray<{ re: RegExp; reason: string }> = [
-  { re: /#\[\s*tauri::command\b/, reason: '#[tauri::command]' },
-  { re: /#\[\s*command\b/, reason: '#[command]' }, // tauri shorthand
-  { re: /#\[\s*test\b/, reason: '#[test]' },
-  { re: /#\[\s*bench\b/, reason: '#[bench]' },
-  { re: /#\[\s*tokio::test\b/, reason: '#[tokio::test]' },
-  { re: /#\[\s*async_std::test\b/, reason: '#[async_std::test]' },
-  { re: /#\[\s*wasm_bindgen\b/, reason: '#[wasm_bindgen]' },
-  { re: /#\[\s*no_mangle\b/, reason: '#[no_mangle]' },
-  { re: /#\[\s*napi\b/, reason: '#[napi]' },
-  { re: /#\[\s*pyfunction\b/, reason: '#[pyfunction]' },
-  { re: /#\[\s*pymethod\b/, reason: '#[pymethod]' },
-  { re: /#\[\s*pyo3\b/, reason: '#[pyo3]' },
-  { re: /#\[\s*cfg\s*\(\s*test\s*\)/, reason: '#[cfg(test)]' },
-  { re: /#\[\s*doc\s*\(\s*hidden\s*\)/, reason: '#[doc(hidden)]' },
-];
-
-function rustFrameworkAttrReason(attrText: string): string | null {
-  return RUST_FRAMEWORK_ATTR_REASONS.find(({ re }) => re.test(attrText))?.reason ?? null;
+interface RustAttributeClassification {
+  reason: string;
+  disposition: ExclusionDisposition;
 }
 
-const RUST_REFLECTIVE_DERIVE_RES: ReadonlyArray<RegExp> = [
-  /\bSerialize\b/,
-  /\bDeserialize\b/,
-  /\bFromRow\b/, // sqlx
-  /\bsqlx::FromRow\b/,
-  /\bDeriveEntityModel\b/, // sea-orm
-  /\bIntoSchema\b/, // utoipa
-  /\bToSchema\b/, // utoipa
-  /\bDeriveValueType\b/,
-  /\bError\b/, // thiserror and compatible generated Display impls
-  /\bthiserror::Error\b/,
-];
+const RUST_TEST_ATTRIBUTE_PATHS = new Set(['test', 'bench', 'tokio::test', 'async_std::test']);
+const RUST_ABI_OR_EXPORT_ATTRIBUTE_PATHS = new Set([
+  'no_mangle',
+  'export_name',
+  'link_name',
+  'used',
+  'macro_export',
+  'proc_macro',
+  'proc_macro_derive',
+  'proc_macro_attribute',
+]);
+const RUST_BUILTIN_NON_USAGE_ATTRIBUTE_PATHS = new Set([
+  'allow',
+  'warn',
+  'deny',
+  'forbid',
+  'cfg',
+  'cfg_attr',
+  'doc',
+  'inline',
+  'cold',
+  'must_use',
+  'deprecated',
+  'repr',
+  'derive',
+  'automatically_derived',
+  'non_exhaustive',
+  'path',
+  'link',
+  'link_section',
+  'global_allocator',
+  'panic_handler',
+]);
 
-function isRustReflectiveDeriveAttr(attrText: string): boolean {
-  if (!/#\[\s*derive\s*\(/.test(attrText)) return false;
-  // Any derive that touches fields via reflection / macro expansion. SCIP
-  // doesn't see these accesses; without the exclusion every field of these
-  // structs looks dead.
-  return RUST_REFLECTIVE_DERIVE_RES.some((re) => re.test(attrText));
+function rustAttributeClassification(attrText: string): RustAttributeClassification | null {
+  if (/#\[\s*cfg\s*\(\s*test\s*\)/.test(attrText)) {
+    return { reason: '#[cfg(test)]', disposition: 'exclude' };
+  }
+  const path = rustAttributePath(attrText);
+  if (!path) return null;
+  if (RUST_TEST_ATTRIBUTE_PATHS.has(path)) return { reason: `#[${path}]`, disposition: 'exclude' };
+  if (RUST_ABI_OR_EXPORT_ATTRIBUTE_PATHS.has(path)) {
+    return { reason: `Rust ABI/export attribute #[${path}]`, disposition: 'implicit-usage' };
+  }
+  if (RUST_BUILTIN_NON_USAGE_ATTRIBUTE_PATHS.has(path)) return null;
+  return { reason: `Rust attribute macro #[${path}]`, disposition: 'implicit-usage' };
+}
+
+function isRustDeriveAttr(attrText: string): boolean {
+  return /#\[\s*derive\s*\(/.test(attrText);
 }
 
 function isRustAllowDeadCodeAttr(attrText: string): boolean {
@@ -516,23 +557,54 @@ function isRustAssociatedTraitItem(node: SyntaxNode): boolean {
   );
 }
 
-function serdeWithModuleExclusions(root: SyntaxNode): ExclusionEntry[] {
-  const serdeWithModNames = collectSerdeWithModNames(root);
-  if (serdeWithModNames.size === 0) return [];
+function attributeWithModuleExclusions(root: SyntaxNode): ExclusionEntry[] {
+  const attributeWithModNames = collectAttributeWithModNames(root);
+  if (attributeWithModNames.size === 0) return [];
 
   const out: ExclusionEntry[] = [];
   for (const mod of root.descendantsOfType('mod_item')) {
     const name = mod.childForFieldName('name')?.text;
-    if (name && serdeWithModNames.has(name)) {
+    if (name && attributeWithModNames.has(name)) {
       out.push({
         startLine: mod.startPosition.row,
         endLine: mod.endPosition.row,
-        reason: 'serde `with = "..."` module — body invoked via reflection',
+        reason: 'attribute `with = "..."` module - body may be invoked via reflection',
+        disposition: 'implicit-usage',
         containerName: name,
       });
     }
   }
   return out;
+}
+
+function rustAttributePath(attrText: string): string | null {
+  const match = /^#!?\[\s*([A-Za-z_][A-Za-z0-9_]*(?:\s*::\s*[A-Za-z_][A-Za-z0-9_]*)*)/.exec(attrText);
+  if (!match) return null;
+  return match[1]!.replace(/\s+/g, '');
+}
+
+function legacyDispositionForReason(reason: string): ExclusionDisposition {
+  if (
+    reason === '#[tauri::command]' ||
+    reason === '#[command]' ||
+    reason === '#[wasm_bindgen]' ||
+    reason === '#[no_mangle]' ||
+    reason === '#[napi]' ||
+    reason === '#[pyfunction]' ||
+    reason === '#[pymethod]' ||
+    reason === '#[pyo3]' ||
+    reason === '#[doc(hidden)]' ||
+    reason.startsWith('trait ') ||
+    reason.startsWith('#[derive(<reflective>)]') ||
+    reason.startsWith('#[derive(...)]') ||
+    reason.startsWith('serde `with = "') ||
+    reason.startsWith('attribute `with = "') ||
+    reason.startsWith('Rust attribute macro #[') ||
+    reason.startsWith('Rust ABI/export attribute #[')
+  ) {
+    return 'implicit-usage';
+  }
+  return 'exclude';
 }
 
 /**
@@ -556,21 +628,19 @@ function isGeneratedFileHeader(root: SyntaxNode): boolean {
   return false;
 }
 
-const SERDE_ATTR_HEAD = /^#!?\[\s*serde\s*\(/;
-const SERDE_WITH_RE = /\bwith\s*=\s*"([^"]+)"/g;
+const ATTR_WITH_RE = /\bwith\s*=\s*"([^"]+)"/g;
 
 /**
- * Subset of attribute scanning aimed at `serde(with = "module_name")` —
- * returns the bare module names referenced. `getRustExclusions` uses this to
- * blanket-exclude the named `mod` block.
+ * Subset of attribute scanning aimed at `with = "module_name"` metadata. The
+ * syntax is library-owned, so the result is implicit usage evidence instead of
+ * a hard exclusion.
  */
-function collectSerdeWithModNames(root: SyntaxNode): Set<string> {
+function collectAttributeWithModNames(root: SyntaxNode): Set<string> {
   const out = new Set<string>();
   for (const attr of root.descendantsOfType('attribute_item')) {
-    if (!SERDE_ATTR_HEAD.test(attr.text)) continue;
-    SERDE_WITH_RE.lastIndex = 0;
+    ATTR_WITH_RE.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = SERDE_WITH_RE.exec(attr.text)) !== null) {
+    while ((m = ATTR_WITH_RE.exec(attr.text)) !== null) {
       const value = m[1]!;
       const leaf = value.split('::').pop() ?? value;
       if (leaf) out.add(leaf);

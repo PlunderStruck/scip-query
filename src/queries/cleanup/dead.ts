@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import { buildFileExclusionPredicate } from './dead-exclusions.js';
+import { buildFileExclusionClassifier, buildFileExclusionPredicate } from './dead-exclusions.js';
 import { getInactiveBarrelPaths, isEntrySurface, isRootedSymbol } from '../../analysis/file-classifier.js';
 import { getScopedDefinitionsMatchingSymbols } from '../../symbols/definition-catalog.js';
 import type { DeadOptions, IndexedDefinition } from '../../domain/types.js';
@@ -40,6 +40,7 @@ export interface DeadSymbolResult {
   shortName: string;
   sameFileRefs: number;
   kind: 'dead-code' | 'file-internal';
+  implicitUsageReason?: string;
 }
 
 export interface DeadCounts {
@@ -74,6 +75,7 @@ interface DeadRow {
   end_line: number;
   loc: number;
   symbol: string;
+  parent_type_name: string | null;
   same_file_refs: number;
   cross_file_refs: number;
 }
@@ -263,12 +265,14 @@ function deadRow(definition: IndexedDefinition, referencesBySymbol: ReferenceCou
     end_line: definition.endLine,
     loc: definition.endLine - definition.startLine + 1,
     symbol: definition.symbol,
+    parent_type_name: definition.parentTypeName,
     same_file_refs: sameFileRefs,
     cross_file_refs: crossFileRefs,
   };
 }
 
 function deadSummary(db: ScipDatabase, rows: readonly DeadRow[]): DeadSummary {
+  const classifyExclusion = buildFileExclusionClassifier(db);
   const symbols: DeadSymbolResult[] = [];
   let deadCodeCount = 0;
   let fileInternalCount = 0;
@@ -286,6 +290,9 @@ function deadSummary(db: ScipDatabase, rows: readonly DeadRow[]): DeadSummary {
     if (kind === 'dead-code') deadCodeCount++;
     else fileInternalCount++;
     totalLoc += row.loc;
+    const usageClassification = classifyExclusion(row.relative_path, row.start_line, row.symbol, row.parent_type_name);
+    const implicitUsageReason =
+      usageClassification?.disposition === 'implicit-usage' ? usageClassification.reason : undefined;
 
     symbols.push({
       relativePath: row.relative_path,
@@ -296,6 +303,7 @@ function deadSummary(db: ScipDatabase, rows: readonly DeadRow[]): DeadSummary {
       shortName: shortenSymbol(row.symbol),
       sameFileRefs: row.same_file_refs,
       kind,
+      ...(implicitUsageReason ? { implicitUsageReason } : {}),
     });
   }
 

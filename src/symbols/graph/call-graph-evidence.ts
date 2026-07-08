@@ -21,7 +21,8 @@ import { buildFileDepGraph } from './file-dep-graph.js';
 import { getResolvedReferenceSites } from '../references/reference-sites.js';
 import type { IndexedDefinition, SymbolLocation, SymbolMatch } from '../../domain/types.js';
 import type { SemanticCallee } from '../../semantic/types.js';
-import { isTypeScriptLike } from '../../semantic/typescript/source-kinds.js';
+import { semanticProviderLanguageForPath } from '../../semantic/provider-cache.js';
+import { rustSemanticEngineIdentity } from '../../semantic/rust/engine-identity.js';
 import { semanticCalleeMap, semanticEvidenceProduct, semanticReferences } from '../../semantic/shared-primitives.js';
 import { profileEnabled, profileSpan } from '../../instrumentation/profile.js';
 import { getGlobalLeafIndex, pickAstCallCandidate, sameLanguageCandidates } from '../leaf-symbol-index.js';
@@ -295,7 +296,7 @@ function cachedSemanticCalleeMap(
   const result = new Map<number, SemanticCallee[]>();
   const misses: Array<{ def: IndexedDefinition | SymbolMatch; contentHash: string; depsDigest: string }> = [];
   const unkeyed: Array<IndexedDefinition | SymbolMatch> = [];
-  let skippedNonTs = 0;
+  let skippedUnsupportedLanguage = 0;
   let sourceMissing = 0;
   let cacheHits = 0;
   let parseFailures = 0;
@@ -304,8 +305,8 @@ function cachedSemanticCalleeMap(
     'semantic.callees.cache-scan',
     () => {
       for (const def of definitions) {
-        if (!isTypeScriptLike(def.relativePath)) {
-          if (profiling) skippedNonTs += 1;
+        if (!semanticProviderLanguageForPath(def.relativePath)) {
+          if (profiling) skippedUnsupportedLanguage += 1;
           continue;
         }
         const source = getSourceText(db, def.relativePath);
@@ -315,7 +316,7 @@ function cachedSemanticCalleeMap(
           continue;
         }
         const contentHash = fileContentHash(db, def.relativePath, source);
-        const depsDigest = depsDigestFor(db, def.relativePath);
+        const depsDigest = semanticCalleeDepsDigest(db, def.relativePath);
         const cached = readCachedSemanticCallees(db, def.relativePath, def.symbol, contentHash, depsDigest);
         if (cached !== null) {
           const callees = parseCachedCallees(cached);
@@ -331,7 +332,7 @@ function cachedSemanticCalleeMap(
     },
     () => ({
       definitions: definitions.length,
-      skippedNonTs,
+      skippedUnsupportedLanguage,
       sourceMissing,
       cacheHits,
       parseFailures,
@@ -359,15 +360,16 @@ function cachedSemanticCalleeMap(
     }),
   );
   for (const [symbolId, callees] of computed) result.set(symbolId, callees);
-  const providerAvailable = semanticEvidenceProduct(db).capability('semantic-callees').available;
-  if (providerAvailable) {
-    const entries = misses.map((miss) => ({
+  const entries = misses
+    .filter((miss) => semanticEvidenceProduct(db).capability('semantic-callees', miss.def.relativePath).available)
+    .map((miss) => ({
       relativePath: miss.def.relativePath,
       symbol: miss.def.symbol,
       contentHash: miss.contentHash,
       depsDigest: miss.depsDigest,
       payload: JSON.stringify(computed.get(miss.def.symbolId) ?? []),
     }));
+  if (entries.length > 0) {
     profileSpan(
       'semantic.callees.cache-write',
       () => writeCachedSemanticCalleesBatch(db, entries),
@@ -386,6 +388,23 @@ function cachedSemanticCalleeMap(
     );
   }
   return result;
+}
+
+function semanticCalleeDepsDigest(db: ScipDatabase, relativePath: string): string {
+  const depsDigest = depsDigestFor(db, relativePath);
+  const language = semanticProviderLanguageForPath(relativePath);
+  if (language === 'rust') {
+    return sha256Hex(
+      JSON.stringify({
+        kind: 'semantic-callees',
+        language,
+        engine: rustSemanticEngineIdentity(db.config.projectRoot),
+        positionMapping: 'nearby-leaf-v1',
+        depsDigest,
+      }),
+    );
+  }
+  return depsDigest;
 }
 
 function parseCachedCallees(payload: string): SemanticCallee[] | null {

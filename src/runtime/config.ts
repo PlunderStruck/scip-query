@@ -59,8 +59,9 @@ const ROOT_CONFIG_KEYS = new Set([
 const WATCH_CONFIG_KEYS = new Set(['enabled', 'debounceMs', 'cooldownMs', 'gitPollMs', 'autoRefresh', 'ignore']);
 const HOOK_CONFIG_KEYS = new Set(['router']);
 const ENTRY_ROOTS_CONFIG_KEYS = new Set(['pathPrefixes', 'files', 'symbolPatterns', 'qualifiedVars']);
-const SEMANTIC_CONFIG_KEYS = new Set(['typescript']);
+const SEMANTIC_CONFIG_KEYS = new Set(['typescript', 'rust']);
 const TYPESCRIPT_SEMANTIC_CONFIG_KEYS = new Set(['tsconfigs']);
+const RUST_SEMANTIC_CONFIG_KEYS = new Set(['rustAnalyzerPath']);
 const INDEXER_CONFIG_KEYS = new Set(SUPPORTED_LANGUAGES);
 const INDEXER_OVERRIDE_CONFIG_KEYS = new Set(['pnpmWorkspaces', 'projectMode', 'projects', 'configPath']);
 const LOCALITY_CONFIG_KEYS = new Set(['architecturalBoundarySegments']);
@@ -179,6 +180,17 @@ export function validateProjectConfig(
       level: 'warning',
       path: 'indexer.typescript.pnpmWorkspaces',
       message: 'Ignored when projectMode is "workspace"; explicit TypeScript projects are indexed directly.',
+    });
+  }
+  const rustSemantic = config.semantic?.rust;
+  if (
+    rustSemantic?.rustAnalyzerPath !== undefined &&
+    (typeof rustSemantic.rustAnalyzerPath !== 'string' || rustSemantic.rustAnalyzerPath.trim() === '')
+  ) {
+    diagnostics.push({
+      level: 'error',
+      path: 'semantic.rust.rustAnalyzerPath',
+      message: 'Rust analyzer path must be a non-empty string.',
     });
   }
   const clojureIndexer = config.indexer?.clojure;
@@ -540,6 +552,7 @@ function reportUnknownConfigKeys(config: ProjectConfig, diagnostics: ConfigDiagn
     'semantic.typescript',
     TYPESCRIPT_SEMANTIC_CONFIG_KEYS,
   );
+  reportUnknownObjectKeys(diagnostics, typedConfig.semantic?.rust, 'semantic.rust', RUST_SEMANTIC_CONFIG_KEYS);
   reportUnknownObjectKeys(diagnostics, typedConfig.locality, 'locality', LOCALITY_CONFIG_KEYS);
   reportUnknownObjectKeys(diagnostics, typedConfig.docs, 'docs', DOCS_CONFIG_KEYS);
 

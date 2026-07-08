@@ -2,6 +2,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
 import { gitEvidenceProduct } from '../../analysis/git-history.js';
+import type { GitHistoryMode } from '../../analysis/git-history.js';
 import { fileContentHash } from '../../storage/evidence-cache.js';
 import { isRecord, stringArray } from '../../storage/evidence-payload.js';
 import { createFileEvidenceProduct, evidenceProductInvalidation } from '../../storage/evidence-products.js';
@@ -147,10 +148,16 @@ const PATH_REFERENCE_PATTERN = /([A-Za-z0-9_@-]+(?:\/[A-Za-z0-9_.@-]+)+\.[A-Za-z
  */
 export function docDrift(
   db: ScipDatabase,
-  opts: { doc?: string; limit?: number; minCoupling?: number; includeSnapshotExcluded?: boolean } = {},
+  opts: {
+    doc?: string;
+    limit?: number;
+    minCoupling?: number;
+    includeSnapshotExcluded?: boolean;
+    historyMode?: GitHistoryMode;
+  } = {},
 ): DocDriftResult {
   const { doc, limit = 20, minCoupling = MIN_COUPLING, includeSnapshotExcluded = false } = opts;
-  const scan = buildDocDriftScanIndex(db);
+  const scan = buildDocDriftScanIndex(db, opts.historyMode ?? 'bounded');
   if (!scan) return { available: false, commitsAnalyzed: 0, docsScanned: 0, findings: [] };
 
   const findings: DocDriftFinding[] = [];
@@ -367,8 +374,8 @@ function docDriftActionTier(
   return evidence === 'co-change' ? 'signal' : 'direct';
 }
 
-function buildDocDriftScanIndex(db: ScipDatabase): DocDriftScanIndex | null {
-  const git = gitEvidenceProduct(db);
+function buildDocDriftScanIndex(db: ScipDatabase, historyMode: GitHistoryMode): DocDriftScanIndex | null {
+  const git = gitEvidenceProduct(db, { historyMode });
   const history = git.commitHistory();
   if (!history) return null;
   const tracked = git.trackedFiles() ?? new Set<string>();

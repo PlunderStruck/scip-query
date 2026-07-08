@@ -483,6 +483,96 @@ describe('evidence cache', () => {
     }
   });
 
+  it('allows intentional partial-index project fingerprints without sharing complete-index cache keys', () => {
+    const partialDir = mkdtempSync(join(tmpdir(), 'scip-query-partial-project-fingerprint-'));
+    const partialRoot = join(partialDir, 'project');
+    const partialDbPath = join(partialDir, 'index.db');
+    writeFixtureFiles(partialRoot, { [FILE]: SOURCE_LINES });
+    evidenceFixtureDb(partialDbPath).document(1, 'typescript', FILE).write();
+
+    const fingerprint = {
+      version: 1,
+      languages: ['typescript', 'rust'],
+      files: [{ path: FILE, size: 123, hash: 'source-a' }],
+    };
+    writeFileSync(
+      join(partialDir, 'meta.json'),
+      JSON.stringify({
+        version: 3,
+        status: 'partial',
+        fingerprint,
+        indexedLanguages: ['rust'],
+        skipped: [{ language: 'c', reason: 'fixture skipped language' }],
+      }),
+    );
+
+    try {
+      const partialDb = new ScipDatabase({
+        projectRoot: partialRoot,
+        dbPath: partialDbPath,
+        indexPath: join(partialDir, 'index.scip'),
+      });
+      const partialFingerprint = projectEvidenceFingerprint(partialDb);
+      partialDb.close();
+      expect(partialFingerprint).not.toBeNull();
+
+      writeFileSync(
+        join(partialDir, 'meta.json'),
+        JSON.stringify({
+          version: 3,
+          status: 'complete',
+          fingerprint,
+          indexedLanguages: ['rust'],
+          skipped: [],
+        }),
+      );
+      const completeDb = new ScipDatabase({
+        projectRoot: partialRoot,
+        dbPath: partialDbPath,
+        indexPath: join(partialDir, 'index.scip'),
+      });
+      try {
+        expect(projectEvidenceFingerprint(completeDb)).not.toBe(partialFingerprint);
+      } finally {
+        completeDb.close();
+      }
+    } finally {
+      rmSync(partialDir, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps semantic reference rows for other cache namespaces when writing a new namespace', () => {
+    const db = openDb();
+    try {
+      const typeScriptPayload = JSON.stringify([{ file: 'src/consumer.ts', line: 2, column: 4 }]);
+      const rustPayload = JSON.stringify([{ file: 'src/consumer.rs', line: 8, column: 2 }]);
+
+      writeCachedSemanticReferencesBatch(db, [
+        {
+          relativePath: FILE,
+          symbol: 'sym#greet',
+          projectFingerprint: 'typescript-cache-fingerprint',
+          payload: typeScriptPayload,
+        },
+      ]);
+      writeCachedSemanticReferencesBatch(db, [
+        {
+          relativePath: 'src/lib.rs',
+          symbol: 'rust#run',
+          projectFingerprint: 'rust-cache-fingerprint',
+          payload: rustPayload,
+        },
+      ]);
+
+      expect(readCachedSemanticReferences(db, FILE, 'sym#greet', 'typescript-cache-fingerprint')).toBe(
+        typeScriptPayload,
+      );
+      expect(readCachedSemanticReferences(db, 'src/lib.rs', 'rust#run', 'rust-cache-fingerprint')).toBe(rustPayload);
+    } finally {
+      db.close();
+    }
+  });
+
   it('round-trips the finding-outcome ledger and caps rows per check (FIFO)', () => {
     const db = openDb();
     try {

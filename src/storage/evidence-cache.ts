@@ -41,7 +41,11 @@ export const FILE_EVIDENCE_KINDS = [
 
 export type FileEvidenceKind = (typeof FILE_EVIDENCE_KINDS)[number];
 
-export const PROJECT_EVIDENCE_KINDS = ['file-dependency-graph'] as const;
+export const PROJECT_EVIDENCE_KINDS = [
+  'file-dependency-graph',
+  'semantic-import-usage',
+  'semantic-signatures',
+] as const;
 
 export type ProjectEvidenceKind = (typeof PROJECT_EVIDENCE_KINDS)[number];
 
@@ -136,13 +140,15 @@ export function projectEvidenceFingerprint(db: ScipDatabase): string | null {
       const metadata = JSON.parse(
         readFileSync(join(dirname(db.config.dbPath), 'meta.json'), 'utf-8'),
       ) as ReindexEvidenceMetadata;
-      if ((metadata.version !== 2 && metadata.version !== 3) || metadata.status !== 'complete') return null;
+      if (metadata.version !== 2 && metadata.version !== 3) return null;
+      if (metadata.status !== 'complete' && metadata.status !== 'partial') return null;
       if (metadata.fingerprint === undefined) return null;
       const indexedLanguages = Array.isArray(metadata.indexedLanguages) ? [...metadata.indexedLanguages].sort() : [];
       return sha256Hex(
         JSON.stringify({
           fingerprint: metadata.fingerprint,
           indexedLanguages,
+          status: metadata.status,
         }),
       );
     } catch (error) {
@@ -267,7 +273,9 @@ function connectionFor(db: ScipDatabase): EvidenceConnection | null {
         `INSERT OR REPLACE INTO semantic_references
            (relative_path, symbol, project_fingerprint, version, payload) VALUES (?, ?, ?, ?, ?)`,
       ),
-      dropStaleReferences: evidence.prepare('DELETE FROM semantic_references WHERE project_fingerprint != ?'),
+      dropStaleReferences: evidence.prepare(
+        'DELETE FROM semantic_references WHERE relative_path = ? AND project_fingerprint != ?',
+      ),
       readFindingOutcomeLedger: evidence.prepare(
         'SELECT check_name, finding_id, first_seen, last_seen, times_shown, outcome FROM finding_outcome_ledger',
       ),
@@ -450,9 +458,10 @@ export function writeCachedSemanticReferencesBatch(
     connection.evidence.transaction(() => {
       const staleDeleteKeys = new Set<string>();
       for (const entry of entries) {
-        if (!staleDeleteKeys.has(entry.projectFingerprint)) {
-          staleDeleteKeys.add(entry.projectFingerprint);
-          connection.dropStaleReferences.run(entry.projectFingerprint);
+        const staleDeleteKey = `${entry.relativePath}\0${entry.projectFingerprint}`;
+        if (!staleDeleteKeys.has(staleDeleteKey)) {
+          staleDeleteKeys.add(staleDeleteKey);
+          connection.dropStaleReferences.run(entry.relativePath, entry.projectFingerprint);
         }
         connection.writeReferences.run(
           entry.relativePath,

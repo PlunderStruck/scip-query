@@ -60,11 +60,13 @@ const handleAffected = dbCommand(({ db, args, opts }) => {
 
 const handleCoChange = budgetedDbCommand('co-change', ({ db, args, opts, budget }) => {
   const file = args[0] === undefined ? undefined : stringArg(args, 0);
+  const full = booleanOptionValue(opts, 'full');
   const result = queries.coChange(db, file, {
     minTogether: definedNumberOption(opts, 'minTogether', 4),
     limit: definedLimitOption(opts, 'limit', 30),
     includeLinked: opts['all'] === true,
     scanLimit: budget.scanLimit,
+    historyMode: full ? 'full' : 'bounded',
   });
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('co-change', args, opts, result, { analysisBudget: budget.analysisBudget });
@@ -217,7 +219,8 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
   if (hookMode && isStopHookReentry(readHookInput())) {
     return; // this turn was already continued by a previous block — don't loop
   }
-  const budget = commandAnalysisBudget(db, 'diff-gate', booleanOptionValue(opts, 'full'), {
+  const full = booleanOptionValue(opts, 'full');
+  const budget = commandAnalysisBudget(db, 'diff-gate', full, {
     quiet: hookMode || booleanOptionValue(opts, 'json'),
   });
   const result = queries.diffGate(db, {
@@ -228,6 +231,7 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
     includeBaseline: booleanOptionValue(opts, 'baseline'),
     scanLimit: budget.scanLimit,
     semantic: budget.semantic,
+    historyMode: full ? 'full' : 'bounded',
     skip: parseSkipChecks(opts['skip']),
   });
   const blocking = queries.blockingFindings(result.findings);
@@ -429,7 +433,7 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
       option('--max-echo-checks <n>', 'Maximum changed symbols to test for echoes (default: all)', parseInteger),
       option('--max-helpers <n>', 'Maximum new helpers to score for incomplete-migration (default: all)', parseInteger),
       option('--baseline', 'Also run the full health-baseline ratchet'),
-      option('--full', 'Run unbounded semantic analysis on large indexes'),
+      option('--full', 'Run unbounded semantic and git-history analysis on large indexes'),
       option(
         '--skip <check>',
         'Skip a check (repeatable): echo, incomplete-migration, co-change-partner, twin-partner, coverage-contract, doc-reference, unused-params, new-dead, baseline',
@@ -454,7 +458,7 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
       option('--min-containment <n>', 'Minimum share of helper callees a site must contain (0-1)', parseNumber, 0.7),
       option('--max-helpers <n>', 'Maximum new helpers to score (default: all)', parseInteger),
       option('-n, --limit <n>', 'Maximum findings to report', parseInteger, 20),
-      option('--full', 'Run unbounded analysis on large indexes'),
+      option('--full', 'Run unbounded git-history analysis on large indexes'),
     ]),
     heuristic: { label: 'incomplete migration candidates' },
     renderShape: 'custom',

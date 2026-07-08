@@ -899,6 +899,7 @@ function verificationLintCaveat(checkers: readonly string[]): string {
 }
 
 export const handleRecentDuplicates = budgetedDbCommand('recent-duplicates', ({ db, args, opts, budget }) => {
+  const full = booleanOptionValue(opts, 'full');
   const result = queries.recentDuplicates(db, {
     windowCommits: definedNumberOption(opts, 'window', 100),
     minSimilarity: numberOptionValue(opts, 'minSimilarity'),
@@ -906,6 +907,7 @@ export const handleRecentDuplicates = budgetedDbCommand('recent-duplicates', ({ 
     scope: stringOptionValue(opts, 'scope'),
     scanLimit: budget.scanLimit,
     semantic: budget.semantic,
+    historyMode: full ? 'full' : 'bounded',
   });
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('recent-duplicates', args, opts, result, { analysisBudget: budget.analysisBudget });
@@ -964,6 +966,7 @@ export const handleDocDrift = dbCommand(({ db, args, opts }) => {
     limit: definedLimitOption(opts, 'limit', 20),
     minCoupling: definedNumberOption(opts, 'minCoupling', 3),
     includeSnapshotExcluded: full,
+    historyMode: full ? 'full' : 'bounded',
   });
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('doc-drift', args, opts, result);

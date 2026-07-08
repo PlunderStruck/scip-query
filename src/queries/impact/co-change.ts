@@ -3,7 +3,12 @@ import { join } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
 import { classifyFile } from '../../analysis/file-classifier.js';
 import { gitEvidenceProduct } from '../../analysis/git-history.js';
-import type { CoChangeCommitScope, CoChangeRecency, CoChangeSubjectContext } from '../../analysis/git-history.js';
+import type {
+  CoChangeCommitScope,
+  CoChangeRecency,
+  CoChangeSubjectContext,
+  GitHistoryMode,
+} from '../../analysis/git-history.js';
 import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
 
 export type CoChangePartnerClass =
@@ -96,6 +101,7 @@ export function coChange(
     limit?: number;
     includeLinked?: boolean;
     maxFilesPerCommit?: number;
+    historyMode?: GitHistoryMode;
     /**
      * Caps how many of the (already together-count-sorted) candidate pairs
      * get classified — the per-pair loop below does filesystem/graph lookups
@@ -109,7 +115,7 @@ export function coChange(
   } = {},
 ): CoChangeResult {
   const { minTogether = 4, minConfidence = 0.6, limit = 30, maxFilesPerCommit = 20 } = opts;
-  const git = gitEvidenceProduct(db);
+  const git = gitEvidenceProduct(db, { historyMode: opts.historyMode });
   const history = git.commitHistory();
   const partnersMode = file !== undefined;
   const allPairs = git.coChangePairs({

@@ -127,7 +127,7 @@ function flattenRustUseTree(node: SyntaxNode, prefix: string): RustImportLeaf[] 
   }
 }
 
-function joinRustPath(prefix: string, suffix: string): string {
+export function joinRustPath(prefix: string, suffix: string): string {
   if (!prefix) return suffix;
   if (!suffix) return prefix;
   return `${prefix}::${suffix}`;

@@ -10,6 +10,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import type { ScipDatabase } from '../storage/db.js';
+import { parsePositiveInteger } from '../domain/number-parsing.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
 import { createFileEvidenceProduct, evidenceProductInvalidation } from '../storage/evidence-products.js';
 
@@ -44,6 +45,7 @@ export interface ChangeAmplification {
 export type CoChangeCommitScope = 'focused' | 'mixed' | 'broad-sweep';
 export type CoChangeRecency = 'recent' | 'stale';
 export type CoChangeExternalIssueLabelStatus = 'unavailable';
+export type GitHistoryMode = 'bounded' | 'full';
 
 export interface CoChangeSubjectContext {
   /** Locally inferred from commit subjects, not issue tracker metadata. */
@@ -102,6 +104,10 @@ export interface GitCoChangeOptions {
   maxFilesPerCommit?: number;
 }
 
+export interface GitEvidenceProductOptions {
+  historyMode?: GitHistoryMode;
+}
+
 export interface GitEvidenceProduct {
   capability(slot: GitEvidenceSlot): GitEvidenceCapability;
   commitHistory(): CommitHistory | null;
@@ -114,7 +120,7 @@ export interface GitEvidenceProduct {
   directionalCoChangePairsForFiles(files: ReadonlySet<string>, opts?: GitCoChangeOptions): CoChangePair[] | null;
 }
 
-const MAX_COMMITS = 2_000;
+const DEFAULT_MAX_COMMITS = 2_000;
 const BULK_COMMIT_FILE_CAP = 50;
 const FOCUSED_HISTORY_FILE_CAP = 64;
 const BROAD_COCHANGE_FILE_THRESHOLD = 8;
@@ -166,19 +172,21 @@ function headKeyedGitMap<T>(
   };
 }
 
-const commitHistoryCache = headKeyedGitValue<CommitHistory>('git-commit-history');
+const commitHistoryCache = headKeyedGitMap<CommitHistory>('git-commit-history');
 
-export function gitEvidenceProduct(db: ScipDatabase): GitEvidenceProduct {
+export function gitEvidenceProduct(db: ScipDatabase, opts: GitEvidenceProductOptions = {}): GitEvidenceProduct {
+  const historyMode = opts.historyMode ?? 'bounded';
   return {
     capability: (slot) => gitEvidenceCapability(db, slot),
-    commitHistory: () => readCommitHistory(db),
-    fileChurn: () => buildFileChurn(db),
-    changeAmplification: () => buildChangeAmplification(db),
+    commitHistory: () => readCommitHistory(db, historyMode),
+    fileChurn: () => buildFileChurn(db, historyMode),
+    changeAmplification: () => buildChangeAmplification(db, historyMode),
     trackedFiles: () => readTrackedFiles(db),
-    fileAddRecords: () => readFileAddRecords(db),
-    coChangePairs: (opts = {}) => buildCoChangePairs(db, opts),
-    coChangePairsForFiles: (files, opts = {}) => buildCoChangePairsForFiles(db, files, opts),
-    directionalCoChangePairsForFiles: (files, opts = {}) => buildDirectionalCoChangePairsForFiles(db, files, opts),
+    fileAddRecords: () => readFileAddRecords(db, historyMode),
+    coChangePairs: (opts = {}) => buildCoChangePairs(db, opts, historyMode),
+    coChangePairsForFiles: (files, opts = {}) => buildCoChangePairsForFiles(db, files, opts, historyMode),
+    directionalCoChangePairsForFiles: (files, opts = {}) =>
+      buildDirectionalCoChangePairsForFiles(db, files, opts, historyMode),
   };
 }
 
@@ -187,8 +195,10 @@ export function getCommitHistory(db: ScipDatabase): CommitHistory | null {
   return gitEvidenceProduct(db).commitHistory();
 }
 
-function readCommitHistory(db: ScipDatabase): CommitHistory | null {
-  return commitHistoryCache(db, loadCommitHistory);
+function readCommitHistory(db: ScipDatabase, historyMode: GitHistoryMode = 'bounded'): CommitHistory | null {
+  return commitHistoryCache(db, gitHistoryCacheKey(historyMode), (projectRoot, head) =>
+    loadCommitHistory(projectRoot, head, historyMode),
+  );
 }
 
 function gitEvidenceCapability(db: ScipDatabase, slot: GitEvidenceSlot): GitEvidenceCapability {
@@ -226,15 +236,14 @@ export function runGit(projectRoot: string, args: string[]): string {
   });
 }
 
-function loadCommitHistory(projectRoot: string, head: string): CommitHistory | null {
+function loadCommitHistory(projectRoot: string, head: string, historyMode: GitHistoryMode): CommitHistory | null {
   let raw: string;
   try {
     raw = runGit(projectRoot, [
       'log',
       '--no-merges',
       '--name-only',
-      `-n`,
-      String(MAX_COMMITS),
+      ...gitHistoryLimitArgs(historyMode),
       '--pretty=format:%x01%H%x00%ct%x00%s',
     ]);
   } catch {
@@ -255,8 +264,8 @@ export function getFileChurn(db: ScipDatabase): Map<string, FileChurn> | null {
   return gitEvidenceProduct(db).fileChurn();
 }
 
-function buildFileChurn(db: ScipDatabase): Map<string, FileChurn> | null {
-  const history = readCommitHistory(db);
+function buildFileChurn(db: ScipDatabase, historyMode: GitHistoryMode): Map<string, FileChurn> | null {
+  const history = readCommitHistory(db, historyMode);
   if (!history) return null;
   const churn = new Map<string, FileChurn>();
   for (const commit of history.commits) {
@@ -277,8 +286,8 @@ export function getChangeAmplification(db: ScipDatabase): ChangeAmplification | 
   return gitEvidenceProduct(db).changeAmplification();
 }
 
-function buildChangeAmplification(db: ScipDatabase): ChangeAmplification | null {
-  const history = readCommitHistory(db);
+function buildChangeAmplification(db: ScipDatabase, historyMode: GitHistoryMode): ChangeAmplification | null {
+  const history = readCommitHistory(db, historyMode);
   if (!history || history.commits.length === 0) return null;
   const sizes = history.commits
     .map((commit) => commit.files.length)
@@ -321,7 +330,7 @@ function readTrackedFiles(db: ScipDatabase): Set<string> | null {
   });
 }
 
-const fileAddCache = headKeyedGitValue<Map<string, FileAddRecord>>('git-file-adds');
+const fileAddCache = headKeyedGitMap<Map<string, FileAddRecord>>('git-file-adds');
 const FILE_ADD_CACHE_KEY = '__git__/file-adds';
 const FILE_ADD_PRODUCT = createFileEvidenceProduct<Map<string, FileAddRecord>>({
   kind: 'git-file-adds',
@@ -332,24 +341,30 @@ const FILE_ADD_PRODUCT = createFileEvidenceProduct<Map<string, FileAddRecord>>({
 
 /**
  * When each file was first added, from `git log --diff-filter=A` over the
- * bounded window. Files older than the window are absent — callers should
- * treat absence as "established".
+ * selected history window. Files older than a bounded window are absent —
+ * callers should treat absence as "established".
  */
 // scip-query: ignore-wrapper — legacy git helper kept for source-compatible callers; the product owns access.
 export function getFileAddRecords(db: ScipDatabase): Map<string, FileAddRecord> | null {
   return gitEvidenceProduct(db).fileAddRecords();
 }
 
-function readFileAddRecords(db: ScipDatabase): Map<string, FileAddRecord> | null {
-  return fileAddCache(db, (projectRoot, head) => cachedFileAddRecords(db, projectRoot, head));
+function readFileAddRecords(db: ScipDatabase, historyMode: GitHistoryMode): Map<string, FileAddRecord> | null {
+  const key = gitHistoryCacheKey(historyMode);
+  return fileAddCache(db, key, (projectRoot, head) => cachedFileAddRecords(db, projectRoot, head, historyMode));
 }
 
-function cachedFileAddRecords(db: ScipDatabase, projectRoot: string, head: string): Map<string, FileAddRecord> | null {
-  const cached = FILE_ADD_PRODUCT.read(db, FILE_ADD_CACHE_KEY, head);
+function cachedFileAddRecords(
+  db: ScipDatabase,
+  projectRoot: string,
+  head: string,
+  historyMode: GitHistoryMode,
+): Map<string, FileAddRecord> | null {
+  const cached = FILE_ADD_PRODUCT.read(db, fileAddCacheKey(historyMode), head);
   if (cached) return cached;
 
-  const adds = loadFileAddRecords(projectRoot);
-  if (adds) FILE_ADD_PRODUCT.write(db, FILE_ADD_CACHE_KEY, head, adds);
+  const adds = loadFileAddRecords(projectRoot, historyMode);
+  if (adds) FILE_ADD_PRODUCT.write(db, fileAddCacheKey(historyMode), head, adds);
   return adds;
 }
 
@@ -383,7 +398,7 @@ function parseFileAddRecordsPayload(payload: string | null): Map<string, FileAdd
   }
 }
 
-function loadFileAddRecords(projectRoot: string): Map<string, FileAddRecord> | null {
+function loadFileAddRecords(projectRoot: string, historyMode: GitHistoryMode): Map<string, FileAddRecord> | null {
   let raw: string;
   try {
     raw = runGit(projectRoot, [
@@ -391,8 +406,7 @@ function loadFileAddRecords(projectRoot: string): Map<string, FileAddRecord> | n
       '--no-merges',
       '--find-renames',
       '--name-status',
-      '-n',
-      String(MAX_COMMITS),
+      ...gitHistoryLimitArgs(historyMode),
       '--pretty=format:%x01%H%x00%ct%x00%s',
     ]);
   } catch {
@@ -455,10 +469,14 @@ export function getCoChangePairs(db: ScipDatabase, opts: GitCoChangeOptions = {}
   return gitEvidenceProduct(db).coChangePairs(opts);
 }
 
-function buildCoChangePairs(db: ScipDatabase, opts: GitCoChangeOptions): CoChangePair[] | null {
-  const key = `all\x00${coChangeOptionsKey(opts)}`;
+function buildCoChangePairs(
+  db: ScipDatabase,
+  opts: GitCoChangeOptions,
+  historyMode: GitHistoryMode,
+): CoChangePair[] | null {
+  const key = `all\x00${gitHistoryCacheKey(historyMode)}\x00${coChangeOptionsKey(opts)}`;
   const pairs = coChangePairsCache(db, key, () => {
-    const history = readCommitHistory(db);
+    const history = readCommitHistory(db, historyMode);
     if (!history) return null;
     return coChangePairsFromHistory(history, opts);
   });
@@ -479,11 +497,12 @@ function buildCoChangePairsForFiles(
   db: ScipDatabase,
   files: ReadonlySet<string>,
   opts: GitCoChangeOptions,
+  historyMode: GitHistoryMode,
 ): CoChangePair[] | null {
   if (files.size === 0) return [];
-  const key = `files\x00${filesKey(files)}\x00${coChangeOptionsKey(opts)}`;
+  const key = `files\x00${gitHistoryCacheKey(historyMode)}\x00${filesKey(files)}\x00${coChangeOptionsKey(opts)}`;
   const pairs = coChangePairsCache(db, key, () => {
-    const history = readCommitHistory(db);
+    const history = readCommitHistory(db, historyMode);
     if (!history) return null;
     return coChangePairsFromHistory(history, opts, files);
   });
@@ -503,13 +522,17 @@ function buildDirectionalCoChangePairsForFiles(
   db: ScipDatabase,
   files: ReadonlySet<string>,
   opts: GitCoChangeOptions,
+  historyMode: GitHistoryMode,
 ): CoChangePair[] | null {
   if (files.size === 0) return [];
   const maxFilesPerCommit = opts.maxFilesPerCommit ?? BULK_COMMIT_FILE_CAP;
-  if (files.size > FOCUSED_HISTORY_FILE_CAP) return buildCoChangePairsForFiles(db, files, opts);
-  const key = `directional\x00${filesKey(files)}\x00${coChangeOptionsKey({ ...opts, maxFilesPerCommit })}`;
+  if (files.size > FOCUSED_HISTORY_FILE_CAP) return buildCoChangePairsForFiles(db, files, opts, historyMode);
+  const key = `directional\x00${gitHistoryCacheKey(historyMode)}\x00${filesKey(files)}\x00${coChangeOptionsKey({
+    ...opts,
+    maxFilesPerCommit,
+  })}`;
   const pairs = directionalCoChangePairsCache(db, key, (projectRoot, head) => {
-    const history = loadFocusedCommitHistory(projectRoot, head, files, maxFilesPerCommit);
+    const history = loadFocusedCommitHistory(projectRoot, head, files, maxFilesPerCommit, historyMode);
     if (!history) return null;
     return coChangePairsFromHistory(history, opts, files);
   });
@@ -626,10 +649,11 @@ function loadFocusedCommitHistory(
   head: string,
   focusFiles: ReadonlySet<string>,
   maxFilesPerCommit: number,
+  historyMode: GitHistoryMode,
 ): CommitHistory | null {
   let globalHeaders: Array<{ hash: string; timestamp: number }>;
   try {
-    globalHeaders = loadGlobalCommitHeaders(projectRoot);
+    globalHeaders = loadGlobalCommitHeaders(projectRoot, historyMode);
   } catch {
     return null;
   }
@@ -641,8 +665,7 @@ function loadFocusedCommitHistory(
       'log',
       '--no-merges',
       '--format=%H',
-      '-n',
-      String(MAX_COMMITS),
+      ...gitHistoryLimitArgs(historyMode),
       '--',
       ...[...focusFiles].sort(),
     ]);
@@ -677,8 +700,11 @@ function loadFocusedCommitHistory(
   return { head, ...parsed, newestAnalyzedAt };
 }
 
-function loadGlobalCommitHeaders(projectRoot: string): Array<{ hash: string; timestamp: number }> {
-  const raw = runGit(projectRoot, ['log', '--no-merges', '--format=%H%x00%ct', '-n', String(MAX_COMMITS)]);
+function loadGlobalCommitHeaders(
+  projectRoot: string,
+  historyMode: GitHistoryMode,
+): Array<{ hash: string; timestamp: number }> {
+  const raw = runGit(projectRoot, ['log', '--no-merges', '--format=%H%x00%ct', ...gitHistoryLimitArgs(historyMode)]);
   return raw
     .split('\n')
     .map((line) => line.trim())
@@ -688,6 +714,23 @@ function loadGlobalCommitHeaders(projectRoot: string): Array<{ hash: string; tim
       return { hash: hash ?? '', timestamp: Number(timestampRaw) || 0 };
     })
     .filter((entry) => entry.hash !== '');
+}
+
+function gitHistoryLimitArgs(historyMode: GitHistoryMode): string[] {
+  return historyMode === 'full' ? [] : ['-n', String(boundedCommitLimit())];
+}
+
+function boundedCommitLimit(): number {
+  return parsePositiveInteger(process.env['SCIP_QUERY_GIT_HISTORY_MAX_COMMITS']) ?? DEFAULT_MAX_COMMITS;
+}
+
+function gitHistoryCacheKey(historyMode: GitHistoryMode): string {
+  return historyMode === 'full' ? 'full' : `bounded:${boundedCommitLimit()}`;
+}
+
+function fileAddCacheKey(historyMode: GitHistoryMode): string {
+  const historyKey = gitHistoryCacheKey(historyMode);
+  return historyKey === `bounded:${DEFAULT_MAX_COMMITS}` ? FILE_ADD_CACHE_KEY : `${FILE_ADD_CACHE_KEY}:${historyKey}`;
 }
 
 function newestAnalyzedTimestamp(

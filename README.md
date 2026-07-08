@@ -133,6 +133,8 @@ Heuristic findings are candidates for inspection, not verdicts — the finding a
 
 Graph navigation works through supported [SCIP](https://github.com/sourcegraph/scip) indexers. Higher-confidence augmentation and verification vary by language and project toolchain. TypeScript currently has the richest semantic augmentation. React and Vue add built-in framework-aware maintainability checks on top of the core workflow.
 
+Rust projects are indexed through rust-analyzer's SCIP output. scip-query also registers Rust semantic-provider readiness so capability output can distinguish a reachable rust-analyzer backend from implemented semantic facts; Rust reference, callee, signature, and module/use semantic evidence are still future work.
+
 Clojure projects are indexed through `scip-clojure`. Source fallback adds namespace imports, callable/callsite evidence, and protocol/record member evidence for `.clj`, `.cljs`, and `.cljc` files. When the project has `clj-kondo` available, cleanup-plan verification can use `clj-kondo --lint .`. Clojure does not currently have a scip-query semantic provider equivalent to TypeScript's `ts-morph` layer; capability output reports that boundary explicitly.
 
 ## Cleaning Up AI-Generated Code

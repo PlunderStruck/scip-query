@@ -1,0 +1,7 @@
+{
+  "id": "SQF1F64A5F7AEE",
+  "check": "echo",
+  "file": "src/semantic/typescript/tsserver-provider.ts",
+  "reason": "Accepted optional-dependency loader echo: loadTypeScript intentionally shares the small catch-and-cache shape used by other optional loaders, but the loaded module and provider semantics differ. Extracting a shared loader is not useful until more semantic engines share one policy.",
+  "createdAt": "2026-07-08T00:00:00.000Z"
+}

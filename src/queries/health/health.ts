@@ -21,6 +21,7 @@ import { complexityHotspots } from '../quality/complexity-hotspots.js';
 import { stats } from '../navigation/stats.js';
 import { coChange, type CoChangeFinding } from '../impact/co-change.js';
 import { gitEvidenceProduct } from '../../analysis/git-history.js';
+import type { GitHistoryMode } from '../../analysis/git-history.js';
 import { getSuppressionInventory } from '../../analysis/suppressions.js';
 import { evaluateCoverageContracts } from '../cleanup/coverage-contracts.js';
 import { detectorPrecision, readLedgerRecords } from './finding-outcome-ledger.js';
@@ -44,6 +45,8 @@ interface HealthBudget {
   candidateScanLimit: number | undefined;
   candidateResultLimit: number;
   complexityResultLimit: number;
+  semantic: boolean;
+  gitHistoryMode: GitHistoryMode;
   releaseCachesBetweenPhases: boolean;
   warnings: string[];
 }
@@ -363,7 +366,12 @@ function runHealthAnalyses(
 
 function summarizeHealthDead(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): CountLocSummary {
   return runHealthPhase(db, budget, 'dead', () => {
-    const deadResult = dead(db, { scope, ...HEALTH_DETECTOR_PROFILES.dead, scanLimit: budget.candidateScanLimit });
+    const deadResult = dead(db, {
+      scope,
+      ...HEALTH_DETECTOR_PROFILES.dead,
+      scanLimit: budget.candidateScanLimit,
+      semantic: budget.semantic,
+    });
     return summarizeLoc(filterHealthDeadSymbols(db, deadResult.symbols));
   });
 }
@@ -374,6 +382,7 @@ function summarizeHealthIsolated(db: ScipDatabase, scope: string | undefined, bu
       scope,
       ...HEALTH_DETECTOR_PROFILES.isolated,
       scanLimit: budget.candidateScanLimit,
+      semantic: budget.semantic,
     });
     return summarizeLoc(filterHealthIsolatedSymbols(db, isolatedResult));
   });
@@ -392,6 +401,7 @@ function countSimilarHealthCandidates(db: ScipDatabase, scope: string | undefine
       scope,
       ...HEALTH_DETECTOR_PROFILES.similar,
       scanLimit: budget.candidateScanLimit,
+      semantic: budget.semantic,
     }),
   );
   return Math.min(count, budget.candidateResultLimit);
@@ -408,6 +418,7 @@ function countExtractionHealthCandidates(db: ScipDatabase, scope: string | undef
         ...HEALTH_DETECTOR_PROFILES.extract,
         limit: budget.candidateResultLimit,
         scanLimit: budget.candidateScanLimit,
+        semantic: budget.semantic,
       }).length,
   );
 }
@@ -558,6 +569,7 @@ function summarizeHealthWrappers(db: ScipDatabase, scope: string | undefined, bu
       ...HEALTH_DETECTOR_PROFILES.wrappers,
       limit: budget.candidateResultLimit,
       scanLimit: budget.candidateScanLimit,
+      semantic: budget.semantic,
     });
     return summarizeLocWithScore(results, wrapperHealthScore);
   });
@@ -574,6 +586,7 @@ function summarizeHealthPassthroughs(
       ...HEALTH_DETECTOR_PROFILES.passthroughs,
       limit: budget.candidateResultLimit,
       scanLimit: budget.candidateScanLimit,
+      semantic: budget.semantic,
     });
     return summarizeLocWithScore(results, passthroughHealthScore);
   });
@@ -590,6 +603,7 @@ function summarizeHealthStaleAbstractions(
       ...HEALTH_DETECTOR_PROFILES.stale,
       limit: budget.candidateResultLimit,
       scanLimit: budget.candidateScanLimit,
+      semantic: budget.semantic,
     });
     const unused = staleResult.filter((s) => s.consumers === 0).length;
     return {
@@ -604,11 +618,14 @@ function summarizeHealthStaleAbstractions(
 
 function summarizeGitEvidence(db: ScipDatabase, budget: HealthBudget): GitEvidenceSummary | null {
   return runHealthPhase(db, budget, 'git-evidence', () => {
-    const git = gitEvidenceProduct(db);
+    const git = gitEvidenceProduct(db, { historyMode: budget.gitHistoryMode });
     const churn = git.fileChurn();
     if (!churn) return null;
     const history = git.commitHistory();
-    const coChangeResult = coChange(db, undefined, { limit: budget.candidateResultLimit });
+    const coChangeResult = coChange(db, undefined, {
+      limit: budget.candidateResultLimit,
+      historyMode: budget.gitHistoryMode,
+    });
     const fileStats: Record<string, { changes: number; fixChanges: number }> = {};
     for (const [file, entry] of churn) {
       fileStats[file] = { changes: entry.changes, fixChanges: entry.fixChanges };
@@ -672,6 +689,7 @@ function summarizeHealthDrift(db: ScipDatabase, scope: string | undefined, budge
       ...HEALTH_DETECTOR_PROFILES.drift,
       includePatternDeviations: false,
       limit: Number.POSITIVE_INFINITY,
+      semantic: budget.semantic,
     });
     const healthVisible = driftResult.results.filter((result) => result.kind !== 'pattern-deviation');
     const direct = healthVisible.filter((result) => result.actionTier === 'direct').length;
@@ -697,7 +715,7 @@ function summarizeHealthComplexity(
       minLoc: 10,
       limit: budget.complexityResultLimit,
       scanLimit: budget.candidateScanLimit,
-      semantic: false,
+      semantic: budget.semantic,
     });
     return {
       top: complexResult.slice(0, 5).map((r) => ({
@@ -721,6 +739,8 @@ function healthBudget(statsResult: ReturnType<typeof stats>, full: boolean): Hea
       candidateScanLimit: undefined,
       candidateResultLimit,
       complexityResultLimit,
+      semantic: true,
+      gitHistoryMode: full ? 'full' : 'bounded',
       releaseCachesBetweenPhases: true,
       warnings:
         full && isLargeIndex
@@ -733,6 +753,8 @@ function healthBudget(statsResult: ReturnType<typeof stats>, full: boolean): Hea
     candidateScanLimit: DEFAULT_HEALTH_CANDIDATE_SCAN_LIMIT,
     candidateResultLimit,
     complexityResultLimit,
+    semantic: false,
+    gitHistoryMode: 'bounded',
     releaseCachesBetweenPhases: true,
     warnings: [
       `Large index detected; candidate-style health checks scanned their highest-priority ${DEFAULT_HEALTH_CANDIDATE_SCAN_LIMIT} symbols and reported their top ${DEFAULT_HEALTH_CANDIDATE_RESULT_LIMIT} findings. Enable full mode for unbounded candidate counts.`,

@@ -12,6 +12,7 @@ import { createEvidenceSchema } from '../../fixtures/evidence-fixture.js';
 const sym = (name: string) => `scip-typescript npm fixture 1.0.0 src/\`foo.ts\`/${name}().`;
 const publicSym = (name: string) => `scip-typescript npm fixture 1.0.0 src/\`public.ts\`/${name}().`;
 const routeSym = (name: string) => `scip-typescript npm fixture 1.0.0 src/app/api/health/\`route.ts\`/${name}().`;
+const rustSym = (name: string) => `rust-analyzer cargo fixture 0.1.0 src/commands.rs/${name}().`;
 
 function withDeadFixture(run: (db: ScipDatabase) => void): void {
   const tempDir = mkdtempSync(join(tmpdir(), 'scip-dead-output-'));
@@ -124,6 +125,51 @@ function withDeadFixture(run: (db: ScipDatabase) => void): void {
   }
 }
 
+function withRustDeadFixture(run: (db: ScipDatabase) => void): void {
+  const tempDir = mkdtempSync(join(tmpdir(), 'scip-rust-dead-output-'));
+  const projectRoot = join(tempDir, 'project');
+  const dbPath = join(tempDir, 'index.db');
+  try {
+    const sourcePath = join(projectRoot, 'src', 'commands.rs');
+    mkdirSync(dirname(sourcePath), { recursive: true });
+    writeFileSync(sourcePath, ['#[tauri::command]', 'pub fn launch() {', '}', ''].join('\n'));
+
+    const sqliteDb = new Database(dbPath);
+    createEvidenceSchema(sqliteDb);
+    sqliteDb.exec(`
+      INSERT INTO documents (id, language, relative_path) VALUES
+        (1, 'rust', 'src/commands.rs');
+
+      INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
+        (1, '${rustSym('launch')}', 'launch', 12, 'fn launch');
+
+      INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+        (1, 1, 1, 1, 7, 2, 1);
+
+      INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+        (1, 1, 0, 1, 2, X'00');
+
+      INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+        (1, 1, 1);
+    `);
+    sqliteDb.close();
+
+    const config: ScipQueryConfig = {
+      dbPath,
+      indexPath: join(tempDir, 'index.scip'),
+      projectRoot,
+    };
+    const db = new ScipDatabase(config);
+    try {
+      run(db);
+    } finally {
+      db.close();
+    }
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
 describe('dead output contract', () => {
   it('exposes explicit counts alongside compatibility summary fields', () => {
     withDeadFixture((db) => {
@@ -152,6 +198,20 @@ describe('dead output contract', () => {
           expect.objectContaining({ shortName: expect.stringContaining('publicApi') }),
         ]),
       );
+    });
+  });
+
+  it('reports Rust implicit-usage symbols instead of hiding them', () => {
+    withRustDeadFixture((db) => {
+      const result = dead(db, { minLoc: 1, semantic: false });
+
+      expect(result.symbols).toEqual([
+        expect.objectContaining({
+          shortName: expect.stringContaining('launch'),
+          kind: 'dead-code',
+          implicitUsageReason: 'Rust attribute macro #[tauri::command]',
+        }),
+      ]);
     });
   });
 });
@@ -185,5 +245,37 @@ describe('dead human renderer', () => {
     }
 
     expect(logs[0]).toBe('═══ DEAD CODE (1 of 25, 10 of 250 LOC) ═══');
+  });
+
+  it('shows implicit-usage reasons when present', () => {
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = (message = '') => logs.push(String(message));
+    try {
+      renderDeadGroup(
+        [
+          {
+            relativePath: 'src/commands.rs',
+            startLine: 1,
+            endLine: 2,
+            loc: 2,
+            symbol: rustSym('launch'),
+            shortName: 'src:lib:launch()',
+            sameFileRefs: 0,
+            kind: 'dead-code',
+            implicitUsageReason: 'Rust attribute macro #[tauri::command]',
+          },
+        ],
+        'DEAD CODE',
+        'explanation',
+        2,
+      );
+    } finally {
+      console.log = originalLog;
+    }
+
+    expect(logs).toContain(
+      '    2-3  (2 LOC)  src:lib:launch()  [implicit usage: Rust attribute macro #[tauri::command]]',
+    );
   });
 });

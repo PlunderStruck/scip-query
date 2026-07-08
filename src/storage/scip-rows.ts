@@ -20,7 +20,9 @@ export interface SymbolQueryRow {
   symbol: string;
   document_id: number;
   start_line: number;
+  start_char?: number;
   end_line: number;
+  end_char?: number;
   relative_path: string;
   display_name?: string | null;
   kind?: number | null;
@@ -40,7 +42,7 @@ export interface SymbolRowQuery {
 // definition-row SQL shape.
 export function definitionRangeRows(db: ScipDatabase, query: SymbolRowQuery): SymbolQueryRow[] {
   return db.all<SymbolQueryRow>(
-    `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.end_line, d.relative_path, gs.display_name, gs.documentation
+    `SELECT gs.id, gs.symbol, der.document_id, der.start_line, der.start_char, der.end_line, der.end_char, d.relative_path, gs.display_name, gs.documentation
      FROM global_symbols gs
      JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
      JOIN documents d ON der.document_id = d.id
@@ -59,7 +61,9 @@ export function definitionMentionRows(db: ScipDatabase, query: SymbolRowQuery): 
       gs.symbol,
       c.document_id,
       MIN(c.start_line) AS start_line,
+      0 AS start_char,
       MAX(c.end_line) AS end_line,
+      0 AS end_char,
       d.relative_path,
       gs.display_name,
       gs.documentation

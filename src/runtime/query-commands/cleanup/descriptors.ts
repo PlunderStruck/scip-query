@@ -135,7 +135,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
       option('--min-similarity <n>', 'Minimum similarity (0-1); omitted uses detector defaults', parseNumber),
       option('-n, --limit <n>', 'Maximum findings', parseInteger, 30),
       option('-s, --scope <path>', 'Limit to files matching path'),
-      option('--full', 'Run unbounded semantic analysis on large indexes'),
+      option('--full', 'Run unbounded semantic and git-history analysis on large indexes'),
     ]),
     budget: 'candidate-scan',
     heuristic: { label: 'recent re-implementation candidates' },
@@ -150,7 +150,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     options: withJsonOption([
       option('-n, --limit <n>', 'Maximum docs to report', parseInteger, 20),
       option('--min-coupling <n>', 'Minimum historical co-changes to track a subject', parseInteger, 3),
-      option('--full', 'Run unbounded analysis on large indexes'),
+      option('--full', 'Run unbounded git-history analysis on large indexes'),
     ]),
     heuristic: { label: 'doc drift candidates' },
     renderShape: 'custom',

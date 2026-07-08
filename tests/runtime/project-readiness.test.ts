@@ -41,6 +41,41 @@ describe('getProjectCapabilities', () => {
     expect(python?.cleanupVerification.reason).toContain('.py');
   });
 
+  it('reports registered Rust semantic support separately from implemented semantic facts', () => {
+    const readiness: ProjectReadiness = {
+      languages: ['rust'],
+      indexers: [
+        {
+          language: 'rust',
+          binaryLabel: 'rust-analyzer',
+          installed: true,
+          runnable: true,
+          resolvedBinary: 'rust-analyzer',
+        },
+      ],
+      semantics: [
+        {
+          language: 'rust',
+          available: false,
+          dependencyAvailable: true,
+          resolvedBinary: 'rust-analyzer',
+          reason: 'Rust semantic provider is registered, but rust-analyzer reference queries are not implemented yet.',
+        },
+      ],
+      checkers: [{ label: 'cargo check', coversExtensions: ['.rs'] }],
+      gitAvailable: true,
+    };
+
+    const report = getProjectCapabilities(readiness);
+    const rust = report.matrix[0];
+
+    expect(rust?.language).toBe('rust');
+    expect(rust?.semantic.status).toBe('partial');
+    expect(rust?.semantic.reason).toContain('registered');
+    expect(rust?.semantic.reason).toContain('not implemented yet');
+    expect(rust?.cleanupVerification.status).toBe('available');
+  });
+
   it('marks source fallback unavailable when the language indexer is not runnable', () => {
     const readiness: ProjectReadiness = {
       languages: ['dart'],

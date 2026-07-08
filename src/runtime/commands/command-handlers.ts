@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { createInterface } from 'node:readline/promises';
 import {
   closeSync,
   existsSync,
@@ -35,7 +36,15 @@ import { getProjectCapabilities, getProjectReadiness } from '../project-readines
 import { Watcher } from '../watch.js';
 import { setupAgent } from '../agent-setup.js';
 import { installProjectAgentHooks } from '../agent-hooks.js';
-import { renderProjectSetupReport, runProjectSetup } from '../project-setup.js';
+import {
+  planGuidedProjectSetup,
+  renderProjectSetupReport,
+  runProjectSetup,
+  type ProjectSetupGuidedAction,
+  type ProjectSetupGuidedActionId,
+  type ProjectSetupGuidedFiles,
+  type ProjectSetupOptions,
+} from '../project-setup.js';
 import { setupCiWorkflow } from '../setup-ci.js';
 import { installSkills, isScipInstalled, printScipInstallInstructions } from '../setup.js';
 import { runUninstall } from '../uninstall.js';
@@ -746,18 +755,14 @@ export function handleCheckDeps(): void {
     if (!status.runnable) hasProblems = true;
   }
 
-  if (readiness.semantic) {
-    const status = readiness.semantic;
-    const prefix = status.available ? '  OK' : status.dependencyAvailable ? '  WARN' : '  MISSING';
-    const configPath =
-      status.tsconfigPaths && status.tsconfigPaths.length > 1
-        ? ` (${status.tsconfigPaths.length} tsconfigs)`
-        : status.tsconfigPath
-          ? ` (${status.tsconfigPath})`
-          : '';
+  const semanticEntries = semanticReadinessEntries(readiness);
+  if (semanticEntries.length > 0) {
     console.log('\nSemantic provider readiness:');
-    console.log(`${prefix} typescript: ts-morph${configPath}`);
-    if (status.reason) console.log(`    ${status.reason}; semantic checks will fall back to SCIP/source evidence`);
+  }
+  for (const status of semanticEntries) {
+    const prefix = status.available ? '  OK' : status.dependencyAvailable ? '  WARN' : '  MISSING';
+    console.log(`${prefix} ${status.language}: ${semanticProviderLabel(status)}${semanticDetailSuffix(status)}`);
+    if (status.reason) console.log(`    ${status.reason}`);
   }
 
   process.exitCode = hasProblems ? 1 : 0;
@@ -983,11 +988,15 @@ export function handleSetupAgent(rawOpts: unknown): void {
 export async function handleSetup(rawOpts: unknown): Promise<void> {
   const opts = commandOptions(rawOpts);
   try {
-    const report = await runProjectSetup({
+    let setupOptions: ProjectSetupOptions = {
       gitHook: booleanOptionValue(opts, 'gitHook'),
       noHooks: booleanOptionValue(opts, 'noHooks') || opts['hooks'] === false,
       dossierDir: stringOptionValue(opts, 'dossierDir'),
-    });
+    };
+    if (booleanOptionValue(opts, 'guided')) {
+      setupOptions = await guidedProjectSetupOptions(setupOptions, { json: booleanOptionValue(opts, 'json') });
+    }
+    const report = await runProjectSetup(setupOptions);
     if (booleanOptionValue(opts, 'json')) {
       printJsonEnvelope('setup', [], opts, report);
     } else {
@@ -998,6 +1007,73 @@ export async function handleSetup(rawOpts: unknown): Promise<void> {
     console.error(`error: ${err instanceof Error ? err.message : err}`);
     process.exit(1);
   }
+}
+
+async function guidedProjectSetupOptions(
+  base: ProjectSetupOptions,
+  opts: { json: boolean },
+): Promise<ProjectSetupOptions> {
+  const { projectRoot, config, paths, dbPath } = resolveCliProjectContext();
+  const readiness = getProjectReadiness(projectRoot, config);
+  const freshness = getIndexFreshness(projectRoot, config, paths);
+  const capabilities = getProjectCapabilities(readiness, {
+    hasIndexedGraph: existsSync(dbPath) && freshness.state !== 'missing',
+  });
+  const plan = planGuidedProjectSetup({
+    files: guidedProjectSetupFiles(projectRoot),
+    readiness,
+    capabilities,
+  });
+  const selected =
+    opts.json || !process.stdin.isTTY
+      ? recommendedGuidedActions(plan.actions)
+      : await promptGuidedActions(plan.actions);
+  const agentActionSelected = selected.has('create-agent-guidance') || selected.has('update-agent-guidance');
+  return {
+    ...base,
+    noHooks:
+      base.noHooks ||
+      (plan.actions.some((action) => action.id === 'install-project-hooks') && !selected.has('install-project-hooks')),
+    noAgentGuidance: !agentActionSelected,
+  };
+}
+
+function guidedProjectSetupFiles(projectRoot: string): ProjectSetupGuidedFiles {
+  return {
+    agentsMd: existsSync(join(projectRoot, 'AGENTS.md')),
+    claudeMd: existsSync(join(projectRoot, 'CLAUDE.md')),
+    codexHooks: existsSync(join(projectRoot, '.codex', 'hooks.json')),
+    claudeSettings: existsSync(join(projectRoot, '.claude', 'settings.json')),
+  };
+}
+
+function recommendedGuidedActions(actions: readonly ProjectSetupGuidedAction[]): Set<ProjectSetupGuidedActionId> {
+  return new Set(actions.filter((action) => action.recommended).map((action) => action.id));
+}
+
+async function promptGuidedActions(
+  actions: readonly ProjectSetupGuidedAction[],
+): Promise<Set<ProjectSetupGuidedActionId>> {
+  if (actions.length === 0) return new Set();
+  console.log('Guided setup choices:');
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const selected = new Set<ProjectSetupGuidedActionId>();
+    for (const action of actions) {
+      console.log(`- ${action.label}: ${action.reason}`);
+      if (await promptYesNo(rl, action)) selected.add(action.id);
+    }
+    return selected;
+  } finally {
+    rl.close();
+  }
+}
+
+async function promptYesNo(rl: ReturnType<typeof createInterface>, action: ProjectSetupGuidedAction): Promise<boolean> {
+  const suffix = action.recommended ? 'Y/n' : 'y/N';
+  const answer = (await rl.question(`  Run ${action.command ?? action.label}? [${suffix}] `)).trim().toLowerCase();
+  if (answer.length === 0) return action.recommended;
+  return answer === 'y' || answer === 'yes';
 }
 
 export function handleSetupCi(rawOpts: unknown): void {
@@ -1255,16 +1331,11 @@ function renderStatusReport(
   if (report.dbPath !== report.configuredDbPath) {
     console.log(`Config:   ${report.configuredDbPath} (fallback to project root index.db)`);
   }
-  if (report.readiness.semantic) {
-    const semanticState = report.readiness.semantic.available ? 'available' : 'fallback';
-    const suffix =
-      report.readiness.semantic.tsconfigPaths && report.readiness.semantic.tsconfigPaths.length > 1
-        ? ` (${report.readiness.semantic.tsconfigPaths.length} tsconfigs)`
-        : report.readiness.semantic.tsconfigPath
-          ? ` (${report.readiness.semantic.tsconfigPath})`
-          : '';
-    console.log(`TS sem:   ${semanticState}${suffix}`);
-    if (report.readiness.semantic.reason) console.log(`TS note:  ${report.readiness.semantic.reason}`);
+  for (const semantic of semanticReadinessEntries(report.readiness)) {
+    const semanticState = semantic.available ? 'available' : semantic.dependencyAvailable ? 'fallback' : 'unavailable';
+    const label = semantic.language === 'typescript' ? 'TS sem:' : `${semantic.language} sem:`;
+    console.log(`${label.padEnd(9)}${semanticState}${semanticDetailSuffix(semantic)}`);
+    if (semantic.reason) console.log(`${semantic.language} note: ${semantic.reason}`);
   }
   console.log(`Exists:   ${report.exists ? 'yes' : 'no'}`);
   console.log(`Fresh:    ${report.freshness.state}${report.freshness.remedy ? ` (${report.freshness.remedy})` : ''}`);
@@ -1277,6 +1348,28 @@ function renderStatusReport(
     console.log('');
     renderCapabilityReport(report.capabilities);
   }
+}
+
+function semanticReadinessEntries(
+  readiness: ReturnType<typeof getProjectReadiness>,
+): NonNullable<ReturnType<typeof getProjectReadiness>['semantics']> {
+  if (readiness.semantics) return readiness.semantics;
+  return readiness.semantic ? [readiness.semantic] : [];
+}
+
+function semanticProviderLabel(
+  status: NonNullable<ReturnType<typeof getProjectReadiness>['semantics']>[number],
+): string {
+  return status.language === 'typescript' ? 'ts-morph' : 'rust-analyzer';
+}
+
+function semanticDetailSuffix(
+  status: NonNullable<ReturnType<typeof getProjectReadiness>['semantics']>[number],
+): string {
+  if (status.tsconfigPaths && status.tsconfigPaths.length > 1) return ` (${status.tsconfigPaths.length} tsconfigs)`;
+  if (status.tsconfigPath) return ` (${status.tsconfigPath})`;
+  if (status.resolvedBinary) return ` (${status.resolvedBinary})`;
+  return '';
 }
 
 function formatLastRefresh(refresh: NonNullable<ReturnType<typeof getIndexFreshness>['lastRefresh']>): string {

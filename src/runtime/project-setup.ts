@@ -108,7 +108,104 @@ export interface ProjectSetupReport {
 export interface ProjectSetupOptions {
   gitHook?: boolean;
   noHooks?: boolean;
+  noAgentGuidance?: boolean;
   dossierDir?: string;
+}
+
+export type ProjectSetupGuidedActionId =
+  | 'create-agent-guidance'
+  | 'update-agent-guidance'
+  | 'install-project-hooks'
+  | 'install-indexers'
+  | 'install-parser-runtimes';
+
+export interface ProjectSetupGuidedFiles {
+  agentsMd: boolean;
+  claudeMd: boolean;
+  codexHooks: boolean;
+  claudeSettings: boolean;
+}
+
+export interface ProjectSetupGuidedAction {
+  id: ProjectSetupGuidedActionId;
+  label: string;
+  recommended: boolean;
+  requiresConsent: true;
+  reason: string;
+  command?: string;
+}
+
+export interface ProjectSetupGuidedPlan {
+  actions: ProjectSetupGuidedAction[];
+}
+
+export function planGuidedProjectSetup(input: {
+  files: ProjectSetupGuidedFiles;
+  readiness: Pick<ProjectReadiness, 'indexers'>;
+  capabilities: Pick<ProjectCapabilityReport, 'matrix'>;
+}): ProjectSetupGuidedPlan {
+  const actions: ProjectSetupGuidedAction[] = [];
+
+  if (input.files.agentsMd || input.files.claudeMd) {
+    actions.push({
+      id: 'update-agent-guidance',
+      label: 'Update project agent guidance',
+      recommended: true,
+      requiresConsent: true,
+      reason: 'Existing AGENTS.md or CLAUDE.md guidance can be updated in place.',
+      command: 'scip-query setup-agent',
+    });
+  } else {
+    actions.push({
+      id: 'create-agent-guidance',
+      label: 'Create project agent guidance',
+      recommended: false,
+      requiresConsent: true,
+      reason: 'No AGENTS.md or CLAUDE.md file exists, so setup should ask before creating one.',
+      command: 'scip-query setup-agent',
+    });
+  }
+
+  if (!input.files.codexHooks || !input.files.claudeSettings) {
+    actions.push({
+      id: 'install-project-hooks',
+      label: 'Install project agent hooks',
+      recommended: true,
+      requiresConsent: true,
+      reason: 'Project hooks help agents check freshness and route through scip-query before editing.',
+      command: 'scip-query setup-hooks',
+    });
+  }
+
+  const blockedIndexers = input.readiness.indexers.filter((indexer) => !indexer.runnable);
+  if (blockedIndexers.length > 0) {
+    actions.push({
+      id: 'install-indexers',
+      label: 'Install missing language indexers',
+      recommended: true,
+      requiresConsent: true,
+      reason: `${blockedIndexers.length} detected language indexer(s) are not runnable.`,
+      command: 'scip-query setup',
+    });
+  }
+
+  const parserRuntimeRows = input.capabilities.matrix.filter(
+    (row) =>
+      row.sourceFacts.status === 'unavailable' &&
+      /tree-sitter|parser/i.test('reason' in row.sourceFacts ? String(row.sourceFacts.reason ?? '') : ''),
+  );
+  if (parserRuntimeRows.length > 0) {
+    actions.push({
+      id: 'install-parser-runtimes',
+      label: 'Install parser runtimes for source evidence',
+      recommended: true,
+      requiresConsent: true,
+      reason: `${parserRuntimeRows.length} language row(s) report unavailable parser-backed source facts.`,
+      command: 'npm install',
+    });
+  }
+
+  return { actions };
 }
 
 // scip-query: ignore-extract - setup is a user-facing workflow transcript; the sequence is the behavior.
@@ -279,14 +376,23 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
 
   let agentResult: SetupAgentResult | null = null;
   try {
-    agentResult = setupAgent(projectRoot, { gitHook: opts.gitHook });
-    addStep(steps, {
-      id: 'agent-guidance',
-      label: 'Project agent guidance',
-      status: agentResult.skipped.length > 0 ? 'warn' : 'ok',
-      message: `${agentResult.written.length} written, ${agentResult.unchanged.length} already wired, ${agentResult.skipped.length} skipped.`,
-      details: agentResult.skipped.map((entry) => `Skipped ${entry.target}: ${entry.reason}`),
-    });
+    if (opts.noAgentGuidance) {
+      addStep(steps, {
+        id: 'agent-guidance',
+        label: 'Project agent guidance',
+        status: 'skipped',
+        message: 'Skipped by guided setup choice.',
+      });
+    } else {
+      agentResult = setupAgent(projectRoot, { gitHook: opts.gitHook });
+      addStep(steps, {
+        id: 'agent-guidance',
+        label: 'Project agent guidance',
+        status: agentResult.skipped.length > 0 ? 'warn' : 'ok',
+        message: `${agentResult.written.length} written, ${agentResult.unchanged.length} already wired, ${agentResult.skipped.length} skipped.`,
+        details: agentResult.skipped.map((entry) => `Skipped ${entry.target}: ${entry.reason}`),
+      });
+    }
   } catch (error) {
     addStep(steps, {
       id: 'agent-guidance',

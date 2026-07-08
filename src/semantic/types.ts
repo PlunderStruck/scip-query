@@ -1,10 +1,14 @@
 import type { IndexedDefinition } from '../domain/types.js';
 
+export type SemanticProviderLanguage = 'typescript' | 'rust';
+
 export interface SemanticAvailability {
   available: boolean;
+  dependencyAvailable?: boolean;
   reason?: string;
   tsconfigPath?: string;
   tsconfigPaths?: string[];
+  resolvedBinary?: string;
 }
 
 export interface SemanticLocation {
@@ -39,8 +43,9 @@ export interface SemanticCallee {
 }
 
 export interface SemanticProvider {
-  language: 'typescript';
+  language: SemanticProviderLanguage;
   availability(): SemanticAvailability;
+  dispose?(): void;
   importUsage(file: string): SemanticImportUsage[];
   referencesFor(definition: IndexedDefinition): SemanticReference[];
   referencesForDefinitions?(definitions: readonly IndexedDefinition[]): Map<number, SemanticReference[]>;
