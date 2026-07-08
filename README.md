@@ -20,11 +20,11 @@
   <a href="https://www.apache.org/licenses/LICENSE-2.0"><img alt="License" src="https://img.shields.io/npm/l/scip-query.svg"></a>
 </p>
 
-`scip-query` gives AI coding agents compiler-grade evidence about your repository and mechanical gates on what they produce. Under the hood it is a TypeScript CLI and npm package built on SCIP indexes, git history, language-aware source analysis, and your repository's own checks.
+Coding agents operate at too concrete a level of abstraction. They work in files and grep, while every decision that actually matters — does a helper for this already exist, what depends on the thing I'm about to change, is this migration finished or just started — lives one level up, in symbols, references, and history. `scip-query` raises agents to that level: a TypeScript CLI and npm package built on SCIP indexes, git history, language-aware source analysis, and your repository's own checks.
 
-Agents are effective at editing the code in front of them. They are less reliable at preserving a whole-repository model across a long task: they miss existing helpers, plan from partial context, migrate only some call sites, overlook files coupled only by history, and declare a diff finished while it still adds duplication, dead code, or stale documentation.
+The failure mode it targets is specific. Agents are genuinely good at editing the code in front of them; what they lose is the whole-repository model across a long task. They re-implement helpers they never saw, plan from partial context, migrate three call sites and abandon the other two, miss the file that always changes with the one they touched, and declare a diff finished while it quietly adds duplication, dead code, and docs that now lie. None of that is a syntax error, so nothing stops it — it just accumulates until complexity nukes your development momentum.
 
-`scip-query` gives them a repeatable operating loop: map the target and its blast radius, build a concrete plan from repository evidence, check for reuse before adding a concept, detect unfinished migrations and hidden coupling, and gate the final diff. It does not replace the compiler, tests, or review; it makes structural evidence and repository checks easy for agents to invoke and report.
+So the loop this tool enforces is evidence at every step: map the target and its blast radius, plan from repository facts, check for reuse before adding a concept, detect unfinished migrations and hidden coupling, and gate the finished diff. It does not replace the compiler, tests, or review. The point is to make structural evidence so cheap to ask for that agents actually ask — and to make "done" something the repository gets a vote on.
 
 ## How Agents Use It
 
@@ -110,7 +110,7 @@ scip-query health --write-baseline
 
 ## Evidence and Confidence
 
-`scip-query` keeps the source and strength of each answer visible:
+A claim you can't trace to evidence is a vibe. `scip-query` labels every answer with where it came from and how much weight it deserves:
 
 ```mermaid
 flowchart LR
@@ -127,7 +127,7 @@ flowchart LR
 4. **Git-history signals** for churn, co-change, recency, and documentation drift.
 5. **Repository-toolchain verification** for supported cleanup plans.
 
-Heuristic findings are candidates for inspection, not proof of equivalence or bad design. Run `scip-query capabilities` to see which evidence and verification layers are available for the current repository and language.
+Heuristic findings are candidates for inspection, not verdicts — the finding always sounds right, because it was generated to; only the code knows. Run `scip-query capabilities` to see which evidence and verification layers are available for the current repository and language.
 
 ## Language and Framework Coverage
 
@@ -137,7 +137,7 @@ Clojure projects are indexed through `scip-clojure`. Source fallback adds namesp
 
 ## Cleaning Up AI-Generated Code
 
-These checks target specific ways AI-assisted development rots a codebase. The full catalog, with prevention wiring for each detector, is in [docs/AI_FAILURE_MODES.md](docs/AI_FAILURE_MODES.md):
+Every check here exists because I watched the failure mode happen — in AI-generated codebases I inherited and rebuilt, and in my own agent sessions. AI-assisted development doesn't rot a codebase in general; it rots it in specific, recurring shapes, and each shape gets its own detector. The full catalog, with prevention wiring for each one, is in [docs/AI_FAILURE_MODES.md](docs/AI_FAILURE_MODES.md):
 
 **1. Find the echoes.** Agents re-implement helpers, hooks, composables, and frontend components they didn't know existed. `recent-duplicates` makes similarity _directional_ using git file ages - which side is the established original, which is the recent echo.
 
