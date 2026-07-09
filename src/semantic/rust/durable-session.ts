@@ -9,9 +9,9 @@ import type {
   RustImportDefinitionWorkerRequest,
   RustImportDefinitionWorkerResponse,
 } from './lsp-session.js';
-import { fingerprintProjectFiles } from '../../reindex/project-files.js';
 import { profileEnabled, writeProfileEvent } from '../../instrumentation/profile.js';
-import { rustSemanticEngineIdentity, type RustSemanticEngineIdentity } from './engine-identity.js';
+import { rustCompilerEngineIdentity, type RustCompilerEngineIdentity } from './engine-identity.js';
+import { rustAnalyzerProjectFingerprint } from './project-fingerprint.js';
 
 export const DURABLE_RUST_SESSION_PROTOCOL_VERSION = 2;
 const DURABLE_RUST_SESSION_MAX_HEARTBEAT_AGE_MS = 5_000;
@@ -23,7 +23,7 @@ type RustSessionRequest = RustReferenceWorkerRequest | RustImportDefinitionWorke
 export interface DurableRustSessionIdentityRuntime {
   canonicalProjectRoot(projectRoot: string): string;
   projectFingerprint(projectRoot: string): string;
-  engineIdentity(projectRoot: string): RustSemanticEngineIdentity;
+  engineIdentity(projectRoot: string): RustCompilerEngineIdentity;
   fileFingerprint(path: string): string;
   environment(): Record<string, string | null>;
 }
@@ -33,7 +33,7 @@ export interface DurableRustSessionIdentity {
   protocolVersion: typeof DURABLE_RUST_SESSION_PROTOCOL_VERSION;
   projectRoot: string;
   projectFingerprint: string;
-  engine: Omit<RustSemanticEngineIdentity, 'scipOccurrenceReferenceMode'>;
+  engine: RustCompilerEngineIdentity;
   workerFingerprint: string;
   environment: Record<string, string | null>;
 }
@@ -442,9 +442,9 @@ const DEFAULT_IDENTITY_RUNTIME: DurableRustSessionIdentityRuntime = {
     }
   },
   projectFingerprint(projectRoot) {
-    return sha256(stableJson(fingerprintProjectFiles(projectRoot, { language: 'rust', markerFiles: ['Cargo.toml'] })));
+    return rustAnalyzerProjectFingerprint(projectRoot);
   },
-  engineIdentity: rustSemanticEngineIdentity,
+  engineIdentity: rustCompilerEngineIdentity,
   fileFingerprint(path) {
     return sha256(readFileSync(path));
   },

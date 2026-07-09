@@ -1,21 +1,33 @@
 import { execFileSync } from 'node:child_process';
+import { rustScipOccurrenceReferenceMode } from './scip-occurrence-references.js';
 import { getRustSemanticStatus } from './status.js';
 
 const VERSION_CACHE = new Map<string, string>();
 
-export interface RustSemanticEngineIdentity {
+export interface RustCompilerEngineIdentity {
   engine: 'rust-analyzer';
   resolvedBinary: string | null;
   version: string;
 }
 
-export function rustSemanticEngineIdentity(projectRoot: string): RustSemanticEngineIdentity {
+export interface RustSemanticEngineIdentity extends RustCompilerEngineIdentity {
+  scipOccurrenceReferenceMode: string;
+}
+
+export function rustCompilerEngineIdentity(projectRoot: string): RustCompilerEngineIdentity {
   const status = getRustSemanticStatus(projectRoot);
   const resolvedBinary = status.resolvedBinary ?? null;
   return {
     engine: 'rust-analyzer',
     resolvedBinary,
     version: resolvedBinary ? rustAnalyzerVersion(projectRoot, resolvedBinary) : 'unavailable',
+  };
+}
+
+export function rustSemanticEngineIdentity(projectRoot: string): RustSemanticEngineIdentity {
+  return {
+    ...rustCompilerEngineIdentity(projectRoot),
+    scipOccurrenceReferenceMode: rustScipOccurrenceReferenceMode(),
   };
 }
 

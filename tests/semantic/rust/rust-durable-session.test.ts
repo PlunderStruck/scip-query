@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { IndexedDefinition } from '../../../src/domain/types.js';
 import {
@@ -20,6 +20,7 @@ import type {
   RustAnalyzerSessionRequester,
   RustImportDefinitionWorkerRequest,
 } from '../../../src/semantic/rust/lsp-session.js';
+import { rustAnalyzerProjectFingerprint } from '../../../src/semantic/rust/project-fingerprint.js';
 import { processDurableRustSessionRequests } from '../../../src/semantic/rust/durable-session-server.js';
 
 const definition: IndexedDefinition = {
@@ -139,10 +140,9 @@ describe('durable Rust semantic session identity', () => {
       {
         name: 'SCIP occurrence routing',
         runtime: identityRuntime({
-          scipOccurrenceReferenceMode: 'all',
           environment: {
             ...compilerEnvironment,
-            SCIP_RUST_SCIP_OCCURRENCE_REFERENCES: 'all',
+            SCIP_RUST_SCIP_OCCURRENCE_REFERENCE_MODE: 'all',
           },
         }),
       },
@@ -188,6 +188,81 @@ describe('durable Rust semantic session identity', () => {
         runtime,
       );
       expect(identity.key, name).not.toBe(baseline.key);
+    }
+  });
+
+  it('changes for every rust-analyzer project input, including nested Cargo configuration', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-rust-project-fingerprint-'));
+    const includedPaths = [
+      'src/lib.rs',
+      'crates/member/src/lib.rs',
+      'Cargo.toml',
+      'crates/member/Cargo.toml',
+      'Cargo.lock',
+      'rust-toolchain',
+      'rust-toolchain.toml',
+      '.cargo/config',
+      'crates/member/.cargo/config.toml',
+      'rust-project.json',
+    ];
+    const excludedPaths = [
+      'package.json',
+      'package-lock.json',
+      'tsconfig.json',
+      'go.mod',
+      'go.sum',
+      'pyproject.toml',
+      'src/main.ts',
+      'src/main.go',
+    ];
+
+    try {
+      for (const path of [...includedPaths, ...excludedPaths]) writeProjectFile(projectRoot, path, 'baseline');
+      const baseline = realDefaultProjectIdentityKey(projectRoot);
+      const changedByPath = Object.fromEntries(
+        includedPaths.map((path) => {
+          writeProjectFile(projectRoot, path, 'changed');
+          const changed = realDefaultProjectIdentityKey(projectRoot) !== baseline;
+          writeProjectFile(projectRoot, path, 'baseline');
+          return [path, changed];
+        }),
+      );
+
+      expect(changedByPath).toEqual(Object.fromEntries(includedPaths.map((path) => [path, true])));
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('ignores unrelated package, TypeScript, Go, Python, and source inputs', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-rust-project-fingerprint-'));
+    const includedPaths = ['src/lib.rs', 'Cargo.toml', 'Cargo.lock', '.cargo/config.toml'];
+    const excludedPaths = [
+      'package.json',
+      'package-lock.json',
+      'tsconfig.json',
+      'go.mod',
+      'go.sum',
+      'pyproject.toml',
+      'src/main.ts',
+      'src/main.go',
+    ];
+
+    try {
+      for (const path of [...includedPaths, ...excludedPaths]) writeProjectFile(projectRoot, path, 'baseline');
+      const baseline = realDefaultProjectIdentityKey(projectRoot);
+      const changedByPath = Object.fromEntries(
+        excludedPaths.map((path) => {
+          writeProjectFile(projectRoot, path, 'changed');
+          const changed = realDefaultProjectIdentityKey(projectRoot) !== baseline;
+          writeProjectFile(projectRoot, path, 'baseline');
+          return [path, changed];
+        }),
+      );
+
+      expect(changedByPath).toEqual(Object.fromEntries(excludedPaths.map((path) => [path, false])));
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
     }
   });
 });
@@ -623,7 +698,6 @@ function identityRuntime(
     projectFingerprint?: string;
     resolvedBinary?: string;
     engineVersion?: string;
-    scipOccurrenceReferenceMode?: string;
     workerFingerprint?: string;
     environment?: Record<string, string | null>;
   } = {},
@@ -635,11 +709,28 @@ function identityRuntime(
       engine: 'rust-analyzer',
       resolvedBinary: overrides.resolvedBinary ?? '/bin/rust-analyzer',
       version: overrides.engineVersion ?? 'rust-analyzer 1',
-      scipOccurrenceReferenceMode: overrides.scipOccurrenceReferenceMode ?? 'safe',
     }),
     fileFingerprint: () => overrides.workerFingerprint ?? 'worker-a',
     environment: () => overrides.environment ?? compilerEnvironment,
   };
+}
+
+function realDefaultProjectIdentityKey(projectRoot: string): string {
+  return createDurableRustSessionIdentity(
+    projectRoot,
+    '/dist/rust-semantic-session-worker.js',
+    semanticRequest,
+    identityRuntime({
+      canonicalProjectRoot: projectRoot,
+      projectFingerprint: rustAnalyzerProjectFingerprint(projectRoot),
+    }),
+  ).key;
+}
+
+function writeProjectFile(projectRoot: string, relativePath: string, content: string): void {
+  const path = join(projectRoot, relativePath);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, content);
 }
 
 function captureDurableMailboxRequest(

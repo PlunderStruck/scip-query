@@ -30,11 +30,15 @@ export function listProjectFiles(projectRoot: string): string[] {
 
 export function fingerprintProjectFiles(
   projectRoot: string,
-  opts: { language?: SupportedLanguage; markerFiles?: readonly string[] } = {},
+  opts: {
+    language?: SupportedLanguage;
+    markerFiles?: readonly string[];
+    includePath?: (relativePath: string) => boolean;
+  } = {},
 ): ProjectFileFingerprint[] {
-  const files = opts.language
-    ? listProjectFiles(projectRoot).filter((path) => isLanguageRelevantPath(path, opts.language!, opts.markerFiles))
-    : listProjectFiles(projectRoot);
+  const files = listProjectFiles(projectRoot)
+    .filter((path) => !opts.language || isLanguageRelevantPath(path, opts.language, opts.markerFiles))
+    .filter((path) => !opts.includePath || opts.includePath(path));
   return files.map((relativePath) => {
     const absPath = join(projectRoot, relativePath);
     try {
