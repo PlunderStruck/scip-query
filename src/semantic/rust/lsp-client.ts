@@ -51,6 +51,12 @@ export interface RustAnalyzerServerStatus {
   message?: string;
 }
 
+interface RustAnalyzerServerStatusPayload {
+  health: 'ok' | 'warning' | 'error';
+  quiescent: boolean;
+  message?: string | null;
+}
+
 export class RustAnalyzerReadinessError extends Error {}
 
 interface PendingRequest {
@@ -298,12 +304,17 @@ export class RustAnalyzerLspClient {
   private recordServerStatusNotification(message: LspJsonMessage): void {
     if (
       message.method !== 'experimental/serverStatus' ||
-      (message.id !== undefined && message.id !== null) ||
-      !isRustAnalyzerServerStatus(message.params)
+      message.id !== undefined ||
+      !isRustAnalyzerServerStatusPayload(message.params)
     ) {
       return;
     }
-    const status = message.params;
+    const payload = message.params;
+    const status: RustAnalyzerServerStatus = {
+      health: payload.health,
+      quiescent: payload.quiescent,
+      ...(typeof payload.message === 'string' ? { message: payload.message } : {}),
+    };
     const generation = ++this.currentServerStatusGeneration;
     this.latestServerStatus = { generation, status };
     if (status.health !== 'ok') {
@@ -355,13 +366,13 @@ export class RustAnalyzerLspClient {
   }
 }
 
-function isRustAnalyzerServerStatus(value: unknown): value is RustAnalyzerServerStatus {
+function isRustAnalyzerServerStatusPayload(value: unknown): value is RustAnalyzerServerStatusPayload {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const status = value as { health?: unknown; quiescent?: unknown; message?: unknown };
   return (
     (status.health === 'ok' || status.health === 'warning' || status.health === 'error') &&
     typeof status.quiescent === 'boolean' &&
-    (status.message === undefined || typeof status.message === 'string')
+    (status.message === undefined || status.message === null || typeof status.message === 'string')
   );
 }
 

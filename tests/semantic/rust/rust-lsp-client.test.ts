@@ -422,6 +422,22 @@ describe('RustAnalyzerLspClient', () => {
     await client.shutdown();
   });
 
+  it('accepts a null wire status message and omits it from the public status', async () => {
+    const { client, transport } = await createIdleClient();
+    const afterGeneration = client.serverStatusGeneration();
+    const readiness = client.waitForQuiescence(afterGeneration, 25);
+
+    transport.send({
+      jsonrpc: '2.0',
+      method: 'experimental/serverStatus',
+      params: { health: 'ok', quiescent: true, message: null },
+    });
+
+    await expect(readiness).resolves.toEqual({ health: 'ok', quiescent: true });
+    expect(client.serverStatusGeneration()).toBe(afterGeneration + 1);
+    await client.shutdown();
+  });
+
   it('does not use a quiescent status observed at the waiter generation', async () => {
     const { client, transport } = await createIdleClient();
     transport.send({
@@ -462,6 +478,22 @@ describe('RustAnalyzerLspClient', () => {
 
     expect(client.serverStatusGeneration()).toBe(0);
     await expect(readiness).rejects.toThrow(/readiness timed out after 5ms/);
+    await client.shutdown();
+  });
+
+  it('does not treat a server-status message with a null id as a notification', async () => {
+    const { client, transport } = await createIdleClient();
+    const readiness = client.waitForQuiescence(client.serverStatusGeneration(), 25);
+
+    transport.send({
+      jsonrpc: '2.0',
+      id: null,
+      method: 'experimental/serverStatus',
+      params: { health: 'ok', quiescent: true },
+    });
+
+    await expect(readiness).rejects.toThrow(/readiness timed out after 25ms/);
+    expect(client.serverStatusGeneration()).toBe(0);
     await client.shutdown();
   });
 
