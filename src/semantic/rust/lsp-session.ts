@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { SHARE_ENV, Worker } from 'node:worker_threads';
 import { parsePositiveInteger } from '../../domain/number-parsing.js';
 import type { IndexedDefinition } from '../../domain/types.js';
-import { profileSpan } from '../../instrumentation/profile.js';
+import { profileEnabled, profileSpan, writeProfileEvent } from '../../instrumentation/profile.js';
 import type { SemanticCallee, SemanticReference } from '../types.js';
 import type { RustImportDefinitionResolver } from './import-usage.js';
 import type {
@@ -482,6 +482,81 @@ export function rustSemanticSessionTransport(configuredValue: string | undefined
   return configuredValue === '1' || configuredValue === 'true' ? 'durable' : 'worker';
 }
 
+type RustSessionFailoverReason = 'readiness' | 'timeout' | 'helper' | 'request';
+type RustSessionRequestKind = 'semantic' | 'import-definitions';
+
+export function createFailoverRustAnalyzerSessionRequester(
+  primary: RustAnalyzerSessionRequester,
+  fallbackFactory: () => RustAnalyzerSessionRequester,
+): RustAnalyzerSessionRequester {
+  let fallback: RustAnalyzerSessionRequester | null = null;
+  let failedOver = false;
+  let primaryShutdown = false;
+  let disposed = false;
+
+  const currentFallback = (): RustAnalyzerSessionRequester => (fallback ??= fallbackFactory());
+  const shutdownPrimary = (): void => {
+    if (primaryShutdown) return;
+    primaryShutdown = true;
+    primary.shutdown();
+  };
+  const activateFailover = (error: unknown, kind: RustSessionRequestKind, durationMs: number): void => {
+    const reason = rustSessionFailoverReason(error);
+    failedOver = true;
+    shutdownPrimary();
+    if (profileEnabled()) {
+      writeProfileEvent({
+        type: 'span',
+        name: 'rust.semantic.durable-session.request',
+        durationMs,
+        ok: false,
+        kind,
+        disposition: 'worker-fallback',
+        reason,
+      });
+    }
+  };
+  const request = <Response>(
+    kind: RustSessionRequestKind,
+    requestPrimary: (requester: RustAnalyzerSessionRequester) => Response,
+    requestFallback: (requester: RustAnalyzerSessionRequester) => Response,
+  ): Response => {
+    if (disposed) throw new Error('Rust semantic failover session was already disposed.');
+    if (failedOver) return requestFallback(currentFallback());
+
+    const startedAtMs = Date.now();
+    try {
+      return requestPrimary(primary);
+    } catch (error) {
+      activateFailover(error, kind, Date.now() - startedAtMs);
+    }
+    return requestFallback(currentFallback());
+  };
+
+  return {
+    requestSemantic(semanticRequest, timeoutMs) {
+      return request(
+        'semantic',
+        (requester) => requester.requestSemantic(semanticRequest, timeoutMs),
+        (requester) => requester.requestSemantic(semanticRequest, timeoutMs),
+      );
+    },
+    requestImportDefinitions(importRequest, timeoutMs) {
+      return request(
+        'import-definitions',
+        (requester) => requester.requestImportDefinitions(importRequest, timeoutMs),
+        (requester) => requester.requestImportDefinitions(importRequest, timeoutMs),
+      );
+    },
+    shutdown() {
+      if (disposed) return;
+      disposed = true;
+      shutdownPrimary();
+      fallback?.shutdown();
+    },
+  };
+}
+
 export function createConfiguredRustAnalyzerSessionRequester(
   projectRoot: string,
   configuredValue: string | undefined,
@@ -497,7 +572,9 @@ export function createConfiguredRustAnalyzerSessionRequester(
       }),
   },
 ): RustAnalyzerSessionRequester {
-  return rustSemanticSessionTransport(configuredValue) === 'durable' ? factories.durable() : factories.worker();
+  return rustSemanticSessionTransport(configuredValue) === 'durable'
+    ? createFailoverRustAnalyzerSessionRequester(factories.durable(), factories.worker)
+    : factories.worker();
 }
 
 export function createWorkerRustAnalyzerSessionRequester(
@@ -663,6 +740,15 @@ function parseImportDefinitionWorkerPayload(raw: string): ImportDefinitionWorker
         ? (parsed as { error: string }).error
         : 'Rust semantic session worker failed.',
   };
+}
+
+function rustSessionFailoverReason(error: unknown): RustSessionFailoverReason {
+  const description =
+    error instanceof Error ? `${error.name} ${error.message}`.toLowerCase() : String(error).toLowerCase();
+  if (description.includes('readiness')) return 'readiness';
+  if (description.includes('timeout') || description.includes('timed out')) return 'timeout';
+  if (description.includes('helper')) return 'helper';
+  return 'request';
 }
 
 function emptyReferenceMap(definitions: readonly IndexedDefinition[]): Map<number, SemanticReference[]> {
