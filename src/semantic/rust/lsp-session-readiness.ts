@@ -11,7 +11,7 @@ export type RustAnalyzerReadinessWorkerErrorEnvelope = { ok: false; error: strin
 export interface RustAnalyzerReadinessClient {
   serverStatusGeneration(): number;
   serverStatusSnapshot(): RustAnalyzerServerStatusSnapshot | null;
-  analyzerStatus(opts?: RustAnalyzerRequestOptions): Promise<string>;
+  readinessBarrier(opts?: RustAnalyzerRequestOptions): Promise<void>;
   waitForQuiescence(afterGeneration: number, timeoutMs: number): Promise<RustAnalyzerServerStatus>;
 }
 
@@ -56,7 +56,7 @@ export async function waitForRustAnalyzerPostOpenReadiness(
   }
   assertUsableQuiescentStatus(checkpoint.status, 'before document open');
   try {
-    await client.analyzerStatus({ deadlineMs });
+    await client.readinessBarrier({ deadlineMs });
     assertRustAnalyzerReadinessBudget(deadlineMs, now, 'during post-open synchronization');
   } catch (error) {
     if (error instanceof RustAnalyzerReadinessError) throw error;

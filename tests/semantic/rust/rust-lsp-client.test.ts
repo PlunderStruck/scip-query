@@ -549,13 +549,17 @@ describe('RustAnalyzerLspClient', () => {
     await client.shutdown();
   });
 
-  it('round-trips analyzer status within the request deadline and returns a defensive status snapshot', async () => {
+  it('uses a method-not-found response as an ordered protocol barrier and returns a defensive status snapshot', async () => {
     const transport = new ScriptedTransport((message, server) => {
       if (message.method === 'initialize') {
         server.send({ jsonrpc: '2.0', id: message.id, result: { capabilities: {} } });
       }
-      if (message.method === 'rust-analyzer/analyzerStatus') {
-        server.send({ jsonrpc: '2.0', id: message.id, result: 'ready' });
+      if (message.method === 'scip-query/readinessBarrier') {
+        server.send({
+          jsonrpc: '2.0',
+          id: message.id,
+          error: { code: -32601, message: 'Method not found' },
+        });
       }
       if (message.method === 'shutdown') {
         server.send({ jsonrpc: '2.0', id: message.id, result: null });
@@ -576,15 +580,39 @@ describe('RustAnalyzerLspClient', () => {
     });
     if (first) first.status.health = 'error';
 
-    await expect(client.analyzerStatus({ deadlineMs: Date.now() + 100 })).resolves.toBe('ready');
+    await expect(client.readinessBarrier({ deadlineMs: Date.now() + 100 })).resolves.toBeUndefined();
     expect(client.serverStatusSnapshot()).toEqual({
       generation: 1,
       status: { health: 'ok', quiescent: true, message: 'ready' },
     });
-    expect(transport.writes.find((message) => message.method === 'rust-analyzer/analyzerStatus')).toMatchObject({
-      method: 'rust-analyzer/analyzerStatus',
-      params: {},
+    expect(transport.writes.find((message) => message.method === 'scip-query/readinessBarrier')).toMatchObject({
+      method: 'scip-query/readinessBarrier',
+      params: null,
     });
+
+    await client.shutdown();
+  });
+
+  it('rejects a protocol-barrier error other than method-not-found', async () => {
+    const transport = new ScriptedTransport((message, server) => {
+      if (message.method === 'initialize') {
+        server.send({ jsonrpc: '2.0', id: message.id, result: { capabilities: {} } });
+      }
+      if (message.method === 'scip-query/readinessBarrier') {
+        server.send({
+          jsonrpc: '2.0',
+          id: message.id,
+          error: { code: -32603, message: 'Internal error' },
+        });
+      }
+      if (message.method === 'shutdown') {
+        server.send({ jsonrpc: '2.0', id: message.id, result: null });
+      }
+    });
+    const client = new RustAnalyzerLspClient(transport, { requestTimeoutMs: 100 });
+    await client.initialize({ rootUri: 'file:///repo' });
+
+    await expect(client.readinessBarrier({ deadlineMs: Date.now() + 100 })).rejects.toThrow('Internal error');
 
     await client.shutdown();
   });

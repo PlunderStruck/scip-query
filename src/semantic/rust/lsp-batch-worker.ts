@@ -288,17 +288,13 @@ function isRustSignatureLine(line: string): boolean {
   );
 }
 
-export function rustAnalyzerInitializationOptions(
-  linkedProjects: readonly string[],
-  opts: { enableDiagnostics?: boolean } = {},
-): Record<string, unknown> {
+export function rustAnalyzerInitializationOptions(linkedProjects: readonly string[]): Record<string, unknown> {
   return {
     ...(linkedProjects.length > 0 ? { linkedProjects } : {}),
     references: {
       excludeImports: false,
       excludeTests: false,
     },
-    ...(opts.enableDiagnostics === false ? { diagnostics: { enable: false } } : {}),
   };
 }
 

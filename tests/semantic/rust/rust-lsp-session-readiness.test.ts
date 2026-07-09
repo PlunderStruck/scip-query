@@ -30,7 +30,7 @@ class FakeReadinessClient implements RustAnalyzerReadinessClient {
       afterGeneration: number,
       timeoutMs: number,
     ) => Promise<RustAnalyzerServerStatus> = async () => readyStatus,
-    private readonly synchronize: (opts: RustAnalyzerRequestOptions) => Promise<string> = async () => 'ready',
+    private readonly synchronize: (opts: RustAnalyzerRequestOptions) => Promise<void> = async () => undefined,
   ) {}
 
   serverStatusGeneration(): number {
@@ -46,7 +46,7 @@ class FakeReadinessClient implements RustAnalyzerReadinessClient {
     return this.status ? { generation: this.generation, status: { ...this.status } } : null;
   }
 
-  analyzerStatus(opts: RustAnalyzerRequestOptions = {}): Promise<string> {
+  readinessBarrier(opts: RustAnalyzerRequestOptions = {}): Promise<void> {
     this.synchronizations.push(opts);
     return this.synchronize(opts);
   }
@@ -139,7 +139,7 @@ describe('waitForRustAnalyzerPostOpenReadiness', () => {
     const events: string[] = [];
     const client = new FakeReadinessClient(undefined, async (opts) => {
       events.push(`synchronize:${opts.deadlineMs}`);
-      return 'ready';
+      return undefined;
     });
     client.generation = 8;
     const checkpoint = client.serverStatusSnapshot();
@@ -165,7 +165,7 @@ describe('waitForRustAnalyzerPostOpenReadiness', () => {
         events.push('synchronize');
         client.generation = 9;
         client.status = { health: 'ok', quiescent: false };
-        return 'indexing';
+        return undefined;
       },
     );
     client.generation = 8;
@@ -208,7 +208,7 @@ describe('waitForRustAnalyzerPostOpenReadiness', () => {
         events.push('synchronize');
         client.generation = 1;
         client.status = { health: 'ok', quiescent: false };
-        return 'indexing';
+        return undefined;
       },
     );
     const settle = vi.fn(async (delayMs: number) => {
@@ -313,7 +313,7 @@ describe('waitForRustAnalyzerPostOpenReadiness', () => {
   ])('rejects unchanged post-open status %#', async (status) => {
     const client = new FakeReadinessClient(undefined, async () => {
       client.status = status;
-      return 'not ready';
+      return undefined;
     });
     const checkpoint = client.serverStatusSnapshot();
 

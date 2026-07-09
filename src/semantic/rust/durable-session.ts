@@ -234,7 +234,10 @@ export function createDurableRustAnalyzerSessionRequester(
           request: {
             ...request,
             readinessDeadlineMs,
-            settleDelayMs: durableSettleDelayMs(process.env['SCIP_RUST_SEMANTIC_SETTLE_MS']),
+            settleDelayMs:
+              process.env['SCIP_RUST_SEMANTIC_SETTLE_MS'] === undefined
+                ? request.settleDelayMs
+                : durableSettleDelayMs(process.env['SCIP_RUST_SEMANTIC_SETTLE_MS']),
           },
           timeoutMs,
         },
@@ -252,7 +255,10 @@ export function createDurableRustAnalyzerSessionRequester(
           request: {
             ...request,
             readinessDeadlineMs,
-            settleDelayMs: durableSettleDelayMs(process.env['SCIP_RUST_SEMANTIC_SETTLE_MS']),
+            settleDelayMs:
+              process.env['SCIP_RUST_SEMANTIC_SETTLE_MS'] === undefined
+                ? request.settleDelayMs
+                : durableSettleDelayMs(process.env['SCIP_RUST_SEMANTIC_SETTLE_MS']),
           },
           timeoutMs,
         },

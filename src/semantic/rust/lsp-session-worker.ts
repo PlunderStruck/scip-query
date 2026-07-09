@@ -10,6 +10,7 @@ import type { LspInitializeResult } from './lsp-types.js';
 import type { RustImportDefinitionWorkerRequest, RustImportDefinitionWorkerResponse } from './lsp-session.js';
 import {
   rustAnalyzerReadinessWorkerErrorEnvelope,
+  waitForRustAnalyzerDiagnosticsWithinDeadline,
   waitForRustAnalyzerPostOpenReadiness,
   waitForRustAnalyzerReadiness,
   withRustAnalyzerReadinessInvalidation,
@@ -492,10 +493,7 @@ async function sessionForPaths(
   const existing = sessions.get(key);
   if (existing) return existing;
 
-  const deadlineReadinessEnabled = opts.readinessDeadlineMs !== undefined;
-  const initializationOptions = rustAnalyzerInitializationOptions(linkedProjects, {
-    enableDiagnostics: !deadlineReadinessEnabled,
-  });
+  const initializationOptions = rustAnalyzerInitializationOptions(linkedProjects);
   const client = new RustAnalyzerLspClient(createRustAnalyzerTransport(rustAnalyzerBinary, sessionRoot), {
     requestTimeoutMs: opts.requestTimeoutMs,
     configuration: initializationOptions,
@@ -592,13 +590,23 @@ async function openNewDefinitionDocuments(
     session.openedPaths.add(definition.relativePath);
   }
   const diagnosticsTimeoutMs = request.diagnosticsTimeoutMs ?? 10_000;
+  let effectiveDiagnosticsTimeoutMs = diagnosticsTimeoutMs;
   await profileAsyncSpan(
     'rust.semantic.worker.diagnostics',
-    () => (readiness ? Promise.resolve() : waitForOpenedDocuments(session.client, openedUris, diagnosticsTimeoutMs)),
+    () =>
+      readiness
+        ? waitForRustAnalyzerDiagnosticsWithinDeadline(
+            (timeoutMs) => {
+              effectiveDiagnosticsTimeoutMs = timeoutMs;
+              return waitForOpenedDocuments(session.client, openedUris, timeoutMs);
+            },
+            diagnosticsTimeoutMs,
+            readiness.deadlineMs,
+          )
+        : waitForOpenedDocuments(session.client, openedUris, diagnosticsTimeoutMs),
     () => ({
       openedDocuments: openedUris.length,
-      timeoutMs: readiness ? 0 : diagnosticsTimeoutMs,
-      diagnosticsEnabled: !readiness,
+      timeoutMs: effectiveDiagnosticsTimeoutMs,
     }),
   );
   const settleDelayMs = request.settleDelayMs ?? 5_000;
@@ -670,13 +678,23 @@ async function openNewSourceDocuments(
     uris.push(uri);
   }
   const diagnosticsTimeoutMs = opts.diagnosticsTimeoutMs ?? 10_000;
+  let effectiveDiagnosticsTimeoutMs = diagnosticsTimeoutMs;
   await profileAsyncSpan(
     'rust.semantic.worker.diagnostics',
-    () => (readiness ? Promise.resolve() : waitForOpenedDocuments(session.client, uris, diagnosticsTimeoutMs)),
+    () =>
+      readiness
+        ? waitForRustAnalyzerDiagnosticsWithinDeadline(
+            (timeoutMs) => {
+              effectiveDiagnosticsTimeoutMs = timeoutMs;
+              return waitForOpenedDocuments(session.client, uris, timeoutMs);
+            },
+            diagnosticsTimeoutMs,
+            readiness.deadlineMs,
+          )
+        : waitForOpenedDocuments(session.client, uris, diagnosticsTimeoutMs),
     () => ({
       openedDocuments: uris.length,
-      timeoutMs: readiness ? 0 : diagnosticsTimeoutMs,
-      diagnosticsEnabled: !readiness,
+      timeoutMs: effectiveDiagnosticsTimeoutMs,
     }),
   );
   const settleDelayMs = opts.settleDelayMs ?? 5_000;

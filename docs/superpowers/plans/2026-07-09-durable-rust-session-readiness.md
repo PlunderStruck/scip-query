@@ -300,8 +300,8 @@ The new test file uses a fake readiness client and injected clock to prove:
 - an expired or zero budget throws `RustAnalyzerReadinessError` immediately;
 - initialization waits for a generation newer than the checkpoint taken
   before `initialize`;
-- a post-open barrier sends an ordered analyzer-status request after `didOpen`
-  and diagnostics;
+- a post-open barrier sends an ordered protocol request after `didOpen` and
+  diagnostics;
 - an unchanged generation after that round trip accepts only a retained
   healthy quiescent status, while a changed generation still requires newer
   healthy quiescence;
@@ -361,12 +361,12 @@ For a request with `readinessDeadlineMs`:
 2. Initialize and send `initialized` through the existing client method.
 3. Wait for a newer healthy quiescent generation.
 4. Before sending any new `didOpen`, take another generation/status snapshot.
-5. Disable native editor diagnostics for the deadline-readiness session, open
-   documents, and skip the now-inapplicable per-URI diagnostics wait.
+5. Open documents and keep the existing per-URI diagnostics wait.
 6. If at least one document was newly opened, send a deadline-bounded,
-   read-only `rust-analyzer/analyzerStatus` request. If the status generation
-   changed, require newer healthy quiescence; if it did not change, require
-   the retained checkpoint status to remain healthy and quiescent.
+   read-only `scip-query/readinessBarrier` request. Accept method-not-found as
+   the expected ordering acknowledgement. If the status generation changed,
+   require newer healthy quiescence; if it did not change, require the retained
+   checkpoint status to remain healthy and quiescent.
 7. If `settleDelayMs > 0`, sleep only after the status-stability barrier.
 8. Run references, callees, signatures, or import-definition operations with
    their explicit request timeouts from Task 1.
@@ -689,7 +689,7 @@ Task 2's requirement for an unconditionally newer post-open generation.
   }
 
   RustAnalyzerLspClient.serverStatusSnapshot(): RustAnalyzerServerStatusSnapshot | null;
-  RustAnalyzerLspClient.analyzerStatus(opts?: RustAnalyzerRequestOptions): Promise<string>;
+  RustAnalyzerLspClient.readinessBarrier(opts?: RustAnalyzerRequestOptions): Promise<void>;
   ```
 
 - `waitForRustAnalyzerPostOpenReadiness()` accepts the pre-open snapshot,
@@ -698,10 +698,11 @@ Task 2's requirement for an unconditionally newer post-open generation.
 
 - [ ] **Step 1: Write failing client protocol tests**
 
-Add tests proving `analyzerStatus()` sends
-`rust-analyzer/analyzerStatus` with `{}` and the current deadline, returns the
-string response, and exposes a defensive latest status snapshot. Mutation of
-the returned object must not alter the client's retained state.
+Add tests proving `readinessBarrier()` sends the private
+`scip-query/readinessBarrier` method with `null` and the current deadline,
+accepts the expected JSON-RPC method-not-found response, rejects other errors,
+and exposes a defensive latest status snapshot. Mutation of the returned object
+must not alter the client's retained state.
 
 Run:
 
@@ -715,7 +716,7 @@ Expected: FAIL because both APIs are absent.
 
 Add tests with a structural fake client for:
 
-1. checkpoint healthy/quiescent, analyzer-status round trip succeeds,
+1. checkpoint healthy/quiescent, protocol-barrier round trip succeeds,
    generation unchanged -> pass without `waitForQuiescence`;
 2. generation advances to non-quiescent during the round trip -> call
    `waitForQuiescence(checkpoint.generation, remainingMs)` and require its
@@ -751,8 +752,13 @@ serverStatusSnapshot(): RustAnalyzerServerStatusSnapshot | null {
     : null;
 }
 
-async analyzerStatus(opts: RustAnalyzerRequestOptions = {}): Promise<string> {
-  return this.request<string>('rust-analyzer/analyzerStatus', {}, opts);
+async readinessBarrier(opts: RustAnalyzerRequestOptions = {}): Promise<void> {
+  try {
+    await this.request<unknown>('scip-query/readinessBarrier', null, opts);
+  } catch (error) {
+    if (error instanceof RustAnalyzerResponseError && error.code === -32601) return;
+    throw error;
+  }
 }
 ```
 
@@ -762,12 +768,12 @@ special transport path.
 - [ ] **Step 4: Implement the ordered status-stability policy**
 
 Extend the structural client with `serverStatusSnapshot()` and
-`analyzerStatus()`. The post-open helper must:
+`readinessBarrier()`. The post-open helper must:
 
 ```ts
 if (openedDocumentCount === 0) return;
 assertUsableQuiescent(checkpoint.status);
-await client.analyzerStatus({ deadlineMs });
+await client.readinessBarrier({ deadlineMs });
 assertRustAnalyzerReadinessBudget(deadlineMs, now, 'during post-open synchronization');
 const latest = client.serverStatusSnapshot();
 if (!latest) throw new RustAnalyzerReadinessError('rust-analyzer status is unavailable after document open');
@@ -779,16 +785,16 @@ if (latest.generation === checkpoint.generation) {
 await waitForRustAnalyzerDelayWithinDeadline(settleDelayMs, deadlineMs, now, settle);
 ```
 
-The Vega smoke proved that extending this request to the remaining absolute
-budget is not a fix: a stack sample showed rust-analyzer's worker pool computing
-native diagnostics, and the request remained queued for more than four minutes.
-Deadline-readiness sessions therefore set `diagnostics.enable: false` and skip
-their diagnostics wait; scip-query does not consume those editor diagnostics.
-The ordered request retains its fail-fast per-request timeout inside the same
-absolute deadline. Do not accept a generation lower than the checkpoint, error
-health, or non-quiescent status, and do not use a fixed implicit delay. A
-quiescent warning is accepted and its health level is recorded in readiness
-profile metadata; exact runtime calibration remains mandatory.
+The Vega smoke rejected two narrower alternatives. Extending analyzer-status to
+the remaining absolute budget left it queued behind native diagnostics for more
+than four minutes. Disabling diagnostics made the barrier fast but produced 14
+incomplete references and triggered two later worker fallbacks. The private
+protocol request is the narrow ordering proof: its method-not-found response is
+handled directly without requesting analyzer work, while diagnostics and the
+request's settle policy remain unchanged. Do not accept a generation lower than
+the checkpoint, error health, or non-quiescent status. A quiescent warning is
+accepted and its health level is recorded in readiness profile metadata; exact
+runtime calibration remains mandatory.
 
 - [ ] **Step 5: Wire snapshots through both open-document paths**
 

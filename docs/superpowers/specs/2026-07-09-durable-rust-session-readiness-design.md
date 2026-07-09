@@ -147,12 +147,11 @@ create the session.
 
 Concurrency and retry settings already belong to the worker request and remain
 there. Diagnostics and readiness timeouts are operation bounds, not compiler
-identity. Deadline-readiness sessions disable native editor diagnostics because
-scip-query never consumes them; otherwise they can occupy rust-analyzer's worker
-pool ahead of the ordered status request. The per-command worker retains its
-accepted diagnostics-plus-settle behavior. The ordered request remains bounded
-by both its ordinary request timeout and the absolute readiness deadline.
-Profiling keys remain transient worker environment.
+identity. Deadline-readiness sessions preserve the request's diagnostics and
+settle policy unless an explicit durable settle override is configured. The
+ordered request remains bounded by both its ordinary request timeout and the
+absolute readiness deadline. Profiling keys remain transient worker
+environment.
 
 ### Readiness protocol
 
@@ -192,13 +191,16 @@ remains the gate that determines whether reusing that state changes semantic
 evidence.
 
 Post-open readiness therefore combines status observation with an ordered,
-read-only round trip. A status-stability round trip is a
-`rust-analyzer/analyzerStatus` request sent after `didOpen` and diagnostics;
-what distinguishes it from a delay is that its response proves the server
-processed the earlier notifications on the same LSP connection. If no status
-generation changed during that ordered work, the previously observed healthy
-quiescent status remains authoritative. If the generation did change, the
-client must observe a newer healthy quiescent status before continuing.
+read-only round trip. A protocol barrier is the deliberately private
+`scip-query/readinessBarrier` JSON-RPC request sent after `didOpen` and
+diagnostics. Rust-analyzer's expected `Method not found` response is an
+acknowledgement, not a failure: the response proves the server processed every
+earlier message on the same LSP connection without scheduling an analyzer
+report behind background diagnostics. A future successful response proves the
+same ordering. Any other error rejects the barrier. If no status generation
+changed during that ordered work, the previously observed usable quiescent
+status remains authoritative. If the generation did change, the client must
+observe a newer usable quiescent status before continuing.
 
 Fresh-session flow:
 
@@ -207,15 +209,15 @@ Fresh-session flow:
 3. Wait for a newer healthy quiescent status.
 4. Record another status generation.
 5. Open the requested project documents.
-6. Skip the diagnostics wait because native diagnostics are disabled for this
-   deadline-readiness session.
-7. Send a deadline-bounded `rust-analyzer/analyzerStatus` request after the
-   document-open notifications.
+6. Keep the existing diagnostics wait as document-specific evidence.
+7. Send the deadline-bounded `scip-query/readinessBarrier` protocol request
+   after the document-open notifications and diagnostics.
 8. If the status generation advanced, require a status newer than the
    pre-open checkpoint that is quiescent and not error health. If it did not
    advance, require the retained status at the checkpoint to remain quiescent
    and not error health.
-9. Run semantic operations.
+9. Apply the request's existing settle policy after the barrier.
+10. Run semantic operations.
 
 Reused-session flow:
 
@@ -235,7 +237,8 @@ The readiness barrier rejects when:
 
 - no valid server-status notification arrives before the bounded deadline;
 - no healthy quiescent status exists before the post-open checkpoint;
-- the ordered analyzer-status request fails or crosses the deadline;
+- the ordered protocol barrier returns an error other than method-not-found or
+  crosses the deadline;
 - the status reports error health;
 - the process exits;
 - the response is malformed; or
@@ -276,8 +279,8 @@ All behavior changes use red-green TDD.
 - Initialization advertises server-status support.
 - Malformed and unrelated notifications do not satisfy readiness.
 - Non-quiescent followed by healthy quiescent resolves the correct waiter.
-- `rust-analyzer/analyzerStatus` is sent as a deadline-bounded read-only
-  ordering request.
+- `scip-query/readinessBarrier` accepts method-not-found as a deadline-bounded
+  ordering acknowledgement and rejects other errors.
 - A post-open round trip with an unchanged generation accepts only a retained
   healthy quiescent status.
 - A post-open round trip with an advanced generation still requires a newer

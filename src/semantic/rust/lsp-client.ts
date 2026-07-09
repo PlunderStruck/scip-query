@@ -65,6 +65,16 @@ interface RustAnalyzerServerStatusPayload {
 
 export class RustAnalyzerReadinessError extends Error {}
 
+class RustAnalyzerResponseError extends Error {
+  constructor(
+    readonly code: number | undefined,
+    method: string,
+    message: string,
+  ) {
+    super(`rust-analyzer LSP request ${method} failed: ${message}`);
+  }
+}
+
 interface PendingRequest {
   method: string;
   deadlineMs: number | undefined;
@@ -174,13 +184,13 @@ export class RustAnalyzerLspClient {
     return result && typeof result === 'object' ? result : null;
   }
 
-  // scip-query: ignore new-dead SQCF747F003E09 -- Called through the RustAnalyzerReadinessClient structural interface by the post-open readiness policy.
-  async analyzerStatus(opts: RustAnalyzerRequestOptions = {}): Promise<string> {
-    const result = await this.request<unknown>('rust-analyzer/analyzerStatus', {}, opts);
-    if (typeof result !== 'string') {
-      throw new Error('rust-analyzer analyzerStatus returned a non-string response');
+  async readinessBarrier(opts: RustAnalyzerRequestOptions = {}): Promise<void> {
+    try {
+      await this.request<unknown>('scip-query/readinessBarrier', null, opts);
+    } catch (error) {
+      if (error instanceof RustAnalyzerResponseError && error.code === -32601) return;
+      throw error;
     }
-    return result;
   }
 
   serverStatusGeneration(): number {
@@ -316,7 +326,7 @@ export class RustAnalyzerLspClient {
     clearTimeout(pending.timeout);
     this.pending.delete(message.id);
     if (message.error) {
-      pending.reject(new Error(`rust-analyzer LSP request ${pending.method} failed: ${message.error.message}`));
+      pending.reject(new RustAnalyzerResponseError(message.error.code, pending.method, message.error.message));
       return;
     }
     if (pending.deadlineMs !== undefined && Date.now() >= pending.deadlineMs) {

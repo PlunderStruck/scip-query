@@ -505,7 +505,7 @@ describe('durable Rust semantic server state', () => {
 });
 
 describe('durable Rust semantic requester', () => {
-  it('copies semantic requests with the injected-clock readiness margin and default durable settle', () => {
+  it('copies semantic requests with the injected-clock readiness margin and preserves the request settle', () => {
     const previousSettle = process.env['SCIP_RUST_SEMANTIC_SETTLE_MS'];
     delete process.env['SCIP_RUST_SEMANTIC_SETTLE_MS'];
     const request: RustReferenceWorkerRequest = {
@@ -522,7 +522,7 @@ describe('durable Rust semantic requester', () => {
       expect(captured.request).toEqual({
         ...request,
         readinessDeadlineMs: 14_000,
-        settleDelayMs: 0,
+        settleDelayMs: 4_000,
       });
       expect(request).toEqual(original);
     } finally {
