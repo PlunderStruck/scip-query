@@ -497,13 +497,17 @@ export function createFailoverRustAnalyzerSessionRequester(
   const currentFallback = (): RustAnalyzerSessionRequester => (fallback ??= fallbackFactory());
   const shutdownPrimary = (): void => {
     if (primaryShutdown) return;
-    primaryShutdown = true;
     primary.shutdown();
+    primaryShutdown = true;
   };
   const activateFailover = (error: unknown, kind: RustSessionRequestKind, durationMs: number): void => {
     const reason = rustSessionFailoverReason(error);
     failedOver = true;
-    shutdownPrimary();
+    try {
+      shutdownPrimary();
+    } catch {
+      // Cleanup failure must not prevent the latched fallback from serving the request.
+    }
     if (profileEnabled()) {
       writeProfileEvent({
         type: 'span',
@@ -511,7 +515,7 @@ export function createFailoverRustAnalyzerSessionRequester(
         durationMs,
         ok: false,
         kind,
-        disposition: 'worker-fallback',
+        session: 'worker-fallback',
         reason,
       });
     }
@@ -551,8 +555,18 @@ export function createFailoverRustAnalyzerSessionRequester(
     shutdown() {
       if (disposed) return;
       disposed = true;
-      shutdownPrimary();
-      fallback?.shutdown();
+      const cleanupErrors: unknown[] = [];
+      try {
+        shutdownPrimary();
+      } catch (error) {
+        cleanupErrors.push(error);
+      }
+      try {
+        fallback?.shutdown();
+      } catch (error) {
+        cleanupErrors.push(error);
+      }
+      if (cleanupErrors.length > 0) throw cleanupErrors[0];
     },
   };
 }

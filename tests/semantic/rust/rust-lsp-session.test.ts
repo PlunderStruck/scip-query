@@ -230,6 +230,125 @@ describe('createFailoverRustAnalyzerSessionRequester', () => {
     expect(primaryShutdowns).toBe(1);
   });
 
+  it('continues exact latched replay and sanitized profiling when primary cleanup throws', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'scip-query-rust-failover-cleanup-profile-'));
+    const profilePath = join(tempRoot, 'profile.jsonl');
+    const previousProfile = process.env['SCIP_QUERY_PROFILE'];
+    const previousProfileOut = process.env['SCIP_QUERY_PROFILE_OUT'];
+    process.env['SCIP_QUERY_PROFILE'] = '1';
+    process.env['SCIP_QUERY_PROFILE_OUT'] = profilePath;
+    const semanticCalls: Array<{ request: RustReferenceWorkerRequest; timeoutMs: number }> = [];
+    const importCalls: Array<{ request: RustImportDefinitionWorkerRequest; timeoutMs: number }> = [];
+    let primaryRequests = 0;
+    let primaryShutdowns = 0;
+    let fallbackCreations = 0;
+
+    try {
+      const requester = createFailoverRustAnalyzerSessionRequester(
+        {
+          requestSemantic() {
+            primaryRequests += 1;
+            throw new Error('Durable Rust semantic session timed out at /private/source.rs');
+          },
+          requestImportDefinitions() {
+            primaryRequests += 1;
+            throw new Error('durable primary must remain latched off');
+          },
+          shutdown() {
+            primaryShutdowns += 1;
+            throw new Error('primary cleanup exposed HOME=/Users/alice');
+          },
+        },
+        () => {
+          fallbackCreations += 1;
+          return {
+            requestSemantic(request, timeoutMs) {
+              semanticCalls.push({ request, timeoutMs });
+              return { available: true, references: [[1, []]] };
+            },
+            requestImportDefinitions(request, timeoutMs) {
+              importCalls.push({ request, timeoutMs });
+              return { available: true, sourcePaths: [['import-1', 'src/math.rs']] };
+            },
+            shutdown() {},
+          };
+        },
+      );
+
+      expect(requester.requestSemantic(semanticRequest, 1_234).references).toEqual([[1, []]]);
+      expect(requester.requestImportDefinitions(importDefinitionRequest, 5_678).sourcePaths).toEqual([
+        ['import-1', 'src/math.rs'],
+      ]);
+      expect(semanticCalls).toEqual([{ request: semanticRequest, timeoutMs: 1_234 }]);
+      expect(importCalls).toEqual([{ request: importDefinitionRequest, timeoutMs: 5_678 }]);
+      expect(primaryRequests).toBe(1);
+      expect(primaryShutdowns).toBe(1);
+      expect(fallbackCreations).toBe(1);
+
+      const raw = readFileSync(profilePath, 'utf8');
+      const event = JSON.parse(raw.trim()) as {
+        name?: string;
+        session?: string;
+        reason?: string;
+        error?: string;
+      };
+      expect(event).toMatchObject({
+        name: 'rust.semantic.durable-session.request',
+        session: 'worker-fallback',
+        reason: 'timeout',
+      });
+      expect(event.error).toBeUndefined();
+      expect(raw).not.toContain('/private/source.rs');
+      expect(raw).not.toContain('/Users/alice');
+    } finally {
+      restoreEnv('SCIP_QUERY_PROFILE', previousProfile);
+      restoreEnv('SCIP_QUERY_PROFILE_OUT', previousProfileOut);
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('attempts every remaining cleanup once and rethrows the first public shutdown error', () => {
+    let primaryShutdowns = 0;
+    let fallbackShutdowns = 0;
+    const requester = createFailoverRustAnalyzerSessionRequester(
+      {
+        requestSemantic() {
+          throw new Error('durable request failed');
+        },
+        requestImportDefinitions() {
+          throw new Error('durable request failed');
+        },
+        shutdown() {
+          primaryShutdowns += 1;
+          throw new Error('primary cleanup failed');
+        },
+      },
+      () => ({
+        requestSemantic() {
+          return { available: true, references: [[1, []]] };
+        },
+        requestImportDefinitions() {
+          return { available: true, sourcePaths: [] };
+        },
+        shutdown() {
+          fallbackShutdowns += 1;
+          throw new Error('fallback cleanup failed');
+        },
+      }),
+    );
+
+    expect(requester.requestSemantic(semanticRequest, 1_000).available).toBe(true);
+    expect(primaryShutdowns).toBe(1);
+
+    expect(() => requester.shutdown()).toThrow('primary cleanup failed');
+    expect(primaryShutdowns).toBe(2);
+    expect(fallbackShutdowns).toBe(1);
+
+    expect(() => requester.shutdown()).not.toThrow();
+    expect(primaryShutdowns).toBe(2);
+    expect(fallbackShutdowns).toBe(1);
+  });
+
   it('profiles only sanitized failover reason categories', () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'scip-query-rust-failover-profile-'));
     const profilePath = join(tempRoot, 'profile.jsonl');
@@ -266,14 +385,14 @@ describe('createFailoverRustAnalyzerSessionRequester', () => {
         .split('\n')
         .map(
           (line) =>
-            JSON.parse(line) as { name?: string; kind?: string; disposition?: string; reason?: string; error?: string },
+            JSON.parse(line) as { name?: string; kind?: string; session?: string; reason?: string; error?: string },
         );
       expect(events).toEqual(
         ['readiness', 'timeout', 'helper', 'request'].map((reason) =>
           expect.objectContaining({
             name: 'rust.semantic.durable-session.request',
             kind: 'semantic',
-            disposition: 'worker-fallback',
+            session: 'worker-fallback',
             reason,
           }),
         ),
