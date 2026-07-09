@@ -361,7 +361,8 @@ For a request with `readinessDeadlineMs`:
 2. Initialize and send `initialized` through the existing client method.
 3. Wait for a newer healthy quiescent generation.
 4. Before sending any new `didOpen`, take another generation/status snapshot.
-5. Open documents and keep the existing per-URI diagnostics wait.
+5. Disable native editor diagnostics for the deadline-readiness session, open
+   documents, and skip the now-inapplicable per-URI diagnostics wait.
 6. If at least one document was newly opened, send a deadline-bounded,
    read-only `rust-analyzer/analyzerStatus` request. If the status generation
    changed, require newer healthy quiescence; if it did not change, require
@@ -766,13 +767,7 @@ Extend the structural client with `serverStatusSnapshot()` and
 ```ts
 if (openedDocumentCount === 0) return;
 assertUsableQuiescent(checkpoint.status);
-const synchronizationTimeoutMs = deadlineMs - now();
-if (synchronizationTimeoutMs <= 0) {
-  throw new RustAnalyzerReadinessError(
-    'rust-analyzer readiness deadline expired before post-open synchronization',
-  );
-}
-await client.analyzerStatus({ timeoutMs: synchronizationTimeoutMs, deadlineMs });
+await client.analyzerStatus({ deadlineMs });
 assertRustAnalyzerReadinessBudget(deadlineMs, now, 'during post-open synchronization');
 const latest = client.serverStatusSnapshot();
 if (!latest) throw new RustAnalyzerReadinessError('rust-analyzer status is unavailable after document open');
@@ -784,13 +779,16 @@ if (latest.generation === checkpoint.generation) {
 await waitForRustAnalyzerDelayWithinDeadline(settleDelayMs, deadlineMs, now, settle);
 ```
 
-The Vega smoke proved that this explicit timeout must be the remaining absolute
-budget: the ordered response can sit behind more than 15 seconds of document
-work even after diagnostics complete. Do not accept a generation lower than
-the checkpoint, error health, or non-quiescent status, and do not use a fixed
-implicit delay. A quiescent warning is accepted and its health level is
-recorded in readiness profile metadata; exact runtime calibration remains
-mandatory.
+The Vega smoke proved that extending this request to the remaining absolute
+budget is not a fix: a stack sample showed rust-analyzer's worker pool computing
+native diagnostics, and the request remained queued for more than four minutes.
+Deadline-readiness sessions therefore set `diagnostics.enable: false` and skip
+their diagnostics wait; scip-query does not consume those editor diagnostics.
+The ordered request retains its fail-fast per-request timeout inside the same
+absolute deadline. Do not accept a generation lower than the checkpoint, error
+health, or non-quiescent status, and do not use a fixed implicit delay. A
+quiescent warning is accepted and its health level is recorded in readiness
+profile metadata; exact runtime calibration remains mandatory.
 
 - [ ] **Step 5: Wire snapshots through both open-document paths**
 

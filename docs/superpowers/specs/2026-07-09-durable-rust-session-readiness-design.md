@@ -147,10 +147,12 @@ create the session.
 
 Concurrency and retry settings already belong to the worker request and remain
 there. Diagnostics and readiness timeouts are operation bounds, not compiler
-identity. The ordered post-open status request uses the remaining absolute
-readiness budget rather than the ordinary semantic-query timeout: on a large
-workspace, its response is queued behind the document-open work whose ordering
-it proves. Profiling keys remain transient worker environment.
+identity. Deadline-readiness sessions disable native editor diagnostics because
+scip-query never consumes them; otherwise they can occupy rust-analyzer's worker
+pool ahead of the ordered status request. The per-command worker retains its
+accepted diagnostics-plus-settle behavior. The ordered request remains bounded
+by both its ordinary request timeout and the absolute readiness deadline.
+Profiling keys remain transient worker environment.
 
 ### Readiness protocol
 
@@ -205,10 +207,10 @@ Fresh-session flow:
 3. Wait for a newer healthy quiescent status.
 4. Record another status generation.
 5. Open the requested project documents.
-6. Keep the existing diagnostics wait as document-specific evidence.
+6. Skip the diagnostics wait because native diagnostics are disabled for this
+   deadline-readiness session.
 7. Send a deadline-bounded `rust-analyzer/analyzerStatus` request after the
-   document-open notifications and diagnostics. Give it the time remaining to
-   the absolute readiness deadline, not the ordinary per-query timeout.
+   document-open notifications.
 8. If the status generation advanced, require a status newer than the
    pre-open checkpoint that is quiescent and not error health. If it did not
    advance, require the retained status at the checkpoint to remain quiescent

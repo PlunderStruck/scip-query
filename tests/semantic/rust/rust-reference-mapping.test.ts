@@ -11,7 +11,11 @@ import {
   locationsToSemanticReferences,
   referencePositionFromSource,
 } from '../../../src/semantic/rust/reference-mapping.js';
-import { cargoManifestsForDefinitions, rustAnalyzerSessionRoot } from '../../../src/semantic/rust/lsp-batch-worker.js';
+import {
+  cargoManifestsForDefinitions,
+  rustAnalyzerInitializationOptions,
+  rustAnalyzerSessionRoot,
+} from '../../../src/semantic/rust/lsp-batch-worker.js';
 
 function rustDefinition(overrides: Partial<IndexedDefinition> = {}): IndexedDefinition {
   return {
@@ -35,6 +39,23 @@ function rustDefinition(overrides: Partial<IndexedDefinition> = {}): IndexedDefi
 }
 
 describe('Rust reference mapping', () => {
+  it('can disable unused native diagnostics for readiness-gated sessions without changing reference policy', () => {
+    expect(
+      rustAnalyzerInitializationOptions(['/repo/Cargo.toml'], {
+        enableDiagnostics: false,
+      }),
+    ).toEqual({
+      linkedProjects: ['/repo/Cargo.toml'],
+      references: {
+        excludeImports: false,
+        excludeTests: false,
+      },
+      diagnostics: {
+        enable: false,
+      },
+    });
+  });
+
   it('round-trips file URIs with spaces to repository-relative paths', () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-rust-uri-'));
     try {
