@@ -540,15 +540,18 @@ async function sessionForPaths(
         }),
       );
       if (initializationReadiness) {
+        let readinessHealth: string | undefined;
         await profileAsyncSpan(
           'rust.semantic.worker.readiness',
-          () =>
-            waitForRustAnalyzerReadiness(
+          async () => {
+            const status = await waitForRustAnalyzerReadiness(
               client,
               initializationReadiness.afterGeneration,
               initializationReadiness.deadlineMs,
-            ),
-          () => ({ phase: 'initialize' }),
+            );
+            readinessHealth = status.health;
+          },
+          () => ({ phase: 'initialize', health: readinessHealth }),
         );
       }
       return result;
@@ -617,10 +620,11 @@ async function openNewDefinitionDocuments(
       }),
     );
   } else {
+    let readinessHealth: string | undefined;
     await profileAsyncSpan(
       'rust.semantic.worker.readiness',
-      () =>
-        waitForRustAnalyzerPostOpenReadiness(
+      async () => {
+        const status = await waitForRustAnalyzerPostOpenReadiness(
           session.client,
           readiness.statusSnapshot,
           openedUris.length,
@@ -633,8 +637,10 @@ async function openNewDefinitionDocuments(
               () => sleep(delayMs),
               () => ({ openedDocuments: openedUris.length, settleDelayMs: delayMs }),
             ),
-        ),
-      () => ({ phase: 'didOpen', openedDocuments: openedUris.length }),
+        );
+        readinessHealth = status?.health;
+      },
+      () => ({ phase: 'didOpen', openedDocuments: openedUris.length, health: readinessHealth }),
     );
   }
   return openedUris.length;
@@ -702,10 +708,11 @@ async function openNewSourceDocuments(
       }),
     );
   } else {
+    let readinessHealth: string | undefined;
     await profileAsyncSpan(
       'rust.semantic.worker.readiness',
-      () =>
-        waitForRustAnalyzerPostOpenReadiness(
+      async () => {
+        const status = await waitForRustAnalyzerPostOpenReadiness(
           session.client,
           readiness.statusSnapshot,
           uris.length,
@@ -718,8 +725,10 @@ async function openNewSourceDocuments(
               () => sleep(delayMs),
               () => ({ openedDocuments: uris.length, settleDelayMs: delayMs }),
             ),
-        ),
-      () => ({ phase: 'didOpen', openedDocuments: uris.length }),
+        );
+        readinessHealth = status?.health;
+      },
+      () => ({ phase: 'didOpen', openedDocuments: uris.length, health: readinessHealth }),
     );
   }
   return uris.length;

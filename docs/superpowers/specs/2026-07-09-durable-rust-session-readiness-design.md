@@ -165,7 +165,7 @@ The client will advertise:
 `experimental/serverStatus` notification with a monotonically increasing
 generation and retain the latest validated status. An initialization waiter
 receives a minimum generation and a deadline. It resolves only after a newer
-status reports `health: "ok"` and `quiescent: true`.
+status reports `quiescent: true` without `health: "error"`.
 
 The built-runtime smoke established a narrower post-open contract. The
 installed rust-analyzer 1.92.0 emitted a healthy quiescent status after
@@ -174,6 +174,17 @@ rust-analyzer's implementation: the main loop compares `current_status()` with
 `last_reported_status` and sends `experimental/serverStatus` only when the
 structured status changes. The extension is a state-change notification, not
 a per-operation acknowledgement.
+
+The VegaAssistant smoke established a second health distinction. Its
+13-project workspace reports `health: "warning"` because some package build
+scripts fail, then reports `quiescent: true`. A warning status is a completed
+compiler state with a declared limitation; unlike `health: "error"`, it does
+not mean the server is nonfunctional. The existing per-command path already
+produces its baseline evidence under that warning. Durable readiness therefore
+waits through non-quiescent warnings and accepts a quiescent warning while
+recording the health level in the profile. Exact five-control payload parity
+remains the gate that determines whether reusing that state changes semantic
+evidence.
 
 Post-open readiness therefore combines status observation with an ordered,
 read-only round trip. A status-stability round trip is a
@@ -195,8 +206,9 @@ Fresh-session flow:
 7. Send a deadline-bounded `rust-analyzer/analyzerStatus` request after the
    document-open notifications and diagnostics.
 8. If the status generation advanced, require a status newer than the
-   pre-open checkpoint with healthy quiescence. If it did not advance, require
-   the retained status at the checkpoint to remain healthy and quiescent.
+   pre-open checkpoint that is quiescent and not error health. If it did not
+   advance, require the retained status at the checkpoint to remain quiescent
+   and not error health.
 9. Run semantic operations.
 
 Reused-session flow:
@@ -218,7 +230,7 @@ The readiness barrier rejects when:
 - no valid server-status notification arrives before the bounded deadline;
 - no healthy quiescent status exists before the post-open checkpoint;
 - the ordered analyzer-status request fails or crosses the deadline;
-- the status reports warning or error health;
+- the status reports error health;
 - the process exits;
 - the response is malformed; or
 - a changed status does not return to healthy quiescence before the deadline.
@@ -235,7 +247,9 @@ an unbounded retry loop.
 
 Profile events distinguish `created`, `reused`, `invalidated`, and
 `worker-fallback`, including the readiness failure reason without embedding
-source contents or full environment values.
+source contents or full environment values. Readiness spans also record
+`health: "ok"` or `health: "warning"` so a warning-backed calibration remains
+visible.
 
 ## Test Design
 
@@ -262,7 +276,7 @@ All behavior changes use red-green TDD.
   healthy quiescent status.
 - A post-open round trip with an advanced generation still requires a newer
   healthy quiescent status.
-- Warning/error health rejects.
+- A warning waits until quiescent and then resolves; error health rejects.
 - Timeout and transport close reject all readiness waiters without leaks.
 - Per-operation timeout options reach every LSP request method.
 
@@ -304,6 +318,11 @@ Acceptance requires:
 - profiles that prove the expected session disposition; and
 - a meaningful warm-session wall-time improvement on both SynthRunnerRust and
   VegaAssistant.
+
+If a corpus reports warning health, every accepted control must remain
+payload-identical and the ledger must state the warning category. Warning
+health never relaxes the digest, incomplete-reference, output, or performance
+requirements.
 
 Failed and diagnostic runs remain in the JSONL history. Only measurements that
 pass every accuracy condition can support default routing.

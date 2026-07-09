@@ -719,11 +719,15 @@ Add tests with a structural fake client for:
 2. generation advances to non-quiescent during the round trip -> call
    `waitForQuiescence(checkpoint.generation, remainingMs)` and require its
    newer healthy/quiescent result;
-3. checkpoint absent, unhealthy, or non-quiescent -> typed readiness failure;
+3. checkpoint absent, error-health, or non-quiescent -> typed readiness
+   failure;
 4. round-trip request failure/timeout -> typed readiness failure;
-5. unchanged generation but retained status becomes warning/error or
-   non-quiescent -> typed readiness failure;
+5. unchanged generation but retained status becomes error or non-quiescent ->
+   typed readiness failure;
 6. zero newly opened documents -> no round trip.
+
+Also prove that warning health remains pending while non-quiescent and is
+accepted once quiescent. Error health remains fail-closed.
 
 Run:
 
@@ -761,13 +765,13 @@ Extend the structural client with `serverStatusSnapshot()` and
 
 ```ts
 if (openedDocumentCount === 0) return;
-assertHealthyQuiescent(checkpoint.status);
+assertUsableQuiescent(checkpoint.status);
 await client.analyzerStatus({ deadlineMs });
 assertRustAnalyzerReadinessBudget(deadlineMs, now, 'during post-open synchronization');
 const latest = client.serverStatusSnapshot();
 if (!latest) throw new RustAnalyzerReadinessError('rust-analyzer status is unavailable after document open');
 if (latest.generation === checkpoint.generation) {
-  assertHealthyQuiescent(latest.status);
+  assertUsableQuiescent(latest.status);
 } else {
   await waitForRustAnalyzerReadiness(client, checkpoint.generation, deadlineMs, now);
 }
@@ -776,8 +780,9 @@ await waitForRustAnalyzerDelayWithinDeadline(settleDelayMs, deadlineMs, now, set
 
 If `analyzerStatus()` needs a shorter explicit timeout, calculate it from the
 same absolute deadline. Do not accept a generation lower than the checkpoint,
-do not accept warning/error/non-quiescent status, and do not use a fixed
-implicit delay.
+error health, or non-quiescent status, and do not use a fixed implicit delay.
+A quiescent warning is accepted and its health level is recorded in readiness
+profile metadata; exact runtime calibration remains mandatory.
 
 - [ ] **Step 5: Wire snapshots through both open-document paths**
 

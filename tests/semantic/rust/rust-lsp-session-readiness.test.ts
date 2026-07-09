@@ -102,13 +102,22 @@ describe('waitForRustAnalyzerReadiness', () => {
     await expect(readiness).rejects.toThrow(failure.message);
   });
 
-  it.each(['warning', 'error'] as const)('rejects a returned %s status from a structural client', async (health) => {
-    const client = new FakeReadinessClient(async () => ({ health, quiescent: true }));
+  it('accepts a returned quiescent warning status from a structural client', async () => {
+    const warningStatus = { health: 'warning' as const, quiescent: true };
+    const client = new FakeReadinessClient(async () => warningStatus);
+
+    const readiness = waitForRustAnalyzerReadiness(client, 0, 2_000, () => 1_000);
+
+    await expect(readiness).resolves.toEqual(warningStatus);
+  });
+
+  it('rejects a returned error status from a structural client', async () => {
+    const client = new FakeReadinessClient(async () => ({ health: 'error', quiescent: true }));
 
     const readiness = waitForRustAnalyzerReadiness(client, 0, 2_000, () => 1_000);
 
     await expect(readiness).rejects.toBeInstanceOf(RustAnalyzerReadinessError);
-    await expect(readiness).rejects.toThrow(`reported ${health} health`);
+    await expect(readiness).rejects.toThrow('reported error health');
   });
 
   it('rejects a healthy quiescent status returned after the absolute deadline', async () => {
@@ -276,7 +285,7 @@ describe('waitForRustAnalyzerPostOpenReadiness', () => {
 
   it.each([
     null,
-    { generation: 4, status: { health: 'warning' as const, quiescent: true } },
+    { generation: 4, status: { health: 'error' as const, quiescent: true } },
     { generation: 4, status: { health: 'ok' as const, quiescent: false } },
   ])('rejects an invalid pre-open status snapshot %#', async (checkpoint) => {
     const client = new FakeReadinessClient();
@@ -298,7 +307,6 @@ describe('waitForRustAnalyzerPostOpenReadiness', () => {
   });
 
   it.each([
-    { health: 'warning' as const, quiescent: true },
     { health: 'error' as const, quiescent: true },
     { health: 'ok' as const, quiescent: false },
   ])('rejects unchanged post-open status %#', async (status) => {
@@ -311,6 +319,17 @@ describe('waitForRustAnalyzerPostOpenReadiness', () => {
     await expect(
       waitForRustAnalyzerPostOpenReadiness(client, checkpoint, 1, 2_000, 0, () => 1_000, vi.fn()),
     ).rejects.toBeInstanceOf(RustAnalyzerReadinessError);
+  });
+
+  it('accepts an unchanged quiescent warning after the ordered round trip', async () => {
+    const warningStatus = { health: 'warning' as const, quiescent: true, message: 'build scripts failed' };
+    const client = new FakeReadinessClient();
+    client.generation = 4;
+    client.status = warningStatus;
+
+    await expect(
+      waitForRustAnalyzerPostOpenReadiness(client, client.serverStatusSnapshot(), 1, 2_000, 0, () => 1_000, vi.fn()),
+    ).resolves.toEqual(warningStatus);
   });
 });
 

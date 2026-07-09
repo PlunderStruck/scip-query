@@ -195,8 +195,8 @@ export class RustAnalyzerLspClient {
   waitForQuiescence(afterGeneration: number, timeoutMs: number): Promise<RustAnalyzerServerStatus> {
     const latest = this.latestServerStatus;
     if (latest && latest.generation > afterGeneration) {
-      if (latest.status.health !== 'ok') {
-        return Promise.reject(readinessErrorForHealth(latest.status.health));
+      if (latest.status.health === 'error') {
+        return Promise.reject(readinessErrorForHealth());
       }
       if (latest.status.quiescent) return Promise.resolve(latest.status);
     }
@@ -358,8 +358,8 @@ export class RustAnalyzerLspClient {
     };
     const generation = ++this.currentServerStatusGeneration;
     this.latestServerStatus = { generation, status };
-    if (status.health !== 'ok') {
-      this.rejectReadinessWaiters(readinessErrorForHealth(status.health));
+    if (status.health === 'error') {
+      this.rejectReadinessWaiters(readinessErrorForHealth());
       return;
     }
     if (!status.quiescent) return;
@@ -433,8 +433,8 @@ function isRustAnalyzerServerStatusPayload(value: unknown): value is RustAnalyze
   );
 }
 
-function readinessErrorForHealth(health: 'warning' | 'error'): RustAnalyzerReadinessError {
-  return new RustAnalyzerReadinessError(`rust-analyzer reported ${health} health before reaching readiness`);
+function readinessErrorForHealth(): RustAnalyzerReadinessError {
+  return new RustAnalyzerReadinessError('rust-analyzer reported error health before reaching readiness');
 }
 
 function configurationValueForSection(configuration: Record<string, unknown>, section: string): unknown {

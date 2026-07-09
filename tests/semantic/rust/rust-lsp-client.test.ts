@@ -648,7 +648,30 @@ describe('RustAnalyzerLspClient', () => {
     await client.shutdown();
   });
 
-  it.each(['warning', 'error'] as const)('rejects %s server health without exposing source text', async (health) => {
+  it('waits through a warning and resolves when the warning state becomes quiescent', async () => {
+    const { client, transport } = await createIdleClient();
+    const readiness = client.waitForQuiescence(client.serverStatusGeneration(), 100);
+
+    transport.send({
+      jsonrpc: '2.0',
+      method: 'experimental/serverStatus',
+      params: { health: 'warning', quiescent: false, message: 'build scripts are still running' },
+    });
+    transport.send({
+      jsonrpc: '2.0',
+      method: 'experimental/serverStatus',
+      params: { health: 'warning', quiescent: true, message: 'some build scripts failed' },
+    });
+
+    await expect(readiness).resolves.toEqual({
+      health: 'warning',
+      quiescent: true,
+      message: 'some build scripts failed',
+    });
+    await client.shutdown();
+  });
+
+  it('rejects error server health without exposing source text', async () => {
     const { client, transport } = await createIdleClient();
     const sourceText = 'private rust-analyzer source details';
     const readiness = client.waitForQuiescence(client.serverStatusGeneration(), 100);
@@ -656,7 +679,7 @@ describe('RustAnalyzerLspClient', () => {
     transport.send({
       jsonrpc: '2.0',
       method: 'experimental/serverStatus',
-      params: { health, quiescent: false, message: sourceText },
+      params: { health: 'error', quiescent: false, message: sourceText },
     });
     const error = await readiness.catch((reason: unknown) => reason);
 
