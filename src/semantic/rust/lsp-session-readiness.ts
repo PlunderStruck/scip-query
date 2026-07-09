@@ -56,7 +56,13 @@ export async function waitForRustAnalyzerPostOpenReadiness(
   }
   assertUsableQuiescentStatus(checkpoint.status, 'before document open');
   try {
-    await client.analyzerStatus({ deadlineMs });
+    const synchronizationTimeoutMs = deadlineMs - now();
+    if (synchronizationTimeoutMs <= 0) {
+      throw new RustAnalyzerReadinessError(
+        'rust-analyzer readiness deadline expired before post-open synchronization',
+      );
+    }
+    await client.analyzerStatus({ timeoutMs: synchronizationTimeoutMs, deadlineMs });
     assertRustAnalyzerReadinessBudget(deadlineMs, now, 'during post-open synchronization');
   } catch (error) {
     if (error instanceof RustAnalyzerReadinessError) throw error;

@@ -766,7 +766,13 @@ Extend the structural client with `serverStatusSnapshot()` and
 ```ts
 if (openedDocumentCount === 0) return;
 assertUsableQuiescent(checkpoint.status);
-await client.analyzerStatus({ deadlineMs });
+const synchronizationTimeoutMs = deadlineMs - now();
+if (synchronizationTimeoutMs <= 0) {
+  throw new RustAnalyzerReadinessError(
+    'rust-analyzer readiness deadline expired before post-open synchronization',
+  );
+}
+await client.analyzerStatus({ timeoutMs: synchronizationTimeoutMs, deadlineMs });
 assertRustAnalyzerReadinessBudget(deadlineMs, now, 'during post-open synchronization');
 const latest = client.serverStatusSnapshot();
 if (!latest) throw new RustAnalyzerReadinessError('rust-analyzer status is unavailable after document open');
@@ -778,11 +784,13 @@ if (latest.generation === checkpoint.generation) {
 await waitForRustAnalyzerDelayWithinDeadline(settleDelayMs, deadlineMs, now, settle);
 ```
 
-If `analyzerStatus()` needs a shorter explicit timeout, calculate it from the
-same absolute deadline. Do not accept a generation lower than the checkpoint,
-error health, or non-quiescent status, and do not use a fixed implicit delay.
-A quiescent warning is accepted and its health level is recorded in readiness
-profile metadata; exact runtime calibration remains mandatory.
+The Vega smoke proved that this explicit timeout must be the remaining absolute
+budget: the ordered response can sit behind more than 15 seconds of document
+work even after diagnostics complete. Do not accept a generation lower than
+the checkpoint, error health, or non-quiescent status, and do not use a fixed
+implicit delay. A quiescent warning is accepted and its health level is
+recorded in readiness profile metadata; exact runtime calibration remains
+mandatory.
 
 - [ ] **Step 5: Wire snapshots through both open-document paths**
 

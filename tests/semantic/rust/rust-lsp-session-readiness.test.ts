@@ -148,6 +148,7 @@ describe('waitForRustAnalyzerPostOpenReadiness', () => {
     await waitForRustAnalyzerPostOpenReadiness(client, checkpoint, 1, 2_000, 0, () => 1_000, vi.fn());
 
     expect(events).toEqual(['didOpen', 'synchronize:2000']);
+    expect(client.synchronizations).toEqual([{ timeoutMs: 1_000, deadlineMs: 2_000 }]);
     expect(client.waits).toEqual([]);
   });
 
