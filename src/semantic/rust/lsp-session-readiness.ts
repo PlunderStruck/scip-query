@@ -41,6 +41,33 @@ export async function waitForRustAnalyzerReadiness(
   }
 }
 
+export async function waitForRustAnalyzerInitialPostOpenReadiness(
+  client: RustAnalyzerReadinessClient,
+  initializationGeneration: number,
+  openedDocumentCount: number,
+  deadlineMs: number,
+  settleDelayMs: number,
+  now: () => number = Date.now,
+  settle: (delayMs: number) => Promise<void> = sleep,
+): Promise<RustAnalyzerServerStatus> {
+  const initialStatus = await waitForRustAnalyzerReadiness(client, initializationGeneration, deadlineMs, now);
+  if (openedDocumentCount === 0) return initialStatus;
+  const checkpoint = client.serverStatusSnapshot();
+  if (!checkpoint) {
+    throw new RustAnalyzerReadinessError('rust-analyzer status is unavailable after initial document open');
+  }
+  const postOpenStatus = await waitForRustAnalyzerPostOpenReadiness(
+    client,
+    checkpoint,
+    openedDocumentCount,
+    deadlineMs,
+    settleDelayMs,
+    now,
+    settle,
+  );
+  return postOpenStatus ?? initialStatus;
+}
+
 export async function waitForRustAnalyzerPostOpenReadiness(
   client: RustAnalyzerReadinessClient,
   checkpoint: RustAnalyzerServerStatusSnapshot | null,

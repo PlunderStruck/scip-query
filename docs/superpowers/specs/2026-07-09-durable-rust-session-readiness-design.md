@@ -206,10 +206,11 @@ Fresh-session flow:
 
 1. Record the current status generation.
 2. Send `initialize` and `initialized`.
-3. Wait for a newer healthy quiescent status.
-4. Record another status generation.
-5. Open the requested project documents.
-6. Keep the existing diagnostics wait as document-specific evidence.
+3. Open the requested project documents while initial workspace loading is in
+   progress.
+4. Keep the existing diagnostics wait as document-specific evidence.
+5. Wait for a newer usable quiescent status than the pre-initialize generation.
+6. Record that status as the post-open checkpoint.
 7. Send the deadline-bounded `scip-query/readinessBarrier` protocol request
    after the document-open notifications and diagnostics.
 8. If the status generation advanced, require a status newer than the
@@ -225,11 +226,11 @@ Reused-session flow:
 - If it opens new documents, repeat the post-open diagnostics and ordered
   status-stability barrier.
 
-The implicit durable-session settle delay is removed. When the user explicitly
-configures a settle delay, durable mode honors it after observed quiescence as
-an additional experiment; the delay never substitutes for the readiness
-barrier and never enters compiler-session identity. The per-command path keeps
-its existing settle behavior.
+Durable mode preserves the request's existing settle policy after observed
+quiescence. An explicit `SCIP_RUST_SEMANTIC_SETTLE_MS` value overrides that
+policy for controlled experiments; the delay never substitutes for the
+readiness barrier and never enters compiler-session identity. The per-command
+path keeps its existing behavior.
 
 ### Failure handling
 

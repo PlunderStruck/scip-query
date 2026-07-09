@@ -8,6 +8,7 @@ import {
 import {
   rustAnalyzerReadinessWorkerErrorEnvelope,
   waitForRustAnalyzerDiagnosticsWithinDeadline,
+  waitForRustAnalyzerInitialPostOpenReadiness,
   waitForRustAnalyzerPostOpenReadiness,
   waitForRustAnalyzerReadiness,
   withRustAnalyzerReadinessInvalidation,
@@ -135,6 +136,34 @@ describe('waitForRustAnalyzerReadiness', () => {
 });
 
 describe('waitForRustAnalyzerPostOpenReadiness', () => {
+  it('opens documents before waiting for initial quiescence and then acknowledges their protocol order', async () => {
+    const events: string[] = ['initialize', 'didOpen'];
+    const client = new FakeReadinessClient(
+      async (afterGeneration) => {
+        events.push(`wait:${afterGeneration}`);
+        client.generation = 1;
+        client.status = readyStatus;
+        return readyStatus;
+      },
+      async () => {
+        events.push('barrier');
+      },
+    );
+
+    await waitForRustAnalyzerInitialPostOpenReadiness(client, 0, 1, 2_000, 0, () => 1_000, vi.fn());
+
+    expect(events).toEqual(['initialize', 'didOpen', 'wait:0', 'barrier']);
+  });
+
+  it('still waits for initial quiescence when a fresh request opens no documents', async () => {
+    const client = new FakeReadinessClient(async () => readyStatus);
+
+    await waitForRustAnalyzerInitialPostOpenReadiness(client, 0, 0, 2_000, 0, () => 1_000, vi.fn());
+
+    expect(client.waits).toEqual([{ afterGeneration: 0, timeoutMs: 1_000 }]);
+    expect(client.synchronizations).toEqual([]);
+  });
+
   it('accepts an unchanged healthy quiescent status after an ordered post-open round trip', async () => {
     const events: string[] = [];
     const client = new FakeReadinessClient(undefined, async (opts) => {

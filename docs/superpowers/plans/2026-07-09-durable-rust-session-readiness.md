@@ -359,9 +359,11 @@ For a request with `readinessDeadlineMs`:
 
 1. Take `client.serverStatusGeneration()` before `initialize()`.
 2. Initialize and send `initialized` through the existing client method.
-3. Wait for a newer healthy quiescent generation.
-4. Before sending any new `didOpen`, take another generation/status snapshot.
-5. Open documents and keep the existing per-URI diagnostics wait.
+3. Open documents while initial workspace loading is still in progress and
+   keep the existing per-URI diagnostics wait.
+4. Wait for a newer usable quiescent generation than the pre-initialize
+   checkpoint.
+5. Record that status as the post-open checkpoint.
 6. If at least one document was newly opened, send a deadline-bounded,
    read-only `scip-query/readinessBarrier` request. Accept method-not-found as
    the expected ordering acknowledgement. If the status generation changed,
@@ -791,17 +793,25 @@ than four minutes. Disabling diagnostics made the barrier fast but produced 14
 incomplete references and triggered two later worker fallbacks. The private
 protocol request is the narrow ordering proof: its method-not-found response is
 handled directly without requesting analyzer work, while diagnostics and the
-request's settle policy remain unchanged. Do not accept a generation lower than
-the checkpoint, error health, or non-quiescent status. A quiescent warning is
-accepted and its health level is recorded in readiness profile metadata; exact
-runtime calibration remains mandatory.
+request's settle policy remain unchanged. A third smoke showed why fresh-session
+ordering matters: waiting for initial quiescence before opening Vega's 706
+documents launched a second diagnostics wave and completed no semantic span in
+five minutes. Fresh sessions therefore open their requested documents during
+initial workspace loading, then wait once for usable quiescence and acknowledge
+the combined message order. Reused sessions retain the pre-open checkpoint path.
+Do not accept a generation lower than the checkpoint, error health, or
+non-quiescent status. A quiescent warning is accepted and its health level is
+recorded in readiness profile metadata; exact runtime calibration remains
+mandatory.
 
 - [ ] **Step 5: Wire snapshots through both open-document paths**
 
-In `openNewDefinitionDocuments()` and `openNewSourceDocuments()`, capture the
-status snapshot immediately before the first new `didOpen` and pass it to the
-post-open helper after diagnostics. Preserve zero-new-document fast paths,
-typed invalidation, explicit settle placement, and per-command behavior when
+In `openNewDefinitionDocuments()` and `openNewSourceDocuments()`, fresh
+sessions carry the pre-initialize generation through document opening and use
+the combined initialization/post-open helper after diagnostics. Reused sessions
+capture the status snapshot immediately before the first new `didOpen` and pass
+it to the post-open helper. Preserve zero-new-document fast paths, typed
+invalidation, explicit settle placement, and per-command behavior when
 `readinessDeadlineMs` is absent.
 
 - [ ] **Step 6: Verify and commit the correction**

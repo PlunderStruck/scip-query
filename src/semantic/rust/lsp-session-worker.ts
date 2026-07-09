@@ -11,8 +11,8 @@ import type { RustImportDefinitionWorkerRequest, RustImportDefinitionWorkerRespo
 import {
   rustAnalyzerReadinessWorkerErrorEnvelope,
   waitForRustAnalyzerDiagnosticsWithinDeadline,
+  waitForRustAnalyzerInitialPostOpenReadiness,
   waitForRustAnalyzerPostOpenReadiness,
-  waitForRustAnalyzerReadiness,
   withRustAnalyzerReadinessInvalidation,
 } from './lsp-session-readiness.js';
 import {
@@ -65,6 +65,7 @@ interface RustAnalyzerSessionState {
   client: RustAnalyzerLspClient;
   capabilities: LspInitializeResult['capabilities'];
   openedPaths: Set<string>;
+  initializationReadiness: { afterGeneration: number; deadlineMs: number } | null;
 }
 
 interface ReferenceTaskResult {
@@ -506,8 +507,8 @@ async function sessionForPaths(
           deadlineMs: opts.readinessDeadlineMs,
         };
   const initialized = await withRustAnalyzerReadinessInvalidation(
-    async () => {
-      const result = await profileAsyncSpan(
+    () =>
+      profileAsyncSpan(
         'rust.semantic.worker.initialize',
         () =>
           client.initialize(
@@ -538,24 +539,7 @@ async function sessionForPaths(
           linkedProjects: linkedProjects.length,
           relativePaths: relativePaths.length,
         }),
-      );
-      if (initializationReadiness) {
-        let readinessHealth: string | undefined;
-        await profileAsyncSpan(
-          'rust.semantic.worker.readiness',
-          async () => {
-            const status = await waitForRustAnalyzerReadiness(
-              client,
-              initializationReadiness.afterGeneration,
-              initializationReadiness.deadlineMs,
-            );
-            readinessHealth = status.health;
-          },
-          () => ({ phase: 'initialize', health: readinessHealth }),
-        );
-      }
-      return result;
-    },
+      ),
     () => client.shutdown({ deadlineMs: opts.readinessDeadlineMs }).catch(() => undefined),
   );
   const session: RustAnalyzerSessionState = {
@@ -563,6 +547,7 @@ async function sessionForPaths(
     client,
     capabilities: initialized.capabilities,
     openedPaths: new Set(),
+    initializationReadiness,
   };
   sessions.set(key, session);
   return session;
@@ -576,13 +561,18 @@ async function openNewDefinitionDocuments(
     if (session.openedPaths.has(definition.relativePath)) return false;
     return existsSync(resolve(request.projectRoot, definition.relativePath));
   });
-  if (definitionsToOpen.length === 0) return 0;
+  if (definitionsToOpen.length === 0) {
+    await waitForRustAnalyzerInitialReadinessWithoutDocuments(session);
+    return 0;
+  }
 
+  const initializationReadiness = session.initializationReadiness;
   const readiness =
     request.readinessDeadlineMs === undefined
       ? null
       : {
-          statusSnapshot: session.client.serverStatusSnapshot(),
+          statusSnapshot: initializationReadiness ? null : session.client.serverStatusSnapshot(),
+          initializationGeneration: initializationReadiness?.afterGeneration,
           deadlineMs: request.readinessDeadlineMs,
         };
   const openedUris = openDefinitionDocuments(session.client, request.projectRoot, definitionsToOpen);
@@ -624,23 +614,40 @@ async function openNewDefinitionDocuments(
     await profileAsyncSpan(
       'rust.semantic.worker.readiness',
       async () => {
-        const status = await waitForRustAnalyzerPostOpenReadiness(
-          session.client,
-          readiness.statusSnapshot,
-          openedUris.length,
-          readiness.deadlineMs,
-          settleDelayMs,
-          Date.now,
-          (delayMs) =>
-            profileAsyncSpan(
-              'rust.semantic.worker.settle',
-              () => sleep(delayMs),
-              () => ({ openedDocuments: openedUris.length, settleDelayMs: delayMs }),
-            ),
-        );
+        const settle = (delayMs: number): Promise<void> =>
+          profileAsyncSpan(
+            'rust.semantic.worker.settle',
+            () => sleep(delayMs),
+            () => ({ openedDocuments: openedUris.length, settleDelayMs: delayMs }),
+          );
+        const status =
+          readiness.initializationGeneration === undefined
+            ? await waitForRustAnalyzerPostOpenReadiness(
+                session.client,
+                readiness.statusSnapshot,
+                openedUris.length,
+                readiness.deadlineMs,
+                settleDelayMs,
+                Date.now,
+                settle,
+              )
+            : await waitForRustAnalyzerInitialPostOpenReadiness(
+                session.client,
+                readiness.initializationGeneration,
+                openedUris.length,
+                readiness.deadlineMs,
+                settleDelayMs,
+                Date.now,
+                settle,
+              );
+        if (readiness.initializationGeneration !== undefined) session.initializationReadiness = null;
         readinessHealth = status?.health;
       },
-      () => ({ phase: 'didOpen', openedDocuments: openedUris.length, health: readinessHealth }),
+      () => ({
+        phase: readiness.initializationGeneration === undefined ? 'didOpen' : 'initialize+didOpen',
+        openedDocuments: openedUris.length,
+        health: readinessHealth,
+      }),
     );
   }
   return openedUris.length;
@@ -656,13 +663,18 @@ async function openNewSourceDocuments(
     if (session.openedPaths.has(file)) return false;
     return existsSync(resolve(projectRoot, file));
   });
-  if (filesToOpen.length === 0) return 0;
+  if (filesToOpen.length === 0) {
+    await waitForRustAnalyzerInitialReadinessWithoutDocuments(session);
+    return 0;
+  }
 
+  const initializationReadiness = session.initializationReadiness;
   const readiness =
     opts.readinessDeadlineMs === undefined
       ? null
       : {
-          statusSnapshot: session.client.serverStatusSnapshot(),
+          statusSnapshot: initializationReadiness ? null : session.client.serverStatusSnapshot(),
+          initializationGeneration: initializationReadiness?.afterGeneration,
           deadlineMs: opts.readinessDeadlineMs,
         };
   const uris: string[] = [];
@@ -712,26 +724,64 @@ async function openNewSourceDocuments(
     await profileAsyncSpan(
       'rust.semantic.worker.readiness',
       async () => {
-        const status = await waitForRustAnalyzerPostOpenReadiness(
-          session.client,
-          readiness.statusSnapshot,
-          uris.length,
-          readiness.deadlineMs,
-          settleDelayMs,
-          Date.now,
-          (delayMs) =>
-            profileAsyncSpan(
-              'rust.semantic.worker.settle',
-              () => sleep(delayMs),
-              () => ({ openedDocuments: uris.length, settleDelayMs: delayMs }),
-            ),
-        );
+        const settle = (delayMs: number): Promise<void> =>
+          profileAsyncSpan(
+            'rust.semantic.worker.settle',
+            () => sleep(delayMs),
+            () => ({ openedDocuments: uris.length, settleDelayMs: delayMs }),
+          );
+        const status =
+          readiness.initializationGeneration === undefined
+            ? await waitForRustAnalyzerPostOpenReadiness(
+                session.client,
+                readiness.statusSnapshot,
+                uris.length,
+                readiness.deadlineMs,
+                settleDelayMs,
+                Date.now,
+                settle,
+              )
+            : await waitForRustAnalyzerInitialPostOpenReadiness(
+                session.client,
+                readiness.initializationGeneration,
+                uris.length,
+                readiness.deadlineMs,
+                settleDelayMs,
+                Date.now,
+                settle,
+              );
+        if (readiness.initializationGeneration !== undefined) session.initializationReadiness = null;
         readinessHealth = status?.health;
       },
-      () => ({ phase: 'didOpen', openedDocuments: uris.length, health: readinessHealth }),
+      () => ({
+        phase: readiness.initializationGeneration === undefined ? 'didOpen' : 'initialize+didOpen',
+        openedDocuments: uris.length,
+        health: readinessHealth,
+      }),
     );
   }
   return uris.length;
+}
+
+async function waitForRustAnalyzerInitialReadinessWithoutDocuments(session: RustAnalyzerSessionState): Promise<void> {
+  const readiness = session.initializationReadiness;
+  if (!readiness) return;
+  let readinessHealth: string | undefined;
+  await profileAsyncSpan(
+    'rust.semantic.worker.readiness',
+    async () => {
+      const status = await waitForRustAnalyzerInitialPostOpenReadiness(
+        session.client,
+        readiness.afterGeneration,
+        0,
+        readiness.deadlineMs,
+        0,
+      );
+      readinessHealth = status.health;
+      session.initializationReadiness = null;
+    },
+    () => ({ phase: 'initialize', openedDocuments: 0, health: readinessHealth }),
+  );
 }
 
 function firstProjectLocalDefinitionPath(
