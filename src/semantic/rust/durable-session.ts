@@ -17,6 +17,7 @@ export const DURABLE_RUST_SESSION_PROTOCOL_VERSION = 2;
 const DURABLE_RUST_SESSION_MAX_HEARTBEAT_AGE_MS = 5_000;
 const DURABLE_RUST_SESSION_STARTUP_TIMEOUT_MS = 5_000;
 const DURABLE_RUST_SESSION_POLL_INTERVAL_MS = 10;
+const DEFAULT_DURABLE_RUST_REFERENCE_RETRY_TIMEOUT_MS = 30_000;
 
 type RustSessionRequest = RustReferenceWorkerRequest | RustImportDefinitionWorkerRequest;
 
@@ -234,6 +235,10 @@ export function createDurableRustAnalyzerSessionRequester(
           request: {
             ...request,
             readinessDeadlineMs,
+            referenceRetryTimeoutMs: durableReferenceRetryTimeoutMs(
+              process.env['SCIP_RUST_SEMANTIC_REFERENCE_RETRY_TIMEOUT_MS'],
+              request.referenceRetryTimeoutMs,
+            ),
             settleDelayMs:
               process.env['SCIP_RUST_SEMANTIC_SETTLE_MS'] === undefined
                 ? request.settleDelayMs
@@ -278,6 +283,14 @@ export function applyWorkerEnvironment(environment: Record<string, string | null
   for (const [key, value] of Object.entries(environment)) {
     if (value !== null) process.env[key] = value;
   }
+}
+
+function durableReferenceRetryTimeoutMs(
+  configuredValue: string | undefined,
+  requestValue: number | undefined,
+): number | undefined {
+  if (requestValue !== undefined) return requestValue;
+  return configuredValue === undefined ? DEFAULT_DURABLE_RUST_REFERENCE_RETRY_TIMEOUT_MS : undefined;
 }
 
 function dispatchDurableRustSessionRequest<Response>(

@@ -149,6 +149,10 @@ Concurrency and retry settings already belong to the worker request and remain
 there. Diagnostics and readiness timeouts are operation bounds, not compiler
 identity. Deadline-readiness sessions preserve the request's diagnostics and
 settle policy unless an explicit durable settle override is configured. The
+durable path supplies one 30-second reference retry when the request has no
+explicit retry policy; `SCIP_RUST_SEMANTIC_REFERENCE_RETRY_TIMEOUT_MS=0`
+disables it. This turns timeout-sensitive first-fill rows into a bounded retry
+on the same warm session without changing the per-command default. The
 ordered request remains bounded by both its ordinary request timeout and the
 absolute readiness deadline. Profiling keys remain transient worker
 environment.

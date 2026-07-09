@@ -507,7 +507,9 @@ describe('durable Rust semantic server state', () => {
 describe('durable Rust semantic requester', () => {
   it('copies semantic requests with the injected-clock readiness margin and preserves the request settle', () => {
     const previousSettle = process.env['SCIP_RUST_SEMANTIC_SETTLE_MS'];
+    const previousRetry = process.env['SCIP_RUST_SEMANTIC_REFERENCE_RETRY_TIMEOUT_MS'];
     delete process.env['SCIP_RUST_SEMANTIC_SETTLE_MS'];
+    delete process.env['SCIP_RUST_SEMANTIC_REFERENCE_RETRY_TIMEOUT_MS'];
     const request: RustReferenceWorkerRequest = {
       ...semanticRequest,
       readinessDeadlineMs: 123,
@@ -523,10 +525,26 @@ describe('durable Rust semantic requester', () => {
         ...request,
         readinessDeadlineMs: 14_000,
         settleDelayMs: 4_000,
+        referenceRetryTimeoutMs: 30_000,
       });
       expect(request).toEqual(original);
     } finally {
       restoreEnv('SCIP_RUST_SEMANTIC_SETTLE_MS', previousSettle);
+      restoreEnv('SCIP_RUST_SEMANTIC_REFERENCE_RETRY_TIMEOUT_MS', previousRetry);
+    }
+  });
+
+  it('honors an explicit zero reference-retry policy for durable requests', () => {
+    const previousRetry = process.env['SCIP_RUST_SEMANTIC_REFERENCE_RETRY_TIMEOUT_MS'];
+    process.env['SCIP_RUST_SEMANTIC_REFERENCE_RETRY_TIMEOUT_MS'] = '0';
+
+    try {
+      const captured = captureDurableMailboxRequest('semantic', semanticRequest, 5_000, 10_000);
+
+      expect(captured.kind).toBe('semantic');
+      expect(captured.request.referenceRetryTimeoutMs).toBeUndefined();
+    } finally {
+      restoreEnv('SCIP_RUST_SEMANTIC_REFERENCE_RETRY_TIMEOUT_MS', previousRetry);
     }
   });
 

@@ -799,10 +799,14 @@ documents launched a second diagnostics wave and completed no semantic span in
 five minutes. Fresh sessions therefore open their requested documents during
 initial workspace loading, then wait once for usable quiescence and acknowledge
 the combined message order. Reused sessions retain the pre-open checkpoint path.
-Do not accept a generation lower than the checkpoint, error health, or
-non-quiescent status. A quiescent warning is accepted and its health level is
-recorded in readiness profile metadata; exact runtime calibration remains
-mandatory.
+A completed combined-readiness Vega run then isolated the remaining accuracy
+failure to 8 reference timeouts in the main batch and 14 incomplete reads after
+phase retries. The existing 30-second retry seam had already restored all Vega
+rows in prior calibration, so durable requests now use that retry only when no
+explicit retry policy exists; explicit zero still disables it. Do not accept a
+generation lower than the checkpoint, error health, or non-quiescent status. A
+quiescent warning is accepted and its health level is recorded in readiness
+profile metadata; exact runtime calibration remains mandatory.
 
 - [ ] **Step 5: Wire snapshots through both open-document paths**
 
