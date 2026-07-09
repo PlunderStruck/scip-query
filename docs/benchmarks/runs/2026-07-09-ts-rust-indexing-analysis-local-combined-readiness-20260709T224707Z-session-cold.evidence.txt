@@ -1,0 +1,11 @@
+label=session-cold
+group=20260709T224707Z
+exit=0
+time=real 8.27 user 16.46 sys 2.69
+stdout=7fca13f196958097c45856d673dbeb9a83a1ffeefeb725436d2b5f1cd1a2ba63
+references=b6fd55ebf71947b0f972df9f610c216cfe95b1018901fa6c9c1cfe46be461bb0
+callees=730dc3f5baf403cc74cec4a5d0a188a74c0dbe647deb428705f592b8c6ed3630
+counts=4613|17074|4230;4614|3248|1452
+incomplete=0
+sessions=["created"]
+readiness=[{"phase":"initialize+didOpen","ok":true,"durationMs":597,"health":"ok","error":null}]

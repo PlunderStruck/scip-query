@@ -1,0 +1,11 @@
+label=session-cold-smoke
+group=20260709T225020Z
+exit=0
+time=real 333.53 user 48.08 sys 18.31
+stdout=7e944222c34dcae93bdf6a8efb52f2fa64432ef9dd86fbe2a7d1742cfa5ad629
+references=e56d10b165e511efcc0bf8ceec94275bcb56b6dca0aac6c002a00d5410ca4538
+callees=7a306badd68a8842807d93519833125fb445a7ee8c1b8ca37cff0610cf984a5a
+counts=38214|83435|13594;38222|104425|14443
+incomplete=14
+sessions=["invalidated","reused"]
+readiness=[{"phase":"initialize+didOpen","ok":true,"durationMs":25569,"health":"warning","error":null},{"phase":"initialize+didOpen","ok":true,"durationMs":14690,"health":"warning","error":null},{"phase":"initialize+didOpen","ok":true,"durationMs":21309,"health":"warning","error":null}]

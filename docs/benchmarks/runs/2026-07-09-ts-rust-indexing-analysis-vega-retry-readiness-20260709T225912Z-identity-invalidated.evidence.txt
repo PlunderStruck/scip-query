@@ -1,0 +1,12 @@
+label=identity-invalidated
+group=20260709T225912Z
+exit=0
+time=real 155.69 user 43.97 sys 11.07
+stdout=7e944222c34dcae93bdf6a8efb52f2fa64432ef9dd86fbe2a7d1742cfa5ad629
+references=6b537edd5127bb7036493a27ea074c4e7b57a5c4c2420e8f51c52603bd2719af
+callees=7a306badd68a8842807d93519833125fb445a7ee8c1b8ca37cff0610cf984a5a
+counts=38222|83440|13598;38222|104425|14443
+prewarmIncomplete=0
+cacheIncomplete=6
+sessions=["invalidated"]
+readiness=[{"phase":"initialize+didOpen","ok":true,"durationMs":26932,"health":"warning","error":null}]

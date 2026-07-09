@@ -1,0 +1,788 @@
+{
+  "command": "health",
+  "evidence": "mixed",
+  "args": [],
+  "options": {
+    "full": true,
+    "json": true
+  },
+  "result": {
+    "score": 9,
+    "riskScore": 65,
+    "hygieneScore": 9,
+    "scoreBreakdown": [
+      {
+        "axis": "dead-code",
+        "points": 1,
+        "detail": "106 dead symbols (1215 LOC deletable)",
+        "kind": "risk"
+      },
+      {
+        "axis": "cycles",
+        "points": 15,
+        "detail": "7 real dependency cycle(s)",
+        "kind": "risk"
+      },
+      {
+        "axis": "similar",
+        "points": 10,
+        "detail": "1331 similar function pair(s)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "duplicate-bodies",
+        "points": 7,
+        "detail": "144 exact duplicate small-body group(s) (1678 duplicate LOC)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "twin-drift",
+        "points": 10,
+        "detail": "459 drifted twin implementation group(s) (same or near-same name, diverged or identical bodies)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "react-component-duplicates",
+        "points": 10,
+        "detail": "11 duplicated React component pair(s)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "react-hook-candidates",
+        "points": 10,
+        "detail": "100 duplicated React behavior pair(s) (29.25 score-weighted)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "react-large-component-pressure",
+        "points": 5,
+        "detail": "118 large React component pressure file(s)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "wrappers",
+        "points": 3,
+        "detail": "223 wrapper candidate(s) (136.75 score-weighted)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "passthroughs",
+        "points": 3,
+        "detail": "144 passthrough candidate(s) (92.25 score-weighted)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "complexity",
+        "points": 5,
+        "detail": "20 extreme complexity hotspot(s)",
+        "kind": "risk"
+      },
+      {
+        "axis": "hidden-coupling",
+        "points": 5,
+        "detail": "191 co-changing pair(s) without a structural link (48 score-weighted)",
+        "kind": "risk"
+      },
+      {
+        "axis": "cycles-pressure",
+        "points": 4,
+        "detail": "7 cycle(s) exceed pressure threshold 3 (2.33x)",
+        "kind": "risk"
+      },
+      {
+        "axis": "complexity-pressure",
+        "points": 5,
+        "detail": "20 extreme complexity hotspot(s) exceed pressure threshold 3 (6.67x)",
+        "kind": "risk"
+      },
+      {
+        "axis": "similar-pressure",
+        "points": 7,
+        "detail": "1331 similar function pair(s) exceed pressure threshold 414.75 (3.21x)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "twin-drift-pressure",
+        "points": 5,
+        "detail": "459 drifted twin implementation group(s) exceed pressure threshold 207.38 (2.21x)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "react-component-duplicates-pressure",
+        "points": 1,
+        "detail": "11 duplicated React component pair(s) exceed pressure threshold 10 (1.1x)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "react-hook-candidates-pressure",
+        "points": 7,
+        "detail": "29.25 duplicated React behavior pair(s) exceed pressure threshold 10 (2.93x)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "react-large-component-pressure-pressure",
+        "points": 4,
+        "detail": "118 large React component pressure file(s) exceed pressure threshold 10 (11.8x)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "extract-pressure",
+        "points": 4,
+        "detail": "1275 extraction candidate(s) exceed pressure threshold 414.75 (3.07x)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "wrappers-pressure",
+        "points": 3,
+        "detail": "136.75 wrapper candidate(s) exceed pressure threshold 50 (2.74x)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "passthroughs-pressure",
+        "points": 2,
+        "detail": "92.25 passthrough candidate(s) exceed pressure threshold 50 (1.85x)",
+        "kind": "hygiene"
+      }
+    ],
+    "overview": {
+      "documents": 708,
+      "symbols": 41475,
+      "indexSizeBytes": 41918464
+    },
+    "findings": {
+      "deadSymbols": 106,
+      "deadLoc": 1215,
+      "isolatedSymbols": 2,
+      "isolatedLoc": 6,
+      "cycles": 7,
+      "similarPairs": 1331,
+      "duplicateBodyGroups": 144,
+      "duplicateBodyLoc": 1678,
+      "twinDriftGroups": 459,
+      "twinDriftLoc": 47269,
+      "reactComponentDuplicatePairs": 11,
+      "reactHookCandidatePairs": 100,
+      "reactHookCandidateScoreCount": 29.25,
+      "reactLargeComponentPressureFiles": 118,
+      "vueComponentDuplicatePairs": 0,
+      "vueComposableCandidatePairs": 0,
+      "vueComposableCandidateScoreCount": 0,
+      "vueLargeViewPressureFiles": 0,
+      "extractionCandidates": 1275,
+      "wrappers": 223,
+      "wrapperScoreCount": 136.75,
+      "passthroughs": 144,
+      "staleTypes": 33,
+      "driftedFiles": 0,
+      "complexityHotspotCount": 20,
+      "hiddenCouplingPairs": 191,
+      "hiddenCouplingScoreCount": 48,
+      "coverageContractViolations": 0
+    },
+    "axes": {
+      "deletable": {
+        "loc": 1221,
+        "symbols": 108
+      },
+      "cycles": {
+        "count": 7
+      },
+      "changeAmplification": {
+        "medianFilesPerCommit": 6,
+        "p90FilesPerCommit": 15,
+        "commitsAnalyzed": 1264
+      },
+      "hiddenCoupling": {
+        "pairCount": 191,
+        "scoreCount": 48,
+        "top": [
+          {
+            "fileA": "apps/desktop/src/lib/tauri/core.ts",
+            "fileB": "apps/desktop/src/stores/settingsConfig.ts",
+            "together": 32,
+            "confidence": 0.9142857142857143,
+            "focusedTogether": 0,
+            "broadTogether": 32,
+            "broadCommitRatio": 1,
+            "lastTogetherAt": 1783349521,
+            "recentTogether": 32,
+            "commitScope": "broad-sweep",
+            "recency": "recent",
+            "scoreWeight": 0.25,
+            "subjectContext": {
+              "subjectLabels": [
+                "feature",
+                "fix",
+                "perf"
+              ],
+              "issueRefs": [
+                "VEGAASSIST-1282",
+                "VEGAASSIST-1122",
+                "VEGAASSIST-762",
+                "VEGAASSIST-778",
+                "VEGAASSIST-763",
+                "VEGAASSIST-592",
+                "VEGAASSIST-578",
+                "VEGAASSIST-561",
+                "VEGAASSIST-270",
+                "VEGAASSIST-243",
+                "VEGAASSIST-214",
+                "VEGAASSIST-204"
+              ],
+              "sampleSubjects": [
+                "feat(VEGAASSIST-1282): autonomy dial per task-type + advanced settings UI",
+                "feat(mentor): T1 -- mentor_model slot, MentorReview routing, budget rails, student-profile schema",
+                "feat(brain): serve two-lane workspace memory to external engines"
+              ],
+              "externalIssueLabelStatus": "unavailable"
+            }
+          },
+          {
+            "fileA": "apps/desktop/src/components/chat/ChatPanel.tsx",
+            "fileB": "apps/desktop/src/stores/agentStore.ts",
+            "together": 31,
+            "confidence": 0.7948717948717948,
+            "focusedTogether": 3,
+            "broadTogether": 28,
+            "broadCommitRatio": 0.9032258064516129,
+            "lastTogetherAt": 1783058666,
+            "recentTogether": 31,
+            "commitScope": "broad-sweep",
+            "recency": "recent",
+            "scoreWeight": 0.25,
+            "subjectContext": {
+              "subjectLabels": [
+                "feature",
+                "fix"
+              ],
+              "issueRefs": [
+                "VEGAASSIST-1138",
+                "VEGAASSIST-1116",
+                "VEGAASSIST-990",
+                "VEGAASSIST-831",
+                "VEGAASSIST-836",
+                "VEGAASSIST-799",
+                "VEGAASSIST-767",
+                "VEGAASSIST-783",
+                "VEGAASSIST-791",
+                "VEGAASSIST-759",
+                "VEGAASSIST-757",
+                "VEGAASSIST-594",
+                "VEGAASSIST-589",
+                "VEGAASSIST-558",
+                "VEGAASSIST-293",
+                "VEGAASSIST-274",
+                "VEGAASSIST-215",
+                "UX-12",
+                "UX-16",
+                "UX-04",
+                "UX-10",
+                "UX-06",
+                "UX-14",
+                "UX-07",
+                "UX-13"
+              ],
+              "sampleSubjects": [
+                "fix(chat): keep live turn work on active turn",
+                "feat: add context pressure compaction controls",
+                "VEGAASSIST-1138 conversation navigation and failure clarity"
+              ],
+              "externalIssueLabelStatus": "unavailable"
+            }
+          },
+          {
+            "fileA": "apps/desktop/src/stores/settingsConfig.ts",
+            "fileB": "src-tauri/src/app/mod.rs",
+            "together": 29,
+            "confidence": 0.8285714285714286,
+            "focusedTogether": 0,
+            "broadTogether": 29,
+            "broadCommitRatio": 1,
+            "lastTogetherAt": 1783349521,
+            "recentTogether": 29,
+            "commitScope": "broad-sweep",
+            "recency": "recent",
+            "scoreWeight": 0.25,
+            "subjectContext": {
+              "subjectLabels": [
+                "feature",
+                "fix",
+                "perf"
+              ],
+              "issueRefs": [
+                "VEGAASSIST-1282",
+                "VEGAASSIST-1122",
+                "VEGAASSIST-778",
+                "VEGAASSIST-763",
+                "VEGAASSIST-592",
+                "VEGAASSIST-578",
+                "VEGAASSIST-561",
+                "VEGAASSIST-270",
+                "VEGAASSIST-243",
+                "VEGAASSIST-214",
+                "VEGAASSIST-204"
+              ],
+              "sampleSubjects": [
+                "feat(VEGAASSIST-1282): autonomy dial per task-type + advanced settings UI",
+                "feat(mentor): T1 -- mentor_model slot, MentorReview routing, budget rails, student-profile schema",
+                "feat(brain): serve two-lane workspace memory to external engines"
+              ],
+              "externalIssueLabelStatus": "unavailable"
+            }
+          },
+          {
+            "fileA": "apps/desktop/src/stores/agentStore.ts",
+            "fileB": "src-tauri/src/commands/agent.rs",
+            "together": 27,
+            "confidence": 0.6923076923076923,
+            "focusedTogether": 0,
+            "broadTogether": 27,
+            "broadCommitRatio": 1,
+            "lastTogetherAt": 1783033773,
+            "recentTogether": 27,
+            "commitScope": "broad-sweep",
+            "recency": "recent",
+            "scoreWeight": 0.25,
+            "subjectContext": {
+              "subjectLabels": [
+                "feature",
+                "fix"
+              ],
+              "issueRefs": [
+                "VEGAASSIST-836",
+                "VEGAASSIST-799",
+                "VEGAASSIST-767",
+                "VEGAASSIST-783",
+                "VEGAASSIST-791",
+                "VEGAASSIST-788",
+                "VEGAASSIST-759",
+                "VEGAASSIST-757",
+                "VEGAASSIST-594",
+                "VEGAASSIST-589",
+                "VEGAASSIST-547",
+                "VEGAASSIST-558",
+                "VEGAASSIST-293",
+                "UX-12",
+                "UX-16",
+                "UX-04",
+                "UX-10",
+                "UX-06",
+                "UX-14",
+                "UX-07",
+                "UX-13"
+              ],
+              "sampleSubjects": [
+                "feat: add context pressure compaction controls",
+                "feat: add first-class experts",
+                "VEGAASSIST-836 add skill slash router"
+              ],
+              "externalIssueLabelStatus": "unavailable"
+            }
+          },
+          {
+            "fileA": "src-tauri/Cargo.toml",
+            "fileB": "src-tauri/tauri.conf.json",
+            "together": 26,
+            "confidence": 0.7428571428571429,
+            "focusedTogether": 3,
+            "broadTogether": 23,
+            "broadCommitRatio": 0.8846153846153846,
+            "lastTogetherAt": 1782653283,
+            "recentTogether": 26,
+            "commitScope": "broad-sweep",
+            "recency": "recent",
+            "scoreWeight": 0.25,
+            "subjectContext": {
+              "subjectLabels": [
+                "build",
+                "chore",
+                "feature",
+                "fix",
+                "release"
+              ],
+              "issueRefs": [
+                "VEGAASSIST-1020",
+                "VEGAASSIST-988",
+                "VEGAASSIST-966",
+                "VEGAASSIST-901",
+                "VEGAASSIST-900",
+                "VEGAASSIST-366",
+                "VEGAASSIST-359",
+                "VEGAASSIST-205"
+              ],
+              "sampleSubjects": [
+                "getting things caught up",
+                "chore(VEGAASSIST-1020): bump app version to 0.1.32",
+                "chore(VEGAASSIST-988): bump Vega release to 0.1.31"
+              ],
+              "externalIssueLabelStatus": "unavailable"
+            }
+          }
+        ]
+      },
+      "churnWeightedComplexity": [
+        {
+          "symbol": "agent:impl:`AgentLoop<'a>`:run()",
+          "score": 46295.16,
+          "file": "src-tauri/src/agent/mod.rs",
+          "changes": 162,
+          "weighted": 340210.55
+        },
+        {
+          "symbol": "commands:agent:agent_chat_impl_with_event_sinks()",
+          "score": 15544.17,
+          "file": "src-tauri/src/commands/agent.rs",
+          "changes": 198,
+          "weighted": 118704.99
+        },
+        {
+          "symbol": "commands:agent:build_system_prompt_for_query()",
+          "score": 2367.33,
+          "file": "src-tauri/src/commands/agent.rs",
+          "changes": 198,
+          "weighted": 18078.41
+        },
+        {
+          "symbol": "run()",
+          "score": 965.29,
+          "file": "src-tauri/src/lib.rs",
+          "changes": 181,
+          "weighted": 7247.2
+        },
+        {
+          "symbol": "meeting:manager:impl:MeetingManager:spawn_audio_processor()",
+          "score": 563.1,
+          "file": "src-tauri/src/meeting/manager.rs",
+          "changes": 15,
+          "weighted": 2252.4
+        }
+      ],
+      "evidenceQuality": {
+        "graphFindings": 115,
+        "heuristicFindings": 3838,
+        "userSuppressed": 0
+      }
+    },
+    "validation": {
+      "flaggedFiles": 656,
+      "flaggedFixDensity": 1.17,
+      "baselineFixDensity": 0.55,
+      "ratio": 2.13,
+      "byCategory": {
+        "dead": {
+          "flaggedFiles": 63,
+          "fixDensity": 0.65,
+          "lift": 1.18
+        },
+        "isolated": {
+          "flaggedFiles": 2,
+          "fixDensity": 1,
+          "lift": 1.82
+        },
+        "twinDrift": {
+          "flaggedFiles": 488,
+          "fixDensity": 0.99,
+          "lift": 1.8
+        },
+        "wrappers": {
+          "flaggedFiles": 84,
+          "fixDensity": 2.69,
+          "lift": 4.89
+        },
+        "passthroughs": {
+          "flaggedFiles": 64,
+          "fixDensity": 2.94,
+          "lift": 5.35
+        },
+        "stale": {
+          "flaggedFiles": 31,
+          "fixDensity": 0.16,
+          "lift": 0.29
+        },
+        "reactComponents": {
+          "flaggedFiles": 14,
+          "fixDensity": 0.71,
+          "lift": 1.29
+        },
+        "reactHooks": {
+          "flaggedFiles": 55,
+          "fixDensity": 1.38,
+          "lift": 2.51
+        },
+        "reactLargeComponents": {
+          "flaggedFiles": 118,
+          "fixDensity": 1.39,
+          "lift": 2.53
+        }
+      },
+      "validationBasis": {
+        "method": "subject-regex",
+        "commitsScanned": 1264
+      }
+    },
+    "suppressions": {
+      "total": 0,
+      "byCategory": {
+        "dead": 0,
+        "stale": 0,
+        "wrapper": 0,
+        "passthrough": 0,
+        "drift": 0,
+        "extract": 0,
+        "similar": 0,
+        "uncategorized": 0
+      }
+    },
+    "actions": [
+      {
+        "category": "Dead code",
+        "evidence": "graph-fact",
+        "description": "106 symbols with zero references anywhere -- deletion candidates; confirm with cleanup-plan --verify before deleting",
+        "effort": "low",
+        "impact": "high",
+        "count": 106,
+        "locRecoverable": 1215
+      },
+      {
+        "category": "Isolated symbols",
+        "evidence": "graph-fact",
+        "description": "2 symbols completely disconnected from the codebase graph",
+        "effort": "low",
+        "impact": "medium",
+        "count": 2,
+        "locRecoverable": 6
+      },
+      {
+        "category": "Circular dependencies",
+        "evidence": "graph-fact",
+        "description": "7 cycle(s) — break with dependency inversion or module restructuring",
+        "effort": "medium",
+        "impact": "high",
+        "count": 7,
+        "locRecoverable": 0
+      },
+      {
+        "category": "Duplicate function bodies",
+        "evidence": "heuristic",
+        "description": "144 exact small-body group(s) across files — consolidate only when the domain concept matches",
+        "effort": "low",
+        "impact": "medium",
+        "count": 144,
+        "locRecoverable": 1678
+      },
+      {
+        "category": "Stale abstractions",
+        "evidence": "heuristic",
+        "description": "33 single-consumer (not in types file) — remove unused abstractions; review single-consumer ownership before moving or inlining",
+        "effort": "low",
+        "impact": "medium",
+        "count": 33,
+        "locRecoverable": 2053
+      },
+      {
+        "category": "Hidden coupling",
+        "evidence": "change-graph",
+        "description": "191 file pair(s) co-change without a structural link (48 score-weighted after broad/stale-history discount) (e.g. apps/desktop/src/lib/tauri/core.ts ↔ apps/desktop/src/stores/settingsConfig.ts) — name the shared concept or enforce the sync",
+        "effort": "medium",
+        "impact": "high",
+        "count": 191,
+        "locRecoverable": 0
+      },
+      {
+        "category": "Similar functions",
+        "evidence": "heuristic",
+        "description": "1331 pairs with real logic overlap (beyond shared imports) — consolidation candidates",
+        "effort": "medium",
+        "impact": "medium",
+        "count": 1331,
+        "locRecoverable": 0
+      },
+      {
+        "category": "Drifted twin implementations",
+        "evidence": "heuristic",
+        "description": "459 same-name (or near-name) function group(s) across files with diverged or identical bodies — the same concept implemented twice; consolidate or verify the drift is intentional",
+        "effort": "medium",
+        "impact": "medium",
+        "count": 459,
+        "locRecoverable": 0
+      },
+      {
+        "category": "Duplicated React components",
+        "evidence": "heuristic",
+        "description": "11 React component pair(s) share JSX structure — extract or reuse the shared UI concept",
+        "effort": "medium",
+        "impact": "medium",
+        "count": 11,
+        "locRecoverable": 708
+      },
+      {
+        "category": "Duplicated React hook behavior",
+        "evidence": "heuristic",
+        "description": "100 React component pair(s) share state/effect/request behavior (29.25 score-weighted after existing shared infrastructure discount) — extract or reuse a hook",
+        "effort": "medium",
+        "impact": "medium",
+        "count": 100,
+        "locRecoverable": 18351
+      },
+      {
+        "category": "Large React components",
+        "evidence": "heuristic",
+        "description": "118 React component(s) concentrate JSX/behavior pressure — split by reason to change",
+        "effort": "medium",
+        "impact": "medium",
+        "count": 118,
+        "locRecoverable": 0
+      },
+      {
+        "category": "Extraction candidates",
+        "evidence": "heuristic",
+        "description": "1275 large functions with isolated callee clusters — review same-file or feature-local extraction seams",
+        "effort": "medium",
+        "impact": "medium",
+        "count": 1275,
+        "locRecoverable": 0
+      },
+      {
+        "category": "Wrapper functions",
+        "evidence": "heuristic",
+        "description": "223 single-consumer symbols (136.75 score-weighted after boundary-evidence discount) — inline direct wrappers or review boundary signals",
+        "effort": "low",
+        "impact": "low",
+        "count": 223,
+        "locRecoverable": 1762
+      },
+      {
+        "category": "Passthrough functions",
+        "evidence": "heuristic",
+        "description": "144 functions that just forward to one callee — unnecessary indirection",
+        "effort": "low",
+        "impact": "low",
+        "count": 144,
+        "locRecoverable": 483
+      }
+    ],
+    "pressure": [
+      {
+        "axis": "cycles-pressure",
+        "category": "Circular dependencies",
+        "kind": "risk",
+        "count": 7,
+        "threshold": 3,
+        "ratio": 2.33,
+        "extraPenalty": 4
+      },
+      {
+        "axis": "complexity-pressure",
+        "category": "Extreme complexity",
+        "kind": "risk",
+        "count": 20,
+        "threshold": 3,
+        "ratio": 6.67,
+        "extraPenalty": 5
+      },
+      {
+        "axis": "similar-pressure",
+        "category": "Similar functions",
+        "kind": "hygiene",
+        "count": 1331,
+        "threshold": 414.75,
+        "ratio": 3.21,
+        "extraPenalty": 7
+      },
+      {
+        "axis": "twin-drift-pressure",
+        "category": "Drifted twin implementations",
+        "kind": "hygiene",
+        "count": 459,
+        "threshold": 207.38,
+        "ratio": 2.21,
+        "extraPenalty": 5
+      },
+      {
+        "axis": "react-component-duplicates-pressure",
+        "category": "Duplicated React components",
+        "kind": "hygiene",
+        "count": 11,
+        "threshold": 10,
+        "ratio": 1.1,
+        "extraPenalty": 1
+      },
+      {
+        "axis": "react-hook-candidates-pressure",
+        "category": "Duplicated React hook behavior",
+        "kind": "hygiene",
+        "count": 29.25,
+        "threshold": 10,
+        "ratio": 2.93,
+        "extraPenalty": 7
+      },
+      {
+        "axis": "react-large-component-pressure-pressure",
+        "category": "Large React components",
+        "kind": "hygiene",
+        "count": 118,
+        "threshold": 10,
+        "ratio": 11.8,
+        "extraPenalty": 4
+      },
+      {
+        "axis": "extract-pressure",
+        "category": "Extraction candidates",
+        "kind": "hygiene",
+        "count": 1275,
+        "threshold": 414.75,
+        "ratio": 3.07,
+        "extraPenalty": 4
+      },
+      {
+        "axis": "wrappers-pressure",
+        "category": "Wrapper functions",
+        "kind": "hygiene",
+        "count": 136.75,
+        "threshold": 50,
+        "ratio": 2.74,
+        "extraPenalty": 3
+      },
+      {
+        "axis": "passthroughs-pressure",
+        "category": "Passthrough functions",
+        "kind": "hygiene",
+        "count": 92.25,
+        "threshold": 50,
+        "ratio": 1.85,
+        "extraPenalty": 2
+      }
+    ],
+    "topComplexity": [
+      {
+        "symbol": "agent:impl:`AgentLoop<'a>`:run()",
+        "score": 46295.16,
+        "file": "src-tauri/src/agent/mod.rs"
+      },
+      {
+        "symbol": "commands:agent:agent_chat_impl_with_event_sinks()",
+        "score": 15544.17,
+        "file": "src-tauri/src/commands/agent.rs"
+      },
+      {
+        "symbol": "commands:agent:build_system_prompt_for_query()",
+        "score": 2367.33,
+        "file": "src-tauri/src/commands/agent.rs"
+      },
+      {
+        "symbol": "run()",
+        "score": 965.29,
+        "file": "src-tauri/src/lib.rs"
+      },
+      {
+        "symbol": "meeting:manager:impl:MeetingManager:spawn_audio_processor()",
+        "score": 563.1,
+        "file": "src-tauri/src/meeting/manager.rs"
+      }
+    ],
+    "warnings": [
+      "Large index detected; running health without candidate scan or result caps because full mode is enabled."
+    ],
+    "detectorPrecision": []
+  }
+}

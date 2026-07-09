@@ -1,0 +1,11 @@
+label=session-warm
+group=20260709T224844Z
+exit=0
+time=real 1.76 user 5.68 sys 1.64
+stdout=47291cda33601a501f2dfb123aed34e457a21bc238c508007d99c4473a1495c4
+references=e24c89c7f5dbef47c0c863b104f9d6298b65954420b900b7dae1c909b8b0b2f5
+callees=ac0ab832b906be3c2f126b7aeaf35de4fa4a581aa01a50c8e0827921b6d9c466
+counts=1661|3117|640;1661|2564|540
+incomplete=0
+sessions=["reused"]
+readiness=[]

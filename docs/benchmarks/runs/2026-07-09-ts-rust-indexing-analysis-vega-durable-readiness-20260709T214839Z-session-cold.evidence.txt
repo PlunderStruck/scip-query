@@ -1,0 +1,10 @@
+label=session-cold
+exit=0
+time=real 177.47 user 55.84 sys 19.68
+stdout=2cb50e965d947543bebc97a199751ee8164b703293482831651538a3e86870cd
+references=a49af193248630558054b00a7a9c522988b3c04c9da71a62a9e7f7e98be0f54e
+callees=8b5b3199ea03eda5ac24258eebbe17cfbffc863007a7f274b1c6394b6284c1a1
+counts=38214|82907|13508;38222|97732|13650;
+incomplete=0
+sessions=["worker-fallback"]
+readiness=[{"phase":"initialize","ok":false,"durationMs":6126},{"phase":"initialize","ok":false,"durationMs":2426},{"phase":"initialize","ok":false,"durationMs":1951}]

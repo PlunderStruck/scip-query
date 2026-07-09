@@ -1,0 +1,470 @@
+{
+  "command": "health",
+  "evidence": "mixed",
+  "args": [],
+  "options": {
+    "full": true,
+    "json": true
+  },
+  "result": {
+    "score": 84,
+    "riskScore": 84,
+    "hygieneScore": 89.5,
+    "scoreBreakdown": [
+      {
+        "axis": "cycles",
+        "points": 15,
+        "detail": "3 real dependency cycle(s)",
+        "kind": "risk"
+      },
+      {
+        "axis": "duplicate-bodies",
+        "points": 1,
+        "detail": "9 exact duplicate small-body group(s) (80 duplicate LOC)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "twin-drift",
+        "points": 3,
+        "detail": "32 drifted twin implementation group(s) (same or near-same name, diverged or identical bodies)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "wrappers",
+        "points": 3,
+        "detail": "3 wrapper candidate(s)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "passthroughs",
+        "points": 0.5,
+        "detail": "2 passthrough candidate(s) (0.5 score-weighted)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "drift",
+        "points": 3,
+        "detail": "18 direct drift finding(s); 0 signal drift finding(s)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "hidden-coupling",
+        "points": 1,
+        "detail": "18 co-changing pair(s) without a structural link (4.5 score-weighted)",
+        "kind": "risk"
+      }
+    ],
+    "overview": {
+      "documents": 300,
+      "symbols": 19537,
+      "indexSizeBytes": 14086144
+    },
+    "findings": {
+      "deadSymbols": 9,
+      "deadLoc": 90,
+      "isolatedSymbols": 0,
+      "isolatedLoc": 0,
+      "cycles": 3,
+      "similarPairs": 8,
+      "duplicateBodyGroups": 9,
+      "duplicateBodyLoc": 80,
+      "twinDriftGroups": 32,
+      "twinDriftLoc": 551,
+      "reactComponentDuplicatePairs": 0,
+      "reactHookCandidatePairs": 0,
+      "reactHookCandidateScoreCount": 0,
+      "reactLargeComponentPressureFiles": 0,
+      "vueComponentDuplicatePairs": 0,
+      "vueComposableCandidatePairs": 0,
+      "vueComposableCandidateScoreCount": 0,
+      "vueLargeViewPressureFiles": 0,
+      "extractionCandidates": 154,
+      "wrappers": 3,
+      "wrapperScoreCount": 3,
+      "passthroughs": 2,
+      "staleTypes": 26,
+      "driftedFiles": 18,
+      "complexityHotspotCount": 0,
+      "hiddenCouplingPairs": 18,
+      "hiddenCouplingScoreCount": 4.5,
+      "coverageContractViolations": 0
+    },
+    "axes": {
+      "deletable": {
+        "loc": 90,
+        "symbols": 9
+      },
+      "cycles": {
+        "count": 3
+      },
+      "changeAmplification": {
+        "medianFilesPerCommit": 4,
+        "p90FilesPerCommit": 19,
+        "commitsAnalyzed": 409
+      },
+      "hiddenCoupling": {
+        "pairCount": 18,
+        "scoreCount": 4.5,
+        "top": [
+          {
+            "fileA": "docs/COMMAND_REFERENCE.md",
+            "fileB": "src/runtime/commands/query-command-specs.ts",
+            "together": 5,
+            "confidence": 1,
+            "focusedTogether": 0,
+            "broadTogether": 5,
+            "broadCommitRatio": 1,
+            "lastTogetherAt": 1783097420,
+            "recentTogether": 5,
+            "commitScope": "broad-sweep",
+            "recency": "recent",
+            "scoreWeight": 0.25,
+            "subjectContext": {
+              "subjectLabels": [
+                "feature",
+                "test"
+              ],
+              "issueRefs": [],
+              "sampleSubjects": [
+                "feat(cleanup): add test-quality — assertion-free/skipped/mock-echo detector (integrity-detectors D3)",
+                "feat(cleanup): add decorative-checkers — checkers-that-cannot-fail detector (integrity-detectors D2)",
+                "feat(cleanup): add not-implemented — reachable placeholder-stub detector (integrity-detectors D1)"
+              ],
+              "externalIssueLabelStatus": "unavailable"
+            }
+          },
+          {
+            "fileA": "package.json",
+            "fileB": "src/runtime/commands/query-command-specs.ts",
+            "together": 5,
+            "confidence": 1,
+            "focusedTogether": 0,
+            "broadTogether": 5,
+            "broadCommitRatio": 1,
+            "lastTogetherAt": 1783097420,
+            "recentTogether": 5,
+            "commitScope": "broad-sweep",
+            "recency": "recent",
+            "scoreWeight": 0.25,
+            "subjectContext": {
+              "subjectLabels": [
+                "feature",
+                "test"
+              ],
+              "issueRefs": [],
+              "sampleSubjects": [
+                "feat(cleanup): add test-quality — assertion-free/skipped/mock-echo detector (integrity-detectors D3)",
+                "feat(cleanup): add decorative-checkers — checkers-that-cannot-fail detector (integrity-detectors D2)",
+                "feat(cleanup): add not-implemented — reachable placeholder-stub detector (integrity-detectors D1)"
+              ],
+              "externalIssueLabelStatus": "unavailable"
+            }
+          },
+          {
+            "fileA": "skills/_shared/SKILL.md",
+            "fileB": "src/runtime/commands/query-command-specs.ts",
+            "together": 5,
+            "confidence": 1,
+            "focusedTogether": 0,
+            "broadTogether": 5,
+            "broadCommitRatio": 1,
+            "lastTogetherAt": 1783097420,
+            "recentTogether": 5,
+            "commitScope": "broad-sweep",
+            "recency": "recent",
+            "scoreWeight": 0.25,
+            "subjectContext": {
+              "subjectLabels": [
+                "feature",
+                "test"
+              ],
+              "issueRefs": [],
+              "sampleSubjects": [
+                "feat(cleanup): add test-quality — assertion-free/skipped/mock-echo detector (integrity-detectors D3)",
+                "feat(cleanup): add decorative-checkers — checkers-that-cannot-fail detector (integrity-detectors D2)",
+                "feat(cleanup): add not-implemented — reachable placeholder-stub detector (integrity-detectors D1)"
+              ],
+              "externalIssueLabelStatus": "unavailable"
+            }
+          },
+          {
+            "fileA": "src/queries/index.ts",
+            "fileB": "src/runtime/commands/query-command-specs.ts",
+            "together": 5,
+            "confidence": 1,
+            "focusedTogether": 0,
+            "broadTogether": 5,
+            "broadCommitRatio": 1,
+            "lastTogetherAt": 1783097420,
+            "recentTogether": 5,
+            "commitScope": "broad-sweep",
+            "recency": "recent",
+            "scoreWeight": 0.25,
+            "subjectContext": {
+              "subjectLabels": [
+                "feature",
+                "test"
+              ],
+              "issueRefs": [],
+              "sampleSubjects": [
+                "feat(cleanup): add test-quality — assertion-free/skipped/mock-echo detector (integrity-detectors D3)",
+                "feat(cleanup): add decorative-checkers — checkers-that-cannot-fail detector (integrity-detectors D2)",
+                "feat(cleanup): add not-implemented — reachable placeholder-stub detector (integrity-detectors D1)"
+              ],
+              "externalIssueLabelStatus": "unavailable"
+            }
+          },
+          {
+            "fileA": "src/queries/public-query-entries.ts",
+            "fileB": "src/runtime/commands/query-command-specs.ts",
+            "together": 5,
+            "confidence": 1,
+            "focusedTogether": 0,
+            "broadTogether": 5,
+            "broadCommitRatio": 1,
+            "lastTogetherAt": 1783097420,
+            "recentTogether": 5,
+            "commitScope": "broad-sweep",
+            "recency": "recent",
+            "scoreWeight": 0.25,
+            "subjectContext": {
+              "subjectLabels": [
+                "feature",
+                "test"
+              ],
+              "issueRefs": [],
+              "sampleSubjects": [
+                "feat(cleanup): add test-quality — assertion-free/skipped/mock-echo detector (integrity-detectors D3)",
+                "feat(cleanup): add decorative-checkers — checkers-that-cannot-fail detector (integrity-detectors D2)",
+                "feat(cleanup): add not-implemented — reachable placeholder-stub detector (integrity-detectors D1)"
+              ],
+              "externalIssueLabelStatus": "unavailable"
+            }
+          }
+        ]
+      },
+      "churnWeightedComplexity": [
+        {
+          "symbol": "src:runtime:config:validateProjectConfig()",
+          "score": 34.36,
+          "file": "src/runtime/config.ts",
+          "changes": 7,
+          "weighted": 103.08
+        },
+        {
+          "symbol": "src:semantic:rust:lsp-session-worker:runSessionRequest()",
+          "score": 16.43,
+          "file": "src/semantic/rust/lsp-session-worker.ts",
+          "changes": 6,
+          "weighted": 46.12
+        },
+        {
+          "symbol": "src:queries:cleanup:dead:dead()",
+          "score": 9.6,
+          "file": "src/queries/cleanup/dead.ts",
+          "changes": 5,
+          "weighted": 24.82
+        },
+        {
+          "symbol": "src:runtime:project-setup:runProjectSetup()",
+          "score": 11.6,
+          "file": "src/runtime/project-setup.ts",
+          "changes": 2,
+          "weighted": 18.39
+        },
+        {
+          "symbol": "src:queries:cleanup:isolated:isolated()",
+          "score": 11.15,
+          "file": "src/queries/cleanup/isolated.ts",
+          "changes": 1,
+          "weighted": 11.15
+        }
+      ],
+      "evidenceQuality": {
+        "graphFindings": 12,
+        "heuristicFindings": 252,
+        "userSuppressed": 233
+      }
+    },
+    "validation": {
+      "flaggedFiles": 57,
+      "flaggedFixDensity": 0.75,
+      "baselineFixDensity": 0.29,
+      "ratio": 2.59,
+      "byCategory": {
+        "dead": {
+          "flaggedFiles": 8,
+          "fixDensity": 0.88,
+          "lift": 3.03
+        },
+        "twinDrift": {
+          "flaggedFiles": 38,
+          "fixDensity": 0.76,
+          "lift": 2.62
+        },
+        "wrappers": {
+          "flaggedFiles": 3,
+          "fixDensity": 0,
+          "lift": 0
+        },
+        "passthroughs": {
+          "flaggedFiles": 2,
+          "fixDensity": 1,
+          "lift": 3.45
+        },
+        "stale": {
+          "flaggedFiles": 20,
+          "fixDensity": 1.05,
+          "lift": 3.62
+        }
+      },
+      "validationBasis": {
+        "method": "subject-regex",
+        "commitsScanned": 409
+      }
+    },
+    "suppressions": {
+      "total": 233,
+      "byCategory": {
+        "dead": 0,
+        "stale": 31,
+        "wrapper": 92,
+        "passthrough": 8,
+        "drift": 0,
+        "extract": 75,
+        "similar": 27,
+        "uncategorized": 0
+      }
+    },
+    "actions": [
+      {
+        "category": "Dead code",
+        "evidence": "graph-fact",
+        "description": "9 symbols with zero references anywhere -- deletion candidates; confirm with cleanup-plan --verify before deleting",
+        "effort": "low",
+        "impact": "high",
+        "count": 9,
+        "locRecoverable": 90
+      },
+      {
+        "category": "Circular dependencies",
+        "evidence": "graph-fact",
+        "description": "3 cycle(s) — break with dependency inversion or module restructuring",
+        "effort": "medium",
+        "impact": "high",
+        "count": 3,
+        "locRecoverable": 0
+      },
+      {
+        "category": "Duplicate function bodies",
+        "evidence": "heuristic",
+        "description": "9 exact small-body group(s) across files — consolidate only when the domain concept matches",
+        "effort": "low",
+        "impact": "medium",
+        "count": 9,
+        "locRecoverable": 80
+      },
+      {
+        "category": "Stale abstractions",
+        "evidence": "heuristic",
+        "description": "26 single-consumer (not in types file) — remove unused abstractions; review single-consumer ownership before moving or inlining",
+        "effort": "low",
+        "impact": "medium",
+        "count": 26,
+        "locRecoverable": 182
+      },
+      {
+        "category": "Hidden coupling",
+        "evidence": "change-graph",
+        "description": "18 file pair(s) co-change without a structural link (4.5 score-weighted after broad/stale-history discount) (e.g. docs/COMMAND_REFERENCE.md ↔ src/runtime/commands/query-command-specs.ts) — name the shared concept or enforce the sync",
+        "effort": "medium",
+        "impact": "high",
+        "count": 18,
+        "locRecoverable": 0
+      },
+      {
+        "category": "Similar functions",
+        "evidence": "heuristic",
+        "description": "8 pairs with real logic overlap (beyond shared imports) — consolidation candidates",
+        "effort": "medium",
+        "impact": "medium",
+        "count": 8,
+        "locRecoverable": 0
+      },
+      {
+        "category": "Drifted twin implementations",
+        "evidence": "heuristic",
+        "description": "32 same-name (or near-name) function group(s) across files with diverged or identical bodies — the same concept implemented twice; consolidate or verify the drift is intentional",
+        "effort": "medium",
+        "impact": "medium",
+        "count": 32,
+        "locRecoverable": 0
+      },
+      {
+        "category": "Extraction candidates",
+        "evidence": "heuristic",
+        "description": "154 large functions with isolated callee clusters — review same-file or feature-local extraction seams",
+        "effort": "medium",
+        "impact": "medium",
+        "count": 154,
+        "locRecoverable": 0
+      },
+      {
+        "category": "Structural drift",
+        "evidence": "heuristic",
+        "description": "18 layer violations — remove direct drift; review signal drift against layer ownership",
+        "effort": "medium",
+        "impact": "medium",
+        "count": 18,
+        "locRecoverable": 0
+      },
+      {
+        "category": "Wrapper functions",
+        "evidence": "heuristic",
+        "description": "3 single-consumer symbols — inline direct wrappers or review boundary signals",
+        "effort": "low",
+        "impact": "low",
+        "count": 3,
+        "locRecoverable": 28
+      },
+      {
+        "category": "Passthrough functions",
+        "evidence": "heuristic",
+        "description": "2 functions that just forward to one callee — unnecessary indirection",
+        "effort": "low",
+        "impact": "low",
+        "count": 2,
+        "locRecoverable": 9
+      }
+    ],
+    "pressure": [],
+    "topComplexity": [
+      {
+        "symbol": "src:runtime:config:validateProjectConfig()",
+        "score": 34.36,
+        "file": "src/runtime/config.ts"
+      },
+      {
+        "symbol": "src:semantic:rust:lsp-session-worker:runSessionRequest()",
+        "score": 16.43,
+        "file": "src/semantic/rust/lsp-session-worker.ts"
+      },
+      {
+        "symbol": "src:runtime:project-setup:runProjectSetup()",
+        "score": 11.6,
+        "file": "src/runtime/project-setup.ts"
+      },
+      {
+        "symbol": "src:queries:cleanup:isolated:isolated()",
+        "score": 11.15,
+        "file": "src/queries/cleanup/isolated.ts"
+      },
+      {
+        "symbol": "src:queries:cleanup:dead:dead()",
+        "score": 9.6,
+        "file": "src/queries/cleanup/dead.ts"
+      }
+    ],
+    "detectorPrecision": []
+  }
+}

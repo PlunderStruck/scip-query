@@ -1,0 +1,1174 @@
+# TypeScript and Rust Indexing/Analysis Ledger
+
+Date: 2026-07-09
+
+## Output Contract
+
+Optimization is accepted only when command output hashes remain identical, or
+when an accuracy correction is documented before accepting the change.
+
+An indexing optimization must leave `status --capabilities` correct for the
+project and must not let complete and partial indexes share cache identity. A
+semantic-analysis optimization must preserve the same compiler-backed facts for
+TypeScript and Rust: references, caller files, callees, signatures, and import
+usage where supported.
+
+## Representative Corpora
+
+| Corpus          | Role                                                | Notes                                                                                                                                               |
+| --------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| scip-query      | local mixed TypeScript/Rust development corpus      | Fresh index after `node dist/cli.js reindex`: 293 files, 18,494 symbols.                                                                            |
+| VegaAssistant   | mixed app corpus from previous full-pass speed work | Used for large mixed TS/Rust command hashes.                                                                                                        |
+| codex-rs        | Rust-heavy corpus                                   | Partial index is expected when C indexing fails; Rust/TS/Python shards are still usable for Rust-heavy profiling.                                   |
+| SynthRunnerRust | standalone Rust corpus                              | Fresh Rust-only index; used after codex-rs proved unsuitable for clean hash comparison because the mixed parent stayed stale after partial reindex. |
+
+## Current Candidate Areas
+
+### Semantic Reference Cache Scans
+
+`materializeSemanticReferenceBatch()` currently groups definitions by file but
+calls `readCachedSemanticReferencesForFile()` once per file. On large full-mode
+runs, `semantic.references.cache-scan` still appears in the top spans. This
+candidate benefits both TypeScript and Rust because semantic reference cache
+rows are language-neutral.
+
+Acceptance signal:
+
+- exact output hashes on representative commands;
+- lower `semantic.references.cache-scan` total on at least one large corpus;
+- no increase in semantic miss/parse-failure counts.
+
+Outcome: rejected for now. Multi-file reference batching was hash-identical on
+VegaAssistant, but it did not improve the command or profile span:
+
+| Run                                                               | Wall time | `semantic.references.cache-scan` | Hash                                                               |
+| ----------------------------------------------------------------- | --------: | -------------------------------: | ------------------------------------------------------------------ |
+| VegaAssistant baseline `health --full --json`                     |   10.259s |                           3.827s | `1bed3b9ffbe72061bf9bebd095da78abcde3e6b841bab0faee6617a9dd6fa81b` |
+| VegaAssistant after reference batch, health cache cleared         |    9.973s |                           4.088s | same                                                               |
+| VegaAssistant after tuple/callee experiment, health cache cleared |   10.414s |                     not accepted | same                                                               |
+
+The callee tuple-batch experiment was rejected harder: on the mixed codex-rs
+parent, the project was stale after partial reindex and semantic cache keys did
+not match; the attempted run timed out. The implementation was reverted to the
+known per-file prepared statement path.
+
+### Cold Versus Warm Rust Semantics
+
+The Rust-heavy optimization target is warm-state durability, not merely faster
+SQLite cache reads. SynthRunnerRust is a fresh Rust-only corpus:
+
+| Run                                                      | Wall time | Hash                                                               | Notes                                                                                                                                   |
+| -------------------------------------------------------- | --------: | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `reindex --json`                                         |   31.000s | n/a                                                                | Rust-only SCIP shard built cleanly.                                                                                                     |
+| cold `health --full --json`, health cache cleared        |   58.363s | `fb798702350d01c5a72267e1bf31d224f5ee814dfe2a802ef594ce55a809eb54` | Populated semantic evidence.                                                                                                            |
+| warm `health --full --json`, health cache cleared        |    0.966s | `7a380714264677105decca5e2a4d4ac3bd53add0fa17883d90431820775e3b5a` | First warm run after evidence writes; one-byte output state transition from cold.                                                       |
+| warm repeat `health --full --json`, health cache cleared |    0.999s | `7a380714264677105decca5e2a4d4ac3bd53add0fa17883d90431820775e3b5a` | Stable warm output hash.                                                                                                                |
+| semantic-prewarm production-only cold                    |   59.138s | `1beb7bc74124c4a23ccbfc95a7270e833b9a8da75f093ffd270f43bfe5611348` | Rejected boundary: parent warmed 1,045 production callables, but workers still computed 7 reference and 616 callee misses.              |
+| semantic-prewarm all-definitions cold                    |   45.450s | `1beb7bc74124c4a23ccbfc95a7270e833b9a8da75f093ffd270f43bfe5611348` | Accepted boundary: parent warmed 1,661 semantic-supported definitions before phase workers.                                             |
+| semantic-prewarm all-definitions marker hit              |    0.900s | `1beb7bc74124c4a23ccbfc95a7270e833b9a8da75f093ffd270f43bfe5611348` | Health cache cleared; project prewarm marker hit in 1ms, workers read warmed rows.                                                      |
+| Rust first-fill split profile, default repeat            |   47.843s | `1beb7bc74124c4a23ccbfc95a7270e833b9a8da75f093ffd270f43bfe5611348` | Added worker-level spans and indexed callee symbol resolver; hash-identical control for the next tuning experiments.                    |
+| Rust first-fill marker hit after split profile           |    0.851s | `1beb7bc74124c4a23ccbfc95a7270e833b9a8da75f093ffd270f43bfe5611348` | Health cache cleared; project prewarm marker still skips and workers stay cache-only.                                                   |
+| Rust first-fill zero diagnostics + zero settle           |   21.928s | `c3c3847bf84219f57dc38061a8f36e075262d7996f93bedbae559a9987654de5` | Rejected: fast only because semantic references collapsed from about 3,011 facts to 13 facts.                                           |
+| Rust first-fill settle-only zero                         |   47.450s | `1beb7bc74124c4a23ccbfc95a7270e833b9a8da75f093ffd270f43bfe5611348` | Safe on SynthRunnerRust, but only 0.393s faster than paired default repeat; keep as explicit env experiment, not default.               |
+| Rust reference drilldown profile                         |   44.907s | `1beb7bc74124c4a23ccbfc95a7270e833b9a8da75f093ffd270f43bfe5611348` | Added per-file and slow-task profile events; exposed repeated Rust `impl Default` methods resolving to the wrong fallback position.     |
+| Rust impl-owner range correction                         |   45.413s | `4827f75e36860769d87f328f2c4b4412ccbe9569fb8d39c3d1577be46576ce2a` | Accepted accuracy correction: Rust reference facts rose from 3,011 to 3,048 and repeated impl methods now resolve to their owner block. |
+| Rust request timeout 5s experiment                       |   48.213s | `4827f75e36860769d87f328f2c4b4412ccbe9569fb8d39c3d1577be46576ce2a` | Rejected: health hash stayed the same, but semantic reference facts dropped from 3,048 to 2,927.                                        |
+
+Profile totals:
+
+| Profile                                      |                                         References |                                            Callees | Key observation                                                                       |
+| -------------------------------------------- | -------------------------------------------------: | -------------------------------------------------: | ------------------------------------------------------------------------------------- |
+| SynthRunnerRust cold                         |                                0 hits / 474 misses |                            807 hits / 2,696 misses | Compiler-backed semantic materialization dominated the run.                           |
+| SynthRunnerRust warm repeat                  |                                474 hits / 0 misses |                              3,503 hits / 0 misses | With durable semantic rows warm, full health is sub-second.                           |
+| SynthRunnerRust prewarm all-definitions cold | 0 hits / 1,661 misses in parent; workers 100% hits | 0 hits / 1,661 misses in parent; workers 100% hits | Parent prewarm removes worker recomputation; cold cost is now one Rust semantic fill. |
+| SynthRunnerRust prewarm marker hit           |                  1ms marker hit; workers 100% hits |                  1ms marker hit; workers 100% hits | Durable across health-cache clears and process restarts.                              |
+
+Decision: full-health semantic prewarming is the production path. It runs once
+before phase workers when project semantic evidence is cold, writes a durable
+project marker after reference and callee cache materialization, and skips
+cheaply when the marker matches the current project fingerprint. The next
+Rust-specific target is the 33.109s parent `semantic.references.compute-misses`
+span inside the first cold fill.
+
+### Rust First-Fill Session Split
+
+The first Rust first-fill slice added worker-level profile spans around the
+persistent rust-analyzer session. A profile span is a timed section of the
+running process; these spans are useful because they separate rust-analyzer
+work from local TypeScript wrapper work.
+
+Default paired control on SynthRunnerRust:
+
+| Span                                             | Duration | Facts/counts                                             |
+| ------------------------------------------------ | -------: | -------------------------------------------------------- |
+| `health.semantic-prewarm`                        |  46.567s | 1,661 definitions                                        |
+| `semantic.references.provider-loop`              |  35.427s | 632 definitions with references, 3,011 reference facts   |
+| `rust.semantic.worker.open-definition-documents` |  10.741s | 26 opened Rust documents                                 |
+| `rust.semantic.worker.diagnostics`               |   5.733s | waited for diagnostics on 26 documents                   |
+| `rust.semantic.worker.settle`                    |   5.002s | fixed settle delay                                       |
+| `rust.semantic.worker.references`                |  21.872s | 1,661 reference requests at concurrency 8                |
+| `semantic.callees.provider-loop`                 |   5.097s | 539 definitions with callees, 2,561 callee facts         |
+| `rust.semantic.worker.callees`                   |   0.226s | rust-analyzer call hierarchy itself                      |
+| `rust.semantic.callees.complete-map`             |   2.313s | local mapping of rust-analyzer callee names to SCIP rows |
+
+Decisions from the split:
+
+- Keep the worker-level spans; they exposed that Rust references, diagnostics
+  readiness, and local callee symbol normalization are separate costs.
+- Keep the provider-scoped Rust callee symbol resolver index. It preserves the
+  existing mapping behavior and avoids per-callee file/name scans, though this
+  corpus shows only a small total win because definition-catalog reads and
+  rust-analyzer references dominate.
+- Keep `SCIP_RUST_SEMANTIC_DIAGNOSTICS_TIMEOUT_MS=0` and
+  `SCIP_RUST_SEMANTIC_SETTLE_MS=0` as real non-negative knobs for experiments.
+  Do not make either zero by default from this data.
+- Reject zero diagnostics for production. On SynthRunnerRust it changed the
+  output hash and reduced reference facts from about 3,011 to 13.
+- Do not default settle to zero yet. It was hash-identical and slightly faster
+  in one paired run, but the gain was within run-to-run noise while references
+  slowed enough to absorb most of the removed 5s sleep.
+- Keep the Rust reference drilldown profile events. The per-file rollup showed
+  `src/app.rs`, `src/effects.rs`, `src/diagnostics.rs`, `src/config.rs`, and
+  `src/camera.rs` dominated reference task time on SynthRunnerRust.
+- Accept the Rust impl-owner range correction as an accuracy fix. A repeated
+  method name such as `default` is not enough to identify a Rust definition when
+  fallback chunks contain several `impl Default` blocks; the SCIP owner segment
+  must participate in range correction.
+- Reject a 5s Rust semantic request timeout as a default. It preserved this
+  health report hash but lost 121 compiler-backed reference facts, which is a
+  semantic regression.
+
+### Rust Default Impl Reference Fast Path
+
+The next accepted Rust slice uses SCIP mention chunks as the compiler-resolved
+identity source for `impl Default::default` references, then scans only those
+chunks for exact direct `Owner::default` columns. Ambiguous `Default::default`
+syntax or chunks without a direct owner call fall back to rust-analyzer.
+
+SynthRunnerRust cold run with semantic reference cache and health report cache
+cleared:
+
+| Span                                | Duration | Facts/counts                                                |
+| ----------------------------------- | -------: | ----------------------------------------------------------- |
+| `health.semantic-prewarm`           |  18.902s | 1,661 definitions, 1,661 reference cache writes             |
+| `semantic.references.provider-loop` |  16.235s | 16 fast-path rows, 167 fast-path refs, 3,118 total refs     |
+| `rust.semantic.worker.references`   |   2.896s | 1,645 LSP reference requests, 2,951 refs from rust-analyzer |
+
+Decision: accepted. Compared with the impl-owner range baseline, cold full
+health fell from 45.413s to 19.822s. Semantic references rose from 3,048 to
+3,118 because the chunk-refined direct-default path recovered 70 direct
+`Owner::default` references that rust-analyzer had timed out or missed.
+
+Rejected follow-up: `SCIP_RUST_SEMANTIC_SETTLE_MS=0` after the Default fast
+path preserved the same hash and 3,118 reference facts, but did not improve wall
+time: 19.961s versus 19.822s. The profile moved 5.002s out of
+`rust.semantic.worker.settle`, but `rust.semantic.worker.references` grew from
+2.896s to 7.999s, so the default 5s settle remains.
+
+### Rust SCIP Occurrence Reference Fast Path
+
+`index.scip` contains exact occurrence positions. A comparison against the
+accepted SynthRunnerRust semantic cache showed that broad SCIP occurrences are
+too noisy for fields, types, and modules, but safe Rust function/value-like
+symbols were effectively exact. The accepted implementation uses SCIP
+occurrences only for Rust method symbols and top-level term symbols, while
+continuing to fall back to rust-analyzer for fields, types, modules, trait impl
+members, and `Default::default` impls.
+
+SynthRunnerRust full cold run with semantic references, semantic callees, the
+health prewarm marker, and the health report cache cleared:
+
+| Span                                | Duration | Facts/counts                                                     |
+| ----------------------------------- | -------: | ---------------------------------------------------------------- |
+| `health.semantic-prewarm`           |  19.789s | 1,661 definitions, 1,661 reference cache writes, 540 callee rows |
+| `semantic.references.provider-loop` |  13.436s | 906 SCIP fast-path rows, 2,773 SCIP refs, 3,117 total refs       |
+| `rust.semantic.worker.references`   |   1.607s | 739 LSP reference requests, 177 refs from rust-analyzer          |
+| `semantic.callees.provider-loop`    |   2.395s | 1,661 callee requests, 2,564 callees                             |
+
+Decision: accepted. Full cold health improved from 24.352s after the Default
+fast path to 21.210s. The health JSON hash stayed
+`4827f75e36860769d87f328f2c4b4412ccbe9569fb8d39c3d1577be46576ce2a`.
+Semantic references changed from 3,118 to 3,117 because one previously cached
+symbol, `diagnostics/record_fixed_steps().`, was corrected from four same-name
+method references to three free-function call sites.
+
+Rejected readiness follow-ups after the SCIP occurrence fast path:
+
+- `SCIP_RUST_SEMANTIC_SETTLE_MS=0`: 21.630s, same health hash and same 3,117
+  reference facts, but slower because `rust.semantic.worker.references` grew to
+  7.559s.
+- `SCIP_RUST_SEMANTIC_DIAGNOSTICS_TIMEOUT_MS=0`: 21.530s, same health hash and
+  same 3,117 reference facts, but slower because references grew to 8.366s.
+- `SCIP_RUST_SEMANTIC_DIAGNOSTICS_TIMEOUT_MS=0 SCIP_RUST_SEMANTIC_SETTLE_MS=0`:
+  16.140s, rejected for accuracy loss. It dropped semantic references from
+  3,117 to 2,953, callee facts from 2,564 to 2,415, and changed the health hash
+  to `bc282574c33f29b70db99e30e13ea0e39ee17aeed9a4c50363cd89b8bee1a9e6`.
+
+### Rust Provider Status Cache
+
+Accepted change: cache the base Rust Analyzer availability inside each Rust
+semantic provider instance. `availableSemanticProvider()` asks availability for
+each definition during bulk semantic materialization; before this change those
+checks repeatedly re-resolved the Rust indexer dependency.
+
+SynthRunnerRust cold `health --full --json`, semantic references/callees/health
+cache cleared:
+
+| Slice                                 |    Time | Health hash                                                        | Ref facts | Callee facts |
+| ------------------------------------- | ------: | ------------------------------------------------------------------ | --------: | -----------: |
+| SCIP occurrence fast path accepted    | 21.210s | `4827f75e36860769d87f328f2c4b4412ccbe9569fb8d39c3d1577be46576ce2a` |     3,117 |        2,564 |
+| Callee-capable filter only            | 22.010s | `4827f75e36860769d87f328f2c4b4412ccbe9569fb8d39c3d1577be46576ce2a` |     3,117 |        2,564 |
+| Provider status cache + callee filter | 14.940s | `4827f75e36860769d87f328f2c4b4412ccbe9569fb8d39c3d1577be46576ce2a` |     3,117 |        2,564 |
+
+Profile deltas:
+
+| Span                                |          Before |   After | Note                                     |
+| ----------------------------------- | --------------: | ------: | ---------------------------------------- |
+| `health.semantic-prewarm`           | 19.789s-21.164s | 14.101s | same facts, same hash                    |
+| `semantic.callees.provider-loop`    |          2.395s |  0.368s | per-definition availability probing gone |
+| `rust.semantic.worker.callees`      |          0.342s |  0.347s | Rust Analyzer work unchanged             |
+| `semantic.references.provider-loop` |         13.436s | 13.613s | reference LSP readiness remains dominant |
+
+Decision: accepted. This is an accuracy-preserving local hot-path fix. The
+next Rust semantic speed lever is still the reference request path: 739
+remaining Rust Analyzer reference requests and the diagnostics/settle readiness
+window dominate first-fill time.
+
+Follow-up accepted on the same slice: the health semantic prewarm marker now
+includes a semantic engine fingerprint. Before this, a project-level warm marker
+could skip prewarm after changing an engine-level reference mode even though the
+underlying semantic reference cache key would miss. Default safe-mode
+SynthRunnerRust cold `health --full --json` after this marker fix measured
+14.820s with the same health hash, 3,117 references, and 2,564 callees.
+
+Rejected/diagnostic occurrence-mode follow-up:
+
+- `SCIP_RUST_SCIP_OCCURRENCE_REFERENCE_MODE=all`: 25.850s, same health hash, but
+  semantic reference facts jumped from 3,117 to 12,575 and the run was slower.
+  Keep this as an explicit experiment/comparison mode only. Its mode is included
+  in the Rust semantic reference cache identity so experimental payloads cannot
+  pollute default safe-mode cache entries.
+- Re-run after provider status cache and marker fix: 18.640s, same health hash,
+  still 12,575 semantic reference facts, and still slower than default safe mode.
+  The run avoided most reference requests but then paid Rust Analyzer readiness
+  during the callee pass because the reference pass opened only one document.
+- Rejected broad zero-reference shortcut: for 50 Rust definitions with zero SCIP
+  occurrence references outside the accepted safe fast path, a direct
+  rust-analyzer audit still found three references across two module symbols.
+  Therefore "SCIP has no occurrence references" is not a safe default proof of
+  zero references.
+- Rejected broad fallback-class promotion after the current indexing slices:
+  SynthRunnerRust still had only 81 exact rows out of 755 fallback definitions
+  when comparing cached rust-analyzer rows to SCIP occurrences, and scip-query
+  itself had only 1 exact row out of 36 fallback definitions. On scip-query,
+  type-owned Rust terms, type symbols, and most namespace symbols had zero
+  compiler-backed references but 159 SCIP-only references. No additional
+  fallback symbol class is safe to promote until a narrower source refinement
+  can prove exact parity.
+
+### Small Rust Reference Batch Settle Policy
+
+Follow-up profile on the mixed scip-query repo showed a different shape than
+SynthRunnerRust: only 36 Rust definitions needed rust-analyzer reference
+fallback, they opened two Rust documents, and they returned zero references.
+The fixed 5s settle delay dominated that small request while TypeScript semantic
+reference scanning stayed under a second.
+
+| Corpus          | Mode                                       | Wall time | Hash                                                               | References | Callees | Key span                                                                |
+| --------------- | ------------------------------------------ | --------: | ------------------------------------------------------------------ | ---------: | ------: | ----------------------------------------------------------------------- |
+| scip-query      | forced `SCIP_RUST_SEMANTIC_SETTLE_MS=5000` |   10.467s | `35b0f7504cb98a59037696923458ef42721e12b3e4af7ccbc6f95034029e4730` |     16,379 |   3,097 | `health.semantic-prewarm` 8.728s; Rust settle 5.000s                    |
+| scip-query      | adaptive default                           |    5.165s | `35b0f7504cb98a59037696923458ef42721e12b3e4af7ccbc6f95034029e4730` |     16,379 |   3,097 | `health.semantic-prewarm` 3.399s; Rust settle 0ms                       |
+| SynthRunnerRust | forced `SCIP_RUST_SEMANTIC_SETTLE_MS=5000` |   15.549s | `4827f75e36860769d87f328f2c4b4412ccbe9569fb8d39c3d1577be46576ce2a` |      3,117 |   2,564 | 739 Rust fallback reference definitions kept the conservative 5s settle |
+| SynthRunnerRust | adaptive default                           |   15.249s | `4827f75e36860769d87f328f2c4b4412ccbe9569fb8d39c3d1577be46576ce2a` |      3,117 |   2,564 | Same 739-definition guardrail path, same fact counts                    |
+
+Direct guardrail audit on SynthRunnerRust selected the 41 positive-reference
+fallback definitions that were not handled by the Default or safe SCIP
+occurrence fast paths. A direct `runRustAnalyzerReferenceBatch` comparison
+returned the same 177 references with `settleDelayMs=5000` and `settleDelayMs=0`
+(`diffCount=0`), so the small-batch policy is not relying on zero-result-only
+behavior.
+
+Rejected diagnostics follow-up: applying both `diagnosticsTimeoutMs=0` and
+`settleDelayMs=0` to the same 41 positive fallback definitions returned only 13
+references across 7 rows, with 34 symbol-level diffs. Diagnostics readiness is
+therefore not optional even for small positive Rust batches.
+
+Decision: accepted. The default settle policy now skips the artificial wait only
+for reference-only Rust semantic batches with 64 or fewer definitions. Larger
+reference batches, callee batches, signature batches, and Rust import-definition
+lookups keep the conservative 5s default. Explicit
+`SCIP_RUST_SEMANTIC_SETTLE_MS` values still override the adaptive default.
+
+### Small Combined Rust Settle Follow-up
+
+Combined Rust semantic materialization is the path that asks one rust-analyzer
+project session for references and callees together, instead of opening the
+same project twice. After that path landed, scip-query's mixed full-health
+prewarm issued one small combined Rust request: 76 Rust definitions across two
+documents. The request still paid the old fixed 5s settle wait.
+
+Fresh paired measurements on the current worktree:
+
+| Run                                        | Wall time | Hash                                                               | `health.semantic-prewarm` | Rust session | Rust settle | Semantic rows              |
+| ------------------------------------------ | --------: | ------------------------------------------------------------------ | ------------------------: | -----------: | ----------: | -------------------------- |
+| forced `SCIP_RUST_SEMANTIC_SETTLE_MS=5000` |   15.756s | `ddd488b34533ca771b5d2678d086ec4191469fcb879456298c7ec9d4ca4c3aed` |                   11.869s |       6.911s |      5.003s | 4,521 refs / 4,522 callees |
+| adaptive default                           |   11.200s | same                                                               |                    7.339s |       2.414s |      0.000s | 4,521 refs / 4,522 callees |
+
+Decision: accepted. The adaptive policy now has two explicit boundaries: small
+reference-only batches skip settle at 64 or fewer definitions, and small
+combined reference+callee batches skip settle at 96 or fewer definitions when
+signatures are not included. Explicit env overrides still win, and large
+Rust-heavy combined batches keep the conservative 5s default. This preserves
+the full health output hash and durable semantic row counts while removing a
+fixed wait from the mixed scip-query path.
+
+### No-Prewarm Worker Demand Experiment
+
+Rejected experiment: disabling full-health semantic prewarm is not a safe speed
+path. An initial SynthRunnerRust `evidence-cold` run reported 0.142s only
+because the health-report cache was still warm, which exposed a benchmark
+harness bug. After clearing `health-report-cache.json`, the same no-prewarm run
+took 31.639s, changed the health JSON hash from
+`4827f75e36860769d87f328f2c4b4412ccbe9569fb8d39c3d1577be46576ce2a` to
+`b1de1b45bd3fbb7a49248fb5c4707ad52c6dc249d247f0b7e7a18ed7517f302a`, and
+wrote only 422 semantic reference rows instead of the 1,661 rows written by the
+parent prewarm path.
+
+The profile is still useful for future design. Without parent prewarm, workers
+asked for 475 semantic reference rows but all 1,661 semantic callee rows, and
+they paid repeated Rust Analyzer readiness costs across separate processes.
+Therefore the next safe speed frontier is not disabling prewarm. It is either a
+parent-side candidate prewarm that preserves the full output contract, or a
+durable project-level Rust Analyzer session that avoids reopening and
+rewarming the same project across commands.
+
+### Rust Callee Symbol Canonicalization Guard
+
+Callee symbol canonicalization is the local pass that takes a rust-analyzer call
+target, such as a short function name and source location, and maps it back to a
+project SCIP symbol when the target file is part of the indexed project. An
+indexed document is a source file with a row in the SCIP `documents` table.
+
+The current parent-prewarm profile showed `rust.semantic.callees.complete-map`
+taking about 2.2s even though rust-analyzer call hierarchy itself took only
+about 0.36s. A first resolver-result cache was safe but did not move the span:
+the cache-only diagnostic run still measured `complete-map` at 2.209s. The real
+cost was asking the definition catalog about dependency files that cannot have
+project SCIP symbols.
+
+Accepted fix: the provider-scoped Rust callee symbol resolver now loads the set
+of indexed project documents once. If a callee target file is outside that set,
+the resolver returns the rust-analyzer symbol unchanged instead of reading and
+range-correcting definitions for a non-project path. Exact `(file, symbol,
+line)` result caching remains in place for repeated project-local callees.
+
+| Run                                       | Wall time | `semantic.callees.provider-loop` | `rust.semantic.callees.complete-map` | Hash                                                               |
+| ----------------------------------------- | --------: | -------------------------------: | -----------------------------------: | ------------------------------------------------------------------ |
+| Current parent prewarm after prior slices |   16.896s |                           2.577s |                               2.207s | `4827f75e36860769d87f328f2c4b4412ccbe9569fb8d39c3d1577be46576ce2a` |
+| Cache-only diagnostic                     |   17.729s |                           2.576s |                               2.209s | same health surface; output was not separately saved               |
+| Indexed-document guard accepted           |   14.902s |                           0.370s |                               0.002s | `4827f75e36860769d87f328f2c4b4412ccbe9569fb8d39c3d1577be46576ce2a` |
+
+Decision: accepted. This preserves the full semantic health hash and removes a
+local mapping tax from Rust-heavy cold first fill. The remaining first-fill
+cost is now almost entirely Rust reference readiness: document open,
+diagnostics, settle, and 739 fallback reference requests.
+
+Rejected follow-up: forcing `SCIP_RUST_SEMANTIC_SETTLE_MS=0` after the callee
+guard preserved the same hash and the same 3,117 reference / 2,564 callee facts,
+but measured 15.948s instead of 14.902s. The profile removed the 5.002s settle
+span, but `rust.semantic.worker.references` grew from 1.546s to 7.600s, so the
+large-batch conservative settle remains the default.
+
+Additional rejected readiness knobs:
+
+| Experiment                          | Wall time | Hash/facts | Key profile result        |
+| ----------------------------------- | --------: | ---------- | ------------------------- |
+| `SCIP_RUST_SEMANTIC_SETTLE_MS=1000` |   15.906s | same       | references grew to 6.621s |
+| `SCIP_RUST_SEMANTIC_SETTLE_MS=3000` |   15.864s | same       | references grew to 4.757s |
+| `SCIP_RUST_SEMANTIC_SETTLE_MS=4000` |   16.019s | same       | references grew to 3.801s |
+| `SCIP_RUST_SEMANTIC_CONCURRENCY=16` |   15.745s | same       | references grew to 2.559s |
+
+These runs show the 5s settle and concurrency 8 default are not arbitrary
+padding on SynthRunnerRust. Lower settle values start reference queries before
+rust-analyzer is ready enough, and higher concurrency does not reduce the
+remaining reference wall time. The next Rust speed frontier is architectural:
+a durable project-level rust-analyzer session that avoids paying document open,
+diagnostics, and settle readiness for each cold CLI process.
+
+### Repeat Reindex With Reused Language Shards
+
+`runLanguageIndexersForFreshReindex()` can reuse TypeScript and Rust language
+SCIP shards. The publish phase still materializes combined SCIP and converts to
+SQLite unless whole-project reuse has already returned early.
+
+Acceptance signal:
+
+- repeat reindex is faster when all requested indexed language shards are
+  reusable;
+- `status --capabilities` remains correct;
+- output DB, SCIP path, metadata, and post-index augmentation remain valid;
+- partial-index status remains isolated from complete-index cache identity.
+
+Implementation note: the measured fast path targets non-language changes, such
+as benchmark docs, where TypeScript and Rust language SCIP shards are unchanged
+but the whole-project fingerprint still needs metadata refresh.
+
+Accepted implementation:
+
+| Run                                                                  | Duration | Result          | Shards                      | Decision |
+| -------------------------------------------------------------------- | -------: | --------------- | --------------------------- | -------- |
+| Repeat `reindex --json`, old publish path after docs changed         |   1.072s | `reused: false` | TypeScript/Rust both reused | Control  |
+| Repeat `reindex --json`, metadata-only path after benchmark doc edit |   0.244s | `reused: true`  | TypeScript/Rust both reused | Accepted |
+
+The accepted path skips combined SCIP materialization and SQLite conversion
+only when `skipIfUnchanged` is not explicitly false, no language was skipped,
+every requested language output came from a reused shard, and the published
+SCIP and SQLite artifacts already exist. It still runs auxiliary-document
+augmentation against the existing DB and rewrites metadata with the new
+whole-project fingerprint. The measured metadata remained `complete`, kept
+requested/indexed languages as TypeScript and Rust, and included the changed
+benchmark ledger file in the refreshed fingerprint.
+
+Follow-up accepted as a small consistency improvement: metadata publication now
+carries language fingerprints from shard classification instead of hashing the
+same per-language inputs again. On this repository the repeat metadata-only
+path measured 0.238s, which is in the same noise band as the 0.237s-0.244s
+metadata-only runs. The value is mostly removing duplicated work and ensuring
+metadata uses the exact fingerprints that made the shard-reuse decision.
+
+### Benchmark Harness Reliability
+
+The benchmark harness previously forwarded a relative `--profile-out` value to
+the spawned command unchanged. Because the spawned command runs with `cwd` set
+to the target corpus, a relative profile path could land inside the benchmarked
+repository rather than beside the intended scip-query run history.
+
+Accepted fix: `scripts/performance-architecture-contract.mjs` now resolves the
+profile path to an absolute path before creating directories or spawning the
+target command. `tests/scripts/performance-architecture-contract.test.ts`
+covers the boundary by passing a relative `--profile-out` and asserting the
+child process receives an absolute `SCIP_QUERY_PROFILE_OUT`.
+
+Accepted follow-up: the same harness now clears `health-report-cache.json` for
+`evidence-cold` and `cold-index` measurements. This matches the real contract of
+those states: a cold semantic/evidence benchmark must not be satisfied by a
+previously cached health report.
+
+### Vega Rust Reference Fallback Follow-ups
+
+VegaAssistant cold `__health-phase complexity-hotspots --full` is the current
+large mixed TS/Rust stress case for reference and callee first-fill behavior.
+The conservative baseline measured 99.790s with output hash
+`09cd4241098ea2db6360bb3ba0671647bc526c22d2838372a5eae2dabbb35a73`.
+The dominant spans were Rust reference fallback (578 provider-hit definitions,
+51.297s provider loop) and Rust callee materialization (7,186 provider-hit
+definitions, 39.359s provider loop).
+
+Rejected `SCIP_RUST_SCIP_OCCURRENCE_REFERENCE_MODE=all`: it measured 117.480s,
+changed the output hash to
+`0c6810dde566fa963445bad9323c5fef970eb34560877da017d5d96075277338`, and did
+not reduce the 578 Rust reference provider hits. Broad occurrence promotion is
+therefore still not a safe or faster path.
+
+Rejected callee-first ordering: it measured 116.900s and changed the output
+hash to the same drifted value. The Rust session still opened definition
+documents twice because the reference and callee requests used different
+linked-project/session keys. The experiment was reverted.
+
+Rejected ordinary trait-impl occurrence promotion: a direct comparison showed
+many Vega ordinary trait impl occurrence rows match rust-analyzer, and one
+codex-rs ordinary method spot-check also matched. The full Vega run still
+measured 117.180s and changed the output hash. Even though reference provider
+hits fell from 578 to 424, health facts changed and the phase was slower, so
+this shortcut was reverted. `TraitMethod`/`From`-style spot checks also proved
+that SCIP occurrences can disagree with current rust-analyzer output.
+
+Accepted combined reference/callee materialization: the first split-list guard
+run preserved the active implementation shape but measured 119.170s with output
+hash `0c6810dde566fa963445bad9323c5fef970eb34560877da017d5d96075277338`.
+That hash differs from the older 99.790s `09cd...` artifact, so the guard is
+not used as a speedup claim against that older baseline. It is used only as the
+immediate control for the prefetch hook.
+
+With the complexity phase asking the semantic product to prefetch callees while
+materializing references, the same cold Vega phase measured 80.070s with the
+same `0c6810...` output hash. The reference provider loop stayed about the
+same size, 54.528s to 54.723s, but it now filled 7,186 Rust callee definitions
+inside the same rust-analyzer project session. The later callee provider loop
+then dropped from 39.785s to 0.007s because it consumed the prefetched provider
+results. The single combined Rust session request was 52.796s for 578 reference
+definitions and 7,186 callee definitions.
+
+Accepted follow-up: prefetched callee rows now flow into the semantic callee
+cache wrapper before the file-by-file cache scan. The wrapper still writes the
+normal durable `semantic_callees` rows with source/dependency fingerprints, but
+it no longer reads the cache for rows that were just produced by the combined
+Rust session. The same Vega phase measured 79.500s with the same `0c6810...`
+hash. `semantic.callees.cache-scan` fell from 5.870s to 0ms, and the durable
+prefetch cache write took 36ms for 7,186 entries. The command-level gain is only
+0.570s because Rust references still dominate the wall clock.
+
+Diagnostic slow-reference profile: enabling
+`SCIP_RUST_SEMANTIC_REFERENCE_TASK_PROFILE_MS=5000` showed 15 slow Rust
+reference requests, mostly standard trait or extension impl members such as
+`From::from`, `Default::default`, `Clone::clone`, `Display::fmt`,
+`Error::source`, `Deserialize::deserialize`, and one extension trait method.
+The run kept the command hash but produced fewer semantic reference facts
+(22,283 instead of the accepted 22,316), so it is not an acceptance baseline.
+
+Diagnostic timeout follow-up: raising `SCIP_RUST_SEMANTIC_REQUEST_TIMEOUT_MS`
+to 30,000ms kept the same command hash and restored the accepted 22,316
+semantic reference facts, but measured 82.370s. This rejects a tempting
+zero-reference shortcut for the slow standard trait impls. The right next
+frontier is either a narrow source-assisted parity proof for those trait shapes
+or a durable rust-analyzer session/timeout policy that avoids freezing
+timeout-shaped empty results.
+
+Rejected direct `From::from` fast path: a conservative source-assisted path for
+direct `Owner::from(...)` calls measured 78.770s and kept the `0c6810...`
+command hash, but semantic reference facts dropped from 22,316 to 22,314. The
+drop did not come from the 12 rows the fast path answered; removing those rows
+changed rust-analyzer request scheduling and two
+`mentor/distillation_export.rs` `From` impl references timed out. The code was
+reverted. This is evidence that the remaining Rust reference bottleneck is
+timeout-sensitive, so future speedups must compare semantic fact counts, not
+only command hashes and wall time.
+
+Accepted reference-cache product reuse with incomplete-row protection: the
+first same-product attempt proved the mechanical speedup, dropping the second
+`semantic.references.cache-scan` from 751ms in the accepted control to 1ms with
+zero cache reads, but it also exposed timeout-shaped empty Rust reference rows.
+The final accepted shape keeps a command-local incomplete set: if a Rust batch
+omits a reference row because rust-analyzer timed out, later passes in the same
+semantic product skip that symbol instead of retrying and caching `[]` as if it
+were compiler-backed evidence. The final Vega run kept the `0c6810...` output
+hash, measured 81.260s, and recorded `incompleteInMemoryHits: 11` on the second
+cache scan. Wall time is still dominated by Rust reference variance, but the
+duplicate cache scan is gone and timeout uncertainty is no longer frozen into
+the durable semantic-reference cache.
+
+Decision: accepted against the immediate guard. This is the first large Vega
+Rust first-fill speedup that did not rely on broad SCIP occurrence promotion or
+changed phase ordering. The next frontier is either reducing the remaining
+Rust reference provider loop, making the rust-analyzer project session durable
+across CLI processes, or narrowing the semantic cache-scan cost after the
+compiler-backed facts are warm.
+
+Accepted `Default::default` struct-update fast path with definition guard:
+the Rust default-impl source shortcut now recognizes explicit owner struct
+updates such as `DictationSettings { ..Default::default() }` only when the
+default impl symbol has a definition mention. The unguarded attempt was
+rejected on SynthRunnerRust: it promoted a derived/generated `VisualizerBar`
+default symbol that has no impl definition mention and dropped semantic
+references from 3,117 to 3,115 after comment-handling regression. The guarded
+shape restores SynthRunnerRust parity: 3,117 references, 16 default fast-path
+rows, and 167 default fast-path references.
+
+On VegaAssistant, the guarded run measured 75.830s for
+`__health-phase complexity-hotspots --full`, down from the previous accepted
+81.260s run. The reference provider loop fell from 56.010s to 51.102s, the
+Rust worker reference span fell from 38.874s to 33.986s, and rust-analyzer
+reference requests fell from 578 to 577. Semantic reference facts increased
+from the previous accepted 22,308 back to the 30s diagnostic count of 22,316.
+The command output hash changed from `0c6810...` to `5c75ff...`; the top five
+hotspots stayed identical, while `extremeCount` changed from 20 to 19. This is
+accepted as a compiler-backed accuracy correction, not as a same-output
+speedup: direct 30s rust-analyzer probes exactly matched the two newly
+source-resolved rows, `DictationSettings::default` and
+`CompetenceProbeContext::default`, four references each.
+
+Rejected follow-up: foreign explicit struct-default accounting let the source
+helper resolve additional Vega defaults such as `SkillDefinition::default`
+(23 refs) and `PersonaPromptConfig::default` (6 refs), while preserving the
+Synth `VisualizerBar::default` guard. The full Vega run still measured 78.548s
+with output hash `0c6810...`, semantic reference facts dropped from the accepted
+22,316 to 22,314, and durable semantic reference rows dropped from 7,186 to
+7,180. This repeats the `From::from` scheduling failure mode: removing a few
+slow positive LSP requests can cause unrelated Rust reference requests to time
+out. The code was reverted.
+
+Rejected follow-up: target-owner chunk-boundary reconstruction tried to recover
+more explicit `Default::default()` struct updates across truncated SCIP mention
+chunks. SynthRunnerRust preserved its hash and semantic row counts, but
+VegaAssistant measured 80.798s, returned the older `0c6810...` hash, wrote only
+7,177 durable semantic reference rows, and left 9 slow reference tasks
+incomplete. Running the same code with
+`SCIP_RUST_SEMANTIC_REFERENCE_RETRY_TIMEOUT_MS=30000` restored 7,186 durable
+semantic reference rows but measured 81.195s, slower than the accepted guarded
+Default run and slower than the retry-only diagnostic. The code was reverted.
+Future work should stabilize the Rust reference session or retry incomplete rows
+before promoting more positive standard-trait source shortcuts.
+
+Accepted opt-in Rust reference retry seam:
+`SCIP_RUST_SEMANTIC_REFERENCE_RETRY_TIMEOUT_MS` now lets a timed-out
+rust-analyzer reference request retry once with a separate per-request
+deadline. The default remains unchanged. The Vega diagnostic run with
+`SCIP_RUST_SEMANTIC_REFERENCE_RETRY_TIMEOUT_MS=30000` and slow-task profiling
+measured 77.337s, kept the `0c6810...` command hash, restored the accepted
+22,316 semantic reference facts, and wrote 7,186 durable semantic reference
+rows. The slow reference profile had 15 slow tasks and 0 incomplete tasks; the
+session span recorded `referenceRetryTimeoutMs: 30000`.
+
+Decision: keep the retry seam as an opt-in accuracy/stability instrument. It is
+not a default speedup: it is 1.507s slower than the best guarded
+`Default::default` run at 75.830s, but 4.185s faster and more complete than the
+slow-task diagnostic run that left 8 reference tasks incomplete. The next speed
+work should use this seam to prevent scheduling regressions while moving more
+Rust standard-trait cases to source-backed parity proofs or a durable
+rust-analyzer session.
+
+Retry timeout tuning: 15s is rejected despite completing every profiled slow
+task, because the provider loop recorded only 22,314 semantic references and
+674 worker references. A 20s retry restored the accepted 22,316 semantic
+references and 676 worker references, but measured 78.412s. In this sample the
+30s retry remains the fastest accurate retry run at 77.337s, so the policy
+question is not solved by simply lowering the retry ceiling.
+
+Rust callee task profiling:
+
+The Rust session worker now has gated callee diagnostics matching the existing
+reference diagnostics. `SCIP_RUST_SEMANTIC_CALLEE_TASK_PROFILE_MS` writes
+per-task `rust.semantic.worker.callee-task` spans, and profiled runs write
+`rust.semantic.worker.callees.by-file` rollups. Normal runs are unchanged
+because the events are emitted only when `SCIP_QUERY_PROFILE` is enabled.
+
+The first VegaAssistant callee-profile run measured 79.082s for
+`__health-phase complexity-hotspots --full`, kept the `0c6810...` command hash,
+and wrote the expected 7,186 durable semantic reference rows and 7,186 durable
+semantic callee rows. The profile showed `rust.semantic.worker.callees` at
+23.748s for 7,186 definitions and 66,469 callees. The top callee rollup was
+`src-tauri/crates/vega-core/src/productivity.rs`: 28 definitions, 16 with
+callees, 170 callees, 37.203s summed task time, and 15 slow tasks over the 1s
+threshold. The slowest single callee task was `get_task_by_source_key`, which
+took 4.280s and returned zero callees.
+
+Decision: keep the callee profiler as evidence infrastructure, not as a
+speedup. This profile does not justify a broad skip rule: most callee-capable
+definitions do return callees, and the slow zero-callee cases are mixed with
+nearby positive project functions. The next callee speed frontier remains
+architectural batching/durable rust-analyzer session work or a source-backed
+zero-callee proof that is validated against this new task-level profile.
+
+Rejected scheduling follow-up: forcing
+`SCIP_RUST_SEMANTIC_PARALLEL_OPERATIONS=0` on the same VegaAssistant phase
+measured 84.140s with the same `0c6810...` command hash, but durable semantic
+reference rows dropped from 7,186 to 7,183 while semantic callee rows stayed at
+7,186. The current contention hypothesis did not hold, so the combined
+reference/callee session should keep parallel operations enabled by default.
+
+Status capability calibration:
+
+The language capability matrix already reported Rust semantics as available,
+but the top-level capability summary still only exposed
+`semantic-typescript`. The summary now emits one semantic capability per
+detected semantic provider, preserving `semantic-typescript` and adding
+`semantic-rust` when Rust is detected. Local `node dist/cli.js status
+--capabilities --json` now reports both TypeScript and Rust semantic providers
+as available in the top-level summary.
+
+Rust method-call source facts and source-zero callee proof:
+
+The first source-zero audit rejected a broad shortcut. Using cached source
+facts, VegaAssistant had 856 Rust definitions with zero source-owned callsites,
+but 699 of them still had semantic callees; SynthRunnerRust had 844 zero-source
+definitions and 90 semantic-positive mismatches. The examples were ordinary
+Rust method chains such as `.zip`, `.clamp`, `.map`, `.clone`, and `.cmp`, which
+showed that source facts were stale or incomplete rather than proving zero
+callees.
+
+Accepted accuracy fix: Rust source call extraction now recognizes
+`field_identifier` leaves and `generic_function` wrappers, so
+tree-sitter-rust method chains and generic calls such as
+`serde_json::from_str::<Value>(...)` produce callsite facts. Source-facts
+payloads now carry a version and old rows deserialize as misses, which prevents
+prior parser behavior from surviving across upgrades. Focused tests cover Rust
+method-chain/generic/macro callsites and source-facts payload-version rebuilds.
+
+After the fix, the audit improved sharply. VegaAssistant source facts now
+reported 177,626 Rust callsites; zero-source cached definitions fell from 856
+to 167, with semantic-positive mismatches falling from 699 to 12.
+SynthRunnerRust reported 5,211 Rust callsites and had 752 zero-source cached
+definitions with 0 semantic-positive mismatches. A stricter proof using exact
+source-callable ranges was clean on both fresh corpora: VegaAssistant had 119
+exact source-callable zero-callee definitions and 0 semantic-positive
+mismatches; SynthRunnerRust had 78 and 0.
+
+Accepted narrow skip: Rust semantic provider construction now injects a
+source-zero-callee oracle from the current DB. The provider skips rust-analyzer
+callee requests only for exact Rust source-callable ranges whose current source
+facts contain no callsites inside the callable body. Prefetched semantic
+callees still win, and oracle failures fall back to rust-analyzer.
+
+Measured result: VegaAssistant
+`__health-phase complexity-hotspots --full` with callee task profiling measured
+81.189s under `vega-complexity-source-zero-callee-skip`. The callee worker saw
+7,067 definitions instead of 7,186, proving 119 requests were removed, but wall
+time did not improve versus the 79.082s callee-profile control. The output hash
+changed to `1ae23ffa26e6217a90938b8c124c41e9bb65dc9148058ba213aa97b4aa12adfe`
+because Rust method-call source facts now add previously missing AST callee
+evidence; this is an accuracy change, not a speed-equivalence run. Durable
+semantic callees stayed at 7,186, while semantic reference rows were 7,176 in
+this run.
+
+SynthRunnerRust `health --full --json` measured 16.052s under
+`synth-runner-rust-health-full-source-zero-callee-skip`, with 1,312 callee
+worker definitions and 2,541 worker callees. This is not a clean speed win over
+the prior best SynthRunnerRust runs, so the decision is to keep the parser/cache
+accuracy fix and the proven-empty request skip, but not to claim a full-pass
+runtime improvement from this slice. The next speed frontier is still reducing
+positive rust-analyzer call hierarchy/reference work, likely through durable
+session/index reuse.
+
+### Rust SCIP Occurrence Positive Callee Proof
+
+The next narrow callee slice uses compiler-resolved SCIP occurrences only when
+they exactly match current source callsite facts inside the same Rust callable
+range. A positive callee proof means a Rust caller's source call leaves and
+line numbers match the compiler occurrence leaves and line numbers as a
+multiset; if the caller is `main`, belongs to a Rust trait impl member, resolves
+to any trait impl member callee, has no current source facts, or has any
+mismatch, the provider falls back to rust-analyzer.
+
+Accepted implementation:
+
+- `src/source/source-calls.ts` unwraps `generic_function` call targets, and
+  `src/source/source-facts.ts` increments the source-facts payload version.
+- `src/semantic/rust/scip-occurrence-callees.ts` builds a per-DB SCIP
+  occurrence callee index and returns callees only for exact source/SCIP
+  equality proofs.
+- `src/semantic/rust/provider.ts` asks this oracle before rust-analyzer callee
+  resolution, both in callee-only and combined reference/callee paths. Proven
+  rows are returned directly; unproven rows continue through the existing
+  resolver.
+- `rust.scip-occurrence.callees` profile spans report definitions, candidates,
+  proven definitions, and proven callee rows when profiling is enabled.
+
+Correctness audit before implementation:
+
+| Corpus          | Candidate callers | Exact matches | Mismatches after structural guard |
+| --------------- | ----------------: | ------------: | --------------------------------: |
+| SynthRunnerRust |                28 |            28 |                                 0 |
+| VegaAssistant   |                86 |            86 |                                 0 |
+
+Measured result after implementation:
+
+| Run                                                             | Wall time | Hash                                                               | Proof count                                  |
+| --------------------------------------------------------------- | --------: | ------------------------------------------------------------------ | -------------------------------------------- |
+| `synth-runner-rust-health-full-scip-occurrence-callee`          |   15.394s | `3d9caaf2b56cc70265bdfe660d71da9dc115181945f22fa190c57c911f11443e` | 12 definitions / 23 callees in profiled run  |
+| `vega-complexity-scip-occurrence-callee`                        |   79.089s | `1ae23ffa26e6217a90938b8c124c41e9bb65dc9148058ba213aa97b4aa12adfe` | 64 definitions / 136 callees in profiled run |
+| `synth-runner-rust-health-full-scip-occurrence-callee-profiled` |   15.478s | same                                                               | 1,372 candidates, 12 proven definitions      |
+| `vega-complexity-scip-occurrence-callee-profiled`               |   79.278s | same                                                               | 6,573 candidates, 64 proven definitions      |
+
+Decision: accepted as a safe positive-callee request elimination and profiling
+hook, not as the main speed win. SynthRunnerRust improved slightly versus the
+source-zero slice, while VegaAssistant stayed effectively flat. The proof count
+is too small to move the dominant profile spans: `semantic.references.provider-loop`
+and `rust.semantic.worker.references.by-file` still dominate. The next serious
+Rust speed slice should audit trait/fallback reference shapes such as
+`From::from`, `fmt`, `source`, `deserialize`, `clone`, and `default`, where
+rust-analyzer often spends a full timeout returning zero or very few
+references.
+
+Rejected follow-up: a standard-trait zero-reference shortcut was tested and
+backed out. Audit data looked attractive: normalized standard trait impl members
+with zero exact SCIP occurrences had 24/24 zero semantic references on
+VegaAssistant and no SynthRunnerRust cases, while the known unsafe positive
+mismatches were custom traits (`RoutingConfig`, `LlmCallGuard`). But the
+implemented shortcut measured worse on VegaAssistant:
+`vega-complexity-standard-trait-zero-reference` took 80.799s, kept the
+`1ae23ffa...` command hash, but wrote only 7,180 durable semantic reference rows
+instead of 7,186. The profile showed 24 shortcut rows, `rust.semantic.worker.references`
+still at 37.693s, and several unrelated reference tasks becoming incomplete.
+Decision: do not skip standard-trait reference requests by zero SCIP occurrence
+alone. Future reference-side work needs a session/durability fix or a stronger
+per-symbol proof that does not perturb batch scheduling.
+
+### Health Semantic Prewarm Completion Marker
+
+Full-health semantic prewarm is the mechanism that makes repeat full passes
+fast: it fills durable semantic reference/callee caches before health phases
+fan out into isolated subprocesses, then writes a project marker so later runs
+can skip that fill.
+
+The marker now records `referenceIncomplete` and uses marker version 2. If Rust
+reference materialization reports incomplete rows, the run keeps successful
+reference and callee cache writes but returns `partial` and does not write the
+reusable project marker. A future full-health run can therefore retry the
+missing rows instead of falsely treating the project as fully warm. Readers
+also ignore any version-2 marker that records nonzero incomplete references.
+
+Validation:
+
+- `npm test -- --run tests/runtime/cli-support.test.ts`
+- `npm run typecheck`
+
+Decision: accepted as warm-state correctness hardening, not as a cold-run
+speedup claim. The optimization value is preventing incomplete Rust reference
+batches from becoming durable "warm enough" state while the Rust LSP path is
+still being stabilized.
+
+### TypeScript tsserver Comparison
+
+Added a hidden `typescript-semantic-compare` command and
+`scripts/typescript-semantic-provider-comparison.mjs` so tsserver can be tested
+against the ts-morph baseline without changing production behavior.
+
+Measured on scip-query:
+
+| Run         | Compared defs | Matches | Mismatches | Missing refs | Extra refs | ts-morph refs | tsserver refs |
+| ----------- | ------------: | ------: | ---------: | -----------: | ---------: | ------------: | ------------: |
+| sample 50   |            50 |      50 |          0 |            0 |          0 |     586.077ms |     663.878ms |
+| full corpus |         4,459 |   4,349 |        110 |          773 |        108 |     725.470ms |   5,183.027ms |
+
+VegaAssistant bounded comparison found only one indexed TypeScript definition,
+so it is not a meaningful TypeScript parity corpus; the Rust-heavy Vega
+profiles remain useful for Rust semantic work.
+
+Decision: keep tsserver comparison-only. It is cheaper to construct than
+ts-morph on this repo, but its scalar full-reference pass is slower and misses
+baseline references. The next TypeScript speedup should optimize the trusted
+ts-morph/bulk-scan path or make tsserver parity work explicit before any
+default routing change.
+
+### Native Rust Boundary
+
+The `consumer-classify` helper proved correctness but not a warm-state speed
+win. The next native candidate must be a larger contiguous computation or a
+lower-overhead boundary.
+
+Acceptance signal:
+
+- native-off/native-on command hashes match;
+- direct command runtime improves, not just one profile span;
+- warm-state comparison still wins after reversing run order.
+
+### Durable Rust Analyzer Project Session
+
+A durable rust-analyzer project session is a long-lived local language-service
+process for one repository whose distinguishing behavior is that it preserves
+rust-analyzer's ready compiler state after the CLI command that requested it
+has exited. The accepted implementation remains opt-in through
+`SCIP_RUST_SEMANTIC_DURABLE_SESSION=1`.
+
+The command-side provider keeps its synchronous `RustAnalyzerSessionRequester`
+contract. It publishes an atomic request into a repository- and helper-build-
+scoped mailbox, starts a detached helper when no live helper exists, and waits
+for the bounded response. The helper owns the existing worker-thread requester,
+so LSP initialization, open-document tracking, reference completion, callee
+resolution, and one-shot fallback behavior are not duplicated.
+
+Live-session reuse is fail-closed. Its identity includes:
+
+- protocol version;
+- canonical project root;
+- content hashes for Rust source and common build inputs, including
+  `Cargo.toml` and `Cargo.lock`;
+- resolved rust-analyzer path and version;
+- semantic worker build hash; and
+- Rust/Cargo environment values that can change compiler answers.
+
+The durable helper build hash scopes the mailbox directory itself. Request
+timeout, diagnostics, settle, concurrency, retry, profiling, and SCIP
+occurrence policy do not identify rust-analyzer's compiler state; changing
+those per-request controls no longer tears down a compatible session. An
+identity mismatch shuts down the old worker before the helper creates a new
+one. A missing, dead, stale-heartbeat, wrong-protocol, or changed-helper state
+is not reused. Per-command worker environment is applied before every request,
+and explicit settle/retry experiments remain explicit.
+
+Readiness version 2 is an observed ordering contract around the real analyzer.
+The client advertises and validates `experimental/serverStatus`, treats a
+quiescent warning as usable and an error as unusable, opens the requested
+documents while initial workspace loading is still underway, then waits once
+for the initial quiescent status. A private `scip-query/readinessBarrier`
+request provides the final JSON-RPC ordering fence: rust-analyzer's expected
+`MethodNotFound` response proves that all earlier open notifications were
+dequeued; any other response error fails closed. This avoids assuming that
+rust-analyzer emits a new status notification for every `didOpen`, which the
+real server does not promise.
+
+Durable requests preserve the caller's settle policy. When the caller has not
+configured a reference retry, the durable transport adds one bounded 30s
+completion retry for definitions that rust-analyzer initially leaves
+incomplete; `SCIP_RUST_SEMANTIC_REFERENCE_RETRY_TIMEOUT_MS=0` disables it
+explicitly. The retry does not fabricate answers: incomplete rows remain
+observable and prevent the health prewarm marker from becoming reusable-warm.
+
+The first default experiment exposed a correctness boundary that command hashes
+alone missed. Reusing a session whose first small combined batch inherited the
+adaptive zero-settle policy changed eight cached callee payloads:
+
+| Run                                  | Wall time | Cache rows | Callee facts | Nonempty callee rows | References | Output hash |
+| ------------------------------------ | --------: | ---------: | -----------: | -------------------: | ---------: | ----------- |
+| zero-settle session-cold, rejected   |    6.670s |      4,521 |        3,124 |                1,413 |      4,520 | `500f4e...` |
+| zero-settle session-warm, diagnostic |    3.940s |      4,521 |        3,167 |                1,421 |      4,520 | `500f4e...` |
+
+Root cause: the newly initialized reusable session issued its first callee work
+before the compiler view reached the same stable state observed by the later
+command. The durable host now applies the conservative 5s readiness settle once
+when it creates or invalidates an identity; reused requests retain the accepted
+adaptive zero-wait path. An explicitly configured settle value, including
+zero, is still honored.
+
+Accepted evidence-cold pair on scip-query itself. Semantic references,
+semantic callees, the health marker, and the health report cache were cleared
+before both commands; the helper was absent before the first and retained
+before the second:
+
+| Run                          | Wall time | `health.semantic-prewarm` | Opened docs | Cache rows | Callee facts | References | Output hash |
+| ---------------------------- | --------: | ------------------------: | ----------: | ---------: | -----------: | ---------: | ----------- |
+| session-cold first fill      |   11.440s |                    9.366s |           2 |      4,521 |        3,167 |      4,520 | `500f4e...` |
+| session-warm evidence refill |    3.860s |                    1.922s |           0 |      4,521 |        3,167 |      4,520 | `500f4e...` |
+
+The evidence-cold/session-warm run is 66.3% faster. The full semantic reference
+and callee payloads compare identically in both directions, reference
+incomplete count is zero, and the command output hashes match. The warm profile
+contains no rust-analyzer initialization span and no document-readiness wait.
+
+Decision at the local-corpus checkpoint: accept durable session reuse as an
+opt-in experimental path. Keep the per-command worker as the default and
+fallback until the same evidence-cold/session-warm contract is measured on
+SynthRunnerRust and VegaAssistant.
+
+#### Multi-corpus calibration: rejected for default routing
+
+The external calibration cleared semantic references, semantic callees, the
+health semantic-prewarm marker, and the health report cache before every run.
+The detached helper was removed before each session-cold control and retained
+before each attempted session-warm control. Semantic rows were hashed in stable
+`relative_path, symbol` order in addition to comparing command output.
+
+SynthRunnerRust showed a repeatable fresh-session readiness failure:
+
+| Control                        | Wall time | Session disposition | Reference facts | Callee facts | Nonempty callee rows | Output hash   |
+| ------------------------------ | --------: | ------------------- | --------------: | -----------: | -------------------: | ------------- |
+| forward session-cold           |   21.052s | `created`           |           3,117 |        2,541 |                  537 | `3d9caaf2...` |
+| forward session-warm           |    1.568s | `reused`            |           3,117 |        2,564 |                  540 | `47291cda...` |
+| explicit identity invalidation |   14.722s | `invalidated`       |           3,117 |        2,541 |                  537 | `3d9caaf2...` |
+| reverse warm-first             |    1.764s | `reused`            |           3,117 |        2,564 |                  540 | `47291cda...` |
+| reverse cold-second            |   14.768s | `created`           |           3,117 |        2,541 |                  537 | `3d9caaf2...` |
+
+Reference payloads were byte-identical in all five controls. Fresh or
+invalidated sessions always produced the same callee digest
+`0ff74585...`; reused sessions always produced `e85e448d...`, adding 23
+callee facts across three rows. Reversing run order did not change either
+result. The fixed first-session settle therefore does not establish a stable
+compiler view on this corpus.
+
+VegaAssistant exposed a separate identity-partition failure:
+
+| Control              | Wall time | Reference rows / facts | Callee rows / facts | Prewarm result                   | Output hash   |
+| -------------------- | --------: | ---------------------: | ------------------: | -------------------------------- | ------------- |
+| session-cold         |  162.327s |        38,222 / 83,440 |    38,222 / 104,293 | partial, 1 incomplete reference  | `fc06912f...` |
+| session-warm attempt |  177.324s |        38,220 / 83,079 |     38,222 / 98,832 | partial, 7 incomplete references | `1b25112e...` |
+
+The second Vega command was 9.2% slower, lost 361 reference facts and 5,461
+callee facts, and did not qualify as a reused project session. The first
+command's large combined request created the session, but later scalar request
+shapes changed request settings included in the durable identity and forced an
+`invalidated` transition. The next command therefore invalidated again instead
+of inheriting the warm compiler state. Additional reverse-order repetitions
+would only repeat fresh-session work, so the calibration stopped after the
+paired result rather than spending two more multi-minute runs on a state the
+protocol cannot currently preserve.
+
+Multi-corpus decision: reject default routing. The environment flag remains
+available for controlled experiments, but the durable path is not yet a
+production-safe substitute for the per-command worker. The next slice must
+separate stable compiler-session identity from per-request execution policy and
+replace the fixed first-fill delay with an observed readiness barrier. Then
+rerun these exact controls before reconsidering rollout.
+
+#### Readiness version 2 follow-up: accepted on all corpora
+
+The rejected rows above remain the historical baseline. After separating
+compiler identity from request policy, replacing per-open status assumptions
+with the combined initial-open ordering barrier, and adding the bounded
+durable-only incomplete-reference retry, the exact controls were rerun from
+implementation HEAD `1301f216035ca2935a6f6d1d904834d3991bef58`.
+
+Every command retained `index.db` and cleared only semantic references,
+semantic callees, the health semantic-prewarm marker, and the health report
+cache. The invalidation and reverse controls used `RA_LOG=warn` as a real
+compiler-environment identity change. The scoped helper was stopped by its
+verified `server.json` PID immediately before each cold control; no process-name
+kill was used.
+
+| Corpus          | Control              | Wall time | Disposition   | Reference rows / facts | Callee rows / facts | Incomplete Rust refs |
+| --------------- | -------------------- | --------: | ------------- | ---------------------: | ------------------: | -------------------: |
+| scip-query      | session-cold         |    8.270s | `created`     |         4,613 / 17,074 |       4,614 / 3,248 |                    0 |
+| scip-query      | session-warm         |    4.780s | `reused`      |         4,613 / 17,074 |       4,614 / 3,248 |                    0 |
+| SynthRunnerRust | session-cold         |   20.310s | `created`     |          1,661 / 3,117 |       1,661 / 2,564 |                    0 |
+| SynthRunnerRust | session-warm         |    1.760s | `reused`      |          1,661 / 3,117 |       1,661 / 2,564 |                    0 |
+| SynthRunnerRust | identity-invalidated |   19.790s | `invalidated` |          1,661 / 3,117 |       1,661 / 2,564 |                    0 |
+| SynthRunnerRust | reverse-warm-first   |    2.080s | `reused`      |          1,661 / 3,117 |       1,661 / 2,564 |                    0 |
+| SynthRunnerRust | reverse-cold-second  |   20.320s | `created`     |          1,661 / 3,117 |       1,661 / 2,564 |                    0 |
+| VegaAssistant   | session-cold         |  161.710s | `created`     |        38,222 / 83,440 |    38,222 / 104,425 |                    0 |
+| VegaAssistant   | session-warm         |   83.860s | `reused`      |        38,222 / 83,440 |    38,222 / 104,425 |                    0 |
+| VegaAssistant   | identity-invalidated |  155.690s | `invalidated` |        38,222 / 83,440 |    38,222 / 104,425 |                    0 |
+| VegaAssistant   | reverse-warm-first   |   80.970s | `reused`      |        38,222 / 83,440 |    38,222 / 104,425 |                    0 |
+| VegaAssistant   | reverse-cold-second  |  159.760s | `created`     |        38,222 / 83,440 |    38,222 / 104,425 |                    0 |
+
+Exact payload identities were stable within each corpus:
+
+| Corpus          | Output SHA-256                                                     | Reference SHA-256                                                  | Callee SHA-256                                                     | Nonempty reference / callee rows |
+| --------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------ | -------------------------------: |
+| scip-query      | `7fca13f196958097c45856d673dbeb9a83a1ffeefeb725436d2b5f1cd1a2ba63` | `b6fd55ebf71947b0f972df9f610c216cfe95b1018901fa6c9c1cfe46be461bb0` | `730dc3f5baf403cc74cec4a5d0a188a74c0dbe647deb428705f592b8c6ed3630` |                    4,230 / 1,452 |
+| SynthRunnerRust | `47291cda33601a501f2dfb123aed34e457a21bc238c508007d99c4473a1495c4` | `e24c89c7f5dbef47c0c863b104f9d6298b65954420b900b7dae1c909b8b0b2f5` | `ac0ab832b906be3c2f126b7aeaf35de4fa4a581aa01a50c8e0827921b6d9c466` |                        640 / 540 |
+| VegaAssistant   | `7e944222c34dcae93bdf6a8efb52f2fa64432ef9dd86fbe2a7d1742cfa5ad629` | `6b537edd5127bb7036493a27ea074c4e7b57a5c4c2420e8f51c52603bd2719af` | `7a306badd68a8842807d93519833125fb445a7ee8c1b8ca37cff0610cf984a5a` |                  13,598 / 14,443 |
+
+Warm reuse improved scip-query by 42.2%, SynthRunnerRust by 91.3% forward
+and 89.8% in reverse order, and VegaAssistant by 48.1% forward and 49.3% in
+reverse order. No accepted run used worker fallback. Vega's fresh readiness
+status was quiescent with warning health; its six generic incomplete-cache
+observations were three unsupported-language definitions observed twice, while
+the Rust semantic prewarm itself reported zero incomplete references.
+
+Follow-up decision: the durable transport now passes the recorded correctness,
+invalidation, order, and >=20% performance gates on both external corpora and
+is eligible for a separate default-routing decision. This campaign keeps the
+flag opt-in because changing the product default was outside the calibration
+plan; it no longer withholds eligibility for correctness or performance.
+
+## Current Checkpoint
+
+This checkpoint summarizes the last optimization push so the direction is easy
+to recover without rereading every benchmark artifact.
+
+What is materially done:
+
+- Rust semantic support is now compiler-backed enough for the health/full-pass
+  work: references, callees, signatures, import-definition support, cache
+  identity, incomplete-reference tracking, and source/SCIP fast paths all have
+  targeted tests and benchmark evidence.
+- Full-health semantic prewarm is the accepted warm-state path. It fills
+  durable semantic reference and callee rows before health workers fan out, and
+  it writes a reusable project marker only when Rust reference materialization
+  is complete.
+- The Rust first-fill path is much faster than the early baseline. On
+  SynthRunnerRust, cold `health --full --json` moved from the early 58s range
+  to the 15s range across accepted Rust semantic slices, while warm marker-hit
+  runs stayed below 1s.
+- VegaAssistant remains the large mixed Rust stress case. The best accepted
+  guarded Default struct-update slice measured 75.830s for
+  `__health-phase complexity-hotspots --full`, with later rejected experiments
+  proving that broad Rust occurrence/trait shortcuts can lose semantic facts.
+- scip-query's own mixed `health --full --json` now avoids the fixed 5s
+  rust-analyzer wait for small combined Rust reference/callee batches. The
+  paired measurement was 15.756s with forced 5s settle versus 11.200s with the
+  adaptive default, with the same output hash and durable semantic row counts.
+- TypeScript tsserver comparison is implemented but not production routing.
+  Full scip-query comparison found 4,349 matches out of 4,459 definitions, 110
+  mismatches, 773 missing references, and 108 extra references. tsserver was
+  also slower than ts-morph for the full reference pass, so ts-morph remains the
+  default.
+- The benchmark harness is safer: evidence-cold health runs clear the health
+  report cache, and profile output paths are resolved before spawning the
+  benchmarked command.
+- Opt-in durable rust-analyzer reuse now survives separate CLI processes with
+  source/Cargo/engine/build/environment invalidation, crash recovery, observed
+  initial readiness, an ordered post-open barrier, and bounded completion retry.
+  The current scip-query evidence-cold/session-warm pair fell from 8.270s to
+  4.780s with identical output and semantic payloads.
+- Readiness version 2 passes the full five-control calibration on both external
+  corpora. SynthRunnerRust reuse improved 91.3% forward and 89.8% in reverse;
+  VegaAssistant improved 48.1% forward and 49.3% in reverse. All ten external
+  controls had exact payload parity, zero incomplete Rust references, expected
+  dispositions, and no worker fallback.
+
+Important rejected ideas:
+
+- Broad semantic cache read batching did not beat the existing per-file
+  prepared-statement path.
+- Disabling full-health semantic prewarm changed output and wrote too few
+  semantic reference rows.
+- Zero diagnostics readiness is not safe; it can collapse Rust reference facts.
+- Broad SCIP occurrence reference promotion is not safe for Rust fields, types,
+  modules, and many fallback classes.
+- Direct `From::from` and broad standard-trait shortcuts can keep the command
+  hash while perturbing rust-analyzer scheduling enough to lose semantic rows.
+- tsserver is not yet accurate or fast enough to replace ts-morph.
+- Native Rust helper-process boundaries have not yet beaten the TypeScript path
+  unless the boundary is large enough; do not convert small kernels just because
+  they are Rust.
+
+What is left:
+
+- Make the separate product decision whether to enable durable transport by
+  default. The implementation is now eligible, but this calibration campaign
+  intentionally leaves `SCIP_RUST_SEMANTIC_DURABLE_SESSION=1` as an opt-in.
+- Continue Rust reference profiling on large Rust-heavy batches. Vega proves
+  that live compiler reuse removes roughly half the wall time, but the warm
+  command still spends about 81-84s materializing 38,222 reference/callee rows.
+  The next large win must reduce that work, not tune the readiness timeout.
+- Optimize TypeScript without replacing ts-morph by default. The trusted path is
+  still ts-morph plus bulk scans; tsserver remains a comparison tool until it
+  proves full parity and speed.
+- Finish the guided setup flow: language detection, parser/indexer setup,
+  optional hooks, and permissioned `AGENTS.md`/`CLAUDE.md` updates.
+- Produce a full command calibration matrix across representative corpora so
+  "full mode is fast" is a measured claim for each important command, not just
+  a few hot paths.
+- Revisit Rust conversion only after the semantic/session architecture is
+  stable, and only for large contiguous computations where benchmark evidence
+  shows the native boundary wins.
+
+Best next campaign target: bulk Rust semantic materialization. Use existing
+SCIP occurrence data to answer references and callees in one indexed pass,
+delegate only unsupported or ambiguous gaps to rust-analyzer, and key the bulk
+product to the same source/index identity. Keep the accepted five-control
+payload and order gates so a radical speedup cannot trade away semantic facts.
+
+## Run History
+
+Machine-readable run history:
+`docs/benchmarks/runs/2026-07-09-ts-rust-indexing-analysis.jsonl`.
+
+Profile files live next to that run history with descriptive names.
+
+## Measurements
+
+Machine-readable measurements are in
+`docs/benchmarks/runs/2026-07-09-ts-rust-indexing-analysis.jsonl`.
+
+Rejected/diagnostic records are intentionally retained in that JSONL:
+health-report-cache hits, tuple-batch timeouts, and stale codex-rs runs explain
+why the implementation was reverted and why codex-rs parent is not a clean
+acceptance corpus for this slice.
+
+## Decisions
+
+- Keep ts-morph as the TypeScript default until tsserver comparison proves
+  parity. The 2026-07-09 full scip-query comparison found 110 mismatches and a
+  slower tsserver reference pass.
+- Keep `SCIP_QUERY_NATIVE_CONSUMER_CLASSIFY=1` opt-in.
+- Do not keep the semantic cache read batching attempted in this campaign; it
+  did not beat the existing prepared per-file reads.
+- Keep full-health semantic prewarm on all semantic-supported definitions, not
+  production callables only. The production-only boundary left phase-worker
+  misses and erased the cold-run benefit.
+- Accept durable Rust semantic-session correctness and performance eligibility.
+  Readiness version 2 reproduced exact outputs and semantic payloads with zero
+  incomplete Rust references across all five SynthRunnerRust and VegaAssistant
+  controls, while both forward and reverse warm comparisons exceeded the 20%
+  gate. Keep the route opt-in until a separate product-default decision.
+- Treat command hashes and semantic fact counts as separate acceptance gates for
+  semantic-speed changes. The rejected 5s Rust timeout kept the health hash but
+  dropped reference facts.
+- Do not keep the direct Rust `From::from` fast path. It kept the command hash
+  but changed rust-analyzer scheduling enough to lose two semantic reference
+  facts elsewhere in the batch.
+- Accept adaptive zero-settle only for small Rust reference-only batches and
+  small combined reference+callee batches. Full zero-wait remains rejected
+  because it changed SynthRunnerRust facts.
+- Accept the Rust callee indexed-document guard. Dependency-file callees cannot
+  resolve to project SCIP definitions, so skipping definition-catalog reads for
+  those paths preserves output while cutting the callee canonicalization span
+  from about 2.2s to 2ms on SynthRunnerRust.
+- Accept Rust `field_identifier` source call extraction and source-facts payload
+  versioning as accuracy fixes. Accept the exact source-callable zero-callee
+  skip as redundant rust-analyzer request elimination, but do not count it as a
+  measured wall-time speedup yet.
+- Accept health semantic prewarm marker version 2 with `referenceIncomplete`.
+  A prewarm with incomplete Rust reference rows may keep successful cache writes,
+  but it must not mark the project reusable-warm.
