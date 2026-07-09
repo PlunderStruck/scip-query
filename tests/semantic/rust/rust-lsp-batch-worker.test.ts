@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { IndexedDefinition } from '../../../src/domain/types.js';
+import type { RustAnalyzerLspClient } from '../../../src/semantic/rust/lsp-client.js';
+import type { LspLocation, LspReferenceParams } from '../../../src/semantic/rust/lsp-types.js';
 
 function rustDefinition(overrides: Partial<IndexedDefinition> = {}): IndexedDefinition {
   return {
@@ -31,8 +33,53 @@ afterEach(() => {
 });
 
 describe('Rust LSP batch worker', () => {
+  it('marks timed-out reference lookups incomplete when retry is disabled', async () => {
+    const { referencesWithCompletion } = await import('../../../src/semantic/rust/lsp-batch-worker.js');
+    const params = referenceParams();
+    const client = {
+      references: vi.fn(async () => {
+        throw new Error('rust-analyzer LSP request textDocument/references timed out after 15ms');
+      }),
+    } as unknown as RustAnalyzerLspClient;
+
+    const result = await referencesWithCompletion(client, params);
+
+    expect(result).toEqual({ locations: [], complete: false });
+    expect(client.references).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries timed-out reference lookups with the configured retry timeout', async () => {
+    const { referencesWithCompletion } = await import('../../../src/semantic/rust/lsp-batch-worker.js');
+    const params = referenceParams();
+    const location: LspLocation = {
+      uri: 'file:///repo/src/lib.rs',
+      range: { start: { line: 4, character: 9 }, end: { line: 4, character: 16 } },
+    };
+    const timeouts: Array<number | undefined> = [];
+    const client = {
+      references: vi.fn(async (_params, opts?: { timeoutMs?: number }) => {
+        timeouts.push(opts?.timeoutMs);
+        if (timeouts.length === 1) {
+          throw new Error('rust-analyzer LSP request textDocument/references timed out after 15ms');
+        }
+        return [location];
+      }),
+    } as unknown as RustAnalyzerLspClient;
+
+    const result = await referencesWithCompletion(client, params, {
+      requestTimeoutMs: 125,
+      retryTimeoutMs: 250,
+    });
+
+    expect(result).toEqual({ locations: [location], complete: true });
+    expect(timeouts).toEqual([125, 250]);
+  });
+
   it('returns outgoing call hierarchy callees when requested', async () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-rust-callee-worker-'));
+    const referenceTimeouts: Array<number | undefined> = [];
+    const prepareTimeouts: Array<number | undefined> = [];
+    const outgoingTimeouts: Array<number | undefined> = [];
     try {
       mkdirSync(join(projectRoot, 'src'), { recursive: true });
       writeFileSync(join(projectRoot, 'src/lib.rs'), ['pub fn run() {', '    compute_total();', '}'].join('\n'));
@@ -49,11 +96,15 @@ describe('Rust LSP batch worker', () => {
           return true;
         }
 
-        async references(): Promise<[]> {
+        async references(_params: unknown, opts?: { timeoutMs?: number }): Promise<[]> {
+          referenceTimeouts.push(opts?.timeoutMs);
           return [];
         }
 
-        async prepareCallHierarchy(): Promise<
+        async prepareCallHierarchy(
+          _params: unknown,
+          opts?: { timeoutMs?: number },
+        ): Promise<
           Array<{
             name: string;
             kind: number;
@@ -62,6 +113,7 @@ describe('Rust LSP batch worker', () => {
             selectionRange: { start: { line: number; character: number }; end: { line: number; character: number } };
           }>
         > {
+          prepareTimeouts.push(opts?.timeoutMs);
           return [
             {
               name: 'run',
@@ -73,7 +125,10 @@ describe('Rust LSP batch worker', () => {
           ];
         }
 
-        async outgoingCalls(): Promise<
+        async outgoingCalls(
+          _item: unknown,
+          opts?: { timeoutMs?: number },
+        ): Promise<
           Array<{
             to: {
               name: string;
@@ -88,6 +143,7 @@ describe('Rust LSP batch worker', () => {
             }>;
           }>
         > {
+          outgoingTimeouts.push(opts?.timeoutMs);
           return [
             {
               to: {
@@ -125,6 +181,9 @@ describe('Rust LSP batch worker', () => {
 
       expect(response.available).toBe(true);
       expect(response.callees).toEqual([[1, [{ symbol: 'compute_total', file: 'src/math.rs', line: 0 }]]]);
+      expect(referenceTimeouts).toEqual([100]);
+      expect(prepareTimeouts).toEqual([100]);
+      expect(outgoingTimeouts).toEqual([100]);
     } finally {
       rmSync(projectRoot, { recursive: true, force: true });
     }
@@ -132,6 +191,7 @@ describe('Rust LSP batch worker', () => {
 
   it('returns signatures from hover information when requested', async () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-rust-signature-worker-'));
+    const hoverTimeouts: Array<number | undefined> = [];
     try {
       mkdirSync(join(projectRoot, 'src'), { recursive: true });
       writeFileSync(join(projectRoot, 'src/lib.rs'), ['pub fn run() -> i32 {', '    1', '}'].join('\n'));
@@ -151,7 +211,11 @@ describe('Rust LSP batch worker', () => {
           return [];
         }
 
-        async hover(): Promise<{ contents: { kind: 'markdown'; value: string } }> {
+        async hover(
+          _params: unknown,
+          opts?: { timeoutMs?: number },
+        ): Promise<{ contents: { kind: 'markdown'; value: string } }> {
+          hoverTimeouts.push(opts?.timeoutMs);
           return {
             contents: {
               kind: 'markdown',
@@ -185,8 +249,40 @@ describe('Rust LSP batch worker', () => {
       expect(response.available).toBe(true);
       expect(response.references).toEqual([[1, []]]);
       expect(response.signatures).toEqual([[1, 'pub fn run() -> i32']]);
+      expect(hoverTimeouts).toEqual([100]);
     } finally {
       rmSync(projectRoot, { recursive: true, force: true });
     }
   });
+
+  it('passes the current request timeout through a hover retry', async () => {
+    vi.useFakeTimers();
+    try {
+      const { signatureForDefinition } = await import('../../../src/semantic/rust/lsp-batch-worker.js');
+      const timeouts: Array<number | undefined> = [];
+      const client = {
+        hover: vi.fn(async (_params, opts?: { timeoutMs?: number }) => {
+          timeouts.push(opts?.timeoutMs);
+          if (timeouts.length === 1) throw new Error('content modified');
+          return { contents: { kind: 'markdown', value: '```rust\npub fn run() -> i32\n```' } };
+        }),
+      } as unknown as RustAnalyzerLspClient;
+
+      const signaturePromise = signatureForDefinition(client, '/repo', rustDefinition(), { timeoutMs: 125 });
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      await expect(signaturePromise).resolves.toBe('pub fn run() -> i32');
+      expect(timeouts).toEqual([125, 125]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
+
+function referenceParams(): LspReferenceParams {
+  return {
+    textDocument: { uri: 'file:///repo/src/lib.rs' },
+    position: { line: 1, character: 7 },
+    context: { includeDeclaration: false },
+  };
+}

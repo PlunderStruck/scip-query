@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   RustAnalyzerLspClient,
+  RustAnalyzerReadinessError,
   type LspJsonMessage,
   type RustAnalyzerTransport,
 } from '../../../src/semantic/rust/lsp-client.js';
@@ -339,4 +340,232 @@ describe('RustAnalyzerLspClient', () => {
     await client.shutdown();
     expect(transport.isKilled()).toBe(false);
   });
+
+  it('allows a references request to use a shorter per-request timeout', async () => {
+    const transport = new ScriptedTransport((message, server) => {
+      if (message.method === 'initialize') {
+        server.send({ jsonrpc: '2.0', id: message.id, result: { capabilities: { referencesProvider: true } } });
+      }
+      if (message.method === 'shutdown') {
+        server.send({ jsonrpc: '2.0', id: message.id, result: null });
+      }
+    });
+
+    const client = new RustAnalyzerLspClient(transport, { requestTimeoutMs: 1_000 });
+    await client.initialize({ rootUri: 'file:///repo' });
+
+    await expect(
+      client.references(
+        {
+          textDocument: { uri: 'file:///repo/src/lib.rs' },
+          position: { line: 1, character: 7 },
+          context: { includeDeclaration: false },
+        },
+        { timeoutMs: 5 },
+      ),
+    ).rejects.toThrow(/timed out after 5ms/);
+
+    await client.shutdown();
+    expect(transport.isKilled()).toBe(false);
+  });
+
+  it('advertises server-status support without replacing caller capabilities', async () => {
+    const transport = new ScriptedTransport((message, server) => {
+      if (message.method === 'initialize') {
+        server.send({ jsonrpc: '2.0', id: message.id, result: { capabilities: {} } });
+      }
+      if (message.method === 'shutdown') {
+        server.send({ jsonrpc: '2.0', id: message.id, result: null });
+      }
+    });
+    const client = new RustAnalyzerLspClient(transport, { requestTimeoutMs: 100 });
+
+    await client.initialize({
+      rootUri: 'file:///repo',
+      capabilities: {
+        workspace: { configuration: true },
+        experimental: { callerCapability: true },
+      },
+    });
+    await client.shutdown();
+
+    expect(transport.writes[0]?.params).toEqual({
+      rootUri: 'file:///repo',
+      capabilities: {
+        workspace: { configuration: true },
+        experimental: {
+          callerCapability: true,
+          serverStatusNotification: true,
+        },
+      },
+    });
+  });
+
+  it('waits for a newer healthy quiescent server status', async () => {
+    const { client, transport } = await createIdleClient();
+    const afterGeneration = client.serverStatusGeneration();
+    const readiness = client.waitForQuiescence(afterGeneration, 100);
+
+    transport.send({
+      jsonrpc: '2.0',
+      method: 'experimental/serverStatus',
+      params: { health: 'ok', quiescent: false },
+    });
+    expect(client.serverStatusGeneration()).toBe(afterGeneration + 1);
+    transport.send({
+      jsonrpc: '2.0',
+      method: 'experimental/serverStatus',
+      params: { health: 'ok', quiescent: true, message: 'ready' },
+    });
+
+    await expect(readiness).resolves.toEqual({ health: 'ok', quiescent: true, message: 'ready' });
+    await client.shutdown();
+  });
+
+  it('does not use a quiescent status observed at the waiter generation', async () => {
+    const { client, transport } = await createIdleClient();
+    transport.send({
+      jsonrpc: '2.0',
+      method: 'experimental/serverStatus',
+      params: { health: 'ok', quiescent: true },
+    });
+    const afterGeneration = client.serverStatusGeneration();
+
+    await expect(client.waitForQuiescence(afterGeneration, 5)).rejects.toThrow(/readiness timed out after 5ms/);
+    await client.shutdown();
+  });
+
+  it('does not establish readiness from unrelated or malformed notifications', async () => {
+    const { client, transport } = await createIdleClient();
+    const readiness = client.waitForQuiescence(client.serverStatusGeneration(), 5);
+
+    transport.send({
+      jsonrpc: '2.0',
+      method: '$/progress',
+      params: { health: 'ok', quiescent: true },
+    });
+    transport.send({
+      jsonrpc: '2.0',
+      method: 'experimental/serverStatus',
+      params: { health: 'unknown', quiescent: true },
+    });
+    transport.send({
+      jsonrpc: '2.0',
+      method: 'experimental/serverStatus',
+      params: { health: 'warning', quiescent: 'yes', message: 'source details' },
+    });
+    transport.send({
+      jsonrpc: '2.0',
+      method: 'experimental/serverStatus',
+      params: { health: 'ok', quiescent: true, message: { text: 'source details' } },
+    });
+
+    expect(client.serverStatusGeneration()).toBe(0);
+    await expect(readiness).rejects.toThrow(/readiness timed out after 5ms/);
+    await client.shutdown();
+  });
+
+  it.each(['warning', 'error'] as const)('rejects %s server health without exposing source text', async (health) => {
+    const { client, transport } = await createIdleClient();
+    const sourceText = 'private rust-analyzer source details';
+    const readiness = client.waitForQuiescence(client.serverStatusGeneration(), 100);
+
+    transport.send({
+      jsonrpc: '2.0',
+      method: 'experimental/serverStatus',
+      params: { health, quiescent: false, message: sourceText },
+    });
+    const error = await readiness.catch((reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(RustAnalyzerReadinessError);
+    expect((error as Error).message).not.toContain(sourceText);
+    await client.shutdown();
+  });
+
+  it('rejects and removes a readiness waiter on timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      const { client } = await createIdleClient();
+      const readiness = client.waitForQuiescence(client.serverStatusGeneration(), 25);
+      const rejection = expect(readiness).rejects.toThrow(/readiness timed out after 25ms/);
+
+      expect(vi.getTimerCount()).toBe(1);
+      await vi.advanceTimersByTimeAsync(25);
+      await rejection;
+      expect(vi.getTimerCount()).toBe(0);
+      await client.shutdown();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    {
+      label: 'transport close',
+      fail: (transport: ScriptedTransport) => transport.close(17),
+      message: 'transport closed with code 17',
+    },
+    {
+      label: 'transport error',
+      fail: (transport: ScriptedTransport) => transport.error(new Error('transport broke')),
+      message: 'transport broke',
+    },
+  ])('rejects and removes all readiness waiters on $label', async ({ fail, message }) => {
+    vi.useFakeTimers();
+    try {
+      const { client, transport } = await createIdleClient();
+      const waiters = [
+        client.waitForQuiescence(client.serverStatusGeneration(), 1_000),
+        client.waitForQuiescence(client.serverStatusGeneration(), 2_000),
+      ];
+      const rejections = waiters.map((waiter) => waiter.catch((error: unknown) => error));
+
+      fail(transport);
+      const errors = await Promise.all(rejections);
+
+      expect(errors).toHaveLength(2);
+      errors.forEach((error) => expect(error).toMatchObject({ message: expect.stringContaining(message) }));
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('allows definition, call-hierarchy, outgoing-call, and hover requests to set timeouts', async () => {
+    const { client } = await createIdleClient(25);
+    const params = {
+      textDocument: { uri: 'file:///repo/src/lib.rs' },
+      position: { line: 1, character: 7 },
+    };
+    const item = {
+      name: 'run',
+      kind: 12,
+      uri: 'file:///repo/src/lib.rs',
+      range: { start: { line: 1, character: 0 }, end: { line: 3, character: 1 } },
+      selectionRange: { start: { line: 1, character: 7 }, end: { line: 1, character: 10 } },
+    };
+
+    await expect(client.definition(params, { timeoutMs: 5 })).rejects.toThrow(/timed out after 5ms/);
+    await expect(client.prepareCallHierarchy(params, { timeoutMs: 5 })).rejects.toThrow(/timed out after 5ms/);
+    await expect(client.outgoingCalls(item, { timeoutMs: 5 })).rejects.toThrow(/timed out after 5ms/);
+    await expect(client.hover(params, { timeoutMs: 5 })).rejects.toThrow(/timed out after 5ms/);
+    await client.shutdown();
+  });
 });
+
+async function createIdleClient(requestTimeoutMs = 100): Promise<{
+  client: RustAnalyzerLspClient;
+  transport: ScriptedTransport;
+}> {
+  const transport = new ScriptedTransport((message, server) => {
+    if (message.method === 'initialize') {
+      server.send({ jsonrpc: '2.0', id: message.id, result: { capabilities: {} } });
+    }
+    if (message.method === 'shutdown') {
+      server.send({ jsonrpc: '2.0', id: message.id, result: null });
+    }
+  });
+  const client = new RustAnalyzerLspClient(transport, { requestTimeoutMs });
+  await client.initialize({ rootUri: 'file:///repo' });
+  return { client, transport };
+}

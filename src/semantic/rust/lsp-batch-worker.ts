@@ -4,7 +4,7 @@ import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { IndexedDefinition } from '../../domain/types.js';
 import type { SemanticCallee, SemanticReference } from '../types.js';
-import { createRustAnalyzerTransport, RustAnalyzerLspClient } from './lsp-client.js';
+import { createRustAnalyzerTransport, RustAnalyzerLspClient, type RustAnalyzerRequestOptions } from './lsp-client.js';
 import type { LspCallHierarchyItem, LspCallHierarchyOutgoingCall, LspHover, LspMarkedString } from './lsp-types.js';
 import {
   dedupeSemanticReferences,
@@ -20,7 +20,11 @@ export interface RustReferenceWorkerRequest {
   projectRoot: string;
   rustAnalyzerBinary: string;
   definitions: IndexedDefinition[];
+  referenceDefinitions?: IndexedDefinition[];
+  calleeDefinitions?: IndexedDefinition[];
+  signatureDefinitions?: IndexedDefinition[];
   requestTimeoutMs?: number;
+  referenceRetryTimeoutMs?: number;
   diagnosticsTimeoutMs?: number;
   settleDelayMs?: number;
   concurrency?: number;
@@ -35,6 +39,7 @@ export interface RustReferenceWorkerResponse {
   available: boolean;
   reason?: string;
   references: Array<[number, SemanticReference[]]>;
+  incompleteReferenceSymbolIds?: number[];
   callees?: Array<[number, SemanticCallee[]]>;
   signatures?: Array<[number, string | null]>;
 }
@@ -42,6 +47,12 @@ export interface RustReferenceWorkerResponse {
 interface ReferenceTaskResult {
   symbolId: number;
   references: SemanticReference[];
+  complete: boolean;
+}
+
+export interface RustReferenceCompletionOptions {
+  requestTimeoutMs?: number;
+  retryTimeoutMs?: number;
 }
 
 interface CalleeTaskResult {
@@ -60,7 +71,12 @@ export async function runRustAnalyzerReferenceBatch(
   const includeReferences = request.includeReferences !== false;
   const includeCallees = request.includeCallees === true;
   const includeSignatures = request.includeSignatures === true;
-  const linkedProjects = cargoManifestsForDefinitions(request.projectRoot, request.definitions);
+  const requestOptions = { timeoutMs: request.requestTimeoutMs };
+  const sessionDefinitions = rustRequestSessionDefinitions(request);
+  const referenceDefinitions = rustRequestReferenceDefinitions(request);
+  const calleeDefinitions = rustRequestCalleeDefinitions(request);
+  const signatureDefinitions = rustRequestSignatureDefinitions(request);
+  const linkedProjects = cargoManifestsForDefinitions(request.projectRoot, sessionDefinitions);
   const sessionRoot = rustAnalyzerSessionRoot(request.projectRoot, linkedProjects);
   const initializationOptions = rustAnalyzerInitializationOptions(linkedProjects);
   const client = new RustAnalyzerLspClient(createRustAnalyzerTransport(request.rustAnalyzerBinary, sessionRoot), {
@@ -90,18 +106,18 @@ export async function runRustAnalyzerReferenceBatch(
       return {
         available: false,
         reason: 'rust-analyzer initialized without textDocument/references support.',
-        references: request.definitions.map((definition) => [definition.symbolId, []]),
-        ...(includeCallees ? { callees: request.definitions.map((definition) => [definition.symbolId, []]) } : {}),
+        references: referenceDefinitions.map((definition) => [definition.symbolId, []]),
+        ...(includeCallees ? { callees: calleeDefinitions.map((definition) => [definition.symbolId, []]) } : {}),
       };
     }
     if (includeCallees && !initialized.capabilities.callHierarchyProvider) {
       return {
         available: false,
         reason: 'rust-analyzer initialized without call hierarchy support.',
-        references: request.definitions.map((definition) => [definition.symbolId, []]),
-        callees: request.definitions.map((definition) => [definition.symbolId, []]),
+        references: referenceDefinitions.map((definition) => [definition.symbolId, []]),
+        callees: calleeDefinitions.map((definition) => [definition.symbolId, []]),
         ...(includeSignatures
-          ? { signatures: request.definitions.map((definition) => [definition.symbolId, null]) }
+          ? { signatures: signatureDefinitions.map((definition) => [definition.symbolId, null]) }
           : {}),
       };
     }
@@ -109,56 +125,64 @@ export async function runRustAnalyzerReferenceBatch(
       return {
         available: false,
         reason: 'rust-analyzer initialized without hover support.',
-        references: request.definitions.map((definition) => [definition.symbolId, []]),
-        ...(includeCallees ? { callees: request.definitions.map((definition) => [definition.symbolId, []]) } : {}),
-        signatures: request.definitions.map((definition) => [definition.symbolId, null]),
+        references: referenceDefinitions.map((definition) => [definition.symbolId, []]),
+        ...(includeCallees ? { callees: calleeDefinitions.map((definition) => [definition.symbolId, []]) } : {}),
+        signatures: signatureDefinitions.map((definition) => [definition.symbolId, null]),
       };
     }
 
-    const openedUris = openDefinitionDocuments(client, request.projectRoot, request.definitions);
+    const openedUris = openDefinitionDocuments(client, request.projectRoot, sessionDefinitions);
     await waitForOpenedDocuments(client, openedUris, request.diagnosticsTimeoutMs ?? 10_000);
     await sleep(request.settleDelayMs ?? 5_000);
 
     const references = includeReferences
       ? await runWithConcurrency(
-          request.definitions,
+          referenceDefinitions,
           request.concurrency ?? 8,
           async (definition): Promise<ReferenceTaskResult> => {
-            const locations = await referencesWithRetry(
+            const lookup = await referencesWithCompletion(
               client,
               definitionToReferenceParams(request.projectRoot, definition, false),
+              {
+                requestTimeoutMs: request.requestTimeoutMs,
+                retryTimeoutMs: request.referenceRetryTimeoutMs,
+              },
             );
             return {
               symbolId: definition.symbolId,
-              references: dedupeSemanticReferences(locationsToSemanticReferences(request.projectRoot, locations)),
+              references: dedupeSemanticReferences(
+                locationsToSemanticReferences(request.projectRoot, lookup.locations),
+              ),
+              complete: lookup.complete,
             };
           },
         )
-      : request.definitions.map((definition) => ({ symbolId: definition.symbolId, references: [] }));
+      : referenceDefinitions.map((definition) => ({ symbolId: definition.symbolId, references: [], complete: true }));
     const callees = includeCallees
       ? await runWithConcurrency(
-          request.definitions,
+          calleeDefinitions,
           request.concurrency ?? 8,
           async (definition): Promise<CalleeTaskResult> => ({
             symbolId: definition.symbolId,
-            callees: await calleesForDefinition(client, request.projectRoot, definition),
+            callees: await calleesForDefinition(client, request.projectRoot, definition, requestOptions),
           }),
         )
       : [];
     const signatures = includeSignatures
       ? await runWithConcurrency(
-          request.definitions,
+          signatureDefinitions,
           request.concurrency ?? 8,
           async (definition): Promise<SignatureTaskResult> => ({
             symbolId: definition.symbolId,
-            signature: await signatureForDefinition(client, request.projectRoot, definition),
+            signature: await signatureForDefinition(client, request.projectRoot, definition, requestOptions),
           }),
         )
       : [];
 
     return {
       available: true,
-      references: references.map((result) => [result.symbolId, result.references]),
+      references: references.filter((result) => result.complete).map((result) => [result.symbolId, result.references]),
+      incompleteReferenceSymbolIds: references.filter((result) => !result.complete).map((result) => result.symbolId),
       ...(includeCallees ? { callees: callees.map((result) => [result.symbolId, result.callees]) } : {}),
       ...(includeSignatures ? { signatures: signatures.map((result) => [result.symbolId, result.signature]) } : {}),
     };
@@ -167,31 +191,57 @@ export async function runRustAnalyzerReferenceBatch(
   }
 }
 
+export function rustRequestReferenceDefinitions(request: RustReferenceWorkerRequest): readonly IndexedDefinition[] {
+  return request.referenceDefinitions ?? request.definitions;
+}
+
+export function rustRequestCalleeDefinitions(request: RustReferenceWorkerRequest): readonly IndexedDefinition[] {
+  return request.calleeDefinitions ?? request.definitions;
+}
+
+export function rustRequestSignatureDefinitions(request: RustReferenceWorkerRequest): readonly IndexedDefinition[] {
+  return request.signatureDefinitions ?? request.definitions;
+}
+
+export function rustRequestSessionDefinitions(request: RustReferenceWorkerRequest): IndexedDefinition[] {
+  return [
+    ...(request.includeReferences !== false ? rustRequestReferenceDefinitions(request) : []),
+    ...(request.includeCallees === true ? rustRequestCalleeDefinitions(request) : []),
+    ...(request.includeSignatures === true ? rustRequestSignatureDefinitions(request) : []),
+  ];
+}
+
 export async function signatureForDefinition(
   client: RustAnalyzerLspClient,
   projectRoot: string,
   definition: IndexedDefinition,
+  requestOptions: RustAnalyzerRequestOptions = {},
 ): Promise<string | null> {
   const referenceParams = definitionToReferenceParams(projectRoot, definition, false);
-  const hover = await hoverWithRetry(client, {
-    textDocument: referenceParams.textDocument,
-    position: referenceParams.position,
-  });
+  const hover = await hoverWithRetry(
+    client,
+    {
+      textDocument: referenceParams.textDocument,
+      position: referenceParams.position,
+    },
+    requestOptions,
+  );
   return hoverToRustSignature(hover);
 }
 
 export async function hoverWithRetry(
   client: RustAnalyzerLspClient,
   params: Parameters<RustAnalyzerLspClient['hover']>[0],
+  requestOptions: RustAnalyzerRequestOptions = {},
 ): Promise<LspHover | null> {
   try {
-    return await client.hover(params);
+    return await client.hover(params, requestOptions);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (!message.includes('content modified')) return null;
     await sleep(1_000);
     try {
-      return await client.hover(params);
+      return await client.hover(params, requestOptions);
     } catch {
       return null;
     }
@@ -304,40 +354,84 @@ export async function referencesWithRetry(
   client: RustAnalyzerLspClient,
   params: Parameters<RustAnalyzerLspClient['references']>[0],
 ): Promise<Awaited<ReturnType<RustAnalyzerLspClient['references']>>> {
+  return (await referencesWithCompletion(client, params)).locations;
+}
+
+export async function referencesWithCompletion(
+  client: RustAnalyzerLspClient,
+  params: Parameters<RustAnalyzerLspClient['references']>[0],
+  opts: RustReferenceCompletionOptions = {},
+): Promise<{ locations: Awaited<ReturnType<RustAnalyzerLspClient['references']>>; complete: boolean }> {
   try {
-    return await client.references(params);
+    return { locations: await client.references(params, { timeoutMs: opts.requestTimeoutMs }), complete: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (!message.includes('content modified')) return [];
+    if (isRustAnalyzerRequestTimeout(error)) {
+      return retryTimedOutReferenceLookup(client, params, opts);
+    }
+    if (!message.includes('content modified')) {
+      return { locations: [], complete: true };
+    }
     await sleep(1_000);
     try {
-      return await client.references(params);
-    } catch {
-      return [];
+      return { locations: await client.references(params, referenceRetryRequestOptions(opts)), complete: true };
+    } catch (retryError) {
+      return { locations: [], complete: !isRustAnalyzerRequestTimeout(retryError) };
     }
   }
+}
+
+async function retryTimedOutReferenceLookup(
+  client: RustAnalyzerLspClient,
+  params: Parameters<RustAnalyzerLspClient['references']>[0],
+  opts: RustReferenceCompletionOptions,
+): Promise<{ locations: Awaited<ReturnType<RustAnalyzerLspClient['references']>>; complete: boolean }> {
+  const retryOptions = referenceRetryRequestOptions(opts);
+  if (!retryOptions) return { locations: [], complete: false };
+  try {
+    return { locations: await client.references(params, retryOptions), complete: true };
+  } catch (retryError) {
+    return { locations: [], complete: !isRustAnalyzerRequestTimeout(retryError) };
+  }
+}
+
+function referenceRetryRequestOptions(opts: RustReferenceCompletionOptions): { timeoutMs: number } | undefined {
+  return opts.retryTimeoutMs && opts.retryTimeoutMs > 0 ? { timeoutMs: opts.retryTimeoutMs } : undefined;
+}
+
+function isRustAnalyzerRequestTimeout(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes('rust-analyzer LSP request') && message.includes('timed out after');
 }
 
 export async function calleesForDefinition(
   client: RustAnalyzerLspClient,
   projectRoot: string,
   definition: IndexedDefinition,
+  requestOptions: RustAnalyzerRequestOptions = {},
 ): Promise<SemanticCallee[]> {
   const referenceParams = definitionToReferenceParams(projectRoot, definition, false);
-  const items = await prepareCallHierarchyWithRetry(client, {
-    textDocument: referenceParams.textDocument,
-    position: referenceParams.position,
-  });
-  const calls = (await Promise.all(items.map((item) => outgoingCallsWithRetry(client, item).catch(() => [])))).flat();
+  const items = await prepareCallHierarchyWithRetry(
+    client,
+    {
+      textDocument: referenceParams.textDocument,
+      position: referenceParams.position,
+    },
+    requestOptions,
+  );
+  const calls = (
+    await Promise.all(items.map((item) => outgoingCallsWithRetry(client, item, requestOptions).catch(() => [])))
+  ).flat();
   return dedupeSemanticCallees(outgoingCallsToSemanticCallees(projectRoot, calls));
 }
 
 async function prepareCallHierarchyWithRetry(
   client: RustAnalyzerLspClient,
   params: Parameters<RustAnalyzerLspClient['prepareCallHierarchy']>[0],
+  requestOptions: RustAnalyzerRequestOptions = {},
 ): Promise<LspCallHierarchyItem[]> {
   try {
-    return await client.prepareCallHierarchy(params);
+    return await client.prepareCallHierarchy(params, requestOptions);
   } catch {
     return [];
   }
@@ -346,9 +440,10 @@ async function prepareCallHierarchyWithRetry(
 async function outgoingCallsWithRetry(
   client: RustAnalyzerLspClient,
   item: LspCallHierarchyItem,
+  requestOptions: RustAnalyzerRequestOptions = {},
 ): Promise<LspCallHierarchyOutgoingCall[]> {
   try {
-    return await client.outgoingCalls(item);
+    return await client.outgoingCalls(item, requestOptions);
   } catch {
     return [];
   }

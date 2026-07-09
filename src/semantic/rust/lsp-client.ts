@@ -41,9 +41,28 @@ export interface RustAnalyzerLspClientOptions {
   configuration?: Record<string, unknown>;
 }
 
+export interface RustAnalyzerRequestOptions {
+  timeoutMs?: number;
+}
+
+export interface RustAnalyzerServerStatus {
+  health: 'ok' | 'warning' | 'error';
+  quiescent: boolean;
+  message?: string;
+}
+
+export class RustAnalyzerReadinessError extends Error {}
+
 interface PendingRequest {
   method: string;
   resolve: (value: unknown) => void;
+  reject: (error: Error) => void;
+  timeout: NodeJS.Timeout;
+}
+
+interface ReadinessWaiter {
+  afterGeneration: number;
+  resolve: (status: RustAnalyzerServerStatus) => void;
   reject: (error: Error) => void;
   timeout: NodeJS.Timeout;
 }
@@ -56,8 +75,11 @@ export class RustAnalyzerLspClient {
   private readonly pending = new Map<number | string, PendingRequest>();
   private readonly diagnosedUris = new Set<string>();
   private readonly diagnosticWaiters = new Map<string, Array<(value: boolean) => void>>();
+  private readonly readinessWaiters = new Set<ReadinessWaiter>();
   private readonly requestTimeoutMs: number;
   private readonly configuration: Record<string, unknown>;
+  private currentServerStatusGeneration = 0;
+  private latestServerStatus: { generation: number; status: RustAnalyzerServerStatus } | null = null;
   private shutdownStarted = false;
 
   constructor(
@@ -72,37 +94,93 @@ export class RustAnalyzerLspClient {
   }
 
   async initialize(params: LspInitializeParams): Promise<LspInitializeResult> {
-    const result = await this.request<LspInitializeResult>('initialize', params);
+    const capabilities = params.capabilities ?? {};
+    const experimental =
+      capabilities.experimental &&
+      typeof capabilities.experimental === 'object' &&
+      !Array.isArray(capabilities.experimental)
+        ? (capabilities.experimental as Record<string, unknown>)
+        : {};
+    const result = await this.request<LspInitializeResult>('initialize', {
+      ...params,
+      capabilities: {
+        ...capabilities,
+        experimental: {
+          ...experimental,
+          serverStatusNotification: true,
+        },
+      },
+    });
     this.notify('initialized', {});
     return result;
   }
 
-  async references(params: LspReferenceParams): Promise<LspLocation[]> {
-    const result = await this.request<LspLocation[] | null>('textDocument/references', params);
+  async references(params: LspReferenceParams, opts: RustAnalyzerRequestOptions = {}): Promise<LspLocation[]> {
+    const result = await this.request<LspLocation[] | null>('textDocument/references', params, opts);
     return Array.isArray(result) ? result : [];
   }
 
-  async definition(params: LspTextDocumentPositionParams): Promise<LspLocation[]> {
+  async definition(
+    params: LspTextDocumentPositionParams,
+    opts: RustAnalyzerRequestOptions = {},
+  ): Promise<LspLocation[]> {
     const result = await this.request<LspLocation | LspLocation[] | LspLocationLink[] | null>(
       'textDocument/definition',
       params,
+      opts,
     );
     return normalizeDefinitionResult(result);
   }
 
-  async prepareCallHierarchy(params: LspTextDocumentPositionParams): Promise<LspCallHierarchyItem[]> {
-    const result = await this.request<LspCallHierarchyItem[] | null>('textDocument/prepareCallHierarchy', params);
+  async prepareCallHierarchy(
+    params: LspTextDocumentPositionParams,
+    opts: RustAnalyzerRequestOptions = {},
+  ): Promise<LspCallHierarchyItem[]> {
+    const result = await this.request<LspCallHierarchyItem[] | null>('textDocument/prepareCallHierarchy', params, opts);
     return Array.isArray(result) ? result : [];
   }
 
-  async outgoingCalls(item: LspCallHierarchyItem): Promise<LspCallHierarchyOutgoingCall[]> {
-    const result = await this.request<LspCallHierarchyOutgoingCall[] | null>('callHierarchy/outgoingCalls', { item });
+  async outgoingCalls(
+    item: LspCallHierarchyItem,
+    opts: RustAnalyzerRequestOptions = {},
+  ): Promise<LspCallHierarchyOutgoingCall[]> {
+    const result = await this.request<LspCallHierarchyOutgoingCall[] | null>(
+      'callHierarchy/outgoingCalls',
+      { item },
+      opts,
+    );
     return Array.isArray(result) ? result : [];
   }
 
-  async hover(params: LspTextDocumentPositionParams): Promise<LspHover | null> {
-    const result = await this.request<LspHover | null>('textDocument/hover', params);
+  async hover(params: LspTextDocumentPositionParams, opts: RustAnalyzerRequestOptions = {}): Promise<LspHover | null> {
+    const result = await this.request<LspHover | null>('textDocument/hover', params, opts);
     return result && typeof result === 'object' ? result : null;
+  }
+
+  serverStatusGeneration(): number {
+    return this.currentServerStatusGeneration;
+  }
+
+  waitForQuiescence(afterGeneration: number, timeoutMs: number): Promise<RustAnalyzerServerStatus> {
+    const latest = this.latestServerStatus;
+    if (latest && latest.generation > afterGeneration) {
+      if (latest.status.health !== 'ok') {
+        return Promise.reject(readinessErrorForHealth(latest.status.health));
+      }
+      if (latest.status.quiescent) return Promise.resolve(latest.status);
+    }
+    return new Promise((resolve, reject) => {
+      const waiter: ReadinessWaiter = {
+        afterGeneration,
+        resolve,
+        reject,
+        timeout: setTimeout(() => {
+          this.readinessWaiters.delete(waiter);
+          reject(new Error(`rust-analyzer readiness timed out after ${timeoutMs}ms`));
+        }, timeoutMs),
+      };
+      this.readinessWaiters.add(waiter);
+    });
   }
 
   didOpenTextDocument(textDocument: { uri: string; languageId: string; version: number; text: string }): void {
@@ -141,14 +219,15 @@ export class RustAnalyzerLspClient {
     }
   }
 
-  private request<T>(method: string, params: unknown): Promise<T> {
+  private request<T>(method: string, params: unknown, opts: RustAnalyzerRequestOptions = {}): Promise<T> {
     const id = this.nextId++;
     const message: LspJsonMessage = { jsonrpc: '2.0', id, method, params };
+    const timeoutMs = opts.timeoutMs ?? this.requestTimeoutMs;
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`rust-analyzer LSP request ${method} timed out after ${this.requestTimeoutMs}ms`));
-      }, this.requestTimeoutMs);
+        reject(new Error(`rust-analyzer LSP request ${method} timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
       this.pending.set(id, { method, resolve: (value) => resolve(value as T), reject, timeout });
       this.transport.write(frameJsonMessage(message));
     });
@@ -184,6 +263,7 @@ export class RustAnalyzerLspClient {
 
   private dispatchMessage(message: LspJsonMessage): void {
     this.recordDiagnosticNotification(message);
+    this.recordServerStatusNotification(message);
     if (message.id !== undefined && message.id !== null && message.method) {
       this.respondToServerRequest(message);
       return;
@@ -215,6 +295,30 @@ export class RustAnalyzerLspClient {
     waiters.forEach((resolve) => resolve(true));
   }
 
+  private recordServerStatusNotification(message: LspJsonMessage): void {
+    if (
+      message.method !== 'experimental/serverStatus' ||
+      (message.id !== undefined && message.id !== null) ||
+      !isRustAnalyzerServerStatus(message.params)
+    ) {
+      return;
+    }
+    const status = message.params;
+    const generation = ++this.currentServerStatusGeneration;
+    this.latestServerStatus = { generation, status };
+    if (status.health !== 'ok') {
+      this.rejectReadinessWaiters(readinessErrorForHealth(status.health));
+      return;
+    }
+    if (!status.quiescent) return;
+    for (const waiter of this.readinessWaiters) {
+      if (generation <= waiter.afterGeneration) continue;
+      clearTimeout(waiter.timeout);
+      this.readinessWaiters.delete(waiter);
+      waiter.resolve(status);
+    }
+  }
+
   private respondToServerRequest(message: LspJsonMessage): void {
     if (message.id === undefined || message.id === null || !message.method) return;
     const result = message.method === 'workspace/configuration' ? this.workspaceConfiguration(message.params) : null;
@@ -239,7 +343,30 @@ export class RustAnalyzerLspClient {
       pending.reject(error);
       this.pending.delete(id);
     }
+    this.rejectReadinessWaiters(error);
   }
+
+  private rejectReadinessWaiters(error: Error): void {
+    for (const waiter of this.readinessWaiters) {
+      clearTimeout(waiter.timeout);
+      waiter.reject(error);
+      this.readinessWaiters.delete(waiter);
+    }
+  }
+}
+
+function isRustAnalyzerServerStatus(value: unknown): value is RustAnalyzerServerStatus {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const status = value as { health?: unknown; quiescent?: unknown; message?: unknown };
+  return (
+    (status.health === 'ok' || status.health === 'warning' || status.health === 'error') &&
+    typeof status.quiescent === 'boolean' &&
+    (status.message === undefined || typeof status.message === 'string')
+  );
+}
+
+function readinessErrorForHealth(health: 'warning' | 'error'): RustAnalyzerReadinessError {
+  return new RustAnalyzerReadinessError(`rust-analyzer reported ${health} health before reaching readiness`);
 }
 
 function configurationValueForSection(configuration: Record<string, unknown>, section: string): unknown {
