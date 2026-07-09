@@ -52,6 +52,11 @@ export interface RustAnalyzerServerStatus {
   message?: string;
 }
 
+export interface RustAnalyzerServerStatusSnapshot {
+  generation: number;
+  status: RustAnalyzerServerStatus;
+}
+
 interface RustAnalyzerServerStatusPayload {
   health: 'ok' | 'warning' | 'error';
   quiescent: boolean;
@@ -169,8 +174,22 @@ export class RustAnalyzerLspClient {
     return result && typeof result === 'object' ? result : null;
   }
 
+  // scip-query: ignore new-dead SQCF747F003E09 -- Called through the RustAnalyzerReadinessClient structural interface by the post-open readiness policy.
+  async analyzerStatus(opts: RustAnalyzerRequestOptions = {}): Promise<string> {
+    const result = await this.request<unknown>('rust-analyzer/analyzerStatus', {}, opts);
+    if (typeof result !== 'string') {
+      throw new Error('rust-analyzer analyzerStatus returned a non-string response');
+    }
+    return result;
+  }
+
   serverStatusGeneration(): number {
     return this.currentServerStatusGeneration;
+  }
+
+  serverStatusSnapshot(): RustAnalyzerServerStatusSnapshot | null {
+    const latest = this.latestServerStatus;
+    return latest ? { generation: latest.generation, status: { ...latest.status } } : null;
   }
 
   waitForQuiescence(afterGeneration: number, timeoutMs: number): Promise<RustAnalyzerServerStatus> {

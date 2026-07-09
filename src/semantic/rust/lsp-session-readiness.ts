@@ -1,13 +1,17 @@
 import {
   RustAnalyzerReadinessError,
   rustAnalyzerOperationBudget,
+  type RustAnalyzerRequestOptions,
   type RustAnalyzerServerStatus,
+  type RustAnalyzerServerStatusSnapshot,
 } from './lsp-client.js';
 
 export type RustAnalyzerReadinessWorkerErrorEnvelope = { ok: false; error: string };
 
 export interface RustAnalyzerReadinessClient {
   serverStatusGeneration(): number;
+  serverStatusSnapshot(): RustAnalyzerServerStatusSnapshot | null;
+  analyzerStatus(opts?: RustAnalyzerRequestOptions): Promise<string>;
   waitForQuiescence(afterGeneration: number, timeoutMs: number): Promise<RustAnalyzerServerStatus>;
 }
 
@@ -38,7 +42,7 @@ export async function waitForRustAnalyzerReadiness(
 
 export async function waitForRustAnalyzerPostOpenReadiness(
   client: RustAnalyzerReadinessClient,
-  afterGeneration: number,
+  checkpoint: RustAnalyzerServerStatusSnapshot | null,
   openedDocumentCount: number,
   deadlineMs: number,
   settleDelayMs: number,
@@ -46,7 +50,27 @@ export async function waitForRustAnalyzerPostOpenReadiness(
   settle: (delayMs: number) => Promise<void> = sleep,
 ): Promise<void> {
   if (openedDocumentCount === 0) return;
-  await waitForRustAnalyzerReadiness(client, afterGeneration, deadlineMs, now);
+  if (!checkpoint) {
+    throw new RustAnalyzerReadinessError('rust-analyzer status is unavailable before document open');
+  }
+  assertHealthyQuiescentStatus(checkpoint.status, 'before document open');
+  try {
+    await client.analyzerStatus({ deadlineMs });
+    assertRustAnalyzerReadinessBudget(deadlineMs, now, 'during post-open synchronization');
+  } catch (error) {
+    if (error instanceof RustAnalyzerReadinessError) throw error;
+    throw new RustAnalyzerReadinessError(error instanceof Error ? error.message : String(error));
+  }
+
+  const latest = client.serverStatusSnapshot();
+  if (!latest || latest.generation < checkpoint.generation) {
+    throw new RustAnalyzerReadinessError('rust-analyzer status is unavailable after document open');
+  }
+  if (latest.generation === checkpoint.generation) {
+    assertHealthyQuiescentStatus(latest.status, 'after document open');
+  } else {
+    await waitForRustAnalyzerReadiness(client, checkpoint.generation, deadlineMs, now);
+  }
   await waitForRustAnalyzerDelayWithinDeadline(settleDelayMs, deadlineMs, now, settle);
 }
 
@@ -97,6 +121,15 @@ export function rustAnalyzerReadinessWorkerErrorEnvelope(
 function assertRustAnalyzerReadinessBudget(deadlineMs: number, now: () => number, phase: string): void {
   if (deadlineMs - now() <= 0) {
     throw new RustAnalyzerReadinessError(`rust-analyzer readiness deadline expired ${phase}`);
+  }
+}
+
+function assertHealthyQuiescentStatus(status: RustAnalyzerServerStatus, phase: string): void {
+  if (status.health !== 'ok') {
+    throw new RustAnalyzerReadinessError(`rust-analyzer reported ${status.health} health ${phase}`);
+  }
+  if (!status.quiescent) {
+    throw new RustAnalyzerReadinessError(`rust-analyzer did not report quiescence ${phase}`);
   }
 }
 

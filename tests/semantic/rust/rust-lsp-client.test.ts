@@ -549,6 +549,46 @@ describe('RustAnalyzerLspClient', () => {
     await client.shutdown();
   });
 
+  it('round-trips analyzer status within the request deadline and returns a defensive status snapshot', async () => {
+    const transport = new ScriptedTransport((message, server) => {
+      if (message.method === 'initialize') {
+        server.send({ jsonrpc: '2.0', id: message.id, result: { capabilities: {} } });
+      }
+      if (message.method === 'rust-analyzer/analyzerStatus') {
+        server.send({ jsonrpc: '2.0', id: message.id, result: 'ready' });
+      }
+      if (message.method === 'shutdown') {
+        server.send({ jsonrpc: '2.0', id: message.id, result: null });
+      }
+    });
+    const client = new RustAnalyzerLspClient(transport, { requestTimeoutMs: 100 });
+    await client.initialize({ rootUri: 'file:///repo' });
+    transport.send({
+      jsonrpc: '2.0',
+      method: 'experimental/serverStatus',
+      params: { health: 'ok', quiescent: true, message: 'ready' },
+    });
+
+    const first = client.serverStatusSnapshot();
+    expect(first).toEqual({
+      generation: 1,
+      status: { health: 'ok', quiescent: true, message: 'ready' },
+    });
+    if (first) first.status.health = 'error';
+
+    await expect(client.analyzerStatus({ deadlineMs: Date.now() + 100 })).resolves.toBe('ready');
+    expect(client.serverStatusSnapshot()).toEqual({
+      generation: 1,
+      status: { health: 'ok', quiescent: true, message: 'ready' },
+    });
+    expect(transport.writes.find((message) => message.method === 'rust-analyzer/analyzerStatus')).toMatchObject({
+      method: 'rust-analyzer/analyzerStatus',
+      params: {},
+    });
+
+    await client.shutdown();
+  });
+
   it('does not use a quiescent status observed at the waiter generation', async () => {
     const { client, transport } = await createIdleClient();
     transport.send({

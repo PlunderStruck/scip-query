@@ -579,7 +579,7 @@ async function openNewDefinitionDocuments(
     request.readinessDeadlineMs === undefined
       ? null
       : {
-          afterGeneration: session.client.serverStatusGeneration(),
+          statusSnapshot: session.client.serverStatusSnapshot(),
           deadlineMs: request.readinessDeadlineMs,
         };
   const openedUris = openDefinitionDocuments(session.client, request.projectRoot, definitionsToOpen);
@@ -622,7 +622,7 @@ async function openNewDefinitionDocuments(
       () =>
         waitForRustAnalyzerPostOpenReadiness(
           session.client,
-          readiness.afterGeneration,
+          readiness.statusSnapshot,
           openedUris.length,
           readiness.deadlineMs,
           settleDelayMs,
@@ -656,7 +656,7 @@ async function openNewSourceDocuments(
     opts.readinessDeadlineMs === undefined
       ? null
       : {
-          afterGeneration: session.client.serverStatusGeneration(),
+          statusSnapshot: session.client.serverStatusSnapshot(),
           deadlineMs: opts.readinessDeadlineMs,
         };
   const uris: string[] = [];
@@ -707,7 +707,7 @@ async function openNewSourceDocuments(
       () =>
         waitForRustAnalyzerPostOpenReadiness(
           session.client,
-          readiness.afterGeneration,
+          readiness.statusSnapshot,
           uris.length,
           readiness.deadlineMs,
           settleDelayMs,

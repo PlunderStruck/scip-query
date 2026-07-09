@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { RustAnalyzerReadinessError, type RustAnalyzerServerStatus } from '../../../src/semantic/rust/lsp-client.js';
+import {
+  RustAnalyzerReadinessError,
+  type RustAnalyzerRequestOptions,
+  type RustAnalyzerServerStatus,
+  type RustAnalyzerServerStatusSnapshot,
+} from '../../../src/semantic/rust/lsp-client.js';
 import {
   rustAnalyzerReadinessWorkerErrorEnvelope,
   waitForRustAnalyzerDiagnosticsWithinDeadline,
@@ -16,13 +21,16 @@ const readyStatus: RustAnalyzerServerStatus = { health: 'ok', quiescent: true };
 
 class FakeReadinessClient implements RustAnalyzerReadinessClient {
   generation = 0;
+  status: RustAnalyzerServerStatus | null = readyStatus;
   readonly waits: Array<{ afterGeneration: number; timeoutMs: number }> = [];
+  readonly synchronizations: RustAnalyzerRequestOptions[] = [];
 
   constructor(
     private readonly wait: (
       afterGeneration: number,
       timeoutMs: number,
     ) => Promise<RustAnalyzerServerStatus> = async () => readyStatus,
+    private readonly synchronize: (opts: RustAnalyzerRequestOptions) => Promise<string> = async () => 'ready',
   ) {}
 
   serverStatusGeneration(): number {
@@ -32,6 +40,15 @@ class FakeReadinessClient implements RustAnalyzerReadinessClient {
   waitForQuiescence(afterGeneration: number, timeoutMs: number): Promise<RustAnalyzerServerStatus> {
     this.waits.push({ afterGeneration, timeoutMs });
     return this.wait(afterGeneration, timeoutMs);
+  }
+
+  serverStatusSnapshot(): RustAnalyzerServerStatusSnapshot | null {
+    return this.status ? { generation: this.generation, status: { ...this.status } } : null;
+  }
+
+  analyzerStatus(opts: RustAnalyzerRequestOptions = {}): Promise<string> {
+    this.synchronizations.push(opts);
+    return this.synchronize(opts);
   }
 }
 
@@ -109,29 +126,62 @@ describe('waitForRustAnalyzerReadiness', () => {
 });
 
 describe('waitForRustAnalyzerPostOpenReadiness', () => {
-  it('waits from the generation checkpoint taken before didOpen', async () => {
+  it('accepts an unchanged healthy quiescent status after an ordered post-open round trip', async () => {
     const events: string[] = [];
-    const client = new FakeReadinessClient(async (afterGeneration) => {
-      events.push(`wait:${afterGeneration}`);
-      return readyStatus;
+    const client = new FakeReadinessClient(undefined, async (opts) => {
+      events.push(`synchronize:${opts.deadlineMs}`);
+      return 'ready';
     });
     client.generation = 8;
-    const checkpoint = client.serverStatusGeneration();
+    const checkpoint = client.serverStatusSnapshot();
     events.push('didOpen');
-    client.generation = 9;
 
     await waitForRustAnalyzerPostOpenReadiness(client, checkpoint, 1, 2_000, 0, () => 1_000, vi.fn());
 
-    expect(events).toEqual(['didOpen', 'wait:8']);
+    expect(events).toEqual(['didOpen', 'synchronize:2000']);
+    expect(client.waits).toEqual([]);
+  });
+
+  it('waits for newer healthy quiescence when status changes during the ordered round trip', async () => {
+    const events: string[] = [];
+    const client = new FakeReadinessClient(
+      async (afterGeneration) => {
+        events.push(`wait:${afterGeneration}`);
+        client.generation = 10;
+        client.status = readyStatus;
+        return readyStatus;
+      },
+      async () => {
+        events.push('synchronize');
+        client.generation = 9;
+        client.status = { health: 'ok', quiescent: false };
+        return 'indexing';
+      },
+    );
+    client.generation = 8;
+    const checkpoint = client.serverStatusSnapshot();
+
+    await waitForRustAnalyzerPostOpenReadiness(client, checkpoint, 1, 2_000, 0, () => 1_000, vi.fn());
+
+    expect(events).toEqual(['synchronize', 'wait:8']);
   });
 
   it('skips the readiness barrier and settle delay when no documents opened', async () => {
     const client = new FakeReadinessClient();
     const settle = vi.fn(async () => undefined);
 
-    await waitForRustAnalyzerPostOpenReadiness(client, 0, 0, 2_000, 25, () => 1_000, settle);
+    await waitForRustAnalyzerPostOpenReadiness(
+      client,
+      client.serverStatusSnapshot(),
+      0,
+      2_000,
+      25,
+      () => 1_000,
+      settle,
+    );
 
     expect(client.waits).toEqual([]);
+    expect(client.synchronizations).toEqual([]);
     expect(settle).not.toHaveBeenCalled();
   });
 
@@ -144,28 +194,44 @@ describe('waitForRustAnalyzerPostOpenReadiness', () => {
           events.push('wait');
           resolveReadiness = resolve;
         }),
+      async () => {
+        events.push('synchronize');
+        client.generation = 1;
+        client.status = { health: 'ok', quiescent: false };
+        return 'indexing';
+      },
     );
     const settle = vi.fn(async (delayMs: number) => {
       events.push(`settle:${delayMs}`);
     });
 
-    const readiness = waitForRustAnalyzerPostOpenReadiness(client, 0, 1, 2_000, 25, () => 1_000, settle);
+    const readiness = waitForRustAnalyzerPostOpenReadiness(
+      client,
+      { generation: 0, status: readyStatus },
+      1,
+      2_000,
+      25,
+      () => 1_000,
+      settle,
+    );
     await Promise.resolve();
-    expect(events).toEqual(['wait']);
+    await Promise.resolve();
+    expect(events).toEqual(['synchronize', 'wait']);
 
     resolveReadiness?.(readyStatus);
     await readiness;
 
-    expect(events).toEqual(['wait', 'settle:25']);
+    expect(events).toEqual(['synchronize', 'wait', 'settle:25']);
   });
 
   it('does not call the settle dependency when the explicit delay is zero', async () => {
     const client = new FakeReadinessClient();
     const settle = vi.fn(async () => undefined);
 
-    await waitForRustAnalyzerPostOpenReadiness(client, 0, 1, 2_000, 0, () => 1_000, settle);
+    await waitForRustAnalyzerPostOpenReadiness(client, client.serverStatusSnapshot(), 1, 2_000, 0, () => 1_000, settle);
 
-    expect(client.waits).toHaveLength(1);
+    expect(client.synchronizations).toHaveLength(1);
+    expect(client.waits).toHaveLength(0);
     expect(settle).not.toHaveBeenCalled();
   });
 
@@ -173,7 +239,15 @@ describe('waitForRustAnalyzerPostOpenReadiness', () => {
     const client = new FakeReadinessClient();
     const settle = vi.fn(async () => undefined);
 
-    const readiness = waitForRustAnalyzerPostOpenReadiness(client, 0, 1, 1_025, 25, () => 1_000, settle);
+    const readiness = waitForRustAnalyzerPostOpenReadiness(
+      client,
+      client.serverStatusSnapshot(),
+      1,
+      1_025,
+      25,
+      () => 1_000,
+      settle,
+    );
 
     await expect(readiness).rejects.toBeInstanceOf(RustAnalyzerReadinessError);
     expect(settle).not.toHaveBeenCalled();
@@ -186,10 +260,57 @@ describe('waitForRustAnalyzerPostOpenReadiness', () => {
       nowMs = 1_100;
     });
 
-    const readiness = waitForRustAnalyzerPostOpenReadiness(client, 0, 1, 1_100, 25, () => nowMs, settle);
+    const readiness = waitForRustAnalyzerPostOpenReadiness(
+      client,
+      client.serverStatusSnapshot(),
+      1,
+      1_100,
+      25,
+      () => nowMs,
+      settle,
+    );
 
     await expect(readiness).rejects.toBeInstanceOf(RustAnalyzerReadinessError);
     expect(settle).toHaveBeenCalledWith(25);
+  });
+
+  it.each([
+    null,
+    { generation: 4, status: { health: 'warning' as const, quiescent: true } },
+    { generation: 4, status: { health: 'ok' as const, quiescent: false } },
+  ])('rejects an invalid pre-open status snapshot %#', async (checkpoint) => {
+    const client = new FakeReadinessClient();
+
+    await expect(
+      waitForRustAnalyzerPostOpenReadiness(client, checkpoint, 1, 2_000, 0, () => 1_000, vi.fn()),
+    ).rejects.toBeInstanceOf(RustAnalyzerReadinessError);
+    expect(client.synchronizations).toEqual([]);
+  });
+
+  it('normalizes a failed ordered round trip to a typed readiness error', async () => {
+    const client = new FakeReadinessClient(undefined, async () => {
+      throw new Error('analyzer status request failed');
+    });
+
+    await expect(
+      waitForRustAnalyzerPostOpenReadiness(client, client.serverStatusSnapshot(), 1, 2_000, 0, () => 1_000, vi.fn()),
+    ).rejects.toBeInstanceOf(RustAnalyzerReadinessError);
+  });
+
+  it.each([
+    { health: 'warning' as const, quiescent: true },
+    { health: 'error' as const, quiescent: true },
+    { health: 'ok' as const, quiescent: false },
+  ])('rejects unchanged post-open status %#', async (status) => {
+    const client = new FakeReadinessClient(undefined, async () => {
+      client.status = status;
+      return 'not ready';
+    });
+    const checkpoint = client.serverStatusSnapshot();
+
+    await expect(
+      waitForRustAnalyzerPostOpenReadiness(client, checkpoint, 1, 2_000, 0, () => 1_000, vi.fn()),
+    ).rejects.toBeInstanceOf(RustAnalyzerReadinessError);
   });
 });
 
