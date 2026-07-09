@@ -5,10 +5,16 @@ import { performance } from 'node:perf_hooks';
 import { parentPort } from 'node:worker_threads';
 import { profileEnabled, writeProfileEvent } from '../../instrumentation/profile.js';
 import type { SemanticCallee, SemanticReference } from '../types.js';
-import { createRustAnalyzerTransport, RustAnalyzerLspClient, RustAnalyzerReadinessError } from './lsp-client.js';
+import { createRustAnalyzerTransport, RustAnalyzerLspClient } from './lsp-client.js';
 import type { LspInitializeResult } from './lsp-types.js';
 import type { RustImportDefinitionWorkerRequest, RustImportDefinitionWorkerResponse } from './lsp-session.js';
-import { waitForRustAnalyzerPostOpenReadiness, waitForRustAnalyzerReadiness } from './lsp-session-readiness.js';
+import {
+  rustAnalyzerReadinessWorkerErrorEnvelope,
+  waitForRustAnalyzerDiagnosticsWithinDeadline,
+  waitForRustAnalyzerPostOpenReadiness,
+  waitForRustAnalyzerReadiness,
+  withRustAnalyzerReadinessInvalidation,
+} from './lsp-session-readiness.js';
 import {
   calleesForDefinition,
   cargoManifestsForDefinitions,
@@ -55,6 +61,7 @@ type RustSessionWorkerMessage =
     };
 
 interface RustAnalyzerSessionState {
+  key: string;
   client: RustAnalyzerLspClient;
   capabilities: LspInitializeResult['capabilities'];
   openedPaths: Set<string>;
@@ -118,8 +125,9 @@ async function handleMessage(message: RustSessionWorkerMessage): Promise<void> {
       const response = await runImportDefinitionRequest(message.request);
       writeWorkerResponse(message.responsePath, { ok: true, response }, message.sharedBuffer);
     } catch (error) {
-      if (error instanceof RustAnalyzerReadinessError) {
-        writeWorkerError(message.responsePath, error.message, message.sharedBuffer);
+      const readinessError = rustAnalyzerReadinessWorkerErrorEnvelope(error);
+      if (readinessError) {
+        writeWorkerResponse(message.responsePath, readinessError, message.sharedBuffer);
         return;
       }
       const response: RustImportDefinitionWorkerResponse = {
@@ -136,8 +144,9 @@ async function handleMessage(message: RustSessionWorkerMessage): Promise<void> {
     const response = await runSessionRequest(message.request);
     writeWorkerResponse(message.responsePath, { ok: true, response }, message.sharedBuffer);
   } catch (error) {
-    if (error instanceof RustAnalyzerReadinessError) {
-      writeWorkerError(message.responsePath, error.message, message.sharedBuffer);
+    const readinessError = rustAnalyzerReadinessWorkerErrorEnvelope(error);
+    if (readinessError) {
+      writeWorkerResponse(message.responsePath, readinessError, message.sharedBuffer);
       return;
     }
     const response = emptyResponse(message.request, error instanceof Error ? error.message : String(error));
@@ -148,6 +157,7 @@ async function handleMessage(message: RustSessionWorkerMessage): Promise<void> {
 async function runImportDefinitionRequest(
   request: RustImportDefinitionWorkerRequest,
 ): Promise<RustImportDefinitionWorkerResponse> {
+  const requestOptions = { timeoutMs: request.requestTimeoutMs, deadlineMs: request.readinessDeadlineMs };
   const session = await profileAsyncSpan(
     'rust.semantic.worker.session',
     () =>
@@ -170,20 +180,24 @@ async function runImportDefinitionRequest(
   }
 
   let openedDocuments = 0;
-  await profileAsyncSpan(
-    'rust.semantic.worker.open-source-documents',
-    async () => {
-      openedDocuments = await openNewSourceDocuments(session, request.projectRoot, [request.file], {
-        diagnosticsTimeoutMs: request.diagnosticsTimeoutMs,
-        settleDelayMs: request.settleDelayMs,
-        readinessDeadlineMs: request.readinessDeadlineMs,
-      });
-    },
-    () => ({
-      files: 1,
-      openedDocuments,
-      positions: request.positions.length,
-    }),
+  await withRustAnalyzerReadinessInvalidation(
+    () =>
+      profileAsyncSpan(
+        'rust.semantic.worker.open-source-documents',
+        async () => {
+          openedDocuments = await openNewSourceDocuments(session, request.projectRoot, [request.file], {
+            diagnosticsTimeoutMs: request.diagnosticsTimeoutMs,
+            settleDelayMs: request.settleDelayMs,
+            readinessDeadlineMs: request.readinessDeadlineMs,
+          });
+        },
+        () => ({
+          files: 1,
+          openedDocuments,
+          positions: request.positions.length,
+        }),
+      ),
+    () => discardRustAnalyzerSession(sessions, session, request.readinessDeadlineMs),
   );
 
   let resolvedPositions = 0;
@@ -196,7 +210,7 @@ async function runImportDefinitionRequest(
             textDocument: { uri: filePathToDocumentUri(request.projectRoot, position.file) },
             position: { line: position.line, character: position.column },
           },
-          { timeoutMs: request.requestTimeoutMs },
+          requestOptions,
         );
         const resolvedPath = firstProjectLocalDefinitionPath(request.projectRoot, definitions);
         if (resolvedPath) resolvedPositions += 1;
@@ -216,6 +230,7 @@ async function runImportDefinitionRequest(
 }
 
 async function runSessionRequest(request: RustReferenceWorkerRequest): Promise<RustReferenceWorkerResponse> {
+  const requestOptions = { timeoutMs: request.requestTimeoutMs, deadlineMs: request.readinessDeadlineMs };
   const includeReferences = request.includeReferences !== false;
   const includeCallees = request.includeCallees === true;
   const includeSignatures = request.includeSignatures === true;
@@ -246,15 +261,19 @@ async function runSessionRequest(request: RustReferenceWorkerRequest): Promise<R
   if (unavailableReason) return emptyResponse(request, unavailableReason);
 
   let openedDocuments = 0;
-  await profileAsyncSpan(
-    'rust.semantic.worker.open-definition-documents',
-    async () => {
-      openedDocuments = await openNewDefinitionDocuments(session, request);
-    },
-    () => ({
-      definitions: sessionDefinitions.length,
-      openedDocuments,
-    }),
+  await withRustAnalyzerReadinessInvalidation(
+    () =>
+      profileAsyncSpan(
+        'rust.semantic.worker.open-definition-documents',
+        async () => {
+          openedDocuments = await openNewDefinitionDocuments(session, request);
+        },
+        () => ({
+          definitions: sessionDefinitions.length,
+          openedDocuments,
+        }),
+      ),
+    () => discardRustAnalyzerSession(sessions, session, request.readinessDeadlineMs),
   );
 
   let referenceCount = 0;
@@ -280,6 +299,7 @@ async function runSessionRequest(request: RustReferenceWorkerRequest): Promise<R
                   {
                     requestTimeoutMs: request.requestTimeoutMs,
                     retryTimeoutMs: request.referenceRetryTimeoutMs,
+                    deadlineMs: request.readinessDeadlineMs,
                   },
                 );
                 const semanticReferences = dedupeSemanticReferences(
@@ -345,9 +365,12 @@ async function runSessionRequest(request: RustReferenceWorkerRequest): Promise<R
               request.concurrency ?? 8,
               async (definition): Promise<CalleeTaskResult> => {
                 const taskStarted = calleeProfilingEnabled ? performance.now() : 0;
-                const semanticCallees = await calleesForDefinition(session.client, request.projectRoot, definition, {
-                  timeoutMs: request.requestTimeoutMs,
-                });
+                const semanticCallees = await calleesForDefinition(
+                  session.client,
+                  request.projectRoot,
+                  definition,
+                  requestOptions,
+                );
                 const taskDurationMs = calleeProfilingEnabled ? Math.round(performance.now() - taskStarted) : 0;
                 recordRustCalleeFileProfile(calleeFileProfile, definition.relativePath, {
                   durationMs: taskDurationMs,
@@ -413,9 +436,12 @@ async function runSessionRequest(request: RustReferenceWorkerRequest): Promise<R
             signatureDefinitions,
             request.concurrency ?? 8,
             async (definition): Promise<SignatureTaskResult> => {
-              const signature = await signatureForDefinition(session.client, request.projectRoot, definition, {
-                timeoutMs: request.requestTimeoutMs,
-              });
+              const signature = await signatureForDefinition(
+                session.client,
+                request.projectRoot,
+                definition,
+                requestOptions,
+              );
               if (signature) signaturesFound += 1;
               return {
                 symbolId: definition.symbolId,
@@ -479,48 +505,58 @@ async function sessionForPaths(
           afterGeneration: client.serverStatusGeneration(),
           deadlineMs: opts.readinessDeadlineMs,
         };
-  const initialized = await profileAsyncSpan(
-    'rust.semantic.worker.initialize',
-    () =>
-      client.initialize({
-        processId: process.pid,
-        rootUri: filePathToDocumentUri(sessionRoot, '.'),
-        capabilities: {
-          textDocument: {
-            references: {
-              dynamicRegistration: false,
+  const initialized = await withRustAnalyzerReadinessInvalidation(
+    async () => {
+      const result = await profileAsyncSpan(
+        'rust.semantic.worker.initialize',
+        () =>
+          client.initialize(
+            {
+              processId: process.pid,
+              rootUri: filePathToDocumentUri(sessionRoot, '.'),
+              capabilities: {
+                textDocument: {
+                  references: {
+                    dynamicRegistration: false,
+                  },
+                  definition: {
+                    dynamicRegistration: false,
+                  },
+                  callHierarchy: {
+                    dynamicRegistration: false,
+                  },
+                  hover: {
+                    dynamicRegistration: false,
+                  },
+                },
+              },
+              initializationOptions,
             },
-            definition: {
-              dynamicRegistration: false,
-            },
-            callHierarchy: {
-              dynamicRegistration: false,
-            },
-            hover: {
-              dynamicRegistration: false,
-            },
-          },
-        },
-        initializationOptions,
-      }),
-    () => ({
-      linkedProjects: linkedProjects.length,
-      relativePaths: relativePaths.length,
-    }),
+            { timeoutMs: opts.requestTimeoutMs, deadlineMs: opts.readinessDeadlineMs },
+          ),
+        () => ({
+          linkedProjects: linkedProjects.length,
+          relativePaths: relativePaths.length,
+        }),
+      );
+      if (initializationReadiness) {
+        await profileAsyncSpan(
+          'rust.semantic.worker.readiness',
+          () =>
+            waitForRustAnalyzerReadiness(
+              client,
+              initializationReadiness.afterGeneration,
+              initializationReadiness.deadlineMs,
+            ),
+          () => ({ phase: 'initialize' }),
+        );
+      }
+      return result;
+    },
+    () => client.shutdown({ deadlineMs: opts.readinessDeadlineMs }).catch(() => undefined),
   );
-  if (initializationReadiness) {
-    await profileAsyncSpan(
-      'rust.semantic.worker.readiness',
-      () =>
-        waitForRustAnalyzerReadiness(
-          client,
-          initializationReadiness.afterGeneration,
-          initializationReadiness.deadlineMs,
-        ),
-      () => ({ phase: 'initialize' }),
-    );
-  }
   const session: RustAnalyzerSessionState = {
+    key,
     client,
     capabilities: initialized.capabilities,
     openedPaths: new Set(),
@@ -551,12 +587,23 @@ async function openNewDefinitionDocuments(
     session.openedPaths.add(definition.relativePath);
   }
   const diagnosticsTimeoutMs = request.diagnosticsTimeoutMs ?? 10_000;
+  let effectiveDiagnosticsTimeoutMs = diagnosticsTimeoutMs;
   await profileAsyncSpan(
     'rust.semantic.worker.diagnostics',
-    () => waitForOpenedDocuments(session.client, openedUris, diagnosticsTimeoutMs),
+    () =>
+      readiness
+        ? waitForRustAnalyzerDiagnosticsWithinDeadline(
+            (timeoutMs) => {
+              effectiveDiagnosticsTimeoutMs = timeoutMs;
+              return waitForOpenedDocuments(session.client, openedUris, timeoutMs);
+            },
+            diagnosticsTimeoutMs,
+            readiness.deadlineMs,
+          )
+        : waitForOpenedDocuments(session.client, openedUris, diagnosticsTimeoutMs),
     () => ({
       openedDocuments: openedUris.length,
-      timeoutMs: diagnosticsTimeoutMs,
+      timeoutMs: effectiveDiagnosticsTimeoutMs,
     }),
   );
   const settleDelayMs = request.settleDelayMs ?? 5_000;
@@ -625,12 +672,23 @@ async function openNewSourceDocuments(
     uris.push(uri);
   }
   const diagnosticsTimeoutMs = opts.diagnosticsTimeoutMs ?? 10_000;
+  let effectiveDiagnosticsTimeoutMs = diagnosticsTimeoutMs;
   await profileAsyncSpan(
     'rust.semantic.worker.diagnostics',
-    () => waitForOpenedDocuments(session.client, uris, diagnosticsTimeoutMs),
+    () =>
+      readiness
+        ? waitForRustAnalyzerDiagnosticsWithinDeadline(
+            (timeoutMs) => {
+              effectiveDiagnosticsTimeoutMs = timeoutMs;
+              return waitForOpenedDocuments(session.client, uris, timeoutMs);
+            },
+            diagnosticsTimeoutMs,
+            readiness.deadlineMs,
+          )
+        : waitForOpenedDocuments(session.client, uris, diagnosticsTimeoutMs),
     () => ({
       openedDocuments: uris.length,
-      timeoutMs: diagnosticsTimeoutMs,
+      timeoutMs: effectiveDiagnosticsTimeoutMs,
     }),
   );
   const settleDelayMs = opts.settleDelayMs ?? 5_000;
@@ -714,6 +772,15 @@ async function shutdownSessions(): Promise<void> {
   const current = [...sessions.values()];
   sessions.clear();
   await Promise.all(current.map((session) => session.client.shutdown().catch(() => undefined)));
+}
+
+export async function discardRustAnalyzerSession(
+  registry: Map<string, RustAnalyzerSessionState>,
+  session: RustAnalyzerSessionState,
+  readinessDeadlineMs: number | undefined,
+): Promise<void> {
+  if (registry.get(session.key) === session) registry.delete(session.key);
+  await session.client.shutdown({ deadlineMs: readinessDeadlineMs }).catch(() => undefined);
 }
 
 function sessionKey(binary: string, sessionRoot: string, linkedProjects: readonly string[]): string {
@@ -882,8 +949,4 @@ function writeWorkerResponse(responsePath: string, payload: unknown, sharedBuffe
   const signal = new Int32Array(sharedBuffer);
   Atomics.store(signal, 0, 1);
   Atomics.notify(signal, 0);
-}
-
-function writeWorkerError(responsePath: string, error: string, sharedBuffer: SharedArrayBuffer): void {
-  writeWorkerResponse(responsePath, { ok: false, error }, sharedBuffer);
 }

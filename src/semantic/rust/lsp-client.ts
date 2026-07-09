@@ -43,6 +43,7 @@ export interface RustAnalyzerLspClientOptions {
 
 export interface RustAnalyzerRequestOptions {
   timeoutMs?: number;
+  deadlineMs?: number;
 }
 
 export interface RustAnalyzerServerStatus {
@@ -99,7 +100,7 @@ export class RustAnalyzerLspClient {
     this.transport.onError((error) => this.rejectPending(error));
   }
 
-  async initialize(params: LspInitializeParams): Promise<LspInitializeResult> {
+  async initialize(params: LspInitializeParams, opts: RustAnalyzerRequestOptions = {}): Promise<LspInitializeResult> {
     const capabilities = params.capabilities ?? {};
     const experimental =
       capabilities.experimental &&
@@ -107,16 +108,20 @@ export class RustAnalyzerLspClient {
       !Array.isArray(capabilities.experimental)
         ? (capabilities.experimental as Record<string, unknown>)
         : {};
-    const result = await this.request<LspInitializeResult>('initialize', {
-      ...params,
-      capabilities: {
-        ...capabilities,
-        experimental: {
-          ...experimental,
-          serverStatusNotification: true,
+    const result = await this.request<LspInitializeResult>(
+      'initialize',
+      {
+        ...params,
+        capabilities: {
+          ...capabilities,
+          experimental: {
+            ...experimental,
+            serverStatusNotification: true,
+          },
         },
       },
-    });
+      opts,
+    );
     this.notify('initialized', {});
     return result;
   }
@@ -212,11 +217,11 @@ export class RustAnalyzerLspClient {
     });
   }
 
-  async shutdown(): Promise<void> {
+  async shutdown(opts: RustAnalyzerRequestOptions = {}): Promise<void> {
     if (this.shutdownStarted) return;
     this.shutdownStarted = true;
     try {
-      await this.request<null>('shutdown', null);
+      await this.request<null>('shutdown', null, opts);
       this.notify('exit', null);
     } catch (error) {
       this.notify('exit', null);
@@ -226,14 +231,18 @@ export class RustAnalyzerLspClient {
   }
 
   private request<T>(method: string, params: unknown, opts: RustAnalyzerRequestOptions = {}): Promise<T> {
+    const budget = rustAnalyzerOperationBudget(opts.timeoutMs ?? this.requestTimeoutMs, opts.deadlineMs);
     const id = this.nextId++;
     const message: LspJsonMessage = { jsonrpc: '2.0', id, method, params };
-    const timeoutMs = opts.timeoutMs ?? this.requestTimeoutMs;
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`rust-analyzer LSP request ${method} timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
+        reject(
+          budget.deadlineLimited
+            ? new RustAnalyzerReadinessError(`rust-analyzer readiness deadline expired during LSP request ${method}`)
+            : new Error(`rust-analyzer LSP request ${method} timed out after ${budget.timeoutMs}ms`),
+        );
+      }, budget.timeoutMs);
       this.pending.set(id, { method, resolve: (value) => resolve(value as T), reject, timeout });
       this.transport.write(frameJsonMessage(message));
     });
@@ -364,6 +373,22 @@ export class RustAnalyzerLspClient {
       this.readinessWaiters.delete(waiter);
     }
   }
+}
+
+export function rustAnalyzerOperationBudget(
+  configuredTimeoutMs: number,
+  deadlineMs: number | undefined,
+  now: () => number = Date.now,
+): { timeoutMs: number; deadlineLimited: boolean } {
+  if (deadlineMs === undefined) return { timeoutMs: configuredTimeoutMs, deadlineLimited: false };
+  const remainingMs = deadlineMs - now();
+  if (remainingMs <= 0) {
+    throw new RustAnalyzerReadinessError('rust-analyzer readiness deadline expired before LSP operation');
+  }
+  return {
+    timeoutMs: Math.min(configuredTimeoutMs, remainingMs),
+    deadlineLimited: remainingMs <= configuredTimeoutMs,
+  };
 }
 
 function isRustAnalyzerServerStatusPayload(value: unknown): value is RustAnalyzerServerStatusPayload {

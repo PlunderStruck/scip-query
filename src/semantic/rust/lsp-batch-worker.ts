@@ -4,8 +4,14 @@ import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { IndexedDefinition } from '../../domain/types.js';
 import type { SemanticCallee, SemanticReference } from '../types.js';
-import { createRustAnalyzerTransport, RustAnalyzerLspClient, type RustAnalyzerRequestOptions } from './lsp-client.js';
+import {
+  createRustAnalyzerTransport,
+  RustAnalyzerLspClient,
+  RustAnalyzerReadinessError,
+  type RustAnalyzerRequestOptions,
+} from './lsp-client.js';
 import type { LspCallHierarchyItem, LspCallHierarchyOutgoingCall, LspHover, LspMarkedString } from './lsp-types.js';
+import { waitForRustAnalyzerDelayWithinDeadline } from './lsp-session-readiness.js';
 import {
   dedupeSemanticReferences,
   definitionToReferenceParams,
@@ -54,6 +60,7 @@ interface ReferenceTaskResult {
 export interface RustReferenceCompletionOptions {
   requestTimeoutMs?: number;
   retryTimeoutMs?: number;
+  deadlineMs?: number;
 }
 
 interface CalleeTaskResult {
@@ -238,12 +245,14 @@ export async function hoverWithRetry(
   try {
     return await client.hover(params, requestOptions);
   } catch (error) {
+    rethrowRustAnalyzerReadinessError(error);
     const message = error instanceof Error ? error.message : String(error);
     if (!message.includes('content modified')) return null;
-    await sleep(1_000);
+    await waitForRetryDelay(requestOptions.deadlineMs);
     try {
       return await client.hover(params, requestOptions);
-    } catch {
+    } catch (retryError) {
+      rethrowRustAnalyzerReadinessError(retryError);
       return null;
     }
   }
@@ -364,8 +373,15 @@ export async function referencesWithCompletion(
   opts: RustReferenceCompletionOptions = {},
 ): Promise<{ locations: Awaited<ReturnType<RustAnalyzerLspClient['references']>>; complete: boolean }> {
   try {
-    return { locations: await client.references(params, { timeoutMs: opts.requestTimeoutMs }), complete: true };
+    return {
+      locations: await client.references(params, {
+        timeoutMs: opts.requestTimeoutMs,
+        deadlineMs: opts.deadlineMs,
+      }),
+      complete: true,
+    };
   } catch (error) {
+    rethrowRustAnalyzerReadinessError(error);
     const message = error instanceof Error ? error.message : String(error);
     if (isRustAnalyzerRequestTimeout(error)) {
       return retryTimedOutReferenceLookup(client, params, opts);
@@ -373,10 +389,11 @@ export async function referencesWithCompletion(
     if (!message.includes('content modified')) {
       return { locations: [], complete: true };
     }
-    await sleep(1_000);
+    await waitForRetryDelay(opts.deadlineMs);
     try {
       return { locations: await client.references(params, referenceRetryRequestOptions(opts)), complete: true };
     } catch (retryError) {
+      rethrowRustAnalyzerReadinessError(retryError);
       return { locations: [], complete: !isRustAnalyzerRequestTimeout(retryError) };
     }
   }
@@ -387,17 +404,21 @@ async function retryTimedOutReferenceLookup(
   params: Parameters<RustAnalyzerLspClient['references']>[0],
   opts: RustReferenceCompletionOptions,
 ): Promise<{ locations: Awaited<ReturnType<RustAnalyzerLspClient['references']>>; complete: boolean }> {
+  if (!opts.retryTimeoutMs || opts.retryTimeoutMs <= 0) return { locations: [], complete: false };
   const retryOptions = referenceRetryRequestOptions(opts);
-  if (!retryOptions) return { locations: [], complete: false };
   try {
     return { locations: await client.references(params, retryOptions), complete: true };
   } catch (retryError) {
+    rethrowRustAnalyzerReadinessError(retryError);
     return { locations: [], complete: !isRustAnalyzerRequestTimeout(retryError) };
   }
 }
 
-function referenceRetryRequestOptions(opts: RustReferenceCompletionOptions): { timeoutMs: number } | undefined {
-  return opts.retryTimeoutMs && opts.retryTimeoutMs > 0 ? { timeoutMs: opts.retryTimeoutMs } : undefined;
+function referenceRetryRequestOptions(opts: RustReferenceCompletionOptions): RustAnalyzerRequestOptions {
+  return {
+    ...(opts.retryTimeoutMs && opts.retryTimeoutMs > 0 ? { timeoutMs: opts.retryTimeoutMs } : {}),
+    ...(opts.deadlineMs !== undefined ? { deadlineMs: opts.deadlineMs } : {}),
+  };
 }
 
 function isRustAnalyzerRequestTimeout(error: unknown): boolean {
@@ -420,9 +441,7 @@ export async function calleesForDefinition(
     },
     requestOptions,
   );
-  const calls = (
-    await Promise.all(items.map((item) => outgoingCallsWithRetry(client, item, requestOptions).catch(() => [])))
-  ).flat();
+  const calls = (await Promise.all(items.map((item) => outgoingCallsWithRetry(client, item, requestOptions)))).flat();
   return dedupeSemanticCallees(outgoingCallsToSemanticCallees(projectRoot, calls));
 }
 
@@ -433,7 +452,8 @@ async function prepareCallHierarchyWithRetry(
 ): Promise<LspCallHierarchyItem[]> {
   try {
     return await client.prepareCallHierarchy(params, requestOptions);
-  } catch {
+  } catch (error) {
+    rethrowRustAnalyzerReadinessError(error);
     return [];
   }
 }
@@ -445,9 +465,22 @@ async function outgoingCallsWithRetry(
 ): Promise<LspCallHierarchyOutgoingCall[]> {
   try {
     return await client.outgoingCalls(item, requestOptions);
-  } catch {
+  } catch (error) {
+    rethrowRustAnalyzerReadinessError(error);
     return [];
   }
+}
+
+async function waitForRetryDelay(deadlineMs: number | undefined): Promise<void> {
+  if (deadlineMs === undefined) {
+    await sleep(1_000);
+    return;
+  }
+  await waitForRustAnalyzerDelayWithinDeadline(1_000, deadlineMs);
+}
+
+function rethrowRustAnalyzerReadinessError(error: unknown): void {
+  if (error instanceof RustAnalyzerReadinessError) throw error;
 }
 
 function outgoingCallsToSemanticCallees(

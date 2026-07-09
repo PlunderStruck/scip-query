@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   RustAnalyzerLspClient,
   RustAnalyzerReadinessError,
+  rustAnalyzerOperationBudget,
   type LspJsonMessage,
   type RustAnalyzerTransport,
 } from '../../../src/semantic/rust/lsp-client.js';
@@ -76,6 +77,18 @@ function decodeFramedMessages(payload: string): LspJsonMessage[] {
 }
 
 describe('RustAnalyzerLspClient', () => {
+  it('caps an operation timeout to the remaining absolute deadline', () => {
+    expect(rustAnalyzerOperationBudget(500, 1_250, () => 1_000)).toEqual({
+      timeoutMs: 250,
+      deadlineLimited: true,
+    });
+    expect(rustAnalyzerOperationBudget(100, 1_250, () => 1_000)).toEqual({
+      timeoutMs: 100,
+      deadlineLimited: false,
+    });
+    expect(() => rustAnalyzerOperationBudget(100, 1_000, () => 1_000)).toThrow(RustAnalyzerReadinessError);
+  });
+
   it('initializes, ignores notifications, requests references, and shuts down', async () => {
     const transport = new ScriptedTransport((message, server) => {
       if (message.method === 'initialize') {
@@ -367,6 +380,20 @@ describe('RustAnalyzerLspClient', () => {
 
     await client.shutdown();
     expect(transport.isKilled()).toBe(false);
+  });
+
+  it('bounds initialization by an absolute readiness deadline', async () => {
+    const transport = new ScriptedTransport(() => undefined);
+    const client = new RustAnalyzerLspClient(transport, { requestTimeoutMs: 100 });
+
+    const initialization = client.initialize(
+      { rootUri: 'file:///repo' },
+      { timeoutMs: 50, deadlineMs: Date.now() + 5 },
+    );
+
+    await expect(initialization).rejects.toBeInstanceOf(RustAnalyzerReadinessError);
+    await expect(initialization).rejects.toThrow(/readiness deadline expired during LSP request initialize/);
+    expect(transport.writes.map((message) => message.method)).toEqual(['initialize']);
   });
 
   it('advertises server-status support without replacing caller capabilities', async () => {

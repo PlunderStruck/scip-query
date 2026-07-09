@@ -55,11 +55,11 @@ describe('Rust LSP batch worker', () => {
       uri: 'file:///repo/src/lib.rs',
       range: { start: { line: 4, character: 9 }, end: { line: 4, character: 16 } },
     };
-    const timeouts: Array<number | undefined> = [];
+    const requestOptions: Array<{ timeoutMs?: number; deadlineMs?: number } | undefined> = [];
     const client = {
-      references: vi.fn(async (_params, opts?: { timeoutMs?: number }) => {
-        timeouts.push(opts?.timeoutMs);
-        if (timeouts.length === 1) {
+      references: vi.fn(async (_params, opts?: { timeoutMs?: number; deadlineMs?: number }) => {
+        requestOptions.push(opts);
+        if (requestOptions.length === 1) {
           throw new Error('rust-analyzer LSP request textDocument/references timed out after 15ms');
         }
         return [location];
@@ -69,10 +69,14 @@ describe('Rust LSP batch worker', () => {
     const result = await referencesWithCompletion(client, params, {
       requestTimeoutMs: 125,
       retryTimeoutMs: 250,
+      deadlineMs: 2_000,
     });
 
     expect(result).toEqual({ locations: [location], complete: true });
-    expect(timeouts).toEqual([125, 250]);
+    expect(requestOptions).toEqual([
+      { timeoutMs: 125, deadlineMs: 2_000 },
+      { timeoutMs: 250, deadlineMs: 2_000 },
+    ]);
   });
 
   it('returns outgoing call hierarchy callees when requested', async () => {
