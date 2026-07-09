@@ -24,6 +24,7 @@ export interface RustReferenceWorkerRequest {
   calleeDefinitions?: IndexedDefinition[];
   signatureDefinitions?: IndexedDefinition[];
   requestTimeoutMs?: number;
+  readinessDeadlineMs?: number;
   referenceRetryTimeoutMs?: number;
   diagnosticsTimeoutMs?: number;
   settleDelayMs?: number;

@@ -1,15 +1,18 @@
 import process from 'node:process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { parentPort } from 'node:worker_threads';
+import { profileEnabled, writeProfileEvent } from '../../instrumentation/profile.js';
 import type { SemanticCallee, SemanticReference } from '../types.js';
-import { createRustAnalyzerTransport, RustAnalyzerLspClient } from './lsp-client.js';
+import { createRustAnalyzerTransport, RustAnalyzerLspClient, RustAnalyzerReadinessError } from './lsp-client.js';
 import type { LspInitializeResult } from './lsp-types.js';
 import type { RustImportDefinitionWorkerRequest, RustImportDefinitionWorkerResponse } from './lsp-session.js';
+import { waitForRustAnalyzerPostOpenReadiness, waitForRustAnalyzerReadiness } from './lsp-session-readiness.js';
 import {
   calleesForDefinition,
   cargoManifestsForDefinitions,
-  referencesWithRetry,
+  referencesWithCompletion,
   runWithConcurrency,
   rustAnalyzerInitializationOptions,
   rustAnalyzerSessionRoot,
@@ -17,6 +20,10 @@ import {
   sleep,
   openDefinitionDocuments,
   waitForOpenedDocuments,
+  rustRequestCalleeDefinitions,
+  rustRequestReferenceDefinitions,
+  rustRequestSessionDefinitions,
+  rustRequestSignatureDefinitions,
   type RustReferenceWorkerRequest,
   type RustReferenceWorkerResponse,
 } from './lsp-batch-worker.js';
@@ -56,6 +63,7 @@ interface RustAnalyzerSessionState {
 interface ReferenceTaskResult {
   symbolId: number;
   references: SemanticReference[];
+  complete: boolean;
 }
 
 interface CalleeTaskResult {
@@ -67,6 +75,29 @@ interface SignatureTaskResult {
   symbolId: number;
   signature: string | null;
 }
+
+interface RustReferenceFileProfile {
+  definitions: number;
+  definitionsWithReferences: number;
+  references: number;
+  durationMs: number;
+  maxDurationMs: number;
+  slowTasks: number;
+}
+
+interface RustCalleeFileProfile {
+  definitions: number;
+  definitionsWithCallees: number;
+  callees: number;
+  durationMs: number;
+  maxDurationMs: number;
+  slowTasks: number;
+}
+
+type ProfileMetadata = Record<string, unknown>;
+
+const REFERENCE_TASK_PROFILE_THRESHOLD_ENV = 'SCIP_RUST_SEMANTIC_REFERENCE_TASK_PROFILE_MS';
+const CALLEE_TASK_PROFILE_THRESHOLD_ENV = 'SCIP_RUST_SEMANTIC_CALLEE_TASK_PROFILE_MS';
 
 const sessions = new Map<string, RustAnalyzerSessionState>();
 let queue = Promise.resolve();
@@ -87,6 +118,10 @@ async function handleMessage(message: RustSessionWorkerMessage): Promise<void> {
       const response = await runImportDefinitionRequest(message.request);
       writeWorkerResponse(message.responsePath, { ok: true, response }, message.sharedBuffer);
     } catch (error) {
+      if (error instanceof RustAnalyzerReadinessError) {
+        writeWorkerError(message.responsePath, error.message, message.sharedBuffer);
+        return;
+      }
       const response: RustImportDefinitionWorkerResponse = {
         available: false,
         reason: error instanceof Error ? error.message : String(error),
@@ -101,17 +136,11 @@ async function handleMessage(message: RustSessionWorkerMessage): Promise<void> {
     const response = await runSessionRequest(message.request);
     writeWorkerResponse(message.responsePath, { ok: true, response }, message.sharedBuffer);
   } catch (error) {
-    const response: RustReferenceWorkerResponse = {
-      available: false,
-      reason: error instanceof Error ? error.message : String(error),
-      references: message.request.definitions.map((definition) => [definition.symbolId, []]),
-      ...(message.request.includeCallees
-        ? { callees: message.request.definitions.map((definition) => [definition.symbolId, []]) }
-        : {}),
-      ...(message.request.includeSignatures
-        ? { signatures: message.request.definitions.map((definition) => [definition.symbolId, null]) }
-        : {}),
-    };
+    if (error instanceof RustAnalyzerReadinessError) {
+      writeWorkerError(message.responsePath, error.message, message.sharedBuffer);
+      return;
+    }
+    const response = emptyResponse(message.request, error instanceof Error ? error.message : String(error));
     writeWorkerResponse(message.responsePath, { ok: true, response }, message.sharedBuffer);
   }
 }
@@ -119,9 +148,19 @@ async function handleMessage(message: RustSessionWorkerMessage): Promise<void> {
 async function runImportDefinitionRequest(
   request: RustImportDefinitionWorkerRequest,
 ): Promise<RustImportDefinitionWorkerResponse> {
-  const session = await sessionForPaths(request.projectRoot, request.rustAnalyzerBinary, [request.file], {
-    requestTimeoutMs: request.requestTimeoutMs,
-  });
+  const session = await profileAsyncSpan(
+    'rust.semantic.worker.session',
+    () =>
+      sessionForPaths(request.projectRoot, request.rustAnalyzerBinary, [request.file], {
+        requestTimeoutMs: request.requestTimeoutMs,
+        readinessDeadlineMs: request.readinessDeadlineMs,
+      }),
+    () => ({
+      kind: 'import-definitions',
+      files: 1,
+      positions: request.positions.length,
+    }),
+  );
   if (!session.capabilities.definitionProvider) {
     return {
       available: false,
@@ -130,18 +169,45 @@ async function runImportDefinitionRequest(
     };
   }
 
-  await openNewSourceDocuments(session, request.projectRoot, [request.file], {
-    diagnosticsTimeoutMs: request.diagnosticsTimeoutMs,
-    settleDelayMs: request.settleDelayMs,
-  });
+  let openedDocuments = 0;
+  await profileAsyncSpan(
+    'rust.semantic.worker.open-source-documents',
+    async () => {
+      openedDocuments = await openNewSourceDocuments(session, request.projectRoot, [request.file], {
+        diagnosticsTimeoutMs: request.diagnosticsTimeoutMs,
+        settleDelayMs: request.settleDelayMs,
+        readinessDeadlineMs: request.readinessDeadlineMs,
+      });
+    },
+    () => ({
+      files: 1,
+      openedDocuments,
+      positions: request.positions.length,
+    }),
+  );
 
-  const sourcePaths = await runWithConcurrency(request.positions, request.concurrency ?? 8, async (position) => {
-    const definitions = await session.client.definition({
-      textDocument: { uri: filePathToDocumentUri(request.projectRoot, position.file) },
-      position: { line: position.line, character: position.column },
-    });
-    return [position.id, firstProjectLocalDefinitionPath(request.projectRoot, definitions)] as [string, string | null];
-  });
+  let resolvedPositions = 0;
+  const sourcePaths = await profileAsyncSpan(
+    'rust.semantic.worker.import-definitions',
+    () =>
+      runWithConcurrency(request.positions, request.concurrency ?? 8, async (position) => {
+        const definitions = await session.client.definition(
+          {
+            textDocument: { uri: filePathToDocumentUri(request.projectRoot, position.file) },
+            position: { line: position.line, character: position.column },
+          },
+          { timeoutMs: request.requestTimeoutMs },
+        );
+        const resolvedPath = firstProjectLocalDefinitionPath(request.projectRoot, definitions);
+        if (resolvedPath) resolvedPositions += 1;
+        return [position.id, resolvedPath] as [string, string | null];
+      }),
+    () => ({
+      positions: request.positions.length,
+      resolvedPositions,
+      concurrency: request.concurrency ?? 8,
+    }),
+  );
 
   return {
     available: true,
@@ -153,7 +219,24 @@ async function runSessionRequest(request: RustReferenceWorkerRequest): Promise<R
   const includeReferences = request.includeReferences !== false;
   const includeCallees = request.includeCallees === true;
   const includeSignatures = request.includeSignatures === true;
-  const session = await sessionFor(request);
+  const referenceDefinitions = rustRequestReferenceDefinitions(request);
+  const calleeDefinitions = rustRequestCalleeDefinitions(request);
+  const signatureDefinitions = rustRequestSignatureDefinitions(request);
+  const sessionDefinitions = rustRequestSessionDefinitions(request);
+  const session = await profileAsyncSpan(
+    'rust.semantic.worker.session',
+    () => sessionFor(request),
+    () => ({
+      kind: 'semantic',
+      definitions: sessionDefinitions.length,
+      referenceDefinitions: referenceDefinitions.length,
+      calleeDefinitions: calleeDefinitions.length,
+      signatureDefinitions: signatureDefinitions.length,
+      references: includeReferences,
+      callees: includeCallees,
+      signatures: includeSignatures,
+    }),
+  );
 
   const unavailableReason = unavailableCapabilityReason(session.capabilities, {
     references: includeReferences,
@@ -162,50 +245,196 @@ async function runSessionRequest(request: RustReferenceWorkerRequest): Promise<R
   });
   if (unavailableReason) return emptyResponse(request, unavailableReason);
 
-  await openNewDefinitionDocuments(session, request);
+  let openedDocuments = 0;
+  await profileAsyncSpan(
+    'rust.semantic.worker.open-definition-documents',
+    async () => {
+      openedDocuments = await openNewDefinitionDocuments(session, request);
+    },
+    () => ({
+      definitions: sessionDefinitions.length,
+      openedDocuments,
+    }),
+  );
 
-  const references = includeReferences
-    ? await runWithConcurrency(
-        request.definitions,
-        request.concurrency ?? 8,
-        async (definition): Promise<ReferenceTaskResult> => {
-          const locations = await referencesWithRetry(
-            session.client,
-            definitionToReferenceParams(request.projectRoot, definition, false),
-          );
-          return {
-            symbolId: definition.symbolId,
-            references: dedupeSemanticReferences(locationsToSemanticReferences(request.projectRoot, locations)),
-          };
-        },
-      )
-    : request.definitions.map((definition) => ({ symbolId: definition.symbolId, references: [] }));
+  let referenceCount = 0;
+  let definitionsWithReferences = 0;
+  const referenceProfilingEnabled = profileEnabled();
+  const referenceFileProfile = referenceProfilingEnabled ? new Map<string, RustReferenceFileProfile>() : null;
+  const slowReferenceTaskThresholdMs = referenceProfilingEnabled
+    ? optionalNonNegativeInteger(process.env[REFERENCE_TASK_PROFILE_THRESHOLD_ENV])
+    : null;
+  const computeReferences = (): Promise<ReferenceTaskResult[]> =>
+    includeReferences
+      ? profileAsyncSpan(
+          'rust.semantic.worker.references',
+          () =>
+            runWithConcurrency(
+              referenceDefinitions,
+              request.concurrency ?? 8,
+              async (definition): Promise<ReferenceTaskResult> => {
+                const taskStarted = referenceProfilingEnabled ? performance.now() : 0;
+                const lookup = await referencesWithCompletion(
+                  session.client,
+                  definitionToReferenceParams(request.projectRoot, definition, false),
+                  {
+                    requestTimeoutMs: request.requestTimeoutMs,
+                    retryTimeoutMs: request.referenceRetryTimeoutMs,
+                  },
+                );
+                const semanticReferences = dedupeSemanticReferences(
+                  locationsToSemanticReferences(request.projectRoot, lookup.locations),
+                );
+                const taskDurationMs = referenceProfilingEnabled ? Math.round(performance.now() - taskStarted) : 0;
+                recordRustReferenceFileProfile(referenceFileProfile, definition.relativePath, {
+                  durationMs: taskDurationMs,
+                  references: semanticReferences.length,
+                  hasReferences: semanticReferences.length > 0,
+                  slow: slowReferenceTaskThresholdMs !== null && taskDurationMs >= slowReferenceTaskThresholdMs,
+                });
+                if (slowReferenceTaskThresholdMs !== null && taskDurationMs >= slowReferenceTaskThresholdMs) {
+                  writeProfileEvent({
+                    type: 'span',
+                    name: 'rust.semantic.worker.reference-task',
+                    durationMs: taskDurationMs,
+                    ok: true,
+                    symbolId: definition.symbolId,
+                    relativePath: definition.relativePath,
+                    leaf: definition.leaf,
+                    kind: definition.kind,
+                    startLine: definition.startLine,
+                    endLine: definition.endLine,
+                    references: semanticReferences.length,
+                    complete: lookup.complete,
+                  });
+                }
+                if (semanticReferences.length > 0) definitionsWithReferences += 1;
+                referenceCount += semanticReferences.length;
+                return {
+                  symbolId: definition.symbolId,
+                  references: semanticReferences,
+                  complete: lookup.complete,
+                };
+              },
+            ),
+          () => ({
+            definitions: referenceDefinitions.length,
+            concurrency: request.concurrency ?? 8,
+            definitionsWithReferences,
+            references: referenceCount,
+          }),
+        )
+      : Promise.resolve(
+          referenceDefinitions.map((definition) => ({ symbolId: definition.symbolId, references: [], complete: true })),
+        );
 
-  const callees = includeCallees
-    ? await runWithConcurrency(
-        request.definitions,
-        request.concurrency ?? 8,
-        async (definition): Promise<CalleeTaskResult> => ({
-          symbolId: definition.symbolId,
-          callees: await calleesForDefinition(session.client, request.projectRoot, definition),
-        }),
-      )
-    : [];
+  let calleeCount = 0;
+  let definitionsWithCallees = 0;
+  const calleeProfilingEnabled = profileEnabled();
+  const calleeFileProfile = calleeProfilingEnabled ? new Map<string, RustCalleeFileProfile>() : null;
+  const slowCalleeTaskThresholdMs = calleeProfilingEnabled
+    ? optionalNonNegativeInteger(process.env[CALLEE_TASK_PROFILE_THRESHOLD_ENV])
+    : null;
+  const computeCallees = (): Promise<CalleeTaskResult[]> =>
+    includeCallees
+      ? profileAsyncSpan(
+          'rust.semantic.worker.callees',
+          () =>
+            runWithConcurrency(
+              calleeDefinitions,
+              request.concurrency ?? 8,
+              async (definition): Promise<CalleeTaskResult> => {
+                const taskStarted = calleeProfilingEnabled ? performance.now() : 0;
+                const semanticCallees = await calleesForDefinition(session.client, request.projectRoot, definition, {
+                  timeoutMs: request.requestTimeoutMs,
+                });
+                const taskDurationMs = calleeProfilingEnabled ? Math.round(performance.now() - taskStarted) : 0;
+                recordRustCalleeFileProfile(calleeFileProfile, definition.relativePath, {
+                  durationMs: taskDurationMs,
+                  callees: semanticCallees.length,
+                  hasCallees: semanticCallees.length > 0,
+                  slow: slowCalleeTaskThresholdMs !== null && taskDurationMs >= slowCalleeTaskThresholdMs,
+                });
+                if (slowCalleeTaskThresholdMs !== null && taskDurationMs >= slowCalleeTaskThresholdMs) {
+                  writeProfileEvent({
+                    type: 'span',
+                    name: 'rust.semantic.worker.callee-task',
+                    durationMs: taskDurationMs,
+                    ok: true,
+                    symbolId: definition.symbolId,
+                    relativePath: definition.relativePath,
+                    leaf: definition.leaf,
+                    kind: definition.kind,
+                    startLine: definition.startLine,
+                    endLine: definition.endLine,
+                    callees: semanticCallees.length,
+                  });
+                }
+                if (semanticCallees.length > 0) definitionsWithCallees += 1;
+                calleeCount += semanticCallees.length;
+                return {
+                  symbolId: definition.symbolId,
+                  callees: semanticCallees,
+                };
+              },
+            ),
+          () => ({
+            definitions: calleeDefinitions.length,
+            concurrency: request.concurrency ?? 8,
+            definitionsWithCallees,
+            callees: calleeCount,
+          }),
+        )
+      : Promise.resolve([]);
 
+  let references: ReferenceTaskResult[];
+  let callees: CalleeTaskResult[];
+  if (
+    includeReferences &&
+    includeCallees &&
+    referenceDefinitions.length > 0 &&
+    calleeDefinitions.length > 0 &&
+    parallelRustSemanticOperationsEnabled()
+  ) {
+    [references, callees] = await Promise.all([computeReferences(), computeCallees()]);
+  } else {
+    references = await computeReferences();
+    callees = await computeCallees();
+  }
+  writeRustReferenceFileProfileEvents(referenceFileProfile);
+  writeRustCalleeFileProfileEvents(calleeFileProfile);
+
+  let signaturesFound = 0;
   const signatures = includeSignatures
-    ? await runWithConcurrency(
-        request.definitions,
-        request.concurrency ?? 8,
-        async (definition): Promise<SignatureTaskResult> => ({
-          symbolId: definition.symbolId,
-          signature: await signatureForDefinition(session.client, request.projectRoot, definition),
+    ? await profileAsyncSpan(
+        'rust.semantic.worker.signatures',
+        () =>
+          runWithConcurrency(
+            signatureDefinitions,
+            request.concurrency ?? 8,
+            async (definition): Promise<SignatureTaskResult> => {
+              const signature = await signatureForDefinition(session.client, request.projectRoot, definition, {
+                timeoutMs: request.requestTimeoutMs,
+              });
+              if (signature) signaturesFound += 1;
+              return {
+                symbolId: definition.symbolId,
+                signature,
+              };
+            },
+          ),
+        () => ({
+          definitions: signatureDefinitions.length,
+          concurrency: request.concurrency ?? 8,
+          signaturesFound,
         }),
       )
     : [];
 
   return {
     available: true,
-    references: references.map((result) => [result.symbolId, result.references]),
+    references: references.filter((result) => result.complete).map((result) => [result.symbolId, result.references]),
+    incompleteReferenceSymbolIds: references.filter((result) => !result.complete).map((result) => result.symbolId),
     ...(includeCallees ? { callees: callees.map((result) => [result.symbolId, result.callees]) } : {}),
     ...(includeSignatures ? { signatures: signatures.map((result) => [result.symbolId, result.signature]) } : {}),
   };
@@ -215,8 +444,11 @@ async function sessionFor(request: RustReferenceWorkerRequest): Promise<RustAnal
   return sessionForPaths(
     request.projectRoot,
     request.rustAnalyzerBinary,
-    request.definitions.map((definition) => definition.relativePath),
-    { requestTimeoutMs: request.requestTimeoutMs },
+    rustRequestSessionDefinitions(request).map((definition) => definition.relativePath),
+    {
+      requestTimeoutMs: request.requestTimeoutMs,
+      readinessDeadlineMs: request.readinessDeadlineMs,
+    },
   );
 }
 
@@ -224,7 +456,7 @@ async function sessionForPaths(
   projectRoot: string,
   rustAnalyzerBinary: string,
   relativePaths: readonly string[],
-  opts: { requestTimeoutMs?: number },
+  opts: { requestTimeoutMs?: number; readinessDeadlineMs?: number },
 ): Promise<RustAnalyzerSessionState> {
   const linkedProjects = cargoManifestsForDefinitions(
     projectRoot,
@@ -240,27 +472,54 @@ async function sessionForPaths(
     requestTimeoutMs: opts.requestTimeoutMs,
     configuration: initializationOptions,
   });
-  const initialized = await client.initialize({
-    processId: process.pid,
-    rootUri: filePathToDocumentUri(sessionRoot, '.'),
-    capabilities: {
-      textDocument: {
-        references: {
-          dynamicRegistration: false,
+  const initializationReadiness =
+    opts.readinessDeadlineMs === undefined
+      ? null
+      : {
+          afterGeneration: client.serverStatusGeneration(),
+          deadlineMs: opts.readinessDeadlineMs,
+        };
+  const initialized = await profileAsyncSpan(
+    'rust.semantic.worker.initialize',
+    () =>
+      client.initialize({
+        processId: process.pid,
+        rootUri: filePathToDocumentUri(sessionRoot, '.'),
+        capabilities: {
+          textDocument: {
+            references: {
+              dynamicRegistration: false,
+            },
+            definition: {
+              dynamicRegistration: false,
+            },
+            callHierarchy: {
+              dynamicRegistration: false,
+            },
+            hover: {
+              dynamicRegistration: false,
+            },
+          },
         },
-        definition: {
-          dynamicRegistration: false,
-        },
-        callHierarchy: {
-          dynamicRegistration: false,
-        },
-        hover: {
-          dynamicRegistration: false,
-        },
-      },
-    },
-    initializationOptions,
-  });
+        initializationOptions,
+      }),
+    () => ({
+      linkedProjects: linkedProjects.length,
+      relativePaths: relativePaths.length,
+    }),
+  );
+  if (initializationReadiness) {
+    await profileAsyncSpan(
+      'rust.semantic.worker.readiness',
+      () =>
+        waitForRustAnalyzerReadiness(
+          client,
+          initializationReadiness.afterGeneration,
+          initializationReadiness.deadlineMs,
+        ),
+      () => ({ phase: 'initialize' }),
+    );
+  }
   const session: RustAnalyzerSessionState = {
     client,
     capabilities: initialized.capabilities,
@@ -273,33 +532,86 @@ async function sessionForPaths(
 async function openNewDefinitionDocuments(
   session: RustAnalyzerSessionState,
   request: RustReferenceWorkerRequest,
-): Promise<void> {
-  const definitionsToOpen = request.definitions.filter((definition) => {
+): Promise<number> {
+  const definitionsToOpen = rustRequestSessionDefinitions(request).filter((definition) => {
     if (session.openedPaths.has(definition.relativePath)) return false;
     return existsSync(resolve(request.projectRoot, definition.relativePath));
   });
-  if (definitionsToOpen.length === 0) return;
+  if (definitionsToOpen.length === 0) return 0;
 
+  const readiness =
+    request.readinessDeadlineMs === undefined
+      ? null
+      : {
+          afterGeneration: session.client.serverStatusGeneration(),
+          deadlineMs: request.readinessDeadlineMs,
+        };
   const openedUris = openDefinitionDocuments(session.client, request.projectRoot, definitionsToOpen);
   for (const definition of definitionsToOpen) {
     session.openedPaths.add(definition.relativePath);
   }
-  await waitForOpenedDocuments(session.client, openedUris, request.diagnosticsTimeoutMs ?? 10_000);
-  await sleep(request.settleDelayMs ?? 5_000);
+  const diagnosticsTimeoutMs = request.diagnosticsTimeoutMs ?? 10_000;
+  await profileAsyncSpan(
+    'rust.semantic.worker.diagnostics',
+    () => waitForOpenedDocuments(session.client, openedUris, diagnosticsTimeoutMs),
+    () => ({
+      openedDocuments: openedUris.length,
+      timeoutMs: diagnosticsTimeoutMs,
+    }),
+  );
+  const settleDelayMs = request.settleDelayMs ?? 5_000;
+  if (!readiness) {
+    await profileAsyncSpan(
+      'rust.semantic.worker.settle',
+      () => sleep(settleDelayMs),
+      () => ({
+        openedDocuments: openedUris.length,
+        settleDelayMs,
+      }),
+    );
+  } else {
+    await profileAsyncSpan(
+      'rust.semantic.worker.readiness',
+      () =>
+        waitForRustAnalyzerPostOpenReadiness(
+          session.client,
+          readiness.afterGeneration,
+          openedUris.length,
+          readiness.deadlineMs,
+          settleDelayMs,
+          Date.now,
+          (delayMs) =>
+            profileAsyncSpan(
+              'rust.semantic.worker.settle',
+              () => sleep(delayMs),
+              () => ({ openedDocuments: openedUris.length, settleDelayMs: delayMs }),
+            ),
+        ),
+      () => ({ phase: 'didOpen', openedDocuments: openedUris.length }),
+    );
+  }
+  return openedUris.length;
 }
 
 async function openNewSourceDocuments(
   session: RustAnalyzerSessionState,
   projectRoot: string,
   files: readonly string[],
-  opts: { diagnosticsTimeoutMs?: number; settleDelayMs?: number },
-): Promise<void> {
+  opts: { diagnosticsTimeoutMs?: number; settleDelayMs?: number; readinessDeadlineMs?: number },
+): Promise<number> {
   const filesToOpen = files.filter((file) => {
     if (session.openedPaths.has(file)) return false;
     return existsSync(resolve(projectRoot, file));
   });
-  if (filesToOpen.length === 0) return;
+  if (filesToOpen.length === 0) return 0;
 
+  const readiness =
+    opts.readinessDeadlineMs === undefined
+      ? null
+      : {
+          afterGeneration: session.client.serverStatusGeneration(),
+          deadlineMs: opts.readinessDeadlineMs,
+        };
   const uris: string[] = [];
   for (const file of filesToOpen) {
     const uri = filePathToDocumentUri(projectRoot, file);
@@ -312,8 +624,47 @@ async function openNewSourceDocuments(
     session.openedPaths.add(file);
     uris.push(uri);
   }
-  await waitForOpenedDocuments(session.client, uris, opts.diagnosticsTimeoutMs ?? 10_000);
-  await sleep(opts.settleDelayMs ?? 5_000);
+  const diagnosticsTimeoutMs = opts.diagnosticsTimeoutMs ?? 10_000;
+  await profileAsyncSpan(
+    'rust.semantic.worker.diagnostics',
+    () => waitForOpenedDocuments(session.client, uris, diagnosticsTimeoutMs),
+    () => ({
+      openedDocuments: uris.length,
+      timeoutMs: diagnosticsTimeoutMs,
+    }),
+  );
+  const settleDelayMs = opts.settleDelayMs ?? 5_000;
+  if (!readiness) {
+    await profileAsyncSpan(
+      'rust.semantic.worker.settle',
+      () => sleep(settleDelayMs),
+      () => ({
+        openedDocuments: uris.length,
+        settleDelayMs,
+      }),
+    );
+  } else {
+    await profileAsyncSpan(
+      'rust.semantic.worker.readiness',
+      () =>
+        waitForRustAnalyzerPostOpenReadiness(
+          session.client,
+          readiness.afterGeneration,
+          uris.length,
+          readiness.deadlineMs,
+          settleDelayMs,
+          Date.now,
+          (delayMs) =>
+            profileAsyncSpan(
+              'rust.semantic.worker.settle',
+              () => sleep(delayMs),
+              () => ({ openedDocuments: uris.length, settleDelayMs: delayMs }),
+            ),
+        ),
+      () => ({ phase: 'didOpen', openedDocuments: uris.length }),
+    );
+  }
+  return uris.length;
 }
 
 function firstProjectLocalDefinitionPath(
@@ -345,13 +696,16 @@ function unavailableCapabilityReason(
 }
 
 function emptyResponse(request: RustReferenceWorkerRequest, reason: string): RustReferenceWorkerResponse {
+  const referenceDefinitions = rustRequestReferenceDefinitions(request);
+  const calleeDefinitions = rustRequestCalleeDefinitions(request);
+  const signatureDefinitions = rustRequestSignatureDefinitions(request);
   return {
     available: false,
     reason,
-    references: request.definitions.map((definition) => [definition.symbolId, []]),
-    ...(request.includeCallees ? { callees: request.definitions.map((definition) => [definition.symbolId, []]) } : {}),
+    references: referenceDefinitions.map((definition) => [definition.symbolId, []]),
+    ...(request.includeCallees ? { callees: calleeDefinitions.map((definition) => [definition.symbolId, []]) } : {}),
     ...(request.includeSignatures
-      ? { signatures: request.definitions.map((definition) => [definition.symbolId, null]) }
+      ? { signatures: signatureDefinitions.map((definition) => [definition.symbolId, null]) }
       : {}),
   };
 }
@@ -366,9 +720,170 @@ function sessionKey(binary: string, sessionRoot: string, linkedProjects: readonl
   return JSON.stringify({ binary, sessionRoot, linkedProjects });
 }
 
+function recordRustReferenceFileProfile(
+  profiles: Map<string, RustReferenceFileProfile> | null,
+  relativePath: string,
+  result: { durationMs: number; references: number; hasReferences: boolean; slow: boolean },
+): void {
+  if (!profiles) return;
+  const profile = rustReferenceFileProfile(profiles, relativePath);
+  profile.definitions += 1;
+  if (result.hasReferences) profile.definitionsWithReferences += 1;
+  profile.references += result.references;
+  profile.durationMs += result.durationMs;
+  profile.maxDurationMs = Math.max(profile.maxDurationMs, result.durationMs);
+  if (result.slow) profile.slowTasks += 1;
+}
+
+function writeRustReferenceFileProfileEvents(profiles: Map<string, RustReferenceFileProfile> | null): void {
+  if (!profiles) return;
+  const entries = [...profiles.entries()].sort(
+    ([leftPath, left], [rightPath, right]) => right.durationMs - left.durationMs || leftPath.localeCompare(rightPath),
+  );
+  for (const [relativePath, profile] of entries) {
+    writeProfileEvent({
+      type: 'span',
+      name: 'rust.semantic.worker.references.by-file',
+      durationMs: profile.durationMs,
+      ok: true,
+      relativePath,
+      definitions: profile.definitions,
+      definitionsWithReferences: profile.definitionsWithReferences,
+      references: profile.references,
+      maxDurationMs: profile.maxDurationMs,
+      slowTasks: profile.slowTasks,
+      aggregate: 'sum-task-duration',
+    });
+  }
+}
+
+function rustReferenceFileProfile(
+  profiles: Map<string, RustReferenceFileProfile>,
+  relativePath: string,
+): RustReferenceFileProfile {
+  const existing = profiles.get(relativePath);
+  if (existing) return existing;
+  const created: RustReferenceFileProfile = {
+    definitions: 0,
+    definitionsWithReferences: 0,
+    references: 0,
+    durationMs: 0,
+    maxDurationMs: 0,
+    slowTasks: 0,
+  };
+  profiles.set(relativePath, created);
+  return created;
+}
+
+function recordRustCalleeFileProfile(
+  profiles: Map<string, RustCalleeFileProfile> | null,
+  relativePath: string,
+  result: { durationMs: number; callees: number; hasCallees: boolean; slow: boolean },
+): void {
+  if (!profiles) return;
+  const profile = rustCalleeFileProfile(profiles, relativePath);
+  profile.definitions += 1;
+  if (result.hasCallees) profile.definitionsWithCallees += 1;
+  profile.callees += result.callees;
+  profile.durationMs += result.durationMs;
+  profile.maxDurationMs = Math.max(profile.maxDurationMs, result.durationMs);
+  if (result.slow) profile.slowTasks += 1;
+}
+
+function writeRustCalleeFileProfileEvents(profiles: Map<string, RustCalleeFileProfile> | null): void {
+  if (!profiles) return;
+  const entries = [...profiles.entries()].sort(
+    ([leftPath, left], [rightPath, right]) => right.durationMs - left.durationMs || leftPath.localeCompare(rightPath),
+  );
+  for (const [relativePath, profile] of entries) {
+    writeProfileEvent({
+      type: 'span',
+      name: 'rust.semantic.worker.callees.by-file',
+      durationMs: profile.durationMs,
+      ok: true,
+      relativePath,
+      definitions: profile.definitions,
+      definitionsWithCallees: profile.definitionsWithCallees,
+      callees: profile.callees,
+      maxDurationMs: profile.maxDurationMs,
+      slowTasks: profile.slowTasks,
+      aggregate: 'sum-task-duration',
+    });
+  }
+}
+
+function rustCalleeFileProfile(
+  profiles: Map<string, RustCalleeFileProfile>,
+  relativePath: string,
+): RustCalleeFileProfile {
+  const existing = profiles.get(relativePath);
+  if (existing) return existing;
+  const created: RustCalleeFileProfile = {
+    definitions: 0,
+    definitionsWithCallees: 0,
+    callees: 0,
+    durationMs: 0,
+    maxDurationMs: 0,
+    slowTasks: 0,
+  };
+  profiles.set(relativePath, created);
+  return created;
+}
+
+function optionalNonNegativeInteger(value: string | undefined): number | null {
+  if (value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function parallelRustSemanticOperationsEnabled(): boolean {
+  const configured = process.env['SCIP_RUST_SEMANTIC_PARALLEL_OPERATIONS'];
+  return configured !== '0' && configured !== 'false';
+}
+
+async function profileAsyncSpan<T>(
+  name: string,
+  run: () => Promise<T>,
+  metadata?: ProfileMetadata | (() => ProfileMetadata),
+): Promise<T> {
+  if (!profileEnabled()) return run();
+  const started = performance.now();
+  try {
+    const value = await run();
+    writeProfileEvent({
+      type: 'span',
+      name,
+      durationMs: Math.round(performance.now() - started),
+      ok: true,
+      ...(rustWorkerProfileMetadata(metadata) ?? {}),
+    });
+    return value;
+  } catch (error) {
+    writeProfileEvent({
+      type: 'span',
+      name,
+      durationMs: Math.round(performance.now() - started),
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+      ...(rustWorkerProfileMetadata(metadata) ?? {}),
+    });
+    throw error;
+  }
+}
+
+function rustWorkerProfileMetadata(
+  metadata: ProfileMetadata | (() => ProfileMetadata) | undefined,
+): ProfileMetadata | undefined {
+  return typeof metadata === 'function' ? metadata() : metadata;
+}
+
 function writeWorkerResponse(responsePath: string, payload: unknown, sharedBuffer: SharedArrayBuffer): void {
   writeFileSync(responsePath, JSON.stringify(payload));
   const signal = new Int32Array(sharedBuffer);
   Atomics.store(signal, 0, 1);
   Atomics.notify(signal, 0);
+}
+
+function writeWorkerError(responsePath: string, error: string, sharedBuffer: SharedArrayBuffer): void {
+  writeWorkerResponse(responsePath, { ok: false, error }, sharedBuffer);
 }

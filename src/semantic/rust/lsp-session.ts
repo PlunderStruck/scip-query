@@ -1,8 +1,8 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { Worker } from 'node:worker_threads';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { SHARE_ENV, Worker } from 'node:worker_threads';
 import { parsePositiveInteger } from '../../domain/number-parsing.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { profileSpan } from '../../instrumentation/profile.js';
@@ -18,6 +18,7 @@ import type {
 } from './provider.js';
 import type { RustSemanticStatus } from './status.js';
 import type { RustReferenceWorkerRequest, RustReferenceWorkerResponse } from './lsp-batch-worker.js';
+import { createDurableRustAnalyzerSessionRequester } from './durable-session.js';
 
 export interface RustAnalyzerSessionRequester {
   requestSemantic(request: RustReferenceWorkerRequest, timeoutMs: number): RustReferenceWorkerResponse;
@@ -41,6 +42,7 @@ export interface RustImportDefinitionWorkerRequest {
   file: string;
   positions: RustImportDefinitionPosition[];
   requestTimeoutMs?: number;
+  readinessDeadlineMs?: number;
   diagnosticsTimeoutMs?: number;
   settleDelayMs?: number;
   concurrency?: number;
@@ -66,8 +68,35 @@ export interface RustAnalyzerSessionResolverOptions {
   fallbackSignatureResolver?: RustSignatureResolver;
 }
 
+export interface RustCombinedSemanticResolution {
+  available: boolean;
+  reason?: string;
+  resolvedBinary?: string;
+  references: Map<number, SemanticReference[]>;
+  callees: Map<number, SemanticCallee[]>;
+}
+
 const DEFAULT_RUST_REQUEST_TIMEOUT_MS = 15_000;
 const DEFAULT_RUST_CONCURRENCY = 8;
+const DEFAULT_RUST_SETTLE_DELAY_MS = 5_000;
+const SMALL_REFERENCE_BATCH_SETTLE_THRESHOLD = 64;
+const SMALL_COMBINED_REFERENCE_BATCH_SETTLE_THRESHOLD = 96;
+
+interface RustSemanticSettleDelayRequest {
+  definitionCount: number;
+  includeReferences?: boolean;
+  includeCallees?: boolean;
+  includeSignatures?: boolean;
+}
+
+type RustSessionRequestFlags = Pick<
+  RustReferenceWorkerRequest,
+  'includeReferences' | 'includeCallees' | 'includeSignatures'
+> & {
+  referenceDefinitions?: readonly IndexedDefinition[];
+  calleeDefinitions?: readonly IndexedDefinition[];
+  signatureDefinitions?: readonly IndexedDefinition[];
+};
 
 export class RustAnalyzerSessionResolver
   implements RustReferenceResolver, RustCalleeResolver, RustSignatureResolver, RustImportDefinitionResolver
@@ -79,7 +108,9 @@ export class RustAnalyzerSessionResolver
     private readonly status: (projectRoot: string) => RustSemanticStatus,
     private readonly opts: RustAnalyzerSessionResolverOptions = {},
   ) {
-    this.requester = opts.requester ?? createWorkerRustAnalyzerSessionRequester();
+    this.requester =
+      opts.requester ??
+      createConfiguredRustAnalyzerSessionRequester(projectRoot, process.env['SCIP_RUST_SEMANTIC_DURABLE_SESSION']);
   }
 
   referencesForDefinitions(definitions: readonly IndexedDefinition[]): RustReferenceResolution {
@@ -101,7 +132,11 @@ export class RustAnalyzerSessionResolver
         available: response.available,
         resolvedBinary: baseStatus.resolvedBinary,
         reason: response.reason,
-        references: completeReferenceMap(definitions, new Map(response.references)),
+        references: completeReferenceMap(
+          definitions,
+          new Map(response.references),
+          new Set(response.incompleteReferenceSymbolIds ?? []),
+        ),
       };
     } catch (error) {
       return (
@@ -146,6 +181,45 @@ export class RustAnalyzerSessionResolver
           callees: emptyCalleeMap(definitions),
         }
       );
+    }
+  }
+
+  referencesAndCalleesForDefinitions(
+    referenceDefinitions: readonly IndexedDefinition[],
+    calleeDefinitions: readonly IndexedDefinition[],
+  ): RustCombinedSemanticResolution {
+    const baseStatus = this.status(this.projectRoot);
+    if (!baseStatus.available || !baseStatus.resolvedBinary) {
+      return {
+        available: false,
+        resolvedBinary: baseStatus.resolvedBinary,
+        reason: baseStatus.reason,
+        references: emptyReferenceMap(referenceDefinitions),
+        callees: emptyCalleeMap(calleeDefinitions),
+      };
+    }
+
+    const sessionDefinitions = [...referenceDefinitions, ...calleeDefinitions];
+    try {
+      const response = this.requestSession(baseStatus.resolvedBinary, sessionDefinitions, {
+        includeReferences: referenceDefinitions.length > 0,
+        includeCallees: calleeDefinitions.length > 0,
+        referenceDefinitions,
+        calleeDefinitions,
+      });
+      return {
+        available: response.available,
+        resolvedBinary: baseStatus.resolvedBinary,
+        reason: response.reason,
+        references: completeReferenceMap(
+          referenceDefinitions,
+          new Map(response.references),
+          new Set(response.incompleteReferenceSymbolIds ?? []),
+        ),
+        callees: completeCalleeMap(calleeDefinitions, new Map(response.callees ?? [])),
+      };
+    } catch (error) {
+      return this.fallbackReferencesAndCallees(baseStatus, referenceDefinitions, calleeDefinitions, error);
     }
   }
 
@@ -231,45 +305,104 @@ export class RustAnalyzerSessionResolver
   private requestSession(
     rustAnalyzerBinary: string,
     definitions: readonly IndexedDefinition[],
-    flags: Pick<RustReferenceWorkerRequest, 'includeReferences' | 'includeCallees' | 'includeSignatures'>,
+    flags: RustSessionRequestFlags,
   ): RustReferenceWorkerResponse {
     const requestTimeoutMs = configuredPositiveInteger(
       process.env['SCIP_RUST_SEMANTIC_REQUEST_TIMEOUT_MS'],
       DEFAULT_RUST_REQUEST_TIMEOUT_MS,
     );
+    const referenceRetryTimeoutMs = configuredNonNegativeInteger(
+      process.env['SCIP_RUST_SEMANTIC_REFERENCE_RETRY_TIMEOUT_MS'],
+      0,
+    );
     const concurrency = configuredPositiveInteger(
       process.env['SCIP_RUST_SEMANTIC_CONCURRENCY'],
       DEFAULT_RUST_CONCURRENCY,
     );
-    const diagnosticsTimeoutMs = configuredPositiveInteger(
+    const diagnosticsTimeoutMs = configuredNonNegativeInteger(
       process.env['SCIP_RUST_SEMANTIC_DIAGNOSTICS_TIMEOUT_MS'],
       Math.min(requestTimeoutMs, 10_000),
     );
-    const settleDelayMs = configuredPositiveInteger(process.env['SCIP_RUST_SEMANTIC_SETTLE_MS'], 5_000);
+    const referenceDefinitions = flags.referenceDefinitions ? [...flags.referenceDefinitions] : undefined;
+    const calleeDefinitions = flags.calleeDefinitions ? [...flags.calleeDefinitions] : undefined;
+    const signatureDefinitions = flags.signatureDefinitions ? [...flags.signatureDefinitions] : undefined;
+    const settleDelayMs = rustSemanticSettleDelayMs(process.env['SCIP_RUST_SEMANTIC_SETTLE_MS'], {
+      definitionCount: definitions.length,
+      ...flags,
+    });
     const request: RustReferenceWorkerRequest = {
       projectRoot: this.projectRoot,
       rustAnalyzerBinary,
       definitions: [...definitions],
+      ...(referenceDefinitions ? { referenceDefinitions } : {}),
+      ...(calleeDefinitions ? { calleeDefinitions } : {}),
+      ...(signatureDefinitions ? { signatureDefinitions } : {}),
       requestTimeoutMs,
+      ...(flags.includeReferences !== false && referenceRetryTimeoutMs > 0 ? { referenceRetryTimeoutMs } : {}),
       diagnosticsTimeoutMs,
       settleDelayMs,
       concurrency,
-      ...flags,
+      includeReferences: flags.includeReferences,
+      includeCallees: flags.includeCallees,
+      includeSignatures: flags.includeSignatures,
     };
+    const operationDefinitionCount = rustSessionOperationDefinitionCount(request);
     return profileSpan(
       'rust.semantic.session.request',
       () =>
         this.requester.requestSemantic(
           request,
-          configuredBatchTimeoutMs(definitions.length, requestTimeoutMs, concurrency),
+          configuredBatchTimeoutMs(
+            operationDefinitionCount,
+            rustSessionRequestTimeoutBudgetMs(requestTimeoutMs, request.referenceRetryTimeoutMs),
+            concurrency,
+          ),
         ),
       () => ({
         definitions: definitions.length,
+        operationDefinitions: operationDefinitionCount,
+        referenceDefinitions: request.referenceDefinitions?.length,
+        calleeDefinitions: request.calleeDefinitions?.length,
+        signatureDefinitions: request.signatureDefinitions?.length,
         references: request.includeReferences !== false,
         callees: request.includeCallees === true,
         signatures: request.includeSignatures === true,
+        referenceRetryTimeoutMs: request.referenceRetryTimeoutMs,
       }),
     );
+  }
+
+  private fallbackReferencesAndCallees(
+    baseStatus: RustSemanticStatus,
+    referenceDefinitions: readonly IndexedDefinition[],
+    calleeDefinitions: readonly IndexedDefinition[],
+    error: unknown,
+  ): RustCombinedSemanticResolution {
+    const referenceResolution =
+      referenceDefinitions.length === 0
+        ? { available: true, references: emptyReferenceMap(referenceDefinitions) }
+        : this.opts.fallbackReferenceResolver?.referencesForDefinitions(referenceDefinitions);
+    const calleeResolution =
+      calleeDefinitions.length === 0
+        ? { available: true, callees: emptyCalleeMap(calleeDefinitions) }
+        : this.opts.fallbackCalleeResolver?.calleesForDefinitions(calleeDefinitions);
+    if (referenceResolution && calleeResolution) {
+      return {
+        available: referenceResolution.available && calleeResolution.available,
+        resolvedBinary:
+          referenceResolution.resolvedBinary ?? calleeResolution.resolvedBinary ?? baseStatus.resolvedBinary,
+        reason: referenceResolution.reason ?? calleeResolution.reason,
+        references: completeReferenceMap(referenceDefinitions, referenceResolution.references),
+        callees: completeCalleeMap(calleeDefinitions, calleeResolution.callees),
+      };
+    }
+    return {
+      available: false,
+      resolvedBinary: baseStatus.resolvedBinary,
+      reason: error instanceof Error ? error.message : String(error),
+      references: emptyReferenceMap(referenceDefinitions),
+      callees: emptyCalleeMap(calleeDefinitions),
+    };
   }
 
   private requestImportDefinitions(
@@ -285,11 +418,14 @@ export class RustAnalyzerSessionResolver
       process.env['SCIP_RUST_SEMANTIC_CONCURRENCY'],
       DEFAULT_RUST_CONCURRENCY,
     );
-    const diagnosticsTimeoutMs = configuredPositiveInteger(
+    const diagnosticsTimeoutMs = configuredNonNegativeInteger(
       process.env['SCIP_RUST_SEMANTIC_DIAGNOSTICS_TIMEOUT_MS'],
       Math.min(requestTimeoutMs, 10_000),
     );
-    const settleDelayMs = configuredPositiveInteger(process.env['SCIP_RUST_SEMANTIC_SETTLE_MS'], 5_000);
+    const settleDelayMs = configuredNonNegativeInteger(
+      process.env['SCIP_RUST_SEMANTIC_SETTLE_MS'],
+      DEFAULT_RUST_SETTLE_DELAY_MS,
+    );
     const request: RustImportDefinitionWorkerRequest = {
       projectRoot: this.projectRoot,
       rustAnalyzerBinary,
@@ -323,7 +459,50 @@ export function createRustAnalyzerSessionResolver(
   return new RustAnalyzerSessionResolver(projectRoot, status, opts);
 }
 
-function createWorkerRustAnalyzerSessionRequester(): RustAnalyzerSessionRequester {
+export function rustSemanticSettleDelayMs(
+  configuredValue: string | undefined,
+  request: RustSemanticSettleDelayRequest,
+): number {
+  const configured = parseNonNegativeInteger(configuredValue);
+  if (configured !== null) return configured;
+
+  const includeReferences = request.includeReferences !== false;
+  const referenceOnly = includeReferences && request.includeCallees !== true && request.includeSignatures !== true;
+  if (referenceOnly && request.definitionCount <= SMALL_REFERENCE_BATCH_SETTLE_THRESHOLD) return 0;
+
+  const combinedReferenceAndCallee =
+    includeReferences && request.includeCallees === true && request.includeSignatures !== true;
+  if (combinedReferenceAndCallee && request.definitionCount <= SMALL_COMBINED_REFERENCE_BATCH_SETTLE_THRESHOLD) {
+    return 0;
+  }
+  return DEFAULT_RUST_SETTLE_DELAY_MS;
+}
+
+export function rustSemanticSessionTransport(configuredValue: string | undefined): 'worker' | 'durable' {
+  return configuredValue === '1' || configuredValue === 'true' ? 'durable' : 'worker';
+}
+
+export function createConfiguredRustAnalyzerSessionRequester(
+  projectRoot: string,
+  configuredValue: string | undefined,
+  factories: {
+    worker(): RustAnalyzerSessionRequester;
+    durable(): RustAnalyzerSessionRequester;
+  } = {
+    worker: () => createWorkerRustAnalyzerSessionRequester(),
+    durable: () =>
+      createDurableRustAnalyzerSessionRequester(projectRoot, {
+        serverPath: fileURLToPath(rustSemanticSessionServerUrl()),
+        semanticWorkerPath: fileURLToPath(rustSemanticSessionWorkerUrl()),
+      }),
+  },
+): RustAnalyzerSessionRequester {
+  return rustSemanticSessionTransport(configuredValue) === 'durable' ? factories.durable() : factories.worker();
+}
+
+export function createWorkerRustAnalyzerSessionRequester(
+  opts: { semanticWorkerPath?: string; shareEnvironment?: boolean } = {},
+): RustAnalyzerSessionRequester {
   let worker: Worker | null = null;
   let resultDir: string | null = null;
   let nextRequestId = 1;
@@ -344,7 +523,7 @@ function createWorkerRustAnalyzerSessionRequester(): RustAnalyzerSessionRequeste
 
   const ensureWorker = (): Worker => {
     if (worker) return worker;
-    const workerUrl = rustSemanticSessionWorkerUrl();
+    const workerUrl = opts.semanticWorkerPath ? pathToFileURL(opts.semanticWorkerPath) : rustSemanticSessionWorkerUrl();
     if (!existsSync(fileURLToPath(workerUrl))) {
       throw new Error(
         `Rust semantic session worker was not found at ${fileURLToPath(
@@ -353,7 +532,7 @@ function createWorkerRustAnalyzerSessionRequester(): RustAnalyzerSessionRequeste
       );
     }
     resultDir = mkdtempSync(join(tmpdir(), 'scip-query-rust-session-'));
-    worker = new Worker(workerUrl);
+    worker = new Worker(workerUrl, opts.shareEnvironment ? { env: SHARE_ENV } : undefined);
     worker.unref();
     return worker;
   };
@@ -501,8 +680,14 @@ function emptySignatureMap(definitions: readonly IndexedDefinition[]): Map<numbe
 function completeReferenceMap(
   definitions: readonly IndexedDefinition[],
   references: ReadonlyMap<number, SemanticReference[]>,
+  incompleteSymbolIds: ReadonlySet<number> = new Set(),
 ): Map<number, SemanticReference[]> {
-  return new Map(definitions.map((definition) => [definition.symbolId, references.get(definition.symbolId) ?? []]));
+  const result = new Map<number, SemanticReference[]>();
+  for (const definition of definitions) {
+    if (incompleteSymbolIds.has(definition.symbolId)) continue;
+    result.set(definition.symbolId, references.get(definition.symbolId) ?? []);
+  }
+  return result;
 }
 
 function completeCalleeMap(
@@ -519,12 +704,43 @@ function completeSignatureMap(
   return new Map(definitions.map((definition) => [definition.symbolId, signatures.get(definition.symbolId) ?? null]));
 }
 
+function rustSessionOperationDefinitionCount(request: RustReferenceWorkerRequest): number {
+  let count = 0;
+  if (request.includeReferences !== false) count += (request.referenceDefinitions ?? request.definitions).length;
+  if (request.includeCallees === true) count += (request.calleeDefinitions ?? request.definitions).length;
+  if (request.includeSignatures === true) count += (request.signatureDefinitions ?? request.definitions).length;
+  return Math.max(1, count);
+}
+
+function rustSessionRequestTimeoutBudgetMs(
+  requestTimeoutMs: number,
+  referenceRetryTimeoutMs: number | undefined,
+): number {
+  return referenceRetryTimeoutMs && referenceRetryTimeoutMs > 0
+    ? Math.max(requestTimeoutMs, referenceRetryTimeoutMs)
+    : requestTimeoutMs;
+}
+
 function rustSemanticSessionWorkerUrl(): URL {
   return new URL('./rust-semantic-session-worker.js', import.meta.url);
 }
 
+function rustSemanticSessionServerUrl(): URL {
+  return new URL('./rust-semantic-session-server.js', import.meta.url);
+}
+
 function configuredPositiveInteger(value: string | undefined, fallback: number): number {
   return parsePositiveInteger(value) ?? fallback;
+}
+
+function configuredNonNegativeInteger(value: string | undefined, fallback: number): number {
+  return parseNonNegativeInteger(value) ?? fallback;
+}
+
+function parseNonNegativeInteger(value: string | undefined): number | null {
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
 function configuredBatchTimeoutMs(definitionCount: number, requestTimeoutMs: number, concurrency: number): number {
