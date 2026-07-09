@@ -62,6 +62,7 @@ export class RustAnalyzerReadinessError extends Error {}
 
 interface PendingRequest {
   method: string;
+  deadlineMs: number | undefined;
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
   timeout: NodeJS.Timeout;
@@ -243,7 +244,13 @@ export class RustAnalyzerLspClient {
             : new Error(`rust-analyzer LSP request ${method} timed out after ${budget.timeoutMs}ms`),
         );
       }, budget.timeoutMs);
-      this.pending.set(id, { method, resolve: (value) => resolve(value as T), reject, timeout });
+      this.pending.set(id, {
+        method,
+        deadlineMs: opts.deadlineMs,
+        resolve: (value) => resolve(value as T),
+        reject,
+        timeout,
+      });
       this.transport.write(frameJsonMessage(message));
     });
   }
@@ -291,6 +298,12 @@ export class RustAnalyzerLspClient {
     this.pending.delete(message.id);
     if (message.error) {
       pending.reject(new Error(`rust-analyzer LSP request ${pending.method} failed: ${message.error.message}`));
+      return;
+    }
+    if (pending.deadlineMs !== undefined && Date.now() >= pending.deadlineMs) {
+      pending.reject(
+        new RustAnalyzerReadinessError(`rust-analyzer readiness deadline expired during LSP request ${pending.method}`),
+      );
       return;
     }
     pending.resolve(message.result);

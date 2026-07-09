@@ -396,6 +396,90 @@ describe('RustAnalyzerLspClient', () => {
     expect(transport.writes.map((message) => message.method)).toEqual(['initialize']);
   });
 
+  it('rejects a successful semantic response delivered after its absolute deadline before timers flush', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(1_000);
+      const transport = new ScriptedTransport((message, server) => {
+        if (message.method === 'initialize') {
+          server.send({ jsonrpc: '2.0', id: message.id, result: { capabilities: { referencesProvider: true } } });
+        }
+        if (message.method === 'shutdown') {
+          server.send({ jsonrpc: '2.0', id: message.id, result: null });
+        }
+      });
+      const client = new RustAnalyzerLspClient(transport, { requestTimeoutMs: 100 });
+      await client.initialize({ rootUri: 'file:///repo' });
+      const deadlineMs = Date.now() + 10;
+      const request = client.references(
+        {
+          textDocument: { uri: 'file:///repo/src/lib.rs' },
+          position: { line: 1, character: 7 },
+          context: { includeDeclaration: false },
+        },
+        { timeoutMs: 100, deadlineMs },
+      );
+      const requestId = transport.writes.at(-1)?.id;
+      const outcome = request.then(
+        (value) => ({ status: 'resolved' as const, value }),
+        (error: unknown) => ({ status: 'rejected' as const, error }),
+      );
+
+      vi.setSystemTime(deadlineMs + 1);
+      transport.send({ jsonrpc: '2.0', id: requestId, result: [] });
+
+      const result = await outcome;
+      expect(result.status).toBe('rejected');
+      expect(result).toMatchObject({
+        error: expect.objectContaining({
+          message: 'rust-analyzer readiness deadline expired during LSP request textDocument/references',
+        }),
+      });
+      if (result.status === 'rejected') expect(result.error).toBeInstanceOf(RustAnalyzerReadinessError);
+      expect(vi.getTimerCount()).toBe(0);
+      await client.shutdown();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('rejects and kills shutdown when its success response arrives after the absolute deadline', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(2_000);
+      const transport = new ScriptedTransport((message, server) => {
+        if (message.method === 'initialize') {
+          server.send({ jsonrpc: '2.0', id: message.id, result: { capabilities: {} } });
+        }
+      });
+      const client = new RustAnalyzerLspClient(transport, { requestTimeoutMs: 100 });
+      await client.initialize({ rootUri: 'file:///repo' });
+      const deadlineMs = Date.now() + 10;
+      const shutdown = client.shutdown({ timeoutMs: 100, deadlineMs });
+      const shutdownId = transport.writes.at(-1)?.id;
+      const outcome = shutdown.then(
+        () => ({ status: 'resolved' as const }),
+        (error: unknown) => ({ status: 'rejected' as const, error }),
+      );
+
+      vi.setSystemTime(deadlineMs + 1);
+      transport.send({ jsonrpc: '2.0', id: shutdownId, result: null });
+
+      const result = await outcome;
+      expect(result.status).toBe('rejected');
+      expect(result).toMatchObject({
+        error: expect.objectContaining({
+          message: 'rust-analyzer readiness deadline expired during LSP request shutdown',
+        }),
+      });
+      if (result.status === 'rejected') expect(result.error).toBeInstanceOf(RustAnalyzerReadinessError);
+      expect(transport.isKilled()).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('advertises server-status support without replacing caller capabilities', async () => {
     const transport = new ScriptedTransport((message, server) => {
       if (message.method === 'initialize') {
