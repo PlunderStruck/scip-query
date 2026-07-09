@@ -2,7 +2,8 @@
 
 Date: 2026-07-09
 
-Status: Approved direction; awaiting written-spec review
+Status: Approved and implemented through version 2; post-open barrier corrected
+after the 2026-07-09 built-runtime smoke
 
 ## Goal
 
@@ -162,9 +163,26 @@ The client will advertise:
 
 `RustAnalyzerLspClient` will validate and record each
 `experimental/serverStatus` notification with a monotonically increasing
-generation. A readiness waiter receives a minimum generation and a deadline.
-It resolves only after a newer status reports `health: "ok"` and
-`quiescent: true`.
+generation and retain the latest validated status. An initialization waiter
+receives a minimum generation and a deadline. It resolves only after a newer
+status reports `health: "ok"` and `quiescent: true`.
+
+The built-runtime smoke established a narrower post-open contract. The
+installed rust-analyzer 1.92.0 emitted a healthy quiescent status after
+initialization but did not emit another status after `didOpen`. This matches
+rust-analyzer's implementation: the main loop compares `current_status()` with
+`last_reported_status` and sends `experimental/serverStatus` only when the
+structured status changes. The extension is a state-change notification, not
+a per-operation acknowledgement.
+
+Post-open readiness therefore combines status observation with an ordered,
+read-only round trip. A status-stability round trip is a
+`rust-analyzer/analyzerStatus` request sent after `didOpen` and diagnostics;
+what distinguishes it from a delay is that its response proves the server
+processed the earlier notifications on the same LSP connection. If no status
+generation changed during that ordered work, the previously observed healthy
+quiescent status remains authoritative. If the generation did change, the
+client must observe a newer healthy quiescent status before continuing.
 
 Fresh-session flow:
 
@@ -174,15 +192,18 @@ Fresh-session flow:
 4. Record another status generation.
 5. Open the requested project documents.
 6. Keep the existing diagnostics wait as document-specific evidence.
-7. Wait for a newer healthy quiescent status after the document-open
-   notifications.
-8. Run semantic operations.
+7. Send a deadline-bounded `rust-analyzer/analyzerStatus` request after the
+   document-open notifications and diagnostics.
+8. If the status generation advanced, require a status newer than the
+   pre-open checkpoint with healthy quiescence. If it did not advance, require
+   the retained status at the checkpoint to remain healthy and quiescent.
+9. Run semantic operations.
 
 Reused-session flow:
 
 - If the request opens no new documents, run immediately.
-- If it opens new documents, repeat the post-open diagnostics and quiescence
-  barrier.
+- If it opens new documents, repeat the post-open diagnostics and ordered
+  status-stability barrier.
 
 The implicit durable-session settle delay is removed. When the user explicitly
 configures a settle delay, durable mode honors it after observed quiescence as
@@ -195,10 +216,12 @@ its existing settle behavior.
 The readiness barrier rejects when:
 
 - no valid server-status notification arrives before the bounded deadline;
+- no healthy quiescent status exists before the post-open checkpoint;
+- the ordered analyzer-status request fails or crosses the deadline;
 - the status reports warning or error health;
 - the process exits;
 - the response is malformed; or
-- a quiescent status does not arrive before the deadline.
+- a changed status does not return to healthy quiescence before the deadline.
 
 The durable requester already attempts helper liveness recovery. If it still
 throws, a failover requester replays the same operation through one
@@ -233,16 +256,23 @@ All behavior changes use red-green TDD.
 - Initialization advertises server-status support.
 - Malformed and unrelated notifications do not satisfy readiness.
 - Non-quiescent followed by healthy quiescent resolves the correct waiter.
-- A stale quiescent generation does not satisfy a post-open waiter.
+- `rust-analyzer/analyzerStatus` is sent as a deadline-bounded read-only
+  ordering request.
+- A post-open round trip with an unchanged generation accepts only a retained
+  healthy quiescent status.
+- A post-open round trip with an advanced generation still requires a newer
+  healthy quiescent status.
 - Warning/error health rejects.
 - Timeout and transport close reject all readiness waiters without leaks.
 - Per-operation timeout options reach every LSP request method.
 
 ### Worker and failover tests
 
-- A fresh session waits after initialization and after opening documents.
+- A fresh session waits for newer healthy quiescence after initialization and
+  uses the ordered status-stability barrier after opening documents.
 - A reused session with no new documents does not wait again.
-- A reused session with new documents waits for a new quiescent generation.
+- A reused session with new documents performs diagnostics and the ordered
+  status-stability barrier.
 - An explicitly configured settle delay runs after observed quiescence without
   changing compiler-session identity.
 - Unsupported/timed-out readiness replays through the per-command worker once
@@ -277,6 +307,13 @@ Acceptance requires:
 
 Failed and diagnostic runs remain in the JSONL history. Only measurements that
 pass every accuracy condition can support default routing.
+
+The first version-2 local smoke is a required rejected diagnostic. It measured
+186.20s, observed initialization readiness, timed out for 176.267s waiting for
+an unpromised newer post-open status, then recorded `worker-fallback`. It
+produced zero incomplete references but no durable `created` disposition, so
+no warm run was eligible. The corrected status-stability barrier must pass a
+new local cold/warm pair before external controls begin.
 
 ## Non-Goals
 

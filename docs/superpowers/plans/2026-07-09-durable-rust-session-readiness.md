@@ -300,8 +300,11 @@ The new test file uses a fake readiness client and injected clock to prove:
 - an expired or zero budget throws `RustAnalyzerReadinessError` immediately;
 - initialization waits for a generation newer than the checkpoint taken
   before `initialize`;
-- a post-open barrier waits for a generation newer than the checkpoint taken
-  before `didOpen`;
+- a post-open barrier sends an ordered analyzer-status request after `didOpen`
+  and diagnostics;
+- an unchanged generation after that round trip accepts only a retained
+  healthy quiescent status, while a changed generation still requires newer
+  healthy quiescence;
 - zero opened documents skip the post-open barrier;
 - a user settle delay runs after observed quiescence, never before it;
 - client timeout, warning/error health, and close errors normalize to a typed
@@ -357,17 +360,19 @@ For a request with `readinessDeadlineMs`:
 1. Take `client.serverStatusGeneration()` before `initialize()`.
 2. Initialize and send `initialized` through the existing client method.
 3. Wait for a newer healthy quiescent generation.
-4. Before sending any new `didOpen`, take another generation checkpoint.
+4. Before sending any new `didOpen`, take another generation/status snapshot.
 5. Open documents and keep the existing per-URI diagnostics wait.
-6. If at least one document was newly opened, wait for a newer healthy
-   quiescent generation.
-7. If `settleDelayMs > 0`, sleep only after the post-open barrier.
+6. If at least one document was newly opened, send a deadline-bounded,
+   read-only `rust-analyzer/analyzerStatus` request. If the status generation
+   changed, require newer healthy quiescence; if it did not change, require
+   the retained checkpoint status to remain healthy and quiescent.
+7. If `settleDelayMs > 0`, sleep only after the status-stability barrier.
 8. Run references, callees, signatures, or import-definition operations with
    their explicit request timeouts from Task 1.
 
 For a reused session with no new documents, do not wait for another status.
 For a reused session with new source or definition documents, perform the
-post-open barrier.
+post-open status-stability barrier.
 
 Make `openNewDefinitionDocuments()` and `openNewSourceDocuments()` return the
 number of newly opened documents so this decision is explicit and testable.
@@ -650,6 +655,160 @@ git commit -m "fix: fail closed from durable Rust sessions"
 
 If `rust-durable-session.test.ts` changed, include it in the explicit `git add`
 only after reviewing its staged diff.
+
+---
+
+### Task 5A: Correct post-open readiness for status-change notifications
+
+This task was added after the first built version-2 smoke. That smoke measured
+186.20s and correctly fell back because rust-analyzer 1.92.0 emitted no status
+newer than the pre-`didOpen` checkpoint. Official source shows that
+`experimental/serverStatus` is emitted only when the structured status
+changes; it is not a per-`didOpen` acknowledgement. This task supersedes only
+Task 2's requirement for an unconditionally newer post-open generation.
+
+**Files:**
+
+- Modify: `src/semantic/rust/lsp-client.ts`
+- Modify: `src/semantic/rust/lsp-session-readiness.ts`
+- Modify: `src/semantic/rust/lsp-session-worker.ts`
+- Modify: `tests/semantic/rust/rust-lsp-client.test.ts`
+- Modify: `tests/semantic/rust/rust-lsp-session-readiness.test.ts`
+
+**Interfaces:**
+
+- Consumes: `serverStatusGeneration()`, `waitForQuiescence()`, and the
+  absolute `readinessDeadlineMs` implemented by Tasks 1-3.
+- Produces:
+
+  ```ts
+  export interface RustAnalyzerServerStatusSnapshot {
+    generation: number;
+    status: RustAnalyzerServerStatus;
+  }
+
+  RustAnalyzerLspClient.serverStatusSnapshot(): RustAnalyzerServerStatusSnapshot | null;
+  RustAnalyzerLspClient.analyzerStatus(opts?: RustAnalyzerRequestOptions): Promise<string>;
+  ```
+
+- `waitForRustAnalyzerPostOpenReadiness()` accepts the pre-open snapshot,
+  performs the ordered read-only round trip, and returns only when status is
+  proven healthy/quiescent inside the existing deadline.
+
+- [ ] **Step 1: Write failing client protocol tests**
+
+Add tests proving `analyzerStatus()` sends
+`rust-analyzer/analyzerStatus` with `{}` and the current deadline, returns the
+string response, and exposes a defensive latest status snapshot. Mutation of
+the returned object must not alter the client's retained state.
+
+Run:
+
+```bash
+npx vitest run tests/semantic/rust/rust-lsp-client.test.ts
+```
+
+Expected: FAIL because both APIs are absent.
+
+- [ ] **Step 2: Write failing post-open policy tests**
+
+Add tests with a structural fake client for:
+
+1. checkpoint healthy/quiescent, analyzer-status round trip succeeds,
+   generation unchanged -> pass without `waitForQuiescence`;
+2. generation advances to non-quiescent during the round trip -> call
+   `waitForQuiescence(checkpoint.generation, remainingMs)` and require its
+   newer healthy/quiescent result;
+3. checkpoint absent, unhealthy, or non-quiescent -> typed readiness failure;
+4. round-trip request failure/timeout -> typed readiness failure;
+5. unchanged generation but retained status becomes warning/error or
+   non-quiescent -> typed readiness failure;
+6. zero newly opened documents -> no round trip.
+
+Run:
+
+```bash
+npx vitest run tests/semantic/rust/rust-lsp-session-readiness.test.ts
+```
+
+Expected: FAIL because the existing helper unconditionally waits for a newer
+generation and has no ordered request/status snapshot.
+
+- [ ] **Step 3: Implement the client APIs**
+
+Add the public snapshot type and return a copied status value:
+
+```ts
+serverStatusSnapshot(): RustAnalyzerServerStatusSnapshot | null {
+  const latest = this.latestServerStatus;
+  return latest
+    ? { generation: latest.generation, status: { ...latest.status } }
+    : null;
+}
+
+async analyzerStatus(opts: RustAnalyzerRequestOptions = {}): Promise<string> {
+  return this.request<string>('rust-analyzer/analyzerStatus', {}, opts);
+}
+```
+
+Use the existing request budget/deadline machinery; do not add a timer or
+special transport path.
+
+- [ ] **Step 4: Implement the ordered status-stability policy**
+
+Extend the structural client with `serverStatusSnapshot()` and
+`analyzerStatus()`. The post-open helper must:
+
+```ts
+if (openedDocumentCount === 0) return;
+assertHealthyQuiescent(checkpoint.status);
+await client.analyzerStatus({ deadlineMs });
+assertRustAnalyzerReadinessBudget(deadlineMs, now, 'during post-open synchronization');
+const latest = client.serverStatusSnapshot();
+if (!latest) throw new RustAnalyzerReadinessError('rust-analyzer status is unavailable after document open');
+if (latest.generation === checkpoint.generation) {
+  assertHealthyQuiescent(latest.status);
+} else {
+  await waitForRustAnalyzerReadiness(client, checkpoint.generation, deadlineMs, now);
+}
+await waitForRustAnalyzerDelayWithinDeadline(settleDelayMs, deadlineMs, now, settle);
+```
+
+If `analyzerStatus()` needs a shorter explicit timeout, calculate it from the
+same absolute deadline. Do not accept a generation lower than the checkpoint,
+do not accept warning/error/non-quiescent status, and do not use a fixed
+implicit delay.
+
+- [ ] **Step 5: Wire snapshots through both open-document paths**
+
+In `openNewDefinitionDocuments()` and `openNewSourceDocuments()`, capture the
+status snapshot immediately before the first new `didOpen` and pass it to the
+post-open helper after diagnostics. Preserve zero-new-document fast paths,
+typed invalidation, explicit settle placement, and per-command behavior when
+`readinessDeadlineMs` is absent.
+
+- [ ] **Step 6: Verify and commit the correction**
+
+```bash
+npx vitest run \
+  tests/semantic/rust/rust-lsp-client.test.ts \
+  tests/semantic/rust/rust-lsp-session-readiness.test.ts \
+  tests/semantic/rust/rust-lsp-session.test.ts \
+  tests/semantic/rust/rust-durable-session.test.ts
+npm run typecheck
+npm run lint
+npm run build
+scip-query reindex
+scip-query diff-gate --json
+git add \
+  src/semantic/rust/lsp-client.ts \
+  src/semantic/rust/lsp-session-readiness.ts \
+  src/semantic/rust/lsp-session-worker.ts \
+  tests/semantic/rust/rust-lsp-client.test.ts \
+  tests/semantic/rust/rust-lsp-session-readiness.test.ts
+git diff --cached --name-only
+git commit -m "fix: synchronize Rust post-open readiness"
+```
 
 ---
 
@@ -1011,9 +1170,10 @@ after each commit, but implementation order stays linear.
 ## Definition of Done
 
 The work is complete only when compatible request shapes reuse one live
-rust-analyzer compiler state, fresh sessions wait for a newer healthy
-quiescent status, failure latches safely to the accepted fallbacks, focused and
-full verification pass, and all five controls on both external corpora produce
-identical ordered semantic evidence with zero incomplete references and a
-meaningful reversed-order warm speedup. Until then, durable routing remains
-experimental and per-command routing remains the default.
+rust-analyzer compiler state, fresh initialization waits for newer healthy
+quiescence, post-open work passes the ordered status-stability barrier, failure
+latches safely to the accepted fallbacks, focused and full verification pass,
+and all five controls on both external corpora produce identical ordered
+semantic evidence with zero incomplete references and a meaningful
+reversed-order warm speedup. Until then, durable routing remains experimental
+and per-command routing remains the default.
