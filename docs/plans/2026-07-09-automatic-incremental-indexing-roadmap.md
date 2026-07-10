@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Phase 1 complete; Phase 2 is next
+Status: Phase 1 complete; Phase 2 planning complete and implementation next
 
 ## Goal
 
@@ -271,19 +271,21 @@ and parity gates rather than unit tests.
 
 | Metric                                                  |                 Current observation |
 | ------------------------------------------------------- | ----------------------------------: |
-| Local exact unchanged reindex                           |                             0.323 s |
-| Local TypeScript edit refresh, Rust reused              |                         about 4.7 s |
-| Current configured quiet delay / cooldown               |                         30 s / 60 s |
+| Local exact unchanged reindex                           |       0.329s median / 0.348s p95 |
+| Local TypeScript edit refresh, Rust reused              |       4.543s median / 4.885s p95 |
+| Current configured quiet delay / cooldown               |                       250ms / 0ms |
 | SynthRunnerRust historical cold reindex                 |                              31.0 s |
 | SynthRunnerRust accepted durable-cache warm full health |                             2.699 s |
 | Vega accepted durable-cache cold full health            |                           190.685 s |
 | Vega accepted durable-cache warm full health            | 41.933 s forward / 46.310 s reverse |
 | Vega warm candidate loading                             |      13.837 s of a 45.918 s command |
 
-Phase 0 reruns every baseline as at least five alternating-order samples and
-records median, p95, output hash, fact counts, cache disposition, and machine
-metadata. Historical values remain context; the rerun becomes the comparison
-baseline.
+The Phase 1 harness reran the local no-op/edit/burst/service baselines as five
+samples and recorded median, p95, output hash, fact counts, cache disposition,
+and machine metadata. The broader Phase 0 semantic/corpus matrix remains
+incomplete; Phase 2 step 2.6 closes the affected-set portion before any
+prediction can become authoritative. Historical external values remain context
+until their alternating-order reruns become the comparison baseline.
 
 The **median** is the middle measured run after sorting; it represents the
 typical result without letting one extreme dominate. The **p95** is the value
@@ -353,7 +355,7 @@ crash-recovery, and built-package gates passed. The raw live-ensure command was
 daemon-specific overhead was <=9ms p95 because the stopped Node/CLI control was
 151ms p95. The miss remains explicit in the Phase 1 plan and ledger.
 
-### Phase 2 — Canonical change manifests and affected-set shadowing
+### Phase 2 — Canonical change manifests and affected-set shadowing (in progress)
 
 **Purpose:** prove the invalidation boundary before using it to skip work.
 
@@ -369,6 +371,9 @@ daemon-specific overhead was <=9ms p95 because the stopped Node/CLI control was
   documents/facts, misses, over-invalidation, fallback reason.
 
 **Dependency:** Phase 1 service owns consecutive state.
+
+**Executable plan:**
+[`2026-07-09-affected-set-shadowing.md`](./2026-07-09-affected-set-shadowing.md).
 
 **Exit gate:** Phase 2 recall and over-invalidation thresholds pass. Any miss
 blocks incremental writes and becomes a regression fixture.
