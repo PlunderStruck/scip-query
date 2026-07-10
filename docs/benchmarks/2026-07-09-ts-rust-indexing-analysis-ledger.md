@@ -848,7 +848,8 @@ A durable rust-analyzer project session is a long-lived local language-service
 process for one repository whose distinguishing behavior is that it preserves
 rust-analyzer's ready compiler state after the CLI command that requested it
 has exited. The accepted implementation remains opt-in through
-`SCIP_RUST_SEMANTIC_DURABLE_SESSION=1`.
+`SCIP_RUST_SEMANTIC_DURABLE_SESSION=1` at this historical checkpoint; Phase 6
+later defaulted the same transport after the remaining product gates passed.
 
 The command-side provider keeps its synchronous `RustAnalyzerSessionRequester`
 contract. It publishes an atomic request into a repository- and helper-build-
@@ -1305,15 +1306,8 @@ Important rejected ideas:
   unless the boundary is large enough; do not convert small kernels just because
   they are Rust.
 
-What is left:
+Separate follow-ups outside this completed roadmap:
 
-- Move ts-morph Project ownership into the demand-started project service and
-  key semantic fragments by the now-proved affected identities. Phase 2 showed
-  which files may change, but it deliberately did not skip indexers or semantic
-  computation.
-- Make the separate product decision whether to enable durable transport by
-  default. The implementation is now eligible, but this calibration campaign
-  intentionally leaves `SCIP_RUST_SEMANTIC_DURABLE_SESSION=1` as an opt-in.
 - Reduce Vega semantic-prewarm candidate loading, now isolated at 13.837s of a
   26.055s warm prewarm. First split durable evidence validation/decoding from
   fallback row loading and source-range correction; the set-oriented row query
@@ -1646,6 +1640,42 @@ identities, and the accepted deferred contract forces composition until the
 whole companion is intentionally materialized. OpenCode finished clean and
 fresh with current/recovery generation checks passing.
 
+## Phase 6 Durable Rust Default and Rollout
+
+The readiness-v2 and complete-response route is now the default Rust semantic
+transport. `SCIP_RUST_SEMANTIC_DURABLE_SESSION=0` selects the previous
+per-command worker, and any durable helper/readiness/timeout/request failure
+automatically latches that command to the same worker fallback. Status reports
+the selection, validity, fallback, and live/stopped/stale helper state.
+
+Fresh evidence controls at the default boundary:
+
+| Corpus | Transport | Cold | Warm | Output |
+| --- | --- | ---: | ---: | --- |
+| scip-query | worker opt-out | 7.436s | — | `d8706ecc…` |
+| scip-query | durable default | 6.068s | 3.724s | `d8706ecc…` |
+| SynthRunnerRust | worker opt-out | 21.227s | — | `3d9caaf2…` |
+| SynthRunnerRust | durable default | 18.414s | 1.226s | `47291cda…` |
+| SynthRunnerRust | packed durable default | 18.688s | — | `47291cda…` |
+
+Cold improved 18.4% locally and 13.3% on SynthRunnerRust, so defaulting does
+not trade first-fill latency for warm speed. The Synth output transition is an
+accepted accuracy correction: worker cold reproduced the historical
+fresh-session payload with missing callees, while durable readiness plus
+completion retry reproduced the already accepted 1,661 rows / 3,117 reference
+facts and 1,661 rows / 2,564 callee facts with zero incomplete Rust references.
+The packed 0.15.0 install started its own packaged helper and reported it live.
+
+No Rust semantic reference-key narrowing was accepted because any Rust file
+can introduce a new reference to a definition; the existing dependency graph
+cannot prove a file-local answer complete. No new native kernel was accepted:
+the prior helper boundary lacked a warm end-to-end win, and no remaining pure
+CPU slice satisfies AD-7's measured share and improvement thresholds. These
+are evidence-backed rejections, not unfinished implementation items.
+
+Final closure passed 1,218 tests across 177 files, typecheck, lint, build,
+package verification, reindex, and diff-gate with zero findings or advisories.
+
 ## Run History
 
 Machine-readable run history:
@@ -1678,9 +1708,10 @@ acceptance corpus for this slice.
   Readiness version 2 reproduced exact outputs and semantic payloads with zero
   incomplete Rust references across all five SynthRunnerRust and VegaAssistant
   controls, while both forward and reverse warm comparisons exceeded the 20%
-  gate. Keep the route opt-in until a separate product-default decision.
-- Accept the bounded live complete-response entry under that same opt-in
-  durable identity. It serves only exact repeated combined requests under a
+  gate. Phase 6 subsequently made this eligible route the default with worker
+  opt-out/failover.
+- Accept the bounded live complete-response entry under the durable default
+  identity. It serves only exact repeated combined requests under a
   reused identity, clears on invalidation/shutdown, and moved Vega warm full
   health below 50 seconds without changing semantic facts.
 - Treat command hashes and semantic fact counts as separate acceptance gates for

@@ -6,6 +6,7 @@ import type { LastRefreshMetadata, ProjectConfig, WatchConfig, WatcherStatus } f
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import type { TypeScriptSemanticServiceStatus } from '../semantic/typescript/session-protocol.js';
 import type { TypeScriptIndexServiceStatus } from '../reindex/typescript-index-protocol.js';
+import { isProcessAlive } from './process-liveness.js';
 
 export const WATCH_SERVICE_PROTOCOL_VERSION = 3;
 export const WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS = 5_000;
@@ -344,7 +345,7 @@ export function acquireWatchProcessLock(
   opts: { pid?: number; now?: () => Date; isProcessAlive?: (pid: number) => boolean } = {},
 ): WatchProcessLockResult {
   const pid = opts.pid ?? process.pid;
-  const isAlive = opts.isProcessAlive ?? defaultIsProcessAlive;
+  const isAlive = opts.isProcessAlive ?? isProcessAlive;
   const releaseNoop = (): void => undefined;
   const existing = readWatchProcessLock(lockPath);
   if (existing && isAlive(existing.pid)) {
@@ -564,18 +565,9 @@ function errorCode(error: unknown): string | undefined {
   return typeof error === 'object' && error && 'code' in error ? (error as { code?: string }).code : undefined;
 }
 
-function defaultIsProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return errorCode(error) === 'EPERM';
-  }
-}
-
 const DEFAULT_WATCH_SERVICE_RUNTIME: WatchServiceRuntime = {
   now: Date.now,
-  isProcessAlive: defaultIsProcessAlive,
+  isProcessAlive,
   spawnServer(serverPath, projectRoot, cliVersion, watchOverrides) {
     if (!existsSync(serverPath)) {
       throw new Error(`Watch service helper was not found at ${serverPath}. Run npm run build first.`);

@@ -519,7 +519,9 @@ describe('status config diagnostics', () => {
     );
 
     const previousProjectRoot = process.env['SCIP_QUERY_PROJECT_ROOT'];
+    const previousRustSession = process.env['SCIP_RUST_SEMANTIC_DURABLE_SESSION'];
     process.env['SCIP_QUERY_PROJECT_ROOT'] = projectRoot;
+    delete process.env['SCIP_RUST_SEMANTIC_DURABLE_SESSION'];
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
     try {
@@ -550,6 +552,11 @@ describe('status config diagnostics', () => {
       } else {
         process.env['SCIP_QUERY_PROJECT_ROOT'] = previousProjectRoot;
       }
+      if (previousRustSession === undefined) {
+        delete process.env['SCIP_RUST_SEMANTIC_DURABLE_SESSION'];
+      } else {
+        process.env['SCIP_RUST_SEMANTIC_DURABLE_SESSION'] = previousRustSession;
+      }
     }
   });
 
@@ -557,13 +564,15 @@ describe('status config diagnostics', () => {
     const projectRoot = createProject();
     writeFileSync(join(projectRoot, 'affected-shadow-latest.json'), `${JSON.stringify(passingShadowRecord())}\n`);
     const previousProjectRoot = process.env['SCIP_QUERY_PROJECT_ROOT'];
+    const previousRustSession = process.env['SCIP_RUST_SEMANTIC_DURABLE_SESSION'];
     process.env['SCIP_QUERY_PROJECT_ROOT'] = projectRoot;
+    delete process.env['SCIP_RUST_SEMANTIC_DURABLE_SESSION'];
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
     try {
       handleStatus({ json: true });
       const payload = JSON.parse(log.mock.calls[0]![0] as string) as {
-        result: { affectedSetShadow: unknown; sqliteGeneration: unknown };
+        result: { affectedSetShadow: unknown; sqliteGeneration: unknown; rustSemanticSession: unknown };
       };
       expect(payload.result.affectedSetShadow).toMatchObject({
         state: 'passing',
@@ -574,12 +583,24 @@ describe('status config diagnostics', () => {
         actualFiles: ['src/a.ts'],
       });
       expect(payload.result.sqliteGeneration).toEqual(expect.objectContaining({ state: 'legacy' }));
+      expect(payload.result.rustSemanticSession).toEqual(
+        expect.objectContaining({
+          transport: 'durable',
+          state: 'stopped',
+          source: 'default',
+          fallback: 'worker',
+          valid: true,
+        }),
+      );
 
       log.mockClear();
       handleStatus({});
       const output = log.mock.calls.map((call) => String(call[0])).join('\n');
       expect(output).toContain('Shadow:   passing, 100.0% recall, 1 predicted / 1 changed, 25.0% of project');
       expect(output).toContain('DB gen:   legacy (no generation record)');
+      expect(output).toContain(
+        'Rust sess: durable/stopped (default; worker fallback; opt out with SCIP_RUST_SEMANTIC_DURABLE_SESSION=0)',
+      );
       expect(output).toContain(`Latest:   ${join(projectRoot, 'affected-shadow-latest.json')}`);
     } finally {
       log.mockRestore();
@@ -587,6 +608,11 @@ describe('status config diagnostics', () => {
         delete process.env['SCIP_QUERY_PROJECT_ROOT'];
       } else {
         process.env['SCIP_QUERY_PROJECT_ROOT'] = previousProjectRoot;
+      }
+      if (previousRustSession === undefined) {
+        delete process.env['SCIP_RUST_SEMANTIC_DURABLE_SESSION'];
+      } else {
+        process.env['SCIP_RUST_SEMANTIC_DURABLE_SESSION'] = previousRustSession;
       }
     }
   });

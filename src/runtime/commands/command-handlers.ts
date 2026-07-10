@@ -61,6 +61,7 @@ import {
   createTsServerProvider,
 } from '../../semantic/typescript/tsserver-provider.js';
 import { isTypeScriptLike } from '../../semantic/typescript/source-kinds.js';
+import { rustSemanticSessionStatus } from '../../semantic/rust/lsp-session.js';
 import { healthPhases } from '../../queries/health/health.js';
 import { writeProfileEvent } from '../../instrumentation/profile.js';
 import {
@@ -1497,11 +1498,16 @@ export function handleStatus(rawOpts: unknown): void {
   );
   const affectedSetShadow = readAffectedSetShadowStatus(report.dbPath);
   const sqliteGeneration = inspectSqliteGeneration(report.dbPath, report.freshness.metaPath);
+  const rustSemanticSession = rustSemanticSessionStatus(
+    report.projectRoot,
+    process.env['SCIP_RUST_SEMANTIC_DURABLE_SESSION'],
+  );
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('status', [], opts, {
       ...report,
       affectedSetShadow,
       sqliteGeneration,
+      rustSemanticSession,
       watchService,
       stats: statusStats(report.exists),
     });
@@ -1511,6 +1517,7 @@ export function handleStatus(rawOpts: unknown): void {
     affectedSetShadow,
     capabilities: booleanOptionValue(opts, 'capabilities'),
     sqliteGeneration,
+    rustSemanticSession,
     watchService,
   });
 }
@@ -1540,6 +1547,7 @@ function renderStatusReport(
     affectedSetShadow: AffectedSetShadowStatus;
     capabilities: boolean;
     sqliteGeneration: SqliteGenerationInspection;
+    rustSemanticSession: ReturnType<typeof rustSemanticSessionStatus>;
     watchService: ReturnType<typeof watchServiceReport>;
   },
 ): void {
@@ -1560,6 +1568,10 @@ function renderStatusReport(
     console.log(`Refresh:  ${formatLastRefresh(report.freshness.lastRefresh)}`);
   }
   renderWatchServiceReport(opts.watchService);
+  console.log(
+    `Rust sess: ${opts.rustSemanticSession.transport}/${opts.rustSemanticSession.state} (${opts.rustSemanticSession.source}; worker fallback; opt out with ${opts.rustSemanticSession.optOut})`,
+  );
+  if (!opts.rustSemanticSession.valid) console.log('Rust note: invalid durable-session value; using worker fallback');
   renderSqliteGeneration(opts.sqliteGeneration);
   console.log(`Shadow:   ${formatAffectedSetShadowStatus(opts.affectedSetShadow)}`);
   console.log(`Latest:   ${opts.affectedSetShadow.latestPath}`);

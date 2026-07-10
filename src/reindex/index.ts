@@ -17,6 +17,7 @@ import {
 import { basename, dirname, extname, join } from 'node:path';
 import { platform } from 'node:os';
 import { resolveScipBinary, tryInstallScipCli } from '../runtime/scip-cli.js';
+import { isProcessAlive } from '../runtime/process-liveness.js';
 import type { LastRefreshMetadata, RefreshTrigger, SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import { auxiliaryDocumentsAugmentationStage } from './augment.js';
@@ -1881,15 +1882,6 @@ async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boole
     await delay(50);
   }
   return !isProcessAlive(pid);
-}
-
-function isProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function delay(ms: number): Promise<void> {

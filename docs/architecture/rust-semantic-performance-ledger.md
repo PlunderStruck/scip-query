@@ -90,9 +90,11 @@ moving the whole product surface at once.
 - `src/semantic/typescript/tsserver-provider.ts` is an experimental
   TypeScript-language-service comparison provider. It exists to compare against
   ts-morph, not to replace ts-morph by default.
-- `src/semantic/rust/lsp-session.ts` keeps a command-scoped `rust-analyzer`
-  session warm behind the Rust provider. It serves references, callees,
-  hover-derived signatures, and compiler-backed import-definition lookups.
+- `src/semantic/rust/lsp-session.ts` selects a demand-started durable
+  `rust-analyzer` session by default behind the Rust provider, with an explicit
+  per-command worker opt-out and automatic worker failover. It serves
+  references, callees, hover-derived signatures, and compiler-backed
+  import-definition lookups.
 - `src/semantic/rust/import-usage.ts` combines source-fallback Rust `use`
   parsing with `rust-analyzer` definition answers for project-local import
   source paths.

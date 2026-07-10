@@ -7,6 +7,7 @@ import {
   watchServicePaths,
   type WatchServiceState,
 } from '../runtime/watch-service.js';
+import { isProcessAlive } from '../runtime/process-liveness.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import type { TypeScriptDocumentFragment } from './typescript-document-emitter.js';
 import {
@@ -218,12 +219,5 @@ const DEFAULT_RUNTIME: TypeScriptIndexRequesterRuntime = {
     const signal = new Int32Array(new SharedArrayBuffer(4));
     Atomics.wait(signal, 0, 0, durationMs);
   },
-  isProcessAlive(pid) {
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch {
-      return false;
-    }
-  },
+  isProcessAlive,
 };

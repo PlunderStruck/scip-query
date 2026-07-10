@@ -10,6 +10,7 @@ import type {
   RustImportDefinitionWorkerResponse,
 } from './lsp-session.js';
 import { profileEnabled, writeProfileEvent } from '../../instrumentation/profile.js';
+import { isProcessAlive } from '../../runtime/process-liveness.js';
 import { writeJsonAtomic } from '../../storage/atomic-json.js';
 import { rustCompilerEngineIdentity, type RustCompilerEngineIdentity } from './engine-identity.js';
 import { rustAnalyzerProjectFingerprint } from './project-fingerprint.js';
@@ -385,7 +386,7 @@ function dispatchDurableRustSessionRequest<Response>(
         }
         return payload.response as Response;
       }
-      const state = readDurableServerState(sessionDir);
+      const state = readDurableRustSessionServerState(sessionDir);
       if (!state || !isDurableRustSessionStateLive(state, runtime.now(), runtime.isProcessAlive)) {
         ensureDurableRustSessionServer(sessionDir, serverPath, semanticWorkerPath, deadline, runtime);
       }
@@ -405,21 +406,21 @@ function ensureDurableRustSessionServer(
   requestDeadline: number,
   runtime: DurableRustSessionRequesterRuntime,
 ): void {
-  const current = readDurableServerState(sessionDir);
+  const current = readDurableRustSessionServerState(sessionDir);
   if (current && isDurableRustSessionStateLive(current, runtime.now(), runtime.isProcessAlive)) return;
 
   rmSync(resolve(sessionDir, 'server.json'), { force: true });
   runtime.spawnServer(serverPath, sessionDir, semanticWorkerPath);
   const startupDeadline = Math.min(requestDeadline, runtime.now() + DURABLE_RUST_SESSION_STARTUP_TIMEOUT_MS);
   while (runtime.now() <= startupDeadline) {
-    const state = readDurableServerState(sessionDir);
+    const state = readDurableRustSessionServerState(sessionDir);
     if (state && isDurableRustSessionStateLive(state, runtime.now(), runtime.isProcessAlive)) return;
     runtime.sleep(DURABLE_RUST_SESSION_POLL_INTERVAL_MS);
   }
   throw new Error('Durable Rust semantic session helper did not become ready within 5s.');
 }
 
-function readDurableServerState(sessionDir: string): DurableRustSessionServerState | null {
+export function readDurableRustSessionServerState(sessionDir: string): DurableRustSessionServerState | null {
   try {
     const parsed = JSON.parse(
       readFileSync(resolve(sessionDir, 'server.json'), 'utf8'),
@@ -523,14 +524,7 @@ const DEFAULT_IDENTITY_RUNTIME: DurableRustSessionIdentityRuntime = {
 const DEFAULT_REQUESTER_RUNTIME: DurableRustSessionRequesterRuntime = {
   now: Date.now,
   randomId: randomUUID,
-  isProcessAlive(pid) {
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch {
-      return false;
-    }
-  },
+  isProcessAlive,
   spawnServer(serverPath, sessionDir, semanticWorkerPath) {
     if (!existsSync(serverPath)) {
       throw new Error(`Durable Rust semantic session helper was not found at ${serverPath}. Run npm run build first.`);

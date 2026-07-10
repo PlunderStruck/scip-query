@@ -10,6 +10,7 @@ import {
 } from './durable-session.js';
 import { createWorkerRustAnalyzerSessionRequester } from './lsp-session.js';
 import { writeJsonAtomic } from '../../storage/atomic-json.js';
+import { isProcessAlive } from '../../runtime/process-liveness.js';
 
 const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60_000;
 const POLL_INTERVAL_MS = 10;
@@ -134,15 +135,6 @@ function readRecordedPid(lockPath: string): number | null {
     return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
   } catch {
     return null;
-  }
-}
-
-function isProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
   }
 }
 

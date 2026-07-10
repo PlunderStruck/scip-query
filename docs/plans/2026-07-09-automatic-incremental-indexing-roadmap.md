@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Phases 1–5 complete; Phase 6 durable Rust defaulting and rollout next
+Status: Complete; Phases 0–6 accepted
 
 ## Goal
 
@@ -73,9 +73,10 @@ The program is complete when all of these statements are true:
 - Semantic callees have file/dependency keys. TypeScript semantic references
   use the whole project fingerprint, while TypeScript signatures and import
   usage are not durably cached.
-- The durable rust-analyzer session and exact response cache are implemented
-  and benchmark-accepted as an opt-in. They are not yet the default product
-  lifecycle.
+- The durable rust-analyzer session and exact response cache are the
+  benchmark-accepted default. They start on semantic demand, exit after a
+  clean idle period, and retain explicit worker opt-out plus automatic
+  failover.
 - Fresh reindex atomically promotes a complete `.scip`, SQLite database, and
   metadata record. The SQLite database is reconstructed from the merged SCIP
   artifact rather than updated by changed documents.
@@ -619,14 +620,36 @@ changes end-to-end latency.
   2 affected dependency identity where facts prove it safe.
 - Profile remaining cold/full paths. Port only AD-7-qualified CPU kernels,
   preferring in-process native bindings over a helper process when safe.
-- Roll out automatic service and incremental generations opt-in -> canary ->
-  default, with status diagnostics, repair command, metrics, and documented
-  rollback.
+- Confirm the already-default automatic service and incremental generations
+  alongside the Rust default, with status diagnostics, repair commands,
+  metrics, and documented rollback.
 
 **Dependency:** earlier contracts and generation model.
 
 **Exit gate:** no corpus regresses beyond the hard gate; default behavior is
 self-healing and the old full rebuild remains a supported repair oracle.
+
+**Progress:** Complete. Executable closure:
+[`2026-07-10-rust-default-rollout.md`](./2026-07-10-rust-default-rollout.md).
+The durable rust-analyzer helper is now the demand-started default; explicit
+`SCIP_RUST_SEMANTIC_DURABLE_SESSION=0` and automatic per-command worker
+failover preserve rollback. Status reports selected transport plus
+live/stopped/stale helper state. Current cold controls improved 18.4% locally
+and 13.3% on SynthRunnerRust, warm Synth fell to 1.226s, and a packed install
+reproduced the accepted `47291cda…` output through its packaged helper. The
+Synth worker control reproduced the known incomplete fresh-session callee
+payload; default readiness/completion retry retained the accepted 3,117
+references and 2,564 callees instead.
+
+Final closure passed 1,218 tests across 177 files, typecheck, lint, build,
+package verification, reindex, and diff-gate with zero findings or advisories.
+
+Rust reference keys remain project-wide because a new reference can originate
+in any Rust source file; the existing dependency graph cannot prove a narrower
+cache answer complete. No native slice met AD-7: the prior helper-process
+kernel did not improve warm command time, and remaining large spans mix I/O,
+decoding, and source correction. Both changes are rejected pending new facts,
+not left as unbounded roadmap work.
 
 ## Stress-Test Findings and Required Responses
 
@@ -676,8 +699,9 @@ self-healing and the old full rebuild remains a supported repair oracle.
   generation coordinator publishes.
 - **DEFER:** File-level index writes before affected-set shadow recall is 100%.
 - **DEFER:** Dropping old evidence rows during the first cache-key migration.
-- **DEFER:** Defaulting durable Rust reuse before crash, package, version, and
-  concurrent-command matrices pass.
+- **FULFILLED:** Durable Rust reuse passed crash, package, version,
+  concurrent-owner, invalidation, opt-out, and multi-corpus matrices before
+  becoming the default. The per-command worker remains its fallback.
 - **DEFER:** Claiming incremental Rust SCIP output merely because the LSP
   semantic session is durable. The outputs are different products.
 - **DEFER:** Optimizing Vega candidate loading again without a new profile;
@@ -728,12 +752,6 @@ Complete this at every phase close:
 6. Phase 5 atomic incremental generation storage.
 7. Phase 6 durable Rust defaulting, selective native kernels, and rollout.
 
-The immediate action is Phase 6's durable Rust default decision. Phase 5's
-local and OpenCode performance, recovery, status, parity, and package gates now
-pass. Re-run the existing durable-session calibration against its current
-opt-in implementation, then decide whether lifecycle parity supports making it
-the default before considering any new native kernel:
-
-```sh
-SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/semantic/rust/durable-session-server.ts --json
-```
+The roadmap is complete. Routine release verification and observation remain;
+new native ports, cache-key narrowing, or compiler substitutions require a new
+evidence-gated plan with their own baseline rather than extending this one.

@@ -6,6 +6,7 @@ import { SHARE_ENV, Worker } from 'node:worker_threads';
 import { parsePositiveInteger } from '../../domain/number-parsing.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { profileEnabled, profileSpan, writeProfileEvent } from '../../instrumentation/profile.js';
+import { isProcessAlive } from '../../runtime/process-liveness.js';
 import type { SemanticCallee, SemanticReference } from '../types.js';
 import type { RustImportDefinitionResolver } from './import-usage.js';
 import type {
@@ -18,7 +19,12 @@ import type {
 } from './provider.js';
 import type { RustSemanticStatus } from './status.js';
 import type { RustReferenceWorkerRequest, RustReferenceWorkerResponse } from './lsp-batch-worker.js';
-import { createDurableRustAnalyzerSessionRequester } from './durable-session.js';
+import {
+  createDurableRustAnalyzerSessionRequester,
+  durableRustSessionDirectory,
+  isDurableRustSessionStateLive,
+  readDurableRustSessionServerState,
+} from './durable-session.js';
 
 export interface RustAnalyzerSessionRequester {
   requestSemantic(request: RustReferenceWorkerRequest, timeoutMs: number): RustReferenceWorkerResponse;
@@ -478,8 +484,62 @@ export function rustSemanticSettleDelayMs(
   return DEFAULT_RUST_SETTLE_DELAY_MS;
 }
 
+export interface RustSemanticSessionSelection {
+  transport: 'worker' | 'durable';
+  source: 'default' | 'environment';
+  fallback: 'worker';
+  valid: boolean;
+  optOut: 'SCIP_RUST_SEMANTIC_DURABLE_SESSION=0';
+}
+
+export type RustSemanticSessionStatus = RustSemanticSessionSelection &
+  (
+    | { state: 'per-command' | 'stopped' }
+    | {
+        state: 'live' | 'stale';
+        pid: number;
+        heartbeatAtMs: number;
+        busyUntilMs?: number;
+      }
+  );
+
+export function rustSemanticSessionSelection(configuredValue: string | undefined): RustSemanticSessionSelection {
+  const normalized = configuredValue?.trim().toLowerCase();
+  const explicitWorker =
+    normalized === '0' || normalized === 'false' || normalized === 'off' || normalized === 'worker';
+  const explicitDurable =
+    normalized === '1' || normalized === 'true' || normalized === 'on' || normalized === 'durable';
+  const usesDefault = normalized === undefined || normalized === '';
+  return {
+    transport: explicitWorker || (!usesDefault && !explicitDurable) ? 'worker' : 'durable',
+    source: usesDefault ? 'default' : 'environment',
+    fallback: 'worker',
+    valid: usesDefault || explicitWorker || explicitDurable,
+    optOut: 'SCIP_RUST_SEMANTIC_DURABLE_SESSION=0',
+  };
+}
+
 export function rustSemanticSessionTransport(configuredValue: string | undefined): 'worker' | 'durable' {
-  return configuredValue === '1' || configuredValue === 'true' ? 'durable' : 'worker';
+  return rustSemanticSessionSelection(configuredValue).transport;
+}
+
+export function rustSemanticSessionStatus(
+  projectRoot: string,
+  configuredValue: string | undefined,
+): RustSemanticSessionStatus {
+  const selection = rustSemanticSessionSelection(configuredValue);
+  if (selection.transport === 'worker') return { ...selection, state: 'per-command' };
+  const serverPath = fileURLToPath(rustSemanticSessionServerUrl());
+  const sessionDir = durableRustSessionDirectory(projectRoot, serverPath, tmpdir());
+  const state = readDurableRustSessionServerState(sessionDir);
+  if (!state) return { ...selection, state: 'stopped' };
+  return {
+    ...selection,
+    state: isDurableRustSessionStateLive(state, Date.now(), isProcessAlive) ? 'live' : 'stale',
+    pid: state.pid,
+    heartbeatAtMs: state.heartbeatAtMs,
+    ...(state.busyUntilMs === undefined ? {} : { busyUntilMs: state.busyUntilMs }),
+  };
 }
 
 type RustSessionFailoverReason = 'readiness' | 'timeout' | 'helper' | 'request';

@@ -6,6 +6,7 @@ import type { WatcherStatus } from '../../src/domain/types.js';
 import {
   WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS,
   WATCH_SERVICE_PROTOCOL_VERSION,
+  acquireWatchProcessLock,
   classifyWatchServiceState,
   ensureWatchService,
   ensureWatchServiceForCommand,
@@ -89,6 +90,19 @@ describe('watch service contract', () => {
     expect(planWatchServiceAction('stop', stale)).toEqual({ kind: 'clean-stale', state: stale.state });
     expect(planWatchServiceAction('stop', live)).toEqual({ kind: 'signal-stop', state: live.state });
     expect(planWatchServiceAction('status', live)).toEqual({ kind: 'report', classification: live });
+  });
+
+  it('uses shared process liveness for the default lock owner check', () => {
+    withTempCache((cacheDir) => {
+      const lockPath = join(cacheDir, 'watch.lock');
+      const owner = acquireWatchProcessLock(lockPath, IDENTITY.projectRoot);
+      try {
+        expect(owner.acquired).toBe(true);
+        expect(acquireWatchProcessLock(lockPath, IDENTITY.projectRoot).acquired).toBe(false);
+      } finally {
+        owner.release();
+      }
+    });
   });
 
   it('allows idle shutdown only from clean idle and lets zero mean always-on', () => {

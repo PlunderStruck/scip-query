@@ -7,6 +7,7 @@ import {
   createConfiguredRustAnalyzerSessionRequester,
   createFailoverRustAnalyzerSessionRequester,
   createRustAnalyzerSessionResolver,
+  rustSemanticSessionSelection,
   rustSemanticSessionTransport,
   type RustAnalyzerSessionRequester,
   type RustImportDefinitionWorkerRequest,
@@ -411,15 +412,26 @@ describe('createFailoverRustAnalyzerSessionRequester', () => {
 });
 
 describe('RustAnalyzerSessionResolver', () => {
-  it('selects durable transport only for an explicit opt-in', () => {
-    expect(rustSemanticSessionTransport(undefined)).toBe('worker');
+  it('selects durable transport by default and preserves explicit worker opt-out', () => {
+    expect(rustSemanticSessionTransport(undefined)).toBe('durable');
     expect(rustSemanticSessionTransport('0')).toBe('worker');
     expect(rustSemanticSessionTransport('false')).toBe('worker');
     expect(rustSemanticSessionTransport('1')).toBe('durable');
     expect(rustSemanticSessionTransport('true')).toBe('durable');
+    expect(rustSemanticSessionTransport('invalid')).toBe('worker');
+    expect(rustSemanticSessionSelection(undefined)).toEqual({
+      transport: 'durable',
+      source: 'default',
+      fallback: 'worker',
+      valid: true,
+      optOut: 'SCIP_RUST_SEMANTIC_DURABLE_SESSION=0',
+    });
+    expect(rustSemanticSessionSelection('invalid')).toEqual(
+      expect.objectContaining({ transport: 'worker', source: 'environment', valid: false }),
+    );
   });
 
-  it('constructs the selected requester without changing the default transport', () => {
+  it('constructs default durable failover and explicit worker transport', () => {
     const worker = fakeSessionRequester('worker');
     let workerCreations = 0;
     let durableCreations = 0;
@@ -446,14 +458,13 @@ describe('RustAnalyzerSessionResolver', () => {
       },
     };
 
-    expect(createConfiguredRustAnalyzerSessionRequester('/repo', undefined, factories)).toBe(worker);
     expect(createConfiguredRustAnalyzerSessionRequester('/repo', 'false', factories)).toBe(worker);
-    const configured = createConfiguredRustAnalyzerSessionRequester('/repo', '1', factories);
+    const configured = createConfiguredRustAnalyzerSessionRequester('/repo', undefined, factories);
     expect(configured).not.toBe(durable);
     expect(durableCreations).toBe(1);
-    expect(workerCreations).toBe(2);
+    expect(workerCreations).toBe(1);
     expect(configured.requestSemantic(semanticRequest, 1_000).available).toBe(true);
-    expect(workerCreations).toBe(3);
+    expect(workerCreations).toBe(2);
     expect(durableShutdowns).toBe(1);
   });
 
