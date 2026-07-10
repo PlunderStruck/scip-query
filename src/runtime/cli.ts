@@ -5,10 +5,17 @@ import { cliVersion, renderHeuristicNotice } from './cli-support.js';
 import { commandDescriptors } from './commands/command-descriptors.js';
 import { registerCommandDescriptors } from './commands/command-registry.js';
 import { loadProjectConfig, resolveIndexStoragePaths } from './config.js';
-import { resolveProjectRoot } from './cli-context.js';
+import { resolveProjectRoot, withDb } from './cli-context.js';
 import { maybePrintUpdateNotice } from './update-notice.js';
 import { ensureWatchServiceForCommand, watchServiceAutoStartEligible } from './watch-service.js';
-import { profileRunId } from '../instrumentation/profile.js';
+import {
+  initializeProfileWorkloadIdentity,
+  profileCommand,
+  profileEnabled,
+  profileRunId,
+  profileWorkloadIdentity,
+} from '../instrumentation/profile.js';
+import { projectEvidenceFingerprint } from '../storage/evidence-cache.js';
 
 program
   .name('scip-query')
@@ -17,7 +24,7 @@ program
 
 registerCommandDescriptors(program, commandDescriptors);
 program.hook('preAction', async (_thisCommand, actionCommand) => {
-  profileRunId();
+  initializeProfileContext();
   const commandName = actionCommand.name();
   await maybePrintUpdateNotice({ commandName });
   if (!watchServiceAutoStartEligible(commandName)) return;
@@ -35,6 +42,22 @@ program.hook('preAction', async (_thisCommand, actionCommand) => {
     console.error(`warning: scip-query watch service did not start: ${service.message}`);
   }
 });
+
+function initializeProfileContext(): void {
+  profileRunId();
+  if (!profileEnabled() || profileWorkloadIdentity()) return;
+  let projectFingerprint: string | null = null;
+  try {
+    projectFingerprint = withDb((db) => projectEvidenceFingerprint(db));
+  } catch {
+    // Setup, init, and first reindex can legitimately run before an index exists.
+  }
+  initializeProfileWorkloadIdentity({
+    command: profileCommand() ?? `scip-query ${process.argv.slice(2).join(' ')}`,
+    toolVersion: cliVersion,
+    projectFingerprint,
+  });
+}
 
 export { program, renderHeuristicNotice };
 

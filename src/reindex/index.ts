@@ -16,6 +16,7 @@ import {
 } from 'node:fs';
 import { basename, dirname, extname, join } from 'node:path';
 import { platform } from 'node:os';
+import { profileAsyncSpan, profileSpan } from '../instrumentation/profile.js';
 import { resolveScipBinary, tryInstallScipCli } from '../runtime/scip-cli.js';
 import { isProcessAlive } from '../runtime/process-liveness.js';
 import type { LastRefreshMetadata, RefreshTrigger, SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
@@ -260,46 +261,77 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
 
   onStatus(`Detected languages: ${languages.join(', ')}`);
 
-  const fingerprint = computeReindexFingerprint(projectRoot, languages, {
-    pnpmWorkspaces: opts.pnpmWorkspaces,
-    typescriptProjectMode: opts.typescriptProjectMode,
-    typescriptProjects: opts.typescriptProjects,
-    clojureConfigPath: opts.clojureConfigPath,
-  });
-  const releaseLock = await acquireReindexLock(join(dirname(paths.outputDb), 'index.lock'), {
-    projectRoot,
-    trigger: opts.trigger,
-    onStatus,
-  });
+  const fingerprint = profileSpan(
+    'reindex.fingerprint',
+    () =>
+      computeReindexFingerprint(projectRoot, languages, {
+        pnpmWorkspaces: opts.pnpmWorkspaces,
+        typescriptProjectMode: opts.typescriptProjectMode,
+        typescriptProjects: opts.typescriptProjects,
+        clojureConfigPath: opts.clojureConfigPath,
+      }),
+    { languages: languages.length },
+  );
+  const releaseLock = await profileAsyncSpan(
+    'reindex.lock',
+    () =>
+      acquireReindexLock(join(dirname(paths.outputDb), 'index.lock'), {
+        projectRoot,
+        trigger: opts.trigger,
+        onStatus,
+      }),
+    { languages: languages.length },
+  );
   let runDir: string | null = null;
 
   try {
-    const reused = reuseExistingIndexIfPossible({
-      opts,
-      paths,
-      languages,
-      fingerprint,
-      start,
-      onStatus,
-    });
+    let reuseObservation: ReindexResult | null = null;
+    const reused = profileSpan(
+      'reindex.reuse-check',
+      () => {
+        reuseObservation = reuseExistingIndexIfPossible({
+          opts,
+          paths,
+          languages,
+          fingerprint,
+          start,
+          onStatus,
+        });
+        return reuseObservation;
+      },
+      () => ({ languages: languages.length, reused: reuseObservation !== null }),
+    );
     if (reused) return reused;
 
-    await ensureScipCliAvailable(skipAutoInstall, onStatus);
+    await profileAsyncSpan('reindex.scip-cli-ready', () => ensureScipCliAvailable(skipAutoInstall, onStatus));
 
     const tempPaths = createTempReindexPaths(paths);
     runDir = tempPaths.runDir;
-    return await runFreshReindex({
-      opts,
-      languages,
-      projectRoot,
-      paths,
-      tempPaths,
-      fingerprint,
-      start,
-      maxHeapMb,
-      skipAutoInstall,
-      onStatus,
-    });
+    let freshObservation: ReindexResult | undefined;
+    const freshResult = await profileAsyncSpan(
+      'reindex.fresh',
+      async () => {
+        freshObservation = await runFreshReindex({
+          opts,
+          languages,
+          projectRoot,
+          paths,
+          tempPaths,
+          fingerprint,
+          start,
+          maxHeapMb,
+          skipAutoInstall,
+          onStatus,
+        });
+        return freshObservation;
+      },
+      () => ({
+        languages: languages.length,
+        reused: freshObservation?.reused,
+        skipped: freshObservation?.skipped.length,
+      }),
+    );
+    return freshResult;
   } catch (error) {
     updateReindexLastRefresh(
       paths.metaPath,
@@ -446,6 +478,20 @@ async function runFreshReindex(opts: {
     NODE_OPTIONS: `--max-old-space-size=${opts.maxHeapMb}`,
   };
 
+  let indexerObservation: FreshIndexRun | undefined;
+  const freshIndexRun = await profileAsyncSpan(
+    'reindex.language-indexers',
+    async () => {
+      indexerObservation = await runLanguageIndexersForFreshReindex(opts, env);
+      return indexerObservation;
+    },
+    () => ({
+      languages: opts.languages.length,
+      indexed: indexerObservation?.indexedOutputs.length,
+      reused: indexerObservation?.reusedLanguages.length,
+      skipped: indexerObservation?.skippedLanguages.length,
+    }),
+  );
   const {
     indexedOutputs,
     skippedLanguages,
@@ -454,7 +500,7 @@ async function runFreshReindex(opts: {
     shards,
     typescriptProjectShardContext,
     incrementalTypeScript,
-  } = await runLanguageIndexersForFreshReindex(opts, env);
+  } = freshIndexRun;
   if (reusedLanguages.length > 0) {
     opts.onStatus(`Reused ${reusedLanguages.length} cached language shard(s): ${reusedLanguages.join(', ')}`);
   }
@@ -466,13 +512,18 @@ async function runFreshReindex(opts: {
       reusedLanguages,
     })
   ) {
-    const lastRefresh = publishFullyReusedLanguageShardArtifacts(
-      opts,
-      indexedOutputs,
-      skippedLanguages,
-      reusedLanguages,
-      languageFingerprints,
-      typescriptProjectShardContext,
+    const lastRefresh = profileSpan(
+      'reindex.publish',
+      () =>
+        publishFullyReusedLanguageShardArtifacts(
+          opts,
+          indexedOutputs,
+          skippedLanguages,
+          reusedLanguages,
+          languageFingerprints,
+          typescriptProjectShardContext,
+        ),
+      { mode: 'metadata-only', languages: indexedOutputs.length, reused: reusedLanguages.length },
     );
     const durationMs = lastRefresh.durationMs;
     opts.onStatus(`All language shards unchanged; reused existing SQLite index in ${(durationMs / 1000).toFixed(1)}s`);
@@ -487,15 +538,25 @@ async function runFreshReindex(opts: {
       shards,
     };
   }
-  const lastRefresh = publishFreshReindexArtifacts(
-    opts,
-    env,
-    indexedOutputs,
-    skippedLanguages,
-    reusedLanguages,
-    languageFingerprints,
-    typescriptProjectShardContext,
-    incrementalTypeScript,
+  const lastRefresh = profileSpan(
+    'reindex.publish',
+    () =>
+      publishFreshReindexArtifacts(
+        opts,
+        env,
+        indexedOutputs,
+        skippedLanguages,
+        reusedLanguages,
+        languageFingerprints,
+        typescriptProjectShardContext,
+        incrementalTypeScript,
+      ),
+    {
+      mode: incrementalTypeScript ? 'incremental-or-fallback' : 'full',
+      languages: indexedOutputs.length,
+      reused: reusedLanguages.length,
+      skipped: skippedLanguages.length,
+    },
   );
   const durationMs = lastRefresh.durationMs;
   opts.onStatus(`Done in ${(durationMs / 1000).toFixed(1)}s`);

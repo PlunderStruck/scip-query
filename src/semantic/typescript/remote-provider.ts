@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { IndexedDefinition } from '../../domain/types.js';
+import { captureProfileEnvironment } from '../../instrumentation/profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { writeJsonAtomic } from '../../storage/atomic-json.js';
 import {
@@ -144,6 +145,7 @@ export class TypeScriptSemanticRequester {
       id,
       generation,
       deadlineAtMs,
+      profileEnvironment: captureProfileEnvironment(),
       request,
     });
 

@@ -497,6 +497,9 @@ function isManagedWorkerEnvironmentKey(key: string): boolean {
     key === 'SCIP_QUERY_PROFILE_CACHE_STATE' ||
     key === 'SCIP_QUERY_PROFILE_COMMAND' ||
     key === 'SCIP_QUERY_PROFILE_OUT' ||
+    key === 'SCIP_QUERY_PROFILE_RUN_ID' ||
+    key === 'SCIP_QUERY_PROFILE_WORKLOAD_IDENTITY' ||
+    key === 'SCIP_QUERY_PROFILE_WORKLOAD_IDENTITY_KIND' ||
     key === 'SCIP_QUERY_PROFILE_MIN_MS'
   );
 }

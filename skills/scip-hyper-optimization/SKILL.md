@@ -120,7 +120,7 @@ This step is complete only when each major pipeline step can be timed as a profi
 
 ### 4. Profile the chain
 
-0. Check whether the target app already has an instrumentation layer before adding spans — a bespoke profiling harness competes with the one the codebase already trusts. When the target is scip-query itself, its instrumentation is `src/instrumentation/profile.ts` (`profileSpan`, env-gated by `SCIP_QUERY_PROFILE`/`SCIP_QUERY_PROFILE_OUT`, with `SCIP_QUERY_PROFILE_CACHE_STATE` for cache-state labels) — use it, don't add a parallel one.
+0. Check whether the target app already has an instrumentation layer before adding spans — a bespoke profiling harness competes with the one the codebase already trusts. When the target is scip-query itself, its instrumentation is `src/instrumentation/profile.ts` (`profileSpan`/`profileAsyncSpan`, env-gated by `SCIP_QUERY_PROFILE`/`SCIP_QUERY_PROFILE_OUT`, with `SCIP_QUERY_PROFILE_CACHE_STATE` for cache-state labels and inherited workload/subsystem identities) — use it, don't add a parallel one.
 1. Measure the target unprofiled.
 2. Measure profiled once and compare overhead.
 3. Measure distinct states: cold index, cold evidence/cache fill, warm cache hit, repeated focused run, production-like mixed state.

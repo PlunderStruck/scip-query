@@ -1741,6 +1741,31 @@ its isolated hook install/remove smoke kept `git status` clean. The final
 reindex reused the fresh generation in 0.3 seconds, and diff gate completed
 with zero findings or advisories.
 
+### 2026-07-10 — subsystem work-identity coverage
+
+The follow-up instrumentation campaign deliberately collected data before
+choosing another speedup. Every named profile event now receives a stable
+command/project workload identity and a subsystem work identity; exact local
+identities remain a separate, stricter contract. Persistent Rust and TypeScript
+services apply the requesting command's identity instead of retaining a stale
+daemon value, generic evidence reads carry exact cache-key identities, and
+reindex exposes fingerprint, lock, reuse, indexer, and publication phases.
+
+The combined measurements contain 34,824 timed spans, 101 observed names, and
+16 subsystem families with 100% aggregate identity coverage. Exact identity is
+available for 28,000 events across five names. Most exact repetition is cheap:
+23,595 repeated file reads consumed 290ms total. Cold indexing rebuilt 325
+files / 21,976 symbols in 4,854ms; the immediate no-change refresh reused the
+publication in 354ms.
+
+The most important observation is transport-level rather than an exact local
+computation. `dead --json --full` issued 2,077 synchronous requests through the
+persistent TypeScript mailbox and took 25,765ms; the direct provider produced
+the same 1,519,771-byte SHA-256 output in 3,216ms. The 8.0x difference is
+recorded in `2026-07-10-profile-identity-coverage-ledger.md`. No batching or
+protocol redesign is selected here; that remains the next evidence-backed
+planning decision.
+
 ## Run History
 
 Machine-readable run history:

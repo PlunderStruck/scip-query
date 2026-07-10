@@ -35,11 +35,17 @@ describe('profile work audit', () => {
 
     expect(report).toMatchObject({
       profileEvents: 10,
+      spanEvents: 10,
+      distinctSpanNames: 4,
       instrumentedEvents: 9,
       unclassifiedInstrumentedEvents: 1,
+      exactIdentifiedSpanNames: 3,
+      workloadIdentifiedEvents: 0,
+      workloadIdentifiedSpanNames: 0,
       runCount: 2,
       repeatedGroups: 2,
       largestOpportunityMs: 14,
+      repeatedWorkloads: 0,
     });
     expect(report.rows).toEqual([
       {
@@ -64,15 +70,74 @@ describe('profile work audit', () => {
     ]);
   });
 
-  it('does not guess that legacy or same-name different-input events are repeated work', () => {
+  it('aggregates repeated same-span events within each run before comparing workloads', () => {
+    const report = auditProfileWork([
+      workloadEvent('typescript.source-file', 'typescript', 'workload-a', 'run-1', 5, 'health'),
+      workloadEvent('typescript.source-file', 'typescript', 'workload-a', 'run-1', 7, 'health'),
+      workloadEvent('typescript.source-file', 'typescript', 'workload-a', 'run-2', 4, 'health'),
+      workloadEvent('typescript.source-file', 'typescript', 'workload-a', 'run-2', 6, 'health'),
+      workloadEvent('semantic.references', 'semantic', 'workload-b', 'run-1', 20, 'health'),
+    ]);
+
+    expect(report).toMatchObject({
+      spanEvents: 5,
+      distinctSpanNames: 2,
+      workloadIdentifiedEvents: 5,
+      workloadIdentifiedSpanNames: 2,
+      repeatedWorkloads: 1,
+      largestRepeatedWorkloadMs: 10,
+    });
+    expect(report.workloadRows).toEqual([
+      {
+        subsystem: 'typescript',
+        spanName: 'typescript.source-file',
+        subsystemWorkIdentity: 'workload-a',
+        commands: ['health'],
+        runCount: 2,
+        totalEvents: 4,
+        firstRunEvents: 2,
+        laterRunEvents: 2,
+        totalDurationMs: 22,
+        firstRunMs: 12,
+        laterRunMs: 10,
+      },
+    ]);
+    expect(report.subsystemCoverage).toEqual([
+      {
+        subsystem: 'typescript',
+        events: 4,
+        totalDurationMs: 22,
+        spanNames: ['typescript.source-file'],
+        workloadIdentifiedEvents: 4,
+        workloadIdentifiedSpanNames: 1,
+        exactIdentifiedEvents: 0,
+        exactIdentifiedSpanNames: 0,
+      },
+      {
+        subsystem: 'semantic',
+        events: 1,
+        totalDurationMs: 20,
+        spanNames: ['semantic.references'],
+        workloadIdentifiedEvents: 1,
+        workloadIdentifiedSpanNames: 1,
+        exactIdentifiedEvents: 0,
+        exactIdentifiedSpanNames: 0,
+      },
+    ]);
+  });
+
+  it('does not compare run-only or same-name different-input events across runs', () => {
     const report = auditProfileWork([
       { command: 'health', name: 'same-span', durationMs: 90 },
       workEvent('same-span', 'input-a', 'run-1', 'computed', 40, 'health'),
       workEvent('same-span', 'input-b', 'run-1', 'computed', 30, 'health'),
+      workloadEvent('same-span', 'same-span', 'run-only-a', 'run-1', 10, 'health', 'run-only'),
+      workloadEvent('same-span', 'same-span', 'run-only-a', 'run-2', 8, 'health', 'run-only'),
     ]);
 
-    expect(report).toMatchObject({ profileEvents: 3, instrumentedEvents: 2, repeatedGroups: 0 });
+    expect(report).toMatchObject({ profileEvents: 5, instrumentedEvents: 2, repeatedGroups: 0 });
     expect(report.rows).toEqual([]);
+    expect(report.workloadRows).toEqual([]);
     expect(renderProfileWorkAudit(report, '/tmp/profile.jsonl')).toContain('No exact repeated computations were found');
   });
 
@@ -98,4 +163,25 @@ function workEvent(
   command: string,
 ): ProfileEvent {
   return { name, workIdentity, runId, workOutcome, durationMs, command };
+}
+
+function workloadEvent(
+  name: string,
+  subsystem: string,
+  subsystemWorkIdentity: string,
+  runId: string,
+  durationMs: number,
+  command: string,
+  workloadIdentityKind: 'published-project' | 'run-only' = 'published-project',
+): ProfileEvent {
+  return {
+    name,
+    subsystem,
+    subsystemWorkIdentity,
+    workloadIdentity: 'top-level-workload',
+    workloadIdentityKind,
+    runId,
+    durationMs,
+    command,
+  };
 }

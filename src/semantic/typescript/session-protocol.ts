@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { IndexedDefinition } from '../../domain/types.js';
+import type { ProfileEnvironment } from '../../instrumentation/profile.js';
 import { stringArray } from '../../storage/evidence-payload.js';
 
 export const TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION = 1;
@@ -20,6 +21,7 @@ export interface TypeScriptSemanticMailboxEnvelope {
   id: string;
   generation: string;
   deadlineAtMs: number;
+  profileEnvironment?: ProfileEnvironment;
   request: TypeScriptSemanticRequest;
 }
 
@@ -92,12 +94,22 @@ export function parseTypeScriptSemanticEnvelope(raw: string): TypeScriptSemantic
     typeof parsed.id !== 'string' ||
     typeof parsed.generation !== 'string' ||
     typeof parsed.deadlineAtMs !== 'number' ||
+    (parsed.profileEnvironment !== undefined && !isProfileEnvironment(parsed.profileEnvironment)) ||
     !parsed.request ||
     !isTypeScriptSemanticRequest(parsed.request)
   ) {
     throw new Error('TypeScript semantic service received an invalid mailbox request.');
   }
   return parsed as TypeScriptSemanticMailboxEnvelope;
+}
+
+function isProfileEnvironment(value: unknown): value is ProfileEnvironment {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.values(value).every((entry) => typeof entry === 'string' || entry === null)
+  );
 }
 
 function isTypeScriptSemanticRequest(value: unknown): value is TypeScriptSemanticRequest {

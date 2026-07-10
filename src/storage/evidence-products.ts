@@ -1,10 +1,11 @@
 import type { ScipDatabase } from './db.js';
-import { profileSpan } from '../instrumentation/profile.js';
+import { profileEnabled, profileSpan, profileWorkIdentity } from '../instrumentation/profile.js';
 import {
   FILE_EVIDENCE_KINDS,
   PROJECT_EVIDENCE_KINDS,
   readCachedFileEvidence,
   readCachedProjectEvidence,
+  projectEvidenceFingerprint,
   writeCachedFileEvidenceBatch,
   writeCachedFileEvidence,
   writeCachedProjectEvidence,
@@ -191,11 +192,30 @@ export const EVIDENCE_PRODUCT_MANIFEST: readonly EvidenceProductManifestEntry[] 
 ];
 
 export function createFileEvidenceProduct<T>(opts: FileEvidenceProductOptions<T>): FileEvidenceProduct<T> {
+  const profileIdentities = new Map<string, string>();
   return {
     kind: opts.kind,
     read(db, relativePath, contentHash) {
       let hit = false;
       let payloadBytes = 0;
+      let workIdentity: string | undefined;
+      if (profileEnabled()) {
+        const projectFingerprint = projectEvidenceFingerprint(db);
+        if (projectFingerprint) {
+          const identityKey = `${projectFingerprint}\0${relativePath}\0${contentHash}`;
+          workIdentity = profileIdentities.get(identityKey);
+          if (!workIdentity) {
+            workIdentity = profileWorkIdentity([
+              'evidence-product-file-read-v1',
+              opts.kind,
+              projectFingerprint,
+              relativePath,
+              contentHash,
+            ]);
+            profileIdentities.set(identityKey, workIdentity);
+          }
+        }
+      }
       return profileSpan(
         'evidence-product.file.read',
         () => {
@@ -210,7 +230,14 @@ export function createFileEvidenceProduct<T>(opts: FileEvidenceProductOptions<T>
             return null;
           }
         },
-        () => ({ scope: 'file', kind: opts.kind, available: true, hit, payloadBytes }),
+        () => ({
+          ...(workIdentity ? { workIdentity, workOutcome: 'computed' } : {}),
+          scope: 'file',
+          kind: opts.kind,
+          available: true,
+          hit,
+          payloadBytes,
+        }),
       );
     },
     write(db, relativePath, contentHash, value) {
@@ -231,11 +258,26 @@ export function createFileEvidenceProduct<T>(opts: FileEvidenceProductOptions<T>
 }
 
 export function createProjectEvidenceProduct<T>(opts: ProjectEvidenceProductOptions<T>): ProjectEvidenceProduct<T> {
+  const profileIdentities = new Map<string, string>();
   return {
     kind: opts.kind,
     read(db, cacheKey, projectFingerprint) {
       let hit = false;
       let payloadBytes = 0;
+      let workIdentity: string | undefined;
+      if (profileEnabled()) {
+        const identityKey = `${projectFingerprint}\0${cacheKey}`;
+        workIdentity = profileIdentities.get(identityKey);
+        if (!workIdentity) {
+          workIdentity = profileWorkIdentity([
+            'evidence-product-project-read-v1',
+            opts.kind,
+            projectFingerprint,
+            cacheKey,
+          ]);
+          profileIdentities.set(identityKey, workIdentity);
+        }
+      }
       return profileSpan(
         'evidence-product.project.read',
         () => {
@@ -250,7 +292,14 @@ export function createProjectEvidenceProduct<T>(opts: ProjectEvidenceProductOpti
             return null;
           }
         },
-        () => ({ scope: 'project', kind: opts.kind, available: true, hit, payloadBytes }),
+        () => ({
+          ...(workIdentity ? { workIdentity, workOutcome: 'computed' } : {}),
+          scope: 'project',
+          kind: opts.kind,
+          available: true,
+          hit,
+          payloadBytes,
+        }),
       );
     },
     write(db, cacheKey, projectFingerprint, value) {

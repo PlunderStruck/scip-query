@@ -1,5 +1,10 @@
 import { mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
+import {
+  applyProfileEnvironment,
+  captureProfileEnvironment,
+  type ProfileEnvironment,
+} from '../../instrumentation/profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { writeJsonAtomic } from '../../storage/atomic-json.js';
 import {
@@ -153,12 +158,15 @@ export function processTypeScriptSemanticMailbox(
     .sort()) {
     const requestPath = resolve(paths.requestDir, file);
     let id = file.slice(0, -'.json'.length);
+    let previousProfileEnvironment: ProfileEnvironment | null = null;
     try {
       const envelope = parseTypeScriptSemanticEnvelope(readFileSync(requestPath, 'utf8'));
       id = envelope.id;
       if (envelope.deadlineAtMs < (opts.nowMs ?? Date.now())) {
         throw new Error('TypeScript semantic request expired before processing.');
       }
+      previousProfileEnvironment = captureProfileEnvironment();
+      applyProfileEnvironment(envelope.profileEnvironment ?? {});
       opts.beforeRequest?.(envelope.deadlineAtMs);
       const response = host.handle(envelope.generation, envelope.request);
       writeJsonAtomic(resolve(paths.responseDir, `${id}.json`), {
@@ -176,6 +184,7 @@ export function processTypeScriptSemanticMailbox(
         error: error instanceof Error ? error.message : String(error),
       });
     } finally {
+      if (previousProfileEnvironment) applyProfileEnvironment(previousProfileEnvironment);
       opts.afterRequest?.();
       rmSync(requestPath, { force: true });
       processed += 1;

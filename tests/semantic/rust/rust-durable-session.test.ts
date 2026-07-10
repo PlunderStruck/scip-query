@@ -489,6 +489,9 @@ describe('DurableRustSessionHost', () => {
           CARGO_TASK_3_SESSION: 'compiler-a',
           SCIP_RUST_TASK_3_SESSION: 'transient-a',
           SCIP_QUERY_PROFILE_OUT: '/tmp/a.jsonl',
+          SCIP_QUERY_PROFILE_RUN_ID: 'run-a',
+          SCIP_QUERY_PROFILE_WORKLOAD_IDENTITY: 'workload-a',
+          SCIP_QUERY_PROFILE_WORKLOAD_IDENTITY_KIND: 'published-project',
         },
         request: semanticRequest,
         timeoutMs: 1_000,
@@ -964,6 +967,9 @@ function isManagedWorkerKey(key: string): boolean {
     key === 'SCIP_QUERY_PROFILE_CACHE_STATE' ||
     key === 'SCIP_QUERY_PROFILE_COMMAND' ||
     key === 'SCIP_QUERY_PROFILE_OUT' ||
+    key === 'SCIP_QUERY_PROFILE_RUN_ID' ||
+    key === 'SCIP_QUERY_PROFILE_WORKLOAD_IDENTITY' ||
+    key === 'SCIP_QUERY_PROFILE_WORKLOAD_IDENTITY_KIND' ||
     key === 'SCIP_QUERY_PROFILE_MIN_MS'
   );
 }

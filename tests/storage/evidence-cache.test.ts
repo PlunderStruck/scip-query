@@ -42,7 +42,14 @@ const SOURCE_LINES = [
   '  return message.toUpperCase();',
   '}',
 ];
-const PROFILE_ENV_KEYS = ['SCIP_QUERY_PROFILE', 'SCIP_QUERY_PROFILE_OUT', 'SCIP_QUERY_PROFILE_COMMAND'] as const;
+const PROFILE_ENV_KEYS = [
+  'SCIP_QUERY_PROFILE',
+  'SCIP_QUERY_PROFILE_OUT',
+  'SCIP_QUERY_PROFILE_COMMAND',
+  'SCIP_QUERY_PROFILE_RUN_ID',
+  'SCIP_QUERY_PROFILE_WORKLOAD_IDENTITY',
+  'SCIP_QUERY_PROFILE_WORKLOAD_IDENTITY_KIND',
+] as const;
 const PRODUCT_TEST = createFileEvidenceProduct<{ marker: string }>({
   kind: 'doc-path-tokens',
   invalidation: evidenceProductInvalidation('doc-path-tokens'),
@@ -178,16 +185,24 @@ describe('evidence cache', () => {
     process.env.SCIP_QUERY_PROFILE = '1';
     process.env.SCIP_QUERY_PROFILE_OUT = profilePath;
     process.env.SCIP_QUERY_PROFILE_COMMAND = 'scip-query test';
+    const metaPath = join(tempDir, 'meta.json');
+    writeFileSync(metaPath, JSON.stringify({ version: 3, status: 'complete', fingerprint: { fixture: 'profile' } }));
 
     const db = openDb();
     try {
       PRODUCT_TEST.write(db, 'docs/profiled.md', 'hash-hit', { marker: 'cached' });
       expect(PRODUCT_TEST.read(db, 'docs/profiled.md', 'hash-hit')).toEqual({ marker: 'cached' });
+      expect(PRODUCT_TEST.read(db, 'docs/profiled.md', 'hash-hit')).toEqual({ marker: 'cached' });
 
       writeCachedFileEvidence(db, 'doc-path-tokens', 'docs/profiled.md', 'hash-corrupt', '{not json');
       expect(PRODUCT_TEST.read(db, 'docs/profiled.md', 'hash-corrupt')).toBeNull();
+
+      PROJECT_PRODUCT_TEST.write(db, 'scope:profiled', 'project-profiled', { marker: 'cached' });
+      expect(PROJECT_PRODUCT_TEST.read(db, 'scope:profiled', 'project-profiled')).toEqual({ marker: 'cached' });
+      expect(PROJECT_PRODUCT_TEST.read(db, 'scope:profiled', 'project-profiled')).toEqual({ marker: 'cached' });
     } finally {
       db.close();
+      rmSync(metaPath, { force: true });
       restoreProfileEnv(envSnapshot);
     }
 
@@ -202,6 +217,15 @@ describe('evidence cache', () => {
         kind: 'doc-path-tokens',
         available: true,
         hit: true,
+        workOutcome: 'computed',
+      }),
+      expect.objectContaining({
+        type: 'span',
+        name: 'evidence-product.file.read',
+        kind: 'doc-path-tokens',
+        available: true,
+        hit: true,
+        workOutcome: 'computed',
       }),
       expect.objectContaining({
         type: 'span',
@@ -209,8 +233,28 @@ describe('evidence cache', () => {
         kind: 'doc-path-tokens',
         available: true,
         hit: false,
+        workOutcome: 'computed',
+      }),
+      expect.objectContaining({
+        type: 'span',
+        name: 'evidence-product.project.read',
+        kind: 'file-dependency-graph',
+        available: true,
+        hit: true,
+        workOutcome: 'computed',
+      }),
+      expect.objectContaining({
+        type: 'span',
+        name: 'evidence-product.project.read',
+        kind: 'file-dependency-graph',
+        available: true,
+        hit: true,
+        workOutcome: 'computed',
       }),
     ]);
+    expect(events[0]?.workIdentity).toBe(events[1]?.workIdentity);
+    expect(events[1]?.workIdentity).not.toBe(events[2]?.workIdentity);
+    expect(events[3]?.workIdentity).toBe(events[4]?.workIdentity);
   });
 
   it('round-trips typed project evidence products', () => {

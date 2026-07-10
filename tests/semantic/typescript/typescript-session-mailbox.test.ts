@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { captureProfileEnvironment } from '../../../src/instrumentation/profile.js';
 import type { ProjectInputSnapshot } from '../../../src/reindex/affected-set.js';
 import { writeWatchServiceState, WATCH_SERVICE_PROTOCOL_VERSION } from '../../../src/runtime/watch-service.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
@@ -211,6 +212,51 @@ describe('TypeScript semantic service mailbox', () => {
     service.closeTypeScriptService();
     db.close();
   });
+
+  it('applies each request profile identity inside the persistent service and restores its own environment', () => {
+    const fixture = serviceFixture();
+    const paths = typeScriptSemanticMailboxPaths(fixture.projectRoot);
+    const observed: Array<Record<string, string | undefined>> = [];
+    const previous = captureProfileEnvironment();
+    const service = new TypeScriptSemanticServiceHost({
+      openDb: fixture.openDb,
+      generationIdentity: () => 'current',
+      readSnapshot: () => projectSnapshot('current'),
+      createHost: (db) =>
+        new TypeScriptSemanticHost(db, {
+          loadModule: () => loadTsMorph(),
+          discoverTsconfigs: () => ['tsconfig.json'],
+          createProjects: () => [],
+          createProvider: () => ({
+            ...fakeProvider(),
+            availability: () => {
+              observed.push({
+                runId: process.env['SCIP_QUERY_PROFILE_RUN_ID'],
+                workloadIdentity: process.env['SCIP_QUERY_PROFILE_WORKLOAD_IDENTITY'],
+              });
+              return { available: true, tsconfigPaths: ['tsconfig.json'] };
+            },
+          }),
+        }),
+    });
+
+    try {
+      writeRequest(paths.requestDir, 'profiled', 'current', { kind: 'availability' }, NOW + 1_000, {
+        SCIP_QUERY_PROFILE: '1',
+        SCIP_QUERY_PROFILE_RUN_ID: 'request-run',
+        SCIP_QUERY_PROFILE_WORKLOAD_IDENTITY: 'request-workload',
+        SCIP_QUERY_PROFILE_WORKLOAD_IDENTITY_KIND: 'published-project',
+      });
+      expect(processTypeScriptSemanticMailbox(paths, service, { nowMs: NOW })).toBe(1);
+      expect(observed).toEqual([
+        { runId: 'request-run', workloadIdentity: 'request-workload' },
+        { runId: 'request-run', workloadIdentity: 'request-workload' },
+      ]);
+      expect(captureProfileEnvironment()).toEqual(previous);
+    } finally {
+      service.closeTypeScriptService();
+    }
+  });
 });
 
 function serviceFixture(withMetadata = false): { projectRoot: string; openDb: () => ScipDatabase } {
@@ -282,12 +328,14 @@ function writeRequest(
   generation: string,
   request: { kind: 'availability' } | { kind: 'import-usage'; file: string },
   deadlineAtMs = NOW + 1_000,
+  profileEnvironment?: Record<string, string | null>,
 ): void {
   writeJsonAtomic(join(requestDir, `${id}.json`), {
     protocolVersion: TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION,
     id,
     generation,
     deadlineAtMs,
+    ...(profileEnvironment ? { profileEnvironment } : {}),
     request,
   });
 }

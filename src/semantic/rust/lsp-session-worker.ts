@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { parentPort } from 'node:worker_threads';
-import { profileEnabled, writeProfileEvent } from '../../instrumentation/profile.js';
+import { profileAsyncSpan, profileEnabled, writeProfileEvent } from '../../instrumentation/profile.js';
 import type { SemanticCallee, SemanticReference } from '../types.js';
 import { createRustAnalyzerTransport, RustAnalyzerLspClient } from './lsp-client.js';
 import type { LspInitializeResult } from './lsp-types.js';
@@ -101,8 +101,6 @@ interface RustCalleeFileProfile {
   maxDurationMs: number;
   slowTasks: number;
 }
-
-type ProfileMetadata = Record<string, unknown>;
 
 const REFERENCE_TASK_PROFILE_THRESHOLD_ENV = 'SCIP_RUST_SEMANTIC_REFERENCE_TASK_PROFILE_MS';
 const CALLEE_TASK_PROFILE_THRESHOLD_ENV = 'SCIP_RUST_SEMANTIC_CALLEE_TASK_PROFILE_MS';
@@ -965,42 +963,6 @@ function optionalNonNegativeInteger(value: string | undefined): number | null {
 function parallelRustSemanticOperationsEnabled(): boolean {
   const configured = process.env['SCIP_RUST_SEMANTIC_PARALLEL_OPERATIONS'];
   return configured !== '0' && configured !== 'false';
-}
-
-async function profileAsyncSpan<T>(
-  name: string,
-  run: () => Promise<T>,
-  metadata?: ProfileMetadata | (() => ProfileMetadata),
-): Promise<T> {
-  if (!profileEnabled()) return run();
-  const started = performance.now();
-  try {
-    const value = await run();
-    writeProfileEvent({
-      type: 'span',
-      name,
-      durationMs: Math.round(performance.now() - started),
-      ok: true,
-      ...(rustWorkerProfileMetadata(metadata) ?? {}),
-    });
-    return value;
-  } catch (error) {
-    writeProfileEvent({
-      type: 'span',
-      name,
-      durationMs: Math.round(performance.now() - started),
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-      ...(rustWorkerProfileMetadata(metadata) ?? {}),
-    });
-    throw error;
-  }
-}
-
-function rustWorkerProfileMetadata(
-  metadata: ProfileMetadata | (() => ProfileMetadata) | undefined,
-): ProfileMetadata | undefined {
-  return typeof metadata === 'function' ? metadata() : metadata;
 }
 
 function writeWorkerResponse(responsePath: string, payload: unknown, sharedBuffer: SharedArrayBuffer): void {
