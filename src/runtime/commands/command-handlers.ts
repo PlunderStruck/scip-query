@@ -1430,6 +1430,7 @@ function watchServiceReport(inspection: WatchServiceInspection, enabled = true) 
         watcher: classification.state.watcher,
         lastRefresh: classification.state.lastRefresh,
         lastError: classification.state.lastError,
+        typescriptSemantic: classification.state.typescriptSemantic,
       };
     case 'stale':
     case 'incompatible':
@@ -1443,6 +1444,7 @@ function watchServiceReport(inspection: WatchServiceInspection, enabled = true) 
         watcher: classification.state.watcher,
         lastRefresh: classification.state.lastRefresh,
         lastError: classification.state.lastError,
+        typescriptSemantic: classification.state.typescriptSemantic,
       };
     default:
       return assertNeverWatchService(classification);
@@ -1460,6 +1462,12 @@ function renderWatchServiceReport(report: ReturnType<typeof watchServiceReport>)
   if ('idleDeadlineAt' in report && report.idleDeadlineAt) console.log(`Idle exit: ${report.idleDeadlineAt}`);
   if ('reason' in report) console.log(`Reason: ${report.reason}`);
   if ('lastError' in report && report.lastError) console.log(`Last error: ${report.lastError.message}`);
+  if ('typescriptSemantic' in report && report.typescriptSemantic) {
+    const semantic = report.typescriptSemantic;
+    console.log(
+      `TypeScript semantics: ${semantic.state} (${semantic.projectsCreated} Projects, ${semantic.requests} requests)`,
+    );
+  }
 }
 
 function assertNeverWatchService(value: never): never {

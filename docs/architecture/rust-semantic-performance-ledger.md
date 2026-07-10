@@ -78,9 +78,11 @@ moving the whole product surface at once.
 - `src/semantic/types.ts` defines the shared `SemanticProvider` contract for
   references, caller maps, callees, import usage, and signatures.
 - `src/semantic/provider-cache.ts` chooses a semantic provider by language and
-  delegates provider reuse to `SemanticSessionManager`. This is still
-  command-scoped reuse, but it names the lifecycle boundary needed for future
-  warmed LSP sessions.
+  delegates command-local object reuse to `SemanticSessionManager`. TypeScript
+  requests now prefer the existing project watch service's persistent ts-morph
+  session and fall back to the direct provider; Rust keeps its separately
+  calibrated durable-session route. The manager remains the per-database
+  provider boundary rather than the cross-process owner.
 - `src/semantic/typescript/ts-morph-provider.ts` is the mature TypeScript
   semantic provider. It loads ts-morph, discovers tsconfigs, constructs project
   bundles, caches import usage/references/callees/signatures, and bulk-scans

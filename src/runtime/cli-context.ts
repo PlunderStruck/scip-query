@@ -41,15 +41,20 @@ export function resolveActiveDbPath(projectRoot: string): string {
 }
 
 export function openDb(): ScipDatabase {
-  const { projectRoot, config, paths, dbPath, dbPathSource, rootFallbackWarning } = resolveCliProjectContext();
-
-  if (!existsSync(dbPath)) {
-    console.error(`error: No index.db found. Run: scip-query reindex`);
+  try {
+    return openProjectDb(resolveProjectRoot(), { warnOnRootFallback: true });
+  } catch (error) {
+    console.error(`error: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
-  if (dbPathSource === 'root-fallback' && rootFallbackWarning) {
+}
+
+export function openProjectDb(projectRoot: string, opts: { warnOnRootFallback?: boolean } = {}): ScipDatabase {
+  const { config, paths, dbPath, dbPathSource, rootFallbackWarning } = resolveCliProjectContext(projectRoot);
+
+  if (!existsSync(dbPath)) throw new Error('No index.db found. Run: scip-query reindex');
+  if (opts.warnOnRootFallback && dbPathSource === 'root-fallback' && rootFallbackWarning)
     console.error(rootFallbackWarning);
-  }
 
   const dbConfig: ScipQueryConfig = {
     dbPath,

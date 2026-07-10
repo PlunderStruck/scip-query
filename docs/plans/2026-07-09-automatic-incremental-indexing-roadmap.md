@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Phases 1–2 complete; Phase 3 steps 3.1–3.3 complete and step 3.4 next
+Status: Phases 1–2 complete; Phase 3 steps 3.1–3.4 complete and step 3.5 next
 
 ## Goal
 
@@ -454,6 +454,12 @@ the next database generation without constructing replacement Projects.
 Configuration, ambient, project-identity, and uncertain changes discard the
 session and recreate it lazily. A real import change proved refresh visibility
 with one Project factory call; a config change caused exactly one replacement.
+Step 3.4 now routes synchronous TypeScript provider calls through an atomic
+mailbox owned by the existing demand-started service. Requests bind to an exact
+publication and fall back to the direct provider on every lifecycle/protocol
+failure. Status exposes session counters. A built diagnostic reused one Project
+across processes (180ms warm versus the 927ms baseline median) and across a real
+leaf reindex (230ms, one refresh, zero replacements) with the exact output hash.
 
 **Exit gate:** Phase 3 performance, hit-rate, and parity thresholds pass on
 separate CLI processes and after service restart.

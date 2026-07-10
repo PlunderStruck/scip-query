@@ -31,6 +31,12 @@ describe('watch service contract', () => {
     expect(parseWatchServiceState({ ...liveState(), pid: 0 })).toBeNull();
     expect(parseWatchServiceState({ ...liveState(), heartbeatAt: 'not-a-date' })).toBeNull();
     expect(parseWatchServiceState({ ...liveState(), watcher: { state: 'waiting' } })).toBeNull();
+    expect(
+      parseWatchServiceState({
+        ...liveState(),
+        typescriptSemantic: { ...liveState().typescriptSemantic!, state: 'mystery' },
+      }),
+    ).toBeNull();
   });
 
   it('trusts only matching, recently-heartbeating live processes', () => {
@@ -195,6 +201,16 @@ function liveState(): WatchServiceState {
     lastActivityAt: new Date(NOW - 2_000).toISOString(),
     idleDeadlineAt: new Date(NOW + 598_000).toISOString(),
     watcher: { state: 'idle' },
+    typescriptSemantic: {
+      protocolVersion: 1,
+      state: 'idle',
+      requests: 0,
+      sessionsCreated: 0,
+      sessionsReused: 0,
+      sessionsRefreshed: 0,
+      sessionsReplaced: 0,
+      projectsCreated: 0,
+    },
   };
 }
 

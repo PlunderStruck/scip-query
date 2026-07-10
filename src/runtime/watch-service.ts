@@ -4,8 +4,9 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { LastRefreshMetadata, ProjectConfig, WatchConfig, WatcherStatus } from '../domain/types.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
+import type { TypeScriptSemanticServiceStatus } from '../semantic/typescript/session-protocol.js';
 
-export const WATCH_SERVICE_PROTOCOL_VERSION = 1;
+export const WATCH_SERVICE_PROTOCOL_VERSION = 2;
 export const WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS = 5_000;
 export const WATCH_LOCK_FILE = 'watch.lock';
 export const WATCH_STATE_FILE = 'watch-state.json';
@@ -41,6 +42,7 @@ export interface WatchServiceState {
   watcher: WatcherStatus;
   lastRefresh?: LastRefreshMetadata;
   lastError?: { at: string; message: string };
+  typescriptSemantic?: TypeScriptSemanticServiceStatus;
 }
 
 export interface WatchServiceIdentity {
@@ -435,6 +437,7 @@ export function parseWatchServiceState(value: unknown): WatchServiceState | null
   if (state.idleDeadlineAt !== undefined && !validTimestamp(state.idleDeadlineAt)) return null;
   if (state.lastError !== undefined && !validLastError(state.lastError)) return null;
   if (state.lastRefresh !== undefined && !validLastRefresh(state.lastRefresh)) return null;
+  if (state.typescriptSemantic !== undefined && !validTypeScriptSemanticStatus(state.typescriptSemantic)) return null;
   return state as WatchServiceState;
 }
 
@@ -626,6 +629,27 @@ function validLastRefresh(value: unknown): value is LastRefreshMetadata {
     validTimestamp(refresh.startedAt) &&
     validTimestamp(refresh.completedAt) &&
     finiteNumber(refresh.durationMs)
+  );
+}
+
+function validTypeScriptSemanticStatus(value: unknown): value is TypeScriptSemanticServiceStatus {
+  if (!value || typeof value !== 'object') return false;
+  const status = value as Partial<TypeScriptSemanticServiceStatus>;
+  return (
+    typeof status.protocolVersion === 'number' &&
+    (status.state === 'idle' ||
+      status.state === 'ready' ||
+      status.state === 'unavailable' ||
+      status.state === 'error') &&
+    finiteNumber(status.requests) &&
+    finiteNumber(status.sessionsCreated) &&
+    finiteNumber(status.sessionsReused) &&
+    finiteNumber(status.sessionsRefreshed) &&
+    finiteNumber(status.sessionsReplaced) &&
+    finiteNumber(status.projectsCreated) &&
+    (status.lastRequestAt === undefined || validTimestamp(status.lastRequestAt)) &&
+    (status.lastError === undefined || typeof status.lastError === 'string') &&
+    (status.busyUntil === undefined || validTimestamp(status.busyUntil))
   );
 }
 

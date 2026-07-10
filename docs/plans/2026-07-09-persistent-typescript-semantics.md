@@ -1,7 +1,7 @@
 # Persistent TypeScript Semantics — Phase 3 Concrete Plan
 
 Date: 2026-07-09
-Status: in progress; steps 3.1–3.3 complete and step 3.4 next
+Status: in progress; steps 3.1–3.4 complete and step 3.5 next
 Roadmap phase: 3
 
 ## Goal
@@ -223,7 +223,7 @@ postchecks.
 
 ### 3.4 — Route synchronous CLI semantics through the existing service
 
-- [ ] **Create/Edit:** TypeScript mailbox requester/host integration, watch
+- [x] **Create/Edit:** TypeScript mailbox requester/host integration, watch
       protocol/state, remote provider, CLI status, build entries, and lifecycle
       tests.
 - Lazily create the host on the first semantic request; process one request at
@@ -235,6 +235,27 @@ postchecks.
 - Prove stale/wrong-version responses, crash, timeout, concurrent requests,
   sleep/wake, package installation, and no eager construction for ordinary
   commands.
+- **Outcome:** Watch protocol 2 now exposes a TypeScript semantic mailbox and
+  lazy host inside the existing per-project service. Every request carries an
+  atomic ID, deadline, protocol, and exact published-generation identity.
+  Server processing is deterministic and single-owner; a bounded busy marker
+  prevents a long compiler request from looking like a dead heartbeat.
+  Separate-process callers validate service liveness and response identity,
+  then permanently fall back to the unchanged direct provider for that command
+  after any absence, crash, timeout, malformed response, wrong protocol, or
+  generation mismatch. Status reports idle/ready/unavailable/error plus request,
+  session, refresh, replacement, and Project counts. The mailbox/service tests
+  cover valid, expired, malformed, wrong-generation, wrong-response-ID, crash,
+  and timeout paths; existing direct-provider fixtures remain exact.
+
+  A built live probe created one Project, returned the exact baseline
+  `de4ce6c…` import-usage hash, and reduced the second separate CLI process from
+  the 927ms baseline median to 180ms. After a real leaf edit and 3.962s
+  authoritative reindex, the next command took 230ms with the same output;
+  status showed one Project, one session refresh, zero replacements, and a
+  newly bound provider. These are diagnostic controls; step 3.6 owns the
+  alternating accepted series, sleep/wake, concurrent-process, and installed
+  package gates.
 
 ### 3.5 — Make verified fragments authoritative with dual-read rollback
 

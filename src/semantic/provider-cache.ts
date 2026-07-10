@@ -9,7 +9,7 @@ import { rustScipOccurrenceCalleeMap } from './rust/scip-occurrence-callees.js';
 import type { IndexedDefinition } from '../domain/types.js';
 import type { SemanticProvider, SemanticProviderLanguage } from './types.js';
 import { SemanticSessionManager } from './session-manager.js';
-import { createTsMorphProvider } from './typescript/ts-morph-provider.js';
+import { createServiceBackedTypeScriptProvider } from './typescript/remote-provider.js';
 import { isTypeScriptLike } from './typescript/source-kinds.js';
 
 const SEMANTIC_SESSIONS = new SemanticSessionManager();
@@ -37,7 +37,7 @@ export function getSemanticProvider(db: ScipDatabase, relativePath?: string): Se
           sourceZeroCalleeOracle: (definition) => rustSourceProvesZeroCallees(db, definition),
           scipOccurrenceCalleeOracle: (definitions) => rustScipOccurrenceCalleeMap(db, definitions),
         })
-      : createTsMorphProvider(db, relativePath),
+      : createServiceBackedTypeScriptProvider(db, relativePath),
   );
 }
 

@@ -6,6 +6,13 @@ import type { RefreshTrigger, WatcherStatus } from '../domain/types.js';
 import { loadProjectConfig, resolveIndexStoragePaths, resolveWatchConfig } from './config.js';
 import { getIndexFreshness, type IndexFreshnessState } from './index-freshness.js';
 import { Watcher } from './watch.js';
+import { openProjectDb } from './cli-context.js';
+import {
+  TypeScriptSemanticServiceHost,
+  initializeTypeScriptSemanticMailbox,
+  processTypeScriptSemanticMailbox,
+} from '../semantic/typescript/session-service.js';
+import { typeScriptSemanticMailboxPaths } from '../semantic/typescript/session-protocol.js';
 import {
   WATCH_SERVICE_PROTOCOL_VERSION,
   acquireWatchProcessLock,
@@ -19,6 +26,7 @@ import {
 
 const HEARTBEAT_INTERVAL_MS = 1_000;
 const ACTIVITY_POLL_INTERVAL_MS = 250;
+const SERVICE_LOOP_INTERVAL_MS = 10;
 
 export function startupRefreshTrigger(state: IndexFreshnessState): RefreshTrigger | null {
   return state === 'fresh' ? null : { kind: 'watch-startup', detail: `index ${state} when watch service started` };
@@ -50,6 +58,11 @@ export async function runWatchServiceServer(
   let ready = false;
   let lastRefreshRequestAtMs = 0;
   let lastHeartbeatAtMs = 0;
+  let lastActivityPollAtMs = 0;
+  let semanticBusyUntilMs: number | undefined;
+  const semanticMailboxPaths = typeScriptSemanticMailboxPaths(indexPaths.cacheDir);
+  initializeTypeScriptSemanticMailbox(semanticMailboxPaths);
+  const semanticHost = new TypeScriptSemanticServiceHost({ openDb: () => openProjectDb(projectRoot) });
 
   const persistState = (force = false): void => {
     if (!ready) return;
@@ -71,6 +84,10 @@ export async function runWatchServiceServer(
       watcher: watcherStatus,
       ...(lastRefresh ? { lastRefresh } : {}),
       ...(lastError ? { lastError } : {}),
+      typescriptSemantic: {
+        ...semanticHost.status(),
+        ...(semanticBusyUntilMs === undefined ? {} : { busyUntil: new Date(semanticBusyUntilMs).toISOString() }),
+      },
     });
   };
 
@@ -117,17 +134,35 @@ export async function runWatchServiceServer(
     persistState(true);
 
     while (!stopping) {
-      const activity = readWatchServiceActivity(servicePaths.activityPath);
-      if (activity && activity.atMs > lastActivityAtMs) {
-        lastActivityAtMs = activity.atMs;
+      const semanticRequests = processTypeScriptSemanticMailbox(semanticMailboxPaths, semanticHost, {
+        beforeRequest(deadlineAtMs) {
+          semanticBusyUntilMs = deadlineAtMs + 5_000;
+          persistState(true);
+        },
+        afterRequest() {
+          semanticBusyUntilMs = undefined;
+          persistState(true);
+        },
+      });
+      const nowMs = Date.now();
+      if (nowMs - lastActivityPollAtMs >= ACTIVITY_POLL_INTERVAL_MS) {
+        lastActivityPollAtMs = nowMs;
+        const activity = readWatchServiceActivity(servicePaths.activityPath);
+        if (activity && activity.atMs > lastActivityAtMs) {
+          lastActivityAtMs = activity.atMs;
+        }
+        if (activity?.refreshRequestedAtMs !== undefined && activity.refreshRequestedAtMs > lastRefreshRequestAtMs) {
+          lastRefreshRequestAtMs = activity.refreshRequestedAtMs;
+          recordActivity();
+          watcher.requestRefresh(
+            { kind: 'watch-demand', detail: activity.refreshDetail ?? 'stale index observed by a command' },
+            { immediate: true },
+          );
+        }
       }
-      if (activity?.refreshRequestedAtMs !== undefined && activity.refreshRequestedAtMs > lastRefreshRequestAtMs) {
-        lastRefreshRequestAtMs = activity.refreshRequestedAtMs;
+      if (semanticRequests > 0) {
         recordActivity();
-        watcher.requestRefresh(
-          { kind: 'watch-demand', detail: activity.refreshDetail ?? 'stale index observed by a command' },
-          { immediate: true },
-        );
+        persistState(true);
       }
       persistState();
       if (
@@ -140,11 +175,12 @@ export async function runWatchServiceServer(
       ) {
         break;
       }
-      await sleep(ACTIVITY_POLL_INTERVAL_MS);
+      await sleep(SERVICE_LOOP_INTERVAL_MS);
     }
   } finally {
     process.off('SIGINT', stop);
     process.off('SIGTERM', stop);
+    semanticHost.closeTypeScriptService();
     watcher.stop();
     rmSync(servicePaths.statePath, { force: true });
     rmSync(servicePaths.activityPath, { force: true });

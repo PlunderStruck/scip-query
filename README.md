@@ -461,6 +461,15 @@ mode, while `watch --daemon`, `watch --status`, and `watch --stop` expose the
 background lifecycle. Both modes share one project lock, so only one can own an
 index cache.
 
+The same demand-started service lazily owns TypeScript compiler Projects after
+the first command that needs ts-morph semantics. Separate CLI processes reuse
+that session through a repository-local atomic mailbox; source-only index
+generations refresh the existing Projects, while configuration or uncertain
+changes replace them. `watch --status` reports Project/session/request counts.
+If the service is stopped, incompatible, busy beyond its bound, or returns an
+invalid response, the command falls back to the existing in-process ts-morph
+provider.
+
 Use `declaredCouplings` for files that intentionally form one maintenance unit.
 These pairs are treated as structurally linked by `co-change` and health, while
 still appearing in file-specific exploration. The cleanup detector example
