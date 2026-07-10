@@ -1505,6 +1505,13 @@ boundary: its current `scip` implementation first computes one complete
 records live in
 `docs/benchmarks/runs/2026-07-09-incremental-scip-documents.jsonl`.
 
+Phase 4.2 added immutable generation manifests over content-addressed document
+blobs. Every load rehashes every named fragment; an edited fixture assembled a
+complete TypeScript shard byte-for-byte equal to a fresh installed-CLI index.
+The negative controls proved that a missing replacement path, wrong project
+identity, attempted generation mutation, and corrupt blob are rejected before
+publication. Blob collection runs only after all retained manifests parse.
+
 ## Run History
 
 Machine-readable run history:

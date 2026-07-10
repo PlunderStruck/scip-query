@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Phases 1–3 complete; Phase 4.1 emitter complete and Phase 4.2 fragment store next
+Status: Phases 1–3 and Phase 4.1–4.2 complete; Phase 4.3 service transport next
 
 ## Goal
 
@@ -665,12 +665,12 @@ Complete this at every phase close:
 6. Phase 5 atomic incremental generation storage.
 7. Phase 6 durable Rust defaulting, selective native kernels, and rollout.
 
-The immediate action is Phase 4.2's durable fragment store. Phases 2–3 prove
-which inputs are affected and reuse live compiler state plus unrelated
-semantic fragments; Phase 4.1 now retains the exact compiler/indexer state and
-emits byte-exact affected documents. Persist and assemble those fragments
-before adding service transport:
+The immediate action is Phase 4.3's service transport. The durable store now
+persists immutable content-addressed documents, verifies every blob, and
+assembles a true edited shard byte-for-byte equal to the clean CLI oracle.
+Connect the reindex worker to the one-writer service without weakening the
+existing full-project fallback:
 
 ```sh
-SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/reindex/typescript-fragment-store.ts --json
+SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/reindex/typescript-index-protocol.ts --json
 ```

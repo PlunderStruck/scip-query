@@ -18,6 +18,7 @@ interface ScipDocumentLike {
 }
 
 interface ScipIndexLike {
+  metadata?: unknown;
   documents: ScipDocumentLike[];
   external_symbols: unknown[];
   serializeBinary(): Uint8Array;
@@ -25,9 +26,11 @@ interface ScipIndexLike {
 
 interface ScipDocumentConstructor {
   new (value: { relative_path: string; occurrences: unknown[] }): ScipDocumentLike;
+  deserializeBinary(value: Uint8Array): ScipDocumentLike;
 }
 
 interface ScipIndexConstructor {
+  new (value: { metadata?: unknown; documents?: ScipDocumentLike[]; external_symbols?: unknown[] }): ScipIndexLike;
   deserializeBinary(value: Uint8Array): ScipIndexLike;
 }
 

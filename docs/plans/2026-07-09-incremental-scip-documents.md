@@ -1,7 +1,7 @@
 # Incremental SCIP Document Plan
 
 Date: 2026-07-09
-Status: Phase 4.1 emitter adapter complete; Phase 4.2 durable fragment store next
+Status: Phases 4.1–4.2 complete; Phase 4.3 service transport next
 Parent: [`2026-07-09-automatic-incremental-indexing-roadmap.md`](./2026-07-09-automatic-incremental-indexing-roadmap.md)
 
 ## Outcome
@@ -130,6 +130,17 @@ format, ESLint, build, and diff checks passed.
 Commit boundary: storage/assembly code plus corruption, deletion, ordering,
 identity, and round-trip tests.
 
+**Result:** Complete in `src/reindex/typescript-fragment-store.ts`. Document
+bytes are content-addressed, while an immutable atomic manifest names the
+complete document set for one producer/project/source generation. Reads verify
+every blob's length and SHA-256 before returning it. Assembly preserves the
+prior shard's metadata and document order, replaces only existing paths, and
+rejects unexpected external symbols. The true-edit fixture assembled an
+entire shard byte-for-byte equal to the installed CLI oracle. Missing paths,
+wrong project identity, mutation of an existing generation, and a corrupted
+blob all failed as required. Garbage collection validates kept manifests
+before deleting prior generations or unreferenced blobs.
+
 ### 4.3 — Service transport and fallback
 
 - Add a versioned TypeScript index mailbox owned by the existing one-writer
@@ -170,5 +181,5 @@ verifier fail before canary results are trusted.
 
 ```sh
 SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context \
-  src/reindex/typescript-fragment-store.ts --json
+  src/reindex/typescript-index-protocol.ts --json
 ```
