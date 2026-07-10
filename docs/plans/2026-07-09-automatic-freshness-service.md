@@ -312,10 +312,10 @@ recent-duplicates --json` reports no duplicate lock/liveness/state helpers.
 
 ### 1.4 — Expose daemon/status/stop while preserving foreground mode
 
-- [ ] **Edit:** `src/runtime/commands/command-descriptors.ts`,
+- [x] **Edit:** `src/runtime/commands/command-descriptors.ts`,
       `src/runtime/commands/command-handlers.ts`,
-      `src/runtime/cli-context.ts`, `tests/runtime/runtime-config.test.ts`,
-      `tests/runtime/cli-contract.test.ts`, `tests/runtime/watch-service.test.ts`,
+      `src/runtime/watch-service.ts`, `src/runtime/watch-server.ts`,
+      `tests/runtime/runtime-config.test.ts`, `tests/runtime/cli-contract.test.ts`,
       `docs/COMMAND_REFERENCE.md`, `skills/_shared/SKILL.md`
 - **Source:** `scip-query code handleWatch`, `scip-query refs handleWatch`,
   `scip-query code formatStatus`,
@@ -331,6 +331,12 @@ recent-duplicates --json` reports no duplicate lock/liveness/state helpers.
   clean on a second run.
 - **Why:** Users and hooks need one observable control surface before automatic
   startup is enabled.
+- **Outcome:** `watch --daemon/--status/--stop` now share the controller and
+  stable JSON envelope; normal `status` includes additive watcher state.
+  Foreground mode remains the no-option behavior, conflicting actions fail
+  early, and start-time timing overrides reach the detached server. Built CLI
+  smoke proved stopped -> started -> same-PID reuse -> stopped, plus a 50 ms
+  idle exit followed by a new-PID wake. Generated command docs are current.
 
 ### 1.5 — Make enabled repositories self-starting and remove one-shot races
 

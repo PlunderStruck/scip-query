@@ -14,6 +14,7 @@ import {
   watchServicePaths,
   writeWatchServiceState,
   type WatchServiceState,
+  type WatchServiceWatchOverrides,
 } from './watch-service.js';
 
 const HEARTBEAT_INTERVAL_MS = 1_000;
@@ -22,9 +23,14 @@ export function startupRefreshTrigger(state: IndexFreshnessState): RefreshTrigge
   return state === 'fresh' ? null : { kind: 'watch-startup', detail: `index ${state} when watch service started` };
 }
 
-export async function runWatchServiceServer(projectRootInput: string, cliVersion: string): Promise<void> {
+export async function runWatchServiceServer(
+  projectRootInput: string,
+  cliVersion: string,
+  watchOverrides: WatchServiceWatchOverrides = {},
+): Promise<void> {
   const projectRoot = resolve(projectRootInput);
   const config = loadProjectConfig(projectRoot);
+  config.watch = { ...config.watch, ...watchOverrides };
   const watchConfig = resolveWatchConfig(config);
   if (!watchConfig.enabled) {
     throw new Error('watch mode is disabled; set "watch.enabled": true before starting the service');
@@ -101,6 +107,7 @@ export async function runWatchServiceServer(projectRootInput: string, cliVersion
     lastRefresh = freshness.lastRefresh;
     const startupTrigger = startupRefreshTrigger(freshness.state);
     if (startupTrigger) watcher.requestRefresh(startupTrigger, { immediate: true });
+    recordActivity();
     ready = true;
     persistState();
 
@@ -140,15 +147,26 @@ const invokedPath = process.argv[1] ? pathToFileURL(resolve(process.argv[1])).hr
 if (invokedPath === import.meta.url) {
   const projectRoot = process.argv[2];
   const cliVersion = process.argv[3];
+  const watchOverrides = parseWatchOverrides(process.argv[4]);
   if (!projectRoot || !cliVersion) {
     console.error('watch-service: expected <project-root> <cli-version>');
     process.exitCode = 1;
   } else {
     try {
-      await runWatchServiceServer(projectRoot, cliVersion);
+      await runWatchServiceServer(projectRoot, cliVersion, watchOverrides);
     } catch (error) {
       console.error(`watch-service: ${error instanceof Error ? error.message : String(error)}`);
       process.exitCode = 1;
     }
+  }
+}
+
+function parseWatchOverrides(raw: string | undefined): WatchServiceWatchOverrides {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as WatchServiceWatchOverrides;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
   }
 }

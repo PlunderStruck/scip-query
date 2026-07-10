@@ -315,14 +315,27 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'watch',
     command: 'watch',
-    description: 'Watch for file changes in the foreground and reindex automatically',
-    options: [
+    description: 'Watch in the foreground or manage the per-project background refresh service',
+    options: withJsonOption([
+      option('--daemon', 'Ensure the demand-started background service is running'),
+      option('--status', 'Show background/foreground watcher state'),
+      option('--stop', 'Stop the watcher or background service for this project'),
       option('--debounce <ms>', 'Ms to wait after last change (default: 30000)', parseIntegerLoose),
       option('--cooldown <ms>', 'Min ms between reindexes (default: 60000)', parseIntegerLoose),
       option('--git-poll <ms>', 'Ms between Git HEAD/index checks (default: 2000)', parseIntegerLoose),
-    ],
+      option(
+        '--idle-timeout <ms>',
+        'Ms before clean-idle daemon exit; 0 keeps it running (default: 600000)',
+        parseIntegerLoose,
+      ),
+    ]),
     renderShape: 'custom',
-    docs: doc('Maintenance'),
+    docs: doc('Maintenance', [
+      'scip-query watch',
+      'scip-query watch --daemon',
+      'scip-query watch --status --json',
+      'scip-query watch --stop',
+    ]),
     handler: handlers.handleWatch,
   },
   {

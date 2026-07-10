@@ -575,6 +575,38 @@ describe('doctor diagnostics', () => {
 });
 
 describe('watch command config gate', () => {
+  it('reports stopped service state even when watching is disabled', () => {
+    const projectRoot = createProject();
+    writeFileSync(join(projectRoot, '.scipquery.json'), '{ "watch": { "enabled": false } }\n');
+    const previousProjectRoot = process.env['SCIP_QUERY_PROJECT_ROOT'];
+    process.env['SCIP_QUERY_PROJECT_ROOT'] = projectRoot;
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    try {
+      handleWatch({ status: true, json: true });
+      const payload = JSON.parse(String(log.mock.calls[0]?.[0]));
+      expect(payload.result).toEqual({ enabled: false, state: 'stopped', mode: 'none' });
+    } finally {
+      log.mockRestore();
+      if (previousProjectRoot === undefined) delete process.env['SCIP_QUERY_PROJECT_ROOT'];
+      else process.env['SCIP_QUERY_PROJECT_ROOT'] = previousProjectRoot;
+    }
+  });
+
+  it('rejects conflicting watch lifecycle actions', () => {
+    const previousExitCode = process.exitCode;
+    process.exitCode = undefined;
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      handleWatch({ daemon: true, status: true });
+      expect(process.exitCode).toBe(1);
+      expect(error).toHaveBeenCalledWith('error: choose only one of --daemon, --status, or --stop.');
+    } finally {
+      error.mockRestore();
+      process.exitCode = previousExitCode;
+    }
+  });
+
   it('refuses to start unless watch.enabled is true', () => {
     const projectRoot = createProject();
     writeFileSync(join(projectRoot, '.scipquery.json'), '{ "languages": [], "watch": { "enabled": false } }\n');

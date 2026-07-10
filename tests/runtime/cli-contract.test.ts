@@ -110,6 +110,16 @@ describe('CLI contract', () => {
       '--force',
       '--json',
     ]);
+    expect(docs.find((entry) => entry.id === 'watch')?.options).toEqual([
+      '--daemon',
+      '--status',
+      '--stop',
+      '--debounce <ms>',
+      '--cooldown <ms>',
+      '--git-poll <ms>',
+      '--idle-timeout <ms>',
+      '--json',
+    ]);
     expect(docs.find((entry) => entry.id === 'diff-impact')?.options).toEqual(['--base <ref>', '--json']);
     expect(docs.find((entry) => entry.id === 'diff-gate')?.options).toContain('--json');
     expect(docs.find((entry) => entry.id === 'plan-context')).toMatchObject({

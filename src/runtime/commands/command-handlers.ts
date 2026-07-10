@@ -25,7 +25,14 @@ import { computeEffectiveness, parseSinceMs } from '../../queries/health/effecti
 import { getIndexFreshness } from '../index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from '../project-readiness.js';
 import { Watcher } from '../watch.js';
-import { acquireWatchProcessLock, WATCH_LOCK_FILE } from '../watch-service.js';
+import {
+  acquireWatchProcessLock,
+  ensureWatchService,
+  inspectWatchService,
+  stopWatchService,
+  WATCH_LOCK_FILE,
+  type WatchServiceInspection,
+} from '../watch-service.js';
 import { setupAgent } from '../agent-setup.js';
 import { installProjectAgentHooks } from '../agent-hooks.js';
 import {
@@ -60,6 +67,7 @@ import {
   withDb,
 } from '../cli-context.js';
 import {
+  cliVersion,
   renderDiffImpactReport,
   renderHealthReport,
   runIsolatedDiffImpactReport,
@@ -1261,17 +1269,94 @@ export function handleWatch(rawOpts: unknown): void {
   const debounce = numberOptionValue(opts, 'debounce');
   const cooldown = numberOptionValue(opts, 'cooldown');
   const gitPoll = numberOptionValue(opts, 'gitPoll');
+  const idleTimeout = numberOptionValue(opts, 'idleTimeout');
+  const daemon = booleanOptionValue(opts, 'daemon');
+  const status = booleanOptionValue(opts, 'status');
+  const stop = booleanOptionValue(opts, 'stop');
+  const json = booleanOptionValue(opts, 'json');
+  const lifecycleModes = [daemon, status, stop].filter(Boolean).length;
+  if (lifecycleModes > 1) {
+    console.error('error: choose only one of --daemon, --status, or --stop.');
+    process.exitCode = 1;
+    return;
+  }
+  if (json && lifecycleModes === 0) {
+    console.error('error: --json requires --daemon, --status, or --stop.');
+    process.exitCode = 1;
+    return;
+  }
+  const invalidTiming = [
+    ['--debounce', debounce, false],
+    ['--cooldown', cooldown, false],
+    ['--git-poll', gitPoll, false],
+    ['--idle-timeout', idleTimeout, true],
+  ].find(([, value, allowZero]) => {
+    return value !== undefined && (!Number.isInteger(value) || (allowZero ? Number(value) < 0 : Number(value) <= 0));
+  });
+  if (invalidTiming) {
+    console.error(`error: ${invalidTiming[0]} requires ${invalidTiming[2] ? 'a non-negative' : 'a positive'} integer.`);
+    process.exitCode = 1;
+    return;
+  }
+  const watchOverrides = {
+    ...(debounce === undefined ? {} : { debounceMs: debounce }),
+    ...(cooldown === undefined ? {} : { cooldownMs: cooldown }),
+    ...(gitPoll === undefined ? {} : { gitPollMs: gitPoll }),
+    ...(idleTimeout === undefined ? {} : { idleTimeoutMs: idleTimeout }),
+  };
   if (debounce) (config.watch ??= {}).debounceMs = debounce;
   if (cooldown) (config.watch ??= {}).cooldownMs = cooldown;
   if (gitPoll) (config.watch ??= {}).gitPollMs = gitPoll;
+  if (idleTimeout !== undefined) (config.watch ??= {}).idleTimeoutMs = idleTimeout;
   const watchConfig = resolveWatchConfig(config);
+  config.watch = watchConfig;
+  const paths = resolveIndexStoragePaths(projectRoot, config);
+  const controllerOptions = { projectRoot, cacheDir: paths.cacheDir, cliVersion, watchOverrides };
+
+  if (status) {
+    const report = watchServiceReport(inspectWatchService(controllerOptions), watchConfig.enabled);
+    if (json) printJsonEnvelope('watch', [], opts, report);
+    else renderWatchServiceReport(report);
+    return;
+  }
+  if (stop) {
+    try {
+      const result = stopWatchService(controllerOptions);
+      if (json) printJsonEnvelope('watch', [], opts, result);
+      else
+        console.log(
+          result.disposition === 'stopped'
+            ? `Stopped watch service${result.pid ? ` (pid ${result.pid})` : ''}.`
+            : 'Watch service is already stopped.',
+        );
+    } catch (error) {
+      console.error(`error: ${error instanceof Error ? error.message : String(error)}`);
+      process.exitCode = 1;
+    }
+    return;
+  }
+
   if (!watchConfig.enabled) {
     console.error('error: watch mode is disabled. Set "watch.enabled": true in .scipquery.json to start it.');
     process.exitCode = 1;
     return;
   }
-  config.watch = watchConfig;
-  const paths = resolveIndexStoragePaths(projectRoot, config);
+  if (daemon) {
+    try {
+      const result = ensureWatchService(controllerOptions);
+      if (json) printJsonEnvelope('watch', [], opts, result);
+      else {
+        console.log(
+          `${result.disposition === 'started' ? 'Started' : 'Reused'} watch service for ${projectRoot} (pid ${result.state.pid}).`,
+        );
+      }
+    } catch (error) {
+      console.error(`error: ${error instanceof Error ? error.message : String(error)}`);
+      process.exitCode = 1;
+    }
+    return;
+  }
+
   const watchLock = acquireWatchProcessLock(join(dirname(paths.dbPath), WATCH_LOCK_FILE), projectRoot);
   if (!watchLock.acquired) {
     console.error(watchLock.message);
@@ -1310,14 +1395,86 @@ export function handleWatch(rawOpts: unknown): void {
   process.once('exit', watchLock.release);
 }
 
+function watchServiceReport(inspection: WatchServiceInspection, enabled = true) {
+  const { classification } = inspection;
+  switch (classification.kind) {
+    case 'stopped':
+      if (inspection.lockIsLive && inspection.lock) {
+        return {
+          enabled,
+          state: 'running' as const,
+          mode: 'foreground-or-starting' as const,
+          pid: inspection.lock.pid,
+          startedAt: inspection.lock.startedAt,
+        };
+      }
+      return { enabled, state: 'stopped' as const, mode: 'none' as const };
+    case 'live':
+      return {
+        enabled,
+        state: 'running' as const,
+        mode: 'daemon' as const,
+        pid: classification.state.pid,
+        startedAt: classification.state.startedAt,
+        heartbeatAt: classification.state.heartbeatAt,
+        lastActivityAt: classification.state.lastActivityAt,
+        idleDeadlineAt: classification.state.idleDeadlineAt,
+        watcher: classification.state.watcher,
+        lastRefresh: classification.state.lastRefresh,
+        lastError: classification.state.lastError,
+      };
+    case 'stale':
+    case 'incompatible':
+      return {
+        enabled,
+        state: classification.kind,
+        mode: 'daemon' as const,
+        reason: classification.reason,
+        pid: classification.state.pid,
+        heartbeatAt: classification.state.heartbeatAt,
+        watcher: classification.state.watcher,
+        lastRefresh: classification.state.lastRefresh,
+        lastError: classification.state.lastError,
+      };
+    default:
+      return assertNeverWatchService(classification);
+  }
+}
+
+function renderWatchServiceReport(report: ReturnType<typeof watchServiceReport>): void {
+  if (report.state === 'stopped') {
+    console.log(`Watch service: stopped${report.enabled ? '' : ' (disabled)'}`);
+    return;
+  }
+  const pid = 'pid' in report ? ` (pid ${report.pid})` : '';
+  console.log(`Watch service: ${report.state} [${report.mode}]${pid}`);
+  if ('watcher' in report && report.watcher) console.log(`Watcher: ${formatStatus(report.watcher)}`);
+  if ('idleDeadlineAt' in report && report.idleDeadlineAt) console.log(`Idle exit: ${report.idleDeadlineAt}`);
+  if ('reason' in report) console.log(`Reason: ${report.reason}`);
+  if ('lastError' in report && report.lastError) console.log(`Last error: ${report.lastError.message}`);
+}
+
+function assertNeverWatchService(value: never): never {
+  throw new Error(`Unhandled watch service classification: ${JSON.stringify(value)}`);
+}
+
 export function handleStatus(rawOpts: unknown): void {
   const opts = commandOptions(rawOpts);
   const { report } = buildProjectDiagnosticReport('status');
+  const watchEnabled = resolveWatchConfig(loadProjectConfig(report.projectRoot)).enabled;
+  const watchService = watchServiceReport(
+    inspectWatchService({
+      projectRoot: report.projectRoot,
+      cacheDir: dirname(report.configuredDbPath),
+      cliVersion,
+    }),
+    watchEnabled,
+  );
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('status', [], opts, { ...report, stats: statusStats(report.exists) });
+    printJsonEnvelope('status', [], opts, { ...report, watchService, stats: statusStats(report.exists) });
     return;
   }
-  renderStatusReport(report, { capabilities: booleanOptionValue(opts, 'capabilities') });
+  renderStatusReport(report, { capabilities: booleanOptionValue(opts, 'capabilities'), watchService });
 }
 
 function renderDoctorReport(
@@ -1341,7 +1498,7 @@ function renderDoctorReport(
 
 function renderStatusReport(
   report: ReturnType<typeof buildProjectDiagnosticReport>['report'],
-  opts: { capabilities: boolean },
+  opts: { capabilities: boolean; watchService: ReturnType<typeof watchServiceReport> },
 ): void {
   console.log(`Project:  ${report.projectRoot}`);
   console.log(`DB path:  ${report.dbPath}`);
@@ -1359,6 +1516,7 @@ function renderStatusReport(
   if (report.freshness.lastRefresh) {
     console.log(`Refresh:  ${formatLastRefresh(report.freshness.lastRefresh)}`);
   }
+  renderWatchServiceReport(opts.watchService);
 
   renderStatusStats(report.exists);
   if (opts.capabilities) {

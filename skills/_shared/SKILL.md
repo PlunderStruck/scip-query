@@ -188,7 +188,7 @@ scip-query setup # Bootstrap this project: install agent skills, refresh the ind
 scip-query setup-agent # Seed agent guidance for this project: AGENTS.md/CLAUDE.md block pointing agents at the scip-query skills and diff gate, plus an optional git pre-commit backstop
 scip-query setup-ci # Write a GitHub Actions workflow that runs scip-query reindex and diff-gate on pull requests
 scip-query uninstall # Remove scip-query-owned skill links, project hooks, and managed agent setup blocks
-scip-query watch # Watch for file changes in the foreground and reindex automatically
+scip-query watch # Watch in the foreground or manage the per-project background refresh service
 scip-query status # Show index status for this project
 ```
 
@@ -197,7 +197,7 @@ scip-query status # Show index status for this project
 ## Detector Reliability
 
 Calibrated against two external production repos on 2026-07-01
-(docs/validation/2026-07-01-external-calibration-*.md). Weight findings by
+(docs/validation/2026-07-01-external-calibration-\*.md). Weight findings by
 measured precision, not by volume:
 
 - **Strong signal** — `complexity-hotspots` (~90%), `recent-duplicates` (~75%), graph facts (`refs`, `trace`, `deps`), compiler-verified `cleanup-plan --verify`.
@@ -216,17 +216,17 @@ measured precision, not by volume:
 
 Run the rows that match the actual edit:
 
-| Change made | Check |
-| --- | --- |
-| Extracted a helper or abstraction | `scip-query incomplete-migration --json --full` |
-| Added a helper, module, component, hook, composable, or adapter | `scip-query similar <symbol> --json --full` and `scip-query recent-duplicates --json --full` |
-| Added parameters, options, props, config flags, or broad option objects | `scip-query unused-params --json --full` |
-| Added a wrapper, facade, forwarding layer, alias, or re-export | `scip-query wrapper-candidates --json --full`, `scip-query passthrough-candidates --json --full`, and `scip-query redundant-reexports` when exports changed |
-| Added an interface, base class, adapter contract, or type alias | `scip-query stale-abstractions --json --full` |
-| Changed schema, config, generated files, public contracts, command descriptors, or docs-backed behavior | `scip-query co-change <file> --json --full` and `scip-query doc-drift --json --full` |
-| Deleted code | `scip-query cleanup-plan --verify --json` |
-| Changed React components or hooks | the React frontend commands above |
-| Changed Vue SFCs or composables | the Vue frontend commands above |
+| Change made                                                                                             | Check                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Extracted a helper or abstraction                                                                       | `scip-query incomplete-migration --json --full`                                                                                                             |
+| Added a helper, module, component, hook, composable, or adapter                                         | `scip-query similar <symbol> --json --full` and `scip-query recent-duplicates --json --full`                                                                |
+| Added parameters, options, props, config flags, or broad option objects                                 | `scip-query unused-params --json --full`                                                                                                                    |
+| Added a wrapper, facade, forwarding layer, alias, or re-export                                          | `scip-query wrapper-candidates --json --full`, `scip-query passthrough-candidates --json --full`, and `scip-query redundant-reexports` when exports changed |
+| Added an interface, base class, adapter contract, or type alias                                         | `scip-query stale-abstractions --json --full`                                                                                                               |
+| Changed schema, config, generated files, public contracts, command descriptors, or docs-backed behavior | `scip-query co-change <file> --json --full` and `scip-query doc-drift --json --full`                                                                        |
+| Deleted code                                                                                            | `scip-query cleanup-plan --verify --json`                                                                                                                   |
+| Changed React components or hooks                                                                       | the React frontend commands above                                                                                                                           |
+| Changed Vue SFCs or composables                                                                         | the Vue frontend commands above                                                                                                                             |
 
 Every implemented change ends with:
 

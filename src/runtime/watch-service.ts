@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { LastRefreshMetadata, WatcherStatus } from '../domain/types.js';
+import type { LastRefreshMetadata, WatchConfig, WatcherStatus } from '../domain/types.js';
 
 export const WATCH_SERVICE_PROTOCOL_VERSION = 1;
 export const WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS = 5_000;
@@ -73,7 +73,12 @@ export interface WatchProcessLockResult {
 export interface WatchServiceRuntime {
   now(): number;
   isProcessAlive(pid: number): boolean;
-  spawnServer(serverPath: string, projectRoot: string, cliVersion: string): void;
+  spawnServer(
+    serverPath: string,
+    projectRoot: string,
+    cliVersion: string,
+    watchOverrides: WatchServiceWatchOverrides,
+  ): void;
   signalProcess(pid: number): void;
   sleep(durationMs: number): void;
 }
@@ -85,8 +90,11 @@ export interface WatchServiceControllerOptions {
   serverPath?: string;
   startupTimeoutMs?: number;
   stopTimeoutMs?: number;
+  watchOverrides?: WatchServiceWatchOverrides;
   runtime?: WatchServiceRuntime;
 }
+
+export type WatchServiceWatchOverrides = Pick<WatchConfig, 'debounceMs' | 'cooldownMs' | 'gitPollMs' | 'idleTimeoutMs'>;
 
 export interface WatchServiceInspection {
   classification: WatchServiceClassification;
@@ -169,7 +177,7 @@ export function ensureWatchService(opts: WatchServiceControllerOptions): WatchSe
   }
 
   const serverPath = opts.serverPath ?? fileURLToPath(new URL('./watch-server.js', import.meta.url));
-  runtime.spawnServer(serverPath, resolve(opts.projectRoot), opts.cliVersion);
+  runtime.spawnServer(serverPath, resolve(opts.projectRoot), opts.cliVersion, opts.watchOverrides ?? {});
   const state = waitForWatchServiceState(opts, runtime, opts.startupTimeoutMs ?? WATCH_SERVICE_STARTUP_TIMEOUT_MS);
   if (!state) {
     throw new Error(
@@ -469,11 +477,11 @@ function defaultIsProcessAlive(pid: number): boolean {
 const DEFAULT_WATCH_SERVICE_RUNTIME: WatchServiceRuntime = {
   now: Date.now,
   isProcessAlive: defaultIsProcessAlive,
-  spawnServer(serverPath, projectRoot, cliVersion) {
+  spawnServer(serverPath, projectRoot, cliVersion, watchOverrides) {
     if (!existsSync(serverPath)) {
       throw new Error(`Watch service helper was not found at ${serverPath}. Run npm run build first.`);
     }
-    const child = spawn(process.execPath, [serverPath, projectRoot, cliVersion], {
+    const child = spawn(process.execPath, [serverPath, projectRoot, cliVersion, JSON.stringify(watchOverrides)], {
       detached: true,
       stdio: 'ignore',
       env: { ...process.env, SCIP_QUERY_SKIP_WATCH_SERVICE: '1' },
