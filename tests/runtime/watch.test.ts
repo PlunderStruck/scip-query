@@ -100,7 +100,7 @@ describe('Watcher', () => {
       })}\n`,
     );
 
-    const { acquireWatchProcessLock } = await import('../../src/runtime/commands/command-handlers.js');
+    const { acquireWatchProcessLock } = await import('../../src/runtime/watch-service.js');
     const result = acquireWatchProcessLock(lockPath, projectRoot);
 
     expect(result.acquired).toBe(false);
@@ -122,7 +122,7 @@ describe('Watcher', () => {
       })}\n`,
     );
 
-    const { acquireWatchProcessLock } = await import('../../src/runtime/commands/command-handlers.js');
+    const { acquireWatchProcessLock } = await import('../../src/runtime/watch-service.js');
     const result = acquireWatchProcessLock(lockPath, projectRoot);
 
     try {

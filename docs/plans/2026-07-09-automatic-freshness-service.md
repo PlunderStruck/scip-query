@@ -255,8 +255,8 @@ tests/runtime/watch.test.ts tests/runtime/cli-contract.test.ts`; failures must
 
 ### 1.2 — Extract one watch-service ownership and state boundary
 
-- [ ] **Create:** `src/runtime/watch-service.ts`
-- [ ] **Edit:** `src/runtime/commands/command-handlers.ts`,
+- [x] **Create:** `src/runtime/watch-service.ts`
+- [x] **Edit:** `src/runtime/commands/command-handlers.ts`,
       `tests/runtime/watch-service.test.ts`, `tests/runtime/watch.test.ts`
 - **Source:** `scip-query code acquireWatchProcessLock`,
   `scip-query refs acquireWatchProcessLock`,
@@ -272,6 +272,10 @@ tests/runtime/watch.test.ts tests/runtime/cli-contract.test.ts`; failures must
 recent-duplicates --json` reports no duplicate lock/liveness/state helpers.
 - **Why:** Foreground and daemon modes must share the same owner; leaving the
   lock in the CLI handler would create two competing lifecycle implementations.
+- **Outcome:** The shared controller now owns state inspection, atomic activity
+  records, idempotent ensure, bounded replacement/stop, detached spawn, and the
+  foreground/daemon lock. Seven focused contract/controller tests pass; the
+  lock migration and recent-duplicate postchecks report no findings.
 
 ### 1.3 — Add the detached server and startup-refresh seam
 

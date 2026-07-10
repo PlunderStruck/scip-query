@@ -1,17 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
 import { createInterface } from 'node:readline/promises';
-import {
-  closeSync,
-  existsSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  unlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join } from 'node:path';
 import type { IndexedDefinition, SupportedLanguage } from '../../domain/types.js';
 import * as queries from '../../queries/index.js';
@@ -35,6 +25,7 @@ import { computeEffectiveness, parseSinceMs } from '../../queries/health/effecti
 import { getIndexFreshness } from '../index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from '../project-readiness.js';
 import { Watcher } from '../watch.js';
+import { acquireWatchProcessLock, WATCH_LOCK_FILE } from '../watch-service.js';
 import { setupAgent } from '../agent-setup.js';
 import { installProjectAgentHooks } from '../agent-hooks.js';
 import {
@@ -90,7 +81,6 @@ const SUPPORTED_LANGUAGE_SET = new Set<SupportedLanguage>(SUPPORTED_LANGUAGES);
 const BENCH_TIMEOUT_MS = 180_000;
 const BENCH_MAX_BUFFER = 100 * 1024 * 1024;
 const SOURCE_EXTENSION_SET = new Set(ALL_SOURCE_EXTENSIONS);
-const WATCH_LOCK_FILE = 'watch.lock';
 const DEFAULT_BENCH_COMMANDS: readonly (readonly string[])[] = [
   ['status', '--json'],
   ['status', '--capabilities'],
@@ -1318,103 +1308,6 @@ export function handleWatch(rawOpts: unknown): void {
     process.exit(0);
   });
   process.once('exit', watchLock.release);
-}
-
-interface WatchProcessLockResult {
-  acquired: boolean;
-  lockPath: string;
-  message: string;
-  release: () => void;
-}
-
-interface WatchProcessLockMetadata {
-  version: 1;
-  pid: number;
-  projectRoot: string;
-  startedAt: string;
-}
-
-export function acquireWatchProcessLock(lockPath: string, projectRoot: string): WatchProcessLockResult {
-  const release = (): void => undefined;
-  const existing = readWatchProcessLock(lockPath);
-  if (existing && isProcessAlive(existing.pid)) {
-    return {
-      acquired: false,
-      lockPath,
-      message: `error: scip-query watch is already running for ${projectRoot} (pid ${existing.pid}, started ${existing.startedAt}; lock: ${lockPath}). Stop that foreground watcher before starting another.`,
-      release,
-    };
-  }
-  if (existing) rmSync(lockPath, { force: true });
-  mkdirSync(dirname(lockPath), { recursive: true });
-
-  let fd: number;
-  try {
-    fd = openSync(lockPath, 'wx');
-  } catch (error) {
-    const code = typeof error === 'object' && error && 'code' in error ? (error as { code?: string }).code : undefined;
-    if (code === 'EEXIST') {
-      const lock = readWatchProcessLock(lockPath);
-      return {
-        acquired: false,
-        lockPath,
-        message: `error: scip-query watch is already running for ${projectRoot}${
-          lock ? ` (pid ${lock.pid}, started ${lock.startedAt}; lock: ${lockPath})` : ` (lock: ${lockPath})`
-        }. Stop that foreground watcher before starting another.`,
-        release,
-      };
-    }
-    throw error;
-  }
-
-  const metadata: WatchProcessLockMetadata = {
-    version: 1,
-    pid: process.pid,
-    projectRoot,
-    startedAt: new Date().toISOString(),
-  };
-  writeFileSync(fd, `${JSON.stringify(metadata)}\n`);
-
-  let released = false;
-  return {
-    acquired: true,
-    lockPath,
-    message: '',
-    release: () => {
-      if (released) return;
-      released = true;
-      try {
-        closeSync(fd);
-      } finally {
-        rmSync(lockPath, { force: true });
-      }
-    },
-  };
-}
-
-function readWatchProcessLock(lockPath: string): WatchProcessLockMetadata | null {
-  try {
-    const parsed = JSON.parse(readFileSync(lockPath, 'utf-8')) as Partial<WatchProcessLockMetadata>;
-    if (typeof parsed.pid !== 'number' || !Number.isInteger(parsed.pid) || parsed.pid <= 0) return null;
-    return {
-      version: 1,
-      pid: parsed.pid,
-      projectRoot: typeof parsed.projectRoot === 'string' ? parsed.projectRoot : dirname(lockPath),
-      startedAt: typeof parsed.startedAt === 'string' ? parsed.startedAt : 'unknown',
-    };
-  } catch {
-    return null;
-  }
-}
-
-function isProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    const code = typeof error === 'object' && error && 'code' in error ? (error as { code?: string }).code : undefined;
-    return code === 'EPERM';
-  }
 }
 
 export function handleStatus(rawOpts: unknown): void {
