@@ -12,6 +12,7 @@ export type RefreshTriggerKind =
   | 'manual-cli'
   | 'setup'
   | 'watch-source'
+  | 'watch-startup'
   | 'watch-git-head'
   | 'watch-git-index'
   | 'watch-git-state'

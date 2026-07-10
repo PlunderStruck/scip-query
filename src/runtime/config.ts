@@ -5,12 +5,14 @@ import { homedir } from 'node:os';
 import type { ProjectConfig, SupportedLanguage, WatchConfig } from '../domain/types.js';
 
 const CONFIG_FILENAME = '.scipquery.json';
+const DEFAULT_WATCH_IDLE_TIMEOUT_MS = 10 * 60_000;
 
 const DEFAULT_WATCH: Required<WatchConfig> = {
   enabled: false,
   debounceMs: 30_000,
   cooldownMs: 60_000,
   gitPollMs: 2_000,
+  idleTimeoutMs: DEFAULT_WATCH_IDLE_TIMEOUT_MS,
   autoRefresh: true,
   ignore: [],
 };
@@ -56,7 +58,15 @@ const ROOT_CONFIG_KEYS = new Set([
   'docs',
 ]);
 
-const WATCH_CONFIG_KEYS = new Set(['enabled', 'debounceMs', 'cooldownMs', 'gitPollMs', 'autoRefresh', 'ignore']);
+const WATCH_CONFIG_KEYS = new Set([
+  'enabled',
+  'debounceMs',
+  'cooldownMs',
+  'gitPollMs',
+  'idleTimeoutMs',
+  'autoRefresh',
+  'ignore',
+]);
 const HOOK_CONFIG_KEYS = new Set(['router']);
 const ENTRY_ROOTS_CONFIG_KEYS = new Set(['pathPrefixes', 'files', 'symbolPatterns', 'qualifiedVars']);
 const SEMANTIC_CONFIG_KEYS = new Set(['typescript', 'rust']);
@@ -136,6 +146,16 @@ export function validateProjectConfig(
   }
   if (config.watch?.gitPollMs !== undefined && config.watch.gitPollMs <= 0) {
     diagnostics.push({ level: 'error', path: 'watch.gitPollMs', message: 'Must be greater than 0.' });
+  }
+  if (
+    config.watch?.idleTimeoutMs !== undefined &&
+    (!Number.isInteger(config.watch.idleTimeoutMs) || config.watch.idleTimeoutMs < 0)
+  ) {
+    diagnostics.push({
+      level: 'error',
+      path: 'watch.idleTimeoutMs',
+      message: 'Must be a non-negative integer; 0 disables idle shutdown.',
+    });
   }
   if (config.watch?.autoRefresh !== undefined && typeof config.watch.autoRefresh !== 'boolean') {
     diagnostics.push({ level: 'error', path: 'watch.autoRefresh', message: 'Must be a boolean.' });
@@ -525,6 +545,7 @@ export function initProjectConfig(projectRoot: string, languages: string[]): str
       debounceMs: 30_000,
       cooldownMs: 60_000,
       gitPollMs: 2_000,
+      idleTimeoutMs: DEFAULT_WATCH_IDLE_TIMEOUT_MS,
       autoRefresh: true,
     },
   };

@@ -18,6 +18,7 @@ import {
   type WatchServiceRuntime,
   type WatchServiceState,
 } from '../../src/runtime/watch-service.js';
+import { startupRefreshTrigger } from '../../src/runtime/watch-server.js';
 
 const NOW = Date.parse('2026-07-09T20:00:00.000Z');
 const IDENTITY = { projectRoot: '/repo', cliVersion: '0.15.0' };
@@ -83,6 +84,16 @@ describe('watch service contract', () => {
     expect(shouldStop({ state: 'indexing', startedAt: NOW }, 20_000, 10_000)).toBe(false);
     expect(shouldStop({ state: 'cooldown', until: NOW + 1_000, dirty: true }, 20_000, 10_000)).toBe(false);
     expect(shouldStop({ state: 'idle' }, 20_000, 0)).toBe(false);
+  });
+
+  it('requests immediate startup refresh for every non-fresh index state', () => {
+    expect(startupRefreshTrigger('fresh')).toBeNull();
+    for (const state of ['stale', 'missing', 'unknown'] as const) {
+      expect(startupRefreshTrigger(state)).toEqual({
+        kind: 'watch-startup',
+        detail: `index ${state} when watch service started`,
+      });
+    }
   });
 
   it('starts once, records command activity, and reuses the live service', () => {

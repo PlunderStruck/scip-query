@@ -279,8 +279,8 @@ recent-duplicates --json` reports no duplicate lock/liveness/state helpers.
 
 ### 1.3 — Add the detached server and startup-refresh seam
 
-- [ ] **Create:** `src/runtime/watch-server.ts`
-- [ ] **Edit:** `src/runtime/watch.ts`, `src/domain/maintenance-types.ts`,
+- [x] **Create:** `src/runtime/watch-server.ts`
+- [x] **Edit:** `src/runtime/watch.ts`, `src/domain/maintenance-types.ts`,
       `src/domain/config-types.ts`, `src/runtime/config.ts`, `tsup.config.ts`,
       `tests/runtime/watch-service.test.ts`, `tests/runtime/watch.test.ts`,
       targeted config tests
@@ -304,6 +304,11 @@ recent-duplicates --json` reports no duplicate lock/liveness/state helpers.
   assert `dist/watch-server.js` exists and the smoke process exits cleanly.
 - **Why:** The existing CLI cannot outlive its terminal; the dedicated entry is
   the smallest owner that preserves the current Watcher and reindex worker.
+- **Outcome:** `watch-server.js` now builds and owns the existing watcher under
+  the shared lock. Startup publishes readiness only after checking freshness
+  and scheduling any required immediate refresh. Command/file activity extends
+  the idle deadline; only clean idle can exit, and signal cleanup removes state
+  and lock files. The built server start/state/SIGTERM smoke test passed.
 
 ### 1.4 — Expose daemon/status/stop while preserving foreground mode
 

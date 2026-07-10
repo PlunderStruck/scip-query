@@ -133,6 +133,18 @@ export class Watcher {
     this.setStatus({ state: 'idle' });
   }
 
+  /** Request a refresh through the same single-flight/coalescing state machine used by file events. */
+  requestRefresh(trigger: RefreshTrigger, opts: { immediate?: boolean } = {}): void {
+    if (!opts.immediate || this.reindexInFlight || this.status.state === 'cooldown') {
+      this.scheduleReindex(trigger);
+      return;
+    }
+    this.pendingTrigger = mergeRefreshTrigger(this.pendingTrigger, trigger);
+    this.changedFiles += 1;
+    this.clearDebounceTimer();
+    this.triggerReindex();
+  }
+
   // ── Internal ─────────────────────────────────────────────
 
   private handleFileChange(filename: string): void {

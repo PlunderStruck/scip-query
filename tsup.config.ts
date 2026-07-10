@@ -39,6 +39,7 @@ export default defineConfig([
       'rust-semantic-worker': 'src/semantic/rust/lsp-batch-worker.ts',
       'rust-semantic-session-worker': 'src/semantic/rust/lsp-session-worker.ts',
       'rust-semantic-session-server': 'src/semantic/rust/durable-session-server.ts',
+      'watch-server': 'src/runtime/watch-server.ts',
       postinstall: 'src/runtime/postinstall.ts',
     },
     format: ['esm'],

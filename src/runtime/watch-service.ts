@@ -6,7 +6,6 @@ import type { LastRefreshMetadata, WatcherStatus } from '../domain/types.js';
 
 export const WATCH_SERVICE_PROTOCOL_VERSION = 1;
 export const WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS = 5_000;
-export const DEFAULT_WATCH_SERVICE_IDLE_TIMEOUT_MS = 10 * 60_000;
 export const WATCH_LOCK_FILE = 'watch.lock';
 export const WATCH_STATE_FILE = 'watch-state.json';
 export const WATCH_ACTIVITY_FILE = 'watch-activity.json';

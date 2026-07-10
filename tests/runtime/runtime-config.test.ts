@@ -322,12 +322,13 @@ describe('validateProjectConfig', () => {
     ]);
   });
 
-  it('requires positive watch timing values', () => {
+  it('requires positive refresh timings and a non-negative integer idle timeout', () => {
     const diagnostics = validateProjectConfig({
       watch: {
         debounceMs: 0,
         cooldownMs: -1,
         gitPollMs: 0,
+        idleTimeoutMs: -1,
         autoRefresh: 'yes' as unknown as boolean,
       },
     });
@@ -336,8 +337,11 @@ describe('validateProjectConfig', () => {
       expect.objectContaining({ level: 'error', path: 'watch.debounceMs' }),
       expect.objectContaining({ level: 'error', path: 'watch.cooldownMs' }),
       expect.objectContaining({ level: 'error', path: 'watch.gitPollMs' }),
+      expect.objectContaining({ level: 'error', path: 'watch.idleTimeoutMs' }),
       expect.objectContaining({ level: 'error', path: 'watch.autoRefresh' }),
     ]);
+
+    expect(validateProjectConfig({ watch: { idleTimeoutMs: 0 } })).toEqual([]);
   });
 
   it('requires positive integer indexer concurrency', () => {

@@ -23,6 +23,27 @@ afterEach(() => {
 });
 
 describe('Watcher', () => {
+  it('can request an immediate startup refresh without waiting for debounce', async () => {
+    const projectRoot = createProject();
+    const statuses: string[] = [];
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { debounceMs: 60_000, gitPollMs: 60_000 } },
+      languages: ['typescript'],
+      onStatus: (status) => statuses.push(status.state),
+    });
+    const runReindex = vi
+      .spyOn(watcher as unknown as { runReindex(trigger: unknown): Promise<number> }, 'runReindex')
+      .mockResolvedValue(1);
+
+    watcher.requestRefresh({ kind: 'watch-startup' }, { immediate: true });
+    await vi.waitFor(() => expect(runReindex).toHaveBeenCalledOnce());
+
+    expect(statuses[0]).toBe('indexing');
+    watcher.stop();
+  });
+
   it('passes canonical index paths and trigger metadata to the reindex worker', async () => {
     const projectRoot = createProject();
     const captured: { detached?: boolean; env?: NodeJS.ProcessEnv } = {};
