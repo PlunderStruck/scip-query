@@ -1,3 +1,6 @@
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   commandAnalysisBudget,
@@ -224,6 +227,46 @@ describe('prewarmHealthSemanticEvidence', () => {
       'project-a',
       expect.anything(),
     );
+  });
+
+  it('profiles each semantic prewarm stage with result cardinalities', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-health-prewarm-'));
+    const profilePath = join(tempDir, 'profile.jsonl');
+    const previousProfile = process.env.SCIP_QUERY_PROFILE;
+    const previousProfileOut = process.env.SCIP_QUERY_PROFILE_OUT;
+
+    try {
+      process.env.SCIP_QUERY_PROFILE = '1';
+      process.env.SCIP_QUERY_PROFILE_OUT = profilePath;
+
+      expect(prewarmHealthSemanticEvidence(fakeLargeDb(), { full: true }, fakePrewarmRuntime())).toMatchObject({
+        status: 'warmed',
+        definitions: 2,
+      });
+
+      const events = readFileSync(profilePath, 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line) as Record<string, unknown>);
+
+      expect(
+        events
+          .filter((event) => String(event.name).startsWith('health.semantic-prewarm'))
+          .map(({ name, definitions, rows }) => ({ name, definitions, rows })),
+      ).toEqual([
+        { name: 'health.semantic-prewarm.candidate-definitions', definitions: 2 },
+        { name: 'health.semantic-prewarm.references', definitions: 2, rows: 2 },
+        { name: 'health.semantic-prewarm.callees', definitions: 2, rows: 1 },
+        { name: 'health.semantic-prewarm.marker-write' },
+        { name: 'health.semantic-prewarm', definitions: 2 },
+      ]);
+    } finally {
+      if (previousProfile === undefined) delete process.env.SCIP_QUERY_PROFILE;
+      else process.env.SCIP_QUERY_PROFILE = previousProfile;
+      if (previousProfileOut === undefined) delete process.env.SCIP_QUERY_PROFILE_OUT;
+      else process.env.SCIP_QUERY_PROFILE_OUT = previousProfileOut;
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it('does not mark a project warm when the semantic provider is unavailable', () => {

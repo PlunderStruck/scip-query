@@ -291,10 +291,27 @@ function runHealthSemanticPrewarm(
   const marker = runtime.readMarker(db, cacheKey, fingerprint);
   if (marker && marker.referenceIncomplete === 0) return skippedHealthSemanticPrewarm('cache-hit');
 
-  const definitions = runtime.candidateDefinitions(db, opts);
+  let definitions: IndexedDefinition[] = [];
+  definitions = profileSpan(
+    'health.semantic-prewarm.candidate-definitions',
+    () => {
+      definitions = runtime.candidateDefinitions(db, opts);
+      return definitions;
+    },
+    () => ({ definitions: definitions.length }),
+  );
   if (definitions.length === 0) return skippedHealthSemanticPrewarm('no-semantic-definitions');
 
-  const references = runtime.materializeReferences(db, definitions, { prefetchCallees: true });
+  let referenceRows = 0;
+  const references = profileSpan(
+    'health.semantic-prewarm.references',
+    () => {
+      const result = runtime.materializeReferences(db, definitions, { prefetchCallees: true });
+      referenceRows = result.cacheHits + result.cacheWrites + result.inMemoryHits;
+      return result;
+    },
+    () => ({ definitions: definitions.length, rows: referenceRows }),
+  );
   const referenceRowsKnown = references.cacheHits + references.cacheWrites + references.inMemoryHits;
   if (referenceRowsKnown === 0 && references.misses + references.unkeyed > 0) {
     return skippedHealthSemanticPrewarm('provider-unavailable', {
@@ -303,7 +320,16 @@ function runHealthSemanticPrewarm(
     });
   }
 
-  const calleeMap = runtime.materializeCallees(db, definitions);
+  let calleeRows = 0;
+  const calleeMap = profileSpan(
+    'health.semantic-prewarm.callees',
+    () => {
+      const result = runtime.materializeCallees(db, definitions);
+      calleeRows = result.size;
+      return result;
+    },
+    () => ({ definitions: definitions.length, rows: calleeRows }),
+  );
   if (references.incomplete > 0) {
     return {
       status: 'partial',
@@ -317,14 +343,16 @@ function runHealthSemanticPrewarm(
     };
   }
 
-  runtime.writeMarker(db, cacheKey, fingerprint, {
-    version: HEALTH_SEMANTIC_PREWARM_MARKER_VERSION,
-    definitions: definitions.length,
-    referenceCacheWrites: references.cacheWrites,
-    referenceIncomplete: references.incomplete,
-    calleeRows: calleeMap.size,
-    warmedAt: Date.now(),
-  });
+  profileSpan('health.semantic-prewarm.marker-write', () =>
+    runtime.writeMarker(db, cacheKey, fingerprint, {
+      version: HEALTH_SEMANTIC_PREWARM_MARKER_VERSION,
+      definitions: definitions.length,
+      referenceCacheWrites: references.cacheWrites,
+      referenceIncomplete: references.incomplete,
+      calleeRows: calleeMap.size,
+      warmedAt: Date.now(),
+    }),
+  );
 
   return {
     status: 'warmed',
