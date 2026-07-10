@@ -1,7 +1,7 @@
 # Persistent TypeScript Semantics — Phase 3 Concrete Plan
 
 Date: 2026-07-09
-Status: in progress; steps 3.1–3.2 complete and step 3.3 next
+Status: in progress; steps 3.1–3.3 complete and step 3.4 next
 Roadmap phase: 3
 
 ## Goal
@@ -203,13 +203,23 @@ postchecks.
 
 ### 3.3 — Keep ts-morph Projects alive across compatible generations
 
-- [ ] **Create:** a TypeScript semantic host with an injected Project factory,
+- [x] **Create:** a TypeScript semantic host with an injected Project factory,
       source updater, and database/provider rebinder.
 - Refresh modified source files, add/delete source files, and retain compatible
   bundles. Replace the session on tsconfig/package/compiler/project identity or
   uncertain change.
 - Prove ordinary edits create zero replacement Projects and config edits replace
   exactly once. Preserve direct provider construction unchanged.
+- **Outcome:** `TypeScriptSemanticHost` lazily constructs Project bundles and
+  can bind new providers/databases to those same bundles across generations.
+  The pure transition planner treats source add/modify/delete as refreshes and
+  treats config, ambient, other, project-identity, or uncertain changes as
+  replacements. Refresh forgets deleted sources, refreshes modified sources,
+  and re-evaluates tsconfig roots for additions. A real two-file TypeScript
+  fixture changed its imported binding from `one` to `two`, observed the new
+  compiler answer, and kept the Project factory at one call; a tsconfig change
+  then caused exactly one lazy replacement and a second factory call. The
+  direct provider remains unchanged and five focused host/provider tests pass.
 
 ### 3.4 — Route synchronous CLI semantics through the existing service
 

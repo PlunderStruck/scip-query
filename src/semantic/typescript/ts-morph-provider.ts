@@ -129,14 +129,23 @@ export function createTsMorphProvider(db: ScipDatabase, _relativePath?: string):
       () => createTsMorphProjectBundles(mod, tsconfigPaths),
       () => ({ tsconfigs: tsconfigPaths.length }),
     );
-    return profileSpan(
-      'typescript.provider.construct',
-      () => new TsMorphSemanticProvider(db, mod, projects),
-      () => ({ tsconfigs: tsconfigPaths.length }),
-    );
+    return createTsMorphProviderFromProjects(db, mod, projects);
   } catch (error) {
     return unavailableProvider(error instanceof Error ? error.message : String(error), tsconfigPaths[0], tsconfigPaths);
   }
+}
+
+export function createTsMorphProviderFromProjects(
+  db: ScipDatabase,
+  tsMorph: TsMorphModule,
+  projects: ProjectBundle[],
+  opts: { reusedProjects?: boolean } = {},
+): SemanticProvider {
+  return profileSpan(
+    'typescript.provider.construct',
+    () => new TsMorphSemanticProvider(db, tsMorph, projects),
+    () => ({ tsconfigs: projects.length, reusedProjects: opts.reusedProjects === true }),
+  );
 }
 
 class TsMorphSemanticProvider implements SemanticProvider {

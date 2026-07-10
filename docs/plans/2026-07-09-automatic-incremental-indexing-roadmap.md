@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Phases 1–2 complete; Phase 3 steps 3.1–3.2 complete and step 3.3 next
+Status: Phases 1–2 complete; Phase 3 steps 3.1–3.3 complete and step 3.4 next
 
 ## Goal
 
@@ -448,6 +448,12 @@ in one evidence-database transaction only after exact comparison with the
 legacy definition-centric oracle. An omitted-origin probe reported the exact
 missing facts. Legacy reads remain authoritative; import, signature, and callee
 fragment routing remains step 3.5.
+Step 3.3 now owns compatible Project bundles in a lazy semantic host. Ordinary
+source add/modify/delete refreshes those Projects and binds a new provider to
+the next database generation without constructing replacement Projects.
+Configuration, ambient, project-identity, and uncertain changes discard the
+session and recreate it lazily. A real import change proved refresh visibility
+with one Project factory call; a config change caused exactly one replacement.
 
 **Exit gate:** Phase 3 performance, hit-rate, and parity thresholds pass on
 separate CLI processes and after service restart.
