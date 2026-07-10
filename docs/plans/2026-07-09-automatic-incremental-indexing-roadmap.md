@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Phase 1 complete; Phase 2 steps 2.1–2.4 complete and step 2.5 next
+Status: Phase 1 complete; Phase 2 steps 2.1–2.5 complete and step 2.6 next
 
 ## Goal
 
@@ -386,8 +386,12 @@ successful full publication. A real zero-consumer TypeScript leaf edit recorded
 100% recall at a 1/305-file prediction; an identical-input forced rebuild
 recorded zero normalized fact changes. Oracle and telemetry failures remain
 non-authoritative, and raw artifact bytes were proven unstable despite
-normalized fact equality. Step 2.5 exposes these records through status next;
-predictions are still not used by runtime indexing.
+normalized fact equality. Step 2.5 now exposes a validated
+passing/failing/unavailable summary, exact telemetry paths, recall,
+prediction/actual/miss sets, ratio, plan mode, and fallback reasons through
+human and JSON status without adding a command option or touching ordinary
+query envelopes. Predictions are still not used by runtime indexing. Step 2.6
+corpus calibration is next.
 
 **Exit gate:** Phase 2 recall and over-invalidation thresholds pass. Any miss
 blocks incremental writes and becomes a regression fixture.

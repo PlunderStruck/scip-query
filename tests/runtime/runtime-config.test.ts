@@ -525,9 +525,14 @@ describe('status config diagnostics', () => {
     try {
       handleStatus({ json: true });
       const payload = JSON.parse(log.mock.calls[0]![0] as string) as {
-        result: { configDiagnostics: unknown[] };
+        result: { affectedSetShadow: unknown; configDiagnostics: unknown[] };
       };
 
+      expect(payload.result.affectedSetShadow).toMatchObject({
+        state: 'unavailable',
+        reason: 'telemetry-missing',
+        latestPath: join(projectRoot, 'affected-shadow-latest.json'),
+      });
       expect(payload.result.configDiagnostics).toEqual([
         expect.objectContaining({
           level: 'warning',
@@ -544,7 +549,64 @@ describe('status config diagnostics', () => {
       }
     }
   });
+
+  it('adds a passing shadow summary to status JSON and human output', () => {
+    const projectRoot = createProject();
+    writeFileSync(join(projectRoot, 'affected-shadow-latest.json'), `${JSON.stringify(passingShadowRecord())}\n`);
+    const previousProjectRoot = process.env['SCIP_QUERY_PROJECT_ROOT'];
+    process.env['SCIP_QUERY_PROJECT_ROOT'] = projectRoot;
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    try {
+      handleStatus({ json: true });
+      const payload = JSON.parse(log.mock.calls[0]![0] as string) as {
+        result: { affectedSetShadow: unknown };
+      };
+      expect(payload.result.affectedSetShadow).toMatchObject({
+        state: 'passing',
+        mode: 'closure',
+        recall: 1,
+        affectedRatio: 0.25,
+        predictedFiles: ['src/a.ts'],
+        actualFiles: ['src/a.ts'],
+      });
+
+      log.mockClear();
+      handleStatus({});
+      const output = log.mock.calls.map((call) => String(call[0])).join('\n');
+      expect(output).toContain('Shadow:   passing, 100.0% recall, 1 predicted / 1 changed, 25.0% of project');
+      expect(output).toContain(`Latest:   ${join(projectRoot, 'affected-shadow-latest.json')}`);
+    } finally {
+      log.mockRestore();
+      if (previousProjectRoot === undefined) {
+        delete process.env['SCIP_QUERY_PROJECT_ROOT'];
+      } else {
+        process.env['SCIP_QUERY_PROJECT_ROOT'] = previousProjectRoot;
+      }
+    }
+  });
 });
+
+function passingShadowRecord(): object {
+  return {
+    version: 1,
+    status: 'evaluated',
+    refreshResult: 'rebuilt',
+    recordedAt: '2026-07-10T00:00:00.000Z',
+    durationMs: 12,
+    manifest: {},
+    plan: { mode: 'closure', affectedFiles: ['src/a.ts'], reasons: [] },
+    comparison: { changedFiles: ['src/a.ts'] },
+    evaluation: {
+      passed: true,
+      recall: 1,
+      affectedRatio: 0.25,
+      predictedFiles: ['src/a.ts'],
+      actualFiles: ['src/a.ts'],
+      missingFiles: [],
+    },
+  };
+}
 
 describe('doctor diagnostics', () => {
   it('exits 0 when the only problem is a stale index', () => {

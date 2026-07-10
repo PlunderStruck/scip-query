@@ -1,7 +1,7 @@
 # Affected-Set Shadowing — Phase 2 Concrete Plan
 
 Date: 2026-07-09
-Status: in progress; steps 2.1–2.4 complete and step 2.5 next
+Status: in progress; steps 2.1–2.5 complete and step 2.6 next
 Roadmap phase: 2
 
 ## Goal
@@ -334,7 +334,7 @@ steps must equal Phase 2 implementation commits before the next step starts.
 
 ### 2.5 — Make shadow evidence observable without changing query contracts
 
-- [ ] **Edit:** `src/runtime/commands/command-handlers.ts`,
+- [x] **Edit:** `src/runtime/commands/command-handlers.ts`,
       `src/runtime/commands/command-descriptors.ts` only if a dedicated option
       is justified, `README.md`, focused status/CLI tests, generated docs
 - **Source:** `... plan-context src/runtime/commands/command-handlers.ts --json`;
@@ -351,6 +351,27 @@ steps must equal Phase 2 implementation commits before the next step starts.
   only if the public command surface changes; built JSON smoke.
 - **Why:** Shadow evidence must be diagnosable before a maintainer can trust or
   reject narrowing rules.
+- **Outcome:** `status --json` now includes a validated `affectedSetShadow`
+  summary with latest/history paths, record time and refresh disposition,
+  passing/failing/unavailable state, plan mode, recall, affected ratio,
+  predicted/actual/missing files, and fallback reasons. Human status renders
+  the same evidence in two compact lines. The reader distinguishes missing,
+  unreadable, malformed, unsupported-version, and recorded oracle-unavailable
+  state; none can masquerade as a pass. It never returns the raw unvalidated
+  sidecar object.
+
+  Seventeen oracle/status-reader tests and 30 runtime-config/status tests cover
+  passing, planted failing recall, full-project fallback, old version,
+  malformed JSON, missing/unreadable files, recorded oracle failure, JSON
+  shape, and human rendering. The 20 CLI descriptor-contract and two reindex
+  JSON tests remain green. The built repository CLI reports the current
+  full-project fallback at 100% recall with the exact latest-record path.
+  Ordinary query handlers and envelopes are untouched. No descriptor or
+  generated command-reference edit was justified because status gained no new
+  option; README documents the additive object and the fact that shadowing is
+  still observational. Matching SCIP checks report no recent duplicates,
+  unused parameters, or diff-gate findings after the ordered-array and
+  missing-file predicates were given distinct, behavior-specific names.
 
 ### 2.6 — Calibrate on fixtures and two representative TypeScript projects
 
@@ -399,8 +420,8 @@ steps must equal Phase 2 implementation commits before the next step starts.
 1. Commit this plan and roadmap baseline update.
 2. Land 2.1–2.3 as testable contracts with no product behavior. Complete.
 3. Land 2.4 shadow integration; full rebuild stays authoritative. Complete.
-4. Land 2.5 observability only after real records exist. Next.
-5. Run 2.6 calibration; fix every miss before closing Phase 2.
+4. Land 2.5 observability only after real records exist. Complete.
+5. Run 2.6 calibration; fix every miss before closing Phase 2. Next.
 6. Do not start Phase 3 cache-key migration until Phase 2 reports 100% recall.
 
 Steps 2.1–2.5 are two-way doors because removing the new files/reads returns to

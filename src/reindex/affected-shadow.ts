@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
-import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import { ScipDatabase } from '../storage/db.js';
+import { isRecord, stringArray } from '../storage/evidence-payload.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import { buildFileDepGraph } from '../symbols/graph/file-dep-graph.js';
 import { buildProjectChangeManifest, classifyAffectedSetFallback, planAffectedFiles } from './affected-set.js';
@@ -77,6 +78,40 @@ export interface AffectedSetShadowPaths {
   latestPath: string;
   historyPath: string;
 }
+
+export type AffectedSetShadowStatusUnavailableReason =
+  | AffectedSetShadowUnavailableReason
+  | 'telemetry-missing'
+  | 'telemetry-unreadable'
+  | 'telemetry-malformed'
+  | 'unsupported-record-version';
+
+export type AffectedSetShadowStatus =
+  | {
+      state: 'passing' | 'failing';
+      latestPath: string;
+      historyPath: string;
+      recordedAt: string;
+      refreshResult: 'rebuilt' | 'reused';
+      durationMs: number;
+      mode: AffectedFilePlan['mode'];
+      recall: number;
+      affectedRatio: number;
+      predictedFiles: string[];
+      actualFiles: string[];
+      missingFiles: string[];
+      fallbackReasons: string[];
+    }
+  | {
+      state: 'unavailable';
+      latestPath: string;
+      historyPath: string;
+      reason: AffectedSetShadowStatusUnavailableReason;
+      recordedAt?: string;
+      refreshResult?: 'rebuilt' | 'reused';
+      durationMs?: number;
+      error?: string;
+    };
 
 export interface AffectedShadowDatabase extends DocumentFactQuery {
   close(): void;
@@ -417,6 +452,111 @@ export function affectedSetShadowPaths(outputDb: string): AffectedSetShadowPaths
   };
 }
 
+export function readAffectedSetShadowStatus(
+  outputDb: string,
+  readFile: (path: string) => string = (path) => readFileSync(path, 'utf-8'),
+): AffectedSetShadowStatus {
+  const paths = affectedSetShadowPaths(outputDb);
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFile(paths.latestPath)) as unknown;
+  } catch (error) {
+    const missing = isMissingFileError(error);
+    const reason = missing ? 'telemetry-missing' : telemetryReadFailureReason(error);
+    return unavailableShadowStatus(
+      paths,
+      reason,
+      missing ? undefined : error instanceof Error ? error.message : String(error),
+    );
+  }
+
+  if (isRecord(raw) && typeof raw['version'] === 'number' && raw['version'] !== 1) {
+    return unavailableShadowStatus(paths, 'unsupported-record-version', `Unsupported version ${raw['version']}.`);
+  }
+  if (!hasValidShadowRecordBase(raw)) {
+    return unavailableShadowStatus(paths, 'telemetry-malformed');
+  }
+  if (raw['status'] === 'unavailable') {
+    if (!isShadowUnavailableReason(raw['reason'])) return unavailableShadowStatus(paths, 'telemetry-malformed');
+    return {
+      state: 'unavailable',
+      ...paths,
+      reason: raw['reason'],
+      recordedAt: raw['recordedAt'],
+      refreshResult: raw['refreshResult'],
+      durationMs: raw['durationMs'],
+      ...(typeof raw['error'] === 'string' ? { error: raw['error'] } : {}),
+    };
+  }
+  if (raw['status'] !== 'evaluated') return unavailableShadowStatus(paths, 'telemetry-malformed');
+  const plan = raw['plan'];
+  const comparison = raw['comparison'];
+  const evaluation = raw['evaluation'];
+  if (!isRecord(raw['manifest']) || !isRecord(plan) || !isRecord(comparison) || !isRecord(evaluation)) {
+    return unavailableShadowStatus(paths, 'telemetry-malformed');
+  }
+
+  const mode = plan['mode'];
+  const planAffectedFiles = stringArray(plan['affectedFiles']);
+  const fallbackReasons = stringArray(plan['reasons']);
+  const changedFiles = stringArray(comparison['changedFiles']);
+  const predictedFiles = stringArray(evaluation['predictedFiles']);
+  const actualFiles = stringArray(evaluation['actualFiles']);
+  const missingFiles = stringArray(evaluation['missingFiles']);
+  const recall = evaluation['recall'];
+  const affectedRatio = evaluation['affectedRatio'];
+  if (
+    (mode !== 'none' && mode !== 'closure' && mode !== 'full-project') ||
+    planAffectedFiles === null ||
+    fallbackReasons === null ||
+    changedFiles === null ||
+    predictedFiles === null ||
+    actualFiles === null ||
+    missingFiles === null ||
+    typeof evaluation['passed'] !== 'boolean' ||
+    !isUnitRatio(recall) ||
+    !isUnitRatio(affectedRatio)
+  ) {
+    return unavailableShadowStatus(paths, 'telemetry-malformed');
+  }
+  const expectedRecall = actualFiles.length === 0 ? 1 : (actualFiles.length - missingFiles.length) / actualFiles.length;
+  if (
+    !sameOrderedStrings(planAffectedFiles, predictedFiles) ||
+    !sameOrderedStrings(changedFiles, actualFiles) ||
+    evaluation['passed'] !== (missingFiles.length === 0) ||
+    Math.abs(recall - expectedRecall) > Number.EPSILON ||
+    missingFiles.some((file) => !actualFiles.includes(file) || predictedFiles.includes(file))
+  ) {
+    return unavailableShadowStatus(paths, 'telemetry-malformed');
+  }
+
+  return {
+    state: evaluation['passed'] ? 'passing' : 'failing',
+    ...paths,
+    recordedAt: raw['recordedAt'],
+    refreshResult: raw['refreshResult'],
+    durationMs: raw['durationMs'],
+    mode,
+    recall,
+    affectedRatio,
+    predictedFiles,
+    actualFiles,
+    missingFiles,
+    fallbackReasons,
+  };
+}
+
+export function formatAffectedSetShadowStatus(status: AffectedSetShadowStatus): string {
+  if (status.state === 'unavailable') return `unavailable (${status.reason})`;
+  const missing = status.missingFiles.length > 0 ? `, ${status.missingFiles.length} missed` : '';
+  const fallback = status.fallbackReasons.length > 0 ? `; fallback: ${status.fallbackReasons.join(', ')}` : '';
+  return (
+    `${status.state}, ${(status.recall * 100).toFixed(1)}% recall, ` +
+    `${status.predictedFiles.length} predicted / ${status.actualFiles.length} changed, ` +
+    `${(status.affectedRatio * 100).toFixed(1)}% of project${missing}${fallback}`
+  );
+}
+
 export function writeAffectedSetShadowRecord(
   outputDb: string,
   record: AffectedSetShadowRecord,
@@ -484,4 +624,49 @@ function closeShadowDatabase(db: AffectedShadowDatabase | null): void {
   } catch {
     // Shadow cleanup must not change whether the authoritative generation publishes.
   }
+}
+
+function hasValidShadowRecordBase(value: unknown): value is Record<string, unknown> & {
+  version: 1;
+  recordedAt: string;
+  refreshResult: 'rebuilt' | 'reused';
+  durationMs: number;
+} {
+  return (
+    isRecord(value) &&
+    value['version'] === 1 &&
+    typeof value['recordedAt'] === 'string' &&
+    (value['refreshResult'] === 'rebuilt' || value['refreshResult'] === 'reused') &&
+    typeof value['durationMs'] === 'number' &&
+    Number.isFinite(value['durationMs']) &&
+    value['durationMs'] >= 0
+  );
+}
+
+function isShadowUnavailableReason(value: unknown): value is AffectedSetShadowUnavailableReason {
+  return value === 'prior-index-unavailable' || value === 'candidate-index-unavailable' || value === 'oracle-error';
+}
+
+function isUnitRatio(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
+}
+
+function sameOrderedStrings(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function unavailableShadowStatus(
+  paths: AffectedSetShadowPaths,
+  reason: AffectedSetShadowStatusUnavailableReason,
+  error?: string,
+): AffectedSetShadowStatus {
+  return { state: 'unavailable', ...paths, reason, ...(error ? { error } : {}) };
+}
+
+function telemetryReadFailureReason(error: unknown): 'telemetry-unreadable' | 'telemetry-malformed' {
+  return error instanceof SyntaxError ? 'telemetry-malformed' : 'telemetry-unreadable';
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT';
 }

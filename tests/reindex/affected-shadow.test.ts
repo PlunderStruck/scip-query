@@ -9,15 +9,18 @@ import {
   compareDocumentFactDigests,
   digestDocumentFacts,
   evaluateAffectedSetShadow,
+  formatAffectedSetShadowStatus,
   GLOBAL_FACTS_UNIT,
+  readAffectedSetShadowStatus,
   readDocumentFactDigests,
   writeAffectedSetShadowRecord,
   type AffectedShadowDatabase,
   type AffectedSetShadowRecord,
   type AffectedSetShadowRuntime,
   type DocumentFactRecord,
+  type EvaluatedAffectedSetShadowRecord,
 } from '../../src/reindex/affected-shadow.js';
-import type { ProjectInputSnapshot } from '../../src/reindex/affected-set.js';
+import type { AffectedSetFallbackReason, ProjectInputSnapshot } from '../../src/reindex/affected-set.js';
 import { ScipDatabase } from '../../src/storage/db.js';
 import { createEvidenceSchema } from '../fixtures/evidence-fixture.js';
 
@@ -392,11 +395,158 @@ describe('affected-set document fact oracle', () => {
     expect(paths).toEqual(affectedSetShadowPaths('/cache/index.db'));
     expect(calls).toEqual(['history:/cache/affected-shadow.jsonl', 'latest:/cache/affected-shadow-latest.json']);
   });
+
+  it('reads and formats a passing status summary', () => {
+    const status = readAffectedSetShadowStatus('/cache/index.db', () => JSON.stringify(evaluatedRecord()));
+    expect(status).toMatchObject({
+      state: 'passing',
+      mode: 'closure',
+      recall: 1,
+      affectedRatio: 0.25,
+      predictedFiles: ['src/a.ts'],
+      actualFiles: ['src/a.ts'],
+      missingFiles: [],
+      fallbackReasons: [],
+      latestPath: '/cache/affected-shadow-latest.json',
+    });
+    expect(formatAffectedSetShadowStatus(status)).toBe(
+      'passing, 100.0% recall, 1 predicted / 1 changed, 25.0% of project',
+    );
+  });
+
+  it('surfaces a failing recall record and exact miss count', () => {
+    const status = readAffectedSetShadowStatus('/cache/index.db', () =>
+      JSON.stringify(
+        evaluatedRecord({
+          passed: false,
+          recall: 0.5,
+          actualFiles: ['src/a.ts', 'src/b.ts'],
+          missingFiles: ['src/b.ts'],
+        }),
+      ),
+    );
+    expect(status).toMatchObject({ state: 'failing', recall: 0.5, missingFiles: ['src/b.ts'] });
+    expect(formatAffectedSetShadowStatus(status)).toContain('failing, 50.0% recall, 1 predicted / 2 changed');
+    expect(formatAffectedSetShadowStatus(status)).toContain('1 missed');
+  });
+
+  it('reports a conservative fallback without calling it a recall failure', () => {
+    const status = readAffectedSetShadowStatus('/cache/index.db', () =>
+      JSON.stringify(
+        evaluatedRecord({
+          mode: 'full-project',
+          predictedFiles: ['src/a.ts', 'src/b.ts'],
+          affectedRatio: 1,
+          fallbackReasons: ['file-added'],
+        }),
+      ),
+    );
+    expect(status).toMatchObject({
+      state: 'passing',
+      mode: 'full-project',
+      fallbackReasons: ['file-added'],
+    });
+    expect(formatAffectedSetShadowStatus(status)).toContain('fallback: file-added');
+  });
+
+  it('preserves an oracle-unavailable record as unavailable status', () => {
+    const record: AffectedSetShadowRecord = {
+      version: 1,
+      status: 'unavailable',
+      refreshResult: 'reused',
+      recordedAt: '2026-07-10T00:00:00.000Z',
+      durationMs: 4,
+      reason: 'oracle-error',
+      error: 'database is malformed',
+    };
+    const status = readAffectedSetShadowStatus('/cache/index.db', () => JSON.stringify(record));
+    expect(status).toMatchObject({
+      state: 'unavailable',
+      reason: 'oracle-error',
+      refreshResult: 'reused',
+      error: 'database is malformed',
+    });
+  });
+
+  it('distinguishes missing, malformed, unreadable, and unsupported telemetry', () => {
+    const missing = Object.assign(new Error('missing'), { code: 'ENOENT' });
+    const unreadable = Object.assign(new Error('permission denied'), { code: 'EACCES' });
+    expect(
+      readAffectedSetShadowStatus('/cache/index.db', () => {
+        throw missing;
+      }),
+    ).toMatchObject({ state: 'unavailable', reason: 'telemetry-missing' });
+    expect(readAffectedSetShadowStatus('/cache/index.db', () => '{')).toMatchObject({
+      state: 'unavailable',
+      reason: 'telemetry-malformed',
+    });
+    expect(
+      readAffectedSetShadowStatus('/cache/index.db', () => {
+        throw unreadable;
+      }),
+    ).toMatchObject({ state: 'unavailable', reason: 'telemetry-unreadable', error: 'permission denied' });
+    expect(readAffectedSetShadowStatus('/cache/index.db', () => JSON.stringify({ version: 2 }))).toMatchObject({
+      state: 'unavailable',
+      reason: 'unsupported-record-version',
+    });
+    expect(
+      readAffectedSetShadowStatus('/cache/index.db', () =>
+        JSON.stringify(evaluatedRecord({ missingFiles: ['src/not-actual.ts'] })),
+      ),
+    ).toMatchObject({ state: 'unavailable', reason: 'telemetry-malformed' });
+  });
 });
 
 function fakeDatabase(label: string, closed: string[]): AffectedShadowDatabase {
   return {
     all: () => [],
     close: () => closed.push(label),
+  };
+}
+
+function evaluatedRecord(
+  options: {
+    passed?: boolean;
+    recall?: number;
+    affectedRatio?: number;
+    mode?: 'none' | 'closure' | 'full-project';
+    predictedFiles?: string[];
+    actualFiles?: string[];
+    missingFiles?: string[];
+    fallbackReasons?: AffectedSetFallbackReason[];
+  } = {},
+): EvaluatedAffectedSetShadowRecord {
+  const predictedFiles = options.predictedFiles ?? ['src/a.ts'];
+  const actualFiles = options.actualFiles ?? ['src/a.ts'];
+  const missingFiles = options.missingFiles ?? [];
+  return {
+    version: 1,
+    status: 'evaluated',
+    refreshResult: 'rebuilt',
+    recordedAt: '2026-07-10T00:00:00.000Z',
+    durationMs: 12,
+    manifest: { version: 1, changes: [], projectIdentityChanged: false, uncertainty: [] },
+    plan: {
+      mode: options.mode ?? 'closure',
+      changedFiles: ['src/a.ts'],
+      affectedFiles: predictedFiles,
+      reasons: options.fallbackReasons ?? [],
+    },
+    comparison: {
+      addedFiles: [],
+      modifiedFiles: actualFiles,
+      deletedFiles: [],
+      changedFiles: actualFiles,
+      unchangedFiles: [],
+    },
+    evaluation: {
+      passed: options.passed ?? true,
+      recall: options.recall ?? 1,
+      affectedRatio: options.affectedRatio ?? 0.25,
+      predictedFiles,
+      actualFiles,
+      missingFiles,
+      extraFiles: [],
+    },
   };
 }

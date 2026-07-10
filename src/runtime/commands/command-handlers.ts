@@ -12,6 +12,11 @@ import {
   reindex,
 } from '../../reindex/index.js';
 import {
+  formatAffectedSetShadowStatus,
+  readAffectedSetShadowStatus,
+  type AffectedSetShadowStatus,
+} from '../../reindex/affected-shadow.js';
+import {
   loadProjectConfig,
   resolveIndexStoragePaths,
   resolveWatchConfig,
@@ -1473,11 +1478,21 @@ export function handleStatus(rawOpts: unknown): void {
     }),
     watchEnabled,
   );
+  const affectedSetShadow = readAffectedSetShadowStatus(report.dbPath);
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('status', [], opts, { ...report, watchService, stats: statusStats(report.exists) });
+    printJsonEnvelope('status', [], opts, {
+      ...report,
+      affectedSetShadow,
+      watchService,
+      stats: statusStats(report.exists),
+    });
     return;
   }
-  renderStatusReport(report, { capabilities: booleanOptionValue(opts, 'capabilities'), watchService });
+  renderStatusReport(report, {
+    affectedSetShadow,
+    capabilities: booleanOptionValue(opts, 'capabilities'),
+    watchService,
+  });
 }
 
 function renderDoctorReport(
@@ -1501,7 +1516,11 @@ function renderDoctorReport(
 
 function renderStatusReport(
   report: ReturnType<typeof buildProjectDiagnosticReport>['report'],
-  opts: { capabilities: boolean; watchService: ReturnType<typeof watchServiceReport> },
+  opts: {
+    affectedSetShadow: AffectedSetShadowStatus;
+    capabilities: boolean;
+    watchService: ReturnType<typeof watchServiceReport>;
+  },
 ): void {
   console.log(`Project:  ${report.projectRoot}`);
   console.log(`DB path:  ${report.dbPath}`);
@@ -1520,6 +1539,8 @@ function renderStatusReport(
     console.log(`Refresh:  ${formatLastRefresh(report.freshness.lastRefresh)}`);
   }
   renderWatchServiceReport(opts.watchService);
+  console.log(`Shadow:   ${formatAffectedSetShadowStatus(opts.affectedSetShadow)}`);
+  console.log(`Latest:   ${opts.affectedSetShadow.latestPath}`);
 
   renderStatusStats(report.exists);
   if (opts.capabilities) {
