@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Phases 1–3 complete; Phase 4 feasibility spike next
+Status: Phases 1–3 complete; Phase 4A TypeScript feasibility proven and implementation in progress
 
 ## Goal
 
@@ -486,6 +486,9 @@ provider and legacy definition rows remain rollback paths.
 
 **Purpose:** avoid whole-project TypeScript/Rust indexing for ordinary edits.
 
+Execution plan and feasibility evidence:
+[`2026-07-09-incremental-scip-documents.md`](./2026-07-09-incremental-scip-documents.md).
+
 #### 4A. Feasibility spike
 
 - Inspect scip-typescript's library boundary and upstream roadmap for a
@@ -497,6 +500,14 @@ provider and legacy definition rows remain rollback paths.
   symbols.
 - Repeat the feasibility analysis for rust-analyzer SCIP output. Do not infer
   that semantic LSP reuse can emit complete SCIP documents.
+
+**Result:** TypeScript is feasible through the shipped scip-typescript 0.4.0
+`FileIndexer` only when the compiler program and project-wide symbol tables are
+retained. The accepted probe matched all 311 base documents and a true edited
+document byte-for-byte; its warm update plus emission took 3.277ms. The
+stateless design matched only 251/311 and is rejected. Rust remains an upstream
+boundary: rust-analyzer computes one project-wide `StaticIndex` before document
+emission and exposes no SCIP-document LSP request.
 
 #### 4B. Fragment store
 
@@ -654,12 +665,11 @@ Complete this at every phase close:
 6. Phase 5 atomic incremental generation storage.
 7. Phase 6 durable Rust defaulting, selective native kernels, and rollout.
 
-The immediate recommendation is Phase 4A's upstream-boundary feasibility
-spike. Phases 2–3 now prove which inputs are affected and reuse live compiler
-state plus unrelated semantic fragments. The remaining edit-to-fresh cost is
-the whole-project SCIP producer, so inspect the real project-shard/indexer
-boundary before designing a fragment store:
+The immediate action is Phase 4.1's supported emitter adapter. Phases 2–3 prove
+which inputs are affected and reuse live compiler state plus unrelated
+semantic fragments; Phase 4A has now proven the exact producer state that must
+survive. Implement the adapter before the durable fragment store:
 
 ```sh
-SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/reindex/project-shards.ts --json
+SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/reindex/typescript-document-emitter.ts --json
 ```
