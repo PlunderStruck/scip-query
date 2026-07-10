@@ -1,7 +1,7 @@
 # Incremental SCIP Document Plan
 
 Date: 2026-07-09
-Status: Phase 4A feasibility proven; implementation in progress
+Status: Phase 4.1 emitter adapter complete; Phase 4.2 durable fragment store next
 Parent: [`2026-07-09-automatic-incremental-indexing-roadmap.md`](./2026-07-09-automatic-incremental-indexing-roadmap.md)
 
 ## Outcome
@@ -106,6 +106,16 @@ whole-project oracle.
 
 Commit boundary: adapter plus focused tests and this feasibility record.
 
+**Result:** Complete in `src/reindex/typescript-document-emitter.ts`. The
+adapter loads the optional 0.4.0 runtime by absolute package path, rejects any
+other version or module shape, uses that package's own TypeScript dependency,
+retains compiler/source/symbol/package state, prunes old changed-file AST keys,
+and emits explicit affected paths. Its independent test invokes the real
+scip-typescript CLI as the clean oracle before and after two source edits. All
+base and affected document bytes matched, both changed source nodes were
+replaced, and stale symbol entries were pruned. Focused tests, typecheck,
+format, ESLint, build, and diff checks passed.
+
 ### 4.2 — Durable fragment store
 
 - Store one versioned document record per relative path under the index cache.
@@ -160,5 +170,5 @@ verifier fail before canary results are trusted.
 
 ```sh
 SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context \
-  src/reindex/typescript-document-emitter.ts --json
+  src/reindex/typescript-fragment-store.ts --json
 ```

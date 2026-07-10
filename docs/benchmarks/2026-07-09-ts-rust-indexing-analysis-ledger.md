@@ -1484,6 +1484,27 @@ packed-install remote/direct smoke, repository reindex, matching SCIP
 postchecks, and diff-gate passed. Machine records, including rejected controls,
 live in `docs/benchmarks/runs/2026-07-09-typescript-semantic-session.jsonl`.
 
+### Incremental SCIP document producer
+
+Phase 4A inspected the installed scip-typescript 0.4.0 library rather than
+stopping at its CLI flags. Its public package surface has no document API, but
+the package ships the same `FileIndexer` used by `ProjectIndexer`. A stateless
+root-TypeScript probe reproduced only 251/311 documents exactly because
+foreign anonymous type-literal names depend on the retained project symbol
+table. The accepted persistent-program probe reproduced all 311 and emitted a
+true edited leaf document byte-for-byte in 3.277ms after a 1,529.850ms initial
+symbol-table warm scan.
+
+The Phase 4.1 adapter now preserves that state, replaces changed source nodes,
+prunes their stale symbol entries, and rejects any unsupported optional
+runtime so the whole-project CLI remains the fallback. An independent fixture
+ran the installed CLI as its clean oracle across two edits and matched every
+base and affected document. rust-analyzer remains at the recorded upstream
+boundary: its current `scip` implementation first computes one complete
+`StaticIndex`, and neither its CLI nor LSP offers document emission. Detailed
+records live in
+`docs/benchmarks/runs/2026-07-09-incremental-scip-documents.jsonl`.
+
 ## Run History
 
 Machine-readable run history:
