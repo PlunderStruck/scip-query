@@ -1,7 +1,7 @@
 # Affected-Set Shadowing — Phase 2 Concrete Plan
 
 Date: 2026-07-09
-Status: in progress; steps 2.1–2.5 complete and step 2.6 next
+Status: complete; all six steps and the Phase 2 exit gate passed
 Roadmap phase: 2
 
 ## Goal
@@ -48,12 +48,12 @@ fixture and parity evidence before changing that rule.
   canonical relative path, byte size, and SHA-256 for each readable file;
   unreadable files receive the explicit `size: -1` / `hash: 'unreadable'`
   identity. Source: `SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js code
-  fingerprintProjectFiles --json` (`src/reindex/project-files.ts:30-58`).
+fingerprintProjectFiles --json` (`src/reindex/project-files.ts:30-58`).
 - `computeReindexFingerprint()` already combines those file identities with
   languages, workspace mode, explicit TypeScript projects, and Clojure config.
   The private `ReindexFingerprint` is the current whole-generation identity.
   Source: `... code ReindexFingerprint --json`; `... code
-  computeReindexFingerprint --json` (`src/reindex/index.ts:1560-1589`).
+computeReindexFingerprint --json` (`src/reindex/index.ts:1560-1589`).
 - The published metadata keeps the preceding complete fingerprint and the
   per-TypeScript-project file fingerprints. This repository currently has one
   `.` TypeScript project with 478 fingerprinted inputs, so every TypeScript
@@ -63,11 +63,11 @@ fixture and parity evidence before changing that rule.
   from SCIP plus source imports. It is consumed by nine analysis/query modules;
   Phase 2 must reuse the product rather than introduce a second import graph.
   Source: `... code buildFileDepGraph --json`; `... refs buildFileDepGraph
-  --json` (`src/symbols/graph/file-dep-graph.ts:43-126`).
+--json` (`src/symbols/graph/file-dep-graph.ts:43-126`).
 - The existing `affected()` command computes a symbol-level consumer closure,
   not a file-level invalidation plan. No exported file reverse-closure or
   change-manifest unit exists. Source: `... code affected --json`; `... similar
-  transitiveClosure --json --full` returned no reuse candidate.
+transitiveClosure --json --full` returned no reuse candidate.
 - `runLanguageIndexersForFreshReindex()` classifies whole-language and
   TypeScript project-shard reuse, runs every missed project indexer, merges the
   outputs, and reports shard diagnostics. It has no per-document prediction.
@@ -78,33 +78,32 @@ fixture and parity evidence before changing that rule.
   replaces the old SCIP, SQLite, and metadata files. This is the safe dual-DB
   comparison seam: both complete graph generations exist immediately before
   promotion. Source: `... code publishFreshReindexArtifacts --json`; `... code
-  promoteReindexArtifacts --json` (`src/reindex/index.ts:879-925,1541-1552`).
+promoteReindexArtifacts --json` (`src/reindex/index.ts:879-925,1541-1552`).
 - `Watcher.runReindex()` forks the existing worker with the current config and
-  trigger; it does not need a second writer or a new daemon protocol for Phase
-  2. Source: `... code Watcher:runReindex --json`
+  trigger; it does not need a second writer or a new daemon protocol for Phase 2. Source: `... code Watcher:runReindex --json`
   (`src/runtime/watch.ts:266-306`).
 - The freshly built repository CLI reports a fresh index and valid Phase 1
   config. The globally installed 0.15.0 binary is an older build with the same
   semver and rejects `watch.cooldownMs: 0` / `watch.idleTimeoutMs`; use
   `node dist/cli.js` for Phase 2 evidence and keep install/upgrade identity as a
   Phase 6 rollout gate. Source: paired `scip-query status --capabilities
-  --json` and `node dist/cli.js status --capabilities --json` controls on
+--json` and `node dist/cli.js status --capabilities --json` controls on
   2026-07-09.
 
 ## Reuse Audit
 
-| Need | Existing unit to reuse | Decision |
-| --- | --- | --- |
-| Canonical file identities | `ProjectFileFingerprint`, `fingerprintProjectFiles()` | Reuse exactly; the manifest compares existing identities and does not re-hash files. |
-| Project/config identity | `ReindexFingerprint`, `computeReindexFingerprint()` | Pass the existing previous/current structural values into the manifest core; do not create a second project fingerprint. |
-| Project membership/dependencies | `assignFilesToProjects()`, `deriveProjectDependencies()`, `computeProjectShardFingerprints()` | Reuse for containing-project widening and workspace fixtures. |
-| File dependency evidence | `buildFileDepGraph()` | Reuse the published graph as the prediction input; do not parse imports in the planner. |
-| Indexed document inventory | `indexedDocumentPaths()` | Reuse for project universe and normalization. |
-| Database access | `ScipDatabase` | Open the old and candidate databases through the existing wrapper and close both deterministically. |
-| Atomic writer | `publishFreshReindexArtifacts()` / `promoteReindexArtifacts()` | Compare immediately before promotion; keep promotion authoritative and unchanged. |
-| File-level reverse closure | None; symbol `affected()` is a different unit and no similar closure candidate was found | Add one pure planner in `src/reindex/affected-set.ts`; keep graph traversal independent of SQLite. |
-| Old/new per-document graph digest | None; existing commands report aggregate/query views, not normalized document identity | Add a narrow oracle shell in `src/reindex/affected-shadow.ts`, using ordered SQLite rows and stable binary encodings. |
-| Durable shadow telemetry | Existing metadata is the publication truth and version 3 is read by older installs | Write versioned `affected-shadow-latest.json` plus append-only JSONL beside `meta.json`; do not bump or overload reindex metadata. |
+| Need                              | Existing unit to reuse                                                                        | Decision                                                                                                                           |
+| --------------------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Canonical file identities         | `ProjectFileFingerprint`, `fingerprintProjectFiles()`                                         | Reuse exactly; the manifest compares existing identities and does not re-hash files.                                               |
+| Project/config identity           | `ReindexFingerprint`, `computeReindexFingerprint()`                                           | Pass the existing previous/current structural values into the manifest core; do not create a second project fingerprint.           |
+| Project membership/dependencies   | `assignFilesToProjects()`, `deriveProjectDependencies()`, `computeProjectShardFingerprints()` | Reuse for containing-project widening and workspace fixtures.                                                                      |
+| File dependency evidence          | `buildFileDepGraph()`                                                                         | Reuse the published graph as the prediction input; do not parse imports in the planner.                                            |
+| Indexed document inventory        | `indexedDocumentPaths()`                                                                      | Reuse for project universe and normalization.                                                                                      |
+| Database access                   | `ScipDatabase`                                                                                | Open the old and candidate databases through the existing wrapper and close both deterministically.                                |
+| Atomic writer                     | `publishFreshReindexArtifacts()` / `promoteReindexArtifacts()`                                | Compare immediately before promotion; keep promotion authoritative and unchanged.                                                  |
+| File-level reverse closure        | None; symbol `affected()` is a different unit and no similar closure candidate was found      | Add one pure planner in `src/reindex/affected-set.ts`; keep graph traversal independent of SQLite.                                 |
+| Old/new per-document graph digest | None; existing commands report aggregate/query views, not normalized document identity        | Add a narrow oracle shell in `src/reindex/affected-shadow.ts`, using ordered SQLite rows and stable binary encodings.              |
+| Durable shadow telemetry          | Existing metadata is the publication truth and version 3 is read by older installs            | Write versioned `affected-shadow-latest.json` plus append-only JSONL beside `meta.json`; do not bump or overload reindex metadata. |
 
 `src/reindex/affected-set.ts` is justified as the deterministic domain core:
 identity comparison, path classification, conservative fallback, and reverse
@@ -115,16 +114,16 @@ separate prevents SQLite/process concerns from contaminating the safety rules.
 
 ## Testability Design
 
-| Behavior | Test seam | Dependencies to inject | Pure core | Side-effect shell | Contract |
-| --- | --- | --- | --- | --- | --- |
-| Snapshot comparison | `buildProjectChangeManifest(previous, current)` | None | Stable sorted add/modify/delete/config classification | Existing fingerprint producer | Identical inputs yield an empty manifest; malformed/unreadable identity records uncertainty. |
-| Conservative widening | `classifyAffectedSetFallback(manifest, context)` | Project membership and path policy values | Full-project/closure/no-index-work decision | None | Config, ambient, add/delete, unknown, or missing graph evidence never narrows. |
-| Reverse dependency closure | `planAffectedFiles(manifest, graph, universe)` | Dependency map and indexed universe | Build reverse edges and traverse deterministically | `buildFileDepGraph()` supplies graph | Includes changed indexed files and all transitive consumers; cycles terminate; results sort canonically. |
-| Graph oracle | `compareDocumentFactDigests(before, after)` | Ordered digest maps | Set comparison and recall calculation | `readDocumentFactDigests(db)` issues SQL | Every graph-bearing row is assigned to a document digest; binary fields use byte-stable encoding. |
-| Recall gate | `evaluateAffectedSetShadow(predicted, actual)` | None | Missing/extra set calculation, recall, ratio | None | Any actual unit outside prediction produces `passed: false`; empty actual set has recall 1. |
-| Reindex integration | `recordAffectedSetShadow(context)` | DB opener, clock, atomic writer, append writer | Manifest/planner/evaluator above | Old/new DB reads and telemetry files | Failures record a conservative error/fallback and never alter the production generation. |
-| Status observability | existing status formatter/JSON envelope | Latest-record reader | Additive state selection | Read `affected-shadow-latest.json` | Missing/malformed telemetry reports unavailable; ordinary query JSON is unchanged. |
-| Harness mutation | `scripts/affected-set-shadow-contract.mjs` | Fixture edit operations and built CLI | Expected containment/hash checks | Temp repos, full rebuilds, restoration | A deliberately omitted expected file makes the harness fail before green controls are trusted. |
+| Behavior                   | Test seam                                        | Dependencies to inject                         | Pure core                                             | Side-effect shell                        | Contract                                                                                                 |
+| -------------------------- | ------------------------------------------------ | ---------------------------------------------- | ----------------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Snapshot comparison        | `buildProjectChangeManifest(previous, current)`  | None                                           | Stable sorted add/modify/delete/config classification | Existing fingerprint producer            | Identical inputs yield an empty manifest; malformed/unreadable identity records uncertainty.             |
+| Conservative widening      | `classifyAffectedSetFallback(manifest, context)` | Project membership and path policy values      | Full-project/closure/no-index-work decision           | None                                     | Config, ambient, add/delete, unknown, or missing graph evidence never narrows.                           |
+| Reverse dependency closure | `planAffectedFiles(manifest, graph, universe)`   | Dependency map and indexed universe            | Build reverse edges and traverse deterministically    | `buildFileDepGraph()` supplies graph     | Includes changed indexed files and all transitive consumers; cycles terminate; results sort canonically. |
+| Graph oracle               | `compareDocumentFactDigests(before, after)`      | Ordered digest maps                            | Set comparison and recall calculation                 | `readDocumentFactDigests(db)` issues SQL | Every graph-bearing row is assigned to a document digest; binary fields use byte-stable encoding.        |
+| Recall gate                | `evaluateAffectedSetShadow(predicted, actual)`   | None                                           | Missing/extra set calculation, recall, ratio          | None                                     | Any actual unit outside prediction produces `passed: false`; empty actual set has recall 1.              |
+| Reindex integration        | `recordAffectedSetShadow(context)`               | DB opener, clock, atomic writer, append writer | Manifest/planner/evaluator above                      | Old/new DB reads and telemetry files     | Failures record a conservative error/fallback and never alter the production generation.                 |
+| Status observability       | existing status formatter/JSON envelope          | Latest-record reader                           | Additive state selection                              | Read `affected-shadow-latest.json`       | Missing/malformed telemetry reports unavailable; ordinary query JSON is unchanged.                       |
+| Harness mutation           | `scripts/affected-set-shadow-contract.mjs`       | Fixture edit operations and built CLI          | Expected containment/hash checks                      | Temp repos, full rebuilds, restoration   | A deliberately omitted expected file makes the harness fail before green controls are trusted.           |
 
 ## Pre-Registered Measurements
 
@@ -132,16 +131,16 @@ The Phase 1 run history remains the timing baseline. Phase 2 adds a distinct
 `docs/benchmarks/runs/2026-07-09-affected-set-shadow.jsonl` history. Every real
 timing scenario runs five times after one warm-up with alternating order.
 
-| Scenario | Current baseline | Phase 2 acceptance |
-| --- | ---: | --- |
-| Local exact no-op | 329ms median / 348ms p95 internal | No shadow work on empty manifest; no-op median/p95 regression <=10%. |
-| Local TypeScript leaf edit | 4.543s median / 4.885s p95 to fresh | 100% document/fact recall; predicted project ratio <20%; shadow overhead median <=10%, p95 <=20%. |
-| Twenty writes over 500ms | 5.065s median / 5.229s p95 | One authoritative refresh remains; one shadow record corresponds to its final manifest. |
-| Export/signature edit | Not yet isolated | 100% graph and semantic-output recall/hash parity against clean rebuild. |
-| Import-edge edit | Not yet isolated | Changed file plus all observed consumers contained; zero misses. |
-| Add/delete/ambient/config edit | Whole project today | Prediction explicitly widens to containing project; zero misses. |
-| Missing/malformed prior state | Whole project today | Full fallback with reason; production full rebuild succeeds. |
-| Second representative TS project | Not yet selected in the run history | Five leaf edits at 100% recall and median predicted ratio <20%. |
+| Scenario                         |                    Current baseline | Phase 2 acceptance                                                                                |
+| -------------------------------- | ----------------------------------: | ------------------------------------------------------------------------------------------------- |
+| Local exact no-op                |   329ms median / 348ms p95 internal | No shadow work on empty manifest; no-op median/p95 regression <=10%.                              |
+| Local TypeScript leaf edit       | 4.543s median / 4.885s p95 to fresh | 100% document/fact recall; predicted project ratio <20%; shadow overhead median <=10%, p95 <=20%. |
+| Twenty writes over 500ms         |          5.065s median / 5.229s p95 | One authoritative refresh remains; one shadow record corresponds to its final manifest.           |
+| Export/signature edit            |                    Not yet isolated | 100% graph and semantic-output recall/hash parity against clean rebuild.                          |
+| Import-edge edit                 |                    Not yet isolated | Changed file plus all observed consumers contained; zero misses.                                  |
+| Add/delete/ambient/config edit   |                 Whole project today | Prediction explicitly widens to containing project; zero misses.                                  |
+| Missing/malformed prior state    |                 Whole project today | Full fallback with reason; production full rebuild succeeds.                                      |
+| Second representative TS project | Not yet selected in the run history | Five leaf edits at 100% recall and median predicted ratio <20%.                                   |
 
 The stable output contract includes normalized document graph digests plus the
 existing command/fact controls used by the campaign: documents, symbols,
@@ -161,7 +160,7 @@ steps must equal Phase 2 implementation commits before the next step starts.
       `tests/reindex/affected-set.test.ts`
 - [x] **Edit:** `src/reindex/project-files.ts`
 - **Source:** `... code fingerprintProjectFiles --json`; `... code
-  ReindexFingerprint --json`; `... refs fingerprintProjectFiles --json`.
+ReindexFingerprint --json`; `... refs fingerprintProjectFiles --json`.
 - **What:** Current fingerprints prove whole-generation equality but do not
   expose a versioned change list or an uncertainty classification.
 - **Change:** Add structural snapshot input types, stable added/modified/deleted
@@ -174,7 +173,7 @@ steps must equal Phase 2 implementation commits before the next step starts.
   and observe it fail before making the conservative rule green.
 - **Validation:** `npx vitest run tests/reindex/affected-set.test.ts`;
   `SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js recent-duplicates --json
-  --full`.
+--full`.
 - **Why:** Every later traversal and oracle depends on a deterministic statement
   of what changed. Landing the pure contract first is deployable and has no
   runtime behavior.
@@ -192,8 +191,8 @@ steps must equal Phase 2 implementation commits before the next step starts.
 - [x] **Edit:** `src/reindex/affected-set.ts`,
       `tests/reindex/affected-set.test.ts`
 - **Source:** `... code buildFileDepGraph --json`; `... refs
-  buildFileDepGraph --json`; `... code affected --json`; `... code
-  deriveProjectDependencies --json`.
+buildFileDepGraph --json`; `... code affected --json`; `... code
+deriveProjectDependencies --json`.
 - **What:** The dependency graph maps a file to its dependencies; no file-level
   reverse-closure API or affected-set policy exists.
 - **Change:** Add deterministic reverse adjacency and transitive consumer
@@ -204,7 +203,7 @@ steps must equal Phase 2 implementation commits before the next step starts.
   diamond, cycle, multi-change, disconnected indexed file, missing edge data,
   and workspace project widening.
 - **Validation:** Focused tests plus `SCIP_QUERY_SKIP_WATCH_SERVICE=1 node
-  dist/cli.js similar planAffectedFiles --json --full` after reindex.
+dist/cli.js similar planAffectedFiles --json --full` after reindex.
 - **Why:** The safety policy must be proved without opening SQLite before a
   side-effect shell can consume it.
 - **Outcome:** `planAffectedFiles()` now reverses the existing
@@ -223,7 +222,7 @@ steps must equal Phase 2 implementation commits before the next step starts.
 - [x] **Create:** `src/reindex/affected-shadow.ts`,
       `tests/reindex/affected-shadow.test.ts`
 - **Source:** `... outline src/storage/scip-documents.ts --json`; `... outline
-  src/storage/db.ts --json`; `... code publishFreshReindexArtifacts --json`.
+src/storage/db.ts --json`; `... code publishFreshReindexArtifacts --json`.
 - **What:** Old and candidate SQLite files coexist before promotion, but no
   normalized per-document graph comparison exists.
 - **Change:** Read ordered document, chunk/occurrence, mention/symbol,
@@ -264,8 +263,8 @@ steps must equal Phase 2 implementation commits before the next step starts.
       `src/reindex/affected-shadow.ts`, the watch/Rust durable-session atomic
       JSON callers, and focused reindex reliability/JSON tests
 - **Source:** `... code publishFreshReindexArtifacts --json`; `... code
-  promoteReindexArtifacts --json`; `... code buildPublishedReindexMetadata
-  --json`; `... co-change src/reindex/index.ts --json`.
+promoteReindexArtifacts --json`; `... code buildPublishedReindexMetadata
+--json`; `... co-change src/reindex/index.ts --json`.
 - **What:** Full reindex currently converts/augments the candidate DB, writes
   metadata, then promotes all artifacts; no shadow comparison is recorded.
 - **Change:** Before promotion, build the manifest from prior/current
@@ -339,7 +338,7 @@ steps must equal Phase 2 implementation commits before the next step starts.
       is justified, `README.md`, focused status/CLI tests, generated docs
 - **Source:** `... plan-context src/runtime/commands/command-handlers.ts --json`;
   `... code formatStatus --json`; `... co-change
-  src/runtime/commands/command-descriptors.ts --json`.
+src/runtime/commands/command-descriptors.ts --json`.
 - **What:** Status reports freshness and service state but cannot report the
   last affected prediction, fallback reason, recall, or telemetry path.
 - **Change:** Add an `affectedSetShadow` object to status JSON and a compact
@@ -375,7 +374,7 @@ steps must equal Phase 2 implementation commits before the next step starts.
 
 ### 2.6 — Calibrate on fixtures and two representative TypeScript projects
 
-- [ ] **Edit:** `scripts/affected-set-shadow-contract.mjs`, Phase 2 tests,
+- [x] **Edit:** `scripts/affected-set-shadow-contract.mjs`, Phase 2 tests,
       `docs/benchmarks/runs/2026-07-09-affected-set-shadow.jsonl`, campaign
       ledger, this plan, and the master roadmap
 - **Source:** this plan's pre-registered table; campaign output contract;
@@ -396,24 +395,67 @@ steps must equal Phase 2 implementation commits before the next step starts.
 - **Why:** Only the corpus matrix can close Phase 2 and permit Phase 3 to key
   semantic caches by affected identity. Any miss blocks closure and becomes a
   regression fixture.
+- **Outcome:** The fixture harness exercised leaf, export-signature,
+  import-edge, multi-file, add, delete, ambient declaration, tsconfig, package
+  manifest, malformed metadata, and sleeping-service wake behavior. Every
+  clean-full-rebuild comparison had recall 1 with no missing document/fact
+  units. Its deliberately under-predicted leaf was rejected before the green
+  controls were accepted. Add/delete/ambient/config/malformed inputs widened to
+  the entire project with explicit reasons; ordinary source edits used
+  dependency closure.
+
+  The five-run scip-query leaf control predicted 1 of 305 indexed documents
+  (0.328%) at 100% recall. Edit-to-fresh was 3,849ms median / 3,863ms p95;
+  shadow comparison was 310ms / 320ms, or 8.73% / 9.10% of the estimated
+  authoritative span. Its normalized generation stayed at 305 documents,
+  20,158 symbols, 4,108 definitions, 65,801 mentions, and 904 chunks with
+  fact-count SHA-256
+  `7e21a39b6ab5fcf3fb55233a5fe1c2a718f5a865b905086be3b99883c8414bf3`
+  and kind-count SHA-256
+  `1346d578a1ff7201c53c168db653b918141aedd81537886b50facec56cd481df`.
+  The exact no-op
+  control improved from the 329ms / 348ms baseline to 293ms / 314ms and did no
+  shadow work.
+
+  OpenCode was selected before its accepted run because it is an independent,
+  TypeScript-heavy 29-tsconfig monorepo rather than another small single-project
+  fixture. At commit `1a8e94dc8e7462d3d0d860e1337b448c71947f6b`, its index
+  contained 2,967 documents and 189,683 symbols. Five alternating leaf edits
+  predicted 1 of 2,531 project inputs (0.0395%) at 100% recall. Edit-to-fresh
+  was 59,810ms median / 60,738ms p95; shadow comparison was 2,940ms / 2,979ms,
+  or 5.09% / 5.42%. Normalized output stayed at 2,967 documents, 189,683
+  symbols, 18,031 definitions, 500,052 mentions, and 7,039 chunks with
+  fact-count SHA-256
+  `01058af2072f26917c7034eb2df3d560fe6c7f65fbc5841fb243e0b45644c1a5`
+  and kind-count SHA-256
+  `194d06178ef78fc2d93ee1dc5e92e822494fad2d0f03174da84da8de9f9b6587`.
+
+  The first OpenCode trial is intentionally retained as failed: a tracked
+  internal directory symlink was classified as unreadable and therefore forced
+  a full-project plan. `fingerprintProjectFiles()` now gives an internal
+  symlink a stable identity derived from its link target while broken or
+  outside-project symlinks remain unreadable conservative fallbacks. Two
+  focused tests cover both boundaries; the rerun passed. Raw SQLite bytes can
+  still differ between equivalent generations, so normalized graph/fact
+  digests—not storage layout—remain the parity authority.
 
 ## Stress-Test Findings
 
-| Case | Required response |
-| --- | --- |
-| Duplicate/missed/reordered file events | Ignore event identity; compare canonical snapshots. |
-| Edit during refresh | The existing dirty follow-up produces a later manifest; never merge observations across published generations. |
-| Add or delete | Full containing-project fallback until an unresolved-import/deletion oracle proves narrower behavior. |
-| Ambient `.d.ts`, tsconfig, package/lock/compiler config | Full containing-project fallback. |
-| Source file absent from indexed universe | Full containing-project fallback with reason. |
-| Dependency graph missing/malformed/stale | Full containing-project fallback; never return only the changed file. |
-| Cycle/diamond | Visited-set traversal terminates and de-duplicates deterministically. |
-| Old database missing | Record unavailable/full fallback; production full rebuild remains valid. |
-| Candidate conversion/augmentation failure | Existing publish path fails; no shadow success record and old generation remains readable. |
-| Telemetry write failure after promotion | Generation stays valid; surface degraded telemetry without rolling back correct index artifacts. |
-| Older installed CLI reads metadata | Metadata remains v3; shadow state is an independent additive file. |
-| Non-index document/config edit | Initially conservative fallback unless the manifest policy has an exact verified non-input classification. |
-| Graph digest unchanged but semantic output changes | Semantic command oracle makes the miss visible; Phase 3 cannot use graph equality as semantic equality. |
+| Case                                                    | Required response                                                                                              |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Duplicate/missed/reordered file events                  | Ignore event identity; compare canonical snapshots.                                                            |
+| Edit during refresh                                     | The existing dirty follow-up produces a later manifest; never merge observations across published generations. |
+| Add or delete                                           | Full containing-project fallback until an unresolved-import/deletion oracle proves narrower behavior.          |
+| Ambient `.d.ts`, tsconfig, package/lock/compiler config | Full containing-project fallback.                                                                              |
+| Source file absent from indexed universe                | Full containing-project fallback with reason.                                                                  |
+| Dependency graph missing/malformed/stale                | Full containing-project fallback; never return only the changed file.                                          |
+| Cycle/diamond                                           | Visited-set traversal terminates and de-duplicates deterministically.                                          |
+| Old database missing                                    | Record unavailable/full fallback; production full rebuild remains valid.                                       |
+| Candidate conversion/augmentation failure               | Existing publish path fails; no shadow success record and old generation remains readable.                     |
+| Telemetry write failure after promotion                 | Generation stays valid; surface degraded telemetry without rolling back correct index artifacts.               |
+| Older installed CLI reads metadata                      | Metadata remains v3; shadow state is an independent additive file.                                             |
+| Non-index document/config edit                          | Initially conservative fallback unless the manifest policy has an exact verified non-input classification.     |
+| Graph digest unchanged but semantic output changes      | Semantic command oracle makes the miss visible; Phase 3 cannot use graph equality as semantic equality.        |
 
 ## Execution and Ship Order
 
@@ -421,8 +463,9 @@ steps must equal Phase 2 implementation commits before the next step starts.
 2. Land 2.1–2.3 as testable contracts with no product behavior. Complete.
 3. Land 2.4 shadow integration; full rebuild stays authoritative. Complete.
 4. Land 2.5 observability only after real records exist. Complete.
-5. Run 2.6 calibration; fix every miss before closing Phase 2. Next.
-6. Do not start Phase 3 cache-key migration until Phase 2 reports 100% recall.
+5. Run 2.6 calibration; fix every miss before closing Phase 2. Complete.
+6. Start Phase 3 only after Phase 2 reports 100% recall. Gate satisfied; Phase
+   3 planning is next.
 
 Steps 2.1–2.5 are two-way doors because removing the new files/reads returns to
 the existing full reindex. Making the predicted set authoritative is the
@@ -476,6 +519,19 @@ decided by the already pre-registered normalized fact contract. Requiring raw
 byte equality would reject semantically identical generations for unrelated
 serialization/row-layout variation.
 
+### 2026-07-09 — Fingerprint internal symlinks without following their contents
+
+The first OpenCode leaf trial widened to the full project even though only one
+source document changed. Its tracked `packages/console/app/public/email`
+directory symlink made `readFileSync()` fail with `EISDIR`, which encoded an
+`unreadable-input` into every snapshot. Treating the target directory contents
+as the symlink's own bytes would duplicate the separately enumerated files and
+make identity dependent on traversal behavior. The accepted rule instead
+hashes `symlink\0` plus the stored link target when the canonical target stays
+inside the repository. Retargeting changes identity, target-file edits are
+fingerprinted through their own paths, and an external or broken target remains
+unreadable so uncertainty still widens. The failed trial remains in JSONL.
+
 ## File Summary
 
 ### Create
@@ -509,3 +565,60 @@ verifier failure and observed red result, every corpus/scenario median and p95,
 predicted/actual sets, fallback reasons, recall and ratios, output hashes/fact
 counts, all deviations and deferrals, package/install smoke, full gate results,
 and the exact first Phase 3 planning command.
+
+## Phase-Close Self-Report
+
+### Delivered commits
+
+1. `79a5c783 feat: define affected-set change manifest`
+2. `05b8a922 feat: plan conservative affected file closure`
+3. `43290fec feat: add affected-set document fact oracle`
+4. `a9378b4c feat: record affected-set shadow results`
+5. `35eb4d7c feat: expose affected-set shadow status`
+6. `test: calibrate affected-set shadowing` (this closing commit; a commit
+   cannot contain its own final hash)
+
+The preparatory plan is `2707b2e2 docs: plan affected-set shadowing`; it is not
+counted as one of the six implementation steps.
+
+### Evidence and parity
+
+The machine history is
+`docs/benchmarks/runs/2026-07-09-affected-set-shadow.jsonl`. It contains 33
+records: five no-op samples plus summary, two five-sample leaf series plus
+summaries, eleven fixture scenarios, the planted verifier rejection, two
+capability snapshots, and the retained failed OpenCode diagnostic. All
+accepted graph/fact comparisons had 100% recall and no misses. Both corpus leaf
+ratios were below 1%, comfortably inside the <20% gate. All normalized
+fact-count and kind-count controls were stable; changing raw SQLite hashes were
+diagnostic only.
+
+The harness restored exact source bytes and clean Git state, stopped services
+in `finally`, and wrote history only after measured service processes stopped.
+OpenCode capability evidence records 29 TypeScript projects with the TypeScript
+indexer and ts-morph semantic provider available. scip-query capability
+evidence records TypeScript and Rust indexers/providers available. The final
+phase gate passed 36 focused tests and the complete 166-file/1,161-test suite,
+typecheck, build, formatting/lint, and `git diff --check`. The package dry run
+listed 333 entries and included `dist/cli.js`, `dist/watch-server.js`, and
+`dist/postinstall.js`; installing that tarball into an empty prefix and running
+its binary's help command passed. The final repository-build reindex completed
+in 4,026ms. `recent-duplicates`, `unused-params`, `incomplete-migration`, and the
+`project-files.ts` co-change check returned no findings; diff-gate returned exit
+0 with no blocking or advisory findings.
+
+### Deviations, deferrals, and next action
+
+The harness moved from step 2.3 to 2.6 to avoid duplicating the private oracle;
+atomic JSON was consolidated when the fourth identical writer would otherwise
+have appeared; normalized facts replaced raw artifact-byte equality; and
+internal symlink identity was corrected after the retained OpenCode failure.
+No prediction is authoritative yet. Incremental semantic writes, SCIP
+fragments, generation-scoped SQLite publication, and durable-default rollout
+remain Phases 3–6.
+
+The exact first Phase 3 command is:
+
+```sh
+SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/semantic/typescript/ts-morph-provider.ts --json
+```

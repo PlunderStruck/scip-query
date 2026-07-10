@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Phase 1 complete; Phase 2 steps 2.1–2.5 complete and step 2.6 next
+Status: Phases 1–2 complete; Phase 3 persistent TypeScript semantics next
 
 ## Goal
 
@@ -271,9 +271,9 @@ and parity gates rather than unit tests.
 
 | Metric                                                  |                 Current observation |
 | ------------------------------------------------------- | ----------------------------------: |
-| Local exact unchanged reindex                           |       0.329s median / 0.348s p95 |
-| Local TypeScript edit refresh, Rust reused              |       4.543s median / 4.885s p95 |
-| Current configured quiet delay / cooldown               |                       250ms / 0ms |
+| Local exact unchanged reindex                           |          0.329s median / 0.348s p95 |
+| Local TypeScript edit refresh, Rust reused              |          4.543s median / 4.885s p95 |
+| Current configured quiet delay / cooldown               |                         250ms / 0ms |
 | SynthRunnerRust historical cold reindex                 |                              31.0 s |
 | SynthRunnerRust accepted durable-cache warm full health |                             2.699 s |
 | Vega accepted durable-cache cold full health            |                           190.685 s |
@@ -355,7 +355,7 @@ crash-recovery, and built-package gates passed. The raw live-ensure command was
 daemon-specific overhead was <=9ms p95 because the stopped Node/CLI control was
 151ms p95. The miss remains explicit in the Phase 1 plan and ledger.
 
-### Phase 2 — Canonical change manifests and affected-set shadowing (in progress)
+### Phase 2 — Canonical change manifests and affected-set shadowing (complete)
 
 **Purpose:** prove the invalidation boundary before using it to skip work.
 
@@ -390,11 +390,20 @@ normalized fact equality. Step 2.5 now exposes a validated
 passing/failing/unavailable summary, exact telemetry paths, recall,
 prediction/actual/miss sets, ratio, plan mode, and fallback reasons through
 human and JSON status without adding a command option or touching ordinary
-query envelopes. Predictions are still not used by runtime indexing. Step 2.6
-corpus calibration is next.
+query envelopes. Step 2.6 then proved the contract with a discriminating
+fixture matrix and five alternating leaf edits on each of two TypeScript
+projects. scip-query predicted 1/305 documents (0.328%) with 100% recall;
+OpenCode predicted 1/2,531 project inputs (0.0395%) with 100% recall. Shadow
+overhead was 8.73% median / 9.10% p95 locally and 5.09% / 5.42% on OpenCode,
+inside the pre-registered limits. The retained first OpenCode failure exposed
+and corrected internal-directory-symlink fingerprinting. Add/delete/ambient/
+config/malformed inputs still widen conservatively. Predictions remain
+observational and are not used by runtime indexing.
 
-**Exit gate:** Phase 2 recall and over-invalidation thresholds pass. Any miss
-blocks incremental writes and becomes a regression fixture.
+**Exit result:** 100% recall with no misses on all accepted fixture and corpus
+trials; both leaf ratios were below 1%; the deliberately under-predicted probe
+failed as required. Machine evidence and the complete self-report live in the
+Phase 2 plan and `docs/benchmarks/runs/2026-07-09-affected-set-shadow.jsonl`.
 
 ### Phase 3 — Persistent TypeScript session and durable semantic fragments
 
@@ -590,6 +599,12 @@ Complete this at every phase close:
 6. Phase 5 atomic incremental generation storage.
 7. Phase 6 durable Rust defaulting, selective native kernels, and rollout.
 
-The immediate recommendation is Phase 1. It fixes the current operational gap
-without pretending file-level indexing already exists, preserves every current
-fallback, and creates the long-lived owner required by every later phase.
+The immediate recommendation is Phase 3. Phase 2 has proved which TypeScript
+files may be affected, but every semantic-heavy command still creates
+ts-morph Projects inside a short-lived CLI process and project-wide cache
+identities still invalidate unrelated answers. First refresh plan evidence at
+the existing project-construction boundary:
+
+```sh
+SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/semantic/typescript/ts-morph-provider.ts --json
+```

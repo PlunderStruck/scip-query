@@ -1182,10 +1182,10 @@ zero concurrent reindexes. The larger eight pairs were not selected because
 they added quiet/cooldown latency without adding safety. Five real repository
 runs for each accepted edit shape selected 250 ms debounce and zero cooldown:
 
-| Scenario                  | Observe median/p95 | Indexing median/p95 | Fresh median/p95 | Refresh median/p95 | Restore median/p95 | Output        |
+| Scenario                  | Observe median/p95 | Indexing median/p95 |  Fresh median/p95 | Refresh median/p95 | Restore median/p95 | Output        |
 | ------------------------- | -----------------: | ------------------: | ----------------: | -----------------: | -----------------: | ------------- |
-| One TypeScript leaf edit  |        27 / 27 ms |        263 / 288 ms | 4.543 s / 4.885 s | 3.849 s / 4.200 s | 4.710 s / 4.834 s | `dbae4362...` |
-| Twenty writes over 500 ms |      526 / 531 ms |        791 / 839 ms | 5.065 s / 5.229 s | 3.897 s / 3.973 s | 4.554 s / 4.951 s | `dbae4362...` |
+| One TypeScript leaf edit  |         27 / 27 ms |        263 / 288 ms | 4.543 s / 4.885 s |  3.849 s / 4.200 s |  4.710 s / 4.834 s | `dbae4362...` |
+| Twenty writes over 500 ms |       526 / 531 ms |        791 / 839 ms | 5.065 s / 5.229 s |  3.897 s / 3.973 s |  4.554 s / 4.951 s | `dbae4362...` |
 
 Every burst had one observed indexing transition. All ten accepted trials
 restored a fresh index with the same `kind-counts --json` hash. The final graph
@@ -1199,15 +1199,15 @@ Five exact unchanged refreshes reused both TypeScript and Rust shards. Internal
 refresh time was 329 ms median / 348 ms p95; whole-CLI wall time was 534 ms
 median / 544 ms p95. Final five-run lifecycle controls were:
 
-| Lifecycle operation                       | Median |   p95 | Identity/result              |
-| ----------------------------------------- | -----: | ----: | ---------------------------- |
-| Cold service start                        | 525 ms | 540 ms | one healthy owner            |
-| Stopped status control                    | 144 ms | 151 ms | ordinary Node/CLI floor      |
-| Ensure compatible live service            | 144 ms | 147 ms | same PID in all five runs    |
-| Ensure minus stopped-status control        |  -1 ms |   9 ms | no measurable added overhead |
-| Graceful stop                              | 367 ms | 374 ms | state/lock removed           |
-| 50 ms configured idle exit                | 261 ms | 265 ms | clean exit on 250 ms poll    |
-| Wake after idle                            | 549 ms | 560 ms | new PID in all five runs     |
+| Lifecycle operation                 | Median |    p95 | Identity/result              |
+| ----------------------------------- | -----: | -----: | ---------------------------- |
+| Cold service start                  | 525 ms | 540 ms | one healthy owner            |
+| Stopped status control              | 144 ms | 151 ms | ordinary Node/CLI floor      |
+| Ensure compatible live service      | 144 ms | 147 ms | same PID in all five runs    |
+| Ensure minus stopped-status control |  -1 ms |   9 ms | no measurable added overhead |
+| Graceful stop                       | 367 ms | 374 ms | state/lock removed           |
+| 50 ms configured idle exit          | 261 ms | 265 ms | clean exit on 250 ms poll    |
+| Wake after idle                     | 549 ms | 560 ms | new PID in all five runs     |
 
 The literal whole-process live-ensure p95 was 147 ms, missing the pre-registered
 100 ms wall target because this built Node CLI itself measured 151 ms p95 for a
@@ -1307,9 +1307,10 @@ Important rejected ideas:
 
 What is left:
 
-- Build the conservative affected-set shadow from canonical content/config
-  changes and dependency closure. Until that proves 100% recall, a TypeScript
-  edit still rebuilds this repository's root project shard.
+- Move ts-morph Project ownership into the demand-started project service and
+  key semantic fragments by the now-proved affected identities. Phase 2 showed
+  which files may change, but it deliberately did not skip indexers or semantic
+  computation.
 - Make the separate product decision whether to enable durable transport by
   default. The implementation is now eligible, but this calibration campaign
   intentionally leaves `SCIP_RUST_SEMANTIC_DURABLE_SESSION=1` as an opt-in.
@@ -1329,11 +1330,72 @@ What is left:
   stable, and only for large contiguous computations where benchmark evidence
   shows the native boundary wins.
 
-Best next campaign target: Phase 2 affected-set shadowing from
+Best next campaign target: Phase 3 persistent TypeScript semantics from
 `docs/plans/2026-07-09-automatic-incremental-indexing-roadmap.md`. Preserve the
-new service as the one owner, compare every predicted set with a clean full
-rebuild, and do not let partial file writes become authoritative before recall
-is 100%.
+service as the one project owner, reuse a live ts-morph Project across CLI
+processes, and dual-read/compare per-file semantic fragments before they become
+authoritative.
+
+## 2026-07-09 — Automatic incremental indexing Phase 2 affected-set calibration
+
+An **affected set** is the collection of indexed files whose compiler-resolved
+answers may differ after an edit; unlike a changed-file list, it includes every
+transitive consumer that can observe changed meaning. Phase 2 measured that set
+without using it to skip production work: each prediction was compared with a
+complete clean rebuild, and the complete rebuild remained the only writer.
+
+### Accepted measurements
+
+| Corpus/scenario                                |       Samples |        Median / p95 |       Predicted ratio | Recall | Shadow overhead | Result                                               |
+| ---------------------------------------------- | ------------: | ------------------: | --------------------: | -----: | --------------: | ---------------------------------------------------- |
+| scip-query exact no-op                         |             5 |       293ms / 314ms | no manifest/no shadow |    n/a |             n/a | pass; -10.94% / -9.77% versus 329ms / 348ms baseline |
+| scip-query leaf `src/runtime/postinstall.ts`   | 5 alternating |   3,849ms / 3,863ms |        1/305 = 0.328% |   100% |   8.73% / 9.10% | pass                                                 |
+| OpenCode leaf `packages/opencode/src/index.ts` | 5 alternating | 59,810ms / 60,738ms |     1/2,531 = 0.0395% |   100% |   5.09% / 5.42% | pass                                                 |
+
+OpenCode commit `1a8e94dc8e7462d3d0d860e1337b448c71947f6b` was
+preselected as an independent TypeScript-heavy monorepo: 29 discovered
+tsconfigs, 2,967 indexed documents, and 189,683 symbols. It complements
+scip-query's 305-document mixed TypeScript/Rust project rather than repeating
+the generated fixture. Both capability snapshots record runnable indexers and
+available ts-morph semantics.
+
+Normalized scip-query controls stayed at 305 documents, 20,158 symbols, 4,108
+definitions, 65,801 mentions, and 904 chunks. OpenCode stayed at 2,967
+documents, 189,683 symbols, 18,031 definitions, 500,052 mentions, and 7,039
+chunks. Fact-count and kind-count hashes were stable within each corpus and edit
+direction. Raw SCIP/SQLite hashes remain recorded, but raw SQLite files can vary
+while all normalized facts are equal, so raw storage bytes are not the parity
+gate.
+
+### Fixture and failure evidence
+
+The generated seven-document project passed ordinary leaf, export-signature,
+import-edge, multi-file, file-add, file-delete, ambient declaration, tsconfig,
+package-manifest, malformed-metadata, and sleeping-service-wake scenarios at
+100% recall. Source closures predicted only the changed files and transitive
+consumers. Add/delete/ambient/config/malformed state explicitly widened to the
+whole project. The harness planted an omitted affected file and observed its
+verifier reject the prediction before accepting any green control.
+
+The first OpenCode leaf attempt failed with `expected closure plan, received
+full-project`; that record is intentionally preserved. A tracked internal
+directory symlink was being read as a regular file, producing `EISDIR` and the
+safe `unreadable-input` fallback. The correction fingerprints an internal
+symlink from its stored target while external or broken targets remain
+unreadable. Two focused tests cover stable internal identity, retargeting,
+separate target-content changes, and external fallback. The repeated five-run
+OpenCode series then passed with the 0.0395% prediction above.
+
+### Decision
+
+Phase 2 is accepted: every accepted trial had 100% recall, both representative
+leaf ratios were below 1% against a <20% gate, uncertainty widened, and the
+no-op/overhead limits passed. The prediction remains shadow-only. Phase 3 may
+now use it to derive and validate persistent semantic cache keys; it does not
+yet authorize partial SCIP or SQLite publication.
+
+Machine-readable evidence:
+`docs/benchmarks/runs/2026-07-09-affected-set-shadow.jsonl`.
 
 ## Run History
 

@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { lstatSync, readdirSync, readFileSync, readlinkSync, realpathSync } from 'node:fs';
+import { isAbsolute, join, relative, sep } from 'node:path';
 import type { SupportedLanguage } from '../domain/types.js';
 
 export interface ProjectFileFingerprint {
@@ -59,9 +59,23 @@ export function fingerprintProjectFiles(
   const files = listProjectFiles(projectRoot)
     .filter((path) => !opts.language || isLanguageRelevantPath(path, opts.language, opts.markerFiles))
     .filter((path) => !opts.includePath || opts.includePath(path));
+  const canonicalProjectRoot = realpathSync(projectRoot);
   return files.map((relativePath) => {
     const absPath = join(projectRoot, relativePath);
     try {
+      if (lstatSync(absPath).isSymbolicLink()) {
+        const targetPath = realpathSync(absPath);
+        const relativeTarget = relative(canonicalProjectRoot, targetPath);
+        if (relativeTarget === '..' || relativeTarget.startsWith(`..${sep}`) || isAbsolute(relativeTarget)) {
+          throw new Error('external symlink');
+        }
+        const target = readlinkSync(absPath);
+        return {
+          path: relativePath,
+          size: Buffer.byteLength(target),
+          hash: createHash('sha256').update('symlink\0').update(target).digest('hex'),
+        };
+      }
       const data = readFileSync(absPath);
       return {
         path: relativePath,
