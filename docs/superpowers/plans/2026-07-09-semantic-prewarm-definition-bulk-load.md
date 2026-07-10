@@ -17,6 +17,9 @@ and revert the bulk route if it misses the performance or parity gates.
 **Tech Stack:** TypeScript, Vitest, better-sqlite3, SCIP SQLite indexes,
 scip-query profile JSONL, existing performance architecture harness.
 
+**Disposition:** Instrumentation retained; the set-oriented route was rejected
+by the Vega performance gates and reverted in `8b8dcdcf`.
+
 ## Global Constraints
 
 - Work directly on `main`; do not use sub-agents.
@@ -98,7 +101,7 @@ transaction and took only 98ms for references and 111ms for callees.
   `health.semantic-prewarm.callees`, and
   `health.semantic-prewarm.marker-write`.
 
-- [ ] **Step 1: Write the failing profile-event test.**
+- [x] **Step 1: Write the failing profile-event test.**
 
   **Source:** `scip-query code runHealthSemanticPrewarm` and the profile-env
   fixture pattern found with
@@ -123,7 +126,7 @@ transaction and took only 98ms for references and 111ms for callees.
   ]);
   ```
 
-- [ ] **Step 2: Run the focused test and witness RED.**
+- [x] **Step 2: Run the focused test and witness RED.**
 
   Run:
 
@@ -134,7 +137,7 @@ transaction and took only 98ms for references and 111ms for callees.
   Expected: the new assertion sees only the existing outer span; the four child
   names are absent.
 
-- [ ] **Step 3: Implement the minimal child spans.**
+- [x] **Step 3: Implement the minimal child spans.**
 
   **Source:** `scip-query code profileSpan`.
 
@@ -154,11 +157,11 @@ transaction and took only 98ms for references and 111ms for callees.
   `{ definitions: definitions.length, rows: ... }`. Wrap the existing marker
   write with the marker-write span. Do not change ordering or result logic.
 
-- [ ] **Step 4: Run the focused test and witness GREEN.**
+- [x] **Step 4: Run the focused test and witness GREEN.**
 
   Run the Step 2 command. Expected: all cli-support tests pass.
 
-- [ ] **Step 5: Run nearby tests, typecheck, and build.**
+- [x] **Step 5: Run nearby tests, typecheck, and build.**
 
   ```bash
   npx vitest run tests/runtime/cli-support.test.ts tests/runtime/health-report-cache.test.ts
@@ -168,7 +171,7 @@ transaction and took only 98ms for references and 111ms for callees.
 
   Expected: every command exits 0.
 
-- [ ] **Step 6: Commit the instrumentation.**
+- [x] **Step 6: Commit the instrumentation.**
 
   ```bash
   git add src/runtime/cli-support.ts tests/runtime/cli-support.test.ts
@@ -190,27 +193,27 @@ transaction and took only 98ms for references and 111ms for callees.
 - Consumes: the built instrumented CLI and existing evidence-cold harness.
 - Produces: exact child-span attribution before any routing change.
 
-- [ ] **Step 1: Run local evidence-cold/session-warm controls.**
+- [x] **Step 1: Run local evidence-cold/session-warm controls.**
 
   Use `scripts/performance-architecture-contract.mjs` with
   `SCIP_RUST_SEMANTIC_DURABLE_SESSION=1`, command
   `health --full --json`, cache state `evidence-cold`, the new JSONL history,
   and distinct cold/warm profile paths.
 
-- [ ] **Step 2: Run Vega evidence-cold/session-warm controls.**
+- [x] **Step 2: Run Vega evidence-cold/session-warm controls.**
 
   Run the same harness against `/Users/aydansalois/Documents/GitHub/VegaAssistant`.
   A new build must first report `created`; the second command must report
   `reused` and a response-cache hit.
 
-- [ ] **Step 3: Record the attribution decision.**
+- [x] **Step 3: Record the attribution decision.**
 
   Sum the four child spans and compare them with the outer 24.704s accepted
   baseline. Continue to Task 3 only if candidate loading is the largest missing
   span and at least 5 seconds on Vega. Otherwise stop the bulk route and select
   the actual largest child span from the new profile.
 
-- [ ] **Step 4: Commit the diagnostic history.**
+- [x] **Step 4: Commit the diagnostic history.**
 
   ```bash
   git add docs/benchmarks/runs/2026-07-09-semantic-prewarm-bulk-load.jsonl
@@ -237,7 +240,7 @@ transaction and took only 98ms for references and 111ms for callees.
 - Produces:
   `healthSemanticCandidateDefinitions(db: ScipDatabase, scope?: string): IndexedDefinition[]`.
 
-- [ ] **Step 1: Write a failing public-seam test.**
+- [x] **Step 1: Write a failing public-seam test.**
 
   **Source:** `scip-query refs getScopedDefinitionsMatchingSymbols` and
   `tests/fixtures/evidence-fixture.ts` (test-only raw fixture because test files
@@ -255,7 +258,7 @@ transaction and took only 98ms for references and 111ms for callees.
 
   Compare complete objects and order, not just counts.
 
-- [ ] **Step 2: Run the focused test and witness RED.**
+- [x] **Step 2: Run the focused test and witness RED.**
 
   ```bash
   npx vitest run tests/runtime/cli-support.test.ts
@@ -264,7 +267,7 @@ transaction and took only 98ms for references and 111ms for callees.
   Expected: import/export failure because
   `healthSemanticCandidateDefinitions` does not exist.
 
-- [ ] **Step 3: Implement the minimal bulk candidate function.**
+- [x] **Step 3: Implement the minimal bulk candidate function.**
 
   **Source:**
   `scip-query code 'src/symbols/definition-catalog.ts:317-359'`.
@@ -284,12 +287,12 @@ transaction and took only 98ms for references and 111ms for callees.
   with `(db, opts) => healthSemanticCandidateDefinitions(db, opts.scope)`.
   Leave `ProjectIndex.scopedDefinitions()` and every other caller untouched.
 
-- [ ] **Step 4: Run the focused test and witness GREEN.**
+- [x] **Step 4: Run the focused test and witness GREEN.**
 
   Run the Step 2 command. Expected: all cli-support tests pass with exact deep
   equality for full and scoped fixtures.
 
-- [ ] **Step 5: Run definition and semantic neighbors.**
+- [x] **Step 5: Run definition and semantic neighbors.**
 
   ```bash
   npx vitest run \
@@ -303,7 +306,7 @@ transaction and took only 98ms for references and 111ms for callees.
 
   Expected: all commands exit 0.
 
-- [ ] **Step 6: Run new-helper postchecks.**
+- [x] **Step 6: Run new-helper postchecks.**
 
   ```bash
   scip-query recent-duplicates
@@ -312,7 +315,7 @@ transaction and took only 98ms for references and 111ms for callees.
 
   Expected: no unresolved finding.
 
-- [ ] **Step 7: Commit the reversible routing slice.**
+- [x] **Step 7: Commit the reversible routing slice.**
 
   ```bash
   git add src/runtime/cli-support.ts tests/runtime/cli-support.test.ts
@@ -335,32 +338,39 @@ transaction and took only 98ms for references and 111ms for callees.
 - Consumes: built bulk-route CLI and accepted response-cache corpus contracts.
 - Produces: an explicit accepted or rejected disposition.
 
-- [ ] **Step 1: Run local and Synth cold/warm controls.**
+- [x] **Step 1: Run local and Synth cold/warm controls.**
 
   Require internal exactness locally and readiness-v2 exact external hashes on
   SynthRunnerRust. Reject immediately on fact drift, incomplete Rust references,
   or unexpected worker fallback.
 
-- [ ] **Step 2: Run Vega cold/warm controls.**
+- [x] **Step 2: Run Vega cold/warm controls.**
 
   Compare stdout SHA-256, ordered reference/callee digests, row/fact/nonempty
   counts, incomplete count, durable dispositions, response-cache hit, outer
   prewarm, and all four child spans.
 
-- [ ] **Step 3: Apply the decision gate.**
+  The post-change warm control was decisive and missed both performance gates;
+  a second post-change cold run was skipped because it could not rescue the
+  warm acceptance criteria. The pre-change cold diagnostic remains recorded.
+
+- [x] **Step 3: Apply the decision gate.**
 
   Accept only when Vega warm prewarm is at most 10 seconds, end-to-end full
   health is at most 30 seconds, external payloads are exact, and local/Synth do
   not materially regress. If rejected, revert Task 3's production/test commit
   with `git revert` and retain Task 1 instrumentation plus all measurements.
 
-- [ ] **Step 4: If accepted, run invalidation and reverse-order controls.**
+- [x] **Step 4: If accepted, run invalidation and reverse-order controls.**
 
   Use the established scoped helper-PID shutdown procedure. Require the five
   dispositions `created`, `reused`, `invalidated`, `reused`, `created`; response
   hits only on reused controls; and exact payloads throughout.
 
-- [ ] **Step 5: Update the ledger and run history.**
+  Not applicable: the route was rejected and reverted before lifecycle
+  expansion.
+
+- [x] **Step 5: Update the ledger and run history.**
 
   Document the measured attribution, accepted/rejected route, exact corpus
   identities, and the new largest child span. Do not state that Rust is needed
@@ -379,7 +389,7 @@ transaction and took only 98ms for references and 111ms for callees.
 - Consumes: final accepted or reverted tree.
 - Produces: a verified clean campaign checkpoint.
 
-- [ ] **Step 1: Run full repository checks.**
+- [x] **Step 1: Run full repository checks.**
 
   ```bash
   npm test
@@ -388,7 +398,7 @@ transaction and took only 98ms for references and 111ms for callees.
   npm run build
   ```
 
-- [ ] **Step 2: Run routed SCIP checks.**
+- [x] **Step 2: Run routed SCIP checks.**
 
   ```bash
   scip-query recent-duplicates
@@ -397,7 +407,7 @@ transaction and took only 98ms for references and 111ms for callees.
   scip-query diff-gate
   ```
 
-- [ ] **Step 3: Validate artifacts and scope.**
+- [x] **Step 3: Validate artifacts and scope.**
 
   ```bash
   jq -e . docs/benchmarks/runs/2026-07-09-semantic-prewarm-bulk-load.jsonl >/dev/null
@@ -405,7 +415,7 @@ transaction and took only 98ms for references and 111ms for callees.
   git status --short
   ```
 
-- [ ] **Step 4: Commit closeout documentation.**
+- [x] **Step 4: Commit closeout documentation.**
 
   Stage only campaign-owned files and commit the final disposition. Do not push
   unless the user separately requests it.
@@ -432,3 +442,14 @@ transaction and took only 98ms for references and 111ms for callees.
 3. Bulk prewarm route commit — reversible two-way door.
 4. Acceptance/revert decision and five-control evidence.
 5. Full verification and closeout commit.
+
+## Verification Outcome
+
+- `npm test`: 162 files and 1,098 tests passed.
+- `npm run lint`, `npm run typecheck`, and `npm run build`: passed.
+- `scip-query recent-duplicates` and `scip-query unused-params`: no findings.
+- `scip-query reindex`: completed in 4.7s.
+- `scip-query diff-gate --json`: exit code 0, no blocking or advisory
+  findings.
+- All campaign JSONL artifacts parse successfully and `git diff --check`
+  passes.

@@ -171,3 +171,31 @@ This slice does not change cold language indexing, enable durable Rust routing
 by default, add worker threads, change SQLite schema, alter detector budgets,
 or create a Rust engine. It creates the evidence needed to decide whether the
 next remaining phase belongs in a persistent native engine.
+
+## Outcome
+
+Completed on 2026-07-09. The hierarchical profiler was accepted and retained;
+the set-oriented candidate route was rejected and reverted.
+
+The decisive pre-change Vega response-cache-hit control measured 45.918s for
+the full command and 26.055s for semantic prewarm. Its child spans accounted
+for all but 40ms: candidate definitions took 13.837s, references 4.849s,
+callees 7.329s, and marker writing 0ms. Candidate loading therefore passed the
+5s experiment gate.
+
+The proposed route preserved the exact accepted Vega output hash and all
+38,222 reference and callee rows, but it did not make candidate loading faster.
+The post-change Vega warm control measured 49.074s for the full command,
+28.658s for prewarm, and 14.050s for candidate definitions. It missed both
+performance gates and was reverted by commit `8b8dcdcf`.
+
+The experiment disproved the N+1 SQL explanation. The existing scalar route
+reads durable corrected-definition evidence per file, while the set-oriented
+route reloads rows and repeats source-range correction per file; exchanging
+those paths did not remove the dominant work. The next design should first
+split candidate loading into evidence validation, evidence decoding, fallback
+row loading, and source-range correction. A Rust boundary is not justified by
+this result alone.
+
+Machine-readable controls and absolute profile paths are recorded in
+`docs/benchmarks/runs/2026-07-09-semantic-prewarm-bulk-load.jsonl`.

@@ -1110,6 +1110,56 @@ diagnostic record. The accepted `identity-invalidated-v3` control used an inert
 `RA_LOG=info` attempt produced no accepted history record because logging itself
 confounded the control.
 
+#### Semantic-prewarm attribution and bulk definition route: rejected
+
+The response-cache checkpoint left 24.704s inside one outer semantic-prewarm
+span, so the next campaign first divided it into four retained child spans:
+candidate definitions, references, callees, and marker writing. A true Vega
+response-cache-hit control accounted for all but 40ms of the 26.055s outer
+span:
+
+| Vega warm child               | Baseline duration | Definitions / rows |
+| ----------------------------- | ----------------: | -----------------: |
+| candidate definitions         |           13.837s |             38,222 |
+| reference materialization     |            4.849s |             38,222 |
+| callee materialization        |            7.329s |             14,367 |
+| complete-marker write         |            0.000s |                  — |
+| unaccounted inside outer span |            0.040s |                  — |
+
+That result disproved the earlier description of the whole outer span as
+SQLite persistence. Candidate definition loading was the largest child, while
+the already-batched semantic writes remained a small part of the reference and
+callee spans.
+
+The health-only experiment replaced `ProjectIndex.scopedDefinitions()` with
+the existing set-oriented primary/fallback definition query. It passed an exact
+full-object/scoped fixture, 36 neighboring tests, typecheck, build,
+`recent-duplicates`, and `unused-params`. Local and SynthRunnerRust controls
+were exact and slightly faster, but the decisive Vega control did not improve:
+
+| Corpus / control           | Full command | Prewarm | Candidate load | Output identity |
+| -------------------------- | -----------: | ------: | -------------: | --------------- |
+| local session-warm         |       9.933s |  5.440s |         2.355s | internal exact  |
+| SynthRunnerRust warm       |       2.413s |  1.091s |         0.517s | `47291cda...`   |
+| Vega pre-change warm hit   |      45.918s | 26.055s |        13.837s | `7e944222...`   |
+| Vega set-oriented warm hit |      49.074s | 28.658s |        14.050s | `7e944222...`   |
+
+Vega retained all 38,222 semantic reference rows and 38,222 callee rows, used
+the exact durable response-cache hit, and had no worker fallback. The route was
+nevertheless rejected because it missed both gates: prewarm was above 10s and
+full health was above 30s. Commit `8b8dcdcf` reverted the production/test slice;
+the profiler and measurements remain.
+
+The N+1 SQL hypothesis was therefore false in the measured warm state. The
+scalar route consumes durable corrected-definition evidence, while the bulk
+route repeats source-range correction after its set-oriented row load. The next
+candidate-loading investigation must separately time evidence validation,
+payload decoding, fallback row loading, and range correction before choosing a
+new cache shape or native boundary. This result does not justify Rust by itself.
+
+Machine-readable controls and profile paths are in
+`docs/benchmarks/runs/2026-07-09-semantic-prewarm-bulk-load.jsonl`.
+
 ## Current Checkpoint
 
 This checkpoint summarizes the last optimization push so the direction is easy
@@ -1162,6 +1212,9 @@ What is materially done:
 
 Important rejected ideas:
 
+- Set-oriented semantic-prewarm definition loading preserved exact payloads
+  but did not reduce Vega candidate time (13.837s before versus 14.050s after),
+  proving that SQL query count was not the dominant warm-path cost.
 - Broad semantic cache read batching did not beat the existing per-file
   prepared-statement path.
 - Disabling full-health semantic prewarm changed output and wrote too few
@@ -1181,9 +1234,10 @@ What is left:
 - Make the separate product decision whether to enable durable transport by
   default. The implementation is now eligible, but this calibration campaign
   intentionally leaves `SCIP_RUST_SEMANTIC_DURABLE_SESSION=1` as an opt-in.
-- Reduce the 24.704s Vega warm semantic evidence materialization span. The next
-  large win is bulk SQLite persistence for the 38,222 reference and 38,222
-  callee rows, not another rust-analyzer readiness or concurrency adjustment.
+- Reduce Vega semantic-prewarm candidate loading, now isolated at 13.837s of a
+  26.055s warm prewarm. First split durable evidence validation/decoding from
+  fallback row loading and source-range correction; the set-oriented row query
+  alone did not help.
 - Optimize TypeScript without replacing ts-morph by default. The trusted path is
   still ts-morph plus bulk scans; tsserver remains a comparison tool until it
   proves full parity and speed.
@@ -1196,10 +1250,10 @@ What is left:
   stable, and only for large contiguous computations where benchmark evidence
   shows the native boundary wins.
 
-Best next campaign target: bulk semantic evidence persistence. Keep the exact
-live response reuse, but replace per-row SQLite work with one transaction and
-prepared bulk writes while preserving row order, cache identity, invalidation,
-and the accepted five-control payload gates.
+Best next campaign target: profile and remove repeated definition-evidence
+validation or source-range correction inside semantic candidate loading. Keep
+the exact live response reuse and accepted payload gates; do not add Rust or
+parallel workers until a large contiguous CPU-bound subspan is measured.
 
 ## Run History
 
