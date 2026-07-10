@@ -160,9 +160,6 @@ export function getProjectCapabilities(
         ? 'available'
         : 'partial';
   const graphDataAvailable = graphStatus !== 'unavailable';
-  const typeScriptSemantic = semanticReadinessForLanguage(readiness, 'typescript');
-  const semanticStatus = typeScriptSemantic ? (typeScriptSemantic.available ? 'available' : 'partial') : 'unavailable';
-
   return {
     languages: readiness.languages,
     matrix: readiness.languages.map((language) =>
@@ -184,17 +181,7 @@ export function getProjectCapabilities(
               ? `An indexed graph is present; ${runnableIndexers}/${readiness.indexers.length} detected/configured language indexers are runnable for refresh.`
               : `${runnableIndexers}/${readiness.indexers.length} detected/configured language indexers are runnable.`,
       },
-      {
-        id: 'semantic-typescript',
-        label: 'TypeScript semantic provider',
-        status: semanticStatus,
-        evidence: 'semantic',
-        reason: typeScriptSemantic
-          ? typeScriptSemantic.available
-            ? 'ts-morph can load the configured TypeScript project.'
-            : (typeScriptSemantic.reason ?? 'TypeScript semantic checks will fall back to SCIP/source evidence.')
-          : 'TypeScript is not detected/configured for this project.',
-      },
+      ...projectSemanticCapabilities(readiness),
       {
         id: 'heuristic-detectors',
         label: 'Heuristic cleanup detectors',
@@ -225,6 +212,64 @@ export function getProjectCapabilities(
       },
     ],
   };
+}
+
+function projectSemanticCapabilities(readiness: ProjectReadiness): ProjectCapability[] {
+  return semanticProviderLanguagesForProject(readiness).map((language) => {
+    const semantic = semanticReadinessForLanguage(readiness, language);
+    const status: CapabilityStatus = semantic
+      ? semantic.available
+        ? 'available'
+        : semantic.dependencyAvailable
+          ? 'partial'
+          : 'unavailable'
+      : 'unavailable';
+    return {
+      id: `semantic-${language}`,
+      label: `${semanticProviderLabel(language)} semantic provider`,
+      status,
+      evidence: 'semantic',
+      reason: semanticProviderReason(language, semantic),
+    };
+  });
+}
+
+function semanticProviderLanguagesForProject(readiness: ProjectReadiness): SemanticProviderLanguage[] {
+  const languages = new Set<SemanticProviderLanguage>();
+  for (const language of readiness.languages) {
+    if (language === 'typescript' || language === 'rust') languages.add(language);
+  }
+  for (const semantic of semanticReadinessEntries(readiness)) {
+    languages.add(semantic.language);
+  }
+  return [...languages].sort((left, right) => semanticProviderOrder(left) - semanticProviderOrder(right));
+}
+
+function semanticProviderOrder(language: SemanticProviderLanguage): number {
+  return language === 'typescript' ? 0 : 1;
+}
+
+function semanticProviderLabel(language: SemanticProviderLanguage): string {
+  return language === 'typescript' ? 'TypeScript' : 'Rust';
+}
+
+function semanticProviderReason(language: SemanticProviderLanguage, semantic: SemanticReadiness | undefined): string {
+  if (semantic?.available) {
+    return language === 'typescript'
+      ? 'ts-morph can load the configured TypeScript project.'
+      : 'rust-analyzer semantic queries are available.';
+  }
+  if (semantic) {
+    return (
+      semantic.reason ??
+      (language === 'typescript'
+        ? 'TypeScript semantic checks will fall back to SCIP/source evidence.'
+        : 'Rust semantic checks will fall back to SCIP/source evidence.')
+    );
+  }
+  return language === 'typescript'
+    ? 'TypeScript is not detected/configured for this project.'
+    : 'Rust is not detected/configured for this project.';
 }
 
 function languageCapability(

@@ -7,8 +7,11 @@ import { getSourceImports } from '../../language-parsers/index.js';
 import { pathsResolveSame } from '../../source/path-normalization.js';
 import { classifyFile, isBarrel } from '../../analysis/file-classifier.js';
 import { stripCommentsAndStrings } from '../../source/source-stripper.js';
+import { scipFunctionLikeKindNumbers } from '../../symbols/symbol-kind.js';
 import { applyScanLimit, definitionLoc } from '../query-utils.js';
 import { definitionSourceSnippet, extractImplementationBody, normalizeBody } from './duplicate-bodies.js';
+
+const SCIP_FUNCTION_LIKE_KINDS = new Set(scipFunctionLikeKindNumbers());
 
 /**
  * Twin-drift: same leaf name (or a near-name variant like escapeRegex vs
@@ -219,20 +222,52 @@ export function groupTwins(
 
 function twinDriftRecords(db: ScipDatabase, opts: { scope?: string; scanLimit?: number }): TwinDriftRecord[] {
   const definitions = getAllDefinitions(db, { scope: opts.scope })
-    .filter((definition) => definition.isFunctionLike && !db.isIgnored(definition.relativePath))
+    .filter((definition) => isTwinCallableDefinition(definition) && !db.isIgnored(definition.relativePath))
     .filter((definition) => !isBarrel(definition.relativePath));
 
   definitions.sort(
     (left, right) => left.relativePath.localeCompare(right.relativePath) || left.startLine - right.startLine,
   );
   const scanned = applyScanLimit(definitions, opts.scanLimit);
+  const candidates =
+    typeof opts.scanLimit === 'number' && Number.isFinite(opts.scanLimit)
+      ? twinDriftCandidateDefinitions(scanned)
+      : scanned;
 
   const records: TwinDriftRecord[] = [];
-  for (const definition of scanned) {
+  for (const definition of candidates) {
     const record = twinDriftRecord(db, definition);
     if (record) records.push(record);
   }
   return records;
+}
+
+function isTwinCallableDefinition(definition: IndexedDefinition): boolean {
+  if (!definition.isFunctionLike) return false;
+  if (!definition.symbol.startsWith('rust-analyzer ')) return true;
+  return typeof definition.kind === 'number' && SCIP_FUNCTION_LIKE_KINDS.has(definition.kind);
+}
+
+function twinDriftCandidateDefinitions(definitions: readonly IndexedDefinition[]): IndexedDefinition[] {
+  const realDefinitions = definitions.filter((definition) => definition.leaf && !isSyntheticLeaf(definition.leaf));
+  const definitionsByLeaf = new Map<string, IndexedDefinition[]>();
+  for (const definition of realDefinitions) {
+    const bucket = definitionsByLeaf.get(definition.leaf) ?? [];
+    bucket.push(definition);
+    definitionsByLeaf.set(definition.leaf, bucket);
+  }
+
+  const clusters = clusterLeafNames([...definitionsByLeaf.keys()]);
+  const selected = new Set<IndexedDefinition>();
+  for (const cluster of clusters) {
+    const members = [...cluster].flatMap((leaf) => definitionsByLeaf.get(leaf) ?? []);
+    if (members.length < 2) continue;
+    if (new Set(members.map((member) => member.relativePath)).size < 2) continue;
+    if (members.every((member) => classifyFile(member.relativePath) === 'test')) continue;
+    for (const member of members) selected.add(member);
+  }
+
+  return definitions.filter((definition) => selected.has(definition));
 }
 
 function twinDriftRecord(db: ScipDatabase, definition: IndexedDefinition): TwinDriftRecord | null {

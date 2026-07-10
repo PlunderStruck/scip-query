@@ -38,6 +38,7 @@ export default defineConfig([
       'augment-vue-worker': 'src/reindex/vue/augment-vue-worker.ts',
       'rust-semantic-worker': 'src/semantic/rust/lsp-batch-worker.ts',
       'rust-semantic-session-worker': 'src/semantic/rust/lsp-session-worker.ts',
+      'rust-semantic-session-server': 'src/semantic/rust/durable-session-server.ts',
       postinstall: 'src/runtime/postinstall.ts',
     },
     format: ['esm'],

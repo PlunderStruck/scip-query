@@ -4,7 +4,12 @@ import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { runCandidateAnalysis } from '../internal/candidate-scan.js';
 import { getSourceFacts } from '../../source/ast.js';
-import { branchEstimateForDefinition, type BranchEstimateBasis } from './complexity.js';
+import { branchEstimatesForDefinitions, type BranchEstimateBasis } from './complexity.js';
+import { scipFunctionLikeKindNumbers } from '../../symbols/symbol-kind.js';
+import { semanticEvidenceProduct } from '../../semantic/shared-primitives.js';
+import { mergeSetMaps } from '../../symbols/references/caller-evidence.js';
+
+const SCIP_FUNCTION_LIKE_KINDS = new Set(scipFunctionLikeKindNumbers());
 
 export interface ComplexityHotspot {
   symbol: string;
@@ -49,12 +54,17 @@ export function complexityHotspots(
         sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
       }),
     scanLimit,
+    filterCandidate: isComplexityCallableDefinition,
     profile: { name: 'complexity-hotspots' },
     prepare: (definitions) => {
       const languages = languageByFile(db, definitions);
+      const useSemantic = opts?.semantic !== false;
+      const semanticEvidence = useSemantic ? semanticEvidenceProduct(db) : null;
+      semanticEvidence?.materializeReferences(definitions, { prefetchCallees: true });
+      const callerMap = index.crossFileCallerMap(definitions, { semantic: false });
       return {
-        callerMap: index.crossFileCallerMap(definitions, { semantic: opts?.semantic !== false }),
-        calleeMap: index.calleeMap(definitions, { semantic: opts?.semantic !== false }),
+        callerMap: semanticEvidence ? mergeSetMaps(callerMap, semanticEvidence.callerMap(definitions)) : callerMap,
+        calleeMap: index.calleeMap(definitions, { semantic: useSemantic }),
         languageByFile: languages,
         clojureCallableIds: clojureCallableDefinitionIds(db, definitions, languages),
         branchEstimates: branchEstimatesByDefinition(db, definitions),
@@ -64,6 +74,11 @@ export function complexityHotspots(
     orderResults: (left, right) => right.score - left.score || right.loc - left.loc,
     limit,
   });
+}
+
+function isComplexityCallableDefinition(definition: IndexedDefinition): boolean {
+  if (!definition.symbol.startsWith('rust-analyzer ')) return true;
+  return typeof definition.kind === 'number' && SCIP_FUNCTION_LIKE_KINDS.has(definition.kind);
 }
 
 function complexityHotspotForDefinition(
@@ -121,7 +136,7 @@ function branchEstimatesByDefinition(
   db: ScipDatabase,
   definitions: ReadonlyArray<IndexedDefinition>,
 ): Map<number, { branches: number; estimateBasis: BranchEstimateBasis }> {
-  return new Map(definitions.map((definition) => [definition.symbolId, branchEstimateForDefinition(db, definition)]));
+  return branchEstimatesForDefinitions(db, definitions);
 }
 
 function languageByFile(db: ScipDatabase, definitions: ReadonlyArray<IndexedDefinition>): Map<string, string | null> {

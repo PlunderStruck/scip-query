@@ -28,7 +28,7 @@ export interface ComplexityResult {
 
 export type BranchEstimateBasis = 'ast' | 'regex-fallback';
 
-interface BranchEstimate {
+export interface BranchEstimate {
   branches: number;
   estimateBasis: BranchEstimateBasis;
 }
@@ -96,6 +96,57 @@ export function branchEstimateForDefinition(db: ScipDatabase, definition: Symbol
   };
 }
 
+export function branchEstimatesForDefinitions(
+  db: ScipDatabase,
+  definitions: ReadonlyArray<SymbolMatch>,
+): Map<number, BranchEstimate> {
+  const result = new Map<number, BranchEstimate>();
+  const definitionsByFile = new Map<string, SymbolMatch[]>();
+
+  for (const definition of definitions) {
+    const bucket = definitionsByFile.get(definition.relativePath) ?? [];
+    bucket.push(definition);
+    definitionsByFile.set(definition.relativePath, bucket);
+  }
+
+  for (const [relativePath, fileDefinitions] of definitionsByFile) {
+    const ast = getAst(db, relativePath);
+    const astDefinitions =
+      ast === null
+        ? []
+        : fileDefinitions.filter(
+            (definition) =>
+              ast.rootNode.startPosition.row <= definition.startLine &&
+              ast.rootNode.endPosition.row >= definition.endLine,
+          );
+    const astDefinitionIds = new Set(astDefinitions.map((definition) => definition.symbolId));
+
+    if (ast && astDefinitions.length > 0) {
+      for (const definition of astDefinitions) {
+        result.set(definition.symbolId, { branches: 0, estimateBasis: 'ast' });
+      }
+      addAstBranchEstimates(ast.rootNode, astDefinitions, result);
+    }
+
+    for (const definition of fileDefinitions) {
+      if (astDefinitionIds.has(definition.symbolId)) continue;
+      result.set(definition.symbolId, regexBranchEstimate(db, definition));
+    }
+  }
+
+  return result;
+}
+
+function regexBranchEstimate(db: ScipDatabase, definition: SymbolMatch): BranchEstimate {
+  return {
+    branches: countBranchesFromRegex(
+      readSymbolSource(db, definition.relativePath, definition.startLine, definition.endLine),
+      languageForFile(db, definition.relativePath),
+    ),
+    estimateBasis: 'regex-fallback',
+  };
+}
+
 function languageForFile(db: ScipDatabase, relativePath: string): string {
   const doc = db.get<{ language: string | null }>(
     `SELECT language FROM documents WHERE relative_path = ?`,
@@ -146,20 +197,32 @@ function fanOutForCallees(callees: ReadonlyArray<{ symbol: string; file: string 
 export function countBranchesFromAst(node: SyntaxNode): number {
   let count = 0;
   walkAst(node, (current) => {
-    if (AST_BRANCH_NODE_TYPES.has(current.type)) {
-      count += 1;
-      return;
-    }
-
-    if (
-      current.type === 'binary_expression' &&
-      current.parent?.type !== 'binary_expression' &&
-      (current.text.includes('&&') || current.text.includes('||'))
-    ) {
-      count += countBooleanOperators(current.text);
-    }
+    count += branchContribution(current);
   });
   return count;
+}
+
+function addAstBranchEstimates(
+  root: SyntaxNode,
+  definitions: ReadonlyArray<SymbolMatch>,
+  result: Map<number, BranchEstimate>,
+): void {
+  const sorted = [...definitions].sort(
+    (left, right) => left.startLine - right.startLine || right.endLine - left.endLine,
+  );
+  walkAst(root, (current) => {
+    const contribution = branchContribution(current);
+    if (contribution === 0) return;
+
+    const startLine = current.startPosition.row;
+    const endLine = current.endPosition.row;
+    for (const definition of sorted) {
+      if (definition.startLine > startLine) break;
+      if (definition.endLine < endLine) continue;
+      const estimate = result.get(definition.symbolId);
+      if (estimate) estimate.branches += contribution;
+    }
+  });
 }
 
 function walkAst(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {
@@ -192,6 +255,20 @@ const AST_BRANCH_NODE_TYPES = new Set([
   'elif_clause',
   'match_arm',
 ]);
+
+function branchContribution(current: SyntaxNode): number {
+  if (AST_BRANCH_NODE_TYPES.has(current.type)) return 1;
+
+  if (
+    current.type === 'binary_expression' &&
+    current.parent?.type !== 'binary_expression' &&
+    (current.text.includes('&&') || current.text.includes('||'))
+  ) {
+    return countBooleanOperators(current.text);
+  }
+
+  return 0;
+}
 
 function countBooleanOperators(text: string): number {
   return (text.match(/&&|\|\|/g) ?? []).length;

@@ -44,6 +44,7 @@ import { isRecord } from '../storage/evidence-payload.js';
 import { createFileEvidenceProduct, evidenceProductInvalidation } from '../storage/evidence-products.js';
 import type { IndexedDefinition, SymbolMatch } from '../domain/types.js';
 import { mergeMixedSymbolQueryRows } from './symbol-row-policy.js';
+import { escapeRegex } from '../core/regex-utils.js';
 
 export { parentTypeName } from './symbol-parser.js';
 
@@ -691,6 +692,9 @@ export function correctDefinitionRangesFromAst(
     const sites = sitesByName.get(def.leaf);
     if (!sites || sites.length === 0) return correctTopLevelTermRangeFromSource(def, source);
 
+    const rustImplSite = source ? rustImplCallableSite(def, sites, source) : null;
+    if (rustImplSite) return { ...def, startLine: rustImplSite.startLine, endLine: rustImplSite.endLine };
+
     let best = sites[0]!;
     let bestDistance = Math.abs(best.startLine - def.startLine);
     for (let i = 1; i < sites.length; i += 1) {
@@ -706,6 +710,50 @@ export function correctDefinitionRangesFromAst(
   });
 }
 
+function rustImplCallableSite(
+  definition: IndexedDefinition,
+  sites: ReadonlyArray<{ name: string; startLine: number; endLine: number }>,
+  source: string,
+): { name: string; startLine: number; endLine: number } | null {
+  const owner = rustImplOwnerName(definition.symbol);
+  if (!owner) return null;
+
+  const lines = source.split(/\r?\n/);
+  const ownerPattern = new RegExp(`\\b${escapeRegex(owner)}\\b`);
+  for (const site of sites) {
+    const header = rustImplHeaderForLine(lines, site.startLine);
+    if (header && ownerPattern.test(header)) return site;
+  }
+  return null;
+}
+
+function rustImplOwnerName(symbol: string): string | null {
+  const match = symbol.match(/\/impl#\[([^\]]+)\]/);
+  return match?.[1] ?? null;
+}
+
+function rustImplHeaderForLine(lines: readonly string[], startLine: number): string | null {
+  for (let lineNumber = startLine; lineNumber >= 0; lineNumber -= 1) {
+    const line = lines[lineNumber]?.trim() ?? '';
+    if (!line) continue;
+    if (/^impl\b/.test(line)) {
+      return rustImplHeader(lines, lineNumber, startLine);
+    }
+    if (/^(?:struct|enum|trait|mod)\b/.test(line)) return null;
+  }
+  return null;
+}
+
+function rustImplHeader(lines: readonly string[], startLine: number, maxLine: number): string {
+  const headerLines: string[] = [];
+  for (let lineNumber = startLine; lineNumber <= maxLine; lineNumber += 1) {
+    const line = lines[lineNumber] ?? '';
+    headerLines.push(line);
+    if (line.includes('{')) break;
+  }
+  return headerLines.join(' ');
+}
+
 function canUseCallableSiteRange(definition: IndexedDefinition): boolean {
   if (isCallableDefinition(definition.symbol)) return true;
   return leafSuffix(definition.symbol) === 'term' && parentTypeName(definition.symbol) === null;
@@ -716,7 +764,7 @@ function correctTopLevelTermRangeFromSource(definition: IndexedDefinition, sourc
   if (leafSuffix(definition.symbol) !== 'term') return definition;
   if (parentTypeName(definition.symbol) !== null) return definition;
 
-  const escapedLeaf = definition.leaf.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapedLeaf = escapeRegex(definition.leaf);
   const declaration = new RegExp(`\\b(?:export\\s+)?(?:const|let|var)\\s+${escapedLeaf}\\b`);
   const lines = source.split(/\r?\n/);
   const line = lines.findIndex((candidate) => declaration.test(candidate));

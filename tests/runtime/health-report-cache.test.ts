@@ -113,7 +113,7 @@ describe('health report cache', () => {
     expect(readHealthReportCache(db, changedKey!)).toBeNull();
   });
 
-  it('separates full and scoped health reports in the cache key', () => {
+  it('separates full, scoped, and phase-timeout health reports in the cache key', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-query-health-report-cache-'));
     const db = fakeDb(tempDir);
     const deps = { gitHead: () => 'head-a' };
@@ -122,11 +122,14 @@ describe('health report cache', () => {
     const fullKey = healthReportCacheKey(db, { full: true }, '0.11.0', deps);
     const scopedKey = healthReportCacheKey(db, { full: true, scope: 'src/runtime' }, '0.11.0', deps);
     const defaultKey = healthReportCacheKey(db, {}, '0.11.0', deps);
+    const boundedDefaultKey = healthReportCacheKey(db, { phaseTimeoutMs: 30000 }, '0.11.0', deps);
 
     expect(fullKey).not.toBeNull();
     expect(scopedKey).not.toBeNull();
     expect(defaultKey).not.toBeNull();
+    expect(boundedDefaultKey).not.toBeNull();
     expect(healthReportCacheKeyHash(scopedKey!)).not.toBe(healthReportCacheKeyHash(fullKey!));
     expect(healthReportCacheKeyHash(defaultKey!)).not.toBe(healthReportCacheKeyHash(fullKey!));
+    expect(healthReportCacheKeyHash(boundedDefaultKey!)).not.toBe(healthReportCacheKeyHash(defaultKey!));
   });
 });

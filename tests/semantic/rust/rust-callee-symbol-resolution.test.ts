@@ -26,7 +26,8 @@ describe('Rust callee symbol resolution', () => {
         .mention(1, 2, 1)
         .write();
 
-      const { resolveRustCalleeSymbol } = await import('../../../src/semantic/rust/callee-symbol-resolution.js');
+      const { createRustCalleeSymbolResolver, resolveRustCalleeSymbol } =
+        await import('../../../src/semantic/rust/callee-symbol-resolution.js');
       const db = new ScipDatabase({
         dbPath,
         indexPath: join(projectRoot, 'index.scip'),
@@ -36,7 +37,58 @@ describe('Rust callee symbol resolution', () => {
         expect(resolveRustCalleeSymbol(db, { symbol: 'compute_total', file: 'src/math.rs', line: 2 })).toBe(
           'rust-analyzer cargo fixture 0.1.0 src/math.rs/compute_total().',
         );
+        const resolveFromIndexedFile = createRustCalleeSymbolResolver(db);
+        expect(resolveFromIndexedFile({ symbol: 'compute_total', file: 'src/math.rs', line: 2 })).toBe(
+          'rust-analyzer cargo fixture 0.1.0 src/math.rs/compute_total().',
+        );
+        expect(resolveFromIndexedFile({ symbol: 'missing', file: 'src/math.rs', line: 99 })).toBe('missing');
+        expect(
+          resolveFromIndexedFile({ symbol: 'external_fn', file: '../../../.cargo/registry/src/pkg/lib.rs', line: 10 }),
+        ).toBe('external_fn');
         expect(resolveRustCalleeSymbol(db, { symbol: 'missing', file: 'src/math.rs', line: 99 })).toBe('missing');
+      } finally {
+        db.close();
+      }
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('caches resolved callee symbols by file, symbol, and line', async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-rust-callee-symbol-cache-'));
+    const dbPath = join(projectRoot, 'index.db');
+    const firstSymbol = 'rust-analyzer cargo fixture 0.1.0 src/actions.rs/impl#[Alpha]tick().';
+    const secondSymbol = 'rust-analyzer cargo fixture 0.1.0 src/actions.rs/impl#[Beta]tick().';
+    try {
+      mkdirSync(join(projectRoot, 'src'), { recursive: true });
+      writeFileSync(
+        join(projectRoot, 'src/actions.rs'),
+        ['impl Alpha {', '    pub fn tick(&self) {}', '}', '', 'impl Beta {', '    pub fn tick(&self) {}', '}'].join(
+          '\n',
+        ),
+      );
+      evidenceFixtureDb(dbPath)
+        .document(1, 'rust', 'src/actions.rs')
+        .symbol(1, firstSymbol, 'tick', 12)
+        .symbol(2, secondSymbol, 'tick', 12)
+        .definition(1, 1, 1, 1, 11, 1, 31)
+        .definition(2, 1, 2, 5, 11, 5, 31)
+        .chunk(1, 1, 0, 6)
+        .mention(1, 1, 1)
+        .mention(1, 2, 1)
+        .write();
+
+      const { createRustCalleeSymbolResolver } = await import('../../../src/semantic/rust/callee-symbol-resolution.js');
+      const db = new ScipDatabase({
+        dbPath,
+        indexPath: join(projectRoot, 'index.scip'),
+        projectRoot,
+      });
+      try {
+        const resolve = createRustCalleeSymbolResolver(db);
+        expect(resolve({ symbol: 'tick', file: 'src/actions.rs', line: 1 })).toBe(firstSymbol);
+        expect(resolve({ symbol: 'tick', file: 'src/actions.rs', line: 5 })).toBe(secondSymbol);
+        expect(resolve({ symbol: 'tick', file: 'src/actions.rs', line: 1 })).toBe(firstSymbol);
       } finally {
         db.close();
       }

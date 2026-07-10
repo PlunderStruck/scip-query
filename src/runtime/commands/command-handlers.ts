@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { performance } from 'node:perf_hooks';
 import { createInterface } from 'node:readline/promises';
 import {
   closeSync,
@@ -12,7 +13,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, extname, join } from 'node:path';
-import type { SupportedLanguage } from '../../domain/types.js';
+import type { IndexedDefinition, SupportedLanguage } from '../../domain/types.js';
 import * as queries from '../../queries/index.js';
 import {
   augmentAuxiliaryDocuments,
@@ -49,6 +50,13 @@ import { setupCiWorkflow } from '../setup-ci.js';
 import { installSkills, isScipInstalled, printScipInstallInstructions } from '../setup.js';
 import { runUninstall } from '../uninstall.js';
 import { ALL_SOURCE_EXTENSIONS } from '../../source/source-fileset.js';
+import { getAllDefinitions } from '../../symbols/definition-catalog.js';
+import { createTsMorphProvider } from '../../semantic/typescript/ts-morph-provider.js';
+import {
+  compareTypeScriptReferenceProviders,
+  createTsServerProvider,
+} from '../../semantic/typescript/tsserver-provider.js';
+import { isTypeScriptLike } from '../../semantic/typescript/source-kinds.js';
 import { healthPhases } from '../../queries/health/health.js';
 import { writeProfileEvent } from '../../instrumentation/profile.js';
 import {
@@ -255,7 +263,7 @@ export async function handleHealth(rawOpts: unknown): Promise<void> {
   try {
     const report = await runIsolatedHealthReport({
       scope: stringOptionValue(opts, 'scope'),
-      full: true,
+      full: booleanOptionValue(opts, 'full'),
       json: booleanOptionValue(opts, 'json'),
     });
     if (booleanOptionValue(opts, 'json')) {
@@ -296,6 +304,30 @@ interface BenchReport {
   coldIndex?: BenchIndexRun;
   warmIndex?: BenchIndexRun;
   commands: BenchCommandRun[];
+}
+
+interface TypeScriptSemanticCompareReport {
+  projectRoot: string;
+  selection: {
+    scope: string | null;
+    full: boolean;
+    limit: number | null;
+    maxMismatchDetails: number;
+    totalTypeScriptDefinitions: number;
+    scopedDefinitions: number;
+    comparedDefinitions: number;
+  };
+  baseline: {
+    provider: 'ts-morph';
+    createMs: number;
+    availability: unknown;
+  };
+  candidate: {
+    provider: 'tsserver';
+    createMs: number;
+    availability: unknown;
+  };
+  comparison: ReturnType<typeof compareTypeScriptReferenceProviders>;
 }
 
 export async function handleBench(rawOpts: unknown): Promise<void> {
@@ -355,6 +387,65 @@ export async function handleBench(rawOpts: unknown): Promise<void> {
     return;
   }
   renderBenchReport(report);
+}
+
+export function handleTypeScriptSemanticCompare(rawOpts: unknown): void {
+  const opts = commandOptions(rawOpts);
+  withDb((db) => {
+    const projectRoot = db.config.projectRoot;
+    const scope = stringOptionValue(opts, 'scope') ?? null;
+    const full = booleanOptionValue(opts, 'full');
+    const limit = numberOptionValue(opts, 'limit') ?? 200;
+    const maxMismatchDetails = Math.max(0, numberOptionValue(opts, 'maxMismatches') ?? 10);
+    const definitions = getAllDefinitions(db)
+      .filter((definition) => isTypeScriptLike(definition.relativePath))
+      .filter((definition) => !db.isIgnored(definition.relativePath))
+      .sort(compareDefinitionsForCalibration);
+    const scopedDefinitions = scope
+      ? definitions.filter((definition) => definition.relativePath.includes(scope))
+      : definitions;
+    const selectedDefinitions = full ? scopedDefinitions : scopedDefinitions.slice(0, limit);
+
+    const baselineStart = performance.now();
+    const baseline = createTsMorphProvider(db);
+    const baselineCreateMs = Number((performance.now() - baselineStart).toFixed(3));
+    const candidateStart = performance.now();
+    const candidate = createTsServerProvider(db);
+    const candidateCreateMs = Number((performance.now() - candidateStart).toFixed(3));
+    const comparison = compareTypeScriptReferenceProviders(selectedDefinitions, baseline, candidate);
+    const report: TypeScriptSemanticCompareReport = {
+      projectRoot,
+      selection: {
+        scope,
+        full,
+        limit: full ? null : limit,
+        maxMismatchDetails,
+        totalTypeScriptDefinitions: definitions.length,
+        scopedDefinitions: scopedDefinitions.length,
+        comparedDefinitions: selectedDefinitions.length,
+      },
+      baseline: {
+        provider: 'ts-morph',
+        createMs: baselineCreateMs,
+        availability: baseline.availability(),
+      },
+      candidate: {
+        provider: 'tsserver',
+        createMs: candidateCreateMs,
+        availability: candidate.availability(),
+      },
+      comparison: {
+        ...comparison,
+        mismatches: comparison.mismatches.slice(0, maxMismatchDetails),
+      },
+    };
+
+    if (booleanOptionValue(opts, 'json')) {
+      printJsonEnvelope('typescript-semantic-compare', [], opts, report);
+      return;
+    }
+    renderTypeScriptSemanticCompareReport(report);
+  });
 }
 
 async function measureColdIndex(projectRoot: string): Promise<BenchIndexRun> {
@@ -653,6 +744,39 @@ function renderBenchReport(report: BenchReport): void {
 function renderBenchIndexRun(label: string, run: BenchIndexRun): void {
   console.log(
     `${label}: ${run.durationMs}ms, ${run.result}, ${run.languages.join(', ')}${run.files ? `, ${run.files} files` : ''}${run.symbols ? `, ${run.symbols} symbols` : ''}`,
+  );
+}
+
+function renderTypeScriptSemanticCompareReport(report: TypeScriptSemanticCompareReport): void {
+  console.log('TypeScript semantic provider comparison');
+  console.log(`Project: ${report.projectRoot}`);
+  console.log(
+    `Definitions: ${report.selection.comparedDefinitions}/${report.selection.scopedDefinitions} compared` +
+      (report.selection.scope ? `, scope ${report.selection.scope}` : ''),
+  );
+  console.log(
+    `ts-morph: create ${report.baseline.createMs}ms, refs ${report.comparison.baselineMs}ms, refs ${report.comparison.baselineReferenceCount}`,
+  );
+  console.log(
+    `tsserver: create ${report.candidate.createMs}ms, refs ${report.comparison.candidateMs}ms, refs ${report.comparison.candidateReferenceCount}`,
+  );
+  console.log(
+    `Matches: ${report.comparison.matches}; mismatches: ${report.comparison.mismatchCount}; missing refs: ${report.comparison.missingReferenceCount}; extra refs: ${report.comparison.extraReferenceCount}`,
+  );
+  if (report.comparison.mismatches.length === 0) return;
+  console.log('\nMismatch samples:');
+  for (const mismatch of report.comparison.mismatches) {
+    console.log(`  ${mismatch.symbol}`);
+    console.log(`    missing=${mismatch.missing.length} extra=${mismatch.extra.length}`);
+  }
+}
+
+function compareDefinitionsForCalibration(left: IndexedDefinition, right: IndexedDefinition): number {
+  return (
+    left.relativePath.localeCompare(right.relativePath) ||
+    left.startLine - right.startLine ||
+    (left.startChar ?? 0) - (right.startChar ?? 0) ||
+    left.symbolId - right.symbolId
   );
 }
 

@@ -7,6 +7,18 @@ interface IsolatedJsonProcessOptions {
   env?: NodeJS.ProcessEnv;
   label: string;
   maxBuffer?: number;
+  timeoutMs?: number;
+}
+
+export class IsolatedProcessTimeoutError extends Error {
+  readonly timedOut = true;
+
+  constructor(
+    readonly label: string,
+    readonly timeoutMs: number,
+  ) {
+    super(`${label} timed out after ${timeoutMs}ms.`);
+  }
 }
 
 // scip-query: ignore-wrapper — subprocess JSON handoff boundary shared by
@@ -48,10 +60,15 @@ export function runIsolatedJsonProcessAsync<T>(opts: IsolatedJsonProcessOptions)
     let stdoutBytes = 0;
     let stderrBytes = 0;
     let settled = false;
+    const timeout =
+      opts.timeoutMs && opts.timeoutMs > 0
+        ? setTimeout(() => fail(new IsolatedProcessTimeoutError(opts.label, opts.timeoutMs!)), opts.timeoutMs)
+        : null;
 
     const fail = (error: Error): void => {
       if (settled) return;
       settled = true;
+      if (timeout) clearTimeout(timeout);
       child.kill();
       reject(error);
     };
@@ -76,6 +93,7 @@ export function runIsolatedJsonProcessAsync<T>(opts: IsolatedJsonProcessOptions)
     child.on('close', (code) => {
       if (settled) return;
       settled = true;
+      if (timeout) clearTimeout(timeout);
       const stderrText = Buffer.concat(stderr).toString('utf8').trim();
       if (code !== 0) {
         reject(new Error(`${opts.label} failed${stderrText ? `:\n${stderrText}` : ''}`));

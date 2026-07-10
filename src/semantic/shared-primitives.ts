@@ -2,7 +2,7 @@ import type { IndexedDefinition, SymbolMatch } from '../domain/types.js';
 import type { ScipDatabase } from '../storage/db.js';
 import {
   projectEvidenceFingerprint,
-  readCachedSemanticReferences,
+  readCachedSemanticReferencesForFile,
   sha256Hex,
   writeCachedSemanticReferencesBatch,
   type SemanticReferenceCacheEntry,
@@ -19,6 +19,12 @@ import type {
 import { getSemanticProvider, semanticProviderLanguageForPath } from './provider-cache.js';
 import { profileEnabled, profileSpan } from '../instrumentation/profile.js';
 import { rustSemanticEngineIdentity } from './rust/engine-identity.js';
+import { rustDefaultImplReferenceMap, rustDefaultImplReferencesForDefinition } from './rust/default-impl-references.js';
+import {
+  rustScipOccurrenceReferenceMap,
+  rustScipOccurrenceReferencesForDefinition,
+} from './rust/scip-occurrence-references.js';
+import { createPerDbValue } from '../storage/per-db-cache.js';
 
 export type SemanticEvidenceSlot =
   | 'semantic-references'
@@ -35,28 +41,51 @@ export interface SemanticEvidenceCapability extends SemanticAvailability {
 export interface SemanticReferenceMaterializationResult {
   definitions: number;
   inMemoryHits: number;
+  incompleteInMemoryHits: number;
   cacheHits: number;
   misses: number;
   unkeyed: number;
   skippedUnsupportedLanguage: number;
   parseFailures: number;
   computed: number;
+  incomplete: number;
   cacheWrites: number;
+}
+
+export interface SemanticReferenceMaterializationOptions {
+  prefetchCallees?: boolean;
 }
 
 export interface SemanticEvidenceProduct {
   capability(slot: SemanticEvidenceSlot, relativePath?: string): SemanticEvidenceCapability;
   importUsage(file: string): SemanticImportUsage[];
   references(definition: IndexedDefinition): SemanticReference[];
-  materializeReferences(definitions: ReadonlyArray<IndexedDefinition>): SemanticReferenceMaterializationResult;
+  materializeReferences(
+    definitions: ReadonlyArray<IndexedDefinition>,
+    opts?: SemanticReferenceMaterializationOptions,
+  ): SemanticReferenceMaterializationResult;
   callerMap(definitions: ReadonlyArray<IndexedDefinition>): Map<number, Set<string>>;
   calleeMap(definitions: ReadonlyArray<IndexedDefinition | SymbolMatch>): Map<number, SemanticCallee[]>;
   signature(definition: IndexedDefinition): string | null;
 }
 
+export interface PrefetchedSemanticCalleeHit<T extends Pick<IndexedDefinition, 'symbolId'>> {
+  definition: T;
+  callees: SemanticCallee[];
+}
+
+export interface PrefetchedSemanticCalleeLookup<T extends Pick<IndexedDefinition, 'symbolId'>> {
+  hits: Array<PrefetchedSemanticCalleeHit<T>>;
+  misses: T[];
+}
+
 interface CachedSemanticSignature {
   signature: string | null;
 }
+
+const PREFETCHED_SEMANTIC_CALLEES = createPerDbValue<Map<number, SemanticCallee[]>>('semantic-prefetched-callees', {
+  clearGroups: ['whole-project', 'source-file', 'semantic-provider'],
+});
 
 const RUST_SEMANTIC_IMPORT_USAGE_CACHE = createProjectEvidenceProduct<SemanticImportUsage[]>({
   kind: 'semantic-import-usage',
@@ -74,15 +103,44 @@ const RUST_SEMANTIC_SIGNATURE_CACHE = createProjectEvidenceProduct<CachedSemanti
 
 export function semanticEvidenceProduct(db: ScipDatabase): SemanticEvidenceProduct {
   const materializedReferences = new Map<number, SemanticReference[]>();
+  const incompleteReferences = new Set<number>();
   return {
     capability: (slot, relativePath) => semanticEvidenceCapability(db, slot, relativePath),
     importUsage: (file) => buildSemanticImportUsage(db, file),
     references: (definition) => buildSemanticReferences(db, definition),
-    materializeReferences: (definitions) => materializeSemanticReferenceBatch(db, definitions, materializedReferences),
-    callerMap: (definitions) => buildSemanticCallerMap(db, definitions, materializedReferences),
+    materializeReferences: (definitions, opts) =>
+      materializeSemanticReferenceBatch(db, definitions, materializedReferences, incompleteReferences, opts),
+    callerMap: (definitions) => buildSemanticCallerMap(db, definitions, materializedReferences, incompleteReferences),
     calleeMap: (definitions) => buildSemanticCalleeMap(db, definitions),
     signature: (definition) => buildSemanticSignature(db, definition),
   };
+}
+
+export function recordPrefetchedSemanticCallees(
+  db: ScipDatabase,
+  rows: ReadonlyMap<number, readonly SemanticCallee[]>,
+): void {
+  if (rows.size === 0) return;
+  const cache = PREFETCHED_SEMANTIC_CALLEES.get(db, () => new Map());
+  for (const [symbolId, callees] of rows) cache.set(symbolId, [...callees]);
+}
+
+export function prefetchedSemanticCalleesForDefinitions<T extends Pick<IndexedDefinition, 'symbolId'>>(
+  db: ScipDatabase,
+  definitions: ReadonlyArray<T>,
+): PrefetchedSemanticCalleeLookup<T> {
+  if (!PREFETCHED_SEMANTIC_CALLEES.has(db)) return { hits: [], misses: [...definitions] };
+  const cache = PREFETCHED_SEMANTIC_CALLEES.get(db, () => new Map());
+  const hits: Array<PrefetchedSemanticCalleeHit<T>> = [];
+  const misses: T[] = [];
+  for (const definition of definitions) {
+    if (cache.has(definition.symbolId)) {
+      hits.push({ definition, callees: cache.get(definition.symbolId) ?? [] });
+    } else {
+      misses.push(definition);
+    }
+  }
+  return { hits, misses };
 }
 
 // scip-query: ignore-wrapper — legacy semantic helper kept for source-compatible callers; the product owns access.
@@ -109,6 +167,10 @@ export function semanticReferences(db: ScipDatabase, definition: IndexedDefiniti
 }
 
 function buildSemanticReferences(db: ScipDatabase, definition: IndexedDefinition): SemanticReference[] {
+  const rustDefaultReferences = rustDefaultImplReferencesForDefinition(db, definition);
+  if (rustDefaultReferences) return rustDefaultReferences;
+  const rustScipOccurrenceReferences = rustScipOccurrenceReferencesForDefinition(db, definition);
+  if (rustScipOccurrenceReferences) return rustScipOccurrenceReferences;
   const provider = availableSemanticProvider(db, definition.relativePath);
   if (!provider) return [];
   return provider.referencesFor(definition);
@@ -126,9 +188,15 @@ function buildSemanticCallerMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<IndexedDefinition>,
   materializedReferences = new Map<number, SemanticReference[]>(),
+  incompleteReferences = new Set<number>(),
 ): Map<number, Set<string>> {
   const result = new Map<number, Set<string>>();
-  const materialization = materializeSemanticReferenceBatch(db, definitions, materializedReferences);
+  const materialization = materializeSemanticReferenceBatch(
+    db,
+    definitions,
+    materializedReferences,
+    incompleteReferences,
+  );
   let callerFiles = 0;
   profileSpan(
     'semantic.callers.from-references',
@@ -146,6 +214,7 @@ function buildSemanticCallerMap(
       definitions: definitions.length,
       materialized: materialization.definitions,
       inMemoryHits: materialization.inMemoryHits,
+      incompleteInMemoryHits: materialization.incompleteInMemoryHits,
       resultRows: result.size,
       callerFiles,
     }),
@@ -157,6 +226,8 @@ function materializeSemanticReferenceBatch(
   db: ScipDatabase,
   definitions: ReadonlyArray<IndexedDefinition>,
   materializedReferences: Map<number, SemanticReference[]>,
+  incompleteReferences: Set<number>,
+  opts: SemanticReferenceMaterializationOptions = {},
 ): SemanticReferenceMaterializationResult {
   const projectFingerprint = projectEvidenceFingerprint(db);
   const cacheWrites: SemanticReferenceCacheEntry[] = [];
@@ -167,32 +238,53 @@ function materializeSemanticReferenceBatch(
   let cacheHits = 0;
   let parseFailures = 0;
   let computedRows = 0;
+  let cacheReadFiles = 0;
+  let fullyInMemoryFiles = 0;
+  let incompleteInMemoryHits = 0;
 
   profileSpan(
     'semantic.references.cache-scan',
     () => {
-      for (const definition of definitions) {
-        if (materializedReferences.has(definition.symbolId)) {
-          inMemoryHits += 1;
-          continue;
-        }
-        const cacheFingerprint = semanticReferenceCacheFingerprint(db, projectFingerprint, definition.relativePath);
-        if (!cacheFingerprint) {
-          if (!semanticProviderLanguageForPath(definition.relativePath)) skippedUnsupportedLanguage += 1;
-          unkeyed.push(definition);
-          continue;
-        }
-        const cached = readCachedSemanticReferences(db, definition.relativePath, definition.symbol, cacheFingerprint);
-        if (cached !== null) {
-          const references = parseCachedReferences(cached);
-          if (references) {
-            cacheHits += 1;
-            materializedReferences.set(definition.symbolId, references);
-            continue;
+      for (const [relativePath, fileDefinitions] of semanticDefinitionsByFile(definitions)) {
+        const pendingDefinitions: IndexedDefinition[] = [];
+        for (const definition of fileDefinitions) {
+          if (materializedReferences.has(definition.symbolId)) {
+            inMemoryHits += 1;
+          } else if (incompleteReferences.has(definition.symbolId)) {
+            incompleteInMemoryHits += 1;
+          } else {
+            pendingDefinitions.push(definition);
           }
-          parseFailures += 1;
         }
-        misses.push({ definition, cacheFingerprint });
+        if (pendingDefinitions.length === 0) {
+          fullyInMemoryFiles += 1;
+          continue;
+        }
+
+        const cacheFingerprint = semanticReferenceCacheFingerprint(db, projectFingerprint, relativePath);
+        if (!cacheFingerprint) {
+          for (const definition of pendingDefinitions) {
+            if (!semanticProviderLanguageForPath(definition.relativePath)) skippedUnsupportedLanguage += 1;
+            unkeyed.push(definition);
+          }
+          continue;
+        }
+
+        cacheReadFiles += 1;
+        const cachedBySymbol = readCachedSemanticReferencesForFile(db, relativePath, cacheFingerprint);
+        for (const definition of pendingDefinitions) {
+          const cached = cachedBySymbol.get(definition.symbol) ?? null;
+          if (cached !== null) {
+            const references = parseCachedReferences(cached);
+            if (references) {
+              cacheHits += 1;
+              materializedReferences.set(definition.symbolId, references);
+              continue;
+            }
+            parseFailures += 1;
+          }
+          misses.push({ definition, cacheFingerprint });
+        }
       }
     },
     () => ({
@@ -203,6 +295,9 @@ function materializeSemanticReferenceBatch(
       misses: misses.length,
       unkeyed: unkeyed.length,
       inMemoryHits,
+      incompleteInMemoryHits,
+      fullyInMemoryFiles,
+      cacheReadFiles,
     }),
   );
 
@@ -211,7 +306,7 @@ function materializeSemanticReferenceBatch(
     const computed = profileSpan(
       'semantic.references.compute-misses',
       () => {
-        const rows = semanticReferenceMap(db, computeInput);
+        const rows = semanticReferenceMap(db, computeInput, opts);
         computedRows = rows.size;
         return rows;
       },
@@ -225,6 +320,9 @@ function materializeSemanticReferenceBatch(
     for (const definition of computeInput) {
       if (computed.has(definition.symbolId)) {
         materializedReferences.set(definition.symbolId, computed.get(definition.symbolId) ?? []);
+        incompleteReferences.delete(definition.symbolId);
+      } else {
+        incompleteReferences.add(definition.symbolId);
       }
     }
     for (const { definition, cacheFingerprint } of misses) {
@@ -252,14 +350,28 @@ function materializeSemanticReferenceBatch(
   return {
     definitions: definitions.length,
     inMemoryHits,
+    incompleteInMemoryHits,
     cacheHits,
     misses: misses.length,
     unkeyed: unkeyed.length,
     skippedUnsupportedLanguage,
     parseFailures,
     computed: computedRows,
+    incomplete: incompleteReferences.size,
     cacheWrites: cacheWrites.length,
   };
+}
+
+function semanticDefinitionsByFile<T extends Pick<IndexedDefinition, 'relativePath'>>(
+  definitions: ReadonlyArray<T>,
+): Map<string, T[]> {
+  const result = new Map<string, T[]>();
+  for (const definition of definitions) {
+    const bucket = result.get(definition.relativePath) ?? [];
+    bucket.push(definition);
+    result.set(definition.relativePath, bucket);
+  }
+  return result;
 }
 
 function semanticReferenceCacheFingerprint(
@@ -286,37 +398,101 @@ function semanticReferenceCacheFingerprint(
 function semanticReferenceMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<IndexedDefinition>,
+  opts: SemanticReferenceMaterializationOptions = {},
 ): Map<number, SemanticReference[]> {
   const profiling = profileEnabled();
   const result = new Map<number, SemanticReference[]>();
   let providerHits = 0;
   let providerMisses = 0;
+  let rustDefaultFastPathRows = 0;
+  let rustDefaultFastPathReferences = 0;
+  let rustScipOccurrenceFastPathRows = 0;
+  let rustScipOccurrenceFastPathReferences = 0;
   let definitionsWithReferences = 0;
   let referenceCount = 0;
+  let prefetchCalleeDefinitions = 0;
   return profileSpan(
     'semantic.references.provider-loop',
     () => {
+      const rustDefaultReferences = rustDefaultImplReferenceMap(db, definitions);
+      const rustScipOccurrenceReferences = rustScipOccurrenceReferenceMap(db, definitions);
       const bulkGroups = new Map<SemanticProvider, IndexedDefinition[]>();
+      const prefetchCalleeGroups = opts.prefetchCallees ? new Map<SemanticProvider, IndexedDefinition[]>() : null;
       const scalarDefinitions: Array<{ provider: SemanticProvider; definition: IndexedDefinition }> = [];
       for (const definition of definitions) {
-        const provider = availableSemanticProvider(db, definition.relativePath);
-        if (!provider) {
+        let provider: SemanticProvider | null | undefined;
+        const getProvider = (): SemanticProvider | null => {
+          provider ??= availableSemanticProvider(db, definition.relativePath);
+          return provider;
+        };
+        if (prefetchCalleeGroups) {
+          const prefetchProvider = getProvider();
+          if (prefetchProvider?.referencesAndCalleesForDefinitions) {
+            const bucket = prefetchCalleeGroups.get(prefetchProvider);
+            if (bucket) bucket.push(definition);
+            else prefetchCalleeGroups.set(prefetchProvider, [definition]);
+            prefetchCalleeDefinitions += 1;
+          }
+        }
+        const defaultReferences = rustDefaultReferences.get(definition.symbolId);
+        if (defaultReferences) {
+          rustDefaultFastPathRows += 1;
+          rustDefaultFastPathReferences += defaultReferences.length;
+          recordSemanticReferences(result, definition.symbolId, defaultReferences, profiling, (count) => {
+            definitionsWithReferences += 1;
+            referenceCount += count;
+          });
+          continue;
+        }
+        const scipOccurrenceReferences = rustScipOccurrenceReferences.get(definition.symbolId);
+        if (scipOccurrenceReferences) {
+          rustScipOccurrenceFastPathRows += 1;
+          rustScipOccurrenceFastPathReferences += scipOccurrenceReferences.length;
+          recordSemanticReferences(result, definition.symbolId, scipOccurrenceReferences, profiling, (count) => {
+            definitionsWithReferences += 1;
+            referenceCount += count;
+          });
+          continue;
+        }
+        const referenceProvider = getProvider();
+        if (!referenceProvider) {
           if (profiling) providerMisses += 1;
           continue;
         }
         if (profiling) providerHits += 1;
-        if (provider.referencesForDefinitions) {
-          const bucket = bulkGroups.get(provider);
+        if (referenceProvider.referencesForDefinitions) {
+          const bucket = bulkGroups.get(referenceProvider);
           if (bucket) bucket.push(definition);
-          else bulkGroups.set(provider, [definition]);
+          else bulkGroups.set(referenceProvider, [definition]);
         } else {
-          scalarDefinitions.push({ provider, definition });
+          scalarDefinitions.push({ provider: referenceProvider, definition });
+        }
+      }
+
+      const combinedProviders = new Set<SemanticProvider>();
+      if (prefetchCalleeGroups) {
+        for (const [provider, calleeDefinitions] of prefetchCalleeGroups) {
+          if (!provider.referencesAndCalleesForDefinitions) continue;
+          const groupedDefinitions = bulkGroups.get(provider) ?? [];
+          const maps = provider.referencesAndCalleesForDefinitions(groupedDefinitions, calleeDefinitions);
+          combinedProviders.add(provider);
+          recordPrefetchedSemanticCallees(db, maps.callees);
+          for (const definition of groupedDefinitions) {
+            if (!maps.references.has(definition.symbolId)) continue;
+            const references = maps.references.get(definition.symbolId) ?? [];
+            recordSemanticReferences(result, definition.symbolId, references, profiling, (count) => {
+              definitionsWithReferences += 1;
+              referenceCount += count;
+            });
+          }
         }
       }
 
       for (const [provider, groupedDefinitions] of bulkGroups) {
+        if (combinedProviders.has(provider)) continue;
         const referenceMap = provider.referencesForDefinitions!(groupedDefinitions);
         for (const definition of groupedDefinitions) {
+          if (!referenceMap.has(definition.symbolId)) continue;
           const references = referenceMap.get(definition.symbolId) ?? [];
           recordSemanticReferences(result, definition.symbolId, references, profiling, (count) => {
             definitionsWithReferences += 1;
@@ -338,6 +514,11 @@ function semanticReferenceMap(
       definitions: definitions.length,
       providerHits,
       providerMisses,
+      rustDefaultFastPathRows,
+      rustDefaultFastPathReferences,
+      rustScipOccurrenceFastPathRows,
+      rustScipOccurrenceFastPathReferences,
+      prefetchCalleeDefinitions,
       definitionsWithReferences,
       referenceCount,
       rows: result.size,

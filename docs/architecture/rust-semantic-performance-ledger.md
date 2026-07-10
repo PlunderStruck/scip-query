@@ -96,14 +96,18 @@ moving the whole product surface at once.
   source paths.
 - `src/semantic/shared-primitives.ts` persists semantic reference cache entries
   for TypeScript and Rust, plus Rust project-scoped import usage and signature
-  products. Rust cache identity is salted with language and
-  `rust-analyzer` engine metadata so TypeScript and Rust invalidation do not
-  drift together.
+  products. It now materializes cached references through file-level bulk reads
+  so full-mode detector passes do not issue one storage read per definition.
+  Rust cache identity is salted with language and `rust-analyzer` engine
+  metadata so TypeScript and Rust invalidation do not drift together.
 - `src/symbols/graph/call-graph-evidence.ts` persists semantic callees and now
   salts Rust callee cache identity with the same Rust semantic engine identity.
+  Cached callees are read in file-level batches for full-mode hot paths.
 - `src/storage/evidence-cache.ts` accepts both complete and intentional partial
   project fingerprints. The cache key includes the index status, so complete and
-  partial indexes do not share project-scoped rows accidentally.
+  partial indexes do not share project-scoped rows accidentally. It exposes
+  semantic callee/reference bulk readers that preserve the same current and
+  legacy key semantics as the single-row readers.
 - `crates/scip-query-kernels` is a first native-kernel experiment. It proves
   SCIP symbol leaf extraction can match TypeScript fixture behavior, but the
   helper-binary benchmark is slower for 100k symbols because process and
@@ -274,6 +278,13 @@ does not become unusably slow.
 facts in those commands. The cache timings below make full mode much more
 realistic, but centralizing the budget policy remains a next slice.
 
+2026-07-08 full-pass cache note: VegaAssistant full-mode warm-cache runs now
+batch semantic callee/reference cache reads by file. Output hashes stayed
+identical while `complexity-hotspots --json --full` improved from 34.2s to
+8.2s, `similar --json --full` from 57.6s to 2.7s, and uncached
+`health --full --json` from 83.0s profiled to 11.3s profiled. Details live in
+`docs/benchmarks/2026-07-08-full-pass-optimization-ledger.md`.
+
 ### D7: Native Rust kernels after measurement
 
 Current pressure: the user wants the CLI to become as fast as possible, and some
@@ -290,6 +301,16 @@ a helper binary it measured slower than JavaScript for 100k symbols
 (`leafName`: about 24ms in JS, about 340ms through the Rust helper). That result
 argues against tiny helper-binary kernels and for either larger batch kernels or
 in-process native embedding.
+
+2026-07-09 status: a larger `consumer-classify` Rust batch kernel was added and
+tested behind `SCIP_QUERY_NATIVE_CONSUMER_CLASSIFY=1`. It preserves
+VegaAssistant hashes for `health --full --json`,
+`wrapper-candidates --json --full`, and `stale-abstractions --json --full`, but
+the helper-process boundary still does not materially beat TypeScript. Direct
+detector smokes were slightly slower with Rust opt-in, so the default remains
+TypeScript. The next Rust-native speed slice should move a larger contiguous
+phase across the boundary or use a lower-overhead native boundary such as a
+persistent worker, in-process native module, or daemon design.
 
 ## Calibration Results
 

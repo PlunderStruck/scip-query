@@ -1,0 +1,10 @@
+evidence_db=/Users/aydansalois/.cache/scip-query/projects/178a22f2ce58/evidence.db
+health_cache=/Users/aydansalois/.cache/scip-query/projects/178a22f2ce58/health-report-cache.json
+health_cache_before=present
+phase   reference_rows  callee_rows  prewarm_rows
+------  --------------  -----------  ------------
+before  90              4621         1
+phase  reference_rows  callee_rows  prewarm_rows
+-----  --------------  -----------  ------------
+after  0               0            0
+health_cache_after=absent

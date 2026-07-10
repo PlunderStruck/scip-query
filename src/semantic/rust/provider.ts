@@ -3,11 +3,22 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { parsePositiveInteger } from '../../domain/number-parsing.js';
 import type { IndexedDefinition } from '../../domain/types.js';
-import { leafName } from '../../symbols/symbol-parser.js';
-import type { SemanticCallee, SemanticImportUsage, SemanticProvider, SemanticReference } from '../types.js';
+import { profileSpan } from '../../instrumentation/profile.js';
+import { isFunctionLikeSymbol, leafName } from '../../symbols/symbol-parser.js';
+import type {
+  SemanticCallee,
+  SemanticImportUsage,
+  SemanticProvider,
+  SemanticReference,
+  SemanticReferenceAndCalleeMaps,
+} from '../types.js';
 import { getRustSemanticStatus, type RustSemanticStatus } from './status.js';
 import type { RustReferenceWorkerRequest, RustReferenceWorkerResponse } from './lsp-batch-worker.js';
-import { createRustAnalyzerSessionResolver } from './lsp-session.js';
+import {
+  createRustAnalyzerSessionResolver,
+  rustSemanticRequestTimeoutBudgetMs,
+  rustSemanticSettleDelayMs,
+} from './lsp-session.js';
 import {
   createRustSemanticImportUsageResolver,
   type RustImportDefinitionResolver,
@@ -37,6 +48,9 @@ export interface RustCalleeResolver {
 }
 
 export type RustCalleeSymbolResolver = (callee: SemanticCallee) => string;
+export type RustScipOccurrenceCalleeOracle = (
+  definitions: readonly IndexedDefinition[],
+) => Map<number, SemanticCallee[]>;
 
 export interface RustSignatureResolution {
   available: boolean;
@@ -53,6 +67,8 @@ export interface RustImportUsageResolver {
   importUsage(file: string): SemanticImportUsage[];
 }
 
+export type RustSourceZeroCalleeOracle = (definition: IndexedDefinition) => boolean;
+
 export interface RustSemanticProviderOptions {
   status?: (projectRoot: string) => RustSemanticStatus;
   importUsageResolver?: RustImportUsageResolver;
@@ -61,6 +77,8 @@ export interface RustSemanticProviderOptions {
   referenceResolver?: RustReferenceResolver;
   calleeResolver?: RustCalleeResolver;
   calleeSymbolResolver?: RustCalleeSymbolResolver;
+  sourceZeroCalleeOracle?: RustSourceZeroCalleeOracle;
+  scipOccurrenceCalleeOracle?: RustScipOccurrenceCalleeOracle;
   signatureResolver?: RustSignatureResolver;
   usePersistentSession?: boolean;
 }
@@ -94,11 +112,20 @@ export function createRustSemanticProvider(
       opts.importDefinitionResolver ?? sessionResolver,
     );
   const calleeSymbolResolver = opts.calleeSymbolResolver;
+  const sourceZeroCalleeOracle = opts.sourceZeroCalleeOracle;
+  const scipOccurrenceCalleeOracle = opts.scipOccurrenceCalleeOracle;
   const importUsageCache = new Map<string, SemanticImportUsage[]>();
+  const prefetchedCallees = new Map<number, SemanticCallee[]>();
+  let baseAvailability: RustSemanticStatus | null = null;
   let lastAvailability: RustSemanticStatus | null = null;
 
+  const currentBaseAvailability = (): RustSemanticStatus => {
+    baseAvailability ??= status(projectRoot);
+    return baseAvailability;
+  };
+
   const currentAvailability = (): RustSemanticStatus => {
-    const base = status(projectRoot);
+    const base = currentBaseAvailability();
     if (!base.dependencyAvailable) return base;
     return lastAvailability ?? base;
   };
@@ -108,16 +135,20 @@ export function createRustSemanticProvider(
     const rustDefinitions = hydrateRustDefinitions(definitions);
     try {
       const resolution = referenceResolver.referencesForDefinitions(rustDefinitions);
+      const baseAvailability = currentBaseAvailability();
       lastAvailability = {
-        ...status(projectRoot),
+        ...baseAvailability,
         available: resolution.available,
-        resolvedBinary: resolution.resolvedBinary ?? status(projectRoot).resolvedBinary,
-        reason: resolution.reason ?? status(projectRoot).reason,
+        resolvedBinary: resolution.resolvedBinary ?? baseAvailability.resolvedBinary,
+        reason: resolution.reason ?? baseAvailability.reason,
       };
-      return completeReferenceMap(rustDefinitions, resolution.references);
+      return resolution.available
+        ? new Map(resolution.references)
+        : completeReferenceMap(rustDefinitions, resolution.references);
     } catch (error) {
+      const baseAvailability = currentBaseAvailability();
       lastAvailability = {
-        ...status(projectRoot),
+        ...baseAvailability,
         available: false,
         reason: error instanceof Error ? error.message : String(error),
       };
@@ -128,22 +159,103 @@ export function createRustSemanticProvider(
   const calleesForDefinitions = (definitions: readonly IndexedDefinition[]): Map<number, SemanticCallee[]> => {
     if (definitions.length === 0) return new Map();
     const rustDefinitions = hydrateRustDefinitions(definitions);
+    const calleeCapableDefinitions = rustDefinitions.filter(isRustCalleeCapableDefinition);
+    if (calleeCapableDefinitions.length === 0) return emptyCalleeMap(rustDefinitions);
+    const resolvedCallees = new Map<number, SemanticCallee[]>();
+    const scipOccurrenceCallees = rustScipOccurrenceCallees(calleeCapableDefinitions, scipOccurrenceCalleeOracle);
+    const pendingDefinitions: IndexedDefinition[] = [];
+    for (const definition of calleeCapableDefinitions) {
+      if (prefetchedCallees.has(definition.symbolId)) {
+        resolvedCallees.set(definition.symbolId, prefetchedCallees.get(definition.symbolId) ?? []);
+      } else if (scipOccurrenceCallees.has(definition.symbolId)) {
+        resolvedCallees.set(definition.symbolId, scipOccurrenceCallees.get(definition.symbolId) ?? []);
+      } else if (rustSourceProvesZeroCallees(definition, sourceZeroCalleeOracle)) {
+        resolvedCallees.set(definition.symbolId, []);
+      } else {
+        pendingDefinitions.push(definition);
+      }
+    }
+    if (pendingDefinitions.length === 0) return completeCalleeMap(rustDefinitions, resolvedCallees, undefined);
     try {
-      const resolution = calleeResolver.calleesForDefinitions(rustDefinitions);
+      const resolution = calleeResolver.calleesForDefinitions(pendingDefinitions);
+      const baseAvailability = currentBaseAvailability();
       lastAvailability = {
-        ...status(projectRoot),
+        ...baseAvailability,
         available: resolution.available,
-        resolvedBinary: resolution.resolvedBinary ?? status(projectRoot).resolvedBinary,
-        reason: resolution.reason ?? status(projectRoot).reason,
+        resolvedBinary: resolution.resolvedBinary ?? baseAvailability.resolvedBinary,
+        reason: resolution.reason ?? baseAvailability.reason,
       };
-      return completeCalleeMap(rustDefinitions, resolution.callees, calleeSymbolResolver);
+      const completedPending = completeCalleeMap(pendingDefinitions, resolution.callees, calleeSymbolResolver);
+      for (const [symbolId, callees] of completedPending) resolvedCallees.set(symbolId, callees);
+      return completeCalleeMap(rustDefinitions, resolvedCallees, undefined);
     } catch (error) {
+      const baseAvailability = currentBaseAvailability();
       lastAvailability = {
-        ...status(projectRoot),
+        ...baseAvailability,
         available: false,
         reason: error instanceof Error ? error.message : String(error),
       };
       return emptyCalleeMap(rustDefinitions);
+    }
+  };
+
+  const referencesAndCalleesForDefinitions = (
+    referenceDefinitions: readonly IndexedDefinition[],
+    calleeDefinitions: readonly IndexedDefinition[],
+  ): SemanticReferenceAndCalleeMaps => {
+    const rustReferenceDefinitions = hydrateRustDefinitions(referenceDefinitions);
+    const rustCalleeDefinitions = hydrateRustDefinitions(calleeDefinitions);
+    const calleeCapableDefinitions = rustCalleeDefinitions.filter(isRustCalleeCapableDefinition);
+    const resolvedCallees = new Map<number, SemanticCallee[]>();
+    const scipOccurrenceCallees = rustScipOccurrenceCallees(calleeCapableDefinitions, scipOccurrenceCalleeOracle);
+    const pendingCalleeDefinitions: IndexedDefinition[] = [];
+    for (const definition of calleeCapableDefinitions) {
+      if (scipOccurrenceCallees.has(definition.symbolId)) {
+        resolvedCallees.set(definition.symbolId, scipOccurrenceCallees.get(definition.symbolId) ?? []);
+      } else if (rustSourceProvesZeroCallees(definition, sourceZeroCalleeOracle)) {
+        resolvedCallees.set(definition.symbolId, []);
+      } else {
+        pendingCalleeDefinitions.push(definition);
+      }
+    }
+    if (rustReferenceDefinitions.length === 0 && pendingCalleeDefinitions.length === 0) {
+      return {
+        references: emptyReferenceMap(rustReferenceDefinitions),
+        callees: completeCalleeMap(rustCalleeDefinitions, resolvedCallees, undefined),
+      };
+    }
+    try {
+      const resolution = sessionResolver
+        ? sessionResolver.referencesAndCalleesForDefinitions(rustReferenceDefinitions, pendingCalleeDefinitions)
+        : resolveReferencesAndCalleesSeparately(referenceResolver, calleeResolver, {
+            referenceDefinitions: rustReferenceDefinitions,
+            calleeDefinitions: pendingCalleeDefinitions,
+          });
+      const baseAvailability = currentBaseAvailability();
+      lastAvailability = {
+        ...baseAvailability,
+        available: resolution.available,
+        resolvedBinary: resolution.resolvedBinary ?? baseAvailability.resolvedBinary,
+        reason: resolution.reason ?? baseAvailability.reason,
+      };
+      const references = resolution.available
+        ? new Map(resolution.references)
+        : completeReferenceMap(rustReferenceDefinitions, resolution.references);
+      for (const [symbolId, rows] of resolution.callees) resolvedCallees.set(symbolId, rows);
+      const callees = completeCalleeMap(rustCalleeDefinitions, resolvedCallees, calleeSymbolResolver);
+      for (const [symbolId, rows] of callees) prefetchedCallees.set(symbolId, rows);
+      return { references, callees };
+    } catch (error) {
+      const baseAvailability = currentBaseAvailability();
+      lastAvailability = {
+        ...baseAvailability,
+        available: false,
+        reason: error instanceof Error ? error.message : String(error),
+      };
+      return {
+        references: emptyReferenceMap(rustReferenceDefinitions),
+        callees: emptyCalleeMap(rustCalleeDefinitions),
+      };
     }
   };
 
@@ -152,16 +264,18 @@ export function createRustSemanticProvider(
     const rustDefinitions = hydrateRustDefinitions(definitions);
     try {
       const resolution = signatureResolver.signaturesForDefinitions(rustDefinitions);
+      const baseAvailability = currentBaseAvailability();
       lastAvailability = {
-        ...status(projectRoot),
+        ...baseAvailability,
         available: resolution.available,
-        resolvedBinary: resolution.resolvedBinary ?? status(projectRoot).resolvedBinary,
-        reason: resolution.reason ?? status(projectRoot).reason,
+        resolvedBinary: resolution.resolvedBinary ?? baseAvailability.resolvedBinary,
+        reason: resolution.reason ?? baseAvailability.reason,
       };
       return completeSignatureMap(rustDefinitions, resolution.signatures);
     } catch (error) {
+      const baseAvailability = currentBaseAvailability();
       lastAvailability = {
-        ...status(projectRoot),
+        ...baseAvailability,
         available: false,
         reason: error instanceof Error ? error.message : String(error),
       };
@@ -183,8 +297,9 @@ export function createRustSemanticProvider(
         importUsageCache.set(file, usage);
         return usage;
       } catch (error) {
+        const baseAvailability = currentBaseAvailability();
         lastAvailability = {
-          ...status(projectRoot),
+          ...baseAvailability,
           available: false,
           reason: error instanceof Error ? error.message : String(error),
         };
@@ -194,6 +309,7 @@ export function createRustSemanticProvider(
     referencesFor: (definition: IndexedDefinition): SemanticReference[] =>
       referencesForDefinitions([definition]).get(definition.symbolId) ?? [],
     referencesForDefinitions,
+    referencesAndCalleesForDefinitions,
     calleesFor: (definition: IndexedDefinition): SemanticCallee[] =>
       calleesForDefinitions([definition]).get(definition.symbolId) ?? [],
     calleesForDefinitions,
@@ -224,13 +340,42 @@ function hydrateRustDefinitions(definitions: readonly IndexedDefinition[]): Inde
       ...definition,
       leaf: typeof partial.leaf === 'string' ? partial.leaf : leafName(definition.symbol),
       parentTypeName: partial.parentTypeName ?? null,
-      isFunctionLike: partial.isFunctionLike ?? false,
+      isFunctionLike:
+        typeof partial.isFunctionLike === 'boolean' ? partial.isFunctionLike : isFunctionLikeSymbol(definition.symbol),
       isTypeLike: partial.isTypeLike ?? false,
       kind: partial.kind ?? null,
       documentation: partial.documentation ?? null,
       enclosingSymbol: partial.enclosingSymbol ?? null,
     };
   });
+}
+
+function isRustCalleeCapableDefinition(definition: IndexedDefinition): boolean {
+  return definition.isFunctionLike;
+}
+
+function rustSourceProvesZeroCallees(
+  definition: IndexedDefinition,
+  oracle: RustSourceZeroCalleeOracle | undefined,
+): boolean {
+  if (!oracle) return false;
+  try {
+    return oracle(definition);
+  } catch {
+    return false;
+  }
+}
+
+function rustScipOccurrenceCallees(
+  definitions: readonly IndexedDefinition[],
+  oracle: RustScipOccurrenceCalleeOracle | undefined,
+): Map<number, SemanticCallee[]> {
+  if (!oracle || definitions.length === 0) return new Map();
+  try {
+    return oracle(definitions);
+  } catch {
+    return new Map();
+  }
 }
 
 function createWorkerRustReferenceResolver(
@@ -289,20 +434,28 @@ function resolveReferencesWithWorker(
     process.env['SCIP_RUST_SEMANTIC_REQUEST_TIMEOUT_MS'],
     DEFAULT_RUST_REFERENCE_TIMEOUT_MS,
   );
+  const referenceRetryTimeoutMs = configuredNonNegativeInteger(
+    process.env['SCIP_RUST_SEMANTIC_REFERENCE_RETRY_TIMEOUT_MS'],
+    0,
+  );
   const concurrency = configuredPositiveInteger(
     process.env['SCIP_RUST_SEMANTIC_CONCURRENCY'],
     DEFAULT_RUST_REFERENCE_CONCURRENCY,
   );
-  const diagnosticsTimeoutMs = configuredPositiveInteger(
+  const diagnosticsTimeoutMs = configuredNonNegativeInteger(
     process.env['SCIP_RUST_SEMANTIC_DIAGNOSTICS_TIMEOUT_MS'],
     Math.min(requestTimeoutMs, 10_000),
   );
-  const settleDelayMs = configuredPositiveInteger(process.env['SCIP_RUST_SEMANTIC_SETTLE_MS'], 5_000);
+  const settleDelayMs = rustSemanticSettleDelayMs(process.env['SCIP_RUST_SEMANTIC_SETTLE_MS'], {
+    definitionCount: definitions.length,
+    includeReferences: true,
+  });
   const request: RustReferenceWorkerRequest = {
     projectRoot,
     rustAnalyzerBinary: baseStatus.resolvedBinary,
     definitions: [...definitions],
     requestTimeoutMs,
+    ...(referenceRetryTimeoutMs > 0 ? { referenceRetryTimeoutMs } : {}),
     diagnosticsTimeoutMs,
     settleDelayMs,
     concurrency,
@@ -312,7 +465,11 @@ function resolveReferencesWithWorker(
     input: JSON.stringify(request),
     encoding: 'utf8',
     maxBuffer: 50 * 1024 * 1024,
-    timeout: configuredBatchTimeoutMs(definitions.length, requestTimeoutMs, concurrency),
+    timeout: configuredBatchTimeoutMs(
+      definitions.length,
+      rustSemanticRequestTimeoutBudgetMs(requestTimeoutMs, request.referenceRetryTimeoutMs),
+      concurrency,
+    ),
   });
 
   const parsed = parseWorkerResponse(result.stdout);
@@ -321,7 +478,11 @@ function resolveReferencesWithWorker(
       available: parsed.available,
       resolvedBinary: baseStatus.resolvedBinary,
       reason: parsed.reason,
-      references: completeReferenceMap(definitions, new Map(parsed.references)),
+      references: completeReferenceMap(
+        definitions,
+        new Map(parsed.references),
+        new Set(parsed.incompleteReferenceSymbolIds ?? []),
+      ),
     };
   }
 
@@ -370,11 +531,15 @@ function resolveCalleesWithWorker(
     process.env['SCIP_RUST_SEMANTIC_CONCURRENCY'],
     DEFAULT_RUST_REFERENCE_CONCURRENCY,
   );
-  const diagnosticsTimeoutMs = configuredPositiveInteger(
+  const diagnosticsTimeoutMs = configuredNonNegativeInteger(
     process.env['SCIP_RUST_SEMANTIC_DIAGNOSTICS_TIMEOUT_MS'],
     Math.min(requestTimeoutMs, 10_000),
   );
-  const settleDelayMs = configuredPositiveInteger(process.env['SCIP_RUST_SEMANTIC_SETTLE_MS'], 5_000);
+  const settleDelayMs = rustSemanticSettleDelayMs(process.env['SCIP_RUST_SEMANTIC_SETTLE_MS'], {
+    definitionCount: definitions.length,
+    includeReferences: false,
+    includeCallees: true,
+  });
   const request: RustReferenceWorkerRequest = {
     projectRoot,
     rustAnalyzerBinary: baseStatus.resolvedBinary,
@@ -449,11 +614,16 @@ function resolveSignaturesWithWorker(
     process.env['SCIP_RUST_SEMANTIC_CONCURRENCY'],
     DEFAULT_RUST_REFERENCE_CONCURRENCY,
   );
-  const diagnosticsTimeoutMs = configuredPositiveInteger(
+  const diagnosticsTimeoutMs = configuredNonNegativeInteger(
     process.env['SCIP_RUST_SEMANTIC_DIAGNOSTICS_TIMEOUT_MS'],
     Math.min(requestTimeoutMs, 10_000),
   );
-  const settleDelayMs = configuredPositiveInteger(process.env['SCIP_RUST_SEMANTIC_SETTLE_MS'], 5_000);
+  const settleDelayMs = rustSemanticSettleDelayMs(process.env['SCIP_RUST_SEMANTIC_SETTLE_MS'], {
+    definitionCount: definitions.length,
+    includeReferences: false,
+    includeCallees: false,
+    includeSignatures: true,
+  });
   const request: RustReferenceWorkerRequest = {
     projectRoot,
     rustAnalyzerBinary: baseStatus.resolvedBinary,
@@ -496,6 +666,37 @@ function resolveSignaturesWithWorker(
   };
 }
 
+function resolveReferencesAndCalleesSeparately(
+  referenceResolver: RustReferenceResolver,
+  calleeResolver: RustCalleeResolver,
+  definitions: {
+    referenceDefinitions: readonly IndexedDefinition[];
+    calleeDefinitions: readonly IndexedDefinition[];
+  },
+): RustReferenceResolution & RustCalleeResolution {
+  const referenceResolution =
+    definitions.referenceDefinitions.length > 0
+      ? referenceResolver.referencesForDefinitions(definitions.referenceDefinitions)
+      : {
+          available: true,
+          references: emptyReferenceMap(definitions.referenceDefinitions),
+        };
+  const calleeResolution =
+    definitions.calleeDefinitions.length > 0
+      ? calleeResolver.calleesForDefinitions(definitions.calleeDefinitions)
+      : {
+          available: true,
+          callees: emptyCalleeMap(definitions.calleeDefinitions),
+        };
+  return {
+    available: referenceResolution.available && calleeResolution.available,
+    resolvedBinary: referenceResolution.resolvedBinary ?? calleeResolution.resolvedBinary,
+    reason: referenceResolution.reason ?? calleeResolution.reason,
+    references: referenceResolution.references,
+    callees: calleeResolution.callees,
+  };
+}
+
 function emptyReferenceMap(definitions: readonly IndexedDefinition[]): Map<number, SemanticReference[]> {
   return new Map(definitions.map((definition) => [definition.symbolId, []]));
 }
@@ -511,8 +712,14 @@ function emptySignatureMap(definitions: readonly IndexedDefinition[]): Map<numbe
 function completeReferenceMap(
   definitions: readonly IndexedDefinition[],
   references: ReadonlyMap<number, SemanticReference[]>,
+  incompleteSymbolIds: ReadonlySet<number> = new Set(),
 ): Map<number, SemanticReference[]> {
-  return new Map(definitions.map((definition) => [definition.symbolId, references.get(definition.symbolId) ?? []]));
+  const result = new Map<number, SemanticReference[]>();
+  for (const definition of definitions) {
+    if (incompleteSymbolIds.has(definition.symbolId)) continue;
+    result.set(definition.symbolId, references.get(definition.symbolId) ?? []);
+  }
+  return result;
 }
 
 function completeCalleeMap(
@@ -520,14 +727,32 @@ function completeCalleeMap(
   callees: ReadonlyMap<number, SemanticCallee[]>,
   resolveSymbol: RustCalleeSymbolResolver | undefined,
 ): Map<number, SemanticCallee[]> {
-  return new Map(
-    definitions.map((definition) => [
-      definition.symbolId,
-      (callees.get(definition.symbolId) ?? []).map((callee) => ({
-        ...callee,
-        symbol: resolveSymbol ? resolveSymbol(callee) : callee.symbol,
-      })),
-    ]),
+  let rows = 0;
+  let calleeCount = 0;
+  return profileSpan(
+    'rust.semantic.callees.complete-map',
+    () => {
+      const result = new Map<number, SemanticCallee[]>();
+      for (const definition of definitions) {
+        const rawCallees = callees.get(definition.symbolId) ?? [];
+        if (rawCallees.length > 0) rows += 1;
+        calleeCount += rawCallees.length;
+        result.set(
+          definition.symbolId,
+          rawCallees.map((callee) => ({
+            ...callee,
+            symbol: resolveSymbol ? resolveSymbol(callee) : callee.symbol,
+          })),
+        );
+      }
+      return result;
+    },
+    () => ({
+      definitions: definitions.length,
+      rows,
+      callees: calleeCount,
+      resolveSymbols: Boolean(resolveSymbol),
+    }),
   );
 }
 
@@ -552,6 +777,9 @@ function parseWorkerResponse(stdout: string): RustReferenceWorkerResponse | null
       available: record.available,
       reason: typeof record.reason === 'string' ? record.reason : undefined,
       references: record.references,
+      incompleteReferenceSymbolIds: Array.isArray(record.incompleteReferenceSymbolIds)
+        ? record.incompleteReferenceSymbolIds.filter((value): value is number => typeof value === 'number')
+        : undefined,
       callees: Array.isArray(record.callees) ? record.callees : undefined,
       signatures: Array.isArray(record.signatures) ? record.signatures : undefined,
     };
@@ -562,6 +790,12 @@ function parseWorkerResponse(stdout: string): RustReferenceWorkerResponse | null
 
 function configuredPositiveInteger(value: string | undefined, fallback: number): number {
   return parsePositiveInteger(value) ?? fallback;
+}
+
+function configuredNonNegativeInteger(value: string | undefined, fallback: number): number {
+  if (!value) return fallback;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 function configuredBatchTimeoutMs(definitionCount: number, requestTimeoutMs: number, concurrency: number): number {

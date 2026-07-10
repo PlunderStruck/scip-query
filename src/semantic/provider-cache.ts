@@ -1,9 +1,12 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { registerCacheClear } from '../storage/cache-registry.js';
 import { detectAstLanguage } from '../source/ast/ast-language.js';
-import { resolveRustCalleeSymbol } from './rust/callee-symbol-resolution.js';
+import { getSourceFacts } from '../source/source-facts.js';
+import { createRustCalleeSymbolResolver } from './rust/callee-symbol-resolution.js';
 import { rustImportUsageFactsFromSource } from './rust/import-usage.js';
 import { createRustSemanticProvider } from './rust/provider.js';
+import { rustScipOccurrenceCalleeMap } from './rust/scip-occurrence-callees.js';
+import type { IndexedDefinition } from '../domain/types.js';
 import type { SemanticProvider, SemanticProviderLanguage } from './types.js';
 import { SemanticSessionManager } from './session-manager.js';
 import { createTsMorphProvider } from './typescript/ts-morph-provider.js';
@@ -30,7 +33,9 @@ export function getSemanticProvider(db: ScipDatabase, relativePath?: string): Se
           sourceImportUsageResolver: {
             importUsageFacts: (file) => rustImportUsageFactsFromSource(db, file),
           },
-          calleeSymbolResolver: (callee) => resolveRustCalleeSymbol(db, callee),
+          calleeSymbolResolver: createRustCalleeSymbolResolver(db),
+          sourceZeroCalleeOracle: (definition) => rustSourceProvesZeroCallees(db, definition),
+          scipOccurrenceCalleeOracle: (definitions) => rustScipOccurrenceCalleeMap(db, definitions),
         })
       : createTsMorphProvider(db, relativePath),
   );
@@ -44,4 +49,21 @@ export function semanticProviderLanguageForPath(relativePath?: string): Semantic
   if (detectAstLanguage(relativePath) === 'rust') return 'rust';
   if (isTypeScriptLike(relativePath)) return 'typescript';
   return null;
+}
+
+function rustSourceProvesZeroCallees(db: ScipDatabase, definition: IndexedDefinition): boolean {
+  const facts = getSourceFacts(db, definition.relativePath);
+  if (!facts || facts.language !== 'rust') return false;
+  const callable =
+    facts.callables.find(
+      (candidate) =>
+        candidate.startLine === definition.startLine &&
+        candidate.endLine === definition.endLine &&
+        candidate.name === definition.leaf,
+    ) ??
+    facts.callables.find(
+      (candidate) => candidate.startLine === definition.startLine && candidate.endLine === definition.endLine,
+    );
+  if (!callable) return false;
+  return !facts.callSites.some((site) => site.line >= callable.startLine && site.line <= callable.endLine);
 }

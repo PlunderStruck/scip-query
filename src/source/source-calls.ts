@@ -58,6 +58,7 @@ export function extractCallLeaf(node: SyntaxNode): string | null {
   switch (node.type) {
     case 'identifier':
     case 'type_identifier':
+    case 'field_identifier':
     case 'property_identifier':
     case 'shorthand_property_identifier':
       return node.text;
@@ -66,6 +67,10 @@ export function extractCallLeaf(node: SyntaxNode): string | null {
     case 'attribute': {
       const last = node.namedChild(node.namedChildCount - 1);
       return last ? extractCallLeaf(last) : null;
+    }
+    case 'generic_function': {
+      const target = node.childForFieldName('function') ?? node.namedChild(0);
+      return target ? extractCallLeaf(target) : null;
     }
     case 'scoped_identifier': {
       const name = node.childForFieldName('name') ?? node.namedChild(node.namedChildCount - 1);

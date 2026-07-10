@@ -42,6 +42,11 @@ export interface SemanticCallee {
   line: number;
 }
 
+export interface SemanticReferenceAndCalleeMaps {
+  references: Map<number, SemanticReference[]>;
+  callees: Map<number, SemanticCallee[]>;
+}
+
 export interface SemanticProvider {
   language: SemanticProviderLanguage;
   availability(): SemanticAvailability;
@@ -49,6 +54,10 @@ export interface SemanticProvider {
   importUsage(file: string): SemanticImportUsage[];
   referencesFor(definition: IndexedDefinition): SemanticReference[];
   referencesForDefinitions?(definitions: readonly IndexedDefinition[]): Map<number, SemanticReference[]>;
+  referencesAndCalleesForDefinitions?(
+    referenceDefinitions: readonly IndexedDefinition[],
+    calleeDefinitions: readonly IndexedDefinition[],
+  ): SemanticReferenceAndCalleeMaps;
   calleesFor(definition: IndexedDefinition): SemanticCallee[];
   calleesForDefinitions?(definitions: readonly IndexedDefinition[]): Map<number, SemanticCallee[]>;
   signatureFor(definition: IndexedDefinition): string | null;

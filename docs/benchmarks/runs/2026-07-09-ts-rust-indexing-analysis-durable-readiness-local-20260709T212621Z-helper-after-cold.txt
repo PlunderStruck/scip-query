@@ -1,0 +1,2 @@
+state_after_cold={"protocolVersion":2,"pid":2174,"heartbeatAtMs":1783632653647}
+pid_command=/opt/homebrew/Cellar/node/26.3.1/bin/node /Users/aydansalois/Documents/GitHub/scip-query/dist/rust-semantic-session-server.js /var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-query-rust-session-7a75eb9487c30349df6c /Users/aydansalois/Documents/GitHub/scip-query/dist/rust-semantic-session-worker.js

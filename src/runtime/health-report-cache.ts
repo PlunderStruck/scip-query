@@ -10,12 +10,17 @@ import { projectEvidenceFingerprint, sha256Hex } from '../storage/evidence-cache
 // health-report.ts findings/axes/actions/scoreBreakdown) — an old-shaped
 // cached report would otherwise pass isHealthReport()'s shallow check and
 // silently miss the new dimension until the next git-HEAD-driven miss.
-const HEALTH_REPORT_CACHE_VERSION = 2;
+//
+// Q2: bumped 2 -> 3 so default health's phase-timeout policy is part of the
+// cache identity. A partial 30s default report and an unbounded report are not
+// interchangeable.
+const HEALTH_REPORT_CACHE_VERSION = 3;
 const HEALTH_REPORT_CACHE_FILE = 'health-report-cache.json';
 
 export interface HealthReportCacheOptions {
   scope?: string;
   full?: boolean;
+  phaseTimeoutMs?: number | null;
 }
 
 export interface HealthReportCacheKey {
@@ -24,6 +29,7 @@ export interface HealthReportCacheKey {
   cliVersion: string;
   scope: string | null;
   full: boolean;
+  phaseTimeoutMs: number | null;
   gitHead: string | null;
 }
 
@@ -62,6 +68,7 @@ export function healthReportCacheKey(
     cliVersion,
     scope: opts.scope ?? null,
     full: opts.full === true,
+    phaseTimeoutMs: opts.phaseTimeoutMs ?? null,
     gitHead: deps.gitHead(db.config.projectRoot),
   };
 }
@@ -141,6 +148,7 @@ function isHealthReportCacheKey(value: unknown): value is HealthReportCacheKey {
     typeof candidate.cliVersion === 'string' &&
     (candidate.scope === null || typeof candidate.scope === 'string') &&
     typeof candidate.full === 'boolean' &&
+    (candidate.phaseTimeoutMs === null || typeof candidate.phaseTimeoutMs === 'number') &&
     (candidate.gitHead === null || typeof candidate.gitHead === 'string')
   );
 }

@@ -342,8 +342,15 @@ describe('TypeScript semantic provider', () => {
         slot: 'semantic-references',
         definitions: 4,
         matches: 4,
+        mismatchCount: 0,
+        missingReferenceCount: 0,
+        extraReferenceCount: 0,
         mismatches: [],
       });
+      expect(comparison.baselineReferenceCount).toBeGreaterThan(0);
+      expect(comparison.candidateReferenceCount).toBe(comparison.baselineReferenceCount);
+      expect(comparison.baselineMs).toBeGreaterThanOrEqual(0);
+      expect(comparison.candidateMs).toBeGreaterThanOrEqual(0);
     });
   });
 

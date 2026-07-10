@@ -4,9 +4,10 @@ import { getSourceText } from '../../source/source-text.js';
 import { getSourceImports } from '../../language-parsers/index.js';
 import {
   fileContentHash,
-  readCachedSemanticCallees,
+  readCachedSemanticCalleesForFile,
   sha256Hex,
   writeCachedSemanticCalleesBatch,
+  type SemanticCalleeCacheEntry,
 } from '../../storage/evidence-cache.js';
 import { createPerDbCache, createPerDbValue } from '../../storage/per-db-cache.js';
 import { getIdentifiersByLine } from '../identifier-index.js';
@@ -23,7 +24,12 @@ import type { IndexedDefinition, SymbolLocation, SymbolMatch } from '../../domai
 import type { SemanticCallee } from '../../semantic/types.js';
 import { semanticProviderLanguageForPath } from '../../semantic/provider-cache.js';
 import { rustSemanticEngineIdentity } from '../../semantic/rust/engine-identity.js';
-import { semanticCalleeMap, semanticEvidenceProduct, semanticReferences } from '../../semantic/shared-primitives.js';
+import {
+  prefetchedSemanticCalleesForDefinitions,
+  semanticCalleeMap,
+  semanticEvidenceProduct,
+  semanticReferences,
+} from '../../semantic/shared-primitives.js';
 import { profileEnabled, profileSpan } from '../../instrumentation/profile.js';
 import { getGlobalLeafIndex, pickAstCallCandidate, sameLanguageCandidates } from '../leaf-symbol-index.js';
 import type { GlobalLeafCandidate } from '../leaf-symbol-index.js';
@@ -294,40 +300,69 @@ function cachedSemanticCalleeMap(
 ): Map<number, SemanticCallee[]> {
   const profiling = profileEnabled();
   const result = new Map<number, SemanticCallee[]>();
+  const prefetched = prefetchedSemanticCalleesForDefinitions(db, definitions);
   const misses: Array<{ def: IndexedDefinition | SymbolMatch; contentHash: string; depsDigest: string }> = [];
   const unkeyed: Array<IndexedDefinition | SymbolMatch> = [];
   let skippedUnsupportedLanguage = 0;
   let sourceMissing = 0;
   let cacheHits = 0;
   let parseFailures = 0;
+  let inMemoryHits = 0;
+  let inMemoryRows = 0;
+  let inMemoryCalleeCount = 0;
+
+  for (const { definition, callees } of prefetched.hits) {
+    inMemoryHits += 1;
+    if (callees.length > 0) {
+      inMemoryRows += 1;
+      inMemoryCalleeCount += callees.length;
+      result.set(definition.symbolId, callees);
+    }
+  }
+
+  const prefetchedCacheEntries = semanticCalleeCacheEntriesForPrefetchedRows(db, prefetched.hits);
+  if (prefetchedCacheEntries.entries.length > 0) {
+    profileSpan(
+      'semantic.callees.prefetch-cache-write',
+      () => writeCachedSemanticCalleesBatch(db, prefetchedCacheEntries.entries),
+      () => ({
+        entries: prefetchedCacheEntries.entries.length,
+        sourceMissing: prefetchedCacheEntries.sourceMissing,
+        skippedUnsupportedLanguage: prefetchedCacheEntries.skippedUnsupportedLanguage,
+      }),
+    );
+  }
 
   profileSpan(
     'semantic.callees.cache-scan',
     () => {
-      for (const def of definitions) {
-        if (!semanticProviderLanguageForPath(def.relativePath)) {
-          if (profiling) skippedUnsupportedLanguage += 1;
+      for (const [relativePath, fileDefinitions] of semanticDefinitionsGroupedByFile(prefetched.misses)) {
+        if (!semanticProviderLanguageForPath(relativePath)) {
+          if (profiling) skippedUnsupportedLanguage += fileDefinitions.length;
           continue;
         }
-        const source = getSourceText(db, def.relativePath);
+        const source = getSourceText(db, relativePath);
         if (!source) {
-          if (profiling) sourceMissing += 1;
-          unkeyed.push(def);
+          if (profiling) sourceMissing += fileDefinitions.length;
+          unkeyed.push(...fileDefinitions);
           continue;
         }
-        const contentHash = fileContentHash(db, def.relativePath, source);
-        const depsDigest = semanticCalleeDepsDigest(db, def.relativePath);
-        const cached = readCachedSemanticCallees(db, def.relativePath, def.symbol, contentHash, depsDigest);
-        if (cached !== null) {
-          const callees = parseCachedCallees(cached);
-          if (callees) {
-            if (profiling) cacheHits += 1;
-            if (callees.length > 0) result.set(def.symbolId, callees);
-            continue;
+        const contentHash = fileContentHash(db, relativePath, source);
+        const depsDigest = semanticCalleeDepsDigest(db, relativePath);
+        const cachedBySymbol = readCachedSemanticCalleesForFile(db, relativePath, contentHash, depsDigest);
+        for (const def of fileDefinitions) {
+          const cached = cachedBySymbol.get(def.symbol) ?? null;
+          if (cached !== null) {
+            const callees = parseCachedCallees(cached);
+            if (callees) {
+              if (profiling) cacheHits += 1;
+              if (callees.length > 0) result.set(def.symbolId, callees);
+              continue;
+            }
+            if (profiling) parseFailures += 1;
           }
-          if (profiling) parseFailures += 1;
+          misses.push({ def, contentHash, depsDigest });
         }
-        misses.push({ def, contentHash, depsDigest });
       }
     },
     () => ({
@@ -338,6 +373,9 @@ function cachedSemanticCalleeMap(
       parseFailures,
       misses: misses.length,
       unkeyed: unkeyed.length,
+      inMemoryHits,
+      inMemoryRows,
+      inMemoryCalleeCount,
       resultRows: result.size,
     }),
   );
@@ -386,6 +424,73 @@ function cachedSemanticCalleeMap(
         misses: misses.length,
       }),
     );
+  }
+  return result;
+}
+
+function semanticCalleeCacheEntriesForPrefetchedRows(
+  db: ScipDatabase,
+  hits: ReadonlyArray<{
+    definition: IndexedDefinition | SymbolMatch;
+    callees: readonly SemanticCallee[];
+  }>,
+): { entries: SemanticCalleeCacheEntry[]; sourceMissing: number; skippedUnsupportedLanguage: number } {
+  const entries: SemanticCalleeCacheEntry[] = [];
+  const keyByPath = new Map<string, { contentHash: string; depsDigest: string } | null>();
+  let sourceMissing = 0;
+  let skippedUnsupportedLanguage = 0;
+
+  for (const { definition, callees } of hits) {
+    if (!semanticProviderLanguageForPath(definition.relativePath)) {
+      skippedUnsupportedLanguage += 1;
+      continue;
+    }
+    if (!keyByPath.has(definition.relativePath)) {
+      const source = getSourceText(db, definition.relativePath);
+      keyByPath.set(
+        definition.relativePath,
+        source
+          ? {
+              contentHash: fileContentHash(db, definition.relativePath, source),
+              depsDigest: semanticCalleeDepsDigest(db, definition.relativePath),
+            }
+          : null,
+      );
+    }
+    const key = keyByPath.get(definition.relativePath);
+    if (!key) {
+      sourceMissing += 1;
+      continue;
+    }
+    entries.push({
+      relativePath: definition.relativePath,
+      symbol: definition.symbol,
+      contentHash: key.contentHash,
+      depsDigest: key.depsDigest,
+      payload: JSON.stringify(callees),
+    });
+  }
+
+  return { entries, sourceMissing, skippedUnsupportedLanguage };
+}
+
+// scip-query: ignore-wrapper — runtime prewarm reaches the same durable
+// semantic-callee cache as buildCalleeMap without also doing AST/chunk work.
+export function materializeSemanticCalleeCache(
+  db: ScipDatabase,
+  definitions: ReadonlyArray<IndexedDefinition | SymbolMatch>,
+): Map<number, SemanticCallee[]> {
+  return cachedSemanticCalleeMap(db, definitions);
+}
+
+function semanticDefinitionsGroupedByFile<T extends Pick<IndexedDefinition | SymbolMatch, 'relativePath'>>(
+  definitions: ReadonlyArray<T>,
+): Map<string, T[]> {
+  const result = new Map<string, T[]>();
+  for (const definition of definitions) {
+    const bucket = result.get(definition.relativePath) ?? [];
+    bucket.push(definition);
+    result.set(definition.relativePath, bucket);
   }
   return result;
 }

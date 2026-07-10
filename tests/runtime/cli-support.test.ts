@@ -1,12 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   commandAnalysisBudget,
+  deferredHealthPhaseResult,
   diffImpactBatchConcurrency,
   healthPhaseConcurrency,
   healthPhaseTasks,
+  healthPhaseTimeoutMs,
+  prewarmHealthSemanticEvidence,
   shouldRunHealthPhase,
   skippedHealthPhaseResult,
+  type HealthSemanticPrewarmRuntime,
 } from '../../src/runtime/cli-support.js';
+import type { IndexedDefinition } from '../../src/domain/types.js';
 import type { ScipDatabase } from '../../src/storage/db.js';
 
 function fakeLargeDb(): ScipDatabase {
@@ -18,6 +23,50 @@ function fakeLargeDb(): ScipDatabase {
       return { c: 0 };
     },
   } as unknown as ScipDatabase;
+}
+
+function fakeDefinition(id: number, relativePath: string): IndexedDefinition {
+  return {
+    documentId: id,
+    symbolId: id,
+    symbol: `test symbol ${id}`,
+    relativePath,
+    startLine: 1,
+    endLine: 3,
+    leaf: `fn${id}`,
+    parentTypeName: null,
+    isFunctionLike: true,
+    isTypeLike: false,
+    kind: 12,
+    documentation: null,
+    enclosingSymbol: null,
+  } as IndexedDefinition;
+}
+
+function fakePrewarmRuntime(overrides: Partial<HealthSemanticPrewarmRuntime> = {}): HealthSemanticPrewarmRuntime {
+  return {
+    env: {},
+    projectFingerprint: vi.fn(() => 'project-a'),
+    semanticEngineFingerprint: vi.fn(() => 'semantic-engine-a'),
+    readMarker: vi.fn(() => null),
+    writeMarker: vi.fn(),
+    candidateDefinitions: vi.fn(() => [fakeDefinition(1, 'src/main.ts'), fakeDefinition(2, 'src/lib.rs')]),
+    materializeReferences: vi.fn((_, definitions) => ({
+      definitions: definitions.length,
+      inMemoryHits: 0,
+      incompleteInMemoryHits: 0,
+      cacheHits: 0,
+      misses: definitions.length,
+      unkeyed: 0,
+      skippedUnsupportedLanguage: 0,
+      parseFailures: 0,
+      computed: definitions.length,
+      incomplete: 0,
+      cacheWrites: definitions.length,
+    })),
+    materializeCallees: vi.fn(() => new Map([[1, []]])),
+    ...overrides,
+  };
 }
 
 describe('commandAnalysisBudget', () => {
@@ -67,6 +116,169 @@ describe('healthPhaseConcurrency', () => {
     expect(healthPhaseConcurrency(20, { SCIP_QUERY_HEALTH_CONCURRENCY: '6' }, () => 14)).toBe(6);
     expect(healthPhaseConcurrency(20, { SCIP_QUERY_HEALTH_CONCURRENCY: '100' }, () => 14)).toBe(20);
     expect(healthPhaseConcurrency(20, { SCIP_QUERY_HEALTH_CONCURRENCY: 'nope' }, () => 14)).toBe(12);
+  });
+});
+
+describe('healthPhaseTimeoutMs', () => {
+  it('applies a default phase timeout only outside full mode', () => {
+    expect(healthPhaseTimeoutMs({}, {})).toBe(30000);
+    expect(healthPhaseTimeoutMs({ full: true }, {})).toBeUndefined();
+  });
+
+  it('allows the health phase timeout to be overridden or disabled', () => {
+    expect(healthPhaseTimeoutMs({}, { SCIP_QUERY_HEALTH_PHASE_TIMEOUT_MS: '12000' })).toBe(12000);
+    expect(healthPhaseTimeoutMs({}, { SCIP_QUERY_HEALTH_PHASE_TIMEOUT_MS: '0' })).toBeUndefined();
+    expect(healthPhaseTimeoutMs({}, { SCIP_QUERY_HEALTH_PHASE_TIMEOUT_MS: 'nope' })).toBe(30000);
+  });
+});
+
+describe('prewarmHealthSemanticEvidence', () => {
+  it('does not run semantic prewarm outside full health mode', () => {
+    const runtime = fakePrewarmRuntime();
+
+    expect(prewarmHealthSemanticEvidence(fakeLargeDb(), {}, runtime)).toMatchObject({
+      status: 'skipped',
+      reason: 'default-mode',
+    });
+    expect(runtime.projectFingerprint).not.toHaveBeenCalled();
+  });
+
+  it('honors the prewarm disable environment switch', () => {
+    const runtime = fakePrewarmRuntime({ env: { SCIP_QUERY_HEALTH_SEMANTIC_PREWARM: '0' } as NodeJS.ProcessEnv });
+
+    expect(prewarmHealthSemanticEvidence(fakeLargeDb(), { full: true }, runtime)).toMatchObject({
+      status: 'skipped',
+      reason: 'disabled',
+    });
+    expect(runtime.projectFingerprint).not.toHaveBeenCalled();
+  });
+
+  it('skips candidate scans when the project prewarm marker is warm', () => {
+    const runtime = fakePrewarmRuntime({
+      readMarker: vi.fn(() => ({
+        version: 2,
+        definitions: 2,
+        referenceCacheWrites: 2,
+        referenceIncomplete: 0,
+        calleeRows: 1,
+        warmedAt: 123,
+      })),
+    });
+
+    expect(prewarmHealthSemanticEvidence(fakeLargeDb(), { full: true }, runtime)).toMatchObject({
+      status: 'skipped',
+      reason: 'cache-hit',
+    });
+    expect(runtime.candidateDefinitions).not.toHaveBeenCalled();
+    expect(runtime.materializeReferences).not.toHaveBeenCalled();
+    expect(runtime.materializeCallees).not.toHaveBeenCalled();
+  });
+
+  it('ignores prewarm markers that recorded incomplete Rust references', () => {
+    const runtime = fakePrewarmRuntime({
+      readMarker: vi.fn(() => ({
+        version: 2,
+        definitions: 2,
+        referenceCacheWrites: 1,
+        referenceIncomplete: 1,
+        calleeRows: 1,
+        warmedAt: 123,
+      })),
+    });
+
+    expect(prewarmHealthSemanticEvidence(fakeLargeDb(), { full: true }, runtime)).toMatchObject({
+      status: 'warmed',
+      reason: 'cache-miss',
+      definitions: 2,
+    });
+    expect(runtime.candidateDefinitions).toHaveBeenCalledTimes(1);
+    expect(runtime.materializeReferences).toHaveBeenCalledTimes(1);
+  });
+
+  it('materializes reference and callee caches before writing the project marker', () => {
+    const runtime = fakePrewarmRuntime();
+
+    expect(prewarmHealthSemanticEvidence(fakeLargeDb(), { full: true, scope: 'src' }, runtime)).toMatchObject({
+      status: 'warmed',
+      definitions: 2,
+      referenceCacheWrites: 2,
+      calleeRows: 1,
+    });
+    expect(runtime.materializeReferences).toHaveBeenCalledTimes(1);
+    expect(runtime.materializeCallees).toHaveBeenCalledTimes(1);
+    expect(runtime.writeMarker).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining('"scope":"src"'),
+      'project-a',
+      expect.objectContaining({
+        version: 2,
+        referenceIncomplete: 0,
+        definitions: 2,
+        referenceCacheWrites: 2,
+        calleeRows: 1,
+      }),
+    );
+    expect(runtime.writeMarker).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining('"semanticEngineFingerprint":"semantic-engine-a"'),
+      'project-a',
+      expect.anything(),
+    );
+  });
+
+  it('does not mark a project warm when the semantic provider is unavailable', () => {
+    const runtime = fakePrewarmRuntime({
+      materializeReferences: vi.fn((_, definitions) => ({
+        definitions: definitions.length,
+        inMemoryHits: 0,
+        incompleteInMemoryHits: 0,
+        cacheHits: 0,
+        misses: definitions.length,
+        unkeyed: 0,
+        skippedUnsupportedLanguage: 0,
+        parseFailures: 0,
+        computed: 0,
+        incomplete: 0,
+        cacheWrites: 0,
+      })),
+    });
+
+    expect(prewarmHealthSemanticEvidence(fakeLargeDb(), { full: true }, runtime)).toMatchObject({
+      status: 'skipped',
+      reason: 'provider-unavailable',
+      definitions: 2,
+      referenceMisses: 2,
+    });
+    expect(runtime.materializeCallees).not.toHaveBeenCalled();
+    expect(runtime.writeMarker).not.toHaveBeenCalled();
+  });
+
+  it('does not mark a project warm when Rust reference materialization is incomplete', () => {
+    const runtime = fakePrewarmRuntime({
+      materializeReferences: vi.fn((_, definitions) => ({
+        definitions: definitions.length,
+        inMemoryHits: 0,
+        incompleteInMemoryHits: 0,
+        cacheHits: 0,
+        misses: definitions.length,
+        unkeyed: 0,
+        skippedUnsupportedLanguage: 0,
+        parseFailures: 0,
+        computed: definitions.length - 1,
+        incomplete: 1,
+        cacheWrites: definitions.length - 1,
+      })),
+    });
+
+    expect(prewarmHealthSemanticEvidence(fakeLargeDb(), { full: true }, runtime)).toMatchObject({
+      status: 'partial',
+      reason: 'incomplete-references',
+      definitions: 2,
+      referenceIncomplete: 1,
+      calleeRows: 1,
+    });
+    expect(runtime.materializeCallees).toHaveBeenCalledTimes(1);
+    expect(runtime.writeMarker).not.toHaveBeenCalled();
   });
 });
 
@@ -150,6 +362,21 @@ describe('frontend health phase pruning', () => {
     expect(skippedHealthPhaseResult('vue-composable-candidates')).toEqual({
       phase: 'vue-composable-candidates',
       vueComposableCandidates: { count: 0, loc: 0, files: [] },
+    });
+  });
+
+  it('synthesizes zero-pressure deferred summaries for timed-out default health phases', () => {
+    expect(deferredHealthPhaseResult('twin-drift', 30000, 'slow')).toMatchObject({
+      phase: 'twin-drift',
+      twinDrift: { count: 0, loc: 0, files: [] },
+    });
+    expect(deferredHealthPhaseResult('complexity-hotspots', 30000, 'slow')).toMatchObject({
+      phase: 'complexity-hotspots',
+      complexity: { top: [], extremeCount: 0 },
+    });
+    expect(deferredHealthPhaseResult('stale-abstractions', 30000, 'slow')).toMatchObject({
+      phase: 'stale-abstractions',
+      stale: { count: 0, loc: 0, files: [], unused: 0, singleUse: 0 },
     });
   });
 });

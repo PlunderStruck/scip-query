@@ -1,0 +1,7 @@
+session_dir=/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-query-rust-session-7a75eb9487c30349df6c
+server_path=/Users/aydansalois/Documents/GitHub/scip-query/dist/rust-semantic-session-server.js
+state_path=/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-query-rust-session-7a75eb9487c30349df6c/server.json
+state_before=absent
+term_sent=false
+stop_reason=no-scoped-state
+state_after=absent

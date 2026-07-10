@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -92,6 +92,10 @@ describe('Rust semantic cache gating', () => {
       const definitions = getAllDefinitions(db);
       expect(definitions).toHaveLength(2);
 
+      const profilePath = join(projectRoot, 'profile.jsonl');
+      process.env.SCIP_QUERY_PROFILE = '1';
+      process.env.SCIP_QUERY_PROFILE_OUT = profilePath;
+      process.env.SCIP_QUERY_PROFILE_COMMAND = 'semantic cache gate test';
       const semantic = semanticEvidenceProduct(db);
       const materialized = semantic.materializeReferences(definitions);
       const callerMap = semantic.callerMap([definitions[0]!]);
@@ -105,7 +109,18 @@ describe('Rust semantic cache gating', () => {
       expect(callerMap.get(definitions[0]!.symbolId)).toEqual(new Set(['src/consumer.rs']));
       expect(batchSizes).toEqual([2]);
       expect(referenceCalls).toBe(1);
+      const cacheScans = readFileSync(profilePath, 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line) as { name?: string; cacheReadFiles?: number; fullyInMemoryFiles?: number })
+        .filter((event) => event.name === 'semantic.references.cache-scan');
+      expect(cacheScans).toHaveLength(2);
+      expect(cacheScans[0]).toMatchObject({ cacheReadFiles: 1, fullyInMemoryFiles: 0 });
+      expect(cacheScans[1]).toMatchObject({ cacheReadFiles: 0, fullyInMemoryFiles: 1 });
     } finally {
+      delete process.env.SCIP_QUERY_PROFILE;
+      delete process.env.SCIP_QUERY_PROFILE_OUT;
+      delete process.env.SCIP_QUERY_PROFILE_COMMAND;
       db.close();
       rmSync(projectRoot, { recursive: true, force: true });
     }
@@ -181,6 +196,85 @@ describe('Rust semantic cache gating', () => {
       expect(referenceCalls).toBe(1);
       expect(fingerprint).not.toBeNull();
       expect(readCachedSemanticReferences(db, definition!.relativePath, definition!.symbol, fingerprint!)).toBeNull();
+    } finally {
+      db.close();
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('does not persist incomplete Rust semantic reference rows as empty cache hits', async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-rust-incomplete-reference-cache-'));
+    const dbPath = join(projectRoot, 'index.db');
+    writeFixtureFiles(projectRoot, {
+      'src/lib.rs': ['pub fn maybe_timeout(value: i32) -> i32 {', '    value + 1', '}'],
+    });
+    mkdirSync(projectRoot, { recursive: true });
+    writeFileSync(
+      join(projectRoot, 'meta.json'),
+      JSON.stringify({
+        version: 3,
+        status: 'complete',
+        fingerprint: 'rust-incomplete-reference-cache',
+        indexedLanguages: ['rust'],
+      }),
+    );
+    evidenceFixtureDb(dbPath)
+      .document(1, 'rust', 'src/lib.rs')
+      .symbol(1, 'rust-analyzer cargo fixture 0.1.0 src/lib.rs/maybe_timeout().', 'maybe_timeout', 12)
+      .definition(1, 1, 1, 0, 7, 2, 1)
+      .chunk(1, 1, 0, 2)
+      .mention(1, 1, 1)
+      .write();
+
+    let referenceCalls = 0;
+    const fakeRustProvider: SemanticProvider = {
+      language: 'rust',
+      availability: () => ({
+        available: true,
+        dependencyAvailable: true,
+        resolvedBinary: 'rust-analyzer',
+        reason: 'fixture Rust references available',
+      }),
+      importUsage: () => [],
+      referencesFor: () => {
+        referenceCalls += 1;
+        return [];
+      },
+      referencesForDefinitions: () => {
+        referenceCalls += 1;
+        return new Map();
+      },
+      calleesFor: () => [],
+      calleesForDefinitions: (definitions) => new Map(definitions.map((definition) => [definition.symbolId, []])),
+      signatureFor: () => null,
+    };
+    vi.doMock('../../../src/semantic/rust/provider.js', () => ({
+      createRustSemanticProvider: () => fakeRustProvider,
+    }));
+
+    const { getAllDefinitions } = await import('../../../src/symbols/definition-catalog.js');
+    const { semanticCallerMap, semanticEvidenceProduct } = await import('../../../src/semantic/shared-primitives.js');
+    const db = new ScipDatabase({
+      dbPath,
+      indexPath: join(projectRoot, 'index.scip'),
+      projectRoot,
+    });
+
+    try {
+      const [definition] = getAllDefinitions(db);
+      expect(definition).toBeDefined();
+
+      const semantic = semanticEvidenceProduct(db);
+      expect(semantic.materializeReferences([definition!])).toMatchObject({
+        definitions: 1,
+        cacheWrites: 0,
+        incomplete: 1,
+      });
+      expect(semantic.callerMap([definition!])).toEqual(new Map());
+      expect(referenceCalls).toBe(1);
+
+      expect(semanticCallerMap(db, [definition!])).toEqual(new Map());
+      expect(referenceCalls).toBe(2);
     } finally {
       db.close();
       rmSync(projectRoot, { recursive: true, force: true });

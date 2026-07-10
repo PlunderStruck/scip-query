@@ -10,7 +10,9 @@ import {
   projectEvidenceFingerprint,
   readCachedProjectEvidence,
   readCachedSemanticCallees,
+  readCachedSemanticCalleesForFile,
   readCachedSemanticReferences,
+  readCachedSemanticReferencesForFile,
   readCachedFileEvidence,
   readFindingOutcomeLedger,
   sha256Hex,
@@ -21,7 +23,7 @@ import {
   writeFindingOutcomeLedger,
   FINDING_OUTCOME_LEDGER_CAP_PER_CHECK,
 } from '../../src/storage/evidence-cache.js';
-import { getSourceFacts } from '../../src/source/source-facts.js';
+import { SOURCE_FACTS_PAYLOAD_VERSION, getSourceFacts } from '../../src/source/source-facts.js';
 import { getSourceLines, getSourceText } from '../../src/source/source-text.js';
 import { getReExports } from '../../src/language-parsers/index.js';
 import {
@@ -244,6 +246,7 @@ describe('evidence cache', () => {
 
     const evidence = new Database(join(tempDir, EVIDENCE_DB_FILENAME));
     const planted = JSON.stringify({
+      version: SOURCE_FACTS_PAYLOAD_VERSION,
       language: 'typescript',
       callables: [
         {
@@ -271,6 +274,47 @@ describe('evidence cache', () => {
     try {
       expect(getSourceFacts(db2, FILE)!.callables[0]!.name).toBe('plantedMarker');
       expect(readCachedFileEvidence(db2, 'source-facts', FILE, hash)).toBe(planted);
+    } finally {
+      db2.close();
+    }
+  });
+
+  it('rebuilds source facts when the persisted payload version is old', () => {
+    const db = openDb();
+    const hash = fileContentHash(db, FILE, getSourceText(db, FILE));
+    db.close();
+
+    const evidence = new Database(join(tempDir, EVIDENCE_DB_FILENAME));
+    const oldPayload = JSON.stringify({
+      language: 'typescript',
+      callables: [
+        {
+          name: 'oldMarker',
+          startLine: 0,
+          endLine: 3,
+          paramCount: 1,
+          params: [{ name: 'name', simple: true }],
+          paramsEndLine: 0,
+          isLiteralPassthrough: false,
+        },
+      ],
+      callSites: [],
+      typeContainerMap: [],
+      identifierLineMap: [],
+      rustAttrReferencedNames: [],
+      crossLanguageDispatchNames: [],
+    });
+    evidence
+      .prepare("UPDATE file_evidence SET payload = ? WHERE kind = 'source-facts' AND relative_path = ?")
+      .run(oldPayload, FILE);
+    evidence.close();
+
+    const db2 = openDb();
+    try {
+      const facts = getSourceFacts(db2, FILE);
+      expect(facts!.callables.map((callable) => callable.name)).toContain('greet');
+      expect(facts!.callables.map((callable) => callable.name)).not.toContain('oldMarker');
+      expect(readCachedFileEvidence(db2, 'source-facts', FILE, hash)).not.toBe(oldPayload);
     } finally {
       db2.close();
     }
@@ -401,6 +445,14 @@ describe('evidence cache', () => {
       ]);
       expect(readCachedSemanticCallees(db, FILE, 'sym#greet', 'hash-a', 'digest-a')).toBe(payload);
       expect(readCachedSemanticCallees(db, FILE, 'sym#other', 'hash-a', 'digest-a')).toBe(otherPayload);
+      expect(readCachedSemanticCalleesForFile(db, FILE, 'hash-a', 'digest-a')).toEqual(
+        new Map([
+          ['sym#greet', payload],
+          ['sym#other', otherPayload],
+        ]),
+      );
+      expect(readCachedSemanticCalleesForFile(db, FILE, 'hash-b', 'digest-a')).toEqual(new Map());
+      expect(readCachedSemanticCalleesForFile(db, FILE, 'hash-a', 'digest-b')).toEqual(new Map());
       expect(readCachedSemanticCallees(db, FILE, 'sym#greet', 'hash-b', 'digest-a')).toBeNull();
       expect(readCachedSemanticCallees(db, FILE, 'sym#greet', 'hash-a', 'digest-b')).toBeNull();
 
@@ -411,6 +463,10 @@ describe('evidence cache', () => {
       expect(readCachedSemanticCallees(db, FILE, 'sym#greet', 'hash-a', 'digest-a')).toBeNull();
       expect(readCachedSemanticCallees(db, FILE, 'sym#other', 'hash-a', 'digest-a')).toBeNull();
       expect(readCachedSemanticCallees(db, FILE, 'sym#other', 'hash-b', 'digest-a')).toBe(payload);
+      expect(readCachedSemanticCalleesForFile(db, FILE, 'hash-a', 'digest-a')).toEqual(new Map());
+      expect(readCachedSemanticCalleesForFile(db, FILE, 'hash-b', 'digest-a')).toEqual(
+        new Map([['sym#other', payload]]),
+      );
     } finally {
       db.close();
     }
@@ -448,7 +504,11 @@ describe('evidence cache', () => {
         { relativePath: FILE, symbol: 'sym#greet', projectFingerprint: projectFingerprint!, payload },
       ]);
       expect(readCachedSemanticReferences(db, FILE, 'sym#greet', projectFingerprint!)).toBe(payload);
+      expect(readCachedSemanticReferencesForFile(db, FILE, projectFingerprint!)).toEqual(
+        new Map([['sym#greet', payload]]),
+      );
       expect(readCachedSemanticReferences(db, FILE, 'sym#greet', 'different-project')).toBeNull();
+      expect(readCachedSemanticReferencesForFile(db, FILE, 'different-project')).toEqual(new Map());
     } finally {
       db.close();
     }
@@ -478,6 +538,10 @@ describe('evidence cache', () => {
       ]);
       expect(readCachedSemanticReferences(dbAfterChange, FILE, 'sym#greet', projectFingerprint!)).toBeNull();
       expect(readCachedSemanticReferences(dbAfterChange, FILE, 'sym#greet', nextProjectFingerprint!)).toBe(nextPayload);
+      expect(readCachedSemanticReferencesForFile(dbAfterChange, FILE, projectFingerprint!)).toEqual(new Map());
+      expect(readCachedSemanticReferencesForFile(dbAfterChange, FILE, nextProjectFingerprint!)).toEqual(
+        new Map([['sym#greet', nextPayload]]),
+      );
     } finally {
       dbAfterChange.close();
     }

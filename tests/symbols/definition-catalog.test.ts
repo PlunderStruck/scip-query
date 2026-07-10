@@ -48,6 +48,60 @@ describe('definition catalog line ownership', () => {
   });
 });
 
+describe('definition catalog Rust impl range correction', () => {
+  it('matches repeated impl method names by owner type instead of fallback chunk start', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-rust-impl-range-'));
+    const projectRoot = join(tempDir, 'project');
+    const dbPath = join(tempDir, 'index.db');
+    writeFixtureFiles(projectRoot, {
+      'src/lib.rs': [
+        'struct Alpha;',
+        'struct Beta;',
+        '',
+        'impl Default for Alpha {',
+        '    fn default() -> Self {',
+        '        Alpha',
+        '    }',
+        '}',
+        '',
+        'impl Default for Beta {',
+        '    fn default() -> Self {',
+        '        Beta',
+        '    }',
+        '}',
+      ],
+    });
+    evidenceFixtureDb(dbPath)
+      .document(1, 'rust', 'src/lib.rs')
+      .symbol(1, 'rust-analyzer cargo fixture 0.1.0 lib/impl#[Alpha][Default]default().', 'default', 80)
+      .symbol(2, 'rust-analyzer cargo fixture 0.1.0 lib/impl#[Beta][Default]default().', 'default', 80)
+      .chunk(1, 1, 0, 13)
+      .mention(1, 1, 1)
+      .mention(1, 2, 1)
+      .write();
+
+    const db = new ScipDatabase({
+      projectRoot,
+      dbPath,
+      indexPath: join(tempDir, 'index.scip'),
+    });
+    try {
+      const definitions = getDefinitionsForFile(db, 'src/lib.rs');
+      expect(definitions.find((definition) => definition.symbol.includes('impl#[Alpha]'))).toMatchObject({
+        startLine: 4,
+        endLine: 6,
+      });
+      expect(definitions.find((definition) => definition.symbol.includes('impl#[Beta]'))).toMatchObject({
+        startLine: 10,
+        endLine: 12,
+      });
+    } finally {
+      db.close();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('definition catalog evidence cache', () => {
   let tempDir: string;
   let projectRoot: string;

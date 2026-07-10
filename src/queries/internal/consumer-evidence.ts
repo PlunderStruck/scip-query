@@ -1,3 +1,7 @@
+import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { ProjectIndex } from '../../core/project-index.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { profileSpan } from '../../instrumentation/profile.js';
@@ -54,6 +58,14 @@ interface SerializedFileLeafUsage {
   usedLeaves: string[];
 }
 
+interface ConsumerClassificationStats {
+  definitions: number;
+  consumerFiles: number;
+  nativeAttempted: boolean;
+  nativeUsed: boolean;
+  nativeReason: string;
+}
+
 const FILE_USAGE_CACHE = createPerDbCache<string, FileLeafUsage>('definition-consumer-file-usage', {
   clearGroups: ['whole-project', 'source-file'],
 });
@@ -102,22 +114,46 @@ function buildDefinitionConsumerEvidence(
   return profileSpan(
     'consumer-evidence.product',
     () => {
-      const provenance = consumerProvenanceMap(db, index, definitions, opts);
+      const provenance = profileSpan(
+        'consumer-evidence.provenance',
+        () => consumerProvenanceMap(db, index, definitions, opts),
+        () => ({
+          definitions: definitions.length,
+          semantic: opts.semantic,
+          sourceFallback: opts.sourceFallback !== false,
+        }),
+      );
       const result: DefinitionConsumerEvidenceMap = new Map();
       counters = { ...counters, ...provenance.counters };
-      for (const definition of definitions) {
-        const fileSources =
-          provenance.sources.get(definition.symbolId) ?? new Map<string, Set<DefinitionConsumerSource>>();
-        const classified = classifyDefinitionConsumers(db, definition, [...fileSources.keys()], fileSources);
-        counters.realFiles += classified.partition.realConsumers.length;
-        counters.reexportOnlyFiles += classified.partition.barrelConsumers;
-        counters.importOnlyFiles += classified.partition.importOnlyConsumers;
-        result.set(definition.symbolId, {
-          definition,
-          files: classified.files,
-          ...classified.partition,
-        });
-      }
+      const classificationStats = emptyConsumerClassificationStats(definitions, provenance.sources);
+      profileSpan(
+        'consumer-evidence.classify',
+        () => {
+          const classifiedById = classifyDefinitionConsumersBatch(
+            db,
+            definitions,
+            provenance.sources,
+            classificationStats,
+          );
+          for (const definition of definitions) {
+            const classified = classifiedById.get(definition.symbolId) ?? emptyDefinitionConsumerClassification();
+            counters.realFiles += classified.partition.realConsumers.length;
+            counters.reexportOnlyFiles += classified.partition.barrelConsumers;
+            counters.importOnlyFiles += classified.partition.importOnlyConsumers;
+            result.set(definition.symbolId, {
+              definition,
+              files: classified.files,
+              ...classified.partition,
+            });
+          }
+        },
+        () => ({
+          ...classificationStats,
+          realFiles: counters.realFiles,
+          reexportOnlyFiles: counters.reexportOnlyFiles,
+          importOnlyFiles: counters.importOnlyFiles,
+        }),
+      );
       return result;
     },
     () => ({ ...counters }),
@@ -173,6 +209,19 @@ function consumerProvenanceMap(
   return { sources, counters };
 }
 
+function emptyConsumerClassificationStats(
+  definitions: readonly IndexedDefinition[],
+  sources: ReadonlyMap<number, ReadonlyMap<string, ReadonlySet<DefinitionConsumerSource>>>,
+): ConsumerClassificationStats {
+  return {
+    definitions: definitions.length,
+    consumerFiles: [...sources.values()].reduce((sum, files) => sum + files.size, 0),
+    nativeAttempted: false,
+    nativeUsed: false,
+    nativeReason: 'not-attempted',
+  };
+}
+
 function recordConsumerSourceMap(
   target: Map<number, Map<string, Set<DefinitionConsumerSource>>>,
   counters: ConsumerEvidenceCounters,
@@ -196,6 +245,30 @@ function recordConsumerSourceMap(
   if (source === 'indexed') counters.indexedFiles += files;
   else if (source === 'semantic') counters.semanticFiles += files;
   else counters.fallbackFiles += files;
+}
+
+function classifyDefinitionConsumersBatch(
+  db: ScipDatabase,
+  definitions: readonly IndexedDefinition[],
+  sources: ReadonlyMap<number, ReadonlyMap<string, ReadonlySet<DefinitionConsumerSource>>>,
+  stats: ConsumerClassificationStats,
+): Map<number, { partition: DefinitionConsumerPartition; files: DefinitionConsumerFileEvidence[] }> {
+  const native = classifyDefinitionConsumersNative(db, definitions, sources, stats);
+  if (native) return native;
+  return classifyDefinitionConsumersFallback(db, definitions, sources);
+}
+
+function classifyDefinitionConsumersFallback(
+  db: ScipDatabase,
+  definitions: readonly IndexedDefinition[],
+  sources: ReadonlyMap<number, ReadonlyMap<string, ReadonlySet<DefinitionConsumerSource>>>,
+): Map<number, { partition: DefinitionConsumerPartition; files: DefinitionConsumerFileEvidence[] }> {
+  const result = new Map<number, { partition: DefinitionConsumerPartition; files: DefinitionConsumerFileEvidence[] }>();
+  for (const definition of definitions) {
+    const fileSources = sources.get(definition.symbolId) ?? new Map<string, Set<DefinitionConsumerSource>>();
+    result.set(definition.symbolId, classifyDefinitionConsumers(db, definition, [...fileSources.keys()], fileSources));
+  }
+  return result;
 }
 
 function classifyDefinitionConsumers(
@@ -232,6 +305,16 @@ function classifyDefinitionConsumers(
   return {
     partition: { realConsumers, barrelConsumers, importOnlyConsumers },
     files,
+  };
+}
+
+function emptyDefinitionConsumerClassification(): {
+  partition: DefinitionConsumerPartition;
+  files: DefinitionConsumerFileEvidence[];
+} {
+  return {
+    partition: { realConsumers: [], barrelConsumers: 0, importOnlyConsumers: 0 },
+    files: [],
   };
 }
 
@@ -327,8 +410,15 @@ function isReExportOnlyConsumer(
   if (lines.length === 0) return false;
 
   const reExports = evidence.reexports ?? [];
-  if (reExports.length === 0) return false;
+  return isReExportOnlyLeaf(lines, reExports, leaf);
+}
 
+function isReExportOnlyLeaf(
+  lines: readonly string[],
+  reExports: readonly { startLine: number; endLine: number }[],
+  leaf: string,
+): boolean {
+  if (lines.length === 0 || reExports.length === 0) return false;
   const escaped = leaf.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const wordRegex = new RegExp(`\\b${escaped}\\b`);
 
@@ -341,4 +431,235 @@ function isReExportOnlyConsumer(
   }
 
   return occurrenceCount > 0;
+}
+
+type NativeConsumerClassifySources = DefinitionConsumerSource[];
+
+interface NativeConsumerClassifyRequest {
+  definitions: NativeConsumerClassifyDefinition[];
+  file_usages: Record<string, { imported_leaves: string[]; used_leaves: string[] }>;
+  reexport_only_leaves: Record<string, string[]>;
+}
+
+interface NativeConsumerClassifyDefinition {
+  symbol_id: number;
+  leaf: string;
+  consumer_files: Array<{ file: string; sources: NativeConsumerClassifySources }>;
+}
+
+interface NativeConsumerClassifyResponse {
+  entries?: unknown;
+}
+
+interface NativeConsumerClassifyEntry {
+  symbol_id: number;
+  real_consumers: string[];
+  barrel_consumers: number;
+  import_only_consumers: number;
+  files: Array<{ file: string; sources: DefinitionConsumerSource[]; classification: DefinitionConsumerClassification }>;
+}
+
+const NATIVE_CONSUMER_CLASSIFY_ENV = 'SCIP_QUERY_NATIVE_CONSUMER_CLASSIFY';
+const NATIVE_KERNEL_BIN_ENV = 'SCIP_QUERY_NATIVE_KERNELS_BIN';
+const NATIVE_CONSUMER_CLASSIFY_MIN_FILES_ENV = 'SCIP_QUERY_NATIVE_CONSUMER_CLASSIFY_MIN_FILES';
+const DEFAULT_NATIVE_CONSUMER_CLASSIFY_MIN_FILES = 1_000;
+const NATIVE_CONSUMER_CLASSIFY_TIMEOUT_MS = 5_000;
+const NATIVE_CONSUMER_CLASSIFY_MAX_BUFFER = 64 * 1024 * 1024;
+let cachedNativeKernelBinary: string | null | undefined;
+
+function classifyDefinitionConsumersNative(
+  db: ScipDatabase,
+  definitions: readonly IndexedDefinition[],
+  sources: ReadonlyMap<number, ReadonlyMap<string, ReadonlySet<DefinitionConsumerSource>>>,
+  stats: ConsumerClassificationStats,
+): Map<number, { partition: DefinitionConsumerPartition; files: DefinitionConsumerFileEvidence[] }> | null {
+  const setting = process.env[NATIVE_CONSUMER_CLASSIFY_ENV]?.toLowerCase();
+  if (setting !== '1' && setting !== 'true') {
+    stats.nativeReason = setting === '0' || setting === 'false' ? 'disabled' : 'opt-in-required';
+    return null;
+  }
+  if (stats.consumerFiles < nativeConsumerClassifyMinFiles()) {
+    stats.nativeReason = 'below-threshold';
+    return null;
+  }
+  const binary = nativeKernelBinary();
+  if (!binary) {
+    stats.nativeReason = 'binary-missing';
+    return null;
+  }
+  stats.nativeAttempted = true;
+  const payload = nativeConsumerClassifyPayload(db, definitions, sources);
+  const result = spawnSync(binary, ['consumer-classify'], {
+    input: JSON.stringify(payload),
+    encoding: 'utf8',
+    timeout: NATIVE_CONSUMER_CLASSIFY_TIMEOUT_MS,
+    maxBuffer: NATIVE_CONSUMER_CLASSIFY_MAX_BUFFER,
+  });
+  if (result.status !== 0 || result.error) {
+    stats.nativeReason = result.error ? `spawn-error:${result.error.message}` : `exit-${result.status ?? 'null'}`;
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(result.stdout) as NativeConsumerClassifyResponse;
+    const converted = nativeConsumerClassifyResult(parsed, definitions);
+    if (!converted) {
+      stats.nativeReason = 'invalid-response';
+      return null;
+    }
+    stats.nativeUsed = true;
+    stats.nativeReason = 'used';
+    return converted;
+  } catch {
+    stats.nativeReason = 'invalid-json';
+    return null;
+  }
+}
+
+function nativeConsumerClassifyPayload(
+  db: ScipDatabase,
+  definitions: readonly IndexedDefinition[],
+  sources: ReadonlyMap<number, ReadonlyMap<string, ReadonlySet<DefinitionConsumerSource>>>,
+): NativeConsumerClassifyRequest {
+  const leavesByFile = new Map<string, Set<string>>();
+  const nativeDefinitions: NativeConsumerClassifyDefinition[] = [];
+  for (const definition of definitions) {
+    const leaf = leafName(definition.symbol);
+    const fileSources = sources.get(definition.symbolId) ?? new Map<string, Set<DefinitionConsumerSource>>();
+    const consumer_files = [...fileSources.entries()].map(([file, sourceSet]) => {
+      const leaves = leavesByFile.get(file) ?? new Set<string>();
+      if (leaf) leaves.add(leaf);
+      leavesByFile.set(file, leaves);
+      return { file, sources: [...sourceSet] };
+    });
+    nativeDefinitions.push({ symbol_id: definition.symbolId, leaf, consumer_files });
+  }
+
+  const file_usages: NativeConsumerClassifyRequest['file_usages'] = {};
+  const reexport_only_leaves: NativeConsumerClassifyRequest['reexport_only_leaves'] = {};
+  for (const [file, leaves] of leavesByFile) {
+    const lang = detectAstLanguage(file);
+    if (lang) {
+      const usage = FILE_USAGE_CACHE.get(db, file, () => computeFileLeafUsage(db, file, lang));
+      file_usages[file] = {
+        imported_leaves: [...usage.importedLeaves],
+        used_leaves: [...usage.usedLeaves],
+      };
+    }
+    const reexportLeaves = reExportOnlyLeavesForFile(db, file, leaves);
+    if (reexportLeaves.length > 0) reexport_only_leaves[file] = reexportLeaves;
+  }
+
+  return { definitions: nativeDefinitions, file_usages, reexport_only_leaves };
+}
+
+function reExportOnlyLeavesForFile(db: ScipDatabase, file: string, leaves: ReadonlySet<string>): string[] {
+  if (leaves.size === 0) return [];
+  const evidence = sourceEvidence(db).forFile(file, { lines: true, reexports: true });
+  const lines = evidence.lines ?? [];
+  const reExports = evidence.reexports ?? [];
+  if (lines.length === 0 || reExports.length === 0) return [];
+  return [...leaves].filter((leaf) => isReExportOnlyLeaf(lines, reExports, leaf));
+}
+
+function nativeConsumerClassifyResult(
+  response: NativeConsumerClassifyResponse,
+  definitions: readonly IndexedDefinition[],
+): Map<number, { partition: DefinitionConsumerPartition; files: DefinitionConsumerFileEvidence[] }> | null {
+  if (!Array.isArray(response.entries)) return null;
+  if (response.entries.length !== definitions.length) return null;
+  const ids = new Set(definitions.map((definition) => definition.symbolId));
+  const result = new Map<number, { partition: DefinitionConsumerPartition; files: DefinitionConsumerFileEvidence[] }>();
+  for (const rawEntry of response.entries) {
+    const entry = nativeConsumerClassifyEntry(rawEntry);
+    if (!entry || !ids.has(entry.symbol_id)) return null;
+    result.set(entry.symbol_id, {
+      partition: {
+        realConsumers: entry.real_consumers,
+        barrelConsumers: entry.barrel_consumers,
+        importOnlyConsumers: entry.import_only_consumers,
+      },
+      files: entry.files,
+    });
+  }
+  for (const id of ids) {
+    if (!result.has(id)) return null;
+  }
+  return result;
+}
+
+function nativeConsumerClassifyEntry(value: unknown): NativeConsumerClassifyEntry | null {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as Partial<NativeConsumerClassifyEntry>;
+  if (
+    typeof candidate.symbol_id !== 'number' ||
+    !Array.isArray(candidate.real_consumers) ||
+    typeof candidate.barrel_consumers !== 'number' ||
+    typeof candidate.import_only_consumers !== 'number' ||
+    !Array.isArray(candidate.files)
+  ) {
+    return null;
+  }
+  if (!candidate.real_consumers.every((file): file is string => typeof file === 'string')) return null;
+  const files: NativeConsumerClassifyEntry['files'] = [];
+  for (const file of candidate.files) {
+    if (!file || typeof file !== 'object') return null;
+    const item = file as Partial<NativeConsumerClassifyEntry['files'][number]>;
+    if (
+      typeof item.file !== 'string' ||
+      !Array.isArray(item.sources) ||
+      !item.sources.every(isDefinitionConsumerSource) ||
+      !isDefinitionConsumerClassification(item.classification)
+    ) {
+      return null;
+    }
+    files.push({
+      file: item.file,
+      sources: item.sources,
+      classification: item.classification,
+    });
+  }
+  return {
+    symbol_id: candidate.symbol_id,
+    real_consumers: candidate.real_consumers,
+    barrel_consumers: candidate.barrel_consumers,
+    import_only_consumers: candidate.import_only_consumers,
+    files,
+  };
+}
+
+function isDefinitionConsumerSource(value: unknown): value is DefinitionConsumerSource {
+  return value === 'indexed' || value === 'semantic' || value === 'source-fallback';
+}
+
+function isDefinitionConsumerClassification(value: unknown): value is DefinitionConsumerClassification {
+  return value === 'real' || value === 'reexport-only' || value === 'import-only';
+}
+
+function nativeConsumerClassifyMinFiles(): number {
+  const raw = process.env[NATIVE_CONSUMER_CLASSIFY_MIN_FILES_ENV];
+  if (!raw) return DEFAULT_NATIVE_CONSUMER_CLASSIFY_MIN_FILES;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_NATIVE_CONSUMER_CLASSIFY_MIN_FILES;
+}
+
+function nativeKernelBinary(): string | null {
+  if (cachedNativeKernelBinary !== undefined) return cachedNativeKernelBinary;
+  const envPath = process.env[NATIVE_KERNEL_BIN_ENV];
+  const binaryName = process.platform === 'win32' ? 'scip-query-kernels.exe' : 'scip-query-kernels';
+  const candidates = [
+    ...(envPath ? [envPath] : []),
+    ...candidatePackageRoots().map((root) => join(root, 'target', 'release', binaryName)),
+  ];
+  cachedNativeKernelBinary = candidates.find((path) => existsSync(path)) ?? null;
+  return cachedNativeKernelBinary;
+}
+
+function candidatePackageRoots(): string[] {
+  const roots = new Set<string>();
+  let current = dirname(fileURLToPath(import.meta.url));
+  for (let depth = 0; depth < 5; depth++) {
+    roots.add(current);
+    current = dirname(current);
+  }
+  return [...roots];
 }

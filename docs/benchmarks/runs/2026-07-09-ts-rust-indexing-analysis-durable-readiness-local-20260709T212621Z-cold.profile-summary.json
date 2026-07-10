@@ -1,0 +1,90 @@
+{
+  "events": 8304,
+  "durable": [
+    {
+      "timestamp": "2026-07-09T21:29:53.329Z",
+      "pid": 1511,
+      "cacheState": "evidence-cold/session-cold",
+      "type": "span",
+      "name": "rust.semantic.durable-session.request",
+      "durationMs": 179031,
+      "ok": false,
+      "kind": "semantic",
+      "session": "worker-fallback",
+      "reason": "readiness"
+    }
+  ],
+  "readiness": [
+    {
+      "timestamp": "2026-07-09T21:26:57.056Z",
+      "pid": 2174,
+      "cacheState": "evidence-cold/session-cold",
+      "type": "span",
+      "name": "rust.semantic.worker.readiness",
+      "durationMs": 2381,
+      "ok": true,
+      "phase": "initialize"
+    },
+    {
+      "timestamp": "2026-07-09T21:29:53.323Z",
+      "pid": 2174,
+      "cacheState": "evidence-cold/session-cold",
+      "type": "span",
+      "name": "rust.semantic.worker.readiness",
+      "durationMs": 176268,
+      "ok": false,
+      "error": "rust-analyzer readiness timed out after 176267ms",
+      "phase": "didOpen",
+      "openedDocuments": 2
+    }
+  ],
+  "initialization": [
+    {
+      "timestamp": "2026-07-09T21:26:54.674Z",
+      "pid": 2174,
+      "cacheState": "evidence-cold/session-cold",
+      "type": "span",
+      "name": "rust.semantic.worker.initialize",
+      "durationMs": 255,
+      "ok": true,
+      "linkedProjects": 1,
+      "relativePaths": 76
+    },
+    {
+      "timestamp": "2026-07-09T21:29:53.391Z",
+      "pid": 1511,
+      "cacheState": "evidence-cold/session-cold",
+      "type": "span",
+      "name": "rust.semantic.worker.initialize",
+      "durationMs": 35,
+      "ok": true,
+      "linkedProjects": 1,
+      "relativePaths": 76
+    }
+  ],
+  "openDocuments": [
+    {
+      "timestamp": "2026-07-09T21:29:53.323Z",
+      "pid": 2174,
+      "cacheState": "evidence-cold/session-cold",
+      "type": "span",
+      "name": "rust.semantic.worker.open-definition-documents",
+      "durationMs": 176270,
+      "ok": false,
+      "error": "rust-analyzer readiness timed out after 176267ms",
+      "definitions": 76,
+      "openedDocuments": 0
+    },
+    {
+      "timestamp": "2026-07-09T21:29:55.132Z",
+      "pid": 1511,
+      "cacheState": "evidence-cold/session-cold",
+      "type": "span",
+      "name": "rust.semantic.worker.open-definition-documents",
+      "durationMs": 1740,
+      "ok": true,
+      "definitions": 76,
+      "openedDocuments": 2
+    }
+  ]
+}

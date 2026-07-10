@@ -97,7 +97,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     description: 'Composite codebase health report with prioritized action list',
     options: [
       option('-s, --scope <path>', 'Limit to files matching path'),
-      option('--full', 'Compatibility flag; health already runs unbounded candidate analyses by default'),
+      option('--full', 'Run unbounded candidate analyses on large indexes'),
       option('--json', 'Output as JSON for programmatic consumption'),
       option('--baseline', 'Compare findings against the committed baseline; exit 1 on new findings'),
       option('--write-baseline', 'Snapshot current finding identities to the baseline file'),
@@ -123,6 +123,22 @@ export const commandDescriptors: CommandDescriptor[] = [
     renderShape: 'custom',
     docs: doc('Maintenance', ['scip-query bench', 'scip-query bench --json --cold-index']),
     handler: handlers.handleBench,
+  },
+  {
+    id: 'typescript-semantic-compare',
+    command: 'typescript-semantic-compare',
+    description: 'Compare tsserver reference answers against the ts-morph baseline',
+    hidden: true,
+    options: [
+      option('-s, --scope <path>', 'Limit compared definitions to files matching path'),
+      option('--limit <n>', 'Maximum definitions to compare unless --full is set', parsePositiveInteger),
+      option('--max-mismatches <n>', 'Maximum mismatch details to include in output', parseIntegerLoose),
+      option('--full', 'Compare every indexed TypeScript-like definition'),
+      option('--json', 'Output as JSON for programmatic consumption'),
+    ],
+    evidence: 'mixed',
+    renderShape: 'custom',
+    handler: handlers.handleTypeScriptSemanticCompare,
   },
   ...queryCommandsBeforeMaintenance,
   {

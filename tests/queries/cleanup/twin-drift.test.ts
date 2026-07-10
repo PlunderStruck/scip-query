@@ -2,8 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { SymbolInformation_Kind } from '@c4312/scip';
 import { groupTwins, twinDrift, type TwinDriftRecord } from '../../../src/queries/cleanup/twin-drift.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
+import type { ScipQueryConfig } from '../../../src/domain/types.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../../fixtures/evidence-fixture.js';
 
 function record(
@@ -267,6 +269,45 @@ describe('twinDrift (db-backed)', () => {
     const groups = twinDrift(db);
 
     expect(groups.every((group) => group.members.every((member) => member.file !== 'src/c.ts'))).toBe(true);
+  });
+
+  it('does not treat rust static variables as callable twins', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-query-twin-drift-rust-'));
+    try {
+      writeFixtureFiles(root, {
+        'src/lib.rs': ['static escapeRegex: i32 = 1;'],
+        'src/work.ts': ['export function escapeRegex(value: string) {', '  return value;', '}'],
+      });
+      const dbPath = join(root, 'index.db');
+      evidenceFixtureDb(dbPath)
+        .document(1, 'rust', 'src/lib.rs')
+        .document(2, 'typescript', 'src/work.ts')
+        .symbol(
+          1,
+          'rust-analyzer cargo fixture 0.1.0 escapeRegex.',
+          'escapeRegex',
+          SymbolInformation_Kind.StaticVariable,
+        )
+        .symbol(
+          2,
+          'scip-typescript npm fixture 1.0.0 src/`work.ts`/escapeRegex().',
+          'escapeRegex',
+          SymbolInformation_Kind.Function,
+        )
+        .definition(1, 1, 1, 0, 0, 0, 27)
+        .definition(2, 2, 2, 0, 0, 2, 1)
+        .write();
+
+      const config: ScipQueryConfig = { projectRoot: root, dbPath, indexPath: join(root, 'index.scip') };
+      const rustDb = new ScipDatabase(config);
+      try {
+        expect(twinDrift(rustDb, { includeHomonyms: true })).toHaveLength(0);
+      } finally {
+        rustDb.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 

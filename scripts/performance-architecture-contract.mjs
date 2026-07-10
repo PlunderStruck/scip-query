@@ -21,8 +21,9 @@ export function main(argv, deps = defaultDeps()) {
   const repoPath = resolve(args.repo);
   const cliPath = resolve(args.cli ?? process.env.SCIP_QUERY_CLI ?? join(REPO_ROOT, 'dist/cli.js'));
   const runHistoryPath = resolve(args.out ?? DEFAULT_RUN_HISTORY);
-  const profilePath =
-    args.profileOut ?? join(dirname(runHistoryPath), `2026-07-02-performance-architecture.${Date.now()}.profile.jsonl`);
+  const profilePath = resolve(
+    args.profileOut ?? join(dirname(runHistoryPath), `2026-07-02-performance-architecture.${Date.now()}.profile.jsonl`),
+  );
 
   deps.mkdirSync(dirname(runHistoryPath), { recursive: true });
   deps.mkdirSync(dirname(profilePath), { recursive: true });
@@ -46,8 +47,14 @@ export function main(argv, deps = defaultDeps()) {
   const metaPath = join(cacheDir, 'meta.json');
   const beforeIndexBytes = fileSize(dbPath);
   const beforeEvidenceBytes = fileSize(evidencePath);
-  if (!args.noClear && args.cacheState === 'cold-index') clearIndex(deps, dbPath, metaPath);
-  if (!args.noClear && args.cacheState === 'evidence-cold') clearEvidence(deps, evidencePath);
+  if (!args.noClear && args.cacheState === 'cold-index') {
+    clearIndex(deps, dbPath, metaPath);
+    clearHealthReportCache(deps, cacheDir);
+  }
+  if (!args.noClear && args.cacheState === 'evidence-cold') {
+    clearEvidence(deps, evidencePath);
+    clearHealthReportCache(deps, cacheDir);
+  }
 
   const command = splitCommand(args.command);
   const runId = new Date().toISOString();
@@ -393,6 +400,11 @@ function clearIndex(deps, dbPath, metaPath) {
   for (const path of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`, metaPath]) {
     if (deps.existsSync(path)) deps.rmSync(path, { force: true });
   }
+}
+
+function clearHealthReportCache(deps, cacheDir) {
+  const healthReportPath = join(cacheDir, 'health-report-cache.json');
+  if (deps.existsSync(healthReportPath)) deps.rmSync(healthReportPath, { force: true });
 }
 
 function splitCommand(value) {

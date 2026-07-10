@@ -1,11 +1,12 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { join, resolve } from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildRetroGatePlan,
   buildRunRecord,
   collectEvidenceRows,
+  main,
   parseArgs,
 } from '../../scripts/performance-architecture-contract.mjs';
 
@@ -141,5 +142,78 @@ describe('performance architecture contract script', () => {
       semantic_references: { total: 0 },
       finding_outcome_ledger: { total: 0 },
     });
+  });
+
+  it('resolves explicit profile output before spawning target repo commands', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-query-plan6-contract-'));
+    const repoPath = join(tempDir, 'target-repo');
+    const runHistoryPath = join(tempDir, 'runs.jsonl');
+    const profileOut = 'relative-profiles/run.profile.jsonl';
+    const calls: Array<{ command: string; args: string[]; env?: NodeJS.ProcessEnv }> = [];
+    const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    try {
+      main(['--repo', repoPath, '--command', 'health --json', '--out', runHistoryPath, '--profile-out', profileOut], {
+        appendFileSync: () => undefined,
+        existsSync: () => false,
+        mkdirSync: () => undefined,
+        mkdtempSync,
+        rmSync,
+        spawnSync: (command: string, args: string[], options?: { env?: NodeJS.ProcessEnv }) => {
+          calls.push({ command, args, env: options?.env });
+          if (command === 'git') return { status: 0, stdout: '', stderr: '', signal: null };
+          if (args.includes('status')) {
+            return {
+              status: 0,
+              stdout: Buffer.from(JSON.stringify({ result: { dbPath: join(tempDir!, 'cache', 'index.db') } })),
+              stderr: Buffer.alloc(0),
+              signal: null,
+            };
+          }
+          return { status: 0, stdout: Buffer.from('{}\n'), stderr: Buffer.alloc(0), signal: null };
+        },
+      });
+    } finally {
+      stdoutWrite.mockRestore();
+    }
+
+    const profiledCall = calls.find((call) => call.args.includes('health'));
+    expect(profiledCall?.env?.SCIP_QUERY_PROFILE_OUT).toBe(resolve(profileOut));
+  });
+
+  it('clears health report cache for evidence-cold measurements', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-query-plan6-contract-'));
+    const cacheDir = join(tempDir, 'cache');
+    const healthReportPath = join(cacheDir, 'health-report-cache.json');
+    const removedPaths: string[] = [];
+    const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    try {
+      main(['--repo', join(tempDir, 'target-repo'), '--command', 'health --json'], {
+        appendFileSync: () => undefined,
+        existsSync: (path: string) => path === healthReportPath,
+        mkdirSync: () => undefined,
+        mkdtempSync,
+        rmSync: (path: string) => {
+          removedPaths.push(path);
+        },
+        spawnSync: (command: string, args: string[]) => {
+          if (command === 'git') return { status: 0, stdout: '', stderr: '', signal: null };
+          if (args.includes('status')) {
+            return {
+              status: 0,
+              stdout: Buffer.from(JSON.stringify({ result: { dbPath: join(cacheDir, 'index.db') } })),
+              stderr: Buffer.alloc(0),
+              signal: null,
+            };
+          }
+          return { status: 0, stdout: Buffer.from('{}\n'), stderr: Buffer.alloc(0), signal: null };
+        },
+      });
+    } finally {
+      stdoutWrite.mockRestore();
+    }
+
+    expect(removedPaths).toContain(healthReportPath);
   });
 });

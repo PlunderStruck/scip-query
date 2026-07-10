@@ -74,6 +74,59 @@ describe('getProjectCapabilities', () => {
     expect(rust?.semantic.reason).toContain('registered');
     expect(rust?.semantic.reason).toContain('not implemented yet');
     expect(rust?.cleanupVerification.status).toBe('available');
+
+    const rustSemantic = report.capabilities.find((capability) => capability.id === 'semantic-rust');
+    expect(rustSemantic?.label).toBe('Rust semantic provider');
+    expect(rustSemantic?.status).toBe('partial');
+    expect(rustSemantic?.reason).toContain('registered');
+  });
+
+  it('reports TypeScript and Rust semantic providers in the top-level capability summary', () => {
+    const readiness: ProjectReadiness = {
+      languages: ['rust', 'typescript'],
+      indexers: [
+        {
+          language: 'rust',
+          binaryLabel: 'rust-analyzer',
+          installed: true,
+          runnable: true,
+          resolvedBinary: 'rust-analyzer',
+        },
+        {
+          language: 'typescript',
+          binaryLabel: 'scip-typescript',
+          installed: true,
+          runnable: true,
+        },
+      ],
+      semantics: [
+        {
+          language: 'rust',
+          available: true,
+          dependencyAvailable: true,
+          resolvedBinary: 'rust-analyzer',
+        },
+        {
+          language: 'typescript',
+          available: true,
+          dependencyAvailable: true,
+          tsconfigPath: 'tsconfig.json',
+        },
+      ],
+      checkers: [
+        { label: 'cargo check', coversExtensions: ['.rs'] },
+        { label: 'tsc --noEmit', coversExtensions: ['.ts', '.tsx', '.js', '.jsx', '.vue'] },
+      ],
+      gitAvailable: true,
+    };
+
+    const report = getProjectCapabilities(readiness);
+    const semanticCapabilities = report.capabilities.filter((capability) => capability.id.startsWith('semantic-'));
+
+    expect(semanticCapabilities.map((capability) => capability.id)).toEqual(['semantic-typescript', 'semantic-rust']);
+    expect(semanticCapabilities.map((capability) => capability.status)).toEqual(['available', 'available']);
+    expect(semanticCapabilities[0]?.reason).toContain('ts-morph');
+    expect(semanticCapabilities[1]?.reason).toContain('rust-analyzer');
   });
 
   it('marks source fallback unavailable when the language indexer is not runnable', () => {

@@ -1,3 +1,7 @@
+use std::collections::{HashMap, HashSet};
+
+use serde::{Deserialize, Serialize};
+
 pub fn leaf_name(raw: &str) -> String {
     if let Some(local) = raw.strip_prefix("local ") {
         return local.to_string();
@@ -148,9 +152,137 @@ fn is_suffix_byte(byte: u8) -> bool {
     matches!(byte, b'/' | b'#' | b'.' | b'(' | b'[' | b':' | b'!')
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ConsumerClassifyRequest {
+    pub definitions: Vec<ConsumerDefinitionInput>,
+    pub file_usages: HashMap<String, FileUsageInput>,
+    #[serde(default)]
+    pub reexport_only_leaves: HashMap<String, HashSet<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ConsumerDefinitionInput {
+    pub symbol_id: i64,
+    pub leaf: String,
+    pub consumer_files: Vec<ConsumerFileInput>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ConsumerFileInput {
+    pub file: String,
+    #[serde(default)]
+    pub sources: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FileUsageInput {
+    #[serde(default)]
+    pub imported_leaves: HashSet<String>,
+    #[serde(default)]
+    pub used_leaves: HashSet<String>,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct ConsumerClassifyResponse {
+    pub entries: Vec<ConsumerDefinitionOutput>,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct ConsumerDefinitionOutput {
+    pub symbol_id: i64,
+    pub real_consumers: Vec<String>,
+    pub barrel_consumers: usize,
+    pub import_only_consumers: usize,
+    pub files: Vec<ConsumerFileOutput>,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct ConsumerFileOutput {
+    pub file: String,
+    pub sources: Vec<String>,
+    pub classification: ConsumerClassification,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ConsumerClassification {
+    Real,
+    ReexportOnly,
+    ImportOnly,
+}
+
+pub fn classify_consumers(request: &ConsumerClassifyRequest) -> ConsumerClassifyResponse {
+    let mut entries = Vec::with_capacity(request.definitions.len());
+    for definition in &request.definitions {
+        entries.push(classify_definition_consumers(definition, request));
+    }
+    ConsumerClassifyResponse { entries }
+}
+
+fn classify_definition_consumers(
+    definition: &ConsumerDefinitionInput,
+    request: &ConsumerClassifyRequest,
+) -> ConsumerDefinitionOutput {
+    let mut real_consumers = Vec::with_capacity(definition.consumer_files.len());
+    let mut barrel_consumers = 0;
+    let mut import_only_consumers = 0;
+    let mut files = Vec::with_capacity(definition.consumer_files.len());
+
+    for consumer in &definition.consumer_files {
+        let classification = classify_consumer_file(&definition.leaf, &consumer.file, request);
+        match classification {
+            ConsumerClassification::Real => real_consumers.push(consumer.file.clone()),
+            ConsumerClassification::ReexportOnly => barrel_consumers += 1,
+            ConsumerClassification::ImportOnly => import_only_consumers += 1,
+        }
+        files.push(ConsumerFileOutput {
+            file: consumer.file.clone(),
+            sources: consumer.sources.clone(),
+            classification,
+        });
+    }
+
+    ConsumerDefinitionOutput {
+        symbol_id: definition.symbol_id,
+        real_consumers,
+        barrel_consumers,
+        import_only_consumers,
+        files,
+    }
+}
+
+fn classify_consumer_file(
+    leaf: &str,
+    consumer_file: &str,
+    request: &ConsumerClassifyRequest,
+) -> ConsumerClassification {
+    if leaf.is_empty() {
+        return ConsumerClassification::Real;
+    }
+    if request
+        .reexport_only_leaves
+        .get(consumer_file)
+        .is_some_and(|leaves| leaves.contains(leaf))
+    {
+        return ConsumerClassification::ReexportOnly;
+    }
+    if request.file_usages.get(consumer_file).is_some_and(|usage| {
+        usage.imported_leaves.contains(leaf) && !usage.used_leaves.contains(leaf)
+    }) {
+        return ConsumerClassification::ImportOnly;
+    }
+    ConsumerClassification::Real
+}
+
 #[cfg(test)]
 mod tests {
-    use super::leaf_name;
+    use std::collections::{HashMap, HashSet};
+
+    use super::{
+        classify_consumers, leaf_name, ConsumerClassification, ConsumerClassifyRequest,
+        ConsumerClassifyResponse, ConsumerDefinitionInput, ConsumerDefinitionOutput,
+        ConsumerFileInput, ConsumerFileOutput, FileUsageInput,
+    };
 
     #[test]
     fn extracts_leaf_names_from_scip_symbols() {
@@ -177,5 +309,78 @@ mod tests {
         for (raw, expected) in cases {
             assert_eq!(leaf_name(raw), expected);
         }
+    }
+
+    #[test]
+    fn classifies_definition_consumers_from_file_usage() {
+        let request = ConsumerClassifyRequest {
+            definitions: vec![ConsumerDefinitionInput {
+                symbol_id: 7,
+                leaf: "target".to_string(),
+                consumer_files: vec![
+                    ConsumerFileInput {
+                        file: "src/real.ts".to_string(),
+                        sources: vec!["indexed".to_string()],
+                    },
+                    ConsumerFileInput {
+                        file: "src/import-only.ts".to_string(),
+                        sources: vec!["indexed".to_string(), "source-fallback".to_string()],
+                    },
+                    ConsumerFileInput {
+                        file: "src/barrel.ts".to_string(),
+                        sources: vec!["indexed".to_string()],
+                    },
+                ],
+            }],
+            file_usages: HashMap::from([
+                (
+                    "src/real.ts".to_string(),
+                    FileUsageInput {
+                        imported_leaves: HashSet::from(["target".to_string()]),
+                        used_leaves: HashSet::from(["target".to_string()]),
+                    },
+                ),
+                (
+                    "src/import-only.ts".to_string(),
+                    FileUsageInput {
+                        imported_leaves: HashSet::from(["target".to_string()]),
+                        used_leaves: HashSet::new(),
+                    },
+                ),
+            ]),
+            reexport_only_leaves: HashMap::from([(
+                "src/barrel.ts".to_string(),
+                HashSet::from(["target".to_string()]),
+            )]),
+        };
+
+        assert_eq!(
+            classify_consumers(&request),
+            ConsumerClassifyResponse {
+                entries: vec![ConsumerDefinitionOutput {
+                    symbol_id: 7,
+                    real_consumers: vec!["src/real.ts".to_string()],
+                    barrel_consumers: 1,
+                    import_only_consumers: 1,
+                    files: vec![
+                        ConsumerFileOutput {
+                            file: "src/real.ts".to_string(),
+                            sources: vec!["indexed".to_string()],
+                            classification: ConsumerClassification::Real,
+                        },
+                        ConsumerFileOutput {
+                            file: "src/import-only.ts".to_string(),
+                            sources: vec!["indexed".to_string(), "source-fallback".to_string()],
+                            classification: ConsumerClassification::ImportOnly,
+                        },
+                        ConsumerFileOutput {
+                            file: "src/barrel.ts".to_string(),
+                            sources: vec!["indexed".to_string()],
+                            classification: ConsumerClassification::ReexportOnly,
+                        },
+                    ],
+                }],
+            },
+        );
     }
 }

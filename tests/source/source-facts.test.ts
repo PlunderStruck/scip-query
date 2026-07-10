@@ -82,6 +82,48 @@ describe('source facts', () => {
     }
   });
 
+  it('extracts Rust method-chain and macro callsites as source facts', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-source-facts-rust-calls-'));
+    try {
+      const projectRoot = join(tempDir, 'project');
+      const dbPath = join(tempDir, 'index.db');
+      writeFixtureFiles(projectRoot, {
+        'src/methods.rs': [
+          'use serde_json::Value;',
+          'pub fn demo(items: Vec<String>) -> Vec<String> {',
+          '    let value = serde_json::from_str::<Value>("{}").unwrap();',
+          '    items.iter().map(|item| item.clone()).collect()',
+          '}',
+          'pub fn macro_demo() {',
+          '    println!("hi");',
+          '}',
+        ],
+      });
+      evidenceFixtureDb(dbPath).document(1, 'rust', 'src/methods.rs').write();
+
+      const db = new ScipDatabase({
+        projectRoot,
+        dbPath,
+        indexPath: join(tempDir, 'index.scip'),
+      });
+      try {
+        expect(getSourceFacts(db, 'src/methods.rs')?.callSites.map((callSite) => callSite.calleeLeaf)).toEqual([
+          'unwrap',
+          'from_str',
+          'collect',
+          'map',
+          'iter',
+          'clone',
+          'println',
+        ]);
+      } finally {
+        db.close();
+      }
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('extracts cross-language dispatch names as source facts', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-source-facts-dispatch-'));
     try {

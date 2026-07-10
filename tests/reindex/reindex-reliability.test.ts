@@ -293,6 +293,57 @@ describe('reindex reliability', () => {
     expect(second.shards?.map((shard) => shard.language).sort()).toEqual(['python', 'typescript']);
   });
 
+  it('refreshes metadata only when non-language files change and every language shard is reusable', async () => {
+    const projectRoot = createProject('scip-query-reindex-shard-metadata-only-');
+    const cacheDir = join(projectRoot, '.scipquery-cache');
+    mkdirSync(cacheDir);
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+    const metaPath = join(cacheDir, 'meta.json');
+    const statuses: string[] = [];
+
+    const { reindex, attempts, mergeCalls } = await loadReindexFixture({
+      languages: ['typescript', 'python'],
+    });
+
+    await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      onStatus: (message) => statuses.push(message),
+      indexerConcurrency: 1,
+    });
+    const firstScip = readFileSync(outputScip, 'utf-8');
+    const firstDb = readFileSync(outputDb, 'utf-8');
+    const firstMeta = JSON.parse(readFileSync(metaPath, 'utf-8'));
+    const mergeCallsAfterFirst = mergeCalls.length;
+
+    writeFileSync(join(projectRoot, 'README.md'), '# Docs only\n');
+    const second = await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      onStatus: (message) => statuses.push(message),
+      indexerConcurrency: 1,
+    });
+    const secondMeta = JSON.parse(readFileSync(metaPath, 'utf-8'));
+
+    expect(second.reused).toBe(true);
+    expect(second.lastRefresh).toEqual(expect.objectContaining({ result: 'reused' }));
+    expect(second.shards?.every((shard) => shard.reused)).toBe(true);
+    expect(attempts.get('typescript')).toBe(1);
+    expect(attempts.get('python')).toBe(1);
+    expect(mergeCalls).toHaveLength(mergeCallsAfterFirst);
+    expect(readFileSync(outputScip, 'utf-8')).toBe(firstScip);
+    expect(readFileSync(outputDb, 'utf-8')).toBe(firstDb);
+    expect(secondMeta.languageFingerprints).toEqual(firstMeta.languageFingerprints);
+    expect(secondMeta.fingerprint).not.toEqual(firstMeta.fingerprint);
+    expect(secondMeta.fingerprint.files.some((file: { path: string }) => file.path === 'README.md')).toBe(true);
+    expect(statuses.join('\n')).toContain('Reusing cached typescript SCIP shard');
+    expect(statuses.join('\n')).toContain('Reusing cached python SCIP shard');
+    expect(statuses.join('\n')).toContain('All language shards unchanged; reused existing SQLite index');
+  });
+
   it('indexes TypeScript workspace project shards and publishes one language output', async () => {
     const projectRoot = createProject('scip-query-reindex-ts-workspace-');
     mkdirSync(join(projectRoot, 'packages/a/src'), { recursive: true });

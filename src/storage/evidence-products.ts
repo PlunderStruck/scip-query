@@ -161,6 +161,12 @@ export const EVIDENCE_PRODUCT_MANIFEST: readonly EvidenceProductManifestEntry[] 
     stalenessTest: 'tests/semantic/rust/rust-semantic-cache-gate.test.ts',
     owner: 'src/semantic/shared-primitives.ts',
   }),
+  projectManifest('health-semantic-prewarm', {
+    dependsOn: ['project-fingerprint', 'indexed-language-set', 'tool-version'],
+    keyParts: ['kind', 'scope', 'cliVersion', 'projectFingerprint', 'payloadVersion'],
+    stalenessTest: 'tests/runtime/cli-support.test.ts',
+    owner: 'src/runtime/cli-support.ts',
+  }),
 ];
 
 export function createFileEvidenceProduct<T>(opts: FileEvidenceProductOptions<T>): FileEvidenceProduct<T> {

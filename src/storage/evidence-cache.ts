@@ -45,6 +45,7 @@ export const PROJECT_EVIDENCE_KINDS = [
   'file-dependency-graph',
   'semantic-import-usage',
   'semantic-signatures',
+  'health-semantic-prewarm',
 ] as const;
 
 export type ProjectEvidenceKind = (typeof PROJECT_EVIDENCE_KINDS)[number];
@@ -59,10 +60,14 @@ interface EvidenceConnection {
   writeProjectEvidence: Database.Statement;
   readCallees: Database.Statement;
   readLegacyCallees: Database.Statement;
+  readCalleesForFile: Database.Statement;
+  readLegacyCalleesForFile: Database.Statement;
   writeCallees: Database.Statement;
   dropStaleCallees: Database.Statement;
   readReferences: Database.Statement;
   readLegacyReferences: Database.Statement;
+  readReferencesForFile: Database.Statement;
+  readLegacyReferencesForFile: Database.Statement;
   writeReferences: Database.Statement;
   dropStaleReferences: Database.Statement;
   readFindingOutcomeLedger: Database.Statement;
@@ -254,6 +259,15 @@ function connectionFor(db: ScipDatabase): EvidenceConnection | null {
          ORDER BY version DESC
          LIMIT 1`,
       ),
+      readCalleesForFile: evidence.prepare(
+        `SELECT symbol, payload FROM semantic_callees
+         WHERE relative_path = ? AND content_hash = ? AND deps_digest = ? AND version = ?`,
+      ),
+      readLegacyCalleesForFile: evidence.prepare(
+        `SELECT symbol, payload FROM semantic_callees
+         WHERE relative_path = ? AND content_hash = ? AND deps_digest = ? AND ${LEGACY_VERSION_PREDICATE}
+         ORDER BY symbol, version DESC`,
+      ),
       writeCallees: evidence.prepare(
         `INSERT OR REPLACE INTO semantic_callees
            (relative_path, symbol, content_hash, deps_digest, version, payload) VALUES (?, ?, ?, ?, ?, ?)`,
@@ -268,6 +282,15 @@ function connectionFor(db: ScipDatabase): EvidenceConnection | null {
          WHERE relative_path = ? AND symbol = ? AND project_fingerprint = ? AND ${LEGACY_VERSION_PREDICATE}
          ORDER BY version DESC
          LIMIT 1`,
+      ),
+      readReferencesForFile: evidence.prepare(
+        `SELECT symbol, payload FROM semantic_references
+         WHERE relative_path = ? AND project_fingerprint = ? AND version = ?`,
+      ),
+      readLegacyReferencesForFile: evidence.prepare(
+        `SELECT symbol, payload FROM semantic_references
+         WHERE relative_path = ? AND project_fingerprint = ? AND ${LEGACY_VERSION_PREDICATE}
+         ORDER BY symbol, version DESC`,
       ),
       writeReferences: evidence.prepare(
         `INSERT OR REPLACE INTO semantic_references
@@ -394,6 +417,30 @@ export function readCachedSemanticCallees(
   }
 }
 
+export function readCachedSemanticCalleesForFile(
+  db: ScipDatabase,
+  relativePath: string,
+  contentHash: string,
+  depsDigest: string,
+): Map<string, string> {
+  const connection = connectionFor(db);
+  if (!connection) return new Map();
+  try {
+    const rows = connection.readCalleesForFile.all(relativePath, contentHash, depsDigest, VERSION) as Array<{
+      symbol: string;
+      payload: string;
+    }>;
+    const legacyRows = connection.readLegacyCalleesForFile.all(relativePath, contentHash, depsDigest) as Array<{
+      symbol: string;
+      payload: string;
+    }>;
+    return rowsBySymbol([...legacyRows, ...rows]);
+  } catch (error) {
+    disable(db, 'semantic_callees bulk read', error);
+    return new Map();
+  }
+}
+
 export function readCachedSemanticReferences(
   db: ScipDatabase,
   relativePath: string,
@@ -410,6 +457,35 @@ export function readCachedSemanticReferences(
     disable(db, 'semantic_references read', error);
     return null;
   }
+}
+
+export function readCachedSemanticReferencesForFile(
+  db: ScipDatabase,
+  relativePath: string,
+  projectFingerprint: string,
+): Map<string, string> {
+  const connection = connectionFor(db);
+  if (!connection) return new Map();
+  try {
+    const rows = connection.readReferencesForFile.all(relativePath, projectFingerprint, VERSION) as Array<{
+      symbol: string;
+      payload: string;
+    }>;
+    const legacyRows = connection.readLegacyReferencesForFile.all(relativePath, projectFingerprint) as Array<{
+      symbol: string;
+      payload: string;
+    }>;
+    return rowsBySymbol([...legacyRows, ...rows]);
+  } catch (error) {
+    disable(db, 'semantic_references bulk read', error);
+    return new Map();
+  }
+}
+
+function rowsBySymbol(rows: ReadonlyArray<{ symbol: string; payload: string }>): Map<string, string> {
+  const result = new Map<string, string>();
+  for (const row of rows) result.set(row.symbol, row.payload);
+  return result;
 }
 
 /**

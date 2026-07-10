@@ -266,11 +266,13 @@ describe('CLI contract', () => {
     expect(commandSources).not.toContain("definedNumberOption(opts, 'limit'");
   });
 
-  it('runs the visible health command in full mode by default', () => {
+  it('runs the visible health command in full mode only when --full is supplied', () => {
     const source = readFileSync(join(process.cwd(), 'src/runtime/commands/command-handlers.ts'), 'utf8');
 
     expect(source).toContain('const report = await runIsolatedHealthReport({');
-    expect(source).toMatch(/runIsolatedHealthReport\(\{\s*scope: stringOptionValue\(opts, 'scope'\),\s*full: true,/);
+    expect(source).toMatch(
+      /runIsolatedHealthReport\(\{\s*scope: stringOptionValue\(opts, 'scope'\),\s*full: booleanOptionValue\(opts, 'full'\),/,
+    );
   });
 
   it('parses graph top-mode limits before targeted-mode branches', () => {

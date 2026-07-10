@@ -1,13 +1,27 @@
 import { createRequire } from 'node:module';
 import { availableParallelism } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import type { IndexedDefinition } from '../domain/types.js';
+import { ProjectIndex } from '../core/project-index.js';
 import type { ScipDatabase } from '../storage/db.js';
 import * as queries from '../queries/index.js';
+import { profileSpan } from '../instrumentation/profile.js';
+import { semanticProviderLanguageForPath } from '../semantic/provider-cache.js';
+import { rustSemanticEngineIdentity } from '../semantic/rust/engine-identity.js';
+import {
+  semanticEvidenceProduct,
+  type SemanticReferenceMaterializationOptions,
+  type SemanticReferenceMaterializationResult,
+} from '../semantic/shared-primitives.js';
 import { sourceFrameworkApplicability } from '../source/source-fileset.js';
+import { materializeSemanticCalleeCache } from '../symbols/graph/call-graph-evidence.js';
+import { projectEvidenceFingerprint, sha256Hex } from '../storage/evidence-cache.js';
+import { createProjectEvidenceProduct, evidenceProductInvalidation } from '../storage/evidence-products.js';
 import { formatBytes, withDb } from './cli-context.js';
 import {
   chunked,
   groupAnalysisTasks,
+  IsolatedProcessTimeoutError,
   runAnalysisTasks,
   runIsolatedJsonProcessAsync,
 } from './isolated-analysis-runner.js';
@@ -27,6 +41,7 @@ const LARGE_COMMAND_DOCUMENT_THRESHOLD = 2_500;
 const DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT = 2_500;
 const DEFAULT_HEALTH_PHASE_CONCURRENCY = 4;
 const MAX_DEFAULT_HEALTH_PHASE_CONCURRENCY = 12;
+const DEFAULT_HEALTH_PHASE_TIMEOUT_MS = 30_000;
 const REACT_HEALTH_PHASES = new Set<HealthPhaseName>([
   'react-component-duplicates',
   'react-hook-candidates',
@@ -39,6 +54,23 @@ const VUE_HEALTH_PHASES = new Set<HealthPhaseName>([
 ]);
 const VUE_HEALTH_TASK_PHASES = new Set<HealthPhaseName>([...VUE_HEALTH_PHASES, 'suppressions']);
 const SIMILAR_EXTRACT_HEALTH_PHASES = new Set<HealthPhaseName>(['similar', 'extract-candidates']);
+const HEALTH_SEMANTIC_PREWARM_MARKER_VERSION = 2;
+
+export interface HealthSemanticPrewarmMarker {
+  version: typeof HEALTH_SEMANTIC_PREWARM_MARKER_VERSION;
+  definitions: number;
+  referenceCacheWrites: number;
+  referenceIncomplete: number;
+  calleeRows: number;
+  warmedAt: number;
+}
+
+const HEALTH_SEMANTIC_PREWARM_CACHE = createProjectEvidenceProduct<HealthSemanticPrewarmMarker>({
+  kind: 'health-semantic-prewarm',
+  invalidation: evidenceProductInvalidation('health-semantic-prewarm'),
+  serialize: (value) => JSON.stringify(value),
+  deserialize: parseHealthSemanticPrewarmMarker,
+});
 
 function loadCliPackageInfo(): { version: string } {
   for (const path of ['../package.json', '../../package.json']) {
@@ -51,9 +83,40 @@ function loadCliPackageInfo(): { version: string } {
   return { version: '0.0.0' };
 }
 
+function parseHealthSemanticPrewarmMarker(payload: string): HealthSemanticPrewarmMarker | null {
+  try {
+    const parsed = JSON.parse(payload) as unknown;
+    if (!parsed || typeof parsed !== 'object') return null;
+    const marker = parsed as Partial<HealthSemanticPrewarmMarker>;
+    if (marker.version !== HEALTH_SEMANTIC_PREWARM_MARKER_VERSION) return null;
+    if (typeof marker.definitions !== 'number' || !Number.isFinite(marker.definitions)) return null;
+    if (typeof marker.referenceCacheWrites !== 'number' || !Number.isFinite(marker.referenceCacheWrites)) return null;
+    if (typeof marker.referenceIncomplete !== 'number' || !Number.isFinite(marker.referenceIncomplete)) return null;
+    if (typeof marker.calleeRows !== 'number' || !Number.isFinite(marker.calleeRows)) return null;
+    if (typeof marker.warmedAt !== 'number' || !Number.isFinite(marker.warmedAt)) return null;
+    return {
+      version: HEALTH_SEMANTIC_PREWARM_MARKER_VERSION,
+      definitions: marker.definitions,
+      referenceCacheWrites: marker.referenceCacheWrites,
+      referenceIncomplete: marker.referenceIncomplete,
+      calleeRows: marker.calleeRows,
+      warmedAt: marker.warmedAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
 type HealthReport = ReturnType<typeof queries.health>;
 type HealthPhaseName = (typeof queries.HEALTH_PHASES)[number];
 type HealthPhaseResult = ReturnType<typeof queries.healthPhase>;
+type HealthPhaseResultWithMeta = HealthPhaseResult & {
+  healthPhaseMeta?: {
+    status: 'deferred';
+    reason: string;
+    timeoutMs: number;
+  };
+};
 type DiffImpactResult = ReturnType<typeof queries.diffImpact>;
 type DiffImpactPartial = ReturnType<typeof queries.diffImpactPartial>;
 type AvailableCpus = () => number;
@@ -64,6 +127,47 @@ export interface HealthCliOptions {
   scope?: string;
   full?: boolean;
   json?: boolean;
+}
+
+export type HealthSemanticPrewarmSkipReason =
+  | 'default-mode'
+  | 'disabled'
+  | 'missing-project-fingerprint'
+  | 'cache-hit'
+  | 'no-semantic-definitions'
+  | 'provider-unavailable'
+  | 'error';
+
+export interface HealthSemanticPrewarmResult {
+  status: 'skipped' | 'warmed' | 'partial';
+  reason: HealthSemanticPrewarmSkipReason | 'cache-miss' | 'incomplete-references';
+  definitions: number;
+  referenceCacheHits: number;
+  referenceCacheWrites: number;
+  referenceMisses: number;
+  referenceIncomplete: number;
+  calleeRows: number;
+  error?: string;
+}
+
+export interface HealthSemanticPrewarmRuntime {
+  env?: NodeJS.ProcessEnv;
+  projectFingerprint(db: ScipDatabase): string | null;
+  semanticEngineFingerprint(db: ScipDatabase): string;
+  readMarker(db: ScipDatabase, cacheKey: string, projectFingerprint: string): HealthSemanticPrewarmMarker | null;
+  writeMarker(
+    db: ScipDatabase,
+    cacheKey: string,
+    projectFingerprint: string,
+    marker: HealthSemanticPrewarmMarker,
+  ): void;
+  candidateDefinitions(db: ScipDatabase, opts: HealthCliOptions): IndexedDefinition[];
+  materializeReferences(
+    db: ScipDatabase,
+    definitions: ReadonlyArray<IndexedDefinition>,
+    opts?: SemanticReferenceMaterializationOptions,
+  ): SemanticReferenceMaterializationResult;
+  materializeCallees(db: ScipDatabase, definitions: ReadonlyArray<IndexedDefinition>): Map<number, unknown>;
 }
 
 export interface DiffImpactCliOptions {
@@ -132,9 +236,162 @@ export function formatAnalysisBudgetDisclosure(disclosure: AnalysisBudgetDisclos
   return `analysis budget: scanning up to ${disclosure.scanLimit} candidate(s); semantic enrichment=${disclosure.semanticEnrichment}; ${disclosure.reason}`;
 }
 
+const DEFAULT_HEALTH_SEMANTIC_PREWARM_RUNTIME: HealthSemanticPrewarmRuntime = {
+  env: process.env,
+  projectFingerprint: projectEvidenceFingerprint,
+  semanticEngineFingerprint: healthSemanticPrewarmEngineFingerprint,
+  readMarker: (db, cacheKey, fingerprint) => HEALTH_SEMANTIC_PREWARM_CACHE.read(db, cacheKey, fingerprint),
+  writeMarker: (db, cacheKey, fingerprint, marker) =>
+    HEALTH_SEMANTIC_PREWARM_CACHE.write(db, cacheKey, fingerprint, marker),
+  candidateDefinitions: (db, opts) =>
+    new ProjectIndex(db)
+      .scopedDefinitions(opts.scope)
+      .filter((definition) => semanticProviderLanguageForPath(definition.relativePath) !== null),
+  materializeReferences: (db, definitions, opts) =>
+    semanticEvidenceProduct(db).materializeReferences(definitions, opts),
+  materializeCallees: materializeSemanticCalleeCache,
+};
+
+export function prewarmHealthSemanticEvidence(
+  db: ScipDatabase,
+  opts: HealthCliOptions,
+  runtime: HealthSemanticPrewarmRuntime = DEFAULT_HEALTH_SEMANTIC_PREWARM_RUNTIME,
+): HealthSemanticPrewarmResult {
+  if (opts.full !== true) return skippedHealthSemanticPrewarm('default-mode');
+  if ((runtime.env ?? process.env)['SCIP_QUERY_HEALTH_SEMANTIC_PREWARM'] === '0') {
+    return skippedHealthSemanticPrewarm('disabled');
+  }
+
+  let result = skippedHealthSemanticPrewarm('error');
+  return profileSpan(
+    'health.semantic-prewarm',
+    () => {
+      try {
+        result = runHealthSemanticPrewarm(db, opts, runtime);
+      } catch (error) {
+        result = skippedHealthSemanticPrewarm('error', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return result;
+    },
+    () => healthSemanticPrewarmProfileMetadata(result),
+  );
+}
+
+function runHealthSemanticPrewarm(
+  db: ScipDatabase,
+  opts: HealthCliOptions,
+  runtime: HealthSemanticPrewarmRuntime,
+): HealthSemanticPrewarmResult {
+  const fingerprint = runtime.projectFingerprint(db);
+  if (!fingerprint) return skippedHealthSemanticPrewarm('missing-project-fingerprint');
+
+  const cacheKey = healthSemanticPrewarmCacheKey(opts, runtime.semanticEngineFingerprint(db));
+  const marker = runtime.readMarker(db, cacheKey, fingerprint);
+  if (marker && marker.referenceIncomplete === 0) return skippedHealthSemanticPrewarm('cache-hit');
+
+  const definitions = runtime.candidateDefinitions(db, opts);
+  if (definitions.length === 0) return skippedHealthSemanticPrewarm('no-semantic-definitions');
+
+  const references = runtime.materializeReferences(db, definitions, { prefetchCallees: true });
+  const referenceRowsKnown = references.cacheHits + references.cacheWrites + references.inMemoryHits;
+  if (referenceRowsKnown === 0 && references.misses + references.unkeyed > 0) {
+    return skippedHealthSemanticPrewarm('provider-unavailable', {
+      definitions: definitions.length,
+      referenceMisses: references.misses,
+    });
+  }
+
+  const calleeMap = runtime.materializeCallees(db, definitions);
+  if (references.incomplete > 0) {
+    return {
+      status: 'partial',
+      reason: 'incomplete-references',
+      definitions: definitions.length,
+      referenceCacheHits: references.cacheHits,
+      referenceCacheWrites: references.cacheWrites,
+      referenceMisses: references.misses,
+      referenceIncomplete: references.incomplete,
+      calleeRows: calleeMap.size,
+    };
+  }
+
+  runtime.writeMarker(db, cacheKey, fingerprint, {
+    version: HEALTH_SEMANTIC_PREWARM_MARKER_VERSION,
+    definitions: definitions.length,
+    referenceCacheWrites: references.cacheWrites,
+    referenceIncomplete: references.incomplete,
+    calleeRows: calleeMap.size,
+    warmedAt: Date.now(),
+  });
+
+  return {
+    status: 'warmed',
+    reason: 'cache-miss',
+    definitions: definitions.length,
+    referenceCacheHits: references.cacheHits,
+    referenceCacheWrites: references.cacheWrites,
+    referenceMisses: references.misses,
+    referenceIncomplete: references.incomplete,
+    calleeRows: calleeMap.size,
+  };
+}
+
+function healthSemanticPrewarmCacheKey(opts: HealthCliOptions, semanticEngineFingerprint: string): string {
+  return JSON.stringify({
+    version: HEALTH_SEMANTIC_PREWARM_MARKER_VERSION,
+    cliVersion,
+    semanticEngineFingerprint,
+    scope: opts.scope ?? null,
+  });
+}
+
+function healthSemanticPrewarmEngineFingerprint(db: ScipDatabase): string {
+  return sha256Hex(
+    JSON.stringify({
+      kind: 'health-semantic-prewarm-engine',
+      rust: rustSemanticEngineIdentity(db.config.projectRoot),
+    }),
+  );
+}
+
+function skippedHealthSemanticPrewarm(
+  reason: HealthSemanticPrewarmSkipReason,
+  overrides: Partial<HealthSemanticPrewarmResult> = {},
+): HealthSemanticPrewarmResult {
+  return {
+    status: 'skipped',
+    reason,
+    definitions: 0,
+    referenceCacheHits: 0,
+    referenceCacheWrites: 0,
+    referenceMisses: 0,
+    referenceIncomplete: 0,
+    calleeRows: 0,
+    ...overrides,
+  };
+}
+
+function healthSemanticPrewarmProfileMetadata(result: HealthSemanticPrewarmResult): Record<string, unknown> {
+  return {
+    status: result.status,
+    reason: result.reason,
+    definitions: result.definitions,
+    referenceCacheHits: result.referenceCacheHits,
+    referenceCacheWrites: result.referenceCacheWrites,
+    referenceMisses: result.referenceMisses,
+    referenceIncomplete: result.referenceIncomplete,
+    calleeRows: result.calleeRows,
+    error: result.error,
+  };
+}
+
 export async function runIsolatedHealthReport(opts: HealthCliOptions): Promise<HealthReport> {
+  const phaseTimeoutMs = healthPhaseTimeoutMs(opts);
+  const cacheOptions = { ...opts, phaseTimeoutMs: phaseTimeoutMs ?? null };
   const cachedReport = withDb((db) => {
-    const key = healthReportCacheKey(db, opts, cliVersion);
+    const key = healthReportCacheKey(db, cacheOptions, cliVersion);
     if (!key) return null;
     const report = readHealthReportCache(db, key);
     if (!report) return null;
@@ -157,17 +414,34 @@ export async function runIsolatedHealthReport(opts: HealthCliOptions): Promise<H
   });
 
   const runnableTasks = healthPhaseTasks(runnablePhases);
+  if (opts.full) withDb((db) => prewarmHealthSemanticEvidence(db, opts));
   const runnableResults = await runAnalysisTasks(runnableTasks, healthPhaseConcurrency(runnableTasks.length), (task) =>
-    runHealthPhaseTaskProcess(task, opts),
+    runHealthPhaseTaskProcess(task, opts, phaseTimeoutMs),
   );
-  runnableResults.flat().forEach((result) => resultByPhase.set(result.phase, result));
+  const phaseWarnings: string[] = [];
+  runnableResults.flat().forEach((result) => {
+    if (result.healthPhaseMeta) {
+      phaseWarnings.push(
+        `Health phase "${result.phase}" deferred: ${result.healthPhaseMeta.reason}. Run health --full for exhaustive analysis.`,
+      );
+    }
+    resultByPhase.set(result.phase, result);
+  });
+
+  if (phaseWarnings.length > 0) {
+    const currentOverview = resultByPhase.get('overview') as Extract<HealthPhaseResult, { phase: 'overview' }>;
+    resultByPhase.set('overview', {
+      ...currentOverview,
+      warnings: [...currentOverview.warnings, ...phaseWarnings],
+    });
+  }
 
   const report = queries.healthReportFromPhases(queries.HEALTH_PHASES.map((phase) => resultByPhase.get(phase)!));
   // Phase results come back from worker processes with no live db handle —
   // the finding-outcome ledger is read here, once, back on the main process.
   report.detectorPrecision = withDb((db) => detectorPrecision(readLedgerRecords(db), Date.now()));
   withDb((db) => {
-    const key = healthReportCacheKey(db, opts, cliVersion);
+    const key = healthReportCacheKey(db, cacheOptions, cliVersion);
     if (key) writeHealthReportCache(db, key, report);
   });
   return report;
@@ -209,8 +483,12 @@ export function skippedHealthPhaseResult(phase: HealthPhaseName): HealthPhaseRes
   }
 }
 
-function runHealthPhaseTaskProcess(phases: HealthPhaseTask, opts: HealthCliOptions): Promise<HealthPhaseResult[]> {
-  if (phases.length === 1) return runHealthPhaseProcess(phases[0]!, opts).then((result) => [result]);
+function runHealthPhaseTaskProcess(
+  phases: HealthPhaseTask,
+  opts: HealthCliOptions,
+  timeoutMs: number | undefined,
+): Promise<HealthPhaseResultWithMeta[]> {
+  if (phases.length === 1) return runHealthPhaseProcess(phases[0]!, opts, timeoutMs).then((result) => [result]);
 
   const phaseArg = phases.join(',');
   const cliPath = process.argv[1] ?? fileURLToPath(import.meta.url);
@@ -223,10 +501,20 @@ function runHealthPhaseTaskProcess(phases: HealthPhaseTask, opts: HealthCliOptio
     command: HEALTH_PHASE_COMMAND,
     args,
     label: `Health phases "${phaseArg}"`,
+    timeoutMs,
+  }).catch((error) => {
+    if (opts.full || !(error instanceof IsolatedProcessTimeoutError)) throw error;
+    return phases.map((phase) =>
+      deferredHealthPhaseResult(phase, error.timeoutMs, `timed out after ${error.timeoutMs}ms`),
+    );
   });
 }
 
-function runHealthPhaseProcess(phase: HealthPhaseName, opts: HealthCliOptions): Promise<HealthPhaseResult> {
+function runHealthPhaseProcess(
+  phase: HealthPhaseName,
+  opts: HealthCliOptions,
+  timeoutMs: number | undefined,
+): Promise<HealthPhaseResultWithMeta> {
   const cliPath = process.argv[1] ?? fileURLToPath(import.meta.url);
   const args: string[] = [phase];
   if (opts.scope) args.push('--scope', opts.scope);
@@ -237,7 +525,74 @@ function runHealthPhaseProcess(phase: HealthPhaseName, opts: HealthCliOptions): 
     command: HEALTH_PHASE_COMMAND,
     args,
     label: `Health phase "${phase}"`,
+    timeoutMs,
+  }).catch((error) => {
+    if (opts.full || !(error instanceof IsolatedProcessTimeoutError)) throw error;
+    return deferredHealthPhaseResult(phase, error.timeoutMs, `timed out after ${error.timeoutMs}ms`);
   });
+}
+
+export function healthPhaseTimeoutMs(opts: HealthCliOptions, env: NodeJS.ProcessEnv = process.env): number | undefined {
+  if (opts.full) return undefined;
+  const raw = env['SCIP_QUERY_HEALTH_PHASE_TIMEOUT_MS'];
+  if (!raw) return DEFAULT_HEALTH_PHASE_TIMEOUT_MS;
+  const parsed = parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return DEFAULT_HEALTH_PHASE_TIMEOUT_MS;
+  return parsed === 0 ? undefined : parsed;
+}
+
+export function deferredHealthPhaseResult(
+  phase: HealthPhaseName,
+  timeoutMs: number,
+  reason: string,
+): HealthPhaseResultWithMeta {
+  const meta = { healthPhaseMeta: { status: 'deferred' as const, reason, timeoutMs } };
+  switch (phase) {
+    case 'overview':
+      throw new Error('Overview health phase cannot be deferred.');
+    case 'dead':
+      return { phase, dead: { count: 0, loc: 0, files: [] }, ...meta };
+    case 'isolated':
+      return { phase, isolated: { count: 0, loc: 0, files: [] }, ...meta };
+    case 'cycles':
+      return { phase, realCycleCount: 0, ...meta };
+    case 'similar':
+      return { phase, similarCount: 0, ...meta };
+    case 'duplicate-bodies':
+      return { phase, duplicateBodies: { count: 0, loc: 0, files: [] }, ...meta };
+    case 'twin-drift':
+      return { phase, twinDrift: { count: 0, loc: 0, files: [] }, ...meta };
+    case 'react-component-duplicates':
+      return { ...skippedHealthPhaseResult(phase), ...meta };
+    case 'react-hook-candidates':
+      return { ...skippedHealthPhaseResult(phase), ...meta };
+    case 'react-large-component-pressure':
+      return { ...skippedHealthPhaseResult(phase), ...meta };
+    case 'vue-component-duplicates':
+      return { ...skippedHealthPhaseResult(phase), ...meta };
+    case 'vue-composable-candidates':
+      return { ...skippedHealthPhaseResult(phase), ...meta };
+    case 'vue-large-view-pressure':
+      return { ...skippedHealthPhaseResult(phase), ...meta };
+    case 'extract-candidates':
+      return { phase, extractCount: 0, ...meta };
+    case 'wrapper-candidates':
+      return { phase, wrappers: { count: 0, loc: 0, files: [] }, ...meta };
+    case 'passthrough-candidates':
+      return { phase, passthroughs: { count: 0, loc: 0, files: [] }, ...meta };
+    case 'stale-abstractions':
+      return { phase, stale: { count: 0, loc: 0, files: [], unused: 0, singleUse: 0 }, ...meta };
+    case 'drift':
+      return { phase, drift: { count: 0, unusedImports: 0, layerViolations: 0, direct: 0, signal: 0 }, ...meta };
+    case 'complexity-hotspots':
+      return { phase, complexity: { top: [], extremeCount: 0 }, ...meta };
+    case 'git-evidence':
+      return { phase, gitEvidence: null, ...meta };
+    case 'suppressions':
+      return { phase, suppressions: { total: 0, byCategory: {} }, ...meta };
+    case 'coverage-contracts':
+      return { phase, coverageContracts: { count: 0, loc: 0, files: [] }, ...meta };
+  }
 }
 
 // scip-query: ignore-similar — public scheduler entrypoints intentionally share

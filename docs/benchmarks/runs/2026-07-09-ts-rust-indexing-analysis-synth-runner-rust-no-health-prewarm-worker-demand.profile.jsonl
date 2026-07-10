@@ -1,0 +1,1 @@
+{"timestamp":"2026-07-09T08:17:12.234Z","pid":55766,"command":"scip-query health --full --json","cacheState":"evidence-cold","type":"span","name":"health.report-cache.read","durationMs":0,"ok":true,"available":true,"hit":true,"keyHash":"93ae660d29b42caece47a779679ee86f84c3adce7c3614c669e4b56f632128cf"}

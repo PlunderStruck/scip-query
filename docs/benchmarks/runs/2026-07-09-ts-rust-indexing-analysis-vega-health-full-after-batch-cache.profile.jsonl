@@ -1,0 +1,1 @@
+{"timestamp":"2026-07-09T03:07:01.887Z","pid":22335,"command":"node /Users/aydansalois/Documents/GitHub/scip-query/dist/cli.js health --full --json","type":"span","name":"health.report-cache.read","durationMs":0,"ok":true,"available":true,"hit":true,"keyHash":"9c27eedcd7258d81da8e17cc5ade29aa738937f13a22378ee79e4c34563826b7"}

@@ -161,6 +161,7 @@ interface FreshIndexRun {
   indexedOutputs: IndexedOutput[];
   skippedLanguages: { language: SupportedLanguage; reason: string }[];
   reusedLanguages: SupportedLanguage[];
+  languageFingerprints: Partial<Record<SupportedLanguage, ReindexFingerprint>>;
   shards: ReindexShardDiagnostic[];
   /** Present only when the TypeScript language shard missed in workspace mode. */
   typescriptProjectShardContext?: TypeScriptProjectShardContext;
@@ -402,10 +403,45 @@ async function runFreshReindex(opts: {
     NODE_OPTIONS: `--max-old-space-size=${opts.maxHeapMb}`,
   };
 
-  const { indexedOutputs, skippedLanguages, reusedLanguages, shards, typescriptProjectShardContext } =
-    await runLanguageIndexersForFreshReindex(opts, env);
+  const {
+    indexedOutputs,
+    skippedLanguages,
+    reusedLanguages,
+    languageFingerprints,
+    shards,
+    typescriptProjectShardContext,
+  } = await runLanguageIndexersForFreshReindex(opts, env);
   if (reusedLanguages.length > 0) {
     opts.onStatus(`Reused ${reusedLanguages.length} cached language shard(s): ${reusedLanguages.join(', ')}`);
+  }
+  if (
+    canReusePublishedArtifactsForLanguageShards({
+      run: opts,
+      indexedOutputs,
+      skippedLanguages,
+      reusedLanguages,
+    })
+  ) {
+    const lastRefresh = publishFullyReusedLanguageShardArtifacts(
+      opts,
+      indexedOutputs,
+      skippedLanguages,
+      reusedLanguages,
+      languageFingerprints,
+      typescriptProjectShardContext,
+    );
+    const durationMs = lastRefresh.durationMs;
+    opts.onStatus(`All language shards unchanged; reused existing SQLite index in ${(durationMs / 1000).toFixed(1)}s`);
+    return {
+      languages: indexedOutputs.map((o) => o.language),
+      indexPath: opts.paths.outputScip,
+      dbPath: opts.paths.outputDb,
+      durationMs,
+      reused: true,
+      skipped: skippedLanguages,
+      lastRefresh,
+      shards,
+    };
   }
   const lastRefresh = publishFreshReindexArtifacts(
     opts,
@@ -413,6 +449,7 @@ async function runFreshReindex(opts: {
     indexedOutputs,
     skippedLanguages,
     reusedLanguages,
+    languageFingerprints,
     typescriptProjectShardContext,
   );
   const durationMs = lastRefresh.durationMs;
@@ -427,6 +464,26 @@ async function runFreshReindex(opts: {
     lastRefresh,
     shards,
   };
+}
+
+function canReusePublishedArtifactsForLanguageShards(opts: {
+  run: Parameters<typeof runFreshReindex>[0];
+  indexedOutputs: readonly IndexedOutput[];
+  skippedLanguages: readonly { language: SupportedLanguage; reason: string }[];
+  reusedLanguages: readonly SupportedLanguage[];
+}): boolean {
+  if (opts.run.opts.skipIfUnchanged === false) return false;
+  if (opts.skippedLanguages.length > 0) return false;
+  if (!existsSync(opts.run.paths.outputScip) || !existsSync(opts.run.paths.outputDb)) return false;
+
+  const reused = new Set(opts.reusedLanguages);
+  const indexed = new Set(opts.indexedOutputs.map((output) => output.language));
+  return (
+    opts.run.languages.length > 0 &&
+    indexed.size === opts.run.languages.length &&
+    opts.indexedOutputs.length === opts.run.languages.length &&
+    opts.run.languages.every((language) => reused.has(language) && indexed.has(language))
+  );
 }
 
 async function runLanguageIndexersForFreshReindex(
@@ -523,6 +580,7 @@ async function runLanguageIndexersForFreshReindex(
     indexedOutputs: allIndexedOutputs,
     skippedLanguages,
     reusedLanguages: [...reused],
+    languageFingerprints: languageFingerprintsFromClassification(classification, opts.languages),
     shards,
     typescriptProjectShardContext: tsProjectShards
       ? { projects: tsProjectShards.allProjects, fingerprints: tsProjectShards.fingerprints }
@@ -802,6 +860,20 @@ function fileSizeOrNull(path: string): number | null {
   }
 }
 
+function languageFingerprintsFromClassification(
+  classification: ReadonlyMap<SupportedLanguage, LanguageShardClassification>,
+  languages: readonly SupportedLanguage[],
+): Partial<Record<SupportedLanguage, ReindexFingerprint>> {
+  const fingerprints: Partial<Record<SupportedLanguage, ReindexFingerprint>> = {};
+  for (const language of languages) {
+    const info = classification.get(language);
+    if (info) {
+      fingerprints[language] = info.fingerprint;
+    }
+  }
+  return fingerprints;
+}
+
 // scip-query: ignore-extract — this is the publish phase for a fresh index:
 // materialize SCIP, convert to SQLite, promote both artifacts, and write
 // metadata are one atomic handoff.
@@ -811,6 +883,7 @@ function publishFreshReindexArtifacts(
   indexedOutputs: readonly IndexedOutput[],
   skippedLanguages: readonly { language: SupportedLanguage; reason: string }[],
   reusedLanguages: readonly SupportedLanguage[],
+  languageFingerprints: Partial<Record<SupportedLanguage, ReindexFingerprint>>,
   typescriptProjectShardContext: TypeScriptProjectShardContext | undefined,
 ): LastRefreshMetadata {
   cacheLanguageShards(opts.paths.outputDb, indexedOutputs);
@@ -823,15 +896,6 @@ function publishFreshReindexArtifacts(
     onStatus: opts.onStatus,
   });
 
-  const typescriptProjectShards = resolveTypeScriptProjectShardsField({
-    mode: opts.opts.typescriptProjectMode,
-    skippedLanguages,
-    reusedLanguages,
-    context: typescriptProjectShardContext,
-    metaPath: opts.paths.metaPath,
-  });
-  pruneTypeScriptProjectShardCache(opts.paths.outputDb, typescriptProjectShards.pruneProjects);
-
   const lastRefresh = buildLastRefresh({
     trigger: opts.opts.trigger,
     result: 'rebuilt',
@@ -839,23 +903,17 @@ function publishFreshReindexArtifacts(
     languages: indexedOutputs.map((o) => o.language),
     skipped: [...skippedLanguages],
   });
-  writeReindexMeta(opts.tempPaths.tempMetaPath, {
-    version: 3,
-    status: skippedLanguages.length === 0 ? 'complete' : 'partial',
-    updatedAt: new Date().toISOString(),
-    fingerprint: opts.fingerprint,
-    languageFingerprints: computeLanguageFingerprints(opts.projectRoot, opts.languages, {
-      pnpmWorkspaces: opts.opts.pnpmWorkspaces,
-      typescriptProjectMode: opts.opts.typescriptProjectMode,
-      typescriptProjects: opts.opts.typescriptProjects,
-      clojureConfigPath: opts.opts.clojureConfigPath,
-    }),
-    typescriptProjectShards: typescriptProjectShards.field,
-    requestedLanguages: opts.languages,
-    indexedLanguages: indexedOutputs.map((o) => o.language),
-    skipped: [...skippedLanguages],
+  const { metadata, pruneProjects } = buildPublishedReindexMetadata({
+    run: opts,
+    indexedOutputs,
+    skippedLanguages,
+    reusedLanguages,
+    languageFingerprints,
+    typescriptProjectShardContext,
     lastRefresh,
   });
+  pruneTypeScriptProjectShardCache(opts.paths.outputDb, pruneProjects);
+  writeReindexMeta(opts.tempPaths.tempMetaPath, metadata);
   promoteReindexArtifacts({
     tempOutputScip: opts.tempPaths.tempOutputScip,
     tempOutputDb: opts.tempPaths.tempOutputDb,
@@ -865,6 +923,74 @@ function publishFreshReindexArtifacts(
     metaPath: opts.paths.metaPath,
   });
   return lastRefresh;
+}
+
+function publishFullyReusedLanguageShardArtifacts(
+  opts: Parameters<typeof runFreshReindex>[0],
+  indexedOutputs: readonly IndexedOutput[],
+  skippedLanguages: readonly { language: SupportedLanguage; reason: string }[],
+  reusedLanguages: readonly SupportedLanguage[],
+  languageFingerprints: Partial<Record<SupportedLanguage, ReindexFingerprint>>,
+  typescriptProjectShardContext: TypeScriptProjectShardContext | undefined,
+): LastRefreshMetadata {
+  runPostIndexAugmentation(auxiliaryDocumentsAugmentationStage(), {
+    projectRoot: opts.projectRoot,
+    dbPath: opts.paths.outputDb,
+    onStatus: opts.onStatus,
+  });
+
+  const lastRefresh = buildLastRefresh({
+    trigger: opts.opts.trigger,
+    result: 'reused',
+    start: opts.start,
+    languages: indexedOutputs.map((o) => o.language),
+    skipped: [...skippedLanguages],
+  });
+  const { metadata, pruneProjects } = buildPublishedReindexMetadata({
+    run: opts,
+    indexedOutputs,
+    skippedLanguages,
+    reusedLanguages,
+    languageFingerprints,
+    typescriptProjectShardContext,
+    lastRefresh,
+  });
+  pruneTypeScriptProjectShardCache(opts.paths.outputDb, pruneProjects);
+  writeReindexMeta(opts.paths.metaPath, metadata);
+  return lastRefresh;
+}
+
+function buildPublishedReindexMetadata(opts: {
+  run: Parameters<typeof runFreshReindex>[0];
+  indexedOutputs: readonly IndexedOutput[];
+  skippedLanguages: readonly { language: SupportedLanguage; reason: string }[];
+  reusedLanguages: readonly SupportedLanguage[];
+  languageFingerprints: Partial<Record<SupportedLanguage, ReindexFingerprint>>;
+  typescriptProjectShardContext: TypeScriptProjectShardContext | undefined;
+  lastRefresh: LastRefreshMetadata;
+}): { metadata: ReindexMetadata; pruneProjects: readonly string[] | null } {
+  const typescriptProjectShards = resolveTypeScriptProjectShardsField({
+    mode: opts.run.opts.typescriptProjectMode,
+    skippedLanguages: opts.skippedLanguages,
+    reusedLanguages: opts.reusedLanguages,
+    context: opts.typescriptProjectShardContext,
+    metaPath: opts.run.paths.metaPath,
+  });
+  return {
+    metadata: {
+      version: 3,
+      status: opts.skippedLanguages.length === 0 ? 'complete' : 'partial',
+      updatedAt: new Date().toISOString(),
+      fingerprint: opts.run.fingerprint,
+      languageFingerprints: opts.languageFingerprints,
+      typescriptProjectShards: typescriptProjectShards.field,
+      requestedLanguages: opts.run.languages,
+      indexedLanguages: opts.indexedOutputs.map((o) => o.language),
+      skipped: [...opts.skippedLanguages],
+      lastRefresh: opts.lastRefresh,
+    },
+    pruneProjects: typescriptProjectShards.pruneProjects,
+  };
 }
 
 /**

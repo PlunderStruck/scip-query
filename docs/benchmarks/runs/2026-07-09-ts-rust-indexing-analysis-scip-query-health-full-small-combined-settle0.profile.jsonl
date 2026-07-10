@@ -1,0 +1,1 @@
+{"timestamp":"2026-07-09T13:43:19.045Z","pid":37067,"type":"span","name":"health.report-cache.read","durationMs":0,"ok":true,"available":true,"hit":true,"keyHash":"1031dedc06e5adc1050af7febc47bdef05d228834ddea224350b4caf545c4904"}

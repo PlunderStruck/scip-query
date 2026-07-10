@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import type * as TypeScript from 'typescript';
 import type { IndexedDefinition } from '../../domain/types.js';
 import type {
@@ -25,6 +26,13 @@ export interface TypeScriptReferenceProviderComparison {
   slot: 'semantic-references';
   definitions: number;
   matches: number;
+  mismatchCount: number;
+  missingReferenceCount: number;
+  extraReferenceCount: number;
+  baselineReferenceCount: number;
+  candidateReferenceCount: number;
+  baselineMs: number;
+  candidateMs: number;
   mismatches: TypeScriptReferenceProviderMismatch[];
 }
 
@@ -62,20 +70,34 @@ export function compareTypeScriptReferenceProviders(
   baseline: SemanticProvider,
   candidate: SemanticProvider,
 ): TypeScriptReferenceProviderComparison {
+  const baselineStart = performance.now();
   const baselineReferences = referencesForDefinitions(baseline, definitions);
+  const baselineMs = performance.now() - baselineStart;
+  const candidateStart = performance.now();
   const candidateReferences = referencesForDefinitions(candidate, definitions);
+  const candidateMs = performance.now() - candidateStart;
   const mismatches: TypeScriptReferenceProviderMismatch[] = [];
   let matches = 0;
+  let baselineReferenceCount = 0;
+  let candidateReferenceCount = 0;
+  let missingReferenceCount = 0;
+  let extraReferenceCount = 0;
 
   for (const definition of definitions) {
-    const baselineSet = referenceKeySet(baselineReferences.get(definition.symbolId) ?? []);
-    const candidateSet = referenceKeySet(candidateReferences.get(definition.symbolId) ?? []);
-    const missing = referencesWithout(baselineReferences.get(definition.symbolId) ?? [], candidateSet);
-    const extra = referencesWithout(candidateReferences.get(definition.symbolId) ?? [], baselineSet);
+    const baselineRows = baselineReferences.get(definition.symbolId) ?? [];
+    const candidateRows = candidateReferences.get(definition.symbolId) ?? [];
+    baselineReferenceCount += baselineRows.length;
+    candidateReferenceCount += candidateRows.length;
+    const baselineSet = referenceKeySet(baselineRows);
+    const candidateSet = referenceKeySet(candidateRows);
+    const missing = referencesWithout(baselineRows, candidateSet);
+    const extra = referencesWithout(candidateRows, baselineSet);
     if (missing.length === 0 && extra.length === 0) {
       matches += 1;
       continue;
     }
+    missingReferenceCount += missing.length;
+    extraReferenceCount += extra.length;
     mismatches.push({ symbol: definition.symbol, missing, extra });
   }
 
@@ -83,6 +105,13 @@ export function compareTypeScriptReferenceProviders(
     slot: 'semantic-references',
     definitions: definitions.length,
     matches,
+    mismatchCount: mismatches.length,
+    missingReferenceCount,
+    extraReferenceCount,
+    baselineReferenceCount,
+    candidateReferenceCount,
+    baselineMs: Number(baselineMs.toFixed(3)),
+    candidateMs: Number(candidateMs.toFixed(3)),
     mismatches,
   };
 }

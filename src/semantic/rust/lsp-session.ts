@@ -354,7 +354,7 @@ export class RustAnalyzerSessionResolver
           request,
           configuredBatchTimeoutMs(
             operationDefinitionCount,
-            rustSessionRequestTimeoutBudgetMs(requestTimeoutMs, request.referenceRetryTimeoutMs),
+            rustSemanticRequestTimeoutBudgetMs(requestTimeoutMs, request.referenceRetryTimeoutMs),
             concurrency,
           ),
         ),
@@ -812,7 +812,7 @@ function rustSessionOperationDefinitionCount(request: RustReferenceWorkerRequest
   return Math.max(1, count);
 }
 
-function rustSessionRequestTimeoutBudgetMs(
+export function rustSemanticRequestTimeoutBudgetMs(
   requestTimeoutMs: number,
   referenceRetryTimeoutMs: number | undefined,
 ): number {

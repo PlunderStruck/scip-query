@@ -1,0 +1,13 @@
+stdout_sha256=bdad683129fb7a91dd283967f57637c845e9b933667749d369766d98c8b2204c
+reference_payload_sha256=ba6015eefc903da9b380cd922b73b69dbfcb0b490b8d7eee84a0cd3e0fc918e7
+callee_payload_sha256=71b2ab6bdbfe83f89c27b350457832ce73e8022f4edb1e8cc40b9acfc1d0d3b1
+product              rows  facts  nonempty_rows
+-------------------  ----  -----  -------------
+semantic_references  4609  17046  4228
+semantic_callees     4610  3200   1443
+prewarm_rows  incomplete_references
+------------  ---------------------
+1             0
+kind                     cache_key                                                                                                                                        project_fingerprint                                               version      payload
+-----------------------  -----------------------------------------------------------------------------------------------------------------------------------------------  ----------------------------------------------------------------  -----------  -------------------------------------------------------------------------------------------------------------------------------
+health-semantic-prewarm  {"version":2,"cliVersion":"0.15.0","semanticEngineFingerprint":"85bac65eaab6ed43a25e1963b0fbba017dc36c3ebb546bd3b8ea75c03c9757ce","scope":null}  7e9c30d010592b5bddb3f7b57860e4e7c0d871da574778606a4df177cb45e9d7  evidence-v1  {"version":2,"definitions":4609,"referenceCacheWrites":4609,"referenceIncomplete":0,"calleeRows":1443,"warmedAt":1783632597229}

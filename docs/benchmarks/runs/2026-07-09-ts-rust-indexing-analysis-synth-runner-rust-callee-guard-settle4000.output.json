@@ -1,0 +1,332 @@
+{
+  "command": "health",
+  "evidence": "mixed",
+  "args": [],
+  "options": {
+    "full": true,
+    "json": true
+  },
+  "result": {
+    "score": 79,
+    "riskScore": 79,
+    "hygieneScore": 82,
+    "scoreBreakdown": [
+      {
+        "axis": "cycles",
+        "points": 15,
+        "detail": "7 real dependency cycle(s)",
+        "kind": "risk"
+      },
+      {
+        "axis": "similar",
+        "points": 3,
+        "detail": "8 similar function pair(s)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "duplicate-bodies",
+        "points": 3,
+        "detail": "3 exact duplicate small-body group(s) (30 duplicate LOC)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "twin-drift",
+        "points": 6,
+        "detail": "7 drifted twin implementation group(s) (same or near-same name, diverged or identical bodies)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "wrappers",
+        "points": 3,
+        "detail": "45 wrapper candidate(s) (11.25 score-weighted)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "passthroughs",
+        "points": 3,
+        "detail": "9 passthrough candidate(s) (3 score-weighted)",
+        "kind": "hygiene"
+      },
+      {
+        "axis": "complexity",
+        "points": 2,
+        "detail": "1 extreme complexity hotspot(s)",
+        "kind": "risk"
+      },
+      {
+        "axis": "cycles-pressure",
+        "points": 4,
+        "detail": "7 cycle(s) exceed pressure threshold 3 (2.33x)",
+        "kind": "risk"
+      }
+    ],
+    "overview": {
+      "documents": 26,
+      "symbols": 2359,
+      "indexSizeBytes": 2273280
+    },
+    "findings": {
+      "deadSymbols": 2,
+      "deadLoc": 9,
+      "isolatedSymbols": 0,
+      "isolatedLoc": 0,
+      "cycles": 7,
+      "similarPairs": 8,
+      "duplicateBodyGroups": 3,
+      "duplicateBodyLoc": 30,
+      "twinDriftGroups": 7,
+      "twinDriftLoc": 353,
+      "reactComponentDuplicatePairs": 0,
+      "reactHookCandidatePairs": 0,
+      "reactHookCandidateScoreCount": 0,
+      "reactLargeComponentPressureFiles": 0,
+      "vueComponentDuplicatePairs": 0,
+      "vueComposableCandidatePairs": 0,
+      "vueComposableCandidateScoreCount": 0,
+      "vueLargeViewPressureFiles": 0,
+      "extractionCandidates": 28,
+      "wrappers": 45,
+      "wrapperScoreCount": 11.25,
+      "passthroughs": 9,
+      "staleTypes": 1,
+      "driftedFiles": 0,
+      "complexityHotspotCount": 1,
+      "hiddenCouplingPairs": 0,
+      "hiddenCouplingScoreCount": 0,
+      "coverageContractViolations": 0
+    },
+    "axes": {
+      "deletable": {
+        "loc": 9,
+        "symbols": 2
+      },
+      "cycles": {
+        "count": 7
+      },
+      "changeAmplification": {
+        "medianFilesPerCommit": 2,
+        "p90FilesPerCommit": 5,
+        "commitsAnalyzed": 160
+      },
+      "hiddenCoupling": {
+        "pairCount": 0,
+        "scoreCount": 0,
+        "top": []
+      },
+      "churnWeightedComplexity": [
+        {
+          "symbol": "app:run_fixed_gameplay()",
+          "score": 135.69,
+          "file": "src/app.rs",
+          "changes": 98,
+          "weighted": 899.54
+        },
+        {
+          "symbol": "app:setup_scene()",
+          "score": 3.69,
+          "file": "src/app.rs",
+          "changes": 98,
+          "weighted": 24.46
+        },
+        {
+          "symbol": "app:spawn_segment_contents_pooled()",
+          "score": 3.27,
+          "file": "src/app.rs",
+          "changes": 98,
+          "weighted": 21.68
+        },
+        {
+          "symbol": "app:spawn_segment_contents_via_sensor_pool()",
+          "score": 3.15,
+          "file": "src/app.rs",
+          "changes": 98,
+          "weighted": 20.88
+        },
+        {
+          "symbol": "app:respawn_world_entities()",
+          "score": 2.85,
+          "file": "src/app.rs",
+          "changes": 98,
+          "weighted": 18.89
+        }
+      ],
+      "evidenceQuality": {
+        "graphFindings": 9,
+        "heuristicFindings": 101,
+        "userSuppressed": 0
+      }
+    },
+    "validation": {
+      "flaggedFiles": 20,
+      "flaggedFixDensity": 0.55,
+      "baselineFixDensity": 0.01,
+      "ratio": 55,
+      "byCategory": {
+        "dead": {
+          "flaggedFiles": 2,
+          "fixDensity": 0,
+          "lift": 0
+        },
+        "twinDrift": {
+          "flaggedFiles": 14,
+          "fixDensity": 0.79,
+          "lift": 79
+        },
+        "wrappers": {
+          "flaggedFiles": 14,
+          "fixDensity": 0.36,
+          "lift": 36
+        },
+        "passthroughs": {
+          "flaggedFiles": 5,
+          "fixDensity": 1,
+          "lift": 100
+        },
+        "stale": {
+          "flaggedFiles": 1,
+          "fixDensity": 1,
+          "lift": 100
+        }
+      },
+      "validationBasis": {
+        "method": "subject-regex",
+        "commitsScanned": 163
+      }
+    },
+    "suppressions": {
+      "total": 0,
+      "byCategory": {
+        "dead": 0,
+        "stale": 0,
+        "wrapper": 0,
+        "passthrough": 0,
+        "drift": 0,
+        "extract": 0,
+        "similar": 0,
+        "uncategorized": 0
+      }
+    },
+    "actions": [
+      {
+        "category": "Dead code",
+        "evidence": "graph-fact",
+        "description": "2 symbols with zero references anywhere -- deletion candidates; confirm with cleanup-plan --verify before deleting",
+        "effort": "low",
+        "impact": "high",
+        "count": 2,
+        "locRecoverable": 9
+      },
+      {
+        "category": "Circular dependencies",
+        "evidence": "graph-fact",
+        "description": "7 cycle(s) — break with dependency inversion or module restructuring",
+        "effort": "medium",
+        "impact": "high",
+        "count": 7,
+        "locRecoverable": 0
+      },
+      {
+        "category": "Duplicate function bodies",
+        "evidence": "heuristic",
+        "description": "3 exact small-body group(s) across files — consolidate only when the domain concept matches",
+        "effort": "low",
+        "impact": "medium",
+        "count": 3,
+        "locRecoverable": 30
+      },
+      {
+        "category": "Stale abstractions",
+        "evidence": "heuristic",
+        "description": "1 single-consumer (not in types file) — remove unused abstractions; review single-consumer ownership before moving or inlining",
+        "effort": "low",
+        "impact": "medium",
+        "count": 1,
+        "locRecoverable": 69
+      },
+      {
+        "category": "Similar functions",
+        "evidence": "heuristic",
+        "description": "8 pairs with real logic overlap (beyond shared imports) — consolidation candidates",
+        "effort": "medium",
+        "impact": "medium",
+        "count": 8,
+        "locRecoverable": 0
+      },
+      {
+        "category": "Drifted twin implementations",
+        "evidence": "heuristic",
+        "description": "7 same-name (or near-name) function group(s) across files with diverged or identical bodies — the same concept implemented twice; consolidate or verify the drift is intentional",
+        "effort": "medium",
+        "impact": "medium",
+        "count": 7,
+        "locRecoverable": 0
+      },
+      {
+        "category": "Extraction candidates",
+        "evidence": "heuristic",
+        "description": "28 large functions with isolated callee clusters — review same-file or feature-local extraction seams",
+        "effort": "medium",
+        "impact": "medium",
+        "count": 28,
+        "locRecoverable": 0
+      },
+      {
+        "category": "Wrapper functions",
+        "evidence": "heuristic",
+        "description": "45 single-consumer symbols (11.25 score-weighted after boundary-evidence discount) — inline direct wrappers or review boundary signals",
+        "effort": "low",
+        "impact": "low",
+        "count": 45,
+        "locRecoverable": 290
+      },
+      {
+        "category": "Passthrough functions",
+        "evidence": "heuristic",
+        "description": "9 functions that just forward to one callee — unnecessary indirection",
+        "effort": "low",
+        "impact": "low",
+        "count": 9,
+        "locRecoverable": 30
+      }
+    ],
+    "pressure": [
+      {
+        "axis": "cycles-pressure",
+        "category": "Circular dependencies",
+        "kind": "risk",
+        "count": 7,
+        "threshold": 3,
+        "ratio": 2.33,
+        "extraPenalty": 4
+      }
+    ],
+    "topComplexity": [
+      {
+        "symbol": "app:run_fixed_gameplay()",
+        "score": 135.69,
+        "file": "src/app.rs"
+      },
+      {
+        "symbol": "app:setup_scene()",
+        "score": 3.69,
+        "file": "src/app.rs"
+      },
+      {
+        "symbol": "app:spawn_segment_contents_pooled()",
+        "score": 3.27,
+        "file": "src/app.rs"
+      },
+      {
+        "symbol": "app:spawn_segment_contents_via_sensor_pool()",
+        "score": 3.15,
+        "file": "src/app.rs"
+      },
+      {
+        "symbol": "app:respawn_world_entities()",
+        "score": 2.85,
+        "file": "src/app.rs"
+      }
+    ],
+    "detectorPrecision": []
+  }
+}

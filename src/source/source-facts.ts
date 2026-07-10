@@ -35,6 +35,8 @@ export interface SourceFactsResult {
   unavailable?: SourceFactsUnavailable;
 }
 
+export const SOURCE_FACTS_PAYLOAD_VERSION = 3;
+
 // In-process layer keyed by (db, path, source) — previously a WeakMap on the
 // parsed Tree, but a persistent-cache hit never parses a Tree at all.
 const SOURCE_FACTS_CACHE = createPerDbSourceCache<SourceFactsResult>('source-facts', {
@@ -97,6 +99,7 @@ function loadOrBuildSourceFacts(
  * the same helpers — structurally identical to a fresh build.
  */
 interface SerializedSourceFacts {
+  version: number;
   language: AstLanguage;
   callables: SourceFacts['callables'];
   callSites: SourceFacts['callSites'];
@@ -109,6 +112,7 @@ interface SerializedSourceFacts {
 
 function serializeSourceFacts(facts: SourceFacts): string {
   const serialized: SerializedSourceFacts = {
+    version: SOURCE_FACTS_PAYLOAD_VERSION,
     language: facts.language,
     callables: facts.callables,
     callSites: facts.callSites,
@@ -124,6 +128,7 @@ function serializeSourceFacts(facts: SourceFacts): string {
 function deserializeSourceFacts(payload: string): SourceFacts | null {
   try {
     const raw = JSON.parse(payload) as SerializedSourceFacts;
+    if (raw.version !== SOURCE_FACTS_PAYLOAD_VERSION) return null;
     if (
       raw.language === 'clojure' &&
       (raw.clojureMembers === undefined || raw.callSites.some((site) => site.calleeText === undefined))
