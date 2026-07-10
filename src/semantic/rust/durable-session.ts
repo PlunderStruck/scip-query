@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import type { RustReferenceWorkerRequest, RustReferenceWorkerResponse } from './lsp-batch-worker.js';
 import type {
   RustAnalyzerSessionRequester,
@@ -10,6 +10,7 @@ import type {
   RustImportDefinitionWorkerResponse,
 } from './lsp-session.js';
 import { profileEnabled, writeProfileEvent } from '../../instrumentation/profile.js';
+import { writeJsonAtomic } from '../../storage/atomic-json.js';
 import { rustCompilerEngineIdentity, type RustCompilerEngineIdentity } from './engine-identity.js';
 import { rustAnalyzerProjectFingerprint } from './project-fingerprint.js';
 
@@ -470,13 +471,6 @@ function parseDurableResponse(raw: string):
       error: `helper wrote malformed JSON: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
-}
-
-function writeJsonAtomic(path: string, value: unknown): void {
-  mkdirSync(dirname(path), { recursive: true });
-  const temporaryPath = `${path}.${process.pid}.tmp`;
-  writeFileSync(temporaryPath, JSON.stringify(value));
-  renameSync(temporaryPath, path);
 }
 
 function currentWorkerEnvironment(): Record<string, string | null> {

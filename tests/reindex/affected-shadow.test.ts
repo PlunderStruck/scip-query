@@ -2,15 +2,22 @@ import Database from 'better-sqlite3';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  affectedSetShadowPaths,
+  collectAffectedSetShadowRecord,
   compareDocumentFactDigests,
   digestDocumentFacts,
   evaluateAffectedSetShadow,
   GLOBAL_FACTS_UNIT,
   readDocumentFactDigests,
+  writeAffectedSetShadowRecord,
+  type AffectedShadowDatabase,
+  type AffectedSetShadowRecord,
+  type AffectedSetShadowRuntime,
   type DocumentFactRecord,
 } from '../../src/reindex/affected-shadow.js';
+import type { ProjectInputSnapshot } from '../../src/reindex/affected-set.js';
 import { ScipDatabase } from '../../src/storage/db.js';
 import { createEvidenceSchema } from '../fixtures/evidence-fixture.js';
 
@@ -105,6 +112,20 @@ function createDatabase(
     sqlite.close();
   }
   return new ScipDatabase({ projectRoot, dbPath });
+}
+
+function snapshot(hash: string): ProjectInputSnapshot {
+  return {
+    version: 2,
+    languages: ['typescript'],
+    pnpmWorkspaces: false,
+    typescriptProjectMode: 'single',
+    typescriptProjects: [],
+    files: [
+      { path: 'src/a.ts', hash, size: 1 },
+      { path: 'src/b.ts', hash: 'same', size: 4 },
+    ],
+  };
 }
 
 describe('affected-set document fact oracle', () => {
@@ -228,4 +249,154 @@ describe('affected-set document fact oracle', () => {
       extraFiles: ['src/b.ts'],
     });
   });
+
+  it('treats a full-project fallback as covering newly observed document units', () => {
+    const comparison = {
+      addedFiles: ['src/new.ts'],
+      modifiedFiles: [],
+      deletedFiles: [],
+      changedFiles: ['src/new.ts'],
+      unchangedFiles: ['src/a.ts'],
+    };
+    expect(
+      evaluateAffectedSetShadow({ mode: 'full-project', affectedFiles: ['src/a.ts'] }, comparison, 1),
+    ).toMatchObject({
+      passed: true,
+      recall: 1,
+      missingFiles: [],
+    });
+  });
+
+  it('collects a closed, deterministic record from injected old/new database evidence', () => {
+    const closed: string[] = [];
+    const before = fakeDatabase('before', closed);
+    const after = fakeDatabase('after', closed);
+    const times = [1_000, 1_012];
+    const runtime: AffectedSetShadowRuntime = {
+      now: () => times.shift() ?? 1_012,
+      databaseExists: () => true,
+      openDatabase: (_projectRoot, dbPath) => (dbPath === 'before.db' ? before : after),
+      indexedPaths: () => ['src/a.ts', 'src/b.ts'],
+      dependencyGraph: () => new Map([['src/b.ts', new Set(['src/a.ts'])]]),
+      factDigests: (db) =>
+        db === before
+          ? new Map([
+              ['src/a.ts', 'old'],
+              ['src/b.ts', 'old'],
+            ])
+          : new Map([
+              ['src/a.ts', 'new'],
+              ['src/b.ts', 'new'],
+            ]),
+    };
+
+    expect(
+      collectAffectedSetShadowRecord(
+        {
+          projectRoot: '/project',
+          previousDbPath: 'before.db',
+          previousIndexPath: 'before.scip',
+          candidateDbPath: 'after.db',
+          candidateIndexPath: 'after.scip',
+          previousSnapshot: snapshot('old'),
+          currentSnapshot: snapshot('new'),
+          refreshResult: 'rebuilt',
+        },
+        runtime,
+      ),
+    ).toMatchObject({
+      version: 1,
+      status: 'evaluated',
+      refreshResult: 'rebuilt',
+      durationMs: 12,
+      plan: { mode: 'closure', affectedFiles: ['src/a.ts', 'src/b.ts'] },
+      comparison: { changedFiles: ['src/a.ts', 'src/b.ts'] },
+      evaluation: { passed: true, recall: 1, missingFiles: [] },
+    });
+    expect(closed.sort()).toEqual(['after', 'before']);
+  });
+
+  it('records unavailable evidence without trying to open a missing prior database', () => {
+    const openDatabase = vi.fn();
+    const runtime: AffectedSetShadowRuntime = {
+      now: () => 1_000,
+      databaseExists: (path) => path !== 'before.db',
+      openDatabase,
+      indexedPaths: () => [],
+      dependencyGraph: () => new Map(),
+      factDigests: () => new Map(),
+    };
+    expect(
+      collectAffectedSetShadowRecord(
+        {
+          projectRoot: '/project',
+          previousDbPath: 'before.db',
+          previousIndexPath: 'before.scip',
+          candidateDbPath: 'after.db',
+          candidateIndexPath: 'after.scip',
+          previousSnapshot: null,
+          currentSnapshot: snapshot('new'),
+          refreshResult: 'rebuilt',
+        },
+        runtime,
+      ),
+    ).toMatchObject({ status: 'unavailable', reason: 'prior-index-unavailable' });
+    expect(openDatabase).not.toHaveBeenCalled();
+  });
+
+  it('skips dependency-graph work when the manifest already requires a full-project fallback', () => {
+    const before = fakeDatabase('before', []);
+    const after = fakeDatabase('after', []);
+    const dependencyGraph = vi.fn(() => new Map());
+    const runtime: AffectedSetShadowRuntime = {
+      now: () => 1_000,
+      databaseExists: () => true,
+      openDatabase: (_projectRoot, dbPath) => (dbPath === 'before.db' ? before : after),
+      indexedPaths: () => ['src/a.ts', 'src/b.ts'],
+      dependencyGraph,
+      factDigests: () => new Map(),
+    };
+
+    expect(
+      collectAffectedSetShadowRecord(
+        {
+          projectRoot: '/project',
+          previousDbPath: 'before.db',
+          previousIndexPath: 'before.scip',
+          candidateDbPath: 'after.db',
+          candidateIndexPath: 'after.scip',
+          previousSnapshot: null,
+          currentSnapshot: snapshot('new'),
+          refreshResult: 'rebuilt',
+        },
+        runtime,
+      ),
+    ).toMatchObject({ status: 'evaluated', plan: { mode: 'full-project' } });
+    expect(dependencyGraph).not.toHaveBeenCalled();
+  });
+
+  it('appends history before atomically replacing the latest record', () => {
+    const calls: string[] = [];
+    const record: AffectedSetShadowRecord = {
+      version: 1,
+      status: 'unavailable',
+      refreshResult: 'rebuilt',
+      recordedAt: '1970-01-01T00:00:01.000Z',
+      durationMs: 0,
+      reason: 'prior-index-unavailable',
+    };
+    const paths = writeAffectedSetShadowRecord('/cache/index.db', record, {
+      appendHistory: (path) => calls.push(`history:${path}`),
+      writeLatest: (path) => calls.push(`latest:${path}`),
+    });
+    expect(paths).toEqual(affectedSetShadowPaths('/cache/index.db'));
+    expect(calls).toEqual(['history:/cache/affected-shadow.jsonl', 'latest:/cache/affected-shadow-latest.json']);
+  });
 });
+
+function fakeDatabase(label: string, closed: string[]): AffectedShadowDatabase {
+  return {
+    all: () => [],
+    close: () => closed.push(label),
+  };
+}

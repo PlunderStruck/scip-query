@@ -1,5 +1,17 @@
 import { createHash } from 'node:crypto';
-import type { AffectedFilePlan } from './affected-set.js';
+import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { writeJsonAtomic } from '../storage/atomic-json.js';
+import { ScipDatabase } from '../storage/db.js';
+import { indexedDocumentPaths } from '../storage/scip-documents.js';
+import { buildFileDepGraph } from '../symbols/graph/file-dep-graph.js';
+import { buildProjectChangeManifest, classifyAffectedSetFallback, planAffectedFiles } from './affected-set.js';
+import type {
+  AffectedFilePlan,
+  FileDependencyGraph,
+  ProjectChangeManifest,
+  ProjectInputSnapshot,
+} from './affected-set.js';
 
 export const GLOBAL_FACTS_UNIT = '<global-symbols>';
 
@@ -31,6 +43,68 @@ export interface AffectedSetShadowEvaluation {
   actualFiles: string[];
   missingFiles: string[];
   extraFiles: string[];
+}
+
+export type AffectedSetShadowUnavailableReason =
+  | 'prior-index-unavailable'
+  | 'candidate-index-unavailable'
+  | 'oracle-error';
+
+interface AffectedSetShadowRecordBase {
+  version: 1;
+  refreshResult: 'rebuilt' | 'reused';
+  recordedAt: string;
+  durationMs: number;
+}
+
+export interface EvaluatedAffectedSetShadowRecord extends AffectedSetShadowRecordBase {
+  status: 'evaluated';
+  manifest: ProjectChangeManifest;
+  plan: AffectedFilePlan;
+  comparison: DocumentFactComparison;
+  evaluation: AffectedSetShadowEvaluation;
+}
+
+export interface UnavailableAffectedSetShadowRecord extends AffectedSetShadowRecordBase {
+  status: 'unavailable';
+  reason: AffectedSetShadowUnavailableReason;
+  error?: string;
+}
+
+export type AffectedSetShadowRecord = EvaluatedAffectedSetShadowRecord | UnavailableAffectedSetShadowRecord;
+
+export interface AffectedSetShadowPaths {
+  latestPath: string;
+  historyPath: string;
+}
+
+export interface AffectedShadowDatabase extends DocumentFactQuery {
+  close(): void;
+}
+
+export interface AffectedSetShadowRuntime {
+  now(): number;
+  databaseExists(path: string): boolean;
+  openDatabase(projectRoot: string, dbPath: string, indexPath: string): AffectedShadowDatabase;
+  indexedPaths(db: AffectedShadowDatabase): string[];
+  dependencyGraph(db: AffectedShadowDatabase): FileDependencyGraph;
+  factDigests(db: AffectedShadowDatabase): Map<string, string>;
+}
+
+export interface AffectedSetShadowTelemetryRuntime {
+  appendHistory(path: string, record: AffectedSetShadowRecord): void;
+  writeLatest(path: string, record: AffectedSetShadowRecord): void;
+}
+
+export interface CollectAffectedSetShadowOptions {
+  projectRoot: string;
+  previousDbPath: string;
+  previousIndexPath: string;
+  candidateDbPath: string;
+  candidateIndexPath: string;
+  previousSnapshot: ProjectInputSnapshot | null;
+  currentSnapshot: ProjectInputSnapshot;
+  refreshResult: 'rebuilt' | 'reused';
 }
 
 interface DocumentRow {
@@ -242,9 +316,8 @@ export function evaluateAffectedSetShadow(
 ): AffectedSetShadowEvaluation {
   const predicted = new Set(plan.affectedFiles);
   const actual = new Set(comparison.changedFiles);
-  const missingFiles = comparison.changedFiles.filter(
-    (path) => !predicted.has(path) && !(path === GLOBAL_FACTS_UNIT && plan.mode === 'full-project'),
-  );
+  const missingFiles =
+    plan.mode === 'full-project' ? [] : comparison.changedFiles.filter((path) => !predicted.has(path));
   const extraFiles = plan.affectedFiles.filter((path) => !actual.has(path)).sort();
   const coveredCount = comparison.changedFiles.length - missingFiles.length;
 
@@ -257,6 +330,102 @@ export function evaluateAffectedSetShadow(
     missingFiles,
     extraFiles,
   };
+}
+
+export function collectAffectedSetShadowRecord(
+  options: CollectAffectedSetShadowOptions,
+  runtime: AffectedSetShadowRuntime = defaultAffectedSetShadowRuntime,
+): AffectedSetShadowRecord {
+  const startedAt = runtime.now();
+  if (!runtime.databaseExists(options.previousDbPath)) {
+    return unavailableAffectedSetShadowRecord(
+      options.refreshResult,
+      'prior-index-unavailable',
+      startedAt,
+      runtime.now(),
+    );
+  }
+  if (!runtime.databaseExists(options.candidateDbPath)) {
+    return unavailableAffectedSetShadowRecord(
+      options.refreshResult,
+      'candidate-index-unavailable',
+      startedAt,
+      runtime.now(),
+    );
+  }
+
+  let previousDb: AffectedShadowDatabase | null = null;
+  let candidateDb: AffectedShadowDatabase | null = null;
+  try {
+    previousDb = runtime.openDatabase(options.projectRoot, options.previousDbPath, options.previousIndexPath);
+    candidateDb = runtime.openDatabase(options.projectRoot, options.candidateDbPath, options.candidateIndexPath);
+    const projectFiles = [
+      ...new Set([...runtime.indexedPaths(previousDb), ...runtime.indexedPaths(candidateDb)]),
+    ].sort();
+    const manifest = buildProjectChangeManifest(options.previousSnapshot, options.currentSnapshot);
+    const projectFileSet = new Set(projectFiles);
+    const needsGraph =
+      manifest.changes.length > 0 &&
+      !classifyAffectedSetFallback(manifest).fullProject &&
+      manifest.changes.every((change) => projectFileSet.has(change.path));
+    const plan = planAffectedFiles(
+      manifest,
+      needsGraph ? runtime.dependencyGraph(previousDb) : new Map(),
+      projectFiles,
+    );
+    const comparison = compareDocumentFactDigests(runtime.factDigests(previousDb), runtime.factDigests(candidateDb));
+    const finishedAt = runtime.now();
+    return {
+      version: 1,
+      status: 'evaluated',
+      refreshResult: options.refreshResult,
+      recordedAt: new Date(finishedAt).toISOString(),
+      durationMs: Math.max(0, finishedAt - startedAt),
+      manifest,
+      plan,
+      comparison,
+      evaluation: evaluateAffectedSetShadow(plan, comparison, projectFiles.length),
+    };
+  } catch (error) {
+    return unavailableAffectedSetShadowRecord(
+      options.refreshResult,
+      'oracle-error',
+      startedAt,
+      runtime.now(),
+      error instanceof Error ? error.message : String(error),
+    );
+  } finally {
+    closeShadowDatabase(previousDb);
+    closeShadowDatabase(candidateDb);
+  }
+}
+
+export function createUnavailableAffectedSetShadowRecord(
+  refreshResult: 'rebuilt' | 'reused',
+  reason: AffectedSetShadowUnavailableReason,
+  error?: string,
+  now = Date.now(),
+): UnavailableAffectedSetShadowRecord {
+  return unavailableAffectedSetShadowRecord(refreshResult, reason, now, now, error);
+}
+
+export function affectedSetShadowPaths(outputDb: string): AffectedSetShadowPaths {
+  const cacheDir = dirname(outputDb);
+  return {
+    latestPath: join(cacheDir, 'affected-shadow-latest.json'),
+    historyPath: join(cacheDir, 'affected-shadow.jsonl'),
+  };
+}
+
+export function writeAffectedSetShadowRecord(
+  outputDb: string,
+  record: AffectedSetShadowRecord,
+  runtime: AffectedSetShadowTelemetryRuntime = defaultAffectedSetShadowTelemetryRuntime,
+): AffectedSetShadowPaths {
+  const paths = affectedSetShadowPaths(outputDb);
+  runtime.appendHistory(paths.historyPath, record);
+  runtime.writeLatest(paths.latestPath, record);
+  return paths;
 }
 
 function symbolValues(row: GlobalSymbolRow, prefix: readonly DocumentFactValue[] = []): DocumentFactValue[] {
@@ -272,4 +441,47 @@ function symbolValues(row: GlobalSymbolRow, prefix: readonly DocumentFactValue[]
     row.relationships_hex,
   );
   return values;
+}
+
+const defaultAffectedSetShadowRuntime: AffectedSetShadowRuntime = {
+  now: () => Date.now(),
+  databaseExists: (path) => existsSync(path),
+  openDatabase: (projectRoot, dbPath, indexPath) => new ScipDatabase({ projectRoot, dbPath, indexPath }),
+  indexedPaths: (db) => indexedDocumentPaths(db as ScipDatabase),
+  dependencyGraph: (db) => buildFileDepGraph(db as ScipDatabase),
+  factDigests: (db) => readDocumentFactDigests(db),
+};
+
+const defaultAffectedSetShadowTelemetryRuntime: AffectedSetShadowTelemetryRuntime = {
+  appendHistory: (path, record) => {
+    mkdirSync(dirname(path), { recursive: true });
+    appendFileSync(path, `${JSON.stringify(record)}\n`);
+  },
+  writeLatest: (path, record) => writeJsonAtomic(path, record, { spacing: 2, trailingNewline: true }),
+};
+
+function unavailableAffectedSetShadowRecord(
+  refreshResult: 'rebuilt' | 'reused',
+  reason: AffectedSetShadowUnavailableReason,
+  startedAt: number,
+  finishedAt: number,
+  error?: string,
+): UnavailableAffectedSetShadowRecord {
+  return {
+    version: 1,
+    status: 'unavailable',
+    refreshResult,
+    recordedAt: new Date(finishedAt).toISOString(),
+    durationMs: Math.max(0, finishedAt - startedAt),
+    reason,
+    ...(error ? { error } : {}),
+  };
+}
+
+function closeShadowDatabase(db: AffectedShadowDatabase | null): void {
+  try {
+    db?.close();
+  } catch {
+    // Shadow cleanup must not change whether the authoritative generation publishes.
+  }
 }

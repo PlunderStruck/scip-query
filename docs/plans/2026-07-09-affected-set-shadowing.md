@@ -1,7 +1,7 @@
 # Affected-Set Shadowing — Phase 2 Concrete Plan
 
 Date: 2026-07-09
-Status: ready for implementation
+Status: in progress; steps 2.1–2.4 complete and step 2.5 next
 Roadmap phase: 2
 
 ## Goal
@@ -259,8 +259,10 @@ steps must equal Phase 2 implementation commits before the next step starts.
 
 ### 2.4 — Record shadow results at the existing atomic publication seam
 
-- [ ] **Edit:** `src/reindex/index.ts`, `src/reindex/affected-shadow.ts`,
-      `src/runtime/config.ts`, focused reindex reliability/JSON tests
+- [x] **Create:** `src/storage/atomic-json.ts`
+- [x] **Edit:** `src/reindex/index.ts`, `src/reindex/affected-set.ts`,
+      `src/reindex/affected-shadow.ts`, the watch/Rust durable-session atomic
+      JSON callers, and focused reindex reliability/JSON tests
 - **Source:** `... code publishFreshReindexArtifacts --json`; `... code
   promoteReindexArtifacts --json`; `... code buildPublishedReindexMetadata
   --json`; `... co-change src/reindex/index.ts --json`.
@@ -279,6 +281,56 @@ steps must equal Phase 2 implementation commits before the next step starts.
   smoke, and exact output hashes before/after integration.
 - **Why:** This is the first runtime step and remains reversible because it only
   observes the two already-complete generations.
+- **Outcome:** Every rebuilt generation now evaluates the previous published
+  database against the augmented candidate immediately before promotion, then
+  appends `affected-shadow.jsonl` and atomically replaces
+  `affected-shadow-latest.json` only after publication succeeds. The
+  all-language-shards-reused path first copies the old SQLite file into the
+  existing temporary run directory, so auxiliary-document augmentation still
+  has a real before/after oracle. Metadata remains v3, and neither the change
+  plan nor its recall result changes an indexer, merge, conversion, or publish
+  decision. Missing/malformed prior state and database/oracle failures produce
+  a versioned unavailable record; a telemetry failure emits degraded status
+  after the correct generation has already published.
+
+  The reuse audit found three exact private atomic-JSON writers in the watch
+  and durable Rust services plus the reindex metadata writer. Step 2.4
+  therefore creates one storage primitive and migrates all four existing
+  callers before adding shadow telemetry; no fourth private implementation or
+  new configuration switch was introduced. Shadowing is always active only on
+  rebuild/reuse-publication paths, while the exact no-op fast path still does
+  no shadow work. The graph product is read only for an ordinary changed source
+  inside the indexed universe; empty manifests and already-conservative
+  fallbacks skip it.
+
+  The planted reliability controls are green: 26 reindex tests prove old-DB
+  absence, invalid SQLite/oracle degradation, telemetry-write failure after a
+  successful publish, and promotion failure with no shadow record; 12 oracle
+  tests cover record orchestration and writer ordering; the existing nine
+  watch-service and 22 durable-Rust-session tests cover the shared writer
+  migration. Typecheck and the built package pass. A real edit of the
+  zero-consumer `src/runtime/postinstall.ts` predicted exactly 1/305 indexed
+  files (0.328%), observed exactly that changed document, and recorded 100%
+  recall with no misses; the shadow comparison took 339ms inside a 4.342s full
+  refresh. An identical-input forced rebuild recorded zero normalized fact
+  changes, recall 1, and affected ratio 0; avoiding its unnecessary graph read
+  reduced the observed shadow span from 1.787s to 280ms.
+
+  Raw artifact SHA-256 is not a valid equality oracle here: two identical-input
+  forced publications produced different `.scip` and SQLite bytes
+  (`f1586602…`/`b4c7c017…` versus `5cc7e39a…`/`5851508a…`) while the normalized
+  per-document comparison reported zero changed facts. Step 2.6 therefore
+  retains the pre-registered normalized graph/semantic fact contract and will
+  record raw hashes only as diagnostic evidence, never as the parity verdict.
+  The matching SCIP checks report no recent duplicate or unused-parameter
+  findings after reusing the established storage `isRecord()` predicate. The
+  wrapper candidates are unchanged Rust/cleanup units outside this step. The
+  `AffectedSetShadowRuntime` single-consumer signal is accepted because it is
+  the injected database/clock seam used by the red failure probes. Diff gate
+  exits 0; its sole advisory points to
+  `docs/architecture/evidence-cache-invalidation.md`, whose cited claim remains
+  accurate because this step changes neither shard cache keys nor
+  cross-worktree reuse.
 
 ### 2.5 — Make shadow evidence observable without changing query contracts
 
@@ -346,9 +398,8 @@ steps must equal Phase 2 implementation commits before the next step starts.
 
 1. Commit this plan and roadmap baseline update.
 2. Land 2.1–2.3 as testable contracts with no product behavior. Complete.
-   Step 2.4 runtime shadow recording is next.
-3. Land 2.4 shadow integration; full rebuild stays authoritative.
-4. Land 2.5 observability only after real records exist.
+3. Land 2.4 shadow integration; full rebuild stays authoritative. Complete.
+4. Land 2.5 observability only after real records exist. Next.
 5. Run 2.6 calibration; fix every miss before closing Phase 2.
 6. Do not start Phase 3 cache-key migration until Phase 2 reports 100% recall.
 
@@ -379,12 +430,38 @@ The real-database discriminating probe stays in
 remains a step 2.6 deliverable, when step 2.4/2.5 provide a built telemetry
 surface the script can consume. This changes no gate or production behavior.
 
+### 2026-07-09 — Consolidate atomic JSON and keep shadowing configuration-free
+
+The pre-edit reuse audit found the same private `writeJsonAtomic()` in the
+watch service and both durable Rust session modules; reindex metadata used the
+same temporary-file/rename protocol with pretty JSON. Adding the sidecar writer
+without consolidation would have created a fourth private copy and immediate
+twin drift. Step 2.4 therefore adds `src/storage/atomic-json.ts`, migrates those
+four existing callers, and uses it for latest shadow state. Rollback is one
+commit: re-inline the prior helpers and remove the new recorder. The planned
+`src/runtime/config.ts` edit was omitted because a Phase 2 switch would create
+an uncalibrated state matrix: shadow evaluation is additive, never
+authoritative, and the exact no-op path bypasses it. Status observability and
+rollout policy remain steps 2.5 and 2.6.
+
+### 2026-07-09 — Use normalized facts, not unstable artifact bytes, for parity
+
+The built identical-input control falsified the assumption that complete SCIP
+and SQLite files are byte-stable across equivalent publications. Their raw
+SHA-256 values changed while every normalized document, occurrence, definition,
+mention, symbol, signature, and relationship digest remained identical. Raw
+hashes remain in the evidence log to expose this behavior, but success is
+decided by the already pre-registered normalized fact contract. Requiring raw
+byte equality would reject semantically identical generations for unrelated
+serialization/row-layout variation.
+
 ## File Summary
 
 ### Create
 
 - `src/reindex/affected-set.ts`
 - `src/reindex/affected-shadow.ts`
+- `src/storage/atomic-json.ts`
 - `tests/reindex/affected-set.test.ts`
 - `tests/reindex/affected-shadow.test.ts`
 - `scripts/affected-set-shadow-contract.mjs`

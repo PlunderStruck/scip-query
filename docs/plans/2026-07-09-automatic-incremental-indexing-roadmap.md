@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Phase 1 complete; Phase 2 steps 2.1–2.3 complete and step 2.4 next
+Status: Phase 1 complete; Phase 2 steps 2.1–2.4 complete and step 2.5 next
 
 ## Goal
 
@@ -381,7 +381,13 @@ now computes deterministic transitive consumer closure from the existing file
 dependency product and widens every unavailable/uncertain boundary. Step 2.3
 now compares normalized old/new document and graph-fact digests, with a proven
 red under-prediction check. Step 2.4 connects these contracts at the atomic
-publication seam next; predictions are still not used by runtime indexing.
+publication seam and persists versioned latest/history telemetry only after a
+successful full publication. A real zero-consumer TypeScript leaf edit recorded
+100% recall at a 1/305-file prediction; an identical-input forced rebuild
+recorded zero normalized fact changes. Oracle and telemetry failures remain
+non-authoritative, and raw artifact bytes were proven unstable despite
+normalized fact equality. Step 2.5 exposes these records through status next;
+predictions are still not used by runtime indexing.
 
 **Exit gate:** Phase 2 recall and over-invalidation thresholds pass. Any miss
 blocks incremental writes and becomes a regression fixture.

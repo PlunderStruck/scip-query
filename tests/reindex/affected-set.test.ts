@@ -3,6 +3,7 @@ import {
   buildProjectChangeManifest,
   classifyAffectedSetFallback,
   planAffectedFiles,
+  projectInputSnapshotOrNull,
   type FileDependencyGraph,
   type ProjectInputSnapshot,
 } from '../../src/reindex/affected-set.js';
@@ -28,6 +29,13 @@ function snapshot(
 }
 
 describe('affected-set change manifest', () => {
+  it('accepts complete snapshots and rejects malformed persisted metadata', () => {
+    const value = snapshot([file('src/a.ts', 'a')]);
+    expect(projectInputSnapshotOrNull(value)).toEqual(value);
+    expect(projectInputSnapshotOrNull({ ...value, files: [{ path: 'src/a.ts', hash: 'a' }] })).toBeNull();
+    expect(projectInputSnapshotOrNull({ ...value, languages: 'typescript' })).toBeNull();
+  });
+
   it('returns an empty deterministic manifest for identical snapshots', () => {
     const value = snapshot([file('src/a.ts', 'a')]);
     expect(buildProjectChangeManifest(value, value)).toEqual({

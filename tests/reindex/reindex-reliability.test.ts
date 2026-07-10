@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import type * as NodeFs from 'node:fs';
 import { dirname, join } from 'node:path';
 import { cpus, tmpdir } from 'node:os';
 import type * as NodeOs from 'node:os';
 import type { SupportedLanguage } from '../../src/domain/types.js';
+import type * as AffectedShadow from '../../src/reindex/affected-shadow.js';
 import { resolveIndexerConcurrency } from '../../src/reindex/indexer-runner.js';
 import { projectShardSlug } from '../../src/reindex/project-shards.js';
 
@@ -342,6 +344,13 @@ describe('reindex reliability', () => {
     expect(statuses.join('\n')).toContain('Reusing cached typescript SCIP shard');
     expect(statuses.join('\n')).toContain('Reusing cached python SCIP shard');
     expect(statuses.join('\n')).toContain('All language shards unchanged; reused existing SQLite index');
+    expect(JSON.parse(readFileSync(join(cacheDir, 'affected-shadow-latest.json'), 'utf-8'))).toMatchObject({
+      version: 1,
+      status: 'unavailable',
+      refreshResult: 'reused',
+      reason: 'oracle-error',
+    });
+    expect(readFileSync(join(cacheDir, 'affected-shadow.jsonl'), 'utf-8').trim().split('\n')).toHaveLength(2);
   });
 
   it('indexes TypeScript workspace project shards and publishes one language output', async () => {
@@ -878,6 +887,53 @@ describe('reindex reliability', () => {
       }),
     ).rejects.toThrow(/scip-query-scip-windows[\s\S]*SCIP_QUERY_SCIP_BIN/);
   });
+
+  it('keeps the rebuilt generation authoritative when shadow telemetry cannot be written', async () => {
+    const projectRoot = createProject('scip-query-reindex-shadow-write-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+    const statuses: string[] = [];
+    const { reindex } = await loadReindexFixture({ languages: ['typescript'], failShadowWrite: true });
+
+    const result = await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      onStatus: (message) => statuses.push(message),
+      indexerConcurrency: 1,
+    });
+
+    expect(result.reused).toBe(false);
+    expect(readFileSync(outputDb, 'utf-8')).toBe('new-db');
+    expect(statuses.join('\n')).toContain('Affected-set shadow telemetry unavailable: forced telemetry failure');
+  });
+
+  it('does not publish shadow telemetry when artifact promotion fails', async () => {
+    const projectRoot = createProject('scip-query-reindex-shadow-promotion-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+    writeFileSync(outputScip, 'old-scip');
+    writeFileSync(outputDb, 'old-db');
+    const { reindex } = await loadReindexFixture({ languages: ['typescript'], failPromotion: true });
+
+    await expect(
+      reindex({
+        projectRoot,
+        outputScip,
+        outputDb,
+        onStatus: () => undefined,
+        indexerConcurrency: 1,
+      }),
+    ).rejects.toThrow('forced promotion failure');
+
+    expect(readFileSync(outputDb, 'utf-8')).toBe('old-db');
+    expect(existsSync(join(cacheDir, 'affected-shadow-latest.json'))).toBe(false);
+    expect(existsSync(join(cacheDir, 'affected-shadow.jsonl'))).toBe(false);
+  });
 });
 
 async function loadReindexFixture(opts: {
@@ -885,6 +941,8 @@ async function loadReindexFixture(opts: {
   failIndexers?: ReadonlySet<SupportedLanguage>;
   failFirstIndexers?: ReadonlySet<SupportedLanguage>;
   failConvert?: boolean;
+  failPromotion?: boolean;
+  failShadowWrite?: boolean;
   platform?: NodeJS.Platform;
   scipCli?: {
     resolveScipBinary?: () => string | null;
@@ -892,8 +950,34 @@ async function loadReindexFixture(opts: {
   };
 }) {
   vi.resetModules();
+  vi.doUnmock('node:fs');
   const attempts = new Map<SupportedLanguage, number>();
   const commands: { binary: string; args: readonly string[] }[] = [];
+
+  if (opts.failPromotion) {
+    vi.doMock('node:fs', async () => {
+      const actual = await vi.importActual<typeof NodeFs>('node:fs');
+      return {
+        ...actual,
+        renameSync: (oldPath: string, newPath: string) => {
+          if (newPath.endsWith('index.db.tmp-replace')) throw new Error('forced promotion failure');
+          return actual.renameSync(oldPath, newPath);
+        },
+      };
+    });
+  }
+
+  if (opts.failShadowWrite) {
+    vi.doMock('../../src/reindex/affected-shadow.js', async () => {
+      const actual = await vi.importActual<typeof AffectedShadow>('../../src/reindex/affected-shadow.js');
+      return {
+        ...actual,
+        writeAffectedSetShadowRecord: () => {
+          throw new Error('forced telemetry failure');
+        },
+      };
+    });
+  }
 
   if (opts.platform) {
     vi.doMock('node:os', async () => {

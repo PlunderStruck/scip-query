@@ -18,7 +18,15 @@ import { basename, dirname, extname, join } from 'node:path';
 import { platform } from 'node:os';
 import { resolveScipBinary, tryInstallScipCli } from '../runtime/scip-cli.js';
 import type { LastRefreshMetadata, RefreshTrigger, SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
+import { writeJsonAtomic } from '../storage/atomic-json.js';
 import { auxiliaryDocumentsAugmentationStage } from './augment.js';
+import {
+  collectAffectedSetShadowRecord,
+  createUnavailableAffectedSetShadowRecord,
+  writeAffectedSetShadowRecord,
+  type AffectedSetShadowRecord,
+} from './affected-shadow.js';
+import { projectInputSnapshotOrNull, type ProjectInputSnapshot } from './affected-set.js';
 import { detectLanguages } from './detect.js';
 import { getIndexerConfig } from './indexers.js';
 import { mergeScipFiles } from './merge.js';
@@ -896,6 +904,18 @@ function publishFreshReindexArtifacts(
     onStatus: opts.onStatus,
   });
 
+  const previousSnapshot = previousProjectInputSnapshot(opts.paths.metaPath);
+  const shadowRecord = collectAffectedSetShadowRecord({
+    projectRoot: opts.projectRoot,
+    previousDbPath: opts.paths.outputDb,
+    previousIndexPath: opts.paths.outputScip,
+    candidateDbPath: opts.tempPaths.tempOutputDb,
+    candidateIndexPath: opts.tempPaths.tempOutputScip,
+    previousSnapshot,
+    currentSnapshot: opts.fingerprint,
+    refreshResult: 'rebuilt',
+  });
+
   const lastRefresh = buildLastRefresh({
     trigger: opts.opts.trigger,
     result: 'rebuilt',
@@ -922,6 +942,7 @@ function publishFreshReindexArtifacts(
     outputDb: opts.paths.outputDb,
     metaPath: opts.paths.metaPath,
   });
+  persistAffectedSetShadowRecord(opts.paths.outputDb, shadowRecord, opts.onStatus);
   return lastRefresh;
 }
 
@@ -933,10 +954,33 @@ function publishFullyReusedLanguageShardArtifacts(
   languageFingerprints: Partial<Record<SupportedLanguage, ReindexFingerprint>>,
   typescriptProjectShardContext: TypeScriptProjectShardContext | undefined,
 ): LastRefreshMetadata {
+  const previousSnapshot = previousProjectInputSnapshot(opts.paths.metaPath);
+  let shadowRecord: AffectedSetShadowRecord | null = null;
+  try {
+    copyFileSync(opts.paths.outputDb, opts.tempPaths.tempOutputDb);
+  } catch (error) {
+    shadowRecord = createUnavailableAffectedSetShadowRecord(
+      'reused',
+      'oracle-error',
+      `Could not snapshot the prior database: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
   runPostIndexAugmentation(auxiliaryDocumentsAugmentationStage(), {
     projectRoot: opts.projectRoot,
     dbPath: opts.paths.outputDb,
     onStatus: opts.onStatus,
+  });
+
+  shadowRecord ??= collectAffectedSetShadowRecord({
+    projectRoot: opts.projectRoot,
+    previousDbPath: opts.tempPaths.tempOutputDb,
+    previousIndexPath: opts.paths.outputScip,
+    candidateDbPath: opts.paths.outputDb,
+    candidateIndexPath: opts.paths.outputScip,
+    previousSnapshot,
+    currentSnapshot: opts.fingerprint,
+    refreshResult: 'reused',
   });
 
   const lastRefresh = buildLastRefresh({
@@ -957,7 +1001,32 @@ function publishFullyReusedLanguageShardArtifacts(
   });
   pruneTypeScriptProjectShardCache(opts.paths.outputDb, pruneProjects);
   writeReindexMeta(opts.paths.metaPath, metadata);
+  persistAffectedSetShadowRecord(opts.paths.outputDb, shadowRecord, opts.onStatus);
   return lastRefresh;
+}
+
+function previousProjectInputSnapshot(metaPath: string): ProjectInputSnapshot | null {
+  return projectInputSnapshotOrNull(readReindexMetaOrNull(metaPath)?.fingerprint);
+}
+
+function persistAffectedSetShadowRecord(
+  outputDb: string,
+  record: AffectedSetShadowRecord,
+  onStatus: (message: string) => void,
+): void {
+  try {
+    writeAffectedSetShadowRecord(outputDb, record);
+    if (record.status === 'evaluated') {
+      onStatus(
+        `Affected-set shadow: ${(record.evaluation.recall * 100).toFixed(1)}% recall; ` +
+          `${record.plan.affectedFiles.length} predicted, ${record.comparison.changedFiles.length} changed.`,
+      );
+    } else {
+      onStatus(`Affected-set shadow unavailable: ${record.reason}.`);
+    }
+  } catch (error) {
+    onStatus(`Affected-set shadow telemetry unavailable: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 function buildPublishedReindexMetadata(opts: {
@@ -1673,9 +1742,7 @@ function isUnchangedReindex(metaPath: string, fingerprint: ReindexFingerprint): 
 }
 
 function writeReindexMeta(metaPath: string, metadata: ReindexMetadata): void {
-  const tempPath = `${metaPath}.tmp-${process.pid}-${Date.now()}`;
-  writeFileSync(tempPath, `${JSON.stringify(metadata, null, 2)}\n`);
-  renameSync(tempPath, metaPath);
+  writeJsonAtomic(metaPath, metadata, { spacing: 2, trailingNewline: true });
 }
 
 function updateReindexLastRefresh(metaPath: string, lastRefresh: LastRefreshMetadata): void {

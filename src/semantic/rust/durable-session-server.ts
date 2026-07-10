@@ -1,5 +1,5 @@
 import process from 'node:process';
-import { closeSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
@@ -9,6 +9,7 @@ import {
   type DurableRustSessionServerState,
 } from './durable-session.js';
 import { createWorkerRustAnalyzerSessionRequester } from './lsp-session.js';
+import { writeJsonAtomic } from '../../storage/atomic-json.js';
 
 const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60_000;
 const POLL_INTERVAL_MS = 10;
@@ -151,13 +152,6 @@ function parseMailboxRequest(raw: string): DurableMailboxRequest {
     throw new Error('Durable Rust semantic helper received an invalid mailbox request.');
   }
   return { id: parsed.id, request: parsed.request } as DurableMailboxRequest;
-}
-
-function writeJsonAtomic(path: string, value: unknown): void {
-  mkdirSync(dirname(path), { recursive: true });
-  const temporaryPath = `${path}.${process.pid}.tmp`;
-  writeFileSync(temporaryPath, JSON.stringify(value));
-  renameSync(temporaryPath, path);
 }
 
 function configuredIdleTimeoutMs(): number {

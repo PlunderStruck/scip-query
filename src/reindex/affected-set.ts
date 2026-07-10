@@ -1,4 +1,5 @@
 import type { SupportedLanguage } from '../domain/types.js';
+import { isRecord, stringArray } from '../storage/evidence-payload.js';
 import { classifyProjectInputPath, type ProjectFileFingerprint, type ProjectInputPathKind } from './project-files.js';
 
 export interface ProjectInputSnapshot {
@@ -75,6 +76,19 @@ export interface AffectedFilePlan {
 
 export type FileDependencyGraph = ReadonlyMap<string, ReadonlySet<string>>;
 
+export function projectInputSnapshotOrNull(value: unknown): ProjectInputSnapshot | null {
+  if (!isRecord(value)) return null;
+  if (typeof value['version'] !== 'number') return null;
+  if (stringArray(value['languages']) === null) return null;
+  if (typeof value['pnpmWorkspaces'] !== 'boolean') return null;
+  if (typeof value['typescriptProjectMode'] !== 'string') return null;
+  if (stringArray(value['typescriptProjects']) === null) return null;
+  if (value['clojureConfigPath'] !== undefined && typeof value['clojureConfigPath'] !== 'string') return null;
+  if (!Array.isArray(value['files']) || !value['files'].every(isProjectFileFingerprint)) return null;
+
+  return value as unknown as ProjectInputSnapshot;
+}
+
 export function buildProjectChangeManifest(
   previous: ProjectInputSnapshot | null,
   current: ProjectInputSnapshot,
@@ -117,6 +131,15 @@ export function buildProjectChangeManifest(
 
 function hasDuplicatePaths(files: readonly ProjectFileFingerprint[]): boolean {
   return new Set(files.map((file) => file.path)).size !== files.length;
+}
+
+function isProjectFileFingerprint(value: unknown): value is ProjectFileFingerprint {
+  return (
+    isRecord(value) &&
+    typeof value['path'] === 'string' &&
+    typeof value['size'] === 'number' &&
+    typeof value['hash'] === 'string'
+  );
 }
 
 function isUnreadableFingerprint(file: ProjectFileFingerprint): boolean {

@@ -1,8 +1,9 @@
 import { spawn } from 'node:child_process';
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { LastRefreshMetadata, ProjectConfig, WatchConfig, WatcherStatus } from '../domain/types.js';
+import { writeJsonAtomic } from '../storage/atomic-json.js';
 
 export const WATCH_SERVICE_PROTOCOL_VERSION = 1;
 export const WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS = 5_000;
@@ -545,13 +546,6 @@ function cleanupWatchServiceFiles(paths: WatchServicePaths, expectedPid: number,
   if (lock?.pid === expectedPid && !runtime.isProcessAlive(expectedPid)) {
     rmSync(paths.lockPath, { force: true });
   }
-}
-
-function writeJsonAtomic(path: string, value: unknown): void {
-  mkdirSync(dirname(path), { recursive: true });
-  const temporaryPath = `${path}.${process.pid}.${Date.now()}.tmp`;
-  writeFileSync(temporaryPath, JSON.stringify(value));
-  renameSync(temporaryPath, path);
 }
 
 function runningWatchMessage(lockPath: string, projectRoot: string, existing: WatchProcessLockMetadata | null): string {
