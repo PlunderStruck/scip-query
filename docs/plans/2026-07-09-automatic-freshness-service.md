@@ -1,22 +1,23 @@
 # Automatic Freshness Service — Phase 1 Concrete Plan
 
 Date: 2026-07-09
-Status: ready for implementation after plan approval
+Status: implementation in progress after user approval
 Roadmap phase: 1
 
 ## Goal
 
 Make `watch.enabled: true` mean that scip-query automatically maintains index
-freshness through one repository-scoped background process, without requiring
-the user to keep a terminal open. This phase deliberately reuses the current
-whole-project/language/project-shard reindexer; it does not claim file-level
-incremental indexing.
+freshness through one demand-started, repository-scoped background process,
+without requiring the user to keep a terminal open or a daemon running
+forever. This phase deliberately reuses the current whole-project/language/
+project-shard reindexer; it does not claim file-level incremental indexing.
 
 Completion requires start/status/stop lifecycle, crash and stale-state
 recovery, automatic startup from normal enabled CLI and agent-hook paths,
-immediate startup refresh when stale, calibrated quiet-period/cooldown values,
-unchanged foreground-watch compatibility, built-package validation, benchmark
-evidence, and a passing SCIP diff gate.
+activity-aware idle shutdown and wake-up, immediate startup refresh when stale,
+calibrated quiet-period/cooldown values, unchanged foreground-watch
+compatibility, built-package validation, benchmark evidence, and a passing SCIP
+diff gate.
 
 The system context is
 [`2026-07-09-incremental-indexing-current-state.md`](./2026-07-09-incremental-indexing-current-state.md).
@@ -128,6 +129,8 @@ interface WatchServiceState {
   cliVersion: string;
   startedAt: string;
   heartbeatAt: string;
+  lastActivityAt: string;
+  idleDeadlineAt?: string;
   watcher: WatcherStatus;
   lastRefresh?: LastRefreshMetadata;
   lastError?: { at: string; message: string };
@@ -139,6 +142,13 @@ A **heartbeat** is a repeatedly refreshed timestamp whose defining trait is
 that recent updates prove the server is still executing its control loop.
 An **idempotent** ensure operation is one whose defining trait is that repeated
 calls preserve one live service rather than creating additional owners.
+
+The service is demand-driven. The default idle timeout is 10 minutes, matching
+the existing durable Rust helper's policy. A normal CLI ensure operation writes
+an activity marker, and accepted source/Git events plus refresh completion reset
+the server's idle clock. The server may exit only while the watcher is idle and
+no refresh is pending or in flight. `watch.idleTimeoutMs: 0` disables idle
+shutdown for users who prefer an always-running project daemon.
 
 The exclusive `watch.lock` remains the ownership proof. A state record is live
 only when its identity matches the project/installed protocol, its heartbeat is
@@ -159,6 +169,10 @@ insufficient because PIDs can be reused.
 - The detached server evaluates freshness once after it owns the lock and
   immediately requests `{ kind: 'watch-startup' }` for stale/missing/unknown
   state. It then relies on file/Git events.
+- Reusing a compatible live service records command activity. After the
+  configured idle timeout with no command, relevant file/Git event, pending
+  change, or refresh, the server cleans up and exits. The next ensure operation
+  starts it again and repeats the startup freshness check.
 
 ### Reader behavior
 
@@ -169,18 +183,19 @@ block every query for freshness or add fields to ordinary query JSON.
 
 ## Testability Design
 
-| Behavior                     | Test seam                                  | Dependencies to inject                        | Pure core                                | Side-effect shell             | Contract                                                                |
-| ---------------------------- | ------------------------------------------ | --------------------------------------------- | ---------------------------------------- | ----------------------------- | ----------------------------------------------------------------------- |
-| State parsing/classification | `classifyWatchServiceState()`              | clock, expected project/version, PID liveness | live/stale/incompatible/stopped decision | state-file read               | malformed, old, dead, or mismatched state is never trusted              |
-| Start decision               | `planWatchServiceAction()`                 | classified state and requested action         | start/reuse/replace/error                | spawn and readiness polling   | at most one compatible owner; repeated ensure is idempotent             |
-| Lock ownership               | moved `acquireWatchProcessLock()`          | PID liveness and filesystem                   | existing/stale decision                  | exclusive open/remove/release | foreground and daemon cannot both own the repository                    |
-| State publication            | state serializer/path helper               | clock and atomic writer                       | canonical record                         | temp write + rename           | readers see a whole old/new record, never partial JSON                  |
-| Startup refresh              | server bootstrap                           | freshness provider and `Watcher` factory      | refresh/no-refresh decision              | start watcher/request refresh | stale/missing/unknown refresh immediately; fresh waits for events       |
-| Edit coalescing              | existing `Watcher` plus `requestRefresh()` | fake timers/reindex runner                    | current state transitions                | child reindex                 | one in flight and at most one dirty follow-up                           |
-| Graceful stop                | service controller                         | signal, liveness, clock                       | stopped/timeout classification           | SIGTERM and bounded poll      | lock/state released; timeout does not spawn a replacement               |
-| CLI dispatch                 | `handleWatch()` lifecycle mode selection   | service controller                            | mutual-exclusion validation              | console/JSON output           | foreground remains default; JSON is valid and stable                    |
-| Auto ensure                  | pre-action/hook helper                     | config loader and controller                  | should-ensure command filter             | background start              | enabled ordinary command ensures once; excluded commands do not recurse |
-| Package entry                | built server path resolver                 | installation root                             | deterministic path                       | built tarball process         | published install contains and can start `watch-server.js`              |
+| Behavior                     | Test seam                                  | Dependencies to inject                        | Pure core                                | Side-effect shell             | Contract                                                                         |
+| ---------------------------- | ------------------------------------------ | --------------------------------------------- | ---------------------------------------- | ----------------------------- | -------------------------------------------------------------------------------- |
+| State parsing/classification | `classifyWatchServiceState()`              | clock, expected project/version, PID liveness | live/stale/incompatible/stopped decision | state-file read               | malformed, old, dead, or mismatched state is never trusted                       |
+| Start decision               | `planWatchServiceAction()`                 | classified state and requested action         | start/reuse/replace/error                | spawn and readiness polling   | at most one compatible owner; repeated ensure is idempotent                      |
+| Lock ownership               | moved `acquireWatchProcessLock()`          | PID liveness and filesystem                   | existing/stale decision                  | exclusive open/remove/release | foreground and daemon cannot both own the repository                             |
+| State publication            | state serializer/path helper               | clock and atomic writer                       | canonical record                         | temp write + rename           | readers see a whole old/new record, never partial JSON                           |
+| Startup refresh              | server bootstrap                           | freshness provider and `Watcher` factory      | refresh/no-refresh decision              | start watcher/request refresh | stale/missing/unknown refresh immediately; fresh waits for events                |
+| Edit coalescing              | existing `Watcher` plus `requestRefresh()` | fake timers/reindex runner                    | current state transitions                | child reindex                 | one in flight and at most one dirty follow-up                                    |
+| Idle shutdown and wake       | `shouldStopWatchServiceForIdle()`          | clock, activity marker, watcher status        | idle/not-idle decision                   | timer, cleanup, later spawn   | never exits with pending/in-flight work; next ensure starts and checks freshness |
+| Graceful stop                | service controller                         | signal, liveness, clock                       | stopped/timeout classification           | SIGTERM and bounded poll      | lock/state released; timeout does not spawn a replacement                        |
+| CLI dispatch                 | `handleWatch()` lifecycle mode selection   | service controller                            | mutual-exclusion validation              | console/JSON output           | foreground remains default; JSON is valid and stable                             |
+| Auto ensure                  | pre-action/hook helper                     | config loader and controller                  | should-ensure command filter             | background start              | enabled ordinary command ensures once; excluded commands do not recurse          |
+| Package entry                | built server path resolver                 | installation root                             | deterministic path                       | built tarball process         | published install contains and can start `watch-server.js`                       |
 
 Unit tests must not start a real long-running process. One bounded integration
 test uses built artifacts and a temporary repository; it always stops the
@@ -193,15 +208,16 @@ start/end, published metadata time, shard disposition, PID/start disposition,
 and command/output hash. Each timing scenario runs five times after one warm-up
 and reports median/p95.
 
-| Scenario                               |                                          Baseline | Acceptance                                                         |
-| -------------------------------------- | ------------------------------------------------: | ------------------------------------------------------------------ |
-| Exact unchanged manual refresh         |                                           0.323 s | median <= 0.5 s, p95 <= 0.75 s                                     |
-| One TypeScript leaf edit to fresh      | about 4.7 s compute plus 30 s configured debounce | event-to-scheduled p95 <= 1.5 s; edit-to-fresh p95 <= 8 s          |
-| Twenty writes in 500 ms                |                                      not recorded | <= 2 refreshes, zero concurrent reindexes                          |
-| Daemon ensure when already live        |                                       unavailable | p95 <= 100 ms and same PID                                         |
-| Cold daemon start to healthy heartbeat |                                       unavailable | p95 <= 1 s excluding required stale reindex                        |
-| Crash/stale-state recovery             |                                       unavailable | one replacement owner within 2 s; no orphan lock                   |
-| Foreground watch/query output          |                                    current hashes | unchanged except declared additive `status`/watch lifecycle output |
+| Scenario                               |                                          Baseline | Acceptance                                                                                  |
+| -------------------------------------- | ------------------------------------------------: | ------------------------------------------------------------------------------------------- |
+| Exact unchanged manual refresh         |                                           0.323 s | median <= 0.5 s, p95 <= 0.75 s                                                              |
+| One TypeScript leaf edit to fresh      | about 4.7 s compute plus 30 s configured debounce | event-to-scheduled p95 <= 1.5 s; edit-to-fresh p95 <= 8 s                                   |
+| Twenty writes in 500 ms                |                                      not recorded | <= 2 refreshes, zero concurrent reindexes                                                   |
+| Daemon ensure when already live        |                                       unavailable | p95 <= 100 ms and same PID                                                                  |
+| Cold daemon start to healthy heartbeat |                                       unavailable | p95 <= 1 s excluding required stale reindex                                                 |
+| Idle shutdown / subsequent wake        |                                       unavailable | exits within heartbeat tolerance; wake p95 <= 1 s; startup freshness detects sleeping edits |
+| Crash/stale-state recovery             |                                       unavailable | one replacement owner within 2 s; no orphan lock                                            |
+| Foreground watch/query output          |                                    current hashes | unchanged except declared additive `status`/watch lifecycle output                          |
 
 Quiet-policy calibration runs the combinations 250/750/1500 ms debounce and
 0/1000/5000 ms cooldown against single edit, 20-write burst, edit-during-index,
@@ -258,8 +274,9 @@ recent-duplicates --json` reports no duplicate lock/liveness/state helpers.
 
 - [ ] **Create:** `src/runtime/watch-server.ts`
 - [ ] **Edit:** `src/runtime/watch.ts`, `src/domain/maintenance-types.ts`,
-      `tsup.config.ts`, `tests/runtime/watch-service.test.ts`,
-      `tests/runtime/watch.test.ts`
+      `src/domain/config-types.ts`, `src/runtime/config.ts`, `tsup.config.ts`,
+      `tests/runtime/watch-service.test.ts`, `tests/runtime/watch.test.ts`,
+      targeted config tests
 - **Source:** `scip-query code Watcher:start`,
   `scip-query code Watcher:triggerReindex`,
   `scip-query code getIndexFreshness`,
@@ -269,7 +286,10 @@ recent-duplicates --json` reports no duplicate lock/liveness/state helpers.
   `Watcher.requestRefresh()` that delegates to existing scheduling. Implement a
   server that owns the lock, starts `Watcher`, persists status/heartbeat/error
   atomically, requests immediate refresh when startup freshness is not fresh,
-  and handles SIGTERM/SIGINT/exit cleanup. Add `watch-server` as a built entry.
+  applies the versioned 10-minute idle timeout/activity-marker contract, never
+  sleeps with pending/in-flight work, and handles idle/SIGTERM/SIGINT/exit
+  cleanup. Add `watch-server` as a built entry. Add and validate
+  `watch.idleTimeoutMs`, where zero disables idle shutdown.
 - **Testability:** Server bootstrap accepts freshness and Watcher factories;
   signal/heartbeat behavior uses fake timers. One built-artifact smoke test
   starts and stops the real entry in a temporary repository.
@@ -361,6 +381,9 @@ typecheck`, `npm run build`, `npm run lint`, `npm test`, `npm pack --dry-run`,
 | CLI version/protocol mismatch             | Stop old compatible-control process, wait boundedly, then replace; otherwise report blockage.                            |
 | Edit before server heartbeat              | Startup content freshness catches it and requests immediate refresh.                                                     |
 | Edit during reindex                       | Dirty flag produces one follow-up after calibrated cooldown.                                                             |
+| Idle deadline while work is pending       | Deadline is deferred until the watcher returns to clean idle.                                                            |
+| Edit while daemon is asleep               | The next CLI/hook wake runs startup fingerprint freshness and schedules the required refresh.                            |
+| Repeated read-only CLI commands           | Each ensure records activity without creating another daemon.                                                            |
 | Save-format-save burst                    | One refresh unless a write lands during the in-flight run, then at most one follow-up.                                   |
 | Reindex child fails                       | Prior generation stays readable; state records last error and returns idle/degraded; later edit can retry.               |
 | Server receives SIGTERM                   | Watcher stops, heartbeat stops, lock/state clean up, exit code 0.                                                        |
@@ -381,7 +404,14 @@ If a step changes files or public behavior beyond its list:
 4. Do not weaken timing/parity/crash gates after seeing an unfavorable result;
    record a rejected experiment or request an explicit roadmap revision.
 
-No deviations are recorded at plan time.
+### 2026-07-09 — Demand-started idle lifecycle
+
+Before implementation, the user chose a per-project service that can release
+memory while unused rather than an indefinitely running daemon. The contract
+now adds `watch.idleTimeoutMs`, command/file activity, clean-idle shutdown, and
+wake-up freshness tests. The default is 10 minutes because the existing durable
+Rust helper already uses that lifecycle. Setting the value to zero is the
+rollback to always-running behavior.
 
 ## Explicit Deferrals
 

@@ -25,9 +25,10 @@ The recommended first implementation slice is
 
 The program is complete when all of these statements are true:
 
-1. With `watch.enabled: true`, the repository service starts without a user
-   keeping `scip-query watch` open, reports its state, recovers from crashes,
-   and stops cleanly.
+1. With `watch.enabled: true`, the repository service starts on demand without
+   a user keeping `scip-query watch` open, reports its state, recovers from
+   crashes, exits after a configurable clean idle period, and wakes on the next
+   CLI or agent-session use.
 2. A burst of edits produces one in-flight refresh and at most one coalesced
    follow-up. Readers continue to see the preceding complete generation until
    the next one is atomically published.
@@ -185,11 +186,15 @@ views of the same repository.
 
 ## Architecture Decisions
 
-### AD-1: One owner for observation, compiler state, and publication
+### AD-1: One demand-started owner for observation, compiler state, and publication
 
 The background service owns watcher events and reusable compiler sessions.
 Short-lived query commands remain simple SQLite readers. This avoids paying
 compiler startup per command and gives invalidation one authoritative owner.
+The owner is per project, not global: project fingerprints, locks, compiler
+configuration, and memory are independent. It exits after a default 10-minute
+clean idle period and is restarted by the next CLI/hook ensure operation;
+durable indexes and semantic evidence remain on disk while it sleeps.
 
 ### AD-2: Content identity before event identity
 
@@ -328,6 +333,9 @@ without waiting for a new index format.
 - Add repository-scoped daemon start/status/stop/recovery around `Watcher`.
 - Start it from enabled CLI/hook paths, refresh immediately if startup state is
   stale, and persist heartbeat plus watcher/generation status atomically.
+- Treat CLI use and relevant file/Git events as activity; exit after a
+  configurable 10-minute clean idle period, never while refresh work is
+  pending, and let zero disable idle shutdown.
 - Calibrate the debounce/cooldown defaults from 250/750/1500 ms and
   0/1000/5000 ms candidates; choose the lowest policy that passes the burst
   gate, then update this repository's explicit config.
