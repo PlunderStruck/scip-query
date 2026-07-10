@@ -545,6 +545,9 @@ Rust remains on its whole-project fallback at the recorded upstream boundary.
 **Purpose:** publish changed graph and semantic fragments without rebuilding
 the entire database or exposing partial state.
 
+Executable plan:
+[`2026-07-10-incremental-sqlite-publication.md`](./2026-07-10-incremental-sqlite-publication.md).
+
 - Add a versioned generation schema or generation-scoped replacement tables.
 - Apply affected document/symbol/chunk/relationship/evidence changes in one
   writer transaction, validate counts/referential integrity, then flip the
@@ -681,11 +684,11 @@ Complete this at every phase close:
 6. Phase 5 atomic incremental generation storage.
 7. Phase 6 durable Rust defaulting, selective native kernels, and rollout.
 
-The immediate action is Phase 5's incremental SQLite publication. Phase 4's
+The immediate action is Phase 5.1's transactional SQLite patcher. Phase 4's
 local and OpenCode distributions and exact full-shard parity now pass; the
 remaining local 2.55–2.60s warm wall time is almost entirely the complete
 merge/conversion path. Inspect that publication boundary next:
 
 ```sh
-SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/reindex/index.ts --json
+SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/reindex/incremental-sqlite-publication.ts --json
 ```
