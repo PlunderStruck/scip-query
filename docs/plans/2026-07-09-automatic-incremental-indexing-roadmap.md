@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Phases 1–4 complete; Phase 5 incremental publication next
+Status: Phases 1–4 and 5.1 complete; Phase 5.2 publication integration next
 
 ## Goal
 
@@ -562,6 +562,15 @@ fragment parity; an on-disk schema is a harder rollback than a shadow cache.
 **Exit gate:** Phase 5 crash/concurrency/parity thresholds pass, including
 package upgrade and downgrade fixtures.
 
+**Progress:** Phase 5.1 is complete. The affected-only TypeScript SCIP index
+now passes through the official converter into a mini database, and the
+standalone copy-on-write patcher matches a clean full converted fixture at
+every normalized document/global fact. Transaction rollback, corrupt input,
+schema drift, omitted documents, and ambiguous shared-definition ownership
+all fail closed without modifying the accepted database. Phase 5.2 must now
+thread that candidate through normal publication, full-conversion fallback,
+recovery-generation retention, and atomic handoff.
+
 ### Phase 6 — Rust defaulting, selective native kernels, and rollout
 
 **Purpose:** consolidate accepted warm-state work and use Rust only where it
@@ -684,11 +693,11 @@ Complete this at every phase close:
 6. Phase 5 atomic incremental generation storage.
 7. Phase 6 durable Rust defaulting, selective native kernels, and rollout.
 
-The immediate action is Phase 5.1's transactional SQLite patcher. Phase 4's
-local and OpenCode distributions and exact full-shard parity now pass; the
-remaining local 2.55–2.60s warm wall time is almost entirely the complete
-merge/conversion path. Inspect that publication boundary next:
+The immediate action is Phase 5.2's publication integration. Phase 5.1's
+official mini conversion and transactional copy-on-write patch now match a
+clean full fixture and fail closed under negative controls. Thread that proven
+candidate through the existing publication boundary next:
 
 ```sh
-SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/reindex/incremental-sqlite-publication.ts --json
+SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/reindex/index.ts --json
 ```

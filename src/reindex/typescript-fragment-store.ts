@@ -221,6 +221,51 @@ export function assembleTypeScriptIndex(input: AssembleTypeScriptIndexInput): Ui
   return bytes;
 }
 
+export function assembleAffectedTypeScriptIndex(input: AssembleTypeScriptIndexInput): Uint8Array {
+  const index = input.runtime.Index.deserializeBinary(input.baseIndexBytes);
+  assertProducerMetadata(index.metadata, input.runtime.packageVersion);
+  assertNoExternalSymbols(index.external_symbols);
+  const replacements = new Map<string, TypeScriptDocumentFragment>();
+  for (const fragment of input.fragments) {
+    const relativePath = validateRelativePath(fragment.relativePath);
+    if (fragment.bytes === null) {
+      throw new Error(`affected TypeScript mini index cannot contain a deleted document: ${relativePath}`);
+    }
+    if (replacements.has(relativePath)) {
+      throw new Error(`duplicate TypeScript fragment replacement: ${relativePath}`);
+    }
+    replacements.set(relativePath, fragment);
+  }
+  if (replacements.size === 0) throw new Error('affected TypeScript mini index requires at least one document');
+
+  const documents: typeof index.documents = [];
+  const seen = new Set<string>();
+  for (const baseDocument of index.documents) {
+    const relativePath = validateRelativePath(baseDocument.relative_path);
+    if (seen.has(relativePath)) throw new Error(`duplicate TypeScript SCIP document path: ${relativePath}`);
+    seen.add(relativePath);
+    const replacement = replacements.get(relativePath);
+    if (!replacement?.bytes) continue;
+    const document = input.runtime.Document.deserializeBinary(replacement.bytes);
+    if (document.relative_path !== relativePath) {
+      throw new Error(`TypeScript fragment path mismatch: expected ${relativePath}, got ${document.relative_path}`);
+    }
+    documents.push(document);
+    replacements.delete(relativePath);
+  }
+  if (replacements.size > 0) {
+    throw new Error(`TypeScript fragment replacement has no prior document: ${[...replacements.keys()].sort()[0]}`);
+  }
+
+  const affected = new input.runtime.Index({ metadata: index.metadata, documents, external_symbols: [] });
+  const bytes = affected.serializeBinary();
+  const verified = input.runtime.Index.deserializeBinary(bytes);
+  if (verified.documents.length !== documents.length || verified.external_symbols.length !== 0) {
+    throw new Error('affected TypeScript mini index failed structural verification');
+  }
+  return bytes;
+}
+
 export function pruneTypeScriptFragmentGenerations(
   cacheDir: string,
   keepGenerationIdentities: readonly string[],

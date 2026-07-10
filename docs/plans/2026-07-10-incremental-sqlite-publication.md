@@ -1,7 +1,7 @@
 # Incremental SQLite Publication Plan
 
 Date: 2026-07-10
-Status: Planned; Phase 5.1 transactional patcher next
+Status: In progress; Phase 5.1 complete, Phase 5.2 publication integration next
 Parent: [`2026-07-09-automatic-incremental-indexing-roadmap.md`](./2026-07-09-automatic-incremental-indexing-roadmap.md)
 
 ## Outcome
@@ -105,6 +105,18 @@ repair oracle.
 
 Commit boundary: patcher, focused tests, and machine evidence.
 
+Result: complete. `assembleAffectedTypeScriptIndex` now emits an exact
+affected-only SCIP index, the official `scip expt-convert` binary converts it,
+and `patchIncrementalSqliteGeneration` copies and patches a private complete
+database. The transaction validates the five core tables, six indexes, unique
+path/symbol constraints, foreign keys, integrity, exact affected paths, row
+counts, symbol ownership, and normalized affected facts. A real two-document
+TypeScript fixture produced the same complete document/global fact digests as
+a clean full conversion. Injected deletion-stage failure rolled back and
+removed the candidate; schema drift, corrupt input, omitted documents, and a
+symbol defined by affected and unaffected documents all rejected without
+changing the accepted database.
+
 ### 5.2 — Generation handoff and publication fallback
 
 - Thread Phase 4's affected mini index through `FreshIndexRun` to publication.
@@ -163,6 +175,5 @@ Phase 6 action.
 
 ```sh
 SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context \
-  src/reindex/incremental-sqlite-publication.ts --json
+  src/reindex/index.ts --json
 ```
-

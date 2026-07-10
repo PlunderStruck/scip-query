@@ -4,11 +4,14 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { describe, expect, test } from 'vitest';
+import { readDocumentFactDigests } from '../../src/reindex/affected-shadow.js';
+import { patchIncrementalSqliteGeneration } from '../../src/reindex/incremental-sqlite-publication.js';
 import {
   createTypeScriptDocumentEmitter,
   loadTypeScriptDocumentRuntime,
 } from '../../src/reindex/typescript-document-emitter.js';
 import {
+  assembleAffectedTypeScriptIndex,
   assembleTypeScriptIndex,
   commitTypeScriptFragmentGeneration,
   pruneTypeScriptFragmentGenerations,
@@ -16,6 +19,8 @@ import {
   seedTypeScriptFragmentGeneration,
   typeScriptFragmentStorePaths,
 } from '../../src/reindex/typescript-fragment-store.js';
+import { resolveScipBinary } from '../../src/runtime/scip-cli.js';
+import { ScipDatabase } from '../../src/storage/db.js';
 
 const require = createRequire(import.meta.url);
 
@@ -92,6 +97,47 @@ describe('TypeScript fragment store', () => {
       fragments: update.fragments,
     });
     expect(Buffer.from(assembled)).toEqual(cleanEdited);
+
+    const affectedBytes = assembleAffectedTypeScriptIndex({
+      runtime: availability.runtime,
+      baseIndexBytes: baseline,
+      fragments: update.fragments,
+    });
+    const affected = availability.runtime.Index.deserializeBinary(affectedBytes);
+    expect(affected.documents.map((document) => document.relative_path)).toEqual(['src/a.ts', 'src/b.ts']);
+    expect(affected.external_symbols).toEqual([]);
+
+    const scipBinary = resolveScipBinary();
+    expect(scipBinary).not.toBeNull();
+    if (scipBinary) {
+      const baseScipPath = join(root, 'base.scip');
+      const miniScipPath = join(root, 'mini.scip');
+      const cleanScipPath = join(root, 'clean.scip');
+      const baseDbPath = join(root, 'base.db');
+      const miniDbPath = join(root, 'mini.db');
+      const candidateDbPath = join(root, 'candidate.db');
+      const cleanDbPath = join(root, 'clean.db');
+      writeFileSync(baseScipPath, baseline);
+      writeFileSync(miniScipPath, affectedBytes);
+      writeFileSync(cleanScipPath, cleanEdited);
+      convertScip(scipBinary, baseScipPath, baseDbPath);
+      convertScip(scipBinary, miniScipPath, miniDbPath);
+      convertScip(scipBinary, cleanScipPath, cleanDbPath);
+      patchIncrementalSqliteGeneration({
+        previousDbPath: baseDbPath,
+        miniDbPath,
+        candidateDbPath,
+        affectedFiles: update.fragments.map((fragment) => fragment.relativePath),
+      });
+      const candidateDb = new ScipDatabase({ projectRoot: root, dbPath: candidateDbPath, indexPath: cleanScipPath });
+      const cleanDb = new ScipDatabase({ projectRoot: root, dbPath: cleanDbPath, indexPath: cleanScipPath });
+      try {
+        expect(readDocumentFactDigests(candidateDb)).toEqual(readDocumentFactDigests(cleanDb));
+      } finally {
+        candidateDb.close();
+        cleanDb.close();
+      }
+    }
 
     expect(() =>
       assembleTypeScriptIndex({
@@ -170,4 +216,8 @@ function cleanOracle(root: string): Buffer {
     stdio: 'pipe',
   });
   return readFileSync(outputPath);
+}
+
+function convertScip(scipBinary: string, indexPath: string, databasePath: string): void {
+  execFileSync(scipBinary, ['expt-convert', '--output', databasePath, indexPath], { stdio: 'pipe' });
 }
