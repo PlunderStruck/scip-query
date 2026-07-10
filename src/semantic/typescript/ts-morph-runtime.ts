@@ -12,6 +12,7 @@ export interface ProjectBundle {
 
 const require = createRequire(import.meta.url);
 let tsMorphModule: TsMorphModule | null | undefined;
+let engineIdentity: string | undefined;
 
 export function loadTsMorph(): TsMorphModule | null {
   if (tsMorphModule !== undefined) return tsMorphModule;
@@ -21,6 +22,20 @@ export function loadTsMorph(): TsMorphModule | null {
     tsMorphModule = null;
   }
   return tsMorphModule;
+}
+
+export function typeScriptSemanticEngineIdentity(): string {
+  if (engineIdentity) return engineIdentity;
+  const tsMorph = loadTsMorph();
+  if (!tsMorph) return 'ts-morph:unavailable';
+  let tsMorphVersion = 'unknown';
+  try {
+    tsMorphVersion = (require('ts-morph/package.json') as { version?: string }).version ?? 'unknown';
+  } catch {
+    // The runtime module and compiler version still distinguish the engine.
+  }
+  engineIdentity = `ts-morph:${tsMorphVersion}:typescript:${tsMorph.ts.version}`;
+  return engineIdentity;
 }
 
 export function createTsMorphProjectBundles(tsMorph: TsMorphModule, tsconfigPaths: readonly string[]): ProjectBundle[] {

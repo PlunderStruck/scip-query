@@ -5,6 +5,7 @@ import {
   PROJECT_EVIDENCE_KINDS,
   readCachedFileEvidence,
   readCachedProjectEvidence,
+  writeCachedFileEvidenceBatch,
   writeCachedFileEvidence,
   writeCachedProjectEvidence,
   type FileEvidenceKind,
@@ -54,6 +55,7 @@ export interface FileEvidenceProduct<T> {
   kind: FileEvidenceKind;
   read(db: ScipDatabase, relativePath: string, contentHash: string): T | null;
   write(db: ScipDatabase, relativePath: string, contentHash: string, value: T): void;
+  writeBatch(db: ScipDatabase, entries: ReadonlyArray<{ relativePath: string; contentHash: string; value: T }>): void;
 }
 
 export interface FileEvidenceProductOptions<T> {
@@ -143,6 +145,12 @@ export const EVIDENCE_PRODUCT_MANIFEST: readonly EvidenceProductManifestEntry[] 
     stalenessTest: 'tests/storage/evidence-cache.test.ts',
     owner: 'src/analysis/git-history.ts',
   }),
+  fileManifest('typescript-reference-fragments', {
+    dependsOn: ['content-hash', 'direct-deps-digest', 'config', 'tool-version'],
+    keyParts: ['kind', 'relativePath', 'semanticIdentity', 'payloadVersion'],
+    stalenessTest: 'tests/semantic/typescript/typescript-reference-fragments.test.ts',
+    owner: 'src/semantic/typescript/reference-fragment-shadow.ts',
+  }),
   projectManifest('file-dependency-graph', {
     dependsOn: ['project-fingerprint', 'indexed-language-set', 'import-resolution-fingerprint', 'tool-version'],
     keyParts: ['kind', 'scope', 'projectFingerprint', 'payloadVersion'],
@@ -194,6 +202,17 @@ export function createFileEvidenceProduct<T>(opts: FileEvidenceProductOptions<T>
     },
     write(db, relativePath, contentHash, value) {
       writeCachedFileEvidence(db, opts.kind, relativePath, contentHash, opts.serialize(value));
+    },
+    writeBatch(db, entries) {
+      writeCachedFileEvidenceBatch(
+        db,
+        entries.map((entry) => ({
+          kind: opts.kind,
+          relativePath: entry.relativePath,
+          contentHash: entry.contentHash,
+          payload: opts.serialize(entry.value),
+        })),
+      );
     },
   };
 }

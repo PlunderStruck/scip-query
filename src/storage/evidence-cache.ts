@@ -37,6 +37,7 @@ export const FILE_EVIDENCE_KINDS = [
   'consumer-file-usage',
   'react-component-behavior-profiles',
   'git-file-adds',
+  'typescript-reference-fragments',
 ] as const;
 
 export type FileEvidenceKind = (typeof FILE_EVIDENCE_KINDS)[number];
@@ -102,6 +103,13 @@ export interface SemanticReferenceCacheEntry {
   relativePath: string;
   symbol: string;
   projectFingerprint: string;
+  payload: string;
+}
+
+export interface FileEvidenceCacheEntry {
+  kind: FileEvidenceKind;
+  relativePath: string;
+  contentHash: string;
   payload: string;
 }
 
@@ -355,6 +363,21 @@ export function writeCachedFileEvidence(
     connection.writeFileEvidence.run(kind, relativePath, contentHash, VERSION, payload);
   } catch (error) {
     disable(db, 'file_evidence write', error);
+  }
+}
+
+export function writeCachedFileEvidenceBatch(db: ScipDatabase, entries: readonly FileEvidenceCacheEntry[]): void {
+  if (entries.length === 0) return;
+  const connection = connectionFor(db);
+  if (!connection) return;
+  try {
+    connection.evidence.transaction(() => {
+      for (const entry of entries) {
+        connection.writeFileEvidence.run(entry.kind, entry.relativePath, entry.contentHash, VERSION, entry.payload);
+      }
+    })();
+  } catch (error) {
+    disable(db, 'file_evidence batch write', error);
   }
 }
 

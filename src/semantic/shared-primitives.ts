@@ -25,6 +25,7 @@ import {
   rustScipOccurrenceReferencesForDefinition,
 } from './rust/scip-occurrence-references.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
+import { recordTypeScriptReferenceFragmentShadow } from './typescript/reference-fragment-shadow.js';
 
 export type SemanticEvidenceSlot =
   | 'semantic-references'
@@ -241,6 +242,8 @@ function materializeSemanticReferenceBatch(
   let cacheReadFiles = 0;
   let fullyInMemoryFiles = 0;
   let incompleteInMemoryHits = 0;
+  let computeInput: IndexedDefinition[] = [];
+  let computed = new Map<number, SemanticReference[]>();
 
   profileSpan(
     'semantic.references.cache-scan',
@@ -302,8 +305,8 @@ function materializeSemanticReferenceBatch(
   );
 
   if (misses.length > 0 || unkeyed.length > 0) {
-    const computeInput = [...unkeyed, ...misses.map((miss) => miss.definition)];
-    const computed = profileSpan(
+    computeInput = [...unkeyed, ...misses.map((miss) => miss.definition)];
+    computed = profileSpan(
       'semantic.references.compute-misses',
       () => {
         const rows = semanticReferenceMap(db, computeInput, opts);
@@ -346,6 +349,9 @@ function materializeSemanticReferenceBatch(
       () => writeCachedSemanticReferencesBatch(db, cacheWrites),
       () => ({ entries: cacheWrites.length }),
     );
+  }
+  if (computed.size > 0) {
+    recordTypeScriptReferenceFragmentShadow(db, computeInput, computed);
   }
   return {
     definitions: definitions.length,

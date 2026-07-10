@@ -13,6 +13,16 @@ import {
 import { getAllDefinitions } from '../../../src/symbols/definition-catalog.js';
 import { dead, refs, staleAbstractions } from '../../../src/queries/index.js';
 import { createEvidenceSchema } from '../../fixtures/evidence-fixture.js';
+import {
+  assembleReferenceFragments,
+  compareReferenceFragmentMaps,
+} from '../../../src/semantic/typescript/reference-fragments.js';
+import { fingerprintProjectFiles } from '../../../src/reindex/project-files.js';
+import { typeScriptSemanticIdentityForFile } from '../../../src/semantic/typescript/semantic-identity-context.js';
+import {
+  readTypeScriptReferenceFragment,
+  TYPESCRIPT_REFERENCE_FRAGMENT_SCHEMA,
+} from '../../../src/semantic/typescript/reference-fragment-shadow.js';
 
 function createSemanticFixtureDb(dbPath: string): void {
   const db = new Database(dbPath);
@@ -100,6 +110,22 @@ function withSemanticFixture(run: (db: ScipDatabase) => void): void {
     ].join('\n'),
   );
   createSemanticFixtureDb(dbPath);
+  writeFileSync(
+    join(projectRoot, 'meta.json'),
+    JSON.stringify({
+      version: 3,
+      status: 'complete',
+      fingerprint: {
+        version: 2,
+        languages: ['typescript'],
+        pnpmWorkspaces: false,
+        typescriptProjectMode: 'single',
+        typescriptProjects: [],
+        files: fingerprintProjectFiles(projectRoot),
+      },
+      indexedLanguages: ['typescript'],
+    }),
+  );
 
   const db = new ScipDatabase({
     dbPath,
@@ -351,6 +377,12 @@ describe('TypeScript semantic provider', () => {
       expect(comparison.candidateReferenceCount).toBe(comparison.baselineReferenceCount);
       expect(comparison.baselineMs).toBeGreaterThanOrEqual(0);
       expect(comparison.candidateMs).toBeGreaterThanOrEqual(0);
+
+      const expected = baseline.referencesForDefinitions!(definitions);
+      const fragments = baseline.referenceFragmentsForFiles!(['src/api.ts', 'src/consumer.ts']);
+      expect(
+        compareReferenceFragmentMaps(definitions, expected, assembleReferenceFragments(definitions, fragments)),
+      ).toEqual(expect.objectContaining({ passed: true, missing: [], extra: [] }));
     });
   });
 
@@ -400,6 +432,21 @@ describe('TypeScript semantic provider', () => {
       expect(callerMap.get(byName.get('semanticOnly')!.symbolId)).toEqual(new Set(['src/consumer.ts']));
       expect(callerMap.get(byName.get('defaultHelper')!.symbolId)).toEqual(new Set(['src/consumer.ts']));
       expect(callerMap.get(byName.get('namespaceHelper')!.symbolId)).toEqual(new Set(['src/consumer.ts']));
+
+      const fragmentIdentity = typeScriptSemanticIdentityForFile(
+        db,
+        'src/consumer.ts',
+        TYPESCRIPT_REFERENCE_FRAGMENT_SCHEMA,
+      );
+      expect(fragmentIdentity?.key).toEqual(expect.any(String));
+      expect(readTypeScriptReferenceFragment(db, 'src/consumer.ts', fragmentIdentity!.key!)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            targetSymbol: byName.get('usedHelper')!.symbol,
+            location: expect.objectContaining({ file: 'src/consumer.ts' }),
+          }),
+        ]),
+      );
 
       expect(semanticSignature(db, byName.get('usedHelper')!)).toBe('()=>string');
       expect(semantic.signature(byName.get('usedHelper')!)).toBe('()=>string');

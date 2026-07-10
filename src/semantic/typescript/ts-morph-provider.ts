@@ -3,7 +3,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { resolveImportPath } from '../../resolution/import-path-resolver.js';
 import { discoverWorkspacePackages, type WorkspacePackage } from '../../resolution/workspace-packages.js';
-import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
+import { getAllDefinitions, getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { cached } from './cache.js';
 import { definitionNodesForSourceFile } from './definition-node-matcher.js';
 import { findIndexedDefinitionNear, indexedDefinitionLeafMap } from './indexed-definitions.js';
@@ -27,6 +27,7 @@ import type {
   SemanticLocation,
   SemanticProvider,
   SemanticReference,
+  SemanticReferenceFragment,
 } from '../types.js';
 import { discoverTypeScriptTsconfigs } from './tsconfig-discovery.js';
 import {
@@ -37,6 +38,8 @@ import {
   type TsMorphModule,
 } from './ts-morph-runtime.js';
 import { profileEnabled, profileSpan } from '../../instrumentation/profile.js';
+import { referenceFragmentsFromDefinitionMap } from './reference-fragments.js';
+import { isTypeScriptLike } from './source-kinds.js';
 
 type PackageExportIndex = Map<string, Map<string, Set<number>>>;
 type TypeScriptSymbol = ts.Symbol;
@@ -250,6 +253,11 @@ class TsMorphSemanticProvider implements SemanticProvider {
     }
 
     return result;
+  }
+
+  referenceFragmentsForFiles(files: readonly string[]): Map<string, SemanticReferenceFragment[]> {
+    const definitions = getAllDefinitions(this.db).filter((definition) => isTypeScriptLike(definition.relativePath));
+    return referenceFragmentsFromDefinitionMap(definitions, this.referencesForDefinitions(definitions), files);
   }
 
   private referencesForDefinitionsBySymbolScan(

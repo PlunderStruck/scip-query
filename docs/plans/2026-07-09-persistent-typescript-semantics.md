@@ -1,7 +1,7 @@
 # Persistent TypeScript Semantics — Phase 3 Concrete Plan
 
 Date: 2026-07-09
-Status: in progress; step 3.1 complete and step 3.2 next
+Status: in progress; steps 3.1–3.2 complete and step 3.3 next
 Roadmap phase: 3
 
 ## Goal
@@ -173,16 +173,33 @@ postchecks.
 
 ### 3.2 — Add origin-file fragment contracts and shadow storage
 
-- [ ] **Edit:** semantic types/provider, TypeScript provider, evidence-product
+- [x] **Edit:** semantic types/provider, TypeScript provider, evidence-product
       manifest/cache, shared primitives, and real SQLite/provider tests.
-- Add reference/import/signature fragment shapes keyed by stable symbols and
-  the step 3.1 identity. Produce fragments from the existing provider and
+- Add reference fragment shapes keyed by stable symbols and the step 3.1
+  identity. Produce fragments from the existing provider and
   compare assembled results against its legacy definition-centric answers.
 - Dual-write accepted fragments while legacy reads remain authoritative.
   Record hit/miss/parity telemetry. The planted omitted-origin verifier must be
   observed red.
 - Validate schema/evidence manifest and recent-duplicate/incomplete-migration
   checks.
+- **Outcome:** The provider can now invert its existing compiler-correct
+  definition answers into canonical origin-file fragments and reassemble any
+  requested definition set by stable SCIP symbol. A new evidence product writes
+  all accepted file fragments in one SQLite transaction under the semantic
+  identity. The legacy definition-centric map remains authoritative; the
+  shadow recorder writes only after exact missing/extra comparison passes and
+  converts every exception into unavailable telemetry. The generated fixture
+  persisted and reread a real consumer fragment. Twenty-seven focused
+  provider/storage/manifest tests pass. The discriminating omitted-origin
+  control reported `passed: false` with the two exact missing symbol/file/line/
+  column facts before the complete fragment set passed.
+
+  Import usage, signatures, and callees were deliberately left in step 3.5.
+  Reference ownership is the non-obvious safety boundary and needed its own
+  shadow oracle; mixing simpler file-owned caches into this commit would have
+  hidden whether failures came from fragment inversion or ordinary key reuse.
+  This changes sequencing, not Phase 3 scope or gates.
 
 ### 3.3 — Keep ts-morph Projects alive across compatible generations
 

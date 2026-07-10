@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Phases 1–2 complete; Phase 3 step 3.1 complete and step 3.2 next
+Status: Phases 1–2 complete; Phase 3 steps 3.1–3.2 complete and step 3.3 next
 
 ## Goal
 
@@ -442,6 +442,12 @@ configuration, ambient declarations, membership, engine, and schema affect
 every required identity. Missing graph evidence widens to a whole-project key,
 while missing, duplicate, or unreadable required inputs disable reuse. An
 export-dependency under-invalidation expectation was planted and observed red.
+Step 3.2 now derives reference fragments owned by the file containing each
+reference, reassembles them by stable SCIP target symbol, and dual-writes them
+in one evidence-database transaction only after exact comparison with the
+legacy definition-centric oracle. An omitted-origin probe reported the exact
+missing facts. Legacy reads remain authoritative; import, signature, and callee
+fragment routing remains step 3.5.
 
 **Exit gate:** Phase 3 performance, hit-rate, and parity thresholds pass on
 separate CLI processes and after service restart.

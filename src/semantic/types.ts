@@ -36,6 +36,11 @@ export interface SemanticReference {
   column: number;
 }
 
+export interface SemanticReferenceFragment {
+  targetSymbol: string;
+  location: SemanticReference;
+}
+
 export interface SemanticCallee {
   symbol: string;
   file: string;
@@ -54,6 +59,7 @@ export interface SemanticProvider {
   importUsage(file: string): SemanticImportUsage[];
   referencesFor(definition: IndexedDefinition): SemanticReference[];
   referencesForDefinitions?(definitions: readonly IndexedDefinition[]): Map<number, SemanticReference[]>;
+  referenceFragmentsForFiles?(files: readonly string[]): Map<string, SemanticReferenceFragment[]>;
   referencesAndCalleesForDefinitions?(
     referenceDefinitions: readonly IndexedDefinition[],
     calleeDefinitions: readonly IndexedDefinition[],
