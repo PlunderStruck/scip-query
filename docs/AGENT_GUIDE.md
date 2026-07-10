@@ -27,6 +27,16 @@ For analyzer implementation work, follow [Regex Policy](REGEX_POLICY.md): regex 
    `scip-query setup --no-hooks --json` when the repo should not write Codex or
    Claude Code lifecycle hooks.
 
+   Setup reports three change scopes. Repository records are shared project
+   facts and history that must survive clones, so commit `.scipquery.json`,
+   managed AGENTS/CLAUDE guidance, health dossiers,
+   `.scipquery/suppressions/*.json`, and `.scipquery/ledger/` when setup or a
+   gate run changes them. Checkout preferences configure only one clone, so do
+   not commit `.codex/hooks.json` or `.claude/settings.local.json`; setup keeps
+   them out of Git through `.git/info/exclude`. User-environment changes install
+   skills or indexers for the current machine. Use `setup --guided` to answer
+   each repository, checkout, or user-scope question separately.
+
 2. **Resolve blockers**
    ```bash
    scip-query doctor

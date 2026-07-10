@@ -4,6 +4,8 @@ Date: 2026-07-10
 Status: Complete
 Parent: [`2026-07-09-automatic-incremental-indexing-roadmap.md`](./2026-07-09-automatic-incremental-indexing-roadmap.md)
 
+Follow-up: [`2026-07-10-setup-scope-and-outcome-records.md`](./2026-07-10-setup-scope-and-outcome-records.md) closes setup ownership, local-hook, and effectiveness-record integrity gaps discovered after this lifecycle slice.
+
 ## Goal
 
 Make the completed demand-started indexing lifecycle the normal outcome of an

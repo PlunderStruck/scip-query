@@ -1718,6 +1718,29 @@ diff-gate with zero findings or advisories. The separate health baseline still
 predates the broader indexing campaign and reports 165 repository-wide deltas;
 it was not rewritten as part of this setup slice.
 
+### 2026-07-10 — setup ownership and outcome-record follow-up
+
+The post-setup integrity audit found that guided indexer/parser questions were
+displayed without controlling an implementation and that installed
+`hook-stop` bypassed the outcome-event recorder used by legacy hook mode. The
+accepted follow-up makes indexer consent effective, removes the unsupported
+parser-runtime action, classifies setup changes as repository, checkout, or
+user state, and makes normal installed Stop hooks record caught-to-resolved
+transitions. A real hook fixture now proves that removing a finding produces a
+`resolved` event and one fixed item in `effectiveness`.
+
+Project hooks now remain local through `.git/info/exclude`; setup refuses to
+rewrite tracked provider settings, and this repository removes its obsolete
+tracked `.codex/hooks.json` and `.claude/settings.json`. Suppression JSON and
+`.scipquery/ledger/` remain shared repository records that generated guidance
+requires agents to commit. Final run counts and package evidence are recorded
+in the closure plan: 1,240 tests across 180 files, lint, typecheck, and build
+passed. The 333-file packed package was 826,805 bytes at SHA-256
+`a18dd564e24ef944c460cd306292079e8f93455ef0a8d80e5735711d3589df0d`;
+its isolated hook install/remove smoke kept `git status` clean. The final
+reindex reused the fresh generation in 0.3 seconds, and diff gate completed
+with zero findings or advisories.
+
 ## Run History
 
 Machine-readable run history:

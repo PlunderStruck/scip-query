@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runStopHookDiffGate } from '../../src/runtime/agent-hooks.js';
+import { computeEffectiveness } from '../../src/queries/health/effectiveness.js';
+import { readOutcomeEvents } from '../../src/storage/outcome-events.js';
 import { evidenceFixtureDb } from '../fixtures/evidence-fixture.js';
 
 // Regression coverage for the Stop-hook path: `resolveHookWorkspace` +
@@ -105,5 +107,23 @@ describe('Stop hook doc-reference snapshot-doc exemption', () => {
     const docFindings = (result?.findings ?? []).filter((finding) => finding.check === 'doc-reference');
     const guideFindings = docFindings.filter((finding) => finding.file === 'docs/guide.md');
     expect(guideFindings).toHaveLength(1);
+  });
+
+  it('records a normal installed-hook finding as fixed after the cited code link is removed', () => {
+    const repoRoot = buildRepo();
+
+    const first = runStopHookDiffGate(hookInputFor(repoRoot));
+    const guideFinding = first?.findings.find(
+      (finding) => finding.check === 'doc-reference' && finding.file === 'docs/guide.md',
+    );
+    expect(guideFinding).toBeDefined();
+
+    writeFile(join(repoRoot, 'docs', 'guide.md'), 'General project guidance.\n');
+    const second = runStopHookDiffGate(hookInputFor(repoRoot));
+    expect(second?.findings.some((finding) => finding.id === guideFinding?.id)).toBe(false);
+
+    const events = readOutcomeEvents(repoRoot).filter((event) => event.findingId === guideFinding?.id);
+    expect(events.map((event) => event.event)).toEqual(['caught', 'resolved']);
+    expect(computeEffectiveness(events).checks[0]).toMatchObject({ caught: 1, fixed: 1, open: 0 });
   });
 });

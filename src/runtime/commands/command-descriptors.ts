@@ -154,7 +154,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     command: 'setup-hooks',
     description: 'Install or refresh project-local Codex and Claude Code lifecycle hooks',
     options: [
-      option('--shared', 'Write Claude hooks to tracked .claude/settings.json instead of settings.local.json'),
+      option('--shared', 'Deprecated compatibility flag; hooks remain checkout-local and untracked'),
       option('--remove', 'Remove managed project hooks and remember the opt-out'),
       option('--force', 'Reinstall hooks even after a previous --remove opt-out'),
       option('--json', 'Output as JSON for programmatic consumption'),
@@ -268,7 +268,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     description:
       'Bootstrap this project: enable automatic indexing, install agent skills, refresh the index, verify capabilities, and report health',
     options: withJsonOption([
-      option('--guided', 'Ask before project-local hooks and agent guidance changes'),
+      option('--guided', 'Ask before repository, checkout-local, and user-environment changes'),
       option('--git-hook', 'Also install a git pre-commit hook that runs diff-gate'),
       option('--no-hooks', 'Skip Codex and Claude Code lifecycle hook installation'),
       option('--dossier-dir <path>', 'Directory for generated setup health dossier files'),

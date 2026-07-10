@@ -27,6 +27,10 @@ describe('setupAgent', () => {
     expect(result.written).toEqual(['AGENTS.md', 'CLAUDE.md']);
     const agentsMd = readFileSync(join(projectRoot, 'AGENTS.md'), 'utf-8');
     expect(agentsMd).toContain('scip-query diff-gate');
+    expect(agentsMd).toContain('commit `.scipquery/suppressions/*.json`');
+    expect(agentsMd).toContain('`.scipquery/ledger/events.jsonl`');
+    expect(agentsMd).toContain('`.codex/hooks.json` and `.claude/settings.local.json`');
+    expect(agentsMd).toContain('must not be committed');
     expect(agentsMd).toContain('scip-query:agent-setup:begin');
     // Claude Code doesn't read AGENTS.md natively — the shim bridges it.
     const claudeMd = readFileSync(join(projectRoot, 'CLAUDE.md'), 'utf-8');

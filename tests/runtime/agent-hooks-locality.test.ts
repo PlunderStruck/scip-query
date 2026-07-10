@@ -1,0 +1,84 @@
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { installProjectAgentHooks } from '../../src/runtime/agent-hooks.js';
+
+const roots: string[] = [];
+
+function createGitRoot(): string {
+  const root = mkdtempSync(join(tmpdir(), 'scip-query-local-hooks-'));
+  roots.push(root);
+  execFileSync('git', ['init', '--quiet'], { cwd: root });
+  return root;
+}
+
+afterEach(() => {
+  while (roots.length > 0) rmSync(roots.pop()!, { recursive: true, force: true });
+});
+
+describe('checkout-local project hooks', () => {
+  it('installs provider configs without creating a Git worktree diff', () => {
+    const root = createGitRoot();
+
+    const first = installProjectAgentHooks(root, { removeLegacyUserHooks: false });
+    const second = installProjectAgentHooks(root, { removeLegacyUserHooks: false });
+
+    expect(first.installed).toEqual(['.codex/hooks.json', '.claude/settings.local.json']);
+    expect(first.gitExcluded).toEqual(['.codex/hooks.json', '.claude/settings.local.json']);
+    expect(second.unchanged).toEqual(['.codex/hooks.json', '.claude/settings.local.json']);
+    expect(readFileSync(join(root, '.git', 'info', 'exclude'), 'utf-8')).toContain(
+      '# scip-query:local-hooks:begin\n/.codex/hooks.json\n/.claude/settings.local.json\n# scip-query:local-hooks:end',
+    );
+    expect(
+      execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], { cwd: root, encoding: 'utf-8' }),
+    ).toBe('');
+  });
+
+  it('keeps the deprecated shared flag local', () => {
+    const root = createGitRoot();
+
+    const result = installProjectAgentHooks(root, { shared: true, removeLegacyUserHooks: false });
+
+    expect(result.warnings).toContain(
+      '--shared is deprecated; project hooks are always checkout-local and will not be committed.',
+    );
+    expect(existsSync(join(root, '.claude', 'settings.local.json'))).toBe(true);
+    expect(existsSync(join(root, '.claude', 'settings.json'))).toBe(false);
+  });
+
+  it('does not mutate a provider config already tracked by the repository', () => {
+    const root = createGitRoot();
+    const path = join(root, '.codex', 'hooks.json');
+    mkdirSync(join(root, '.codex'), { recursive: true });
+    writeFileSync(path, '{"team":"owned"}\n');
+    execFileSync('git', ['add', '.codex/hooks.json'], { cwd: root });
+
+    const result = installProjectAgentHooks(root, { removeLegacyUserHooks: false });
+
+    expect(result.skipped).toContainEqual({
+      target: '.codex/hooks.json',
+      reason: 'tracked repository config; checkout-local hook setup will not modify it',
+    });
+    expect(readFileSync(path, 'utf-8')).toBe('{"team":"owned"}\n');
+    expect(result.installed).toContain('.claude/settings.local.json');
+  });
+
+  it('removes owned Codex hooks and keeps the ignored Claude opt-out', () => {
+    const root = createGitRoot();
+    installProjectAgentHooks(root, { removeLegacyUserHooks: false });
+
+    const result = installProjectAgentHooks(root, { remove: true, removeLegacyUserHooks: false });
+
+    expect(result.removed).toContain('.codex/hooks.json');
+    expect(result.removed).toContain('.claude/settings.local.json');
+    expect(existsSync(join(root, '.codex', 'hooks.json'))).toBe(false);
+    expect(readFileSync(join(root, '.claude', 'settings.local.json'), 'utf-8')).toContain(
+      '"scipQueryHooks": "declined"',
+    );
+    expect(
+      execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], { cwd: root, encoding: 'utf-8' }),
+    ).toBe('');
+  });
+});

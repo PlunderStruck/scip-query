@@ -119,8 +119,11 @@ moving the whole product surface at once.
 - `src/runtime/project-readiness.ts` reports language readiness, semantic
   readiness, Tree-sitter/source fallback readiness, and checker availability.
 - `src/runtime/project-setup.ts` owns the non-interactive setup workflow plus a
-  guided planner used by `scip-query setup --guided` for consent-first local
-  changes. Setup now persists the demand-started indexing policy, proves the
+  guided planner used by `scip-query setup --guided` for consent-first changes.
+  Every action and result is classified as a repository record, a
+  checkout-local preference, or a user-environment change. Indexer consent now
+  controls remediation; unsupported parser-runtime installation is not
+  offered. Setup persists the demand-started indexing policy, proves the
   service's clean-idle lifecycle from live state, and reports Rust's final
   semantic transport, lifecycle state, and worker fallback after health. The
   status read is passive; semantic health work may wake the helper.

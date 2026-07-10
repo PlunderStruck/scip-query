@@ -24,6 +24,7 @@ async function loadSetup(): Promise<{
   const readdirSync = vi.fn(() => []);
   const readFileSync = vi.fn(() => '{}');
   const writeFileSync = vi.fn();
+  const rmSync = vi.fn();
   const readlinkSync = vi.fn(() => {
     throw new Error('not-a-link');
   });
@@ -61,6 +62,7 @@ async function loadSetup(): Promise<{
     readdirSync,
     readFileSync,
     writeFileSync,
+    rmSync,
     readlinkSync,
     unlinkSync,
   }));
@@ -210,7 +212,7 @@ describe('skill installation', () => {
     );
   });
 
-  it('can opt Claude hooks into the shared tracked settings file', async () => {
+  it('keeps the deprecated shared hook flag checkout-local', async () => {
     const { module, writeFileSync } = await loadSetup();
 
     const result = module.installProjectAgentHooks('/repo', {
@@ -219,9 +221,12 @@ describe('skill installation', () => {
       shared: true,
     });
 
-    expect(result.installed).toEqual(['.codex/hooks.json', '.claude/settings.json']);
+    expect(result.installed).toEqual(['.codex/hooks.json', '.claude/settings.local.json']);
+    expect(result.warnings).toContain(
+      '--shared is deprecated; project hooks are always checkout-local and will not be committed.',
+    );
     expect(writeFileSync).toHaveBeenCalledWith(
-      '/repo/.claude/settings.json',
+      '/repo/.claude/settings.local.json',
       expect.stringContaining('"command": "scip-query hook-stop"'),
     );
   });

@@ -179,3 +179,6 @@ even though its per-pair classification loop in `queries.coChange`
 candidate-pair count on a large repository. It now flows through `budgetedDbCommand` and
 `coChange` accepts a `scanLimit` option that truncates the (already priority-sorted) candidate
 pairs before classification, so the disclosed budget is truthful rather than cosmetic.
+The setup-scope follow-up rechecked this implementation citation; extracting
+shared hook outcome recording changed imports in the same runtime module but
+did not change the `co-change` budget boundary described here.

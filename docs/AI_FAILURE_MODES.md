@@ -253,9 +253,10 @@ The detectors only help if they run. Three layers, in increasing strength:
 **1. Skills and lifecycle hooks (routing).** Installing scip-query symlinks the
 bundled skills into `~/.agents/skills/`, `~/.claude/skills/`, and
 `~/.codex/skills/` — they update automatically with the package. Project setup
-writes reviewable repo-local hooks to `.codex/hooks.json` and
-`.claude/settings.local.json` by default; `setup-hooks --shared` opts into the
-tracked `.claude/settings.json`. Set `SCIP_QUERY_SKIP_HOOK_INSTALL=1` or run
+writes reviewable checkout-local hooks to `.codex/hooks.json` and
+`.claude/settings.local.json` and excludes both through `.git/info/exclude`.
+The deprecated `setup-hooks --shared` flag remains parse-compatible but no
+longer writes tracked settings. Set `SCIP_QUERY_SKIP_HOOK_INSTALL=1` or run
 `scip-query setup --no-hooks` to skip lifecycle hook setup. The hooks add
 scip-query context at session start, route prompts toward the right specialist,
 and run a safe Stop hook wrapper around the diff gate only for that repository.
@@ -275,6 +276,10 @@ configured indexer remediation, refreshes the index, smoke-tests representative
 commands, writes `docs/scip-query/health-dossier.md` and `.json`, reports the
 health score and items needing attention, and seeds a managed block in
 `AGENTS.md` plus a `CLAUDE.md` import shim.
+
+The generated guidance distinguishes shared repository records from local
+preferences. Commit suppression files and `.scipquery/ledger/` outcome events
+with the change that produced them. Never commit the checkout hook files.
 
 After setup, use `scip-cleanup-audit` to confirm raw signals and
 `scip-cleanup-improve` when the user wants the agent to fix the worst confirmed

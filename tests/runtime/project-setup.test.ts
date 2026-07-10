@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type * as NodeFs from 'node:fs';
+import type * as ReindexInstall from '../../src/reindex/install.js';
 
 async function loadProjectSetup(
   overrides: {
@@ -13,6 +14,7 @@ async function loadProjectSetup(
     automaticRefreshConfigThrows?: boolean;
     configDiagnostics?: Array<{ level: 'error' | 'warning'; path: string; message: string }>;
     freshnessStates?: Array<'fresh' | 'stale' | 'missing' | 'unknown'>;
+    indexerRunnable?: boolean;
   } = {},
 ) {
   vi.resetModules();
@@ -27,6 +29,7 @@ async function loadProjectSetup(
     reused: false,
     skipped: [],
   }));
+  const tryInstallIndexer = vi.fn(() => true);
   const runIsolatedHealthReport = vi.fn(() => {
     if (overrides.healthThrows) throw new Error('health failed');
     return {
@@ -84,8 +87,8 @@ async function loadProjectSetup(
     indexers: languages.map((language) => ({
       language,
       binaryLabel: `scip-${language}`,
-      installed: true,
-      runnable: true,
+      installed: overrides.indexerRunnable ?? true,
+      runnable: overrides.indexerRunnable ?? true,
     })),
     semantic: undefined,
     checkers: [],
@@ -103,12 +106,18 @@ async function loadProjectSetup(
       detectors: [],
     })),
   };
-  const setupAgent = vi.fn(() => ({ written: ['AGENTS.md'], unchanged: [], skipped: [] }));
+  const setupAgent = vi.fn((_projectRoot: string, options?: { gitHook?: boolean }) => ({
+    written: ['AGENTS.md', ...(options?.gitHook ? ['.git/hooks/pre-commit'] : [])],
+    unchanged: [],
+    skipped: [],
+  }));
   const installProjectAgentHooks = vi.fn(() => ({
-    installed: ['.codex/hooks.json', '.claude/settings.json'],
+    installed: ['.codex/hooks.json', '.claude/settings.local.json'],
     updated: [],
     unchanged: [],
     removed: [],
+    gitExcluded: ['.codex/hooks.json', '.claude/settings.local.json'],
+    warnings: [],
     skipped: [],
   }));
   const configureProjectAutomaticRefresh = vi.fn(
@@ -152,6 +161,10 @@ async function loadProjectSetup(
     return { ...actual, existsSync: vi.fn((target: string) => target === '/repo/.scip/index.db' && dbExists) };
   });
   vi.doMock('../../src/reindex/index.js', () => ({ reindex }));
+  vi.doMock('../../src/reindex/install.js', async () => {
+    const actual = await vi.importActual<typeof ReindexInstall>('../../src/reindex/install.js');
+    return { ...actual, tryInstallIndexer };
+  });
   vi.doMock('../../src/runtime/agent-setup.js', () => ({ setupAgent }));
   vi.doMock('../../src/runtime/agent-hooks.js', () => ({ installProjectAgentHooks }));
   vi.doMock('../../src/runtime/cli-support.js', () => ({ cliVersion: '0.15.0', runIsolatedHealthReport }));
@@ -247,6 +260,7 @@ async function loadProjectSetup(
     configureProjectAutomaticRefresh,
     ensureWatchService,
     rustSemanticSessionStatus,
+    tryInstallIndexer,
   };
 }
 
@@ -269,23 +283,10 @@ describe('runProjectSetup', () => {
       watchEnabled: false,
       readiness: {
         languages: ['rust'],
-        indexers: [{ language: 'rust', binaryLabel: 'rust-analyzer', installed: true, runnable: true }],
+        indexers: [{ language: 'rust', binaryLabel: 'rust-analyzer', installed: false, runnable: false }],
         semantics: [],
         checkers: [],
         gitAvailable: true,
-      },
-      capabilities: {
-        languages: ['rust'],
-        capabilities: [],
-        matrix: [
-          {
-            language: 'rust',
-            indexing: { status: 'available' },
-            sourceFacts: { status: 'unavailable', reason: 'tree-sitter native module not loadable' },
-            semantic: { status: 'available' },
-            cleanupVerification: { status: 'unavailable' },
-          },
-        ],
       },
     });
 
@@ -293,21 +294,25 @@ describe('runProjectSetup', () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: 'enable-automatic-refresh',
+          scope: 'repository',
           recommended: true,
           requiresConsent: true,
         }),
         expect.objectContaining({
           id: 'create-agent-guidance',
+          scope: 'repository',
           recommended: false,
           requiresConsent: true,
         }),
         expect.objectContaining({
           id: 'install-project-hooks',
+          scope: 'checkout',
           recommended: true,
           requiresConsent: true,
         }),
         expect.objectContaining({
-          id: 'install-parser-runtimes',
+          id: 'install-indexers',
+          scope: 'user',
           recommended: true,
           requiresConsent: true,
         }),
@@ -333,24 +338,12 @@ describe('runProjectSetup', () => {
         checkers: [],
         gitAvailable: true,
       },
-      capabilities: {
-        languages: ['typescript'],
-        capabilities: [],
-        matrix: [
-          {
-            language: 'typescript',
-            indexing: { status: 'available' },
-            sourceFacts: { status: 'available' },
-            semantic: { status: 'available' },
-            cleanupVerification: { status: 'available' },
-          },
-        ],
-      },
     });
 
     expect(plan.actions).toEqual([
       expect.objectContaining({
         id: 'update-agent-guidance',
+        scope: 'repository',
         recommended: true,
         requiresConsent: true,
       }),
@@ -391,6 +384,16 @@ describe('runProjectSetup', () => {
       status: 'written',
     });
     expect(report.filesWritten).toContain('/repo/docs/scip-query/health-dossier.md');
+    expect(report.changeScopes).toEqual({
+      repository: [
+        '/repo/.scipquery.json',
+        'AGENTS.md',
+        '/repo/docs/scip-query/health-dossier.md',
+        '/repo/docs/scip-query/health-dossier.json',
+      ],
+      checkout: ['.codex/hooks.json', '.claude/settings.local.json', '.git/hooks/pre-commit'],
+      user: ['Codex/scip-query'],
+    });
     expect(report.smokeTests).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ command: 'scip-query reindex', status: 'pass' }),
@@ -460,6 +463,19 @@ describe('runProjectSetup', () => {
         expect.objectContaining({ command: 'scip-query setup-agent', status: 'pass' }),
       ]),
     );
+  });
+
+  it('does not install a missing indexer when guided setup consent is declined', async () => {
+    const { module, tryInstallIndexer } = await loadProjectSetup({ indexerRunnable: false });
+
+    const report = await module.runProjectSetup({ installIndexers: false });
+
+    expect(tryInstallIndexer).not.toHaveBeenCalled();
+    expect(report.indexerRemediation).toEqual([]);
+    expect(report.steps.find((step) => step.id === 'indexer-remediation')).toMatchObject({
+      status: 'skipped',
+      message: 'Skipped by guided setup choice.',
+    });
   });
 
   it('settles one first-build input change before claiming freshness', async () => {
@@ -697,10 +713,12 @@ describe('runProjectSetup', () => {
     }));
     vi.doMock('../../src/runtime/agent-hooks.js', () => ({
       installProjectAgentHooks: vi.fn(() => ({
-        installed: ['.codex/hooks.json', '.claude/settings.json'],
+        installed: ['.codex/hooks.json', '.claude/settings.local.json'],
         updated: [],
         unchanged: [],
         removed: [],
+        gitExcluded: ['.codex/hooks.json', '.claude/settings.local.json'],
+        warnings: [],
         skipped: [],
       })),
     }));

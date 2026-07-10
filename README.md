@@ -228,7 +228,7 @@ scip-query suppress SQABC123DEF456 --check echo --reason "intentional compatibil
 
 This writes one file per suppression under `.scipquery/suppressions/` — commit it with your change. One-file-per-suppression means two branches suppressing different findings merge without conflict; the legacy `suppressions[]` array in `.scipquery.json` is still honored (read-only). Every suppression requires a reason plus either a stable finding id or a `check` (optionally narrowed by `file`). Check+file suppressions are allowed but warn because they waive every matching finding in that file. `diff-gate --json` reports both active and suppressed findings.
 
-**12. Measure whether the gate is earning its keep.** Every hook-mode `diff-gate` run appends finding transitions to a committed, merge-conflict-free ledger (`.scipquery/ledger/events.jsonl`, one JSON event per line under a scoped `merge=union` gitattribute). A finding that disappears without a suppression was fixed; a suppressed finding was noise or an accepted trade-off — the tool keeps score on itself:
+**12. Measure whether the gate is earning its keep.** Both installed Stop hooks and the legacy `diff-gate --hook` path append finding transitions to a committed, merge-conflict-free ledger (`.scipquery/ledger/events.jsonl`, one JSON event per line under a scoped `merge=union` gitattribute). A finding that disappears without a suppression was fixed; a suppressed finding was noise or an accepted trade-off — the tool keeps score on itself:
 
 ```bash
 scip-query effectiveness --since 30d
@@ -328,7 +328,7 @@ One-line "essential difference" per skill — read this table before the Routes 
 
 The confusable clusters, disambiguated: `scip-concrete-plan` (one change) vs `scip-conductor` (a program of changes with delegation); `scip-cleanup-audit` (report only) vs `scip-cleanup-improve` (autonomous fixing loop); `scip-verify` (did this specific change land safely) vs `scip-integrity-audit` (does this code actually work at all) vs `scip-maintainability` (is this well organized) vs `scip-twin-drift` (one drifted same-name pair specifically); `scip-directory-architecture` (folder ownership) vs `scip-maintainability` (deeper structural compression). `skills/scip-query/SKILL.md`'s Tie-Breaks section has the full routing logic.
 
-Project setup writes reviewable project-local lifecycle hooks for Codex and Claude Code (`.codex/hooks.json` and `.claude/settings.local.json` by default; `setup-hooks --shared` opts into `.claude/settings.json`). These hooks add scip-query context at session start, route prompts toward the right skill, and run an advisory Stop-hook wrapper around the diff gate only for that repository. The Stop hook sends feedback to the agent by default instead of blocking; set `SCIP_QUERY_STOP_HOOK_MODE=warn` for a warning-only hook response, or `SCIP_QUERY_STOP_HOOK_MODE=block` to enforce the gate. Set `SCIP_QUERY_SKIP_HOOK_INSTALL=1` or run `scip-query setup --no-hooks` to skip hook installation during setup, and run `scip-query setup-hooks --json` later to repair the current repo's hooks.
+Project setup writes reviewable checkout-local lifecycle hooks for Codex and Claude Code (`.codex/hooks.json` and `.claude/settings.local.json`). A checkout-local hook is an agent-tool preference whose defining trait is that it applies to one clone rather than expressing team policy. Setup adds both paths to that clone's `.git/info/exclude`, so they do not appear in commits, and refuses to rewrite either path if it is already tracked. `setup-hooks --shared` remains accepted only as a deprecated compatibility flag; it no longer writes `.claude/settings.json`. These hooks add scip-query context at session start, route prompts toward the right skill, and run an advisory Stop-hook wrapper around the diff gate only for that repository. The Stop hook sends feedback to the agent by default instead of blocking; set `SCIP_QUERY_STOP_HOOK_MODE=warn` for a warning-only hook response, or `SCIP_QUERY_STOP_HOOK_MODE=block` to enforce the gate. Set `SCIP_QUERY_SKIP_HOOK_INSTALL=1` or run `scip-query setup --no-hooks` to skip hook installation during setup, and run `scip-query setup-hooks --json` later to repair the current checkout's hooks.
 
 For a project, run `scip-query setup`. It enables demand-started automatic
 indexing unless the project already has an explicit `watch.enabled: false`,
@@ -347,6 +347,14 @@ indexing action and other project-local changes. After setup,
 fixing the worst confirmed items until no safe confirmed cleanup remains. Use
 `scip-query setup --git-hook` when you also want a local pre-commit diff gate.
 CI setup is intentionally separate.
+
+Setup classifies every change by where its facts belong:
+
+- **Repository records (commit):** shared project policy and history whose value comes from surviving clones and branches, including `.scipquery.json`, AGENTS/CLAUDE guidance, health dossiers, `.scipquery/suppressions/*.json`, and `.scipquery/ledger/`.
+- **Checkout preferences (do not commit):** integration settings for one clone, including `.codex/hooks.json`, `.claude/settings.local.json`, `.git/info/exclude`, and an optional `.git/hooks/pre-commit` backstop.
+- **User environment:** installed skills and language indexers used across checkouts on that machine.
+
+Rebuildable indexes, caches, and service state are runtime state: generated working data whose defining trait is that source plus configuration can reproduce it. They remain outside the repository by default. `setup --guided` labels each question with its scope, and both human and JSON setup reports return the resulting scope buckets.
 
 ## Formal Models (TLA+)
 

@@ -684,6 +684,25 @@ Setup closure passed 1,231 tests across 177 files, lint, typecheck, build,
 generated command docs, reindex, and diff-gate with zero findings or
 advisories.
 
+### Setup ownership and record integrity follow-up
+
+**Purpose:** ensure the completed setup lifecycle distinguishes shared project
+history from one-checkout preferences and records normal Stop-hook outcomes.
+
+**Progress:** Complete. Verification evidence lives in
+[`2026-07-10-setup-scope-and-outcome-records.md`](./2026-07-10-setup-scope-and-outcome-records.md).
+Setup actions and reports now classify repository, checkout, and user scopes.
+Hook files are always checkout-local, excluded through `.git/info/exclude`,
+and never written over tracked provider configuration. Guided indexer consent
+now controls the installer, while the nonfunctional parser-runtime question is
+gone. Installed Stop hooks share the durable caught-to-fixed recorder with the
+legacy hook path. Managed agent guidance requires committing suppression and
+outcome history and forbids committing hook preferences; uninstall preserves
+and names those repository records.
+The follow-up passed 1,240 tests across 180 files, lint, typecheck, build, an
+isolated packed hook install/remove smoke, fresh reindex, and diff gate with
+zero findings or advisories.
+
 ## Stress-Test Findings and Required Responses
 
 - **Missed or duplicated file events:** rescan content identities; events only

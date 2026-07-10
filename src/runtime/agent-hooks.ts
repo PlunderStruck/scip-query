@@ -1,7 +1,7 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import type { ProjectConfig, ScipQueryConfig } from '../domain/types.js';
 import { diffGate } from '../queries/impact/diff-gate.js';
 import type { DiffGateResult } from '../queries/impact/diff-gate.js';
@@ -13,6 +13,7 @@ import { getIndexFreshness } from './index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from './project-readiness.js';
 import { formatGateBlockReason, isStopHookReentry, readHookInput } from './agent-setup.js';
 import { cliVersion } from './cli-support.js';
+import { recordDiffGateOutcomes } from './diff-gate-outcomes.js';
 import {
   ensureWatchServiceForCommand,
   requestWatchServiceRefresh,
@@ -24,6 +25,12 @@ const SKIP_HOOK_INSTALL_ENV = 'SCIP_QUERY_SKIP_HOOK_INSTALL';
 const STOP_HOOK_MODE_ENV = 'SCIP_QUERY_STOP_HOOK_MODE';
 const SCIP_HOOK_COMMAND_PREFIX = 'scip-query hook-';
 const LEGACY_STOP_HOOK_COMMAND = 'scip-query diff-gate --hook';
+const LOCAL_HOOK_EXCLUDE_BEGIN = '# scip-query:local-hooks:begin';
+const LOCAL_HOOK_EXCLUDE_END = '# scip-query:local-hooks:end';
+const PROJECT_LOCAL_HOOK_TARGETS = [
+  { relativePath: '.codex/hooks.json', label: '.codex/hooks.json' },
+  { relativePath: '.claude/settings.local.json', label: '.claude/settings.local.json' },
+] as const;
 
 export type StopHookMode = 'warn' | 'feedback' | 'block';
 
@@ -42,6 +49,8 @@ export interface InstallUserAgentHooksResult {
   updated: string[];
   unchanged: string[];
   removed: string[];
+  gitExcluded: string[];
+  warnings: string[];
   skipped: Array<{ target: string; reason: string }>;
 }
 
@@ -131,44 +140,31 @@ export function installProjectAgentHooks(
   }
 
   const commandPrefix = projectHookCommandPrefix(projectRoot);
-  const claudeConfigName = opts.shared ? 'settings.json' : 'settings.local.json';
+  if (opts.shared) {
+    result.warnings.push('--shared is deprecated; project hooks are always checkout-local and will not be committed.');
+  }
+  ensureProjectHookGitExcludes(projectRoot, result, opts.dryRun);
 
   if (opts.remove) {
-    removeProjectProviderHooks({
-      configPath: join(projectRoot, '.codex', 'hooks.json'),
-      label: '.codex/hooks.json',
-      result,
+    removeProjectHookTarget(projectRoot, PROJECT_LOCAL_HOOK_TARGETS[0], result, {
       dryRun: opts.dryRun,
     });
-    removeProjectProviderHooks({
-      configPath: join(projectRoot, '.claude', claudeConfigName),
-      label: `.claude/${claudeConfigName}`,
-      result,
+    removeProjectHookTarget(projectRoot, PROJECT_LOCAL_HOOK_TARGETS[1], result, {
       writeDeclinedTombstone: true,
       dryRun: opts.dryRun,
     });
     return result;
   }
 
-  installProviderHooks({
+  installProjectHookTarget(projectRoot, PROJECT_LOCAL_HOOK_TARGETS[0], result, {
     provider: 'codex',
-    rootDir: join(projectRoot, '.codex'),
-    configPath: join(projectRoot, '.codex', 'hooks.json'),
-    label: '.codex/hooks.json',
-    createRoot: true,
     commandPrefix,
     force: opts.force,
-    result,
   });
-  installProviderHooks({
+  installProjectHookTarget(projectRoot, PROJECT_LOCAL_HOOK_TARGETS[1], result, {
     provider: 'claude',
-    rootDir: join(projectRoot, '.claude'),
-    configPath: join(projectRoot, '.claude', claudeConfigName),
-    label: `.claude/${claudeConfigName}`,
-    createRoot: true,
     commandPrefix,
     force: opts.force,
-    result,
   });
 
   if (opts.removeLegacyUserHooks !== false) {
@@ -202,7 +198,106 @@ export function removeUserAgentHooks(
 }
 
 function emptyHookInstallResult(): InstallUserAgentHooksResult {
-  return { installed: [], updated: [], unchanged: [], removed: [], skipped: [] };
+  return { installed: [], updated: [], unchanged: [], removed: [], gitExcluded: [], warnings: [], skipped: [] };
+}
+
+function installProjectHookTarget(
+  projectRoot: string,
+  target: (typeof PROJECT_LOCAL_HOOK_TARGETS)[number],
+  result: InstallUserAgentHooksResult,
+  opts: { provider: HookProvider; commandPrefix: string; force?: boolean },
+): void {
+  if (isGitTracked(projectRoot, target.relativePath)) {
+    result.skipped.push({
+      target: target.label,
+      reason: 'tracked repository config; checkout-local hook setup will not modify it',
+    });
+    return;
+  }
+  const configPath = join(projectRoot, target.relativePath);
+  installProviderHooks({
+    provider: opts.provider,
+    rootDir: dirname(configPath),
+    configPath,
+    label: target.label,
+    createRoot: true,
+    commandPrefix: opts.commandPrefix,
+    force: opts.force,
+    result,
+  });
+}
+
+function removeProjectHookTarget(
+  projectRoot: string,
+  target: (typeof PROJECT_LOCAL_HOOK_TARGETS)[number],
+  result: InstallUserAgentHooksResult,
+  opts: { writeDeclinedTombstone?: boolean; dryRun?: boolean },
+): void {
+  if (isGitTracked(projectRoot, target.relativePath)) {
+    result.skipped.push({
+      target: target.label,
+      reason: 'tracked repository config; checkout-local hook removal will not modify it',
+    });
+    return;
+  }
+  removeProjectProviderHooks({
+    configPath: join(projectRoot, target.relativePath),
+    label: target.label,
+    result,
+    writeDeclinedTombstone: opts.writeDeclinedTombstone,
+    dryRun: opts.dryRun,
+  });
+}
+
+function ensureProjectHookGitExcludes(projectRoot: string, result: InstallUserAgentHooksResult, dryRun = false): void {
+  const excludePath = gitInfoExcludePath(projectRoot);
+  if (!excludePath) {
+    result.warnings.push('Could not locate .git/info/exclude; local hook files may appear as untracked.');
+    return;
+  }
+  const targets = PROJECT_LOCAL_HOOK_TARGETS.filter((target) => !isGitTracked(projectRoot, target.relativePath));
+  if (targets.length === 0) return;
+  const block = [
+    LOCAL_HOOK_EXCLUDE_BEGIN,
+    ...targets.map((target) => `/${target.relativePath}`),
+    LOCAL_HOOK_EXCLUDE_END,
+  ].join('\n');
+  const current = existsSync(excludePath) ? readFileSync(excludePath, 'utf-8') : '';
+  const pattern = new RegExp(
+    `${escapeRegex(LOCAL_HOOK_EXCLUDE_BEGIN)}[\\s\\S]*?${escapeRegex(LOCAL_HOOK_EXCLUDE_END)}\\n?`,
+    'g',
+  );
+  const withoutOwnedBlock = current.replace(pattern, '').replace(/\n*$/, '');
+  const next = `${withoutOwnedBlock}${withoutOwnedBlock ? '\n\n' : ''}${block}\n`;
+  if (!dryRun && next !== current) {
+    mkdirSync(dirname(excludePath), { recursive: true });
+    writeFileSync(excludePath, next);
+  }
+  result.gitExcluded.push(...targets.map((target) => target.label));
+}
+
+function gitInfoExcludePath(projectRoot: string): string | null {
+  try {
+    const value = execFileSync('git', ['-C', projectRoot, 'rev-parse', '--git-path', 'info/exclude'], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    if (!value) return null;
+    return isAbsolute(value) ? value : resolve(projectRoot, value);
+  } catch {
+    return null;
+  }
+}
+
+function isGitTracked(projectRoot: string, relativePath: string): boolean {
+  try {
+    execFileSync('git', ['-C', projectRoot, 'ls-files', '--error-unmatch', '--', relativePath], {
+      stdio: 'ignore',
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function shouldSkipUserHookInstall(env: Record<string, string | undefined> = process.env): boolean {
@@ -298,7 +393,11 @@ function removeProviderHooks(opts: {
     delete next.hooks;
   }
   if (!opts.dryRun) {
-    writeFileSync(opts.configPath, `${JSON.stringify(next, null, 2)}\n`);
+    if (Object.keys(next).length === 0) {
+      rmSync(opts.configPath, { force: true });
+    } else {
+      writeFileSync(opts.configPath, `${JSON.stringify(next, null, 2)}\n`);
+    }
   }
   opts.result.removed.push(opts.label);
 }
@@ -454,12 +553,15 @@ export function runStopHookDiffGate(hookInput: string): DiffGateResult | undefin
   const workspace = resolveHookWorkspace(payload);
   if (!workspace || !existsSync(workspace.paths.dbPath)) return undefined;
 
-  return withWorkspaceDb(workspace, (db) =>
-    diffGate(db, {
+  return withWorkspaceDb(workspace, (db) => {
+    const result = diffGate(db, {
       minTogether: 6,
       skip: [],
-    }),
-  );
+    });
+    const outcomes = recordDiffGateOutcomes(db, result);
+    if (outcomes.warning) console.error(`note: ${outcomes.warning}`);
+    return result;
+  });
 }
 
 export function handleAgentHookStop(): void {

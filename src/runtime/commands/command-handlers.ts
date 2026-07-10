@@ -847,11 +847,13 @@ export function handleSetupHooks(rawOpts: unknown): void {
   for (const target of result.updated) console.log(`  update: ${target}`);
   for (const target of result.unchanged) console.log(`  ok:   ${target} (already configured)`);
   for (const target of result.removed) console.log(`  remove: ${target}`);
+  for (const target of result.gitExcluded) console.log(`  local: ${target} (excluded through .git/info/exclude)`);
+  for (const warning of result.warnings) console.log(`  warning: ${warning}`);
   for (const skip of result.skipped) console.log(`  skip: ${skip.target} — ${skip.reason}`);
 
   const total = result.installed.length + result.updated.length + result.unchanged.length;
   if (total > 0) {
-    console.log('\nProject-local scip-query hooks are configured for this repository.');
+    console.log('\nCheckout-local scip-query hooks are configured for this clone and must not be committed.');
     console.log('Review new or changed hooks in Codex/Claude Code with /hooks before they run.');
   } else {
     console.log('\nNo project-local hook config was written.');
@@ -1145,24 +1147,19 @@ async function guidedProjectSetupOptions(
   base: ProjectSetupOptions,
   opts: { json: boolean },
 ): Promise<ProjectSetupOptions> {
-  const { projectRoot, config, paths, dbPath } = resolveCliProjectContext();
+  const { projectRoot, config } = resolveCliProjectContext();
   const readiness = getProjectReadiness(projectRoot, config);
-  const freshness = getIndexFreshness(projectRoot, config, paths);
-  const capabilities = getProjectCapabilities(readiness, {
-    hasIndexedGraph: existsSync(dbPath) && freshness.state !== 'missing',
-  });
   const plan = planGuidedProjectSetup({
     files: guidedProjectSetupFiles(projectRoot),
     watchEnabled: resolveWatchConfig(config).enabled,
     readiness,
-    capabilities,
   });
-  const selected =
-    opts.json || !process.stdin.isTTY
-      ? recommendedGuidedActions(plan.actions)
-      : await promptGuidedActions(plan.actions);
+  const interactive = !opts.json && process.stdin.isTTY;
+  const selected = interactive ? await promptGuidedActions(plan.actions) : recommendedGuidedActions(plan.actions);
+  if (interactive) renderGuidedSelection(plan.actions, selected);
   const agentActionSelected = selected.has('create-agent-guidance') || selected.has('update-agent-guidance');
   const automaticRefreshAction = plan.actions.some((action) => action.id === 'enable-automatic-refresh');
+  const indexerAction = plan.actions.some((action) => action.id === 'install-indexers');
   return {
     ...base,
     ...(automaticRefreshAction ? { automaticRefresh: selected.has('enable-automatic-refresh') } : {}),
@@ -1170,6 +1167,7 @@ async function guidedProjectSetupOptions(
       base.noHooks ||
       (plan.actions.some((action) => action.id === 'install-project-hooks') && !selected.has('install-project-hooks')),
     noAgentGuidance: !agentActionSelected,
+    ...(indexerAction ? { installIndexers: selected.has('install-indexers') } : {}),
   };
 }
 
@@ -1178,7 +1176,7 @@ function guidedProjectSetupFiles(projectRoot: string): ProjectSetupGuidedFiles {
     agentsMd: existsSync(join(projectRoot, 'AGENTS.md')),
     claudeMd: existsSync(join(projectRoot, 'CLAUDE.md')),
     codexHooks: existsSync(join(projectRoot, '.codex', 'hooks.json')),
-    claudeSettings: existsSync(join(projectRoot, '.claude', 'settings.json')),
+    claudeSettings: existsSync(join(projectRoot, '.claude', 'settings.local.json')),
   };
 }
 
@@ -1195,12 +1193,32 @@ async function promptGuidedActions(
   try {
     const selected = new Set<ProjectSetupGuidedActionId>();
     for (const action of actions) {
-      console.log(`- ${action.label}: ${action.reason}`);
+      console.log(`- [${action.scope}] ${action.label}: ${action.reason}`);
       if (await promptYesNo(rl, action)) selected.add(action.id);
     }
     return selected;
   } finally {
     rl.close();
+  }
+}
+
+function renderGuidedSelection(
+  actions: readonly ProjectSetupGuidedAction[],
+  selected: ReadonlySet<ProjectSetupGuidedActionId>,
+): void {
+  console.log('');
+  console.log('Selected setup changes:');
+  for (const scope of ['repository', 'checkout', 'user'] as const) {
+    const labels = actions
+      .filter((action) => action.scope === scope && selected.has(action.id))
+      .map((action) => action.label);
+    const guidance =
+      scope === 'repository'
+        ? 'commit these shared project changes'
+        : scope === 'checkout'
+          ? 'keep these local to this checkout'
+          : 'changes this machine or user environment';
+    console.log(`  ${scope} (${guidance}): ${labels.length > 0 ? labels.join(', ') : 'none'}`);
   }
 }
 

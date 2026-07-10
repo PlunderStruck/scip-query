@@ -111,8 +111,15 @@ export interface ProjectSetupReport {
   healthDossier: ProjectSetupHealthDossier | null;
   hooks: SetupHooksResult | null;
   setupAgent: SetupAgentResult | null;
+  changeScopes: ProjectSetupChangeScopes;
   filesWritten: string[];
   verdict: ProjectSetupVerdict;
+}
+
+export interface ProjectSetupChangeScopes {
+  repository: string[];
+  checkout: string[];
+  user: string[];
 }
 
 export interface ProjectSetupOptions {
@@ -120,6 +127,7 @@ export interface ProjectSetupOptions {
   noHooks?: boolean;
   noAgentGuidance?: boolean;
   automaticRefresh?: boolean;
+  installIndexers?: boolean;
   dossierDir?: string;
 }
 
@@ -128,8 +136,9 @@ export type ProjectSetupGuidedActionId =
   | 'update-agent-guidance'
   | 'install-project-hooks'
   | 'enable-automatic-refresh'
-  | 'install-indexers'
-  | 'install-parser-runtimes';
+  | 'install-indexers';
+
+export type ProjectSetupActionScope = 'repository' | 'checkout' | 'user';
 
 export interface ProjectSetupGuidedFiles {
   agentsMd: boolean;
@@ -140,6 +149,7 @@ export interface ProjectSetupGuidedFiles {
 
 export interface ProjectSetupGuidedAction {
   id: ProjectSetupGuidedActionId;
+  scope: ProjectSetupActionScope;
   label: string;
   recommended: boolean;
   requiresConsent: true;
@@ -155,13 +165,13 @@ export function planGuidedProjectSetup(input: {
   files: ProjectSetupGuidedFiles;
   watchEnabled: boolean;
   readiness: Pick<ProjectReadiness, 'indexers'>;
-  capabilities: Pick<ProjectCapabilityReport, 'matrix'>;
 }): ProjectSetupGuidedPlan {
   const actions: ProjectSetupGuidedAction[] = [];
 
   if (!input.watchEnabled) {
     actions.push({
       id: 'enable-automatic-refresh',
+      scope: 'repository',
       label: 'Enable automatic incremental indexing',
       recommended: true,
       requiresConsent: true,
@@ -173,6 +183,7 @@ export function planGuidedProjectSetup(input: {
   if (input.files.agentsMd || input.files.claudeMd) {
     actions.push({
       id: 'update-agent-guidance',
+      scope: 'repository',
       label: 'Update project agent guidance',
       recommended: true,
       requiresConsent: true,
@@ -182,6 +193,7 @@ export function planGuidedProjectSetup(input: {
   } else {
     actions.push({
       id: 'create-agent-guidance',
+      scope: 'repository',
       label: 'Create project agent guidance',
       recommended: false,
       requiresConsent: true,
@@ -193,6 +205,7 @@ export function planGuidedProjectSetup(input: {
   if (!input.files.codexHooks || !input.files.claudeSettings) {
     actions.push({
       id: 'install-project-hooks',
+      scope: 'checkout',
       label: 'Install project agent hooks',
       recommended: true,
       requiresConsent: true,
@@ -205,27 +218,12 @@ export function planGuidedProjectSetup(input: {
   if (blockedIndexers.length > 0) {
     actions.push({
       id: 'install-indexers',
+      scope: 'user',
       label: 'Install missing language indexers',
       recommended: true,
       requiresConsent: true,
       reason: `${blockedIndexers.length} detected language indexer(s) are not runnable.`,
       command: 'scip-query setup',
-    });
-  }
-
-  const parserRuntimeRows = input.capabilities.matrix.filter(
-    (row) =>
-      row.sourceFacts.status === 'unavailable' &&
-      /tree-sitter|parser/i.test('reason' in row.sourceFacts ? String(row.sourceFacts.reason ?? '') : ''),
-  );
-  if (parserRuntimeRows.length > 0) {
-    actions.push({
-      id: 'install-parser-runtimes',
-      label: 'Install parser runtimes for source evidence',
-      recommended: true,
-      requiresConsent: true,
-      reason: `${parserRuntimeRows.length} language row(s) report unavailable parser-backed source facts.`,
-      command: 'npm install',
     });
   }
 
@@ -326,7 +324,16 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     }),
   });
 
-  const indexerRemediation = remediateIndexers(projectRoot, initialReadiness, steps);
+  const installIndexers = opts.installIndexers ?? true;
+  const indexerRemediation = installIndexers ? remediateIndexers(projectRoot, initialReadiness, steps) : [];
+  if (!installIndexers) {
+    addStep(steps, {
+      id: 'indexer-remediation',
+      label: 'Indexer remediation',
+      status: 'skipped',
+      message: 'Skipped by guided setup choice.',
+    });
+  }
   const readyForIndexing = getProjectReadiness(projectRoot, config);
 
   let reindexResult: ReindexResult | null = null;
@@ -505,8 +512,10 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
         status: hooksResult.skipped.length > 0 ? 'warn' : 'ok',
         message: `${hooksResult.installed.length} installed, ${hooksResult.updated.length} updated, ${hooksResult.unchanged.length} already configured, ${hooksResult.removed.length} hook config(s) cleaned up, ${hooksResult.skipped.length} skipped.`,
         details: [
+          ...hooksResult.gitExcluded.map((entry) => `Checkout-local Git exclude: ${entry}`),
           ...hooksResult.removed.map((entry) => `Removed ${entry}`),
           ...hooksResult.skipped.map((entry) => `Skipped ${entry.target}: ${entry.reason}`),
+          ...hooksResult.warnings,
         ],
       });
     }
@@ -568,6 +577,24 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     details: smokeTests.map((test) => `${test.command}: ${test.status} - ${test.evidence}`),
   });
 
+  const changeScopes: ProjectSetupChangeScopes = {
+    repository: [
+      ...(automaticRefreshConfig?.changed ? [automaticRefreshConfig.configPath] : []),
+      ...(agentResult?.written.filter((entry) => !entry.startsWith('.git/hooks/')) ?? []),
+    ],
+    checkout: [
+      ...new Set([
+        ...(hooksResult?.installed ?? []),
+        ...(hooksResult?.updated ?? []),
+        ...(hooksResult?.gitExcluded ?? []),
+        ...(agentResult?.written.filter((entry) => entry.startsWith('.git/hooks/')) ?? []),
+      ]),
+    ],
+    user: [
+      ...skills.installed,
+      ...indexerRemediation.filter((entry) => entry.attempted).map((entry) => `${entry.binaryLabel} installer`),
+    ],
+  };
   const report: ProjectSetupReport = {
     projectRoot,
     dbPath,
@@ -590,12 +617,14 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     healthDossier: null,
     hooks: hooksResult,
     setupAgent: agentResult,
+    changeScopes,
     filesWritten: agentResult?.written ?? [],
     verdict: setupVerdict(steps, readiness),
   };
 
   const healthDossier = writeProjectHealthDossier(report, { dossierDir: opts.dossierDir });
   report.healthDossier = healthDossier;
+  report.changeScopes.repository.push(...healthDossier.written);
   report.filesWritten = [...report.filesWritten, ...healthDossier.written];
   addStep(steps, {
     id: 'health-dossier',
@@ -641,6 +670,12 @@ export function renderProjectSetupReport(report: ProjectSetupReport): void {
   }
 
   console.log('');
+  console.log('Change scopes:');
+  renderChangeScope('Repository records (commit)', report.changeScopes.repository);
+  renderChangeScope('Checkout preferences (do not commit)', report.changeScopes.checkout);
+  renderChangeScope('User environment', report.changeScopes.user);
+
+  console.log('');
   console.log('Setup steps:');
   for (const step of report.steps) {
     console.log(`  ${step.status.toUpperCase()} ${step.label}${step.message ? ` - ${step.message}` : ''}`);
@@ -662,6 +697,15 @@ export function renderProjectSetupReport(report: ProjectSetupReport): void {
       if (remediation.recovery) console.log(`    ${remediation.recovery}`);
     }
   }
+}
+
+function renderChangeScope(label: string, entries: readonly string[]): void {
+  console.log(`  ${label}:`);
+  if (entries.length === 0) {
+    console.log('    - none');
+    return;
+  }
+  for (const entry of entries) console.log(`    - ${entry}`);
 }
 
 function buildSetupSmokeTests(opts: {
