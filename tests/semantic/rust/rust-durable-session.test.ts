@@ -268,6 +268,94 @@ describe('durable Rust semantic session identity', () => {
 });
 
 describe('DurableRustSessionHost', () => {
+  it('reuses one complete combined response until request shape or compiler identity changes', () => {
+    const events: string[] = [];
+    let requesterNumber = 0;
+    const host = new DurableRustSessionHost(() => {
+      const requesterId = ++requesterNumber;
+      return {
+        ...fakeRequester(requesterId, events),
+        requestSemantic(request) {
+          events.push(`request:${requesterId}:${request.concurrency}`);
+          return {
+            available: true,
+            references: [[definition.symbolId, [{ file: 'src/lib.rs', line: 4, column: 2 }]]],
+            callees: [[definition.symbolId, [{ symbol: 'callee', file: 'src/lib.rs', line: 8 }]]],
+          };
+        },
+      };
+    });
+    const combinedRequest: RustReferenceWorkerRequest = {
+      ...semanticRequest,
+      definitions: [definition, definition],
+      referenceDefinitions: [definition],
+      calleeDefinitions: [definition],
+      includeReferences: true,
+      includeCallees: true,
+      readinessDeadlineMs: 100,
+    };
+
+    const created = host.handle({
+      kind: 'semantic',
+      identityKey: 'identity-a',
+      request: combinedRequest,
+      timeoutMs: 1_000,
+    });
+    const deadlineChanged = host.handle({
+      kind: 'semantic',
+      identityKey: 'identity-a',
+      request: { ...combinedRequest, readinessDeadlineMs: 200 },
+      timeoutMs: 1_000,
+    });
+    host.handle({
+      kind: 'semantic',
+      identityKey: 'identity-a',
+      request: { ...combinedRequest, readinessDeadlineMs: 300, concurrency: 16 },
+      timeoutMs: 1_000,
+    });
+    host.handle({
+      kind: 'semantic',
+      identityKey: 'identity-b',
+      request: { ...combinedRequest, readinessDeadlineMs: 400 },
+      timeoutMs: 1_000,
+    });
+
+    expect([created.session, deadlineChanged.session]).toEqual(['created', 'reused']);
+    expect(deadlineChanged.response).toEqual(created.response);
+    expect(events).toEqual(['request:1:8', 'request:1:16', 'shutdown:1', 'request:2:8']);
+    host.shutdown();
+  });
+
+  it('never retains unavailable or incomplete combined responses', () => {
+    const events: string[] = [];
+    let call = 0;
+    const host = new DurableRustSessionHost(() => ({
+      ...fakeRequester(1, events),
+      requestSemantic() {
+        call += 1;
+        events.push(`request:${call}`);
+        if (call === 1) {
+          return { available: true, references: [], callees: [], incompleteReferenceSymbolIds: [definition.symbolId] };
+        }
+        return { available: false, reason: 'unavailable', references: [], callees: [] };
+      },
+    }));
+    const request: RustReferenceWorkerRequest = {
+      ...semanticRequest,
+      referenceDefinitions: [definition],
+      calleeDefinitions: [definition],
+      includeReferences: true,
+      includeCallees: true,
+    };
+
+    for (let index = 0; index < 3; index += 1) {
+      host.handle({ kind: 'semantic', identityKey: 'identity-a', request, timeoutMs: 1_000 });
+    }
+
+    expect(events).toEqual(['request:1', 'request:2', 'request:3']);
+    host.shutdown();
+  });
+
   it('reuses the requester for the same identity and replaces it before a changed identity runs', () => {
     const events: string[] = [];
     let requesterNumber = 0;

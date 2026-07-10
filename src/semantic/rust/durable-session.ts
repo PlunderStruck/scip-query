@@ -116,6 +116,11 @@ export function createDurableRustSessionIdentity(
 export class DurableRustSessionHost {
   private requester: RustAnalyzerSessionRequester | null = null;
   private identityKey: string | null = null;
+  private semanticResponseCache: {
+    identityKey: string;
+    requestKey: string;
+    response: RustReferenceWorkerResponse;
+  } | null = null;
 
   constructor(
     private readonly createRequester: () => RustAnalyzerSessionRequester,
@@ -130,6 +135,7 @@ export class DurableRustSessionHost {
       this.identityKey = request.identityKey;
       session = 'created';
     } else if (this.identityKey !== request.identityKey) {
+      this.semanticResponseCache = null;
       this.requester.shutdown();
       this.requester = this.createRequester();
       this.identityKey = request.identityKey;
@@ -139,9 +145,27 @@ export class DurableRustSessionHost {
     }
 
     if (request.kind === 'semantic') {
+      const requestKey = durableSemanticResponseCacheKey(request.request);
+      const cached =
+        session === 'reused' &&
+        requestKey !== null &&
+        this.semanticResponseCache?.identityKey === request.identityKey &&
+        this.semanticResponseCache.requestKey === requestKey
+          ? this.semanticResponseCache.response
+          : null;
+      if (cached) {
+        writeDurableSemanticResponseCacheProfile(true, request.request.definitions.length);
+        return { session, response: cached };
+      }
+
+      const response = this.requester.requestSemantic(request.request, request.timeoutMs);
+      if (requestKey !== null && isCompleteDurableSemanticResponse(response)) {
+        this.semanticResponseCache = { identityKey: request.identityKey, requestKey, response };
+      }
+      writeDurableSemanticResponseCacheProfile(false, request.request.definitions.length);
       return {
         session,
-        response: this.requester.requestSemantic(request.request, request.timeoutMs),
+        response,
       };
     }
     return {
@@ -154,7 +178,37 @@ export class DurableRustSessionHost {
     this.requester?.shutdown();
     this.requester = null;
     this.identityKey = null;
+    this.semanticResponseCache = null;
   }
+}
+
+function durableSemanticResponseCacheKey(request: RustReferenceWorkerRequest): string | null {
+  if (request.includeReferences === false || request.includeCallees !== true || request.includeSignatures === true) {
+    return null;
+  }
+  if ((request.referenceDefinitions?.length ?? 0) === 0 || (request.calleeDefinitions?.length ?? 0) === 0) {
+    return null;
+  }
+  const { readinessDeadlineMs: _readinessDeadlineMs, ...stableRequest } = request;
+  return sha256(stableJson(stableRequest));
+}
+
+function isCompleteDurableSemanticResponse(response: RustReferenceWorkerResponse): boolean {
+  return (
+    response.available && Array.isArray(response.callees) && (response.incompleteReferenceSymbolIds?.length ?? 0) === 0
+  );
+}
+
+function writeDurableSemanticResponseCacheProfile(hit: boolean, definitions: number): void {
+  if (!profileEnabled()) return;
+  writeProfileEvent({
+    type: 'span',
+    name: 'rust.semantic.durable-session.response-cache',
+    durationMs: 0,
+    ok: true,
+    hit,
+    definitions,
+  });
 }
 
 export function isDurableRustSessionStateLive(

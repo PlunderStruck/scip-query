@@ -72,6 +72,78 @@ the remaining definitions. If the slice misses the 50-second target, its exact
 result stays diagnostic and the next slice is chosen from the new critical-path
 profile rather than accepted as the campaign result.
 
+### Profile-Driven Second Slice: Parallel Gap Delegation
+
+The first standard-trait slice preserved the accepted Vega payload but measured
+110.189 seconds warm. It promoted 50 definitions, while the reference provider
+loop remained 63.521 seconds. The same request spent 60.161 seconds resolving
+references and 47.412 seconds resolving callees inside one rust-analyzer
+process. A role-bit audit found no SCIP occurrence role that separates the
+broad exact and mismatching field/type/module rows, so widening the occurrence
+policy would trade away facts.
+
+The second slice keeps the exact bulk policy and changes only the fallback
+execution shape. An explicit durable-session experiment switch gives reference
+gaps and callee gaps one persistent rust-analyzer worker each. Both workers are
+started before either response is awaited, then their responses are merged into
+the existing combined response. Reference incompleteness comes only from the
+reference response; availability requires both responses; either error fails
+the combined request so the existing one-shot fallback remains authoritative.
+
+This is not enabled for the ordinary worker transport and is not silently
+enabled for durable sessions before corpus proof. It intentionally doubles the
+live analyzer process count during the experiment, so acceptance requires a
+large wall-time win, exact payloads, and no fallback—not merely parallel-looking
+profile spans.
+
+Measured decision: rejected and reverted. VegaAssistant remained exact, but
+parallel warm full health measured 96.200 seconds at concurrency 8, 109.572
+seconds at concurrency 16, and 95.185 seconds at concurrency 4. The accepted
+single-session range remains faster. The two lanes competed for CPU and memory;
+the split is not a viable production tradeoff on the stress corpus.
+
+### Profile-Driven Third Slice: Complete-Response Reuse
+
+The durable helper already survives CLI process exit and invalidates its worker
+when source, Cargo inputs, rust-analyzer, compiler environment, protocol, or the
+helper build changes. The third slice reuses that same identity boundary to
+memoize one complete combined semantic response in memory. A memoized response
+is a process-local computation result whose essential property is that it can
+be reused only while every input that determines it is unchanged.
+
+The response key includes the full semantic request shape and definition lists,
+but omits the absolute readiness deadline because that deadline changes on each
+command without changing a completed answer. Request timeout, diagnostics,
+settle, retry, concurrency, operation flags, and definitions remain key inputs,
+so explicit experiments still execute. Only available responses with no
+incomplete reference IDs are retained. Identity invalidation and helper
+shutdown clear the entry; import-definition requests do not use it.
+
+This is not a second disk cache: stopping the helper loses the response, and a
+session-cold command still performs the full compiler work. It is live-session
+reuse under the exact benchmark contract that distinguishes session-cold from
+session-warm. The expected warm path still serializes the response through the
+normal mailbox and writes the normal evidence rows, so downstream behavior and
+durable evidence are unchanged.
+
+Measured decision: accepted. VegaAssistant warm full health measured 41.933
+seconds forward and 46.310 seconds in the reverse-order control, both below the
+50-second gate. The live semantic request itself fell from 148.531 seconds cold
+to 0.680 seconds on the forward warm control. The five-control Vega sequence
+reported `created`, `reused`, `invalidated`, `reused`, and `created`; only the
+two reused controls hit the response entry. All controls retained the accepted
+output hash, ordered reference and callee digests, 38,222 rows of each kind,
+zero incomplete Rust references, and no worker fallback.
+
+The same control shape passed locally and on SynthRunnerRust. An inert
+`RA_TEST_IDENTITY` value supplied the local and corrected Synth invalidation
+control: it is part of the compiler-environment identity because it begins with
+`RA_`, but rust-analyzer ignores it, so it tests invalidation without adding the
+logging overhead of `RA_LOG=info`. The initial Synth control labeled
+`identity-invalidated` was classified `created` because its helper had expired
+during the long Vega matrix; it remains diagnostic, and the `-v3` artifact is
+the accepted `invalidated` control.
+
 ## Correctness and Failure Handling
 
 Focused tests must prove:

@@ -1030,6 +1030,86 @@ is eligible for a separate default-routing decision. This campaign keeps the
 flag opt-in because changing the product default was outside the calibration
 plan; it no longer withholds eligibility for correctness or performance.
 
+#### Complete-response reuse: accepted at the 50-second Vega gate
+
+The next campaign profiled the 80.97–83.86-second Vega warm path and tested
+three ways to remove its remaining compiler work. A live response entry is one
+in-memory cached computation owned by the durable helper; what distinguishes it
+from durable evidence is that it exists only while the exact compiler identity
+and exact combined request remain alive, and stopping or invalidating the
+helper destroys it.
+
+Two implementation experiments were rejected and reverted before the accepted
+slice:
+
+- Audited standard-trait SCIP promotion preserved exact external-corpus facts,
+  but promoted only 50 Vega definitions and three reference facts. Vega warm
+  measured 110.189s, with the reference provider still at 63.521s.
+- Two parallel rust-analyzer workers preserved facts but competed for CPU and
+  memory. Vega warm measured 96.200s at concurrency 8, 109.572s at concurrency
+  16, and 95.185s at concurrency 4.
+- A pre-implementation callee audit found only 3,030 exact rows among 3,420
+  apparently supported expanded call-syntax rows; the 390 mismatches made that
+  rule unsafe, so it was not implemented.
+
+The accepted slice keeps one complete combined reference/callee response in
+`DurableRustSessionHost`. Its key includes all request fields and ordered
+definition lists except the moving absolute readiness deadline. It stores only
+available responses with no incomplete references, clears before compiler
+identity replacement and shutdown, never serves a newly created or invalidated
+session, and leaves import-definition requests uncached. Durable routing remains
+opt-in.
+
+Every control cleared semantic evidence and the health caches while retaining
+`index.db`. The cold controls therefore still performed real compiler work; a
+warm response hit avoided only the repeated compiler query and then repopulated
+the normal SQLite evidence rows.
+
+| Corpus          | Control              | Wall time | Disposition   | Response entry | Reference rows / facts | Callee rows / facts | Incomplete Rust refs |
+| --------------- | -------------------- | --------: | ------------- | -------------- | ---------------------: | ------------------: | -------------------: |
+| scip-query      | session-cold         |   14.223s | `created`     | miss           |         4,618 / 17,091 |       4,619 / 3,252 |                    0 |
+| scip-query      | session-warm         |   12.233s | `reused`      | hit            |         4,618 / 17,091 |       4,619 / 3,252 |                    0 |
+| scip-query      | identity-invalidated |   13.348s | `invalidated` | miss           |         4,618 / 17,091 |       4,619 / 3,252 |                    0 |
+| scip-query      | reverse-warm-first   |   11.908s | `reused`      | hit            |         4,618 / 17,091 |       4,619 / 3,252 |                    0 |
+| scip-query      | reverse-cold-second  |   18.806s | `created`     | miss           |         4,618 / 17,091 |       4,619 / 3,252 |                    0 |
+| SynthRunnerRust | session-cold         |   30.040s | `created`     | miss           |          1,661 / 3,117 |       1,661 / 2,564 |                    0 |
+| SynthRunnerRust | session-warm         |    2.699s | `reused`      | hit            |          1,661 / 3,117 |       1,661 / 2,564 |                    0 |
+| SynthRunnerRust | identity-invalidated |   21.679s | `invalidated` | miss           |          1,661 / 3,117 |       1,661 / 2,564 |                    0 |
+| SynthRunnerRust | reverse-warm-first   |    2.504s | `reused`      | hit            |          1,661 / 3,117 |       1,661 / 2,564 |                    0 |
+| SynthRunnerRust | reverse-cold-second  |   20.815s | `created`     | miss           |          1,661 / 3,117 |       1,661 / 2,564 |                    0 |
+| VegaAssistant   | session-cold         |  190.685s | `created`     | miss           |        38,222 / 83,440 |    38,222 / 104,425 |                    0 |
+| VegaAssistant   | session-warm         |   41.933s | `reused`      | hit            |        38,222 / 83,440 |    38,222 / 104,425 |                    0 |
+| VegaAssistant   | identity-invalidated |  175.956s | `invalidated` | miss           |        38,222 / 83,440 |    38,222 / 104,425 |                    0 |
+| VegaAssistant   | reverse-warm-first   |   46.310s | `reused`      | hit            |        38,222 / 83,440 |    38,222 / 104,425 |                    0 |
+| VegaAssistant   | reverse-cold-second  |  168.937s | `created`     | miss           |        38,222 / 83,440 |    38,222 / 104,425 |                    0 |
+
+External-corpus identities remained byte-for-byte equal to readiness version 2:
+
+| Corpus          | Output SHA-256                                                     | Reference SHA-256                                                  | Callee SHA-256                                                     | Nonempty reference / callee rows |
+| --------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------ | -------------------------------: |
+| SynthRunnerRust | `47291cda33601a501f2dfb123aed34e457a21bc238c508007d99c4473a1495c4` | `e24c89c7f5dbef47c0c863b104f9d6298b65954420b900b7dae1c909b8b0b2f5` | `ac0ab832b906be3c2f126b7aeaf35de4fa4a581aa01a50c8e0827921b6d9c466` |                        640 / 540 |
+| VegaAssistant   | `7e944222c34dcae93bdf6a8efb52f2fa64432ef9dd86fbe2a7d1742cfa5ad629` | `6b537edd5127bb7036493a27ea074c4e7b57a5c4c2420e8f51c52603bd2719af` | `7a306badd68a8842807d93519833125fb445a7ee8c1b8ca37cff0610cf984a5a` |                  13,598 / 14,443 |
+
+The local corpus changed during the campaign because the implementation and
+tests are themselves indexed; its five controls were exact against one another
+at output `10f3cd21...`, reference digest `97c8ec4f...`, and callee digest
+`4298616d...`. No accepted control used `worker-fallback`.
+
+Vega forward warm improved 50.0% from 83.860s to 41.933s, and the reverse warm
+control improved 42.8% from 80.970s to 46.310s. The decisive compiler request
+fell from 148.531s cold to 0.680s warm. The largest remaining warm span is now
+the normal semantic evidence materialization path: it spent 24.704s writing
+38,222 reference rows and 38,222 callee rows. That bulk persistence work, not
+rust-analyzer readiness or concurrency, is the next measured optimization
+target.
+
+The Synth run initially labeled `identity-invalidated` was classified
+`created` because its helper expired while the Vega matrix ran. It remains a
+diagnostic record. The accepted `identity-invalidated-v3` control used an inert
+`RA_TEST_IDENTITY` change and was classified `invalidated`; an interrupted
+`RA_LOG=info` attempt produced no accepted history record because logging itself
+confounded the control.
+
 ## Current Checkpoint
 
 This checkpoint summarizes the last optimization push so the direction is easy
@@ -1075,6 +1155,10 @@ What is materially done:
   VegaAssistant improved 48.1% forward and 49.3% in reverse. All ten external
   controls had exact payload parity, zero incomplete Rust references, expected
   dispositions, and no worker fallback.
+- Complete-response reuse now removes repeated compiler semantic queries from
+  the live durable helper. Vega warm full health is 41.933s forward and 46.310s
+  in reverse order with exact readiness-v2 payloads, meeting the <=50s campaign
+  gate while durable routing remains opt-in.
 
 Important rejected ideas:
 
@@ -1097,10 +1181,9 @@ What is left:
 - Make the separate product decision whether to enable durable transport by
   default. The implementation is now eligible, but this calibration campaign
   intentionally leaves `SCIP_RUST_SEMANTIC_DURABLE_SESSION=1` as an opt-in.
-- Continue Rust reference profiling on large Rust-heavy batches. Vega proves
-  that live compiler reuse removes roughly half the wall time, but the warm
-  command still spends about 81-84s materializing 38,222 reference/callee rows.
-  The next large win must reduce that work, not tune the readiness timeout.
+- Reduce the 24.704s Vega warm semantic evidence materialization span. The next
+  large win is bulk SQLite persistence for the 38,222 reference and 38,222
+  callee rows, not another rust-analyzer readiness or concurrency adjustment.
 - Optimize TypeScript without replacing ts-morph by default. The trusted path is
   still ts-morph plus bulk scans; tsserver remains a comparison tool until it
   proves full parity and speed.
@@ -1113,11 +1196,10 @@ What is left:
   stable, and only for large contiguous computations where benchmark evidence
   shows the native boundary wins.
 
-Best next campaign target: bulk Rust semantic materialization. Use existing
-SCIP occurrence data to answer references and callees in one indexed pass,
-delegate only unsupported or ambiguous gaps to rust-analyzer, and key the bulk
-product to the same source/index identity. Keep the accepted five-control
-payload and order gates so a radical speedup cannot trade away semantic facts.
+Best next campaign target: bulk semantic evidence persistence. Keep the exact
+live response reuse, but replace per-row SQLite work with one transaction and
+prepared bulk writes while preserving row order, cache identity, invalidation,
+and the accepted five-control payload gates.
 
 ## Run History
 
@@ -1152,6 +1234,10 @@ acceptance corpus for this slice.
   incomplete Rust references across all five SynthRunnerRust and VegaAssistant
   controls, while both forward and reverse warm comparisons exceeded the 20%
   gate. Keep the route opt-in until a separate product-default decision.
+- Accept the bounded live complete-response entry under that same opt-in
+  durable identity. It serves only exact repeated combined requests under a
+  reused identity, clears on invalidation/shutdown, and moved Vega warm full
+  health below 50 seconds without changing semantic facts.
 - Treat command hashes and semantic fact counts as separate acceptance gates for
   semantic-speed changes. The rejected 5s Rust timeout kept the health hash but
   dropped reference facts.
