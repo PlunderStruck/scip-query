@@ -189,7 +189,7 @@ steps must equal Phase 2 implementation commits before the next step starts.
 
 ### 2.2 — Plan the conservative file closure from existing graph evidence
 
-- [ ] **Edit:** `src/reindex/affected-set.ts`,
+- [x] **Edit:** `src/reindex/affected-set.ts`,
       `tests/reindex/affected-set.test.ts`
 - **Source:** `... code buildFileDepGraph --json`; `... refs
   buildFileDepGraph --json`; `... code affected --json`; `... code
@@ -207,6 +207,16 @@ steps must equal Phase 2 implementation commits before the next step starts.
   dist/cli.js similar planAffectedFiles --json --full` after reindex.
 - **Why:** The safety policy must be proved without opening SQLite before a
   side-effect shell can consume it.
+- **Outcome:** `planAffectedFiles()` now reverses the existing
+  consumer-to-dependency graph and returns canonical `none`, `closure`, or
+  `full-project` plans. Chains, diamonds, cycles, disconnected indexed files,
+  multiple edits, outside-project edges, unavailable graphs, ambient fallback,
+  and outside-project changes are covered by 16 total affected-set tests. An
+  ordinary modified leaf remains a one-file closure when no consumers exist;
+  every missing/uncertain boundary returns the sorted full project instead.
+  The similarity postcheck reported only the intended same-file relationship:
+  `planAffectedFiles()` directly reuses `classifyAffectedSetFallback()` rather
+  than duplicating its policy.
 
 ### 2.3 — Build the clean-full document/fact oracle and prove the verifier
 
@@ -319,7 +329,8 @@ steps must equal Phase 2 implementation commits before the next step starts.
 ## Execution and Ship Order
 
 1. Commit this plan and roadmap baseline update.
-2. Land 2.1–2.3 as testable contracts with no product behavior.
+2. Land 2.1–2.3 as testable contracts with no product behavior. Steps 2.1 and
+   2.2 are complete; step 2.3 is next.
 3. Land 2.4 shadow integration; full rebuild stays authoritative.
 4. Land 2.5 observability only after real records exist.
 5. Run 2.6 calibration; fix every miss before closing Phase 2.

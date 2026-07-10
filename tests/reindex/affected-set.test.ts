@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   buildProjectChangeManifest,
   classifyAffectedSetFallback,
+  planAffectedFiles,
+  type FileDependencyGraph,
   type ProjectInputSnapshot,
 } from '../../src/reindex/affected-set.js';
 import { classifyProjectInputPath, type ProjectFileFingerprint } from '../../src/reindex/project-files.js';
@@ -110,5 +112,124 @@ describe('affected-set change manifest', () => {
     expect(classifyAffectedSetFallback(buildProjectChangeManifest(duplicate, duplicate)).reasons).toEqual([
       'duplicate-input-path',
     ]);
+  });
+});
+
+function graph(entries: Record<string, readonly string[]>): FileDependencyGraph {
+  return new Map(Object.entries(entries).map(([path, dependencies]) => [path, new Set(dependencies)]));
+}
+
+describe('affected file planning', () => {
+  it('does no work for an empty proven manifest even when graph evidence is unavailable', () => {
+    const value = snapshot([file('src/a.ts', 'same')]);
+    expect(planAffectedFiles(buildProjectChangeManifest(value, value), null, ['src/a.ts'])).toEqual({
+      mode: 'none',
+      changedFiles: [],
+      affectedFiles: [],
+      reasons: [],
+    });
+  });
+
+  it('includes the changed leaf and every transitive consumer', () => {
+    const manifest = buildProjectChangeManifest(
+      snapshot([file('src/a.ts', 'old'), file('src/b.ts', 'same'), file('src/c.ts', 'same')]),
+      snapshot([file('src/a.ts', 'new'), file('src/b.ts', 'same'), file('src/c.ts', 'same')]),
+    );
+    expect(
+      planAffectedFiles(manifest, graph({ 'src/b.ts': ['src/a.ts'], 'src/c.ts': ['src/b.ts'] }), [
+        'src/c.ts',
+        'src/a.ts',
+        'src/b.ts',
+      ]),
+    ).toEqual({
+      mode: 'closure',
+      changedFiles: ['src/a.ts'],
+      affectedFiles: ['src/a.ts', 'src/b.ts', 'src/c.ts'],
+      reasons: [],
+    });
+  });
+
+  it('de-duplicates diamonds, terminates cycles, and ignores outside-project edges', () => {
+    const before = snapshot([
+      file('src/a.ts', 'old'),
+      file('src/b.ts', 'same'),
+      file('src/c.ts', 'same'),
+      file('src/d.ts', 'same'),
+    ]);
+    const after = snapshot([
+      file('src/a.ts', 'new'),
+      file('src/b.ts', 'same'),
+      file('src/c.ts', 'same'),
+      file('src/d.ts', 'same'),
+    ]);
+    const dependencies = graph({
+      'src/a.ts': ['src/d.ts'],
+      'src/b.ts': ['src/a.ts'],
+      'src/c.ts': ['src/a.ts'],
+      'src/d.ts': ['src/b.ts', 'src/c.ts'],
+      'external.ts': ['src/a.ts'],
+    });
+    expect(
+      planAffectedFiles(
+        buildProjectChangeManifest(before, after),
+        dependencies,
+        before.files.map((f) => f.path),
+      ),
+    ).toMatchObject({
+      mode: 'closure',
+      affectedFiles: ['src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts'],
+    });
+  });
+
+  it('keeps a disconnected changed indexed file as a one-file closure', () => {
+    const manifest = buildProjectChangeManifest(
+      snapshot([file('src/leaf.ts', 'old'), file('src/other.ts', 'same')]),
+      snapshot([file('src/leaf.ts', 'new'), file('src/other.ts', 'same')]),
+    );
+    expect(planAffectedFiles(manifest, graph({}), ['src/other.ts', 'src/leaf.ts'])).toMatchObject({
+      mode: 'closure',
+      affectedFiles: ['src/leaf.ts'],
+    });
+  });
+
+  it('unions multiple changed-file closures deterministically', () => {
+    const manifest = buildProjectChangeManifest(
+      snapshot([file('src/a.ts', 'old'), file('src/b.ts', 'old'), file('src/c.ts', 'same')]),
+      snapshot([file('src/a.ts', 'new'), file('src/b.ts', 'new'), file('src/c.ts', 'same')]),
+    );
+    expect(
+      planAffectedFiles(manifest, graph({ 'src/c.ts': ['src/b.ts'] }), ['src/c.ts', 'src/b.ts', 'src/a.ts']),
+    ).toMatchObject({
+      mode: 'closure',
+      changedFiles: ['src/a.ts', 'src/b.ts'],
+      affectedFiles: ['src/a.ts', 'src/b.ts', 'src/c.ts'],
+    });
+  });
+
+  it('widens manifest fallbacks, missing graphs, and out-of-project changes', () => {
+    const sourceManifest = buildProjectChangeManifest(
+      snapshot([file('src/a.ts', 'old')]),
+      snapshot([file('src/a.ts', 'new')]),
+    );
+    expect(planAffectedFiles(sourceManifest, null, ['src/a.ts', 'src/b.ts'])).toMatchObject({
+      mode: 'full-project',
+      affectedFiles: ['src/a.ts', 'src/b.ts'],
+      reasons: ['dependency-graph-unavailable'],
+    });
+    expect(planAffectedFiles(sourceManifest, graph({}), ['src/b.ts'])).toMatchObject({
+      mode: 'full-project',
+      affectedFiles: ['src/b.ts'],
+      reasons: ['changed-file-outside-project'],
+    });
+
+    const ambientManifest = buildProjectChangeManifest(
+      snapshot([file('src/global.d.ts', 'old'), file('src/a.ts', 'same')]),
+      snapshot([file('src/global.d.ts', 'new'), file('src/a.ts', 'same')]),
+    );
+    expect(planAffectedFiles(ambientManifest, graph({}), ['src/global.d.ts', 'src/a.ts'])).toMatchObject({
+      mode: 'full-project',
+      affectedFiles: ['src/a.ts', 'src/global.d.ts'],
+      reasons: ['ambient-declaration-changed'],
+    });
   });
 });
