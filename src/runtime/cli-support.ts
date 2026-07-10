@@ -2,7 +2,6 @@ import { createRequire } from 'node:module';
 import { availableParallelism } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { IndexedDefinition } from '../domain/types.js';
-import { ProjectIndex } from '../core/project-index.js';
 import type { ScipDatabase } from '../storage/db.js';
 import * as queries from '../queries/index.js';
 import { profileSpan } from '../instrumentation/profile.js';
@@ -14,6 +13,7 @@ import {
   type SemanticReferenceMaterializationResult,
 } from '../semantic/shared-primitives.js';
 import { sourceFrameworkApplicability } from '../source/source-fileset.js';
+import { getScopedDefinitionsMatchingSymbols } from '../symbols/definition-catalog.js';
 import { materializeSemanticCalleeCache } from '../symbols/graph/call-graph-evidence.js';
 import { projectEvidenceFingerprint, sha256Hex } from '../storage/evidence-cache.js';
 import { createProjectEvidenceProduct, evidenceProductInvalidation } from '../storage/evidence-products.js';
@@ -236,6 +236,13 @@ export function formatAnalysisBudgetDisclosure(disclosure: AnalysisBudgetDisclos
   return `analysis budget: scanning up to ${disclosure.scanLimit} candidate(s); semantic enrichment=${disclosure.semanticEnrichment}; ${disclosure.reason}`;
 }
 
+export function healthSemanticCandidateDefinitions(db: ScipDatabase, scope?: string): IndexedDefinition[] {
+  return getScopedDefinitionsMatchingSymbols(db, {
+    scope,
+    symbolMatches: () => true,
+  }).filter((definition) => semanticProviderLanguageForPath(definition.relativePath) !== null);
+}
+
 const DEFAULT_HEALTH_SEMANTIC_PREWARM_RUNTIME: HealthSemanticPrewarmRuntime = {
   env: process.env,
   projectFingerprint: projectEvidenceFingerprint,
@@ -243,10 +250,7 @@ const DEFAULT_HEALTH_SEMANTIC_PREWARM_RUNTIME: HealthSemanticPrewarmRuntime = {
   readMarker: (db, cacheKey, fingerprint) => HEALTH_SEMANTIC_PREWARM_CACHE.read(db, cacheKey, fingerprint),
   writeMarker: (db, cacheKey, fingerprint, marker) =>
     HEALTH_SEMANTIC_PREWARM_CACHE.write(db, cacheKey, fingerprint, marker),
-  candidateDefinitions: (db, opts) =>
-    new ProjectIndex(db)
-      .scopedDefinitions(opts.scope)
-      .filter((definition) => semanticProviderLanguageForPath(definition.relativePath) !== null),
+  candidateDefinitions: (db, opts) => healthSemanticCandidateDefinitions(db, opts.scope),
   materializeReferences: (db, definitions, opts) =>
     semanticEvidenceProduct(db).materializeReferences(definitions, opts),
   materializeCallees: materializeSemanticCalleeCache,

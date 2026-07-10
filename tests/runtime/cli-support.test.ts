@@ -2,10 +2,12 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ProjectIndex } from '../../src/core/project-index.js';
 import {
   commandAnalysisBudget,
   deferredHealthPhaseResult,
   diffImpactBatchConcurrency,
+  healthSemanticCandidateDefinitions,
   healthPhaseConcurrency,
   healthPhaseTasks,
   healthPhaseTimeoutMs,
@@ -15,7 +17,9 @@ import {
   type HealthSemanticPrewarmRuntime,
 } from '../../src/runtime/cli-support.js';
 import type { IndexedDefinition } from '../../src/domain/types.js';
-import type { ScipDatabase } from '../../src/storage/db.js';
+import { semanticProviderLanguageForPath } from '../../src/semantic/provider-cache.js';
+import { ScipDatabase } from '../../src/storage/db.js';
+import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
 function fakeLargeDb(): ScipDatabase {
   return {
@@ -136,6 +140,51 @@ describe('healthPhaseTimeoutMs', () => {
 });
 
 describe('prewarmHealthSemanticEvidence', () => {
+  it('bulk-loads the same supported-language candidates as the scalar catalog path', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-health-candidates-'));
+    const projectRoot = join(tempDir, 'project');
+    const dbPath = join(tempDir, 'index.db');
+    writeFixtureFiles(projectRoot, {
+      'other/extra.ts': 'export function extra(): number { return 4; }\n',
+      'scripts/tool.py': 'def tool():\n    return 3\n',
+      'src/a.ts': 'export function alpha(): number { return 1; }\n',
+      'src/nested/lib.rs': 'pub fn beta() -> i32 { 2 }\n',
+    });
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/a.ts')
+      .document(2, 'rust', 'src/nested/lib.rs')
+      .document(3, 'python', 'scripts/tool.py')
+      .document(4, 'typescript', 'other/extra.ts')
+      .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`a.ts`/alpha().', 'alpha', 12)
+      .symbol(2, 'rust-analyzer cargo fixture 0.1.0 nested/lib/beta().', 'beta', 12)
+      .symbol(3, 'scip-python python fixture tool().', 'tool', 12)
+      .symbol(4, 'scip-typescript npm fixture 1.0.0 other/`extra.ts`/extra().', 'extra', 12)
+      .definition(1, 1, 1, 0, 0, 0, 47)
+      .definition(3, 3, 3, 0, 0, 1, 12)
+      .definition(4, 4, 4, 0, 0, 0, 46)
+      .chunk(2, 2, 0, 0)
+      .mention(2, 2, 1)
+      .write();
+
+    const db = new ScipDatabase({
+      projectRoot,
+      dbPath,
+      indexPath: join(tempDir, 'index.scip'),
+    });
+    try {
+      const scalarCandidates = (scope?: string): IndexedDefinition[] =>
+        new ProjectIndex(db)
+          .scopedDefinitions(scope)
+          .filter((definition) => semanticProviderLanguageForPath(definition.relativePath) !== null);
+
+      expect(healthSemanticCandidateDefinitions(db)).toEqual(scalarCandidates());
+      expect(healthSemanticCandidateDefinitions(db, 'nested')).toEqual(scalarCandidates('nested'));
+    } finally {
+      db.close();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('does not run semantic prewarm outside full health mode', () => {
     const runtime = fakePrewarmRuntime();
 
