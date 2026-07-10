@@ -1676,10 +1676,53 @@ are evidence-backed rejections, not unfinished implementation items.
 Final closure passed 1,218 tests across 177 files, typecheck, lint, build,
 package verification, reindex, and diff-gate with zero findings or advisories.
 
+## Automatic Indexing Setup Integration
+
+The post-roadmap setup closure makes the completed runtime lifecycle the
+default result of explicit `init` or `setup`. A missing watch decision becomes
+`watch.enabled: true` with automatic refresh, an existing explicit false is
+preserved by non-guided setup, and guided setup presents enablement as a
+recommended action. The setup report now records the observed start/reuse
+disposition, PID, watcher state, Git polling policy, and clean-idle deadline.
+Rust projects expose the selected durable or worker semantic transport, helper
+state, worker fallback, and opt-out. Status inspection itself is passive; the
+final sample follows health so any semantic request that wakes rust-analyzer is
+reported truthfully.
+
+A packed cold TypeScript/Rust fixture began with no database, Rust build
+artifacts, or `Cargo.lock`. The installed `0.15.0` package detected only the two
+project languages, indexed both shards in 2,627ms, reported fresh metadata,
+started an idle automatic service with a ten-minute deadline, and reported the
+Rust semantic helper as `durable/live` with worker fallback after the health
+audit made a semantic request. Setup recorded
+12 passing smoke checks, one intentionally unavailable hook check under
+`--no-hooks`, and zero failures. The 333-file tarball was 824,195 bytes with
+SHA-256 `6d9673689152e891362986147572c48ca20317b426612fab1855e25918674a45`.
+
+An explicit-opt-out packed control preserved `watch.enabled: false`, did not
+start the service, and reported automatic refresh as unavailable. Failure
+controls cover invalid config, config-write failure, service startup failure,
+missing idle-deadline evidence, invalid Rust selection, and freshness that
+remains stale after one bounded settling refresh.
+
+The package fixture also found a language-discovery defect: Git discovery
+included untracked `node_modules` paths when a repository had no `.gitignore`,
+causing dependency `.py`, `.c`, and `.cpp` files to masquerade as project
+languages. Git paths now use the same ignored-directory segments as filesystem
+discovery, and a repository fixture guards the corrected TypeScript-only
+result.
+
+Final setup-integration acceptance passed 1,231 tests across 177 files, lint,
+typecheck, build, generated command docs, a fresh TypeScript/Rust reindex, and
+diff-gate with zero findings or advisories. The separate health baseline still
+predates the broader indexing campaign and reports 165 repository-wide deltas;
+it was not rewritten as part of this setup slice.
+
 ## Run History
 
 Machine-readable run history:
-`docs/benchmarks/runs/2026-07-09-ts-rust-indexing-analysis.jsonl`.
+`docs/benchmarks/runs/2026-07-09-ts-rust-indexing-analysis.jsonl` and
+`docs/benchmarks/runs/2026-07-10-setup-integration.jsonl`.
 
 Profile files live next to that run history with descriptive names.
 

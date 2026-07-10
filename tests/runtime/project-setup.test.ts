@@ -7,6 +7,12 @@ async function loadProjectSetup(
     languages?: string[];
     healthThrows?: boolean;
     config?: Record<string, unknown>;
+    watchServiceThrows?: boolean;
+    watchServiceMissingIdleDeadline?: boolean;
+    rustSessionValid?: boolean;
+    automaticRefreshConfigThrows?: boolean;
+    configDiagnostics?: Array<{ level: 'error' | 'warning'; path: string; message: string }>;
+    freshnessStates?: Array<'fresh' | 'stale' | 'missing' | 'unknown'>;
   } = {},
 ) {
   vi.resetModules();
@@ -105,6 +111,41 @@ async function loadProjectSetup(
     removed: [],
     skipped: [],
   }));
+  const configureProjectAutomaticRefresh = vi.fn(
+    (_projectRoot: string, config: Record<string, unknown>, enabled: boolean) => {
+      if (overrides.automaticRefreshConfigThrows) throw new Error('config write failed');
+      return {
+        configPath: '/repo/.scipquery.json',
+        config: {
+          ...config,
+          watch: {
+            ...(typeof config['watch'] === 'object' && config['watch'] !== null ? config['watch'] : {}),
+            enabled,
+            autoRefresh: true,
+          },
+        },
+        changed: true,
+      };
+    },
+  );
+  const ensureWatchService = vi.fn(() => {
+    if (overrides.watchServiceThrows) throw new Error('watch startup failed');
+    return {
+      disposition: 'started' as const,
+      state: {
+        version: 1 as const,
+        protocolVersion: 3 as const,
+        pid: 456,
+        projectRoot: '/repo',
+        cliVersion: '0.15.0',
+        startedAt: '2026-07-10T00:00:00.000Z',
+        heartbeatAt: '2026-07-10T00:00:01.000Z',
+        lastActivityAt: '2026-07-10T00:00:01.000Z',
+        ...(overrides.watchServiceMissingIdleDeadline ? {} : { idleDeadlineAt: '2026-07-10T00:10:01.000Z' }),
+        watcher: { state: 'idle' as const },
+      },
+    };
+  });
 
   vi.doMock('node:fs', async () => {
     const actual = await vi.importActual<typeof NodeFs>('node:fs');
@@ -113,16 +154,17 @@ async function loadProjectSetup(
   vi.doMock('../../src/reindex/index.js', () => ({ reindex }));
   vi.doMock('../../src/runtime/agent-setup.js', () => ({ setupAgent }));
   vi.doMock('../../src/runtime/agent-hooks.js', () => ({ installProjectAgentHooks }));
-  vi.doMock('../../src/runtime/cli-support.js', () => ({ runIsolatedHealthReport }));
+  vi.doMock('../../src/runtime/cli-support.js', () => ({ cliVersion: '0.15.0', runIsolatedHealthReport }));
   vi.doMock('../../src/runtime/config.js', () => ({
-    validateProjectConfig: vi.fn(() => []),
-    resolveWatchConfig: vi.fn(() => ({
-      enabled: true,
+    configureProjectAutomaticRefresh,
+    validateProjectConfig: vi.fn(() => overrides.configDiagnostics ?? []),
+    resolveWatchConfig: vi.fn((config: { watch?: { enabled?: boolean; autoRefresh?: boolean } }) => ({
+      enabled: config.watch?.enabled ?? false,
       debounceMs: 30_000,
       cooldownMs: 60_000,
       gitPollMs: 2_000,
       idleTimeoutMs: 600_000,
-      autoRefresh: true,
+      autoRefresh: config.watch?.autoRefresh ?? true,
       ignore: [],
     })),
   }));
@@ -131,6 +173,7 @@ async function loadProjectSetup(
       projectRoot: '/repo',
       config: overrides.config ?? {},
       paths: {
+        cacheDir: '/repo/.scip',
         indexPath: '/repo/.scip/index.scip',
         dbPath: '/repo/.scip/index.db',
         metaPath: '/repo/.scip/index.meta.json',
@@ -138,13 +181,22 @@ async function loadProjectSetup(
       dbPath: '/repo/.scip/index.db',
     })),
   }));
+  let freshnessCall = 0;
   vi.doMock('../../src/runtime/index-freshness.js', () => ({
-    getIndexFreshness: vi.fn(() => ({
-      state: dbExists ? 'fresh' : 'missing',
-      checkedAt: '2026-06-23T00:00:00.000Z',
-      metaPath: '/repo/.scip/index.meta.json',
-      reason: dbExists ? 'fresh' : 'missing',
-    })),
+    getIndexFreshness: vi.fn(() => {
+      const configured = overrides.freshnessStates;
+      const state = configured
+        ? configured[Math.min(freshnessCall++, configured.length - 1)]!
+        : dbExists
+          ? 'fresh'
+          : 'missing';
+      return {
+        state,
+        checkedAt: '2026-06-23T00:00:00.000Z',
+        metaPath: '/repo/.scip/index.meta.json',
+        reason: state,
+      };
+    }),
   }));
   vi.doMock('../../src/runtime/health-dossier.js', () => ({
     writeProjectHealthDossier: vi.fn(() => ({
@@ -172,9 +224,30 @@ async function loadProjectSetup(
     installSkills: vi.fn(() => ({ installed: ['Codex/scip-query'], alreadyLinked: [], pruned: [], skipped: [] })),
     isScipInstalled: vi.fn(() => true),
   }));
+  vi.doMock('../../src/runtime/watch-service.js', () => ({ ensureWatchService }));
+  const rustSemanticSessionStatus = vi.fn(() => ({
+    transport: 'durable' as const,
+    source: 'default' as const,
+    fallback: 'worker' as const,
+    valid: overrides.rustSessionValid ?? true,
+    optOut: 'SCIP_RUST_SEMANTIC_DURABLE_SESSION=0',
+    state: 'stopped' as const,
+  }));
+  vi.doMock('../../src/semantic/rust/lsp-session.js', () => ({
+    rustSemanticSessionStatus,
+  }));
 
   const module = await import('../../src/runtime/project-setup.js');
-  return { module, reindex, runIsolatedHealthReport, setupAgent, installProjectAgentHooks };
+  return {
+    module,
+    reindex,
+    runIsolatedHealthReport,
+    setupAgent,
+    installProjectAgentHooks,
+    configureProjectAutomaticRefresh,
+    ensureWatchService,
+    rustSemanticSessionStatus,
+  };
 }
 
 afterEach(() => {
@@ -193,6 +266,7 @@ describe('runProjectSetup', () => {
         codexHooks: false,
         claudeSettings: false,
       },
+      watchEnabled: false,
       readiness: {
         languages: ['rust'],
         indexers: [{ language: 'rust', binaryLabel: 'rust-analyzer', installed: true, runnable: true }],
@@ -217,6 +291,11 @@ describe('runProjectSetup', () => {
 
     expect(plan.actions).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({
+          id: 'enable-automatic-refresh',
+          recommended: true,
+          requiresConsent: true,
+        }),
         expect.objectContaining({
           id: 'create-agent-guidance',
           recommended: false,
@@ -246,6 +325,7 @@ describe('runProjectSetup', () => {
         codexHooks: true,
         claudeSettings: true,
       },
+      watchEnabled: true,
       readiness: {
         languages: ['typescript'],
         indexers: [{ language: 'typescript', binaryLabel: 'scip-typescript', installed: true, runnable: true }],
@@ -278,7 +358,14 @@ describe('runProjectSetup', () => {
   });
 
   it('reports health score and issue list before any cleanup work could begin', async () => {
-    const { module, runIsolatedHealthReport, setupAgent, installProjectAgentHooks } = await loadProjectSetup();
+    const {
+      module,
+      runIsolatedHealthReport,
+      setupAgent,
+      installProjectAgentHooks,
+      configureProjectAutomaticRefresh,
+      ensureWatchService,
+    } = await loadProjectSetup();
 
     const report = await module.runProjectSetup({ gitHook: true });
 
@@ -317,13 +404,17 @@ describe('runProjectSetup', () => {
         expect.objectContaining({ command: 'scip-query setup-hooks', status: 'pass' }),
         expect.objectContaining({
           id: 'watch-refresh',
-          command: expect.stringContaining('"hook_event_name":"SessionStart"'),
+          command: 'scip-query status --json',
           status: 'pass',
         }),
         expect.objectContaining({ command: 'scip-query setup-agent', status: 'pass' }),
       ]),
     );
     expect(runIsolatedHealthReport).toHaveBeenCalledWith({ full: true, json: true });
+    expect(configureProjectAutomaticRefresh).toHaveBeenCalledWith('/repo', {}, true);
+    expect(ensureWatchService).toHaveBeenCalledWith(
+      expect.objectContaining({ projectRoot: '/repo', cacheDir: '/repo/.scip', cliVersion: '0.15.0' }),
+    );
     expect(installProjectAgentHooks).toHaveBeenCalledWith('/repo');
     expect(setupAgent).toHaveBeenCalledWith('/repo', { gitHook: true });
 
@@ -340,7 +431,7 @@ describe('runProjectSetup', () => {
   });
 
   it('blocks setup when no supported languages are detected', async () => {
-    const { module, reindex, runIsolatedHealthReport } = await loadProjectSetup({
+    const { module, reindex, runIsolatedHealthReport, ensureWatchService } = await loadProjectSetup({
       dbExists: false,
       languages: [],
     });
@@ -350,6 +441,7 @@ describe('runProjectSetup', () => {
     expect(report.verdict).toBe('blocked');
     expect(reindex).not.toHaveBeenCalled();
     expect(runIsolatedHealthReport).not.toHaveBeenCalled();
+    expect(ensureWatchService).not.toHaveBeenCalled();
     expect(report.steps.find((step) => step.id === 'reindex')).toMatchObject({
       status: 'skipped',
       message: 'Skipped because no supported languages were detected.',
@@ -368,6 +460,134 @@ describe('runProjectSetup', () => {
         expect.objectContaining({ command: 'scip-query setup-agent', status: 'pass' }),
       ]),
     );
+  });
+
+  it('settles one first-build input change before claiming freshness', async () => {
+    const { module, reindex } = await loadProjectSetup({ freshnessStates: ['stale', 'fresh'] });
+
+    const report = await module.runProjectSetup();
+
+    expect(reindex).toHaveBeenCalledTimes(2);
+    expect(report.freshness.state).toBe('fresh');
+    expect(report.steps.find((step) => step.id === 'reindex')?.details).toEqual(
+      expect.arrayContaining([expect.stringContaining('running one settling refresh')]),
+    );
+    expect(report.smokeTests.find((test) => test.id === 'status')).toMatchObject({ status: 'pass' });
+  });
+
+  it('fails the setup freshness smoke when the bounded settling pass remains stale', async () => {
+    const { module, reindex, ensureWatchService } = await loadProjectSetup({
+      freshnessStates: ['stale', 'stale', 'stale'],
+    });
+
+    const report = await module.runProjectSetup();
+
+    expect(reindex).toHaveBeenCalledTimes(2);
+    expect(ensureWatchService).not.toHaveBeenCalled();
+    expect(report.freshness.state).toBe('stale');
+    expect(report.steps.find((step) => step.id === 'watch-refresh')).toMatchObject({
+      status: 'skipped',
+      message: 'Skipped because the initial refresh did not produce a complete fresh generation.',
+    });
+    expect(report.smokeTests.find((test) => test.id === 'status')).toMatchObject({ status: 'fail' });
+    expect(report.verdict).toBe('blocked');
+  });
+
+  it('preserves an explicit automatic-indexing opt-out', async () => {
+    const { module, configureProjectAutomaticRefresh, ensureWatchService } = await loadProjectSetup({
+      config: { watch: { enabled: false, autoRefresh: true } },
+    });
+
+    const report = await module.runProjectSetup();
+
+    expect(configureProjectAutomaticRefresh).not.toHaveBeenCalled();
+    expect(ensureWatchService).not.toHaveBeenCalled();
+    expect(report.steps.find((step) => step.id === 'watch-refresh')).toMatchObject({
+      status: 'skipped',
+      message: 'Disabled by watch.enabled=false; setup left the explicit opt-out unchanged.',
+    });
+    expect(report.smokeTests.find((test) => test.id === 'watch-refresh')).toMatchObject({
+      status: 'unavailable',
+    });
+  });
+
+  it('reports config persistence failure without hiding the rest of setup', async () => {
+    const { module, ensureWatchService } = await loadProjectSetup({ automaticRefreshConfigThrows: true });
+
+    const report = await module.runProjectSetup();
+
+    expect(report.verdict).toBe('blocked');
+    expect(report.steps.find((step) => step.id === 'automatic-indexing-config')).toMatchObject({
+      status: 'failed',
+      message: 'config write failed',
+    });
+    expect(ensureWatchService).not.toHaveBeenCalled();
+  });
+
+  it('does not rewrite an existing config with validation errors', async () => {
+    const { module, configureProjectAutomaticRefresh } = await loadProjectSetup({
+      configDiagnostics: [{ level: 'error', path: 'watch.enabled', message: 'Expected a boolean.' }],
+    });
+
+    const report = await module.runProjectSetup();
+
+    expect(configureProjectAutomaticRefresh).not.toHaveBeenCalled();
+    expect(report.verdict).toBe('blocked');
+    expect(report.steps.find((step) => step.id === 'automatic-indexing-config')).toMatchObject({
+      status: 'skipped',
+      message: 'Skipped because the existing project config has validation errors.',
+    });
+  });
+
+  it('blocks setup when the enabled automatic-indexing service cannot start', async () => {
+    const { module } = await loadProjectSetup({
+      config: { watch: { enabled: true } },
+      watchServiceThrows: true,
+    });
+
+    const report = await module.runProjectSetup();
+
+    expect(report.verdict).toBe('blocked');
+    expect(report.steps.find((step) => step.id === 'watch-refresh')).toMatchObject({
+      status: 'failed',
+      message: 'watch startup failed',
+    });
+    expect(report.smokeTests.find((test) => test.id === 'watch-refresh')).toMatchObject({ status: 'fail' });
+  });
+
+  it('blocks setup when the service omits its configured idle deadline', async () => {
+    const { module } = await loadProjectSetup({ watchServiceMissingIdleDeadline: true });
+
+    const report = await module.runProjectSetup();
+
+    expect(report.verdict).toBe('blocked');
+    expect(report.steps.find((step) => step.id === 'watch-refresh')).toMatchObject({
+      status: 'failed',
+      message: 'Automatic indexing service did not publish its configured clean-idle deadline.',
+    });
+  });
+
+  it('reports the default durable Rust transport and fails invalid selection', async () => {
+    const passing = await loadProjectSetup({ languages: ['rust'] });
+    const passingReport = await passing.module.runProjectSetup();
+
+    expect(passing.runIsolatedHealthReport.mock.invocationCallOrder[0]).toBeLessThan(
+      passing.rustSemanticSessionStatus.mock.invocationCallOrder[0]!,
+    );
+    expect(passingReport.steps.find((step) => step.id === 'rust-semantic-session')).toMatchObject({
+      status: 'ok',
+      message: expect.stringContaining('durable/stopped selected from default; worker fallback'),
+    });
+    expect(passingReport.smokeTests.find((test) => test.id === 'rust-semantic-session')).toMatchObject({
+      status: 'pass',
+    });
+
+    const invalid = await loadProjectSetup({ languages: ['rust'], rustSessionValid: false });
+    const invalidReport = await invalid.module.runProjectSetup();
+    expect(invalidReport.verdict).toBe('blocked');
+    expect(invalidReport.smokeTests.find((test) => test.id === 'rust-semantic-session')).toMatchObject({
+      status: 'fail',
+    });
   });
 
   it('reports attempted indexer remediation and keeps setup partial when a language remains blocked', async () => {
@@ -485,6 +705,7 @@ describe('runProjectSetup', () => {
       })),
     }));
     vi.doMock('../../src/runtime/cli-support.js', () => ({
+      cliVersion: '0.15.0',
       runIsolatedHealthReport: vi.fn(() => ({
         score: 100,
         riskScore: 100,
@@ -501,9 +722,16 @@ describe('runProjectSetup', () => {
       })),
     }));
     vi.doMock('../../src/runtime/config.js', () => ({
+      configureProjectAutomaticRefresh: vi.fn(
+        (_projectRoot: string, config: Record<string, unknown>, enabled: boolean) => ({
+          configPath: '/repo/.scipquery.json',
+          config: { ...config, watch: { enabled, autoRefresh: true } },
+          changed: true,
+        }),
+      ),
       validateProjectConfig: vi.fn(() => []),
-      resolveWatchConfig: vi.fn(() => ({
-        enabled: false,
+      resolveWatchConfig: vi.fn((config: { watch?: { enabled?: boolean } }) => ({
+        enabled: config.watch?.enabled ?? false,
         debounceMs: 30_000,
         cooldownMs: 60_000,
         gitPollMs: 2_000,
@@ -517,6 +745,7 @@ describe('runProjectSetup', () => {
         projectRoot: '/repo',
         config: {},
         paths: {
+          cacheDir: '/repo/.scip',
           indexPath: '/repo/.scip/index.scip',
           dbPath: '/repo/.scip/index.db',
           metaPath: '/repo/.scip/index.meta.json',
@@ -578,6 +807,19 @@ describe('runProjectSetup', () => {
     vi.doMock('../../src/runtime/setup.js', () => ({
       installSkills: vi.fn(() => ({ installed: [], alreadyLinked: ['Codex/scip-query'], pruned: [], skipped: [] })),
       isScipInstalled: vi.fn(() => true),
+    }));
+    vi.doMock('../../src/runtime/watch-service.js', () => ({
+      ensureWatchService: vi.fn(() => ({
+        disposition: 'started',
+        state: {
+          pid: 456,
+          idleDeadlineAt: '2026-07-10T00:10:01.000Z',
+          watcher: { state: 'idle' },
+        },
+      })),
+    }));
+    vi.doMock('../../src/semantic/rust/lsp-session.js', () => ({
+      rustSemanticSessionStatus: vi.fn(),
     }));
 
     const module = await import('../../src/runtime/project-setup.js');

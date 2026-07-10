@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Complete; Phases 0–6 accepted
+Status: Complete; Phases 0–6 and setup integration accepted
 
 ## Goal
 
@@ -50,6 +50,10 @@ The program is complete when all of these statements are true:
 8. A native Rust port is accepted only for an isolated CPU-bound span whose
    end-to-end command speed improves after process/serialization overhead. A
    whole-CLI rewrite is not required for completion.
+9. Explicit setup makes this lifecycle the normal project configuration,
+   preserves an existing opt-out, proves the service's sleep policy from live
+   state, and reports Rust's final semantic transport/lifecycle state. Status
+   inspection is passive; semantic health work may wake the helper.
 
 ## Current State
 
@@ -650,6 +654,35 @@ cache answer complete. No native slice met AD-7: the prior helper-process
 kernel did not improve warm command time, and remaining large spans mix I/O,
 decoding, and source correction. Both changes are rejected pending new facts,
 not left as unbounded roadmap work.
+
+### Setup integration closure
+
+**Purpose:** make the accepted lifecycle the normal, observable result of an
+explicit project setup rather than requiring users to know the watch config.
+
+**Progress:** Complete. Executable closure:
+[`2026-07-10-setup-automatic-indexing.md`](./2026-07-10-setup-automatic-indexing.md).
+`init` and setup now persist the demand-started automatic policy, existing
+explicit opt-outs survive non-guided setup, and guided setup offers a clear
+recommended action. Setup performs the initial refresh before starting or
+reusing the service, proves a positive clean-idle deadline from live state,
+and reports Rust's durable/worker selection and asleep/live status without
+waking it merely to inspect status. The sample occurs after health so a
+semantic health request is reflected as `live`. Freshness is a strict smoke
+gate, with one bounded settling refresh for indexer-created inputs.
+
+The packed TypeScript/Rust cold control detected only the two project
+languages, rebuilt both shards in 2,627ms, finished fresh, started the service
+with its ten-minute clean-idle deadline, and reported `durable/live` plus
+worker fallback after semantic health work. Twelve setup checks passed, the
+deliberately skipped hook check was unavailable, and none failed. A separate
+opt-out control preserved
+`watch.enabled: false` and did not start the service. The package contained 333
+files in 824,195 bytes at SHA-256 `6d967368…`.
+
+Setup closure passed 1,231 tests across 177 files, lint, typecheck, build,
+generated command docs, reindex, and diff-gate with zero findings or
+advisories.
 
 ## Stress-Test Findings and Required Responses
 

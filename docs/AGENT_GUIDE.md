@@ -17,7 +17,15 @@ For analyzer implementation work, follow [Regex Policy](REGEX_POLICY.md): regex 
    ```bash
    scip-query setup --json
    ```
-   Returns: detected languages, indexer readiness, remediation attempts, index result, capability summary, project-local hook install state, smoke tests, health score, issue list, health dossier paths, and setup verdict. Use `scip-query setup --no-hooks --json` when the repo should not write Codex or Claude Code lifecycle hooks.
+   Returns: detected languages, automatic-indexing config and live service
+   state, Rust semantic transport/fallback state, indexer readiness,
+   remediation attempts, index result, capability summary, project-local hook
+   install state, smoke tests, health score, issue list, health dossier paths,
+   and setup verdict. A project with no watch decision is enabled; an existing
+   explicit `watch.enabled: false` is preserved. Use `scip-query setup --guided`
+   for a recommended automatic-indexing choice, or
+   `scip-query setup --no-hooks --json` when the repo should not write Codex or
+   Claude Code lifecycle hooks.
 
 2. **Resolve blockers**
    ```bash

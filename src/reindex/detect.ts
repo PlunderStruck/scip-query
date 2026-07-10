@@ -196,6 +196,7 @@ function collectGitTrackedExtensions(projectRoot: string): Set<string> | null {
     const found = new Set<string>();
     for (const line of stdout.split('\n')) {
       if (!line) continue;
+      if (line.split('/').some((segment) => IGNORED_DIRS.has(segment))) continue;
       const extension = extname(line).toLowerCase();
       if (extension) {
         found.add(extension);

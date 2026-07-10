@@ -3,7 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { handleDoctor, handleStatus, handleWatch } from '../../src/runtime/commands/command-handlers.js';
-import { loadProjectConfig, resolveWatchConfig, validateProjectConfig } from '../../src/runtime/config.js';
+import {
+  configureProjectAutomaticRefresh,
+  initProjectConfig,
+  loadProjectConfig,
+  resolveWatchConfig,
+  validateProjectConfig,
+} from '../../src/runtime/config.js';
 import type { ProjectConfig } from '../../src/domain/types.js';
 
 const tempDirs: string[] = [];
@@ -61,6 +67,49 @@ describe('loadProjectConfig', () => {
     } finally {
       chmodSync(configPath, 0o600);
     }
+  });
+});
+
+describe('automatic indexing config setup', () => {
+  it('initializes explicit project configs with demand-started indexing enabled', () => {
+    const projectRoot = createProject();
+
+    const configPath = initProjectConfig(projectRoot, ['typescript']);
+
+    expect(configPath).toBe(join(projectRoot, '.scipquery.json'));
+    expect(loadProjectConfig(projectRoot)).toMatchObject({
+      languages: ['typescript'],
+      watch: { enabled: true, autoRefresh: true, idleTimeoutMs: 600_000 },
+    });
+  });
+
+  it('persists setup enablement without replacing unrelated config', () => {
+    const projectRoot = createProject();
+    const current = {
+      languages: ['rust'] as const,
+      docs: { snapshotPaths: ['docs/archive/**'] },
+      watch: { enabled: false, debounceMs: 500 },
+    };
+
+    const result = configureProjectAutomaticRefresh(projectRoot, current, true);
+
+    expect(result.changed).toBe(true);
+    expect(loadProjectConfig(projectRoot)).toEqual({
+      languages: ['rust'],
+      docs: { snapshotPaths: ['docs/archive/**'] },
+      watch: { enabled: true, debounceMs: 500, autoRefresh: true },
+    });
+  });
+
+  it('leaves an already-persisted setup state untouched', () => {
+    const projectRoot = createProject();
+    const current = { watch: { enabled: true, autoRefresh: false } };
+    writeFileSync(join(projectRoot, '.scipquery.json'), `${JSON.stringify(current, null, 2)}\n`);
+
+    const result = configureProjectAutomaticRefresh(projectRoot, current, true);
+
+    expect(result).toMatchObject({ changed: false, config: current });
+    expect(loadProjectConfig(projectRoot)).toEqual(current);
   });
 });
 

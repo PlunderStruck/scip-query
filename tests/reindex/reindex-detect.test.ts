@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -62,6 +63,21 @@ describe('detectLanguages', () => {
     const languages = detectLanguages(projectRoot);
     expect(languages).toContain('typescript');
     expect(languages).not.toContain('javascript');
+  });
+
+  it('ignores untracked dependency directories in Git-backed detection', () => {
+    const projectRoot = createProject('scip-query-detect-dependencies-');
+    execFileSync('git', ['init', '-q', projectRoot]);
+    writeFileSync(join(projectRoot, 'package.json'), '{}\n');
+    writeFileSync(join(projectRoot, 'tsconfig.json'), '{}\n');
+    mkdirSync(join(projectRoot, 'src'), { recursive: true });
+    writeFileSync(join(projectRoot, 'src', 'main.ts'), 'export const answer = 42;\n');
+    mkdirSync(join(projectRoot, 'node_modules', 'dependency', 'src'), { recursive: true });
+    writeFileSync(join(projectRoot, 'node_modules', 'dependency', 'src', 'helper.py'), 'answer = 42\n');
+    writeFileSync(join(projectRoot, 'node_modules', 'dependency', 'src', 'helper.c'), 'int answer = 42;\n');
+    writeFileSync(join(projectRoot, 'node_modules', 'dependency', 'src', 'helper.cpp'), 'int answer = 42;\n');
+
+    expect(detectLanguages(projectRoot)).toEqual(['typescript']);
   });
 
   it('detects Clojure projects from common manifests and source extensions', () => {

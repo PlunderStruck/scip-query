@@ -4,10 +4,16 @@ import type { HealthReport } from '../queries/index.js';
 import { getIndexerConfig } from '../reindex/indexers.js';
 import { getIndexerDependencyStatus, tryInstallIndexer } from '../reindex/install.js';
 import { reindex, type ReindexResult } from '../reindex/index.js';
+import { rustSemanticSessionStatus, type RustSemanticSessionStatus } from '../semantic/rust/lsp-session.js';
 import { setupAgent } from './agent-setup.js';
 import { installProjectAgentHooks } from './agent-hooks.js';
-import { runIsolatedHealthReport } from './cli-support.js';
-import { resolveWatchConfig, validateProjectConfig } from './config.js';
+import { cliVersion, runIsolatedHealthReport } from './cli-support.js';
+import {
+  configureProjectAutomaticRefresh,
+  resolveWatchConfig,
+  validateProjectConfig,
+  type ProjectAutomaticRefreshConfigResult,
+} from './config.js';
 import { resolveCliProjectContext } from './cli-context.js';
 import {
   writeProjectHealthDossier,
@@ -17,6 +23,7 @@ import {
 import { getIndexFreshness } from './index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from './project-readiness.js';
 import { installSkills, isScipInstalled } from './setup.js';
+import { ensureWatchService, type WatchServiceEnsureResult } from './watch-service.js';
 
 type HealthAction = HealthReport['actions'][number];
 type IndexFreshness = ReturnType<typeof getIndexFreshness>;
@@ -96,6 +103,9 @@ export interface ProjectSetupReport {
   capabilities: ProjectCapabilityReport;
   freshness: IndexFreshness;
   reindex: ReindexResult | null;
+  automaticRefreshConfig: ProjectAutomaticRefreshConfigResult | null;
+  watchService: WatchServiceEnsureResult | null;
+  rustSemanticSession: RustSemanticSessionStatus | null;
   health: ProjectSetupHealthSummary;
   smokeTests: ProjectSetupSmokeTest[];
   healthDossier: ProjectSetupHealthDossier | null;
@@ -109,6 +119,7 @@ export interface ProjectSetupOptions {
   gitHook?: boolean;
   noHooks?: boolean;
   noAgentGuidance?: boolean;
+  automaticRefresh?: boolean;
   dossierDir?: string;
 }
 
@@ -116,6 +127,7 @@ export type ProjectSetupGuidedActionId =
   | 'create-agent-guidance'
   | 'update-agent-guidance'
   | 'install-project-hooks'
+  | 'enable-automatic-refresh'
   | 'install-indexers'
   | 'install-parser-runtimes';
 
@@ -141,10 +153,22 @@ export interface ProjectSetupGuidedPlan {
 
 export function planGuidedProjectSetup(input: {
   files: ProjectSetupGuidedFiles;
+  watchEnabled: boolean;
   readiness: Pick<ProjectReadiness, 'indexers'>;
   capabilities: Pick<ProjectCapabilityReport, 'matrix'>;
 }): ProjectSetupGuidedPlan {
   const actions: ProjectSetupGuidedAction[] = [];
+
+  if (!input.watchEnabled) {
+    actions.push({
+      id: 'enable-automatic-refresh',
+      label: 'Enable automatic incremental indexing',
+      recommended: true,
+      requiresConsent: true,
+      reason: 'A demand-started project service keeps indexes current and exits after a clean idle period.',
+      command: 'scip-query setup',
+    });
+  }
 
   if (input.files.agentsMd || input.files.claudeMd) {
     actions.push({
@@ -211,8 +235,43 @@ export function planGuidedProjectSetup(input: {
 // scip-query: ignore-extract - setup is a user-facing workflow transcript; the sequence is the behavior.
 export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<ProjectSetupReport> {
   const steps: ProjectSetupStep[] = [];
-  const { projectRoot, config, paths, dbPath } = resolveCliProjectContext();
+  const context = resolveCliProjectContext();
+  const { projectRoot, paths, dbPath } = context;
+  const automaticRefresh = opts.automaticRefresh ?? context.config.watch?.enabled ?? true;
+  const existingConfigDiagnostics = validateProjectConfig(context.config, { projectRoot });
+  const existingConfigErrors = existingConfigDiagnostics.filter((diagnostic) => diagnostic.level === 'error');
+  let automaticRefreshConfig: ProjectAutomaticRefreshConfigResult | null = null;
+  let automaticRefreshError: string | null = null;
+  if (existingConfigErrors.length === 0 && context.config.watch?.enabled !== automaticRefresh) {
+    try {
+      automaticRefreshConfig = configureProjectAutomaticRefresh(projectRoot, context.config, automaticRefresh);
+    } catch (error) {
+      automaticRefreshError = errorMessage(error);
+    }
+  }
+  const config = automaticRefreshConfig?.config ?? context.config;
   const scipCliInstalled = isScipInstalled();
+
+  addStep(steps, {
+    id: 'automatic-indexing-config',
+    label: 'Automatic indexing config',
+    status:
+      automaticRefreshError !== null
+        ? 'failed'
+        : existingConfigErrors.length > 0 || !automaticRefresh
+          ? 'skipped'
+          : 'ok',
+    message:
+      automaticRefreshError ??
+      (existingConfigErrors.length > 0
+        ? 'Skipped because the existing project config has validation errors.'
+        : automaticRefresh
+          ? automaticRefreshConfig?.changed
+            ? 'Enabled demand-started automatic incremental indexing for this project.'
+            : 'Demand-started automatic incremental indexing is already enabled.'
+          : 'Automatic incremental indexing remains explicitly disabled for this project.'),
+    ...(automaticRefreshConfig ? { details: [automaticRefreshConfig.configPath] } : {}),
+  });
 
   addStep(steps, {
     id: 'scip-cli',
@@ -230,7 +289,9 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     details: [...skills.pruned.map((entry) => `Pruned ${entry}`), ...skills.skipped.map((entry) => `Skipped ${entry}`)],
   });
 
-  const configDiagnostics = validateProjectConfig(config, { projectRoot });
+  const configDiagnostics = automaticRefreshConfig
+    ? validateProjectConfig(config, { projectRoot })
+    : existingConfigDiagnostics;
   const configErrors = configDiagnostics.filter((diagnostic) => diagnostic.level === 'error');
   addStep(steps, {
     id: 'config',
@@ -243,17 +304,6 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     details: configDiagnostics.map(
       (diagnostic) => `${diagnostic.level.toUpperCase()} ${diagnostic.path}: ${diagnostic.message}`,
     ),
-  });
-
-  const watchConfig = resolveWatchConfig(config);
-  addStep(steps, {
-    id: 'watch-refresh',
-    label: 'Watch refresh policy',
-    status: watchConfig.autoRefresh === false ? 'skipped' : 'ok',
-    message:
-      watchConfig.autoRefresh === false
-        ? 'Project commands wake an enabled watch service; project hooks report freshness but do not auto-refresh stale indexes.'
-        : `Project commands and hooks wake the enabled per-project watch service; defaults are ${watchConfig.debounceMs}ms debounce, ${watchConfig.cooldownMs}ms cooldown, ${watchConfig.gitPollMs}ms Git polling, and ${watchConfig.idleTimeoutMs}ms clean-idle exit (0 keeps it running).`,
   });
 
   const initialReadiness = getProjectReadiness(projectRoot, config);
@@ -280,6 +330,7 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
   const readyForIndexing = getProjectReadiness(projectRoot, config);
 
   let reindexResult: ReindexResult | null = null;
+  let postReindexFreshness: IndexFreshness | null = null;
   if (readyForIndexing.languages.length === 0 || configErrors.length > 0) {
     addStep(steps, {
       id: 'reindex',
@@ -293,31 +344,47 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
   } else {
     const reindexMessages: string[] = [];
     try {
-      reindexResult = await reindex({
-        projectRoot,
-        languages: readyForIndexing.languages,
-        outputScip: paths.indexPath,
-        outputDb: paths.dbPath,
-        pnpmWorkspaces: config.indexer?.typescript?.pnpmWorkspaces,
-        typescriptProjectMode: config.indexer?.typescript?.projectMode,
-        typescriptProjects: config.indexer?.typescript?.projects,
-        clojureConfigPath: config.indexer?.clojure?.configPath,
-        skipIfUnchanged: true,
-        allowPartial: true,
-        indexerConcurrency: config.indexerConcurrency,
-        trigger: { kind: 'setup', detail: 'scip-query setup' },
-        onStatus: (message) => reindexMessages.push(message),
-      });
+      let totalDurationMs = 0;
+      let rebuilt = false;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        reindexResult = await reindex({
+          projectRoot,
+          languages: readyForIndexing.languages,
+          outputScip: paths.indexPath,
+          outputDb: paths.dbPath,
+          pnpmWorkspaces: config.indexer?.typescript?.pnpmWorkspaces,
+          typescriptProjectMode: config.indexer?.typescript?.projectMode,
+          typescriptProjects: config.indexer?.typescript?.projects,
+          clojureConfigPath: config.indexer?.clojure?.configPath,
+          skipIfUnchanged: true,
+          allowPartial: true,
+          indexerConcurrency: config.indexerConcurrency,
+          trigger: { kind: 'setup', detail: 'scip-query setup' },
+          onStatus: (message) => reindexMessages.push(message),
+        });
+        totalDurationMs += reindexResult.durationMs;
+        rebuilt ||= !reindexResult.reused;
+        postReindexFreshness = getIndexFreshness(projectRoot, config, paths);
+        if (attempt === 0 && reindexResult.skipped.length === 0 && postReindexFreshness.state === 'stale') {
+          reindexMessages.push(
+            `Index inputs changed during the first build (${postReindexFreshness.reason}); running one settling refresh.`,
+          );
+          continue;
+        }
+        break;
+      }
+      if (!reindexResult) throw new Error('Setup index refresh produced no result.');
+      const completedReindex = reindexResult;
       addStep(steps, {
         id: 'reindex',
         label: 'Index refresh',
-        status: reindexResult.skipped.length > 0 ? 'warn' : 'ok',
-        message: `${reindexResult.reused ? 'Reused' : 'Indexed'} ${reindexResult.languages.join(', ')} in ${(
-          reindexResult.durationMs / 1000
+        status: completedReindex.skipped.length > 0 ? 'warn' : 'ok',
+        message: `${rebuilt ? 'Indexed' : 'Reused'} ${completedReindex.languages.join(', ')} in ${(
+          totalDurationMs / 1000
         ).toFixed(1)}s.`,
         details: [
           ...reindexMessages,
-          ...reindexResult.skipped.map((entry) => `Skipped ${entry.language}: ${entry.reason}`),
+          ...completedReindex.skipped.map((entry) => `Skipped ${entry.language}: ${entry.reason}`),
         ],
       });
     } catch (error) {
@@ -327,6 +394,72 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
         status: 'failed',
         message: errorMessage(error),
         details: reindexMessages,
+      });
+    }
+  }
+
+  const watchConfig = resolveWatchConfig(config);
+  let watchService: WatchServiceEnsureResult | null = null;
+  if (readyForIndexing.languages.length === 0) {
+    addStep(steps, {
+      id: 'watch-refresh',
+      label: 'Automatic indexing service',
+      status: 'skipped',
+      message: 'Skipped because no supported languages were detected.',
+    });
+  } else if (configErrors.length > 0) {
+    addStep(steps, {
+      id: 'watch-refresh',
+      label: 'Automatic indexing service',
+      status: 'skipped',
+      message: 'Skipped because config validation has errors.',
+    });
+  } else if (!watchConfig.enabled) {
+    addStep(steps, {
+      id: 'watch-refresh',
+      label: 'Automatic indexing service',
+      status: 'skipped',
+      message: 'Disabled by watch.enabled=false; setup left the explicit opt-out unchanged.',
+    });
+  } else if (reindexResult === null || reindexResult.skipped.length > 0 || postReindexFreshness?.state !== 'fresh') {
+    addStep(steps, {
+      id: 'watch-refresh',
+      label: 'Automatic indexing service',
+      status: 'skipped',
+      message: 'Skipped because the initial refresh did not produce a complete fresh generation.',
+    });
+  } else {
+    try {
+      watchService = ensureWatchService({
+        projectRoot,
+        cacheDir: paths.cacheDir,
+        cliVersion,
+        watchOverrides: watchConfig,
+      });
+      if (watchConfig.idleTimeoutMs > 0 && watchService.state.idleDeadlineAt === undefined) {
+        throw new Error('Automatic indexing service did not publish its configured clean-idle deadline.');
+      }
+      const idlePolicy =
+        watchConfig.idleTimeoutMs === 0
+          ? 'configured to remain running'
+          : `clean-idle exit scheduled for ${watchService.state.idleDeadlineAt}`;
+      addStep(steps, {
+        id: 'watch-refresh',
+        label: 'Automatic indexing service',
+        status: 'ok',
+        message: `${watchService.disposition} pid ${watchService.state.pid}; ${idlePolicy}.`,
+        details: [
+          `watcher=${watchService.state.watcher.state}`,
+          `autoRefresh=${watchConfig.autoRefresh}`,
+          `gitPollMs=${watchConfig.gitPollMs}`,
+        ],
+      });
+    } catch (error) {
+      addStep(steps, {
+        id: 'watch-refresh',
+        label: 'Automatic indexing service',
+        status: 'failed',
+        message: errorMessage(error),
       });
     }
   }
@@ -342,6 +475,18 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
   });
 
   const health = await runSetupHealth(paths.dbPath, steps);
+  const rustSemanticSession = readiness.languages.includes('rust')
+    ? rustSemanticSessionStatus(projectRoot, process.env['SCIP_RUST_SEMANTIC_DURABLE_SESSION'])
+    : null;
+  addStep(steps, {
+    id: 'rust-semantic-session',
+    label: 'Rust semantic session',
+    status: rustSemanticSession === null ? 'skipped' : rustSemanticSession.valid ? 'ok' : 'failed',
+    message:
+      rustSemanticSession === null
+        ? 'Skipped because Rust was not detected.'
+        : `${rustSemanticSession.transport}/${rustSemanticSession.state} selected from ${rustSemanticSession.source}; ${rustSemanticSession.fallback} fallback; opt out with ${rustSemanticSession.optOut}.`,
+  });
 
   let hooksResult: SetupHooksResult | null = null;
   try {
@@ -410,6 +555,9 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     health,
     hooksResult,
     agentResult,
+    watchConfig,
+    watchService,
+    rustSemanticSession,
     steps,
   });
   addStep(steps, {
@@ -434,6 +582,9 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     capabilities,
     freshness,
     reindex: reindexResult,
+    automaticRefreshConfig,
+    watchService,
+    rustSemanticSession,
     health,
     smokeTests,
     healthDossier: null,
@@ -521,6 +672,9 @@ function buildSetupSmokeTests(opts: {
   health: ProjectSetupHealthSummary;
   hooksResult: SetupHooksResult | null;
   agentResult: SetupAgentResult | null;
+  watchConfig: ReturnType<typeof resolveWatchConfig>;
+  watchService: WatchServiceEnsureResult | null;
+  rustSemanticSession: RustSemanticSessionStatus | null;
   steps: readonly ProjectSetupStep[];
 }): ProjectSetupSmokeTest[] {
   const reindexStep = opts.steps.find((step) => step.id === 'reindex');
@@ -539,7 +693,7 @@ function buildSetupSmokeTests(opts: {
     {
       id: 'status',
       command: 'scip-query status',
-      status: opts.freshness.state === 'missing' ? 'fail' : 'pass',
+      status: opts.freshness.state === 'fresh' ? 'pass' : 'fail',
       evidence: `Index freshness is ${opts.freshness.state}: ${opts.freshness.reason}`,
     },
     {
@@ -603,9 +757,23 @@ function buildSetupSmokeTests(opts: {
     },
     {
       id: 'watch-refresh',
-      command: `printf %s '{"hook_event_name":"SessionStart"}' | scip-query hook-context`,
-      status: watchStep?.status === 'ok' ? 'pass' : 'unavailable',
+      command: 'scip-query status --json',
+      status:
+        watchStep?.status === 'failed'
+          ? 'fail'
+          : opts.watchConfig.enabled && opts.watchService
+            ? 'pass'
+            : 'unavailable',
       evidence: watchStep?.message ?? 'Watch refresh policy was not evaluated.',
+    },
+    {
+      id: 'rust-semantic-session',
+      command: 'scip-query status --json',
+      status: opts.rustSemanticSession === null ? 'unavailable' : opts.rustSemanticSession.valid ? 'pass' : 'fail',
+      evidence:
+        opts.rustSemanticSession === null
+          ? 'Rust was not detected.'
+          : `${opts.rustSemanticSession.transport}/${opts.rustSemanticSession.state}; ${opts.rustSemanticSession.fallback} fallback; ${opts.rustSemanticSession.optOut}.`,
     },
     {
       id: 'setup-agent',

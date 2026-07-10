@@ -550,7 +550,7 @@ export function initProjectConfig(projectRoot: string, languages: string[]): str
   const config: ProjectConfig = {
     languages: languages as ProjectConfig['languages'],
     watch: {
-      enabled: false,
+      enabled: true,
       debounceMs: DEFAULT_WATCH_DEBOUNCE_MS,
       cooldownMs: DEFAULT_WATCH_COOLDOWN_MS,
       gitPollMs: 2_000,
@@ -561,6 +561,36 @@ export function initProjectConfig(projectRoot: string, languages: string[]): str
 
   writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
   return configPath;
+}
+
+export interface ProjectAutomaticRefreshConfigResult {
+  configPath: string;
+  config: ProjectConfig;
+  changed: boolean;
+}
+
+/**
+ * Persist setup's automatic-indexing decision without replacing unrelated
+ * project configuration. Callers decide whether an existing explicit opt-out
+ * should be preserved before invoking this function.
+ */
+export function configureProjectAutomaticRefresh(
+  projectRoot: string,
+  config: ProjectConfig,
+  enabled: boolean,
+): ProjectAutomaticRefreshConfigResult {
+  const configPath = join(projectRoot, CONFIG_FILENAME);
+  const nextConfig: ProjectConfig = {
+    ...config,
+    watch: {
+      ...config.watch,
+      enabled,
+      ...(enabled && config.watch?.autoRefresh === undefined ? { autoRefresh: true } : {}),
+    },
+  };
+  const changed = !existsSync(configPath) || JSON.stringify(nextConfig) !== JSON.stringify(config);
+  if (changed) writeFileSync(configPath, JSON.stringify(nextConfig, null, 2) + '\n');
+  return { configPath, config: nextConfig, changed };
 }
 
 function ensureDir(dir: string): string {

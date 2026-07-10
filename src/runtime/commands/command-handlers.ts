@@ -1153,6 +1153,7 @@ async function guidedProjectSetupOptions(
   });
   const plan = planGuidedProjectSetup({
     files: guidedProjectSetupFiles(projectRoot),
+    watchEnabled: resolveWatchConfig(config).enabled,
     readiness,
     capabilities,
   });
@@ -1161,8 +1162,10 @@ async function guidedProjectSetupOptions(
       ? recommendedGuidedActions(plan.actions)
       : await promptGuidedActions(plan.actions);
   const agentActionSelected = selected.has('create-agent-guidance') || selected.has('update-agent-guidance');
+  const automaticRefreshAction = plan.actions.some((action) => action.id === 'enable-automatic-refresh');
   return {
     ...base,
+    ...(automaticRefreshAction ? { automaticRefresh: selected.has('enable-automatic-refresh') } : {}),
     noHooks:
       base.noHooks ||
       (plan.actions.some((action) => action.id === 'install-project-hooks') && !selected.has('install-project-hooks')),

@@ -184,7 +184,7 @@ scip-query config-validate # Validate .scipquery.json, including structured supp
 scip-query suppress <id> # Record an accepted finding as a file under .scipquery/suppressions/ with a required reason
 scip-query effectiveness # Per-check effectiveness from the committed outcome ledger: findings caught, fixed by code changes, suppressed, precision, median time-to-fix
 scip-query doctor # Diagnose config, index freshness, dependency readiness, and project capabilities
-scip-query setup # Bootstrap this project: install agent skills, refresh the index, verify capabilities, and report health
+scip-query setup # Bootstrap this project: enable automatic indexing, install agent skills, refresh the index, verify capabilities, and report health
 scip-query setup-agent # Seed agent guidance for this project: AGENTS.md/CLAUDE.md block pointing agents at the scip-query skills and diff gate, plus an optional git pre-commit backstop
 scip-query setup-ci # Write a GitHub Actions workflow that runs scip-query reindex and diff-gate on pull requests
 scip-query uninstall # Remove scip-query-owned skill links, project hooks, and managed agent setup blocks

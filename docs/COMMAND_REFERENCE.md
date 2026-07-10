@@ -138,7 +138,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 | `suppress <id>` | Record an accepted finding as a file under .scipquery/suppressions/ with a required reason | `--reason <text>`<br>`--check <check>`<br>`--file <path>`<br>`--expires-at <iso>`<br>`--json` |
 | `effectiveness` | Per-check effectiveness from the committed outcome ledger: findings caught, fixed by code changes, suppressed, precision, median time-to-fix | `--since <window>`<br>`--check <check>`<br>`--json` |
 | `doctor` | Diagnose config, index freshness, dependency readiness, and project capabilities | `--json` |
-| `setup` | Bootstrap this project: install agent skills, refresh the index, verify capabilities, and report health | `--guided`<br>`--git-hook`<br>`--no-hooks`<br>`--dossier-dir <path>`<br>`--json` |
+| `setup` | Bootstrap this project: enable automatic indexing, install agent skills, refresh the index, verify capabilities, and report health | `--guided`<br>`--git-hook`<br>`--no-hooks`<br>`--dossier-dir <path>`<br>`--json` |
 | `setup-agent` | Seed agent guidance for this project: AGENTS.md/CLAUDE.md block pointing agents at the scip-query skills and diff gate, plus an optional git pre-commit backstop | `--git-hook` |
 | `setup-ci` | Write a GitHub Actions workflow that runs scip-query reindex and diff-gate on pull requests | `--force`<br>`--dry-run` |
 | `uninstall` | Remove scip-query-owned skill links, project hooks, and managed agent setup blocks | `--global`<br>`--project`<br>`--dry-run`<br>`--json` |

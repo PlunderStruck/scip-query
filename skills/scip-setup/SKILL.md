@@ -27,7 +27,7 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 
 | Command | Purpose | When |
 | --- | --- | --- |
-| `scip-query setup --json` | Bootstrap this project: install agent skills, refresh the index, verify capabilities, and report health | Run setup: install skills, refresh the index, report health. |
+| `scip-query setup --json` | Bootstrap this project: enable automatic indexing, install agent skills, refresh the index, verify capabilities, and report health | Run setup: install skills, refresh the index, report health. |
 | `scip-query doctor` | Diagnose config, index freshness, dependency readiness, and project capabilities | Resolve blockers: human diagnostic for config, index, and dependencies. |
 | `scip-query status --json` | Show index status for this project | Resolve blockers: machine surface for freshness and config. |
 | `scip-query capabilities --matrix` | Report which evidence and verification capabilities are available in this project | Resolve blockers: which evidence/verification capabilities are available. |

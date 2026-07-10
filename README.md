@@ -53,7 +53,7 @@ React and Vue repositories get additional framework-aware checks for repeated co
 
 ```bash
 npm install -g scip-query@latest
-scip-query setup           # opt-in: skills, project hooks, first index, health dossier
+scip-query setup           # opt-in: automatic indexing, skills, hooks, first index, health dossier
 scip-query check-deps
 scip-query reindex
 ```
@@ -330,7 +330,23 @@ The confusable clusters, disambiguated: `scip-concrete-plan` (one change) vs `sc
 
 Project setup writes reviewable project-local lifecycle hooks for Codex and Claude Code (`.codex/hooks.json` and `.claude/settings.local.json` by default; `setup-hooks --shared` opts into `.claude/settings.json`). These hooks add scip-query context at session start, route prompts toward the right skill, and run an advisory Stop-hook wrapper around the diff gate only for that repository. The Stop hook sends feedback to the agent by default instead of blocking; set `SCIP_QUERY_STOP_HOOK_MODE=warn` for a warning-only hook response, or `SCIP_QUERY_STOP_HOOK_MODE=block` to enforce the gate. Set `SCIP_QUERY_SKIP_HOOK_INSTALL=1` or run `scip-query setup --no-hooks` to skip hook installation during setup, and run `scip-query setup-hooks --json` later to repair the current repo's hooks.
 
-For a project, run `scip-query setup`. It installs/refreshes skills, configures project-local hooks unless skipped, checks indexer readiness, attempts configured indexer remediation, refreshes the index, smoke-tests representative command families, writes `docs/scip-query/health-dossier.md` and `.json`, reports the health score and items needing attention, and seeds AGENTS.md/CLAUDE.md guidance. After setup, `scip-cleanup-audit` confirms raw signals and `scip-cleanup-improve` keeps fixing the worst confirmed items until no safe confirmed cleanup remains. Use `scip-query setup --git-hook` when you also want a local pre-commit diff gate. CI setup is intentionally separate.
+For a project, run `scip-query setup`. It enables demand-started automatic
+indexing unless the project already has an explicit `watch.enabled: false`,
+starts or reuses the project service, verifies its clean-idle deadline, and
+reports Rust's final durable/worker semantic selection and lifecycle state.
+The status read is passive; the setup health audit may make a semantic request
+that wakes rust-analyzer, after which the helper exits on clean idle.
+It also installs/refreshes skills, configures project-local hooks unless
+skipped, checks indexer readiness, attempts configured indexer remediation,
+refreshes the index, smoke-tests representative command families, writes
+`docs/scip-query/health-dossier.md` and `.json`, reports the health score and
+items needing attention, and seeds AGENTS.md/CLAUDE.md guidance. Use
+`scip-query setup --guided` to accept or decline the recommended automatic
+indexing action and other project-local changes. After setup,
+`scip-cleanup-audit` confirms raw signals and `scip-cleanup-improve` keeps
+fixing the worst confirmed items until no safe confirmed cleanup remains. Use
+`scip-query setup --git-hook` when you also want a local pre-commit diff gate.
+CI setup is intentionally separate.
 
 ## Formal Models (TLA+)
 
@@ -440,7 +456,7 @@ It creates a minimal `.scipquery.json`:
 {
   "languages": ["typescript"],
   "watch": {
-    "enabled": false,
+    "enabled": true,
     "debounceMs": 250,
     "cooldownMs": 0,
     "gitPollMs": 2000,
@@ -453,7 +469,10 @@ It creates a minimal `.scipquery.json`:
 Add optional fields such as `indexerConcurrency`, `indexer`, `entryRoots`,
 `declaredCouplings`, and `suppressions` only when the project needs them.
 
-With `watch.enabled`, normal commands and agent hooks wake one per-project
+`scip-query init` and a first `scip-query setup` enable this lifecycle. An
+existing explicit `watch.enabled: false` remains an opt-out unless guided setup
+selects the recommended enable action. With `watch.enabled`, normal commands
+and agent hooks wake one per-project
 background service. Relevant file/Git activity keeps it alive; it exits after
 `idleTimeoutMs` of clean inactivity and wakes on the next command. Set the idle
 timeout to `0` to keep it running. `scip-query watch` still provides foreground
@@ -469,6 +488,12 @@ changes replace them. `watch --status` reports Project/session/request counts.
 If the service is stopped, incompatible, busy beyond its bound, or returns an
 invalid response, the command falls back to the existing in-process ts-morph
 provider.
+
+Rust semantic requests use a separate demand-started durable rust-analyzer
+session by default. It remains stopped until a Rust semantic request needs it,
+exits after its clean idle period, and automatically falls back to the
+per-command worker on helper/readiness/timeout/request failure. Set
+`SCIP_RUST_SEMANTIC_DURABLE_SESSION=0` for an explicit worker-only opt-out.
 
 Use `declaredCouplings` for files that intentionally form one maintenance unit.
 These pairs are treated as structurally linked by `co-change` and health, while
