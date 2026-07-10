@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Phase 1 complete; Phase 2 planning complete and implementation next
+Status: Phase 1 complete; Phase 2 step 2.1 complete and step 2.2 next
 
 ## Goal
 
@@ -374,6 +374,12 @@ daemon-specific overhead was <=9ms p95 because the stopped Node/CLI control was
 
 **Executable plan:**
 [`2026-07-09-affected-set-shadowing.md`](./2026-07-09-affected-set-shadowing.md).
+
+**Progress:** Step 2.1 now defines the canonical manifest and conservative
+fallback contract with an observed red/green ambient-declaration safety probe.
+The next step builds deterministic transitive consumer closure from the
+existing file dependency product; predictions are still not used by runtime
+indexing.
 
 **Exit gate:** Phase 2 recall and over-invalidation thresholds pass. Any miss
 blocks incremental writes and becomes a regression fixture.

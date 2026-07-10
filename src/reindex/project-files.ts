@@ -10,6 +10,26 @@ export interface ProjectFileFingerprint {
   hash: string;
 }
 
+export type ProjectInputPathKind = 'source' | 'ambient' | 'config' | 'other';
+
+export function classifyProjectInputPath(
+  relativePath: string,
+  languages: readonly SupportedLanguage[],
+): ProjectInputPathKind {
+  const basename = relativePath.split('/').at(-1) ?? relativePath;
+  if (
+    COMMON_INDEX_INPUTS.has(basename) ||
+    basename === '.scipquery.json' ||
+    /^tsconfig(?:\..+)?\.json$/.test(basename)
+  ) {
+    return 'config';
+  }
+  if (/\.d\.(?:ts|mts|cts)$/.test(relativePath.toLowerCase())) return 'ambient';
+  const extension = relativePath.includes('.') ? `.${relativePath.split('.').at(-1)!.toLowerCase()}` : '';
+  if (languages.some((language) => (LANGUAGE_SOURCE_EXTENSIONS[language] ?? []).includes(extension))) return 'source';
+  return 'other';
+}
+
 /**
  * Dedupe, trim, and sort a `typescript.projects` config list — shared by the
  * fingerprint builder (this module's caller in src/reindex/index.ts) and the

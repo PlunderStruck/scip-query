@@ -157,8 +157,9 @@ steps must equal Phase 2 implementation commits before the next step starts.
 
 ### 2.1 — Define canonical manifest and fallback contracts
 
-- [ ] **Create:** `src/reindex/affected-set.ts`,
+- [x] **Create:** `src/reindex/affected-set.ts`,
       `tests/reindex/affected-set.test.ts`
+- [x] **Edit:** `src/reindex/project-files.ts`
 - **Source:** `... code fingerprintProjectFiles --json`; `... code
   ReindexFingerprint --json`; `... refs fingerprintProjectFiles --json`.
 - **What:** Current fingerprints prove whole-generation equality but do not
@@ -177,6 +178,14 @@ steps must equal Phase 2 implementation commits before the next step starts.
 - **Why:** Every later traversal and oracle depends on a deterministic statement
   of what changed. Landing the pure contract first is deployable and has no
   runtime behavior.
+- **Outcome:** The pure manifest now emits canonically sorted add/modify/delete
+  records from existing fingerprints and separates ordinary source changes from
+  ambient, config, unclassified, unreadable, duplicate, version-mismatched, and
+  missing-prior-state fallbacks. Ten focused tests pass. The required verifier
+  probe was observed red: checking source extension before ambient suffix made
+  `globals.d.ts` classify as ordinary source and produced two failing tests,
+  including an unsafe `fullProject: false`; ambient precedence then made the
+  suite green. No production caller consumes the new contract yet.
 
 ### 2.2 — Plan the conservative file closure from existing graph evidence
 
@@ -321,6 +330,18 @@ the existing full reindex. Making the predicted set authoritative is the
 one-way behavioral door and is explicitly deferred beyond Phase 2. Metadata
 version remains unchanged to preserve installed-binary rollback.
 
+## Deviation Protocol
+
+### 2026-07-09 — Reuse the existing path-policy constants
+
+The reuse audit found that `COMMON_INDEX_INPUTS` and
+`LANGUAGE_SOURCE_EXTENSIONS` already define the path policy needed by step 2.1,
+but both are private to `project-files.ts`. Step 2.1 therefore also edits that
+file to export `classifyProjectInputPath()` over the existing constants. This
+avoids a second extension/config table and does not change
+`isLanguageRelevantPath()` or any current fingerprint behavior. Rollback is
+deleting the new export and the new shadow-only caller.
+
 ## File Summary
 
 ### Create
@@ -334,6 +355,7 @@ version remains unchanged to preserve installed-binary rollback.
 
 ### Edit
 
+- `src/reindex/project-files.ts`
 - `src/reindex/index.ts`
 - status/CLI files only for additive observability
 - focused reindex/runtime tests
