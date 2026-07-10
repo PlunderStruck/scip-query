@@ -1522,6 +1522,20 @@ stale-generation, dead-service, timeout, and intentionally omitted-document
 controls were all rejected. Watch service protocol 3 replaces older daemons
 and exposes producer warmup/update/request counters in status.
 
+The first authoritative local watch trial then made two real edits to
+`src/runtime/postinstall.ts` and restored it. Cold producer warmup covered all
+317 documents in 2,406ms. Warm updates took 10ms and 8ms, one document each.
+The edited TypeScript shard (`f53148b2…`) was byte-identical to a separate
+2,410ms clean scip-typescript run; restore reproduced the original
+`6af18c46…` shard hash. The temporary export was removed.
+
+Complete refreshes were still 5,036ms cold and 2,603ms / 2,546ms warm because
+the existing full merge and `scip expt-convert` publication path remains.
+Accordingly, the roadmap now treats sub-500ms warm document/shard production
+as the Phase 4 gate and retains the original 2s local / 5s large complete
+edit-to-fresh target as the combined Phase 4+5 ship gate. This is a measured
+boundary transfer, not a relaxed final target.
+
 ## Run History
 
 Machine-readable run history:

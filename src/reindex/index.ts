@@ -42,6 +42,7 @@ import {
 } from './project-shards.js';
 import { sanitizeScipFile } from './sanitize.js';
 import { discoverTypeScriptProjectRoots } from './typescript-projects.js';
+import { tryMaterializeTypeScriptIncrementalIndex } from './typescript-incremental-index.js';
 import { runPreparedIndexers } from './indexer-runner.js';
 import type { PreparedIndexerRun, IndexerRunResult } from './indexer-runner.js';
 import {
@@ -519,20 +520,38 @@ async function runLanguageIndexersForFreshReindex(
     opts.onStatus(`Reusing cached ${language} SCIP shard (language inputs unchanged).`);
   }
 
+  const typescriptClassification = classification.get('typescript');
+  const incrementalTypeScript =
+    typescriptClassification && !typescriptClassification.reused
+      ? tryMaterializeTypeScriptIncrementalIndex({
+          projectRoot: opts.projectRoot,
+          cacheDir: dirname(opts.paths.outputDb),
+          previousDbPath: opts.paths.outputDb,
+          previousIndexPath: opts.paths.outputScip,
+          previousShardPath: typescriptClassification.scipPath,
+          candidateShardPath: tempScipPath(opts.tempPaths.tempOutputScip, 'typescript-incremental', 0),
+          previousSnapshot: previousProjectInputSnapshot(opts.paths.metaPath),
+          currentSnapshot: opts.fingerprint,
+          projectMode: opts.opts.typescriptProjectMode,
+          onStatus: opts.onStatus,
+        })
+      : null;
+  const incrementallyIndexed = new Set<SupportedLanguage>(incrementalTypeScript ? ['typescript'] : []);
+
   // Plan6 per-project TS shard caching (2.2): only relevant when the whole
   // typescript language shard missed in workspace mode — an untouched
   // typescript language shard already proves every project unchanged
   // (invariant: the language fingerprint covers the same files every
   // project's fingerprint is built from), so the classification below is
   // skipped entirely on that path (today's behavior, untouched).
-  const tsProjectShards = planTypeScriptProjectShardReuse(opts, classification);
+  const tsProjectShards = incrementalTypeScript ? undefined : planTypeScriptProjectShardReuse(opts, classification);
 
   const {
     preparedRuns: preparedRunsAll,
     skippedLanguages,
     languageOutputScipPaths,
   } = prepareIndexerRuns({
-    languages: opts.languages.filter((language) => !reused.has(language)),
+    languages: opts.languages.filter((language) => !reused.has(language) && !incrementallyIndexed.has(language)),
     tempOutputScip: opts.tempPaths.tempOutputScip,
     projectRoot: opts.projectRoot,
     env,
@@ -577,11 +596,28 @@ async function runLanguageIndexersForFreshReindex(
 
   const combinedResults = [...runResults, ...syntheticResults];
   const { indexedOutputs } = collectIndexerOutputs(combinedResults, skippedLanguages);
-  const allIndexedOutputs = [...reusableOutputs, ...indexedOutputs];
+  const incrementalOutputs: IndexedOutput[] = incrementalTypeScript
+    ? [{ language: 'typescript', scipPath: incrementalTypeScript.scipPath }]
+    : [];
+  const allIndexedOutputs = [...reusableOutputs, ...incrementalOutputs, ...indexedOutputs];
   validateIndexingOutcome(allIndexedOutputs, skippedLanguages, opts.languages, opts.opts.allowPartial, opts.onStatus);
+  const incrementalRunResults: IndexerRunResult[] = incrementalTypeScript
+    ? [
+        {
+          id: 'typescript',
+          language: 'typescript',
+          label: 'typescript (incremental documents)',
+          scipPath: incrementalTypeScript.scipPath,
+          outputScipPath: incrementalTypeScript.scipPath,
+          durationMs: incrementalTypeScript.durationMs,
+          command: 'watch-service:typescript-index',
+          outputBytes: fileSizeOrNull(incrementalTypeScript.scipPath) ?? undefined,
+        },
+      ]
+    : [];
   const shards = buildFreshReindexShardDiagnostics(
     classification,
-    runResults,
+    [...runResults, ...incrementalRunResults],
     tsProjectShards ? { outputDb: opts.paths.outputDb, classification: tsProjectShards.classification } : undefined,
   );
   return {

@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Phases 1–3 and Phase 4.1–4.3 complete; Phase 4.4 reindex integration next
+Status: Phases 1–3 complete; Phase 4 local authority proven, large calibration and Phase 5 publication next
 
 ## Goal
 
@@ -303,8 +303,8 @@ omitted.
 | Phase 1 automatic service           | Event-to-refresh-scheduled p95 <= 1.5 s; local edit-to-fresh p95 <= 8 s with current project shard; unchanged refresh median <= 0.5 s and p95 <= 0.75 s; 20-write burst causes <= 2 refreshes and never concurrent reindex; foreground output hashes unchanged.                   |
 | Phase 2 affected-set shadow         | 100% recall against documents/facts changed by clean full rebuilds on all fixtures and corpora; median leaf edit affects < 20% of project files on at least two representative TS projects; any uncertainty widens rather than misses.                                            |
 | Phase 3 persistent TS semantics     | Fully warm command constructs zero new unchanged Projects; unaffected semantic cache-hit rate >= 95%; TS-heavy command median improves >= 20% or measured Project/semantic span improves >= 50%; exact output/fact parity.                                                        |
-| Phase 4 incremental SCIP documents  | Leaf-edit edit-to-fresh p95 <= 2 s locally and <= 5 s on the selected large TS corpus; clean full-rebuild parity is exact; failure falls back to project rebuild; no-op regression <= 10%. These are north-star gates and may be revised only with a recorded feasibility result. |
-| Phase 5 generation store            | Crash at every publication failpoint leaves the preceding generation readable; zero mixed-generation reads under concurrent query stress; incremental and full generations normalize identically.                                                                                 |
+| Phase 4 incremental SCIP documents  | Warm affected-document/shard production p95 <= 0.5 s locally and <= 5 s on the selected large TS corpus; clean full-rebuild parity is exact; failure falls back to project rebuild; no-op regression <= 10%. The original complete edit-to-fresh target remains a combined Phase 4+5 ship gate. |
+| Phase 5 generation store            | Complete leaf-edit edit-to-fresh p95 <= 2 s locally and <= 5 s on the selected large TS corpus; crash at every publication failpoint leaves the preceding generation readable; zero mixed-generation reads under concurrent query stress; incremental and full generations normalize identically. |
 | Phase 6 Rust default/native kernels | Durable default has <= 5% cold/warm regression on any corpus and retains current accepted facts; native slices meet AD-7 threshold and exact parity.                                                                                                                              |
 
 All timing gates use the same built artifacts, cache state, environment, corpus
@@ -524,6 +524,14 @@ emission and exposes no SCIP-document LSP request.
 feasible, publish the spike result and stop at fast persistent semantics plus
 project-shard indexing rather than claiming file-level indexing.
 
+**Measured gate revision:** The local authoritative trial produced byte-exact
+warm shards in 10ms and 8ms, but complete publication still took 2,603ms and
+2,546ms because the unchanged whole-index merge/SQLite conversion runs after
+the producer. The producer gate is now isolated above; the original 2s/5s
+edit-to-fresh target is retained unchanged as the combined Phase 4+5 gate.
+This revision follows the roadmap's allowed recorded-feasibility rule rather
+than weakening the ship target.
+
 ### Phase 5 — Generation-aware incremental SQLite publication
 
 **Purpose:** publish changed graph and semantic fragments without rebuilding
@@ -665,11 +673,10 @@ Complete this at every phase close:
 6. Phase 5 atomic incremental generation storage.
 7. Phase 6 durable Rust defaulting, selective native kernels, and rollout.
 
-The immediate action is Phase 4.4's authoritative reindex integration. The
-versioned service transport now returns a complete affected fragment set bound
-to the published base generation, with crash/timeout/omission controls. Apply
-the Phase 2 eligibility plan before indexer preparation, assemble the candidate
-TypeScript shard, and retain the existing full-project fallback:
+The immediate action is large-corpus Phase 4 calibration followed by Phase 5's
+incremental SQLite publication. Local authority and byte parity are proven;
+the remaining local 2.55–2.60s warm wall time is now almost entirely the
+complete merge/conversion path. Inspect that publication boundary next:
 
 ```sh
 SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/reindex/index.ts --json

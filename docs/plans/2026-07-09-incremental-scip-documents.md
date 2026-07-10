@@ -1,7 +1,7 @@
 # Incremental SCIP Document Plan
 
 Date: 2026-07-09
-Status: Phases 4.1–4.3 complete; Phase 4.4 authoritative reindex integration next
+Status: Phase 4.4 local authority proven; large-corpus calibration remains
 Parent: [`2026-07-09-automatic-incremental-indexing-roadmap.md`](./2026-07-09-automatic-incremental-indexing-roadmap.md)
 
 ## Outcome
@@ -178,6 +178,24 @@ source update reused one session and advanced its compiler program once.
 
 Commit boundary: authoritative integration, benchmark evidence, and Phase 4
 roadmap closure.
+
+**Local result:** The reindex planner now attempts the incremental route only
+after the source-only closure gate passes; it supports single mode and a
+workspace containing only the root project. Every rejection logs its reason
+and prepares the unchanged whole-project run. A real daemon trial changed
+`src/runtime/postinstall.ts` twice and then restored it. The cold producer
+warmed 317 documents in 2,406ms; the two warm updates emitted the one affected
+document in 10ms and 8ms. The edited language shard had SHA-256 `f53148b2…`,
+byte-for-byte equal to a separate 2,410ms clean scip-typescript oracle. Restore
+reproduced the original `6af18c46…` shard exactly.
+
+Total cold/warm/restore publication remained 5,036ms / 2,603ms / 2,546ms.
+This is a discriminating feasibility result: compiler/index production is no
+longer the warm bottleneck, while the existing complete SCIP merge and SQLite
+conversion remain a roughly 2.5s floor. The Phase 4 producer gate is therefore
+separated from the combined ship gate; Phase 5 must bring complete
+edit-to-fresh below the original 2s local / 5s large-corpus thresholds. The
+temporary export was removed and the restored shard hash proved no residue.
 
 ## Verification
 

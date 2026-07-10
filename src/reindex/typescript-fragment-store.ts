@@ -82,6 +82,7 @@ export function seedTypeScriptFragmentGeneration(
   input: SeedTypeScriptFragmentGenerationInput,
 ): TypeScriptFragmentGenerationManifest {
   const index = input.runtime.Index.deserializeBinary(input.indexBytes);
+  assertProducerMetadata(index.metadata, input.runtime.packageVersion);
   assertNoExternalSymbols(index.external_symbols);
   const seen = new Set<string>();
   const documents: TypeScriptFragmentRecord[] = [];
@@ -175,6 +176,7 @@ export function readTypeScriptFragmentGeneration(
 
 export function assembleTypeScriptIndex(input: AssembleTypeScriptIndexInput): Uint8Array {
   const index = input.runtime.Index.deserializeBinary(input.baseIndexBytes);
+  assertProducerMetadata(index.metadata, input.runtime.packageVersion);
   assertNoExternalSymbols(index.external_symbols);
   const replacements = new Map<string, TypeScriptDocumentFragment>();
   for (const fragment of input.fragments) {
@@ -367,6 +369,20 @@ function generationManifestFile(generationIdentity: string): string {
 function assertNoExternalSymbols(externalSymbols: readonly unknown[]): void {
   if (externalSymbols.length > 0) {
     throw new Error('scip-typescript emitted external symbols; incremental document assembly is unsupported');
+  }
+}
+
+function assertProducerMetadata(metadata: unknown, packageVersion: string): void {
+  if (!metadata || typeof metadata !== 'object') {
+    throw new Error('TypeScript SCIP shard has no producer metadata');
+  }
+  const tool = (metadata as { tool_info?: unknown }).tool_info;
+  if (!tool || typeof tool !== 'object') {
+    throw new Error('TypeScript SCIP shard has no producer tool identity');
+  }
+  const identity = tool as { name?: unknown; version?: unknown };
+  if (identity.name !== 'scip-typescript' || identity.version !== packageVersion) {
+    throw new Error('TypeScript SCIP shard producer identity changed');
   }
 }
 
