@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: proposed master roadmap
+Status: Phase 1 complete; Phase 2 is next
 
 ## Goal
 
@@ -58,12 +58,16 @@ The program is complete when all of these statements are true:
 - Language shards and TypeScript project shards are durable. This repository's
   only TypeScript project shard is `.`, so one TypeScript edit still rebuilds
   the root project shard; the observed campaign refresh was about 4.7 seconds.
-- `Watcher` already provides debounce, single-flight execution, a dirty flag,
-  cooldown, Git polling, and atomic reindex child-process publication.
-- `handleWatch()` owns the process lock and foreground lifecycle. No background
-  watch-service or status protocol exists.
-- The config is enabled here but waits 30 seconds after the last edit and can
-  enforce a 60-second cooldown. No watcher is currently live.
+- `Watcher` provides calibrated 250ms debounce, single-flight execution, a
+  dirty flag, zero default cooldown, Git polling, and atomic reindex
+  child-process publication.
+- One demand-started service per enabled project now owns the shared watcher
+  lock, heartbeat/status protocol, automatic command/hook wake-up, stale
+  startup refresh, crash replacement, and default 10-minute clean-idle exit.
+  Foreground `scip-query watch` remains available under the same lock.
+- Five real local leaf edits reached fresh in 4.543s median / 4.885s p95;
+  five 20-write bursts reached fresh in 5.065s median / 5.229s p95 with one
+  indexing transition and exact restored output in every run.
 - TypeScript uses ts-morph, but `SemanticSessionManager` caches its provider
   only inside one `ScipDatabase` object/process.
 - Semantic callees have file/dependency keys. TypeScript semantic references
@@ -343,8 +347,11 @@ without waiting for a new index format.
 
 **Dependency:** Phase 0 harness.
 
-**Exit gate:** all Phase 1 thresholds pass, including crash recovery and built
-package smoke tests.
+**Exit result:** correctness, edit-to-fresh, burst, cold-start, idle/wake,
+crash-recovery, and built-package gates passed. The raw live-ensure command was
+147ms p95 against the pre-registered 100ms process-wall target; its matched
+daemon-specific overhead was <=9ms p95 because the stopped Node/CLI control was
+151ms p95. The miss remains explicit in the Phase 1 plan and ledger.
 
 ### Phase 2 — Canonical change manifests and affected-set shadowing
 

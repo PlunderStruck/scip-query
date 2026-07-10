@@ -32,7 +32,7 @@ interface GitStateSnapshot {
  * File watcher that triggers single-flight background reindexing.
  *
  * Design:
- *  - Debounce: waits 30s (configurable) after the last file change
+ *  - Debounce: waits for a configurable quiet period after the last file change
  *  - Single-flight: only one reindex runs at a time, never queued
  *  - Dirty flag: changes during reindex schedule ONE follow-up
  *  - Cooldown: minimum interval between reindex completions

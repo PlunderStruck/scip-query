@@ -1,7 +1,7 @@
 # Automatic Freshness Service — Phase 1 Concrete Plan
 
 Date: 2026-07-09
-Status: implementation in progress after user approval
+Status: Phase 1 complete
 Roadmap phase: 1
 
 ## Goal
@@ -374,7 +374,7 @@ recent-duplicates --json` reports no duplicate lock/liveness/state helpers.
 
 ### 1.6 — Calibrate timing, update defaults/config, and close the phase
 
-- [ ] **Edit:** `src/runtime/config.ts`, `src/domain/config-types.ts`,
+- [x] **Edit:** `src/runtime/config.ts`, `src/domain/config-types.ts`,
       `src/runtime/commands/command-descriptors.ts`, `.scipquery.json`,
       targeted config/watch tests,
       `docs/benchmarks/2026-07-09-ts-rust-indexing-analysis-ledger.md`,
@@ -397,6 +397,15 @@ typecheck`, `npm run build`, `npm run lint`, `npm test`, `npm pack --dry-run`,
 --json` all pass or each accepted finding is documented.
 - **Why:** The current 30/60-second policy is the dominant perceived delay, but
   lowering it without burst/edit-during-index evidence risks refresh churn.
+- **Outcome:** The nine-pair state-machine matrix passed at every candidate and
+  selected the lowest-latency 250ms/0ms pair. Five real single edits reached
+  fresh in 4.543s median / 4.885s p95; five 20-write bursts reached fresh in
+  5.065s median / 5.229s p95 with one indexing transition each. Exact no-op
+  refresh was 329ms median / 348ms p95 internally, and both language shards
+  were reused. All accepted edit runs restored the same `kind-counts --json`
+  hash. Typecheck, build, lint, 1,122 tests, package dry run, crash replacement,
+  targeted SCIP postchecks, reindex, and diff-gate passed. The package contains
+  `dist/watch-server.js`.
 
 ## Stress-Test Matrix
 
@@ -446,6 +455,17 @@ The original step 1.1 expected a red test-only commit. To preserve the
 repository working agreement that each commit passes its focused tests, step
 1.1 now includes the pure lifecycle contract in `watch-service.ts`; step 1.2
 adds the filesystem/process shell around it.
+
+### 2026-07-09 — Live-ensure wall target versus CLI startup floor
+
+The pre-registered live-ensure target was <=100ms p95. Five built CLI runs
+measured 147ms p95 while reusing the same PID every time, so the literal
+whole-process target missed. The matched stopped-status control measured 151ms
+p95, and live ensure minus that control was <=9ms p95. The implementation and
+recorded threshold were not changed after the result: the ledger reports the
+wall miss, while also separating the service work from the already-required
+Node/CLI startup. A future native launcher or resident client can attack that
+startup floor; Phase 1 does not claim it did.
 
 ## Explicit Deferrals
 
@@ -505,13 +525,64 @@ semantic providers as fallbacks throughout.
 
 ## Phase-Close Self-Report
 
-The final Phase 1 commit must append an outcome containing:
+### Commits
 
-- commits mapped 1:1 to steps 1.1–1.6;
-- selected debounce/cooldown pair and every rejected pair;
-- median/p95 for every pre-registered scenario;
-- service start/reuse/recovery dispositions and shard reuse;
-- output hashes and graph/semantic fact counts;
-- package smoke/install path;
-- deviations and deferrals;
-- exact first command for Phase 2 affected-set planning.
+1. 1.1: `1fd30693 test: define watch service lifecycle contract`
+2. 1.2: `1f1fa69c feat: add watch service process controller`
+3. 1.3: `9886e697 feat: add demand-driven watch server`
+4. 1.4: `9294c64e feat: expose watch service lifecycle CLI`
+5. 1.5: `f403fe5c feat: wake watch service on project use`
+6. 1.6: this calibrated phase-close commit
+
+### Calibration and identity
+
+- Selected: 250ms debounce / 0ms cooldown.
+- Not selected: the other eight combinations of 250/750/1500ms debounce and
+  0/1000/5000ms cooldown. All passed coalescing and single-flight safety, but
+  each added latency without improving the contract.
+- Exact no-op refresh: 329ms median / 348ms p95 internally; 534ms median /
+  544ms p95 including CLI startup. TypeScript and Rust shards were reused.
+- One TypeScript leaf edit: scheduled 263ms median / 288ms p95; fresh 4.543s
+  median / 4.885s p95.
+- Twenty writes over 500ms: scheduled 791ms median / 839ms p95; fresh 5.065s
+  median / 5.229s p95; one indexing transition in every trial.
+- Cold service start: 525ms median / 540ms p95. Compatible live ensure: 144ms
+  median / 147ms p95, same PID in all trials; matched controller overhead was
+  -1ms median / 9ms p95 versus stopped status. The literal <=100ms process-wall
+  target miss is documented above and in the benchmark ledger.
+- Clean idle exit with a 50ms test timeout: 261ms median / 265ms p95. Wake:
+  549ms median / 560ms p95 and a new PID every time.
+- A forced SIGKILL left stale state; the next ensure started one replacement
+  owner under a new PID, and graceful stop removed its state and lock.
+- All ten accepted edit/burst runs restored freshness and the same stable
+  `kind-counts --json` SHA-256,
+  `dbae4362c4b32a45696b049fc275f457ab645f97cb1c49c6a1c60f53d7a5237b`.
+  The final graph snapshot had 302 documents, 19,870 symbols, 18,554
+  definitions, and 46,285 references.
+
+### Verification and package
+
+- `npm run typecheck`, `npm run build`, `npm run lint`, and all 1,122 tests
+  passed. Focused watch/config/hook/CLI coverage contributed 83 passing tests.
+- `npm pack --dry-run --json` includes `dist/watch-server.js` in
+  `scip-query-0.15.0.tgz`; no separate installed runtime path is required.
+- `recent-duplicates`, `unused-params`, and `incomplete-migration` returned no
+  findings. Co-change partners for config types, watcher behavior, tests, and
+  README were updated together. Final reindex reused both language shards.
+  Diff-gate exited 0 with one accepted advisory: the TLA skill's bare
+  `src/runtime/watch.ts` guide reference remains correct because this diff only
+  removes the obsolete numeric debounce value from the Watcher design comment;
+  it does not change the member rows or scaffold behavior described there.
+
+### Deviations, deferrals, and next command
+
+The demand-started idle lifecycle and the live-ensure target miss are recorded
+under Deviation Protocol. File-level invalidation, persistent ts-morph state,
+SCIP document fragments, incremental SQLite publication, and Rust defaulting
+remain the explicit Phase 2–6 deferrals above.
+
+Start Phase 2 with:
+
+```bash
+SCIP_QUERY_SKIP_WATCH_SERVICE=1 scip-query plan-context src/reindex/project-shards.ts --json
+```

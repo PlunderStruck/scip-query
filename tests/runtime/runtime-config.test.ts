@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { handleDoctor, handleStatus, handleWatch } from '../../src/runtime/commands/command-handlers.js';
-import { loadProjectConfig, validateProjectConfig } from '../../src/runtime/config.js';
+import { loadProjectConfig, resolveWatchConfig, validateProjectConfig } from '../../src/runtime/config.js';
 import type { ProjectConfig } from '../../src/domain/types.js';
 
 const tempDirs: string[] = [];
@@ -21,6 +21,17 @@ afterEach(() => {
 });
 
 describe('loadProjectConfig', () => {
+  it('uses the calibrated demand-service timing defaults', () => {
+    expect(resolveWatchConfig({})).toMatchObject({
+      enabled: false,
+      debounceMs: 250,
+      cooldownMs: 0,
+      gitPollMs: 2_000,
+      idleTimeoutMs: 600_000,
+      autoRefresh: true,
+    });
+  });
+
   it('returns an empty config when no project config exists', () => {
     expect(loadProjectConfig(createProject())).toEqual({});
   });
@@ -342,6 +353,7 @@ describe('validateProjectConfig', () => {
     ]);
 
     expect(validateProjectConfig({ watch: { idleTimeoutMs: 0 } })).toEqual([]);
+    expect(validateProjectConfig({ watch: { cooldownMs: 0 } })).toEqual([]);
   });
 
   it('requires positive integer indexer concurrency', () => {

@@ -1160,6 +1160,76 @@ new cache shape or native boundary. This result does not justify Rust by itself.
 Machine-readable controls and profile paths are in
 `docs/benchmarks/runs/2026-07-09-semantic-prewarm-bulk-load.jsonl`.
 
+## Automatic Freshness Service
+
+The next accepted slice changes the refresh lifecycle rather than the compiler
+index format. One demand-started daemon now owns each enabled project while it
+is active. Normal commands and agent hooks start or touch it; file/Git events
+use the existing single-flight watcher; clean inactivity ends it after 10
+minutes by default; the next command starts a new process and checks the full
+content fingerprint before publishing readiness.
+
+The index/output contract remains the same. Foreground watch and manual reindex
+remain fallbacks, only one foreground/background owner can hold the project
+lock, failed refreshes keep the preceding atomic generation readable, and
+ordinary query JSON is unchanged. `status` and `watch` intentionally gain
+additive lifecycle fields/options.
+
+The pre-registered nine-pair state-machine matrix covered 250/750/1500 ms
+debounce crossed with 0/1000/5000 ms cooldown. Every pair coalesced 20 writes
+into one refresh and an edit during indexing into exactly one follow-up, with
+zero concurrent reindexes. The larger eight pairs were not selected because
+they added quiet/cooldown latency without adding safety. Five real repository
+runs for each accepted edit shape selected 250 ms debounce and zero cooldown:
+
+| Scenario                  | Observe median/p95 | Indexing median/p95 | Fresh median/p95 | Refresh median/p95 | Restore median/p95 | Output        |
+| ------------------------- | -----------------: | ------------------: | ----------------: | -----------------: | -----------------: | ------------- |
+| One TypeScript leaf edit  |        27 / 27 ms |        263 / 288 ms | 4.543 s / 4.885 s | 3.849 s / 4.200 s | 4.710 s / 4.834 s | `dbae4362...` |
+| Twenty writes over 500 ms |      526 / 531 ms |        791 / 839 ms | 5.065 s / 5.229 s | 3.897 s / 3.973 s | 4.554 s / 4.951 s | `dbae4362...` |
+
+Every burst had one observed indexing transition. All ten accepted trials
+restored a fresh index with the same `kind-counts --json` hash. The final graph
+snapshot contained 302 documents, 19,870 symbols, 18,554 definitions, and
+46,285 references. The zero-cooldown path was accepted because single-flight
+still forbids concurrent indexing and the dirty bit permits only one immediate
+follow-up; the measured 1s cooldown candidate added restore latency without
+changing that safety contract.
+
+Five exact unchanged refreshes reused both TypeScript and Rust shards. Internal
+refresh time was 329 ms median / 348 ms p95; whole-CLI wall time was 534 ms
+median / 544 ms p95. Final five-run lifecycle controls were:
+
+| Lifecycle operation                       | Median |   p95 | Identity/result              |
+| ----------------------------------------- | -----: | ----: | ---------------------------- |
+| Cold service start                        | 525 ms | 540 ms | one healthy owner            |
+| Stopped status control                    | 144 ms | 151 ms | ordinary Node/CLI floor      |
+| Ensure compatible live service            | 144 ms | 147 ms | same PID in all five runs    |
+| Ensure minus stopped-status control        |  -1 ms |   9 ms | no measurable added overhead |
+| Graceful stop                              | 367 ms | 374 ms | state/lock removed           |
+| 50 ms configured idle exit                | 261 ms | 265 ms | clean exit on 250 ms poll    |
+| Wake after idle                            | 549 ms | 560 ms | new PID in all five runs     |
+
+The literal whole-process live-ensure p95 was 147 ms, missing the pre-registered
+100 ms wall target because this built Node CLI itself measured 151 ms p95 for a
+stopped status read. The service-specific incremental comparison was <=9 ms p95
+and the normal command path performs that ensure inside an already-required CLI
+process. This is recorded as a target miss rather than relabeling the 147 ms
+measurement. Before the final activity-poll tuning, a 50 ms test timeout was
+observed on the 1s heartbeat boundary; the accepted server keeps the 1s durable
+heartbeat but polls activity/signals every 250 ms so idle/stop responsiveness
+does not multiply state-file writes.
+
+Early edit records with an approximately 1 ms indexing start are diagnostic,
+not acceptance runs: writing the benchmark JSONL had changed the project
+fingerprint before daemon startup, so startup recovery was already indexing
+when the fixture edit occurred. The harness now prepares a fresh index before
+each scenario and buffers JSONL writes until the daemon stops. Early output
+hashes based on `stats` are also diagnostic because that command includes a
+changing build time; accepted parity uses stable `kind-counts` output.
+
+Machine-readable measurements are in
+`docs/benchmarks/runs/2026-07-09-automatic-freshness.jsonl`.
+
 ## Current Checkpoint
 
 This checkpoint summarizes the last optimization push so the direction is easy
@@ -1209,6 +1279,12 @@ What is materially done:
   the live durable helper. Vega warm full health is 41.933s forward and 46.310s
   in reverse order with exact readiness-v2 payloads, meeting the <=50s campaign
   gate while durable routing remains opt-in.
+- Enabled projects now have a demand-started per-project freshness service with
+  start/status/stop controls, command/hook wake-up, immediate stale startup
+  refresh, single-flight coalescing, crash/stale-state recovery, and clean-idle
+  exit. The calibrated 250ms/0ms policy moved a local leaf edit to fresh in
+  4.543s median / 4.885s p95 and a 20-write burst to fresh in 5.065s median /
+  5.229s p95 with exact restored output.
 
 Important rejected ideas:
 
@@ -1231,6 +1307,9 @@ Important rejected ideas:
 
 What is left:
 
+- Build the conservative affected-set shadow from canonical content/config
+  changes and dependency closure. Until that proves 100% recall, a TypeScript
+  edit still rebuilds this repository's root project shard.
 - Make the separate product decision whether to enable durable transport by
   default. The implementation is now eligible, but this calibration campaign
   intentionally leaves `SCIP_RUST_SEMANTIC_DURABLE_SESSION=1` as an opt-in.
@@ -1250,10 +1329,11 @@ What is left:
   stable, and only for large contiguous computations where benchmark evidence
   shows the native boundary wins.
 
-Best next campaign target: profile and remove repeated definition-evidence
-validation or source-range correction inside semantic candidate loading. Keep
-the exact live response reuse and accepted payload gates; do not add Rust or
-parallel workers until a large contiguous CPU-bound subspan is measured.
+Best next campaign target: Phase 2 affected-set shadowing from
+`docs/plans/2026-07-09-automatic-incremental-indexing-roadmap.md`. Preserve the
+new service as the one owner, compare every predicted set with a clean full
+rebuild, and do not let partial file writes become authoritative before recall
+is 100%.
 
 ## Run History
 

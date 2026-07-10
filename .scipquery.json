@@ -2,8 +2,9 @@
   "watch": {
     "enabled": true,
     "autoRefresh": true,
-    "debounceMs": 30000,
-    "cooldownMs": 60000,
+    "debounceMs": 250,
+    "cooldownMs": 0,
+    "idleTimeoutMs": 600000,
     "gitPollMs": 2000
   },
   "indexer": {

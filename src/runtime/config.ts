@@ -5,12 +5,14 @@ import { homedir } from 'node:os';
 import type { ProjectConfig, SupportedLanguage, WatchConfig } from '../domain/types.js';
 
 const CONFIG_FILENAME = '.scipquery.json';
+const DEFAULT_WATCH_DEBOUNCE_MS = 250;
+const DEFAULT_WATCH_COOLDOWN_MS = 0;
 const DEFAULT_WATCH_IDLE_TIMEOUT_MS = 10 * 60_000;
 
 const DEFAULT_WATCH: Required<WatchConfig> = {
   enabled: false,
-  debounceMs: 30_000,
-  cooldownMs: 60_000,
+  debounceMs: DEFAULT_WATCH_DEBOUNCE_MS,
+  cooldownMs: DEFAULT_WATCH_COOLDOWN_MS,
   gitPollMs: 2_000,
   idleTimeoutMs: DEFAULT_WATCH_IDLE_TIMEOUT_MS,
   autoRefresh: true,
@@ -141,8 +143,15 @@ export function validateProjectConfig(
   if (config.watch?.debounceMs !== undefined && config.watch.debounceMs <= 0) {
     diagnostics.push({ level: 'error', path: 'watch.debounceMs', message: 'Must be greater than 0.' });
   }
-  if (config.watch?.cooldownMs !== undefined && config.watch.cooldownMs <= 0) {
-    diagnostics.push({ level: 'error', path: 'watch.cooldownMs', message: 'Must be greater than 0.' });
+  if (
+    config.watch?.cooldownMs !== undefined &&
+    (!Number.isInteger(config.watch.cooldownMs) || config.watch.cooldownMs < 0)
+  ) {
+    diagnostics.push({
+      level: 'error',
+      path: 'watch.cooldownMs',
+      message: 'Must be a non-negative integer; 0 disables cooldown spacing.',
+    });
   }
   if (config.watch?.gitPollMs !== undefined && config.watch.gitPollMs <= 0) {
     diagnostics.push({ level: 'error', path: 'watch.gitPollMs', message: 'Must be greater than 0.' });
@@ -542,8 +551,8 @@ export function initProjectConfig(projectRoot: string, languages: string[]): str
     languages: languages as ProjectConfig['languages'],
     watch: {
       enabled: false,
-      debounceMs: 30_000,
-      cooldownMs: 60_000,
+      debounceMs: DEFAULT_WATCH_DEBOUNCE_MS,
+      cooldownMs: DEFAULT_WATCH_COOLDOWN_MS,
       gitPollMs: 2_000,
       idleTimeoutMs: DEFAULT_WATCH_IDLE_TIMEOUT_MS,
       autoRefresh: true,

@@ -15,6 +15,7 @@ function createProject(): string {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.resetModules();
   for (const dir of tempDirs.splice(0)) {
@@ -23,6 +24,47 @@ afterEach(() => {
 });
 
 describe('Watcher', () => {
+  it.each([
+    [250, 0],
+    [250, 1_000],
+    [250, 5_000],
+    [750, 0],
+    [750, 1_000],
+    [750, 5_000],
+    [1_500, 0],
+    [1_500, 1_000],
+    [1_500, 5_000],
+  ])('coalesces the calibration burst at %ims debounce / %ims cooldown', async (debounceMs, cooldownMs) => {
+    vi.useFakeTimers();
+    const projectRoot = createProject();
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { debounceMs, cooldownMs, gitPollMs: 60_000 } },
+      languages: ['typescript'],
+    });
+    const completions: Array<(durationMs: number) => void> = [];
+    const runReindex = vi
+      .spyOn(watcher as unknown as { runReindex(trigger: unknown): Promise<number> }, 'runReindex')
+      .mockImplementation(() => new Promise((resolvePromise) => completions.push(resolvePromise)));
+
+    for (let write = 0; write < 20; write += 1) {
+      watcher.requestRefresh({ kind: 'watch-source', detail: `write-${write}` });
+      await vi.advanceTimersByTimeAsync(25);
+    }
+    await vi.advanceTimersByTimeAsync(debounceMs);
+    expect(runReindex).toHaveBeenCalledTimes(1);
+
+    watcher.requestRefresh({ kind: 'watch-source', detail: 'during-index' });
+    completions[0]?.(100);
+    await vi.advanceTimersByTimeAsync(cooldownMs);
+    expect(runReindex).toHaveBeenCalledTimes(2);
+
+    completions[1]?.(100);
+    await vi.runAllTimersAsync();
+    watcher.stop();
+  });
+
   it('can request an immediate startup refresh without waiting for debounce', async () => {
     const projectRoot = createProject();
     const statuses: string[] = [];

@@ -297,34 +297,34 @@ Heuristic detectors carry guardrails learned from real codebases: published `pac
 
 One-line "essential difference" per skill — read this table before the Routes table in `skills/scip-query/SKILL.md` if two names sound alike.
 
-| Skill | Essential difference |
-| --- | --- |
-| `scip-query` | Router: dispatches codebase work to the specialist skill below. |
-| `scip-explore` | Understand before touching. |
-| `scip-concrete-plan` | Specify ONE change so an executor can't guess. |
-| `scip-conductor` | Run a multi-phase program (delegate, verify handoffs, pre-registered benchmarks). |
-| `scip-debug` | Root-cause a failure. |
-| `scip-triage-issue` | Package a report into an actionable issue+fix plan. |
-| `scip-verify` | Post-change closeout gate. |
-| `scip-cleanup-audit` | Rank findings, no edits. |
-| `scip-cleanup-improve` | Autonomously fix confirmed findings. |
-| `scip-maintainability` | Is this well-organized (scattered concepts, accidental variation)? |
-| `scip-integrity-audit` | Is this real (decorative checkers, faked implementations, dead fallback-hidden paths)? |
-| `scip-calibrate` | Measure detector precision on a repo before trusting scores or gating anyone. |
-| `scip-twin-drift` | Same-name implementations that drifted apart. |
-| `scip-claim-audit` | Status words derived vs asserted. |
-| `scip-probe-reachability` | Prove parser/AST branches actually fire. |
-| `scip-api-impact` | Blast radius before changing public surfaces. |
-| `scip-directory-architecture` | Folder/ownership layout. |
-| `scip-doc-reconcile` | Docs vs code drift. |
-| `scip-diagram` | Visual artifacts. |
-| `scip-react-maintainability` | Framework-specific reuse lens (React). |
-| `scip-vue-maintainability` | Framework-specific reuse lens (Vue). |
-| `scip-language-playbook` | Which commands per language. |
-| `scip-hyper-optimization` | Performance campaigns without output changes. |
-| `scip-tla-model-system` | Formal models tied to code evidence. |
-| `scip-setup` | Adopt or repair scip-query in a repo. |
-| `_shared` | Reference loaded by other skills, not user-invoked. |
+| Skill                         | Essential difference                                                                   |
+| ----------------------------- | -------------------------------------------------------------------------------------- |
+| `scip-query`                  | Router: dispatches codebase work to the specialist skill below.                        |
+| `scip-explore`                | Understand before touching.                                                            |
+| `scip-concrete-plan`          | Specify ONE change so an executor can't guess.                                         |
+| `scip-conductor`              | Run a multi-phase program (delegate, verify handoffs, pre-registered benchmarks).      |
+| `scip-debug`                  | Root-cause a failure.                                                                  |
+| `scip-triage-issue`           | Package a report into an actionable issue+fix plan.                                    |
+| `scip-verify`                 | Post-change closeout gate.                                                             |
+| `scip-cleanup-audit`          | Rank findings, no edits.                                                               |
+| `scip-cleanup-improve`        | Autonomously fix confirmed findings.                                                   |
+| `scip-maintainability`        | Is this well-organized (scattered concepts, accidental variation)?                     |
+| `scip-integrity-audit`        | Is this real (decorative checkers, faked implementations, dead fallback-hidden paths)? |
+| `scip-calibrate`              | Measure detector precision on a repo before trusting scores or gating anyone.          |
+| `scip-twin-drift`             | Same-name implementations that drifted apart.                                          |
+| `scip-claim-audit`            | Status words derived vs asserted.                                                      |
+| `scip-probe-reachability`     | Prove parser/AST branches actually fire.                                               |
+| `scip-api-impact`             | Blast radius before changing public surfaces.                                          |
+| `scip-directory-architecture` | Folder/ownership layout.                                                               |
+| `scip-doc-reconcile`          | Docs vs code drift.                                                                    |
+| `scip-diagram`                | Visual artifacts.                                                                      |
+| `scip-react-maintainability`  | Framework-specific reuse lens (React).                                                 |
+| `scip-vue-maintainability`    | Framework-specific reuse lens (Vue).                                                   |
+| `scip-language-playbook`      | Which commands per language.                                                           |
+| `scip-hyper-optimization`     | Performance campaigns without output changes.                                          |
+| `scip-tla-model-system`       | Formal models tied to code evidence.                                                   |
+| `scip-setup`                  | Adopt or repair scip-query in a repo.                                                  |
+| `_shared`                     | Reference loaded by other skills, not user-invoked.                                    |
 
 The confusable clusters, disambiguated: `scip-concrete-plan` (one change) vs `scip-conductor` (a program of changes with delegation); `scip-cleanup-audit` (report only) vs `scip-cleanup-improve` (autonomous fixing loop); `scip-verify` (did this specific change land safely) vs `scip-integrity-audit` (does this code actually work at all) vs `scip-maintainability` (is this well organized) vs `scip-twin-drift` (one drifted same-name pair specifically); `scip-directory-architecture` (folder ownership) vs `scip-maintainability` (deeper structural compression). `skills/scip-query/SKILL.md`'s Tie-Breaks section has the full routing logic.
 
@@ -433,9 +433,10 @@ It creates a minimal `.scipquery.json`:
   "languages": ["typescript"],
   "watch": {
     "enabled": false,
-    "debounceMs": 30000,
-    "cooldownMs": 60000,
+    "debounceMs": 250,
+    "cooldownMs": 0,
     "gitPollMs": 2000,
+    "idleTimeoutMs": 600000,
     "autoRefresh": true
   }
 }
@@ -444,7 +445,13 @@ It creates a minimal `.scipquery.json`:
 Add optional fields such as `indexerConcurrency`, `indexer`, `entryRoots`,
 `declaredCouplings`, and `suppressions` only when the project needs them.
 
-`scip-query watch` is a foreground process. It writes a project-local watcher lock and refuses a second watcher for the same index cache; keep one terminal running it, or stop it with Ctrl+C before starting another.
+With `watch.enabled`, normal commands and agent hooks wake one per-project
+background service. Relevant file/Git activity keeps it alive; it exits after
+`idleTimeoutMs` of clean inactivity and wakes on the next command. Set the idle
+timeout to `0` to keep it running. `scip-query watch` still provides foreground
+mode, while `watch --daemon`, `watch --status`, and `watch --stop` expose the
+background lifecycle. Both modes share one project lock, so only one can own an
+index cache.
 
 Use `declaredCouplings` for files that intentionally form one maintenance unit.
 These pairs are treated as structurally linked by `co-change` and health, while

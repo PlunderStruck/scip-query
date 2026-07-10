@@ -230,9 +230,9 @@ export interface EntryRootsConfig {
 export interface WatchConfig {
   /** Enable file watching (default: false, must opt in) */
   enabled?: boolean;
-  /** Ms to wait after the last file change before triggering reindex (default: 30000) */
+  /** Ms to wait after the last file change before triggering reindex (default: 250) */
   debounceMs?: number;
-  /** Minimum ms between reindex completions (default: 60000) */
+  /** Minimum ms between reindex completions; 0 disables spacing (default: 0) */
   cooldownMs?: number;
   /** Ms between Git HEAD/index state checks (default: 2000) */
   gitPollMs?: number;

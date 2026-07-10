@@ -1290,7 +1290,7 @@ export function handleWatch(rawOpts: unknown): void {
   }
   const invalidTiming = [
     ['--debounce', debounce, false],
-    ['--cooldown', cooldown, false],
+    ['--cooldown', cooldown, true],
     ['--git-poll', gitPoll, false],
     ['--idle-timeout', idleTimeout, true],
   ].find(([, value, allowZero]) => {
@@ -1308,7 +1308,7 @@ export function handleWatch(rawOpts: unknown): void {
     ...(idleTimeout === undefined ? {} : { idleTimeoutMs: idleTimeout }),
   };
   if (debounce) (config.watch ??= {}).debounceMs = debounce;
-  if (cooldown) (config.watch ??= {}).cooldownMs = cooldown;
+  if (cooldown !== undefined) (config.watch ??= {}).cooldownMs = cooldown;
   if (gitPoll) (config.watch ??= {}).gitPollMs = gitPoll;
   if (idleTimeout !== undefined) (config.watch ??= {}).idleTimeoutMs = idleTimeout;
   const watchConfig = resolveWatchConfig(config);

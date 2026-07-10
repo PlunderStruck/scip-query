@@ -2,6 +2,12 @@
 
 Date: 2026-07-09
 
+Snapshot status: preserved as the verified pre-Phase-1 baseline. The
+demand-started freshness service described as missing below is now complete;
+current measurements and lifecycle behavior are recorded in
+[`2026-07-09-automatic-freshness-service.md`](./2026-07-09-automatic-freshness-service.md),
+and Phase 2 affected-set shadowing is next.
+
 This document is the verified starting point for the automatic incremental
 indexing roadmap. It explains what the repository does now, which parts are
 already cached, and why a small edit can still trigger project-wide work.

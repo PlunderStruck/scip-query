@@ -18,6 +18,7 @@ import {
 } from './watch-service.js';
 
 const HEARTBEAT_INTERVAL_MS = 1_000;
+const ACTIVITY_POLL_INTERVAL_MS = 250;
 
 export function startupRefreshTrigger(state: IndexFreshnessState): RefreshTrigger | null {
   return state === 'fresh' ? null : { kind: 'watch-startup', detail: `index ${state} when watch service started` };
@@ -48,10 +49,13 @@ export async function runWatchServiceServer(
   let stopping = false;
   let ready = false;
   let lastRefreshRequestAtMs = 0;
+  let lastHeartbeatAtMs = 0;
 
-  const persistState = (): void => {
+  const persistState = (force = false): void => {
     if (!ready) return;
     const nowMs = Date.now();
+    if (!force && nowMs - lastHeartbeatAtMs < HEARTBEAT_INTERVAL_MS) return;
+    lastHeartbeatAtMs = nowMs;
     writeWatchServiceState(servicePaths.statePath, {
       version: 1,
       protocolVersion: WATCH_SERVICE_PROTOCOL_VERSION,
@@ -81,18 +85,18 @@ export async function runWatchServiceServer(
     onStatus(status) {
       watcherStatus = status;
       if (status.state !== 'idle') recordActivity();
-      persistState();
+      persistState(true);
     },
     onReindexComplete() {
       recordActivity();
       lastRefresh = getIndexFreshness(projectRoot, config, indexPaths).lastRefresh;
       lastError = undefined;
-      persistState();
+      persistState(true);
     },
     onError(error) {
       recordActivity();
       lastError = { at: new Date().toISOString(), message: error.message };
-      persistState();
+      persistState(true);
     },
   });
 
@@ -110,7 +114,7 @@ export async function runWatchServiceServer(
     if (startupTrigger) watcher.requestRefresh(startupTrigger, { immediate: true });
     recordActivity();
     ready = true;
-    persistState();
+    persistState(true);
 
     while (!stopping) {
       const activity = readWatchServiceActivity(servicePaths.activityPath);
@@ -136,7 +140,7 @@ export async function runWatchServiceServer(
       ) {
         break;
       }
-      await sleep(HEARTBEAT_INTERVAL_MS);
+      await sleep(ACTIVITY_POLL_INTERVAL_MS);
     }
   } finally {
     process.off('SIGINT', stop);

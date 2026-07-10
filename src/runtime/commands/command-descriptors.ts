@@ -320,8 +320,8 @@ export const commandDescriptors: CommandDescriptor[] = [
       option('--daemon', 'Ensure the demand-started background service is running'),
       option('--status', 'Show background/foreground watcher state'),
       option('--stop', 'Stop the watcher or background service for this project'),
-      option('--debounce <ms>', 'Ms to wait after last change (default: 30000)', parseIntegerLoose),
-      option('--cooldown <ms>', 'Min ms between reindexes (default: 60000)', parseIntegerLoose),
+      option('--debounce <ms>', 'Ms to wait after last change (default: 250)', parseIntegerLoose),
+      option('--cooldown <ms>', 'Min ms between reindexes; 0 disables spacing (default: 0)', parseIntegerLoose),
       option('--git-poll <ms>', 'Ms between Git HEAD/index checks (default: 2000)', parseIntegerLoose),
       option(
         '--idle-timeout <ms>',
