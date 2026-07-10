@@ -94,6 +94,7 @@ interface ReferenceMapProfileStats {
   semanticRefsMs: number;
   packageReferenceCount: number;
   referenceCount: number;
+  preciseSearchFailures: number;
 }
 
 interface ImportUsageProfileStats {
@@ -235,6 +236,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
       else byFile.set(definition.relativePath, [definition]);
     }
 
+    const preciseScanFallbacks: IndexedDefinition[] = [];
     for (const [relativePath, fileDefinitions] of byFile) {
       const stats = createReferenceMapProfileStats();
       profileSpan(
@@ -248,9 +250,14 @@ class TsMorphSemanticProvider implements SemanticProvider {
               if (node) stats.nodeHits += 1;
               else stats.nodeMisses += 1;
             }
-            const references = this.referencesForDefinitionNode(definition, node, profiling ? stats : undefined);
-            this.referencesCache.set(definition.symbolId, references);
-            result.set(definition.symbolId, references);
+            try {
+              const references = this.referencesForDefinitionNode(definition, node, profiling ? stats : undefined);
+              this.referencesCache.set(definition.symbolId, references);
+              result.set(definition.symbolId, references);
+            } catch {
+              stats.preciseSearchFailures += 1;
+              preciseScanFallbacks.push(definition);
+            }
           }
         },
         () => ({
@@ -261,16 +268,28 @@ class TsMorphSemanticProvider implements SemanticProvider {
       );
     }
 
+    if (preciseScanFallbacks.length > 0) {
+      const computed = this.referencesForDefinitionsBySymbolScan(preciseScanFallbacks);
+      for (const definition of preciseScanFallbacks) {
+        const references = computed.get(definition.symbolId) ?? [];
+        this.referencesCache.set(definition.symbolId, references);
+        result.set(definition.symbolId, references);
+      }
+    }
+
     return result;
   }
 
   referenceFragmentsForFiles(files: readonly string[]): Map<string, SemanticReferenceFragment[]> {
     const definitions = getAllDefinitions(this.db).filter((definition) => isTypeScriptLike(definition.relativePath));
-    return referenceFragmentsFromDefinitionMap(definitions, this.referencesForDefinitions(definitions), files);
+    const availableFiles = files.filter((relativePath) => this.sourceFiles.sourceFile(relativePath) !== null);
+    const references = this.referencesForDefinitionsBySymbolScan(definitions, availableFiles);
+    return referenceFragmentsFromDefinitionMap(definitions, references, availableFiles);
   }
 
   private referencesForDefinitionsBySymbolScan(
     definitions: readonly IndexedDefinition[],
+    originFiles?: readonly string[],
   ): Map<number, SemanticReference[]> {
     const profiling = profileEnabled();
     const stats = createReferenceMapProfileStats();
@@ -285,8 +304,11 @@ class TsMorphSemanticProvider implements SemanticProvider {
       'typescript.references-map.inverted-scan',
       () => {
         const packageRefsStart = profiling ? performance.now() : 0;
+        const packageReferenceIndex = originFiles
+          ? this.packageImportReferencesForFiles(originFiles)
+          : this.packageImportReferences();
         for (const definition of definitions) {
-          const packageRefs = this.packageImportReferencesForDefinition(definition);
+          const packageRefs = packageReferenceIndex.get(definition.symbolId) ?? [];
           if (packageRefs.length > 0) {
             const bucket = result.get(definition.symbolId) ?? [];
             bucket.push(...packageRefs);
@@ -299,7 +321,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
         const symbolCache = new Map<TypeScriptSymbol, ResolvedCalleeTarget | null>();
         const referenceNames = new Set(definitions.map((definition) => definition.leaf).filter(Boolean));
         const scanStart = profiling ? performance.now() : 0;
-        for (const relativePath of this.sourceFiles.indexedTypeScriptLikeDocuments()) {
+        for (const relativePath of originFiles ?? this.sourceFiles.indexedTypeScriptLikeDocuments()) {
           if (this.db.isIgnored(relativePath)) continue;
           const sourceFile = this.sourceFiles.sourceFile(relativePath);
           if (!sourceFile) continue;
@@ -606,6 +628,29 @@ class TsMorphSemanticProvider implements SemanticProvider {
     return index.get(definition.symbolId) ?? [];
   }
 
+  private packageImportReferencesForFiles(relativePaths: readonly string[]): Map<number, SemanticReference[]> {
+    const index = new Map<number, SemanticReference[]>();
+    const packageNames = new Set<string>();
+    for (const relativePath of relativePaths) {
+      const sourceFile = this.sourceFiles.sourceFile(relativePath);
+      if (!sourceFile) continue;
+      for (const declaration of sourceFile.getImportDeclarations()) {
+        const packageName = workspacePackageNameForSpecifier(
+          this.workspacePackages,
+          declaration.getModuleSpecifierValue(),
+        );
+        if (packageName) packageNames.add(packageName);
+      }
+    }
+    if (packageNames.size === 0) return index;
+    const exportIndex = this.packageExportsForNames(packageNames);
+    for (const relativePath of relativePaths) {
+      this.addPackageImportReferencesForDocument(index, exportIndex, relativePath);
+    }
+    for (const [symbolId, references] of index) index.set(symbolId, dedupeLocations(references));
+    return index;
+  }
+
   private packageImportReferences(): Map<number, SemanticReference[]> {
     if (this.packageImportReferenceIndex) return this.packageImportReferenceIndex;
     const index = new Map<number, SemanticReference[]>();
@@ -658,15 +703,20 @@ class TsMorphSemanticProvider implements SemanticProvider {
 
   private packageExports(): PackageExportIndex {
     if (this.packageExportIndex) return this.packageExportIndex;
+    this.packageExportIndex = this.packageExportsForNames(new Set(this.workspacePackages.map((pkg) => pkg.name)));
+    return this.packageExportIndex;
+  }
+
+  private packageExportsForNames(packageNames: ReadonlySet<string>): PackageExportIndex {
     const index: PackageExportIndex = new Map();
     for (const pkg of this.workspacePackages) {
+      if (!packageNames.has(pkg.name)) continue;
       const exportsForPackage = new Map<string, Set<number>>();
       for (const entryFile of packageEntryCandidates(pkg)) {
         this.collectPackageExports(pkg, entryFile, exportsForPackage, new Set());
       }
       if (exportsForPackage.size > 0) index.set(pkg.name, exportsForPackage);
     }
-    this.packageExportIndex = index;
     return index;
   }
 
@@ -1104,6 +1154,7 @@ function createReferenceMapProfileStats(): ReferenceMapProfileStats {
     semanticRefsMs: 0,
     packageReferenceCount: 0,
     referenceCount: 0,
+    preciseSearchFailures: 0,
   };
 }
 

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { FileDependencyGraph, ProjectInputSnapshot } from '../../../src/reindex/affected-set.js';
-import { buildTypeScriptSemanticIdentity } from '../../../src/semantic/typescript/semantic-identity.js';
+import {
+  buildTypeScriptSemanticIdentity,
+  createTypeScriptSemanticIdentityBuilder,
+} from '../../../src/semantic/typescript/semantic-identity.js';
 
 const PROJECT_FILES = ['src/consumer.ts', 'src/isolated.ts', 'src/leaf.ts'];
 
@@ -119,6 +122,28 @@ describe('TypeScript semantic identity', () => {
     );
     expect(identity('src/isolated.ts', { ...snapshot(), typescriptProjects: ['apps/web'] }, graph).key).not.toBe(
       baseline.key,
+    );
+  });
+
+  it('prepares shared project evidence without changing per-file identities', () => {
+    const inputSnapshot = snapshot();
+    const graph = dependencyGraph([
+      ['src/consumer.ts', ['src/leaf.ts']],
+      ['src/leaf.ts', []],
+      ['src/isolated.ts', []],
+    ]);
+    const builder = createTypeScriptSemanticIdentityBuilder({
+      projectFiles: PROJECT_FILES,
+      snapshot: inputSnapshot,
+      graph,
+      engineIdentity: 'engine-v1',
+    });
+
+    for (const target of PROJECT_FILES) {
+      expect(builder.identityFor(target, 'schema-v1')).toEqual(identity(target, inputSnapshot, graph));
+    }
+    expect(builder.identityFor('src/leaf.ts', 'schema-v2').key).not.toBe(
+      builder.identityFor('src/leaf.ts', 'schema-v1').key,
     );
   });
 });

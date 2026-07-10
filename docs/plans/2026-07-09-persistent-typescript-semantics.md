@@ -1,7 +1,7 @@
 # Persistent TypeScript Semantics — Phase 3 Concrete Plan
 
 Date: 2026-07-09
-Status: in progress; steps 3.1–3.5 complete and step 3.6 next
+Status: complete; all Phase 3 gates passed
 Roadmap phase: 3
 
 ## Goal
@@ -293,7 +293,7 @@ postchecks.
 
 ### 3.6 — Calibrate, package, and close Phase 3
 
-- [ ] **Create/Edit:** a bounded session/fragment harness, machine JSONL,
+- [x] **Create/Edit:** a bounded session/fragment harness, machine JSONL,
       campaign ledger, this plan, and the master roadmap.
 - Run cold/warm, separate-process, edit, config, sleeping wake, service restart,
   crash/fallback, and alternating corpus controls on scip-query and OpenCode.
@@ -301,6 +301,49 @@ postchecks.
   relevant SCIP postchecks, repository-build reindex, and diff-gate.
 - Close only if all gates pass. Otherwise keep the direct route authoritative,
   record the measured boundary, and do not begin Phase 4.
+- **Outcome:** The extended calibration harness now records OpenCode and the
+  full semantic variant plus TypeScript fragment/import/signature counters.
+  After one warm-up, five separate scip-query processes ran import usage in
+  237ms median / 250ms p95 versus the pre-change 927ms / 1,307ms, a 74.43%
+  median and 80.87% p95 improvement. OpenCode commit `1a8e94dc…` ran the same
+  full-semantic command in 307ms / 331ms versus five direct-process controls at
+  7,910ms / 8,133ms, a 96.12% / 95.93% improvement. Every accepted process had
+  one cache hit, zero misses, and an identical command hash. The service
+  created one local Project set and 33 OpenCode tsconfig Project bundles on the
+  cold request, then created zero more across the five warm processes.
+
+  The ordinary local leaf edit hit 310/311 fragments (99.6785%); OpenCode hit
+  2,529/2,530 (99.9605%). Each recomputed exactly one origin file, retained the
+  same full command hash, refreshed its session once, replaced no session, and
+  created no Project. Preparing 2,530 semantic identities once per database
+  reduced OpenCode's fully warm reference materialization from 9,506ms to
+  524ms. The origin producer now scans only missing files through the same
+  compiler-symbol path used by the bulk oracle; OpenCode's true reverse edit
+  materialized its one miss in 6,149ms rather than recomputing all 2,530 files.
+
+  The first OpenCode cold reference population exceeded Node's default 4GB
+  heap and published zero rows. The retained 8GB diagnostic then exposed a
+  TypeScript language-service failure on a declaration-file reference. The
+  accepted fallback batches those failed precise lookups through the exact
+  compiler-symbol scan; the 8GB cold fill wrote all 2,530 fragments in 20,900ms
+  with the same output hash. This is an explicit cold large-corpus memory
+  boundary, not hidden evidence. It does not affect the accepted warm route.
+
+  Two simultaneous callers produced identical hashes through one Project;
+  1ms timeout, explicit direct, idle-exit/wake, forced crash/recovery, service
+  restart, and config replacement controls all returned the baseline hash.
+  Config changed exactly one session and created one replacement Project;
+  ordinary source edits created none. Exact no-op reindex was 300ms median /
+  333ms p95 internally and 476ms / 500ms process-wall, both faster than the
+  329ms / 348ms and 534ms / 544ms controls. Typecheck, build, lint, all 1,180
+  tests, package dry-run, clean packed install, installed remote/direct smoke,
+  repository reindex, matching SCIP postchecks, and diff-gate passed. The
+  installed hashes matched `de4ce6c…`, and its service created one Project.
+  Diff-gate reported two non-blocking advisories: the Rust and TypeScript
+  `referencesForDefinitions` methods intentionally remain separate because
+  they adapt different compiler protocols, and the architecture ledger's
+  citation of `ts-morph-provider.ts` remains accurate after the internal
+  caching change. Neither advisory identifies a parity or migration defect.
 
 ## Stress and Rollback Rules
 
@@ -323,5 +366,5 @@ door—removing legacy reads—is explicitly deferred beyond Phase 3.
 ## Exact Next Action
 
 ```sh
-node scripts/semantic-command-calibration.mjs --help
+SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/reindex/project-shards.ts --json
 ```

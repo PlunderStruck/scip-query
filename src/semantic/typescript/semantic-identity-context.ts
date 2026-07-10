@@ -4,14 +4,18 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { createPerDbValue } from '../../storage/per-db-cache.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
-import { projectInputSnapshotOrNull, type ProjectInputSnapshot } from '../../reindex/affected-set.js';
+import { projectInputSnapshotOrNull } from '../../reindex/affected-set.js';
 import { isTypeScriptLike } from './source-kinds.js';
-import { buildTypeScriptSemanticIdentity, type TypeScriptSemanticIdentity } from './semantic-identity.js';
+import {
+  createTypeScriptSemanticIdentityBuilder,
+  type TypeScriptSemanticIdentity,
+  type TypeScriptSemanticIdentityBuilder,
+} from './semantic-identity.js';
 import { typeScriptSemanticEngineIdentity } from './ts-morph-runtime.js';
 
 interface TypeScriptSemanticIdentityContext {
-  snapshot: ProjectInputSnapshot;
-  projectFiles: string[];
+  builder: TypeScriptSemanticIdentityBuilder;
+  identities: Map<string, TypeScriptSemanticIdentity>;
 }
 
 const IDENTITY_CONTEXT = createPerDbValue<TypeScriptSemanticIdentityContext | null>(
@@ -26,14 +30,12 @@ export function typeScriptSemanticIdentityForFile(
 ): TypeScriptSemanticIdentity | null {
   const context = IDENTITY_CONTEXT.get(db, () => readIdentityContext(db));
   if (!context) return null;
-  return buildTypeScriptSemanticIdentity({
-    targetFile: relativePath,
-    projectFiles: context.projectFiles,
-    snapshot: context.snapshot,
-    graph: buildFileDepGraph(db),
-    engineIdentity: typeScriptSemanticEngineIdentity(),
-    schemaVersion,
-  });
+  const cacheKey = `${schemaVersion}\0${relativePath}`;
+  const existing = context.identities.get(cacheKey);
+  if (existing) return existing;
+  const identity = context.builder.identityFor(relativePath, schemaVersion);
+  context.identities.set(cacheKey, identity);
+  return identity;
 }
 
 export function indexedTypeScriptFiles(db: ScipDatabase): string[] {
@@ -47,7 +49,15 @@ function readIdentityContext(db: ScipDatabase): TypeScriptSemanticIdentityContex
     };
     const snapshot = projectInputSnapshotOrNull(metadata.fingerprint);
     if (!snapshot) return null;
-    return { snapshot, projectFiles: indexedTypeScriptFiles(db) };
+    return {
+      builder: createTypeScriptSemanticIdentityBuilder({
+        projectFiles: indexedTypeScriptFiles(db),
+        snapshot,
+        graph: buildFileDepGraph(db),
+        engineIdentity: typeScriptSemanticEngineIdentity(),
+      }),
+      identities: new Map(),
+    };
   } catch {
     return null;
   }

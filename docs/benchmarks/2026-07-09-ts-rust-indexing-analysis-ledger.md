@@ -1448,6 +1448,42 @@ computed file). This two-file fixture proves the selective mechanism, not the
 roadmap's >=95% corpus threshold; the scip-query/OpenCode calibration in step
 3.6 owns that acceptance result.
 
+### Phase 3 acceptance
+
+The final separate-process series passed the speed gate with exact output.
+scip-query improved from 927ms median / 1,307ms p95 to 237ms / 250ms across
+five accepted warm processes. OpenCode commit `1a8e94dc…`, the independent
+29-tsconfig corpus, improved from five direct controls at 7,910ms / 8,133ms to
+307ms / 331ms. The accepted hashes were respectively `de4ce6c…` and
+`85e4aa50…`; the service constructed no additional unchanged Projects after
+each cold request.
+
+The final scip-query leaf edit retained 310/311 reference fragments (99.6785%)
+and OpenCode retained 2,529/2,530 (99.9605%). Each computed only the changed
+origin file, refreshed one session without replacing its Project set, and kept
+the exact complexity-hotspot output hash (`c04bbfa2…` locally and `021d524d…`
+on OpenCode). Preparing shared identity context once per database cut fully
+warm OpenCode fragment materialization from 9,506ms to 524ms. The true reverse
+leaf edit took 6,149ms for the one missing semantic fragment; its existing SCIP
+rebuild still took 54.911s, which is precisely the Phase 4 target.
+
+The first OpenCode cold fragment fill exhausted Node's default 4GB heap and
+wrote zero rows. An 8GB retry exposed a TypeScript language-service exception
+for declaration-file references. The retained recovery batches those failed
+precise lookups through the compiler-symbol scanner and produced all 2,530
+fragments in 20,900ms with exact output. This cold memory boundary remains
+explicit; normal warm import analysis used the default process and passed.
+
+Concurrency, 1ms timeout-to-direct fallback, explicit direct mode, clean idle
+exit and wake, forced crash recovery, service restart, and config replacement
+all returned the local baseline hash. Two concurrent processes created one
+Project; a source edit created none; the config edit created exactly one
+replacement. Exact no-op reindex improved to 300ms median / 333ms p95 internal
+and 476ms / 500ms process-wall. All 1,180 tests, typecheck, build, lint, the
+packed-install remote/direct smoke, repository reindex, matching SCIP
+postchecks, and diff-gate passed. Machine records, including rejected controls,
+live in `docs/benchmarks/runs/2026-07-09-typescript-semantic-session.jsonl`.
+
 ## Run History
 
 Machine-readable run history:

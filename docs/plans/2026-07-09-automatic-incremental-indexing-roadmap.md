@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Phases 1–2 complete; Phase 3 steps 3.1–3.5 complete and step 3.6 next
+Status: Phases 1–3 complete; Phase 4 feasibility spike next
 
 ## Goal
 
@@ -466,11 +466,21 @@ rollback path. Partial hits compute and publish only missing origin files.
 Import usage, file-owned signatures, and callees now share the conservative
 transitive semantic identity. A fresh-process fixture reused every semantic row
 without rewriting it; an ordinary leaf edit retained the unrelated fragment
-and recomputed exactly the changed one. Repository-scale hit-rate, parity, and
-performance calibration remains step 3.6.
+and recomputed exactly the changed one. Step 3.6 then passed the corpus gates:
+scip-query's warm import command is 237ms median / 250ms p95 versus 927ms /
+1,307ms, while OpenCode is 307ms / 331ms versus direct controls at 7,910ms /
+8,133ms. Leaf edits retained 310/311 local fragments and 2,529/2,530 OpenCode
+fragments with exact output, one session refresh, zero replacements, and zero
+new Projects. Prepared identity context reduced fully warm OpenCode reference
+materialization from 9,506ms to 524ms. Concurrent, timeout/direct fallback,
+idle/wake, crash recovery, config replacement, no-op, package-install, and full
+verification gates passed. The 4GB OpenCode cold-reference OOM and subsequent
+TypeScript declaration-file failure are retained; an 8GB bounded retry plus
+compiler-symbol fallback published all 2,530 exact fragments.
 
-**Exit gate:** Phase 3 performance, hit-rate, and parity thresholds pass on
-separate CLI processes and after service restart.
+**Exit result:** Phase 3 performance, hit-rate, parity, lifecycle, fallback,
+no-op, and packaging thresholds passed on both accepted corpora. The direct
+provider and legacy definition rows remain rollback paths.
 
 ### Phase 4 — Incremental SCIP document producer and sub-shards
 
@@ -644,12 +654,12 @@ Complete this at every phase close:
 6. Phase 5 atomic incremental generation storage.
 7. Phase 6 durable Rust defaulting, selective native kernels, and rollout.
 
-The immediate recommendation is Phase 3 step 3.1. Phase 2 has proved which
-TypeScript files may be affected, but every semantic-heavy command still
-creates ts-morph Projects inside a short-lived CLI process and project-wide
-cache identities still invalidate unrelated answers. Define the conservative
-per-file identity before adding persistent storage or service routing:
+The immediate recommendation is Phase 4A's upstream-boundary feasibility
+spike. Phases 2–3 now prove which inputs are affected and reuse live compiler
+state plus unrelated semantic fragments. The remaining edit-to-fresh cost is
+the whole-project SCIP producer, so inspect the real project-shard/indexer
+boundary before designing a fragment store:
 
 ```sh
-SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/reindex/affected-set.ts --json
+SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/reindex/project-shards.ts --json
 ```

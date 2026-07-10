@@ -28,15 +28,26 @@ export interface TypeScriptSemanticIdentityInput {
   schemaVersion: string;
 }
 
-export function buildTypeScriptSemanticIdentity(input: TypeScriptSemanticIdentityInput): TypeScriptSemanticIdentity {
-  const projectFiles = sortedUnique(input.projectFiles);
-  if (!projectFiles.includes(input.targetFile)) {
-    return unkeyed('target-outside-project');
-  }
-  if (new Set(input.snapshot.files.map((file) => file.path)).size !== input.snapshot.files.length) {
-    return unkeyed('duplicate-input-path');
-  }
+export interface TypeScriptSemanticIdentityBuilderInput {
+  projectFiles: readonly string[];
+  snapshot: ProjectInputSnapshot;
+  graph: FileDependencyGraph | null;
+  engineIdentity: string;
+}
 
+export interface TypeScriptSemanticIdentityBuilder {
+  identityFor(targetFile: string, schemaVersion: string): TypeScriptSemanticIdentity;
+}
+
+export function buildTypeScriptSemanticIdentity(input: TypeScriptSemanticIdentityInput): TypeScriptSemanticIdentity {
+  return createTypeScriptSemanticIdentityBuilder(input).identityFor(input.targetFile, input.schemaVersion);
+}
+
+export function createTypeScriptSemanticIdentityBuilder(
+  input: TypeScriptSemanticIdentityBuilderInput,
+): TypeScriptSemanticIdentityBuilder {
+  const projectFiles = sortedUnique(input.projectFiles);
+  const projectFileSet = new Set(projectFiles);
   const filesByPath = new Map(input.snapshot.files.map((file) => [file.path, file]));
   const globalInputs = input.snapshot.files
     .filter((file) => {
@@ -46,45 +57,57 @@ export function buildTypeScriptSemanticIdentity(input: TypeScriptSemanticIdentit
     .map((file) => file.path);
   const requiredProjectFiles = sortedUnique([...projectFiles, ...globalInputs]);
   const missingProjectInput = requiredProjectFiles.find((path) => !filesByPath.has(path));
-  if (missingProjectInput) return unkeyed('missing-input-fingerprint');
-  if (requiredProjectFiles.some((path) => isUnreadable(filesByPath.get(path)!))) {
-    return unkeyed('unreadable-input');
-  }
-
-  const reasons: TypeScriptSemanticIdentityReason[] = [];
-  let semanticFiles: string[];
-  let mode: TypeScriptSemanticIdentityMode;
-  if (input.graph === null) {
-    reasons.push('dependency-graph-unavailable');
-    mode = 'whole-project';
-    semanticFiles = requiredProjectFiles;
-  } else {
-    const closure = dependencyClosure(input.targetFile, input.graph);
-    const missingDependency = closure.find((path) => !filesByPath.has(path));
-    if (missingDependency) return unkeyed('missing-input-fingerprint');
-    semanticFiles = sortedUnique([...closure, ...globalInputs]);
-    if (semanticFiles.some((path) => isUnreadable(filesByPath.get(path)!))) {
-      return unkeyed('unreadable-input');
-    }
-    mode = 'dependency-closure';
-  }
-
-  const fingerprints = semanticFiles.map((path) => fingerprintValue(filesByPath.get(path)!));
-  const key = sha256Hex(
+  const hasDuplicateInput = new Set(input.snapshot.files.map((file) => file.path)).size !== input.snapshot.files.length;
+  const hasUnreadableProjectInput =
+    !missingProjectInput && requiredProjectFiles.some((path) => isUnreadable(filesByPath.get(path)!));
+  const projectIdentity = sha256Hex(
     JSON.stringify({
-      version: 1,
-      engineIdentity: input.engineIdentity,
-      schemaVersion: input.schemaVersion,
-      project: {
-        pnpmWorkspaces: input.snapshot.pnpmWorkspaces,
-        typescriptProjectMode: input.snapshot.typescriptProjectMode,
-        typescriptProjects: sortedUnique(input.snapshot.typescriptProjects),
-        membership: projectFiles,
-      },
-      inputs: fingerprints,
+      pnpmWorkspaces: input.snapshot.pnpmWorkspaces,
+      typescriptProjectMode: input.snapshot.typescriptProjectMode,
+      typescriptProjects: sortedUnique(input.snapshot.typescriptProjects),
+      membership: projectFiles,
     }),
   );
-  return { version: 1, key, mode, inputFiles: semanticFiles, reasons };
+  const closureCache = new Map<string, string[]>();
+
+  return {
+    identityFor(targetFile, schemaVersion) {
+      if (!projectFileSet.has(targetFile)) return unkeyed('target-outside-project');
+      if (hasDuplicateInput) return unkeyed('duplicate-input-path');
+      if (missingProjectInput) return unkeyed('missing-input-fingerprint');
+      if (hasUnreadableProjectInput) return unkeyed('unreadable-input');
+
+      const reasons: TypeScriptSemanticIdentityReason[] = [];
+      let semanticFiles: string[];
+      let mode: TypeScriptSemanticIdentityMode;
+      if (input.graph === null) {
+        reasons.push('dependency-graph-unavailable');
+        mode = 'whole-project';
+        semanticFiles = requiredProjectFiles;
+      } else {
+        const closure = cachedDependencyClosure(targetFile, input.graph, closureCache);
+        const missingDependency = closure.find((path) => !filesByPath.has(path));
+        if (missingDependency) return unkeyed('missing-input-fingerprint');
+        semanticFiles = sortedUnique([...closure, ...globalInputs]);
+        if (semanticFiles.some((path) => isUnreadable(filesByPath.get(path)!))) {
+          return unkeyed('unreadable-input');
+        }
+        mode = 'dependency-closure';
+      }
+
+      const fingerprints = semanticFiles.map((path) => fingerprintValue(filesByPath.get(path)!));
+      const key = sha256Hex(
+        JSON.stringify({
+          version: 1,
+          engineIdentity: input.engineIdentity,
+          schemaVersion,
+          projectIdentity,
+          inputs: fingerprints,
+        }),
+      );
+      return { version: 1, key, mode, inputFiles: semanticFiles, reasons };
+    },
+  };
 }
 
 function dependencyClosure(targetFile: string, graph: FileDependencyGraph): string[] {
@@ -99,6 +122,18 @@ function dependencyClosure(targetFile: string, graph: FileDependencyGraph): stri
     }
   }
   return [...visited].sort();
+}
+
+function cachedDependencyClosure(
+  targetFile: string,
+  graph: FileDependencyGraph,
+  cache: Map<string, string[]>,
+): string[] {
+  const existing = cache.get(targetFile);
+  if (existing) return existing;
+  const closure = dependencyClosure(targetFile, graph);
+  cache.set(targetFile, closure);
+  return closure;
 }
 
 function fingerprintValue(file: ProjectFileFingerprint): ProjectFileFingerprint {

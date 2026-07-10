@@ -48,6 +48,7 @@ export function createServiceBackedTypeScriptProvider(
 ): SemanticProvider {
   const requester = new TypeScriptSemanticRequester(db, opts);
   let directProvider: SemanticProvider | null = null;
+  let cachedAvailability: SemanticAvailability | null = null;
   let remoteFailed = process.env['SCIP_QUERY_SKIP_WATCH_SERVICE'] === '1';
   const direct = (): SemanticProvider => {
     directProvider ??= createTsMorphProvider(db, relativePath);
@@ -81,7 +82,10 @@ export function createServiceBackedTypeScriptProvider(
 
   return {
     language: 'typescript',
-    availability: () => request({ kind: 'availability' }, parseAvailability, () => direct().availability()),
+    availability: () => {
+      cachedAvailability ??= request({ kind: 'availability' }, parseAvailability, () => direct().availability());
+      return cachedAvailability;
+    },
     importUsage: (file) =>
       request(
         { kind: 'import-usage', file },

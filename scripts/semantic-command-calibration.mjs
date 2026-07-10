@@ -25,6 +25,21 @@ const REPOS = {
       doc: 'docs/architecture/rust-semantic-performance-ledger.md',
     },
   },
+  OpenCode: {
+    cwd: '/Users/aydansalois/Documents/GitHub/opencode',
+    env: {},
+    target: {
+      file: 'packages/opencode/src/index.ts',
+      rustFile: 'packages/opencode/src/index.ts',
+      module: 'packages/opencode/src',
+      symbol: 'toRequestError',
+      secondSymbol: 'fromUnknownDefect',
+      rustSymbol: 'toRequestError',
+      className: 'NamedError',
+      kind: 'function',
+      doc: 'README.md',
+    },
+  },
   VegaAssistant: {
     cwd: '/Users/aydansalois/Documents/GitHub/VegaAssistant',
     env: {},
@@ -82,6 +97,7 @@ const COMMANDS = [
   c('imports-file-full', ({ target }) => ['imports', target.rustFile, '--full', '--json']),
   c('imported-by-symbol', ({ target }) => ['imported-by', target.symbol, '--json']),
   c('unused-imports-file', ({ target }) => ['unused-imports', target.file, '--json']),
+  c('unused-imports-file-full', ({ target }) => ['unused-imports', target.file, '--full', '--json']),
   c('outline-file', ({ target }) => ['outline', target.rustFile, '--json']),
   c('outline-file-signatures', ({ target }) => ['outline', target.rustFile, '--signatures', '--json']),
   c('members-symbol', ({ target }) => ['members', target.symbol, '--json']),
@@ -314,6 +330,21 @@ function summarizeProfile(profilePath) {
     semanticReferenceMisses: sumField(spanEvents, 'semantic.references.cache-scan', 'misses'),
     semanticCalleeCacheHits: sumField(spanEvents, 'semantic.callees.cache-scan', 'cacheHits'),
     semanticCalleeMisses: sumField(spanEvents, 'semantic.callees.cache-scan', 'misses'),
+    typescriptReferenceFragmentHits: sumField(spanEvents, 'typescript.reference-fragments.materialize', 'cacheHits'),
+    typescriptReferenceFragmentMisses: sumField(
+      spanEvents,
+      'typescript.reference-fragments.materialize',
+      'cacheMisses',
+    ),
+    typescriptReferenceFragmentComputations: sumField(
+      spanEvents,
+      'typescript.reference-fragments.materialize',
+      'computedFiles',
+    ),
+    typescriptImportUsageCacheHits: sumField(spanEvents, 'typescript.import-usage.materialize', 'cacheHits'),
+    typescriptImportUsageCacheMisses: sumField(spanEvents, 'typescript.import-usage.materialize', 'cacheMisses'),
+    typescriptSignatureCacheHits: sumField(spanEvents, 'typescript.signature.materialize', 'cacheHits'),
+    typescriptSignatureCacheMisses: sumField(spanEvents, 'typescript.signature.materialize', 'cacheMisses'),
   };
   profile.topSpans = [...spanEvents]
     .sort((left, right) => (Number(right.durationMs) || 0) - (Number(left.durationMs) || 0))
@@ -326,6 +357,8 @@ function summarizeProfile(profilePath) {
       rows: event.rows,
       entries: event.entries,
       cacheHits: event.cacheHits,
+      cacheMisses: event.cacheMisses,
+      computedFiles: event.computedFiles,
       misses: event.misses,
       hit: event.hit,
       kind: event.kind,

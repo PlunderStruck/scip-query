@@ -18,7 +18,10 @@ import {
   publishedGenerationIdentity,
   typeScriptSemanticMailboxPaths,
 } from '../../../src/semantic/typescript/session-protocol.js';
-import { TypeScriptSemanticRequester } from '../../../src/semantic/typescript/remote-provider.js';
+import {
+  createServiceBackedTypeScriptProvider,
+  TypeScriptSemanticRequester,
+} from '../../../src/semantic/typescript/remote-provider.js';
 import { loadTsMorph } from '../../../src/semantic/typescript/ts-morph-runtime.js';
 import { evidenceFixtureDb } from '../../fixtures/evidence-fixture.js';
 
@@ -179,6 +182,33 @@ describe('TypeScript semantic service mailbox', () => {
       },
     });
     expect(() => timedOut.request({ kind: 'availability' })).toThrow('timed out');
+    db.close();
+  });
+
+  it('caches remote availability for the command-scoped provider', () => {
+    const fixture = serviceFixture(true);
+    const db = fixture.openDb();
+    const paths = typeScriptSemanticMailboxPaths(fixture.projectRoot);
+    const statePath = join(fixture.projectRoot, 'watch-state.json');
+    const service = new TypeScriptSemanticServiceHost({ openDb: fixture.openDb, createHost: fakeSemanticHost });
+    writeLiveState(statePath, fixture.projectRoot);
+    let requestNumber = 0;
+    const provider = createServiceBackedTypeScriptProvider(db, undefined, {
+      timeoutMs: 1_000,
+      runtime: {
+        now: () => NOW,
+        randomId: () => `availability-${++requestNumber}`,
+        isProcessAlive: () => true,
+        sleep: () => {
+          processTypeScriptSemanticMailbox(paths, service, { nowMs: NOW });
+        },
+      },
+    });
+
+    expect(provider.availability()).toEqual({ available: true, tsconfigPaths: ['tsconfig.json'] });
+    expect(provider.availability()).toEqual({ available: true, tsconfigPaths: ['tsconfig.json'] });
+    expect(service.status().requests).toBe(1);
+    service.closeTypeScriptService();
     db.close();
   });
 });
