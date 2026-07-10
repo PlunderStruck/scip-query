@@ -38,6 +38,8 @@ export const FILE_EVIDENCE_KINDS = [
   'react-component-behavior-profiles',
   'git-file-adds',
   'typescript-reference-fragments',
+  'typescript-import-usage',
+  'typescript-signatures',
 ] as const;
 
 export type FileEvidenceKind = (typeof FILE_EVIDENCE_KINDS)[number];

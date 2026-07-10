@@ -22,6 +22,14 @@ export interface TypeScriptReferenceFragmentShadowResult {
   reason?: string;
 }
 
+export interface TypeScriptReferenceFragmentMaterialization {
+  references: Map<number, SemanticReference[]>;
+  files: number;
+  cacheHits: number;
+  cacheMisses: number;
+  computedFiles: number;
+}
+
 const REFERENCE_FRAGMENT_PRODUCT = createFileEvidenceProduct<SemanticReferenceFragment[]>({
   kind: 'typescript-reference-fragments',
   invalidation: evidenceProductInvalidation('typescript-reference-fragments'),
@@ -96,6 +104,81 @@ export function readTypeScriptReferenceFragment(
   semanticIdentity: string,
 ): SemanticReferenceFragment[] | null {
   return REFERENCE_FRAGMENT_PRODUCT.read(db, relativePath, semanticIdentity);
+}
+
+export function materializeTypeScriptReferenceFragments(
+  db: ScipDatabase,
+  definitions: readonly IndexedDefinition[],
+): TypeScriptReferenceFragmentMaterialization | null {
+  if (definitions.length === 0) {
+    return { references: new Map(), files: 0, cacheHits: 0, cacheMisses: 0, computedFiles: 0 };
+  }
+  let state = 'fallback';
+  let files = 0;
+  let cacheHits = 0;
+  let cacheMisses = 0;
+  let computedFiles = 0;
+  return profileSpan(
+    'typescript.reference-fragments.materialize',
+    () => {
+      try {
+        const projectFiles = indexedTypeScriptFiles(db);
+        files = projectFiles.length;
+        const identities = new Map<string, string>();
+        const cachedFragments = new Map<string, SemanticReferenceFragment[]>();
+        const missingFiles: string[] = [];
+        for (const file of projectFiles) {
+          const identity = typeScriptSemanticIdentityForFile(db, file, TYPESCRIPT_REFERENCE_FRAGMENT_SCHEMA);
+          if (!identity?.key) return null;
+          identities.set(file, identity.key);
+          const cached = REFERENCE_FRAGMENT_PRODUCT.read(db, file, identity.key);
+          if (cached === null) {
+            cacheMisses += 1;
+            missingFiles.push(file);
+          } else {
+            cacheHits += 1;
+            cachedFragments.set(file, cached);
+          }
+        }
+        if (cacheMisses === 0) {
+          state = 'hit';
+          return {
+            references: assembleReferenceFragments(definitions, cachedFragments),
+            files,
+            cacheHits,
+            cacheMisses,
+            computedFiles,
+          };
+        }
+
+        const provider = getSemanticProvider(db, definitions[0]!.relativePath);
+        if (!provider.availability().available || !provider.referenceFragmentsForFiles) return null;
+        const computed = provider.referenceFragmentsForFiles(missingFiles);
+        if (missingFiles.some((file) => !computed.has(file))) return null;
+        computedFiles = computed.size;
+        REFERENCE_FRAGMENT_PRODUCT.writeBatch(
+          db,
+          missingFiles.map((file) => ({
+            relativePath: file,
+            contentHash: identities.get(file)!,
+            value: computed.get(file) ?? [],
+          })),
+        );
+        for (const [file, fragments] of computed) cachedFragments.set(file, fragments);
+        state = 'computed';
+        return {
+          references: assembleReferenceFragments(definitions, cachedFragments),
+          files,
+          cacheHits,
+          cacheMisses,
+          computedFiles,
+        };
+      } catch {
+        return null;
+      }
+    },
+    () => ({ state, files, cacheHits, cacheMisses, computedFiles }),
+  );
 }
 
 function unavailable(reason: string): TypeScriptReferenceFragmentShadowResult {

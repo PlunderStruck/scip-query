@@ -1,7 +1,7 @@
 # Persistent TypeScript Semantics — Phase 3 Concrete Plan
 
 Date: 2026-07-09
-Status: in progress; steps 3.1–3.4 complete and step 3.5 next
+Status: in progress; steps 3.1–3.5 complete and step 3.6 next
 Roadmap phase: 3
 
 ## Goal
@@ -259,7 +259,7 @@ postchecks.
 
 ### 3.5 — Make verified fragments authoritative with dual-read rollback
 
-- [ ] **Edit:** shared semantic/callee materialization and evidence storage.
+- [x] **Edit:** shared semantic/callee materialization and evidence storage.
 - Read TypeScript origin fragments first, assemble requested definitions by
   stable symbol, and fall back to legacy rows/provider on any absent, malformed,
   unkeyed, or parity-failing unit. Continue old definition-centric reads and
@@ -268,6 +268,28 @@ postchecks.
   callees. Batch all SQLite work. Expose per-kind eligible/hit/miss/fallback
   counts.
 - Prove >=95% unaffected hits after a leaf edit and exact full-rebuild parity.
+- **Outcome:** Eligible TypeScript reference requests now assemble origin-file
+  fragments before consulting the legacy definition rows. A complete cache hit
+  constructs no provider; a partial hit asks the compiler only for missing
+  origin files, combines those answers with unchanged fragments, and commits
+  the new file rows as one batch. Missing identity, malformed storage, provider
+  failure, or an incomplete provider batch returns to the unchanged legacy
+  read/provider path. TypeScript import usage and file-owned signature maps now
+  use the same conservative identity, and callee rows replace the previous
+  direct-dependency digest with that transitive identity. Profile events expose
+  reference file hits/misses/computations plus import/signature
+  eligible/hit/miss/fallback state; the existing callee scan exposes its batch
+  counts.
+
+  The real SQLite/provider fixture proved that a fresh `ScipDatabase` reused
+  references, imports, signatures, and callees without replacing any evidence
+  row. Its ordinary consumer leaf edit then retained the unrelated API fragment
+  row and recomputed exactly one of two fixture fragments. The repository-scale
+  >=95% threshold remains the step 3.6 calibration gate. Seventeen focused
+  semantic-identity/fragment/provider/manifest tests, typecheck, build, lint,
+  the manifest/doc contract, `recent-duplicates`, and
+  `incomplete-migration` passed; the storage co-change review identified no
+  missing current contract partner.
 
 ### 3.6 — Calibrate, package, and close Phase 3
 
@@ -301,5 +323,5 @@ door—removing legacy reads—is explicitly deferred beyond Phase 3.
 ## Exact Next Action
 
 ```sh
-SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/reindex/affected-set.ts --json
+node scripts/semantic-command-calibration.mjs --help
 ```

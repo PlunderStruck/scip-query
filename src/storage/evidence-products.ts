@@ -17,6 +17,7 @@ export type EvidenceProductScope = 'file' | 'project';
 export type EvidenceProductDependency =
   | 'content-hash'
   | 'direct-deps-digest'
+  | 'transitive-deps-digest'
   | 'project-fingerprint'
   | 'import-resolution-fingerprint'
   | 'git-head'
@@ -146,10 +147,22 @@ export const EVIDENCE_PRODUCT_MANIFEST: readonly EvidenceProductManifestEntry[] 
     owner: 'src/analysis/git-history.ts',
   }),
   fileManifest('typescript-reference-fragments', {
-    dependsOn: ['content-hash', 'direct-deps-digest', 'config', 'tool-version'],
+    dependsOn: ['content-hash', 'transitive-deps-digest', 'config', 'tool-version'],
     keyParts: ['kind', 'relativePath', 'semanticIdentity', 'payloadVersion'],
     stalenessTest: 'tests/semantic/typescript/typescript-reference-fragments.test.ts',
     owner: 'src/semantic/typescript/reference-fragment-shadow.ts',
+  }),
+  fileManifest('typescript-import-usage', {
+    dependsOn: ['content-hash', 'transitive-deps-digest', 'config', 'tool-version'],
+    keyParts: ['kind', 'relativePath', 'semanticIdentity', 'payloadVersion'],
+    stalenessTest: 'tests/semantic/typescript/typescript-semantic-provider.test.ts',
+    owner: 'src/semantic/shared-primitives.ts',
+  }),
+  fileManifest('typescript-signatures', {
+    dependsOn: ['content-hash', 'transitive-deps-digest', 'config', 'tool-version'],
+    keyParts: ['kind', 'relativePath', 'semanticIdentity', 'payloadVersion'],
+    stalenessTest: 'tests/semantic/typescript/typescript-semantic-provider.test.ts',
+    owner: 'src/semantic/shared-primitives.ts',
   }),
   projectManifest('file-dependency-graph', {
     dependsOn: ['project-fingerprint', 'indexed-language-set', 'import-resolution-fingerprint', 'tool-version'],

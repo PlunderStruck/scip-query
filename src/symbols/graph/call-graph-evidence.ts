@@ -24,6 +24,7 @@ import type { IndexedDefinition, SymbolLocation, SymbolMatch } from '../../domai
 import type { SemanticCallee } from '../../semantic/types.js';
 import { semanticProviderLanguageForPath } from '../../semantic/provider-cache.js';
 import { rustSemanticEngineIdentity } from '../../semantic/rust/engine-identity.js';
+import { typeScriptSemanticIdentityForFile } from '../../semantic/typescript/semantic-identity-context.js';
 import {
   prefetchedSemanticCalleesForDefinitions,
   semanticCalleeMap,
@@ -288,11 +289,10 @@ export function buildCalleeMap(
  * Persistent-cache wrapper around `semanticCalleeMap`. A full-hit batch is
  * served without touching the provider at all — provider construction (an
  * eager ts-morph project load) is the dominant cost this avoids on warm runs.
- * Rows are keyed by the file's content hash plus a digest of its direct deps'
- * content hashes, so import/barrel changes invalidate; transitive-only
- * resolution drift is the same staleness class the SCIP index itself accepts
- * between reindexes. Results are only written when the provider is available,
- * so "provider missing" is never frozen into the cache as an empty result.
+ * TypeScript rows are keyed by the same transitive semantic identity as the
+ * other compiler-derived fragments. Rust retains its engine-qualified direct
+ * dependency key. Results are only written when the provider is available, so
+ * "provider missing" is never frozen into the cache as an empty result.
  */
 function cachedSemanticCalleeMap(
   db: ScipDatabase,
@@ -349,6 +349,10 @@ function cachedSemanticCalleeMap(
         }
         const contentHash = fileContentHash(db, relativePath, source);
         const depsDigest = semanticCalleeDepsDigest(db, relativePath);
+        if (!depsDigest) {
+          unkeyed.push(...fileDefinitions);
+          continue;
+        }
         const cachedBySymbol = readCachedSemanticCalleesForFile(db, relativePath, contentHash, depsDigest);
         for (const def of fileDefinitions) {
           const cached = cachedBySymbol.get(def.symbol) ?? null;
@@ -447,12 +451,13 @@ function semanticCalleeCacheEntriesForPrefetchedRows(
     }
     if (!keyByPath.has(definition.relativePath)) {
       const source = getSourceText(db, definition.relativePath);
+      const depsDigest = source ? semanticCalleeDepsDigest(db, definition.relativePath) : null;
       keyByPath.set(
         definition.relativePath,
-        source
+        source && depsDigest
           ? {
               contentHash: fileContentHash(db, definition.relativePath, source),
-              depsDigest: semanticCalleeDepsDigest(db, definition.relativePath),
+              depsDigest,
             }
           : null,
       );
@@ -495,9 +500,14 @@ function semanticDefinitionsGroupedByFile<T extends Pick<IndexedDefinition | Sym
   return result;
 }
 
-function semanticCalleeDepsDigest(db: ScipDatabase, relativePath: string): string {
-  const depsDigest = depsDigestFor(db, relativePath);
+const TYPESCRIPT_CALLEE_SCHEMA = 'typescript-callees-v1';
+
+function semanticCalleeDepsDigest(db: ScipDatabase, relativePath: string): string | null {
   const language = semanticProviderLanguageForPath(relativePath);
+  if (language === 'typescript') {
+    return typeScriptSemanticIdentityForFile(db, relativePath, TYPESCRIPT_CALLEE_SCHEMA)?.key ?? null;
+  }
+  const depsDigest = depsDigestFor(db, relativePath);
   if (language === 'rust') {
     return sha256Hex(
       JSON.stringify({

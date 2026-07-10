@@ -1428,6 +1428,26 @@ Executable plan:
 `docs/plans/2026-07-09-persistent-typescript-semantics.md`. Machine history:
 `docs/benchmarks/runs/2026-07-09-typescript-semantic-session.jsonl`.
 
+### Phase 3 authoritative semantic fragments
+
+Step 3.5 moved eligible TypeScript reference reads from the whole-project
+definition cache to origin-file fragments. A fully warm batch returns without
+constructing a semantic provider. A partially warm batch computes only missing
+files and combines them with unchanged fragments; any missing identity,
+malformed payload, unavailable provider, or incomplete response returns to the
+legacy route. Import usage and file-owned signature maps use the same transitive
+semantic identity. TypeScript callees now use that identity instead of the old
+direct-dependency digest.
+
+The SQLite/provider fixture closed the process-persistence contract: a fresh
+database object returned identical references, imports, signatures, and callees
+without changing any evidence row ID. After a real ordinary edit to the
+consumer source and a new published fingerprint, the API fragment remained a
+hit and only the consumer fragment was replaced (one hit, one miss, one
+computed file). This two-file fixture proves the selective mechanism, not the
+roadmap's >=95% corpus threshold; the scip-query/OpenCode calibration in step
+3.6 owns that acceptance result.
+
 ## Run History
 
 Machine-readable run history:

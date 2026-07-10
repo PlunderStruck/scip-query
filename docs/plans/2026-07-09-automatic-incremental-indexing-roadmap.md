@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Phases 1–2 complete; Phase 3 steps 3.1–3.4 complete and step 3.5 next
+Status: Phases 1–2 complete; Phase 3 steps 3.1–3.5 complete and step 3.6 next
 
 ## Goal
 
@@ -446,8 +446,8 @@ Step 3.2 now derives reference fragments owned by the file containing each
 reference, reassembles them by stable SCIP target symbol, and dual-writes them
 in one evidence-database transaction only after exact comparison with the
 legacy definition-centric oracle. An omitted-origin probe reported the exact
-missing facts. Legacy reads remain authoritative; import, signature, and callee
-fragment routing remains step 3.5.
+missing facts. That shadow-only step left import, signature, callee, and
+authoritative fragment routing to step 3.5.
 Step 3.3 now owns compatible Project bundles in a lazy semantic host. Ordinary
 source add/modify/delete refreshes those Projects and binds a new provider to
 the next database generation without constructing replacement Projects.
@@ -460,6 +460,14 @@ publication and fall back to the direct provider on every lifecycle/protocol
 failure. Status exposes session counters. A built diagnostic reused one Project
 across processes (180ms warm versus the 927ms baseline median) and across a real
 leaf reindex (230ms, one refresh, zero replacements) with the exact output hash.
+Step 3.5 now makes origin-file reference fragments authoritative for eligible
+TypeScript batches while retaining the old definition rows/provider as the
+rollback path. Partial hits compute and publish only missing origin files.
+Import usage, file-owned signatures, and callees now share the conservative
+transitive semantic identity. A fresh-process fixture reused every semantic row
+without rewriting it; an ordinary leaf edit retained the unrelated fragment
+and recomputed exactly the changed one. Repository-scale hit-rate, parity, and
+performance calibration remains step 3.6.
 
 **Exit gate:** Phase 3 performance, hit-rate, and parity thresholds pass on
 separate CLI processes and after service restart.

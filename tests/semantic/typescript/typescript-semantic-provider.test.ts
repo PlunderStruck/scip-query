@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import Database from 'better-sqlite3';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
@@ -18,6 +18,8 @@ import {
   compareReferenceFragmentMaps,
 } from '../../../src/semantic/typescript/reference-fragments.js';
 import { fingerprintProjectFiles } from '../../../src/reindex/project-files.js';
+import { materializeSemanticCalleeCache } from '../../../src/symbols/graph/call-graph-evidence.js';
+import { EVIDENCE_DB_FILENAME } from '../../../src/storage/evidence-cache.js';
 import { typeScriptSemanticIdentityForFile } from '../../../src/semantic/typescript/semantic-identity-context.js';
 import {
   readTypeScriptReferenceFragment,
@@ -425,6 +427,18 @@ describe('TypeScript semantic provider', () => {
       );
 
       const definitions = getAllDefinitions(db);
+      const referenceMaterialization = semantic.materializeReferences(definitions);
+      expect(referenceMaterialization).toEqual(
+        expect.objectContaining({
+          definitions: definitions.length,
+          fragmentDefinitions: definitions.length,
+          fragmentCacheHits: 0,
+          fragmentCacheMisses: 2,
+          fragmentComputedFiles: 2,
+          misses: 0,
+          unkeyed: 0,
+        }),
+      );
       const callerMap = semanticCallerMap(db, definitions);
       const byName = new Map(definitions.map((definition) => [definition.leaf, definition]));
       expect(semantic.callerMap(definitions)).toEqual(callerMap);
@@ -450,6 +464,94 @@ describe('TypeScript semantic provider', () => {
 
       expect(semanticSignature(db, byName.get('usedHelper')!)).toBe('()=>string');
       expect(semantic.signature(byName.get('usedHelper')!)).toBe('()=>string');
+      const callees = materializeSemanticCalleeCache(db, definitions);
+
+      const evidencePath = join(db.config.projectRoot, EVIDENCE_DB_FILENAME);
+      const cacheRows = (): Array<{ cache_key: string; rowid: number }> => {
+        const evidence = new Database(evidencePath, { readonly: true });
+        try {
+          return evidence
+            .prepare(
+              `SELECT 'file:' || kind || ':' || relative_path AS cache_key, rowid
+               FROM file_evidence
+               WHERE kind IN ('typescript-reference-fragments', 'typescript-import-usage', 'typescript-signatures')
+               UNION ALL
+               SELECT 'callee:' || relative_path || ':' || symbol AS cache_key, rowid
+               FROM semantic_callees
+               ORDER BY cache_key`,
+            )
+            .all() as Array<{ cache_key: string; rowid: number }>;
+        } finally {
+          evidence.close();
+        }
+      };
+      const beforeFreshProcess = cacheRows();
+      expect(beforeFreshProcess.length).toBeGreaterThanOrEqual(6);
+
+      const freshDb = new ScipDatabase({
+        dbPath: db.config.dbPath,
+        indexPath: db.config.indexPath,
+        projectRoot: db.config.projectRoot,
+      });
+      try {
+        const freshDefinitions = getAllDefinitions(freshDb);
+        const freshByName = new Map(freshDefinitions.map((definition) => [definition.leaf, definition]));
+        expect(semanticImportUsage(freshDb, 'src/consumer.ts')).toEqual(imports);
+        expect(semanticSignature(freshDb, freshByName.get('usedHelper')!)).toBe('()=>string');
+        expect(semanticCallerMap(freshDb, freshDefinitions)).toEqual(callerMap);
+        expect(materializeSemanticCalleeCache(freshDb, freshDefinitions)).toEqual(callees);
+      } finally {
+        freshDb.close();
+      }
+      expect(cacheRows()).toEqual(beforeFreshProcess);
+
+      const consumerPath = join(db.config.projectRoot, 'src/consumer.ts');
+      writeFileSync(consumerPath, `${readFileSync(consumerPath, 'utf8')}// ordinary leaf edit\n`);
+      writeFileSync(
+        join(db.config.projectRoot, 'meta.json'),
+        JSON.stringify({
+          version: 3,
+          status: 'complete',
+          fingerprint: {
+            version: 2,
+            languages: ['typescript'],
+            pnpmWorkspaces: false,
+            typescriptProjectMode: 'single',
+            typescriptProjects: [],
+            files: fingerprintProjectFiles(db.config.projectRoot),
+          },
+          indexedLanguages: ['typescript'],
+        }),
+      );
+      const editedDb = new ScipDatabase({
+        dbPath: db.config.dbPath,
+        indexPath: db.config.indexPath,
+        projectRoot: db.config.projectRoot,
+      });
+      try {
+        const editedMaterialization = semanticEvidenceProduct(editedDb).materializeReferences(
+          getAllDefinitions(editedDb),
+        );
+        expect(editedMaterialization).toEqual(
+          expect.objectContaining({
+            fragmentCacheHits: 1,
+            fragmentCacheMisses: 1,
+            fragmentComputedFiles: 1,
+          }),
+        );
+      } finally {
+        editedDb.close();
+      }
+      const afterLeafEdit = cacheRows();
+      const rowId = (rows: Array<{ cache_key: string; rowid: number }>, key: string): number | undefined =>
+        rows.find((row) => row.cache_key === key)?.rowid;
+      expect(rowId(afterLeafEdit, 'file:typescript-reference-fragments:src/api.ts')).toBe(
+        rowId(beforeFreshProcess, 'file:typescript-reference-fragments:src/api.ts'),
+      );
+      expect(rowId(afterLeafEdit, 'file:typescript-reference-fragments:src/consumer.ts')).not.toBe(
+        rowId(beforeFreshProcess, 'file:typescript-reference-fragments:src/consumer.ts'),
+      );
+
       expect(dead(db, { minLoc: 1 }).symbols.map((symbol) => symbol.shortName)).not.toContain('api:usedHelper()');
       expect(dead(db, { minLoc: 1 }).symbols.map((symbol) => symbol.shortName)).not.toContain('api:semanticOnly()');
       expect(dead(db, { minLoc: 1 }).symbols.map((symbol) => symbol.shortName)).not.toContain('api:defaultHelper()');

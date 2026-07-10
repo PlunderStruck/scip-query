@@ -7,7 +7,11 @@ import {
   writeCachedSemanticReferencesBatch,
   type SemanticReferenceCacheEntry,
 } from '../storage/evidence-cache.js';
-import { createProjectEvidenceProduct, evidenceProductInvalidation } from '../storage/evidence-products.js';
+import {
+  createFileEvidenceProduct,
+  createProjectEvidenceProduct,
+  evidenceProductInvalidation,
+} from '../storage/evidence-products.js';
 import type {
   SemanticAvailability,
   SemanticCallee,
@@ -25,7 +29,11 @@ import {
   rustScipOccurrenceReferencesForDefinition,
 } from './rust/scip-occurrence-references.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
-import { recordTypeScriptReferenceFragmentShadow } from './typescript/reference-fragment-shadow.js';
+import {
+  materializeTypeScriptReferenceFragments,
+  recordTypeScriptReferenceFragmentShadow,
+} from './typescript/reference-fragment-shadow.js';
+import { typeScriptSemanticIdentityForFile } from './typescript/semantic-identity-context.js';
 
 export type SemanticEvidenceSlot =
   | 'semantic-references'
@@ -51,6 +59,10 @@ export interface SemanticReferenceMaterializationResult {
   computed: number;
   incomplete: number;
   cacheWrites: number;
+  fragmentDefinitions: number;
+  fragmentCacheHits: number;
+  fragmentCacheMisses: number;
+  fragmentComputedFiles: number;
 }
 
 export interface SemanticReferenceMaterializationOptions {
@@ -84,6 +96,9 @@ interface CachedSemanticSignature {
   signature: string | null;
 }
 
+const TYPESCRIPT_IMPORT_USAGE_SCHEMA = 'typescript-import-usage-v1';
+const TYPESCRIPT_SIGNATURE_SCHEMA = 'typescript-signatures-v1';
+
 const PREFETCHED_SEMANTIC_CALLEES = createPerDbValue<Map<number, SemanticCallee[]>>('semantic-prefetched-callees', {
   clearGroups: ['whole-project', 'source-file', 'semantic-provider'],
 });
@@ -100,6 +115,20 @@ const RUST_SEMANTIC_SIGNATURE_CACHE = createProjectEvidenceProduct<CachedSemanti
   invalidation: evidenceProductInvalidation('semantic-signatures'),
   serialize: (value) => JSON.stringify(value),
   deserialize: parseCachedSignature,
+});
+
+const TYPESCRIPT_IMPORT_USAGE_CACHE = createFileEvidenceProduct<SemanticImportUsage[]>({
+  kind: 'typescript-import-usage',
+  invalidation: evidenceProductInvalidation('typescript-import-usage'),
+  serialize: (value) => JSON.stringify(value),
+  deserialize: parseCachedImportUsage,
+});
+
+const TYPESCRIPT_SIGNATURE_CACHE = createFileEvidenceProduct<Record<string, string | null>>({
+  kind: 'typescript-signatures',
+  invalidation: evidenceProductInvalidation('typescript-signatures'),
+  serialize: (value) => JSON.stringify(value),
+  deserialize: parseCachedSignatureMap,
 });
 
 export function semanticEvidenceProduct(db: ScipDatabase): SemanticEvidenceProduct {
@@ -150,6 +179,47 @@ export function semanticImportUsage(db: ScipDatabase, file: string): SemanticImp
 }
 
 function buildSemanticImportUsage(db: ScipDatabase, file: string): SemanticImportUsage[] {
+  if (semanticProviderLanguageForPath(file) === 'typescript') {
+    let state = 'fallback';
+    let eligible = 0;
+    let cacheHits = 0;
+    let cacheMisses = 0;
+    let fallbacks = 0;
+    return profileSpan(
+      'typescript.import-usage.materialize',
+      () => {
+        const identity = typeScriptSemanticIdentityForFile(db, file, TYPESCRIPT_IMPORT_USAGE_SCHEMA);
+        if (identity?.key) {
+          eligible = 1;
+          const cached = TYPESCRIPT_IMPORT_USAGE_CACHE.read(db, file, identity.key);
+          if (cached) {
+            state = 'hit';
+            cacheHits = 1;
+            return cached;
+          }
+          cacheMisses = 1;
+          const provider = availableSemanticProvider(db, file);
+          if (!provider) {
+            state = 'unavailable';
+            return [];
+          }
+          const usage = provider.importUsage(file);
+          TYPESCRIPT_IMPORT_USAGE_CACHE.write(db, file, identity.key, usage);
+          state = 'computed';
+          return usage;
+        }
+        fallbacks = 1;
+        const provider = availableSemanticProvider(db, file);
+        if (!provider) {
+          state = 'unavailable';
+          return [];
+        }
+        state = 'direct-fallback';
+        return provider.importUsage(file);
+      },
+      () => ({ state, eligible, cacheHits, cacheMisses, fallbacks }),
+    );
+  }
   const cacheFingerprint = semanticProjectSlotCacheFingerprint(db, 'semantic-import-usage', file);
   if (cacheFingerprint) {
     const cached = RUST_SEMANTIC_IMPORT_USAGE_CACHE.read(db, file, cacheFingerprint);
@@ -242,8 +312,32 @@ function materializeSemanticReferenceBatch(
   let cacheReadFiles = 0;
   let fullyInMemoryFiles = 0;
   let incompleteInMemoryHits = 0;
+  let fragmentDefinitions = 0;
+  let fragmentCacheHits = 0;
+  let fragmentCacheMisses = 0;
+  let fragmentComputedFiles = 0;
   let computeInput: IndexedDefinition[] = [];
   let computed = new Map<number, SemanticReference[]>();
+
+  const fragmentCandidates = definitions.filter(
+    (definition) =>
+      semanticProviderLanguageForPath(definition.relativePath) === 'typescript' &&
+      !materializedReferences.has(definition.symbolId) &&
+      !incompleteReferences.has(definition.symbolId),
+  );
+  const fragmentMaterialization = materializeTypeScriptReferenceFragments(db, fragmentCandidates);
+  if (fragmentMaterialization) {
+    fragmentDefinitions = fragmentCandidates.length;
+    fragmentCacheHits = fragmentMaterialization.cacheHits;
+    fragmentCacheMisses = fragmentMaterialization.cacheMisses;
+    fragmentComputedFiles = fragmentMaterialization.computedFiles;
+    for (const definition of fragmentCandidates) {
+      materializedReferences.set(
+        definition.symbolId,
+        fragmentMaterialization.references.get(definition.symbolId) ?? [],
+      );
+    }
+  }
 
   profileSpan(
     'semantic.references.cache-scan',
@@ -365,6 +459,10 @@ function materializeSemanticReferenceBatch(
     computed: computedRows,
     incomplete: incompleteReferences.size,
     cacheWrites: cacheWrites.length,
+    fragmentDefinitions,
+    fragmentCacheHits,
+    fragmentCacheMisses,
+    fragmentComputedFiles,
   };
 }
 
@@ -665,6 +763,50 @@ export function semanticSignature(db: ScipDatabase, definition: IndexedDefinitio
 }
 
 function buildSemanticSignature(db: ScipDatabase, definition: IndexedDefinition): string | null {
+  if (semanticProviderLanguageForPath(definition.relativePath) === 'typescript') {
+    let state = 'fallback';
+    let eligible = 0;
+    let cacheHits = 0;
+    let cacheMisses = 0;
+    let fallbacks = 0;
+    return profileSpan(
+      'typescript.signature.materialize',
+      () => {
+        const identity = typeScriptSemanticIdentityForFile(db, definition.relativePath, TYPESCRIPT_SIGNATURE_SCHEMA);
+        if (identity?.key) {
+          eligible = 1;
+          const cached = TYPESCRIPT_SIGNATURE_CACHE.read(db, definition.relativePath, identity.key) ?? {};
+          if (Object.prototype.hasOwnProperty.call(cached, definition.symbol)) {
+            state = 'hit';
+            cacheHits = 1;
+            return cached[definition.symbol] ?? null;
+          }
+          cacheMisses = 1;
+          const provider = availableSemanticProvider(db, definition.relativePath);
+          if (!provider) {
+            state = 'unavailable';
+            return null;
+          }
+          const signature = provider.signatureFor(definition);
+          TYPESCRIPT_SIGNATURE_CACHE.write(db, definition.relativePath, identity.key, {
+            ...cached,
+            [definition.symbol]: signature,
+          });
+          state = 'computed';
+          return signature;
+        }
+        fallbacks = 1;
+        const provider = availableSemanticProvider(db, definition.relativePath);
+        if (!provider) {
+          state = 'unavailable';
+          return null;
+        }
+        state = 'direct-fallback';
+        return provider.signatureFor(definition);
+      },
+      () => ({ state, eligible, cacheHits, cacheMisses, fallbacks }),
+    );
+  }
   const cacheFingerprint = semanticProjectSlotCacheFingerprint(db, 'semantic-signatures', definition.relativePath);
   const cacheKey = semanticSignatureCacheKey(definition);
   if (cacheFingerprint) {
@@ -717,6 +859,19 @@ function parseCachedSignature(payload: string): CachedSemanticSignature | null {
     const signature = (parsed as { signature?: unknown }).signature;
     if (signature !== null && typeof signature !== 'string') return null;
     return { signature };
+  } catch {
+    return null;
+  }
+}
+
+function parseCachedSignatureMap(payload: string): Record<string, string | null> | null {
+  try {
+    const parsed = JSON.parse(payload) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    for (const value of Object.values(parsed)) {
+      if (value !== null && typeof value !== 'string') return null;
+    }
+    return parsed as Record<string, string | null>;
   } catch {
     return null;
   }
