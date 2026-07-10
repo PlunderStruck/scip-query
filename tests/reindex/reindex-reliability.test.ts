@@ -281,6 +281,15 @@ describe('reindex reliability', () => {
 
     expect(attempts.get('typescript')).toBe(1);
     expect(readFileSync(outputDb, 'utf8')).toBe('incrementally-patched-db');
+    expect(JSON.parse(readFileSync(join(cacheDir, '.scipquery-generations/state.json'), 'utf8')).publication).toEqual(
+      expect.objectContaining({
+        mode: 'incremental',
+        validation: 'passed',
+        affectedDocumentCount: 1,
+        changedDocumentCount: 1,
+        patchDurationMs: 3,
+      }),
+    );
     expect(statuses.join('\n')).toContain('Converting 1 affected TypeScript document(s) to SQLite');
     expect(statuses.join('\n')).toContain('Patched 1 SQLite document(s)');
   });
@@ -309,7 +318,15 @@ describe('reindex reliability', () => {
 
     expect(attempts.get('typescript')).toBe(1);
     expect(readFileSync(outputDb, 'utf8')).toBe('new-db');
-    expect(statuses.join('\n')).toContain('Incremental SQLite publication unavailable: forced patch rejection');
+    expect(JSON.parse(readFileSync(join(cacheDir, '.scipquery-generations/state.json'), 'utf8')).publication).toEqual(
+      expect.objectContaining({
+        mode: 'full',
+        fallbackReason: 'candidate SQLite generation schema changed for table documents',
+      }),
+    );
+    expect(statuses.join('\n')).toContain(
+      'Incremental SQLite publication unavailable: candidate SQLite generation schema changed for table documents',
+    );
     expect(statuses.join('\n')).toContain('Falling back to complete conversion');
   });
 
@@ -348,6 +365,26 @@ describe('reindex reliability', () => {
     expect(second.shards?.length).toBe(2);
     expect(second.shards?.every((shard) => shard.reused)).toBe(true);
     expect(second.shards?.map((shard) => shard.language).sort()).toEqual(['python', 'typescript']);
+  });
+
+  it('repairs a malformed generation from cached language shards without rerunning indexers', async () => {
+    const projectRoot = createProject('scip-query-reindex-generation-repair-');
+    const cacheDir = join(projectRoot, '.scipquery-cache');
+    mkdirSync(cacheDir);
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+    const { reindex, attempts } = await loadReindexFixture({ languages: ['typescript', 'python'] });
+
+    await reindex({ projectRoot, outputScip, outputDb, onStatus: () => undefined });
+    const attemptsAfterFirst = new Map(attempts);
+    writeFileSync(join(cacheDir, '.scipquery-generations/state.json'), '{');
+    const repaired = await reindex({ projectRoot, outputScip, outputDb, onStatus: () => undefined });
+
+    expect(repaired.reused).toBe(false);
+    expect(attempts).toEqual(attemptsAfterFirst);
+    expect(JSON.parse(readFileSync(join(cacheDir, '.scipquery-generations/state.json'), 'utf8')).publication).toEqual(
+      expect.objectContaining({ mode: 'full', validation: 'passed' }),
+    );
   });
 
   it('refreshes metadata only when non-language files change and every language shard is reusable', async () => {
@@ -1051,6 +1088,7 @@ async function loadReindexFixture(opts: {
             runtimeMs: 1,
             graphMs: 1,
             requestMs: 1,
+            serviceMs: 1,
             assemblyMs: 1,
             fragmentStoreMs: 1,
             writeMs: 1,
@@ -1060,7 +1098,9 @@ async function loadReindexFixture(opts: {
     }));
     vi.doMock('../../src/reindex/incremental-sqlite-publication.js', () => ({
       patchIncrementalSqliteGeneration: (input: { candidateDbPath: string }) => {
-        if (opts.failIncrementalPatch) throw new Error('forced patch rejection');
+        if (opts.failIncrementalPatch) {
+          throw new Error('candidate SQLite generation schema changed for table documents');
+        }
         writeFileSync(input.candidateDbPath, 'incrementally-patched-db');
         return {
           candidateDbPath: input.candidateDbPath,

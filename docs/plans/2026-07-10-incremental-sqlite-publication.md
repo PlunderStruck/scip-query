@@ -1,7 +1,7 @@
 # Incremental SQLite Publication Plan
 
 Date: 2026-07-10
-Status: In progress; Phases 5.1–5.2 complete, Phase 5.3 operational compatibility next
+Status: In progress; Phases 5.1–5.3 complete, Phase 5.4 corpus/release calibration next
 Parent: [`2026-07-09-automatic-incremental-indexing-roadmap.md`](./2026-07-09-automatic-incremental-indexing-roadmap.md)
 
 ## Outcome
@@ -174,6 +174,24 @@ pass. Remaining work is package reinstall/previous-package compatibility,
 schema-drift repair proof through the integrated route, and surfacing the
 generation/publication record in `status`.
 
+Result: complete. `status --json` and human status now report whether the
+generation is current/drifted/legacy/invalid; current and previous identities;
+recovery path; incremental/full mode; validation; affected/changed counts;
+producer, converter, materialization, and patch durations; and any fallback
+reason. A present malformed or drifted record makes freshness stale and
+requests repair. Both unchanged reuse shortcuts now yield to that repair,
+which rebuilds a full database from cached language shards without rerunning
+indexers. Legacy databases with no generation record remain readable and do
+not become stale merely because they predate the feature.
+
+The live repaired generation reported current, retained recovery, then a real
+incremental restore reported 1 affected / 1 changed, 20ms producer, 122ms
+converter, 915ms materialization, and 98ms patch in a 1,709ms complete refresh.
+An integrated schema-mismatch control selected complete conversion and stored
+the reason. A packed 0.15.0 install (333 files, 815,945 bytes) and a CLI built
+from pre-generation commit `d4b1d8c7` both read the current stable database as
+321 documents, 21,525 symbols, 20,129 definitions, and 50,550 references.
+
 ### 5.4 — Corpus calibration and Phase 5 closure
 
 - Alternate five full controls with five incremental leaf edits on scip-query
@@ -204,5 +222,5 @@ Phase 6 action.
 
 ```sh
 SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context \
-  src/reindex/sqlite-generation-store.ts --json
+  src/reindex/index.ts --json
 ```

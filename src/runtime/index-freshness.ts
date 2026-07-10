@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import type { LastRefreshMetadata, ProjectConfig, SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
 import { detectLanguages } from '../reindex/detect.js';
 import { fingerprintProjectFiles, normalizeTypeScriptProjects } from '../reindex/project-files.js';
+import { inspectSqliteGeneration } from '../reindex/sqlite-generation-store.js';
 
 export type IndexFreshnessState = 'fresh' | 'stale' | 'missing' | 'unknown';
 
@@ -69,16 +70,21 @@ export function getIndexFreshness(
       metadata.status === 'complete' &&
       JSON.stringify(metadata.fingerprint) === JSON.stringify(current) &&
       JSON.stringify(metadataLanguages) === JSON.stringify(current.languages);
+    const generation = inspectSqliteGeneration(paths.dbPath, paths.metaPath);
+    const generationDrift = generation.state === 'invalid' || generation.state === 'drifted';
+    const accepted = fresh && !generationDrift;
     return {
-      state: fresh ? 'fresh' : 'stale',
+      state: accepted ? 'fresh' : 'stale',
       checkedAt,
       metaPath: paths.metaPath,
       updatedAt: metadata.updatedAt,
       lastRefresh: metadata.lastRefresh,
-      reason: fresh
-        ? 'Index metadata fingerprint matches current source files.'
-        : 'Index metadata fingerprint differs from current source files.',
-      remedy: fresh ? undefined : 'Run: scip-query reindex',
+      reason: generationDrift
+        ? `SQLite generation requires repair: ${generation.reason}`
+        : fresh
+          ? 'Index metadata fingerprint matches current source files.'
+          : 'Index metadata fingerprint differs from current source files.',
+      remedy: accepted ? undefined : 'Run: scip-query reindex',
     };
   } catch (error) {
     return {

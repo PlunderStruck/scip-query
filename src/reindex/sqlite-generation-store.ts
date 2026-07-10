@@ -29,6 +29,7 @@ export interface PromoteReindexArtifactsInput {
   outputScip: string;
   outputDb: string;
   metaPath: string;
+  publication?: SqlitePublicationRecord;
   onStage?: (stage: SqliteGenerationHandoffStage) => void;
   now?: () => Date;
 }
@@ -43,8 +44,33 @@ export interface SqliteGenerationState {
   version: typeof SQLITE_GENERATION_STORE_VERSION;
   currentGeneration: string;
   previousGeneration?: SqliteGenerationRecovery;
+  publication?: SqlitePublicationRecord;
   publishedAt: string;
 }
+
+export interface SqlitePublicationRecord {
+  mode: 'incremental' | 'full';
+  validation: 'passed';
+  converterDurationMs: number;
+  affectedDocumentCount?: number;
+  changedDocumentCount?: number;
+  producerDurationMs?: number;
+  materializationDurationMs?: number;
+  patchDurationMs?: number;
+  fallbackReason?: string;
+}
+
+export type SqliteGenerationInspection =
+  | { state: 'legacy'; statePath: string }
+  | { state: 'invalid'; statePath: string; reason: string }
+  | {
+      state: 'current' | 'drifted';
+      statePath: string;
+      currentMatches: boolean;
+      recoveryExists: boolean;
+      generation: SqliteGenerationState;
+      reason?: string;
+    };
 
 export interface PromoteReindexArtifactsResult {
   currentGeneration: string;
@@ -72,6 +98,7 @@ export function promoteReindexArtifacts(input: PromoteReindexArtifactsInput): Pr
     version: SQLITE_GENERATION_STORE_VERSION,
     currentGeneration,
     ...(previousGeneration ? { previousGeneration } : {}),
+    ...(input.publication ? { publication: input.publication } : {}),
     publishedAt: (input.now ?? (() => new Date()))().toISOString(),
   };
   writeJsonAtomic(join(generationRoot, 'state.json'), state, { spacing: 2, trailingNewline: true });
@@ -89,13 +116,53 @@ export function readSqliteGenerationState(outputDb: string): SqliteGenerationSta
       !parsed.currentGeneration ||
       typeof parsed.publishedAt !== 'string' ||
       !Number.isFinite(Date.parse(parsed.publishedAt)) ||
-      !validRecovery(parsed.previousGeneration)
+      !validRecovery(parsed.previousGeneration) ||
+      !validPublication(parsed.publication)
     ) {
       return null;
     }
     return parsed as SqliteGenerationState;
   } catch {
     return null;
+  }
+}
+
+export function inspectSqliteGeneration(
+  outputDb: string,
+  metaPath = join(dirname(outputDb), 'meta.json'),
+): SqliteGenerationInspection {
+  const statePath = join(sqliteGenerationRoot(outputDb), 'state.json');
+  if (!existsSync(statePath)) return { state: 'legacy', statePath };
+  const generation = readSqliteGenerationState(outputDb);
+  if (!generation) return { state: 'invalid', statePath, reason: 'generation state is malformed' };
+  try {
+    const expectedGeneration = sqliteGenerationIdentity(metaPath, outputDb);
+    const currentMatches = generation.currentGeneration === expectedGeneration;
+    const recoveryExists = generation.previousGeneration
+      ? existsSync(join(dirname(outputDb), generation.previousGeneration.databasePath))
+      : true;
+    if (!currentMatches || !recoveryExists) {
+      return {
+        state: 'drifted',
+        statePath,
+        currentMatches,
+        recoveryExists,
+        generation,
+        reason: !currentMatches
+          ? 'stable database or metadata no longer matches the published generation'
+          : 'retained recovery database is missing',
+      };
+    }
+    return { state: 'current', statePath, currentMatches, recoveryExists, generation };
+  } catch (error) {
+    return {
+      state: 'drifted',
+      statePath,
+      currentMatches: false,
+      recoveryExists: false,
+      generation,
+      reason: error instanceof Error ? error.message : String(error),
+    };
   }
 }
 
@@ -150,10 +217,39 @@ function pruneRecoveryGenerations(generationRoot: string, keepIdentity: string):
 
 function sqliteGenerationIdentity(metaPath: string, databasePath: string): string {
   const hash = createHash('sha256').update(`sqlite-generation-v${SQLITE_GENERATION_STORE_VERSION}\0`);
-  if (existsSync(metaPath)) hash.update(readFileSync(metaPath));
+  if (existsSync(metaPath)) hash.update(stableMetadataIdentity(readFileSync(metaPath, 'utf8')));
   const stat = statSync(databasePath);
   hash.update(`\0${stat.size}`);
   return hash.digest('hex');
+}
+
+function stableMetadataIdentity(raw: string): string {
+  try {
+    const metadata = JSON.parse(raw) as {
+      version?: unknown;
+      status?: unknown;
+      updatedAt?: unknown;
+      fingerprint?: unknown;
+      indexedLanguages?: unknown;
+    };
+    if (
+      (metadata.version === 2 || metadata.version === 3) &&
+      metadata.status === 'complete' &&
+      typeof metadata.updatedAt === 'string' &&
+      metadata.fingerprint !== undefined
+    ) {
+      return JSON.stringify({
+        version: metadata.version,
+        status: metadata.status,
+        updatedAt: metadata.updatedAt,
+        fingerprint: metadata.fingerprint,
+        indexedLanguages: metadata.indexedLanguages,
+      });
+    }
+  } catch {
+    // Legacy/non-JSON metadata keeps its exact byte identity.
+  }
+  return raw;
 }
 
 function replaceFile(source: string, target: string): void {
@@ -173,5 +269,26 @@ function validRecovery(value: unknown): boolean {
     Boolean(recovery.databasePath) &&
     (recovery.metadataPath === undefined ||
       (typeof recovery.metadataPath === 'string' && Boolean(recovery.metadataPath)))
+  );
+}
+
+function validPublication(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!value || typeof value !== 'object') return false;
+  const publication = value as Partial<SqlitePublicationRecord>;
+  const numericValues = [
+    publication.converterDurationMs,
+    publication.affectedDocumentCount,
+    publication.changedDocumentCount,
+    publication.producerDurationMs,
+    publication.materializationDurationMs,
+    publication.patchDurationMs,
+  ].filter((entry) => entry !== undefined);
+  return (
+    (publication.mode === 'incremental' || publication.mode === 'full') &&
+    publication.validation === 'passed' &&
+    publication.converterDurationMs !== undefined &&
+    numericValues.every((entry) => typeof entry === 'number' && Number.isFinite(entry) && entry >= 0) &&
+    (publication.fallbackReason === undefined || typeof publication.fallbackReason === 'string')
   );
 }

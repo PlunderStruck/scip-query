@@ -119,6 +119,39 @@ describe('index freshness', () => {
     }
   });
 
+  it('requires repair when a present SQLite generation record is malformed', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-freshness-generation-drift-'));
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(join(root, 'tsconfig.json'), '{}');
+      writeFileSync(join(root, 'src', 'a.ts'), 'export const a = 1;\n');
+      const cacheDir = join(root, '.scipquery-cache');
+      const dbPath = join(cacheDir, 'index.db');
+      const metaPath = join(cacheDir, 'meta.json');
+      mkdirSync(join(cacheDir, '.scipquery-generations'), { recursive: true });
+      writeFileSync(dbPath, 'database');
+      writeMeta(root, metaPath, ['typescript']);
+      writeFileSync(join(cacheDir, '.scipquery-generations', 'state.json'), '{');
+      const config: ProjectConfig = {
+        dbPath,
+        indexPath: join(cacheDir, 'index.scip'),
+        projectRoot: root,
+        languages: ['typescript'],
+      };
+
+      const freshness = getIndexFreshness(root, config, { dbPath, metaPath });
+      expect(freshness).toEqual(
+        expect.objectContaining({
+          state: 'stale',
+          reason: 'SQLite generation requires repair: generation state is malformed',
+          remedy: 'Run: scip-query reindex',
+        }),
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('ignores root metadata when projects store scip-query outputs in the project root', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-freshness-root-meta-'));
     try {

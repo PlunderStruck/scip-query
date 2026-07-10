@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Phases 1–4 and 5.1–5.2 complete; Phase 5.3 compatibility/status next
+Status: Phases 1–4 and 5.1–5.3 complete; Phase 5.4 corpus/release gates next
 
 ## Goal
 
@@ -583,6 +583,15 @@ client runtime load, five post-fix local daemon refreshes measured 1,383ms
 median / 1,413ms p95. Phase 5.3 owns package compatibility and operational
 status; Phase 5.4 still owns the large-corpus distribution and release gates.
 
+Phase 5.3 is complete. Generation identity ignores last-refresh-only metadata
+updates but detects stable DB/meta drift, missing recovery, and malformed
+state. Drift bypasses both unchanged reuse paths and republishes from cached
+language shards without rerunning indexers. Status exposes current/recovery
+identity and publication mode/counts/timings/fallback. A packed current reader
+and the pre-generation `d4b1d8c7` reader returned identical stats from the
+same stable database. Phase 5.4 now owns OpenCode calibration and the final
+package/reindex/diff-gate closure.
+
 ### Phase 6 — Rust defaulting, selective native kernels, and rollout
 
 **Purpose:** consolidate accepted warm-state work and use Rust only where it
@@ -705,10 +714,11 @@ Complete this at every phase close:
 6. Phase 5 atomic incremental generation storage.
 7. Phase 6 durable Rust defaulting, selective native kernels, and rollout.
 
-The immediate action is Phase 5.3's package compatibility and operational
-status. The real local publication path now passes exact normalized parity,
-recovery retention, concurrent-reader isolation, and the 2s p95 gate. Surface
-and exercise that generation record across installed-package boundaries next:
+The immediate action is Phase 5.4's large-corpus and release calibration. The
+local route, recovery/repair lifecycle, status record, and current/previous
+package readers now pass. Run the same complete publication distribution and
+oracle parity gate on OpenCode, then execute the final package and repository
+verification matrix:
 
 ```sh
 SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/reindex/sqlite-generation-store.ts --json

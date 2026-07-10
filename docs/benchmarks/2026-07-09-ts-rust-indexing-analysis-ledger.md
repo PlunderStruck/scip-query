@@ -1589,6 +1589,25 @@ both contain 321 fact units with zero normalized differences. Phase 5.3 now
 owns installed-package compatibility and status visibility; large-corpus
 calibration remains Phase 5.4.
 
+Phase 5.3 makes that generation observable and self-repairing. Status reports
+current/drifted/legacy/invalid state, current and recovery identities,
+publication mode, validation, affected/changed counts, phase timings, and
+fallback reason. Last-refresh-only metadata updates do not change identity.
+A malformed record, missing recovery file, or DB/meta mismatch makes freshness
+stale; both reuse shortcuts yield to a full database publication from cached
+language shards, so repair does not rerun indexers. Legacy indexes without a
+state file remain compatible.
+
+The live repaired generation returned to `current`; the next incremental
+restore exposed 1 affected / 1 changed document, 20ms producer, 122ms
+conversion, 915ms complete TypeScript materialization, and 98ms patch within a
+1,709ms refresh. A schema-mismatch control selected full conversion and
+persisted its reason. A packed 0.15.0 install contained 333 files in an
+815,945-byte tarball. That installed CLI and a CLI built from pre-generation
+commit `d4b1d8c7` both read the same stable DB as 321 documents, 21,525
+symbols, 20,129 definitions, and 50,550 references. Phase 5.3 is closed;
+OpenCode and final release gates remain Phase 5.4.
+
 ## Run History
 
 Machine-readable run history:

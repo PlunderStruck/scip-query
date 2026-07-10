@@ -43,7 +43,7 @@ import {
   readProjectManifestInputs,
 } from './project-shards.js';
 import { sanitizeScipFile } from './sanitize.js';
-import { promoteReindexArtifacts } from './sqlite-generation-store.js';
+import { inspectSqliteGeneration, promoteReindexArtifacts } from './sqlite-generation-store.js';
 import { discoverTypeScriptProjectRoots } from './typescript-projects.js';
 import {
   tryMaterializeTypeScriptIncrementalIndex,
@@ -189,9 +189,11 @@ type SqliteMaterializationResult =
       mode: 'incremental';
       changedDocumentPaths: string[];
       patchDurationMs: number;
+      converterDurationMs: number;
     }
   | {
       mode: 'full';
+      converterDurationMs: number;
       fallbackReason?: string;
     };
 
@@ -342,11 +344,14 @@ function reuseExistingIndexIfPossible(opts: {
   start: number;
   onStatus: (message: string) => void;
 }): ReindexResult | null {
+  const generation = inspectSqliteGeneration(opts.paths.outputDb, opts.paths.metaPath);
   if (
     opts.opts.skipIfUnchanged === false ||
     !existsSync(opts.paths.outputScip) ||
     !existsSync(opts.paths.outputDb) ||
-    !isUnchangedReindex(opts.paths.metaPath, opts.fingerprint)
+    !isUnchangedReindex(opts.paths.metaPath, opts.fingerprint) ||
+    generation.state === 'invalid' ||
+    generation.state === 'drifted'
   ) {
     return null;
   }
@@ -505,6 +510,8 @@ function canReusePublishedArtifactsForLanguageShards(opts: {
   if (opts.run.opts.skipIfUnchanged === false) return false;
   if (opts.skippedLanguages.length > 0) return false;
   if (!existsSync(opts.run.paths.outputScip) || !existsSync(opts.run.paths.outputDb)) return false;
+  const generation = inspectSqliteGeneration(opts.run.paths.outputDb, opts.run.paths.metaPath);
+  if (generation.state === 'invalid' || generation.state === 'drifted') return false;
 
   const reused = new Set(opts.reusedLanguages);
   const indexed = new Set(opts.indexedOutputs.map((output) => output.language));
@@ -1012,6 +1019,24 @@ function publishFreshReindexArtifacts(
     outputScip: opts.paths.outputScip,
     outputDb: opts.paths.outputDb,
     metaPath: opts.paths.metaPath,
+    publication:
+      sqliteMaterialization.mode === 'incremental'
+        ? {
+            mode: 'incremental',
+            validation: 'passed',
+            converterDurationMs: sqliteMaterialization.converterDurationMs,
+            affectedDocumentCount: incrementalTypeScript?.affectedFiles.length,
+            changedDocumentCount: sqliteMaterialization.changedDocumentPaths.length,
+            producerDurationMs: incrementalTypeScript?.timings.serviceMs,
+            materializationDurationMs: incrementalTypeScript?.durationMs,
+            patchDurationMs: sqliteMaterialization.patchDurationMs,
+          }
+        : {
+            mode: 'full',
+            validation: 'passed',
+            converterDurationMs: sqliteMaterialization.converterDurationMs,
+            ...(sqliteMaterialization.fallbackReason ? { fallbackReason: sqliteMaterialization.fallbackReason } : {}),
+          },
   });
   persistAffectedSetShadowRecord(opts.paths.outputDb, shadowRecord, opts.onStatus);
   return lastRefresh;
@@ -1534,6 +1559,7 @@ function materializeSqliteOutput(opts: {
         mode: 'incremental',
         changedDocumentPaths: patched.changedDocumentPaths,
         patchDurationMs: patched.durationMs,
+        converterDurationMs: performance.now() - convertStartedAt,
       };
     } catch (error) {
       fallbackReason = error instanceof Error ? error.message : String(error);
@@ -1544,6 +1570,7 @@ function materializeSqliteOutput(opts: {
       );
     }
   }
+  const convertStartedAt = performance.now();
   convertScipToSqlite(
     opts.run.tempPaths.tempOutputScip,
     opts.run.tempPaths.tempOutputDb,
@@ -1551,7 +1578,11 @@ function materializeSqliteOutput(opts: {
     opts.run.onStatus,
     opts.completeScipSanitized,
   );
-  return { mode: 'full', ...(fallbackReason ? { fallbackReason } : {}) };
+  return {
+    mode: 'full',
+    converterDurationMs: performance.now() - convertStartedAt,
+    ...(fallbackReason ? { fallbackReason } : {}),
+  };
 }
 
 function canPublishIncrementalSqlite(opts: {

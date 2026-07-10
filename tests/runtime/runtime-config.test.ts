@@ -525,7 +525,7 @@ describe('status config diagnostics', () => {
     try {
       handleStatus({ json: true });
       const payload = JSON.parse(log.mock.calls[0]![0] as string) as {
-        result: { affectedSetShadow: unknown; configDiagnostics: unknown[] };
+        result: { affectedSetShadow: unknown; sqliteGeneration: unknown; configDiagnostics: unknown[] };
       };
 
       expect(payload.result.affectedSetShadow).toMatchObject({
@@ -540,6 +540,9 @@ describe('status config diagnostics', () => {
           message: 'Declared coupling file does not exist: src/missing.ts',
         }),
       ]);
+      expect(payload.result.sqliteGeneration).toEqual(
+        expect.objectContaining({ state: 'legacy', statePath: join(projectRoot, '.scipquery-generations/state.json') }),
+      );
     } finally {
       log.mockRestore();
       if (previousProjectRoot === undefined) {
@@ -560,7 +563,7 @@ describe('status config diagnostics', () => {
     try {
       handleStatus({ json: true });
       const payload = JSON.parse(log.mock.calls[0]![0] as string) as {
-        result: { affectedSetShadow: unknown };
+        result: { affectedSetShadow: unknown; sqliteGeneration: unknown };
       };
       expect(payload.result.affectedSetShadow).toMatchObject({
         state: 'passing',
@@ -570,11 +573,13 @@ describe('status config diagnostics', () => {
         predictedFiles: ['src/a.ts'],
         actualFiles: ['src/a.ts'],
       });
+      expect(payload.result.sqliteGeneration).toEqual(expect.objectContaining({ state: 'legacy' }));
 
       log.mockClear();
       handleStatus({});
       const output = log.mock.calls.map((call) => String(call[0])).join('\n');
       expect(output).toContain('Shadow:   passing, 100.0% recall, 1 predicted / 1 changed, 25.0% of project');
+      expect(output).toContain('DB gen:   legacy (no generation record)');
       expect(output).toContain(`Latest:   ${join(projectRoot, 'affected-shadow-latest.json')}`);
     } finally {
       log.mockRestore();

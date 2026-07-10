@@ -1,9 +1,10 @@
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import { describe, expect, test } from 'vitest';
 import {
+  inspectSqliteGeneration,
   promoteReindexArtifacts,
   readSqliteGenerationState,
   sqliteGenerationRoot,
@@ -37,6 +38,15 @@ describe('SQLite generation handoff', () => {
 
     const result = promoteReindexArtifacts({
       ...fixture.paths,
+      publication: {
+        mode: 'incremental',
+        validation: 'passed',
+        converterDurationMs: 12,
+        affectedDocumentCount: 1,
+        changedDocumentCount: 1,
+        producerDurationMs: 7,
+        patchDurationMs: 4,
+      },
       now: () => new Date('2026-07-10T09:00:00.000Z'),
     });
     const newReader = new Database(fixture.paths.outputDb, { readonly: true });
@@ -54,8 +64,12 @@ describe('SQLite generation handoff', () => {
         version: 1,
         currentGeneration: result.currentGeneration,
         previousGeneration: result.previousGeneration,
+        publication: expect.objectContaining({ mode: 'incremental', patchDurationMs: 4 }),
         publishedAt: '2026-07-10T09:00:00.000Z',
       }),
+    );
+    expect(inspectSqliteGeneration(fixture.paths.outputDb, fixture.paths.metaPath)).toEqual(
+      expect.objectContaining({ state: 'current', currentMatches: true, recoveryExists: true }),
     );
   });
 
@@ -86,6 +100,46 @@ describe('SQLite generation handoff', () => {
     expect(result.previousGeneration?.metadataPath).toBeUndefined();
     expect(readValue(join(dirname(fixture.paths.outputDb), result.previousGeneration!.databasePath))).toBe('old');
     expect(readFileSync(fixture.paths.metaPath, 'utf8')).toBe('new-meta');
+  });
+
+  test('ignores last-refresh-only metadata changes but detects generation and recovery drift', () => {
+    const fixture = createFixture();
+    const metadata = {
+      version: 3,
+      status: 'complete',
+      updatedAt: '2026-07-10T09:00:00.000Z',
+      fingerprint: { version: 2, files: [] },
+      indexedLanguages: ['typescript'],
+    };
+    writeFileSync(fixture.paths.tempMetaPath, JSON.stringify(metadata));
+    const result = promoteReindexArtifacts({ ...fixture.paths });
+
+    writeFileSync(
+      fixture.paths.metaPath,
+      JSON.stringify({ ...metadata, lastRefresh: { result: 'reused', durationMs: 3 } }),
+    );
+    expect(inspectSqliteGeneration(fixture.paths.outputDb, fixture.paths.metaPath).state).toBe('current');
+
+    writeFileSync(fixture.paths.metaPath, JSON.stringify({ ...metadata, updatedAt: '2026-07-10T09:01:00.000Z' }));
+    expect(inspectSqliteGeneration(fixture.paths.outputDb, fixture.paths.metaPath)).toEqual(
+      expect.objectContaining({ state: 'drifted', currentMatches: false }),
+    );
+
+    writeFileSync(fixture.paths.metaPath, JSON.stringify(metadata));
+    rmSync(join(dirname(fixture.paths.outputDb), result.previousGeneration!.databasePath));
+    expect(inspectSqliteGeneration(fixture.paths.outputDb, fixture.paths.metaPath)).toEqual(
+      expect.objectContaining({ state: 'drifted', recoveryExists: false }),
+    );
+  });
+
+  test('classifies a malformed generation state without throwing', () => {
+    const fixture = createFixture();
+    promoteReindexArtifacts({ ...fixture.paths });
+    writeFileSync(join(sqliteGenerationRoot(fixture.paths.outputDb), 'state.json'), '{');
+
+    expect(inspectSqliteGeneration(fixture.paths.outputDb, fixture.paths.metaPath)).toEqual(
+      expect.objectContaining({ state: 'invalid', reason: 'generation state is malformed' }),
+    );
   });
 });
 

@@ -81,6 +81,7 @@ export interface MaterializedTypeScriptIncrementalIndex {
     runtimeMs: number;
     graphMs: number;
     requestMs: number;
+    serviceMs: number;
     assemblyMs: number;
     fragmentStoreMs: number;
     writeMs: number;
@@ -265,7 +266,15 @@ export function tryMaterializeTypeScriptIncrementalIndex(
       manifest: eligibility.manifest,
       plan: eligibility.plan,
       projectFileCount: projectFiles.length,
-      timings: { runtimeMs, graphMs, requestMs, assemblyMs, fragmentStoreMs, writeMs },
+      timings: {
+        runtimeMs,
+        graphMs,
+        requestMs,
+        serviceMs: response.durationMs,
+        assemblyMs,
+        fragmentStoreMs,
+        writeMs,
+      },
     };
     input.onStatus(
       `Incremental TypeScript index emitted ${result.affectedFiles.length} affected document(s) in ${(result.durationMs / 1000).toFixed(3)}s (${result.cold ? 'cold' : 'warm'} service; runtime ${runtimeMs.toFixed(0)}ms, graph ${graphMs.toFixed(0)}ms, request ${requestMs.toFixed(0)}ms, assembly ${assemblyMs.toFixed(0)}ms, fragments ${fragmentStoreMs.toFixed(0)}ms, write ${writeMs.toFixed(0)}ms).`,

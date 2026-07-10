@@ -16,6 +16,7 @@ import {
   readAffectedSetShadowStatus,
   type AffectedSetShadowStatus,
 } from '../../reindex/affected-shadow.js';
+import { inspectSqliteGeneration, type SqliteGenerationInspection } from '../../reindex/sqlite-generation-store.js';
 import {
   loadProjectConfig,
   resolveIndexStoragePaths,
@@ -1495,10 +1496,12 @@ export function handleStatus(rawOpts: unknown): void {
     watchEnabled,
   );
   const affectedSetShadow = readAffectedSetShadowStatus(report.dbPath);
+  const sqliteGeneration = inspectSqliteGeneration(report.dbPath, report.freshness.metaPath);
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('status', [], opts, {
       ...report,
       affectedSetShadow,
+      sqliteGeneration,
       watchService,
       stats: statusStats(report.exists),
     });
@@ -1507,6 +1510,7 @@ export function handleStatus(rawOpts: unknown): void {
   renderStatusReport(report, {
     affectedSetShadow,
     capabilities: booleanOptionValue(opts, 'capabilities'),
+    sqliteGeneration,
     watchService,
   });
 }
@@ -1535,6 +1539,7 @@ function renderStatusReport(
   opts: {
     affectedSetShadow: AffectedSetShadowStatus;
     capabilities: boolean;
+    sqliteGeneration: SqliteGenerationInspection;
     watchService: ReturnType<typeof watchServiceReport>;
   },
 ): void {
@@ -1555,6 +1560,7 @@ function renderStatusReport(
     console.log(`Refresh:  ${formatLastRefresh(report.freshness.lastRefresh)}`);
   }
   renderWatchServiceReport(opts.watchService);
+  renderSqliteGeneration(opts.sqliteGeneration);
   console.log(`Shadow:   ${formatAffectedSetShadowStatus(opts.affectedSetShadow)}`);
   console.log(`Latest:   ${opts.affectedSetShadow.latestPath}`);
 
@@ -1563,6 +1569,40 @@ function renderStatusReport(
     console.log('');
     renderCapabilityReport(report.capabilities);
   }
+}
+
+function renderSqliteGeneration(inspection: SqliteGenerationInspection): void {
+  if (inspection.state === 'legacy') {
+    console.log('DB gen:   legacy (no generation record)');
+    return;
+  }
+  if (inspection.state === 'invalid') {
+    console.log(`DB gen:   invalid (${inspection.reason})`);
+    return;
+  }
+  const publication = inspection.generation.publication;
+  const mode = publication?.mode ?? 'unknown';
+  const details = publication
+    ? [
+        publication.affectedDocumentCount === undefined ? null : `${publication.affectedDocumentCount} affected`,
+        publication.changedDocumentCount === undefined ? null : `${publication.changedDocumentCount} changed`,
+        publication.producerDurationMs === undefined ? null : `${publication.producerDurationMs.toFixed(0)}ms producer`,
+        `${publication.converterDurationMs.toFixed(0)}ms convert`,
+        publication.patchDurationMs === undefined ? null : `${publication.patchDurationMs.toFixed(0)}ms patch`,
+      ]
+        .filter((value): value is string => value !== null)
+        .join(', ')
+    : 'no publication metrics';
+  console.log(
+    `DB gen:   ${inspection.state} ${inspection.generation.currentGeneration.slice(0, 12)} (${mode}; ${details})`,
+  );
+  if (inspection.generation.previousGeneration) {
+    console.log(
+      `Recovery: ${inspection.generation.previousGeneration.generationIdentity.slice(0, 12)} at ${inspection.generation.previousGeneration.databasePath}`,
+    );
+  }
+  if (publication?.fallbackReason) console.log(`DB fallback: ${publication.fallbackReason}`);
+  if (inspection.reason) console.log(`DB note:   ${inspection.reason}`);
 }
 
 function semanticReadinessEntries(
