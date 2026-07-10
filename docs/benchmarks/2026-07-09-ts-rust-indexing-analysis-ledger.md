@@ -1793,6 +1793,19 @@ The reconstructed pre-edit comparison kept the same 1,834 symbols, including
 moved with the implementation. Machine-readable accepted and rejected runs
 are in `docs/benchmarks/runs/2026-07-10-dead-typescript-mailbox-batching.jsonl`.
 
+The first external cold confirmation on the current dirty Vega_2.0 worktree
+qualified that result. With automatic watching disabled, the exact direct path
+took 36,940ms over 2,037 files / 118,264 symbols. Its 6,353 semantic candidates
+required precise lookup across 905 TypeScript definition files; that work
+accounted for 32,913ms in the profiled control. The prior approximate bulk path
+took 8,310ms in a mixed-cache comparison, but emitted 17 additional findings
+that the exact compiler lookup proved referenced. Exact batching therefore
+fixes the mailbox N+1 problem without yet making the cold compiler computation
+cheap on a Vega-sized project. The next performance target is an exact
+file-owned reference index or exact fragment representation, not a return to
+the faster false-positive-producing scan. The external records are in
+`docs/benchmarks/runs/2026-07-10-vega-dead-cold.jsonl`.
+
 ## Run History
 
 Machine-readable run history:
@@ -1856,4 +1869,6 @@ acceptance corpus for this slice.
 - Accept exact TypeScript caller batching for medium/large `dead --full`
   workloads. Preserve scalar resolved-reference attribution, batch only precise
   compiler references, and reject the faster approximate fragment route because
-  it changed symbol classifications.
+  it changed symbol classifications. Treat Vega's 36,940ms cold direct result
+  as the next optimization target: preserve those exact answers while moving
+  the compiler work to an exact file-owned reference product.
