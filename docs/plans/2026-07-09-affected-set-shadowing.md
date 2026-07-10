@@ -220,9 +220,8 @@ steps must equal Phase 2 implementation commits before the next step starts.
 
 ### 2.3 — Build the clean-full document/fact oracle and prove the verifier
 
-- [ ] **Create:** `src/reindex/affected-shadow.ts`,
-      `tests/reindex/affected-shadow.test.ts`,
-      `scripts/affected-set-shadow-contract.mjs`
+- [x] **Create:** `src/reindex/affected-shadow.ts`,
+      `tests/reindex/affected-shadow.test.ts`
 - **Source:** `... outline src/storage/scip-documents.ts --json`; `... outline
   src/storage/db.ts --json`; `... code publishFreshReindexArtifacts --json`.
 - **What:** Old and candidate SQLite files coexist before promotion, but no
@@ -230,8 +229,9 @@ steps must equal Phase 2 implementation commits before the next step starts.
 - **Change:** Read ordered document, chunk/occurrence, mention/symbol,
   relationship, and definition-range rows into per-document SHA-256 digests;
   compare digest maps; calculate misses, extras, recall, and affected ratio.
-  Add a bounded fixture harness that performs a real full rebuild and restores
-  every edited file/cache/service state in `finally`.
+  Use real temporary SQLite fixtures in the focused test; the bounded built
+  full-rebuild harness remains step 2.6 work after runtime integration gives it
+  a non-duplicated observation surface.
 - **Testability:** Inject ordered row arrays into digest normalization; use tiny
   temporary SQLite fixtures for the shell. First mutate the expected actual set
   so the recall gate demonstrably fails, record the failure, then restore the
@@ -240,6 +240,22 @@ steps must equal Phase 2 implementation commits before the next step starts.
   smoke whose before/after graph digests differ exactly where expected.
 - **Why:** A prediction cannot be calibrated against aggregate counts; the
   verifier must identify the specific document/fact unit it would have missed.
+- **Outcome:** The oracle now normalizes document text, chunk ranges and binary
+  occurrences, definition ranges, mentions, symbol kind/documentation/
+  signature/enclosing/relationship facts, and otherwise-unowned global symbols
+  into stable per-document SHA-256 digests without using database row IDs.
+  Old/new comparison reports added, modified, deleted, changed, and unchanged
+  units; evaluation reports recall, affected ratio, exact misses, and extras.
+  Seven tests use real temporary SQLite databases and prove that symbol metadata
+  changes mark both the defining file and a file that mentions the symbol. The
+  planted under-prediction was observed red with `passed: false`, recall `0.5`,
+  and exact missing file `src/b.ts`, then the correct expectation made all
+  controls green. The similarity postcheck found only generic DB/fact access
+  overlap with the Rust import-usage path, not reusable product semantics. The
+  exploratory stale-abstraction signal for the pure fact-record seam is
+  accepted for this intermediate commit because the real-SQLite shell and
+  normalization test are its two deliberate sides; step 2.4 adds the runtime
+  caller. No production caller consumes the oracle yet.
 
 ### 2.4 — Record shadow results at the existing atomic publication seam
 
@@ -329,8 +345,8 @@ steps must equal Phase 2 implementation commits before the next step starts.
 ## Execution and Ship Order
 
 1. Commit this plan and roadmap baseline update.
-2. Land 2.1–2.3 as testable contracts with no product behavior. Steps 2.1 and
-   2.2 are complete; step 2.3 is next.
+2. Land 2.1–2.3 as testable contracts with no product behavior. Complete.
+   Step 2.4 runtime shadow recording is next.
 3. Land 2.4 shadow integration; full rebuild stays authoritative.
 4. Land 2.5 observability only after real records exist.
 5. Run 2.6 calibration; fix every miss before closing Phase 2.
@@ -352,6 +368,16 @@ file to export `classifyProjectInputPath()` over the existing constants. This
 avoids a second extension/config table and does not change
 `isLanguageRelevantPath()` or any current fingerprint behavior. Rollback is
 deleting the new export and the new shadow-only caller.
+
+### 2026-07-09 — Keep the built harness after runtime integration
+
+Step 2.3 originally created the `.mjs` corpus harness alongside the unexported
+TypeScript oracle. At this point an `.mjs` script could only duplicate the SQL
+and digest rules or force a premature public export from the reindex bundle.
+The real-database discriminating probe stays in
+`tests/reindex/affected-shadow.test.ts`; `scripts/affected-set-shadow-contract.mjs`
+remains a step 2.6 deliverable, when step 2.4/2.5 provide a built telemetry
+surface the script can consume. This changes no gate or production behavior.
 
 ## File Summary
 
