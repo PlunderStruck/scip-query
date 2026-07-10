@@ -1,7 +1,7 @@
 # Incremental SCIP Document Plan
 
 Date: 2026-07-09
-Status: Phases 4.1–4.2 complete; Phase 4.3 service transport next
+Status: Phases 4.1–4.3 complete; Phase 4.4 authoritative reindex integration next
 Parent: [`2026-07-09-automatic-incremental-indexing-roadmap.md`](./2026-07-09-automatic-incremental-indexing-roadmap.md)
 
 ## Outcome
@@ -154,6 +154,17 @@ before deleting prior generations or unreferenced blobs.
 
 Commit boundary: transport, lifecycle tests, and status surface.
 
+**Result:** Complete across `typescript-index-protocol.ts`,
+`typescript-index-service.ts`, and `typescript-index-requester.ts`. A dedicated
+mailbox binds each request and response to the currently published base
+generation, exact producer/project identities, a deadline, and complete
+modified/affected path sets. The repository service retains one emitter,
+advertises cold warmups/program updates/document counts, and publishes a busy
+deadline before blocking compiler work. Protocol 3 replaces older daemons.
+Malformed, expired, stale-generation, dead-service, timeout, and omitted-
+affected-document controls all failed; a cold request followed by a real warm
+source update reused one session and advanced its compiler program once.
+
 ### 4.4 — Reindex authority and Phase 4 calibration
 
 - Compute the authoritative eligibility plan before preparing indexer runs.
@@ -181,5 +192,5 @@ verifier fail before canary results are trusted.
 
 ```sh
 SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context \
-  src/reindex/typescript-index-protocol.ts --json
+  src/reindex/index.ts --json
 ```

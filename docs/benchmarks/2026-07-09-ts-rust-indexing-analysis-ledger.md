@@ -1512,6 +1512,16 @@ The negative controls proved that a missing replacement path, wrong project
 identity, attempted generation mutation, and corrupt blob are rejected before
 publication. Blob collection runs only after all retained manifests parse.
 
+Phase 4.3 connected the retained producer to the existing one-writer service
+through a separate versioned mailbox. Each request is tied to the currently
+published base generation and exact producer/project identity, and the
+requester requires exactly one returned fragment for every affected path. A
+cold request followed by a disk edit reused one emitter session, performed one
+program update, and returned the edited document. Malformed, expired,
+stale-generation, dead-service, timeout, and intentionally omitted-document
+controls were all rejected. Watch service protocol 3 replaces older daemons
+and exposes producer warmup/update/request counters in status.
+
 ## Run History
 
 Machine-readable run history:

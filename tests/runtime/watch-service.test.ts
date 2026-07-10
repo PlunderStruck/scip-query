@@ -37,6 +37,12 @@ describe('watch service contract', () => {
         typescriptSemantic: { ...liveState().typescriptSemantic!, state: 'mystery' },
       }),
     ).toBeNull();
+    expect(
+      parseWatchServiceState({
+        ...liveState(),
+        typescriptIndex: { ...liveState().typescriptIndex!, documentsEmitted: -1 },
+      }),
+    ).toBeNull();
   });
 
   it('trusts only matching, recently-heartbeating live processes', () => {
@@ -210,6 +216,17 @@ function liveState(): WatchServiceState {
       sessionsRefreshed: 0,
       sessionsReplaced: 0,
       projectsCreated: 0,
+    },
+    typescriptIndex: {
+      protocolVersion: 1,
+      state: 'idle',
+      requests: 0,
+      sessionsCreated: 0,
+      sessionsReplaced: 0,
+      initializations: 0,
+      programUpdates: 0,
+      documentsEmitted: 0,
+      documentsRemoved: 0,
     },
   };
 }

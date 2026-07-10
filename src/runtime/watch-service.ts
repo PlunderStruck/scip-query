@@ -5,8 +5,9 @@ import { fileURLToPath } from 'node:url';
 import type { LastRefreshMetadata, ProjectConfig, WatchConfig, WatcherStatus } from '../domain/types.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import type { TypeScriptSemanticServiceStatus } from '../semantic/typescript/session-protocol.js';
+import type { TypeScriptIndexServiceStatus } from '../reindex/typescript-index-protocol.js';
 
-export const WATCH_SERVICE_PROTOCOL_VERSION = 2;
+export const WATCH_SERVICE_PROTOCOL_VERSION = 3;
 export const WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS = 5_000;
 export const WATCH_LOCK_FILE = 'watch.lock';
 export const WATCH_STATE_FILE = 'watch-state.json';
@@ -43,6 +44,7 @@ export interface WatchServiceState {
   lastRefresh?: LastRefreshMetadata;
   lastError?: { at: string; message: string };
   typescriptSemantic?: TypeScriptSemanticServiceStatus;
+  typescriptIndex?: TypeScriptIndexServiceStatus;
 }
 
 export interface WatchServiceIdentity {
@@ -438,6 +440,7 @@ export function parseWatchServiceState(value: unknown): WatchServiceState | null
   if (state.lastError !== undefined && !validLastError(state.lastError)) return null;
   if (state.lastRefresh !== undefined && !validLastRefresh(state.lastRefresh)) return null;
   if (state.typescriptSemantic !== undefined && !validTypeScriptSemanticStatus(state.typescriptSemantic)) return null;
+  if (state.typescriptIndex !== undefined && !validTypeScriptIndexStatus(state.typescriptIndex)) return null;
   return state as WatchServiceState;
 }
 
@@ -653,8 +656,35 @@ function validTypeScriptSemanticStatus(value: unknown): value is TypeScriptSeman
   );
 }
 
+function validTypeScriptIndexStatus(value: unknown): value is TypeScriptIndexServiceStatus {
+  if (!value || typeof value !== 'object') return false;
+  const status = value as Partial<TypeScriptIndexServiceStatus>;
+  return (
+    typeof status.protocolVersion === 'number' &&
+    (status.state === 'idle' ||
+      status.state === 'ready' ||
+      status.state === 'unavailable' ||
+      status.state === 'error') &&
+    nonNegativeInteger(status.requests) &&
+    nonNegativeInteger(status.sessionsCreated) &&
+    nonNegativeInteger(status.sessionsReplaced) &&
+    nonNegativeInteger(status.initializations) &&
+    nonNegativeInteger(status.programUpdates) &&
+    nonNegativeInteger(status.documentsEmitted) &&
+    nonNegativeInteger(status.documentsRemoved) &&
+    (status.lastRequestAt === undefined || validTimestamp(status.lastRequestAt)) &&
+    (status.lastDurationMs === undefined || (finiteNumber(status.lastDurationMs) && status.lastDurationMs >= 0)) &&
+    (status.lastError === undefined || typeof status.lastError === 'string') &&
+    (status.busyUntil === undefined || validTimestamp(status.busyUntil))
+  );
+}
+
 function finiteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
+}
+
+function nonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
 }
 
 function assertNever(value: never): never {

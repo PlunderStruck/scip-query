@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Phases 1–3 and Phase 4.1–4.2 complete; Phase 4.3 service transport next
+Status: Phases 1–3 and Phase 4.1–4.3 complete; Phase 4.4 reindex integration next
 
 ## Goal
 
@@ -665,12 +665,12 @@ Complete this at every phase close:
 6. Phase 5 atomic incremental generation storage.
 7. Phase 6 durable Rust defaulting, selective native kernels, and rollout.
 
-The immediate action is Phase 4.3's service transport. The durable store now
-persists immutable content-addressed documents, verifies every blob, and
-assembles a true edited shard byte-for-byte equal to the clean CLI oracle.
-Connect the reindex worker to the one-writer service without weakening the
-existing full-project fallback:
+The immediate action is Phase 4.4's authoritative reindex integration. The
+versioned service transport now returns a complete affected fragment set bound
+to the published base generation, with crash/timeout/omission controls. Apply
+the Phase 2 eligibility plan before indexer preparation, assemble the candidate
+TypeScript shard, and retain the existing full-project fallback:
 
 ```sh
-SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/reindex/typescript-index-protocol.ts --json
+SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/reindex/index.ts --json
 ```

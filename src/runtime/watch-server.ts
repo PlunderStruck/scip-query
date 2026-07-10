@@ -14,6 +14,15 @@ import {
 } from '../semantic/typescript/session-service.js';
 import { typeScriptSemanticMailboxPaths } from '../semantic/typescript/session-protocol.js';
 import {
+  TypeScriptIndexServiceHost,
+  initializeTypeScriptIndexMailbox,
+  processTypeScriptIndexMailbox,
+} from '../reindex/typescript-index-service.js';
+import {
+  publishedTypeScriptIndexGeneration,
+  typeScriptIndexMailboxPaths,
+} from '../reindex/typescript-index-protocol.js';
+import {
   WATCH_SERVICE_PROTOCOL_VERSION,
   acquireWatchProcessLock,
   readWatchServiceActivity,
@@ -60,9 +69,16 @@ export async function runWatchServiceServer(
   let lastHeartbeatAtMs = 0;
   let lastActivityPollAtMs = 0;
   let semanticBusyUntilMs: number | undefined;
+  let indexBusyUntilMs: number | undefined;
   const semanticMailboxPaths = typeScriptSemanticMailboxPaths(indexPaths.cacheDir);
+  const indexMailboxPaths = typeScriptIndexMailboxPaths(indexPaths.cacheDir);
   initializeTypeScriptSemanticMailbox(semanticMailboxPaths);
+  initializeTypeScriptIndexMailbox(indexMailboxPaths);
   const semanticHost = new TypeScriptSemanticServiceHost({ openDb: () => openProjectDb(projectRoot) });
+  const indexHost = new TypeScriptIndexServiceHost({
+    projectRoot,
+    currentGeneration: () => publishedTypeScriptIndexGeneration(indexPaths.dbPath),
+  });
 
   const persistState = (force = false): void => {
     if (!ready) return;
@@ -87,6 +103,10 @@ export async function runWatchServiceServer(
       typescriptSemantic: {
         ...semanticHost.status(),
         ...(semanticBusyUntilMs === undefined ? {} : { busyUntil: new Date(semanticBusyUntilMs).toISOString() }),
+      },
+      typescriptIndex: {
+        ...indexHost.status(),
+        ...(indexBusyUntilMs === undefined ? {} : { busyUntil: new Date(indexBusyUntilMs).toISOString() }),
       },
     });
   };
@@ -134,6 +154,16 @@ export async function runWatchServiceServer(
     persistState(true);
 
     while (!stopping) {
+      const indexRequests = processTypeScriptIndexMailbox(indexMailboxPaths, indexHost, {
+        beforeRequest(deadlineAtMs) {
+          indexBusyUntilMs = deadlineAtMs + 5_000;
+          persistState(true);
+        },
+        afterRequest() {
+          indexBusyUntilMs = undefined;
+          persistState(true);
+        },
+      });
       const semanticRequests = processTypeScriptSemanticMailbox(semanticMailboxPaths, semanticHost, {
         beforeRequest(deadlineAtMs) {
           semanticBusyUntilMs = deadlineAtMs + 5_000;
@@ -160,7 +190,7 @@ export async function runWatchServiceServer(
           );
         }
       }
-      if (semanticRequests > 0) {
+      if (semanticRequests > 0 || indexRequests > 0) {
         recordActivity();
         persistState(true);
       }
@@ -181,6 +211,7 @@ export async function runWatchServiceServer(
     process.off('SIGINT', stop);
     process.off('SIGTERM', stop);
     semanticHost.closeTypeScriptService();
+    indexHost.close();
     watcher.stop();
     rmSync(servicePaths.statePath, { force: true });
     rmSync(servicePaths.activityPath, { force: true });

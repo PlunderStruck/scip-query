@@ -1431,6 +1431,7 @@ function watchServiceReport(inspection: WatchServiceInspection, enabled = true) 
         lastRefresh: classification.state.lastRefresh,
         lastError: classification.state.lastError,
         typescriptSemantic: classification.state.typescriptSemantic,
+        typescriptIndex: classification.state.typescriptIndex,
       };
     case 'stale':
     case 'incompatible':
@@ -1445,6 +1446,7 @@ function watchServiceReport(inspection: WatchServiceInspection, enabled = true) 
         lastRefresh: classification.state.lastRefresh,
         lastError: classification.state.lastError,
         typescriptSemantic: classification.state.typescriptSemantic,
+        typescriptIndex: classification.state.typescriptIndex,
       };
     default:
       return assertNeverWatchService(classification);
@@ -1466,6 +1468,12 @@ function renderWatchServiceReport(report: ReturnType<typeof watchServiceReport>)
     const semantic = report.typescriptSemantic;
     console.log(
       `TypeScript semantics: ${semantic.state} (${semantic.projectsCreated} Projects, ${semantic.requests} requests)`,
+    );
+  }
+  if ('typescriptIndex' in report && report.typescriptIndex) {
+    const index = report.typescriptIndex;
+    console.log(
+      `TypeScript index: ${index.state} (${index.initializations} warmups, ${index.programUpdates} updates, ${index.requests} requests)`,
     );
   }
 }
