@@ -100,7 +100,7 @@ Top commands per routed skill, generated from each skill's own `commands:` front
 | `scip-directory-architecture` | `scip-query system <scope>`, `scip-query locality-candidates --json --full`, `scip-query similar-files --full --json` |
 | `scip-doc-reconcile` | `scip-query doc-drift --json --full`, `scip-query doc-drift <doc>`, `scip-query outline <subject-file>` |
 | `scip-explore` | `scip-query stats`, `scip-query system <module-or-scope>`, `scip-query trace <entry-symbol>` |
-| `scip-hyper-optimization` | `scip-query bench --json`, `scip-query bench --json --cold-index --include-heavy --timeout-ms 600000`, `scip-query plan-context <entry-symbol-or-file>` |
+| `scip-hyper-optimization` | `scip-query bench --json`, `scip-query bench --json --cold-index --include-heavy --timeout-ms 600000`, `scip-query work-audit <profile> --json` |
 | `scip-language-playbook` | `scip-query stats`, `scip-query files <feature-or-module-name>`, `scip-query outline <file>` |
 | `scip-maintainability` | `scip-query stats`, `scip-query system <scope>`, `scip-query surface <scope>` |
 | `scip-probe-reachability` | `scip-query outline <file> --signatures`, `scip-query code <symbol>`, `scip-query trace <symbol>` |

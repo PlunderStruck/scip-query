@@ -125,6 +125,19 @@ export const commandDescriptors: CommandDescriptor[] = [
     handler: handlers.handleBench,
   },
   {
+    id: 'work-audit',
+    command: 'work-audit <profile>',
+    description: 'Rank exact repeated computations in a profiling JSONL file by measured avoidable time',
+    options: [
+      option('--top <n>', 'Maximum repeated-work groups to show', parsePositiveInteger, 20),
+      option('--json', 'Output as JSON for programmatic consumption'),
+    ],
+    evidence: 'mixed',
+    renderShape: 'custom',
+    docs: doc('Maintenance', ['scip-query work-audit profile.jsonl', 'scip-query work-audit profile.jsonl --json']),
+    handler: handlers.handleWorkAudit,
+  },
+  {
     id: 'typescript-semantic-compare',
     command: 'typescript-semantic-compare',
     description: 'Compare tsserver reference answers against the ts-morph baseline',

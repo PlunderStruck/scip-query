@@ -6,6 +6,8 @@ commands:
     when: "Target and harness: baseline timings for a scip-query command target."
   - template: "scip-query bench --json --cold-index --include-heavy --timeout-ms 600000"
     when: "Target and harness: cold-path and heavy-detector timings."
+  - template: "scip-query work-audit <profile> --json"
+    when: "Profile the chain: rank exact repeated computations by measured avoidable time."
   - template: "scip-query plan-context <entry-symbol-or-file>"
     when: "Trace behavior: pre-edit context for the profiled entry point."
   - template: "scip-query call-graph <entry-symbol>"
@@ -40,6 +42,7 @@ One sentence to decide: if you can already name the one function you expect to f
 | --- | --- | --- |
 | `scip-query bench --json` | Benchmark indexing and command runtimes for this repository | Target and harness: baseline timings for a scip-query command target. |
 | `scip-query bench --json --cold-index --include-heavy --timeout-ms 600000` | Benchmark indexing and command runtimes for this repository | Target and harness: cold-path and heavy-detector timings. |
+| `scip-query work-audit <profile> --json` | Rank exact repeated computations in a profiling JSONL file by measured avoidable time | Profile the chain: rank exact repeated computations by measured avoidable time. |
 | `scip-query plan-context <entry-symbol-or-file>` | Pre-edit planning context for a symbol, file, or module | Trace behavior: pre-edit context for the profiled entry point. |
 | `scip-query call-graph <entry-symbol>` | Show incoming callers and outgoing callees for a symbol | Trace behavior: callers/callees for the pipeline under test. |
 | `scip-query complexity <hot-symbol>` | Per-symbol complexity: branches, cyclomatic estimate, fan-in/out, callees | Diagnose: branches, cyclomatic estimate, fan-in/out for a hot symbol. |
@@ -125,6 +128,7 @@ This step is complete only when each major pipeline step can be timed as a profi
 5. Split the largest workload-weighted span.
 6. Repeat until the slow operation is a repeated lookup, initialization, scan, traversal, subprocess, serialization step, or wait.
 7. Write span records with cardinality to run history.
+8. When spans carry work identities, run `scip-query work-audit <profile> --json` to separate exact repeats from same-name work on different inputs.
 
 This step is complete only when the dominant cost is concrete enough to form a falsifiable hypothesis.
 

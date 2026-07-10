@@ -8,6 +8,7 @@ import { loadProjectConfig, resolveIndexStoragePaths } from './config.js';
 import { resolveProjectRoot } from './cli-context.js';
 import { maybePrintUpdateNotice } from './update-notice.js';
 import { ensureWatchServiceForCommand, watchServiceAutoStartEligible } from './watch-service.js';
+import { profileRunId } from '../instrumentation/profile.js';
 
 program
   .name('scip-query')
@@ -16,6 +17,7 @@ program
 
 registerCommandDescriptors(program, commandDescriptors);
 program.hook('preAction', async (_thisCommand, actionCommand) => {
+  profileRunId();
   const commandName = actionCommand.name();
   await maybePrintUpdateNotice({ commandName });
   if (!watchServiceAutoStartEligible(commandName)) return;

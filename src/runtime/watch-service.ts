@@ -29,6 +29,7 @@ const AUTO_START_EXCLUDED_COMMANDS = new Set([
   'setup-hooks',
   'uninstall',
   'watch',
+  'work-audit',
 ]);
 
 export interface WatchServiceState {

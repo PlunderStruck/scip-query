@@ -757,6 +757,32 @@ direct commands and warm-state profiles.
 - **Why**: This prevents adding Rust that is technically correct but operationally
   slower.
 
+### 5b. Automate selection of repeated-work targets
+
+- [x] **File**: `src/instrumentation/profile.ts`,
+      `src/runtime/profile-work-audit.ts`, and
+      `src/queries/internal/consumer-evidence.ts`
+- **Source**: `docs/plans/2026-07-10-work-reuse-audit.md` and the repeated
+  wrapper-candidates baseline in
+  `docs/benchmarks/runs/2026-07-10-work-reuse-audit.jsonl`.
+- **What**: The existing profile scoreboard ranks span names but cannot tell
+  repeated computation from distinct inputs. That makes target selection a
+  manual profile-reading loop.
+- **Change**: Give profiled computations stable input identities and top-level
+  run identities, then add `scip-query work-audit <profile>` to rank exact
+  repeats by measured time. Instrument consumer evidence as the first known
+  hotspot.
+- **Validation**: exact-repeat unit fixtures, legacy-profile compatibility,
+  multi-process run inheritance, wrapper output hashes, and a real repeated
+  wrapper profile.
+- **Result**: Accepted. The audit runs in 145ms median / 151ms p95 on 6,505
+  events. The final wrapper profile found three exact consumer-evidence inputs,
+  zero within-command repeats, and a 518ms largest cross-command opportunity.
+  Profiled/unprofiled output hashes match and diff-gate is clean.
+- **Why**: This replaces slow intuition-driven optimization selection with a
+  reusable measurement that tells the next slice where time is actually being
+  recomputed.
+
 ### 6. Continue Rust semantic materialization after the combined session
 
 - [ ] **File**: `src/semantic/rust/lsp-session.ts`,

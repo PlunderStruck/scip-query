@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { ProjectIndex } from '../../../src/core/project-index.js';
@@ -47,6 +47,10 @@ describe('definition consumer evidence', () => {
         .mention(3, 1, 0)
         .mention(4, 1, 0)
         .write();
+      writeFileSync(
+        join(tempDir, 'meta.json'),
+        JSON.stringify({ version: 3, status: 'complete', fingerprint: { fixture: 'consumer-evidence' } }),
+      );
 
       const config: ScipQueryConfig = {
         projectRoot,
@@ -83,31 +87,58 @@ describe('definition consumer evidence', () => {
           documentation: null,
           enclosingSymbol: null,
         };
-        const productEvidence = consumerEvidenceProduct(db, new ProjectIndex(db)).forDefinitions([definition], {
-          semantic: false,
-          sourceFallback: false,
-        });
-        const evidence = productEvidence.get(1);
-        expect(evidence?.realConsumers).toEqual(['src/real.ts']);
-        expect(evidence?.barrelConsumers).toBe(1);
-        expect(evidence?.importOnlyConsumers).toBe(1);
-        expect(evidence?.files.slice().sort((left, right) => left.file.localeCompare(right.file))).toEqual([
-          {
-            file: 'src/index.ts',
-            sources: ['indexed'],
-            classification: 'reexport-only',
-          },
-          {
-            file: 'src/real.ts',
-            sources: ['indexed'],
-            classification: 'real',
-          },
-          {
-            file: 'src/unused-import.ts',
-            sources: ['indexed'],
-            classification: 'import-only',
-          },
-        ]);
+        const profilePath = join(tempDir, 'consumer-evidence-profile.jsonl');
+        const previousProfile = process.env['SCIP_QUERY_PROFILE'];
+        const previousProfileOut = process.env['SCIP_QUERY_PROFILE_OUT'];
+        const previousRunId = process.env['SCIP_QUERY_PROFILE_RUN_ID'];
+        process.env['SCIP_QUERY_PROFILE'] = '1';
+        process.env['SCIP_QUERY_PROFILE_OUT'] = profilePath;
+        process.env['SCIP_QUERY_PROFILE_RUN_ID'] = 'consumer-fixture-run';
+        try {
+          const productEvidence = consumerEvidenceProduct(db, new ProjectIndex(db)).forDefinitions([definition], {
+            semantic: false,
+            sourceFallback: false,
+          });
+          const evidence = productEvidence.get(1);
+          expect(evidence?.realConsumers).toEqual(['src/real.ts']);
+          expect(evidence?.barrelConsumers).toBe(1);
+          expect(evidence?.importOnlyConsumers).toBe(1);
+          expect(evidence?.files.slice().sort((left, right) => left.file.localeCompare(right.file))).toEqual([
+            {
+              file: 'src/index.ts',
+              sources: ['indexed'],
+              classification: 'reexport-only',
+            },
+            {
+              file: 'src/real.ts',
+              sources: ['indexed'],
+              classification: 'real',
+            },
+            {
+              file: 'src/unused-import.ts',
+              sources: ['indexed'],
+              classification: 'import-only',
+            },
+          ]);
+
+          const profiledStages = readFileSync(profilePath, 'utf8')
+            .trim()
+            .split('\n')
+            .map((line) => JSON.parse(line) as Record<string, unknown>)
+            .filter((event) => String(event['name']).startsWith('consumer-evidence.'));
+          expect(profiledStages.map((event) => event['name']).sort()).toEqual([
+            'consumer-evidence.classify',
+            'consumer-evidence.product',
+            'consumer-evidence.provenance',
+          ]);
+          expect(new Set(profiledStages.map((event) => event['workIdentity'])).size).toBe(1);
+          expect(profiledStages[0]?.['workIdentity']).toMatch(/^[a-f0-9]{24}$/);
+          expect(profiledStages.every((event) => event['workOutcome'] === 'computed')).toBe(true);
+        } finally {
+          restoreEnv('SCIP_QUERY_PROFILE', previousProfile);
+          restoreEnv('SCIP_QUERY_PROFILE_OUT', previousProfileOut);
+          restoreEnv('SCIP_QUERY_PROFILE_RUN_ID', previousRunId);
+        }
       } finally {
         db.close();
       }
@@ -116,3 +147,8 @@ describe('definition consumer evidence', () => {
     }
   });
 });
+
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
+}

@@ -1,15 +1,16 @@
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ProjectIndex } from '../../core/project-index.js';
 import type { IndexedDefinition } from '../../domain/types.js';
-import { profileSpan } from '../../instrumentation/profile.js';
+import { profileEnabled, profileSpan } from '../../instrumentation/profile.js';
 import { semanticCallerMap } from '../../semantic/shared-primitives.js';
 import { detectAstLanguage, type SyntaxNode, type Tree } from '../../source/ast.js';
 import { sourceEvidence } from '../../source/source-evidence.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { fileContentHash } from '../../storage/evidence-cache.js';
+import { fileContentHash, projectEvidenceFingerprint } from '../../storage/evidence-cache.js';
 import { createFileEvidenceProduct, evidenceProductInvalidation } from '../../storage/evidence-products.js';
 import { createPerDbCache } from '../../storage/per-db-cache.js';
 import { leafName } from '../../symbols/symbol-parser.js';
@@ -111,6 +112,11 @@ function buildDefinitionConsumerEvidence(
   opts: DefinitionConsumerEvidenceOptions,
 ): DefinitionConsumerEvidenceMap {
   let counters = emptyConsumerEvidenceCounters(definitions.length);
+  const projectFingerprint = profileEnabled() ? projectEvidenceFingerprint(db) : null;
+  const workIdentity = projectFingerprint
+    ? consumerEvidenceWorkIdentity(definitions, opts, projectFingerprint)
+    : undefined;
+  const workMetadata = workIdentity ? { workIdentity, workOutcome: 'computed' as const } : {};
   return profileSpan(
     'consumer-evidence.product',
     () => {
@@ -118,6 +124,7 @@ function buildDefinitionConsumerEvidence(
         'consumer-evidence.provenance',
         () => consumerProvenanceMap(db, index, definitions, opts),
         () => ({
+          ...workMetadata,
           definitions: definitions.length,
           semantic: opts.semantic,
           sourceFallback: opts.sourceFallback !== false,
@@ -148,6 +155,7 @@ function buildDefinitionConsumerEvidence(
           }
         },
         () => ({
+          ...workMetadata,
           ...classificationStats,
           realFiles: counters.realFiles,
           reexportOnlyFiles: counters.reexportOnlyFiles,
@@ -156,8 +164,25 @@ function buildDefinitionConsumerEvidence(
       );
       return result;
     },
-    () => ({ ...counters }),
+    () => ({ ...workMetadata, ...counters }),
   );
+}
+
+function consumerEvidenceWorkIdentity(
+  definitions: readonly IndexedDefinition[],
+  opts: DefinitionConsumerEvidenceOptions,
+  projectFingerprint: string,
+): string {
+  const hash = createHash('sha256')
+    .update('consumer-evidence-v1\0')
+    .update(projectFingerprint)
+    .update('\0')
+    .update(opts.semantic ? 'semantic\0' : 'indexed\0')
+    .update(opts.sourceFallback === false ? 'no-source-fallback' : 'source-fallback');
+  for (const symbol of definitions.map((definition) => definition.symbol).sort()) {
+    hash.update('\0').update(symbol);
+  }
+  return hash.digest('hex').slice(0, 24);
 }
 
 interface ConsumerProvenanceMap {

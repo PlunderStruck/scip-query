@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
 import { createInterface } from 'node:readline/promises';
 import { existsSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
-import { dirname, extname, join } from 'node:path';
+import { dirname, extname, join, resolve } from 'node:path';
 import type { IndexedDefinition, SupportedLanguage } from '../../domain/types.js';
 import * as queries from '../../queries/index.js';
 import {
@@ -64,6 +64,7 @@ import { isTypeScriptLike } from '../../semantic/typescript/source-kinds.js';
 import { rustSemanticSessionStatus } from '../../semantic/rust/lsp-session.js';
 import { healthPhases } from '../../queries/health/health.js';
 import { writeProfileEvent } from '../../instrumentation/profile.js';
+import { auditProfileWork, readProfileEvents, renderProfileWorkAudit } from '../profile-work-audit.js';
 import {
   collect,
   formatBytes,
@@ -392,6 +393,19 @@ export async function handleBench(rawOpts: unknown): Promise<void> {
     return;
   }
   renderBenchReport(report);
+}
+
+export function handleWorkAudit(profile: unknown, rawOpts: unknown): void {
+  const opts = commandOptions(rawOpts);
+  const profilePath = resolve(String(profile));
+  const report = auditProfileWork(readProfileEvents(profilePath), {
+    top: numberOptionValue(opts, 'top') ?? 20,
+  });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('work-audit', [profilePath], opts, { profilePath, ...report });
+    return;
+  }
+  process.stdout.write(renderProfileWorkAudit(report, profilePath));
 }
 
 export function handleTypeScriptSemanticCompare(rawOpts: unknown): void {

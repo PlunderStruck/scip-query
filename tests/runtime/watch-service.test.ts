@@ -146,6 +146,7 @@ describe('watch service contract', () => {
     expect(watchServiceAutoStartEligible('status', {})).toBe(true);
     expect(watchServiceAutoStartEligible('watch', {})).toBe(false);
     expect(watchServiceAutoStartEligible('bench', {})).toBe(false);
+    expect(watchServiceAutoStartEligible('work-audit', {})).toBe(false);
     expect(watchServiceAutoStartEligible('__health-phase', {})).toBe(false);
     expect(watchServiceAutoStartEligible('status', { SCIP_QUERY_SKIP_WATCH_SERVICE: '1' })).toBe(false);
 

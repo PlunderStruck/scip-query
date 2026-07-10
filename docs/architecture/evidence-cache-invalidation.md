@@ -43,8 +43,15 @@ They still need an explicit identity key because they can affect command output.
 ## Benchmark Commands
 
 - `node scripts/performance-architecture-contract.mjs --repo . --command "health --json" --warm-iterations 1 --no-clear`
-- `node scripts/profile-scoreboard.mjs --input <profile-jsonl> --top 10 --json`
+- `node dist/cli.js work-audit <profile-jsonl> --top 10 --json`
 - `node scripts/check-evidence-manifest-doc.mjs`
+
+The consumer-evidence profile identity includes the exact definition set,
+semantic/source-fallback options, and this matrix's project evidence
+fingerprint. That makes equal identities evidence that the computation inputs
+matched the same published project generation. When the project fingerprint is
+unavailable, the span remains unclassified instead of being treated as safely
+reusable.
 
 ## Cross-checkout content-addressed sharing (Plan 6 6.6.2 — design only, not implemented)
 
