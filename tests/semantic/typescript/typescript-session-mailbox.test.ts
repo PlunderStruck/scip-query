@@ -8,6 +8,7 @@ import { writeWatchServiceState, WATCH_SERVICE_PROTOCOL_VERSION } from '../../..
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { writeJsonAtomic } from '../../../src/storage/atomic-json.js';
 import type { SemanticProvider } from '../../../src/semantic/types.js';
+import type { IndexedDefinition } from '../../../src/domain/types.js';
 import { TypeScriptSemanticHost } from '../../../src/semantic/typescript/session-host.js';
 import {
   initializeTypeScriptSemanticMailbox,
@@ -213,6 +214,49 @@ describe('TypeScript semantic service mailbox', () => {
     db.close();
   });
 
+  it('forwards exact reference batches through one mailbox request', () => {
+    const fixture = serviceFixture(true);
+    const db = fixture.openDb();
+    const paths = typeScriptSemanticMailboxPaths(fixture.projectRoot);
+    const statePath = join(fixture.projectRoot, 'watch-state.json');
+    const service = new TypeScriptSemanticServiceHost({ openDb: fixture.openDb, createHost: fakeSemanticHost });
+    writeLiveState(statePath, fixture.projectRoot);
+    let requestNumber = 0;
+    const provider = createServiceBackedTypeScriptProvider(db, undefined, {
+      timeoutMs: 1_000,
+      runtime: {
+        now: () => NOW,
+        randomId: () => `references-${++requestNumber}`,
+        isProcessAlive: () => true,
+        sleep: () => {
+          processTypeScriptSemanticMailbox(paths, service, { nowMs: NOW });
+        },
+      },
+    });
+    const definition: IndexedDefinition = {
+      symbolId: 1,
+      documentId: 1,
+      symbol: 'fixture/exact().',
+      relativePath: 'src/consumer.ts',
+      leaf: 'exact',
+      startLine: 0,
+      endLine: 0,
+      parentTypeName: null,
+      isFunctionLike: true,
+      isTypeLike: false,
+      kind: 12,
+      documentation: null,
+      enclosingSymbol: null,
+    };
+
+    expect(provider.referencesForDefinitions?.([definition], { exact: true }).get(1)).toEqual([
+      { file: 'src/exact-consumer.ts', line: 1, column: 0 },
+    ]);
+    expect(service.status().requests).toBe(1);
+    service.closeTypeScriptService();
+    db.close();
+  });
+
   it('applies each request profile identity inside the persistent service and restores its own environment', () => {
     const fixture = serviceFixture();
     const paths = typeScriptSemanticMailboxPaths(fixture.projectRoot);
@@ -300,7 +344,13 @@ function fakeProvider(): SemanticProvider {
     availability: () => ({ available: true, tsconfigPaths: ['tsconfig.json'] }),
     importUsage: () => [],
     referencesFor: () => [],
-    referencesForDefinitions: (definitions) => new Map(definitions.map((definition) => [definition.symbolId, []])),
+    referencesForDefinitions: (definitions, opts) =>
+      new Map(
+        definitions.map((definition) => [
+          definition.symbolId,
+          opts?.exact ? [{ file: 'src/exact-consumer.ts', line: 1, column: 0 }] : [],
+        ]),
+      ),
     referenceFragmentsForFiles: (files) => new Map(files.map((file) => [file, []])),
     calleesFor: () => [],
     calleesForDefinitions: (definitions) => new Map(definitions.map((definition) => [definition.symbolId, []])),

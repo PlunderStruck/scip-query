@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import {
+  exactSemanticCallerMap,
   semanticCallerMap,
   semanticEvidenceProduct,
   semanticImportUsage,
@@ -440,8 +441,11 @@ describe('TypeScript semantic provider', () => {
         }),
       );
       const callerMap = semanticCallerMap(db, definitions);
+      const exactCallerMap = exactSemanticCallerMap(db, definitions);
       const byName = new Map(definitions.map((definition) => [definition.leaf, definition]));
       expect(semantic.callerMap(definitions)).toEqual(callerMap);
+      expect(exactCallerMap.get(byName.get('usedHelper')!.symbolId)).toEqual(new Set(['src/consumer.ts']));
+      expect(exactCallerMap.get(byName.get('semanticOnly')!.symbolId)).toEqual(new Set(['src/consumer.ts']));
       expect(callerMap.get(byName.get('usedHelper')!.symbolId)).toEqual(new Set(['src/consumer.ts']));
       expect(callerMap.get(byName.get('semanticOnly')!.symbolId)).toEqual(new Set(['src/consumer.ts']));
       expect(callerMap.get(byName.get('defaultHelper')!.symbolId)).toEqual(new Set(['src/consumer.ts']));

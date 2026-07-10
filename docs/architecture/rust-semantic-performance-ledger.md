@@ -86,7 +86,9 @@ moving the whole product surface at once.
 - `src/semantic/typescript/ts-morph-provider.ts` is the mature TypeScript
   semantic provider. It loads ts-morph, discovers tsconfigs, constructs project
   bundles, caches import usage/references/callees/signatures, and bulk-scans
-  references when the batch is large enough.
+  references when the batch is large enough. Callers that require scalar-answer
+  parity can request an exact batch: one transport operation that retains the
+  precise per-definition compiler lookup instead of the approximate bulk scan.
 - `src/semantic/typescript/tsserver-provider.ts` is an experimental
   TypeScript-language-service comparison provider. It exists to compare against
   ts-morph, not to replace ts-morph by default.
@@ -102,6 +104,9 @@ moving the whole product surface at once.
   for TypeScript and Rust, plus Rust project-scoped import usage and signature
   products. It now materializes cached references through file-level bulk reads
   so full-mode detector passes do not issue one storage read per definition.
+  `dead --full` deliberately bypasses those approximate TypeScript reference
+  products for its exact caller batch while retaining them for consumers whose
+  contracts permit the bulk scan.
   Rust cache identity is salted with language and `rust-analyzer` engine
   metadata so TypeScript and Rust invalidation do not drift together.
 - `src/symbols/graph/call-graph-evidence.ts` persists semantic callees and now

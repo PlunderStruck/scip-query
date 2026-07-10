@@ -58,7 +58,10 @@ export interface SemanticProvider {
   dispose?(): void;
   importUsage(file: string): SemanticImportUsage[];
   referencesFor(definition: IndexedDefinition): SemanticReference[];
-  referencesForDefinitions?(definitions: readonly IndexedDefinition[]): Map<number, SemanticReference[]>;
+  referencesForDefinitions?(
+    definitions: readonly IndexedDefinition[],
+    opts?: { exact?: boolean },
+  ): Map<number, SemanticReference[]>;
   referenceFragmentsForFiles?(files: readonly string[]): Map<string, SemanticReferenceFragment[]>;
   referencesAndCalleesForDefinitions?(
     referenceDefinitions: readonly IndexedDefinition[],

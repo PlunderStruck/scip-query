@@ -68,7 +68,7 @@ export class TypeScriptSemanticServiceHost {
         case 'import-usage':
           return provider.importUsage(request.file);
         case 'references':
-          return [...referenceMap(provider, request.definitions)];
+          return [...referenceMap(provider, request.definitions, { exact: request.exact === true })];
         case 'reference-fragments':
           if (!provider.referenceFragmentsForFiles) {
             throw new Error('TypeScript provider does not support reference fragments.');
@@ -198,9 +198,10 @@ function referenceMap(
   definitions: Parameters<
     NonNullable<ReturnType<TypeScriptSemanticHost['semanticProvider']>['referencesForDefinitions']>
   >[0],
+  opts?: Parameters<NonNullable<ReturnType<TypeScriptSemanticHost['semanticProvider']>['referencesForDefinitions']>>[1],
 ) {
   return (
-    provider.referencesForDefinitions?.(definitions) ??
+    provider.referencesForDefinitions?.(definitions, opts) ??
     new Map(definitions.map((definition) => [definition.symbolId, provider.referencesFor(definition)]))
   );
 }

@@ -65,12 +65,15 @@ export function createServiceBackedTypeScriptProvider(
       return fallback();
     }
   };
-  const referencesForDefinitions = (definitions: readonly IndexedDefinition[]): Map<number, SemanticReference[]> =>
+  const referencesForDefinitions = (
+    definitions: readonly IndexedDefinition[],
+    batchOpts?: { exact?: boolean },
+  ): Map<number, SemanticReference[]> =>
     request(
-      { kind: 'references', definitions: [...definitions] },
+      { kind: 'references', definitions: [...definitions], ...(batchOpts?.exact ? { exact: true } : {}) },
       (response) => numericMap<SemanticReference[]>(response),
       () =>
-        direct().referencesForDefinitions?.(definitions) ??
+        direct().referencesForDefinitions?.(definitions, batchOpts) ??
         new Map(definitions.map((definition) => [definition.symbolId, direct().referencesFor(definition)])),
     );
   const calleesForDefinitions = (definitions: readonly IndexedDefinition[]): Map<number, SemanticCallee[]> =>

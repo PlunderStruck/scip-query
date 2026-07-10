@@ -16,9 +16,8 @@ import { getSourceImports } from '../../language-parsers/index.js';
 import { applyScanLimit } from '../query-utils.js';
 import { pathsResolveSame } from '../../source/path-normalization.js';
 import { sourceImportPathsByLocalName } from '../../language-parsers/import-index.js';
-import { semanticCallerMap } from '../../semantic/shared-primitives.js';
+import { exactSemanticCallerMap } from '../../semantic/shared-primitives.js';
 import { indexedDocumentPaths as listIndexedDocumentPaths } from '../../storage/scip-documents.js';
-import { mentionReferenceChunkRows } from '../../storage/scip-mentions.js';
 import {
   emptyReferenceCounts,
   hasAnyReference,
@@ -82,8 +81,8 @@ interface DeadRow {
 
 type ReferenceCounts = ReturnType<typeof emptyReferenceCounts>;
 
-const BULK_SEMANTIC_CALLER_MIN_DEFINITIONS = 3000;
-const BULK_SEMANTIC_CALLER_MIN_INDEXED_FILES = 1000;
+const BULK_SEMANTIC_CALLER_MIN_DEFINITIONS = 1000;
+const BULK_SEMANTIC_CALLER_MIN_INDEXED_FILES = 300;
 
 /**
  * Find dead exports: symbols defined locally with no cross-file references.
@@ -565,9 +564,14 @@ function supplementReferencesFromCallerMap(
 
   if (useBulkSemanticCallers) {
     profileSpan(
-      'dead.caller-map.mention-chunks',
-      () => supplementCallerFilesFromMentionChunks(db, definitions, recordCallerFile),
-      () => ({ definitions: definitions.length }),
+      'dead.caller-map.per-symbol-non-semantic',
+      () => {
+        for (const definition of definitions) {
+          const callers = callerRowsForSymbol(db, definition, { semantic: false });
+          for (const caller of callers) recordCallerFile(definition, caller.file);
+        }
+      },
+      () => ({ definitions: definitions.length, semantic: false }),
     );
   } else {
     profileSpan(
@@ -599,23 +603,10 @@ function supplementReferencesFromCallerMap(
     () => ({ definitions: definitions.length, semanticCandidates: semanticCandidateCount }),
   );
   if (semanticCandidates.length === 0) return;
-  const semanticCallersBySymbol = semanticCallerMap(db, semanticCandidates);
+  const semanticCallersBySymbol = exactSemanticCallerMap(db, semanticCandidates);
   for (const definition of semanticCandidates) {
     const callerFiles = semanticCallersBySymbol.get(definition.symbolId);
     if (!callerFiles) continue;
     for (const callerFile of callerFiles) recordCallerFile(definition, callerFile);
-  }
-}
-
-function supplementCallerFilesFromMentionChunks(
-  db: ScipDatabase,
-  definitions: readonly IndexedDefinition[],
-  recordCallerFile: (definition: IndexedDefinition, callerFile: string) => void,
-): void {
-  const definitionBySymbolId = new Map(definitions.map((definition) => [definition.symbolId, definition]));
-  for (const row of mentionReferenceChunkRows(db, [...definitionBySymbolId.keys()])) {
-    const definition = definitionBySymbolId.get(row.symbol_id);
-    if (!definition) continue;
-    recordCallerFile(definition, row.relative_path);
   }
 }

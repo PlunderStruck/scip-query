@@ -5,13 +5,13 @@ import type { IndexedDefinition } from '../../domain/types.js';
 import type { ProfileEnvironment } from '../../instrumentation/profile.js';
 import { stringArray } from '../../storage/evidence-payload.js';
 
-export const TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION = 1;
+export const TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION = 2;
 export const TYPESCRIPT_SEMANTIC_MAILBOX_DIR = 'typescript-semantic';
 
 export type TypeScriptSemanticRequest =
   | { kind: 'availability' }
   | { kind: 'import-usage'; file: string }
-  | { kind: 'references'; definitions: IndexedDefinition[] }
+  | { kind: 'references'; definitions: IndexedDefinition[]; exact?: boolean }
   | { kind: 'reference-fragments'; files: string[] }
   | { kind: 'callees'; definitions: IndexedDefinition[] }
   | { kind: 'signature'; definition: IndexedDefinition };
@@ -120,6 +120,7 @@ function isTypeScriptSemanticRequest(value: unknown): value is TypeScriptSemanti
     files?: unknown;
     definitions?: unknown;
     definition?: unknown;
+    exact?: unknown;
   };
   switch (request.kind) {
     case 'availability':
@@ -129,6 +130,9 @@ function isTypeScriptSemanticRequest(value: unknown): value is TypeScriptSemanti
     case 'reference-fragments':
       return stringArray(request.files) !== null;
     case 'references':
+      return (
+        definitionArray(request.definitions) && (request.exact === undefined || typeof request.exact === 'boolean')
+      );
     case 'callees':
       return definitionArray(request.definitions);
     case 'signature':

@@ -1766,11 +1766,39 @@ recorded in `2026-07-10-profile-identity-coverage-ledger.md`. No batching or
 protocol redesign is selected here; that remains the next evidence-backed
 planning decision.
 
+### 2026-07-10 — exact TypeScript caller batching
+
+The follow-up removed that mailbox bottleneck without replacing TypeScript or
+changing dead-code evidence. An exact batch is one service request containing
+many symbol definitions whose server performs the same precise compiler lookup
+previously requested one symbol at a time. Medium/large `dead --full` workloads
+now keep the existing resolved-reference attribution locally and send only the
+semantic reference work through that exact batch. Small projects retain the
+original scalar route.
+
+The first threshold-only experiment was rejected even though it took 2,550ms:
+the existing reference-fragment/inverted-scan product changed four unrelated
+symbol classifications. The accepted path bypasses that approximate product
+for `dead`, advances the TypeScript semantic mailbox protocol to version 2,
+and falls back to the same exact direct provider when no compatible daemon is
+available.
+
+On the fresh 325-file / 21,970-symbol index, cold service time fell from
+30,035ms to 3,650ms, an 8.2x speedup. TypeScript service requests fell from
+2,075 to 2 (availability plus one exact reference batch). The direct-provider
+control took 3,390ms and was byte-identical to service output at 1,519,771 bytes
+and SHA-256 `ad7ccc9b600ebe5b9de1c0a20a40bb01926cc00f03e006aa931f2b71c923392c`.
+The reconstructed pre-edit comparison kept the same 1,834 symbols, including
+15 dead-code and 1,819 file-internal classifications; only source ranges/LOC
+moved with the implementation. Machine-readable accepted and rejected runs
+are in `docs/benchmarks/runs/2026-07-10-dead-typescript-mailbox-batching.jsonl`.
+
 ## Run History
 
 Machine-readable run history:
 `docs/benchmarks/runs/2026-07-09-ts-rust-indexing-analysis.jsonl` and
-`docs/benchmarks/runs/2026-07-10-setup-integration.jsonl`.
+`docs/benchmarks/runs/2026-07-10-setup-integration.jsonl`, plus the focused
+`docs/benchmarks/runs/2026-07-10-dead-typescript-mailbox-batching.jsonl`.
 
 Profile files live next to that run history with descriptive names.
 
@@ -1825,3 +1853,7 @@ acceptance corpus for this slice.
 - Accept health semantic prewarm marker version 2 with `referenceIncomplete`.
   A prewarm with incomplete Rust reference rows may keep successful cache writes,
   but it must not mark the project reusable-warm.
+- Accept exact TypeScript caller batching for medium/large `dead --full`
+  workloads. Preserve scalar resolved-reference attribution, batch only precise
+  compiler references, and reject the faster approximate fragment route because
+  it changed symbol classifications.

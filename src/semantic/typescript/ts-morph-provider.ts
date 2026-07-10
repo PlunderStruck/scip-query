@@ -202,7 +202,10 @@ class TsMorphSemanticProvider implements SemanticProvider {
     });
   }
 
-  referencesForDefinitions(definitions: readonly IndexedDefinition[]): Map<number, SemanticReference[]> {
+  referencesForDefinitions(
+    definitions: readonly IndexedDefinition[],
+    opts: { exact?: boolean } = {},
+  ): Map<number, SemanticReference[]> {
     const result = new Map<number, SemanticReference[]>();
     const profiling = profileEnabled();
     const misses: IndexedDefinition[] = [];
@@ -217,7 +220,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
 
     if (misses.length === 0) return result;
     let preciseSearchDefinitions = misses;
-    const scanDefinitions = misses.filter((definition) => !needsPreciseReferenceSearch(definition));
+    const scanDefinitions = opts.exact ? [] : misses.filter((definition) => !needsPreciseReferenceSearch(definition));
     if (scanDefinitions.length >= BULK_REFERENCE_SCAN_MIN_DEFINITIONS) {
       const computed = this.referencesForDefinitionsBySymbolScan(scanDefinitions);
       for (const definition of scanDefinitions) {
