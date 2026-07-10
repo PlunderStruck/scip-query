@@ -7,11 +7,7 @@ import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { callerRowsForSymbol } from '../../symbols/references/caller-evidence.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { clearSourceFileEvidenceCaches } from '../internal/cache-invalidation.js';
-import {
-  deadCandidateDecision,
-  looksValueLikeDefinition,
-  passesDeadTestFileFilter,
-} from '../internal/dead-candidate-gate.js';
+import { deadCandidateDecision, looksValueLikeDefinition } from '../internal/dead-candidate-gate.js';
 import { getSourceImports } from '../../language-parsers/index.js';
 import { applyScanLimit } from '../query-utils.js';
 import { pathsResolveSame } from '../../source/path-normalization.js';
@@ -29,6 +25,8 @@ import {
   recordReference,
 } from '../internal/reference-counts.js';
 import { profileSpan } from '../../instrumentation/profile.js';
+import { getAst } from '../../source/ast.js';
+import { getSourceLines } from '../../source/source-text.js';
 
 export interface DeadSymbolResult {
   relativePath: string;
@@ -178,20 +176,18 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
       'dead.source-fallback.dead-code-only',
       () =>
         supplementDeadCodeOnlySourceReferences(db, sourceCandidates, referencesBySymbol, {
-          includeTests,
           inactiveBarrelPaths,
         }),
-      () => ({ definitions: sourceCandidates.length, includeTests }),
+      () => ({ definitions: sourceCandidates.length, testReferencesIncluded: true }),
     );
   } else {
     profileSpan(
       'dead.source-fallback.ast',
       () =>
         supplementReferencesFromAst(db, sourceCandidates, referencesBySymbol, {
-          includeTests,
           inactiveBarrelPaths,
         }),
-      () => ({ definitions: sourceCandidates.length, includeTests }),
+      () => ({ definitions: sourceCandidates.length, testReferencesIncluded: true }),
     );
   }
 
@@ -204,7 +200,6 @@ export function dead(db: ScipDatabase, opts: DeadOptions = {}): DeadSummary {
     'dead.caller-map-supplement',
     () =>
       supplementReferencesFromCallerMap(db, callerCandidates, referencesBySymbol, {
-        includeTests,
         inactiveBarrelPaths,
         includeSemantic: !deadCodeOnly && semantic,
       }),
@@ -235,11 +230,76 @@ function deadCandidateDefinitions(db: ScipDatabase, opts: DeadCandidateOptions):
       includeMembers: opts.includeMembers,
       isIgnoredPath: (path) => db.isIgnored(path),
       isExcludedRegion: isExcluded,
+      isDeclarationOnlyCallable: () => isDeclarationOnlyCallable(db, definition),
+      isFrameworkContractCallable: () => isFrameworkContractCallable(db, definition),
     });
     if (decision.accepted) candidates.push(definition);
   }
 
   return candidates;
+}
+
+const DECLARATION_ONLY_NODE_TYPES = [
+  'method_signature',
+  'abstract_method_signature',
+  'call_signature',
+  'construct_signature',
+] as const;
+
+function isDeclarationOnlyCallable(db: ScipDatabase, definition: IndexedDefinition): boolean {
+  if (!definition.parentTypeName || !/\.[cm]?[jt]sx?$/.test(definition.relativePath)) return false;
+
+  const tree = getAst(db, definition.relativePath);
+  if (tree) {
+    return tree.rootNode
+      .descendantsOfType([...DECLARATION_ONLY_NODE_TYPES])
+      .some((node) => node.startPosition.row <= definition.startLine && node.endPosition.row >= definition.endLine);
+  }
+
+  // Source-only fallback for environments where the optional parser cannot
+  // load. A declaration member ends in `;` and has no implementation body.
+  const declaration = getSourceLines(db, definition.relativePath)
+    .slice(definition.startLine, definition.endLine + 1)
+    .join('\n')
+    .trim();
+  return declaration.endsWith(';') && !declaration.includes('=>') && !declaration.includes('{');
+}
+
+const REACT_CLASS_LIFECYCLE_METHODS = new Set([
+  'componentDidCatch',
+  'componentDidMount',
+  'componentDidUpdate',
+  'componentWillUnmount',
+  'getDerivedStateFromError',
+  'getDerivedStateFromProps',
+  'getSnapshotBeforeUpdate',
+  'render',
+  'shouldComponentUpdate',
+  'UNSAFE_componentWillMount',
+  'UNSAFE_componentWillReceiveProps',
+  'UNSAFE_componentWillUpdate',
+]);
+
+function isFrameworkContractCallable(db: ScipDatabase, definition: IndexedDefinition): boolean {
+  if (!definition.parentTypeName || !/\.[cm]?[jt]sx?$/.test(definition.relativePath)) return false;
+  const tree = getAst(db, definition.relativePath);
+  if (!tree) return false;
+
+  const method = tree.rootNode
+    .descendantsOfType('method_definition')
+    .find((node) => node.startPosition.row <= definition.startLine && node.endPosition.row >= definition.endLine);
+  if (!method) return false;
+
+  let container = method.parent;
+  while (container && container.type !== 'class_declaration' && container.type !== 'class')
+    container = container.parent;
+  if (!container) return false;
+  const header = container.text.slice(0, Math.max(0, container.text.indexOf('{')));
+  if (/\bimplements\b/.test(header)) return true;
+  return (
+    REACT_CLASS_LIFECYCLE_METHODS.has(definition.leaf) &&
+    /\bextends\s+(?:React\.)?(?:Component|PureComponent)\b/.test(header)
+  );
 }
 
 function deadRows(definitions: readonly IndexedDefinition[], referencesBySymbol: ReferenceCounts): DeadRow[] {
@@ -346,7 +406,7 @@ function supplementReferencesFromAst(
   db: ScipDatabase,
   definitions: readonly IndexedDefinition[],
   referencesBySymbol: ReferenceCounts,
-  opts: { includeTests: boolean; inactiveBarrelPaths: ReadonlySet<string> },
+  opts: { inactiveBarrelPaths: ReadonlySet<string> },
 ): void {
   if (definitions.length === 0) return;
 
@@ -369,8 +429,10 @@ function supplementReferencesFromAst(
       includeRustAttributeNames: true,
       identifierResolution: 'permissive',
       candidateNames,
-      skipPath: (relativePath) =>
-        opts.inactiveBarrelPaths.has(relativePath) || (!opts.includeTests && !passesDeadTestFileFilter(relativePath)),
+      // `includeTests` controls whether test definitions are candidates. Test
+      // files still consume production code, so their references always count
+      // when the command claims a definition is repository-dead.
+      skipPath: (relativePath) => opts.inactiveBarrelPaths.has(relativePath),
     },
     (hit) => {
       if (!targetIds.has(hit.target.symbolId)) return;
@@ -394,7 +456,7 @@ function supplementDeadCodeOnlySourceReferences(
   db: ScipDatabase,
   definitions: readonly IndexedDefinition[],
   referencesBySymbol: ReferenceCounts,
-  opts: { includeTests: boolean; inactiveBarrelPaths: ReadonlySet<string> },
+  opts: { inactiveBarrelPaths: ReadonlySet<string> },
 ): void {
   if (definitions.length === 0) return;
 
@@ -422,8 +484,7 @@ function supplementDeadCodeOnlySourceReferences(
       includeRustAttributeNames: true,
       identifierResolution: 'permissive',
       candidateNames,
-      skipPath: (sourceFile) =>
-        opts.inactiveBarrelPaths.has(sourceFile) || (!opts.includeTests && !passesDeadTestFileFilter(sourceFile)),
+      skipPath: (sourceFile) => opts.inactiveBarrelPaths.has(sourceFile),
       resolveTargets: ({ sourceFile, name, kind }) => {
         const candidates = candidatesByLeaf.get(name);
         if (!candidates) return [];
@@ -547,7 +608,7 @@ function supplementReferencesFromCallerMap(
   db: ScipDatabase,
   definitions: readonly IndexedDefinition[],
   referencesBySymbol: ReferenceCounts,
-  opts: { includeTests: boolean; inactiveBarrelPaths: ReadonlySet<string>; includeSemantic?: boolean },
+  opts: { inactiveBarrelPaths: ReadonlySet<string>; includeSemantic?: boolean },
 ): void {
   const canUseSemantic = opts.includeSemantic !== false;
   const useBulkSemanticCallers =
@@ -558,7 +619,6 @@ function supplementReferencesFromCallerMap(
   const recordCallerFile = (definition: IndexedDefinition, callerFile: string): void => {
     if (callerFile === definition.relativePath || db.isIgnored(callerFile)) return;
     if (opts.inactiveBarrelPaths.has(callerFile)) return;
-    if (!opts.includeTests && !passesDeadTestFileFilter(callerFile)) return;
     recordReferenceAtLeast(referencesBySymbol, definition.symbolId, callerFile, 1, 'caller-map');
   };
 

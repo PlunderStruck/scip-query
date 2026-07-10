@@ -1024,13 +1024,23 @@ export function handleEffectiveness(rawOpts: unknown): void {
   if (report.checks.length === 0) {
     console.log(
       events.length === 0
-        ? `No outcome events recorded yet (${join(LEDGER_DIR, LEDGER_FILENAME)} is missing or empty). Events accrue as the diff-gate stop hook runs; commit the ledger so history is shared.`
+        ? `No outcome events recorded yet (${join(LEDGER_DIR, LEDGER_FILENAME)} is missing or empty). Events accrue as diff-gate runs; commit the ledger so history is shared.`
         : 'No findings match the requested window/check.',
     );
     return;
   }
 
-  const header = ['check', 'caught', 'fixed', 'suppressed', 'open', 'moved', 'precision', 'median-days-to-fix'];
+  const header = [
+    'check',
+    'caught',
+    'fixed',
+    'suppressed',
+    'open',
+    'moved',
+    'unverified',
+    'precision',
+    'median-days-to-fix',
+  ];
   const rows = report.checks.map((entry) => [
     entry.check,
     String(entry.caught),
@@ -1038,6 +1048,7 @@ export function handleEffectiveness(rawOpts: unknown): void {
     String(entry.suppressed),
     String(entry.open),
     String(entry.moved),
+    String(entry.unverified),
     entry.precision === null ? '-' : `${Math.round(entry.precision * 100)}%`,
     entry.medianDaysToFix === null ? '-' : entry.medianDaysToFix.toFixed(1),
   ]);
@@ -1048,12 +1059,17 @@ export function handleEffectiveness(rawOpts: unknown): void {
 
   const totalFixed = report.checks.reduce((sum, entry) => sum + entry.fixed, 0);
   const totalSuppressed = report.checks.reduce((sum, entry) => sum + entry.suppressed, 0);
+  const totalUnverified = report.checks.reduce((sum, entry) => sum + entry.unverified, 0);
   const concluded = totalFixed + totalSuppressed;
   if (concluded > 0) {
     console.log(
-      `\n${totalFixed} finding(s) fixed by code changes, ${totalSuppressed} suppressed — overall precision ${Math.round(
+      `\n${totalFixed} finding(s) verified fixed before HEAD changed, ${totalSuppressed} suppressed, ${totalUnverified} disappeared without comparable evidence — overall precision ${Math.round(
         (totalFixed / concluded) * 100,
       )}%.`,
+    );
+  } else if (totalUnverified > 0) {
+    console.log(
+      `\n${totalUnverified} finding(s) disappeared without comparable same-HEAD evidence; precision is not available.`,
     );
   }
 }

@@ -12,12 +12,12 @@ The companion documents are:
 
 The ledger is anchored to the current tool surface, not memory.
 
-| Surface                   | Source                                                                                                                                                                                                                                                                                                       | Why it anchors the ledger                                                                     |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
-| Repo-wide health analysis | `scip-query code health --json` reported `src/queries/health/health.ts:218`, where `health()` runs `runHealthAnalyses()` and `buildHealthReport()` through the health budget that carries full-vs-bounded semantic enrichment.                                                                                  | Every repo-wide analyzer validation must eventually reconcile with health output and scoring. |
+| Surface                   | Source                                                                                                                                                                                                                                                                                                        | Why it anchors the ledger                                                                     |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Repo-wide health analysis | `scip-query code health --json` reported `src/queries/health/health.ts:218`, where `health()` runs `runHealthAnalyses()` and `buildHealthReport()` through the health budget that carries full-vs-bounded semantic enrichment.                                                                                | Every repo-wide analyzer validation must eventually reconcile with health output and scoring. |
 | Change-time gate analysis | `scip-query code diffGate --json` reported `src/queries/impact/diff-gate.ts:228`, where `diffGate()` runs the default diff-scoped checks: `echo`, `incomplete-migration`, `co-change-partner`, `doc-reference`, `unused-params`, and `new-dead`. The baseline ratchet is explicit because it is repo-wide.    | Every diff-only analyzer needs a separate validation path from repo-wide health.              |
-| Public command registry   | `scip-query trace queryCommandOrder --json` reported `src/runtime/commands/query-command-specs.ts:11`, where the public query command order starts. `scip-query code queryCommandDescriptor --json` reported `src/runtime/commands/query-command-specs.ts:104`, where command descriptors are resolved by id. | The ledger must not silently miss a public analyzer command.                                 |
-| Diff-gate check list      | `scip-query trace DIFF_GATE_CHECKS --json` reported `src/queries/impact/diff-gate.ts:64`, where the canonical diff-gate check list is exported.                                                                                                                                                              | The ledger must cover every change-time check that can block a diff.                          |
+| Public command registry   | `scip-query trace queryCommandOrder --json` reported `src/runtime/commands/query-command-specs.ts:11`, where the public query command order starts. `scip-query code queryCommandDescriptor --json` reported `src/runtime/commands/query-command-specs.ts:104`, where command descriptors are resolved by id. | The ledger must not silently miss a public analyzer command.                                  |
+| Diff-gate check list      | `scip-query trace DIFF_GATE_CHECKS --json` reported `src/queries/impact/diff-gate.ts:64`, where the canonical diff-gate check list is exported.                                                                                                                                                               | The ledger must cover every change-time check that can block a diff.                          |
 
 ## Core Concepts
 
@@ -343,3 +343,22 @@ one clustered finding carrying `citationCount`, up to 3 `citationExemplars`,
 and an explicit `suppressedCount`. Default diff-gate still runs the same
 check family through the same entry point; per-doc findings under the
 threshold are unchanged.
+
+## 2026-07-10 TypeScript Dead-Code Certification Follow-Up
+
+The direct-repair `dead` row now has a detector-language certificate rather
+than relying on the earlier mixed-family calibration. The pinned four-repo
+baseline produced 25 valid and 53 invalid TypeScript findings. Shared fixes
+made test references count as repository usage, propagated declared package
+surfaces through re-exports, recognized framework entry files, and excluded
+interface, constructor, React lifecycle, and implemented-protocol contracts.
+
+The final fixed-seed review contained 43 valid findings and zero invalid
+findings across Vega_2.0, openwork, Stable_Management, and traceroot. Observed
+precision was 100%, the 95% Wilson lower bound was 91.8%, and three positive
+fixtures continued to detect ordinary unreferenced definitions. The retained
+claim is narrowly scoped: TypeScript `dead-code` rows are certified
+repository-dead candidates, while `file-internal`, other detector families,
+Rust, Python, and the aggregate health score retain independent status. The
+full evidence is in
+`docs/validation/2026-07-10-typescript-dead-certification.md`.

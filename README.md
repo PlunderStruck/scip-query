@@ -34,14 +34,14 @@ Two layers, wired by `scip-query setup`:
 
 **Invoked** — the agent routes work through skills, each carrying its own short command list so it never navigates the full CLI:
 
-| Phase     | Skill                                                    | Commands underneath (also usable directly)      |
-| --------- | -------------------------------------------------------- | ----------------------------------------------- |
-| Orient    | `scip-explore`                                            | `system`, `trace`, `plan-context`, `call-graph` |
-| Plan      | `scip-concrete-plan` (one change) · `scip-conductor` (a program) | `plan-context`, `change-surface`, `co-change`   |
-| Reuse     | (taught in-loop by the planning skills)                   | `similar`, `duplicate-bodies`, `recent-duplicates` |
-| Implement | your agent + the post-change check for the change type    | `incomplete-migration`, `unused-params`, `co-change` |
-| Verify    | `scip-verify` (closeout) + the ambient diff gate          | `diff-impact`, `diff-gate`, `health --baseline` |
-| Clean up  | `scip-cleanup-audit` → `scip-cleanup-improve`             | `cleanup-plan --verify`, `dead`, `twin-drift`   |
+| Phase     | Skill                                                            | Commands underneath (also usable directly)           |
+| --------- | ---------------------------------------------------------------- | ---------------------------------------------------- |
+| Orient    | `scip-explore`                                                   | `system`, `trace`, `plan-context`, `call-graph`      |
+| Plan      | `scip-concrete-plan` (one change) · `scip-conductor` (a program) | `plan-context`, `change-surface`, `co-change`        |
+| Reuse     | (taught in-loop by the planning skills)                          | `similar`, `duplicate-bodies`, `recent-duplicates`   |
+| Implement | your agent + the post-change check for the change type           | `incomplete-migration`, `unused-params`, `co-change` |
+| Verify    | `scip-verify` (closeout) + the ambient diff gate                 | `diff-impact`, `diff-gate`, `health --baseline`      |
+| Clean up  | `scip-cleanup-audit` → `scip-cleanup-improve`                    | `cleanup-plan --verify`, `dead`, `twin-drift`        |
 
 Interrogation lenses go deeper on demand: `scip-integrity-audit` ("is this implementation real?"), `scip-twin-drift`, `scip-claim-audit`, `scip-probe-reachability`, and `scip-maintainability`. The full map with essential differences is in [Bundled skills](#bundled-skills); every command remains directly invocable for humans and scripts.
 
@@ -70,7 +70,7 @@ which leaves the native modules unbuilt. Every script on that list is expected:
 - `better-sqlite3` — builds/downloads the native SQLite binding that backs the index
 - `tree-sitter` + the per-language grammars — native parsers behind multi-language source facts
 
-Approve them and re-run the builds (`--allow-scripts-pending` only *lists* — the approving forms
+Approve them and re-run the builds (`--allow-scripts-pending` only _lists_ — the approving forms
 are `npm approve-scripts <pkg> ...` or `--all`):
 
 ```bash
@@ -192,17 +192,19 @@ When verification _fails_, the errors name the exact references the static evide
 **8. Gate every diff.** `diff-gate` runs a defined set of checks scoped to what a change _introduces_ and exits nonzero with remediation text for each finding. Baseline regressions are included when you pass `--baseline`.
 
 <!-- BEGIN GENERATED DIFF-GATE CHECKS -->
-| Check | What it catches | When it runs |
-| --- | --- | --- |
-| `echo` | Changed symbols that newly echo established code elsewhere. | Default diff gate. |
-| `incomplete-migration` | New helpers or abstractions wired into some sites while older inline sites remain. | Default diff gate. |
-| `co-change-partner` | Historically coupled files that usually change together but are missing from this diff. | Default diff gate. |
-| `twin-partner` | A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched. | Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves. |
-| `coverage-contract` | A configured `coverageContracts` entry (.scipquery.json) drifted: its declared key set no longer matches its ground-truth source. | Default diff gate, only when either side of a configured contract changed. |
-| `doc-reference` | Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy. | Default diff gate. Advisory (21.2) for bare file-mention citations; blocking when the citation has a line anchor or the cited file was deleted/renamed. |
-| `unused-params` | Fresh trailing parameters or options that no changed body uses. | Default diff gate. |
-| `new-dead` | Changed production symbols with zero indexed consumers. | Default diff gate. |
-| `baseline` | New health finding identities compared with the committed health baseline. | Only with `diff-gate --baseline`. |
+
+| Check                  | What it catches                                                                                                                   | When it runs                                                                                                                                            |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `echo`                 | Changed symbols that newly echo established code elsewhere.                                                                       | Default diff gate.                                                                                                                                      |
+| `incomplete-migration` | New helpers or abstractions wired into some sites while older inline sites remain.                                                | Default diff gate.                                                                                                                                      |
+| `co-change-partner`    | Historically coupled files that usually change together but are missing from this diff.                                           | Default diff gate.                                                                                                                                      |
+| `twin-partner`         | A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched.            | Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves.                                                               |
+| `coverage-contract`    | A configured `coverageContracts` entry (.scipquery.json) drifted: its declared key set no longer matches its ground-truth source. | Default diff gate, only when either side of a configured contract changed.                                                                              |
+| `doc-reference`        | Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy.     | Default diff gate. Advisory (21.2) for bare file-mention citations; blocking when the citation has a line anchor or the cited file was deleted/renamed. |
+| `unused-params`        | Fresh trailing parameters or options that no changed body uses.                                                                   | Default diff gate.                                                                                                                                      |
+| `new-dead`             | Changed production symbols with zero indexed consumers.                                                                           | Default diff gate.                                                                                                                                      |
+| `baseline`             | New health finding identities compared with the committed health baseline.                                                        | Only with `diff-gate --baseline`.                                                                                                                       |
+
 <!-- END GENERATED DIFF-GATE CHECKS -->
 
 Illustrative output:
@@ -228,19 +230,19 @@ scip-query suppress SQABC123DEF456 --check echo --reason "intentional compatibil
 
 This writes one file per suppression under `.scipquery/suppressions/` — commit it with your change. One-file-per-suppression means two branches suppressing different findings merge without conflict; the legacy `suppressions[]` array in `.scipquery.json` is still honored (read-only). Every suppression requires a reason plus either a stable finding id or a `check` (optionally narrowed by `file`). Check+file suppressions are allowed but warn because they waive every matching finding in that file. `diff-gate --json` reports both active and suppressed findings.
 
-**12. Measure whether the gate is earning its keep.** Both installed Stop hooks and the legacy `diff-gate --hook` path append finding transitions to a committed, merge-conflict-free ledger (`.scipquery/ledger/events.jsonl`, one JSON event per line under a scoped `merge=union` gitattribute). A finding that disappears without a suppression was fixed; a suppressed finding was noise or an accepted trade-off — the tool keeps score on itself:
+**12. Measure whether the gate is earning its keep.** Every completed `diff-gate` run, including JSON and installed Stop-hook runs, appends finding transitions to a committed, merge-conflict-free ledger (`.scipquery/ledger/events.jsonl`, one JSON event per line under a scoped `merge=union` gitattribute). A finding that disappears on a later run against the same non-null HEAD is a verified fix. If HEAD changed or Git evidence is unavailable, the disappearance is reported as `unverified` rather than credited as a fix. A suppressed finding was noise or an accepted trade-off:
 
 ```bash
 scip-query effectiveness --since 30d
 ```
 
 ```
-check       caught  fixed  suppressed  open  moved  precision  median-days-to-fix
-echo        14      11     2           1     0      85%        0.8
-new-dead    6       5      0           1     0      100%       0.3
+check       caught  fixed  suppressed  open  moved  unverified  precision  median-days-to-fix
+echo        14      10     2           1     0      1           83%        0.8
+new-dead    6       5      0           1     0      0           100%       0.3
 ```
 
-`precision` is fixed ÷ (fixed + suppressed) — how often acting on the check was the right call. `moved` separates rename churn from real fixes. Filter with `--check <name>`, window with `--since 30d|12w|<ISO date>`, and get machine-readable output with `--json`. Because the ledger is committed, the numbers survive re-clones and aggregate across every machine and agent working the repo.
+`precision` is verified fixed ÷ (verified fixed + suppressed). `moved` separates rename churn, while `unverified` prevents a commit or missing Git identity from masquerading as a confirmed repair. Run diff-gate once to record the finding and again after the repair, before committing, to earn same-HEAD verification. Filter with `--check <name>`, window with `--since 30d|12w|<ISO date>`, and get machine-readable output with `--json`. Because the ledger is committed, the numbers survive re-clones and aggregate across every machine and agent working the repo. Standalone health/cleanup commands are not yet outcome-tracked because they do not all expose a complete-scan contract.
 
 Before any edit, `plan-context <target>` bundles the structural picture — definitions, references, call graph, blast radius — plus a HISTORY section: churn, fix-commit density, and the files that usually change together with the target ("editing this usually means editing these").
 
@@ -532,12 +534,12 @@ dead and isolated cleanup detectors.
 
 Useful environment variables:
 
-| Variable                  | Purpose                                                               |
-| ------------------------- | --------------------------------------------------------------------- |
-| `SCIP_QUERY_PROJECT_ROOT` | Override the project root directory                                   |
-| `SCIP_QUERY_INDEX_DB`     | Override the SQLite database path                                     |
-| `SCIP_QUERY_INDEX_SCIP`   | Override the SCIP protobuf path                                       |
-| `SCIP_QUERY_CACHE_DIR`    | Override the cache directory                                          |
+| Variable                  | Purpose                                                                |
+| ------------------------- | ---------------------------------------------------------------------- |
+| `SCIP_QUERY_PROJECT_ROOT` | Override the project root directory                                    |
+| `SCIP_QUERY_INDEX_DB`     | Override the SQLite database path                                      |
+| `SCIP_QUERY_INDEX_SCIP`   | Override the SCIP protobuf path                                        |
+| `SCIP_QUERY_CACHE_DIR`    | Override the cache directory                                           |
 | `SCIP_QUERY_SCIP_BIN`     | Path to a local `scip` binary (overrides PATH and the Windows sidecar) |
 
 Query results are filtered through the project's `.gitignore`. If none exists, common generated directories such as `dist/`, `target/`, `node_modules/`, and `.venv/` are excluded by default.

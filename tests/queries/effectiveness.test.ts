@@ -13,7 +13,7 @@ describe('computeEffectiveness', () => {
     const events: OutcomeEvent[] = [
       // fixed after 2 days
       event({ ts: 0, findingId: 'SQFIX' }),
-      event({ ts: 2 * DAY, findingId: 'SQFIX', event: 'resolved', commit: 'c2' }),
+      event({ ts: 2 * DAY, findingId: 'SQFIX', event: 'resolved', commit: 'c1' }),
       // suppressed = not a fix
       event({ ts: 0, findingId: 'SQSUP' }),
       event({ ts: DAY, findingId: 'SQSUP', event: 'suppressed', commit: 'c2' }),
@@ -30,6 +30,7 @@ describe('computeEffectiveness', () => {
       suppressed: 1,
       open: 1,
       moved: 0,
+      unverified: 0,
       precision: 0.5,
       medianDaysToFix: 2,
     });
@@ -43,6 +44,30 @@ describe('computeEffectiveness', () => {
     ];
     const report = computeEffectiveness(events);
     expect(report.checks[0]).toMatchObject({ caught: 1, fixed: 0, open: 1, reopened: 1 });
+  });
+
+  it('does not call a cross-HEAD disappearance fixed', () => {
+    const events: OutcomeEvent[] = [
+      event({ ts: 0, findingId: 'SQABSORBED', commit: 'c1' }),
+      event({ ts: DAY, findingId: 'SQABSORBED', event: 'resolved', commit: 'c2' }),
+    ];
+
+    expect(computeEffectiveness(events).checks[0]).toMatchObject({
+      caught: 1,
+      fixed: 0,
+      unverified: 1,
+      precision: null,
+      medianDaysToFix: null,
+    });
+  });
+
+  it('does not verify a resolution without Git commit evidence', () => {
+    const events: OutcomeEvent[] = [
+      event({ ts: 0, findingId: 'SQNOGIT', commit: null }),
+      event({ ts: DAY, findingId: 'SQNOGIT', event: 'resolved', commit: null }),
+    ];
+
+    expect(computeEffectiveness(events).checks[0]).toMatchObject({ fixed: 0, unverified: 1 });
   });
 
   it('reclassifies a rename as moved: resolved id whose symbol re-caught at the same commit', () => {
@@ -61,14 +86,15 @@ describe('computeEffectiveness', () => {
     expect(check.caught).toBe(2);
   });
 
-  it('a genuine fix at a commit where an unrelated symbol was caught stays fixed', () => {
+  it('a disappearance after a commit stays unverified even when an unrelated symbol was caught', () => {
     const events: OutcomeEvent[] = [
       event({ ts: 0, findingId: 'SQOLD', symbol: 'sym#fn', commit: 'c1' }),
       event({ ts: DAY, findingId: 'SQOLD', event: 'resolved', commit: 'c9' }),
       event({ ts: DAY, findingId: 'SQNEW', symbol: 'sym#other', commit: 'c9' }),
     ];
     const report = computeEffectiveness(events);
-    expect(report.checks[0].fixed).toBe(1);
+    expect(report.checks[0].fixed).toBe(0);
+    expect(report.checks[0].unverified).toBe(1);
     expect(report.checks[0].moved).toBe(0);
   });
 
@@ -79,7 +105,7 @@ describe('computeEffectiveness', () => {
       event({ ts: 10 * DAY, findingId: 'SQOLD', event: 'resolved' }),
       // new finding caught in window, fixed after — included
       event({ ts: 9 * DAY, findingId: 'SQNEW' }),
-      event({ ts: 12 * DAY, findingId: 'SQNEW', event: 'resolved', commit: 'c3' }),
+      event({ ts: 12 * DAY, findingId: 'SQNEW', event: 'resolved', commit: 'c1' }),
     ];
     const report = computeEffectiveness(events, { sinceMs: 8 * DAY });
     expect(report.checks[0]).toMatchObject({ caught: 1, fixed: 1 });
@@ -89,7 +115,7 @@ describe('computeEffectiveness', () => {
     const events: OutcomeEvent[] = [
       event({ ts: 0, check: 'echo', findingId: 'SQA' }),
       event({ ts: 0, check: 'new-dead', findingId: 'SQB' }),
-      event({ ts: 1, check: 'new-dead', findingId: 'SQB', event: 'resolved' }),
+      event({ ts: 1, check: 'new-dead', findingId: 'SQB', event: 'resolved', commit: 'c1' }),
     ];
     expect(computeEffectiveness(events).checks.map((c) => c.check)).toEqual(['echo', 'new-dead']);
     const only = computeEffectiveness(events, { check: 'new-dead' });

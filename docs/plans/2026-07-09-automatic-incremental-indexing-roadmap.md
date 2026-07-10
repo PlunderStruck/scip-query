@@ -3,6 +3,15 @@
 Date: 2026-07-09
 Status: Complete; Phases 0–6 and setup integration accepted
 
+## Next Program
+
+Automatic incremental indexing is the performance and lifecycle foundation
+for repository-at-commit analysis. The next program is
+[`Accuracy Hardening and Health Certification`](../accuracy-hardening-goal.md):
+certify each health detector by language against real repositories, expose
+unsupported and excluded coverage, and replace an unqualified universal score
+with reproducible evidence views before operating a public cloud leaderboard.
+
 ## Goal
 
 Make scip-query automatically maintain a compiler-correct, query-ready code
@@ -303,14 +312,14 @@ omitted.
 
 ### Acceptance thresholds
 
-| Milestone                           | Hard gate                                                                                                                                                                                                                                                                         |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Phase 1 automatic service           | Event-to-refresh-scheduled p95 <= 1.5 s; local edit-to-fresh p95 <= 8 s with current project shard; unchanged refresh median <= 0.5 s and p95 <= 0.75 s; 20-write burst causes <= 2 refreshes and never concurrent reindex; foreground output hashes unchanged.                   |
-| Phase 2 affected-set shadow         | 100% recall against documents/facts changed by clean full rebuilds on all fixtures and corpora; median leaf edit affects < 20% of project files on at least two representative TS projects; any uncertainty widens rather than misses.                                            |
-| Phase 3 persistent TS semantics     | Fully warm command constructs zero new unchanged Projects; unaffected semantic cache-hit rate >= 95%; TS-heavy command median improves >= 20% or measured Project/semantic span improves >= 50%; exact output/fact parity.                                                        |
-| Phase 4 incremental SCIP documents  | Warm affected-document/shard production p95 <= 0.5 s locally and <= 5 s on the selected large TS corpus; clean full-rebuild parity is exact; failure falls back to project rebuild; no-op regression <= 10%. The original complete edit-to-fresh target remains a combined Phase 4+5 ship gate. |
+| Milestone                           | Hard gate                                                                                                                                                                                                                                                                                         |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phase 1 automatic service           | Event-to-refresh-scheduled p95 <= 1.5 s; local edit-to-fresh p95 <= 8 s with current project shard; unchanged refresh median <= 0.5 s and p95 <= 0.75 s; 20-write burst causes <= 2 refreshes and never concurrent reindex; foreground output hashes unchanged.                                   |
+| Phase 2 affected-set shadow         | 100% recall against documents/facts changed by clean full rebuilds on all fixtures and corpora; median leaf edit affects < 20% of project files on at least two representative TS projects; any uncertainty widens rather than misses.                                                            |
+| Phase 3 persistent TS semantics     | Fully warm command constructs zero new unchanged Projects; unaffected semantic cache-hit rate >= 95%; TS-heavy command median improves >= 20% or measured Project/semantic span improves >= 50%; exact output/fact parity.                                                                        |
+| Phase 4 incremental SCIP documents  | Warm affected-document/shard production p95 <= 0.5 s locally and <= 5 s on the selected large TS corpus; clean full-rebuild parity is exact; failure falls back to project rebuild; no-op regression <= 10%. The original complete edit-to-fresh target remains a combined Phase 4+5 ship gate.   |
 | Phase 5 generation store            | Complete leaf-edit edit-to-fresh p95 <= 2 s locally and <= 5 s on the selected large TS corpus; crash at every publication failpoint leaves the preceding generation readable; zero mixed-generation reads under concurrent query stress; incremental and full generations normalize identically. |
-| Phase 6 Rust default/native kernels | Durable default has <= 5% cold/warm regression on any corpus and retains current accepted facts; native slices meet AD-7 threshold and exact parity.                                                                                                                              |
+| Phase 6 Rust default/native kernels | Durable default has <= 5% cold/warm regression on any corpus and retains current accepted facts; native slices meet AD-7 threshold and exact parity.                                                                                                                                              |
 
 All timing gates use the same built artifacts, cache state, environment, corpus
 commit, and alternating run order. A speedup is rejected if output hashes or

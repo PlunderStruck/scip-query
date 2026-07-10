@@ -19,6 +19,8 @@ const baseOptions: DeadCandidateDecisionOptions = {
   includeMembers: false,
   isIgnoredPath: () => false,
   isExcludedRegion: () => false,
+  isDeclarationOnlyCallable: () => false,
+  isFrameworkContractCallable: () => false,
 };
 
 describe('dead candidate gate', () => {
@@ -57,6 +59,43 @@ describe('dead candidate gate', () => {
       accepted: false,
       rejectionReason: 'rust-trait-impl-member',
     });
+  });
+
+  it('keeps implicit constructors and declaration-only members out of deletion candidates', () => {
+    expect(
+      deadCandidateDecision(
+        {
+          ...baseDefinition,
+          symbol: 'scip-typescript npm fixture 1.0.0 src/`domain.ts`/Model#`<constructor>`().',
+          parentTypeName: 'Model',
+        },
+        baseOptions,
+      ),
+    ).toEqual({ accepted: false, rejectionReason: 'implicit-constructor' });
+
+    expect(
+      deadCandidateDecision(
+        {
+          ...baseDefinition,
+          symbol: 'scip-typescript npm fixture 1.0.0 src/`domain.ts`/Model#run().',
+          parentTypeName: 'Model',
+        },
+        { ...baseOptions, isDeclarationOnlyCallable: () => true },
+      ),
+    ).toEqual({ accepted: false, rejectionReason: 'declaration-only-callable' });
+  });
+
+  it('keeps framework and implemented-contract members out of deletion candidates', () => {
+    expect(
+      deadCandidateDecision(
+        {
+          ...baseDefinition,
+          symbol: 'scip-typescript npm fixture 1.0.0 src/`domain.ts`/Boundary#getDerivedStateFromError().',
+          parentTypeName: 'Boundary',
+        },
+        { ...baseOptions, isFrameworkContractCallable: () => true },
+      ),
+    ).toEqual({ accepted: false, rejectionReason: 'framework-contract-member' });
   });
 
   it('keeps members out unless member scanning is requested', () => {

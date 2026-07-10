@@ -1,11 +1,13 @@
 /**
  * Effectiveness stats over the committed outcome-event ledger
  * (.scipquery/ledger/events.jsonl): per check, how many findings the gate
- * caught, how many were fixed by code changes, how many were suppressed as
- * accepted/false findings, and how long fixes took.
+ * caught, how many disappeared on a comparable same-HEAD rerun, how many were
+ * suppressed as accepted/false findings, and how long verified fixes took.
  *
- * "Fixed" is strictly "the finding stopped matching without a suppression"
- * — an agent suppressing a finding is a precision datapoint, not a fix.
+ * "Fixed" is strictly "the finding stopped matching without a suppression on
+ * a later run against the same non-null HEAD". A changed or missing HEAD is
+ * unverified because committing a finding also clears the current diff.
+ * An agent suppressing a finding is a precision datapoint, not a fix.
  * Rename noise is reclassified at query time: a resolved finding whose
  * symbol was re-caught under the same check at the same commit is counted
  * as `moved`, not fixed (finding ids embed the file path, so renames mint
@@ -31,6 +33,8 @@ export interface CheckEffectiveness {
   suppressed: number;
   reopened: number;
   moved: number;
+  /** Resolved after HEAD changed or without a comparable Git commit. */
+  unverified: number;
   open: number;
   /** fixed / (fixed + suppressed); null until at least one finding concluded. */
   precision: number | null;
@@ -94,6 +98,7 @@ export function computeEffectiveness(
     let suppressed = 0;
     let reopened = 0;
     let moved = 0;
+    let unverified = 0;
     let open = 0;
     const daysToFix: number[] = [];
 
@@ -104,8 +109,13 @@ export function computeEffectiveness(
       if (terminal.event === 'resolved' && movedKeys.has(key)) {
         moved += 1;
       } else if (terminal.event === 'resolved') {
-        fixed += 1;
-        daysToFix.push((terminal.ts - history.caughtAt) / MS_PER_DAY);
+        const anchor = resolutionAnchor(history.events);
+        if (anchor?.commit && terminal.commit === anchor.commit) {
+          fixed += 1;
+          daysToFix.push((terminal.ts - history.caughtAt) / MS_PER_DAY);
+        } else {
+          unverified += 1;
+        }
       } else if (terminal.event === 'suppressed') {
         suppressed += 1;
       } else {
@@ -121,6 +131,7 @@ export function computeEffectiveness(
       suppressed,
       reopened,
       moved,
+      unverified,
       open,
       precision: concluded > 0 ? fixed / concluded : null,
       medianDaysToFix: daysToFix.length > 0 ? median(daysToFix) : null,
@@ -132,6 +143,18 @@ export function computeEffectiveness(
     windowStart: options.sinceMs ?? null,
     checks: checks.sort((left, right) => left.check.localeCompare(right.check)),
   };
+}
+
+/**
+ * The observation that opened the current lifecycle. A same-HEAD clean rerun
+ * can verify that cycle as fixed; a later commit cannot prove what happened.
+ */
+function resolutionAnchor(events: readonly OutcomeEvent[]): OutcomeEvent | undefined {
+  for (let index = events.length - 2; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event?.event === 'caught' || event?.event === 'reopened') return event;
+  }
+  return undefined;
 }
 
 /**

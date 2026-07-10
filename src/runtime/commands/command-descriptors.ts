@@ -257,7 +257,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     id: 'effectiveness',
     command: 'effectiveness',
     description:
-      'Per-check effectiveness from the committed outcome ledger: findings caught, fixed by code changes, suppressed, precision, median time-to-fix',
+      'Per-check effectiveness from the committed outcome ledger: caught, same-HEAD verified fixes, suppressed, unverified disappearances, and precision',
     options: withJsonOption([
       option('--since <window>', 'Only count findings first caught in this window (30d, 12w, or an ISO date)'),
       option('--check <check>', 'Restrict to one diff-gate check'),

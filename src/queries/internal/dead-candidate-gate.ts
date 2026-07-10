@@ -7,6 +7,7 @@ import {
   isInRustTestModule,
   isModuleLikeSymbol,
   isRustTraitImplMember,
+  leafName,
 } from '../../symbols/symbol-parser.js';
 
 export type DeadCandidateRejectionReason =
@@ -16,6 +17,9 @@ export type DeadCandidateRejectionReason =
   | 'nested-non-callable-value'
   | 'test-file'
   | 'excluded-file-region'
+  | 'implicit-constructor'
+  | 'declaration-only-callable'
+  | 'framework-contract-member'
   | 'rust-trait-impl-member'
   | 'rust-test-module'
   | 'member'
@@ -44,6 +48,8 @@ export function deadCandidateDecision(
       symbol: string,
       parentTypeName: string | null,
     ) => boolean;
+    isDeclarationOnlyCallable: () => boolean;
+    isFrameworkContractCallable: () => boolean;
   },
 ): DeadCandidateDecision {
   if (opts.isIgnoredPath(definition.relativePath)) return rejectDeadCandidate('ignored-file');
@@ -57,6 +63,13 @@ export function deadCandidateDecision(
     opts.isExcludedRegion(definition.relativePath, definition.startLine, definition.symbol, definition.parentTypeName)
   )
     return rejectDeadCandidate('excluded-file-region');
+  // Constructors are invoked by creating an instance or subclass, not by a
+  // direct call to the synthetic `<constructor>` SCIP member.
+  if (leafName(definition.symbol) === '<constructor>') return rejectDeadCandidate('implicit-constructor');
+  // Interface and abstract method signatures are contracts. Implementations
+  // and property dispatch consume the contract without calling its declaration.
+  if (opts.isDeclarationOnlyCallable()) return rejectDeadCandidate('declaration-only-callable');
+  if (opts.isFrameworkContractCallable()) return rejectDeadCandidate('framework-contract-member');
   // rust-analyzer encodes trait impls as `impl#[Type][Trait]Member.` and
   // inherent impls as `impl#[Type]Member.`. Trait-impl members are reached
   // through the trait, which SCIP rarely traces accurately.

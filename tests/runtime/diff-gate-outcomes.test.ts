@@ -58,12 +58,34 @@ describe('recordDiffGateOutcomes', () => {
       });
       recordDiffGateOutcomes(db, result([]), {
         now: () => 2_000,
-        headCommit: () => 'commit-2',
+        headCommit: () => 'commit-1',
       });
 
       const events = readOutcomeEvents(root);
       expect(events.map((event) => event.event)).toEqual(['caught', 'resolved']);
       expect(computeEffectiveness(events).checks[0]).toMatchObject({ caught: 1, fixed: 1, open: 0 });
+    } finally {
+      db.close();
+    }
+  });
+
+  it('records a cross-HEAD disappearance without crediting it as fixed', () => {
+    const { db, root } = openDb();
+    try {
+      recordDiffGateOutcomes(db, result([finding()]), {
+        now: () => 1_000,
+        headCommit: () => 'commit-1',
+      });
+      recordDiffGateOutcomes(db, result([]), {
+        now: () => 2_000,
+        headCommit: () => 'commit-2',
+      });
+
+      expect(computeEffectiveness(readOutcomeEvents(root)).checks[0]).toMatchObject({
+        caught: 1,
+        fixed: 0,
+        unverified: 1,
+      });
     } finally {
       db.close();
     }

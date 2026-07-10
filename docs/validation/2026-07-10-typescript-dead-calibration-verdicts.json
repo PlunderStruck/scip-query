@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "packet": "reports/accuracy/2026-07-10T22-27-14-877Z-typescript-dead-calibration.json",
+  "knownPositiveRecallCases": 0,
+  "groups": [
+    {
+      "verdict": "invalid",
+      "archetype": "test-only-consumer-excluded",
+      "evidenceNote": "Pinned-commit source search found exact imports, calls, assertions, or mocks in tests but no production consumer. The certification truth rule treats test-required code as live, so excluding test references creates a false dead-code claim.",
+      "ids": [
+        "f72baf3fcaf105ed449b",
+        "db4368732d40a28c4b07",
+        "59cf92645d76e0917de5",
+        "62ef434074cb514b4c39",
+        "fed6d10bb332802b2758",
+        "111c78124882a6b328ec",
+        "7b18114341aea7f7e5a2",
+        "f544173875e0a7e496b8",
+        "b17ffb87e93035f88974",
+        "b072ad953202313bc7d6",
+        "b7f09b2eefd926408a8b",
+        "698c216a132bd6ada3cc",
+        "6ab672d1017a847bc350",
+        "add9eae54b6b7819d90f",
+        "efd50be64c2cedbf259b",
+        "fd1430a5802a7c6cae48",
+        "bfa72750017a40c2ccb3",
+        "bf9d2acd9f761d3b6db5",
+        "1eeb279b49e83ff360a8",
+        "bad4744f7ac9d60fb108",
+        "ee3287bd4477d50bf9f2",
+        "c4e784001f23e52fa6f2",
+        "e0567df8f5212a5e7a4d",
+        "ec8dac6a9b074767b143",
+        "28f9fd33bd98bcb13382",
+        "527b184e9f3091226c70"
+      ]
+    },
+    {
+      "verdict": "invalid",
+      "archetype": "framework-file-entrypoint",
+      "evidenceNote": "The symbol is the default export or configuration export of a Next.js page.tsx/layout.tsx file, or the middleware function in middleware.ts. The framework loads it by file convention, so ordinary reference counts cannot establish deadness.",
+      "ids": [
+        "331dbc4c264a8c60636d",
+        "e389db2ac35831f7d29f",
+        "1e3014d6e73bd2e1f5f3",
+        "906ce036114be0ae2c72",
+        "c2cd35a2d6b5cd7d24d4",
+        "806f62bd5d161ba2cee5",
+        "12e82f55a2206bb3c2e0",
+        "89f10f2152d88c0c0c42",
+        "0c4c63ab7e8a981f3eb8",
+        "f79a506f6d4cea28d646",
+        "9ffe3cb488477552c69e",
+        "dc866efde2832fa79c73",
+        "4afd12501807ee61e57e",
+        "3b9d72e10e2eca5cfaf6",
+        "d1b97a9dea76fd83304e",
+        "da3af27c17c25bd9c5e2",
+        "0793e90dfd7fbabcf64f",
+        "194f4315946765413234",
+        "0d99883a5b3e7e9d9bb3",
+        "3c3cc4250188524aa6e9"
+      ]
+    },
+    {
+      "verdict": "invalid",
+      "archetype": "declared-package-surface",
+      "evidenceNote": "The defining file is re-exported through a declared workspace package entrypoint. OpenWork's den-db schema barrel exposes Drizzle relation objects; TraceRoot's core package barrel exposes its schemas. A package-surface root cannot be called dead solely because in-repository call references are absent.",
+      "ids": [
+        "8f33868c53b43d5e25f5",
+        "5e2ef325b55760b6cf3e",
+        "a5573745e1a88386b755",
+        "870bb88e622f42039fdd",
+        "5b4d3004faf98ed4aeb8"
+      ]
+    },
+    {
+      "verdict": "invalid",
+      "archetype": "interface-contract-member",
+      "evidenceNote": "Executor.readFile is a required interface member implemented by the Daytona and Docker executors and exercised by executor tests. Interface conformance and property dispatch are the usage evidence; a direct call to the declaration is not required.",
+      "ids": ["a48db6123ca7be1b80fb"]
+    },
+    {
+      "verdict": "invalid",
+      "archetype": "implicit-constructor",
+      "evidenceNote": "The base-class constructor initializes protected state for subclasses. Constructor execution is implicit when a subclass instance is created, so the absence of a textual constructor reference is not deadness evidence.",
+      "ids": ["837224d3bdd57ecb35fa"]
+    },
+    {
+      "verdict": "valid",
+      "evidenceNote": "Pinned-commit inspection found an internal application symbol with no production, test, framework-convention, interface, or declared package-surface consumer. The emitted dead-code claim is actionable under the current truth rule.",
+      "ids": [
+        "af2b371fcf4da9d18402",
+        "3c54d16266c3ba7d3eb9",
+        "3a9291665d917a4e929b",
+        "5c0e8e00c6b2bf5645b6",
+        "1a1c64f6f2e37b0af0ad",
+        "d3b83818b98bb515ab8a",
+        "3d1a5f21dc65fcd6f695",
+        "4bfd05e745f86088d0ec",
+        "c1a54124fb379cee784b",
+        "b3fc9bd939fa6da81bbb",
+        "d86b0936017d45be154f",
+        "37409d21dbd8bd0ce752",
+        "ad4d361345bb9e208e29",
+        "ab5185ca1c1cdc7bbd83",
+        "10ee79c265a40470c988",
+        "b8fa9689222c4f5b747e",
+        "2173365704b8f3674337",
+        "2fb71b4d1be3316e0ee9",
+        "0e984b4be3c948744545",
+        "7af8309fe097b192dabf",
+        "81dfc873aba204c5c832",
+        "dcb2a44cf29061442bff",
+        "0ba1b1926c257fb0d952",
+        "6868274455a150139f56",
+        "6320fd60d6e89240fd11"
+      ]
+    }
+  ]
+}

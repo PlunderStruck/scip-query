@@ -230,6 +230,8 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
   });
   const blocking = queries.blockingFindings(result.findings);
   const gateFailed = queries.diffGateFailedClosed(result);
+  const outcomes = recordDiffGateOutcomes(db, result);
+  if (outcomes.warning) console.error(`note: ${outcomes.warning}`);
   if (!hookMode && booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('diff-gate', [], opts, {
       exitCode: blocking.length > 0 || gateFailed ? 1 : 0,
@@ -242,9 +244,7 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
     return;
   }
   if (hookMode) {
-    const outcomes = recordDiffGateOutcomes(db, result);
     const { ledger, observed, now } = outcomes;
-    if (outcomes.warning) console.error(`note: ${outcomes.warning}`);
 
     // Hook contract (Claude Code and Codex): silent exit 0 = allow stop,
     // exit 2 with stderr = block and feed the reason back to the agent.

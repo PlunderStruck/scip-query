@@ -18,6 +18,7 @@ import { sourceEvidence } from '../source/source-evidence.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import { normalizePathSeparators as normalizePath } from '../source/path-normalization.js';
 import { leafName } from '../symbols/symbol-parser.js';
+import { getReExports } from '../language-parsers/index.js';
 import { isPackageSurfaceFile } from './package-surface.js';
 
 export type FileKind =
@@ -134,8 +135,9 @@ function definesFunctions(db: ScipDatabase, relativePath: string): boolean {
  * static graph.
  */
 export function isEntrySurface(db: ScipDatabase, file: string): boolean {
+  const normalized = normalizePath(file);
   const kind = classifyFile(file);
-  return kind === 'entry' || kind === 'worker' || isLiveBarrel(db, file);
+  return kind === 'entry' || kind === 'worker' || isFrameworkEntrypointPath(normalized) || isLiveBarrel(db, normalized);
 }
 
 /**
@@ -146,6 +148,7 @@ export function isEntrySurface(db: ScipDatabase, file: string): boolean {
 export function isRootedSymbol(db: ScipDatabase, symbol: string, file: string): boolean {
   const normalized = normalizePath(file);
   if (isPackageSurfaceFile(db, normalized)) return true;
+  if (isTransitivelyPackageSurfaceSymbol(db, symbol, normalized)) return true;
   if (isFrameworkDiscoveredEntrypointSymbol(symbol, normalized)) return true;
   const roots = db.config.entryRoots;
   if (!roots) return false;
@@ -163,6 +166,89 @@ export function isRootedSymbol(db: ScipDatabase, symbol: string, file: string): 
   )
     return true;
   return false;
+}
+
+type PackageSurfaceVisibility = Set<string> | null;
+
+// `null` means every export from the file is externally visible. A Set means
+// only those names were propagated through a named re-export. This closure is
+// deliberately based on re-export edges, not ordinary imports: a public entry
+// file may depend on private implementation modules without publishing them.
+const packageSurfaceReachabilityCache = createPerDbValue<Map<string, PackageSurfaceVisibility>>(
+  'package-surface-reachability',
+  { clearGroups: ['whole-project'] },
+);
+
+function isTransitivelyPackageSurfaceSymbol(db: ScipDatabase, symbol: string, file: string): boolean {
+  const visibility = packageSurfaceReachability(db).get(file);
+  if (visibility === undefined) return false;
+  return visibility === null || visibility.has(leafName(symbol));
+}
+
+function packageSurfaceReachability(db: ScipDatabase): Map<string, PackageSurfaceVisibility> {
+  return packageSurfaceReachabilityCache.get(db, () => {
+    const visibility = new Map<string, PackageSurfaceVisibility>();
+    const queue: string[] = [];
+
+    for (const path of indexedDocumentPaths(db, { includeIgnored: false })) {
+      if (!isPackageSurfaceFile(db, path)) continue;
+      visibility.set(path, null);
+      queue.push(path);
+    }
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const currentVisibility = visibility.get(current);
+      if (currentVisibility === undefined) continue;
+
+      for (const reexport of getReExports(db, current)) {
+        if (!reexport.sourcePath || db.isIgnored(reexport.sourcePath)) continue;
+        const propagated = propagatedReexportVisibility(currentVisibility, reexport);
+        if (propagated === undefined) continue;
+        if (mergePackageVisibility(visibility, reexport.sourcePath, propagated)) queue.push(reexport.sourcePath);
+      }
+    }
+
+    return visibility;
+  });
+}
+
+function propagatedReexportVisibility(
+  current: PackageSurfaceVisibility,
+  reexport: ReturnType<typeof getReExports>[number],
+): PackageSurfaceVisibility | undefined {
+  if (current === null) {
+    return reexport.kind === 'named' ? new Set(reexport.names) : null;
+  }
+  if (reexport.kind === 'star') return new Set(current);
+  if (reexport.kind === 'star-as') return undefined;
+  const names = reexport.names.filter((name) => current.has(name));
+  return names.length > 0 ? new Set(names) : undefined;
+}
+
+function mergePackageVisibility(
+  visibility: Map<string, PackageSurfaceVisibility>,
+  file: string,
+  incoming: PackageSurfaceVisibility,
+): boolean {
+  if (!visibility.has(file)) {
+    visibility.set(file, incoming);
+    return true;
+  }
+  const existing = visibility.get(file);
+  if (existing === undefined) return false;
+  if (existing === null || incoming === null) {
+    if (existing === null) return false;
+    visibility.set(file, null);
+    return true;
+  }
+  let changed = false;
+  for (const name of incoming) {
+    if (existing.has(name)) continue;
+    existing.add(name);
+    changed = true;
+  }
+  return changed;
 }
 
 // ── Pattern internals ────────────────────────────────────────────
@@ -198,6 +284,23 @@ function isFrameworkDiscoveredEntrypointSymbol(symbol: string, normalized: strin
   return false;
 }
 
+/**
+ * Files whose framework discovers them by path rather than an ordinary
+ * import. The whole file is an external entry boundary: static references
+ * cannot prove its exported handler/component dead, and suppressing private
+ * helpers here is the conservative tradeoff required for deletion advice.
+ */
+export function isFrameworkEntrypointPath(normalized: string): boolean {
+  return (
+    isNextAppRoutePath(normalized) ||
+    isNextAppPagePath(normalized) ||
+    isNextPagesPath(normalized) ||
+    isNextMiddlewarePath(normalized) ||
+    isRemixRoutePath(normalized) ||
+    isSvelteKitRoutePath(normalized)
+  );
+}
+
 function isNextAppRoutePath(normalized: string): boolean {
   return /(?:^|\/)app(?:\/[^/]+)*\/route\.(?:ts|tsx|js|jsx|mjs|cjs)$/.test(normalized);
 }
@@ -210,6 +313,15 @@ function isNextAppPagePath(normalized: string): boolean {
 
 function isNextPagesPath(normalized: string): boolean {
   return /(?:^|\/)pages\/.+\.(?:ts|tsx|js|jsx|mjs|cjs)$/.test(normalized);
+}
+
+function isNextMiddlewarePath(normalized: string): boolean {
+  const basename = '(?:middleware|proxy|instrumentation)\\.(?:ts|js|mts|mjs)';
+  return (
+    new RegExp(`^(?:src/)?${basename}$`).test(normalized) ||
+    new RegExp(`(?:^|/)src/${basename}$`).test(normalized) ||
+    new RegExp(`(?:^|/)(?:apps|services|packages)/[^/]+/(?:src/)?${basename}$`).test(normalized)
+  );
 }
 
 function isRemixRoutePath(normalized: string): boolean {

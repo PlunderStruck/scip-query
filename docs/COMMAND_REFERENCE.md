@@ -45,7 +45,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 
 | Command | Description | Options |
 |---|---|---|
-| `dead [scope]` | Find dead code and file-internal symbols (no cross-file consumers) | `--min-loc <n>`<br>`--include-tests`<br>`--skip-barrels`<br>`--include-members`<br>`--only-dead`<br>`--only-internal`<br>`--full`<br>`--json` |
+| `dead [scope]` | Find repository-dead code and file-internal symbols | `--min-loc <n>`<br>`--include-tests`<br>`--skip-barrels`<br>`--include-members`<br>`--only-dead`<br>`--only-internal`<br>`--full`<br>`--json` |
 | `unused-imports <file>` | Find imports not referenced in the same file | `--full`<br>`--json` |
 | `isolated` | Find completely orphaned symbols (no references at all) | `-s, --scope <path>`<br>`--min-loc <n>`<br>`--full`<br>`--json` |
 | `similar [symbol] [other]` | Find heuristic function similarity candidates from callee fingerprints | `--min-similarity <n>`<br>`-n, --limit <n>`<br>`-s, --scope <path>`<br>`--min-callees <n>`<br>`--cross-file-only`<br>`--plan`<br>`--full`<br>`--json` |
@@ -137,7 +137,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 | `init` | Create a .scipquery.json config file for this project | - |
 | `config-validate` | Validate .scipquery.json, including structured suppressions and declared coupling groups | `--json` |
 | `suppress <id>` | Record an accepted finding as a file under .scipquery/suppressions/ with a required reason | `--reason <text>`<br>`--check <check>`<br>`--file <path>`<br>`--expires-at <iso>`<br>`--json` |
-| `effectiveness` | Per-check effectiveness from the committed outcome ledger: findings caught, fixed by code changes, suppressed, precision, median time-to-fix | `--since <window>`<br>`--check <check>`<br>`--json` |
+| `effectiveness` | Per-check effectiveness from the committed outcome ledger: caught, same-HEAD verified fixes, suppressed, unverified disappearances, and precision | `--since <window>`<br>`--check <check>`<br>`--json` |
 | `doctor` | Diagnose config, index freshness, dependency readiness, and project capabilities | `--json` |
 | `setup` | Bootstrap this project: enable automatic indexing, install agent skills, refresh the index, verify capabilities, and report health | `--guided`<br>`--git-hook`<br>`--no-hooks`<br>`--dossier-dir <path>`<br>`--json` |
 | `setup-agent` | Seed agent guidance for this project: AGENTS.md/CLAUDE.md block pointing agents at the scip-query skills and diff gate, plus an optional git pre-commit backstop | `--git-hook` |

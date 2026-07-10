@@ -91,7 +91,7 @@ scip-query slice <symbol> # Reference-level program slice: what affects this (ba
 ### Cleanup
 
 ```bash
-scip-query dead [scope] # Find dead code and file-internal symbols (no cross-file consumers)
+scip-query dead [scope] # Find repository-dead code and file-internal symbols
 scip-query unused-imports <file> # Find imports not referenced in the same file
 scip-query isolated # Find completely orphaned symbols (no references at all)
 scip-query similar [symbol] [other] # Find heuristic function similarity candidates from callee fingerprints
@@ -183,7 +183,7 @@ scip-query capability-matrix # Deprecated alias for capabilities --matrix
 scip-query init # Create a .scipquery.json config file for this project
 scip-query config-validate # Validate .scipquery.json, including structured suppressions and declared coupling groups
 scip-query suppress <id> # Record an accepted finding as a file under .scipquery/suppressions/ with a required reason
-scip-query effectiveness # Per-check effectiveness from the committed outcome ledger: findings caught, fixed by code changes, suppressed, precision, median time-to-fix
+scip-query effectiveness # Per-check effectiveness from the committed outcome ledger: caught, same-HEAD verified fixes, suppressed, unverified disappearances, and precision
 scip-query doctor # Diagnose config, index freshness, dependency readiness, and project capabilities
 scip-query setup # Bootstrap this project: enable automatic indexing, install agent skills, refresh the index, verify capabilities, and report health
 scip-query setup-agent # Seed agent guidance for this project: AGENTS.md/CLAUDE.md block pointing agents at the scip-query skills and diff gate, plus an optional git pre-commit backstop
@@ -207,7 +207,7 @@ measured precision, not by volume:
 - **Advisory gate findings** (marked `(advisory)`) never block; they are context, not obligations.
 - **False-dead archetypes (2026-07-02 remediation, docs/plans/2026-07-02-followups.md items 1-3)**: `import type`-only consumers (incl. tsconfig `paths`-aliased specifiers) and pnpm/npm/yarn workspace cross-package consumers (incl. unbuilt `dist/` exports maps) are now resolved by the shared reference-counting layer that `dead`/`isolated`/`new-dead`/`stale-abstractions`/`production-callables` all consume; Vue `<script setup>` composable consumers were already correctly resolved (verified live, no code change needed). One narrow residual gap remains: a symbol with an **ambiguous leaf name** (a same-named definition exists elsewhere in the project) reached only through a **re-exporting barrel file** in a workspace package can still misattribute — `new-dead` labels that specific shape `unconfirmed (cross-package ambiguous-name resolution gap)` with `evidence: "heuristic"` and lowered confidence instead of asserting `dead`; treat those as "verify manually," not as a fact. Everything else in this class is a normal graph-fact `dead` claim again — confirm with `refs` when in doubt, same as any other finding.
 - **Ledger nudges**: when `diff-gate --hook` reports "this check is rarely acted on in this repo", either tune that check's config, suppress the standing findings with reasons, or consciously accept the noise — do not let unresolved findings accumulate as wallpaper.
-- **Effectiveness ledger**: hook-mode gate runs append caught/resolved/suppressed transitions to `.scipquery/ledger/events.jsonl` (committed, conflict-free via a scoped `merge=union` gitattribute — commit it with your changes). Query it with `scip-query effectiveness [--since 30d] [--check <check>] [--json]`: per check it reports findings caught, fixed by code changes, suppressed, still open, `moved` (rename noise), precision (fixed ÷ concluded), and median days-to-fix. A finding that disappears without a suppression counts as fixed; a suppression counts against the detector's precision. Use it to decide which checks to trust, tune, or suppress in a given repo.
+- **Effectiveness ledger**: every completed diff-gate run, including JSON and hook mode, appends caught/resolved/suppressed transitions to `.scipquery/ledger/events.jsonl` (committed, conflict-free via a scoped `merge=union` gitattribute — commit it with your changes). Query it with `scip-query effectiveness [--since 30d] [--check <check>] [--json]`: per check it reports findings caught, same-HEAD verified fixed, suppressed, still open, `moved` (rename noise), `unverified` (the finding disappeared after HEAD changed or without Git identity), precision (verified fixed ÷ verified fixed plus suppressed), and median days-to-fix. Run diff-gate before and after a repair, before committing, to earn verified credit. Standalone detector commands are not outcome-tracked until they expose complete-scan evidence.
 
 ## Diff Gate Checks
 
