@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Phases 1–2 complete; Phase 3 planned and implementation next
+Status: Phases 1–2 complete; Phase 3 step 3.1 complete and step 3.2 next
 
 ## Goal
 
@@ -435,6 +435,13 @@ fragments under conservative transitive semantic identities; legacy
 definition-centric reads remain available during rollout. The recorded local
 pre-change import-usage baseline is 927ms median / 1,307ms p95 with 212ms
 median Project construction.
+
+**Progress:** Step 3.1 now defines the conservative semantic identity. Ordinary
+leaf contents affect only the leaf and transitive consumers' identities;
+configuration, ambient declarations, membership, engine, and schema affect
+every required identity. Missing graph evidence widens to a whole-project key,
+while missing, duplicate, or unreadable required inputs disable reuse. An
+export-dependency under-invalidation expectation was planted and observed red.
 
 **Exit gate:** Phase 3 performance, hit-rate, and parity thresholds pass on
 separate CLI processes and after service restart.

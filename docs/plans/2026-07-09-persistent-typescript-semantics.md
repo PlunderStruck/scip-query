@@ -1,7 +1,7 @@
 # Persistent TypeScript Semantics — Phase 3 Concrete Plan
 
 Date: 2026-07-09
-Status: planned; implementation step 3.1 next
+Status: in progress; step 3.1 complete and step 3.2 next
 Roadmap phase: 3
 
 ## Goal
@@ -151,7 +151,7 @@ postchecks.
 
 ### 3.1 — Define conservative per-file semantic identities
 
-- [ ] **Create:** `src/semantic/typescript/semantic-identity.ts` and focused
+- [x] **Create:** `src/semantic/typescript/semantic-identity.ts` and focused
       tests.
 - Parse the published TypeScript language snapshot, derive project membership
   and config/ambient identities, traverse the existing dependency graph, and
@@ -159,6 +159,17 @@ postchecks.
 - Cover leaf, chain, cycle, export dependency, add/delete membership,
   config/ambient, unreadable, missing graph, engine version, and stable ordering.
 - Validate with focused tests and `recent-duplicates`.
+- **Outcome:** `buildTypeScriptSemanticIdentity()` now produces an ordered
+  dependency-closure key from the target, all transitive dependencies, every
+  TypeScript config/ambient input, sorted project membership, TypeScript project
+  mode, engine identity, and fragment schema. Missing graph evidence safely
+  selects a readable whole-project key. Missing/duplicate/unreadable required
+  inputs return an explicit unkeyed result. Eight tests cover leaf isolation,
+  export propagation, cycles, ordering, config/ambient, add membership,
+  missing evidence, engine/schema, and project identity. The required unsafe
+  verifier was observed red: forcing a consumer key to remain equal across a
+  dependency export change failed with the exact before/after digests; restoring
+  the invalidation expectation made all controls green.
 
 ### 3.2 — Add origin-file fragment contracts and shadow storage
 
