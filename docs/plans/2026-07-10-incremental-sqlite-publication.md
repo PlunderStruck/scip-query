@@ -1,7 +1,7 @@
 # Incremental SQLite Publication Plan
 
 Date: 2026-07-10
-Status: In progress; Phase 5.1 complete, Phase 5.2 publication integration next
+Status: In progress; Phases 5.1–5.2 complete, Phase 5.3 operational compatibility next
 Parent: [`2026-07-09-automatic-incremental-indexing-roadmap.md`](./2026-07-09-automatic-incremental-indexing-roadmap.md)
 
 ## Outcome
@@ -132,6 +132,29 @@ changing the accepted database.
 Commit boundary: publication authority, failpoints, recovery metadata, and
 fallback tests.
 
+Result: complete. Normal refresh now converts the affected-only SCIP index,
+patches a copy of the accepted database, reruns augmentation, publishes the
+new complete database by atomic rename, and retains the preceding complete
+database under `.scipquery-generations/<identity>/index.db`. The route is
+selected only when TypeScript is incremental, every other language shard is
+reused, and no language is skipped; every rejection falls back to complete
+conversion before handoff. Four handoff failpoints leave the stable database
+or its retained predecessor readable, and the standalone patch transaction
+still rolls back at each internal failure stage.
+
+The local implementation also removed three full-file costs exposed by the
+first 2.617s trial: previous fragment generations are validated rather than
+reseeded, complete and affected SCIP outputs share one base parse, and merge
+plus sanitization serialize once. Portable SCIP protobuf assembly is
+byte-identical to the scip-typescript runtime while avoiding a roughly 150ms
+compiler-runtime load in every reindex subprocess. The final post-fix local
+distribution was 1,380 / 1,383 / 1,390 / 1,358 / 1,413ms (1,383ms median,
+1,413ms p95), versus the 2,000ms gate. The warm service itself took 7–20ms.
+The final candidate matched the official full-conversion oracle across all
+321 normalized fact units. A pre-acceptance orphan `global_symbols` mismatch
+was rejected and fixed by restoring the converter invariant that every
+retained global symbol is mentioned or defined.
+
 ### 5.3 — Reader, retention, upgrade, and repair proof
 
 - Hold an old SQLite reader open across handoff while new readers open the new
@@ -144,6 +167,12 @@ fallback tests.
   duration, fallback reason, recovery path, and validation result in status.
 
 Commit boundary: lifecycle/compatibility proof and operational status.
+
+Progress: old/new reader isolation, bounded current-plus-previous retention,
+all four handoff failpoints, and a legacy database without generation metadata
+pass. Remaining work is package reinstall/previous-package compatibility,
+schema-drift repair proof through the integrated route, and surfacing the
+generation/publication record in `status`.
 
 ### 5.4 — Corpus calibration and Phase 5 closure
 
@@ -175,5 +204,5 @@ Phase 6 action.
 
 ```sh
 SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context \
-  src/reindex/index.ts --json
+  src/reindex/sqlite-generation-store.ts --json
 ```

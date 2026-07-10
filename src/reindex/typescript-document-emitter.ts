@@ -73,6 +73,10 @@ export type TypeScriptDocumentRuntimeAvailability =
   | { available: true; runtime: TypeScriptDocumentRuntime; producerIdentity: string }
   | { available: false; reason: string };
 
+export type TypeScriptDocumentProducerAvailability =
+  | { available: true; packageVersion: string; typescriptVersion: string; producerIdentity: string }
+  | { available: false; reason: string };
+
 export interface TypeScriptDocumentFragment {
   relativePath: string;
   bytes: Uint8Array | null;
@@ -121,16 +125,9 @@ export type TypeScriptDocumentEmitterCreation =
  */
 export function loadTypeScriptDocumentRuntime(): TypeScriptDocumentRuntimeAvailability {
   try {
-    const packageJsonPath = require.resolve('@sourcegraph/scip-typescript/package.json');
-    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as { version?: unknown };
-    if (packageJson.version !== SUPPORTED_SCIP_TYPESCRIPT_VERSION) {
-      return {
-        available: false,
-        reason: `unsupported scip-typescript version ${String(packageJson.version ?? 'unknown')}; expected ${SUPPORTED_SCIP_TYPESCRIPT_VERSION}`,
-      };
-    }
-
-    const packageRoot = dirname(packageJsonPath);
+    const producer = resolveTypeScriptDocumentProducer();
+    if (!producer.available) return producer;
+    const { packageRoot } = producer;
     const typescriptPath = require.resolve('typescript', { paths: [packageRoot] });
     const typescript = require(typescriptPath) as TypeScriptModule;
     const { FileIndexer } = require(resolve(packageRoot, 'dist/src/FileIndexer.js')) as {
@@ -147,7 +144,7 @@ export function loadTypeScriptDocumentRuntime(): TypeScriptDocumentRuntimeAvaila
       return { available: false, reason: 'scip-typescript document runtime has an unsupported module shape' };
     }
     const runtime = {
-      packageVersion: packageJson.version,
+      packageVersion: producer.packageVersion,
       typescript,
       Document: scipModule.scip.Document,
       Index: scipModule.scip.Index,
@@ -160,6 +157,50 @@ export function loadTypeScriptDocumentRuntime(): TypeScriptDocumentRuntimeAvaila
     return {
       available: false,
       reason: `scip-typescript document runtime unavailable: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
+export function inspectTypeScriptDocumentProducer(): TypeScriptDocumentProducerAvailability {
+  const producer = resolveTypeScriptDocumentProducer();
+  if (!producer.available) return producer;
+  return {
+    available: true,
+    packageVersion: producer.packageVersion,
+    typescriptVersion: producer.typescriptVersion,
+    producerIdentity: producer.producerIdentity,
+  };
+}
+
+function resolveTypeScriptDocumentProducer():
+  | (Extract<TypeScriptDocumentProducerAvailability, { available: true }> & { packageRoot: string })
+  | Extract<TypeScriptDocumentProducerAvailability, { available: false }> {
+  try {
+    const packageJsonPath = require.resolve('@sourcegraph/scip-typescript/package.json');
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as { version?: unknown };
+    if (packageJson.version !== SUPPORTED_SCIP_TYPESCRIPT_VERSION) {
+      return {
+        available: false,
+        reason: `unsupported scip-typescript version ${String(packageJson.version ?? 'unknown')}; expected ${SUPPORTED_SCIP_TYPESCRIPT_VERSION}`,
+      };
+    }
+    const packageRoot = dirname(packageJsonPath);
+    const typescriptPackagePath = require.resolve('typescript/package.json', { paths: [packageRoot] });
+    const typescriptPackage = JSON.parse(readFileSync(typescriptPackagePath, 'utf8')) as { version?: unknown };
+    if (typeof typescriptPackage.version !== 'string' || !typescriptPackage.version) {
+      return { available: false, reason: 'scip-typescript TypeScript compiler version is unavailable' };
+    }
+    return {
+      available: true,
+      packageRoot,
+      packageVersion: packageJson.version,
+      typescriptVersion: typescriptPackage.version,
+      producerIdentity: producerIdentityForVersions(packageJson.version, typescriptPackage.version),
+    };
+  } catch (error) {
+    return {
+      available: false,
+      reason: `scip-typescript document producer unavailable: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
 }
@@ -394,7 +435,11 @@ function readTypeScriptConfig(typescript: TypeScriptModule, tsconfigPath: string
 }
 
 function producerIdentity(runtime: TypeScriptDocumentRuntime): string {
-  return `scip-typescript:${runtime.packageVersion}:typescript:${runtime.typescript.version}:document-adapter:${SCIP_TYPESCRIPT_DOCUMENT_EMITTER_ADAPTER_VERSION}`;
+  return producerIdentityForVersions(runtime.packageVersion, runtime.typescript.version);
+}
+
+function producerIdentityForVersions(packageVersion: string, typescriptVersion: string): string {
+  return `scip-typescript:${packageVersion}:typescript:${typescriptVersion}:document-adapter:${SCIP_TYPESCRIPT_DOCUMENT_EMITTER_ADAPTER_VERSION}`;
 }
 
 function projectArgument(workspaceRoot: string, projectDirectory: string): string {

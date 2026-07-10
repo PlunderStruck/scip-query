@@ -1552,6 +1552,43 @@ file are rejected evidence; the accepted oracle used the established 8GB
 bound. The external file was restored in 2,229.052ms and OpenCode remained
 clean. Phase 4 is closed; Phase 5 owns complete publication latency.
 
+## Phase 5 Incremental SQLite Publication Checkpoint
+
+Phase 5.1 converts only affected TypeScript documents with the official
+`scip expt-convert` binary, attaches that mini database to a private copy of
+the accepted database, and replaces document/chunk/mention/definition rows in
+one transaction. Schema drift, corrupt or incomplete mini databases,
+ambiguous definitions shared with unaffected documents, and injected
+transaction failures all reject without changing the accepted database. A
+real two-document fixture matches a clean full conversion at every normalized
+fact.
+
+Phase 5.2 connects that patch to normal publication only when TypeScript is
+incremental and all other language shards are reused. The stable database path
+is replaced atomically after validation; the preceding complete database is
+retained under `.scipquery-generations/<identity>/index.db`. Tests hold an old
+reader open across handoff, open a new reader afterward, inject failures at
+all four artifact boundaries, and retain only the immediately preceding
+generation. Both stable and recovery databases pass `integrity_check`.
+
+The first real route was correct but 2.617s. Profiling showed the service was
+already 8ms; repeated whole-file orchestration was the cost. Reusing validated
+fragment generations, parsing the TypeScript base once for complete and mini
+outputs, merging and sanitizing in one serialization, and using the already
+loaded portable SCIP schema instead of loading the compiler runtime reduced
+the final post-fix distribution to 1,380, 1,383, 1,390, 1,358, and 1,413ms:
+1,383ms median / 1,413ms p95 against the 2,000ms gate. No-op was 311ms versus
+the prior 331ms control.
+
+One earlier candidate had 322 fact units versus the oracle's 321 because an
+orphan TypeScript standard-library symbol survived from a preceding mini
+conversion. That evidence is rejected. Global-symbol collection now enforces
+the official converter invariant: a retained symbol must be mentioned or have
+a definition range. The final restored candidate and official full conversion
+both contain 321 fact units with zero normalized differences. Phase 5.3 now
+owns installed-package compatibility and status visibility; large-corpus
+calibration remains Phase 5.4.
+
 ## Run History
 
 Machine-readable run history:

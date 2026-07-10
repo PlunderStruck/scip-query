@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Phases 1–4 and 5.1 complete; Phase 5.2 publication integration next
+Status: Phases 1–4 and 5.1–5.2 complete; Phase 5.3 compatibility/status next
 
 ## Goal
 
@@ -571,6 +571,18 @@ all fail closed without modifying the accepted database. Phase 5.2 must now
 thread that candidate through normal publication, full-conversion fallback,
 recovery-generation retention, and atomic handoff.
 
+Phase 5.2 is also complete. Incremental publication is now the real refresh
+route when TypeScript is the only changed language; every pre-handoff rejection
+falls back to complete conversion. The stable database path changes by atomic
+rename only after a complete candidate passes validation, and the immediately
+preceding complete database is retained under a bounded generation identity.
+Crash-stage tests, old/new concurrent readers, legacy metadata, and normalized
+full-oracle parity pass. After eliminating redundant fragment seeding,
+duplicate base parsing, duplicate merge/sanitize serialization, and a heavy
+client runtime load, five post-fix local daemon refreshes measured 1,383ms
+median / 1,413ms p95. Phase 5.3 owns package compatibility and operational
+status; Phase 5.4 still owns the large-corpus distribution and release gates.
+
 ### Phase 6 — Rust defaulting, selective native kernels, and rollout
 
 **Purpose:** consolidate accepted warm-state work and use Rust only where it
@@ -693,11 +705,11 @@ Complete this at every phase close:
 6. Phase 5 atomic incremental generation storage.
 7. Phase 6 durable Rust defaulting, selective native kernels, and rollout.
 
-The immediate action is Phase 5.2's publication integration. Phase 5.1's
-official mini conversion and transactional copy-on-write patch now match a
-clean full fixture and fail closed under negative controls. Thread that proven
-candidate through the existing publication boundary next:
+The immediate action is Phase 5.3's package compatibility and operational
+status. The real local publication path now passes exact normalized parity,
+recovery retention, concurrent-reader isolation, and the 2s p95 gate. Surface
+and exercise that generation record across installed-package boundaries next:
 
 ```sh
-SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/reindex/index.ts --json
+SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/reindex/sqlite-generation-store.ts --json
 ```

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import Database from 'better-sqlite3';
@@ -19,6 +20,7 @@ export interface PatchIncrementalSqliteGenerationInput {
 export interface IncrementalSqlitePatchResult {
   candidateDbPath: string;
   affectedDocumentCount: number;
+  changedDocumentPaths: string[];
   durationMs: number;
 }
 
@@ -105,7 +107,9 @@ export function patchIncrementalSqliteGeneration(
   if (!existsSync(input.previousDbPath)) throw new Error('previous SQLite generation is unavailable');
   if (!existsSync(input.miniDbPath)) throw new Error('incremental SQLite mini database is unavailable');
 
-  validateStandaloneDatabase(input.previousDbPath, 'previous SQLite generation');
+  // The stable prior generation already passed publication integrity checks;
+  // validate its schema here and run the full checks on the copied candidate.
+  validateStandaloneDatabase(input.previousDbPath, 'previous SQLite generation', false);
   validateStandaloneDatabase(input.miniDbPath, 'incremental SQLite mini database');
 
   copyFileSync(input.previousDbPath, input.candidateDbPath);
@@ -120,6 +124,7 @@ export function patchIncrementalSqliteGeneration(
     validateSchema(db, 'incremental', 'incremental SQLite mini database');
     prepareAffectedPaths(db, affectedFiles);
     validateDocumentSets(db, affectedFiles.length);
+    const previousFactDigests = readAffectedFactDigests(db, 'main', true);
 
     const originalDocumentCount = scalarNumber(db, 'SELECT COUNT(*) AS value FROM main.documents');
     const transaction = db.transaction(() => {
@@ -138,13 +143,18 @@ export function patchIncrementalSqliteGeneration(
     transaction.immediate();
 
     validateDatabaseIntegrity(db, 'main', 'candidate SQLite generation');
-    validateAffectedFacts(db);
+    const candidateFactDigests = validateAffectedFacts(db);
+    const changedDocumentPaths = [...candidateFactDigests]
+      .filter(([relativePath, digest]) => previousFactDigests.get(relativePath) !== digest)
+      .map(([relativePath]) => relativePath)
+      .sort();
     db.exec('DETACH DATABASE incremental');
     db.close();
     db = null;
     return {
       candidateDbPath: input.candidateDbPath,
       affectedDocumentCount: affectedFiles.length,
+      changedDocumentPaths,
       durationMs: Date.now() - startedAt,
     };
   } catch (error) {
@@ -181,11 +191,11 @@ function assertDistinctPaths(previousDbPath: string, miniDbPath: string, candida
   }
 }
 
-function validateStandaloneDatabase(path: string, label: string): void {
+function validateStandaloneDatabase(path: string, label: string, checkIntegrity = true): void {
   const db = new Database(path, { readonly: true, fileMustExist: true });
   try {
     validateSchema(db, 'main', label);
-    validateDatabaseIntegrity(db, 'main', label);
+    if (checkIntegrity) validateDatabaseIntegrity(db, 'main', label);
   } finally {
     db.close();
   }
@@ -477,11 +487,7 @@ function insertAffectedDocumentRows(db: Database.Database): void {
 function pruneReconciledOrphanSymbols(db: Database.Database): void {
   db.exec(`
     DELETE FROM main.global_symbols
-    WHERE (
-      symbol IN (SELECT symbol FROM temp.incremental_old_defined_symbols)
-      OR symbol IN (SELECT symbol FROM incremental.global_symbols)
-    )
-      AND NOT EXISTS (SELECT 1 FROM main.mentions m WHERE m.symbol_id = main.global_symbols.id)
+    WHERE NOT EXISTS (SELECT 1 FROM main.mentions m WHERE m.symbol_id = main.global_symbols.id)
       AND NOT EXISTS (
         SELECT 1 FROM main.defn_enclosing_ranges r WHERE r.symbol_id = main.global_symbols.id
       );
@@ -512,15 +518,20 @@ function validatePatchedTransaction(db: Database.Database, affectedCount: number
   }
 }
 
-function validateAffectedFacts(db: Database.Database): void {
-  const candidateFacts = readAffectedFacts(db, 'main', true);
-  const miniFacts = readAffectedFacts(db, 'incremental', false);
-  if (candidateFacts !== miniFacts) {
+function validateAffectedFacts(db: Database.Database): Map<string, string> {
+  const candidateFacts = readAffectedFactDigests(db, 'main', true);
+  const miniFacts = readAffectedFactDigests(db, 'incremental', false);
+  if (JSON.stringify([...candidateFacts]) !== JSON.stringify([...miniFacts])) {
     throw new Error('candidate SQLite affected document facts differ from the mini database');
   }
+  return candidateFacts;
 }
 
-function readAffectedFacts(db: Database.Database, schema: DatabaseSchema, filterAffected: boolean): string {
+function readAffectedFactDigests(
+  db: Database.Database,
+  schema: DatabaseSchema,
+  filterAffected: boolean,
+): Map<string, string> {
   const affectedJoin = filterAffected
     ? 'JOIN temp.incremental_affected_paths p ON p.relative_path = d.relative_path'
     : '';
@@ -566,7 +577,22 @@ function readAffectedFacts(db: Database.Database, schema: DatabaseSchema, filter
        ORDER BY d.relative_path, c.chunk_index, m.role, g.symbol`,
     )
     .all();
-  return JSON.stringify({ documents, chunks, definitions, mentions });
+  const encodedByPath = new Map<string, string[]>();
+  for (const [kind, rows] of Object.entries({ documents, chunks, definitions, mentions })) {
+    for (const row of rows as Array<{ relative_path: string }>) {
+      const encoded = JSON.stringify([kind, row]);
+      const facts = encodedByPath.get(row.relative_path) ?? [];
+      facts.push(encoded);
+      encodedByPath.set(row.relative_path, facts);
+    }
+  }
+  const digests = new Map<string, string>();
+  for (const [relativePath, facts] of [...encodedByPath].sort(([left], [right]) => left.localeCompare(right))) {
+    const hash = createHash('sha256');
+    for (const fact of facts.sort()) hash.update(fact).update('\n');
+    digests.set(relativePath, hash.digest('hex'));
+  }
+  return digests;
 }
 
 function scalarNumber(db: Database.Database, sql: string): number {

@@ -11,8 +11,9 @@ import {
   OccurrenceSchema,
   serializeSCIP,
   SymbolInformationSchema,
+  SymbolRole,
 } from '@c4312/scip';
-import { mergeScipFiles, mergeScipIndexes } from '../../src/reindex/merge.js';
+import { mergeAndSanitizeScipFiles, mergeScipFiles, mergeScipIndexes } from '../../src/reindex/merge.js';
 
 const tempDirs: string[] = [];
 
@@ -150,6 +151,57 @@ describe('SCIP merge support', () => {
     const shared = merged.documents.find((document) => document.relativePath === 'src/shared.ts');
     expect(shared?.occurrences).toHaveLength(1);
     expect(shared?.symbols).toHaveLength(1);
+  });
+
+  it('sanitizes the merged index before its only serialization pass', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'scip-query-merge-sanitize-'));
+    tempDirs.push(dir);
+    const firstPath = join(dir, 'first.scip');
+    const secondPath = join(dir, 'second.scip');
+    const mergedPath = join(dir, 'merged.scip');
+    const invalid = 'scip-typescript npm fixture 1.0.0 src/`missing.ts`/Missing#';
+    const first = createFixtureIndex({
+      documents: [
+        createDocument({
+          language: 'typescript',
+          relativePath: 'src/a.ts',
+          symbol: 'scip-typescript npm fixture 1.0.0 src/`a.ts`/a().',
+          text: 'export const a = 1;\n',
+        }),
+      ],
+    });
+    first.documents[0]!.occurrences.push(
+      create(OccurrenceSchema, {
+        range: [1, 0, 1, 1],
+        symbol: invalid,
+        symbolRoles: SymbolRole.Definition,
+      }),
+    );
+    writeFileSync(firstPath, Buffer.from(serializeSCIP(first)));
+    writeFileSync(
+      secondPath,
+      Buffer.from(
+        serializeSCIP(
+          createFixtureIndex({
+            documents: [
+              createDocument({
+                language: 'python',
+                relativePath: 'src/b.py',
+                symbol: 'scip-python python fixture 1.0.0 src/b.py/b().',
+                text: 'def b():\n    return 1\n',
+              }),
+            ],
+          }),
+        ),
+      ),
+    );
+
+    const result = mergeAndSanitizeScipFiles([firstPath, secondPath], mergedPath);
+    const merged = deserializeSCIP(readFileSync(mergedPath));
+
+    expect(result.removedDefinitionOccurrences).toBe(1);
+    expect(result.touchedDocuments).toBe(1);
+    expect(merged.documents.find((document) => document.relativePath === 'src/a.ts')?.occurrences).toHaveLength(1);
   });
 });
 

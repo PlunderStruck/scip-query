@@ -15,11 +15,11 @@ import {
   type ProjectChangeManifest,
   type ProjectInputSnapshot,
 } from './affected-set.js';
-import { loadTypeScriptDocumentRuntime } from './typescript-document-emitter.js';
+import { inspectTypeScriptDocumentProducer } from './typescript-document-emitter.js';
 import {
-  assembleTypeScriptIndex,
+  assembleTypeScriptIndexes,
   commitTypeScriptFragmentGeneration,
-  seedTypeScriptFragmentGeneration,
+  ensureTypeScriptFragmentGeneration,
 } from './typescript-fragment-store.js';
 import { publishedTypeScriptIndexGeneration } from './typescript-index-protocol.js';
 import { TypeScriptIndexRequester } from './typescript-index-requester.js';
@@ -57,6 +57,7 @@ export interface MaterializeTypeScriptIncrementalInput {
   previousIndexPath: string;
   previousShardPath: string;
   candidateShardPath: string;
+  candidateAffectedScipPath: string;
   previousSnapshot: ProjectInputSnapshot | null;
   currentSnapshot: ProjectInputSnapshot;
   projectMode: TypeScriptProjectMode | undefined;
@@ -65,6 +66,7 @@ export interface MaterializeTypeScriptIncrementalInput {
 
 export interface MaterializedTypeScriptIncrementalIndex {
   scipPath: string;
+  affectedScipPath: string;
   durationMs: number;
   cold: boolean;
   changedFiles: string[];
@@ -72,6 +74,17 @@ export interface MaterializedTypeScriptIncrementalIndex {
   producerIdentity: string;
   previousFragmentGeneration: string;
   nextFragmentGeneration: string;
+  manifest: ProjectChangeManifest;
+  plan: AffectedFilePlan;
+  projectFileCount: number;
+  timings: {
+    runtimeMs: number;
+    graphMs: number;
+    requestMs: number;
+    assemblyMs: number;
+    fragmentStoreMs: number;
+    writeMs: number;
+  };
 }
 
 export function planTypeScriptIncrementalUpdate(
@@ -155,8 +168,11 @@ export function tryMaterializeTypeScriptIncrementalIndex(
     if (!existsSync(input.previousDbPath) || !existsSync(input.previousShardPath)) {
       throw new Error('prior TypeScript graph or language shard unavailable');
     }
-    const availability = loadTypeScriptDocumentRuntime();
+    let phaseStartedAt = performance.now();
+    const availability = inspectTypeScriptDocumentProducer();
     if (!availability.available) throw new Error(availability.reason);
+    const runtimeMs = performance.now() - phaseStartedAt;
+    phaseStartedAt = performance.now();
     const db = new ScipDatabase({
       projectRoot: input.projectRoot,
       dbPath: input.previousDbPath,
@@ -170,6 +186,7 @@ export function tryMaterializeTypeScriptIncrementalIndex(
     } finally {
       db.close();
     }
+    const graphMs = performance.now() - phaseStartedAt;
     const eligibility = planTypeScriptIncrementalUpdate({
       projectMode: input.projectMode,
       workspaceProjects:
@@ -187,6 +204,7 @@ export function tryMaterializeTypeScriptIncrementalIndex(
     const baseGeneration = publishedTypeScriptIndexGeneration(input.previousDbPath);
     if (!baseGeneration) throw new Error('published TypeScript base generation unavailable');
 
+    phaseStartedAt = performance.now();
     const requester = new TypeScriptIndexRequester({
       projectRoot: input.projectRoot,
       cacheDir: input.cacheDir,
@@ -201,15 +219,19 @@ export function tryMaterializeTypeScriptIncrementalIndex(
       modifiedFiles: eligibility.plan.changedFiles,
       affectedFiles: eligibility.plan.affectedFiles,
     });
+    const requestMs = performance.now() - phaseStartedAt;
+    phaseStartedAt = performance.now();
     const baseIndexBytes = readFileSync(input.previousShardPath);
-    const candidateBytes = assembleTypeScriptIndex({
-      runtime: availability.runtime,
+    const assembled = assembleTypeScriptIndexes({
+      packageVersion: availability.packageVersion,
       baseIndexBytes,
       fragments: response.fragments,
     });
-    seedTypeScriptFragmentGeneration({
+    const assemblyMs = performance.now() - phaseStartedAt;
+    phaseStartedAt = performance.now();
+    ensureTypeScriptFragmentGeneration({
       cacheDir: input.cacheDir,
-      runtime: availability.runtime,
+      packageVersion: availability.packageVersion,
       indexBytes: baseIndexBytes,
       producerIdentity: availability.producerIdentity,
       projectIdentity: eligibility.projectIdentity,
@@ -225,9 +247,14 @@ export function tryMaterializeTypeScriptIncrementalIndex(
       fragments: response.fragments,
       documentIdentities: eligibility.nextDocumentIdentities,
     });
-    writeFileSync(input.candidateShardPath, candidateBytes);
+    const fragmentStoreMs = performance.now() - phaseStartedAt;
+    phaseStartedAt = performance.now();
+    writeFileSync(input.candidateShardPath, assembled.completeIndexBytes);
+    writeFileSync(input.candidateAffectedScipPath, assembled.affectedIndexBytes);
+    const writeMs = performance.now() - phaseStartedAt;
     const result = {
       scipPath: input.candidateShardPath,
+      affectedScipPath: input.candidateAffectedScipPath,
       durationMs: Date.now() - startedAt,
       cold: response.cold,
       changedFiles: eligibility.plan.changedFiles,
@@ -235,9 +262,13 @@ export function tryMaterializeTypeScriptIncrementalIndex(
       producerIdentity: availability.producerIdentity,
       previousFragmentGeneration: eligibility.previousFragmentGeneration,
       nextFragmentGeneration: eligibility.nextFragmentGeneration,
+      manifest: eligibility.manifest,
+      plan: eligibility.plan,
+      projectFileCount: projectFiles.length,
+      timings: { runtimeMs, graphMs, requestMs, assemblyMs, fragmentStoreMs, writeMs },
     };
     input.onStatus(
-      `Incremental TypeScript index emitted ${result.affectedFiles.length} affected document(s) in ${(result.durationMs / 1000).toFixed(3)}s (${result.cold ? 'cold' : 'warm'} service).`,
+      `Incremental TypeScript index emitted ${result.affectedFiles.length} affected document(s) in ${(result.durationMs / 1000).toFixed(3)}s (${result.cold ? 'cold' : 'warm'} service; runtime ${runtimeMs.toFixed(0)}ms, graph ${graphMs.toFixed(0)}ms, request ${requestMs.toFixed(0)}ms, assembly ${assemblyMs.toFixed(0)}ms, fragments ${fragmentStoreMs.toFixed(0)}ms, write ${writeMs.toFixed(0)}ms).`,
     );
     return result;
   } catch (error) {

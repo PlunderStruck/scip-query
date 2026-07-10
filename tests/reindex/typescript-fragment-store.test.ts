@@ -13,7 +13,9 @@ import {
 import {
   assembleAffectedTypeScriptIndex,
   assembleTypeScriptIndex,
+  assembleTypeScriptIndexes,
   commitTypeScriptFragmentGeneration,
+  ensureTypeScriptFragmentGeneration,
   pruneTypeScriptFragmentGenerations,
   readTypeScriptFragmentGeneration,
   seedTypeScriptFragmentGeneration,
@@ -58,6 +60,17 @@ describe('TypeScript fragment store', () => {
       now: () => new Date('2026-07-09T00:00:00.000Z'),
     });
     expect(seeded.documents).toHaveLength(2);
+    expect(
+      ensureTypeScriptFragmentGeneration({
+        cacheDir,
+        runtime: availability.runtime,
+        indexBytes: baseline,
+        producerIdentity: initial.producerIdentity,
+        projectIdentity: 'fixture-project-v1',
+        generationIdentity: 'generation-1',
+        documentIdentities: initialIdentities,
+      }),
+    ).toEqual(seeded);
     const loadedInitial = readTypeScriptFragmentGeneration({
       cacheDir,
       generationIdentity: 'generation-1',
@@ -106,6 +119,13 @@ describe('TypeScript fragment store', () => {
     const affected = availability.runtime.Index.deserializeBinary(affectedBytes);
     expect(affected.documents.map((document) => document.relative_path)).toEqual(['src/a.ts', 'src/b.ts']);
     expect(affected.external_symbols).toEqual([]);
+    const combined = assembleTypeScriptIndexes({
+      runtime: availability.runtime,
+      baseIndexBytes: baseline,
+      fragments: update.fragments,
+    });
+    expect(Buffer.from(combined.completeIndexBytes)).toEqual(Buffer.from(assembled));
+    expect(Buffer.from(combined.affectedIndexBytes)).toEqual(Buffer.from(affectedBytes));
 
     const scipBinary = resolveScipBinary();
     expect(scipBinary).not.toBeNull();

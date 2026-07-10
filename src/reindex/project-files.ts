@@ -160,6 +160,7 @@ const PROJECT_ARTIFACT_DIRS = new Set([
   '.git',
   'node_modules',
   '.scipquery-cache',
+  '.scipquery-generations',
   '.stryker-tmp',
   'dist',
   'build',

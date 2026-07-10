@@ -1,6 +1,9 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { create, fromBinary, toBinary } from '@bufbuild/protobuf';
+import { deserializeSCIP, DocumentSchema, IndexSchema, serializeSCIP } from '@c4312/scip';
+import type { Document, Index } from '@c4312/scip';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import type { TypeScriptDocumentFragment, TypeScriptDocumentRuntime } from './typescript-document-emitter.js';
 
@@ -31,7 +34,8 @@ export interface TypeScriptFragmentStorePaths {
 
 export interface SeedTypeScriptFragmentGenerationInput {
   cacheDir: string;
-  runtime: TypeScriptDocumentRuntime;
+  runtime?: TypeScriptDocumentRuntime;
+  packageVersion?: string;
   indexBytes: Uint8Array;
   producerIdentity: string;
   projectIdentity: string;
@@ -64,9 +68,15 @@ export interface LoadedTypeScriptFragmentGeneration {
 }
 
 export interface AssembleTypeScriptIndexInput {
-  runtime: TypeScriptDocumentRuntime;
+  runtime?: TypeScriptDocumentRuntime;
+  packageVersion?: string;
   baseIndexBytes: Uint8Array;
   fragments: readonly TypeScriptDocumentFragment[];
+}
+
+export interface AssembledTypeScriptIndexes {
+  completeIndexBytes: Uint8Array;
+  affectedIndexBytes: Uint8Array;
 }
 
 export function typeScriptFragmentStorePaths(cacheDir: string): TypeScriptFragmentStorePaths {
@@ -81,13 +91,13 @@ export function typeScriptFragmentStorePaths(cacheDir: string): TypeScriptFragme
 export function seedTypeScriptFragmentGeneration(
   input: SeedTypeScriptFragmentGenerationInput,
 ): TypeScriptFragmentGenerationManifest {
-  const index = input.runtime.Index.deserializeBinary(input.indexBytes);
-  assertProducerMetadata(index.metadata, input.runtime.packageVersion);
-  assertNoExternalSymbols(index.external_symbols);
+  const index = deserializeSCIP(input.indexBytes);
+  assertProducerMetadata(index.metadata, inputPackageVersion(input));
+  assertNoExternalSymbols(index.externalSymbols);
   const seen = new Set<string>();
   const documents: TypeScriptFragmentRecord[] = [];
   for (const document of index.documents) {
-    const relativePath = validateRelativePath(document.relative_path);
+    const relativePath = validateRelativePath(document.relativePath);
     if (seen.has(relativePath)) throw new Error(`duplicate TypeScript SCIP document path: ${relativePath}`);
     seen.add(relativePath);
     const documentIdentity = input.documentIdentities.get(relativePath);
@@ -97,7 +107,7 @@ export function seedTypeScriptFragmentGeneration(
         input.cacheDir,
         {
           relativePath,
-          bytes: document.serializeBinary(),
+          bytes: toBinary(DocumentSchema, document),
           occurrences: document.occurrences.length,
           symbols: document.symbols.length,
         },
@@ -108,6 +118,30 @@ export function seedTypeScriptFragmentGeneration(
   const manifest = createManifest(input, documents);
   persistManifest(input.cacheDir, manifest);
   return manifest;
+}
+
+export function ensureTypeScriptFragmentGeneration(
+  input: SeedTypeScriptFragmentGenerationInput,
+): TypeScriptFragmentGenerationManifest {
+  const paths = typeScriptFragmentStorePaths(input.cacheDir);
+  if (!existsSync(generationManifestPath(paths, input.generationIdentity))) {
+    return seedTypeScriptFragmentGeneration(input);
+  }
+  const loaded = readTypeScriptFragmentGeneration({
+    cacheDir: input.cacheDir,
+    generationIdentity: input.generationIdentity,
+    producerIdentity: input.producerIdentity,
+    projectIdentity: input.projectIdentity,
+  });
+  if (loaded.manifest.documents.length !== input.documentIdentities.size) {
+    throw new Error('TypeScript fragment generation document identities changed');
+  }
+  for (const document of loaded.manifest.documents) {
+    if (input.documentIdentities.get(document.relativePath) !== document.documentIdentity) {
+      throw new Error(`TypeScript fragment generation document identity changed: ${document.relativePath}`);
+    }
+  }
+  return loaded.manifest;
 }
 
 export function commitTypeScriptFragmentGeneration(
@@ -175,9 +209,34 @@ export function readTypeScriptFragmentGeneration(
 }
 
 export function assembleTypeScriptIndex(input: AssembleTypeScriptIndexInput): Uint8Array {
-  const index = input.runtime.Index.deserializeBinary(input.baseIndexBytes);
-  assertProducerMetadata(index.metadata, input.runtime.packageVersion);
-  assertNoExternalSymbols(index.external_symbols);
+  const prepared = prepareTypeScriptIndexAssembly(input);
+  return serializeTypeScriptIndex(prepared.baseIndex, prepared.completeDocuments, 'assembled');
+}
+
+export function assembleAffectedTypeScriptIndex(input: AssembleTypeScriptIndexInput): Uint8Array {
+  const prepared = prepareTypeScriptIndexAssembly(input);
+  assertNoDeletedAffectedDocuments(prepared.deletedAffectedPaths);
+  return serializeTypeScriptIndex(prepared.baseIndex, prepared.affectedDocuments, 'affected');
+}
+
+export function assembleTypeScriptIndexes(input: AssembleTypeScriptIndexInput): AssembledTypeScriptIndexes {
+  const prepared = prepareTypeScriptIndexAssembly(input);
+  assertNoDeletedAffectedDocuments(prepared.deletedAffectedPaths);
+  return {
+    completeIndexBytes: serializeTypeScriptIndex(prepared.baseIndex, prepared.completeDocuments, 'assembled'),
+    affectedIndexBytes: serializeTypeScriptIndex(prepared.baseIndex, prepared.affectedDocuments, 'affected'),
+  };
+}
+
+function prepareTypeScriptIndexAssembly(input: AssembleTypeScriptIndexInput): {
+  baseIndex: Index;
+  completeDocuments: Document[];
+  affectedDocuments: Document[];
+  deletedAffectedPaths: string[];
+} {
+  const index = deserializeSCIP(input.baseIndexBytes);
+  assertProducerMetadata(index.metadata, inputPackageVersion(input));
+  assertNoExternalSymbols(index.externalSymbols);
   const replacements = new Map<string, TypeScriptDocumentFragment>();
   for (const fragment of input.fragments) {
     const relativePath = validateRelativePath(fragment.relativePath);
@@ -187,83 +246,53 @@ export function assembleTypeScriptIndex(input: AssembleTypeScriptIndexInput): Ui
   if (replacements.size === 0) throw new Error('TypeScript index assembly requires at least one replacement');
 
   const seen = new Set<string>();
-  const documents: typeof index.documents = [];
+  const completeDocuments: Document[] = [];
+  const affectedDocuments: Document[] = [];
+  const deletedAffectedPaths: string[] = [];
   for (const document of index.documents) {
-    const relativePath = validateRelativePath(document.relative_path);
+    const relativePath = validateRelativePath(document.relativePath);
     if (seen.has(relativePath)) throw new Error(`duplicate TypeScript SCIP document path: ${relativePath}`);
     seen.add(relativePath);
     const replacement = replacements.get(relativePath);
     if (!replacement) {
-      documents.push(document);
+      completeDocuments.push(document);
       continue;
     }
     replacements.delete(relativePath);
-    if (replacement.bytes === null) continue;
-    const nextDocument = input.runtime.Document.deserializeBinary(replacement.bytes);
-    if (nextDocument.relative_path !== relativePath) {
-      throw new Error(`TypeScript fragment path mismatch: expected ${relativePath}, got ${nextDocument.relative_path}`);
+    if (replacement.bytes === null) {
+      deletedAffectedPaths.push(relativePath);
+      continue;
     }
-    documents.push(nextDocument);
+    const nextDocument = fromBinary(DocumentSchema, replacement.bytes);
+    if (nextDocument.relativePath !== relativePath) {
+      throw new Error(`TypeScript fragment path mismatch: expected ${relativePath}, got ${nextDocument.relativePath}`);
+    }
+    completeDocuments.push(nextDocument);
+    affectedDocuments.push(nextDocument);
   }
   if (replacements.size > 0) {
     throw new Error(`TypeScript fragment replacement has no prior document: ${[...replacements.keys()].sort()[0]}`);
   }
-  const assembled = new input.runtime.Index({
-    metadata: index.metadata,
-    documents,
-    external_symbols: index.external_symbols,
-  });
-  const bytes = assembled.serializeBinary();
-  const verified = input.runtime.Index.deserializeBinary(bytes);
-  if (verified.documents.length !== documents.length || verified.external_symbols.length !== 0) {
-    throw new Error('assembled TypeScript SCIP index failed structural verification');
+  return { baseIndex: index, completeDocuments, affectedDocuments, deletedAffectedPaths };
+}
+
+function serializeTypeScriptIndex(
+  baseIndex: Index,
+  documents: Document[],
+  label: 'assembled' | 'affected',
+): Uint8Array {
+  const bytes = serializeSCIP(create(IndexSchema, { metadata: baseIndex.metadata, documents, externalSymbols: [] }));
+  const verified = deserializeSCIP(bytes);
+  if (verified.documents.length !== documents.length || verified.externalSymbols.length !== 0) {
+    throw new Error(`${label} TypeScript SCIP index failed structural verification`);
   }
   return bytes;
 }
 
-export function assembleAffectedTypeScriptIndex(input: AssembleTypeScriptIndexInput): Uint8Array {
-  const index = input.runtime.Index.deserializeBinary(input.baseIndexBytes);
-  assertProducerMetadata(index.metadata, input.runtime.packageVersion);
-  assertNoExternalSymbols(index.external_symbols);
-  const replacements = new Map<string, TypeScriptDocumentFragment>();
-  for (const fragment of input.fragments) {
-    const relativePath = validateRelativePath(fragment.relativePath);
-    if (fragment.bytes === null) {
-      throw new Error(`affected TypeScript mini index cannot contain a deleted document: ${relativePath}`);
-    }
-    if (replacements.has(relativePath)) {
-      throw new Error(`duplicate TypeScript fragment replacement: ${relativePath}`);
-    }
-    replacements.set(relativePath, fragment);
+function assertNoDeletedAffectedDocuments(paths: readonly string[]): void {
+  if (paths.length > 0) {
+    throw new Error(`affected TypeScript mini index cannot contain a deleted document: ${paths[0]}`);
   }
-  if (replacements.size === 0) throw new Error('affected TypeScript mini index requires at least one document');
-
-  const documents: typeof index.documents = [];
-  const seen = new Set<string>();
-  for (const baseDocument of index.documents) {
-    const relativePath = validateRelativePath(baseDocument.relative_path);
-    if (seen.has(relativePath)) throw new Error(`duplicate TypeScript SCIP document path: ${relativePath}`);
-    seen.add(relativePath);
-    const replacement = replacements.get(relativePath);
-    if (!replacement?.bytes) continue;
-    const document = input.runtime.Document.deserializeBinary(replacement.bytes);
-    if (document.relative_path !== relativePath) {
-      throw new Error(`TypeScript fragment path mismatch: expected ${relativePath}, got ${document.relative_path}`);
-    }
-    documents.push(document);
-    replacements.delete(relativePath);
-  }
-  if (replacements.size > 0) {
-    throw new Error(`TypeScript fragment replacement has no prior document: ${[...replacements.keys()].sort()[0]}`);
-  }
-
-  const affected = new input.runtime.Index({ metadata: index.metadata, documents, external_symbols: [] });
-  const bytes = affected.serializeBinary();
-  const verified = input.runtime.Index.deserializeBinary(bytes);
-  if (verified.documents.length !== documents.length || verified.external_symbols.length !== 0) {
-    throw new Error('affected TypeScript mini index failed structural verification');
-  }
-  return bytes;
 }
 
 export function pruneTypeScriptFragmentGenerations(
@@ -421,7 +450,8 @@ function assertProducerMetadata(metadata: unknown, packageVersion: string): void
   if (!metadata || typeof metadata !== 'object') {
     throw new Error('TypeScript SCIP shard has no producer metadata');
   }
-  const tool = (metadata as { tool_info?: unknown }).tool_info;
+  const value = metadata as { toolInfo?: unknown; tool_info?: unknown };
+  const tool = value.toolInfo ?? value.tool_info;
   if (!tool || typeof tool !== 'object') {
     throw new Error('TypeScript SCIP shard has no producer tool identity');
   }
@@ -429,6 +459,12 @@ function assertProducerMetadata(metadata: unknown, packageVersion: string): void
   if (identity.name !== 'scip-typescript' || identity.version !== packageVersion) {
     throw new Error('TypeScript SCIP shard producer identity changed');
   }
+}
+
+function inputPackageVersion(input: { runtime?: TypeScriptDocumentRuntime; packageVersion?: string }): string {
+  const packageVersion = input.packageVersion ?? input.runtime?.packageVersion;
+  if (!packageVersion) throw new Error('scip-typescript package version is unavailable');
+  return packageVersion;
 }
 
 function validateRelativePath(value: string): string {

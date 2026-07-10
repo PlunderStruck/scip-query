@@ -21,6 +21,7 @@ describe('incremental SQLite publication', () => {
     });
 
     expect(result.affectedDocumentCount).toBe(1);
+    expect(result.changedDocumentPaths).toEqual(['src/a.ts']);
     expect(existsSync(paths.candidate)).toBe(true);
     expect(readFacts(paths.candidate)).toEqual(readFacts(paths.expected));
 
@@ -197,6 +198,7 @@ function populatePrevious(db: Database.Database, sharedDefinition = false): void
   insertDocument(db, 2, 'src/b.ts', 'stable b', 'stable-b');
   insertSymbol(db, 1, 'symbol/A', 'A', 'old A documentation');
   insertSymbol(db, 2, 'symbol/B', 'B', 'unaffected B documentation');
+  insertSymbol(db, 3, 'symbol/stale-orphan', null, null);
   insertDefinition(db, 1, 1, 1);
   insertDefinition(db, 2, 2, 2);
   if (sharedDefinition) insertDefinition(db, 3, 2, 1);

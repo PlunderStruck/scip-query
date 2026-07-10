@@ -258,6 +258,61 @@ describe('reindex reliability', () => {
     expect(typescript?.outputBytes).toEqual(expect.any(Number));
   });
 
+  it('publishes affected TypeScript documents through the incremental SQLite patcher', async () => {
+    const projectRoot = createProject('scip-query-reindex-incremental-sqlite-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+    const statuses: string[] = [];
+    const { reindex, attempts } = await loadReindexFixture({
+      languages: ['typescript'],
+      incrementalTypeScript: true,
+    });
+
+    await reindex({ projectRoot, outputScip, outputDb, onStatus: () => undefined });
+    writeFileSync(join(projectRoot, 'src/main.ts'), 'export const answer = 43;\n');
+    await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      onStatus: (message) => statuses.push(message),
+    });
+
+    expect(attempts.get('typescript')).toBe(1);
+    expect(readFileSync(outputDb, 'utf8')).toBe('incrementally-patched-db');
+    expect(statuses.join('\n')).toContain('Converting 1 affected TypeScript document(s) to SQLite');
+    expect(statuses.join('\n')).toContain('Patched 1 SQLite document(s)');
+  });
+
+  it('falls back to complete conversion when incremental SQLite publication rejects', async () => {
+    const projectRoot = createProject('scip-query-reindex-incremental-fallback-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+    const statuses: string[] = [];
+    const { reindex, attempts } = await loadReindexFixture({
+      languages: ['typescript'],
+      incrementalTypeScript: true,
+      failIncrementalPatch: true,
+    });
+
+    await reindex({ projectRoot, outputScip, outputDb, onStatus: () => undefined });
+    writeFileSync(join(projectRoot, 'src/main.ts'), 'export const answer = 43;\n');
+    await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      onStatus: (message) => statuses.push(message),
+    });
+
+    expect(attempts.get('typescript')).toBe(1);
+    expect(readFileSync(outputDb, 'utf8')).toBe('new-db');
+    expect(statuses.join('\n')).toContain('Incremental SQLite publication unavailable: forced patch rejection');
+    expect(statuses.join('\n')).toContain('Falling back to complete conversion');
+  });
+
   it('reports every shard as reused when the whole project index is unchanged (plan6 6.5.2)', async () => {
     const projectRoot = createProject('scip-query-reindex-shard-full-reuse-');
     // Use the real project-local cache directory name (matches
@@ -943,6 +998,8 @@ async function loadReindexFixture(opts: {
   failConvert?: boolean;
   failPromotion?: boolean;
   failShadowWrite?: boolean;
+  incrementalTypeScript?: boolean;
+  failIncrementalPatch?: boolean;
   platform?: NodeJS.Platform;
   scipCli?: {
     resolveScipBinary?: () => string | null;
@@ -951,8 +1008,69 @@ async function loadReindexFixture(opts: {
 }) {
   vi.resetModules();
   vi.doUnmock('node:fs');
+  vi.doUnmock('../../src/reindex/typescript-incremental-index.js');
+  vi.doUnmock('../../src/reindex/incremental-sqlite-publication.js');
   const attempts = new Map<SupportedLanguage, number>();
   const commands: { binary: string; args: readonly string[] }[] = [];
+
+  if (opts.incrementalTypeScript) {
+    vi.doMock('../../src/reindex/typescript-incremental-index.js', () => ({
+      tryMaterializeTypeScriptIncrementalIndex: (input: {
+        previousDbPath: string;
+        previousShardPath: string;
+        candidateShardPath: string;
+        candidateAffectedScipPath: string;
+      }) => {
+        if (!existsSync(input.previousDbPath) || !existsSync(input.previousShardPath)) return null;
+        writeFileSync(input.candidateShardPath, 'incremental-complete-scip');
+        writeFileSync(input.candidateAffectedScipPath, 'incremental-affected-scip');
+        return {
+          scipPath: input.candidateShardPath,
+          affectedScipPath: input.candidateAffectedScipPath,
+          durationMs: 4,
+          cold: false,
+          changedFiles: ['src/main.ts'],
+          affectedFiles: ['src/main.ts'],
+          producerIdentity: 'test-producer',
+          previousFragmentGeneration: 'previous-generation',
+          nextFragmentGeneration: 'next-generation',
+          manifest: {
+            version: 1,
+            changes: [],
+            projectIdentityChanged: false,
+            uncertainty: [],
+          },
+          plan: {
+            mode: 'closure',
+            changedFiles: ['src/main.ts'],
+            affectedFiles: ['src/main.ts'],
+            reasons: [],
+          },
+          projectFileCount: 1,
+          timings: {
+            runtimeMs: 1,
+            graphMs: 1,
+            requestMs: 1,
+            assemblyMs: 1,
+            fragmentStoreMs: 1,
+            writeMs: 1,
+          },
+        };
+      },
+    }));
+    vi.doMock('../../src/reindex/incremental-sqlite-publication.js', () => ({
+      patchIncrementalSqliteGeneration: (input: { candidateDbPath: string }) => {
+        if (opts.failIncrementalPatch) throw new Error('forced patch rejection');
+        writeFileSync(input.candidateDbPath, 'incrementally-patched-db');
+        return {
+          candidateDbPath: input.candidateDbPath,
+          affectedDocumentCount: 1,
+          changedDocumentPaths: ['src/main.ts'],
+          durationMs: 3,
+        };
+      },
+    }));
+  }
 
   if (opts.failPromotion) {
     vi.doMock('node:fs', async () => {
@@ -1066,19 +1184,25 @@ async function loadReindexFixture(opts: {
   const mergeCalls: { inputPaths: string[]; inputContents: (string | null)[]; outputPath: string }[] = [];
   vi.doMock('../../src/reindex/merge.js', async () => {
     const fs = await import('node:fs');
+    const mergeScipFiles = (_inputPaths: readonly string[], outputPath: string) => {
+      const inputContents = _inputPaths.map((path) => {
+        try {
+          return fs.readFileSync(path, 'utf-8');
+        } catch {
+          return null;
+        }
+      });
+      mergeCalls.push({ inputPaths: [..._inputPaths], inputContents, outputPath });
+      fs.writeFileSync(outputPath, 'merged-scip');
+      return { documentCount: 0, externalSymbolCount: 0, inputCount: _inputPaths.length };
+    };
     return {
-      mergeScipFiles: (_inputPaths: readonly string[], outputPath: string) => {
-        const inputContents = _inputPaths.map((path) => {
-          try {
-            return fs.readFileSync(path, 'utf-8');
-          } catch {
-            return null;
-          }
-        });
-        mergeCalls.push({ inputPaths: [..._inputPaths], inputContents, outputPath });
-        fs.writeFileSync(outputPath, 'merged-scip');
-        return { documentCount: 0, externalSymbolCount: 0, inputCount: _inputPaths.length };
-      },
+      mergeScipFiles,
+      mergeAndSanitizeScipFiles: (inputPaths: readonly string[], outputPath: string) => ({
+        ...mergeScipFiles(inputPaths, outputPath),
+        removedDefinitionOccurrences: 0,
+        touchedDocuments: 0,
+      }),
     };
   });
 

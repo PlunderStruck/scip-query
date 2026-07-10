@@ -23,13 +23,15 @@ import { auxiliaryDocumentsAugmentationStage } from './augment.js';
 import {
   collectAffectedSetShadowRecord,
   createUnavailableAffectedSetShadowRecord,
+  evaluateAffectedSetShadow,
   writeAffectedSetShadowRecord,
   type AffectedSetShadowRecord,
 } from './affected-shadow.js';
 import { projectInputSnapshotOrNull, type ProjectInputSnapshot } from './affected-set.js';
 import { detectLanguages } from './detect.js';
 import { getIndexerConfig } from './indexers.js';
-import { mergeScipFiles } from './merge.js';
+import { mergeAndSanitizeScipFiles, mergeScipFiles } from './merge.js';
+import { patchIncrementalSqliteGeneration } from './incremental-sqlite-publication.js';
 import { runPostIndexAugmentation } from './post-index-augmentation.js';
 import { fingerprintProjectFiles, normalizeTypeScriptProjects } from './project-files.js';
 import type { ProjectFileFingerprint } from './project-files.js';
@@ -41,8 +43,12 @@ import {
   readProjectManifestInputs,
 } from './project-shards.js';
 import { sanitizeScipFile } from './sanitize.js';
+import { promoteReindexArtifacts } from './sqlite-generation-store.js';
 import { discoverTypeScriptProjectRoots } from './typescript-projects.js';
-import { tryMaterializeTypeScriptIncrementalIndex } from './typescript-incremental-index.js';
+import {
+  tryMaterializeTypeScriptIncrementalIndex,
+  type MaterializedTypeScriptIncrementalIndex,
+} from './typescript-incremental-index.js';
 import { runPreparedIndexers } from './indexer-runner.js';
 import type { PreparedIndexerRun, IndexerRunResult } from './indexer-runner.js';
 import {
@@ -174,7 +180,20 @@ interface FreshIndexRun {
   shards: ReindexShardDiagnostic[];
   /** Present only when the TypeScript language shard missed in workspace mode. */
   typescriptProjectShardContext?: TypeScriptProjectShardContext;
+  /** Exact whole and affected-only SCIP outputs produced by the persistent TypeScript service. */
+  incrementalTypeScript?: MaterializedTypeScriptIncrementalIndex;
 }
+
+type SqliteMaterializationResult =
+  | {
+      mode: 'incremental';
+      changedDocumentPaths: string[];
+      patchDurationMs: number;
+    }
+  | {
+      mode: 'full';
+      fallbackReason?: string;
+    };
 
 /**
  * Carries the per-project fingerprints computed while classifying TypeScript
@@ -419,6 +438,7 @@ async function runFreshReindex(opts: {
     languageFingerprints,
     shards,
     typescriptProjectShardContext,
+    incrementalTypeScript,
   } = await runLanguageIndexersForFreshReindex(opts, env);
   if (reusedLanguages.length > 0) {
     opts.onStatus(`Reused ${reusedLanguages.length} cached language shard(s): ${reusedLanguages.join(', ')}`);
@@ -460,6 +480,7 @@ async function runFreshReindex(opts: {
     reusedLanguages,
     languageFingerprints,
     typescriptProjectShardContext,
+    incrementalTypeScript,
   );
   const durationMs = lastRefresh.durationMs;
   opts.onStatus(`Done in ${(durationMs / 1000).toFixed(1)}s`);
@@ -530,6 +551,7 @@ async function runLanguageIndexersForFreshReindex(
           previousIndexPath: opts.paths.outputScip,
           previousShardPath: typescriptClassification.scipPath,
           candidateShardPath: tempScipPath(opts.tempPaths.tempOutputScip, 'typescript-incremental', 0),
+          candidateAffectedScipPath: tempScipPath(opts.tempPaths.tempOutputScip, 'typescript-affected', 0),
           previousSnapshot: previousProjectInputSnapshot(opts.paths.metaPath),
           currentSnapshot: opts.fingerprint,
           projectMode: opts.opts.typescriptProjectMode,
@@ -629,6 +651,7 @@ async function runLanguageIndexersForFreshReindex(
     typescriptProjectShardContext: tsProjectShards
       ? { projects: tsProjectShards.allProjects, fingerprints: tsProjectShards.fingerprints }
       : undefined,
+    incrementalTypeScript: incrementalTypeScript ?? undefined,
   };
 }
 
@@ -929,10 +952,19 @@ function publishFreshReindexArtifacts(
   reusedLanguages: readonly SupportedLanguage[],
   languageFingerprints: Partial<Record<SupportedLanguage, ReindexFingerprint>>,
   typescriptProjectShardContext: TypeScriptProjectShardContext | undefined,
+  incrementalTypeScript: MaterializedTypeScriptIncrementalIndex | undefined,
 ): LastRefreshMetadata {
   cacheLanguageShards(opts.paths.outputDb, indexedOutputs);
-  materializeScipOutput(indexedOutputs, opts.tempPaths.tempOutputScip, opts.onStatus);
-  convertScipToSqlite(opts.tempPaths.tempOutputScip, opts.tempPaths.tempOutputDb, env, opts.onStatus);
+  const completeScipSanitized = materializeScipOutput(indexedOutputs, opts.tempPaths.tempOutputScip, opts.onStatus);
+  const sqliteMaterialization = materializeSqliteOutput({
+    run: opts,
+    env,
+    indexedOutputs,
+    skippedLanguages,
+    reusedLanguages,
+    incrementalTypeScript,
+    completeScipSanitized,
+  });
 
   runPostIndexAugmentation(auxiliaryDocumentsAugmentationStage(), {
     projectRoot: opts.projectRoot,
@@ -941,16 +973,19 @@ function publishFreshReindexArtifacts(
   });
 
   const previousSnapshot = previousProjectInputSnapshot(opts.paths.metaPath);
-  const shadowRecord = collectAffectedSetShadowRecord({
-    projectRoot: opts.projectRoot,
-    previousDbPath: opts.paths.outputDb,
-    previousIndexPath: opts.paths.outputScip,
-    candidateDbPath: opts.tempPaths.tempOutputDb,
-    candidateIndexPath: opts.tempPaths.tempOutputScip,
-    previousSnapshot,
-    currentSnapshot: opts.fingerprint,
-    refreshResult: 'rebuilt',
-  });
+  const shadowRecord =
+    sqliteMaterialization.mode === 'incremental' && incrementalTypeScript
+      ? buildIncrementalAffectedSetShadowRecord(incrementalTypeScript, sqliteMaterialization.changedDocumentPaths)
+      : collectAffectedSetShadowRecord({
+          projectRoot: opts.projectRoot,
+          previousDbPath: opts.paths.outputDb,
+          previousIndexPath: opts.paths.outputScip,
+          candidateDbPath: opts.tempPaths.tempOutputDb,
+          candidateIndexPath: opts.tempPaths.tempOutputScip,
+          previousSnapshot,
+          currentSnapshot: opts.fingerprint,
+          refreshResult: 'rebuilt',
+        });
 
   const lastRefresh = buildLastRefresh({
     trigger: opts.opts.trigger,
@@ -1447,16 +1482,119 @@ function materializeScipOutput(
   indexedOutputs: readonly { language: SupportedLanguage; scipPath: string }[],
   tempOutputScip: string,
   onStatus: (message: string) => void,
-): void {
+): boolean {
   if (indexedOutputs.length > 1) {
     onStatus(`Merging ${indexedOutputs.length} language indexes...`);
-    mergeScipFiles(
+    const startedAt = performance.now();
+    const sanitized = mergeAndSanitizeScipFiles(
       indexedOutputs.map((entry) => entry.scipPath),
       tempOutputScip,
     );
+    reportSanitizedScip(sanitized, onStatus);
+    onStatus(`Merged and sanitized SCIP indexes in ${(performance.now() - startedAt).toFixed(0)}ms.`);
+    return true;
   } else if (indexedOutputs[0]!.scipPath !== tempOutputScip) {
     renameSync(indexedOutputs[0]!.scipPath, tempOutputScip);
   }
+  return false;
+}
+
+function materializeSqliteOutput(opts: {
+  run: Parameters<typeof runFreshReindex>[0];
+  env: NodeJS.ProcessEnv;
+  indexedOutputs: readonly IndexedOutput[];
+  skippedLanguages: readonly { language: SupportedLanguage; reason: string }[];
+  reusedLanguages: readonly SupportedLanguage[];
+  incrementalTypeScript: MaterializedTypeScriptIncrementalIndex | undefined;
+  completeScipSanitized: boolean;
+}): SqliteMaterializationResult {
+  let fallbackReason: string | undefined;
+  if (canPublishIncrementalSqlite(opts)) {
+    const miniDbPath = join(opts.run.tempPaths.runDir, 'typescript-affected.db');
+    try {
+      if (!opts.completeScipSanitized) {
+        sanitizeScipForSqlite(opts.run.tempPaths.tempOutputScip, opts.run.onStatus);
+      }
+      opts.run.onStatus(
+        `Converting ${opts.incrementalTypeScript.affectedFiles.length} affected TypeScript document(s) to SQLite...`,
+      );
+      const convertStartedAt = performance.now();
+      convertScipToSqlite(opts.incrementalTypeScript.affectedScipPath, miniDbPath, opts.env, opts.run.onStatus);
+      opts.run.onStatus(`Converted affected SCIP documents in ${(performance.now() - convertStartedAt).toFixed(0)}ms.`);
+      const patched = patchIncrementalSqliteGeneration({
+        previousDbPath: opts.run.paths.outputDb,
+        miniDbPath,
+        candidateDbPath: opts.run.tempPaths.tempOutputDb,
+        affectedFiles: opts.incrementalTypeScript.affectedFiles,
+      });
+      opts.run.onStatus(
+        `Patched ${patched.affectedDocumentCount} SQLite document(s) in ${(patched.durationMs / 1000).toFixed(3)}s.`,
+      );
+      return {
+        mode: 'incremental',
+        changedDocumentPaths: patched.changedDocumentPaths,
+        patchDurationMs: patched.durationMs,
+      };
+    } catch (error) {
+      fallbackReason = error instanceof Error ? error.message : String(error);
+      rmSync(miniDbPath, { force: true });
+      rmSync(opts.run.tempPaths.tempOutputDb, { force: true });
+      opts.run.onStatus(
+        `Incremental SQLite publication unavailable: ${fallbackReason}. Falling back to complete conversion.`,
+      );
+    }
+  }
+  convertScipToSqlite(
+    opts.run.tempPaths.tempOutputScip,
+    opts.run.tempPaths.tempOutputDb,
+    opts.env,
+    opts.run.onStatus,
+    opts.completeScipSanitized,
+  );
+  return { mode: 'full', ...(fallbackReason ? { fallbackReason } : {}) };
+}
+
+function canPublishIncrementalSqlite(opts: {
+  run: Parameters<typeof runFreshReindex>[0];
+  indexedOutputs: readonly IndexedOutput[];
+  skippedLanguages: readonly { language: SupportedLanguage; reason: string }[];
+  reusedLanguages: readonly SupportedLanguage[];
+  incrementalTypeScript: MaterializedTypeScriptIncrementalIndex | undefined;
+}): opts is typeof opts & { incrementalTypeScript: MaterializedTypeScriptIncrementalIndex } {
+  if (!opts.incrementalTypeScript || opts.skippedLanguages.length > 0) return false;
+  if (!existsSync(opts.run.paths.outputDb) || !existsSync(opts.run.paths.outputScip)) return false;
+  const reused = new Set(opts.reusedLanguages);
+  return (
+    opts.indexedOutputs.length === opts.run.languages.length &&
+    opts.run.languages.every((language) => language === 'typescript' || reused.has(language))
+  );
+}
+
+function buildIncrementalAffectedSetShadowRecord(
+  incremental: MaterializedTypeScriptIncrementalIndex,
+  changedDocumentPaths: readonly string[],
+): AffectedSetShadowRecord {
+  const startedAt = Date.now();
+  const modifiedFiles = [...changedDocumentPaths].sort();
+  const changed = new Set(modifiedFiles);
+  const comparison = {
+    addedFiles: [],
+    modifiedFiles,
+    deletedFiles: [],
+    changedFiles: modifiedFiles,
+    unchangedFiles: incremental.affectedFiles.filter((file) => !changed.has(file)).sort(),
+  };
+  return {
+    version: 1,
+    status: 'evaluated',
+    refreshResult: 'rebuilt',
+    recordedAt: new Date().toISOString(),
+    durationMs: Date.now() - startedAt,
+    manifest: incremental.manifest,
+    plan: incremental.plan,
+    comparison,
+    evaluation: evaluateAffectedSetShadow(incremental.plan, comparison, incremental.projectFileCount),
+  };
 }
 
 function convertScipToSqlite(
@@ -1464,6 +1602,7 @@ function convertScipToSqlite(
   tempOutputDb: string,
   env: NodeJS.ProcessEnv,
   onStatus: (message: string) => void,
+  alreadySanitized = false,
 ): void {
   onStatus('Converting to SQLite...');
   if (!existsSync(tempOutputScip)) {
@@ -1471,13 +1610,7 @@ function convertScipToSqlite(
   }
 
   try {
-    const sanitized = sanitizeScipFile(tempOutputScip);
-    if (sanitized.removedDefinitionOccurrences > 0) {
-      onStatus(
-        `Sanitized ${sanitized.removedDefinitionOccurrences} invalid definition occurrences ` +
-          `across ${sanitized.touchedDocuments} documents before SQLite conversion.`,
-      );
-    }
+    if (!alreadySanitized) sanitizeScipForSqlite(tempOutputScip, onStatus);
     const scipBinary = resolveScipBinary();
     if (!scipBinary) {
       throw new Error('scip CLI is not available');
@@ -1491,6 +1624,22 @@ function convertScipToSqlite(
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(`Failed to convert SCIP index to SQLite: ${msg}`, { cause: err });
   }
+}
+
+function sanitizeScipForSqlite(scipPath: string, onStatus: (message: string) => void): void {
+  const sanitized = sanitizeScipFile(scipPath);
+  reportSanitizedScip(sanitized, onStatus);
+}
+
+function reportSanitizedScip(
+  sanitized: { removedDefinitionOccurrences: number; touchedDocuments: number },
+  onStatus: (message: string) => void,
+): void {
+  if (sanitized.removedDefinitionOccurrences === 0) return;
+  onStatus(
+    `Sanitized ${sanitized.removedDefinitionOccurrences} invalid definition occurrences ` +
+      `across ${sanitized.touchedDocuments} documents before SQLite conversion.`,
+  );
 }
 
 function tempScipPath(outputScip: string, label: string, index: number): string {
@@ -1642,25 +1791,6 @@ function isProcessAlive(pid: number): boolean {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
-}
-
-function promoteReindexArtifacts(opts: {
-  tempOutputScip: string;
-  tempOutputDb: string;
-  tempMetaPath: string;
-  outputScip: string;
-  outputDb: string;
-  metaPath: string;
-}): void {
-  replaceFile(opts.tempOutputScip, opts.outputScip);
-  replaceFile(opts.tempOutputDb, opts.outputDb);
-  replaceFile(opts.tempMetaPath, opts.metaPath);
-}
-
-function replaceFile(source: string, target: string): void {
-  rmSync(`${target}.tmp-replace`, { force: true });
-  renameSync(source, `${target}.tmp-replace`);
-  renameSync(`${target}.tmp-replace`, target);
 }
 
 interface ReindexFingerprint {

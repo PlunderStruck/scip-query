@@ -2,11 +2,17 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { create } from '@bufbuild/protobuf';
 import { deserializeSCIP, serializeSCIP, DocumentSchema, IndexSchema, SymbolInformationSchema } from '@c4312/scip';
 import type { Document, Index, Occurrence, Relationship, SymbolInformation } from '@c4312/scip';
+import { sanitizeScipIndex } from './sanitize.js';
 
 export interface MergeScipResult {
   documentCount: number;
   externalSymbolCount: number;
   inputCount: number;
+}
+
+export interface MergeAndSanitizeScipResult extends MergeScipResult {
+  removedDefinitionOccurrences: number;
+  touchedDocuments: number;
 }
 
 /**
@@ -50,6 +56,23 @@ export function mergeScipFiles(inputPaths: readonly string[], outputPath: string
     documentCount: merged.documents.length,
     externalSymbolCount: merged.externalSymbols.length,
     inputCount: inputPaths.length,
+  };
+}
+
+export function mergeAndSanitizeScipFiles(
+  inputPaths: readonly string[],
+  outputPath: string,
+): MergeAndSanitizeScipResult {
+  if (inputPaths.length === 0) throw new Error('Cannot merge zero SCIP files');
+  const indexes = inputPaths.map((path) => deserializeSCIP(readFileSync(path)));
+  const sanitized = sanitizeScipIndex(mergeScipIndexes(indexes));
+  writeFileSync(outputPath, Buffer.from(serializeSCIP(sanitized.index)));
+  return {
+    documentCount: sanitized.index.documents.length,
+    externalSymbolCount: sanitized.index.externalSymbols.length,
+    inputCount: inputPaths.length,
+    removedDefinitionOccurrences: sanitized.removedDefinitionOccurrences,
+    touchedDocuments: sanitized.touchedDocuments,
   };
 }
 
