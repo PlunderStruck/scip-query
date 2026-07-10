@@ -231,17 +231,17 @@ Each numbered step is one commit after its focused tests pass.
 
 ### 1.1 — Add the lifecycle contract and benchmark harness first
 
-- [ ] **Create:** `tests/runtime/watch-service.test.ts`,
+- [x] **Create:** `src/runtime/watch-service.ts`,
+      `tests/runtime/watch-service.test.ts`,
       `scripts/incremental-freshness-contract.mjs`
-- [ ] **Edit:** `tests/runtime/watch.test.ts`,
-      `tests/runtime/cli-contract.test.ts`
 - **Source:** `scip-query code Watcher`, `scip-query code handleWatch`,
   `scip-query code acquireWatchProcessLock`, `scip-query refs WatcherStatus`.
-- **Change:** Write failing tests for state classification, idempotent ensure,
-  incompatible/dead/stale recovery, action mutual exclusion, foreground
-  compatibility, startup refresh decision, graceful stop, and single-flight
-  coalescing through the new public request seam. Add a harness that can edit a
-  fixture, poll metadata/service state, hash outputs, and restore the fixture.
+- **Change:** Define and test the pure versioned state parser/classifier,
+  lifecycle action planner, and clean-idle decision first. Add contract cases
+  for idempotent ensure, incompatible/dead/stale recovery, action mutual
+  exclusion, and idle safety. Add the first no-op benchmark scenario and its
+  machine-readable run history; later steps extend it with live service/edit
+  scenarios.
 - **Testability:** Inject clock, liveness, spawn/signal, filesystem state, and
   Watcher factory. The harness exposes explicit service/cache reset modes.
 - **Validation:** Run `npx vitest run tests/runtime/watch-service.test.ts
@@ -249,6 +249,9 @@ tests/runtime/watch.test.ts tests/runtime/cli-contract.test.ts`; failures must
   be missing symbols/behavior, not flaky timers.
 - **Why:** Process code is easy to make appear functional while stale-state and
   duplicate-owner behavior remain undefined; tests fix the state machine first.
+- **Outcome:** Four lifecycle/idle contract tests pass. Five built-CLI no-op
+  controls reused both language shards in 525–575 ms wall time; records are in
+  `docs/benchmarks/runs/2026-07-09-automatic-freshness.jsonl`.
 
 ### 1.2 — Extract one watch-service ownership and state boundary
 
@@ -412,6 +415,11 @@ now adds `watch.idleTimeoutMs`, command/file activity, clean-idle shutdown, and
 wake-up freshness tests. The default is 10 minutes because the existing durable
 Rust helper already uses that lifecycle. Setting the value to zero is the
 rollback to always-running behavior.
+
+The original step 1.1 expected a red test-only commit. To preserve the
+repository working agreement that each commit passes its focused tests, step
+1.1 now includes the pure lifecycle contract in `watch-service.ts`; step 1.2
+adds the filesystem/process shell around it.
 
 ## Explicit Deferrals
 
