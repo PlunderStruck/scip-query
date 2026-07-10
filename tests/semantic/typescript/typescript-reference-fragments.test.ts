@@ -33,6 +33,13 @@ describe('TypeScript reference fragments', () => {
       actualCount: 3,
       missing: [],
       extra: [],
+      callerFiles: {
+        passed: true,
+        expectedCount: 3,
+        actualCount: 3,
+        missing: [],
+        extra: [],
+      },
     });
   });
 
@@ -50,6 +57,13 @@ describe('TypeScript reference fragments', () => {
       actualCount: 1,
       missing: ['pkg alpha().\u0000src/b.ts\u00004\u00005', 'pkg beta().\u0000src/b.ts\u00007\u00001'],
       extra: [],
+      callerFiles: {
+        passed: false,
+        expectedCount: 3,
+        actualCount: 1,
+        missing: ['pkg alpha().\u0000src/b.ts', 'pkg beta().\u0000src/b.ts'],
+        extra: [],
+      },
     });
   });
 

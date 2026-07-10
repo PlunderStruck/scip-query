@@ -255,11 +255,7 @@ export function semanticCallerMap(
   return semanticEvidenceProduct(db).callerMap(definitions);
 }
 
-/**
- * Preserve scalar reference semantics while batching TypeScript transport.
- * Unlike semanticCallerMap, this path intentionally bypasses fragment and
- * persistent reference caches because those use the approximate inverted scan.
- */
+/** Preserve exact cross-file caller semantics without materializing every reference location. */
 export function exactSemanticCallerMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<IndexedDefinition>,
@@ -278,9 +274,13 @@ export function exactSemanticCallerMap(
     recordCallerFilesFromReferences(db, result, definition, buildSemanticReferences(db, definition));
   }
   for (const [provider, groupedDefinitions] of typescriptGroups) {
-    const references = provider.referencesForDefinitions
-      ? provider.referencesForDefinitions(groupedDefinitions, { exact: true })
-      : new Map(groupedDefinitions.map((definition) => [definition.symbolId, provider.referencesFor(definition)]));
+    const fragments = materializeTypeScriptReferenceFragments(db, groupedDefinitions);
+    const references =
+      fragments?.references ??
+      (provider.referencesForDefinitions
+        ? provider.referencesForDefinitions(groupedDefinitions, { exact: true })
+        : new Map(groupedDefinitions.map((definition) => [definition.symbolId, provider.referencesFor(definition)])));
+    if (!fragments && profileEnabled()) recordTypeScriptReferenceFragmentShadow(db, groupedDefinitions, references);
     for (const definition of groupedDefinitions) {
       recordCallerFilesFromReferences(db, result, definition, references.get(definition.symbolId) ?? []);
     }

@@ -6,7 +6,11 @@ import { discoverWorkspacePackages, type WorkspacePackage } from '../../resoluti
 import { getAllDefinitions, getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { cached } from './cache.js';
 import { definitionNodesForSourceFile } from './definition-node-matcher.js';
-import { findIndexedDefinitionNear, indexedDefinitionLeafMap } from './indexed-definitions.js';
+import {
+  findIndexedDefinitionExact,
+  findIndexedDefinitionNear,
+  indexedDefinitionLeafMap,
+} from './indexed-definitions.js';
 import { createTypeScriptSourceFiles } from './source-file-resolver.js';
 import { packageEntryCandidates, workspacePackageNameForSpecifier } from './workspace-packages.js';
 import { leafSuffix } from '../../symbols/symbol-parser.js';
@@ -44,6 +48,7 @@ import { isTypeScriptLike } from './source-kinds.js';
 type PackageExportIndex = Map<string, Map<string, Set<number>>>;
 type TypeScriptSymbol = ts.Symbol;
 type TypeScriptTypeChecker = ts.TypeChecker;
+type TypeScriptHierarchyContainer = ts.ClassLikeDeclaration | ts.InterfaceDeclaration;
 
 interface ImportIdentifierEntry {
   identifier: Identifier | null;
@@ -58,6 +63,11 @@ interface ResolvedCalleeTarget {
   symbol: string;
   file: string;
   line: number;
+}
+
+interface HierarchyMemberDefinition {
+  definition: IndexedDefinition;
+  location: SemanticReference;
 }
 
 interface CalleeMapProfileStats {
@@ -95,6 +105,10 @@ interface ReferenceMapProfileStats {
   packageReferenceCount: number;
   referenceCount: number;
   preciseSearchFailures: number;
+  hierarchyDefinitions: number;
+  hierarchyFamilies: number;
+  hierarchyReferences: number;
+  hierarchyMs: number;
 }
 
 interface ImportUsageProfileStats {
@@ -322,6 +336,8 @@ class TsMorphSemanticProvider implements SemanticProvider {
         if (profiling) stats.packageRefsMs += performance.now() - packageRefsStart;
 
         const symbolCache = new Map<TypeScriptSymbol, ResolvedCalleeTarget | null>();
+        const hierarchySymbolKeyCache = new Map<TypeScriptSymbol, string[]>();
+        const hierarchyTargets = this.hierarchyTargetsForDefinitions(definitions);
         const referenceNames = new Set(definitions.map((definition) => definition.leaf).filter(Boolean));
         const scanStart = profiling ? performance.now() : 0;
         for (const relativePath of originFiles ?? this.sourceFiles.indexedTypeScriptLikeDocuments()) {
@@ -334,13 +350,19 @@ class TsMorphSemanticProvider implements SemanticProvider {
             relativePath,
             requestedSymbolIds,
             definitionBySymbolId,
+            hierarchyTargets,
             referenceNames,
             symbolCache,
+            hierarchySymbolKeyCache,
             result,
             profiling ? stats : undefined,
           );
         }
         if (profiling) stats.scanMs += performance.now() - scanStart;
+
+        const hierarchyStart = profiling ? performance.now() : 0;
+        this.addHierarchyMemberReferences(definitions, result, profiling ? stats : undefined);
+        if (profiling) stats.hierarchyMs += performance.now() - hierarchyStart;
 
         for (const [symbolId, references] of result) {
           const deduped = dedupeLocations(references);
@@ -362,8 +384,10 @@ class TsMorphSemanticProvider implements SemanticProvider {
     relativePath: string,
     requestedSymbolIds: ReadonlySet<number>,
     definitionBySymbolId: ReadonlyMap<number, IndexedDefinition>,
+    hierarchyTargets: ReadonlyMap<string, ReadonlyMap<number, IndexedDefinition>>,
     referenceNames: ReadonlySet<string>,
     symbolCache: Map<TypeScriptSymbol, ResolvedCalleeTarget | null>,
+    hierarchySymbolKeyCache: Map<TypeScriptSymbol, string[]>,
     result: Map<number, SemanticReference[]>,
     stats?: ReferenceMapProfileStats,
   ): void {
@@ -383,28 +407,41 @@ class TsMorphSemanticProvider implements SemanticProvider {
           if (symbolCache.has(symbol)) {
             target = symbolCache.get(symbol) ?? null;
           } else {
-            target = this.definitionFromCompilerSymbol(symbol);
+            target = this.referenceDefinitionFromCompilerSymbol(symbol);
             symbolCache.set(symbol, target);
           }
           if (stats) {
             if (target) stats.targetHits += 1;
             else stats.targetMisses += 1;
           }
-          if (target && requestedSymbolIds.has(target.symbolId)) {
-            if (stats) stats.requestedHits += 1;
-            const definition = definitionBySymbolId.get(target.symbolId);
-            if (
-              definition &&
-              !isDefinitionSelfLocation(definition, relativePath, lineOfCompilerNode(compilerSourceFile, node))
-            ) {
-              const bucket = result.get(target.symbolId) ?? [];
+          const hierarchySymbolKeys = cached(hierarchySymbolKeyCache, symbol, () => this.compilerSymbolKeys(symbol));
+          let line: number | null = null;
+          let location: SemanticReference | null = null;
+          const directDefinition =
+            target && requestedSymbolIds.has(target.symbolId) ? definitionBySymbolId.get(target.symbolId) : undefined;
+          if (directDefinition) {
+            line = lineOfCompilerNode(compilerSourceFile, node);
+            if (!isDefinitionSelfLocation(directDefinition, relativePath, line)) {
               const position = compilerSourceFile.getLineAndCharacterOfPosition(node.getStart(compilerSourceFile));
-              bucket.push({
-                file: relativePath,
-                line: position.line,
-                column: position.character,
-              });
-              result.set(target.symbolId, bucket);
+              location = { file: relativePath, line: position.line, column: position.character };
+              const bucket = result.get(directDefinition.symbolId) ?? [];
+              bucket.push(location);
+              result.set(directDefinition.symbolId, bucket);
+              if (stats) stats.requestedHits += 1;
+            }
+          }
+          for (const symbolKey of hierarchySymbolKeys) {
+            for (const definition of hierarchyTargets.get(symbolKey)?.values() ?? []) {
+              line ??= lineOfCompilerNode(compilerSourceFile, node);
+              if (isDefinitionSelfLocation(definition, relativePath, line)) continue;
+              if (!location) {
+                const position = compilerSourceFile.getLineAndCharacterOfPosition(node.getStart(compilerSourceFile));
+                location = { file: relativePath, line: position.line, column: position.character };
+              }
+              const bucket = result.get(definition.symbolId) ?? [];
+              bucket.push(location);
+              result.set(definition.symbolId, bucket);
+              if (stats) stats.requestedHits += 1;
             }
           }
         }
@@ -412,6 +449,199 @@ class TsMorphSemanticProvider implements SemanticProvider {
       this.tsMorph.ts.forEachChild(node, visit);
     };
     visit(compilerSourceFile);
+  }
+
+  private hierarchyTargetsForDefinitions(
+    definitions: readonly IndexedDefinition[],
+  ): Map<string, Map<number, IndexedDefinition>> {
+    const targets = new Map<string, Map<number, IndexedDefinition>>();
+    for (const definition of definitions) {
+      const node = this.nodeForDefinition(definition);
+      const member = node?.compilerNode;
+      if (!member || !this.isHierarchyMethod(member)) continue;
+      const container = member.parent;
+      if (!this.isHierarchyContainer(container)) continue;
+      const checker = this.compilerCheckerForSourceFile(node!.getSourceFile());
+      const memberSymbol = checker.getSymbolAtLocation(member.name);
+      if (!memberSymbol) continue;
+      for (const symbol of this.hierarchyMemberSymbols(checker, container, memberSymbol)) {
+        for (const symbolKey of this.compilerSymbolKeys(symbol)) {
+          const symbolTargets = targets.get(symbolKey) ?? new Map<number, IndexedDefinition>();
+          symbolTargets.set(definition.symbolId, definition);
+          targets.set(symbolKey, symbolTargets);
+        }
+      }
+    }
+    return targets;
+  }
+
+  private hierarchyMemberSymbols(
+    checker: TypeScriptTypeChecker,
+    container: TypeScriptHierarchyContainer,
+    memberSymbol: TypeScriptSymbol,
+  ): Set<TypeScriptSymbol> {
+    const symbols = new Set<TypeScriptSymbol>();
+    const visited = new Set<ts.Type>();
+    const visit = (type: ts.Type, symbol: TypeScriptSymbol, ancestorTypes: readonly ts.Type[]): void => {
+      if (visited.has(type)) return;
+      visited.add(type);
+      symbols.add(symbol);
+      for (const ancestorType of ancestorTypes) {
+        const ancestorMember = ancestorType.getProperty(memberSymbol.name);
+        if (ancestorMember) {
+          visit(ancestorType, ancestorMember, this.hierarchyAncestorTypesForType(checker, ancestorType));
+        }
+      }
+    };
+    visit(checker.getTypeAtLocation(container), memberSymbol, this.hierarchyAncestorTypes(checker, container));
+    return symbols;
+  }
+
+  private addHierarchyMemberReferences(
+    definitions: readonly IndexedDefinition[],
+    result: Map<number, SemanticReference[]>,
+    stats?: ReferenceMapProfileStats,
+  ): void {
+    const families = new Map<string, Map<number, HierarchyMemberDefinition>>();
+    for (const definition of definitions) {
+      const node = this.nodeForDefinition(definition);
+      const member = node?.compilerNode;
+      if (!member || !this.isHierarchyMethod(member)) continue;
+      const container = member.parent;
+      if (!this.isHierarchyContainer(container)) continue;
+      const checker = this.compilerCheckerForSourceFile(node!.getSourceFile());
+      const memberSymbol = checker.getSymbolAtLocation(member.name);
+      if (!memberSymbol) continue;
+      const sourceFile = member.getSourceFile();
+      const position = sourceFile.getLineAndCharacterOfPosition(member.name.getStart(sourceFile));
+      const entry = {
+        definition,
+        location: {
+          file: definition.relativePath,
+          line: position.line,
+          column: position.character,
+        },
+      };
+      const bucket = result.get(definition.symbolId) ?? [];
+      for (const hierarchySymbol of this.hierarchyMemberSymbols(checker, container, memberSymbol)) {
+        if (hierarchySymbol === memberSymbol) continue;
+        for (const location of this.compilerSymbolLocations(hierarchySymbol)) {
+          bucket.push(location);
+          if (stats) stats.hierarchyReferences += 1;
+        }
+      }
+      result.set(definition.symbolId, bucket);
+      const roots = this.hierarchyRootMemberSymbols(checker, container, memberSymbol);
+      for (const root of roots) {
+        const family = families.get(root) ?? new Map<number, HierarchyMemberDefinition>();
+        family.set(definition.symbolId, entry);
+        families.set(root, family);
+      }
+      if (stats) stats.hierarchyDefinitions += 1;
+    }
+
+    for (const family of families.values()) {
+      if (family.size < 2) continue;
+      if (stats) stats.hierarchyFamilies += 1;
+      for (const { definition } of family.values()) {
+        const bucket = result.get(definition.symbolId) ?? [];
+        for (const other of family.values()) {
+          if (other.definition.symbolId === definition.symbolId) continue;
+          bucket.push(other.location);
+          if (stats) stats.hierarchyReferences += 1;
+        }
+        result.set(definition.symbolId, bucket);
+      }
+    }
+  }
+
+  private hierarchyRootMemberSymbols(
+    checker: TypeScriptTypeChecker,
+    container: TypeScriptHierarchyContainer,
+    memberSymbol: TypeScriptSymbol,
+  ): Set<string> {
+    const roots = new Set<string>();
+    const visited = new Set<ts.Type>();
+    const visit = (type: ts.Type, symbol: TypeScriptSymbol, ancestorTypes: readonly ts.Type[]): void => {
+      if (visited.has(type)) return;
+      visited.add(type);
+      let inherited = false;
+      for (const baseType of ancestorTypes) {
+        const baseMember = baseType.getProperty(memberSymbol.name);
+        if (!baseMember) continue;
+        inherited = true;
+        visit(baseType, baseMember, this.hierarchyAncestorTypesForType(checker, baseType));
+      }
+      if (!inherited) {
+        for (const symbolKey of this.compilerSymbolKeys(symbol)) roots.add(symbolKey);
+      }
+    };
+    visit(checker.getTypeAtLocation(container), memberSymbol, this.hierarchyAncestorTypes(checker, container));
+    return roots;
+  }
+
+  private compilerSymbolKeys(symbol: TypeScriptSymbol): string[] {
+    return (symbol.declarations ?? []).map((declaration) => {
+      const sourceFile = declaration.getSourceFile();
+      return `${sourceFile.fileName}\0${declaration.getStart(sourceFile)}\0${symbol.name}`;
+    });
+  }
+
+  private compilerSymbolLocations(symbol: TypeScriptSymbol): SemanticReference[] {
+    const locations: SemanticReference[] = [];
+    for (const declaration of symbol.declarations ?? []) {
+      const sourceFile = declaration.getSourceFile();
+      const file = toRelative(this.db.config.projectRoot, sourceFile.fileName);
+      if (!file) continue;
+      const name = (declaration as ts.NamedDeclaration).name;
+      const position = sourceFile.getLineAndCharacterOfPosition((name ?? declaration).getStart(sourceFile));
+      locations.push({ file, line: position.line, column: position.character });
+    }
+    return locations;
+  }
+
+  private baseTypes(checker: TypeScriptTypeChecker, type: ts.Type): readonly ts.BaseType[] {
+    try {
+      return checker.getBaseTypes(type as ts.InterfaceType) ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  private hierarchyAncestorTypes(
+    checker: TypeScriptTypeChecker,
+    container: TypeScriptHierarchyContainer,
+  ): readonly ts.Type[] {
+    const ancestors = new Set<ts.Type>(
+      this.hierarchyAncestorTypesForType(checker, checker.getTypeAtLocation(container)),
+    );
+    for (const clause of container.heritageClauses ?? []) {
+      for (const heritageType of clause.types) ancestors.add(checker.getTypeAtLocation(heritageType));
+    }
+    return [...ancestors];
+  }
+
+  private hierarchyAncestorTypesForType(checker: TypeScriptTypeChecker, type: ts.Type): readonly ts.Type[] {
+    const ancestors = new Set<ts.Type>(this.baseTypes(checker, type));
+    for (const declaration of type.getSymbol()?.declarations ?? []) {
+      if (!this.isHierarchyContainer(declaration)) continue;
+      for (const clause of declaration.heritageClauses ?? []) {
+        for (const heritageType of clause.types) ancestors.add(checker.getTypeAtLocation(heritageType));
+      }
+    }
+    return [...ancestors];
+  }
+
+  private isHierarchyMethod(node: ts.Node): node is ts.MethodDeclaration | ts.MethodSignature {
+    return this.tsMorph.ts.isMethodDeclaration(node) || this.tsMorph.ts.isMethodSignature(node);
+  }
+
+  private isHierarchyContainer(node: ts.Node): node is TypeScriptHierarchyContainer {
+    return (
+      this.tsMorph.ts.isClassDeclaration(node) ||
+      this.tsMorph.ts.isClassExpression(node) ||
+      this.tsMorph.ts.isInterfaceDeclaration(node)
+    );
   }
 
   private compilerReferenceSymbol(
@@ -788,9 +1018,14 @@ class TsMorphSemanticProvider implements SemanticProvider {
     });
   }
 
+  private referenceDefinitionFromCompilerSymbol(symbol: TypeScriptSymbol): ResolvedCalleeTarget | null {
+    return this.definitionFromCompilerSymbol(symbol, undefined, true);
+  }
+
   private definitionFromCompilerSymbol(
     symbol: TypeScriptSymbol,
     stats?: CalleeMapProfileStats,
+    exactMatch = false,
   ): ResolvedCalleeTarget | null {
     const symbolName = symbol.name;
     const declarationsStart = stats ? performance.now() : 0;
@@ -809,7 +1044,13 @@ class TsMorphSemanticProvider implements SemanticProvider {
       if (!file || this.db.isIgnored(file)) continue;
 
       const lookupStart = stats ? performance.now() : 0;
-      const match = findIndexedDefinitionNear(this.db, file, line, symbolName);
+      const declarationName = this.compilerDeclarationName(declaration);
+      const match = exactMatch
+        ? (findIndexedDefinitionExact(this.db, file, line, symbolName) ??
+          (declarationName && declarationName !== symbolName
+            ? findIndexedDefinitionExact(this.db, file, line, declarationName)
+            : null))
+        : findIndexedDefinitionNear(this.db, file, line, symbolName);
       if (stats) stats.indexedLookupMs += performance.now() - lookupStart;
       if (match) {
         return {
@@ -821,6 +1062,11 @@ class TsMorphSemanticProvider implements SemanticProvider {
       }
     }
     return null;
+  }
+
+  private compilerDeclarationName(declaration: ts.Declaration): string | null {
+    const name = (declaration as ts.NamedDeclaration).name;
+    return name && this.tsMorph.ts.isIdentifier(name) ? name.text : null;
   }
 
   // scip-query: ignore-extract — this builds the TypeScript semantic callee
@@ -1158,6 +1404,10 @@ function createReferenceMapProfileStats(): ReferenceMapProfileStats {
     packageReferenceCount: 0,
     referenceCount: 0,
     preciseSearchFailures: 0,
+    hierarchyDefinitions: 0,
+    hierarchyFamilies: 0,
+    hierarchyReferences: 0,
+    hierarchyMs: 0,
   };
 }
 
@@ -1167,6 +1417,7 @@ function roundReferenceMapProfileStats(stats: ReferenceMapProfileStats): Referen
     scanMs: Math.round(stats.scanMs),
     packageRefsMs: Math.round(stats.packageRefsMs),
     semanticRefsMs: Math.round(stats.semanticRefsMs),
+    hierarchyMs: Math.round(stats.hierarchyMs),
   };
 }
 

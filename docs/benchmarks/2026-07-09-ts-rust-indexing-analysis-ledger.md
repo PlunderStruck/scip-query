@@ -1650,13 +1650,13 @@ the selection, validity, fallback, and live/stopped/stale helper state.
 
 Fresh evidence controls at the default boundary:
 
-| Corpus | Transport | Cold | Warm | Output |
-| --- | --- | ---: | ---: | --- |
-| scip-query | worker opt-out | 7.436s | — | `d8706ecc…` |
-| scip-query | durable default | 6.068s | 3.724s | `d8706ecc…` |
-| SynthRunnerRust | worker opt-out | 21.227s | — | `3d9caaf2…` |
-| SynthRunnerRust | durable default | 18.414s | 1.226s | `47291cda…` |
-| SynthRunnerRust | packed durable default | 18.688s | — | `47291cda…` |
+| Corpus          | Transport              |    Cold |   Warm | Output      |
+| --------------- | ---------------------- | ------: | -----: | ----------- |
+| scip-query      | worker opt-out         |  7.436s |      — | `d8706ecc…` |
+| scip-query      | durable default        |  6.068s | 3.724s | `d8706ecc…` |
+| SynthRunnerRust | worker opt-out         | 21.227s |      — | `3d9caaf2…` |
+| SynthRunnerRust | durable default        | 18.414s | 1.226s | `47291cda…` |
+| SynthRunnerRust | packed durable default | 18.688s |      — | `47291cda…` |
 
 Cold improved 18.4% locally and 13.3% on SynthRunnerRust, so defaulting does
 not trade first-fill latency for warm speed. The Synth output transition is an
@@ -1806,6 +1806,53 @@ file-owned reference index or exact fragment representation, not a return to
 the faster false-positive-producing scan. The external records are in
 `docs/benchmarks/runs/2026-07-10-vega-dead-cold.jsonl`.
 
+### 2026-07-10 — exact TypeScript caller fragments
+
+The next slice removed the repeated cold compiler searches while preserving
+the exact `dead --full` caller-file contract. A caller fragment is a file-owned
+semantic record whose essential property is that replacing one source file's
+record replaces every outgoing caller relationship from that file. The
+provider now scans each indexed TypeScript source file once, resolves compiler
+symbols to indexed definitions with strict declaration matching, and relates
+base, derived, sibling, interface, and external lifecycle members through
+stable declaration identities rather than compiler-object identity.
+
+The first strict scan was rejected locally: fuzzy symbol-to-index matching
+mistook ordinary identifiers such as `files` for nearby definitions such as
+`filesKey`. Exact leaf/declaration matching removed all nine false cross-file
+relationships. A second attempt still missed class implementations called
+through interfaces because SCIP did not catalog the interface method itself;
+including unindexed compiler ancestor symbols closed that gap. Vega then
+showed that compiler symbol objects were not stable across every project view,
+so hierarchy keys were changed to declaration file/position identities. The
+final caller-file comparison had zero missing and zero extra project-owned
+facts on both scip-query and Vega.
+
+Accepted Vega_2.0 results on the active worktree snapshot:
+
+| Run                                                    | Wall time | Fragment state        | Findings | Output SHA-256 |
+| ------------------------------------------------------ | --------: | --------------------- | -------: | -------------- |
+| Precise compiler oracle, unprofiled historical control |    36.94s | bypassed              |    6,299 | `907162fa...`  |
+| Precise compiler oracle, profiled current snapshot     |    43.01s | comparison only       |    6,297 | `06916977...`  |
+| Exact fragments, profiled cold miss                    |    16.59s | 0 hits / 2,036 writes |    6,297 | `06916977...`  |
+| Exact fragments, unprofiled cold miss                  |    13.81s | 0 hits / 2,036 writes |    6,297 | `06916977...`  |
+| Exact fragments, unchanged warm hit                    |     4.16s | 2,036 hits            |    6,297 | `06916977...`  |
+
+The unprofiled cold miss removes 23.13 seconds, or 62.6%, from the prior exact
+control. The warm run removes 32.78 seconds, or 88.7%. The normalized finding
+list hash is `15b23fc233dc94cf29624310ecd9cf7eab100fc743c8255b3991107f506ca8a1`
+for the precise, cold-fragment, and warm-fragment runs. Fragment schema version
+2 prevents older approximate rows from being reused. If identities or fragment
+materialization are unavailable, exact callers still fall back to the precise
+per-definition compiler path.
+
+Decision: accepted for exact TypeScript caller maps and `dead --full`. Full
+reference line/column parity is a broader contract and remains diagnostic; the
+accepted product is exact for the cross-file caller presence the command
+actually consumes. Feeding these fragments directly from incremental compiler
+emission and extending file-level affected updates to multi-project workspaces
+remain later phases.
+
 ## Run History
 
 Machine-readable run history:
@@ -1872,3 +1919,7 @@ acceptance corpus for this slice.
   it changed symbol classifications. Treat Vega's 36,940ms cold direct result
   as the next optimization target: preserve those exact answers while moving
   the compiler work to an exact file-owned reference product.
+- Accept exact TypeScript caller fragments for `dead --full`. Vega cold time
+  fell from 36.94s to 13.81s and unchanged warm time to 4.16s with identical
+  findings. Keep the precise compiler path as fallback and do not claim full
+  reference-location parity from the caller-specific product.

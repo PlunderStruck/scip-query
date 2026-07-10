@@ -26,6 +26,7 @@ import {
   readTypeScriptReferenceFragment,
   TYPESCRIPT_REFERENCE_FRAGMENT_SCHEMA,
 } from '../../../src/semantic/typescript/reference-fragment-shadow.js';
+import { createTsMorphProvider } from '../../../src/semantic/typescript/ts-morph-provider.js';
 
 function createSemanticFixtureDb(dbPath: string): void {
   const db = new Database(dbPath);
@@ -204,6 +205,99 @@ async function withSemanticFixtureAsync(run: (db: ScipDatabase) => Promise<void>
   }
 }
 
+function addOverrideReferenceFixture(db: ScipDatabase): void {
+  const projectRoot = db.config.projectRoot;
+  writeFileSync(
+    join(projectRoot, 'src/base-worker.ts'),
+    [
+      'export interface Worker { work(): string; }',
+      '',
+      'export class BaseWorker implements Worker {',
+      "  work(): string { return 'base'; }",
+      '}',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(
+    join(projectRoot, 'src/child-worker.ts'),
+    [
+      "import { BaseWorker } from './base-worker';",
+      'export class ChildWorker extends BaseWorker {',
+      "  override work(): string { return 'child'; }",
+      '}',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(
+    join(projectRoot, 'src/sibling-worker.ts'),
+    [
+      "import { BaseWorker } from './base-worker';",
+      'export class SiblingWorker extends BaseWorker {',
+      "  override work(): string { return 'sibling'; }",
+      '}',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(
+    join(projectRoot, 'src/unrelated-worker.ts'),
+    ['export class UnrelatedWorker {', "  work(): string { return 'unrelated'; }", '}', ''].join('\n'),
+  );
+  writeFileSync(
+    join(projectRoot, 'src/worker-consumer.ts'),
+    [
+      "import type { Worker } from './base-worker';",
+      'export function runWorker(worker: Worker): string {',
+      '  return worker.work();',
+      '}',
+      '',
+    ].join('\n'),
+  );
+
+  const raw = new Database(db.config.dbPath);
+  raw.exec(`
+    INSERT INTO documents (id, language, relative_path) VALUES
+      (3, 'typescript', 'src/base-worker.ts'),
+      (4, 'typescript', 'src/child-worker.ts'),
+      (5, 'typescript', 'src/sibling-worker.ts'),
+      (6, 'typescript', 'src/unrelated-worker.ts'),
+      (7, 'typescript', 'src/worker-consumer.ts');
+
+    INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+      (3, 3, 0, 0, 3, X''),
+      (4, 4, 0, 0, 4, X''),
+      (5, 5, 0, 0, 4, X''),
+      (6, 6, 0, 0, 3, X''),
+      (7, 7, 0, 0, 4, X'');
+
+    INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
+      (7, 'scip-typescript npm fixture 1.0.0 src/\`base-worker.ts\`/BaseWorker#', 'BaseWorker', 5, 'class BaseWorker'),
+      (8, 'scip-typescript npm fixture 1.0.0 src/\`base-worker.ts\`/BaseWorker#work().', 'work', 6, 'method work(): string'),
+      (9, 'scip-typescript npm fixture 1.0.0 src/\`child-worker.ts\`/ChildWorker#', 'ChildWorker', 5, 'class ChildWorker'),
+      (10, 'scip-typescript npm fixture 1.0.0 src/\`child-worker.ts\`/ChildWorker#work().', 'work', 6, 'method work(): string'),
+      (11, 'scip-typescript npm fixture 1.0.0 src/\`sibling-worker.ts\`/SiblingWorker#', 'SiblingWorker', 5, 'class SiblingWorker'),
+      (12, 'scip-typescript npm fixture 1.0.0 src/\`sibling-worker.ts\`/SiblingWorker#work().', 'work', 6, 'method work(): string'),
+      (13, 'scip-typescript npm fixture 1.0.0 src/\`unrelated-worker.ts\`/UnrelatedWorker#', 'UnrelatedWorker', 5, 'class UnrelatedWorker'),
+      (14, 'scip-typescript npm fixture 1.0.0 src/\`unrelated-worker.ts\`/UnrelatedWorker#work().', 'work', 6, 'method work(): string');
+
+    INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+      (7, 3, 7, 2, 0, 4, 1),
+      (8, 3, 8, 3, 2, 3, 42),
+      (9, 4, 9, 1, 0, 3, 1),
+      (10, 4, 10, 2, 2, 2, 52),
+      (11, 5, 11, 1, 0, 3, 1),
+      (12, 5, 12, 2, 2, 2, 56),
+      (13, 6, 13, 0, 0, 2, 1),
+      (14, 6, 14, 1, 2, 1, 52);
+
+    INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+      (3, 7, 1), (3, 8, 1),
+      (4, 9, 1), (4, 10, 1),
+      (5, 11, 1), (5, 12, 1),
+      (6, 13, 1), (6, 14, 1);
+  `);
+  raw.close();
+}
+
 function createMonorepoSemanticFixtureDb(dbPath: string): void {
   const db = new Database(dbPath);
   createEvidenceSchema(db);
@@ -353,6 +447,39 @@ function withMonorepoSemanticFixture(run: (db: ScipDatabase) => void): void {
 }
 
 describe('TypeScript semantic provider', () => {
+  it('keeps the file-first reference scan exact across override families', () => {
+    withSemanticFixture((db) => {
+      addOverrideReferenceFixture(db);
+      const definitions = getAllDefinitions(db).filter(
+        (definition) => definition.leaf === 'work' && definition.relativePath.endsWith('-worker.ts'),
+      );
+      const provider = createTsMorphProvider(db);
+      const precise = provider.referencesForDefinitions?.(definitions, { exact: true }) ?? new Map();
+      const fragments = provider.referenceFragmentsForFiles?.([
+        ...definitions.map((definition) => definition.relativePath),
+        'src/worker-consumer.ts',
+      ]);
+      expect(fragments).toBeDefined();
+      const inverted = assembleReferenceFragments(definitions, fragments!);
+
+      expect(compareReferenceFragmentMaps(definitions, precise, inverted)).toEqual(
+        expect.objectContaining({ passed: true, missing: [], extra: [] }),
+      );
+      expect(
+        inverted.get(definitions.find((definition) => definition.relativePath === 'src/child-worker.ts')!.symbolId),
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ file: 'src/base-worker.ts' }),
+          expect.objectContaining({ file: 'src/worker-consumer.ts' }),
+        ]),
+      );
+      expect(
+        inverted.get(definitions.find((definition) => definition.relativePath === 'src/unrelated-worker.ts')!.symbolId),
+      ).toEqual([]);
+      provider.dispose?.();
+    });
+  });
+
   it('compares tsserver-style reference answers against the ts-morph baseline without changing defaults', async () => {
     await withSemanticFixtureAsync(async (db) => {
       const { createTsMorphProvider } = await import('../../../src/semantic/typescript/ts-morph-provider.js');

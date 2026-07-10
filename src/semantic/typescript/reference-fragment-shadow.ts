@@ -8,7 +8,7 @@ import { indexedTypeScriptFiles, typeScriptSemanticIdentityForFile } from './sem
 import { isTypeScriptLike } from './source-kinds.js';
 import { assembleReferenceFragments, compareReferenceFragmentMaps } from './reference-fragments.js';
 
-export const TYPESCRIPT_REFERENCE_FRAGMENT_SCHEMA = 'typescript-reference-fragment-v1';
+export const TYPESCRIPT_REFERENCE_FRAGMENT_SCHEMA = 'typescript-reference-fragment-v2';
 
 export interface TypeScriptReferenceFragmentShadowResult {
   state: 'passing' | 'failing' | 'unavailable';
@@ -56,9 +56,14 @@ export function recordTypeScriptReferenceFragmentShadow(
           return result;
         }
         const files = indexedTypeScriptFiles(db);
+        const indexedFiles = new Set(files);
         const fragments = provider.referenceFragmentsForFiles(files);
         const actual = assembleReferenceFragments(typeScriptDefinitions, fragments);
-        const parity = compareReferenceFragmentMaps(typeScriptDefinitions, expected, actual);
+        const parity = compareReferenceFragmentMaps(
+          typeScriptDefinitions,
+          referencesWithinFiles(expected, indexedFiles),
+          actual,
+        );
         if (!parity.passed) {
           result = {
             state: 'failing',
@@ -95,6 +100,18 @@ export function recordTypeScriptReferenceFragmentShadow(
       }
     },
     () => ({ ...result }),
+  );
+}
+
+function referencesWithinFiles(
+  references: ReadonlyMap<number, readonly SemanticReference[]>,
+  files: ReadonlySet<string>,
+): Map<number, SemanticReference[]> {
+  return new Map(
+    [...references].map(([symbolId, locations]) => [
+      symbolId,
+      locations.filter((location) => files.has(location.file)),
+    ]),
   );
 }
 

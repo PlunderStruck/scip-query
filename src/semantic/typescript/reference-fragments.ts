@@ -7,6 +7,15 @@ export interface ReferenceFragmentParity {
   actualCount: number;
   missing: string[];
   extra: string[];
+  callerFiles: ReferenceCallerFileParity;
+}
+
+export interface ReferenceCallerFileParity {
+  passed: boolean;
+  expectedCount: number;
+  actualCount: number;
+  missing: string[];
+  extra: string[];
 }
 
 export function assembleReferenceFragments(
@@ -35,13 +44,38 @@ export function compareReferenceFragmentMaps(
   const actualFacts = referenceFactSet(definitions, actual);
   const missing = [...expectedFacts].filter((fact) => !actualFacts.has(fact)).sort();
   const extra = [...actualFacts].filter((fact) => !expectedFacts.has(fact)).sort();
+  const expectedCallerFiles = referenceCallerFileFactSet(definitions, expected);
+  const actualCallerFiles = referenceCallerFileFactSet(definitions, actual);
+  const missingCallerFiles = [...expectedCallerFiles].filter((fact) => !actualCallerFiles.has(fact)).sort();
+  const extraCallerFiles = [...actualCallerFiles].filter((fact) => !expectedCallerFiles.has(fact)).sort();
   return {
     passed: missing.length === 0 && extra.length === 0,
     expectedCount: expectedFacts.size,
     actualCount: actualFacts.size,
     missing,
     extra,
+    callerFiles: {
+      passed: missingCallerFiles.length === 0 && extraCallerFiles.length === 0,
+      expectedCount: expectedCallerFiles.size,
+      actualCount: actualCallerFiles.size,
+      missing: missingCallerFiles,
+      extra: extraCallerFiles,
+    },
   };
+}
+
+function referenceCallerFileFactSet(
+  definitions: readonly IndexedDefinition[],
+  references: ReadonlyMap<number, readonly SemanticReference[]>,
+): Set<string> {
+  const facts = new Set<string>();
+  for (const definition of definitions) {
+    for (const reference of references.get(definition.symbolId) ?? []) {
+      if (reference.file === definition.relativePath) continue;
+      facts.add(`${definition.symbol}\0${reference.file}`);
+    }
+  }
+  return facts;
 }
 
 export function referenceFragmentsFromDefinitionMap(

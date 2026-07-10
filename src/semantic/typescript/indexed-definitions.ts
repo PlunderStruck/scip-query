@@ -31,6 +31,15 @@ export function findIndexedDefinitionNear(
   return nearestDefinition(fallback, line);
 }
 
+export function findIndexedDefinitionExact(
+  db: ScipDatabase,
+  file: string,
+  line: number,
+  symbolName: string,
+): IndexedDefinition | null {
+  return nearestDefinition(indexedDefinitionCandidatesByLeaf(db, file).get(symbolName) ?? [], line);
+}
+
 export function indexedDefinitionLeafMap(db: ScipDatabase, file: string): Map<string, IndexedDefinition> {
   const byLeaf = new Map<string, IndexedDefinition>();
   for (const [leaf, candidates] of indexedDefinitionCandidatesByLeaf(db, file)) {
