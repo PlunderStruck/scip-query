@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Phases 1–2 complete; Phase 3 persistent TypeScript semantics next
+Status: Phases 1–2 complete; Phase 3 planned and implementation next
 
 ## Goal
 
@@ -424,6 +424,18 @@ TypeScript semantic facts.
 
 **Dependency:** Phase 2 affected-set correctness.
 
+**Executable plan:**
+[`2026-07-09-persistent-typescript-semantics.md`](./2026-07-09-persistent-typescript-semantics.md).
+
+**Planned boundary:** The existing demand-started watch service becomes the
+single lazy owner of compatible ts-morph Projects. Synchronous CLI processes
+use an atomic repository-local mailbox and fall back to the unchanged direct
+provider on any service error. Reference facts are persisted as origin-file
+fragments under conservative transitive semantic identities; legacy
+definition-centric reads remain available during rollout. The recorded local
+pre-change import-usage baseline is 927ms median / 1,307ms p95 with 212ms
+median Project construction.
+
 **Exit gate:** Phase 3 performance, hit-rate, and parity thresholds pass on
 separate CLI processes and after service restart.
 
@@ -599,12 +611,12 @@ Complete this at every phase close:
 6. Phase 5 atomic incremental generation storage.
 7. Phase 6 durable Rust defaulting, selective native kernels, and rollout.
 
-The immediate recommendation is Phase 3. Phase 2 has proved which TypeScript
-files may be affected, but every semantic-heavy command still creates
-ts-morph Projects inside a short-lived CLI process and project-wide cache
-identities still invalidate unrelated answers. First refresh plan evidence at
-the existing project-construction boundary:
+The immediate recommendation is Phase 3 step 3.1. Phase 2 has proved which
+TypeScript files may be affected, but every semantic-heavy command still
+creates ts-morph Projects inside a short-lived CLI process and project-wide
+cache identities still invalidate unrelated answers. Define the conservative
+per-file identity before adding persistent storage or service routing:
 
 ```sh
-SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/semantic/typescript/ts-morph-provider.ts --json
+SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/reindex/affected-set.ts --json
 ```

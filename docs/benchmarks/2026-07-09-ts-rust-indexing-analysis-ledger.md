@@ -1397,6 +1397,37 @@ yet authorize partial SCIP or SQLite publication.
 Machine-readable evidence:
 `docs/benchmarks/runs/2026-07-09-affected-set-shadow.jsonl`.
 
+## 2026-07-09 — Phase 3 persistent TypeScript semantics kickoff
+
+The accepted design keeps one lazy ts-morph compiler session in the existing
+repository service; it does not create a second daemon. The service remains
+demand-started, exits after the configured clean-idle period, and is woken by
+the next eligible CLI or hook command. Synchronous CLI calls will use atomic
+request/response mailbox files and fall back to the current direct provider on
+any service, protocol, timeout, or response failure.
+
+The durable cache boundary changes from whole-project definition rows to
+origin-file semantic fragments. A reference fragment belongs to the file
+containing the reference and is keyed by that file plus its transitive compiler
+dependencies, global TypeScript configuration/ambient inputs, project
+membership, compiler engine, and schema. This is the necessary ownership rule:
+a consumer can add a reference to an unchanged definition, so caching only by
+the definition file would either be unsafe or remain whole-project-wide.
+
+The pre-change five-run scip-query `unused-imports
+src/semantic/shared-primitives.ts --json` baseline was 927ms median / 1,307ms
+p95 with an exact stable output SHA-256 of
+`de4ce6c21a7d9100288e663c7a02b12e94df85d0b773a36b353609ddc224be0b`.
+Every process rebuilt Projects in 206–218ms (212ms median) and import-usage
+computation took 424–451ms (432ms median). Phase 3 must produce zero new
+unchanged Projects after warm-up, preserve at least 95% of eligible fragments
+after a leaf edit, and meet the roadmap's >=20% command or >=50% semantic-span
+improvement with exact fixture/scip-query/OpenCode parity.
+
+Executable plan:
+`docs/plans/2026-07-09-persistent-typescript-semantics.md`. Machine history:
+`docs/benchmarks/runs/2026-07-09-typescript-semantic-session.jsonl`.
+
 ## Run History
 
 Machine-readable run history:
