@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Phases 1–3 complete; Phase 4 local authority proven, large calibration and Phase 5 publication next
+Status: Phases 1–4 complete; Phase 5 incremental publication next
 
 ## Goal
 
@@ -532,6 +532,14 @@ edit-to-fresh target is retained unchanged as the combined Phase 4+5 gate.
 This revision follows the roadmap's allowed recorded-feasibility rule rather
 than weakening the ship target.
 
+**Exit result:** Complete. Five local warm updates measured 16.748ms median /
+22.193ms p95. Five OpenCode warm updates measured 2,324.730ms / 2,802.661ms.
+The full local and 119MB OpenCode candidate shards were byte-identical to clean
+scip-typescript oracles. The service-current-directory mismatch and default
+4GB OpenCode oracle OOM are retained as rejected evidence; the fixed emitter
+matched 2,967/2,967 base documents and the established 8GB oracle completed.
+Rust remains on its whole-project fallback at the recorded upstream boundary.
+
 ### Phase 5 — Generation-aware incremental SQLite publication
 
 **Purpose:** publish changed graph and semantic fragments without rebuilding
@@ -673,10 +681,10 @@ Complete this at every phase close:
 6. Phase 5 atomic incremental generation storage.
 7. Phase 6 durable Rust defaulting, selective native kernels, and rollout.
 
-The immediate action is large-corpus Phase 4 calibration followed by Phase 5's
-incremental SQLite publication. Local authority and byte parity are proven;
-the remaining local 2.55–2.60s warm wall time is now almost entirely the
-complete merge/conversion path. Inspect that publication boundary next:
+The immediate action is Phase 5's incremental SQLite publication. Phase 4's
+local and OpenCode distributions and exact full-shard parity now pass; the
+remaining local 2.55–2.60s warm wall time is almost entirely the complete
+merge/conversion path. Inspect that publication boundary next:
 
 ```sh
 SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/reindex/index.ts --json

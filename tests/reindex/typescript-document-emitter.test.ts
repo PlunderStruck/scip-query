@@ -80,10 +80,22 @@ describe('TypeScriptDocumentEmitter', () => {
 
 function writeFixture(root: string): void {
   writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'emitter-fixture', version: '1.0.0' }));
+  mkdirSync(join(root, 'node_modules/@types/probe'), { recursive: true });
+  writeFileSync(
+    join(root, 'node_modules/@types/probe/package.json'),
+    JSON.stringify({ name: '@types/probe', version: '1.0.0', types: 'index.d.ts' }),
+  );
+  writeFileSync(join(root, 'node_modules/@types/probe/index.d.ts'), 'interface ProbeGlobal { value: number }\n');
   writeFileSync(
     join(root, 'tsconfig.json'),
     JSON.stringify({
-      compilerOptions: { target: 'ES2022', module: 'ESNext', moduleResolution: 'Bundler', strict: true },
+      compilerOptions: {
+        target: 'ES2022',
+        module: 'ESNext',
+        moduleResolution: 'Bundler',
+        strict: true,
+        types: ['probe'],
+      },
       include: ['src/**/*.ts'],
     }),
   );
@@ -93,6 +105,7 @@ function writeFixture(root: string): void {
     [
       'export interface Shape { point: { x: number; y: number } }',
       'export const origin: Shape = { point: { x: 0, y: 0 } };',
+      'export const ambient: ProbeGlobal = { value: 1 };',
       '',
     ].join('\n'),
   );

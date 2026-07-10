@@ -1536,6 +1536,22 @@ as the Phase 4 gate and retains the original 2s local / 5s large complete
 edit-to-fresh target as the combined Phase 4+5 ship gate. This is a measured
 boundary transfer, not a relaxed final target.
 
+Final Phase 4 distributions passed. Retained local document production was
+16.748ms median / 22.193ms p95 across five edits. The first OpenCode base probe
+matched only 1,740/2,967 documents and was rejected: the compiler host inherited
+the benchmark process directory and resolved scip-query's `@types/node`
+22.19.17 rather than OpenCode's Bun-installed 24.12.2. Making the workspace
+root the compiler host's explicit current directory produced 2,967/2,967 exact
+base documents; an ambient-type fixture now guards this boundary.
+
+OpenCode's five warm edit samples were 2,802.661, 2,510.632, 2,321.364,
+2,315.935, and 2,324.730ms: 2,324.730ms median / 2,802.661ms p95. The assembled
+119,345,147-byte incremental shard had SHA-256 `34a5a4bb…`, exactly matching a
+48.24s clean full oracle. The first default-4GB oracle OOM and its 82MB partial
+file are rejected evidence; the accepted oracle used the established 8GB
+bound. The external file was restored in 2,229.052ms and OpenCode remained
+clean. Phase 4 is closed; Phase 5 owns complete publication latency.
+
 ## Run History
 
 Machine-readable run history:

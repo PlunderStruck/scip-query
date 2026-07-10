@@ -1,7 +1,7 @@
 # Incremental SCIP Document Plan
 
 Date: 2026-07-09
-Status: Phase 4.4 local authority proven; large-corpus calibration remains
+Status: Phase 4 complete; producer, fallback, parity, and corpus gates passed
 Parent: [`2026-07-09-automatic-incremental-indexing-roadmap.md`](./2026-07-09-automatic-incremental-indexing-roadmap.md)
 
 ## Outcome
@@ -196,6 +196,27 @@ conversion remain a roughly 2.5s floor. The Phase 4 producer gate is therefore
 separated from the combined ship gate; Phase 5 must bring complete
 edit-to-fresh below the original 2s local / 5s large-corpus thresholds. The
 temporary export was removed and the restored shard hash proved no residue.
+
+**Final calibration:** Five retained local updates were 22.193, 9.366,
+16.748, 16.682, and 18.253ms: 16.748ms median / 22.193ms p95. OpenCode commit
+`1a8e94dc…` first exposed and rejected a process-current-directory leak:
+1,740/2,967 documents matched because the benchmark resolved scip-query's
+`@types/node` 22.19.17 instead of OpenCode's Bun-installed 24.12.2. Pinning the
+compiler host's current directory to the indexed workspace made all
+2,967/2,967 documents byte-exact and is covered by an ambient-type fixture.
+
+OpenCode's five retained warm leaf updates were 2,802.661, 2,510.632,
+2,321.364, 2,315.935, and 2,324.730ms: 2,324.730ms median / 2,802.661ms p95,
+inside the 5s large-corpus producer gate. The one-document candidate assembled
+into a 119,345,147-byte shard with SHA-256 `34a5a4bb…`, byte-identical to the
+8GB clean oracle, which took 48.24s. The default 4GB oracle OOM was rejected;
+it left only an 82MB partial file. The sixth update restored OpenCode in
+2,229.052ms, and both repositories are clean.
+
+**Exit result:** Phase 4 is complete. Local and large warm producer p95,
+byte-exact full-shard parity, defensive fallback, fragment validation,
+lifecycle, and failure controls pass. Rust remains at the documented upstream
+`StaticIndex` boundary. Phase 5 owns the unchanged combined edit-to-fresh gate.
 
 ## Verification
 

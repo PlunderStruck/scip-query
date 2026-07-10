@@ -212,7 +212,7 @@ export class TypeScriptDocumentEmitter {
     this.producerIdentity = producerIdentity(runtime);
     const config = readTypeScriptConfig(runtime.typescript, this.tsconfigPath);
     this.config = config;
-    this.host = new CachedCompilerHost(runtime.typescript, config.options);
+    this.host = new CachedCompilerHost(runtime.typescript, config.options, this.workspaceRoot);
     this.packages = new runtime.Packages(this.projectRoot);
   }
 
@@ -361,11 +361,12 @@ class CachedCompilerHost {
   readonly compilerHost: TypeScript.CompilerHost;
   private readonly sourceFiles = new Map<string, TypeScript.SourceFile | undefined>();
 
-  constructor(typescript: TypeScriptModule, options: TypeScript.CompilerOptions) {
+  constructor(typescript: TypeScriptModule, options: TypeScript.CompilerOptions, currentDirectory: string) {
     const base = typescript.createCompilerHost(options);
     const getSourceFile = base.getSourceFile.bind(base);
     this.compilerHost = {
       ...base,
+      getCurrentDirectory: () => currentDirectory,
       getSourceFile: (fileName, languageVersion, onError, shouldCreateNewSourceFile) => {
         const key = normalizedAbsolutePath(fileName);
         if (this.sourceFiles.has(key)) return this.sourceFiles.get(key);
