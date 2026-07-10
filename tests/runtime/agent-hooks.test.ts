@@ -1,10 +1,11 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { DiffGateResult } from '../../src/queries/impact/diff-gate.js';
 import {
   renderAgentHookContext,
+  refreshIndexForHookIfNeeded,
   renderStopHookOutput,
   renderUserPromptContext,
   resolveStopHookMode,
@@ -12,6 +13,43 @@ import {
 } from '../../src/runtime/agent-hooks.js';
 
 describe('agent hook context', () => {
+  it('wakes an enabled idle service and requests refresh when the index is stale', async () => {
+    const requestRefresh = vi.fn();
+    const note = await refreshIndexForHookIfNeeded(
+      hookWorkspace({ watch: { enabled: true, autoRefresh: true } }),
+      'UserPromptSubmit',
+      {
+        ensureService: vi.fn(() => ({ kind: 'reused', state: watchState('idle') })),
+        freshness: vi.fn(() => ({ state: 'stale' })),
+        requestRefresh,
+        startOneShot: vi.fn(),
+      },
+    );
+
+    expect(note).toContain('woke the watch service and requested refresh');
+    expect(requestRefresh).toHaveBeenCalledWith(
+      expect.stringContaining('watch-activity.json'),
+      expect.stringContaining('stale index'),
+    );
+  });
+
+  it('keeps the one-shot SessionStart fallback when live watching is disabled', async () => {
+    const startOneShot = vi.fn();
+    const note = await refreshIndexForHookIfNeeded(
+      hookWorkspace({ watch: { enabled: false, autoRefresh: true } }),
+      'SessionStart',
+      {
+        ensureService: vi.fn(),
+        freshness: vi.fn(() => ({ state: 'missing' })),
+        requestRefresh: vi.fn(),
+        startOneShot,
+      },
+    );
+
+    expect(note).toContain('started background refresh');
+    expect(startOneShot).toHaveBeenCalledWith('/repo');
+  });
+
   it('exits quietly outside a git-backed scip-query workspace', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'scip-query-hook-'));
 
@@ -120,5 +158,32 @@ function diffGateResult(): DiffGateResult {
       },
     ],
     rootCauseGroups: [],
+  };
+}
+
+function hookWorkspace(config: Record<string, unknown>) {
+  return {
+    projectRoot: '/repo',
+    config,
+    paths: {
+      cacheDir: '/cache',
+      dbPath: '/cache/index.db',
+      indexPath: '/cache/index.scip',
+      metaPath: '/cache/meta.json',
+    },
+  };
+}
+
+function watchState(state: 'idle' | 'indexing') {
+  return {
+    version: 1 as const,
+    protocolVersion: 1 as const,
+    pid: 123,
+    projectRoot: '/repo',
+    cliVersion: '0.15.0',
+    startedAt: '2026-07-09T20:00:00.000Z',
+    heartbeatAt: '2026-07-09T20:00:01.000Z',
+    lastActivityAt: '2026-07-09T20:00:01.000Z',
+    watcher: state === 'idle' ? ({ state } as const) : ({ state, startedAt: Date.now() } as const),
   };
 }

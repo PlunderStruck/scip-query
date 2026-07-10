@@ -644,7 +644,10 @@ function runBenchCommand(
     opts.profileOut,
   );
   const started = performance.now();
-  const env = opts.profile ? benchProfileEnv(label, opts.profileOut) : process.env;
+  const env = {
+    ...(opts.profile ? benchProfileEnv(label, opts.profileOut) : process.env),
+    SCIP_QUERY_SKIP_WATCH_SERVICE: '1',
+  };
   const result = spawnSync(process.execPath, [...process.execArgv, process.argv[1] ?? '', ...command], {
     cwd: projectRoot,
     env,

@@ -340,16 +340,20 @@ recent-duplicates --json` reports no duplicate lock/liveness/state helpers.
 
 ### 1.5 — Make enabled repositories self-starting and remove one-shot races
 
-- [ ] **Edit:** `src/runtime/cli.ts`, `src/runtime/agent-hooks.ts`,
-      `src/runtime/project-setup.ts`, `tests/runtime/agent-hooks.test.ts`,
-      `tests/runtime/project-setup.test.ts`, `tests/runtime/watch-service.test.ts`
+- [x] **Edit:** `src/runtime/cli.ts`, `src/runtime/agent-hooks.ts`,
+      `src/runtime/project-setup.ts`, `src/runtime/watch-service.ts`,
+      `src/runtime/watch-server.ts`, `src/domain/maintenance-types.ts`,
+      `src/runtime/commands/command-handlers.ts`,
+      `tests/runtime/agent-hooks.test.ts`, `tests/runtime/project-setup.test.ts`,
+      `tests/runtime/watch-service.test.ts`
 - **Source:** `scip-query code refreshIndexForHookIfNeeded`,
   `scip-query refs getIndexFreshness`,
   `scip-query plan-context src/runtime/cli.ts --json`,
   `scip-query co-change src/runtime/agent-hooks.ts --json`.
 - **Change:** Add a shared best-effort `ensureWatchServiceForCommand()` and call
-  it from the CLI pre-action filter plus SessionStart. Replace the detached
-  one-shot reindex in agent hooks with service ensure; keep UserPromptSubmit
+  it from the CLI pre-action filter plus SessionStart/UserPromptSubmit. Use the
+  service for enabled repositories while preserving the detached one-shot
+  SessionStart fallback for watch-disabled repositories. Keep prompt refresh
   non-blocking. Report service readiness/degraded repair in setup/status. Honor
   config disable and `SCIP_QUERY_SKIP_WATCH_SERVICE=1`.
 - **Testability:** Inject command name, config, env, and controller. Assert every
@@ -360,6 +364,13 @@ recent-duplicates --json` reports no duplicate lock/liveness/state helpers.
 - **Why:** A daemon command alone would still require manual action; shared
   ensure semantics make enabled repositories automatic and eliminate competing
   hook-triggered reindexes.
+- **Outcome:** Eligible normal commands and agent hooks now start or touch one
+  per-project service; lifecycle/setup/bench/internal commands are excluded,
+  and benchmark children receive the opt-out environment. Hooks can request an
+  immediate refresh from an idle live service without spawning a competing
+  reindex. The watch-disabled one-shot path remains compatible. Built smoke
+  proved `status` auto-start, same-PID reuse by a second command, and a fresh
+  SessionStart wake with a new PID.
 
 ### 1.6 — Calibrate timing, update defaults/config, and close the phase
 

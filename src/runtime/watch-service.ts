@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { LastRefreshMetadata, WatchConfig, WatcherStatus } from '../domain/types.js';
+import type { LastRefreshMetadata, ProjectConfig, WatchConfig, WatcherStatus } from '../domain/types.js';
 
 export const WATCH_SERVICE_PROTOCOL_VERSION = 1;
 export const WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS = 5_000;
@@ -12,6 +12,20 @@ export const WATCH_ACTIVITY_FILE = 'watch-activity.json';
 const WATCH_SERVICE_STARTUP_TIMEOUT_MS = 5_000;
 const WATCH_SERVICE_STOP_TIMEOUT_MS = 2_000;
 const WATCH_SERVICE_POLL_INTERVAL_MS = 10;
+const AUTO_START_EXCLUDED_COMMANDS = new Set([
+  'bench',
+  'config-validate',
+  'hook-context',
+  'hook-stop',
+  'init',
+  'reindex',
+  'setup',
+  'setup-agent',
+  'setup-ci',
+  'setup-hooks',
+  'uninstall',
+  'watch',
+]);
 
 export interface WatchServiceState {
   version: 1;
@@ -54,6 +68,12 @@ export interface WatchServicePaths {
   lockPath: string;
   statePath: string;
   activityPath: string;
+}
+
+export interface WatchServiceActivity {
+  atMs: number;
+  refreshRequestedAtMs?: number;
+  refreshDetail?: string;
 }
 
 export interface WatchProcessLockMetadata {
@@ -111,6 +131,48 @@ export interface WatchServiceEnsureResult {
 export interface WatchServiceStopResult {
   disposition: 'stopped' | 'already-stopped';
   pid?: number;
+}
+
+export type WatchServiceAutoEnsureResult =
+  | { kind: 'skipped'; reason: 'disabled' | 'excluded-command' | 'environment' }
+  | { kind: 'started' | 'reused'; state: WatchServiceState }
+  | { kind: 'failed'; message: string };
+
+export function watchServiceAutoStartEligible(
+  commandName: string,
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return (
+    env['SCIP_QUERY_SKIP_WATCH_SERVICE'] !== '1' &&
+    !commandName.startsWith('__') &&
+    !AUTO_START_EXCLUDED_COMMANDS.has(commandName)
+  );
+}
+
+export function ensureWatchServiceForCommand(opts: {
+  commandName: string;
+  projectRoot: string;
+  cacheDir: string;
+  cliVersion: string;
+  config: ProjectConfig;
+  env?: Record<string, string | undefined>;
+  runtime?: WatchServiceRuntime;
+}): WatchServiceAutoEnsureResult {
+  const env = opts.env ?? process.env;
+  if (env['SCIP_QUERY_SKIP_WATCH_SERVICE'] === '1') return { kind: 'skipped', reason: 'environment' };
+  if (!watchServiceAutoStartEligible(opts.commandName, env)) return { kind: 'skipped', reason: 'excluded-command' };
+  if (opts.config.watch?.enabled !== true) return { kind: 'skipped', reason: 'disabled' };
+  try {
+    const result = ensureWatchService({
+      projectRoot: opts.projectRoot,
+      cacheDir: opts.cacheDir,
+      cliVersion: opts.cliVersion,
+      runtime: opts.runtime,
+    });
+    return { kind: result.disposition, state: result.state };
+  } catch (error) {
+    return { kind: 'failed', message: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 export function watchServicePaths(cacheDir: string): WatchServicePaths {
@@ -222,13 +284,50 @@ export function writeWatchServiceState(statePath: string, state: WatchServiceSta
 }
 
 export function recordWatchServiceActivity(activityPath: string, nowMs = Date.now()): void {
-  writeJsonAtomic(activityPath, { version: 1, at: new Date(nowMs).toISOString() });
+  const current = readWatchServiceActivity(activityPath);
+  writeJsonAtomic(activityPath, {
+    version: 1,
+    at: new Date(nowMs).toISOString(),
+    ...(current?.refreshRequestedAtMs === undefined
+      ? {}
+      : {
+          refreshRequestedAt: new Date(current.refreshRequestedAtMs).toISOString(),
+          ...(current.refreshDetail ? { refreshDetail: current.refreshDetail } : {}),
+        }),
+  });
 }
 
 export function readWatchServiceActivityAt(activityPath: string): number | null {
+  return readWatchServiceActivity(activityPath)?.atMs ?? null;
+}
+
+export function requestWatchServiceRefresh(activityPath: string, detail: string, nowMs = Date.now()): void {
+  writeJsonAtomic(activityPath, {
+    version: 1,
+    at: new Date(nowMs).toISOString(),
+    refreshRequestedAt: new Date(nowMs).toISOString(),
+    refreshDetail: detail,
+  });
+}
+
+export function readWatchServiceActivity(activityPath: string): WatchServiceActivity | null {
   try {
-    const parsed = JSON.parse(readFileSync(activityPath, 'utf8')) as { version?: unknown; at?: unknown };
-    return parsed.version === 1 && validTimestamp(parsed.at) ? Date.parse(parsed.at) : null;
+    const parsed = JSON.parse(readFileSync(activityPath, 'utf8')) as {
+      version?: unknown;
+      at?: unknown;
+      refreshRequestedAt?: unknown;
+      refreshDetail?: unknown;
+    };
+    if (parsed.version !== 1 || !validTimestamp(parsed.at)) return null;
+    if (parsed.refreshRequestedAt !== undefined && !validTimestamp(parsed.refreshRequestedAt)) return null;
+    if (parsed.refreshDetail !== undefined && typeof parsed.refreshDetail !== 'string') return null;
+    return {
+      atMs: Date.parse(parsed.at),
+      ...(parsed.refreshRequestedAt === undefined
+        ? {}
+        : { refreshRequestedAtMs: Date.parse(parsed.refreshRequestedAt) }),
+      ...(parsed.refreshDetail === undefined ? {} : { refreshDetail: parsed.refreshDetail }),
+    };
   } catch {
     return null;
   }

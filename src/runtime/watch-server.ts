@@ -9,7 +9,7 @@ import { Watcher } from './watch.js';
 import {
   WATCH_SERVICE_PROTOCOL_VERSION,
   acquireWatchProcessLock,
-  readWatchServiceActivityAt,
+  readWatchServiceActivity,
   shouldStopWatchServiceForIdle,
   watchServicePaths,
   writeWatchServiceState,
@@ -47,6 +47,7 @@ export async function runWatchServiceServer(
   let lastError: WatchServiceState['lastError'];
   let stopping = false;
   let ready = false;
+  let lastRefreshRequestAtMs = 0;
 
   const persistState = (): void => {
     if (!ready) return;
@@ -112,9 +113,17 @@ export async function runWatchServiceServer(
     persistState();
 
     while (!stopping) {
-      const commandActivityAtMs = readWatchServiceActivityAt(servicePaths.activityPath);
-      if (commandActivityAtMs !== null && commandActivityAtMs > lastActivityAtMs) {
-        lastActivityAtMs = commandActivityAtMs;
+      const activity = readWatchServiceActivity(servicePaths.activityPath);
+      if (activity && activity.atMs > lastActivityAtMs) {
+        lastActivityAtMs = activity.atMs;
+      }
+      if (activity?.refreshRequestedAtMs !== undefined && activity.refreshRequestedAtMs > lastRefreshRequestAtMs) {
+        lastRefreshRequestAtMs = activity.refreshRequestedAtMs;
+        recordActivity();
+        watcher.requestRefresh(
+          { kind: 'watch-demand', detail: activity.refreshDetail ?? 'stale index observed by a command' },
+          { immediate: true },
+        );
       }
       persistState();
       if (

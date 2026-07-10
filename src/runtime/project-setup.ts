@@ -252,8 +252,8 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     status: watchConfig.autoRefresh === false ? 'skipped' : 'ok',
     message:
       watchConfig.autoRefresh === false
-        ? 'Project hooks report freshness but do not auto-refresh stale indexes.'
-        : `Project hooks auto-refresh stale indexes; live watch defaults are ${watchConfig.debounceMs}ms debounce, ${watchConfig.cooldownMs}ms cooldown, and ${watchConfig.gitPollMs}ms Git polling.`,
+        ? 'Project commands wake an enabled watch service; project hooks report freshness but do not auto-refresh stale indexes.'
+        : `Project commands and hooks wake the enabled per-project watch service; defaults are ${watchConfig.debounceMs}ms debounce, ${watchConfig.cooldownMs}ms cooldown, ${watchConfig.gitPollMs}ms Git polling, and ${watchConfig.idleTimeoutMs}ms clean-idle exit (0 keeps it running).`,
   });
 
   const initialReadiness = getProjectReadiness(projectRoot, config);

@@ -13,6 +13,7 @@ export type RefreshTriggerKind =
   | 'setup'
   | 'watch-source'
   | 'watch-startup'
+  | 'watch-demand'
   | 'watch-git-head'
   | 'watch-git-index'
   | 'watch-git-state'

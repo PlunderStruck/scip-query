@@ -4,7 +4,10 @@ import { fileURLToPath } from 'node:url';
 import { cliVersion, renderHeuristicNotice } from './cli-support.js';
 import { commandDescriptors } from './commands/command-descriptors.js';
 import { registerCommandDescriptors } from './commands/command-registry.js';
+import { loadProjectConfig, resolveIndexStoragePaths } from './config.js';
+import { resolveProjectRoot } from './cli-context.js';
 import { maybePrintUpdateNotice } from './update-notice.js';
+import { ensureWatchServiceForCommand, watchServiceAutoStartEligible } from './watch-service.js';
 
 program
   .name('scip-query')
@@ -13,7 +16,22 @@ program
 
 registerCommandDescriptors(program, commandDescriptors);
 program.hook('preAction', async (_thisCommand, actionCommand) => {
-  await maybePrintUpdateNotice({ commandName: actionCommand.name() });
+  const commandName = actionCommand.name();
+  await maybePrintUpdateNotice({ commandName });
+  if (!watchServiceAutoStartEligible(commandName)) return;
+  const projectRoot = resolveProjectRoot();
+  const config = loadProjectConfig(projectRoot);
+  const paths = resolveIndexStoragePaths(projectRoot, config);
+  const service = ensureWatchServiceForCommand({
+    commandName,
+    projectRoot,
+    cacheDir: paths.cacheDir,
+    cliVersion,
+    config,
+  });
+  if (service.kind === 'failed') {
+    console.error(`warning: scip-query watch service did not start: ${service.message}`);
+  }
 });
 
 export { program, renderHeuristicNotice };

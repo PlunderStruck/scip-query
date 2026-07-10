@@ -8,12 +8,14 @@ import {
   WATCH_SERVICE_PROTOCOL_VERSION,
   classifyWatchServiceState,
   ensureWatchService,
+  ensureWatchServiceForCommand,
   parseWatchServiceState,
   planWatchServiceAction,
   readWatchServiceActivityAt,
   shouldStopWatchServiceForIdle,
   stopWatchService,
   watchServicePaths,
+  watchServiceAutoStartEligible,
   writeWatchServiceState,
   type WatchServiceRuntime,
   type WatchServiceState,
@@ -111,6 +113,40 @@ describe('watch service contract', () => {
       expect(reused.disposition).toBe('reused');
       expect(reused.state.pid).toBe(started.state.pid);
       expect(runtime.spawned).toBe(1);
+    });
+  });
+
+  it('auto-starts only eligible commands in enabled projects', () => {
+    expect(watchServiceAutoStartEligible('status', {})).toBe(true);
+    expect(watchServiceAutoStartEligible('watch', {})).toBe(false);
+    expect(watchServiceAutoStartEligible('bench', {})).toBe(false);
+    expect(watchServiceAutoStartEligible('__health-phase', {})).toBe(false);
+    expect(watchServiceAutoStartEligible('status', { SCIP_QUERY_SKIP_WATCH_SERVICE: '1' })).toBe(false);
+
+    withTempCache((cacheDir) => {
+      const runtime = fakeRuntime(watchServicePaths(cacheDir).statePath);
+      expect(
+        ensureWatchServiceForCommand({
+          commandName: 'status',
+          projectRoot: IDENTITY.projectRoot,
+          cacheDir,
+          cliVersion: IDENTITY.cliVersion,
+          config: { watch: { enabled: false } },
+          env: {},
+          runtime,
+        }),
+      ).toEqual({ kind: 'skipped', reason: 'disabled' });
+      expect(
+        ensureWatchServiceForCommand({
+          commandName: 'status',
+          projectRoot: IDENTITY.projectRoot,
+          cacheDir,
+          cliVersion: IDENTITY.cliVersion,
+          config: { watch: { enabled: true } },
+          env: {},
+          runtime,
+        }),
+      ).toEqual(expect.objectContaining({ kind: 'started' }));
     });
   });
 

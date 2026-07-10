@@ -12,6 +12,13 @@ import { loadProjectConfig, resolveIndexStoragePaths, resolveWatchConfig } from 
 import { getIndexFreshness } from './index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from './project-readiness.js';
 import { formatGateBlockReason, isStopHookReentry, readHookInput } from './agent-setup.js';
+import { cliVersion } from './cli-support.js';
+import {
+  ensureWatchServiceForCommand,
+  requestWatchServiceRefresh,
+  watchServicePaths,
+  type WatchServiceAutoEnsureResult,
+} from './watch-service.js';
 
 const SKIP_HOOK_INSTALL_ENV = 'SCIP_QUERY_SKIP_HOOK_INSTALL';
 const STOP_HOOK_MODE_ENV = 'SCIP_QUERY_STOP_HOOK_MODE';
@@ -516,36 +523,88 @@ export async function renderAgentHookContext(hookInput: string): Promise<unknown
   };
 }
 
-async function refreshIndexForHookIfNeeded(
+interface HookRefreshDependencies {
+  ensureService: typeof ensureWatchServiceForCommand;
+  freshness: typeof getIndexFreshness;
+  requestRefresh: typeof requestWatchServiceRefresh;
+  startOneShot(projectRoot: string): void;
+}
+
+const DEFAULT_HOOK_REFRESH_DEPENDENCIES: HookRefreshDependencies = {
+  ensureService: ensureWatchServiceForCommand,
+  freshness: getIndexFreshness,
+  requestRefresh: requestWatchServiceRefresh,
+  startOneShot(projectRoot) {
+    const child = spawn('scip-query', ['reindex', '--allow-partial'], {
+      cwd: projectRoot,
+      detached: true,
+      stdio: 'ignore',
+      env: { ...process.env, SCIP_QUERY_SKIP_AUTO_INSTALL: '1' },
+    });
+    child.unref();
+  },
+};
+
+export async function refreshIndexForHookIfNeeded(
   workspace: {
     projectRoot: string;
     config: ProjectConfig;
     paths: ReturnType<typeof resolveIndexStoragePaths>;
   },
   event: string,
+  dependencies: HookRefreshDependencies = DEFAULT_HOOK_REFRESH_DEPENDENCIES,
 ): Promise<string | undefined> {
   const watch = resolveWatchConfig(workspace.config);
   if (watch.autoRefresh === false) return undefined;
 
-  const freshness = getIndexFreshness(workspace.projectRoot, workspace.config, workspace.paths);
+  const freshness = dependencies.freshness(workspace.projectRoot, workspace.config, workspace.paths);
+  if (watch.enabled) {
+    const service = dependencies.ensureService({
+      commandName: `agent-${event}`,
+      projectRoot: workspace.projectRoot,
+      cacheDir: workspace.paths.cacheDir,
+      cliVersion,
+      config: workspace.config,
+    });
+    if (service.kind === 'failed') {
+      return `scip-query watch service did not start: ${service.message}. Run 'scip-query watch --daemon' to repair it.`;
+    }
+    if (service.kind === 'skipped') {
+      return freshness.state === 'fresh'
+        ? undefined
+        : `scip-query index is ${freshness.state}; automatic watch service wake was skipped (${service.reason}).`;
+    }
+    requestIdleServiceRefreshIfStale(service, freshness.state, workspace.paths.cacheDir, dependencies);
+    if (freshness.state !== 'fresh') {
+      return `scip-query index is ${freshness.state}; ${service.kind === 'started' ? 'started' : 'woke'} the watch service and requested refresh.`;
+    }
+    return service.kind === 'started' ? 'scip-query watch service started for this project.' : undefined;
+  }
+
   if (freshness.state === 'fresh') return undefined;
   if (event === 'UserPromptSubmit') {
     return `scip-query index is ${freshness.state}; evidence commands will note staleness. Run 'scip-query reindex' to refresh.`;
   }
-
   try {
-    const child = spawn('scip-query', ['reindex', '--allow-partial'], {
-      cwd: workspace.projectRoot,
-      detached: true,
-      stdio: 'ignore',
-      env: { ...process.env, SCIP_QUERY_SKIP_AUTO_INSTALL: '1' },
-    });
-    child.unref();
+    dependencies.startOneShot(workspace.projectRoot);
     return `scip-query index is ${freshness.state}; started background refresh with auto-install disabled.`;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return `scip-query auto-refresh skipped: index is ${freshness.state}, but background refresh failed to start: ${message}`;
   }
+}
+
+function requestIdleServiceRefreshIfStale(
+  service: Extract<WatchServiceAutoEnsureResult, { kind: 'started' | 'reused' }>,
+  freshness: ReturnType<typeof getIndexFreshness>['state'],
+  cacheDir: string,
+  dependencies: HookRefreshDependencies,
+): void {
+  if (freshness === 'fresh' || service.kind === 'started' || service.state.watcher.state !== 'idle') return;
+  dependencies.requestRefresh(
+    watchServicePaths(cacheDir).activityPath,
+    `agent hook observed ${freshness} index while service was idle`,
+  );
 }
 
 function renderSessionStartContext(
