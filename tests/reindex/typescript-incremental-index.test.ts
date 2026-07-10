@@ -36,6 +36,19 @@ describe('TypeScript incremental index eligibility', () => {
     expect(rootWorkspace.eligible).toBe(true);
   });
 
+  test('assigns stable retained identities to indexed generated documents outside the project snapshot', () => {
+    const input = fixture();
+    const result = planTypeScriptIncrementalUpdate({
+      ...input,
+      projectFiles: [...input.projectFiles, 'packages/app/dist/generated.js'],
+    });
+
+    expect(result.eligible).toBe(true);
+    if (!result.eligible) return;
+    expect(result.previousDocumentIdentities.get('packages/app/dist/generated.js')).toEqual(expect.any(String));
+    expect(result.nextDocumentIdentities.has('packages/app/dist/generated.js')).toBe(false);
+  });
+
   test.each([
     {
       label: 'multi-project workspace mode',

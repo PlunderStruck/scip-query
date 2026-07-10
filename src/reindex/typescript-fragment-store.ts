@@ -41,6 +41,7 @@ export interface SeedTypeScriptFragmentGenerationInput {
   projectIdentity: string;
   generationIdentity: string;
   documentIdentities: ReadonlyMap<string, string>;
+  allowUntrackedDocuments?: boolean;
   now?: () => Date;
 }
 
@@ -79,6 +80,35 @@ export interface AssembledTypeScriptIndexes {
   affectedIndexBytes: Uint8Array;
 }
 
+/**
+ * Serializes only the changed documents. Unlike the complete-index assembly
+ * helpers, this path never opens the previous whole-project SCIP file.
+ */
+export function assembleAffectedTypeScriptFragments(fragments: readonly TypeScriptDocumentFragment[]): Uint8Array {
+  if (fragments.length === 0) throw new Error('affected TypeScript mini index requires documents');
+  const seen = new Set<string>();
+  const documents: Document[] = [];
+  for (const fragment of fragments) {
+    const relativePath = validateRelativePath(fragment.relativePath);
+    if (seen.has(relativePath)) throw new Error(`duplicate TypeScript fragment replacement: ${relativePath}`);
+    seen.add(relativePath);
+    if (fragment.bytes === null) {
+      throw new Error(`affected TypeScript mini index cannot contain a deleted document: ${relativePath}`);
+    }
+    const document = fromBinary(DocumentSchema, fragment.bytes);
+    if (document.relativePath !== relativePath) {
+      throw new Error(`TypeScript fragment path mismatch: expected ${relativePath}, got ${document.relativePath}`);
+    }
+    documents.push(document);
+  }
+  const bytes = serializeSCIP(create(IndexSchema, { documents, externalSymbols: [] }));
+  const verified = deserializeSCIP(bytes);
+  if (verified.documents.length !== documents.length || verified.externalSymbols.length !== 0) {
+    throw new Error('affected TypeScript SCIP index failed structural verification');
+  }
+  return bytes;
+}
+
 export function typeScriptFragmentStorePaths(cacheDir: string): TypeScriptFragmentStorePaths {
   const rootDir = join(cacheDir, FRAGMENT_STORE_DIRECTORY);
   return {
@@ -100,14 +130,27 @@ export function seedTypeScriptFragmentGeneration(
     const relativePath = validateRelativePath(document.relativePath);
     if (seen.has(relativePath)) throw new Error(`duplicate TypeScript SCIP document path: ${relativePath}`);
     seen.add(relativePath);
-    const documentIdentity = input.documentIdentities.get(relativePath);
+    const documentBytes = toBinary(DocumentSchema, document);
+    const documentIdentity =
+      input.documentIdentities.get(relativePath) ??
+      (input.allowUntrackedDocuments
+        ? sha256(
+            JSON.stringify({
+              version: 1,
+              producerIdentity: input.producerIdentity,
+              projectIdentity: input.projectIdentity,
+              untrackedDocument: relativePath,
+              contentHash: sha256(documentBytes),
+            }),
+          )
+        : null);
     if (!documentIdentity) throw new Error(`missing TypeScript document identity: ${relativePath}`);
     documents.push(
       persistFragment(
         input.cacheDir,
         {
           relativePath,
-          bytes: toBinary(DocumentSchema, document),
+          bytes: documentBytes,
           occurrences: document.occurrences.length,
           symbols: document.symbols.length,
         },
@@ -133,11 +176,13 @@ export function ensureTypeScriptFragmentGeneration(
     producerIdentity: input.producerIdentity,
     projectIdentity: input.projectIdentity,
   });
-  if (loaded.manifest.documents.length !== input.documentIdentities.size) {
+  if (!input.allowUntrackedDocuments && loaded.manifest.documents.length !== input.documentIdentities.size) {
     throw new Error('TypeScript fragment generation document identities changed');
   }
   for (const document of loaded.manifest.documents) {
-    if (input.documentIdentities.get(document.relativePath) !== document.documentIdentity) {
+    const expectedIdentity = input.documentIdentities.get(document.relativePath);
+    if (expectedIdentity === undefined && input.allowUntrackedDocuments) continue;
+    if (expectedIdentity !== document.documentIdentity) {
       throw new Error(`TypeScript fragment generation document identity changed: ${document.relativePath}`);
     }
   }

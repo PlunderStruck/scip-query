@@ -1608,6 +1608,44 @@ commit `d4b1d8c7` both read the same stable DB as 321 documents, 21,525
 symbols, 20,129 definitions, and 50,550 references. Phase 5.3 is closed;
 OpenCode and final release gates remain Phase 5.4.
 
+### Phase 5.4 large-corpus publication
+
+OpenCode commit `1a8e94dc8e7462d3d0d860e1337b448c71947f6b` exposed a
+second whole-shard floor after the affected-document producer was already
+warm. Rebuilding and sanitizing the 119MB TypeScript companion measured 13.0s
+on restore and 9.6s on the next leaf edit. That implementation is rejected:
+the database patch was fast, but repeatedly deserializing and serializing every
+unchanged document could not meet the 5s edit-to-fresh gate.
+
+The accepted route stores each changed SCIP document as a content-addressed
+blob and records an immutable overlay manifest over one whole base shard. For
+large shards, the affected-only SCIP index is serialized directly without
+opening the base. The official converter produces the mini database, the
+validated SQLite generation publishes atomically, and metadata reports that
+the rebuildable whole SCIP companion is deferred. A full-conversion fallback
+reconstructs the complete shard before conversion. Explicit deferred metadata
+and an omitted TypeScript whole-shard fingerprint prevent edit reversals from
+selecting the old base as a current cache hit.
+
+Five accepted alternating leaf edits measured 4,395, 4,408, 4,303, 4,413, and
+4,339ms: 4,395ms median and approximately 4,412ms p95. A sixth 4,312ms update
+restored the source. Typical warm phase timing was about 0.59s graph read,
+2.23s persistent-service request, 4ms affected-only assembly, 22ms official
+conversion, and 0.86s validated SQLite patch. The reconstructed
+119,344,942-byte current shard and the clean whole-project shard both hash to
+`4e8f58e49ccfb90da91343eee4dbdbf671cd84a7d6ed06a9f880046c9b110213`.
+The incremental database matches a fresh full conversion across all 2,967
+normalized document fact sets.
+
+Rejected diagnostics are retained: the first 4GB OpenCode service exhausted
+the heap; two 8GB attempts exposed an ignored generated document missing from
+the project snapshot; the first overlay fingerprint contract passed once at
+4.464s but failed the immediate reversal by treating the base content as a
+whole-shard hit. Generated documents now receive content-bound retained
+identities, and the accepted deferred contract forces composition until the
+whole companion is intentionally materialized. OpenCode finished clean and
+fresh with current/recovery generation checks passing.
+
 ## Run History
 
 Machine-readable run history:

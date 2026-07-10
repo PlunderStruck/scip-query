@@ -29,6 +29,8 @@ export interface PromoteReindexArtifactsInput {
   outputScip: string;
   outputDb: string;
   metaPath: string;
+  /** Keep the accepted whole SCIP file when SQLite was published from a changed-document overlay. */
+  preserveOutputScip?: boolean;
   publication?: SqlitePublicationRecord;
   onStage?: (stage: SqliteGenerationHandoffStage) => void;
   now?: () => Date;
@@ -57,6 +59,8 @@ export interface SqlitePublicationRecord {
   producerDurationMs?: number;
   materializationDurationMs?: number;
   patchDurationMs?: number;
+  scipCompanion?: 'current' | 'deferred';
+  typescriptOverlayGeneration?: string;
   fallbackReason?: string;
 }
 
@@ -86,7 +90,7 @@ export function promoteReindexArtifacts(input: PromoteReindexArtifactsInput): Pr
   const previousGeneration = retainPreviousGeneration(input, generationRoot);
   input.onStage?.('after-recovery-retained');
 
-  replaceFile(input.tempOutputScip, input.outputScip);
+  if (!input.preserveOutputScip) replaceFile(input.tempOutputScip, input.outputScip);
   input.onStage?.('after-scip-handoff');
   replaceFile(input.tempOutputDb, input.outputDb);
   input.onStage?.('after-database-handoff');
@@ -125,6 +129,30 @@ export function readSqliteGenerationState(outputDb: string): SqliteGenerationSta
   } catch {
     return null;
   }
+}
+
+/** Refreshes the generation identity after metadata-only publication. */
+export function refreshSqliteGenerationMetadata(
+  outputDb: string,
+  metaPath: string,
+  now: () => Date = () => new Date(),
+): SqliteGenerationState {
+  if (!existsSync(outputDb) || !existsSync(metaPath)) {
+    throw new Error('metadata-only generation refresh requires stable database and metadata files');
+  }
+  const previous = readSqliteGenerationState(outputDb);
+  const state: SqliteGenerationState = {
+    version: SQLITE_GENERATION_STORE_VERSION,
+    currentGeneration: sqliteGenerationIdentity(metaPath, outputDb),
+    ...(previous?.previousGeneration ? { previousGeneration: previous.previousGeneration } : {}),
+    ...(previous?.publication ? { publication: previous.publication } : {}),
+    publishedAt: now().toISOString(),
+  };
+  writeJsonAtomic(join(sqliteGenerationRoot(outputDb), 'state.json'), state, {
+    spacing: 2,
+    trailingNewline: true,
+  });
+  return state;
 }
 
 export function inspectSqliteGeneration(
@@ -231,6 +259,7 @@ function stableMetadataIdentity(raw: string): string {
       updatedAt?: unknown;
       fingerprint?: unknown;
       indexedLanguages?: unknown;
+      scipCompanion?: unknown;
     };
     if (
       (metadata.version === 2 || metadata.version === 3) &&
@@ -244,6 +273,7 @@ function stableMetadataIdentity(raw: string): string {
         updatedAt: metadata.updatedAt,
         fingerprint: metadata.fingerprint,
         indexedLanguages: metadata.indexedLanguages,
+        scipCompanion: metadata.scipCompanion,
       });
     }
   } catch {
@@ -289,6 +319,13 @@ function validPublication(value: unknown): boolean {
     publication.validation === 'passed' &&
     publication.converterDurationMs !== undefined &&
     numericValues.every((entry) => typeof entry === 'number' && Number.isFinite(entry) && entry >= 0) &&
+    (publication.scipCompanion === undefined ||
+      publication.scipCompanion === 'current' ||
+      publication.scipCompanion === 'deferred') &&
+    (publication.typescriptOverlayGeneration === undefined ||
+      (typeof publication.typescriptOverlayGeneration === 'string' &&
+        Boolean(publication.typescriptOverlayGeneration))) &&
+    (publication.scipCompanion !== 'deferred' || Boolean(publication.typescriptOverlayGeneration)) &&
     (publication.fallbackReason === undefined || typeof publication.fallbackReason === 'string')
   );
 }

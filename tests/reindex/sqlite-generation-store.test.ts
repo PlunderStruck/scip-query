@@ -7,6 +7,7 @@ import {
   inspectSqliteGeneration,
   promoteReindexArtifacts,
   readSqliteGenerationState,
+  refreshSqliteGenerationMetadata,
   sqliteGenerationRoot,
 } from '../../src/reindex/sqlite-generation-store.js';
 
@@ -92,6 +93,30 @@ describe('SQLite generation handoff', () => {
     expect(readValue(fixture.paths.outputDb)).toBe('next');
   });
 
+  test('can publish a database generation while retaining a deferred SCIP companion', () => {
+    const fixture = createFixture();
+    const result = promoteReindexArtifacts({
+      ...fixture.paths,
+      preserveOutputScip: true,
+      publication: {
+        mode: 'incremental',
+        validation: 'passed',
+        converterDurationMs: 2,
+        scipCompanion: 'deferred',
+        typescriptOverlayGeneration: 'typescript-generation-2',
+      },
+    });
+
+    expect(readFileSync(fixture.paths.outputScip, 'utf8')).toBe('old-scip');
+    expect(readValue(fixture.paths.outputDb)).toBe('new');
+    expect(readSqliteGenerationState(fixture.paths.outputDb)).toEqual(
+      expect.objectContaining({
+        currentGeneration: result.currentGeneration,
+        publication: expect.objectContaining({ scipCompanion: 'deferred' }),
+      }),
+    );
+  });
+
   test('retains a legacy database even when it has no metadata companion', () => {
     const fixture = createFixture({ legacyWithoutMeta: true });
 
@@ -140,6 +165,24 @@ describe('SQLite generation handoff', () => {
     expect(inspectSqliteGeneration(fixture.paths.outputDb, fixture.paths.metaPath)).toEqual(
       expect.objectContaining({ state: 'invalid', reason: 'generation state is malformed' }),
     );
+  });
+
+  test('refreshes generation identity after a metadata-only publication', () => {
+    const fixture = createFixture();
+    promoteReindexArtifacts({ ...fixture.paths });
+    writeFileSync(fixture.paths.metaPath, 'metadata-only-update');
+    expect(inspectSqliteGeneration(fixture.paths.outputDb, fixture.paths.metaPath).state).toBe('drifted');
+
+    refreshSqliteGenerationMetadata(
+      fixture.paths.outputDb,
+      fixture.paths.metaPath,
+      () => new Date('2026-07-10T10:30:00.000Z'),
+    );
+
+    expect(inspectSqliteGeneration(fixture.paths.outputDb, fixture.paths.metaPath)).toEqual(
+      expect.objectContaining({ state: 'current', currentMatches: true }),
+    );
+    expect(readSqliteGenerationState(fixture.paths.outputDb)?.publishedAt).toBe('2026-07-10T10:30:00.000Z');
   });
 });
 

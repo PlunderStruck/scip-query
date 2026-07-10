@@ -1,7 +1,7 @@
 # Automatic Incremental Indexing Roadmap
 
 Date: 2026-07-09
-Status: Phases 1–4 and 5.1–5.3 complete; Phase 5.4 corpus/release gates next
+Status: Phases 1–5 complete; Phase 6 durable Rust defaulting and rollout next
 
 ## Goal
 
@@ -589,8 +589,22 @@ state. Drift bypasses both unchanged reuse paths and republishes from cached
 language shards without rerunning indexers. Status exposes current/recovery
 identity and publication mode/counts/timings/fallback. A packed current reader
 and the pre-generation `d4b1d8c7` reader returned identical stats from the
-same stable database. Phase 5.4 now owns OpenCode calibration and the final
-package/reindex/diff-gate closure.
+same stable database.
+
+Phase 5.4 is complete. The original large-corpus implementation still parsed,
+sanitized, and serialized OpenCode's 119MB TypeScript shard and measured 13.0s
+on restore / 9.6s warm, so it was rejected. Large shards now publish affected
+documents directly and retain immutable changed-document overlays over one
+whole base shard. The SQLite database is current at handoff; status explicitly
+marks the rebuildable whole SCIP companion deferred until a full conversion or
+repair needs it. Five accepted OpenCode leaf reversals measured 4,395, 4,408,
+4,303, 4,413, and 4,339ms (4,395ms median, about 4,412ms p95). A reconstructed
+119,344,942-byte shard was byte-identical to the clean oracle at SHA-256
+`4e8f58e…`; the incremental and full databases matched all 2,967 normalized
+document fact sets. Explicit deferred metadata prevents an edit reversal from
+mistaking the old base shard for a current cache hit. Full tests (1,215),
+typecheck, lint, package dry-run, fallback/recovery controls, and external
+worktree restoration pass.
 
 ### Phase 6 — Rust defaulting, selective native kernels, and rollout
 
@@ -714,12 +728,12 @@ Complete this at every phase close:
 6. Phase 5 atomic incremental generation storage.
 7. Phase 6 durable Rust defaulting, selective native kernels, and rollout.
 
-The immediate action is Phase 5.4's large-corpus and release calibration. The
-local route, recovery/repair lifecycle, status record, and current/previous
-package readers now pass. Run the same complete publication distribution and
-oracle parity gate on OpenCode, then execute the final package and repository
-verification matrix:
+The immediate action is Phase 6's durable Rust default decision. Phase 5's
+local and OpenCode performance, recovery, status, parity, and package gates now
+pass. Re-run the existing durable-session calibration against its current
+opt-in implementation, then decide whether lifecycle parity supports making it
+the default before considering any new native kernel:
 
 ```sh
-SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/reindex/sqlite-generation-store.ts --json
+SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context src/semantic/rust/durable-session-server.ts --json
 ```

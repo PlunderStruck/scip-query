@@ -1589,6 +1589,7 @@ function renderSqliteGeneration(inspection: SqliteGenerationInspection): void {
         publication.producerDurationMs === undefined ? null : `${publication.producerDurationMs.toFixed(0)}ms producer`,
         `${publication.converterDurationMs.toFixed(0)}ms convert`,
         publication.patchDurationMs === undefined ? null : `${publication.patchDurationMs.toFixed(0)}ms patch`,
+        `${publication.scipCompanion ?? 'current'} SCIP companion`,
       ]
         .filter((value): value is string => value !== null)
         .join(', ')

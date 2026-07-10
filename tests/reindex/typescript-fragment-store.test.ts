@@ -11,6 +11,7 @@ import {
   loadTypeScriptDocumentRuntime,
 } from '../../src/reindex/typescript-document-emitter.js';
 import {
+  assembleAffectedTypeScriptFragments,
   assembleAffectedTypeScriptIndex,
   assembleTypeScriptIndex,
   assembleTypeScriptIndexes,
@@ -21,6 +22,12 @@ import {
   seedTypeScriptFragmentGeneration,
   typeScriptFragmentStorePaths,
 } from '../../src/reindex/typescript-fragment-store.js';
+import {
+  commitTypeScriptOverlay,
+  materializeTypeScriptOverlay,
+  pruneTypeScriptOverlays,
+  readTypeScriptOverlay,
+} from '../../src/reindex/typescript-overlay-store.js';
 import { resolveScipBinary } from '../../src/runtime/scip-cli.js';
 import { ScipDatabase } from '../../src/storage/db.js';
 
@@ -60,6 +67,20 @@ describe('TypeScript fragment store', () => {
       now: () => new Date('2026-07-09T00:00:00.000Z'),
     });
     expect(seeded.documents).toHaveLength(2);
+    const retainedUntracked = seedTypeScriptFragmentGeneration({
+      cacheDir,
+      runtime: availability.runtime,
+      indexBytes: baseline,
+      producerIdentity: initial.producerIdentity,
+      projectIdentity: 'fixture-project-v1',
+      generationIdentity: 'generation-with-untracked-document',
+      documentIdentities: new Map([['src/a.ts', 'tracked:a']]),
+      allowUntrackedDocuments: true,
+    });
+    expect(retainedUntracked.documents).toHaveLength(2);
+    expect(
+      retainedUntracked.documents.find((document) => document.relativePath === 'src/b.ts')?.documentIdentity,
+    ).toEqual(expect.any(String));
     expect(
       ensureTypeScriptFragmentGeneration({
         cacheDir,
@@ -119,6 +140,10 @@ describe('TypeScript fragment store', () => {
     const affected = availability.runtime.Index.deserializeBinary(affectedBytes);
     expect(affected.documents.map((document) => document.relative_path)).toEqual(['src/a.ts', 'src/b.ts']);
     expect(affected.external_symbols).toEqual([]);
+    const directAffectedBytes = assembleAffectedTypeScriptFragments(update.fragments);
+    const directAffected = availability.runtime.Index.deserializeBinary(directAffectedBytes);
+    expect(directAffected.documents).toEqual(affected.documents);
+    expect(directAffected.external_symbols).toEqual([]);
     const combined = assembleTypeScriptIndexes({
       runtime: availability.runtime,
       baseIndexBytes: baseline,
@@ -138,7 +163,7 @@ describe('TypeScript fragment store', () => {
       const candidateDbPath = join(root, 'candidate.db');
       const cleanDbPath = join(root, 'clean.db');
       writeFileSync(baseScipPath, baseline);
-      writeFileSync(miniScipPath, affectedBytes);
+      writeFileSync(miniScipPath, directAffectedBytes);
       writeFileSync(cleanScipPath, cleanEdited);
       convertScip(scipBinary, baseScipPath, baseDbPath);
       convertScip(scipBinary, miniScipPath, miniDbPath);
@@ -200,6 +225,81 @@ describe('TypeScript fragment store', () => {
     expect(() => readTypeScriptFragmentGeneration({ cacheDir, generationIdentity: 'generation-2' })).toThrow(
       'blob is corrupt',
     );
+  });
+
+  test('layers multiple changed-document generations over one immutable base shard', () => {
+    const availability = loadTypeScriptDocumentRuntime();
+    expect(availability.available).toBe(true);
+    if (!availability.available) return;
+
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'scip-query-overlay-store-')));
+    const cacheDir = join(root, '.cache');
+    writeFixture(root);
+    const created = createTypeScriptDocumentEmitter({
+      workspaceRoot: root,
+      tsconfigPath: 'tsconfig.json',
+      projectRoot: '.',
+      runtime: availability.runtime,
+    });
+    expect(created.available).toBe(true);
+    if (!created.available) return;
+    created.emitter.initialize();
+    const baseline = cleanOracle(root);
+
+    writeFileSync(join(root, 'src/a.ts'), 'export const origin = { x: 1, y: 2 };\n');
+    const first = created.emitter.advance({ modifiedFiles: ['src/a.ts'], affectedFiles: ['src/a.ts', 'src/b.ts'] });
+    const firstManifest = commitTypeScriptOverlay({
+      cacheDir,
+      previousGenerationIdentity: 'generation-1',
+      nextGenerationIdentity: 'generation-2',
+      producerIdentity: first.producerIdentity,
+      projectIdentity: 'fixture-project-v1',
+      baseShardCurrent: true,
+      fragments: first.fragments,
+    });
+    expect(firstManifest.baseGenerationIdentity).toBe('generation-1');
+
+    writeFileSync(
+      join(root, 'src/b.ts'),
+      "import { origin } from './a.js';\nexport const selected = { ...origin, z: 3 };\n",
+    );
+    const second = created.emitter.advance({ modifiedFiles: ['src/b.ts'], affectedFiles: ['src/b.ts'] });
+    const secondManifest = commitTypeScriptOverlay({
+      cacheDir,
+      previousGenerationIdentity: 'generation-2',
+      nextGenerationIdentity: 'generation-3',
+      producerIdentity: second.producerIdentity,
+      projectIdentity: 'fixture-project-v1',
+      baseShardCurrent: false,
+      fragments: second.fragments,
+    });
+    expect(secondManifest.overlays.map((overlay) => overlay.relativePath)).toEqual(['src/a.ts', 'src/b.ts']);
+    expect(
+      Buffer.from(
+        materializeTypeScriptOverlay({
+          cacheDir,
+          generationIdentity: 'generation-3',
+          baseIndexBytes: baseline,
+          packageVersion: availability.runtime.packageVersion,
+        }),
+      ),
+    ).toEqual(cleanOracle(root));
+
+    expect(() =>
+      commitTypeScriptOverlay({
+        cacheDir: join(root, 'missing'),
+        previousGenerationIdentity: 'generation-2',
+        nextGenerationIdentity: 'generation-3',
+        producerIdentity: second.producerIdentity,
+        projectIdentity: 'fixture-project-v1',
+        baseShardCurrent: false,
+        fragments: second.fragments,
+      }),
+    ).toThrow('no matching overlay generation');
+
+    pruneTypeScriptOverlays(cacheDir, ['generation-3']);
+    expect(readTypeScriptOverlay(cacheDir, 'generation-2')).toBeNull();
+    expect(readTypeScriptOverlay(cacheDir, 'generation-3')).not.toBeNull();
   });
 });
 

@@ -294,6 +294,39 @@ describe('reindex reliability', () => {
     expect(statuses.join('\n')).toContain('Patched 1 SQLite document(s)');
   });
 
+  it('publishes repeated changed-document SQLite generations while preserving a deferred whole SCIP companion', async () => {
+    const projectRoot = createProject('scip-query-reindex-deferred-scip-');
+    const cacheDir = join(projectRoot, '.scipquery-cache');
+    mkdirSync(cacheDir);
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+    const metaPath = join(cacheDir, 'meta.json');
+    const { reindex, attempts } = await loadReindexFixture({
+      languages: ['typescript'],
+      deferredIncrementalTypeScript: true,
+    });
+
+    await reindex({ projectRoot, outputScip, outputDb, onStatus: () => undefined });
+    const baseScip = readFileSync(outputScip, 'utf8');
+    writeFileSync(join(projectRoot, 'src/main.ts'), 'export const answer = 43;\n');
+    await reindex({ projectRoot, outputScip, outputDb, onStatus: () => undefined });
+    writeFileSync(join(projectRoot, 'src/main.ts'), 'export const answer = 44;\n');
+    await reindex({ projectRoot, outputScip, outputDb, onStatus: () => undefined });
+
+    expect(attempts.get('typescript')).toBe(1);
+    expect(readFileSync(outputScip, 'utf8')).toBe(baseScip);
+    expect(JSON.parse(readFileSync(metaPath, 'utf8'))).toEqual(
+      expect.objectContaining({ scipCompanion: 'deferred', languageFingerprints: {} }),
+    );
+    expect(JSON.parse(readFileSync(join(cacheDir, '.scipquery-generations/state.json'), 'utf8')).publication).toEqual(
+      expect.objectContaining({
+        mode: 'incremental',
+        scipCompanion: 'deferred',
+        typescriptOverlayGeneration: 'next-generation',
+      }),
+    );
+  });
+
   it('falls back to complete conversion when incremental SQLite publication rejects', async () => {
     const projectRoot = createProject('scip-query-reindex-incremental-fallback-');
     const cacheDir = join(projectRoot, '.cache');
@@ -328,6 +361,31 @@ describe('reindex reliability', () => {
       'Incremental SQLite publication unavailable: candidate SQLite generation schema changed for table documents',
     );
     expect(statuses.join('\n')).toContain('Falling back to complete conversion');
+  });
+
+  it('reconstructs a deferred whole SCIP companion before full-conversion fallback', async () => {
+    const projectRoot = createProject('scip-query-reindex-deferred-fallback-');
+    const cacheDir = join(projectRoot, '.scipquery-cache');
+    mkdirSync(cacheDir);
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+    const statuses: string[] = [];
+    const { reindex } = await loadReindexFixture({
+      languages: ['typescript'],
+      deferredIncrementalTypeScript: true,
+      failIncrementalPatch: true,
+    });
+
+    await reindex({ projectRoot, outputScip, outputDb, onStatus: () => undefined });
+    writeFileSync(join(projectRoot, 'src/main.ts'), 'export const answer = 43;\n');
+    await reindex({ projectRoot, outputScip, outputDb, onStatus: (message) => statuses.push(message) });
+
+    expect(readFileSync(outputScip, 'utf8')).toBe('materialized-deferred-scip');
+    expect(JSON.parse(readFileSync(join(cacheDir, 'meta.json'), 'utf8')).scipCompanion).toBe('current');
+    expect(JSON.parse(readFileSync(join(cacheDir, '.scipquery-generations/state.json'), 'utf8')).publication).toEqual(
+      expect.objectContaining({ mode: 'full', scipCompanion: 'current' }),
+    );
+    expect(statuses.join('\n')).toContain('Materializing the deferred whole TypeScript SCIP companion');
   });
 
   it('reports every shard as reused when the whole project index is unchanged (plan6 6.5.2)', async () => {
@@ -1036,6 +1094,7 @@ async function loadReindexFixture(opts: {
   failPromotion?: boolean;
   failShadowWrite?: boolean;
   incrementalTypeScript?: boolean;
+  deferredIncrementalTypeScript?: boolean;
   failIncrementalPatch?: boolean;
   platform?: NodeJS.Platform;
   scipCli?: {
@@ -1050,7 +1109,7 @@ async function loadReindexFixture(opts: {
   const attempts = new Map<SupportedLanguage, number>();
   const commands: { binary: string; args: readonly string[] }[] = [];
 
-  if (opts.incrementalTypeScript) {
+  if (opts.incrementalTypeScript || opts.deferredIncrementalTypeScript) {
     vi.doMock('../../src/reindex/typescript-incremental-index.js', () => ({
       tryMaterializeTypeScriptIncrementalIndex: (input: {
         previousDbPath: string;
@@ -1059,11 +1118,15 @@ async function loadReindexFixture(opts: {
         candidateAffectedScipPath: string;
       }) => {
         if (!existsSync(input.previousDbPath) || !existsSync(input.previousShardPath)) return null;
-        writeFileSync(input.candidateShardPath, 'incremental-complete-scip');
+        if (!opts.deferredIncrementalTypeScript) {
+          writeFileSync(input.candidateShardPath, 'incremental-complete-scip');
+        }
         writeFileSync(input.candidateAffectedScipPath, 'incremental-affected-scip');
         return {
-          scipPath: input.candidateShardPath,
+          scipPath: opts.deferredIncrementalTypeScript ? input.previousShardPath : input.candidateShardPath,
+          candidateScipPath: input.candidateShardPath,
           affectedScipPath: input.candidateAffectedScipPath,
+          completeScipUpdated: !opts.deferredIncrementalTypeScript,
           durationMs: 4,
           cold: false,
           changedFiles: ['src/main.ts'],
@@ -1094,6 +1157,9 @@ async function loadReindexFixture(opts: {
             writeMs: 1,
           },
         };
+      },
+      materializeDeferredTypeScriptIndex: (input: { candidateShardPath: string }) => {
+        writeFileSync(input.candidateShardPath, 'materialized-deferred-scip');
       },
     }));
     vi.doMock('../../src/reindex/incremental-sqlite-publication.js', () => ({

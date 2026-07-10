@@ -43,9 +43,15 @@ import {
   readProjectManifestInputs,
 } from './project-shards.js';
 import { sanitizeScipFile } from './sanitize.js';
-import { inspectSqliteGeneration, promoteReindexArtifacts } from './sqlite-generation-store.js';
+import {
+  inspectSqliteGeneration,
+  promoteReindexArtifacts,
+  refreshSqliteGenerationMetadata,
+} from './sqlite-generation-store.js';
+import { pruneTypeScriptOverlays } from './typescript-overlay-store.js';
 import { discoverTypeScriptProjectRoots } from './typescript-projects.js';
 import {
+  materializeDeferredTypeScriptIndex,
   tryMaterializeTypeScriptIncrementalIndex,
   type MaterializedTypeScriptIncrementalIndex,
 } from './typescript-incremental-index.js';
@@ -144,6 +150,8 @@ interface ReindexMetadata {
   updatedAt: string;
   fingerprint: ReindexFingerprint;
   languageFingerprints?: Partial<Record<SupportedLanguage, ReindexFingerprint>>;
+  /** Whether index.scip is exact or reconstructible from changed-document overlays. */
+  scipCompanion?: 'current' | 'deferred';
   /**
    * Per-TypeScript-project shard fingerprints (workspace mode only), keyed by
    * relative project path ('.', 'apps/web'). Additive on meta v3: absent on
@@ -190,6 +198,7 @@ type SqliteMaterializationResult =
       changedDocumentPaths: string[];
       patchDurationMs: number;
       converterDurationMs: number;
+      scipCompanion: 'current' | 'deferred';
     }
   | {
       mode: 'full';
@@ -549,8 +558,14 @@ async function runLanguageIndexersForFreshReindex(
   }
 
   const typescriptClassification = classification.get('typescript');
+  const acceptedGeneration = inspectSqliteGeneration(opts.paths.outputDb, opts.paths.metaPath);
+  const acceptedMetadata = readReindexMetaOrNull(opts.paths.metaPath);
+  const incrementalGenerationUsable = acceptedGeneration.state === 'legacy' || acceptedGeneration.state === 'current';
+  const baseShardCurrent =
+    acceptedMetadata?.scipCompanion !== 'deferred' &&
+    (acceptedGeneration.state !== 'current' || acceptedGeneration.generation.publication?.scipCompanion !== 'deferred');
   const incrementalTypeScript =
-    typescriptClassification && !typescriptClassification.reused
+    typescriptClassification && !typescriptClassification.reused && incrementalGenerationUsable
       ? tryMaterializeTypeScriptIncrementalIndex({
           projectRoot: opts.projectRoot,
           cacheDir: dirname(opts.paths.outputDb),
@@ -559,6 +574,7 @@ async function runLanguageIndexersForFreshReindex(
           previousShardPath: typescriptClassification.scipPath,
           candidateShardPath: tempScipPath(opts.tempPaths.tempOutputScip, 'typescript-incremental', 0),
           candidateAffectedScipPath: tempScipPath(opts.tempPaths.tempOutputScip, 'typescript-affected', 0),
+          baseShardCurrent,
           previousSnapshot: previousProjectInputSnapshot(opts.paths.metaPath),
           currentSnapshot: opts.fingerprint,
           projectMode: opts.opts.typescriptProjectMode,
@@ -827,6 +843,15 @@ function classifyLanguageShardReuse(opts: {
       });
       continue;
     }
+    if (language === 'typescript' && meta.scipCompanion === 'deferred') {
+      result.set(language, {
+        reused: false,
+        reason: 'whole TypeScript SCIP companion is deferred behind changed-document overlays',
+        fingerprint,
+        scipPath,
+      });
+      continue;
+    }
     if (!meta.languageFingerprints) {
       result.set(language, {
         reused: false,
@@ -961,8 +986,12 @@ function publishFreshReindexArtifacts(
   typescriptProjectShardContext: TypeScriptProjectShardContext | undefined,
   incrementalTypeScript: MaterializedTypeScriptIncrementalIndex | undefined,
 ): LastRefreshMetadata {
-  cacheLanguageShards(opts.paths.outputDb, indexedOutputs);
-  const completeScipSanitized = materializeScipOutput(indexedOutputs, opts.tempPaths.tempOutputScip, opts.onStatus);
+  const completeScipAvailable = !incrementalTypeScript || incrementalTypeScript.completeScipUpdated;
+  let completeScipSanitized = false;
+  if (completeScipAvailable) {
+    cacheLanguageShards(opts.paths.outputDb, indexedOutputs);
+    completeScipSanitized = materializeScipOutput(indexedOutputs, opts.tempPaths.tempOutputScip, opts.onStatus);
+  }
   const sqliteMaterialization = materializeSqliteOutput({
     run: opts,
     env,
@@ -970,7 +999,28 @@ function publishFreshReindexArtifacts(
     skippedLanguages,
     reusedLanguages,
     incrementalTypeScript,
+    completeScipAvailable,
     completeScipSanitized,
+    materializeFullFallback: () => {
+      if (!incrementalTypeScript || incrementalTypeScript.completeScipUpdated) {
+        return completeScipSanitized;
+      }
+      opts.onStatus('Materializing the deferred whole TypeScript SCIP companion for full conversion...');
+      materializeDeferredTypeScriptIndex({
+        cacheDir: dirname(opts.paths.outputDb),
+        generationIdentity: incrementalTypeScript.nextFragmentGeneration,
+        baseShardPath: incrementalTypeScript.scipPath,
+        candidateShardPath: incrementalTypeScript.candidateScipPath,
+      });
+      const completeOutputs = indexedOutputs.map((output) =>
+        output.language === 'typescript'
+          ? { language: output.language, scipPath: incrementalTypeScript.candidateScipPath }
+          : output,
+      );
+      cacheLanguageShards(opts.paths.outputDb, completeOutputs);
+      completeScipSanitized = materializeScipOutput(completeOutputs, opts.tempPaths.tempOutputScip, opts.onStatus);
+      return completeScipSanitized;
+    },
   });
 
   runPostIndexAugmentation(auxiliaryDocumentsAugmentationStage(), {
@@ -1001,15 +1051,20 @@ function publishFreshReindexArtifacts(
     languages: indexedOutputs.map((o) => o.language),
     skipped: [...skippedLanguages],
   });
+  const deferredScipCompanion =
+    sqliteMaterialization.mode === 'incremental' && sqliteMaterialization.scipCompanion === 'deferred';
+  const publishedLanguageFingerprints = { ...languageFingerprints };
+  if (deferredScipCompanion) delete publishedLanguageFingerprints.typescript;
   const { metadata, pruneProjects } = buildPublishedReindexMetadata({
     run: opts,
     indexedOutputs,
     skippedLanguages,
     reusedLanguages,
-    languageFingerprints,
+    languageFingerprints: publishedLanguageFingerprints,
     typescriptProjectShardContext,
     lastRefresh,
   });
+  metadata.scipCompanion = deferredScipCompanion ? 'deferred' : 'current';
   pruneTypeScriptProjectShardCache(opts.paths.outputDb, pruneProjects);
   writeReindexMeta(opts.tempPaths.tempMetaPath, metadata);
   promoteReindexArtifacts({
@@ -1019,6 +1074,8 @@ function publishFreshReindexArtifacts(
     outputScip: opts.paths.outputScip,
     outputDb: opts.paths.outputDb,
     metaPath: opts.paths.metaPath,
+    preserveOutputScip:
+      sqliteMaterialization.mode === 'incremental' && sqliteMaterialization.scipCompanion === 'deferred',
     publication:
       sqliteMaterialization.mode === 'incremental'
         ? {
@@ -1030,14 +1087,25 @@ function publishFreshReindexArtifacts(
             producerDurationMs: incrementalTypeScript?.timings.serviceMs,
             materializationDurationMs: incrementalTypeScript?.durationMs,
             patchDurationMs: sqliteMaterialization.patchDurationMs,
+            scipCompanion: sqliteMaterialization.scipCompanion,
+            ...(sqliteMaterialization.scipCompanion === 'deferred' && incrementalTypeScript
+              ? { typescriptOverlayGeneration: incrementalTypeScript.nextFragmentGeneration }
+              : {}),
           }
         : {
             mode: 'full',
             validation: 'passed',
             converterDurationMs: sqliteMaterialization.converterDurationMs,
+            scipCompanion: 'current',
             ...(sqliteMaterialization.fallbackReason ? { fallbackReason: sqliteMaterialization.fallbackReason } : {}),
           },
   });
+  pruneTypeScriptOverlays(
+    dirname(opts.paths.outputDb),
+    sqliteMaterialization.mode === 'incremental' && sqliteMaterialization.scipCompanion === 'deferred'
+      ? [incrementalTypeScript!.nextFragmentGeneration]
+      : [],
+  );
   persistAffectedSetShadowRecord(opts.paths.outputDb, shadowRecord, opts.onStatus);
   return lastRefresh;
 }
@@ -1097,6 +1165,7 @@ function publishFullyReusedLanguageShardArtifacts(
   });
   pruneTypeScriptProjectShardCache(opts.paths.outputDb, pruneProjects);
   writeReindexMeta(opts.paths.metaPath, metadata);
+  refreshSqliteGenerationMetadata(opts.paths.outputDb, opts.paths.metaPath);
   persistAffectedSetShadowRecord(opts.paths.outputDb, shadowRecord, opts.onStatus);
   return lastRefresh;
 }
@@ -1531,15 +1600,15 @@ function materializeSqliteOutput(opts: {
   skippedLanguages: readonly { language: SupportedLanguage; reason: string }[];
   reusedLanguages: readonly SupportedLanguage[];
   incrementalTypeScript: MaterializedTypeScriptIncrementalIndex | undefined;
+  completeScipAvailable: boolean;
   completeScipSanitized: boolean;
+  materializeFullFallback: () => boolean;
 }): SqliteMaterializationResult {
   let fallbackReason: string | undefined;
   if (canPublishIncrementalSqlite(opts)) {
     const miniDbPath = join(opts.run.tempPaths.runDir, 'typescript-affected.db');
     try {
-      if (!opts.completeScipSanitized) {
-        sanitizeScipForSqlite(opts.run.tempPaths.tempOutputScip, opts.run.onStatus);
-      }
+      sanitizeScipForSqlite(opts.incrementalTypeScript.affectedScipPath, opts.run.onStatus);
       opts.run.onStatus(
         `Converting ${opts.incrementalTypeScript.affectedFiles.length} affected TypeScript document(s) to SQLite...`,
       );
@@ -1560,6 +1629,7 @@ function materializeSqliteOutput(opts: {
         changedDocumentPaths: patched.changedDocumentPaths,
         patchDurationMs: patched.durationMs,
         converterDurationMs: performance.now() - convertStartedAt,
+        scipCompanion: opts.incrementalTypeScript.completeScipUpdated ? 'current' : 'deferred',
       };
     } catch (error) {
       fallbackReason = error instanceof Error ? error.message : String(error);
@@ -1570,13 +1640,15 @@ function materializeSqliteOutput(opts: {
       );
     }
   }
+  let completeScipSanitized = opts.completeScipSanitized;
+  if (!opts.completeScipAvailable) completeScipSanitized = opts.materializeFullFallback();
   const convertStartedAt = performance.now();
   convertScipToSqlite(
     opts.run.tempPaths.tempOutputScip,
     opts.run.tempPaths.tempOutputDb,
     opts.env,
     opts.run.onStatus,
-    opts.completeScipSanitized,
+    completeScipSanitized,
   );
   return {
     mode: 'full',

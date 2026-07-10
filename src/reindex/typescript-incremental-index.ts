@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { TypeScriptProjectMode } from '../domain/types.js';
 import { createTypeScriptSemanticIdentityBuilder } from '../semantic/typescript/semantic-identity.js';
@@ -17,10 +17,16 @@ import {
 } from './affected-set.js';
 import { inspectTypeScriptDocumentProducer } from './typescript-document-emitter.js';
 import {
+  assembleAffectedTypeScriptFragments,
   assembleTypeScriptIndexes,
   commitTypeScriptFragmentGeneration,
   ensureTypeScriptFragmentGeneration,
 } from './typescript-fragment-store.js';
+import {
+  commitTypeScriptOverlay,
+  materializeTypeScriptOverlay,
+  TYPESCRIPT_DEFERRED_SCIP_THRESHOLD_BYTES,
+} from './typescript-overlay-store.js';
 import { publishedTypeScriptIndexGeneration } from './typescript-index-protocol.js';
 import { TypeScriptIndexRequester } from './typescript-index-requester.js';
 import { classifyProjectInputPath } from './project-files.js';
@@ -58,6 +64,8 @@ export interface MaterializeTypeScriptIncrementalInput {
   previousShardPath: string;
   candidateShardPath: string;
   candidateAffectedScipPath: string;
+  /** Whether previousShardPath already represents previousSnapshot. */
+  baseShardCurrent: boolean;
   previousSnapshot: ProjectInputSnapshot | null;
   currentSnapshot: ProjectInputSnapshot;
   projectMode: TypeScriptProjectMode | undefined;
@@ -66,7 +74,10 @@ export interface MaterializeTypeScriptIncrementalInput {
 
 export interface MaterializedTypeScriptIncrementalIndex {
   scipPath: string;
+  candidateScipPath: string;
   affectedScipPath: string;
+  /** False when the accepted database is current but the whole SCIP companion is represented by an overlay. */
+  completeScipUpdated: boolean;
   durationMs: number;
   cold: boolean;
   changedFiles: string[];
@@ -221,41 +232,62 @@ export function tryMaterializeTypeScriptIncrementalIndex(
       affectedFiles: eligibility.plan.affectedFiles,
     });
     const requestMs = performance.now() - phaseStartedAt;
+    const deferCompleteScip = statSync(input.previousShardPath).size >= TYPESCRIPT_DEFERRED_SCIP_THRESHOLD_BYTES;
     phaseStartedAt = performance.now();
-    const baseIndexBytes = readFileSync(input.previousShardPath);
-    const assembled = assembleTypeScriptIndexes({
-      packageVersion: availability.packageVersion,
-      baseIndexBytes,
-      fragments: response.fragments,
-    });
+    const baseIndexBytes = deferCompleteScip ? null : readFileSync(input.previousShardPath);
+    const assembled = deferCompleteScip
+      ? {
+          completeIndexBytes: null,
+          affectedIndexBytes: assembleAffectedTypeScriptFragments(response.fragments),
+        }
+      : assembleTypeScriptIndexes({
+          packageVersion: availability.packageVersion,
+          baseIndexBytes: baseIndexBytes!,
+          fragments: response.fragments,
+        });
     const assemblyMs = performance.now() - phaseStartedAt;
     phaseStartedAt = performance.now();
-    ensureTypeScriptFragmentGeneration({
-      cacheDir: input.cacheDir,
-      packageVersion: availability.packageVersion,
-      indexBytes: baseIndexBytes,
-      producerIdentity: availability.producerIdentity,
-      projectIdentity: eligibility.projectIdentity,
-      generationIdentity: eligibility.previousFragmentGeneration,
-      documentIdentities: eligibility.previousDocumentIdentities,
-    });
-    commitTypeScriptFragmentGeneration({
-      cacheDir: input.cacheDir,
-      previousGenerationIdentity: eligibility.previousFragmentGeneration,
-      producerIdentity: availability.producerIdentity,
-      projectIdentity: eligibility.projectIdentity,
-      generationIdentity: eligibility.nextFragmentGeneration,
-      fragments: response.fragments,
-      documentIdentities: eligibility.nextDocumentIdentities,
-    });
+    if (deferCompleteScip) {
+      commitTypeScriptOverlay({
+        cacheDir: input.cacheDir,
+        previousGenerationIdentity: eligibility.previousFragmentGeneration,
+        nextGenerationIdentity: eligibility.nextFragmentGeneration,
+        producerIdentity: availability.producerIdentity,
+        projectIdentity: eligibility.projectIdentity,
+        baseShardCurrent: input.baseShardCurrent,
+        fragments: response.fragments,
+      });
+    } else {
+      ensureTypeScriptFragmentGeneration({
+        cacheDir: input.cacheDir,
+        packageVersion: availability.packageVersion,
+        indexBytes: baseIndexBytes!,
+        producerIdentity: availability.producerIdentity,
+        projectIdentity: eligibility.projectIdentity,
+        generationIdentity: eligibility.previousFragmentGeneration,
+        documentIdentities: eligibility.previousDocumentIdentities,
+        allowUntrackedDocuments: true,
+      });
+      commitTypeScriptFragmentGeneration({
+        cacheDir: input.cacheDir,
+        previousGenerationIdentity: eligibility.previousFragmentGeneration,
+        producerIdentity: availability.producerIdentity,
+        projectIdentity: eligibility.projectIdentity,
+        generationIdentity: eligibility.nextFragmentGeneration,
+        fragments: response.fragments,
+        documentIdentities: eligibility.nextDocumentIdentities,
+      });
+    }
     const fragmentStoreMs = performance.now() - phaseStartedAt;
     phaseStartedAt = performance.now();
-    writeFileSync(input.candidateShardPath, assembled.completeIndexBytes);
+    if (assembled.completeIndexBytes) writeFileSync(input.candidateShardPath, assembled.completeIndexBytes);
     writeFileSync(input.candidateAffectedScipPath, assembled.affectedIndexBytes);
     const writeMs = performance.now() - phaseStartedAt;
     const result = {
-      scipPath: input.candidateShardPath,
+      scipPath: deferCompleteScip ? input.previousShardPath : input.candidateShardPath,
+      candidateScipPath: input.candidateShardPath,
       affectedScipPath: input.candidateAffectedScipPath,
+      completeScipUpdated: !deferCompleteScip,
       durationMs: Date.now() - startedAt,
       cold: response.cold,
       changedFiles: eligibility.plan.changedFiles,
@@ -277,7 +309,7 @@ export function tryMaterializeTypeScriptIncrementalIndex(
       },
     };
     input.onStatus(
-      `Incremental TypeScript index emitted ${result.affectedFiles.length} affected document(s) in ${(result.durationMs / 1000).toFixed(3)}s (${result.cold ? 'cold' : 'warm'} service; runtime ${runtimeMs.toFixed(0)}ms, graph ${graphMs.toFixed(0)}ms, request ${requestMs.toFixed(0)}ms, assembly ${assemblyMs.toFixed(0)}ms, fragments ${fragmentStoreMs.toFixed(0)}ms, write ${writeMs.toFixed(0)}ms).`,
+      `Incremental TypeScript index emitted ${result.affectedFiles.length} affected document(s) in ${(result.durationMs / 1000).toFixed(3)}s (${result.cold ? 'cold' : 'warm'} service; ${deferCompleteScip ? 'whole SCIP deferred' : 'whole SCIP current'}; runtime ${runtimeMs.toFixed(0)}ms, graph ${graphMs.toFixed(0)}ms, request ${requestMs.toFixed(0)}ms, assembly ${assemblyMs.toFixed(0)}ms, fragments ${fragmentStoreMs.toFixed(0)}ms, write ${writeMs.toFixed(0)}ms).`,
     );
     return result;
   } catch (error) {
@@ -286,6 +318,23 @@ export function tryMaterializeTypeScriptIncrementalIndex(
     );
     return null;
   }
+}
+
+export function materializeDeferredTypeScriptIndex(input: {
+  cacheDir: string;
+  generationIdentity: string;
+  baseShardPath: string;
+  candidateShardPath: string;
+}): void {
+  const availability = inspectTypeScriptDocumentProducer();
+  if (!availability.available) throw new Error(availability.reason);
+  const bytes = materializeTypeScriptOverlay({
+    cacheDir: input.cacheDir,
+    generationIdentity: input.generationIdentity,
+    baseIndexBytes: readFileSync(input.baseShardPath),
+    packageVersion: availability.packageVersion,
+  });
+  writeFileSync(input.candidateShardPath, bytes);
 }
 
 function typeScriptFragmentProjectIdentity(
@@ -321,8 +370,9 @@ function documentIdentities(
   producerIdentity: string,
   requestedFiles: readonly string[],
 ): Map<string, string> | null {
+  const snapshotPaths = new Set(snapshot.files.map((file) => file.path));
   const builder = createTypeScriptSemanticIdentityBuilder({
-    projectFiles,
+    projectFiles: projectFiles.filter((file) => snapshotPaths.has(file)),
     snapshot,
     graph,
     engineIdentity: producerIdentity,
@@ -330,8 +380,15 @@ function documentIdentities(
   const result = new Map<string, string>();
   for (const file of requestedFiles) {
     const identity = builder.identityFor(file, 'typescript-scip-document-v1');
-    if (!identity.key) return null;
-    result.set(file, identity.key);
+    if (identity.key) {
+      result.set(file, identity.key);
+      continue;
+    }
+    if (snapshotPaths.has(file)) return null;
+    // Upstream indexers may include ignored generated outputs. They are not
+    // project inputs and cannot trigger this route, so bind their retained
+    // fragment to the producer/path instead of pretending they were hashed.
+    result.set(file, sha256(JSON.stringify({ version: 1, producerIdentity, generatedDocument: file })));
   }
   return result;
 }

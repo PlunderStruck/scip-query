@@ -1,7 +1,7 @@
 # Incremental SQLite Publication Plan
 
 Date: 2026-07-10
-Status: In progress; Phases 5.1–5.3 complete, Phase 5.4 corpus/release calibration next
+Status: Complete; Phases 5.1–5.4 accepted
 Parent: [`2026-07-09-automatic-incremental-indexing-roadmap.md`](./2026-07-09-automatic-incremental-indexing-roadmap.md)
 
 ## Outcome
@@ -58,10 +58,16 @@ metadata are complete.
 
 The combined `.scip` and `meta.json` files are rebuildable companions. Their
 replacement remains ordered around the database handoff, but query consistency
-depends only on the atomic DB rename. A crash after the DB flip leaves both the
-new complete DB at the stable path and the preceding complete DB in recovery
-storage. Freshness detects companion drift and the full rebuild remains the
-repair oracle.
+depends only on the atomic DB rename. For TypeScript shards of at least 64 MiB,
+an **overlay generation** is an immutable manifest of changed SCIP documents
+layered over one accepted whole shard; its defining trait is that it preserves
+the exact current whole index without parsing and serializing that whole file
+on every edit. The query database publishes immediately from the affected-only
+mini index. Metadata marks the whole SCIP companion `deferred`, prevents that
+base shard from being selected as a cache hit, and names the overlay needed to
+reconstruct it. Full conversion, repair, or fallback reconstructs the exact
+whole shard first. A crash after the DB flip leaves both the new complete DB at
+the stable path and the preceding complete DB in recovery storage.
 
 ## Row-Replacement Contract
 
@@ -205,6 +211,24 @@ from pre-generation commit `d4b1d8c7` both read the current stable database as
 Commit boundary: accepted measurements, roadmap/ledger closure, and exact next
 Phase 6 action.
 
+Accepted outcome: OpenCode's first whole-companion route measured 13.0s on
+restore and 9.6s warm, so it failed the 5s gate. The accepted overlay route
+measured 4,395, 4,408, 4,303, 4,413, and 4,339ms: 4,395ms median and about
+4,412ms p95. A sixth 4,312ms run restored the source tree. The reconstructed
+119,344,942-byte shard was byte-identical to the clean whole-project shard at
+SHA-256 `4e8f58e49ccfb90da91343eee4dbdbf671cd84a7d6ed06a9f880046c9b110213`.
+The incremental database and a fresh full conversion matched all 2,967
+normalized document fact sets. The local distribution remains 1,383ms median /
+1,413ms p95, and OpenCode no-op controls remain below their direct controls.
+
+Calibration also rejected a fingerprint-only deferred marker: changing a file
+back to the base content could make the old whole shard look reusable. The
+accepted contract records `scipCompanion: deferred` in both metadata and
+generation state, omits the TypeScript whole-shard fingerprint, and forces the
+next changed-input run through overlay composition. Reversal, missing-overlay,
+deferred-fallback, metadata-only handoff, corrupt-blob, and package/schema
+controls now fail closed or reconstruct the complete oracle.
+
 ## Verification Matrix
 
 | Risk | Failure probe | Required result |
@@ -222,5 +246,5 @@ Phase 6 action.
 
 ```sh
 SCIP_QUERY_SKIP_WATCH_SERVICE=1 node dist/cli.js plan-context \
-  src/reindex/index.ts --json
+  src/semantic/rust/durable-session-server.ts --json
 ```
