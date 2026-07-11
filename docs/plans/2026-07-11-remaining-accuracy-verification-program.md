@@ -1,7 +1,7 @@
 # Remaining Accuracy Verification Program
 
 Date: 2026-07-11
-Status: Active
+Status: Complete
 
 ## Goal
 
@@ -210,14 +210,22 @@ observable output contract and a failure-path probe.
 
 ### 7. Publication-readiness closure
 
-- [ ] Reconcile every checklist row and certification-matrix cell.
-- [ ] State whether certified evidence views are ready for a private cloud
+- [x] Reconcile every checklist row and certification-matrix cell.
+- [x] State whether certified evidence views are ready for a private cloud
       shadow; keep leaderboard operation a separate product program.
-- [ ] Run final full tests, typecheck, lint/format, build, reindex, health
+- [x] Run final full tests, typecheck, lint/format, build, reindex, health
       baseline review, doc drift, and diff gate.
-- [ ] Write the conductor self-report with benchmark before/after values,
+- [x] Write the conductor self-report with benchmark before/after values,
       observed discriminating probes, deviations, deferrals, and folded-back
       learning.
+
+  - 2026-07-11: the matrix has no pending cells and the checklist has no
+    unexplained rows. The full suite passed 1,318 tests across 188 files;
+    typecheck, lint, build, reindex, and diff-gate passed. Full health remains
+    explicitly experimental/non-comparable. Doc drift finished with zero
+    broken references after correcting obsolete Windows sidecar instructions.
+  - Closure:
+    `docs/validation/2026-07-11-accuracy-program-closure.md`.
 
 Acceptance: zero unexplained accuracy gaps and a quiet final gate.
 

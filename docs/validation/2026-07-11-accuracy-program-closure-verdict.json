@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-07-11",
+  "programStatus": "complete",
+  "privateCloudShadow": "ready-with-capability-and-provenance-boundaries",
+  "publicLeaderboard": "not-ready",
+  "publicLeaderboardReason": "The aggregate health score is experimental, completed-analyses-only, and not normalized across languages or frameworks.",
+  "finalVerification": {
+    "testFiles": 188,
+    "tests": 1318,
+    "typecheck": "passed",
+    "lint": "passed",
+    "build": "passed",
+    "reindex": "passed",
+    "healthScore": 80,
+    "healthInterpretation": "experimental-composite",
+    "docsScanned": 614,
+    "docDriftSignals": 72,
+    "brokenDocReferences": 0,
+    "diffGateExitCode": 0,
+    "diffGateFindings": 0,
+    "diffGateAdvisories": 0
+  },
+  "operationalBenchmark": {
+    "indexedFiles": 328,
+    "symbols": 22318,
+    "coldIndexMs": 4350,
+    "warmIndexMs": 357,
+    "statsMs": 156
+  },
+  "terminalVerdicts": [
+    "certified",
+    "qualified",
+    "insufficient",
+    "experimental",
+    "unsupported",
+    "parity"
+  ],
+  "unexplainedChecklistRows": 0,
+  "pendingMatrixCells": 0
+}

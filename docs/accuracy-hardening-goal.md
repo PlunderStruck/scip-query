@@ -1,10 +1,12 @@
 # Accuracy Hardening and Health Certification Roadmap
 
 Date: 2026-07-10
-Status: Active; language detectors, composite workflows, and navigation answers closed with explicit capability boundaries; operational audit remains
+Status: Complete for private-shadow readiness; public leaderboard remains a separate program
 
 Current execution plan:
 [`2026-07-11-remaining-accuracy-verification-program.md`](./plans/2026-07-11-remaining-accuracy-verification-program.md).
+Closure certificate:
+[`2026-07-11-accuracy-program-closure.md`](./validation/2026-07-11-accuracy-program-closure.md).
 
 ## Goal
 
@@ -276,14 +278,13 @@ Those checks prove that selected commands retrieve expected source and graph
 facts. They do not certify health-finding precision or recall, which is the
 active program above.
 
-## Immediate Next Slice
+## Program Closure
 
 Language detectors, composite workflows, navigation answers, and operational
-state transitions now have terminal verdicts under their current capabilities.
-The remaining slice is publication-readiness closure: reconcile the complete
-matrix, run the full repository verification sequence, and record the private
-cloud shadow decision without promoting the aggregate health score to a public
-leaderboard metric.
+state transitions have terminal verdicts under their current capabilities.
+The final full repository verification passed, and certified evidence views are
+ready for a capability-aware private cloud shadow. The aggregate health score
+remains experimental and must not drive a public cross-language leaderboard.
 
 ## Progress — 2026-07-10
 

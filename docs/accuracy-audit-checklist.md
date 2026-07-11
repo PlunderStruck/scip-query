@@ -1,7 +1,7 @@
 # Command Accuracy Audit Checklist
 
 Date: 2026-07-10
-Status: Active
+Status: Complete; see the 2026-07-11 closure certificate
 
 ## Purpose
 
@@ -35,6 +35,8 @@ verdict remains qualified, insufficient, or unsupported.
 
 The certification thresholds and publication rules live in
 [`accuracy-hardening-goal.md`](./accuracy-hardening-goal.md).
+Program closure and the private-shadow decision live in
+[`2026-07-11-accuracy-program-closure.md`](./validation/2026-07-11-accuracy-program-closure.md).
 
 ## Certification Matrix
 
