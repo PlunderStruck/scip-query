@@ -569,6 +569,18 @@ export interface ProjectAutomaticRefreshConfigResult {
   changed: boolean;
 }
 
+export function configureProjectLanguages(
+  projectRoot: string,
+  config: ProjectConfig,
+  languages: readonly SupportedLanguage[],
+): ProjectAutomaticRefreshConfigResult {
+  const configPath = join(projectRoot, CONFIG_FILENAME);
+  const nextConfig: ProjectConfig = { ...config, languages: [...languages] };
+  const changed = !existsSync(configPath) || JSON.stringify(nextConfig) !== JSON.stringify(config);
+  if (changed) writeFileSync(configPath, JSON.stringify(nextConfig, null, 2) + '\n');
+  return { configPath, config: nextConfig, changed };
+}
+
 /**
  * Persist setup's automatic-indexing decision without replacing unrelated
  * project configuration. Callers decide whether an existing explicit opt-out

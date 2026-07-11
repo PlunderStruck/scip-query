@@ -10,6 +10,7 @@ import { installProjectAgentHooks } from './agent-hooks.js';
 import { cliVersion, runIsolatedHealthReport } from './cli-support.js';
 import {
   configureProjectAutomaticRefresh,
+  configureProjectLanguages,
   resolveWatchConfig,
   validateProjectConfig,
   type ProjectAutomaticRefreshConfigResult,
@@ -129,6 +130,10 @@ export interface ProjectSetupOptions {
   automaticRefresh?: boolean;
   installIndexers?: boolean;
   dossierDir?: string;
+  languages?: readonly SupportedLanguage[];
+  installSkills?: boolean;
+  runHealth?: boolean;
+  onStatus?: (message: string) => void;
 }
 
 export type ProjectSetupGuidedActionId =
@@ -136,7 +141,9 @@ export type ProjectSetupGuidedActionId =
   | 'update-agent-guidance'
   | 'install-project-hooks'
   | 'enable-automatic-refresh'
-  | 'install-indexers';
+  | 'install-indexers'
+  | 'install-agent-skills'
+  | 'run-health-analysis';
 
 export type ProjectSetupActionScope = 'repository' | 'checkout' | 'user';
 
@@ -236,18 +243,20 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
   const context = resolveCliProjectContext();
   const { projectRoot, paths, dbPath } = context;
   const automaticRefresh = opts.automaticRefresh ?? context.config.watch?.enabled ?? true;
-  const existingConfigDiagnostics = validateProjectConfig(context.config, { projectRoot });
+  const languageConfig = opts.languages ? configureProjectLanguages(projectRoot, context.config, opts.languages) : null;
+  const startingConfig = languageConfig?.config ?? context.config;
+  const existingConfigDiagnostics = validateProjectConfig(startingConfig, { projectRoot });
   const existingConfigErrors = existingConfigDiagnostics.filter((diagnostic) => diagnostic.level === 'error');
   let automaticRefreshConfig: ProjectAutomaticRefreshConfigResult | null = null;
   let automaticRefreshError: string | null = null;
-  if (existingConfigErrors.length === 0 && context.config.watch?.enabled !== automaticRefresh) {
+  if (existingConfigErrors.length === 0 && startingConfig.watch?.enabled !== automaticRefresh) {
     try {
-      automaticRefreshConfig = configureProjectAutomaticRefresh(projectRoot, context.config, automaticRefresh);
+      automaticRefreshConfig = configureProjectAutomaticRefresh(projectRoot, startingConfig, automaticRefresh);
     } catch (error) {
       automaticRefreshError = errorMessage(error);
     }
   }
-  const config = automaticRefreshConfig?.config ?? context.config;
+  const config = automaticRefreshConfig?.config ?? startingConfig;
   const scipCliInstalled = isScipInstalled();
 
   addStep(steps, {
@@ -278,12 +287,18 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     message: scipCliInstalled ? 'scip CLI is available.' : 'scip CLI is not available; reindex may attempt install.',
   });
 
-  const skills = installSkills({ quiet: true });
+  const skills =
+    opts.installSkills === false
+      ? { installed: [], skipped: [], alreadyLinked: [], pruned: [] }
+      : installSkills({ quiet: true });
   addStep(steps, {
     id: 'skills',
     label: 'Agent skills',
-    status: skills.skipped.length > 0 ? 'warn' : 'ok',
-    message: `${skills.installed.length} installed, ${skills.alreadyLinked.length} already linked, ${skills.pruned.length} pruned, ${skills.skipped.length} skipped.`,
+    status: opts.installSkills === false ? 'skipped' : skills.skipped.length > 0 ? 'warn' : 'ok',
+    message:
+      opts.installSkills === false
+        ? 'Skipped by setup choice.'
+        : `${skills.installed.length} installed, ${skills.alreadyLinked.length} already linked, ${skills.pruned.length} pruned, ${skills.skipped.length} skipped.`,
     details: [...skills.pruned.map((entry) => `Pruned ${entry}`), ...skills.skipped.map((entry) => `Skipped ${entry}`)],
   });
 
@@ -367,7 +382,10 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
           allowPartial: true,
           indexerConcurrency: config.indexerConcurrency,
           trigger: { kind: 'setup', detail: 'scip-query setup' },
-          onStatus: (message) => reindexMessages.push(message),
+          onStatus: (message) => {
+            reindexMessages.push(message);
+            opts.onStatus?.(message);
+          },
         });
         totalDurationMs += reindexResult.durationMs;
         rebuilt ||= !reindexResult.reused;
@@ -481,7 +499,8 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     message: capabilitySummary(capabilities),
   });
 
-  const health = await runSetupHealth(paths.dbPath, steps);
+  opts.onStatus?.(opts.runHealth === false ? 'Skipping optional full health audit.' : 'Running full health audit…');
+  const health = opts.runHealth === false ? skippedSetupHealth(steps) : await runSetupHealth(paths.dbPath, steps);
   const rustSemanticSession = readiness.languages.includes('rust')
     ? rustSemanticSessionStatus(projectRoot, process.env['SCIP_RUST_SEMANTIC_DURABLE_SESSION'])
     : null;
@@ -579,6 +598,7 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
 
   const changeScopes: ProjectSetupChangeScopes = {
     repository: [
+      ...(languageConfig?.changed ? [languageConfig.configPath] : []),
       ...(automaticRefreshConfig?.changed ? [automaticRefreshConfig.configPath] : []),
       ...(agentResult?.written.filter((entry) => !entry.startsWith('.git/hooks/')) ?? []),
     ],
@@ -622,6 +642,16 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     verdict: setupVerdict(steps, readiness),
   };
 
+  if (opts.runHealth === false) {
+    addStep(steps, {
+      id: 'health-dossier',
+      label: 'Health dossier',
+      status: 'skipped',
+      message: 'Skipped because the optional health audit was not selected.',
+    });
+    report.verdict = setupVerdict(steps, readiness);
+    return report;
+  }
   const healthDossier = writeProjectHealthDossier(report, { dossierDir: opts.dossierDir });
   report.healthDossier = healthDossier;
   report.changeScopes.repository.push(...healthDossier.written);
@@ -1004,6 +1034,12 @@ async function runSetupHealth(dbPath: string, steps: ProjectSetupStep[]): Promis
     });
     return emptyHealthSummary(unavailableReason);
   }
+}
+
+function skippedSetupHealth(steps: ProjectSetupStep[]): ProjectSetupHealthSummary {
+  const reason = 'Skipped by setup choice; run `scip-query health --full` when wanted.';
+  addStep(steps, { id: 'health', label: 'Health audit', status: 'skipped', message: reason });
+  return emptyHealthSummary(reason);
 }
 
 function healthSummary(report: HealthReport): ProjectSetupHealthSummary {

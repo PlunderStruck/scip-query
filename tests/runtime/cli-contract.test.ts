@@ -101,8 +101,11 @@ describe('CLI contract', () => {
     ]);
     expect(docs.find((entry) => entry.id === 'setup')?.options).toEqual([
       '--guided',
+      '--yes',
       '--git-hook',
       '--no-hooks',
+      '--no-skills',
+      '--no-health',
       '--dossier-dir <path>',
       '--json',
     ]);

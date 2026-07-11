@@ -281,9 +281,12 @@ export const commandDescriptors: CommandDescriptor[] = [
     description:
       'Bootstrap this project: enable automatic indexing, install agent skills, refresh the index, verify capabilities, and report health',
     options: withJsonOption([
-      option('--guided', 'Ask before repository, checkout-local, and user-environment changes'),
+      option('--guided', 'Open the interactive checklist (the default in a terminal)'),
+      option('--yes', 'Accept recommended setup defaults without prompting'),
       option('--git-hook', 'Also install a git pre-commit hook that runs diff-gate'),
       option('--no-hooks', 'Skip Codex and Claude Code lifecycle hook installation'),
+      option('--no-skills', 'Skip user-level agent skill installation'),
+      option('--no-health', 'Skip the optional full health audit and dossier'),
       option('--dossier-dir <path>', 'Directory for generated setup health dossier files'),
     ]),
     renderShape: 'custom',

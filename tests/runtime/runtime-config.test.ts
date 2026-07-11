@@ -113,6 +113,24 @@ describe('automatic indexing config setup', () => {
   });
 });
 
+describe('setup language selection', () => {
+  it('persists selected indexers without replacing unrelated config', async () => {
+    const projectRoot = createProject();
+    const current = { docs: { snapshotPaths: ['docs/**'] }, watch: { enabled: true } };
+    writeFileSync(join(projectRoot, '.scipquery.json'), `${JSON.stringify(current, null, 2)}\n`);
+    const { configureProjectLanguages } = await import('../../src/runtime/config.js');
+
+    const result = configureProjectLanguages(projectRoot, current, ['typescript', 'python']);
+
+    expect(result.changed).toBe(true);
+    expect(loadProjectConfig(projectRoot)).toEqual({
+      docs: { snapshotPaths: ['docs/**'] },
+      watch: { enabled: true },
+      languages: ['typescript', 'python'],
+    });
+  });
+});
+
 describe('validateProjectConfig', () => {
   it('requires structured suppressions to include an identity and reason', () => {
     const diagnostics = validateProjectConfig({

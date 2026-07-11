@@ -1,6 +1,5 @@
 import { spawnSync } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
-import { createInterface } from 'node:readline/promises';
 import { existsSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join, resolve } from 'node:path';
 import type { IndexedDefinition, SupportedLanguage } from '../../domain/types.js';
@@ -46,10 +45,10 @@ import {
   renderProjectSetupReport,
   runProjectSetup,
   type ProjectSetupGuidedAction,
-  type ProjectSetupGuidedActionId,
   type ProjectSetupGuidedFiles,
   type ProjectSetupOptions,
 } from '../project-setup.js';
+import { promptSetupChecklist, type SetupWizardChoice } from '../setup-wizard.js';
 import { setupCiWorkflow } from '../setup-ci.js';
 import { installSkills, isScipInstalled, printScipInstallInstructions } from '../setup.js';
 import { runUninstall } from '../uninstall.js';
@@ -1165,10 +1164,15 @@ export async function handleSetup(rawOpts: unknown): Promise<void> {
       gitHook: booleanOptionValue(opts, 'gitHook'),
       noHooks: booleanOptionValue(opts, 'noHooks') || opts['hooks'] === false,
       dossierDir: stringOptionValue(opts, 'dossierDir'),
+      runHealth: booleanOptionValue(opts, 'yes') ? false : opts['health'] !== false,
+      installSkills: opts['skills'] !== false,
     };
-    if (booleanOptionValue(opts, 'guided')) {
+    const json = booleanOptionValue(opts, 'json');
+    const interactive = !json && !booleanOptionValue(opts, 'yes') && process.stdin.isTTY && process.stdout.isTTY;
+    if (booleanOptionValue(opts, 'guided') || interactive) {
       setupOptions = await guidedProjectSetupOptions(setupOptions, { json: booleanOptionValue(opts, 'json') });
     }
+    if (!json) setupOptions.onStatus = (message) => console.log(`  ${message}`);
     const report = await runProjectSetup(setupOptions);
     if (booleanOptionValue(opts, 'json')) {
       printJsonEnvelope('setup', [], opts, report);
@@ -1193,8 +1197,44 @@ async function guidedProjectSetupOptions(
     watchEnabled: resolveWatchConfig(config).enabled,
     readiness,
   });
-  const interactive = !opts.json && process.stdin.isTTY;
-  const selected = interactive ? await promptGuidedActions(plan.actions) : recommendedGuidedActions(plan.actions);
+  const languageChoices = readiness.languages.map(
+    (language): SetupWizardChoice => ({
+      id: `language:${language}`,
+      scope: 'project',
+      label: `Index ${language}`,
+      reason: 'Detected in this project.',
+      selected: true,
+    }),
+  );
+  const actionChoices = plan.actions.map(
+    (action): SetupWizardChoice => ({
+      id: action.id,
+      scope: action.scope === 'repository' ? 'project' : action.scope,
+      label: action.label,
+      reason: action.reason,
+      selected: action.recommended,
+    }),
+  );
+  actionChoices.push(
+    {
+      id: 'install-agent-skills',
+      scope: 'user',
+      label: 'Install agent skills',
+      reason: 'Makes scip-query workflows available to local agents.',
+      selected: true,
+    },
+    {
+      id: 'run-health-analysis',
+      scope: 'analysis',
+      label: 'Run full health analysis and write dossier',
+      reason: 'Optional and can take much longer than indexing.',
+      selected: false,
+    },
+  );
+  const interactive = !opts.json && process.stdin.isTTY && process.stdout.isTTY;
+  const selected = interactive
+    ? await promptSetupChecklist([...languageChoices, ...actionChoices])
+    : new Set([...recommendedGuidedActions(plan.actions), ...languageChoices.map((choice) => choice.id)]);
   if (interactive) renderGuidedSelection(plan.actions, selected);
   const agentActionSelected = selected.has('create-agent-guidance') || selected.has('update-agent-guidance');
   const automaticRefreshAction = plan.actions.some((action) => action.id === 'enable-automatic-refresh');
@@ -1207,6 +1247,9 @@ async function guidedProjectSetupOptions(
       (plan.actions.some((action) => action.id === 'install-project-hooks') && !selected.has('install-project-hooks')),
     noAgentGuidance: !agentActionSelected,
     ...(indexerAction ? { installIndexers: selected.has('install-indexers') } : {}),
+    languages: readiness.languages.filter((language) => selected.has(`language:${language}`)),
+    installSkills: selected.has('install-agent-skills'),
+    runHealth: selected.has('run-health-analysis'),
   };
 }
 
@@ -1219,32 +1262,14 @@ function guidedProjectSetupFiles(projectRoot: string): ProjectSetupGuidedFiles {
   };
 }
 
-function recommendedGuidedActions(actions: readonly ProjectSetupGuidedAction[]): Set<ProjectSetupGuidedActionId> {
-  return new Set(actions.filter((action) => action.recommended).map((action) => action.id));
+function recommendedGuidedActions(actions: readonly ProjectSetupGuidedAction[]): Set<string> {
+  return new Set([
+    ...actions.filter((action) => action.recommended).map((action) => action.id),
+    'install-agent-skills',
+  ]);
 }
 
-async function promptGuidedActions(
-  actions: readonly ProjectSetupGuidedAction[],
-): Promise<Set<ProjectSetupGuidedActionId>> {
-  if (actions.length === 0) return new Set();
-  console.log('Guided setup choices:');
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    const selected = new Set<ProjectSetupGuidedActionId>();
-    for (const action of actions) {
-      console.log(`- [${action.scope}] ${action.label}: ${action.reason}`);
-      if (await promptYesNo(rl, action)) selected.add(action.id);
-    }
-    return selected;
-  } finally {
-    rl.close();
-  }
-}
-
-function renderGuidedSelection(
-  actions: readonly ProjectSetupGuidedAction[],
-  selected: ReadonlySet<ProjectSetupGuidedActionId>,
-): void {
+function renderGuidedSelection(actions: readonly ProjectSetupGuidedAction[], selected: ReadonlySet<string>): void {
   console.log('');
   console.log('Selected setup changes:');
   for (const scope of ['repository', 'checkout', 'user'] as const) {
@@ -1259,13 +1284,6 @@ function renderGuidedSelection(
           : 'changes this machine or user environment';
     console.log(`  ${scope} (${guidance}): ${labels.length > 0 ? labels.join(', ') : 'none'}`);
   }
-}
-
-async function promptYesNo(rl: ReturnType<typeof createInterface>, action: ProjectSetupGuidedAction): Promise<boolean> {
-  const suffix = action.recommended ? 'Y/n' : 'y/N';
-  const answer = (await rl.question(`  Run ${action.command ?? action.label}? [${suffix}] `)).trim().toLowerCase();
-  if (answer.length === 0) return action.recommended;
-  return answer === 'y' || answer === 'yes';
 }
 
 export function handleSetupCi(rawOpts: unknown): void {
