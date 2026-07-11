@@ -1,12 +1,61 @@
+import Database from 'better-sqlite3';
 import { describe, expect, it, vi } from 'vitest';
-import { computeVueReferenceTask, type VueReferenceComputationOptions } from '../../src/reindex/vue/augment-vue.js';
+import {
+  computeVueReferenceTask,
+  isVueModulePathToken,
+  type VueReferenceComputationOptions,
+  vueDefinitionOmissionReason,
+} from '../../src/reindex/vue/augment-vue.js';
+import { createSymbolLookup } from '../../src/reindex/vue/augment-vue-runtime.js';
 
 describe('Vue reference task computation', () => {
+  it('does not index identifier-looking fragments inside module paths', () => {
+    const source = "import Other from './components/Other.vue'\nconst lazy = import('./LazyView.vue')";
+    expect(isVueModulePathToken(source, source.indexOf('components'))).toBe(true);
+    expect(isVueModulePathToken(source, source.indexOf('Other'))).toBe(false);
+    expect(isVueModulePathToken(source, source.indexOf('LazyView'))).toBe(true);
+  });
+
+  it('does not map a property definition to an unrelated enclosing callable', () => {
+    const db = new Database(':memory:');
+    db.exec(`
+      CREATE TABLE documents (id INTEGER PRIMARY KEY, relative_path TEXT NOT NULL);
+      CREATE TABLE global_symbols (id INTEGER PRIMARY KEY, display_name TEXT);
+      CREATE TABLE defn_enclosing_ranges (
+        document_id INTEGER NOT NULL,
+        symbol_id INTEGER NOT NULL,
+        start_line INTEGER NOT NULL,
+        end_line INTEGER NOT NULL
+      );
+      INSERT INTO documents (id, relative_path) VALUES (1, 'src/settings.js');
+      INSERT INTO global_symbols (id, display_name) VALUES (7, 'load');
+      INSERT INTO defn_enclosing_ranges (document_id, symbol_id, start_line, end_line) VALUES (1, 7, 2, 20);
+    `);
+    const lookup = createSymbolLookup(db, '/project', {
+      get: () => ({ text: '', lineStarts: [0] }),
+      positionAt: (_source, offset) => ({ line: offset, character: 0 }),
+    });
+
+    expect(
+      lookup({ fileName: '/project/src/settings.js', textSpan: { start: 5, length: 4 }, name: 'mode' }),
+    ).toBeNull();
+    expect(lookup({ fileName: '/project/src/settings.js', textSpan: { start: 5, length: 4 }, name: 'load' })).toBe(7);
+    db.close();
+  });
+
+  it('inserts only cross-file Vue component identities into the graph', () => {
+    expect(vueDefinitionOmissionReason('src/View.vue', 'localState', 'src/View.vue')).toBe('same-file-definition');
+    expect(vueDefinitionOmissionReason('src/View.vue', 'foreignBinding', 'src/Other.vue')).toBe('unindexed-definition');
+    expect(vueDefinitionOmissionReason('src/View.vue', 'Other', 'src/Other.vue')).toBeNull();
+    expect(vueDefinitionOmissionReason('src/View.vue', 'getAgentColor', 'src/useSettings.js')).toBeNull();
+  });
+
   it('counts a missing project file as skipped before asking Volar to load it', () => {
     const getSourceScript = vi.fn(() => {
       throw new Error('Volar must not load a source file that does not exist');
     });
     const options = {
+      projectRoot: '/project',
       sourceReader: { get: vi.fn(() => null) },
       context: { language: { scripts: { get: getSourceScript } } },
     } as unknown as VueReferenceComputationOptions;
@@ -18,7 +67,27 @@ describe('Vue reference task computation', () => {
         endOffset: Number.POSITIVE_INFINITY,
         countFileSkip: true,
       }),
-    ).toEqual({ occurrences: [], skippedReferences: 1 });
+    ).toEqual({
+      occurrences: [],
+      skippedReferences: 1,
+      skippedReferenceReasons: {
+        'missing-source-file': 1,
+        'missing-service-script': 0,
+        'no-definition': 0,
+        'same-file-definition': 0,
+        'unindexed-definition': 0,
+      },
+      skippedReferenceSamples: [
+        {
+          sourceFile: 'src/MissingView.vue',
+          sourceLine: 0,
+          sourceStartChar: 0,
+          sourceEndChar: 0,
+          token: '',
+          reason: 'missing-source-file',
+        },
+      ],
+    });
     expect(getSourceScript).not.toHaveBeenCalled();
   });
 });

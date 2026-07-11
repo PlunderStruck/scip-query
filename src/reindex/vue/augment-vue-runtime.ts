@@ -166,8 +166,8 @@ interface VueLanguageDependencies {
 }
 
 interface DefinitionRangeLookup {
-  containingByLine: Map<number, number>;
-  starts: { line: number; symbolId: number }[];
+  containingByLine: Map<number, { symbolId: number; displayName: string | null }>;
+  starts: { line: number; symbolId: number; displayName: string | null }[];
 }
 
 function clearVueDocumentChunks(db: Database.Database): void {
@@ -343,15 +343,20 @@ export function createSymbolLookup(
   const rangesByFile = loadDefinitionRanges(db);
 
   return (definition: DefinitionInfo): number | null => {
+    if (!definition.name) return null;
     const relativePath = toRelativePath(projectRoot, definition.fileName);
     const sourceInfo = sourceReader.get(definition.fileName);
     if (!sourceInfo) return null;
     const pos = sourceReader.positionAt(sourceInfo, definition.textSpan.start);
     const lookup = rangesByFile.get(relativePath);
     if (!lookup) return null;
+    const exact = lookup.starts.find(
+      (candidate) => candidate.line === pos.line && candidate.displayName === definition.name,
+    );
+    if (exact) return exact.symbolId;
     const containing = lookup.containingByLine.get(pos.line);
-    if (containing !== undefined) return containing;
-    return findNearestStart(lookup.starts, pos.line, 2);
+    if (containing && containing.displayName === definition.name) return containing.symbolId;
+    return findNearestStart(lookup.starts, pos.line, 2, definition.name);
   };
 }
 
@@ -363,9 +368,11 @@ function loadDefinitionRanges(db: Database.Database): Map<string, DefinitionRang
       d.relative_path AS relativePath,
       der.start_line AS startLine,
       der.end_line AS endLine,
-      der.symbol_id AS symbolId
+      der.symbol_id AS symbolId,
+      gs.display_name AS displayName
     FROM defn_enclosing_ranges der
     JOIN documents d ON d.id = der.document_id
+    JOIN global_symbols gs ON gs.id = der.symbol_id
     ORDER BY d.relative_path, (der.end_line - der.start_line) DESC
   `,
     )
@@ -374,6 +381,7 @@ function loadDefinitionRanges(db: Database.Database): Map<string, DefinitionRang
     startLine: number;
     endLine: number;
     symbolId: number;
+    displayName: string | null;
   }[];
 
   const byFile = new Map<string, DefinitionRangeLookup>();
@@ -383,9 +391,9 @@ function loadDefinitionRanges(db: Database.Database): Map<string, DefinitionRang
       lookup = { containingByLine: new Map(), starts: [] };
       byFile.set(row.relativePath, lookup);
     }
-    lookup.starts.push({ line: row.startLine, symbolId: row.symbolId });
+    lookup.starts.push({ line: row.startLine, symbolId: row.symbolId, displayName: row.displayName });
     for (let line = row.startLine; line <= row.endLine; line++) {
-      lookup.containingByLine.set(line, row.symbolId);
+      lookup.containingByLine.set(line, { symbolId: row.symbolId, displayName: row.displayName });
     }
   }
 
@@ -396,9 +404,10 @@ function loadDefinitionRanges(db: Database.Database): Map<string, DefinitionRang
 }
 
 function findNearestStart(
-  starts: readonly { line: number; symbolId: number }[],
+  starts: readonly { line: number; symbolId: number; displayName: string | null }[],
   targetLine: number,
   maxDistance: number,
+  definitionName: string,
 ): number | null {
   let low = 0;
   let high = starts.length - 1;
@@ -415,6 +424,7 @@ function findNearestStart(
   for (const index of [high, low]) {
     const candidate = starts[index];
     if (!candidate) continue;
+    if (candidate.displayName !== definitionName) continue;
     const distance = Math.abs(candidate.line - targetLine);
     if (distance > maxDistance) continue;
     if (!best || distance < best.distance) {

@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "command": "augment-vue",
+  "language": "vue",
+  "truthRule": "Every inserted occurrence must identify an exact cross-file project symbol. For Vue component default imports, the imported local name, component tag sites, resolved component file, and persisted synthetic default-export symbol must agree. Same-file bindings and definitions without an exact base-index symbol are disclosed but not inserted.",
+  "verdict": "qualified",
+  "capability": {
+    "state": "available",
+    "scope": "cross-file Vue component identities and exact-name base-index symbols",
+    "unsupportedBoundary": "general local-binding identity and cross-file properties absent from the base SCIP definition catalog"
+  },
+  "corpora": [
+    {
+      "repository": "Stable_Management",
+      "commit": "bd221c3fa61034b4e52734f15ce6ef0b285ec78e",
+      "vueFiles": 410,
+      "insertedMentions": 1566,
+      "directRelativeImportRelationships": 250,
+      "exactOracleMentions": 582,
+      "oracleMismatches": 0
+    },
+    {
+      "repository": "on_main_mvp",
+      "commit": "5faef0ffd5d17f9dc8058622a3f70005fd3232a6",
+      "vueFiles": 86,
+      "insertedMentions": 245,
+      "directRelativeImportRelationships": 104,
+      "exactOracleMentions": 245,
+      "oracleMismatches": 0
+    },
+    {
+      "repository": "agent_chat",
+      "commit": "a86e71fc083a8e6b505186283fb8dc9fb83e708d",
+      "vueFiles": 9,
+      "insertedMentions": 14,
+      "directRelativeImportRelationships": 7,
+      "exactOracleMentions": 14,
+      "oracleMismatches": 0
+    }
+  ],
+  "reviewedExactOracleMentions": 841,
+  "knownPositiveCases": 2,
+  "knownNegativeCases": 3,
+  "falsePositiveArchetypesRemoved": [
+    "all same-file bindings collapsed onto the SFC default-export symbol",
+    "object properties attributed to a nearby enclosing callable",
+    "identifier-looking module-path fragments inserted as symbol references"
+  ],
+  "replay": {
+    "resolvedSamplesDisclosed": true,
+    "omissionReasonCountsDisclosed": true,
+    "omissionSamplesDisclosed": true,
+    "missingSourceFiles": 0,
+    "missingServiceScripts": 0
+  }
+}

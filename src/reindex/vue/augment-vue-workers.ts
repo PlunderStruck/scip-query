@@ -2,6 +2,7 @@ import { readFileSync, rmSync, statSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
+import { emptySkippedReferenceDiagnostics, mergeSkippedReferenceDiagnostics } from './augment-vue-contracts.js';
 import type { VueReferenceComputationResult, VueReferenceTask } from './augment-vue-contracts.js';
 
 // scip-query: ignore-wrapper — named Vue worker dispatch policy; callers
@@ -57,10 +58,12 @@ export function awaitVueReferenceWorkers(opts: {
       return raw.result;
     });
 
-    return {
+    const merged: VueReferenceComputationResult = {
       occurrences: results.flatMap((result) => result.occurrences),
-      skippedReferences: results.reduce((sum, result) => sum + result.skippedReferences, 0),
+      ...emptySkippedReferenceDiagnostics(),
     };
+    for (const result of results) mergeSkippedReferenceDiagnostics(merged, result);
+    return merged;
   } finally {
     rmSync(resultDir, { recursive: true, force: true });
   }

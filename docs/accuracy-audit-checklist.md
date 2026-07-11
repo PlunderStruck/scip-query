@@ -78,7 +78,7 @@ Legend: `certified`, `qualified`, `experimental`, `insufficient`, `unsupported`,
 | `vue-component-duplicates`       | certified    | unsupported  | unsupported | framework relationship     | 41/41 structural relationships valid across four Vue repositories; recommendation utility remains contextual.                 |
 | `vue-composable-candidates`      | certified    | unsupported  | unsupported | framework relationship     | 48/48 behavior relationships valid across three repositories with findings.                                                   |
 | `vue-large-view-pressure`        | certified    | unsupported  | unsupported | framework measurement      | 64/64 pressure rows valid across four Vue repositories.                                                                       |
-| `augment-vue`                    | insufficient | unsupported  | unsupported | reference completeness     | Operationally hardened on two dependency-ready repositories; resolved-site completeness needs a third source-reviewed cohort. |
+| `augment-vue`                    | qualified    | unsupported  | unsupported | reference completeness     | 841 exact-oracle component mentions across three repositories; broader local/property identity is withheld and unsupported.   |
 
 ### TypeScript factual detector slice
 
@@ -149,8 +149,8 @@ action. A real relationship can still be an unhelpful recommendation.
 - [x] `vue-component-duplicates` — 41/41, certified relationship
 - [x] `vue-composable-candidates` — 48/48, certified relationship
 - [x] `vue-large-view-pressure` — 64/64, certified measurement
-- [x] `augment-vue` reference-completeness audit — operationally hardened;
-      insufficient real-repository completeness evidence
+- [x] `augment-vue` — qualified exact cross-file component identity across
+      three repositories; broader local/property identity unsupported
 
 Use framework-specific repositories and record framework applicability rather
 than treating absent framework evidence as a clean result.

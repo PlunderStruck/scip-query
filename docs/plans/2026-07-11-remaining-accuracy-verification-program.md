@@ -86,8 +86,12 @@ Target:
   - 2026-07-11: `bottlenecks` expanded to 39/39 valid disclosed graph facts
     across four repositories. Its 91.0% confidence floor now certifies the
     measurement; refactoring utility remains contextual.
-- [ ] Source-review resolved and missed Vue reference sites in a third
+- [x] Source-review resolved and missed Vue reference sites in a third
       dependency-ready repository and record `augment-vue` completeness.
+  - 2026-07-11: a three-repository replay removed SFC-default, enclosing-callable,
+    and module-path misattribution. The direct component-import oracle matched
+    all 841 reviewed mentions. `augment-vue` is qualified for exact cross-file
+    component identity; broader binding identity remains explicitly unsupported.
 
 Acceptance: each named row is certified, qualified, insufficient, or
 unsupported with a dated machine-readable verdict and narrative evidence.

@@ -1,7 +1,7 @@
 # Accuracy Hardening and Health Certification Roadmap
 
 Date: 2026-07-10
-Status: Active; TypeScript factual, similarity, architecture, graph-risk, React, and Vue detector slices audited; Rust dead-code hardened but insufficiently evidenced
+Status: Active; TypeScript and Vue campaigns closed with explicit capability boundaries; Rust dead-code hardened but insufficiently evidenced
 
 Current execution plan:
 [`2026-07-11-remaining-accuracy-verification-program.md`](./plans/2026-07-11-remaining-accuracy-verification-program.md).
@@ -263,13 +263,11 @@ active program above.
 
 ## Immediate Next Slice
 
-Finish the small remaining TypeScript gaps: expand targeted corpus or historical
-cases for detectors that remain insufficiently evidenced. The broader
-`bottlenecks` replay is now certified. Then renew the Rust detector campaign
-against additional repositories or historical commits before beginning Python
-semantic certification. Vue resolved-reference completeness also needs a third
-dependency-ready, source-reviewed repository even though its operational path
-is now hardened.
+The remaining TypeScript gaps now have terminal verdicts for their named
+corpora, the broader `bottlenecks` replay is certified, and Vue cross-file
+component identity is qualified across three repositories. Renew the Rust
+detector campaign against additional repositories or historical commits before
+beginning Python semantic certification.
 
 ## Progress — 2026-07-10
 
@@ -367,15 +365,21 @@ removed unqualified dominant-pressure axes, nested-component route-page
 misclassification, and unreproducible similarity-score totals. All sampled
 refactoring advice remained non-actionable without local design context.
 
-The same campaign audited `augment-vue`. Stable_Management produced 66,396
-resolved SFC mentions, and hardened on_main_mvp produced 13,700 while exposing
-26,319 skipped source tokens. Missing project files no longer abort the whole
-run, the reliable single-context resolver is now the default after parallel
-worker stalls reproduced at two, four, and eight workers, and the CLI discloses
-skipped references and synthetic symbols. Completeness remains insufficiently
-evidenced until resolved and missed sites are source-reviewed across a third
-dependency-ready Vue repository; ordinary `reindex` must not be described as
-running this optional augmentation automatically.
+The same campaign's initial `augment-vue` runs reported 66,396 SFC mentions in
+Stable_Management and 13,700 in on_main_mvp. Those totals established the
+operational path but were not an accuracy certificate. Missing project files
+no longer abort the whole run, and the reliable single-context resolver is the
+default after parallel worker stalls reproduced at two, four, and eight
+workers. Ordinary `reindex` does not run this optional augmentation.
+
+The completed Vue reference-completeness audit is recorded in
+[`2026-07-11-vue-reference-completeness.md`](./validation/2026-07-11-vue-reference-completeness.md).
+It found that the earlier totals collapsed local SFC bindings onto component
+symbols, attributed properties to nearby callables, and counted module-path
+fragments. After hardening, an exact import/component oracle matched all 841
+reviewed mentions across Stable_Management, on_main_mvp, and agent_chat. The
+command is qualified for cross-file component identity; broader local and
+property identity is withheld and explicitly unsupported.
 
 The `twin-ab` generated-scaffold audit is complete:
 [`2026-07-11-twin-ab-generated-scaffold.md`](./validation/2026-07-11-twin-ab-generated-scaffold.md).

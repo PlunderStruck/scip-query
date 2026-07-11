@@ -201,7 +201,10 @@ export function handleAugmentVue(rawOpts: unknown): void {
       onStatus: (message) => console.log(message),
     });
     console.log(
-      `Vue files: ${result.vueFiles}; resolved references: ${result.resolvedReferences}; inserted mentions: ${result.insertedMentions}; skipped references: ${result.skippedReferences}; synthetic symbols: ${result.syntheticSymbols}.`,
+      `Vue files: ${result.vueFiles}; resolved references: ${result.resolvedReferences}; inserted mentions: ${result.insertedMentions}; not-inserted identifier tokens: ${result.skippedReferences}; synthetic symbols: ${result.syntheticSymbols}.`,
+    );
+    console.log(
+      `Not inserted by reason: no definition ${result.skippedReferenceReasons['no-definition']}; same-file definition ${result.skippedReferenceReasons['same-file-definition']}; unindexed definition ${result.skippedReferenceReasons['unindexed-definition']}; missing source ${result.skippedReferenceReasons['missing-source-file']}; missing service script ${result.skippedReferenceReasons['missing-service-script']}. Samples: ${result.skippedReferenceSamples.length} omitted, ${result.resolvedReferenceSamples.length} resolved.`,
     );
   } catch (err) {
     console.error(`error: ${err instanceof Error ? err.message : err}`);

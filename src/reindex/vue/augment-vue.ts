@@ -31,6 +31,13 @@ import type {
   ResolvedOccurrence,
   VueReferenceComputationResult,
   VueReferenceTask,
+  VueSkippedReferenceReason,
+  VueSkippedReferenceSample,
+} from './augment-vue-contracts.js';
+import {
+  emptySkippedReferenceDiagnostics,
+  mergeSkippedReferenceDiagnostics,
+  SKIPPED_REFERENCE_SAMPLES_PER_FILE_REASON,
 } from './augment-vue-contracts.js';
 
 type VueLanguageContext = ReturnType<typeof createVueLanguageContext>;
@@ -68,7 +75,7 @@ interface VueReferenceComputationContext {
 }
 
 interface AugmentVueFingerprint {
-  version: 2;
+  version: 3;
   tsconfig: string;
   files: ReturnType<typeof fingerprintProjectFiles>;
   db: {
@@ -177,8 +184,11 @@ function runVueAugmentationTransaction(ctx: VueAugmentationTransactionContext): 
   const result: AugmentVueResolvedResult = {
     vueFiles: ctx.vueFiles.length,
     resolvedReferences: occurrences.length,
+    resolvedReferenceSamples: resolvedReferenceSamples(ctx.db, occurrences, 20),
     insertedMentions,
     skippedReferences: computation.skippedReferences,
+    skippedReferenceReasons: computation.skippedReferenceReasons,
+    skippedReferenceSamples: sampleSkippedReferences(computation.skippedReferenceSamples, 20),
     syntheticSymbols: vueSymbolLookup.syntheticSymbols,
   };
 
@@ -234,7 +244,7 @@ function computeAugmentVueFingerprint(
     .get() as AugmentVueFingerprint['db'];
 
   return {
-    version: 2,
+    version: 3,
     tsconfig,
     files: fingerprintProjectFiles(projectRoot),
     db: dbStats,
@@ -285,7 +295,7 @@ function createVueReferenceComputationContext(opts: {
 
 function computeVueResolvedReferencesForFiles(opts: VueReferenceComputationOptions): VueReferenceComputationResult {
   const occurrences: ResolvedOccurrence[] = [];
-  let skippedReferences = 0;
+  const diagnostics = emptySkippedReferenceDiagnostics();
   const tasks =
     opts.tasks ??
     opts.vueFiles.map((fileName) => ({
@@ -298,10 +308,10 @@ function computeVueResolvedReferencesForFiles(opts: VueReferenceComputationOptio
   for (const task of tasks) {
     const result = computeVueReferenceTask(opts, task);
     occurrences.push(...result.occurrences);
-    skippedReferences += result.skippedReferences;
+    mergeSkippedReferenceDiagnostics(diagnostics, result);
   }
 
-  return { occurrences, skippedReferences };
+  return { occurrences, ...diagnostics };
 }
 
 // scip-query: ignore-extract — this prepares one bounded Vue reference task:
@@ -313,7 +323,7 @@ export function computeVueReferenceTask(
 ): VueReferenceComputationResult {
   const sourceInfo = opts.sourceReader.get(task.fileName);
   if (!sourceInfo) {
-    return { occurrences: [], skippedReferences: task.countFileSkip ? 1 : 0 };
+    return skippedFileResult(opts.projectRoot, task, 'missing-source-file');
   }
 
   const sourceScript = opts.context.language.scripts.get(task.fileName);
@@ -321,7 +331,7 @@ export function computeVueReferenceTask(
     sourceScript.generated.root,
   )?.code;
   if (!sourceScript || !serviceScript) {
-    return { occurrences: [], skippedReferences: task.countFileSkip ? 1 : 0 };
+    return skippedFileResult(opts.projectRoot, task, 'missing-service-script');
   }
 
   const map = opts.context.language.maps.get(serviceScript, sourceScript);
@@ -362,17 +372,25 @@ function resolveVueTokenReferences(
   },
 ): VueReferenceComputationResult {
   const occurrences: ResolvedOccurrence[] = [];
-  let skippedReferences = 0;
+  const diagnostics = emptySkippedReferenceDiagnostics();
 
   for (const token of opts.tokenContext.tokens) {
     if (opts.tokenContext.processedStarts.has(token.start)) continue;
+    if (isVueModulePathToken(opts.sourceInfo.text, token.start)) continue;
     const generated = firstGeneratedOffset(opts.map, token.start);
     if (generated === null) continue;
 
     const definitions = opts.context.languageService.getDefinitionAtPosition(opts.fileName, generated + 1) ?? [];
     const definition = definitions.find((def) => !isExternalDefinition(opts.projectRoot, def.fileName));
     if (!definition) {
-      skippedReferences++;
+      addSkippedReference(diagnostics, opts.sourceReader, opts.sourceInfo, opts.sourceFile, token, 'no-definition');
+      continue;
+    }
+
+    const definitionFile = toRelativePath(opts.projectRoot, definition.fileName);
+    const omissionReason = vueDefinitionOmissionReason(opts.sourceFile, token.text, definitionFile);
+    if (omissionReason) {
+      addSkippedReference(diagnostics, opts.sourceReader, opts.sourceInfo, opts.sourceFile, token, omissionReason);
       continue;
     }
 
@@ -384,16 +402,172 @@ function resolveVueTokenReferences(
       opts.projectRoot,
     );
     if (symbolId === null) {
-      skippedReferences++;
+      addSkippedReference(
+        diagnostics,
+        opts.sourceReader,
+        opts.sourceInfo,
+        opts.sourceFile,
+        token,
+        'unindexed-definition',
+      );
       continue;
     }
 
-    addVueOccurrence(occurrences, opts.sourceReader, opts.sourceInfo, opts.sourceFile, token, symbolId);
+    addVueOccurrence(occurrences, opts.sourceReader, opts.sourceInfo, opts.sourceFile, token, definitionFile, symbolId);
     opts.tokenContext.processedStarts.add(token.start);
-    addVueHighlightedOccurrences(occurrences, opts, token, generated, symbolId);
+    addVueHighlightedOccurrences(occurrences, opts, token, generated, definitionFile, symbolId);
   }
 
-  return { occurrences, skippedReferences };
+  return { occurrences, ...diagnostics };
+}
+
+export function isVueModulePathToken(source: string, tokenStart: number): boolean {
+  const lineStart = source.lastIndexOf('\n', tokenStart - 1) + 1;
+  const prefix = source.slice(lineStart, tokenStart);
+  return /\bfrom\s+['"][^'"]*$/.test(prefix) || /\bimport\s*\(\s*['"][^'"]*$/.test(prefix);
+}
+
+export function vueDefinitionOmissionReason(
+  sourceFile: string,
+  sourceToken: string,
+  definitionFile: string,
+): Extract<VueSkippedReferenceReason, 'same-file-definition' | 'unindexed-definition'> | null {
+  if (definitionFile === sourceFile) return 'same-file-definition';
+  if (
+    definitionFile.endsWith('.vue') &&
+    sourceToken !==
+      definitionFile
+        .split('/')
+        .at(-1)
+        ?.replace(/\.vue$/, '')
+  ) {
+    return 'unindexed-definition';
+  }
+  return null;
+}
+
+function skippedFileResult(
+  projectRoot: string,
+  task: VueReferenceTask,
+  reason: Extract<VueSkippedReferenceReason, 'missing-source-file' | 'missing-service-script'>,
+): VueReferenceComputationResult {
+  const diagnostics = emptySkippedReferenceDiagnostics();
+  if (task.countFileSkip) {
+    diagnostics.skippedReferences = 1;
+    diagnostics.skippedReferenceReasons[reason] = 1;
+    diagnostics.skippedReferenceSamples.push({
+      sourceFile: toRelativePath(projectRoot, task.fileName),
+      sourceLine: 0,
+      sourceStartChar: 0,
+      sourceEndChar: 0,
+      token: '',
+      reason,
+    });
+  }
+  return { occurrences: [], ...diagnostics };
+}
+
+function addSkippedReference(
+  diagnostics: Omit<VueReferenceComputationResult, 'occurrences'>,
+  sourceReader: VueSourceReader,
+  sourceInfo: SourceTextInfo,
+  sourceFile: string,
+  token: VueIdentifierToken,
+  reason: Extract<VueSkippedReferenceReason, 'no-definition' | 'same-file-definition' | 'unindexed-definition'>,
+): void {
+  diagnostics.skippedReferences++;
+  diagnostics.skippedReferenceReasons[reason]++;
+  if (
+    diagnostics.skippedReferenceSamples.filter((sample) => sample.reason === reason && sample.sourceFile === sourceFile)
+      .length >= SKIPPED_REFERENCE_SAMPLES_PER_FILE_REASON
+  ) {
+    return;
+  }
+  const sourcePos = sourceReader.positionAt(sourceInfo, token.start);
+  diagnostics.skippedReferenceSamples.push({
+    sourceFile,
+    sourceLine: sourcePos.line,
+    sourceStartChar: sourcePos.character,
+    sourceEndChar: sourcePos.character + token.text.length,
+    token: token.text,
+    reason,
+  });
+}
+
+function sampleAcrossVueFiles<T extends { sourceFile: string }>(items: readonly T[], limit: number): T[] {
+  const byFile = new Map<string, T[]>();
+  for (const item of items) {
+    const bucket = byFile.get(item.sourceFile) ?? [];
+    bucket.push(item);
+    byFile.set(item.sourceFile, bucket);
+  }
+  const files = [...byFile.keys()].sort();
+  const sampled: T[] = [];
+  for (let offset = 0; sampled.length < limit; offset++) {
+    let added = false;
+    for (const file of files) {
+      const item = byFile.get(file)?.[offset];
+      if (!item) continue;
+      sampled.push(item);
+      added = true;
+      if (sampled.length === limit) break;
+    }
+    if (!added) break;
+  }
+  return sampled;
+}
+
+function sampleResolvedReferences(items: readonly ResolvedOccurrence[], limit: number): ResolvedOccurrence[] {
+  const crossFile = sampleAcrossVueFiles(
+    items.filter((item) => item.sourceFile !== item.definitionFile),
+    Math.ceil(limit / 2),
+  );
+  const selected = new Set(
+    crossFile.map(
+      (item) => `${item.sourceFile}:${item.sourceLine}:${item.sourceStartChar}:${item.sourceEndChar}:${item.symbolId}`,
+    ),
+  );
+  const sameAndRemaining = sampleAcrossVueFiles(
+    items.filter(
+      (item) =>
+        !selected.has(
+          `${item.sourceFile}:${item.sourceLine}:${item.sourceStartChar}:${item.sourceEndChar}:${item.symbolId}`,
+        ),
+    ),
+    limit - crossFile.length,
+  );
+  return [...crossFile, ...sameAndRemaining];
+}
+
+function sampleSkippedReferences(
+  items: readonly VueSkippedReferenceSample[],
+  limit: number,
+): VueSkippedReferenceSample[] {
+  const reasons = [...new Set(items.map((item) => item.reason))].sort();
+  const sampled: VueSkippedReferenceSample[] = [];
+  for (const [index, reason] of reasons.entries()) {
+    const remainingReasons = reasons.length - index;
+    const allocation = Math.ceil((limit - sampled.length) / remainingReasons);
+    sampled.push(
+      ...sampleAcrossVueFiles(
+        items.filter((item) => item.reason === reason),
+        allocation,
+      ),
+    );
+  }
+  return sampled.slice(0, limit);
+}
+
+function resolvedReferenceSamples(
+  db: Database.Database,
+  items: readonly ResolvedOccurrence[],
+  limit: number,
+): AugmentVueResolvedResult['resolvedReferenceSamples'] {
+  const symbolQuery = db.prepare('SELECT symbol FROM global_symbols WHERE id = ?');
+  return sampleResolvedReferences(items, limit).map(({ symbolId, ...sample }) => ({
+    ...sample,
+    definitionSymbol: (symbolQuery.get(symbolId) as { symbol: string } | undefined)?.symbol ?? `symbol-id:${symbolId}`,
+  }));
 }
 
 function addVueHighlightedOccurrences(
@@ -401,6 +575,7 @@ function addVueHighlightedOccurrences(
   opts: Parameters<typeof resolveVueTokenReferences>[0],
   token: VueIdentifierToken,
   generated: number,
+  definitionFile: string,
   symbolId: number,
 ): void {
   if ((opts.tokenContext.tokenTextCounts.get(token.text) ?? 0) <= 1) return;
@@ -415,7 +590,15 @@ function addVueHighlightedOccurrences(
     if (opts.tokenContext.processedStarts.has(highlightedStart)) continue;
     const highlightedToken = opts.tokenContext.tokenByStart.get(highlightedStart);
     if (!highlightedToken) continue;
-    addVueOccurrence(occurrences, opts.sourceReader, opts.sourceInfo, opts.sourceFile, highlightedToken, symbolId);
+    addVueOccurrence(
+      occurrences,
+      opts.sourceReader,
+      opts.sourceInfo,
+      opts.sourceFile,
+      highlightedToken,
+      definitionFile,
+      symbolId,
+    );
     opts.tokenContext.processedStarts.add(highlightedStart);
   }
 }
@@ -426,6 +609,7 @@ function addVueOccurrence(
   sourceInfo: SourceTextInfo,
   sourceFile: string,
   token: VueIdentifierToken,
+  definitionFile: string,
   symbolId: number,
 ): void {
   const sourcePos = sourceReader.positionAt(sourceInfo, token.start);
@@ -434,6 +618,8 @@ function addVueOccurrence(
     sourceLine: sourcePos.line,
     sourceStartChar: sourcePos.character,
     sourceEndChar: sourcePos.character + token.text.length,
+    sourceToken: token.text,
+    definitionFile,
     symbolId,
   });
 }
