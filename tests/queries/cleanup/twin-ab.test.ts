@@ -31,7 +31,13 @@ describe('twin-ab', () => {
         '  return `${a}${b}${c}`;',
         '}',
       ],
-      'src/not-exported.ts': ['function secretHelper(value: string): string {', '  return value;', '}'],
+      'src/not-exported.ts': [
+        "export const runtime = 'nodejs';",
+        '',
+        'function secretHelper(value: string): string {',
+        '  return value;',
+        '}',
+      ],
       'src/not-callable.ts': ['export const notCallable: number = 1;'],
     });
 
@@ -79,7 +85,7 @@ describe('twin-ab', () => {
       .definition(1, 1, 1, 0, 0, 2, 1)
       .definition(2, 2, 2, 0, 0, 2, 1)
       .definition(3, 3, 3, 0, 0, 2, 1)
-      .definition(4, 4, 4, 0, 0, 2, 1)
+      .definition(4, 4, 4, 2, 0, 4, 1)
       .definition(5, 5, 5, 0, 0, 0, 30)
       .write();
 
@@ -140,7 +146,7 @@ describe('twin-ab', () => {
     expect(outcome.reason).toContain('must be functions or methods');
   });
 
-  it('refuses a non-exported symbol with an actionable message', () => {
+  it('refuses a private symbol even when a nearby declaration is exported', () => {
     const outFile = join(db.config.projectRoot, defaultTwinAbOutPath('escapeRegex', 'secretHelper'));
     const outcome = twinAb(db, 'escapeRegex', 'secretHelper', outFile);
 

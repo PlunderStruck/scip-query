@@ -151,9 +151,16 @@ function publicFacadeEvidence(db: ScipDatabase, sym: IndexedDefinition): string[
 export function isExportedDefinition(db: ScipDatabase, sym: SymbolMatch): boolean {
   const lines = getSourceLines(db, sym.relativePath);
   if (lines.length === 0) return false;
+  const name = leafName(sym.symbol);
+  if (!name) return false;
   const declarationWindow = lines.slice(Math.max(0, sym.startLine - 2), sym.startLine + 1).join('\n');
-  if (EXPORTED_DEFINITION_PATTERN.test(declarationWindow)) return true;
-  return hasNamedExport(lines, leafName(sym.symbol));
+  const escapedName = escapeRegExp(name);
+  const declarationPattern = new RegExp(
+    `^\\s*export\\s+(?:default\\s+)?(?:(?:async\\s+)?function\\s+${escapedName}\\b|(?:const|let|var)\\s+${escapedName}\\b)`,
+    'm',
+  );
+  if (declarationPattern.test(declarationWindow)) return true;
+  return hasNamedExport(lines, name);
 }
 
 function hasNamedExport(lines: readonly string[], name: string): boolean {
@@ -197,5 +204,3 @@ function getPassthroughCandidateSymbols(
     })
     .filter((definition) => !isClojureMacroDefinition(db, definition));
 }
-
-const EXPORTED_DEFINITION_PATTERN = /^\s*export\s+(?:default\s+)?(?:(?:async\s+)?function\b|(?:const|let|var)\b)/m;

@@ -263,10 +263,10 @@ active program above.
 
 ## Immediate Next Slice
 
-Finish the small remaining TypeScript gaps: verify the `twin-ab` generated
-scaffold, expand targeted corpus or historical cases for detectors that remain
-insufficiently evidenced, and raise `bottlenecks` above its current confidence
-floor if a broader population exists. Then renew the Rust detector campaign
+Finish the small remaining TypeScript gaps: expand targeted corpus or historical
+cases for detectors that remain insufficiently evidenced, and raise
+`bottlenecks` above its current confidence floor if a broader population
+exists. Then renew the Rust detector campaign
 against additional repositories or historical commits before beginning Python
 semantic certification. Vue resolved-reference completeness also needs a third
 dependency-ready, source-reviewed repository even though its operational path
@@ -367,6 +367,15 @@ skipped references and synthetic symbols. Completeness remains insufficiently
 evidenced until resolved and missed sites are source-reviewed across a third
 dependency-ready Vue repository; ordinary `reindex` must not be described as
 running this optional augmentation automatically.
+
+The `twin-ab` generated-scaffold audit is complete:
+[`2026-07-11-twin-ab-generated-scaffold.md`](./validation/2026-07-11-twin-ab-generated-scaffold.md).
+Three pinned TypeScript repositories produced importable real-callable
+scaffolds with zero scaffold-local compiler diagnostics. The audit found and
+fixed a shared export-classification defect where an adjacent exported
+declaration made a following private callable look exported; the two real
+private pairs now refuse, and focused regression coverage preserves that
+boundary.
 
 ## Program Acceptance Criteria
 

@@ -58,7 +58,7 @@ Target:
 
 ### 1. Reconcile and close the remaining TypeScript evidence gaps
 
-- [ ] Run `twin-ab` against real exported callable pairs in at least three
+- [x] Run `twin-ab` against real exported callable pairs in at least three
       pinned TypeScript repositories, compile each emitted scaffold, and test
       refusal paths against non-callable, non-exported, ambiguous, and
       signature-incompatible inputs.

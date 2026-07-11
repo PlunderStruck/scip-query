@@ -113,7 +113,9 @@ certificate:
 - [x] `react-component-duplicates` — certified relationship
 - [x] `vue-component-duplicates` — certified relationship
 - [x] `convergence` alias parity with `similar --plan`
-- [ ] `twin-ab` generated-scaffold correctness
+- [x] `twin-ab` — certified generated-scaffold correctness for importable named
+      TypeScript callables; private-callable support is outside the current
+      contract
 
 For each analyzer, verify the measured similarity independently from whether
 consolidation would improve the code.

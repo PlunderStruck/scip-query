@@ -1,0 +1,47 @@
+{
+  "command": "twin-ab",
+  "language": "typescript",
+  "auditKind": "generated-scaffold correctness",
+  "verdict": "certified",
+  "corpus": [
+    {
+      "repository": "openwork",
+      "commit": "1bc2b18ef426c4751a6d8c16fbbf8023f5da9f6e",
+      "acceptedPair": "htmlResponse",
+      "signatureCompatible": false,
+      "scaffoldDiagnostics": 0
+    },
+    {
+      "repository": "Stable_Management",
+      "commit": "bd221c3fa61034b4e52734f15ce6ef0b285ec78e",
+      "acceptedPair": "requestEmailVerification",
+      "signatureCompatible": false,
+      "scaffoldDiagnostics": 0
+    },
+    {
+      "repository": "traceroot",
+      "commit": "c41ac2bb3801fc2ce882ea3bacba9b0c4c5afeb9",
+      "acceptedPair": "GeneralTab",
+      "signatureCompatible": true,
+      "scaffoldDiagnostics": 0
+    }
+  ],
+  "negativeProbes": [
+    {
+      "repository": "openwork",
+      "archetype": "private callable preceded by nearby exported declaration",
+      "before": "invalid scaffold accepted; two TS2459 diagnostics",
+      "after": "refused as not exported"
+    },
+    {
+      "repository": "Stable_Management",
+      "archetype": "private callable preceded by nearby exported declaration",
+      "before": "invalid scaffold accepted; TS2459 diagnostic",
+      "after": "refused as not exported"
+    }
+  ],
+  "focusedTests": 8,
+  "knownPositiveCases": 4,
+  "knownNegativeCases": 4,
+  "scopeBoundary": "Importable named TypeScript callables; recommendation utility and private-callable instrumentation are not included."
+}
