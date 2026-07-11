@@ -415,6 +415,14 @@ remained explicit rather than becoming a zero. The 67.6% confidence floor is
 still insufficient, so renewal is terminal for this named corpus and should
 resume only when another corpus or historical snapshot adds findings.
 
+The widened Rust dead-code population replay is complete:
+[`2026-07-11-rust-dead-expansion.md`](./validation/2026-07-11-rust-dead-expansion.md).
+Five of six pinned repositories completed with indexing, source, semantic, and
+checker capability; one indexing failure stayed explicit. The only three
+natural findings again came from VegaAssistant and were all valid. Four
+supported zeros cannot raise the 43.9% confidence floor, so Rust `dead` remains
+insufficient and is terminal for this named corpus.
+
 ## Program Acceptance Criteria
 
 - Every health detector-language pair has a visible certification state.

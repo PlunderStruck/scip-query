@@ -40,7 +40,7 @@ Legend: `certified`, `qualified`, `experimental`, `insufficient`, `unsupported`,
 
 | Analyzer or command              | TypeScript   | Rust         | Python      | Audit kind                 | Notes                                                                                                                         |
 | -------------------------------- | ------------ | ------------ | ----------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `dead`                           | certified    | insufficient | pending     | finding certification      | Rust was hardened; more representative findings are required.                                                                 |
+| `dead`                           | certified    | insufficient | pending     | finding certification      | Rust expansion: 3/3 valid from one repository, four supported zeros, and one explicit indexing failure; population still sparse. |
 | `unused-imports`                 | certified    | pending      | pending     | finding certification      | 59/59 valid across three repositories after binding-evidence hardening.                                                       |
 | `unused-params`                  | insufficient | unsupported  | unsupported | finding certification      | 5/5 valid, but all rows came from one repository.                                                                             |
 | `cycles`                         | insufficient | pending      | pending     | graph-fact certification   | 3/3 source-verifiable import cycles, but one repository.                                                                      |

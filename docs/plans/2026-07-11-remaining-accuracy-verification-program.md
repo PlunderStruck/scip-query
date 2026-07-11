@@ -98,8 +98,12 @@ unsupported with a dated machine-readable verdict and narrative evidence.
 
 ### 2. Renew Rust detector certification
 
-- [ ] Pin at least three representative Rust repositories or historical
+- [x] Pin at least three representative Rust repositories or historical
       revisions and record capability/build state separately from findings.
+  - 2026-07-11: six repositories were pinned for the `dead` expansion. Five
+    completed with indexing/source/semantic/checker capability, while one
+    indexing failure remained explicit. Only VegaAssistant emitted findings;
+    all 3 were valid, leaving the row insufficient for population breadth.
 - [ ] Audit factual, similarity, architecture, graph-risk, composite, and
       navigation families that actually support Rust.
 - [ ] Record trait, implementation, derive, macro, generated-code, public API,

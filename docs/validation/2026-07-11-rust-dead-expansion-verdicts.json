@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "packet": "reports/accuracy/2026-07-11T17-55-27-614Z-rust-dead-calibration.json",
+  "knownPositiveRecallCases": 3,
+  "groups": [
+    {
+      "verdict": "valid",
+      "evidenceNote": "Pinned-source exact-name searches found only each definition itself. All three rows are private/example-target definitions with no source, test, trait-contract, macro/derive, ABI/registration, configured-feature, generated, reflective, or public-library consumer.",
+      "ids": [
+        "c833e923ab0af1570b65",
+        "e9439cf4273db35d6adb",
+        "6d06b7245fdf81f7c3ab"
+      ]
+    }
+  ]
+}
