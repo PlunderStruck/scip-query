@@ -18,6 +18,8 @@ export type DeadCandidateRejectionReason =
   | 'test-file'
   | 'excluded-file-region'
   | 'implicit-constructor'
+  | 'python-protocol-member'
+  | 'python-runtime-metadata'
   | 'declaration-only-callable'
   | 'framework-contract-member'
   | 'rust-trait-impl-member'
@@ -65,7 +67,18 @@ export function deadCandidateDecision(
     return rejectDeadCandidate('excluded-file-region');
   // Constructors are invoked by creating an instance or subclass, not by a
   // direct call to the synthetic `<constructor>` SCIP member.
-  if (leafName(definition.symbol) === '<constructor>') return rejectDeadCandidate('implicit-constructor');
+  const leaf = leafName(definition.symbol);
+  if (leaf === '<constructor>') return rejectDeadCandidate('implicit-constructor');
+  if (definition.symbol.startsWith('scip-python ')) {
+    // Python invokes data-model methods through syntax and protocols
+    // (`Class()` -> `__init__`, `with` -> `__enter__`, iteration, repr,
+    // serialization hooks, and so on). Their declarations rarely have a
+    // direct SCIP call edge, so they are not independent deletion candidates.
+    // `__all__` is read by Python's import machinery. A repository reference
+    // count of zero is expected and says nothing about whether it is useful.
+    if (leaf === '__all__') return rejectDeadCandidate('python-runtime-metadata');
+    if (/^__[^_].*__$/.test(leaf)) return rejectDeadCandidate('python-protocol-member');
+  }
   // Interface and abstract method signatures are contracts. Implementations
   // and property dispatch consume the contract without calling its declaration.
   if (opts.isDeclarationOnlyCallable()) return rejectDeadCandidate('declaration-only-callable');

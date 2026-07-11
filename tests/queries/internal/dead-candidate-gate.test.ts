@@ -85,6 +85,32 @@ describe('dead candidate gate', () => {
     ).toEqual({ accepted: false, rejectionReason: 'declaration-only-callable' });
   });
 
+  it('keeps Python protocol methods and import metadata out of deletion candidates', () => {
+    expect(
+      deadCandidateDecision(
+        {
+          ...baseDefinition,
+          relativePath: 'models.py',
+          symbol: 'scip-python python fixture 1.0.0 models/Service#__init__().',
+          parentTypeName: 'Service',
+        },
+        baseOptions,
+      ),
+    ).toEqual({ accepted: false, rejectionReason: 'python-protocol-member' });
+
+    expect(
+      deadCandidateDecision(
+        {
+          ...baseDefinition,
+          relativePath: 'package/__init__.py',
+          symbol: 'scip-python python fixture 1.0.0 package/__all__.',
+          isFunctionLike: false,
+        },
+        baseOptions,
+      ),
+    ).toEqual({ accepted: false, rejectionReason: 'python-runtime-metadata' });
+  });
+
   it('keeps framework and implemented-contract members out of deletion candidates', () => {
     expect(
       deadCandidateDecision(
