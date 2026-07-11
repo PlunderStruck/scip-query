@@ -37,9 +37,11 @@ Done is falsifiable:
   generation is already incremental: one changed file produced 36 affected
   documents, then a mini conversion and atomic SQLite patch. The sub-shard
   mechanism exists and is not being designed from scratch.
-- Vega_2.0's `.scipquery.json` explicitly has `watch.enabled: false` and a
-  four-project TypeScript workspace (`apps/api`, `apps/web`, `packages/shared`,
-  `packages/companion`). Its status therefore reports `stopped (disabled)`.
+- Vega_2.0 originally had `watch.enabled: false`; the verified setup pass now
+  persists `watch.enabled: true` and `watch.autoRefresh: true` while retaining
+  its four-project TypeScript workspace (`apps/api`, `apps/web`,
+  `packages/shared`, `packages/companion`). Setup started the demand-driven
+  service and a no-op refresh reused both cached language shards.
 - `scip-query plan-context handleSetup --json` resolves the setup entry to
   `src/runtime/commands/command-handlers.ts`. `handleSetup()` only invokes the
   guided path when `--guided` is explicitly supplied. The current guided path
@@ -108,7 +110,7 @@ Machine measurements are appended to
 
 ### 1. Make setup an interactive wizard by default
 
-- [ ] **Files:** `src/runtime/setup-wizard.ts`,
+- [x] **Files:** `src/runtime/setup-wizard.ts`,
       `src/runtime/commands/command-handlers.ts`,
       `src/runtime/commands/command-descriptors.ts`,
       `src/runtime/project-setup.ts`, focused runtime/CLI tests and command docs.
@@ -127,7 +129,7 @@ Machine measurements are appended to
 
 ### 2. Enable and verify Vega_2.0 automatic indexing
 
-- [ ] **Files:** Vega_2.0 `.scipquery.json` only; checkout-local hook files only
+- [x] **Files:** Vega_2.0 `.scipquery.json` only; checkout-local hook files only
       if selected. Preserve every unrelated dirty path.
 - **Source:** `scip-query status --capabilities` in Vega_2.0 and guided setup
   plan output.

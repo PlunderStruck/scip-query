@@ -1166,6 +1166,7 @@ export async function handleSetup(rawOpts: unknown): Promise<void> {
       dossierDir: stringOptionValue(opts, 'dossierDir'),
       runHealth: booleanOptionValue(opts, 'yes') ? false : opts['health'] !== false,
       installSkills: opts['skills'] !== false,
+      ...(booleanOptionValue(opts, 'yes') ? { automaticRefresh: true } : {}),
     };
     const json = booleanOptionValue(opts, 'json');
     const interactive = !json && !booleanOptionValue(opts, 'yes') && process.stdin.isTTY && process.stdout.isTTY;
