@@ -240,7 +240,8 @@ describe('CLI contract', () => {
 
   it('treats --full as an unbounded result limit unless --limit is explicit', () => {
     expect(definedLimitOption({}, 'limit', 30)).toBe(30);
-    expect(definedLimitOption({ full: true }, 'limit', 30)).toBe(Number.POSITIVE_INFINITY);
+    expect(definedLimitOption({ full: true }, 'limit', 30)).toBe(Number.MAX_SAFE_INTEGER);
+    expect(Number.isFinite(definedLimitOption({ full: true }, 'limit', 30))).toBe(true);
     expect(() => definedLimitOption({ full: true, limit: 7 }, 'limit', 30)).toThrow(
       '--full cannot be combined with --limit',
     );
@@ -254,7 +255,7 @@ describe('CLI contract', () => {
       getOptionValueSource: (key: string) => (key === 'limit' ? 'cli' : 'cli'),
     });
 
-    expect(definedLimitOption(defaultedOpts, 'limit', 30)).toBe(Number.POSITIVE_INFINITY);
+    expect(definedLimitOption(defaultedOpts, 'limit', 30)).toBe(Number.MAX_SAFE_INTEGER);
     expect(() => definedLimitOption(explicitOpts, 'limit', 30)).toThrow('--full cannot be combined with --limit');
   });
 

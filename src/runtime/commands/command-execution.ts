@@ -229,7 +229,10 @@ export function definedLimitOption(opts: CommandOptions, key: string, fallback: 
         '--full cannot be combined with --limit. Use --full for all findings, or --limit N for a capped report.',
       );
     }
-    return Number.POSITIVE_INFINITY;
+    // Keep the unbounded sentinel finite: several query paths bind this value
+    // directly to SQLite's LIMIT parameter, which rejects JavaScript Infinity.
+    // MAX_SAFE_INTEGER remains effectively unbounded for both SQL and slice().
+    return Number.MAX_SAFE_INTEGER;
   }
   return explicitLimit ?? fallback;
 }
