@@ -609,6 +609,10 @@ describe('command accuracy fixes', () => {
       try {
         const graph = callGraph(callDb, 'collect');
         expect(graph?.callees.map((callee) => callee.shortName)).toEqual(['src:db:Store:all()']);
+        // The only call is at module top level. The module definition is an
+        // owner/reference context, not a callable symbol, so call-graph must
+        // not relabel it as a caller. refs/dataflow still retain both sites.
+        expect(graph?.callers).toEqual([]);
 
         const result = complexity(callDb, 'collect');
         expect(result?.calleeCount).toBe(1);

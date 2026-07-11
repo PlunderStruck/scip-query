@@ -382,12 +382,14 @@ export function createTypeScriptCallFixtureDb(dbPath: string): void {
     23,
     'collect(store: Store)',
   );
+  insertSymbol.run(4, 'scip-typescript npm pkg 1.0.0 src/`consumer.ts`/', 'consumer', 29, 'module consumer');
 
   run(`
     INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
       (1, 1, 1, 0, 0, 2, 0),
       (2, 1, 2, 1, 0, 1, 0),
-      (3, 2, 3, 2, 0, 4, 0);
+      (3, 2, 3, 2, 0, 4, 0),
+      (4, 3, 4, 0, 0, 4, 0);
   `);
 
   run(`
@@ -402,7 +404,8 @@ export function createTypeScriptCallFixtureDb(dbPath: string): void {
       (1, 1, 1),
       (1, 2, 1),
       (2, 3, 1),
-      (3, 3, 0);
+      (3, 3, 0),
+      (3, 4, 1);
   `);
 
   sqliteDb.close();
