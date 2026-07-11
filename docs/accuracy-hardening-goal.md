@@ -3,6 +3,9 @@
 Date: 2026-07-10
 Status: Active; TypeScript factual, similarity, architecture, graph-risk, React, and Vue detector slices audited; Rust dead-code hardened but insufficiently evidenced
 
+Current execution plan:
+[`2026-07-11-remaining-accuracy-verification-program.md`](./plans/2026-07-11-remaining-accuracy-verification-program.md).
+
 ## Goal
 
 Make scip-query's reported health findings trustworthy enough to publish for
