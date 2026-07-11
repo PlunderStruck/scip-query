@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { getAllDefinitions } from '../../symbols/definition-catalog.js';
-import { getSourceText } from '../../source/source-text.js';
+import { getSourceLines } from '../../source/source-text.js';
 import { stripCommentsAndStrings } from '../../source/source-stripper.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { getFileAddRecords } from '../../analysis/git-history.js';
@@ -155,9 +155,8 @@ export function normalizedBodyForDefinition(db: ScipDatabase, definition: Indexe
  * reuse this instead of re-deriving "read file, slice lines" per detector.
  */
 export function definitionSourceSnippet(db: ScipDatabase, definition: IndexedDefinition): string | null {
-  const source = getSourceText(db, definition.relativePath);
-  if (!source) return null;
-  const lines = source.split(/\r?\n/);
+  const lines = getSourceLines(db, definition.relativePath);
+  if (lines.length === 0) return null;
   return lines.slice(definition.startLine, definition.endLine + 1).join('\n');
 }
 

@@ -83,6 +83,18 @@ describe('groupTwins (pure)', () => {
     expect(groups[0]?.members.map((m) => m.file).sort()).toEqual(['src/a.ts', 'src/b.ts']);
   });
 
+  it('preserves source record order when a near-name cluster spans leaf buckets', () => {
+    const groups = groupTwins([
+      record({ leaf: 'escapeRegExp', file: 'src/b.ts', tokens: ['return', 'B', ';'] }),
+      record({ leaf: 'escapeRegex', file: 'src/a.ts', tokens: ['return', 'A', ';'] }),
+      record({ leaf: 'escapeRegex', file: 'src/c.ts', tokens: ['return', 'C', ';'] }),
+    ]);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.members.map((member) => member.file)).toEqual(['src/a.ts', 'src/b.ts', 'src/c.ts']);
+    expect(groups[0]?.firstDivergentTokens).toBe('A: B ;  |  B: A ;');
+  });
+
   it('does not merge near names without a strong shared prefix', () => {
     const groups = groupTwins([
       record({ leaf: 'StageCard', file: 'src/landing.ts', tokens: ['return', 'Card', '(', 'stage', ')'] }),
@@ -90,6 +102,16 @@ describe('groupTwins (pure)', () => {
     ]);
 
     expect(groups).toHaveLength(0);
+  });
+
+  it('retains exact short-name matches while tightening near-name buckets', () => {
+    const groups = groupTwins([
+      record({ leaf: 'Cell', shortName: 'Panel:Cell', file: 'src/a.ts', tokens: ['return', 'a', ';'] }),
+      record({ leaf: 'cell', shortName: 'Panel:Cell', file: 'src/b.ts', tokens: ['return', 'b', ';'] }),
+    ]);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.relationship).toBe('divergent');
   });
 
   it('requires contextual overlap for very short generic component names', () => {

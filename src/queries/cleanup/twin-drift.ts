@@ -6,10 +6,11 @@ import { getCallSites } from '../../source/ast/ast-facts.js';
 import { getSourceImports } from '../../language-parsers/index.js';
 import { pathsResolveSame } from '../../source/path-normalization.js';
 import { classifyFile, isBarrel } from '../../analysis/file-classifier.js';
+import { profileSpan } from '../../instrumentation/profile.js';
 import { stripCommentsAndStrings } from '../../source/source-stripper.js';
 import { scipFunctionLikeKindNumbers } from '../../symbols/symbol-kind.js';
 import { applyScanLimit, definitionLoc } from '../query-utils.js';
-import { definitionSourceSnippet, extractImplementationBody, normalizeBody } from './duplicate-bodies.js';
+import { definitionSourceSnippet, extractImplementationBody } from './duplicate-bodies.js';
 
 const SCIP_FUNCTION_LIKE_KINDS = new Set(scipFunctionLikeKindNumbers());
 
@@ -148,75 +149,90 @@ export function groupTwins(
       !isRustInlineTestSymbol(record.symbol) &&
       !isRustConventionOnlyTwin(record.symbol, record.leaf),
   );
-  const leaves = [...new Set(realRecords.map((record) => record.leaf))];
-  const clusters = clusterLeafNames(leaves);
+  const { recordsByLeaf, recordOrder } = profileSpan(
+    'twin-drift.group-by-leaf',
+    () => indexTwinRecordsByLeaf(realRecords),
+    () => ({ records: realRecords.length }),
+  );
+  const clusters = profileSpan(
+    'twin-drift.cluster-leaf-names',
+    () => clusterLeafNames([...recordsByLeaf.keys()]),
+    () => ({ leaves: recordsByLeaf.size }),
+  );
 
-  const groups: TwinGroup[] = [];
-  for (const cluster of clusters) {
-    const members = realRecords.filter((record) => cluster.has(record.leaf));
-    if (members.length < 2) continue;
-    if (new Set(members.map((member) => member.file)).size < 2) continue;
-    let bestNonIdentical: { a: TwinDriftRecord; b: TwinDriftRecord; similarity: number } | null = null;
-    let hasCrossFilePair = false;
-    let hasIdenticalPair = false;
-    const participatingSymbols = new Set<string>();
+  const groups = profileSpan(
+    'twin-drift.compare-clusters',
+    () => {
+      const output: TwinGroup[] = [];
+      for (const cluster of clusters) {
+        const members = twinMembersForCluster(cluster, recordsByLeaf, recordOrder);
+        if (members.length < 2) continue;
+        if (new Set(members.map((member) => member.file)).size < 2) continue;
+        let bestNonIdentical: { a: TwinDriftRecord; b: TwinDriftRecord; similarity: number } | null = null;
+        let hasCrossFilePair = false;
+        let hasIdenticalPair = false;
+        const participatingSymbols = new Set<string>();
 
-    for (let i = 0; i < members.length; i += 1) {
-      for (let j = i + 1; j < members.length; j += 1) {
-        const a = members[i]!;
-        const b = members[j]!;
-        if (a.file === b.file) continue;
-        if (!hasEnoughConceptContext(a, b)) continue;
-        // A thin controller/service/storage-style delegate calling its
-        // same-name implementation (directly, or through a chain of
-        // same-name forwarders) is not a drifted twin — it's the intended
-        // architecture. Skip the pair entirely (as if it didn't exist for
-        // grouping purposes) rather than merely excluding it from
-        // similarity scoring, so a cluster whose *only* cross-file pair is a
-        // delegation chain produces no group at all.
-        if (isDelegatePair?.(a, b, members) || isDelegatePair?.(b, a, members)) continue;
-        hasCrossFilePair = true;
-        participatingSymbols.add(a.symbol);
-        participatingSymbols.add(b.symbol);
-        if (a.normalizedBody === b.normalizedBody) {
-          hasIdenticalPair = true;
+        for (let i = 0; i < members.length; i += 1) {
+          for (let j = i + 1; j < members.length; j += 1) {
+            const a = members[i]!;
+            const b = members[j]!;
+            if (a.file === b.file) continue;
+            if (!hasEnoughConceptContext(a, b)) continue;
+            // A thin controller/service/storage-style delegate calling its
+            // same-name implementation (directly, or through a chain of
+            // same-name forwarders) is not a drifted twin — it's the intended
+            // architecture. Skip the pair entirely (as if it didn't exist for
+            // grouping purposes) rather than merely excluding it from
+            // similarity scoring, so a cluster whose *only* cross-file pair is a
+            // delegation chain produces no group at all.
+            if (isDelegatePair?.(a, b, members) || isDelegatePair?.(b, a, members)) continue;
+            hasCrossFilePair = true;
+            participatingSymbols.add(a.symbol);
+            participatingSymbols.add(b.symbol);
+            if (a.normalizedBody === b.normalizedBody) {
+              hasIdenticalPair = true;
+              continue;
+            }
+            const similarity = jaccardSimilarity(a.tokens, b.tokens);
+            if (!bestNonIdentical || similarity > bestNonIdentical.similarity) {
+              bestNonIdentical = { a, b, similarity };
+            }
+          }
+        }
+        if (!hasCrossFilePair) continue;
+
+        const sortedMembers = members
+          .filter((member) => participatingSymbols.has(member.symbol))
+          .sort((left, right) => left.file.localeCompare(right.file) || left.startLine - right.startLine)
+          .map(toTwinMember);
+
+        if (!bestNonIdentical) {
+          // Every cross-file pair in this cluster is byte-identical — duplicate-bodies owns it.
+          output.push({
+            leaf: representativeLeaf(cluster),
+            relationship: hasIdenticalPair ? 'identical' : 'homonym',
+            maxDivergence: 0,
+            members: sortedMembers,
+          });
           continue;
         }
-        const similarity = jaccardSimilarity(a.tokens, b.tokens);
-        if (!bestNonIdentical || similarity > bestNonIdentical.similarity) {
-          bestNonIdentical = { a, b, similarity };
-        }
+
+        const relationship: TwinRelationship = bestNonIdentical.similarity >= minSimilarity ? 'divergent' : 'homonym';
+        output.push({
+          leaf: representativeLeaf(cluster),
+          relationship,
+          maxDivergence: Math.round((1 - bestNonIdentical.similarity) * 1000) / 1000,
+          members: sortedMembers,
+          ...(relationship === 'divergent'
+            ? { firstDivergentTokens: firstDivergentRun(bestNonIdentical.a.tokens, bestNonIdentical.b.tokens) }
+            : {}),
+        });
       }
-    }
-    if (!hasCrossFilePair) continue;
-
-    const sortedMembers = members
-      .filter((member) => participatingSymbols.has(member.symbol))
-      .sort((left, right) => left.file.localeCompare(right.file) || left.startLine - right.startLine)
-      .map(toTwinMember);
-
-    if (!bestNonIdentical) {
-      // Every cross-file pair in this cluster is byte-identical — duplicate-bodies owns it.
-      groups.push({
-        leaf: representativeLeaf(cluster),
-        relationship: hasIdenticalPair ? 'identical' : 'homonym',
-        maxDivergence: 0,
-        members: sortedMembers,
-      });
-      continue;
-    }
-
-    const relationship: TwinRelationship = bestNonIdentical.similarity >= minSimilarity ? 'divergent' : 'homonym';
-    groups.push({
-      leaf: representativeLeaf(cluster),
-      relationship,
-      maxDivergence: Math.round((1 - bestNonIdentical.similarity) * 1000) / 1000,
-      members: sortedMembers,
-      ...(relationship === 'divergent'
-        ? { firstDivergentTokens: firstDivergentRun(bestNonIdentical.a.tokens, bestNonIdentical.b.tokens) }
-        : {}),
-    });
-  }
+      return output;
+    },
+    () => ({ clusters: clusters.length, records: realRecords.length }),
+  );
 
   return groups.sort(
     (left, right) =>
@@ -226,26 +242,72 @@ export function groupTwins(
   );
 }
 
-function twinDriftRecords(db: ScipDatabase, opts: { scope?: string; scanLimit?: number }): TwinDriftRecord[] {
-  const definitions = getAllDefinitions(db, { scope: opts.scope })
-    .filter((definition) => isTwinCallableDefinition(definition) && !db.isIgnored(definition.relativePath))
-    .filter((definition) => !isBarrel(definition.relativePath));
+/**
+ * Keeps twin groups from re-scanning every record for every leaf-name cluster.
+ * The ordinal preserves the prior `records.filter(...)` traversal order when a
+ * near-name cluster combines multiple leaf buckets.
+ */
+function indexTwinRecordsByLeaf(records: readonly TwinDriftRecord[]): {
+  recordsByLeaf: Map<string, TwinDriftRecord[]>;
+  recordOrder: Map<TwinDriftRecord, number>;
+} {
+  const recordsByLeaf = new Map<string, TwinDriftRecord[]>();
+  const recordOrder = new Map<TwinDriftRecord, number>();
+  for (const [index, record] of records.entries()) {
+    const bucket = recordsByLeaf.get(record.leaf) ?? [];
+    bucket.push(record);
+    recordsByLeaf.set(record.leaf, bucket);
+    recordOrder.set(record, index);
+  }
+  return { recordsByLeaf, recordOrder };
+}
 
-  definitions.sort(
-    (left, right) => left.relativePath.localeCompare(right.relativePath) || left.startLine - right.startLine,
+function twinMembersForCluster(
+  cluster: ReadonlySet<string>,
+  recordsByLeaf: ReadonlyMap<string, readonly TwinDriftRecord[]>,
+  recordOrder: ReadonlyMap<TwinDriftRecord, number>,
+): TwinDriftRecord[] {
+  const members = [...cluster].flatMap((leaf) => recordsByLeaf.get(leaf) ?? []);
+  if (cluster.size > 1) {
+    members.sort((left, right) => (recordOrder.get(left) ?? 0) - (recordOrder.get(right) ?? 0));
+  }
+  return members;
+}
+
+function twinDriftRecords(db: ScipDatabase, opts: { scope?: string; scanLimit?: number }): TwinDriftRecord[] {
+  const definitions = profileSpan('twin-drift.load-definitions', () =>
+    getAllDefinitions(db, { scope: opts.scope })
+      .filter((definition) => isTwinCallableDefinition(definition) && !db.isIgnored(definition.relativePath))
+      .filter((definition) => !isBarrel(definition.relativePath)),
+  );
+
+  profileSpan(
+    'twin-drift.sort-definitions',
+    () =>
+      definitions.sort(
+        (left, right) => left.relativePath.localeCompare(right.relativePath) || left.startLine - right.startLine,
+      ),
+    () => ({ definitions: definitions.length }),
   );
   const scanned = applyScanLimit(definitions, opts.scanLimit);
-  const candidates =
-    typeof opts.scanLimit === 'number' && Number.isFinite(opts.scanLimit)
-      ? twinDriftCandidateDefinitions(scanned)
-      : scanned;
+  const candidates = profileSpan(
+    'twin-drift.select-candidates',
+    () => twinDriftCandidateDefinitions(scanned),
+    () => ({ scanned: scanned.length }),
+  );
 
-  const records: TwinDriftRecord[] = [];
-  for (const definition of candidates) {
-    const record = twinDriftRecord(db, definition);
-    if (record) records.push(record);
-  }
-  return records;
+  return profileSpan(
+    'twin-drift.build-records',
+    () => {
+      const records: TwinDriftRecord[] = [];
+      for (const definition of candidates) {
+        const record = twinDriftRecord(db, definition);
+        if (record) records.push(record);
+      }
+      return records;
+    },
+    () => ({ candidates: candidates.length, scanned: scanned.length }),
+  );
 }
 
 function isTwinCallableDefinition(definition: IndexedDefinition): boolean {
@@ -288,9 +350,10 @@ function twinDriftRecord(db: ScipDatabase, definition: IndexedDefinition): TwinD
   const snippet = definitionSourceSnippet(db, definition);
   if (!snippet) return null;
   if (!isCallableSymbol(definition.symbol) && !isTopLevelArrowFunctionSnippet(snippet, definition.leaf)) return null;
-  const normalizedBody = normalizeBody(snippet);
+  const strippedBody = stripCommentsAndStrings(extractImplementationBody(snippet));
+  const normalizedBody = strippedBody.replace(/\s+/g, '');
   if (!normalizedBody || normalizedBody.length < 8) return null;
-  const tokens = tokenizeSnippet(snippet);
+  const tokens = strippedBody.match(TOKEN_PATTERN) ?? [];
   if (tokens.length === 0) return null;
   return {
     leaf: definition.leaf,
@@ -302,7 +365,7 @@ function twinDriftRecord(db: ScipDatabase, definition: IndexedDefinition): TwinD
     loc: definitionLoc(definition),
     normalizedBody,
     tokens,
-    isThinForwarder: isThinForwarderBody(snippet),
+    isThinForwarder: isThinForwarderStrippedBody(strippedBody),
   };
 }
 
@@ -315,12 +378,6 @@ function isTopLevelArrowFunctionSnippet(snippet: string, leaf: string): boolean 
 }
 
 const TOKEN_PATTERN = /[A-Za-z_$][A-Za-z0-9_$]*|\d+(?:\.\d+)?|[^\sA-Za-z0-9_$]/g;
-
-function tokenizeSnippet(snippet: string): string[] {
-  const body = extractImplementationBody(snippet);
-  const stripped = stripCommentsAndStrings(body);
-  return stripped.match(TOKEN_PATTERN) ?? [];
-}
 
 function toTwinMember(record: TwinDriftRecord): TwinMember {
   return {
@@ -383,17 +440,19 @@ function clusterLeafNames(leaves: readonly string[]): Array<Set<string>> {
     if (rootA !== rootB) parent.set(rootA, rootB);
   };
 
-  // Bucket by first lowercase character to avoid O(n^2) edit-distance work
-  // across the whole leaf-name vocabulary.
-  const byFirstChar = new Map<string, string[]>();
+  // `areNearNames` requires an 80% common prefix for names long enough to be
+  // near-name candidates. Two leading lowercase characters are therefore a
+  // safe bucket: any accepted pair shares them. Exact short-name matches also
+  // share the same two-character prefix (or the whole shorter name).
+  const byPrefix = new Map<string, string[]>();
   for (const leaf of leaves) {
-    const key = leaf.slice(0, 1).toLowerCase();
-    const bucket = byFirstChar.get(key) ?? [];
+    const key = leaf.slice(0, 2).toLowerCase();
+    const bucket = byPrefix.get(key) ?? [];
     bucket.push(leaf);
-    byFirstChar.set(key, bucket);
+    byPrefix.set(key, bucket);
   }
 
-  for (const bucket of byFirstChar.values()) {
+  for (const bucket of byPrefix.values()) {
     for (let i = 0; i < bucket.length; i += 1) {
       for (let j = i + 1; j < bucket.length; j += 1) {
         if (areNearNames(bucket[i]!, bucket[j]!)) union(bucket[i]!, bucket[j]!);
@@ -516,7 +575,11 @@ function levenshteinAtMost(a: string, b: string, max: number): boolean {
  * statement-count/control-flow/call-shape check.
  */
 export function isThinForwarderBody(rawSnippet: string): boolean {
-  const body = stripCommentsAndStrings(extractImplementationBody(rawSnippet)).trim();
+  return isThinForwarderStrippedBody(stripCommentsAndStrings(extractImplementationBody(rawSnippet)));
+}
+
+function isThinForwarderStrippedBody(strippedBody: string): boolean {
+  const body = strippedBody.trim();
   if (!body) return false;
   if (CONTROL_FLOW_PATTERN.test(body)) return false;
   const statements = splitTopLevelStatements(body);
