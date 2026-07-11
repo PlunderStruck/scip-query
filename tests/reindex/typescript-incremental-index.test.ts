@@ -51,11 +51,6 @@ describe('TypeScript incremental index eligibility', () => {
 
   test.each([
     {
-      label: 'multi-project workspace mode',
-      mutate: (input: EligibilityFixture) => ({ ...input, projectMode: 'workspace' as const }),
-      reason: 'workspace has multiple TypeScript projects',
-    },
-    {
       label: 'config edit',
       mutate: (input: EligibilityFixture) => ({
         ...input,
@@ -87,6 +82,37 @@ describe('TypeScript incremental index eligibility', () => {
   ])('falls back for $label', ({ mutate, reason }) => {
     const result = planTypeScriptIncrementalUpdate(mutate(fixture()));
     expect(result).toEqual({ eligible: false, reason });
+  });
+
+  test('accepts a single-owned workspace edit and rejects a cross-project closure', () => {
+    const previous = workspaceSnapshot('a1');
+    const current = workspaceSnapshot('a2');
+    const base = {
+      projectMode: 'workspace' as const,
+      workspaceProjects: ['apps/api', 'apps/web'],
+      previousSnapshot: previous,
+      currentSnapshot: current,
+      projectFiles: ['apps/api/src/a.ts', 'apps/web/src/b.ts'],
+      producerIdentity: 'scip-typescript:0.4.0:test',
+      rootTsconfigExists: false,
+    };
+    const owned = planTypeScriptIncrementalUpdate({ ...base, graph: new Map() });
+    expect(owned).toEqual(
+      expect.objectContaining({
+        eligible: true,
+        tsconfigPath: 'apps/api/tsconfig.json',
+        projectArgument: 'apps/api',
+      }),
+    );
+
+    const crossing = planTypeScriptIncrementalUpdate({
+      ...base,
+      graph: new Map([['apps/web/src/b.ts', new Set(['apps/api/src/a.ts'])]]),
+    });
+    expect(crossing).toEqual({
+      eligible: false,
+      reason: 'affected files cross or ambiguously match TypeScript projects',
+    });
   });
 });
 
@@ -123,6 +149,22 @@ function snapshot(hashes: { a: string; b: string; config: string }): ProjectInpu
       { path: 'src/a.ts', size: 1, hash: hashes.a },
       { path: 'src/b.ts', size: 1, hash: hashes.b },
       { path: 'tsconfig.json', size: 1, hash: hashes.config },
+    ],
+  };
+}
+
+function workspaceSnapshot(apiHash: string): ProjectInputSnapshot {
+  return {
+    version: 4,
+    languages: ['typescript'],
+    pnpmWorkspaces: false,
+    typescriptProjectMode: 'workspace',
+    typescriptProjects: ['apps/api', 'apps/web'],
+    files: [
+      { path: 'apps/api/src/a.ts', size: 1, hash: apiHash },
+      { path: 'apps/web/src/b.ts', size: 1, hash: 'b1' },
+      { path: 'apps/api/tsconfig.json', size: 1, hash: 'api-config' },
+      { path: 'apps/web/tsconfig.json', size: 1, hash: 'web-config' },
     ],
   };
 }

@@ -159,7 +159,7 @@ Machine measurements are appended to
 
 ### 4. Extend affected-file publication to multi-project TypeScript workspaces
 
-- [ ] **Files:** `src/reindex/typescript-incremental-index.ts`, project-root and
+- [x] **Files:** `src/reindex/typescript-incremental-index.ts`, project-root and
       shard helpers, protocol/service session ownership, and multi-project tests.
 - **Source:** `scip-query plan-context planTypeScriptIncrementalUpdate --json`.
 - **Change:** Assign indexed/source files to discovered project roots, partition

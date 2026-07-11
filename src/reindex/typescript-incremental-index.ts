@@ -54,6 +54,8 @@ export type TypeScriptIncrementalEligibility =
       nextFragmentGeneration: string;
       previousDocumentIdentities: Map<string, string>;
       nextDocumentIdentities: Map<string, string>;
+      tsconfigPath: string;
+      projectArgument: string;
     }
   | { eligible: false; reason: string };
 
@@ -104,13 +106,11 @@ export interface MaterializedTypeScriptIncrementalIndex {
 export function planTypeScriptIncrementalUpdate(
   input: TypeScriptIncrementalEligibilityInput,
 ): TypeScriptIncrementalEligibility {
-  if (
-    input.projectMode === 'workspace' &&
-    (input.workspaceProjects?.length !== 1 || input.workspaceProjects[0] !== '.')
-  ) {
-    return { eligible: false, reason: 'workspace has multiple TypeScript projects' };
+  const workspaceProjects = input.projectMode === 'workspace' ? (input.workspaceProjects ?? []) : ['.'];
+  if (workspaceProjects.length === 0) return { eligible: false, reason: 'workspace project roots unavailable' };
+  if (workspaceProjects.length === 1 && workspaceProjects[0] === '.' && !input.rootTsconfigExists) {
+    return { eligible: false, reason: 'root tsconfig unavailable' };
   }
-  if (!input.rootTsconfigExists) return { eligible: false, reason: 'root tsconfig unavailable' };
   if (!input.previousSnapshot) return { eligible: false, reason: 'prior project snapshot unavailable' };
   if (input.graph === null) return { eligible: false, reason: 'dependency graph unavailable' };
   if (input.projectFiles.length === 0) return { eligible: false, reason: 'prior TypeScript documents unavailable' };
@@ -130,6 +130,10 @@ export function planTypeScriptIncrementalUpdate(
       eligible: false,
       reason: plan.reasons.length > 0 ? `affected set widened: ${plan.reasons.join(', ')}` : 'empty affected set',
     };
+  }
+  const projectArgument = ownedWorkspaceProject([...plan.changedFiles, ...plan.affectedFiles], workspaceProjects);
+  if (!projectArgument) {
+    return { eligible: false, reason: 'affected files cross or ambiguously match TypeScript projects' };
   }
 
   const projectIdentity = typeScriptFragmentProjectIdentity(
@@ -171,7 +175,20 @@ export function planTypeScriptIncrementalUpdate(
     nextFragmentGeneration: typeScriptFragmentGenerationIdentity(input.currentSnapshot, input.producerIdentity),
     previousDocumentIdentities,
     nextDocumentIdentities,
+    tsconfigPath: projectArgument === '.' ? 'tsconfig.json' : `${projectArgument}/tsconfig.json`,
+    projectArgument,
   };
+}
+
+function ownedWorkspaceProject(files: readonly string[], projects: readonly string[]): string | null {
+  let owner: string | null = null;
+  for (const file of files) {
+    const matches = projects.filter((project) => project === '.' || file === project || file.startsWith(`${project}/`));
+    if (matches.length !== 1) return null;
+    if (owner !== null && owner !== matches[0]) return null;
+    owner = matches[0]!;
+  }
+  return owner;
 }
 
 export function tryMaterializeTypeScriptIncrementalIndex(
@@ -226,8 +243,8 @@ export function tryMaterializeTypeScriptIncrementalIndex(
     });
     const response = requester.request({
       kind: 'emit-documents',
-      tsconfigPath: 'tsconfig.json',
-      projectArgument: '.',
+      tsconfigPath: eligibility.tsconfigPath,
+      projectArgument: eligibility.projectArgument,
       projectIdentity: eligibility.projectIdentity,
       producerIdentity: availability.producerIdentity,
       modifiedFiles: eligibility.plan.changedFiles,
