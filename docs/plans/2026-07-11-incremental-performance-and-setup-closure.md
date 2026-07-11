@@ -193,7 +193,7 @@ Machine measurements are appended to
 
 ### 6. Renew tsserver and native-kernel decisions
 
-- [ ] **Files:** benchmark JSONL/ledger; production code only for an accepted
+- [x] **Files:** benchmark JSONL/ledger; production code only for an accepted
       candidate.
 - **Source:** current profiler/work-audit and prior mismatch records in the
   indexing-analysis ledger.
