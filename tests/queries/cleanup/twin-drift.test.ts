@@ -194,6 +194,86 @@ describe('groupTwins (pure)', () => {
     expect(groups).toHaveLength(0);
   });
 
+  it('excludes Rust trait implementations that share a required method name', () => {
+    const groups = groupTwins([
+      record({
+        leaf: 'default',
+        file: 'src/a.rs',
+        symbol: 'rust-analyzer cargo fixture 0.1.0 a/impl#[Alpha][Default]default().',
+        tokens: ['Self', '{', 'value', ':', '1', '}'],
+      }),
+      record({
+        leaf: 'default',
+        file: 'src/b.rs',
+        symbol: 'rust-analyzer cargo fixture 0.1.0 b/impl#[Beta][Default]default().',
+        tokens: ['Self', '{', 'value', ':', '2', '}'],
+      }),
+    ]);
+
+    expect(groups).toHaveLength(0);
+  });
+
+  it('does not treat the Rust impl marker as concept context for generic methods', () => {
+    const groups = groupTwins([
+      record({
+        leaf: 'new',
+        file: 'src/effects.rs',
+        symbol: 'rust-analyzer cargo fixture 0.1.0 effects/impl#[BubbleTrail]new().',
+        shortName: 'effects:impl:BubbleTrail:new()',
+        tokens: ['Self', '{', 'slots', ':', 'Vec', ':', ':', 'new', '(', ')', '}'],
+      }),
+      record({
+        leaf: 'new',
+        file: 'src/transcript.rs',
+        symbol: 'rust-analyzer cargo fixture 0.1.0 transcript/impl#[Snapshot]new().',
+        shortName: 'transcript:impl:Snapshot:new()',
+        tokens: ['Self', '{', 'version', ':', 'VERSION', ',', 'summary', '}'],
+      }),
+    ]);
+
+    expect(groups).toHaveLength(0);
+  });
+
+  it('excludes conventional Rust lifecycle method names longer than the short-name guard', () => {
+    const groups = groupTwins([
+      record({
+        leaf: 'reset',
+        file: 'src/effects.rs',
+        symbol: 'rust-analyzer cargo fixture 0.1.0 effects/impl#[BubbleTrail]reset().',
+        shortName: 'effects:impl:BubbleTrail:reset()',
+        tokens: ['self', '.', 'slots', '.', 'clear', '(', ')'],
+      }),
+      record({
+        leaf: 'reset',
+        file: 'src/visualizer.rs',
+        symbol: 'rust-analyzer cargo fixture 0.1.0 visualizer/impl#[State]reset().',
+        shortName: 'visualizer:impl:State:reset()',
+        tokens: ['self', '.', 'left', '.', 'clear', '(', ')'],
+      }),
+    ]);
+
+    expect(groups).toHaveLength(0);
+  });
+
+  it('excludes Rust inline test-module helpers in production-shaped files', () => {
+    const groups = groupTwins([
+      record({
+        leaf: 'mesh_positions',
+        file: 'src/effects.rs',
+        symbol: 'rust-analyzer cargo fixture 0.1.0 effects/tests/mesh_positions().',
+        tokens: ['mesh', '.', 'attribute', '(', 'POSITION', ')'],
+      }),
+      record({
+        leaf: 'mesh_positions',
+        file: 'src/visualizer.rs',
+        symbol: 'rust-analyzer cargo fixture 0.1.0 visualizer/tests/mesh_positions().',
+        tokens: ['mesh', '.', 'attribute', '(', 'POSITION', ')', '.', 'unwrap', '(', ')'],
+      }),
+    ]);
+
+    expect(groups).toHaveLength(0);
+  });
+
   // followup #7: controller -> service -> storage style delegation chains
   // (a thin forwarder and its same-name implementation) are not drifted
   // twins -- they're the intended architecture. `isDelegatePair` is injected

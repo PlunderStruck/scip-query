@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { getAllDefinitions } from '../../symbols/definition-catalog.js';
-import { isCallableSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
+import { isCallableSymbol, isRustTraitImplMember, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { getCallSites } from '../../source/ast/ast-facts.js';
 import { getSourceImports } from '../../language-parsers/index.js';
 import { pathsResolveSame } from '../../source/path-normalization.js';
@@ -141,7 +141,12 @@ export function groupTwins(
   // clustering so they can never form a group.
   const realRecords = records.filter(
     (record) =>
-      !isSyntheticLeaf(record.leaf) && !isConventionOnlyTwinLeaf(record.leaf) && classifyFile(record.file) !== 'test',
+      !isSyntheticLeaf(record.leaf) &&
+      !isConventionOnlyTwinLeaf(record.leaf) &&
+      classifyFile(record.file) !== 'test' &&
+      !isRustTraitImplMember(record.symbol) &&
+      !isRustInlineTestSymbol(record.symbol) &&
+      !isRustConventionOnlyTwin(record.symbol, record.leaf),
   );
   const leaves = [...new Set(realRecords.map((record) => record.leaf))];
   const clusters = clusterLeafNames(leaves);
@@ -250,7 +255,14 @@ function isTwinCallableDefinition(definition: IndexedDefinition): boolean {
 }
 
 function twinDriftCandidateDefinitions(definitions: readonly IndexedDefinition[]): IndexedDefinition[] {
-  const realDefinitions = definitions.filter((definition) => definition.leaf && !isSyntheticLeaf(definition.leaf));
+  const realDefinitions = definitions.filter(
+    (definition) =>
+      definition.leaf &&
+      !isSyntheticLeaf(definition.leaf) &&
+      !isRustTraitImplMember(definition.symbol) &&
+      !isRustInlineTestSymbol(definition.symbol) &&
+      !isRustConventionOnlyTwin(definition.symbol, definition.leaf),
+  );
   const definitionsByLeaf = new Map<string, IndexedDefinition[]>();
   for (const definition of realDefinitions) {
     const bucket = definitionsByLeaf.get(definition.leaf) ?? [];
@@ -429,6 +441,7 @@ const GENERIC_CONTEXT_SEGMENTS = new Set([
   'components',
   'feature',
   'features',
+  'impl',
   'index',
   'lib',
   'route',
@@ -439,6 +452,16 @@ const GENERIC_CONTEXT_SEGMENTS = new Set([
   'typescript',
   'ui',
 ]);
+
+function isRustInlineTestSymbol(symbol: string): boolean {
+  return symbol.startsWith('rust-analyzer ') && /\/(?:tests?|benches?)\//.test(symbol);
+}
+
+const RUST_CONVENTION_ONLY_TWIN_LEAVES = new Set(['default', 'new', 'reset']);
+
+function isRustConventionOnlyTwin(symbol: string, leaf: string): boolean {
+  return symbol.startsWith('rust-analyzer ') && RUST_CONVENTION_ONLY_TWIN_LEAVES.has(leaf.toLowerCase());
+}
 
 function hasEnoughConceptContext(a: TwinDriftRecord, b: TwinDriftRecord): boolean {
   if (a.leaf.toLowerCase() !== b.leaf.toLowerCase()) return true;
