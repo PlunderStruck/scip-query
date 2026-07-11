@@ -176,7 +176,7 @@ Machine measurements are appended to
 
 ### 5. Decide and implement the Rust SCIP boundary
 
-- [ ] **Files:** feasibility probe and benchmark records first; production Rust
+- [x] **Files:** feasibility probe and benchmark records first; production Rust
       code only if the probe passes.
 - **Source:** installed rust-analyzer package/binary inspection plus
   `scip-query plan-context src/reindex/indexers.ts --json`.
