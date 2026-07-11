@@ -1,0 +1,24 @@
+{
+  "packet": "reports/accuracy/2026-07-11T16-40-10-807Z-typescript-graph-risk-calibration.json",
+  "knownPositiveRecallCases": {
+    "bottlenecks": 1
+  },
+  "groups": [
+    {
+      "verdict": "valid",
+      "detectors": [
+        "bottlenecks"
+      ],
+      "evidenceNote": "All 39 rows reproduced their disclosed arithmetic exactly. Independent pinned-source checks found all 272 referenced files, the target name in all 140 reported caller files, and each callee name in all 259 reported callee files."
+    }
+  ],
+  "utilityGroups": [
+    {
+      "verdict": "uncertain",
+      "detectors": [
+        "bottlenecks"
+      ],
+      "evidenceNote": "The graph centrality measurement is exact, but whether a central callable should be refactored depends on ownership, stability, and architectural intent that the measurement does not establish."
+    }
+  ]
+}

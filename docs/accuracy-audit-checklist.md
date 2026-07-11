@@ -66,7 +66,7 @@ Legend: `certified`, `qualified`, `experimental`, `insufficient`, `unsupported`,
 | `extract-candidates`             | certified    | pending      | pending     | measurement certification  | 43/43 callee-cluster measurements valid; extraction remains contextual.                                                       |
 | `locality-candidates`            | certified    | pending      | pending     | relationship certification | 48/48 ownership/destination relationships valid; movement remains contextual.                                                 |
 | `coupling`                       | certified    | pending      | pending     | graph-fact certification   | 48/48 exact shared-symbol relationships valid across four repositories.                                                       |
-| `bottlenecks`                    | qualified    | pending      | pending     | graph-fact certification   | 33/33 centrality facts valid; confidence floor is 89.6%.                                                                      |
+| `bottlenecks`                    | certified    | pending      | pending     | graph-fact certification   | 39/39 disclosed centrality facts valid across four repositories; confidence floor is 91.0%.                                  |
 | `deep-chains`                    | certified    | pending      | pending     | graph-fact certification   | 48/48 condensed-component paths valid after cycle-depth hardening.                                                            |
 | `complexity-hotspots`            | certified    | pending      | pending     | measurement certification  | 48/48 composite measurements valid across magnitude bands.                                                                    |
 | `hotspots`                       | certified    | pending      | pending     | graph-fact certification   | 48/48 cross-file reference counts valid.                                                                                      |
@@ -131,7 +131,7 @@ consolidation would improve the code.
 - [x] `co-change` — certified relationship
 - [x] `doc-drift` — certified relationship
 - [x] `coupling` — certified graph fact
-- [x] `bottlenecks` — qualified graph fact; 89.6% confidence floor
+- [x] `bottlenecks` — certified disclosed graph fact; utility remains contextual
 - [x] `deep-chains` — certified condensed-component path
 - [x] `complexity-hotspots` — certified measurement
 - [x] `hotspots` — certified graph fact

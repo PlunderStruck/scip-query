@@ -264,9 +264,8 @@ active program above.
 ## Immediate Next Slice
 
 Finish the small remaining TypeScript gaps: expand targeted corpus or historical
-cases for detectors that remain insufficiently evidenced, and raise
-`bottlenecks` above its current confidence floor if a broader population
-exists. Then renew the Rust detector campaign
+cases for detectors that remain insufficiently evidenced. The broader
+`bottlenecks` replay is now certified. Then renew the Rust detector campaign
 against additional repositories or historical commits before beginning Python
 semantic certification. Vue resolved-reference completeness also needs a third
 dependency-ready, source-reviewed repository even though its operational path
@@ -339,15 +338,23 @@ relationships across three repositories, certifying both narrow facts. Removal
 utility remains contextual. The campaign removed ambient-declaration,
 generated co-change state, and structural-token feature-label noise.
 
-The TypeScript extraction and graph-risk campaign is complete:
+The initial TypeScript extraction and graph-risk campaign is complete:
 [`2026-07-10-typescript-extraction-graph-risk-detectors.md`](./validation/2026-07-10-typescript-extraction-graph-risk-detectors.md).
 `extract-candidates`, `locality-candidates`, `coupling`, `deep-chains`,
 `complexity-hotspots`, `hotspots`, `fan-in`, and `fan-out` are certified on
 43-48 valid sampled rows across four repositories. `bottlenecks` is qualified
-at 33/33 because its 89.6% confidence floor remains just below the certified
+at 33/33 because its 89.6% confidence floor remained just below the certified
 threshold. The 69,942-row uncapped frame exposed and removed ambiguous
 shortened fan-in identities and cycle-inflated dependency depth. These results
 certify the disclosed measurements, not automatic refactoring actionability.
+
+The bottleneck population renewal is complete:
+[`2026-07-11-typescript-bottlenecks-certification.md`](./validation/2026-07-11-typescript-bottlenecks-certification.md).
+The public result now discloses the deterministic caller-file and
+external-callee sets behind its totals. All 39 reviewed rows passed arithmetic
+and pinned-source checks across four repositories, producing a 91.0% Wilson
+lower bound and certifying the narrow graph fact. Centrality remains a review
+signal rather than evidence that refactoring is beneficial.
 
 The React and Vue framework-detector campaign is complete:
 [`2026-07-11-react-vue-detectors.md`](./validation/2026-07-11-react-vue-detectors.md).

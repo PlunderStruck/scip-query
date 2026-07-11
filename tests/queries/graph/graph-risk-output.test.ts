@@ -225,6 +225,19 @@ describe('graph-risk output classification', () => {
         fanIn: 2,
         fanOut: 2,
         score: 4,
+        callerFiles: ['src/caller-one.ts', 'src/caller-two.ts'],
+        externalCallees: [
+          {
+            symbol: sym('dep-one.ts', 'depOne'),
+            shortName: 'src:dep-one:depOne()',
+            file: 'src/dep-one.ts',
+          },
+          {
+            symbol: sym('dep-two.ts', 'depTwo'),
+            shortName: 'src:dep-two:depTwo()',
+            file: 'src/dep-two.ts',
+          },
+        ],
       });
       expect(central?.evidenceReasons).toEqual(
         expect.arrayContaining([

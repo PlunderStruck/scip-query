@@ -11,6 +11,8 @@ export interface BottleneckResult {
   shortName: string;
   fanIn: number;
   fanOut: number;
+  callerFiles: string[];
+  externalCallees: Array<{ symbol: string; shortName: string; file: string }>;
   /** fanIn * fanOut — higher = more central coupling hub */
   score: number;
   definedIn: string;
@@ -61,18 +63,34 @@ export function bottlenecks(
 }
 
 function bottleneckRowFor(db: ScipDatabase, definition: IndexedDefinition, semantic: boolean): BottleneckResult {
-  const fanIn = new Set(callerRowsForSymbol(db, definition, { limit: 500, semantic }).map((row) => row.file)).size;
-  const fanOut = new Set(
-    getCalleeRowsForSymbol(db, definition, { limit: 500, semantic })
-      .filter((row) => row.file !== definition.relativePath)
-      .map((row) => `${row.symbol}|${row.file}`),
-  ).size;
+  const callerFiles = [
+    ...new Set(callerRowsForSymbol(db, definition, { limit: 500, semantic }).map((row) => row.file)),
+  ].sort();
+  const externalCalleeByIdentity = new Map<string, { symbol: string; shortName: string; file: string }>();
+  for (const row of getCalleeRowsForSymbol(db, definition, { limit: 500, semantic })) {
+    if (row.file === definition.relativePath) continue;
+    const identity = `${row.symbol}|${row.file}`;
+    if (!externalCalleeByIdentity.has(identity)) {
+      externalCalleeByIdentity.set(identity, {
+        symbol: row.symbol,
+        shortName: shortenSymbol(row.symbol),
+        file: row.file,
+      });
+    }
+  }
+  const externalCallees = [...externalCalleeByIdentity.values()].sort(
+    (left, right) => left.file.localeCompare(right.file) || left.symbol.localeCompare(right.symbol),
+  );
+  const fanIn = callerFiles.length;
+  const fanOut = externalCallees.length;
   const score = fanIn * fanOut;
   return {
     symbol: definition.symbol,
     shortName: shortenSymbol(definition.symbol),
     fanIn,
     fanOut,
+    callerFiles,
+    externalCallees,
     score,
     definedIn: definition.relativePath,
     actionTier: 'signal',
