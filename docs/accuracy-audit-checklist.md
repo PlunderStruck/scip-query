@@ -63,6 +63,15 @@ Legend: `certified`, `qualified`, `experimental`, `insufficient`, `unsupported`,
 | `wrapper-candidates`     | qualified    | pending      | pending     | relationship certification | 30/30 single-caller/fan-in facts valid; confidence floor remains 88.6%.                        |
 | `passthrough-candidates` | insufficient | pending      | pending     | relationship certification | 21/21 literal-forwarding facts valid; more findings are required.                              |
 | `stale-abstractions`     | certified    | pending      | pending     | relationship certification | 40/40 low-consumer facts valid after ambient-declaration hardening.                            |
+| `extract-candidates`     | certified    | pending      | pending     | measurement certification  | 43/43 callee-cluster measurements valid; extraction remains contextual.                        |
+| `locality-candidates`    | certified    | pending      | pending     | relationship certification | 48/48 ownership/destination relationships valid; movement remains contextual.                  |
+| `coupling`               | certified    | pending      | pending     | graph-fact certification   | 48/48 exact shared-symbol relationships valid across four repositories.                        |
+| `bottlenecks`            | qualified    | pending      | pending     | graph-fact certification   | 33/33 centrality facts valid; confidence floor is 89.6%.                                       |
+| `deep-chains`            | certified    | pending      | pending     | graph-fact certification   | 48/48 condensed-component paths valid after cycle-depth hardening.                             |
+| `complexity-hotspots`    | certified    | pending      | pending     | measurement certification  | 48/48 composite measurements valid across magnitude bands.                                     |
+| `hotspots`               | certified    | pending      | pending     | graph-fact certification   | 48/48 cross-file reference counts valid.                                                       |
+| `fan-in`                 | certified    | pending      | pending     | graph-fact certification   | 48/48 exact-symbol counts valid after identity hardening.                                      |
+| `fan-out`                | certified    | pending      | pending     | graph-fact certification   | 48/48 external-symbol counts valid.                                                            |
 
 ### TypeScript factual detector slice
 
@@ -107,18 +116,18 @@ consolidation would improve the code.
 - [x] `wrapper-candidates` — qualified relationship
 - [x] `passthrough-candidates` — insufficient population evidence
 - [x] `stale-abstractions` — certified relationship
-- [ ] `extract-candidates`
-- [ ] `locality-candidates`
+- [x] `extract-candidates` — certified measurement; extraction remains contextual
+- [x] `locality-candidates` — certified relationship; movement remains contextual
 - [x] `drift` — qualified; subtype breadth incomplete
 - [x] `co-change` — certified relationship
 - [x] `doc-drift` — certified relationship
-- [ ] `coupling`
-- [ ] `bottlenecks`
-- [ ] `deep-chains`
-- [ ] `complexity-hotspots`
-- [ ] `hotspots`
-- [ ] `fan-in`
-- [ ] `fan-out`
+- [x] `coupling` — certified graph fact
+- [x] `bottlenecks` — qualified graph fact; 89.6% confidence floor
+- [x] `deep-chains` — certified condensed-component path
+- [x] `complexity-hotspots` — certified measurement
+- [x] `hotspots` — certified graph fact
+- [x] `fan-in` — certified exact-symbol graph fact
+- [x] `fan-out` — certified graph fact
 
 These audits must label the measured relationship separately from the proposed
 action. A real relationship can still be an unhelpful recommendation.

@@ -14,6 +14,7 @@ import {
   parseArchitectureCalibrationOptions,
   parseDeadCalibrationOptions,
   parseFactualCalibrationOptions,
+  parseGraphRiskCalibrationOptions,
   parseSimilarityCalibrationOptions,
   summarizeCalibration,
   summarizeCalibrationByDetector,
@@ -119,6 +120,35 @@ describe('accuracy calibration core', () => {
       ),
     ).toMatchObject({ detectors: ['drift'], sampleSize: 6, roots: ['/repos/custom'] });
     expect(() => parseArchitectureCalibrationOptions(['--detector', 'similar'], ['/repos/default'])).toThrow(
+      '--detector must be one of',
+    );
+  });
+
+  it('selects all TypeScript graph-risk detectors or an explicit repeatable subset', () => {
+    const all = parseGraphRiskCalibrationOptions([], ['/repos/a', '/repos/b']);
+    expect(all).toMatchObject({
+      language: 'typescript',
+      seed: 'typescript-graph-risk-v1',
+      roots: ['/repos/a', '/repos/b'],
+    });
+    expect(all.detectors).toEqual([
+      'extract-candidates',
+      'locality-candidates',
+      'coupling',
+      'bottlenecks',
+      'deep-chains',
+      'complexity-hotspots',
+      'hotspots',
+      'fan-in',
+      'fan-out',
+    ]);
+    expect(
+      parseGraphRiskCalibrationOptions(
+        ['--detector', 'fan-in', '--detector', 'fan-in', '--sample-size', '8', '/repos/custom'],
+        ['/repos/default'],
+      ),
+    ).toMatchObject({ detectors: ['fan-in'], sampleSize: 8, roots: ['/repos/custom'] });
+    expect(() => parseGraphRiskCalibrationOptions(['--detector', 'drift'], ['/repos/default'])).toThrow(
       '--detector must be one of',
     );
   });

@@ -130,12 +130,12 @@ scip-query similar-signatures # Find functions with near-identical type signatur
 
 ```bash
 scip-query hotspots # Most-referenced symbols in the codebase (choke points)
-scip-query fan-in [symbol] # How many files reference a symbol (or top fan-in across codebase)
+scip-query fan-in [symbol] # Count files referencing an exact symbol; top JSON rows include exact symbol identity
 scip-query fan-out [file] # How many external symbols a file uses (or top fan-out across codebase)
 scip-query coupling [file1] [file2] # Coupling between two files, or top coupled pairs in codebase
 scip-query cycles # Detect circular dependency chains between files
 scip-query bottlenecks # Find coupling hubs: high fan-in AND high fan-out
-scip-query deep-chains # Find the longest transitive dependency chains
+scip-query deep-chains # Find the longest condensed dependency-component chains
 scip-query call-graph <symbol> # Show incoming callers and outgoing callees for a symbol
 ```
 

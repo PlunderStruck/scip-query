@@ -260,10 +260,8 @@ active program above.
 
 ## Immediate Next Slice
 
-Continue Phase 3 with TypeScript extraction/locality and graph-risk signals:
-`extract-candidates`, `locality-candidates`, coupling, bottlenecks, deep chains,
-hotspots, and fan-in/fan-out; then certify React and Vue duplication,
-composition, and pressure analyzers.
+Continue Phase 3 with React and Vue duplication, composition, and pressure
+analyzers. The TypeScript extraction/locality and graph-risk slice is complete.
 Expand targeted corpus or historical cases for the factual and similarity
 detectors that remain insufficiently evidenced. In parallel, renew Rust `dead`
 against additional repositories or historical commits until its sparse
@@ -333,6 +331,16 @@ was actionable without ownership evidence. `wrapper-candidates` is qualified
 at 30/30 with an 88.6% confidence floor, while `passthrough-candidates` remains
 insufficient at 21/21. The campaign removed ambient-declaration, generated
 co-change state, and structural-token feature-label noise.
+
+The TypeScript extraction and graph-risk campaign is complete:
+[`2026-07-10-typescript-extraction-graph-risk-detectors.md`](./validation/2026-07-10-typescript-extraction-graph-risk-detectors.md).
+`extract-candidates`, `locality-candidates`, `coupling`, `deep-chains`,
+`complexity-hotspots`, `hotspots`, `fan-in`, and `fan-out` are certified on
+43-48 valid sampled rows across four repositories. `bottlenecks` is qualified
+at 33/33 because its 89.6% confidence floor remains just below the certified
+threshold. The 69,942-row uncapped frame exposed and removed ambiguous
+shortened fan-in identities and cycle-inflated dependency depth. These results
+certify the disclosed measurements, not automatic refactoring actionability.
 
 ## Program Acceptance Criteria
 

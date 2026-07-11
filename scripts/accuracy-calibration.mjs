@@ -14,14 +14,20 @@ import { basename, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
   byKind,
+  bottlenecks,
   coChange,
   complexity,
+  complexityHotspots,
+  deepChains,
   cycleSummary,
   decorativeCheckers,
   docDrift,
   drift,
   duplicateBodies,
+  extractCandidates,
+  hotspots,
   isolated,
+  localityCandidates,
   notImplemented,
   passthroughCandidates,
   recentDuplicates,
@@ -35,9 +41,12 @@ import {
   unusedImports,
   unusedParams,
   staleAbstractions,
+  topCoupling,
+  topFanIn,
+  topFanOut,
   wrapperCandidates,
 } from '../dist/queries/index.js';
-import { ScipDatabase } from '../dist/index.js';
+import { ScipDatabase, shortenSymbol } from '../dist/index.js';
 import {
   CALIBRATION_SCHEMA_VERSION,
   applyUtilityGroups,
@@ -50,6 +59,7 @@ import {
   parseArchitectureCalibrationOptions,
   parseDeadCalibrationOptions,
   parseFactualCalibrationOptions,
+  parseGraphRiskCalibrationOptions,
   parseSimilarityCalibrationOptions,
   summarizeCalibration,
   summarizeCalibrationByDetector,
@@ -174,6 +184,29 @@ const architectureTruthRules = {
     'The reported type or class has the disclosed real, transitive, barrel, singleton, and defining-file use evidence and therefore matches the stated low-consumer class; folding or deleting it is separate.',
 };
 
+const graphRiskTruthRules = {
+  'extract-candidates':
+    'The production callable has the reported source span, distinct callee set, disconnected callee co-occurrence clusters, and isolation scores; whether a new helper would improve the code is separate.',
+  'locality-candidates':
+    'The reported source unit, consumer files, common owner, boundary markers, destination confidence, and withheld or suggested home agree with indexed and configured ownership evidence; moving code is separate.',
+  coupling:
+    'The two current files have exactly the reported number of distinct symbols defined in one and referenced by the other; architectural harm or colocation is separate.',
+  bottlenecks:
+    'The production callable has the reported distinct incoming consumer files and distinct cross-file callee symbols, and score equals fan-in multiplied by fan-out; risk is separate.',
+  'deep-chains':
+    'Every adjacent component in the representative chain is connected by a real file dependency after cycles are condensed, and depth matches the disclosed materialized component members; shortening it is separate.',
+  'complexity-hotspots':
+    'The callable source span, LOC, distinct incoming files, distinct callees, external fan-out, branch basis, and composite score agree with production evidence; refactoring priority is separate.',
+  hotspots:
+    'The emitted symbol is defined in the reported file and has the reported cross-file reference and distinct referencing-file counts; change risk is separate.',
+  'fan-in':
+    'The emitted symbol identity is unambiguous and the count equals the number of distinct external files that reference that exact definition; API blast radius is separate.',
+  'fan-out':
+    'The emitted file has the reported number of distinct symbols defined in other indexed files that it references; fragility is separate.',
+};
+
+const UNBOUNDED_RESULT_LIMIT = 2_147_483_647;
+
 mkdirSync(outDir, { recursive: true });
 
 const args = process.argv.slice(2);
@@ -185,6 +218,8 @@ if (args[0] === 'health-dead') {
   runHealthSimilarityMode(args.slice(1));
 } else if (args[0] === 'health-architecture') {
   runHealthArchitectureMode(args.slice(1));
+} else if (args[0] === 'health-graph-risk') {
+  runHealthGraphRiskMode(args.slice(1));
 } else if (args[0] === 'summarize') {
   runSummarizeMode(args.slice(1));
 } else if (args[0] === 'resample') {
@@ -212,7 +247,7 @@ function runResampleMode(rawArgs) {
       );
       const count = Math.min(sampleSize, candidates.length);
       rows.push(
-        ...(packet.detector === 'typescript-architecture'
+        ...(usesStratifiedRelationshipSample(packet)
           ? deterministicStratifiedSample(
               candidates,
               count,
@@ -349,6 +384,18 @@ function runHealthArchitectureMode(rawArgs) {
     collectCandidates: collectArchitectureCandidates,
     summarize: (rows, detectors) => similarityPacketSummary(rows, detectors, {}),
     render: renderArchitecturePacket,
+  });
+}
+
+function runHealthGraphRiskMode(rawArgs) {
+  const options = parseGraphRiskCalibrationOptions(rawArgs, defaultDeadReposByLanguage.typescript, resolve);
+  runTypeScriptDetectorMode(options, {
+    detector: 'typescript-graph-risk',
+    cachePrefix: 'scip-query-graph-risk-calibrate-',
+    truthRules: graphRiskTruthRules,
+    collectCandidates: collectGraphRiskCandidates,
+    summarize: (rows, detectors) => similarityPacketSummary(rows, detectors, {}),
+    render: renderGraphRiskPacket,
   });
 }
 
@@ -955,6 +1002,249 @@ function collectArchitectureCandidates(db, detector, context) {
   };
 }
 
+function collectGraphRiskCandidates(db, detector, context) {
+  const evidence = ['extract-candidates', 'locality-candidates', 'bottlenecks', 'complexity-hotspots'].includes(
+    detector,
+  )
+    ? 'mixed'
+    : 'graph-fact';
+  const normalize = (candidate) =>
+    normalizeSimilarityCandidate(candidate, {
+      detector,
+      repository: context.repository,
+      commit: context.commit,
+      evidence,
+      capabilityStatus: context.capabilityStatus,
+    });
+
+  let rawRows;
+  let metadata = { exhaustiveCandidateFrame: true };
+  if (detector === 'extract-candidates') {
+    rawRows = extractCandidates(db, {
+      limit: UNBOUNDED_RESULT_LIMIT,
+      semantic: true,
+    }).map((finding) => {
+      const endpoints = [definitionEndpoint(db, finding.symbol, finding.relativePath, context.root)];
+      return deferredSimilarityRow({
+        root: context.root,
+        endpoints,
+        symbol: finding.symbol,
+        shortName: finding.shortName,
+        findingKind: finding.extractionKind,
+        details: finding,
+      });
+    });
+  } else if (detector === 'locality-candidates') {
+    rawRows = localityCandidates(db, {
+      limit: UNBOUNDED_RESULT_LIMIT,
+      semantic: true,
+    }).map((finding) => {
+      const source = finding.sourceUnit;
+      const primary = source.symbol
+        ? definitionEndpoint(db, source.symbol, source.file, context.root)
+        : fileEndpoint(source.file);
+      const endpoints = [primary, ...finding.consumerFiles.slice(0, 12).map(fileEndpoint)];
+      return deferredSimilarityRow({
+        root: context.root,
+        endpoints,
+        symbol: source.symbol ?? source.file,
+        shortName: source.shortName,
+        findingKind: `${finding.recommendedTier}:${finding.destinationConfidence}`,
+        details: finding,
+      });
+    });
+  } else if (detector === 'coupling') {
+    rawRows = topCoupling(db, { limit: UNBOUNDED_RESULT_LIMIT }).map((finding) =>
+      deferredSimilarityRow({
+        root: context.root,
+        endpoints: [fileEndpoint(finding.file1), fileEndpoint(finding.file2)],
+        symbol: `${finding.file1}|${finding.file2}`,
+        shortName: `${finding.file1} ↔ ${finding.file2}`,
+        findingKind: `${finding.couplingKind}:${magnitudeBand(finding.sharedSymbols, 10, 3)}`,
+        details: finding,
+      }),
+    );
+  } else if (detector === 'bottlenecks') {
+    rawRows = bottlenecks(db, {
+      limit: UNBOUNDED_RESULT_LIMIT,
+      semantic: true,
+    }).map((finding) =>
+      deferredSimilarityRow({
+        root: context.root,
+        endpoints: [definitionEndpoint(db, finding.symbol, finding.definedIn, context.root)],
+        symbol: finding.symbol,
+        shortName: finding.shortName,
+        findingKind: `${finding.riskKind}:${magnitudeBand(finding.score, 100, 20)}`,
+        details: finding,
+      }),
+    );
+  } else if (detector === 'deep-chains') {
+    rawRows = deepChains(db, {
+      limit: UNBOUNDED_RESULT_LIMIT,
+    }).map((finding) =>
+      deferredSimilarityRow({
+        root: context.root,
+        endpoints: finding.chain.map(fileEndpoint),
+        symbol: finding.chain.join('|'),
+        shortName: `${finding.chain[0]} → ${finding.chain.at(-1)}`,
+        findingKind: `${finding.chainKind}:${magnitudeBand(finding.depth, 15, 8)}`,
+        details: finding,
+      }),
+    );
+  } else if (detector === 'complexity-hotspots') {
+    rawRows = complexityHotspots(db, {
+      limit: UNBOUNDED_RESULT_LIMIT,
+      semantic: true,
+    }).map((finding) =>
+      deferredSimilarityRow({
+        root: context.root,
+        endpoints: [definitionEndpoint(db, finding.symbol, finding.file, context.root)],
+        symbol: finding.symbol,
+        shortName: finding.shortName,
+        findingKind: `${finding.estimateBasis}:${magnitudeBand(finding.score, 10, 1)}`,
+        details: finding,
+      }),
+    );
+  } else if (detector === 'hotspots') {
+    rawRows = hotspots(db, { limit: UNBOUNDED_RESULT_LIMIT }).map((finding) =>
+      deferredSimilarityRow({
+        root: context.root,
+        endpoints: [definitionEndpoint(db, finding.symbol, finding.definedIn, context.root)],
+        symbol: finding.symbol,
+        shortName: finding.shortName,
+        findingKind: `cross-file-reference-count:${magnitudeBand(finding.refCount, 20, 5)}`,
+        details: finding,
+      }),
+    );
+  } else if (detector === 'fan-in') {
+    const productionRows = topFanIn(db, { limit: UNBOUNDED_RESULT_LIMIT });
+    const detailedRows = topFanInDetailedRows(db, UNBOUNDED_RESULT_LIMIT);
+    const nameCounts = new Map();
+    for (const finding of productionRows) {
+      nameCounts.set(finding.name, (nameCounts.get(finding.name) ?? 0) + 1);
+    }
+    metadata = {
+      ...metadata,
+      productionRows: productionRows.length,
+      detailedRows: detailedRows.length,
+      outputMultisetMatches: fanIdentityMultiset(productionRows) === fanIdentityMultiset(detailedRows),
+      duplicateDisplayNameRows: productionRows.filter((finding) => (nameCounts.get(finding.name) ?? 0) > 1).length,
+    };
+    rawRows = productionRows.map((finding) => {
+      return deferredSimilarityRow({
+        root: context.root,
+        endpoints: [definitionEndpoint(db, finding.symbol, finding.definedIn, context.root)],
+        symbol: finding.symbol,
+        shortName: `${finding.name} (${finding.count})`,
+        findingKind: `resolved-symbol-count:${magnitudeBand(finding.count, 10, 4)}`,
+        details: finding,
+      });
+    });
+  } else if (detector === 'fan-out') {
+    rawRows = topFanOut(db, { limit: UNBOUNDED_RESULT_LIMIT }).map((finding) =>
+      deferredSimilarityRow({
+        root: context.root,
+        endpoints: [fileEndpoint(finding.name)],
+        symbol: finding.name,
+        shortName: `${finding.name} (${finding.count})`,
+        findingKind: `external-symbol-count:${magnitudeBand(finding.count, 100, 25)}`,
+        details: finding,
+      }),
+    );
+  } else {
+    throw new Error(`unsupported graph-risk detector: ${detector}`);
+  }
+
+  const normalized = rawRows.map(normalize);
+  metadata = {
+    ...metadata,
+    subtypeCounts: Object.fromEntries(
+      [...new Set(normalized.map((row) => row.findingKind))]
+        .sort()
+        .map((findingKind) => [findingKind, normalized.filter((row) => row.findingKind === findingKind).length]),
+    ),
+  };
+  const sampled = deterministicStratifiedSample(
+    normalized,
+    Math.min(context.sampleSize, normalized.length),
+    context.seed,
+    (row) => row.findingKind,
+  );
+  return {
+    total: normalized.length,
+    rows: sampled.map((row) => ({ ...row, sourceExcerpt: graphRiskSourceExcerpt(context.root, row) })),
+    metadata,
+  };
+}
+
+function topFanInDetailedRows(db, limit) {
+  return db
+    .all(
+      `SELECT gs.symbol,
+              COUNT(DISTINCT c.document_id) AS file_count,
+              def_d.relative_path AS defined_in
+         FROM mentions m
+         JOIN chunks c ON m.chunk_id = c.id
+         JOIN global_symbols gs ON m.symbol_id = gs.id
+         JOIN (
+           SELECT m2.symbol_id, c2.document_id
+           FROM mentions m2
+           JOIN chunks c2 ON m2.chunk_id = c2.id
+           WHERE m2.role = 1
+           GROUP BY m2.symbol_id
+         ) sym_def ON sym_def.symbol_id = gs.id
+         JOIN documents def_d ON sym_def.document_id = def_d.id
+        WHERE m.role != 1
+          AND def_d.id != c.document_id
+          ${db.pathExclusionsFor('def_d')}
+          ${db.symbolNoiseFor('gs')}
+        GROUP BY gs.id
+       HAVING file_count > 1
+        ORDER BY file_count DESC
+        LIMIT ?`,
+      limit,
+    )
+    .map((row) => ({
+      name: shortenSymbol(row.symbol),
+      count: row.file_count,
+      symbol: row.symbol,
+      file: row.defined_in,
+    }));
+}
+
+function fanIdentityMultiset(rows) {
+  return [...rows]
+    .map((row) => `${row.symbol}\0${row.definedIn ?? row.file}\0${row.count}`)
+    .sort()
+    .join('\n');
+}
+
+function magnitudeBand(value, highThreshold, mediumThreshold) {
+  if (value >= highThreshold) return 'high';
+  if (value >= mediumThreshold) return 'medium';
+  return 'low';
+}
+
+function deferredSimilarityRow(options) {
+  return similarityRow({ ...options, sourceExcerpt: '' });
+}
+
+function graphRiskSourceExcerpt(root, row) {
+  if (row.detector === 'locality-candidates') {
+    return dependencyFilesExcerpt(root, [row.details.sourceUnit.file, ...row.details.consumerFiles.slice(0, 12)]);
+  }
+  if (row.detector === 'coupling') {
+    return dependencyFilesExcerpt(root, [row.details.file1, row.details.file2]);
+  }
+  if (row.detector === 'deep-chains') {
+    return dependencyPathExcerpt(root, row.details.components?.flat() ?? row.details.chain);
+  }
+  if (row.detector === 'fan-out') {
+    return dependencyFilesExcerpt(root, [row.details.name]);
+  }
+  return endpointSourceExcerpts(root, row.endpoints);
+}
+
 function similarityRow({ root, endpoints, symbol, shortName, findingKind, details, sourceExcerpt: excerpt }) {
   const primary = endpoints[0] ?? fileEndpoint('');
   return {
@@ -1180,14 +1470,26 @@ function renderArchitecturePacket(packet) {
   return renderRelationshipPacket(packet, 'TypeScript Architecture and History Detector Calibration Packet');
 }
 
+function renderGraphRiskPacket(packet) {
+  return renderRelationshipPacket(packet, 'TypeScript Extraction and Graph-Risk Detector Calibration Packet');
+}
+
 function renderRelationshipPacketForType(packet) {
-  return packet.detector === 'typescript-architecture'
-    ? renderArchitecturePacket(packet)
-    : renderSimilarityPacket(packet);
+  if (packet.detector === 'typescript-architecture') return renderArchitecturePacket(packet);
+  if (packet.detector === 'typescript-graph-risk') return renderGraphRiskPacket(packet);
+  return renderSimilarityPacket(packet);
 }
 
 function isRelationshipPacket(packet) {
-  return packet.detector === 'typescript-similarity' || packet.detector === 'typescript-architecture';
+  return (
+    packet.detector === 'typescript-similarity' ||
+    packet.detector === 'typescript-architecture' ||
+    packet.detector === 'typescript-graph-risk'
+  );
+}
+
+function usesStratifiedRelationshipSample(packet) {
+  return packet.detector === 'typescript-architecture' || packet.detector === 'typescript-graph-risk';
 }
 
 function renderRelationshipPacket(packet, title) {

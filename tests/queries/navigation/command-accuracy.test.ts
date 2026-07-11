@@ -141,7 +141,14 @@ describe('command accuracy fixes', () => {
   });
 
   it('resolves fan-in against the matched symbol instead of fuzzy nested matches', () => {
-    expect(fanIn(db, 'tryInstallScipCli')).toEqual([{ name: 'src:utils:tryInstallScipCli()', count: 2 }]);
+    expect(fanIn(db, 'tryInstallScipCli')).toEqual([
+      {
+        name: 'src:utils:tryInstallScipCli()',
+        count: 2,
+        symbol: 'scip-typescript npm pkg 1.0.0 src/`utils.ts`/tryInstallScipCli().',
+        definedIn: 'src/utils.ts',
+      },
+    ]);
   });
 
   it('keeps source-attributed cross-file callers out of dead-code results', () => {

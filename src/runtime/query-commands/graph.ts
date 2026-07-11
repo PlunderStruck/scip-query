@@ -51,9 +51,14 @@ const handleFanIn = dbCommand(({ db, args, opts }) => {
     printJsonEnvelope('fan-in', args, opts, { mode: 'top', rows: results });
     return;
   }
+  const nameCounts = new Map<string, number>();
+  for (const row of results) nameCounts.set(row.name, (nameCounts.get(row.name) ?? 0) + 1);
+  const duplicateNames = new Set([...nameCounts].filter(([, count]) => count > 1).map(([name]) => name));
   render.table(
     ['files', 'symbol'],
-    results.map((r) => `  ${String(r.count).padStart(5)}  ${r.name}`),
+    results.map(
+      (r) => `  ${String(r.count).padStart(5)}  ${r.name}${duplicateNames.has(r.name) ? `  [${r.definedIn}]` : ''}`,
+    ),
   );
 });
 
@@ -159,7 +164,10 @@ const handleDeepChains = reportCommand({
   render: (results) => {
     for (let i = 0; i < results.length; i++) {
       console.log(`\nChain ${i + 1} (depth ${results[i]!.depth}):`);
-      for (const file of results[i]!.chain) console.log(`  → ${file}`);
+      for (const component of results[i]!.components) {
+        const label = component.length === 1 ? component[0]! : `{ ${component.join(', ')} } (cycle)`;
+        console.log(`  → ${label}`);
+      }
       console.log(`  Tier: ${results[i]!.actionTier}  Risk: ${results[i]!.chainKind}`);
       console.log(`  Recommendation: ${results[i]!.recommendation}`);
       console.log(`  Evidence: ${results[i]!.evidenceReasons.join('; ')}`);
@@ -189,7 +197,7 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'fan-in',
     command: 'fan-in [symbol]',
-    description: 'How many files reference a symbol (or top fan-in across codebase)',
+    description: 'Count files referencing an exact symbol; top JSON rows include exact symbol identity',
     options: withJsonOption([
       option('-n, --limit <n>', 'Number of results for top mode', parseInteger, 30),
       option('-s, --scope <path>', 'Limit to files matching path'),
@@ -256,7 +264,7 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'deep-chains',
     command: 'deep-chains',
-    description: 'Find the longest transitive dependency chains',
+    description: 'Find the longest condensed dependency-component chains',
     options: withJsonOption([
       option('-n, --limit <n>', 'Number of chains to show', parseInteger, 10),
       option('-s, --scope <path>', 'Limit to files matching path'),

@@ -1,0 +1,43 @@
+{
+  "groups": [
+    {
+      "verdict": "valid",
+      "detectors": [
+        "extract-candidates",
+        "locality-candidates",
+        "coupling",
+        "bottlenecks",
+        "deep-chains",
+        "complexity-hotspots",
+        "hotspots",
+        "fan-in",
+        "fan-out"
+      ],
+      "evidenceNote": "Reviewed against exact compiler identities and source endpoints across four repositories. All 417 sampled rows passed detector-specific source-span, ownership, component, count, and score invariants; focused known-positive fixtures cover every command."
+    }
+  ],
+  "utilityGroups": [
+    {
+      "verdict": "non-actionable",
+      "archetype": "structural-signal-requires-local-design-context",
+      "detectors": ["extract-candidates", "locality-candidates", "coupling", "bottlenecks", "deep-chains"],
+      "evidenceNote": "The disclosed structure is useful for investigation, but extraction, movement, dependency reduction, or boundary changes require a concept name, ownership judgment, and behavioral evidence beyond the measurement alone."
+    },
+    {
+      "verdict": "not-applicable",
+      "detectors": ["complexity-hotspots", "hotspots", "fan-in", "fan-out"],
+      "evidenceNote": "These commands emit measurements and rankings rather than a direct code-change recommendation; their values should be combined with local design and change context."
+    }
+  ],
+  "knownPositiveRecallCases": {
+    "extract-candidates": 1,
+    "locality-candidates": 1,
+    "coupling": 1,
+    "bottlenecks": 1,
+    "deep-chains": 1,
+    "complexity-hotspots": 1,
+    "hotspots": 1,
+    "fan-in": 1,
+    "fan-out": 1
+  }
+}

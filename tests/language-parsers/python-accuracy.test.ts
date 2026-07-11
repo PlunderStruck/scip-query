@@ -474,7 +474,14 @@ describe('python repo accuracy regressions', () => {
   });
 
   it('resolves fan-in against the exact Python symbol', () => {
-    expect(fanIn(db, 'GardenSimulation')).toEqual([{ name: 'simulation:GardenSimulation', count: 3 }]);
+    expect(fanIn(db, 'GardenSimulation')).toEqual([
+      {
+        name: 'simulation:GardenSimulation',
+        count: 3,
+        symbol: 'scip-python python project 0.1.0 simulation/GardenSimulation#',
+        definedIn: 'simulation.py',
+      },
+    ]);
   });
 
   it('falls back to Python source calls when the index omits function-internal mentions', () => {

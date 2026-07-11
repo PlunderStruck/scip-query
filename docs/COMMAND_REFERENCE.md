@@ -84,12 +84,12 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 | Command | Description | Options |
 |---|---|---|
 | `hotspots` | Most-referenced symbols in the codebase (choke points) | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--full`<br>`--json` |
-| `fan-in [symbol]` | How many files reference a symbol (or top fan-in across codebase) | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--full`<br>`--json` |
+| `fan-in [symbol]` | Count files referencing an exact symbol; top JSON rows include exact symbol identity | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--full`<br>`--json` |
 | `fan-out [file]` | How many external symbols a file uses (or top fan-out across codebase) | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--full`<br>`--json` |
 | `coupling [file1] [file2]` | Coupling between two files, or top coupled pairs in codebase | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--full`<br>`--json` |
 | `cycles` | Detect circular dependency chains between files | `-s, --scope <path>`<br>`--max-depth <n>`<br>`--json` |
 | `bottlenecks` | Find coupling hubs: high fan-in AND high fan-out | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--min-fan-in <n>`<br>`--min-fan-out <n>`<br>`--full`<br>`--json` |
-| `deep-chains` | Find the longest transitive dependency chains | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--min-depth <n>`<br>`--full`<br>`--json` |
+| `deep-chains` | Find the longest condensed dependency-component chains | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--min-depth <n>`<br>`--full`<br>`--json` |
 | `call-graph <symbol>` | Show incoming callers and outgoing callees for a symbol | `--full`<br>`--json` |
 
 ### Impact

@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 import { bottlenecks } from '../../../src/queries/graph/bottlenecks.js';
 import { coupling, topCoupling } from '../../../src/queries/graph/coupling.js';
 import { deepChains } from '../../../src/queries/graph/deep-chains.js';
+import { topFanIn, topFanOut } from '../../../src/queries/graph/fan.js';
+import { hotspots } from '../../../src/queries/graph/hotspots.js';
 import { drift } from '../../../src/queries/cleanup/drift.js';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
@@ -117,6 +119,51 @@ function withGraphFixture(run: (db: ScipDatabase) => void): void {
   }
 }
 
+function withCycleChainFixture(run: (db: ScipDatabase) => void): void {
+  const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-deep-chain-cycle-'));
+  const dbPath = join(tempDir, 'index.db');
+  try {
+    writeFixtureFiles(tempDir, {
+      'src/cycle-a.ts': 'export function cycleA(): void { cycleB(); }',
+      'src/cycle-b.ts': 'export function cycleB(): void { cycleA(); tail(); }',
+      'src/tail.ts': 'export function tail(): void {}',
+    });
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/cycle-a.ts')
+      .document(2, 'typescript', 'src/cycle-b.ts')
+      .document(3, 'typescript', 'src/tail.ts')
+      .symbol(1, sym('cycle-a.ts', 'cycleA'), 'cycleA', 6)
+      .symbol(2, sym('cycle-b.ts', 'cycleB'), 'cycleB', 6)
+      .symbol(3, sym('tail.ts', 'tail'), 'tail', 6)
+      .definition(1, 1, 1, 0, 0, 0, 40)
+      .definition(2, 2, 2, 0, 0, 0, 50)
+      .definition(3, 3, 3, 0, 0, 0, 30)
+      .chunk(1, 1, 0, 0)
+      .chunk(2, 2, 0, 0)
+      .chunk(3, 3, 0, 0)
+      .mention(1, 1, 1)
+      .mention(1, 2, 0)
+      .mention(2, 2, 1)
+      .mention(2, 1, 0)
+      .mention(2, 3, 0)
+      .mention(3, 3, 1)
+      .write();
+
+    const db = new ScipDatabase({
+      dbPath,
+      indexPath: join(tempDir, 'index.scip'),
+      projectRoot: tempDir,
+    });
+    try {
+      run(db);
+    } finally {
+      db.close();
+    }
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
 function withDriftPolicyFixture(run: (db: ScipDatabase) => void): void {
   const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-drift-policy-'));
   const dbPath = join(tempDir, 'index.db');
@@ -187,6 +234,21 @@ describe('graph-risk output classification', () => {
       );
       expect(central?.recommendation).toContain('do not refactor solely from graph centrality');
 
+      expect(topFanIn(db, { limit: 20 }).find((row) => row.name === 'src:central:central()')).toMatchObject({
+        count: 2,
+        symbol: sym('central.ts', 'central'),
+        definedIn: 'src/central.ts',
+      });
+      expect(topFanOut(db, { limit: 20 }).find((row) => row.name === 'src/central.ts')).toEqual({
+        name: 'src/central.ts',
+        count: 2,
+      });
+      expect(hotspots(db, { limit: 20 }).find((row) => row.shortName === 'src:central:central()')).toMatchObject({
+        refCount: 2,
+        fileCount: 2,
+        definedIn: 'src/central.ts',
+      });
+
       const pair = coupling(db, 'src/model.ts', 'src/view.ts');
       expect(pair).toMatchObject({
         actionTier: 'signal',
@@ -209,6 +271,22 @@ describe('graph-risk output classification', () => {
         actionTier: 'signal',
         chainKind: 'transitive-dependency-depth',
       });
+    });
+  });
+
+  it('counts a dependency cycle as one condensed depth component', () => {
+    withCycleChainFixture((db) => {
+      const [chain] = deepChains(db, { minDepth: 2, limit: 10 });
+
+      expect(chain).toMatchObject({
+        chain: ['src/cycle-a.ts', 'src/tail.ts'],
+        components: [['src/cycle-a.ts', 'src/cycle-b.ts'], ['src/tail.ts']],
+        depth: 2,
+        fileCount: 3,
+      });
+      expect(chain?.evidenceReasons).toContain(
+        'cycles count once toward depth and retain their full membership separately',
+      );
     });
   });
 

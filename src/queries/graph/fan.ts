@@ -9,11 +9,18 @@ export interface FanResult {
   count: number;
 }
 
+export interface FanInResult extends FanResult {
+  /** Exact SCIP symbol identity; `name` is only a shortened display label. */
+  symbol: string;
+  /** File that owns the exact definition counted by this row. */
+  definedIn: string;
+}
+
 /**
  * Fan-in: how many distinct files reference this symbol.
  * High fan-in = widely depended upon = high blast radius for changes.
  */
-export function fanIn(db: ScipDatabase, symbolPattern: string): FanResult[] {
+export function fanIn(db: ScipDatabase, symbolPattern: string): FanInResult[] {
   const match = findFirstSymbolMatch(db, symbolPattern);
   if (!match) {
     return [];
@@ -40,6 +47,8 @@ export function fanIn(db: ScipDatabase, symbolPattern: string): FanResult[] {
     {
       name: shortenSymbol(match.symbol),
       count: row?.file_count ?? 0,
+      symbol: match.symbol,
+      definedIn: match.relativePath,
     },
   ];
 }
@@ -107,23 +116,27 @@ export function fanOut(db: ScipDatabase, filePattern: string): FanResult[] {
 /**
  * Top fan-in across the whole codebase — the most depended-on symbols.
  */
-export function topFanIn(db: ScipDatabase, opts: { limit?: number; scope?: string } = {}): FanResult[] {
+export function topFanIn(db: ScipDatabase, opts: { limit?: number; scope?: string } = {}): FanInResult[] {
   return fetchTopFanInRows(db, opts).map((r) => ({
     name: shortenSymbol(r.symbol),
     count: r.file_count,
+    symbol: r.symbol,
+    definedIn: r.defined_in,
   }));
 }
 
 function fetchTopFanInRows(
   db: ScipDatabase,
   opts: { limit?: number; scope?: string },
-): Array<{ symbol: string; file_count: number }> {
+): Array<{ symbol: string; file_count: number; defined_in: string }> {
   const { limit = 30, scope } = opts;
   const scopeFilter = scope ? `AND def_d.relative_path LIKE ?` : '';
   const scopeParams = scope ? [`%${scope}%`] : [];
 
-  return db.all<{ symbol: string; file_count: number }>(
-    `SELECT gs.symbol, COUNT(DISTINCT c.document_id) AS file_count
+  return db.all<{ symbol: string; file_count: number; defined_in: string }>(
+    `SELECT gs.symbol,
+            COUNT(DISTINCT c.document_id) AS file_count,
+            def_d.relative_path AS defined_in
     FROM mentions m
     JOIN chunks c ON m.chunk_id = c.id
     JOIN global_symbols gs ON m.symbol_id = gs.id

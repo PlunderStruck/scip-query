@@ -30,6 +30,27 @@ export const TYPESCRIPT_ARCHITECTURE_DETECTORS = [
   'passthrough-candidates',
   'stale-abstractions',
 ];
+export const TYPESCRIPT_GRAPH_RISK_DETECTORS = [
+  'extract-candidates',
+  'locality-candidates',
+  'coupling',
+  'bottlenecks',
+  'deep-chains',
+  'complexity-hotspots',
+  'hotspots',
+  'fan-in',
+  'fan-out',
+];
+
+export function parseGraphRiskCalibrationOptions(rawArgs, defaultRoots, resolveRoot = (value) => value) {
+  return parseTypeScriptDetectorOptions(rawArgs, {
+    defaultRoots,
+    detectors: TYPESCRIPT_GRAPH_RISK_DETECTORS,
+    optionLabel: 'graph-risk',
+    resolveRoot,
+    seed: 'typescript-graph-risk-v1',
+  });
+}
 
 export function parseArchitectureCalibrationOptions(rawArgs, defaultRoots, resolveRoot = (value) => value) {
   return parseTypeScriptDetectorOptions(rawArgs, {

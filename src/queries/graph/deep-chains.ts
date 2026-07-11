@@ -2,9 +2,14 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
 
 export interface DeepChainResult {
-  /** Files in the chain, from leaf to root */
+  /** Canonical representative file for each condensed dependency component. */
   chain: string[];
+  /** Full component membership; arrays with multiple files are dependency cycles. */
+  components: string[][];
+  /** Number of condensed dependency components, not the number of files inside cycles. */
   depth: number;
+  /** Total files represented by the condensed component path. */
+  fileCount: number;
   actionTier: 'signal';
   chainKind: 'transitive-dependency-depth';
   evidenceReasons: string[];
@@ -102,10 +107,7 @@ export function deepChains(
   // 2. Build condensed DAG over SCCs.
   // sccs are emitted in reverse topological order by Tarjan.
   const dag = new Map<SccId, Set<SccId>>();
-  // Member count per SCC drives chain length: a 5-file cycle counts as 5.
-  const sccSize = new Array<number>(sccs.length);
   for (let i = 0; i < sccs.length; i++) {
-    sccSize[i] = sccs[i]!.length;
     dag.set(i, new Set<SccId>());
   }
   for (const [from, neighbors] of graph) {
@@ -120,7 +122,8 @@ export function deepChains(
   // (sinks first, sources last), so a forward iteration of `sccs` gives us
   // a valid bottom-up DP order.
   // longestSccPath[s] = list of SCC IDs forming the longest chain starting at s.
-  // pathLength[s] = sum of sccSize[id] over that path.
+  // pathLength[s] = number of condensed dependency components. A cycle is
+  // one component, so adding its member count would falsely inflate depth.
   const longestSccPath = new Array<SccId[]>(sccs.length);
   const pathLength = new Array<number>(sccs.length);
   for (let s = 0; s < sccs.length; s++) {
@@ -134,44 +137,48 @@ export function deepChains(
       }
     }
     longestSccPath[s] = [s, ...bestTail];
-    pathLength[s] = sccSize[s]! + bestTailLength;
+    pathLength[s] = 1 + bestTailLength;
   }
   function lp(s: SccId): SccId[] {
     return longestSccPath[s]!;
   }
 
-  // 4. Materialize one representative file path per SCC.
-  // For DAG output we pick the alphabetically-first file in each SCC as
-  // the representative. Multi-file cycles inflate the chain length by
-  // listing every member of the SCC in alphabetical order before moving on.
+  // 4. Materialize one representative file path per SCC while retaining full
+  // component membership. Multi-file cycles are one dependency component;
+  // listing their members as sequential chain steps would invent edges.
   const sortedScc = sccs.map((members) => [...members].sort());
 
   const seen = new Set<string>();
   const results: DeepChainResult[] = [];
   for (let s = 0; s < sccs.length; s++) {
     const sccPath = lp(s);
-    const chain: string[] = [];
-    for (const id of sccPath) chain.push(...sortedScc[id]!);
-    if (chain.length < minDepth) continue;
+    const components = sccPath.map((id) => sortedScc[id]!);
+    const chain = components.map((component) => component[0]!);
+    if (components.length < minDepth) continue;
     const key = chain.join(' ');
     if (seen.has(key)) continue;
     seen.add(key);
-    results.push(deepChainResult(chain));
+    results.push(deepChainResult(chain, components));
   }
 
   results.sort((a, b) => b.depth - a.depth);
   return dedupeSuffixChains(results).slice(0, limit);
 }
 
-function deepChainResult(chain: string[]): DeepChainResult {
+function deepChainResult(chain: string[], components: string[][]): DeepChainResult {
+  const fileCount = components.reduce((sum, component) => sum + component.length, 0);
+  const cycleCount = components.filter((component) => component.length > 1).length;
   return {
     chain,
-    depth: chain.length,
+    components,
+    depth: components.length,
+    fileCount,
     actionTier: 'signal',
     chainKind: 'transitive-dependency-depth',
     evidenceReasons: [
-      `${chain.length} file(s) form the representative transitive dependency path`,
-      'cycles are condensed before longest-path calculation',
+      `${components.length} condensed dependency component(s) form the representative transitive path`,
+      `${fileCount} file(s) are represented; ${cycleCount} component(s) contain a dependency cycle`,
+      'cycles count once toward depth and retain their full membership separately',
     ],
     recommendation:
       'Review whether the chain crosses ownership or layer boundaries; shorten it only when the dependency direction is accidental.',
