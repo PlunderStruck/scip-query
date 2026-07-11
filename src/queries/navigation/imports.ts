@@ -8,6 +8,7 @@ import type { ParsedSourceImport } from '../../domain/types.js';
 import { isModuleLikeSymbol, leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { detectAstLanguage } from '../../source/ast.js';
 import { normalizePathSeparators as normalizePath } from '../../source/path-normalization.js';
+import { getSourceText } from '../../source/source-text.js';
 
 export interface ImportResult {
   symbol: string;
@@ -297,13 +298,18 @@ function semanticFileImportEntries(db: ScipDatabase, importer: string): ImportEn
 }
 
 function sourceFileImportEntries(db: ScipDatabase, importer: string): ImportEntry[] {
+  const pythonExports = pythonRuntimeExportNames(importer, getSourceText(db, importer));
   return getSourceImports(db, importer).map((entry) => {
     const rendered = renderImportSymbol(entry.importedName, entry.localName, entry.kind);
     // Side-effect imports never reference a named symbol, so they're never
     // "unused" in the sense unused-imports flags. Mark them used to preserve
     // the original `kind !== 'side-effect' && !entry.used` filter behavior.
     const used =
-      entry.kind === 'side-effect' || rustImportMayProvideImplicitMethods(importer, entry) ? true : entry.used;
+      entry.kind === 'side-effect' ||
+      rustImportMayProvideImplicitMethods(importer, entry) ||
+      pythonExports.has(entry.localName ?? entry.importedName)
+        ? true
+        : entry.used;
     return {
       symbol: rendered,
       shortName: rendered,
@@ -312,6 +318,25 @@ function sourceFileImportEntries(db: ScipDatabase, importer: string): ImportEntr
       used,
     };
   });
+}
+
+/**
+ * Names listed in a Python module's `__all__` are runtime exports. They often
+ * appear only as string literals, which the ordinary identifier-usage scan
+ * deliberately masks. Restrict this recovery to literal list/tuple
+ * assignments so unrelated strings do not make an import look used.
+ */
+function pythonRuntimeExportNames(importer: string, source: string): Set<string> {
+  const exports = new Set<string>();
+  if (detectAstLanguage(importer) !== 'python') return exports;
+  const assignmentPattern = /(?:^|\n)\s*__all__\s*(?:\+?=)\s*[[(]([\s\S]*?)[\])]/g;
+  for (const assignment of source.matchAll(assignmentPattern)) {
+    const body = assignment[1] ?? '';
+    for (const literal of body.matchAll(/(['"])([A-Za-z_]\w*)\1/g)) {
+      exports.add(literal[2]!);
+    }
+  }
+  return exports;
 }
 
 /**

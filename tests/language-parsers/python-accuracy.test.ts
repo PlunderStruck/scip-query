@@ -53,6 +53,17 @@ function createPythonFixtureProject(projectRoot: string): void {
       '',
     ].join('\n'),
   );
+
+  writeFileSync(
+    join(projectRoot, 'exports.py'),
+    [
+      'from simulation import GardenSimulation, helper',
+      'import json as unused_json',
+      '',
+      '__all__ = ["GardenSimulation", "helper"]',
+      '',
+    ].join('\n'),
+  );
 }
 
 function createPythonFixtureDb(dbPath: string): void {
@@ -112,7 +123,8 @@ function createPythonFixtureDb(dbPath: string): void {
       (1, 'python', 'app.py'),
       (2, 'python', 'analysis.py'),
       (3, 'python', 'simulation.py'),
-      (4, 'python', 'tests/test_simulation.py');
+      (4, 'python', 'tests/test_simulation.py'),
+      (5, 'python', 'exports.py');
   `);
 
   const insertSymbol = sqliteDb.prepare(
@@ -142,7 +154,8 @@ function createPythonFixtureDb(dbPath: string): void {
       (1, 1, 0, 0, 7, X'00'),
       (2, 2, 0, 0, 3, X'00'),
       (3, 3, 0, 0, 5, X'00'),
-      (4, 4, 0, 0, 3, X'00');
+      (4, 4, 0, 0, 3, X'00'),
+      (5, 5, 0, 0, 4, X'00');
   `);
 
   run(`
@@ -425,10 +438,12 @@ describe('python repo accuracy regressions', () => {
     expect(importedBy(db, 'GardenSimulation').map((result) => result.fromFile)).toEqual([
       'analysis.py',
       'app.py',
+      'exports.py',
       'tests/test_simulation.py',
     ]);
 
     expect(unusedImports(db, 'app.py').map((result) => result.shortName)).toEqual(['json as unused_json']);
+    expect(unusedImports(db, 'exports.py').map((result) => result.shortName)).toEqual(['json as unused_json']);
   });
 
   it('does not invent layer violations for flat root-level Python modules or tests', () => {
