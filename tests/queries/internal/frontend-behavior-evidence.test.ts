@@ -62,4 +62,33 @@ describe('frontend behavior evidence helpers', () => {
       reasons: ['120 line(s)', '45 token(s)'],
     });
   });
+
+  it('selects the dominant pressure only from axes that qualified', () => {
+    const profile = { fileLines: 700, structureTokens: 80 };
+    const result = evaluatePressure(
+      profile,
+      [
+        {
+          axis: 'file',
+          value: (entry) => entry.fileLines,
+          qualifies: (_entry, value) => value >= 800,
+          reason: (_entry, value) => `${value} file line(s)`,
+        },
+        {
+          axis: 'structure',
+          value: (entry) => entry.structureTokens,
+          weightedValue: (_entry, value) => value * 3,
+          qualifies: (_entry, value) => value >= 80,
+          reason: (_entry, value) => `${value} structure token(s)`,
+        },
+      ],
+      'file',
+    );
+
+    expect(result).toEqual({
+      dominantPressure: 'structure',
+      pressureKinds: ['structure'],
+      reasons: ['80 structure token(s)'],
+    });
+  });
 });

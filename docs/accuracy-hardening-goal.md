@@ -1,7 +1,7 @@
 # Accuracy Hardening and Health Certification Roadmap
 
 Date: 2026-07-10
-Status: Active; TypeScript dead-code, four factual detectors, and three similarity relationships certified; Rust dead-code hardened but insufficiently evidenced
+Status: Active; TypeScript factual, similarity, architecture, graph-risk, React, and Vue detector slices audited; Rust dead-code hardened but insufficiently evidenced
 
 ## Goal
 
@@ -83,11 +83,11 @@ The first calibration corpus uses repositories already available locally.
 They remain read-only; any deletion test or planted known-positive case runs
 in an isolated worktree or temporary clone.
 
-| Cohort     | Initial repositories                                 | Coverage purpose                                                                                                    |
-| ---------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| TypeScript | Vega_2.0, openwork, Stable_Management, traceroot     | React, workspaces, packages, backend code, and mixed-language boundaries                                            |
-| Rust       | openai/codex, SynthRunnerRust                        | Large workspace plus small crate; traits, derives, macros, generated code, async runtimes, and public APIs          |
-| Python     | scip-python, traceroot, Python files in openai/codex | Large Python codebase, mixed repositories, decorators, framework registration, and current semantic-capability gaps |
+| Cohort     | Initial repositories                                                                                  | Coverage purpose                                                                                                    |
+| ---------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| TypeScript | Vega_2.0, openwork, Stable_Management, traceroot; Element Plus and PrimeVue for Vue framework breadth | React, Vue, workspaces, packages, backend code, documentation/showcase families, and mixed-language boundaries      |
+| Rust       | openai/codex, SynthRunnerRust                                                                         | Large workspace plus small crate; traits, derives, macros, generated code, async runtimes, and public APIs          |
+| Python     | scip-python, traceroot, Python files in openai/codex                                                  | Large Python codebase, mixed repositories, decorators, framework registration, and current semantic-capability gaps |
 
 Additional public repositories may be added to cover a missing framework or
 repository shape. Corpus additions must address a named gap rather than merely
@@ -260,12 +260,14 @@ active program above.
 
 ## Immediate Next Slice
 
-Continue Phase 3 with React and Vue duplication, composition, and pressure
-analyzers. The TypeScript extraction/locality and graph-risk slice is complete.
-Expand targeted corpus or historical cases for the factual and similarity
-detectors that remain insufficiently evidenced. In parallel, renew Rust `dead`
-against additional repositories or historical commits until its sparse
-post-hardening frame satisfies the same statistical gates.
+Finish the small remaining TypeScript gaps: verify the `twin-ab` generated
+scaffold, expand targeted corpus or historical cases for detectors that remain
+insufficiently evidenced, and raise `bottlenecks` above its current confidence
+floor if a broader population exists. Then renew the Rust detector campaign
+against additional repositories or historical commits before beginning Python
+semantic certification. Vue resolved-reference completeness also needs a third
+dependency-ready, source-reviewed repository even though its operational path
+is now hardened.
 
 ## Progress — 2026-07-10
 
@@ -341,6 +343,27 @@ at 33/33 because its 89.6% confidence floor remains just below the certified
 threshold. The 69,942-row uncapped frame exposed and removed ambiguous
 shortened fan-in identities and cycle-inflated dependency depth. These results
 certify the disclosed measurements, not automatic refactoring actionability.
+
+The React and Vue framework-detector campaign is complete:
+[`2026-07-11-react-vue-detectors.md`](./validation/2026-07-11-react-vue-detectors.md).
+React component duplication, hook candidates, and component pressure are each
+certified at 48/48 valid rows across three repositories. Vue component
+duplication is certified at 41/41 across four repositories, composable
+candidates at 48/48 across three repositories with findings, and view pressure
+at 64/64 across four repositories. The 54,586-row combined uncapped frame
+removed unqualified dominant-pressure axes, nested-component route-page
+misclassification, and unreproducible similarity-score totals. All sampled
+refactoring advice remained non-actionable without local design context.
+
+The same campaign audited `augment-vue`. Stable_Management produced 66,396
+resolved SFC mentions, and hardened on_main_mvp produced 13,700 while exposing
+26,319 skipped source tokens. Missing project files no longer abort the whole
+run, the reliable single-context resolver is now the default after parallel
+worker stalls reproduced at two, four, and eight workers, and the CLI discloses
+skipped references and synthetic symbols. Completeness remains insufficiently
+evidenced until resolved and missed sites are source-reviewed across a third
+dependency-ready Vue repository; ordinary `reindex` must not be described as
+running this optional augmentation automatically.
 
 ## Program Acceptance Criteria
 

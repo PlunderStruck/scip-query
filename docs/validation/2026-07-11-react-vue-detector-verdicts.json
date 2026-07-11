@@ -1,0 +1,39 @@
+{
+  "groups": [
+    {
+      "verdict": "valid",
+      "detectors": [
+        "react-component-duplicates",
+        "react-hook-candidates",
+        "react-large-component-pressure",
+        "vue-component-duplicates",
+        "vue-composable-candidates",
+        "vue-large-view-pressure"
+      ],
+      "evidenceNote": "Reviewed 297 deterministic, subtype-stratified rows against pinned source across three React and four Vue repositories after hardening. The independent arithmetic replay performed 409 exact score, pressure-axis, dominant-axis, and source-line checks with zero mismatches; sampled shared token categories were also inspected at both source endpoints. Focused known-positive fixtures cover every detector."
+    }
+  ],
+  "utilityGroups": [
+    {
+      "verdict": "non-actionable",
+      "archetype": "framework-similarity-and-pressure-require-local-design-context",
+      "detectors": [
+        "react-component-duplicates",
+        "react-hook-candidates",
+        "react-large-component-pressure",
+        "vue-component-duplicates",
+        "vue-composable-candidates",
+        "vue-large-view-pressure"
+      ],
+      "evidenceNote": "The emitted overlap or pressure is useful investigation evidence, but component, hook, composable, or view decomposition requires ownership, lifecycle, design-system, generated/example-code, and change-context judgments beyond the measurement alone."
+    }
+  ],
+  "knownPositiveRecallCases": {
+    "react-component-duplicates": 1,
+    "react-hook-candidates": 1,
+    "react-large-component-pressure": 1,
+    "vue-component-duplicates": 1,
+    "vue-composable-candidates": 1,
+    "vue-large-view-pressure": 1
+  }
+}

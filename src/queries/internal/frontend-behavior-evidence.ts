@@ -150,7 +150,7 @@ export function evaluatePressure<Profile, Axis extends string>(
     .filter((entry) => entry.qualifies && entry.axis.reason)
     .map((entry) => entry.axis.reason!(profile, entry.value));
   const dominant = measured
-    .filter((entry) => entry.axis.dominantEligible !== false)
+    .filter((entry) => entry.qualifies && entry.axis.dominantEligible !== false)
     .sort((a, b) => b.weighted - a.weighted)[0];
   const dominantPressure = dominant && dominant.weighted > 0 ? dominant.axis.axis : fallbackAxis;
   const pressureKinds = [

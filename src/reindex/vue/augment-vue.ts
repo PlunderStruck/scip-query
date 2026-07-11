@@ -307,20 +307,20 @@ function computeVueResolvedReferencesForFiles(opts: VueReferenceComputationOptio
 // scip-query: ignore-extract — this prepares one bounded Vue reference task:
 // service script lookup, source cache lookup, token windows, and mapper context
 // are the setup contract for the resolver.
-function computeVueReferenceTask(
+export function computeVueReferenceTask(
   opts: VueReferenceComputationOptions,
   task: VueReferenceTask,
 ): VueReferenceComputationResult {
+  const sourceInfo = opts.sourceReader.get(task.fileName);
+  if (!sourceInfo) {
+    return { occurrences: [], skippedReferences: task.countFileSkip ? 1 : 0 };
+  }
+
   const sourceScript = opts.context.language.scripts.get(task.fileName);
   const serviceScript = sourceScript?.generated?.languagePlugin.typescript?.getServiceScript(
     sourceScript.generated.root,
   )?.code;
   if (!sourceScript || !serviceScript) {
-    return { occurrences: [], skippedReferences: task.countFileSkip ? 1 : 0 };
-  }
-
-  const sourceInfo = opts.sourceReader.get(task.fileName);
-  if (!sourceInfo) {
     return { occurrences: [], skippedReferences: task.countFileSkip ? 1 : 0 };
   }
 

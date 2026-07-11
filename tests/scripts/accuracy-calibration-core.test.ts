@@ -14,6 +14,7 @@ import {
   parseArchitectureCalibrationOptions,
   parseDeadCalibrationOptions,
   parseFactualCalibrationOptions,
+  parseFrameworkCalibrationOptions,
   parseGraphRiskCalibrationOptions,
   parseSimilarityCalibrationOptions,
   summarizeCalibration,
@@ -149,6 +150,32 @@ describe('accuracy calibration core', () => {
       ),
     ).toMatchObject({ detectors: ['fan-in'], sampleSize: 8, roots: ['/repos/custom'] });
     expect(() => parseGraphRiskCalibrationOptions(['--detector', 'drift'], ['/repos/default'])).toThrow(
+      '--detector must be one of',
+    );
+  });
+
+  it('selects all TypeScript framework detectors or an explicit repeatable subset', () => {
+    const all = parseFrameworkCalibrationOptions([], ['/repos/a', '/repos/b']);
+    expect(all).toMatchObject({
+      language: 'typescript',
+      seed: 'typescript-framework-v1',
+      roots: ['/repos/a', '/repos/b'],
+    });
+    expect(all.detectors).toEqual([
+      'react-component-duplicates',
+      'react-hook-candidates',
+      'react-large-component-pressure',
+      'vue-component-duplicates',
+      'vue-composable-candidates',
+      'vue-large-view-pressure',
+    ]);
+    expect(
+      parseFrameworkCalibrationOptions(
+        ['--detector', 'react-hook-candidates', '--detector', 'react-hook-candidates', '/repos/custom'],
+        ['/repos/default'],
+      ),
+    ).toMatchObject({ detectors: ['react-hook-candidates'], roots: ['/repos/custom'] });
+    expect(() => parseFrameworkCalibrationOptions(['--detector', 'similar'], ['/repos/default'])).toThrow(
       '--detector must be one of',
     );
   });

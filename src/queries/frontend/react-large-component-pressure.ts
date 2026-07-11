@@ -156,20 +156,20 @@ function reactContextKind(profile: ReactComponentBehaviorProfile): ReactLargeCom
   const segments = profile.file.split(/[\\/]+/).filter(Boolean);
   const ownerSegments = segments.slice(0, -1).map((segment) => segment.toLowerCase());
   const baseName = (segments.at(-1) ?? profile.name).replace(/\.[^.]+$/, '');
-  const lowerNameTokens = `${baseName} ${profile.name}`
-    .split(/[^A-Za-z0-9]+/)
-    .filter(Boolean)
-    .map((token) => token.toLowerCase());
   const routeRootIndex = ownerSegments.findIndex((segment) => ROUTE_DIRECTORY_TOKENS.has(segment));
-  const nestedLocalComponent =
-    routeRootIndex >= 0 &&
-    ownerSegments.slice(routeRootIndex + 1).some((segment) => LOCAL_COMPONENT_DIRECTORY_TOKENS.has(segment));
+  const routeOwned = routeRootIndex >= 0;
+  const localComponentDirectory = ownerSegments.some((segment) => LOCAL_COMPONENT_DIRECTORY_TOKENS.has(segment));
   const componentNamed = componentNameLooksLocal(baseName) || componentNameLooksLocal(profile.name);
-  const routeNamed =
-    /(?:Page|Route|Screen|View)$/.test(baseName) ||
-    /(?:Page|Route|Screen|View)$/.test(profile.name) ||
-    lowerNameTokens.some((token) => REACT_ROUTE_NAME_TOKENS.has(token));
-  if (routeNamed || (routeRootIndex >= 0 && !nestedLocalComponent && !componentNamed)) {
+  if (componentNamed) return 'component';
+
+  const conventionalRouteFile = REACT_ROUTE_FILE_NAMES.has(baseName.toLowerCase());
+  const explicitlyRouteNamed = /(?:Page|Route|Screen)$/.test(profile.name);
+  const routeOwnedView = routeOwned && /View$/.test(profile.name);
+  const sameNamedRouteModule =
+    !localComponentDirectory &&
+    baseName.replace(/[^A-Za-z0-9]+/g, '').toLowerCase() === profile.name.replace(/[^A-Za-z0-9]+/g, '').toLowerCase() &&
+    /(?:Page|Route|Screen|View)$/.test(baseName);
+  if (conventionalRouteFile || explicitlyRouteNamed || routeOwnedView || sameNamedRouteModule) {
     return 'route-page';
   }
   return 'component';
@@ -257,7 +257,7 @@ const ROUTE_DIRECTORY_TOKENS = new Set([
   'view',
   'views',
 ]);
-const REACT_ROUTE_NAME_TOKENS = new Set(['landing', 'page', 'route', 'screen', 'view']);
+const REACT_ROUTE_FILE_NAMES = new Set(['page', 'route', 'screen']);
 
 function titleCaseToken(token: string): string {
   return token.charAt(0).toUpperCase() + token.slice(1);

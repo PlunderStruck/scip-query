@@ -30,6 +30,9 @@ import {
   localityCandidates,
   notImplemented,
   passthroughCandidates,
+  reactComponentDuplicates,
+  reactHookCandidates,
+  reactLargeComponentPressure,
   recentDuplicates,
   redundantReexports,
   similarAll,
@@ -44,6 +47,9 @@ import {
   topCoupling,
   topFanIn,
   topFanOut,
+  vueComponentDuplicates,
+  vueComposableCandidates,
+  vueLargeViewPressure,
   wrapperCandidates,
 } from '../dist/queries/index.js';
 import { ScipDatabase, shortenSymbol } from '../dist/index.js';
@@ -59,6 +65,7 @@ import {
   parseArchitectureCalibrationOptions,
   parseDeadCalibrationOptions,
   parseFactualCalibrationOptions,
+  parseFrameworkCalibrationOptions,
   parseGraphRiskCalibrationOptions,
   parseSimilarityCalibrationOptions,
   summarizeCalibration,
@@ -205,6 +212,21 @@ const graphRiskTruthRules = {
     'The emitted file has the reported number of distinct symbols defined in other indexed files that it references; fragility is separate.',
 };
 
+const frameworkTruthRules = {
+  'react-component-duplicates':
+    'Both named React components render the disclosed shared JSX components, native tags, props, events, and bindings, and their token-set similarity equals the reported score; extracting a shared component is separate.',
+  'react-hook-candidates':
+    'Both named React units contain the disclosed shared hooks, effects, state, requests, handlers, and handler verbs, and their behavior similarity equals the reported score; extracting a hook is separate.',
+  'react-large-component-pressure':
+    'The named React component has the reported source and file lines plus JSX and behavior token counts, and every pressure axis follows the disclosed thresholds; splitting the component is separate.',
+  'vue-component-duplicates':
+    'Both Vue single-file components render the disclosed shared components, props, events, directives, slots, and identifiers, and their template-token similarity equals the reported score; extracting a shared component is separate.',
+  'vue-composable-candidates':
+    'Both Vue single-file components contain the disclosed shared composables, stores, reactivity, lifecycle, requests, functions, verbs, bindings, and template events, and their behavior similarity equals the reported score; extracting a composable is separate.',
+  'vue-large-view-pressure':
+    'The Vue file has the reported SFC, template, script, style, external-script, custom-block, and one-hop delegated-composable line counts, and every pressure axis follows the disclosed thresholds; splitting the view is separate.',
+};
+
 const UNBOUNDED_RESULT_LIMIT = 2_147_483_647;
 
 mkdirSync(outDir, { recursive: true });
@@ -220,6 +242,8 @@ if (args[0] === 'health-dead') {
   runHealthArchitectureMode(args.slice(1));
 } else if (args[0] === 'health-graph-risk') {
   runHealthGraphRiskMode(args.slice(1));
+} else if (args[0] === 'health-framework') {
+  runHealthFrameworkMode(args.slice(1));
 } else if (args[0] === 'summarize') {
   runSummarizeMode(args.slice(1));
 } else if (args[0] === 'resample') {
@@ -396,6 +420,18 @@ function runHealthGraphRiskMode(rawArgs) {
     collectCandidates: collectGraphRiskCandidates,
     summarize: (rows, detectors) => similarityPacketSummary(rows, detectors, {}),
     render: renderGraphRiskPacket,
+  });
+}
+
+function runHealthFrameworkMode(rawArgs) {
+  const options = parseFrameworkCalibrationOptions(rawArgs, defaultDeadReposByLanguage.typescript, resolve);
+  runTypeScriptDetectorMode(options, {
+    detector: 'typescript-framework',
+    cachePrefix: 'scip-query-framework-calibrate-',
+    truthRules: frameworkTruthRules,
+    collectCandidates: collectFrameworkCandidates,
+    summarize: (rows, detectors) => similarityPacketSummary(rows, detectors, {}),
+    render: renderFrameworkPacket,
   });
 }
 
@@ -1177,6 +1213,142 @@ function collectGraphRiskCandidates(db, detector, context) {
   };
 }
 
+function collectFrameworkCandidates(db, detector, context) {
+  const framework = detector.startsWith('react-') ? 'react' : 'vue';
+  const applicableFiles = frameworkSourceFiles(db, framework);
+  const metadata = {
+    exhaustiveCandidateFrame: true,
+    framework,
+    applicable: applicableFiles.length > 0,
+    applicableFiles: applicableFiles.length,
+  };
+  if (applicableFiles.length === 0) return { total: 0, rows: [], metadata };
+
+  const normalize = (candidate) =>
+    normalizeSimilarityCandidate(candidate, {
+      detector,
+      repository: context.repository,
+      commit: context.commit,
+      evidence: 'heuristic',
+      capabilityStatus: context.capabilityStatus,
+    });
+
+  let rawRows;
+  if (detector === 'react-component-duplicates') {
+    rawRows = reactComponentDuplicates(db, { limit: UNBOUNDED_RESULT_LIMIT }).map((finding) =>
+      deferredSimilarityRow({
+        root: context.root,
+        endpoints: [
+          namedSourceEndpoint(context.root, finding.fileA, finding.componentA),
+          namedSourceEndpoint(context.root, finding.fileB, finding.componentB),
+        ],
+        symbol: `${finding.fileA}:${finding.componentA}|${finding.fileB}:${finding.componentB}`,
+        shortName: `${finding.componentA} ↔ ${finding.componentB}`,
+        findingKind: `${finding.evidenceClass}:${finding.actionTier}`,
+        details: finding,
+      }),
+    );
+  } else if (detector === 'react-hook-candidates') {
+    rawRows = reactHookCandidates(db, { limit: UNBOUNDED_RESULT_LIMIT }).map((finding) =>
+      deferredSimilarityRow({
+        root: context.root,
+        endpoints: [
+          namedSourceEndpoint(context.root, finding.fileA, finding.componentA),
+          namedSourceEndpoint(context.root, finding.fileB, finding.componentB),
+        ],
+        symbol: `${finding.fileA}:${finding.componentA}|${finding.fileB}:${finding.componentB}`,
+        shortName: `${finding.componentA} ↔ ${finding.componentB}`,
+        findingKind: `${finding.evidenceClass}:${finding.actionTier}`,
+        details: finding,
+      }),
+    );
+  } else if (detector === 'react-large-component-pressure') {
+    rawRows = reactLargeComponentPressure(db, { limit: UNBOUNDED_RESULT_LIMIT }).map((finding) =>
+      deferredSimilarityRow({
+        root: context.root,
+        endpoints: [namedSourceEndpoint(context.root, finding.file, finding.component)],
+        symbol: `${finding.file}:${finding.component}`,
+        shortName: `${finding.component} (${finding.componentLines} lines)`,
+        findingKind: `${finding.contextKind}:${finding.dominantPressure}`,
+        details: finding,
+      }),
+    );
+  } else if (detector === 'vue-component-duplicates') {
+    rawRows = vueComponentDuplicates(db, { limit: UNBOUNDED_RESULT_LIMIT }).map((finding) =>
+      deferredSimilarityRow({
+        root: context.root,
+        endpoints: [fileReviewEndpoint(context.root, finding.fileA), fileReviewEndpoint(context.root, finding.fileB)],
+        symbol: `${finding.fileA}|${finding.fileB}`,
+        shortName: `${finding.fileA} ↔ ${finding.fileB}`,
+        findingKind: `${finding.evidenceClass}:${finding.actionTier}`,
+        details: finding,
+      }),
+    );
+  } else if (detector === 'vue-composable-candidates') {
+    rawRows = vueComposableCandidates(db, { limit: UNBOUNDED_RESULT_LIMIT }).map((finding) =>
+      deferredSimilarityRow({
+        root: context.root,
+        endpoints: [fileReviewEndpoint(context.root, finding.fileA), fileReviewEndpoint(context.root, finding.fileB)],
+        symbol: `${finding.fileA}|${finding.fileB}`,
+        shortName: `${finding.fileA} ↔ ${finding.fileB}`,
+        findingKind: `${finding.evidenceClass}:${finding.actionTier}`,
+        details: finding,
+      }),
+    );
+  } else if (detector === 'vue-large-view-pressure') {
+    rawRows = vueLargeViewPressure(db, { limit: UNBOUNDED_RESULT_LIMIT }).map((finding) =>
+      deferredSimilarityRow({
+        root: context.root,
+        endpoints: [fileReviewEndpoint(context.root, finding.file)],
+        symbol: finding.file,
+        shortName: `${finding.file} (${finding.totalLines} lines)`,
+        findingKind: `${finding.contextKind}:${finding.dominantPressure}`,
+        details: finding,
+      }),
+    );
+  } else {
+    throw new Error(`unsupported framework detector: ${detector}`);
+  }
+
+  const normalized = rawRows.map(normalize);
+  const subtypeCounts = Object.fromEntries(
+    [...new Set(normalized.map((row) => row.findingKind))]
+      .sort()
+      .map((findingKind) => [findingKind, normalized.filter((row) => row.findingKind === findingKind).length]),
+  );
+  const sampled = deterministicStratifiedSample(
+    normalized,
+    Math.min(context.sampleSize, normalized.length),
+    context.seed,
+    (row) => row.findingKind,
+  );
+  return {
+    total: normalized.length,
+    rows: sampled.map((row) => ({ ...row, sourceExcerpt: endpointSourceExcerpts(context.root, row.endpoints) })),
+    metadata: { ...metadata, subtypeCounts },
+  };
+}
+
+function frameworkSourceFiles(db, framework) {
+  const pattern = framework === 'react' ? /\.(?:tsx|jsx)$/ : /\.vue$/;
+  return db
+    .all(`SELECT relative_path AS relativePath FROM documents WHERE relative_path IS NOT NULL ORDER BY relative_path`)
+    .map((row) => row.relativePath)
+    .filter((relativePath) => pattern.test(relativePath))
+    .filter((relativePath) => !db.isIgnored(relativePath));
+}
+
+function namedSourceEndpoint(root, file, name) {
+  const startLine = findSourceLine(root, file, name);
+  return { file, symbol: `${file}:${name}`, startLine, endLine: startLine + 180 };
+}
+
+function fileReviewEndpoint(root, file) {
+  const path = join(root, file);
+  const lineCount = existsSync(path) ? readFileSync(path, 'utf8').split('\n').length : 1;
+  return { file, symbol: file, startLine: 0, endLine: Math.min(lineCount - 1, 260) };
+}
+
 function topFanInDetailedRows(db, limit) {
   return db
     .all(
@@ -1474,9 +1646,14 @@ function renderGraphRiskPacket(packet) {
   return renderRelationshipPacket(packet, 'TypeScript Extraction and Graph-Risk Detector Calibration Packet');
 }
 
+function renderFrameworkPacket(packet) {
+  return renderRelationshipPacket(packet, 'React and Vue Detector Calibration Packet');
+}
+
 function renderRelationshipPacketForType(packet) {
   if (packet.detector === 'typescript-architecture') return renderArchitecturePacket(packet);
   if (packet.detector === 'typescript-graph-risk') return renderGraphRiskPacket(packet);
+  if (packet.detector === 'typescript-framework') return renderFrameworkPacket(packet);
   return renderSimilarityPacket(packet);
 }
 
@@ -1484,12 +1661,17 @@ function isRelationshipPacket(packet) {
   return (
     packet.detector === 'typescript-similarity' ||
     packet.detector === 'typescript-architecture' ||
-    packet.detector === 'typescript-graph-risk'
+    packet.detector === 'typescript-graph-risk' ||
+    packet.detector === 'typescript-framework'
   );
 }
 
 function usesStratifiedRelationshipSample(packet) {
-  return packet.detector === 'typescript-architecture' || packet.detector === 'typescript-graph-risk';
+  return (
+    packet.detector === 'typescript-architecture' ||
+    packet.detector === 'typescript-graph-risk' ||
+    packet.detector === 'typescript-framework'
+  );
 }
 
 function renderRelationshipPacket(packet, title) {

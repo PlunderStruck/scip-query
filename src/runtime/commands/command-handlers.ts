@@ -201,7 +201,7 @@ export function handleAugmentVue(rawOpts: unknown): void {
       onStatus: (message) => console.log(message),
     });
     console.log(
-      `Vue files: ${result.vueFiles}; resolved references: ${result.resolvedReferences}; inserted mentions: ${result.insertedMentions}.`,
+      `Vue files: ${result.vueFiles}; resolved references: ${result.resolvedReferences}; inserted mentions: ${result.insertedMentions}; skipped references: ${result.skippedReferences}; synthetic symbols: ${result.syntheticSymbols}.`,
     );
   } catch (err) {
     console.error(`error: ${err instanceof Error ? err.message : err}`);

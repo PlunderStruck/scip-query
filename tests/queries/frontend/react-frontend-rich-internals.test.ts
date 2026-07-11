@@ -246,6 +246,8 @@ export function HostPanel({ panelProps, user }: { panelProps: Record<string, unk
           componentA: 'IncidentPanel',
           fileB: 'src/components/IssuePanel.tsx',
           componentB: 'IssuePanel',
+          tokenCountA: expect.any(Number),
+          tokenCountB: expect.any(Number),
           evidenceClass: expect.stringMatching(/domain-behavior|mixed|shared-abstraction/),
           actionTier: expect.any(String),
           recommendation: expect.any(String),
@@ -265,6 +267,8 @@ export function HostPanel({ panelProps, user }: { panelProps: Record<string, unk
           componentA: 'IncidentPanel',
           fileB: 'src/components/IssuePanel.tsx',
           componentB: 'IssuePanel',
+          tokenCountA: expect.any(Number),
+          tokenCountB: expect.any(Number),
           evidenceClass: 'shared-abstraction',
           actionTier: 'support',
           evidenceClassReasons: expect.arrayContaining([
@@ -377,6 +381,55 @@ export function HostPanel({ panelProps, user }: { panelProps: Record<string, unk
           sharedNativeTags: expect.arrayContaining(['button', 'div', 'form', 'input', 'label', 'span']),
         }),
       ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('does not classify nested or component-owned views as route pages', () => {
+    const { db } = createReactFixture({
+      'src/components/coding-agents/ProjectAgentPage.tsx': `
+export function ProjectAgentPage() {
+  return <main><SessionActivityFeed /></main>;
+}
+
+function SessionActivityFeed() {
+  return <section><header>Activity</header><ol><li>Queued</li></ol></section>;
+}
+`,
+      'src/features/traces/components/SpanTimelineView.tsx': `
+export function SpanTimelineView() {
+  return <section><header>Timeline</header><ol><li>Span</li></ol></section>;
+}
+`,
+      'src/routes/home/HomePage.tsx': `
+export function HomePage() {
+  return <main><OrganizationDashboard /></main>;
+}
+
+function OrganizationDashboard() {
+  return <section><header>Dashboard</header><ol><li>Project</li></ol></section>;
+}
+`,
+    });
+    try {
+      const pressure = reactLargeComponentPressure(db, {
+        limit: 10,
+        minComponentLines: 1,
+        minFileLines: 1,
+        minJsxTokens: 1,
+        minBehaviorTokens: 100,
+      });
+
+      expect(pressure).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ component: 'ProjectAgentPage', contextKind: 'route-page' }),
+          expect.objectContaining({ component: 'SessionActivityFeed', contextKind: 'component' }),
+          expect.objectContaining({ component: 'SpanTimelineView', contextKind: 'component' }),
+          expect.objectContaining({ component: 'HomePage', contextKind: 'route-page' }),
+          expect.objectContaining({ component: 'OrganizationDashboard', contextKind: 'component' }),
+        ]),
+      );
     } finally {
       db.close();
     }

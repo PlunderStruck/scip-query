@@ -20,6 +20,8 @@ export interface VueComponentDuplicateResult {
   fileA: string;
   fileB: string;
   similarity: number;
+  tokenCountA: number;
+  tokenCountB: number;
   sharedTokens: string[];
   sharedComponents: string[];
   sharedProps: string[];
@@ -126,6 +128,8 @@ function compareVueComponentProfiles(
     fileA: a.file,
     fileB: b.file,
     similarity,
+    tokenCountA: a.tokens.size,
+    tokenCountB: b.tokens.size,
     sharedTokens: sortedTokens(shared),
     sharedComponents,
     sharedProps,

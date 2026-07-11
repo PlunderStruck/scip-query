@@ -22,6 +22,8 @@ export interface ReactComponentDuplicateResult {
   fileB: string;
   componentB: string;
   similarity: number;
+  tokenCountA: number;
+  tokenCountB: number;
   sharedTokens: string[];
   sharedComponents: string[];
   sharedNativeTags: string[];
@@ -119,6 +121,8 @@ function compareReactComponentProfiles(
     fileB: b.file,
     componentB: b.component,
     similarity,
+    tokenCountA: a.tokens.size,
+    tokenCountB: b.tokens.size,
     sharedTokens: sortedTokens(shared),
     sharedComponents,
     sharedNativeTags,

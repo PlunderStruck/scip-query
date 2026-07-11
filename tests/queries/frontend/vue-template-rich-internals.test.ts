@@ -259,6 +259,8 @@ describe('Vue template rich internals', () => {
         expect.objectContaining({
           fileA: 'src/components/SharedBehaviorExternal.vue',
           fileB: 'src/components/SharedBehaviorPanel.vue',
+          tokenCountA: expect.any(Number),
+          tokenCountB: expect.any(Number),
           evidenceClass: 'mixed',
           actionTier: 'signal',
           evidenceClassReasons: expect.arrayContaining([
@@ -367,6 +369,8 @@ describe('Vue template rich internals', () => {
         expect.objectContaining({
           fileA: 'src/components/IncidentPanel.vue',
           fileB: 'src/components/IssuePanel.vue',
+          tokenCountA: expect.any(Number),
+          tokenCountB: expect.any(Number),
           evidenceClass: expect.stringMatching(/domain-behavior|mixed|shared-abstraction/),
           actionTier: expect.any(String),
           recommendation: expect.any(String),

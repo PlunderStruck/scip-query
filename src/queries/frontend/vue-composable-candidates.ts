@@ -24,6 +24,8 @@ export interface VueComposableCandidateResult {
   fileA: string;
   fileB: string;
   similarity: number;
+  tokenCountA: number;
+  tokenCountB: number;
   sharedTokens: string[];
   sharedComposables: string[];
   sharedStores: string[];
@@ -126,6 +128,8 @@ function compareVueComposableProfiles(
     fileA: a.file,
     fileB: b.file,
     similarity,
+    tokenCountA: a.tokens.size,
+    tokenCountB: b.tokens.size,
     sharedTokens: sortedTokens(shared),
     sharedComposables,
     sharedStores,

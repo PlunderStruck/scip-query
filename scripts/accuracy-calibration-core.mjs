@@ -41,6 +41,24 @@ export const TYPESCRIPT_GRAPH_RISK_DETECTORS = [
   'fan-in',
   'fan-out',
 ];
+export const TYPESCRIPT_FRAMEWORK_DETECTORS = [
+  'react-component-duplicates',
+  'react-hook-candidates',
+  'react-large-component-pressure',
+  'vue-component-duplicates',
+  'vue-composable-candidates',
+  'vue-large-view-pressure',
+];
+
+export function parseFrameworkCalibrationOptions(rawArgs, defaultRoots, resolveRoot = (value) => value) {
+  return parseTypeScriptDetectorOptions(rawArgs, {
+    defaultRoots,
+    detectors: TYPESCRIPT_FRAMEWORK_DETECTORS,
+    optionLabel: 'framework',
+    resolveRoot,
+    seed: 'typescript-framework-v1',
+  });
+}
 
 export function parseGraphRiskCalibrationOptions(rawArgs, defaultRoots, resolveRoot = (value) => value) {
   return parseTypeScriptDetectorOptions(rawArgs, {

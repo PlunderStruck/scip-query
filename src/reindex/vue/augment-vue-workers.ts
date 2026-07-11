@@ -1,5 +1,5 @@
 import { readFileSync, rmSync, statSync, mkdtempSync } from 'node:fs';
-import { cpus, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import type { VueReferenceComputationResult, VueReferenceTask } from './augment-vue-contracts.js';
@@ -68,8 +68,10 @@ export function awaitVueReferenceWorkers(opts: {
 
 function resolveVueWorkerCount(fileCount: number): number {
   const configured = Number(process.env['SCIP_QUERY_AUGMENT_VUE_WORKERS'] ?? 0);
-  const maxWorkers =
-    Number.isFinite(configured) && configured > 0 ? configured : Math.min(8, Math.max(1, cpus().length - 1));
+  // Every worker constructs a full TypeScript/Volar project. Keep the reliable
+  // single-context path as the default; parallelism remains an explicit opt-in
+  // for projects that have calibrated its memory and worker-exit behavior.
+  const maxWorkers = Number.isFinite(configured) && configured > 0 ? configured : 1;
   return Math.max(1, Math.min(fileCount, maxWorkers));
 }
 

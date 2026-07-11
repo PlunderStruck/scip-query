@@ -26,6 +26,8 @@ export interface ReactHookCandidateResult {
   fileB: string;
   componentB: string;
   similarity: number;
+  tokenCountA: number;
+  tokenCountB: number;
   sharedTokens: string[];
   sharedHooks: string[];
   sharedReactHooks: string[];
@@ -132,6 +134,8 @@ function compareReactHookProfiles(
     fileB: b.file,
     componentB: b.component,
     similarity,
+    tokenCountA: a.tokens.size,
+    tokenCountB: b.tokens.size,
     sharedTokens: sortedTokens(shared),
     sharedHooks,
     sharedReactHooks,
