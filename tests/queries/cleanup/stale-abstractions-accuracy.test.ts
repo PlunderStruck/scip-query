@@ -55,6 +55,83 @@ function withFixture(
 }
 
 describe('staleAbstractions accuracy', () => {
+  it('keeps Python models live through inheritance and multi-level nested response schemas', () => {
+    withFixture(
+      'python-transitive-models',
+      {
+        'models.py': [
+          'class InnerModel:',
+          '    value: str',
+          '    rank: int',
+          '',
+          'class BaseModel:',
+          '    base_id: str',
+          '    created_at: str',
+          '',
+          'class DerivedModel(BaseModel):',
+          '    inner: InnerModel',
+          '    label: str',
+          '',
+          'class Envelope:',
+          '    derived: DerivedModel',
+          '    status: str',
+          '',
+          'class PublicResponse:',
+          '    envelope: Envelope',
+          '    request_id: str',
+          '',
+        ].join('\n'),
+        'consumer.py': [
+          'from models import PublicResponse',
+          '',
+          'def render(value: PublicResponse):',
+          '    return value',
+          '',
+        ].join('\n'),
+      },
+      (sqliteDb) => {
+        sqliteDb.exec(`
+          INSERT INTO documents (id, language, relative_path) VALUES
+            (1, 'python', 'models.py'),
+            (2, 'python', 'consumer.py');
+
+          INSERT INTO global_symbols (id, symbol, display_name, kind) VALUES
+            (1, 'scip-python python fixture 1.0.0 models/InnerModel#', 'InnerModel', 5),
+            (2, 'scip-python python fixture 1.0.0 models/BaseModel#', 'BaseModel', 5),
+            (3, 'scip-python python fixture 1.0.0 models/DerivedModel#', 'DerivedModel', 5),
+            (4, 'scip-python python fixture 1.0.0 models/Envelope#', 'Envelope', 5),
+            (5, 'scip-python python fixture 1.0.0 models/PublicResponse#', 'PublicResponse', 5),
+            (6, 'scip-python python fixture 1.0.0 consumer/render().', 'render', 12);
+
+          INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+            (1, 1, 1, 0, 0, 2, 13),
+            (2, 1, 2, 4, 0, 6, 19),
+            (3, 1, 3, 8, 0, 10, 14),
+            (4, 1, 4, 12, 0, 14, 15),
+            (5, 1, 5, 16, 0, 18, 19),
+            (6, 2, 6, 2, 0, 3, 16);
+
+          INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+            (1, 1, 0, 0, 19, X'00'),
+            (2, 2, 0, 0, 4, X'00');
+
+          INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+            (1, 1, 1), (1, 2, 1), (1, 3, 1), (1, 4, 1), (1, 5, 1),
+            (2, 5, 0), (2, 6, 1);
+        `);
+      },
+      (db) => {
+        const results = staleAbstractions(db, { minLoc: 3, includeLowConfidence: true });
+        for (const liveType of ['InnerModel', 'BaseModel', 'DerivedModel', 'Envelope']) {
+          expect(
+            results.find((result) => result.shortName.endsWith(liveType)),
+            `${liveType} is transitively exposed by PublicResponse`,
+          ).toBeUndefined();
+        }
+      },
+    );
+  });
+
   it('excludes ambient declaration contracts from repository liveness scoring', () => {
     withFixture(
       'ambient-declaration',

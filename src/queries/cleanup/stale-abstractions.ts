@@ -563,20 +563,29 @@ function isTransitivelyConsumed(
   const containerMap = getTypeContainerMap(db, definition.relativePath);
   const myLeaf = leafName(definition.symbol);
   if (!myLeaf) return false;
-  const containers = containerMap.get(myLeaf);
-  if (!containers || containers.size === 0) return false;
-
   const perFile = candidateIndex.get(definition.relativePath);
   if (!perFile) return false;
 
-  for (const containerName of containers) {
+  // Follow the full same-file type graph. Python response schemas commonly
+  // nest models multiple levels deep (Inner -> Envelope -> Response), while
+  // inheritance adds another edge (Base -> Derived). One-hop traversal made
+  // the inner live model look unused whenever only the outer model crossed a
+  // file boundary.
+  const pending = [...(containerMap.get(myLeaf) ?? [])];
+  const visited = new Set<string>();
+  while (pending.length > 0) {
+    const containerName = pending.pop()!;
+    if (visited.has(containerName)) continue;
+    visited.add(containerName);
     const container = perFile.get(containerName);
     if (!container) continue;
     const containerConsumers = consumerFileMap.get(container.symbolId);
-    if (!containerConsumers) continue;
-    for (const f of containerConsumers) {
-      if (f !== definition.relativePath && !db.isIgnored(f)) return true;
+    if (containerConsumers) {
+      for (const f of containerConsumers) {
+        if (f !== definition.relativePath && !db.isIgnored(f)) return true;
+      }
     }
+    for (const parent of containerMap.get(containerName) ?? []) pending.push(parent);
   }
   return false;
 }

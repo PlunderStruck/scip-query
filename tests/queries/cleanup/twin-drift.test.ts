@@ -158,6 +158,25 @@ describe('groupTwins (pure)', () => {
     expect(groups).toHaveLength(0);
   });
 
+  it('excludes Python dunder protocol methods that match by convention rather than concept', () => {
+    const groups = groupTwins([
+      record({
+        leaf: '__init__',
+        symbol: 'scip-python python fixture 1.0.0 `a`/Alpha#__init__().',
+        file: 'src/a.py',
+        tokens: ['self', '.', 'value', '=', 'value'],
+      }),
+      record({
+        leaf: '__init__',
+        symbol: 'scip-python python fixture 1.0.0 `b`/Beta#__init__().',
+        file: 'src/b.py',
+        tokens: ['self', '.', 'client', '=', 'Client', '(', ')'],
+      }),
+    ]);
+
+    expect(groups).toHaveLength(0);
+  });
+
   // 21.2 calibration retune: a same-name pair that only exists inside test
   // files (mocks, parallel suites) is not a drifted-production-twin.
   it('excludes groups where every member lives in a test file', () => {

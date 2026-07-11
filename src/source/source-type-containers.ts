@@ -41,6 +41,11 @@ export function buildTypeContainerMap(tree: Tree, language: AstLanguage): Map<st
     for (const cls of tree.rootNode.descendantsOfType('class_definition')) {
       const name = cls.namedChildren.find((child) => child.type === 'identifier')?.text;
       if (!name) continue;
+      // Python base classes are type consumers too. A framework/schema class
+      // commonly stays live only because another model subclasses it, so
+      // omitting the class header makes the base look unreferenced.
+      const superclasses = cls.childForFieldName('superclasses');
+      if (superclasses) collectChildren(superclasses, name);
       const body = cls.namedChildren.find((child) => child.type === 'block');
       if (!body) continue;
       for (const typeNode of body.descendantsOfType('type')) {

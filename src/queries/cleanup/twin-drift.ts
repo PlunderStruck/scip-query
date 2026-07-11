@@ -430,7 +430,9 @@ function commonCharacterPrefixLength(a: string, b: string): number {
 }
 
 function isConventionOnlyTwinLeaf(leaf: string): boolean {
-  return /^[A-Z][A-Z0-9_]*$/.test(leaf) || CONVENTION_ONLY_TWIN_LEAVES.has(leaf.toLowerCase());
+  return (
+    /^[A-Z][A-Z0-9_]*$/.test(leaf) || /^__[^_].*__$/.test(leaf) || CONVENTION_ONLY_TWIN_LEAVES.has(leaf.toLowerCase())
+  );
 }
 
 const CONVENTION_ONLY_TWIN_LEAVES = new Set(['main', 'row']);
