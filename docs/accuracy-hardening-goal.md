@@ -1,7 +1,7 @@
 # Accuracy Hardening and Health Certification Roadmap
 
 Date: 2026-07-10
-Status: Active; language detector and composite workflow campaigns closed with explicit capability boundaries; navigation and operational audits remain
+Status: Active; language detectors, composite workflows, and navigation answers closed with explicit capability boundaries; operational audit remains
 
 Current execution plan:
 [`2026-07-11-remaining-accuracy-verification-program.md`](./plans/2026-07-11-remaining-accuracy-verification-program.md).
@@ -278,10 +278,10 @@ active program above.
 
 ## Immediate Next Slice
 
-The language detector and composite workflow campaigns now have terminal
-verdicts under their current capabilities. Next, audit navigation and graph
-answers against exact source/index oracles before exercising indexing and
-operational state transitions.
+Language detectors, composite workflows, and navigation answers now have
+terminal verdicts under their current capabilities. Next, exercise indexing,
+watcher, setup, configuration, suppression, and lifecycle state transitions,
+including cold/warm and incremental failure paths.
 
 ## Progress — 2026-07-10
 
@@ -457,6 +457,16 @@ languages, distinguishes syntax-only verification, and describes candidates as
 investigations rather than automatic refactorings. Diff-gate and impact
 workflows are qualified under their per-check evidence; only exact configured
 coverage-contract comparison is certified in this slice.
+
+The navigation and graph-answer campaign is complete:
+[`2026-07-11-navigation-graph-certification.md`](./validation/2026-07-11-navigation-graph-certification.md).
+All 107 exact-answer probes passed across 14 fixture files, and a live replay
+kept definition ranges, imports, references, dependencies, calls, slices,
+outlines, and counts mutually consistent. The audit corrected reference-only
+imports, type owners, and module owners appearing as callable callers. It also
+records that hierarchy is lexical, dataflow is reference-level, overload
+selection and inheritance are unsupported, and semantic cross-language edges
+exist only when an upstream indexer emits them.
 
 ## Program Acceptance Criteria
 

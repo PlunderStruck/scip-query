@@ -167,13 +167,20 @@ nor lose capability/suppression/status information.
 
 ### 5. Audit navigation and graph answers
 
-- [ ] Compare every navigation row in the checklist against exact SCIP,
+- [x] Compare every navigation row in the checklist against exact SCIP,
       compiler, source, and hand-established graph oracles.
-- [ ] Cover aliases, overloads, re-exports, inheritance, traits,
+- [x] Cover aliases, overloads, re-exports, inheritance, traits,
       implementations, generated files, path-qualified ambiguity, and
       cross-language boundaries where applicable.
-- [ ] Record exact-answer parity rather than statistical recommendation
+- [x] Record exact-answer parity rather than statistical recommendation
       precision for graph-fact commands.
+
+  - 2026-07-11: 107 exact-answer probes passed across 14 files, followed by a
+    live 20-command parity replay. The audit removed import, type-reference,
+    and module-owner rows from callable call-graph callers while preserving
+    them in reference commands. Unsupported overload selection, inheritance,
+    value flow, top-level ownership, and semantic cross-language edges are now
+    explicit.
 
 Acceptance: each command has known-positive and known-negative cases, explicit
 unsupported shapes, and reproducible exact-answer evidence.

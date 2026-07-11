@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-07-11",
+  "targetedProbeSuite": {
+    "files": 14,
+    "tests": 107,
+    "passed": 107
+  },
+  "verdicts": {
+    "files": "certified",
+    "methods": "qualified",
+    "refs": "qualified",
+    "trace": "qualified",
+    "deps": "qualified",
+    "rdeps": "qualified",
+    "system": "qualified",
+    "surface": "qualified",
+    "imports": "qualified",
+    "imported-by": "qualified",
+    "outline": "qualified",
+    "members": "qualified",
+    "by-kind": "qualified",
+    "kind-counts": "certified",
+    "hierarchy": "qualified",
+    "code": "qualified",
+    "dataflow": "qualified",
+    "slice": "qualified",
+    "call-graph": "qualified",
+    "stats": "certified"
+  },
+  "fixedArchetypes": [
+    "call-graph-import-as-caller",
+    "call-graph-type-reference-as-caller",
+    "call-graph-module-owner-as-caller"
+  ],
+  "unsupportedShapes": [
+    "compiler-overload-selection",
+    "type-inheritance-in-hierarchy",
+    "value-or-control-flow-in-dataflow",
+    "unowned-top-level-callers",
+    "semantic-cross-language-edges"
+  ]
+}

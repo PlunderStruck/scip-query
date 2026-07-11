@@ -225,31 +225,34 @@ Certificate:
 
 ## Navigation and Graph Answers
 
-- [ ] `files`
-- [ ] `methods`
-- [ ] `refs`
-- [ ] `trace`
-- [ ] `deps`
-- [ ] `rdeps`
-- [ ] `system`
-- [ ] `surface`
-- [ ] `imports`
-- [ ] `imported-by`
-- [ ] `outline`
-- [ ] `members`
-- [ ] `by-kind`
-- [ ] `kind-counts`
-- [ ] `hierarchy`
-- [ ] `code`
-- [ ] `dataflow`
-- [ ] `slice`
-- [ ] `call-graph`
-- [ ] `stats`
+- [x] `files` — certified indexed-path match
+- [x] `methods` — qualified direct lexical methods
+- [x] `refs` — qualified resolved/source reference sites
+- [x] `trace` — qualified definition plus reference parity
+- [x] `deps` — qualified indexed/source file edges
+- [x] `rdeps` — qualified inverse file edges
+- [x] `system` — qualified module aggregation
+- [x] `surface` — qualified indexed consumer surface
+- [x] `imports` — qualified binding/path evidence
+- [x] `imported-by` — qualified resolved importers
+- [x] `outline` — qualified lexical tree and ranges
+- [x] `members` — qualified direct lexical children
+- [x] `by-kind` — qualified stored/inferred kinds
+- [x] `kind-counts` — certified indexed aggregation
+- [x] `hierarchy` — qualified lexical ancestry, not type inheritance
+- [x] `code` — qualified bounded definition source
+- [x] `dataflow` — qualified reference flow, not value flow
+- [x] `slice` — qualified bounded reference closure
+- [x] `call-graph` — qualified callable-owned call edges
+- [x] `stats` — certified generation-local database counts
 
 These commands need exact-answer comparisons against compiler, source, or
 hand-established graph oracles, including aliases, overloads, re-exports,
 traits, implementations, inheritance, generated files, and cross-language
 boundaries.
+
+Certificate:
+[`2026-07-11-navigation-graph-certification.md`](./validation/2026-07-11-navigation-graph-certification.md).
 
 ## Indexing and Operations
 
