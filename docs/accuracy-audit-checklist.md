@@ -41,37 +41,37 @@ Legend: `certified`, `qualified`, `experimental`, `insufficient`, `unsupported`,
 | Analyzer or command              | TypeScript   | Rust         | Python      | Audit kind                 | Notes                                                                                                                         |
 | -------------------------------- | ------------ | ------------ | ----------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `dead`                           | certified    | insufficient | pending     | finding certification      | Rust expansion: 3/3 valid from one repository, four supported zeros, and one explicit indexing failure; population still sparse. |
-| `unused-imports`                 | certified    | pending      | pending     | finding certification      | 59/59 valid across three repositories after binding-evidence hardening.                                                       |
+| `unused-imports`                 | certified    | qualified    | pending     | finding certification      | Rust uses a conservative implicit-trait boundary; 107 false positives removed across the renewal corpus.                      |
 | `unused-params`                  | insufficient | unsupported  | unsupported | finding certification      | 5/5 valid, but all rows came from one repository.                                                                             |
-| `cycles`                         | insufficient | pending      | pending     | graph-fact certification   | 3/3 source-verifiable import cycles, but one repository.                                                                      |
-| `duplicate-bodies`               | certified    | pending      | pending     | measurement certification  | 40/40 normalized-body facts valid across four repositories.                                                                   |
-| `complexity`                     | certified    | pending      | pending     | measurement certification  | 40/40 uncapped-frame measurements valid across four repositories.                                                             |
-| `isolated`                       | insufficient | pending      | pending     | finding certification      | 3/3 valid across two repositories after contract hardening.                                                                   |
-| `redundant-reexports`            | certified    | pending      | pending     | finding certification      | 40/40 binding/module facts valid; public surfaces remain signals.                                                             |
-| `not-implemented`                | insufficient | pending      | pending     | finding certification      | Supported zero plus positive fixtures; no population precision frame.                                                         |
-| `decorative-checkers`            | insufficient | pending      | pending     | finding certification      | Baseline wall removed; supported zero plus positive fixtures.                                                                 |
-| `test-quality`                   | insufficient | pending      | pending     | finding certification      | 14/14 mock-echo facts valid across two repositories; other subtypes need population evidence.                                 |
-| `recent-duplicates`              | insufficient | pending      | pending     | history relationship       | Fresh seven-repository expansion yielded 8/8 valid across four repositories with findings; one indexing failure stayed explicit. |
-| `similar`                        | certified    | pending      | pending     | relationship certification | 36/36 shared-evidence relationships valid across four repositories.                                                           |
-| `similar-files`                  | certified    | pending      | pending     | relationship certification | 40/40 distinctive-dependency relationships valid across four repositories.                                                    |
-| `similar-chains`                 | qualified    | pending      | pending     | bounded relationship       | 40/40 valid inside the 500-generated-chain candidate frame; sampled advice was non-actionable.                                |
-| `similar-signatures`             | certified    | pending      | pending     | measurement certification  | 40/40 normalized-signature relationships valid across four repositories.                                                      |
-| `twin-drift`                     | qualified    | pending      | pending     | relationship certification | 37/40 valid; generic-operation homonyms remain.                                                                               |
-| `co-change`                      | certified    | pending      | pending     | history relationship       | 40/40 accepted Git-history relationships valid across four repositories.                                                      |
-| `doc-drift`                      | certified    | pending      | pending     | history relationship       | 40/40 citation/co-change/change-order relationships valid across four repositories.                                           |
-| `drift`                          | qualified    | pending      | pending     | subtype relationship       | 40/40 relationships valid; subtype breadth incomplete and sampled advice non-actionable.                                      |
-| `wrapper-candidates`             | certified    | pending      | pending     | relationship certification | 60/60 production single-caller relationships valid across three repositories; removal utility remains contextual.             |
-| `passthrough-candidates`         | certified    | pending      | pending     | relationship certification | 41/41 literal-forwarding relationships valid across three repositories; removal utility remains contextual.                   |
-| `stale-abstractions`             | certified    | pending      | pending     | relationship certification | 40/40 low-consumer facts valid after ambient-declaration hardening.                                                           |
-| `extract-candidates`             | certified    | pending      | pending     | measurement certification  | 43/43 callee-cluster measurements valid; extraction remains contextual.                                                       |
-| `locality-candidates`            | certified    | pending      | pending     | relationship certification | 48/48 ownership/destination relationships valid; movement remains contextual.                                                 |
-| `coupling`                       | certified    | pending      | pending     | graph-fact certification   | 48/48 exact shared-symbol relationships valid across four repositories.                                                       |
-| `bottlenecks`                    | certified    | pending      | pending     | graph-fact certification   | 39/39 disclosed centrality facts valid across four repositories; confidence floor is 91.0%.                                  |
-| `deep-chains`                    | certified    | pending      | pending     | graph-fact certification   | 48/48 condensed-component paths valid after cycle-depth hardening.                                                            |
-| `complexity-hotspots`            | certified    | pending      | pending     | measurement certification  | 48/48 composite measurements valid across magnitude bands.                                                                    |
-| `hotspots`                       | certified    | pending      | pending     | graph-fact certification   | 48/48 cross-file reference counts valid.                                                                                      |
-| `fan-in`                         | certified    | pending      | pending     | graph-fact certification   | 48/48 exact-symbol counts valid after identity hardening.                                                                     |
-| `fan-out`                        | certified    | pending      | pending     | graph-fact certification   | 48/48 external-symbol counts valid.                                                                                           |
+| `cycles`                         | insufficient | qualified    | pending     | graph-fact certification   | Rust source/index cycles observed across two repositories; compiler-exhaustive completeness is not claimed.                    |
+| `duplicate-bodies`               | certified    | qualified    | pending     | measurement certification  | Rust normalized-body equality is factual; consolidation remains contextual.                                                   |
+| `complexity`                     | certified    | qualified    | pending     | measurement certification  | Rust source-derived branch counts exclude macro expansion.                                                                    |
+| `isolated`                       | insufficient | insufficient | pending     | finding certification      | Rust has supported zeros and fixtures but no natural positive population.                                                     |
+| `redundant-reexports`            | certified    | insufficient | pending     | finding certification      | Rust has a positive fixture but no natural positive population in the renewal corpus.                                         |
+| `not-implemented`                | insufficient | unsupported  | pending     | finding certification      | Rust `todo!` and `unimplemented!` syntax is not analyzed.                                                                     |
+| `decorative-checkers`            | insufficient | unsupported  | pending     | finding certification      | Callable/failure syntax is JavaScript/TypeScript-specific.                                                                    |
+| `test-quality`                   | insufficient | unsupported  | pending     | finding certification      | The source scan is restricted to JavaScript/TypeScript extensions.                                                            |
+| `recent-duplicates`              | insufficient | qualified    | pending     | history relationship       | Trait-required advice removed; 62 ordinary Vega holdout relationships remain.                                                 |
+| `similar`                        | certified    | qualified    | pending     | relationship certification | Rust shared-callee facts are disclosed; refactoring advice remains contextual.                                                |
+| `similar-files`                  | certified    | qualified    | pending     | relationship certification | Rust distinctive-dependency overlap is supported.                                                                            |
+| `similar-chains`                 | qualified    | qualified    | pending     | bounded relationship       | Rust is also bounded by the 500-generated-chain internal frame.                                                               |
+| `similar-signatures`             | certified    | qualified    | pending     | measurement certification  | Rust fields and trait-required members are excluded from callable signature equality.                                         |
+| `twin-drift`                     | qualified    | qualified    | pending     | relationship certification | Rust convention methods are excluded; supported-zero and focused-positive evidence remains.                                  |
+| `co-change`                      | certified    | qualified    | pending     | history relationship       | Rust Git-history relationships are factual; coupling advice remains contextual.                                               |
+| `doc-drift`                      | certified    | qualified    | pending     | history relationship       | Rust citation/change-order facts are supported; priority remains contextual.                                                  |
+| `drift`                          | qualified    | insufficient | pending     | subtype relationship       | Rust has no natural subtype population in the renewal corpus.                                                                 |
+| `wrapper-candidates`             | certified    | qualified    | pending     | relationship certification | Rust trait implementations are excluded; ordinary single-caller relationships remain.                                        |
+| `passthrough-candidates`         | certified    | qualified    | pending     | relationship certification | Rust literal-forwarding relationships are supported; removal remains contextual.                                              |
+| `stale-abstractions`             | certified    | qualified    | pending     | relationship certification | Rust low-consumer facts require public/registration review.                                                                   |
+| `extract-candidates`             | certified    | qualified    | pending     | measurement certification  | Rust callee-cluster measurements are supported; extraction remains contextual.                                                |
+| `locality-candidates`            | certified    | qualified    | pending     | relationship certification | Rust ownership/destination relationships are supported; movement remains contextual.                                         |
+| `coupling`                       | certified    | qualified    | pending     | graph-fact certification   | Rust disclosed shared-symbol relationships are supported.                                                                    |
+| `bottlenecks`                    | certified    | qualified    | pending     | graph-fact certification   | Rust disclosed centrality facts are supported; utility remains contextual.                                                    |
+| `deep-chains`                    | certified    | qualified    | pending     | graph-fact certification   | Rust condensed index paths exclude unavailable macro/generated edges.                                                         |
+| `complexity-hotspots`            | certified    | qualified    | pending     | measurement certification  | Rust composite source measurements are supported, not defect verdicts.                                                       |
+| `hotspots`                       | certified    | qualified    | pending     | graph-fact certification   | Rust indexed reference counts are supported; module/crate rows remain contextual.                                             |
+| `fan-in`                         | certified    | qualified    | pending     | graph-fact certification   | Rust exact indexed-symbol counts do not claim linker-wide reachability.                                                       |
+| `fan-out`                        | certified    | qualified    | pending     | graph-fact certification   | Rust indexed external-symbol counts are supported.                                                                            |
 | `react-component-duplicates`     | certified    | unsupported  | unsupported | framework relationship     | 48/48 structural relationships valid across three React repositories; extraction remains contextual.                          |
 | `react-hook-candidates`          | certified    | unsupported  | unsupported | framework relationship     | 48/48 behavior relationships valid across three React repositories; hook extraction remains contextual.                       |
 | `react-large-component-pressure` | certified    | unsupported  | unsupported | framework measurement      | 48/48 pressure rows valid after dominant-axis and route-context hardening.                                                    |
@@ -96,6 +96,24 @@ state. A checked box does not upgrade an `insufficient` state to `certified`.
 - [x] `not-implemented` — supported zero; insufficient population evidence
 - [x] `decorative-checkers` — supported zero; insufficient population evidence
 - [x] `test-quality` — insufficient subtype and repository breadth
+
+### Rust detector slice
+
+The Rust renewal used three pinned repositories for the broad detector replay
+and retains the prior six-repository `dead` expansion. Checked boxes mean the
+row has an explicit applicability boundary and verdict, not that it is
+publication-certified.
+
+- [x] Factual detectors — qualified, insufficient, or unsupported as recorded
+- [x] Similarity/history detectors — trait and convention false positives hardened
+- [x] Architecture detectors — relationship facts separated from removal advice
+- [x] Graph-risk detectors — indexed facts qualified against macro/whole-program limits
+- [x] Rust applicability — trait, impl, derive, macro, generated, surface,
+      target, feature, test, binary, and ABI boundaries recorded
+- [x] Untouched holdout — Vega retained 62 ordinary recent-duplicate relationships
+
+Certificate:
+[`2026-07-11-rust-detector-certification.md`](./validation/2026-07-11-rust-detector-certification.md).
 
 ## Similarity and Duplication
 

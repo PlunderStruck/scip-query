@@ -104,12 +104,21 @@ unsupported with a dated machine-readable verdict and narrative evidence.
     completed with indexing/source/semantic/checker capability, while one
     indexing failure remained explicit. Only VegaAssistant emitted findings;
     all 3 were valid, leaving the row insufficient for population breadth.
-- [ ] Audit factual, similarity, architecture, graph-risk, composite, and
-      navigation families that actually support Rust.
-- [ ] Record trait, implementation, derive, macro, generated-code, public API,
+- [x] Audit factual, similarity, architecture, and graph-risk families that
+      actually support Rust; composite commands remain in batch 4.
+  - 2026-07-11: the three-repository renewal assigned every detector an
+    explicit qualified, insufficient, or unsupported verdict. It corrected
+    convention twins, trait wrappers, implicit trait imports, grouped
+    self-imports, non-callable signature candidates, trait signature
+    candidates, and directional trait-implementation duplicate advice.
+- [x] Record trait, implementation, derive, macro, generated-code, public API,
       test, binary, ABI, and feature/target applicability.
-- [ ] Replace every proven false-positive archetype with the smallest shared
+  - Certificate:
+    `docs/validation/2026-07-11-rust-detector-certification.md`.
+- [x] Replace every proven false-positive archetype with the smallest shared
       correction and replay an untouched holdout.
+  - Vega retained 62 ordinary `recent-duplicates` relationships, SynthRunnerRust
+    retained two, and agentic_cad's three trait-contract rows fell to zero.
 
 Acceptance: every Rust row has visible applicability/exclusion counts and a
 verdict; no broad framework/library exclusion silently improves output.

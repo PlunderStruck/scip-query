@@ -1,7 +1,7 @@
 # Accuracy Hardening and Health Certification Roadmap
 
 Date: 2026-07-10
-Status: Active; TypeScript and Vue campaigns closed with explicit capability boundaries; Rust dead-code hardened but insufficiently evidenced
+Status: Active; TypeScript, Vue, and broad Rust detector campaigns closed with explicit capability boundaries; Python and composite/operational audits remain
 
 Current execution plan:
 [`2026-07-11-remaining-accuracy-verification-program.md`](./plans/2026-07-11-remaining-accuracy-verification-program.md).
@@ -185,6 +185,14 @@ Exit: every TypeScript health family has a current certification state and a
 published list of unresolved noise archetypes.
 
 ### Phase 4 — Certify Rust and replace silent bias with visible applicability
+
+Completed 2026-07-11 with qualified, insufficient, or unsupported verdicts;
+no Rust row met the evidence threshold for promotion to certified. The renewal
+used three pinned broad-replay repositories plus the prior six-repository dead
+expansion, corrected seven trait/convention/import/signature advice archetypes,
+and retained ordinary relationships on an untouched Vega holdout. Evidence and
+per-command boundaries are recorded in
+[`2026-07-11-rust-detector-certification.md`](./validation/2026-07-11-rust-detector-certification.md).
 
 - Calibrate on openai/codex and SynthRunnerRust, then add at least one more
   public Rust repository before awarding certified status.
