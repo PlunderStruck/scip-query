@@ -1,7 +1,7 @@
 # Accuracy Hardening and Health Certification Roadmap
 
 Date: 2026-07-10
-Status: Active; TypeScript, Vue, Rust, and Python detector campaigns closed with explicit capability boundaries; composite and operational audits remain
+Status: Active; language detector and composite workflow campaigns closed with explicit capability boundaries; navigation and operational audits remain
 
 Current execution plan:
 [`2026-07-11-remaining-accuracy-verification-program.md`](./plans/2026-07-11-remaining-accuracy-verification-program.md).
@@ -278,10 +278,10 @@ active program above.
 
 ## Immediate Next Slice
 
-The language detector campaigns now have terminal verdicts under their current
-capabilities. Next, audit composite health, cleanup, diff, and impact workflows
-so aggregation cannot turn a qualified, insufficient, or unsupported input
-into an unqualified factual claim.
+The language detector and composite workflow campaigns now have terminal
+verdicts under their current capabilities. Next, audit navigation and graph
+answers against exact source/index oracles before exercising indexing and
+operational state transitions.
 
 ## Progress — 2026-07-10
 
@@ -446,6 +446,17 @@ literal `__all__` export/import behavior. The Flask holdout retained 29
 file-internal and two signature relationships while reporting zero
 repository-dead rows. Every Python matrix row is now qualified, insufficient,
 or unsupported; none is certified for public actionable scoring.
+
+The composite workflow campaign is complete:
+[`2026-07-11-composite-workflow-certification.md`](./validation/2026-07-11-composite-workflow-certification.md).
+All 166 targeted cleanup, diff-gate, health, effectiveness, and impact probes
+passed. A mixed Python replay exposed that health omitted capability state and
+turned contextual relationships into action language. Health now carries the
+live capability matrix, marks its score experimental and non-comparable across
+languages, distinguishes syntax-only verification, and describes candidates as
+investigations rather than automatic refactorings. Diff-gate and impact
+workflows are qualified under their per-check evidence; only exact configured
+coverage-contract comparison is certified in this slice.
 
 ## Program Acceptance Criteria
 

@@ -146,15 +146,21 @@ cannot imply unsupported semantic completeness.
 
 ### 4. Audit composite, diff, cleanup, health, and impact workflows
 
-- [ ] Audit `incomplete-migration`, `cleanup-plan`, `cleanup-apply`, every
+- [x] Audit `incomplete-migration`, `cleanup-plan`, `cleanup-apply`, every
       `diff-gate` check, `health`, `self-audit`, and `effectiveness`.
-- [ ] Audit `affected`, `change-surface`, `diff-impact`, and `plan-context`
+- [x] Audit `affected`, `change-surface`, `diff-impact`, and `plan-context`
       against hand-established changed-symbol/consumer fixtures and real diffs.
-- [ ] Plant at least one bounded failure for each gate family before trusting a
+- [x] Plant at least one bounded failure for each gate family before trusting a
       green result, then remove the probe by targeted edit.
-- [ ] Verify aggregation, suppression, unavailable-state propagation, baseline
+- [x] Verify aggregation, suppression, unavailable-state propagation, baseline
       comparison, and outcome-ledger transitions independently from detector
       precision.
+
+  - 2026-07-11: 166 targeted probes passed across 24 files. The audit found and
+    fixed capability-loss and action-language amplification in `health`.
+    Composite and impact commands now have explicit certified, qualified,
+    insufficient, or experimental verdicts; the health score is explicitly
+    non-comparable across languages and private-shadow-only.
 
 Acceptance: composite commands neither amplify uncertified inputs into facts
 nor lose capability/suppression/status information.

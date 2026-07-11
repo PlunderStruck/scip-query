@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-07-11",
+  "targetedProbeSuite": {
+    "files": 24,
+    "tests": 166,
+    "passed": 166
+  },
+  "verdicts": {
+    "incomplete-migration": "qualified",
+    "cleanup-plan": "qualified",
+    "cleanup-apply": "qualified",
+    "diff-gate": "qualified",
+    "diff-gate:echo": "qualified",
+    "diff-gate:incomplete-migration": "qualified",
+    "diff-gate:co-change-partner": "qualified",
+    "diff-gate:twin-partner": "qualified",
+    "diff-gate:coverage-contract": "certified",
+    "diff-gate:doc-reference": "qualified",
+    "diff-gate:unused-params": "insufficient",
+    "diff-gate:new-dead": "qualified",
+    "diff-gate:baseline": "qualified",
+    "health": "experimental",
+    "self-audit": "qualified",
+    "effectiveness": "qualified",
+    "affected": "qualified",
+    "change-surface": "qualified",
+    "diff-impact": "qualified",
+    "plan-context": "qualified"
+  },
+  "fixedArchetypes": [
+    "health-score-without-capability-disclosure",
+    "health-unsupported-analysis-as-clean-zero",
+    "health-relationship-as-automatic-action",
+    "health-zero-reference-as-proven-deletable"
+  ],
+  "publication": {
+    "healthScore": "private-shadow-only",
+    "diffGate": "repository-workflow-with-per-check-evidence",
+    "impactAnswers": "qualified-indexed-graph-facts"
+  }
+}

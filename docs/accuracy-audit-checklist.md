@@ -195,30 +195,33 @@ was not independently actionable without local design context.
 
 ## Diff, Cleanup, and Health Workflows
 
-- [ ] `incomplete-migration`
-- [ ] `cleanup-plan`
-- [ ] `cleanup-apply`
-- [ ] `diff-gate`
-  - [ ] `echo`
-  - [ ] `incomplete-migration`
-  - [ ] `co-change-partner`
-  - [ ] `twin-partner`
-  - [ ] `coverage-contract`
-  - [ ] `doc-reference`
-  - [ ] `unused-params`
-  - [ ] `new-dead`
-  - [ ] `baseline`
-- [ ] `health`
-- [ ] `self-audit`
-- [ ] `effectiveness`
-- [ ] `affected`
-- [ ] `change-surface`
-- [ ] `diff-impact`
-- [ ] `plan-context`
+- [x] `incomplete-migration` — qualified
+- [x] `cleanup-plan` — qualified; inherits liveness limits
+- [x] `cleanup-apply` — qualified; bounded by detected checker capability
+- [x] `diff-gate` — qualified aggregation
+  - [x] `echo` — qualified
+  - [x] `incomplete-migration` — qualified
+  - [x] `co-change-partner` — qualified
+  - [x] `twin-partner` — qualified
+  - [x] `coverage-contract` — certified exact comparison
+  - [x] `doc-reference` — qualified citation/change fact
+  - [x] `unused-params` — insufficient underlying population
+  - [x] `new-dead` — qualified candidate with unconfirmed tier
+  - [x] `baseline` — qualified exact set difference
+- [x] `health` — experimental composite; private shadow only
+- [x] `self-audit` — qualified; partial oracles withhold precision
+- [x] `effectiveness` — qualified ledger-transition facts
+- [x] `affected` — qualified indexed closure
+- [x] `change-surface` — qualified indexed consumer counts
+- [x] `diff-impact` — qualified hunk attribution and indexed impact
+- [x] `plan-context` — qualified aggregation parity
 
 Composite commands reuse certified detector rows, then receive an aggregation,
 scope, suppression, and status-propagation audit. They do not inherit trust
 merely because one input detector is certified.
+
+Certificate:
+[`2026-07-11-composite-workflow-certification.md`](./validation/2026-07-11-composite-workflow-certification.md).
 
 ## Navigation and Graph Answers
 
