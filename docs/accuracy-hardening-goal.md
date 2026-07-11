@@ -377,6 +377,15 @@ declaration made a following private callable look exported; the two real
 private pairs now refuse, and focused regression coverage preserves that
 boundary.
 
+The low-population TypeScript factual renewal is also complete:
+[`2026-07-11-typescript-factual-evidence-renewal.md`](./validation/2026-07-11-typescript-factual-evidence-renewal.md).
+All 25 emitted rows were valid across the four-repository replay, including four
+newly reviewed mock-echo facts. `unused-params`, `cycles`, `isolated`,
+`not-implemented`, `decorative-checkers`, and `test-quality` remain
+insufficient because their natural populations still fail sample-size or
+repository-breadth gates; they should be renewed only when a named new corpus
+adds the missing population.
+
 ## Program Acceptance Criteria
 
 - Every health detector-language pair has a visible certification state.

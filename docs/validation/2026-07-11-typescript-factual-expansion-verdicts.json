@@ -1,0 +1,18 @@
+{
+  "packet": "reports/accuracy/2026-07-11T16-00-12-326Z-typescript-factual-calibration.json",
+  "knownPositiveRecallCases": {
+    "unused-params": 1,
+    "cycles": 1,
+    "isolated": 1,
+    "not-implemented": 1,
+    "decorative-checkers": 1,
+    "test-quality": 3
+  },
+  "groups": [
+    {
+      "verdict": "valid",
+      "detectors": ["unused-params", "cycles", "isolated", "not-implemented", "decorative-checkers", "test-quality"],
+      "evidenceNote": "All 25 emitted rows were reviewed against their pinned source excerpts and narrow truth rules. Twenty-one rows reproduce the prior reviewed packet. Four new mock-echo rows accurately disclose a mocked literal later asserted, although each test also verifies additional routing or response behavior; the factual echo is valid and does not by itself make the test low quality. The two supported-zero detectors retain positive fixtures but no real-repository precision population."
+    }
+  ]
+}

@@ -66,6 +66,10 @@ Target:
       `insufficient`: `unused-params`, `cycles`, `isolated`,
       `not-implemented`, `decorative-checkers`, `test-quality`,
       `recent-duplicates`, and `passthrough-candidates`.
+  - 2026-07-11: the six factual families were renewed across four pinned
+    repositories. All 25 rows were valid, but the natural populations still
+    fail breadth or sample-size gates. Renew them only when a named new corpus
+    contributes the missing population; similarity/passthrough remain open.
 - [ ] Seek additional populations for qualified rows whose only failed gate is
       confidence or subtype breadth, including `bottlenecks` and
       `wrapper-candidates`; preserve qualified status when the population does
