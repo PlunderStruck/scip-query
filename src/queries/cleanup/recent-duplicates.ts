@@ -6,6 +6,7 @@ import { reactHookCandidates } from '../frontend/react-hook-candidates.js';
 import { similarAll } from './similar.js';
 import { vueComponentDuplicates } from '../frontend/vue-component-duplicates.js';
 import { vueComposableCandidates } from '../frontend/vue-composable-candidates.js';
+import { isRustTraitImplMember } from '../../symbols/symbol-parser.js';
 
 export type RecentDuplicateDomain = 'callable' | 'react-component' | 'react-hook' | 'vue-component' | 'vue-composable';
 
@@ -261,17 +262,19 @@ function callableDuplicateCandidates(
     scanLimit: opts.scanLimit,
     semantic: opts.semantic,
     focusFiles: opts.focusFiles,
-  }).map((pair) => ({
-    domain: 'callable',
-    basis: pair.similarityBasis ?? 'callees',
-    symbolA: pair.shortNameA,
-    fileA: pair.fileA,
-    symbolB: pair.shortNameB,
-    fileB: pair.fileB,
-    similarity: pair.similarity,
-    sharedEvidence: pair.sharedCallees,
-    sharedCallees: pair.sharedCallees,
-  }));
+  })
+    .filter((pair) => !isRustTraitImplMember(pair.symbolA) && !isRustTraitImplMember(pair.symbolB))
+    .map((pair) => ({
+      domain: 'callable',
+      basis: pair.similarityBasis ?? 'callees',
+      symbolA: pair.shortNameA,
+      fileA: pair.fileA,
+      symbolB: pair.shortNameB,
+      fileB: pair.fileB,
+      similarity: pair.similarity,
+      sharedEvidence: pair.sharedCallees,
+      sharedCallees: pair.sharedCallees,
+    }));
 }
 
 function reactComponentDuplicateCandidates(
