@@ -34,3 +34,7 @@
 {"ts":1783800983277,"check":"doc-reference","findingId":"SQ508BE832CBB1","event":"resolved","commit":"683e60f17948da661daf23e0e48a13040a46c56e"}
 {"ts":1783801440982,"check":"doc-reference","findingId":"SQF57A771CD0FC","event":"reopened","commit":"17e84c9da08a42d04cdb19a7db04554c0b4d8a47"}
 {"ts":1783801609811,"check":"doc-reference","findingId":"SQF57A771CD0FC","event":"resolved","commit":"91fc17adca07aa47f128f36d061387d14fd77875"}
+{"ts":1783802401993,"check":"doc-reference","findingId":"SQ83CF165F67A2","event":"caught","commit":"5a0438f6f6836adb01a14de0474be4087fd011cc"}
+{"ts":1783802401993,"check":"doc-reference","findingId":"SQ9A7B74C58953","event":"caught","commit":"5a0438f6f6836adb01a14de0474be4087fd011cc"}
+{"ts":1783802424489,"check":"doc-reference","findingId":"SQ83CF165F67A2","event":"resolved","commit":"5a0438f6f6836adb01a14de0474be4087fd011cc"}
+{"ts":1783802424489,"check":"doc-reference","findingId":"SQ9A7B74C58953","event":"resolved","commit":"5a0438f6f6836adb01a14de0474be4087fd011cc"}

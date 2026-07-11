@@ -65,6 +65,7 @@ import { rustSemanticSessionStatus } from '../../semantic/rust/lsp-session.js';
 import { healthPhases } from '../../queries/health/health.js';
 import { writeProfileEvent } from '../../instrumentation/profile.js';
 import { auditProfileWork, readProfileEvents, renderProfileWorkAudit } from '../profile-work-audit.js';
+import { discloseHealthCapabilities } from '../health-capability-disclosure.js';
 import {
   collect,
   formatBytes,
@@ -275,11 +276,16 @@ export async function handleHealth(rawOpts: unknown): Promise<void> {
       full: booleanOptionValue(opts, 'full'),
       json: booleanOptionValue(opts, 'json'),
     });
+    const { projectRoot, config, dbPath } = resolveCliProjectContext();
+    const capabilities = getProjectCapabilities(getProjectReadiness(projectRoot, config), {
+      hasIndexedGraph: existsSync(dbPath),
+    });
+    const disclosedReport = discloseHealthCapabilities(report, capabilities);
     if (booleanOptionValue(opts, 'json')) {
-      printJsonEnvelope('health', [], opts, report);
+      printJsonEnvelope('health', [], opts, disclosedReport);
       return;
     }
-    renderHealthReport(report, false);
+    renderHealthReport(disclosedReport, false);
   } catch (err) {
     console.error(`error: ${err instanceof Error ? err.message : err}`);
     process.exit(1);

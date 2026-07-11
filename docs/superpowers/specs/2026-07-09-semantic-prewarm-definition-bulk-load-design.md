@@ -52,6 +52,11 @@ calls `getDefinitionsForFile()` once per file. The source evidence is:
 - `scip-query code getDefinitionsForFile`
 - `scip-query code computeDefinitionsForFile`
 
+2026-07-11 verification: the anchored `src/runtime/cli-support.ts:239-254`
+reference still names `DEFAULT_HEALTH_SEMANTIC_PREWARM_RUNTIME` and its bulk
+candidate-definition path. The later health capability-disclosure change only
+affects command rendering after the cached detector report is assembled.
+
 The repository already contains a set-oriented definition path:
 `getScopedDefinitionsMatchingSymbols()` loads primary and fallback rows for the
 scope, groups by file, applies `mergeMixedSymbolQueryRows()`, and corrects ranges

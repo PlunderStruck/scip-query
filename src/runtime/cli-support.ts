@@ -710,7 +710,11 @@ export function renderHealthReport(report: HealthReport, json: boolean | undefin
   }
 
   if (report.actions.length === 0) {
-    console.log('\n  No issues found. Codebase is clean.');
+    console.log(
+      report.warnings && report.warnings.length > 0
+        ? '\n  No findings from completed analyses. Review warnings before interpreting this result as clean.'
+        : '\n  No issues found. Codebase is clean.',
+    );
   }
 }
 

@@ -40,6 +40,11 @@ They still need an explicit identity key because they can affect command output.
 | -------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `index-side:health-report-cache` | Full rendered health report for one indexed project and health option set. | `health-report-cache.json` beside `index.db` | `src/runtime/health-report-cache.ts` | cache version, project evidence fingerprint, CLI version, `scope`, `full`, phase timeout, git HEAD | Project/index metadata, indexed language set, CLI version, health scope/full mode, phase timeout, git HEAD, or cache payload version change. Detector precision is refreshed from the live finding-outcome ledger on every read. | `tests/runtime/health-report-cache.test.ts` | Safe after clearing only `evidence.db`; not shared across branch/worktree/clone unless git HEAD and project fingerprint match exactly. Workspace and multi-language identity flow through the project evidence fingerprint. |
 
+The cached health payload contains detector results. The command boundary adds
+the live project capability matrix and experimental-score interpretation after
+the cache read, so changes in installed semantic providers or checkers do not
+require invalidating the detector-result cache and cannot be hidden by it.
+
 ## Benchmark Commands
 
 - `node scripts/performance-architecture-contract.mjs --repo . --command "health --json" --warm-iterations 1 --no-clear`
