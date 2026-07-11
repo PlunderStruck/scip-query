@@ -5,12 +5,15 @@ import { escapeRegex } from '../../core/regex-utils.js';
 import { parenBalance } from '../../source/source-stripper.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { semanticSignature } from '../../semantic/shared-primitives.js';
-import { shortenSymbol } from '../../symbols/symbol-parser.js';
+import { isRustTraitImplMember, shortenSymbol } from '../../symbols/symbol-parser.js';
+import { scipFunctionLikeKindNumbers } from '../../symbols/symbol-kind.js';
 import { cleanSignature, extractSignature } from '../../storage/scip-rows.js';
 import { applyScanLimit, definitionLoc } from '../query-utils.js';
 import { normalizedBodyForDefinition } from './duplicate-bodies.js';
 
 type SignatureLocBand = '<=5' | '6-20' | '>20';
+
+const SCIP_FUNCTION_LIKE_KINDS = new Set(scipFunctionLikeKindNumbers());
 
 type SimilarSignatureFunction = {
   symbol: string;
@@ -71,7 +74,7 @@ function similarSignatureCandidates(
   opts: { scope?: string; minLoc: number; scanLimit?: number },
 ): IndexedDefinition[] {
   const definitions = getAllDefinitions(db, { scope: opts.scope })
-    .filter((definition) => definition.isFunctionLike && !db.isIgnored(definition.relativePath))
+    .filter((definition) => isSimilarSignatureCallable(definition) && !db.isIgnored(definition.relativePath))
     .filter((definition) => definitionLoc(definition) >= opts.minLoc);
 
   if (typeof opts.scanLimit === 'number' && opts.scanLimit > 0) {
@@ -82,6 +85,12 @@ function similarSignatureCandidates(
   }
 
   return applyScanLimit(definitions, opts.scanLimit);
+}
+
+function isSimilarSignatureCallable(definition: IndexedDefinition): boolean {
+  if (!definition.isFunctionLike) return false;
+  if (isRustTraitImplMember(definition.symbol)) return false;
+  return definition.kind === null || SCIP_FUNCTION_LIKE_KINDS.has(definition.kind);
 }
 
 function groupDefinitionsBySignature(

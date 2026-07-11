@@ -11,7 +11,9 @@ Use parsers for structured inputs when the parser is available:
 
 Regex remains the right tool for flat machine-generated strings:
 
-- SCIP symbol encodings in `src/symbols/symbol-parser.ts`.
+- SCIP symbol encodings in `src/symbols/symbol-parser.ts`; when SCIP kind
+  metadata is available, detectors use it as the final callable/type/value
+  classification instead of treating symbol shape as sufficient proof.
 - SCIP row and descriptor filters in storage/query SQL when the pattern is static.
 - Path fragments and glob prefilters, followed by segment-aware matching when slash semantics matter.
 - Signature normalization in `src/queries/cleanup/similar-signatures.ts`.

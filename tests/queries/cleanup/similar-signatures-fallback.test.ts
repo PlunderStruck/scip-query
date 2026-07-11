@@ -122,6 +122,14 @@ describe('similar-signatures source fallback', () => {
         '',
       ].join('\n'),
     );
+    writeFileSync(
+      join(projectRoot, 'src', 'Particle.rs'),
+      'pub struct Particle { pub position: Vec3 }\nimpl Default for Particle { fn default() -> Self { todo!() } }\n',
+    );
+    writeFileSync(
+      join(projectRoot, 'src', 'Trail.rs'),
+      'pub struct Trail { pub position: Vec3 }\nimpl Default for Trail { fn default() -> Self { todo!() } }\n',
+    );
 
     const sqliteDb = new Database(join(tempDir, 'index.db'));
     createSchema(sqliteDb);
@@ -131,19 +139,25 @@ describe('similar-signatures source fallback', () => {
         (2, 'java', 'src/StatusBoardReporter.java'),
         (3, 'java', 'src/StatusDigestReporter.java'),
         (4, 'typescript', 'src/BulkIssueService.ts'),
-        (5, 'typescript', 'src/BulkIssueRepository.ts');
+        (5, 'typescript', 'src/BulkIssueRepository.ts'),
+        (6, 'rust', 'src/Particle.rs'),
+        (7, 'rust', 'src/Trail.rs');
 
       INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
-        (1, 'semanticdb maven . . fixture/StatusAuditReporter#', 'StatusAuditReporter', 5, 'class StatusAuditReporter|class StatusAuditReporter'),
-        (2, 'semanticdb maven . . fixture/StatusAuditReporter#renderAuditStatus().', 'renderAuditStatus', 12, 'semanticdb maven . . fixture/StatusAuditReporter#renderAuditStatus().|'),
-        (3, 'semanticdb maven . . fixture/StatusBoardReporter#', 'StatusBoardReporter', 5, 'class StatusBoardReporter|class StatusBoardReporter'),
-        (4, 'semanticdb maven . . fixture/StatusBoardReporter#renderBoardStatus().', 'renderBoardStatus', 12, 'semanticdb maven . . fixture/StatusBoardReporter#renderBoardStatus().|'),
-        (5, 'semanticdb maven . . fixture/StatusDigestReporter#', 'StatusDigestReporter', 5, 'class StatusDigestReporter|class StatusDigestReporter'),
-        (6, 'semanticdb maven . . fixture/StatusDigestReporter#renderDigestStatus().', 'renderDigestStatus', 12, 'semanticdb maven . . fixture/StatusDigestReporter#renderDigestStatus().|'),
-        (7, 'scip-typescript npm fixture 1.0.0 src/\`BulkIssueService.ts\`/BulkIssueService#', 'BulkIssueService', 5, NULL),
-        (8, 'scip-typescript npm fixture 1.0.0 src/\`BulkIssueService.ts\`/BulkIssueService#bulkArchive().', 'bulkArchive', 12, NULL),
-        (9, 'scip-typescript npm fixture 1.0.0 src/\`BulkIssueRepository.ts\`/BulkIssueRepository#', 'BulkIssueRepository', 5, NULL),
-        (10, 'scip-typescript npm fixture 1.0.0 src/\`BulkIssueRepository.ts\`/BulkIssueRepository#bulkRestore().', 'bulkRestore', 12, NULL);
+        (1, 'semanticdb maven . . fixture/StatusAuditReporter#', 'StatusAuditReporter', 7, 'class StatusAuditReporter|class StatusAuditReporter'),
+        (2, 'semanticdb maven . . fixture/StatusAuditReporter#renderAuditStatus().', 'renderAuditStatus', 26, 'semanticdb maven . . fixture/StatusAuditReporter#renderAuditStatus().|'),
+        (3, 'semanticdb maven . . fixture/StatusBoardReporter#', 'StatusBoardReporter', 7, 'class StatusBoardReporter|class StatusBoardReporter'),
+        (4, 'semanticdb maven . . fixture/StatusBoardReporter#renderBoardStatus().', 'renderBoardStatus', 26, 'semanticdb maven . . fixture/StatusBoardReporter#renderBoardStatus().|'),
+        (5, 'semanticdb maven . . fixture/StatusDigestReporter#', 'StatusDigestReporter', 7, 'class StatusDigestReporter|class StatusDigestReporter'),
+        (6, 'semanticdb maven . . fixture/StatusDigestReporter#renderDigestStatus().', 'renderDigestStatus', 26, 'semanticdb maven . . fixture/StatusDigestReporter#renderDigestStatus().|'),
+        (7, 'scip-typescript npm fixture 1.0.0 src/\`BulkIssueService.ts\`/BulkIssueService#', 'BulkIssueService', 7, NULL),
+        (8, 'scip-typescript npm fixture 1.0.0 src/\`BulkIssueService.ts\`/BulkIssueService#bulkArchive().', 'bulkArchive', 26, NULL),
+        (9, 'scip-typescript npm fixture 1.0.0 src/\`BulkIssueRepository.ts\`/BulkIssueRepository#', 'BulkIssueRepository', 7, NULL),
+        (10, 'scip-typescript npm fixture 1.0.0 src/\`BulkIssueRepository.ts\`/BulkIssueRepository#bulkRestore().', 'bulkRestore', 26, NULL),
+        (11, 'rust-analyzer cargo fixture 0.1.0 model/Particle#position.', 'position', 15, 'fn position(value: Vec3)'),
+        (12, 'rust-analyzer cargo fixture 0.1.0 model/Trail#position.', 'position', 15, 'fn position(value: Vec3)'),
+        (13, 'rust-analyzer cargo fixture 0.1.0 model/impl#[Particle][Default]default().', 'default', 26, 'fn default() -> Self'),
+        (14, 'rust-analyzer cargo fixture 0.1.0 model/impl#[Trail][Default]default().', 'default', 26, 'fn default() -> Self');
 
       INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
         (1, 1, 1, 1, 0, 4, 1),
@@ -155,7 +169,11 @@ describe('similar-signatures source fallback', () => {
         (7, 4, 7, 0, 0, 4, 1),
         (8, 4, 8, 1, 2, 3, 3),
         (9, 5, 9, 0, 0, 4, 1),
-        (10, 5, 10, 1, 2, 3, 3);
+        (10, 5, 10, 1, 2, 3, 3),
+        (11, 6, 11, 0, 0, 0, 48),
+        (12, 7, 12, 0, 0, 0, 45),
+        (13, 6, 13, 1, 0, 1, 71),
+        (14, 7, 14, 1, 0, 1, 65);
     `);
     sqliteDb.close();
 
@@ -200,5 +218,12 @@ describe('similar-signatures source fallback', () => {
         'src:BulkIssueRepository:BulkIssueRepository:bulkRestore()',
       ]),
     );
+  });
+
+  it('excludes Rust fields even when their index metadata contains callable-looking documentation', () => {
+    const groups = similarSignatures(db, { minLoc: 1, semantic: false });
+    const names = groups.flatMap((group) => group.functions.map((fn) => fn.shortName));
+    expect(names).not.toContain('model:Particle:position');
+    expect(names).not.toContain('model:impl:Particle:Default:default()');
   });
 });

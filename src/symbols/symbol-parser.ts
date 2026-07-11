@@ -311,6 +311,10 @@ export function isFunctionLikeSymbol(raw: string): boolean {
   if (suffix === 'method') return true;
   if (suffix !== 'term') return false;
   if (raw.endsWith('().')) return true;
+  // rust-analyzer emits struct fields and associated values as plain term
+  // descriptors beneath a type (`Type#field.`). They are not callables even
+  // though file-level Rust terms may still need source-backed classification.
+  if (raw.startsWith('rust-analyzer ') && raw.includes('#')) return false;
   if (!raw.startsWith('scip-typescript ')) return true;
   // scip-typescript plain terms split two ways: members of a type
   // (`Parent#leaf.`) are properties/fields and never callable, while

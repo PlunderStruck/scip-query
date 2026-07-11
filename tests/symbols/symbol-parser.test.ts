@@ -108,6 +108,10 @@ describe('parseSymbol', () => {
     expect(isFunctionLikeSymbol('scip-clojure deps.edn demo . `demo.core`/greet.')).toBe(true);
   });
 
+  it('does not classify Rust struct fields as function-like', () => {
+    expect(isFunctionLikeSymbol('rust-analyzer cargo fixture 0.1.0 model/Particle#position.')).toBe(false);
+  });
+
   it('handles parameter descriptors', () => {
     // Parameter uses paren-wrap syntax: (paramName)
     const raw = 'scip-typescript npm pkg 1.0.0 `file.ts`/MyClass#method().(param)';
