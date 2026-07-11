@@ -226,11 +226,14 @@ export function errorKey(errorLine: string): string {
   return errorLine.replace(/\(\d+,\d+\)|:\d+(?::\d+)?/g, '').trim();
 }
 
+export type CleanupCheckerStrength = 'reference-aware' | 'syntax-only';
+
 interface Checker {
   label: string;
   binary: string;
   args: string[];
   coversExtensions: string[];
+  strength: CleanupCheckerStrength;
   env?: NodeJS.ProcessEnv;
 }
 
@@ -244,8 +247,20 @@ export function detectCheckers(projectRoot: string): Checker[] {
     const localTsc = join(projectRoot, 'node_modules', '.bin', 'tsc');
     checkers.push(
       existsSync(localTsc)
-        ? { label: 'tsc --noEmit', binary: localTsc, args: ['--noEmit'], coversExtensions: TS_EXTENSIONS }
-        : { label: 'npx tsc --noEmit', binary: 'npx', args: ['tsc', '--noEmit'], coversExtensions: TS_EXTENSIONS },
+        ? {
+            label: 'tsc --noEmit',
+            binary: localTsc,
+            args: ['--noEmit'],
+            coversExtensions: TS_EXTENSIONS,
+            strength: 'reference-aware',
+          }
+        : {
+            label: 'npx tsc --noEmit',
+            binary: 'npx',
+            args: ['tsc', '--noEmit'],
+            coversExtensions: TS_EXTENSIONS,
+            strength: 'reference-aware',
+          },
     );
   }
   if (existsSync(join(projectRoot, 'go.mod'))) {
@@ -254,6 +269,7 @@ export function detectCheckers(projectRoot: string): Checker[] {
       binary: 'go',
       args: ['build', './...'],
       coversExtensions: ['.go'],
+      strength: 'reference-aware',
     });
   }
   if (['pyproject.toml', 'setup.py', 'requirements.txt'].some((marker) => existsSync(join(projectRoot, marker)))) {
@@ -270,6 +286,7 @@ export function detectCheckers(projectRoot: string): Checker[] {
       binary: 'cargo',
       args: ['check', '--quiet', '--message-format', 'json', '--manifest-path', manifest],
       coversExtensions: ['.rs'],
+      strength: 'reference-aware',
       // Reuse the project's build cache — a cold target dir takes minutes.
       env: {
         ...process.env,
@@ -292,6 +309,7 @@ function detectPythonChecker(): Checker | null {
       binary: 'ruff',
       args: ['check', '--quiet', '--output-format', 'json', '--select', 'E9,F821,F822', '.'],
       coversExtensions: ['.py'],
+      strength: 'reference-aware',
     };
   }
   if (binaryAvailable('python3')) {
@@ -300,6 +318,7 @@ function detectPythonChecker(): Checker | null {
       binary: 'python3',
       args: ['-m', 'compileall', '-q', '.'],
       coversExtensions: ['.py'],
+      strength: 'syntax-only',
     };
   }
   return null;
@@ -313,6 +332,7 @@ function detectClojureChecker(projectRoot: string): Checker | null {
       binary: localKondo,
       args: ['--lint', '.', '--config', '{:output {:format :json}}'],
       coversExtensions: [...CLOJURE_EXTENSIONS],
+      strength: 'reference-aware',
     };
   }
   if (binaryAvailable('clj-kondo')) {
@@ -321,6 +341,7 @@ function detectClojureChecker(projectRoot: string): Checker | null {
       binary: 'clj-kondo',
       args: ['--lint', '.', '--config', '{:output {:format :json}}'],
       coversExtensions: [...CLOJURE_EXTENSIONS],
+      strength: 'reference-aware',
     };
   }
   if (binaryAvailable('npx')) {
@@ -329,6 +350,7 @@ function detectClojureChecker(projectRoot: string): Checker | null {
       binary: 'npx',
       args: ['--yes', 'clj-kondo', '--lint', '.', '--config', '{:output {:format :json}}'],
       coversExtensions: [...CLOJURE_EXTENSIONS],
+      strength: 'reference-aware',
     };
   }
   return null;

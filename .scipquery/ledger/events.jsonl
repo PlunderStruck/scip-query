@@ -42,3 +42,4 @@
 {"ts":1783802550536,"check":"doc-reference","findingId":"SQ9A7B74C58953","event":"reopened","commit":"e0f989f7ffd3e09bb4e9c0ed6b74c198a045eb04"}
 {"ts":1783802572885,"check":"doc-reference","findingId":"SQ83CF165F67A2","event":"resolved","commit":"e0f989f7ffd3e09bb4e9c0ed6b74c198a045eb04"}
 {"ts":1783802572885,"check":"doc-reference","findingId":"SQ9A7B74C58953","event":"resolved","commit":"e0f989f7ffd3e09bb4e9c0ed6b74c198a045eb04"}
+{"ts":1783803198029,"check":"doc-reference","findingId":"SQ812CEAB08CC1","event":"caught","commit":"9c24b3bce856ed04e55ca69ed94686b09355c5f1"}

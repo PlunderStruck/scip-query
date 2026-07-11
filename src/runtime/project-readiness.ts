@@ -6,7 +6,7 @@ import { getIndexerDependencyStatus } from '../reindex/install.js';
 import type { SemanticProviderLanguage } from '../semantic/types.js';
 import { getRustSemanticStatus } from '../semantic/rust/status.js';
 import { getTypeScriptSemanticStatus } from '../semantic/typescript/status.js';
-import { detectCheckers } from './cleanup-verify.js';
+import { detectCheckers, type CleanupCheckerStrength } from './cleanup-verify.js';
 import { probeAstLanguageRuntime, type LanguageRuntimeProbe } from '../source/ast/ast-runtime.js';
 import type { AstLanguage } from '../source/ast/ast-language.js';
 import { registeredParserCapabilities } from '../language-parsers/registry.js';
@@ -40,12 +40,12 @@ export interface ProjectReadiness {
   indexers: LanguageReadiness[];
   semantics?: SemanticReadiness[];
   semantic?: SemanticReadiness;
-  checkers: Array<{ label: string; coversExtensions: string[] }>;
+  checkers: Array<{ label: string; coversExtensions: string[]; strength?: CleanupCheckerStrength }>;
   gitAvailable: boolean;
 }
 
 export type CapabilityStatus = 'available' | 'partial' | 'unavailable';
-export type CapabilityEvidence = 'graph-fact' | 'semantic' | 'heuristic' | 'compiler' | 'git';
+export type CapabilityEvidence = 'graph-fact' | 'semantic' | 'heuristic' | 'checker' | 'git';
 
 export interface ProjectCapability {
   id: string;
@@ -139,6 +139,7 @@ export function getProjectReadiness(projectRoot: string, config: ProjectConfig):
   const checkers = detectCheckers(projectRoot).map((checker) => ({
     label: checker.label,
     coversExtensions: checker.coversExtensions,
+    strength: checker.strength,
   }));
 
   return { languages, indexers, semantics, semantic, checkers, gitAvailable: gitAvailable(projectRoot) };
@@ -160,14 +161,22 @@ export function getProjectCapabilities(
         ? 'available'
         : 'partial';
   const graphDataAvailable = graphStatus !== 'unavailable';
+  const matrix = readiness.languages.map((language) =>
+    languageCapability(readiness, language, {
+      hasIndexedGraph: languageHasIndexedGraph(language, opts),
+      runtimeProbe: opts.runtimeProbe,
+    }),
+  );
+  const verificationStatuses = matrix.map((row) => row.cleanupVerification.status);
+  const verificationStatus: CapabilityStatus =
+    verificationStatuses.length === 0 || verificationStatuses.every((status) => status === 'unavailable')
+      ? 'unavailable'
+      : verificationStatuses.every((status) => status === 'available')
+        ? 'available'
+        : 'partial';
   return {
     languages: readiness.languages,
-    matrix: readiness.languages.map((language) =>
-      languageCapability(readiness, language, {
-        hasIndexedGraph: languageHasIndexedGraph(language, opts),
-        runtimeProbe: opts.runtimeProbe,
-      }),
-    ),
+    matrix,
     capabilities: [
       {
         id: 'indexing',
@@ -193,12 +202,14 @@ export function getProjectCapabilities(
       },
       {
         id: 'cleanup-verification',
-        label: 'Compiler cleanup verification',
-        status: readiness.checkers.length > 0 ? 'available' : 'unavailable',
-        evidence: 'compiler',
+        label: 'Project cleanup verification',
+        status: verificationStatus,
+        evidence: 'checker',
         reason:
-          readiness.checkers.length > 0
-            ? readiness.checkers.map((checker) => checker.label).join(', ')
+          verificationStatus !== 'unavailable'
+            ? matrix
+                .map((row) => `${row.language}: ${row.cleanupVerification.status} (${row.cleanupVerification.reason})`)
+                .join('; ')
             : 'No project checker was detected for cleanup-plan --verify.',
       },
       {
@@ -287,6 +298,12 @@ function languageCapability(
   const sourceSupport = sourceFactCapability(language, opts.runtimeProbe);
   const semantic = languageSemanticCapability(readiness, language);
   const coveredByCheckers = checkersForLanguage(readiness, language);
+  const cleanupVerificationStatus: CapabilityStatus =
+    coveredByCheckers.length === 0
+      ? 'unavailable'
+      : coveredByCheckers.every((checker) => checker.strength !== 'syntax-only')
+        ? 'available'
+        : 'partial';
 
   return {
     language,
@@ -324,8 +341,8 @@ function languageCapability(
     cleanupVerification: {
       id: 'cleanup-verification',
       label: 'Cleanup verification',
-      status: coveredByCheckers.length > 0 ? 'available' : 'unavailable',
-      evidence: 'compiler',
+      status: cleanupVerificationStatus,
+      evidence: 'checker',
       reason:
         coveredByCheckers.length > 0
           ? coveredByCheckers.map((checker) => checker.label).join(', ')
@@ -481,7 +498,10 @@ function languageSemanticCapability(readiness: ProjectReadiness, language: Suppo
   };
 }
 
-function checkersForLanguage(readiness: ProjectReadiness, language: SupportedLanguage): Array<{ label: string }> {
+function checkersForLanguage(
+  readiness: ProjectReadiness,
+  language: SupportedLanguage,
+): Array<{ label: string; strength?: CleanupCheckerStrength }> {
   const extensions = new Set(LANGUAGE_EXTENSIONS[language]);
   return readiness.checkers.filter((checker) =>
     checker.coversExtensions.some((extension) => extensions.has(extension)),

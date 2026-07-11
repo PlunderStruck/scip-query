@@ -41,6 +41,39 @@ describe('getProjectCapabilities', () => {
     expect(python?.cleanupVerification.reason).toContain('.py');
   });
 
+  it('reports syntax-only validation as partial at language and project level', () => {
+    const readiness: ProjectReadiness = {
+      languages: ['typescript', 'python'],
+      indexers: [
+        { language: 'typescript', binaryLabel: 'scip-typescript', installed: true, runnable: true },
+        { language: 'python', binaryLabel: 'scip-python', installed: true, runnable: true },
+      ],
+      checkers: [
+        {
+          label: 'tsc --noEmit',
+          coversExtensions: ['.ts', '.tsx'],
+          strength: 'reference-aware',
+        },
+        {
+          label: 'python3 -m compileall (syntax only)',
+          coversExtensions: ['.py'],
+          strength: 'syntax-only',
+        },
+      ],
+      gitAvailable: true,
+    };
+
+    const report = getProjectCapabilities(readiness);
+
+    expect(report.matrix.find((row) => row.language === 'typescript')?.cleanupVerification.status).toBe('available');
+    expect(report.matrix.find((row) => row.language === 'python')?.cleanupVerification.status).toBe('partial');
+    expect(report.capabilities.find((capability) => capability.id === 'cleanup-verification')).toMatchObject({
+      label: 'Project cleanup verification',
+      status: 'partial',
+      evidence: 'checker',
+    });
+  });
+
   it('reports registered Rust semantic support separately from implemented semantic facts', () => {
     const readiness: ProjectReadiness = {
       languages: ['rust'],
