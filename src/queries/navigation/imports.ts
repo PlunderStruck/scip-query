@@ -77,13 +77,19 @@ export function unusedImports(
 }
 
 function mergeImportUsageEntries(semantic: ImportEntry[], source: ImportEntry[]): ImportEntry[] {
-  const sourceByBinding = new Map(source.map((entry) => [entry.shortName, entry]));
+  const sourceByBinding = new Map<string, ImportEntry[]>();
+  for (const entry of source) {
+    const bucket = sourceByBinding.get(entry.shortName);
+    if (bucket) bucket.push(entry);
+    else sourceByBinding.set(entry.shortName, [entry]);
+  }
   const merged = semantic.map((entry) => {
-    const sourceEntry = sourceByBinding.get(entry.shortName);
-    sourceByBinding.delete(entry.shortName);
+    const bucket = sourceByBinding.get(entry.shortName);
+    const sourceEntry = bucket?.shift();
+    if (bucket?.length === 0) sourceByBinding.delete(entry.shortName);
     return sourceEntry ? { ...entry, used: entry.used || sourceEntry.used } : entry;
   });
-  merged.push(...sourceByBinding.values());
+  merged.push(...[...sourceByBinding.values()].flat());
   return merged;
 }
 
@@ -296,7 +302,8 @@ function sourceFileImportEntries(db: ScipDatabase, importer: string): ImportEntr
     // Side-effect imports never reference a named symbol, so they're never
     // "unused" in the sense unused-imports flags. Mark them used to preserve
     // the original `kind !== 'side-effect' && !entry.used` filter behavior.
-    const used = entry.kind === 'side-effect' ? true : entry.used;
+    const used =
+      entry.kind === 'side-effect' || rustImportMayProvideImplicitMethods(importer, entry) ? true : entry.used;
     return {
       symbol: rendered,
       shortName: rendered,
@@ -305,6 +312,21 @@ function sourceFileImportEntries(db: ScipDatabase, importer: string): ImportEntr
       used,
     };
   });
+}
+
+/**
+ * A Rust trait import can be required even when its binding name never occurs
+ * outside the `use` declaration: importing `rand::Rng` makes `.random()` and
+ * `.random_range()` available through method resolution. Source-token and
+ * rust-analyzer definition-location evidence cannot distinguish that use from
+ * an actually unused UpperCamelCase import. Preserve the uncertain import
+ * instead of publishing a false removal claim; rustc remains the exact oracle
+ * for that recall boundary.
+ */
+function rustImportMayProvideImplicitMethods(importer: string, entry: ParsedSourceImport): boolean {
+  if (detectAstLanguage(importer) !== 'rust' || entry.used || entry.kind === 'side-effect') return false;
+  const localName = entry.localName ?? entry.importedName;
+  return localName === '_' || /^[A-Z]/.test(localName);
 }
 
 function renderImportSymbol(

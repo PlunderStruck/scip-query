@@ -126,6 +126,34 @@ describe('command accuracy fixes', () => {
     }
   });
 
+  it('withholds Rust imports that may provide implicit trait methods', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-query-rust-unused-import-'));
+    try {
+      writeFixtureFiles(root, {
+        'src/lib.rs': [
+          'use rand::{Rng, unused_fn};',
+          '',
+          'fn sample(rng: &mut rand::rngs::StdRng) -> u32 {',
+          '    rng.random_range(0..10)',
+          '}',
+          '',
+        ],
+      });
+      const dbPath = join(root, 'index.db');
+      evidenceFixtureDb(dbPath).document(1, 'rust', 'src/lib.rs').chunk(1, 1, 0, 5).write();
+      const fixtureDb = new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') });
+      try {
+        expect(unusedImports(fixtureDb, 'src/lib.rs', { semantic: false }).map((row) => row.shortName)).toEqual([
+          'unused_fn',
+        ]);
+      } finally {
+        fixtureDb.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('distinguishes TypeScript interfaces from classes when inferring kinds', () => {
     const classes = byKind(db, 'class').map((result) => result.shortName);
     const interfaces = byKind(db, 'interface').map((result) => result.shortName);

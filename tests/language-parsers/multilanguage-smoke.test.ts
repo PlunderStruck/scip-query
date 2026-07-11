@@ -7,7 +7,7 @@ import { ScipDatabase } from '../../src/storage/db.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
 describe('multi-language parser smoke coverage', () => {
-  it('extracts imports from Ruby, PHP, Dart, .NET, JVM, and C-like fixtures', () => {
+  it('extracts imports from Ruby, PHP, Dart, Rust, .NET, JVM, and C-like fixtures', () => {
     withParserFixture((db) => {
       expect(getSourceImports(db, 'app/main.rb')).toEqual(
         expect.arrayContaining([
@@ -34,6 +34,13 @@ describe('multi-language parser smoke coverage', () => {
       expect(getSourceExports(db, 'lib/main.dart')).toEqual([
         expect.objectContaining({ specifier: './public.dart', sourcePath: 'lib/public.dart' }),
       ]);
+
+      expect(getSourceImports(db, 'rust/main.rs')).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ importedName: 'io', localName: 'io', used: true }),
+          expect.objectContaining({ importedName: 'Read', localName: 'Read', used: false }),
+        ]),
+      );
 
       expect(getSourceImports(db, 'dotnet/App.cs')).toEqual(
         expect.arrayContaining([
@@ -94,6 +101,7 @@ function withParserFixture(run: (db: ScipDatabase) => void): void {
       ],
       'lib/model.dart': ['class Thing {}'],
       'lib/public.dart': ['class PublicThing {}'],
+      'rust/main.rs': ['use std::io::{self, Read};', '', 'fn main() {', '    let _ = io::empty();', '}'],
       'dotnet/App.cs': [
         'using LinqAlias = System.Linq;',
         'using System.Text;',
@@ -123,10 +131,11 @@ function withParserFixture(run: (db: ScipDatabase) => void): void {
       .document(5, 'dart', 'lib/main.dart')
       .document(6, 'dart', 'lib/model.dart')
       .document(7, 'dart', 'lib/public.dart')
-      .document(8, 'csharp', 'dotnet/App.cs')
-      .document(9, 'java', 'jvm/App.java')
-      .document(10, 'c', 'native/main.c')
-      .document(11, 'c', 'native/widget.h')
+      .document(8, 'rust', 'rust/main.rs')
+      .document(9, 'csharp', 'dotnet/App.cs')
+      .document(10, 'java', 'jvm/App.java')
+      .document(11, 'c', 'native/main.c')
+      .document(12, 'c', 'native/widget.h')
       .write();
 
     const db = new ScipDatabase({

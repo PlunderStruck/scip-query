@@ -63,7 +63,6 @@ function flattenRustUseTree(node: SyntaxNode, prefix: string): RustImportLeaf[] 
   switch (node.type) {
     case 'identifier':
     case 'super':
-    case 'self':
     case 'crate': {
       const name = node.text;
       return [
@@ -71,6 +70,16 @@ function flattenRustUseTree(node: SyntaxNode, prefix: string): RustImportLeaf[] 
           qualifiedName: joinRustPath(prefix, name),
           importedName: name,
           localName: name,
+        },
+      ];
+    }
+    case 'self': {
+      const importedName = prefix.split('::').filter(Boolean).pop() ?? 'self';
+      return [
+        {
+          qualifiedName: prefix || 'self',
+          importedName,
+          localName: importedName,
         },
       ];
     }
@@ -145,7 +154,12 @@ function parseRustUseClause(
     const inner = trimmed.slice(trimmed.indexOf('{') + 1, trimmed.lastIndexOf('}')).trim();
     return splitTopLevel(inner).flatMap((entry) => {
       const cleaned = entry.trim();
-      if (!cleaned || cleaned === 'self') return [];
+      if (!cleaned) return [];
+      if (cleaned === 'self') {
+        const importedName = prefix.split('::').filter(Boolean).pop();
+        if (!importedName) return [];
+        return [buildSimpleImport(db, importerPath, body, prefix, importedName, importedName)];
+      }
       const [importedPart, aliasPart] = cleaned.split(/\s+as\s+/);
       const importedName = importedPart?.trim();
       if (!importedName) return [];
