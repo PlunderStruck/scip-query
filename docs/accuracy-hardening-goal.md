@@ -402,6 +402,15 @@ source review validated all 41 passthrough rows. Both relationship claims are
 now certified; automatic removal remains unsupported without local boundary
 evidence.
 
+The recent-duplicates population expansion is complete:
+[`2026-07-11-typescript-recent-duplicates-expansion.md`](./validation/2026-07-11-typescript-recent-duplicates-expansion.md).
+All eight natural findings passed pinned source, shared-evidence, and
+file-addition-history checks across four repositories with findings. Two more
+repositories produced supported zeros, and one repository's indexing failure
+remained explicit rather than becoming a zero. The 67.6% confidence floor is
+still insufficient, so renewal is terminal for this named corpus and should
+resume only when another corpus or historical snapshot adds findings.
+
 ## Program Acceptance Criteria
 
 - Every health detector-language pair has a visible certification state.

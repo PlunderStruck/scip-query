@@ -1,0 +1,20 @@
+{
+  "packet": "reports/accuracy/2026-07-11T16-51-17-696Z-typescript-similarity-calibration.json",
+  "knownPositiveRecallCases": {
+    "recent-duplicates": 1
+  },
+  "groups": [
+    {
+      "verdict": "valid",
+      "detectors": ["recent-duplicates"],
+      "evidenceNote": "All 8 relationships had both pinned source endpoints, all 179 disclosed shared-evidence tokens appeared in both endpoints after domain-aware token spelling, and all 8 Git addition-history orientations matched the reported echo or twin kind."
+    }
+  ],
+  "utilityGroups": [
+    {
+      "verdict": "uncertain",
+      "detectors": ["recent-duplicates"],
+      "evidenceNote": "Recency plus structural overlap is a valid investigation signal, but consolidation still depends on domain ownership, intentional specialization, and boundary intent."
+    }
+  ]
+}

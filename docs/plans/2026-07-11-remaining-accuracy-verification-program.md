@@ -62,7 +62,7 @@ Target:
       pinned TypeScript repositories, compile each emitted scaffold, and test
       refusal paths against non-callable, non-exported, ambiguous, and
       signature-incompatible inputs.
-- [ ] Expand real-repository or historical evidence for TypeScript rows marked
+- [x] Expand real-repository or historical evidence for TypeScript rows marked
       `insufficient`: `unused-params`, `cycles`, `isolated`,
       `not-implemented`, `decorative-checkers`, `test-quality`,
       `recent-duplicates`, and `passthrough-candidates`.
@@ -71,7 +71,12 @@ Target:
     fail breadth or sample-size gates. Renew them only when a named new corpus
     contributes the missing population; similarity/passthrough remain open.
   - 2026-07-11: `passthrough-candidates` expanded to 41/41 valid rows across
-    three repositories and is now certified. `recent-duplicates` remains open.
+    three repositories and is now certified.
+  - 2026-07-11: a seven-repository `recent-duplicates` expansion again found
+    only eight natural relationships. All were valid across four repositories
+    with findings; two supported zeros and one explicit indexing failure did
+    not inflate confidence. The row remains honestly insufficient and is
+    terminal for this named corpus.
 - [x] Seek additional populations for qualified rows whose only failed gate is
       confidence or subtype breadth, including `bottlenecks` and
       `wrapper-candidates`; preserve qualified status when the population does
