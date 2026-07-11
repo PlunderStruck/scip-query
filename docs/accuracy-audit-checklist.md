@@ -60,8 +60,8 @@ Legend: `certified`, `qualified`, `experimental`, `insufficient`, `unsupported`,
 | `co-change`                      | certified    | pending      | pending     | history relationship       | 40/40 accepted Git-history relationships valid across four repositories.                                                      |
 | `doc-drift`                      | certified    | pending      | pending     | history relationship       | 40/40 citation/co-change/change-order relationships valid across four repositories.                                           |
 | `drift`                          | qualified    | pending      | pending     | subtype relationship       | 40/40 relationships valid; subtype breadth incomplete and sampled advice non-actionable.                                      |
-| `wrapper-candidates`             | qualified    | pending      | pending     | relationship certification | 30/30 single-caller/fan-in facts valid; confidence floor remains 88.6%.                                                       |
-| `passthrough-candidates`         | insufficient | pending      | pending     | relationship certification | 21/21 literal-forwarding facts valid; more findings are required.                                                             |
+| `wrapper-candidates`             | certified    | pending      | pending     | relationship certification | 60/60 production single-caller relationships valid across three repositories; removal utility remains contextual.             |
+| `passthrough-candidates`         | certified    | pending      | pending     | relationship certification | 41/41 literal-forwarding relationships valid across three repositories; removal utility remains contextual.                   |
 | `stale-abstractions`             | certified    | pending      | pending     | relationship certification | 40/40 low-consumer facts valid after ambient-declaration hardening.                                                           |
 | `extract-candidates`             | certified    | pending      | pending     | measurement certification  | 43/43 callee-cluster measurements valid; extraction remains contextual.                                                       |
 | `locality-candidates`            | certified    | pending      | pending     | relationship certification | 48/48 ownership/destination relationships valid; movement remains contextual.                                                 |
@@ -122,8 +122,8 @@ consolidation would improve the code.
 
 ## Architecture and Refactoring Signals
 
-- [x] `wrapper-candidates` — qualified relationship
-- [x] `passthrough-candidates` — insufficient population evidence
+- [x] `wrapper-candidates` — certified production single-caller relationship
+- [x] `passthrough-candidates` — certified literal-forwarding relationship
 - [x] `stale-abstractions` — certified relationship
 - [x] `extract-candidates` — certified measurement; extraction remains contextual
 - [x] `locality-candidates` — certified relationship; movement remains contextual

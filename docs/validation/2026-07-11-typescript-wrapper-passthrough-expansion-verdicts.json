@@ -1,0 +1,21 @@
+{
+  "packet": "reports/accuracy/2026-07-11T16-10-03-113Z-typescript-typescript-architecture-resampled.json",
+  "knownPositiveRecallCases": {
+    "wrapper-candidates": 1,
+    "passthrough-candidates": 1
+  },
+  "groups": [
+    {
+      "verdict": "valid",
+      "detectors": ["wrapper-candidates", "passthrough-candidates"],
+      "evidenceNote": "All 60 wrapper rows passed 180 independent unbounded-reference checks: exactly one production caller after documented test/barrel/entry exclusions, that caller resolved to the reported enclosing file, and caller fan-in was a positive disclosed graph measurement. All 41 passthrough rows were source-reviewed and each body literally forwarded its parameters through one call or return."
+    }
+  ],
+  "utilityGroups": [
+    {
+      "verdict": "uncertain",
+      "detectors": ["wrapper-candidates", "passthrough-candidates"],
+      "evidenceNote": "The measured wrapper or forwarding relationship is exact, but removal utility still depends on boundary naming, public API, framework handlers, ownership, and test seams not established by the relationship alone."
+    }
+  ]
+}

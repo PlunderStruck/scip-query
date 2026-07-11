@@ -326,16 +326,18 @@ near-name, test-helper, and convention-only filtering. `recent-duplicates` is
 evidenced. The campaign now records factual relationship validity separately
 from recommendation utility.
 
-The TypeScript architecture/history campaign is complete:
+The initial TypeScript architecture/history campaign is complete:
 [`2026-07-10-typescript-architecture-history-detectors.md`](./validation/2026-07-10-typescript-architecture-history-detectors.md).
 The `co-change`, `doc-drift`, and `stale-abstractions` relationship claims are
 certified at 40/40 valid rows across four repositories. `drift` is qualified at
 40/40 because the population was 39 pattern deviations, one inferred layer,
 and a supported zero for unused-import rows; none of the sampled drift advice
-was actionable without ownership evidence. `wrapper-candidates` is qualified
-at 30/30 with an 88.6% confidence floor, while `passthrough-candidates` remains
-insufficient at 21/21. The campaign removed ambient-declaration, generated
-co-change state, and structural-token feature-label noise.
+was actionable without ownership evidence. The initial packet qualified
+`wrapper-candidates` at 30/30 and left `passthrough-candidates` insufficient at
+21/21. The 2026-07-11 renewal expanded those samples to 60/60 and 41/41 valid
+relationships across three repositories, certifying both narrow facts. Removal
+utility remains contextual. The campaign removed ambient-declaration,
+generated co-change state, and structural-token feature-label noise.
 
 The TypeScript extraction and graph-risk campaign is complete:
 [`2026-07-10-typescript-extraction-graph-risk-detectors.md`](./validation/2026-07-10-typescript-extraction-graph-risk-detectors.md).
@@ -385,6 +387,13 @@ newly reviewed mock-echo facts. `unused-params`, `cycles`, `isolated`,
 insufficient because their natural populations still fail sample-size or
 repository-breadth gates; they should be renewed only when a named new corpus
 adds the missing population.
+
+The wrapper/passthrough population renewal is complete:
+[`2026-07-11-typescript-wrapper-passthrough-certification.md`](./validation/2026-07-11-typescript-wrapper-passthrough-certification.md).
+Independent unbounded reference checks validated all 60 wrapper rows, and
+source review validated all 41 passthrough rows. Both relationship claims are
+now certified; automatic removal remains unsupported without local boundary
+evidence.
 
 ## Program Acceptance Criteria
 

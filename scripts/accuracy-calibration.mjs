@@ -184,7 +184,7 @@ const architectureTruthRules = {
   drift:
     'The reported dependency edge exists and the stated subtype is true: no accepted import use survived, a declared or inferred layer rule rejects the edge, or exactly one accepted sibling has the dependency; architectural harm is separate.',
   'wrapper-candidates':
-    'The short production callable has exactly one external caller file and its enclosing caller or file has the reported fan-in after semantic and source fallback; removing the layer is separate.',
+    'The short production callable has exactly one production external caller file after test, entry, and barrel exclusions, and its enclosing caller or file has the reported fan-in after semantic and source fallback; removing the layer is separate.',
   'passthrough-candidates':
     'The callable has one unique callee and its body literally forwards its parameters through a return expression; public or boundary value is separate.',
   'stale-abstractions':

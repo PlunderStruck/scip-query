@@ -70,10 +70,15 @@ Target:
     repositories. All 25 rows were valid, but the natural populations still
     fail breadth or sample-size gates. Renew them only when a named new corpus
     contributes the missing population; similarity/passthrough remain open.
+  - 2026-07-11: `passthrough-candidates` expanded to 41/41 valid rows across
+    three repositories and is now certified. `recent-duplicates` remains open.
 - [ ] Seek additional populations for qualified rows whose only failed gate is
       confidence or subtype breadth, including `bottlenecks` and
       `wrapper-candidates`; preserve qualified status when the population does
       not exist.
+  - 2026-07-11: `wrapper-candidates` expanded to 60/60 valid production
+    single-caller rows across three repositories and is now certified.
+    `bottlenecks` remains open.
 - [ ] Source-review resolved and missed Vue reference sites in a third
       dependency-ready repository and record `augment-vue` completeness.
 
