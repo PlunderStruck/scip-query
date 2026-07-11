@@ -38,47 +38,47 @@ The certification thresholds and publication rules live in
 Legend: `certified`, `qualified`, `experimental`, `insufficient`, `unsupported`,
 `pending`, or `parity`.
 
-| Analyzer or command              | TypeScript   | Rust         | Python      | Audit kind                 | Notes                                                                                                                         |
-| -------------------------------- | ------------ | ------------ | ----------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `dead`                           | certified    | insufficient | pending     | finding certification      | Rust expansion: 3/3 valid from one repository, four supported zeros, and one explicit indexing failure; population still sparse. |
-| `unused-imports`                 | certified    | qualified    | pending     | finding certification      | Rust uses a conservative implicit-trait boundary; 107 false positives removed across the renewal corpus.                      |
-| `unused-params`                  | insufficient | unsupported  | unsupported | finding certification      | 5/5 valid, but all rows came from one repository.                                                                             |
-| `cycles`                         | insufficient | qualified    | pending     | graph-fact certification   | Rust source/index cycles observed across two repositories; compiler-exhaustive completeness is not claimed.                    |
-| `duplicate-bodies`               | certified    | qualified    | pending     | measurement certification  | Rust normalized-body equality is factual; consolidation remains contextual.                                                   |
-| `complexity`                     | certified    | qualified    | pending     | measurement certification  | Rust source-derived branch counts exclude macro expansion.                                                                    |
-| `isolated`                       | insufficient | insufficient | pending     | finding certification      | Rust has supported zeros and fixtures but no natural positive population.                                                     |
-| `redundant-reexports`            | certified    | insufficient | pending     | finding certification      | Rust has a positive fixture but no natural positive population in the renewal corpus.                                         |
-| `not-implemented`                | insufficient | unsupported  | pending     | finding certification      | Rust `todo!` and `unimplemented!` syntax is not analyzed.                                                                     |
-| `decorative-checkers`            | insufficient | unsupported  | pending     | finding certification      | Callable/failure syntax is JavaScript/TypeScript-specific.                                                                    |
-| `test-quality`                   | insufficient | unsupported  | pending     | finding certification      | The source scan is restricted to JavaScript/TypeScript extensions.                                                            |
-| `recent-duplicates`              | insufficient | qualified    | pending     | history relationship       | Trait-required advice removed; 62 ordinary Vega holdout relationships remain.                                                 |
-| `similar`                        | certified    | qualified    | pending     | relationship certification | Rust shared-callee facts are disclosed; refactoring advice remains contextual.                                                |
-| `similar-files`                  | certified    | qualified    | pending     | relationship certification | Rust distinctive-dependency overlap is supported.                                                                            |
-| `similar-chains`                 | qualified    | qualified    | pending     | bounded relationship       | Rust is also bounded by the 500-generated-chain internal frame.                                                               |
-| `similar-signatures`             | certified    | qualified    | pending     | measurement certification  | Rust fields and trait-required members are excluded from callable signature equality.                                         |
-| `twin-drift`                     | qualified    | qualified    | pending     | relationship certification | Rust convention methods are excluded; supported-zero and focused-positive evidence remains.                                  |
-| `co-change`                      | certified    | qualified    | pending     | history relationship       | Rust Git-history relationships are factual; coupling advice remains contextual.                                               |
-| `doc-drift`                      | certified    | qualified    | pending     | history relationship       | Rust citation/change-order facts are supported; priority remains contextual.                                                  |
-| `drift`                          | qualified    | insufficient | pending     | subtype relationship       | Rust has no natural subtype population in the renewal corpus.                                                                 |
-| `wrapper-candidates`             | certified    | qualified    | pending     | relationship certification | Rust trait implementations are excluded; ordinary single-caller relationships remain.                                        |
-| `passthrough-candidates`         | certified    | qualified    | pending     | relationship certification | Rust literal-forwarding relationships are supported; removal remains contextual.                                              |
-| `stale-abstractions`             | certified    | qualified    | pending     | relationship certification | Rust low-consumer facts require public/registration review.                                                                   |
-| `extract-candidates`             | certified    | qualified    | pending     | measurement certification  | Rust callee-cluster measurements are supported; extraction remains contextual.                                                |
-| `locality-candidates`            | certified    | qualified    | pending     | relationship certification | Rust ownership/destination relationships are supported; movement remains contextual.                                         |
-| `coupling`                       | certified    | qualified    | pending     | graph-fact certification   | Rust disclosed shared-symbol relationships are supported.                                                                    |
-| `bottlenecks`                    | certified    | qualified    | pending     | graph-fact certification   | Rust disclosed centrality facts are supported; utility remains contextual.                                                    |
-| `deep-chains`                    | certified    | qualified    | pending     | graph-fact certification   | Rust condensed index paths exclude unavailable macro/generated edges.                                                         |
-| `complexity-hotspots`            | certified    | qualified    | pending     | measurement certification  | Rust composite source measurements are supported, not defect verdicts.                                                       |
-| `hotspots`                       | certified    | qualified    | pending     | graph-fact certification   | Rust indexed reference counts are supported; module/crate rows remain contextual.                                             |
-| `fan-in`                         | certified    | qualified    | pending     | graph-fact certification   | Rust exact indexed-symbol counts do not claim linker-wide reachability.                                                       |
-| `fan-out`                        | certified    | qualified    | pending     | graph-fact certification   | Rust indexed external-symbol counts are supported.                                                                            |
-| `react-component-duplicates`     | certified    | unsupported  | unsupported | framework relationship     | 48/48 structural relationships valid across three React repositories; extraction remains contextual.                          |
-| `react-hook-candidates`          | certified    | unsupported  | unsupported | framework relationship     | 48/48 behavior relationships valid across three React repositories; hook extraction remains contextual.                       |
-| `react-large-component-pressure` | certified    | unsupported  | unsupported | framework measurement      | 48/48 pressure rows valid after dominant-axis and route-context hardening.                                                    |
-| `vue-component-duplicates`       | certified    | unsupported  | unsupported | framework relationship     | 41/41 structural relationships valid across four Vue repositories; recommendation utility remains contextual.                 |
-| `vue-composable-candidates`      | certified    | unsupported  | unsupported | framework relationship     | 48/48 behavior relationships valid across three repositories with findings.                                                   |
-| `vue-large-view-pressure`        | certified    | unsupported  | unsupported | framework measurement      | 64/64 pressure rows valid across four Vue repositories.                                                                       |
-| `augment-vue`                    | qualified    | unsupported  | unsupported | reference completeness     | 841 exact-oracle component mentions across three repositories; broader local/property identity is withheld and unsupported.   |
+| Analyzer or command              | TypeScript   | Rust         | Python       | Audit kind                 | Notes                                                                                                                       |
+| -------------------------------- | ------------ | ------------ | ------------ | -------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `dead`                           | certified    | insufficient | insufficient | finding certification      | Python lacks semantic/checker completeness; traceroot retained 2 source-backed candidates and Flask had 0.                  |
+| `unused-imports`                 | certified    | qualified    | qualified    | finding certification      | Python literal `__all__` exports are honored; dynamic import completeness is not claimed.                                   |
+| `unused-params`                  | insufficient | unsupported  | unsupported  | finding certification      | 5/5 valid, but all rows came from one repository.                                                                           |
+| `cycles`                         | insufficient | qualified    | insufficient | graph-fact certification   | Python source/index path is supported, but the corpus supplied no natural positive or exhaustive oracle.                    |
+| `duplicate-bodies`               | certified    | qualified    | insufficient | measurement certification  | Python normalized-body equality is supported but had no natural positive population.                                        |
+| `complexity`                     | certified    | qualified    | qualified    | measurement certification  | Python source-derived branch counts are measurements, not runtime-behavior verdicts.                                        |
+| `isolated`                       | insufficient | insufficient | insufficient | finding certification      | Python has supported zeros but lacks a natural positive and semantic completeness.                                          |
+| `redundant-reexports`            | certified    | insufficient | unsupported  | finding certification      | The barrel/export model does not analyze Python module exports.                                                             |
+| `not-implemented`                | insufficient | unsupported  | unsupported  | finding certification      | Placeholder syntax and reachability are JavaScript/TypeScript-specific.                                                     |
+| `decorative-checkers`            | insufficient | unsupported  | unsupported  | finding certification      | Callable/failure syntax is JavaScript/TypeScript-specific.                                                                  |
+| `test-quality`                   | insufficient | unsupported  | unsupported  | finding certification      | The source scan is restricted to JavaScript/TypeScript extensions.                                                          |
+| `recent-duplicates`              | insufficient | qualified    | insufficient | history relationship       | Python completed with no natural relationship population.                                                                   |
+| `similar`                        | certified    | qualified    | insufficient | relationship certification | Python completed with no natural shared-callee population.                                                                  |
+| `similar-files`                  | certified    | qualified    | insufficient | relationship certification | Python completed with no natural distinctive-overlap population.                                                            |
+| `similar-chains`                 | qualified    | qualified    | qualified    | bounded relationship       | Traceroot returned 1,994 relationships within the internal candidate frame.                                                 |
+| `similar-signatures`             | certified    | qualified    | qualified    | measurement certification  | 11 traceroot and 2 Flask signature-shape relationships were source-valid.                                                   |
+| `twin-drift`                     | qualified    | qualified    | insufficient | relationship certification | Python convention dunders are excluded; the replay then had no natural positive population.                                 |
+| `co-change`                      | certified    | qualified    | qualified    | history relationship       | Python pairs are exact Git-history facts; design coupling remains contextual.                                               |
+| `doc-drift`                      | certified    | qualified    | qualified    | history relationship       | Python citation/change-order facts are supported; priority remains contextual.                                              |
+| `drift`                          | qualified    | insufficient | qualified    | subtype relationship       | Python dependency edges are factual; inferred layer policy remains a signal.                                                |
+| `wrapper-candidates`             | certified    | qualified    | qualified    | relationship certification | Python disclosed two single-caller relationships; decorator/runtime boundaries require review.                              |
+| `passthrough-candidates`         | certified    | qualified    | insufficient | relationship certification | Python completed with no natural positive population.                                                                       |
+| `stale-abstractions`             | certified    | qualified    | insufficient | relationship certification | Two live Pydantic families were fixed; semantic/framework completeness is unavailable.                                      |
+| `extract-candidates`             | certified    | qualified    | insufficient | measurement certification  | Python completed with no natural positive population.                                                                       |
+| `locality-candidates`            | certified    | qualified    | qualified    | relationship certification | 39 Python ownership/destination relationships were disclosed; movement remains contextual.                                  |
+| `coupling`                       | certified    | qualified    | qualified    | graph-fact certification   | 108 Python shared-indexed-symbol relationships were reproduced.                                                             |
+| `bottlenecks`                    | certified    | qualified    | qualified    | graph-fact certification   | Three disclosed Python centrality facts are supported; utility remains contextual.                                          |
+| `deep-chains`                    | certified    | qualified    | qualified    | graph-fact certification   | 15 condensed Python dependency paths were reproduced.                                                                       |
+| `complexity-hotspots`            | certified    | qualified    | qualified    | measurement certification  | 310 Python composite source/index measurements are supported, not defect verdicts.                                          |
+| `hotspots`                       | certified    | qualified    | qualified    | graph-fact certification   | 219 Python indexed reference-count rows were reproduced.                                                                    |
+| `fan-in`                         | certified    | qualified    | qualified    | graph-fact certification   | 58 exact Python indexed-symbol counts do not claim runtime reachability.                                                    |
+| `fan-out`                        | certified    | qualified    | qualified    | graph-fact certification   | 36 Python indexed external-symbol counts were reproduced.                                                                   |
+| `react-component-duplicates`     | certified    | unsupported  | unsupported  | framework relationship     | 48/48 structural relationships valid across three React repositories; extraction remains contextual.                        |
+| `react-hook-candidates`          | certified    | unsupported  | unsupported  | framework relationship     | 48/48 behavior relationships valid across three React repositories; hook extraction remains contextual.                     |
+| `react-large-component-pressure` | certified    | unsupported  | unsupported  | framework measurement      | 48/48 pressure rows valid after dominant-axis and route-context hardening.                                                  |
+| `vue-component-duplicates`       | certified    | unsupported  | unsupported  | framework relationship     | 41/41 structural relationships valid across four Vue repositories; recommendation utility remains contextual.               |
+| `vue-composable-candidates`      | certified    | unsupported  | unsupported  | framework relationship     | 48/48 behavior relationships valid across three repositories with findings.                                                 |
+| `vue-large-view-pressure`        | certified    | unsupported  | unsupported  | framework measurement      | 64/64 pressure rows valid across four Vue repositories.                                                                     |
+| `augment-vue`                    | qualified    | unsupported  | unsupported  | reference completeness     | 841 exact-oracle component mentions across three repositories; broader local/property identity is withheld and unsupported. |
 
 ### TypeScript factual detector slice
 
@@ -114,6 +114,21 @@ publication-certified.
 
 Certificate:
 [`2026-07-11-rust-detector-certification.md`](./validation/2026-07-11-rust-detector-certification.md).
+
+### Python detector slice
+
+The Python audit pinned an indexer/syntax corpus, a FastAPI/Pydantic/Celery
+production corpus, and a small Flask holdout. Checked boxes mean capability and
+verdict are explicit; they do not imply semantic completeness.
+
+- [x] Pinned three repositories with distinct evidence roles
+- [x] Separated index, source, semantic-provider, framework, and checker capability
+- [x] Hardened dunder, model-liveness, and `__all__` false-positive families
+- [x] Marked TS/JS-only analyzers unsupported rather than clean
+- [x] Replayed the Flask holdout and retained ordinary relationships
+
+Certificate:
+[`2026-07-11-python-detector-certification.md`](./validation/2026-07-11-python-detector-certification.md).
 
 ## Similarity and Duplication
 

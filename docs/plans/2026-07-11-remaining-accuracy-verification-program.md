@@ -125,14 +125,21 @@ verdict; no broad framework/library exclusion silently improves output.
 
 ### 3. Establish Python capability and certification boundaries
 
-- [ ] Pin `scip-python`, `traceroot`, and a third distinct Python framework
+- [x] Pin `scip-python`, `traceroot`, and a third distinct Python framework
       repository or revision.
-- [ ] Establish indexing, semantic-reference, framework-registration, and
+- [x] Establish indexing, semantic-reference, framework-registration, and
       checker capability independently.
-- [ ] Audit only claims supported by the available provider, covering
+- [x] Audit only claims supported by the available provider, covering
       decorators and registration patterns encountered in the corpus.
-- [ ] Treat unavailable semantic/checker paths as `unsupported` or
+- [x] Treat unavailable semantic/checker paths as `unsupported` or
       `insufficient`, never as zero findings.
+
+  - 2026-07-11: the Python renewal pinned scip-python's syntax/indexer corpus,
+    traceroot's FastAPI/Pydantic/Celery production code, and a Flask holdout.
+    It found no Python semantic provider and only a syntax checker in
+    traceroot, corrected five dunder/model/export liveness archetypes, and
+    assigned every Python matrix row a qualified, insufficient, or unsupported
+    verdict. No Python row was promoted to public-actionable certification.
 
 Acceptance: every Python row has a capability-backed verdict and public output
 cannot imply unsupported semantic completeness.

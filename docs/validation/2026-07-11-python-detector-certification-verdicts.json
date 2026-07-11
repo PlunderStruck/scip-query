@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-07-11",
+  "corpus": [
+    {
+      "repository": "scip-python",
+      "commit": "e02c96e17078e701639d533ec1baa57468d0215b",
+      "role": "indexer and syntax corpus; Python files are test fixtures, not a natural production population"
+    },
+    {
+      "repository": "traceroot",
+      "commit": "c41ac2bb3801fc2ce882ea3bacba9b0c4c5afeb9",
+      "role": "FastAPI, Pydantic, and Celery production corpus"
+    },
+    {
+      "repository": "PaddOCR_Client",
+      "commit": "dee9dd4d31e7f4b3c7b4038957ffeb39c0df6aa3",
+      "role": "small Flask holdout"
+    }
+  ],
+  "capability": {
+    "indexer": "available: scip-python-plus",
+    "sourceFacts": "available",
+    "semanticProvider": "unavailable",
+    "checker": "syntax-only in traceroot; unavailable in the other two repositories"
+  },
+  "verdicts": {
+    "dead": "insufficient",
+    "unused-imports": "qualified",
+    "unused-params": "unsupported",
+    "cycles": "insufficient",
+    "duplicate-bodies": "insufficient",
+    "complexity": "qualified",
+    "isolated": "insufficient",
+    "redundant-reexports": "unsupported",
+    "not-implemented": "unsupported",
+    "decorative-checkers": "unsupported",
+    "test-quality": "unsupported",
+    "recent-duplicates": "insufficient",
+    "similar": "insufficient",
+    "similar-files": "insufficient",
+    "similar-chains": "qualified",
+    "similar-signatures": "qualified",
+    "twin-drift": "insufficient",
+    "co-change": "qualified",
+    "doc-drift": "qualified",
+    "drift": "qualified",
+    "wrapper-candidates": "qualified",
+    "passthrough-candidates": "insufficient",
+    "stale-abstractions": "insufficient",
+    "extract-candidates": "insufficient",
+    "locality-candidates": "qualified",
+    "coupling": "qualified",
+    "bottlenecks": "qualified",
+    "deep-chains": "qualified",
+    "complexity-hotspots": "qualified",
+    "hotspots": "qualified",
+    "fan-in": "qualified",
+    "fan-out": "qualified",
+    "react-component-duplicates": "unsupported",
+    "react-hook-candidates": "unsupported",
+    "react-large-component-pressure": "unsupported",
+    "vue-component-duplicates": "unsupported",
+    "vue-composable-candidates": "unsupported",
+    "vue-large-view-pressure": "unsupported",
+    "augment-vue": "unsupported"
+  },
+  "fixedArchetypes": [
+    "python-convention-twins",
+    "python-transitive-model-liveness",
+    "python-dunder-protocol-hooks",
+    "python-runtime-all-exports",
+    "python-all-import-usage"
+  ],
+  "holdout": {
+    "repository": "PaddOCR_Client",
+    "deadCode": 0,
+    "fileInternal": 29,
+    "similarSignatureRelationships": 2,
+    "evidenceNote": "The narrow fixes retained ordinary source/index relationships while the Flask holdout remained free of repository-dead findings."
+  }
+}

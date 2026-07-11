@@ -1,7 +1,7 @@
 # Accuracy Hardening and Health Certification Roadmap
 
 Date: 2026-07-10
-Status: Active; TypeScript, Vue, and broad Rust detector campaigns closed with explicit capability boundaries; Python and composite/operational audits remain
+Status: Active; TypeScript, Vue, Rust, and Python detector campaigns closed with explicit capability boundaries; composite and operational audits remain
 
 Current execution plan:
 [`2026-07-11-remaining-accuracy-verification-program.md`](./plans/2026-07-11-remaining-accuracy-verification-program.md).
@@ -212,6 +212,13 @@ or insufficiently evidenced, with exclusion coverage visible.
 
 ### Phase 5 — Build and certify Python semantic and framework coverage
 
+Status: Complete with explicit withholding. The current implementation has a
+Python indexer and source facts but no Python semantic provider or type-aware
+checker. The three-repository audit corrected dunder, transitive model,
+protocol-hook, and runtime export false positives, then assigned every Python
+row a qualified, insufficient, or unsupported verdict. Evidence:
+[`2026-07-11-python-detector-certification.md`](./validation/2026-07-11-python-detector-certification.md).
+
 - Establish the current indexing, semantic, and checker capability separately
   for each corpus repository.
 - Add or integrate semantic reference evidence before making strong dead-code
@@ -271,11 +278,10 @@ active program above.
 
 ## Immediate Next Slice
 
-The remaining TypeScript gaps now have terminal verdicts for their named
-corpora, the broader `bottlenecks` replay is certified, and Vue cross-file
-component identity is qualified across three repositories. Renew the Rust
-detector campaign against additional repositories or historical commits before
-beginning Python semantic certification.
+The language detector campaigns now have terminal verdicts under their current
+capabilities. Next, audit composite health, cleanup, diff, and impact workflows
+so aggregation cannot turn a qualified, insufficient, or unsupported input
+into an unqualified factual claim.
 
 ## Progress — 2026-07-10
 
@@ -430,6 +436,16 @@ checker capability; one indexing failure stayed explicit. The only three
 natural findings again came from VegaAssistant and were all valid. Four
 supported zeros cannot raise the 43.9% confidence floor, so Rust `dead` remains
 insufficient and is terminal for this named corpus.
+
+The Python detector campaign is complete under the current capability boundary:
+[`2026-07-11-python-detector-certification.md`](./validation/2026-07-11-python-detector-certification.md).
+`scip-python-plus` and source facts were available, but no Python semantic
+provider or type-aware checker existed. The renewal corrected convention
+dunders, transitive Pydantic model liveness, runtime protocol hooks, and
+literal `__all__` export/import behavior. The Flask holdout retained 29
+file-internal and two signature relationships while reporting zero
+repository-dead rows. Every Python matrix row is now qualified, insufficient,
+or unsupported; none is certified for public actionable scoring.
 
 ## Program Acceptance Criteria
 
