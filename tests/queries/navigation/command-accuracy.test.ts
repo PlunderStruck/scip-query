@@ -494,7 +494,7 @@ describe('command accuracy fixes', () => {
     expect(report.findings.staleTypes).toBe(stale.length);
     expect(staleAction?.count).toBe(stale.length);
     expect(staleAction?.description).toContain('1 unused');
-    expect(staleAction?.description).toContain('remove unused abstractions');
+    expect(staleAction?.description).toContain('review public, runtime-registration, and ownership evidence');
     expect(report.scoreBreakdown.find((deduction) => deduction.axis === 'stale-abstractions')).toMatchObject({
       points: 1,
       detail: expect.stringContaining('1 unused stale abstraction(s); 0 single-consumer signal(s)'),
