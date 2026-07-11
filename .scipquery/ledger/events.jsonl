@@ -15,3 +15,6 @@
 {"ts":1783737382650,"check":"doc-reference","findingId":"SQC59B9120B421","event":"caught","commit":"617385fe3598ee8ffc3f5553bfbe3ff5204b235c"}
 {"ts":1783737382650,"check":"doc-reference","findingId":"SQ676EC9BCA841","event":"caught","commit":"617385fe3598ee8ffc3f5553bfbe3ff5204b235c"}
 {"ts":1783737551817,"check":"doc-reference","findingId":"SQ676EC9BCA841","event":"resolved","commit":"617385fe3598ee8ffc3f5553bfbe3ff5204b235c"}
+{"ts":1783744770827,"check":"doc-reference","findingId":"SQC59B9120B421","event":"resolved","commit":"7190ad911686380eb836b68f57a5268a882d56a0"}
+{"ts":1783744770827,"check":"doc-reference","findingId":"SQF57A771CD0FC","event":"caught","commit":"7190ad911686380eb836b68f57a5268a882d56a0"}
+{"ts":1783744770827,"check":"doc-reference","findingId":"SQ814505E3948D","event":"caught","commit":"7190ad911686380eb836b68f57a5268a882d56a0"}

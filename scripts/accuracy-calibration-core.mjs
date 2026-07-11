@@ -22,6 +22,24 @@ export const TYPESCRIPT_SIMILARITY_DETECTORS = [
   'similar-signatures',
   'twin-drift',
 ];
+export const TYPESCRIPT_ARCHITECTURE_DETECTORS = [
+  'co-change',
+  'doc-drift',
+  'drift',
+  'wrapper-candidates',
+  'passthrough-candidates',
+  'stale-abstractions',
+];
+
+export function parseArchitectureCalibrationOptions(rawArgs, defaultRoots, resolveRoot = (value) => value) {
+  return parseTypeScriptDetectorOptions(rawArgs, {
+    defaultRoots,
+    detectors: TYPESCRIPT_ARCHITECTURE_DETECTORS,
+    optionLabel: 'architecture',
+    resolveRoot,
+    seed: 'typescript-architecture-v1',
+  });
+}
 
 export function parseSimilarityCalibrationOptions(rawArgs, defaultRoots, resolveRoot = (value) => value) {
   return parseTypeScriptDetectorOptions(rawArgs, {
@@ -155,6 +173,44 @@ export function deterministicSample(rows, count, seed) {
     })
     .slice(0, count)
     .map(({ row, identity }) => ({ ...row, calibrationId: identity }));
+}
+
+export function deterministicStratifiedSample(rows, count, seed, stratumForRow) {
+  if (!Number.isInteger(count) || count < 0) throw new Error('sample count must be a non-negative integer');
+  if (typeof stratumForRow !== 'function') throw new Error('stratumForRow must be a function');
+
+  const grouped = new Map();
+  for (const row of rows) {
+    const stratum = String(stratumForRow(row));
+    const group = grouped.get(stratum) ?? [];
+    group.push(row);
+    grouped.set(stratum, group);
+  }
+
+  const strata = [...grouped.entries()]
+    .map(([stratum, entries]) => ({
+      stratum,
+      rows: deterministicSample(entries, entries.length, `${seed}:${stratum}`),
+    }))
+    .sort(
+      (left, right) =>
+        sampleRank(seed, left.stratum).localeCompare(sampleRank(seed, right.stratum)) ||
+        left.stratum.localeCompare(right.stratum),
+    );
+
+  const selected = [];
+  for (let depth = 0; selected.length < Math.min(count, rows.length); depth += 1) {
+    let foundAtDepth = false;
+    for (const stratum of strata) {
+      const candidate = stratum.rows[depth];
+      if (!candidate) continue;
+      foundAtDepth = true;
+      selected.push(candidate);
+      if (selected.length >= count) break;
+    }
+    if (!foundAtDepth) break;
+  }
+  return selected;
 }
 
 export function wilsonInterval(successes, total, z = 1.96) {

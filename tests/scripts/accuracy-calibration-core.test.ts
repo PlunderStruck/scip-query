@@ -7,9 +7,11 @@ import {
   applyVerdictGroups,
   calibrationRowIdentity,
   deterministicSample,
+  deterministicStratifiedSample,
   normalizeDeadCandidate,
   normalizeFactualCandidate,
   normalizeSimilarityCandidate,
+  parseArchitectureCalibrationOptions,
   parseDeadCalibrationOptions,
   parseFactualCalibrationOptions,
   parseSimilarityCalibrationOptions,
@@ -93,6 +95,32 @@ describe('accuracy calibration core', () => {
         ['/repos/default'],
       ),
     ).toMatchObject({ detectors: ['similar'], sampleSize: 4, roots: ['/repos/custom'] });
+  });
+
+  it('selects all TypeScript architecture detectors or an explicit repeatable subset', () => {
+    const all = parseArchitectureCalibrationOptions([], ['/repos/a', '/repos/b']);
+    expect(all).toMatchObject({
+      language: 'typescript',
+      seed: 'typescript-architecture-v1',
+      roots: ['/repos/a', '/repos/b'],
+    });
+    expect(all.detectors).toEqual([
+      'co-change',
+      'doc-drift',
+      'drift',
+      'wrapper-candidates',
+      'passthrough-candidates',
+      'stale-abstractions',
+    ]);
+    expect(
+      parseArchitectureCalibrationOptions(
+        ['--detector', 'drift', '--detector', 'drift', '--sample-size', '6', '/repos/custom'],
+        ['/repos/default'],
+      ),
+    ).toMatchObject({ detectors: ['drift'], sampleSize: 6, roots: ['/repos/custom'] });
+    expect(() => parseArchitectureCalibrationOptions(['--detector', 'similar'], ['/repos/default'])).toThrow(
+      '--detector must be one of',
+    );
   });
 
   it('retains implicit Rust usage evidence in normalized dead-code rows', () => {
@@ -185,6 +213,28 @@ describe('accuracy calibration core', () => {
     expect(calibrationRowIdentity(rows[0])).toBe(calibrationRowIdentity({ ...rows[0] }));
     expect(deterministicSample(rows, 5, 'seed-a')).toEqual(deterministicSample([...rows].reverse(), 5, 'seed-a'));
     expect(deterministicSample(rows, 5, 'seed-a')).not.toEqual(deterministicSample(rows, 5, 'seed-b'));
+  });
+
+  it('keeps a fixed deterministic sample representative across unequal strata', () => {
+    const rows = [
+      ...Array.from({ length: 20 }, (_, index) => row(index, { detector: 'dominant' })),
+      row(20, { detector: 'small-a' }),
+      row(21, { detector: 'small-b' }),
+    ];
+    const selected = deterministicStratifiedSample(rows, 6, 'strata', (entry: CalibrationTestRow) => entry.detector);
+    expect(selected).toHaveLength(6);
+    expect(new Set(selected.map((entry: CalibrationTestRow) => entry.detector))).toEqual(
+      new Set(['dominant', 'small-a', 'small-b']),
+    );
+    expect(selected).toEqual(
+      deterministicStratifiedSample([...rows].reverse(), 6, 'strata', (entry: CalibrationTestRow) => entry.detector),
+    );
+    expect(
+      deterministicStratifiedSample(rows, 50, 'strata', (entry: CalibrationTestRow) => entry.detector),
+    ).toHaveLength(rows.length);
+    expect(() => deterministicStratifiedSample(rows, -1, 'strata', () => 'all')).toThrow(
+      'sample count must be a non-negative integer',
+    );
   });
 
   it('computes the conservative 95% Wilson interval', () => {

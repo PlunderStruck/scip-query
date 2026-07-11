@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
-import { coChange } from '../../../src/queries/impact/co-change.js';
+import { classifyCoChangePartner, coChange, isCoChangeNoiseFile } from '../../../src/queries/impact/co-change.js';
 import { diffGate, symbolPreexistenceChecker, type DiffGateCheck } from '../../../src/queries/impact/diff-gate.js';
 import type { DiffImpactPlan } from '../../../src/queries/impact/diff-impact.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
@@ -88,6 +88,31 @@ afterEach(() => {
 });
 
 describe('co-change partner labels', () => {
+  it('excludes generated TypeScript incremental-build state from relationship candidates', () => {
+    expect(isCoChangeNoiseFile('apps/web/tsconfig.tsbuildinfo')).toBe(true);
+    expect(isCoChangeNoiseFile('packaging/aur/.SRCINFO')).toBe(true);
+    expect(isCoChangeNoiseFile('uv.lock')).toBe(true);
+    expect(isCoChangeNoiseFile('apps/web/src/tsconfig-state.ts')).toBe(false);
+  });
+
+  it('does not promote shared workspace roots and file extensions into same-feature evidence', () => {
+    expect(
+      classifyCoChangePartner(
+        'frontend/ui/src/app/api/projects/[projectId]/messages/route.ts',
+        'frontend/worker/src/ee/billing/usageMetering.ts',
+      ).partnerClass,
+    ).toBe('unknown');
+    expect(
+      classifyCoChangePartner(
+        'examples/python/deepagents/requirements.txt',
+        'examples/python/openai-tool-agent/requirements.txt',
+      ).partnerClass,
+    ).toBe('unknown');
+    expect(
+      classifyCoChangePartner('apps/api/src/db/schema/proposals.ts', 'apps/web/src/api/proposals.ts').partnerClass,
+    ).toBe('same-feature');
+  });
+
   it('classifies repeated contract-like pairs and suggests declared coupling', () => {
     const { db } = createFixture();
 

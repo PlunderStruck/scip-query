@@ -260,9 +260,10 @@ active program above.
 
 ## Immediate Next Slice
 
-Continue Phase 3 with TypeScript architecture and framework signals: `co-change`,
-`doc-drift`, wrapper and passthrough candidates, stale abstractions, extraction
-and locality candidates, then React and Vue duplication/pressure analyzers.
+Continue Phase 3 with TypeScript extraction/locality and graph-risk signals:
+`extract-candidates`, `locality-candidates`, coupling, bottlenecks, deep chains,
+hotspots, and fan-in/fan-out; then certify React and Vue duplication,
+composition, and pressure analyzers.
 Expand targeted corpus or historical cases for the factual and similarity
 detectors that remain insufficiently evidenced. In parallel, renew Rust `dead`
 against additional repositories or historical commits until its sparse
@@ -321,6 +322,17 @@ near-name, test-helper, and convention-only filtering. `recent-duplicates` is
 8/8 after generic React-plumbing hardening but remains insufficiently
 evidenced. The campaign now records factual relationship validity separately
 from recommendation utility.
+
+The TypeScript architecture/history campaign is complete:
+[`2026-07-10-typescript-architecture-history-detectors.md`](./validation/2026-07-10-typescript-architecture-history-detectors.md).
+The `co-change`, `doc-drift`, and `stale-abstractions` relationship claims are
+certified at 40/40 valid rows across four repositories. `drift` is qualified at
+40/40 because the population was 39 pattern deviations, one inferred layer,
+and a supported zero for unused-import rows; none of the sampled drift advice
+was actionable without ownership evidence. `wrapper-candidates` is qualified
+at 30/30 with an 88.6% confidence floor, while `passthrough-candidates` remains
+insufficient at 21/21. The campaign removed ambient-declaration, generated
+co-change state, and structural-token feature-label noise.
 
 ## Program Acceptance Criteria
 

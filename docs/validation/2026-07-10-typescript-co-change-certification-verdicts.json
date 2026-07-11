@@ -1,0 +1,19 @@
+{
+  "knownPositiveRecallCases": {
+    "co-change": 1
+  },
+  "groups": [
+    {
+      "verdict": "valid",
+      "evidenceNote": "Both current files, accepted Git co-occurrence counts, confidence, commit-scope evidence, structural-link state, and path-based partner class were reviewed under the recorded truth rule.",
+      "detectors": ["co-change"]
+    }
+  ],
+  "utilityGroups": [
+    {
+      "verdict": "uncertain",
+      "evidenceNote": "The historical relationship is real; whether it should become declared coupling depends on ownership and whether broad-sweep co-occurrence reflects required coordination.",
+      "detectors": ["co-change"]
+    }
+  ]
+}

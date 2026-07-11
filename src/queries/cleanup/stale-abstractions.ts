@@ -185,6 +185,10 @@ function staleTypeCandidates(
       // otherwise dominate the report.
       .filter((definition) => definitionLoc(definition) <= opts.maxLoc)
       .filter((definition) => !db.isIgnored(definition.relativePath))
+      // Ambient declaration files are compiler-consumed environment contracts
+      // (module/global augmentation, JSX namespaces, Vite ImportMeta, etc.).
+      // Their repository reference count is not a liveness measurement.
+      .filter((definition) => !definition.relativePath.endsWith('.d.ts'))
       // Test fixtures aren't abstractions; types in test files are noise here.
       .filter((definition) => classifyFile(definition.relativePath) !== 'test')
       // Externally-live types (package surface / entryRoots) are published

@@ -55,6 +55,43 @@ function withFixture(
 }
 
 describe('staleAbstractions accuracy', () => {
+  it('excludes ambient declaration contracts from repository liveness scoring', () => {
+    withFixture(
+      'ambient-declaration',
+      {
+        'src/env.d.ts': [
+          'declare namespace JSX {',
+          '  interface IntrinsicElements {',
+          '    [elementName: string]: unknown;',
+          '  }',
+          '}',
+          '',
+        ].join('\n'),
+      },
+      (sqliteDb) => {
+        sqliteDb.exec(`
+          INSERT INTO documents (id, language, relative_path) VALUES
+            (1, 'typescript', 'src/env.d.ts');
+
+          INSERT INTO global_symbols (id, symbol, display_name, kind) VALUES
+            (1, 'scip-typescript npm fixture 1.0.0 src/\`env.d.ts\`/JSX/IntrinsicElements#', 'IntrinsicElements', 11);
+
+          INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+            (1, 1, 1, 1, 0, 4, 1);
+
+          INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+            (1, 1, 0, 0, 5, X'00');
+
+          INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+            (1, 1, 1);
+        `);
+      },
+      (db) => {
+        expect(staleAbstractions(db, { minLoc: 3, includeLowConfidence: true })).toEqual([]);
+      },
+    );
+  });
+
   it('marks a zero-consumer type as a direct unused-abstraction cleanup', () => {
     withFixture(
       'unused-type',

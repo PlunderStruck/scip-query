@@ -79,7 +79,7 @@ export function isCoChangeNoiseFile(file: string): boolean {
 }
 
 const NOISE_FILE_PATTERN =
-  /(?:^|\/)(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock|CHANGELOG(?:\.[a-z]+)?|.*\.map)$|(?:^|\/)(?:dist|build|out|node_modules|docs\/plans)\//i;
+  /(?:^|\/)(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock|uv\.lock|poetry\.lock|Pipfile\.lock|bun\.lockb?|\.SRCINFO|CHANGELOG(?:\.[a-z]+)?|.*\.(?:map|tsbuildinfo))$|(?:^|\/)(?:dist|build|out|node_modules|docs\/plans)\//i;
 
 /**
  * Hidden coupling from the change graph: file pairs that repeatedly change
@@ -354,6 +354,14 @@ const GENERIC_PATH_TOKENS = new Set([
   'src',
   'lib',
   'app',
+  'apps',
+  'packages',
+  'frontend',
+  'backend',
+  'examples',
+  'python',
+  'typescript',
+  'javascript',
   'test',
   'tests',
   'spec',
@@ -366,6 +374,23 @@ const GENERIC_PATH_TOKENS = new Set([
   'config',
   'docs',
   'doc',
+  'package',
+  'requirements',
+  'ts',
+  'tsx',
+  'js',
+  'jsx',
+  'mjs',
+  'cjs',
+  'vue',
+  'py',
+  'md',
+  'mdx',
+  'json',
+  'yaml',
+  'yml',
+  'toml',
+  'txt',
 ]);
 
 function coChangePathFacts(file: string): CoChangePathFacts {

@@ -38,25 +38,31 @@ The certification thresholds and publication rules live in
 Legend: `certified`, `qualified`, `experimental`, `insufficient`, `unsupported`,
 `pending`, or `parity`.
 
-| Analyzer or command   | TypeScript   | Rust         | Python      | Audit kind                 | Notes                                                                                          |
-| --------------------- | ------------ | ------------ | ----------- | -------------------------- | ---------------------------------------------------------------------------------------------- |
-| `dead`                | certified    | insufficient | pending     | finding certification      | Rust was hardened; more representative findings are required.                                  |
-| `unused-imports`      | certified    | pending      | pending     | finding certification      | 59/59 valid across three repositories after binding-evidence hardening.                        |
-| `unused-params`       | insufficient | unsupported  | unsupported | finding certification      | 5/5 valid, but all rows came from one repository.                                              |
-| `cycles`              | insufficient | pending      | pending     | graph-fact certification   | 3/3 source-verifiable import cycles, but one repository.                                       |
-| `duplicate-bodies`    | certified    | pending      | pending     | measurement certification  | 40/40 normalized-body facts valid across four repositories.                                    |
-| `complexity`          | certified    | pending      | pending     | measurement certification  | 40/40 uncapped-frame measurements valid across four repositories.                              |
-| `isolated`            | insufficient | pending      | pending     | finding certification      | 3/3 valid across two repositories after contract hardening.                                    |
-| `redundant-reexports` | certified    | pending      | pending     | finding certification      | 40/40 binding/module facts valid; public surfaces remain signals.                              |
-| `not-implemented`     | insufficient | pending      | pending     | finding certification      | Supported zero plus positive fixtures; no population precision frame.                          |
-| `decorative-checkers` | insufficient | pending      | pending     | finding certification      | Baseline wall removed; supported zero plus positive fixtures.                                  |
-| `test-quality`        | insufficient | pending      | pending     | finding certification      | 12/12 mock-echo facts valid across two repositories; other subtypes need population evidence.  |
-| `recent-duplicates`   | insufficient | pending      | pending     | history relationship       | 8/8 valid across three repositories; more findings are required.                               |
-| `similar`             | certified    | pending      | pending     | relationship certification | 36/36 shared-evidence relationships valid across four repositories.                            |
-| `similar-files`       | certified    | pending      | pending     | relationship certification | 40/40 distinctive-dependency relationships valid across four repositories.                     |
-| `similar-chains`      | qualified    | pending      | pending     | bounded relationship       | 40/40 valid inside the 500-generated-chain candidate frame; sampled advice was non-actionable. |
-| `similar-signatures`  | certified    | pending      | pending     | measurement certification  | 40/40 normalized-signature relationships valid across four repositories.                       |
-| `twin-drift`          | qualified    | pending      | pending     | relationship certification | 37/40 valid; generic-operation homonyms remain.                                                |
+| Analyzer or command      | TypeScript   | Rust         | Python      | Audit kind                 | Notes                                                                                          |
+| ------------------------ | ------------ | ------------ | ----------- | -------------------------- | ---------------------------------------------------------------------------------------------- |
+| `dead`                   | certified    | insufficient | pending     | finding certification      | Rust was hardened; more representative findings are required.                                  |
+| `unused-imports`         | certified    | pending      | pending     | finding certification      | 59/59 valid across three repositories after binding-evidence hardening.                        |
+| `unused-params`          | insufficient | unsupported  | unsupported | finding certification      | 5/5 valid, but all rows came from one repository.                                              |
+| `cycles`                 | insufficient | pending      | pending     | graph-fact certification   | 3/3 source-verifiable import cycles, but one repository.                                       |
+| `duplicate-bodies`       | certified    | pending      | pending     | measurement certification  | 40/40 normalized-body facts valid across four repositories.                                    |
+| `complexity`             | certified    | pending      | pending     | measurement certification  | 40/40 uncapped-frame measurements valid across four repositories.                              |
+| `isolated`               | insufficient | pending      | pending     | finding certification      | 3/3 valid across two repositories after contract hardening.                                    |
+| `redundant-reexports`    | certified    | pending      | pending     | finding certification      | 40/40 binding/module facts valid; public surfaces remain signals.                              |
+| `not-implemented`        | insufficient | pending      | pending     | finding certification      | Supported zero plus positive fixtures; no population precision frame.                          |
+| `decorative-checkers`    | insufficient | pending      | pending     | finding certification      | Baseline wall removed; supported zero plus positive fixtures.                                  |
+| `test-quality`           | insufficient | pending      | pending     | finding certification      | 12/12 mock-echo facts valid across two repositories; other subtypes need population evidence.  |
+| `recent-duplicates`      | insufficient | pending      | pending     | history relationship       | 8/8 valid across three repositories; more findings are required.                               |
+| `similar`                | certified    | pending      | pending     | relationship certification | 36/36 shared-evidence relationships valid across four repositories.                            |
+| `similar-files`          | certified    | pending      | pending     | relationship certification | 40/40 distinctive-dependency relationships valid across four repositories.                     |
+| `similar-chains`         | qualified    | pending      | pending     | bounded relationship       | 40/40 valid inside the 500-generated-chain candidate frame; sampled advice was non-actionable. |
+| `similar-signatures`     | certified    | pending      | pending     | measurement certification  | 40/40 normalized-signature relationships valid across four repositories.                       |
+| `twin-drift`             | qualified    | pending      | pending     | relationship certification | 37/40 valid; generic-operation homonyms remain.                                                |
+| `co-change`              | certified    | pending      | pending     | history relationship       | 40/40 accepted Git-history relationships valid across four repositories.                       |
+| `doc-drift`              | certified    | pending      | pending     | history relationship       | 40/40 citation/co-change/change-order relationships valid across four repositories.            |
+| `drift`                  | qualified    | pending      | pending     | subtype relationship       | 40/40 relationships valid; subtype breadth incomplete and sampled advice non-actionable.       |
+| `wrapper-candidates`     | qualified    | pending      | pending     | relationship certification | 30/30 single-caller/fan-in facts valid; confidence floor remains 88.6%.                        |
+| `passthrough-candidates` | insufficient | pending      | pending     | relationship certification | 21/21 literal-forwarding facts valid; more findings are required.                              |
+| `stale-abstractions`     | certified    | pending      | pending     | relationship certification | 40/40 low-consumer facts valid after ambient-declaration hardening.                            |
 
 ### TypeScript factual detector slice
 
@@ -98,14 +104,14 @@ consolidation would improve the code.
 
 ## Architecture and Refactoring Signals
 
-- [ ] `wrapper-candidates`
-- [ ] `passthrough-candidates`
-- [ ] `stale-abstractions`
+- [x] `wrapper-candidates` — qualified relationship
+- [x] `passthrough-candidates` — insufficient population evidence
+- [x] `stale-abstractions` — certified relationship
 - [ ] `extract-candidates`
 - [ ] `locality-candidates`
-- [ ] `drift`
-- [ ] `co-change`
-- [ ] `doc-drift`
+- [x] `drift` — qualified; subtype breadth incomplete
+- [x] `co-change` — certified relationship
+- [x] `doc-drift` — certified relationship
 - [ ] `coupling`
 - [ ] `bottlenecks`
 - [ ] `deep-chains`

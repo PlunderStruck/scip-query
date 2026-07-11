@@ -1,0 +1,38 @@
+{
+  "knownPositiveRecallCases": {
+    "co-change": 1,
+    "doc-drift": 1,
+    "drift": 1,
+    "wrapper-candidates": 1,
+    "passthrough-candidates": 1,
+    "stale-abstractions": 1
+  },
+  "certificationLimits": {
+    "drift": "subtype-coverage: pattern-deviation 39 rows, inferred-layer 1 row, unused-import supported zero"
+  },
+  "groups": [
+    {
+      "verdict": "valid",
+      "evidenceNote": "Reviewed from both cited endpoints and the detector-specific compiler, source, policy, or Git evidence under the recorded truth rule.",
+      "detectors": ["doc-drift", "drift", "wrapper-candidates", "passthrough-candidates", "stale-abstractions"]
+    },
+    {
+      "verdict": "uncertain",
+      "evidenceNote": "Superseded by the post-hardening typescript-co-change-v5 packet.",
+      "detectors": ["co-change"]
+    }
+  ],
+  "utilityGroups": [
+    {
+      "verdict": "non-actionable",
+      "archetype": "unique-dependency-shape-without-refactoring-evidence",
+      "evidenceNote": "The sampled relationship accurately identifies a unique sibling dependency shape, but none establishes a defect or concrete refactoring without ownership evidence.",
+      "detectors": ["drift"]
+    },
+    {
+      "verdict": "uncertain",
+      "evidenceNote": "The measured relationship is real, but actionability depends on repository history, ownership, boundary, and domain semantics not established by the detector.",
+      "detectors": ["co-change", "doc-drift", "wrapper-candidates", "passthrough-candidates", "stale-abstractions"]
+    }
+  ]
+}
