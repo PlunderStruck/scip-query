@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { isolated } from '../../../src/queries/cleanup/isolated.js';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
+import { evidenceFixtureDb, writeFixtureFiles } from '../../fixtures/evidence-fixture.js';
 
 function createSchema(sqliteDb: Database.Database): void {
   sqliteDb.exec(`
@@ -158,5 +159,43 @@ describe('isolated query', () => {
     expect(results.map((row) => row.shortName)).toContain('fixture:AnalysisStatusShadow:shadowStatus()');
     expect(results.map((row) => row.shortName)).not.toContain('fixture:StatusBadgeRelay:normalizeBadgeStatus()');
     expect(results.map((row) => row.shortName)).not.toContain('fixture:AnalysisStatusPresenter:renderStatusBadge()');
+  });
+
+  it('excludes TypeScript override methods whose callers are supplied by a framework contract', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-query-isolated-contract-'));
+    try {
+      const dbPath = join(root, 'index.db');
+      writeFixtureFiles(root, {
+        'src/node.ts': [
+          'class BaseNode { canInsertTextAfter(): boolean { return true; } }',
+          'export class ComposerNode extends BaseNode {',
+          '  canInsertTextAfter(): false {',
+          '    return false;',
+          '  }',
+          '}',
+          '',
+        ],
+      });
+      evidenceFixtureDb(dbPath)
+        .document(1, 'typescript', 'src/node.ts')
+        .symbol(
+          1,
+          'scip-typescript npm fixture 1.0.0 src/`node.ts`/ComposerNode#canInsertTextAfter().',
+          'canInsertTextAfter',
+          23,
+        )
+        .definition(1, 1, 1, 2, 2, 4, 3)
+        .chunk(1, 1, 0, 5)
+        .mention(1, 1, 1)
+        .write();
+      const fixtureDb = new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') });
+      try {
+        expect(isolated(fixtureDb, { minLoc: 1 })).toEqual([]);
+      } finally {
+        fixtureDb.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

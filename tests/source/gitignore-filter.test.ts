@@ -19,7 +19,10 @@ describe('createGitignoreFilter', () => {
   });
 
   it('uses defaults when no .gitignore exists', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'scip-query-test-'));
+    const sandbox = mkdtempSync(join(tmpdir(), 'scip-query-test-'));
+    mkdirSync(join(sandbox, '.git'));
+    const dir = join(sandbox, 'project');
+    mkdirSync(dir);
 
     const filter = createGitignoreFilter(dir);
 

@@ -111,6 +111,7 @@ interface FrontendDuplicateCandidateSource<TPair extends FrontendDuplicatePair> 
   symbolA: (pair: TPair) => string;
   symbolB: (pair: TPair) => string;
   evidenceBuckets: (pair: TPair) => Array<[string, readonly string[]]>;
+  acceptPair?: (pair: TPair) => boolean;
 }
 
 const CALLABLE_MIN_SIMILARITY = 0.7;
@@ -301,6 +302,7 @@ function frontendDuplicateCandidates<TPair extends FrontendDuplicatePair>(
   return source
     .query(db, opts)
     .filter((pair) => pair.fileA !== pair.fileB)
+    .filter((pair) => source.acceptPair?.(pair) ?? true)
     .map((pair) => ({
       domain: source.domain,
       basis: source.basis,
@@ -321,6 +323,7 @@ function reactHookDuplicateCandidates(db: ScipDatabase, opts: FrontendDuplicateO
     basis: 'react-behavior',
     symbolA: (pair) => pair.componentA,
     symbolB: (pair) => pair.componentB,
+    acceptPair: hasSubstantiveSharedReactBehavior,
     evidenceBuckets: (pair) => [
       ['hook', pair.sharedHooks],
       ['react-hook', pair.sharedReactHooks],
@@ -331,6 +334,29 @@ function reactHookDuplicateCandidates(db: ScipDatabase, opts: FrontendDuplicateO
       ['action', pair.sharedHandlerVerbs],
     ],
   });
+}
+
+const GENERIC_REACT_BEHAVIOR_HOOKS = new Set([
+  'useCallback',
+  'useEffect',
+  'useLayoutEffect',
+  'useMemo',
+  'useMutation',
+  'useQueries',
+  'useQuery',
+  'useQueryClient',
+  'useReducer',
+  'useRef',
+  'useState',
+]);
+
+function hasSubstantiveSharedReactBehavior(pair: ReturnType<typeof reactHookCandidates>[number]): boolean {
+  return (
+    pair.sharedHooks.some((hook) => !GENERIC_REACT_BEHAVIOR_HOOKS.has(hook)) ||
+    pair.sharedState.length > 0 ||
+    pair.sharedHandlers.length > 0 ||
+    pair.sharedHandlerVerbs.length >= 2
+  );
 }
 
 function vueComponentDuplicateCandidates(db: ScipDatabase, opts: FrontendDuplicateOptions): RecentDuplicateCandidate[] {

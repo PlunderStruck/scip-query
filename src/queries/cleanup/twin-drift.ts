@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { getAllDefinitions } from '../../symbols/definition-catalog.js';
-import { shortenSymbol } from '../../symbols/symbol-parser.js';
+import { isCallableSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { getCallSites } from '../../source/ast/ast-facts.js';
 import { getSourceImports } from '../../language-parsers/index.js';
 import { pathsResolveSame } from '../../source/path-normalization.js';
@@ -139,7 +139,10 @@ export function groupTwins(
   // same `<...>` shape); grouping on that name matches unrelated classes by
   // convention alone, not by concept. Drop synthetic leaves before
   // clustering so they can never form a group.
-  const realRecords = records.filter((record) => !isSyntheticLeaf(record.leaf));
+  const realRecords = records.filter(
+    (record) =>
+      !isSyntheticLeaf(record.leaf) && !isConventionOnlyTwinLeaf(record.leaf) && classifyFile(record.file) !== 'test',
+  );
   const leaves = [...new Set(realRecords.map((record) => record.leaf))];
   const clusters = clusterLeafNames(leaves);
 
@@ -148,22 +151,17 @@ export function groupTwins(
     const members = realRecords.filter((record) => cluster.has(record.leaf));
     if (members.length < 2) continue;
     if (new Set(members.map((member) => member.file)).size < 2) continue;
-    // 21.2 calibration retune: a same-name pair that only exists inside
-    // test files (mocks, fixtures, parallel test suites) is not the "two
-    // production implementations drifted apart" shape twin-drift targets —
-    // reuse the shared test-file classification (the same one dead.ts and
-    // co-change use) instead of re-deriving a test-path heuristic here.
-    if (members.every((member) => classifyFile(member.file) === 'test')) continue;
-
     let bestNonIdentical: { a: TwinDriftRecord; b: TwinDriftRecord; similarity: number } | null = null;
     let hasCrossFilePair = false;
     let hasIdenticalPair = false;
+    const participatingSymbols = new Set<string>();
 
     for (let i = 0; i < members.length; i += 1) {
       for (let j = i + 1; j < members.length; j += 1) {
         const a = members[i]!;
         const b = members[j]!;
         if (a.file === b.file) continue;
+        if (!hasEnoughConceptContext(a, b)) continue;
         // A thin controller/service/storage-style delegate calling its
         // same-name implementation (directly, or through a chain of
         // same-name forwarders) is not a drifted twin — it's the intended
@@ -173,6 +171,8 @@ export function groupTwins(
         // delegation chain produces no group at all.
         if (isDelegatePair?.(a, b, members) || isDelegatePair?.(b, a, members)) continue;
         hasCrossFilePair = true;
+        participatingSymbols.add(a.symbol);
+        participatingSymbols.add(b.symbol);
         if (a.normalizedBody === b.normalizedBody) {
           hasIdenticalPair = true;
           continue;
@@ -185,7 +185,8 @@ export function groupTwins(
     }
     if (!hasCrossFilePair) continue;
 
-    const sortedMembers = [...members]
+    const sortedMembers = members
+      .filter((member) => participatingSymbols.has(member.symbol))
       .sort((left, right) => left.file.localeCompare(right.file) || left.startLine - right.startLine)
       .map(toTwinMember);
 
@@ -274,6 +275,7 @@ function twinDriftRecord(db: ScipDatabase, definition: IndexedDefinition): TwinD
   if (!definition.leaf) return null;
   const snippet = definitionSourceSnippet(db, definition);
   if (!snippet) return null;
+  if (!isCallableSymbol(definition.symbol) && !isTopLevelArrowFunctionSnippet(snippet, definition.leaf)) return null;
   const normalizedBody = normalizeBody(snippet);
   if (!normalizedBody || normalizedBody.length < 8) return null;
   const tokens = tokenizeSnippet(snippet);
@@ -290,6 +292,14 @@ function twinDriftRecord(db: ScipDatabase, definition: IndexedDefinition): TwinD
     tokens,
     isThinForwarder: isThinForwarderBody(snippet),
   };
+}
+
+function isTopLevelArrowFunctionSnippet(snippet: string, leaf: string): boolean {
+  const escapedLeaf = leaf.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(
+    `\\b(?:const|let|var)\\s+${escapedLeaf}(?:\\s*:[^=]+)?\\s*=\\s*(?:async\\s*)?(?:\\([^)]*\\)|[A-Za-z_$][\\w$]*)\\s*=>`,
+    's',
+  ).test(snippet);
 }
 
 const TOKEN_PATTERN = /[A-Za-z_$][A-Za-z0-9_$]*|\d+(?:\.\d+)?|[^\sA-Za-z0-9_$]/g;
@@ -394,7 +404,58 @@ function areNearNames(a: string, b: string): boolean {
   if (a.toLowerCase() === b.toLowerCase()) return true;
   if (a.length < 8 || b.length < 8) return false;
   if (Math.abs(a.length - b.length) > 2) return false;
+  if (commonCharacterPrefixLength(a.toLowerCase(), b.toLowerCase()) / Math.max(a.length, b.length) < 0.8) {
+    return false;
+  }
   return levenshteinAtMost(a.toLowerCase(), b.toLowerCase(), 2);
+}
+
+function commonCharacterPrefixLength(a: string, b: string): number {
+  const length = Math.min(a.length, b.length);
+  let index = 0;
+  while (index < length && a[index] === b[index]) index += 1;
+  return index;
+}
+
+function isConventionOnlyTwinLeaf(leaf: string): boolean {
+  return /^[A-Z][A-Z0-9_]*$/.test(leaf) || CONVENTION_ONLY_TWIN_LEAVES.has(leaf.toLowerCase());
+}
+
+const CONVENTION_ONLY_TWIN_LEAVES = new Set(['main', 'row']);
+
+const GENERIC_CONTEXT_SEGMENTS = new Set([
+  'app',
+  'component',
+  'components',
+  'feature',
+  'features',
+  'index',
+  'lib',
+  'route',
+  'routes',
+  'shared',
+  'src',
+  'tsx',
+  'typescript',
+  'ui',
+]);
+
+function hasEnoughConceptContext(a: TwinDriftRecord, b: TwinDriftRecord): boolean {
+  if (a.leaf.toLowerCase() !== b.leaf.toLowerCase()) return true;
+  if (a.leaf.length > 4) return true;
+  const aContext = twinContextTokens(a);
+  return [...twinContextTokens(b)].some((token) => aContext.has(token));
+}
+
+function twinContextTokens(record: TwinDriftRecord): Set<string> {
+  const leaf = record.leaf.toLowerCase();
+  return new Set(
+    `${record.file}/${record.shortName}`
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token.length > 2 && token !== leaf && !GENERIC_CONTEXT_SEGMENTS.has(token)),
+  );
 }
 
 /** Bounded edit distance check — returns false as soon as the distance provably exceeds `max`. */

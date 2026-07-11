@@ -48,6 +48,18 @@ const REACT_TASK_PANEL = REACT_ISSUE_PANEL.replace('IssuePanel', 'TaskPanel')
   .replaceAll("fetch('/issues')", "fetch('/tasks')")
   .replace('title="Issues"', 'title="Tasks"');
 
+const GENERIC_REACT_SCREEN = `import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+
+export function GenericScreen() {
+  const [open, setOpen] = useState(false);
+  const query = useQuery({ queryKey: ['generic'], queryFn: async () => [] });
+  const rows = useMemo(() => query.data ?? [], [query.data]);
+  useEffect(() => setOpen(rows.length > 0), [rows]);
+  return <div>{open ? rows.length : 0}</div>;
+}
+`;
+
 const VUE_ISSUE_PANEL = `<template>
   <PageShell :title="title">
     <ToolbarPanel v-if="hasFilters" :filters="filters" @reset="resetFilters">
@@ -96,11 +108,18 @@ describe('frontend recent duplicates', () => {
       established: {
         'src/components/IssuePanel.tsx': REACT_ISSUE_PANEL,
         'src/components/IssuePanel.vue': VUE_ISSUE_PANEL,
+        'src/components/GenericAccountScreen.tsx': GENERIC_REACT_SCREEN.replace(
+          'GenericScreen',
+          'GenericAccountScreen',
+        ),
       },
       recent: {
         'src/components/IncidentPanel.tsx': REACT_INCIDENT_PANEL,
         'src/components/TaskPanel.tsx': REACT_TASK_PANEL,
         'src/components/IncidentPanel.vue': VUE_INCIDENT_PANEL,
+        'src/components/GenericReportScreen.tsx': GENERIC_REACT_SCREEN.replace('GenericScreen', 'GenericReportScreen')
+          .replaceAll('open', 'expanded')
+          .replace("['generic']", "['report']"),
       },
     });
 
@@ -138,6 +157,13 @@ describe('frontend recent duplicates', () => {
           }),
         ]),
       );
+      expect(
+        result.findings.filter(
+          (finding) =>
+            finding.domain === 'react-hook' &&
+            (finding.echoSymbol.startsWith('Generic') || finding.establishedSymbol.startsWith('Generic')),
+        ),
+      ).toEqual([]);
 
       const reactGroup = result.rootCauseGroups?.find(
         (group) =>

@@ -1,0 +1,49 @@
+{
+  "packet": "reports/accuracy/2026-07-11T03-22-30-333Z-typescript-similarity-calibration.json",
+  "knownPositiveRecallCases": {
+    "recent-duplicates": 1,
+    "similar": 1,
+    "similar-files": 1,
+    "similar-chains": 1,
+    "similar-signatures": 1
+  },
+  "boundedDetectors": ["similar-chains"],
+  "groups": [
+    {
+      "verdict": "valid",
+      "evidenceNote": "Reviewed from both source endpoints and detector-specific relationship evidence under the recorded truth rule.",
+      "detectors": ["recent-duplicates", "similar", "similar-files", "similar-chains", "similar-signatures"]
+    }
+  ],
+  "utilityGroups": [
+    {
+      "verdict": "actionable",
+      "evidenceNote": "The pair implements the same repository concept and presents a concrete reuse or consolidation opportunity.",
+      "ids": [
+        "69d662d11b965b52de47",
+        "6683eeb8e2bea9b81b1c",
+        "c5c299265125766e8a77",
+        "a35f55cec120d477a0d1",
+        "eb503a5a1022cac45662",
+        "95f488f9074997b06e47"
+      ]
+    },
+    {
+      "verdict": "non-actionable",
+      "archetype": "intentional-template-or-local-ui-variation",
+      "evidenceNote": "The structural relationship is real, but the small local UI/template variants do not justify consolidation.",
+      "ids": ["87e29c058c9676f7b0d1", "8068720228997ffb435c"]
+    },
+    {
+      "verdict": "non-actionable",
+      "archetype": "combinatorial-shared-dependency-tail",
+      "evidenceNote": "The paths are real, but the sampled overlap comes from alternative traversals through shared dependency tails rather than a consolidation opportunity.",
+      "detectors": ["similar-chains"]
+    },
+    {
+      "verdict": "uncertain",
+      "evidenceNote": "The relationship is valid, but recommendation usefulness requires domain-owner judgment and is not used for certification.",
+      "detectors": ["similar", "similar-files", "similar-signatures"]
+    }
+  ]
+}

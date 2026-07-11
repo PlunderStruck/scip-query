@@ -37,6 +37,7 @@ import {
   createTypeScriptCallFixtureDb,
   createTypeScriptCallFixtureProject,
 } from '../../fixtures/command-accuracy-fixtures.js';
+import { evidenceFixtureDb, writeFixtureFiles } from '../../fixtures/evidence-fixture.js';
 
 describe('command accuracy fixes', () => {
   let db: ScipDatabase;
@@ -89,6 +90,40 @@ describe('command accuracy fixes', () => {
     expect(importResults).toEqual(['tryInstallScipCli', 'unusedHelper as ignored', 'settings', '* as reindexApi']);
     expect(unusedResults).toEqual(['unusedHelper as ignored']);
     expect(importers).toEqual(['src/consumer.ts', 'tests/utils.test.ts']);
+  });
+
+  it('uses local binding evidence when SCIP import roles omit the later binding reference', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-query-unused-import-binding-'));
+    try {
+      writeFixtureFiles(root, {
+        'src/lib.ts': ['export function createThing() {', '  return true;', '}', ''],
+        'src/consumer.ts': [
+          "import { createThing } from '@/lib';",
+          'const registry = { createThing };',
+          'export { registry };',
+          '',
+        ],
+      });
+      const dbPath = join(root, 'index.db');
+      evidenceFixtureDb(dbPath)
+        .document(1, 'typescript', 'src/lib.ts')
+        .document(2, 'typescript', 'src/consumer.ts')
+        .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`lib.ts`/createThing().', 'createThing', 12)
+        .definition(1, 1, 1, 0, 0, 2, 1)
+        .chunk(1, 1, 0, 2)
+        .chunk(2, 2, 0, 2)
+        .mention(1, 1, 1)
+        .mention(2, 1, 2)
+        .write();
+      const fixtureDb = new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') });
+      try {
+        expect(unusedImports(fixtureDb, 'src/consumer.ts')).toEqual([]);
+      } finally {
+        fixtureDb.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('distinguishes TypeScript interfaces from classes when inferring kinds', () => {

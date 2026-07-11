@@ -1,0 +1,223 @@
+# Command Accuracy Audit Checklist
+
+Date: 2026-07-10
+Status: Active
+
+## Purpose
+
+This checklist tracks whether each public command tells the truth about the
+repositories it analyzes. An accuracy audit is a repeatable comparison between
+a command's output and independently inspectable source, compiler, index, Git,
+or runtime facts. What distinguishes it from a smoke test is that a successful
+exit is not evidence of a correct answer.
+
+Audit the underlying analyzer once, then give aliases and workflow wrappers a
+separate parity test. Record results independently by language and framework;
+an unsupported analysis is `not analyzed`, never a successful zero.
+
+## Evidence Gates
+
+A finding-producing analyzer is complete only when it has:
+
+- [ ] a written truth rule;
+- [ ] a pinned, read-only corpus with at least three repositories;
+- [ ] uncapped baseline candidate counts;
+- [ ] deterministic samples classified from cited source;
+- [ ] named false-positive archetypes;
+- [ ] at least one known-positive recall case;
+- [ ] regression tests for every fixed archetype;
+- [ ] a fresh replay after hardening; and
+- [ ] a recorded certification state: certified, qualified, experimental,
+      unsupported, or insufficient evidence.
+
+The certification thresholds and publication rules live in
+[`accuracy-hardening-goal.md`](./accuracy-hardening-goal.md).
+
+## Certification Matrix
+
+Legend: `certified`, `qualified`, `experimental`, `insufficient`, `unsupported`,
+`pending`, or `parity`.
+
+| Analyzer or command   | TypeScript   | Rust         | Python      | Audit kind                 | Notes                                                                                          |
+| --------------------- | ------------ | ------------ | ----------- | -------------------------- | ---------------------------------------------------------------------------------------------- |
+| `dead`                | certified    | insufficient | pending     | finding certification      | Rust was hardened; more representative findings are required.                                  |
+| `unused-imports`      | certified    | pending      | pending     | finding certification      | 59/59 valid across three repositories after binding-evidence hardening.                        |
+| `unused-params`       | insufficient | unsupported  | unsupported | finding certification      | 5/5 valid, but all rows came from one repository.                                              |
+| `cycles`              | insufficient | pending      | pending     | graph-fact certification   | 3/3 source-verifiable import cycles, but one repository.                                       |
+| `duplicate-bodies`    | certified    | pending      | pending     | measurement certification  | 40/40 normalized-body facts valid across four repositories.                                    |
+| `complexity`          | certified    | pending      | pending     | measurement certification  | 40/40 uncapped-frame measurements valid across four repositories.                              |
+| `isolated`            | insufficient | pending      | pending     | finding certification      | 3/3 valid across two repositories after contract hardening.                                    |
+| `redundant-reexports` | certified    | pending      | pending     | finding certification      | 40/40 binding/module facts valid; public surfaces remain signals.                              |
+| `not-implemented`     | insufficient | pending      | pending     | finding certification      | Supported zero plus positive fixtures; no population precision frame.                          |
+| `decorative-checkers` | insufficient | pending      | pending     | finding certification      | Baseline wall removed; supported zero plus positive fixtures.                                  |
+| `test-quality`        | insufficient | pending      | pending     | finding certification      | 12/12 mock-echo facts valid across two repositories; other subtypes need population evidence.  |
+| `recent-duplicates`   | insufficient | pending      | pending     | history relationship       | 8/8 valid across three repositories; more findings are required.                               |
+| `similar`             | certified    | pending      | pending     | relationship certification | 36/36 shared-evidence relationships valid across four repositories.                            |
+| `similar-files`       | certified    | pending      | pending     | relationship certification | 40/40 distinctive-dependency relationships valid across four repositories.                     |
+| `similar-chains`      | qualified    | pending      | pending     | bounded relationship       | 40/40 valid inside the 500-generated-chain candidate frame; sampled advice was non-actionable. |
+| `similar-signatures`  | certified    | pending      | pending     | measurement certification  | 40/40 normalized-signature relationships valid across four repositories.                       |
+| `twin-drift`          | qualified    | pending      | pending     | relationship certification | 37/40 valid; generic-operation homonyms remain.                                                |
+
+### TypeScript factual detector slice
+
+These boxes mean the detector was run uncapped on the pinned corpus, reviewed,
+hardened where evidence proved a defect, replayed, and assigned an honest
+state. A checked box does not upgrade an `insufficient` state to `certified`.
+
+- [x] `unused-imports` — certified
+- [x] `unused-params` — insufficient population evidence
+- [x] `cycles` — insufficient population evidence
+- [x] `duplicate-bodies` — certified
+- [x] `complexity` — certified
+- [x] `isolated` — insufficient population evidence
+- [x] `redundant-reexports` — certified
+- [x] `not-implemented` — supported zero; insufficient population evidence
+- [x] `decorative-checkers` — supported zero; insufficient population evidence
+- [x] `test-quality` — insufficient subtype and repository breadth
+
+## Similarity and Duplication
+
+TypeScript general similarity certification is complete. Execution plan and
+certificate:
+[`2026-07-10-typescript-similarity-detector-certification.md`](./plans/2026-07-10-typescript-similarity-detector-certification.md).
+[`2026-07-10-typescript-similarity-detectors.md`](./validation/2026-07-10-typescript-similarity-detectors.md).
+
+- [x] `recent-duplicates` — insufficient population evidence
+- [x] `similar` — certified relationship
+- [x] `similar-files` — certified relationship
+- [x] `similar-chains` — qualified within a bounded candidate frame
+- [x] `similar-signatures` — certified relationship
+- [x] `twin-drift` — qualified; 37/40 valid
+- [ ] `react-component-duplicates`
+- [ ] `vue-component-duplicates`
+- [x] `convergence` alias parity with `similar --plan`
+- [ ] `twin-ab` generated-scaffold correctness
+
+For each analyzer, verify the measured similarity independently from whether
+consolidation would improve the code.
+
+## Architecture and Refactoring Signals
+
+- [ ] `wrapper-candidates`
+- [ ] `passthrough-candidates`
+- [ ] `stale-abstractions`
+- [ ] `extract-candidates`
+- [ ] `locality-candidates`
+- [ ] `drift`
+- [ ] `co-change`
+- [ ] `doc-drift`
+- [ ] `coupling`
+- [ ] `bottlenecks`
+- [ ] `deep-chains`
+- [ ] `complexity-hotspots`
+- [ ] `hotspots`
+- [ ] `fan-in`
+- [ ] `fan-out`
+
+These audits must label the measured relationship separately from the proposed
+action. A real relationship can still be an unhelpful recommendation.
+
+## React and Vue Signals
+
+- [ ] `react-component-duplicates`
+- [ ] `react-hook-candidates`
+- [ ] `react-large-component-pressure`
+- [ ] `vue-component-duplicates`
+- [ ] `vue-composable-candidates`
+- [ ] `vue-large-view-pressure`
+- [ ] `augment-vue` reference-completeness audit
+
+Use framework-specific repositories and record framework applicability rather
+than treating absent framework evidence as a clean result.
+
+## Diff, Cleanup, and Health Workflows
+
+- [ ] `incomplete-migration`
+- [ ] `cleanup-plan`
+- [ ] `cleanup-apply`
+- [ ] `diff-gate`
+  - [ ] `echo`
+  - [ ] `incomplete-migration`
+  - [ ] `co-change-partner`
+  - [ ] `twin-partner`
+  - [ ] `coverage-contract`
+  - [ ] `doc-reference`
+  - [ ] `unused-params`
+  - [ ] `new-dead`
+  - [ ] `baseline`
+- [ ] `health`
+- [ ] `self-audit`
+- [ ] `effectiveness`
+- [ ] `affected`
+- [ ] `change-surface`
+- [ ] `diff-impact`
+- [ ] `plan-context`
+
+Composite commands reuse certified detector rows, then receive an aggregation,
+scope, suppression, and status-propagation audit. They do not inherit trust
+merely because one input detector is certified.
+
+## Navigation and Graph Answers
+
+- [ ] `files`
+- [ ] `methods`
+- [ ] `refs`
+- [ ] `trace`
+- [ ] `deps`
+- [ ] `rdeps`
+- [ ] `system`
+- [ ] `surface`
+- [ ] `imports`
+- [ ] `imported-by`
+- [ ] `outline`
+- [ ] `members`
+- [ ] `by-kind`
+- [ ] `kind-counts`
+- [ ] `hierarchy`
+- [ ] `code`
+- [ ] `dataflow`
+- [ ] `slice`
+- [ ] `call-graph`
+- [ ] `stats`
+
+These commands need exact-answer comparisons against compiler, source, or
+hand-established graph oracles, including aliases, overloads, re-exports,
+traits, implementations, inheritance, generated files, and cross-language
+boundaries.
+
+## Indexing and Operations
+
+- [ ] `reindex`
+- [ ] `augment-sources`
+- [ ] `watch`
+- [ ] `status`
+- [ ] `work-audit`
+- [ ] `bench`
+- [ ] `capabilities`
+- [ ] `capability-matrix` alias parity
+- [ ] `doctor`
+- [ ] `check-deps`
+- [ ] `config-validate`
+- [ ] `suppress`
+- [ ] `init`
+- [ ] `setup`
+- [ ] `setup-agent`
+- [ ] `setup-hooks`
+- [ ] `setup-ci`
+- [ ] `uninstall`
+- [ ] `install-skills`
+- [ ] `tla`
+
+Operational audits exercise cold and incremental indexes, additions, edits,
+deletions, renames, branch switches, stale caches, interrupted publication,
+concurrent invocations, daemon sleep/wake, idempotent setup, and clean removal.
+
+## Campaign Order
+
+1. Finish the TypeScript factual detector matrix above.
+2. Certify TypeScript similarity and history-derived analyzers.
+3. Certify TypeScript architectural and framework signals.
+4. Repeat supported detector campaigns for Rust.
+5. Build and certify Python semantic and framework coverage.
+6. Audit composite workflows and public evidence views.
+7. Complete navigation and operational reliability matrices.

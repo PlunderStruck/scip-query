@@ -1,0 +1,107 @@
+{
+  "packet": "reports/accuracy/2026-07-11T03-27-25-505Z-typescript-similarity-calibration.json",
+  "knownPositiveRecallCases": {
+    "twin-drift": 1
+  },
+  "groups": [
+    {
+      "verdict": "valid",
+      "evidenceNote": "The group names and source contexts identify the same implementation concept with materially different bodies.",
+      "ids": [
+        "f2febb8ad4531366a1ba",
+        "33cb781b1266c9e6de9e",
+        "7819e2f70cf9cce6ebb3",
+        "552d115518742d25d48a",
+        "3c570bc725a0c5899a1e",
+        "e10e14242c7f549befc4",
+        "c4874bfc200a4a96b486",
+        "b594909767acf5d36d0f",
+        "2bebc60e664cf61aca74",
+        "06948664951b6a24ef93",
+        "3339edbaf8b8534f6e11",
+        "d1ffead181eb9969b8b9",
+        "46a804ba8f27d080442c",
+        "7b1eac64a15018b536cd",
+        "3eb86a3ecbfe91553f49",
+        "4c01bfe06e742101adc5",
+        "e0293df09c59eeea344d",
+        "5a997c92dc1795ffe7e6",
+        "18e570f45e7335da8a25",
+        "77df04fdb9e9607089e8",
+        "129efd230104455c4c3a",
+        "f9b24155228b0a9c1f54",
+        "63214813b8e29ba4e99f",
+        "f9ed813a3b988dfe6644",
+        "750926f8b37f56c87680",
+        "14e561a5dfef69d509d7",
+        "c4e1b7dd51ac859621e4",
+        "fcd6b45d206f822ee57f",
+        "746e2fa2a84480497773",
+        "e39191afb494c0039a06",
+        "00ed7292164e0518d9a2",
+        "674f6de10d59e918dc07",
+        "2e7c449e9ae7b8994733",
+        "00e2c3fe3e5fc32469dd",
+        "d13b85bad3ce39555b12",
+        "955e4af0b27820838e4e",
+        "52b541d0ff25cf4b6b9b"
+      ]
+    },
+    {
+      "verdict": "invalid",
+      "archetype": "generic-operation-name-without-shared-domain",
+      "evidenceNote": "The same generic operation name occurs in unrelated resource or settings domains; body-token overlap does not establish one concept.",
+      "ids": ["0c89efbbd0bd87bc0f6b", "1a0e649d74d5add28a4a", "a44d56e0a2d1e3810e88"]
+    }
+  ],
+  "utilityGroups": [
+    {
+      "verdict": "uncertain",
+      "evidenceNote": "The relationship is real, but consolidation depends on whether the differing implementations are intentional boundary variants.",
+      "ids": [
+        "f2febb8ad4531366a1ba",
+        "33cb781b1266c9e6de9e",
+        "7819e2f70cf9cce6ebb3",
+        "552d115518742d25d48a",
+        "3c570bc725a0c5899a1e",
+        "e10e14242c7f549befc4",
+        "c4874bfc200a4a96b486",
+        "b594909767acf5d36d0f",
+        "2bebc60e664cf61aca74",
+        "06948664951b6a24ef93",
+        "3339edbaf8b8534f6e11",
+        "d1ffead181eb9969b8b9",
+        "46a804ba8f27d080442c",
+        "7b1eac64a15018b536cd",
+        "3eb86a3ecbfe91553f49",
+        "4c01bfe06e742101adc5",
+        "e0293df09c59eeea344d",
+        "5a997c92dc1795ffe7e6",
+        "18e570f45e7335da8a25",
+        "77df04fdb9e9607089e8",
+        "129efd230104455c4c3a",
+        "f9b24155228b0a9c1f54",
+        "63214813b8e29ba4e99f",
+        "f9ed813a3b988dfe6644",
+        "750926f8b37f56c87680",
+        "14e561a5dfef69d509d7",
+        "c4e1b7dd51ac859621e4",
+        "fcd6b45d206f822ee57f",
+        "746e2fa2a84480497773",
+        "e39191afb494c0039a06",
+        "00ed7292164e0518d9a2",
+        "674f6de10d59e918dc07",
+        "2e7c449e9ae7b8994733",
+        "00e2c3fe3e5fc32469dd",
+        "d13b85bad3ce39555b12",
+        "955e4af0b27820838e4e",
+        "52b541d0ff25cf4b6b9b"
+      ]
+    },
+    {
+      "verdict": "not-applicable",
+      "evidenceNote": "The underlying same-concept claim is invalid, so no consolidation recommendation is evaluated.",
+      "ids": ["0c89efbbd0bd87bc0f6b", "1a0e649d74d5add28a4a", "a44d56e0a2d1e3810e88"]
+    }
+  ]
+}

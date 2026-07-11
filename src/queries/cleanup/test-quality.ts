@@ -262,6 +262,12 @@ function assertionVocabulary(source: string): Set<string> {
 
 function hasAssertionCall(maskedBody: string, vocabulary: ReadonlySet<string>): boolean {
   if (/\.should\b/.test(maskedBody)) return true; // chai's should-style, not name-gated
+  // Testing Library's async findBy* queries reject when no element appears,
+  // and condition-specific waitFor helpers throw or time out when their named
+  // condition is absent. Awaiting either is an assertion mechanism even when
+  // the test does not wrap the result in expect().
+  if (/\bawait\s+(?:[\w$.]+\.)?findBy[A-Z]\w*\s*\(/.test(maskedBody)) return true;
+  if (/\bawait\s+\w*waitFor(?:Text|Value|Condition|Result|Event)\s*\(/.test(maskedBody)) return true;
   // A test that manually collects failures and `throw`s a descriptive error
   // (rather than calling expect/assert) is a legitimate, common assertion
   // mechanism — expect() failures throw internally too. External

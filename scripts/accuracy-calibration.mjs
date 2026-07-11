@@ -13,12 +13,39 @@ import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
+  byKind,
+  complexity,
+  cycleSummary,
+  decorativeCheckers,
+  duplicateBodies,
+  isolated,
+  notImplemented,
+  recentDuplicates,
+  redundantReexports,
+  similarAll,
+  similarChains,
+  similarFiles,
+  similarSignatures,
+  testQuality,
+  twinDrift,
+  unusedImports,
+  unusedParams,
+} from '../dist/queries/index.js';
+import { ScipDatabase } from '../dist/index.js';
+import {
   CALIBRATION_SCHEMA_VERSION,
+  applyUtilityGroups,
   applyVerdictGroups,
   deterministicSample,
   normalizeDeadCandidate,
+  normalizeFactualCandidate,
+  normalizeSimilarityCandidate,
   parseDeadCalibrationOptions,
+  parseFactualCalibrationOptions,
+  parseSimilarityCalibrationOptions,
   summarizeCalibration,
+  summarizeCalibrationByDetector,
+  summarizeUtilityByDetector,
 } from './accuracy-calibration-core.mjs';
 
 const repoRoot = resolve(new URL('..', import.meta.url).pathname);
@@ -86,11 +113,53 @@ const deadTruthRules = {
   rust: 'No source, test, trait-contract, macro/derive, ABI/registration, Cargo-target, configured-feature, public-library, generated, or reflective consumer exists; certified deletion additionally requires an applicable checker.',
 };
 
+const factualTruthRules = {
+  'unused-imports':
+    'The named binding is imported into the reported file and has no executable, type, decorator, JSX, namespace, re-export, or other language-valid use there.',
+  'unused-params':
+    'Every reported trailing simple parameter is absent from the callable body, and the callable is a production implementation rather than a required interface or framework signature.',
+  cycles:
+    'Every adjacent pair in the closed path is a real dependency edge in the accepted index; architectural harm is not part of this fact.',
+  'duplicate-bodies':
+    'Every grouped callable has the same normalized implementation body and is in a different file; consolidation is not part of this fact.',
+  complexity:
+    'The source span and LOC match the definition, branches match the disclosed AST or fallback basis, and cyclomatic estimate equals branches plus one.',
+  isolated:
+    'The production callable has neither a non-self caller nor a non-self callee after compiler, source, framework, test, and configured-root evidence is considered.',
+  'redundant-reexports':
+    'No repository consumer imports the named export through the reported barrel; public package surfaces are signals, not direct removal claims.',
+  'not-implemented':
+    'The callable is a placeholder implementation and a production entry, export, override, or caller can reach it.',
+  'decorative-checkers':
+    'The callable promises validation or a predicate but has no reachable throw, rejecting result, false result, diagnostic sink, assertion, or failing delegate.',
+  'test-quality':
+    'The cited test is genuinely assertion-free, intentionally skipped, or asserts the same simple literal supplied by its mock, according to the reported subtype.',
+};
+
+const similarityTruthRules = {
+  'recent-duplicates':
+    'The echo side is newer within the declared Git window, the established side predates it, and the reported domain-specific similarity evidence exists; consolidation remains a separate recommendation.',
+  similar:
+    'The two callables have the disclosed shared callee or source-token evidence and score; generic scaffolding alone is not direct consolidation evidence.',
+  'similar-files':
+    'The two files have the disclosed distinctive dependency overlap and score; matching framework infrastructure alone is support rather than consolidation evidence.',
+  'similar-chains':
+    'Both sequences are real dependency paths and the reported edit distance, divergence, prefix, suffix, and similarity agree.',
+  'similar-signatures':
+    'Every grouped callable has the same normalized parameter and return shape plus compatible LOC band; equal shape alone does not imply duplicate behavior.',
+  'twin-drift':
+    'Group members represent the same or credibly near concept by name and context, have materially divergent bodies, and are not homonyms, generated leaves, tests, or intentional delegation layers.',
+};
+
 mkdirSync(outDir, { recursive: true });
 
 const args = process.argv.slice(2);
 if (args[0] === 'health-dead') {
   runHealthDeadMode(args.slice(1));
+} else if (args[0] === 'health-factual') {
+  runHealthFactualMode(args.slice(1));
+} else if (args[0] === 'health-similarity') {
+  runHealthSimilarityMode(args.slice(1));
 } else if (args[0] === 'summarize') {
   runSummarizeMode(args.slice(1));
 } else if (args[0] === 'resample') {
@@ -111,31 +180,65 @@ function runResampleMode(rawArgs) {
 
   const rows = [];
   for (const repository of packet.repositories) {
-    const candidates = packet.rows.filter((row) => row.repository === repository.repository);
-    rows.push(
-      ...deterministicSample(
-        candidates,
-        Math.min(sampleSize, candidates.length),
-        `${packet.seed}:${repository.repository}`,
-      ),
-    );
+    const detectors = packet.detectors ?? [packet.detector];
+    for (const detector of detectors) {
+      const candidates = packet.rows.filter(
+        (row) => row.repository === repository.repository && row.detector === detector,
+      );
+      rows.push(
+        ...deterministicSample(
+          candidates,
+          Math.min(sampleSize, candidates.length),
+          `${packet.seed}:${repository.repository}:${detector}`,
+        ),
+      );
+    }
   }
   const resampled = {
     ...packet,
     generatedAt: new Date().toISOString(),
-    sampleSizePerRepository: sampleSize,
+    ...(packet.detectors
+      ? { sampleSizePerRepositoryAndDetector: sampleSize }
+      : { sampleSizePerRepository: sampleSize }),
     repositories: packet.repositories.map((repository) => ({
       ...repository,
-      sampled: Math.min(sampleSize, packet.rows.filter((row) => row.repository === repository.repository).length),
+      ...(packet.detectors
+        ? {
+            sampledCounts: Object.fromEntries(
+              packet.detectors.map((detector) => [
+                detector,
+                Math.min(
+                  sampleSize,
+                  packet.rows.filter((row) => row.repository === repository.repository && row.detector === detector)
+                    .length,
+                ),
+              ]),
+            ),
+          }
+        : {
+            sampled: Math.min(sampleSize, packet.rows.filter((row) => row.repository === repository.repository).length),
+          }),
     })),
     rows,
-    summary: summarizeCalibration(rows),
+    summary:
+      packet.detector === 'typescript-similarity'
+        ? similarityPacketSummary(rows, packet.detectors ?? [], {})
+        : packet.detector === 'typescript-factual'
+          ? summarizeCalibrationByDetector(rows, { detectors: packet.detectors ?? [] })
+          : summarizeCalibration(rows),
   };
   const baseName = `${runId}-${packet.language}-${packet.detector}-resampled`;
   const jsonPath = join(outDir, `${baseName}.json`);
   const markdownPath = join(outDir, `${baseName}.md`);
   writeFileSync(jsonPath, `${JSON.stringify(resampled, null, 2)}\n`);
-  writeFileSync(markdownPath, renderDeadPacket(resampled));
+  writeFileSync(
+    markdownPath,
+    packet.detector === 'typescript-similarity'
+      ? renderSimilarityPacket(resampled)
+      : packet.detector === 'typescript-factual'
+        ? renderFactualPacket(resampled)
+        : renderDeadPacket(resampled),
+  );
   console.log(jsonPath);
   console.log(markdownPath);
 }
@@ -148,23 +251,727 @@ function runSummarizeMode(rawArgs) {
   if (packet.schemaVersion !== CALIBRATION_SCHEMA_VERSION) {
     throw new Error(`unsupported calibration packet schema: ${packet.schemaVersion}`);
   }
-  const rows = applyVerdictGroups(packet.rows, verdicts.groups ?? []);
+  let rows = applyVerdictGroups(packet.rows, verdicts.groups ?? []);
+  if (packet.detector === 'typescript-similarity') {
+    rows = applyUtilityGroups(rows, verdicts.utilityGroups ?? []);
+  }
+  const knownPositiveRecallCases = verdicts.knownPositiveRecallCases ?? 0;
   const reviewed = {
     ...packet,
     reviewedAt: new Date().toISOString(),
     verdictSource: resolve(verdictArg),
     rows,
-    summary: summarizeCalibration(rows, {
-      knownPositiveRecallCases: verdicts.knownPositiveRecallCases ?? 0,
-    }),
+    summary:
+      packet.detector === 'typescript-similarity'
+        ? similarityPacketSummary(rows, packet.detectors ?? [], verdicts)
+        : packet.detector === 'typescript-factual'
+          ? summarizeCalibrationByDetector(rows, {
+              detectors: packet.detectors ?? [],
+              knownPositiveRecallCases: typeof knownPositiveRecallCases === 'object' ? knownPositiveRecallCases : {},
+            })
+          : summarizeCalibration(rows, {
+              knownPositiveRecallCases: typeof knownPositiveRecallCases === 'number' ? knownPositiveRecallCases : 0,
+            }),
   };
   const baseName = `${runId}-${packet.language}-${packet.detector}-reviewed`;
   const jsonPath = join(outDir, `${baseName}.json`);
   const markdownPath = join(outDir, `${baseName}.md`);
   writeFileSync(jsonPath, `${JSON.stringify(reviewed, null, 2)}\n`);
-  writeFileSync(markdownPath, renderDeadPacket(reviewed));
+  writeFileSync(
+    markdownPath,
+    packet.detector === 'typescript-similarity'
+      ? renderSimilarityPacket(reviewed)
+      : packet.detector === 'typescript-factual'
+        ? renderFactualPacket(reviewed)
+        : renderDeadPacket(reviewed),
+  );
   console.log(jsonPath);
   console.log(markdownPath);
+}
+
+function runHealthFactualMode(rawArgs) {
+  const options = parseFactualCalibrationOptions(rawArgs, defaultDeadReposByLanguage.typescript, resolve);
+  runTypeScriptDetectorMode(options, {
+    detector: 'typescript-factual',
+    cachePrefix: 'scip-query-factual-calibrate-',
+    truthRules: factualTruthRules,
+    collectCandidates: collectFactualCandidates,
+    summarize: (rows, detectors) => summarizeCalibrationByDetector(rows, { detectors }),
+    render: renderFactualPacket,
+  });
+}
+
+function runHealthSimilarityMode(rawArgs) {
+  const options = parseSimilarityCalibrationOptions(rawArgs, defaultDeadReposByLanguage.typescript, resolve);
+  runTypeScriptDetectorMode(options, {
+    detector: 'typescript-similarity',
+    cachePrefix: 'scip-query-similarity-calibrate-',
+    truthRules: similarityTruthRules,
+    collectCandidates: collectSimilarityCandidates,
+    summarize: (rows, detectors) => similarityPacketSummary(rows, detectors, {}),
+    render: renderSimilarityPacket,
+  });
+}
+
+function runTypeScriptDetectorMode(options, config) {
+  const rows = [];
+  const repositories = [];
+  let failures = 0;
+
+  for (const sourceRoot of options.roots) {
+    const repository = basename(sourceRoot);
+    if (!existsSync(join(sourceRoot, '.git'))) {
+      failures += 1;
+      repositories.push({ repository, sourceRoot, error: 'repository is missing or is not a Git checkout' });
+      continue;
+    }
+
+    const isolated = createDetachedWorktree(sourceRoot);
+    const cacheDir = mkdtempSync(join(tmpdir(), config.cachePrefix));
+    let db = null;
+    try {
+      const env = {
+        ...process.env,
+        SCIP_QUERY_PROJECT_ROOT: isolated.root,
+        SCIP_QUERY_CACHE_DIR: cacheDir,
+        SCIP_QUERY_SKIP_WATCH_SERVICE: '1',
+      };
+      const reindex = runCli(['reindex', '--force', '--language', 'typescript'], isolated.root, env, 600_000);
+      if (reindex.status !== 0) {
+        failures += 1;
+        repositories.push({
+          repository,
+          sourceRoot,
+          commit: isolated.commit,
+          error: commandError('reindex', reindex),
+        });
+        continue;
+      }
+
+      const status = runCli(['status', '--capabilities', '--json'], isolated.root, env, 60_000);
+      if (status.status !== 0) {
+        failures += 1;
+        repositories.push({
+          repository,
+          sourceRoot,
+          commit: isolated.commit,
+          error: commandError('status', status),
+        });
+        continue;
+      }
+      const statusEnvelope = parseEnvelope(status.stdout, 'status');
+      const capability = statusEnvelope.result.capabilities?.matrix?.find((entry) => entry.language === 'typescript');
+      db = new ScipDatabase({
+        projectRoot: isolated.root,
+        dbPath: join(cacheDir, 'index.db'),
+        indexPath: join(cacheDir, 'index.scip'),
+      });
+
+      const candidateCounts = {};
+      const sampledCounts = {};
+      const detectorMetadata = {};
+      for (const detector of options.detectors) {
+        const startedAt = Date.now();
+        const collection = config.collectCandidates(db, detector, {
+          root: isolated.root,
+          repository,
+          commit: isolated.commit,
+          capabilityStatus: capability ?? null,
+          sampleSize: options.sampleSize,
+          seed: `${options.seed}:${repository}:${detector}`,
+        });
+        candidateCounts[detector] = collection.total;
+        sampledCounts[detector] = collection.rows.length;
+        detectorMetadata[detector] = {
+          durationMs: Date.now() - startedAt,
+          ...(collection.metadata ?? {}),
+        };
+        rows.push(...collection.rows);
+      }
+
+      repositories.push({
+        repository,
+        sourceRoot,
+        commit: isolated.commit,
+        language: 'typescript',
+        capability: capability ?? null,
+        reindexDurationMs: reindex.durationMs,
+        candidateCounts,
+        sampledCounts,
+        detectorMetadata,
+      });
+    } catch (error) {
+      failures += 1;
+      repositories.push({ repository, sourceRoot, commit: isolated.commit, error: errorMessage(error) });
+    } finally {
+      db?.close();
+      isolated.remove();
+      rmSync(cacheDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  }
+
+  const packet = {
+    schemaVersion: CALIBRATION_SCHEMA_VERSION,
+    generatedAt: new Date().toISOString(),
+    detector: config.detector,
+    language: 'typescript',
+    detectors: options.detectors,
+    truthRules: Object.fromEntries(options.detectors.map((detector) => [detector, config.truthRules[detector]])),
+    seed: options.seed,
+    sampleSizePerRepositoryAndDetector: options.sampleSize,
+    repositories,
+    rows,
+    summary: config.summarize(rows, options.detectors),
+  };
+  const baseName = `${runId}-${config.detector}-calibration`;
+  const jsonPath = join(outDir, `${baseName}.json`);
+  const markdownPath = join(outDir, `${baseName}.md`);
+  writeFileSync(jsonPath, `${JSON.stringify(packet, null, 2)}\n`);
+  writeFileSync(markdownPath, config.render(packet));
+  console.log(jsonPath);
+  console.log(markdownPath);
+  if (failures > 0) process.exitCode = 1;
+}
+
+function similarityPacketSummary(rows, detectors, options = {}) {
+  const knownPositiveRecallCases = options.knownPositiveRecallCases ?? {};
+  const relationships = summarizeCalibrationByDetector(rows, {
+    detectors,
+    knownPositiveRecallCases:
+      typeof knownPositiveRecallCases === 'object' && knownPositiveRecallCases !== null ? knownPositiveRecallCases : {},
+  });
+  for (const detector of options.boundedDetectors ?? []) {
+    if (!relationships[detector]) continue;
+    relationships[detector] = {
+      ...relationships[detector],
+      ...(relationships[detector].certification === 'certified' ? { certification: 'qualified' } : {}),
+      certificationLimit: 'bounded-candidate-frame',
+    };
+  }
+  return {
+    relationships,
+    recommendations: summarizeUtilityByDetector(rows, { detectors }),
+  };
+}
+
+function collectFactualCandidates(db, detector, context) {
+  const normalize = (candidate, evidence) =>
+    normalizeFactualCandidate(candidate, {
+      detector,
+      repository: context.repository,
+      commit: context.commit,
+      evidence,
+      capabilityStatus: context.capabilityStatus,
+    });
+
+  let rawRows;
+  let evidence = 'heuristic';
+  if (detector === 'unused-imports') {
+    evidence = 'graph-fact';
+    rawRows = typescriptSourceFiles(db).flatMap((file) =>
+      unusedImports(db, file, { semantic: true }).map((finding) => {
+        const line = findSourceLine(context.root, file, finding.shortName);
+        return {
+          relativePath: file,
+          startLine: line,
+          symbol: finding.symbol,
+          shortName: finding.shortName,
+          details: finding,
+          sourceExcerpt: sourceExcerpt(context.root, file, line, line),
+        };
+      }),
+    );
+  } else if (detector === 'unused-params') {
+    rawRows = unusedParams(db, { limit: undefined }).map((finding) => ({
+      relativePath: finding.file,
+      startLine: finding.startLine,
+      endLine: finding.endLine,
+      symbol: finding.symbol,
+      shortName: finding.shortName,
+      details: finding,
+      sourceExcerpt: sourceExcerpt(context.root, finding.file, finding.startLine, finding.endLine),
+    }));
+  } else if (detector === 'cycles') {
+    evidence = 'graph-fact';
+    rawRows = cycleSummary(db, { maxDepth: 100 }).cycles.map((finding) => ({
+      relativePath: finding.path[0],
+      startLine: 0,
+      symbol: finding.path.join(' -> '),
+      findingKind: finding.kind,
+      details: finding,
+      sourceExcerpt: dependencyPathExcerpt(context.root, finding.path),
+    }));
+  } else if (detector === 'duplicate-bodies') {
+    rawRows = duplicateBodies(db, { limit: undefined }).map((finding) => ({
+      relativePath: finding.canonical.file,
+      startLine: finding.canonical.startLine,
+      endLine: finding.canonical.endLine,
+      symbol: finding.hash,
+      shortName: finding.functions.map((entry) => entry.shortName).join(' = '),
+      details: finding,
+      sourceExcerpt: finding.functions
+        .map(
+          (entry) =>
+            `${entry.file}:${entry.startLine + 1}-${entry.endLine + 1}\n${sourceExcerpt(
+              context.root,
+              entry.file,
+              entry.startLine,
+              entry.endLine,
+            )}`,
+        )
+        .join('\n\n'),
+    }));
+  } else if (detector === 'complexity') {
+    evidence = 'graph-fact';
+    const definitions = ['function', 'method', 'constructor']
+      .flatMap((kind) => byKind(db, kind, { limit: Number.POSITIVE_INFINITY }))
+      .filter((definition) => /\.[cm]?[jt]sx?$/.test(definition.relativePath));
+    const frames = definitions.map((definition) => ({
+      detector,
+      language: 'typescript',
+      repository: context.repository,
+      relativePath: definition.relativePath,
+      symbol: definition.symbol,
+      startLine: definition.startLine,
+      verdict: null,
+    }));
+    const selected = deterministicSample(frames, Math.min(context.sampleSize, frames.length), context.seed);
+    const measured = selected
+      .map((frame) => complexity(db, frame.symbol, { semantic: true }))
+      .filter(Boolean)
+      .map((finding) =>
+        normalize(
+          {
+            relativePath: finding.relativePath,
+            startLine: finding.startLine,
+            endLine: finding.endLine,
+            symbol: finding.symbol,
+            shortName: finding.shortName,
+            details: finding,
+            sourceExcerpt: sourceExcerpt(context.root, finding.relativePath, finding.startLine, finding.endLine),
+          },
+          evidence,
+        ),
+      );
+    return { total: definitions.length, rows: measured };
+  } else if (detector === 'isolated') {
+    evidence = 'graph-fact';
+    rawRows = isolated(db, { minLoc: 3, semantic: true }).map((finding) => ({
+      relativePath: finding.relativePath,
+      startLine: finding.startLine,
+      endLine: finding.endLine,
+      symbol: finding.symbol,
+      shortName: finding.shortName,
+      details: finding,
+      sourceExcerpt: sourceExcerpt(context.root, finding.relativePath, finding.startLine, finding.endLine),
+    }));
+  } else if (detector === 'redundant-reexports') {
+    evidence = 'graph-fact';
+    rawRows = redundantReexports(db).map((finding) => {
+      const line = findSourceLine(context.root, finding.barrelFile, leafName(finding.shortName));
+      return {
+        relativePath: finding.barrelFile,
+        startLine: line,
+        symbol: finding.symbol,
+        shortName: finding.shortName,
+        findingKind: finding.actionTier,
+        details: finding,
+        sourceExcerpt: sourceExcerpt(context.root, finding.barrelFile, Math.max(0, line - 2), line + 2),
+      };
+    });
+  } else if (detector === 'not-implemented') {
+    rawRows = notImplemented(db, { limit: undefined, semantic: true }).map((finding) =>
+      findingRow(context.root, finding),
+    );
+  } else if (detector === 'decorative-checkers') {
+    rawRows = decorativeCheckers(db, { limit: undefined }).map((finding) => findingRow(context.root, finding));
+  } else if (detector === 'test-quality') {
+    const report = testQuality(db, { limit: undefined });
+    rawRows = [
+      ...report.assertionFree.map((finding) => testQualityRow(context.root, finding, 'assertion-free')),
+      ...report.skipped.map((finding) => testQualityRow(context.root, finding, 'skipped')),
+      ...report.mockEcho.map((finding) => testQualityRow(context.root, finding, 'mock-echo')),
+    ];
+  } else {
+    throw new Error(`unsupported factual detector: ${detector}`);
+  }
+
+  const normalized = rawRows.map((candidate) => normalize(candidate, evidence));
+  return {
+    total: normalized.length,
+    rows: deterministicSample(normalized, Math.min(context.sampleSize, normalized.length), context.seed),
+  };
+}
+
+function collectSimilarityCandidates(db, detector, context) {
+  const normalize = (candidate) =>
+    normalizeSimilarityCandidate(candidate, {
+      detector,
+      repository: context.repository,
+      commit: context.commit,
+      evidence: 'heuristic',
+      capabilityStatus: context.capabilityStatus,
+    });
+
+  let rawRows;
+  let metadata = { exhaustiveCandidateFrame: true };
+  if (detector === 'recent-duplicates') {
+    const result = recentDuplicates(db, {
+      historyMode: 'full',
+      limit: Number.POSITIVE_INFINITY,
+      semantic: true,
+    });
+    metadata = {
+      ...metadata,
+      available: result.available,
+      historyWindowCommits: result.windowCommits,
+    };
+    rawRows = result.findings.map((finding) => {
+      const endpoints = [
+        definitionEndpoint(db, finding.echoSymbol, finding.echoFile, context.root),
+        definitionEndpoint(db, finding.establishedSymbol, finding.establishedFile, context.root),
+      ];
+      return similarityRow({
+        root: context.root,
+        endpoints,
+        symbol: `${finding.domain}:${finding.echoSymbol}|${finding.establishedSymbol}`,
+        shortName: `${finding.echoSymbol} ↔ ${finding.establishedSymbol}`,
+        findingKind: `${finding.kind}:${finding.domain}:${finding.basis}`,
+        details: finding,
+      });
+    });
+  } else if (detector === 'similar') {
+    rawRows = similarAll(db, { limit: Number.POSITIVE_INFINITY, semantic: true }).map((finding) => {
+      const endpoints = [
+        definitionEndpoint(db, finding.symbolA, finding.fileA, context.root),
+        definitionEndpoint(db, finding.symbolB, finding.fileB, context.root),
+      ];
+      return similarityRow({
+        root: context.root,
+        endpoints,
+        symbol: `${finding.symbolA}|${finding.symbolB}`,
+        shortName: `${finding.shortNameA} ↔ ${finding.shortNameB}`,
+        findingKind: finding.similarityBasis ?? 'callees',
+        details: finding,
+      });
+    });
+  } else if (detector === 'similar-files') {
+    rawRows = similarFiles(db, { limit: Number.POSITIVE_INFINITY }).map((finding) => {
+      const endpoints = [fileEndpoint(finding.fileA), fileEndpoint(finding.fileB)];
+      return similarityRow({
+        root: context.root,
+        endpoints,
+        symbol: `${finding.fileA}|${finding.fileB}`,
+        shortName: `${finding.fileA} ↔ ${finding.fileB}`,
+        findingKind: 'dependency-profile',
+        details: finding,
+        sourceExcerpt: dependencyFilesExcerpt(context.root, [finding.fileA, finding.fileB]),
+      });
+    });
+  } else if (detector === 'similar-chains') {
+    metadata = {
+      exhaustiveCandidateFrame: false,
+      frameLimit: '500 generated dependency chains before pair comparison',
+    };
+    rawRows = similarChains(db, { limit: Number.POSITIVE_INFINITY }).map((finding) => {
+      const endpoints = [fileEndpoint(finding.chainA[0]), fileEndpoint(finding.chainB[0])];
+      return similarityRow({
+        root: context.root,
+        endpoints,
+        symbol: `${finding.chainA.join('>')}|${finding.chainB.join('>')}`,
+        shortName: `${finding.chainA.join(' → ')} ↔ ${finding.chainB.join(' → ')}`,
+        findingKind: 'dependency-chain',
+        details: finding,
+        sourceExcerpt: dependencyFilesExcerpt(context.root, [...finding.chainA, ...finding.chainB]),
+      });
+    });
+  } else if (detector === 'similar-signatures') {
+    rawRows = similarSignatures(db, { semantic: true }).map((finding) => {
+      const endpoints = finding.functions.map((entry) => ({
+        file: entry.file,
+        symbol: entry.symbol,
+        shortName: entry.shortName,
+        startLine: entry.startLine,
+        endLine: entry.endLine,
+      }));
+      return similarityRow({
+        root: context.root,
+        endpoints,
+        symbol: `${finding.signature}|${finding.functions.map((entry) => entry.symbol).join('|')}`,
+        shortName: finding.functions.map((entry) => entry.shortName).join(' = '),
+        findingKind: finding.exactBody ? 'signature-and-body' : `signature:${finding.locBand}`,
+        details: finding,
+      });
+    });
+  } else if (detector === 'twin-drift') {
+    rawRows = twinDrift(db).map((finding) => {
+      const endpoints = finding.members.map((entry) => ({
+        file: entry.file,
+        symbol: entry.symbol,
+        shortName: entry.shortName,
+        startLine: entry.startLine,
+        endLine: entry.endLine,
+      }));
+      return similarityRow({
+        root: context.root,
+        endpoints,
+        symbol: `${finding.leaf}|${finding.members.map((entry) => entry.symbol).join('|')}`,
+        shortName: `${finding.leaf}: ${finding.members.map((entry) => entry.shortName).join(' ↔ ')}`,
+        findingKind: finding.relationship,
+        details: finding,
+      });
+    });
+  } else {
+    throw new Error(`unsupported similarity detector: ${detector}`);
+  }
+
+  const normalized = rawRows.map(normalize);
+  return {
+    total: normalized.length,
+    rows: deterministicSample(normalized, Math.min(context.sampleSize, normalized.length), context.seed),
+    metadata,
+  };
+}
+
+function similarityRow({ root, endpoints, symbol, shortName, findingKind, details, sourceExcerpt: excerpt }) {
+  const primary = endpoints[0] ?? fileEndpoint('');
+  return {
+    relativePath: primary.file,
+    startLine: primary.startLine ?? 0,
+    endLine: primary.endLine ?? primary.startLine ?? 0,
+    symbol,
+    shortName,
+    findingKind,
+    endpoints,
+    details,
+    sourceExcerpt: excerpt ?? endpointSourceExcerpts(root, endpoints),
+  };
+}
+
+function definitionEndpoint(db, symbol, fallbackFile, root) {
+  const definition = db.get(
+    `SELECT d.relative_path AS file,
+            der.start_line AS startLine,
+            der.end_line AS endLine
+       FROM global_symbols gs
+       JOIN defn_enclosing_ranges der ON der.symbol_id = gs.id
+       JOIN documents d ON d.id = der.document_id
+      WHERE gs.symbol = ?
+      ORDER BY d.relative_path, der.start_line
+      LIMIT 1`,
+    symbol,
+  );
+  if (definition) {
+    return {
+      file: definition.file,
+      symbol,
+      startLine: definition.startLine,
+      endLine: definition.endLine ?? definition.startLine,
+    };
+  }
+  const sourceLine = findSourceLine(root, fallbackFile, leafName(symbol));
+  return { file: fallbackFile, symbol, startLine: sourceLine, endLine: sourceLine + 80 };
+}
+
+function fileEndpoint(file) {
+  return { file, symbol: file, startLine: 0, endLine: 0 };
+}
+
+function endpointSourceExcerpts(root, endpoints) {
+  return endpoints
+    .map((endpoint) => {
+      const location = `${endpoint.file}:${(endpoint.startLine ?? 0) + 1}-${(endpoint.endLine ?? endpoint.startLine ?? 0) + 1}`;
+      return `${location}\n${sourceExcerpt(root, endpoint.file, endpoint.startLine ?? 0, endpoint.endLine ?? 0) ?? '(source unavailable)'}`;
+    })
+    .join('\n\n');
+}
+
+function dependencyFilesExcerpt(root, files) {
+  return [...new Set(files)]
+    .map((relativePath) => {
+      const absolutePath = join(root, relativePath);
+      if (!existsSync(absolutePath)) return `${relativePath}\n(source unavailable)`;
+      const lines = readFileSync(absolutePath, 'utf8').split('\n');
+      const dependencies = lines
+        .map((line, index) => ({ line, index }))
+        .filter(({ line }) => /\b(import|export)\b|\brequire\s*\(/.test(line))
+        .slice(0, 60)
+        .map(({ line, index }) => `${String(index + 1).padStart(5)} | ${line}`)
+        .join('\n');
+      return `${relativePath}\n${dependencies || '(no textual dependency lines)'}`;
+    })
+    .join('\n\n');
+}
+
+function typescriptSourceFiles(db) {
+  return db
+    .all(
+      `SELECT relative_path AS relativePath
+       FROM documents
+       WHERE relative_path IS NOT NULL
+       ORDER BY relative_path`,
+    )
+    .map((row) => row.relativePath)
+    .filter((relativePath) => /\.[cm]?[jt]sx?$/.test(relativePath))
+    .filter((relativePath) => !db.isIgnored(relativePath));
+}
+
+function findingRow(root, finding) {
+  return {
+    relativePath: finding.file,
+    startLine: finding.startLine,
+    endLine: finding.endLine,
+    symbol: finding.symbol,
+    shortName: finding.shortName,
+    findingKind: finding.stubKind ?? finding.nameKind,
+    details: finding,
+    sourceExcerpt: sourceExcerpt(root, finding.file, finding.startLine, finding.endLine),
+  };
+}
+
+function testQualityRow(root, finding, findingKind) {
+  return {
+    relativePath: finding.file,
+    startLine: finding.startLine,
+    endLine: finding.endLine,
+    symbol: `${findingKind}:${finding.file}:${finding.startLine}:${finding.title}`,
+    shortName: finding.title || findingKind,
+    findingKind,
+    details: finding,
+    sourceExcerpt: sourceExcerpt(root, finding.file, finding.startLine, finding.endLine),
+  };
+}
+
+function findSourceLine(root, relativePath, needle) {
+  const path = join(root, relativePath);
+  if (!existsSync(path)) return 0;
+  const lines = readFileSync(path, 'utf8').split('\n');
+  const index = lines.findIndex((line) => line.includes(needle));
+  return index < 0 ? 0 : index;
+}
+
+function leafName(shortName) {
+  return String(shortName).replace(/\(\)$/, '').split(':').at(-1)?.replace(/^<|>$/g, '') ?? String(shortName);
+}
+
+function dependencyPathExcerpt(root, path) {
+  return [...new Set(path.slice(0, -1))]
+    .map((relativePath) => {
+      const absolutePath = join(root, relativePath);
+      if (!existsSync(absolutePath)) return `${relativePath}\n(source unavailable)`;
+      const lines = readFileSync(absolutePath, 'utf8').split('\n');
+      const imports = lines
+        .map((line, index) => ({ line, index }))
+        .filter(({ line }) => /\b(import|export)\b|\brequire\s*\(/.test(line))
+        .slice(0, 40)
+        .map(({ line, index }) => `${String(index + 1).padStart(5)} | ${line}`)
+        .join('\n');
+      return `${relativePath}\n${imports || '(no textual dependency lines)'}`;
+    })
+    .join('\n\n');
+}
+
+function renderFactualPacket(packet) {
+  const lines = [
+    '# TypeScript Factual Detector Calibration Packet',
+    '',
+    `Generated: ${packet.generatedAt}`,
+    `Schema: ${packet.schemaVersion}`,
+    `Seed: \`${packet.seed}\``,
+    '',
+    '## Truth Rules',
+    '',
+  ];
+  for (const detector of packet.detectors) lines.push(`- **${detector}:** ${packet.truthRules[detector]}`);
+  lines.push('', '## Repository Inventory', '');
+  for (const repository of packet.repositories) {
+    lines.push(
+      `### ${repository.repository}`,
+      '',
+      `- Commit: \`${repository.commit ?? '-'}\``,
+      `- Candidate counts: \`${JSON.stringify(repository.candidateCounts ?? {})}\``,
+      `- Sampled counts: \`${JSON.stringify(repository.sampledCounts ?? {})}\``,
+      `- Error: ${repository.error ?? '-'}`,
+      '',
+    );
+  }
+  lines.push('## Current Summary', '', '```json', JSON.stringify(packet.summary, null, 2), '```', '');
+  for (const [index, row] of packet.rows.entries()) {
+    lines.push(
+      `## ${index + 1}. ${row.detector}: ${row.repository}: ${row.shortName}`,
+      '',
+      `- Calibration ID: \`${row.calibrationId}\``,
+      `- Commit: \`${row.commit}\``,
+      `- Location: \`${row.relativePath}:${row.startLine + 1}-${row.endLine + 1}\``,
+      `- Evidence: ${row.evidence}`,
+      `- Kind: ${row.findingKind}`,
+      `- Verdict: **${row.verdict?.toUpperCase() ?? 'PENDING'}**`,
+      `- Noise archetype: ${row.noiseArchetype ?? '-'}`,
+      `- Evidence note: ${row.evidenceNote ?? '-'}`,
+      `- Details: \`${JSON.stringify(row.details)}\``,
+      '',
+      '````text',
+      row.sourceExcerpt ?? '(source unavailable)',
+      '````',
+      '',
+    );
+  }
+  return `${lines.join('\n')}\n`;
+}
+
+function renderSimilarityPacket(packet) {
+  const lines = [
+    '# TypeScript Similarity Detector Calibration Packet',
+    '',
+    `Generated: ${packet.generatedAt}`,
+    `Schema: ${packet.schemaVersion}`,
+    `Seed: \`${packet.seed}\``,
+    '',
+    'Relationship verdicts certify the disclosed measurement. Utility verdicts classify whether the emitted consolidation advice is useful for the reviewed pair; they do not alter relationship precision.',
+    '',
+    '## Truth Rules',
+    '',
+  ];
+  for (const detector of packet.detectors) lines.push(`- **${detector}:** ${packet.truthRules[detector]}`);
+  lines.push('', '## Repository Inventory', '');
+  for (const repository of packet.repositories) {
+    lines.push(
+      `### ${repository.repository}`,
+      '',
+      `- Commit: \`${repository.commit ?? '-'}\``,
+      `- Candidate counts: \`${JSON.stringify(repository.candidateCounts ?? {})}\``,
+      `- Sampled counts: \`${JSON.stringify(repository.sampledCounts ?? {})}\``,
+      `- Detector metadata: \`${JSON.stringify(repository.detectorMetadata ?? {})}\``,
+      `- Error: ${repository.error ?? '-'}`,
+      '',
+    );
+  }
+  lines.push('## Current Summary', '', '```json', JSON.stringify(packet.summary, null, 2), '```', '');
+  for (const [index, row] of packet.rows.entries()) {
+    lines.push(
+      `## ${index + 1}. ${row.detector}: ${row.repository}: ${row.shortName}`,
+      '',
+      `- Calibration ID: \`${row.calibrationId}\``,
+      `- Commit: \`${row.commit}\``,
+      `- Primary location: \`${row.relativePath}:${row.startLine + 1}-${row.endLine + 1}\``,
+      `- Endpoints: \`${JSON.stringify(row.endpoints)}\``,
+      `- Evidence: ${row.evidence}`,
+      `- Kind: ${row.findingKind}`,
+      `- Relationship verdict: **${row.verdict?.toUpperCase() ?? 'PENDING'}**`,
+      `- Relationship noise archetype: ${row.noiseArchetype ?? '-'}`,
+      `- Relationship evidence note: ${row.evidenceNote ?? '-'}`,
+      `- Recommendation utility: **${row.utilityVerdict?.toUpperCase() ?? 'PENDING'}**`,
+      `- Utility archetype: ${row.utilityArchetype ?? '-'}`,
+      `- Utility evidence note: ${row.utilityNote ?? '-'}`,
+      `- Details: \`${JSON.stringify(row.details)}\``,
+      '',
+      '````text',
+      row.sourceExcerpt ?? '(source unavailable)',
+      '````',
+      '',
+    );
+  }
+  return `${lines.join('\n')}\n`;
 }
 
 function runNavigationMode(rawRoots) {

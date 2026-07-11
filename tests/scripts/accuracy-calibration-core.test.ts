@@ -3,12 +3,19 @@ import { describe, expect, it } from 'vitest';
 // as native ESM outside the shipped TypeScript source tree.
 // @ts-expect-error native script modules do not ship TypeScript declarations
 import {
+  applyUtilityGroups,
   applyVerdictGroups,
   calibrationRowIdentity,
   deterministicSample,
   normalizeDeadCandidate,
+  normalizeFactualCandidate,
+  normalizeSimilarityCandidate,
   parseDeadCalibrationOptions,
+  parseFactualCalibrationOptions,
+  parseSimilarityCalibrationOptions,
   summarizeCalibration,
+  summarizeCalibrationByDetector,
+  summarizeUtilityByDetector,
   wilsonInterval,
 } from '../../scripts/accuracy-calibration-core.mjs';
 
@@ -50,6 +57,44 @@ describe('accuracy calibration core', () => {
     expect(() => parseDeadCalibrationOptions(['--language', 'python'], defaults)).toThrow('--language must be one of');
   });
 
+  it('selects all TypeScript factual detectors or an explicit repeatable subset', () => {
+    const all = parseFactualCalibrationOptions([], ['/repos/a', '/repos/b']);
+    expect(all.language).toBe('typescript');
+    expect(all.detectors).toContain('unused-imports');
+    expect(all.detectors).toContain('test-quality');
+    expect(all.roots).toEqual(['/repos/a', '/repos/b']);
+
+    expect(
+      parseFactualCalibrationOptions(
+        ['--detector', 'cycles', '--detector', 'cycles', '--sample-size', '7', '/repos/custom'],
+        ['/repos/default'],
+      ),
+    ).toMatchObject({ detectors: ['cycles'], sampleSize: 7, roots: ['/repos/custom'] });
+  });
+
+  it('selects all TypeScript similarity detectors or an explicit repeatable subset', () => {
+    const all = parseSimilarityCalibrationOptions([], ['/repos/a', '/repos/b']);
+    expect(all).toMatchObject({
+      language: 'typescript',
+      seed: 'typescript-similarity-v1',
+      roots: ['/repos/a', '/repos/b'],
+    });
+    expect(all.detectors).toEqual([
+      'recent-duplicates',
+      'similar',
+      'similar-files',
+      'similar-chains',
+      'similar-signatures',
+      'twin-drift',
+    ]);
+    expect(
+      parseSimilarityCalibrationOptions(
+        ['--detector', 'similar', '--detector', 'similar', '--sample-size', '4', '/repos/custom'],
+        ['/repos/default'],
+      ),
+    ).toMatchObject({ detectors: ['similar'], sampleSize: 4, roots: ['/repos/custom'] });
+  });
+
   it('retains implicit Rust usage evidence in normalized dead-code rows', () => {
     const normalized = normalizeDeadCandidate(
       {
@@ -75,6 +120,63 @@ describe('accuracy calibration core', () => {
     expect(normalized).toMatchObject({
       language: 'rust',
       implicitUsageReason: 'Rust attribute macro #[tauri::command]',
+    });
+  });
+
+  it('normalizes factual rows without erasing detector-specific evidence', () => {
+    const normalized = normalizeFactualCandidate(
+      {
+        relativePath: 'src/a.ts',
+        startLine: 3,
+        endLine: 5,
+        symbol: 'a',
+        findingKind: 'cycle',
+        details: { path: ['src/a.ts', 'src/b.ts', 'src/a.ts'] },
+        sourceExcerpt: 'import "./b";',
+      },
+      {
+        detector: 'cycles',
+        repository: 'fixture',
+        commit: 'abc123',
+        evidence: 'graph-fact',
+        capabilityStatus: null,
+      },
+    );
+    expect(normalized).toMatchObject({
+      detector: 'cycles',
+      findingKind: 'cycle',
+      details: { path: ['src/a.ts', 'src/b.ts', 'src/a.ts'] },
+    });
+    expect(normalized.calibrationId).toHaveLength(20);
+  });
+
+  it('normalizes both endpoints and review dimensions for similarity rows', () => {
+    const normalized = normalizeSimilarityCandidate(
+      {
+        relativePath: 'src/a.ts',
+        startLine: 2,
+        symbol: 'a = b',
+        endpoints: [
+          { file: 'src/a.ts', symbol: 'a' },
+          { file: 'src/b.ts', symbol: 'b' },
+        ],
+        details: { similarity: 0.8 },
+      },
+      {
+        detector: 'similar',
+        repository: 'fixture',
+        commit: 'abc123',
+        evidence: 'heuristic',
+        capabilityStatus: null,
+      },
+    );
+    expect(normalized).toMatchObject({
+      endpoints: [
+        { file: 'src/a.ts', symbol: 'a' },
+        { file: 'src/b.ts', symbol: 'b' },
+      ],
+      verdict: null,
+      utilityVerdict: null,
     });
   });
 
@@ -117,6 +219,24 @@ describe('accuracy calibration core', () => {
     expect(summarizeCalibration([], { unsupported: true }).certification).toBe('unsupported');
   });
 
+  it('summarizes mixed factual packets independently by detector', () => {
+    const rows = [
+      row(0, { detector: 'cycles', verdict: 'valid' }),
+      row(1, { detector: 'cycles', verdict: 'invalid' }),
+      row(2, { detector: 'unused-imports', verdict: 'valid' }),
+    ];
+    expect(summarizeCalibrationByDetector(rows)).toMatchObject({
+      cycles: { reviewed: 2, valid: 1, invalid: 1 },
+      'unused-imports': { reviewed: 1, valid: 1 },
+    });
+  });
+
+  it('retains declared detectors with no holdout findings as insufficient evidence', () => {
+    expect(summarizeCalibrationByDetector([], { detectors: ['decorative-checkers'] })).toMatchObject({
+      'decorative-checkers': { reviewed: 0, pending: 0, certification: 'insufficient-evidence' },
+    });
+  });
+
   it('applies grouped verdict evidence exactly once per known row', () => {
     const rows = deterministicSample([row(0), row(1)], 2, 'verdicts');
     const classified = applyVerdictGroups(rows, [
@@ -139,5 +259,49 @@ describe('accuracy calibration core', () => {
         { verdict: 'valid', evidenceNote: 'duplicate', ids: [rows[0].calibrationId] },
       ]),
     ).toThrow('more than one verdict');
+  });
+
+  it('records recommendation utility separately from relationship truth', () => {
+    const rows = deterministicSample(
+      [row(0, { detector: 'similar', verdict: 'valid' }), row(1, { detector: 'similar', verdict: 'valid' })],
+      2,
+      'utility',
+    );
+    const classified = applyUtilityGroups(rows, [
+      { verdict: 'actionable', evidenceNote: 'Same behavior.', ids: [rows[0].calibrationId] },
+      {
+        verdict: 'non-actionable',
+        archetype: 'boundary-duplication',
+        evidenceNote: 'Intentional boundary.',
+        ids: [rows[1].calibrationId],
+      },
+    ]);
+    expect(summarizeUtilityByDetector(classified, { detectors: ['similar'] })).toMatchObject({
+      similar: { reviewed: 2, actionable: 1, nonActionable: 1, observedUtilityRate: 0.5 },
+    });
+    expect(classified[1]).toHaveProperty('utilityArchetype', 'boundary-duplication');
+  });
+
+  it('supports packet-scoped detector selectors without weakening exact id overlays', () => {
+    const rows = deterministicSample(
+      [row(0, { detector: 'similar', verdict: null }), row(1, { detector: 'similar-files', verdict: null })],
+      2,
+      'selectors',
+    );
+    const classified = applyVerdictGroups(rows, [
+      { verdict: 'valid', evidenceNote: 'Reviewed full detector sample.', detectors: ['similar'] },
+    ]);
+    expect(classified.find((entry) => entry.detector === 'similar')).toMatchObject({ verdict: 'valid' });
+    expect(classified.find((entry) => entry.detector === 'similar-files')).toMatchObject({ verdict: null });
+    expect(() =>
+      applyVerdictGroups(rows, [
+        {
+          verdict: 'valid',
+          evidenceNote: 'ambiguous selector',
+          ids: [rows[0].calibrationId],
+          detectors: ['similar'],
+        },
+      ]),
+    ).toThrow('exactly one of ids or detectors');
   });
 });

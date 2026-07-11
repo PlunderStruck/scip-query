@@ -40,6 +40,17 @@ describe('test-quality — assertion-free', () => {
         '  });',
         '});',
       ],
+      'tests/async-query.test.ts': [
+        "import { it } from 'vitest';",
+        '',
+        "it('uses an awaited Testing Library query', async () => {",
+        "  await screen.findByText('ready');",
+        '});',
+        '',
+        "it('uses a condition-specific wait helper', async () => {",
+        "  await waitForText(chunks, 'ping');",
+        '});',
+      ],
     });
     const dbPath = join(tempDir, 'index.db');
     db = emptyFixtureDb(projectRoot, dbPath);
@@ -67,6 +78,12 @@ describe('test-quality — assertion-free', () => {
     const hit = report.assertionFree.find((f) => f.title === 'awaits only, no assertion');
     expect(hit).toBeDefined();
     expect(hit?.severity).toBe('low');
+  });
+
+  it('recognizes awaited findBy and condition-specific wait helpers as assertions', () => {
+    const titles = testQuality(db).assertionFree.map((finding) => finding.title);
+    expect(titles).not.toContain('uses an awaited Testing Library query');
+    expect(titles).not.toContain('uses a condition-specific wait helper');
   });
 });
 

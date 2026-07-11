@@ -1,0 +1,54 @@
+{
+  "packet": "reports/accuracy/2026-07-11T02-22-28-804Z-typescript-factual-calibration.json",
+  "knownPositiveRecallCases": {
+    "complexity": 1
+  },
+  "groups": [
+    {
+      "verdict": "valid",
+      "evidenceNote": "Source span, LOC, documented AST branch contributions, and branches-plus-one invariant reviewed.",
+      "ids": [
+        "673d6e40e930d0b3925c",
+        "a48588fc3359db5dfce5",
+        "bb24e189ae339c178f85",
+        "a1745fa79db37c3c6cea",
+        "e22a13eb413252d90949",
+        "8f88a15fffed75edfa85",
+        "e449838655cfcbb6d5c9",
+        "29ed7d532437b0abc686",
+        "0428ad84d0aea69541ef",
+        "65d12192cfe7fbf99d85",
+        "bf1125c76950b78a1640",
+        "842d578aef7f1bce4cf5",
+        "decba6d5b2fa2728eaa1",
+        "198a17fcadd5e54f44df",
+        "f42255a9c2b4594750fe",
+        "efb13fcf2d66c0bc7cd7",
+        "d806628df2cf1ec94728",
+        "e5a23ab548d9b10c2c8f",
+        "d1cf2167788ba58e57fd",
+        "e1c104386469a9aab32c",
+        "4f6990dffa84b11fbaa6",
+        "1eab8d1138d257278ca0",
+        "7a1cfe6a7fa9c28277fc",
+        "325b05e256e20cbdf089",
+        "89cd952d85d4c82d39d0",
+        "a252213414ac5729c145",
+        "fc578a549dea8b9f4f3f",
+        "52525471f33fdd388375",
+        "918cd4886f13384a52b8",
+        "e7e645be2d3fd48f6694",
+        "51e92f5e1f94762bc4d2",
+        "d4a03422923e221909a9",
+        "bbb55aba63b5fc4f2f98",
+        "2985d7b04682cd6983ed",
+        "5dcc6c97d9709abe2cdf",
+        "b20cfb9dfcd080b0e105",
+        "31d336e1f82f823b6de4",
+        "2b9df840c251ecd4e01c",
+        "bc7bac012d74dd6f0a99",
+        "b79815390d8c4f5d20ec"
+      ]
+    }
+  ]
+}

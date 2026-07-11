@@ -9,6 +9,8 @@ import { stripComments } from '../../source/source-stripper.js';
 import { getCalleeRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
 import { resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
+import { getSourceFacts } from '../../source/source-facts.js';
+import { isFrameworkContractCallable } from './callable-contracts.js';
 
 /**
  * decorative-checkers (D2): mechanizes scip-integrity-audit drill 1 for a
@@ -116,10 +118,15 @@ function classifyChecker(
 ): Pick<DecorativeCheckerFinding, 'nameKind' | 'resolvedVia' | 'delegateTarget'> | null {
   const nameKind = checkerNameKind(def.leaf);
   if (!nameKind) return null;
+  if (isFrameworkContractCallable(db, def)) return null;
 
   const snippet = definitionSourceSnippet(db, def);
   if (!snippet) return null;
   if (!CALLABLE_SHAPE_PATTERN.test(snippet)) return null;
+  const callable = getSourceFacts(db, def.relativePath)?.callables.find(
+    (candidate) => candidate.startLine === def.startLine && candidate.endLine === def.endLine,
+  );
+  if (nameKind === 'predicate' && callable?.paramCount === 0) return null;
 
   // Delegating checkers (`validateX = () => validateY(x)`) inherit their
   // delegate's failure exits — a wrapper whose only statement is a forwarded
@@ -131,12 +138,28 @@ function classifyChecker(
     const delegate = resolveOneHopDelegate(db, def);
     if (!delegate) return null;
     if (bodyHasFailureExit(delegate.body, isConciseArrowBody(delegate.snippet))) return null;
+    if (bodyHasPotentiallyFailingCall(delegate.body)) return null;
     return { nameKind, resolvedVia: 'one-hop-delegate', delegateTarget: delegate.shortName };
   }
 
   const rawBody = extractImplementationBody(snippet);
   if (bodyHasFailureExit(rawBody, isConciseArrowBody(snippet))) return null;
+  // A call can throw, reject, append diagnostics, or return an Effect-style
+  // failure without spelling that exit in this body. Unless the callable is a
+  // thin forwarder whose one target we resolved above, do not claim that all
+  // paths pass merely because local syntax lacks `throw`/`false`.
+  if (bodyHasPotentiallyFailingCall(rawBody)) return null;
   return { nameKind, resolvedVia: 'direct' };
+}
+
+const NON_CALL_KEYWORDS = new Set(['if', 'for', 'while', 'switch', 'catch', 'function']);
+
+function bodyHasPotentiallyFailingCall(body: string): boolean {
+  const masked = stripComments(body);
+  for (const match of masked.matchAll(/\b([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\(/g)) {
+    if (!NON_CALL_KEYWORDS.has(match[1]!)) return true;
+  }
+  return false;
 }
 
 /**

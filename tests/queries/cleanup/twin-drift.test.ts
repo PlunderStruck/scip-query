@@ -55,14 +55,13 @@ describe('groupTwins (pure)', () => {
     expect(groups[0]?.relationship).toBe('identical');
   });
 
-  it('suppresses unrelated homonyms below the similarity threshold', () => {
+  it('drops unrelated short-name homonyms before similarity scoring', () => {
     const groups = groupTwins([
       record({ leaf: 'get', file: 'src/a.ts', tokens: ['return', 'this', '.', 'a', ';'] }),
       record({ leaf: 'get', file: 'src/b.ts', tokens: ['throw', 'new', 'Error', '(', ')', ';'] }),
     ]);
 
-    expect(groups).toHaveLength(1);
-    expect(groups[0]?.relationship).toBe('homonym');
+    expect(groups).toHaveLength(0);
   });
 
   it('clusters near-names (edit distance <= 2, length >= 8) and flags drift', () => {
@@ -82,6 +81,34 @@ describe('groupTwins (pure)', () => {
     expect(groups).toHaveLength(1);
     expect(groups[0]?.relationship).toBe('divergent');
     expect(groups[0]?.members.map((m) => m.file).sort()).toEqual(['src/a.ts', 'src/b.ts']);
+  });
+
+  it('does not merge near names without a strong shared prefix', () => {
+    const groups = groupTwins([
+      record({ leaf: 'StageCard', file: 'src/landing.ts', tokens: ['return', 'Card', '(', 'stage', ')'] }),
+      record({ leaf: 'StatCard', file: 'src/report.ts', tokens: ['return', 'Card', '(', 'stat', ')'] }),
+    ]);
+
+    expect(groups).toHaveLength(0);
+  });
+
+  it('requires contextual overlap for very short generic component names', () => {
+    const groups = groupTwins([
+      record({
+        leaf: 'Row',
+        file: 'src/slack/SlackConnectButton.tsx',
+        shortName: 'SlackConnectButton:Row',
+        tokens: ['return', 'div', '(', 'label', ')'],
+      }),
+      record({
+        leaf: 'Row',
+        file: 'src/billing/CostBreakdown.tsx',
+        shortName: 'CostBreakdown:Row',
+        tokens: ['return', 'div', '(', 'amount', ')'],
+      }),
+    ]);
+
+    expect(groups).toHaveLength(0);
   });
 
   it('does not cluster short or unrelated names', () => {
@@ -150,7 +177,7 @@ describe('groupTwins (pure)', () => {
     expect(groups).toHaveLength(0);
   });
 
-  it('still flags a divergent pair when only one side is a test file', () => {
+  it('excludes test helpers even when a production callable shares the name', () => {
     const groups = groupTwins([
       record({
         leaf: 'compareProfiles',
@@ -164,8 +191,7 @@ describe('groupTwins (pure)', () => {
       }),
     ]);
 
-    expect(groups).toHaveLength(1);
-    expect(groups[0]?.relationship).toBe('divergent');
+    expect(groups).toHaveLength(0);
   });
 
   // followup #7: controller -> service -> storage style delegation chains
@@ -304,6 +330,35 @@ describe('twinDrift (db-backed)', () => {
         expect(twinDrift(rustDb, { includeHomonyms: true })).toHaveLength(0);
       } finally {
         rustDb.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('does not treat TypeScript top-level constants as callable twins', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-query-twin-drift-ts-constant-'));
+    try {
+      writeFixtureFiles(root, {
+        'src/a.ts': ['export const queue = [1, 2];'],
+        'src/b.ts': ['export const queue = [2, 3];'],
+      });
+      const dbPath = join(root, 'index.db');
+      evidenceFixtureDb(dbPath)
+        .document(1, 'typescript', 'src/a.ts')
+        .document(2, 'typescript', 'src/b.ts')
+        .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`a.ts`/queue.', 'queue', SymbolInformation_Kind.Variable)
+        .symbol(2, 'scip-typescript npm fixture 1.0.0 src/`b.ts`/queue.', 'queue', SymbolInformation_Kind.Variable)
+        .definition(1, 1, 1, 0, 0, 0, 27)
+        .definition(2, 2, 2, 0, 0, 0, 27)
+        .write();
+
+      const config: ScipQueryConfig = { projectRoot: root, dbPath, indexPath: join(root, 'index.scip') };
+      const tsDb = new ScipDatabase(config);
+      try {
+        expect(twinDrift(tsDb, { includeHomonyms: true })).toHaveLength(0);
+      } finally {
+        tsDb.close();
       }
     } finally {
       rmSync(root, { recursive: true, force: true });

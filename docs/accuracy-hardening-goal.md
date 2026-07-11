@@ -1,7 +1,7 @@
 # Accuracy Hardening and Health Certification Roadmap
 
 Date: 2026-07-10
-Status: Active; TypeScript dead-code certified, Rust dead-code hardened but insufficiently evidenced
+Status: Active; TypeScript dead-code, four factual detectors, and three similarity relationships certified; Rust dead-code hardened but insufficiently evidenced
 
 ## Goal
 
@@ -260,11 +260,13 @@ active program above.
 
 ## Immediate Next Slice
 
-Resume Phase 3 with the most directly derived TypeScript families: dependency
-cycles, exact duplicate bodies, raw complexity measurements, unused imports,
-and unused parameters. In parallel with later corpus acquisition, renew Rust
-`dead` against additional repositories or historical commits until its sparse
-post-hardening finding frame can satisfy the statistical evidence gates.
+Continue Phase 3 with TypeScript architecture and framework signals: `co-change`,
+`doc-drift`, wrapper and passthrough candidates, stale abstractions, extraction
+and locality candidates, then React and Vue duplication/pressure analyzers.
+Expand targeted corpus or historical cases for the factual and similarity
+detectors that remain insufficiently evidenced. In parallel, renew Rust `dead`
+against additional repositories or historical commits until its sparse
+post-hardening frame satisfies the same statistical gates.
 
 ## Progress — 2026-07-10
 
@@ -296,6 +298,29 @@ one-repository finding sample are too small for certification. Rust `dead`
 therefore remains insufficiently evidenced and must not be presented as a
 public actionable metric. Three positive fixtures protect private-library and
 binary-only recall while the corpus is expanded.
+
+The TypeScript factual-detector campaign is complete:
+[`2026-07-10-typescript-factual-detectors.md`](./validation/2026-07-10-typescript-factual-detectors.md).
+`unused-imports` (59/59), `duplicate-bodies` (40/40), raw `complexity`
+(40/40), and `redundant-reexports` (40/40) are certified under their narrow
+fact rules. `unused-params`, `cycles`, `isolated`, `not-implemented`,
+`decorative-checkers`, and `test-quality` were audited and hardened but remain
+insufficiently evidenced because their surviving real-repository frames lack
+the required row count or repository breadth. The campaign removed import-use,
+ambient dependency-edge, framework-contract, re-export-attribution,
+delegated-checker, and implicit-test-assertion false-positive archetypes.
+
+The TypeScript general-similarity campaign is also complete:
+[`2026-07-10-typescript-similarity-detectors.md`](./validation/2026-07-10-typescript-similarity-detectors.md).
+The `similar`, `similar-files`, and `similar-signatures` relationship claims are
+certified at 36/36, 40/40, and 40/40 valid rows across four repositories.
+`similar-chains` is qualified because its correct 40/40 sample came from a
+bounded 500-path input frame, and none of its sampled consolidation advice was
+actionable. `twin-drift` is qualified at 37/40 (92.5%) after constant,
+near-name, test-helper, and convention-only filtering. `recent-duplicates` is
+8/8 after generic React-plumbing hardening but remains insufficiently
+evidenced. The campaign now records factual relationship validity separately
+from recommendation utility.
 
 ## Program Acceptance Criteria
 

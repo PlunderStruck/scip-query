@@ -24,6 +24,39 @@ describe('cycles', () => {
       expect(truncated.maxDepth).toBe(1);
     });
   });
+
+  it('does not turn ordinary cross-file symbol mentions into import cycles', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-query-ambient-cycle-'));
+    try {
+      const dbPath = join(root, 'index.db');
+      writeFixtureFiles(root, {
+        'src/a.ts': 'declare global { interface Window { fromA?: string } }\n',
+        'src/b.ts': 'declare global { interface Window { fromB?: string } }\n',
+      });
+      evidenceFixtureDb(dbPath)
+        .document(1, 'typescript', 'src/a.ts')
+        .document(2, 'typescript', 'src/b.ts')
+        .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`a.ts`/Window#', 'Window', 11)
+        .symbol(2, 'scip-typescript npm fixture 1.0.0 src/`b.ts`/Window#', 'Window', 11)
+        .definition(1, 1, 1, 0, 0, 0, 1)
+        .definition(2, 2, 2, 0, 0, 0, 1)
+        .chunk(1, 1, 0, 0)
+        .chunk(2, 2, 0, 0)
+        .mention(1, 1, 1)
+        .mention(2, 2, 1)
+        .mention(1, 2, 0)
+        .mention(2, 1, 0)
+        .write();
+      const db = new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') });
+      try {
+        expect(cycleSummary(db, { maxDepth: 5 }).cycles).toEqual([]);
+      } finally {
+        db.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
 
 function withCycleFixture(run: (db: ScipDatabase) => void): void {

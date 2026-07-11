@@ -41,11 +41,16 @@ const FILE_DEP_GRAPH_CACHE = createPerDbCache<string, Map<string, Set<string>>>(
 // scip-query: ignore-extract — this builds the file dependency graph from
 // SCIP edges plus source-import fallback edges; the two sources intentionally
 // share one normalization path.
-export function buildFileDepGraph(db: ScipDatabase, scope?: string): Map<string, Set<string>> {
-  return FILE_DEP_GRAPH_CACHE.get(db, scope ?? '', () => {
+export function buildFileDepGraph(
+  db: ScipDatabase,
+  scope?: string,
+  opts: { scipEdges?: 'all-references' | 'imports-only' } = {},
+): Map<string, Set<string>> {
+  const scipEdges = opts.scipEdges ?? 'all-references';
+  return FILE_DEP_GRAPH_CACHE.get(db, `${scipEdges}:${scope ?? ''}`, () => {
     const indexedFiles = new Set(indexedDocumentPaths(db, { includeIgnored: false }));
     const projectFingerprint = projectEvidenceFingerprint(db);
-    const cacheKey = fileDependencyGraphCacheKey(scope);
+    const cacheKey = fileDependencyGraphCacheKey(scope, scipEdges);
     let sourceFileCount = 0;
     let sourceEdgeCount = 0;
     let sourceImportFingerprintValue: string | null = null;
@@ -89,7 +94,7 @@ export function buildFileDepGraph(db: ScipDatabase, scope?: string): Map<string,
         profileSpan(
           'file-dep-graph.scip-edges',
           () => {
-            for (const edge of scipFileDepEdges(db, scope)) {
+            for (const edge of scipFileDepEdges(db, scope, scipEdges)) {
               scipEdgeCount += 1;
               addEdge(edge.from_file, edge.to_file);
             }
@@ -154,8 +159,10 @@ function sourceImportFingerprint(files: readonly string[], edges: readonly Sourc
   return sha256Hex(JSON.stringify({ files, edges: sortedEdges }));
 }
 
-function fileDependencyGraphCacheKey(scope: string | undefined): string {
-  return scope ?? '<all>';
+function fileDependencyGraphCacheKey(scope: string | undefined, scipEdges: 'all-references' | 'imports-only'): string {
+  // v2 excludes ordinary cross-file symbol references from dependency edges;
+  // keep it out of v1's durable cache even when the project fingerprint is unchanged.
+  return `edge-mode-v2:${scipEdges}:${scope ?? '<all>'}`;
 }
 
 function graphPayloadFromGraph(graph: Map<string, Set<string>>): Array<[string, string[]]> {
@@ -195,9 +202,14 @@ function isGraphPayloadEntry(value: unknown): value is [string, string[]] {
   );
 }
 
-function scipFileDepEdges(db: ScipDatabase, scope?: string): Array<{ from_file: string; to_file: string }> {
+function scipFileDepEdges(
+  db: ScipDatabase,
+  scope: string | undefined,
+  edgeMode: 'all-references' | 'imports-only',
+): Array<{ from_file: string; to_file: string }> {
   const scopeFilter = scope ? `AND d1.relative_path LIKE ?` : '';
   const scopeParams = scope ? [`%${scope}%`] : [];
+  const roleFilter = edgeMode === 'imports-only' ? 'AND m.role = 2' : 'AND m.role != 1';
   return db.all<{ from_file: string; to_file: string }>(
     `SELECT DISTINCT
       d1.relative_path AS from_file,
@@ -213,9 +225,9 @@ function scipFileDepEdges(db: ScipDatabase, scope?: string): Array<{ from_file: 
       WHERE m2.role = 1
       GROUP BY m2.symbol_id
     ) sym_def ON sym_def.symbol_id = gs.id
-    JOIN documents d2 ON sym_def.document_id = d2.id
-    WHERE d1.id != d2.id
-	      AND m.role != 1
+      JOIN documents d2 ON sym_def.document_id = d2.id
+      WHERE d1.id != d2.id
+	      ${roleFilter}
 	      ${db.pathExclusionsFor('d1', 'd2')}
 	      ${scopeFilter}`,
     ...scopeParams,

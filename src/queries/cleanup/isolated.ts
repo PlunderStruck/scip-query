@@ -3,6 +3,7 @@ import { classifyFile } from '../../analysis/file-classifier.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { profileSpan } from '../../instrumentation/profile.js';
+import { isFrameworkContractCallable } from './callable-contracts.js';
 import { semanticCallerMap } from '../../semantic/shared-primitives.js';
 import { applyScanLimit, definitionLoc } from '../query-utils.js';
 
@@ -39,6 +40,7 @@ export function isolated(
           scope,
           minLoc,
           excludeEntrySurfaces: true,
+          excludeRootedSymbols: true,
           excludeRustTraitImplMembers: true,
           includeSuppressed: true,
           requireFunctionLikeSymbol: true,
@@ -46,8 +48,9 @@ export function isolated(
         }),
         scanLimit,
       );
-      candidateCount = result.length;
-      return result;
+      const contractSafeCandidates = result.filter((definition) => !isFrameworkContractCallable(db, definition));
+      candidateCount = contractSafeCandidates.length;
+      return contractSafeCandidates;
     },
     () => ({ definitions: candidateCount }),
   );

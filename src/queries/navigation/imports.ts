@@ -56,15 +56,35 @@ export function unusedImports(
   filePattern: string,
   opts: { semantic?: boolean } = {},
 ): UnusedImportResult[] {
-  return (
-    loadFileImportEntries(db, filePattern, opts)
-      ?.filter((entry) => !entry.used)
-      .map((entry) => ({
-        symbol: entry.symbol,
-        shortName: entry.shortName,
-        importedIn: entry.importer,
-      })) ?? []
-  );
+  const importer = resolveIndexedFile(db, filePattern);
+  if (!importer) return [];
+
+  // Import usage is a property of the local binding, not the target symbol.
+  // SCIP import-role rows identify the target definition, but some indexers do
+  // not attach later local-binding references to that same symbol. Prefer the
+  // semantic/source binding model here; `imports()` still uses graph identity
+  // when callers need definition provenance.
+  const sourceEntries = sourceFileImportEntries(db, importer);
+  const semanticEntries = opts.semantic === false ? null : semanticFileImportEntries(db, importer);
+  const entries = semanticEntries ? mergeImportUsageEntries(semanticEntries, sourceEntries) : sourceEntries;
+  return entries
+    .filter((entry) => !entry.used)
+    .map((entry) => ({
+      symbol: entry.symbol,
+      shortName: entry.shortName,
+      importedIn: entry.importer,
+    }));
+}
+
+function mergeImportUsageEntries(semantic: ImportEntry[], source: ImportEntry[]): ImportEntry[] {
+  const sourceByBinding = new Map(source.map((entry) => [entry.shortName, entry]));
+  const merged = semantic.map((entry) => {
+    const sourceEntry = sourceByBinding.get(entry.shortName);
+    sourceByBinding.delete(entry.shortName);
+    return sourceEntry ? { ...entry, used: entry.used || sourceEntry.used } : entry;
+  });
+  merged.push(...sourceByBinding.values());
+  return merged;
 }
 
 interface ImportEntry {

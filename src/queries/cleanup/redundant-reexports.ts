@@ -2,8 +2,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { ProjectIndex } from '../../core/project-index.js';
 import { isLiveBarrel } from '../../analysis/file-classifier.js';
 import { getReExports, getSourceExports, getSourceImports } from '../../language-parsers/index.js';
-import type { IndexedDefinition } from '../../domain/types.js';
-import { leafSuffix, shortenSymbol } from '../../symbols/symbol-parser.js';
+import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { getSourceText } from '../../source/source-text.js';
 import { isPackageSurfaceFile } from '../../analysis/package-surface.js';
@@ -213,10 +212,24 @@ function sourceRedundantReexportsForBarrel(
 ): RedundantReexport[] {
   const sourceExportRows = getSourceExports(db, barrelPath)
     .filter((entry) => entry.sourcePath && !db.isIgnored(entry.sourcePath))
-    .flatMap((entry) => sourceRedundantReexportForExport(db, index, barrelPath, entry.sourcePath!));
+    .flatMap((entry) =>
+      sourceRedundantReexportForExport(db, index, barrelPath, entry.sourcePath!, [
+        exportSpecifierName(entry.specifier),
+      ]),
+    );
   const reExportRows = getReExports(db, barrelPath)
     .filter((entry) => entry.sourcePath && !db.isIgnored(entry.sourcePath))
-    .flatMap((entry) => sourceRedundantReexportForExport(db, index, barrelPath, entry.sourcePath!));
+    .flatMap((entry) =>
+      sourceRedundantReexportForExport(
+        db,
+        index,
+        barrelPath,
+        entry.sourcePath!,
+        entry.kind === 'named' && entry.names.length > 0
+          ? entry.names
+          : [entry.kind === 'star' ? `* from ${entry.sourcePath}` : `* namespace from ${entry.sourcePath}`],
+      ),
+    );
   return [...sourceExportRows, ...reExportRows];
 }
 
@@ -225,20 +238,32 @@ function sourceRedundantReexportForExport(
   index: ProjectIndex,
   barrelPath: string,
   sourcePath: string,
+  exportedNames: readonly string[],
 ): RedundantReexport[] {
-  const representative = representativeExportSymbol(index, sourcePath);
-  if (!representative) return [];
-  return [
-    {
+  const definitions = index.definitionsForFile(sourcePath);
+  return exportedNames.map((exportedName) => {
+    const definition = definitions.find((candidate) => candidate.leaf === exportedName);
+    return {
       barrelFile: barrelPath,
-      symbol: representative.symbol,
-      shortName: shortenSymbol(representative.symbol),
+      symbol: definition?.symbol ?? `source-reexport:${barrelPath}:${exportedName}`,
+      shortName: definition ? shortenSymbol(definition.symbol) : exportedName,
       originalFile: sourcePath,
       barrelConsumers: 0,
       directConsumers: countDirectImporters(db, sourcePath, barrelPath),
       ...redundantReexportCaveat(db, barrelPath),
-    },
-  ];
+    };
+  });
+}
+
+function exportSpecifierName(specifier: string): string {
+  return (
+    specifier
+      .split('::')
+      .at(-1)
+      ?.split('/')
+      .at(-1)
+      ?.replace(/\.[^.]+$/, '') ?? specifier
+  );
 }
 
 function redundantReexportCaveat(
@@ -277,11 +302,6 @@ function countDirectImporters(db: ScipDatabase, targetPath: string, excludedPath
   }
 
   return importers.size;
-}
-
-function representativeExportSymbol(index: ProjectIndex, sourcePath: string): IndexedDefinition | null {
-  const definitions = index.definitionsForFile(sourcePath);
-  return definitions.find((definition) => leafSuffix(definition.symbol) === 'method') ?? definitions[0] ?? null;
 }
 
 function dedupeReexports(rows: RedundantReexport[]): RedundantReexport[] {

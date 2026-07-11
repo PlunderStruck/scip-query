@@ -45,6 +45,14 @@ describe('decorative-checkers', () => {
         '  return true;',
         '}',
       ],
+      'src/capability.ts': ['export function hasNativeGit(): boolean {', '  return true;', '}'],
+      'src/effect-failure.ts': [
+        'export function assertStable(input: unknown) {',
+        '  return Effect.gen(function* () {',
+        '    if (!input) yield* Effect.fail(new Error("invalid"));',
+        '  });',
+        '}',
+      ],
     });
 
     const dbPath = join(tempDir, 'index.db');
@@ -54,6 +62,8 @@ describe('decorative-checkers', () => {
       .document(3, 'typescript', 'src/predicate-expr.ts')
       .document(4, 'typescript', 'src/delegator.ts')
       .document(5, 'typescript', 'src/config-gated.ts')
+      .document(6, 'typescript', 'src/capability.ts')
+      .document(7, 'typescript', 'src/effect-failure.ts')
       .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`constant-true.ts`/validateAlwaysOk().', 'validateAlwaysOk', 12)
       .symbol(2, 'scip-typescript npm fixture 1.0.0 src/`throwing.ts`/validateRealCheck().', 'validateRealCheck', 12)
       .symbol(3, 'scip-typescript npm fixture 1.0.0 src/`predicate-expr.ts`/isValidShape().', 'isValidShape', 12)
@@ -63,6 +73,8 @@ describe('decorative-checkers', () => {
         'validateViaDelegate',
         12,
       )
+      .symbol(6, 'scip-typescript npm fixture 1.0.0 src/`capability.ts`/hasNativeGit().', 'hasNativeGit', 12)
+      .symbol(7, 'scip-typescript npm fixture 1.0.0 src/`effect-failure.ts`/assertStable().', 'assertStable', 12)
       .symbol(
         5,
         'scip-typescript npm fixture 1.0.0 src/`config-gated.ts`/validateWhenEnabled().',
@@ -74,6 +86,8 @@ describe('decorative-checkers', () => {
       .definition(3, 3, 3, 0, 0, 2, 1)
       .definition(4, 4, 4, 1, 0, 3, 1)
       .definition(5, 5, 5, 0, 0, 4, 1)
+      .definition(6, 6, 6, 0, 0, 2, 1)
+      .definition(7, 7, 7, 0, 0, 4, 1)
       .write();
 
     db = new ScipDatabase({ dbPath, projectRoot, indexPath: join(tempDir, 'index.scip') });
@@ -109,6 +123,14 @@ describe('decorative-checkers', () => {
   it('does not fire when an early constant-true exit is followed by a real failure path', () => {
     const findings = decorativeCheckers(db);
     expect(findings.some((f) => f.shortName.includes('validateWhenEnabled'))).toBe(false);
+  });
+
+  it('does not flag a zero-input capability predicate that is intentionally constant', () => {
+    expect(decorativeCheckers(db).some((finding) => finding.shortName.includes('hasNativeGit'))).toBe(false);
+  });
+
+  it('does not flag a checker whose nested Effect call can fail', () => {
+    expect(decorativeCheckers(db).some((finding) => finding.shortName.includes('assertStable'))).toBe(false);
   });
 });
 

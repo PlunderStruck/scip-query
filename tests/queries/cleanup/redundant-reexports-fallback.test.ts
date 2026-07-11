@@ -26,6 +26,12 @@ describe('redundant re-export fallbacks', () => {
       'src/analysis_status_exports.rs': ['pub use crate::analysis_status_core::normalize_status_label;', ''],
       'src/public-api.ts': ["export { publicUtility } from './public-utility.ts';", ''],
       'src/public-utility.ts': ['export function publicUtility(): string {', "  return 'ok';", '}', ''],
+      'src/named-api.ts': ["export { secondUtility } from './multi.ts';", ''],
+      'src/multi.ts': [
+        "export function firstUtility(): string { return 'first'; }",
+        "export function secondUtility(): string { return 'second'; }",
+        '',
+      ],
       'src/index.ts': ["import { boot } from './boot.js';", '', 'boot();', ''],
       'src/boot.ts': ['export function boot(): void {', '  // startup work', '}', ''],
     });
@@ -45,6 +51,8 @@ describe('redundant re-export fallbacks', () => {
       .document(4, 'typescript', 'src/boot.ts')
       .document(5, 'typescript', 'src/public-api.ts')
       .document(6, 'typescript', 'src/public-utility.ts')
+      .document(7, 'typescript', 'src/named-api.ts')
+      .document(8, 'typescript', 'src/multi.ts')
       .symbol(
         1,
         'scip-rust cargo fixture crate/src/analysis_status_core.rs/normalize_status_label().',
@@ -53,9 +61,13 @@ describe('redundant re-export fallbacks', () => {
       )
       .symbol(2, 'scip-typescript npm fixture 1.0.0 src/`boot.ts`/boot().', 'boot', 12)
       .symbol(3, 'scip-typescript npm fixture 1.0.0 src/`public-utility.ts`/publicUtility().', 'publicUtility', 12)
+      .symbol(4, 'scip-typescript npm fixture 1.0.0 src/`multi.ts`/firstUtility().', 'firstUtility', 12)
+      .symbol(5, 'scip-typescript npm fixture 1.0.0 src/`multi.ts`/secondUtility().', 'secondUtility', 12)
       .definition(1, 1, 1, 0, 0, 2, 1)
       .definition(2, 4, 2, 0, 0, 2, 1)
       .definition(3, 6, 3, 0, 0, 2, 1)
+      .definition(4, 8, 4, 0, 0, 0, 1)
+      .definition(5, 8, 5, 1, 0, 1, 1)
       .chunk(1, 3, 0, 3)
       .mention(1, 2, 8)
       .write();
@@ -113,5 +125,15 @@ describe('redundant re-export fallbacks', () => {
         }),
       ]),
     );
+  });
+
+  it('attributes named source re-exports to the exported binding instead of an arbitrary module member', () => {
+    const rows = redundantReexports(db).filter((row) => row.barrelFile === 'src/named-api.ts');
+    expect(rows).toEqual([
+      expect.objectContaining({
+        shortName: 'src:multi:secondUtility()',
+        originalFile: 'src/multi.ts',
+      }),
+    ]);
   });
 });

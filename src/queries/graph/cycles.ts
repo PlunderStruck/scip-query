@@ -35,7 +35,7 @@ export function cycles(db: ScipDatabase, opts: { scope?: string; maxDepth?: numb
 
 export function cycleSummary(db: ScipDatabase, opts: { scope?: string; maxDepth?: number } = {}): CycleSummary {
   const { scope, maxDepth = 10 } = opts;
-  const graph = buildFileDepGraph(db, scope);
+  const graph = buildFileDepGraph(db, scope, { scipEdges: 'imports-only' });
 
   // DFS cycle detection
   const allCycles: CycleResult[] = [];

@@ -9,6 +9,7 @@ import { PUBLIC_QUERY_ENTRIES, PUBLIC_QUERY_SOURCE_PATHS } from '../../src/queri
 
 const PRIVATE_QUERY_MODULES = [
   'boundary-evidence',
+  'callable-contracts',
   'coverage-contracts',
   'dead-exclusions',
   'diff-gate-baseline-policy',
@@ -30,6 +31,7 @@ const PRIVATE_QUERY_MODULES = [
 
 const PRIVATE_QUERY_SOURCE_PATHS = {
   'boundary-evidence': 'src/queries/cleanup/boundary-evidence.ts',
+  'callable-contracts': 'src/queries/cleanup/callable-contracts.ts',
   'coverage-contracts': 'src/queries/cleanup/coverage-contracts.ts',
   'dead-exclusions': 'src/queries/cleanup/dead-exclusions.ts',
   'diff-gate-baseline-policy': 'src/queries/impact/diff-gate-baseline-policy.ts',
