@@ -21,6 +21,8 @@ import { resolveScipBinary, tryInstallScipCli } from '../runtime/scip-cli.js';
 import { isProcessAlive } from '../runtime/process-liveness.js';
 import type { LastRefreshMetadata, RefreshTrigger, SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
+import { ScipDatabase } from '../storage/db.js';
+import { seedTypeScriptReferenceFragments } from '../semantic/typescript/reference-fragment-shadow.js';
 import { auxiliaryDocumentsAugmentationStage } from './augment.js';
 import {
   collectAffectedSetShadowRecord,
@@ -403,6 +405,7 @@ function reuseExistingIndexIfPossible(opts: {
     dbPath: opts.paths.outputDb,
     onStatus: opts.onStatus,
   });
+
   const durationMs = Date.now() - opts.start;
   const lastRefresh = buildLastRefresh({
     trigger: opts.opts.trigger,
@@ -1090,6 +1093,31 @@ function publishFreshReindexArtifacts(
     dbPath: opts.tempPaths.tempOutputDb,
     onStatus: opts.onStatus,
   });
+
+  if (sqliteMaterialization.mode === 'incremental' && incrementalTypeScript) {
+    const candidateDb = new ScipDatabase({
+      projectRoot: opts.projectRoot,
+      dbPath: opts.tempPaths.tempOutputDb,
+      indexPath: opts.tempPaths.tempOutputScip,
+    });
+    const evidenceDb = new ScipDatabase({
+      projectRoot: opts.projectRoot,
+      dbPath: opts.paths.outputDb,
+      indexPath: opts.paths.outputScip,
+    });
+    try {
+      const written = seedTypeScriptReferenceFragments(
+        candidateDb,
+        opts.fingerprint,
+        incrementalTypeScript.referenceFragmentsByFile,
+        evidenceDb,
+      );
+      opts.onStatus(`Cached exact TypeScript reference fragments for ${written} affected document(s).`);
+    } finally {
+      candidateDb.close();
+      evidenceDb.close();
+    }
+  }
 
   const previousSnapshot = previousProjectInputSnapshot(opts.paths.metaPath);
   const shadowRecord =

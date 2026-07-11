@@ -142,7 +142,7 @@ Machine measurements are appended to
 
 ### 3. Return exact reference fragments with affected TypeScript documents
 
-- [ ] **Files:** TypeScript document emitter, index protocol/service/requester,
+- [x] **Files:** TypeScript document emitter, index protocol/service/requester,
       reference-fragment product, incremental coordinator, and focused tests.
 - **Source:** `scip-query plan-context tryMaterializeTypeScriptIncrementalIndex
 --json` and `scip-query code referenceFragmentsFromDefinitionMap`.

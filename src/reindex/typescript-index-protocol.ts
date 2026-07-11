@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import type { SemanticReferenceFragment } from '../semantic/types.js';
 
-export const TYPESCRIPT_INDEX_PROTOCOL_VERSION = 1;
+export const TYPESCRIPT_INDEX_PROTOCOL_VERSION = 2;
 export const TYPESCRIPT_INDEX_MAILBOX_DIRECTORY = 'typescript-index';
 
 export interface TypeScriptIndexDocumentRequest {
@@ -28,6 +29,7 @@ export interface TypeScriptIndexResponseFragment {
   bytesBase64: string | null;
   occurrences: number;
   symbols: number;
+  referenceFragments: SemanticReferenceFragment[];
 }
 
 export interface TypeScriptIndexDocumentResponse {

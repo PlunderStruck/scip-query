@@ -46,6 +46,11 @@ describe('TypeScriptDocumentEmitter', () => {
     for (const fragment of initial.fragments) {
       expect(Buffer.from(fragment.bytes ?? [])).toEqual(initialOracle.get(fragment.relativePath));
     }
+    const consumerReferences = initial.fragments.find(
+      (fragment) => fragment.relativePath === 'src/b.ts',
+    )?.referenceFragments;
+    expect(consumerReferences?.length).toBeGreaterThan(0);
+    expect(consumerReferences?.every((fragment) => fragment.location.file === 'src/b.ts')).toBe(true);
 
     writeFileSync(
       join(root, 'src/a.ts'),

@@ -43,3 +43,5 @@
 {"ts":1783802572885,"check":"doc-reference","findingId":"SQ83CF165F67A2","event":"resolved","commit":"e0f989f7ffd3e09bb4e9c0ed6b74c198a045eb04"}
 {"ts":1783802572885,"check":"doc-reference","findingId":"SQ9A7B74C58953","event":"resolved","commit":"e0f989f7ffd3e09bb4e9c0ed6b74c198a045eb04"}
 {"ts":1783803198029,"check":"doc-reference","findingId":"SQ812CEAB08CC1","event":"caught","commit":"9c24b3bce856ed04e55ca69ed94686b09355c5f1"}
+{"ts":1783814100247,"check":"twin-partner","findingId":"SQ8A83ABE34282","event":"caught","commit":"9a564e46e5995bbb4723ce3b2ce0bd2b8d2ab79c","symbol":"scip-typescript npm scip-query 0.15.0 src/reindex/`typescript-index-service.ts`/TypeScriptIndexServiceHost#handle()."}
+{"ts":1783814100247,"check":"doc-reference","findingId":"SQD9D3BF7F86CA","event":"caught","commit":"9a564e46e5995bbb4723ce3b2ce0bd2b8d2ab79c"}

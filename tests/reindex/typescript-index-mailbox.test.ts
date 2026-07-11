@@ -137,6 +137,27 @@ describe('TypeScript index service mailbox', () => {
     });
     expect(() => omitted.request(indexRequest('producer'))).toThrow('omitted or added an affected document');
 
+    const missingReferences = requesterWithRuntime(fixture, {
+      now: () => NOW,
+      randomId: () => 'missing-references',
+      isProcessAlive: () => true,
+      sleep: () => {
+        writeJsonAtomic(join(paths.responseDir, 'missing-references.json'), {
+          ok: true,
+          protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
+          id: 'missing-references',
+          baseGeneration: 'base',
+          response: {
+            producerIdentity: 'producer',
+            cold: false,
+            durationMs: 1,
+            fragments: [{ relativePath: 'src/a.ts', bytesBase64: null, occurrences: 0, symbols: 0 }],
+          },
+        });
+      },
+    });
+    expect(() => missingReferences.request(indexRequest('producer'))).toThrow('invalid fragment');
+
     const statePath = watchServicePaths(fixture.cacheDir).statePath;
     const crashed = requesterWithRuntime(fixture, {
       now: () => NOW,

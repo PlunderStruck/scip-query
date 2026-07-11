@@ -31,6 +31,7 @@ import { publishedTypeScriptIndexGeneration } from './typescript-index-protocol.
 import { TypeScriptIndexRequester } from './typescript-index-requester.js';
 import { classifyProjectInputPath } from './project-files.js';
 import { discoverTypeScriptProjectRoots } from './typescript-projects.js';
+import type { SemanticReferenceFragment } from '../semantic/types.js';
 
 export interface TypeScriptIncrementalEligibilityInput {
   projectMode: TypeScriptProjectMode | undefined;
@@ -88,6 +89,7 @@ export interface MaterializedTypeScriptIncrementalIndex {
   manifest: ProjectChangeManifest;
   plan: AffectedFilePlan;
   projectFileCount: number;
+  referenceFragmentsByFile: Map<string, SemanticReferenceFragment[]>;
   timings: {
     runtimeMs: number;
     graphMs: number;
@@ -298,6 +300,9 @@ export function tryMaterializeTypeScriptIncrementalIndex(
       manifest: eligibility.manifest,
       plan: eligibility.plan,
       projectFileCount: projectFiles.length,
+      referenceFragmentsByFile: new Map(
+        response.fragments.map((fragment) => [fragment.relativePath, fragment.referenceFragments]),
+      ),
       timings: {
         runtimeMs,
         graphMs,

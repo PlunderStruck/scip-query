@@ -81,13 +81,13 @@ export function materializeTypeScriptOverlay(input: MaterializeTypeScriptOverlay
   if (!manifest) throw new Error('TypeScript overlay generation is unavailable');
   const fragments = manifest.overlays.map((record): TypeScriptDocumentFragment => {
     if (record.blobHash === null) {
-      return { relativePath: record.relativePath, bytes: null, occurrences: 0, symbols: 0 };
+      return { relativePath: record.relativePath, bytes: null, occurrences: 0, symbols: 0, referenceFragments: [] };
     }
     const bytes = readFileSync(join(overlayRoot(input.cacheDir), 'blobs', `${record.blobHash}.scipdoc`));
     if (bytes.byteLength !== record.byteLength || sha256(bytes) !== record.blobHash) {
       throw new Error(`TypeScript overlay blob is corrupt: ${record.relativePath}`);
     }
-    return { relativePath: record.relativePath, bytes, occurrences: 0, symbols: 0 };
+    return { relativePath: record.relativePath, bytes, occurrences: 0, symbols: 0, referenceFragments: [] };
   });
   return assembleTypeScriptIndex({
     packageVersion: input.packageVersion,

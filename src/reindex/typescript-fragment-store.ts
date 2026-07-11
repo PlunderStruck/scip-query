@@ -153,6 +153,7 @@ export function seedTypeScriptFragmentGeneration(
           bytes: documentBytes,
           occurrences: document.occurrences.length,
           symbols: document.symbols.length,
+          referenceFragments: [],
         },
         documentIdentity,
       ),

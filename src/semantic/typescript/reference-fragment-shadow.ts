@@ -7,6 +7,10 @@ import type { SemanticReference, SemanticReferenceFragment } from '../types.js';
 import { indexedTypeScriptFiles, typeScriptSemanticIdentityForFile } from './semantic-identity-context.js';
 import { isTypeScriptLike } from './source-kinds.js';
 import { assembleReferenceFragments, compareReferenceFragmentMaps } from './reference-fragments.js';
+import { createTypeScriptSemanticIdentityBuilder } from './semantic-identity.js';
+import { typeScriptSemanticEngineIdentity } from './ts-morph-runtime.js';
+import type { ProjectInputSnapshot } from '../../reindex/affected-set.js';
+import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
 
 export const TYPESCRIPT_REFERENCE_FRAGMENT_SCHEMA = 'typescript-reference-fragment-v2';
 
@@ -36,6 +40,34 @@ const REFERENCE_FRAGMENT_PRODUCT = createFileEvidenceProduct<SemanticReferenceFr
   serialize: (value) => JSON.stringify(value),
   deserialize: parseReferenceFragments,
 });
+
+export function seedTypeScriptReferenceFragments(
+  identityDb: ScipDatabase,
+  snapshot: ProjectInputSnapshot,
+  fragmentsByFile: ReadonlyMap<string, readonly SemanticReferenceFragment[]>,
+  evidenceDb: ScipDatabase = identityDb,
+): number {
+  const projectFiles = indexedTypeScriptFiles(identityDb);
+  const builder = createTypeScriptSemanticIdentityBuilder({
+    projectFiles,
+    snapshot,
+    graph: buildFileDepGraph(identityDb),
+    engineIdentity: typeScriptSemanticEngineIdentity(),
+  });
+  const writes = [...fragmentsByFile].map(([relativePath, fragments]) => ({
+    relativePath,
+    contentHash: builder.identityFor(relativePath, TYPESCRIPT_REFERENCE_FRAGMENT_SCHEMA).key,
+    value: [...fragments],
+  }));
+  if (writes.some((write) => write.contentHash === null)) {
+    throw new Error('TypeScript reference fragment identity is unavailable for an affected document.');
+  }
+  REFERENCE_FRAGMENT_PRODUCT.writeBatch(
+    evidenceDb,
+    writes.map((write) => ({ ...write, contentHash: write.contentHash! })),
+  );
+  return writes.length;
+}
 
 export function recordTypeScriptReferenceFragmentShadow(
   db: ScipDatabase,

@@ -80,6 +80,7 @@ export class TypeScriptIndexServiceHost {
           bytesBase64: fragment.bytes === null ? null : Buffer.from(fragment.bytes).toString('base64'),
           occurrences: fragment.occurrences,
           symbols: fragment.symbols,
+          referenceFragments: fragment.referenceFragments,
         })),
       };
     } catch (error) {

@@ -180,6 +180,8 @@ function decodeDocumentResponse(value: unknown, producerIdentity: string): Reque
       typeof fragment.symbols !== 'number' ||
       !Number.isInteger(fragment.symbols) ||
       fragment.symbols < 0 ||
+      !Array.isArray(fragment.referenceFragments) ||
+      !fragment.referenceFragments.every(isReferenceFragment) ||
       paths.has(fragment.relativePath)
     ) {
       throw new Error('TypeScript index service wrote an invalid fragment.');
@@ -191,6 +193,7 @@ function decodeDocumentResponse(value: unknown, producerIdentity: string): Reque
       bytes,
       occurrences: fragment.occurrences,
       symbols: fragment.symbols,
+      referenceFragments: fragment.referenceFragments,
     };
   });
   return {
@@ -199,6 +202,18 @@ function decodeDocumentResponse(value: unknown, producerIdentity: string): Reque
     durationMs: response.durationMs,
     fragments,
   };
+}
+
+function isReferenceFragment(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const fragment = value as { targetSymbol?: unknown; location?: Record<string, unknown> };
+  return (
+    typeof fragment.targetSymbol === 'string' &&
+    !!fragment.location &&
+    typeof fragment.location.file === 'string' &&
+    Number.isInteger(fragment.location.line) &&
+    Number.isInteger(fragment.location.column)
+  );
 }
 
 function decodeBase64(value: string): Uint8Array {

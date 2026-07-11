@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import type * as TypeScript from 'typescript';
+import type { SemanticReferenceFragment } from '../semantic/types.js';
 
 const require = createRequire(import.meta.url);
 
@@ -12,9 +13,15 @@ type TypeScriptModule = typeof TypeScript;
 
 interface ScipDocumentLike {
   relative_path: string;
-  occurrences: unknown[];
+  occurrences: ScipOccurrenceLike[];
   symbols: unknown[];
   serializeBinary(): Uint8Array;
+}
+
+interface ScipOccurrenceLike {
+  range: number[];
+  symbol: string;
+  symbol_roles: number;
 }
 
 interface ScipIndexLike {
@@ -82,6 +89,7 @@ export interface TypeScriptDocumentFragment {
   bytes: Uint8Array | null;
   occurrences: number;
   symbols: number;
+  referenceFragments: SemanticReferenceFragment[];
 }
 
 export interface TypeScriptDocumentEmitterStats {
@@ -376,7 +384,13 @@ export class TypeScriptDocumentEmitter {
     if (document.occurrences.length === 0) {
       this.fragments.delete(relativePath);
       this.stats.documentsRemoved += 1;
-      return { relativePath, bytes: null, occurrences: 0, symbols: document.symbols.length };
+      return {
+        relativePath,
+        bytes: null,
+        occurrences: 0,
+        symbols: document.symbols.length,
+        referenceFragments: [],
+      };
     }
     const bytes = document.serializeBinary();
     this.fragments.set(relativePath, bytes);
@@ -385,6 +399,7 @@ export class TypeScriptDocumentEmitter {
       bytes,
       occurrences: document.occurrences.length,
       symbols: document.symbols.length,
+      referenceFragments: referenceFragmentsFromDocument(relativePath, document),
     };
   }
 
@@ -396,6 +411,27 @@ export class TypeScriptDocumentEmitter {
       stats: this.snapshotStats(),
     };
   }
+}
+
+export function referenceFragmentsFromDocument(
+  relativePath: string,
+  document: Pick<ScipDocumentLike, 'occurrences'>,
+): SemanticReferenceFragment[] {
+  const fragments = new Map<string, SemanticReferenceFragment>();
+  for (const occurrence of document.occurrences) {
+    if (!occurrence.symbol || (occurrence.symbol_roles & 1) !== 0 || occurrence.range.length < 3) continue;
+    const line = occurrence.range[0];
+    const column = occurrence.range[1];
+    if (!Number.isInteger(line) || !Number.isInteger(column)) continue;
+    const fragment = { targetSymbol: occurrence.symbol, location: { file: relativePath, line, column } };
+    fragments.set(`${occurrence.symbol}\0${line}\0${column}`, fragment);
+  }
+  return [...fragments.values()].sort(
+    (left, right) =>
+      left.targetSymbol.localeCompare(right.targetSymbol) ||
+      left.location.line - right.location.line ||
+      left.location.column - right.location.column,
+  );
 }
 
 class CachedCompilerHost {
