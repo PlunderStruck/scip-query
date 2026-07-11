@@ -250,6 +250,6 @@ function nestedSourceCandidates(
   return matches;
 }
 
-function packagePath(packageRoot: string, relativePath: string): string {
+export function packagePath(packageRoot: string, relativePath: string): string {
   return packageRoot ? `${packageRoot}/${relativePath}` : relativePath;
 }

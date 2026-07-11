@@ -36,7 +36,7 @@ export interface DeadSymbolResult {
   symbol: string;
   shortName: string;
   sameFileRefs: number;
-  kind: 'dead-code' | 'file-internal';
+  kind: 'dead-code' | 'file-internal' | 'implicit-usage';
   implicitUsageReason?: string;
 }
 
@@ -44,18 +44,26 @@ export interface DeadCounts {
   total: number;
   deadCode: number;
   fileInternal: number;
+  implicitUsage: number;
   loc: number;
 }
 
 export interface DeadSummary {
   symbols: DeadSymbolResult[];
   counts: DeadCounts;
+  applicability: {
+    entrySurfaceExcluded: number;
+    externalRootExcluded: number;
+    implicitUsageSignals: number;
+  };
   totalCount: number;
   /** Symbols with zero references anywhere; verify before deleting */
   deadCodeCount: number;
   /** Symbols referenced only within their own file — no cross-file consumers.
    *  May be private helpers (fine) or forgotten exports (needs review). */
   fileInternalCount: number;
+  /** Symbols reached through traits, attributes, generated code, or reflection. */
+  implicitUsageCount: number;
   totalLoc: number;
 }
 
@@ -335,23 +343,35 @@ function deadSummary(db: ScipDatabase, rows: readonly DeadRow[]): DeadSummary {
   const symbols: DeadSymbolResult[] = [];
   let deadCodeCount = 0;
   let fileInternalCount = 0;
+  let implicitUsageCount = 0;
+  let entrySurfaceExcluded = 0;
+  let externalRootExcluded = 0;
   let totalLoc = 0;
 
   for (const row of rows) {
     if (db.isIgnored(row.relative_path)) continue;
-    if (isEntrySurface(db, row.relative_path)) continue;
-    if (isRootedSymbol(db, row.symbol, row.relative_path)) continue;
+    if (isEntrySurface(db, row.relative_path)) {
+      entrySurfaceExcluded++;
+      continue;
+    }
+    if (isRootedSymbol(db, row.symbol, row.relative_path)) {
+      externalRootExcluded++;
+      continue;
+    }
 
-    // dead-code: zero references anywhere (not even in same file); verify before deleting
-    // file-internal: referenced within same file but never cross-file —
-    //   may be a private helper (fine) or a forgotten export (needs review)
-    const kind = row.same_file_refs === 0 ? 'dead-code' : 'file-internal';
-    if (kind === 'dead-code') deadCodeCount++;
-    else fileInternalCount++;
-    totalLoc += row.loc;
     const usageClassification = classifyExclusion(row.relative_path, row.start_line, row.symbol, row.parent_type_name);
     const implicitUsageReason =
       usageClassification?.disposition === 'implicit-usage' ? usageClassification.reason : undefined;
+    // dead-code: zero references anywhere (not even in same file); verify before deleting
+    // file-internal: referenced within same file but never cross-file —
+    //   may be a private helper (fine) or a forgotten export (needs review)
+    // implicit-usage: a trait, macro, attribute, ABI, or reflection boundary
+    //   provides a caller that the static reference graph cannot represent.
+    const kind = implicitUsageReason ? 'implicit-usage' : row.same_file_refs === 0 ? 'dead-code' : 'file-internal';
+    if (kind === 'dead-code') deadCodeCount++;
+    else if (kind === 'file-internal') fileInternalCount++;
+    else implicitUsageCount++;
+    totalLoc += row.loc;
 
     symbols.push({
       relativePath: row.relative_path,
@@ -372,11 +392,18 @@ function deadSummary(db: ScipDatabase, rows: readonly DeadRow[]): DeadSummary {
       total: symbols.length,
       deadCode: deadCodeCount,
       fileInternal: fileInternalCount,
+      implicitUsage: implicitUsageCount,
       loc: totalLoc,
+    },
+    applicability: {
+      entrySurfaceExcluded,
+      externalRootExcluded,
+      implicitUsageSignals: implicitUsageCount,
     },
     totalCount: symbols.length,
     deadCodeCount,
     fileInternalCount,
+    implicitUsageCount,
     totalLoc,
   };
 }

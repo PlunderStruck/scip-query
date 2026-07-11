@@ -20,6 +20,7 @@ import { normalizePathSeparators as normalizePath } from '../source/path-normali
 import { leafName } from '../symbols/symbol-parser.js';
 import { getReExports } from '../language-parsers/index.js';
 import { isPackageSurfaceFile } from './package-surface.js';
+import { isRustPublicLibrarySymbol } from './rust-package-surface.js';
 
 export type FileKind =
   | 'entry' // CLI/server bootstraps, main.rs, top-level index.ts, src/bin/*, scripts
@@ -149,6 +150,7 @@ export function isRootedSymbol(db: ScipDatabase, symbol: string, file: string): 
   const normalized = normalizePath(file);
   if (isPackageSurfaceFile(db, normalized)) return true;
   if (isTransitivelyPackageSurfaceSymbol(db, symbol, normalized)) return true;
+  if (isRustPublicLibrarySymbol(db, symbol, normalized)) return true;
   if (isFrameworkDiscoveredEntrypointSymbol(symbol, normalized)) return true;
   const roots = db.config.entryRoots;
   if (!roots) return false;

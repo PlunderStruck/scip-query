@@ -1,7 +1,7 @@
 # Accuracy Hardening and Health Certification Roadmap
 
 Date: 2026-07-10
-Status: Active; TypeScript dead-code certified, remaining detector families next
+Status: Active; TypeScript dead-code certified, Rust dead-code hardened but insufficiently evidenced
 
 ## Goal
 
@@ -260,10 +260,11 @@ active program above.
 
 ## Immediate Next Slice
 
-Begin Phase 3 with the most directly derived TypeScript families: dependency
+Resume Phase 3 with the most directly derived TypeScript families: dependency
 cycles, exact duplicate bodies, raw complexity measurements, unused imports,
-and unused parameters. Give each detector an explicit truth rule and
-fixed-seed packet before reviewing recommendations or changing score weights.
+and unused parameters. In parallel with later corpus acquisition, renew Rust
+`dead` against additional repositories or historical commits until its sparse
+post-hardening finding frame can satisfy the statistical evidence gates.
 
 ## Progress — 2026-07-10
 
@@ -282,6 +283,19 @@ findings across four repositories: 100% observed precision with a 91.8% 95%
 Wilson lower bound, plus three positive-recall fixtures. TypeScript `dead` is
 therefore certified under its repository-dead truth rule. This does not certify
 Rust, Python, other TypeScript detectors, or the aggregate health score.
+
+The Rust `dead` baseline and hardening replay are also complete:
+[`2026-07-10-rust-dead-certification-baseline.md`](./validation/2026-07-10-rust-dead-certification-baseline.md)
+and
+[`2026-07-10-rust-dead-certification.md`](./validation/2026-07-10-rust-dead-certification.md).
+The baseline found 1 valid and 51 invalid rows. Cargo library rooting and an
+explicit `implicit-usage` signal tier removed every reviewed false positive;
+the pinned replay produced three valid findings and zero invalid findings.
+That is 100% observed precision, but the 43.8% Wilson lower bound and
+one-repository finding sample are too small for certification. Rust `dead`
+therefore remains insufficiently evidenced and must not be presented as a
+public actionable metric. Three positive fixtures protect private-library and
+binary-only recall while the corpus is expanded.
 
 ## Program Acceptance Criteria
 

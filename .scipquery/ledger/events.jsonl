@@ -1,3 +1,13 @@
 {"ts":1783725230115,"check":"co-change-partner","findingId":"SQ1B4F12926BE7","event":"caught","commit":"936caa1d264427c4b468bc93a8beb49b62644f55"}
 {"ts":1783725230115,"check":"co-change-partner","findingId":"SQB9E53195F4C3","event":"caught","commit":"936caa1d264427c4b468bc93a8beb49b62644f55"}
 {"ts":1783725325886,"check":"co-change-partner","findingId":"SQB9E53195F4C3","event":"resolved","commit":"936caa1d264427c4b468bc93a8beb49b62644f55"}
+{"ts":1783729101797,"check":"co-change-partner","findingId":"SQ1B4F12926BE7","event":"resolved","commit":"6626d6d67cb19dd71c098106e5bd1d07cdcdb610"}
+{"ts":1783729101797,"check":"echo","findingId":"SQ0EE5DBF735E1","event":"caught","commit":"6626d6d67cb19dd71c098106e5bd1d07cdcdb610","symbol":"scip-typescript npm scip-query 0.15.0 src/analysis/`rust-package-surface.ts`/getRustLibrarySurface()."}
+{"ts":1783729101797,"check":"co-change-partner","findingId":"SQFBECAB58C318","event":"caught","commit":"6626d6d67cb19dd71c098106e5bd1d07cdcdb610"}
+{"ts":1783729101797,"check":"twin-partner","findingId":"SQ863491781FE8","event":"caught","commit":"6626d6d67cb19dd71c098106e5bd1d07cdcdb610","symbol":"scip-typescript npm scip-query 0.15.0 src/analysis/`rust-package-surface.ts`/packagePath()."}
+{"ts":1783729101797,"check":"doc-reference","findingId":"SQ6CF70BB93B0C","event":"caught","commit":"6626d6d67cb19dd71c098106e5bd1d07cdcdb610"}
+{"ts":1783729229523,"check":"co-change-partner","findingId":"SQFBECAB58C318","event":"resolved","commit":"6626d6d67cb19dd71c098106e5bd1d07cdcdb610"}
+{"ts":1783729229523,"check":"echo","findingId":"SQ0EE5DBF735E1","event":"resolved","commit":"6626d6d67cb19dd71c098106e5bd1d07cdcdb610"}
+{"ts":1783729229523,"check":"twin-partner","findingId":"SQ863491781FE8","event":"resolved","commit":"6626d6d67cb19dd71c098106e5bd1d07cdcdb610"}
+{"ts":1783729229523,"check":"doc-reference","findingId":"SQ6CF70BB93B0C","event":"resolved","commit":"6626d6d67cb19dd71c098106e5bd1d07cdcdb610"}
+{"ts":1783729332906,"check":"doc-reference","findingId":"SQ6CF70BB93B0C","event":"reopened","commit":"6626d6d67cb19dd71c098106e5bd1d07cdcdb610"}

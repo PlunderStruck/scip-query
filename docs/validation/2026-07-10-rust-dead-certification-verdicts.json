@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "packet": "reports/accuracy/2026-07-10T23-58-05-136Z-rust-dead-calibration.json",
+  "knownPositiveRecallCases": 3,
+  "groups": [
+    {
+      "verdict": "valid",
+      "evidenceNote": "Pinned-commit source and exact-name search found an unused definition in a Cargo example target with no source, test, trait-contract, macro/derive, ABI/registration, configured-feature, generated, reflective, or public-library consumer.",
+      "ids": ["c833e923ab0af1570b65", "e9439cf4273db35d6adb", "6d06b7245fdf81f7c3ab"]
+    }
+  ]
+}

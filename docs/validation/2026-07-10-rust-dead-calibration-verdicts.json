@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "packet": "reports/accuracy/2026-07-10T23-39-56-119Z-rust-dead-resampled.json",
+  "knownPositiveRecallCases": 0,
+  "groups": [
+    {
+      "verdict": "invalid",
+      "archetype": "declared-cargo-library-surface",
+      "evidenceNote": "Pinned-commit Cargo and module inspection found a public item reachable through a library target. Consumers outside the indexed checkout can call that declared surface, so an absent in-repository reference cannot establish repository-deadness.",
+      "ids": [
+        "f4a2158f6c4b9a2753f2",
+        "ff754f03157291b53129",
+        "209fd3b4df454038298c",
+        "0174cd1cd269255ef2f2",
+        "1efd43e001c2ce48b58d",
+        "2e3cbf597a2fff5c0d7f",
+        "0e72c279d0701c11e4b3",
+        "38a4fb4623b2a6773aa5",
+        "f546cb570e5218bbc3b7",
+        "62466232486b764a34c8",
+        "00de2f885bb4f2ccd721",
+        "95f49d50b28ae91392e0",
+        "7e2982fc1b91a67c2858",
+        "7834abab2760001564c4",
+        "f9a158bf2f40a7b3c240",
+        "73d00a11d446a6730a9f",
+        "792d7d307d0f72623ec0",
+        "0085620a0f3e9aab6abe",
+        "2eccdf39d7d47a3946ff",
+        "f29814df143e5aa327d2",
+        "58ea3cfe420c71896881",
+        "c0cb563232f100a50743",
+        "a6499bb41779e5cab39e",
+        "cfa1e0188e7999783c70",
+        "67f80ab640e938398fd8",
+        "a85a69d9b45e46091fb3",
+        "a5b00ee9bde83391f04d",
+        "971b3f35aee2ca96cbb1",
+        "d276e73b01c892ba8a0a",
+        "ef458a10c4e3b1fb8dbc",
+        "e2ca462ad5a256c72c74",
+        "15290a5a4ee37a06239f",
+        "12354aeabacb53334220",
+        "b24fd90cfb244f568a98",
+        "0036eacc8e619077070c",
+        "addc90b93c07cf5d43d2",
+        "b834ee09d088f51d1ebf",
+        "b561568e4ae3123b8172",
+        "75125e149ef03a5548ac",
+        "762d9905e5be2354b5a3",
+        "d40fb277e28955bc8455",
+        "8559fe92b3c08f2319b7",
+        "808d2a3b4705917adf5a",
+        "c092ebf26b0116e494d1",
+        "7b583033052bf60e1c2f",
+        "da7fcaac111f7c4f2c79",
+        "63e7d53bfe08bf0560ff",
+        "f220afd54200c724f7d9"
+      ]
+    },
+    {
+      "verdict": "invalid",
+      "archetype": "trait-dispatch-contract",
+      "evidenceNote": "The definition is a trait declaration member. Implementations and trait objects consume the contract through Rust dispatch even when the SCIP graph contains no direct call to the declaration.",
+      "ids": ["a4b155a5372a3db4dfa4", "36315c04f2ba393e199d"]
+    },
+    {
+      "verdict": "invalid",
+      "archetype": "serde-module-reflection",
+      "evidenceNote": "Serde's `with = \"nonce_b64\"` attribute calls the module's serialize/deserialize functions through generated code. The detector already records this implicit-use mechanism, so retaining a direct dead-code label contradicts its own evidence.",
+      "ids": ["ae3c55ac2066496d5d6c"]
+    },
+    {
+      "verdict": "valid",
+      "evidenceNote": "Pinned-commit source inspection found a private UAT capability constant with no reference, Cargo public-surface role, generated caller, trait contract, attribute registration, or test consumer.",
+      "ids": ["c833e923ab0af1570b65"]
+    }
+  ]
+}

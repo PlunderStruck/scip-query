@@ -6,6 +6,8 @@ import {
   applyVerdictGroups,
   calibrationRowIdentity,
   deterministicSample,
+  normalizeDeadCandidate,
+  parseDeadCalibrationOptions,
   summarizeCalibration,
   wilsonInterval,
 } from '../../scripts/accuracy-calibration-core.mjs';
@@ -34,6 +36,48 @@ function row(index: number, overrides: Partial<CalibrationTestRow> = {}): Calibr
 }
 
 describe('accuracy calibration core', () => {
+  it('selects language-specific dead-code defaults without changing TypeScript compatibility', () => {
+    const defaults = { typescript: ['/repos/ts'], rust: ['/repos/rust-a', '/repos/rust-b'] };
+    expect(parseDeadCalibrationOptions([], defaults)).toEqual({
+      language: 'typescript',
+      sampleSize: 25,
+      seed: 'typescript-dead-v1',
+      roots: ['/repos/ts'],
+    });
+    expect(
+      parseDeadCalibrationOptions(['--language', 'rust', '--sample-size', '7', '--seed', 'fixed'], defaults),
+    ).toEqual({ language: 'rust', sampleSize: 7, seed: 'fixed', roots: ['/repos/rust-a', '/repos/rust-b'] });
+    expect(() => parseDeadCalibrationOptions(['--language', 'python'], defaults)).toThrow('--language must be one of');
+  });
+
+  it('retains implicit Rust usage evidence in normalized dead-code rows', () => {
+    const normalized = normalizeDeadCandidate(
+      {
+        relativePath: 'src/lib.rs',
+        startLine: 4,
+        endLine: 7,
+        loc: 4,
+        symbol: 'rust-analyzer cargo fixture 0.1.0 src/lib.rs/command().',
+        shortName: 'src:command()',
+        kind: 'dead-code',
+        sameFileRefs: 0,
+        implicitUsageReason: 'Rust attribute macro #[tauri::command]',
+      },
+      {
+        language: 'rust',
+        repository: 'fixture',
+        commit: 'abc123',
+        evidence: 'graph-fact',
+        capabilityStatus: null,
+        sourceExcerpt: () => 'fn command() {}',
+      },
+    );
+    expect(normalized).toMatchObject({
+      language: 'rust',
+      implicitUsageReason: 'Rust attribute macro #[tauri::command]',
+    });
+  });
+
   it('assigns stable identities and deterministic seeded samples', () => {
     const rows = Array.from({ length: 20 }, (_, index) => row(index));
     expect(calibrationRowIdentity(rows[0])).toBe(calibrationRowIdentity({ ...rows[0] }));

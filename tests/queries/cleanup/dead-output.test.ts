@@ -15,7 +15,7 @@ const internalSym = (name: string) => `scip-typescript npm fixture 1.0.0 src/\`i
 const contractSym = (owner: string, name: string) =>
   `scip-typescript npm fixture 1.0.0 src/\`contracts.ts\`/${owner}#${name}().`;
 const routeSym = (name: string) => `scip-typescript npm fixture 1.0.0 src/app/api/health/\`route.ts\`/${name}().`;
-const rustSym = (name: string) => `rust-analyzer cargo fixture 0.1.0 src/commands.rs/${name}().`;
+const rustSym = (file: string, name: string) => `rust-analyzer cargo fixture 0.1.0 ${file}/${name}().`;
 
 function withDeadFixture(run: (db: ScipDatabase) => void): void {
   const tempDir = mkdtempSync(join(tmpdir(), 'scip-dead-output-'));
@@ -201,27 +201,66 @@ function withRustDeadFixture(run: (db: ScipDatabase) => void): void {
   const projectRoot = join(tempDir, 'project');
   const dbPath = join(tempDir, 'index.db');
   try {
-    const sourcePath = join(projectRoot, 'src', 'commands.rs');
+    const sourcePath = join(projectRoot, 'src', 'lib.rs');
     mkdirSync(dirname(sourcePath), { recursive: true });
-    writeFileSync(sourcePath, ['#[tauri::command]', 'pub fn launch() {', '}', ''].join('\n'));
+    writeFileSync(sourcePath, ['pub mod api;', 'mod internal;', ''].join('\n'));
+    writeFileSync(join(projectRoot, 'src', 'api.rs'), ['pub fn public_api() {}', ''].join('\n'));
+    writeFileSync(
+      join(projectRoot, 'src', 'internal.rs'),
+      ['fn private_unused() {}', 'fn another_private_unused() {}', ''].join('\n'),
+    );
+    writeFileSync(join(projectRoot, 'src', 'commands.rs'), ['#[tauri::command]', 'fn launch() {', '}', ''].join('\n'));
+    mkdirSync(join(projectRoot, 'tools', 'helper', 'src'), { recursive: true });
+    writeFileSync(
+      join(projectRoot, 'tools', 'helper', 'src', 'unused.rs'),
+      ['pub fn binary_unused() {}', ''].join('\n'),
+    );
+    writeFileSync(
+      join(projectRoot, 'tools', 'helper', 'src', 'main.rs'),
+      ['mod unused;', 'fn main() {}', ''].join('\n'),
+    );
+    writeFileSync(join(projectRoot, 'Cargo.toml'), '[package]\nname = "fixture"\nversion = "0.1.0"\n');
+    writeFileSync(
+      join(projectRoot, 'tools', 'helper', 'Cargo.toml'),
+      '[package]\nname = "helper"\nversion = "0.1.0"\n',
+    );
 
     const sqliteDb = new Database(dbPath);
     createEvidenceSchema(sqliteDb);
     sqliteDb.exec(`
       INSERT INTO documents (id, language, relative_path) VALUES
-        (1, 'rust', 'src/commands.rs');
+        (1, 'rust', 'src/commands.rs'),
+        (2, 'rust', 'src/api.rs'),
+        (3, 'rust', 'src/internal.rs'),
+        (4, 'rust', 'tools/helper/src/unused.rs');
 
       INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
-        (1, '${rustSym('launch')}', 'launch', 12, 'fn launch');
+        (1, '${rustSym('src/commands.rs', 'launch')}', 'launch', 12, 'fn launch'),
+        (2, '${rustSym('src/api.rs', 'public_api')}', 'public_api', 12, 'fn public_api'),
+        (3, '${rustSym('src/internal.rs', 'private_unused')}', 'private_unused', 12, 'fn private_unused'),
+        (4, '${rustSym('tools/helper/src/unused.rs', 'binary_unused')}', 'binary_unused', 12, 'fn binary_unused'),
+        (5, '${rustSym('src/internal.rs', 'another_private_unused')}', 'another_private_unused', 12, 'fn another_private_unused');
 
       INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
-        (1, 1, 1, 1, 7, 2, 1);
+        (1, 1, 1, 1, 3, 2, 1),
+        (2, 2, 2, 0, 4, 0, 22),
+        (3, 3, 3, 0, 3, 0, 22),
+        (4, 4, 4, 0, 4, 0, 24),
+        (5, 3, 5, 1, 3, 1, 30);
 
       INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
-        (1, 1, 0, 1, 2, X'00');
+        (1, 1, 0, 1, 2, X'00'),
+        (2, 2, 0, 0, 0, X'00'),
+        (3, 3, 0, 0, 0, X'00'),
+        (4, 4, 0, 0, 0, X'00'),
+        (5, 3, 1, 1, 1, X'00');
 
       INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
-        (1, 1, 1);
+        (1, 1, 1),
+        (2, 2, 1),
+        (3, 3, 1),
+        (4, 4, 1),
+        (5, 5, 1);
     `);
     sqliteDb.close();
 
@@ -250,12 +289,14 @@ describe('dead output contract', () => {
         total: result.totalCount,
         deadCode: result.deadCodeCount,
         fileInternal: result.fileInternalCount,
+        implicitUsage: result.implicitUsageCount,
         loc: result.totalLoc,
       });
       expect(result.counts).toMatchObject({
         total: 4,
         deadCode: 3,
         fileInternal: 1,
+        implicitUsage: 0,
       });
       expect(result.symbols.filter((symbol) => symbol.kind === 'file-internal')).toEqual([
         expect.objectContaining({ shortName: expect.stringContaining('shared') }),
@@ -283,17 +324,29 @@ describe('dead output contract', () => {
     });
   });
 
-  it('reports Rust implicit-usage symbols instead of hiding them', () => {
+  it('separates Rust implicit usage and roots only public library definitions', () => {
     withRustDeadFixture((db) => {
       const result = dead(db, { minLoc: 1, semantic: false });
 
-      expect(result.symbols).toEqual([
-        expect.objectContaining({
-          shortName: expect.stringContaining('launch'),
-          kind: 'dead-code',
-          implicitUsageReason: 'Rust attribute macro #[tauri::command]',
-        }),
-      ]);
+      expect(result.counts).toMatchObject({ total: 4, deadCode: 3, implicitUsage: 1 });
+      expect(result.symbols).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            shortName: expect.stringContaining('launch'),
+            kind: 'implicit-usage',
+            implicitUsageReason: 'Rust attribute macro #[tauri::command]',
+          }),
+          expect.objectContaining({ shortName: expect.stringContaining('private_unused'), kind: 'dead-code' }),
+          expect.objectContaining({
+            shortName: expect.stringContaining('another_private_unused'),
+            kind: 'dead-code',
+          }),
+          expect.objectContaining({ shortName: expect.stringContaining('binary_unused'), kind: 'dead-code' }),
+        ]),
+      );
+      expect(result.symbols).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ shortName: expect.stringContaining('public_api') })]),
+      );
     });
   });
 });
@@ -341,10 +394,10 @@ describe('dead human renderer', () => {
             startLine: 1,
             endLine: 2,
             loc: 2,
-            symbol: rustSym('launch'),
+            symbol: rustSym('src/commands.rs', 'launch'),
             shortName: 'src:lib:launch()',
             sameFileRefs: 0,
-            kind: 'dead-code',
+            kind: 'implicit-usage',
             implicitUsageReason: 'Rust attribute macro #[tauri::command]',
           },
         ],

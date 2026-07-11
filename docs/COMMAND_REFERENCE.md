@@ -45,7 +45,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 
 | Command | Description | Options |
 |---|---|---|
-| `dead [scope]` | Find repository-dead code and file-internal symbols | `--min-loc <n>`<br>`--include-tests`<br>`--skip-barrels`<br>`--include-members`<br>`--only-dead`<br>`--only-internal`<br>`--full`<br>`--json` |
+| `dead [scope]` | Find repository-dead code, file-internal symbols, and implicit-usage signals | `--min-loc <n>`<br>`--include-tests`<br>`--skip-barrels`<br>`--include-members`<br>`--only-dead`<br>`--only-internal`<br>`--full`<br>`--json` |
 | `unused-imports <file>` | Find imports not referenced in the same file | `--full`<br>`--json` |
 | `isolated` | Find completely orphaned symbols (no references at all) | `-s, --scope <path>`<br>`--min-loc <n>`<br>`--full`<br>`--json` |
 | `similar [symbol] [other]` | Find heuristic function similarity candidates from callee fingerprints | `--min-similarity <n>`<br>`-n, --limit <n>`<br>`-s, --scope <path>`<br>`--min-callees <n>`<br>`--cross-file-only`<br>`--plan`<br>`--full`<br>`--json` |

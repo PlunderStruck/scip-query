@@ -91,7 +91,7 @@ scip-query slice <symbol> # Reference-level program slice: what affects this (ba
 ### Cleanup
 
 ```bash
-scip-query dead [scope] # Find repository-dead code and file-internal symbols
+scip-query dead [scope] # Find repository-dead code, file-internal symbols, and implicit-usage signals
 scip-query unused-imports <file> # Find imports not referenced in the same file
 scip-query isolated # Find completely orphaned symbols (no references at all)
 scip-query similar [symbol] [other] # Find heuristic function similarity candidates from callee fingerprints

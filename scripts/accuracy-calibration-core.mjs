@@ -1,6 +1,51 @@
 import { createHash } from 'node:crypto';
 
 export const CALIBRATION_SCHEMA_VERSION = 1;
+export const DEAD_CALIBRATION_LANGUAGES = ['typescript', 'rust'];
+
+export function parseDeadCalibrationOptions(rawArgs, defaultRootsByLanguage, resolveRoot = (value) => value) {
+  let language = 'typescript';
+  let sampleSize = 25;
+  let seed = null;
+  const roots = [];
+
+  for (let index = 0; index < rawArgs.length; index += 1) {
+    const arg = rawArgs[index];
+    if (arg === '--language') {
+      const value = rawArgs[index + 1];
+      if (!DEAD_CALIBRATION_LANGUAGES.includes(value)) {
+        throw new Error(`--language must be one of: ${DEAD_CALIBRATION_LANGUAGES.join(', ')}`);
+      }
+      language = value;
+      index += 1;
+    } else if (arg === '--sample-size') {
+      const value = Number(rawArgs[index + 1]);
+      if (!Number.isInteger(value) || value < 1) throw new Error('--sample-size must be a positive integer');
+      sampleSize = value;
+      index += 1;
+    } else if (arg === '--seed') {
+      const value = rawArgs[index + 1];
+      if (!value) throw new Error('--seed requires a value');
+      seed = value;
+      index += 1;
+    } else if (arg.startsWith('-')) {
+      throw new Error(`unknown health-dead option: ${arg}`);
+    } else {
+      roots.push(resolveRoot(arg));
+    }
+  }
+
+  const selectedRoots = roots.length > 0 ? roots : defaultRootsByLanguage[language];
+  if (!Array.isArray(selectedRoots) || selectedRoots.length === 0) {
+    throw new Error(`no default calibration repositories configured for ${language}`);
+  }
+  return {
+    language,
+    sampleSize,
+    seed: seed ?? `${language}-dead-v1`,
+    roots: [...selectedRoots],
+  };
+}
 
 export function calibrationRowIdentity(row) {
   const raw = [
@@ -110,6 +155,7 @@ export function normalizeDeadCandidate(candidate, context) {
     shortName: candidate.shortName,
     findingKind: candidate.kind,
     sameFileRefs: candidate.sameFileRefs,
+    ...(candidate.implicitUsageReason ? { implicitUsageReason: candidate.implicitUsageReason } : {}),
     sourceExcerpt: context.sourceExcerpt(candidate),
     verdict: null,
     noiseArchetype: null,

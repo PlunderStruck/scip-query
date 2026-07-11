@@ -17,6 +17,7 @@ import {
   applyVerdictGroups,
   deterministicSample,
   normalizeDeadCandidate,
+  parseDeadCalibrationOptions,
   summarizeCalibration,
 } from './accuracy-calibration-core.mjs';
 
@@ -65,12 +66,25 @@ const navigationCases = [
   },
 ];
 
-const defaultDeadRepos = [
-  '/Users/aydansalois/Documents/GitHub/Vega_2.0',
-  '/Users/aydansalois/Documents/GitHub/openwork',
-  '/Users/aydansalois/Documents/GitHub/Stable_Management',
-  '/Users/aydansalois/Documents/GitHub/traceroot',
-];
+const defaultDeadReposByLanguage = {
+  typescript: [
+    '/Users/aydansalois/Documents/GitHub/Vega_2.0',
+    '/Users/aydansalois/Documents/GitHub/openwork',
+    '/Users/aydansalois/Documents/GitHub/Stable_Management',
+    '/Users/aydansalois/Documents/GitHub/traceroot',
+  ],
+  rust: [
+    '/Users/aydansalois/Documents/GitHub/codex',
+    '/Users/aydansalois/Documents/GitHub/SynthRunnerRust',
+    '/Users/aydansalois/Documents/GitHub/VegaAssistant',
+  ],
+};
+
+const deadTruthRules = {
+  typescript:
+    'No production, public API, framework, generated, reflective, configured, or test-required consumer exists; certified deletion additionally requires an applicable checker.',
+  rust: 'No source, test, trait-contract, macro/derive, ABI/registration, Cargo-target, configured-feature, public-library, generated, or reflective consumer exists; certified deletion additionally requires an applicable checker.',
+};
 
 mkdirSync(outDir, { recursive: true });
 
@@ -226,7 +240,7 @@ function runHealthDeadMode(rawArgs) {
         SCIP_QUERY_CACHE_DIR: cacheDir,
         SCIP_QUERY_SKIP_WATCH_SERVICE: '1',
       };
-      const reindex = runCli(['reindex', '--force', '--language', 'typescript'], isolated.root, env, 300_000);
+      const reindex = runCli(['reindex', '--force', '--language', options.language], isolated.root, env, 600_000);
       if (reindex.status !== 0) {
         failures += 1;
         repositories.push({
@@ -239,7 +253,7 @@ function runHealthDeadMode(rawArgs) {
       }
 
       const status = runCli(['status', '--capabilities', '--json'], isolated.root, env, 60_000);
-      const dead = runCli(['dead', '--full', '--json'], isolated.root, env, 300_000);
+      const dead = runCli(['dead', '--full', '--json'], isolated.root, env, 600_000);
       if (status.status !== 0 || dead.status !== 0) {
         failures += 1;
         repositories.push({
@@ -254,11 +268,13 @@ function runHealthDeadMode(rawArgs) {
 
       const statusEnvelope = parseEnvelope(status.stdout, 'status');
       const deadEnvelope = parseEnvelope(dead.stdout, 'dead');
-      const capability = statusEnvelope.result.capabilities?.matrix?.find((entry) => entry.language === 'typescript');
+      const capability = statusEnvelope.result.capabilities?.matrix?.find(
+        (entry) => entry.language === options.language,
+      );
       const candidates = (deadEnvelope.result.symbols ?? []).filter((candidate) => candidate.kind === 'dead-code');
       const normalized = candidates.map((candidate) =>
         normalizeDeadCandidate(candidate, {
-          language: 'typescript',
+          language: options.language,
           repository,
           commit: isolated.commit,
           evidence: deadEnvelope.evidence,
@@ -276,7 +292,7 @@ function runHealthDeadMode(rawArgs) {
         repository,
         sourceRoot,
         commit: isolated.commit,
-        language: 'typescript',
+        language: options.language,
         capability: capability ?? null,
         reindexDurationMs: reindex.durationMs,
         deadDurationMs: dead.durationMs,
@@ -296,16 +312,15 @@ function runHealthDeadMode(rawArgs) {
     schemaVersion: CALIBRATION_SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
     detector: 'dead',
-    language: 'typescript',
-    truthRule:
-      'No production, public API, framework, generated, reflective, configured, or test-required consumer exists; certified deletion additionally requires an applicable checker.',
+    language: options.language,
+    truthRule: deadTruthRules[options.language],
     seed: options.seed,
     sampleSizePerRepository: options.sampleSize,
     repositories,
     rows,
     summary: summarizeCalibration(rows),
   };
-  const baseName = `${runId}-typescript-dead-calibration`;
+  const baseName = `${runId}-${options.language}-dead-calibration`;
   const jsonPath = join(outDir, `${baseName}.json`);
   const markdownPath = join(outDir, `${baseName}.md`);
   writeFileSync(jsonPath, `${JSON.stringify(packet, null, 2)}\n`);
@@ -316,26 +331,7 @@ function runHealthDeadMode(rawArgs) {
 }
 
 function parseHealthDeadArgs(rawArgs) {
-  let sampleSize = 25;
-  let seed = 'typescript-dead-v1';
-  const roots = [];
-  for (let index = 0; index < rawArgs.length; index += 1) {
-    const arg = rawArgs[index];
-    if (arg === '--sample-size') {
-      const value = Number(rawArgs[index + 1]);
-      if (!Number.isInteger(value) || value < 1) throw new Error('--sample-size must be a positive integer');
-      sampleSize = value;
-      index += 1;
-    } else if (arg === '--seed') {
-      const value = rawArgs[index + 1];
-      if (!value) throw new Error('--seed requires a value');
-      seed = value;
-      index += 1;
-    } else {
-      roots.push(resolve(arg));
-    }
-  }
-  return { sampleSize, seed, roots: roots.length > 0 ? roots : defaultDeadRepos };
+  return parseDeadCalibrationOptions(rawArgs, defaultDeadReposByLanguage, resolve);
 }
 
 function createDetachedWorktree(sourceRoot) {
@@ -448,8 +444,9 @@ function sourceExcerpt(projectRoot, relativePath, startLine, endLine) {
 }
 
 function renderDeadPacket(packet) {
+  const languageLabel = packet.language === 'rust' ? 'Rust' : 'TypeScript';
   const lines = [
-    '# TypeScript Dead-Code Calibration Packet',
+    `# ${languageLabel} Dead-Code Calibration Packet`,
     '',
     `Generated: ${packet.generatedAt}`,
     `Schema: ${packet.schemaVersion}`,
@@ -461,7 +458,7 @@ function renderDeadPacket(packet) {
     '',
     '## Repository Inventory',
     '',
-    '| Repository | Commit | Candidates | Sampled | TypeScript semantic | Error |',
+    `| Repository | Commit | Candidates | Sampled | ${languageLabel} semantic | Error |`,
     '| --- | --- | ---: | ---: | --- | --- |',
   ];
   for (const repo of packet.repositories) {
@@ -478,6 +475,7 @@ function renderDeadPacket(packet) {
       `- Commit: \`${row.commit}\``,
       `- Location: \`${row.relativePath}:${row.startLine + 1}-${row.endLine + 1}\``,
       `- Evidence: ${row.evidence}`,
+      `- Implicit usage: ${row.implicitUsageReason ?? '-'}`,
       `- Verdict: **${row.verdict?.toUpperCase() ?? 'PENDING'}**`,
       `- Noise archetype: ${row.noiseArchetype ?? '-'}`,
       `- Evidence note: ${row.evidenceNote ?? '-'}`,

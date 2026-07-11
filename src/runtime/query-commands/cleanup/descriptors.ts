@@ -160,14 +160,14 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'dead',
     command: 'dead [scope]',
-    description: 'Find repository-dead code and file-internal symbols',
+    description: 'Find repository-dead code, file-internal symbols, and implicit-usage signals',
     options: withJsonOption([
       option('--min-loc <n>', 'Only show symbols >= N lines', parseInteger, 1),
       option('--include-tests', 'Include definitions from test files (test references always count)'),
       option('--skip-barrels', 'Ignore refs from barrel re-export files'),
       option('--include-members', 'Include class members'),
-      option('--only-dead', 'Show only [dead code] symbols (skip [file-internal only])'),
-      option('--only-internal', 'Show only [file-internal only] symbols (skip [dead code])'),
+      option('--only-dead', 'Show only [dead code] symbols (skip file-internal and implicit-usage signals)'),
+      option('--only-internal', 'Show only [file-internal only] symbols (skip dead-code and implicit-usage signals)'),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
     ]),
     budget: 'candidate-scan',
