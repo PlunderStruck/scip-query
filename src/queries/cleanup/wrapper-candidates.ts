@@ -209,6 +209,9 @@ function getWrapperCandidateSymbols(
       // "Inline this wrapper" is wrong advice for published API — external
       // consumers the index can't see depend on the wrapper staying put.
       excludeRootedSymbols: true,
+      // Trait-required methods are contract implementations, not removable
+      // wrappers, even when only one repository caller invokes them directly.
+      excludeRustTraitImplMembers: true,
     })
     .filter((definition) => !isClojureMacroDefinition(db, definition));
 }

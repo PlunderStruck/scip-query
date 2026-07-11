@@ -104,6 +104,48 @@ describe('wrapper-candidates', () => {
       db.close();
     }
   });
+
+  it('excludes Rust trait implementation methods from wrapper advice', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-wrapper-rust-trait-'));
+    tempDirs.push(root);
+    writeFixtureFiles(root, {
+      'src/model.rs': [
+        'pub struct Model;',
+        'impl Default for Model {',
+        '  fn default() -> Self {',
+        '    Self',
+        '  }',
+        '}',
+      ],
+      'src/build.rs': ['use crate::model::Model;', 'pub fn build() -> Model {', '  Model::default()', '}'],
+    });
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'rust', 'src/model.rs')
+      .document(2, 'rust', 'src/build.rs')
+      .symbol(1, 'rust-analyzer cargo fixture 0.1.0 model/Model#', 'Model', 5)
+      .symbol(2, 'rust-analyzer cargo fixture 0.1.0 model/impl#[Model][Default]default().', 'default', 12)
+      .symbol(3, 'rust-analyzer cargo fixture 0.1.0 build/build().', 'build', 12)
+      .definition(1, 1, 1, 0, 0, 0, 16)
+      .definition(2, 1, 2, 2, 2, 4, 3)
+      .definition(3, 2, 3, 1, 1, 3, 2)
+      .chunk(1, 1, 0, 6)
+      .chunk(2, 2, 0, 4)
+      .mention(1, 1, 1)
+      .mention(1, 2, 1)
+      .mention(2, 3, 1)
+      .mention(2, 2, 0)
+      .write();
+
+    const db = new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') });
+    try {
+      expect(wrapperCandidates(db, { limit: 10, semantic: false }).map((finding) => finding.shortName)).not.toEqual(
+        expect.arrayContaining([expect.stringContaining('default')]),
+      );
+    } finally {
+      db.close();
+    }
+  });
 });
 
 function reporter(className: string, methodName: string): string {
