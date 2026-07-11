@@ -15,20 +15,23 @@ Audit the underlying analyzer once, then give aliases and workflow wrappers a
 separate parity test. Record results independently by language and framework;
 an unsupported analysis is `not analyzed`, never a successful zero.
 
-## Evidence Gates
+## Evidence Gate Template
 
-A finding-producing analyzer is complete only when it has:
+A finding-producing analyzer is complete only when it has all of the following.
+These are audit criteria, not independently completable task boxes; each
+command's dated certificate records whether the criteria were met or why the
+verdict remains qualified, insufficient, or unsupported.
 
-- [ ] a written truth rule;
-- [ ] a pinned, read-only corpus with at least three repositories;
-- [ ] uncapped baseline candidate counts;
-- [ ] deterministic samples classified from cited source;
-- [ ] named false-positive archetypes;
-- [ ] at least one known-positive recall case;
-- [ ] regression tests for every fixed archetype;
-- [ ] a fresh replay after hardening; and
-- [ ] a recorded certification state: certified, qualified, experimental,
-      unsupported, or insufficient evidence.
+- a written truth rule;
+- a pinned, read-only corpus with at least three repositories;
+- uncapped baseline candidate counts;
+- deterministic samples classified from cited source;
+- named false-positive archetypes;
+- at least one known-positive recall case;
+- regression tests for every fixed archetype;
+- a fresh replay after hardening; and
+- a recorded certification state: certified, qualified, experimental,
+  unsupported, or insufficient evidence.
 
 The certification thresholds and publication rules live in
 [`accuracy-hardening-goal.md`](./accuracy-hardening-goal.md).
@@ -256,30 +259,33 @@ Certificate:
 
 ## Indexing and Operations
 
-- [ ] `reindex`
-- [ ] `augment-sources`
-- [ ] `watch`
-- [ ] `status`
-- [ ] `work-audit`
-- [ ] `bench`
-- [ ] `capabilities`
-- [ ] `capability-matrix` alias parity
-- [ ] `doctor`
-- [ ] `check-deps`
-- [ ] `config-validate`
-- [ ] `suppress`
-- [ ] `init`
-- [ ] `setup`
-- [ ] `setup-agent`
-- [ ] `setup-hooks`
-- [ ] `setup-ci`
-- [ ] `uninstall`
-- [ ] `install-skills`
-- [ ] `tla`
+- [x] `reindex` — certified atomic generation publication
+- [x] `augment-sources` — qualified registered source-fact augmentation
+- [x] `watch` — certified per-project lifecycle and refresh serialization
+- [x] `status` — certified observable artifact/service snapshot
+- [x] `work-audit` — qualified exact arithmetic over instrumented work
+- [x] `bench` — certified environment-local measurement and cache restore
+- [x] `capabilities` — qualified runtime/tool capability disclosure
+- [x] `capability-matrix` — alias result parity
+- [x] `doctor` — qualified aggregate operational diagnosis
+- [x] `check-deps` — qualified point-in-time dependency probe
+- [x] `config-validate` — certified deterministic validation
+- [x] `suppress` — certified repository-record persistence
+- [x] `init` — certified non-destructive config creation
+- [x] `setup` — qualified composite setup orchestration
+- [x] `setup-agent` — certified owned managed-block lifecycle
+- [x] `setup-hooks` — certified checkout-local hook lifecycle
+- [x] `setup-ci` — certified owned workflow generation
+- [x] `uninstall` — certified ownership-aware removal
+- [x] `install-skills` — certified owned symlink lifecycle
+- [x] `tla` — qualified mapped model/checker workflow
 
 Operational audits exercise cold and incremental indexes, additions, edits,
 deletions, renames, branch switches, stale caches, interrupted publication,
 concurrent invocations, daemon sleep/wake, idempotent setup, and clean removal.
+
+Certificate:
+[`2026-07-11-indexing-operations-certification.md`](./validation/2026-07-11-indexing-operations-certification.md).
 
 ## Campaign Order
 

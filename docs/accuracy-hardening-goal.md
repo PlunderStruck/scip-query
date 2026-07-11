@@ -278,10 +278,12 @@ active program above.
 
 ## Immediate Next Slice
 
-Language detectors, composite workflows, and navigation answers now have
-terminal verdicts under their current capabilities. Next, exercise indexing,
-watcher, setup, configuration, suppression, and lifecycle state transitions,
-including cold/warm and incremental failure paths.
+Language detectors, composite workflows, navigation answers, and operational
+state transitions now have terminal verdicts under their current capabilities.
+The remaining slice is publication-readiness closure: reconcile the complete
+matrix, run the full repository verification sequence, and record the private
+cloud shadow decision without promoting the aggregate health score to a public
+leaderboard metric.
 
 ## Progress — 2026-07-10
 

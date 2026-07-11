@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-07-11",
+  "targetedProbeSuite": {
+    "files": 64,
+    "tests": 532,
+    "passed": 532
+  },
+  "liveReplay": {
+    "indexedFiles": 328,
+    "symbols": 22318,
+    "coldIndexMs": 4350,
+    "warmIndexMs": 357,
+    "statsMs": 156,
+    "freshness": "fresh",
+    "sqliteGeneration": "current",
+    "watchService": "running",
+    "watcher": "idle",
+    "capabilityAliasResultParity": true
+  },
+  "verdicts": {
+    "reindex": "certified",
+    "augment-sources": "qualified",
+    "watch": "certified",
+    "status": "certified",
+    "work-audit": "qualified",
+    "bench": "certified",
+    "capabilities": "qualified",
+    "capability-matrix": "parity",
+    "doctor": "qualified",
+    "check-deps": "qualified",
+    "config-validate": "certified",
+    "suppress": "certified",
+    "init": "certified",
+    "setup": "qualified",
+    "setup-agent": "certified",
+    "setup-hooks": "certified",
+    "setup-ci": "certified",
+    "uninstall": "certified",
+    "install-skills": "certified",
+    "tla": "qualified"
+  },
+  "fixedArchetypes": [
+    "syntax-only-checker-advertised-as-full-verification",
+    "mixed-project-verification-inherited-from-strongest-checker",
+    "non-compiler-verifier-labeled-as-compiler"
+  ],
+  "qualifiedBoundaries": [
+    "unmodeled-source-augmentation",
+    "uninstrumented-profile-work",
+    "environment-dependent-tool-availability",
+    "unmapped-runtime-behavior-outside-tla-contract",
+    "machine-specific-benchmark-timings"
+  ]
+}

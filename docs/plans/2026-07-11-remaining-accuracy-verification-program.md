@@ -187,14 +187,23 @@ unsupported shapes, and reproducible exact-answer evidence.
 
 ### 6. Audit indexing and operations
 
-- [ ] Exercise the checklist's indexing, watcher, status, profiling,
+- [x] Exercise the checklist's indexing, watcher, status, profiling,
       capability, setup, configuration, suppression, lifecycle, skill, and TLA
       commands.
-- [ ] Cover cold/warm indexes, incremental add/edit/delete/rename, branch/index
+- [x] Cover cold/warm indexes, incremental add/edit/delete/rename, branch/index
       changes, stale/corrupt caches, interrupted publication, concurrent
       requests, daemon sleep/wake, setup idempotence, and clean uninstall.
-- [ ] Separate local user preferences from committed project records and verify
+- [x] Separate local user preferences from committed project records and verify
       the effectiveness ledger records caught/resolved/suppressed transitions.
+
+  - 2026-07-11: 532 operational probes passed across 64 test files. A live
+    controlled replay measured a 4.35 s cold TypeScript/Rust rebuild, 357 ms
+    warm reuse, and 156 ms `stats` query. The audit corrected syntax-only
+    Python validation from available to partial and made project verification
+    aggregate every language. Local hooks remained Git-excluded while
+    suppression/effectiveness files remained shared repository records.
+  - Certificate:
+    `docs/validation/2026-07-11-indexing-operations-certification.md`.
 
 Acceptance: every operational row has a deterministic state transition or
 observable output contract and a failure-path probe.
