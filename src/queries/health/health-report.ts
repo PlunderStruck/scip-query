@@ -19,7 +19,7 @@ export interface ScoreDeduction {
   axis: string;
   points: number;
   detail: string;
-  /** Risk deductions are empirically validated predictors; hygiene are tidiness signals. */
+  /** Risk deductions use graph/change evidence; hygiene deductions use candidate signals. */
   kind: 'risk' | 'hygiene';
 }
 
@@ -34,7 +34,7 @@ export interface HealthPressure {
 }
 
 export interface HealthAxes {
-  /** LOC provably removable with behavior preserved (dead + isolated). */
+  /** LOC in indexed zero-reference or disconnected candidates (legacy field name: deletable). */
   deletable: { loc: number; symbols: number };
   cycles: { count: number };
   /** Files touched per commit — the measured cost of one conceptual change. */
@@ -78,7 +78,7 @@ export interface HealthValidation {
 export interface HealthReport {
   /** Headline = min(riskScore, hygieneScore); kept for compatibility. */
   score: number;
-  /** Empirically validated predictors only (graph facts, change-graph signals). */
+  /** Risk-oriented graph facts and change-graph signals; the composite remains experimental. */
   riskScore: number;
   /** Tidiness signals (candidate detectors) — real but not fix-predictive. */
   hygieneScore: number;
@@ -334,7 +334,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Dead code',
       evidence: 'graph-fact',
-      description: `${analyses.dead.count} symbols with zero references anywhere -- deletion candidates; confirm with cleanup-plan --verify before deleting`,
+      description: `${analyses.dead.count} indexed symbols with no visible repository references — review runtime/framework roots and the capability disclosure, then verify any deletion with cleanup-plan --verify`,
       effort: 'low',
       impact: 'high',
       count: analyses.dead.count,
@@ -358,7 +358,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Circular dependencies',
       evidence: 'graph-fact',
-      description: `${analyses.realCycleCount} cycle(s) — break with dependency inversion or module restructuring`,
+      description: `${analyses.realCycleCount} indexed dependency cycle(s) — inspect ownership and runtime order before choosing whether or how to break them`,
       effort: 'medium',
       impact: 'high',
       count: analyses.realCycleCount,
@@ -370,7 +370,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Similar functions',
       evidence: 'heuristic',
-      description: `${analyses.similarCount} pairs with real logic overlap (beyond shared imports) — consolidation candidates`,
+      description: `${analyses.similarCount} pairs share disclosed call or source-token evidence beyond imports — review domain identity before considering consolidation`,
       effort: 'medium',
       impact: 'medium',
       count: analyses.similarCount,
@@ -394,7 +394,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Drifted twin implementations',
       evidence: 'heuristic',
-      description: `${analyses.twinDrift.count} same-name (or near-name) function group(s) across files with diverged or identical bodies — the same concept implemented twice; consolidate or verify the drift is intentional`,
+      description: `${analyses.twinDrift.count} same-name (or near-name) function group(s) across files with diverged or identical bodies — determine whether they represent the same concept before acting`,
       effort: 'medium',
       impact: 'medium',
       count: analyses.twinDrift.count,
@@ -406,7 +406,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Duplicated React components',
       evidence: 'heuristic',
-      description: `${analyses.reactComponentDuplicates.count} React component pair(s) share JSX structure — extract or reuse the shared UI concept`,
+      description: `${analyses.reactComponentDuplicates.count} React component pair(s) share JSX structure — review whether local product intent justifies reuse`,
       effort: 'medium',
       impact: 'medium',
       count: analyses.reactComponentDuplicates.count,
@@ -418,7 +418,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Duplicated React hook behavior',
       evidence: 'heuristic',
-      description: `${analyses.reactHookCandidates.count} React component pair(s) share state/effect/request behavior${scoreCountNote(analyses.reactHookCandidates)} — extract or reuse a hook`,
+      description: `${analyses.reactHookCandidates.count} React component pair(s) share state/effect/request behavior${scoreCountNote(analyses.reactHookCandidates)} — review whether a common hook would preserve ownership and lifecycle semantics`,
       effort: 'medium',
       impact: 'medium',
       count: analyses.reactHookCandidates.count,
@@ -442,7 +442,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Duplicated Vue components',
       evidence: 'heuristic',
-      description: `${analyses.vueComponentDuplicates.count} Vue component pair(s) share template structure — extract or reuse the shared UI concept`,
+      description: `${analyses.vueComponentDuplicates.count} Vue component pair(s) share template structure — review whether local product intent justifies reuse`,
       effort: 'medium',
       impact: 'medium',
       count: analyses.vueComponentDuplicates.count,
@@ -454,7 +454,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Duplicated Vue behavior',
       evidence: 'heuristic',
-      description: `${analyses.vueComposableCandidates.count} Vue component pair(s) share state/effect/request behavior${scoreCountNote(analyses.vueComposableCandidates)} — extract or reuse a composable`,
+      description: `${analyses.vueComposableCandidates.count} Vue component pair(s) share state/effect/request behavior${scoreCountNote(analyses.vueComposableCandidates)} — review whether a common composable would preserve ownership and lifecycle semantics`,
       effort: 'medium',
       impact: 'medium',
       count: analyses.vueComposableCandidates.count,
@@ -490,7 +490,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Wrapper functions',
       evidence: 'heuristic',
-      description: `${analyses.wrappers.count} single-consumer symbols${scoreCountNote(analyses.wrappers, 'boundary-evidence discount')} — inline direct wrappers or review boundary signals`,
+      description: `${analyses.wrappers.count} single-consumer symbols${scoreCountNote(analyses.wrappers, 'boundary-evidence discount')} — inspect whether each is indirection or an intentional API, framework, or ownership boundary`,
       effort: 'low',
       impact: 'low',
       count: analyses.wrappers.count,
@@ -502,7 +502,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Passthrough functions',
       evidence: 'heuristic',
-      description: `${analyses.passthroughs.count} functions that just forward to one callee — unnecessary indirection`,
+      description: `${analyses.passthroughs.count} functions that literally forward to one callee — inspect whether each is unnecessary indirection or an intentional boundary`,
       effort: 'low',
       impact: 'low',
       count: analyses.passthroughs.count,
@@ -517,7 +517,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Stale abstractions',
       evidence: 'heuristic',
-      description: `${parts.join(', ')} — remove unused abstractions; review single-consumer ownership before moving or inlining`,
+      description: `${parts.join(', ')} — review public, runtime-registration, and ownership evidence before removing, moving, or inlining`,
       effort: 'low',
       impact: 'medium',
       count: analyses.stale.count,
@@ -532,7 +532,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Structural drift',
       evidence: 'heuristic',
-      description: `${parts.join(', ')} — remove direct drift; review signal drift against layer ownership`,
+      description: `${parts.join(', ')} — verify direct rows and review inferred layer signals against declared ownership`,
       effort: analyses.drift.layerViolations > 0 ? 'medium' : 'low',
       impact: analyses.drift.layerViolations > 0 ? 'medium' : 'low',
       count: analyses.drift.count,
@@ -567,7 +567,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
           'broad/stale-history discount',
         ) +
         (top ? ` (e.g. ${top.fileA} ↔ ${top.fileB})` : '') +
-        ' — name the shared concept or enforce the sync',
+        ' — inspect whether a shared concept, generated artifact, or coordinated contract explains the history',
       effort: 'medium',
       impact: 'high',
       count: analyses.gitEvidence.hiddenCoupling.pairCount,

@@ -56,6 +56,8 @@ calls `getDefinitionsForFile()` once per file. The source evidence is:
 reference still names `DEFAULT_HEALTH_SEMANTIC_PREWARM_RUNTIME` and its bulk
 candidate-definition path. The later health capability-disclosure change only
 affects command rendering after the cached detector report is assembled.
+The subsequent candidate-language correction also changes only rendering; the
+anchored prewarm runtime remains at the cited lines with the same behavior.
 
 The repository already contains a set-oriented definition path:
 `getScopedDefinitionsMatchingSymbols()` loads primary and fallback rows for the

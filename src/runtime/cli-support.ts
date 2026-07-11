@@ -637,7 +637,7 @@ export function renderHealthReport(report: HealthReport, json: boolean | undefin
     return;
   }
   console.log(`\n  Codebase Health Score: ${report.score}/100`);
-  console.log(`    Risk:    ${report.riskScore}/100  (validated predictors: graph facts + change graph)`);
+  console.log(`    Risk:    ${report.riskScore}/100  (risk-oriented graph facts + change graph)`);
   console.log(`    Hygiene: ${report.hygieneScore}/100  (tidiness candidates)\n`);
   console.log(
     `  ${report.overview.documents} files | ${report.overview.symbols} symbols | ${formatBytes(report.overview.indexSizeBytes)}\n`,
@@ -687,7 +687,7 @@ export function renderHealthReport(report: HealthReport, json: boolean | undefin
     console.log('\n  Prioritized Actions (highest impact + lowest effort first):');
     for (let i = 0; i < report.actions.length; i++) {
       const a = report.actions[i]!;
-      const loc = a.locRecoverable > 0 ? ` (~${a.locRecoverable} LOC recoverable)` : '';
+      const loc = a.locRecoverable > 0 ? ` (~${a.locRecoverable} LOC involved)` : '';
       console.log(`    ${i + 1}. [${a.effort} effort / ${a.impact} impact] ${a.description}${loc}`);
     }
   }
@@ -741,7 +741,7 @@ function renderHealthPressure(report: HealthReport): void {
 function renderHealthAxes(report: HealthReport): void {
   const axes = report.axes;
   console.log('\n  Axes:');
-  console.log(`    Deletable:            ${axes.deletable.loc} LOC across ${axes.deletable.symbols} symbols`);
+  console.log(`    Zero-reference candidates: ${axes.deletable.loc} LOC across ${axes.deletable.symbols} symbols`);
   if (axes.changeAmplification) {
     const amp = axes.changeAmplification;
     console.log(

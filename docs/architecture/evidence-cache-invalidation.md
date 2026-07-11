@@ -44,6 +44,8 @@ The cached health payload contains detector results. The command boundary adds
 the live project capability matrix and experimental-score interpretation after
 the cache read, so changes in installed semantic providers or checkers do not
 require invalidating the detector-result cache and cannot be hidden by it.
+Human rendering now uses investigation language for candidate LOC and does not
+alter this cache ownership or invalidation contract.
 
 ## Benchmark Commands
 
